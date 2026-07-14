@@ -934,3 +934,192 @@ Tier legend:
 | CONF-19 | Email settings migration from `EMAIL_*` to `MAILERS`; `EMAIL_BACKEND`/`EMAIL_HOST`/… + `get_connection()` deprecated, removal scheduled | OPT | ref/settings.md, internals/deprecation.md — 6.1 → 7.0 |
 | CONF-20 | contrib.sites: `Site` model (`domain`/`name`), `SITE_ID`, `get_current_site(request)` shortcut, `Site.objects.get_current()`/`clear_cache()`, post_migrate default site | OPT | ref/contrib/sites.md |
 | CONF-21 | contrib.sites helpers: `CurrentSiteManager` (auto-filter by `site`/`sites` field), `CurrentSiteMiddleware` (sets `request.site`), `RequestSite` fallback | OPT | ref/contrib/sites.md, ref/middleware.md |
+
+## P19 — Extensibility: DI, events, hooks & packages
+
+**Problem.** Let apps hook into framework and each other's lifecycles, ship reusable components, and verify configuration. **Answer.** No DI container — Django's composition unit is the *app*: an `AppConfig` with a `ready()` hook in a process-wide registry, wired together by signals (the event bus), the system-check framework (config linting), contenttypes (model-generic references), and a small utils toolkit. Settings dotted-paths and subclass-based protocols are the universal override seam.
+
+| ID | Feature | Tier | Notes |
+|---|---|---|---|
+| EXT-1 | `django.dispatch.Signal` — `connect(receiver, sender, weak, dispatch_uid)`, `@receiver`, `disconnect()`; weak refs, duplicate-prevention via `dispatch_uid` | CORE | topics/signals.md |
+| EXT-2 | Sync/async dispatch — `send`/`send_robust`/`asend`/`asend_robust`, async receivers auto-adapted, async receivers run concurrently via `asyncio.TaskGroup` (**6.1**, was gather) | CORE | topics/signals.md — `providing_args` no longer exists |
+| EXT-3 | Model signals — `pre_init/post_init`, `pre_save/post_save`, `pre_delete/post_delete`, `m2m_changed` (incl. `raw` arg **6.1**), `class_prepared`; lazy `'app.Model'` sender refs | CORE | ref/signals.md — django.db.models.signals |
+| EXT-4 | Management signals `pre_migrate`/`post_migrate` (migrate/flush) | CORE | ref/signals.md |
+| EXT-5 | Request/response signals `request_started`, `request_finished`, `got_request_exception` | CORE | ref/signals.md — django.core.signals |
+| EXT-6 | Database signal `connection_created` | CORE | ref/signals.md — django.db.backends.signals |
+| EXT-7 | Test signals `setting_changed` (override_settings/`settings()`), `template_rendered` | OPT | ref/signals.md — setting_changed importable from django.core.signals |
+| EXT-8 | Tasks signals `task_enqueued`/`task_started`/`task_finished` | OPT | ref/signals.md — django.tasks.signals, **6.0** |
+| EXT-9 | Custom signals — define `Signal()`, send from your code | DIY | topics/signals.md — docs discourage vs explicit function calls |
+| EXT-10 | Applications framework — `AppConfig` (name/label/verbose_name/default/`default_auto_field`/path), `ready()` hook for signal registration; single-config auto-detection in `apps.py` | CORE | ref/applications.md |
+| EXT-11 | App registry `django.apps.apps` — `get_app_config(s)`, `get_model`, `is_installed`, `apps.ready` | CORE | ref/applications.md |
+| EXT-12 | Three-stage app loading in `django.setup()`; reusable-app authoring conventions; namespace-package apps require a single path | CORE/OPT | ref/applications.md |
+| EXT-13 | System check framework — static checks run explicitly via `check` and implicitly before `runserver`/`migrate` (not in the WSGI stack) | CORE | topics/checks.md, ref/checks.md — CLI at CLI-9 |
+| EXT-14 | Built-in check tags: admin, async_support, caches, compatibility, commands, database, files, mail, models, security, signals, sites, staticfiles, templates, translation, urls | CORE | ref/checks.md — database checks off by default |
+| EXT-15 | Custom checks: `@register(*tags)` returning `[CheckMessage]`; shortcut classes `Debug/Info/Warning/Error/Critical`; register in `AppConfig.ready()` | DIY | topics/checks.md, ref/checks.md |
+| EXT-16 | Deployment checks — `@register(Tags.security, deploy=True)`, run only under `check --deploy` | OPT | topics/checks.md, howto/deployment/checklist.md |
+| EXT-17 | Piggyback checks — override `check()` on fields, constraints (**6.0**), models, managers, template engines, task/db backends | DIY | topics/checks.md |
+| EXT-18 | Silence warnings via the `SILENCED_SYSTEM_CHECKS` setting | OPT | topics/checks.md, ref/settings.md |
+| EXT-19 | Testing checks — `call_command("check")`, comparable `CheckMessage` equality, assert on stderr | DIY | topics/checks.md |
+| EXT-20 | contrib.contenttypes: `ContentType` model (`app_label`, `model`, `name`) + instance methods `model_class()`, `get_object_for_this_type()` | OPT | ref/contrib/contenttypes.md |
+| EXT-21 | `ContentTypeManager`: `get_for_model()`, `get_for_models()`, `get_for_id()`, `get_by_natural_key()`, `clear_cache()` (proxy via `for_concrete_model=False`) | OPT | ref/contrib/contenttypes.md |
+| EXT-22 | `GenericForeignKey` (content_type + object_id, `for_concrete_model`); not filterable/queryable directly, absent from ModelForms | OPT | ref/contrib/contenttypes.md — recommend `Meta.indexes` |
+| EXT-23 | `GenericRelation` reverse relation (`related_query_name`, `content_type_field`/`object_id_field`), cascade-delete, aggregation support | OPT | ref/contrib/contenttypes.md |
+| EXT-24 | Generic inline forms: `generic_inlineformset_factory()`, `BaseGenericInlineFormSet`; admin `GenericInlineModelAdmin`/`GenericTabularInline`/`GenericStackedInline` (`ct_field`/`ct_fk_field`) | OPT | ref/contrib/contenttypes.md, ref/contrib/admin/index.md |
+| EXT-25 | `GenericPrefetch(lookup, querysets)` for non-homogeneous GFK prefetch | OPT | ref/contrib/contenttypes.md |
+| EXT-26 | `django.utils.functional` — `@cached_property`, `@classproperty`, `lazy()`/`keep_lazy`/`keep_lazy_text`, `format_lazy` | OPT | ref/utils.md — see also CACHE-19 |
+| EXT-27 | `django.utils.html` — `format_html`, `format_html_join`, `escape`, `@html_safe`; `django.utils.safestring.mark_safe` | OPT | ref/utils.md |
+| EXT-28 | `django.utils.text.slugify(value, allow_unicode)` | OPT | ref/utils.md |
+| EXT-29 | `django.utils.timezone` — `now()`, `localtime()`, `localdate()`, `make_aware()` (USE_TZ-aware) | OPT | ref/utils.md — fuller tz coverage at I18N-38 |
+| EXT-30 | `django.utils.module_loading` — `import_string(dotted_path)`, `autodiscover_modules` | OPT | ref/utils.md |
+| EXT-31 | `django.utils.encoding` — `force_str`/`smart_str` (+ bytes variants) | OPT | ref/utils.md |
+
+## P20 — Observability
+
+**Problem.** Know what the running application is doing and hear about failures. **Answer.** Python stdlib logging configured by a `LOGGING` dictConfig with framework-named loggers (`django.request`, `django.db.backends`, `django.security.*`), error reports emailed to `ADMINS`/`MANAGERS` with sensitive-data scrubbing, and a rich debug-mode 500 page. No metrics or tracing story in core.
+
+| ID | Feature | Tier | Notes |
+|---|---|---|---|
+| OBS-1 | `LOGGING` dictConfig setting (loggers/handlers/filters/formatters), merged with defaults unless `disable_existing_loggers`; configured during `django.setup()` | CORE | topics/logging.md, howto/logging.md |
+| OBS-2 | Default logging config `django.utils.log.DEFAULT_LOGGING` — DEBUG→console (require_debug_true), non-DEBUG→mail_admins (require_debug_false), django.server formatter | CORE | ref/logging.md |
+| OBS-3 | Built-in named loggers: `django`, `django.request` (5xx ERROR/4xx WARNING), `django.server`, `django.db.backends` (SQL, DEBUG-only), `django.db.backends.schema`, `django.template`, `django.security.*` (per SuspiciousOperation subtype + csrf), `django.contrib.auth/gis/sessions`, `django.dispatch`, `django.utils.autoreload` | CORE | ref/logging.md |
+| OBS-4 | `AdminEmailHandler` — emails ADMINS on error; `include_html`, `using` (MAILERS alias, **6.1**), `reporter_class` | OPT | ref/logging.md, topics/logging.md — `email_backend` arg deprecated **6.1** |
+| OBS-5 | Log filters `RequireDebugFalse`, `RequireDebugTrue`, `CallbackFilter`; server-formatter `ServerFormatter` | OPT | ref/logging.md |
+| OBS-6 | `LOGGING_CONFIG` — swap the dictConfig callable, or set `None` to fully disable auto-config | OPT | topics/logging.md |
+| OBS-7 | SQL query logging via `django.db.backends` (only when `DEBUG=True`); `test --debug-sql` | OPT | ref/logging.md, ref/django-admin.md |
+| OBS-8 | Email error reports — ADMINS get 500s; MANAGERS get 404-with-referrer reports via `BrokenLinkEmailsMiddleware`; `IGNORABLE_404_URLS`, `SERVER_EMAIL` | OPT | howto/error-reporting.md, ref/middleware.md |
+| OBS-9 | Sensitive-data filtering decorators `sensitive_variables(*vars)` and `sensitive_post_parameters(*params)` (`django.views.decorators.debug`); auto-applied to some auth views | OPT | howto/error-reporting.md |
+| OBS-10 | Custom error reports — `SafeExceptionReporterFilter` (`cleansed_substitute`/`hidden_settings`/`is_active`) via `DEFAULT_EXCEPTION_REPORTER_FILTER`; `ExceptionReporter` via `DEFAULT_EXCEPTION_REPORTER`; per-request `exception_reporter_filter`/`_class` | DIY | howto/error-reporting.md |
+| OBS-11 | Debug 500 page (tracebacks/locals when DEBUG); overridable 404/500/403/400 templates and error views | CORE | howto/deployment/checklist.md, howto/error-reporting.md — see ROUTE-22/CTRL-45 |
+| OBS-12 | Logging security implications — `AdminEmailHandler` `include_html` leaks locals/settings; know what's collected | OPT | topics/logging.md |
+
+## P21 — Admin & operational UIs
+
+**Problem.** Give staff a production-ready CRUD interface over the domain models without building one. **Answer.** `django.contrib.admin` — Django's flagship contrib app: register a model (optionally with a `ModelAdmin`) and get list/search/filter/edit/history screens, inlines, bulk actions, permissions integration and theming, all declaratively customized and template-overridable, with autodiscovery per app.
+
+| ID | Feature | Tier | Notes |
+|---|---|---|---|
+| ADMIN-1 | ModelAdmin registration via `admin.site.register(Model, ModelAdmin)` or `@admin.register(*models, site=...)` decorator; `unregister()`, `get_model_admin()` | OPT | ref/contrib/admin/index.md — register decorator can't be used if `__init__` references the class |
+| ADMIN-2 | Admin autodiscovery of per-app `admin.py` (`AdminConfig`/`autodiscover`); disable via `SimpleAdminConfig` with `default_site` | OPT | ref/contrib/admin/index.md — INSTALLED_APPS swap |
+| ADMIN-3 | Changelist `list_display` (model/related-`__`/callable/method/property) with `@admin.display(description, boolean, ordering, empty_value)` decorator; `list_display_links` | OPT | ref/contrib/admin/index.md — ManyToMany unsupported; ordering supports query expressions |
+| ADMIN-4 | `list_filter` by field name / relation-spanning `__`; `get_list_filter()` hook | OPT | ref/contrib/admin/filters.md, index.md |
+| ADMIN-5 | Custom `SimpleListFilter` subclass (`title`, `parameter_name`, `lookups()`, `queryset()`, custom `template`) | DIY | ref/contrib/admin/filters.md |
+| ADMIN-6 | Explicit `FieldListFilter` classes: `BooleanFieldListFilter`, `RelatedOnlyFieldListFilter`, `EmptyFieldListFilter`, custom `__in` filter w/ `list_separator` | OPT | ref/contrib/admin/filters.md — 2-tuple `(field, FilterClass)` |
+| ADMIN-7 | Filter facet counts: `show_facets` / `ShowFacets` enum (`ALWAYS`/`ALLOW`/`NEVER`), `_facets` query param | OPT | ref/contrib/admin/index.md, filters.md — perf caveat |
+| ADMIN-8 | `search_fields` with lookups/prefix shortcuts (`^`, `=`, `@`), quoted phrases, invalid-term skipping (**6.1**); `search_help_text`; `get_search_results()` custom search | OPT | ref/contrib/admin/index.md |
+| ADMIN-9 | `list_editable` bulk inline editing on the changelist (+ `get_changelist_form`/`get_changelist_formset`) | OPT | ref/contrib/admin/index.md |
+| ADMIN-10 | `date_hierarchy` drill-down nav (supports related `__` field) | OPT | ref/contrib/admin/index.md |
+| ADMIN-11 | `sortable_by` / `get_sortable_by()` to control sortable columns | OPT | ref/contrib/admin/index.md |
+| ADMIN-12 | `list_select_related` (list/tuple; `True` deprecated **6.1**) / `get_list_select_related()` | OPT | ref/contrib/admin/index.md |
+| ADMIN-13 | Pagination: `list_per_page`, `list_max_show_all`, custom `paginator`/`get_paginator()`, `show_full_result_count` | OPT | ref/contrib/admin/index.md |
+| ADMIN-14 | `ordering` / `get_ordering()`; changelist appends `pk` for deterministic order | OPT | ref/contrib/admin/index.md |
+| ADMIN-15 | `empty_value_display` (per-ModelAdmin, per-field, or site-wide); `preserve_filters` | OPT | ref/contrib/admin/index.md |
+| ADMIN-16 | Form layout: `fields` (tuples for rows), `fieldsets` (`classes:['collapse']`, `description`), `exclude`/`get_exclude()` | OPT | ref/contrib/admin/index.md — `wide` class removed **6.1**; accessibility form-layout overhaul **6.1** |
+| ADMIN-17 | `readonly_fields` / `get_readonly_fields()` (displays model/ModelAdmin method output) | OPT | ref/contrib/admin/index.md — warning: return a copy, not the class attr |
+| ADMIN-18 | `prepopulated_fields` (JS slug population) / `get_prepopulated_fields()` | OPT | ref/contrib/admin/index.md — no DateTime/FK/M2M |
+| ADMIN-19 | `autocomplete_fields` Select2 async inputs / `get_autocomplete_fields()`; requires related `search_fields` + view/change perm | OPT | ref/contrib/admin/index.md |
+| ADMIN-20 | `raw_id_fields` (Input widget w/ lookup popup for FK/M2M); `radio_fields` (`HORIZONTAL`/`VERTICAL`) | OPT | ref/contrib/admin/index.md |
+| ADMIN-21 | `filter_horizontal` / `filter_vertical` M2M dual-list JS widgets | OPT | ref/contrib/admin/index.md |
+| ADMIN-22 | Custom `form` override + `formfield_overrides` (field-class→widget map); custom `clean_*` validation via ModelForm | OPT | ref/contrib/admin/index.md |
+| ADMIN-23 | `formfield_for_foreignkey()` / `formfield_for_manytomany()` / `formfield_for_choice_field()` hooks | DIY | ref/contrib/admin/index.md — request-based queryset filtering |
+| ADMIN-24 | Inlines: `TabularInline`/`StackedInline` via `inlines`; `extra`/`max_num`/`min_num` (+ `get_*`), `fk_name`, `formset`, `can_delete`, `show_change_link`, `classes`, `verbose_name*` | OPT | ref/contrib/admin/index.md — `get_inlines()`/`get_inline_instances()`/`get_formsets_with_inlines()` |
+| ADMIN-25 | M2M-via-inline patterns: `through` model inline, intermediary-model inline, generic-relation inline (`GenericTabularInline`) | OPT | ref/contrib/admin/index.md — generic inline classes canonical at EXT-24 |
+| ADMIN-26 | Save behavior: `save_as`/`save_as_continue`/`save_on_top`; `save_model()`, `save_formset()`, `save_related()`, `delete_model()`, `delete_queryset()` | OPT | ref/contrib/admin/index.md |
+| ADMIN-27 | Object tools & CRUD views: `add_view`/`change_view`/`changelist_view`/`delete_view`/`history_view`; `response_add/change/delete`; `view_on_site` (bool/callable) | OPT | ref/contrib/admin/index.md |
+| ADMIN-28 | Permission hooks: `has_add/change/delete/view_permission()`, `has_module_permission()`; per-user `get_queryset()` scoping; `lookup_allowed()` security | OPT | ref/contrib/admin/index.md |
+| ADMIN-29 | Custom actions via `@admin.action(permissions, description, description_plural, location)`; per-request `get_actions(request, action_location)` (**6.1** dict return); intermediate `HttpResponse`/redirect pages; `message_user()` | OPT | ref/contrib/admin/actions.md — `Action`/`ActionLocation` (CHANGE_FORM/CHANGE_LIST) new **6.1** |
+| ADMIN-30 | Site-wide actions: `AdminSite.add_action()`, `disable_action()`; built-in `delete_selected`, `delete_confirmation_max_display` (**6.1**); `actions=None` disables | OPT | ref/contrib/admin/actions.md, index.md |
+| ADMIN-31 | Custom admin URLs/views: `ModelAdmin.get_urls()` + `AdminSite.admin_view()` wrapper (perm+never_cache), `each_context()`, extend `admin/base_site.html` | DIY | ref/contrib/admin/index.md |
+| ADMIN-32 | `AdminSite` customization: `site_header`/`site_title`/`index_title`/`site_url`, `enable_nav_sidebar`, `final_catch_all_view`, `get_app_list()`, subclass + `default_site` override, multiple sites in the URLconf | OPT | ref/contrib/admin/index.md — `AdminSite.password_change_form` (**6.0**) |
+| ADMIN-33 | Overriding admin templates per app/model (`change_form.html`, `object-tools-items` block, etc.); root/login template attrs | DIY | ref/contrib/admin/index.md — `*_template` ModelAdmin attrs |
+| ADMIN-34 | Theming: CSS variables in `base.css`, dark mode via `dark_mode.css`/`prefers-color-scheme`/`dark-mode-vars` block, `extrabody` block | OPT | ref/contrib/admin/index.md |
+| ADMIN-35 | Admin JS/jQuery: `django.jQuery` namespace (v3.7.1), `Media` inner class assets, minified vs uncompressed by `DEBUG` | OPT | ref/contrib/admin/index.md |
+| ADMIN-36 | Inline form JS events `formset:added` / `formset:removed` (`event.detail.formsetName`), `admin_change_form_document_ready` block | DIY | ref/contrib/admin/javascript.md |
+| ADMIN-37 | `LogEntry` history model (`action_flag` ADDITION/CHANGE/DELETION, `change_message`, `get_change_message()`, `get_edited_object()`); `AdminSite.get_log_entries()` | OPT | ref/contrib/admin/index.md — uses contenttypes |
+| ADMIN-38 | admindocs generator: docstring extraction for models/views/tags/filters, reST roles (`:model:`, `:view:`, `:tag:`, `:filter:`, `:template:`), "Documentation" bookmarklet via `XViewMiddleware`, requires docutils 0.22+ | OPT | ref/contrib/admin/admindocs.md — docutils is an ECO dependency |
+| ADMIN-39 | Reversing admin URLs (`admin:{app}_{model}_change` etc., `current_app` hint, `admin_urlname` filter); `staff_member_required` decorator | OPT | ref/contrib/admin/index.md |
+
+## P22 — Geospatial
+
+**Problem.** Store, query and render geographic data. **Answer.** GeoDjango (`django.contrib.gis`) — a full geospatial stack in contrib: spatial model/form fields, spatial lookups and DB functions over PostGIS/SpatiaLite/MySQL/Oracle, GEOS/GDAL Python bindings usable standalone, map widgets, and geo-flavored serializers/feeds/sitemaps/admin. All rows OPT: require GEOS/GDAL/PROJ libraries + a spatial database.
+
+| ID | Feature | Tier | Notes |
+|---|---|---|---|
+| GEO-1 | Spatial model fields: `GeometryField`, `PointField`, `LineStringField`, `PolygonField`, `MultiPointField`, `MultiLineStringField`, `MultiPolygonField`, `GeometryCollectionField`, plus `RasterField` (PostGIS-only) | OPT | ref/contrib/gis/model-api.md — field opts `srid` (default 4326/WGS84), `spatial_index`, `dim` (2/3D), `geography` (geography column, PostGIS) |
+| GEO-2 | Spatial lookups: topological `bbcontains/bboverlaps/contained/contains/contains_properly/coveredby/covers/crosses/disjoint/equals/intersects/isempty/isvalid/geom_type/num_dimensions/overlaps/relate/touches/within` + bbox `left/right/overlaps_*/strictly_above/below` | OPT | ref/contrib/gis/geoquerysets.md, db-api.md — per-backend compat table; work on geometry & raster inputs |
+| GEO-3 | Distance lookups: `distance_lt/distance_lte/distance_gt/distance_gte/dwithin` taking `(geom, D(...))` tuples | OPT | ref/contrib/gis/db-api.md, geoquerysets.md — uses `measure.D`; `dwithin` unavailable on MariaDB/MySQL |
+| GEO-4 | Geo database functions: measurements (`Area/Distance/Length/Perimeter/GeometryDistance`), relations (`Azimuth/BoundingCircle/Centroid/ClosestPoint/Envelope/LineLocatePoint/PointOnSurface`), ops (`Difference/Intersection/SymDifference/Union`), editors (`ForcePolygonCW/MakeValid/Reverse/Rotate/Scale/SnapToGrid/Transform/Translate`), I/O (`FromWKB/FromWKT/AsGeoJSON/AsGML/AsKML/AsSVG/AsWKB/AsWKT/GeoHash`), misc (`IsEmpty/IsValid/GeometryType/MemSize/NumDimensions/NumGeometries/NumPoints`) | OPT | ref/contrib/gis/functions.md, db-api.md — `django.contrib.gis.db.models.functions`; per-backend availability table; `Rotate`/`geom_type` **6.0**, `num_dimensions`/`IsEmpty` on more backends **6.1** |
+| GEO-5 | Geo aggregates: `Collect`, `Extent`, `Extent3D`, `MakeLine`, `Union` | OPT | ref/contrib/gis/geoquerysets.md, db-api.md — `django.contrib.gis.db.models` |
+| GEO-6 | GEOS bindings: `GEOSGeometry` + `Point/LineString/LinearRing/Polygon/Multi*/GeometryCollection`, `PreparedGeometry`, WKT/WKB/GeoJSON reader-writer I/O objects | OPT | ref/contrib/gis/geos.md — pure-Python `ctypes` wrapper over libgeos; usable standalone without Django settings; geometries are mutable |
+| GEO-7 | GDAL/OGR bindings: `DataSource/Layer/Feature/Field/Driver`, `OGRGeometry/OGRGeomType/Envelope`, `SpatialReference/CoordTransform`, raster `GDALRaster/GDALBand` (incl. `/vsimem/` virtual filesystem) | OPT | ref/contrib/gis/gdal.md — high-level OGR vector read + coordinate transform + minimal raster support |
+| GEO-8 | Geo forms & widgets: form fields (`PointField` etc.) + `BaseGeometryWidget`/`OpenLayersWidget`/`OSMWidget`, `base_layer` attr, CSP-aware CDN assets | OPT | ref/contrib/gis/forms-api.md — OpenLayers-based map editing (**6.0** added `base_layer`; **6.1** bumps OL to 10.9.0) |
+| GEO-9 | Geo admin: `GISModelAdmin` (`gis_widget` defaults to `OSMWidget`, `gis_widget_kwargs`) | OPT | ref/contrib/gis/admin.md |
+| GEO-10 | GeoJSON serializer (`serialize("geojson", ...)`) with `geometry_field`/`id_field`/`srid` opts | OPT | ref/contrib/gis/serializers.md — serialize-only, no deserializer/`loaddata` round-trip |
+| GEO-11 | Data import/introspection: `LayerMapping` (shapefile→model import) + `ogrinspect` management command (`--mapping/--multi-geom/--srid/...`) and GIS-aware `inspectdb` override | OPT | ref/contrib/gis/layermapping.md, commands.md |
+| GEO-12 | GeoIP2 geolocation: `GeoIP2` wrapper (`.city/.country/.lat_lon/.lon_lat/.geos`) over MaxMind mmdb | OPT | ref/contrib/gis/geoip2.md — needs `geoip2` pkg + `GEOIP_PATH` datasets; `GEOIP_COUNTRY/GEOIP_CITY` settings (ECO dependency) |
+| GEO-13 | Spatial DB backends: `postgis`, `mysql`, `oracle`, `spatialite` | OPT | ref/contrib/gis/db-api.md — raster PostGIS-only; MySQL feature-limited |
+| GEO-14 | Measurement objects: `Distance`/`Area` (aliases `D`/`A`) with unit conversion + arithmetic (`D*D→Area`), ~30 distance units + `ha` | OPT | ref/contrib/gis/measure.md |
+| GEO-15 | Geo feeds & sitemaps: `Feed` subclass emitting GeoRSS/`GeoAtom1`/`W3CGeo` (`geometry()`/`item_geometry()`); `KMLSitemap`/`KMZSitemap` | OPT | ref/contrib/gis/feeds.md, sitemaps.md |
+
+## P23 — PostgreSQL-native
+
+**Problem.** Exploit PostgreSQL-specific capabilities the DB-agnostic core won't expose. **Answer.** `django.contrib.postgres` — arrays, hstore, ranges, full-text search, trigram similarity, exclusion constraints, PG index types and concurrent-index migration operations. The module's own docs stress that Django "is, and will continue to be, a database-agnostic web framework": this contrib app is the sanctioned exception (there's "no fundamental reason a `contrib.mysql` doesn't exist" — Postgres just has the richest feature set). All rows OPT, PostgreSQL-only.
+
+| ID | Feature | Tier | Notes |
+|---|---|---|---|
+| PG-1 | `ArrayField(base_field, size)` — native Postgres arrays with index/slice transforms and `contains/contained_by/overlap/len` lookups | OPT | ref/contrib/postgres/fields.md |
+| PG-2 | `HStoreField` — key/value store with `contains/has_key/keys/values` lookups | OPT | ref/contrib/postgres/fields.md — needs `HStoreExtension`; `inspectdb` introspects it in **6.1** w/ psycopg 3.2+ |
+| PG-3 | Range fields: `IntegerRangeField/BigIntegerRangeField/DecimalRangeField/DateTimeRangeField/DateRangeField` + `RangeOperators`, `RangeBoundary`, custom range types | OPT | ref/contrib/postgres/fields.md — map to psycopg `NumericRange/DateRange/DateTimeTZRange` |
+| PG-4 | Full-text search stack: `SearchVector`, `SearchQuery`, `SearchRank`, `SearchHeadline`, `SearchVectorField`, weighting/config, plus `Lexeme` (**6.0**) safe operator expressions (`&`/`\|`/`~`, prefix, weight) | OPT | ref/contrib/postgres/search.md — the `search` lookup; see ORM-173 |
+| PG-5 | Trigram similarity: `TrigramSimilarity/TrigramWordSimilarity/TrigramStrictWordSimilarity` + `*Distance` variants; lookups `trigram_similar/trigram_word_similar/trigram_strict_word_similar` | OPT | ref/contrib/postgres/search.md, lookups.md — needs `pg_trgm` (`TrigramExtension`) |
+| PG-6 | `unaccent` accent-insensitive lookup (chainable Transform) | OPT | ref/contrib/postgres/lookups.md — needs the `unaccent` extension; warns re full-table scans |
+| PG-7 | PG-specific indexes: `BloomIndex`, `BrinIndex`, `BTreeIndex`, `GinIndex`, `GistIndex`, `HashIndex`, `SpGistIndex` + `OpClass()` for functional indexes/constraints | OPT | ref/contrib/postgres/indexes.md |
+| PG-8 | `ExclusionConstraint(expressions=[(field, RangeOperators.X)], index_type, condition, deferrable, include, ...)` | OPT | ref/contrib/postgres/constraints.md — default GiST; **6.1** adds Hash index type; enforced during model validation |
+| PG-9 | Aggregates: general `ArrayAgg`, `StringAgg`, `JSONBAgg`, `BoolAnd`, `BoolOr` (+ deprecated `BitAnd/BitOr/BitXor`) with `order_by`/`distinct`/`filter`/`default`; statistical `Corr`, `CovarPop`, `RegrAvgX/Y`, `RegrCount`, `RegrIntercept`, `RegrR2`, `RegrSlope`, `RegrSXX/SXY/SYY` | OPT | ref/contrib/postgres/aggregates.md — `StringAgg`/`BitAnd/Or/Xor` moved to core `django.db.models` (deprecated here in 6.0/6.1; see ORM-177) |
+| PG-10 | Migration operations: `CreateExtension` + `Bloom/BtreeGin/BtreeGist/CIText/Crypto/HStore/Trigram/Unaccent Extension` (all gained `hints` in **6.0**); `CreateCollation/RemoveCollation`; `AddIndexConcurrently/RemoveIndexConcurrently`; `AddConstraintNotValid/ValidateConstraint` | OPT | ref/contrib/postgres/operations.md |
+| PG-11 | citext: no CIText *model fields* ship (removed pre-6.x in favor of `db_collation` non-deterministic collations); only the `CITextExtension` migration op remains | OPT | ref/contrib/postgres/operations.md |
+| PG-12 | Validators: `KeysValidator` (hstore key presence/strict), `RangeMaxValueValidator`, `RangeMinValueValidator` | OPT | ref/contrib/postgres/validators.md |
+| PG-13 | Form fields/widgets: `SimpleArrayField`, `SplitArrayField`, `HStoreField`, range fields (`IntegerRangeField` etc.) + `RangeWidget` | OPT | ref/contrib/postgres/forms.md |
+| PG-14 | Expressions & functions: `ArraySubquery` (ARRAY constructor subquery, non-aggregate); `RandomUUID` (→ prefer core `UUID4`), `TransactionNow` | OPT | ref/contrib/postgres/expressions.md, functions.md |
+
+## Signature design decisions
+
+The choices that make Django *Django*, as evidenced by the corpus (chiefly misc/design-philosophies.md, misc/api-stability.md, faq/general.md):
+
+1. **Loose coupling, tight cohesion.** The layers genuinely don't know about each other: the template system knows nothing of web requests, the DB layer nothing of display, views are agnostic about which template system is used — or whether one is used at all. URLs are decoupled from Python function names by design. In practice the template language and even the ORM are swappable/omittable (faq/usage.md).
+
+2. **DRY as founding doctrine.** Every distinct concept lives in exactly one place and the framework deduces as much as possible from as little as possible — the model is the single source from which forms, admin, migrations and serialization are all derived. "Less code / no boilerplate" is a stated goal, leaning on Python introspection.
+
+3. **Explicit over implicit — "no magic".** Fields don't infer behavior from their names, only from keyword args/types; `save()` is an explicit call, never silent; magic is admitted only when it's a huge, non-confusing convenience. The corollary in the query layer: execute as few SQL statements as possible, but always let the developer drop to raw SQL (`raw()`, `cursor.execute`, `RawSQL`).
+
+4. **MTV, not MVC.** The "view" is the Python callable that decides *which data* is presented; the template decides *how*; the "controller" is the framework itself (faq/general.md). Views are just functions taking an explicit request object — trivially testable with fake requests.
+
+5. **Models are Active Record — and carry the metadata too.** Domain logic *and* presentation metadata (verbose names, ordering, permissions, constraints) live in the model class. This is what lets the admin, ModelForms and migrations be derived rather than written.
+
+6. **Templates are presentation only, on purpose.** The DTL is deliberately not a programming language: branching and looping only, no arbitrary Python, autoescaped by default, decoupled from HTML (any text format), extensible via custom tags/filters. XML-based template languages are explicitly rejected.
+
+7. **The app as the unit of composition.** `INSTALLED_APPS` + `AppConfig.ready()` + per-app conventions (models, migrations, templates, static, management commands, admin.py autodiscovery) make functionality pluggable — Django's own contrib features (auth, admin, sessions, staticfiles…) are consumed through exactly the same mechanism as third-party apps.
+
+8. **The admin as flagship.** A production CRUD UI derived entirely from model metadata ships in the box and has for two decades — the single feature that most distinguishes Django's "batteries included, for the newsroom" heritage, while the FAQ insists Django is a framework, not a CMS.
+
+9. **Consistency at all levels + one config shape.** From coding style to the "experience" of the framework: cache, storage, database, template, mailer (6.1) and task (6.0) backends all follow the same dict-of-aliases settings pattern (`CACHES`, `STORAGES`, `DATABASES`, `TEMPLATES`, `MAILERS`, `TASKS`) with dotted-path backend classes and OPTIONS — the settings module is the universal driver-selection seam.
+
+10. **An explicit API-stability promise.** Everything documented (outside `/internals/`) is stable: no renames/moves without backwards-compatible aliases, removals only after a deprecation path of at least two feature releases with warnings; only security fixes may break compatibility without one. Underscore-prefixed APIs are exempt. The 6.x cycle shows the machinery working (EMAIL_* → MAILERS on a published timeline).
+
+11. **Secure and correct by default.** Autoescaping on, CSRF middleware in the startproject template, `ALLOWED_HOSTS` enforcement, timezone-aware UTC storage (`USE_TZ=True`), signed cookies — the safe path is the default path, and hardening is a checklist (`check --deploy`), not a rewrite.
+
+## Non-goals & gaps
+
+What the corpus shows Django deliberately does not provide, or is comparatively weak at:
+
+- **Database-agnostic by charter.** Core refuses DB-specific surface area: no DB-specific `CREATE TABLE` options (use `RunSQL`), and `contrib.postgres`/GeoDjango are the explicitly sanctioned exceptions — the postgres docs state Django "is, and will continue to be, a database-agnostic web framework" and encourage DB-agnostic reusable apps (ref/contrib/postgres/index.md, faq/models.md).
+- **No NoSQL.** "NoSQL databases are not officially supported by Django itself"; only third-party forks/side-projects (faq/models.md).
+- **No real-time/websocket layer in core.** The corpus stops at async views, ASGI deployment and SSE-capable streaming responses; Django's well-known external answer (Channels) is not part of core and does not appear in the corpus (see P10).
+- **Tasks framework ships no worker.** Django 6.0 owns task definition/queueing/results but deliberately leaves execution, durability and scheduling to external infrastructure — there is no worker command and no cron/scheduler in core (releases/6.0.md, topics/tasks.md).
+- **No REST/OpenAPI/GraphQL in core.** Model serialization, `JsonResponse` and content negotiation are as far as core goes; REST frameworks, schema generation and versioning are ecosystem territory (DRF, django-ninja — neither appears in the corpus).
+- **Frontend agnosticism.** No bundler/Vite/npm integration, no JS component model, no first-party reactive story; staticfiles ends at collect/hash/serve, and the static-deployment howto names only Nginx/Apache/S3/rsync (not even WhiteNoise).
+- **Composite/multi-column PKs only partially supported.** `CompositePrimaryKey` exists but with real holes: no FKs to CPK models, excluded from ModelForms/admin, no migration path to/from (faq/models.md, topics/composite-primary-key.md).
+- **Not a CMS, not a turnkey product.** Django is a framework "you use to *create* things like Drupal"; the admin is just one module (faq/general.md).
+- **"Framework X does feature Y" is rejected as a rationale.** Feature parity with other frameworks is explicitly not sufficient justification for additions — Django was written from scratch precisely because no existing tool fit its philosophies (faq/general.md).
+- **Async has hard edges.** Transactions are not async (`SynchronousOnlyOperation`), fully async cache backends are still developing, `runserver` is WSGI-only with no HTTPS (dev ASGI needs third-party Daphne).
+- **GeoJSON serialization is intentionally one-way** — no deserializer, not `loaddata`-reloadable (ref/contrib/gis/serializers.md).
+- **Reusable-app packaging is a tutorial, not a mechanism** — publishing an app to PyPI is taught (pyproject.toml walkthrough) but there is no runtime plugin/package system beyond `INSTALLED_APPS` (intro/reusable-apps.md).
