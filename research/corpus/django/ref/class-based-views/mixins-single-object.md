@@ -1,0 +1,180 @@
+# Single object mixins
+
+## `SingleObjectMixin`
+
+<div class="django.views.generic.detail.SingleObjectMixin">
+
+Provides a mechanism for looking up an object associated with the current HTTP request.
+
+**Methods and Attributes**
+
+<div class="attribute">
+
+model
+
+The model that this view will display data for. Specifying `model = Foo` is effectively the same as specifying `queryset = Foo.objects.all()`, where `objects` stands for `Foo`’s `default manager <default-managers>`.
+
+</div>
+
+<div class="attribute">
+
+queryset
+
+A `QuerySet` that represents the objects. If provided, the value of `queryset` supersedes the value provided for `model`.
+
+<div class="warning">
+
+<div class="title">
+
+Warning
+
+</div>
+
+`queryset` is a class attribute with a *mutable* value so care must be taken when using it directly. Before using it, either call its `~django.db.models.query.QuerySet.all` method or retrieve it with `get_queryset` which takes care of the cloning behind the scenes.
+
+</div>
+
+</div>
+
+<div class="attribute">
+
+slug_field
+
+The name of the field on the model that contains the slug. By default, `slug_field` is `'slug'`.
+
+</div>
+
+<div class="attribute">
+
+slug_url_kwarg
+
+The name of the URLConf keyword argument that contains the slug. By default, `slug_url_kwarg` is `'slug'`.
+
+</div>
+
+<div class="attribute">
+
+pk_url_kwarg
+
+The name of the URLConf keyword argument that contains the primary key. By default, `pk_url_kwarg` is `'pk'`.
+
+</div>
+
+<div class="attribute">
+
+context_object_name
+
+Designates the name of the variable to use in the context.
+
+</div>
+
+<div class="attribute">
+
+query_pk_and_slug
+
+If `True`, causes `get_object` to perform its lookup using both the primary key and the slug. Defaults to `False`.
+
+This attribute can help mitigate [insecure direct object reference]() attacks. When applications allow access to individual objects by a sequential primary key, an attacker could brute-force guess all URLs; thereby obtaining a list of all objects in the application. If users with access to individual objects should be prevented from obtaining this list, setting `query_pk_and_slug` to `True` will help prevent the guessing of URLs as each URL will require two correct, non-sequential arguments. Using a unique slug may serve the same purpose, but this scheme allows you to have non-unique slugs.
+
+</div>
+
+<div class="method">
+
+get_object(queryset=None)
+
+Returns the single object that this view will display. If `queryset` is provided, that queryset will be used as the source of objects; otherwise, `get_queryset` will be used. `get_object()` looks for a `pk_url_kwarg` argument in the arguments to the view; if this argument is found, this method performs a primary-key based lookup using that value. If this argument is not found, it looks for a `slug_url_kwarg` argument, and performs a slug lookup using the `slug_field`.
+
+When `query_pk_and_slug` is `True`, `get_object()` will perform its lookup using both the primary key and the slug.
+
+</div>
+
+<div class="method">
+
+get_queryset()
+
+Returns the queryset that will be used to retrieve the object that this view will display. By default, `get_queryset` returns the value of the `queryset` attribute if it is set, otherwise it constructs a `~django.db.models.query.QuerySet` by calling the `all()` method on the `model` attribute's default manager.
+
+</div>
+
+<div class="method">
+
+get_context_object_name(obj)
+
+Return the context variable name that will be used to contain the data that this view is manipulating. If `context_object_name` is not set, the context name will be constructed from the `model_name` of the model that the queryset is composed from. For example, the model `Article` would have context object named `'article'`.
+
+</div>
+
+<div class="method">
+
+get_context_data(\*\*kwargs)
+
+Returns context data for displaying the object.
+
+The base implementation of this method requires that the `self.object` attribute be set by the view (even if `None`). Be sure to do this if you are using this mixin without one of the built-in views that does so.
+
+It returns a dictionary with these contents:
+
+- `object`: The object that this view is displaying (`self.object`).
+- `context_object_name`: `self.object` will also be stored under the name returned by `get_context_object_name`, which defaults to the lowercased version of the model name.
+
+<div class="admonition">
+
+Context variables override values from template context processors
+
+Any variables from `get_context_data` take precedence over context variables from `context processors
+<subclassing-context-requestcontext>`. For example, if your view sets the `model` attribute to `~django.contrib.auth.models.User`, the default context object name of `user` would override the `user` variable from the `django.contrib.auth.context_processors.auth` context processor. Use `get_context_object_name` to avoid a clash.
+
+</div>
+
+</div>
+
+<div class="method">
+
+get_slug_field()
+
+Returns the name of a slug field to be used to look up by slug. By default this returns the value of `slug_field`.
+
+</div>
+
+</div>
+
+## `SingleObjectTemplateResponseMixin`
+
+<div class="django.views.generic.detail.SingleObjectTemplateResponseMixin">
+
+A mixin class that performs template-based response rendering for views that operate upon a single object instance. Requires that the view it is mixed with provides `self.object`, the object instance that the view is operating on. `self.object` will usually be, but is not required to be, an instance of a Django model. It may be `None` if the view is in the process of constructing a new instance.
+
+**Extends**
+
+- `~django.views.generic.base.TemplateResponseMixin`
+
+**Methods and Attributes**
+
+<div class="attribute">
+
+template_name_field
+
+The field on the current object instance that can be used to determine the name of a candidate template. If either `template_name_field` itself or the value of the `template_name_field` on the current object instance is `None`, the object will not be used for a candidate template name.
+
+</div>
+
+<div class="attribute">
+
+template_name_suffix
+
+The suffix to append to the auto-generated candidate template name. Default suffix is `_detail`.
+
+</div>
+
+<div class="method">
+
+get_template_names()
+
+Returns a list of candidate template names. Return a list containing `template_name`, if set on the value. Otherwise, return a list containing:
+
+- the contents of the `template_name_field` field on the object instance that the view is operating upon (if available)
+- `<app_label>/<model_name><template_name_suffix>.html`
+
+</div>
+
+</div>

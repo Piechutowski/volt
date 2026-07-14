@@ -1,0 +1,203 @@
+# `django.urls` functions for use in URLconfs
+
+<div class="module" synopsis="Functions for use in URLconfs.">
+
+django.urls.conf
+
+</div>
+
+<div class="currentmodule">
+
+django.urls
+
+</div>
+
+## `path()`
+
+<div class="function">
+
+path(route, view, kwargs=None, name=None)
+
+</div>
+
+Returns an element for inclusion in `urlpatterns`. For example:
+
+    from django.urls import include, path
+
+    urlpatterns = [
+        path("index/", views.index, name="main-view"),
+        path("bio/<username>/", views.bio, name="bio"),
+        path("articles/<slug:title>/", views.article, name="article-detail"),
+        path("articles/<slug:title>/<int:section>/", views.section, name="article-section"),
+        path("blog/", include("blog.urls")),
+        ...,
+    ]
+
+### `route`
+
+The `route` argument should be a string or `~django.utils.translation.gettext_lazy` (see `translating-urlpatterns`) that contains a URL pattern. The string may contain angle brackets (like `<username>` above) to capture part of the URL and send it as a keyword argument to the view. The angle brackets may include a converter specification (like the `int` part of `<int:section>`) which limits the characters matched and may also change the type of the variable passed to the view. For example, `<int:section>` matches a string of decimal digits and converts the value to an `int`.
+
+When processing a request, Django starts at the first pattern in `urlpatterns` and makes its way down the list, comparing the requested URL against each pattern until it finds one that matches. See `how-django-processes-a-request` for more details.
+
+Patterns don't match GET and POST parameters, or the domain name. For example, in a request to `https://www.example.com/myapp/`, the URLconf will look for `myapp/`. In a request to `https://www.example.com/myapp/?page=3`, the URLconf will also look for `myapp/`.
+
+### `view`
+
+The `view` argument is a view function or the result of `~django.views.generic.base.View.as_view` for class-based views. It can also be a `django.urls.include`.
+
+When Django finds a matching pattern, it calls the specified view function with an `~django.http.HttpRequest` object as the first argument and any "captured" values from the route as keyword arguments.
+
+### `kwargs`
+
+The `kwargs` argument allows you to pass additional arguments to the view function or method. See `views-extra-options` for an example.
+
+### `name`
+
+Naming your URL lets you refer to it unambiguously from elsewhere in Django, especially from within templates. This powerful feature allows you to make global changes to the URL patterns of your project while only touching a single file.
+
+See `Naming URL patterns <naming-url-patterns>` for why the `name` argument is useful.
+
+## `re_path()`
+
+<div class="function">
+
+re_path(route, view, kwargs=None, name=None)
+
+</div>
+
+Returns an element for inclusion in `urlpatterns`. For example:
+
+    from django.urls import include, re_path
+
+    urlpatterns = [
+        re_path(r"^index/$", views.index, name="index"),
+        re_path(r"^bio/(?P<username>\w+)/$", views.bio, name="bio"),
+        re_path(r"^blog/", include("blog.urls")),
+        ...,
+    ]
+
+The `route` argument should be a string or `~django.utils.translation.gettext_lazy` (see `translating-urlpatterns`) that contains a regular expression compatible with Python's `re` module. Strings typically use raw string syntax (`r''`) so that they can contain sequences like `\d` without the need to escape the backslash with another backslash. When a match is made, captured groups from the regular expression are passed to the view -- as named arguments if the groups are named, and as positional arguments otherwise. The values are passed as strings, without any type conversion.
+
+When a `route` ends with `$` the whole requested URL, matching against `~django.http.HttpRequest.path_info`, must match the regular expression pattern (`re.fullmatch` is used).
+
+The `view`, `kwargs` and `name` arguments are the same as for `~django.urls.path`.
+
+## `include()`
+
+<div class="function">
+
+include(module, namespace=None) include(pattern_list) include((pattern_list, app_namespace), namespace=None)
+
+A function that takes a full Python import path to another URLconf module that should be "included" in this place. Optionally, the `application
+namespace` and `instance namespace` where the entries will be included into can also be specified.
+
+Usually, the application namespace should be specified by the included module. If an application namespace is set, the `namespace` argument can be used to set a different instance namespace.
+
+`include()` also accepts as an argument either an iterable that returns URL patterns or a 2-tuple containing such iterable plus the names of the application namespaces.
+
+arg module  
+URLconf module (or module name)
+
+arg namespace  
+Instance namespace for the URL entries being included
+
+type namespace  
+str
+
+arg pattern_list  
+Iterable of `~django.urls.path` and/or `~django.urls.re_path` instances.
+
+arg app_namespace  
+Application namespace for the URL entries being included
+
+type app_namespace  
+str
+
+</div>
+
+See `including-other-urlconfs` and `namespaces-and-include`.
+
+## `register_converter()`
+
+<div class="function">
+
+register_converter(converter, type_name)
+
+</div>
+
+The function for registering a converter for use in `~django.urls.path` `route`s.
+
+The `converter` argument is a converter class, and `type_name` is the converter name to use in path patterns. See `registering-custom-path-converters` for an example.
+
+# `django.conf.urls` functions for use in URLconfs
+
+<div class="module">
+
+django.conf.urls
+
+</div>
+
+## `static()`
+
+<div class="function">
+
+static.static(prefix, view=django.views.static.serve, \*\*kwargs)
+
+</div>
+
+Helper function to return a URL pattern for serving files in debug mode:
+
+    from django.conf import settings
+    from django.conf.urls.static import static
+
+    urlpatterns = [
+        # ... the rest of your URLconf goes here ...
+    ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+## `handler400`
+
+<div class="data">
+
+handler400
+
+</div>
+
+A callable, or a string representing the full Python import path to the view that should be called if the HTTP client has sent a request that caused an error condition and a response with a status code of 400.
+
+By default, this is `django.views.defaults.bad_request`. If you implement a custom view, be sure it accepts `request` and `exception` arguments and returns an `~django.http.HttpResponseBadRequest`.
+
+## `handler403`
+
+<div class="data">
+
+handler403
+
+</div>
+
+A callable, or a string representing the full Python import path to the view that should be called if the user doesn't have the permissions required to access a resource.
+
+By default, this is `django.views.defaults.permission_denied`. If you implement a custom view, be sure it accepts `request` and `exception` arguments and returns an `~django.http.HttpResponseForbidden`.
+
+## `handler404`
+
+<div class="data">
+
+handler404
+
+</div>
+
+A callable, or a string representing the full Python import path to the view that should be called if none of the URL patterns match.
+
+By default, this is `django.views.defaults.page_not_found`. If you implement a custom view, be sure it accepts `request` and `exception` arguments and returns an `~django.http.HttpResponseNotFound`.
+
+## `handler500`
+
+<div class="data">
+
+handler500
+
+</div>
+
+A callable, or a string representing the full Python import path to the view that should be called in case of server errors. Server errors happen when you have runtime errors in view code.
+
+By default, this is `django.views.defaults.server_error`. If you implement a custom view, be sure it accepts a `request` argument and returns an `~django.http.HttpResponseServerError`.

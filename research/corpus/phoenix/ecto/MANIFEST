@@ -1,0 +1,5 @@
+source: https://github.com/elixir-ecto/ecto
+ref: v3.14.1
+commit: e0aa6e1b453f1c454f2810965eb34c5926fc8472
+fetched: 2026-07-14T12:57:22Z
+markdown_files: 19
