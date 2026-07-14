@@ -352,7 +352,7 @@ This document is the synthesis layer of the Volt framework research. Volt is a p
 - Cast-then-validate (Phoenix/Django) doubles as mass-assignment defense and type coercion in one step; in Go, decoding `map[string]any` → typed struct with a field whitelist is the same move and avoids a separate "rules language."
 - Laravel's ~100-rule string DSL trades compile-time safety for terseness — the exact opposite tradeoff a Go framework would make; Rails' `:on` contexts and Phoenix's per-action changeset functions are two ways to express "different rules for create vs update," a problem Volt must answer either way.
 
-## P23 / P22 skim — data-adjacent capabilities worth matrix rows
+### Aside — database-native extras (Django P23, Laravel P22)
 
 Already folded into P4/P5 above: vector search (Laravel SRCH-2/ORM-18 vs nothing elsewhere), PG-native types/indexes/exclusion constraints (Django PG-1–8 vs Rails ORM-49 in core), extension/concurrent-index migration ops (Django PG-10 vs Laravel MIG-12), and PG full-text/trigram (Django PG-4–6, Laravel SRCH-1). Not carried in: Laravel Scout (index-synced external search engines, SRCH-5–8) — an application-search product layer rather than a data-layer capability; Django PG form fields (PG-13) — belongs to the forms layer.
 
