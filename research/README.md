@@ -57,22 +57,17 @@ automatic — highest stable branch/tag via `git ls-remote` — and each
 script accepts an env override (`LARAVEL_REF`, `RAILS_REF`,
 `PHOENIX_REF`, `LIVEVIEW_REF`, `ECTO_REF`, `PLUG_REF`, `DJANGO_REF`).
 
-### HTML crawler (API references)
+### Known blind spot: generated API references
 
-The guides above are the feature-bearing docs, but the generated API
-references (api.rubyonrails.org, api.laravel.com, hexdocs module pages)
-have no markdown source. `scripts/crawl_html.py` is a polite generic
-crawler (robots.txt-aware, rate-limited, main-content extraction,
-HTML → markdown) for exactly that, e.g.:
-
-```sh
-pip install -r scripts/requirements.txt
-scripts/crawl_html.py --start https://hexdocs.pm/phoenix/Phoenix.html \
-    --prefix https://hexdocs.pm/phoenix/ --out corpus/phoenix-api
-```
-
-These crawls are not committed by default — the guides corpus is what
-the feature inventories are built from.
+The guides above are the feature-bearing docs, but each ecosystem also
+has a generated API reference (api.rubyonrails.org, api.laravel.com,
+hexdocs module pages) whose text exists only as comments in the source
+code — RDoc / PHPDoc / `@moduledoc` — rendered to HTML at release
+time, with no doc files to fetch. The corpus and the inventories built
+from it therefore reflect what the guides document. If that layer is
+ever needed: for the Elixir libraries the clean path is extracting
+`@moduledoc`/`@doc` strings (they are markdown) from a source clone;
+for Rails/Laravel it would mean scraping the rendered HTML.
 
 ## Feature inventories (`features/`)
 

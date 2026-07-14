@@ -6,7 +6,7 @@
 # overrides it (e.g. RAILS_REF=main for edge guides).
 #
 # Note: this is the guides, not the API reference (api.rubyonrails.org
-# is generated from source comments — see crawl_html.py for that).
+# is generated from RDoc comments in the Rails source, not from doc files).
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
