@@ -1,4 +1,4 @@
-# Volt Router — Specification (draft v0.2)
+# Volt Router — Specification (draft v0.3)
 
 **Status:** Draft for discussion — nothing here is locked yet.
 **Part of:** Volt. Grounded in [`research/features/`](../research/features/):
@@ -16,6 +16,14 @@ speak the ecosystem contract `func(http.Handler) http.Handler`; the
 §4.1 gains the committed-response clause and the layering rationale).
 New §0 positioning statement. New §12 **Datasets** — schema-driven
 group-expanded resources — with decisions R12–R14.
+
+**Changes in v0.3.** The file/module model moved to its own document,
+[`language.md`](./language.md) (L-series decisions): one language in
+three dialect layers, `.volt` files, package = directory, Go-style
+`package`/`import`, DBML `use`/`reuse` removed (legacy reference:
+[`dbml-imports.md`](./dbml-imports.md)). `Project { schema: }` is
+replaced by importing the schema package. §11 question 1 is resolved by
+L1. not-an-orm's source now lives in this repository under `nao/`.
 
 **TLDR.** One authored file — `routes.volt` — and the router is
 *generated*: registration onto the stdlib's own `ServeMux`, typed handler
@@ -112,16 +120,19 @@ statically composed pipelines, and the derivations.
 
 ## 3. The authored file: `routes.volt`
 
-Same lexical family as EDBML: newline-sensitive, `{}` blocks, `[]`
-settings lists, `//` comments, contextual keywords. One file per
-application (splittable via `use`, same module semantics as EDBML §7).
+Routing elements are the outermost dialect layer of the Volt language
+(L2): newline-sensitive, `{}` blocks, `[]` settings lists, `//`
+comments, contextual keywords. They live in ordinary `.volt` files of a
+package — in one file with the models, split across many, or in a
+dedicated routes package importing the schema package; all layouts are
+equivalent (L1). The schema connection is an ordinary package import:
 
 ```volt
-Project app {
-  package: 'routes'          // Go package for generated code
-  module:  'example.com/app' // import path root for controller resolution
-  schema:  'db/schema.edbml' // enables [model:], [bind], Dataset (§6, §12)
-}
+package app
+
+import (
+	db                       // the schema package — enables [model:], [bind], Dataset
+)
 
 Pipeline browser {
   use volt.RequestID
@@ -139,7 +150,7 @@ Scope / [pipe: browser] {
   get  /            Home.Index   [name: root]
   get  /about       Home.About
 
-  resources users [model: User, only: (index, show, new, create)] {
+  resources users [model: db.User, only: (index, show, new, create)] {
     resources posts [shallow]
     member {
       post /promote  Users.Promote
@@ -150,7 +161,7 @@ Scope / [pipe: browser] {
 }
 
 Scope /api/v1 [pipe: api, name: api] {
-  resources users [api, model: User, bind]
+  resources users [api, model: db.User, bind]
   get /health   Health.Check
 }
 ```
@@ -380,19 +391,19 @@ This is the Rails lesson — the symbiosis is the product: components
 derive from each other through one shared name. Volt does it without
 runtime reflection, at gen time, **explicitly and optionally**:
 
-- `[model: User]` on a resource makes `volt gen` read `schema.edbml`
-  (path from `Project` settings). It infers the `:id` param type from
-  the PK (`integer [pk, increment]` → `int64`), names helpers by the
-  model, and enables `paths.For(u)`.
+- `[model: db.User]` on a resource points `volt gen` at the imported
+  schema package (L3). It infers the `:id` param type from the PK
+  (`integer [pk, increment]` → `int64`), names helpers by the model,
+  and enables `paths.For(u)`.
 - `[bind]` (requires `model:`) generates the Laravel move — implicit
   binding — as *visible code*: the shim calls `q.UserGet(ctx, id)`,
   maps `rt.ErrNotFound` → 404, and the handler signature becomes
   `Show(w, r, user models.User) error`. The DB boundary is explicit:
   `New(c Controllers, volt.WithQueries(q))`. No `model:`/`bind:` — no
   coupling; the router stands alone.
-- Gen-time cross-validation: `[model: User]` naming a model absent from
-  the schema is a gen error, same class as nao preparing every query
-  against the generated DDL.
+- Gen-time cross-validation: `[model: db.User]` naming a model absent
+  from the imported package is a gen error, same class as nao preparing
+  every query against the generated DDL.
 - §12's `Dataset` is this symbiosis at group scale: the schema's
   `TableGroup` becomes the loop the generator expands.
 
@@ -533,9 +544,9 @@ handler method** and back.
 
 ## 11. Open questions (need your call)
 
-1. **File extension & name** — `routes.volt`? `app.routes`? Multiple
-   files by convention (`web.volt`, `api.volt` — the Laravel layout) or
-   one file + `use` imports (the EDBML layout)?
+1. ~~File extension & name~~ — **resolved by L1/L2**
+   ([`language.md`](./language.md)): everything is `.volt`, the package
+   (directory) is the unit, file layout carries no semantics.
 2. **`volt.Request` vs bare `*http.Request`** — narrowed by v0.2: the
    wrapper now appears only in controller signatures (pipelines are
    pure std). It still buys `Route()`, raw params, and `Committed()`
@@ -576,7 +587,7 @@ URLs like `/da/r_r` — and zero appetite for 40 hand-written resources.
 ### 12.1 Declaration and expansion
 
 ```volt
-Dataset da [from: group(DA), pipe: api, formats: (html, json, gob)] {
+Dataset da [from: db.group(DA), pipe: api, formats: (html, json, gob)] {
   path:   strip('da_')                 // da_r_r → /da/r_r
   key:    idpk
   ops:    (list, create, update, delete)
