@@ -683,6 +683,12 @@ declared, escape is omission.** Each rung replaces only what it names:
    generator swaps that single instantiation for a call to your method
    (which lands on a controller interface — forgetting to implement it
    is a compile error). The table's other operations stay generated.
+   The override receives the parsed, validated query **and the
+   generated default as a `next` argument**
+   (`DaRRList(w, r, q, next dataset.ListFunc[db.DaRR]) error`) — call
+   `next` to wrap (adjust the query, log, then delegate), ignore it to
+   replace. Wrap-or-replace with zero extra wiring; see
+   `docs/example/`.
    - **2.5 — presentation only**: drop a `templates/da/r_r.html` file,
      or supply your own `Renderer` in deps. No routing touched.
 3. **One table entirely** — `except:` it; write it as an ordinary
