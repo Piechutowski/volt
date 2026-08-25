@@ -1,4 +1,4 @@
-module github.com/Piechutowski/volt/nao
+module github.com/Piechutowski/volt
 
 go 1.24
 

@@ -47,6 +47,7 @@ const (
 	DOT      // .
 	TILDE    // ~
 	STAR     // *
+	SLASH    // / (Volt route paths and import paths, spec §V3-§V5)
 
 	LT    // <
 	GT    // >
@@ -73,6 +74,7 @@ var kindNames = [...]string{
 	DOT:      "'.'",
 	TILDE:    "'~'",
 	STAR:     "'*'",
+	SLASH:    "'/'",
 	LT:       "'<'",
 	GT:       "'>'",
 	LTGT:     "'<>'",

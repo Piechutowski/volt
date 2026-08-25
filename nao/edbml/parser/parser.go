@@ -132,6 +132,24 @@ func (p *parser) decl() (d ast.Decl) {
 	switch strings.ToLower(t.Val) {
 	case "use", "reuse":
 		return p.useDecl()
+	case "package":
+		return p.packageClause()
+	case "import":
+		if p.peekKind(1) == token.LPAREN {
+			return p.importDecl()
+		}
+		p.fail(t, "expected '(' after import (§V2); Volt uses Go-style import blocks")
+		return nil
+	case "pipeline":
+		return p.pipeline()
+	case "scope":
+		return p.scope()
+	case "dataset":
+		p.fail(t, "Dataset is reserved for a future version of Volt (§V8)")
+		return nil
+	case "get", "post", "put", "patch", "delete", "options", "head", "any", "resources":
+		p.fail(t, "routes and resources must appear inside a Scope (§V4)")
+		return nil
 	case "project":
 		return p.project()
 	case "table":
@@ -761,6 +779,19 @@ func (p *parser) settingValue() ast.Node {
 	case token.LT, token.GT, token.LTGT:
 		op := p.next()
 		return &ast.RefValue{OpTok: op, Endpoint: p.refEndpoint()}
+	case token.LPAREN: // identifier list value: only: (index, show) (§V6)
+		l := p.next()
+		il := &ast.IdentList{Lparen: l.Pos}
+		for {
+			il.Names = append(il.Names, p.ident("identifier list (§V6)"))
+			if p.at(token.COMMA) {
+				p.next()
+				continue
+			}
+			break
+		}
+		il.Rparen = p.expect(token.RPAREN, "identifier list (§V6)").End()
+		return il
 	case token.IDENT:
 		id := p.ident("setting value (§4.2)")
 		if p.at(token.DOT) {

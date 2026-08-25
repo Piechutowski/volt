@@ -444,7 +444,7 @@ var singleOps = map[rune]token.Kind{
 	'[': token.LBRACKET, ']': token.RBRACKET,
 	'(': token.LPAREN, ')': token.RPAREN,
 	',': token.COMMA, ':': token.COLON, '.': token.DOT,
-	'~': token.TILDE, '*': token.STAR,
+	'~': token.TILDE, '*': token.STAR, '/': token.SLASH,
 	'-': token.MINUS, '>': token.GT,
 }
 

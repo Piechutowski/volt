@@ -28,7 +28,7 @@ func main() {
 			App:    &app.App{Q: q, Log: slog.Default()},
 			Health: app.Health{},
 		},
-		volt.WithQueries(q),          // the explicit DB boundary (R9)
+		volt.WithQueries(q),           // the explicit DB boundary (R9)
 		volt.WithTemplates(templates), // HTML arm of the renderer (§12.3)
 	)
 

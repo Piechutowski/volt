@@ -146,14 +146,14 @@ func TestGoldenGofmtStable(t *testing.T) {
 func TestGoldenCompiles(t *testing.T) {
 	dir := t.TempDir()
 	// Generated code imports the rt runtime package (D03/D13); point the
-	// throwaway module back at this repository for it.
-	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	// throwaway module back at this repository (the volt module root) for it.
+	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
 	gomod := "module goldencheck\n\ngo 1.24\n\n" +
-		"require github.com/Piechutowski/volt/nao v0.0.0\n\n" +
-		"replace github.com/Piechutowski/volt/nao => " + repoRoot + "\n"
+		"require github.com/Piechutowski/volt v0.0.0\n\n" +
+		"replace github.com/Piechutowski/volt => " + repoRoot + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0o644); err != nil {
 		t.Fatal(err)
 	}

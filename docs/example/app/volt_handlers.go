@@ -37,7 +37,7 @@ type Controllers struct {
 func New(c Controllers, opts ...volt.Option) http.Handler {
 	deps := volt.BuildDeps(opts...)
 	mux := http.NewServeMux()
-	registerRoutes(mux, c, deps)   // volt_router.go (not shown)
+	registerRoutes(mux, c, deps)    // volt_router.go (not shown)
 	registerDatasetDA(mux, c, deps) // volt_dataset_da.go
 	return mux
 }
