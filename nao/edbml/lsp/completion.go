@@ -17,8 +17,14 @@ var (
 	elementKeywords = []string{
 		"Project", "Table", "TablePartial", "Enum", "Ref", "TableGroup",
 		"Note", "Records", "DiagramView", "use", "reuse",
+		// Volt layer (SPEC.md §V)
+		"package ", "import", "Pipeline", "Scope",
 	}
 	tableBodyKeywords = []string{"indexes", "checks", "Note", "Records"}
+	scopeBodyKeywords = []string{
+		"get ", "post ", "put ", "patch ", "delete ", "options ", "head ",
+		"any ", "resources ", "Scope ",
+	}
 
 	settingsByContext = map[string][]string{
 		"column":    {"pk", "primary key", "null", "not null", "unique", "increment", "default: ", "check: ", "note: ", "ref: "},
@@ -29,6 +35,10 @@ var (
 		"enumvalue": {"note: "},
 		"sticky":    {"color: "},
 		"group":     {"note: ", "color: "},
+		// Volt layer (SPEC.md §V4-§V5)
+		"scope":     {"pipe: ", "error_handler: ", "name: "},
+		"route":     {"name: "},
+		"resources": {"model: ", "only: (", "except: (", "param: ", "api"},
 	}
 
 	builtinTypes = []string{
@@ -40,6 +50,12 @@ var (
 	}
 
 	refActionValues = []string{"cascade", "restrict", "set null", "set default", "no action"}
+
+	// voltVerbSet mirrors the parser's route verbs (SPEC.md §V4.2).
+	voltVerbSet = map[string]bool{
+		"get": true, "post": true, "put": true, "patch": true,
+		"delete": true, "options": true, "head": true, "any": true,
+	}
 
 	partialInjectRE = regexp.MustCompile(`~\s*[\w"]*$`)
 	dotChainRE      = regexp.MustCompile(`([\p{L}\p{M}\d_]+|"[^"]*")(\.([\p{L}\p{M}\d_]+|"[^"]*"))?\.$`)
@@ -98,6 +114,14 @@ func (d *Document) Complete(pos protocol.Position) []protocol.CompletionItem {
 		if lineStartRE.MatchString(prefix) {
 			return d.tableItems()
 		}
+	case "scope":
+		if lineStartRE.MatchString(prefix) {
+			return keywordItems(scopeBodyKeywords)
+		}
+	case "pipeline":
+		if lineStartRE.MatchString(prefix) {
+			return keywordItems([]string{"use "})
+		}
 	}
 	return nil
 }
@@ -147,6 +171,10 @@ func (d *Document) blockContext(line int) string {
 				return "diagramview"
 			case strings.HasPrefix(head, "note"):
 				return "note"
+			case strings.HasPrefix(head, "pipeline"):
+				return "pipeline"
+			case strings.HasPrefix(head, "scope"):
+				return "scope"
 			default:
 				// unnamed opener inside another block: keep scanning with
 				// the parent block's depth.
@@ -175,6 +203,7 @@ func (d *Document) settingsComplete(prefix, ctx string) []protocol.CompletionIte
 
 	kind := "column"
 	head := strings.ToLower(strings.TrimSpace(prefix))
+	verb := strings.SplitN(head, " ", 2)[0]
 	switch {
 	case strings.HasPrefix(head, "table") && !strings.HasPrefix(head, "tablegroup"):
 		kind = "table"
@@ -184,6 +213,16 @@ func (d *Document) settingsComplete(prefix, ctx string) []protocol.CompletionIte
 		kind = "ref"
 	case strings.HasPrefix(head, "note"):
 		kind = "sticky"
+	// Volt lines exist only where the grammar puts them (§V4): Scope
+	// openers at top level or nested in a Scope, routes and resources
+	// in Scope bodies. Without the context gate a column named 'scope'
+	// or 'delete' inside a Table would get route settings.
+	case strings.HasPrefix(head, "scope") && (ctx == "" || ctx == "scope"):
+		kind = "scope"
+	case strings.HasPrefix(head, "resources") && ctx == "scope":
+		kind = "resources"
+	case voltVerbSet[verb] && ctx == "scope":
+		kind = "route"
 	default:
 		switch ctx {
 		case "indexes":

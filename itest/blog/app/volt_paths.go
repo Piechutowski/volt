@@ -73,7 +73,7 @@ func PathPage(num int, opts ...volt.URLOption) string {
 	return volt.URL("/pages/"+volt.SegInt(int64(num)), opts...)
 }
 
-// PathEpoch returns the path for GET /epochs/:stamp(int64) (Epochs.Show).
-func PathEpoch(stamp int64, opts ...volt.URLOption) string {
-	return volt.URL("/epochs/"+volt.SegInt(stamp), opts...)
+// PathArchive returns the path for GET /archive/:stamp(int64) (Archive.Show).
+func PathArchive(stamp int64, opts ...volt.URLOption) string {
+	return volt.URL("/archive/"+volt.SegInt(stamp), opts...)
 }

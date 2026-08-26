@@ -384,6 +384,10 @@ func (c *checker) routeBuild(r *ast.Route, inh inherited) *RouteInfo {
 		c.errorf(r.Handler.Pos(), "V4", "handlers live in the routes package; %q names an imported package (§V4.3)", controller)
 		return nil
 	}
+	if r.Handler.Parts[0].Quoted() || r.Handler.Parts[1].Quoted() {
+		c.errorf(r.Handler.Pos(), "V4", "handler names are plain (unquoted) identifiers (§V4.1.6), found %q", r.Handler.String())
+		return nil
+	}
 	if !exportedIdentOK(controller) || !exportedIdentOK(action) {
 		c.errorf(r.Handler.Pos(), "V4", "handler must be Controller.Action, both exported Go identifiers (§V4.3), found %q", r.Handler.String())
 		return nil

@@ -46,11 +46,12 @@ func wantError(t *testing.T, diags []diag.Diagnostic, substr string) {
 	t.Fatalf("no diagnostic mentions %q; got %v", substr, diags)
 }
 
-const modFile = "module fadn\n"
+const modFile = "module blog\n"
 
-// The reference project: a schema package and a routes package,
-// exercising imports, model inference, resources, nesting and helpers.
-var fadn = map[string]string{
+// The reference project: a small blog — a schema package and a routes
+// package exercising imports, model inference, resources, nesting and
+// helpers.
+var blog = map[string]string{
 	"volt.mod": modFile,
 	"db/schema.volt": `package db
 
@@ -59,9 +60,9 @@ Table users {
 	email text    [not null, unique]
 }
 
-Table da_r_r {
-	idpk integer [pk]
-	rok  integer [not null, default: 0]
+Table posts {
+	id    integer [pk, increment]
+	title text    [not null]
 }
 `,
 	"app/routes.volt": `package app
@@ -92,7 +93,7 @@ Scope / [pipe: api, error_handler: Errors] {
 }
 
 func TestReferenceProject(t *testing.T) {
-	pr, diags := project(t, fadn)
+	pr, diags := project(t, blog)
 	wantClean(t, diags)
 
 	app := pr.Packages["app"]

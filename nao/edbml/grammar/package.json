@@ -1,18 +1,18 @@
 {
   "name": "tree-sitter-edbml",
-  "version": "0.1.0",
-  "description": "EDBML (Extended Database Markup Language) grammar for tree-sitter",
-  "repository": "github:Piechutowski/not-an-orm",
+  "version": "0.2.0",
+  "description": "EDBML/Volt grammar for tree-sitter: DBML, its EDBML extensions, and the Volt routing layer (.volt files)",
+  "repository": "github:Piechutowski/volt",
   "license": "Apache-2.0",
-  "keywords": ["parser", "tree-sitter", "dbml", "edbml"],
+  "keywords": ["parser", "tree-sitter", "dbml", "edbml", "volt"],
   "devDependencies": {
     "tree-sitter-cli": "^0.25.0"
   },
   "tree-sitter": [
     {
       "scope": "source.edbml",
-      "file-types": ["edbml", "dbml"],
-      "injection-regex": "^e?dbml$"
+      "file-types": ["volt", "edbml", "dbml"],
+      "injection-regex": "^(e?dbml|volt)$"
     }
   ]
 }

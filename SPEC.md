@@ -101,7 +101,9 @@ import path = name, { slash, name } ;
    after the package clause, before other use of the imported names.
 2. An import path names a package by its directory path from the
    project root, `/`-separated, with no `./`, no `..`, and no interior
-   whitespace. The path MUST name an existing package of the project.
+   whitespace; its segments, and the alias, are plain (unquoted)
+   identifiers (§V4.1.6). The path MUST name an existing package of
+   the project.
 3. The imported package is referenced through its **qualifier**: the
    alias when given, else the last path segment. All cross-package
    references are qualifier-prefixed (`db.User`); nothing is ever
@@ -197,8 +199,9 @@ type name  = "int" | "int32" | "int64" | "string" ;
    and generated Go; the closed character set is what makes that safe
    (and is why `{`/`}` can serve as the collision-free conflict markers
    of §V4.7.1). The same constraint applies to the `resources` table
-   name (§V5.1) and to the identifiers of pipeline names and plug
-   references (§V3).
+   name (§V5.1), to the identifiers of pipeline names and plug
+   references (§V3), to route handler names (§V4.3), and to import
+   aliases and path segments (§V2.2).
 
 ### §V4.2 Routes
 

@@ -75,12 +75,25 @@ func (s *Server) initialize(_ *glsp.Context, params *protocol.InitializeParams) 
 // document sync
 
 func (s *Server) didOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
-	doc := NewDocument(params.TextDocument.URI, params.TextDocument.Text)
+	doc := &Document{URI: params.TextDocument.URI, Siblings: s.openTexts}
 	s.mu.Lock()
 	s.docs[params.TextDocument.URI] = doc
 	s.mu.Unlock()
+	doc.Update(params.TextDocument.Text)
 	s.diagnosticsPublish(ctx, doc)
 	return nil
+}
+
+// openTexts snapshots every open buffer keyed by on-disk path — the
+// overlay the Volt project pass feeds to lang.LoadOverlay.
+func (s *Server) openTexts() map[string]string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make(map[string]string, len(s.docs))
+	for uri, doc := range s.docs {
+		out[pathFromURI(uri)] = doc.Text
+	}
+	return out
 }
 
 func (s *Server) didChange(ctx *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {

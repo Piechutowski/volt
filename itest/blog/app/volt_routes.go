@@ -29,5 +29,5 @@ var Table = []volt.Route{
 	{Method: "GET", Pattern: "/files/{path...}", Spelled: "/files/:path...", Controller: "Files", Action: "Serve", Helper: "PathServe", Params: []volt.RouteParam{{Name: "path", Type: "string", Wild: true}}},
 	{Method: "GET", Pattern: "/tags/{name}", Spelled: "/tags/:name", Controller: "Tags", Action: "Show", Helper: "PathTag", Params: []volt.RouteParam{{Name: "name", Type: "string"}}},
 	{Method: "GET", Pattern: "/pages/{num}", Spelled: "/pages/:num(int)", Controller: "Pages", Action: "Show", Helper: "PathPage", Params: []volt.RouteParam{{Name: "num", Type: "int"}}},
-	{Method: "GET", Pattern: "/epochs/{stamp}", Spelled: "/epochs/:stamp(int64)", Controller: "Epochs", Action: "Show", Helper: "PathEpoch", Params: []volt.RouteParam{{Name: "stamp", Type: "int64"}}},
+	{Method: "GET", Pattern: "/archive/{stamp}", Spelled: "/archive/:stamp(int64)", Controller: "Archive", Action: "Show", Helper: "PathArchive", Params: []volt.RouteParam{{Name: "stamp", Type: "int64"}}},
 }

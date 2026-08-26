@@ -7,21 +7,21 @@
       "title": "EDBML",
       "scope": "source.edbml",
       "path": ".",
-      "file-types": ["edbml", "dbml"],
-      "injection-regex": "^e?dbml$"
+      "file-types": ["volt", "edbml", "dbml"],
+      "injection-regex": "^(e?dbml|volt)$"
     }
   ],
   "metadata": {
-    "version": "0.1.0",
+    "version": "0.2.0",
     "license": "Apache-2.0",
-    "description": "EDBML (Extended Database Markup Language) grammar for tree-sitter",
+    "description": "EDBML/Volt grammar for tree-sitter: DBML, its EDBML extensions, and the Volt routing layer (.volt files)",
     "authors": [
       {
         "name": "Szymon Piechutowski"
       }
     ],
     "links": {
-      "repository": "https://github.com/Piechutowski/not-an-orm"
+      "repository": "https://github.com/Piechutowski/volt"
     }
   },
   "bindings": {

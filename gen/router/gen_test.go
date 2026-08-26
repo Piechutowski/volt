@@ -20,7 +20,7 @@ var update = flag.Bool("update", false, "rewrite golden files")
 // generate loads the fixture project and generates the app package.
 func generate(t *testing.T) map[string][]byte {
 	t.Helper()
-	pr, err := lang.Load(filepath.Join("testdata", "fadn"))
+	pr, err := lang.Load(filepath.Join("testdata", "blog"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func generate(t *testing.T) map[string][]byte {
 }
 
 func goldenPath(name string) string {
-	return filepath.Join("testdata", "fadn_app_"+strings.TrimSuffix(strings.TrimPrefix(name, "volt_"), ".go")+".go.golden")
+	return filepath.Join("testdata", "blog_app_"+strings.TrimSuffix(strings.TrimPrefix(name, "volt_"), ".go")+".go.golden")
 }
 
 func TestGolden(t *testing.T) {

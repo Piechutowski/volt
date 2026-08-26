@@ -47,3 +47,25 @@
 (diagram_view_definition
   "DiagramView" @context
   name: (_) @name) @item
+
+; ---------- Volt layer (volt SPEC.md §V) ----------
+
+(package_clause
+  "package" @context
+  name: (identifier) @name) @item
+
+(pipeline_definition
+  "Pipeline" @context
+  name: (pipeline_name) @name) @item
+
+(scope_definition
+  "Scope" @context
+  path: (route_path) @name) @item
+
+(route
+  verb: (verb) @context
+  path: (route_path) @name) @item
+
+(resources_declaration
+  "resources" @context
+  table: (table_name) @name) @item

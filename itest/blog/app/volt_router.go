@@ -136,13 +136,13 @@ func register(mux *http.ServeMux, c Controllers) {
 		return c.Pages.Show(w, r, voltnum)
 	}, errHandlerErrors)))
 
-	// GET /epochs/:stamp(int64) → Epochs.Show [pipe: api]
-	mux.Handle("GET /epochs/{stamp}", pipe0(volt.Handler("GET /epochs/{stamp}", func(w http.ResponseWriter, r *volt.Request) error {
+	// GET /archive/:stamp(int64) → Archive.Show [pipe: api]
+	mux.Handle("GET /archive/{stamp}", pipe0(volt.Handler("GET /archive/{stamp}", func(w http.ResponseWriter, r *volt.Request) error {
 		voltstamp, ok := volt.ParseInt64(r.PathValue("stamp"))
 		if !ok {
 			return volt.ErrNotFound
 		}
-		return c.Epochs.Show(w, r, voltstamp)
+		return c.Archive.Show(w, r, voltstamp)
 	}, errHandlerErrors)))
 }
 

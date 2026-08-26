@@ -134,6 +134,10 @@ func TestVoltSyntaxErrors(t *testing.T) {
 		{"space in import path", "import (\n\tshared / dicts\n)\n", "expected end of line after import specifier"},
 		{"plug without use", "Pipeline api {\n\tRequestID\n}\n", "expected 'use' plug line"},
 		{"trailing slash", "Scope / {\n\tget /users/ Users.Index\n}\n", "without a trailing slash"},
+		{"space in type annotation", "Scope / {\n\tget /users/:id( int32 ) Users.Show\n}\n", "with no spaces"},
+		{"space before closing paren", "Scope / {\n\tget /users/:id(int32 ) Users.Show\n}\n", "with no spaces"},
+		{"quoted import path", "import (\n\t\"db\"\n)\n", "plain (unquoted) identifiers"},
+		{"quoted import alias", "import (\n\t\"d\" shared/db\n)\n", "plain (unquoted) identifier"},
 		{"trailing slash on scope", "Scope /admin/ {\n\tget / A.Index\n}\n", "without a trailing slash"},
 		// An empty segment ("//") is lexically unreachable — '//' opens a
 		// line comment (§V0.2) — so the non-segment case needs another

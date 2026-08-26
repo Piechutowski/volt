@@ -99,6 +99,14 @@ func FindRoot(dir string) (string, error) {
 // packages. Parse errors are collected, not fatal: Check still runs on
 // what parsed, like the rest of the toolchain.
 func Load(root string) (*Project, error) {
+	return LoadOverlay(root, nil)
+}
+
+// LoadOverlay is Load with in-memory contents taking precedence over
+// the disk: overlay maps absolute file paths to their current text.
+// This is the language server's view of a project — open editor
+// buffers override what was last saved.
+func LoadOverlay(root string, overlay map[string]string) (*Project, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -132,9 +140,15 @@ func Load(root string) (*Project, error) {
 		if !strings.HasSuffix(d.Name(), ".volt") {
 			return nil
 		}
-		src, err := os.ReadFile(path)
-		if err != nil {
-			return err
+		src := ""
+		if text, ok := overlay[path]; ok {
+			src = text
+		} else {
+			b, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			src = string(b)
 		}
 		rel, err := filepath.Rel(abs, filepath.Dir(path))
 		if err != nil {
@@ -146,7 +160,7 @@ func Load(root string) (*Project, error) {
 			pkg = &Package{Path: key, Dir: filepath.Dir(path), Imports: map[string]string{}}
 			pr.Packages[key] = pkg
 		}
-		f, diags := parser.ParseFile(path, string(src))
+		f, diags := parser.ParseFile(path, src)
 		pkg.Files = append(pkg.Files, f)
 		pr.Diags = append(pr.Diags, diags...)
 		return nil

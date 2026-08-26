@@ -14,9 +14,9 @@ import (
 // TestFixtureNotDrifted regenerates the fixture's router files
 // in-memory and byte-compares them with the committed ones: the proof
 // suite always exercises current generator output. Refresh with
-// 'go run ./cmd/volt gen ./itest/fadn' after intentional changes.
+// 'go run ./cmd/volt gen ./itest/blog' after intentional changes.
 func TestFixtureNotDrifted(t *testing.T) {
-	pr, err := lang.Load("fadn")
+	pr, err := lang.Load("blog")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,12 +29,12 @@ func TestFixtureNotDrifted(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, want := range files {
-		got, err := os.ReadFile(filepath.Join("fadn", "app", name))
+		got, err := os.ReadFile(filepath.Join("blog", "app", name))
 		if err != nil {
 			t.Fatal(err)
 		}
 		if !bytes.Equal(got, want) {
-			t.Errorf("%s drifted from generator output; re-run volt gen ./itest/fadn", name)
+			t.Errorf("%s drifted from generator output; re-run volt gen ./itest/blog", name)
 		}
 	}
 }

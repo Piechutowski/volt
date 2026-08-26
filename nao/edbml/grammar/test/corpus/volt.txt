@@ -1,0 +1,204 @@
+==================
+volt: package clause and import block
+==================
+
+package app
+
+import (
+	db
+	d2 shared/dicts
+)
+
+---
+
+(source_file
+  (package_clause
+    (identifier))
+  (import_block
+    (import_spec
+      (import_path
+        (identifier)))
+    (import_spec
+      (import_alias)
+      (import_path
+        (identifier)
+        (identifier)))))
+
+==================
+volt: pipeline with plugs
+==================
+
+Pipeline api {
+	use volt.RequestID
+	use BearerAuth
+}
+
+---
+
+(source_file
+  (pipeline_definition
+    (pipeline_name)
+    (plug
+      (go_ref
+        (identifier)
+        (identifier)))
+    (plug
+      (go_ref
+        (identifier)))))
+
+==================
+volt: scope with routes, resources, nesting
+==================
+
+Scope / [pipe: api, error_handler: Errors] {
+	get / Home.Index [name: root]
+
+	Scope /admin [name: admin] {
+		get /stats Admin.Stats
+	}
+
+	resources users [model: db.User, only: (index, show)]
+
+	get /users/:id(int32)/avatar Users.Avatar
+	get /files/:path...          Files.Serve
+}
+
+---
+
+(source_file
+  (scope_definition
+    (route_path)
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (setting_value_words
+          (identifier)))
+      (setting
+        (setting_name
+          (identifier))
+        (setting_value_words
+          (identifier))))
+    (route
+      (verb)
+      (route_path)
+      (go_ref
+        (identifier)
+        (identifier))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (setting_value_words
+            (identifier)))))
+    (scope_definition
+      (route_path
+        (path_segment))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (setting_value_words
+            (identifier))))
+      (route
+        (verb)
+        (route_path
+          (path_segment))
+        (go_ref
+          (identifier)
+          (identifier))))
+    (resources_declaration
+      (table_name)
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (enum_constant
+            (enum_name
+              (identifier))
+            (identifier)))
+        (setting
+          (setting_name
+            (identifier))
+          (ident_group
+            (identifier)
+            (identifier)))))
+    (route
+      (verb)
+      (route_path
+        (path_segment)
+        (path_parameter
+          (parameter_name)
+          (type_name))
+        (path_segment))
+      (go_ref
+        (identifier)
+        (identifier)))
+    (route
+      (verb)
+      (route_path
+        (path_segment)
+        (path_parameter
+          (parameter_name)
+          (wildcard_marker)))
+      (go_ref
+        (identifier)
+        (identifier)))))
+
+==================
+volt: routing beside tables (superset)
+==================
+
+package app
+
+Table users {
+	id integer [pk]
+}
+
+Scope / {
+	get /users/:id(int32) Users.Show
+}
+
+---
+
+(source_file
+  (package_clause
+    (identifier))
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))))))
+  (scope_definition
+    (route_path)
+    (route
+      (verb)
+      (route_path
+        (path_segment)
+        (path_parameter
+          (parameter_name)
+          (type_name)))
+      (go_ref
+        (identifier)
+        (identifier)))))
+
+==================
+volt: whitespace splits a route path
+:error
+==================
+
+Scope / {
+	get /users /:id Users.Show
+}
+
+---
+
+

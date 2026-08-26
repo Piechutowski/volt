@@ -6,6 +6,7 @@
 package lsp
 
 import (
+	"net/url"
 	"strings"
 	"unicode/utf16"
 
@@ -23,6 +24,12 @@ import (
 type Document struct {
 	URI  string
 	Text string
+
+	// Siblings, when set, snapshots every open buffer keyed by on-disk
+	// path. The Volt project pass overlays them all, so cross-file
+	// analysis sees unsaved edits in other tabs. Nil (a lone document,
+	// as in tests) means only this document overlays its saved file.
+	Siblings func() map[string]string
 
 	File  *ast.File
 	Info  *check.Info
@@ -52,11 +59,20 @@ func (d *Document) Update(text string) {
 
 	file, diags := parser.ParseFile(pathFromURI(d.URI), text)
 	info, semDiags := check.File(file)
-	diags = append(diags, semDiags...)
-	// vet warnings only make sense on files that already check clean;
-	// stacking style advice on top of hard errors is noise while typing.
-	if !diag.HasErrors(diags) {
-		diags = append(diags, vet.Run(file, info, analyzersActive()...)...)
+	// Info always comes from the single-file pass — hover, definition
+	// and completion read it. Diagnostics depend on where the file
+	// lives: inside a Volt project the whole-project check is the truth
+	// (this file's tables may be half of a package, §V1.5) and the
+	// single-file verdicts would be wrong; alone, the DBML pass stands.
+	if projDiags, ok := d.voltProjectDiags(); ok {
+		diags = projDiags
+	} else {
+		diags = append(diags, semDiags...)
+		// vet warnings only make sense on files that already check clean;
+		// stacking style advice on top of hard errors is noise while typing.
+		if !diag.HasErrors(diags) {
+			diags = append(diags, vet.Run(file, info, analyzersActive()...)...)
+		}
 	}
 	diag.Sort(diags)
 
@@ -79,8 +95,15 @@ func analyzersActive() []*vet.Analyzer {
 	return out
 }
 
-// pathFromURI strips the file:// scheme for prettier diagnostics.
+// pathFromURI converts a file URI to the on-disk path. Editors
+// percent-encode URIs (spaces, non-ASCII), and the result is a real
+// lookup key — the project overlay and the diagnostic filter match it
+// against filepath.WalkDir paths — so it must be the decoded path, not
+// a cosmetic trim.
 func pathFromURI(uri string) string {
+	if u, err := url.Parse(uri); err == nil && u.Scheme == "file" {
+		return u.Path
+	}
 	return strings.TrimPrefix(uri, "file://")
 }
 

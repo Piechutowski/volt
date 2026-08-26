@@ -1,11 +1,12 @@
-//! Zed glue for the EDBML language server.
+//! Zed glue for the Volt/EDBML language server.
 //!
-//! The extension's only job is to tell Zed how to launch `nao lsp` (the
-//! language server is a subcommand of the project's one binary, D41). The
-//! binary is resolved in order: the user's `lsp.nao.binary.path` setting,
-//! then `nao` on the worktree `PATH`. The extension is installed locally as
-//! a dev extension, so there is no download fallback — build the binary
-//! with `go install ./cmd/nao` instead.
+//! The extension's only job is to tell Zed how to launch the language
+//! server (a subcommand of the project's binaries, D41). The binary is
+//! resolved in order: the user's `lsp.nao.binary.path` setting, then
+//! `volt` on the worktree `PATH` (the merged toolchain, whose server
+//! adds project-aware .volt diagnostics), then `nao`. The extension is
+//! installed locally as a dev extension, so there is no download
+//! fallback — build the binary with `go install ./cmd/volt` instead.
 
 use zed_extension_api::{self as zed, settings::LspSettings, LanguageServerId, Result};
 
@@ -35,11 +36,15 @@ impl zed::Extension for EdbmlExtension {
             });
         }
 
-        let path = worktree.which("nao").ok_or_else(|| {
-            "nao not found on PATH. Build it with `go install ./cmd/nao`, or point \
-             Zed at the binary via the `lsp.nao.binary.path` setting."
-                .to_string()
-        })?;
+        let path = worktree
+            .which("volt")
+            .or_else(|| worktree.which("nao"))
+            .ok_or_else(|| {
+                "neither volt nor nao found on PATH. Build one with `go install \
+                 ./cmd/volt` (or ./nao/cmd/nao), or point Zed at the binary via \
+                 the `lsp.nao.binary.path` setting."
+                    .to_string()
+            })?;
 
         Ok(zed::Command {
             command: path,

@@ -32,7 +32,7 @@ Scope / [pipe: api, error_handler: Errors] {
 	get /users/:id(int32)/avatar Users.Avatar
 	get /files/:path...          Files.Serve
 
-	get /tags/:name            Tags.Show   [name: tag]
-	get /pages/:num(int)       Pages.Show  [name: page]
-	get /epochs/:stamp(int64)  Epochs.Show [name: epoch]
+	get /tags/:name             Tags.Show    [name: tag]
+	get /pages/:num(int)        Pages.Show   [name: page]
+	get /archive/:stamp(int64)  Archive.Show [name: archive]
 }

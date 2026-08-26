@@ -1,6 +1,6 @@
 // Package itest proves the generated router's runtime semantics
 // (SPEC.md, "Conformance and the proof chain", link 4): the committed
-// fixture under fadn/ is served over httptest and its behavior asserted
+// fixture under blog/ is served over httptest and its behavior asserted
 // against the spec — matching, typed-parameter 404s, pipeline order,
 // the error spine, and reverse-URL round-trip totality.
 package itest
@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	"github.com/Piechutowski/volt"
-	"github.com/Piechutowski/volt/itest/fadn/app"
+	"github.com/Piechutowski/volt/itest/blog/app"
 )
 
 // echo answers every route with its matched pattern and parameters, so
@@ -68,7 +68,7 @@ func (ops) Fail(w http.ResponseWriter, r *volt.Request) error {
 	return volt.Error(http.StatusServiceUnavailable, "ops down")
 }
 
-// tags, pages and epochs exercise the three explicit parameter types:
+// tags, pages and archive exercise the three explicit parameter types:
 // string, int and int64 (§V4.1.3).
 type tags struct{}
 
@@ -82,16 +82,16 @@ func (pages) Show(w http.ResponseWriter, r *volt.Request, num int) error {
 	return echo(w, r, num)
 }
 
-type epochs struct{}
+type archive struct{}
 
-func (epochs) Show(w http.ResponseWriter, r *volt.Request, stamp int64) error {
+func (archive) Show(w http.ResponseWriter, r *volt.Request, stamp int64) error {
 	return echo(w, r, stamp)
 }
 
 func handler() http.Handler {
 	return app.New(app.Controllers{
 		Home: home{}, Users: users{}, Files: files{}, Admin: admin{},
-		Ops: ops{}, Tags: tags{}, Pages: pages{}, Epochs: epochs{},
+		Ops: ops{}, Tags: tags{}, Pages: pages{}, Archive: archive{},
 	})
 }
 
@@ -135,7 +135,7 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathOpsFail":    {"GET", app.PathOpsFail()},
 		"PathTag":        {"GET", app.PathTag("hello world")},
 		"PathPage":       {"GET", app.PathPage(3)},
-		"PathEpoch":      {"GET", app.PathEpoch(1755000000123)},
+		"PathArchive":    {"GET", app.PathArchive(1755000000123)},
 	}
 
 	tableHelpers := map[string]string{} // helper -> full registered pattern
@@ -191,7 +191,7 @@ func TestTypedParamParseFailureIs404(t *testing.T) {
 	for _, target := range []string{
 		"/users/abc", "/users/abc/avatar", "/users/99999999999",
 		"/pages/abc", "/pages/99999999999999999999", // int
-		"/epochs/1.5", "/epochs/99999999999999999999", // int64
+		"/archive/1.5", "/archive/99999999999999999999", // int64
 	} {
 		rec, _ := serve(t, h, "GET", target)
 		if rec.Code != 404 {
@@ -349,7 +349,7 @@ func TestParamTypesEndToEnd(t *testing.T) {
 	cases := []struct{ url, wantRoute, wantParams string }{
 		{app.PathTag("hello world"), "GET /tags/{name}", "hello world"},
 		{app.PathPage(3), "GET /pages/{num}", "3"},
-		{app.PathEpoch(1755000000123), "GET /epochs/{stamp}", "1755000000123"},
+		{app.PathArchive(1755000000123), "GET /archive/{stamp}", "1755000000123"},
 	}
 	for _, tc := range cases {
 		rec, body := serve(t, h, "GET", tc.url)

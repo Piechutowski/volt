@@ -6,6 +6,7 @@
 //	volt vet    [--json] [dir]     check plus warnings for legal-but-suspicious Volt
 //	volt gen    [dir]              generate volt_*.go for every routing package
 //	volt routes [dir]              print the expanded route table
+//	volt lsp                       language server on stdin/stdout
 //	volt version                   report the tool version
 //
 // Every command resolves the project root by walking up from dir (or
@@ -29,6 +30,7 @@ import (
 	"github.com/Piechutowski/volt/gen/router"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/nao/edbml/diag"
+	"github.com/Piechutowski/volt/nao/edbml/lsp"
 )
 
 const version = "0.1.0-dev"
@@ -76,6 +78,13 @@ func main() {
 				ArgsUsage: "[dir]",
 				Action: func(_ context.Context, c *cli.Command) error {
 					return routesRun(c)
+				},
+			},
+			{
+				Name:  "lsp",
+				Usage: "run the Volt language server (LSP over stdin/stdout)",
+				Action: func(context.Context, *cli.Command) error {
+					return lsp.NewServer().RunStdio()
 				},
 			},
 			{

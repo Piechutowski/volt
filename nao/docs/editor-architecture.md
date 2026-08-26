@@ -222,7 +222,7 @@ optional passthrough
 methods that forward `initialization_options` / workspace `settings` from
 Zed's `settings.json` to the server. There is deliberately no
 download-from-releases step (the Odin extension shows that pattern): this
-extension is local-first, and `go install ./cmd/nao` is the installer.
+extension is local-first, and `go install ./cmd/volt` (from the volt repo root) is the installer.
 
 ### Pattern: the local grammar mirror (`scripts/sync-grammar.sh`)
 
@@ -459,3 +459,27 @@ picks it up automatically.
   ends in a quote immediately before the closing `'''` may tokenize
   differently from the spec's maximal-munch rule; the front end handles
   them correctly.
+
+## 7. The Volt layer (.volt files)
+
+Since the merge into the volt repository, all three components serve the
+Volt language (volt SPEC.md §V), of which DBML and EDBML are the inner
+layers (§V0) — one grammar, one server, one extension:
+
+- **Grammar.** `grammar.js` carries the Volt rules — package clause,
+  Go-style `import (...)` blocks, `Pipeline`, `Scope`, routes with typed
+  parameters and `:name...` wildcards, `resources` — and the registered
+  file types are `volt`, `edbml`, `dbml` (a `.volt` file may sit at any
+  layer; the dialect is its content, §V0.1). `test/corpus/volt.txt` and
+  `examples/blog.volt` pin the trees.
+- **Server.** `volt lsp` serves the same LSP as `nao lsp`, plus
+  project-aware Volt diagnostics: a file under a `volt.mod` root (§V1.1)
+  is checked as part of its whole project — imports, route conflicts,
+  cross-file package rules — with the open buffer overlaid over the
+  disk (`lang.LoadOverlay`). A file outside any project keeps the
+  single-file DBML pass. Completion knows Scope bodies (verbs,
+  `resources`, nested `Scope`), Pipeline bodies (`use`), and the Volt
+  settings (`pipe:`, `error_handler:`, `model:`, `only:`, ...).
+- **Extension.** `path_suffixes` includes `volt`; the launcher resolves
+  `volt` on PATH before `nao`, so one installed binary lights up the
+  whole tree. Install with `go install ./cmd/volt`.

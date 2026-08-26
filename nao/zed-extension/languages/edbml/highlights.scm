@@ -93,3 +93,34 @@
 (settings_list (setting name: (_) @attribute))
 (setting_value_words) @constant
 (legacy_flag) @attribute
+
+; ---------- Volt layer (volt SPEC.md §V) ----------
+
+[
+  "package"
+  "import"
+  "Pipeline"
+  "Scope"
+  "resources"
+] @keyword
+
+(verb) @keyword
+
+; module wiring
+(package_clause name: (identifier) @namespace)
+(import_alias) @namespace
+(import_path (identifier) @namespace)
+
+; pipelines and Go references (plugs, route handlers, error handlers)
+(pipeline_name) @label
+(go_ref (identifier) @function)
+
+; route paths: literals as paths, parameters as parameters
+(route_path "/" @string.special)
+(path_segment) @string.special
+(path_parameter ":" @operator)
+(parameter_name) @variable.parameter
+(wildcard_marker) @operator
+
+; the resources table reference
+(resources_declaration table: (table_name) @type)

@@ -74,6 +74,16 @@ func (p *parser) importSpec() *ast.ImportSpec {
 		}
 		spec.Path = append(spec.Path, p.ident("import path (§V2)"))
 	}
+	// Aliases and path segments name directories and qualify Go-bound
+	// references: plain identifiers only (§V2.2, §V4.1.6).
+	if spec.Alias != nil && spec.Alias.Quoted() {
+		p.fail(spec.Alias.Tok, "import alias must be a plain (unquoted) identifier (§V2.2)")
+	}
+	for _, seg := range spec.Path {
+		if seg.Quoted() {
+			p.fail(seg.Tok, "import path segments are plain (unquoted) identifiers (§V2.2)")
+		}
+	}
 	p.endOfLine("import specifier (§V2)")
 	return spec
 }
@@ -224,8 +234,16 @@ func (p *parser) routePath() *ast.RoutePath {
 			seg := &ast.Segment{Kind: ast.SegParam, MarkPos: mark.Pos, Name: p.ident("path parameter (§V4.1)")}
 			if p.at(token.LPAREN) && p.contiguous() {
 				p.next()
+				// The annotation is part of the path's lexical island
+				// (§V4.1.1): every token of ':name(type)' abuts.
+				if !p.at(token.IDENT) || !p.contiguous() {
+					p.fail(p.cur(), "parameter type is written ':name(type)' with no spaces (§V4.1)")
+				}
 				seg.Type = p.ident("parameter type (§V4.1)")
-				seg.Rparen = p.expect(token.RPAREN, "parameter type (§V4.1)").End()
+				if !p.at(token.RPAREN) || !p.contiguous() {
+					p.fail(p.cur(), "parameter type is written ':name(type)' with no spaces (§V4.1)")
+				}
+				seg.Rparen = p.next().End()
 			}
 			// ":name..." — the rest-of-path wildcard (§V4.1.4). Written
 			// with three contiguous '.' tokens; a type annotation cannot

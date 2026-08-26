@@ -18,11 +18,11 @@ type AdminController interface {
 	Stats(w http.ResponseWriter, r *volt.Request) error
 }
 
-// EpochsController is implemented by your code and wired through
-// Controllers; a route referencing Epochs.<Action> will not build until
+// ArchiveController is implemented by your code and wired through
+// Controllers; a route referencing Archive.<Action> will not build until
 // the method exists with this exact signature.
-type EpochsController interface {
-	// Show handles GET /epochs/:stamp(int64)
+type ArchiveController interface {
+	// Show handles GET /archive/:stamp(int64)
 	Show(w http.ResponseWriter, r *volt.Request, stamp int64) error
 }
 
@@ -96,14 +96,14 @@ type UsersController interface {
 // Controllers is the dependency manifest of the route table: one
 // implementation per controller named in the routes.
 type Controllers struct {
-	Admin  AdminController
-	Epochs EpochsController
-	Files  FilesController
-	Home   HomeController
-	Ops    OpsController
-	Pages  PagesController
-	Tags   TagsController
-	Users  UsersController
+	Admin   AdminController
+	Archive ArchiveController
+	Files   FilesController
+	Home    HomeController
+	Ops     OpsController
+	Pages   PagesController
+	Tags    TagsController
+	Users   UsersController
 }
 
 // New builds the router: ServeMux registrations with statically

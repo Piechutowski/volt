@@ -1,11 +1,16 @@
 /**
- * Tree-sitter grammar for EDBML (Extended Database Markup Language).
+ * Tree-sitter grammar for EDBML (Extended Database Markup Language) and
+ * the Volt layer above it (.volt files).
  *
- * Covers the full DBML specification in SPEC.md (not-an-orm repository):
+ * Covers the full DBML specification in nao/SPEC.md:
  * Project, Table (settings, alias, columns, legacy flags), TablePartial and
  * ~injection, Enum, Ref (long, short and inline forms, composite endpoints),
  * TableGroup, Note (member, block and sticky forms), Records (top-level and
- * in-table), DiagramView, indexes and checks blocks, use/reuse imports.
+ * in-table), DiagramView, indexes and checks blocks, use/reuse imports —
+ * plus the Volt routing dialect of SPEC.md §V: package clauses, Go-style
+ * import blocks, Pipeline, Scope, routes and resources. One grammar for
+ * one language in three layers (§V0): every .volt file parses here,
+ * whichever layer it uses.
  *
  * Design notes, driven by SPEC.md §3:
  *  - DBML is newline-sensitive: columns, enum values, record rows, index and
@@ -80,6 +85,11 @@ module.exports = grammar({
         $.records_definition,
         $.diagram_view_definition,
         $.import_statement,
+        // Volt layer (volt SPEC.md §V)
+        $.package_clause,
+        $.import_block,
+        $.pipeline_definition,
+        $.scope_definition,
       ),
 
     // ==================== Project (§6.1) ====================
@@ -429,6 +439,131 @@ module.exports = grammar({
         optional(seq(kw('as'), field('alias', $._name))),
       ),
 
+    // ==================== Volt layer (volt SPEC.md §V) ====================
+    // The routing dialect: package clauses, Go-style import blocks,
+    // Pipeline and Scope. Route paths are lexical islands (§V4.1.5) —
+    // token.immediate stitches their segments together so interior
+    // whitespace ends the path, exactly like the reference parser.
+
+    // package name (§V1.2)
+    package_clause: ($) =>
+      seq(kw('package'), field('name', $.identifier)),
+
+    // import ( [alias] path/segments ... ) (§V2)
+    import_block: ($) =>
+      seq(
+        kw('import'),
+        '(',
+        repeat($._newline),
+        optional(newlineSep1($.import_spec, $)),
+        ')',
+      ),
+
+    import_spec: ($) =>
+      choice(
+        field('path', $.import_path),
+        seq(
+          field('alias', alias($.identifier, $.import_alias)),
+          field('path', $.import_path),
+        ),
+      ),
+
+    import_path: ($) =>
+      seq(
+        $.identifier,
+        repeat(seq(token.immediate('/'), alias($._ident_immediate, $.identifier))),
+      ),
+
+    // Pipeline name { use ref ... } (§V3)
+    pipeline_definition: ($) =>
+      seq(
+        kw('Pipeline'),
+        field('name', alias($.identifier, $.pipeline_name)),
+        '{',
+        repeat($._newline),
+        optional(newlineSep1($.plug, $)),
+        '}',
+      ),
+
+    plug: ($) => seq(kw('use'), field('ref', $.go_ref)),
+
+    go_ref: ($) => seq($.identifier, optional(seq('.', $.identifier))),
+
+    // Scope path [settings] { routes | resources | Scope } (§V4)
+    scope_definition: ($) =>
+      seq(
+        kw('Scope'),
+        field('path', $.route_path),
+        optional(field('settings', $.settings_list)),
+        '{',
+        repeat($._newline),
+        optional(newlineSep1($._scope_item, $)),
+        '}',
+      ),
+
+    _scope_item: ($) =>
+      choice($.route, $.resources_declaration, $.scope_definition),
+
+    route: ($) =>
+      seq(
+        field('verb', $.verb),
+        field('path', $.route_path),
+        field('handler', $.go_ref),
+        optional(field('settings', $.settings_list)),
+      ),
+
+    verb: () =>
+      choice(
+        kw('get', 2), kw('post', 2), kw('put', 2), kw('patch', 2),
+        kw('delete', 2), kw('options', 2), kw('head', 2), kw('any', 2),
+      ),
+
+    resources_declaration: ($) =>
+      seq(
+        kw('resources'),
+        field('table', alias($.identifier, $.table_name)),
+        optional(field('settings', $.settings_list)),
+      ),
+
+    // /users/:id(int32)/avatar, /files/:path..., or the bare root /
+    // (§V4.1). Segments abut: whitespace ends the path.
+    route_path: ($) =>
+      seq(
+        '/',
+        optional(
+          seq(
+            $._path_segment,
+            repeat(seq(token.immediate('/'), $._path_segment)),
+          ),
+        ),
+      ),
+
+    _path_segment: ($) =>
+      choice(
+        alias($._ident_immediate, $.path_segment),
+        $.path_parameter,
+      ),
+
+    path_parameter: ($) =>
+      seq(
+        token.immediate(':'),
+        field('name', alias($._ident_immediate, $.parameter_name)),
+        optional(
+          choice(
+            seq(
+              token.immediate('('),
+              field('type', alias($._ident_immediate, $.type_name)),
+              token.immediate(')'),
+            ),
+            field('wildcard', alias(token.immediate('...'), $.wildcard_marker)),
+          ),
+        ),
+      ),
+
+    // An identifier glued to the previous token (route and import paths).
+    _ident_immediate: () =>
+      token.immediate(/[0-9]*[\p{L}\p{M}_][\p{L}\p{M}\p{Nd}_]*/),
+
     // ==================== Settings (§4.2) ====================
 
     settings_list: ($) =>
@@ -454,8 +589,13 @@ module.exports = grammar({
         $.expression,
         $.enum_constant,
         $.inline_ref,
+        $.ident_group,
         alias($.setting_name, $.setting_value_words),
       ),
+
+    // Parenthesized identifier list: only: (index, show) (volt §V5.3).
+    ident_group: ($) =>
+      seq('(', $._name, repeat(seq(',', $._name)), ')'),
 
     // value of a column's `ref:` setting: `> schema.table.column` (§6.7)
     inline_ref: ($) =>
