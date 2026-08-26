@@ -33,6 +33,7 @@ func Check(pr *Project) []diag.Diagnostic {
 		info, schemaDiags := check.File(pkg.merged)
 		c.diags = append(c.diags, schemaDiags...)
 		c.schemas[path] = info
+		pkg.schema = info
 	}
 	for _, path := range c.paths() {
 		c.routing(pr.Packages[path])

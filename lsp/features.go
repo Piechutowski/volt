@@ -199,6 +199,10 @@ func (d *Document) Rename(pos protocol.Position, newName string) (*protocol.Work
 	if !validIdentifier(newName) {
 		return nil, fmt.Errorf("%q is not a valid EDBML identifier", newName)
 	}
+	// A Volt-layer symbol renames across the whole project.
+	if edit, ok := d.voltRename(pos, newName); ok {
+		return edit, nil
+	}
 	occ := d.Index.At(d.FromLSP(pos))
 	if occ == nil {
 		return nil, fmt.Errorf("nothing renameable at this position")

@@ -36,6 +36,7 @@ type voltRef struct {
 	span voltSpan
 	sym  voltSym
 	decl bool
+	text string // the identifier as written here, for rename
 }
 
 // voltDef is a declaration: where it is, and the node itself so hover
@@ -86,6 +87,32 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 		}
 	}
 
+	// The schema layer's own references to a table — Ref endpoints,
+	// TableGroup members, Records targets — indexed per package over the
+	// merged file, so every file of the package is covered with its real
+	// positions. Without this a rename would miss half the uses.
+	for path, pkg := range pr.Packages {
+		info := pkg.Schema()
+		if info == nil {
+			continue
+		}
+		single := NewIndex(pkg.Merged(), info)
+		for _, occ := range single.Occs {
+			if occ.ID.Kind != SymTable {
+				continue
+			}
+			ti, ok := single.Tables[occ.ID.Name]
+			if !ok {
+				continue
+			}
+			sp := spanOf(occ.Ident)
+			if sp.file == "" {
+				continue
+			}
+			ix.refs = append(ix.refs, voltRef{sp, voltSym{"table", path, ti.Decl.Name.Base()}, occ.IsDecl, occ.Ident.Name()})
+		}
+	}
+
 	for path, pkg := range pr.Packages {
 		for _, d := range pkg.Merged().Decls {
 			switch d := d.(type) {
@@ -96,7 +123,7 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 						continue
 					}
 					last := spec.Path[len(spec.Path)-1]
-					ix.refs = append(ix.refs, voltRef{spanOf(last), voltSym{"package", target, ""}, false})
+					ix.refs = append(ix.refs, voltRef{spanOf(last), voltSym{"package", target, ""}, false, last.Name()})
 				}
 			case *ast.Scope:
 				ix.scopeRefs(pkg, path, d)
@@ -111,7 +138,7 @@ func (ix *voltIndex) define(sym voltSym, def voltDef) {
 		return // duplicate declaration: the checker reports it
 	}
 	ix.defs[sym] = def
-	ix.refs = append(ix.refs, voltRef{def.span, sym, true})
+	ix.refs = append(ix.refs, voltRef{def.span, sym, true, sym.name})
 }
 
 // scopeRefs records the symbol references a scope subtree makes: pipe:
@@ -136,7 +163,7 @@ func (ix *voltIndex) scopeRefs(pkg *lang.Package, path string, sc *ast.Scope) {
 			if it.Pkg != nil {
 				span.pos = it.Pkg.Pos()
 			}
-			ix.refs = append(ix.refs, voltRef{span, voltSym{"table", target, it.Name.Name()}, false})
+			ix.refs = append(ix.refs, voltRef{span, voltSym{"table", target, it.Name.Name()}, false, it.Name.Name()})
 			ix.settingRefs(pkg, path, it.Settings)
 		case *ast.Route:
 			ix.settingRefs(pkg, path, it.Settings)
@@ -152,7 +179,7 @@ func (ix *voltIndex) settingRefs(pkg *lang.Package, path string, list *ast.Setti
 		switch s.Name {
 		case "pipe":
 			if id, ok := s.Value.(*ast.Ident); ok {
-				ix.refs = append(ix.refs, voltRef{spanOf(id), voltSym{"pipeline", path, id.Name()}, false})
+				ix.refs = append(ix.refs, voltRef{spanOf(id), voltSym{"pipeline", path, id.Name()}, false, id.Name()})
 			}
 		}
 	}
@@ -376,4 +403,45 @@ func tablePK(t *ast.Table) (name, goType string) {
 		}
 	}
 	return name, goType
+}
+
+/* ===== rename ===== */
+
+// voltRename renames a Volt-layer symbol everywhere it appears in the
+// project: the declaration, the schema layer's own references, and the
+// resources declarations that name it — across files. Only occurrences
+// spelled like the one under the cursor are rewritten, so a table alias
+// keeps its own name (matching the single-file rule).
+func (d *Document) voltRename(pos protocol.Position, newName string) (*protocol.WorkspaceEdit, bool) {
+	if d.vindex == nil {
+		return nil, false
+	}
+	ref := d.vindex.at(pathFromURI(d.URI), d.FromLSP(pos))
+	if ref == nil {
+		return nil, false
+	}
+	if ref.sym.kind == "package" {
+		return nil, false // renaming a package means moving a directory
+	}
+
+	spelling := ref.text
+	changes := map[protocol.DocumentUri][]protocol.TextEdit{}
+	seen := map[string]bool{}
+	for _, r := range d.vindex.refs {
+		if r.sym != ref.sym || r.text != spelling {
+			continue
+		}
+		key := fmt.Sprintf("%s:%d", r.span.file, r.span.pos.Offset)
+		if seen[key] {
+			continue // the declaration is recorded by both passes
+		}
+		seen[key] = true
+		loc := d.vindex.location(r.span)
+		changes[protocol.DocumentUri(loc.URI)] = append(changes[protocol.DocumentUri(loc.URI)],
+			protocol.TextEdit{Range: loc.Range, NewText: newName})
+	}
+	if len(changes) == 0 {
+		return nil, false
+	}
+	return &protocol.WorkspaceEdit{Changes: changes}, true
 }

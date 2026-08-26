@@ -155,3 +155,50 @@ func TestVoltHoverDBMLStillWorks(t *testing.T) {
 		t.Error("column hover regressed")
 	}
 }
+
+// TestVoltRenameCrossFile: renaming the table in schema.volt must also
+// rewrite the resources declaration in routes.volt — the two files are
+// one project, so a rename that touched only one would break the other.
+func TestVoltRenameCrossFile(t *testing.T) {
+	_, schema, routes := navProject(t)
+	d := NewDocument("file://"+schema, navSchema)
+
+	edit, err := d.Rename(posOf(t, navSchema, "posts", 0), "articles")
+	if err != nil {
+		t.Fatalf("rename from the declaration failed: %v", err)
+	}
+	if len(edit.Changes) != 2 {
+		t.Fatalf("edits touch %d file(s), want 2: %v", len(edit.Changes), edit.Changes)
+	}
+	for _, uri := range []string{"file://" + schema, "file://" + routes} {
+		edits := edit.Changes[protocol.DocumentUri(uri)]
+		if len(edits) == 0 {
+			t.Errorf("no edits for %s", uri)
+			continue
+		}
+		for _, e := range edits {
+			if e.NewText != "articles" {
+				t.Errorf("%s: NewText = %q", uri, e.NewText)
+			}
+		}
+	}
+}
+
+// TestVoltRenameFromReference: the same rename started from the
+// reference side (routes.volt) works too — this is the position that
+// used to answer "nothing renameable at this position".
+func TestVoltRenameFromReference(t *testing.T) {
+	_, schema, routes := navProject(t)
+	d := NewDocument("file://"+routes, navRoutes)
+
+	edit, err := d.Rename(posOf(t, navRoutes, "db.posts", 0), "articles")
+	if err != nil {
+		t.Fatalf("rename from the reference failed: %v", err)
+	}
+	if len(edit.Changes) != 2 {
+		t.Fatalf("edits touch %d file(s), want 2: %v", len(edit.Changes), edit.Changes)
+	}
+	if len(edit.Changes[protocol.DocumentUri("file://"+schema)]) != 1 {
+		t.Errorf("the declaration in schema.volt was not renamed")
+	}
+}

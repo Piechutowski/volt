@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/parser"
 	"github.com/Piechutowski/volt/lang/token"
@@ -55,6 +56,9 @@ type Package struct {
 	// Controllers maps controller name -> its actions, for the generator.
 	Controllers map[string]*ControllerInfo
 
+	// schema is the package's checked table model, set by Check.
+	schema *check.Info
+
 	// resourceHints records `resources <table>` declarations that could
 	// have named a model instead; Vet turns them into advice (§V5.1).
 	resourceHints []resourceHint
@@ -79,6 +83,9 @@ func (p *Package) HasRouting() bool {
 
 // Merged returns the package's declarations as one synthetic file.
 func (p *Package) Merged() *ast.File { return p.merged }
+
+// Schema returns the package's checked table model (nil before Check).
+func (p *Package) Schema() *check.Info { return p.schema }
 
 // FindRoot walks up from dir to the nearest directory containing
 // volt.mod (§V1.1).

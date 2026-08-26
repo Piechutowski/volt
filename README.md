@@ -69,10 +69,10 @@ hand-written illustration only:
   `docs/router.md` §12; runtime has only `volt.JSON`
 - `volt.WithQueries` / `WithTemplates` / `BuildDeps` options
 - plugs from imported packages (a v0 error on purpose)
-- LSP navigation beyond Volt symbols: go-to-def works across the
-  project for tables (`model:`), pipelines (`pipe:`) and imports, but
-  handler refs (`Home.Index`) and `error_handler:` point at Go, which
-  this server does not index
+- LSP navigation beyond Volt symbols: go-to-def, hover and rename work
+  across the project for tables, pipelines and imports, but handler
+  refs (`Home.Index`) and `error_handler:` point at Go, which this
+  server does not index
 
 ## Crib sheet
 
