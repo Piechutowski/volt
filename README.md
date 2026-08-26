@@ -1,80 +1,78 @@
 # Volt
 
-Volt is a codegen-first web framework for Go. You describe your
-application — database schema and HTTP routes — in one small language,
-and `volt gen` writes the code you would otherwise write by hand:
-typed controller interfaces, a router on `net/http.ServeMux`, reverse-URL
-helpers, models and queries. Rails-grade ergonomics, but everything is
-resolved at compile time: no reflection, no runtime DSL, and the
-generated code is plain Go you can read.
+**Status: alpha.** Personal project. The language, the generated code
+and every API in here can change without ceremony. Nothing is promised
+to anyone; SPEC.md describes what the implementation does today, not a
+stability contract.
 
-One language, three layers, one file extension:
+Volt is my codegen-first web framework for Go: schema and routes are
+declared in `.volt` files, `volt gen` writes the router, controller
+interfaces and reverse-URL helpers onto plain `net/http.ServeMux`, and
+nao (embedded here) generates the models and queries. Everything
+resolves at compile time.
 
-```
-DBML  ⊂  EDBML  ⊂  Volt          (SPEC.md §V0)
-tables    partials,    packages, imports,
-enums     records,     Pipelines, Scopes,
-refs      checks…      routes, resources
-```
-
-Every `.volt` file is written in this language; which layer it uses is
-determined by its content. A project is a directory tree rooted at a
-`volt.mod` file; a package is a directory (files carry no semantics —
-split or merge them freely, §V1.5).
-
-## Architecture
-
-The pipeline, front to back:
+One language, three layers, one extension. A `.volt` file is DBML, or
+EDBML, or full Volt — decided by its content, not its name (SPEC.md
+§V0):
 
 ```
- .volt files
-     │  scanner → parser → AST        nao/edbml/…   (shared front end)
-     ▼
- lang/        project semantics: volt.mod, packages, imports,
-     │        pipelines, scope/route expansion, conflict detection
-     ▼
- gen/router/  volt_handlers.go, volt_router.go, volt_paths.go,
-     │        volt_routes.go — generated onto http.ServeMux (Go 1.22+)
-     ▼
- your app     implements the generated controller interfaces;
-              app.New(Controllers{…}) returns a plain http.Handler
+DBML   — tables, enums, refs, notes
+EDBML  — + partials, records, checks, diagram views
+Volt   — + package / import, Pipeline, Scope, routes, resources
 ```
+
+Project = tree rooted at `volt.mod`. Package = directory. File
+boundaries carry no meaning (§V1.5).
+
+## Layout
+
+The pipeline: `.volt` → `nao/edbml` front end (shared scanner/parser)
+→ `lang` (project semantics) → `gen/router` → my app implements the
+generated interfaces and mounts a plain `http.Handler`.
 
 | Directory        | What it is |
 |------------------|------------|
-| `*.go` (root)    | **package `volt`** — the small runtime generated code links against: the error spine (`volt.Request`, `HTTPError`, error handlers), parameter parsing, path builders, middleware. |
-| `cmd/volt`       | The one binary: `check`, `vet`, `gen`, `routes`, `lsp`, `version`. |
-| `lang/`          | Project loading and the Volt-layer checker (SPEC.md §V), plus the executable conformance corpus (`lang/conformance/`). |
-| `gen/router/`    | The router generator, with golden files compiled by the real Go toolchain. |
-| `nao/`           | The embedded data layer, [not-an-orm](https://github.com/Piechutowski/not-an-orm): the DBML/EDBML front end (`nao/edbml/…`) every layer shares, model/query/SQLite generation, and the `nao` CLI. |
-| `lsp/`           | The Volt language server (`volt lsp`): project-aware diagnostics, completion, hover, navigation, rename. |
-| `grammar/`       | The tree-sitter grammar for the whole language — syntax highlighting in any tree-sitter editor. |
-| `zed-extension/` | The Zed extension wiring grammar + server together (`scripts/sync-grammar.sh` to install as a dev extension). |
-| `itest/`         | The proof suite: a committed fixture project served over `httptest`, drift-checked against the current generator. |
-| `docs/`          | The design documents — `router.md`, `language.md`, the editor architecture, and `docs/example/`, a worked end-to-end application. |
-| `research/`      | Groundwork: local documentation corpus and feature inventories of Laravel, Rails, Phoenix and Django. |
-| `SPEC.md`        | The normative language specification (§V). Every rule is backed by a conformance snippet or test — see its "Conformance and the proof chain" section. |
+| `*.go` (root)    | package `volt` — the runtime generated code links against: error spine, param parsing, path builders, minimal middleware |
+| `cmd/volt`       | the binary: `check` `vet` `gen` `routes` `lsp` `version` |
+| `lang/`          | volt.mod/package/import resolution, route expansion, conflict detection; `lang/conformance/` = executable corpus of SPEC §V |
+| `gen/router/`    | router generator; goldens are gofmt-stable and compiled by the real toolchain |
+| `nao/`           | not-an-orm, merged in as the data layer; owns the shared front end (`nao/edbml/…`) and model/SQLite generation |
+| `lsp/`           | the Volt language server (`volt lsp`); project-aware diagnostics for files under a volt.mod, single-file DBML pass otherwise |
+| `grammar/`       | tree-sitter grammar for the whole language |
+| `zed-extension/` | Zed glue; install via `scripts/sync-grammar.sh` + Install Dev Extension |
+| `itest/`         | committed fixture project served over httptest, drift-checked against the generator |
+| `docs/`          | design docs (`router.md`, `language.md`, editor architecture) + `docs/example/` — the FADN case study; **partly illustrative, see below** |
+| `research/`      | Laravel/Rails/Phoenix/Django docs corpus + feature inventories |
+| `SPEC.md`        | the §V language spec; every rule backed by a corpus snippet or test |
 
-## Quick start
+## What is real vs. not yet
+
+Implemented and tested: the three-layer front end, project checking,
+router generation (typed params, wildcards, resources, pipelines,
+per-scope error handlers, reverse URLs), the runtime, the CLI, the
+LSP, the grammar, the Zed extension, and the whole proof chain.
+
+Designed but **not implemented** — `docs/example/` shows these as
+hand-written illustration only:
+
+- **Datasets** (`Dataset` is just reserved, §V8) — the auto-CRUD grid
+  the FADN case wants
+- the renderer / content negotiation (HTML, JSON, GOB) from
+  `docs/router.md` §12; runtime has only `volt.JSON`
+- `volt.WithQueries` / `WithTemplates` / `BuildDeps` options
+- plugs from imported packages (a v0 error on purpose)
+- LSP navigation for Volt-layer symbols (diagnostics yes, go-to-def
+  still DBML-only)
+
+## Crib sheet
 
 ```sh
 go install ./cmd/volt
-
-volt check  ./myapp      # semantic analysis against SPEC.md §V
-volt gen    ./myapp      # write volt_*.go into every routing package
-volt routes ./myapp      # print the expanded route table
-volt lsp                 # language server over stdio
+volt check ./app && volt gen ./app && volt routes ./app
+go test ./...                        # everything, incl. nao's suites
+go test ./gen/router -update         # refresh goldens after gen changes
+go run ./cmd/volt gen ./itest/blog   # refresh the itest fixture
+./scripts/sync-grammar.sh            # mirror grammar + preflight Zed
 ```
 
-A minimal project:
-
-```
-myapp/
-├── volt.mod             module myapp
-├── db/schema.volt       package db  +  Table users { … }
-└── app/routes.volt      package app +  import ( db ) + Scope / { … }
-```
-
-## License
-
-Apache-2.0 — see [LICENSE](LICENSE).
+Apache-2.0.
