@@ -6,6 +6,7 @@
 package lsp
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"unicode/utf16"
@@ -37,9 +38,17 @@ type voltRef struct {
 	decl bool
 }
 
+// voltDef is a declaration: where it is, and the node itself so hover
+// can describe what was declared.
+type voltDef struct {
+	span  voltSpan
+	table *ast.Table
+	pipe  *ast.Pipeline
+}
+
 // voltIndex is the whole project's Volt-layer symbol graph.
 type voltIndex struct {
-	defs  map[voltSym]voltSpan
+	defs  map[voltSym]voltDef
 	refs  []voltRef
 	texts map[string]string // open buffers, for position conversion
 }
@@ -52,7 +61,7 @@ func spanOf(n ast.Node) voltSpan {
 // buildVoltIndex walks every package's declarations twice: definitions
 // first (tables and pipelines), then the references that name them.
 func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
-	ix := &voltIndex{defs: map[voltSym]voltSpan{}, texts: overlay}
+	ix := &voltIndex{defs: map[voltSym]voltDef{}, texts: overlay}
 
 	for path, pkg := range pr.Packages {
 		for _, d := range pkg.Merged().Decls {
@@ -62,20 +71,20 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 				if err != nil {
 					continue
 				}
-				ix.define(voltSym{"table", path, name}, spanOf(d.Name))
+				ix.define(voltSym{"table", path, name}, voltDef{span: spanOf(d.Name), table: d})
 			case *ast.Pipeline:
-				ix.define(voltSym{"pipeline", path, d.Name.Name()}, spanOf(d.Name))
+				ix.define(voltSym{"pipeline", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), pipe: d})
 			}
 		}
 		// A package "declaration" is its first file, so an import can
 		// jump somewhere useful.
 		if len(pkg.Files) > 0 {
 			first := pkg.Files[0]
-			ix.defs[voltSym{"package", path, ""}] = voltSpan{
+			ix.defs[voltSym{"package", path, ""}] = voltDef{span: voltSpan{
 				file: first.Name,
 				pos:  token.Position{Filename: first.Name, Line: 1, Column: 1},
 				end:  token.Position{Filename: first.Name, Line: 1, Column: 1},
-			}
+			}}
 		}
 	}
 
@@ -99,12 +108,12 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 	return ix
 }
 
-func (ix *voltIndex) define(sym voltSym, sp voltSpan) {
+func (ix *voltIndex) define(sym voltSym, def voltDef) {
 	if _, dup := ix.defs[sym]; dup {
 		return // duplicate declaration: the checker reports it
 	}
-	ix.defs[sym] = sp
-	ix.refs = append(ix.refs, voltRef{sp, sym, true})
+	ix.defs[sym] = def
+	ix.refs = append(ix.refs, voltRef{def.span, sym, true})
 }
 
 // scopeRefs records the symbol references a scope subtree makes: pipe:
@@ -210,11 +219,11 @@ func (d *Document) voltDefinition(pos protocol.Position) *protocol.Location {
 	if ref == nil {
 		return nil
 	}
-	sp, ok := d.vindex.defs[ref.sym]
+	def, ok := d.vindex.defs[ref.sym]
 	if !ok {
 		return nil
 	}
-	return d.vindex.location(sp)
+	return d.vindex.location(def.span)
 }
 
 // voltReferences lists every project-wide use of the symbol under the
@@ -235,4 +244,131 @@ func (d *Document) voltReferences(pos protocol.Position, includeDecl bool) []pro
 		out = append(out, *d.vindex.location(r.span))
 	}
 	return out
+}
+
+/* ===== hover ===== */
+
+// voltHover describes the Volt-layer symbol under the cursor. For a
+// table it spells out the mapping that is otherwise invisible in
+// routes.volt: `model: db.Post` names the *Go model* nao derives from
+// `Table posts`, not the table's own name (§V5.4.2).
+func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
+	if d.vindex == nil {
+		return nil
+	}
+	path := pathFromURI(d.URI)
+	ref := d.vindex.at(path, d.FromLSP(pos))
+	if ref == nil {
+		return nil
+	}
+	def, ok := d.vindex.defs[ref.sym]
+	if !ok {
+		return nil
+	}
+
+	var md string
+	switch ref.sym.kind {
+	case "table":
+		md = tableModelHover(ref.sym, def)
+	case "pipeline":
+		md = pipelineHover(ref.sym, def)
+	case "package":
+		md = "**package** `" + ref.sym.pkg + "`"
+	}
+	if md == "" {
+		return nil
+	}
+	rng := protocol.Range{
+		Start: offsetToLSP(d.Text, ref.span.pos.Offset),
+		End:   offsetToLSP(d.Text, ref.span.end.Offset),
+	}
+	return &protocol.Hover{
+		Contents: protocol.MarkupContent{Kind: protocol.MarkupKindMarkdown, Value: md},
+		Range:    &rng,
+	}
+}
+
+func tableModelHover(sym voltSym, def voltDef) string {
+	t := def.table
+	if t == nil {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "**model `%s`** — `Table %s` in package `%s`\n\n",
+		sym.name, t.Name.String(), sym.pkg)
+
+	pk, pkType := tablePK(t)
+	if pk != "" {
+		if pkType != "" {
+			fmt.Fprintf(&b, "key: `%s` → route parameter type `%s`\n\n", pk, pkType)
+		} else {
+			fmt.Fprintf(&b, "key: `%s`\n\n", pk)
+		}
+	}
+
+	b.WriteString("```dbml\n")
+	fmt.Fprintf(&b, "Table %s {\n", t.Name.String())
+	for _, item := range t.Body {
+		col, ok := item.(*ast.Column)
+		if !ok {
+			continue
+		}
+		mark := ""
+		if col.Name.Name() == pk {
+			mark = " [pk]"
+		}
+		fmt.Fprintf(&b, "\t%s %s%s\n", col.Name.Name(), col.Type.String(), mark)
+	}
+	b.WriteString("}\n```\n\n")
+	b.WriteString("_The model name is nao's singularization of the table name; `[model:]` on the table overrides it (§V5.4.2)._")
+	return b.String()
+}
+
+func pipelineHover(sym voltSym, def voltDef) string {
+	p := def.pipe
+	if p == nil {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "**Pipeline `%s`** — %d plug(s), outermost first\n\n```volt\n", sym.name, len(p.Plugs))
+	fmt.Fprintf(&b, "Pipeline %s {\n", sym.name)
+	for _, plug := range p.Plugs {
+		fmt.Fprintf(&b, "\tuse %s\n", plug.Ref.String())
+	}
+	b.WriteString("}\n```")
+	return b.String()
+}
+
+// tablePK returns the single-column primary key and the Go type it maps
+// to, mirroring the checker's rule (§V5.4.3); "" when there is none or
+// the key is composite.
+func tablePK(t *ast.Table) (name, goType string) {
+	var names []string
+	for _, item := range t.Body {
+		col, ok := item.(*ast.Column)
+		if !ok {
+			continue
+		}
+		isPK := col.Settings.Get("pk") != nil || col.Settings.Get("primary key") != nil
+		for _, f := range col.LegacyFlags {
+			if strings.EqualFold(f.Name(), "pk") {
+				isPK = true
+			}
+		}
+		if isPK {
+			names = append(names, col.Name.Name())
+		}
+	}
+	if len(names) != 1 {
+		return "", ""
+	}
+	name = names[0]
+	for _, item := range t.Body {
+		if col, ok := item.(*ast.Column); ok && col.Name.Name() == name {
+			if gt, known := golang.GoTypeName(strings.ToLower(col.Type.Name.String())); known {
+				goType = gt
+			}
+		}
+	}
+	return name, goType
 }

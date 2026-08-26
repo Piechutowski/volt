@@ -249,6 +249,11 @@ func isLetter(r rune) bool {
 
 // Hover renders documentation for the symbol at pos.
 func (d *Document) Hover(pos protocol.Position) *protocol.Hover {
+	// Volt-layer symbols first: model:/pipe: references describe things
+	// declared in other files, which the single-file index cannot see.
+	if h := d.voltHover(pos); h != nil {
+		return h
+	}
 	occ := d.Index.At(d.FromLSP(pos))
 	if occ == nil {
 		return nil

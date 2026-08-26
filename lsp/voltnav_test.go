@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
 const navSchema = "package db\n\nTable posts {\n\tid    integer [pk]\n\ttitle text\n}\n"
@@ -103,5 +105,54 @@ func TestVoltNavOutsideProjectIsQuiet(t *testing.T) {
 	}
 	if refs := d.References(posOf(t, navRoutes, "db.Post", 0), true); len(refs) != 0 {
 		t.Errorf("references = %v, want none", refs)
+	}
+}
+
+// TestVoltHoverTableExplainsModelName: hovering `db.Post` must show
+// which table it means and how the name was derived — that mapping is
+// invisible in routes.volt otherwise.
+func TestVoltHoverTableExplainsModelName(t *testing.T) {
+	_, _, routes := navProject(t)
+	d := NewDocument("file://"+routes, navRoutes)
+
+	h := d.Hover(posOf(t, navRoutes, "db.Post", 0))
+	if h == nil {
+		t.Fatal("no hover for db.Post")
+	}
+	md := h.Contents.(protocol.MarkupContent).Value
+	for _, want := range []string{"model `Post`", "Table posts", "package `db`", "singulariz"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("hover missing %q:\n%s", want, md)
+		}
+	}
+	// The routed key type is what a handler signature will use.
+	if !strings.Contains(md, "int32") {
+		t.Errorf("hover should name the key's route parameter type:\n%s", md)
+	}
+}
+
+// TestVoltHoverPipeline: hovering a pipe: reference lists its plugs.
+func TestVoltHoverPipeline(t *testing.T) {
+	_, _, routes := navProject(t)
+	d := NewDocument("file://"+routes, navRoutes)
+
+	h := d.Hover(posOf(t, navRoutes, "api", 1))
+	if h == nil {
+		t.Fatal("no hover for pipe: api")
+	}
+	md := h.Contents.(protocol.MarkupContent).Value
+	if !strings.Contains(md, "Pipeline `api`") || !strings.Contains(md, "volt.RequestID") {
+		t.Errorf("pipeline hover wrong:\n%s", md)
+	}
+}
+
+// TestVoltHoverDBMLStillWorks: the single-file DBML hover is unchanged
+// for symbols the project index does not own.
+func TestVoltHoverDBMLStillWorks(t *testing.T) {
+	_, schema, _ := navProject(t)
+	d := NewDocument("file://"+schema, navSchema)
+
+	if h := d.Hover(posOf(t, navSchema, "title", 0)); h == nil {
+		t.Error("column hover regressed")
 	}
 }
