@@ -2,10 +2,10 @@
   "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
   "grammars": [
     {
-      "name": "edbml",
-      "camelcase": "Edbml",
-      "title": "EDBML",
-      "scope": "source.edbml",
+      "name": "volt",
+      "camelcase": "Volt",
+      "title": "Volt",
+      "scope": "source.volt",
       "path": ".",
       "file-types": ["volt", "edbml", "dbml"],
       "injection-regex": "^(e?dbml|volt)$"
@@ -14,7 +14,7 @@
   "metadata": {
     "version": "0.2.0",
     "license": "Apache-2.0",
-    "description": "EDBML/Volt grammar for tree-sitter: DBML, its EDBML extensions, and the Volt routing layer (.volt files)",
+    "description": "Volt grammar for tree-sitter: DBML, the EDBML extensions, and the Volt routing layer (.volt files)",
     "authors": [
       {
         "name": "Szymon Piechutowski"

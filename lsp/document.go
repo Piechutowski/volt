@@ -1,5 +1,8 @@
-// Package lsp implements the EDBML language server. It wraps the DBML front
-// end (scanner, parser, check, vet) behind the Language Server Protocol:
+// Package lsp implements the Volt language server — one server for the
+// whole language, of which DBML and EDBML are the inner layers (SPEC.md
+// §V0). It wraps the front end (scanner, parser, check, vet, and the
+// lang project checker for .volt projects) behind the Language Server
+// Protocol:
 // diagnostics, completion, hover, definition, references, rename and
 // document symbols. One Document per open file holds the parse result, the
 // semantic model and the symbol occurrence index.
@@ -83,8 +86,8 @@ func (d *Document) Update(text string) {
 }
 
 // analyzersActive is every registered vet analyzer except modelname: the
-// [model:] setting it wants is part of EDBML, which this DBML server does
-// not implement yet (see docs/editor-architecture.md).
+// [model:] setting it wants is above the DBML layer, and the single-file
+// pass this feeds does not resolve it (see docs/editor-architecture.md).
 func analyzersActive() []*vet.Analyzer {
 	var out []*vet.Analyzer
 	for _, a := range vet.All() {

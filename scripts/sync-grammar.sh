@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Publish the edbml/grammar tree-sitter grammar to a local git mirror and point the
+# Publish the grammar/ tree-sitter grammar to a local git mirror and point the
 # Zed extension at it.
 #
 # Zed loads extension grammars from a git repository (repository + commit in
@@ -8,9 +8,9 @@
 # git checkout:
 #
 #   1. (optional) regenerate src/parser.c if a tree-sitter CLI is available
-#   2. mirror edbml/grammar/ into ~/.cache/edbml/tree-sitter-edbml-git
+#   2. mirror grammar/ into ~/.cache/volt/tree-sitter-volt-git
 #      and commit the current state there
-#   3. rewrite [grammars.edbml] in zed-extension/extension.toml with the
+#   3. rewrite [grammars.volt] in zed-extension/extension.toml with the
 #      mirror's file:// URL and fresh commit hash
 #
 # Run it after cloning and after every grammar change, then use
@@ -18,9 +18,9 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-grammar_src="$repo_root/edbml/grammar"
+grammar_src="$repo_root/grammar"
 extension_toml="$repo_root/zed-extension/extension.toml"
-mirror="${EDBML_GRAMMAR_MIRROR:-${XDG_CACHE_HOME:-$HOME/.cache}/edbml/tree-sitter-edbml-git}"
+mirror="${VOLT_GRAMMAR_MIRROR:-${XDG_CACHE_HOME:-$HOME/.cache}/volt/tree-sitter-volt-git}"
 
 # 1. Regenerate the parser when a CLI is around (committed src/ still works
 #    when it is not).
@@ -42,7 +42,7 @@ if [ ! -d .git ]; then
 fi
 git add -A
 if ! git diff --cached --quiet; then
-    git -c user.name=edbml-sync -c user.email=sync@localhost \
+    git -c user.name=volt-sync -c user.email=sync@localhost \
         commit -q -m "sync $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 fi
 sha="$(git rev-parse HEAD)"
@@ -52,7 +52,7 @@ python3 - "$extension_toml" "file://$mirror" "$sha" <<'PY'
 import re, sys
 path, url, sha = sys.argv[1:]
 text = open(path).read()
-text = re.sub(r'(?ms)(\[grammars\.edbml\]\n)repository = "[^"]*"\ncommit = "[^"]*"',
+text = re.sub(r'(?ms)(\[grammars\.volt\]\n)repository = "[^"]*"\ncommit = "[^"]*"',
               lambda m: f'{m.group(1)}repository = "{url}"\ncommit = "{sha}"', text)
 open(path, "w").write(text)
 PY
@@ -61,6 +61,6 @@ echo "Grammar mirrored at: $mirror"
 echo "extension.toml now pins commit ${sha:0:12}"
 echo
 echo "Next: in Zed run 'zed: extensions' and click Install Dev Extension"
-echo "(first time) or Rebuild on the EDBML extension."
+echo "(first time) or Rebuild on the Volt extension."
 echo "Note: extension.toml's grammar lines are machine-local; avoid"
 echo "committing that change."

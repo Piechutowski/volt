@@ -125,21 +125,26 @@ nao completion pwsh              # PowerShell: pipe into your $PROFILE
 ## Editor support
 
 The schema deserves the same editor experience as the code generated from
-it, so the repository also ships the editor tooling (D40):
+it, so the monorepo ships the editor tooling (D40) — at the repository
+root, since it serves the whole Volt language (DBML and EDBML are its
+inner layers, volt SPEC.md §V0):
 
-- [`edbml/grammar/`](edbml/grammar/) — a tree-sitter grammar
-  covering the full spec, for syntax highlighting;
-- [`zed-extension/`](zed-extension/) — a [Zed](https://zed.dev) extension:
-  highlighting, outline, auto-indent, Markdown rendered inside notes;
-- [`edbml/lsp/`](edbml/lsp/) — the language server, served by `nao lsp`,
-  wrapping the same front end as the CLI, so squiggles, `nao check` and codegen can never
-  disagree: live diagnostics (check errors + vet lints), completion,
-  hover, go-to-definition, find references, rename. Editor-agnostic LSP
-  over stdio — works in Zed, Neovim, Helix, VS Code.
+- [`../grammar/`](../grammar/) — a tree-sitter grammar covering the full
+  language, for syntax highlighting;
+- [`../zed-extension/`](../zed-extension/) — a [Zed](https://zed.dev)
+  extension: highlighting, outline, auto-indent, Markdown rendered inside
+  notes;
+- [`../lsp/`](../lsp/) — the Volt language server, served by `volt lsp`
+  (and by `nao lsp` for DBML-only work), wrapping the same front end as
+  the CLIs, so squiggles, `volt check` and codegen can never disagree:
+  live diagnostics (check errors + vet lints), completion, hover,
+  go-to-definition, find references, rename. Editor-agnostic LSP over
+  stdio — works in Zed, Neovim, Helix, VS Code.
 
-Install locally: `go install ./cmd/nao`, then `./scripts/sync-grammar.sh`,
-then Zed's `Install Dev Extension` pointed at `zed-extension/`. The design
-and every pattern used: [`docs/editor-architecture.md`](docs/editor-architecture.md).
+Install locally: `go install ./cmd/volt` (from the repo root), then
+`./scripts/sync-grammar.sh`, then Zed's `Install Dev Extension` pointed at
+`zed-extension/`. The design and every pattern used:
+[`../docs/editor-architecture.md`](../docs/editor-architecture.md).
 
 ## The DBML spec lives here too
 

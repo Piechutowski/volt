@@ -1,8 +1,8 @@
-//! Zed glue for the Volt/EDBML language server.
+//! Zed glue for the Volt language server.
 //!
 //! The extension's only job is to tell Zed how to launch the language
 //! server (a subcommand of the project's binaries, D41). The binary is
-//! resolved in order: the user's `lsp.nao.binary.path` setting, then
+//! resolved in order: the user's `lsp.volt.binary.path` setting, then
 //! `volt` on the worktree `PATH` (the merged toolchain, whose server
 //! adds project-aware .volt diagnostics), then `nao`. The extension is
 //! installed locally as a dev extension, so there is no download
@@ -10,9 +10,9 @@
 
 use zed_extension_api::{self as zed, settings::LspSettings, LanguageServerId, Result};
 
-struct EdbmlExtension;
+struct VoltExtension;
 
-impl zed::Extension for EdbmlExtension {
+impl zed::Extension for VoltExtension {
     fn new() -> Self {
         Self
     }
@@ -42,7 +42,7 @@ impl zed::Extension for EdbmlExtension {
             .ok_or_else(|| {
                 "neither volt nor nao found on PATH. Build one with `go install \
                  ./cmd/volt` (or ./nao/cmd/nao), or point Zed at the binary via \
-                 the `lsp.nao.binary.path` setting."
+                 the `lsp.volt.binary.path` setting."
                     .to_string()
             })?;
 
@@ -74,4 +74,4 @@ impl zed::Extension for EdbmlExtension {
     }
 }
 
-zed::register_extension!(EdbmlExtension);
+zed::register_extension!(VoltExtension);

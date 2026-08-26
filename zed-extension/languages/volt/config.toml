@@ -1,5 +1,5 @@
-name = "EDBML"
-grammar = "edbml"
+name = "Volt"
+grammar = "volt"
 path_suffixes = ["volt", "edbml", "dbml"]
 line_comments = ["// "]
 block_comment = ["/* ", " */"]

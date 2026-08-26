@@ -29,8 +29,8 @@ import (
 
 	"github.com/Piechutowski/volt/gen/router"
 	"github.com/Piechutowski/volt/lang"
+	"github.com/Piechutowski/volt/lsp"
 	"github.com/Piechutowski/volt/nao/edbml/diag"
-	"github.com/Piechutowski/volt/nao/edbml/lsp"
 )
 
 const version = "0.1.0-dev"

@@ -1,6 +1,6 @@
 /**
- * Tree-sitter grammar for EDBML (Extended Database Markup Language) and
- * the Volt layer above it (.volt files).
+ * Tree-sitter grammar for the Volt language (.volt files): DBML, the
+ * EDBML extensions, and the routing layer above them.
  *
  * Covers the full DBML specification in nao/SPEC.md:
  * Project, Table (settings, alias, columns, legacy flags), TablePartial and
@@ -50,7 +50,7 @@ function newlineSep1(rule, $) {
 }
 
 module.exports = grammar({
-  name: 'edbml',
+  name: 'volt',
 
   // Newlines are significant; \r is discarded everywhere (§2). Comments may
   // appear anywhere and a line comment does not consume its newline (§3.3).

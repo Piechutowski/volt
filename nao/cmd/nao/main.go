@@ -34,9 +34,9 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/Piechutowski/volt/lsp"
 	"github.com/Piechutowski/volt/nao/edbml/check"
 	"github.com/Piechutowski/volt/nao/edbml/diag"
-	"github.com/Piechutowski/volt/nao/edbml/lsp"
 	"github.com/Piechutowski/volt/nao/edbml/parser"
 	"github.com/Piechutowski/volt/nao/edbml/vet"
 	golanggen "github.com/Piechutowski/volt/nao/gen/golang"
