@@ -8,7 +8,7 @@ stability contract.
 Volt is my codegen-first web framework for Go: schema and routes are
 declared in `.volt` files, `volt gen` writes the router, controller
 interfaces and reverse-URL helpers onto plain `net/http.ServeMux`, and
-its ORM sub-library generates the models and queries. Everything
+nao — its ORM — generates the models and queries. Everything
 resolves at compile time.
 
 **One language, one file extension.** A `.volt` file is Volt — the
@@ -32,8 +32,8 @@ boundaries carry no meaning (§V1.5).
 
 The pipeline: `.volt` → `lang` (scanner, parser, schema and project
 semantics) → `gen/router` → my app implements the generated interfaces
-and mounts a plain `http.Handler`. `orm/` is a sub-library of the
-framework — the data layer — the way ActiveRecord sits inside Rails.
+and mounts a plain `http.Handler`. `nao/` is Volt's ORM, a
+sub-library of the framework the way ActiveRecord sits inside Rails.
 
 | Directory        | What it is |
 |------------------|------------|
@@ -41,7 +41,7 @@ framework — the data layer — the way ActiveRecord sits inside Rails.
 | `cmd/volt`       | the binary: `check` `vet` `gen` `routes` `lsp` `version` |
 | `lang/`          | **the language**: `token` `scanner` `parser` `ast` `diag` `check` `vet` front end, plus volt.mod/package/import resolution, route expansion and conflict detection; `lang/SPEC.md` = schema-layer spec, `lang/conformance/{volt,dbml}` = executable corpora |
 | `gen/router/`    | router generator; goldens are gofmt-stable and compiled by the real toolchain |
-| `orm/`           | **the ORM sub-library**: model + query + SQLite generation (`nao/gen`), its runtime (`nao/rt`), inflector, docs and the `nao` CLI |
+| `nao/`           | **nao — the ORM**: model + query + SQLite generation (`nao/gen`), its runtime (`nao/rt`), inflector, docs and the `nao` CLI |
 | `lsp/`           | the Volt language server (`volt lsp`); project-aware diagnostics for files under a volt.mod, single-file DBML pass otherwise |
 | `grammar/`       | tree-sitter grammar for the whole language |
 | `zed-extension/` | Zed glue; install via `scripts/sync-grammar.sh` + Install Dev Extension |
