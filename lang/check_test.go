@@ -240,6 +240,33 @@ Scope / {
 	}
 }
 
+func TestResourcesSingularOverride(t *testing.T) {
+	// A name English singularization leaves alone collides with itself…
+	_, diags := project(t, map[string]string{
+		"volt.mod":   modFile,
+		"app/r.volt": "package app\n\nScope / {\n\tresources posty\n}\n",
+	})
+	wantError(t, diags, "set the singular explicitly")
+
+	// …and singular: is the fix, giving distinct collection/member helpers.
+	pr, diags := project(t, map[string]string{
+		"volt.mod":   modFile,
+		"app/r.volt": "package app\n\nScope / {\n\tresources posty [singular: post]\n}\n",
+	})
+	wantClean(t, diags)
+	helpers := map[string]bool{}
+	for _, r := range pr.Packages["app"].Routes {
+		if r.HelperName != "" {
+			helpers[r.HelperName] = true
+		}
+	}
+	for _, want := range []string{"Posty", "Post", "NewPost", "EditPost"} {
+		if !helpers[want] {
+			t.Errorf("helper %q missing; got %v", want, helpers)
+		}
+	}
+}
+
 func TestVerbMethodMapping(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"volt.mod": modFile,

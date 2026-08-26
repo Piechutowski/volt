@@ -534,6 +534,18 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 				} else {
 					except, exceptPos = set, s.Pos()
 				}
+			case "singular":
+				id, ok := s.Value.(*ast.Ident)
+				if !ok || id.Quoted() || !goIdentOK(id.Name()) {
+					c.errorf(s.Pos(), "V5", "singular: takes a plain identifier (§V5.3)")
+					continue
+				}
+				gn, err := golang.GoName(id.Name())
+				if err != nil {
+					c.errorf(s.Pos(), "V5", "singular %q: %v (§V5.3)", id.Name(), err)
+					continue
+				}
+				singular = gn
 			case "param":
 				id, ok := s.Value.(*ast.Ident)
 				if !ok || !goIdentOK(id.Name()) || goKeywords[id.Name()] || reservedParamNames[id.Name()] {
@@ -546,7 +558,7 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 					keyType = t
 				}
 			default:
-				c.errorf(s.Pos(), "V6", "setting %q is not valid on resources (§V6); valid: api, only, except, param, model", s.Name)
+				c.errorf(s.Pos(), "V6", "setting %q is not valid on resources (§V6); valid: api, only, except, param, model, singular", s.Name)
 			}
 		}
 	}
@@ -743,7 +755,18 @@ func (c *checker) routeAdd(r *RouteInfo, seenShape, seenHelper map[string]*Route
 
 	if r.HelperName != "" {
 		if prev, dup := seenHelper[r.HelperName]; dup {
-			c.errorf(r.Pos, "V4", "reverse-URL helper %q already produced by the route at %s (§V4.6); disambiguate with [name:] or a scope name", r.HelperName, prev.Pos)
+			// A resources declaration colliding with itself means its
+			// table name survived singularization unchanged (nao's
+			// inflector is English), so the collection and member
+			// helpers came out identical. Neither [name:] (not a
+			// resources setting) nor a scope name helps there — both
+			// sides get the same prefix — so name the working fix.
+			if r.FromResources && prev.FromResources && r.Pos == prev.Pos {
+				c.errorf(r.Pos, "V5", "resources %q: the collection and member reverse-URL helpers are both %q, because singularizing %q does not change it (§V5.4); set the singular explicitly, e.g. [singular: <name>]",
+					prev.Controller, r.HelperName, prev.Controller)
+			} else {
+				c.errorf(r.Pos, "V4", "reverse-URL helper %q already produced by the route at %s (§V4.6); disambiguate with [name:] or a scope name", r.HelperName, prev.Pos)
+			}
 			r.HelperName = ""
 		} else {
 			seenHelper[r.HelperName] = r

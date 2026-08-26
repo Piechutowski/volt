@@ -38,7 +38,7 @@ var (
 		// Volt layer (SPEC.md §V4-§V5)
 		"scope":     {"pipe: ", "error_handler: ", "name: "},
 		"route":     {"name: "},
-		"resources": {"model: ", "only: (", "except: (", "param: ", "api"},
+		"resources": {"model: ", "only: (", "except: (", "param: ", "singular: ", "api"},
 	}
 
 	builtinTypes = []string{

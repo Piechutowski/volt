@@ -345,11 +345,15 @@ resources = "resources", name, [ settings ], newline ;
 | `except` | action list | drop these actions |
 | `param` | identifier | key parameter name (default `id`) |
 | `model` | `Model` or `pkg.Model` | infer the key type from the model's primary key |
+| `singular` | identifier | the singular used for member helper names (§V5.4) |
 
 1. Action names in `only`/`except` are the lowercase names of §V5.2;
    unknown names are errors. `only` and `except` MUST NOT be combined.
    `only`/`except` filter the action set after `api`.
 2. Without `model`, the key parameter's type is `int64`.
+3. `singular` overrides the inflector of §V5.4.2. It is required
+   whenever singularization leaves the name unchanged, which would
+   otherwise make the collection and member helpers collide.
 
 ### §V5.4 Model resolution
 
@@ -363,8 +367,15 @@ resources = "resources", name, [ settings ], newline ;
    becomes the key parameter's type. Composite, missing, or unroutable
    keys are errors.
 4. Helper names use the resources name: plural = the Go name of the
-   declaration's table name, singular = its deterministic
-   singularization (nao's inflector).
+   declaration's table name, singular = the `singular:` setting when
+   given, else its deterministic singularization (nao's inflector,
+   which implements English rules only).
+5. The two MUST differ: a name whose singularization is the identity
+   (`posty`, `data`, `series`) would give the collection and member
+   helpers one name, and is an error naming `singular:` as the fix.
+   Neither a route `name:` nor a scope `name:` can resolve it — the
+   former is not a resources setting (§V6), the latter prefixes both
+   sides equally.
 
 ```volt
 resources users [model: db.User, only: (index, show, create)]
@@ -379,7 +390,7 @@ an element is an error on that element):
 |---|---|
 | Scope | `pipe`, `name`, `error_handler` |
 | route | `name` |
-| resources | `api`, `only`, `except`, `param`, `model` |
+| resources | `api`, `only`, `except`, `param`, `model`, `singular` |
 
 The identifier-list value form `(a, b, c)` (production in Appendix VA)
 is valid only where a setting explicitly takes an action list.
