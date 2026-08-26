@@ -57,7 +57,7 @@ core DBML  ⊂  EDBML (nao extensions)  ⊂  Volt (routing & dataset elements)
   for diagramming, whatever its layout. The ER diagram is a derived
   artifact of the schema elements, not a property of file bytes.
 - The core-DBML layer remains conformance-guarded by the corpus
-  (`nao/edbml/conformance/`) — with the one deliberate exception below
+  (`lang/conformance/`) — with the one deliberate exception below
   (L4).
 
 ## L3 — Go-style packages and imports
@@ -87,7 +87,7 @@ import (
 Pipeline api { use volt.RequestID }
 
 Scope /api [pipe: api] {
-  resources users [model: db.User, bind]
+  resources db.User [bind]
 }
 Ref: app_audit.user_id > db.users.id
 ```
@@ -168,7 +168,7 @@ Near-term layout roadmap (deliberately incremental):
 
 1. **Now:** `nao/` as copied, own Go module, everything green.
 2. **When Volt elements land in the grammar:** the front end
-   (`nao/edbml/{token,scanner,ast,parser,check,vet}`) migrates to a
+   (`lang/{token,scanner,ast,parser,check,vet}`) migrates to a
    shared `lang/` tree that both generators consume; `cmd/volt` grows
    `check | vet | gen | routes | export dbml | lsp`; `cmd/nao` remains
    as a compatibility shim during the alpha, then deprecates.

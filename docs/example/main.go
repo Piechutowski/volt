@@ -8,7 +8,7 @@ import (
 	"net/http"
 
 	"github.com/Piechutowski/volt"
-	"github.com/Piechutowski/volt/nao/rt"
+	"github.com/Piechutowski/volt/orm/rt"
 
 	"example.com/metrics/app"
 	"example.com/metrics/db"

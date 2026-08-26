@@ -6,7 +6,7 @@ import (
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
 
-	"github.com/Piechutowski/volt/nao/edbml/check"
+	"github.com/Piechutowski/volt/lang/check"
 )
 
 // Completion contexts are derived textually (the file rarely parses while a
@@ -38,7 +38,7 @@ var (
 		// Volt layer (SPEC.md §V4-§V5)
 		"scope":     {"pipe: ", "error_handler: ", "name: "},
 		"route":     {"name: "},
-		"resources": {"model: ", "only: (", "except: (", "param: ", "singular: ", "api"},
+		"resources": {"only: (", "except: (", "param: ", "singular: ", "api"},
 	}
 
 	builtinTypes = []string{

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Piechutowski/volt/nao/edbml/diag"
+	"github.com/Piechutowski/volt/lang/diag"
 )
 
 // project materializes files into a temp dir and runs Load+Check.
@@ -84,7 +84,7 @@ Scope / [pipe: api, error_handler: Errors] {
 		get /stats Admin.Stats
 	}
 
-	resources users [model: db.User, only: (index, show, create)]
+	resources db.User [only: (index, show, create)]
 
 	get /files/:path...       Files.Serve
 	get /users/:id(int32)/avatar  Users.Avatar
@@ -267,6 +267,42 @@ func TestResourcesSingularOverride(t *testing.T) {
 	}
 }
 
+func TestResourcesNamesModel(t *testing.T) {
+	pr, diags := project(t, map[string]string{
+		"volt.mod":       modFile,
+		"db/schema.volt": "package db\n\nTable posty [model: 'Post'] {\n\tid integer [pk]\n}\n",
+		"app/r.volt":     "package app\nimport (\n\tdb\n)\nScope / {\n\tresources db.Post\n}\n",
+	})
+	wantClean(t, diags)
+
+	app := pr.Packages["app"]
+	helpers := map[string]bool{}
+	for _, r := range app.Routes {
+		// URL segment comes from the table…
+		if !strings.HasPrefix(r.Pattern, "/posty") {
+			t.Errorf("pattern %q should use the table name", r.Pattern)
+		}
+		// …key type from the model's primary key…
+		for _, p := range r.Params {
+			if p.Type != TInt32 {
+				t.Errorf("key type = %v on %s, want int32", p.Type, r.Pattern)
+			}
+		}
+		if r.HelperName != "" {
+			helpers[r.HelperName] = true
+		}
+	}
+	// …and the member helper from the model name, with no inflection.
+	for _, want := range []string{"Posty", "Post", "NewPost", "EditPost"} {
+		if !helpers[want] {
+			t.Errorf("helper %q missing; got %v", want, helpers)
+		}
+	}
+	if app.Controllers["Posty"] == nil {
+		t.Errorf("controller should be Posty (from the table); got %v", app.Controllers)
+	}
+}
+
 func TestVerbMethodMapping(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"volt.mod": modFile,
@@ -363,8 +399,8 @@ func TestErrors(t *testing.T) {
 		}, "imported and not used"},
 		{"import cycle", map[string]string{
 			"volt.mod":  modFile,
-			"a/a.volt":  "package a\nimport (\n\tb\n)\nScope / { resources users [model: b.User] }\n",
-			"b/b.volt":  "package b\nimport (\n\ta\n)\nScope /b { resources users [model: a.User] }\n",
+			"a/a.volt":  "package a\nimport (\n\tb\n)\nScope / { resources b.User }\n",
+			"b/b.volt":  "package b\nimport (\n\ta\n)\nScope /b { resources a.User }\n",
 			"a/t.volt":  "package a\nTable users { id integer [pk] }\n",
 			"b/t2.volt": "package b\nTable users { id integer [pk] }\n",
 		}, "import cycle"},
@@ -402,8 +438,9 @@ func TestErrors(t *testing.T) {
 		}, "duplicate path parameter"},
 		{"unknown model", map[string]string{
 			"volt.mod":   modFile,
-			"app/r.volt": "package app\nScope / {\n\tresources users [model: Nope]\n}\n",
-		}, "no table in package"},
+			"db/s.volt":  "package db\n\nTable users {\n\tid integer [pk]\n}\n",
+			"app/r.volt": "package app\nimport (\n\tdb\n)\nScope / {\n\tresources db.Nope\n}\n",
+		}, "no model"},
 		{"only and except", map[string]string{
 			"volt.mod":   modFile,
 			"app/r.volt": "package app\nScope / {\n\tresources users [only: (index), except: (show)]\n}\n",
@@ -442,7 +479,7 @@ func TestFileLayoutIsInvisible(t *testing.T) {
 Table users { id integer [pk] }
 Pipeline api { use volt.RequestID }
 Scope / [pipe: api] {
-	resources users [model: User]
+	resources User
 	get /about Home.About
 }
 `,
@@ -452,7 +489,7 @@ Scope / [pipe: api] {
 		"volt.mod":     modFile,
 		"app/a_s.volt": "package app\nTable users { id integer [pk] }\n",
 		"app/b_p.volt": "package app\nPipeline api { use volt.RequestID }\n",
-		"app/c_r.volt": "package app\nScope / [pipe: api] {\n\tresources users [model: User]\n\tget /about Home.About\n}\n",
+		"app/c_r.volt": "package app\nScope / [pipe: api] {\n\tresources User\n\tget /about Home.About\n}\n",
 	})
 	wantClean(t, d3)
 

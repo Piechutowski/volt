@@ -290,7 +290,7 @@ Two deliberate choices:
 - **vet runs only on error-free files.** Style advice stacked on top of
   hard errors is noise while typing; it reappears the moment the file
   checks clean. The `modelname` analyzer is additionally excluded outright
-  because `[model:]` is EDBML-only (`activeAnalyzers`).
+  because `[model:]` belongs to the schema extensions (`analyzersActive`).
 - **`check.File` returns a usable `Info` even for broken files**, so
   completion and hover keep working from the last coherent model while the
   user is mid-keystroke.

@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 
 	"github.com/Piechutowski/volt/lang"
-	"github.com/Piechutowski/volt/nao/edbml/diag"
-	"github.com/Piechutowski/volt/nao/edbml/token"
+	"github.com/Piechutowski/volt/lang/diag"
+	"github.com/Piechutowski/volt/lang/token"
 )
 
 // voltProjectDiags runs the project-level pipeline (lang.Load, Check,

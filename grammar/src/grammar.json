@@ -3168,8 +3168,38 @@
           "value": "resources"
         },
         {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "FIELD",
+                  "name": "package",
+                  "content": {
+                    "type": "ALIAS",
+                    "content": {
+                      "type": "SYMBOL",
+                      "name": "identifier"
+                    },
+                    "named": true,
+                    "value": "package_name"
+                  }
+                },
+                {
+                  "type": "STRING",
+                  "value": "."
+                }
+              ]
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
           "type": "FIELD",
-          "name": "table",
+          "name": "model",
           "content": {
             "type": "ALIAS",
             "content": {
@@ -3177,7 +3207,7 @@
               "name": "identifier"
             },
             "named": true,
-            "value": "table_name"
+            "value": "model_name"
           }
         },
         {

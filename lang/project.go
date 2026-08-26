@@ -1,7 +1,7 @@
 // Package lang implements the project-level semantics of the Volt
 // language (SPEC.md §V): package and import resolution, pipeline and
 // scope checking, route expansion and conflict detection. It plays the
-// role edbml/check plays for the DBML layer, one level up — whole
+// role lang/check plays for the schema layer, one level up — whole
 // project instead of single file.
 //
 // The pipeline is Load (files → packages) then Check (packages →
@@ -16,10 +16,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Piechutowski/volt/nao/edbml/ast"
-	"github.com/Piechutowski/volt/nao/edbml/diag"
-	"github.com/Piechutowski/volt/nao/edbml/parser"
-	"github.com/Piechutowski/volt/nao/edbml/token"
+	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/diag"
+	"github.com/Piechutowski/volt/lang/parser"
+	"github.com/Piechutowski/volt/lang/token"
 )
 
 // ModFile is the project root marker (spec §V1.1).
@@ -54,6 +54,10 @@ type Package struct {
 	Routes    []*RouteInfo
 	// Controllers maps controller name -> its actions, for the generator.
 	Controllers map[string]*ControllerInfo
+
+	// resourceHints records `resources <table>` declarations that could
+	// have named a model instead; Vet turns them into advice (§V5.1).
+	resourceHints []resourceHint
 
 	// merged is the synthetic single file of all declarations, in file
 	// order (sorted by name for determinism), fed to the DBML-layer
@@ -209,4 +213,10 @@ func parseModFile(path, src string) (string, []diag.Diagnostic) {
 			"spec/V1", "%s must declare 'module <name>'", ModFile))
 	}
 	return module, diags
+}
+
+// resourceHint is one 'name the model instead' suggestion.
+type resourceHint struct {
+	pos               token.Position
+	declared, suggest string
 }

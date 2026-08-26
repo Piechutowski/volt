@@ -21,7 +21,7 @@ Scope / [pipe: api, error_handler: Errors] {
 		get /stats Admin.Stats
 	}
 
-	resources users [model: db.User, only: (index, show, create)]
+	resources db.User [only: (index, show, create)]
 
 	get /users/:id(int32)/avatar Users.Avatar
 	get /files/:path...          Files.Serve

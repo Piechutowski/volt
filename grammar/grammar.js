@@ -2,7 +2,7 @@
  * Tree-sitter grammar for the Volt language (.volt files): DBML, the
  * EDBML extensions, and the routing layer above them.
  *
- * Covers the full DBML specification in nao/SPEC.md:
+ * Covers the full DBML specification in lang/SPEC.md:
  * Project, Table (settings, alias, columns, legacy flags), TablePartial and
  * ~injection, Enum, Ref (long, short and inline forms, composite endpoints),
  * TableGroup, Note (member, block and sticky forms), Records (top-level and
@@ -518,10 +518,13 @@ module.exports = grammar({
         kw('delete', 2), kw('options', 2), kw('head', 2), kw('any', 2),
       ),
 
+    // resources names a model, optionally qualified by a package
+    // (volt §V5.1): `resources db.Post`.
     resources_declaration: ($) =>
       seq(
         kw('resources'),
-        field('table', alias($.identifier, $.table_name)),
+        optional(seq(field('package', alias($.identifier, $.package_name)), '.')),
+        field('model', alias($.identifier, $.model_name)),
         optional(field('settings', $.settings_list)),
       ),
 

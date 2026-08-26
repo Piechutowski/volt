@@ -3,20 +3,20 @@
 **Version:** 0.1 (v0 surface: packages, imports, pipelines, scopes,
 routes, resources)
 **Status:** Normative for the v0 implementation in this repository.
-**Part of:** [Volt](README.md). The DBML and EDBML layers are specified
-by [`nao/SPEC.md`](nao/SPEC.md); this document specifies only what the
-Volt layer adds. Section numbers here are prefixed **§V** to keep the
+**Part of:** [Volt](README.md). The schema layer is specified by
+[`lang/SPEC.md`](lang/SPEC.md); this document specifies only what the
+routing layer adds. Section numbers here are prefixed **§V** to keep the
 two documents cross-referencable; diagnostics cite the section they
 enforce (`spec/V4`).
 
-Volt is **one language in three layers**:
+Volt is **one language**, grown in layers:
 
 ```
-core DBML  ⊂  EDBML (nao's extensions)  ⊂  Volt (this document)
+schema core (DBML-derived)  ⊂  schema extensions  ⊂  routing (this document)
 ```
 
 Every construct below is specified by (1) a grammar production in EBNF
-(notation of nao/SPEC.md §1), (2) an enumerated list of constraints, and
+(notation of lang/SPEC.md §1), (2) an enumerated list of constraints, and
 (3) a minimal example. The collected grammar appears in
 [Appendix VA](#appendix-va-collected-grammar). The executable companion
 is the conformance corpus in [`lang/conformance/`](lang/conformance/):
@@ -31,8 +31,8 @@ files under `invalid/` MUST be rejected.
    The file's *dialect* — plain DBML, EDBML, or full Volt — follows
    from its content, never from its name.
 2. **Superset rule.** Every valid EDBML program whose declarations avoid
-   the import statements of nao/SPEC.md §7 is a valid Volt file body
-   (§V2.5 removes `use`/`reuse`). The lexical grammar is nao/SPEC.md §3
+   the import statements of lang/SPEC.md §7 is a valid Volt file body
+   (§V2.5 removes `use`/`reuse`). The lexical grammar is lang/SPEC.md §3
    with one addition:
 
    ```ebnf
@@ -64,7 +64,7 @@ package clause = "package", name, newline ;
 3. A **package** is a directory: all `.volt` files in one directory
    MUST declare the same package name, and share one namespace per
    element kind (tables, enums, partials, pipelines, scopes — each per
-   nao/SPEC.md §8.2 extended with §V3.1 and §V4).
+   lang/SPEC.md §8.2 extended with §V3.1 and §V4).
 4. In every directory other than the project root, the package name
    MUST equal the directory's base name. The root directory's package
    may take any name.
@@ -114,7 +114,7 @@ import path = name, { slash, name } ;
    MUST NOT import itself; **every import MUST be used** — an import
    whose qualifier is never referenced is an error.
 5. **DBML file imports are removed.** The `use` and `reuse` statements
-   of nao/SPEC.md §7 are not part of the Volt language at any layer; a
+   of lang/SPEC.md §7 are not part of the Volt language at any layer; a
    conforming implementation rejects them with a migration diagnostic.
    (The parser MAY still recognize the syntax so the DBML conformance
    corpus remains checkable; acceptance is what is forbidden.)
@@ -183,7 +183,7 @@ type name  = "int" | "int32" | "int64" | "string" ;
    within the route's full path (scope prefixes included).
 3. A parameter's type defaults to `string`; the closed type set is
    `int`, `int32`, `int64`, `string`, chosen to coincide with the Go
-   types nao's model generator emits for routable primary keys.
+   types the model generator emits for routable primary keys.
    **Types shape handler signatures, never matching**: a request
    segment that fails to parse as the declared type is that route's
    404, not a fallthrough to a sibling route.
@@ -313,7 +313,8 @@ Scope / [pipe: api, error_handler: Errors] {
 ## §V5. Resources
 
 ```ebnf
-resources = "resources", name, [ settings ], newline ;
+resources = "resources", model ref, [ settings ], newline ;
+model ref = name, [ ".", name ] ;
 ```
 
 ### §V5.1 Declaration
@@ -344,33 +345,41 @@ resources = "resources", name, [ settings ], newline ;
 | `only` | action list `(index, show)` | keep only these actions |
 | `except` | action list | drop these actions |
 | `param` | identifier | key parameter name (default `id`) |
-| `model` | `Model` or `pkg.Model` | infer the key type from the model's primary key |
 | `singular` | identifier | the singular used for member helper names (§V5.4) |
 
 1. Action names in `only`/`except` are the lowercase names of §V5.2;
    unknown names are errors. `only` and `except` MUST NOT be combined.
    `only`/`except` filter the action set after `api`.
-2. Without `model`, the key parameter's type is `int64`.
+2. When the declaration does not resolve to a model, the key
+   parameter's type is `int64`.
 3. `singular` overrides the inflector of §V5.4.2. It is required
    whenever singularization leaves the name unchanged, which would
    otherwise make the collection and member helpers collide.
 
 ### §V5.4 Model resolution
 
-1. `model:` names a model of this package (`User`) or of an imported
-   package (`db.User`); the reference marks the import used (§V2.4).
-2. The model name resolves against the target package's tables by
-   nao's model naming (D10: `[model:]` override, else the singularized
-   table name). No match is an error.
+1. The declaration names a **model** of this package (`User`) or of an
+   imported package (`db.User`); a qualified reference marks the import
+   used (§V2.4).
+2. The name resolves against the target package's tables by the model
+   naming of lang/SPEC.md (the `[model:]` table setting when present,
+   else the singularized table name). A qualified name that resolves to
+   nothing is an error; an unqualified one that resolves to nothing is
+   a resource without a schema (clause 6).
 3. The resolved table MUST have a single-column primary key whose
-   nao-mapped Go type is `int`, `int32`, `int64` or `string`; that type
+   Go type is `int`, `int32`, `int64` or `string`; that type
    becomes the key parameter's type. Composite, missing, or unroutable
    keys are errors.
-4. Helper names use the resources name: plural = the Go name of the
-   declaration's table name, singular = the `singular:` setting when
-   given, else its deterministic singularization (nao's inflector,
-   which implements English rules only).
-5. The two MUST differ: a name whose singularization is the identity
+4. A resolved declaration fixes every derived name from the schema,
+   not from the spelling: the URL segment and the controller come from
+   the **table** name, the member helper from the **model** name. No
+   singularization is guessed, so a non-English table name needs no
+   help.
+5. An unresolved (schemaless) declaration derives all of it from the
+   name as written: plural = its Go name, singular = the `singular:`
+   setting when given, else its deterministic singularization (the
+   inflector implements English rules only).
+6. Plural and singular MUST differ: a name whose singularization is the identity
    (`posty`, `data`, `series`) would give the collection and member
    helpers one name, and is an error naming `singular:` as the fix.
    Neither a route `name:` nor a scope `name:` can resolve it — the
@@ -378,7 +387,7 @@ resources = "resources", name, [ settings ], newline ;
    sides equally.
 
 ```volt
-resources users [model: db.User, only: (index, show, create)]
+resources db.User [only: (index, show, create)]
 ```
 
 ## §V6. Settings whitelists
@@ -390,7 +399,7 @@ an element is an error on that element):
 |---|---|
 | Scope | `pipe`, `name`, `error_handler` |
 | route | `name` |
-| resources | `api`, `only`, `except`, `param`, `model`, `singular` |
+| resources | `api`, `only`, `except`, `param`, `singular` |
 
 The identifier-list value form `(a, b, c)` (production in Appendix VA)
 is valid only where a setting explicitly takes an action list.
@@ -416,11 +425,11 @@ forward-pointing diagnostic. (Design: docs/router.md §12.)
 
 ## Appendix VA: Collected grammar
 
-Additions to the collected grammar of nao/SPEC.md Appendix A. The
+Additions to the collected grammar of lang/SPEC.md Appendix A. The
 `element` production is extended:
 
 ```ebnf
-element        = (* nao/SPEC.md Appendix A alternatives *)
+element        = (* lang/SPEC.md Appendix A alternatives *)
                | package clause | import decl | pipeline | scope ;
 
 slash          = "/" ;
@@ -453,8 +462,8 @@ type name      = "int" | "int32" | "int64" | "string" ;
 
 resources      = "resources", name, [ settings ], newline ;
 
-(* setting value, extended (nao/SPEC.md §4.2): *)
-setting value  = (* nao alternatives *) | ident list ;
+(* setting value, extended (lang/SPEC.md §4.2): *)
+setting value  = (* schema-layer alternatives *) | ident list ;
 ident list     = "(", name, { ",", name }, ")" ;
 ```
 
@@ -474,7 +483,7 @@ chain, each link runnable by `go test ./...`:
 1. **Corpus ↔ spec.** Every file in `lang/conformance/snippets/`
    carries a `// spec: §V…` tag; `valid/` MUST check clean, `invalid/`
    MUST be rejected. The corpus is the spec's executable surface.
-2. **DBML layer preserved.** nao's conformance corpus continues to run
+2. **Schema layer preserved.** The schema conformance corpus continues to run
    unchanged against the same front end: the superset rule (§V0.2) is
    enforced, not assumed.
 3. **Generator ↔ contract.** Goldens are byte-compared, gofmt-stable by

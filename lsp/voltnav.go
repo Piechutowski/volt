@@ -14,9 +14,9 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 
 	"github.com/Piechutowski/volt/lang"
-	"github.com/Piechutowski/volt/nao/edbml/ast"
-	"github.com/Piechutowski/volt/nao/edbml/token"
-	"github.com/Piechutowski/volt/nao/gen/golang"
+	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/token"
+	"github.com/Piechutowski/volt/orm/gen/golang"
 )
 
 // voltSym names a symbol reachable from the Volt layer.
@@ -125,6 +125,20 @@ func (ix *voltIndex) scopeRefs(pkg *lang.Package, path string, sc *ast.Scope) {
 		case *ast.Scope:
 			ix.scopeRefs(pkg, path, it)
 		case *ast.Resources:
+			// The declaration itself names the model (§V5.1).
+			target := path
+			if it.Pkg != nil {
+				t, ok := pkg.Imports[it.Pkg.Name()]
+				if !ok {
+					continue
+				}
+				target = t
+			}
+			span := spanOf(it.Name)
+			if it.Pkg != nil {
+				span.pos = it.Pkg.Pos()
+			}
+			ix.refs = append(ix.refs, voltRef{span, voltSym{"table", target, it.Name.Name()}, false})
 			ix.settingRefs(pkg, path, it.Settings)
 		case *ast.Route:
 			ix.settingRefs(pkg, path, it.Settings)
@@ -141,17 +155,6 @@ func (ix *voltIndex) settingRefs(pkg *lang.Package, path string, list *ast.Setti
 		case "pipe":
 			if id, ok := s.Value.(*ast.Ident); ok {
 				ix.refs = append(ix.refs, voltRef{spanOf(id), voltSym{"pipeline", path, id.Name()}, false})
-			}
-		case "model":
-			switch v := s.Value.(type) {
-			case *ast.Ident: // Model — this package
-				ix.refs = append(ix.refs, voltRef{spanOf(v), voltSym{"table", path, v.Name()}, false})
-			case *ast.EnumConst: // pkg.Model — an imported package
-				target, ok := pkg.Imports[v.Enum.Name()]
-				if !ok {
-					continue
-				}
-				ix.refs = append(ix.refs, voltRef{spanOf(v), voltSym{"table", target, v.Value.Name()}, false})
 			}
 		}
 	}

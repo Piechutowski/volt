@@ -131,7 +131,7 @@ equivalent (L1). The schema connection is an ordinary package import:
 package app
 
 import (
-	db                       // the schema package — enables [model:], [bind], Dataset
+	db                       // the schema package — enables model refs, [bind], Dataset
 )
 
 Pipeline browser {
@@ -150,7 +150,7 @@ Scope / [pipe: browser] {
   get  /            Home.Index   [name: root]
   get  /about       Home.About
 
-  resources users [model: db.User, only: (index, show, new, create)] {
+  resources db.User [only: (index, show, new, create)] {
     resources posts [shallow]
     member {
       post /promote  Users.Promote
@@ -161,7 +161,7 @@ Scope / [pipe: browser] {
 }
 
 Scope /api/v1 [pipe: api, name: api] {
-  resources users [api, model: db.User, bind]
+  resources db.User [api, bind]
   get /health   Health.Check
 }
 ```
@@ -228,7 +228,7 @@ ROUTE-16 (groups/namespaces/per-group middleware) as one construct.
 | delete  | `DELETE /users/:id`   | — |
 
 Settings: `[api]` (5 actions: no new/edit), `[only: (…)]`,
-`[except: (…)]`, `[model: Name]` (§6), `[bind]` (§6), `[param: slug]`
+`[except: (…)]`, `[bind]` (§6), `[param: slug]`
 (rename `:id`). Nesting mints `/users/:user_id/posts/…`; `[shallow]`
 gives Rails shallow semantics (member routes lose the parent prefix).
 `member { … }` / `collection { … }` blocks add extra routes at the
@@ -350,7 +350,7 @@ the single biggest routing gap in Go — solved *stronger* than any of the
 four references: Phoenix's `~p` warns at compile time; a Volt path
 helper that doesn't exist, or is called with an `int` where the route
 takes a `uuid`, **does not compile**. Structs can interpolate via a
-generated `paths.For(u models.User)` when `[model:]` is set (the
+generated `paths.For(u models.User)` when the resource names a model (the
 `Phoenix.Param` direction of model coupling — generation-side only,
 R9).
 
@@ -391,17 +391,17 @@ This is the Rails lesson — the symbiosis is the product: components
 derive from each other through one shared name. Volt does it without
 runtime reflection, at gen time, **explicitly and optionally**:
 
-- `[model: db.User]` on a resource points `volt gen` at the imported
+- `resources db.User` points `volt gen` at the imported
   schema package (L3). It infers the `:id` param type from the PK
   (`integer [pk, increment]` → `int64`), names helpers by the model,
   and enables `paths.For(u)`.
-- `[bind]` (requires `model:`) generates the Laravel move — implicit
+- `[bind]` (requires a resolved model) generates the Laravel move — implicit
   binding — as *visible code*: the shim calls `q.UserGet(ctx, id)`,
   maps `rt.ErrNotFound` → 404, and the handler signature becomes
   `Show(w, r, user models.User) error`. The DB boundary is explicit:
-  `New(c Controllers, volt.WithQueries(q))`. No `model:`/`bind:` — no
+  `New(c Controllers, volt.WithQueries(q))`. No model or `bind` — no
   coupling; the router stands alone.
-- Gen-time cross-validation: `[model: db.User]` naming a model absent
+- Gen-time cross-validation: `resources db.User` naming a model absent
   from the imported package is a gen error, same class as nao preparing
   every query against the generated DDL.
 - §12's `Dataset` is this symbiosis at group scale: the schema's

@@ -14,11 +14,11 @@ Scope / [pipe: api, error_handler: Errors] {
 
 	// The full Rails-7 set: index, new, create, show, edit,
 	// update (PATCH *and* PUT), delete — 8 routes.
-	resources posts [model: db.Post]
+	resources db.Post
 
 	// Nested scope + [api]: no HTML form actions (new/edit), and
 	// `name: api` prefixes the generated helpers (PathAPIComment…).
 	Scope /api [name: api] {
-		resources comments [model: db.Comment, api, except: (delete)]
+		resources db.Comment [api, except: (delete)]
 	}
 }

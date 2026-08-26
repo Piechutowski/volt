@@ -7,10 +7,10 @@ The whole route table comes from two lines in
 [`app/routes.volt`](app/routes.volt):
 
 ```volt
-resources posts [model: db.Post]
+resources db.Post
 
 Scope /api [name: api] {
-    resources comments [model: db.Comment, api, except: (delete)]
+    resources db.Comment [api, except: (delete)]
 }
 ```
 
@@ -37,8 +37,7 @@ PUT     /api/comments/:id(int32)         Comments.Update
 
 | In routes.volt | Effect |
 |---|---|
-| `resources posts` | the full Rails-7 action set — 8 routes |
-| `model: db.Post` | key type read from the schema's `id integer [pk]` → every handler takes `id int32`; no type spelled in routes.volt |
+| `resources db.Post` | the full Rails-7 action set — 8 routes. The declaration names the **model**, so the URL keeps the table's name (`/posts`), the member helper takes the model's (`PathPost`), and the key type is read from the schema's `id integer [pk]` → every handler takes `id int32`, with no type spelled in routes.volt |
 | `api` | drops the HTML-form actions `new` and `edit` |
 | `except: (delete)` | drops DELETE (`only: (index, show)` is the allowlist form) |
 | `Scope /api [name: api]` | prefixes the paths *and* the helper names (`PathAPIComment`) |

@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/Piechutowski/volt/lang"
-	"github.com/Piechutowski/volt/nao/edbml/diag"
+	"github.com/Piechutowski/volt/lang/diag"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")

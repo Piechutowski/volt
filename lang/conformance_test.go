@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Piechutowski/volt/nao/edbml/diag"
+	"github.com/Piechutowski/volt/lang/diag"
 )
 
 // The conformance corpus is the executable surface of SPEC.md §V:
@@ -20,7 +20,7 @@ var pkgClauseRE = regexp.MustCompile(`(?im)^package\s+(\w+)`)
 
 func corpusEntries(t *testing.T, kind string) []string {
 	t.Helper()
-	dir := filepath.Join("conformance", "snippets", kind)
+	dir := filepath.Join("conformance", "volt", "snippets", kind)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatal(err)

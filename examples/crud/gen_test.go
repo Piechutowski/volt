@@ -8,7 +8,7 @@ import (
 
 	"github.com/Piechutowski/volt/gen/router"
 	"github.com/Piechutowski/volt/lang"
-	"github.com/Piechutowski/volt/nao/edbml/diag"
+	"github.com/Piechutowski/volt/lang/diag"
 )
 
 // TestExampleNotDrifted keeps the committed volt_*.go files honest:

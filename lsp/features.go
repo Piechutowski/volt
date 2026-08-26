@@ -6,9 +6,9 @@ import (
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
 
-	"github.com/Piechutowski/volt/nao/edbml/ast"
-	"github.com/Piechutowski/volt/nao/edbml/check"
-	"github.com/Piechutowski/volt/nao/edbml/diag"
+	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/lang/diag"
 )
 
 // ---------------------------------------------------------------------------

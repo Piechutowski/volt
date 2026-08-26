@@ -9,7 +9,7 @@ import (
 )
 
 const navSchema = "package db\n\nTable posts {\n\tid    integer [pk]\n\ttitle text\n}\n"
-const navRoutes = "package app\n\nimport (\n\tdb\n)\n\nPipeline api {\n\tuse volt.RequestID\n}\n\nScope / [pipe: api] {\n\tresources posts [model: db.Post]\n}\n"
+const navRoutes = "package app\n\nimport (\n\tdb\n)\n\nPipeline api {\n\tuse volt.RequestID\n}\n\nScope / [pipe: api] {\n\tresources db.Post\n}\n"
 
 // navProject materializes the two-package project both tests use.
 func navProject(t *testing.T) (root, schema, routes string) {
@@ -58,7 +58,7 @@ func TestVoltDefinitionPipeline(t *testing.T) {
 }
 
 // TestVoltReferencesFindUses: asking for references on the table
-// declaration in schema.volt finds the `model: db.Post` use over in
+// declaration in schema.volt finds the `resources db.Post` use over in
 // app/routes.volt.
 func TestVoltReferencesFindUses(t *testing.T) {
 	_, schema, routes := navProject(t)
@@ -75,7 +75,7 @@ func TestVoltReferencesFindUses(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("the model: use in routes.volt is missing; got %v", refs)
+		t.Errorf("the resources use in routes.volt is missing; got %v", refs)
 	}
 }
 

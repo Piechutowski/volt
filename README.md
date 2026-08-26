@@ -8,41 +8,40 @@ stability contract.
 Volt is my codegen-first web framework for Go: schema and routes are
 declared in `.volt` files, `volt gen` writes the router, controller
 interfaces and reverse-URL helpers onto plain `net/http.ServeMux`, and
-nao (embedded here) generates the models and queries. Everything
+its ORM sub-library generates the models and queries. Everything
 resolves at compile time.
 
-One language, three layers, one extension. A `.volt` file is DBML, or
-EDBML, or full Volt — decided by its content, not its name (SPEC.md
-§V0). The layers, with their honest build state:
+**One language, one file extension.** A `.volt` file is Volt — the
+markup began as DBML and grew outward, but it is a single language, not
+three that share a suffix. Which constructs a file happens to use is up
+to the file. Its layers, with their honest build state:
 
-- **DBML** — *built.* Everything in nao/SPEC.md v1.0 (upstream-pinned):
+- **Schema** (the DBML-derived core) — *built.* `lang/SPEC.md`:
   Project, Table with columns/indexes/checks, TablePartial, Records,
-  Enum, Ref, TableGroup, Notes, DiagramView. This is what the front
-  end parses and checks today.
-- **EDBML** — *designed, not built* (nao decisions D05–D07): the
-  extension layer above DBML — declared queries (`Select` / `View` /
-  `Trigger`), `[was:]`, `[repr:]`. Of it, only the `[model:]` naming
-  override has landed (checker, generator, vet).
-- **Volt** — *this repo, alpha:* `package` / `import`, `Pipeline`,
-  `Scope`, routes, `resources` — layered on whatever the inner layers
-  accept, so EDBML slots in underneath when it lands (§V0.2).
+  Enum, Ref, TableGroup, Notes, DiagramView.
+- **Schema extensions** — *designed, not built* (`orm/docs/decisions.md`
+  D05–D07): declared queries (`Select` / `View` / `Trigger`), `[was:]`,
+  `[repr:]`. Only the `[model:]` naming override has landed.
+- **Routing** — *alpha:* `package` / `import`, `Pipeline`, `Scope`,
+  routes, `resources` (SPEC.md §V).
 
 Project = tree rooted at `volt.mod`. Package = directory. File
 boundaries carry no meaning (§V1.5).
 
 ## Layout
 
-The pipeline: `.volt` → `nao/edbml` front end (shared scanner/parser)
-→ `lang` (project semantics) → `gen/router` → my app implements the
-generated interfaces and mounts a plain `http.Handler`.
+The pipeline: `.volt` → `lang` (scanner, parser, schema and project
+semantics) → `gen/router` → my app implements the generated interfaces
+and mounts a plain `http.Handler`. `orm/` is a sub-library of the
+framework — the data layer — the way ActiveRecord sits inside Rails.
 
 | Directory        | What it is |
 |------------------|------------|
 | `*.go` (root)    | package `volt` — the runtime generated code links against: error spine, param parsing, path builders, minimal middleware |
 | `cmd/volt`       | the binary: `check` `vet` `gen` `routes` `lsp` `version` |
-| `lang/`          | volt.mod/package/import resolution, route expansion, conflict detection; `lang/conformance/` = executable corpus of SPEC §V |
+| `lang/`          | **the language**: `token` `scanner` `parser` `ast` `diag` `check` `vet` front end, plus volt.mod/package/import resolution, route expansion and conflict detection; `lang/SPEC.md` = schema-layer spec, `lang/conformance/{volt,dbml}` = executable corpora |
 | `gen/router/`    | router generator; goldens are gofmt-stable and compiled by the real toolchain |
-| `nao/`           | not-an-orm, merged in as the data layer; owns the shared front end (`nao/edbml/…`) and model/SQLite generation |
+| `orm/`           | **the ORM sub-library**: model + query + SQLite generation (`orm/gen`), its runtime (`orm/rt`), inflector, docs and the `nao` CLI |
 | `lsp/`           | the Volt language server (`volt lsp`); project-aware diagnostics for files under a volt.mod, single-file DBML pass otherwise |
 | `grammar/`       | tree-sitter grammar for the whole language |
 | `zed-extension/` | Zed glue; install via `scripts/sync-grammar.sh` + Install Dev Extension |
@@ -62,8 +61,8 @@ LSP, the grammar, the Zed extension, and the whole proof chain.
 Designed but **not implemented** — `docs/example/` shows these as
 hand-written illustration only:
 
-- **EDBML itself** — the query layer (`Select`/`View`/`Trigger`,
-  `[was:]`, `[repr:]`); only `[model:]` exists today
+- **the schema extensions** — the query layer (`Select`/`View`/
+  `Trigger`), `[was:]`, `[repr:]`; only `[model:]` exists today
 - **Datasets** (`Dataset` is just reserved, §V8) — the auto-CRUD grid
   over a TableGroup (`docs/router.md` §12)
 - the renderer / content negotiation (HTML, JSON, GOB) from
@@ -81,7 +80,7 @@ hand-written illustration only:
 go install ./cmd/volt
 volt check ./app && volt gen ./app && volt routes ./app
 go run ./examples/crud                # the runnable CRUD example
-go test ./...                        # everything, incl. nao's suites
+go test ./...                        # everything, ORM suites included
 go test ./gen/router -update         # refresh goldens after gen changes
 go run ./cmd/volt gen ./itest/blog   # refresh the itest fixture
 ./scripts/sync-grammar.sh            # mirror grammar + preflight Zed

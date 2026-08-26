@@ -57,7 +57,7 @@ Scope / [pipe: api, error_handler: Errors] {
 		get /stats Admin.Stats
 	}
 
-	resources users [model: db.User, only: (index, show)]
+	resources db.User [only: (index, show)]
 
 	get /users/:id(int32)/avatar Users.Avatar
 	get /files/:path...          Files.Serve
@@ -108,15 +108,9 @@ Scope / [pipe: api, error_handler: Errors] {
           (identifier)
           (identifier))))
     (resources_declaration
-      (table_name)
+      (package_name)
+      (model_name)
       (settings_list
-        (setting
-          (setting_name
-            (identifier))
-          (enum_constant
-            (enum_name
-              (identifier))
-            (identifier)))
         (setting
           (setting_name
             (identifier))

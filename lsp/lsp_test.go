@@ -6,7 +6,7 @@ import (
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
 
-	"github.com/Piechutowski/volt/nao/edbml/token"
+	"github.com/Piechutowski/volt/lang/token"
 )
 
 const sample = `Enum status {

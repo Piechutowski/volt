@@ -1,8 +1,8 @@
 package lsp
 
 import (
-	"github.com/Piechutowski/volt/nao/edbml/ast"
-	"github.com/Piechutowski/volt/nao/edbml/check"
+	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/check"
 )
 
 // SymKind classifies the symbols the server can navigate.

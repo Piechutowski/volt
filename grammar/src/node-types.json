@@ -1123,22 +1123,32 @@
     "type": "resources_declaration",
     "named": true,
     "fields": {
+      "model": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "model_name",
+            "named": true
+          }
+        ]
+      },
+      "package": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "package_name",
+            "named": true
+          }
+        ]
+      },
       "settings": {
         "multiple": false,
         "required": false,
         "types": [
           {
             "type": "settings_list",
-            "named": true
-          }
-        ]
-      },
-      "table": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "table_name",
             "named": true
           }
         ]
@@ -1666,7 +1676,7 @@
     "fields": {
       "name": {
         "multiple": false,
-        "required": false,
+        "required": true,
         "types": [
           {
             "type": "identifier",
@@ -2039,6 +2049,10 @@
     "named": false
   },
   {
+    "type": "model_name",
+    "named": true
+  },
+  {
     "type": "null",
     "named": false
   },
@@ -2053,6 +2067,10 @@
   {
     "type": "package",
     "named": false
+  },
+  {
+    "type": "package_name",
+    "named": true
   },
   {
     "type": "parameter_name",
