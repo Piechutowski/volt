@@ -27,7 +27,7 @@ Scope / [pipe: api, error_handler: Errors] {
 		get /fail Ops.Fail
 	}
 
-	resources db.User
+	resources db.users
 
 	get /users/:id(int32)/avatar Users.Avatar
 	get /files/:path...          Files.Serve

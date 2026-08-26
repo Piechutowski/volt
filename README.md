@@ -19,7 +19,7 @@ to the file. Its layers, with their honest build state:
 - **Schema** (the DBML-derived core) — *built.* `lang/SPEC.md`:
   Project, Table with columns/indexes/checks, TablePartial, Records,
   Enum, Ref, TableGroup, Notes, DiagramView.
-- **Schema extensions** — *designed, not built* (`orm/docs/decisions.md`
+- **Schema extensions** — *designed, not built* (`nao/docs/decisions.md`
   D05–D07): declared queries (`Select` / `View` / `Trigger`), `[was:]`,
   `[repr:]`. Only the `[model:]` naming override has landed.
 - **Routing** — *alpha:* `package` / `import`, `Pipeline`, `Scope`,
@@ -41,7 +41,7 @@ framework — the data layer — the way ActiveRecord sits inside Rails.
 | `cmd/volt`       | the binary: `check` `vet` `gen` `routes` `lsp` `version` |
 | `lang/`          | **the language**: `token` `scanner` `parser` `ast` `diag` `check` `vet` front end, plus volt.mod/package/import resolution, route expansion and conflict detection; `lang/SPEC.md` = schema-layer spec, `lang/conformance/{volt,dbml}` = executable corpora |
 | `gen/router/`    | router generator; goldens are gofmt-stable and compiled by the real toolchain |
-| `orm/`           | **the ORM sub-library**: model + query + SQLite generation (`orm/gen`), its runtime (`orm/rt`), inflector, docs and the `nao` CLI |
+| `orm/`           | **the ORM sub-library**: model + query + SQLite generation (`nao/gen`), its runtime (`nao/rt`), inflector, docs and the `nao` CLI |
 | `lsp/`           | the Volt language server (`volt lsp`); project-aware diagnostics for files under a volt.mod, single-file DBML pass otherwise |
 | `grammar/`       | tree-sitter grammar for the whole language |
 | `zed-extension/` | Zed glue; install via `scripts/sync-grammar.sh` + Install Dev Extension |

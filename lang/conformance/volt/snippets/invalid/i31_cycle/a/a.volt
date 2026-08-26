@@ -7,4 +7,4 @@ import (
 
 Table users { id integer [pk] }
 
-Scope / { resources b.User }
+Scope / { resources b.users }

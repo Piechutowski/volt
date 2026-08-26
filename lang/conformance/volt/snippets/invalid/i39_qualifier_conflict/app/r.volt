@@ -9,5 +9,5 @@ import (
 )
 
 Scope / {
-	resources db.User
+	resources db.users
 }

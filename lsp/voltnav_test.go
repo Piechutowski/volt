@@ -9,7 +9,7 @@ import (
 )
 
 const navSchema = "package db\n\nTable posts {\n\tid    integer [pk]\n\ttitle text\n}\n"
-const navRoutes = "package app\n\nimport (\n\tdb\n)\n\nPipeline api {\n\tuse volt.RequestID\n}\n\nScope / [pipe: api] {\n\tresources db.Post\n}\n"
+const navRoutes = "package app\n\nimport (\n\tdb\n)\n\nPipeline api {\n\tuse volt.RequestID\n}\n\nScope / [pipe: api] {\n\tresources db.posts\n}\n"
 
 // navProject materializes the two-package project both tests use.
 func navProject(t *testing.T) (root, schema, routes string) {
@@ -29,9 +29,9 @@ func TestVoltDefinitionCrossPackage(t *testing.T) {
 	_, schema, routes := navProject(t)
 	d := NewDocument("file://"+routes, navRoutes)
 
-	loc := d.Definition(posOf(t, navRoutes, "db.Post", 0))
+	loc := d.Definition(posOf(t, navRoutes, "db.posts", 0))
 	if loc == nil {
-		t.Fatal("no definition for db.Post")
+		t.Fatal("no definition for db.posts")
 	}
 	if loc.URI != "file://"+schema {
 		t.Fatalf("definition URI = %s, want %s", loc.URI, "file://"+schema)
@@ -58,7 +58,7 @@ func TestVoltDefinitionPipeline(t *testing.T) {
 }
 
 // TestVoltReferencesFindUses: asking for references on the table
-// declaration in schema.volt finds the `resources db.Post` use over in
+// declaration in schema.volt finds the `resources db.posts` use over in
 // app/routes.volt.
 func TestVoltReferencesFindUses(t *testing.T) {
 	_, schema, routes := navProject(t)
@@ -100,27 +100,26 @@ func TestVoltNavOutsideProjectIsQuiet(t *testing.T) {
 	if d.vindex != nil {
 		t.Error("project index built for a file outside any project")
 	}
-	if loc := d.Definition(posOf(t, navRoutes, "db.Post", 0)); loc != nil {
+	if loc := d.Definition(posOf(t, navRoutes, "db.posts", 0)); loc != nil {
 		t.Errorf("definition = %v, want nil", loc)
 	}
-	if refs := d.References(posOf(t, navRoutes, "db.Post", 0), true); len(refs) != 0 {
+	if refs := d.References(posOf(t, navRoutes, "db.posts", 0), true); len(refs) != 0 {
 		t.Errorf("references = %v, want none", refs)
 	}
 }
 
-// TestVoltHoverTableExplainsModelName: hovering `db.Post` must show
-// which table it means and how the name was derived — that mapping is
-// invisible in routes.volt otherwise.
-func TestVoltHoverTableExplainsModelName(t *testing.T) {
+// TestVoltHoverTableShowsModel: hovering the table a resources
+// declaration names shows the table and the Go model it generates.
+func TestVoltHoverTableShowsModel(t *testing.T) {
 	_, _, routes := navProject(t)
 	d := NewDocument("file://"+routes, navRoutes)
 
-	h := d.Hover(posOf(t, navRoutes, "db.Post", 0))
+	h := d.Hover(posOf(t, navRoutes, "db.posts", 0))
 	if h == nil {
-		t.Fatal("no hover for db.Post")
+		t.Fatal("no hover for db.posts")
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
-	for _, want := range []string{"model `Post`", "Table posts", "package `db`", "singulariz"} {
+	for _, want := range []string{"Table posts", "package `db`", "Go model `Post`"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover missing %q:\n%s", want, md)
 		}

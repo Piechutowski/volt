@@ -6,5 +6,5 @@ Table users {
 }
 
 Scope / {
-	resources User
+	resources users
 }

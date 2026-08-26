@@ -13,7 +13,7 @@ func Vet(pr *Project) []diag.Diagnostic {
 	for _, path := range c.paths() {
 		pkg := pr.Packages[path]
 		out = append(out, vetUnusedPipelines(pkg)...)
-		out = append(out, vetResourceNamesModel(pkg)...)
+		out = append(out, vetResourceNamesTable(pkg)...)
 	}
 	diag.Sort(out)
 	return out
@@ -41,15 +41,14 @@ func vetUnusedPipelines(pkg *Package) []diag.Diagnostic {
 	return out
 }
 
-// vetResourceNamesModel flags `resources <table>` where the package
-// declares a model for that very table: naming the model instead makes
-// the declaration self-describing and gives the route its real key type
-// rather than the int64 default (§V5.1).
-func vetResourceNamesModel(pkg *Package) []diag.Diagnostic {
+// vetResourceNamesTable flags a declaration that spells a table's model
+// name instead of the table's own name: the reference should read as the
+// schema does (§V5.1).
+func vetResourceNamesTable(pkg *Package) []diag.Diagnostic {
 	var out []diag.Diagnostic
 	for _, h := range pkg.resourceHints {
-		out = append(out, diag.Warningf(h.pos, "vet/resourcemodel",
-			"resources %s names a table; name its model instead — `resources %s` — so the declaration matches the model and the key keeps its type (§V5.1)",
+		out = append(out, diag.Warningf(h.pos, "vet/resourcetable",
+			"resources %s spells a model name; name the table as declared — `resources %s` — so the reference matches the schema and the key keeps its type (§V5.1)",
 			h.declared, h.suggest))
 	}
 	return out

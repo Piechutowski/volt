@@ -4,7 +4,7 @@
 // name out loud with the [model:] extension setting.
 package vet
 
-import "github.com/Piechutowski/volt/orm/inflect"
+import "github.com/Piechutowski/volt/nao/inflect"
 
 func init() { register(modelName) }
 

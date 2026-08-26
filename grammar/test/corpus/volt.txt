@@ -57,7 +57,7 @@ Scope / [pipe: api, error_handler: Errors] {
 		get /stats Admin.Stats
 	}
 
-	resources db.User [only: (index, show)]
+	resources db.users [only: (index, show)]
 
 	get /users/:id(int32)/avatar Users.Avatar
 	get /files/:path...          Files.Serve
@@ -109,7 +109,7 @@ Scope / [pipe: api, error_handler: Errors] {
           (identifier))))
     (resources_declaration
       (package_name)
-      (model_name)
+      (table_name)
       (settings_list
         (setting
           (setting_name

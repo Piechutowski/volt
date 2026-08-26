@@ -87,7 +87,7 @@ import (
 Pipeline api { use volt.RequestID }
 
 Scope /api [pipe: api] {
-  resources db.User [bind]
+  resources db.users [bind]
 }
 Ref: app_audit.user_id > db.users.id
 ```

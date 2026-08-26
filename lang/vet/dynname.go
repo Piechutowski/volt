@@ -6,7 +6,7 @@
 // the generator's own (gen/golang), so rule and generator cannot drift.
 package vet
 
-import golang "github.com/Piechutowski/volt/orm/gen/golang"
+import golang "github.com/Piechutowski/volt/nao/gen/golang"
 
 func init() { register(dynName) }
 

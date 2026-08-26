@@ -16,7 +16,7 @@ import (
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/token"
-	"github.com/Piechutowski/volt/orm/gen/golang"
+	"github.com/Piechutowski/volt/nao/gen/golang"
 )
 
 // voltSym names a symbol reachable from the Volt layer.
@@ -67,11 +67,9 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 		for _, d := range pkg.Merged().Decls {
 			switch d := d.(type) {
 			case *ast.Table:
-				name, err := golang.ModelName(d)
-				if err != nil {
-					continue
-				}
-				ix.define(voltSym{"table", path, name}, voltDef{span: spanOf(d.Name), table: d})
+				// Keyed by the name as declared: references spell the
+				// table exactly (§V5.1).
+				ix.define(voltSym{"table", path, d.Name.Base()}, voltDef{span: spanOf(d.Name), table: d})
 			case *ast.Pipeline:
 				ix.define(voltSym{"pipeline", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), pipe: d})
 			}
@@ -297,8 +295,12 @@ func tableModelHover(sym voltSym, def voltDef) string {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "**model `%s`** — `Table %s` in package `%s`\n\n",
-		sym.name, t.Name.String(), sym.pkg)
+	model, _ := golang.ModelName(t)
+	fmt.Fprintf(&b, "**`Table %s`** in package `%s`", t.Name.String(), sym.pkg)
+	if model != "" {
+		fmt.Fprintf(&b, " — Go model `%s`", model)
+	}
+	b.WriteString("\n\n")
 
 	pk, pkType := tablePK(t)
 	if pk != "" {
@@ -323,7 +325,7 @@ func tableModelHover(sym voltSym, def voltDef) string {
 		fmt.Fprintf(&b, "\t%s %s%s\n", col.Name.Name(), col.Type.String(), mark)
 	}
 	b.WriteString("}\n```\n\n")
-	b.WriteString("_The model name is nao's singularization of the table name; `[model:]` on the table overrides it (§V5.4.2)._")
+	b.WriteString("_Routes and helpers derive from this: the URL keeps the table's name, the member helper takes the model's (§V5.4)._")
 	return b.String()
 }
 

@@ -10,10 +10,10 @@
 #define STATE_COUNT 673
 #define LARGE_STATE_COUNT 2
 #define SYMBOL_COUNT 170
-#define ALIAS_COUNT 16
+#define ALIAS_COUNT 15
 #define TOKEN_COUNT 74
 #define EXTERNAL_TOKEN_COUNT 0
-#define FIELD_COUNT 26
+#define FIELD_COUNT 25
 #define MAX_ALIAS_SEQUENCE_LENGTH 11
 #define MAX_RESERVED_WORD_SET_SIZE 0
 #define PRODUCTION_ID_COUNT 78
@@ -194,17 +194,16 @@ enum ts_symbol_identifiers {
   alias_sym_enum_name = 172,
   alias_sym_group_member = 173,
   alias_sym_import_alias = 174,
-  alias_sym_model_name = 175,
-  alias_sym_package_name = 176,
-  alias_sym_partial_name = 177,
-  alias_sym_path_segment = 178,
-  alias_sym_pipeline_name = 179,
-  alias_sym_ref_name = 180,
-  alias_sym_schema_name = 181,
-  alias_sym_setting_value_words = 182,
-  alias_sym_table_alias = 183,
-  alias_sym_type_name = 184,
-  alias_sym_view_member = 185,
+  alias_sym_package_name = 175,
+  alias_sym_partial_name = 176,
+  alias_sym_path_segment = 177,
+  alias_sym_pipeline_name = 178,
+  alias_sym_ref_name = 179,
+  alias_sym_schema_name = 180,
+  alias_sym_setting_value_words = 181,
+  alias_sym_table_alias = 182,
+  alias_sym_type_name = 183,
+  alias_sym_view_member = 184,
 };
 
 static const char * const ts_symbol_names[] = {
@@ -383,7 +382,6 @@ static const char * const ts_symbol_names[] = {
   [alias_sym_enum_name] = "enum_name",
   [alias_sym_group_member] = "group_member",
   [alias_sym_import_alias] = "import_alias",
-  [alias_sym_model_name] = "model_name",
   [alias_sym_package_name] = "package_name",
   [alias_sym_partial_name] = "partial_name",
   [alias_sym_path_segment] = "path_segment",
@@ -572,7 +570,6 @@ static const TSSymbol ts_symbol_map[] = {
   [alias_sym_enum_name] = alias_sym_enum_name,
   [alias_sym_group_member] = alias_sym_group_member,
   [alias_sym_import_alias] = alias_sym_import_alias,
-  [alias_sym_model_name] = alias_sym_model_name,
   [alias_sym_package_name] = alias_sym_package_name,
   [alias_sym_partial_name] = alias_sym_partial_name,
   [alias_sym_path_segment] = alias_sym_path_segment,
@@ -1286,10 +1283,6 @@ static const TSSymbolMetadata ts_symbol_metadata[] = {
     .visible = true,
     .named = true,
   },
-  [alias_sym_model_name] = {
-    .visible = true,
-    .named = true,
-  },
   [alias_sym_package_name] = {
     .visible = true,
     .named = true,
@@ -1344,21 +1337,20 @@ enum ts_field_identifiers {
   field_keyword = 9,
   field_kind = 10,
   field_left = 11,
-  field_model = 12,
-  field_name = 13,
-  field_operator = 14,
-  field_package = 15,
-  field_path = 16,
-  field_ref = 17,
-  field_right = 18,
-  field_schema = 19,
-  field_settings = 20,
-  field_table = 21,
-  field_target = 22,
-  field_type = 23,
-  field_value = 24,
-  field_verb = 25,
-  field_wildcard = 26,
+  field_name = 12,
+  field_operator = 13,
+  field_package = 14,
+  field_path = 15,
+  field_ref = 16,
+  field_right = 17,
+  field_schema = 18,
+  field_settings = 19,
+  field_table = 20,
+  field_target = 21,
+  field_type = 22,
+  field_value = 23,
+  field_verb = 24,
+  field_wildcard = 25,
 };
 
 static const char * const ts_field_names[] = {
@@ -1374,7 +1366,6 @@ static const char * const ts_field_names[] = {
   [field_keyword] = "keyword",
   [field_kind] = "kind",
   [field_left] = "left",
-  [field_model] = "model",
   [field_name] = "name",
   [field_operator] = "operator",
   [field_package] = "package",
@@ -1530,7 +1521,7 @@ static const TSFieldMapEntry ts_field_map_entries[] = {
     {field_name, 1},
     {field_wildcard, 2},
   [40] =
-    {field_model, 1},
+    {field_table, 1},
   [41] =
     {field_path, 1},
     {field_settings, 2},
@@ -1577,8 +1568,8 @@ static const TSFieldMapEntry ts_field_map_entries[] = {
     {field_kind, 0},
     {field_name, 1},
   [71] =
-    {field_model, 1},
     {field_settings, 2},
+    {field_table, 1},
   [73] =
     {field_handler, 2},
     {field_path, 1},
@@ -1614,8 +1605,8 @@ static const TSFieldMapEntry ts_field_map_entries[] = {
     {field_name, 1},
     {field_type, 3},
   [97] =
-    {field_model, 3},
     {field_package, 1},
+    {field_table, 3},
   [99] =
     {field_handler, 2},
     {field_path, 1},
@@ -1629,9 +1620,9 @@ static const TSFieldMapEntry ts_field_map_entries[] = {
     {field_keyword, 0},
     {field_path, 7},
   [108] =
-    {field_model, 3},
     {field_package, 1},
     {field_settings, 4},
+    {field_table, 3},
   [111] =
     {field_enum, 2},
     {field_schema, 0},
@@ -1686,7 +1677,7 @@ static const TSSymbol ts_alias_sequences[PRODUCTION_ID_COUNT][MAX_ALIAS_SEQUENCE
     [1] = sym_identifier,
   },
   [34] = {
-    [1] = alias_sym_model_name,
+    [1] = sym_table_name,
   },
   [36] = {
     [0] = alias_sym_column_name,
@@ -1722,7 +1713,7 @@ static const TSSymbol ts_alias_sequences[PRODUCTION_ID_COUNT][MAX_ALIAS_SEQUENCE
     [0] = alias_sym_element_kind,
   },
   [55] = {
-    [1] = alias_sym_model_name,
+    [1] = sym_table_name,
   },
   [58] = {
     [0] = alias_sym_column_name,
@@ -1748,7 +1739,7 @@ static const TSSymbol ts_alias_sequences[PRODUCTION_ID_COUNT][MAX_ALIAS_SEQUENCE
   },
   [69] = {
     [1] = alias_sym_package_name,
-    [3] = alias_sym_model_name,
+    [3] = sym_table_name,
   },
   [71] = {
     [0] = alias_sym_schema_name,
@@ -1762,7 +1753,7 @@ static const TSSymbol ts_alias_sequences[PRODUCTION_ID_COUNT][MAX_ALIAS_SEQUENCE
   },
   [75] = {
     [1] = alias_sym_package_name,
-    [3] = alias_sym_model_name,
+    [3] = sym_table_name,
   },
   [76] = {
     [0] = alias_sym_schema_name,

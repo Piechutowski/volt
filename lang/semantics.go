@@ -9,8 +9,8 @@ import (
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/token"
-	"github.com/Piechutowski/volt/orm/gen/golang"
-	"github.com/Piechutowski/volt/orm/inflect"
+	"github.com/Piechutowski/volt/nao/gen/golang"
+	"github.com/Piechutowski/volt/nao/inflect"
 )
 
 // Check runs project-level semantic analysis (spec §V1–§V6) over a
@@ -498,9 +498,17 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 	// the model name authoritative for the member helper — no
 	// singularization guess.
 	tableName, singular := declared, ""
-	if ti, ok := c.resourceModel(res); ok {
+	ti, ok, reported := c.resourceTable(res)
+	if reported {
+		return nil // the reference is wrong; expanding it would only add noise
+	}
+	if ok {
+		// The declaration spells the table; the member helper takes the
+		// model's name so it reads as one row (§V5.4).
 		tableName = ti.Decl.Name.Base()
-		singular, _ = golang.GoName(declared)
+		if model, err := golang.ModelName(ti.Decl); err == nil {
+			singular = model
+		}
 		if t, ok := c.pkParamType(ti, res.Name.Pos()); ok {
 			keyType = t
 		}
@@ -572,7 +580,7 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 				}
 				paramName = id.Name()
 			case "model":
-				c.errorf(s.Pos(), "V5", "model: is not a setting; name the model in the declaration itself — `resources %s` (§V5.1)", settingRefText(s))
+				c.errorf(s.Pos(), "V5", "model: is not a setting; name the table in the declaration itself — `resources <table>` (§V5.1)")
 			default:
 				c.errorf(s.Pos(), "V6", "setting %q is not valid on resources (§V6); valid: api, only, except, param, singular", s.Name)
 			}
@@ -646,67 +654,68 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 	return out
 }
 
-// resourceHint notes when a bare declaration names a table that has a
-// model — the author almost certainly meant the model (§V5.1).
+// resourceHint notes when a bare declaration spells a table's *model*
+// name instead of the table's own name — the reference should read as
+// the schema does (§V5.1).
 func (c *checker) resourceHint(res *ast.Resources, declared string) {
 	info := c.schemas[c.pkg.Path]
 	if info == nil {
 		return
 	}
 	for _, ti := range info.Tables {
-		if ti.Decl.Name.Base() != declared {
+		model, err := golang.ModelName(ti.Decl)
+		if err != nil || model != declared {
 			continue
 		}
-		if model, err := golang.ModelName(ti.Decl); err == nil && model != declared {
-			c.pkg.resourceHints = append(c.pkg.resourceHints,
-				resourceHint{pos: res.Name.Pos(), declared: declared, suggest: model})
-		}
+		c.pkg.resourceHints = append(c.pkg.resourceHints,
+			resourceHint{pos: res.Name.Pos(), declared: declared, suggest: ti.Decl.Name.Base()})
 		return
 	}
 }
 
-// resourceModel resolves a resources declaration to the table whose
-// model name it spells (§V5.1). Not every declaration names a model —
-// a resource without a schema is legal — so a miss is not an error
-// here; vet suggests the model form when one plainly exists.
-func (c *checker) resourceModel(res *ast.Resources) (*check.TableInfo, bool) {
+// resourceTable resolves a resources declaration to the table it names
+// (§V5.1). Names are matched exactly: `Table posts` is `posts`, never
+// `Posts` or `Post`, so what is written in routes.volt is what stands
+// in the schema. Not every declaration names a table — a resource
+// without a schema is legal — so an unqualified miss is not an error.
+func (c *checker) resourceTable(res *ast.Resources) (ti *check.TableInfo, ok, reported bool) {
 	pkgPath := c.pkg.Path
 	if res.Pkg != nil {
 		qual := res.Pkg.Name()
-		target, ok := c.pkg.Imports[qual]
-		if !ok {
+		target, known := c.pkg.Imports[qual]
+		if !known {
 			c.errorf(res.Pkg.Pos(), "V5", "unknown package qualifier %q (§V5.1)", qual)
-			return nil, false
+			return nil, false, true
 		}
 		c.usedQual[qual] = true
 		pkgPath = target
 	}
 	info := c.schemas[pkgPath]
 	if info == nil {
-		return nil, false
+		return nil, false, false
 	}
 	want := res.Name.Name()
-	for _, ti := range info.Tables {
-		if name, err := golang.ModelName(ti.Decl); err == nil && name == want {
-			return ti, true
+	var caseMatch string
+	for _, cand := range info.Tables {
+		name := cand.Decl.Name.Base()
+		if name == want {
+			return cand, true, false
+		}
+		if strings.EqualFold(name, want) {
+			caseMatch = name
 		}
 	}
+	// A name that differs only in case is a typo worth naming, whether
+	// or not the reference was qualified.
+	if caseMatch != "" {
+		c.errorf(res.Name.Pos(), "V5", "no table %q in package %q; did you mean %q? names are case-sensitive (§V5.1)", want, pkgPath, caseMatch)
+		return nil, false, true
+	}
 	if res.Pkg != nil {
-		// Qualified means the author meant a model; a miss is an error.
-		c.errorf(res.Name.Pos(), "V5", "no model %q in package %q (§V5.1)", want, pkgPath)
+		c.errorf(res.Name.Pos(), "V5", "no table %q in package %q (§V5.1)", want, pkgPath)
+		return nil, false, true
 	}
-	return nil, false
-}
-
-// settingRefText renders a legacy model: value for the migration hint.
-func settingRefText(s *ast.Setting) string {
-	switch v := s.Value.(type) {
-	case *ast.Ident:
-		return v.Name()
-	case *ast.EnumConst:
-		return v.Enum.Name() + "." + v.Value.Name()
-	}
-	return "<Model>"
+	return nil, false, false
 }
 
 // pkParamType maps a table's primary key to a route parameter type.

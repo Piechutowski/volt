@@ -5,5 +5,5 @@ import (
 )
 
 Scope / {
-	resources d.Post
+	resources d.posts
 }

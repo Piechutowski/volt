@@ -3199,7 +3199,7 @@
         },
         {
           "type": "FIELD",
-          "name": "model",
+          "name": "table",
           "content": {
             "type": "ALIAS",
             "content": {
@@ -3207,7 +3207,7 @@
               "name": "identifier"
             },
             "named": true,
-            "value": "model_name"
+            "value": "table_name"
           }
         },
         {

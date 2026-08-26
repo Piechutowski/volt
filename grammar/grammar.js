@@ -518,13 +518,13 @@ module.exports = grammar({
         kw('delete', 2), kw('options', 2), kw('head', 2), kw('any', 2),
       ),
 
-    // resources names a model, optionally qualified by a package
-    // (volt §V5.1): `resources db.Post`.
+    // resources names a table, optionally qualified by a package
+    // (volt §V5.1): `resources db.posts`.
     resources_declaration: ($) =>
       seq(
         kw('resources'),
         optional(seq(field('package', alias($.identifier, $.package_name)), '.')),
-        field('model', alias($.identifier, $.model_name)),
+        field('table', alias($.identifier, $.table_name)),
         optional(field('settings', $.settings_list)),
       ),
 

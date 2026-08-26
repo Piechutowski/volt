@@ -313,8 +313,8 @@ Scope / [pipe: api, error_handler: Errors] {
 ## §V5. Resources
 
 ```ebnf
-resources = "resources", model ref, [ settings ], newline ;
-model ref = name, [ ".", name ] ;
+resources = "resources", table ref, [ settings ], newline ;
+table ref = name, [ ".", name ] ;
 ```
 
 ### §V5.1 Declaration
@@ -356,25 +356,25 @@ model ref = name, [ ".", name ] ;
    whenever singularization leaves the name unchanged, which would
    otherwise make the collection and member helpers collide.
 
-### §V5.4 Model resolution
+### §V5.4 Table resolution
 
-1. The declaration names a **model** of this package (`User`) or of an
-   imported package (`db.User`); a qualified reference marks the import
-   used (§V2.4).
-2. The name resolves against the target package's tables by the model
-   naming of lang/SPEC.md (the `[model:]` table setting when present,
-   else the singularized table name). A qualified name that resolves to
-   nothing is an error; an unqualified one that resolves to nothing is
-   a resource without a schema (clause 6).
+1. The declaration names a **table** of this package (`posts`) or of an
+   imported package (`db.posts`); a qualified reference marks the
+   import used (§V2.4).
+2. The name matches the table's declared name **exactly**: names are
+   case-sensitive, and a name differing only in case is an error naming
+   the right spelling. A qualified name that matches nothing is an
+   error; an unqualified one that matches nothing is a resource
+   without a schema (clause 6).
 3. The resolved table MUST have a single-column primary key whose
    Go type is `int`, `int32`, `int64` or `string`; that type
    becomes the key parameter's type. Composite, missing, or unroutable
    keys are errors.
-4. A resolved declaration fixes every derived name from the schema,
-   not from the spelling: the URL segment and the controller come from
-   the **table** name, the member helper from the **model** name. No
-   singularization is guessed, so a non-English table name needs no
-   help.
+4. A resolved declaration fixes every derived name from the schema:
+   the URL segment and the controller come from the table name as
+   written, and the member helper from the table's **model** name (the
+   `[model:]` setting when present, else the singularized table name).
+   With `[model:]` set, no singularization is guessed at all.
 5. An unresolved (schemaless) declaration derives all of it from the
    name as written: plural = its Go name, singular = the `singular:`
    setting when given, else its deterministic singularization (the
@@ -387,7 +387,7 @@ model ref = name, [ ".", name ] ;
    sides equally.
 
 ```volt
-resources db.User [only: (index, show, create)]
+resources db.users [only: (index, show, create)]
 ```
 
 ## §V6. Settings whitelists

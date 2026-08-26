@@ -84,7 +84,7 @@ Scope / [pipe: api, error_handler: Errors] {
 		get /stats Admin.Stats
 	}
 
-	resources db.User [only: (index, show, create)]
+	resources db.users [only: (index, show, create)]
 
 	get /files/:path...       Files.Serve
 	get /users/:id(int32)/avatar  Users.Avatar
@@ -267,11 +267,11 @@ func TestResourcesSingularOverride(t *testing.T) {
 	}
 }
 
-func TestResourcesNamesModel(t *testing.T) {
+func TestResourcesNamesTable(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"volt.mod":       modFile,
 		"db/schema.volt": "package db\n\nTable posty [model: 'Post'] {\n\tid integer [pk]\n}\n",
-		"app/r.volt":     "package app\nimport (\n\tdb\n)\nScope / {\n\tresources db.Post\n}\n",
+		"app/r.volt":     "package app\nimport (\n\tdb\n)\nScope / {\n\tresources db.posty\n}\n",
 	})
 	wantClean(t, diags)
 
@@ -292,7 +292,8 @@ func TestResourcesNamesModel(t *testing.T) {
 			helpers[r.HelperName] = true
 		}
 	}
-	// …and the member helper from the model name, with no inflection.
+	// …and the member helper from the model name ([model: 'Post']),
+	// with no inflection guess.
 	for _, want := range []string{"Posty", "Post", "NewPost", "EditPost"} {
 		if !helpers[want] {
 			t.Errorf("helper %q missing; got %v", want, helpers)
@@ -399,8 +400,8 @@ func TestErrors(t *testing.T) {
 		}, "imported and not used"},
 		{"import cycle", map[string]string{
 			"volt.mod":  modFile,
-			"a/a.volt":  "package a\nimport (\n\tb\n)\nScope / { resources b.User }\n",
-			"b/b.volt":  "package b\nimport (\n\ta\n)\nScope /b { resources a.User }\n",
+			"a/a.volt":  "package a\nimport (\n\tb\n)\nScope / { resources b.users }\n",
+			"b/b.volt":  "package b\nimport (\n\ta\n)\nScope /b { resources a.users }\n",
 			"a/t.volt":  "package a\nTable users { id integer [pk] }\n",
 			"b/t2.volt": "package b\nTable users { id integer [pk] }\n",
 		}, "import cycle"},
@@ -436,11 +437,15 @@ func TestErrors(t *testing.T) {
 			"volt.mod":   modFile,
 			"app/r.volt": "package app\nScope /u/:id {\n\tget /p/:id X.Y\n}\n",
 		}, "duplicate path parameter"},
-		{"unknown model", map[string]string{
+		{"unknown table", map[string]string{
 			"volt.mod":   modFile,
 			"db/s.volt":  "package db\n\nTable users {\n\tid integer [pk]\n}\n",
-			"app/r.volt": "package app\nimport (\n\tdb\n)\nScope / {\n\tresources db.Nope\n}\n",
-		}, "no model"},
+			"app/r.volt": "package app\nimport (\n\tdb\n)\nScope / {\n\tresources db.nope\n}\n",
+		}, "no table"},
+		{"table name case", map[string]string{
+			"volt.mod":   modFile,
+			"app/r.volt": "package app\n\nTable posts {\n\tid integer [pk]\n}\n\nScope / {\n\tresources Posts\n}\n",
+		}, "case-sensitive"},
 		{"only and except", map[string]string{
 			"volt.mod":   modFile,
 			"app/r.volt": "package app\nScope / {\n\tresources users [only: (index), except: (show)]\n}\n",
@@ -479,7 +484,7 @@ func TestFileLayoutIsInvisible(t *testing.T) {
 Table users { id integer [pk] }
 Pipeline api { use volt.RequestID }
 Scope / [pipe: api] {
-	resources User
+	resources users
 	get /about Home.About
 }
 `,
@@ -489,7 +494,7 @@ Scope / [pipe: api] {
 		"volt.mod":     modFile,
 		"app/a_s.volt": "package app\nTable users { id integer [pk] }\n",
 		"app/b_p.volt": "package app\nPipeline api { use volt.RequestID }\n",
-		"app/c_r.volt": "package app\nScope / [pipe: api] {\n\tresources User\n\tget /about Home.About\n}\n",
+		"app/c_r.volt": "package app\nScope / [pipe: api] {\n\tresources users\n\tget /about Home.About\n}\n",
 	})
 	wantClean(t, d3)
 

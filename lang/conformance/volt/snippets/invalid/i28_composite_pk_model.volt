@@ -8,5 +8,5 @@ Table pairs {
 }
 
 Scope / {
-	resources Pair
+	resources pairs
 }

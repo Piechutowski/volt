@@ -150,7 +150,7 @@ Scope / [pipe: browser] {
   get  /            Home.Index   [name: root]
   get  /about       Home.About
 
-  resources db.User [only: (index, show, new, create)] {
+  resources db.users [only: (index, show, new, create)] {
     resources posts [shallow]
     member {
       post /promote  Users.Promote
@@ -161,7 +161,7 @@ Scope / [pipe: browser] {
 }
 
 Scope /api/v1 [pipe: api, name: api] {
-  resources db.User [api, bind]
+  resources db.users [api, bind]
   get /health   Health.Check
 }
 ```
@@ -391,7 +391,7 @@ This is the Rails lesson — the symbiosis is the product: components
 derive from each other through one shared name. Volt does it without
 runtime reflection, at gen time, **explicitly and optionally**:
 
-- `resources db.User` points `volt gen` at the imported
+- `resources db.users` points `volt gen` at the imported
   schema package (L3). It infers the `:id` param type from the PK
   (`integer [pk, increment]` → `int64`), names helpers by the model,
   and enables `paths.For(u)`.
@@ -401,7 +401,7 @@ runtime reflection, at gen time, **explicitly and optionally**:
   `Show(w, r, user models.User) error`. The DB boundary is explicit:
   `New(c Controllers, volt.WithQueries(q))`. No model or `bind` — no
   coupling; the router stands alone.
-- Gen-time cross-validation: `resources db.User` naming a model absent
+- Gen-time cross-validation: `resources db.users` naming a model absent
   from the imported package is a gen error, same class as nao preparing
   every query against the generated DDL.
 - §12's `Dataset` is this symbiosis at group scale: the schema's
