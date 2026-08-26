@@ -47,6 +47,7 @@ generated interfaces and mounts a plain `http.Handler`.
 | `grammar/`       | tree-sitter grammar for the whole language |
 | `zed-extension/` | Zed glue; install via `scripts/sync-grammar.sh` + Install Dev Extension |
 | `itest/`         | committed fixture project served over httptest, drift-checked against the generator |
+| `examples/crud/` | **runnable**: two `resources` lines → 14 routes; `go run ./examples/crud`, `go test ./examples/crud` |
 | `docs/`          | design docs (`router.md`, `language.md`, editor architecture) + `docs/example/` — a worked end-to-end app; **partly illustrative, see below** |
 | `research/`      | Laravel/Rails/Phoenix/Django docs corpus + feature inventories |
 | `SPEC.md`        | the §V language spec; every rule backed by a corpus snippet or test |
@@ -77,6 +78,7 @@ hand-written illustration only:
 ```sh
 go install ./cmd/volt
 volt check ./app && volt gen ./app && volt routes ./app
+go run ./examples/crud                # the runnable CRUD example
 go test ./...                        # everything, incl. nao's suites
 go test ./gen/router -update         # refresh goldens after gen changes
 go run ./cmd/volt gen ./itest/blog   # refresh the itest fixture
