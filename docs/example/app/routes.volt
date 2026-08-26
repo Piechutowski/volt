@@ -14,13 +14,13 @@ Scope / [pipe: api, error_handler: app.Errors] {
 	get /health  Health.Check
 }
 
-Dataset da [from: db.group(DA), pipe: api, formats: (html, json, gob)] {
-	path: strip('da_')        // da_r_r → /da/r_r
-	key:  idpk
+Dataset ms [from: db.group(MS), pipe: api, formats: (html, json, gob)] {
+	path: strip('ms_')        // ms_revenue → /ms/revenue
+	key:  id
 	ops:  (list, create, update, delete)
 
 	// Override exactly one operation on one table; everything else stays
-	// generated. App.DaRRList must exist with the right signature or the
-	// build fails (volt_handlers.go interface).
-	da_r_r [list: App.DaRRList]
+	// generated. App.MsRevenueList must exist with the right signature or
+	// the build fails (volt_handlers.go interface).
+	ms_revenue [list: App.MsRevenueList]
 }

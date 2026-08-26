@@ -1,47 +1,47 @@
 package db
 
-// The real FADN survey partials — every da_* table injects one of these.
-TablePartial da_base {
-	idpk integer [pk]
-	idgr text    [not null, default: '']
-	rok  integer [not null, default: 0]
+// Every ms_* series table injects one of these shared headers.
+TablePartial ms_base {
+	id     integer [pk]
+	region text    [not null, default: '']
+	year   integer [not null, default: 0]
 }
 
-TablePartial da_head {
-	idpk integer [pk]
-	idgr text    [not null, default: '']
-	rok  integer [not null, default: 0]
-	Indexes { (rok, idgr) [unique] }
+TablePartial ms_head {
+	id     integer [pk]
+	region text    [not null, default: '']
+	year   integer [not null, default: 0]
+	Indexes { (year, region) [unique] }
 }
 
-Table da_r_r {
-	note: 'Ilości referencyjne'
-	~da_head
-	r_r_platsmg_tn text [not null, default: '', note: 'Czy w roku 2024 rolnik uczestniczył w systemie dla małych gospodarstw? [T/N], j.m.=kod, słownik=TakNie']
-	r_r_platsmg_zl real [not null, default: 0,  note: 'Kwota płatności w ramach systemu dla małych gospodarstw, j.m.=zł']
-	r_r_platbc_tn  text [not null, default: '', note: 'Czy przysługiwało prawo do płatności do powierzchni uprawy buraków cukrowych? [T/N], j.m.=kod, słownik=TakNie']
-	r_r_platbc_ha  real [not null, default: 0,  note: 'Powierzchnia uprawy buraków cukrowych objęta płatnością, j.m.=ha']
+Table ms_revenue {
+	note: 'Revenue by region and year'
+	~ms_head
+	rev_recurring_flag text [not null, default: '', note: 'Is the plan billed on a recurring schedule? [Y/N], unit=code, dict=YesNo']
+	rev_recurring_amt  real [not null, default: 0,  note: 'Revenue from recurring plans, unit=EUR']
+	rev_discount_flag  text [not null, default: '', note: 'Was a volume discount applied? [Y/N], unit=code, dict=YesNo']
+	rev_discount_pct   real [not null, default: 0,  note: 'Share of revenue discounted, unit=%']
 	// … abridged: the full table has ~50 columns
 }
 
-Table da_i_u {
-	note: 'Uprawy'
-	~da_base
-	i_u_kod text [not null, default: '', note: 'Kod, j.m.=kod, słownik=Kody']
-	i_u_pow real [not null, default: 0,  note: 'Powierzchnia, j.m.=ha']
-	i_u_zb  real [not null, default: 0,  note: 'Zbiór, j.m.=dt']
-	Indexes { (rok, idgr, i_u_kod) [unique] }
+Table ms_usage {
+	note: 'Feature usage'
+	~ms_base
+	use_code  text [not null, default: '', note: 'Feature code, unit=code, dict=Features']
+	use_seats real [not null, default: 0,  note: 'Licensed seats, unit=seats']
+	use_calls real [not null, default: 0,  note: 'API calls, unit=thousands']
+	Indexes { (year, region, use_code) [unique] }
 	// … abridged
 }
 
-TableGroup DA {
-	note: 'Survey data tables'
-	da_r_r
-	da_i_u
+TableGroup MS {
+	note: 'Measurement series tables'
+	ms_revenue
+	ms_usage
 }
 
 // nao v1 `Select` block (features.md): real SQL in the schema, a typed
 // function out, prepare-validated against the generated DDL at gen time.
-Select DaRRLatestRok {
-	'SELECT MAX(rok) AS rok FROM da_r_r'
+Select MsRevenueLatestYear {
+	'SELECT MAX(year) AS year FROM ms_revenue'
 }

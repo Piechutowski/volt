@@ -9,13 +9,13 @@ import (
 
 	"github.com/Piechutowski/volt/dataset"
 
-	"example.com/fadn/db"
+	"example.com/metrics/db"
 )
 
-func FetchDaRR(base, token string, year int64) (dataset.Page[db.DaRR], error) {
-	var page dataset.Page[db.DaRR]
+func FetchMsRevenue(base, token string, year int64) (dataset.Page[db.MsRevenue], error) {
+	var page dataset.Page[db.MsRevenue]
 
-	req, _ := http.NewRequest("GET", base+"/da/r_r?f.rok="+itoa(year)+"&sort=-idpk", nil)
+	req, _ := http.NewRequest("GET", base+"/ms/revenue?f.year="+itoa(year)+"&sort=-id", nil)
 	req.Header.Set("Authorization", token)
 	req.Header.Set("Accept", "application/x-gob") // the Go-native arm
 
@@ -25,9 +25,9 @@ func FetchDaRR(base, token string, year int64) (dataset.Page[db.DaRR], error) {
 	}
 	defer resp.Body.Close()
 
-	// page.Rows is []db.DaRR — no DTOs, no mapping, no JSON tags.
-	// page.Columns carries Title/Unit/Dict for headers, zł/ha formatting,
-	// and słownik dropdowns in the grid widget.
+	// page.Rows is []db.MsRevenue — no DTOs, no mapping, no JSON tags.
+	// page.Columns carries Title/Unit/Dict for headers, EUR/%/seats
+	// formatting, and dictionary dropdowns in the grid widget.
 	err = gob.NewDecoder(resp.Body).Decode(&page)
 	return page, err
 }

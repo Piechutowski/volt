@@ -4,20 +4,21 @@ package main
 import (
 	"embed"
 	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/nao/rt"
 
-	"example.com/fadn/app"
-	"example.com/fadn/db"
+	"example.com/metrics/app"
+	"example.com/metrics/db"
 )
 
 //go:embed templates
 var templates embed.FS
 
 func main() {
-	conn, err := rt.Open("sqlite3", "fadn.db") // WAL, busy_timeout, FKs on
+	conn, err := rt.Open("sqlite3", "metrics.db") // WAL, busy_timeout, FKs on
 	if err != nil {
 		log.Fatal(err)
 	}

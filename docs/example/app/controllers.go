@@ -4,13 +4,14 @@
 package app
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/dataset"
 
-	"example.com/fadn/db"
+	"example.com/metrics/db"
 )
 
 // App is your controller: your struct, your dependencies, your rules.
@@ -19,28 +20,27 @@ type App struct {
 	Log *slog.Logger
 }
 
-// DaRRList replaces the generated list for GET /da/r_r
-// (routes.volt: `da_r_r [list: App.DaRRList]`).
+// MsRevenueList replaces the generated list for GET /ms/revenue
+// (routes.volt: `ms_revenue [list: App.MsRevenueList]`).
 //
-// Business rule: bez filtra roku pokazujemy tylko najnowszy rok ankiety —
-// with no year filter, default to the latest survey year instead of
-// dumping every year ever collected.
+// Business rule: with no year filter, default to the latest reporting
+// year instead of dumping every year ever collected.
 //
 // `q` arrives already parsed and validated against the generated column
 // whitelist. `next` IS the generated default handler — call it to wrap
 // (as here), or ignore it and render entirely yourself.
-func (a *App) DaRRList(w http.ResponseWriter, r *volt.Request, q volt.GridQuery,
-	next dataset.ListFunc[db.DaRR]) error {
+func (a *App) MsRevenueList(w http.ResponseWriter, r *volt.Request, q volt.GridQuery,
+	next dataset.ListFunc[db.MsRevenue]) error {
 
-	if !q.HasFilter("rok") {
-		latest, err := a.Q.DaRRLatestRok(r.Context()) // the Select block from schema.volt
+	if !q.HasFilter("year") {
+		latest, err := a.Q.MsRevenueLatestYear(r.Context()) // the Select block from schema.volt
 		if err != nil {
 			return err // one error spine: app.Errors decides status + shape
 		}
-		q = q.WithFilter("rok", volt.Eq(latest))
+		q = q.WithFilter("year", volt.Eq(latest))
 	}
 
-	a.Log.Info("da_r_r list", "route", r.Route(), "filters", q.FilterNames())
+	a.Log.Info("ms_revenue list", "route", r.Route(), "filters", q.FilterNames())
 	return next(w, r, q) // delegate: generated query, generated negotiation
 }
 

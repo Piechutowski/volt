@@ -7,13 +7,13 @@ import "github.com/Piechutowski/volt"
 // Typed reverse URLs. A helper that doesn't exist, or is called with the
 // wrong argument types, does not compile (R5).
 
-func PathHealth(opts ...volt.URLOption) string { return volt.Path("/health", opts...) }
-func PathDaRR(opts ...volt.URLOption) string   { return volt.Path("/da/r_r", opts...) }
-func PathDaRRRow(idpk int64, opts ...volt.URLOption) string {
-	return volt.PathID("/da/r_r/", idpk, opts...)
+func PathHealth(opts ...volt.URLOption) string    { return volt.Path("/health", opts...) }
+func PathMsRevenue(opts ...volt.URLOption) string { return volt.Path("/ms/revenue", opts...) }
+func PathMsRevenueRow(id int64, opts ...volt.URLOption) string {
+	return volt.PathID("/ms/revenue/", id, opts...)
 }
-func PathDaIU(opts ...volt.URLOption) string { return volt.Path("/da/i_u", opts...) }
-func PathDaIURow(idpk int64, opts ...volt.URLOption) string {
-	return volt.PathID("/da/i_u/", idpk, opts...)
+func PathMsUsage(opts ...volt.URLOption) string { return volt.Path("/ms/usage", opts...) }
+func PathMsUsageRow(id int64, opts ...volt.URLOption) string {
+	return volt.PathID("/ms/usage/", id, opts...)
 }
-func PathDaMeta(opts ...volt.URLOption) string { return volt.Path("/da/_meta", opts...) }
+func PathMsMeta(opts ...volt.URLOption) string { return volt.Path("/ms/_meta", opts...) }

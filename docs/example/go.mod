@@ -1,4 +1,4 @@
-module example.com/fadn
+module example.com/metrics
 
 go 1.24
 

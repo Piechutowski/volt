@@ -47,7 +47,7 @@ generated interfaces and mounts a plain `http.Handler`.
 | `grammar/`       | tree-sitter grammar for the whole language |
 | `zed-extension/` | Zed glue; install via `scripts/sync-grammar.sh` + Install Dev Extension |
 | `itest/`         | committed fixture project served over httptest, drift-checked against the generator |
-| `docs/`          | design docs (`router.md`, `language.md`, editor architecture) + `docs/example/` — the FADN case study; **partly illustrative, see below** |
+| `docs/`          | design docs (`router.md`, `language.md`, editor architecture) + `docs/example/` — a worked end-to-end app; **partly illustrative, see below** |
 | `research/`      | Laravel/Rails/Phoenix/Django docs corpus + feature inventories |
 | `SPEC.md`        | the §V language spec; every rule backed by a corpus snippet or test |
 
@@ -64,7 +64,7 @@ hand-written illustration only:
 - **EDBML itself** — the query layer (`Select`/`View`/`Trigger`,
   `[was:]`, `[repr:]`); only `[model:]` exists today
 - **Datasets** (`Dataset` is just reserved, §V8) — the auto-CRUD grid
-  the FADN case wants
+  over a TableGroup (`docs/router.md` §12)
 - the renderer / content negotiation (HTML, JSON, GOB) from
   `docs/router.md` §12; runtime has only `volt.JSON`
 - `volt.WithQueries` / `WithTemplates` / `BuildDeps` options

@@ -2,44 +2,42 @@
 // (Illustrative excerpt — hand-written to show what the generator emits today.)
 package db
 
-// DaRR — Ilości referencyjne.
-type DaRR struct {
-	Idpk int64
-	Idgr string
-	Rok  int64
-	// Czy w roku 2024 rolnik uczestniczył w systemie dla małych
-	// gospodarstw? [T/N], j.m.=kod, słownik=TakNie
-	RRPlatsmgTn string
-	// Kwota płatności w ramach systemu dla małych gospodarstw, j.m.=zł
-	RRPlatsmgZl float64
-	// Czy przysługiwało prawo do płatności do powierzchni uprawy buraków
-	// cukrowych? [T/N], j.m.=kod, słownik=TakNie
-	RRPlatbcTn string
-	// Powierzchnia uprawy buraków cukrowych objęta płatnością, j.m.=ha
-	RRPlatbcHa float64
+// MsRevenue — Revenue by region and year.
+type MsRevenue struct {
+	Id     int64
+	Region string
+	Year   int64
+	// Is the plan billed on a recurring schedule? [Y/N], unit=code, dict=YesNo
+	RevRecurringFlag string
+	// Revenue from recurring plans, unit=EUR
+	RevRecurringAmt float64
+	// Was a volume discount applied? [Y/N], unit=code, dict=YesNo
+	RevDiscountFlag string
+	// Share of revenue discounted, unit=%
+	RevDiscountPct float64
 }
 
-type DaRRCreateParams struct {
-	Idgr        string
-	Rok         int64
-	RRPlatsmgTn string
-	RRPlatsmgZl float64
-	RRPlatbcTn  string
-	RRPlatbcHa  float64
+type MsRevenueCreateParams struct {
+	Region           string
+	Year             int64
+	RevRecurringFlag string
+	RevRecurringAmt  float64
+	RevDiscountFlag  string
+	RevDiscountPct   float64
 }
 
-// DaIU — Uprawy.
-type DaIU struct {
-	Idpk  int64
-	Idgr  string
-	Rok   int64
-	IUKod string  // Kod, j.m.=kod, słownik=Kody
-	IUPow float64 // Powierzchnia, j.m.=ha
-	IUZb  float64 // Zbiór, j.m.=dt
+// MsUsage — Feature usage.
+type MsUsage struct {
+	Id       int64
+	Region   string
+	Year     int64
+	UseCode  string  // Feature code, unit=code, dict=Features
+	UseSeats float64 // Licensed seats, unit=seats
+	UseCalls float64 // API calls, unit=thousands
 }
 
 // Queries also carries (illustrative signatures):
-//   DaRRLatestRok(ctx) (int64, error)                      — the Select block
-//   DaRRGrid(ctx, volt.GridQuery) ([]DaRR, int, error)     — dataset list (nao v2 predicates)
-//   DaRRCreate(ctx, DaRRCreateParams) (DaRR, error)
-//   DaRRUpdate/DaRRDelete, and the DaIU* family symmetrically.
+//   MsRevenueLatestYear(ctx) (int64, error)                     — the Select block
+//   MsRevenueGrid(ctx, volt.GridQuery) ([]MsRevenue, int, error) — dataset list (nao v2 predicates)
+//   MsRevenueCreate(ctx, MsRevenueCreateParams) (MsRevenue, error)
+//   MsRevenueUpdate/MsRevenueDelete, and the MsUsage* family symmetrically.

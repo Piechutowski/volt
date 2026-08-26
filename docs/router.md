@@ -531,7 +531,7 @@ handler method** and back.
   `map[string]` registry, no reflection; an unknown table is a routing
   404 and `volt routes` lists every expanded row.
 - **R13 — Column metadata is parsed and validated at gen time.** The
-  note conventions (`j.m.=`, `słownik=`) — or their future first-class
+  note conventions (`unit=`, `dict=`) — or their future first-class
   nao settings (`[unit:]`, `[dict:]`) — are a declared contract:
   `volt vet` warns on unparseable notes, and the generated
   `[]volt.Column` is the single source the grid protocol, templates,
@@ -579,29 +579,30 @@ handler method** and back.
 
 The construct that closes the loop between Volt's two authored files:
 `resources` where the loop variable is bound by the **schema** instead
-of by hand. Motivating case: a survey database with ~40 uniform tables
-(`da_*`, all injecting the same TablePartials, keyed `idpk`, with
+of by hand. Motivating case: a reporting database with ~40 uniform series tables
+(`ms_*`, all injecting the same TablePartials, keyed `id`, with
 note-encoded column metadata), one generic grid UI over all of them,
-URLs like `/da/r_r` — and zero appetite for 40 hand-written resources.
+URLs like `/ms/revenue` — and zero appetite for 40 hand-written
+resources.
 
 ### 12.1 Declaration and expansion
 
 ```volt
-Dataset da [from: db.group(DA), pipe: api, formats: (html, json, gob)] {
-  path:   strip('da_')                 // da_r_r → /da/r_r
-  key:    idpk
+Dataset ms [from: db.group(MS), pipe: api, formats: (html, json, gob)] {
+  path:   strip('ms_')                 // ms_revenue → /ms/revenue
+  key:    id
   ops:    (list, create, update, delete)
 
-  da_r_r [list: App.DaRRList]          // rung-2 override (§12.4)
+  ms_revenue [list: App.MsRevenueList] // rung-2 override (§12.4)
 
-  except: (da_kolumny, da_kolumny__podtabele, da_podtabele)
+  except: (ms_dicts, ms_dicts__entries, ms_entries)
 }
 ```
 
-`volt gen` reads the schema's `TableGroup DA`, checks every member has
+`volt gen` reads the schema's `TableGroup MS`, checks every member has
 the declared key (gen error naming the table if not), and emits per
 table: the four routes, a typed instantiation (§12.2), a
-`[]volt.Column` spec, and `paths` helpers (`paths.DaRR()`). ~40 tables
+`[]volt.Column` spec, and `paths` helpers (`PathMsRevenue()`). ~40 tables
 → ~160 static routes, each with a `volt routes` row pointing at the one
 `Dataset` block. Adding a table next year is: add it to the DBML group,
 run `nao gen && volt gen` — routes, adapter, columns, dictionary wiring
@@ -625,18 +626,20 @@ func List[T any](
 	render Renderer,
 ) func(http.ResponseWriter, *Request) error { … }
 
-// volt_dataset_da.go — generated, one block per table:
-mux.Handle("GET /da/r_r", api(volt.HTTP(
-	dataset.List[models.DaRR](deps.Q.DaRRGrid, daRRColumns, deps.Render))))
+// volt_dataset_ms.go — generated, one block per table:
+mux.Handle("GET /ms/revenue", api(volt.HTTP(
+	dataset.List[models.MsRevenue](deps.Q.MsRevenueGrid, msRevenueColumns, deps.Render))))
 ```
 
-`/da/r_r` therefore returns `[]models.DaRR` — the actual nao structs,
+`/ms/revenue` therefore returns `[]models.MsRevenue` — the actual nao
+structs,
 compiler-held end to end. Zero reflection; Go's generics do at compile
 time what Rails does with `const_get` at runtime. Write paths decode
-into nao's params structs (`models.DaRRCreateParams`) symmetrically.
+into nao's params structs (`models.MsRevenueCreateParams`)
+symmetrically.
 
 Filtering and sorting are the one runtime-dynamic surface: `GridQuery`
-(`?sort=-rok&f.rok=2024&f.kod~=61-%`) is validated against the
+(`?sort=-year&f.year=2024&f.use_code~=api-%`) is validated against the
 generated column set — unknown column → 400, values parsed to the
 column's type, predicates mapped onto nao's typed predicate values
 (nao v2). Injection is impossible by construction: columns come from a
@@ -657,7 +660,7 @@ default:                  return tmpls.ExecuteTemplate(w, page.Template(), page)
 ```
 
 - **HTML** resolves by convention with fallback:
-  `templates/da/r_r.html` if present, else the shared
+  `templates/ms/revenue.html` if present, else the shared
   `templates/dataset.html` grid template rendering any page from its
   `Columns` (titles, units, dictionaries — §12.5). `html` enabled with
   no generic template = gen error, not a runtime 500.
@@ -666,7 +669,8 @@ default:                  return tmpls.ExecuteTemplate(w, page.Template(), page)
   `--models-only` mode exists precisely to share row types between a
   server and a GUI process. A Go client (e.g. a guigui desktop app)
   imports the same generated models package and decodes
-  `dataset.Page[models.DaRR]` in four lines — no DTOs, no mapping, no
+  `dataset.Page[models.MsRevenue]` in four lines — no DTOs, no
+  mapping, no
   JSON tag maintenance. Schema → structs → SQL → wire → widget: one
   type the whole way, every hop generated.
 
@@ -679,17 +683,20 @@ The extensibility model (R14): **defaults are generated, overrides are
 declared, escape is omission.** Each rung replaces only what it names:
 
 1. **Nothing** — generated wiring, generic handler, generic template.
-2. **One operation, one table** — `da_r_r [list: App.DaRRList]`: the
+2. **One operation, one table** — `ms_revenue [list: App.MsRevenueList]`:
+   the
    generator swaps that single instantiation for a call to your method
    (which lands on a controller interface — forgetting to implement it
    is a compile error). The table's other operations stay generated.
    The override receives the parsed, validated query **and the
    generated default as a `next` argument**
-   (`DaRRList(w, r, q, next dataset.ListFunc[db.DaRR]) error`) — call
+   (`MsRevenueList(w, r, q, next dataset.ListFunc[db.MsRevenue])
+   error`) — call
    `next` to wrap (adjust the query, log, then delegate), ignore it to
    replace. Wrap-or-replace with zero extra wiring; see
    `docs/example/`.
-   - **2.5 — presentation only**: drop a `templates/da/r_r.html` file,
+   - **2.5 — presentation only**: drop a `templates/ms/revenue.html`
+     file,
      or supply your own `Renderer` in deps. No routing touched.
 3. **One table entirely** — `except:` it; write it as an ordinary
    `resources`/routes by hand in the same file.
@@ -705,12 +712,12 @@ regenerates forever *around* the pieces you have claimed.
 ### 12.5 Column metadata
 
 The generator lifts per-column UI metadata from the schema (R13):
-today, the note conventions `'Title, j.m.=unit, słownik=Dict'` parse
+today, the note conventions `'Title, unit=<unit>, dict=<Dict>'` parse
 into `Column{Name, Type, Title, Unit, Dict}`; the intended end state is
-first-class nao extensions (`[unit: 'zł', dict: TakNie]`) with the note
+first-class nao extensions (`[unit: 'EUR', dict: YesNo]`) with the note
 parser as the migration path. The `[]volt.Column` spec is consumed by
 filter validation (§12.2), the generic template, the `_meta` endpoint,
-and any client (a grid widget renders headers, formats `zł`/`ha`/`%`,
+and any client (a grid widget renders headers, formats `EUR`/`seats`/`%`,
 and populates dictionary dropdowns from it). `volt vet` warns on notes
 that don't parse — the convention is a contract, not folklore.
 
@@ -723,6 +730,6 @@ that don't parse — the convention is a contract, not folklore.
 - The note-metadata convention is load-bearing (R13) and must be
   vetted, versioned, and eventually promoted into the schema language.
 - ~160 generated routes are ~160 real registrations: binary size and
-  gen time grow linearly with group size. At survey scale (dozens of
+  gen time grow linearly with group size. At warehouse scale (dozens of
   tables) this is noise; the §7.2 gen-time budget (<1s for 500 routes)
   covers datasets too.

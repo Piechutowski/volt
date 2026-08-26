@@ -8,7 +8,7 @@ import (
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/dataset"
 
-	"example.com/fadn/db"
+	"example.com/metrics/db"
 )
 
 // One interface per controller named in routes.volt. Implement them
@@ -18,12 +18,12 @@ type HealthController interface {
 	Check(w http.ResponseWriter, r *volt.Request) error
 }
 
-// AppController exists because routes.volt overrides da_r_r's list with
-// App.DaRRList. The `next` parameter is the generated default for this
-// operation: call it to wrap, ignore it to replace.
+// AppController exists because routes.volt overrides ms_revenue's list
+// with App.MsRevenueList. The `next` parameter is the generated default
+// for this operation: call it to wrap, ignore it to replace.
 type AppController interface {
-	DaRRList(w http.ResponseWriter, r *volt.Request, q volt.GridQuery,
-		next dataset.ListFunc[db.DaRR]) error
+	MsRevenueList(w http.ResponseWriter, r *volt.Request, q volt.GridQuery,
+		next dataset.ListFunc[db.MsRevenue]) error
 }
 
 // Controllers is the dependency manifest of the whole route table.
@@ -38,6 +38,6 @@ func New(c Controllers, opts ...volt.Option) http.Handler {
 	deps := volt.BuildDeps(opts...)
 	mux := http.NewServeMux()
 	registerRoutes(mux, c, deps)    // volt_router.go (not shown)
-	registerDatasetDA(mux, c, deps) // volt_dataset_da.go
+	registerDatasetMS(mux, c, deps) // volt_dataset_ms.go
 	return mux
 }
