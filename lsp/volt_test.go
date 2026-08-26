@@ -206,6 +206,19 @@ func TestVoltSettingsGatedByContext(t *testing.T) {
 	}
 }
 
+// TestDiagnosticSourceIsVolt: editors label diagnostics by their
+// Source field — the language's name, whichever binary serves it.
+func TestDiagnosticSourceIsVolt(t *testing.T) {
+	d := doc(t, "Table t {\n\tid int [pk]\n}\n\nTable t {\n\tid int [pk]\n}\n")
+	lsp := d.LSPDiagnostics()
+	if len(lsp) == 0 {
+		t.Fatal("expected diagnostics")
+	}
+	if lsp[0].Source == nil || *lsp[0].Source != "volt" {
+		t.Fatalf("diagnostic source = %v, want volt", lsp[0].Source)
+	}
+}
+
 // TestVoltCompletionScopeBody: inside a Scope body the verbs,
 // 'resources' and nested 'Scope' complete.
 func TestVoltCompletionScopeBody(t *testing.T) {
