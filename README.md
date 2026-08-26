@@ -13,13 +13,19 @@ resolves at compile time.
 
 One language, three layers, one extension. A `.volt` file is DBML, or
 EDBML, or full Volt — decided by its content, not its name (SPEC.md
-§V0):
+§V0). The layers, with their honest build state:
 
-```
-DBML   — tables, enums, refs, notes
-EDBML  — + partials, records, checks, diagram views
-Volt   — + package / import, Pipeline, Scope, routes, resources
-```
+- **DBML** — *built.* Everything in nao/SPEC.md v1.0 (upstream-pinned):
+  Project, Table with columns/indexes/checks, TablePartial, Records,
+  Enum, Ref, TableGroup, Notes, DiagramView. This is what the front
+  end parses and checks today.
+- **EDBML** — *designed, not built* (nao decisions D05–D07): the
+  extension layer above DBML — declared queries (`Select` / `View` /
+  `Trigger`), `[was:]`, `[repr:]`. Of it, only the `[model:]` naming
+  override has landed (checker, generator, vet).
+- **Volt** — *this repo, alpha:* `package` / `import`, `Pipeline`,
+  `Scope`, routes, `resources` — layered on whatever the inner layers
+  accept, so EDBML slots in underneath when it lands (§V0.2).
 
 Project = tree rooted at `volt.mod`. Package = directory. File
 boundaries carry no meaning (§V1.5).
@@ -55,6 +61,8 @@ LSP, the grammar, the Zed extension, and the whole proof chain.
 Designed but **not implemented** — `docs/example/` shows these as
 hand-written illustration only:
 
+- **EDBML itself** — the query layer (`Select`/`View`/`Trigger`,
+  `[was:]`, `[repr:]`); only `[model:]` exists today
 - **Datasets** (`Dataset` is just reserved, §V8) — the auto-CRUD grid
   the FADN case wants
 - the renderer / content negotiation (HTML, JSON, GOB) from
