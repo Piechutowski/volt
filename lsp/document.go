@@ -39,6 +39,11 @@ type Document struct {
 	Diags []diag.Diagnostic
 	Index *Index
 
+	// vindex is the project-wide Volt symbol graph, rebuilt with the
+	// diagnostics whenever this file belongs to a Volt project. Nil for
+	// a file outside any project (navigation then stays single-file).
+	vindex *voltIndex
+
 	lineOffsets []int // byte offset of the start of each line
 }
 

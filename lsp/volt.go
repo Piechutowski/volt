@@ -29,10 +29,12 @@ import (
 func (d *Document) voltProjectDiags() ([]diag.Diagnostic, bool) {
 	path := pathFromURI(d.URI)
 	if !filepath.IsAbs(path) {
+		d.vindex = nil
 		return nil, false
 	}
 	root, err := lang.FindRoot(filepath.Dir(path))
 	if err != nil {
+		d.vindex = nil
 		return nil, false
 	}
 	// Every open buffer overlays its saved file, not just this one:
@@ -48,6 +50,7 @@ func (d *Document) voltProjectDiags() ([]diag.Diagnostic, bool) {
 	overlay[path] = d.Text
 	pr, err := lang.LoadOverlay(root, overlay)
 	if err != nil {
+		d.vindex = nil
 		return nil, false
 	}
 	member := false
@@ -59,9 +62,13 @@ func (d *Document) voltProjectDiags() ([]diag.Diagnostic, bool) {
 		}
 	}
 	if !member {
+		d.vindex = nil
 		return nil, false
 	}
 	diags := lang.Check(pr)
+	// After Check: it is what resolves each package's imports, which
+	// the index needs to follow a `db.Post` qualifier to its package.
+	d.vindex = buildVoltIndex(pr, overlay)
 	// Vet advice only on top of a clean check, matching the single-file
 	// policy: style notes stacked on hard errors are noise while typing.
 	if !diag.HasErrors(diags) {

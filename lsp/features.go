@@ -151,6 +151,10 @@ func identNames(ids []*ast.Ident) []string {
 
 // Definition returns the location of the declaration of the symbol at pos.
 func (d *Document) Definition(pos protocol.Position) *protocol.Location {
+	// Volt-layer symbols first: they are the ones that cross files.
+	if loc := d.voltDefinition(pos); loc != nil {
+		return loc
+	}
 	occ := d.Index.At(d.FromLSP(pos))
 	if occ == nil {
 		return nil
@@ -164,16 +168,26 @@ func (d *Document) Definition(pos protocol.Position) *protocol.Location {
 
 // References returns every occurrence of the symbol at pos.
 func (d *Document) References(pos protocol.Position, includeDecl bool) []protocol.Location {
-	occ := d.Index.At(d.FromLSP(pos))
-	if occ == nil {
-		return nil
+	// The two indexes answer different halves of the question — the
+	// single-file one knows DBML uses (refs, column mentions), the
+	// project one knows Volt uses (model:, pipe:) in other files — so
+	// the answer is their union, deduplicated.
+	out := d.voltReferences(pos, includeDecl)
+	seen := map[protocol.Location]bool{}
+	for _, l := range out {
+		seen[l] = true
 	}
-	var out []protocol.Location
-	for _, o := range d.Index.OccurrencesOf(occ.ID) {
-		if o.IsDecl && !includeDecl {
-			continue
+	if occ := d.Index.At(d.FromLSP(pos)); occ != nil {
+		for _, o := range d.Index.OccurrencesOf(occ.ID) {
+			if o.IsDecl && !includeDecl {
+				continue
+			}
+			l := protocol.Location{URI: d.URI, Range: d.tokenRange(o.Ident.Tok)}
+			if !seen[l] {
+				seen[l] = true
+				out = append(out, l)
+			}
 		}
-		out = append(out, protocol.Location{URI: d.URI, Range: d.tokenRange(o.Ident.Tok)})
 	}
 	return out
 }
