@@ -87,6 +87,12 @@ func (p *Package) Merged() *ast.File { return p.merged }
 // Schema returns the package's checked table model (nil before Check).
 func (p *Package) Schema() *check.Info { return p.schema }
 
+// HasSchema reports whether the package declares data elements — such
+// packages get generated model, query and DDL files.
+func (p *Package) HasSchema() bool {
+	return p.schema != nil && (len(p.schema.Tables) > 0 || len(p.schema.Enums) > 0)
+}
+
 // FindRoot walks up from dir to the nearest directory containing
 // volt.mod (§V1.1).
 func FindRoot(dir string) (string, error) {

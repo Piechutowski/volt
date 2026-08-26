@@ -38,10 +38,11 @@ sub-library of the framework the way ActiveRecord sits inside Rails.
 | Directory        | What it is |
 |------------------|------------|
 | `*.go` (root)    | package `volt` — the runtime generated code links against: error spine, param parsing, path builders, minimal middleware |
-| `cmd/volt`       | the binary: `check` `vet` `gen` `routes` `lsp` `version` |
+| `cmd/volt`       | the one binary: `check` `vet` `gen` `routes` `lsp` `version` — `gen` emits models, queries and routers |
 | `lang/`          | **the language**: `token` `scanner` `parser` `ast` `diag` `check` `vet` front end, plus volt.mod/package/import resolution, route expansion and conflict detection; `lang/SPEC.md` = schema-layer spec, `lang/conformance/{volt,dbml}` = executable corpora |
 | `gen/router/`    | router generator; goldens are gofmt-stable and compiled by the real toolchain |
-| `nao/`           | **nao — the ORM**: model + query + SQLite generation (`nao/gen`), its runtime (`nao/rt`), inflector, docs and the `nao` CLI |
+| `gen/model/`     | the data half: nao's models, queries and DDL, driven by the same project load |
+| `nao/`           | **nao — the ORM**: model + query + SQLite generation (`nao/gen`), its runtime (`nao/rt`), inflector and docs |
 | `lsp/`           | the Volt language server (`volt lsp`); project-aware diagnostics for files under a volt.mod, single-file DBML pass otherwise |
 | `grammar/`       | tree-sitter grammar for the whole language |
 | `zed-extension/` | Zed glue; install via `scripts/sync-grammar.sh` + Install Dev Extension |
@@ -79,6 +80,7 @@ hand-written illustration only:
 ```sh
 go install ./cmd/volt
 volt check ./app && volt gen ./app && volt routes ./app
+volt gen --sql ./app                 # models + queries + router + DDL
 go run ./examples/crud                # the runnable CRUD example
 go test ./...                        # everything, ORM suites included
 go test ./gen/router -update         # refresh goldens after gen changes

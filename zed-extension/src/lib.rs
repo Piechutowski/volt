@@ -3,10 +3,9 @@
 //! The extension's only job is to tell Zed how to launch the language
 //! server (a subcommand of the project's binaries, D41). The binary is
 //! resolved in order: the user's `lsp.volt.binary.path` setting, then
-//! `volt` on the worktree `PATH` (the merged toolchain, whose server
-//! adds project-aware .volt diagnostics), then `nao`. The extension is
-//! installed locally as a dev extension, so there is no download
-//! fallback — build the binary with `go install ./cmd/volt` instead.
+//! `volt` on the worktree `PATH`. The extension is installed locally as
+//! a dev extension, so there is no download fallback — build the binary
+//! with `go install ./cmd/volt` instead.
 
 use zed_extension_api::{self as zed, settings::LspSettings, LanguageServerId, Result};
 
@@ -36,15 +35,11 @@ impl zed::Extension for VoltExtension {
             });
         }
 
-        let path = worktree
-            .which("volt")
-            .or_else(|| worktree.which("nao"))
-            .ok_or_else(|| {
-                "neither volt nor nao found on PATH. Build one with `go install \
-                 ./cmd/volt` (or ./nao/cmd/nao), or point Zed at the binary via \
-                 the `lsp.volt.binary.path` setting."
-                    .to_string()
-            })?;
+        let path = worktree.which("volt").ok_or_else(|| {
+            "volt not found on PATH. Build it with `go install ./cmd/volt`, or \
+             point Zed at the binary via the `lsp.volt.binary.path` setting."
+                .to_string()
+        })?;
 
         Ok(zed::Command {
             command: path,

@@ -24,9 +24,7 @@ func (d *Document) LSPDiagnostics() []protocol.Diagnostic {
 		}
 		sev := severity
 		code := dg.Code
-		// The diagnostic source names the language, not the binary
-		// that happened to serve it (volt lsp and nao lsp are the
-		// same server).
+		// The diagnostic source names the language.
 		source := "volt"
 		out = append(out, protocol.Diagnostic{
 			Range:    d.diagnosticRange(dg.Pos),

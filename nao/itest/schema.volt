@@ -2,7 +2,9 @@
 // the v2 dynamic query layer against a real SQLite (decision D25). The
 // generated siblings (nao_models.go, nao_queries.go, nao_dyn.go,
 // nao_schema.sql) are checked in and drift-tested; refresh them with
-// go generate ./itest.
+// 'volt gen ./nao/itest --sql' from the repository root.
+package itest
+
 Project itest {
   note: 'Integration-test fixture for the generated query surface.'
 }

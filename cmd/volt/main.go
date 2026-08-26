@@ -1,10 +1,10 @@
-// Command volt is the one binary of the Volt language: the CLI front
-// end over the lang package plus the router generator, built on
-// urfave/cli in the style of nao (D41):
+// Command volt is the framework's one binary: the CLI front end over
+// the lang package and both generators — nao's models and queries for
+// data packages, routers for routing packages (D41).
 //
 //	volt check  [--json] [dir]     load the project, run semantic analysis (SPEC.md §V)
 //	volt vet    [--json] [dir]     check plus warnings for legal-but-suspicious Volt
-//	volt gen    [dir]              generate volt_*.go for every routing package
+//	volt gen    [dir]              generate models, queries and routers
 //	volt routes [dir]              print the expanded route table
 //	volt lsp                       language server on stdin/stdout
 //	volt version                   report the tool version
@@ -27,6 +27,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/Piechutowski/volt/gen/model"
 	"github.com/Piechutowski/volt/gen/router"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
@@ -66,8 +67,12 @@ func main() {
 			},
 			{
 				Name:      "gen",
-				Usage:     "generate volt_*.go router files for every package with routing elements",
+				Usage:     "generate Go for the whole project: models and queries for data packages, routers for routing packages",
 				ArgsUsage: "[dir]",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{Name: "models-only", Aliases: []string{"m"}, Usage: "emit only nao_models.go; skip the query layers"},
+					&cli.BoolFlag{Name: "sql", Usage: "also write nao_schema.sql (SQLite DDL and seed inserts)"},
+				},
 				Action: func(_ context.Context, c *cli.Command) error {
 					return genRun(c)
 				},
@@ -192,35 +197,60 @@ func genRun(c *cli.Command) error {
 	}
 	sort.Strings(paths)
 
-	generated := false
-	marker := []byte("// Code generated ")
+	// Collect everything first, then refuse every clobber, then write:
+	// all or nothing across the whole project.
+	type outFile struct {
+		path string
+		code []byte
+	}
+	var out []outFile
+
 	for _, path := range paths {
 		pkg := pr.Packages[path]
-		if !pkg.HasRouting() {
-			continue
-		}
-		generated = true
-		files, err := router.Generate(pkg, router.Options{Source: "package " + pkg.Path})
-		if err != nil {
-			return cli.Exit("gen: "+err.Error(), 1)
-		}
-		// Refuse every clobber before writing anything: all or nothing.
-		for _, name := range router.Files {
-			target := filepath.Join(pkg.Dir, name)
-			if old, err := os.ReadFile(target); err == nil && !bytes.HasPrefix(old, marker) {
-				return cli.Exit(fmt.Sprintf("gen: refusing to overwrite %s: it lacks the generated-code header", target), 2)
+		source := "package " + pkg.Path
+
+		if pkg.HasSchema() {
+			files, err := model.Generate(pkg, model.Options{
+				Source: source, ModelsOnly: c.Bool("models-only"), SQL: c.Bool("sql"),
+			})
+			if err != nil {
+				return cli.Exit("gen: "+err.Error(), 1)
+			}
+			for _, f := range files {
+				out = append(out, outFile{filepath.Join(pkg.Dir, f.Name), f.Code})
 			}
 		}
-		for _, name := range router.Files {
-			target := filepath.Join(pkg.Dir, name)
-			if err := os.WriteFile(target, files[name], 0o644); err != nil {
-				return cli.Exit(err.Error(), 2)
+
+		if pkg.HasRouting() {
+			files, err := router.Generate(pkg, router.Options{Source: source})
+			if err != nil {
+				return cli.Exit("gen: "+err.Error(), 1)
 			}
-			fmt.Println(target)
+			for _, name := range router.Files {
+				out = append(out, outFile{filepath.Join(pkg.Dir, name), files[name]})
+			}
 		}
 	}
-	if !generated {
-		fmt.Println("gen: no package declares routing elements; nothing to do")
+	if len(out) == 0 {
+		fmt.Println("gen: no package declares data or routing elements; nothing to do")
+		return nil
+	}
+
+	for _, f := range out {
+		// SQL carries the marker in its own comment syntax.
+		marker := []byte("// Code generated ")
+		if filepath.Ext(f.path) == ".sql" {
+			marker = []byte("-- Code generated ")
+		}
+		if old, err := os.ReadFile(f.path); err == nil && !bytes.HasPrefix(old, marker) {
+			return cli.Exit(fmt.Sprintf("gen: refusing to overwrite %s: it lacks the generated-code header", f.path), 2)
+		}
+	}
+	for _, f := range out {
+		if err := os.WriteFile(f.path, f.code, 0o644); err != nil {
+			return cli.Exit(err.Error(), 2)
+		}
+		fmt.Println(f.path)
 	}
 	return nil
 }

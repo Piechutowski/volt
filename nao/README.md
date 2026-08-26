@@ -14,7 +14,7 @@ that lie. Plain Go you can read, grep, and step through in a debugger.
 ```text
         schema.edbml  ──  the single source of truth (and your ER diagram)
              │
-    nao gen ─┼──► nao_models.go    structs, enums, notes as doc comments
+   volt gen ─┼──► nao_models.go    structs, enums, notes as doc comments
              ├──► nao_queries.go   typed CRUD on a Queries handle
              └──► nao_schema.sql   DDL + seed data, FK/CHECK/UNIQUE real
 ```
@@ -76,23 +76,16 @@ organized by problem solved, with per-feature status. The short version:
 ## The CLI
 
 ```sh
-nao check  schema.edbml                 # syntax + semantics (spec §4–§8)
-nao vet    schema.edbml                 # legal-but-suspicious EDBML (edbml/vet/RULES.md)
+volt check ./myapp                      # syntax + semantics (spec §4–§8, §V)
+volt vet   ./myapp                      # legal-but-suspicious schema and routes
 
-# From the directory that holds schema.edbml, gen needs no arguments:
-nao gen go                              # ./schema.edbml -> ./edbml_{models,queries}.go
-nao gen sqlite                          # ./schema.edbml -> ./nao_schema.sql
+# One command generates the whole project — models and queries for data
+# packages, routers for routing packages:
+volt gen        ./myapp                 # nao_models.go, nao_queries.go, nao_dyn.go
+volt gen --sql  ./myapp                 # …and nao_schema.sql
+volt gen -m     ./myapp                 # models only (the shared-types mode)
 
-# Defaults: input ./schema.edbml, output '.', Go package 'main'. Override with
-# -i/--input, -o/--out, -p/--package:
-nao gen go -i db/schema.edbml -o ./models -p models
-
-# -m/--models-only emits just nao_models.go (structs/enums, no CRUD) — for
-# sharing the row types across processes (e.g. gob between a server and a GUI):
-nao gen go --models-only -o ./shared -p shared
-
-# The language server (used by the Zed extension) is a subcommand too:
-nao lsp                                 # LSP over stdin/stdout
+volt lsp                                # LSP over stdin/stdout
 ```
 
 Everything the CLI does is importable as a library
@@ -102,12 +95,12 @@ Everything the CLI does is importable as a library
 ### Install
 
 ```sh
-go install github.com/Piechutowski/not-an-nao/cmd/nao@latest
+go install github.com/Piechutowski/volt/cmd/volt@latest
 ```
 
 This builds the `nao` binary into your Go bin directory (`$GOBIN`, else
 `$GOPATH/bin`); put that directory on your `PATH`. From a clone,
-`go install ./cmd/nao` does the same.
+`go install ./cmd/volt` does the same.
 
 ### Shell completion
 
@@ -135,7 +128,7 @@ inner layers, volt SPEC.md §V0):
   extension: highlighting, outline, auto-indent, Markdown rendered inside
   notes;
 - [`../lsp/`](../lsp/) — the Volt language server, served by `volt lsp`
-  (and by `nao lsp` for DBML-only work), wrapping the same front end as
+  wrapping the same front end as
   the CLIs, so squiggles, `volt check` and codegen can never disagree:
   live diagnostics (check errors + vet lints), completion, hover,
   go-to-definition, find references, rename. Editor-agnostic LSP over
