@@ -693,8 +693,7 @@ declared, escape is omission.** Each rung replaces only what it names:
    (`MsRevenueList(w, r, q, next dataset.ListFunc[db.MsRevenue])
    error`) — call
    `next` to wrap (adjust the query, log, then delegate), ignore it to
-   replace. Wrap-or-replace with zero extra wiring; see
-   `docs/example/`.
+   replace. Wrap-or-replace with zero extra wiring.
    - **2.5 — presentation only**: drop a `templates/ms/revenue.html`
      file,
      or supply your own `Renderer` in deps. No routing touched.

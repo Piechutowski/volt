@@ -53,7 +53,7 @@ third-party deps. Importing `nao/rt` alone drags in nothing.
 | `zed-extension/` | Zed glue; install via `scripts/sync-grammar.sh` + Install Dev Extension |
 | `itest/`         | committed fixture project served over httptest, drift-checked against the generator |
 | `examples/crud/` | **runnable**: two `resources` lines → 14 routes; `go run ./examples/crud`, `go test ./examples/crud` |
-| `docs/`          | design docs (`router.md`, `language.md`, editor architecture) + `docs/example/` — a worked end-to-end app; **partly illustrative, see below** |
+| `docs/`          | design docs (`router.md`, `language.md`, editor architecture) |
 | `research/`      | Laravel/Rails/Phoenix/Django docs corpus + feature inventories |
 | `SPEC.md`        | the §V language spec; every rule backed by a corpus snippet or test |
 
@@ -64,8 +64,8 @@ router generation (typed params, wildcards, resources, pipelines,
 per-scope error handlers, reverse URLs), the runtime, the CLI, the
 LSP, the grammar, the Zed extension, and the whole proof chain.
 
-Designed but **not implemented** — `docs/example/` shows these as
-hand-written illustration only:
+Designed but **not implemented** — `docs/router.md` describes these;
+no code backs them yet:
 
 - **the schema extensions** — the query layer (`Select`/`View`/
   `Trigger`), `[was:]`, `[repr:]`; only `[model:]` exists today

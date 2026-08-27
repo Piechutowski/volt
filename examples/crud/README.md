@@ -1,7 +1,7 @@
 # CRUD without typing routes
 
-**Runnable**, unlike `docs/example/`: `go run ./examples/crud`, and
-`go test ./examples/crud` proves every generated route works.
+**Runnable**: `go run ./examples/crud`, and `go test ./examples/crud`
+proves every generated route works.
 
 The whole route table comes from two lines in
 [`app/routes.volt`](app/routes.volt):
