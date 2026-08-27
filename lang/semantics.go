@@ -492,29 +492,25 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 	}
 
 	paramName := "id"
-	keyType := TInt64
 
-	// §V5.1: the declaration names a MODEL. Resolving it gives the
-	// table (hence the URL segment) and the key's Go type, and makes
-	// the model name authoritative for the member helper — no
-	// singularization guess.
-	tableName, singular := declared, ""
+	// §V5.1: the declaration MUST name a declared table — qualified or
+	// not. Resolution gives the URL segment, the member helper (the
+	// table's model name) and the key's Go type from the primary key;
+	// there is no schemaless fallback to guess any of it from spelling.
 	ti, ok, reported := c.resourceTable(res)
 	if reported {
 		return nil // the reference is wrong; expanding it would only add noise
 	}
-	if ok {
-		// The declaration spells the table; the member helper takes the
-		// model's name so it reads as one row (§V5.4).
-		tableName = ti.Decl.Name.Base()
-		if model, err := golang.ModelName(ti.Decl); err == nil {
-			singular = model
-		}
-		if t, ok := c.pkParamType(ti, res.Name.Pos()); ok {
-			keyType = t
-		}
-	} else if res.Pkg == nil {
-		c.resourceHint(res, declared)
+	if !ok {
+		return nil // resourceTable reported the miss
+	}
+	tableName, singular := ti.Decl.Name.Base(), ""
+	if model, err := golang.ModelName(ti.Decl); err == nil {
+		singular = model
+	}
+	keyType, ok := c.pkParamType(ti, res.Name.Pos())
+	if !ok {
+		return nil
 	}
 
 	controller, err := golang.GoName(tableName)
@@ -655,30 +651,12 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 	return out
 }
 
-// resourceHint notes when a bare declaration spells a table's *model*
-// name instead of the table's own name — the reference should read as
-// the schema does (§V5.1).
-func (c *checker) resourceHint(res *ast.Resources, declared string) {
-	info := c.schemas[c.pkg.Path]
-	if info == nil {
-		return
-	}
-	for _, ti := range info.Tables {
-		model, err := golang.ModelName(ti.Decl)
-		if err != nil || model != declared {
-			continue
-		}
-		c.pkg.resourceHints = append(c.pkg.resourceHints,
-			resourceHint{pos: res.Name.Pos(), declared: declared, suggest: ti.Decl.Name.Base()})
-		return
-	}
-}
-
 // resourceTable resolves a resources declaration to the table it names
 // (§V5.1). Names are matched exactly: `Table posts` is `posts`, never
 // `Posts` or `Post`, so what is written in routes.volt is what stands
-// in the schema. Not every declaration names a table — a resource
-// without a schema is legal — so an unqualified miss is not an error.
+// in the schema. Every declaration must resolve; a miss is an error
+// that names the closest thing it can (a case variant, or the table
+// whose model name was written).
 func (c *checker) resourceTable(res *ast.Resources) (ti *check.TableInfo, ok, reported bool) {
 	pkgPath := c.pkg.Path
 	if res.Pkg != nil {
@@ -706,17 +684,20 @@ func (c *checker) resourceTable(res *ast.Resources) (ti *check.TableInfo, ok, re
 			caseMatch = name
 		}
 	}
-	// A name that differs only in case is a typo worth naming, whether
-	// or not the reference was qualified.
+	// A name that differs only in case is a typo worth naming.
 	if caseMatch != "" {
 		c.errorf(res.Name.Pos(), "V5", "no table %q in package %q; did you mean %q? names are case-sensitive (§V5.1)", want, pkgPath, caseMatch)
 		return nil, false, true
 	}
-	if res.Pkg != nil {
-		c.errorf(res.Name.Pos(), "V5", "no table %q in package %q (§V5.1)", want, pkgPath)
-		return nil, false, true
+	// A name that spells a table's MODEL name gets pointed at the table.
+	for _, cand := range info.Tables {
+		if model, err := golang.ModelName(cand.Decl); err == nil && model == want {
+			c.errorf(res.Name.Pos(), "V5", "no table %q in package %q; %q is the model of table %q — name the table (§V5.1)", want, pkgPath, want, cand.Decl.Name.Base())
+			return nil, false, true
+		}
 	}
-	return nil, false, false
+	c.errorf(res.Name.Pos(), "V5", "no table %q in package %q (§V5.1)", want, pkgPath)
+	return nil, false, true
 }
 
 // pkParamType maps a table's primary key to a route parameter type.

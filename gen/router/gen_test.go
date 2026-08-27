@@ -108,7 +108,7 @@ func TestNoNamedRoutesCompiles(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(src, "app"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	routes := "package app\n\nScope / {\n\tresources users [only: (create)]\n}\n"
+	routes := "package app\n\nTable users {\n\tid integer [pk]\n}\n\nScope / {\n\tresources users [only: (create)]\n}\n"
 	if err := os.WriteFile(filepath.Join(src, "app", "r.volt"), []byte(routes), 0o644); err != nil {
 		t.Fatal(err)
 	}

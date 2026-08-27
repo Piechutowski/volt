@@ -176,6 +176,10 @@ func TestUpdateSpansPatchAndPut(t *testing.T) {
 		"volt.mod": modFile,
 		"app/r.volt": `package app
 
+Table users {
+	id integer [pk]
+}
+
 Scope / {
 	resources users [api]
 }
@@ -202,10 +206,14 @@ Scope / {
 	}
 }
 
-func TestResourcesParamExceptNoModel(t *testing.T) {
+func TestResourcesParamExcept(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"volt.mod": modFile,
 		"app/r.volt": `package app
+
+Table posts {
+	id integer [pk]
+}
 
 Scope / {
 	resources posts [param: slug, except: (delete)]
@@ -230,8 +238,8 @@ Scope / {
 			if p.Name != "slug" {
 				t.Errorf("param: rename not applied on %s: %q", r.Pattern, p.Name)
 			}
-			if p.Type != TInt64 {
-				t.Errorf("no-model key type = %v on %s, want int64 (§V5.2)", p.Type, r.Pattern)
+			if p.Type != TInt32 {
+				t.Errorf("key type = %v on %s, want int32 from the pk (§V5.4)", p.Type, r.Pattern)
 			}
 		}
 		if strings.Contains(r.Pattern, "{") && !strings.Contains(r.Pattern, "{slug}") {
@@ -244,14 +252,14 @@ func TestResourcesSingularOverride(t *testing.T) {
 	// A name English singularization leaves alone collides with itself…
 	_, diags := project(t, map[string]string{
 		"volt.mod":   modFile,
-		"app/r.volt": "package app\n\nScope / {\n\tresources posty\n}\n",
+		"app/r.volt": "package app\n\nTable posty {\n\tid integer [pk]\n}\n\nScope / {\n\tresources posty\n}\n",
 	})
 	wantError(t, diags, "set the singular explicitly")
 
 	// …and singular: is the fix, giving distinct collection/member helpers.
 	pr, diags := project(t, map[string]string{
 		"volt.mod":   modFile,
-		"app/r.volt": "package app\n\nScope / {\n\tresources posty [singular: post]\n}\n",
+		"app/r.volt": "package app\n\nTable posty {\n\tid integer [pk]\n}\n\nScope / {\n\tresources posty [singular: post]\n}\n",
 	})
 	wantClean(t, diags)
 	helpers := map[string]bool{}
@@ -302,6 +310,22 @@ func TestResourcesNamesTable(t *testing.T) {
 	if app.Controllers["Posty"] == nil {
 		t.Errorf("controller should be Posty (from the table); got %v", app.Controllers)
 	}
+}
+
+func TestResourcesRequireDeclaredTable(t *testing.T) {
+	// Unqualified miss: an error, never a schemaless resource.
+	_, diags := project(t, map[string]string{
+		"volt.mod":   modFile,
+		"app/r.volt": "package app\n\nTable posts {\n\tid integer [pk]\n}\n\nScope / {\n\tresources ghosts\n}\n",
+	})
+	wantError(t, diags, `no table "ghosts" in package "app"`)
+
+	// A model name in the declaration gets pointed at its table.
+	_, diags = project(t, map[string]string{
+		"volt.mod":   modFile,
+		"app/r.volt": "package app\n\nTable posts {\n\tid integer [pk]\n}\n\nScope / {\n\tresources Post\n}\n",
+	})
+	wantError(t, diags, `is the model of table "posts"`)
 }
 
 func TestVerbMethodMapping(t *testing.T) {
@@ -448,11 +472,11 @@ func TestErrors(t *testing.T) {
 		}, "case-sensitive"},
 		{"only and except", map[string]string{
 			"volt.mod":   modFile,
-			"app/r.volt": "package app\nScope / {\n\tresources users [only: (index), except: (show)]\n}\n",
+			"app/r.volt": "package app\nTable users {\n\tid integer [pk]\n}\nScope / {\n\tresources users [only: (index), except: (show)]\n}\n",
 		}, "cannot be combined"},
 		{"unknown action", map[string]string{
 			"volt.mod":   modFile,
-			"app/r.volt": "package app\nScope / {\n\tresources users [only: (browse)]\n}\n",
+			"app/r.volt": "package app\nTable users {\n\tid integer [pk]\n}\nScope / {\n\tresources users [only: (browse)]\n}\n",
 		}, "unknown action"},
 		{"lowercase controller", map[string]string{
 			"volt.mod":   modFile,

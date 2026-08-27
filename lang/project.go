@@ -59,10 +59,6 @@ type Package struct {
 	// schema is the package's checked table model, set by Check.
 	schema *check.Info
 
-	// resourceHints records `resources <table>` declarations that could
-	// have named a model instead; Vet turns them into advice (§V5.1).
-	resourceHints []resourceHint
-
 	// merged is the synthetic single file of all declarations, in file
 	// order (sorted by name for determinism), fed to the DBML-layer
 	// checker for table semantics.
@@ -226,10 +222,4 @@ func parseModFile(path, src string) (string, []diag.Diagnostic) {
 			"spec/V1", "%s must declare 'module <name>'", ModFile))
 	}
 	return module, diags
-}
-
-// resourceHint is one 'name the model instead' suggestion.
-type resourceHint struct {
-	pos               token.Position
-	declared, suggest string
 }

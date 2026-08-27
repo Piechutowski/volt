@@ -322,6 +322,10 @@ table ref = name, [ ".", name ] ;
 1. `resources <table>` appears only inside a Scope body and expands to
    the action routes of §V5.2 with the table name as the collection
    segment. The name MUST map to a Go identifier.
+3. The declaration MUST resolve to a declared table (§V5.4); there
+   is no schemaless form. A miss — including a name that only matches
+   a table's model name or differs only in case — is an error naming
+   the correct spelling where one exists.
 
 ### §V5.2 The action table
 
@@ -350,8 +354,8 @@ table ref = name, [ ".", name ] ;
 1. Action names in `only`/`except` are the lowercase names of §V5.2;
    unknown names are errors. `only` and `except` MUST NOT be combined.
    `only`/`except` filter the action set after `api`.
-2. When the declaration does not resolve to a model, the key
-   parameter's type is `int64`.
+2. The key parameter's type always comes from the resolved table's
+   primary key (§V5.4.3).
 3. `singular` overrides the inflector of §V5.4.2. It is required
    whenever singularization leaves the name unchanged, which would
    otherwise make the collection and member helpers collide.
@@ -375,10 +379,10 @@ table ref = name, [ ".", name ] ;
    written, and the member helper from the table's **model** name (the
    `[model:]` setting when present, else the singularized table name).
    With `[model:]` set, no singularization is guessed at all.
-5. An unresolved (schemaless) declaration derives all of it from the
-   name as written: plural = its Go name, singular = the `singular:`
-   setting when given, else its deterministic singularization (the
-   inflector implements English rules only).
+5. The `singular:` setting overrides the member-helper name for a
+   table whose model name the inflector cannot separate from the
+   plural (clause 6); `[model:]` on the table is the equivalent fix at
+   the schema side, and wins when both apply.
 6. Plural and singular MUST differ: a name whose singularization is the identity
    (`posty`, `data`, `series`) would give the collection and member
    helpers one name, and is an error naming `singular:` as the fix.

@@ -13,7 +13,6 @@ func Vet(pr *Project) []diag.Diagnostic {
 	for _, path := range c.paths() {
 		pkg := pr.Packages[path]
 		out = append(out, vetUnusedPipelines(pkg)...)
-		out = append(out, vetResourceNamesTable(pkg)...)
 	}
 	diag.Sort(out)
 	return out
@@ -37,19 +36,6 @@ func vetUnusedPipelines(pkg *Package) []diag.Diagnostic {
 			out = append(out, diag.Warningf(pl.Pos(), "vet/pipeline",
 				"Pipeline %q is declared and never piped through by any scope", name))
 		}
-	}
-	return out
-}
-
-// vetResourceNamesTable flags a declaration that spells a table's model
-// name instead of the table's own name: the reference should read as the
-// schema does (§V5.1).
-func vetResourceNamesTable(pkg *Package) []diag.Diagnostic {
-	var out []diag.Diagnostic
-	for _, h := range pkg.resourceHints {
-		out = append(out, diag.Warningf(h.pos, "vet/resourcetable",
-			"resources %s spells a model name; name the table as declared — `resources %s` — so the reference matches the schema and the key keeps its type (§V5.1)",
-			h.declared, h.suggest))
 	}
 	return out
 }
