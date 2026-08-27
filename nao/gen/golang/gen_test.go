@@ -151,7 +151,7 @@ func TestGoldenCompiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gomod := "module goldencheck\n\ngo 1.24\n\n" +
+	gomod := "module goldencheck\n\ngo 1.27\n\n" +
 		"require github.com/Piechutowski/volt v0.0.0\n\n" +
 		"replace github.com/Piechutowski/volt => " + repoRoot + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0o644); err != nil {

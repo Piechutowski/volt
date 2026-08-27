@@ -82,6 +82,9 @@ hand-written illustration only:
 
 ## Crib sheet
 
+Requires **Go 1.27+** (all four modules declare `go 1.27`); with the
+default `GOTOOLCHAIN=auto` an older `go` fetches it automatically.
+
 ```sh
 go install ./cmd/volt
 volt check ./app && volt gen ./app && volt routes ./app

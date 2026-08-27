@@ -1,6 +1,6 @@
 module github.com/Piechutowski/volt
 
-go 1.24
+go 1.27
 
 // mattn/go-sqlite3 is a TEST-ONLY dependency (itest, D25): generated code
 // and the rt runtime import stdlib + this module only (D03).

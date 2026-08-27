@@ -1,6 +1,6 @@
 module example.com/metrics
 
-go 1.24
+go 1.27
 
 // Illustrative example (docs/example/README.md): not buildable — the
 // generated files are hand-written mockups. This go.mod exists to keep
