@@ -30,11 +30,13 @@ func (d *Document) voltProjectDiags() ([]diag.Diagnostic, bool) {
 	path := pathFromURI(d.URI)
 	if !filepath.IsAbs(path) {
 		d.vindex = nil
+		d.vpkg = nil
 		return nil, false
 	}
 	root, err := lang.FindRoot(filepath.Dir(path))
 	if err != nil {
 		d.vindex = nil
+		d.vpkg = nil
 		return nil, false
 	}
 	// Every open buffer overlays its saved file, not just this one:
@@ -51,18 +53,20 @@ func (d *Document) voltProjectDiags() ([]diag.Diagnostic, bool) {
 	pr, err := lang.LoadOverlay(root, overlay)
 	if err != nil {
 		d.vindex = nil
+		d.vpkg = nil
 		return nil, false
 	}
-	member := false
+	d.vpkg = nil
 	for _, pkg := range pr.Packages {
 		for _, f := range pkg.Files {
 			if f.Name == path {
-				member = true
+				d.vpkg = pkg
 			}
 		}
 	}
-	if !member {
+	if d.vpkg == nil {
 		d.vindex = nil
+		d.vpkg = nil
 		return nil, false
 	}
 	diags := lang.Check(pr)

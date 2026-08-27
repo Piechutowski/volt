@@ -13,6 +13,8 @@ import (
 	"strings"
 	"unicode/utf16"
 
+	"github.com/Piechutowski/volt/lang"
+
 	protocol "github.com/tliron/glsp/protocol_3_16"
 
 	"github.com/Piechutowski/volt/lang/ast"
@@ -43,6 +45,9 @@ type Document struct {
 	// diagnostics whenever this file belongs to a Volt project. Nil for
 	// a file outside any project (navigation then stays single-file).
 	vindex *voltIndex
+	// vpkg is the project package containing this file (nil outside a
+	// project): completion reads its imports and sibling declarations.
+	vpkg *lang.Package
 
 	lineOffsets []int // byte offset of the start of each line
 }

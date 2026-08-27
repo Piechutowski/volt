@@ -74,6 +74,12 @@ func (d *Document) Complete(pos protocol.Position) []protocol.CompletionItem {
 	prefix := d.Text[lineStart:offset]
 	ctx := d.blockContext(int(pos.Line))
 
+	// Project-aware completions first: `db.<tables>` after an import
+	// qualifier, tables and qualifiers after `resources`.
+	if items := d.voltComplete(prefix); items != nil {
+		return items
+	}
+
 	// ~partial injection
 	if (ctx == "table" || ctx == "tablepartial") && partialInjectRE.MatchString(prefix) {
 		return d.partialItems()

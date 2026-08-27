@@ -8,6 +8,8 @@ package lsp
 import (
 	"fmt"
 	"os"
+	"regexp"
+	"sort"
 	"strings"
 	"unicode/utf16"
 
@@ -451,3 +453,94 @@ func (d *Document) voltRename(pos protocol.Position, newName string) (*protocol.
 	}
 	return &protocol.WorkspaceEdit{Changes: changes}, true
 }
+
+/* ===== completion ===== */
+
+// voltQualRefRE matches a possibly-partial qualified reference at the
+// end of the line: `db.`, `db.P`. The qualifier decides whether the
+// Volt layer owns the completion — only import qualifiers do, so DBML
+// dot-chains (`status.active`, `users.id`) fall through untouched.
+var voltQualRefRE = regexp.MustCompile(`([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z0-9_]*)$`)
+
+// voltResourcesRE matches a resources declaration being typed, with the
+// partial table name (possibly empty) after it.
+var voltResourcesRE = regexp.MustCompile(`^\s*resources\s+([A-Za-z0-9_]*)$`)
+
+// voltComplete offers project-aware completions: after an import
+// qualifier's dot, the tables of that package; after `resources`, the
+// local tables and the import qualifiers. Nil means "not ours" and the
+// single-file DBML completion proceeds.
+func (d *Document) voltComplete(prefix string) []protocol.CompletionItem {
+	if d.vpkg == nil || d.vindex == nil {
+		return nil
+	}
+
+	if m := voltQualRefRE.FindStringSubmatch(prefix); m != nil {
+		if target, ok := d.vpkg.Imports[m[1]]; ok {
+			return d.packageTableItems(target, m[2])
+		}
+	}
+	if m := voltResourcesRE.FindStringSubmatch(prefix); m != nil {
+		items := d.packageTableItems(d.vpkg.Path, m[1])
+		quals := make([]string, 0, len(d.vpkg.Imports))
+		for q := range d.vpkg.Imports {
+			quals = append(quals, q)
+		}
+		sort.Strings(quals)
+		for _, q := range quals {
+			detail := "package " + d.vpkg.Imports[q]
+			items = append(items, protocol.CompletionItem{
+				Label:  q + ".",
+				Kind:   kindPtr(protocol.CompletionItemKindModule),
+				Detail: &detail,
+			})
+		}
+		return items
+	}
+	return nil
+}
+
+// packageTableItems lists the tables a package declares, filtered by
+// the partial the user has typed so a manual invoke mid-word works.
+// The filter is case-insensitive — someone typing `db.P` from model
+// muscle memory should see `posts`, which is also how they learn the
+// spelling — and when it would empty the list, everything is offered
+// instead (the client fuzzy-filters anyway).
+func (d *Document) packageTableItems(pkgPath, partial string) []protocol.CompletionItem {
+	type row struct{ name, detail string }
+	collect := func(filter string) []row {
+		var rows []row
+		for sym, def := range d.vindex.defs {
+			if sym.kind != "table" || sym.pkg != pkgPath || def.table == nil {
+				continue
+			}
+			if filter != "" && !strings.HasPrefix(strings.ToLower(sym.name), strings.ToLower(filter)) {
+				continue
+			}
+			detail := "Table"
+			if pk, goType := tablePK(def.table); pk != "" && goType != "" {
+				detail = "Table — key " + pk + " " + goType
+			}
+			rows = append(rows, row{sym.name, detail})
+		}
+		return rows
+	}
+	rows := collect(partial)
+	if len(rows) == 0 && partial != "" {
+		rows = collect("")
+	}
+
+	sort.Slice(rows, func(i, j int) bool { return rows[i].name < rows[j].name })
+	items := make([]protocol.CompletionItem, 0, len(rows))
+	for _, r := range rows {
+		detail := r.detail
+		items = append(items, protocol.CompletionItem{
+			Label:  r.name,
+			Kind:   kindPtr(protocol.CompletionItemKindStruct),
+			Detail: &detail,
+		})
+	}
+	return items
+}
+
+func kindPtr(k protocol.CompletionItemKind) *protocol.CompletionItemKind { return &k }

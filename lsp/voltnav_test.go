@@ -270,3 +270,71 @@ func TestSiblingDiagnosticsFollowSchemaEdits(t *testing.T) {
 		t.Fatalf("stale after revert: %v", d.Diags)
 	}
 }
+
+// TestVoltCompleteQualifiedTables: after `db.` (and mid-word `db.p`)
+// the tables of the imported package complete, with the key in the
+// detail. This is cross-file knowledge only the project index has.
+func TestVoltCompleteQualifiedTables(t *testing.T) {
+	_, _, routes := navProject(t)
+	// Uppercase on purpose: model-name muscle memory types db.P, and
+	// the completion is how the table's real spelling is learned.
+	text := strings.Replace(navRoutes, "resources db.posts", "resources db.P", 1)
+	d := NewDocument("file://"+routes, text)
+
+	pos := posOf(t, text, "db.P", 0)
+	pos.Character += 4 // cursor after "db.P"
+	items := d.Complete(pos)
+	if len(items) != 1 || items[0].Label != "posts" {
+		t.Fatalf("completion after db.P = %v, want [posts]", items)
+	}
+	if items[0].Detail == nil || !strings.Contains(*items[0].Detail, "key id int32") {
+		t.Errorf("detail = %v, want the key type", items[0].Detail)
+	}
+}
+
+// TestVoltCompleteResourcesOffersTablesAndImports: right after
+// `resources ` the local tables and the import qualifiers complete.
+func TestVoltCompleteResourcesOffersTablesAndImports(t *testing.T) {
+	_, _, routes := navProject(t)
+	text := strings.Replace(navRoutes, "resources db.posts", "resources ", 1)
+	d := NewDocument("file://"+routes, text)
+
+	pos := posOf(t, text, "resources ", 0)
+	pos.Character += uint32(len("resources "))
+	labels := map[string]bool{}
+	for _, it := range d.Complete(pos) {
+		labels[it.Label] = true
+	}
+	if !labels["db."] {
+		t.Errorf("import qualifier missing from %v", labels)
+	}
+}
+
+// TestVoltCompleteLeavesDBMLChains: a DBML dot-chain whose first
+// segment is not an import qualifier falls through to the single-file
+// completion — `users.` in a Ref still lists the table's columns, even
+// with the project index active.
+func TestVoltCompleteLeavesDBMLChains(t *testing.T) {
+	root := voltProject(t, map[string]string{
+		"volt.mod": "module lsptest\n",
+		"db/schema.volt": "package db\n\nTable users {\n\tid integer [pk]\n\temail text\n}\n\n" +
+			"Table posts {\n\tid integer [pk]\n\tauthor_id integer\n}\n\nRef: posts.author_id > users.id\n",
+	})
+	path := root + "/db/schema.volt"
+	text := "package db\n\nTable users {\n\tid integer [pk]\n\temail text\n}\n\n" +
+		"Table posts {\n\tid integer [pk]\n\tauthor_id integer\n}\n\nRef: posts.author_id > users.\n"
+	d := NewDocument("file://"+path, text)
+	if d.vpkg == nil {
+		t.Fatal("project index should be active for this file")
+	}
+
+	pos := posOf(t, text, "> users.", 0)
+	pos.Character += uint32(len("> users."))
+	labels := map[string]bool{}
+	for _, it := range d.Complete(pos) {
+		labels[it.Label] = true
+	}
+	if !labels["id"] || !labels["email"] {
+		t.Errorf("DBML ref-chain completion lost: %v", labels)
+	}
+}
