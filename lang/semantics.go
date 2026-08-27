@@ -94,7 +94,7 @@ func (c *checker) fileRules(pkg *Package) {
 				if d.Reuse {
 					kw = "reuse"
 				}
-				c.errorf(d.Pos(), "V2", "%s is not part of the Volt language (§V2.5); replace file imports with the package system — see docs/dbml-imports.md for migration", kw)
+				c.errorf(d.Pos(), "V2", "%s is not part of the Volt language (§V2.5); replace file imports with the package system — see docs/spec.md Appendix C for migration", kw)
 			}
 		}
 		if clause == nil {

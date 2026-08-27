@@ -1,4 +1,4 @@
-// A Volt routing package (SPEC.md §V) — the layer above the DBML
+// A Volt routing package (docs/spec.md §V) — the layer above the DBML
 // kitchen sink next door. One language: this file and kitchen_sink.dbml
 // parse with the same grammar.
 package app

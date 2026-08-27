@@ -93,7 +93,8 @@ func TestVetWarningsSurface(t *testing.T) {
 
 func TestModelnameAnalyzerExcluded(t *testing.T) {
 	// `status` has an -us ending that trips vet/modelname; the LSP must not
-	// run that analyzer because [model:] is EDBML-only.
+	// run that analyzer because [model:] is a schema extension the editor
+	// does not assist yet.
 	d := doc(t, "Table status {\n  id int [pk]\n}\nTable other {\n  id int [pk]\n  s int [ref: > status.id]\n}\n")
 	for _, dg := range d.Diags {
 		if strings.Contains(dg.Code, "modelname") {

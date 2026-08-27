@@ -1,18 +1,18 @@
 /**
  * Tree-sitter grammar for the Volt language (.volt files): DBML, the
- * EDBML extensions, and the routing layer above them.
+ * the schema extensions, and the routing layer above them.
  *
- * Covers the full DBML specification in lang/SPEC.md:
+ * Covers the full DBML specification in docs/spec.md Part I:
  * Project, Table (settings, alias, columns, legacy flags), TablePartial and
  * ~injection, Enum, Ref (long, short and inline forms, composite endpoints),
  * TableGroup, Note (member, block and sticky forms), Records (top-level and
  * in-table), DiagramView, indexes and checks blocks, use/reuse imports —
- * plus the Volt routing dialect of SPEC.md §V: package clauses, Go-style
+ * plus the Volt routing layer of docs/spec.md §V: package clauses, Go-style
  * import blocks, Pipeline, Scope, routes and resources. One grammar for
  * one language in three layers (§V0): every .volt file parses here,
  * whichever layer it uses.
  *
- * Design notes, driven by SPEC.md §3:
+ * Design notes, driven by spec §3:
  *  - DBML is newline-sensitive: columns, enum values, record rows, index and
  *    check lines, project properties, group members and partial injections
  *    are newline-terminated. Newlines are therefore NOT extras; bodies use an
@@ -28,7 +28,7 @@
  *    inject other languages (Markdown in notes, SQL in backticks).
  *  - Settings lists are generic `[name, key: value]` (§4.2); which keys are
  *    valid where is the language server's business, which also keeps the
- *    grammar open for EDBML extensions.
+ *    grammar open for the schema extensions.
  */
 
 /// <reference types="tree-sitter-cli/dsl" />
@@ -85,7 +85,7 @@ module.exports = grammar({
         $.records_definition,
         $.diagram_view_definition,
         $.import_statement,
-        // Volt layer (volt SPEC.md §V)
+        // Volt layer (docs/spec.md §V)
         $.package_clause,
         $.import_block,
         $.pipeline_definition,
@@ -439,7 +439,7 @@ module.exports = grammar({
         optional(seq(kw('as'), field('alias', $._name))),
       ),
 
-    // ==================== Volt layer (volt SPEC.md §V) ====================
+    // ==================== Volt layer (docs/spec.md §V) ====================
     // The routing dialect: package clauses, Go-style import blocks,
     // Pipeline and Scope. Route paths are lexical islands (§V4.1.5) —
     // token.immediate stitches their segments together so interior

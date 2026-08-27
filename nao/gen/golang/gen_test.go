@@ -99,13 +99,13 @@ func TestGolden(t *testing.T) {
 
 func corpusSchemas(t *testing.T) []string {
 	t.Helper()
-	// .dbml fixtures are core DBML; .edbml fixtures exercise the language
+	// .dbml fixtures are core DBML; .volt fixtures exercise the language
 	// extensions — the split makes extension regressions visible by name.
 	files, err := filepath.Glob(filepath.Join("..", "testdata", "*.dbml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	extended, err := filepath.Glob(filepath.Join("..", "testdata", "*.edbml"))
+	extended, err := filepath.Glob(filepath.Join("..", "testdata", "*.volt"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,9 +117,9 @@ func corpusSchemas(t *testing.T) []string {
 	return files
 }
 
-// schemaName is the fixture's base name without the .dbml/.edbml suffix.
+// schemaName is the fixture's base name without the .dbml/.volt suffix.
 func schemaName(path string) string {
-	return strings.TrimSuffix(strings.TrimSuffix(filepath.Base(path), ".dbml"), ".edbml")
+	return strings.TrimSuffix(strings.TrimSuffix(filepath.Base(path), ".dbml"), ".volt")
 }
 
 // TestGoldenGofmtStable proves the generated code is gofmt-clean: applying

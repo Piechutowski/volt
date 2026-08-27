@@ -1,7 +1,7 @@
 // Package parser turns DBML source into an ast.File, mirroring go/parser.
 //
 // The parser is a hand-written recursive descent over the EBNF of the
-// specification (SPEC.md): one method per production. Like go/parser it
+// specification (docs/spec.md): one method per production. Like go/parser it
 // is syntax-only — it accepts any setting name in any position, any value
 // shape the token stream allows, and unresolved names; the check package
 // judges meaning. This split keeps the front end reusable: tools that only

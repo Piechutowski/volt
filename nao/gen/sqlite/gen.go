@@ -2,7 +2,7 @@
 // DBML file: CREATE TABLE per table, CREATE INDEX per non-pk index, and
 // INSERT statements from records.
 //
-// Dialect decisions (see SPEC.md):
+// Dialect decisions (see docs/spec.md Appendix B):
 //   - enums become TEXT + CHECK (col IN (...)) — SQLite has no enum type;
 //   - schemas are flattened: core.users -> core_users;
 //   - every primary-key column gets an explicit NOT NULL, because SQLite's

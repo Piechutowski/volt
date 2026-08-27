@@ -48,7 +48,7 @@
   "DiagramView" @context
   name: (_) @name) @item
 
-; ---------- Volt layer (volt SPEC.md §V) ----------
+; ---------- Volt layer (docs/spec.md §V) ----------
 
 (package_clause
   "package" @context

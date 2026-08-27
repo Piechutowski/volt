@@ -2,7 +2,7 @@
 // the lang package and both generators — nao's models and queries for
 // data packages, routers for routing packages (D41).
 //
-//	volt check  [--json] [dir]     load the project, run semantic analysis (SPEC.md §V)
+//	volt check  [--json] [dir]     load the project, run semantic analysis (docs/spec.md §V)
 //	volt vet    [--json] [dir]     check plus warnings for legal-but-suspicious Volt
 //	volt gen    [dir]              generate models, queries and routers
 //	volt routes [dir]              print the expanded route table
@@ -46,7 +46,7 @@ func main() {
 		Commands: []*cli.Command{
 			{
 				Name:      "check",
-				Usage:     "load the project and run semantic analysis (SPEC.md §V)",
+				Usage:     "load the project and run semantic analysis (docs/spec.md §V)",
 				ArgsUsage: "[dir]",
 				Flags:     []cli.Flag{jsonFlag},
 				Action: func(_ context.Context, c *cli.Command) error {
@@ -178,7 +178,7 @@ func diagsPrintJSON(all []diag.Diagnostic) error {
 
 // genRun implements 'volt gen': check the whole project, then write the
 // four router files into every package with routing elements, refusing
-// to clobber non-generated files (all or nothing, like nao gen).
+// to clobber non-generated files (all or nothing).
 func genRun(c *cli.Command) error {
 	pr, diags, err := load(c)
 	if err != nil {

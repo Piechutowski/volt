@@ -5,7 +5,7 @@ import (
 )
 
 // Vet reports legal-but-suspicious Volt (the lang-layer analog of
-// edbml/vet). Run after Check on a checked project. Warnings never
+// lang/vet). Run after Check on a checked project. Warnings never
 // change what conforming Volt is.
 func Vet(pr *Project) []diag.Diagnostic {
 	var out []diag.Diagnostic

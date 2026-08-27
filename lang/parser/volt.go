@@ -1,4 +1,4 @@
-// Volt-layer productions (spec §V, SPEC.md at the repository root): the
+// Volt-layer productions (spec §V, docs/spec.md): the
 // package clause, Go-style imports, pipelines, scopes, routes and
 // resources. One method per production, in the style of the DBML layer.
 package parser

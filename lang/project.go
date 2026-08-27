@@ -1,5 +1,5 @@
 // Package lang implements the project-level semantics of the Volt
-// language (SPEC.md §V): package and import resolution, pipeline and
+// language (docs/spec.md §V): package and import resolution, pipeline and
 // scope checking, route expansion and conflict detection. It plays the
 // role lang/check plays for the schema layer, one level up — whole
 // project instead of single file.

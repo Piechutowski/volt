@@ -1,5 +1,5 @@
 // Package itest proves the generated router's runtime semantics
-// (SPEC.md, "Conformance and the proof chain", link 4): the committed
+// (docs/spec.md, "Conformance and the proof chain", link 4): the committed
 // fixture under blog/ is served over httptest and its behavior asserted
 // against the spec — matching, typed-parameter 404s, pipeline order,
 // the error spine, and reverse-URL round-trip totality.

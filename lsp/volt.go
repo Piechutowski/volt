@@ -1,4 +1,4 @@
-// Volt-layer support. Volt is one language in three layers (SPEC.md
+// Volt-layer support. Volt is one language in three layers (docs/spec.md
 // §V0), and this is one server for all of it: the shared parser already
 // reads every .volt file, so the only question is which checker's
 // diagnostics to publish. A file that belongs to a Volt project — a

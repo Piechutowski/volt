@@ -1,18 +1,18 @@
 {
   "name": "tree-sitter-volt",
   "version": "0.2.0",
-  "description": "Volt grammar for tree-sitter: DBML, the EDBML extensions, and the Volt routing layer (.volt files)",
+  "description": "Tree-sitter grammar for the Volt language: the DBML schema core, the schema extensions and the routing layer (.volt files)",
   "repository": "github:Piechutowski/volt",
   "license": "Apache-2.0",
-  "keywords": ["parser", "tree-sitter", "dbml", "edbml", "volt"],
+  "keywords": ["parser", "tree-sitter", "dbml", "volt"],
   "devDependencies": {
     "tree-sitter-cli": "^0.25.0"
   },
   "tree-sitter": [
     {
       "scope": "source.volt",
-      "file-types": ["volt", "edbml", "dbml"],
-      "injection-regex": "^(e?dbml|volt)$"
+      "file-types": ["volt", "dbml"],
+      "injection-regex": "^(dbml|volt)$"
     }
   ]
 }

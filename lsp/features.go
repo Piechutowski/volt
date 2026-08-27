@@ -195,7 +195,7 @@ func (d *Document) References(pos protocol.Position, includeDecl bool) []protoco
 // usages alone, and renaming the alias leaves the table name alone.
 func (d *Document) Rename(pos protocol.Position, newName string) (*protocol.WorkspaceEdit, error) {
 	if !validIdentifier(newName) {
-		return nil, fmt.Errorf("%q is not a valid EDBML identifier", newName)
+		return nil, fmt.Errorf("%q is not a valid Volt identifier", newName)
 	}
 	// A Volt-layer symbol renames across the whole project.
 	if edit, ok := d.voltRename(pos, newName); ok {
@@ -293,7 +293,7 @@ func (d *Document) tableHover(key string) string {
 	if ti.Alias != "" {
 		header += " as " + ti.Alias
 	}
-	fmt.Fprintf(&b, "```edbml\n%s\n```\n", header)
+	fmt.Fprintf(&b, "```volt\n%s\n```\n", header)
 	for _, cd := range ti.Columns {
 		line := "- `" + cd.Col.Name.Name() + " " + cd.Col.Type.String() + "`" + settingsSuffix(cd.Col.Settings, cd.Col.LegacyFlags)
 		if cd.Partial != nil {
@@ -313,7 +313,7 @@ func (d *Document) enumHover(key string) string {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "```edbml\nEnum %s\n```\n", ei.Decl.Name.String())
+	fmt.Fprintf(&b, "```volt\nEnum %s\n```\n", ei.Decl.Name.String())
 	for _, v := range ei.Decl.Values {
 		b.WriteString("- `" + v.Name.Name() + "`")
 		if note := settingString(v.Settings, "note"); note != "" {
@@ -330,7 +330,7 @@ func (d *Document) partialHover(name string) string {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "```edbml\nTablePartial %s\n```\n", name)
+	fmt.Fprintf(&b, "```volt\nTablePartial %s\n```\n", name)
 	for _, item := range pi.Decl.Body {
 		if col, ok := item.(*ast.Column); ok {
 			b.WriteString("- `" + col.Name.Name() + " " + col.Type.String() + "`" + settingsSuffix(col.Settings, col.LegacyFlags) + "\n")
@@ -346,7 +346,7 @@ func (d *Document) columnHover(id SymbolID) string {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "```edbml\n%s %s\n```\n", col.Name.Name(), col.Type.String())
+	fmt.Fprintf(&b, "```volt\n%s %s\n```\n", col.Name.Name(), col.Type.String())
 	if s := settingsSuffix(col.Settings, col.LegacyFlags); s != "" {
 		b.WriteString(strings.TrimSpace(s) + "\n")
 	}
@@ -367,7 +367,7 @@ func (d *Document) enumValueHover(id SymbolID) string {
 	}
 	for _, v := range ei.Decl.Values {
 		if v.Name.Name() == id.Name {
-			md := fmt.Sprintf("```edbml\n%s.%s\n```\n", ei.Decl.Name.String(), id.Name)
+			md := fmt.Sprintf("```volt\n%s.%s\n```\n", ei.Decl.Name.String(), id.Name)
 			if note := settingString(v.Settings, "note"); note != "" {
 				md += "\n" + note + "\n"
 			}

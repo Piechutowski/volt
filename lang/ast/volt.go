@@ -1,6 +1,6 @@
-// Volt-layer AST nodes (spec §V, SPEC.md at the repository root).
+// Volt-layer AST nodes (spec §V, docs/spec.md).
 //
-// The Volt language is a strict superset of EDBML: these declarations may
+// The Volt language is a strict superset of the DBML core: these declarations may
 // appear alongside tables and enums in any .volt file. The DBML-layer
 // checker (package check) ignores them entirely; their semantics belong to
 // the project-level checker in the lang package.

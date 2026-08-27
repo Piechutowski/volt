@@ -1,4 +1,4 @@
-// spec: §V0.2 — the superset rule: EDBML bodies are valid Volt
+// spec: §V0.2 — the superset rule: DBML bodies are valid Volt
 package db
 
 Table users {

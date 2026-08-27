@@ -10,11 +10,11 @@ import (
 	"github.com/Piechutowski/volt/lang/vet"
 )
 
-// TestRulesDocumentation pins RULES.md, the analyzer registry and the
+// TestRulesDocumentation pins docs/lint.md, the analyzer registry and the
 // testdata corpus to each other. If any of the three drifts, the build
 // fails:
 //
-//  1. every registered analyzer has a "### <name>" section in RULES.md;
+//  1. every registered analyzer has a "### <name>" section in lint.md;
 //  2. every "### <name>" section documents a registered analyzer (no
 //     stale docs for removed rules);
 //  3. every section links at least one existing testdata/*.dbml file;
@@ -22,16 +22,16 @@ import (
 //     "// analyzers:" header names it) and contains at least one bad
 //     example ("//WANT <name>") — TestAnalyzers separately proves the
 //     bad examples warn and the good lines stay silent;
-//  5. every testdata file is linked from RULES.md (no orphaned examples).
+//  5. every testdata file is linked from lint.md (no orphaned examples).
 func TestRulesDocumentation(t *testing.T) {
-	docBytes, err := os.ReadFile("RULES.md")
+	docBytes, err := os.ReadFile(filepath.Join("..", "..", "docs", "lint.md"))
 	if err != nil {
-		t.Fatalf("RULES.md: %v", err)
+		t.Fatalf("docs/lint.md: %v", err)
 	}
 	doc := string(docBytes)
 
 	headingRE := regexp.MustCompile(`(?m)^### ([a-z]+)$`)
-	linkRE := regexp.MustCompile(`\((testdata/[a-z_]+\.e?dbml)\)`)
+	linkRE := regexp.MustCompile(`\(\.\./lang/vet/(testdata/[a-z_]+\.(?:dbml|volt))\)`)
 
 	// Slice the document into per-rule sections.
 	headings := headingRE.FindAllStringSubmatchIndex(doc, -1)
@@ -43,7 +43,7 @@ func TestRulesDocumentation(t *testing.T) {
 			end = headings[i+1][0]
 		}
 		if _, dup := sections[name]; dup {
-			t.Errorf("RULES.md: duplicate section for %q", name)
+			t.Errorf("lint.md: duplicate section for %q", name)
 		}
 		sections[name] = doc[h[1]:end]
 	}
@@ -56,7 +56,7 @@ func TestRulesDocumentation(t *testing.T) {
 	// (2) no stale sections
 	for name := range sections {
 		if !registered[name] {
-			t.Errorf("RULES.md documents %q, which is not a registered analyzer", name)
+			t.Errorf("lint.md documents %q, which is not a registered analyzer", name)
 		}
 	}
 
@@ -65,13 +65,13 @@ func TestRulesDocumentation(t *testing.T) {
 		sec, ok := sections[a.Name]
 		if !ok {
 			// (1) every analyzer documented
-			t.Errorf("analyzer %q has no '### %s' section in RULES.md", a.Name, a.Name)
+			t.Errorf("analyzer %q has no '### %s' section in lint.md", a.Name, a.Name)
 			continue
 		}
 		links := linkRE.FindAllStringSubmatch(sec, -1)
 		if len(links) == 0 {
 			// (3) every section links examples
-			t.Errorf("RULES.md section %q links no testdata file", a.Name)
+			t.Errorf("lint.md section %q links no testdata file", a.Name)
 			continue
 		}
 		ranByLinked, wantInLinked := false, false
@@ -80,7 +80,7 @@ func TestRulesDocumentation(t *testing.T) {
 			linkedAnywhere[filepath.Base(rel)] = true
 			src, err := os.ReadFile(rel)
 			if err != nil {
-				t.Errorf("RULES.md section %q links %s: %v", a.Name, rel, err)
+				t.Errorf("lint.md section %q links %s: %v", a.Name, rel, err)
 				continue
 			}
 			lines := strings.Split(string(src), "\n")
@@ -96,10 +96,10 @@ func TestRulesDocumentation(t *testing.T) {
 		}
 		// (4) linked examples actually exercise the rule
 		if !ranByLinked {
-			t.Errorf("no file linked from RULES.md section %q runs the analyzer (missing from '// analyzers:' header)", a.Name)
+			t.Errorf("no file linked from lint.md section %q runs the analyzer (missing from '// analyzers:' header)", a.Name)
 		}
 		if !wantInLinked {
-			t.Errorf("no file linked from RULES.md section %q contains a bad example ('//WANT %s')", a.Name, a.Name)
+			t.Errorf("no file linked from lint.md section %q contains a bad example ('//WANT %s')", a.Name, a.Name)
 		}
 	}
 
@@ -108,7 +108,7 @@ func TestRulesDocumentation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	extended, err := filepath.Glob(filepath.Join("testdata", "*.edbml"))
+	extended, err := filepath.Glob(filepath.Join("testdata", "*.volt"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestRulesDocumentation(t *testing.T) {
 	}
 	for _, f := range files {
 		if !linkedAnywhere[filepath.Base(f)] {
-			t.Errorf("testdata file %s is not linked from RULES.md", f)
+			t.Errorf("testdata file %s is not linked from lint.md", f)
 		}
 	}
 }

@@ -22,7 +22,7 @@ func voltGen(t *testing.T, dir string) (string, error) {
 
 // TestCLIClobberProtection: 'volt gen' refuses to overwrite a file that
 // lacks the generated-code header, and writes nothing at all when any
-// target is refused (all or nothing, like nao gen).
+// target is refused (all or nothing).
 func TestCLIClobberProtection(t *testing.T) {
 	if testing.Short() {
 		t.Skip("execs the toolchain")

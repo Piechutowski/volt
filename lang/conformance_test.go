@@ -10,7 +10,7 @@ import (
 	"github.com/Piechutowski/volt/lang/diag"
 )
 
-// The conformance corpus is the executable surface of SPEC.md §V:
+// The conformance corpus is the executable surface of docs/spec.md §V:
 // snippets under valid/ MUST check clean, snippets under invalid/ MUST
 // be rejected. A snippet is either one .volt file (run as a
 // single-package project, the package directory named from its package

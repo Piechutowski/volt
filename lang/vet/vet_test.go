@@ -27,7 +27,7 @@ func TestAnalyzers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	extended, err := filepath.Glob(filepath.Join("testdata", "*.edbml"))
+	extended, err := filepath.Glob(filepath.Join("testdata", "*.volt"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -103,7 +103,7 @@ echo "extension.toml now pins commit ${sha:0:12}"
 echo "Preflight OK: Zed-style checkout works; parser.c exports tree_sitter_volt."
 echo
 echo "Next: in Zed run 'zed: extensions' and click Install Dev Extension"
-echo "(first time, pointing at zed-extension/ — remove any old EDBML dev"
+echo "(first time, pointing at zed-extension/ — remove any old Volt dev"
 echo "extension entry first) or Rebuild on the Volt extension."
 echo
 echo "If Zed still reports \"failed to compile grammar 'volt'\", run"

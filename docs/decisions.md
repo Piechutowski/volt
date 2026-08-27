@@ -1,0 +1,327 @@
+# Decisions
+
+The locked design decisions of Volt, numbered for reference. Each was
+argued out in working sessions; this file is the cross-session memory. A
+decision is changed by editing this file, not by drifting away from it.
+D01–D42 were made while the data layer was the standalone `not-an-orm`
+project; they remain law, amended in place where the merge into Volt
+changed the facts (D01, D39, D40, D41). D43 onward are Volt-era.
+
+## Scope and identity
+
+- **D01 — This repository is the project, named Volt** (amended
+  2026-08-27; originally `not-an-orm`, renamed from the pre-pivot
+  "dbml-docs" on 2026-07-09). Language spec + front end + linter +
+  generators + runtime + editor tooling, one repository, library module
+  `github.com/Piechutowski/volt`. The data layer lives on as the
+  sub-library `nao/` — see D43. The front page (README.md) presents the
+  framework; the language spec lives in [`spec.md`](spec.md).
+- **D02 — SQLite-first, all-in.** Every simplification bought by rejecting
+  other DBMSes is a good trade. SQLite is also *tooling*: at generation time
+  an in-memory SQLite is my SQL parser and type checker (prepare-validate
+  everything I emit or accept).
+- **D03 — One coherent tool, zero runtime dependencies.** Generated code
+  imports stdlib and my own small runtime package only. No sqlc, squirrel,
+  sqlx, Atlas. Proven *shapes* may be borrowed (e.g. Queries/DBTX); code is
+  mine.
+- **D04 — Library-first, CLI-thin.** Everything the CLI does is importable;
+  user binaries embed subcommands (`app migrate up`) and migrations
+  (`embed.FS`). One self-contained deployable binary.
+- **D39 — `gen` defaults to the working directory** (amended 2026-08-27
+  for the project model): the common case is running the generator from
+  inside the project, so `volt gen` needs no argument — it finds the
+  nearest `volt.mod` root and generates for every package beneath it,
+  models/queries/DDL for schema packages and routers for routing
+  packages, each output beside its sources. An explicit directory
+  argument overrides. Consistent with D16's "never guess": the project
+  root is discovered by the marker file, never inferred from content.
+  Shell completion is enabled on the CLI (`volt completion <shell>`).
+## Language and front end
+
+- **D05 — The spec is normative; the conformance corpus + upstream
+  cross-check pin it.** Extensions (Select, View, Trigger, `[was:]`,
+  `[model:]`, `[repr:]`) are a superset; core stays projectable to vanilla
+  DBML for diagramming.
+- **D06 — Structure mine, expressions SQLite's.** Extended-DBML queries parse
+  select lists, tables, joins and declared params with my front end
+  (resolved against `check.Info`); WHERE/HAVING bodies and other expressions
+  stay opaque and are validated by gen-time prepare. I never build an SQL
+  expression grammar.
+- **D07 — Query params are declared, not inferred** — `Select foo (rok int)`.
+  Explicit signatures beat inference.
+- **D08 — Joins are inferred from declared refs** where a unique ref exists
+  between the joined tables; explicit `on:` overrides.
+
+## Generated Go
+
+- **D09 — Naming is subject-first, verb-last**: `UserGet`, `UserList`,
+  `UserCreateParams`, `PostCommentsLoad`, `EOrderStatusPending`. Autocomplete
+  and search group by model, then filter by verb.
+- **D10 — Models are singular** (`User` from `users`) via a small
+  deterministic inflector; `[model: 'Person']` overrides; vet warns when the
+  inflector guessed. Go names use the initialisms convention (`UserID`).
+- **D11 — Enums are string-backed by default, E-prefixed**
+  (`type EOrderStatus string`, constants `EOrderStatusPending`), stored
+  as TEXT. The `E` prefix (edited 2026-07-21, with D29) keeps enum
+  types out of the flat column-handle namespace: `Table orders { status
+  order_status }` mints the handle `OrderStatus` and the enum type
+  `EOrderStatus` instead of colliding — the tax lands on enum mentions,
+  not on query code, where names are typed most. Int-backed
+  (`[repr: int]`) is opt-in and generates the full conversion suite
+  (String, Valuer, Scanner, JSON) — the int must never escape the process.
+- **D12 — No enum CHECK constraints by default** (adding a value must not
+  force SQLite's twelve-step rebuild); opt-in for belt-and-suspenders.
+  Structural constraints (NOT NULL, FK, UNIQUE) always emitted.
+- **D13 — Nullable columns are `Null[T]`** — my runtime's generic value type
+  (`struct { V T; Valid bool }`) with Scan/Value and JSON that marshals as
+  the value or `null`. Value semantics, no heap, no nil-deref. (Supersedes
+  the pointer representation in early `gen go` output.)
+- **D14 — Values, not objects.** Each scan is a fresh struct; no identity
+  map, no lazy loading (impossible by construction), no `Save()` methods,
+  no association fields on row structs.
+- **D15 — Named placeholders; identity args positional, data args in a
+  struct.** Generated SQL uses SQLite's named parameters (`:email`), bound
+  via `sql.Named` inside the generated code — the placeholder *is* the
+  column name, so ordering cannot exist as a concept, and the generated SQL
+  is self-documenting. At the Go boundary: **identity** arguments (the
+  pk columns of Get/Delete) are positional — `UserGet(ctx, id)`,
+  `UserRoleGet(ctx, userID, roleID)`; **data** arguments (Create/Update,
+  declared query params) arrive in a generated params struct whose fields
+  map 1:1 to the named placeholders. Explicit end to end: DBML column →
+  struct field → `:param`.
+- **D16 — CreateParams exclude auto-increment PKs and defaulted columns**;
+  the INSERT omits them and `RETURNING` (SQLite ≥ 3.35) brings back the row
+  the database actually wrote. Overriding a default = dynamic/declared query.
+- **D17 — Tables without a primary key** get only `List/Create/Count`.
+  Composite PKs get multi-argument `Get/Update/Delete`.
+- **D18 — Hand-written code extends generated types in sibling files** of the
+  same package (methods, validation, invariants). Generated business logic
+  is a non-goal. Raw SQL strings in `.go` files are outside the safety net —
+  the supported escape hatch is a `Select` block in the schema file, which
+  regeneration re-validates.
+
+## Query layer (from the query-builder design session, 2026-07-08)
+
+- **D28 — The dynamic query core is functional options as inert data.**
+  Options and predicates are plain values (a small expression tree), never
+  closures and never a mutable builder: one terminal call
+  (`UserQuery(ctx, opts...)`) walks the tree once and renders SQL + named
+  args in lockstep. Values compose (`And`/`Or`/`Not`), store in variables
+  (the scope replacement), append conditionally, and can be inspected,
+  cached and tested — a closure can only be executed. A fluent facade could
+  be layered on later; the value core is the irreversible part.
+- **D29 — Typed handles via a generic runtime column type, flat
+  one-line vars.** The runtime defines `Column[M, T]` once (phantom
+  model type `M`, value type `T`; `NullColumn[M, T]` adds the explicit
+  NULL operations `IsNull`/`SetNull` — comparisons take plain `T`,
+  never `Null[T]`, because SQL comparison with NULL matches nothing
+  anyway); the generator emits one-line vars:
+  `UserEmail = rt.Column[User, string]{...}`. Flat `Model+Field` names
+  live in the same package scope as everything else generated, and the
+  idiomatic enum pattern — `Table orders { status order_status }` —
+  minted `OrderStatus` twice (enum type and handle); that is resolved
+  on the *enum* side: enum types carry an `E` prefix (see the D11
+  edit), keeping the query-side names, the ones typed most, shortest.
+  (History: originally flat, briefly namespaced as `UserCols.Email`
+  during the 2026-07-21 build session when the collision surfaced;
+  reverted to flat + `E` the same day at the maintainer's direction —
+  short names and few dots outrank collision-proofing by namespace.)
+  Operators (`Eq/Ne/In/Gt/Like/Desc/EqCol/...`) live once in the
+  runtime. Phantom `M` makes cross-model mixups a compile error
+  (`Pred[Post]` cannot enter a `User` query). The remaining
+  concatenation collisions — a handle vs another table's model or
+  handle (`users.foo_bar` vs `user_foos.bar`), a model vs a D30
+  wrapper (`user_limits` vs `UserLimit`) — are rare: generation fails
+  loudly, never renames silently, and the vet `dynname` rule reports
+  every collision with both origins named.
+- **D30 — The generics wall is papered by codegen.** Go cannot infer `M`
+  for value-less options (`Limit`), so the generator emits per-model
+  wrappers: `UserLimit(n)`, `UserOffset(n)`. Subject-first everywhere.
+- **D31 — Prepared-statement cache keyed by rendered SQL text.** The
+  interpreter is deterministic, so identical tree shapes render identical
+  SQL; the runtime caches `*sql.Stmt` per text (LRU). Static SQL (CRUD,
+  declared Selects) is prepare-validated at generation time; dynamic shapes
+  are validated by construction plus first prepare.
+- **D32 — The shape rule.** Anything that *changes what a row is* (joins,
+  computed columns, GROUP BY/HAVING) happens at generation time, where
+  structs can be minted (declared `Select`/`View` blocks). Anything that
+  only *filters/orders/limits an existing shape* is runtime-builder
+  material (including same-model `EqCol` column comparisons). Predicates
+  are shared across verbs: `UserQuery`, `UserCount`, `UserDeleteWhere`,
+  `UserUpdateWhere` (+ typed `Assign[M]` setters).
+- **D33 — Truly user-defined queries live in a quarantined report engine.**
+  The generator also exports the schema as a runtime *catalog* (tables,
+  columns, types, refs); the engine validates request-data against it,
+  emits SQL with values only ever behind placeholders, joins only along
+  declared refs, and returns `[]map[string]any` whose sole consumer is
+  serialization. The untyped region is one package.
+- **D34 — Keyset pagination is a first-class runtime feature** (scheduled
+  with v2, not "later"): `OFFSET` degrades linearly with depth. SQLite is
+  not a small-apps database — the solo dev with 100M rows is the thesis —
+  so scale features are in scope by default.
+- **D42 — Dynamic SQL binds positional `?` placeholders** (2026-07-21, v2
+  build session; refines D15, which continues to govern static CRUD). A
+  dynamic predicate has no stable column-derived parameter name — the
+  same column can appear twice in one tree, and independently-built
+  fragments must not be able to collide — so parameter hygiene belongs
+  to the interpreter, and positional placeholders make collision
+  impossible by construction. Interpreter guarantees, all in service of
+  determinism (D31) and loudness (D16's principle): `LIMIT`/`OFFSET`
+  values bind as parameters, so page size never changes the SQL text
+  (one cached statement per shape); `In()` over the empty set renders
+  constant false (`NOT IN` constant true) instead of invalid SQL;
+  `After` renders the lexicographic keyset expansion and errors without
+  an `OrderBy` or with the wrong key arity; the empty (zero-value)
+  `Pred` vanishes from `And`/`Or`/`Not`/`WHERE`, so conditional
+  building needs no special cases; `DeleteWhere`/`UpdateWhere` whose
+  predicates all vanish are errors, never whole-table statements —
+  affecting every row is written out loud (`rt.Raw("1 = 1")`). The
+  statement cache binds to the handle `WithCache` saw; `WithTx` drops
+  it, because cached statements belong to the outer connection.
+- **D35 — N+1 is reframed, batched loaders stay.** In embedded SQLite a
+  query is a function call, not a network round trip — the loop-of-queries
+  pattern is officially acceptable (SQLite's own docs, Fossil's practice),
+  so N+1 is not the marketing headline. Batched loaders remain the default
+  because one `IN` query is *atomic* (a loop of queries in autocommit can
+  interleave with writes — the single-writer property makes consistency,
+  not speed, the argument) and still wins at large N. Statement overhead is
+  microseconds, not milliseconds; I say so honestly.
+
+## Runtime and CRUD surface (v0 build, 2026-07-08)
+
+- **D36 — CRUD miss and return semantics.** `Get`/`GetBy*` return
+  `rt.ErrNotFound`, which *is* `sql.ErrNoRows` (existing `errors.Is`
+  checks keep working). `Update` rewrites every non-key column and
+  returns the resulting row via `RETURNING` (`ErrNotFound` on a miss);
+  partial updates are v2's `UserUpdateWhere` with typed setters. `Delete`
+  checks `RowsAffected` and reports a miss as `ErrNotFound`. `GetMany`
+  treats missing keys as absence, not error, and exists only for
+  single-column keys.
+- **D37 — `rt.Open` pins the pool to one connection.** SQLite pragmas are
+  per-connection, so `Open(driver, dsn)` sets `MaxOpenConns(1)` and then
+  applies WAL, `busy_timeout=5000` and `foreign_keys=ON` — the pragmas
+  provably hold for every statement, and in-process busy contention
+  disappears. SQLite has a single writer anyway; multi-connection read
+  scaling can be revisited without breaking the API. The runtime registers
+  no driver (D03): the application imports one and passes its name.
+- **D38 — Temporal declared types are the driver contract.** `gen sqlite`
+  declares `TIMESTAMP`/`DATETIME`/`DATE` (NUMERIC affinity, stored as
+  ISO-8601 text) because SQLite drivers key their `time.Time` parsing on
+  the declared type. Time-of-day types (`time`, `timetz`) map to Go
+  `string`: SQLite has no time type and drivers no scan rule for one.
+
+## Associations
+
+- **D19 — Per-ref loaders, not struct fields**: single
+  (`PostAuthorGet(ctx, post)`) and batched
+  (`PostCommentsLoad(ctx, posts) map[int64][]Comment`) — one `IN (…)` query,
+  grouped in memory. A `Comments` field on `Post` cannot distinguish
+  not-loaded from empty; that ambiguity is banned.
+
+## Migrations
+
+- **D20 — Declarative, diffed against the last-migrated DBML snapshot**
+  (semantic-model diff, never SQL parsing). Drops = deletion from the file;
+  renames = `[was: 'old']` provenance hints; versioning lives only in the
+  generated ordered ledger + `schema_migrations` table.
+- **D21 — Each migration embeds the schema content hash** it targets, so
+  "schema changed but no migration cut" is machine-detectable drift.
+- **D22 — I own the SQLite twelve-step rebuild** (I already generate full
+  CREATE TABLE; a rebuild is create-new + INSERT…SELECT + drop + rename in
+  the pragma bracket). No Atlas.
+- **D23 — Migrations never run on app startup.** Applied by CLI or an
+  embedded runner invocation, explicitly.
+- **D24 — Views declare their columns and carry their SQL**; the prepare
+  check verifies the two agree. Views generate read-only structs +
+  accessors. Triggers: deferred (stateless drop-and-recreate when added).
+
+## Testing
+
+- **D25 — Integration over mocks for the data layer.** Generated code is
+  exercised against a real SQLite (test-only driver dependency); the
+  language front end keeps its exhaustive unit corpus. Golden files remain
+  for a different job: surfacing unintended generator-output changes in
+  review. Every generated SQL artifact must execute against a real engine
+  in tests.
+- **D26 — Docs are enforced where possible** (lint.md ↔ registry ↔
+  testdata consistency test); the maintained docs live in `docs/` as the
+  cross-session memory — see D49 for the full doctrine. Feature statuses
+  in [`roadmap.md`](roadmap.md) update in the commit that lands them.
+
+## Non-goals (permanent unless revisited here)
+
+- **D27 — Never:** identity map / unit of work, lazy loading, active-record
+  `Save()`, reflection in generated paths, callbacks, dirty tracking,
+  default scopes, single-table inheritance / delegated types, a
+  Turing-complete query DSL.
+
+## The Volt framework (2026-08)
+
+- **D43 — nao is a sub-library, never a separate module.** `nao/` sits
+  inside the root module the way ActiveRecord sits inside Rails: its own
+  name, docs and tests, one shared version. It does not get its own
+  `go.mod`; the earlier idea of per-sublibrary modules at v1 is
+  rejected. Independent usability is preserved at the package level:
+  `nao/rt` and the root `volt` runtime import nothing but the standard
+  library.
+- **D44 — Tools live in their own Go modules.** `lsp/` (glsp and its
+  tail) and `cmd/volt/` (urfave/cli) are separate modules stitched to
+  the library by `go.work`, so importing any library package inherits
+  no third-party requirements (sqlite3 stays, test-only, per D25). The
+  editor stack's dependencies — and their CVE noise — can never leak
+  into a consumer's `go.sum` again.
+- **D45 — The floor is the newest stable Go** (1.27 today). A personal
+  framework tracks the toolchain it is developed on; `GOTOOLCHAIN=auto`
+  makes the floor cheap for anyone else. Revisit breadth (last-two
+  releases convention) at v1.
+- **D46 — The word "EDBML" is retired.** Two names only: **DBML** is
+  the Part I schema core (kept diagrammable upstream), **Volt** is the
+  language — everything beyond the core included. The `.edbml` file
+  type is dropped everywhere (editor registrations, fixtures — a
+  fixture exercising extensions is `.volt`); `.dbml` remains supported
+  as an input for interchange.
+- **D47 — One CLI: `volt`** (check · vet · gen · routes · lsp ·
+  version). `volt gen` generates whatever a package declares — models,
+  queries and DDL for schema packages, routers for routing packages.
+  There is no `nao` binary; a second CLI was maintenance with no user.
+- **D48 — `resources` must resolve, case-sensitively** (spec §V5.1,
+  §V5.4). What you type is a real declared table name or it is a check
+  error, with did-you-mean diagnostics for case mismatches and for
+  naming the model instead of the table. Self-descriptive source beats
+  forgiving resolution.
+- **D49 — The docs doctrine: eight maintained files, everything
+  normative that can be** (2026-08-27). `docs/` holds exactly:
+  `spec.md` (the language, EBNF + numbered constraints, every
+  constraint tagged in the conformance corpus), `lint.md` (every rule
+  with executable examples, drift-checked by build), `editor.md` (the
+  tooling, with a construct-by-construct verification checklist),
+  `decisions.md` (this file), `roadmap.md` (features with IDs and
+  statuses), `nao.md` (the ORM explained), `model-layer.md` (the
+  philosophy), and `reference/` (pinned-subject research: the framework
+  inventories and the ORM capability matrix — consulted, not
+  maintained). No other directory carries prose docs. Operational
+  detail (paths, commands, code) may appear **only** in docs a test or
+  the compiler keeps honest; philosophy is written at an altitude where
+  nothing can rot; **no doc is ever knowingly wrong** — a change whose
+  blast radius includes a doc updates the doc in the same commit.
+- **D50 — ServeMux is the matcher** (was R2/R11). v1 generates
+  registrations onto the stdlib `http.ServeMux` — post-1.22 a real
+  router with registration-time conflict detection — and spends its
+  code on what surrounds the match: typed shims, pipelines, reverse
+  URLs, the route table. A generated static matcher stays possible
+  behind the same API and is built only if profiling justifies it.
+- **D51 — Pipelines speak `func(http.Handler) http.Handler`** (was
+  R3/R8); the `error` return lives only on controller interfaces, where
+  the generated shim owns the error spine. Middleware stays
+  ecosystem-compatible; handlers stay honest about failure.
+- **D52 — No runtime route registration.** The language is the only way
+  routes exist; there is no `router.GET(...)` API. The escape hatch is
+  `mount`, which forwards a subtree to any `http.Handler`. This is what
+  keeps the route table closed — the precondition for typed reverse
+  URLs, conflict checking and datasets (was a router non-goal, now
+  law).
+- **D53 — Migration identity is semantic, never file bytes** (was L5).
+  The future migration engine pins schema identity to a canonical hash
+  of the checked AST's schema elements; reformatting, comments,
+  reordering and re-slicing files never perturb the ledger. Forced by
+  layout invariance (§V1.5), and better regardless.

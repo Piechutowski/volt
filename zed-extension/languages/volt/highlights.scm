@@ -1,4 +1,4 @@
-; EDBML highlight queries for Zed. Later patterns win, so generic rules come
+; Volt highlight queries for Zed. Later patterns win, so generic rules come
 ; first and specific roles override them.
 
 ; ---------- comments and literals ----------
@@ -94,7 +94,7 @@
 (setting_value_words) @constant
 (legacy_flag) @attribute
 
-; ---------- Volt layer (volt SPEC.md §V) ----------
+; ---------- Volt layer (docs/spec.md §V) ----------
 
 [
   "package"

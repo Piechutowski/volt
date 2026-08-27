@@ -3,7 +3,7 @@ name = "Volt"
 version = "0.2.0"
 schema_version = 1
 authors = ["Szymon Piechutowski <106471045+Piechutowski@users.noreply.github.com>"]
-description = "Volt language support (.volt, .edbml, .dbml): syntax highlighting and the Volt language server."
+description = "Volt language support (.volt, .dbml): syntax highlighting and the Volt language server."
 repository = "https://github.com/Piechutowski/volt"
 
 [language_servers.volt]
