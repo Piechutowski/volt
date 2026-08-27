@@ -202,3 +202,71 @@ func TestVoltRenameFromReference(t *testing.T) {
 		t.Errorf("the declaration in schema.volt was not renamed")
 	}
 }
+
+// TestVoltRenameKeepsQualifier: renaming `db.posts` from the reference
+// rewrites only the name — the `db.` qualifier must survive. (It used
+// to be swallowed because the hover hit-span doubled as the edit span.)
+func TestVoltRenameKeepsQualifier(t *testing.T) {
+	_, _, routes := navProject(t)
+	d := NewDocument("file://"+routes, navRoutes)
+
+	edit, err := d.Rename(posOf(t, navRoutes, "db.posts", 0), "articles")
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := 0
+	for i, l := range strings.Split(navRoutes, "\n") {
+		if strings.Contains(l, "db.posts") {
+			line = i
+		}
+	}
+	nameCol := strings.Index(strings.Split(navRoutes, "\n")[line], "posts")
+	for _, e := range edit.Changes[protocol.DocumentUri("file://"+routes)] {
+		if int(e.Range.Start.Line) != line {
+			continue
+		}
+		if int(e.Range.Start.Character) != nameCol {
+			t.Errorf("edit starts at char %d, want %d — the qualifier would be rewritten", e.Range.Start.Character, nameCol)
+		}
+		if got := int(e.Range.End.Character - e.Range.Start.Character); got != len("posts") {
+			t.Errorf("edit spans %d chars, want %d", got, len("posts"))
+		}
+	}
+}
+
+// TestSiblingDiagnosticsFollowSchemaEdits: routes.volt's diagnostics
+// must track edits to the OPEN schema buffer — break the table name and
+// the error appears; revert and it clears. (The server-level republish
+// is exercised by the stdio session; this pins the recompute itself.)
+func TestSiblingDiagnosticsFollowSchemaEdits(t *testing.T) {
+	_, schema, routes := navProject(t)
+
+	schemaText := navSchema
+	d := &Document{URI: "file://" + routes, Siblings: func() map[string]string {
+		return map[string]string{schema: schemaText}
+	}}
+	d.Update(navRoutes)
+	if len(d.Diags) != 0 {
+		t.Fatalf("clean project reports %v", d.Diags)
+	}
+
+	// The schema buffer renames the table: routes.volt is now wrong.
+	schemaText = strings.Replace(navSchema, "Table posts", "Table articles", 1)
+	d.Update(d.Text)
+	found := false
+	for _, dg := range d.Diags {
+		if strings.Contains(dg.Msg, `no table "posts"`) {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("stale: schema renamed but no error; diags = %v", d.Diags)
+	}
+
+	// The schema buffer reverts: the error must clear.
+	schemaText = navSchema
+	d.Update(d.Text)
+	if len(d.Diags) != 0 {
+		t.Fatalf("stale after revert: %v", d.Diags)
+	}
+}

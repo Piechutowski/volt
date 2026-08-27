@@ -81,6 +81,7 @@ func (s *Server) didOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocument
 	s.mu.Unlock()
 	doc.Update(params.TextDocument.Text)
 	s.diagnosticsPublish(ctx, doc)
+	s.refreshOthers(ctx, params.TextDocument.URI)
 	return nil
 }
 
@@ -116,6 +117,7 @@ func (s *Server) didChange(ctx *glsp.Context, params *protocol.DidChangeTextDocu
 		}
 	}
 	s.diagnosticsPublish(ctx, doc)
+	s.refreshOthers(ctx, params.TextDocument.URI)
 	return nil
 }
 
@@ -128,7 +130,29 @@ func (s *Server) didClose(ctx *glsp.Context, params *protocol.DidCloseTextDocume
 		URI:         params.TextDocument.URI,
 		Diagnostics: []protocol.Diagnostic{},
 	})
+	// the closed buffer reverts to its saved content for everyone else
+	s.refreshOthers(ctx, params.TextDocument.URI)
 	return nil
+}
+
+// refreshOthers re-checks and republishes every open document except
+// the one that just changed. Open documents of a Volt project see each
+// other through the overlay, so an edit in one file changes the truth
+// of the diagnostics in all of them — without this, a fixed (or newly
+// broken) sibling keeps its stale squiggles until it is touched.
+func (s *Server) refreshOthers(ctx *glsp.Context, except string) {
+	s.mu.Lock()
+	others := make([]*Document, 0, len(s.docs))
+	for uri, doc := range s.docs {
+		if uri != except {
+			others = append(others, doc)
+		}
+	}
+	s.mu.Unlock()
+	for _, doc := range others {
+		doc.Update(doc.Text)
+		s.diagnosticsPublish(ctx, doc)
+	}
 }
 
 func (s *Server) diagnosticsPublish(ctx *glsp.Context, doc *Document) {

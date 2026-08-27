@@ -33,7 +33,8 @@ type voltSpan struct {
 }
 
 type voltRef struct {
-	span voltSpan
+	span voltSpan // hit-test area (spans the qualifier on `db.posts`)
+	edit voltSpan // exactly the identifier a rename may rewrite
 	sym  voltSym
 	decl bool
 	text string // the identifier as written here, for rename
@@ -109,7 +110,7 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 			if sp.file == "" {
 				continue
 			}
-			ix.refs = append(ix.refs, voltRef{sp, voltSym{"table", path, ti.Decl.Name.Base()}, occ.IsDecl, occ.Ident.Name()})
+			ix.refs = append(ix.refs, voltRef{sp, sp, voltSym{"table", path, ti.Decl.Name.Base()}, occ.IsDecl, occ.Ident.Name()})
 		}
 	}
 
@@ -123,7 +124,8 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 						continue
 					}
 					last := spec.Path[len(spec.Path)-1]
-					ix.refs = append(ix.refs, voltRef{spanOf(last), voltSym{"package", target, ""}, false, last.Name()})
+					sp := spanOf(last)
+					ix.refs = append(ix.refs, voltRef{sp, sp, voltSym{"package", target, ""}, false, last.Name()})
 				}
 			case *ast.Scope:
 				ix.scopeRefs(pkg, path, d)
@@ -138,7 +140,7 @@ func (ix *voltIndex) define(sym voltSym, def voltDef) {
 		return // duplicate declaration: the checker reports it
 	}
 	ix.defs[sym] = def
-	ix.refs = append(ix.refs, voltRef{def.span, sym, true, sym.name})
+	ix.refs = append(ix.refs, voltRef{def.span, def.span, sym, true, sym.name})
 }
 
 // scopeRefs records the symbol references a scope subtree makes: pipe:
@@ -159,11 +161,14 @@ func (ix *voltIndex) scopeRefs(pkg *lang.Package, path string, sc *ast.Scope) {
 				}
 				target = t
 			}
-			span := spanOf(it.Name)
+			// Hover and gd hit anywhere on `db.posts`; a rename must
+			// rewrite only the name, never the qualifier.
+			edit := spanOf(it.Name)
+			hit := edit
 			if it.Pkg != nil {
-				span.pos = it.Pkg.Pos()
+				hit.pos = it.Pkg.Pos()
 			}
-			ix.refs = append(ix.refs, voltRef{span, voltSym{"table", target, it.Name.Name()}, false, it.Name.Name()})
+			ix.refs = append(ix.refs, voltRef{hit, edit, voltSym{"table", target, it.Name.Name()}, false, it.Name.Name()})
 			ix.settingRefs(pkg, path, it.Settings)
 		case *ast.Route:
 			ix.settingRefs(pkg, path, it.Settings)
@@ -179,7 +184,8 @@ func (ix *voltIndex) settingRefs(pkg *lang.Package, path string, list *ast.Setti
 		switch s.Name {
 		case "pipe":
 			if id, ok := s.Value.(*ast.Ident); ok {
-				ix.refs = append(ix.refs, voltRef{spanOf(id), voltSym{"pipeline", path, id.Name()}, false, id.Name()})
+				sp := spanOf(id)
+				ix.refs = append(ix.refs, voltRef{sp, sp, voltSym{"pipeline", path, id.Name()}, false, id.Name()})
 			}
 		}
 	}
@@ -431,12 +437,12 @@ func (d *Document) voltRename(pos protocol.Position, newName string) (*protocol.
 		if r.sym != ref.sym || r.text != spelling {
 			continue
 		}
-		key := fmt.Sprintf("%s:%d", r.span.file, r.span.pos.Offset)
+		key := fmt.Sprintf("%s:%d", r.edit.file, r.edit.pos.Offset)
 		if seen[key] {
 			continue // the declaration is recorded by both passes
 		}
 		seen[key] = true
-		loc := d.vindex.location(r.span)
+		loc := d.vindex.location(r.edit)
 		changes[protocol.DocumentUri(loc.URI)] = append(changes[protocol.DocumentUri(loc.URI)],
 			protocol.TextEdit{Range: loc.Range, NewText: newName})
 	}
