@@ -91,7 +91,7 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 		for _, si := range pkg.Selects {
 			d := si.Decl
 			ix.define(voltSym{"select", path, d.Name.Name()},
-				voltDef{span: spanOf(d.Name), md: selectHoverMD(si)})
+				voltDef{span: spanOf(d.Name), md: selectHoverMD(pkg, si)})
 		}
 		// A package "declaration" is its first file, so an import can
 		// jump somewhere useful.
@@ -385,10 +385,11 @@ func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 }
 
 // selectHoverMD renders a select's generated surface: one signature
-// per member (one parameter list for all — §V11.4), and the WHERE and
-// ORDER BY exactly as they will be emitted, so `order: (year desc, id)`
-// answers its own "and id?" question (asc — §V11.5 default).
-func selectHoverMD(si *lang.SelectInfo) string {
+// per member (one parameter list for all — §V11.4), the WHERE/ORDER
+// exactly as emitted, and the output row structs, so the hover answers
+// "what comes back from this query for each table" (§V11.6).
+func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
+	const structCap = 4
 	var b strings.Builder
 	b.WriteString("```go\n")
 	var params strings.Builder
@@ -409,6 +410,26 @@ func selectHoverMD(si *lang.SelectInfo) string {
 	}
 	if si.OrderSQL != "" {
 		b.WriteString("```sql\nORDER BY " + si.OrderSQL + "\n```\n")
+	}
+	// The output structs, from the same plan the generator runs.
+	shown := si.Members
+	if len(shown) > structCap {
+		shown = shown[:structCap]
+	}
+	for _, m := range shown {
+		model, fields, err := golang.ModelFields(pkg.Merged(), pkg.Schema(), m.Key)
+		if err != nil {
+			continue
+		}
+		b.WriteString("```go\n")
+		fmt.Fprintf(&b, "type %s struct {\n", model)
+		for _, f := range fields {
+			fmt.Fprintf(&b, "\t%s %s\n", f.Name, f.Type)
+		}
+		b.WriteString("}\n```\n")
+	}
+	if n := len(si.Members) - len(shown); n > 0 {
+		fmt.Fprintf(&b, "*… and %d more member structs*\n", n)
 	}
 	return b.String()
 }

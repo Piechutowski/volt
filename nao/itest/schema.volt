@@ -65,5 +65,5 @@ Group metrics {
 Pred at { site = :site and day = :day }
 Pred since { day >= :from }
 
-Select rows for metrics where at [order: (day desc, id)]
+Select rows for metrics where at [order: (day desc, id asc)]
 Select recent for metrics where at or since

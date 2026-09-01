@@ -1847,7 +1847,7 @@ select decl = "Select", plain name, "for", plain name,
 ```
 
 ```volt
-Select rows   for series where current [order: (year desc, id)]
+Select rows   for series where current [order: (year desc, id asc)]
 Select stale  for ms_usage where not recent
 Select all    for series
 ```
@@ -1866,11 +1866,11 @@ Select all    for series
    A missing column or a type disagreement is an error naming the
    offending members and their types — the predicate must be checkable
    for all members or it does not compile.
-5. Settings: `order:` takes a parenthesized list of `column [asc|desc]`
-   pairs. An omitted direction is `asc` (SQL's own default), and the
-   emitted SQL always spells the direction out (`ORDER BY year DESC,
-   id ASC`) so the generated statement is self-describing. Order
-   columns obey rule 4 and MUST be orderable (§V10.3) or text —
+5. Settings: `order:` takes a parenthesized list of `column asc` /
+   `column desc` pairs. The direction is **mandatory** — SQL's silent
+   `asc` default is deliberately not inherited; explicit over implicit
+   — and the emitted SQL spells it out (`ORDER BY year DESC, id ASC`).
+   Order columns obey rule 4 and MUST be orderable (§V10.3) or text —
    ORDER BY text is SQL's own collation, allowed here.
 6. Generation contract (with Appendix A): per member, a method on
    `Queries` —

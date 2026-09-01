@@ -3,7 +3,12 @@
 // generator on names and Go types, so there is exactly one implementation.
 package golang
 
-import "github.com/Piechutowski/volt/lang/ast"
+import (
+	"fmt"
+
+	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/check"
+)
 
 // ModelName derives the Go model type name for a table (decision D10):
 // the [model:] override when present, else the singularized table name.
@@ -38,4 +43,30 @@ type SelectFn struct {
 	WhereSQL     string
 	OrderSQL     string
 	Params       []SelectParam
+}
+
+// FieldSig is one generated struct field, for tooling display.
+type FieldSig struct {
+	Name string // Go field name, e.g. "EditorID"
+	Type string // full Go type, e.g. "rt.Null[int64]"
+}
+
+// ModelFields reports the exact struct fields the model generator emits
+// for the table with the given canonical key — hover-grade truth, from
+// the same plan the generator runs (spec §V11.6, Appendix A).
+func ModelFields(f *ast.File, info *check.Info, tableKey string) (model string, fields []FieldSig, err error) {
+	p, err := planBuild(f, info)
+	if err != nil {
+		return "", nil, err
+	}
+	for _, t := range p.tables {
+		if t.ti.Key != tableKey {
+			continue
+		}
+		for _, fp := range t.fields {
+			fields = append(fields, FieldSig{Name: fp.goField, Type: fp.goType})
+		}
+		return t.model, fields, nil
+	}
+	return "", nil, fmt.Errorf("no table %q", tableKey)
 }

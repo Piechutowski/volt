@@ -20,5 +20,5 @@ Group series {
 
 Pred current { org = :org and year = :year }
 
-Select rows for series where current [order: (year desc, id)]
+Select rows for series where current [order: (year desc, id asc)]
 Select all for series

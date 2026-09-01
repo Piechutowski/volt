@@ -399,18 +399,21 @@ func (c *checker) selectSettings(sel *ast.Select, env *selectEnv) string {
 					c.errorf(id.Pos(), "V11", "column %q (%s) is not orderable (§V11.5)", b.name, b.goType)
 					continue
 				}
-				// Rendered with an explicit direction either way, so the
-				// emitted SQL answers "and id?" by itself (§V11.5).
+				// Explicit over implicit (§V11.5): every column states
+				// its direction; there is no SQL-style silent asc.
+				mod := list.Mods[i]
+				if mod == nil {
+					c.errorf(id.Pos(), "V11", "order: every column states its direction — write %q or %q (§V11.5)", id.Name()+" asc", id.Name()+" desc")
+					continue
+				}
 				dir := " ASC"
-				if mod := list.Mods[i]; mod != nil {
-					switch strings.ToLower(mod.Name()) {
-					case "asc":
-					case "desc":
-						dir = " DESC"
-					default:
-						c.errorf(mod.Pos(), "V11", "order direction is asc or desc, not %q (§V11.5)", mod.Name())
-						continue
-					}
+				switch strings.ToLower(mod.Name()) {
+				case "asc":
+				case "desc":
+					dir = " DESC"
+				default:
+					c.errorf(mod.Pos(), "V11", "order direction is asc or desc, not %q (§V11.5)", mod.Name())
+					continue
 				}
 				parts = append(parts, sqlite.Ident(b.name)+dir)
 			}
