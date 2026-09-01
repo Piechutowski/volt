@@ -116,7 +116,7 @@ Roadmap slices: **v0** CRUD + runtime *(shipped 2026-07-08)* · **v1** declared 
 | `has_many :through` | join through | `GEN(v3)` | junction detected (2 FKs forming the pk) → `UserRolesList` through it, one joined query |
 | `has_one :through` | join through | `GEN(v3)` | same mechanism, single row |
 | `has_and_belongs_to_many` | headless junction | `NO` | the junction table is always explicit in DBML; through-loaders cover it |
-| Polymorphic associations | `commentable` | `LATER` | needs an extended-DBML declaration (`type`+`id` pair); loaders per target follow mechanically |
+| Polymorphic associations | `commentable` | `LATER` | needs a Volt schema declaration (`type`+`id` pair); loaders per target follow mechanically |
 | Self joins | `manager_id` | `GEN(v3)` | falls out of ref loaders naturally |
 | Composite-pk associations | query_constraints | `GEN(v3)` | row-value `IN ((a,b),…)` — SQLite supports it |
 | `dependent:` destroy/delete | app-level cascade | `DDL` | `ref [delete: cascade]` → real `ON DELETE CASCADE`, already generated. App-level cascade callbacks: `NO` |
@@ -137,7 +137,7 @@ I generate the first and third; the middle is yours.
 | `presence` | validator | `DDL` `DONE` | `not null` |
 | `uniqueness` | SELECT-then-INSERT (racy!) | `DDL` `DONE` | real `UNIQUE` constraint — strictly stronger than Rails' |
 | `inclusion` | validator | `GEN` `DONE` | enum types; DB `CHECK` opt-in (D12) |
-| `length` / `format` / `numericality` / `comparison` | validators | `LATER` | candidates for extended-DBML settings compiling to `CHECK`s and/or a generated `Validate()`; not scheduled |
+| `length` / `format` / `numericality` / `comparison` | validators | `LATER` | candidates for Volt schema settings compiling to `CHECK`s and/or a generated `Validate()`; not scheduled |
 | `acceptance` / `confirmation` | form-layer | `NO` | HTTP-form concerns, not model concerns |
 | Custom validators / contexts / conditional validation | framework | `HAND` | `func (u User) Validate() error` in a sibling file (D18) |
 | `errors` object & rich error API | framework | `HAND`/`LATER` | plain Go errors first; a tiny multi-error type in the runtime if demand appears |

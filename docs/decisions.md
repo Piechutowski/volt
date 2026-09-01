@@ -60,7 +60,8 @@ where the merge changed the facts.
   Everything beyond the core — packages and imports, routing, and the
   coming `Select`/`View`/`[was:]`/`[repr:]` — is Volt's own, additive,
   and owes upstream nothing.
-- **D06 — Structure mine, expressions SQLite's.** Extended-DBML queries parse
+- **D06 — Structure mine, expressions SQLite's.** Declared queries
+  (`Select`/`View`) parse
   select lists, tables, joins and declared params with my front end
   (resolved against `check.Info`); WHERE/HAVING bodies and other expressions
   stay opaque and are validated by gen-time prepare. I never build an SQL
@@ -97,9 +98,15 @@ where the merge changed the facts.
   (`struct { V T; Valid bool }`) with Scan/Value and JSON that marshals as
   the value or `null`. Value semantics, no heap, no nil-deref. (Supersedes
   the pointer representation in early `gen go` output.)
-- **D14 — Values, not objects.** Each scan is a fresh struct; no identity
-  map, no lazy loading (impossible by construction), no `Save()` methods,
-  no association fields on row structs.
+- **D14 — Values first; the ergonomic surface is open** (amended
+  2026-09-01). Today each scan is a fresh plain struct — no identity
+  map, no `Save()`, no association fields on row structs. That
+  describes what is built, not a permanent ceiling: nao's final feature
+  set is deliberately undiscovered, and Active-Record-grade ergonomics
+  are welcome whenever they can be *generated* — visible plain Go,
+  compile-time checked, no hidden runtime behavior. Candidates get
+  their verdict against `reference/orm-matrix.md` as real use surfaces
+  the need; the only immovable line is D27's.
 - **D15 — Named placeholders; identity args positional, data args in a
   struct.** Generated SQL uses SQLite's named parameters (`:email`), bound
   via `sql.Named` inside the generated code — the placeholder *is* the
