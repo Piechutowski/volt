@@ -13,7 +13,7 @@ resolves at compile time.
 
 **One language, one file extension.** A `.volt` file is Volt — the
 markup began as DBML and grew outward, but it is a single language
-(the word "EDBML" is retired, D46). Which constructs a file happens to
+(the word "EDBML" is retired). Which constructs a file happens to
 use is up to the file. The honest build state:
 
 - **Schema core** (DBML-derived) — *built.* Spec Part I: Project,

@@ -41,7 +41,7 @@ against [`spec.md`](spec.md).
    files (manifest, language config, queries) plus ~70 lines of Rust
    whose only job is telling Zed how to launch `volt lsp`.
 3. **The language server** (`lsp/`, served by `volt lsp`; its own Go
-   module, D44) — a *semantic*, spec-exact analyzer speaking LSP over
+   module, so its dependencies stay out of the library) — a *semantic*, spec-exact analyzer speaking LSP over
    stdio: diagnostics, completion, hover, navigation, rename.
 
 ### Why two parsers?
@@ -232,7 +232,7 @@ agree. The LSP picks it up automatically.
 - **`tliron/glsp` over `go.lsp.dev`** — maintained, complete 3.16
   types, no codegen. Its dependency tail is real (websocket, jsonrpc2,
   an LSP-3.17 rewrite would be ~300 lines over stdio) — contained by
-  D44's module split; replacing it stays an open option.
+  the tool-module split; replacing it stays an open option.
 - **Full-text sync over incremental** — statelessness beats patch
   bookkeeping at these file sizes.
 - **Whole-project re-check per edit** — no dirty tracking to get

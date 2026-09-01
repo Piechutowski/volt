@@ -36,22 +36,23 @@ the correct price for a project whose thesis is "one source of truth,
 everything else derived"; the normative docs already pay it via tests
 (`lang/vet/docs_test.go` fails the build if `lint.md` drifts).
 
-**Vocabulary (D46).** Two names: **DBML** is the schema core
+**Vocabulary.** Two names: **DBML** is the schema core
 (spec Part I, kept diagrammable on dbdiagram.io); **Volt** is the
 language — everything, extensions included. The word "EDBML" is
 retired; do not reintroduce it. There is no `.edbml` file type;
 extension-exercising fixtures are `.volt`, plain `.dbml` stays
 supported as input.
 
-**nao is a sub-library, not a product (D43).** `nao/` is Volt's ORM the
+**nao is a sub-library, not a product.** `nao/` is Volt's ORM the
 way ActiveRecord is Rails'. It has no separate go.mod, no separate CLI
-(D47 — one binary, `volt`), no separate identity in docs beyond
+(one binary, `volt`), no separate identity in docs beyond
 `docs/nao.md`. Don't "helpfully" rename it to `orm/` (tried once,
 reverted: nao is its *name*).
 
 ## Read in this order
 
-1. `docs/decisions.md` — **the law**, D01–D56. Never contradict one
+1. `docs/decisions.md` — **the law** (numbered with gaps — removed
+   decisions retire their numbers). Never contradict one
    silently; changing a decision means editing that file in the same
    commit. New session-level rulings get appended there.
 2. `docs/roadmap.md` — **the build plan**: stable IDs, statuses
@@ -69,7 +70,7 @@ reverted: nao is its *name*).
 
 ## Repository shape
 
-Three Go modules, stitched by `go.work` (D44): the **library** at the
+Three Go modules, stitched by `go.work`: the **library** at the
 root — runtime (`*.go`), `lang/` (token/scanner/parser/ast/check/vet +
 project semantics), `gen/router`, `gen/model`, `nao/` (rt, gen,
 inflect, itest), `itest/` — stdlib-only (sqlite3 is
