@@ -53,3 +53,19 @@ for one table). The shape this wants is the Dataset override ladder
 (roadmap FW-2): defaults generated, overrides declared per member,
 escape by omission. Decide when FW-2's ladder lands, so selects and
 datasets end up with one override idiom, not two.
+
+## H4 — Column properties belong in the schema, not in Go tags
+
+**Current working position:** Go code is derived, so a property that
+today would be a hand-written Go tag or a convention (this column is
+sensitive; this column is heavy; this column is internal) belongs on
+the **column declaration** in Volt, where every generator and check
+can see it.
+
+**What's actually unsettled:** the surface. Candidates, roughly in
+order of appeal: a `[sensitive]` column setting that (a) makes vet
+warn when a projection or full-row select exposes the column to a
+route or dataset, and maybe (b) excludes it from `*` unless named
+explicitly; a `[heavy]`-style hint for list-view defaults; whether
+these are separate flags or one extensible property mechanism.
+Decide from a real leak-shaped moment in the app, not in advance.

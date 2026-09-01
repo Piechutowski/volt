@@ -287,11 +287,14 @@ Still open from the original slice, in the maintainer's build order:
      the sensitive-data case. Excluded columns must exist in every
      member (§V9.3's "the algebra must say something true"); excluding
      per-single-member is hypotheses H3.
-  Cross-cutting rules: where/order columns need not be projected (SQL
-  does not require it); row-type names are collision-checked against
-  models; the LSP hovers a select's name with its generated
-  signatures, rendered SQL and output row structs (shipped
-  2026-09-02).
+  Cross-cutting rules: a minted row type is a **struct derivative**
+  (the maintainer's term): every kept field is copied verbatim from
+  the model — Go type, `db`/`json` tags, doc comment — so the
+  derivative behaves exactly like the model minus the removed fields;
+  where/order columns need not be projected (SQL does not require it);
+  row-type names are collision-checked against models; the LSP hovers
+  a select's name with its generated signatures, rendered SQL and
+  output row structs (shipped 2026-09-02).
 - **Raw-SQL `Select`/`View` blocks** — real SQL declared in the schema
   for shapes the closed language refuses (joins, aggregates), typed
   functions out, prepare-validated (D06, D24).
