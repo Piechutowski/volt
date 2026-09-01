@@ -236,6 +236,7 @@ func SelectRowType(f *ast.File, info *check.Info, fn SelectFn) (string, []FieldS
 			sigs = append(sigs, FieldSig{
 				Name: fp.goField, Col: fp.colName, Type: fp.goType,
 				Tag: fp.tag, Doc: settingNote(fp.col.Settings),
+				Nullable: fp.nullable,
 			})
 		}
 		return row, sigs, nil

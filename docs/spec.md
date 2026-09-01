@@ -748,6 +748,12 @@ check setting  = "name", ":", string ;
 3. Single-column checks MAY alternatively be written as a `check:` column
    setting (§6.3).
 
+> **Extension (this implementation).** In the Volt layer a check line
+> may also be a typed predicate expression or a Go-reference call —
+> §V12 defines both forms, their static rules, and what each tier
+> generates. The opaque form above stays exactly as upstream DBML has
+> it: SQL CHECK only, never validated.
+
 ```volt
 Table users {
   wealth integer
@@ -1959,6 +1965,87 @@ the optional projection narrows the emitted columns.
 
 ---
 
+## §V12. Validation checks
+
+Validation reuses `checks` (§6.6) instead of minting per-rule settings:
+checks are parameterless predicates (D57), and one construct serves the
+database and the application. A check line takes one of three forms:
+
+```ebnf
+check    = expression literal, [ check settings ], newline   (* §6.6: opaque SQL *)
+         | pred expr,          [ check settings ], newline   (* typed *)
+         | go check,           [ check settings ], newline   (* Go reference *)
+
+go check = go ref, "(", column name, { ",", column name }, ")" ;
+```
+
+```volt
+Table users {
+  email varchar [not null]
+  hits  integer [not null]
+
+  checks {
+    hits >= 0 and hits in (0, 1, 2)  [name: 'hits_sane']
+    email like '%@%'
+    EmailValid(email)
+    `length(email) < 255`
+  }
+}
+```
+
+1. **What each tier gets.** A **typed** check compiles to BOTH a SQL
+   `CHECK (<rendering>)` in the DDL (Appendix B) and a clause of the
+   generated validator — early, friendly errors in Go; the database
+   stays the last line of defense. A **Go-reference** check lands in
+   the validator only: SQLite cannot call Go — that asymmetry is
+   documented here, not hidden. An **opaque SQL** check stays §6.6's:
+   DDL only.
+2. **Typed checks are §V10 expressions with two narrowings.** A check
+   judges one row of one table, so (a) it MUST NOT contain `:params`,
+   and (b) every referenced column MUST be a column of the enclosing
+   table (after partial injection). Package `Pred` declarations MAY be
+   referenced and are expanded in place — a check is a parameterless
+   predicate — subject to the same two rules after expansion. A
+   `like` pattern is a string literal.
+3. **Not-null columns only.** Every column a typed check references
+   MUST be `not null`. The Go tier and the SQL tier MUST agree, and
+   the Go tier does not mirror SQL's three-valued NULL logic — a
+   nullable column is an error pointing at `not null` or an opaque
+   SQL check. Consequently `is null` / `is not null` are constant
+   inside a check and are errors.
+4. **One rendering, two tiers.** The checker types and renders a typed
+   check once, producing the SQL fragment and the Go condition in the
+   same walk: `and` → `AND` and `&&`, `or` → `OR` and `||`, `not` →
+   `NOT` and `!`, comparisons and `in` to their Go operators, and
+   `like` to `rt.Like`, whose semantics are pinned to SQLite's LIKE
+   (no ESCAPE clause) by the runtime's own test corpus. Two further
+   narrowings keep the tiers provably identical: date/time columns are
+   rejected (SQL compares text timestamps lexically; Go compares
+   `time.Time` — use an opaque SQL check or a Go reference), and a
+   fractional number literal requires a float column (the Go tier
+   must compile). Ordering comparisons follow §V10.3-§V10.4 with
+   numeric-only ordering.
+5. **Go-reference checks.** `go ref` names a function of the
+   **containing package** — bare (`EmailValid`) or qualified by the
+   package's own name (`db.EmailValid`); referencing an imported
+   package's function is an error suggesting a local wrapper (the
+   §V3.2 rule). Arguments are columns of the table, `not null` (rule
+   3). The contract is `func <Name>(<the columns' Go types>) error`;
+   whether it exists and matches is the Go compiler's business, not
+   the checker's (the §V4.3 pattern).
+6. **Generation contract.** For every table with typed or Go-reference
+   checks, `nao_validate.go` declares
+   `func (v <Model>) Validate() error`, evaluating every check in
+   declaration order against the row's values: a failed typed check
+   contributes `rt.CheckError{Model, Check}`, a failed Go reference
+   `rt.CheckError{Model, Check, Cause}` wrapping the returned error;
+   the results are joined (`errors.Join`), nil when every check
+   passes. `Check` is the check's `name:` setting when present, else
+   its rendered form. Nothing calls `Validate` implicitly — no
+   callbacks (D27); the application decides when to validate.
+
+---
+
 ## Appendix VA: Collected grammar
 
 Additions to the collected grammar of Part I, Appendix IA. The
@@ -2006,7 +2093,8 @@ ident list     = "(", name, { ",", name }, ")" ;
 
 The `group decl`, `pred decl` and `select decl` productions — with the
 predicate expression grammar they share — are collected in §V9, §V10
-and §V11; they are not duplicated here.
+and §V11, and the extended `check` forms in §V12; they are not
+duplicated here.
 
 All tokens of a `route path` and of an `import path` MUST be contiguous
 (§V4.1.1, §V2.2) — the grammar above is subject to that adjacency
@@ -2152,6 +2240,7 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 | strings / uuid / dates / json | `TEXT` (dates as ISO-8601, SQLite's convention) |
 | bytea / blob family | `BLOB` |
 | backtick expressions | verbatim; parenthesized in `DEFAULT` as SQLite requires |
+| typed checks (§V12) | `CHECK (<the §V12.4 rendering>)`; Go-reference checks emit nothing — SQLite cannot call Go |
 | `records` | multi-row `INSERT` statements after all tables, in source order; empty fields become `NULL` |
 | unknown type | generation **error** naming the column |
 

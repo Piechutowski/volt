@@ -168,11 +168,27 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 			continue
 		}
 		for _, ck := range cb.Checks {
+			var expr string
+			switch {
+			case ck.Expr != nil:
+				expr = ck.Expr.Text()
+			case ck.Pred != nil:
+				// Lowered by the Volt checker (§V12.4); one rendering
+				// serves the DDL and the generated validator.
+				if ck.SQL == "" {
+					return fmt.Errorf("table %s: typed check not lowered — generate through volt gen (§V12)", ti.Decl.Name.Base())
+				}
+				expr = ck.SQL
+			case ck.Ref != nil:
+				continue // validator tier only: SQLite cannot call Go (§V12.5)
+			default:
+				continue
+			}
 			line := "  "
 			if n := settingString(ck.Settings, "name"); n != "" {
 				line += "CONSTRAINT " + identQuote(n) + " "
 			}
-			line += "CHECK (" + ck.Expr.Text() + ")"
+			line += "CHECK (" + expr + ")"
 			lines = append(lines, line)
 		}
 	}

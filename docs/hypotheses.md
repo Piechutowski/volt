@@ -69,19 +69,8 @@ when (`[sensitive]` is the candidate), and whether a Go-field-name
 override (`[go:]`-style, sibling of `[model:]`) is ever needed — the
 gob rename case, since gob ignores tags.
 
-**Validation — the maintainer's design, replacing the settings
-sketch:** no `[min:]`-style settings at all. `checks { }` blocks ARE
-parameterless predicates (D57), so validation reuses them in two
-tiers:
-- a check written in the typed predicate language compiles to **both**
-  a SQL `CHECK` in the DDL and a generated Go validation (early,
-  friendly errors; the DB stays the last line of defense);
-- a check referencing a **hand-written Go function**
-  (`app.EmailValid(email)` — the same Go-ref pattern pipelines use for
-  middleware) lands in the generated validator only, never in DDL
-  (SQLite cannot call Go); the asymmetry is documented, not hidden.
-One construct, zero new settings names, composable with everything
-Pred already is.
+**Graduated part → D61** (2026-09-02, built): validation rides checks
+— spec §V12, `nao_validate.go`, `rt.CheckError`/`rt.Like`.
 
 Mint each surface from a real moment in the app, not in advance; every
 one added costs spec + checker + generator + corpus (the D57 lesson:

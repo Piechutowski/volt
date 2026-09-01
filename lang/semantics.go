@@ -39,6 +39,9 @@ func Check(pr *Project) []diag.Diagnostic {
 		c.dataQueries(pr.Packages[path])
 	}
 	for _, path := range c.paths() {
+		c.tableChecks(pr.Packages[path])
+	}
+	for _, path := range c.paths() {
 		c.routing(pr.Packages[path])
 	}
 

@@ -54,6 +54,13 @@ func Generate(pkg *lang.Package, opts Options) ([]File, error) {
 			}
 			out = append(out, File{"nao_selects.go", selects})
 		}
+		if len(pkg.CheckFns) > 0 {
+			validators, err := golang.GenerateValidators(pkg.Merged(), pkg.Schema(), pkg.CheckFns, gopts)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, File{"nao_validate.go", validators})
+		}
 	}
 	if opts.SQL {
 		ddl, err := sqlite.Generate(pkg.Merged(), pkg.Schema(), sqlite.Options{Source: opts.Source})

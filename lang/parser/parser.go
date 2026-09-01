@@ -451,7 +451,7 @@ func (p *parser) checksBlock() *ast.ChecksBlock {
 	b := &ast.ChecksBlock{ChecksPos: p.next().Pos}
 	p.expect(token.LBRACE, "checks block (§6.6)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
-		c := &ast.Check{Expr: &ast.FuncExpr{Tok: p.expect(token.FUNCEXPR, "check expression (§6.6)")}}
+		c := p.check()
 		if p.at(token.LBRACKET) && !p.cur().NLBefore {
 			c.Settings = p.settingList()
 		}
@@ -460,6 +460,37 @@ func (p *parser) checksBlock() *ast.ChecksBlock {
 	}
 	b.Rbrace = p.expect(token.RBRACE, "checks block (§6.6)").Pos
 	return b
+}
+
+// check parses one line of a checks block: an opaque SQL expression
+// literal (§6.6), a Go-reference call (§V12), or a typed predicate
+// expression (§V12). A name followed by '(' — bare or once-qualified —
+// can only be a Go reference: the predicate grammar never puts '('
+// after an operand.
+func (p *parser) check() *ast.Check {
+	switch {
+	case p.at(token.FUNCEXPR):
+		return &ast.Check{Expr: &ast.FuncExpr{Tok: p.next()}}
+	case p.at(token.IDENT) && (p.peekKind(1) == token.LPAREN ||
+		(p.peekKind(1) == token.DOT && p.peekKind(3) == token.LPAREN)):
+		c := &ast.Check{Ref: p.goRef("check reference (§V12)")}
+		p.expect(token.LPAREN, "check reference arguments (§V12)")
+		for {
+			c.Args = append(c.Args, p.ident("check reference argument (§V12)"))
+			if !p.at(token.COMMA) {
+				break
+			}
+			p.next()
+		}
+		c.EndPos = p.expect(token.RPAREN, "check reference arguments (§V12)").End()
+		return c
+	default:
+		c := &ast.Check{Pred: p.predExpr()}
+		if c.Pred != nil {
+			c.EndPos = c.Pred.End()
+		}
+		return c
+	}
 }
 
 /* ===== Ref (§6.7) ===== */

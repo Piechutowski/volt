@@ -21,6 +21,7 @@ import (
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/parser"
 	"github.com/Piechutowski/volt/lang/token"
+	"github.com/Piechutowski/volt/nao/gen/golang"
 )
 
 // ModFile is the project root marker (spec §V1.1).
@@ -58,9 +59,11 @@ type Package struct {
 
 	// Groups, Preds and Selects are the data-query layer (§V9-§V11),
 	// resolved by Check.
-	Groups  map[string]*GroupInfo
-	Preds   map[string]*ast.Pred
-	Selects []*SelectInfo
+	Groups map[string]*GroupInfo
+	Preds  map[string]*ast.Pred
+	// CheckFns is the validator surface (§V12), lowered by Check.
+	CheckFns []golang.CheckFn
+	Selects  []*SelectInfo
 
 	// schema is the package's checked table model, set by Check.
 	schema *check.Info

@@ -364,16 +364,40 @@ func (x *ChecksBlock) Pos() token.Position { return x.ChecksPos }
 func (x *ChecksBlock) End() token.Position { return x.Rbrace }
 func (x *ChecksBlock) tableItemNode()      {}
 
-// Check is one check constraint line.
+// Check is one check constraint line (spec §6.6, §V12). Exactly one
+// of the three forms is set: Expr (opaque SQL, the DBML core), Pred (a
+// typed §V10 expression), or Ref+Args (a Go-reference check).
 type Check struct {
-	Expr     *FuncExpr
+	Expr     *FuncExpr // opaque SQL; SQL CHECK only
+	Pred     PredExpr  // typed (§V12); SQL CHECK + generated validator
+	Ref      *GoRef    // Go reference (§V12); generated validator only
+	Args     []*Ident  // Go-reference arguments: columns of the table
+	EndPos   token.Position
 	Settings *SettingList
+
+	// SQL is the typed form's rendering, lowered by the Volt checker
+	// (§V12); gen/sqlite refuses to render a Pred check while it is
+	// still empty.
+	SQL string
 }
 
-func (x *Check) Pos() token.Position { return x.Expr.Pos() }
+func (x *Check) Pos() token.Position {
+	switch {
+	case x.Expr != nil:
+		return x.Expr.Pos()
+	case x.Pred != nil:
+		return x.Pred.Pos()
+	case x.Ref != nil:
+		return x.Ref.Pos()
+	}
+	return x.EndPos
+}
 func (x *Check) End() token.Position {
 	if x.Settings != nil {
 		return x.Settings.End()
+	}
+	if x.EndPos.Line != 0 {
+		return x.EndPos
 	}
 	return x.Expr.End()
 }

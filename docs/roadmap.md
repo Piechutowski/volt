@@ -74,6 +74,7 @@ DBML is canonical; everything else is generated from `check.Info`.
 | SRC-4 | `volt gen` → models (`nao_models.go`): structs, enums, notes → doc comments, `Null[T]`, singular names + `[model:]` | v0 | `DONE` (D09–D13) |
 | SRC-5 | `volt gen --sql` → DDL + seed `INSERT`s from `records` | v0 | `DONE` (D12, D38) |
 | SRC-6 | Extensions stay a projectable superset (core diagrams still work) | all | ongoing ([hypotheses H1](hypotheses.md)) |
+| SRC-7 | Every field property lives in the schema: `[tag:]` verbatim struct-tag passthrough | v0 | `DONE` (D59, D60; spec §6.3 + A.5) |
 
 ## P2 — Default CRUD
 
@@ -192,8 +193,9 @@ much the database enforces. **Answer.** Structure is the database's job
 | INT-1 | `NOT NULL`, `UNIQUE`, FKs with `ON DELETE/UPDATE`, composite PKs, 1:1 uniqueness, `CHECK` expressions | v0 | `DONE` (DDL) |
 | INT-2 | Enums: string-backed types + constants; DB `CHECK` opt-in only (twelve-step-dance avoidance) | v0 | `DONE` (D11, D12) |
 | INT-3 | Int-backed enums via `[repr: int]` (extension) — full String/Valuer/Scanner/JSON suite, int never escapes the process | LATER | planned (D11) |
-| INT-4 | Business validation: hand-written methods in sibling files of the generated package | — | `HAND` (D18); document the pattern |
+| INT-4 | Business validation: hand-written methods in sibling files of the generated package | — | `HAND` (D18); Go-reference checks (INT-6) formalize the entry point |
 | INT-5 | Optimistic locking via `[lock_version]` (extension): `Update` gains version check + bump | LATER | planned (matrix §2) |
+| INT-6 | Validation rides `checks`: typed predicates → SQL `CHECK` + generated `Validate()`; Go-reference checks → validator only | v0 | `DONE` (spec §V12, D61) |
 
 ## P9 — Transactions & concurrency
 

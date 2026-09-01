@@ -33,7 +33,9 @@ CREATE TABLE page_views (
   id INTEGER PRIMARY KEY,
   site TEXT NOT NULL,
   day INTEGER NOT NULL,
-  hits INTEGER NOT NULL DEFAULT 0
+  hits INTEGER NOT NULL DEFAULT 0,
+  CONSTRAINT counts_positive CHECK (hits >= 0 AND day >= 1),
+  CHECK (site LIKE '%_')
 );
 
 CREATE TABLE link_clicks (

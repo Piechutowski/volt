@@ -21,6 +21,10 @@ Table users {
   name varchar [not null, tag: 'json:"displayName"']
   bio text [note: 'NULL until the user writes one']
   created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  checks {
+    EmailValid(email)
+  }
 }
 
 Table orders {
@@ -48,6 +52,11 @@ Table page_views {
   site varchar [not null]
   day integer [not null]
   hits integer [not null, default: 0]
+
+  checks {
+    hits >= 0 and day >= 1 [name: 'counts_positive']
+    site like '%_'
+  }
 }
 
 Table link_clicks {

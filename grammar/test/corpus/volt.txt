@@ -317,3 +317,71 @@ Select public (* - password_hash - email) for accounts
       (column_ref)
       (column_ref))
     (select_target)))
+
+==================
+validation checks
+==================
+
+Table page_views {
+  hits integer [not null]
+  site varchar [not null]
+
+  checks {
+    hits >= 0 and site like '%_' [name: 'sane']
+    EmailValid(site)
+    `hits < 1000000`
+  }
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier)
+            (identifier)))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier)
+            (identifier)))))
+    (checks_block
+      (check_definition
+        (pred_expr
+          (pred_compare
+            (column_ref)
+            (number))
+          (pred_like
+            (column_ref)
+            (string
+              (string_content))))
+        (settings_list
+          (setting
+            (setting_name
+              (identifier))
+            (string
+              (string_content)))))
+      (check_definition
+        (go_check
+          (go_ref
+            (identifier))
+          (column_ref)))
+      (check_definition
+        (expression
+          (expression_content))))))

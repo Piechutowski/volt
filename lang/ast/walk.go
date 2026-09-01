@@ -72,7 +72,13 @@ func children(n Node) []Node {
 			add(c)
 		}
 	case *Check:
-		add(n.Expr, settingsOrNil(n.Settings))
+		if n.Expr != nil {
+			add(n.Expr)
+		}
+		for _, a := range n.Args {
+			add(a)
+		}
+		add(settingsOrNil(n.Settings))
 	case *PartialRef:
 		add(n.Name)
 	case *Note:

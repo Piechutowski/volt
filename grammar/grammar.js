@@ -292,8 +292,26 @@ module.exports = grammar({
         '}',
       ),
 
+    // One check line (§6.6, §V12): opaque SQL, a Go-reference call, or
+    // a typed predicate expression. A name followed by '(' can only be
+    // a Go reference, so go_check wins that race by precedence.
     check_definition: ($) =>
-      seq($.expression, optional(field('settings', $.settings_list))),
+      seq(
+        choice($.expression, $.go_check, $.pred_expr),
+        optional(field('settings', $.settings_list)),
+      ),
+
+    go_check: ($) =>
+      prec(
+        2,
+        seq(
+          field('ref', $.go_ref),
+          '(',
+          alias($.identifier, $.column_ref),
+          repeat(seq(',', alias($.identifier, $.column_ref))),
+          ')',
+        ),
+      ),
 
     // ==================== Note (§6.11) ====================
 

@@ -392,3 +392,19 @@ where the merge changed the facts.
   `[tag: 'note:"x"']`, its key inside the string, not in Volt's
   vocabulary. gob ignores struct tags entirely; renaming for gob would
   be a Go-field-name override and stays out of scope (H4).
+- **D61 — Validation rides checks: one predicate, two tiers, zero new
+  settings** (2026-09-02). No `[min:]`/`[format:]` annotation zoo is
+  ever minted. `checks { }` lines are parameterless predicates (D57),
+  and validation reuses them (spec §V12): a typed check compiles to
+  BOTH a SQL `CHECK` and a clause of the generated
+  `func (v Model) Validate() error` — rendered in one walk so the
+  tiers cannot disagree — while a check referencing a hand-written Go
+  function of the containing package (`EmailValid(email)`, the §V3.2
+  pattern middleware uses) lands in the validator only, because SQLite
+  cannot call Go: the asymmetry is documented, never hidden. Arbitrary
+  validation is expressible without growing the closed language — the
+  Go escape hatch is a function reference, not new syntax. Provable
+  identity of the tiers is bought with three narrowings: not-null
+  columns only (no three-valued logic to mirror), no date/time
+  columns, fractional literals only against floats. Nothing calls
+  Validate implicitly (D27): the application decides when.

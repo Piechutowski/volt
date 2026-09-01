@@ -52,11 +52,27 @@ type SelectFn struct {
 // FieldSig is one generated struct field — hover- and derivative-grade
 // truth, from the same plan the generator runs.
 type FieldSig struct {
-	Name string // Go field name, e.g. "EditorID"
-	Col  string // source column name, e.g. "editor_id"
-	Type string // full Go type, e.g. "rt.Null[int64]"
-	Tag  string // assembled struct tag (Appendix A.5)
-	Doc  string // column note, "" when absent
+	Name     string // Go field name, e.g. "EditorID"
+	Col      string // source column name, e.g. "editor_id"
+	Type     string // full Go type, e.g. "rt.Null[int64]"
+	Tag      string // assembled struct tag (Appendix A.5)
+	Doc      string // column note, "" when absent
+	Nullable bool   // NULL-admitting column (Appendix A.2)
+}
+
+// CheckFn is one table's validator surface (spec §V12): the checks a
+// generated Validate method evaluates.
+type CheckFn struct {
+	TableKey string // canonical schema.name key into check.Info
+	Checks   []CheckSpec
+}
+
+// CheckSpec is one lowered check, rendered by the Volt checker.
+type CheckSpec struct {
+	Name string // the check's [name:] setting, "" when absent
+	Src  string // human-readable form, reported by rt.CheckError
+	Cond string // typed form: Go condition over v.<Field>; "" otherwise
+	Call string // Go-reference call, e.g. "EmailValid(v.Email)"; "" otherwise
 }
 
 // EnumTypeName is the Go type name an enum declaration generates
@@ -79,6 +95,7 @@ func ModelFields(f *ast.File, info *check.Info, tableKey string) (model string, 
 			fields = append(fields, FieldSig{
 				Name: fp.goField, Col: fp.colName, Type: fp.goType,
 				Tag: fp.tag, Doc: settingNote(fp.col.Settings),
+				Nullable: fp.nullable,
 			})
 		}
 		return t.model, fields, nil
