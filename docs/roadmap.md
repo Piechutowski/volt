@@ -264,11 +264,19 @@ method per group member, one signature for all (the §V11.4 agreement
 rule), WHERE rendered once, driver-proven in `nao/itest`. Design law:
 D57, D58.
 
-Still open from the original slice (SEL-1…SEL-5, P3): **raw-SQL
-`Select`/`View` blocks** — real SQL declared in the schema for shapes
-the closed language refuses (joins, aggregates), `:named` params,
-typed functions out, prepare-validated (D06, D24). FW-2 needs the
-structured half only, so Datasets are unblocked.
+Still open from the original slice, in the maintainer's build order:
+
+- **Column projection** (agreed 2026-09-01):
+  `Select summary for series (id, year, amount) where at` — because
+  every projected column obeys the §V11.4 agreement rule, one shared
+  row struct (`SummaryRow`) serves every member: one wire type, N
+  sources. Tricky parts to design: row-type naming vs models, where/
+  order columns need not be projected, `*` explicitness.
+- **Raw-SQL `Select`/`View` blocks** — real SQL declared in the schema
+  for shapes the closed language refuses (joins, aggregates), typed
+  functions out, prepare-validated (D06, D24).
+
+FW-2 needs the structured half only, so Datasets are unblocked.
 
 ## FW-2 — Datasets: schema-driven group expansion
 
