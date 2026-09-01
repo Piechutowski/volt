@@ -50,6 +50,7 @@ type voltDef struct {
 	pipe  *ast.Pipeline
 	group *ast.Group
 	pred  *ast.Pred
+	md    string // prebuilt hover (selects: signatures + rendered SQL)
 }
 
 // voltIndex is the whole project's Volt-layer symbol graph.
@@ -83,6 +84,14 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 			case *ast.Pred:
 				ix.define(voltSym{"pred", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), pred: d})
 			}
+		}
+		// Selects: definition + a prebuilt hover with the generated
+		// signatures and the rendered WHERE/ORDER — the editor answers
+		// "what does this mint, and which way does id sort" (§V11.6).
+		for _, si := range pkg.Selects {
+			d := si.Decl
+			ix.define(voltSym{"select", path, d.Name.Name()},
+				voltDef{span: spanOf(d.Name), md: selectHoverMD(si)})
 		}
 		// A package "declaration" is its first file, so an import can
 		// jump somewhere useful.
@@ -359,6 +368,8 @@ func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 		md = groupHover(ref.sym, def)
 	case "pred":
 		md = predHover(ref.sym, def, d.vindex)
+	case "select":
+		md = def.md
 	}
 	if md == "" {
 		return nil
@@ -371,6 +382,35 @@ func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 		Contents: protocol.MarkupContent{Kind: protocol.MarkupKindMarkdown, Value: md},
 		Range:    &rng,
 	}
+}
+
+// selectHoverMD renders a select's generated surface: one signature
+// per member (one parameter list for all — §V11.4), and the WHERE and
+// ORDER BY exactly as they will be emitted, so `order: (year desc, id)`
+// answers its own "and id?" question (asc — §V11.5 default).
+func selectHoverMD(si *lang.SelectInfo) string {
+	var b strings.Builder
+	b.WriteString("```go\n")
+	var params strings.Builder
+	for _, p := range si.Params {
+		fmt.Fprintf(&params, ", %s %s", p.GoName, p.GoType)
+	}
+	for _, m := range si.Members {
+		model := m.Decl.Name.Base()
+		if mn, err := golang.ModelName(m.Decl); err == nil {
+			model = mn
+		}
+		fmt.Fprintf(&b, "func (q *Queries) %s%s(ctx context.Context%s) ([]%s, error)\n",
+			model, si.MethodSuffix, params.String(), model)
+	}
+	b.WriteString("```\n")
+	if si.WhereSQL != "" {
+		b.WriteString("```sql\nWHERE " + si.WhereSQL + "\n```\n")
+	}
+	if si.OrderSQL != "" {
+		b.WriteString("```sql\nORDER BY " + si.OrderSQL + "\n```\n")
+	}
+	return b.String()
 }
 
 // groupHover lists a group's terms as written (§V9).

@@ -266,12 +266,26 @@ D57, D58.
 
 Still open from the original slice, in the maintainer's build order:
 
-- **Column projection** (agreed 2026-09-01):
-  `Select summary for series (id, year, amount) where at` — because
-  every projected column obeys the §V11.4 agreement rule, one shared
-  row struct (`SummaryRow`) serves every member: one wire type, N
-  sources. Tricky parts to design: row-type naming vs models, where/
-  order columns need not be projected, `*` explicitness.
+- **Column projection** (agreed 2026-09-01; case matrix agreed
+  2026-09-02). The same +/- algebra as groups, applied to columns —
+  three cases with different type consequences:
+  1. **Explicit list = intersection = one shared type.**
+     `Select summary for series (idpk, idgr, rok) where at` — every
+     listed column passes §V11.4 agreement, so one `SummaryRow` struct
+     serves every member: one wire type, N sources. This is the case
+     for groups whose members share only a few columns.
+  2. **No list = full row = per-member models** (built today):
+     `[]MsRevenue`, `[]MsUsage` — heterogeneous rests welcome.
+  3. **Star with exclusion = per-member minted rows.**
+     `Select rows for series (* - deleted_at) where at` — each member
+     projects its own columns minus the excluded ones, minting
+     `<Model><SelectName>Row` per member. Excluded columns must exist
+     in every member (§V9.3's "the algebra must say something true");
+     excluding per-single-member is hypotheses H3.
+  Cross-cutting rules: where/order columns need not be projected (SQL
+  does not require it); row-type names are collision-checked against
+  models; the LSP hovers a select's name with its full generated
+  signatures and rendered SQL (shipped 2026-09-02).
 - **Raw-SQL `Select`/`View` blocks** — real SQL declared in the schema
   for shapes the closed language refuses (joins, aggregates), typed
   functions out, prepare-validated (D06, D24).

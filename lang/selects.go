@@ -399,11 +399,12 @@ func (c *checker) selectSettings(sel *ast.Select, env *selectEnv) string {
 					c.errorf(id.Pos(), "V11", "column %q (%s) is not orderable (§V11.5)", b.name, b.goType)
 					continue
 				}
-				dir := ""
+				// Rendered with an explicit direction either way, so the
+				// emitted SQL answers "and id?" by itself (§V11.5).
+				dir := " ASC"
 				if mod := list.Mods[i]; mod != nil {
 					switch strings.ToLower(mod.Name()) {
 					case "asc":
-						dir = ""
 					case "desc":
 						dir = " DESC"
 					default:

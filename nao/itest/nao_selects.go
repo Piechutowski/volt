@@ -10,7 +10,7 @@ import (
 	"database/sql"
 )
 
-const pageViewRowsSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE (site = :site AND day = :day) ORDER BY day DESC, id`
+const pageViewRowsSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE (site = :site AND day = :day) ORDER BY day DESC, id ASC`
 
 // PageViewRows runs the "Rows" select over page_views (spec §V11).
 func (q *Queries) PageViewRows(ctx context.Context, site string, day int32) ([]PageView, error) {
@@ -30,7 +30,7 @@ func (q *Queries) PageViewRows(ctx context.Context, site string, day int32) ([]P
 	return out, rows.Err()
 }
 
-const linkClickRowsSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE (site = :site AND day = :day) ORDER BY day DESC, id`
+const linkClickRowsSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE (site = :site AND day = :day) ORDER BY day DESC, id ASC`
 
 // LinkClickRows runs the "Rows" select over link_clicks (spec §V11).
 func (q *Queries) LinkClickRows(ctx context.Context, site string, day int32) ([]LinkClick, error) {

@@ -41,3 +41,15 @@ generated join structs, validations compiling to `CHECK`s and a
 validator surface). The immovable line is D27's: no lazy loading,
 callbacks, dirty tracking, identity map — those are runtime magic by
 nature, not by implementation choice.
+
+## H3 — Member-scoped select overrides
+
+**Current working position:** everything a `Select` says applies to
+every member of its group uniformly — projection exclusions included.
+
+**What's actually unsettled:** whether one member should be able to
+deviate (exclude a column only for itself, override an operation only
+for one table). The shape this wants is the Dataset override ladder
+(roadmap FW-2): defaults generated, overrides declared per member,
+escape by omission. Decide when FW-2's ladder lands, so selects and
+datasets end up with one override idiom, not two.

@@ -1867,9 +1867,11 @@ Select all    for series
    offending members and their types — the predicate must be checkable
    for all members or it does not compile.
 5. Settings: `order:` takes a parenthesized list of `column [asc|desc]`
-   pairs (default `asc`); order columns obey rule 4 and MUST be
-   orderable (§V10.3) or text — ORDER BY text is SQL's own collation,
-   allowed here.
+   pairs. An omitted direction is `asc` (SQL's own default), and the
+   emitted SQL always spells the direction out (`ORDER BY year DESC,
+   id ASC`) so the generated statement is self-describing. Order
+   columns obey rule 4 and MUST be orderable (§V10.3) or text —
+   ORDER BY text is SQL's own collation, allowed here.
 6. Generation contract (with Appendix A): per member, a method on
    `Queries` —
    `func (q *Queries) <Model><SelectName>(ctx context.Context, <params>) ([]<Model>, error)`
