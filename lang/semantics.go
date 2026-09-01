@@ -90,11 +90,7 @@ func (c *checker) fileRules(pkg *Package) {
 				}
 				clause = d
 			case *ast.Use:
-				kw := "use"
-				if d.Reuse {
-					kw = "reuse"
-				}
-				c.errorf(d.Pos(), "V2", "%s is not part of the Volt language (§V2.5); replace file imports with the package system — see docs/spec.md Appendix C for migration", kw)
+				// Rejected by the schema checker (§7) — one error, not two.
 			}
 		}
 		if clause == nil {

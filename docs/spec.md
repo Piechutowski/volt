@@ -22,7 +22,7 @@ from DBML. This specification has two parts and three appendices:
 Every construct is specified by (1) a grammar production in EBNF, (2)
 an enumerated list of constraints, and (3) a minimal example. Every
 constraint is executable: the conformance corpus under
-[`lang/conformance/`](../lang/conformance/) tags each snippet with the
+[`lang/conformance/snippets/`](../lang/conformance/snippets/) tags each snippet with the
 section it exercises (`// spec: §…`); `valid/` MUST be accepted,
 `invalid/` MUST be rejected, and `go test ./...` runs the whole chain.
 Diagnostics cite the section they enforce. The lint annex — legal but
@@ -39,7 +39,7 @@ This part is a complete, standalone-conformant specification of DBML:
 a schema written using only Part I constructs is valid upstream DBML
 (diagrammable on dbdiagram.io as-is). The reference implementation is
 [`lang/`](../lang/); the executable corpus is
-[`lang/conformance/dbml/`](../lang/conformance/dbml/).
+[`lang/conformance/snippets/`](../lang/conformance/snippets/) (the `.dbml` entries).
 
 DBML (Database Markup Language) is a declarative, database-agnostic domain-specific
 language for defining database schemas: tables, columns, indexes, constraints,
@@ -92,7 +92,7 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
    - 6.11 [Notes](#611-notes)
    - 6.12 [TableGroup](#612-tablegroup)
    - 6.13 [DiagramView](#613-diagramview)
-7. [Module System](#7-module-system)
+7. [File Imports (removed)](#7-file-imports-removed)
 8. [Static Semantics](#8-static-semantics)
 - [Appendix IA: Collected Grammar](#appendix-ia-collected-grammar-part-i)
 
@@ -251,7 +251,7 @@ any char           = ? any Unicode character ? ;
    semantic effect. A line comment does **not** consume the terminating
    newline; the newline retains its statement-terminating role.
 
-```dbml
+```volt
 // single-line comment
 /* block
    comment */
@@ -333,7 +333,7 @@ mls body          = { ( any char - "\" ) | escape sequence }
    common case, where content starts on the line after the opening `'''`)
    and a trailing newline before the closing `'''` are removed.
 
-```dbml
+```volt
 Note: '''
   This is a block string.
   It spans multiple lines.
@@ -537,7 +537,7 @@ project property = identifier, ":", string, newline ;
    `'MySQL'`). Implementations MUST accept arbitrary property keys.
 3. A `note def` (§6.11) documents the project.
 
-```dbml
+```volt
 Project ecommerce {
   database_type: 'PostgreSQL'
   Note: 'E-commerce database schema'
@@ -581,7 +581,7 @@ table setting  = "headercolor", ":", color
 > `vet` rule [`modelname`](lint.md#modelname) tells you when it is
 > needed. The core grammar above is unchanged.
 
-```dbml
+```volt
 Table core.users as U [headercolor: #3498DB] {
   id integer [pk]
   email varchar(255) [not null, unique]
@@ -685,7 +685,7 @@ index setting  = "type", ":", identifier
 4. `type` selects the index method. Any identifier is accepted; the
    conventional, portable values are `btree` and `hash`.
 
-```dbml
+```volt
 Table bookings {
   id integer
   country varchar
@@ -718,7 +718,7 @@ check setting  = "name", ":", string ;
 3. Single-column checks MAY alternatively be written as a `check:` column
    setting (§6.3).
 
-```dbml
+```volt
 Table users {
   wealth integer
   debt integer
@@ -792,7 +792,7 @@ ref action       = "cascade" | "restrict" | "set null"
     a stylistic variant of the short form, not a container for several
     relationships; to declare several, write several `Ref` elements.
 
-```dbml
+```volt
 // short form, with settings
 Ref fk_posts_user: posts.user_id > core.users.id [delete: cascade, update: no action]
 
@@ -826,7 +826,7 @@ enum setting  = "note", ":", string ;
 4. A column references an enum by using the (optionally schema-qualified)
    enum name as its type: `status v2.job_status`.
 
-```dbml
+```volt
 Enum job_status {
   created [note: 'Waiting to be processed']
   running
@@ -864,7 +864,7 @@ partial injection = "~", name, newline ;
    1. A definition written directly in the table overrides any partial.
    2. Otherwise the **last-injected** partial (in source order) wins.
 
-```dbml
+```volt
 TablePartial base_template [headercolor: #ff0000] {
   id int [pk, not null]
   created_at timestamp [default: `now()`]
@@ -918,7 +918,7 @@ empty           = ;                      (* nothing between separators *)
      **not** a valid record value.
    - Expression literals (backticks) pass through unchecked.
 
-```dbml
+```volt
 Table users {
   id int [pk]
   name varchar
@@ -962,7 +962,7 @@ note settings = "[", "color", ":", ( color | "none" ), "]" ;
 4. A sticky note is a named, free-standing note (visualization only). Its
    `color` setting accepts a color literal or `none` (no background).
 
-```dbml
+```volt
 Note deployment_reminder [color: #F4D03F] {
   'Remember to run migrations after deploy'
 }
@@ -987,7 +987,7 @@ table group setting  = "note", ":", string
    alias). Every named table MUST exist.
 2. A table MUST NOT belong to more than one TableGroup.
 
-```dbml
+```volt
 TableGroup e_commerce [color: #3498DB, note: 'Core commerce tables'] {
   merchants
   countries
@@ -1013,7 +1013,7 @@ category body = "*"
    per line. An empty body (or omitted category) selects nothing.
 3. Listed names MUST refer to existing elements of the corresponding kind.
 
-```dbml
+```volt
 DiagramView sales_view {
   Tables { users
            orders }
@@ -1024,57 +1024,34 @@ DiagramView sales_view {
 
 ---
 
-## 7. Module System
+## 7. File Imports (removed)
 
-A schema may be split across files. `use` imports elements from another
-file; `reuse` additionally re-exports them.
+DBML's file-based module system — `use * from './file'`, selective
+import with per-element kinds and `as` aliases, and `reuse` re-export —
+**is not part of the Volt language**. Splitting a schema across files
+needs no imports at all: a package is a directory and every file in it
+shares one namespace (§V1); cross-package references go through the
+package system (§V2). The rationale and the mechanical migration are
+Appendix C.
+
+A conforming implementation recognizes the historical forms in order to
+reject them precisely:
 
 ```ebnf
 import statement = import kw, import spec, "from", import path ;
-
 import kw        = "use" | "reuse" ;
-
-import spec      = "*"
-                 | "{", import item, newline,
+import spec      = "*" | "{", import item, newline,
                    { import item, newline }, "}" ;
-
 import item      = element kind, table name, [ "as", name ] ;
-element kind     = "table" | "enum" | "tablepartial" | "note"
-                 | "schema" | "tablegroup" ;
-
 import path      = string ;
 ```
 
-1. `import path` is a relative path to the source file. The `.dbml`
-   extension is optional: `'./base'` and `'./base.dbml'` are equivalent.
-2. `use * from <path>` imports every element the target file exports.
-3. Selective import names elements by kind and name. `element kind` is
-   case-insensitive. Importing:
-   - `table` brings the table together with its records and refs;
-   - `schema` brings all elements under that schema;
-   - `tablegroup` brings the group and all tables in it.
-4. `as <alias>` renames the import. Once aliased, only the alias is
-   visible; the original name is not.
-5. **Visibility.** Elements imported with `use` are visible only in the
-   importing file. `use` is **not transitive**: if `a` uses `b` and `b`
-   uses `c`, elements of `c` are not visible in `a`.
-6. `reuse` imports and additionally re-exports: elements brought in with
-   `reuse` are visible to files importing the current file.
-7. **Circular imports are permitted.** Because DBML is declarative, files
-   may import each other without restriction.
-8. Name conflicts among imported and local elements are errors; resolve
-   them with selective import and/or aliases.
-
-```dbml
-use * from './base'
-
-use {
-  table auth.users as u
-  schema billing
-} from './auth'
-
-reuse * from './common/types'
-```
+1. An `import statement` anywhere in a file is an **error** (code
+   `spec/7`), at every layer: the single-file schema pass and the
+   project pass alike. The diagnostic points at Appendix C.
+2. No other behavior attaches to the statement: it declares nothing,
+   imports nothing, and suppresses only cascading unresolved-name
+   noise within its file.
 
 ---
 
@@ -1351,7 +1328,7 @@ Every construct below is specified by (1) a grammar production in EBNF
 (notation of Part I §1), (2) an enumerated list of constraints, and
 (3) a minimal example. The collected grammar appears in
 [Appendix VA](#appendix-va-collected-grammar). The executable companion
-is the conformance corpus in [`lang/conformance/`](../lang/conformance/):
+is the conformance corpus in [`lang/conformance/snippets/`](../lang/conformance/snippets/):
 files under `valid/` MUST be accepted by a conforming implementation,
 files under `invalid/` MUST be rejected.
 
@@ -1980,8 +1957,10 @@ cycle error: packages must layer.
 
 Part I is a distillation of the DBML language as documented and
 implemented in [holistics/dbml](https://github.com/holistics/dbml)
-(the `@dbml/parse` reference implementation), corrected against that
-implementation via the cross-check under
-[`lang/conformance/dbml/refcheck/`](../lang/conformance/dbml/refcheck/).
+(the `@dbml/parse` reference implementation). While Part I was being
+written, every corpus verdict was cross-checked against that
+implementation and the prose corrected wherever it disagreed; the
+cross-check harness was retired at zero disagreements (D54), and the
+corpus it pinned remains the executable record.
 Like the upstream project, this specification is licensed under the
 [Apache License 2.0](../LICENSE).

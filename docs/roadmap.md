@@ -221,7 +221,7 @@ all enforced by `go test ./...`:
 
 | ID | Guarantee | Status |
 |---|---|---|
-| PROOF-1 | Spec ⇄ conformance corpus ⇄ upstream `@dbml/parse` (0 disagreements) | `DONE` |
+| PROOF-1 | Spec ⇄ conformance corpus; verdicts pinned against upstream `@dbml/parse` before the cross-check retired at 0 disagreements (D54) | `DONE` |
 | PROOF-2 | Generated Go: gofmt-stable goldens + compiled by the real toolchain | `DONE` |
 | PROOF-3 | Generated SQL: executes on real SQLite (`foreign_key_check` clean) | `DONE` |
 | PROOF-4 | Every generated statement prepares against the generated DDL (cross-generator coherence) | `DONE` |

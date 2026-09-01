@@ -258,8 +258,7 @@ How to audit that the three components implement
 
 | Claim | Check | Where |
 |---|---|---|
-| Front end accepts/rejects exactly what the spec says | conformance corpus: `valid/` MUST pass, `invalid/` MUST fail, each snippet tagged `// spec: §…` | `lang/conformance/{dbml,volt}` via `go test ./lang/...` |
-| The schema core is real DBML | corpus replayed through upstream `@dbml/parse`; verdicts must agree | `lang/conformance/dbml/refcheck/` (needs bun) |
+| Front end accepts/rejects exactly what the spec says | conformance corpus: `valid/` MUST pass, `invalid/` MUST fail, each snippet tagged `// spec: §…` (`.dbml` entries = the schema pass, `.volt` entries and project dirs = the project pass) | `lang/conformance/snippets/` via `go test ./lang/...` |
 | Grammar parses everything the spec allows | corpus cases (input → expected tree, incl. `:error` cases) | `grammar/test/corpus/`, `tree-sitter test` |
 | Grammar and front end agree | every valid conformance snippet and `grammar/examples/*` must produce zero tree-sitter ERROR nodes **and** zero front-end diagnostics | differential run after grammar changes |
 | Lint rules match their doc | doc ↔ registry ↔ testdata consistency test; `//WANT` markers both directions | `lang/vet/docs_test.go` against [`lint.md`](lint.md) |
@@ -267,6 +266,11 @@ How to audit that the three components implement
 | Generated models implement Appendix A/B | goldens compiled; every CRUD statement prepared against the generated DDL; SQL goldens executed on real SQLite | `nao/gen/...`, `nao/itest` |
 | LSP behaves per spec | in-process unit suites: index, rename spelling rules, hover content, completion contexts, UTF-16 | `lsp/*_test.go` via `go test ./lsp/...` |
 | LSP behaves per spec, interactively | scripted stdio JSON-RPC sessions against the built binary, replaying real keystrokes — a development practice, not yet an automated test | manual; automating it is an open roadmap item |
+
+The upstream `@dbml/parse` cross-check that established Part I's
+fidelity was retired at zero disagreements (D54); the corpus verdicts
+it pinned are the surviving record, and a divergence-worthy upstream
+feature gets re-checked by hand when adopted.
 
 When adding a construct, every row above must gain its case — §5's
 recipes say where. A construct that exists in code but has no row here

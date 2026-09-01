@@ -26,7 +26,7 @@ never weaken a test to get green.
 **No doc is ever knowingly wrong (D49).** Eight maintained docs live in
 `docs/` — spec, lint, editor, decisions, roadmap, nao, model-layer,
 reference/ — and no other directory carries prose docs (root README.md/AGENT.md
-and a runnable example's own README are the named exceptions, D49).
+are the named exceptions, D49).
 Operational detail (paths, commands, code snippets) may appear only in
 docs a test or the compiler keeps honest; philosophy is written at an
 altitude where nothing can rot. The accepted cost, chosen deliberately:
@@ -51,7 +51,7 @@ reverted: nao is its *name*).
 
 ## Read in this order
 
-1. `docs/decisions.md` — **the law**, D01–D53. Never contradict one
+1. `docs/decisions.md` — **the law**, D01–D56. Never contradict one
    silently; changing a decision means editing that file in the same
    commit. New session-level rulings get appended there.
 2. `docs/roadmap.md` — **the build plan**: stable IDs, statuses
@@ -72,7 +72,7 @@ reverted: nao is its *name*).
 Three Go modules, stitched by `go.work` (D44): the **library** at the
 root — runtime (`*.go`), `lang/` (token/scanner/parser/ast/check/vet +
 project semantics), `gen/router`, `gen/model`, `nao/` (rt, gen,
-inflect, itest), `itest/`, `examples/crud/` — stdlib-only (sqlite3 is
+inflect, itest), `itest/` — stdlib-only (sqlite3 is
 test-only); and the **tools** `lsp/` and `cmd/volt/`, which carry the
 third-party deps (glsp, urfave/cli). Go floor: **1.27** (D45),
 declared in all three go.mod files and go.work. `grammar/` +

@@ -38,17 +38,12 @@ func (c *checker) declsCheck(f *ast.File) {
 	}
 }
 
-var importKinds = map[string]bool{
-	"table": true, "enum": true, "tablepartial": true,
-	"note": true, "schema": true, "tablegroup": true,
-}
-
 func (c *checker) useCheck(d *ast.Use) {
-	for _, it := range d.Items {
-		if !importKinds[strings.ToLower(it.Kind.Name())] || it.Kind.Quoted() {
-			c.errorf(it.Kind.Pos(), "7", "unknown import kind %q; expected table, enum, tablepartial, note, schema or tablegroup", it.Kind.Name())
-		}
+	kw := "use"
+	if d.Reuse {
+		kw = "reuse"
 	}
+	c.errorf(d.Pos(), "7", "%s is not part of the Volt language (§7); replace file imports with the package system — see docs/spec.md Appendix C for migration", kw)
 }
 
 /* ===== table bodies (§6.2, §6.9) ===== */

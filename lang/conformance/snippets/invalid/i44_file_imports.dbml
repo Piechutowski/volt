@@ -1,4 +1,4 @@
-// spec: §7 — import-all, selective with aliases, every kind, reuse
+// spec: §7 — file imports are not part of Volt; every form is rejected
 use * from './base'
 use {
   table auth.users as u

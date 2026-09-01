@@ -44,7 +44,7 @@ third-party deps. Importing `nao/rt` alone drags in nothing.
 |------------------|------------|
 | `*.go` (root)    | package `volt` — the runtime generated code links against: error spine, param parsing, path builders, minimal middleware |
 | `cmd/volt`       | the one binary: `check` `vet` `gen` `routes` `lsp` `version` — `gen` emits models, queries and routers. **Own module** — its CLI deps stay out of the library |
-| `lang/`          | **the language**: `token` `scanner` `parser` `ast` `diag` `check` `vet` front end, plus volt.mod/package/import resolution, route expansion and conflict detection; `lang/conformance/{volt,dbml}` = the executable corpora |
+| `lang/`          | **the language**: `token` `scanner` `parser` `ast` `diag` `check` `vet` front end, plus volt.mod/package/import resolution, route expansion and conflict detection; `lang/conformance/snippets/` = the executable corpus |
 | `gen/router/`    | router generator; goldens are gofmt-stable and compiled by the real toolchain |
 | `gen/model/`     | the data half: nao's models, queries and DDL, driven by the same project load |
 | `nao/`           | **nao — the ORM**: model + query + SQLite generation (`nao/gen`), its runtime (`nao/rt`), inflector and integration tests |
@@ -53,7 +53,6 @@ third-party deps. Importing `nao/rt` alone drags in nothing.
 | `zed-extension/` | Zed glue; install via `scripts/sync-grammar.sh` + Install Dev Extension |
 | `scripts/`       | `sync-grammar.sh` — mirrors the grammar into the local git cache Zed loads dev grammars from |
 | `itest/`         | committed fixture project served over httptest, drift-checked against the generator |
-| `examples/crud/` | **runnable**: two `resources` lines → 14 routes; `go run ./examples/crud`, `go test ./examples/crud` |
 | `docs/`          | **all prose lives here** (D49): `spec.md` (the language, normative) · `lint.md` · `editor.md` · `decisions.md` (the law) · `roadmap.md` (the plan) · `nao.md` · `model-layer.md` · `reference/` (pinned research) |
 | `AGENT.md`       | cross-session working doctrine for AI sessions (CLAUDE.md imports it) |
 
@@ -89,7 +88,6 @@ default `GOTOOLCHAIN=auto` an older `go` fetches it automatically.
 go install ./cmd/volt
 volt check ./app && volt gen ./app && volt routes ./app
 volt gen --sql ./app                 # models + queries + router + DDL
-go run ./examples/crud                # the runnable CRUD example
 go test ./... ./lsp/... ./cmd/volt/...   # everything, ORM + tooling modules
 go test ./gen/router -update         # refresh goldens after gen changes
 go run ./cmd/volt gen ./itest/blog   # refresh the itest fixture

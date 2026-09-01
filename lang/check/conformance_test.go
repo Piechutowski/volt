@@ -10,13 +10,14 @@ import (
 	"github.com/Piechutowski/volt/lang/parser"
 )
 
-// TestConformanceCorpus runs the spec's snippet corpus through the full
-// front end: every valid snippet must produce zero errors, every invalid
-// snippet at least one. The corpus verdicts are cross-checked against the
-// upstream @dbml/parse compiler (see conformance/refcheck), so this test
-// pins the library to the reference implementation's behavior.
+// TestConformanceCorpus runs the schema half of the spec's snippet
+// corpus (the .dbml entries of lang/conformance/snippets) through the
+// single-file front end: every valid snippet must produce zero errors,
+// every invalid snippet at least one. The verdicts were pinned against
+// the upstream @dbml/parse compiler while the cross-check existed
+// (retired at 0 disagreements, D54).
 func TestConformanceCorpus(t *testing.T) {
-	root := filepath.Join("..", "conformance", "dbml", "snippets")
+	root := filepath.Join("..", "conformance", "snippets")
 	for _, group := range []struct {
 		dir       string
 		wantError bool

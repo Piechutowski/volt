@@ -38,8 +38,8 @@ changed the facts (D01, D39, D40, D41). D43 onward are Volt-era.
   Shell completion is enabled on the CLI (`volt completion <shell>`).
 ## Language and front end
 
-- **D05 — The spec is normative; the conformance corpus + upstream
-  cross-check pin it.** Extensions (Select, View, Trigger, `[was:]`,
+- **D05 — The spec is normative; the conformance corpus pins it**
+  (the upstream cross-check that established the pin is retired, D54). Extensions (Select, View, Trigger, `[was:]`,
   `[model:]`, `[repr:]`) are a superset; core stays projectable to vanilla
   DBML for diagramming.
 - **D06 — Structure mine, expressions SQLite's.** Extended-DBML queries parse
@@ -325,3 +325,30 @@ changed the facts (D01, D39, D40, D41). D43 onward are Volt-era.
   of the checked AST's schema elements; reformatting, comments,
   reordering and re-slicing files never perturb the ledger. Forced by
   layout invariance (§V1.5), and better regardless.
+- **D54 — One conformance tree; the upstream cross-check is retired**
+  (2026-09-01). The corpus lives in `lang/conformance/snippets/
+  {valid,invalid}` — `.dbml` entries exercise the single-file schema
+  pass, `.volt` entries and project directories the project pass — one
+  tree, because it is one language. The `refcheck` harness that
+  replayed the schema corpus through upstream `@dbml/parse` is deleted:
+  it reached zero disagreements, its corrections are baked into Part I
+  and the corpus verdicts, and carrying upstream's code (plus a bun
+  toolchain) to re-prove a settled fact was rent. If upstream grows a
+  feature worth adopting, it is spec'd, corpus'd and, if doubt
+  warrants, re-checked by hand then.
+- **D55 — File imports are rejected at every layer** (2026-09-01).
+  DBML's `use`/`reuse` is not tolerated even by the single-file schema
+  pass: spec §7 is now a removal stub, the checker errors with code
+  `spec/7` pointing at Appendix C's migration, and the old §V2.5
+  project-level duplicate error is folded into it. A `.dbml`
+  interchange file that uses file imports must be migrated before Volt
+  accepts it — one language, one import system, no lenient pockets.
+- **D56 — No example apps in the repository** (2026-09-01). An example
+  app is a second application to maintain through every architecture
+  change, and the maintainer is already building a real app on Volt.
+  The executable proof lives in the test suites — `itest/` (routing:
+  match, 404/405, pipeline order, error spine, reverse-URL round-trip
+  totality) and `nao/itest` (data: CRUD through a real driver) — which
+  is exactly where languages keep it (Go's `test/`, Odin's `tests/`,
+  Zig's `test/`). Worked examples belong in the docs, where D49 keeps
+  them honest.
