@@ -44,3 +44,19 @@ type UserTag struct {
 	UserID int32  `db:"user_id" json:"user_id"`
 	Tag    string `db:"tag" json:"tag"`
 }
+
+// PageView is a row of the page_views table.
+type PageView struct {
+	ID   int32  `db:"id" json:"id"`
+	Site string `db:"site" json:"site"`
+	Day  int32  `db:"day" json:"day"`
+	Hits int32  `db:"hits" json:"hits"`
+}
+
+// LinkClick is a row of the link_clicks table.
+type LinkClick struct {
+	ID     int32  `db:"id" json:"id"`
+	Site   string `db:"site" json:"site"`
+	Day    int32  `db:"day" json:"day"`
+	Target string `db:"target" json:"target"`
+}

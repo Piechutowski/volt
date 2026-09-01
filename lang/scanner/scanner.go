@@ -445,18 +445,36 @@ var singleOps = map[rune]token.Kind{
 	'(': token.LPAREN, ')': token.RPAREN,
 	',': token.COMMA, ':': token.COLON, '.': token.DOT,
 	'~': token.TILDE, '*': token.STAR, '/': token.SLASH,
-	'-': token.MINUS, '>': token.GT,
+	'-': token.MINUS, '+': token.PLUS, '=': token.EQ,
 }
 
 func operatorScan(s *Scanner) stateFn {
 	r := s.next()
 	if r == '<' {
-		if s.peek() == '>' { // §3.1 longest match: <> is one token
+		switch s.peek() { // §3.1 longest match
+		case '>':
 			s.next()
 			s.emit(token.LTGT, "<>")
-		} else {
+		case '=':
+			s.next()
+			s.emit(token.LE, "<=")
+		default:
 			s.emit(token.LT, "<")
 		}
+		return anyScan
+	}
+	if r == '>' {
+		if s.peek() == '=' {
+			s.next()
+			s.emit(token.GE, ">=")
+		} else {
+			s.emit(token.GT, ">")
+		}
+		return anyScan
+	}
+	if r == '!' && s.peek() == '=' {
+		s.next()
+		s.emit(token.NEQ, "!=")
 		return anyScan
 	}
 	if k, ok := singleOps[r]; ok {

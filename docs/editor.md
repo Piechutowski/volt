@@ -110,8 +110,11 @@ load-bearing patterns, each citing the spec section it implements:
   parse without touching the grammar.
 - **The Volt layer** (§V): `package` clause, `import (…)` blocks,
   `Pipeline`, `Scope`, routes with typed parameters and `:name...`
-  wildcards, `resources` with an optional package qualifier. `/` is a
-  token per §V0.2.
+  wildcards, `resources` with an optional package qualifier, and the
+  query layer — `Group` algebra, the `Pred` expression grammar
+  (prec.left or/and, keyword operators at the same precedence as other
+  keywords so `not` never outlexes `Note`), `Select ... for ... where`.
+  `/` is a token per §V0.2.
 
 ## 3. The Zed extension (`zed-extension/`)
 

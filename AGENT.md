@@ -59,9 +59,9 @@ reverted: nao is its *name*).
    numbered, graduated or killed by practice; never treat one as law,
    and put new open questions there, not in decisions.
 2. `docs/roadmap.md` — **the build plan**: stable IDs, statuses
-   (updated in the landing commit). Current priority: FW-1
-   (`Select`/`View` query layer) then FW-2 (Datasets) — these stand
-   between the language and running a real application.
+   (updated in the landing commit). Current priority: FW-2 (Datasets;
+   unblocked — FW-1's structured Group/Pred/Select layer landed
+   2026-09-01, raw-SQL Select/View blocks remain).
 3. `docs/spec.md` — the language: Part I schema core §1–§8, Part II
    routing §V0–§V8, Appendices A/B (Go and SQLite mappings), C (DBML
    compatibility).

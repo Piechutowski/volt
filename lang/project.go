@@ -56,6 +56,12 @@ type Package struct {
 	// Controllers maps controller name -> its actions, for the generator.
 	Controllers map[string]*ControllerInfo
 
+	// Groups, Preds and Selects are the data-query layer (§V9-§V11),
+	// resolved by Check.
+	Groups  map[string]*GroupInfo
+	Preds   map[string]*ast.Pred
+	Selects []*SelectInfo
+
 	// schema is the package's checked table model, set by Check.
 	schema *check.Info
 

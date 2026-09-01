@@ -381,12 +381,38 @@
     }
   },
   {
-    "type": "group_member",
+    "type": "group_definition",
     "named": true,
     "fields": {
       "name": {
         "multiple": false,
         "required": true,
+        "types": [
+          {
+            "type": "group_name",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "group_member",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "group_member",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": false,
         "types": [
           {
             "type": "identifier",
@@ -416,6 +442,29 @@
     "fields": {},
     "children": {
       "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "ident_modifier",
+          "named": true
+        },
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "quoted_identifier",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "ident_modifier",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
       "required": true,
       "types": [
         {
@@ -800,6 +849,194 @@
     }
   },
   {
+    "type": "pred_compare",
+    "named": true,
+    "fields": {
+      "op": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "!=",
+            "named": false
+          },
+          {
+            "type": "<",
+            "named": false
+          },
+          {
+            "type": "<=",
+            "named": false
+          },
+          {
+            "type": "=",
+            "named": false
+          },
+          {
+            "type": ">",
+            "named": false
+          },
+          {
+            "type": ">=",
+            "named": false
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "column_ref",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "query_param",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "pred_definition",
+    "named": true,
+    "fields": {
+      "body": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "pred_expr",
+            "named": true
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "pred_name",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "pred_expr",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "pred_compare",
+          "named": true
+        },
+        {
+          "type": "pred_expr",
+          "named": true
+        },
+        {
+          "type": "pred_in",
+          "named": true
+        },
+        {
+          "type": "pred_like",
+          "named": true
+        },
+        {
+          "type": "pred_null",
+          "named": true
+        },
+        {
+          "type": "pred_ref",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "pred_in",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "column_ref",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "pred_like",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "column_ref",
+          "named": true
+        },
+        {
+          "type": "query_param",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "pred_null",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "column_ref",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "project_definition",
     "named": true,
     "fields": {
@@ -857,6 +1094,22 @@
         "types": [
           {
             "type": "string",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "query_param",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "parameter_name",
             "named": true
           }
         ]
@@ -1284,6 +1537,52 @@
     }
   },
   {
+    "type": "select_definition",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "select_name",
+            "named": true
+          }
+        ]
+      },
+      "settings": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "settings_list",
+            "named": true
+          }
+        ]
+      },
+      "target": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "select_target",
+            "named": true
+          }
+        ]
+      },
+      "where": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "pred_expr",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "setting",
     "named": true,
     "fields": {
@@ -1435,6 +1734,10 @@
           "named": true
         },
         {
+          "type": "group_definition",
+          "named": true
+        },
+        {
           "type": "import_block",
           "named": true
         },
@@ -1451,6 +1754,10 @@
           "named": true
         },
         {
+          "type": "pred_definition",
+          "named": true
+        },
+        {
           "type": "project_definition",
           "named": true
         },
@@ -1464,6 +1771,10 @@
         },
         {
           "type": "scope_definition",
+          "named": true
+        },
+        {
+          "type": "select_definition",
           "named": true
         },
         {
@@ -1868,6 +2179,10 @@
     }
   },
   {
+    "type": "!=",
+    "named": false
+  },
+  {
     "type": "'",
     "named": false
   },
@@ -1881,6 +2196,10 @@
   },
   {
     "type": ")",
+    "named": false
+  },
+  {
+    "type": "+",
     "named": false
   },
   {
@@ -1908,11 +2227,23 @@
     "named": false
   },
   {
+    "type": "<=",
+    "named": false
+  },
+  {
     "type": "<>",
     "named": false
   },
   {
+    "type": "=",
+    "named": false
+  },
+  {
     "type": ">",
+    "named": false
+  },
+  {
+    "type": ">=",
     "named": false
   },
   {
@@ -1921,6 +2252,10 @@
   },
   {
     "type": "Enum",
+    "named": false
+  },
+  {
+    "type": "Group",
     "named": false
   },
   {
@@ -1933,6 +2268,10 @@
   },
   {
     "type": "Pipeline",
+    "named": false
+  },
+  {
+    "type": "Pred",
     "named": false
   },
   {
@@ -1953,6 +2292,10 @@
   },
   {
     "type": "Scope",
+    "named": false
+  },
+  {
+    "type": "Select",
     "named": false
   },
   {
@@ -1988,6 +2331,10 @@
     "named": false
   },
   {
+    "type": "and",
+    "named": false
+  },
+  {
     "type": "any",
     "named": false
   },
@@ -2001,6 +2348,10 @@
   },
   {
     "type": "color",
+    "named": true
+  },
+  {
+    "type": "column_ref",
     "named": true
   },
   {
@@ -2021,12 +2372,20 @@
     "named": false
   },
   {
+    "type": "for",
+    "named": false
+  },
+  {
     "type": "from",
     "named": false
   },
   {
     "type": "get",
     "named": false
+  },
+  {
+    "type": "group_name",
+    "named": true
   },
   {
     "type": "head",
@@ -2045,7 +2404,23 @@
     "named": true
   },
   {
+    "type": "in",
+    "named": false
+  },
+  {
     "type": "indexes",
+    "named": false
+  },
+  {
+    "type": "is",
+    "named": false
+  },
+  {
+    "type": "like",
+    "named": false
+  },
+  {
+    "type": "not",
     "named": false
   },
   {
@@ -2058,6 +2433,10 @@
   },
   {
     "type": "options",
+    "named": false
+  },
+  {
+    "type": "or",
     "named": false
   },
   {
@@ -2093,6 +2472,14 @@
     "named": false
   },
   {
+    "type": "pred_name",
+    "named": true
+  },
+  {
+    "type": "pred_ref",
+    "named": true
+  },
+  {
     "type": "put",
     "named": false
   },
@@ -2109,6 +2496,14 @@
     "named": false
   },
   {
+    "type": "select_name",
+    "named": true
+  },
+  {
+    "type": "select_target",
+    "named": true
+  },
+  {
     "type": "string_content",
     "named": true
   },
@@ -2122,6 +2517,10 @@
   },
   {
     "type": "use",
+    "named": false
+  },
+  {
+    "type": "where",
     "named": false
   },
   {

@@ -124,3 +124,35 @@
 
 ; the resources table reference
 (resources_declaration table: (table_name) @type)
+
+; ---------- groups, predicates, selects (docs/spec.md §V9-§V11) ----------
+
+[
+  "Group"
+  "Pred"
+  "Select"
+  "for"
+  "where"
+] @keyword
+
+[
+  "and"
+  "or"
+  "not"
+  "in"
+  "like"
+  "is"
+  "null"
+] @keyword.operator
+
+(group_name) @type
+(group_member) @type
+(pred_name) @label
+(pred_ref) @label
+(select_name) @label
+(select_target) @type
+(column_ref) @property
+(query_param ":" @operator)
+(query_param name: (parameter_name) @variable.parameter)
+(pred_compare op: _ @operator)
+(ident_modifier) @constant

@@ -69,3 +69,15 @@
 (resources_declaration
   "resources" @context
   table: (table_name) @name) @item
+
+(group_definition
+  "Group" @context
+  name: (group_name) @name) @item
+
+(pred_definition
+  "Pred" @context
+  name: (pred_name) @name) @item
+
+(select_definition
+  "Select" @context
+  name: (select_name) @name) @item

@@ -90,6 +90,9 @@ module.exports = grammar({
         $.import_block,
         $.pipeline_definition,
         $.scope_definition,
+        $.group_definition,
+        $.pred_definition,
+        $.select_definition,
       ),
 
     // ==================== Project (§6.1) ====================
@@ -528,6 +531,123 @@ module.exports = grammar({
         optional(field('settings', $.settings_list)),
       ),
 
+    // ==================== Groups, Preds, Selects (§V9-§V11) ====================
+
+    // Group name { members } | Group name = a + b - c (§V9)
+    group_definition: ($) =>
+      seq(
+        kw('Group'),
+        field('name', alias($.identifier, $.group_name)),
+        choice(
+          seq(
+            '{',
+            repeat($._newline),
+            optional(newlineSep1(alias($.identifier, $.group_member), $)),
+            '}',
+          ),
+          seq(
+            '=',
+            alias($.identifier, $.group_member),
+            repeat(seq(choice('+', '-'), alias($.identifier, $.group_member))),
+          ),
+        ),
+      ),
+
+    // Pred name { expr } (§V10) — the closed predicate language.
+    pred_definition: ($) =>
+      seq(
+        kw('Pred'),
+        field('name', alias($.identifier, $.pred_name)),
+        '{',
+        repeat($._newline),
+        field('body', $.pred_expr),
+        repeat($._newline),
+        '}',
+      ),
+
+    pred_expr: ($) => $._pred_or,
+
+    _pred_or: ($) =>
+      prec.left(1, choice(
+        seq($._pred_or, kw('or'), $._pred_and),
+        $._pred_and,
+      )),
+
+    _pred_and: ($) =>
+      prec.left(2, choice(
+        seq($._pred_and, kw('and'), $._pred_unary),
+        $._pred_unary,
+      )),
+
+    _pred_unary: ($) =>
+      choice(seq(kw('not'), $._pred_unary), $._pred_primary),
+
+    _pred_primary: ($) =>
+      choice(
+        seq('(', $.pred_expr, ')'),
+        $.pred_compare,
+        $.pred_in,
+        $.pred_like,
+        $.pred_null,
+        alias($.identifier, $.pred_ref),
+      ),
+
+    pred_compare: ($) =>
+      seq(
+        $._pred_operand,
+        field('op', choice('=', '!=', '<', '<=', '>', '>=')),
+        $._pred_operand,
+      ),
+
+    pred_in: ($) =>
+      seq(
+        alias($.identifier, $.column_ref),
+        kw('in'),
+        '(',
+        $._pred_literal,
+        repeat(seq(',', $._pred_literal)),
+        ')',
+      ),
+
+    pred_like: ($) =>
+      seq(
+        alias($.identifier, $.column_ref),
+        kw('like'),
+        choice($.string, $.query_param),
+      ),
+
+    pred_null: ($) =>
+      seq(
+        alias($.identifier, $.column_ref),
+        kw('is'),
+        optional(kw('not')),
+        kw('null'),
+      ),
+
+    _pred_operand: ($) =>
+      choice(
+        $.query_param,
+        $._pred_literal,
+        alias($.identifier, $.column_ref),
+      ),
+
+    _pred_literal: ($) =>
+      choice($.number, seq('-', $.number), $.string, $.boolean),
+
+    query_param: ($) =>
+      seq(':', field('name', alias($._ident_immediate, $.parameter_name))),
+
+    // Select name for target [where expr] [settings] (§V11)
+    select_definition: ($) =>
+      seq(
+        kw('Select'),
+        field('name', alias($.identifier, $.select_name)),
+        kw('for'),
+        field('target', alias($.identifier, $.select_target)),
+        optional(seq(kw('where'), field('where', $.pred_expr))),
+        optional(field('settings', $.settings_list)),
+      ),
+
     // /users/:id(int32)/avatar, /files/:path..., or the bare root /
     // (§V4.1). Segments abut: whitespace ends the path.
     route_path: ($) =>
@@ -596,9 +716,12 @@ module.exports = grammar({
         alias($.setting_name, $.setting_value_words),
       ),
 
-    // Parenthesized identifier list: only: (index, show) (volt §V5.3).
+    // Parenthesized identifier list: only: (index, show) (volt §V5.3);
+    // order lists allow a one-word modifier: order: (year desc, id) (§V11.5).
     ident_group: ($) =>
-      seq('(', $._name, repeat(seq(',', $._name)), ')'),
+      seq('(', $._ident_item, repeat(seq(',', $._ident_item)), ')'),
+
+    _ident_item: ($) => seq($._name, optional(alias($._name, $.ident_modifier))),
 
     // value of a column's `ref:` setting: `> schema.table.column` (§6.7)
     inline_ref: ($) =>
@@ -658,7 +781,7 @@ module.exports = grammar({
 
     boolean: () => choice(kw('true', 2), kw('false', 2)),
 
-    null: () => kw('null', 2),
+    null: () => kw('null'),
 
     // #rgb or #rrggbb (§3.11)
     color: () => /#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?/,

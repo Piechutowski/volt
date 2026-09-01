@@ -142,6 +142,12 @@ func (p *parser) decl() (d ast.Decl) {
 		return nil
 	case "pipeline":
 		return p.pipeline()
+	case "group":
+		return p.groupDecl()
+	case "pred":
+		return p.predDecl()
+	case "select":
+		return p.selectDecl()
 	case "scope":
 		return p.scope()
 	case "dataset":
@@ -784,6 +790,11 @@ func (p *parser) settingValue() ast.Node {
 		il := &ast.IdentList{Lparen: l.Pos}
 		for {
 			il.Names = append(il.Names, p.ident("identifier list (§V6)"))
+			var mod *ast.Ident
+			if p.at(token.IDENT) && !p.cur().NLBefore { // e.g. "year desc" (§V11.5)
+				mod = p.ident("identifier list (§V6)")
+			}
+			il.Mods = append(il.Mods, mod)
 			if p.at(token.COMMA) {
 				p.next()
 				continue

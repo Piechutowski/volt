@@ -268,6 +268,10 @@ func (x *Segment) String() string {
 type IdentList struct {
 	Lparen token.Position
 	Names  []*Ident
+	// Mods holds an optional one-word modifier per name (parallel to
+	// Names, nil entries when absent): order lists use it for asc/desc
+	// (§V11.5); other settings reject modifiers at check time.
+	Mods   []*Ident
 	Rparen token.Position
 }
 
@@ -283,3 +287,176 @@ func lower(s string) string {
 	}
 	return string(b)
 }
+
+/* ===== groups, predicates, selects (spec §V9-§V11) ===== */
+
+// Group is a named set of tables for generation (spec §V9): either a
+// block of members or a +/- expression over tables and other groups.
+type Group struct {
+	GroupPos token.Position
+	Name     *Ident
+	Terms    []*GroupTerm // block form: all Add; expr form: signed
+	EndPos   token.Position
+}
+
+func (d *Group) Pos() token.Position { return d.GroupPos }
+func (d *Group) End() token.Position { return d.EndPos }
+func (d *Group) declNode()           {}
+
+// GroupTerm is one term of a group: a table or group name, added or
+// removed (spec §V9.3).
+type GroupTerm struct {
+	Neg  bool // true for '-' terms
+	Name *Ident
+}
+
+// Pred is a named predicate declaration (spec §V10).
+type Pred struct {
+	PredPos token.Position
+	Name    *Ident
+	X       PredExpr
+	Rbrace  token.Position
+}
+
+func (d *Pred) Pos() token.Position { return d.PredPos }
+func (d *Pred) End() token.Position { return d.Rbrace }
+func (d *Pred) declNode()           {}
+
+// PredExpr is a node of the closed predicate expression language
+// (spec §V10). It is deliberately not SQL (D06).
+type PredExpr interface {
+	Node
+	predExpr()
+}
+
+// PredBinary is "x and y" / "x or y".
+type PredBinary struct {
+	Op   string // "and" | "or" (canonical lower case)
+	X, Y PredExpr
+}
+
+func (x *PredBinary) Pos() token.Position { return x.X.Pos() }
+func (x *PredBinary) End() token.Position { return x.Y.End() }
+func (x *PredBinary) predExpr()           {}
+
+// PredNot is "not x".
+type PredNot struct {
+	NotPos token.Position
+	X      PredExpr
+}
+
+func (x *PredNot) Pos() token.Position { return x.NotPos }
+func (x *PredNot) End() token.Position { return x.X.End() }
+func (x *PredNot) predExpr()           {}
+
+// PredParen is "(x)"; kept for exact source spans.
+type PredParen struct {
+	Lparen token.Position
+	X      PredExpr
+	Rparen token.Position
+}
+
+func (x *PredParen) Pos() token.Position { return x.Lparen }
+func (x *PredParen) End() token.Position { return x.Rparen }
+func (x *PredParen) predExpr()           {}
+
+// PredRef is a bare name referencing another Pred (spec §V10.2).
+type PredRef struct {
+	Name *Ident
+}
+
+func (x *PredRef) Pos() token.Position { return x.Name.Pos() }
+func (x *PredRef) End() token.Position { return x.Name.End() }
+func (x *PredRef) predExpr()           {}
+
+// PredCompare is "a <op> b" with op one of = != < <= > >=.
+type PredCompare struct {
+	X  Operand
+	Op token.Kind // EQ NEQ LT LE GT GE
+	Y  Operand
+}
+
+func (x *PredCompare) Pos() token.Position { return x.X.Pos() }
+func (x *PredCompare) End() token.Position { return x.Y.End() }
+func (x *PredCompare) predExpr()           {}
+
+// PredIn is "col in (lit, ...)".
+type PredIn struct {
+	Col    *Ident
+	Items  []*Lit
+	Rparen token.Position
+}
+
+func (x *PredIn) Pos() token.Position { return x.Col.Pos() }
+func (x *PredIn) End() token.Position { return x.Rparen }
+func (x *PredIn) predExpr()           {}
+
+// PredLike is "col like pattern" (pattern: string literal or param).
+type PredLike struct {
+	Col     *Ident
+	Pattern Operand // *Lit (string) or *Param
+}
+
+func (x *PredLike) Pos() token.Position { return x.Col.Pos() }
+func (x *PredLike) End() token.Position { return x.Pattern.End() }
+func (x *PredLike) predExpr()           {}
+
+// PredNull is "col is [not] null".
+type PredNull struct {
+	Col    *Ident
+	Not    bool
+	EndPos token.Position
+}
+
+func (x *PredNull) Pos() token.Position { return x.Col.Pos() }
+func (x *PredNull) End() token.Position { return x.EndPos }
+func (x *PredNull) predExpr()           {}
+
+// Operand is a comparison operand: column reference, :param, or literal.
+type Operand interface {
+	Node
+	operand()
+}
+
+// ColRef is a column reference inside a predicate.
+type ColRef struct {
+	Name *Ident
+}
+
+func (x *ColRef) Pos() token.Position { return x.Name.Pos() }
+func (x *ColRef) End() token.Position { return x.Name.End() }
+func (x *ColRef) operand()            {}
+
+// Param is a ":name" query parameter (spec §V10, D15).
+type Param struct {
+	ColonPos token.Position
+	Name     *Ident
+}
+
+func (x *Param) Pos() token.Position { return x.ColonPos }
+func (x *Param) End() token.Position { return x.Name.End() }
+func (x *Param) operand()            {}
+
+// Lit is a number, string or boolean literal operand.
+type Lit struct {
+	Tok token.Token // NUMBER, STRING, or IDENT true/false
+}
+
+func (x *Lit) Pos() token.Position { return x.Tok.Pos }
+func (x *Lit) End() token.Position { return x.Tok.End() }
+func (x *Lit) operand()            {}
+
+// Select declares a query generated for every member of its target
+// (spec §V11).
+type Select struct {
+	SelectPos token.Position
+	Name      *Ident
+	Target    *Ident   // group or table name (§V11.2)
+	Where     PredExpr // nil = all rows
+	Settings  *SettingList
+	EndPos    token.Position
+}
+
+func (d *Select) Pos() token.Position { return d.SelectPos }
+func (d *Select) End() token.Position { return d.EndPos }
+func (d *Select) declNode()           {}

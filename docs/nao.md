@@ -13,6 +13,7 @@ you can read, grep, and step through in a debugger.
    volt gen ─┼──► nao_models.go    structs, enums, notes as doc comments
              ├──► nao_queries.go   typed CRUD on a Queries handle
              ├──► nao_dyn.go       typed filter/order/limit values
+             ├──► nao_selects.go   Group/Pred selects: one method per member
              └──► nao_schema.sql   DDL + seed data (--sql); FK/CHECK/UNIQUE real
 ```
 
@@ -70,7 +71,8 @@ split is exhaustive:
 | What varies at runtime | Answer | Status |
 |---|---|---|
 | nothing — fixed shapes | generated CRUD (`UserGet` … `UserDelete`) | **done** |
-| values only | real SQL in declared `Select`/`View` blocks, typed functions out, prepare-validated | next — [roadmap FW-1](roadmap.md) |
+| values only, uniform shapes | `Select` over a `Group` with typed `Pred` composition (§V9-§V11): one method per member, one signature | **done** |
+| values only, arbitrary SQL | raw-SQL `Select`/`View` blocks, typed functions out, prepare-validated | next — [roadmap FW-1](roadmap.md) |
 | filter / order / limit | typed predicate **values** (`UserEmail.Eq(x)`) over generated column handles | **done** |
 | associations | explicit per-ref loaders, batched `IN` | scheduled |
 | migrations | declarative diff, hash-pinned ledger (D53), owned 12-step rebuild | scheduled |

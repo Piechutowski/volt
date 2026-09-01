@@ -532,3 +532,7 @@ func contains(ss []string, s string) bool {
 	}
 	return false
 }
+
+// Ident quotes an identifier for SQLite exactly the way the DDL
+// generator does — exported for the select lowering (spec §V11.6).
+func Ident(name string) string { return identQuote(name) }

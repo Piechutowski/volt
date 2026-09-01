@@ -196,3 +196,99 @@ Scope / {
 ---
 
 
+
+==================
+group block and algebra forms
+==================
+
+Group series {
+  ms_revenue
+  ms_usage
+}
+
+Group wide = series + ks_costs - ms_usage
+
+---
+
+(source_file
+  (group_definition
+    (group_name)
+    (group_member)
+    (group_member))
+  (group_definition
+    (group_name)
+    (group_member)
+    (group_member)
+    (group_member)))
+
+==================
+pred with composition, in, like, is null
+==================
+
+Pred current { org = :org and year = :year }
+Pred fresh { current and (year >= :since or year in (2024, 2025)) and not org like 'x%' and note is not null }
+
+---
+
+(source_file
+  (pred_definition
+    (pred_name)
+    (pred_expr
+      (pred_compare
+        (column_ref)
+        (query_param
+          (parameter_name)))
+      (pred_compare
+        (column_ref)
+        (query_param
+          (parameter_name)))))
+  (pred_definition
+    (pred_name)
+    (pred_expr
+      (pred_ref)
+      (pred_expr
+        (pred_compare
+          (column_ref)
+          (query_param
+            (parameter_name)))
+        (pred_in
+          (column_ref)
+          (number)
+          (number)))
+      (pred_like
+        (column_ref)
+        (string
+          (string_content)))
+      (pred_null
+        (column_ref)))))
+
+==================
+select for group with where and order
+==================
+
+Select rows for series where current and year >= 2000 [order: (year desc, id)]
+Select all for ms_usage
+
+---
+
+(source_file
+  (select_definition
+    (select_name)
+    (select_target)
+    (pred_expr
+      (pred_ref)
+      (pred_compare
+        (column_ref)
+        (number)))
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (ident_group
+          (identifier)
+          (ident_modifier
+            (identifier))
+          (identifier)))))
+  (select_definition
+    (select_name)
+    (select_target)))

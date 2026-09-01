@@ -1736,6 +1736,151 @@ forward-pointing diagnostic. (Design: [roadmap FW-2](roadmap.md).)
 
 ---
 
+## §V9. Groups
+
+A **Group** names a set of tables so the same code can be generated for
+every member (§V11). It is not a diagram construct: `TableGroup`
+(Part I §6.12) partitions the ER diagram and allows one group per
+table; a `Group` is a query set — overlapping freely, invisible to
+diagrams.
+
+```ebnf
+group decl = "Group", plain name,
+             ( "{", { newline }, [ group members ], "}"
+             | "=", group expr ), newline ;
+group members = group term, { newline+, group term }, { newline } ;
+group expr    = group term, { ( "+" | "-" ), group term } ;
+group term    = plain name ;
+```
+
+```volt
+Group series {
+  ms_revenue
+  ms_usage
+  ks_seats
+}
+
+Group wide = series + ks_costs - ms_usage
+```
+
+1. Group names share one namespace per package, disjoint from tables;
+   redeclaration is an error.
+2. A `group term` resolves, case-sensitively, to a table or a group of
+   the same package — tables first, then groups. An unknown name is an
+   error with the same did-you-mean aids as §V5.4.
+3. The block form is the expression form with every term joined by
+   `+`. Evaluation is left to right: `+` adds a term's member set
+   (a table adds itself), `-` removes it. Removing a table that is not
+   currently a member, or adding one already present, is an error —
+   the algebra must say something true.
+4. Group references must be acyclic (error otherwise), and the
+   resulting set must be non-empty.
+5. Member order is first-addition order; generation (§V11) is
+   deterministic in it.
+
+## §V10. Predicates
+
+A **Pred** names a boolean expression over the columns of an as-yet
+unnamed table. The expression language is deliberately **closed** —
+it is not SQL and never grows toward it (D06); anything it cannot say
+belongs in a raw `Select` body (reserved) or the dynamic layer.
+
+```ebnf
+pred decl    = "Pred", plain name, "{", { newline }, pred expr, { newline }, "}", newline ;
+pred expr    = pred and, { "or", pred and } ;
+pred and     = pred unary, { "and", pred unary } ;
+pred unary   = [ "not" ], pred primary ;
+pred primary = "(", pred expr, ")"
+             | comparison | membership | pattern | null test
+             | plain name ;                      (* reference to a Pred *)
+comparison   = operand, comp op, operand ;
+comp op      = "=" | "!=" | "<" | "<=" | ">" | ">=" ;
+membership   = column ref, "in", "(", literal, { ",", literal }, ")" ;
+pattern      = column ref, "like", ( string | param ) ;
+null test    = column ref, "is", [ "not" ], "null" ;
+operand      = column ref | param | literal ;
+column ref   = name ;
+param        = ":", plain name ;                 (* no space after ':' *)
+literal      = number | string | boolean ;
+```
+
+```volt
+Pred current { org = :org and year = :year }
+Pred recent  { year >= :since }
+Pred fresh   { current and recent }
+```
+
+1. `and`, `or`, `not`, `in`, `like`, `is`, `null` are contextual
+   keywords (§3.5), case-insensitive, not reserved.
+2. A bare name in primary position references a Pred of the same
+   package; references must exist and be acyclic.
+3. A Pred is typed **at each use site** (§V11), where a target binds
+   its column names. The rules:
+   - a `column ref` must resolve in the target's environment (§V11.4);
+   - `=` and `!=` require both operands to share a type class;
+   - `<` `<=` `>` `>=` require numeric or date/time operands — text is
+     **not** orderable here (`text_column > 1` and
+     `text_column > 'a'` are both errors; order text in SQL, §V11.6);
+   - `like` requires a text column and a text pattern;
+   - `in` items must all match the column's type;
+   - blob and JSON columns may not appear in predicates;
+   - a `param` adopts the type of the expression position it appears
+     in; one param name MUST resolve to one type across the whole use
+     site, or the use is an error naming both positions.
+4. Type classes are defined by the Appendix A mapping: two column
+   types agree iff they map to the same Go type; numeric = the
+   integer, unsigned and float families; text = `string`-mapped;
+   date/time = `time.Time`-mapped. `decimal`/`money` map to `string`
+   and are therefore **not** orderable in a predicate — deliberate.
+5. Checks (Part I §6.6) are the parameterless ancestors of predicates;
+   unifying them onto this language is planned, not yet specified.
+
+## §V11. Selects over groups
+
+A **Select** declares a query once and generates it for every member
+of a target (§V9 group, or a single table treated as a one-member
+group).
+
+```ebnf
+select decl = "Select", plain name, "for", plain name,
+              [ "where", pred expr ], [ settings list ], newline ;
+```
+
+```volt
+Select rows   for series where current [order: (year desc, id)]
+Select stale  for ms_usage where not recent
+Select all    for series
+```
+
+1. The select name is a plain identifier; per target-member it mints
+   the method `<Model><SelectName>` (Appendix A naming). A collision
+   with a generated CRUD/dynamic method name, or between two selects
+   on an overlapping member, is an error.
+2. `for` resolves case-sensitively to a group, else a table (§V9.2
+   aids apply).
+3. `where` takes a full §V10 expression — named Preds, inline
+   comparisons, and any composition of the two. Omitted = all rows.
+4. **The agreement rule.** Every column referenced by the `where`
+   expression (Pred references expanded) and by `order:` MUST exist in
+   **every** member, and all members MUST agree on its type (§V10.4).
+   A missing column or a type disagreement is an error naming the
+   offending members and their types — the predicate must be checkable
+   for all members or it does not compile.
+5. Settings: `order:` takes a parenthesized list of `column [asc|desc]`
+   pairs (default `asc`); order columns obey rule 4 and MUST be
+   orderable (§V10.3) or text — ORDER BY text is SQL's own collation,
+   allowed here.
+6. Generation contract (with Appendix A): per member, a method on
+   `Queries` —
+   `func (q *Queries) <Model><SelectName>(ctx context.Context, <params>) ([]<Model>, error)`
+   — parameters in first-appearance order over the expanded
+   expression, each typed by rule §V10.3; the emitted SQL is
+   `SELECT <all columns> FROM <table> [WHERE …] [ORDER BY …]` with
+   SQLite named parameters (D15), and every emitted statement is
+   prepare-validated against the generated DDL (D06).
+
+---
+
 ## Appendix VA: Collected grammar
 
 Additions to the collected grammar of Part I, Appendix IA. The

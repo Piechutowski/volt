@@ -36,6 +36,9 @@ func Check(pr *Project) []diag.Diagnostic {
 		pkg.schema = info
 	}
 	for _, path := range c.paths() {
+		c.dataQueries(pr.Packages[path])
+	}
+	for _, path := range c.paths() {
 		c.routing(pr.Packages[path])
 	}
 
@@ -538,6 +541,11 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 				if !ok {
 					c.errorf(s.Pos(), "V5", "%s: takes an action list like (index, show) (§V5.3)", s.Name)
 					continue
+				}
+				for i, mod := range list.Mods {
+					if mod != nil {
+						c.errorf(mod.Pos(), "V5", "%s: entries are single action names; %q does not belong after %q (§V5.3)", s.Name, mod.Name(), list.Names[i].Name())
+					}
 				}
 				set := map[string]bool{}
 				for _, id := range list.Names {

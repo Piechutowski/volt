@@ -40,3 +40,30 @@ Table user_tags {
     (user_id, tag) [pk]
   }
 }
+
+// Two uniform metric tables plus the group/pred/select layer over them
+// (spec §V9-§V11): one select, one signature, every member.
+Table page_views {
+  id integer [pk, increment]
+  site varchar [not null]
+  day integer [not null]
+  hits integer [not null, default: 0]
+}
+
+Table link_clicks {
+  id integer [pk, increment]
+  site varchar [not null]
+  day integer [not null]
+  target text [not null, default: '']
+}
+
+Group metrics {
+  page_views
+  link_clicks
+}
+
+Pred at { site = :site and day = :day }
+Pred since { day >= :from }
+
+Select rows for metrics where at [order: (day desc, id)]
+Select recent for metrics where at or since

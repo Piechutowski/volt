@@ -255,14 +255,20 @@ every `go test ./...`). What follows is the framework's build list, in
 priority order. The first two entries are what stand between the
 language and running a real application on it.
 
-## FW-1 — The `Select`/`View` query layer — **next**
+## FW-1 — The `Select` query layer — **structured half `DONE`** (2026-09-01)
 
-Slice v1 of the ladder above (SEL-1…SEL-5, P3): real SQL declared in
-the schema, `:named` params, typed functions generated,
-prepare-validated against the generated DDL at gen time. This is the
-single highest-leverage unbuilt feature: it is what "almost any query"
-means without a runtime builder, and FW-2 depends on it. Design law:
-D06, D24, D32.
+Landed: `Group` (overlapping table sets with +/- algebra, §V9), `Pred`
+(the closed, statically typed predicate language, §V10) and
+`Select ... for <group> where <expr> [order: ...]` (§V11) — one typed
+method per group member, one signature for all (the §V11.4 agreement
+rule), WHERE rendered once, driver-proven in `nao/itest`. Design law:
+D57, D58.
+
+Still open from the original slice (SEL-1…SEL-5, P3): **raw-SQL
+`Select`/`View` blocks** — real SQL declared in the schema for shapes
+the closed language refuses (joins, aggregates), `:named` params,
+typed functions out, prepare-validated (D06, D24). FW-2 needs the
+structured half only, so Datasets are unblocked.
 
 ## FW-2 — Datasets: schema-driven group expansion
 

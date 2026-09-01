@@ -53,6 +53,13 @@ const (
 	GT    // >
 	LTGT  // <>
 	MINUS // -
+
+	// Predicate and group operators (spec §V9-§V10)
+	PLUS // +
+	EQ   // =
+	NEQ  // !=
+	LE   // <=
+	GE   // >=
 )
 
 var kindNames = [...]string{
@@ -79,6 +86,11 @@ var kindNames = [...]string{
 	GT:       "'>'",
 	LTGT:     "'<>'",
 	MINUS:    "'-'",
+	PLUS:     "'+'",
+	EQ:       "'='",
+	NEQ:      "'!='",
+	LE:       "'<='",
+	GE:       "'>='",
 }
 
 func (k Kind) String() string {

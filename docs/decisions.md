@@ -345,3 +345,20 @@ where the merge changed the facts.
   is exactly where languages keep it (Go's `test/`, Odin's `tests/`,
   Zig's `test/`). Worked examples belong in the docs, where D49 keeps
   them honest.
+- **D57 — The predicate language is closed, typed, and not SQL**
+  (2026-09-01). `Pred` (spec §V10) carries a fixed operator set —
+  comparisons, and/or/not, in, like, is null — type-checked at every
+  use site, and it never grows toward SQL: that is the carve-out that
+  keeps D06 intact (structure mine, expressions SQLite's). Anything
+  the closed language cannot say belongs in raw-SQL Select/View blocks
+  (still to build) or the dynamic layer. Checks (§6.6) are the
+  parameterless ancestors of predicates; unification is planned.
+- **D58 — Group is a codegen set; TableGroup is a diagram** (2026-09-01).
+  `Group` (spec §V9) exists to generate the same code for many tables:
+  overlapping freely, composed by +/- set algebra where re-adding a
+  member or removing a non-member is an error — the algebra must say
+  something true. The §V11.4 agreement rule makes group selects honest:
+  every referenced column must exist in every member with one agreed
+  type, so one WHERE rendering and one Go signature serve all members,
+  and a text/integer disagreement (the mistake that motivated the rule)
+  is a check error naming the tables.

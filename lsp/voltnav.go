@@ -48,6 +48,8 @@ type voltDef struct {
 	span  voltSpan
 	table *ast.Table
 	pipe  *ast.Pipeline
+	group *ast.Group
+	pred  *ast.Pred
 }
 
 // voltIndex is the whole project's Volt-layer symbol graph.
@@ -76,6 +78,10 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 				ix.define(voltSym{"table", path, d.Name.Base()}, voltDef{span: spanOf(d.Name), table: d})
 			case *ast.Pipeline:
 				ix.define(voltSym{"pipeline", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), pipe: d})
+			case *ast.Group:
+				ix.define(voltSym{"group", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), group: d})
+			case *ast.Pred:
+				ix.define(voltSym{"pred", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), pred: d})
 			}
 		}
 		// A package "declaration" is its first file, so an import can
@@ -131,10 +137,49 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 				}
 			case *ast.Scope:
 				ix.scopeRefs(pkg, path, d)
+			case *ast.Group:
+				// Terms resolve tables first, then groups (§V9.2).
+				for _, term := range d.Terms {
+					sp := spanOf(term.Name)
+					kind := "group"
+					if _, isTable := ix.defs[voltSym{"table", path, term.Name.Name()}]; isTable {
+						kind = "table"
+					}
+					ix.refs = append(ix.refs, voltRef{sp, sp, voltSym{kind, path, term.Name.Name()}, false, term.Name.Name()})
+				}
+			case *ast.Pred:
+				ix.predExprRefs(path, d.X)
+			case *ast.Select:
+				// The target resolves groups first (§V11.2).
+				sp := spanOf(d.Target)
+				kind := "table"
+				if _, isGroup := ix.defs[voltSym{"group", path, d.Target.Name()}]; isGroup {
+					kind = "group"
+				}
+				ix.refs = append(ix.refs, voltRef{sp, sp, voltSym{kind, path, d.Target.Name()}, false, d.Target.Name()})
+				if d.Where != nil {
+					ix.predExprRefs(path, d.Where)
+				}
 			}
 		}
 	}
 	return ix
+}
+
+// predExprRefs indexes the Pred references inside an expression (§V10.2).
+func (ix *voltIndex) predExprRefs(path string, x ast.PredExpr) {
+	switch x := x.(type) {
+	case *ast.PredBinary:
+		ix.predExprRefs(path, x.X)
+		ix.predExprRefs(path, x.Y)
+	case *ast.PredNot:
+		ix.predExprRefs(path, x.X)
+	case *ast.PredParen:
+		ix.predExprRefs(path, x.X)
+	case *ast.PredRef:
+		sp := spanOf(x.Name)
+		ix.refs = append(ix.refs, voltRef{sp, sp, voltSym{"pred", path, x.Name.Name()}, false, x.Name.Name()})
+	}
 }
 
 func (ix *voltIndex) define(sym voltSym, def voltDef) {
@@ -310,6 +355,10 @@ func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 		md = pipelineHover(ref.sym, def)
 	case "package":
 		md = "**package** `" + ref.sym.pkg + "`"
+	case "group":
+		md = groupHover(ref.sym, def)
+	case "pred":
+		md = predHover(ref.sym, def, d.vindex)
 	}
 	if md == "" {
 		return nil
@@ -322,6 +371,41 @@ func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 		Contents: protocol.MarkupContent{Kind: protocol.MarkupKindMarkdown, Value: md},
 		Range:    &rng,
 	}
+}
+
+// groupHover lists a group's terms as written (§V9).
+func groupHover(sym voltSym, def voltDef) string {
+	g := def.group
+	if g == nil {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "```volt\nGroup %s\n```\n", sym.name)
+	for _, t := range g.Terms {
+		op := "+"
+		if t.Neg {
+			op = "-"
+		}
+		fmt.Fprintf(&b, "- %s %s\n", op, t.Name.Name())
+	}
+	return b.String()
+}
+
+// predHover shows the predicate's source expression when the buffer is
+// open, else just its name (§V10).
+func predHover(sym voltSym, def voltDef, ix *voltIndex) string {
+	p := def.pred
+	if p == nil {
+		return ""
+	}
+	md := "```volt\nPred " + sym.name + "\n```\n"
+	if text, ok := ix.texts[def.span.file]; ok && p.X != nil {
+		start, end := p.X.Pos().Offset, p.X.End().Offset
+		if start >= 0 && end <= len(text) && start < end {
+			md += "```volt\n" + text[start:end] + "\n```\n"
+		}
+	}
+	return md
 }
 
 func tableModelHover(sym voltSym, def voltDef) string {
@@ -480,6 +564,14 @@ func (d *Document) voltComplete(prefix string) []protocol.CompletionItem {
 			return d.packageTableItems(target, m[2])
 		}
 	}
+	if m := voltSelectForRE.FindStringSubmatch(prefix); m != nil {
+		items := d.packageTableItems(d.vpkg.Path, m[1])
+		items = append(items, d.namedDefItems("group", m[1], protocol.CompletionItemKindStruct)...)
+		return items
+	}
+	if m := voltWhereRE.FindStringSubmatch(prefix); m != nil {
+		return d.namedDefItems("pred", m[1], protocol.CompletionItemKindFunction)
+	}
 	if m := voltResourcesRE.FindStringSubmatch(prefix); m != nil {
 		items := d.packageTableItems(d.vpkg.Path, m[1])
 		quals := make([]string, 0, len(d.vpkg.Imports))
@@ -498,6 +590,34 @@ func (d *Document) voltComplete(prefix string) []protocol.CompletionItem {
 		return items
 	}
 	return nil
+}
+
+// voltSelectForRE matches a select's target being typed (§V11.2).
+var voltSelectForRE = regexp.MustCompile(`^\s*[Ss]elect\s+\w+\s+for\s+([A-Za-z0-9_]*)$`)
+
+// voltWhereRE matches an identifier being typed inside a where clause
+// or a Pred body opened on the same line (§V10).
+var voltWhereRE = regexp.MustCompile(`\b(?:where|and|or|not|\{)\s+([A-Za-z0-9_]*)$`)
+
+// namedDefItems lists this package's definitions of one kind.
+func (d *Document) namedDefItems(kind, partial string, itemKind protocol.CompletionItemKind) []protocol.CompletionItem {
+	var items []protocol.CompletionItem
+	for sym := range d.vindex.defs {
+		if sym.kind != kind || sym.pkg != d.vpkg.Path {
+			continue
+		}
+		if partial != "" && !strings.HasPrefix(strings.ToLower(sym.name), strings.ToLower(partial)) {
+			continue
+		}
+		detail := kind + " " + sym.name
+		items = append(items, protocol.CompletionItem{
+			Label:  sym.name,
+			Kind:   kindPtr(itemKind),
+			Detail: &detail,
+		})
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Label < items[j].Label })
+	return items
 }
 
 // packageTableItems lists the tables a package declares, filtered by

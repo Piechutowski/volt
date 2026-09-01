@@ -287,3 +287,247 @@ func (p *parser) routePath() *ast.RoutePath {
 	}
 	return rp
 }
+
+/* ===== groups (§V9) ===== */
+
+// groupDecl = "Group" name ( "{" members "}" | "=" group expr ) (§V9).
+func (p *parser) groupDecl() *ast.Group {
+	d := &ast.Group{GroupPos: p.next().Pos}
+	d.Name = p.ident("group declaration (§V9)")
+	if d.Name.Quoted() {
+		p.fail(p.toks[p.pos-1], "group name must be a plain identifier (§V9.1)")
+	}
+	switch {
+	case p.at(token.LBRACE):
+		p.next()
+		for !p.at(token.RBRACE) && !p.at(token.EOF) {
+			name := p.ident("group member (§V9)")
+			d.Terms = append(d.Terms, &ast.GroupTerm{Name: name})
+			if !p.at(token.RBRACE) && !p.cur().NLBefore {
+				p.fail(p.cur(), "group members are one per line (§V9)")
+			}
+		}
+		d.EndPos = p.expect(token.RBRACE, "group declaration (§V9)").End()
+	case p.at(token.EQ):
+		p.next()
+		d.Terms = append(d.Terms, &ast.GroupTerm{Name: p.ident("group expression (§V9.3)")})
+		for p.at(token.PLUS) || p.at(token.MINUS) {
+			neg := p.at(token.MINUS)
+			p.next()
+			d.Terms = append(d.Terms, &ast.GroupTerm{Neg: neg, Name: p.ident("group expression (§V9.3)")})
+		}
+		d.EndPos = d.Terms[len(d.Terms)-1].Name.End()
+		p.endOfLine("group declaration (§V9)")
+	default:
+		p.fail(p.cur(), "expected '{' or '=' after the group name (§V9)")
+	}
+	return d
+}
+
+/* ===== predicates (§V10) ===== */
+
+// predDecl = "Pred" name "{" pred expr "}" (§V10).
+func (p *parser) predDecl() *ast.Pred {
+	d := &ast.Pred{PredPos: p.next().Pos}
+	d.Name = p.ident("predicate declaration (§V10)")
+	if d.Name.Quoted() {
+		p.fail(p.toks[p.pos-1], "predicate name must be a plain identifier (§V10)")
+	}
+	p.expect(token.LBRACE, "predicate declaration (§V10)")
+	d.X = p.predExpr()
+	d.Rbrace = p.expect(token.RBRACE, "predicate declaration (§V10)").End()
+	return d
+}
+
+// predExpr = pred and { "or" pred and } (§V10).
+func (p *parser) predExpr() ast.PredExpr {
+	x := p.predAnd()
+	for p.atKw("or") {
+		p.next()
+		x = &ast.PredBinary{Op: "or", X: x, Y: p.predAnd()}
+	}
+	return x
+}
+
+func (p *parser) predAnd() ast.PredExpr {
+	x := p.predUnary()
+	for p.atKw("and") {
+		p.next()
+		x = &ast.PredBinary{Op: "and", X: x, Y: p.predUnary()}
+	}
+	return x
+}
+
+func (p *parser) predUnary() ast.PredExpr {
+	if p.atKw("not") {
+		pos := p.next().Pos
+		return &ast.PredNot{NotPos: pos, X: p.predUnary()}
+	}
+	return p.predPrimary()
+}
+
+// predPrimary distinguishes parenthesized expressions, column-anchored
+// forms (comparison, in, like, is null), literal/param-anchored
+// comparisons, and bare Pred references (§V10).
+func (p *parser) predPrimary() ast.PredExpr {
+	t := p.cur()
+	switch {
+	case p.at(token.LPAREN):
+		lp := p.next().Pos
+		x := p.predExpr()
+		rp := p.expect(token.RPAREN, "parenthesized predicate (§V10)").End()
+		return &ast.PredParen{Lparen: lp, X: x, Rparen: rp}
+	case p.at(token.COLON), p.at(token.NUMBER), p.at(token.STRING), p.at(token.MINUS),
+		p.at(token.IDENT) && (strings.EqualFold(t.Val, "true") || strings.EqualFold(t.Val, "false")) && p.compOpAt(1):
+		x := p.operand()
+		return p.comparisonTail(x)
+	case p.at(token.IDENT):
+		name := p.ident("predicate (§V10)")
+		switch {
+		case p.compOpAt(0):
+			return p.comparisonTail(&ast.ColRef{Name: name})
+		case p.atKw("in"):
+			return p.predIn(name)
+		case p.atKw("like"):
+			return p.predLike(name)
+		case p.atKw("is"):
+			return p.predNull(name)
+		default:
+			if name.Quoted() {
+				p.fail(name.Tok, "a predicate reference must be a plain identifier (§V10.2)")
+			}
+			return &ast.PredRef{Name: name}
+		}
+	default:
+		p.fail(t, "expected a predicate expression (§V10), found %s", t)
+		return nil
+	}
+}
+
+// compOpAt reports whether the token n ahead is a comparison operator.
+func (p *parser) compOpAt(n int) bool {
+	switch p.peekKind(n) {
+	case token.EQ, token.NEQ, token.LT, token.LE, token.GT, token.GE:
+		return true
+	}
+	return false
+}
+
+func (p *parser) comparisonTail(x ast.Operand) ast.PredExpr {
+	if !p.compOpAt(0) {
+		p.fail(p.cur(), "expected a comparison operator (= != < <= > >=) (§V10)")
+	}
+	op := p.next().Kind
+	return &ast.PredCompare{X: x, Op: op, Y: p.operand()}
+}
+
+// operand = column ref | ":" name | literal (§V10).
+func (p *parser) operand() ast.Operand {
+	t := p.cur()
+	switch {
+	case p.at(token.COLON):
+		colon := p.next().Pos
+		if !p.at(token.IDENT) || !p.contiguous() {
+			p.fail(p.cur(), "':' must be directly followed by a parameter name (§V10)")
+		}
+		name := p.ident("parameter (§V10)")
+		if name.Quoted() {
+			p.fail(name.Tok, "parameter names are plain identifiers (§V10)")
+		}
+		return &ast.Param{ColonPos: colon, Name: name}
+	case p.at(token.NUMBER), p.at(token.STRING):
+		return &ast.Lit{Tok: p.next()}
+	case p.at(token.MINUS) && p.peekKind(1) == token.NUMBER:
+		minus := p.next()
+		num := p.next()
+		num.Val = "-" + num.Val
+		num.Pos = minus.Pos
+		return &ast.Lit{Tok: num}
+	case p.at(token.IDENT) && (strings.EqualFold(t.Val, "true") || strings.EqualFold(t.Val, "false")):
+		return &ast.Lit{Tok: p.next()}
+	case p.at(token.IDENT):
+		return &ast.ColRef{Name: p.ident("operand (§V10)")}
+	default:
+		p.fail(t, "expected a column, :param or literal (§V10), found %s", t)
+		return nil
+	}
+}
+
+func (p *parser) predIn(col *ast.Ident) ast.PredExpr {
+	p.next() // in
+	x := &ast.PredIn{Col: col}
+	p.expect(token.LPAREN, "in list (§V10)")
+	for {
+		lit, ok := p.operand().(*ast.Lit)
+		if !ok {
+			p.fail(p.toks[p.pos-1], "in items are literals (§V10)")
+		}
+		x.Items = append(x.Items, lit)
+		if !p.at(token.COMMA) {
+			break
+		}
+		p.next()
+	}
+	x.Rparen = p.expect(token.RPAREN, "in list (§V10)").End()
+	return x
+}
+
+func (p *parser) predLike(col *ast.Ident) ast.PredExpr {
+	p.next() // like
+	x := &ast.PredLike{Col: col}
+	switch pat := p.operand().(type) {
+	case *ast.Lit:
+		if pat.Tok.Kind != token.STRING {
+			p.fail(pat.Tok, "like takes a string pattern or :param (§V10)")
+		}
+		x.Pattern = pat
+	case *ast.Param:
+		x.Pattern = pat
+	default:
+		p.fail(p.toks[p.pos-1], "like takes a string pattern or :param (§V10)")
+	}
+	return x
+}
+
+func (p *parser) predNull(col *ast.Ident) ast.PredExpr {
+	p.next() // is
+	x := &ast.PredNull{Col: col}
+	if p.atKw("not") {
+		p.next()
+		x.Not = true
+	}
+	if !p.atKw("null") {
+		p.fail(p.cur(), "expected 'null' after 'is' (§V10)")
+	}
+	x.EndPos = p.next().End()
+	return x
+}
+
+/* ===== selects (§V11) ===== */
+
+// selectDecl = "Select" name "for" target [ "where" pred expr ]
+// [ settings ] newline (§V11).
+func (p *parser) selectDecl() *ast.Select {
+	d := &ast.Select{SelectPos: p.next().Pos}
+	d.Name = p.ident("select declaration (§V11)")
+	if d.Name.Quoted() {
+		p.fail(p.toks[p.pos-1], "select name must be a plain identifier (§V11.1)")
+	}
+	if !p.atKw("for") {
+		p.fail(p.cur(), "expected 'for' after the select name (§V11)")
+	}
+	p.next()
+	d.Target = p.ident("select target (§V11.2)")
+	d.EndPos = d.Target.End()
+	if p.atKw("where") {
+		p.next()
+		d.Where = p.predExpr()
+		d.EndPos = d.Where.End()
+	}
+	if p.at(token.LBRACKET) {
+		d.Settings = p.settingList()
+		d.EndPos = d.Settings.End()
+	}
+	p.endOfLine("select declaration (§V11)")
+	return d
+}

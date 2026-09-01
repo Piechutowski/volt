@@ -28,3 +28,17 @@ CREATE TABLE user_tags (
   PRIMARY KEY (user_id, tag),
   FOREIGN KEY (user_id) REFERENCES users (id)
 );
+
+CREATE TABLE page_views (
+  id INTEGER PRIMARY KEY,
+  site TEXT NOT NULL,
+  day INTEGER NOT NULL,
+  hits INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE link_clicks (
+  id INTEGER PRIMARY KEY,
+  site TEXT NOT NULL,
+  day INTEGER NOT NULL,
+  target TEXT NOT NULL DEFAULT ''
+);

@@ -47,6 +47,13 @@ func Generate(pkg *lang.Package, opts Options) ([]File, error) {
 			return nil, err
 		}
 		out = append(out, File{"nao_queries.go", queries}, File{"nao_dyn.go", dyn})
+		if fns := pkg.SelectFns(); len(fns) > 0 {
+			selects, err := golang.GenerateSelects(pkg.Merged(), pkg.Schema(), fns, gopts)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, File{"nao_selects.go", selects})
+		}
 	}
 	if opts.SQL {
 		ddl, err := sqlite.Generate(pkg.Merged(), pkg.Schema(), sqlite.Options{Source: opts.Source})

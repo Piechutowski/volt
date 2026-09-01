@@ -21,3 +21,21 @@ func GoTypeName(dbmlType string) (string, bool) {
 	}
 	return t.name, true
 }
+
+// SelectParam is one Go parameter of a generated select method
+// (spec §V11.6), in declaration order.
+type SelectParam struct {
+	SQLName string // name bound as :name in the statement
+	GoName  string
+	GoType  string // e.g. "string", "int64", "time.Time"
+}
+
+// SelectFn is one select instantiation: a method on Queries for one
+// member table, with WHERE/ORDER fragments rendered by the checker.
+type SelectFn struct {
+	TableKey     string // canonical schema.name key into check.Info
+	MethodSuffix string
+	WhereSQL     string
+	OrderSQL     string
+	Params       []SelectParam
+}
