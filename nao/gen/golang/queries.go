@@ -76,6 +76,7 @@ type fieldPlan struct {
 	col      *ast.Column
 	colName  string // DBML/SQL column name
 	goField  string // exported struct field, e.g. "EditorID"
+	tag      string // assembled struct tag (Appendix A.5), e.g. `db:"id" json:"id"`
 	goType   string // full field type, e.g. "rt.Null[int64]"
 	baseType string // goType without the Null wrapper, e.g. "int64"
 	param    string // SQL parameter name, e.g. "editor_id"
@@ -252,6 +253,7 @@ func fieldBuild(g *generator, cd *check.ColumnDef, pkFromIndex map[string]bool, 
 		col:        col,
 		colName:    colName,
 		goField:    goField,
+		tag:        fieldTag(col),
 		goType:     goType,
 		baseType:   typ.name,
 		param:      param,
@@ -698,6 +700,6 @@ func (e *queryEmitter) paramFields(fields []*fieldPlan) {
 		if note := settingNote(f.col.Settings); note != "" {
 			commentWriteIndent(b, note)
 		}
-		fmt.Fprintf(b, "\t%s %s `db:%q json:%q`\n", f.goField, f.goType, f.colName, f.colName)
+		fmt.Fprintf(b, "\t%s %s `%s`\n", f.goField, f.goType, f.tag)
 	}
 }

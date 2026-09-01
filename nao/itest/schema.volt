@@ -18,7 +18,7 @@ Enum order_status {
 Table users {
   id integer [pk, increment]
   email varchar [not null, unique]
-  name varchar [not null]
+  name varchar [not null, tag: 'json:"displayName"']
   bio text [note: 'NULL until the user writes one']
   created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
 }

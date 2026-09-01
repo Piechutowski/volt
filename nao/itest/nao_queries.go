@@ -125,7 +125,7 @@ const userCreateSQL = `INSERT INTO "users" ("email", "name", "bio") VALUES (:ema
 // auto-increment key and defaulted columns are the database's job (D16).
 type UserCreateParams struct {
 	Email string `db:"email" json:"email"`
-	Name  string `db:"name" json:"name"`
+	Name  string `db:"name" json:"displayName"`
 	// NULL until the user writes one
 	Bio rt.Null[string] `db:"bio" json:"bio"`
 }
@@ -146,7 +146,7 @@ const userUpdateSQL = `UPDATE "users" SET "email" = :email, "name" = :name, "bio
 // outside the primary key.
 type UserUpdateParams struct {
 	Email string `db:"email" json:"email"`
-	Name  string `db:"name" json:"name"`
+	Name  string `db:"name" json:"displayName"`
 	// NULL until the user writes one
 	Bio       rt.Null[string] `db:"bio" json:"bio"`
 	CreatedAt time.Time       `db:"created_at" json:"created_at"`

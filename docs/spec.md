@@ -632,6 +632,36 @@ column setting  = "primary key" | "pk"
    (`id int pk`). New documents SHOULD use the settings list instead.
 8. Each column definition is terminated by a line break.
 
+> **Extension (this implementation).** The column setting `tag: string`
+> (repeatable) passes one Go struct tag through to the generated field
+> verbatim ([decision D60](decisions.md)): every field property lives in
+> the schema (D59), and the passthrough serves every encoding and
+> third-party library without minting a setting name per format.
+>
+> 1. The value MUST be exactly one `key:"value"` pair in Go struct-tag
+>    form: a key containing no spaces, colons, double quotes or
+>    backticks, then a colon, then a double-quoted value containing no
+>    double quotes or backticks.
+> 2. Within one column, tag keys MUST be unique across all `tag`
+>    settings.
+> 3. The key `db` is reserved and an error — the `db` tag is the scan
+>    contract (Appendix A.5).
+> 4. A `json` tag replaces the generated default; every other tag is
+>    appended after the generated pair, in declaration order
+>    (Appendix A.5).
+>
+> The setting is accepted by this front end but is not upstream DBML.
+> Note that `encoding/gob` ignores struct tags entirely: renaming a
+> field for gob is a Go-field-name concern, not a tag concern, and has
+> no surface here.
+
+```volt
+Table users {
+  id        integer [pk]
+  user_name varchar [not null, tag: 'json:"userName"', tag: 'xml:"user-name,attr"']
+}
+```
+
 ### 6.4 Default Values
 
 ```ebnf
@@ -2028,6 +2058,20 @@ Generated files start with the machine-readable
 `// Code generated … DO NOT EDIT.` marker; `volt gen` refuses to
 overwrite a file lacking it. Generated code imports the standard
 library and `nao/rt` only.
+
+## A.5 Struct tags
+
+Every generated struct field derived from a column — on the model and
+its params structs alike — carries the same tag, assembled in this
+order:
+
+1. `db:"<column name>"` — the scan contract. Not overridable; the
+   column setting `tag:` rejects the key `db` (§6.3).
+2. `json:"<column name>"` — the JSON default. Nothing is omitted
+   (`omitempty` is never generated): a document always carries every
+   column, and NULL is the value `null` (D13). A column `tag:` with key
+   `json` **replaces** this pair verbatim.
+3. Every other `tag:` passthrough pair, verbatim, in declaration order.
 
 ---
 

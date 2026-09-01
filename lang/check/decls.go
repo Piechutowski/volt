@@ -121,6 +121,7 @@ func (c *checker) columnCheck(col *ast.Column) {
 		}
 	}
 	c.settingsCheck(col.Settings, "6.3", columnSettings)
+	c.tagSettingsCheck(col.Settings)
 }
 
 /* ===== Enum (§6.8) ===== */

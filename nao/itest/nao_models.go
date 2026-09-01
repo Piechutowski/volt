@@ -24,7 +24,7 @@ const (
 type User struct {
 	ID    int32  `db:"id" json:"id"`
 	Email string `db:"email" json:"email"`
-	Name  string `db:"name" json:"name"`
+	Name  string `db:"name" json:"displayName"`
 	// NULL until the user writes one
 	Bio       rt.Null[string] `db:"bio" json:"bio"`
 	CreatedAt time.Time       `db:"created_at" json:"created_at"`

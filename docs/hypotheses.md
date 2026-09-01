@@ -59,20 +59,15 @@ datasets end up with one override idiom, not two.
 **Settled part → D59:** every per-field property lives on the column
 declaration; generated code cannot carry hand-authored tags.
 
-**What's actually unsettled:** the surfaces and their order — plus
-the namespace problem the maintainer raised: every first-class column
-setting eats a name in the `[]` vocabulary forever (`note:` is already
-taken by notes), and per-encoding settings would only crowd it further.
+**Graduated part → D60** (2026-09-02, built): the namespace resolution
+— first-class settings only for what Volt itself understands, plus the
+repeatable `[tag: 'key:"value"']` verbatim passthrough (spec §6.3
+extension, Appendix A.5).
 
-Working resolution of the namespace problem: **first-class settings
-only for what Volt itself understands** (semantics the checker, vet or
-generators act on — `[sensitive]` is the candidate), plus **one
-generic passthrough**, a repeatable `[tag: 'key:"value"']` that emits
-a verbatim struct tag. The passthrough serves every encoding and
-third-party library ever, without minting a name per format — and a
-tag literally named `note` is just `[tag: 'note:"x"']`, no collision.
-gob nuance stands: gob ignores tags; renaming for gob means a
-Go-field-name override (`[go:]`-style, sibling of `[model:]`).
+**What's actually unsettled:** which first-class settings to mint and
+when (`[sensitive]` is the candidate), and whether a Go-field-name
+override (`[go:]`-style, sibling of `[model:]`) is ever needed — the
+gob rename case, since gob ignores tags.
 
 **Validation — the maintainer's design, replacing the settings
 sketch:** no `[min:]`-style settings at all. `checks { }` blocks ARE

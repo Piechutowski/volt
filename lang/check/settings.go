@@ -40,14 +40,16 @@ var (
 		kinds: map[string]valueKind{"headercolor": colorValue, "note": strValue, "model": strValue},
 	}
 	columnSettings = settingSpec{
+		// tag is our extension (D60): one verbatim Go struct-tag pair per
+		// setting, shaped and deduplicated by tagSettingsCheck.
 		kinds: map[string]valueKind{
 			"pk": flagOnly, "primary key": flagOnly,
 			"null": flagOnly, "not null": flagOnly,
 			"unique": flagOnly, "increment": flagOnly,
 			"default": defaultVal, "check": exprValue,
-			"note": strValue, "ref": refVal,
+			"note": strValue, "ref": refVal, "tag": strValue,
 		},
-		repeatable: map[string]bool{"check": true, "ref": true},
+		repeatable: map[string]bool{"check": true, "ref": true, "tag": true},
 		synonyms:   map[string]string{"primary key": "pk"},
 		conflicts:  [][2]string{{"null", "not null"}},
 	}
@@ -178,6 +180,60 @@ func (c *checker) defaultValueCheck(s *ast.Setting) {
 	default:
 		c.errorf(s.Value.Pos(), "6.4", "default value must be a number, string, boolean, null, expression or enum constant")
 	}
+}
+
+// tagSettingsCheck enforces the tag: extension's shape rules (§6.3,
+// D60): one key:"value" pair per setting, keys unique per column, db
+// reserved for the scan contract.
+func (c *checker) tagSettingsCheck(sl *ast.SettingList) {
+	if sl == nil {
+		return
+	}
+	seen := map[string]bool{}
+	for _, s := range sl.Settings {
+		if s.Name != "tag" {
+			continue
+		}
+		lit, ok := s.Value.(*ast.BasicLit)
+		if !ok || lit.Tok.Kind != token.STRING {
+			continue // shape already reported by settingValueCheck
+		}
+		key, ok := tagPairKey(lit.Tok.Val)
+		if !ok {
+			c.errorf(lit.Pos(), "6.3", `tag %q is not one key:"value" pair — write e.g. 'json:"name"' (§6.3)`, lit.Tok.Val)
+			continue
+		}
+		if key == "db" {
+			c.errorf(lit.Pos(), "6.3", `tag key "db" is reserved: the db tag is the scan contract (Appendix A.5)`)
+			continue
+		}
+		if seen[key] {
+			c.errorf(lit.Pos(), "6.3", "tag key %q appears more than once on this column (§6.3)", key)
+			continue
+		}
+		seen[key] = true
+	}
+}
+
+// tagPairKey parses one key:"value" struct-tag pair, returning its key.
+// The shape rules are §6.3's: no spaces, colons, double quotes or
+// backticks in the key; a double-quoted value free of both quote kinds.
+func tagPairKey(pair string) (string, bool) {
+	i := strings.IndexByte(pair, ':')
+	if i <= 0 {
+		return "", false
+	}
+	key, val := pair[:i], pair[i+1:]
+	if strings.ContainsAny(key, " \t\"`") {
+		return "", false
+	}
+	if len(val) < 2 || val[0] != '"' || val[len(val)-1] != '"' {
+		return "", false
+	}
+	if strings.ContainsAny(val[1:len(val)-1], "\"`") {
+		return "", false
+	}
+	return key, true
 }
 
 func isString(n ast.Node) bool {

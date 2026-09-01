@@ -377,3 +377,18 @@ where the merge changed the facts.
   this project exists to delete, never the recommended path. Which
   settings to mint and when is H4's question; that they live in the
   schema is settled.
+- **D60 — First-class settings for Volt semantics; one verbatim
+  `[tag:]` passthrough for everything else** (2026-09-02). A column
+  setting earns a first-class name only when Volt itself acts on it
+  (`[model:]`, notes). Per-encoding settings are never minted — every
+  one would eat a `[]` name forever (`note:` is already taken) and
+  grow the language per third-party library. Instead the repeatable
+  `tag: 'key:"value"'` (spec §6.3 extension, Appendix A.5) passes one
+  Go struct tag through verbatim: `db` is reserved (scan contract), a
+  `json` pair replaces the generated default, everything else appends
+  in declaration order, and params structs carry the same tags. This
+  makes D59 total — every field property has a home in the schema —
+  without a namespace to defend: a tag literally named `note` is
+  `[tag: 'note:"x"']`, its key inside the string, not in Volt's
+  vocabulary. gob ignores struct tags entirely; renaming for gob would
+  be a Go-field-name override and stays out of scope (H4).
