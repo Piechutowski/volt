@@ -59,20 +59,35 @@ datasets end up with one override idiom, not two.
 **Settled part → D59:** every per-field property lives on the column
 declaration; generated code cannot carry hand-authored tags.
 
-**What's actually unsettled:** the surfaces and their order. The
-inventory of degrees of freedom, so none is forgotten:
-- **wire names**: `[json: 'displayName']` today the JSON tag is
-  locked to the column name; msgpack/other encodings would follow the
-  same pattern per format. gob is the exception — it ignores tags and
-  encodes by Go field name, so renaming for gob means overriding the
-  *field* name (a `[go:]`-style setting, the per-column sibling of
-  `[model:]`).
-- **omission per format**: sensitive columns (`[sensitive]` or
-  `[json: -]`) — vet warning on exposure, exclusion from `*`?
-- **form binding**: when a form/params sub-library exists, its field
-  mapping reads the schema, same rule.
-- **validation**: settings compiling to CHECKs and/or a generated
-  validator surface (orm-matrix LATER rows).
-Mint each setting from a real moment in the app, not in advance; every
+**What's actually unsettled:** the surfaces and their order — plus
+the namespace problem the maintainer raised: every first-class column
+setting eats a name in the `[]` vocabulary forever (`note:` is already
+taken by notes), and per-encoding settings would only crowd it further.
+
+Working resolution of the namespace problem: **first-class settings
+only for what Volt itself understands** (semantics the checker, vet or
+generators act on — `[sensitive]` is the candidate), plus **one
+generic passthrough**, a repeatable `[tag: 'key:"value"']` that emits
+a verbatim struct tag. The passthrough serves every encoding and
+third-party library ever, without minting a name per format — and a
+tag literally named `note` is just `[tag: 'note:"x"']`, no collision.
+gob nuance stands: gob ignores tags; renaming for gob means a
+Go-field-name override (`[go:]`-style, sibling of `[model:]`).
+
+**Validation — the maintainer's design, replacing the settings
+sketch:** no `[min:]`-style settings at all. `checks { }` blocks ARE
+parameterless predicates (D57), so validation reuses them in two
+tiers:
+- a check written in the typed predicate language compiles to **both**
+  a SQL `CHECK` in the DDL and a generated Go validation (early,
+  friendly errors; the DB stays the last line of defense);
+- a check referencing a **hand-written Go function**
+  (`app.EmailValid(email)` — the same Go-ref pattern pipelines use for
+  middleware) lands in the generated validator only, never in DDL
+  (SQLite cannot call Go); the asymmetry is documented, not hidden.
+One construct, zero new settings names, composable with everything
+Pred already is.
+
+Mint each surface from a real moment in the app, not in advance; every
 one added costs spec + checker + generator + corpus (the D57 lesson:
 closed sets, deliberately grown).
