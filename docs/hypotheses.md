@@ -54,18 +54,25 @@ for one table). The shape this wants is the Dataset override ladder
 escape by omission. Decide when FW-2's ladder lands, so selects and
 datasets end up with one override idiom, not two.
 
-## H4 — Column properties belong in the schema, not in Go tags
+## H4 — Which field-property settings to mint, and when
 
-**Current working position:** Go code is derived, so a property that
-today would be a hand-written Go tag or a convention (this column is
-sensitive; this column is heavy; this column is internal) belongs on
-the **column declaration** in Volt, where every generator and check
-can see it.
+**Settled part → D59:** every per-field property lives on the column
+declaration; generated code cannot carry hand-authored tags.
 
-**What's actually unsettled:** the surface. Candidates, roughly in
-order of appeal: a `[sensitive]` column setting that (a) makes vet
-warn when a projection or full-row select exposes the column to a
-route or dataset, and maybe (b) excludes it from `*` unless named
-explicitly; a `[heavy]`-style hint for list-view defaults; whether
-these are separate flags or one extensible property mechanism.
-Decide from a real leak-shaped moment in the app, not in advance.
+**What's actually unsettled:** the surfaces and their order. The
+inventory of degrees of freedom, so none is forgotten:
+- **wire names**: `[json: 'displayName']` today the JSON tag is
+  locked to the column name; msgpack/other encodings would follow the
+  same pattern per format. gob is the exception — it ignores tags and
+  encodes by Go field name, so renaming for gob means overriding the
+  *field* name (a `[go:]`-style setting, the per-column sibling of
+  `[model:]`).
+- **omission per format**: sensitive columns (`[sensitive]` or
+  `[json: -]`) — vet warning on exposure, exclusion from `*`?
+- **form binding**: when a form/params sub-library exists, its field
+  mapping reads the schema, same rule.
+- **validation**: settings compiling to CHECKs and/or a generated
+  validator surface (orm-matrix LATER rows).
+Mint each setting from a real moment in the app, not in advance; every
+one added costs spec + checker + generator + corpus (the D57 lesson:
+closed sets, deliberately grown).

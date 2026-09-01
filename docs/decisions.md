@@ -362,3 +362,18 @@ where the merge changed the facts.
   type, so one WHERE rendering and one Go signature serve all members,
   and a text/integer disagreement (the mistake that motivated the rule)
   is a check error naming the tables.
+- **D59 — Every field property is a schema declaration, because
+  generated code cannot carry hand-authored metadata** (2026-09-02).
+  This follows necessarily from what is already law: models are
+  generated behind the DO-NOT-EDIT marker, so a hand-written struct
+  tag has no legal home — the next `volt gen` erases it. Therefore
+  any per-field degree of freedom — the wire name for JSON or any
+  other encoding, omission from a format, form binding, validation —
+  either exists as a **column setting in Volt** (the way `[model:]`
+  names the type and notes become doc comments) or it does not exist.
+  A config file on the side (sqlc's overrides.yaml) is rejected: it is
+  a second source of truth. Hand-written wrapper types that embed a
+  model remain possible Go, but they are the drift-prone DTO layer
+  this project exists to delete, never the recommended path. Which
+  settings to mint and when is H4's question; that they live in the
+  schema is settled.
