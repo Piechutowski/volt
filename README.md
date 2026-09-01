@@ -53,7 +53,7 @@ third-party deps. Importing `nao/rt` alone drags in nothing.
 | `zed-extension/` | Zed glue; install via `scripts/sync-grammar.sh` + Install Dev Extension |
 | `scripts/`       | `sync-grammar.sh` — mirrors the grammar into the local git cache Zed loads dev grammars from |
 | `itest/`         | committed fixture project served over httptest, drift-checked against the generator |
-| `docs/`          | **all prose lives here** (D49): `spec.md` (the language, normative) · `lint.md` · `editor.md` · `decisions.md` (the law) · `roadmap.md` (the plan) · `nao.md` · `model-layer.md` · `reference/` (pinned research) |
+| `docs/`          | **all prose lives here** (D49): `spec.md` (the language, normative) · `lint.md` · `editor.md` · `decisions.md` (the law) · `hypotheses.md` (the open questions) · `roadmap.md` (the plan) · `nao.md` · `model-layer.md` · `reference/` (pinned research) |
 | `AGENT.md`       | cross-session working doctrine for AI sessions (CLAUDE.md imports it) |
 
 ## What is real vs. not yet

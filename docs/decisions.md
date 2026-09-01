@@ -50,16 +50,6 @@ where the merge changed the facts.
   supported as inputs.
 ## Language and front end
 
-- **D05 — The spec is normative; the conformance corpus pins it**
-  (amended 2026-09-01; the upstream cross-check that established the
-  pin is retired, D54). Volt's relationship to DBML, stated exactly: the
-  schema core (spec Part I) is DBML **minus the file-import system**
-  (spec §7, Appendix C) — a file using only core constructs is valid
-  upstream DBML and diagrams on dbdiagram.io as-is, and every valid
-  DBML program without file imports is a valid Volt file body (§V0.2).
-  Everything beyond the core — packages and imports, routing, and the
-  coming `Select`/`View`/`[was:]`/`[repr:]` — is Volt's own, additive,
-  and owes upstream nothing.
 - **D06 — Structure mine, expressions SQLite's.** Declared queries
   (`Select`/`View`) parse
   select lists, tables, joins and declared params with my front end
@@ -98,15 +88,11 @@ where the merge changed the facts.
   (`struct { V T; Valid bool }`) with Scan/Value and JSON that marshals as
   the value or `null`. Value semantics, no heap, no nil-deref. (Supersedes
   the pointer representation in early `gen go` output.)
-- **D14 — Values first; the ergonomic surface is open** (amended
-  2026-09-01). Today each scan is a fresh plain struct — no identity
-  map, no `Save()`, no association fields on row structs. That
-  describes what is built, not a permanent ceiling: nao's final feature
-  set is deliberately undiscovered, and Active-Record-grade ergonomics
-  are welcome whenever they can be *generated* — visible plain Go,
-  compile-time checked, no hidden runtime behavior. Candidates get
-  their verdict against `reference/orm-matrix.md` as real use surfaces
-  the need; the only immovable line is D27's.
+- **D14 — Values first** (amended 2026-09-01). Each scan is a fresh
+  plain struct — no identity map, no `Save()`, no association fields on
+  row structs. This states what is built, nothing more; whether
+  AR-grade ergonomics join it is deliberately open —
+  [`hypotheses.md`](hypotheses.md) H2. The immovable line is D27's.
 - **D15 — Named placeholders; identity args positional, data args in a
   struct.** Generated SQL uses SQLite's named parameters (`:email`), bound
   via `sql.Named` inside the generated code — the placeholder *is* the
@@ -294,14 +280,16 @@ where the merge changed the facts.
   error, with did-you-mean diagnostics for case mismatches and for
   naming the model instead of the table. Self-descriptive source beats
   forgiving resolution.
-- **D49 — The docs doctrine: eight maintained files, everything
+- **D49 — The docs doctrine: nine maintained files, everything
   normative that can be** (2026-08-27). `docs/` holds exactly:
   `spec.md` (the language, EBNF + numbered constraints, every
   constraint tagged in the conformance corpus), `lint.md` (every rule
   with executable examples, drift-checked by build), `editor.md` (the
   tooling, with a construct-by-construct verification checklist),
   `decisions.md` (this file), `roadmap.md` (features with IDs and
-  statuses), `nao.md` (the ORM explained), `model-layer.md` (the
+  statuses), `hypotheses.md` (working beliefs that are not yet
+  decisions — cited, held loosely, graduated or killed by practice),
+  `nao.md` (the ORM explained), `model-layer.md` (the
   philosophy), and `reference/` (pinned-subject research: the framework
   inventories and the ORM capability matrix — consulted, not
   maintained). No other directory carries prose docs. Operational

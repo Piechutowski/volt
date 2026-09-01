@@ -23,9 +23,9 @@ disagree, one of them has a bug — the fixing commit says which. Never
 change behavior without changing the spec in the same commit, and
 never weaken a test to get green.
 
-**No doc is ever knowingly wrong (D49).** Eight maintained docs live in
-`docs/` — spec, lint, editor, decisions, roadmap, nao, model-layer,
-reference/ — and no other directory carries prose docs (root README.md/AGENT.md
+**No doc is ever knowingly wrong (D49).** Nine maintained docs live in
+`docs/` — spec, lint, editor, decisions, hypotheses, roadmap, nao,
+model-layer, reference/ — and no other directory carries prose docs (root README.md/AGENT.md
 are the named exceptions, D49).
 Operational detail (paths, commands, code snippets) may appear only in
 docs a test or the compiler keeps honest; philosophy is written at an
@@ -54,7 +54,10 @@ reverted: nao is its *name*).
 1. `docs/decisions.md` — **the law** (numbered with gaps — removed
    decisions retire their numbers). Never contradict one
    silently; changing a decision means editing that file in the same
-   commit. New session-level rulings get appended there.
+   commit. New session-level rulings get appended there. What is
+   *not yet* decided lives in `docs/hypotheses.md` — working beliefs,
+   numbered, graduated or killed by practice; never treat one as law,
+   and put new open questions there, not in decisions.
 2. `docs/roadmap.md` — **the build plan**: stable IDs, statuses
    (updated in the landing commit). Current priority: FW-1
    (`Select`/`View` query layer) then FW-2 (Datasets) — these stand

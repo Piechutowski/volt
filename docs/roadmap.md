@@ -68,12 +68,12 @@ DBML is canonical; everything else is generated from `check.Info`.
 
 | ID | Feature | Slice | Status |
 |---|---|---|---|
-| SRC-1 | Normative DBML spec (EBNF) + conformance corpus + upstream cross-check | — | `DONE` ([spec.md](spec.md), D05) |
+| SRC-1 | Normative DBML spec (EBNF) + conformance corpus | — | `DONE` ([spec.md](spec.md); cross-check retired, D54) |
 | SRC-2 | Full front end: scanner, parser, `check.Info`, multi-error recovery | — | `DONE` |
 | SRC-3 | `vet`: lint for legal-but-suspicious DBML, docs-enforced rules | — | `DONE` ([lint.md](lint.md), D26) |
 | SRC-4 | `volt gen` → models (`nao_models.go`): structs, enums, notes → doc comments, `Null[T]`, singular names + `[model:]` | v0 | `DONE` (D09–D13) |
 | SRC-5 | `volt gen --sql` → DDL + seed `INSERT`s from `records` | v0 | `DONE` (D12, D38) |
-| SRC-6 | Extensions stay a projectable superset (core diagrams still work) | all | ongoing (D05) |
+| SRC-6 | Extensions stay a projectable superset (core diagrams still work) | all | ongoing ([hypotheses H1](hypotheses.md)) |
 
 ## P2 — Default CRUD
 
