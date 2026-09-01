@@ -1,7 +1,9 @@
-// Select generation (docs/spec.md §V11.6): one typed method per
+// Select generation (docs/spec.md §V11.6-§V11.7): one typed method per
 // (select × group member), over WHERE/ORDER fragments the checker has
-// already typed and rendered. The heavy lifting — plans, scan
-// functions, quoting — is shared with the CRUD generator.
+// already typed and rendered, plus the projection row types — a shared
+// struct for explicit lists, per-member struct derivatives for the
+// star form. The heavy lifting — plans, scan functions, quoting — is
+// shared with the CRUD generator.
 package golang
 
 import (
@@ -31,6 +33,7 @@ func GenerateSelects(f *ast.File, info *check.Info, fns []SelectFn, opts Options
 
 	var body strings.Builder
 	imports := map[string]bool{"context": true}
+	sharedDone := map[string]bool{}
 	for _, fn := range fns {
 		t := byKey[fn.TableKey]
 		if t == nil {
@@ -44,7 +47,41 @@ func GenerateSelects(f *ast.File, info *check.Info, fns []SelectFn, opts Options
 				imports["time"] = true
 			}
 		}
-		selectEmit(&body, t, fn)
+		cols, err := selectColumns(t, fn)
+		if err != nil {
+			return nil, err
+		}
+		switch {
+		case fn.SharedType != "":
+			if !sharedDone[fn.SharedType] {
+				sharedDone[fn.SharedType] = true
+				fmt.Fprintf(&body, "// %s is the shared row type of select %q (spec §V11.7):\n// one wire type, every member of the target a source.\n", fn.SharedType, lowerFirstWord(fn.MethodSuffix))
+				fmt.Fprintf(&body, "type %s struct {\n", fn.SharedType)
+				for _, f := range cols {
+					// The shared type belongs to the select, not to any one
+					// table: default tags, no per-table notes (A.5, §V11.7).
+					fieldImports(imports, f.goType)
+					fmt.Fprintf(&body, "\t%s %s `db:%q json:%q`\n", f.goField, f.goType, f.colName, f.colName)
+				}
+				body.WriteString("}\n\n")
+				rowScanEmit(&body, fn.SharedType, cols)
+			}
+		case len(fn.Excluded) > 0:
+			row := t.model + fn.MethodSuffix
+			fmt.Fprintf(&body, "// %s is %s minus (%s) — a struct derivative of select %q,\n// every kept field copied verbatim (spec §V11.7).\n",
+				row, t.model, strings.Join(fn.Excluded, ", "), lowerFirstWord(fn.MethodSuffix))
+			fmt.Fprintf(&body, "type %s struct {\n", row)
+			for _, f := range cols {
+				fieldImports(imports, f.goType)
+				if note := settingNote(f.col.Settings); note != "" {
+					commentWriteIndent(&body, note)
+				}
+				fmt.Fprintf(&body, "\t%s %s `%s`\n", f.goField, f.goType, f.tag)
+			}
+			body.WriteString("}\n\n")
+			rowScanEmit(&body, row, cols)
+		}
+		selectEmit(&body, t, fn, cols)
 	}
 
 	var out strings.Builder
@@ -70,10 +107,84 @@ func GenerateSelects(f *ast.File, info *check.Info, fns []SelectFn, opts Options
 	return src, nil
 }
 
+// selectColumns resolves one instantiation's projected columns
+// (§V11.7): the explicit list in declared order, the member's fields
+// minus the star exclusions, or every field.
+func selectColumns(t *tableModel, fn SelectFn) ([]*fieldPlan, error) {
+	switch {
+	case len(fn.Cols) > 0:
+		out := make([]*fieldPlan, 0, len(fn.Cols))
+		for _, c := range fn.Cols {
+			f := t.field(c)
+			if f == nil {
+				return nil, fmt.Errorf("select %s: no column %q in table %s", fn.MethodSuffix, c, t.sqlName)
+			}
+			out = append(out, f)
+		}
+		return out, nil
+	case len(fn.Excluded) > 0:
+		ex := make(map[string]bool, len(fn.Excluded))
+		for _, c := range fn.Excluded {
+			if t.field(c) == nil {
+				return nil, fmt.Errorf("select %s: no column %q in table %s", fn.MethodSuffix, c, t.sqlName)
+			}
+			ex[c] = true
+		}
+		var out []*fieldPlan
+		for _, f := range t.fields {
+			if !ex[f.colName] {
+				out = append(out, f)
+			}
+		}
+		if len(out) == 0 {
+			return nil, fmt.Errorf("select %s: every column of %s excluded", fn.MethodSuffix, t.sqlName)
+		}
+		return out, nil
+	}
+	return t.fields, nil
+}
+
+// fieldImports records the imports a copied field type drags in.
+func fieldImports(imports map[string]bool, goType string) {
+	if strings.Contains(goType, "rt.") {
+		imports[rtImport] = true
+	}
+	if strings.Contains(goType, "time.Time") {
+		imports["time"] = true
+	}
+	if strings.Contains(goType, "json.RawMessage") {
+		imports["encoding/json"] = true
+	}
+}
+
+// rowScanEmit writes the scan function for a minted row type, the same
+// shape queries.go emits for models.
+func rowScanEmit(b *strings.Builder, row string, cols []*fieldPlan) {
+	lower := argName(row)
+	fmt.Fprintf(b, "func %sScan(r rowScanner) (%s, error) {\n\tvar v %s\n\terr := r.Scan(", lower, row, row)
+	for i, f := range cols {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(b, "&v.%s", f.goField)
+	}
+	b.WriteString(")\n\treturn v, err\n}\n\n")
+}
+
 // SelectSQL renders the statement for one instantiation — shared with
 // the prepare-validation tests, so what is tested is what ships.
 func SelectSQL(t *tableModel, fn SelectFn) string {
-	sql := "SELECT " + t.columnList() + " FROM " + sqlIdentQuote(t.sqlName)
+	cols, err := selectColumns(t, fn)
+	if err != nil {
+		// The checker refuses such an instantiation (§V11.7); surfaced
+		// loudly if a caller bypasses it.
+		return "-- " + err.Error()
+	}
+	names := make([]string, len(cols))
+	for i, f := range cols {
+		names[i] = sqlIdentQuote(f.colName)
+	}
+	sql := "SELECT " + strings.Join(names, ", ") + " FROM " + sqlIdentQuote(t.sqlName)
 	if fn.WhereSQL != "" {
 		sql += " WHERE " + fn.WhereSQL
 	}
@@ -98,10 +209,60 @@ func SelectSQLFor(f *ast.File, info *check.Info, fn SelectFn) (string, error) {
 	return "", fmt.Errorf("no table %q", fn.TableKey)
 }
 
-func selectEmit(b *strings.Builder, t *tableModel, fn SelectFn) {
-	lower := argName(t.model)
+// SelectRowType names the row type one instantiation returns (§V11.7)
+// and reports its fields — hover-grade truth for the tooling.
+func SelectRowType(f *ast.File, info *check.Info, fn SelectFn) (string, []FieldSig, error) {
+	p, err := planBuild(f, info)
+	if err != nil {
+		return "", nil, err
+	}
+	for _, t := range p.tables {
+		if t.ti.Key != fn.TableKey {
+			continue
+		}
+		cols, err := selectColumns(t, fn)
+		if err != nil {
+			return "", nil, err
+		}
+		row := t.model
+		switch {
+		case fn.SharedType != "":
+			row = fn.SharedType
+		case len(fn.Excluded) > 0:
+			row = t.model + fn.MethodSuffix
+		}
+		sigs := make([]FieldSig, 0, len(cols))
+		for _, fp := range cols {
+			sigs = append(sigs, FieldSig{
+				Name: fp.goField, Col: fp.colName, Type: fp.goType,
+				Tag: fp.tag, Doc: settingNote(fp.col.Settings),
+			})
+		}
+		return row, sigs, nil
+	}
+	return "", nil, fmt.Errorf("no table %q", fn.TableKey)
+}
+
+// lowerFirstWord echoes a method suffix the way the schema spells the
+// select name (Rows -> rows), for doc comments.
+func lowerFirstWord(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToLower(s[:1]) + s[1:]
+}
+
+func selectEmit(b *strings.Builder, t *tableModel, fn SelectFn, cols []*fieldPlan) {
+	row, scanPrefix := t.model, argName(t.model)
+	switch {
+	case fn.SharedType != "":
+		row, scanPrefix = fn.SharedType, argName(fn.SharedType)
+	case len(fn.Excluded) > 0:
+		row = t.model + fn.MethodSuffix
+		scanPrefix = argName(row)
+	}
 	name := t.model + fn.MethodSuffix
-	constName := lower + fn.MethodSuffix + "SQL"
+	constName := argName(t.model) + fn.MethodSuffix + "SQL"
 
 	fmt.Fprintf(b, "const %s = `%s`\n\n", constName, SelectSQL(t, fn))
 
@@ -110,8 +271,8 @@ func selectEmit(b *strings.Builder, t *tableModel, fn SelectFn) {
 		fmt.Fprintf(&sig, ", %s %s", prm.GoName, prm.GoType)
 		fmt.Fprintf(&binds, ", sql.Named(%q, %s)", prm.SQLName, prm.GoName)
 	}
-	fmt.Fprintf(b, "// %s runs the %q select over %s (spec §V11).\n", name, fn.MethodSuffix, t.sqlName)
-	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context%s) ([]%s, error) {\n", name, sig.String(), t.model)
+	fmt.Fprintf(b, "// %s runs the %q select over %s (spec §V11).\n", name, lowerFirstWord(fn.MethodSuffix), t.sqlName)
+	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context%s) ([]%s, error) {\n", name, sig.String(), row)
 	fmt.Fprintf(b, "\trows, err := q.db.QueryContext(ctx, %s%s)\n", constName, binds.String())
-	rowsScanEmit(b, t.model, lower)
+	rowsScanEmit(b, row, scanPrefix)
 }

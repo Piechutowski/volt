@@ -6,6 +6,8 @@ package itest
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -90,5 +92,56 @@ func TestSelectOrderDescApplies(t *testing.T) {
 	// day desc, then id asc: both rows share day 1, ids ascend.
 	if len(ordered) == 2 && ordered[0].ID > ordered[1].ID {
 		t.Errorf("order (day desc, id) violated: ids %d before %d", ordered[0].ID, ordered[1].ID)
+	}
+}
+
+func TestSelectProjectionSharedType(t *testing.T) {
+	_, q := newDB(t)
+	seedMetrics(t, q)
+	ctx := context.Background()
+
+	// One shared row type (Summary), two sources: the §V11.7 explicit
+	// list. Both methods return the same Go type.
+	pv, err := q.PageViewSummary(ctx, "alpha", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lc, err := q.LinkClickSummary(ctx, "alpha", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := append(pv, lc...) // compiles only because the type is shared
+	if len(pv) != 2 || len(lc) != 1 || len(rows) != 3 {
+		t.Fatalf("summary rows = %d + %d, want 2 + 1", len(pv), len(lc))
+	}
+	for _, r := range rows {
+		if r.Site != "alpha" || r.Day != 1 {
+			t.Errorf("row escaped the predicate: %+v", r)
+		}
+	}
+}
+
+func TestSelectProjectionStructDerivative(t *testing.T) {
+	_, q := newDB(t)
+	seedMetrics(t, q)
+
+	// The star form: LinkClickPublic is LinkClick minus target, every
+	// kept field copied verbatim (§V11.7).
+	rows, err := q.LinkClickPublic(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("LinkClickPublic = %d rows, want 2", len(rows))
+	}
+	if rows[0].ID > rows[1].ID {
+		t.Errorf("order (id asc) violated: %d before %d", rows[0].ID, rows[1].ID)
+	}
+	doc, err := json.Marshal(rows[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(doc), "target") {
+		t.Errorf("excluded column leaked into the derivative's JSON: %s", doc)
 	}
 }

@@ -36,20 +36,32 @@ type SelectParam struct {
 }
 
 // SelectFn is one select instantiation: a method on Queries for one
-// member table, with WHERE/ORDER fragments rendered by the checker.
+// member table, with WHERE/ORDER fragments rendered by the checker and
+// the §V11.7 projection already validated.
 type SelectFn struct {
 	TableKey     string // canonical schema.name key into check.Info
 	MethodSuffix string
 	WhereSQL     string
 	OrderSQL     string
 	Params       []SelectParam
+	Cols         []string // explicit projection, declared order; nil = all
+	Excluded     []string // star-form exclusions; nil = none
+	SharedType   string   // explicit list: the one shared row type name
 }
 
-// FieldSig is one generated struct field, for tooling display.
+// FieldSig is one generated struct field — hover- and derivative-grade
+// truth, from the same plan the generator runs.
 type FieldSig struct {
 	Name string // Go field name, e.g. "EditorID"
+	Col  string // source column name, e.g. "editor_id"
 	Type string // full Go type, e.g. "rt.Null[int64]"
+	Tag  string // assembled struct tag (Appendix A.5)
+	Doc  string // column note, "" when absent
 }
+
+// EnumTypeName is the Go type name an enum declaration generates
+// (Appendix A.3), for tooling and row-type collision checks.
+func EnumTypeName(schema, base string) (string, error) { return enumTypeName(schema, base) }
 
 // ModelFields reports the exact struct fields the model generator emits
 // for the table with the given canonical key — hover-grade truth, from
@@ -64,7 +76,10 @@ func ModelFields(f *ast.File, info *check.Info, tableKey string) (model string, 
 			continue
 		}
 		for _, fp := range t.fields {
-			fields = append(fields, FieldSig{Name: fp.goField, Type: fp.goType})
+			fields = append(fields, FieldSig{
+				Name: fp.goField, Col: fp.colName, Type: fp.goType,
+				Tag: fp.tag, Doc: settingNote(fp.col.Settings),
+			})
 		}
 		return t.model, fields, nil
 	}

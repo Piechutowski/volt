@@ -451,11 +451,18 @@ func (x *Lit) operand()            {}
 type Select struct {
 	SelectPos token.Position
 	Name      *Ident
+	Lparen    token.Position // projection parens (§V11.7); zero when absent
+	Star      bool           // (* - a - b) star form
+	Cols      []*Ident       // explicit list, or the star form's exclusions
+	Rparen    token.Position
 	Target    *Ident   // group or table name (§V11.2)
 	Where     PredExpr // nil = all rows
 	Settings  *SettingList
 	EndPos    token.Position
 }
+
+// Projected reports whether the select carries a projection (§V11.7).
+func (d *Select) Projected() bool { return len(d.Cols) > 0 }
 
 func (d *Select) Pos() token.Position { return d.SelectPos }
 func (d *Select) End() token.Position { return d.EndPos }

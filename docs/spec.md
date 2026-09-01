@@ -1872,15 +1872,23 @@ of a target (§V9 group, or a single table treated as a one-member
 group).
 
 ```ebnf
-select decl = "Select", plain name, "for", plain name,
+select decl = "Select", plain name, [ projection ], "for", plain name,
               [ "where", pred expr ], [ settings list ], newline ;
+
+projection  = "(", column name, { ",", column name }, ")"
+            | "(", "*", "-", column name, { "-", column name }, ")" ;
 ```
 
 ```volt
-Select rows   for series where current [order: (year desc, id asc)]
-Select stale  for ms_usage where not recent
-Select all    for series
+Select rows    for series where current [order: (year desc, id asc)]
+Select stale   for ms_usage where not recent
+Select all     for series
+Select summary (id, org, year)    for series where current
+Select public  (* - password_hash) for accounts
 ```
+
+The clauses read in SQL order — name, columns, source, filter — and
+the optional projection narrows the emitted columns.
 
 1. The select name is a plain identifier; per target-member it mints
    the method `<Model><SelectName>` (Appendix A naming). A collision
@@ -1904,12 +1912,50 @@ Select all    for series
    ORDER BY text is SQL's own collation, allowed here.
 6. Generation contract (with Appendix A): per member, a method on
    `Queries` —
-   `func (q *Queries) <Model><SelectName>(ctx context.Context, <params>) ([]<Model>, error)`
+   `func (q *Queries) <Model><SelectName>(ctx context.Context, <params>) ([]<Row>, error)`
    — parameters in first-appearance order over the expanded
-   expression, each typed by rule §V10.3; the emitted SQL is
-   `SELECT <all columns> FROM <table> [WHERE …] [ORDER BY …]` with
-   SQLite named parameters (D15), and every emitted statement is
+   expression, each typed by rule §V10.3; `<Row>` is the member's row
+   type per rule 7 (the model itself when there is no projection); the
+   emitted SQL is
+   `SELECT <projected columns> FROM <table> [WHERE …] [ORDER BY …]`
+   with SQLite named parameters (D15), and every emitted statement is
    prepare-validated against the generated DDL (D06).
+7. **Projection and row types.** Without a projection the row type is
+   the member's model and the emitted columns are all of it. With one:
+   - **Explicit list** `(a, b, c)` — at least one column, no
+     duplicates. Every listed column MUST exist in every member with
+     one agreed generated **field type** (Appendix A — nullability
+     included, so `text` and `text [not null]` disagree); a miss or a
+     disagreement is an error naming the members and their types. The
+     row type is **one shared struct** named by the select name
+     mapped per Appendix A.3 (select `summary` → `Summary`), serving
+     every member: one wire type, N sources. Its fields keep the
+     columns' declared order from the list, each with the agreed type
+     and the **default** tag pair `db:"col" json:"col"` (A.5) — the
+     shared type belongs to the select, not to any one table, so
+     per-table `tag:` passthroughs and doc comments do not transfer.
+     Agreement is judged on the generated field type, so an enum-typed
+     column agrees exactly when every member resolves it to the same
+     generated enum type.
+   - **Star with exclusions** `(* - a - b)` — at least one exclusion,
+     no duplicates. Every excluded column MUST exist in every member
+     (§V9.3: the algebra must say something true), and no member may
+     end up with zero columns. Each member projects its own columns,
+     in declaration order, minus the exclusions, minting a per-member
+     **struct derivative** named `<Model><SelectName>`
+     (`User` + `public` → `UserPublic`): every kept field is copied
+     verbatim from the model — Go name, Go type, assembled struct tag
+     (A.5, `tag:` passthroughs included), doc comment — so the
+     derivative behaves exactly like the model minus the removed
+     fields.
+   - Columns referenced by `where` or `order:` need not be projected.
+   - Minted row-type names (the shared struct, and each derivative)
+     live in the generated package scope and MUST NOT collide with any
+     generated package-level name. The checker reports collisions with
+     models, enums, the `Queries` handle, another select's minted row
+     type, the generated params types (`CreateParams`/`UpdateParams`
+     select names are rejected outright), and the member tables' own
+     dynamic column handles; the Go compiler backstops the rest.
 
 ---
 
@@ -1920,7 +1966,8 @@ Additions to the collected grammar of Part I, Appendix IA. The
 
 ```ebnf
 element        = (* Part I Appendix IA alternatives *)
-               | package clause | import decl | pipeline | scope ;
+               | package clause | import decl | pipeline | scope
+               | group decl | pred decl | select decl ;
 
 slash          = "/" ;
 
@@ -1956,6 +2003,10 @@ resources      = "resources", name, [ settings ], newline ;
 setting value  = (* schema-layer alternatives *) | ident list ;
 ident list     = "(", name, { ",", name }, ")" ;
 ```
+
+The `group decl`, `pred decl` and `select decl` productions — with the
+predicate expression grammar they share — are collected in §V9, §V10
+and §V11; they are not duplicated here.
 
 All tokens of a `route path` and of an `import path` MUST be contiguous
 (§V4.1.1, §V2.2) — the grammar above is subject to that adjacency
@@ -2072,6 +2123,10 @@ order:
    column, and NULL is the value `null` (D13). A column `tag:` with key
    `json` **replaces** this pair verbatim.
 3. Every other `tag:` passthrough pair, verbatim, in declaration order.
+
+A struct derivative (§V11.7) copies each kept field's assembled tag
+unchanged; an explicit-list shared row type (§V11.7) carries the
+default `db`/`json` pair only.
 
 ---
 

@@ -12,7 +12,7 @@ import (
 
 const pageViewRowsSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE (site = :site AND day = :day) ORDER BY day DESC, id ASC`
 
-// PageViewRows runs the "Rows" select over page_views (spec §V11).
+// PageViewRows runs the "rows" select over page_views (spec §V11).
 func (q *Queries) PageViewRows(ctx context.Context, site string, day int32) ([]PageView, error) {
 	rows, err := q.db.QueryContext(ctx, pageViewRowsSQL, sql.Named("site", site), sql.Named("day", day))
 	if err != nil {
@@ -32,7 +32,7 @@ func (q *Queries) PageViewRows(ctx context.Context, site string, day int32) ([]P
 
 const linkClickRowsSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE (site = :site AND day = :day) ORDER BY day DESC, id ASC`
 
-// LinkClickRows runs the "Rows" select over link_clicks (spec §V11).
+// LinkClickRows runs the "rows" select over link_clicks (spec §V11).
 func (q *Queries) LinkClickRows(ctx context.Context, site string, day int32) ([]LinkClick, error) {
 	rows, err := q.db.QueryContext(ctx, linkClickRowsSQL, sql.Named("site", site), sql.Named("day", day))
 	if err != nil {
@@ -52,7 +52,7 @@ func (q *Queries) LinkClickRows(ctx context.Context, site string, day int32) ([]
 
 const pageViewRecentSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE (site = :site AND day = :day) OR (day >= :from)`
 
-// PageViewRecent runs the "Recent" select over page_views (spec §V11).
+// PageViewRecent runs the "recent" select over page_views (spec §V11).
 func (q *Queries) PageViewRecent(ctx context.Context, site string, day int32, from int32) ([]PageView, error) {
 	rows, err := q.db.QueryContext(ctx, pageViewRecentSQL, sql.Named("site", site), sql.Named("day", day), sql.Named("from", from))
 	if err != nil {
@@ -72,7 +72,7 @@ func (q *Queries) PageViewRecent(ctx context.Context, site string, day int32, fr
 
 const linkClickRecentSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE (site = :site AND day = :day) OR (day >= :from)`
 
-// LinkClickRecent runs the "Recent" select over link_clicks (spec §V11).
+// LinkClickRecent runs the "recent" select over link_clicks (spec §V11).
 func (q *Queries) LinkClickRecent(ctx context.Context, site string, day int32, from int32) ([]LinkClick, error) {
 	rows, err := q.db.QueryContext(ctx, linkClickRecentSQL, sql.Named("site", site), sql.Named("day", day), sql.Named("from", from))
 	if err != nil {
@@ -82,6 +82,93 @@ func (q *Queries) LinkClickRecent(ctx context.Context, site string, day int32, f
 	var out []LinkClick
 	for rows.Next() {
 		v, err := linkClickScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// Summary is the shared row type of select "summary" (spec §V11.7):
+// one wire type, every member of the target a source.
+type Summary struct {
+	Site string `db:"site" json:"site"`
+	Day  int32  `db:"day" json:"day"`
+}
+
+func summaryScan(r rowScanner) (Summary, error) {
+	var v Summary
+	err := r.Scan(&v.Site, &v.Day)
+	return v, err
+}
+
+const pageViewSummarySQL = `SELECT "site", "day" FROM "page_views" WHERE (site = :site AND day = :day)`
+
+// PageViewSummary runs the "summary" select over page_views (spec §V11).
+func (q *Queries) PageViewSummary(ctx context.Context, site string, day int32) ([]Summary, error) {
+	rows, err := q.db.QueryContext(ctx, pageViewSummarySQL, sql.Named("site", site), sql.Named("day", day))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Summary
+	for rows.Next() {
+		v, err := summaryScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+const linkClickSummarySQL = `SELECT "site", "day" FROM "link_clicks" WHERE (site = :site AND day = :day)`
+
+// LinkClickSummary runs the "summary" select over link_clicks (spec §V11).
+func (q *Queries) LinkClickSummary(ctx context.Context, site string, day int32) ([]Summary, error) {
+	rows, err := q.db.QueryContext(ctx, linkClickSummarySQL, sql.Named("site", site), sql.Named("day", day))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Summary
+	for rows.Next() {
+		v, err := summaryScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// LinkClickPublic is LinkClick minus (target) — a struct derivative of select "public",
+// every kept field copied verbatim (spec §V11.7).
+type LinkClickPublic struct {
+	ID   int32  `db:"id" json:"id"`
+	Site string `db:"site" json:"site"`
+	Day  int32  `db:"day" json:"day"`
+}
+
+func linkClickPublicScan(r rowScanner) (LinkClickPublic, error) {
+	var v LinkClickPublic
+	err := r.Scan(&v.ID, &v.Site, &v.Day)
+	return v, err
+}
+
+const linkClickPublicSQL = `SELECT "id", "site", "day" FROM "link_clicks" ORDER BY id ASC`
+
+// LinkClickPublic runs the "public" select over link_clicks (spec §V11).
+func (q *Queries) LinkClickPublic(ctx context.Context) ([]LinkClickPublic, error) {
+	rows, err := q.db.QueryContext(ctx, linkClickPublicSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []LinkClickPublic
+	for rows.Next() {
+		v, err := linkClickPublicScan(rows)
 		if err != nil {
 			return nil, err
 		}

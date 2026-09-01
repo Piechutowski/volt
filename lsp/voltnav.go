@@ -396,13 +396,23 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 	for _, p := range si.Params {
 		fmt.Fprintf(&params, ", %s %s", p.GoName, p.GoType)
 	}
+	memberFn := func(key string) golang.SelectFn {
+		return golang.SelectFn{
+			TableKey: key, MethodSuffix: si.MethodSuffix,
+			Cols: si.Cols, Excluded: si.Excluded, SharedType: si.Shared,
+		}
+	}
 	for _, m := range si.Members {
 		model := m.Decl.Name.Base()
 		if mn, err := golang.ModelName(m.Decl); err == nil {
 			model = mn
 		}
+		row := model
+		if r, _, err := golang.SelectRowType(pkg.Merged(), pkg.Schema(), memberFn(m.Key)); err == nil {
+			row = r
+		}
 		fmt.Fprintf(&b, "func (q *Queries) %s%s(ctx context.Context%s) ([]%s, error)\n",
-			model, si.MethodSuffix, params.String(), model)
+			model, si.MethodSuffix, params.String(), row)
 	}
 	b.WriteString("```\n")
 	if si.WhereSQL != "" {
@@ -411,25 +421,30 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 	if si.OrderSQL != "" {
 		b.WriteString("```sql\nORDER BY " + si.OrderSQL + "\n```\n")
 	}
-	// The output structs, from the same plan the generator runs.
+	// The output row structs, from the same plan the generator runs
+	// (§V11.7): the shared type once, per-member rows capped.
 	shown := si.Members
-	if len(shown) > structCap {
+	if si.Shared != "" {
+		shown = shown[:1]
+	} else if len(shown) > structCap {
 		shown = shown[:structCap]
 	}
 	for _, m := range shown {
-		model, fields, err := golang.ModelFields(pkg.Merged(), pkg.Schema(), m.Key)
+		row, fields, err := golang.SelectRowType(pkg.Merged(), pkg.Schema(), memberFn(m.Key))
 		if err != nil {
 			continue
 		}
 		b.WriteString("```go\n")
-		fmt.Fprintf(&b, "type %s struct {\n", model)
+		fmt.Fprintf(&b, "type %s struct {\n", row)
 		for _, f := range fields {
 			fmt.Fprintf(&b, "\t%s %s\n", f.Name, f.Type)
 		}
 		b.WriteString("}\n```\n")
 	}
-	if n := len(si.Members) - len(shown); n > 0 {
-		fmt.Fprintf(&b, "*… and %d more member structs*\n", n)
+	if si.Shared == "" {
+		if n := len(si.Members) - len(shown); n > 0 {
+			fmt.Fprintf(&b, "*… and %d more member structs*\n", n)
+		}
 	}
 	return b.String()
 }

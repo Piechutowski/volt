@@ -637,15 +637,31 @@ module.exports = grammar({
     query_param: ($) =>
       seq(':', field('name', alias($._ident_immediate, $.parameter_name))),
 
-    // Select name for target [where expr] [settings] (§V11)
+    // Select name [(cols) | (* - cols)] for target [where expr]
+    // [settings] (§V11, §V11.7)
     select_definition: ($) =>
       seq(
         kw('Select'),
         field('name', alias($.identifier, $.select_name)),
+        optional(field('projection', $.select_projection)),
         kw('for'),
         field('target', alias($.identifier, $.select_target)),
         optional(seq(kw('where'), field('where', $.pred_expr))),
         optional(field('settings', $.settings_list)),
+      ),
+
+    // (a, b, c) or (* - a - b) (§V11.7): clauses read in SQL order
+    select_projection: ($) =>
+      seq(
+        '(',
+        choice(
+          seq(
+            alias($.identifier, $.column_ref),
+            repeat(seq(',', alias($.identifier, $.column_ref))),
+          ),
+          seq('*', repeat1(seq('-', alias($.identifier, $.column_ref)))),
+        ),
+        ')',
       ),
 
     // /users/:id(int32)/avatar, /files/:path..., or the bare root /

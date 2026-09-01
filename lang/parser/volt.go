@@ -513,6 +513,9 @@ func (p *parser) selectDecl() *ast.Select {
 	if d.Name.Quoted() {
 		p.fail(p.toks[p.pos-1], "select name must be a plain identifier (§V11.1)")
 	}
+	if p.at(token.LPAREN) {
+		p.selectProjection(d)
+	}
 	if !p.atKw("for") {
 		p.fail(p.cur(), "expected 'for' after the select name (§V11)")
 	}
@@ -530,4 +533,31 @@ func (p *parser) selectDecl() *ast.Select {
 	}
 	p.endOfLine("select declaration (§V11)")
 	return d
+}
+
+// selectProjection = "(" col {"," col} ")" | "(" "*" "-" col {"-" col} ")"
+// (§V11.7). Clauses read in SQL order, so the parens precede "for".
+func (p *parser) selectProjection(d *ast.Select) {
+	d.Lparen = p.next().Pos
+	if p.at(token.STAR) {
+		d.Star = true
+		p.next()
+		for p.at(token.MINUS) {
+			p.next()
+			d.Cols = append(d.Cols, p.ident("excluded column (§V11.7)"))
+		}
+		if len(d.Cols) == 0 {
+			p.fail(p.cur(), "a star projection needs at least one '- column' exclusion; drop the parens to select every column (§V11.7)")
+		}
+	} else {
+		for {
+			d.Cols = append(d.Cols, p.ident("projected column (§V11.7)"))
+			if !p.at(token.COMMA) {
+				break
+			}
+			p.next()
+		}
+	}
+	d.Rparen = p.expect(token.RPAREN, "projection (§V11.7)").End()
+	d.EndPos = d.Rparen
 }

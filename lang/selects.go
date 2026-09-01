@@ -40,6 +40,9 @@ type SelectInfo struct {
 	WhereSQL     string // "" when no where clause
 	OrderSQL     string // "" when no order setting
 	Params       []SelectParam
+	Cols         []string // explicit projection, declared order (§V11.7)
+	Excluded     []string // star-form exclusions (§V11.7)
+	Shared       string   // shared row type name; "" unless explicit list
 }
 
 /* ===== collection ===== */
@@ -86,9 +89,27 @@ func (c *checker) dataQueries(pkg *Package) {
 	}
 	c.predRefCycles(pkg)
 
+	// §V11.7: minted row-type names share the package scope with every
+	// generated type; models and enums are claimed before any select.
+	minted := map[string]string{}
+	for _, ti := range info.Tables {
+		if m, err := golang.ModelName(ti.Decl); err == nil {
+			minted[m] = fmt.Sprintf("the model of table %q", ti.Decl.Name.Base())
+		}
+	}
+	for _, d := range pkg.merged.Decls {
+		if e, ok := d.(*ast.Enum); ok {
+			if n, err := golang.EnumTypeName(e.Name.Schema(), e.Name.Base()); err == nil {
+				minted[n] = fmt.Sprintf("the enum %q", e.Name.String())
+			}
+		}
+	}
+	minted["Queries"] = "the generated Queries handle"
+	minted["New"] = "the generated constructor"
+
 	seen := map[string]*ast.Select{} // tableKey+method -> declaring select
 	for _, sel := range selects {
-		if si := c.selectCheck(sel, info); si != nil {
+		if si := c.selectCheck(sel, info, minted); si != nil {
 			for _, m := range si.Members {
 				key := m.Key + "." + si.MethodSuffix
 				if prev, dup := seen[key]; dup {
@@ -314,7 +335,7 @@ type colBinding struct {
 
 // selectCheck resolves and types one Select (§V11) and lowers it to a
 // SelectInfo, or reports why not.
-func (c *checker) selectCheck(sel *ast.Select, info *check.Info) *SelectInfo {
+func (c *checker) selectCheck(sel *ast.Select, info *check.Info, minted map[string]string) *SelectInfo {
 	si := &SelectInfo{Decl: sel}
 
 	// §V11.1: method suffix.
@@ -341,6 +362,10 @@ func (c *checker) selectCheck(sel *ast.Select, info *check.Info) *SelectInfo {
 	}
 	if len(si.Members) == 0 {
 		return nil // the group already errored
+	}
+
+	if sel.Projected() && !c.projectionCheck(sel, si, info, minted) {
+		return nil
 	}
 
 	env := &selectEnv{
@@ -373,6 +398,136 @@ var crudMethodSuffixes = map[string]bool{
 	"Update": true, "Delete": true, "Count": true, "Exists": true,
 	"Query": true, "DeleteWhere": true, "UpdateWhere": true,
 	"Limit": true, "Offset": true, "OrderBy": true,
+	"CreateParams": true, "UpdateParams": true,
+}
+
+/* ===== projection (§V11.7) ===== */
+
+// projectionCheck applies §V11.7: existence and field-type agreement
+// for the explicit list, the exclusion algebra for the star form, and
+// row-type name minting against the package's generated scope.
+func (c *checker) projectionCheck(sel *ast.Select, si *SelectInfo, info *check.Info, minted map[string]string) bool {
+	type memberFields struct {
+		ti     *check.TableInfo
+		model  string
+		fields []golang.FieldSig
+		byCol  map[string]golang.FieldSig
+	}
+	members := make([]memberFields, 0, len(si.Members))
+	for _, m := range si.Members {
+		model, fields, err := golang.ModelFields(c.pkg.merged, info, m.Key)
+		if err != nil {
+			c.errorf(sel.Name.Pos(), "V11", "select %q: %v (§V11.7)", sel.Name.Name(), err)
+			return false
+		}
+		byCol := make(map[string]golang.FieldSig, len(fields))
+		for _, f := range fields {
+			byCol[f.Col] = f
+		}
+		members = append(members, memberFields{m, model, fields, byCol})
+	}
+
+	ok := true
+	seen := map[string]bool{}
+	for _, id := range sel.Cols {
+		name := id.Name()
+		if seen[name] {
+			c.errorf(id.Pos(), "V11", "column %q appears twice in the projection (§V11.7)", name)
+			ok = false
+			continue
+		}
+		seen[name] = true
+
+		var missing []string
+		types := map[string][]string{} // field type -> member tables
+		for _, mf := range members {
+			f, has := mf.byCol[name]
+			if !has {
+				missing = append(missing, mf.ti.Decl.Name.Base())
+				continue
+			}
+			types[f.Type] = append(types[f.Type], mf.ti.Decl.Name.Base())
+		}
+		if len(missing) > 0 {
+			c.errorf(id.Pos(), "V11", "column %q is missing from %s — every member of %q must have it (§V11.7)",
+				name, tableList(missing), sel.Target.Name())
+			ok = false
+			continue
+		}
+		if !sel.Star && len(types) > 1 {
+			var goTypes []string
+			for t := range types {
+				goTypes = append(goTypes, t)
+			}
+			sort.Strings(goTypes)
+			var parts []string
+			for _, t := range goTypes {
+				sort.Strings(types[t])
+				parts = append(parts, fmt.Sprintf("%s in %s", t, tableList(types[t])))
+			}
+			c.errorf(id.Pos(), "V11", "column %q disagrees on field type across %q: %s — a shared row type needs one type, nullability included (§V11.7)",
+				name, sel.Target.Name(), strings.Join(parts, "; "))
+			ok = false
+			continue
+		}
+	}
+	if !ok {
+		return false
+	}
+
+	cols := make([]string, len(sel.Cols))
+	for i, id := range sel.Cols {
+		cols[i] = id.Name()
+	}
+
+	if !sel.Star {
+		si.Cols = cols
+		si.Shared = si.MethodSuffix
+		if prev, dup := minted[si.Shared]; dup {
+			c.errorf(sel.Name.Pos(), "V11", "select %q mints the shared row type %s, which collides with %s (§V11.7)",
+				sel.Name.Name(), si.Shared, prev)
+			return false
+		}
+		for _, mf := range members {
+			for _, f := range mf.fields {
+				if mf.model+f.Name == si.Shared {
+					c.errorf(sel.Name.Pos(), "V11", "select %q mints the shared row type %s, which collides with the dynamic column handle for %s.%s (§V11.7)",
+						sel.Name.Name(), si.Shared, mf.ti.Decl.Name.Base(), f.Col)
+					return false
+				}
+			}
+		}
+		minted[si.Shared] = fmt.Sprintf("select %q's shared row type", sel.Name.Name())
+		return true
+	}
+
+	si.Excluded = cols
+	for _, mf := range members {
+		kept := 0
+		for _, f := range mf.fields {
+			if !seen[f.Col] {
+				kept++
+			}
+			if f.Name == si.MethodSuffix {
+				c.errorf(sel.Name.Pos(), "V11", "select %q mints %s%s, which collides with the dynamic column handle for %s.%s (§V11.7)",
+					sel.Name.Name(), mf.model, si.MethodSuffix, mf.ti.Decl.Name.Base(), f.Col)
+				return false
+			}
+		}
+		if kept == 0 {
+			c.errorf(sel.Name.Pos(), "V11", "select %q excludes every column of %q — nothing is left to project (§V11.7)",
+				sel.Name.Name(), mf.ti.Decl.Name.Base())
+			return false
+		}
+		name := mf.model + si.MethodSuffix
+		if prev, dup := minted[name]; dup {
+			c.errorf(sel.Name.Pos(), "V11", "select %q mints the row type %s, which collides with %s (§V11.7)",
+				sel.Name.Name(), name, prev)
+			return false
+		}
+		minted[name] = fmt.Sprintf("select %q's row type for table %q", sel.Name.Name(), mf.ti.Decl.Name.Base())
+	}
+	return true
 }
 
 // selectSettings checks the settings list ([order: ...] only, §V11.5)
@@ -723,6 +878,9 @@ func (p *Package) SelectFns() []golang.SelectFn {
 				MethodSuffix: si.MethodSuffix,
 				WhereSQL:     si.WhereSQL,
 				OrderSQL:     si.OrderSQL,
+				Cols:         si.Cols,
+				Excluded:     si.Excluded,
+				SharedType:   si.Shared,
 			}
 			for _, prm := range si.Params {
 				fn.Params = append(fn.Params, golang.SelectParam(prm))

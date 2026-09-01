@@ -266,38 +266,33 @@ D57, D58.
 
 Still open from the original slice, in the maintainer's build order:
 
-- **Column projection** (agreed 2026-09-01; case matrix and clause
-  order agreed 2026-09-02). Clauses read in SQL order — name, columns,
-  source, filter: `Select <name> (<columns>) for <target> where …` —
-  and the column list is the same +/- algebra as groups. Three cases
-  with different type consequences:
+- **Column projection — `DONE` 2026-09-02** (spec §V11.7). Clauses
+  read in SQL order — name, columns, source, filter:
+  `Select <name> (<columns>) for <target> where …`. Three cases:
   1. **Explicit list = intersection = one shared type.**
-     `Select summary (idpk, idgr, rok) for series where at` — every
-     listed column passes §V11.4 agreement, so one shared struct named
-     `<SelectName>` (`Summary`) serves every member: one wire type, N
-     sources. This is the case
-     for groups whose members share only a few columns.
-  2. **No list = full row = per-member models** (built today):
-     `[]MsRevenue`, `[]MsUsage` — heterogeneous rests welcome.
-  3. **Star with exclusion = per-member minted rows.**
-     `Select public (* - password_hash) for series where at` — each
-     member projects its own columns minus the excluded ones (the
+     `Select summary (site, day) for metrics where at` — every listed
+     column passes field-type agreement (nullability included), so one
+     shared struct named `<SelectName>` (`Summary`) serves every
+     member: one wire type, N sources.
+  2. **No list = full row = per-member models**:
+     `[]PageView`, `[]LinkClick` — heterogeneous rests welcome.
+  3. **Star with exclusion = per-member struct derivatives.**
+     `Select public (* - password_hash) for accounts` — each member
+     projects its own columns minus the exclusions (the
      `SELECT * EXCEPT` BigQuery has and standard SQL lacks), minting
-     `<Model><SelectName>` per member (`UserPublic`) — subject-first,
-     no `Row` suffix; the select's name IS the type's name, so naming
-     the select well names the type well. A column that structurally
-     cannot exist beats a serialization tag that must be remembered —
-     the sensitive-data case. Excluded columns must exist in every
-     member (§V9.3's "the algebra must say something true"); excluding
-     per-single-member is hypotheses H3.
-  Cross-cutting rules: a minted row type is a **struct derivative**
-  (the maintainer's term): every kept field is copied verbatim from
-  the model — Go type, `db`/`json` tags, doc comment — so the
-  derivative behaves exactly like the model minus the removed fields;
-  where/order columns need not be projected (SQL does not require it);
-  row-type names are collision-checked against models; the LSP hovers
-  a select's name with its generated signatures, rendered SQL and
-  output row structs (shipped 2026-09-02).
+     `<Model><SelectName>` (`UserPublic`) with every kept field copied
+     verbatim — Go type, assembled tag (`tag:` passthroughs included),
+     doc comment. A column that structurally cannot exist beats a
+     serialization tag that must be remembered — the sensitive-data
+     case. Excluded columns must exist in every member (§V9.3's "the
+     algebra must say something true"); per-single-member exclusion
+     stays hypotheses H3.
+  Where/order columns need not be projected; minted row-type names are
+  collision-checked against the generated package scope; the LSP
+  hovers a select with its signatures, rendered SQL and output row
+  structs (the shared type once, derivatives per member). Proof:
+  corpus v55/i64-i70, generator output compiled and driver-proven in
+  `nao/itest`, grammar corpus, hover tests.
 - **Raw-SQL `Select`/`View` blocks** — real SQL declared in the schema
   for shapes the closed language refuses (joins, aggregates), typed
   functions out, prepare-validated (D06, D24).

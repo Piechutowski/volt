@@ -67,3 +67,8 @@ Pred since { day >= :from }
 
 Select rows for metrics where at [order: (day desc, id asc)]
 Select recent for metrics where at or since
+
+// §V11.7 projections: an explicit list mints one shared row type for
+// every member; the star form mints a per-member struct derivative.
+Select summary (site, day) for metrics where at
+Select public (* - target) for link_clicks [order: (id asc)]

@@ -292,3 +292,28 @@ Select all for ms_usage
   (select_definition
     (select_name)
     (select_target)))
+
+==================
+select projections
+==================
+
+Select summary (site, day) for metrics where at
+Select public (* - password_hash - email) for accounts
+
+---
+
+(source_file
+  (select_definition
+    (select_name)
+    (select_projection
+      (column_ref)
+      (column_ref))
+    (select_target)
+    (pred_expr
+      (pred_ref)))
+  (select_definition
+    (select_name)
+    (select_projection
+      (column_ref)
+      (column_ref))
+    (select_target)))
