@@ -273,16 +273,19 @@ Still open from the original slice, in the maintainer's build order:
   with different type consequences:
   1. **Explicit list = intersection = one shared type.**
      `Select summary (idpk, idgr, rok) for series where at` — every
-     listed column passes §V11.4 agreement, so one `SummaryRow` struct
-     serves every member: one wire type, N sources. This is the case
+     listed column passes §V11.4 agreement, so one shared struct named
+     `<SelectName>` (`Summary`) serves every member: one wire type, N
+     sources. This is the case
      for groups whose members share only a few columns.
   2. **No list = full row = per-member models** (built today):
      `[]MsRevenue`, `[]MsUsage` — heterogeneous rests welcome.
   3. **Star with exclusion = per-member minted rows.**
-     `Select rows (* - password_hash) for series where at` — each
+     `Select public (* - password_hash) for series where at` — each
      member projects its own columns minus the excluded ones (the
      `SELECT * EXCEPT` BigQuery has and standard SQL lacks), minting
-     `<Model><SelectName>Row` per member. A column that structurally
+     `<Model><SelectName>` per member (`UserPublic`) — subject-first,
+     no `Row` suffix; the select's name IS the type's name, so naming
+     the select well names the type well. A column that structurally
      cannot exist beats a serialization tag that must be remembered —
      the sensitive-data case. Excluded columns must exist in every
      member (§V9.3's "the algebra must say something true"); excluding
