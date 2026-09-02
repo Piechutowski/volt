@@ -254,6 +254,18 @@ agree. The LSP picks it up automatically.
   and `error_handler:` point into Go, which this server does not
   index (roadmap FW-6).
 
+### Go references
+
+A `.volt` file names Go by rule only in the containing package's own
+Go files — pipeline plugs (§V3.2) and Go-reference checks (§V12.5).
+The server resolves those names with the standard library's Go parser
+over the package directory's non-test `*.go` files (no gopls, no
+build): go-to-definition lands on the `func`, hover shows its signature
+and doc comment, and an undeclared name hovers with the contract to
+write (`func Name(...) error`). `volt.*` plugs live in the runtime and
+make no claim. The Go compiler remains the authority on whether the
+reference is valid; rename never touches Go.
+
 ## 8. The verification checklist
 
 How to audit that the three components implement

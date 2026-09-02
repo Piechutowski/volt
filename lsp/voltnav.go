@@ -50,14 +50,16 @@ type voltDef struct {
 	pipe  *ast.Pipeline
 	group *ast.Group
 	pred  *ast.Pred
-	md    string // prebuilt hover (selects: signatures + rendered SQL)
+	gofn  *goFunc // Go-reference targets (§V3.2, §V12.5); nil = undeclared
+	md    string  // prebuilt hover (selects: signatures + rendered SQL)
 }
 
 // voltIndex is the whole project's Volt-layer symbol graph.
 type voltIndex struct {
-	defs  map[voltSym]voltDef
-	refs  []voltRef
-	texts map[string]string // open buffers, for position conversion
+	defs    map[voltSym]voltDef
+	refs    []voltRef
+	texts   map[string]string            // open buffers, for position conversion
+	gofuncs map[string]map[string]goFunc // package path -> its Go functions
 }
 
 func spanOf(n ast.Node) voltSpan {
@@ -146,6 +148,22 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 				}
 			case *ast.Scope:
 				ix.scopeRefs(pkg, path, d)
+			case *ast.Pipeline:
+				for _, plug := range d.Plugs {
+					ix.goRefAdd(pkg, path, plug.Ref)
+				}
+			case *ast.Table:
+				for _, item := range d.Body {
+					cb, ok := item.(*ast.ChecksBlock)
+					if !ok {
+						continue
+					}
+					for _, ck := range cb.Checks {
+						if ck.Ref != nil {
+							ix.goRefAdd(pkg, path, ck.Ref)
+						}
+					}
+				}
 			case *ast.Group:
 				// Terms resolve tables first, then groups (§V9.2).
 				for _, term := range d.Terms {
@@ -173,6 +191,40 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 		}
 	}
 	return ix
+}
+
+// goRefAdd indexes a Go reference — a bare name or one qualified by the
+// containing package's own name (§V3.2, §V12.5) — and resolves it in
+// the package directory's Go files once per package. volt.* plugs live
+// in the runtime and make no claim here.
+func (ix *voltIndex) goRefAdd(pkg *lang.Package, path string, ref *ast.GoRef) {
+	if ref == nil || len(ref.Parts) == 0 {
+		return
+	}
+	if q := ref.Qualifier(); q != "" && q != pkg.Name {
+		return
+	}
+	name := ref.Base()
+	sym := voltSym{"gofunc", path, name}
+	sp := spanOf(ref)
+	ix.refs = append(ix.refs, voltRef{sp, sp, sym, false, name})
+	if _, done := ix.defs[sym]; done {
+		return
+	}
+	if ix.gofuncs == nil {
+		ix.gofuncs = map[string]map[string]goFunc{}
+	}
+	funcs, ok := ix.gofuncs[path]
+	if !ok {
+		funcs = goFuncsIn(pkg.Dir)
+		ix.gofuncs[path] = funcs
+	}
+	if gf, found := funcs[name]; found {
+		gfCopy := gf
+		ix.defs[sym] = voltDef{span: gf.span, gofn: &gfCopy, md: goFuncHover(name, pkg.Name, &gfCopy)}
+	} else {
+		ix.defs[sym] = voltDef{md: goFuncHover(name, pkg.Name, nil)}
+	}
 }
 
 // predExprRefs indexes the Pred references inside an expression (§V10.2).
@@ -310,8 +362,8 @@ func (d *Document) voltDefinition(pos protocol.Position) *protocol.Location {
 		return nil
 	}
 	def, ok := d.vindex.defs[ref.sym]
-	if !ok {
-		return nil
+	if !ok || def.span.file == "" {
+		return nil // undeclared Go reference: nowhere to go (hover explains)
 	}
 	return d.vindex.location(def.span)
 }
@@ -368,7 +420,7 @@ func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 		md = groupHover(ref.sym, def)
 	case "pred":
 		md = predHover(ref.sym, def, d.vindex)
-	case "select":
+	case "select", "gofunc":
 		md = def.md
 	}
 	if md == "" {
@@ -595,8 +647,8 @@ func (d *Document) voltRename(pos protocol.Position, newName string) (*protocol.
 	if ref == nil {
 		return nil, false
 	}
-	if ref.sym.kind == "package" {
-		return nil, false // renaming a package means moving a directory
+	if ref.sym.kind == "package" || ref.sym.kind == "gofunc" {
+		return nil, false // a directory move, or a Go rename — not ours to do
 	}
 
 	spelling := ref.text
