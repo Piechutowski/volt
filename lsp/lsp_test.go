@@ -265,6 +265,21 @@ func TestCompletionColumnSettings(t *testing.T) {
 	}
 }
 
+// TestCompletionDefaultEnumValues: `default: status.` inside a settings
+// list completes the enum's values, not the column-setting names.
+func TestCompletionDefaultEnumValues(t *testing.T) {
+	text := "Enum status {\n  active\n  banned\n}\n\nTable t {\n  s status [not null, default: status.\n}\n"
+	d := doc(t, text)
+	line := "  s status [not null, default: status."
+	items := d.Complete(protocol.Position{Line: 6, Character: protocol.UInteger(len(line))})
+	if !hasLabel(items, "active") || !hasLabel(items, "banned") {
+		t.Fatalf("enum value completion missing: %v", labels(items))
+	}
+	if hasLabel(items, "pk") || hasLabel(items, "not null") {
+		t.Fatalf("column settings leaked into an enum value position: %v", labels(items))
+	}
+}
+
 func TestCompletionRefEndpointColumns(t *testing.T) {
 	text := sample + "\nRef: x.y > users."
 	d := doc(t, text)

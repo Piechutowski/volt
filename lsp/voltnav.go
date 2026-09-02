@@ -391,38 +391,16 @@ func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 	const structCap = 4
 	var b strings.Builder
-	b.WriteString("```go\n")
-	var params strings.Builder
-	for _, p := range si.Params {
-		fmt.Fprintf(&params, ", %s %s", p.GoName, p.GoType)
-	}
 	memberFn := func(key string) golang.SelectFn {
 		return golang.SelectFn{
 			TableKey: key, MethodSuffix: si.MethodSuffix,
 			Cols: si.Cols, Excluded: si.Excluded, SharedType: si.Shared,
 		}
 	}
-	for _, m := range si.Members {
-		model := m.Decl.Name.Base()
-		if mn, err := golang.ModelName(m.Decl); err == nil {
-			model = mn
-		}
-		row := model
-		if r, _, err := golang.SelectRowType(pkg.Merged(), pkg.Schema(), memberFn(m.Key)); err == nil {
-			row = r
-		}
-		fmt.Fprintf(&b, "func (q *Queries) %s%s(ctx context.Context%s) ([]%s, error)\n",
-			model, si.MethodSuffix, params.String(), row)
-	}
-	b.WriteString("```\n")
-	if si.WhereSQL != "" {
-		b.WriteString("```sql\nWHERE " + si.WhereSQL + "\n```\n")
-	}
-	if si.OrderSQL != "" {
-		b.WriteString("```sql\nORDER BY " + si.OrderSQL + "\n```\n")
-	}
-	// The output row structs, from the same plan the generator runs
-	// (§V11.7): the shared type once, per-member rows capped.
+
+	// 1. What comes back: the output row structs, from the same plan the
+	//    generator runs (§V11.7) — the shared type once, per-member rows
+	//    capped. The struct is what the reader wants first.
 	shown := si.Members
 	if si.Shared != "" {
 		shown = shown[:1]
@@ -446,6 +424,35 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 			fmt.Fprintf(&b, "*… and %d more member structs*\n", n)
 		}
 	}
+
+	// 2. How it is filtered and ordered: the SQL exactly as emitted.
+	if si.WhereSQL != "" {
+		b.WriteString("```sql\nWHERE " + si.WhereSQL + "\n```\n")
+	}
+	if si.OrderSQL != "" {
+		b.WriteString("```sql\nORDER BY " + si.OrderSQL + "\n```\n")
+	}
+
+	// 3. How to call it: one signature per member, one parameter list
+	//    for all (§V11.4).
+	var params strings.Builder
+	for _, p := range si.Params {
+		fmt.Fprintf(&params, ", %s %s", p.GoName, p.GoType)
+	}
+	b.WriteString("```go\n")
+	for _, m := range si.Members {
+		model := m.Decl.Name.Base()
+		if mn, err := golang.ModelName(m.Decl); err == nil {
+			model = mn
+		}
+		row := model
+		if r, _, err := golang.SelectRowType(pkg.Merged(), pkg.Schema(), memberFn(m.Key)); err == nil {
+			row = r
+		}
+		fmt.Fprintf(&b, "func (q *Queries) %s%s(ctx context.Context%s) ([]%s, error)\n",
+			model, si.MethodSuffix, params.String(), row)
+	}
+	b.WriteString("```\n")
 	return b.String()
 }
 

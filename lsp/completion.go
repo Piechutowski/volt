@@ -62,6 +62,7 @@ var (
 	refValueRE      = regexp.MustCompile(`(?i)\bref\s*:\s*(<>|[<>-])?\s*$`)
 	afterCardRE     = regexp.MustCompile(`(<>|[<>-])\s*$`)
 	defaultValueRE  = regexp.MustCompile(`(?i)\bdefault\s*:\s*$`)
+	defaultChainRE  = regexp.MustCompile(`(?i)\bdefault\s*:\s*\S+\.$`)
 	actionValueRE   = regexp.MustCompile(`(?i)\b(delete|update)\s*:\s*\w*$`)
 	columnShapeRE   = regexp.MustCompile(`^\s*([\p{L}\p{M}\d_]+|"[^"]*")\s+[\p{L}\p{M}\d_".]*$`)
 	lineStartRE     = regexp.MustCompile(`^\s*[\p{L}\p{M}\d_"~]*$`)
@@ -197,6 +198,14 @@ func (d *Document) settingsComplete(prefix, ctx string) []protocol.CompletionIte
 
 	if refValueRE.MatchString(segment) || afterCardRE.MatchString(segment) {
 		return d.tableItems()
+	}
+	// default: status.<values> — a dotted chain inside a settings list
+	// resolves like one anywhere else (enum values, or a schema's enums),
+	// instead of falling through to the column-setting names.
+	if defaultChainRE.MatchString(segment) {
+		if m := dotChainRE.FindStringSubmatch(segment); m != nil {
+			return d.dotChainComplete(m)
+		}
 	}
 	if defaultValueRE.MatchString(segment) {
 		items := d.enumItems()

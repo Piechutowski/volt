@@ -51,6 +51,13 @@ func TestSelectHoverSharedRowType(t *testing.T) {
 	if strings.Count(md, "type Summary struct") != 1 {
 		t.Errorf("shared row type rendered more than once:\n%s", md)
 	}
+	// Reading order: the struct first, then the SQL, then the signatures.
+	structAt := strings.Index(md, "type Summary struct")
+	whereAt := strings.Index(md, "WHERE ")
+	funcAt := strings.Index(md, "func (q *Queries)")
+	if !(structAt < whereAt && whereAt < funcAt) {
+		t.Errorf("hover order must be struct, SQL, signatures; got offsets %d %d %d:\n%s", structAt, whereAt, funcAt, md)
+	}
 }
 
 func TestSelectHoverStructDerivative(t *testing.T) {
