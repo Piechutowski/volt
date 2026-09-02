@@ -15,11 +15,14 @@ MUST stay silent. `go test ./vet/` verifies both directions, and
 this document, links to a nonexistent file, or has no bad example in its
 linked tests. The docs cannot silently drift from the code.
 
-Run a single rule with:
+Run every rule over the named packages with:
 
 ```sh
-volt vet --enable <rule> file.dbml
+volt vet ./...
 ```
+
+There is no per-rule switch: the rules are cheap, and a suppressed
+warning would be a rule the document lists but the tool does not run.
 
 ---
 

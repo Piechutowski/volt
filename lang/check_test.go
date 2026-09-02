@@ -52,7 +52,8 @@ const modFile = "module blog\n"
 // package exercising imports, model inference, resources, nesting and
 // helpers.
 var blog = map[string]string{
-	"go.mod": modFile,
+	"go.mod":    modFile,
+	"app/mw.go": "package app\n\nimport (\n\t\"net/http\"\n\n\tvolt \"github.com/Piechutowski/volt\"\n)\n\nfunc BearerAuth(next http.Handler) http.Handler { return next }\nfunc Errors(w http.ResponseWriter, r *volt.Request, err error) {}\n",
 	"db/schema.volt": `package db
 
 Table users {

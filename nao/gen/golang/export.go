@@ -102,3 +102,34 @@ func ModelFields(f *ast.File, info *check.Info, tableKey string) (model string, 
 	}
 	return "", nil, fmt.Errorf("no table %q", tableKey)
 }
+
+// PackageNames lists every package-level Go identifier the model, query
+// and dynamic generators emit for a schema, each with a description —
+// the scope a minted row type (§V11.7) must not collide with.
+func PackageNames(f *ast.File, info *check.Info) (map[string]string, error) {
+	p, err := planBuild(f, info)
+	if err != nil {
+		return nil, err
+	}
+	names := map[string]string{"Queries": "the generated Queries handle", "New": "the generated constructor"}
+	for _, t := range p.tables {
+		tbl := t.ti.Decl.Name.Base()
+		names[t.model] = fmt.Sprintf("the model of table %q", tbl)
+		names[t.model+"CreateParams"] = fmt.Sprintf("the create params of table %q", tbl)
+		names[t.model+"UpdateParams"] = fmt.Sprintf("the update params of table %q", tbl)
+		for _, suffix := range []string{"Limit", "Offset", "Distinct", "OrderBy", "After", "Set"} {
+			names[t.model+suffix] = fmt.Sprintf("the dynamic-layer function %s%s", t.model, suffix)
+		}
+		for _, fp := range t.fields {
+			names[t.model+fp.goField] = fmt.Sprintf("the dynamic column handle for %s.%s", tbl, fp.colName)
+		}
+	}
+	for _, d := range f.Decls {
+		if e, ok := d.(*ast.Enum); ok {
+			if n, err := enumTypeName(e.Name.Schema(), e.Name.Base()); err == nil {
+				names[n] = fmt.Sprintf("the enum %q", e.Name.String())
+			}
+		}
+	}
+	return names, nil
+}

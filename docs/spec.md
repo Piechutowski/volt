@@ -1510,8 +1510,15 @@ go ref   = name, [ ".", name ] ;
    runtime), `<Name>` or `<package name>.<Name>` (a function of the
    containing package). Referencing an *imported* package's function is
    not supported in v0 and is an error suggesting a local wrapper.
-   Whether the referenced Go function exists is the Go compiler's
-   business, not the checker's.
+   A function of the containing package MUST exist as a non-generic
+   top-level function in the package directory's non-test Go files that
+   the go tool would compile for it (go/build's file constraints: no
+   leading `_` or `.`, a matching GOOS/GOARCH suffix, a satisfied
+   `//go:build` line), with exactly one parameter spelled
+   `http.Handler` and exactly one result spelled `http.Handler` (D63):
+   a missing function or another signature is an error naming the
+   signature to write. The Go compiler still compiles the result; the
+   checker catches the typo and the wrong shape first.
 3. Pipelines contribute middleware in declaration order, outermost
    first, composed statically in generated code (§V4.4).
 
@@ -1531,7 +1538,7 @@ route path = slash,
              [ segment, { slash, segment } ] ;
 segment    = name
            | ":", name, [ "(", type name, ")" ]
-           | ":", name, "...", "...", "..." ;  (* three '.' tokens *)
+           | ":", name, ".", ".", "." ;  (* three '.' tokens, contiguous *)
 type name  = "int" | "int32" | "int64" | "string" ;
 ```
 
@@ -1622,7 +1629,9 @@ Scope settings (the complete set):
 2. A route's middleware is the concatenation of its pipeline chain's
    plugs, composed once at generation time — never iterated per
    request.
-3. The `error_handler` function has the volt runtime's ErrorHandler
+3. The `error_handler` function is a Go reference held like a plug
+   (D63): it MUST exist in the package's compiled Go files with the
+   volt runtime's ErrorHandler
    shape: `func(http.ResponseWriter, *volt.Request, error)`. Routes
    without one use the runtime default.
 
@@ -1686,7 +1695,7 @@ table ref = name, [ ".", name ] ;
 1. `resources <table>` appears only inside a Scope body and expands to
    the action routes of §V5.2 with the table name as the collection
    segment. The name MUST map to a Go identifier.
-3. The declaration MUST resolve to a declared table (§V5.4); there
+2. The declaration MUST resolve to a declared table (§V5.4); there
    is no schemaless form. A miss — including a name that only matches
    a table's model name or differs only in case — is an error naming
    the correct spelling where one exists.
@@ -1882,7 +1891,10 @@ Pred fresh   { current and recent }
    - a `param` adopts the type of the expression position it appears
      in; one param name MUST resolve to one type across the whole use
      site, or the use is an error naming both positions.
-4. Type classes are defined by the Appendix A mapping: two column
+4. An enum-typed column cannot be compared in the predicate language
+   in v1 — the only column type predicates refuse besides blob/json;
+   whether typed enum parameters should lift this is hypotheses H5.
+5. Type classes are defined by the Appendix A mapping: two column
    types agree iff they map to the same Go type; numeric = the
    integer, unsigned and float families; text = `string`-mapped;
    date/time = `time.Time`-mapped. `decimal`/`money` map to `string`
@@ -1934,7 +1946,10 @@ the optional projection narrows the emitted columns.
    `asc` default is deliberately not inherited; explicit over implicit
    — and the emitted SQL spells it out (`ORDER BY year DESC, id ASC`).
    Order columns obey rule 4 and MUST be orderable (§V10.3) or text —
-   ORDER BY text is SQL's own collation, allowed here.
+   ORDER BY text is SQL's own collation, allowed here — and MUST appear
+   at most once. A decimal column is neither: it is stored as text
+   (Appendix B), so ordering it would be lexical, not numeric — an
+   error.
 6. Generation contract (with Appendix A): per member, a method on
    `Queries` —
    `func (q *Queries) <Model><SelectName>(ctx context.Context, <params>) ([]<Row>, error)`
@@ -1943,8 +1958,11 @@ the optional projection narrows the emitted columns.
    type per rule 7 (the model itself when there is no projection); the
    emitted SQL is
    `SELECT <projected columns> FROM <table> [WHERE …] [ORDER BY …]`
-   with SQLite named parameters (D15), and every emitted statement is
-   prepare-validated against the generated DDL (D06).
+   with SQLite named parameters (D15). The rendering is proven by
+   construction (typed operators over quoted identifiers) and by the
+   generator's corpus, whose select statements are prepared against
+   the generated DDL on a real SQLite (D06) and executed through a real
+   driver in `nao/itest`.
 7. **Projection and row types.** Without a projection the row type is
    the member's model and the emitted columns are all of it. With one:
    - **Explicit list** `(a, b, c)` — at least one column, no
@@ -2049,9 +2067,23 @@ Table users {
    package's own name (`db.EmailValid`); referencing an imported
    package's function is an error suggesting a local wrapper (the
    §V3.2 rule). Arguments are columns of the table, `not null` (rule
-   3). The contract is `func <Name>(<the columns' Go types>) error`;
-   whether it exists and matches is the Go compiler's business, not
-   the checker's (the §V4.3 pattern).
+   3). The contract is `func <Name>(<the columns' Go types>) error`,
+   and it is **checked** (D63): the function MUST exist as a non-generic
+   top-level function in the package directory's non-test Go files that
+   the go tool would compile for it (go/build's file constraints, as
+   §V3.2), take exactly one parameter per argument column with the
+   column's generated Go type spelled exactly (Appendix A: `string`,
+   `int32`, `time.Time`, `[]byte`, an enum's generated type name
+   `E<Enum>` — a variadic parameter never matches), and return exactly
+   `error`. Each violation is its own error — undeclared, generic,
+   variadic, wrong arity, a parameter whose spelled type disagrees with
+   the column, a wrong result — and every message names the exact
+   signature to write, so an unimplemented reference reads as a to-do.
+   A Go file with a syntax error hides the declarations after the
+   error; the undeclared message then names the file and position. The Go compiler still compiles the result and remains the
+   authority on what a spelled type denotes (a `type Email string`
+   parameter would compile against a `string` column but is refused
+   here: spell the generated type).
 6. **Generation contract.** For every table with typed or Go-reference
    checks, `nao_validate.go` declares
    `func (v <Model>) Validate() error`, evaluating every check in
@@ -2103,7 +2135,7 @@ segment        = name
                | ":", name, "." , ".", "." ;
 type name      = "int" | "int32" | "int64" | "string" ;
 
-resources      = "resources", name, [ settings ], newline ;
+resources      = "resources", [ name, "." ], name, [ settings ], newline ;
 
 (* setting value, extended (Part I §4.2): *)
 setting value  = (* schema-layer alternatives *) | ident list ;
@@ -2128,9 +2160,13 @@ Testing never proves software correct; a specification with an
 executable conformance surface narrows the gap deliberately. The v0
 chain, each link runnable by `go test ./...`:
 
-1. **Corpus ↔ spec.** Every file in `lang/conformance/snippets/`
-   carries a `// spec: §V…` tag; `valid/` MUST check clean, `invalid/`
-   MUST be rejected. The corpus is the spec's executable surface.
+1. **Corpus ↔ spec.** Every snippet in `lang/conformance/snippets/`
+   — a `.volt`/`.dbml` file, or a directory whose first `.volt` file
+   carries the tag — cites a `// spec: §…` section; `valid/` MUST check
+   clean, `invalid/` MUST be rejected, and an invalid snippet with a
+   `// want: <text>` line MUST be rejected with a diagnostic containing
+   that text — for the rule it names, not by accident. The corpus is
+   the spec's executable surface.
 2. **Schema layer preserved.** The schema conformance corpus continues to run
    unchanged against the same front end: the superset rule (§V0.2) is
    enforced, not assumed.
@@ -2192,7 +2228,10 @@ generated as `rt.Null[T]` — a value plus a validity bit, never a pointer
 ## A.3 Names
 
 `snake_case` → `PascalCase` with the Go initialisms convention
-(`user_id` → `UserID`, `api_key` → `APIKey`). Model names are the
+(`user_id` → `UserID`, `api_key` → `APIKey`). An enum's generated type
+is `E` + the PascalCase name (`order_status` → `EOrderStatus`; a
+non-`public` schema prefixes as for models), and each value is a
+constant of that type. Model names are the
 singular of the table name (`users` → `User`, D10), overridable with
 `[model:]` — the only model-naming override; `resources`' `singular:`
 setting (§V5.3) renames the route member helper, never the model.

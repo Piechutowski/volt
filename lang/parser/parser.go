@@ -471,7 +471,7 @@ func (p *parser) check() *ast.Check {
 	switch {
 	case p.at(token.FUNCEXPR):
 		return &ast.Check{Expr: &ast.FuncExpr{Tok: p.next()}}
-	case p.at(token.IDENT) && (p.peekKind(1) == token.LPAREN ||
+	case p.at(token.IDENT) && !strings.EqualFold(p.cur().Val, "not") && (p.peekKind(1) == token.LPAREN ||
 		(p.peekKind(1) == token.DOT && p.peekKind(3) == token.LPAREN)):
 		c := &ast.Check{Ref: p.goRef("check reference (§V12)")}
 		p.expect(token.LPAREN, "check reference arguments (§V12)")

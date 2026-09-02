@@ -75,3 +75,14 @@ gob rename case, since gob ignores tags.
 Mint each surface from a real moment in the app, not in advance; every
 one added costs spec + checker + generator + corpus (the D57 lesson:
 closed sets, deliberately grown).
+
+## H5 — Enum columns in predicates
+
+Enum-typed columns cannot be compared in the predicate language (spec
+§V10.4): `where plan = :plan` is refused. The refusal is a v1
+narrowing, not a belief: a typed enum parameter (`:plan` typed as the
+generated `EPlan`, literals checked against the enum's values) is
+well-defined in both tiers. **Belief:** it should be lifted the first
+time a real app filters by an enum, with parameters typed as the enum
+and `in (a, b)` literals validated against the declared values —
+never as loose strings.

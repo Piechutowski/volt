@@ -160,8 +160,10 @@ func load(c *cli.Command) (pr *lang.Project, named []string, diags []diag.Diagno
 	if err != nil {
 		return nil, nil, nil, cli.Exit(err.Error(), 2)
 	}
+	seen := map[string]bool{}
 	for _, d := range dirs {
-		if pkg := pr.PackageAt(d); pkg != nil {
+		if pkg := pr.PackageAt(d); pkg != nil && !seen[pkg.Path] {
+			seen[pkg.Path] = true
 			named = append(named, pkg.Path)
 		}
 	}
@@ -280,6 +282,31 @@ func genRun(c *cli.Command) error {
 		}
 		if old, err := os.ReadFile(f.path); err == nil && !bytes.HasPrefix(old, marker) {
 			return cli.Exit(fmt.Sprintf("gen: refusing to overwrite %s: it lacks the generated-code header", f.path), 2)
+		}
+	}
+	// An optional output that is no longer produced (every select or
+	// check removed) must not linger and keep enforcing deleted rules:
+	// a generated file — marker present — is ours to remove.
+	produced := map[string]bool{}
+	for _, f := range out {
+		produced[f.path] = true
+	}
+	for _, path := range paths {
+		pkg := pr.Packages[path]
+		if !pkg.HasSchema() {
+			continue
+		}
+		for _, name := range []string{"nao_selects.go", "nao_validate.go"} {
+			stale := filepath.Join(pkg.Dir, name)
+			if produced[stale] {
+				continue
+			}
+			if old, err := os.ReadFile(stale); err == nil && bytes.HasPrefix(old, []byte("// Code generated ")) {
+				if err := os.Remove(stale); err != nil {
+					return cli.Exit(err.Error(), 2)
+				}
+				fmt.Println(stale, "(removed: no longer generated)")
+			}
 		}
 	}
 	for _, f := range out {

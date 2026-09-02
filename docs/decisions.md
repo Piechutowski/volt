@@ -421,3 +421,25 @@ where the merge changed the facts.
   as Go excludes them. Odin's "no manifest at all" was considered and
   rejected: root-relative imports (§V2) need a root, and the Go module
   is the honest one.
+- **D63 — Go references are checked against the package's Go source,
+  by spelling** (2026-09-02). A `.volt` file names Go in exactly one
+  place — the containing package's own Go files (§V3.2 plugs, §V12.5
+  checks) — so the checker reads those files with the standard
+  library's parser — only the non-test files the go tool would compile
+  (go/build's file constraints), never generic functions — and holds
+  every reference to a declared top-level function with the exact
+  contract: `func(http.Handler) http.Handler`
+  for plugs, `func(<the columns' generated types>) error` for checks,
+  the runtime's ErrorHandler shape for `error_handler:`.
+  Types are compared by spelling against Appendix A's generated names,
+  not resolved: no build, no gopls, no type-checker, and no ambiguity
+  about what "the same type" means. What this buys: a typo is an error
+  at the reference instead of a compile error in generated code, and
+  an unimplemented function is a to-do with its exact signature in the
+  message — "how many are not written yet" is `volt check`. What it
+  costs: a named type (`type Email string`) is refused where a `string`
+  column is passed; spell the generated type. The Go compiler remains
+  the authority on the result; the checker only moves the first error
+  to where the mistake was made. Rename follows the same asymmetry:
+  renaming a Go reference in Volt rewrites the Volt spellings only,
+  and the existence error then points at whichever side is behind.

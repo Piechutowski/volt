@@ -90,3 +90,190 @@ func TestGoRefPipelinePlug(t *testing.T) {
 		t.Errorf("volt.RequestID resolved to %v; runtime plugs are not package functions", loc)
 	}
 }
+
+// TestGoRefUndeclaredIsDiagnostic: a Go reference to a function the
+// package's Go files do not declare is an error at the reference
+// (§V12.5, D63) — the typo shows up in the editor, and an unwritten
+// function reads as a to-do with its exact signature.
+func TestGoRefUndeclaredIsDiagnostic(t *testing.T) {
+	root := goRefProject(t)
+	schema := filepath.Join(root, "db", "schema.volt")
+	d := NewDocument("file://"+schema, goRefSchema)
+	found := false
+	for _, dg := range d.Diags {
+		if strings.Contains(dg.Msg, "no function Missing") && strings.Contains(dg.Msg, "func Missing(string) error") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("undeclared Go reference produced no diagnostic naming the signature to write; diags = %v", d.Diags)
+	}
+	for _, dg := range d.Diags {
+		if strings.Contains(dg.Msg, "EmailValid") {
+			t.Errorf("the declared, well-typed reference must not be flagged: %v", dg)
+		}
+	}
+}
+
+// TestGoRefRenameRewritesVoltSpellings: renaming a Go reference in a
+// .volt file rewrites the Volt spellings only; the Go declaration is
+// gopls' job and the existence error then points at it.
+func TestGoRefRenameRewritesVoltSpellings(t *testing.T) {
+	root := goRefProject(t)
+	schema := filepath.Join(root, "db", "schema.volt")
+	d := NewDocument("file://"+schema, goRefSchema)
+
+	edit, err := d.Rename(posOf(t, goRefSchema, "EmailValid", 0), "AddressValid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var voltEdits, goEdits int
+	for uri, edits := range edit.Changes {
+		if strings.HasSuffix(uri, ".go") {
+			goEdits += len(edits)
+		} else {
+			voltEdits += len(edits)
+		}
+	}
+	if voltEdits != 1 || goEdits != 0 {
+		t.Errorf("rename touched %d volt and %d go spellings, want 1 and 0: %+v", voltEdits, goEdits, edit.Changes)
+	}
+}
+
+// TestColumnRenameFollowsIntoChecks: renaming a column rewrites its
+// uses inside the table's checks — typed operands and Go-reference
+// arguments alike.
+func TestColumnRenameFollowsIntoChecks(t *testing.T) {
+	const text = "package db\n\nTable users {\n\tid integer [pk, increment]\n\temail varchar [not null]\n\n\tchecks {\n\t\temail like '%@%'\n\t\tEmailValid(email)\n\t}\n}\n"
+	root := voltProject(t, map[string]string{
+		"go.mod":         "module rn\n",
+		"db/schema.volt": text,
+		"db/checks.go":   "package db\n\nfunc EmailValid(email string) error { return nil }\n",
+	})
+	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), text)
+	edit, err := d.Rename(posOf(t, text, "email", 0), "address")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, edits := range edit.Changes {
+		n += len(edits)
+	}
+	// declaration + like operand + Go-reference argument
+	if n != 3 {
+		t.Errorf("column rename produced %d edits, want 3 (declaration, check operand, check argument): %+v", n, edit.Changes)
+	}
+}
+
+// TestColumnRenameFollowsIntoSingleTableSelect: a select over one table
+// binds its projection, order and where columns to that table, so a
+// column rename rewrites them; a group-targeted select is left alone.
+func TestColumnRenameFollowsIntoSingleTableSelect(t *testing.T) {
+	const text = "package db\n\nTable page_views {\n\tid integer [pk, increment]\n\tsite varchar [not null]\n\tday integer [not null]\n}\n\n" +
+		"Select rows (site, day) for page_views where site = :s [order: (day desc, site asc)]\n"
+	root := voltProject(t, map[string]string{
+		"go.mod":         "module rn\n",
+		"db/schema.volt": text,
+	})
+	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), text)
+	edit, err := d.Rename(posOf(t, text, "site", 0), "host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, edits := range edit.Changes {
+		n += len(edits)
+	}
+	// declaration + projection + where + order
+	if n != 4 {
+		t.Errorf("column rename produced %d edits, want 4 (declaration, projection, where, order): %+v", n, edit.Changes)
+	}
+}
+
+// TestGoRefQualifiedRenameKeepsQualifier: renaming `db.EmailValid`
+// rewrites the name only; the package qualifier stays.
+func TestGoRefQualifiedRenameKeepsQualifier(t *testing.T) {
+	const text = "package db\n\nTable users {\n\tid integer [pk]\n\temail varchar [not null]\n\n\tchecks {\n\t\tdb.EmailValid(email)\n\t}\n}\n"
+	root := voltProject(t, map[string]string{
+		"go.mod":         "module q\n",
+		"db/schema.volt": text,
+		"db/checks.go":   "package db\n\nfunc EmailValid(email string) error { return nil }\n",
+	})
+	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), text)
+	edit, err := d.Rename(posOf(t, text, "EmailValid", 0), "AddressValid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, edits := range edit.Changes {
+		for _, e := range edits {
+			// The edit starts after "db." — column 5 on the check line.
+			if e.Range.Start.Character != 5 {
+				t.Errorf("rename edit starts at char %d, want 5 (the name, not the qualifier)", e.Range.Start.Character)
+			}
+		}
+	}
+}
+
+// TestSelectColumnRefsRespectGroupShadowing: a select targeting a
+// Group that shares a table's name binds no column refs (the checker
+// resolves groups first, §V11.2), while a schema-qualified table
+// targeted by its base name does bind.
+func TestSelectColumnRefsRespectGroupShadowing(t *testing.T) {
+	const text = "package db\n\nTable core.orders {\n\tid integer [pk]\n\ttotal integer [not null]\n}\n\n" +
+		"Table page_views {\n\tid integer [pk]\n\tsite varchar [not null]\n}\n\n" +
+		"Table link_clicks {\n\tid integer [pk]\n\tsite varchar [not null]\n}\n\n" +
+		"Group page_views {\n\tlink_clicks\n}\n\n" +
+		"Select big (total) for orders where total > 1\n" +
+		"Select all (site) for page_views\n"
+	root := voltProject(t, map[string]string{"go.mod": "module g\n", "db/schema.volt": text})
+	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), text)
+
+	// core.orders.total: declaration + projection + where = 3 edits.
+	edit, err := d.Rename(posOf(t, text, "total", 0), "amount")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, edits := range edit.Changes {
+		n += len(edits)
+	}
+	if n != 3 {
+		t.Errorf("schema-qualified table: rename produced %d edits, want 3: %+v", n, edit.Changes)
+	}
+
+	// page_views.site: the select targets the GROUP page_views, so only
+	// the declaration is renamed.
+	edit, err = d.Rename(posOf(t, text, "site", 0), "host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n = 0
+	for _, edits := range edit.Changes {
+		n += len(edits)
+	}
+	if n != 1 {
+		t.Errorf("group-shadowed select: rename produced %d edits, want 1 (declaration only): %+v", n, edit.Changes)
+	}
+}
+
+// TestPredRefInCheckNavigates: a Pred named inside a checks block has a
+// definition, and renaming the Pred follows into the check.
+func TestPredRefInCheckNavigates(t *testing.T) {
+	const text = "package db\n\nPred positive { hits >= 0 }\n\nTable page_views {\n\tid integer [pk]\n\thits integer [not null]\n\n\tchecks {\n\t\tpositive\n\t}\n}\n"
+	root := voltProject(t, map[string]string{"go.mod": "module p\n", "db/schema.volt": text})
+	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), text)
+	if loc := d.Definition(posOf(t, text, "positive", 1)); loc == nil || loc.Range.Start.Line != 2 {
+		t.Errorf("Pred reference inside checks did not resolve to the declaration: %v", loc)
+	}
+	edit, err := d.Rename(posOf(t, text, "positive", 0), "nonneg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, edits := range edit.Changes {
+		n += len(edits)
+	}
+	if n != 2 {
+		t.Errorf("Pred rename produced %d edits, want 2 (declaration + check use): %+v", n, edit.Changes)
+	}
+}

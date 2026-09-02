@@ -1,4 +1,5 @@
 // spec: §6.3 increment extension — no rowid alias under a composite key
+// want: composite primary key
 Table user_tags {
   user_id integer [increment]
   tag varchar [not null]

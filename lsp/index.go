@@ -3,6 +3,7 @@ package lsp
 import (
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
+	"strings"
 )
 
 // SymKind classifies the symbols the server can navigate.
@@ -108,6 +109,15 @@ func NewIndex(f *ast.File, info *check.Info) *Index {
 		}
 	}
 
+	// Groups shadow tables as select targets (§V11.2): a group-targeted
+	// select names agreed columns, not one table's.
+	groups := map[string]bool{}
+	for _, decl := range f.Decls {
+		if g, ok := decl.(*ast.Group); ok {
+			groups[g.Name.Name()] = true
+		}
+	}
+
 	// --- references ---
 	for _, decl := range f.Decls {
 		switch n := decl.(type) {
@@ -119,6 +129,26 @@ func NewIndex(f *ast.File, info *check.Info) *Index {
 		case *ast.Ref:
 			ix.walkEndpoint(n.Left)
 			ix.walkEndpoint(n.Right)
+		case *ast.Select:
+			// A select over one table binds its columns to that table:
+			// projection, order and where follow a rename. A group target
+			// names an agreed column across members and is left alone —
+			// the §V11.4 error then says what went missing.
+			if ti := ix.tableByBase(n.Target.Name()); ti != nil && !groups[n.Target.Name()] {
+				for _, col := range n.Cols {
+					ix.addColumnRef(ti, "", col)
+				}
+				if o := n.Settings.Get("order"); o != nil {
+					if list, ok := o.Value.(*ast.IdentList); ok {
+						for _, id := range list.Names {
+							ix.addColumnRef(ti, "", id)
+						}
+					}
+				}
+				if n.Where != nil {
+					ix.walkPredCols(ti, "", n.Where)
+				}
+			}
 		case *ast.Records:
 			ti := ix.resolveTable(n.Table)
 			if ti != nil {
@@ -182,8 +212,41 @@ func (ix *Index) walkTableBody(body []ast.TableItem, ti *check.TableInfo, partia
 		case *ast.ChecksBlock:
 			for _, c := range n.Checks {
 				ix.walkSettings(c.Settings)
+				if c.Pred != nil {
+					ix.walkPredCols(ti, partial, c.Pred)
+				}
+				for _, a := range c.Args {
+					ix.addColumnRef(ti, partial, a)
+				}
 			}
 		}
+	}
+}
+
+// walkPredCols records the column references of a typed check (§V12):
+// every operand names a column of the enclosing table, so a rename of
+// the column must follow it into the check.
+func (ix *Index) walkPredCols(ti *check.TableInfo, partial string, x ast.PredExpr) {
+	switch x := x.(type) {
+	case *ast.PredBinary:
+		ix.walkPredCols(ti, partial, x.X)
+		ix.walkPredCols(ti, partial, x.Y)
+	case *ast.PredNot:
+		ix.walkPredCols(ti, partial, x.X)
+	case *ast.PredParen:
+		ix.walkPredCols(ti, partial, x.X)
+	case *ast.PredCompare:
+		for _, side := range []ast.Operand{x.X, x.Y} {
+			if cr, ok := side.(*ast.ColRef); ok {
+				ix.addColumnRef(ti, partial, cr.Name)
+			}
+		}
+	case *ast.PredIn:
+		ix.addColumnRef(ti, partial, x.Col)
+	case *ast.PredLike:
+		ix.addColumnRef(ti, partial, x.Col)
+	case *ast.PredNull:
+		ix.addColumnRef(ti, partial, x.Col)
 	}
 }
 
@@ -272,6 +335,23 @@ func (ix *Index) addColumnRef(ti *check.TableInfo, partial string, id *ast.Ident
 		container = "partial:" + cd.Partial.Name.Name()
 	}
 	ix.add(SymbolID{SymColumn, container, id.Name()}, id, false)
+}
+
+// tableByBase finds the one table with the given base name (the
+// checker's §V11.2 rule for select targets), or nil when none or more
+// than one matches.
+func (ix *Index) tableByBase(base string) *check.TableInfo {
+	var found *check.TableInfo
+	for key, ti := range ix.Tables {
+		if strings.HasPrefix(key, "alias:") || ti.Decl.Name.Base() != base {
+			continue
+		}
+		if found != nil && found != ti {
+			return nil
+		}
+		found = ti
+	}
+	return found
 }
 
 // resolveTable resolves a table name or alias to its info.

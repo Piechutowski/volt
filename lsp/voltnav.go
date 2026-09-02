@@ -50,16 +50,16 @@ type voltDef struct {
 	pipe  *ast.Pipeline
 	group *ast.Group
 	pred  *ast.Pred
-	gofn  *goFunc // Go-reference targets (§V3.2, §V12.5); nil = undeclared
-	md    string  // prebuilt hover (selects: signatures + rendered SQL)
+	gofn  *lang.GoFunc // Go-reference targets (§V3.2, §V12.5); nil = undeclared
+	md    string       // prebuilt hover (selects: signatures + rendered SQL)
 }
 
 // voltIndex is the whole project's Volt-layer symbol graph.
 type voltIndex struct {
 	defs    map[voltSym]voltDef
 	refs    []voltRef
-	texts   map[string]string            // open buffers, for position conversion
-	gofuncs map[string]map[string]goFunc // package path -> its Go functions
+	texts   map[string]string                 // open buffers, for position conversion
+	gofuncs map[string]map[string]lang.GoFunc // package path -> its Go functions
 }
 
 func spanOf(n ast.Node) voltSpan {
@@ -153,17 +153,9 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 					ix.goRefAdd(pkg, path, plug.Ref)
 				}
 			case *ast.Table:
-				for _, item := range d.Body {
-					cb, ok := item.(*ast.ChecksBlock)
-					if !ok {
-						continue
-					}
-					for _, ck := range cb.Checks {
-						if ck.Ref != nil {
-							ix.goRefAdd(pkg, path, ck.Ref)
-						}
-					}
-				}
+				ix.checksRefs(pkg, path, d.Body)
+			case *ast.TablePartial:
+				ix.checksRefs(pkg, path, d.Body) // injected checks travel with the partial (§6.9.3)
 			case *ast.Group:
 				// Terms resolve tables first, then groups (§V9.2).
 				for _, term := range d.Terms {
@@ -193,6 +185,25 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 	return ix
 }
 
+// checksRefs indexes the Go references and Pred names inside a table
+// or partial body's checks blocks (§V12.2, §V12.5).
+func (ix *voltIndex) checksRefs(pkg *lang.Package, path string, body []ast.TableItem) {
+	for _, item := range body {
+		cb, ok := item.(*ast.ChecksBlock)
+		if !ok {
+			continue
+		}
+		for _, ck := range cb.Checks {
+			if ck.Ref != nil {
+				ix.goRefAdd(pkg, path, ck.Ref)
+			}
+			if ck.Pred != nil {
+				ix.predExprRefs(path, ck.Pred)
+			}
+		}
+	}
+}
+
 // goRefAdd indexes a Go reference — a bare name or one qualified by the
 // containing package's own name (§V3.2, §V12.5) — and resolves it in
 // the package directory's Go files once per package. volt.* plugs live
@@ -206,22 +217,24 @@ func (ix *voltIndex) goRefAdd(pkg *lang.Package, path string, ref *ast.GoRef) {
 	}
 	name := ref.Base()
 	sym := voltSym{"gofunc", path, name}
-	sp := spanOf(ref)
-	ix.refs = append(ix.refs, voltRef{sp, sp, sym, false, name})
+	// Hit anywhere on `db.EmailValid`; a rename rewrites only the name.
+	hit, edit := spanOf(ref), spanOf(ref.Parts[len(ref.Parts)-1])
+	ix.refs = append(ix.refs, voltRef{hit, edit, sym, false, name})
 	if _, done := ix.defs[sym]; done {
 		return
 	}
 	if ix.gofuncs == nil {
-		ix.gofuncs = map[string]map[string]goFunc{}
+		ix.gofuncs = map[string]map[string]lang.GoFunc{}
 	}
 	funcs, ok := ix.gofuncs[path]
 	if !ok {
-		funcs = goFuncsIn(pkg.Dir)
+		funcs = lang.GoFuncsIn(pkg.Dir)
 		ix.gofuncs[path] = funcs
 	}
 	if gf, found := funcs[name]; found {
 		gfCopy := gf
-		ix.defs[sym] = voltDef{span: gf.span, gofn: &gfCopy, md: goFuncHover(name, pkg.Name, &gfCopy)}
+		span := voltSpan{file: gf.File, pos: gf.Pos, end: gf.End}
+		ix.defs[sym] = voltDef{span: span, gofn: &gfCopy, md: goFuncHover(name, pkg.Name, &gfCopy)}
 	} else {
 		ix.defs[sym] = voltDef{md: goFuncHover(name, pkg.Name, nil)}
 	}
@@ -647,9 +660,12 @@ func (d *Document) voltRename(pos protocol.Position, newName string) (*protocol.
 	if ref == nil {
 		return nil, false
 	}
-	if ref.sym.kind == "package" || ref.sym.kind == "gofunc" {
-		return nil, false // a directory move, or a Go rename — not ours to do
+	if ref.sym.kind == "package" {
+		return nil, false // renaming a package means moving a directory
 	}
+	// A Go reference renames its Volt spellings only: the Go declaration
+	// is gopls' job, and the §V12.5/§V3.2 existence error then points at
+	// whichever side is still behind.
 
 	spelling := ref.text
 	changes := map[protocol.DocumentUri][]protocol.TextEdit{}

@@ -57,6 +57,10 @@ type checker struct {
 	// per-package state during routing()
 	pkg      *Package
 	usedQual map[string]bool
+
+	// gofuncs caches each package directory's Go functions (§V3.2,
+	// §V12.5), scanned once per run.
+	gofuncs map[string]*goScan
 }
 
 func (c *checker) paths() []string {
@@ -274,8 +278,27 @@ func (c *checker) plugCheck(p *ast.Plug) {
 		}
 	}
 	switch q := p.Ref.Qualifier(); {
-	case q == "" || q == "volt" || q == c.pkg.Name:
-		// existence is the Go compiler's business (§V3.2)
+	case q == "volt":
+		// the runtime's middleware: not in this package's files
+	case q == "" || q == c.pkg.Name:
+		// A function of this package: it must exist with the middleware
+		// signature, spelled exactly (§V3.2, D63).
+		name := p.Ref.Base()
+		const want = "func %s(next http.Handler) http.Handler"
+		sc := c.goFuncs(c.pkg)
+		gf, found := sc.funcs[name]
+		if !found {
+			c.errorf(p.Ref.Pos(), "V3", "no function %s in package %s's Go files — declare "+want+" beside the routes (§V3.2)%s", name, c.pkg.Name, name, sc.brokenHint())
+			return
+		}
+		if gf.Generic {
+			c.errorf(p.Ref.Pos(), "V3", "%s is generic (%s); a plug cannot instantiate it — wrap it in a plain "+want+" (§V3.2)", name, gf.Sig, name)
+			return
+		}
+		if gf.Variadic || len(gf.Params) != 1 || gf.Params[0].Type != "http.Handler" ||
+			len(gf.Results) != 1 || gf.Results[0] != "http.Handler" {
+			c.errorf(p.Ref.Pos(), "V3", "%s is not middleware: found %s, a plug is "+want+" (§V3.2)", name, gf.Sig, name)
+		}
 	default:
 		if _, isImport := c.pkg.Imports[q]; isImport {
 			c.usedQual[q] = true
@@ -326,6 +349,18 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, seenShape, seenHelper 
 				next.namePrefix += n
 			case "error_handler":
 				name, ok := c.selfFuncRef(s.Value)
+				if ok {
+					// Held like every Go reference (D63): the function must exist
+					// with the runtime's ErrorHandler shape, spelled exactly.
+					const want = "func %s(w http.ResponseWriter, r *volt.Request, err error)"
+					sc := c.goFuncs(c.pkg)
+					if gf, found := sc.funcs[name]; !found {
+						c.errorf(s.Pos(), "V4", "no function %s in package %s's Go files — declare "+want+" beside the routes (§V4.4)%s", name, c.pkg.Name, name, sc.brokenHint())
+					} else if gf.Generic || gf.Variadic || len(gf.Params) != 3 || gf.Params[0].Type != "http.ResponseWriter" ||
+						gf.Params[1].Type != "*volt.Request" || gf.Params[2].Type != "error" || len(gf.Results) != 0 {
+						c.errorf(s.Pos(), "V4", "%s is not an error handler: found %s, expected "+want+" (§V4.4)", name, gf.Sig, name)
+					}
+				}
 				if !ok {
 					c.errorf(s.Pos(), "V4", "error_handler: takes a function of this package, written Name or %s.Name (§V4.5)", c.pkg.Name)
 					continue

@@ -301,6 +301,42 @@ Still open from the original slice, in the maintainer's build order:
 
 FW-2 needs the structured half only, so Datasets are unblocked.
 
+## Known gaps (adversarial audit, 2026-09-02)
+
+Confirmed by reproduction, not yet fixed — listed so the docs never
+imply otherwise (D49). Each is small; none blocks FW-2.
+
+- **Editor, cross-file.** Column occurrences are indexed per file: a
+  select, enum reference or `default: status.x` in a *sibling* `.volt`
+  file of the same package is neither navigable nor renamed from the
+  declaration. Pred hover from a sibling file shows only the name.
+- **Editor, uncovered spellings.** No hover/definition/references for
+  select parameters (`:site`), for columns inside a Pred body, or for
+  projection/order columns of a group-targeted select (by design the
+  latter are not renamed; they should still navigate). References on a
+  table list its declaration twice; hover ranges on qualified
+  references span the qualifier.
+- **Editor, Go files.** Editing a package's Go file does not re-run
+  the D63 checks until a `.volt` buffer changes (no watch on `*.go`).
+- **Diagnostics anchoring.** A Pred that fails typing at a use site is
+  reported inside the Pred declaration, once per failing select or
+  check, without naming the use. Two same-named projected selects on
+  disjoint tables are refused with a message naming one select twice.
+  A projection over a member with an unmapped column type leaks the
+  generator's internal message.
+- **Selects.** `TableGroup` as a select target gets the generic "no
+  such table or group" without saying that TableGroup is a diagram
+  construct (D58). Generated doc comments lower-case the first letter
+  of a select name instead of quoting the schema spelling.
+- **Validation.** `Validate()` does not enforce enum membership (the
+  DDL `CHECK … IN` does); `rt.Null[T]` implements JSON only, so a
+  non-JSON encoder reached through `tag:` sees the wrapper's fields;
+  Pred-reference checks render with redundant parentheses.
+- **CLI.** `Project.Module` is required but unused; a nonexistent
+  argument gets a loader message rather than "no such directory";
+  diagnostics print absolute paths even for relative arguments;
+  cascading import errors are not collapsed.
+
 ## FW-2 — Datasets: schema-driven group expansion
 
 `Dataset` (reserved word, spec §V8) turns a `TableGroup` into a full

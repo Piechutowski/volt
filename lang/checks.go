@@ -28,32 +28,28 @@ func (c *checker) tableChecks(pkg *Package) {
 	}
 	for _, ti := range info.Tables {
 		var specs []golang.CheckSpec
-		for _, item := range ti.Decl.Body {
-			cb, ok := item.(*ast.ChecksBlock)
+		// Direct and injected checks alike (§6.9.3): a partial's checks
+		// belong to every table it is injected into.
+		for _, ck := range ti.Checks {
+			var spec golang.CheckSpec
+			var ok bool
+			switch {
+			case ck.Pred != nil:
+				spec, ok = c.typedCheck(ti, ck, info)
+			case ck.Ref != nil:
+				spec, ok = c.goRefCheck(ti, ck, info)
+			default:
+				continue // opaque SQL: §6.6's business, SQL CHECK only
+			}
 			if !ok {
 				continue
 			}
-			for _, ck := range cb.Checks {
-				var spec golang.CheckSpec
-				var ok bool
-				switch {
-				case ck.Pred != nil:
-					spec, ok = c.typedCheck(ti, ck, info)
-				case ck.Ref != nil:
-					spec, ok = c.goRefCheck(ti, ck, info)
-				default:
-					continue // opaque SQL: §6.6's business, SQL CHECK only
+			if n := ck.Settings.Get("name"); n != nil {
+				if lit, isStr := n.Value.(*ast.BasicLit); isStr && lit.Tok.Kind == token.STRING {
+					spec.Name = lit.Tok.Val
 				}
-				if !ok {
-					continue
-				}
-				if n := ck.Settings.Get("name"); n != nil {
-					if lit, isStr := n.Value.(*ast.BasicLit); isStr && lit.Tok.Kind == token.STRING {
-						spec.Name = lit.Tok.Val
-					}
-				}
-				specs = append(specs, spec)
 			}
+			specs = append(specs, spec)
 		}
 		if len(specs) > 0 {
 			pkg.CheckFns = append(pkg.CheckFns, golang.CheckFn{TableKey: ti.Key, Checks: specs})
@@ -88,7 +84,8 @@ func (c *checker) goRefCheck(ti *check.TableInfo, ck *ast.Check, info *check.Inf
 	if env == nil {
 		return golang.CheckSpec{}, false
 	}
-	var args, src []string
+	var args, src, argTypes, declTypes []string
+	var fields []golang.FieldSig
 	for _, a := range ck.Args {
 		f, ok := env.fieldOf(a, false)
 		if !ok {
@@ -96,11 +93,49 @@ func (c *checker) goRefCheck(ti *check.TableInfo, ck *ast.Check, info *check.Inf
 		}
 		args = append(args, "v."+f.Name)
 		src = append(src, a.Name())
+		argTypes = append(argTypes, f.Type)
+		declTypes = append(declTypes, ti.Column(a.Name()).Col.Type.String())
+		fields = append(fields, f)
 	}
-	call := ck.Ref.Base() + "(" + strings.Join(args, ", ") + ")"
+	name := ck.Ref.Base()
+	want := "func " + name + "(" + strings.Join(argTypes, ", ") + ") error"
+
+	// The function must exist in this package's Go files with exactly
+	// the contract, spelled as the generated field types (§V12.5, D63):
+	// the typo and the wrong type are caught here, not by the compiler.
+	sc := c.goFuncs(c.pkg)
+	gf, found := sc.funcs[name]
+	if !found {
+		c.errorf(ck.Ref.Pos(), "V12", "no function %s in package %s's Go files — declare %s beside the schema (§V12.5)%s", name, c.pkg.Name, want, sc.brokenHint())
+		return golang.CheckSpec{}, false
+	}
+	if gf.Generic {
+		c.errorf(ck.Ref.Pos(), "V12", "%s is generic (%s); a check cannot instantiate it — wrap it in a plain %s (§V12.5)", name, gf.Sig, want)
+		return golang.CheckSpec{}, false
+	}
+	if gf.Variadic {
+		c.errorf(ck.Ref.Pos(), "V12", "%s is variadic (%s); a check passes a fixed column list — expected %s (§V12.5)", name, gf.Sig, want)
+		return golang.CheckSpec{}, false
+	}
+	if len(gf.Params) != len(args) {
+		c.errorf(ck.Ref.Pos(), "V12", "%s takes %d parameter(s) but the check passes %d column(s): found %s, expected %s (§V12.5)",
+			name, len(gf.Params), len(args), gf.Sig, want)
+		return golang.CheckSpec{}, false
+	}
+	for i, prm := range gf.Params {
+		if prm.Type != argTypes[i] {
+			c.errorf(ck.Args[i].Pos(), "V12", "column %q (%s, Go %s) but parameter %d of %s is %s — change the column type or the function: expected %s (§V12.5)",
+				fields[i].Col, declTypes[i], argTypes[i], i+1, name, prm.Type, want)
+			return golang.CheckSpec{}, false
+		}
+	}
+	if len(gf.Results) != 1 || gf.Results[0] != "error" {
+		c.errorf(ck.Ref.Pos(), "V12", "%s must return exactly error: found %s, expected %s (§V12.5)", name, gf.Sig, want)
+		return golang.CheckSpec{}, false
+	}
 	return golang.CheckSpec{
-		Src:  ck.Ref.Base() + "(" + strings.Join(src, ", ") + ")",
-		Call: call,
+		Src:  name + "(" + strings.Join(src, ", ") + ")",
+		Call: name + "(" + strings.Join(args, ", ") + ")",
 	}, true
 }
 
@@ -158,6 +193,10 @@ func (e *chkEnv) fieldOf(id *ast.Ident, typed bool) (golang.FieldSig, bool) {
 				"column %q is a date/time; the Go tier cannot mirror SQL's text-time comparison — use an opaque `SQL` check or a Go reference (§V12.4)", id.Name())
 			return f, false
 		case classForbidden:
+			if _, mapped := golang.GoTypeName(normalizeType(cd.Col.Type.String())); !mapped {
+				e.errorf(id.Pos(), "column %q is enum-typed (%s); predicates do not compare enums in v1 (§V10.3, hypotheses H5)", id.Name(), cd.Col.Type.String())
+				return f, false
+			}
 			e.errorf(id.Pos(), "column %q (blob/json) cannot appear in a typed check (§V10.3)", id.Name())
 			return f, false
 		}

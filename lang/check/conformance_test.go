@@ -3,6 +3,8 @@ package check_test
 import (
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/Piechutowski/volt/lang/check"
@@ -16,6 +18,8 @@ import (
 // every invalid snippet at least one. The verdicts were pinned against
 // the upstream @dbml/parse compiler while the cross-check existed
 // (retired at 0 disagreements, D54).
+var wantRE = regexp.MustCompile(`(?m)^// want: (.+)$`)
+
 func TestConformanceCorpus(t *testing.T) {
 	root := filepath.Join("..", "conformance", "snippets")
 	for _, group := range []struct {
@@ -42,6 +46,20 @@ func TestConformanceCorpus(t *testing.T) {
 				gotError := diag.HasErrors(diags)
 				if gotError != group.wantError {
 					t.Errorf("want error=%v, got error=%v; diagnostics: %v", group.wantError, gotError, diags)
+				}
+				// `// want: <text>` pins the reason an invalid snippet is
+				// rejected: the rule its comment names, not an accident.
+				if m := wantRE.FindSubmatch(src); m != nil && group.wantError {
+					want := strings.TrimSpace(string(m[1]))
+					found := false
+					for _, d := range diags {
+						if strings.Contains(d.Msg, want) {
+							found = true
+						}
+					}
+					if !found {
+						t.Errorf("rejected, but not for the pinned reason %q; diagnostics: %v", want, diags)
+					}
 				}
 			})
 		}

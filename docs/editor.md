@@ -261,10 +261,18 @@ Go files — pipeline plugs (§V3.2) and Go-reference checks (§V12.5).
 The server resolves those names with the standard library's Go parser
 over the package directory's non-test `*.go` files (no gopls, no
 build): go-to-definition lands on the `func`, hover shows its signature
-and doc comment, and an undeclared name hovers with the contract to
-write (`func Name(...) error`). `volt.*` plugs live in the runtime and
-make no claim. The Go compiler remains the authority on whether the
-reference is valid; rename never touches Go.
+and doc comment, and an undeclared name hovers as undeclared while the
+checker's diagnostic on the reference names the exact signature to
+write. `volt.*` plugs live in the runtime and
+make no claim. Existence and the spelled signature are the checker's
+(D63), so a typo or a wrong parameter type is a diagnostic at the
+reference. Rename on a Go reference rewrites its Volt spellings only —
+the Go declaration is gopls' job, and the existence error then points
+at whichever side is still behind. Rename on a column follows it into
+the table's checks (typed operands and Go-reference arguments); a
+column named through a group — in a `Pred` body or a group select — is
+left alone, and the agreement error (§V11.4 for a select, §V12.2 for a
+Pred used by a table's checks) names what is now missing.
 
 ## 8. The verification checklist
 

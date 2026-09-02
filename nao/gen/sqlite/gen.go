@@ -161,13 +161,9 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 		uniqueDone[strings.Join(pkCols, ",")] = true
 	}
 
-	// table-level checks (spec §6.6)
-	for _, item := range ti.Decl.Body {
-		cb, ok := item.(*ast.ChecksBlock)
-		if !ok {
-			continue
-		}
-		for _, ck := range cb.Checks {
+	// table-level checks (spec §6.6), direct and injected (§6.9.3)
+	{
+		for _, ck := range ti.Checks {
 			var expr string
 			switch {
 			case ck.Expr != nil:

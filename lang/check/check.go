@@ -37,6 +37,7 @@ type TableInfo struct {
 	Shadowed []*ColumnDef
 
 	Indexes []*ast.Index // all indexes, direct and injected
+	Checks  []*ast.Check // all check lines, direct and injected (§6.9.3)
 }
 
 // ColumnDef is one column definition and where it came from.
@@ -268,10 +269,14 @@ func (c *checker) columnsExpand(ti *TableInfo) {
 					addCol(pit, pi.Decl)
 				case *ast.IndexesBlock:
 					ti.Indexes = append(ti.Indexes, pit.Indexes...)
+				case *ast.ChecksBlock:
+					ti.Checks = append(ti.Checks, pit.Checks...)
 				}
 			}
 		case *ast.IndexesBlock:
 			ti.Indexes = append(ti.Indexes, item.Indexes...)
+		case *ast.ChecksBlock:
+			ti.Checks = append(ti.Checks, item.Checks...)
 		}
 	}
 	slots := make([]*slot, 0, len(byName))

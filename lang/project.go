@@ -271,6 +271,11 @@ func LoadDirs(root string, dirs []string, overlay map[string]string) (*Project, 
 				}
 				for _, spec := range id.Specs {
 					target := filepath.Join(abs, filepath.FromSlash(spec.PathString()))
+					if why := importExcluded(abs, spec.PathString()); why != "" {
+						pr.Diags = append(pr.Diags, diag.Errorf(spec.Pos(), "spec/V1",
+							"import %q names %s, which is not part of this project (§V1.6)", spec.PathString(), why))
+						continue
+					}
 					if hasVoltFiles(target) {
 						queue = append(queue, target)
 					}
@@ -279,6 +284,26 @@ func LoadDirs(root string, dirs []string, overlay map[string]string) (*Project, 
 		}
 	}
 	return pr, nil
+}
+
+// importExcluded reports why a root-relative import path is outside
+// the project (§V1.6): a segment the exclusions cover, or a nested
+// module boundary between the root and the target. "" means allowed.
+func importExcluded(root, path string) string {
+	dir := root
+	for _, seg := range strings.Split(path, "/") {
+		if seg == "" || seg == "." {
+			continue
+		}
+		if excludedDir(seg) {
+			return "an excluded directory (" + seg + ")"
+		}
+		dir = filepath.Join(dir, seg)
+		if _, err := os.Stat(filepath.Join(dir, ModFile)); err == nil {
+			return "a nested module (" + seg + " has its own " + ModFile + ")"
+		}
+	}
+	return ""
 }
 
 // packageLoad parses one directory's .volt files into a package (nil
@@ -331,14 +356,47 @@ func (pr *Project) packageLoad(dir string, overlay map[string]string) (*Package,
 }
 
 // goModModule reads the module directive of go.mod — the only line Volt
-// needs; every other directive is Go's business and ignored.
+// needs; every other directive is Go's business and ignored. The scan
+// honors go.mod's lexical structure: // and /* */ comments are not
+// text, and a directive inside a parenthesized block (require (...))
+// is not the top-level module directive.
 func goModModule(path, src string) (string, []diag.Diagnostic) {
-	for i, line := range strings.Split(src, "\n") {
-		fields := strings.Fields(line)
-		if len(fields) >= 2 && fields[0] == "module" {
+	inBlockComment, depth := false, 0
+	for _, line := range strings.Split(src, "\n") {
+		var text strings.Builder
+		for i := 0; i < len(line); i++ {
+			switch {
+			case inBlockComment:
+				if strings.HasPrefix(line[i:], "*/") {
+					inBlockComment = false
+					i++
+				}
+			case strings.HasPrefix(line[i:], "/*"):
+				inBlockComment = true
+				i++
+			case strings.HasPrefix(line[i:], "//"):
+				i = len(line)
+			default:
+				text.WriteByte(line[i])
+			}
+		}
+		fields := strings.Fields(text.String())
+		if len(fields) == 0 {
+			continue
+		}
+		if depth == 0 && fields[0] == "module" && len(fields) >= 2 && fields[1] != "(" {
 			return strings.Trim(fields[1], "\""), nil
 		}
-		_ = i
+		for _, f := range fields {
+			switch f {
+			case "(":
+				depth++
+			case ")":
+				if depth > 0 {
+					depth--
+				}
+			}
+		}
 	}
 	return "", []diag.Diagnostic{diag.Errorf(token.Position{Filename: path, Line: 1, Column: 1},
 		"spec/V1", "%s must declare 'module <path>' (§V1.1)", ModFile)}

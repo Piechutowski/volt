@@ -6,5 +6,6 @@ Table ms_revenue {
 }
 
 Group series {
+  ms_revenue
   ms_revenu
 }

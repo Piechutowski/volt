@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 
@@ -15,7 +16,7 @@ import (
 // under invalid/ MUST be rejected. A snippet is either one .volt file
 // (run as a single-package project, the package directory named from
 // its package clause) or a directory containing a complete project
-// with volt.mod. The .dbml entries sharing the tree are the schema
+// with go.mod (D62). The .dbml entries sharing the tree are the schema
 // half, exercised by lang/check's corpus test.
 
 var pkgClauseRE = regexp.MustCompile(`(?im)^package\s+(\w+)`)
@@ -109,8 +110,53 @@ func TestConformanceInvalid(t *testing.T) {
 			if !diag.HasErrors(diags) {
 				t.Errorf("invalid snippet accepted")
 			}
+			// A `// want: <substring>` line pins the reason: the snippet
+			// must be rejected for the rule its comment names, not by
+			// accident.
+			if want := corpusWant(t, path); want != "" {
+				found := false
+				for _, d := range diags {
+					if strings.Contains(d.Msg, want) {
+						found = true
+					}
+				}
+				if !found {
+					t.Errorf("rejected, but not for the pinned reason %q; diagnostics: %v", want, diags)
+				}
+			}
 		})
 	}
+}
+
+var wantRE = regexp.MustCompile(`(?m)^// want: (.+)$`)
+
+// corpusWant returns the snippet's `// want:` pin, "" when absent. For
+// a directory snippet the first .volt file (name order) carries it.
+func corpusWant(t *testing.T, path string) string {
+	t.Helper()
+	file := path
+	if st, err := os.Stat(path); err == nil && st.IsDir() {
+		var files []string
+		filepath.WalkDir(path, func(p string, d os.DirEntry, err error) error {
+			if err == nil && !d.IsDir() && strings.HasSuffix(p, ".volt") {
+				files = append(files, p)
+			}
+			return nil
+		})
+		if len(files) == 0 {
+			return ""
+		}
+		sort.Strings(files)
+		file = files[0]
+	}
+	src, err := os.ReadFile(file)
+	if err != nil {
+		return ""
+	}
+	if m := wantRE.FindSubmatch(src); m != nil {
+		return strings.TrimSpace(string(m[1]))
+	}
+	return ""
 }
 
 // TestConformanceTagged pins the corpus to the spec: every snippet

@@ -91,21 +91,13 @@ func (c *checker) dataQueries(pkg *Package) {
 
 	// §V11.7: minted row-type names share the package scope with every
 	// generated type; models and enums are claimed before any select.
-	minted := map[string]string{}
-	for _, ti := range info.Tables {
-		if m, err := golang.ModelName(ti.Decl); err == nil {
-			minted[m] = fmt.Sprintf("the model of table %q", ti.Decl.Name.Base())
-		}
+	// The names are claimed from the generators' own plan (models, params
+	// types, enum types, dynamic handles and functions, the Queries
+	// handle), so the list cannot drift from the output.
+	minted, err := golang.PackageNames(pkg.merged, info)
+	if err != nil {
+		minted = map[string]string{"Queries": "the generated Queries handle", "New": "the generated constructor"}
 	}
-	for _, d := range pkg.merged.Decls {
-		if e, ok := d.(*ast.Enum); ok {
-			if n, err := golang.EnumTypeName(e.Name.Schema(), e.Name.Base()); err == nil {
-				minted[n] = fmt.Sprintf("the enum %q", e.Name.String())
-			}
-		}
-	}
-	minted["Queries"] = "the generated Queries handle"
-	minted["New"] = "the generated constructor"
 
 	seen := map[string]*ast.Select{} // tableKey+method -> declaring select
 	for _, sel := range selects {
@@ -545,9 +537,19 @@ func (c *checker) selectSettings(sel *ast.Select, env *selectEnv) string {
 				c.errorf(s.Pos(), "V11", "order: takes a parenthesized column list (§V11.5)")
 				continue
 			}
+			seenOrder := map[string]bool{}
 			for i, id := range list.Names {
 				b := env.columnBind(id)
 				if b == nil {
+					continue
+				}
+				if seenOrder[b.name] {
+					c.errorf(id.Pos(), "V11", "column %q appears twice in order: (§V11.5)", b.name)
+					continue
+				}
+				seenOrder[b.name] = true
+				if b.class == classEqOnly {
+					c.errorf(id.Pos(), "V11", "column %q is decimal-exact, stored as text: ordering it would be lexical, not numeric (§V11.5)", b.name)
 					continue
 				}
 				if b.class != classNumeric && b.class != classTime && b.class != classText {
@@ -617,7 +619,7 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 		goType, ok := golang.GoTypeName(normalizeType(declType))
 		if !ok {
 			// Enum-typed or unmapped: not usable in predicates (v1).
-			e.errorf(id.Pos(), "column %q of table %q has type %q, which predicates cannot use (§V10.3)", name, m.Decl.Name.Base(), declType)
+			e.errorf(id.Pos(), "column %q of table %q is enum-typed (%s); predicates do not compare enums in v1 — filter on a text column or use the dynamic layer (§V10.4, hypotheses H5)", name, m.Decl.Name.Base(), declType)
 			return nil
 		}
 		types[goType] = append(types[goType], m.Decl.Name.Base())

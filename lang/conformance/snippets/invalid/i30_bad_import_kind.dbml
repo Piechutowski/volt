@@ -1,2 +1,2 @@
-// spec: §7.3 — import kind must be one of the six element kinds
+// spec: §7 — file imports are removed from the language; 'use' is rejected outright (Appendix C)
 use { view v } from './x'
