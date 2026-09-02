@@ -6,5 +6,5 @@ import (
 )
 
 Scope / {
-	resources users [model: nothere.User]
+	resources nothere.users
 }

@@ -37,9 +37,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Piechutowski/volt/nao/edbml/ast"
-	"github.com/Piechutowski/volt/nao/edbml/check"
-	"github.com/Piechutowski/volt/nao/edbml/token"
+	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/lang/token"
 )
 
 // GenerateDyn renders the dynamic-query file for one checked DBML file:

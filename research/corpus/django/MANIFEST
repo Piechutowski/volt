@@ -1,5 +1,0 @@
-source: https://github.com/django/django
-ref: stable/6.1.x
-commit: bc529fb8a6c289e066f3aadc8a6944333e35f12f
-fetched: 2026-07-14T12:57:45Z
-markdown_files: 669

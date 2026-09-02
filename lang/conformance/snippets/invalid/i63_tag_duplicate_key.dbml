@@ -1,0 +1,5 @@
+// spec: §6.3 tag extension rule 2 — tag keys are unique per column
+Table users {
+  id   integer [pk]
+  name varchar [tag: 'json:"a"', tag: 'json:"b"']
+}

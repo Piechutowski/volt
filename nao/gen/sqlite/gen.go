@@ -2,7 +2,7 @@
 // DBML file: CREATE TABLE per table, CREATE INDEX per non-pk index, and
 // INSERT statements from records.
 //
-// Dialect decisions (see SPEC.md):
+// Dialect decisions (see docs/spec.md Appendix B):
 //   - enums become TEXT + CHECK (col IN (...)) — SQLite has no enum type;
 //   - schemas are flattened: core.users -> core_users;
 //   - every primary-key column gets an explicit NOT NULL, because SQLite's
@@ -22,10 +22,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Piechutowski/volt/nao/edbml/ast"
-	"github.com/Piechutowski/volt/nao/edbml/check"
-	"github.com/Piechutowski/volt/nao/edbml/parser"
-	"github.com/Piechutowski/volt/nao/edbml/token"
+	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/lang/parser"
+	"github.com/Piechutowski/volt/lang/token"
 )
 
 // Options configures generation.
@@ -168,11 +168,27 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 			continue
 		}
 		for _, ck := range cb.Checks {
+			var expr string
+			switch {
+			case ck.Expr != nil:
+				expr = ck.Expr.Text()
+			case ck.Pred != nil:
+				// Lowered by the Volt checker (§V12.4); one rendering
+				// serves the DDL and the generated validator.
+				if ck.SQL == "" {
+					return fmt.Errorf("table %s: typed check not lowered — generate through volt gen (§V12)", ti.Decl.Name.Base())
+				}
+				expr = ck.SQL
+			case ck.Ref != nil:
+				continue // validator tier only: SQLite cannot call Go (§V12.5)
+			default:
+				continue
+			}
 			line := "  "
 			if n := settingString(ck.Settings, "name"); n != "" {
 				line += "CONSTRAINT " + identQuote(n) + " "
 			}
-			line += "CHECK (" + ck.Expr.Text() + ")"
+			line += "CHECK (" + expr + ")"
 			lines = append(lines, line)
 		}
 	}
@@ -532,3 +548,7 @@ func contains(ss []string, s string) bool {
 	}
 	return false
 }
+
+// Ident quotes an identifier for SQLite exactly the way the DDL
+// generator does — exported for the select lowering (spec §V11.6).
+func Ident(name string) string { return identQuote(name) }

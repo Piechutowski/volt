@@ -1,0 +1,9 @@
+// spec: §6.3 increment extension — no rowid alias under a composite key
+Table user_tags {
+  user_id integer [increment]
+  tag varchar [not null]
+
+  indexes {
+    (user_id, tag) [pk]
+  }
+}

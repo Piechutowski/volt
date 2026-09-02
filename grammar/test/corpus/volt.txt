@@ -1,0 +1,387 @@
+==================
+volt: package clause and import block
+==================
+
+package app
+
+import (
+	db
+	d2 shared/dicts
+)
+
+---
+
+(source_file
+  (package_clause
+    (identifier))
+  (import_block
+    (import_spec
+      (import_path
+        (identifier)))
+    (import_spec
+      (import_alias)
+      (import_path
+        (identifier)
+        (identifier)))))
+
+==================
+volt: pipeline with plugs
+==================
+
+Pipeline api {
+	use volt.RequestID
+	use BearerAuth
+}
+
+---
+
+(source_file
+  (pipeline_definition
+    (pipeline_name)
+    (plug
+      (go_ref
+        (identifier)
+        (identifier)))
+    (plug
+      (go_ref
+        (identifier)))))
+
+==================
+volt: scope with routes, resources, nesting
+==================
+
+Scope / [pipe: api, error_handler: Errors] {
+	get / Home.Index [name: root]
+
+	Scope /admin [name: admin] {
+		get /stats Admin.Stats
+	}
+
+	resources db.users [only: (index, show)]
+
+	get /users/:id(int32)/avatar Users.Avatar
+	get /files/:path...          Files.Serve
+}
+
+---
+
+(source_file
+  (scope_definition
+    (route_path)
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (setting_value_words
+          (identifier)))
+      (setting
+        (setting_name
+          (identifier))
+        (setting_value_words
+          (identifier))))
+    (route
+      (verb)
+      (route_path)
+      (go_ref
+        (identifier)
+        (identifier))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (setting_value_words
+            (identifier)))))
+    (scope_definition
+      (route_path
+        (path_segment))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (setting_value_words
+            (identifier))))
+      (route
+        (verb)
+        (route_path
+          (path_segment))
+        (go_ref
+          (identifier)
+          (identifier))))
+    (resources_declaration
+      (package_name)
+      (table_name)
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (ident_group
+            (identifier)
+            (identifier)))))
+    (route
+      (verb)
+      (route_path
+        (path_segment)
+        (path_parameter
+          (parameter_name)
+          (type_name))
+        (path_segment))
+      (go_ref
+        (identifier)
+        (identifier)))
+    (route
+      (verb)
+      (route_path
+        (path_segment)
+        (path_parameter
+          (parameter_name)
+          (wildcard_marker)))
+      (go_ref
+        (identifier)
+        (identifier)))))
+
+==================
+volt: routing beside tables (superset)
+==================
+
+package app
+
+Table users {
+	id integer [pk]
+}
+
+Scope / {
+	get /users/:id(int32) Users.Show
+}
+
+---
+
+(source_file
+  (package_clause
+    (identifier))
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))))))
+  (scope_definition
+    (route_path)
+    (route
+      (verb)
+      (route_path
+        (path_segment)
+        (path_parameter
+          (parameter_name)
+          (type_name)))
+      (go_ref
+        (identifier)
+        (identifier)))))
+
+==================
+volt: whitespace splits a route path
+:error
+==================
+
+Scope / {
+	get /users /:id Users.Show
+}
+
+---
+
+
+
+==================
+group block and algebra forms
+==================
+
+Group series {
+  ms_revenue
+  ms_usage
+}
+
+Group wide = series + ks_costs - ms_usage
+
+---
+
+(source_file
+  (group_definition
+    (group_name)
+    (group_member)
+    (group_member))
+  (group_definition
+    (group_name)
+    (group_member)
+    (group_member)
+    (group_member)))
+
+==================
+pred with composition, in, like, is null
+==================
+
+Pred current { org = :org and year = :year }
+Pred fresh { current and (year >= :since or year in (2024, 2025)) and not org like 'x%' and note is not null }
+
+---
+
+(source_file
+  (pred_definition
+    (pred_name)
+    (pred_expr
+      (pred_compare
+        (column_ref)
+        (query_param
+          (parameter_name)))
+      (pred_compare
+        (column_ref)
+        (query_param
+          (parameter_name)))))
+  (pred_definition
+    (pred_name)
+    (pred_expr
+      (pred_ref)
+      (pred_expr
+        (pred_compare
+          (column_ref)
+          (query_param
+            (parameter_name)))
+        (pred_in
+          (column_ref)
+          (number)
+          (number)))
+      (pred_like
+        (column_ref)
+        (string
+          (string_content)))
+      (pred_null
+        (column_ref)))))
+
+==================
+select for group with where and order
+==================
+
+Select rows for series where current and year >= 2000 [order: (year desc, id)]
+Select all for ms_usage
+
+---
+
+(source_file
+  (select_definition
+    (select_name)
+    (select_target)
+    (pred_expr
+      (pred_ref)
+      (pred_compare
+        (column_ref)
+        (number)))
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (ident_group
+          (identifier)
+          (ident_modifier
+            (identifier))
+          (identifier)))))
+  (select_definition
+    (select_name)
+    (select_target)))
+
+==================
+select projections
+==================
+
+Select summary (site, day) for metrics where at
+Select public (* - password_hash - email) for accounts
+
+---
+
+(source_file
+  (select_definition
+    (select_name)
+    (select_projection
+      (column_ref)
+      (column_ref))
+    (select_target)
+    (pred_expr
+      (pred_ref)))
+  (select_definition
+    (select_name)
+    (select_projection
+      (column_ref)
+      (column_ref))
+    (select_target)))
+
+==================
+validation checks
+==================
+
+Table page_views {
+  hits integer [not null]
+  site varchar [not null]
+
+  checks {
+    hits >= 0 and site like '%_' [name: 'sane']
+    EmailValid(site)
+    `hits < 1000000`
+  }
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier)
+            (identifier)))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier)
+            (identifier)))))
+    (checks_block
+      (check_definition
+        (pred_expr
+          (pred_compare
+            (column_ref)
+            (number))
+          (pred_like
+            (column_ref)
+            (string
+              (string_content))))
+        (settings_list
+          (setting
+            (setting_name
+              (identifier))
+            (string
+              (string_content)))))
+      (check_definition
+        (go_check
+          (go_ref
+            (identifier))
+          (column_ref)))
+      (check_definition
+        (expression
+          (expression_content))))))

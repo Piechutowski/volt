@@ -6,5 +6,5 @@ Table users {
 }
 
 Scope / {
-	resources users [model: User]
+	resources users
 }

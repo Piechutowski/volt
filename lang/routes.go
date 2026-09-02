@@ -1,7 +1,7 @@
 package lang
 
 import (
-	"github.com/Piechutowski/volt/nao/edbml/token"
+	"github.com/Piechutowski/volt/lang/token"
 )
 
 // ParamType is the closed set of route parameter types (spec §V4.1.3).

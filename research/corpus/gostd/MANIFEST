@@ -1,5 +1,0 @@
-source: go doc -all (installed toolchain)
-ref: go1.26.5
-commit: n/a (toolchain release)
-fetched: 2026-07-14T16:29:30Z
-files: 105

@@ -5,5 +5,5 @@ import (
 )
 
 Scope / {
-	resources posts [model: d.Post]
+	resources d.posts
 }

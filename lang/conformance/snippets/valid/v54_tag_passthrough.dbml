@@ -1,0 +1,7 @@
+// spec: §6.3 tag extension, Appendix A.5 — verbatim struct-tag passthrough;
+// a json key replaces the generated default, others append in order
+Table users {
+  id        integer [pk]
+  user_name varchar [not null, tag: 'json:"userName"', tag: 'xml:"user-name,attr"']
+  bio       text [tag: 'msgpack:"bio,omitempty"']
+}

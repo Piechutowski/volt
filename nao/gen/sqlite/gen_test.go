@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Piechutowski/volt/nao/edbml/check"
-	"github.com/Piechutowski/volt/nao/edbml/diag"
-	"github.com/Piechutowski/volt/nao/edbml/parser"
+	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/lang/diag"
+	"github.com/Piechutowski/volt/lang/parser"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
@@ -45,7 +45,7 @@ func TestGolden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	extended, err := filepath.Glob(filepath.Join("..", "testdata", "*.edbml"))
+	extended, err := filepath.Glob(filepath.Join("..", "testdata", "*.volt"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestGolden(t *testing.T) {
 		dbml := dbml
 		t.Run(filepath.Base(dbml), func(t *testing.T) {
 			got := generate(t, dbml)
-			golden := filepath.Join("testdata", strings.TrimSuffix(strings.TrimSuffix(filepath.Base(dbml), ".dbml"), ".edbml")+".sql.golden")
+			golden := filepath.Join("testdata", strings.TrimSuffix(strings.TrimSuffix(filepath.Base(dbml), ".dbml"), ".volt")+".sql.golden")
 			if *update {
 				if err := os.WriteFile(golden, got, 0o644); err != nil {
 					t.Fatal(err)

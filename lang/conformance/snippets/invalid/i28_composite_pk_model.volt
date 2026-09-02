@@ -8,5 +8,5 @@ Table pairs {
 }
 
 Scope / {
-	resources pairs [model: Pair]
+	resources pairs
 }

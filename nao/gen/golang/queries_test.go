@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Piechutowski/volt/nao/edbml/check"
-	"github.com/Piechutowski/volt/nao/edbml/diag"
-	"github.com/Piechutowski/volt/nao/edbml/parser"
+	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/lang/diag"
+	"github.com/Piechutowski/volt/lang/parser"
 	sqlitegen "github.com/Piechutowski/volt/nao/gen/sqlite"
 	"github.com/Piechutowski/volt/nao/rt"
 )

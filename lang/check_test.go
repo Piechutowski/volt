@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Piechutowski/volt/nao/edbml/diag"
+	"github.com/Piechutowski/volt/lang/diag"
 )
 
 // project materializes files into a temp dir and runs Load+Check.
@@ -46,12 +46,13 @@ func wantError(t *testing.T, diags []diag.Diagnostic, substr string) {
 	t.Fatalf("no diagnostic mentions %q; got %v", substr, diags)
 }
 
-const modFile = "module fadn\n"
+const modFile = "module blog\n"
 
-// The reference project: a schema package and a routes package,
-// exercising imports, model inference, resources, nesting and helpers.
-var fadn = map[string]string{
-	"volt.mod": modFile,
+// The reference project: a small blog — a schema package and a routes
+// package exercising imports, model inference, resources, nesting and
+// helpers.
+var blog = map[string]string{
+	"go.mod": modFile,
 	"db/schema.volt": `package db
 
 Table users {
@@ -59,9 +60,9 @@ Table users {
 	email text    [not null, unique]
 }
 
-Table da_r_r {
-	idpk integer [pk]
-	rok  integer [not null, default: 0]
+Table posts {
+	id    integer [pk, increment]
+	title text    [not null]
 }
 `,
 	"app/routes.volt": `package app
@@ -83,7 +84,7 @@ Scope / [pipe: api, error_handler: Errors] {
 		get /stats Admin.Stats
 	}
 
-	resources users [model: db.User, only: (index, show, create)]
+	resources db.users [only: (index, show, create)]
 
 	get /files/:path...       Files.Serve
 	get /users/:id(int32)/avatar  Users.Avatar
@@ -92,7 +93,7 @@ Scope / [pipe: api, error_handler: Errors] {
 }
 
 func TestReferenceProject(t *testing.T) {
-	pr, diags := project(t, fadn)
+	pr, diags := project(t, blog)
 	wantClean(t, diags)
 
 	app := pr.Packages["app"]
@@ -172,8 +173,12 @@ func TestReferenceProject(t *testing.T) {
 
 func TestUpdateSpansPatchAndPut(t *testing.T) {
 	pr, diags := project(t, map[string]string{
-		"volt.mod": modFile,
+		"go.mod": modFile,
 		"app/r.volt": `package app
+
+Table users {
+	id integer [pk]
+}
 
 Scope / {
 	resources users [api]
@@ -201,10 +206,14 @@ Scope / {
 	}
 }
 
-func TestResourcesParamExceptNoModel(t *testing.T) {
+func TestResourcesParamExcept(t *testing.T) {
 	pr, diags := project(t, map[string]string{
-		"volt.mod": modFile,
+		"go.mod": modFile,
 		"app/r.volt": `package app
+
+Table posts {
+	id integer [pk]
+}
 
 Scope / {
 	resources posts [param: slug, except: (delete)]
@@ -229,8 +238,8 @@ Scope / {
 			if p.Name != "slug" {
 				t.Errorf("param: rename not applied on %s: %q", r.Pattern, p.Name)
 			}
-			if p.Type != TInt64 {
-				t.Errorf("no-model key type = %v on %s, want int64 (§V5.2)", p.Type, r.Pattern)
+			if p.Type != TInt32 {
+				t.Errorf("key type = %v on %s, want int32 from the pk (§V5.4)", p.Type, r.Pattern)
 			}
 		}
 		if strings.Contains(r.Pattern, "{") && !strings.Contains(r.Pattern, "{slug}") {
@@ -239,9 +248,89 @@ Scope / {
 	}
 }
 
+func TestResourcesSingularOverride(t *testing.T) {
+	// A name English singularization leaves alone collides with itself…
+	_, diags := project(t, map[string]string{
+		"go.mod":     modFile,
+		"app/r.volt": "package app\n\nTable posty {\n\tid integer [pk]\n}\n\nScope / {\n\tresources posty\n}\n",
+	})
+	wantError(t, diags, "set the singular explicitly")
+
+	// …and singular: is the fix, giving distinct collection/member helpers.
+	pr, diags := project(t, map[string]string{
+		"go.mod":     modFile,
+		"app/r.volt": "package app\n\nTable posty {\n\tid integer [pk]\n}\n\nScope / {\n\tresources posty [singular: post]\n}\n",
+	})
+	wantClean(t, diags)
+	helpers := map[string]bool{}
+	for _, r := range pr.Packages["app"].Routes {
+		if r.HelperName != "" {
+			helpers[r.HelperName] = true
+		}
+	}
+	for _, want := range []string{"Posty", "Post", "NewPost", "EditPost"} {
+		if !helpers[want] {
+			t.Errorf("helper %q missing; got %v", want, helpers)
+		}
+	}
+}
+
+func TestResourcesNamesTable(t *testing.T) {
+	pr, diags := project(t, map[string]string{
+		"go.mod":         modFile,
+		"db/schema.volt": "package db\n\nTable posty [model: 'Post'] {\n\tid integer [pk]\n}\n",
+		"app/r.volt":     "package app\nimport (\n\tdb\n)\nScope / {\n\tresources db.posty\n}\n",
+	})
+	wantClean(t, diags)
+
+	app := pr.Packages["app"]
+	helpers := map[string]bool{}
+	for _, r := range app.Routes {
+		// URL segment comes from the table…
+		if !strings.HasPrefix(r.Pattern, "/posty") {
+			t.Errorf("pattern %q should use the table name", r.Pattern)
+		}
+		// …key type from the model's primary key…
+		for _, p := range r.Params {
+			if p.Type != TInt32 {
+				t.Errorf("key type = %v on %s, want int32", p.Type, r.Pattern)
+			}
+		}
+		if r.HelperName != "" {
+			helpers[r.HelperName] = true
+		}
+	}
+	// …and the member helper from the model name ([model: 'Post']),
+	// with no inflection guess.
+	for _, want := range []string{"Posty", "Post", "NewPost", "EditPost"} {
+		if !helpers[want] {
+			t.Errorf("helper %q missing; got %v", want, helpers)
+		}
+	}
+	if app.Controllers["Posty"] == nil {
+		t.Errorf("controller should be Posty (from the table); got %v", app.Controllers)
+	}
+}
+
+func TestResourcesRequireDeclaredTable(t *testing.T) {
+	// Unqualified miss: an error, never a schemaless resource.
+	_, diags := project(t, map[string]string{
+		"go.mod":     modFile,
+		"app/r.volt": "package app\n\nTable posts {\n\tid integer [pk]\n}\n\nScope / {\n\tresources ghosts\n}\n",
+	})
+	wantError(t, diags, `no table "ghosts" in package "app"`)
+
+	// A model name in the declaration gets pointed at its table.
+	_, diags = project(t, map[string]string{
+		"go.mod":     modFile,
+		"app/r.volt": "package app\n\nTable posts {\n\tid integer [pk]\n}\n\nScope / {\n\tresources Post\n}\n",
+	})
+	wantError(t, diags, `is the model of table "posts"`)
+}
+
 func TestVerbMethodMapping(t *testing.T) {
 	pr, diags := project(t, map[string]string{
-		"volt.mod": modFile,
+		"go.mod": modFile,
 		"app/r.volt": `package app
 
 Scope / {
@@ -274,7 +363,7 @@ Scope / {
 
 func TestVetUnusedPipeline(t *testing.T) {
 	pr, diags := project(t, map[string]string{
-		"volt.mod": modFile,
+		"go.mod": modFile,
 		"app/r.volt": `package app
 
 Pipeline api {
@@ -304,96 +393,101 @@ func TestErrors(t *testing.T) {
 		want  string
 	}{
 		{"missing package clause", map[string]string{
-			"volt.mod":   modFile,
+			"go.mod":     modFile,
 			"app/r.volt": "Scope / {\n\tget /x X.Y\n}\n",
 		}, "must begin with a package clause"},
 		{"package/dir mismatch", map[string]string{
-			"volt.mod":   modFile,
+			"go.mod":     modFile,
 			"app/r.volt": "package routes\n",
 		}, "must match its directory name"},
 		{"file name disagreement", map[string]string{
-			"volt.mod":   modFile,
+			"go.mod":     modFile,
 			"app/a.volt": "package app\n",
 			"app/b.volt": "package app2\n",
 		}, "disagrees"},
 		{"use rejected", map[string]string{
-			"volt.mod":   modFile,
+			"go.mod":     modFile,
 			"app/r.volt": "package app\nuse * from './x'\n",
 		}, "not part of the Volt language"},
 		{"unknown import", map[string]string{
-			"volt.mod":   modFile,
+			"go.mod":     modFile,
 			"app/r.volt": "package app\nimport (\n\tnothere\n)\nScope / [pipe: p] { get /x X.Y }\n",
 		}, "unknown package"},
 		{"self import", map[string]string{
-			"volt.mod":   modFile,
+			"go.mod":     modFile,
 			"app/r.volt": "package app\nimport (\n\tapp\n)\n",
 		}, "cannot import itself"},
 		{"unused import", map[string]string{
-			"volt.mod":   modFile,
+			"go.mod":     modFile,
 			"db/s.volt":  "package db\nTable users { id integer [pk] }\n",
 			"app/r.volt": "package app\nimport (\n\tdb\n)\n",
 		}, "imported and not used"},
 		{"import cycle", map[string]string{
-			"volt.mod":  modFile,
-			"a/a.volt":  "package a\nimport (\n\tb\n)\nScope / { resources users [model: b.User] }\n",
-			"b/b.volt":  "package b\nimport (\n\ta\n)\nScope /b { resources users [model: a.User] }\n",
+			"go.mod":    modFile,
+			"a/a.volt":  "package a\nimport (\n\tb\n)\nScope / { resources b.users }\n",
+			"b/b.volt":  "package b\nimport (\n\ta\n)\nScope /b { resources a.users }\n",
 			"a/t.volt":  "package a\nTable users { id integer [pk] }\n",
 			"b/t2.volt": "package b\nTable users { id integer [pk] }\n",
 		}, "import cycle"},
 		{"duplicate route", map[string]string{
-			"volt.mod":   modFile,
+			"go.mod":     modFile,
 			"app/r.volt": "package app\nScope / {\n\tget /users/:id Users.Show\n\tget /users/:name Users.ByName\n}\n",
 		}, "identical method and path shape"},
 		{"helper collision", map[string]string{
-			"volt.mod":   modFile,
+			"go.mod":     modFile,
 			"app/r.volt": "package app\nScope / {\n\tget /a A.Show\n\tget /b B.Show [name: show]\n}\n",
 		}, "already produced by the route"},
 		{"signature conflict", map[string]string{
-			"volt.mod":   modFile,
+			"go.mod":     modFile,
 			"app/r.volt": "package app\nScope / {\n\tget /a/:id(int64) X.Show\n\tget /b/:id(int32) X.Show\n}\n",
 		}, "different parameter signatures"},
 		{"wildcard not last", map[string]string{
-			"volt.mod":   modFile,
+			"go.mod":     modFile,
 			"app/r.volt": "package app\nScope / {\n\tget /f/:p.../x F.S\n}\n",
 		}, "must be the last path segment"},
 		{"wildcard in scope prefix", map[string]string{
-			"volt.mod":   modFile,
+			"go.mod":     modFile,
 			"app/r.volt": "package app\nScope /f/:p... {\n\tget /x F.S\n}\n",
 		}, "Scope prefix cannot contain a wildcard"},
 		{"unknown pipeline", map[string]string{
-			"volt.mod":   modFile,
+			"go.mod":     modFile,
 			"app/r.volt": "package app\nScope / [pipe: nope] {\n\tget /x X.Y\n}\n",
 		}, "unknown Pipeline"},
 		{"unknown param type", map[string]string{
-			"volt.mod":   modFile,
+			"go.mod":     modFile,
 			"app/r.volt": "package app\nScope / {\n\tget /x/:id(uuid) X.Y\n}\n",
 		}, "unknown parameter type"},
 		{"duplicate param", map[string]string{
-			"volt.mod":   modFile,
+			"go.mod":     modFile,
 			"app/r.volt": "package app\nScope /u/:id {\n\tget /p/:id X.Y\n}\n",
 		}, "duplicate path parameter"},
-		{"unknown model", map[string]string{
-			"volt.mod":   modFile,
-			"app/r.volt": "package app\nScope / {\n\tresources users [model: Nope]\n}\n",
-		}, "no table in package"},
+		{"unknown table", map[string]string{
+			"go.mod":     modFile,
+			"db/s.volt":  "package db\n\nTable users {\n\tid integer [pk]\n}\n",
+			"app/r.volt": "package app\nimport (\n\tdb\n)\nScope / {\n\tresources db.nope\n}\n",
+		}, "no table"},
+		{"table name case", map[string]string{
+			"go.mod":     modFile,
+			"app/r.volt": "package app\n\nTable posts {\n\tid integer [pk]\n}\n\nScope / {\n\tresources Posts\n}\n",
+		}, "case-sensitive"},
 		{"only and except", map[string]string{
-			"volt.mod":   modFile,
-			"app/r.volt": "package app\nScope / {\n\tresources users [only: (index), except: (show)]\n}\n",
+			"go.mod":     modFile,
+			"app/r.volt": "package app\nTable users {\n\tid integer [pk]\n}\nScope / {\n\tresources users [only: (index), except: (show)]\n}\n",
 		}, "cannot be combined"},
 		{"unknown action", map[string]string{
-			"volt.mod":   modFile,
-			"app/r.volt": "package app\nScope / {\n\tresources users [only: (browse)]\n}\n",
+			"go.mod":     modFile,
+			"app/r.volt": "package app\nTable users {\n\tid integer [pk]\n}\nScope / {\n\tresources users [only: (browse)]\n}\n",
 		}, "unknown action"},
 		{"lowercase controller", map[string]string{
-			"volt.mod":   modFile,
+			"go.mod":     modFile,
 			"app/r.volt": "package app\nScope / {\n\tget /x home.Index\n}\n",
 		}, "exported Go identifiers"},
 		{"scope setting typo", map[string]string{
-			"volt.mod":   modFile,
+			"go.mod":     modFile,
 			"app/r.volt": "package app\nScope / [pipes: api] {\n\tget /x X.Y\n}\n",
 		}, "not valid on a Scope"},
 		{"keyword param", map[string]string{
-			"volt.mod":   modFile,
+			"go.mod":     modFile,
 			"app/r.volt": "package app\nScope / {\n\tget /x/:type X.Y\n}\n",
 		}, "non-keyword"},
 	}
@@ -409,22 +503,22 @@ func TestFileLayoutIsInvisible(t *testing.T) {
 	// L1: the same declarations in one file or three must yield the same
 	// routes in the same order.
 	one, d1 := project(t, map[string]string{
-		"volt.mod": modFile,
+		"go.mod": modFile,
 		"app/all.volt": `package app
 Table users { id integer [pk] }
 Pipeline api { use volt.RequestID }
 Scope / [pipe: api] {
-	resources users [model: User]
+	resources users
 	get /about Home.About
 }
 `,
 	})
 	wantClean(t, d1)
 	three, d3 := project(t, map[string]string{
-		"volt.mod":     modFile,
+		"go.mod":       modFile,
 		"app/a_s.volt": "package app\nTable users { id integer [pk] }\n",
 		"app/b_p.volt": "package app\nPipeline api { use volt.RequestID }\n",
-		"app/c_r.volt": "package app\nScope / [pipe: api] {\n\tresources users [model: User]\n\tget /about Home.About\n}\n",
+		"app/c_r.volt": "package app\nScope / [pipe: api] {\n\tresources users\n\tget /about Home.About\n}\n",
 	})
 	wantClean(t, d3)
 

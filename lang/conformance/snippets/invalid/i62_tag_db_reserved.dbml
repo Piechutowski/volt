@@ -1,0 +1,5 @@
+// spec: §6.3 tag extension rule 3 — db is the scan contract, not overridable
+Table users {
+  id   integer [pk]
+  name varchar [tag: 'db:"other_name"']
+}

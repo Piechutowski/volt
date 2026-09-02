@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/Piechutowski/volt/lang"
-	"github.com/Piechutowski/volt/nao/edbml/diag"
+	"github.com/Piechutowski/volt/lang/diag"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
@@ -20,7 +20,7 @@ var update = flag.Bool("update", false, "rewrite golden files")
 // generate loads the fixture project and generates the app package.
 func generate(t *testing.T) map[string][]byte {
 	t.Helper()
-	pr, err := lang.Load(filepath.Join("testdata", "fadn"))
+	pr, err := lang.Load(filepath.Join("testdata", "blog"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func generate(t *testing.T) map[string][]byte {
 }
 
 func goldenPath(name string) string {
-	return filepath.Join("testdata", "fadn_app_"+strings.TrimSuffix(strings.TrimPrefix(name, "volt_"), ".go")+".go.golden")
+	return filepath.Join("testdata", "blog_app_"+strings.TrimSuffix(strings.TrimPrefix(name, "volt_"), ".go")+".go.golden")
 }
 
 func TestGolden(t *testing.T) {
@@ -102,13 +102,13 @@ func TestGeneratedHeader(t *testing.T) {
 // references it.
 func TestNoNamedRoutesCompiles(t *testing.T) {
 	src := t.TempDir()
-	if err := os.WriteFile(filepath.Join(src, "volt.mod"), []byte("module nohelpers\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(src, "go.mod"), []byte("module nohelpers\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(src, "app"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	routes := "package app\n\nScope / {\n\tresources users [only: (create)]\n}\n"
+	routes := "package app\n\nTable users {\n\tid integer [pk]\n}\n\nScope / {\n\tresources users [only: (create)]\n}\n"
 	if err := os.WriteFile(filepath.Join(src, "app", "r.volt"), []byte(routes), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestNoNamedRoutesCompiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gomod := "module nohelpers\n\ngo 1.24\n\n" +
+	gomod := "module nohelpers\n\ngo 1.27\n\n" +
 		"require github.com/Piechutowski/volt v0.0.0\n\n" +
 		"replace github.com/Piechutowski/volt => " + repoRoot + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0o644); err != nil {
@@ -185,7 +185,7 @@ func TestGoldenCompiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gomod := "module goldencheck\n\ngo 1.24\n\n" +
+	gomod := "module goldencheck\n\ngo 1.27\n\n" +
 		"require github.com/Piechutowski/volt v0.0.0\n\n" +
 		"replace github.com/Piechutowski/volt => " + repoRoot + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0o644); err != nil {

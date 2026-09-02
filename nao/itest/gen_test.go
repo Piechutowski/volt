@@ -1,71 +1,53 @@
 package itest
 
 // The generated siblings are checked in so the package always compiles;
-// these directives refresh them after editing schema.dbml:
+// this directive refreshes them after editing schema.volt:
 //
-//go:generate go run ../cmd/nao gen go --out . --package itest schema.dbml
-//go:generate go run ../cmd/nao gen sqlite --out . schema.dbml
+//go:generate go run ../../cmd/volt gen --sql .
 
 import (
 	"bytes"
 	"os"
 	"testing"
 
-	"github.com/Piechutowski/volt/nao/edbml/check"
-	"github.com/Piechutowski/volt/nao/edbml/diag"
-	"github.com/Piechutowski/volt/nao/edbml/parser"
-	golanggen "github.com/Piechutowski/volt/nao/gen/golang"
-	sqlitegen "github.com/Piechutowski/volt/nao/gen/sqlite"
+	"github.com/Piechutowski/volt/gen/model"
+	"github.com/Piechutowski/volt/lang"
+	"github.com/Piechutowski/volt/lang/diag"
 )
 
-// TestGeneratedFilesCurrent proves the checked-in generated files match
-// what the generators produce from schema.dbml today — the itest analogue
-// of the golden tests. On failure: go generate ./itest
+// TestGeneratedFilesCurrent proves the checked-in files match what the
+// generator produces from schema.volt today — through the same path
+// `volt gen` takes, so the test and the tool cannot disagree.
+// On failure: go generate ./nao/itest
 func TestGeneratedFilesCurrent(t *testing.T) {
-	src, err := os.ReadFile("schema.dbml")
+	root, err := lang.FindRoot(".")
 	if err != nil {
 		t.Fatal(err)
 	}
-	f, diags := parser.ParseFile("schema.dbml", string(src))
-	info, semDiags := check.File(f)
-	if diags = append(diags, semDiags...); diag.HasErrors(diags) {
-		t.Fatalf("schema.dbml must be valid: %v", diags)
+	pr, err := lang.LoadDirs(root, []string{"."}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diags := lang.Check(pr); diag.HasErrors(diags) {
+		t.Fatalf("schema.volt must be valid: %v", diags)
+	}
+	pkg := pr.PackageAt(".")
+	if pkg == nil || !pkg.HasSchema() {
+		t.Fatal("the fixture package declares no data elements")
 	}
 
-	opts := golanggen.Options{Package: "itest", Source: "schema.dbml"}
-	models, err := golanggen.Generate(f, info, opts)
+	files, err := model.Generate(pkg, model.Options{Source: "package " + pkg.Path, SQL: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	queries, err := golanggen.GenerateQueries(f, info, opts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	dyn, err := golanggen.GenerateDyn(f, info, opts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	schema, err := sqlitegen.Generate(f, info, sqlitegen.Options{Source: "schema.dbml"})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, tc := range []struct {
-		file string
-		want []byte
-	}{
-		{"nao_models.go", models},
-		{"nao_queries.go", queries},
-		{"nao_dyn.go", dyn},
-		{"nao_schema.sql", schema},
-	} {
-		got, err := os.ReadFile(tc.file)
+	for _, f := range files {
+		got, err := os.ReadFile(f.Name)
 		if err != nil {
-			t.Errorf("%s: %v (run 'go generate ./itest')", tc.file, err)
+			t.Errorf("%s: %v (run 'go generate ./nao/itest')", f.Name, err)
 			continue
 		}
-		if !bytes.Equal(got, tc.want) {
-			t.Errorf("%s is stale; run 'go generate ./itest'", tc.file)
+		if !bytes.Equal(got, f.Code) {
+			t.Errorf("%s is stale; run 'go generate ./nao/itest'", f.Name)
 		}
 	}
 }

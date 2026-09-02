@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/Piechutowski/volt/nao/edbml/ast"
+	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/nao/inflect"
 )
 

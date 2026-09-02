@@ -7,14 +7,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Piechutowski/volt/nao/edbml/diag"
+	"github.com/Piechutowski/volt/lang/diag"
 )
 
-// The conformance corpus is the executable surface of SPEC.md §V:
-// snippets under valid/ MUST check clean, snippets under invalid/ MUST
-// be rejected. A snippet is either one .volt file (run as a
-// single-package project, the package directory named from its package
-// clause) or a directory containing a complete project with volt.mod.
+// The Volt half of the conformance corpus is the executable surface of
+// docs/spec.md §V: snippets under valid/ MUST check clean, snippets
+// under invalid/ MUST be rejected. A snippet is either one .volt file
+// (run as a single-package project, the package directory named from
+// its package clause) or a directory containing a complete project
+// with volt.mod. The .dbml entries sharing the tree are the schema
+// half, exercised by lang/check's corpus test.
 
 var pkgClauseRE = regexp.MustCompile(`(?im)^package\s+(\w+)`)
 
@@ -27,6 +29,9 @@ func corpusEntries(t *testing.T, kind string) []string {
 	}
 	out := make([]string, 0, len(entries))
 	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".dbml") {
+			continue // the schema half; lang/check's corpus test runs it
+		}
 		out = append(out, filepath.Join(dir, e.Name()))
 	}
 	return out

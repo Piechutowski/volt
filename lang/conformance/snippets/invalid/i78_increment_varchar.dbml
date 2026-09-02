@@ -1,0 +1,4 @@
+// spec: §6.3 increment extension — increment needs an integer column
+Table users {
+  code varchar [pk, increment]
+}

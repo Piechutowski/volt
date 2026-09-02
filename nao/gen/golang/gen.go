@@ -22,8 +22,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Piechutowski/volt/nao/edbml/ast"
-	"github.com/Piechutowski/volt/nao/edbml/check"
+	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/lang/token"
 )
 
 // rtImport is the runtime support package generated code may depend on
@@ -277,15 +278,40 @@ func (g *generator) fieldEmit(cd *check.ColumnDef, pkCols map[string]bool, field
 		g.imports[rtImport] = true
 	}
 
-	// JSON is the value or null (D13); nothing is omitted, so a document
-	// always carries every column.
-	jsonTag := col.Name.Name()
-
 	if note := settingNote(col.Settings); note != "" {
 		commentWriteIndent(&g.body, note)
 	}
-	fmt.Fprintf(&g.body, "\t%s %s `db:%q json:%q`\n", fieldName, goTypeName, col.Name.Name(), jsonTag)
+	fmt.Fprintf(&g.body, "\t%s %s `%s`\n", fieldName, goTypeName, fieldTag(col))
 	return nil
+}
+
+// fieldTag assembles a column's struct tag (Appendix A.5): the db scan
+// contract, then the json default — the value or null, nothing omitted
+// (D13) — unless a [tag:] with key json replaces it, then every other
+// [tag:] passthrough verbatim in declaration order (D60).
+func fieldTag(col *ast.Column) string {
+	name := col.Name.Name()
+	jsonPair := `json:"` + name + `"`
+	var extra []string
+	if col.Settings != nil {
+		for _, s := range col.Settings.Settings {
+			if s.Name != "tag" {
+				continue
+			}
+			lit, ok := s.Value.(*ast.BasicLit)
+			if !ok || lit.Tok.Kind != token.STRING {
+				continue
+			}
+			pair := lit.Tok.Val
+			if key, _, ok := strings.Cut(pair, ":"); ok && key == "json" {
+				jsonPair = pair
+				continue
+			}
+			extra = append(extra, pair)
+		}
+	}
+	parts := append([]string{`db:"` + name + `"`, jsonPair}, extra...)
+	return strings.Join(parts, " ")
 }
 
 // isNullable applies spec §6.3.2 plus SQL semantics: a column is NOT NULL

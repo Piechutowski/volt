@@ -6,4 +6,4 @@ import (
 
 Table users { id integer [pk] }
 
-Scope /b { resources users [model: a.User] }
+Scope /b { resources a.users }

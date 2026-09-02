@@ -1,0 +1,35 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
+  "grammars": [
+    {
+      "name": "volt",
+      "camelcase": "Volt",
+      "title": "Volt",
+      "scope": "source.volt",
+      "path": ".",
+      "file-types": ["volt", "dbml"],
+      "injection-regex": "^(dbml|volt)$"
+    }
+  ],
+  "metadata": {
+    "version": "0.2.0",
+    "license": "Apache-2.0",
+    "description": "Tree-sitter grammar for the Volt language: the DBML schema core, the schema extensions and the routing layer (.volt files)",
+    "authors": [
+      {
+        "name": "Szymon Piechutowski"
+      }
+    ],
+    "links": {
+      "repository": "https://github.com/Piechutowski/volt"
+    }
+  },
+  "bindings": {
+    "c": false,
+    "go": false,
+    "node": false,
+    "python": false,
+    "rust": false,
+    "swift": false
+  }
+}

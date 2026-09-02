@@ -1,7 +1,7 @@
 // The SQL-to-Go type mapping. Generated code depends only on the standard
 // library. The table is the single place to extend when a schema uses a
 // type not listed; an unmapped type is a generation error, never a silent
-// guess (see SPEC.md).
+// guess (see docs/spec.md Appendix A).
 package golang
 
 import (

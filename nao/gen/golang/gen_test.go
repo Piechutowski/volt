@@ -12,10 +12,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Piechutowski/volt/nao/edbml/ast"
-	"github.com/Piechutowski/volt/nao/edbml/check"
-	"github.com/Piechutowski/volt/nao/edbml/diag"
-	"github.com/Piechutowski/volt/nao/edbml/parser"
+	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/lang/diag"
+	"github.com/Piechutowski/volt/lang/parser"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
@@ -99,13 +99,13 @@ func TestGolden(t *testing.T) {
 
 func corpusSchemas(t *testing.T) []string {
 	t.Helper()
-	// .dbml fixtures are core DBML; .edbml fixtures exercise the language
+	// .dbml fixtures are core DBML; .volt fixtures exercise the language
 	// extensions — the split makes extension regressions visible by name.
 	files, err := filepath.Glob(filepath.Join("..", "testdata", "*.dbml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	extended, err := filepath.Glob(filepath.Join("..", "testdata", "*.edbml"))
+	extended, err := filepath.Glob(filepath.Join("..", "testdata", "*.volt"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,9 +117,9 @@ func corpusSchemas(t *testing.T) []string {
 	return files
 }
 
-// schemaName is the fixture's base name without the .dbml/.edbml suffix.
+// schemaName is the fixture's base name without the .dbml/.volt suffix.
 func schemaName(path string) string {
-	return strings.TrimSuffix(strings.TrimSuffix(filepath.Base(path), ".dbml"), ".edbml")
+	return strings.TrimSuffix(strings.TrimSuffix(filepath.Base(path), ".dbml"), ".volt")
 }
 
 // TestGoldenGofmtStable proves the generated code is gofmt-clean: applying
@@ -151,7 +151,7 @@ func TestGoldenCompiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gomod := "module goldencheck\n\ngo 1.24\n\n" +
+	gomod := "module goldencheck\n\ngo 1.27\n\n" +
 		"require github.com/Piechutowski/volt v0.0.0\n\n" +
 		"replace github.com/Piechutowski/volt => " + repoRoot + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0o644); err != nil {
