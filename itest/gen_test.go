@@ -14,9 +14,15 @@ import (
 // TestFixtureNotDrifted regenerates the fixture's router files
 // in-memory and byte-compares them with the committed ones: the proof
 // suite always exercises current generator output. Refresh with
-// 'go run ./cmd/volt gen ./itest/blog' after intentional changes.
+// 'go run ./cmd/volt gen ./itest/blog/app' after intentional changes.
 func TestFixtureNotDrifted(t *testing.T) {
-	pr, err := lang.Load("blog")
+	// The fixture is a package of this repository's Go module (§V1.1),
+	// loaded the way 'volt gen ./itest/blog/app' loads it.
+	root, err := lang.FindRoot(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pr, err := lang.LoadDirs(root, []string{filepath.Join("blog", "app")}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +30,11 @@ func TestFixtureNotDrifted(t *testing.T) {
 	if diag.HasErrors(diags) {
 		t.Fatalf("fixture has errors: %v", diags)
 	}
-	files, err := router.Generate(pr.Packages["app"], router.Options{Source: "package app"})
+	pkg := pr.PackageAt(filepath.Join("blog", "app"))
+	if pkg == nil {
+		t.Fatal("blog/app not loaded")
+	}
+	files, err := router.Generate(pkg, router.Options{Source: "package " + pkg.Path})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +44,7 @@ func TestFixtureNotDrifted(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !bytes.Equal(got, want) {
-			t.Errorf("%s drifted from generator output; re-run volt gen ./itest/blog", name)
+			t.Errorf("%s drifted from generator output; re-run volt gen ./itest/blog/app", name)
 		}
 	}
 }

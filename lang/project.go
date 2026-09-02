@@ -24,17 +24,20 @@ import (
 	"github.com/Piechutowski/volt/nao/gen/golang"
 )
 
-// ModFile is the project root marker (spec §V1.1).
-const ModFile = "volt.mod"
+// ModFile is the project root marker (spec §V1.1): the Go module file.
+// A Volt project is a Go module — one root, one module path, no second
+// manifest (D62).
+const ModFile = "go.mod"
 
-// Project is a loaded Volt project: the volt.mod module name and every
-// package (directory of .volt files) beneath the root.
+// Project is a loaded Volt project: the Go module path and the packages
+// (directories of .volt files) that were loaded — the ones asked for
+// and, transitively, the ones they import (§V1.7).
 type Project struct {
-	Root     string // absolute path of the directory holding volt.mod
-	Module   string // module name from volt.mod
+	Root     string // absolute path of the directory holding go.mod
+	Module   string // the Go module path, from go.mod's module directive
 	Packages map[string]*Package
 
-	// Diags collects load-time diagnostics (parse errors, volt.mod
+	// Diags collects load-time diagnostics (parse errors, go.mod
 	// problems). Check appends semantic diagnostics.
 	Diags []diag.Diagnostic
 }
@@ -98,8 +101,22 @@ func (p *Package) HasSchema() bool {
 	return p.schema != nil && (len(p.schema.Tables) > 0 || len(p.schema.Enums) > 0)
 }
 
-// FindRoot walks up from dir to the nearest directory containing
-// volt.mod (§V1.1).
+// PackageAt returns the loaded package whose directory is dir, or nil.
+func (pr *Project) PackageAt(dir string) *Package {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return nil
+	}
+	for _, pkg := range pr.Packages {
+		if pkg.Dir == abs {
+			return pkg
+		}
+	}
+	return nil
+}
+
+// FindRoot walks up from dir to the nearest directory holding go.mod
+// (spec §V1.1): the Go module is the Volt project.
 func FindRoot(dir string) (string, error) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
@@ -111,15 +128,15 @@ func FindRoot(dir string) (string, error) {
 		}
 		parent := filepath.Dir(abs)
 		if parent == abs {
-			return "", fmt.Errorf("no %s found in %s or any parent directory", ModFile, dir)
+			return "", fmt.Errorf("no %s found in %s or any parent directory (a Volt project is a Go module, §V1.1)", ModFile, dir)
 		}
 		abs = parent
 	}
 }
 
-// Load reads volt.mod and parses every .volt file under root into
-// packages. Parse errors are collected, not fatal: Check still runs on
-// what parsed, like the rest of the toolchain.
+// Load loads every package under root — the ./... pattern (§V1.7),
+// with §V1.6's exclusions. Parse errors are collected, not fatal:
+// Check still runs on what parsed, like the rest of the toolchain.
 func Load(root string) (*Project, error) {
 	return LoadOverlay(root, nil)
 }
@@ -129,106 +146,200 @@ func Load(root string) (*Project, error) {
 // This is the language server's view of a project — open editor
 // buffers override what was last saved.
 func LoadOverlay(root string, overlay map[string]string) (*Project, error) {
+	dirs, err := PackageDirs(root, root)
+	if err != nil {
+		return nil, err
+	}
+	return LoadDirs(root, dirs, overlay)
+}
+
+// PackageDirs enumerates the directories under dir that hold .volt
+// files — the ./... pattern — applying §V1.6: directories named with a
+// leading dot or underscore, testdata and node_modules are skipped, and
+// so is any subtree with its own go.mod (a different project).
+func PackageDirs(root, dir string) ([]string, error) {
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return nil, err
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	err = filepath.WalkDir(abs, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			return nil
+		}
+		if path != abs && excludedDir(d.Name()) {
+			return filepath.SkipDir
+		}
+		if path != absRoot {
+			if _, err := os.Stat(filepath.Join(path, ModFile)); err == nil {
+				return filepath.SkipDir
+			}
+		}
+		if hasVoltFiles(path) {
+			out = append(out, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// excludedDir applies §V1.6's directory exclusions (Go's own rules).
+func excludedDir(name string) bool {
+	return strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") ||
+		name == "testdata" || name == "node_modules"
+}
+
+func hasVoltFiles(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".volt") {
+			return true
+		}
+	}
+	return false
+}
+
+// LoadDirs loads the packages in dirs and, transitively, the packages
+// they import (§V1.7) — the way Go loads what a build needs and nothing
+// more, so stray .volt trees elsewhere in the module never interfere.
+// Every dir MUST lie under root; a dir without .volt files is an error.
+func LoadDirs(root string, dirs []string, overlay map[string]string) (*Project, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
 	}
 	pr := &Project{Root: abs, Packages: map[string]*Package{}}
 
-	modSrc, err := os.ReadFile(filepath.Join(abs, ModFile))
+	modPath := filepath.Join(abs, ModFile)
+	modSrc, err := os.ReadFile(modPath)
 	if err != nil {
 		return nil, fmt.Errorf("not a Volt project: %w", err)
 	}
-	pr.Module, pr.Diags = parseModFile(filepath.Join(abs, ModFile), string(modSrc))
+	pr.Module, pr.Diags = goModModule(modPath, string(modSrc))
 
-	err = filepath.WalkDir(abs, func(path string, d os.DirEntry, err error) error {
+	queue := make([]string, 0, len(dirs))
+	for _, d := range dirs {
+		ad, err := filepath.Abs(d)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if d.IsDir() {
-			name := d.Name()
-			if path != abs && (strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") || name == "node_modules") {
-				return filepath.SkipDir
-			}
-			// A subdirectory with its own volt.mod is a different project
-			// (§V1.1): its packages belong to it, not to this module.
-			if path != abs {
-				if _, err := os.Stat(filepath.Join(path, ModFile)); err == nil {
-					return filepath.SkipDir
+		rel, err := filepath.Rel(abs, ad)
+		if err != nil || strings.HasPrefix(rel, "..") {
+			return nil, fmt.Errorf("%s is outside the project rooted at %s", d, abs)
+		}
+		if !hasVoltFiles(ad) {
+			return nil, fmt.Errorf("no Volt package in %s (no .volt files)", d)
+		}
+		queue = append(queue, ad)
+	}
+
+	seen := map[string]bool{}
+	for len(queue) > 0 {
+		dir := queue[0]
+		queue = queue[1:]
+		if seen[dir] {
+			continue
+		}
+		seen[dir] = true
+		pkg, err := pr.packageLoad(dir, overlay)
+		if err != nil {
+			return nil, err
+		}
+		if pkg == nil {
+			continue
+		}
+		// Imports name root-relative package paths (§V2); an existing
+		// directory is loaded, a missing one is left for Check to report.
+		for _, f := range pkg.Files {
+			for _, d := range f.Decls {
+				id, ok := d.(*ast.ImportDecl)
+				if !ok {
+					continue
+				}
+				for _, spec := range id.Specs {
+					target := filepath.Join(abs, filepath.FromSlash(spec.PathString()))
+					if hasVoltFiles(target) {
+						queue = append(queue, target)
+					}
 				}
 			}
-			return nil
 		}
-		if !strings.HasSuffix(d.Name(), ".volt") {
-			return nil
+	}
+	return pr, nil
+}
+
+// packageLoad parses one directory's .volt files into a package (nil
+// when the directory holds none), files in name order (§V1.5).
+func (pr *Project) packageLoad(dir string, overlay map[string]string) (*Package, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	rel, err := filepath.Rel(pr.Root, dir)
+	if err != nil {
+		return nil, err
+	}
+	key := filepath.ToSlash(rel)
+	var pkg *Package
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".volt") {
+			continue
 		}
+		path := filepath.Join(dir, e.Name())
 		src := ""
 		if text, ok := overlay[path]; ok {
 			src = text
 		} else {
 			b, err := os.ReadFile(path)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			src = string(b)
 		}
-		rel, err := filepath.Rel(abs, filepath.Dir(path))
-		if err != nil {
-			return err
-		}
-		key := filepath.ToSlash(rel)
-		pkg := pr.Packages[key]
 		if pkg == nil {
-			pkg = &Package{Path: key, Dir: filepath.Dir(path), Imports: map[string]string{}}
+			pkg = &Package{Path: key, Dir: dir, Imports: map[string]string{}}
 			pr.Packages[key] = pkg
 		}
 		f, diags := parser.ParseFile(path, src)
 		pkg.Files = append(pkg.Files, f)
 		pr.Diags = append(pr.Diags, diags...)
-		return nil
-	})
-	if err != nil {
-		return nil, err
 	}
-
-	for _, pkg := range pr.Packages {
-		sort.Slice(pkg.Files, func(i, j int) bool { return pkg.Files[i].Name < pkg.Files[j].Name })
-		merged := &ast.File{Name: "<package " + pkg.Path + ">"}
-		for _, f := range pkg.Files {
-			merged.Decls = append(merged.Decls, f.Decls...)
-			merged.EOF = f.EOF
-		}
-		pkg.merged = merged
+	if pkg == nil {
+		return nil, nil
 	}
-	return pr, nil
+	sort.Slice(pkg.Files, func(i, j int) bool { return pkg.Files[i].Name < pkg.Files[j].Name })
+	merged := &ast.File{Name: "<package " + pkg.Path + ">"}
+	for _, f := range pkg.Files {
+		merged.Decls = append(merged.Decls, f.Decls...)
+		merged.EOF = f.EOF
+	}
+	pkg.merged = merged
+	return pkg, nil
 }
 
-// parseModFile reads volt.mod: comments, blank lines, and exactly one
-// "module <name>" directive (§V1.1).
-func parseModFile(path, src string) (string, []diag.Diagnostic) {
-	var diags []diag.Diagnostic
-	module := ""
+// goModModule reads the module directive of go.mod — the only line Volt
+// needs; every other directive is Go's business and ignored.
+func goModModule(path, src string) (string, []diag.Diagnostic) {
 	for i, line := range strings.Split(src, "\n") {
-		pos := token.Position{Filename: path, Line: i + 1, Column: 1}
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "//") {
-			continue
-		}
 		fields := strings.Fields(line)
-		switch {
-		case fields[0] == "module" && len(fields) == 2:
-			if module != "" {
-				diags = append(diags, diag.Errorf(pos, "spec/V1", "duplicate module directive in %s", ModFile))
-				continue
-			}
-			module = fields[1]
-		default:
-			diags = append(diags, diag.Errorf(pos, "spec/V1", "unsupported %s directive %q (only 'module <name>')", ModFile, fields[0]))
+		if len(fields) >= 2 && fields[0] == "module" {
+			return strings.Trim(fields[1], "\""), nil
 		}
+		_ = i
 	}
-	if module == "" {
-		diags = append(diags, diag.Errorf(token.Position{Filename: path, Line: 1, Column: 1},
-			"spec/V1", "%s must declare 'module <name>'", ModFile))
-	}
-	return module, diags
+	return "", []diag.Diagnostic{diag.Errorf(token.Position{Filename: path, Line: 1, Column: 1},
+		"spec/V1", "%s must declare 'module <path>' (§V1.1)", ModFile)}
 }

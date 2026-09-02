@@ -21,15 +21,16 @@ where the merge changed the facts.
 - **D04 — Library-first, CLI-thin.** Everything the CLI does is importable;
   user binaries embed subcommands (`app migrate up`) and migrations
   (`embed.FS`). One self-contained deployable binary.
-- **D39 — `gen` defaults to the working directory** (amended 2026-08-27
-  for the project model): the common case is running the generator from
-  inside the project, so `volt gen` needs no argument — it finds the
-  nearest `volt.mod` root and generates for every package beneath it,
-  models/queries/DDL for schema packages and routers for routing
-  packages, each output beside its sources. An explicit directory
-  argument overrides. Consistent with D16's "never guess": the project
-  root is discovered by the marker file, never inferred from content.
-  Shell completion is enabled on the CLI (`volt completion <shell>`).
+- **D39 — Packages are named as in Go** (amended 2026-09-02, settled in
+  practice with D62): `volt gen` with no argument generates the package
+  in the working directory, `volt gen ./app` that package, and
+  `volt gen ./...` every package beneath — exactly `go build`'s rules,
+  so nothing new to learn and no "whole project" guess about what the
+  user meant. Output goes for the named packages only; their imports
+  are loaded for checking, never written. The project root is the
+  nearest `go.mod` (§V1.1), discovered by the marker file, never
+  inferred from content (D16's "never guess"). Shell completion is
+  enabled on the CLI (`volt completion <shell>`).
 - **D40 — Editor tooling lives in this repository** (2026-07-12; paths
   amended): the tree-sitter grammar (`grammar/`), the Zed extension
   (`zed-extension/`) and the language server (`lsp/`, served by
@@ -408,3 +409,15 @@ where the merge changed the facts.
   columns only (no three-valued logic to mirror), no date/time
   columns, fractional literals only against floats. Nothing calls
   Validate implicitly (D27): the application decides when.
+- **D62 — A Volt project is a Go module: `go.mod` is the root, there is
+  no `volt.mod`** (2026-09-02). The former `volt.mod` held one
+  directive whose value nothing ever read; its only job was marking
+  the root — a job `go.mod` already does for the same tree, with the
+  one name Volt could ever need (the module path). One marker, one
+  manifest, no `volt mod init`. With it comes Go's loading model
+  (§V1.7): tools load the named packages plus their transitive imports
+  rather than walking the whole tree, and `testdata`, dot/underscore
+  directories, `node_modules` and nested modules are excluded exactly
+  as Go excludes them. Odin's "no manifest at all" was considered and
+  rejected: root-relative imports (§V2) need a root, and the Go module
+  is the honest one.

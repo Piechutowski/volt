@@ -15,7 +15,7 @@ const navRoutes = "package app\n\nimport (\n\tdb\n)\n\nPipeline api {\n\tuse vol
 func navProject(t *testing.T) (root, schema, routes string) {
 	t.Helper()
 	root = voltProject(t, map[string]string{
-		"volt.mod":        "module nav\n",
+		"go.mod":          "module nav\n",
 		"db/schema.volt":  navSchema,
 		"app/routes.volt": navRoutes,
 	})
@@ -92,7 +92,7 @@ func TestVoltDefinitionImport(t *testing.T) {
 	}
 }
 
-// TestVoltNavOutsideProjectIsQuiet: with no volt.mod above it, the
+// TestVoltNavOutsideProjectIsQuiet: with no go.mod above it, the
 // project index is absent and navigation must not panic or invent
 // locations.
 func TestVoltNavOutsideProjectIsQuiet(t *testing.T) {
@@ -316,7 +316,7 @@ func TestVoltCompleteResourcesOffersTablesAndImports(t *testing.T) {
 // with the project index active.
 func TestVoltCompleteLeavesDBMLChains(t *testing.T) {
 	root := voltProject(t, map[string]string{
-		"volt.mod": "module lsptest\n",
+		"go.mod": "module lsptest\n",
 		"db/schema.volt": "package db\n\nTable users {\n\tid integer [pk]\n\temail text\n}\n\n" +
 			"Table posts {\n\tid integer [pk]\n\tauthor_id integer\n}\n\nRef: posts.author_id > users.id\n",
 	})

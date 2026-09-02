@@ -1,7 +1,7 @@
 package app
 
 import (
-	db
+	itest/blog/db
 )
 
 Pipeline api {

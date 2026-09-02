@@ -156,14 +156,14 @@ files are small, and full sync makes the server stateless per edit.
 **The per-edit pipeline.** Every open/change/close re-runs the whole
 front end — it is fast enough that there is no cache to invalidate:
 
-1. Find the project root (`volt.mod`, §V1.1). A file under a root is
+1. Find the project root (the nearest `go.mod`, §V1.1). A file under a root is
    checked as part of its **whole project**: every open buffer is
    overlaid over the disk (`lang.LoadOverlay`) so unsaved edits in one
    file are visible to checks in another. A file outside any project
    gets the single-file schema pass.
 2. `lang.Check` resolves packages, imports, tables, routes, conflicts.
 3. Diagnostics are filtered per open file and published (push);
-   `volt.mod` problems are remapped to line 1 of the file. After each
+   `go.mod` problems are remapped to line 1 of the file. After each
    change the server re-checks and republishes **every other open
    document** (`refreshOthers`), so cross-file diagnostics never go
    stale.

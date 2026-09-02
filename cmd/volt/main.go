@@ -10,7 +10,7 @@
 //	volt version                   report the tool version
 //
 // Every command resolves the project root by walking up from dir (or
-// the working directory) to the nearest volt.mod.
+// the working directory) to the nearest go.mod.
 //
 // Exit status: 0 clean (warnings do not fail), 1 errors found, 2 usage
 // or I/O problems.
@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/urfave/cli/v3"
 
@@ -46,8 +47,8 @@ func main() {
 		Commands: []*cli.Command{
 			{
 				Name:      "check",
-				Usage:     "load the project and run semantic analysis (docs/spec.md §V)",
-				ArgsUsage: "[dir]",
+				Usage:     "load the named packages and run semantic analysis (docs/spec.md §V)",
+				ArgsUsage: "[packages]",
 				Flags:     []cli.Flag{jsonFlag},
 				Action: func(_ context.Context, c *cli.Command) error {
 					return run(c, "check")
@@ -56,7 +57,7 @@ func main() {
 			{
 				Name:      "vet",
 				Usage:     "check plus warnings for legal-but-suspicious Volt",
-				ArgsUsage: "[dir]",
+				ArgsUsage: "[packages]",
 				Flags: []cli.Flag{
 					jsonFlag,
 					&cli.BoolFlag{Name: "werror", Usage: "treat warnings as errors in the exit status"},
@@ -67,8 +68,8 @@ func main() {
 			},
 			{
 				Name:      "gen",
-				Usage:     "generate Go for the whole project: models and queries for data packages, routers for routing packages",
-				ArgsUsage: "[dir]",
+				Usage:     "generate Go for the named packages: models and queries for data packages, routers for routing packages. Packages as in Go: none = the current directory, dir, or dir/... for everything beneath",
+				ArgsUsage: "[packages]",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{Name: "models-only", Aliases: []string{"m"}, Usage: "emit only nao_models.go; skip the query layers"},
 					&cli.BoolFlag{Name: "sql", Usage: "also write nao_schema.sql (SQLite DDL and seed inserts)"},
@@ -80,7 +81,7 @@ func main() {
 			{
 				Name:      "routes",
 				Usage:     "print the expanded route table (verb, path, handler, helper)",
-				ArgsUsage: "[dir]",
+				ArgsUsage: "[packages]",
 				Action: func(_ context.Context, c *cli.Command) error {
 					return routesRun(c)
 				},
@@ -109,30 +110,66 @@ func main() {
 	}
 }
 
-// load resolves the project root from the command's optional dir
-// argument and loads + checks the project.
-func load(c *cli.Command) (*lang.Project, []diag.Diagnostic, error) {
-	dir := "."
-	switch c.Args().Len() {
-	case 0:
-	case 1:
-		dir = c.Args().First()
-	default:
-		return nil, nil, cli.Exit("at most one project directory", 2)
+// load resolves the packages named by the command's arguments — Go's
+// rules (D39, §V1.7): none means the package in the working directory,
+// a directory means that package, and dir/... means every package
+// beneath dir. The project root is the nearest go.mod (§V1.1); the
+// named packages and their imports are loaded and checked. named lists
+// the package paths the arguments selected, in argument order.
+func load(c *cli.Command) (pr *lang.Project, named []string, diags []diag.Diagnostic, err error) {
+	args := c.Args().Slice()
+	if len(args) == 0 {
+		args = []string{"."}
 	}
-	root, err := lang.FindRoot(dir)
+	root := ""
+	var dirs []string
+	for _, arg := range args {
+		pattern := filepath.ToSlash(arg)
+		base := arg
+		recursive := false
+		if strings.HasSuffix(pattern, "/...") || pattern == "..." {
+			recursive = true
+			base = filepath.FromSlash(strings.TrimSuffix(strings.TrimSuffix(pattern, "..."), "/"))
+			if base == "" {
+				base = "."
+			}
+		}
+		r, err := lang.FindRoot(base)
+		if err != nil {
+			return nil, nil, nil, cli.Exit(err.Error(), 2)
+		}
+		if root == "" {
+			root = r
+		} else if root != r {
+			return nil, nil, nil, cli.Exit(fmt.Sprintf("%s belongs to a different project (%s); one project per invocation", arg, r), 2)
+		}
+		if recursive {
+			found, err := lang.PackageDirs(root, base)
+			if err != nil {
+				return nil, nil, nil, cli.Exit(err.Error(), 2)
+			}
+			if len(found) == 0 {
+				return nil, nil, nil, cli.Exit(fmt.Sprintf("no Volt packages under %s", base), 2)
+			}
+			dirs = append(dirs, found...)
+		} else {
+			dirs = append(dirs, base)
+		}
+	}
+	pr, err = lang.LoadDirs(root, dirs, nil)
 	if err != nil {
-		return nil, nil, cli.Exit(err.Error(), 2)
+		return nil, nil, nil, cli.Exit(err.Error(), 2)
 	}
-	pr, err := lang.Load(root)
-	if err != nil {
-		return nil, nil, cli.Exit(err.Error(), 2)
+	for _, d := range dirs {
+		if pkg := pr.PackageAt(d); pkg != nil {
+			named = append(named, pkg.Path)
+		}
 	}
-	return pr, lang.Check(pr), nil
+	return pr, named, lang.Check(pr), nil
 }
 
 func run(c *cli.Command, mode string) error {
-	pr, diags, err := load(c)
+	pr, _, diags, err := load(c)
 	if err != nil {
 		return err
 	}
@@ -180,7 +217,7 @@ func diagsPrintJSON(all []diag.Diagnostic) error {
 // four router files into every package with routing elements, refusing
 // to clobber non-generated files (all or nothing).
 func genRun(c *cli.Command) error {
-	pr, diags, err := load(c)
+	pr, named, diags, err := load(c)
 	if err != nil {
 		return err
 	}
@@ -191,10 +228,9 @@ func genRun(c *cli.Command) error {
 		return cli.Exit("gen: project has errors; fix them first (see 'volt check')", 1)
 	}
 
-	paths := make([]string, 0, len(pr.Packages))
-	for p := range pr.Packages {
-		paths = append(paths, p)
-	}
+	// Generate for the named packages only — imports are loaded for
+	// checking, never written (Go's rule, D39).
+	paths := append([]string(nil), named...)
 	sort.Strings(paths)
 
 	// Collect everything first, then refuse every clobber, then write:
@@ -257,7 +293,7 @@ func genRun(c *cli.Command) error {
 
 // routesRun implements 'volt routes': the introspection table.
 func routesRun(c *cli.Command) error {
-	pr, diags, err := load(c)
+	pr, named, diags, err := load(c)
 	if err != nil {
 		return err
 	}
@@ -267,10 +303,9 @@ func routesRun(c *cli.Command) error {
 		}
 		return cli.Exit("routes: project has errors; fix them first (see 'volt check')", 1)
 	}
-	paths := make([]string, 0, len(pr.Packages))
-	for p := range pr.Packages {
-		paths = append(paths, p)
-	}
+	// Generate for the named packages only — imports are loaded for
+	// checking, never written (Go's rule, D39).
+	paths := append([]string(nil), named...)
 	sort.Strings(paths)
 	for _, path := range paths {
 		pkg := pr.Packages[path]

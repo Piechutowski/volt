@@ -20,14 +20,18 @@ import (
 // `volt gen` takes, so the test and the tool cannot disagree.
 // On failure: go generate ./nao/itest
 func TestGeneratedFilesCurrent(t *testing.T) {
-	pr, err := lang.Load(".")
+	root, err := lang.FindRoot(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pr, err := lang.LoadDirs(root, []string{"."}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if diags := lang.Check(pr); diag.HasErrors(diags) {
 		t.Fatalf("schema.volt must be valid: %v", diags)
 	}
-	pkg := pr.Packages["."]
+	pkg := pr.PackageAt(".")
 	if pkg == nil || !pkg.HasSchema() {
 		t.Fatal("the fixture package declares no data elements")
 	}

@@ -38,14 +38,14 @@ func TestCLIClobberProtection(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("volt.mod", "module clobber\n")
+	write("go.mod", "module clobber\n")
 	write(filepath.Join("app", "r.volt"), "package app\n\nScope / {\n\tget / Home.Index\n}\n")
 
 	// A hand-written file squatting on a generated name.
 	hand := "package app\n\n// hand-written: mine, not the generator's\n"
 	write(filepath.Join("app", "volt_router.go"), hand)
 
-	out, err := voltGen(t, root)
+	out, err := voltGen(t, appDir)
 	if err == nil {
 		t.Fatalf("gen succeeded over a hand-written volt_router.go:\n%s", out)
 	}
@@ -69,7 +69,7 @@ func TestCLIClobberProtection(t *testing.T) {
 	if err := os.Remove(filepath.Join(appDir, "volt_router.go")); err != nil {
 		t.Fatal(err)
 	}
-	out, err = voltGen(t, root)
+	out, err = voltGen(t, appDir)
 	if err != nil {
 		t.Fatalf("gen failed on a clean package: %v\n%s", err, out)
 	}
@@ -84,7 +84,7 @@ func TestCLIClobberProtection(t *testing.T) {
 	}
 
 	// Re-running over its own output is fine (the marker authorizes it).
-	if out, err = voltGen(t, root); err != nil {
+	if out, err = voltGen(t, appDir); err != nil {
 		t.Fatalf("gen is not idempotent over its own output: %v\n%s", err, out)
 	}
 }

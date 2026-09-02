@@ -25,7 +25,7 @@ use is up to the file. The honest build state:
 - **Routing** — *alpha:* `package` / `import`, `Pipeline`, `Scope`,
   routes, `resources` (spec Part II, §V).
 
-Project = tree rooted at `volt.mod`. Package = directory. File
+Project = the Go module (tree rooted at `go.mod`, D62). Package = directory. File
 boundaries carry no meaning (§V1.5).
 
 ## Layout
@@ -44,11 +44,11 @@ third-party deps. Importing `nao/rt` alone drags in nothing.
 |------------------|------------|
 | `*.go` (root)    | package `volt` — the runtime generated code links against: error spine, param parsing, path builders, minimal middleware |
 | `cmd/volt`       | the one binary: `check` `vet` `gen` `routes` `lsp` `version` — `gen` emits models, queries and routers. **Own module** — its CLI deps stay out of the library |
-| `lang/`          | **the language**: `token` `scanner` `parser` `ast` `diag` `check` `vet` front end, plus volt.mod/package/import resolution, route expansion and conflict detection; `lang/conformance/snippets/` = the executable corpus |
+| `lang/`          | **the language**: `token` `scanner` `parser` `ast` `diag` `check` `vet` front end, plus go.mod root discovery, package/import resolution, route expansion and conflict detection; `lang/conformance/snippets/` = the executable corpus |
 | `gen/router/`    | router generator; goldens are gofmt-stable and compiled by the real toolchain |
 | `gen/model/`     | the data half: nao's models, queries and DDL, driven by the same project load |
 | `nao/`           | **nao — the ORM**: model + query + SQLite generation (`nao/gen`), its runtime (`nao/rt`), inflector and integration tests |
-| `lsp/`           | the Volt language server (`volt lsp`); project-aware diagnostics for files under a volt.mod, single-file DBML pass otherwise. **Own module** — glsp and its tail stay out of the library |
+| `lsp/`           | the Volt language server (`volt lsp`); project-aware diagnostics for files under a go.mod, single-file DBML pass otherwise. **Own module** — glsp and its tail stay out of the library |
 | `grammar/`       | tree-sitter grammar for the whole language |
 | `zed-extension/` | Zed glue; install via `scripts/sync-grammar.sh` + Install Dev Extension |
 | `scripts/`       | `sync-grammar.sh` — mirrors the grammar into the local git cache Zed loads dev grammars from |

@@ -22,7 +22,7 @@ const projSchema = "package db\n\n" +
 func projSelectDoc(t *testing.T) (*Document, string) {
 	t.Helper()
 	root := voltProject(t, map[string]string{
-		"volt.mod":       "module proj\n",
+		"go.mod":         "module proj\n",
 		"db/schema.volt": projSchema,
 	})
 	path := filepath.Join(root, "db", "schema.volt")

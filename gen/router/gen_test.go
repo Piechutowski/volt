@@ -102,7 +102,7 @@ func TestGeneratedHeader(t *testing.T) {
 // references it.
 func TestNoNamedRoutesCompiles(t *testing.T) {
 	src := t.TempDir()
-	if err := os.WriteFile(filepath.Join(src, "volt.mod"), []byte("module nohelpers\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(src, "go.mod"), []byte("module nohelpers\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(src, "app"), 0o755); err != nil {

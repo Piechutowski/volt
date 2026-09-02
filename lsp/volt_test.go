@@ -24,13 +24,13 @@ func voltProject(t *testing.T, files map[string]string) string {
 	return root
 }
 
-// TestVoltProjectDiagnostics: a .volt file under a volt.mod root is
+// TestVoltProjectDiagnostics: a .volt file under a go.mod root is
 // checked as part of the whole project — the open buffer overlays the
 // saved file, so the unused import typed into the buffer is reported
 // even though the disk copy is clean.
 func TestVoltProjectDiagnostics(t *testing.T) {
 	root := voltProject(t, map[string]string{
-		"volt.mod":        "module lsptest\n",
+		"go.mod":          "module lsptest\n",
 		"db/schema.volt":  "package db\n\nTable users {\n\tid integer [pk]\n}\n",
 		"app/routes.volt": "package app\n\nScope / {\n\tget / Home.Index\n}\n",
 	})
@@ -54,7 +54,7 @@ func TestVoltProjectDiagnostics(t *testing.T) {
 // caught — the single-file pass could never see it.
 func TestVoltProjectCrossFileConflict(t *testing.T) {
 	root := voltProject(t, map[string]string{
-		"volt.mod":   "module lsptest\n",
+		"go.mod":     "module lsptest\n",
 		"app/a.volt": "package app\n\nScope / {\n\tget /x Home.A\n}\n",
 		"app/b.volt": "package app\n\nScope / {\n\tget /y Home.B\n}\n",
 	})
@@ -73,7 +73,7 @@ func TestVoltProjectCrossFileConflict(t *testing.T) {
 	}
 }
 
-// TestVoltFileOutsideProjectKeepsDBML: with no volt.mod above it, a
+// TestVoltFileOutsideProjectKeepsDBML: with no go.mod above it, a
 // .volt file gets the single-file DBML pass — Volt declarations parse
 // (superset, §V0) without bogus squiggles, and DBML errors still show.
 func TestVoltFileOutsideProjectKeepsDBML(t *testing.T) {
@@ -91,12 +91,12 @@ func TestVoltFileOutsideProjectKeepsDBML(t *testing.T) {
 }
 
 // TestVoltProjectSkipsForeignFiles: the project pass owns only files
-// the loader actually read. A .dbml file under a volt.mod root, or a
+// the loader actually read. A .dbml file under a go.mod root, or a
 // .volt file in a skipped directory (§V1.6), keeps the single-file
 // pass — its diagnostics must not silently vanish.
 func TestVoltProjectSkipsForeignFiles(t *testing.T) {
 	root := voltProject(t, map[string]string{
-		"volt.mod":        "module lsptest\n",
+		"go.mod":          "module lsptest\n",
 		"app/routes.volt": "package app\n\nScope / {\n\tget / Home.Index\n}\n",
 	})
 	dup := "Table t {\n\tid int [pk]\n}\n\nTable t {\n\tid int [pk]\n}\n"
@@ -115,7 +115,7 @@ func TestVoltProjectSkipsForeignFiles(t *testing.T) {
 // decoded path must still hit the overlay and the diagnostic filter.
 func TestVoltProjectEncodedURI(t *testing.T) {
 	root := voltProject(t, map[string]string{
-		"volt.mod":           "module lsptest\n",
+		"go.mod":             "module lsptest\n",
 		"db/schema.volt":     "package db\n\nTable users {\n\tid integer [pk]\n}\n",
 		"app/my routes.volt": "package app\n\nScope / {\n\tget / Home.Index\n}\n",
 	})
@@ -140,7 +140,7 @@ func TestVoltProjectEncodedURI(t *testing.T) {
 // unsaved sibling shows up here.
 func TestVoltSiblingBuffersOverlay(t *testing.T) {
 	root := voltProject(t, map[string]string{
-		"volt.mod":   "module lsptest\n",
+		"go.mod":     "module lsptest\n",
 		"app/a.volt": "package app\n\nScope / {\n\tget /y Home.A\n}\n",
 		"app/b.volt": "package app\n\nScope / {\n\tget /z Home.B\n}\n",
 	})
@@ -164,11 +164,11 @@ func TestVoltSiblingBuffersOverlay(t *testing.T) {
 	}
 }
 
-// TestVoltModDiagnosticsSurface: volt.mod is never open in the editor,
+// TestVoltModDiagnosticsSurface: go.mod is never open in the editor,
 // so its problems attach to the top of every project file.
 func TestVoltModDiagnosticsSurface(t *testing.T) {
 	root := voltProject(t, map[string]string{
-		"volt.mod":   "modul lsptest\n",
+		"go.mod":     "modul lsptest\n",
 		"app/r.volt": "package app\n\nScope / {\n\tget / Home.Index\n}\n",
 	})
 	d := NewDocument("file://"+filepath.Join(root, "app", "r.volt"),
@@ -176,12 +176,12 @@ func TestVoltModDiagnosticsSurface(t *testing.T) {
 
 	found := false
 	for _, dg := range d.Diags {
-		if strings.Contains(dg.Msg, "volt.mod") && dg.Pos.Line == 1 {
+		if strings.Contains(dg.Msg, "go.mod") && dg.Pos.Line == 1 {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("broken volt.mod surfaced nowhere; diags = %v", d.Diags)
+		t.Fatalf("broken go.mod surfaced nowhere; diags = %v", d.Diags)
 	}
 }
 

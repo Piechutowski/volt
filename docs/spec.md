@@ -1397,10 +1397,10 @@ files under `invalid/` MUST be rejected.
 package clause = "package", name, newline ;
 ```
 
-1. A **project** is a directory tree rooted at the nearest ancestor
-   directory containing a file named **`volt.mod`**. `volt.mod`
-   contains comments (`//`), blank lines, and exactly one directive:
-   `module <name>`.
+1. A **project** is a Go module: the directory tree rooted at the
+   nearest ancestor directory containing **`go.mod`** (D62). Its
+   `module` directive is the project's module path; every other
+   directive is Go's business and ignored. There is no second manifest.
 2. Every `.volt` file MUST begin with a package clause: its first
    declaration, at most one per file. The name is a plain (unquoted)
    identifier. The name `volt` is reserved: generated files import the
@@ -1419,9 +1419,17 @@ package clause = "package", name, newline ;
    concatenation of its files in file-name order, and route expansion
    (§V4.7) follows declaration order within that concatenation.
 6. Directories whose name begins with `.` or `_`, and directories named
-   `node_modules`, are not part of the project. Neither is any
-   subdirectory containing its own `volt.mod` (a nested project's
-   packages belong to it, not to the enclosing module).
+   `testdata` or `node_modules`, are not part of the project — Go's own
+   exclusions. Neither is any subdirectory containing its own `go.mod`
+   (a nested module is a different project; its packages belong to it).
+7. **Loading is import-driven.** A tool loads the packages it is asked
+   about and, transitively, the packages they import (§V2) — nothing
+   else, so stray `.volt` trees elsewhere in the module never
+   interfere. Packages are named as in Go: a directory names its
+   package, `dir/...` names every package beneath `dir` (rule 6
+   applied), and no argument means the working directory. `volt gen`
+   writes output for the named packages only; imports are loaded for
+   checking, never written.
 
 ```volt
 // db/schema.volt

@@ -2,7 +2,7 @@
 // §V0), and this is one server for all of it: the shared parser already
 // reads every .volt file, so the only question is which checker's
 // diagnostics to publish. A file that belongs to a Volt project — a
-// volt.mod root above it (§V1.1) — is checked as part of that whole
+// go.mod root above it (§V1.1) — is checked as part of that whole
 // project through the lang package, with the open buffer overlaid over
 // the disk; a file with no project keeps the single-file DBML pass.
 package lsp
@@ -18,7 +18,7 @@ import (
 // voltProjectDiags runs the project-level pipeline (lang.Load, Check,
 // Vet) for the document and returns the diagnostics that point into it.
 // ok is false when the document is not part of any Volt project — no
-// volt.mod above it, the project cannot be loaded, or the loader never
+// go.mod above it, the project cannot be loaded, or the loader never
 // read this file (it reads only .volt files and skips dot, underscore
 // and nested-module directories, §V1.6) — and the caller then falls
 // back to the single-file DBML diagnostics.
@@ -81,7 +81,7 @@ func (d *Document) voltProjectDiags() ([]diag.Diagnostic, bool) {
 	// Publish per document: findings positioned in this file. A
 	// conflict with another file still shows here whenever this file
 	// holds one of its ends, because the checker names both positions.
-	// volt.mod is never open in an editor, so its problems (which the
+	// go.mod is never open in an editor, so its problems (which the
 	// messages name explicitly) surface at the top of every project
 	// file instead of nowhere.
 	modPath := filepath.Join(root, lang.ModFile)
