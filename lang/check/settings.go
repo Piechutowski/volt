@@ -252,3 +252,64 @@ func validColor(v string) bool {
 	}
 	return true
 }
+
+// integerTypes is the integer family of Appendix A/B: the only types an
+// increment column may have (§6.3 extension). nao/gen/golang's tests
+// pin this set against its own type map so the two cannot drift.
+var integerTypes = map[string]bool{
+	"tinyint": true, "int2": true, "smallint": true, "smallserial": true,
+	"int": true, "integer": true, "int4": true, "mediumint": true, "serial": true,
+	"bigint": true, "int8": true, "bigserial": true,
+	"tinyint unsigned": true, "smallint unsigned": true, "int unsigned": true,
+	"integer unsigned": true, "bigint unsigned": true,
+}
+
+// IntegerType reports whether a declared type (arguments stripped,
+// case-insensitive) belongs to the integer family.
+func IntegerType(declType string) bool {
+	base := strings.ToLower(declType)
+	if i := strings.IndexByte(base, '('); i >= 0 {
+		base = strings.TrimSpace(base[:i])
+	}
+	return integerTypes[base]
+}
+
+// incrementCheck enforces the §6.3 extension: increment is honored in
+// exactly one shape — the single-column integer primary key, SQLite's
+// rowid alias (Appendix B) — and is an error anywhere else, because a
+// keyword that is typed must be applied.
+func (c *checker) incrementCheck(ti *TableInfo) {
+	compositePK := false
+	for _, ix := range ti.Indexes {
+		if ix.Settings.Get("pk") != nil {
+			compositePK = true
+		}
+	}
+	for _, cd := range ti.Columns {
+		col := cd.Col
+		inc := col.Settings.Get("increment")
+		if inc == nil {
+			continue
+		}
+		name := col.Name.Name()
+		if !IntegerType(col.Type.String()) {
+			c.errorf(inc.Pos(), "6.3",
+				"increment on %q (%s): only an integer column can auto-increment (§6.3, Appendix B)", name, col.Type.String())
+			continue
+		}
+		isPK := col.Settings.Get("pk") != nil || col.Settings.Get("primary key") != nil
+		for _, f := range col.LegacyFlags {
+			if strings.EqualFold(f.Name(), "pk") {
+				isPK = true
+			}
+		}
+		switch {
+		case compositePK:
+			c.errorf(inc.Pos(), "6.3",
+				"increment on %q: a composite primary key has no auto-assigned column — SQLite auto-assigns only the single-column integer key (§6.3, Appendix B)", name)
+		case !isPK:
+			c.errorf(inc.Pos(), "6.3",
+				"increment on %q: only the primary key auto-increments; elsewhere the keyword would be silently ignored while CreateParams omits the column (§6.3, Appendix B)", name)
+		}
+	}
+}

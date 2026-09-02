@@ -288,4 +288,5 @@ func (c *checker) columnsExpand(ti *TableInfo) {
 	for _, s := range slots {
 		ti.Columns = append(ti.Columns, s.def)
 	}
+	c.incrementCheck(ti)
 }

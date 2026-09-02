@@ -622,7 +622,18 @@ column setting  = "primary key" | "pk"
 3. **`pk` / `primary key`** are synonyms and mutually exclusive; they mark a
    single-column primary key. A composite primary key MUST be expressed as
    an index with the `pk` setting (§6.5).
-4. **`increment`** marks the column auto-increment.
+4. **`increment`** marks the column auto-increment: the database
+   assigns its value, and the generated `CreateParams` omits it
+   (Appendix A, D16).
+
+   > **Extension (this implementation).** Because the target is SQLite
+   > (D02), `increment` is honored in exactly one shape — the table's
+   > single-column primary key of an integer type, which becomes the
+   > rowid alias (Appendix B) — and is an **error** anywhere else: on a
+   > non-integer column, on a column that is not the primary key, or
+   > when the primary key is composite. A keyword that is typed MUST be
+   > applied; silently ignoring it while `CreateParams` drops the
+   > column would insert NULL into a NOT NULL column at run time.
 5. **`check`** attaches a single-column check constraint; the setting MAY be
    repeated to attach multiple checks.
 6. **`ref`** declares an inline relationship (§6.7). The setting MAY be
@@ -2237,7 +2248,7 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 | enum-typed column | `TEXT` + `CHECK (col IN ('a', 'b'))` — SQLite has no enum type |
 | `core.users` (schema) | `core_users` — SQLite has no schemas; collisions are generation errors |
 | `pk` column | explicit `NOT NULL` added: SQLite's `PRIMARY KEY` does **not** imply NOT NULL |
-| integer `[pk, increment]` | exactly `INTEGER PRIMARY KEY` (rowid alias); `AUTOINCREMENT` deliberately avoided |
+| integer `[pk, increment]` | exactly `INTEGER PRIMARY KEY` (rowid alias, auto-assigned); SQLite's `AUTOINCREMENT` keyword deliberately avoided — it only adds the never-reuse-an-id bookkeeping the SQLite docs discourage. Any other `increment` placement is a check error (§6.3) |
 | composite pk (`[pk]` index) | `PRIMARY KEY (a, b)` table constraint; members get `NOT NULL` |
 | refs (`>`, `<`, `-`) | `FOREIGN KEY … REFERENCES` with `ON DELETE` / `ON UPDATE`; FK side per §6.7.3 |
 | one-to-one (`-`) | adds `UNIQUE` on the FK column unless something already guarantees it |
