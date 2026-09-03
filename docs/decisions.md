@@ -443,3 +443,15 @@ where the merge changed the facts.
   to where the mistake was made. Rename follows the same asymmetry:
   renaming a Go reference in Volt rewrites the Volt spellings only,
   and the existence error then points at whichever side is behind.
+- **D64 — Spec sections are named, not numbered** (2026-09-03). Go's
+  specification cites by heading name and so does Volt's: a heading
+  is stable — it changes only for a very good reason — while a number
+  moves whenever a section is inserted, and a merged document had
+  already produced two numbering schemes (`§4.6` vs `§V4.6`) and a
+  table of contents describing half the file. The table of contents
+  is generated from the headings and pinned by test; headings are
+  unique so anchors never collide. Existing citations keep their
+  former numbers for now and resolve through the spec's Citation key
+  (also pinned by test); migrating them to heading names is a
+  scheduled chore (docs/backlog.md), deferred for its breadth, not
+  its difficulty.

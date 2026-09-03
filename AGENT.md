@@ -23,10 +23,10 @@ disagree, one of them has a bug — the fixing commit says which. Never
 change behavior without changing the spec in the same commit, and
 never weaken a test to get green.
 
-**No doc is ever knowingly wrong (D49).** Nine maintained docs live in
-`docs/` — spec, lint, editor, decisions, hypotheses, roadmap, nao,
-model-layer, reference/ — and no other directory carries prose docs (root README.md/AGENT.md
-are the named exceptions, D49).
+**No doc is ever knowingly wrong (D49).** Ten maintained docs live in
+`docs/` — spec, lint, editor, decisions, hypotheses, roadmap, backlog,
+nao, model-layer, reference/ — and no other directory carries prose
+docs (root README.md/AGENT.md are the named exceptions, D49).
 Operational detail (paths, commands, code snippets) may appear only in
 docs a test or the compiler keeps honest; philosophy is written at an
 altitude where nothing can rot. The accepted cost, chosen deliberately:
@@ -62,9 +62,12 @@ reverted: nao is its *name*).
    (updated in the landing commit). Current priority: FW-2 (Datasets;
    unblocked — FW-1's structured Group/Pred/Select layer landed
    2026-09-01, raw-SQL Select/View blocks remain).
-3. `docs/spec.md` — the language: Part I schema core §1–§8, Part II
-   routing §V0–§V8, Appendices A/B (Go and SQLite mappings), C (DBML
-   compatibility).
+3. `docs/spec.md` — the language: Part I the schema core, Part II
+   the project, routing and query layers, then the appendices (Go and
+   SQLite mappings, DBML compatibility). Sections are named, not
+   numbered (D64); existing `§…` citations resolve through the spec's
+   Citation key until the migration in `docs/backlog.md` lands.
+   `docs/backlog.md` — scheduled chores with the reason each waits.
 4. `docs/editor.md` — grammar/extension/LSP architecture, extension
    recipes, and the §8 verification checklist.
 5. `docs/nao.md` + `docs/model-layer.md` — the data layer and the

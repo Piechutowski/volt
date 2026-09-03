@@ -54,53 +54,99 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
 
 ## Table of Contents
 
-1. [Notation](#1-notation)
-   - 1.1 [EBNF](#11-ebnf)
-   - 1.2 [Character Notation (U+XXXX)](#12-character-notation-uxxxx)
-   - 1.3 [Unicode General Categories](#13-unicode-general-categories)
-   - 1.4 [Case Sensitivity and Terminology](#14-case-sensitivity-and-terminology)
-2. [Source Text](#2-source-text)
-3. [Lexical Structure](#3-lexical-structure)
-   - 3.1 [Tokenization](#31-tokenization)
-   - 3.2 [Line Structure and Whitespace](#32-line-structure-and-whitespace)
-   - 3.3 [Comments](#33-comments)
-   - 3.4 [Identifiers](#34-identifiers)
-   - 3.5 [Keywords](#35-keywords)
-   - 3.6 [String Literals](#36-string-literals)
-   - 3.7 [Multi-line String Literals](#37-multi-line-string-literals)
-   - 3.8 [Escape Sequences](#38-escape-sequences)
-   - 3.9 [Numeric Literals](#39-numeric-literals)
-   - 3.10 [Boolean and Null Literals](#310-boolean-and-null-literals)
-   - 3.11 [Color Literals](#311-color-literals)
-   - 3.12 [Expression Literals](#312-expression-literals)
-   - 3.13 [Operators and Punctuation](#313-operators-and-punctuation)
-4. [Common Syntactic Forms](#4-common-syntactic-forms)
-   - 4.1 [Names and Qualified Names](#41-names-and-qualified-names)
-   - 4.2 [Settings Lists](#42-settings-lists)
-5. [Program Structure](#5-program-structure)
-6. [Element Definitions](#6-element-definitions)
-   - 6.1 [Project](#61-project)
-   - 6.2 [Table](#62-table)
-   - 6.3 [Columns](#63-columns)
-   - 6.4 [Default Values](#64-default-values)
-   - 6.5 [Indexes](#65-indexes)
-   - 6.6 [Checks](#66-checks)
-   - 6.7 [Relationships (Ref)](#67-relationships-ref)
-   - 6.8 [Enum](#68-enum)
-   - 6.9 [TablePartial](#69-tablepartial)
-   - 6.10 [Records (Sample Data)](#610-records-sample-data)
-   - 6.11 [Notes](#611-notes)
-   - 6.12 [TableGroup](#612-tablegroup)
-   - 6.13 [DiagramView](#613-diagramview)
-7. [File Imports (removed)](#7-file-imports-removed)
-8. [Static Semantics](#8-static-semantics)
-- [Appendix IA: Collected Grammar](#appendix-ia-collected-grammar-part-i)
+- **Part I — The Schema Core (DBML)**
+  - [Notation](#notation)
+    - [EBNF](#ebnf)
+    - [Character Notation (U+XXXX)](#character-notation-uxxxx)
+    - [Unicode General Categories](#unicode-general-categories)
+    - [Case Sensitivity and Terminology](#case-sensitivity-and-terminology)
+  - [Source Text](#source-text)
+  - [Lexical Structure](#lexical-structure)
+    - [Tokenization](#tokenization)
+    - [Line Structure and Whitespace](#line-structure-and-whitespace)
+    - [Comments](#comments)
+    - [Identifiers](#identifiers)
+    - [Keywords](#keywords)
+    - [String Literals](#string-literals)
+    - [Multi-line String Literals](#multi-line-string-literals)
+    - [Escape Sequences](#escape-sequences)
+    - [Numeric Literals](#numeric-literals)
+    - [Boolean and Null Literals](#boolean-and-null-literals)
+    - [Color Literals](#color-literals)
+    - [Expression Literals](#expression-literals)
+    - [Operators and Punctuation](#operators-and-punctuation)
+  - [Common Syntactic Forms](#common-syntactic-forms)
+    - [Names and Qualified Names](#names-and-qualified-names)
+    - [Settings Lists](#settings-lists)
+  - [Program Structure](#program-structure)
+  - [Element Definitions](#element-definitions)
+    - [Project](#project)
+    - [Table](#table)
+    - [Columns](#columns)
+    - [Default Values](#default-values)
+    - [Indexes](#indexes)
+    - [Checks](#checks)
+    - [Relationships (Ref)](#relationships-ref)
+    - [Enum](#enum)
+    - [TablePartial](#tablepartial)
+    - [Records (Sample Data)](#records-sample-data)
+    - [Notes](#notes)
+    - [TableGroup](#tablegroup)
+    - [DiagramView](#diagramview)
+  - [File Imports (removed)](#file-imports-removed)
+  - [Static Semantics](#static-semantics)
+    - [Schemas](#schemas)
+    - [Namespaces and Uniqueness](#namespaces-and-uniqueness)
+    - [Reference Resolution](#reference-resolution)
+    - [Partial Injection Order](#partial-injection-order)
+    - [Nullability and Cardinality](#nullability-and-cardinality)
+  - [Collected grammar (Part I)](#collected-grammar-part-i)
+- **Part II — The Project and Routing Layer**
+  - [Layers, files and the superset rule](#layers-files-and-the-superset-rule)
+  - [Projects and packages](#projects-and-packages)
+  - [Imports](#imports)
+  - [Pipelines](#pipelines)
+  - [Scopes and routes](#scopes-and-routes)
+    - [Route paths](#route-paths)
+    - [Routes](#routes)
+    - [Handler references](#handler-references)
+    - [Scopes](#scopes)
+    - [Reserved](#reserved)
+    - [Route names and reverse URLs](#route-names-and-reverse-urls)
+    - [Route conflicts](#route-conflicts)
+  - [Resources](#resources)
+    - [Declaration](#declaration)
+    - [The action table](#the-action-table)
+    - [Settings](#settings)
+    - [Table resolution](#table-resolution)
+  - [Settings whitelists](#settings-whitelists)
+  - [Generation contract (informative)](#generation-contract-informative)
+  - [Reserved words for future layers](#reserved-words-for-future-layers)
+  - [Groups](#groups)
+  - [Predicates](#predicates)
+  - [Selects over groups](#selects-over-groups)
+  - [Validation checks](#validation-checks)
+  - [Collected grammar (Part II)](#collected-grammar-part-ii)
+  - [Conformance and the proof chain](#conformance-and-the-proof-chain)
+- **Appendices**
+  - [Mapping to Go](#mapping-to-go)
+    - [Types](#types)
+    - [Nullability](#nullability)
+    - [Names](#names)
+    - [Notes become doc comments](#notes-become-doc-comments)
+    - [Struct tags](#struct-tags)
+  - [Mapping to SQLite DDL](#mapping-to-sqlite-ddl)
+  - [Compatibility with DBML](#compatibility-with-dbml)
+  - [License and Provenance](#license-and-provenance)
 
----
+Sections are named, not numbered (D64): a reference names the heading,
+which changes only for a very good reason. Until every citation is
+migrated (docs/backlog.md), the [citation key](#citation-key) maps the
+former numbers to their headings.
 
-## 1. Notation
+## Notation
 
-### 1.1 EBNF
+### EBNF
 
 The grammar is written in **EBNF** (Extended Backus–Naur Form) following
 ISO/IEC 14977. Nonterminal names are lowercase words separated by spaces
@@ -129,7 +175,7 @@ being defined.
 Whitespace between symbols in a production is insignificant unless a
 production explicitly references the `newline` or `sp` nonterminals.
 
-### 1.2 Character Notation (U+XXXX)
+### Character Notation (U+XXXX)
 
 `U+XXXX` is the standard Unicode notation for a single character (code
 point), where `XXXX` is its number in hexadecimal. The characters referenced
@@ -146,7 +192,7 @@ by this specification:
 | `U+000B` | LINE TABULATION (vertical tab)                       |
 | `U+000C` | FORM FEED                                            |
 
-### 1.3 Unicode General Categories
+### Unicode General Categories
 
 Unicode assigns every character a *General Category*. This specification
 uses two of them to define identifiers:
@@ -164,7 +210,7 @@ In regular-expression terms these are `\p{L}` and `\p{M}`. Any Unicode-aware
 implementation language provides them; an implementation MUST NOT
 approximate category L with ASCII `[a-zA-Z]`.
 
-### 1.4 Case Sensitivity and Terminology
+### Case Sensitivity and Terminology
 
 **Case sensitivity.** All DBML *keywords* (terminals spelled with letters in
 this grammar, e.g. `"Table"`, `"pk"`, `"not null"`) are matched
@@ -177,7 +223,7 @@ interpreted as described in RFC 2119.
 
 ---
 
-## 2. Source Text
+## Source Text
 
 1. A DBML source file is a sequence of Unicode characters, conventionally
    encoded as UTF-8, conventionally using the file extension `.dbml`.
@@ -186,9 +232,9 @@ interpreted as described in RFC 2119.
 
 ---
 
-## 3. Lexical Structure
+## Lexical Structure
 
-### 3.1 Tokenization
+### Tokenization
 
 Before parsing, the input is split into *tokens* (identifiers, literals,
 operators, punctuation) by a scanner governed by two rules:
@@ -212,7 +258,7 @@ Consequences of the longest-match rule:
 To write two adjacent tokens that would otherwise fuse, separate them with
 whitespace.
 
-### 3.2 Line Structure and Whitespace
+### Line Structure and Whitespace
 
 ```ebnf
 newline = ? U+000A LINE FEED ? ;
@@ -229,7 +275,7 @@ sp      = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
 3. Space and tab characters separate tokens and are otherwise insignificant.
 4. Indentation is never significant (except inside multi-line strings, §3.7).
 
-### 3.3 Comments
+### Comments
 
 There are **exactly two** comment forms:
 
@@ -257,7 +303,7 @@ any char           = ? any Unicode character ? ;
    comment */
 ```
 
-### 3.4 Identifiers
+### Identifiers
 
 ```ebnf
 identifier        = plain identifier | quoted identifier ;
@@ -288,7 +334,7 @@ qi char           = any char - ( '"' | "\" | newline ) ;
 4. Plain and quoted identifiers are interchangeable everywhere an
    `identifier` is expected; `users` and `"users"` denote the same name.
 
-### 3.5 Keywords
+### Keywords
 
 DBML has **no reserved words**. All keywords are contextual: a keyword such
 as `Table` acts as a keyword only in keyword position and remains usable as an
@@ -301,7 +347,7 @@ Clause keywords: `as`, `use`, `reuse`, `from`.
 Value keywords: `true`, `false`, `null`.
 All are case-insensitive (§1.4).
 
-### 3.6 String Literals
+### String Literals
 
 ```ebnf
 string             = single line string | multi line string ;
@@ -314,7 +360,7 @@ sls char           = any char - ( "'" | "\" | newline ) ;
    contain an unescaped line break.
 2. Escape sequences (§3.8) are interpreted.
 
-### 3.7 Multi-line String Literals
+### Multi-line String Literals
 
 ```ebnf
 multi line string = "'''", mls body, "'''" ;
@@ -342,7 +388,7 @@ Note: '''
 
 The value of the above is `This is a block string.\nIt spans multiple lines.`
 
-### 3.8 Escape Sequences
+### Escape Sequences
 
 Escape sequences apply inside single-line strings, multi-line strings, and
 quoted identifiers. They do **not** apply inside expression literals (§3.12)
@@ -377,7 +423,7 @@ hex digit       = digit
 | `\uHHHH` | the code unit U+HHHH (exactly 4 hex digits; fewer is an error) |
 | `\c` (any other `c`) | the character `c` itself     |
 
-### 3.9 Numeric Literals
+### Numeric Literals
 
 ```ebnf
 number   = digit, { digit }, [ ".", digit, { digit } ], [ exponent ] ;
@@ -391,7 +437,7 @@ exponent = ( "e" | "E" ), [ "+" | "-" ], digit, { digit } ;
    letters (e.g. `2fa`) lexes as an identifier (§3.4); a digit run containing
    a dot followed by letters (e.g. `12.3abc`) is a lexical error.
 
-### 3.10 Boolean and Null Literals
+### Boolean and Null Literals
 
 ```ebnf
 boolean = "true" | "false" ;
@@ -400,7 +446,7 @@ null    = "null" ;
 
 Case-insensitive, as all keywords.
 
-### 3.11 Color Literals
+### Color Literals
 
 ```ebnf
 color = "#", ( 3 * hex digit | 6 * hex digit ) ;
@@ -409,7 +455,7 @@ color = "#", ( 3 * hex digit | 6 * hex digit ) ;
 1. Shorthand `#rgb` or full `#rrggbb` hexadecimal color, e.g. `#3498DB`.
 2. Used as the value of `headercolor` and `color` settings.
 
-### 3.12 Expression Literals
+### Expression Literals
 
 ```ebnf
 expression literal = "`", { any char - "`" }, "`" ;
@@ -422,7 +468,7 @@ expression literal = "`", { any char - "`" }, "`" ;
 3. Used for computed defaults (`` default: `now()` ``), expression indexes,
    check expressions, and expression values in records.
 
-### 3.13 Operators and Punctuation
+### Operators and Punctuation
 
 ```ebnf
 rel op = "<>" | "<" | ">" | "-" ;
@@ -446,9 +492,9 @@ Punctuation roles (uniform across the language):
 
 ---
 
-## 4. Common Syntactic Forms
+## Common Syntactic Forms
 
-### 4.1 Names and Qualified Names
+### Names and Qualified Names
 
 ```ebnf
 name          = identifier ;
@@ -465,7 +511,7 @@ enum constant = name, ".", name ;        (* EnumName.value *)
 3. `enum constant` references one value of an enum, e.g. `status.active`;
    it is valid as a default value (§6.4) and as a record value (§6.10).
 
-### 4.2 Settings Lists
+### Settings Lists
 
 Settings attach metadata to the construct they follow. A settings list is
 always delimited by square brackets and comma-separated:
@@ -494,7 +540,7 @@ setting value = string | number | boolean | null
 
 ---
 
-## 5. Program Structure
+## Program Structure
 
 ```ebnf
 program = { import statement | element } ;
@@ -518,9 +564,9 @@ element = project
 
 ---
 
-## 6. Element Definitions
+## Element Definitions
 
-### 6.1 Project
+### Project
 
 Declares project-level metadata. There MUST be at most one `Project` element
 per compiled schema.
@@ -544,7 +590,7 @@ Project ecommerce {
 }
 ```
 
-### 6.2 Table
+### Table
 
 ```ebnf
 table          = "Table", table name, [ table alias ], [ table settings ],
@@ -588,7 +634,7 @@ Table core.users as U [headercolor: #3498DB] {
 }
 ```
 
-### 6.3 Columns
+### Columns
 
 ```ebnf
 column          = name, column type, { legacy flag },
@@ -673,7 +719,7 @@ Table users {
 }
 ```
 
-### 6.4 Default Values
+### Default Values
 
 ```ebnf
 default value = [ "-" ], number
@@ -695,7 +741,7 @@ default value = [ "-" ], number
 A bare identifier that is not `true`/`false`/`null` and not a dotted enum
 constant is **not** a valid default value.
 
-### 6.5 Indexes
+### Indexes
 
 An `indexes` block may appear inside a `Table` or `TablePartial` body. A
 body MAY contain more than one `indexes` block; their contents accumulate.
@@ -740,7 +786,7 @@ Table bookings {
 }
 ```
 
-### 6.6 Checks
+### Checks
 
 A `checks` block declares table-level check constraints (constraints over one
 or many columns). It may appear inside a `Table` or `TablePartial` body. A
@@ -776,7 +822,7 @@ Table users {
 }
 ```
 
-### 6.7 Relationships (Ref)
+### Relationships (Ref)
 
 Relationships define foreign-key constraints. There are three syntactic
 forms: **long**, **short**, and **inline**.
@@ -854,7 +900,7 @@ Table posts {
 }
 ```
 
-### 6.8 Enum
+### Enum
 
 ```ebnf
 enum          = "Enum", table name, "{", { enum value }, "}" ;
@@ -882,7 +928,7 @@ Enum job_status {
 }
 ```
 
-### 6.9 TablePartial
+### TablePartial
 
 A `TablePartial` declares a reusable fragment of a table body. Tables inject
 partials by name.
@@ -923,7 +969,7 @@ Table users {
 }
 ```
 
-### 6.10 Records (Sample Data)
+### Records (Sample Data)
 
 `Records` declares sample rows for a table, in CSV-like syntax. Records may
 be declared at top level (naming the table) or inside a table body.
@@ -983,7 +1029,7 @@ Records users(id, name, status) {
 }
 ```
 
-### 6.11 Notes
+### Notes
 
 Notes attach human-readable documentation. There are two positions: a
 **note definition** inside an element body, and a top-level **sticky note**
@@ -1015,7 +1061,7 @@ Note deployment_reminder [color: #F4D03F] {
 }
 ```
 
-### 6.12 TableGroup
+### TableGroup
 
 Groups related tables (documentation/visualization only; no SQL semantics).
 
@@ -1041,7 +1087,7 @@ TableGroup e_commerce [color: #3498DB, note: 'Core commerce tables'] {
 }
 ```
 
-### 6.13 DiagramView
+### DiagramView
 
 Declares a named view of the diagram, selecting which items are shown
 (visualization only).
@@ -1071,7 +1117,7 @@ DiagramView sales_view {
 
 ---
 
-## 7. File Imports (removed)
+## File Imports (removed)
 
 DBML's file-based module system — `use * from './file'`, selective
 import with per-element kinds and `as` aliases, and `reuse` re-export —
@@ -1102,16 +1148,16 @@ import path      = string ;
 
 ---
 
-## 8. Static Semantics
+## Static Semantics
 
-### 8.1 Schemas
+### Schemas
 
 1. Schemas are not declared; a schema exists if and only if at least one
    table or enum names it as qualifier.
 2. Every unqualified table, enum, or relationship endpoint belongs to the
    default schema **`public`**.
 
-### 8.2 Namespaces and Uniqueness
+### Namespaces and Uniqueness
 
 Within one compiled schema (after imports):
 
@@ -1123,7 +1169,7 @@ Within one compiled schema (after imports):
 4. Column names MUST be unique within their table; enum values within their
    enum.
 
-### 8.3 Reference Resolution
+### Reference Resolution
 
 1. Relationship endpoints, index columns, records columns, TableGroup
    members, and DiagramView members MUST resolve to existing elements.
@@ -1132,14 +1178,14 @@ Within one compiled schema (after imports):
 3. Composite relationship endpoints MUST have equal arity, and referenced
    column lists must match in count and order.
 
-### 8.4 Partial Injection Order
+### Partial Injection Order
 
 1. Injections are expanded in source order; the effective column order of a
    table is the concatenation of injected and direct columns in source
    order (this order also drives implicit records column lists, §6.10).
 2. Conflicts resolve per §6.9.4.
 
-### 8.5 Nullability and Cardinality
+### Nullability and Cardinality
 
 1. A column without `null`/`not null` is nullable.
 2. A nullable foreign-key column yields zero-or-one / zero-or-many
@@ -1147,7 +1193,7 @@ Within one compiled schema (after imports):
 
 ---
 
-## Appendix IA: Collected Grammar (Part I)
+## Collected grammar (Part I)
 
 The complete grammar in EBNF (ISO/IEC 14977), collected from the sections
 above.
@@ -1361,7 +1407,7 @@ expression literal   = "`", { any char - "`" }, "`" ;
 
 ---
 
-# Part II — The Project and Routing Layer (§V)
+# Part II — The Project and Routing Layer
 
 **Version:** 0.1 (v0 surface: packages, imports, pipelines, scopes,
 routes, resources)
@@ -1381,7 +1427,7 @@ files under `invalid/` MUST be rejected.
 
 ---
 
-## §V0. Layers, files and the superset rule
+## Layers, files and the superset rule
 
 1. A Volt source file conventionally uses the extension **`.volt`**.
    Whether a file happens to use only the DBML core (Part I) or the
@@ -1402,7 +1448,7 @@ files under `invalid/` MUST be rejected.
    unreachable in a superset of DBML.
 3. Declaration order and file assignment carry no semantics (§V1.5).
 
-## §V1. Projects and packages
+## Projects and packages
 
 ```ebnf
 package clause = "package", name, newline ;
@@ -1451,7 +1497,7 @@ Table users {
 }
 ```
 
-## §V2. Imports
+## Imports
 
 ```ebnf
 import decl = "import", "(", { import spec }, ")" ;
@@ -1494,7 +1540,7 @@ import (
 )
 ```
 
-## §V3. Pipelines
+## Pipelines
 
 ```ebnf
 pipeline = "Pipeline", name, "{", { plug }, "}" ;
@@ -1529,9 +1575,9 @@ Pipeline api {
 }
 ```
 
-## §V4. Scopes and routes
+## Scopes and routes
 
-### §V4.1 Route paths
+### Route paths
 
 ```ebnf
 route path = slash,
@@ -1574,7 +1620,7 @@ type name  = "int" | "int32" | "int64" | "string" ;
    references (§V3), to route handler names (§V4.3), and to import
    aliases and path segments (§V2.2).
 
-### §V4.2 Routes
+### Routes
 
 ```ebnf
 route = verb, route path, handler ref, [ settings ], newline ;
@@ -1592,7 +1638,7 @@ verb  = "get" | "post" | "put" | "patch" | "delete"
    root full path as `/{$}`. Matching is exact — Volt never registers
    subtree patterns.
 
-### §V4.3 Handler references
+### Handler references
 
 ```ebnf
 handler ref = name, ".", name ;
@@ -1608,7 +1654,7 @@ handler ref = name, ".", name ;
 3. Two routes MAY share `Controller.Action` only with identical
    parameter signatures (names, types and wildcard-ness, in order).
 
-### §V4.4 Scopes
+### Scopes
 
 ```ebnf
 scope      = "Scope", route path, [ settings ], "{", { scope item }, "}" ;
@@ -1635,9 +1681,9 @@ Scope settings (the complete set):
    shape: `func(http.ResponseWriter, *volt.Request, error)`. Routes
    without one use the runtime default.
 
-### §V4.5 (reserved)
+### Reserved
 
-### §V4.6 Route names and reverse URLs
+### Route names and reverse URLs
 
 1. Every route derives a **helper name**: the scope name prefixes
    followed by the `[name:]` setting (normalized to a Go name) when
@@ -1650,7 +1696,7 @@ Scope settings (the complete set):
    values `.` and `..` escape entirely (`%2E` forms) — as literal
    segments they would change the path's shape under cleaning.
 
-### §V4.7 Route conflicts
+### Route conflicts
 
 1. A route's **shape** is its full path with every parameter replaced
    by `{}` and every wildcard by `{...}`; literals compare by spelling.
@@ -1683,14 +1729,14 @@ Scope / [pipe: api, error_handler: Errors] {
 }
 ```
 
-## §V5. Resources
+## Resources
 
 ```ebnf
 resources = "resources", table ref, [ settings ], newline ;
 table ref = name, [ ".", name ] ;
 ```
 
-### §V5.1 Declaration
+### Declaration
 
 1. `resources <table>` appears only inside a Scope body and expands to
    the action routes of §V5.2 with the table name as the collection
@@ -1700,7 +1746,7 @@ table ref = name, [ ".", name ] ;
    a table's model name or differs only in case — is an error naming
    the correct spelling where one exists.
 
-### §V5.2 The action table
+### The action table
 
 | Action | Method(s) | Path | Helper |
 |---|---|---|---|
@@ -1714,7 +1760,7 @@ table ref = name, [ ".", name ] ;
 
 `update` expands to two routes sharing one action and signature.
 
-### §V5.3 Settings
+### Settings
 
 | Setting | Value | Meaning |
 |---|---|---|
@@ -1733,7 +1779,7 @@ table ref = name, [ ".", name ] ;
    whenever singularization leaves the name unchanged, which would
    otherwise make the collection and member helpers collide.
 
-### §V5.4 Table resolution
+### Table resolution
 
 1. The declaration names a **table** of this package (`posts`) or of an
    imported package (`db.posts`); a qualified reference marks the
@@ -1767,7 +1813,7 @@ table ref = name, [ ".", name ] ;
 resources db.users [only: (index, show, create)]
 ```
 
-## §V6. Settings whitelists
+## Settings whitelists
 
 Settings valid on Volt elements, exhaustively (a setting not listed for
 an element is an error on that element):
@@ -1781,7 +1827,7 @@ an element is an error on that element):
 The identifier-list value form `(a, b, c)` (production in Appendix VA)
 is valid only where a setting explicitly takes an action list.
 
-## §V7. Generation contract (informative)
+## Generation contract (informative)
 
 The normative output contract is the golden corpus under
 `gen/router/testdata/` and the proof suite under `itest/`. In prose:
@@ -1793,14 +1839,14 @@ composed statically and its typed shim parsing parameters per §V4.1.3;
 expanded route list in declaration order. All generated files carry the
 standard generated-code header and are gofmt-stable.
 
-## §V8. Reserved words for future layers
+## Reserved words for future layers
 
 `Dataset` is reserved: a conforming v0 implementation rejects it with a
 forward-pointing diagnostic. (Design: [roadmap FW-2](roadmap.md).)
 
 ---
 
-## §V9. Groups
+## Groups
 
 A **Group** names a set of tables so the same code can be generated for
 every member (§V11). It is not a diagram construct: `TableGroup`
@@ -1842,7 +1888,7 @@ Group wide = series + ks_costs - ms_usage
 5. Member order is first-addition order; generation (§V11) is
    deterministic in it.
 
-## §V10. Predicates
+## Predicates
 
 A **Pred** names a boolean expression over the columns of an as-yet
 unnamed table. The expression language is deliberately **closed** —
@@ -1902,7 +1948,7 @@ Pred fresh   { current and recent }
 5. Checks (Part I §6.6) are the parameterless ancestors of predicates;
    unifying them onto this language is planned, not yet specified.
 
-## §V11. Selects over groups
+## Selects over groups
 
 A **Select** declares a query once and generates it for every member
 of a target (§V9 group, or a single table treated as a one-member
@@ -2002,7 +2048,7 @@ the optional projection narrows the emitted columns.
 
 ---
 
-## §V12. Validation checks
+## Validation checks
 
 Validation reuses `checks` (§6.6) instead of minting per-rule settings:
 checks are parameterless predicates (D57), and one construct serves the
@@ -2097,7 +2143,7 @@ Table users {
 
 ---
 
-## Appendix VA: Collected grammar
+## Collected grammar (Part II)
 
 Additions to the collected grammar of Part I, Appendix IA. The
 `element` production is extended:
@@ -2185,14 +2231,16 @@ chain, each link runnable by `go test ./...`:
 
 ---
 
-# Appendix A — Mapping to Go
+# Appendices
+
+## Mapping to Go
 
 *The data layer: generation contract of `volt gen` for schema packages (`nao_models.go`,
 `nao_queries.go`, `nao_dyn.go`). Informative in form; in force it is
 pinned by the generator goldens, which are gofmt-stable and compiled by
 the real Go toolchain on every `go test ./...` run.*
 
-## A.1 Types
+### Types
 
 Lower-cased declared type, parenthesized arguments ignored. An unmapped
 type is a **generation error** naming the column — never a silent guess.
@@ -2214,7 +2262,7 @@ type is a **generation error** naming the column — never a silent guess.
 | `bytea`, `blob` family, `binary`, `varbinary` | `[]byte` |
 | enum type (optionally schema-qualified) | generated `type X string` + constants |
 
-## A.2 Nullability
+### Nullability
 
 A column is required (`T`) when it has `not null`, `pk`/`primary key`
 (setting or legacy flag), `increment`, or is covered by a `[pk]` index —
@@ -2225,7 +2273,7 @@ generated as `rt.Null[T]` — a value plus a validity bit, never a pointer
 `rt.NullColumn` handles: comparisons take plain `T`, NULL is explicit
 (`IsNull`, `SetNull`).
 
-## A.3 Names
+### Names
 
 `snake_case` → `PascalCase` with the Go initialisms convention
 (`user_id` → `UserID`, `api_key` → `APIKey`). An enum's generated type
@@ -2241,7 +2289,7 @@ prefixed (`2fa_codes` → `X2faCode`). Two declarations mapping to the
 same Go identifier is a generation error; the `dynname` lint reports
 the dynamic layer's concatenation collisions ahead of time.
 
-## A.4 Notes become doc comments
+### Notes become doc comments
 
 | Note on | Generated position |
 |---|---|
@@ -2256,7 +2304,7 @@ Generated files start with the machine-readable
 overwrite a file lacking it. Generated code imports the standard
 library and `nao/rt` only.
 
-## A.5 Struct tags
+### Struct tags
 
 Every generated struct field derived from a column — on the model and
 its params structs alike — carries the same tag, assembled in this
@@ -2276,7 +2324,7 @@ default `db`/`json` pair only.
 
 ---
 
-# Appendix B — Mapping to SQLite DDL
+## Mapping to SQLite DDL
 
 *Generation contract of `volt gen --sql` (`nao_schema.sql`). Pinned by
 goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
@@ -2311,7 +2359,7 @@ marker, with the same overwrite protection as Appendix A.
 
 ---
 
-# Appendix C — Compatibility with DBML
+## Compatibility with DBML
 
 Volt accepts the entire DBML core of Part I verbatim: a schema using
 only Part I constructs is upstream-valid DBML and pastes into
@@ -2345,6 +2393,95 @@ cycle error: packages must layer.
    defining package directly.
 
 ---
+
+## Citation key
+
+Former section numbers, kept so that every existing citation (`§6.3`,
+`§V11.4`, `Appendix A.5`) still resolves: the number names the heading,
+a trailing component names a numbered rule inside it. Scheduled for
+removal once citations name headings (docs/backlog.md).
+
+| Cited as | Heading |
+|---|---|
+| §1 | [Notation](#notation) |
+| §1.1 | [EBNF](#ebnf) |
+| §1.2 | [Character Notation (U+XXXX)](#character-notation-uxxxx) |
+| §1.3 | [Unicode General Categories](#unicode-general-categories) |
+| §1.4 | [Case Sensitivity and Terminology](#case-sensitivity-and-terminology) |
+| §2 | [Source Text](#source-text) |
+| §3 | [Lexical Structure](#lexical-structure) |
+| §3.1 | [Tokenization](#tokenization) |
+| §3.2 | [Line Structure and Whitespace](#line-structure-and-whitespace) |
+| §3.3 | [Comments](#comments) |
+| §3.4 | [Identifiers](#identifiers) |
+| §3.5 | [Keywords](#keywords) |
+| §3.6 | [String Literals](#string-literals) |
+| §3.7 | [Multi-line String Literals](#multi-line-string-literals) |
+| §3.8 | [Escape Sequences](#escape-sequences) |
+| §3.9 | [Numeric Literals](#numeric-literals) |
+| §3.10 | [Boolean and Null Literals](#boolean-and-null-literals) |
+| §3.11 | [Color Literals](#color-literals) |
+| §3.12 | [Expression Literals](#expression-literals) |
+| §3.13 | [Operators and Punctuation](#operators-and-punctuation) |
+| §4 | [Common Syntactic Forms](#common-syntactic-forms) |
+| §4.1 | [Names and Qualified Names](#names-and-qualified-names) |
+| §4.2 | [Settings Lists](#settings-lists) |
+| §5 | [Program Structure](#program-structure) |
+| §6 | [Element Definitions](#element-definitions) |
+| §6.1 | [Project](#project) |
+| §6.2 | [Table](#table) |
+| §6.3 | [Columns](#columns) |
+| §6.4 | [Default Values](#default-values) |
+| §6.5 | [Indexes](#indexes) |
+| §6.6 | [Checks](#checks) |
+| §6.7 | [Relationships (Ref)](#relationships-ref) |
+| §6.8 | [Enum](#enum) |
+| §6.9 | [TablePartial](#tablepartial) |
+| §6.10 | [Records (Sample Data)](#records-sample-data) |
+| §6.11 | [Notes](#notes) |
+| §6.12 | [TableGroup](#tablegroup) |
+| §6.13 | [DiagramView](#diagramview) |
+| §7 | [File Imports (removed)](#file-imports-removed) |
+| §8 | [Static Semantics](#static-semantics) |
+| §8.1 | [Schemas](#schemas) |
+| §8.2 | [Namespaces and Uniqueness](#namespaces-and-uniqueness) |
+| §8.3 | [Reference Resolution](#reference-resolution) |
+| §8.4 | [Partial Injection Order](#partial-injection-order) |
+| §8.5 | [Nullability and Cardinality](#nullability-and-cardinality) |
+| Appendix IA | [Collected grammar (Part I)](#collected-grammar-part-i) |
+| §V0 | [Layers, files and the superset rule](#layers-files-and-the-superset-rule) |
+| §V1 | [Projects and packages](#projects-and-packages) |
+| §V2 | [Imports](#imports) |
+| §V3 | [Pipelines](#pipelines) |
+| §V4 | [Scopes and routes](#scopes-and-routes) |
+| §V4.1 | [Route paths](#route-paths) |
+| §V4.2 | [Routes](#routes) |
+| §V4.3 | [Handler references](#handler-references) |
+| §V4.4 | [Scopes](#scopes) |
+| §V4.5 | [Reserved](#reserved) |
+| §V4.6 | [Route names and reverse URLs](#route-names-and-reverse-urls) |
+| §V4.7 | [Route conflicts](#route-conflicts) |
+| §V5 | [Resources](#resources) |
+| §V5.1 | [Declaration](#declaration) |
+| §V5.2 | [The action table](#the-action-table) |
+| §V5.3 | [Settings](#settings) |
+| §V5.4 | [Table resolution](#table-resolution) |
+| §V6 | [Settings whitelists](#settings-whitelists) |
+| §V7 | [Generation contract (informative)](#generation-contract-informative) |
+| §V8 | [Reserved words for future layers](#reserved-words-for-future-layers) |
+| §V9 | [Groups](#groups) |
+| §V10 | [Predicates](#predicates) |
+| §V11 | [Selects over groups](#selects-over-groups) |
+| §V12 | [Validation checks](#validation-checks) |
+| Appendix VA | [Collected grammar (Part II)](#collected-grammar-part-ii) |
+| Appendix A | [Mapping to Go](#mapping-to-go) |
+| Appendix A.1 | [Types](#types) |
+| Appendix A.2 | [Nullability](#nullability) |
+| Appendix A.3 | [Names](#names) |
+| Appendix A.4 | [Notes become doc comments](#notes-become-doc-comments) |
+| Appendix A.5 | [Struct tags](#struct-tags) |
+| Appendix B | [Mapping to SQLite DDL](#mapping-to-sqlite-ddl) |
+| Appendix C | [Compatibility with DBML](#compatibility-with-dbml) |
 
 ## License and Provenance
 

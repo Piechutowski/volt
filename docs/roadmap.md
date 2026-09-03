@@ -340,7 +340,7 @@ imply otherwise (D49). Each is small; none blocks FW-2.
 `Dataset` (reserved word, spec §V8) turns a `TableGroup` into a full
 CRUD surface: `resources` where the loop variable is bound by the
 schema. Condensed design (argued in full in working sessions of
-2026-07; supersedes the old router draft §12):
+2026-07; supersedes section 12 of the old router draft):
 
 - **Declaration.** `Dataset ms [from: db.group(MS), pipe: api,
   formats: (html, json, gob)] { path: strip('ms_')  key: id
