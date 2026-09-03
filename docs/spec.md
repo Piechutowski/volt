@@ -137,12 +137,13 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Struct tags](#struct-tags)
   - [Mapping to SQLite DDL](#mapping-to-sqlite-ddl)
   - [Compatibility with DBML](#compatibility-with-dbml)
+  - [Citation key](#citation-key)
   - [License and Provenance](#license-and-provenance)
 
 Sections are named, not numbered (D64): a reference names the heading,
 which changes only for a very good reason. Until every citation is
-migrated (docs/backlog.md), the [citation key](#citation-key) maps the
-former numbers to their headings.
+migrated (docs/backlog.md), the Citation key at the end of this document
+maps the former numbers to their headings.
 
 ## Notation
 
