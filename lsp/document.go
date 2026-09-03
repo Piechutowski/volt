@@ -95,6 +95,18 @@ func (d *Document) Update(text string) {
 	d.Index = NewIndex(file, info)
 }
 
+// GoFilesChanged reports whether the Go files this document's project
+// analysis read have changed on disk since — the checker's D63 facts
+// and the Go-reference navigation are then stale until Update runs.
+// Only Go files that were actually scanned count: a project without
+// Go references never re-runs for this reason.
+func (d *Document) GoFilesChanged() bool {
+	if d.vindex == nil {
+		return false
+	}
+	return d.vindex.goStale()
+}
+
 // analyzersActive is every registered vet analyzer except modelname: the
 // [model:] setting it wants is above the DBML layer, and the single-file
 // pass this feeds does not resolve it (see docs/editor.md).

@@ -316,8 +316,6 @@ imply otherwise (D49). Each is small; none blocks FW-2.
   latter are not renamed; they should still navigate). References on a
   table list its declaration twice; hover ranges on qualified
   references span the qualifier.
-- **Editor, Go files.** Editing a package's Go file does not re-run
-  the D63 checks until a `.volt` buffer changes (no watch on `*.go`).
 - **Diagnostics anchoring.** A Pred that fails typing at a use site is
   reported inside the Pred declaration, once per failing select or
   check, without naming the use. Two same-named projected selects on

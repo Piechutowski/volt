@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/tliron/glsp"
@@ -15,8 +16,9 @@ const serverName = "volt-lsp"
 
 // Server owns the open documents and the protocol handler.
 type Server struct {
-	mu   sync.Mutex
-	docs map[string]*Document
+	watchSupported bool // client accepts dynamic didChangeWatchedFiles registration
+	mu             sync.Mutex
+	docs           map[string]*Document
 
 	handler protocol.Handler
 }
@@ -26,13 +28,15 @@ func NewServer() *Server {
 	s := &Server{docs: map[string]*Document{}}
 	s.handler = protocol.Handler{
 		Initialize:  s.initialize,
-		Initialized: func(*glsp.Context, *protocol.InitializedParams) error { return nil },
+		Initialized: s.initialized,
 		Shutdown:    func(*glsp.Context) error { return nil },
 		SetTrace:    func(*glsp.Context, *protocol.SetTraceParams) error { return nil },
 
 		TextDocumentDidOpen:   s.didOpen,
 		TextDocumentDidChange: s.didChange,
 		TextDocumentDidClose:  s.didClose,
+
+		WorkspaceDidChangeWatchedFiles: s.watchedFilesChanged,
 
 		TextDocumentCompletion:     s.completion,
 		TextDocumentHover:          s.hover,
@@ -50,6 +54,10 @@ func (s *Server) RunStdio() error {
 }
 
 func (s *Server) initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error) {
+	if ws := params.Capabilities.Workspace; ws != nil && ws.DidChangeWatchedFiles != nil &&
+		ws.DidChangeWatchedFiles.DynamicRegistration != nil {
+		s.watchSupported = *ws.DidChangeWatchedFiles.DynamicRegistration
+	}
 	capabilities := s.handler.CreateServerCapabilities()
 
 	syncKind := protocol.TextDocumentSyncKindFull
@@ -73,6 +81,54 @@ func (s *Server) initialize(_ *glsp.Context, params *protocol.InitializeParams) 
 
 // ---------------------------------------------------------------------------
 // document sync
+
+// initialized asks the client to report Go file changes: a Go reference
+// (§V3.2, §V12.5) is checked against the package's Go files, so a
+// gopls rename or a newly written function changes the truth of a
+// .volt file the user is not editing. The request is fire-and-forget:
+// a client without dynamic registration simply never notifies, and the
+// per-request freshness check (freshen) still catches up on demand.
+func (s *Server) initialized(ctx *glsp.Context, _ *protocol.InitializedParams) error {
+	if !s.watchSupported {
+		return nil
+	}
+	go ctx.Call(protocol.ServerClientRegisterCapability, protocol.RegistrationParams{
+		Registrations: []protocol.Registration{{
+			ID:     "volt-go-files",
+			Method: string(protocol.MethodWorkspaceDidChangeWatchedFiles),
+			RegisterOptions: protocol.DidChangeWatchedFilesRegistrationOptions{
+				Watchers: []protocol.FileSystemWatcher{{GlobPattern: "**/*.go"}},
+			},
+		}},
+	}, nil)
+	return nil
+}
+
+// watchedFilesChanged re-checks every open document when a Go file was
+// saved, created or deleted: D63 facts live in those files.
+func (s *Server) watchedFilesChanged(ctx *glsp.Context, params *protocol.DidChangeWatchedFilesParams) error {
+	goTouched := false
+	for _, ev := range params.Changes {
+		if strings.HasSuffix(string(ev.URI), ".go") {
+			goTouched = true
+		}
+	}
+	if goTouched {
+		s.refreshOthers(ctx, "")
+	}
+	return nil
+}
+
+// freshen re-runs a document's analysis before answering a request when
+// the Go files it depends on changed since — the fallback for clients
+// that do not report file changes, and for the window between a save
+// and its notification. The republished diagnostics follow.
+func (s *Server) freshen(ctx *glsp.Context, doc *Document) {
+	if doc != nil && doc.GoFilesChanged() {
+		doc.Update(doc.Text)
+		s.diagnosticsPublish(ctx, doc)
+	}
+}
 
 func (s *Server) didOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
 	doc := &Document{URI: params.TextDocument.URI, Siblings: s.openTexts}
@@ -171,8 +227,9 @@ func (s *Server) docGet(uri string) *Document {
 // ---------------------------------------------------------------------------
 // language features
 
-func (s *Server) completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
+func (s *Server) completion(ctx *glsp.Context, params *protocol.CompletionParams) (any, error) {
 	doc := s.docGet(params.TextDocument.URI)
+	s.freshen(ctx, doc)
 	if doc == nil {
 		return nil, nil
 	}
@@ -183,16 +240,18 @@ func (s *Server) completion(_ *glsp.Context, params *protocol.CompletionParams) 
 	return items, nil
 }
 
-func (s *Server) hover(_ *glsp.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
+func (s *Server) hover(ctx *glsp.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
 	doc := s.docGet(params.TextDocument.URI)
+	s.freshen(ctx, doc)
 	if doc == nil {
 		return nil, nil
 	}
 	return doc.Hover(params.Position), nil
 }
 
-func (s *Server) definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error) {
+func (s *Server) definition(ctx *glsp.Context, params *protocol.DefinitionParams) (any, error) {
 	doc := s.docGet(params.TextDocument.URI)
+	s.freshen(ctx, doc)
 	if doc == nil {
 		return nil, nil
 	}
@@ -203,16 +262,18 @@ func (s *Server) definition(_ *glsp.Context, params *protocol.DefinitionParams) 
 	return *loc, nil
 }
 
-func (s *Server) references(_ *glsp.Context, params *protocol.ReferenceParams) ([]protocol.Location, error) {
+func (s *Server) references(ctx *glsp.Context, params *protocol.ReferenceParams) ([]protocol.Location, error) {
 	doc := s.docGet(params.TextDocument.URI)
+	s.freshen(ctx, doc)
 	if doc == nil {
 		return nil, nil
 	}
 	return doc.References(params.Position, params.Context.IncludeDeclaration), nil
 }
 
-func (s *Server) rename(_ *glsp.Context, params *protocol.RenameParams) (*protocol.WorkspaceEdit, error) {
+func (s *Server) rename(ctx *glsp.Context, params *protocol.RenameParams) (*protocol.WorkspaceEdit, error) {
 	doc := s.docGet(params.TextDocument.URI)
+	s.freshen(ctx, doc)
 	if doc == nil {
 		return nil, nil
 	}

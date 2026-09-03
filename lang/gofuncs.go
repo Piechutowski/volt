@@ -17,6 +17,7 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/Piechutowski/volt/lang/token"
@@ -142,6 +143,33 @@ func goFuncOf(fset *gotoken.FileSet, path string, fn *goast.FuncDecl) GoFunc {
 type goScan struct {
 	funcs  map[string]GoFunc
 	broken []string
+}
+
+// GoDirStamp fingerprints the Go files of a directory — names, sizes
+// and modification times — so a tool can tell cheaply whether a scan is
+// stale (the editor re-checks Go references when it changes).
+func GoDirStamp(dir string) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		b.WriteString(e.Name())
+		b.WriteByte(':')
+		b.WriteString(strconv.FormatInt(info.Size(), 10))
+		b.WriteByte(':')
+		b.WriteString(strconv.FormatInt(info.ModTime().UnixNano(), 10))
+		b.WriteByte(';')
+	}
+	return b.String()
 }
 
 // goFuncs returns the package directory's functions, scanned once per

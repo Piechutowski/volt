@@ -4,9 +4,11 @@
 package lsp
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
@@ -275,5 +277,52 @@ func TestPredRefInCheckNavigates(t *testing.T) {
 	}
 	if n != 2 {
 		t.Errorf("Pred rename produced %d edits, want 2 (declaration + check use): %+v", n, edit.Changes)
+	}
+}
+
+// TestGoFileChangeInvalidatesIndex: after the Go function is renamed on
+// disk (gopls' job), the document knows its facts are stale; a re-run
+// then drops the definition and reports the reference as undeclared.
+func TestGoFileChangeInvalidatesIndex(t *testing.T) {
+	root := goRefProject(t)
+	schema := filepath.Join(root, "db", "schema.volt")
+	d := NewDocument("file://"+schema, goRefSchema)
+	if d.GoFilesChanged() {
+		t.Fatal("fresh index reports stale Go files")
+	}
+	if d.Definition(posOf(t, goRefSchema, "EmailValid", 0)) == nil {
+		t.Fatal("precondition: EmailValid resolves before the rename")
+	}
+
+	// gopls renames the function; the .volt buffer is untouched.
+	goFile := filepath.Join(root, "db", "checks.go")
+	src, err := os.ReadFile(goFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	renamed := strings.ReplaceAll(string(src), "EmailValid", "AddressValid")
+	if err := os.WriteFile(goFile, []byte(renamed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	future := time.Now().Add(2 * time.Second)
+	if err := os.Chtimes(goFile, future, future); err != nil {
+		t.Fatal(err)
+	}
+
+	if !d.GoFilesChanged() {
+		t.Fatal("index did not notice the Go file changed")
+	}
+	d.Update(d.Text) // what the server does before answering
+	if loc := d.Definition(posOf(t, goRefSchema, "EmailValid", 0)); loc != nil {
+		t.Errorf("definition still resolves to the renamed function: %v", loc)
+	}
+	found := false
+	for _, dg := range d.Diags {
+		if strings.Contains(dg.Msg, "no function EmailValid") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the reference must now be reported as undeclared; diags = %v", d.Diags)
 	}
 }

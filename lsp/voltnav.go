@@ -60,6 +60,21 @@ type voltIndex struct {
 	refs    []voltRef
 	texts   map[string]string                 // open buffers, for position conversion
 	gofuncs map[string]map[string]lang.GoFunc // package path -> its Go functions
+	// goStamps fingerprints each package directory's Go files as scanned
+	// (lang.GoDirStamp); a changed stamp means the Go side moved under
+	// us — a rename with gopls, a new function — and the index is stale.
+	goStamps map[string]string
+}
+
+// goStale reports whether any package directory's Go files changed
+// since the index scanned them.
+func (ix *voltIndex) goStale() bool {
+	for dir, stamp := range ix.goStamps {
+		if lang.GoDirStamp(dir) != stamp {
+			return true
+		}
+	}
+	return false
 }
 
 func spanOf(n ast.Node) voltSpan {
@@ -230,6 +245,10 @@ func (ix *voltIndex) goRefAdd(pkg *lang.Package, path string, ref *ast.GoRef) {
 	if !ok {
 		funcs = lang.GoFuncsIn(pkg.Dir)
 		ix.gofuncs[path] = funcs
+		if ix.goStamps == nil {
+			ix.goStamps = map[string]string{}
+		}
+		ix.goStamps[pkg.Dir] = lang.GoDirStamp(pkg.Dir)
 	}
 	if gf, found := funcs[name]; found {
 		gfCopy := gf

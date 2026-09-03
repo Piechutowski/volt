@@ -266,7 +266,14 @@ checker's diagnostic on the reference names the exact signature to
 write. `volt.*` plugs live in the runtime and
 make no claim. Existence and the spelled signature are the checker's
 (D63), so a typo or a wrong parameter type is a diagnostic at the
-reference. Rename on a Go reference rewrites its Volt spellings only —
+reference. The Go side can move without any `.volt` buffer changing —
+a gopls rename, a newly written function — so the server registers a
+`**/*.go` file watcher with the client and re-checks every open
+document when one is saved; independently, every hover, definition,
+references, rename and completion request first compares the scanned
+Go files' fingerprint (names, sizes, mtimes) with the disk and re-runs
+the analysis when it moved, republishing diagnostics. Only saved files
+count: the Go buffers themselves belong to gopls, not to this server. Rename on a Go reference rewrites its Volt spellings only —
 the Go declaration is gopls' job, and the existence error then points
 at whichever side is still behind. Rename on a column follows it into
 the table's checks (typed operands and Go-reference arguments); a
