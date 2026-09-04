@@ -51,10 +51,61 @@ func (c *checker) tableChecks(pkg *Package) {
 			}
 			specs = append(specs, spec)
 		}
+		// required columns (§6.3 extension, D72): one synthesized check
+		// per column, "non-empty" spelled per type class; gen/sqlite
+		// renders the same rule as a CHECK, both named <column>_required.
+		if req := c.requiredSpecs(ti, info); len(req) > 0 {
+			specs = append(specs, req...)
+		}
 		if len(specs) > 0 {
 			pkg.CheckFns = append(pkg.CheckFns, golang.CheckFn{TableKey: ti.Key, Checks: specs})
 		}
 	}
+}
+
+// requiredSpecs lowers every [required] column of a table to the Go
+// tier's condition (§V12.8).
+func (c *checker) requiredSpecs(ti *check.TableInfo, info *check.Info) []golang.CheckSpec {
+	var out []golang.CheckSpec
+	var fields []golang.FieldSig
+	for _, cd := range ti.Columns {
+		if cd.Col.Settings.Get("required") == nil {
+			continue
+		}
+		if fields == nil {
+			_, fs, err := golang.ModelFields(c.pkg.merged, info, ti.Key)
+			if err != nil {
+				return nil
+			}
+			fields = fs
+		}
+		name := cd.Col.Name.Name()
+		var f *golang.FieldSig
+		for i := range fields {
+			if fields[i].Col == name {
+				f = &fields[i]
+			}
+		}
+		if f == nil {
+			continue
+		}
+		_, isEnum := golang.GoTypeName(normalizeType(cd.Col.Type.String()))
+		kind, ok := check.RequiredKind(cd.Col.Type.String(), !isEnum)
+		if !ok {
+			continue // reported by the schema checker
+		}
+		var cond string
+		switch kind {
+		case "text":
+			cond = "v." + f.Name + ` != ""`
+		case "numeric":
+			cond = "v." + f.Name + " != 0"
+		case "bytes":
+			cond = "len(v." + f.Name + ") > 0"
+		}
+		out = append(out, golang.CheckSpec{Name: name + "_required", Src: name + " required", Cond: cond, Cols: []string{name}})
+	}
+	return out
 }
 
 // typedCheck types one predicate-form check against its table and

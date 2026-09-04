@@ -16,10 +16,13 @@ import (
 func (v User) Validate() error {
 	var errs []rt.CheckError
 	if !(rt.Like(v.Email, "%_@%_")) {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "email_shape"})
+		errs = append(errs, rt.CheckError{Model: "User", Check: "email_shape", Columns: []string{"email"}})
 	}
 	if err := EmailValid(v.Email); err != nil {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Cause: err})
+		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Columns: []string{"email"}, Cause: err})
+	}
+	if !(v.Email != "") {
+		errs = append(errs, rt.CheckError{Model: "User", Check: "email_required", Columns: []string{"email"}})
 	}
 	return rt.Validation(errs)
 }
@@ -29,10 +32,13 @@ func (v User) Validate() error {
 func (v UserCreateParams) Validate() error {
 	var errs []rt.CheckError
 	if !(rt.Like(v.Email, "%_@%_")) {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "email_shape"})
+		errs = append(errs, rt.CheckError{Model: "User", Check: "email_shape", Columns: []string{"email"}})
 	}
 	if err := EmailValid(v.Email); err != nil {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Cause: err})
+		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Columns: []string{"email"}, Cause: err})
+	}
+	if !(v.Email != "") {
+		errs = append(errs, rt.CheckError{Model: "User", Check: "email_required", Columns: []string{"email"}})
 	}
 	return rt.Validation(errs)
 }
@@ -42,10 +48,13 @@ func (v UserCreateParams) Validate() error {
 func (v UserUpdateParams) Validate() error {
 	var errs []rt.CheckError
 	if !(rt.Like(v.Email, "%_@%_")) {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "email_shape"})
+		errs = append(errs, rt.CheckError{Model: "User", Check: "email_shape", Columns: []string{"email"}})
 	}
 	if err := EmailValid(v.Email); err != nil {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Cause: err})
+		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Columns: []string{"email"}, Cause: err})
+	}
+	if !(v.Email != "") {
+		errs = append(errs, rt.CheckError{Model: "User", Check: "email_required", Columns: []string{"email"}})
 	}
 	return rt.Validation(errs)
 }

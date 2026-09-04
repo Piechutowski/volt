@@ -335,6 +335,12 @@ imply otherwise (D49). Each is small; none blocks FW-2.
   cannot expand its own selects. Only `get` query routes and event
   routes have reverse-URL helpers, by design. `resources … [default]`
   is not built: resources still expand to controller actions.
+- **Validation (2026-09-04, after D72).** The Go tier does not check
+  enum membership (the DDL `CHECK … IN` does, hypotheses H5); typed
+  checks have no `length()` term, so string bounds are an opaque SQL
+  check or a Go function; a select's query parameters are typed but
+  not bounded (no `[check:]` on a parameter); messages are the check's
+  name or rendered form, not localized text.
 - **CLI.** `Project.Module` is required but unused; a nonexistent
   argument gets a loader message rather than "no such directory";
   diagnostics print absolute paths even for relative arguments;

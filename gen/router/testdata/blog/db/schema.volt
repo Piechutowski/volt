@@ -2,7 +2,7 @@ package db
 
 Table users {
 	id    integer [pk, increment]
-	email text    [not null, unique]
+	email text    [not null, required, unique]
 
 	checks {
 		email like '%_@%_' [name: 'email_shape']

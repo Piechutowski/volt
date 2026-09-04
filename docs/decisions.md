@@ -578,3 +578,19 @@ where the merge changed the facts.
   evaluating a check the struct cannot see (a defaulted column is the
   database's value, D16), so those stay with the row and the DDL, and
   the method's doc comment says which.
+
+- **D72 — `required` is the word for "not empty either"; errors name
+  their columns; bodies are bounded and strict** (2026-09-04, spec
+  §6.3 extension, §V12.7–§V12.8, §V4.9.2, §V4.9.5). Under ZII a
+  missing input is the zero value and `not null` is satisfied, so the
+  schema needed one word for presence; `required` lowers to a check
+  in both tiers, per type class, named `<column>_required`, and is
+  refused where it means nothing (bool, date/time) or contradicts
+  (`null`, `default:`, `increment`). `CheckError` carries its columns
+  and every validation and constraint error itemizes itself; the spine
+  renders a structured `Problem` body and the client decodes it, so
+  attribution to fields survives the wire in either format. `Decode`
+  rejects unknown JSON fields (a typo must fail loudly) and caps the
+  body. What it refuses: `required` implying `not null` — one spelled
+  rule per fact; and localized messages, which stay a client concern
+  keyed by the check's name.

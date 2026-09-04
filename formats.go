@@ -4,6 +4,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -91,15 +92,27 @@ func Encode(w io.Writer, f Format, v any) error {
 	return json.NewEncoder(w).Encode(v)
 }
 
+// MaxBodyBytes caps a request body Decode reads; a larger body is a
+// 413. Four megabytes is more than any params struct needs and less
+// than what an attacker would enjoy. Set it before serving.
+var MaxBodyBytes int64 = 4 << 20
+
 // Decode reads the request body into v by its Content-Type: JSON when
 // the header is absent or names JSON, GOB for application/x-gob. Any
-// other type is a 415; an empty or malformed body is a 400.
+// other type is a 415; an empty or malformed body is a 400; a JSON
+// field the struct does not declare is a 400 naming it (a typo must
+// not vanish silently); a body over MaxBodyBytes is a 413.
 func Decode(r *Request, v any) error {
 	f, ok := FormatOf(r.Header.Get("Content-Type"))
 	if !ok {
 		return Error(http.StatusUnsupportedMediaType, "supported request formats: "+MIMEJSON+", "+MIMEGOB)
 	}
-	if err := DecodeBody(f, r.Body, v); err != nil {
+	body := http.MaxBytesReader(nil, r.Body, MaxBodyBytes)
+	if err := DecodeBody(f, body, v); err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			return Error(http.StatusRequestEntityTooLarge, fmt.Sprintf("request body over %d bytes", MaxBodyBytes))
+		}
 		return Error(http.StatusBadRequest, "malformed "+f.MIME()+" body: "+err.Error())
 	}
 	return nil
@@ -133,6 +146,7 @@ func DecodeBody(f Format, body io.Reader, v any) error {
 		return gob.NewDecoder(body).Decode(v)
 	}
 	dec := json.NewDecoder(body)
+	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
 		if errors.Is(err, io.EOF) {
 			return errors.New("empty body")

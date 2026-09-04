@@ -257,6 +257,23 @@ func (g *generator) columnDef(ti *check.TableInfo, cd *check.ColumnDef, pkCols [
 		}
 		parts = append(parts, "CHECK ("+identQuote(colName)+" IN ("+strings.Join(vals, ", ")+"))")
 	}
+	if columnHas(cd, "required") {
+		// The required extension (§6.3, D72): the same non-empty rule the
+		// generated validator applies, named so a refusal says which column.
+		kind, _ := check.RequiredKind(col.Type.String(), enumInfo != nil)
+		var expr string
+		switch kind {
+		case "text":
+			expr = identQuote(colName) + " <> ''"
+		case "numeric":
+			expr = identQuote(colName) + " <> 0"
+		case "bytes":
+			expr = "length(" + identQuote(colName) + ") > 0"
+		}
+		if expr != "" {
+			parts = append(parts, "CONSTRAINT "+identQuote(colName+"_required")+" CHECK ("+expr+")")
+		}
+	}
 	if col.Settings != nil {
 		for _, s := range col.Settings.Settings {
 			if s.Name != "check" {

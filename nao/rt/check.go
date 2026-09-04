@@ -13,9 +13,26 @@ import (
 // carry no Cause; a Go-reference check wraps the error the referenced
 // function returned.
 type CheckError struct {
-	Model string // the Go model name, e.g. "User"
-	Check string // the check's [name:] when set, else its rendered form
-	Cause error  // non-nil only for Go-reference checks
+	Model   string   // the Go model name, e.g. "User"
+	Check   string   // the check's [name:] when set, else its rendered form
+	Columns []string // the columns the check reads, for attributing the failure to fields
+	Cause   error    // non-nil only for Go-reference checks
+}
+
+// Detail is the itemized form the volt runtime renders into an error
+// body: the check, its columns, the message. It aliases the same
+// unnamed struct the volt runtime aliases, so Details() satisfies
+// volt's Detailer interface without either package importing the
+// other (nao/rt stays stdlib-only, D03).
+type Detail = struct {
+	Check   string   `json:"check"`
+	Columns []string `json:"columns,omitempty"`
+	Message string   `json:"message"`
+}
+
+// Details itemizes the one failure (the volt Detailer contract).
+func (e CheckError) Details() []Detail {
+	return []Detail{{Check: e.Check, Columns: e.Columns, Message: e.Error()}}
 }
 
 func (e CheckError) Error() string {
@@ -58,6 +75,15 @@ func (e ValidationError) Unwrap() []error {
 // StatusCode is 422: the values violate the schema's checks.
 func (e ValidationError) StatusCode() int { return 422 }
 
+// Details itemizes every failure with its columns.
+func (e ValidationError) Details() []Detail {
+	out := make([]Detail, len(e))
+	for i, ce := range e {
+		out[i] = ce.Details()[0]
+	}
+	return out
+}
+
 // Validation is what a generated Validate returns: nil when every
 // check passed, else the failures as one ValidationError.
 func Validation(errs []CheckError) error {
@@ -91,6 +117,24 @@ func (e ConstraintError) Error() string {
 }
 
 func (e ConstraintError) Unwrap() error { return e.Cause }
+
+// Details itemizes the refusal: for unique and not-null the column
+// SQLite named (table.column, reduced to the column), for a check its
+// name, so a form can still mark a field.
+func (e ConstraintError) Details() []Detail {
+	d := Detail{Check: e.Kind, Message: e.Error()}
+	switch e.Kind {
+	case "unique", "not null":
+		col := e.Detail
+		if i := strings.LastIndexByte(col, '.'); i >= 0 {
+			col = col[i+1:]
+		}
+		d.Columns = []string{col}
+	case "check":
+		d.Check = e.Detail
+	}
+	return []Detail{d}
+}
 
 // StatusCode is 409 (Conflict) for a duplicate key and 422 for every
 // other constraint: the values are unprocessable as given.

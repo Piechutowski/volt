@@ -132,3 +132,30 @@ func TestConstraintErrorsCarryStatus(t *testing.T) {
 		t.Fatalf("check violation = %v (%+v)", err, ce)
 	}
 }
+
+// TestRequiredBothTiers (§V12.8): a required column refuses its empty
+// value in Go — naming the column — and in the DDL, under the same
+// constraint name.
+func TestRequiredBothTiers(t *testing.T) {
+	db, q := newDB(t)
+	ctx := context.Background()
+	u, err := q.UserCreate(ctx, UserCreateParams{Email: "r@example.com", Name: "R"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	empty := OrderCreateParams{UserID: u.ID, Total: ""}
+	var ve rt.ValidationError
+	if err := empty.Validate(); !errors.As(err, &ve) || ve[0].Check != "total_required" || ve[0].Columns[0] != "total" {
+		t.Fatalf("Go tier: %v", err)
+	}
+	if d := ve.Details(); d[0].Columns[0] != "total" {
+		t.Errorf("details = %+v", d)
+	}
+	var ce rt.ConstraintError
+	if _, err := db.ExecContext(ctx, `INSERT INTO orders (user_id, status, total) VALUES (?, 'pending', '')`, u.ID); !errors.As(rt.Constraint(err), &ce) || ce.Detail != "total_required" {
+		t.Fatalf("SQL tier: %v", err)
+	}
+	if _, err := q.OrderCreate(ctx, OrderCreateParams{UserID: u.ID, Total: "1.00"}); err != nil {
+		t.Fatalf("non-empty total rejected: %v", err)
+	}
+}

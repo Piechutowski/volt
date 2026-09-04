@@ -83,7 +83,7 @@ split is exhaustive:
 | values only, uniform shapes | `Select` over a `Group` with typed `Pred` composition (§V9-§V11): one method per member, one signature | **done** |
 | values only, arbitrary SQL | raw-SQL `Select`/`View` blocks, typed functions out, prepare-validated | next — [roadmap FW-1](roadmap.md) |
 | filter / order / limit | typed predicate **values** (`UserEmail.Eq(x)`) over generated column handles | **done** |
-| validation | `checks` as predicates: SQL `CHECK` + generated `Validate()` on rows and params structs, Go-ref checks Go-only; 422/409 through query routes (§V12, D61, D71) | **done** |
+| validation | `checks` as predicates and `[required]`: SQL `CHECK` + generated `Validate()` on rows and params structs, Go-ref checks Go-only; 422/409 with per-column details through query routes (§V12, D61, D71, D72) | **done** |
 | associations | explicit per-ref loaders, batched `IN` | scheduled |
 | migrations | declarative diff, hash-pinned ledger (D53), owned 12-step rebuild | scheduled |
 | callbacks, lazy loading, dirty tracking | never — D27 | — |

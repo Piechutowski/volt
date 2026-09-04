@@ -263,3 +263,58 @@ func TestClientDoAndErrors(t *testing.T) {
 		resp.Body.Close()
 	}
 }
+
+func TestDecodeStrictAndBounded(t *testing.T) {
+	decode := func(w http.ResponseWriter, r *Request) error {
+		var v row
+		if err := Decode(r, &v); err != nil {
+			return err
+		}
+		return Render(w, r, v)
+	}
+	// An unknown JSON field is a 400 naming it: a typo must not vanish.
+	rec := serve(t, decode, httptest.NewRequest("POST", "/x", strings.NewReader(`{"ID":1,"Nmae":"typo"}`)))
+	if rec.Code != 400 || !strings.Contains(rec.Body.String(), "Nmae") {
+		t.Fatalf("unknown field: %d %q", rec.Code, rec.Body.String())
+	}
+	// Over the cap is a 413, and the cap is settable.
+	old := MaxBodyBytes
+	MaxBodyBytes = 16
+	defer func() { MaxBodyBytes = old }()
+	rec = serve(t, decode, httptest.NewRequest("POST", "/x", strings.NewReader(`{"ID":1,"Name":"a name longer than sixteen bytes"}`)))
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversize: %d, want 413", rec.Code)
+	}
+}
+
+type itemized struct{ msg string }
+
+func (e itemized) Error() string   { return e.msg }
+func (e itemized) StatusCode() int { return 422 }
+func (e itemized) Details() []Detail {
+	return []Detail{{Check: "email_required", Columns: []string{"email"}, Message: e.msg}}
+}
+
+func TestProblemBodyRoundTrip(t *testing.T) {
+	srv := httptest.NewServer(Handler("GET /x", func(w http.ResponseWriter, r *Request) error {
+		return itemized{"email required"}
+	}, nil))
+	defer srv.Close()
+	for _, f := range []Format{FormatJSON, FormatGOB} {
+		c := &Client{Base: srv.URL, Format: f}
+		err := c.Do(context.Background(), "POST", "/x", nil, nil)
+		var pe *ProblemError
+		if !errors.As(err, &pe) || pe.Status != 422 || len(pe.Details()) != 1 || pe.Details()[0].Columns[0] != "email" {
+			t.Fatalf("%v: %v", f, err)
+		}
+		if !errors.Is(err, Error(422, "")) {
+			t.Errorf("%v: a problem matches its status", f)
+		}
+	}
+	// The body itself is a Problem in the negotiated format.
+	rec := serve(t, func(w http.ResponseWriter, r *Request) error { return ErrNotFound }, httptest.NewRequest("GET", "/x", nil))
+	var p Problem
+	if rec.Code != 404 || json.Unmarshal(rec.Body.Bytes(), &p) != nil || p.Status != 404 || p.Message != "not found" {
+		t.Fatalf("problem body = %d %q", rec.Code, rec.Body.String())
+	}
+}

@@ -48,10 +48,11 @@ var (
 			"unique": flagOnly, "increment": flagOnly,
 			"default": defaultVal, "check": exprValue,
 			"note": strValue, "ref": refVal, "tag": strValue,
+			"required": flagOnly, // our extension (D72): non-empty in both tiers
 		},
 		repeatable: map[string]bool{"check": true, "ref": true, "tag": true},
 		synonyms:   map[string]string{"primary key": "pk"},
-		conflicts:  [][2]string{{"null", "not null"}},
+		conflicts:  [][2]string{{"null", "not null"}, {"required", "null"}, {"required", "default"}, {"required", "increment"}},
 	}
 	indexSettings = settingSpec{
 		kinds: map[string]valueKind{
@@ -310,6 +311,72 @@ func (c *checker) incrementCheck(ti *TableInfo) {
 		case !isPK:
 			c.errorf(inc.Pos(), "6.3",
 				"increment on %q: only the primary key auto-increments; elsewhere the keyword would be silently ignored while CreateParams omits the column (§6.3, Appendix B)", name)
+		}
+	}
+}
+
+// requiredKinds classifies declared types for the required setting
+// (§6.3 extension, D72): what "non-empty" means per type class. Types
+// absent here (bool, date/time) cannot be required. nao/gen/golang's
+// tests pin this against its own type map so the two cannot drift.
+var requiredKinds = map[string]string{
+	"varchar": "text", "char": "text", "text": "text", "tinytext": "text", "mediumtext": "text", "longtext": "text",
+	"citext": "text", "string": "text", "uuid": "text", "decimal": "text", "numeric": "text", "money": "text",
+	"character": "text", "character varying": "text",
+	"time": "text", "timetz": "text", "time with time zone": "text", "time without time zone": "text",
+	"tinyint": "numeric", "int2": "numeric", "smallint": "numeric", "smallserial": "numeric",
+	"int": "numeric", "integer": "numeric", "int4": "numeric", "mediumint": "numeric", "serial": "numeric",
+	"bigint": "numeric", "int8": "numeric", "bigserial": "numeric",
+	"tinyint unsigned": "numeric", "smallint unsigned": "numeric", "int unsigned": "numeric",
+	"integer unsigned": "numeric", "bigint unsigned": "numeric",
+	"real": "numeric", "float4": "numeric", "float": "numeric", "float8": "numeric", "double": "numeric", "double precision": "numeric",
+	"json": "bytes", "jsonb": "bytes",
+	"bytea": "bytes", "blob": "bytes", "tinyblob": "bytes", "mediumblob": "bytes", "longblob": "bytes", "binary": "bytes", "varbinary": "bytes",
+}
+
+// RequiredKind reports how a declared type spells "non-empty": "text"
+// (not ”), "numeric" (not 0) or "bytes" (length > 0). An enum type is
+// text. Types with no empty value (bool, date/time) report false.
+func RequiredKind(declType string, isEnum bool) (string, bool) {
+	if isEnum {
+		return "text", true
+	}
+	base := strings.ToLower(declType)
+	if i := strings.IndexByte(base, '('); i >= 0 {
+		base = strings.TrimSpace(base[:i])
+	}
+	k, ok := requiredKinds[base]
+	return k, ok
+}
+
+// requiredCheck enforces the required setting's preconditions (§6.3
+// extension): the column is not null (or a key) and its type has an
+// empty value to refuse.
+func (c *checker) requiredCheck(ti *TableInfo) {
+	for _, cd := range ti.Columns {
+		col := cd.Col
+		req := col.Settings.Get("required")
+		if req == nil {
+			continue
+		}
+		name := col.Name.Name()
+		notNull := col.Settings.Get("not null") != nil || col.Settings.Get("pk") != nil || col.Settings.Get("primary key") != nil
+		for _, f := range col.LegacyFlags {
+			if strings.EqualFold(f.Name(), "pk") {
+				notNull = true
+			}
+		}
+		if !notNull {
+			c.errorf(req.Pos(), "6.3", "required on %q needs not null: a nullable column has no empty value to refuse, NULL is absence (§6.3)", name)
+			continue
+		}
+		isEnum := c.enums[canonKey(col.Type.Name)] != nil
+		if !isEnum && col.Type.Name.Schema() == "" && ti.Decl.Name.Schema() != "" {
+			// an unqualified enum type may live in the table's schema
+			isEnum = c.enums[ti.Decl.Name.Schema()+"."+col.Type.Name.Base()] != nil
+		}
+		if _, ok := RequiredKind(col.Type.String(), isEnum); !ok {
+			c.errorf(req.Pos(), "6.3", "required on %q (%s): a %s has no empty value — every value is a value (§6.3)", name, col.Type.String(), col.Type.String())
 		}
 	}
 }

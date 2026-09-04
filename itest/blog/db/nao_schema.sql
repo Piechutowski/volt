@@ -4,7 +4,7 @@ PRAGMA foreign_keys = ON;
 
 CREATE TABLE users (
   id INTEGER PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE,
+  email TEXT NOT NULL UNIQUE CONSTRAINT email_required CHECK (email <> ''),
   CONSTRAINT email_shape CHECK (email LIKE '%_@%_')
 );
 

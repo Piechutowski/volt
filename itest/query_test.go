@@ -209,3 +209,36 @@ func TestQueryRouteValidation(t *testing.T) {
 		t.Fatalf("duplicate: %d %q, want 409 naming users.email", rec.Code, rec.Body.String())
 	}
 }
+
+// TestQueryRouteValidationAttribution (§V4.9.5, §V12.7): the error body
+// is a Problem whose details name the failing check and its columns,
+// so the GUI can mark the field.
+func TestQueryRouteValidationAttribution(t *testing.T) {
+	h := handlerWithDB(t)
+	rec := call(h, "POST", "/api/users", strings.NewReader(`{"email":""}`))
+	var p volt.Problem
+	if rec.Code != 422 || json.Unmarshal(rec.Body.Bytes(), &p) != nil {
+		t.Fatalf("empty email: %d %q", rec.Code, rec.Body.String())
+	}
+	names := map[string]bool{}
+	for _, d := range p.Details {
+		if len(d.Columns) != 1 || d.Columns[0] != "email" {
+			t.Errorf("detail %+v should name the email column", d)
+		}
+		names[d.Check] = true
+	}
+	if !names["email_required"] || !names["email_shape"] {
+		t.Errorf("details = %+v, want email_required and email_shape", p.Details)
+	}
+	// A typo'd field is a 400 naming it, never silently dropped.
+	rec = call(h, "POST", "/api/users", strings.NewReader(`{"emial":"x@y"}`))
+	if rec.Code != 400 || !strings.Contains(rec.Body.String(), "emial") {
+		t.Fatalf("unknown field: %d %q", rec.Code, rec.Body.String())
+	}
+	// A duplicate attributes to the column too.
+	rec = call(h, "POST", "/api/users", strings.NewReader(`{"email":"one@example.com"}`))
+	p = volt.Problem{}
+	if rec.Code != 409 || json.Unmarshal(rec.Body.Bytes(), &p) != nil || len(p.Details) != 1 || p.Details[0].Columns[0] != "email" {
+		t.Fatalf("duplicate: %d %q", rec.Code, rec.Body.String())
+	}
+}

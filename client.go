@@ -31,8 +31,7 @@ func (c *Client) Do(ctx context.Context, method, url string, in, out any) error 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return Error(resp.StatusCode, strings.TrimSpace(string(msg)))
+		return problemOf(resp)
 	}
 	if out == nil || resp.StatusCode == http.StatusNoContent {
 		return nil
@@ -73,4 +72,18 @@ func (c *Client) send(ctx context.Context, method, url string, in any) (*http.Re
 		hc = http.DefaultClient
 	}
 	return hc.Do(req)
+}
+
+// problemOf turns a non-2xx reply into an error: a Problem body
+// (JSON or GOB) becomes a *ProblemError with its details; anything
+// else becomes a status error carrying the body text.
+func problemOf(resp *http.Response) error {
+	if f, ok := FormatOf(resp.Header.Get("Content-Type")); ok {
+		var p Problem
+		if err := DecodeBody(f, io.LimitReader(resp.Body, 1<<20), &p); err == nil && p.Status != 0 {
+			return &ProblemError{p}
+		}
+	}
+	msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	return Error(resp.StatusCode, strings.TrimSpace(string(msg)))
 }

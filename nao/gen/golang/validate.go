@@ -87,13 +87,17 @@ func validateEmit(body *strings.Builder, recv, model string, checks []CheckSpec)
 		if name == "" {
 			name = ck.Src
 		}
+		cols := "nil"
+		if len(ck.Cols) > 0 {
+			cols = fmt.Sprintf("%#v", ck.Cols)
+		}
 		switch {
 		case ck.Cond != "":
-			fmt.Fprintf(body, "\tif !(%s) {\n\t\terrs = append(errs, rt.CheckError{Model: %q, Check: %q})\n\t}\n",
-				ck.Cond, model, name)
+			fmt.Fprintf(body, "\tif !(%s) {\n\t\terrs = append(errs, rt.CheckError{Model: %q, Check: %q, Columns: %s})\n\t}\n",
+				ck.Cond, model, name, cols)
 		case ck.Call != "":
-			fmt.Fprintf(body, "\tif err := %s; err != nil {\n\t\terrs = append(errs, rt.CheckError{Model: %q, Check: %q, Cause: err})\n\t}\n",
-				ck.Call, model, name)
+			fmt.Fprintf(body, "\tif err := %s; err != nil {\n\t\terrs = append(errs, rt.CheckError{Model: %q, Check: %q, Columns: %s, Cause: err})\n\t}\n",
+				ck.Call, model, name, cols)
 		}
 	}
 	body.WriteString("\treturn rt.Validation(errs)\n}\n\n")

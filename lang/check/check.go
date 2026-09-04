@@ -319,4 +319,5 @@ func (c *checker) columnsExpand(ti *TableInfo) {
 		ti.Columns = append(ti.Columns, s.def)
 	}
 	c.incrementCheck(ti)
+	c.requiredCheck(ti)
 }

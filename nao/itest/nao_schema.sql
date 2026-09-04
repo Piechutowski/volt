@@ -17,7 +17,7 @@ CREATE TABLE orders (
   id INTEGER PRIMARY KEY,
   user_id INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'shipped', 'delivered')),
-  total TEXT NOT NULL,
+  total TEXT NOT NULL CONSTRAINT total_required CHECK (total <> ''),
   placed_at TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users (id)
 );

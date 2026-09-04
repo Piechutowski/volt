@@ -68,15 +68,30 @@ func DefaultErrorHandler(w http.ResponseWriter, r *Request, err error) {
 	}
 	var he HTTPError
 	if errors.As(err, &he) {
-		http.Error(w, he.Error(), he.StatusCode())
+		p := Problem{Status: he.StatusCode(), Message: he.Error()}
+		var d Detailer
+		if errors.As(err, &d) {
+			p.Details = d.Details()
+		}
+		writeProblem(w, r, p)
 		return
 	}
 	if errors.Is(err, sql.ErrNoRows) {
-		http.Error(w, "not found", http.StatusNotFound)
+		writeProblem(w, r, Problem{Status: http.StatusNotFound, Message: "not found"})
 		return
 	}
 	slog.Error("volt: handler error", "route", r.Route(), "err", err)
-	http.Error(w, "internal server error", http.StatusInternalServerError)
+	writeProblem(w, r, Problem{Status: http.StatusInternalServerError, Message: "internal server error"})
+}
+
+// writeProblem renders an error body in the negotiated format (JSON
+// when the client offered nothing usable), never caching it.
+func writeProblem(w http.ResponseWriter, r *Request, p Problem) {
+	f, _ := Negotiate(r.Request)
+	w.Header().Set("Content-Type", f.MIME())
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(p.Status)
+	_ = Encode(w, f, p)
 }
 
 // Chain composes middleware around h: the first element is outermost,

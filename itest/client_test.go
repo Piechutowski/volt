@@ -137,6 +137,11 @@ func TestClientValidationErrors(t *testing.T) {
 	if !errors.As(err, &he) || he.StatusCode() != 422 || !strings.Contains(he.Error(), "EmailValid") {
 		t.Fatalf("invalid email = %v", err)
 	}
+	// The details survive the wire in GOB: the GUI marks the field.
+	var pe *volt.ProblemError
+	if !errors.As(err, &pe) || len(pe.Details()) == 0 || pe.Details()[0].Columns[0] != "email" {
+		t.Fatalf("no attribution through the client: %v", err)
+	}
 	_, err = c.APIUserCreate(ctx, db.UserCreateParams{Email: "one@example.com"})
 	if !errors.As(err, &he) || he.StatusCode() != 409 {
 		t.Fatalf("duplicate = %v", err)

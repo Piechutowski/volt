@@ -27,7 +27,7 @@ var (
 	}
 
 	settingsByContext = map[string][]string{
-		"column":    {"pk", "primary key", "null", "not null", "unique", "increment", "default: ", "check: ", "note: ", "ref: ", "tag: "},
+		"column":    {"pk", "primary key", "null", "not null", "unique", "increment", "required", "default: ", "check: ", "note: ", "ref: ", "tag: "},
 		"table":     {"headercolor: ", "note: "},
 		"index":     {"type: ", "name: ", "unique", "pk", "note: "},
 		"check":     {"name: "},

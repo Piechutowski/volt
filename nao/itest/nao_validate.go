@@ -16,7 +16,7 @@ import (
 func (v User) Validate() error {
 	var errs []rt.CheckError
 	if err := EmailValid(v.Email); err != nil {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Cause: err})
+		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Columns: []string{"email"}, Cause: err})
 	}
 	return rt.Validation(errs)
 }
@@ -26,7 +26,7 @@ func (v User) Validate() error {
 func (v UserCreateParams) Validate() error {
 	var errs []rt.CheckError
 	if err := EmailValid(v.Email); err != nil {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Cause: err})
+		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Columns: []string{"email"}, Cause: err})
 	}
 	return rt.Validation(errs)
 }
@@ -36,7 +36,38 @@ func (v UserCreateParams) Validate() error {
 func (v UserUpdateParams) Validate() error {
 	var errs []rt.CheckError
 	if err := EmailValid(v.Email); err != nil {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Cause: err})
+		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Columns: []string{"email"}, Cause: err})
+	}
+	return rt.Validation(errs)
+}
+
+// Validate evaluates every check of orders against the row's values
+// (spec §V12). Typed checks are also CHECK constraints in the DDL;
+// Go-reference checks run here only — SQLite cannot call Go.
+func (v Order) Validate() error {
+	var errs []rt.CheckError
+	if !(v.Total != "") {
+		errs = append(errs, rt.CheckError{Model: "Order", Check: "total_required", Columns: []string{"total"}})
+	}
+	return rt.Validation(errs)
+}
+
+// Validate evaluates the checks of orders whose columns OrderCreateParams carries
+// (spec §V12.6).
+func (v OrderCreateParams) Validate() error {
+	var errs []rt.CheckError
+	if !(v.Total != "") {
+		errs = append(errs, rt.CheckError{Model: "Order", Check: "total_required", Columns: []string{"total"}})
+	}
+	return rt.Validation(errs)
+}
+
+// Validate evaluates the checks of orders whose columns OrderUpdateParams carries
+// (spec §V12.6).
+func (v OrderUpdateParams) Validate() error {
+	var errs []rt.CheckError
+	if !(v.Total != "") {
+		errs = append(errs, rt.CheckError{Model: "Order", Check: "total_required", Columns: []string{"total"}})
 	}
 	return rt.Validation(errs)
 }
@@ -47,10 +78,10 @@ func (v UserUpdateParams) Validate() error {
 func (v PageView) Validate() error {
 	var errs []rt.CheckError
 	if !(v.Hits >= 0 && v.Day >= 1) {
-		errs = append(errs, rt.CheckError{Model: "PageView", Check: "counts_positive"})
+		errs = append(errs, rt.CheckError{Model: "PageView", Check: "counts_positive", Columns: []string{"hits", "day"}})
 	}
 	if !(rt.Like(v.Site, "%_")) {
-		errs = append(errs, rt.CheckError{Model: "PageView", Check: "site LIKE '%_'"})
+		errs = append(errs, rt.CheckError{Model: "PageView", Check: "site LIKE '%_'", Columns: []string{"site"}})
 	}
 	return rt.Validation(errs)
 }
@@ -60,7 +91,7 @@ func (v PageView) Validate() error {
 func (v PageViewCreateParams) Validate() error {
 	var errs []rt.CheckError
 	if !(rt.Like(v.Site, "%_")) {
-		errs = append(errs, rt.CheckError{Model: "PageView", Check: "site LIKE '%_'"})
+		errs = append(errs, rt.CheckError{Model: "PageView", Check: "site LIKE '%_'", Columns: []string{"site"}})
 	}
 	return rt.Validation(errs)
 }
@@ -70,10 +101,10 @@ func (v PageViewCreateParams) Validate() error {
 func (v PageViewUpdateParams) Validate() error {
 	var errs []rt.CheckError
 	if !(v.Hits >= 0 && v.Day >= 1) {
-		errs = append(errs, rt.CheckError{Model: "PageView", Check: "counts_positive"})
+		errs = append(errs, rt.CheckError{Model: "PageView", Check: "counts_positive", Columns: []string{"hits", "day"}})
 	}
 	if !(rt.Like(v.Site, "%_")) {
-		errs = append(errs, rt.CheckError{Model: "PageView", Check: "site LIKE '%_'"})
+		errs = append(errs, rt.CheckError{Model: "PageView", Check: "site LIKE '%_'", Columns: []string{"site"}})
 	}
 	return rt.Validation(errs)
 }

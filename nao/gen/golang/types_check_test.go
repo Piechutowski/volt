@@ -19,3 +19,28 @@ func TestIntegerFamilyAgreesWithChecker(t *testing.T) {
 		}
 	}
 }
+
+// TestRequiredKindAgreesWithTypeMap pins lang/check's required
+// classification (§6.3 extension) to this package's type map: every
+// string-mapped type is "text", every integer/unsigned/float type is
+// "numeric", []byte and json.RawMessage are "bytes", and bool and
+// time.Time cannot be required.
+func TestRequiredKindAgreesWithTypeMap(t *testing.T) {
+	for dbml, gt := range typeMap {
+		want, ok := "", true
+		switch {
+		case gt.name == "string":
+			want = "text"
+		case strings.HasPrefix(gt.name, "int"), strings.HasPrefix(gt.name, "uint"), strings.HasPrefix(gt.name, "float"):
+			want = "numeric"
+		case gt.name == "[]byte", gt.name == "json.RawMessage":
+			want = "bytes"
+		default:
+			ok = false
+		}
+		got, gotOK := check.RequiredKind(dbml, false)
+		if gotOK != ok || got != want {
+			t.Errorf("check.RequiredKind(%q) = (%q, %v), but Appendix A maps it to %s", dbml, got, gotOK, gt.name)
+		}
+	}
+}

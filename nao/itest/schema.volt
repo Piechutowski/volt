@@ -31,7 +31,7 @@ Table orders {
   id integer [pk, increment]
   user_id integer [not null, ref: > users.id]
   status order_status [not null, default: order_status.pending]
-  total decimal(10,2) [not null]
+  total decimal(10,2) [not null, required]
   placed_at timestamp
 }
 

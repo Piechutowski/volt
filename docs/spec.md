@@ -659,6 +659,7 @@ column setting  = "primary key" | "pk"
                 | "null" | "not null"
                 | "unique"
                 | "increment"
+                | "required"                          (* extension, below *)
                 | "default", ":", default value
                 | "check", ":", expression literal
                 | "note", ":", string
@@ -697,6 +698,18 @@ column setting  = "primary key" | "pk"
    (`id int pk`). New documents SHOULD use the settings list instead.
 8. Each column definition is terminated by a line break.
 
+> **Extension (this implementation).** The column setting `required`
+> ([decision D72](decisions.md)) declares that a value must be present
+> in the zero-value sense: under ZII a missing input decodes to the
+> type's zero value and `not null` is satisfied, so `required` is the
+> word for "and not that either". It lowers to one check in both tiers
+> (Part II, Validation checks rule 8): `<> ''` for string-mapped types
+> and enums, `<> 0` for numeric types, `length(…) > 0` for blob and
+> JSON, named `<column>_required` in the DDL and in the validator's
+> error. It MUST accompany `not null` (or a key), and is an error on a
+> `null`, `default:` or `increment` column and on a type with no empty
+> value — `bool` and date/time, where every value is a value.
+>
 > **Extension (this implementation).** The column setting `tag: string`
 > (repeatable) passes one Go struct tag through to the generated field
 > verbatim ([decision D60](decisions.md)): every field property lives in
@@ -1744,7 +1757,11 @@ for a format suffix.
    a 406 naming both.
 2. **Request bodies** follow `Content-Type`: absent or
    `application/json` decodes JSON, `application/x-gob` decodes GOB,
-   anything else is a 415; an empty or malformed body is a 400.
+   anything else is a 415; an empty or malformed body is a 400; a JSON
+   field the struct does not declare is a 400 naming it — a typo must
+   not vanish silently (GOB ignores unknown fields by design, the
+   shared struct being the contract); a body over the runtime's
+   `MaxBodyBytes` (four megabytes unless set) is a 413.
 3. **GOB is the Go-native arm**: a client that imports the generated
    models package decodes rows into the same types the server
    encoded, with no schema on the wire. JSON is what browsers, curl and
@@ -1752,6 +1769,12 @@ for a format suffix.
 4. The runtime exposes the same rules to hand-written controllers as
    `volt.Render`, `volt.RenderStatus` and `volt.Decode`, so a
    controller route can speak both formats without repeating them.
+5. **Error bodies** are structured: the default error handler writes a
+   `volt.Problem` — status, message, and details (check, columns,
+   message) when the error itemizes them — in the negotiated format,
+   JSON when the client offered nothing usable. A generated client
+   decodes it into a `*volt.ProblemError`, so a caller reads
+   `errors.As(err, &pe)` and marks the fields `pe.Details` name.
 
 ### Generated client
 
@@ -2390,14 +2413,22 @@ Table users {
    and the DDL, and the method's doc comment names it. Nothing calls
    `Validate` implicitly in your code — no callbacks (D27); the one
    generated caller is a query route's Create/Update handler (§V4.8.3).
-7. **Statuses.** A `CheckError` and a `ValidationError` carry status
-   422; the database's own refusals are translated by `rt.Constraint`
-   into `rt.ConstraintError` — 409 for a unique violation, 422 for a
-   check, foreign-key or not-null failure — naming what SQLite named
-   (the column, the check). Every generated write passes its error
-   through `rt.Constraint`, so a violated constraint reaches an error
-   spine or a caller with a status and a reason, never as an opaque
-   driver error.
+7. **Statuses and attribution.** A `CheckError` and a `ValidationError`
+   carry status 422; the database's own refusals are translated by
+   `rt.Constraint` into `rt.ConstraintError` — 409 for a unique
+   violation, 422 for a check, foreign-key or not-null failure —
+   naming what SQLite named (the column, the check). Every generated
+   write passes its error through `rt.Constraint`, so a violated
+   constraint reaches an error spine or a caller with a status and a
+   reason, never as an opaque driver error. Every `CheckError` carries
+   the **columns** its check reads, and every one of these errors
+   itemizes itself (`Details()`: check, columns, message), which the
+   error spine renders into the error body (§V4.9.5) so a form can
+   mark the fields.
+8. **`required` columns** (Part I §6.3 extension) lower to one check
+   each, named `<column>_required`, in both tiers: the Go condition on
+   the row and the params structs, and a `CHECK` in the DDL, spelled
+   per type class (`<> ''`, `<> 0`, `length(…) > 0`).
 
 ---
 
