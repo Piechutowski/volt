@@ -188,6 +188,8 @@ func TestRoundTripTotality(t *testing.T) {
 		// Dataset routes (§V13): one per member of the group select.
 		"PathMsRevenueBrowse": {"GET", app.PathMsRevenueBrowse(volt.Query("year", "2024"))},
 		"PathMsUsageBrowse":   {"GET", app.PathMsUsageBrowse(volt.Query("year", "2024"))},
+		"PathRefUsers":        {"GET", app.PathRefUsers()},
+		"PathRefUser":         {"GET", app.PathRefUser(1)},
 		// The event route (§V4.11) streams forever; its round trip is
 		// TestEventRouteStreams, so the helper is listed and not served.
 		"PathEvents": {"GET", app.PathEvents()},

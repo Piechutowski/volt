@@ -38,7 +38,7 @@ var (
 		// Volt layer (docs/spec.md §V4-§V5)
 		"scope":     {"pipe: ", "error_handler: ", "name: "},
 		"route":     {"name: "},
-		"resources": {"only: (", "except: (", "param: ", "singular: ", "api"},
+		"resources": {"only: (", "except: (", "param: ", "singular: ", "api", "default"},
 		"dataset":   {"strip: ", "only: (", "except: ("},
 	}
 

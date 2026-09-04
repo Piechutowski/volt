@@ -103,6 +103,16 @@ func PathMsUsageBrowse(opts ...volt.URLOption) string {
 	return volt.URL("/ms/usage", opts...)
 }
 
+// PathRefUsers returns the path for GET /ref/users (db.UserList).
+func PathRefUsers(opts ...volt.URLOption) string {
+	return volt.URL("/ref/users", opts...)
+}
+
+// PathRefUser returns the path for GET /ref/users/:id(int32) (db.UserGet).
+func PathRefUser(id int32, opts ...volt.URLOption) string {
+	return volt.URL("/ref/users/"+volt.SegInt(int64(id)), opts...)
+}
+
 // PathEvents returns the path for GET /events (volt.Events).
 func PathEvents(opts ...volt.URLOption) string {
 	return volt.URL("/events", opts...)

@@ -333,8 +333,7 @@ imply otherwise (D49). Each is small; none blocks FW-2.
   handler slot has no editor navigation (a dataset's
   select does). A dataset needs a qualified select; a routing package
   cannot expand its own selects. Only `get` query routes and event
-  routes have reverse-URL helpers, by design. `resources … [default]`
-  is not built: resources still expand to controller actions.
+  routes have reverse-URL helpers, by design.
 - **Validation (2026-09-04, after D72).** The Go tier does not check
   enum membership (the DDL `CHECK … IN` does, hypotheses H5); typed
   checks have no `length()` term; a select's query parameters are typed
@@ -367,8 +366,9 @@ replaced the reserved `Dataset` word.
 runtime's broker; `Publish` fans out with replay, the client's
 `Events(ctx)` reconnects with Last-Event-ID.
 
-**Next:** `resources db.t [default]` for generated CRUD handlers over
-the seven actions.
+**Landed (D73): `resources db.t [default]`.** Every surviving action
+becomes a query route over the table's CRUD; `default` implies `api`,
+and `except:` takes an action back by hand. FW-2 is complete.
 
 **Landed (D68): the client package.** `client/volt_client.go` beside
 every routing package — typed methods per query route, raw methods

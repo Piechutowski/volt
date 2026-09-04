@@ -29,5 +29,11 @@ var Table = []volt.Route{
 	{Method: "GET", Pattern: "/api/picked", Spelled: "/api/picked", Query: "db.UserPicked", Helper: "PathAPIUserPicked"},
 	{Method: "GET", Pattern: "/ms/revenue", Spelled: "/ms/revenue", Query: "db.MsRevenueBrowse", Helper: "PathMsRevenueBrowse"},
 	{Method: "GET", Pattern: "/ms/usage", Spelled: "/ms/usage", Query: "db.MsUsageBrowse", Helper: "PathMsUsageBrowse"},
+	{Method: "GET", Pattern: "/ref/users", Spelled: "/ref/users", Query: "db.UserList", Helper: "PathRefUsers"},
+	{Method: "POST", Pattern: "/ref/users", Spelled: "/ref/users", Query: "db.UserCreate"},
+	{Method: "GET", Pattern: "/ref/users/{id}", Spelled: "/ref/users/:id(int32)", Query: "db.UserGet", Helper: "PathRefUser", Params: []volt.RouteParam{{Name: "id", Type: "int32"}}},
+	{Method: "PATCH", Pattern: "/ref/users/{id}", Spelled: "/ref/users/:id(int32)", Query: "db.UserUpdate", Params: []volt.RouteParam{{Name: "id", Type: "int32"}}},
+	{Method: "PUT", Pattern: "/ref/users/{id}", Spelled: "/ref/users/:id(int32)", Query: "db.UserUpdate", Params: []volt.RouteParam{{Name: "id", Type: "int32"}}},
+	{Method: "DELETE", Pattern: "/ref/users/{id}", Spelled: "/ref/users/:id(int32)", Query: "db.UserDelete", Params: []volt.RouteParam{{Name: "id", Type: "int32"}}},
 	{Method: "GET", Pattern: "/events", Spelled: "/events", Controller: "volt", Action: "Events", Helper: "PathEvents"},
 }

@@ -911,6 +911,23 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 
 	paramName := "id"
 
+	// §V5.5: [default] generates the handlers from the table's default
+	// CRUD, which lives in an imported data package — so the reference
+	// must be qualified, as a query route's is (§V4.8).
+	def := false
+	if res.Settings != nil {
+		if s := res.Settings.Get("default"); s != nil {
+			def = true
+			if s.Value != nil {
+				c.errorf(s.Pos(), "V5", "default is a flag and takes no value (§V5.5)")
+			}
+			if res.Pkg == nil {
+				c.errorf(res.Name.Pos(), "V5", "resources [default] binds the table's generated CRUD, which lives in an imported data package; qualify the table: resources db.%s [default] (§V5.5)", declared)
+				return nil
+			}
+		}
+	}
+
 	// §V5.1: the declaration MUST name a declared table — qualified or
 	// not. Resolution gives the URL segment, the member helper (the
 	// table's model name) and the key's Go type from the primary key;
@@ -955,6 +972,9 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 					c.errorf(s.Pos(), "V5", "api is a flag and takes no value (§V5.3)")
 				}
 				api = true
+			case "default":
+				// validated above; implies api (§V5.5)
+				api = true
 			case "only", "except":
 				list, ok := s.Value.(*ast.IdentList)
 				if !ok {
@@ -993,6 +1013,10 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 				}
 				singular = gn
 			case "param":
+				if def {
+					c.errorf(s.Pos(), "V5", "param: does not apply with [default]; the key parameter is named by the primary-key column, as the generated CRUD spells it (§V5.5)")
+					continue
+				}
 				id, ok := s.Value.(*ast.Ident)
 				if !ok || !goIdentOK(id.Name()) || goKeywords[id.Name()] || reservedParamNames[id.Name()] {
 					c.errorf(s.Pos(), "V5", "param: takes a valid, non-keyword, non-reserved Go identifier (§V5.3, §V4.1.2)")
@@ -1002,7 +1026,7 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 			case "model":
 				c.errorf(s.Pos(), "V5", "model: is not a setting; name the table in the declaration itself — `resources <table>` (§V5.1)")
 			default:
-				c.errorf(s.Pos(), "V6", "setting %q is not valid on resources (§V6); valid: api, only, except, param, singular", s.Name)
+				c.errorf(s.Pos(), "V6", "setting %q is not valid on resources (§V6); valid: api, only, except, param, singular, default", s.Name)
 			}
 		}
 	}
@@ -1010,6 +1034,31 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 		c.errorf(exceptPos, "V5", "only: and except: cannot be combined (§V5.3)")
 		_ = onlyPos
 		except = nil
+	}
+
+	// §V5.5: the CRUD methods the default handlers call, by operation.
+	var crud map[string]golang.CRUDMethod
+	qual, target := "", ""
+	if def {
+		qual = res.Pkg.Name()
+		target = c.pkg.Imports[qual]
+		dp := c.pr.Packages[target]
+		if dp == nil || !dp.HasSchema() {
+			c.errorf(res.Pkg.Pos(), "V5", "package %q declares no tables; [default] needs a data package (§V5.5)", target)
+			return nil
+		}
+		_, methods, err := golang.CRUDMethods(dp.Merged(), c.schemas[target], ti.Key)
+		if err != nil {
+			c.errorf(res.Name.Pos(), "V5", "resources %s.%s [default]: %v (§V5.5)", qual, declared, err)
+			return nil
+		}
+		crud = map[string]golang.CRUDMethod{}
+		for _, cm := range methods {
+			crud[cm.Op] = cm
+			if len(cm.Key) == 1 {
+				paramName = cm.Key[0].GoName
+			}
+		}
 	}
 
 	nameSeg := func(n string) *ast.Segment { return litSeg(n, res.Pos()) }
@@ -1050,6 +1099,30 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 		case "Edit":
 			helper = inh.namePrefix + "Edit" + singular
 		}
+		// §V5.5: with [default] the action is a query route over the
+		// table's CRUD method — no controller. Writes have a client
+		// method named like the form pages would be (CreateUser,
+		// UpdateUser, DeleteUser) and no reverse-URL helper (§V4.8).
+		var qr *QueryRef
+		client := ""
+		if def {
+			cm, has := crud[a.Op]
+			if !has {
+				c.errorf(res.Name.Pos(), "V5", "resources %s.%s [default]: the generated CRUD has no %s method for %q (%s); drop the action with except: (%s) (§V5.5)",
+					qual, declared, a.Op, a.Name, crudAbsent(a.Op), strings.ToLower(a.Name))
+				continue
+			}
+			qr = c.queryBind(res.Name.Pos(), res.Pkg.Pos(), a.Methods[0], params, qual, target, cm.Name, func(string) token.Position { return res.Pos() })
+			if qr == nil {
+				continue
+			}
+			switch a.Name {
+			case "Index", "Show":
+				client = helper
+			default:
+				client = inh.namePrefix + a.Name + singular
+			}
+		}
 		for _, m := range a.Methods {
 			r := &RouteInfo{
 				Method:       m,
@@ -1058,18 +1131,34 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 				Params:       params,
 				Controller:   controller,
 				Action:       a.Name,
+				Query:        qr,
 				HelperName:   helper,
+				ClientName:   client,
 				Pipes:        inh.pipes,
 				ErrorHandler: inh.errHandler,
 				Pos:          res.Pos(),
 
 				FromResources: true,
+				Table:         tableName,
 			}
-			helper = "" // the helper belongs to the first method of the action
+			if qr != nil {
+				r.Controller, r.Action = "", ""
+			}
+			helper, client = "", "" // the names belong to the first method of the action
 			out = append(out, r)
 		}
 	}
 	return out
+}
+
+// crudAbsent says why a default CRUD method can be missing (CRUD-1 to
+// CRUD-7): Update needs a non-key column to set; the others exist for
+// every table with a primary key, which §V5.4 already requires.
+func crudAbsent(op string) string {
+	if op == "update" {
+		return "every column is part of the key, so there is nothing to update"
+	}
+	return "the table has no primary key"
 }
 
 // resourceTable resolves a resources declaration to the table it names
@@ -1224,7 +1313,7 @@ func (c *checker) routeAdd(r *RouteInfo, seenShape, seenHelper map[string]*Route
 			// sides get the same prefix — so name the working fix.
 			if r.FromResources && prev.FromResources && r.Pos == prev.Pos {
 				c.errorf(r.Pos, "V5", "resources %q: the collection and member reverse-URL helpers are both %q, because singularizing %q does not change it (§V5.4); set the singular explicitly, e.g. [singular: <name>]",
-					prev.Controller, r.HelperName, prev.Controller)
+					prev.Table, r.HelperName, prev.Table)
 			} else {
 				c.errorf(r.Pos, "V4", "reverse-URL helper or client method %q already produced by the route at %s (§V4.6, §V4.10); disambiguate with [name:] or a scope name", name, prev.Pos)
 			}

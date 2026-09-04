@@ -37,6 +37,12 @@ Scope / [pipe: api, error_handler: Errors] {
 		dataset db.browse [strip: 'ms_']
 	}
 
+	// Default handlers (§V5.5): every action is a query route over
+	// the table's generated CRUD; no controller to write.
+	Scope /ref [name: ref] {
+		resources db.users [default]
+	}
+
 	// The event stream (§V4.11).
 	get /events volt.Events
 }

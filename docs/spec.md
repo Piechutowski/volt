@@ -123,6 +123,7 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [The action table](#the-action-table)
     - [Settings](#settings)
     - [Table resolution](#table-resolution)
+    - [Default handlers](#default-handlers)
   - [Datasets](#datasets)
     - [Dataset declaration](#dataset-declaration)
     - [Dataset settings](#dataset-settings)
@@ -1956,6 +1957,7 @@ table ref = name, [ ".", name ] ;
 | `except` | action list | drop these actions |
 | `param` | identifier | key parameter name (default `id`) |
 | `singular` | identifier | the singular used for member helper names (§V5.4) |
+| `default` | flag | generate the handlers from the table's default CRUD; implies `api` (§V5.5) |
 
 1. Action names in `only`/`except` are the lowercase names of §V5.2;
    unknown names are errors. `only` and `except` MUST NOT be combined.
@@ -1999,6 +2001,45 @@ table ref = name, [ ".", name ] ;
 ```volt
 resources db.users [only: (index, show, create)]
 ```
+
+### Default handlers
+
+```volt
+resources db.users [default]
+resources db.tags  [default, except: (delete)]
+```
+
+1. `[default]` turns every surviving action into a **query route**
+   (§V4.8) over the table's default CRUD method — `index` → `List`,
+   `show` → `Get`, `create` → `Create`, `update` → `Update`, `delete`
+   → `Delete` — so the handlers are generated and there is no
+   controller to write. The routes, their paths and their helpers are
+   those of §V5.2 and §V5.4; only the handler side changes. Rails and
+   Phoenix scaffold such a controller once and hand it over; Volt
+   regenerates it forever, and an action taken back with `except:` is
+   written by hand as any route.
+2. `default` implies `api`: `new` and `edit` are form pages, and a
+   generated handler has nothing to return for them.
+3. The table MUST be qualified (`db.users`): the CRUD lives in an
+   imported data package, as for every query route. An unqualified
+   reference is an error naming the qualified form.
+4. The key parameter is named as the generated CRUD spells the
+   primary-key column (`id` for `id`), because binding is by name
+   (§V4.8.2); `param:` is an error with `default`. Type and
+   routability follow §V5.4.3 unchanged.
+5. An action whose CRUD method does not exist is an error naming the
+   `except:` that drops it — `update` on a table whose every column is
+   part of the key (there is nothing to set).
+6. Naming: `index` and `show` keep their reverse-URL helpers and
+   client methods (§V5.4); `create`, `update` and `delete` have no
+   reverse URL (writes never do, §V4.8.6) and a client method named
+   `Create`/`Update`/`Delete` + singular, prefixed by the scope name
+   like the form-page helpers `New`/`Edit` + singular would be.
+   `update`'s PUT route shares the PATCH route's client method.
+7. Statuses, binding, validation and rendering are §V4.8's: 201 for
+   `create`, 204 for `delete`, 404 on a miss, `Validate()` before a
+   write when the params struct validates (§V12.6), the body and the
+   response in the negotiated format (§V4.9).
 
 ## Datasets
 
@@ -2062,7 +2103,7 @@ an element is an error on that element):
 |---|---|
 | Scope | `pipe`, `name`, `error_handler` |
 | route | `name` |
-| resources | `api`, `only`, `except`, `param`, `singular` |
+| resources | `api`, `only`, `except`, `param`, `singular`, `default` |
 | dataset | `strip`, `only`, `except` |
 
 The identifier-list value form `(a, b, c)` (production in Appendix VA)
@@ -2763,6 +2804,7 @@ removal once citations name headings (docs/backlog.md).
 | §V5.2 | [The action table](#the-action-table) |
 | §V5.3 | [Settings](#settings) |
 | §V5.4 | [Table resolution](#table-resolution) |
+| §V5.5 | [Default handlers](#default-handlers) |
 | §V6 | [Settings whitelists](#settings-whitelists) |
 | §V7 | [Generation contract (informative)](#generation-contract-informative) |
 | §V8 | [Reserved words for future layers](#reserved-words-for-future-layers) |

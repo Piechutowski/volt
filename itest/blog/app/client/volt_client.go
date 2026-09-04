@@ -157,6 +157,39 @@ func (c *Client) MsUsageBrowse(ctx context.Context, year int32) ([]db.MsUsage, e
 	return out, err
 }
 
+// RefUsers calls GET /ref/users (db.UserList).
+func (c *Client) RefUsers(ctx context.Context) ([]db.User, error) {
+	var out []db.User
+	err := c.Do(ctx, "GET", volt.URL("/ref/users"), nil, &out)
+	return out, err
+}
+
+// RefCreateUser calls POST /ref/users (db.UserCreate).
+func (c *Client) RefCreateUser(ctx context.Context, arg db.UserCreateParams) (db.User, error) {
+	var out db.User
+	err := c.Do(ctx, "POST", volt.URL("/ref/users"), arg, &out)
+	return out, err
+}
+
+// RefUser calls GET /ref/users/:id(int32) (db.UserGet).
+func (c *Client) RefUser(ctx context.Context, id int32) (db.User, error) {
+	var out db.User
+	err := c.Do(ctx, "GET", volt.URL("/ref/users/"+volt.SegInt(int64(id))), nil, &out)
+	return out, err
+}
+
+// RefUpdateUser calls PATCH /ref/users/:id(int32) (db.UserUpdate).
+func (c *Client) RefUpdateUser(ctx context.Context, id int32, arg db.UserUpdateParams) (db.User, error) {
+	var out db.User
+	err := c.Do(ctx, "PATCH", volt.URL("/ref/users/"+volt.SegInt(int64(id))), arg, &out)
+	return out, err
+}
+
+// RefDeleteUser calls DELETE /ref/users/:id(int32) (db.UserDelete).
+func (c *Client) RefDeleteUser(ctx context.Context, id int32) error {
+	return c.Do(ctx, "DELETE", volt.URL("/ref/users/"+volt.SegInt(int64(id))), nil, nil)
+}
+
 // Events subscribes to /events (§V4.11): every published event, reconnecting
 // with Last-Event-ID until ctx is done, when the channel closes.
 func (c *Client) Events(ctx context.Context) <-chan volt.Event {

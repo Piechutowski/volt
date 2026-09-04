@@ -64,7 +64,8 @@ type RouteInfo struct {
 
 	Pos           token.Position
 	FromResources bool
-	FromDataset   bool // expanded from a dataset item (§V13)
+	Table         string // the resources declaration's table name, when FromResources
+	FromDataset   bool   // expanded from a dataset item (§V13)
 }
 
 // QuerySource says where a query route binds one parameter from.
@@ -138,14 +139,15 @@ var resourceActions = []struct {
 	Suffix  string   // path suffix after /<table>
 	OnID    bool     // route includes the key parameter
 	API     bool     // included under [api]
+	Op      string   // the default CRUD operation behind [default] (§V5.5); "" for form pages
 }{
-	{"Index", []string{"GET"}, "", false, true},
-	{"New", []string{"GET"}, "/new", false, false},
-	{"Create", []string{"POST"}, "", false, true},
-	{"Show", []string{"GET"}, "", true, true},
-	{"Edit", []string{"GET"}, "/edit", true, false},
-	{"Update", []string{"PATCH", "PUT"}, "", true, true},
-	{"Delete", []string{"DELETE"}, "", true, true},
+	{"Index", []string{"GET"}, "", false, true, "list"},
+	{"New", []string{"GET"}, "/new", false, false, ""},
+	{"Create", []string{"POST"}, "", false, true, "create"},
+	{"Show", []string{"GET"}, "", true, true, "get"},
+	{"Edit", []string{"GET"}, "/edit", true, false, ""},
+	{"Update", []string{"PATCH", "PUT"}, "", true, true, "update"},
+	{"Delete", []string{"DELETE"}, "", true, true, "delete"},
 }
 
 // actionByLower maps the lowercased action names accepted in only:/except:

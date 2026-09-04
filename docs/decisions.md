@@ -594,3 +594,18 @@ where the merge changed the facts.
   body. What it refuses: `required` implying `not null` — one spelled
   rule per fact; and localized messages, which stay a client concern
   keyed by the check's name.
+
+- **D73 — `resources … [default]` is a query route per action, not a
+  scaffold** (2026-09-04, spec §V5.5). A reference table needs the
+  seven-line controller nobody wants to write; Rails and Phoenix
+  answer with a generator that writes it once and hands it over, after
+  which it drifts. Volt already had the primitive — a query route
+  binds a CRUD method by name (D67) — so `[default]` is nothing more
+  than expanding the §V5.2 action table into those routes: index/List,
+  show/Get, create/Create, update/Update, delete/Delete, regenerated
+  forever, with `except:` as the way to take one action back by hand.
+  What it refuses: the form pages (`default` implies `api`, since a
+  generated handler has nothing to render for `new` and `edit`), a
+  `param:` rename (binding is by the key's generated name), and an
+  unqualified table (the CRUD lives in the data package, as for every
+  query route).
