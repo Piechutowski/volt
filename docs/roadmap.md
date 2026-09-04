@@ -329,6 +329,14 @@ imply otherwise (D49). Each is small; none blocks FW-2.
   DDL `CHECK … IN` does); `rt.Null[T]` implements JSON only, so a
   non-JSON encoder reached through `tag:` sees the wrapper's fields;
   Pred-reference checks render with redundant parentheses.
+- **Query routes and datasets (2026-09-04).** A generated Create/Update
+  handler does not call the model's `Validate()`: typed checks hold
+  through the DDL, Go-reference checks are not run on the API path.
+  `db.UserGet` in a handler slot has no editor navigation (a dataset's
+  select does). A dataset needs a qualified select; a routing package
+  cannot expand its own selects. Only `get` query routes and event
+  routes have reverse-URL helpers, by design. `resources … [default]`
+  is not built: resources still expand to controller actions.
 - **CLI.** `Project.Module` is required but unused; a nonexistent
   argument gets a loader message rather than "no such directory";
   diagnostics print absolute paths even for relative arguments;

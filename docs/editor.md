@@ -252,7 +252,8 @@ agree. The LSP picks it up automatically.
   end handles it correctly.
 - **LSP: no Go-side navigation** — handler references (`Home.Index`)
   and `error_handler:` point into Go, which this server does not
-  index (roadmap FW-6).
+  index (roadmap FW-6). A query reference (`db.UserGet`, §V4.8) is
+  not navigated either; a dataset's select (`dataset db.browse`) is.
 
 ### Go references
 
