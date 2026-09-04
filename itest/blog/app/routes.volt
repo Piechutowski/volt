@@ -50,4 +50,7 @@ Scope / [pipe: api, error_handler: Errors] {
 	Scope /ms {
 		dataset db.browse [strip: 'ms_']
 	}
+
+	// The event stream (§V4.11).
+	get /events volt.Events
 }

@@ -566,7 +566,19 @@ func (c *checker) routeBuild(r *ast.Route, inh inherited) *RouteInfo {
 	// A qualified handler names a generated query of an imported data
 	// package — a query route (§V4.8) — rather than a controller.
 	var query *QueryRef
-	if target, isImport := c.pkg.Imports[controller]; isImport {
+	events := false
+	if controller == "volt" {
+		// The runtime's own handlers: today exactly one, the event stream.
+		if action != "Events" {
+			c.errorf(r.Handler.Pos(), "V4", "the runtime provides no handler volt.%s; volt.Events is the event stream (§V4.11)", action)
+			return nil
+		}
+		if method != "GET" {
+			c.errorf(r.Pos(), "V4", "an event route is read with get (§V4.11)")
+			return nil
+		}
+		events = true
+	} else if target, isImport := c.pkg.Imports[controller]; isImport {
 		c.usedQual[controller] = true
 		query = c.queryRef(r, method, params, controller, target)
 		if query == nil {
@@ -607,6 +619,9 @@ func (c *checker) routeBuild(r *ast.Route, inh inherited) *RouteInfo {
 			helper = ""
 		}
 	}
+	if events {
+		client = helper // the client's Events method (§V4.11)
+	}
 	return &RouteInfo{
 		Method:       method,
 		Pattern:      patternOf(segs),
@@ -615,6 +630,7 @@ func (c *checker) routeBuild(r *ast.Route, inh inherited) *RouteInfo {
 		Controller:   controller,
 		Action:       action,
 		Query:        query,
+		Events:       events,
 		HelperName:   helper,
 		ClientName:   client,
 		Pipes:        inh.pipes,
@@ -1201,12 +1217,12 @@ func (c *checker) routeAdd(r *RouteInfo, seenShape, seenHelper map[string]*Route
 			seenHelper[name] = r
 		}
 	}
-	if r.Query == nil && r.HelperName != "" {
+	if r.Query == nil && !r.Events && r.HelperName != "" {
 		r.ClientName = r.HelperName // a named controller route gets a raw client method (§V4.10)
 	}
 
-	if r.Query != nil {
-		c.pkg.Routes = append(c.pkg.Routes, r) // no controller: the handler is generated (§V4.8)
+	if r.Query != nil || r.Events {
+		c.pkg.Routes = append(c.pkg.Routes, r) // no controller: the handler is generated (§V4.8) or the runtime's (§V4.11)
 		return
 	}
 	ci := c.pkg.Controllers[r.Controller]

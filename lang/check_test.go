@@ -657,3 +657,31 @@ func TestDatasetExpansion(t *testing.T) {
 		})
 	}
 }
+
+// Event routes (§V4.11): volt.Events is the runtime's only handler, on
+// get, with helper and client names from the action and no controller.
+func TestEventRoute(t *testing.T) {
+	pr, diags := project(t, map[string]string{
+		"go.mod":     modFile,
+		"app/r.volt": "package app\n\nScope /live [name: live] {\n\tget /events volt.Events\n}\n",
+	})
+	wantClean(t, diags)
+	app := pr.Packages["app"]
+	if len(app.Routes) != 1 || len(app.Controllers) != 0 {
+		t.Fatalf("routes = %d, controllers = %d; want 1 and none", len(app.Routes), len(app.Controllers))
+	}
+	r := app.Routes[0]
+	if !r.Events || r.HelperName != "LiveEvents" || r.ClientName != "LiveEvents" || r.HandlerRef() != "volt.Events" {
+		t.Errorf("event route = %+v", r)
+	}
+	for _, tc := range []struct{ name, route, want string }{
+		{"unknown runtime handler", "get /events volt.Stream", "provides no handler volt.Stream"},
+		{"wrong verb", "post /events volt.Events", "read with get"},
+	} {
+		_, diags := project(t, map[string]string{
+			"go.mod":     modFile,
+			"app/r.volt": "package app\n\nScope / {\n\t" + tc.route + "\n}\n",
+		})
+		wantError(t, diags, tc.want)
+	}
+}

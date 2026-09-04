@@ -113,6 +113,7 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Query routes](#query-routes)
     - [Formats](#formats)
     - [Generated client](#generated-client)
+    - [Event routes](#event-routes)
     - [Scopes](#scopes)
     - [Reserved](#reserved)
     - [Route names and reverse URLs](#route-names-and-reverse-urls)
@@ -1779,6 +1780,37 @@ the routes through typed methods instead of hand-built requests.
    namespace per package (§V4.6); a collision is an error naming
    `name:`.
 
+### Event routes
+
+An **event route** streams server-sent events to every connected
+client, so what one user does — starts a computation, finishes it,
+changes rows — reaches every open screen without polling.
+
+```volt
+Scope / [pipe: api] {
+	get /events volt.Events
+}
+```
+
+1. The handler `volt.Events` names the runtime's event stream; it is
+   the only handler the runtime provides, and it takes `get`. The
+   route otherwise behaves as any route: prefixes, pipelines, error
+   handler, a helper and a client method named by the action
+   (`PathEvents`, `client.Events`).
+2. The `Controllers` manifest (§V4.3) gains `Events *volt.Broker`; the
+   application publishes with `Events.Publish(name, data)`. The
+   broker fans every event out to every open stream, assigns IDs in
+   order, and keeps a replay buffer so a client that reconnects with
+   `Last-Event-ID` resumes where it was. Events are
+   `text/event-stream` with a JSON payload; a subscriber that falls
+   behind is dropped and reconnects.
+3. The generated client's `Events(ctx) <-chan volt.Event` connects,
+   delivers every event, reconnects with backoff on any drop, and
+   closes the channel when ctx is done.
+4. Event names and payloads are the application's contract, not the
+   language's: a `table.changed` event carrying keys, after which the
+   client refetches what it shows, keeps one code path for loading.
+
 ### Scopes
 
 ```ebnf
@@ -2672,6 +2704,7 @@ removal once citations name headings (docs/backlog.md).
 | §V4.8 | [Query routes](#query-routes) |
 | §V4.9 | [Formats](#formats) |
 | §V4.10 | [Generated client](#generated-client) |
+| §V4.11 | [Event routes](#event-routes) |
 | §V5 | [Resources](#resources) |
 | §V5.1 | [Declaration](#declaration) |
 | §V5.2 | [The action table](#the-action-table) |

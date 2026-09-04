@@ -248,6 +248,14 @@ func register(mux *http.ServeMux, c Controllers) {
 		}
 		return volt.RenderStatus(w, r, 200, out)
 	}, errHandlerErrors)))
+
+	// GET /events → volt.Events [pipe: api]
+	mux.Handle("GET /events", pipe0(volt.Handler("GET /events", func(w http.ResponseWriter, r *volt.Request) error {
+		if c.Events == nil {
+			return volt.Error(http.StatusServiceUnavailable, "no event broker configured")
+		}
+		return c.Events.Serve(w, r)
+	}, errHandlerErrors)))
 }
 
 // errHandlerErrors adapts the error_handler declared in the routes.

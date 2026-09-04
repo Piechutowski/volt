@@ -72,3 +72,8 @@ func PathMsRevenueBrowse(opts ...volt.URLOption) string {
 func PathMsUsageBrowse(opts ...volt.URLOption) string {
 	return volt.URL("/ms/usage", opts...)
 }
+
+// PathEvents returns the path for GET /events (volt.Events).
+func PathEvents(opts ...volt.URLOption) string {
+	return volt.URL("/events", opts...)
+}

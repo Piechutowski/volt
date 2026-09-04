@@ -208,6 +208,9 @@ func (g *generator) handlersEmit() error {
 	for _, q := range data {
 		g.pf("\t%s *%s.Queries // query routes written %s.<Method>\n", q.Field, q.Qualifier, q.Qualifier)
 	}
+	if g.hasEvents() {
+		g.pf("\tEvents *volt.Broker // event routes written volt.Events (§V4.11); nil serves nothing\n")
+	}
 	g.pf("}\n\n")
 
 	g.pf("// New builds the router: ServeMux registrations with statically\n")
@@ -318,6 +321,16 @@ func prefixEach(items []string, sep string) string {
 	return b.String()
 }
 
+// hasEvents reports whether the package declares an event route.
+func (g *generator) hasEvents() bool {
+	for _, r := range g.pkg.Routes {
+		if r.Events {
+			return true
+		}
+	}
+	return false
+}
+
 // hasBody reports whether a query route decodes a request body.
 func hasBody(q *lang.QueryRef) bool {
 	for _, p := range q.Params {
@@ -394,10 +407,14 @@ func (g *generator) routeEmit(r *lang.RouteInfo) {
 	g.pf("\n")
 
 	shim := fmt.Sprintf("volt.Handler(%q, func(w http.ResponseWriter, r *volt.Request) error {\n", pattern)
-	if r.Query != nil {
+	switch {
+	case r.Events:
+		shim += "\t\tif c.Events == nil {\n\t\t\treturn volt.Error(http.StatusServiceUnavailable, \"no event broker configured\")\n\t\t}\n"
+		shim += fmt.Sprintf("\t\treturn c.Events.Serve(w, r)\n\t}, %s)", eh)
+	case r.Query != nil:
 		shim += queryShimBody(r)
 		shim += fmt.Sprintf("\t}, %s)", eh)
-	} else {
+	default:
 		var body strings.Builder
 		call := make([]string, 0, len(r.Params))
 		for _, p := range r.Params {
@@ -565,7 +582,7 @@ func (g *generator) clientEmit() error {
 			continue
 		}
 		anyMethod = true
-		if r.Query == nil {
+		if r.Query == nil && !r.Events {
 			rawMethod = true
 		}
 	}
@@ -598,6 +615,12 @@ func (g *generator) clientEmit() error {
 		method := r.Method
 		if method == "" {
 			method = "GET" // the any-verb: the client speaks GET
+		}
+		if r.Events {
+			g.pf("// %s subscribes to %s (§V4.11): every published event, reconnecting\n// with Last-Event-ID until ctx is done, when the channel closes.\n", r.ClientName, r.Spelled)
+			g.pf("func (c *Client) %s(ctx context.Context%s) <-chan volt.Event {\n", r.ClientName, sigParams(r.Params))
+			g.pf("\treturn c.Stream(ctx, volt.URL(%s))\n}\n\n", pathExpr(r))
+			continue
 		}
 		if r.Query == nil {
 			g.pf("// %s calls %s %s (%s); the response is the caller's to read and close.\n",

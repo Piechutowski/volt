@@ -126,3 +126,9 @@ func (c *Client) MsUsageBrowse(ctx context.Context, year int32) ([]db.MsUsage, e
 	err := c.Do(ctx, "GET", volt.URL("/ms/usage", q...), nil, &out)
 	return out, err
 }
+
+// Events subscribes to /events (§V4.11): every published event, reconnecting
+// with Last-Event-ID until ctx is done, when the channel closes.
+func (c *Client) Events(ctx context.Context) <-chan volt.Event {
+	return c.Stream(ctx, volt.URL("/events"))
+}

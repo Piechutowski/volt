@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/itest/blog/app"
@@ -103,6 +104,13 @@ func handler() http.Handler {
 // routes, §V4.8) — an in-memory SQLite loaded with the generated DDL —
 // seeded with one user so reads by id 1 succeed.
 func handlerWithDB(t *testing.T) http.Handler {
+	h, _ := fixture(t)
+	return h
+}
+
+// fixture is handlerWithDB plus the event broker the router serves
+// (§V4.11), so a test can publish and watch the stream.
+func fixture(t *testing.T) (http.Handler, *volt.Broker) {
 	if t == nil {
 		t = &testing.T{}
 	}
@@ -121,11 +129,13 @@ func handlerWithDB(t *testing.T) http.Handler {
 	if _, err := q.UserCreate(context.Background(), db.UserCreateParams{Email: "one@example.com"}); err != nil {
 		panic(err)
 	}
+	broker := &volt.Broker{Heartbeat: 20 * time.Millisecond}
 	return app.New(app.Controllers{
 		Home: home{}, Users: users{}, Files: files{}, Admin: admin{},
 		Ops: ops{}, Tags: tags{}, Pages: pages{}, Archive: archive{},
-		DB: q,
-	})
+		DB:     q,
+		Events: broker,
+	}), broker
 }
 
 // serve issues one request and decodes the echo payload when present.
@@ -178,6 +188,9 @@ func TestRoundTripTotality(t *testing.T) {
 		// Dataset routes (§V13): one per member of the group select.
 		"PathMsRevenueBrowse": {"GET", app.PathMsRevenueBrowse(volt.Query("year", "2024"))},
 		"PathMsUsageBrowse":   {"GET", app.PathMsUsageBrowse(volt.Query("year", "2024"))},
+		// The event route (§V4.11) streams forever; its round trip is
+		// TestEventRouteStreams, so the helper is listed and not served.
+		"PathEvents": {"GET", app.PathEvents()},
 	}
 	queryRoutes := map[string]bool{} // helper -> served by a generated query handler
 	for _, r := range app.Table {
@@ -207,6 +220,9 @@ func TestRoundTripTotality(t *testing.T) {
 		if !ok {
 			t.Errorf("no round-trip entry for %s", helper)
 			continue
+		}
+		if helper == "PathEvents" {
+			continue // a stream never returns to a recorder
 		}
 		rec, body := serve(t, h, b.method, b.url)
 		if helper == "PathTeapot" {
@@ -442,6 +458,9 @@ func TestTableMatchesServedReality(t *testing.T) {
 		want := row.Pattern
 		if row.Method != "" {
 			want = row.Method + " " + row.Pattern
+		}
+		if row.Controller == "volt" && row.Action == "Events" {
+			continue // the stream never returns to a recorder; TestEventRouteStreams covers it
 		}
 		rec, body := serve(t, h, method, url)
 		if row.Spelled == "/teapot" || row.Spelled == "/ops/fail" {

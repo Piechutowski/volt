@@ -57,11 +57,12 @@ type UsersController interface {
 // implementation per controller named in the routes, and the
 // Queries handle of every data package query routes go through (§V4.8).
 type Controllers struct {
-	Admin AdminController
-	Files FilesController
-	Home  HomeController
-	Users UsersController
-	DB    *db.Queries // query routes written db.<Method>
+	Admin  AdminController
+	Files  FilesController
+	Home   HomeController
+	Users  UsersController
+	DB     *db.Queries  // query routes written db.<Method>
+	Events *volt.Broker // event routes written volt.Events (§V4.11); nil serves nothing
 }
 
 // New builds the router: ServeMux registrations with statically

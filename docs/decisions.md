@@ -547,3 +547,17 @@ where the merge changed the facts.
   and cannot disagree. What it refuses: a table name in the URL that
   is read at runtime — every expanded route exists in the generated
   source and in `volt routes`. The `Dataset` reserved word is retired.
+
+- **D70 — Live updates are server-sent events through one runtime
+  broker** (2026-09-04, spec §V4.11). Everything the server tells
+  clients is one-directional (running, progress, finished, rows
+  changed) and everything a client tells the server is a request, so
+  SSE over the stdlib covers it and WebSocket would add a second
+  protocol for nothing. `get /events volt.Events` is the one handler
+  the runtime provides; the `Controllers` manifest carries the
+  `*volt.Broker`, whose `Publish` fans out to every stream and keeps
+  a replay buffer keyed by event ID for `Last-Event-ID` resumption.
+  The generated client's `Events(ctx)` reconnects with backoff. What
+  it refuses: a multi-process bus (one process, in memory, is the
+  promise) and the language knowing event names — those are the
+  application's contract.

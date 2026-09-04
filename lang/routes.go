@@ -53,6 +53,10 @@ type RouteInfo struct {
 	Pipes        []string
 	ErrorHandler string // package-level function name; "" for the default
 
+	// Events marks an event route (`get /events volt.Events`, §V4.11):
+	// the runtime's broker serves it; Controller/Action read "volt"/"Events".
+	Events bool
+
 	// Query is set for a query route (§V4.8): the handler is a generated
 	// query method of an imported data package, and Controller/Action
 	// are empty.

@@ -351,8 +351,12 @@ member table with the segment derived from the table name, and
 `only:`/`except:` to take a member out and write it by hand. It
 replaced the reserved `Dataset` word.
 
+**Landed (D70): event routes.** `get /events volt.Events` serves the
+runtime's broker; `Publish` fans out with replay, the client's
+`Events(ctx)` reconnects with Last-Event-ID.
+
 **Next:** `resources db.t [default]` for generated CRUD handlers over
-the seven actions, and the SSE broker for live updates.
+the seven actions.
 
 **Landed (D68): the client package.** `client/volt_client.go` beside
 every routing package — typed methods per query route, raw methods

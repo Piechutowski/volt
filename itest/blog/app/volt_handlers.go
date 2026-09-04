@@ -106,7 +106,8 @@ type Controllers struct {
 	Pages   PagesController
 	Tags    TagsController
 	Users   UsersController
-	DB      *db.Queries // query routes written db.<Method>
+	DB      *db.Queries  // query routes written db.<Method>
+	Events  *volt.Broker // event routes written volt.Events (§V4.11); nil serves nothing
 }
 
 // New builds the router: ServeMux registrations with statically

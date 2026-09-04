@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/itest/blog/app/client"
@@ -76,5 +77,48 @@ func TestClientQueryRoutes(t *testing.T) {
 			t.Fatalf("%v: raw body %q", f, body)
 		}
 		srv.Close()
+	}
+}
+
+// TestEventRouteStreams (§V4.11): what the server publishes reaches
+// every connected client through the generated Events method, in
+// order, and a late subscriber replays what it missed.
+func TestEventRouteStreams(t *testing.T) {
+	h, broker := fixture(t)
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	c := client.New(srv.URL)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	a := c.Events(ctx)
+	b := c.Events(ctx)
+	type change struct {
+		Table string
+		IDs   []int32
+	}
+	if err := broker.Publish("table.changed", change{"users", []int32{1}}); err != nil {
+		t.Fatal(err)
+	}
+	for name, ch := range map[string]<-chan volt.Event{"a": a, "b": b} {
+		select {
+		case ev := <-ch:
+			var got change
+			if err := ev.Decode(&got); err != nil || ev.Name != "table.changed" || got.Table != "users" || len(got.IDs) != 1 {
+				t.Fatalf("%s: event = %+v (%v)", name, ev, err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatalf("%s: no event", name)
+		}
+	}
+	// A subscriber arriving after the fact still sees it (replay).
+	late := c.Events(ctx)
+	select {
+	case ev := <-late:
+		if ev.Name != "table.changed" {
+			t.Fatalf("late subscriber got %+v", ev)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("late subscriber saw no replay")
 	}
 }
