@@ -11,6 +11,7 @@
 package volt
 
 import (
+	"database/sql"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -56,9 +57,10 @@ func Handler(route string, h HandlerFunc, eh ErrorHandler) http.Handler {
 	})
 }
 
-// DefaultErrorHandler maps HTTPError to its status and message and
-// everything else to a generic 500, logging the underlying error. On a
-// committed response it only logs.
+// DefaultErrorHandler maps HTTPError to its status and message, a
+// query's row miss (sql.ErrNoRows, which nao's rt.ErrNotFound is) to
+// 404, and everything else to a generic 500, logging the underlying
+// error. On a committed response it only logs.
 func DefaultErrorHandler(w http.ResponseWriter, r *Request, err error) {
 	if r.Committed() {
 		slog.Error("volt: handler error after response commit", "route", r.Route(), "err", err)
@@ -67,6 +69,10 @@ func DefaultErrorHandler(w http.ResponseWriter, r *Request, err error) {
 	var he HTTPError
 	if errors.As(err, &he) {
 		http.Error(w, he.Error(), he.StatusCode())
+		return
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 	slog.Error("volt: handler error", "route", r.Route(), "err", err)
