@@ -561,3 +561,20 @@ where the merge changed the facts.
   it refuses: a multi-process bus (one process, in memory, is the
   promise) and the language knowing event names — those are the
   application's contract.
+
+- **D71 — Declared checks hold on the API path, with statuses**
+  (2026-09-04, spec §V12.6, §V12.7, §V4.8.3). The validators existed
+  and the generated Create/Update handlers never called them: a
+  Go-reference check was silently skipped over HTTP, and a typed
+  check or unique column failed as an opaque driver error, a 500 with
+  nothing to tell the caller. Now the params structs get their own
+  `Validate` over the checks they can see (the coverage rule lives in
+  one function both generators call), the handler runs it before the
+  query, `CheckError`/`ValidationError` are 422 by interface — the
+  runtime stays stdlib-only and recognizes `StatusCode()` without
+  importing nao — and every generated write translates the driver's
+  constraint failure into `rt.ConstraintError`, 409 for a duplicate
+  key and 422 otherwise, naming what SQLite named. What it refuses:
+  evaluating a check the struct cannot see (a defaulted column is the
+  database's value, D16), so those stay with the row and the DDL, and
+  the method's doc comment says which.

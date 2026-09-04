@@ -52,7 +52,7 @@ type rowScanner interface {
 func invoiceScan(r rowScanner) (Invoice, error) {
 	var v Invoice
 	err := r.Scan(&v.ID, &v.Total, &v.CreatedAt, &v.UpdatedAt, &v.DeletedAt)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const invoiceGetSQL = `SELECT "id", "total", "created_at", "updated_at", "deleted_at" FROM "invoices" WHERE "id" = :id`
@@ -168,7 +168,7 @@ const invoiceDeleteSQL = `DELETE FROM "invoices" WHERE "id" = :id`
 func (q *Queries) InvoiceDelete(ctx context.Context, id int64) error {
 	res, err := q.db.ExecContext(ctx, invoiceDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {

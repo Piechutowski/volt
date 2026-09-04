@@ -51,7 +51,7 @@ type rowScanner interface {
 func commentScan(r rowScanner) (Comment, error) {
 	var v Comment
 	err := r.Scan(&v.ID, &v.CommentableType, &v.CommentableID, &v.Body)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const commentGetSQL = `SELECT "id", "commentable_type", "commentable_id", "body" FROM "comments" WHERE "id" = :id`
@@ -160,7 +160,7 @@ const commentDeleteSQL = `DELETE FROM "comments" WHERE "id" = :id`
 func (q *Queries) CommentDelete(ctx context.Context, id int64) error {
 	res, err := q.db.ExecContext(ctx, commentDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {

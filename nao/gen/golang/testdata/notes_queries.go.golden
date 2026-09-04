@@ -52,7 +52,7 @@ type rowScanner interface {
 func postScan(r rowScanner) (Post, error) {
 	var v Post
 	err := r.Scan(&v.ID, &v.Title, &v.Status, &v.Body, &v.PublishedAt)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const postGetSQL = `SELECT "id", "title", "status", "body", "published_at" FROM "posts" WHERE "id" = :id`
@@ -169,7 +169,7 @@ const postDeleteSQL = `DELETE FROM "posts" WHERE "id" = :id`
 func (q *Queries) PostDelete(ctx context.Context, id int64) error {
 	res, err := q.db.ExecContext(ctx, postDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -185,7 +185,7 @@ func (q *Queries) PostDelete(ctx context.Context, id int64) error {
 func tagScan(r rowScanner) (Tag, error) {
 	var v Tag
 	err := r.Scan(&v.ID, &v.Name)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const tagGetSQL = `SELECT "id", "name" FROM "tags" WHERE "id" = :id`
@@ -294,7 +294,7 @@ const tagDeleteSQL = `DELETE FROM "tags" WHERE "id" = :id`
 func (q *Queries) TagDelete(ctx context.Context, id int32) error {
 	res, err := q.db.ExecContext(ctx, tagDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {

@@ -52,7 +52,7 @@ type rowScanner interface {
 func userScan(r rowScanner) (User, error) {
 	var v User
 	err := r.Scan(&v.ID, &v.Email, &v.Name, &v.Bio, &v.CreatedAt)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const userGetSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE "id" = :id`
@@ -171,7 +171,7 @@ const userDeleteSQL = `DELETE FROM "users" WHERE "id" = :id`
 func (q *Queries) UserDelete(ctx context.Context, id int32) error {
 	res, err := q.db.ExecContext(ctx, userDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -187,7 +187,7 @@ func (q *Queries) UserDelete(ctx context.Context, id int32) error {
 func orderScan(r rowScanner) (Order, error) {
 	var v Order
 	err := r.Scan(&v.ID, &v.UserID, &v.Status, &v.Total, &v.PlacedAt)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const orderGetSQL = `SELECT "id", "user_id", "status", "total", "placed_at" FROM "orders" WHERE "id" = :id`
@@ -296,7 +296,7 @@ const orderDeleteSQL = `DELETE FROM "orders" WHERE "id" = :id`
 func (q *Queries) OrderDelete(ctx context.Context, id int32) error {
 	res, err := q.db.ExecContext(ctx, orderDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -312,7 +312,7 @@ func (q *Queries) OrderDelete(ctx context.Context, id int32) error {
 func userTagScan(r rowScanner) (UserTag, error) {
 	var v UserTag
 	err := r.Scan(&v.UserID, &v.Tag)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const userTagGetSQL = `SELECT "user_id", "tag" FROM "user_tags" WHERE "user_id" = :user_id AND "tag" = :tag`
@@ -367,7 +367,7 @@ const userTagDeleteSQL = `DELETE FROM "user_tags" WHERE "user_id" = :user_id AND
 func (q *Queries) UserTagDelete(ctx context.Context, userID int32, tag string) error {
 	res, err := q.db.ExecContext(ctx, userTagDeleteSQL, sql.Named("user_id", userID), sql.Named("tag", tag))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -383,7 +383,7 @@ func (q *Queries) UserTagDelete(ctx context.Context, userID int32, tag string) e
 func pageViewScan(r rowScanner) (PageView, error) {
 	var v PageView
 	err := r.Scan(&v.ID, &v.Site, &v.Day, &v.Hits)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const pageViewGetSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE "id" = :id`
@@ -488,7 +488,7 @@ const pageViewDeleteSQL = `DELETE FROM "page_views" WHERE "id" = :id`
 func (q *Queries) PageViewDelete(ctx context.Context, id int32) error {
 	res, err := q.db.ExecContext(ctx, pageViewDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -504,7 +504,7 @@ func (q *Queries) PageViewDelete(ctx context.Context, id int32) error {
 func linkClickScan(r rowScanner) (LinkClick, error) {
 	var v LinkClick
 	err := r.Scan(&v.ID, &v.Site, &v.Day, &v.Target)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const linkClickGetSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE "id" = :id`
@@ -609,7 +609,7 @@ const linkClickDeleteSQL = `DELETE FROM "link_clicks" WHERE "id" = :id`
 func (q *Queries) LinkClickDelete(ctx context.Context, id int32) error {
 	res, err := q.db.ExecContext(ctx, linkClickDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {

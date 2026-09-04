@@ -69,10 +69,62 @@ type CheckFn struct {
 
 // CheckSpec is one lowered check, rendered by the Volt checker.
 type CheckSpec struct {
-	Name string // the check's [name:] setting, "" when absent
-	Src  string // human-readable form, reported by rt.CheckError
-	Cond string // typed form: Go condition over v.<Field>; "" otherwise
-	Call string // Go-reference call, e.g. "EmailValid(v.Email)"; "" otherwise
+	Name string   // the check's [name:] setting, "" when absent
+	Src  string   // human-readable form, reported by rt.CheckError
+	Cond string   // typed form: Go condition over v.<Field>; "" otherwise
+	Call string   // Go-reference call, e.g. "EmailValid(v.Email)"; "" otherwise
+	Cols []string // the columns the check reads, so a params struct knows whether it can evaluate it (§V12.6)
+}
+
+// ParamsValidators reports whether the table's CreateParams and
+// UpdateParams structs get a Validate method: each does when the struct
+// exists and carries every column of at least one check. The same rule
+// decides what the validator generator emits and what a generated
+// handler calls, so the two cannot disagree.
+func ParamsValidators(f *ast.File, info *check.Info, tableKey string, checks []CheckSpec) (create, update bool, err error) {
+	p, err := planBuild(f, info)
+	if err != nil {
+		return false, false, err
+	}
+	for _, t := range p.tables {
+		if t.ti.Key != tableKey {
+			continue
+		}
+		c, u := paramsChecks(t, checks)
+		return len(c) > 0, len(u) > 0, nil
+	}
+	return false, false, fmt.Errorf("no table %q", tableKey)
+}
+
+// paramsChecks splits the checks a table's params structs can evaluate:
+// those whose columns all appear among the struct's fields. A check
+// reading a defaulted or auto-increment column (absent from
+// CreateParams, D16) or a key column (absent from UpdateParams) stays
+// with the row's Validate and the DDL.
+func paramsChecks(t *tableModel, checks []CheckSpec) (create, update []CheckSpec) {
+	covered := func(fields []*fieldPlan, ck CheckSpec) bool {
+		have := map[string]bool{}
+		for _, f := range fields {
+			have[f.colName] = true
+		}
+		for _, col := range ck.Cols {
+			if !have[col] {
+				return false
+			}
+		}
+		return len(ck.Cols) > 0
+	}
+	cf := t.createFields()
+	uf := t.nonPK()
+	for _, ck := range checks {
+		if len(cf) > 0 && covered(cf, ck) {
+			create = append(create, ck)
+		}
+		if len(t.pk) > 0 && len(uf) > 0 && covered(uf, ck) {
+			update = append(update, ck)
+		}
+	}
+	return create, update
 }
 
 // EnumTypeName is the Go type name an enum declaration generates

@@ -218,6 +218,17 @@ func TestGoldenCompiles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// The fixture's hand-written Go beside the schema (the check target).
+	hand, _ := filepath.Glob(filepath.Join("testdata", "blog", "db", "*.go"))
+	for _, path := range hand {
+		src, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dbDir, filepath.Base(path)), src, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 	pkgDir := filepath.Join(dir, "app")
 	if err := os.MkdirAll(pkgDir, 0o755); err != nil {
 		t.Fatal(err)

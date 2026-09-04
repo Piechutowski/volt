@@ -183,3 +183,29 @@ func TestDatasetRoutesServe(t *testing.T) {
 		t.Errorf("a table outside the group: %d, want 404", rec.Code)
 	}
 }
+
+// TestQueryRouteValidation (§V12.6, §V12.7, §V4.8.3): a violated check
+// is a 422 naming the check before the database sees the row; a
+// duplicate key is a 409 naming the column; both in either format.
+func TestQueryRouteValidation(t *testing.T) {
+	h := handlerWithDB(t)
+
+	rec := call(h, "POST", "/api/users", strings.NewReader(`{"email":"nope"}`))
+	if rec.Code != 422 || !strings.Contains(rec.Body.String(), "EmailValid") {
+		t.Fatalf("Go-reference check: %d %q, want 422 naming the check", rec.Code, rec.Body.String())
+	}
+	rec = call(h, "POST", "/api/users", strings.NewReader(`{"email":"@"}`))
+	if rec.Code != 422 || !strings.Contains(rec.Body.String(), "email_shape") {
+		t.Fatalf("typed check: %d %q, want 422 naming email_shape", rec.Code, rec.Body.String())
+	}
+	rec = call(h, "PATCH", "/api/users/1", strings.NewReader(`{"email":"nope"}`))
+	if rec.Code != 422 {
+		t.Fatalf("update validation: %d, want 422", rec.Code)
+	}
+	// The seeded user is one@example.com: a duplicate is the database's
+	// refusal, translated to 409 naming the column.
+	rec = call(h, "POST", "/api/users", strings.NewReader(`{"email":"one@example.com"}`))
+	if rec.Code != 409 || !strings.Contains(rec.Body.String(), "users.email") {
+		t.Fatalf("duplicate: %d %q, want 409 naming users.email", rec.Code, rec.Body.String())
+	}
+}

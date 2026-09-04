@@ -684,6 +684,7 @@ func (c *checker) queryBind(pos, qualPos token.Position, method string, params [
 	type sigParam struct {
 		name, goType string
 		body         bool
+		validates    bool
 	}
 	var sig []sigParam
 	found := false
@@ -729,7 +730,11 @@ func (c *checker) queryBind(pos, qualPos token.Position, method string, params [
 					sig = append(sig, sigParam{name: k.GoName, goType: k.GoType})
 				}
 				if cm.Body != "" {
-					sig = append(sig, sigParam{name: "arg", goType: qual + "." + cm.Body, body: true})
+					// The params struct validates when it carries the
+					// columns of at least one check (§V12.6).
+					create, update, _ := golang.ParamsValidators(pkg.Merged(), info, ti.Key, tableChecksOf(pkg, ti.Key))
+					sig = append(sig, sigParam{name: "arg", goType: qual + "." + cm.Body, body: true,
+						validates: (cm.Op == "create" && create) || (cm.Op == "update" && update)})
 				}
 				qr.Result, qr.Many = cm.Result, cm.Many
 				switch cm.Op {
@@ -766,6 +771,7 @@ func (c *checker) queryBind(pos, qualPos token.Position, method string, params [
 		switch {
 		case sp.body:
 			qp.Source = FromBody
+			qp.Validates = sp.validates
 			if method != "POST" && method != "PUT" && method != "PATCH" {
 				c.errorf(pos, "V4", "%s.%s takes a request body (%s); route it with post, put or patch (§V4.8)", qual, name, sp.goType)
 				ok = false
@@ -811,6 +817,16 @@ func (c *checker) queryBind(pos, qualPos token.Position, method string, params [
 		return nil
 	}
 	return qr
+}
+
+// tableChecksOf returns the lowered checks of one table of a package.
+func tableChecksOf(pkg *Package, tableKey string) []golang.CheckSpec {
+	for _, fn := range pkg.CheckFns {
+		if fn.TableKey == tableKey {
+			return fn.Checks
+		}
+	}
+	return nil
 }
 
 // litSeg builds a synthetic literal segment for an expanded route.

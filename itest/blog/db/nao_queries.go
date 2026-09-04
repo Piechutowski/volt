@@ -51,7 +51,7 @@ type rowScanner interface {
 func userScan(r rowScanner) (User, error) {
 	var v User
 	err := r.Scan(&v.ID, &v.Email)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const userGetSQL = `SELECT "id", "email" FROM "users" WHERE "id" = :id`
@@ -158,7 +158,7 @@ const userDeleteSQL = `DELETE FROM "users" WHERE "id" = :id`
 func (q *Queries) UserDelete(ctx context.Context, id int32) error {
 	res, err := q.db.ExecContext(ctx, userDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -174,7 +174,7 @@ func (q *Queries) UserDelete(ctx context.Context, id int32) error {
 func msRevenueScan(r rowScanner) (MsRevenue, error) {
 	var v MsRevenue
 	err := r.Scan(&v.ID, &v.Org, &v.Year)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const msRevenueGetSQL = `SELECT "id", "org", "year" FROM "ms_revenue" WHERE "id" = :id`
@@ -277,7 +277,7 @@ const msRevenueDeleteSQL = `DELETE FROM "ms_revenue" WHERE "id" = :id`
 func (q *Queries) MsRevenueDelete(ctx context.Context, id int32) error {
 	res, err := q.db.ExecContext(ctx, msRevenueDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -293,7 +293,7 @@ func (q *Queries) MsRevenueDelete(ctx context.Context, id int32) error {
 func msUsageScan(r rowScanner) (MsUsage, error) {
 	var v MsUsage
 	err := r.Scan(&v.ID, &v.Org, &v.Year)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const msUsageGetSQL = `SELECT "id", "org", "year" FROM "ms_usage" WHERE "id" = :id`
@@ -396,7 +396,7 @@ const msUsageDeleteSQL = `DELETE FROM "ms_usage" WHERE "id" = :id`
 func (q *Queries) MsUsageDelete(ctx context.Context, id int32) error {
 	res, err := q.db.ExecContext(ctx, msUsageDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {

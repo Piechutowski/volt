@@ -7,6 +7,7 @@ package itest
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Piechutowski/volt/nao/rt"
@@ -75,5 +76,59 @@ func TestValidateGoRefCheckIsGoOnly(t *testing.T) {
 	if _, err := db.ExecContext(ctx,
 		`INSERT INTO users (email, name) VALUES ('not-an-address', 'Ann')`); err != nil {
 		t.Errorf("the DDL must carry no CHECK for a Go-reference check: %v", err)
+	}
+}
+
+// Params structs validate the checks they can see (§V12.6): a create
+// params struct carries email, so both users checks run before any
+// insert; page_views' counts_positive reads hits, a defaulted column
+// absent from CreateParams, so only the like check runs there.
+func TestParamsValidate(t *testing.T) {
+	bad := UserCreateParams{Email: "nope", Name: "N"}
+	err := bad.Validate()
+	var ve rt.ValidationError
+	if !errors.As(err, &ve) || len(ve) != 1 || ve[0].Check != "EmailValid(email)" {
+		t.Fatalf("UserCreateParams.Validate = %v, want the Go-reference failure", err)
+	}
+	if sc, ok := err.(interface{ StatusCode() int }); !ok || sc.StatusCode() != 422 {
+		t.Errorf("a validation failure is a 422, got %v", err)
+	}
+	if (UserCreateParams{Email: "ok@example.com"}).Validate() != nil {
+		t.Error("valid params rejected")
+	}
+	if (UserUpdateParams{Email: "still@example.com"}).Validate() != nil {
+		t.Error("valid update params rejected")
+	}
+
+	pv := PageViewCreateParams{Site: "", Day: 1}
+	if err := pv.Validate(); err == nil {
+		t.Error("site like '%_' should fail on an empty site")
+	}
+	// hits is defaulted and absent from CreateParams: counts_positive is
+	// the row's and the DDL's business, so Day alone does not fail here.
+	if err := (PageViewCreateParams{Site: "a", Day: 0}).Validate(); err != nil {
+		t.Errorf("a check the params cannot see must not run: %v", err)
+	}
+}
+
+// TestConstraintErrorsCarryStatus: the database's refusals reach the
+// caller as rt.ConstraintError with a status (§V12.7).
+func TestConstraintErrorsCarryStatus(t *testing.T) {
+	_, q := newDB(t)
+	ctx := context.Background()
+	if _, err := q.UserCreate(ctx, UserCreateParams{Email: "one@example.com", Name: "One"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := q.UserCreate(ctx, UserCreateParams{Email: "one@example.com", Name: "Two"})
+	var ce rt.ConstraintError
+	if !errors.As(err, &ce) || ce.Kind != "unique" || ce.Detail != "users.email" || ce.StatusCode() != 409 {
+		t.Fatalf("duplicate = %v (%+v)", err, ce)
+	}
+	if !strings.Contains(err.Error(), "users.email already exists") {
+		t.Errorf("message = %q", err.Error())
+	}
+	_, err = q.PageViewCreate(ctx, PageViewCreateParams{Site: "", Day: 1})
+	if !errors.As(err, &ce) || ce.Kind != "check" || ce.StatusCode() != 422 {
+		t.Fatalf("check violation = %v (%+v)", err, ce)
 	}
 }

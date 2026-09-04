@@ -1715,8 +1715,12 @@ Scope /api [pipe: api] {
 3. **Response.** The result renders in the negotiated format
    (Formats): rows or a row with status 200, a created row with 201,
    a delete with 204 and no body. A query's row miss (`rt.ErrNotFound`,
-   which is `sql.ErrNoRows`) is a 404 through the error spine; any
-   other error is the spine's 500.
+   which is `sql.ErrNoRows`) is a 404 through the error spine. A
+   Create or Update handler calls the params struct's `Validate`
+   (§V12.6) before the query when it has one, so a violated check is a
+   422 naming the check; a constraint the database refuses is a 409
+   (duplicate key) or 422 naming the constraint (§V12.7). Any other
+   error is the spine's 500.
 4. **Names.** The helper name (§V4.6) defaults to the scope name
    prefixes followed by the method name, and only `get`/`head` query
    routes carry one — writes have no reverse URL, as with resources
@@ -2375,10 +2379,25 @@ Table users {
    declaration order against the row's values: a failed typed check
    contributes `rt.CheckError{Model, Check}`, a failed Go reference
    `rt.CheckError{Model, Check, Cause}` wrapping the returned error;
-   the results are joined (`errors.Join`), nil when every check
-   passes. `Check` is the check's `name:` setting when present, else
-   its rendered form. Nothing calls `Validate` implicitly — no
-   callbacks (D27); the application decides when to validate.
+   the failures are returned together as one `rt.ValidationError`
+   (which unwraps to its members), nil when every check passes.
+   `Check` is the check's `name:` setting when present, else its
+   rendered form. The **params structs** validate too: `<Model>CreateParams`
+   and `<Model>UpdateParams` each get `Validate` over the checks whose
+   columns the struct carries — a check reading a defaulted or
+   auto-increment column (absent from CreateParams, D16) or a key
+   column (absent from UpdateParams) is left to the row's `Validate`
+   and the DDL, and the method's doc comment names it. Nothing calls
+   `Validate` implicitly in your code — no callbacks (D27); the one
+   generated caller is a query route's Create/Update handler (§V4.8.3).
+7. **Statuses.** A `CheckError` and a `ValidationError` carry status
+   422; the database's own refusals are translated by `rt.Constraint`
+   into `rt.ConstraintError` — 409 for a unique violation, 422 for a
+   check, foreign-key or not-null failure — naming what SQLite named
+   (the column, the check). Every generated write passes its error
+   through `rt.Constraint`, so a violated constraint reaches an error
+   spine or a caller with a status and a reason, never as an opaque
+   driver error.
 
 ---
 

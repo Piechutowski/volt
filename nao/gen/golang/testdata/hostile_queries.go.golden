@@ -52,7 +52,7 @@ type rowScanner interface {
 func userScan(r rowScanner) (User, error) {
 	var v User
 	err := r.Scan(&v.ID)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const userGetSQL = `SELECT "id" FROM "users" WHERE "id" = :id`
@@ -134,7 +134,7 @@ const userDeleteSQL = `DELETE FROM "users" WHERE "id" = :id`
 func (q *Queries) UserDelete(ctx context.Context, id int64) error {
 	res, err := q.db.ExecContext(ctx, userDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -150,7 +150,7 @@ func (q *Queries) UserDelete(ctx context.Context, id int64) error {
 func coreUserScan(r rowScanner) (CoreUser, error) {
 	var v CoreUser
 	err := r.Scan(&v.ID, &v.APIKey, &v.HomepageURL, &v.HTTPStatus, &v.FullName, &v.PrecisionValue, &v.Balance, &v.Kind, &v.Type, &v.Func)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const coreUserGetSQL = `SELECT "id", "api_key", "homepage_url", "http_status", "full name", "precision_value", "balance", "kind", "type", "func" FROM "core_users" WHERE "id" = :id`
@@ -287,7 +287,7 @@ const coreUserDeleteSQL = `DELETE FROM "core_users" WHERE "id" = :id`
 func (q *Queries) CoreUserDelete(ctx context.Context, id uint64) error {
 	res, err := q.db.ExecContext(ctx, coreUserDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -303,7 +303,7 @@ func (q *Queries) CoreUserDelete(ctx context.Context, id uint64) error {
 func x2faCodeScan(r rowScanner) (X2faCode, error) {
 	var v X2faCode
 	err := r.Scan(&v.Code, &v.UserID, &v.ExpiresAt)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const x2faCodeGetSQL = `SELECT "code", "user_id", "expires_at" FROM "2fa_codes" WHERE "user_id" = :user_id AND "code" = :code`
@@ -378,7 +378,7 @@ const x2faCodeDeleteSQL = `DELETE FROM "2fa_codes" WHERE "user_id" = :user_id AN
 func (q *Queries) X2faCodeDelete(ctx context.Context, userID int64, code string) error {
 	res, err := q.db.ExecContext(ctx, x2faCodeDeleteSQL, sql.Named("user_id", userID), sql.Named("code", code))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {

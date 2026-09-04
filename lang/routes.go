@@ -80,9 +80,10 @@ const (
 // QueryParam is one parameter of a query route's method, in signature
 // order after ctx.
 type QueryParam struct {
-	Name   string // Go parameter name, also the URL key
-	GoType string // unqualified Go type ("int32", "[]string"); params structs are qualified ("db.UserCreateParams")
-	Source QuerySource
+	Name      string // Go parameter name, also the URL key
+	GoType    string // unqualified Go type ("int32", "[]string"); params structs are qualified ("db.UserCreateParams")
+	Source    QuerySource
+	Validates bool // body param: the params struct has a Validate method the handler calls first (§V12.6)
 }
 
 // QueryRef binds a route to a generated query method of an imported

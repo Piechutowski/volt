@@ -51,7 +51,7 @@ type rowScanner interface {
 func employeeScan(r rowScanner) (Employee, error) {
 	var v Employee
 	err := r.Scan(&v.ID, &v.FullName, &v.ManagerID)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const employeeGetSQL = `SELECT "id", "full_name", "manager_id" FROM "employees" WHERE "id" = :id`
@@ -156,7 +156,7 @@ const employeeDeleteSQL = `DELETE FROM "employees" WHERE "id" = :id`
 func (q *Queries) EmployeeDelete(ctx context.Context, id int64) error {
 	res, err := q.db.ExecContext(ctx, employeeDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {

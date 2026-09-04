@@ -158,8 +158,9 @@ func TestOrderDefaultsEnumsAndFKs(t *testing.T) {
 	}
 
 	// enum CHECK and FK are real constraints in the generated DDL
-	if _, err := q.OrderCreate(ctx, OrderCreateParams{UserID: 999, Total: "1.00"}); err == nil || !strings.Contains(err.Error(), "FOREIGN KEY") {
-		t.Errorf("dangling user_id = %v; want a FOREIGN KEY violation", err)
+	var ce rt.ConstraintError
+	if _, err := q.OrderCreate(ctx, OrderCreateParams{UserID: 999, Total: "1.00"}); !errors.As(err, &ce) || ce.Kind != "foreign key" {
+		t.Errorf("dangling user_id = %v; want a foreign key ConstraintError", err)
 	}
 	if _, err := q.OrderUpdate(ctx, o.ID, OrderUpdateParams{UserID: o.UserID, Status: "teleported", Total: o.Total}); err == nil {
 		t.Error("invalid enum value accepted; CHECK constraint missing")

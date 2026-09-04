@@ -7,7 +7,6 @@
 package itest
 
 import (
-	"errors"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -15,23 +14,66 @@ import (
 // (spec §V12). Typed checks are also CHECK constraints in the DDL;
 // Go-reference checks run here only — SQLite cannot call Go.
 func (v User) Validate() error {
-	var errs []error
+	var errs []rt.CheckError
 	if err := EmailValid(v.Email); err != nil {
 		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Cause: err})
 	}
-	return errors.Join(errs...)
+	return rt.Validation(errs)
+}
+
+// Validate evaluates the checks of users whose columns UserCreateParams carries
+// (spec §V12.6).
+func (v UserCreateParams) Validate() error {
+	var errs []rt.CheckError
+	if err := EmailValid(v.Email); err != nil {
+		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Cause: err})
+	}
+	return rt.Validation(errs)
+}
+
+// Validate evaluates the checks of users whose columns UserUpdateParams carries
+// (spec §V12.6).
+func (v UserUpdateParams) Validate() error {
+	var errs []rt.CheckError
+	if err := EmailValid(v.Email); err != nil {
+		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Cause: err})
+	}
+	return rt.Validation(errs)
 }
 
 // Validate evaluates every check of page_views against the row's values
 // (spec §V12). Typed checks are also CHECK constraints in the DDL;
 // Go-reference checks run here only — SQLite cannot call Go.
 func (v PageView) Validate() error {
-	var errs []error
+	var errs []rt.CheckError
 	if !(v.Hits >= 0 && v.Day >= 1) {
 		errs = append(errs, rt.CheckError{Model: "PageView", Check: "counts_positive"})
 	}
 	if !(rt.Like(v.Site, "%_")) {
 		errs = append(errs, rt.CheckError{Model: "PageView", Check: "site LIKE '%_'"})
 	}
-	return errors.Join(errs...)
+	return rt.Validation(errs)
+}
+
+// Validate evaluates the checks of page_views whose columns PageViewCreateParams carries
+// (spec §V12.6); left to the row and the DDL: counts_positive.
+func (v PageViewCreateParams) Validate() error {
+	var errs []rt.CheckError
+	if !(rt.Like(v.Site, "%_")) {
+		errs = append(errs, rt.CheckError{Model: "PageView", Check: "site LIKE '%_'"})
+	}
+	return rt.Validation(errs)
+}
+
+// Validate evaluates the checks of page_views whose columns PageViewUpdateParams carries
+// (spec §V12.6).
+func (v PageViewUpdateParams) Validate() error {
+	var errs []rt.CheckError
+	if !(v.Hits >= 0 && v.Day >= 1) {
+		errs = append(errs, rt.CheckError{Model: "PageView", Check: "counts_positive"})
+	}
+	if !(rt.Like(v.Site, "%_")) {
+		errs = append(errs, rt.CheckError{Model: "PageView", Check: "site LIKE '%_'"})
+	}
+	return rt.Validation(errs)
 }

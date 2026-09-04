@@ -53,7 +53,7 @@ type rowScanner interface {
 func userScan(r rowScanner) (User, error) {
 	var v User
 	err := r.Scan(&v.ID)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const userGetSQL = `SELECT "id" FROM "users" WHERE "id" = :id`
@@ -135,7 +135,7 @@ const userDeleteSQL = `DELETE FROM "users" WHERE "id" = :id`
 func (q *Queries) UserDelete(ctx context.Context, id int64) error {
 	res, err := q.db.ExecContext(ctx, userDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -151,7 +151,7 @@ func (q *Queries) UserDelete(ctx context.Context, id int64) error {
 func postScan(r rowScanner) (Post, error) {
 	var v Post
 	err := r.Scan(&v.ID, &v.AuthorID, &v.EditorID, &v.ReviewedAt, &v.Meta, &v.Raw)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const postGetSQL = `SELECT "id", "author_id", "editor_id", "reviewed_at", "meta", "raw" FROM "posts" WHERE "id" = :id`
@@ -272,7 +272,7 @@ const postDeleteSQL = `DELETE FROM "posts" WHERE "id" = :id`
 func (q *Queries) PostDelete(ctx context.Context, id int64) error {
 	res, err := q.db.ExecContext(ctx, postDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {

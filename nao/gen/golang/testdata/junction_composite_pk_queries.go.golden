@@ -52,7 +52,7 @@ type rowScanner interface {
 func userScan(r rowScanner) (User, error) {
 	var v User
 	err := r.Scan(&v.ID)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const userGetSQL = `SELECT "id" FROM "users" WHERE "id" = :id`
@@ -134,7 +134,7 @@ const userDeleteSQL = `DELETE FROM "users" WHERE "id" = :id`
 func (q *Queries) UserDelete(ctx context.Context, id int64) error {
 	res, err := q.db.ExecContext(ctx, userDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -150,7 +150,7 @@ func (q *Queries) UserDelete(ctx context.Context, id int64) error {
 func roleScan(r rowScanner) (Role, error) {
 	var v Role
 	err := r.Scan(&v.ID, &v.Name)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const roleGetSQL = `SELECT "id", "name" FROM "roles" WHERE "id" = :id`
@@ -259,7 +259,7 @@ const roleDeleteSQL = `DELETE FROM "roles" WHERE "id" = :id`
 func (q *Queries) RoleDelete(ctx context.Context, id int32) error {
 	res, err := q.db.ExecContext(ctx, roleDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -275,7 +275,7 @@ func (q *Queries) RoleDelete(ctx context.Context, id int32) error {
 func userRoleScan(r rowScanner) (UserRole, error) {
 	var v UserRole
 	err := r.Scan(&v.UserID, &v.RoleID, &v.GrantedAt)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const userRoleGetSQL = `SELECT "user_id", "role_id", "granted_at" FROM "user_roles" WHERE "user_id" = :user_id AND "role_id" = :role_id`
@@ -348,7 +348,7 @@ const userRoleDeleteSQL = `DELETE FROM "user_roles" WHERE "user_id" = :user_id A
 func (q *Queries) UserRoleDelete(ctx context.Context, userID int64, roleID int32) error {
 	res, err := q.db.ExecContext(ctx, userRoleDeleteSQL, sql.Named("user_id", userID), sql.Named("role_id", roleID))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {

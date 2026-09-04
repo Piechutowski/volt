@@ -69,7 +69,7 @@ func (c *checker) typedCheck(ti *check.TableInfo, ck *ast.Check, info *check.Inf
 		return golang.CheckSpec{}, false
 	}
 	ck.SQL = sql // gen/sqlite emits CHECK (<this>) — one rendering, both tiers
-	return golang.CheckSpec{Src: sql, Cond: gocode}, true
+	return golang.CheckSpec{Src: sql, Cond: gocode, Cols: env.used}, true
 }
 
 // goRefCheck resolves one Go-reference check (§V12.5): a function of
@@ -136,6 +136,7 @@ func (c *checker) goRefCheck(ti *check.TableInfo, ck *ast.Check, info *check.Inf
 	return golang.CheckSpec{
 		Src:  name + "(" + strings.Join(src, ", ") + ")",
 		Call: name + "(" + strings.Join(args, ", ") + ")",
+		Cols: env.used,
 	}, true
 }
 
@@ -151,6 +152,7 @@ type chkEnv struct {
 	ck     *ast.Check
 	byCol  map[string]golang.FieldSig
 	failed bool
+	used   []string // columns the check reads, first-use order (§V12.6)
 }
 
 func (c *checker) checkEnv(ti *check.TableInfo, ck *ast.Check, info *check.Info) *chkEnv {
@@ -178,6 +180,15 @@ func (e *chkEnv) fieldOf(id *ast.Ident, typed bool) (golang.FieldSig, bool) {
 	if !has {
 		e.errorf(id.Pos(), "no column %q in table %q (§V12.2)", id.Name(), e.ti.Decl.Name.Base())
 		return f, false
+	}
+	seen := false
+	for _, u := range e.used {
+		if u == id.Name() {
+			seen = true
+		}
+	}
+	if !seen {
+		e.used = append(e.used, id.Name())
 	}
 	if f.Nullable {
 		e.errorf(id.Pos(),

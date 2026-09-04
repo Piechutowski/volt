@@ -379,6 +379,10 @@ func queryShimBody(r *lang.RouteInfo) string {
 			args = append(args, "volt"+p.Name)
 		case lang.FromBody:
 			fmt.Fprintf(&body, "\t\tvar volt%s %s\n\t\tif err := volt.Decode(r, &volt%s); err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name, p.GoType, p.Name)
+			if p.Validates {
+				// The schema's checks, before the database sees the row (§V12.6).
+				fmt.Fprintf(&body, "\t\tif err := volt%s.Validate(); err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name)
+			}
 			args = append(args, "volt"+p.Name)
 		}
 	}

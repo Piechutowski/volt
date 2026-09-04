@@ -174,6 +174,9 @@ func register(mux *http.ServeMux, c Controllers) {
 		if err := volt.Decode(r, &voltarg); err != nil {
 			return err
 		}
+		if err := voltarg.Validate(); err != nil {
+			return err
+		}
 		out, err := c.DB.UserCreate(r.Context(), voltarg)
 		if err != nil {
 			return err
@@ -189,6 +192,9 @@ func register(mux *http.ServeMux, c Controllers) {
 		}
 		var voltarg db.UserUpdateParams
 		if err := volt.Decode(r, &voltarg); err != nil {
+			return err
+		}
+		if err := voltarg.Validate(); err != nil {
 			return err
 		}
 		out, err := c.DB.UserUpdate(r.Context(), voltid, voltarg)

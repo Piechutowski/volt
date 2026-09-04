@@ -538,7 +538,7 @@ func (e *queryEmitter) tableEmit(t *tableModel) {
 		}
 		b.WriteString("&v." + f.goField)
 	}
-	b.WriteString(")\n\treturn v, err\n}\n\n")
+	b.WriteString(")\n\treturn v, rt.Constraint(err)\n}\n\n")
 
 	if len(t.pk) > 0 {
 		e.getEmit(t, lower, tbl)
@@ -691,7 +691,7 @@ func (e *queryEmitter) deleteEmit(t *tableModel, lower, tbl string) {
 	fmt.Fprintf(b, "// %sDelete removes the identified %s row; rt.ErrNotFound reports\n// that nothing matched.\n", t.model, tbl)
 	fmt.Fprintf(b, "func (q *Queries) %sDelete(ctx context.Context, %s) error {\n", t.model, identityParams(t))
 	fmt.Fprintf(b, "\tres, err := q.db.ExecContext(ctx, %sDeleteSQL, %s)\n", lower, identityArgs(t))
-	fmt.Fprintf(b, "\tif err != nil {\n\t\treturn err\n\t}\n")
+	fmt.Fprintf(b, "\tif err != nil {\n\t\treturn rt.Constraint(err)\n\t}\n")
 	fmt.Fprintf(b, "\tn, err := res.RowsAffected()\n\tif err != nil {\n\t\treturn err\n\t}\n")
 	fmt.Fprintf(b, "\tif n == 0 {\n\t\treturn rt.ErrNotFound\n\t}\n\treturn nil\n}\n\n")
 }

@@ -122,3 +122,23 @@ func TestEventRouteStreams(t *testing.T) {
 		t.Fatal("late subscriber saw no replay")
 	}
 }
+
+// TestClientValidationErrors: the generated client sees the same
+// statuses as HTTPError values (§V12.7).
+func TestClientValidationErrors(t *testing.T) {
+	srv := httptest.NewServer(handlerWithDB(t))
+	defer srv.Close()
+	c := client.New(srv.URL)
+	c.Format = volt.FormatGOB
+	ctx := context.Background()
+
+	_, err := c.APIUserCreate(ctx, db.UserCreateParams{Email: "nope"})
+	var he volt.HTTPError
+	if !errors.As(err, &he) || he.StatusCode() != 422 || !strings.Contains(he.Error(), "EmailValid") {
+		t.Fatalf("invalid email = %v", err)
+	}
+	_, err = c.APIUserCreate(ctx, db.UserCreateParams{Email: "one@example.com"})
+	if !errors.As(err, &he) || he.StatusCode() != 409 {
+		t.Fatalf("duplicate = %v", err)
+	}
+}

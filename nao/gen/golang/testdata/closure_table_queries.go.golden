@@ -51,7 +51,7 @@ type rowScanner interface {
 func categoryScan(r rowScanner) (Category, error) {
 	var v Category
 	err := r.Scan(&v.ID, &v.Name)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const categoryGetSQL = `SELECT "id", "name" FROM "categories" WHERE "id" = :id`
@@ -152,7 +152,7 @@ const categoryDeleteSQL = `DELETE FROM "categories" WHERE "id" = :id`
 func (q *Queries) CategoryDelete(ctx context.Context, id int32) error {
 	res, err := q.db.ExecContext(ctx, categoryDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -168,7 +168,7 @@ func (q *Queries) CategoryDelete(ctx context.Context, id int32) error {
 func categoryPathScan(r rowScanner) (CategoryPath, error) {
 	var v CategoryPath
 	err := r.Scan(&v.AncestorID, &v.DescendantID, &v.Depth)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const categoryPathGetSQL = `SELECT "ancestor_id", "descendant_id", "depth" FROM "category_paths" WHERE "ancestor_id" = :ancestor_id AND "descendant_id" = :descendant_id`
@@ -245,7 +245,7 @@ const categoryPathDeleteSQL = `DELETE FROM "category_paths" WHERE "ancestor_id" 
 func (q *Queries) CategoryPathDelete(ctx context.Context, ancestorID int32, descendantID int32) error {
 	res, err := q.db.ExecContext(ctx, categoryPathDeleteSQL, sql.Named("ancestor_id", ancestorID), sql.Named("descendant_id", descendantID))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {

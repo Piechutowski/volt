@@ -51,7 +51,7 @@ type rowScanner interface {
 func menuScan(r rowScanner) (Menu, error) {
 	var v Menu
 	err := r.Scan(&v.ID, &v.Title, &v.Price)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const menuGetSQL = `SELECT "id", "title", "price" FROM "menus" WHERE "id" = :id`
@@ -152,7 +152,7 @@ const menuDeleteSQL = `DELETE FROM "menus" WHERE "id" = :id`
 func (q *Queries) MenuDelete(ctx context.Context, id int32) error {
 	res, err := q.db.ExecContext(ctx, menuDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -168,7 +168,7 @@ func (q *Queries) MenuDelete(ctx context.Context, id int32) error {
 func orderStatusScan(r rowScanner) (OrderStatus, error) {
 	var v OrderStatus
 	err := r.Scan(&v.Code, &v.Label)
-	return v, err
+	return v, rt.Constraint(err)
 }
 
 const orderStatusGetSQL = `SELECT "code", "label" FROM "order_status" WHERE "code" = :code`
@@ -277,7 +277,7 @@ const orderStatusDeleteSQL = `DELETE FROM "order_status" WHERE "code" = :code`
 func (q *Queries) OrderStatusDelete(ctx context.Context, code string) error {
 	res, err := q.db.ExecContext(ctx, orderStatusDeleteSQL, sql.Named("code", code))
 	if err != nil {
-		return err
+		return rt.Constraint(err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {

@@ -14,7 +14,7 @@ you can read, grep, and step through in a debugger.
              ├──► nao_queries.go   typed CRUD on a Queries handle
              ├──► nao_dyn.go       typed filter/order/limit values
              ├──► nao_selects.go   Group/Pred selects: one method per member
-             ├──► nao_validate.go  Validate() per table with checks (§V12)
+             ├──► nao_validate.go  Validate() on rows and params structs with checks (§V12)
              └──► nao_schema.sql   DDL + seed data (--sql); FK/CHECK/UNIQUE real
 
        app/*.volt  ──  routes over the schema (Part II of the spec)
@@ -83,7 +83,7 @@ split is exhaustive:
 | values only, uniform shapes | `Select` over a `Group` with typed `Pred` composition (§V9-§V11): one method per member, one signature | **done** |
 | values only, arbitrary SQL | raw-SQL `Select`/`View` blocks, typed functions out, prepare-validated | next — [roadmap FW-1](roadmap.md) |
 | filter / order / limit | typed predicate **values** (`UserEmail.Eq(x)`) over generated column handles | **done** |
-| validation | `checks` as predicates: SQL `CHECK` + generated `Validate()`, Go-ref checks Go-only (§V12, D61) | **done** |
+| validation | `checks` as predicates: SQL `CHECK` + generated `Validate()` on rows and params structs, Go-ref checks Go-only; 422/409 through query routes (§V12, D61, D71) | **done** |
 | associations | explicit per-ref loaders, batched `IN` | scheduled |
 | migrations | declarative diff, hash-pinned ledger (D53), owned 12-step rebuild | scheduled |
 | callbacks, lazy loading, dirty tracking | never — D27 | — |

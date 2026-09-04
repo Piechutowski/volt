@@ -4,7 +4,10 @@
 // typed check agree.
 package rt
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // CheckError is one failed schema check (spec §V12). Typed checks
 // carry no Cause; a Go-reference check wraps the error the referenced
@@ -23,6 +26,104 @@ func (e CheckError) Error() string {
 }
 
 func (e CheckError) Unwrap() error { return e.Cause }
+
+// StatusCode makes a failed check an HTTP 422 (Unprocessable Content)
+// wherever the volt error spine or a generated client sees it: the
+// request was well-formed, the values were not.
+func (e CheckError) StatusCode() int { return 422 }
+
+// ValidationError is every check a Validate call found failing, in
+// declaration order. It unwraps to its members, so errors.As finds the
+// first CheckError and errors.Is matches any of them, and it is a 422
+// as a whole.
+type ValidationError []CheckError
+
+func (e ValidationError) Error() string {
+	parts := make([]string, len(e))
+	for i, ce := range e {
+		parts[i] = ce.Error()
+	}
+	return strings.Join(parts, "; ")
+}
+
+// Unwrap exposes the members to errors.As and errors.Is.
+func (e ValidationError) Unwrap() []error {
+	out := make([]error, len(e))
+	for i, ce := range e {
+		out[i] = ce
+	}
+	return out
+}
+
+// StatusCode is 422: the values violate the schema's checks.
+func (e ValidationError) StatusCode() int { return 422 }
+
+// Validation is what a generated Validate returns: nil when every
+// check passed, else the failures as one ValidationError.
+func Validation(errs []CheckError) error {
+	if len(errs) == 0 {
+		return nil
+	}
+	return ValidationError(errs)
+}
+
+// ConstraintError is a database refusal translated into a status: the
+// row violated a constraint the schema declared. Kind is one of
+// "unique", "check", "foreign key" and "not null"; Detail is what
+// SQLite named — the column (table.column) for unique and not null,
+// the check's name or expression for check, nothing for foreign key.
+type ConstraintError struct {
+	Kind   string
+	Detail string
+	Cause  error
+}
+
+func (e ConstraintError) Error() string {
+	switch e.Kind {
+	case "unique":
+		return e.Detail + " already exists"
+	case "not null":
+		return e.Detail + " must not be null"
+	case "check":
+		return "check " + e.Detail + " failed"
+	}
+	return e.Kind + " constraint failed"
+}
+
+func (e ConstraintError) Unwrap() error { return e.Cause }
+
+// StatusCode is 409 (Conflict) for a duplicate key and 422 for every
+// other constraint: the values are unprocessable as given.
+func (e ConstraintError) StatusCode() int {
+	if e.Kind == "unique" {
+		return 409
+	}
+	return 422
+}
+
+// Constraint translates a driver error into a ConstraintError when it
+// is a SQLite constraint failure, and returns any other error
+// unchanged. Generated queries pass every write's error through it.
+// The messages are SQLite's own and identical across drivers:
+// "UNIQUE constraint failed: users.email", "CHECK constraint failed:
+// counts_positive", "FOREIGN KEY constraint failed", "NOT NULL
+// constraint failed: users.email".
+func Constraint(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	for _, kind := range []string{"UNIQUE", "CHECK", "FOREIGN KEY", "NOT NULL"} {
+		prefix := kind + " constraint failed"
+		i := strings.Index(msg, prefix)
+		if i < 0 {
+			continue
+		}
+		detail := strings.TrimSpace(strings.TrimPrefix(msg[i+len(prefix):], ":"))
+		return ConstraintError{Kind: strings.ToLower(kind), Detail: detail, Cause: err}
+	}
+	return err
+}
 
 // Like reports whether s matches pattern under SQLite's LIKE operator
 // with no ESCAPE clause: '%' matches any sequence (empty included),
