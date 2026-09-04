@@ -93,14 +93,6 @@ The gaps, in the order to close them:
    that maps `(table, check)` to text so an app can ship translations
    without touching the schema. The name stays the stable key.
 
-6. **Unknown-field attribution.** `volt.Decode` answers 400 with Go's
-   own text (`json: unknown field "emial"`). Surface it as
-   `Detail{Check: "unknown_field", Columns: ["emial"]}` so a form marks
-   the field like any other failure. Only the first unknown field is
-   reported (the decoder stops); and GOB bodies get no such check at all
-   because `encoding/gob` drops undeclared fields silently — say so in
-   §V4.9.
-
 Not planned: nullable columns inside typed checks (rule 3 stands; the
 Go tier does not mirror three-valued NULL logic, and pretending it does
 is where Rails and Ecto quietly diverge from their databases), and

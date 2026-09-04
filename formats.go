@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -113,9 +114,31 @@ func Decode(r *Request, v any) error {
 		if errors.As(err, &tooBig) {
 			return Error(http.StatusRequestEntityTooLarge, fmt.Sprintf("request body over %d bytes", MaxBodyBytes))
 		}
+		if name, ok := unknownField(err); ok {
+			msg := "unknown field " + strconv.Quote(name)
+			return &ProblemError{Problem{
+				Status:  http.StatusBadRequest,
+				Message: msg,
+				Details: []Detail{{Check: "unknown_field", Columns: []string{name}, Message: msg}},
+			}}
+		}
 		return Error(http.StatusBadRequest, "malformed "+f.MIME()+" body: "+err.Error())
 	}
 	return nil
+}
+
+// unknownField recognizes encoding/json's refusal of an undeclared
+// field (`json: unknown field "Nmae"`) and returns the field's name, so
+// Decode can itemize it as a Detail like any other failure. The
+// decoder stops at the first such field. The message shape is the
+// standard library's; the test pins it.
+func unknownField(err error) (string, bool) {
+	const prefix = `json: unknown field "`
+	msg := err.Error()
+	if !strings.HasPrefix(msg, prefix) || !strings.HasSuffix(msg, `"`) {
+		return "", false
+	}
+	return msg[len(prefix) : len(msg)-1], true
 }
 
 // FormatOf maps a Content-Type header to a format: JSON when the header

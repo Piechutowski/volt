@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -272,10 +273,25 @@ func TestDecodeStrictAndBounded(t *testing.T) {
 		}
 		return Render(w, r, v)
 	}
-	// An unknown JSON field is a 400 naming it: a typo must not vanish.
+	// An unknown JSON field is a 400 naming it as a Detail, so a form
+	// marks the field like any other failure: a typo must not vanish.
 	rec := serve(t, decode, httptest.NewRequest("POST", "/x", strings.NewReader(`{"ID":1,"Nmae":"typo"}`)))
-	if rec.Code != 400 || !strings.Contains(rec.Body.String(), "Nmae") {
+	if rec.Code != 400 {
 		t.Fatalf("unknown field: %d %q", rec.Code, rec.Body.String())
+	}
+	var p Problem
+	if err := json.Unmarshal(rec.Body.Bytes(), &p); err != nil {
+		t.Fatal(err)
+	}
+	want := Detail{Check: "unknown_field", Columns: []string{"Nmae"}, Message: `unknown field "Nmae"`}
+	if len(p.Details) != 1 || !reflect.DeepEqual(p.Details[0], want) {
+		t.Fatalf("details = %+v, want [%+v]", p.Details, want)
+	}
+	// The decoder stops at the first unknown field; the second is not
+	// reported. Pinned so the limitation is a known one, not a surprise.
+	rec = serve(t, decode, httptest.NewRequest("POST", "/x", strings.NewReader(`{"Nmae":1,"Nam":2}`)))
+	if rec.Code != 400 || strings.Contains(rec.Body.String(), "Nam\"") {
+		t.Fatalf("second unknown field: %d %q", rec.Code, rec.Body.String())
 	}
 	// Over the cap is a 413, and the cap is settable.
 	old := MaxBodyBytes

@@ -339,8 +339,7 @@ imply otherwise (D49). Each is small; none blocks FW-2.
   enum membership (the DDL `CHECK … IN` does, hypotheses H5); typed
   checks have no `length()` term; a select's query parameters are typed
   but not bounded; no `[on: create]` / `[on: update]`; messages are not
-  localized; an unknown JSON field is a 400 with Go's text, not a
-  `Detail`. Each has a design sketched under backlog "Validation,
+  localized. Each has a design sketched under backlog "Validation,
   round 3", taken when the battlefield app first needs it.
 - **CLI.** `Project.Module` is required but unused; a nonexistent
   argument gets a loader message rather than "no such directory";

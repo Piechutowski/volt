@@ -1758,10 +1758,13 @@ for a format suffix.
 2. **Request bodies** follow `Content-Type`: absent or
    `application/json` decodes JSON, `application/x-gob` decodes GOB,
    anything else is a 415; an empty or malformed body is a 400; a JSON
-   field the struct does not declare is a 400 naming it — a typo must
-   not vanish silently (GOB ignores unknown fields by design, the
-   shared struct being the contract); a body over the runtime's
-   `MaxBodyBytes` (four megabytes unless set) is a 413.
+   field the struct does not declare is a 400 whose body itemizes it
+   (rule 5) as `Detail{Check: "unknown_field", Columns: [<field>]}`,
+   so a form marks the field — a typo must not vanish silently. Only
+   the first undeclared field is reported (the decoder stops there),
+   and GOB ignores unknown fields by design, the shared struct being
+   the contract. A body over the runtime's `MaxBodyBytes` (four
+   megabytes unless set) is a 413.
 3. **GOB is the Go-native arm**: a client that imports the generated
    models package decodes rows into the same types the server
    encoded, with no schema on the wire. JSON is what browsers, curl and
