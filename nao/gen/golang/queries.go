@@ -627,7 +627,10 @@ func (e *queryEmitter) rowsScan(t *tableModel, lower string) {
 // (List, GetMany, and the dynamic Query verb).
 func rowsScanEmit(b *strings.Builder, model, lower string) {
 	fmt.Fprintf(b, "\tif err != nil {\n\t\treturn nil, err\n\t}\n\tdefer rows.Close()\n")
-	fmt.Fprintf(b, "\tvar out []%s\n\tfor rows.Next() {\n", model)
+	// Never nil: an empty result is an empty list on every wire (JSON
+	// "[]", not "null"), so a query route's reply shape does not depend
+	// on whether anything matched.
+	fmt.Fprintf(b, "\tout := []%s{}\n\tfor rows.Next() {\n", model)
 	fmt.Fprintf(b, "\t\tv, err := %sScan(rows)\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tout = append(out, v)\n\t}\n", lower)
 	fmt.Fprintf(b, "\treturn out, rows.Err()\n}\n\n")
 }

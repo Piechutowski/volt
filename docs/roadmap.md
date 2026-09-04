@@ -334,12 +334,29 @@ imply otherwise (D49). Each is small; none blocks FW-2.
   diagnostics print absolute paths even for relative arguments;
   cascading import errors are not collapsed.
 
-## FW-2 — Datasets: schema-driven group expansion
+## FW-2 — Query routes and datasets: schema-driven route expansion
 
-`Dataset` (reserved word, spec §V8) turns a `TableGroup` into a full
-CRUD surface: `resources` where the loop variable is bound by the
-schema. Condensed design (argued in full in working sessions of
-2026-07; supersedes section 12 of the old router draft):
+**Landed (D67, 2026-09-04): query routes.** `get /users/:id(int32)
+db.UserGet` binds a route to a generated query — a select method or a
+default CRUD method — and Volt writes the handler: typed binding from
+path, body and query string, rendering by `Accept` (JSON and GOB),
+404 on a row miss, 201/204 for create/delete. The `Controllers`
+manifest carries one `*pkg.Queries` per data package. This is the
+primitive the rest of FW-2 expands: every route below is a query
+route emitted per group member.
+
+**Next: `dataset`.** A scope item binding a *group* select,
+`dataset db.browse [strip: 'da_']`, expands to one query route per
+member table with the segment derived from the table name, and
+`only:`/`except:` to take a member out and write it by hand. It
+replaces the reserved `Dataset` word. Then a generated client package
+(one typed method per query route, same name as the query) and
+`resources db.t [default]` for generated CRUD handlers over the
+seven actions.
+
+The original condensed design, kept for what it still decides
+(the override ladder, the honest costs), with the parts superseded by
+D67 noted:
 
 - **Declaration.** `Dataset ms [from: db.group(MS), pipe: api,
   formats: (html, json, gob)] { path: strip('ms_')  key: id
@@ -353,17 +370,15 @@ schema. Condensed design (argued in full in working sessions of
   disagree. The runtime ships one generic implementation per operation
   (`dataset.List[T]`); generation picks `T`, so `/ms/revenue` returns
   `[]models.MsRevenue`, compiler-held end to end. Zero reflection.
-- **The one runtime-dynamic surface** is `GridQuery`
-  (`?sort=-year&f.year=2024`), validated against the generated column
-  whitelist: unknown column → 400, values parsed to the column's type,
-  predicates mapped onto nao's typed predicate values (needs FW-1/DYN).
-  Injection impossible by construction.
-- **Renderer seam.** Generic handlers end with
-  `return render(w, r, page)`; the default renderer negotiates HTML
-  (per-table template if present, shared grid template otherwise —
-  missing generic template is a gen error, not a 500), JSON, and GOB —
-  the Go-native arm: a desktop client imports the same generated
-  models package and decodes `dataset.Page[models.MsRevenue]` directly.
+- **The one runtime-dynamic surface** was to be `GridQuery`
+  (`?sort=-year&f.year=2024`). Dropped by D67: a query route's
+  parameters are the select's declared parameters, and filtering and
+  sorting beyond them belong to the client or to another select.
+  Nothing on the wire selects a column by name.
+- **Renderer seam.** Landed as `volt.Render`/`volt.RenderStatus`
+  (spec §V4.9): JSON and GOB by `Accept`, GOB being the Go-native arm
+  where a desktop client imports the generated models and decodes
+  `[]db.DaAA` directly. HTML rendering is not part of it.
 - **Override ladder** (R14's shape, now the model for all generated
   surfaces): nothing → one operation on one table
   (`ms_revenue [list: App.MsRevenueList]`, override receives the

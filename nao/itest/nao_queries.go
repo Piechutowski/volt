@@ -80,7 +80,7 @@ func (q *Queries) UserGetMany(ctx context.Context, ids []int32) ([]User, error) 
 		return nil, err
 	}
 	defer rows.Close()
-	var out []User
+	out := []User{}
 	for rows.Next() {
 		v, err := userScan(rows)
 		if err != nil {
@@ -108,7 +108,7 @@ func (q *Queries) UserList(ctx context.Context) ([]User, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []User
+	out := []User{}
 	for rows.Next() {
 		v, err := userScan(rows)
 		if err != nil {
@@ -215,7 +215,7 @@ func (q *Queries) OrderGetMany(ctx context.Context, ids []int32) ([]Order, error
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Order
+	out := []Order{}
 	for rows.Next() {
 		v, err := orderScan(rows)
 		if err != nil {
@@ -235,7 +235,7 @@ func (q *Queries) OrderList(ctx context.Context) ([]Order, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Order
+	out := []Order{}
 	for rows.Next() {
 		v, err := orderScan(rows)
 		if err != nil {
@@ -331,7 +331,7 @@ func (q *Queries) UserTagList(ctx context.Context) ([]UserTag, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []UserTag
+	out := []UserTag{}
 	for rows.Next() {
 		v, err := userTagScan(rows)
 		if err != nil {
@@ -411,7 +411,7 @@ func (q *Queries) PageViewGetMany(ctx context.Context, ids []int32) ([]PageView,
 		return nil, err
 	}
 	defer rows.Close()
-	var out []PageView
+	out := []PageView{}
 	for rows.Next() {
 		v, err := pageViewScan(rows)
 		if err != nil {
@@ -431,7 +431,7 @@ func (q *Queries) PageViewList(ctx context.Context) ([]PageView, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []PageView
+	out := []PageView{}
 	for rows.Next() {
 		v, err := pageViewScan(rows)
 		if err != nil {
@@ -532,7 +532,7 @@ func (q *Queries) LinkClickGetMany(ctx context.Context, ids []int32) ([]LinkClic
 		return nil, err
 	}
 	defer rows.Close()
-	var out []LinkClick
+	out := []LinkClick{}
 	for rows.Next() {
 		v, err := linkClickScan(rows)
 		if err != nil {
@@ -552,7 +552,7 @@ func (q *Queries) LinkClickList(ctx context.Context) ([]LinkClick, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []LinkClick
+	out := []LinkClick{}
 	for rows.Next() {
 		v, err := linkClickScan(rows)
 		if err != nil {

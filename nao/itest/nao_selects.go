@@ -20,7 +20,7 @@ func (q *Queries) PageViewRows(ctx context.Context, site string, day int32) ([]P
 		return nil, err
 	}
 	defer rows.Close()
-	var out []PageView
+	out := []PageView{}
 	for rows.Next() {
 		v, err := pageViewScan(rows)
 		if err != nil {
@@ -40,7 +40,7 @@ func (q *Queries) LinkClickRows(ctx context.Context, site string, day int32) ([]
 		return nil, err
 	}
 	defer rows.Close()
-	var out []LinkClick
+	out := []LinkClick{}
 	for rows.Next() {
 		v, err := linkClickScan(rows)
 		if err != nil {
@@ -60,7 +60,7 @@ func (q *Queries) PageViewRecent(ctx context.Context, site string, day int32, fr
 		return nil, err
 	}
 	defer rows.Close()
-	var out []PageView
+	out := []PageView{}
 	for rows.Next() {
 		v, err := pageViewScan(rows)
 		if err != nil {
@@ -80,7 +80,7 @@ func (q *Queries) LinkClickRecent(ctx context.Context, site string, day int32, f
 		return nil, err
 	}
 	defer rows.Close()
-	var out []LinkClick
+	out := []LinkClick{}
 	for rows.Next() {
 		v, err := linkClickScan(rows)
 		if err != nil {
@@ -100,7 +100,7 @@ func (q *Queries) PageViewOnSites(ctx context.Context, sites []string) ([]PageVi
 		return nil, err
 	}
 	defer rows.Close()
-	var out []PageView
+	out := []PageView{}
 	for rows.Next() {
 		v, err := pageViewScan(rows)
 		if err != nil {
@@ -120,7 +120,7 @@ func (q *Queries) LinkClickOnSites(ctx context.Context, sites []string) ([]LinkC
 		return nil, err
 	}
 	defer rows.Close()
-	var out []LinkClick
+	out := []LinkClick{}
 	for rows.Next() {
 		v, err := linkClickScan(rows)
 		if err != nil {
@@ -153,7 +153,7 @@ func (q *Queries) PageViewSummary(ctx context.Context, site string, day int32) (
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Summary
+	out := []Summary{}
 	for rows.Next() {
 		v, err := summaryScan(rows)
 		if err != nil {
@@ -173,7 +173,7 @@ func (q *Queries) LinkClickSummary(ctx context.Context, site string, day int32) 
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Summary
+	out := []Summary{}
 	for rows.Next() {
 		v, err := summaryScan(rows)
 		if err != nil {
@@ -207,7 +207,7 @@ func (q *Queries) LinkClickPublic(ctx context.Context) ([]LinkClickPublic, error
 		return nil, err
 	}
 	defer rows.Close()
-	var out []LinkClickPublic
+	out := []LinkClickPublic{}
 	for rows.Next() {
 		v, err := linkClickPublicScan(rows)
 		if err != nil {

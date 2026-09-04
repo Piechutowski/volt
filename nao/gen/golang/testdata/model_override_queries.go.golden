@@ -79,7 +79,7 @@ func (q *Queries) MenuGetMany(ctx context.Context, ids []int32) ([]Menu, error) 
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Menu
+	out := []Menu{}
 	for rows.Next() {
 		v, err := menuScan(rows)
 		if err != nil {
@@ -99,7 +99,7 @@ func (q *Queries) MenuList(ctx context.Context) ([]Menu, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Menu
+	out := []Menu{}
 	for rows.Next() {
 		v, err := menuScan(rows)
 		if err != nil {
@@ -196,7 +196,7 @@ func (q *Queries) OrderStatusGetMany(ctx context.Context, codes []string) ([]Ord
 		return nil, err
 	}
 	defer rows.Close()
-	var out []OrderStatus
+	out := []OrderStatus{}
 	for rows.Next() {
 		v, err := orderStatusScan(rows)
 		if err != nil {
@@ -224,7 +224,7 @@ func (q *Queries) OrderStatusList(ctx context.Context) ([]OrderStatus, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []OrderStatus
+	out := []OrderStatus{}
 	for rows.Next() {
 		v, err := orderStatusScan(rows)
 		if err != nil {

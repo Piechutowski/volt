@@ -62,7 +62,7 @@ func (q *Queries) CurrencyQuery(ctx context.Context, opts ...rt.Opt[Currency]) (
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Currency
+	out := []Currency{}
 	for rows.Next() {
 		v, err := currencyScan(rows)
 		if err != nil {
@@ -185,7 +185,7 @@ func (q *Queries) RateQuery(ctx context.Context, opts ...rt.Opt[Rate]) ([]Rate, 
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Rate
+	out := []Rate{}
 	for rows.Next() {
 		v, err := rateScan(rows)
 		if err != nil {

@@ -65,7 +65,7 @@ func (q *Queries) PostQuery(ctx context.Context, opts ...rt.Opt[Post]) ([]Post, 
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Post
+	out := []Post{}
 	for rows.Next() {
 		v, err := postScan(rows)
 		if err != nil {
@@ -184,7 +184,7 @@ func (q *Queries) TagQuery(ctx context.Context, opts ...rt.Opt[Tag]) ([]Tag, err
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Tag
+	out := []Tag{}
 	for rows.Next() {
 		v, err := tagScan(rows)
 		if err != nil {

@@ -533,3 +533,76 @@ Scope / [pipe: api] {
 		}
 	}
 }
+
+// Query routes (§V4.8): a qualified handler binds a generated query;
+// parameters bind by source and the manifest field is the qualifier's
+// Go name.
+func TestQueryRoutes(t *testing.T) {
+	pr, diags := project(t, map[string]string{
+		"go.mod":         modFile,
+		"db/schema.volt": "package db\n\nTable users {\n\tid integer [pk, increment]\n\temail text [not null, unique]\n}\n\nSelect picked for users where id in :ids and email like :pat\n",
+		"app/r.volt": "package app\n\nimport (\n\tdb\n)\n\nScope /api [name: api] {\n" +
+			"\tget /users/:id(int32) db.UserGet\n\tpost /users db.UserCreate\n\tget /picked db.UserPicked\n\tdelete /users/:id(int32) db.UserDelete\n}\n",
+	})
+	wantClean(t, diags)
+	app := pr.Packages["app"]
+	if len(app.Routes) != 4 || len(app.Controllers) != 0 {
+		t.Fatalf("routes = %d, controllers = %d; want 4 and none", len(app.Routes), len(app.Controllers))
+	}
+	get := app.Routes[0].Query
+	if get == nil || get.Field != "DB" || get.Import != "blog/db" || get.Result != "User" || get.Many || get.Status != 200 {
+		t.Errorf("UserGet ref = %+v", get)
+	}
+	if len(get.Params) != 1 || get.Params[0].Source != FromPath || get.Params[0].GoType != "int32" {
+		t.Errorf("UserGet params = %+v, want id from the path as int32", get.Params)
+	}
+	if app.Routes[0].HelperName != "APIUserGet" {
+		t.Errorf("helper = %q, want APIUserGet", app.Routes[0].HelperName)
+	}
+	create := app.Routes[1].Query
+	if create.Status != 201 || len(create.Params) != 1 || create.Params[0].Source != FromBody || create.Params[0].GoType != "db.UserCreateParams" {
+		t.Errorf("UserCreate ref = %+v", create)
+	}
+	if app.Routes[1].HelperName != "" {
+		t.Errorf("a write has no helper, got %q", app.Routes[1].HelperName)
+	}
+	picked := app.Routes[2].Query
+	if !picked.Many || len(picked.Params) != 2 || picked.Params[0].Source != FromList || picked.Params[0].GoType != "[]int32" ||
+		picked.Params[1].Source != FromQuery || picked.Params[1].GoType != "string" {
+		t.Errorf("UserPicked ref = %+v", picked)
+	}
+	del := app.Routes[3].Query
+	if del.Result != "" || del.Status != 204 {
+		t.Errorf("UserDelete ref = %+v", del)
+	}
+}
+
+func TestQueryRouteErrors(t *testing.T) {
+	schema := "package db\n\nTable users {\n\tid integer [pk, increment]\n\temail text [not null]\n}\n\nTable notes {\n\tbody text [not null]\n}\n\nSelect picked for users where id in :ids\n"
+	cases := []struct{ name, route, want string }{
+		{"unknown", "get /x db.UserFetch", "no generated query db.UserFetch"},
+		{"case hint", "get /x db.userget", `did you mean "UserGet"`},
+		{"no pk", "get /x/:id(int32) db.NoteGet", "no generated query db.NoteGet"},
+		{"path type", "get /x/:id(int64) db.UserGet", "spell it :id(int32)"},
+		{"body verb", "get /x db.UserCreate", "route it with post, put or patch"},
+		{"extra path param", "get /x/:n(int32) db.UserList", `path parameter "n" is not a parameter of db.UserList`},
+		{"list in path", "get /x/:ids db.UserPicked", "cannot be a path parameter"},
+		{"wildcard", "get /x/:id... db.UserGet", "cannot be a wildcard"},
+		{"not a data package", "get /x app2.Thing", "declares no tables"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			files := map[string]string{
+				"go.mod":         modFile,
+				"db/schema.volt": schema,
+				"app2/x.volt":    "package app2\n\nScope /z {\n\tget /q Q.R\n}\n",
+				"app/r.volt":     "package app\n\nimport (\n\tdb\n\tapp2\n)\n\nScope / {\n\tget /keep app2.Z\n\t" + tc.route + "\n}\n",
+			}
+			if tc.name != "not a data package" {
+				files["app/r.volt"] = "package app\n\nimport (\n\tdb\n)\n\nScope / {\n\t" + tc.route + "\n}\n"
+			}
+			_, diags := project(t, files)
+			wantError(t, diags, tc.want)
+		})
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Piechutowski/volt/gen/model"
 	"github.com/Piechutowski/volt/gen/router"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
@@ -45,6 +46,27 @@ func TestFixtureNotDrifted(t *testing.T) {
 		}
 		if !bytes.Equal(got, want) {
 			t.Errorf("%s drifted from generator output; re-run volt gen ./itest/blog/app", name)
+		}
+	}
+
+	// The data package the query routes go through (§V4.8) is generated
+	// too, with the DDL the proof suite loads. Refresh with
+	// 'go run ./cmd/volt gen --sql ./itest/blog/db'.
+	dbPkg := pr.PackageAt(filepath.Join("blog", "db"))
+	if dbPkg == nil {
+		t.Fatal("blog/db not loaded")
+	}
+	dbFiles, err := model.Generate(dbPkg, model.Options{Source: "package " + dbPkg.Path, SQL: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range dbFiles {
+		got, err := os.ReadFile(filepath.Join("blog", "db", f.Name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got, f.Code) {
+			t.Errorf("%s drifted from generator output; re-run volt gen --sql ./itest/blog/db", f.Name)
 		}
 	}
 }

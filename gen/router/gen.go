@@ -82,11 +82,49 @@ func (g *generator) header(imports ...string) {
 				g.pf("\n") // group separator
 				continue
 			}
+			if strings.Contains(im, " ") {
+				g.pf("\t%s\n", im) // already rendered: `alias "path"`
+				continue
+			}
 			g.pf("\t%q\n", im)
 		}
 		g.pf(")\n\n")
 	}
 }
+
+// dataPackages lists the imported data packages query routes go
+// through, by qualifier, sorted (§V4.8).
+func (g *generator) dataPackages() []*lang.QueryRef {
+	seen := map[string]*lang.QueryRef{}
+	for _, r := range g.pkg.Routes {
+		if r.Query != nil && seen[r.Query.Qualifier] == nil {
+			seen[r.Query.Qualifier] = r.Query
+		}
+	}
+	quals := make([]string, 0, len(seen))
+	for q := range seen {
+		quals = append(quals, q)
+	}
+	sort.Strings(quals)
+	out := make([]*lang.QueryRef, len(quals))
+	for i, q := range quals {
+		out[i] = seen[q]
+	}
+	return out
+}
+
+// dataImport renders the import line of a data package: aliased when
+// the Volt qualifier differs from the Go package name.
+func dataImport(q *lang.QueryRef) string {
+	if q.Qualifier == q.PkgName {
+		return q.Import
+	}
+	return q.Qualifier + " " + fmt.Sprintf("%q", q.Import)
+}
+
+// handlerLabel renders a route's handler for comments: Controller.Action
+// or pkg.Query.
+func handlerLabel(r *lang.RouteInfo) string { return r.HandlerRef() }
 
 // controllerNames returns the controllers sorted by name for
 // deterministic emission.
@@ -121,7 +159,12 @@ func sigParams(ps []lang.Param) string {
 /* ===== volt_handlers.go ===== */
 
 func (g *generator) handlersEmit() error {
-	g.header("net/http", "", voltImport)
+	imports := []string{"net/http", "", voltImport}
+	data := g.dataPackages()
+	for _, q := range data {
+		imports = append(imports, dataImport(q))
+	}
+	g.header(imports...)
 
 	for _, name := range g.controllerNames() {
 		ci := g.pkg.Controllers[name]
@@ -139,10 +182,17 @@ func (g *generator) handlersEmit() error {
 	}
 
 	g.pf("// Controllers is the dependency manifest of the route table: one\n")
-	g.pf("// implementation per controller named in the routes.\n")
+	g.pf("// implementation per controller named in the routes")
+	if len(data) > 0 {
+		g.pf(", and the\n// Queries handle of every data package query routes go through (§V4.8)")
+	}
+	g.pf(".\n")
 	g.pf("type Controllers struct {\n")
 	for _, name := range g.controllerNames() {
 		g.pf("\t%s %sController\n", name, name)
+	}
+	for _, q := range data {
+		g.pf("\t%s *%s.Queries // query routes written %s.<Method>\n", q.Field, q.Qualifier, q.Qualifier)
 	}
 	g.pf("}\n\n")
 
@@ -174,7 +224,17 @@ func plugExpr(ref string, pkgName string) string {
 }
 
 func (g *generator) routerEmit() error {
-	g.header("net/http", "", voltImport)
+	imports := []string{"net/http", "", voltImport}
+	for _, q := range g.dataPackages() {
+		// The shim names the package only for a body type it declares.
+		for _, r := range g.pkg.Routes {
+			if r.Query != nil && r.Query.Qualifier == q.Qualifier && hasBody(r.Query) {
+				imports = append(imports, dataImport(q))
+				break
+			}
+		}
+	}
+	g.header(imports...)
 
 	g.pf("// register wires every route of the package onto mux. Dispatch is\n")
 	g.pf("// decided here, at generation time: the route line and the call it\n")
@@ -244,6 +304,68 @@ func prefixEach(items []string, sep string) string {
 	return b.String()
 }
 
+// hasBody reports whether a query route decodes a request body.
+func hasBody(q *lang.QueryRef) bool {
+	for _, p := range q.Params {
+		if p.Source == lang.FromBody {
+			return true
+		}
+	}
+	return false
+}
+
+// pathParse renders the typed parse of one path parameter into the
+// shim body, returning the expression that carries its value (§V4.1.3:
+// a parse failure is the route's 404).
+func pathParse(body *strings.Builder, p lang.Param) string {
+	if p.Type == lang.TString {
+		// Wildcards and string params pass through verbatim.
+		return fmt.Sprintf("r.PathValue(%q)", p.Name)
+	}
+	parse := map[lang.ParamType]string{
+		lang.TInt: "ParseInt", lang.TInt32: "ParseInt32", lang.TInt64: "ParseInt64",
+	}[p.Type]
+	fmt.Fprintf(body, "\t\tvolt%s, ok := volt.%s(r.PathValue(%q))\n", p.GoName, parse, p.Name)
+	fmt.Fprintf(body, "\t\tif !ok {\n\t\t\treturn volt.ErrNotFound\n\t\t}\n")
+	return "volt" + p.GoName
+}
+
+// queryShimBody renders a query route's generated handler (§V4.8): bind
+// every parameter from its source, call the query, render the result.
+func queryShimBody(r *lang.RouteInfo) string {
+	q := r.Query
+	var body strings.Builder
+	byName := map[string]lang.Param{}
+	for _, p := range r.Params {
+		byName[p.Name] = p
+	}
+	args := make([]string, 0, len(q.Params))
+	for _, p := range q.Params {
+		switch p.Source {
+		case lang.FromPath:
+			args = append(args, pathParse(&body, byName[p.Name]))
+		case lang.FromQuery:
+			fmt.Fprintf(&body, "\t\tvolt%s, err := volt.QueryParam[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name, p.GoType, p.Name)
+			args = append(args, "volt"+p.Name)
+		case lang.FromList:
+			fmt.Fprintf(&body, "\t\tvolt%s, err := volt.QueryParams[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name, strings.TrimPrefix(p.GoType, "[]"), p.Name)
+			args = append(args, "volt"+p.Name)
+		case lang.FromBody:
+			fmt.Fprintf(&body, "\t\tvar volt%s %s\n\t\tif err := volt.Decode(r, &volt%s); err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name, p.GoType, p.Name)
+			args = append(args, "volt"+p.Name)
+		}
+	}
+	call := fmt.Sprintf("c.%s.%s(r.Context()%s)", q.Field, q.Method, prefixEach(args, ", "))
+	if q.Result == "" {
+		fmt.Fprintf(&body, "\t\tif err := %s; err != nil {\n\t\t\treturn err\n\t\t}\n", call)
+		fmt.Fprintf(&body, "\t\treturn volt.RenderStatus(w, r, %d, nil)\n", q.Status)
+		return body.String()
+	}
+	fmt.Fprintf(&body, "\t\tout, err := %s\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", call)
+	fmt.Fprintf(&body, "\t\treturn volt.RenderStatus(w, r, %d, out)\n", q.Status)
+	return body.String()
+}
+
 func (g *generator) routeEmit(r *lang.RouteInfo) {
 	pattern := fullPattern(r)
 	eh := "nil"
@@ -251,31 +373,25 @@ func (g *generator) routeEmit(r *lang.RouteInfo) {
 		eh = "errHandler" + r.ErrorHandler
 	}
 
-	g.pf("\n\t// %s %s → %s.%s", methodOrAny(r.Method), r.Spelled, r.Controller, r.Action)
+	g.pf("\n\t// %s %s → %s", methodOrAny(r.Method), r.Spelled, handlerLabel(r))
 	if len(r.Pipes) > 0 {
 		g.pf(" [pipe: %s]", strings.Join(r.Pipes, ", "))
 	}
 	g.pf("\n")
 
 	shim := fmt.Sprintf("volt.Handler(%q, func(w http.ResponseWriter, r *volt.Request) error {\n", pattern)
-	var body strings.Builder
-	call := make([]string, 0, len(r.Params))
-	for _, p := range r.Params {
-		switch p.Type {
-		case lang.TString:
-			// Wildcards and string params pass through verbatim.
-			call = append(call, fmt.Sprintf("r.PathValue(%q)", p.Name))
-		default:
-			parse := map[lang.ParamType]string{
-				lang.TInt: "ParseInt", lang.TInt32: "ParseInt32", lang.TInt64: "ParseInt64",
-			}[p.Type]
-			fmt.Fprintf(&body, "\t\tvolt%s, ok := volt.%s(r.PathValue(%q))\n", p.GoName, parse, p.Name)
-			fmt.Fprintf(&body, "\t\tif !ok {\n\t\t\treturn volt.ErrNotFound\n\t\t}\n")
-			call = append(call, "volt"+p.GoName)
+	if r.Query != nil {
+		shim += queryShimBody(r)
+		shim += fmt.Sprintf("\t}, %s)", eh)
+	} else {
+		var body strings.Builder
+		call := make([]string, 0, len(r.Params))
+		for _, p := range r.Params {
+			call = append(call, pathParse(&body, p))
 		}
+		shim += body.String()
+		shim += fmt.Sprintf("\t\treturn c.%s.%s(w, r%s)\n\t}, %s)", r.Controller, r.Action, prefixEach(call, ", "), eh)
 	}
-	shim += body.String()
-	shim += fmt.Sprintf("\t\treturn c.%s.%s(w, r%s)\n\t}, %s)", r.Controller, r.Action, prefixEach(call, ", "), eh)
 
 	if len(r.Pipes) > 0 {
 		g.pf("\tmux.Handle(%q, %s(%s))\n", pattern, g.pipeVars[pipeKey(r.Pipes)], shim)
@@ -308,8 +424,8 @@ func (g *generator) pathsEmit() error {
 			continue
 		}
 		emitted = true
-		g.pf("// Path%s returns the path for %s %s (%s.%s).\n",
-			r.HelperName, methodOrAny(r.Method), r.Spelled, r.Controller, r.Action)
+		g.pf("// Path%s returns the path for %s %s (%s).\n",
+			r.HelperName, methodOrAny(r.Method), r.Spelled, handlerLabel(r))
 		g.pf("func Path%s(%sopts ...volt.URLOption) string {\n", r.HelperName, sigParamsLead(r.Params))
 		g.pf("\treturn volt.URL(%s, opts...)\n", pathExpr(r))
 		g.pf("}\n\n")
@@ -383,8 +499,13 @@ func (g *generator) routesEmit() error {
 	g.pf("// labels, and downstream derivations read this).\n")
 	g.pf("var Table = []volt.Route{\n")
 	for _, r := range g.pkg.Routes {
-		g.pf("\t{Method: %q, Pattern: %q, Spelled: %q, Controller: %q, Action: %q",
-			r.Method, r.Pattern, r.Spelled, r.Controller, r.Action)
+		if r.Query != nil {
+			g.pf("\t{Method: %q, Pattern: %q, Spelled: %q, Query: %q",
+				r.Method, r.Pattern, r.Spelled, r.Query.Ref())
+		} else {
+			g.pf("\t{Method: %q, Pattern: %q, Spelled: %q, Controller: %q, Action: %q",
+				r.Method, r.Pattern, r.Spelled, r.Controller, r.Action)
+		}
 		if r.HelperName != "" {
 			g.pf(", Helper: %q", "Path"+r.HelperName)
 		}

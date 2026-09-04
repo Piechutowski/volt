@@ -65,7 +65,7 @@ func (q *Queries) UserQuery(ctx context.Context, opts ...rt.Opt[User]) ([]User, 
 		return nil, err
 	}
 	defer rows.Close()
-	var out []User
+	out := []User{}
 	for rows.Next() {
 		v, err := userScan(rows)
 		if err != nil {
@@ -187,7 +187,7 @@ func (q *Queries) OrderQuery(ctx context.Context, opts ...rt.Opt[Order]) ([]Orde
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Order
+	out := []Order{}
 	for rows.Next() {
 		v, err := orderScan(rows)
 		if err != nil {
@@ -306,7 +306,7 @@ func (q *Queries) UserTagQuery(ctx context.Context, opts ...rt.Opt[UserTag]) ([]
 		return nil, err
 	}
 	defer rows.Close()
-	var out []UserTag
+	out := []UserTag{}
 	for rows.Next() {
 		v, err := userTagScan(rows)
 		if err != nil {
@@ -427,7 +427,7 @@ func (q *Queries) PageViewQuery(ctx context.Context, opts ...rt.Opt[PageView]) (
 		return nil, err
 	}
 	defer rows.Close()
-	var out []PageView
+	out := []PageView{}
 	for rows.Next() {
 		v, err := pageViewScan(rows)
 		if err != nil {
@@ -548,7 +548,7 @@ func (q *Queries) LinkClickQuery(ctx context.Context, opts ...rt.Opt[LinkClick])
 		return nil, err
 	}
 	defer rows.Close()
-	var out []LinkClick
+	out := []LinkClick{}
 	for rows.Next() {
 		v, err := linkClickScan(rows)
 		if err != nil {

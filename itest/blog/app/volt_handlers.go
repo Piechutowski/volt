@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/Piechutowski/volt"
+	"github.com/Piechutowski/volt/itest/blog/db"
 )
 
 // AdminController is implemented by your code and wired through
@@ -94,7 +95,8 @@ type UsersController interface {
 }
 
 // Controllers is the dependency manifest of the route table: one
-// implementation per controller named in the routes.
+// implementation per controller named in the routes, and the
+// Queries handle of every data package query routes go through (§V4.8).
 type Controllers struct {
 	Admin   AdminController
 	Archive ArchiveController
@@ -104,6 +106,7 @@ type Controllers struct {
 	Pages   PagesController
 	Tags    TagsController
 	Users   UsersController
+	DB      *db.Queries // query routes written db.<Method>
 }
 
 // New builds the router: ServeMux registrations with statically

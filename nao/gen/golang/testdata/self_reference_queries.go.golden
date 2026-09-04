@@ -79,7 +79,7 @@ func (q *Queries) EmployeeGetMany(ctx context.Context, ids []int64) ([]Employee,
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Employee
+	out := []Employee{}
 	for rows.Next() {
 		v, err := employeeScan(rows)
 		if err != nil {
@@ -99,7 +99,7 @@ func (q *Queries) EmployeeList(ctx context.Context) ([]Employee, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Employee
+	out := []Employee{}
 	for rows.Next() {
 		v, err := employeeScan(rows)
 		if err != nil {

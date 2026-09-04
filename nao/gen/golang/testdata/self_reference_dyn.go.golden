@@ -62,7 +62,7 @@ func (q *Queries) EmployeeQuery(ctx context.Context, opts ...rt.Opt[Employee]) (
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Employee
+	out := []Employee{}
 	for rows.Next() {
 		v, err := employeeScan(rows)
 		if err != nil {

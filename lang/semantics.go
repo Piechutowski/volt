@@ -417,21 +417,29 @@ func (c *checker) routeBuild(r *ast.Route, inh inherited) *RouteInfo {
 	}
 
 	controller, action := r.Handler.Parts[0].Name(), r.Handler.Parts[1].Name()
-	if _, isImport := c.pkg.Imports[controller]; isImport {
-		c.usedQual[controller] = true
-		c.errorf(r.Handler.Pos(), "V4", "handlers live in the routes package; %q names an imported package (§V4.3)", controller)
-		return nil
-	}
 	if r.Handler.Parts[0].Quoted() || r.Handler.Parts[1].Quoted() {
 		c.errorf(r.Handler.Pos(), "V4", "handler names are plain (unquoted) identifiers (§V4.1.6), found %q", r.Handler.String())
 		return nil
 	}
-	if !exportedIdentOK(controller) || !exportedIdentOK(action) {
+	// A qualified handler names a generated query of an imported data
+	// package — a query route (§V4.8) — rather than a controller.
+	var query *QueryRef
+	if target, isImport := c.pkg.Imports[controller]; isImport {
+		c.usedQual[controller] = true
+		query = c.queryRef(r, method, params, controller, target)
+		if query == nil {
+			return nil
+		}
+		controller, action = "", query.Method
+	} else if !exportedIdentOK(controller) || !exportedIdentOK(action) {
 		c.errorf(r.Handler.Pos(), "V4", "handler must be Controller.Action, both exported Go identifiers (§V4.3), found %q", r.Handler.String())
 		return nil
 	}
 
 	helper := inh.namePrefix + action
+	if query != nil && method != "GET" && method != "HEAD" {
+		helper = "" // like resources' create/update/delete: writes have no reverse URL (§V4.8)
+	}
 	if s := settingOf(r.Settings, "name"); s != nil {
 		id, ok := s.Value.(*ast.Ident)
 		if !ok {
@@ -450,6 +458,9 @@ func (c *checker) routeBuild(r *ast.Route, inh inherited) *RouteInfo {
 		}
 	}
 
+	if query != nil {
+		action = ""
+	}
 	return &RouteInfo{
 		Method:       method,
 		Pattern:      patternOf(segs),
@@ -457,11 +468,191 @@ func (c *checker) routeBuild(r *ast.Route, inh inherited) *RouteInfo {
 		Params:       params,
 		Controller:   controller,
 		Action:       action,
+		Query:        query,
 		HelperName:   helper,
 		Pipes:        inh.pipes,
 		ErrorHandler: inh.errHandler,
 		Pos:          r.Pos(),
 	}
+}
+
+/* ===== query routes (§V4.8) ===== */
+
+// queryValueTypes are the Go types a query-string parameter can carry:
+// the scalar column types of Appendix A, matched by the runtime's
+// volt.QueryParam.
+var queryValueTypes = map[string]bool{
+	"string": true, "bool": true,
+	"int": true, "int8": true, "int16": true, "int32": true, "int64": true,
+	"uint": true, "uint8": true, "uint16": true, "uint32": true, "uint64": true,
+	"float32": true, "float64": true, "time.Time": true,
+}
+
+// queryRef resolves `pkg.Method` to a generated query of the imported
+// package — a select method (§V11.6) or a default CRUD method — and
+// binds the route's parameters to the method's (§V4.8).
+func (c *checker) queryRef(r *ast.Route, method string, params []Param, qual, target string) *QueryRef {
+	name := r.Handler.Parts[1].Name()
+	pos := r.Handler.Parts[1].Pos()
+	pkg := c.pr.Packages[target]
+	info := c.schemas[target]
+	if pkg == nil || info == nil || !pkg.HasSchema() {
+		c.errorf(pos, "V4", "package %q declares no tables; a query route needs a data package (§V4.8)", target)
+		return nil
+	}
+	field, err := golang.GoName(qual)
+	if err != nil {
+		c.errorf(r.Handler.Parts[0].Pos(), "V4", "import qualifier %q: %v (§V4.8)", qual, err)
+		return nil
+	}
+	importPath := c.pr.Module
+	if target != "." {
+		importPath += "/" + target
+	}
+	qr := &QueryRef{Qualifier: qual, Field: field, Package: target, Import: importPath, PkgName: pkg.Name, Method: name, Status: 200}
+
+	// Signature parameters of the named method, in order.
+	type sigParam struct {
+		name, goType string
+		body         bool
+	}
+	var sig []sigParam
+	found := false
+	var candidates []string
+
+	// Selects: <Model><SelectName> per member (§V11.6).
+	for _, si := range pkg.Selects {
+		for _, m := range si.Members {
+			mn := modelOrBase(m) + si.MethodSuffix
+			candidates = append(candidates, mn)
+			if mn != name || found {
+				continue
+			}
+			found = true
+			for _, p := range si.Params {
+				sig = append(sig, sigParam{name: p.GoName, goType: p.GoType})
+			}
+			switch {
+			case si.Shared != "":
+				qr.Result = si.Shared
+			case len(si.Excluded) > 0:
+				qr.Result = modelOrBase(m) + si.MethodSuffix
+			default:
+				qr.Result = modelOrBase(m)
+			}
+			qr.Many = true
+		}
+	}
+	// Default CRUD (CRUD-1 to CRUD-7).
+	if !found {
+		for _, ti := range info.Tables {
+			_, methods, err := golang.CRUDMethods(pkg.Merged(), info, ti.Key)
+			if err != nil {
+				continue
+			}
+			for _, cm := range methods {
+				candidates = append(candidates, cm.Name)
+				if cm.Name != name || found {
+					continue
+				}
+				found = true
+				for _, k := range cm.Key {
+					sig = append(sig, sigParam{name: k.GoName, goType: k.GoType})
+				}
+				if cm.Body != "" {
+					sig = append(sig, sigParam{name: "arg", goType: qual + "." + cm.Body, body: true})
+				}
+				qr.Result, qr.Many = cm.Result, cm.Many
+				switch cm.Op {
+				case "create":
+					qr.Status = 201
+				case "delete":
+					qr.Status = 204
+				}
+			}
+		}
+	}
+	if !found {
+		hint := ""
+		for _, cand := range candidates {
+			if strings.EqualFold(cand, name) {
+				hint = fmt.Sprintf("; did you mean %q?", cand)
+				break
+			}
+		}
+		c.errorf(pos, "V4", "no generated query %s.%s in package %q%s — a query route names a select method or a default CRUD method (Get, List, Create, Update, Delete) (§V4.8)", qual, name, target, hint)
+		return nil
+	}
+
+	// Bind: path parameters by name (type spelled to match), a params
+	// struct from the body, everything else from the query string.
+	byName := map[string]Param{}
+	for _, p := range params {
+		byName[p.Name] = p
+	}
+	bound := map[string]bool{}
+	ok := true
+	for _, sp := range sig {
+		qp := QueryParam{Name: sp.name, GoType: sp.goType}
+		switch {
+		case sp.body:
+			qp.Source = FromBody
+			if method != "POST" && method != "PUT" && method != "PATCH" {
+				c.errorf(r.Pos(), "V4", "%s.%s takes a request body (%s); route it with post, put or patch (§V4.8)", qual, name, sp.goType)
+				ok = false
+			}
+		case strings.HasPrefix(sp.goType, "[]"):
+			qp.Source = FromList
+			if pp, inPath := byName[sp.name]; inPath {
+				c.errorf(segPos(r, pp.Name), "V4", "list parameter %q of %s.%s cannot be a path parameter; pass it as a repeated query key (§V4.8)", sp.name, qual, name)
+				ok = false
+			}
+		default:
+			if pp, inPath := byName[sp.name]; inPath {
+				qp.Source = FromPath
+				bound[sp.name] = true
+				if pp.Wild {
+					c.errorf(segPos(r, pp.Name), "V4", "parameter %q of %s.%s cannot be a wildcard (§V4.8)", sp.name, qual, name)
+					ok = false
+				} else if pp.Type.GoType() != sp.goType {
+					if KnownParamType(sp.goType) {
+						c.errorf(segPos(r, pp.Name), "V4", "path parameter %q is %s but %s.%s takes %s; spell it :%s(%s) (§V4.8)", sp.name, pp.Type.GoType(), qual, name, sp.goType, sp.name, sp.goType)
+					} else {
+						c.errorf(segPos(r, pp.Name), "V4", "parameter %q of %s.%s is %s, which a path segment cannot carry (§V4.1.3); pass it in the query string (§V4.8)", sp.name, qual, name, sp.goType)
+					}
+					ok = false
+				}
+			} else {
+				qp.Source = FromQuery
+				if !queryValueTypes[sp.goType] {
+					c.errorf(pos, "V4", "parameter %q of %s.%s is %s, which the query string cannot carry (§V4.8)", sp.name, qual, name, sp.goType)
+					ok = false
+				}
+			}
+		}
+		qr.Params = append(qr.Params, qp)
+	}
+	for _, p := range params {
+		if !bound[p.Name] {
+			c.errorf(segPos(r, p.Name), "V4", "path parameter %q is not a parameter of %s.%s (§V4.8)", p.Name, qual, name)
+			ok = false
+		}
+	}
+	if !ok {
+		return nil
+	}
+	return qr
+}
+
+// segPos finds the position of a named parameter segment in the route's
+// own path, falling back to the route.
+func segPos(r *ast.Route, name string) token.Position {
+	for _, seg := range r.Path.Segments {
+		if seg.Kind != ast.SegLit && seg.Name.Name() == name {
+			return seg.Pos()
+		}
+	}
+	return r.Pos()
 }
 
 // pathParams validates the full segment list and derives the parameter
@@ -848,6 +1039,10 @@ func (c *checker) routeAdd(r *RouteInfo, seenShape, seenHelper map[string]*Route
 		}
 	}
 
+	if r.Query != nil {
+		c.pkg.Routes = append(c.pkg.Routes, r) // no controller: the handler is generated (§V4.8)
+		return
+	}
 	ci := c.pkg.Controllers[r.Controller]
 	if ci == nil {
 		ci = &ControllerInfo{Name: r.Controller}
@@ -1098,5 +1293,14 @@ func (r *RouteInfo) String() string {
 	if helper != "" {
 		helper = "Path" + helper
 	}
-	return fmt.Sprintf("%-7s %-32s %s.%s %s", methodOrAny(r.Method), r.Spelled, r.Controller, r.Action, helper)
+	return fmt.Sprintf("%-7s %-32s %s %s", methodOrAny(r.Method), r.Spelled, r.HandlerRef(), helper)
+}
+
+// HandlerRef renders the route's handler as written: Controller.Action,
+// or pkg.Query for a query route (§V4.8).
+func (r *RouteInfo) HandlerRef() string {
+	if r.Query != nil {
+		return r.Query.Ref()
+	}
+	return r.Controller + "." + r.Action
 }

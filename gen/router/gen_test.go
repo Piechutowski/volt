@@ -11,14 +11,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Piechutowski/volt/gen/model"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
 
-// generate loads the fixture project and generates the app package.
-func generate(t *testing.T) map[string][]byte {
+// fixture loads and checks the fixture project.
+func fixture(t *testing.T) *lang.Project {
 	t.Helper()
 	pr, err := lang.Load(filepath.Join("testdata", "blog"))
 	if err != nil {
@@ -28,7 +29,13 @@ func generate(t *testing.T) map[string][]byte {
 	if diag.HasErrors(diags) {
 		t.Fatalf("fixture has errors: %v", diags)
 	}
-	files, err := Generate(pr.Packages["app"], Options{Source: "package app"})
+	return pr
+}
+
+// generate loads the fixture project and generates the app package.
+func generate(t *testing.T) map[string][]byte {
+	t.Helper()
+	files, err := Generate(fixture(t).Packages["app"], Options{Source: "package app"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,11 +192,27 @@ func TestGoldenCompiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gomod := "module goldencheck\n\ngo 1.27\n\n" +
+	// The module is the fixture's (blog): the goldens import blog/db, the
+	// data package the query routes go through (§V4.8), which is
+	// generated here by the model generator the way volt gen would.
+	gomod := "module blog\n\ngo 1.27\n\n" +
 		"require github.com/Piechutowski/volt v0.0.0\n\n" +
 		"replace github.com/Piechutowski/volt => " + repoRoot + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0o644); err != nil {
 		t.Fatal(err)
+	}
+	dbDir := filepath.Join(dir, "db")
+	if err := os.MkdirAll(dbDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dbFiles, err := model.Generate(fixture(t).Packages["db"], model.Options{Source: "package db"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range dbFiles {
+		if err := os.WriteFile(filepath.Join(dbDir, f.Name), f.Code, 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	pkgDir := filepath.Join(dir, "app")
 	if err := os.MkdirAll(pkgDir, 0o755); err != nil {

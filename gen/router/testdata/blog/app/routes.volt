@@ -22,4 +22,13 @@ Scope / [pipe: api, error_handler: Errors] {
 	get /files/:path...          Files.Serve
 	get /users/:id(int32)/avatar Users.Avatar
 	any /ping                    Home.Ping
+
+	Scope /api [name: api] {
+		get    /users            db.UserList
+		get    /users/:id(int32) db.UserGet
+		post   /users            db.UserCreate
+		patch  /users/:id(int32) db.UserUpdate
+		delete /users/:id(int32) db.UserDelete
+		get    /picked           db.UserPicked
+	}
 }

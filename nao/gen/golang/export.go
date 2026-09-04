@@ -133,3 +133,54 @@ func PackageNames(f *ast.File, info *check.Info) (map[string]string, error) {
 	}
 	return names, nil
 }
+
+// CRUDMethod is one generated default-CRUD method of a table (CRUD-1 to
+// CRUD-7), as a query route (spec §V4.8) sees it: the name to call, the
+// identity parameters in key order, the params struct it decodes, and
+// what comes back.
+type CRUDMethod struct {
+	Name   string        // method name, e.g. "UserGet"
+	Op     string        // get | list | create | update | delete
+	Key    []SelectParam // identity parameters (get, update, delete); nil otherwise
+	Body   string        // params struct type (create, update); "" when the method takes none
+	Result string        // row type; "" for delete
+	Many   bool          // slice result (list)
+}
+
+// CRUDMethods lists the default CRUD methods the query generator emits
+// for one table, with the same existence rules it applies: Get, Update
+// and Delete need a primary key, Update needs a non-key column, Create
+// takes a params struct only when a column is caller-supplied (D16).
+func CRUDMethods(f *ast.File, info *check.Info, tableKey string) (model string, methods []CRUDMethod, err error) {
+	p, err := planBuild(f, info)
+	if err != nil {
+		return "", nil, err
+	}
+	for _, t := range p.tables {
+		if t.ti.Key != tableKey {
+			continue
+		}
+		var key []SelectParam
+		for _, fp := range t.pk {
+			key = append(key, SelectParam{SQLName: fp.param, GoName: fp.arg, GoType: fp.baseType})
+		}
+		m := t.model
+		if len(t.pk) > 0 {
+			methods = append(methods, CRUDMethod{Name: m + "Get", Op: "get", Key: key, Result: m})
+		}
+		methods = append(methods, CRUDMethod{Name: m + "List", Op: "list", Result: m, Many: true})
+		create := CRUDMethod{Name: m + "Create", Op: "create", Result: m}
+		if len(t.createFields()) > 0 {
+			create.Body = m + "CreateParams"
+		}
+		methods = append(methods, create)
+		if len(t.pk) > 0 {
+			if len(t.nonPK()) > 0 {
+				methods = append(methods, CRUDMethod{Name: m + "Update", Op: "update", Key: key, Body: m + "UpdateParams", Result: m})
+			}
+			methods = append(methods, CRUDMethod{Name: m + "Delete", Op: "delete", Key: key})
+		}
+		return t.model, methods, nil
+	}
+	return "", nil, fmt.Errorf("no table %q", tableKey)
+}

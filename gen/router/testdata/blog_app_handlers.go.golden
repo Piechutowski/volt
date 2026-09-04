@@ -7,6 +7,7 @@ package app
 import (
 	"net/http"
 
+	"blog/db"
 	"github.com/Piechutowski/volt"
 )
 
@@ -53,12 +54,14 @@ type UsersController interface {
 }
 
 // Controllers is the dependency manifest of the route table: one
-// implementation per controller named in the routes.
+// implementation per controller named in the routes, and the
+// Queries handle of every data package query routes go through (§V4.8).
 type Controllers struct {
 	Admin AdminController
 	Files FilesController
 	Home  HomeController
 	Users UsersController
+	DB    *db.Queries // query routes written db.<Method>
 }
 
 // New builds the router: ServeMux registrations with statically

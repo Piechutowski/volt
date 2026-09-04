@@ -136,6 +136,7 @@ type Route struct {
 	Spelled    string // DSL spelling
 	Controller string
 	Action     string
+	Query      string // "pkg.Method" for a query route (§V4.8); Controller and Action are then empty
 	Helper     string // reverse-URL function name, "" when none
 	Params     []RouteParam
 }

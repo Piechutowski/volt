@@ -210,7 +210,10 @@ where the merge changed the facts.
   returns the resulting row via `RETURNING` (`ErrNotFound` on a miss);
   partial updates are v2's `UserUpdateWhere` with typed setters. `Delete`
   checks `RowsAffected` and reports a miss as `ErrNotFound`. `GetMany`
-  treats missing keys as absence, not error, and exists only for
+  treats missing keys as absence, not error — and every list-shaped
+  result (`List`, `GetMany`, select methods) is an empty slice, never
+  nil, so an empty reply is `[]` on every wire (amended 2026-09-04
+  with D67) — and exists only for
   single-column keys.
 - **D37 — `rt.Open` pins the pool to one connection.** SQLite pragmas are
   per-connection, so `Open(driver, dsn)` sets `MaxOpenConns(1)` and then
@@ -491,3 +494,24 @@ where the merge changed the facts.
   parameter (a text round trip would depend on the driver's storage
   format); and the JSON1 functions must be present, which every SQLite
   since 3.38 guarantees.
+
+- **D67 — A route may name a generated query; the handler is then
+  generated** (2026-09-04, spec §V4.8, §V4.9). A handler reference
+  whose first part is an import qualifier binds the route to a select
+  method or a default CRUD method of that data package. Volt generated
+  the method, so it knows every parameter and the row type, and it
+  writes the handler: path parameters by name with the type spelled
+  to match, a params struct from the body by `Content-Type`, list
+  parameters from a repeated query key, everything else from the
+  query string, then `RenderStatus` by `Accept`. What this buys: the
+  only route shape whose request and response types Volt can prove
+  end to end — the precondition for a generated client and for
+  expanding a group select into one route per member (FW-2). What it
+  refuses: hand-written functions in the handler slot (Volt cannot
+  know their result type — a controller route stays the honest
+  shape for those) and formats in the URL (a suffix on a parameter
+  segment is ambiguous with the value; headers carry the format, and
+  the round-trip proof keeps the segment renderer and parser
+  inverse). The dependency manifest grows one `*pkg.Queries` field
+  per data package used, named by the qualifier as a Go name, so the
+  application wires its database exactly once.

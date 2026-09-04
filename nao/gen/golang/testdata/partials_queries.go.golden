@@ -80,7 +80,7 @@ func (q *Queries) InvoiceGetMany(ctx context.Context, ids []int64) ([]Invoice, e
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Invoice
+	out := []Invoice{}
 	for rows.Next() {
 		v, err := invoiceScan(rows)
 		if err != nil {
@@ -100,7 +100,7 @@ func (q *Queries) InvoiceList(ctx context.Context) ([]Invoice, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Invoice
+	out := []Invoice{}
 	for rows.Next() {
 		v, err := invoiceScan(rows)
 		if err != nil {

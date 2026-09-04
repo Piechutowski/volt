@@ -6,15 +6,22 @@
 package itest
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/itest/blog/app"
+	"github.com/Piechutowski/volt/itest/blog/db"
+	"github.com/Piechutowski/volt/nao/rt"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // echo answers every route with its matched pattern and parameters, so
@@ -89,9 +96,35 @@ func (archive) Show(w http.ResponseWriter, r *volt.Request, stamp int64) error {
 }
 
 func handler() http.Handler {
+	return handlerWithDB(nil)
+}
+
+// handlerWithDB wires the fixture router over a real database (query
+// routes, §V4.8) — an in-memory SQLite loaded with the generated DDL —
+// seeded with one user so reads by id 1 succeed.
+func handlerWithDB(t *testing.T) http.Handler {
+	if t == nil {
+		t = &testing.T{}
+	}
+	sqlDB, err := rt.Open("sqlite3", ":memory:")
+	if err != nil {
+		panic(err)
+	}
+	ddl, err := os.ReadFile(filepath.Join("blog", "db", "nao_schema.sql"))
+	if err != nil {
+		panic(err)
+	}
+	if _, err := sqlDB.Exec(string(ddl)); err != nil {
+		panic(err)
+	}
+	q := db.New(sqlDB)
+	if _, err := q.UserCreate(context.Background(), db.UserCreateParams{Email: "one@example.com"}); err != nil {
+		panic(err)
+	}
 	return app.New(app.Controllers{
 		Home: home{}, Users: users{}, Files: files{}, Admin: admin{},
 		Ops: ops{}, Tags: tags{}, Pages: pages{}, Archive: archive{},
+		DB: q,
 	})
 }
 
@@ -102,9 +135,11 @@ func serve(t *testing.T, h http.Handler, method, target string) (*httptest.Respo
 	h.ServeHTTP(rec, httptest.NewRequest(method, target, nil))
 	var body map[string]any
 	if strings.HasPrefix(rec.Header().Get("Content-Type"), "application/json") {
-		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-			t.Fatalf("bad echo body %q: %v", rec.Body.String(), err)
+		var v any
+		if err := json.Unmarshal(rec.Body.Bytes(), &v); err != nil {
+			t.Fatalf("bad JSON body %q: %v", rec.Body.String(), err)
 		}
+		body, _ = v.(map[string]any) // query routes answer rows, not the echo object
 	}
 	return rec, body
 }
@@ -136,6 +171,16 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathTag":        {"GET", app.PathTag("hello world")},
 		"PathPage":       {"GET", app.PathPage(3)},
 		"PathArchive":    {"GET", app.PathArchive(1755000000123)},
+		// Query routes (§V4.8): the seeded user is id 1.
+		"PathAPIUserList":   {"GET", app.PathAPIUserList()},
+		"PathAPIUserGet":    {"GET", app.PathAPIUserGet(1)},
+		"PathAPIUserPicked": {"GET", app.PathAPIUserPicked(volt.Query("ids", "1"))},
+	}
+	queryRoutes := map[string]bool{} // helper -> served by a generated query handler
+	for _, r := range app.Table {
+		if r.Query != "" && r.Helper != "" {
+			queryRoutes[r.Helper] = true
+		}
 	}
 
 	tableHelpers := map[string]string{} // helper -> full registered pattern
@@ -177,6 +222,14 @@ func TestRoundTripTotality(t *testing.T) {
 		}
 		if rec.Code != 200 {
 			t.Errorf("%s → %s: status %d, want 200", helper, b.url, rec.Code)
+			continue
+		}
+		if queryRoutes[helper] {
+			// A query route renders rows, not the echo; a 200 with a JSON
+			// body from the seeded database is its dispatch proof.
+			if !strings.HasPrefix(rec.Header().Get("Content-Type"), "application/json") {
+				t.Errorf("%s → %s: query route answered %q, want JSON", helper, b.url, rec.Header().Get("Content-Type"))
+			}
 			continue
 		}
 		if got := body["route"]; got != want {
@@ -390,6 +443,15 @@ func TestTableMatchesServedReality(t *testing.T) {
 		rec, body := serve(t, h, method, url)
 		if row.Spelled == "/teapot" || row.Spelled == "/ops/fail" {
 			continue // error by design
+		}
+		if row.Query != "" {
+			// A generated query handler owns the row: sample values may
+			// miss (404 from the spine, never ServeMux's page) or lack a
+			// body (400); what must not happen is a mux-level miss.
+			if rec.Code == 405 || strings.HasPrefix(rec.Body.String(), "404 page not found") {
+				t.Errorf("%s %s: not dispatched to the query route: %d %q", method, url, rec.Code, rec.Body.String())
+			}
+			continue
 		}
 		if rec.Code != 200 {
 			t.Errorf("%s %s: status %d", method, url, rec.Code)

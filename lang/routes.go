@@ -52,9 +52,50 @@ type RouteInfo struct {
 	Pipes        []string
 	ErrorHandler string // package-level function name; "" for the default
 
+	// Query is set for a query route (§V4.8): the handler is a generated
+	// query method of an imported data package, and Controller/Action
+	// are empty.
+	Query *QueryRef
+
 	Pos           token.Position
 	FromResources bool
 }
+
+// QuerySource says where a query route binds one parameter from.
+type QuerySource int
+
+const (
+	FromPath  QuerySource = iota // a typed path parameter of the route
+	FromQuery                    // one query-string key, parsed to the type
+	FromList                     // a repeated query-string key (list parameter)
+	FromBody                     // the request body, decoded by Content-Type
+)
+
+// QueryParam is one parameter of a query route's method, in signature
+// order after ctx.
+type QueryParam struct {
+	Name   string // Go parameter name, also the URL key
+	GoType string // unqualified Go type ("int32", "[]string"); params structs are qualified ("db.UserCreateParams")
+	Source QuerySource
+}
+
+// QueryRef binds a route to a generated query method of an imported
+// data package (§V4.8).
+type QueryRef struct {
+	Qualifier string // the import qualifier as written, e.g. "db"
+	Field     string // the Controllers field holding *pkg.Queries: the qualifier as a Go name, e.g. "DB"
+	Package   string // root-relative package path
+	Import    string // Go import path of the package
+	PkgName   string // the package's Go name (its directory name)
+	Method    string // generated method name, e.g. "UserGet"
+	Params    []QueryParam
+	Result    string // row type, unqualified ("User"); "" for delete
+	Many      bool   // slice result
+	Status    int    // success status: 200, 201 for create, 204 for delete
+}
+
+// Ref renders the reference as written, e.g. "db.UserGet".
+func (q *QueryRef) Ref() string { return q.Qualifier + "." + q.Method }
 
 // ControllerInfo groups the actions dispatched to one controller
 // interface, for the generator.

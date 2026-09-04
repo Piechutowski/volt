@@ -77,3 +77,18 @@ func PathPage(num int, opts ...volt.URLOption) string {
 func PathArchive(stamp int64, opts ...volt.URLOption) string {
 	return volt.URL("/archive/"+volt.SegInt(stamp), opts...)
 }
+
+// PathAPIUserList returns the path for GET /api/users (db.UserList).
+func PathAPIUserList(opts ...volt.URLOption) string {
+	return volt.URL("/api/users", opts...)
+}
+
+// PathAPIUserGet returns the path for GET /api/users/:id(int32) (db.UserGet).
+func PathAPIUserGet(id int32, opts ...volt.URLOption) string {
+	return volt.URL("/api/users/"+volt.SegInt(int64(id)), opts...)
+}
+
+// PathAPIUserPicked returns the path for GET /api/picked (db.UserPicked).
+func PathAPIUserPicked(opts ...volt.URLOption) string {
+	return volt.URL("/api/picked", opts...)
+}

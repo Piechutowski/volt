@@ -80,7 +80,7 @@ func (q *Queries) PostGetMany(ctx context.Context, ids []int64) ([]Post, error) 
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Post
+	out := []Post{}
 	for rows.Next() {
 		v, err := postScan(rows)
 		if err != nil {
@@ -100,7 +100,7 @@ func (q *Queries) PostList(ctx context.Context) ([]Post, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Post
+	out := []Post{}
 	for rows.Next() {
 		v, err := postScan(rows)
 		if err != nil {
@@ -213,7 +213,7 @@ func (q *Queries) TagGetMany(ctx context.Context, ids []int32) ([]Tag, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Tag
+	out := []Tag{}
 	for rows.Next() {
 		v, err := tagScan(rows)
 		if err != nil {
@@ -241,7 +241,7 @@ func (q *Queries) TagList(ctx context.Context) ([]Tag, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Tag
+	out := []Tag{}
 	for rows.Next() {
 		v, err := tagScan(rows)
 		if err != nil {

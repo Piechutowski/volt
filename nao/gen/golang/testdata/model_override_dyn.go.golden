@@ -62,7 +62,7 @@ func (q *Queries) MenuQuery(ctx context.Context, opts ...rt.Opt[Menu]) ([]Menu, 
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Menu
+	out := []Menu{}
 	for rows.Next() {
 		v, err := menuScan(rows)
 		if err != nil {
@@ -183,7 +183,7 @@ func (q *Queries) OrderStatusQuery(ctx context.Context, opts ...rt.Opt[OrderStat
 		return nil, err
 	}
 	defer rows.Close()
-	var out []OrderStatus
+	out := []OrderStatus{}
 	for rows.Next() {
 		v, err := orderStatusScan(rows)
 		if err != nil {

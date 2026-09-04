@@ -63,7 +63,7 @@ func (q *Queries) CommentQuery(ctx context.Context, opts ...rt.Opt[Comment]) ([]
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Comment
+	out := []Comment{}
 	for rows.Next() {
 		v, err := commentScan(rows)
 		if err != nil {

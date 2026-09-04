@@ -7,6 +7,7 @@ package app
 import (
 	"net/http"
 
+	"blog/db"
 	"github.com/Piechutowski/volt"
 )
 
@@ -70,6 +71,83 @@ func register(mux *http.ServeMux, c Controllers) {
 	// any /ping → Home.Ping [pipe: api]
 	mux.Handle("/ping", pipe0(volt.Handler("/ping", func(w http.ResponseWriter, r *volt.Request) error {
 		return c.Home.Ping(w, r)
+	}, errHandlerErrors)))
+
+	// GET /api/users → db.UserList [pipe: api]
+	mux.Handle("GET /api/users", pipe0(volt.Handler("GET /api/users", func(w http.ResponseWriter, r *volt.Request) error {
+		out, err := c.DB.UserList(r.Context())
+		if err != nil {
+			return err
+		}
+		return volt.RenderStatus(w, r, 200, out)
+	}, errHandlerErrors)))
+
+	// GET /api/users/:id(int32) → db.UserGet [pipe: api]
+	mux.Handle("GET /api/users/{id}", pipe0(volt.Handler("GET /api/users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
+		voltid, ok := volt.ParseInt32(r.PathValue("id"))
+		if !ok {
+			return volt.ErrNotFound
+		}
+		out, err := c.DB.UserGet(r.Context(), voltid)
+		if err != nil {
+			return err
+		}
+		return volt.RenderStatus(w, r, 200, out)
+	}, errHandlerErrors)))
+
+	// POST /api/users → db.UserCreate [pipe: api]
+	mux.Handle("POST /api/users", pipe0(volt.Handler("POST /api/users", func(w http.ResponseWriter, r *volt.Request) error {
+		var voltarg db.UserCreateParams
+		if err := volt.Decode(r, &voltarg); err != nil {
+			return err
+		}
+		out, err := c.DB.UserCreate(r.Context(), voltarg)
+		if err != nil {
+			return err
+		}
+		return volt.RenderStatus(w, r, 201, out)
+	}, errHandlerErrors)))
+
+	// PATCH /api/users/:id(int32) → db.UserUpdate [pipe: api]
+	mux.Handle("PATCH /api/users/{id}", pipe0(volt.Handler("PATCH /api/users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
+		voltid, ok := volt.ParseInt32(r.PathValue("id"))
+		if !ok {
+			return volt.ErrNotFound
+		}
+		var voltarg db.UserUpdateParams
+		if err := volt.Decode(r, &voltarg); err != nil {
+			return err
+		}
+		out, err := c.DB.UserUpdate(r.Context(), voltid, voltarg)
+		if err != nil {
+			return err
+		}
+		return volt.RenderStatus(w, r, 200, out)
+	}, errHandlerErrors)))
+
+	// DELETE /api/users/:id(int32) → db.UserDelete [pipe: api]
+	mux.Handle("DELETE /api/users/{id}", pipe0(volt.Handler("DELETE /api/users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
+		voltid, ok := volt.ParseInt32(r.PathValue("id"))
+		if !ok {
+			return volt.ErrNotFound
+		}
+		if err := c.DB.UserDelete(r.Context(), voltid); err != nil {
+			return err
+		}
+		return volt.RenderStatus(w, r, 204, nil)
+	}, errHandlerErrors)))
+
+	// GET /api/picked → db.UserPicked [pipe: api]
+	mux.Handle("GET /api/picked", pipe0(volt.Handler("GET /api/picked", func(w http.ResponseWriter, r *volt.Request) error {
+		voltids, err := volt.QueryParams[int32](r, "ids")
+		if err != nil {
+			return err
+		}
+		out, err := c.DB.UserPicked(r.Context(), voltids)
+		if err != nil {
+			return err
+		}
+		return volt.RenderStatus(w, r, 200, out)
 	}, errHandlerErrors)))
 }
 

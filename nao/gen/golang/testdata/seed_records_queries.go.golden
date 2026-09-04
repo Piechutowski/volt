@@ -80,7 +80,7 @@ func (q *Queries) CurrencyGetMany(ctx context.Context, codes []string) ([]Curren
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Currency
+	out := []Currency{}
 	for rows.Next() {
 		v, err := currencyScan(rows)
 		if err != nil {
@@ -100,7 +100,7 @@ func (q *Queries) CurrencyList(ctx context.Context) ([]Currency, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Currency
+	out := []Currency{}
 	for rows.Next() {
 		v, err := currencyScan(rows)
 		if err != nil {
@@ -197,7 +197,7 @@ func (q *Queries) RateGetMany(ctx context.Context, ids []int32) ([]Rate, error) 
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Rate
+	out := []Rate{}
 	for rows.Next() {
 		v, err := rateScan(rows)
 		if err != nil {
@@ -217,7 +217,7 @@ func (q *Queries) RateList(ctx context.Context) ([]Rate, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Rate
+	out := []Rate{}
 	for rows.Next() {
 		v, err := rateScan(rows)
 		if err != nil {

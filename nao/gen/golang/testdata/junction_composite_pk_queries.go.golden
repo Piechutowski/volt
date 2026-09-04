@@ -80,7 +80,7 @@ func (q *Queries) UserGetMany(ctx context.Context, ids []int64) ([]User, error) 
 		return nil, err
 	}
 	defer rows.Close()
-	var out []User
+	out := []User{}
 	for rows.Next() {
 		v, err := userScan(rows)
 		if err != nil {
@@ -100,7 +100,7 @@ func (q *Queries) UserList(ctx context.Context) ([]User, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []User
+	out := []User{}
 	for rows.Next() {
 		v, err := userScan(rows)
 		if err != nil {
@@ -178,7 +178,7 @@ func (q *Queries) RoleGetMany(ctx context.Context, ids []int32) ([]Role, error) 
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Role
+	out := []Role{}
 	for rows.Next() {
 		v, err := roleScan(rows)
 		if err != nil {
@@ -206,7 +206,7 @@ func (q *Queries) RoleList(ctx context.Context) ([]Role, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Role
+	out := []Role{}
 	for rows.Next() {
 		v, err := roleScan(rows)
 		if err != nil {
@@ -294,7 +294,7 @@ func (q *Queries) UserRoleList(ctx context.Context) ([]UserRole, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []UserRole
+	out := []UserRole{}
 	for rows.Next() {
 		v, err := userRoleScan(rows)
 		if err != nil {

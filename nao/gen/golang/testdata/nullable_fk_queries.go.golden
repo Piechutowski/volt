@@ -81,7 +81,7 @@ func (q *Queries) UserGetMany(ctx context.Context, ids []int64) ([]User, error) 
 		return nil, err
 	}
 	defer rows.Close()
-	var out []User
+	out := []User{}
 	for rows.Next() {
 		v, err := userScan(rows)
 		if err != nil {
@@ -101,7 +101,7 @@ func (q *Queries) UserList(ctx context.Context) ([]User, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []User
+	out := []User{}
 	for rows.Next() {
 		v, err := userScan(rows)
 		if err != nil {
@@ -179,7 +179,7 @@ func (q *Queries) PostGetMany(ctx context.Context, ids []int64) ([]Post, error) 
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Post
+	out := []Post{}
 	for rows.Next() {
 		v, err := postScan(rows)
 		if err != nil {
@@ -199,7 +199,7 @@ func (q *Queries) PostList(ctx context.Context) ([]Post, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Post
+	out := []Post{}
 	for rows.Next() {
 		v, err := postScan(rows)
 		if err != nil {

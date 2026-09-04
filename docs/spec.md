@@ -110,6 +110,8 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Route paths](#route-paths)
     - [Routes](#routes)
     - [Handler references](#handler-references)
+    - [Query routes](#query-routes)
+    - [Formats](#formats)
     - [Scopes](#scopes)
     - [Reserved](#reserved)
     - [Route names and reverse URLs](#route-names-and-reverse-urls)
@@ -1648,15 +1650,99 @@ verb  = "get" | "post" | "put" | "patch" | "delete"
 handler ref = name, ".", name ;
 ```
 
-1. A handler is `Controller.Action`: exactly two exported Go
-   identifiers. The controller MUST NOT be an import qualifier —
-   handlers live in the routes package.
+1. A handler is `Controller.Action` — exactly two exported Go
+   identifiers, the controller not an import qualifier, so the action
+   lives in the routes package — or `pkg.Query`, a **query
+   reference**: its first part is an import qualifier (§V2.4) and its
+   second names a generated query of that package. A query reference
+   makes the route a query route (§V4.8) with no controller at all.
 2. Every distinct controller becomes one generated interface; every
    distinct action one method with the route's typed parameters
    appended after `(w http.ResponseWriter, r *volt.Request)`, returning
    `error`.
 3. Two routes MAY share `Controller.Action` only with identical
    parameter signatures (names, types and wildcard-ness, in order).
+
+### Query routes
+
+A **query route** binds a route to a generated query method of an
+imported data package instead of to a controller. Volt generated the
+method, so it knows the parameters and the row type, and it writes the
+handler: bind, call, render. Nothing is dispatched by name at runtime.
+
+```volt
+import ( db )
+
+Scope /api [pipe: api] {
+	get    /users            db.UserList
+	get    /users/:id(int32) db.UserGet
+	post   /users            db.UserCreate
+	patch  /users/:id(int32) db.UserUpdate
+	delete /users/:id(int32) db.UserDelete
+	get    /picked           db.UserPicked      // Select picked for users where id in :ids
+}
+```
+
+1. **Which methods qualify.** A select method, `<Model><SelectName>`
+   per member (§V11.6), or a default CRUD method of a table:
+   `<Model>Get`, `<Model>List`, `<Model>Create`, `<Model>Update`,
+   `<Model>Delete`, each only where the query generator emits it
+   (`Get`/`Update`/`Delete` need a primary key, `Update` a non-key
+   column). Any other name is an error listing what qualifies; a name
+   differing only in case names the right spelling.
+2. **Binding.** Each parameter of the method, in signature order,
+   binds from exactly one source, decided at generation time:
+   - a **path parameter** of the route with the same name binds it.
+     Its declared type MUST spell the method's Go type
+     (`:id(int32)` for `id int32`; `string` needs no annotation); a
+     type a segment cannot carry (§V4.1.3) goes in the query string.
+     A wildcard cannot bind a query parameter;
+   - a **params struct** (`<Model>CreateParams`, `<Model>UpdateParams`)
+     binds from the **request body**, decoded by `Content-Type`
+     (Formats). The route's verb MUST be `post`, `put` or `patch`;
+   - a **list parameter** (§V10.3) binds from the **repeated query
+     key** of its name; absent means the empty list;
+   - every other parameter binds from the **query string** by name,
+     parsed to its type; a missing or unparseable value is a 400 that
+     names the parameter.
+   A path parameter the method does not take is an error: the route
+   would capture a value nothing consumes.
+3. **Response.** The result renders in the negotiated format
+   (Formats): rows or a row with status 200, a created row with 201,
+   a delete with 204 and no body. A query's row miss (`rt.ErrNotFound`,
+   which is `sql.ErrNoRows`) is a 404 through the error spine; any
+   other error is the spine's 500.
+4. **Names.** The helper name (§V4.6) defaults to the scope name
+   prefixes followed by the method name, and only `get`/`head` query
+   routes carry one — writes have no reverse URL, as with resources
+   (§V5.2). `volt routes` and the route table show the reference as
+   written (`db.UserGet`) in place of `Controller.Action`.
+5. **Wiring.** The generated `Controllers` manifest (§V4.3) gains one
+   field per data package that query routes go through, named by the
+   qualifier as a Go name (`db` → `DB`), typed `*<pkg>.Queries`; the
+   application constructs it with the package's `New`. No interface is
+   generated for a query route.
+
+### Formats
+
+The wire format of a query route is negotiated by HTTP headers and
+never spelled in the URL, so a path parameter can never be mistaken
+for a format suffix.
+
+1. **Responses** follow `Accept`: the first listed media type that is
+   `application/json`, `application/x-gob`, `application/*` or `*/*`
+   decides; an absent header means JSON; a header offering neither is
+   a 406 naming both.
+2. **Request bodies** follow `Content-Type`: absent or
+   `application/json` decodes JSON, `application/x-gob` decodes GOB,
+   anything else is a 415; an empty or malformed body is a 400.
+3. **GOB is the Go-native arm**: a client that imports the generated
+   models package decodes rows into the same types the server
+   encoded, with no schema on the wire. JSON is what browsers, curl and
+   every other language see.
+4. The runtime exposes the same rules to hand-written controllers as
+   `volt.Render`, `volt.RenderStatus` and `volt.Decode`, so a
+   controller route can speak both formats without repeating them.
 
 ### Scopes
 
@@ -1836,11 +1922,15 @@ is valid only where a setting explicitly takes an action list.
 The normative output contract is the golden corpus under
 `gen/router/testdata/` and the proof suite under `itest/`. In prose:
 one `<Controller>Controller` interface per controller and a
-`Controllers` struct (§V4.3); `New(Controllers) http.Handler`
+`Controllers` struct (§V4.3), with one `*<pkg>.Queries` field per data
+package query routes use (§V4.8); `New(Controllers) http.Handler`
 registering every route onto a `http.ServeMux` with its pipeline chain
-composed statically and its typed shim parsing parameters per §V4.1.3;
+composed statically and its typed shim parsing parameters per §V4.1.3
+— for a query route the shim is the whole handler: it binds every
+parameter per §V4.8, calls the query and renders per §V4.9;
 `Path*` helpers per §V4.6; a `Table []volt.Route` mirroring the
-expanded route list in declaration order. All generated files carry the
+expanded route list in declaration order, with `Query` set on query
+routes. All generated files carry the
 standard generated-code header and are gofmt-stable.
 
 ## Reserved words for future layers
@@ -2489,6 +2579,8 @@ removal once citations name headings (docs/backlog.md).
 | §V4.5 | [Reserved](#reserved) |
 | §V4.6 | [Route names and reverse URLs](#route-names-and-reverse-urls) |
 | §V4.7 | [Route conflicts](#route-conflicts) |
+| §V4.8 | [Query routes](#query-routes) |
+| §V4.9 | [Formats](#formats) |
 | §V5 | [Resources](#resources) |
 | §V5.1 | [Declaration](#declaration) |
 | §V5.2 | [The action table](#the-action-table) |

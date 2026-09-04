@@ -79,7 +79,7 @@ func (q *Queries) CommentGetMany(ctx context.Context, ids []int64) ([]Comment, e
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Comment
+	out := []Comment{}
 	for rows.Next() {
 		v, err := commentScan(rows)
 		if err != nil {
@@ -99,7 +99,7 @@ func (q *Queries) CommentList(ctx context.Context) ([]Comment, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Comment
+	out := []Comment{}
 	for rows.Next() {
 		v, err := commentScan(rows)
 		if err != nil {
