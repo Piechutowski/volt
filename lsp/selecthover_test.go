@@ -17,7 +17,8 @@ const projSchema = "package db\n\n" +
 	"Table link_clicks {\n\tid integer [pk, increment]\n\tsite varchar [not null]\n\tday integer [not null]\n\ttarget text [not null, default: '']\n}\n\n" +
 	"Group metrics {\n\tpage_views\n\tlink_clicks\n}\n\n" +
 	"Select summary (site, day) for metrics where day >= :from\n" +
-	"Select public (* \\ site) for link_clicks\n"
+	"Select public (* \\ site) for link_clicks\n" +
+	"Select chosen for metrics where site in :sites and day in :days\n"
 
 func projSelectDoc(t *testing.T) (*Document, string) {
 	t.Helper()
@@ -78,5 +79,23 @@ func TestSelectHoverStructDerivative(t *testing.T) {
 	}
 	if strings.Contains(md, "Site") {
 		t.Errorf("excluded column leaked into the derivative hover:\n%s", md)
+	}
+}
+
+// A list parameter shows its slice type in the hover signature (§V10.3).
+func TestSelectHoverListParam(t *testing.T) {
+	d, text := projSelectDoc(t)
+	h := d.Hover(posOf(t, text, "chosen", 0))
+	if h == nil {
+		t.Fatal("no hover for the chosen select")
+	}
+	md := h.Contents.(protocol.MarkupContent).Value
+	for _, want := range []string{
+		"PageViewChosen(ctx context.Context, sites []string, days []int32) ([]PageView, error)",
+		"json_each(:sites)",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("hover missing %q:\n%s", want, md)
+		}
 	}
 }

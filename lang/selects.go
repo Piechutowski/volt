@@ -856,6 +856,18 @@ func (e *selectEnv) inCheck(x *ast.PredIn) string {
 	if b == nil {
 		return "1"
 	}
+	if x.List != nil {
+		// A list parameter binds as one JSON array and is unpacked by
+		// SQLite's json_each, so the statement stays static and
+		// prepared once (§V10.3, §V11.6, D66). Time columns are
+		// excluded: JSON has no time literal, and a text round trip
+		// would silently depend on the driver's storage format.
+		if b.class == classTime {
+			e.errorf(x.Col.Pos(), "column %q (%s) cannot take a list parameter: JSON carries no date/time value (§V10.3)", b.name, b.goType)
+			return "1"
+		}
+		return sqlite.Ident(b.name) + " IN (SELECT value FROM json_each(" + e.paramBind(x.List, "[]"+b.goType) + "))"
+	}
 	var items []string
 	for _, it := range x.Items {
 		items = append(items, e.litRender(it, b))

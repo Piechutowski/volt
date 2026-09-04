@@ -46,6 +46,9 @@ func GenerateSelects(f *ast.File, info *check.Info, fns []SelectFn, opts Options
 			if strings.HasPrefix(prm.GoType, "time.") {
 				imports["time"] = true
 			}
+			if strings.HasPrefix(prm.GoType, "[]") {
+				imports[rtImport] = true // rt.JSONList binds a list parameter
+			}
 		}
 		cols, err := selectColumns(t, fn)
 		if err != nil {
@@ -270,6 +273,11 @@ func selectEmit(b *strings.Builder, t *tableModel, fn SelectFn, cols []*fieldPla
 	var sig, binds strings.Builder
 	for _, prm := range fn.Params {
 		fmt.Fprintf(&sig, ", %s %s", prm.GoName, prm.GoType)
+		if strings.HasPrefix(prm.GoType, "[]") {
+			// A list parameter travels as one JSON array (§V11.6, D66).
+			fmt.Fprintf(&binds, ", sql.Named(%q, rt.JSONList(%s))", prm.SQLName, prm.GoName)
+			continue
+		}
 		fmt.Fprintf(&binds, ", sql.Named(%q, %s)", prm.SQLName, prm.GoName)
 	}
 	fmt.Fprintf(b, "// %s runs the %q select over %s (spec §V11).\n", name, lowerFirstWord(fn.MethodSuffix), t.sqlName)

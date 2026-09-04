@@ -8,6 +8,7 @@ package itest
 import (
 	"context"
 	"database/sql"
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
 const pageViewRowsSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE (site = :site AND day = :day) ORDER BY day DESC, id ASC`
@@ -75,6 +76,46 @@ const linkClickRecentSQL = `SELECT "id", "site", "day", "target" FROM "link_clic
 // LinkClickRecent runs the "recent" select over link_clicks (spec §V11).
 func (q *Queries) LinkClickRecent(ctx context.Context, site string, day int32, from int32) ([]LinkClick, error) {
 	rows, err := q.db.QueryContext(ctx, linkClickRecentSQL, sql.Named("site", site), sql.Named("day", day), sql.Named("from", from))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []LinkClick
+	for rows.Next() {
+		v, err := linkClickScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+const pageViewOnSitesSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE site IN (SELECT value FROM json_each(:sites)) ORDER BY id ASC`
+
+// PageViewOnSites runs the "onSites" select over page_views (spec §V11).
+func (q *Queries) PageViewOnSites(ctx context.Context, sites []string) ([]PageView, error) {
+	rows, err := q.db.QueryContext(ctx, pageViewOnSitesSQL, sql.Named("sites", rt.JSONList(sites)))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []PageView
+	for rows.Next() {
+		v, err := pageViewScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+const linkClickOnSitesSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE site IN (SELECT value FROM json_each(:sites)) ORDER BY id ASC`
+
+// LinkClickOnSites runs the "onSites" select over link_clicks (spec §V11).
+func (q *Queries) LinkClickOnSites(ctx context.Context, sites []string) ([]LinkClick, error) {
+	rows, err := q.db.QueryContext(ctx, linkClickOnSitesSQL, sql.Named("sites", rt.JSONList(sites)))
 	if err != nil {
 		return nil, err
 	}

@@ -633,10 +633,10 @@ module.exports = grammar({
       seq(
         alias($.identifier, $.column_ref),
         kw('in'),
-        '(',
-        $._pred_literal,
-        repeat(seq(',', $._pred_literal)),
-        ')',
+        choice(
+          seq('(', $._pred_literal, repeat(seq(',', $._pred_literal)), ')'),
+          $.query_param,
+        ),
       ),
 
     pred_like: ($) =>

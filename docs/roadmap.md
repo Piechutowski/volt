@@ -118,6 +118,7 @@ are illustrative):
 | SEL-6 | `View` blocks: DDL `CREATE VIEW` + read-only struct + accessors; declared columns verified against the SQL (D24) | v1 | planned |
 | SEL-7 | Narrow projections (list views without full hydration) — a `Select` block per shape is *the* mechanism | v1 | planned |
 | SEL-8 | Raw SQL strings in `.go` files: outside the safety net, escape hatch documented as "promote it to a Select block" | — | `HAND` (D18) |
+| SEL-9 | List parameters: `col in :names` typed `[]T`, bound as one JSON array through `json_each` so the statement stays static (§V10.3, D66) | v1 | `DONE` |
 
 ## P4 — Dynamic queries: runtime composition
 

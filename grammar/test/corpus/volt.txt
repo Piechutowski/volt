@@ -233,6 +233,7 @@ pred with composition, in, like, is null
 
 Pred current { org = :org and year = :year }
 Pred fresh { current and (year >= :since or year in (2024, 2025)) and not org like 'x%' and note is not null }
+Pred chosen { org in :orgs }
 
 ---
 
@@ -266,7 +267,14 @@ Pred fresh { current and (year >= :since or year in (2024, 2025)) and not org li
         (string
           (string_content)))
       (pred_null
-        (column_ref)))))
+        (column_ref))))
+  (pred_definition
+    (pred_name)
+    (pred_expr
+      (pred_in
+        (column_ref)
+        (query_param
+          (parameter_name))))))
 
 ==================
 select for group with where and order

@@ -474,3 +474,20 @@ where the merge changed the facts.
   character inside strings, so the editor grammar and the scanner
   must keep the two apart — they do, since group expressions never
   contain strings.
+
+- **D66 — A list parameter is one JSON array unpacked by `json_each`**
+  (2026-09-04). `col in :names` types `:names` as a slice of the
+  column's Go type and renders
+  `col IN (SELECT value FROM json_each(:names))`. The alternative —
+  expanding `IN (?, ?, …)` per call — was rejected because it makes
+  the statement text a function of the argument, which breaks three
+  things at once: the emitted SQL is no longer a constant the reader
+  can see, the prepare-validation corpus (D06) no longer proves the
+  statement that runs, and the statement cache keys on text. With
+  `json_each` the SQL is static whatever the list length, SQLite
+  compares JSON numbers and strings by their natural affinity, and an
+  empty list is `[]` — no rows, no special case. What it costs: JSON
+  has no date/time literal, so time-class columns refuse a list
+  parameter (a text round trip would depend on the driver's storage
+  format); and the JSON1 functions must be present, which every SQLite
+  since 3.38 guarantees.

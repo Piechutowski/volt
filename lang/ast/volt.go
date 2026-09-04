@@ -394,16 +394,23 @@ func (x *PredCompare) Pos() token.Position { return x.X.Pos() }
 func (x *PredCompare) End() token.Position { return x.Y.End() }
 func (x *PredCompare) predExpr()           {}
 
-// PredIn is "col in (lit, ...)".
+// PredIn is "col in (lit, ...)" or "col in :list" — the latter a list
+// parameter, typed as a slice of the column's type (spec §V10.3).
 type PredIn struct {
 	Col    *Ident
-	Items  []*Lit
+	Items  []*Lit // literal form; nil when List is set
+	List   *Param // list-parameter form; nil for the literal form
 	Rparen token.Position
 }
 
 func (x *PredIn) Pos() token.Position { return x.Col.Pos() }
-func (x *PredIn) End() token.Position { return x.Rparen }
-func (x *PredIn) predExpr()           {}
+func (x *PredIn) End() token.Position {
+	if x.List != nil {
+		return x.List.End()
+	}
+	return x.Rparen
+}
+func (x *PredIn) predExpr() {}
 
 // PredLike is "col like pattern" (pattern: string literal or param).
 type PredLike struct {

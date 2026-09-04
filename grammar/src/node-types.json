@@ -1026,6 +1026,10 @@
           "named": true
         },
         {
+          "type": "query_param",
+          "named": true
+        },
+        {
           "type": "string",
           "named": true
         }

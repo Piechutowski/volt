@@ -1918,7 +1918,7 @@ pred primary = "(", pred expr, ")"
              | plain name ;                      (* reference to a Pred *)
 comparison   = operand, comp op, operand ;
 comp op      = "=" | "!=" | "<" | "<=" | ">" | ">=" ;
-membership   = column ref, "in", "(", literal, { ",", literal }, ")" ;
+membership   = column ref, "in", ( "(", literal, { ",", literal }, ")" | param ) ;
 pattern      = column ref, "like", ( string | param ) ;
 null test    = column ref, "is", [ "not" ], "null" ;
 operand      = column ref | param | literal ;
@@ -1931,6 +1931,7 @@ literal      = number | string | boolean ;
 Pred current { org = :org and year = :year }
 Pred recent  { year >= :since }
 Pred fresh   { current and recent }
+Pred chosen  { org in :orgs }
 ```
 
 1. `and`, `or`, `not`, `in`, `like`, `is`, `null` are contextual
@@ -1946,10 +1947,15 @@ Pred fresh   { current and recent }
      `text_column > 'a'` are both errors; order text in SQL, §V11.6);
    - `like` requires a text column and a text pattern;
    - `in` items must all match the column's type;
+   - `in :name` makes `:name` a **list parameter**: its Go type is a
+     slice of the column's generated type (`[]string`, `[]int32`),
+     and the column MUST NOT be date/time-typed — JSON, the list's
+     wire form (§V11.6), carries no date/time value;
    - blob and JSON columns may not appear in predicates;
    - a `param` adopts the type of the expression position it appears
      in; one param name MUST resolve to one type across the whole use
-     site, or the use is an error naming both positions.
+     site — a list and a scalar use of the same name disagree — or
+     the use is an error naming both positions.
 4. An enum-typed column cannot be compared in the predicate language
    in v1 — the only column type predicates refuse besides blob/json;
    whether typed enum parameters should lift this is hypotheses H5.
@@ -2020,7 +2026,11 @@ the optional projection narrows the emitted columns.
    type per rule 7 (the model itself when there is no projection); the
    emitted SQL is
    `SELECT <projected columns> FROM <table> [WHERE …] [ORDER BY …]`
-   with SQLite named parameters (D15). The rendering is proven by
+   with SQLite named parameters (D15). A list parameter renders as
+   `<column> IN (SELECT value FROM json_each(:name))` and binds one
+   JSON array (`rt.JSONList`), so the statement is the same text for
+   every list length and an empty list matches no row (D66). The
+   rendering is proven by
    construction (typed operators over quoted identifiers) and by the
    generator's corpus, whose select statements are prepared against
    the generated DDL on a real SQLite (D06) and executed through a real

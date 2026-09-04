@@ -153,6 +153,9 @@ func TestVoltSyntaxErrors(t *testing.T) {
 		{"projection minus", "Select p (* - a) for t\n", "exclusion is spelled '\\'"},
 		{"projection star alone", "Select p (*) for t\n", "needs at least one"},
 		{"projection unclosed set", "Select p (* \\ (a, b for t\n", "expected ')'"},
+		// `in` takes a literal list or one :list parameter (§V10.3).
+		{"in without list", "Pred p { site in }\n", "expected '('"},
+		{"in with column", "Pred p { site in other }\n", "expected '('"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

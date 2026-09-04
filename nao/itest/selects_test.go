@@ -145,3 +145,48 @@ func TestSelectProjectionStructDerivative(t *testing.T) {
 		t.Errorf("excluded column leaked into the derivative's JSON: %s", doc)
 	}
 }
+
+// TestSelectListParam: `site in :sites` binds one JSON array and is
+// unpacked by json_each on the real driver (§V10.3, D66) — a
+// multi-value list, a single value, and the empty list that matches
+// nothing, with one signature across both members.
+func TestSelectListParam(t *testing.T) {
+	_, q := newDB(t)
+	seedMetrics(t, q)
+	ctx := context.Background()
+
+	both, err := q.PageViewOnSites(ctx, []string{"alpha", "beta"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(both) != 4 {
+		t.Fatalf("PageViewOnSites(alpha, beta) = %d rows, want 4", len(both))
+	}
+	for i := 1; i < len(both); i++ {
+		if both[i].ID < both[i-1].ID {
+			t.Fatalf("rows not in id order: %+v", both)
+		}
+	}
+	beta, err := q.LinkClickOnSites(ctx, []string{"beta"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(beta) != 1 || beta[0].Site != "beta" {
+		t.Fatalf("LinkClickOnSites(beta) = %+v, want the beta row", beta)
+	}
+	none, err := q.PageViewOnSites(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(none) != 0 {
+		t.Fatalf("PageViewOnSites(empty) = %d rows, want 0", len(none))
+	}
+	// A value with a JSON-significant character is carried verbatim.
+	odd, err := q.PageViewOnSites(ctx, []string{`al"pha`, "alpha"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(odd) != 3 {
+		t.Fatalf("PageViewOnSites(quoted, alpha) = %d rows, want 3", len(odd))
+	}
+}

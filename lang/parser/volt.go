@@ -478,6 +478,16 @@ func (p *parser) operand() ast.Operand {
 func (p *parser) predIn(col *ast.Ident) ast.PredExpr {
 	p.next() // in
 	x := &ast.PredIn{Col: col}
+	if p.at(token.COLON) {
+		// col in :list — a list parameter (§V10.3).
+		prm, ok := p.operand().(*ast.Param)
+		if !ok {
+			p.fail(p.toks[p.pos-1], "expected a :list parameter after 'in' (§V10)")
+			return x
+		}
+		x.List = prm
+		return x
+	}
 	p.expect(token.LPAREN, "in list (§V10)")
 	for {
 		lit, ok := p.operand().(*ast.Lit)
