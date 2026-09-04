@@ -310,6 +310,9 @@ func genRun(c *cli.Command) error {
 		}
 	}
 	for _, f := range out {
+		if err := os.MkdirAll(filepath.Dir(f.path), 0o755); err != nil {
+			return cli.Exit(err.Error(), 2)
+		}
 		if err := os.WriteFile(f.path, f.code, 0o644); err != nil {
 			return cli.Exit(err.Error(), 2)
 		}

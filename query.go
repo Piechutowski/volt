@@ -115,3 +115,22 @@ func parseQuery(s string, dst any) error {
 func typeName(dst any) string {
 	return fmt.Sprintf("%T", dst)[1:] // strip the pointer star
 }
+
+// FormatQuery renders a query-string value the way QueryParam parses it:
+// the inverse a generated client uses to build URLs (§V4.10).
+func FormatQuery[T QueryValue](v T) string {
+	switch v := any(v).(type) {
+	case string:
+		return v
+	case bool:
+		return strconv.FormatBool(v)
+	case time.Time:
+		return v.Format(time.RFC3339)
+	case float32:
+		return strconv.FormatFloat(float64(v), 'g', -1, 32)
+	case float64:
+		return strconv.FormatFloat(v, 'g', -1, 64)
+	default:
+		return fmt.Sprint(v) // the integer families
+	}
+}

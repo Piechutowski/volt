@@ -349,10 +349,13 @@ route emitted per group member.
 `dataset db.browse [strip: 'da_']`, expands to one query route per
 member table with the segment derived from the table name, and
 `only:`/`except:` to take a member out and write it by hand. It
-replaces the reserved `Dataset` word. Then a generated client package
-(one typed method per query route, same name as the query) and
-`resources db.t [default]` for generated CRUD handlers over the
-seven actions.
+replaces the reserved `Dataset` word. Then `resources db.t [default]`
+for generated CRUD handlers over the seven actions.
+
+**Landed (D68): the client package.** `client/volt_client.go` beside
+every routing package — typed methods per query route, raw methods
+per named controller route, JSON or GOB, `errors.Is(err,
+volt.ErrNotFound)` on a miss.
 
 The original condensed design, kept for what it still decides
 (the override ladder, the honest costs), with the parts superseded by

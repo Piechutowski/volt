@@ -16,6 +16,14 @@ you can read, grep, and step through in a debugger.
              ├──► nao_selects.go   Group/Pred selects: one method per member
              ├──► nao_validate.go  Validate() per table with checks (§V12)
              └──► nao_schema.sql   DDL + seed data (--sql); FK/CHECK/UNIQUE real
+
+       app/*.volt  ──  routes over the schema (Part II of the spec)
+             │
+   volt gen ─┼──► volt_handlers.go  controller interfaces + the Controllers manifest
+             ├──► volt_router.go    ServeMux registrations; query routes' handlers (§V4.8)
+             ├──► volt_paths.go     typed reverse-URL helpers
+             ├──► volt_routes.go    the route table as data
+             └──► client/volt_client.go  typed client: one method per query route (§V4.10)
 ```
 
 ## Ten seconds of it

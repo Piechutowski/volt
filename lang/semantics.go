@@ -437,9 +437,7 @@ func (c *checker) routeBuild(r *ast.Route, inh inherited) *RouteInfo {
 	}
 
 	helper := inh.namePrefix + action
-	if query != nil && method != "GET" && method != "HEAD" {
-		helper = "" // like resources' create/update/delete: writes have no reverse URL (§V4.8)
-	}
+	client := ""
 	if s := settingOf(r.Settings, "name"); s != nil {
 		id, ok := s.Value.(*ast.Ident)
 		if !ok {
@@ -460,6 +458,12 @@ func (c *checker) routeBuild(r *ast.Route, inh inherited) *RouteInfo {
 
 	if query != nil {
 		action = ""
+		// The client method carries the name for every query route; the
+		// reverse-URL helper only for reads, as with resources (§V4.8).
+		client = helper
+		if method != "GET" && method != "HEAD" {
+			helper = ""
+		}
 	}
 	return &RouteInfo{
 		Method:       method,
@@ -470,6 +474,7 @@ func (c *checker) routeBuild(r *ast.Route, inh inherited) *RouteInfo {
 		Action:       action,
 		Query:        query,
 		HelperName:   helper,
+		ClientName:   client,
 		Pipes:        inh.pipes,
 		ErrorHandler: inh.errHandler,
 		Pos:          r.Pos(),
@@ -1019,8 +1024,15 @@ func (c *checker) routeAdd(r *RouteInfo, seenShape, seenHelper map[string]*Route
 	}
 	seenShape[shape] = r
 
-	if r.HelperName != "" {
-		if prev, dup := seenHelper[r.HelperName]; dup {
+	// One namespace for reverse-URL helpers and client methods (§V4.6,
+	// §V4.10): a write query route has a client method and no helper,
+	// and it must not collide with either.
+	name := r.HelperName
+	if name == "" {
+		name = r.ClientName
+	}
+	if name != "" {
+		if prev, dup := seenHelper[name]; dup {
 			// A resources declaration colliding with itself means its
 			// table name survived singularization unchanged (nao's
 			// inflector is English), so the collection and member
@@ -1031,12 +1043,15 @@ func (c *checker) routeAdd(r *RouteInfo, seenShape, seenHelper map[string]*Route
 				c.errorf(r.Pos, "V5", "resources %q: the collection and member reverse-URL helpers are both %q, because singularizing %q does not change it (§V5.4); set the singular explicitly, e.g. [singular: <name>]",
 					prev.Controller, r.HelperName, prev.Controller)
 			} else {
-				c.errorf(r.Pos, "V4", "reverse-URL helper %q already produced by the route at %s (§V4.6); disambiguate with [name:] or a scope name", r.HelperName, prev.Pos)
+				c.errorf(r.Pos, "V4", "reverse-URL helper or client method %q already produced by the route at %s (§V4.6, §V4.10); disambiguate with [name:] or a scope name", name, prev.Pos)
 			}
-			r.HelperName = ""
+			r.HelperName, r.ClientName = "", ""
 		} else {
-			seenHelper[r.HelperName] = r
+			seenHelper[name] = r
 		}
+	}
+	if r.Query == nil && r.HelperName != "" {
+		r.ClientName = r.HelperName // a named controller route gets a raw client method (§V4.10)
 	}
 
 	if r.Query != nil {

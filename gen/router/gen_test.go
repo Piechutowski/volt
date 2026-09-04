@@ -43,7 +43,8 @@ func generate(t *testing.T) map[string][]byte {
 }
 
 func goldenPath(name string) string {
-	return filepath.Join("testdata", "blog_app_"+strings.TrimSuffix(strings.TrimPrefix(name, "volt_"), ".go")+".go.golden")
+	base := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(name), "volt_"), ".go")
+	return filepath.Join("testdata", "blog_app_"+base+".go.golden")
 }
 
 func TestGolden(t *testing.T) {
@@ -155,6 +156,9 @@ func TestNoNamedRoutesCompiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, content := range files {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(pkgDir, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
 		if err := os.WriteFile(filepath.Join(pkgDir, name), content, 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -221,6 +225,9 @@ func TestGoldenCompiles(t *testing.T) {
 	for _, name := range Files {
 		src, err := os.ReadFile(goldenPath(name))
 		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(pkgDir, name)), 0o755); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(filepath.Join(pkgDir, name), src, 0o644); err != nil {

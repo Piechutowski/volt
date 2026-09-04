@@ -49,6 +49,7 @@ type RouteInfo struct {
 	Action     string // method name, e.g. "Show"
 
 	HelperName   string // reverse-URL function base name; "" when suppressed
+	ClientName   string // generated client method name (§V4.10): every query route, and every controller route with a helper
 	Pipes        []string
 	ErrorHandler string // package-level function name; "" for the default
 

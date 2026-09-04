@@ -515,3 +515,19 @@ where the merge changed the facts.
   inverse). The dependency manifest grows one `*pkg.Queries` field
   per data package used, named by the qualifier as a Go name, so the
   application wires its database exactly once.
+
+- **D68 — The client is generated beside the routes and links no
+  server code** (2026-09-04, spec §V4.10). `volt gen` writes
+  `client/volt_client.go` for every routing package: a `Client`
+  embedding the runtime's `volt.Client` (origin, http.Client, wire
+  format), one typed method per query route named as its helper would
+  be, and one raw `*http.Response` method per named controller route.
+  It imports the runtime and the data packages only, so a desktop
+  application shares the generated models with the server without
+  importing the server. Client method names and reverse-URL helpers
+  share one namespace, because they are the same name seen from two
+  sides. A non-2xx reply is a `volt.HTTPError`, and status errors
+  match by code, so `errors.Is(err, volt.ErrNotFound)` reads the same
+  in a handler and in a caller. What it refuses: guessing a
+  controller route's result type — that method stays raw until the
+  language can declare it.

@@ -2,9 +2,11 @@ package volt
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -181,5 +183,83 @@ func TestNoRowsIs404(t *testing.T) {
 	}, httptest.NewRequest("GET", "/x", nil))
 	if rec.Code != 404 {
 		t.Fatalf("sql.ErrNoRows: %d, want 404", rec.Code)
+	}
+}
+
+func TestFormatQueryRoundTrip(t *testing.T) {
+	at := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+	// Built the way a generated client builds it: FormatQuery values
+	// through volt.Query, which escapes them.
+	req := httptest.NewRequest("GET", URL("/x",
+		Query("s", FormatQuery("a b")), Query("i", FormatQuery(int32(-7))), Query("u", FormatQuery(uint64(9))),
+		Query("f", FormatQuery(1.25)), Query("b", FormatQuery(true)), Query("t", FormatQuery(at))), nil)
+	r := &Request{Request: req}
+	if v, _ := QueryParam[string](r, "s"); v != "a b" {
+		t.Errorf("s = %q", v)
+	}
+	if v, _ := QueryParam[int32](r, "i"); v != -7 {
+		t.Errorf("i = %d", v)
+	}
+	if v, _ := QueryParam[uint64](r, "u"); v != 9 {
+		t.Errorf("u = %d", v)
+	}
+	if v, _ := QueryParam[float64](r, "f"); v != 1.25 {
+		t.Errorf("f = %v", v)
+	}
+	if v, _ := QueryParam[bool](r, "b"); !v {
+		t.Errorf("b = %v", v)
+	}
+	if v, _ := QueryParam[time.Time](r, "t"); !v.Equal(at) {
+		t.Errorf("t = %v", v)
+	}
+}
+
+func TestClientDoAndErrors(t *testing.T) {
+	srv := httptest.NewServer(Handler("GET /x", func(w http.ResponseWriter, r *Request) error {
+		switch r.URL.Path {
+		case "/rows":
+			var in row
+			if r.Method == "POST" {
+				if err := Decode(r, &in); err != nil {
+					return err
+				}
+				return RenderStatus(w, r, 201, in)
+			}
+			return Render(w, r, []row{{1, "a"}})
+		case "/gone":
+			return ErrNotFound
+		case "/none":
+			return RenderStatus(w, r, 204, nil)
+		}
+		return Error(418, "teapot")
+	}, nil))
+	defer srv.Close()
+
+	for _, f := range []Format{FormatJSON, FormatGOB} {
+		c := &Client{Base: srv.URL, Format: f}
+		var rows []row
+		if err := c.Do(context.Background(), "GET", "/rows", nil, &rows); err != nil || len(rows) != 1 || rows[0].Name != "a" {
+			t.Fatalf("%v: rows = %+v, %v", f, rows, err)
+		}
+		var made row
+		if err := c.Do(context.Background(), "POST", "/rows", row{2, "b"}, &made); err != nil || made.ID != 2 {
+			t.Fatalf("%v: create = %+v, %v", f, made, err)
+		}
+		if err := c.Do(context.Background(), "GET", "/none", nil, &made); err != nil {
+			t.Fatalf("%v: 204 = %v", f, err)
+		}
+		err := c.Do(context.Background(), "GET", "/gone", nil, &made)
+		if !errors.Is(err, ErrNotFound) {
+			t.Fatalf("%v: 404 should match ErrNotFound: %v", f, err)
+		}
+		var he HTTPError
+		if err := c.Do(context.Background(), "GET", "/tea", nil, nil); !errors.As(err, &he) || he.StatusCode() != 418 || !strings.Contains(he.Error(), "teapot") {
+			t.Fatalf("%v: 418 = %v", f, err)
+		}
+		resp, err := c.Raw(context.Background(), "GET", "/rows")
+		if err != nil || resp.StatusCode != 200 {
+			t.Fatalf("%v: raw = %v %v", f, resp, err)
+		}
+		resp.Body.Close()
 	}
 }

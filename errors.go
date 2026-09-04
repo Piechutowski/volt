@@ -18,6 +18,14 @@ type statusError struct {
 func (e *statusError) Error() string   { return e.msg }
 func (e *statusError) StatusCode() int { return e.code }
 
+// Is matches another status error by code, so errors.Is(err,
+// volt.ErrNotFound) holds for any 404 — a generated client's reply
+// included — whatever its message.
+func (e *statusError) Is(target error) bool {
+	t, ok := target.(*statusError)
+	return ok && t.code == e.code
+}
+
 // Error builds an HTTPError with the given status code and message.
 func Error(code int, msg string) error {
 	if msg == "" {

@@ -112,6 +112,7 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Handler references](#handler-references)
     - [Query routes](#query-routes)
     - [Formats](#formats)
+    - [Generated client](#generated-client)
     - [Scopes](#scopes)
     - [Reserved](#reserved)
     - [Route names and reverse URLs](#route-names-and-reverse-urls)
@@ -1744,6 +1745,37 @@ for a format suffix.
    `volt.Render`, `volt.RenderStatus` and `volt.Decode`, so a
    controller route can speak both formats without repeating them.
 
+### Generated client
+
+Every routing package also generates a **client package**,
+`client/volt_client.go` beside it, so a Go program — the desktop
+application that shares the schema, a test, another service — calls
+the routes through typed methods instead of hand-built requests.
+
+1. The package is named `client` and imports only the runtime and the
+   data packages the routes go through — never the routing package —
+   so a caller links no server code.
+2. `type Client struct { volt.Client }` and `New(base string)
+   *Client`. The embedded runtime client carries the origin, the
+   `http.Client` and the wire format (§V4.9); a non-2xx reply comes
+   back as an `HTTPError` with the status and body text, so
+   `errors.Is(err, volt.ErrNotFound)` holds for a 404.
+3. **Every query route** (§V4.8) is one typed method, named as its
+   helper would be (scope name prefixes and the method name, or
+   `name:`), with the query's parameters in signature order and the
+   query's result: `func (c *Client) APIUserGet(ctx, id int32)
+   (db.User, error)`, `APIUserDelete(ctx, id int32) error`. Path
+   parameters render through the same builders as `Path*` helpers,
+   query-string parameters through `volt.FormatQuery`, a list as a
+   repeated key, a params struct as the body.
+4. **Every named controller route** is one raw method with the
+   route's path parameters, returning `*http.Response` for the caller
+   to read and close: Volt does not know what a hand-written action
+   writes.
+5. Client method names and reverse-URL helper names share one
+   namespace per package (§V4.6); a collision is an error naming
+   `name:`.
+
 ### Scopes
 
 ```ebnf
@@ -1930,7 +1962,7 @@ composed statically and its typed shim parsing parameters per §V4.1.3
 parameter per §V4.8, calls the query and renders per §V4.9;
 `Path*` helpers per §V4.6; a `Table []volt.Route` mirroring the
 expanded route list in declaration order, with `Query` set on query
-routes. All generated files carry the
+routes; and the client package of §V4.10. All generated files carry the
 standard generated-code header and are gofmt-stable.
 
 ## Reserved words for future layers
@@ -2581,6 +2613,7 @@ removal once citations name headings (docs/backlog.md).
 | §V4.7 | [Route conflicts](#route-conflicts) |
 | §V4.8 | [Query routes](#query-routes) |
 | §V4.9 | [Formats](#formats) |
+| §V4.10 | [Generated client](#generated-client) |
 | §V5 | [Resources](#resources) |
 | §V5.1 | [Declaration](#declaration) |
 | §V5.2 | [The action table](#the-action-table) |
