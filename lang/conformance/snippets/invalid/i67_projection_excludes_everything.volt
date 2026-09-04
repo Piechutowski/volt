@@ -6,4 +6,4 @@ Table page_views {
   site varchar [not null]
 }
 
-Select nothing (* - id - site) for page_views
+Select nothing (* \ (id, site)) for page_views

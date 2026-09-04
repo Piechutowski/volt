@@ -279,7 +279,7 @@ Still open from the original slice, in the maintainer's build order:
   2. **No list = full row = per-member models**:
      `[]PageView`, `[]LinkClick` — heterogeneous rests welcome.
   3. **Star with exclusion = per-member struct derivatives.**
-     `Select public (* - password_hash) for accounts` — each member
+     `Select public (* \ password_hash) for accounts` — each member
      projects its own columns minus the exclusions (the
      `SELECT * EXCEPT` BigQuery has and standard SQL lacks), minting
      `<Model><SelectName>` (`UserPublic`) with every kept field copied

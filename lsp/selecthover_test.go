@@ -17,7 +17,7 @@ const projSchema = "package db\n\n" +
 	"Table link_clicks {\n\tid integer [pk, increment]\n\tsite varchar [not null]\n\tday integer [not null]\n\ttarget text [not null, default: '']\n}\n\n" +
 	"Group metrics {\n\tpage_views\n\tlink_clicks\n}\n\n" +
 	"Select summary (site, day) for metrics where day >= :from\n" +
-	"Select public (* - site) for link_clicks\n"
+	"Select public (* \\ site) for link_clicks\n"
 
 func projSelectDoc(t *testing.T) (*Document, string) {
 	t.Helper()

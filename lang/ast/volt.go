@@ -466,7 +466,7 @@ type Select struct {
 	SelectPos token.Position
 	Name      *Ident
 	Lparen    token.Position // projection parens (§V11.7); zero when absent
-	Star      bool           // (* - a - b) star form
+	Star      bool           // (* \\ a \\ (b, c)) star form
 	Cols      []*Ident       // explicit list, or the star form's exclusions
 	Rparen    token.Position
 	Target    *Ident   // group or table name (§V11.2)

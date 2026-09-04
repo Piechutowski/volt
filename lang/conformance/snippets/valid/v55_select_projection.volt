@@ -23,4 +23,4 @@ Group metrics {
 }
 
 Select summary (site, day) for metrics where day >= :from
-Select public (* - site) for metrics [order: (id asc)]
+Select public (* \ site) for metrics [order: (id asc)]

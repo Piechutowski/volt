@@ -7,4 +7,4 @@ Table page_views {
   site varchar [not null]
 }
 
-Select public (* - hits) for page_views
+Select public (* \ hits) for page_views

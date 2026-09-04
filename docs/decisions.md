@@ -468,7 +468,9 @@ where the merge changed the facts.
   difference as `\`, the set-theoretic operator, with parenthesized
   terms `(a, b)` for the union of several names; `-` is an error
   that names `\`. What this buys: `Group farm = DA \ (dict, notes)`
-  says exactly what it means. What it costs: `\` is also the escape
+  says exactly what it means. Star projections (§V11.7) use the same
+  spelling — `(* \ a)`, `(* \ (a, b))` — so "without" is one
+  operator everywhere. What it costs: `\` is also the escape
   character inside strings, so the editor grammar and the scanner
   must keep the two apart — they do, since group expressions never
   contain strings.

@@ -149,6 +149,10 @@ func TestVoltSyntaxErrors(t *testing.T) {
 		{"group minus", "Group narrow = wide - ms_usage\n", "set difference is spelled '\\'"},
 		{"group empty set", "Group narrow = wide \\ ()\n", "expected identifier in group set member"},
 		{"group unclosed set", "Group narrow = wide \\ (a, b\n", "expected ')'"},
+		// Projections (§V11.7) share the group algebra's spelling.
+		{"projection minus", "Select p (* - a) for t\n", "exclusion is spelled '\\'"},
+		{"projection star alone", "Select p (*) for t\n", "needs at least one"},
+		{"projection unclosed set", "Select p (* \\ (a, b for t\n", "expected ')'"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -201,6 +205,31 @@ func TestGroupSetTerms(t *testing.T) {
 	}
 	if g.End().Line != 2 {
 		t.Errorf("group end line = %d, want 2", g.End().Line)
+	}
+}
+
+// A star projection takes exclusions one at a time or as a set, in any
+// mix; the AST flattens them into Cols in the order written (§V11.7).
+func TestProjectionSetTerms(t *testing.T) {
+	f, diags := ParseFile("t.volt", "package db\nSelect p (* \\ a \\ (b, c) \\ d) for t\n")
+	if len(diags) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+	var sel *ast.Select
+	for _, d := range f.Decls {
+		if s, ok := d.(*ast.Select); ok {
+			sel = s
+		}
+	}
+	if sel == nil || !sel.Star {
+		t.Fatalf("no star select parsed: %+v", sel)
+	}
+	got := make([]string, len(sel.Cols))
+	for i, c := range sel.Cols {
+		got[i] = c.Name()
+	}
+	if strings.Join(got, ",") != "a,b,c,d" {
+		t.Errorf("exclusions = %v, want a,b,c,d", got)
 	}
 }
 

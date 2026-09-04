@@ -689,7 +689,23 @@ module.exports = grammar({
             alias($.identifier, $.column_ref),
             repeat(seq(',', alias($.identifier, $.column_ref))),
           ),
-          seq('*', repeat1(seq('-', alias($.identifier, $.column_ref)))),
+          seq(
+            '*',
+            repeat1(
+              seq(
+                '\\',
+                choice(
+                  alias($.identifier, $.column_ref),
+                  seq(
+                    '(',
+                    alias($.identifier, $.column_ref),
+                    repeat(seq(',', alias($.identifier, $.column_ref))),
+                    ')',
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
         ')',
       ),

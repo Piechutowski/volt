@@ -557,19 +557,35 @@ func (p *parser) selectDecl() *ast.Select {
 	return d
 }
 
-// selectProjection = "(" col {"," col} ")" | "(" "*" "-" col {"-" col} ")"
-// (§V11.7). Clauses read in SQL order, so the parens precede "for".
+// selectProjection = "(" col {"," col} ")" | "(" "*" { "\\" col term } ")"
+// where a col term is one name or a parenthesized set (§V11.7). Clauses
+// read in SQL order, so the parens precede "for".
 func (p *parser) selectProjection(d *ast.Select) {
 	d.Lparen = p.next().Pos
 	if p.at(token.STAR) {
 		d.Star = true
 		p.next()
-		for p.at(token.MINUS) {
+		for p.at(token.BACKSLASH) || p.at(token.MINUS) {
+			if p.at(token.MINUS) {
+				p.fail(p.cur(), "'-' is not a projection operator: exclusion is spelled '\\' (§V11.7)")
+			}
 			p.next()
-			d.Cols = append(d.Cols, p.ident("excluded column (§V11.7)"))
+			if !p.at(token.LPAREN) {
+				d.Cols = append(d.Cols, p.ident("excluded column (§V11.7)"))
+				continue
+			}
+			p.next()
+			for {
+				d.Cols = append(d.Cols, p.ident("excluded column (§V11.7)"))
+				if !p.at(token.COMMA) {
+					break
+				}
+				p.next()
+			}
+			p.expect(token.RPAREN, "excluded column set (§V11.7)")
 		}
 		if len(d.Cols) == 0 {
-			p.fail(p.cur(), "a star projection needs at least one '- column' exclusion; drop the parens to select every column (§V11.7)")
+			p.fail(p.cur(), "a star projection needs at least one '\\ column' exclusion; drop the parens to select every column (§V11.7)")
 		}
 	} else {
 		for {

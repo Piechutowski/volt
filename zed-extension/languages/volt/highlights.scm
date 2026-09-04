@@ -148,6 +148,7 @@
 (group_name) @type
 (group_member) @type
 (group_definition ["+" "\\"] @operator)
+(select_projection ["*" "\\"] @operator)
 (pred_name) @label
 (pred_ref) @label
 (select_name) @label

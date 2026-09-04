@@ -304,7 +304,7 @@ select projections
 ==================
 
 Select summary (site, day) for metrics where at
-Select public (* - password_hash - email) for accounts
+Select public (* \ (password_hash, email)) for accounts
 
 ---
 

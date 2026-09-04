@@ -1972,7 +1972,9 @@ select decl = "Select", plain name, [ projection ], "for", plain name,
               [ "where", pred expr ], [ settings list ], newline ;
 
 projection  = "(", column name, { ",", column name }, ")"
-            | "(", "*", "-", column name, { "-", column name }, ")" ;
+            | "(", "*", { "\\", column term }, ")" ;
+column term = column name
+            | "(", column name, { ",", column name }, ")" ;
 ```
 
 ```volt
@@ -1980,7 +1982,8 @@ Select rows    for series where current [order: (year desc, id asc)]
 Select stale   for ms_usage where not recent
 Select all     for series
 Select summary (id, org, year)    for series where current
-Select public  (* - password_hash) for accounts
+Select public  (* \\ password_hash) for accounts
+Select brief   (* \\ (password_hash, bio, avatar)) for accounts
 ```
 
 The clauses read in SQL order — name, columns, source, filter — and
@@ -2039,7 +2042,9 @@ the optional projection narrows the emitted columns.
      Agreement is judged on the generated field type, so an enum-typed
      column agrees exactly when every member resolves it to the same
      generated enum type.
-   - **Star with exclusions** `(* - a - b)` — at least one exclusion,
+   - **Star with exclusions** `(* \\ a \\ b)`, or as a set
+     `(* \\ (a, b))` — the same `\\` and set term as group algebra
+     (§V9.3); `-` is an error naming `\\`. At least one exclusion,
      no duplicates. Every excluded column MUST exist in every member
      (§V9.3: the algebra must say something true), and no member may
      end up with zero columns. Each member projects its own columns,
