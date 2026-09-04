@@ -1061,6 +1061,21 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 		}
 	}
 
+	// The key parameter must not repeat a parameter of the enclosing
+	// scope (§V4.1.2); say so once, at the declaration, with the fix —
+	// rather than once per member action from pathParams.
+	for _, seg := range inh.prefix {
+		if seg.Kind != ast.SegParam || seg.Name.Name() != paramName {
+			continue
+		}
+		if def {
+			c.errorf(res.Name.Pos(), "V5", "resources %s.%s [default]: the key parameter %q is already a parameter of the enclosing scope, and the generated CRUD fixes its name; give the scope's parameter another name (§V5.5, §V4.1.2)", qual, declared, paramName)
+		} else {
+			c.errorf(res.Name.Pos(), "V5", "resources %q: the key parameter %q is already a parameter of the enclosing scope; rename it with [param: <name>] (§V5.3, §V4.1.2)", declared, paramName)
+		}
+		return nil
+	}
+
 	nameSeg := func(n string) *ast.Segment { return litSeg(n, res.Pos()) }
 	idSeg := &ast.Segment{Kind: ast.SegParam, MarkPos: res.Pos(),
 		Name: &ast.Ident{Tok: token.Token{Kind: token.IDENT, Val: paramName, Pos: res.Pos()}},

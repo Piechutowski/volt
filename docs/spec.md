@@ -1967,6 +1967,12 @@ table ref = name, [ ".", name ] ;
 3. `singular` overrides the inflector of §V5.4.2. It is required
    whenever singularization leaves the name unchanged, which would
    otherwise make the collection and member helpers collide.
+4. The key parameter MUST NOT repeat a parameter of the enclosing
+   scope (§V4.1.2): `Scope /farms/:id { resources plots }` is an
+   error, reported once at the declaration, naming `param:` as the
+   fix (`[param: plot_id]`). Under `[default]` the name is the
+   generated CRUD's and cannot move, so the scope's parameter is the
+   one to rename.
 
 ### Table resolution
 
