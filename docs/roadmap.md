@@ -337,10 +337,11 @@ imply otherwise (D49). Each is small; none blocks FW-2.
   is not built: resources still expand to controller actions.
 - **Validation (2026-09-04, after D72).** The Go tier does not check
   enum membership (the DDL `CHECK … IN` does, hypotheses H5); typed
-  checks have no `length()` term, so string bounds are an opaque SQL
-  check or a Go function; a select's query parameters are typed but
-  not bounded (no `[check:]` on a parameter); messages are the check's
-  name or rendered form, not localized text.
+  checks have no `length()` term; a select's query parameters are typed
+  but not bounded; no `[on: create]` / `[on: update]`; messages are not
+  localized; an unknown JSON field is a 400 with Go's text, not a
+  `Detail`. Each has a design sketched under backlog "Validation,
+  round 3", taken when the battlefield app first needs it.
 - **CLI.** `Project.Module` is required but unused; a nonexistent
   argument gets a loader message rather than "no such directory";
   diagnostics print absolute paths even for relative arguments;
