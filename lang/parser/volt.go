@@ -302,7 +302,7 @@ func (p *parser) groupDecl() *ast.Group {
 		p.next()
 		for !p.at(token.RBRACE) && !p.at(token.EOF) {
 			name := p.ident("group member (§V9)")
-			d.Terms = append(d.Terms, &ast.GroupTerm{Name: name})
+			d.Terms = append(d.Terms, &ast.GroupTerm{Names: []*ast.Ident{name}})
 			if !p.at(token.RBRACE) && !p.cur().NLBefore {
 				p.fail(p.cur(), "group members are one per line (§V9)")
 			}
@@ -310,18 +310,40 @@ func (p *parser) groupDecl() *ast.Group {
 		d.EndPos = p.expect(token.RBRACE, "group declaration (§V9)").End()
 	case p.at(token.EQ):
 		p.next()
-		d.Terms = append(d.Terms, &ast.GroupTerm{Name: p.ident("group expression (§V9.3)")})
-		for p.at(token.PLUS) || p.at(token.MINUS) {
-			neg := p.at(token.MINUS)
+		d.Terms = append(d.Terms, p.groupTerm(false))
+		for p.at(token.PLUS) || p.at(token.BACKSLASH) || p.at(token.MINUS) {
+			if p.at(token.MINUS) {
+				p.fail(p.cur(), "'-' is not a group operator: set difference is spelled '\\' (§V9.3)")
+			}
+			neg := !p.at(token.PLUS)
 			p.next()
-			d.Terms = append(d.Terms, &ast.GroupTerm{Neg: neg, Name: p.ident("group expression (§V9.3)")})
+			d.Terms = append(d.Terms, p.groupTerm(neg))
 		}
-		d.EndPos = d.Terms[len(d.Terms)-1].Name.End()
+		d.EndPos = d.Terms[len(d.Terms)-1].End()
 		p.endOfLine("group declaration (§V9)")
 	default:
 		p.fail(p.cur(), "expected '{' or '=' after the group name (§V9)")
 	}
 	return d
+}
+
+// groupTerm = plain name | "(" plain name { "," plain name } ")" (§V9.3).
+func (p *parser) groupTerm(neg bool) *ast.GroupTerm {
+	t := &ast.GroupTerm{Neg: neg}
+	if !p.at(token.LPAREN) {
+		t.Names = append(t.Names, p.ident("group expression (§V9.3)"))
+		return t
+	}
+	t.Lparen = p.next().Pos
+	for {
+		t.Names = append(t.Names, p.ident("group set member (§V9.3)"))
+		if !p.at(token.COMMA) {
+			break
+		}
+		p.next()
+	}
+	t.Rparen = p.expect(token.RPAREN, "group set (§V9.3)").End()
+	return t
 }
 
 /* ===== predicates (§V10) ===== */

@@ -1,4 +1,5 @@
-// spec: §V9.2 — a group term must name a table or group
+// spec: §V9.2 — a group term must name a table, group or TableGroup
+// want: no such table, group or TableGroup
 package db
 
 Table ms_revenue {

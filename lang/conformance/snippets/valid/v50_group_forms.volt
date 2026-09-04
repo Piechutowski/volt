@@ -25,4 +25,4 @@ Group series {
 }
 
 Group wide = series + ks_costs
-Group narrow = wide - ms_usage
+Group narrow = wide \ ms_usage

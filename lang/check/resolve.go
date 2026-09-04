@@ -106,6 +106,7 @@ func (c *checker) resolve(f *ast.File) {
 		if !ok {
 			continue
 		}
+		gi := &TableGroupInfo{Decl: g}
 		for _, m := range g.Members {
 			ti := c.tableLookup(m)
 			if ti == nil {
@@ -119,7 +120,9 @@ func (c *checker) resolve(f *ast.File) {
 				continue
 			}
 			memberOf[ti.Key] = g.Name.Name()
+			gi.Members = append(gi.Members, ti)
 		}
+		c.info.TableGroups = append(c.info.TableGroups, gi)
 	}
 
 	// DiagramView members (§6.13.3).

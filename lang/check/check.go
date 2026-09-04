@@ -20,8 +20,33 @@ type Info struct {
 	Partials   []*PartialInfo
 	Refs       []*RefInfo
 	HasImports bool
+	// TableGroups in declaration order, resolved to their member tables
+	// (unknown members dropped; §6.12 reports them). A TableGroup is a
+	// set wherever Volt names one (spec §V9.2, D65).
+	TableGroups []*TableGroupInfo
 
 	byTable map[string]*TableInfo // canonical key and alias -> table
+}
+
+// TableGroupInfo is one TableGroup with its members resolved.
+type TableGroupInfo struct {
+	Decl    *ast.TableGroup
+	Members []*TableInfo // declaration order, unresolved names omitted
+}
+
+// TableGroup finds a TableGroup by exact name.
+func (i *Info) TableGroup(name string) *TableGroupInfo {
+	for _, g := range i.TableGroups {
+		if g.Decl.Name.Name() == name {
+			return g
+		}
+	}
+	return nil
+}
+
+// LookupTable finds a table by its qualified name (canonical key or alias).
+func (i *Info) LookupTable(q *ast.QualName) *TableInfo {
+	return i.byTable[canonKey(q)]
 }
 
 // TableInfo describes one table with partial injection applied.

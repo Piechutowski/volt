@@ -55,42 +55,44 @@ const (
 	MINUS // -
 
 	// Predicate and group operators (spec §V9-§V10)
-	PLUS // +
-	EQ   // =
-	NEQ  // !=
-	LE   // <=
-	GE   // >=
+	PLUS      // +
+	BACKSLASH // \ (group set difference, §V9.3)
+	EQ        // =
+	NEQ       // !=
+	LE        // <=
+	GE        // >=
 )
 
 var kindNames = [...]string{
-	ILLEGAL:  "illegal token",
-	EOF:      "end of file",
-	IDENT:    "identifier",
-	STRING:   "string",
-	NUMBER:   "number",
-	COLOR:    "color",
-	FUNCEXPR: "expression literal",
-	LBRACE:   "'{'",
-	RBRACE:   "'}'",
-	LBRACKET: "'['",
-	RBRACKET: "']'",
-	LPAREN:   "'('",
-	RPAREN:   "')'",
-	COMMA:    "','",
-	COLON:    "':'",
-	DOT:      "'.'",
-	TILDE:    "'~'",
-	STAR:     "'*'",
-	SLASH:    "'/'",
-	LT:       "'<'",
-	GT:       "'>'",
-	LTGT:     "'<>'",
-	MINUS:    "'-'",
-	PLUS:     "'+'",
-	EQ:       "'='",
-	NEQ:      "'!='",
-	LE:       "'<='",
-	GE:       "'>='",
+	ILLEGAL:   "illegal token",
+	EOF:       "end of file",
+	IDENT:     "identifier",
+	STRING:    "string",
+	NUMBER:    "number",
+	COLOR:     "color",
+	FUNCEXPR:  "expression literal",
+	LBRACE:    "'{'",
+	RBRACE:    "'}'",
+	LBRACKET:  "'['",
+	RBRACKET:  "']'",
+	LPAREN:    "'('",
+	RPAREN:    "')'",
+	COMMA:     "','",
+	COLON:     "':'",
+	DOT:       "'.'",
+	TILDE:     "'~'",
+	STAR:      "'*'",
+	SLASH:     "'/'",
+	LT:        "'<'",
+	GT:        "'>'",
+	LTGT:      "'<>'",
+	MINUS:     "'-'",
+	PLUS:      "'+'",
+	BACKSLASH: "'\\'",
+	EQ:        "'='",
+	NEQ:       "'!='",
+	LE:        "'<='",
+	GE:        "'>='",
 }
 
 func (k Kind) String() string {

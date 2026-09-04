@@ -565,9 +565,21 @@ module.exports = grammar({
           ),
           seq(
             '=',
-            alias($.identifier, $.group_member),
-            repeat(seq(choice('+', '-'), alias($.identifier, $.group_member))),
+            $._group_term,
+            repeat(seq(choice('+', '\\'), $._group_term)),
           ),
+        ),
+      ),
+
+    // One group term: a name, or a parenthesized set of names (§V9.3).
+    _group_term: ($) =>
+      choice(
+        alias($.identifier, $.group_member),
+        seq(
+          '(',
+          alias($.identifier, $.group_member),
+          repeat(seq(',', alias($.identifier, $.group_member))),
+          ')',
         ),
       ),
 

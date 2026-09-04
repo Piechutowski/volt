@@ -291,11 +291,12 @@ func lower(s string) string {
 /* ===== groups, predicates, selects (spec §V9-§V11) ===== */
 
 // Group is a named set of tables for generation (spec §V9): either a
-// block of members or a +/- expression over tables and other groups.
+// block of members or a `+`/`\` expression over tables, groups and
+// TableGroups.
 type Group struct {
 	GroupPos token.Position
 	Name     *Ident
-	Terms    []*GroupTerm // block form: all Add; expr form: signed
+	Terms    []*GroupTerm // block form: all Add, one name each; expr form: signed
 	EndPos   token.Position
 }
 
@@ -303,11 +304,24 @@ func (d *Group) Pos() token.Position { return d.GroupPos }
 func (d *Group) End() token.Position { return d.EndPos }
 func (d *Group) declNode()           {}
 
-// GroupTerm is one term of a group: a table or group name, added or
-// removed (spec §V9.3).
+// GroupTerm is one term of a group expression: one name, or a
+// parenthesized set of names, added or removed (spec §V9.3).
 type GroupTerm struct {
-	Neg  bool // true for '-' terms
-	Name *Ident
+	Neg    bool     // true for '\' terms
+	Names  []*Ident // one name, or the members of a parenthesized set
+	Lparen token.Position
+	Rparen token.Position // End of the closing paren; zero when unparenthesized
+}
+
+// Set reports whether the term was written as a parenthesized set.
+func (t *GroupTerm) Set() bool { return t.Rparen.Line > 0 }
+
+// End is the term's extent: the closing paren or the last name.
+func (t *GroupTerm) End() token.Position {
+	if t.Set() {
+		return t.Rparen
+	}
+	return t.Names[len(t.Names)-1].End()
 }
 
 // Pred is a named predicate declaration (spec §V10).

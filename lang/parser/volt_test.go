@@ -144,6 +144,11 @@ func TestVoltSyntaxErrors(t *testing.T) {
 		// token abutting the slash. (Quoted segments parse as identifiers
 		// and are rejected by the checker, §V4.1.6.)
 		{"non-segment after slash", "Scope / {\n\tget /users/[name: root] Users.Index\n}\n", "'/' must be followed by a path segment"},
+		// Group algebra (§V9.3): difference is '\\', never '-'; a set
+		// term is a parenthesized, comma-separated list of names.
+		{"group minus", "Group narrow = wide - ms_usage\n", "set difference is spelled '\\'"},
+		{"group empty set", "Group narrow = wide \\ ()\n", "expected identifier in group set member"},
+		{"group unclosed set", "Group narrow = wide \\ (a, b\n", "expected ')'"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -161,6 +166,41 @@ func TestVoltSyntaxErrors(t *testing.T) {
 				t.Errorf("diagnostics %v do not mention %q", diags, tc.wantMsg)
 			}
 		})
+	}
+}
+
+// Group expressions carry set terms and the '\\' operator (§V9.3): the
+// AST records each name of a parenthesized set and whether the term
+// was written as a set, so the checker can apply names one at a time.
+func TestGroupSetTerms(t *testing.T) {
+	f, diags := ParseFile("t.volt", "package db\nGroup farm = Metrics \\ (ms_dict, ms_notes) + extra\n")
+	if len(diags) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+	var g *ast.Group
+	for _, d := range f.Decls {
+		if gg, ok := d.(*ast.Group); ok {
+			g = gg
+		}
+	}
+	if g == nil {
+		t.Fatal("no Group parsed")
+	}
+	if len(g.Terms) != 3 {
+		t.Fatalf("terms = %d, want 3", len(g.Terms))
+	}
+	if g.Terms[0].Neg || g.Terms[0].Set() || g.Terms[0].Names[0].Name() != "Metrics" {
+		t.Errorf("term 0 = %+v, want +Metrics unparenthesized", g.Terms[0])
+	}
+	if !g.Terms[1].Neg || !g.Terms[1].Set() || len(g.Terms[1].Names) != 2 ||
+		g.Terms[1].Names[0].Name() != "ms_dict" || g.Terms[1].Names[1].Name() != "ms_notes" {
+		t.Errorf("term 1 = %+v, want \\ (ms_dict, ms_notes)", g.Terms[1])
+	}
+	if g.Terms[2].Neg || g.Terms[2].Set() || g.Terms[2].Names[0].Name() != "extra" {
+		t.Errorf("term 2 = %+v, want +extra", g.Terms[2])
+	}
+	if g.End().Line != 2 {
+		t.Errorf("group end line = %d, want 2", g.End().Line)
 	}
 }
 

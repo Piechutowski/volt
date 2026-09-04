@@ -259,7 +259,7 @@ language and running a real application on it.
 
 ## FW-1 — The `Select` query layer — **structured half `DONE`** (2026-09-01)
 
-Landed: `Group` (overlapping table sets with +/- algebra, §V9), `Pred`
+Landed: `Group` (overlapping table sets with `+`/`\` algebra, §V9), `Pred`
 (the closed, statically typed predicate language, §V10) and
 `Select ... for <group> where <expr> [order: ...]` (§V11) — one typed
 method per group member, one signature for all (the §V11.4 agreement
@@ -322,9 +322,7 @@ imply otherwise (D49). Each is small; none blocks FW-2.
   disjoint tables are refused with a message naming one select twice.
   A projection over a member with an unmapped column type leaks the
   generator's internal message.
-- **Selects.** `TableGroup` as a select target gets the generic "no
-  such table or group" without saying that TableGroup is a diagram
-  construct (D58). Generated doc comments lower-case the first letter
+- **Selects.** Generated doc comments lower-case the first letter
   of a select name instead of quoting the schema spelling.
 - **Validation.** `Validate()` does not enforce enum membership (the
   DDL `CHECK … IN` does); `rt.Null[T]` implements JSON only, so a

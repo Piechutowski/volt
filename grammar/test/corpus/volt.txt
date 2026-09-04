@@ -206,13 +206,19 @@ Group series {
   ms_usage
 }
 
-Group wide = series + ks_costs - ms_usage
+Group wide = series + ks_costs \ ms_usage
+Group farm = Metrics \ (ms_dict, ms_notes)
 
 ---
 
 (source_file
   (group_definition
     (group_name)
+    (group_member)
+    (group_member))
+  (group_definition
+    (group_name)
+    (group_member)
     (group_member)
     (group_member))
   (group_definition

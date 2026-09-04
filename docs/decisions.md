@@ -455,3 +455,20 @@ where the merge changed the facts.
   (also pinned by test); migrating them to heading names is a
   scheduled chore (docs/backlog.md), deferred for its breadth, not
   its difficulty.
+
+- **D65 — A TableGroup is a set; `\` is the difference operator**
+  (2026-09-04). D58 kept `Group` (codegen set) and `TableGroup`
+  (diagram partition) apart in purpose, and that stands. But a
+  TableGroup *is* a set of tables, and refusing it where a set is
+  wanted forced the FADN schema to list 37 tables twice — once for
+  the diagram, once for the queries. So a TableGroup name resolves
+  wherever a group is named (group terms, select targets), last in
+  resolution order after tables and groups; the one-group-per-table
+  rule of §6.12 still applies to TableGroups only. The algebra spells
+  difference as `\`, the set-theoretic operator, with parenthesized
+  terms `(a, b)` for the union of several names; `-` is an error
+  that names `\`. What this buys: `Group farm = DA \ (dict, notes)`
+  says exactly what it means. What it costs: `\` is also the escape
+  character inside strings, so the editor grammar and the scanner
+  must keep the two apart — they do, since group expressions never
+  contain strings.

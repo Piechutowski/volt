@@ -3424,13 +3424,8 @@
                   "value": "="
                 },
                 {
-                  "type": "ALIAS",
-                  "content": {
-                    "type": "SYMBOL",
-                    "name": "identifier"
-                  },
-                  "named": true,
-                  "value": "group_member"
+                  "type": "SYMBOL",
+                  "name": "_group_term"
                 },
                 {
                   "type": "REPEAT",
@@ -3446,23 +3441,75 @@
                           },
                           {
                             "type": "STRING",
-                            "value": "-"
+                            "value": "\\"
                           }
                         ]
                       },
                       {
-                        "type": "ALIAS",
-                        "content": {
-                          "type": "SYMBOL",
-                          "name": "identifier"
-                        },
-                        "named": true,
-                        "value": "group_member"
+                        "type": "SYMBOL",
+                        "name": "_group_term"
                       }
                     ]
                   }
                 }
               ]
+            }
+          ]
+        }
+      ]
+    },
+    "_group_term": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "identifier"
+          },
+          "named": true,
+          "value": "group_member"
+        },
+        {
+          "type": "SEQ",
+          "members": [
+            {
+              "type": "STRING",
+              "value": "("
+            },
+            {
+              "type": "ALIAS",
+              "content": {
+                "type": "SYMBOL",
+                "name": "identifier"
+              },
+              "named": true,
+              "value": "group_member"
+            },
+            {
+              "type": "REPEAT",
+              "content": {
+                "type": "SEQ",
+                "members": [
+                  {
+                    "type": "STRING",
+                    "value": ","
+                  },
+                  {
+                    "type": "ALIAS",
+                    "content": {
+                      "type": "SYMBOL",
+                      "name": "identifier"
+                    },
+                    "named": true,
+                    "value": "group_member"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "STRING",
+              "value": ")"
             }
           ]
         }

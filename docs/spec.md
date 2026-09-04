@@ -1080,6 +1080,9 @@ table group setting  = "note", ":", string
 1. Each body line names one table (optionally schema-qualified, or an
    alias). Every named table MUST exist.
 2. A table MUST NOT belong to more than one TableGroup.
+3. A TableGroup is also a set of tables for the Volt query layer: its
+   name resolves as a group term and as a select target (Part II,
+   Groups and Selects over groups).
 
 ```volt
 TableGroup e_commerce [color: #3498DB, note: 'Core commerce tables'] {
@@ -1853,15 +1856,18 @@ A **Group** names a set of tables so the same code can be generated for
 every member (§V11). It is not a diagram construct: `TableGroup`
 (Part I §6.12) partitions the ER diagram and allows one group per
 table; a `Group` is a query set — overlapping freely, invisible to
-diagrams.
+diagrams. A `TableGroup` is nevertheless a set of tables, and it is
+usable as one: wherever a group is named, a TableGroup name denotes
+its members.
 
 ```ebnf
 group decl = "Group", plain name,
              ( "{", { newline }, [ group members ], "}"
              | "=", group expr ), newline ;
-group members = group term, { newline+, group term }, { newline } ;
-group expr    = group term, { ( "+" | "-" ), group term } ;
-group term    = plain name ;
+group members = plain name, { newline+, plain name }, { newline } ;
+group expr    = group term, { ( "+" | "\" ), group term } ;
+group term    = plain name
+              | "(", plain name, { ",", plain name }, ")" ;
 ```
 
 ```volt
@@ -1871,19 +1877,25 @@ Group series {
   ks_seats
 }
 
-Group wide = series + ks_costs - ms_usage
+Group wide   = series + ks_costs \ ms_usage
+Group public = Commerce \ (audit_log, api_keys)
 ```
 
 1. Group names share one namespace per package, disjoint from tables;
    redeclaration is an error.
-2. A `group term` resolves, case-sensitively, to a table or a group of
-   the same package — tables first, then groups. An unknown name is an
-   error with the same did-you-mean aids as §V5.4.
-3. The block form is the expression form with every term joined by
+2. A name in a `group term` resolves, case-sensitively, to a table, a
+   group or a TableGroup of the same package — tables first, then
+   groups, then TableGroups. A TableGroup denotes its members in
+   declaration order. An unknown name is an error with the same
+   did-you-mean aids as §V5.4.
+3. The block form is the expression form with every member joined by
    `+`. Evaluation is left to right: `+` adds a term's member set
-   (a table adds itself), `-` removes it. Removing a table that is not
-   currently a member, or adding one already present, is an error —
-   the algebra must say something true.
+   (a table adds itself), `\` — set difference — removes it. A
+   parenthesized term is the union of its names, applied one name at a
+   time in the order written. Removing a table that is not currently a
+   member, or adding one already present, is an error — the algebra
+   must say something true. `-` is not a group operator: writing it is
+   an error naming `\`.
 4. Group references must be acyclic (error otherwise), and the
    resulting set must be non-empty.
 5. Member order is first-addition order; generation (§V11) is
@@ -1952,8 +1964,8 @@ Pred fresh   { current and recent }
 ## Selects over groups
 
 A **Select** declares a query once and generates it for every member
-of a target (§V9 group, or a single table treated as a one-member
-group).
+of a target (§V9 group, a TableGroup used as a set, or a single table
+treated as a one-member group).
 
 ```ebnf
 select decl = "Select", plain name, [ projection ], "for", plain name,
@@ -1978,8 +1990,8 @@ the optional projection narrows the emitted columns.
    the method `<Model><SelectName>` (Appendix A naming). A collision
    with a generated CRUD/dynamic method name, or between two selects
    on an overlapping member, is an error.
-2. `for` resolves case-sensitively to a group, else a table (§V9.2
-   aids apply).
+2. `for` resolves case-sensitively to a group, else a table, else a
+   TableGroup — whose members are the target set (§V9.2 aids apply).
 3. `where` takes a full §V10 expression — named Preds, inline
    comparisons, and any composition of the two. Omitted = all rows.
 4. **The agreement rule.** Every column referenced by the `where`

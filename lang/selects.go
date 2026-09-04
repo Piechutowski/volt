@@ -167,28 +167,36 @@ func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *c
 		index[ti.Key] = -1
 	}
 
+	apply := func(pos token.Position, neg bool, ti *check.TableInfo) {
+		if neg {
+			remove(pos, ti)
+		} else {
+			add(pos, ti)
+		}
+	}
 	for _, term := range d.Terms {
-		want := term.Name.Name()
-		if ti := tableByBase(info, want); ti != nil {
-			if term.Neg {
-				remove(term.Name.Pos(), ti)
-			} else {
-				add(term.Name.Pos(), ti)
+		for _, id := range term.Names {
+			want := id.Name()
+			// Tables first, then groups, then TableGroups (§V9.2).
+			if ti := tableByBase(info, want); ti != nil {
+				apply(id.Pos(), term.Neg, ti)
+				continue
 			}
-			continue
-		}
-		if _, isGroup := decls[want]; isGroup {
-			sg := c.groupResolve(want, decls, info, path)
-			for _, ti := range sg.Members {
-				if term.Neg {
-					remove(term.Name.Pos(), ti)
-				} else {
-					add(term.Name.Pos(), ti)
+			if _, isGroup := decls[want]; isGroup {
+				sg := c.groupResolve(want, decls, info, path)
+				for _, ti := range sg.Members {
+					apply(id.Pos(), term.Neg, ti)
 				}
+				continue
 			}
-			continue
+			if tg := info.TableGroup(want); tg != nil {
+				for _, ti := range tg.Members {
+					apply(id.Pos(), term.Neg, ti)
+				}
+				continue
+			}
+			c.nameMiss(id, info, "V9", "group term")
 		}
-		c.nameMiss(term.Name, info, "V9", "group term")
 	}
 	if len(g.Members) == 0 {
 		c.errorf(d.Name.Pos(), "V9", "group %q has no members (§V9.4)", name)
@@ -223,7 +231,7 @@ func (c *checker) nameMiss(id *ast.Ident, info *check.Info, section, what string
 			return
 		}
 	}
-	c.errorf(id.Pos(), section, "unknown %s %q: no such table or group in package %q (§V9.2)", what, want, c.pkg.Path)
+	c.errorf(id.Pos(), section, "unknown %s %q: no such table, group or TableGroup in package %q (§V9.2)", what, want, c.pkg.Path)
 }
 
 /* ===== predicates (§V10) ===== */
@@ -342,12 +350,18 @@ func (c *checker) selectCheck(sel *ast.Select, info *check.Info, minted map[stri
 		return nil
 	}
 
-	// §V11.2: target.
+	// §V11.2: target — a group, else a table, else a TableGroup as a set.
 	want := sel.Target.Name()
 	if g, isGroup := c.pkg.Groups[want]; isGroup {
 		si.Members = g.Members
 	} else if ti := tableByBase(info, want); ti != nil {
 		si.Members = []*check.TableInfo{ti}
+	} else if tg := info.TableGroup(want); tg != nil {
+		si.Members = tg.Members
+		if len(si.Members) == 0 {
+			c.errorf(sel.Target.Pos(), "V11", "TableGroup %q has no members to select from (§V11.2)", want)
+			return nil
+		}
 	} else {
 		c.nameMiss(sel.Target, info, "V11", "select target")
 		return nil
