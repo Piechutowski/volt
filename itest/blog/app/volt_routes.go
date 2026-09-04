@@ -36,4 +36,6 @@ var Table = []volt.Route{
 	{Method: "PATCH", Pattern: "/api/users/{id}", Spelled: "/api/users/:id(int32)", Query: "db.UserUpdate", Params: []volt.RouteParam{{Name: "id", Type: "int32"}}},
 	{Method: "DELETE", Pattern: "/api/users/{id}", Spelled: "/api/users/:id(int32)", Query: "db.UserDelete", Params: []volt.RouteParam{{Name: "id", Type: "int32"}}},
 	{Method: "GET", Pattern: "/api/picked", Spelled: "/api/picked", Query: "db.UserPicked", Helper: "PathAPIUserPicked"},
+	{Method: "GET", Pattern: "/ms/revenue", Spelled: "/ms/revenue", Query: "db.MsRevenueBrowse", Helper: "PathMsRevenueBrowse"},
+	{Method: "GET", Pattern: "/ms/usage", Spelled: "/ms/usage", Query: "db.MsUsageBrowse", Helper: "PathMsUsageBrowse"},
 }

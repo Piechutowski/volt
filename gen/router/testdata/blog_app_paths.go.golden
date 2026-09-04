@@ -62,3 +62,13 @@ func PathAPIUserGet(id int32, opts ...volt.URLOption) string {
 func PathAPIUserPicked(opts ...volt.URLOption) string {
 	return volt.URL("/api/picked", opts...)
 }
+
+// PathMsRevenueBrowse returns the path for GET /ms/revenue (db.MsRevenueBrowse).
+func PathMsRevenueBrowse(opts ...volt.URLOption) string {
+	return volt.URL("/ms/revenue", opts...)
+}
+
+// PathMsUsageBrowse returns the path for GET /ms/usage (db.MsUsageBrowse).
+func PathMsUsageBrowse(opts ...volt.URLOption) string {
+	return volt.URL("/ms/usage", opts...)
+}

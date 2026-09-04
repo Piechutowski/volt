@@ -531,3 +531,19 @@ where the merge changed the facts.
   in a handler and in a caller. What it refuses: guessing a
   controller route's result type — that method stays raw until the
   language can declare it.
+
+- **D69 — `dataset` expands a group select into query routes**
+  (2026-09-04, spec §V13). The FW-2 design bound the loop to
+  pk-keyed `resources` and a runtime grid query; the FADN schema
+  showed the loop's true variable is a *group select*: its predicate
+  already names the browse key (`rok = :rok and idgr in :idgr`), its
+  members are the tables, its methods are the handlers. So
+  `dataset db.browse [strip: 'da_']` is one scope item that yields one
+  GET query route per member, the segment being the table name minus
+  the prefix, every route obeying the conflict and helper rules like
+  any other. `only:`/`except:` take a member out to hand-write it
+  beside the dataset. What this buys: browsing 37 tables is one line,
+  and the route string and the query call come from the same iteration
+  and cannot disagree. What it refuses: a table name in the URL that
+  is read at runtime — every expanded route exists in the generated
+  source and in `volt routes`. The `Dataset` reserved word is retired.

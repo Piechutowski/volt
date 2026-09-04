@@ -177,12 +177,31 @@ func (p *parser) scopeItem() (item ast.ScopeItem) {
 		return p.scope()
 	case p.atKw("resources"):
 		return p.resources()
+	case p.atKw("dataset"):
+		return p.dataset()
 	case isVerb(t.Val) && !t.Quoted:
 		return p.route()
 	default:
-		p.fail(t, "expected a verb (get, post, ...), 'resources' or 'Scope' in Scope body (§V4), found %q", t.Val)
+		p.fail(t, "expected a verb (get, post, ...), 'resources', 'dataset' or 'Scope' in Scope body (§V4), found %q", t.Val)
 		return nil
 	}
+}
+
+// dataset = "dataset", [ name, "." ], name, [ settings ], newline
+// (Datasets): a group select, expanded to one query route per member.
+func (p *parser) dataset() *ast.Dataset {
+	d := &ast.Dataset{DatasetPos: p.next().Pos}
+	d.Name = p.ident("dataset select name (§V13)")
+	if p.at(token.DOT) {
+		p.next()
+		d.Pkg = d.Name
+		d.Name = p.ident("dataset select name (§V13)")
+	}
+	if p.at(token.LBRACKET) && !p.cur().NLBefore {
+		d.Settings = p.settingList()
+	}
+	p.endOfLine("dataset (§V13)")
+	return d
 }
 
 // route = verb, route path, handler ref, [ settings ], newline (§V4.2).

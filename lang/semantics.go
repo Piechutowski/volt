@@ -383,8 +383,150 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, seenShape, seenHelper 
 			for _, r := range c.resourcesExpand(item, next) {
 				c.routeAdd(r, seenShape, seenHelper)
 			}
+		case *ast.Dataset:
+			for _, r := range c.datasetExpand(item, next) {
+				c.routeAdd(r, seenShape, seenHelper)
+			}
 		}
 	}
+}
+
+/* ===== datasets (§V13) ===== */
+
+// datasetExpand turns `dataset db.browse [strip: 'da_']` into one GET
+// query route per member of the select's target: the segment is the
+// member's table name with the strip prefix removed, the handler the
+// member's select method, bound like any query route (§V4.8).
+func (c *checker) datasetExpand(ds *ast.Dataset, inh inherited) []*RouteInfo {
+	if ds.Pkg == nil {
+		c.errorf(ds.Name.Pos(), "V13", "dataset names a select of an imported data package, qualified: dataset db.%s (§V13.1)", ds.Name.Name())
+		return nil
+	}
+	qual := ds.Pkg.Name()
+	target, known := c.pkg.Imports[qual]
+	if !known {
+		c.errorf(ds.Pkg.Pos(), "V13", "unknown package qualifier %q (§V13.1)", qual)
+		return nil
+	}
+	c.usedQual[qual] = true
+	pkg := c.pr.Packages[target]
+	var si *SelectInfo
+	for _, cand := range pkg.Selects {
+		if cand.Decl.Name.Name() == ds.Name.Name() {
+			si = cand
+		}
+	}
+	if si == nil {
+		hint := ""
+		for _, cand := range pkg.Selects {
+			if strings.EqualFold(cand.Decl.Name.Name(), ds.Name.Name()) {
+				hint = fmt.Sprintf("; did you mean %q?", cand.Decl.Name.Name())
+			}
+		}
+		c.errorf(ds.Name.Pos(), "V13", "no select %q in package %q%s (§V13.1)", ds.Name.Name(), target, hint)
+		return nil
+	}
+
+	strip := ""
+	var only, except map[string]bool
+	var onlyPos, exceptPos token.Position
+	members := map[string]bool{}
+	for _, m := range si.Members {
+		members[m.Decl.Name.Base()] = true
+	}
+	if ds.Settings != nil {
+		for _, s := range ds.Settings.Settings {
+			switch s.Name {
+			case "strip":
+				lit, ok := s.Value.(*ast.BasicLit)
+				if !ok || lit.Tok.Kind != token.STRING {
+					c.errorf(s.Pos(), "V13", "strip: takes a string, the table-name prefix to drop from the URL segment (§V13.2)")
+					continue
+				}
+				strip = lit.Tok.Val
+			case "only", "except":
+				list, ok := s.Value.(*ast.IdentList)
+				if !ok {
+					c.errorf(s.Pos(), "V13", "%s: takes a table list like (da_a_a, da_b_b) (§V13.2)", s.Name)
+					continue
+				}
+				set := map[string]bool{}
+				for i, id := range list.Names {
+					if list.Mods[i] != nil {
+						c.errorf(list.Mods[i].Pos(), "V13", "%s: entries are table names; %q does not belong after %q (§V13.2)", s.Name, list.Mods[i].Name(), id.Name())
+					}
+					if !members[id.Name()] {
+						c.errorf(id.Pos(), "V13", "%s: %q is not a member of select %q's target (§V13.2)", s.Name, id.Name(), si.Decl.Name.Name())
+						continue
+					}
+					set[id.Name()] = true
+				}
+				if s.Name == "only" {
+					only, onlyPos = set, s.Pos()
+				} else {
+					except, exceptPos = set, s.Pos()
+				}
+			default:
+				c.errorf(s.Pos(), "V6", "setting %q is not valid on a dataset (§V6); valid: strip, only, except", s.Name)
+			}
+		}
+	}
+	if only != nil && except != nil {
+		pos := onlyPos
+		if exceptPos.Line > onlyPos.Line || (exceptPos.Line == onlyPos.Line && exceptPos.Column > onlyPos.Column) {
+			pos = exceptPos
+		}
+		c.errorf(pos, "V13", "only: and except: cannot both be set on a dataset (§V13.2)")
+		return nil
+	}
+
+	var out []*RouteInfo
+	for _, m := range si.Members {
+		base := m.Decl.Name.Base()
+		if only != nil && !only[base] {
+			continue
+		}
+		if except[base] {
+			continue
+		}
+		seg := base
+		if strip != "" {
+			if !strings.HasPrefix(base, strip) {
+				c.errorf(ds.Pos(), "V13", "strip: %q is not a prefix of member table %q (§V13.2)", strip, base)
+				continue
+			}
+			seg = strings.TrimPrefix(base, strip)
+			if seg == "" || !goIdentOK(seg) {
+				c.errorf(ds.Pos(), "V13", "strip: %q leaves member table %q with no usable segment (§V13.2)", strip, base)
+				continue
+			}
+		}
+		segs := append(append([]*ast.Segment{}, inh.prefix...), litSeg(seg, ds.Pos()))
+		params, ok := c.pathParams(segs)
+		if !ok {
+			continue
+		}
+		method := modelOrBase(m) + si.MethodSuffix
+		qr := c.queryBind(ds.Name.Pos(), ds.Pkg.Pos(), "GET", params, qual, target, method, func(string) token.Position { return ds.Pos() })
+		if qr == nil {
+			continue
+		}
+		helper := inh.namePrefix + method
+		out = append(out, &RouteInfo{
+			Method:       "GET",
+			Pattern:      patternOf(segs),
+			Spelled:      spelledOf(segs),
+			Params:       params,
+			Query:        qr,
+			HelperName:   helper,
+			ClientName:   helper,
+			Pipes:        inh.pipes,
+			ErrorHandler: inh.errHandler,
+			Pos:          ds.Pos(),
+			FromDataset:  true,
+		})
+	}
+	return out
 }
 
 // selfFuncRef accepts Name or <thispackage>.Name and returns the bare
@@ -497,8 +639,14 @@ var queryValueTypes = map[string]bool{
 // package — a select method (§V11.6) or a default CRUD method — and
 // binds the route's parameters to the method's (§V4.8).
 func (c *checker) queryRef(r *ast.Route, method string, params []Param, qual, target string) *QueryRef {
-	name := r.Handler.Parts[1].Name()
-	pos := r.Handler.Parts[1].Pos()
+	return c.queryBind(r.Handler.Parts[1].Pos(), r.Handler.Parts[0].Pos(), method, params, qual, target, r.Handler.Parts[1].Name(),
+		func(name string) token.Position { return segPos(r, name) })
+}
+
+// queryBind resolves a query method by name in the imported package and
+// binds the route's parameters; segAt locates a path parameter for
+// diagnostics. Shared by query routes and datasets.
+func (c *checker) queryBind(pos, qualPos token.Position, method string, params []Param, qual, target, name string, segAt func(string) token.Position) *QueryRef {
 	pkg := c.pr.Packages[target]
 	info := c.schemas[target]
 	if pkg == nil || info == nil || !pkg.HasSchema() {
@@ -507,7 +655,7 @@ func (c *checker) queryRef(r *ast.Route, method string, params []Param, qual, ta
 	}
 	field, err := golang.GoName(qual)
 	if err != nil {
-		c.errorf(r.Handler.Parts[0].Pos(), "V4", "import qualifier %q: %v (§V4.8)", qual, err)
+		c.errorf(qualPos, "V4", "import qualifier %q: %v (§V4.8)", qual, err)
 		return nil
 	}
 	importPath := c.pr.Module
@@ -603,13 +751,13 @@ func (c *checker) queryRef(r *ast.Route, method string, params []Param, qual, ta
 		case sp.body:
 			qp.Source = FromBody
 			if method != "POST" && method != "PUT" && method != "PATCH" {
-				c.errorf(r.Pos(), "V4", "%s.%s takes a request body (%s); route it with post, put or patch (§V4.8)", qual, name, sp.goType)
+				c.errorf(pos, "V4", "%s.%s takes a request body (%s); route it with post, put or patch (§V4.8)", qual, name, sp.goType)
 				ok = false
 			}
 		case strings.HasPrefix(sp.goType, "[]"):
 			qp.Source = FromList
 			if pp, inPath := byName[sp.name]; inPath {
-				c.errorf(segPos(r, pp.Name), "V4", "list parameter %q of %s.%s cannot be a path parameter; pass it as a repeated query key (§V4.8)", sp.name, qual, name)
+				c.errorf(segAt(pp.Name), "V4", "list parameter %q of %s.%s cannot be a path parameter; pass it as a repeated query key (§V4.8)", sp.name, qual, name)
 				ok = false
 			}
 		default:
@@ -617,13 +765,13 @@ func (c *checker) queryRef(r *ast.Route, method string, params []Param, qual, ta
 				qp.Source = FromPath
 				bound[sp.name] = true
 				if pp.Wild {
-					c.errorf(segPos(r, pp.Name), "V4", "parameter %q of %s.%s cannot be a wildcard (§V4.8)", sp.name, qual, name)
+					c.errorf(segAt(pp.Name), "V4", "parameter %q of %s.%s cannot be a wildcard (§V4.8)", sp.name, qual, name)
 					ok = false
 				} else if pp.Type.GoType() != sp.goType {
 					if KnownParamType(sp.goType) {
-						c.errorf(segPos(r, pp.Name), "V4", "path parameter %q is %s but %s.%s takes %s; spell it :%s(%s) (§V4.8)", sp.name, pp.Type.GoType(), qual, name, sp.goType, sp.name, sp.goType)
+						c.errorf(segAt(pp.Name), "V4", "path parameter %q is %s but %s.%s takes %s; spell it :%s(%s) (§V4.8)", sp.name, pp.Type.GoType(), qual, name, sp.goType, sp.name, sp.goType)
 					} else {
-						c.errorf(segPos(r, pp.Name), "V4", "parameter %q of %s.%s is %s, which a path segment cannot carry (§V4.1.3); pass it in the query string (§V4.8)", sp.name, qual, name, sp.goType)
+						c.errorf(segAt(pp.Name), "V4", "parameter %q of %s.%s is %s, which a path segment cannot carry (§V4.1.3); pass it in the query string (§V4.8)", sp.name, qual, name, sp.goType)
 					}
 					ok = false
 				}
@@ -639,7 +787,7 @@ func (c *checker) queryRef(r *ast.Route, method string, params []Param, qual, ta
 	}
 	for _, p := range params {
 		if !bound[p.Name] {
-			c.errorf(segPos(r, p.Name), "V4", "path parameter %q is not a parameter of %s.%s (§V4.8)", p.Name, qual, name)
+			c.errorf(segAt(p.Name), "V4", "path parameter %q is not a parameter of %s.%s (§V4.8)", p.Name, qual, name)
 			ok = false
 		}
 	}
@@ -647,6 +795,11 @@ func (c *checker) queryRef(r *ast.Route, method string, params []Param, qual, ta
 		return nil
 	}
 	return qr
+}
+
+// litSeg builds a synthetic literal segment for an expanded route.
+func litSeg(n string, at token.Position) *ast.Segment {
+	return &ast.Segment{Kind: ast.SegLit, Name: &ast.Ident{Tok: token.Token{Kind: token.IDENT, Val: n, Pos: at}}}
 }
 
 // segPos finds the position of a named parameter segment in the route's
@@ -827,9 +980,7 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 		except = nil
 	}
 
-	nameSeg := func(n string) *ast.Segment {
-		return &ast.Segment{Kind: ast.SegLit, Name: &ast.Ident{Tok: token.Token{Kind: token.IDENT, Val: n, Pos: res.Pos()}}}
-	}
+	nameSeg := func(n string) *ast.Segment { return litSeg(n, res.Pos()) }
 	idSeg := &ast.Segment{Kind: ast.SegParam, MarkPos: res.Pos(),
 		Name: &ast.Ident{Tok: token.Token{Kind: token.IDENT, Val: paramName, Pos: res.Pos()}},
 		Type: &ast.Ident{Tok: token.Token{Kind: token.IDENT, Val: string(keyType), Pos: res.Pos()}}}

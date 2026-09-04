@@ -149,6 +149,32 @@ func register(mux *http.ServeMux, c Controllers) {
 		}
 		return volt.RenderStatus(w, r, 200, out)
 	}, errHandlerErrors)))
+
+	// GET /ms/revenue → db.MsRevenueBrowse [pipe: api]
+	mux.Handle("GET /ms/revenue", pipe0(volt.Handler("GET /ms/revenue", func(w http.ResponseWriter, r *volt.Request) error {
+		voltyear, err := volt.QueryParam[int32](r, "year")
+		if err != nil {
+			return err
+		}
+		out, err := c.DB.MsRevenueBrowse(r.Context(), voltyear)
+		if err != nil {
+			return err
+		}
+		return volt.RenderStatus(w, r, 200, out)
+	}, errHandlerErrors)))
+
+	// GET /ms/usage → db.MsUsageBrowse [pipe: api]
+	mux.Handle("GET /ms/usage", pipe0(volt.Handler("GET /ms/usage", func(w http.ResponseWriter, r *volt.Request) error {
+		voltyear, err := volt.QueryParam[int32](r, "year")
+		if err != nil {
+			return err
+		}
+		out, err := c.DB.MsUsageBrowse(r.Context(), voltyear)
+		if err != nil {
+			return err
+		}
+		return volt.RenderStatus(w, r, 200, out)
+	}, errHandlerErrors)))
 }
 
 // errHandlerErrors adapts the error_handler declared in the routes.

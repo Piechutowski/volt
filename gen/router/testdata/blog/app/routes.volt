@@ -31,4 +31,9 @@ Scope / [pipe: api, error_handler: Errors] {
 		delete /users/:id(int32) db.UserDelete
 		get    /picked           db.UserPicked
 	}
+
+	// A dataset (§V13): one query route per member of the group select.
+	Scope /ms {
+		dataset db.browse [strip: 'ms_']
+	}
 }

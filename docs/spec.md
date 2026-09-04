@@ -122,6 +122,9 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [The action table](#the-action-table)
     - [Settings](#settings)
     - [Table resolution](#table-resolution)
+  - [Datasets](#datasets)
+    - [Dataset declaration](#dataset-declaration)
+    - [Dataset settings](#dataset-settings)
   - [Settings whitelists](#settings-whitelists)
   - [Generation contract (informative)](#generation-contract-informative)
   - [Reserved words for future layers](#reserved-words-for-future-layers)
@@ -1780,7 +1783,7 @@ the routes through typed methods instead of hand-built requests.
 
 ```ebnf
 scope      = "Scope", route path, [ settings ], "{", { scope item }, "}" ;
-scope item = route | resources | scope ;
+scope item = route | resources | dataset | scope ;
 ```
 
 Scope settings (the complete set):
@@ -1935,6 +1938,59 @@ table ref = name, [ ".", name ] ;
 resources db.users [only: (index, show, create)]
 ```
 
+## Datasets
+
+A **dataset** expands a group select of an imported data package into
+one query route per member table, so browsing every table of a group
+is one line, and the route and the query it calls are emitted from
+the same iteration and cannot disagree.
+
+```ebnf
+dataset = "dataset", name, ".", name, [ settings ], newline ;
+```
+
+```volt
+// db: Group da_farm = DA \ (da_kody, …)
+//     Select browse for da_farm where rok = :rok and idgr in :idgr
+Scope /da [pipe: api] {
+	dataset db.browse [strip: 'da_', except: (da_r_r)]
+	get /r_r Da.RR
+}
+```
+
+### Dataset declaration
+
+1. `dataset` appears only inside a Scope body and names a select of
+   an imported data package, qualified (`db.browse`); the qualifier
+   marks the import used (§V2.4). A name that is not a select of that
+   package is an error, with a case-insensitive hint.
+2. For every member of the select's target (§V11.2), in member order,
+   the dataset yields one `get` **query route** (§V4.8) whose path is
+   the scope prefixes followed by one segment — the member's table
+   name, with the `strip:` prefix removed — and whose handler is the
+   member's select method (`<Model><SelectName>`). Every parameter of
+   the select binds from the query string, a list parameter as a
+   repeated key (§V4.8.2). The helper and client method names are the
+   scope name prefixes followed by the method name (§V4.8.4).
+3. Expanded routes obey every rule of routes: conflicts (§V4.7), one
+   helper namespace (§V4.6, §V4.10). To hand-write one member's route,
+   take it out with `except:` and declare it beside the dataset.
+
+### Dataset settings
+
+| Setting | Value | Meaning |
+|---|---|---|
+| `strip` | string | prefix removed from each member's table name to form its segment |
+| `only` | table list `(da_a_a, da_b_b)` | keep only these members |
+| `except` | table list | drop these members |
+
+1. `strip:` MUST be a prefix of every kept member's name, and what
+   remains MUST be a usable segment (§V4.1.6); otherwise an error
+   names the member. Without `strip:` the segment is the table name.
+2. Names in `only`/`except` are members of the select's target,
+   spelled exactly; an unknown name is an error. `only` and `except`
+   MUST NOT be combined.
+
 ## Settings whitelists
 
 Settings valid on Volt elements, exhaustively (a setting not listed for
@@ -1945,6 +2001,7 @@ an element is an error on that element):
 | Scope | `pipe`, `name`, `error_handler` |
 | route | `name` |
 | resources | `api`, `only`, `except`, `param`, `singular` |
+| dataset | `strip`, `only`, `except` |
 
 The identifier-list value form `(a, b, c)` (production in Appendix VA)
 is valid only where a setting explicitly takes an action list.
@@ -1967,8 +2024,8 @@ standard generated-code header and are gofmt-stable.
 
 ## Reserved words for future layers
 
-`Dataset` is reserved: a conforming v0 implementation rejects it with a
-forward-pointing diagnostic. (Design: [roadmap FW-2](roadmap.md).)
+No word is currently reserved. `Dataset` was reserved until the
+`dataset` scope item landed (Datasets, D69).
 
 ---
 
@@ -2318,7 +2375,7 @@ go ref         = name, [ ".", name ] ;
 
 scope          = "Scope", route path, [ settings ],
                  "{", { scope item }, "}" ;
-scope item     = route | resources | scope ;
+scope item     = route | resources | dataset | scope ;
 
 route          = verb, route path, handler ref, [ settings ], newline ;
 verb           = "get" | "post" | "put" | "patch" | "delete"
@@ -2332,6 +2389,7 @@ segment        = name
 type name      = "int" | "int32" | "int64" | "string" ;
 
 resources      = "resources", [ name, "." ], name, [ settings ], newline ;
+dataset        = "dataset", name, ".", name, [ settings ], newline ;
 
 (* setting value, extended (Part I §4.2): *)
 setting value  = (* schema-layer alternatives *) | ident list ;
@@ -2626,6 +2684,9 @@ removal once citations name headings (docs/backlog.md).
 | §V10 | [Predicates](#predicates) |
 | §V11 | [Selects over groups](#selects-over-groups) |
 | §V12 | [Validation checks](#validation-checks) |
+| §V13 | [Datasets](#datasets) |
+| §V13.1 | [Dataset declaration](#dataset-declaration) |
+| §V13.2 | [Dataset settings](#dataset-settings) |
 | Appendix VA | [Collected grammar (Part II)](#collected-grammar-part-ii) |
 | Appendix A | [Mapping to Go](#mapping-to-go) |
 | Appendix A.1 | [Types](#types) |

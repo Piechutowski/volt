@@ -58,6 +58,7 @@ Scope / [pipe: api, error_handler: Errors] {
 	}
 
 	resources db.users [only: (index, show)]
+	dataset db.browse [strip: 'da_', except: (da_r_r)]
 
 	get /users/:id(int32)/avatar Users.Avatar
 	get /files/:path...          Files.Serve
@@ -116,6 +117,20 @@ Scope / [pipe: api, error_handler: Errors] {
             (identifier))
           (ident_group
             (identifier)
+            (identifier)))))
+    (dataset_declaration
+      (package_name)
+      (select_name)
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (string
+            (string_content)))
+        (setting
+          (setting_name
+            (identifier))
+          (ident_group
             (identifier)))))
     (route
       (verb)

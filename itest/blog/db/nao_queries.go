@@ -169,3 +169,241 @@ func (q *Queries) UserDelete(ctx context.Context, id int32) error {
 	}
 	return nil
 }
+
+// msRevenueScan reads one ms_revenue row in generated column order.
+func msRevenueScan(r rowScanner) (MsRevenue, error) {
+	var v MsRevenue
+	err := r.Scan(&v.ID, &v.Org, &v.Year)
+	return v, err
+}
+
+const msRevenueGetSQL = `SELECT "id", "org", "year" FROM "ms_revenue" WHERE "id" = :id`
+
+// MsRevenueGet fetches the ms_revenue row with the given primary key, or rt.ErrNotFound.
+func (q *Queries) MsRevenueGet(ctx context.Context, id int32) (MsRevenue, error) {
+	return msRevenueScan(q.db.QueryRowContext(ctx, msRevenueGetSQL, sql.Named("id", id)))
+}
+
+const msRevenueGetManySQL = `SELECT "id", "org", "year" FROM "ms_revenue" WHERE "id" IN`
+
+// MsRevenueGetMany fetches the ms_revenue rows whose primary key is in ids, in
+// database order. Missing keys are not an error; they are just absent.
+func (q *Queries) MsRevenueGetMany(ctx context.Context, ids []int32) ([]MsRevenue, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	args := make([]any, len(ids))
+	for i, k := range ids {
+		args[i] = k
+	}
+	query := msRevenueGetManySQL + " (?" + strings.Repeat(", ?", len(ids)-1) + ")"
+	rows, err := q.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []MsRevenue{}
+	for rows.Next() {
+		v, err := msRevenueScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+const msRevenueListSQL = `SELECT "id", "org", "year" FROM "ms_revenue"`
+
+// MsRevenueList returns every ms_revenue row.
+func (q *Queries) MsRevenueList(ctx context.Context) ([]MsRevenue, error) {
+	rows, err := q.db.QueryContext(ctx, msRevenueListSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []MsRevenue{}
+	for rows.Next() {
+		v, err := msRevenueScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+const msRevenueCreateSQL = `INSERT INTO "ms_revenue" ("org", "year") VALUES (:org, :year) RETURNING "id", "org", "year"`
+
+// MsRevenueCreateParams are the caller-supplied columns of MsRevenueCreate. The
+// auto-increment key and defaulted columns are the database's job (D16).
+type MsRevenueCreateParams struct {
+	Org  string `db:"org" json:"org"`
+	Year int32  `db:"year" json:"year"`
+}
+
+// MsRevenueCreate inserts a ms_revenue row and returns the row the database wrote,
+// generated keys and defaults filled in.
+func (q *Queries) MsRevenueCreate(ctx context.Context, arg MsRevenueCreateParams) (MsRevenue, error) {
+	return msRevenueScan(q.db.QueryRowContext(ctx, msRevenueCreateSQL,
+		sql.Named("org", arg.Org),
+		sql.Named("year", arg.Year),
+	))
+}
+
+const msRevenueUpdateSQL = `UPDATE "ms_revenue" SET "org" = :org, "year" = :year WHERE "id" = :id RETURNING "id", "org", "year"`
+
+// MsRevenueUpdateParams are the data columns of MsRevenueUpdate: every column
+// outside the primary key.
+type MsRevenueUpdateParams struct {
+	Org  string `db:"org" json:"org"`
+	Year int32  `db:"year" json:"year"`
+}
+
+// MsRevenueUpdate rewrites every non-key column of the identified ms_revenue row
+// and returns the result, or rt.ErrNotFound when no row matches.
+func (q *Queries) MsRevenueUpdate(ctx context.Context, id int32, arg MsRevenueUpdateParams) (MsRevenue, error) {
+	return msRevenueScan(q.db.QueryRowContext(ctx, msRevenueUpdateSQL,
+		sql.Named("id", id),
+		sql.Named("org", arg.Org),
+		sql.Named("year", arg.Year),
+	))
+}
+
+const msRevenueDeleteSQL = `DELETE FROM "ms_revenue" WHERE "id" = :id`
+
+// MsRevenueDelete removes the identified ms_revenue row; rt.ErrNotFound reports
+// that nothing matched.
+func (q *Queries) MsRevenueDelete(ctx context.Context, id int32) error {
+	res, err := q.db.ExecContext(ctx, msRevenueDeleteSQL, sql.Named("id", id))
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return rt.ErrNotFound
+	}
+	return nil
+}
+
+// msUsageScan reads one ms_usage row in generated column order.
+func msUsageScan(r rowScanner) (MsUsage, error) {
+	var v MsUsage
+	err := r.Scan(&v.ID, &v.Org, &v.Year)
+	return v, err
+}
+
+const msUsageGetSQL = `SELECT "id", "org", "year" FROM "ms_usage" WHERE "id" = :id`
+
+// MsUsageGet fetches the ms_usage row with the given primary key, or rt.ErrNotFound.
+func (q *Queries) MsUsageGet(ctx context.Context, id int32) (MsUsage, error) {
+	return msUsageScan(q.db.QueryRowContext(ctx, msUsageGetSQL, sql.Named("id", id)))
+}
+
+const msUsageGetManySQL = `SELECT "id", "org", "year" FROM "ms_usage" WHERE "id" IN`
+
+// MsUsageGetMany fetches the ms_usage rows whose primary key is in ids, in
+// database order. Missing keys are not an error; they are just absent.
+func (q *Queries) MsUsageGetMany(ctx context.Context, ids []int32) ([]MsUsage, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	args := make([]any, len(ids))
+	for i, k := range ids {
+		args[i] = k
+	}
+	query := msUsageGetManySQL + " (?" + strings.Repeat(", ?", len(ids)-1) + ")"
+	rows, err := q.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []MsUsage{}
+	for rows.Next() {
+		v, err := msUsageScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+const msUsageListSQL = `SELECT "id", "org", "year" FROM "ms_usage"`
+
+// MsUsageList returns every ms_usage row.
+func (q *Queries) MsUsageList(ctx context.Context) ([]MsUsage, error) {
+	rows, err := q.db.QueryContext(ctx, msUsageListSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []MsUsage{}
+	for rows.Next() {
+		v, err := msUsageScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+const msUsageCreateSQL = `INSERT INTO "ms_usage" ("org", "year") VALUES (:org, :year) RETURNING "id", "org", "year"`
+
+// MsUsageCreateParams are the caller-supplied columns of MsUsageCreate. The
+// auto-increment key and defaulted columns are the database's job (D16).
+type MsUsageCreateParams struct {
+	Org  string `db:"org" json:"org"`
+	Year int32  `db:"year" json:"year"`
+}
+
+// MsUsageCreate inserts a ms_usage row and returns the row the database wrote,
+// generated keys and defaults filled in.
+func (q *Queries) MsUsageCreate(ctx context.Context, arg MsUsageCreateParams) (MsUsage, error) {
+	return msUsageScan(q.db.QueryRowContext(ctx, msUsageCreateSQL,
+		sql.Named("org", arg.Org),
+		sql.Named("year", arg.Year),
+	))
+}
+
+const msUsageUpdateSQL = `UPDATE "ms_usage" SET "org" = :org, "year" = :year WHERE "id" = :id RETURNING "id", "org", "year"`
+
+// MsUsageUpdateParams are the data columns of MsUsageUpdate: every column
+// outside the primary key.
+type MsUsageUpdateParams struct {
+	Org  string `db:"org" json:"org"`
+	Year int32  `db:"year" json:"year"`
+}
+
+// MsUsageUpdate rewrites every non-key column of the identified ms_usage row
+// and returns the result, or rt.ErrNotFound when no row matches.
+func (q *Queries) MsUsageUpdate(ctx context.Context, id int32, arg MsUsageUpdateParams) (MsUsage, error) {
+	return msUsageScan(q.db.QueryRowContext(ctx, msUsageUpdateSQL,
+		sql.Named("id", id),
+		sql.Named("org", arg.Org),
+		sql.Named("year", arg.Year),
+	))
+}
+
+const msUsageDeleteSQL = `DELETE FROM "ms_usage" WHERE "id" = :id`
+
+// MsUsageDelete removes the identified ms_usage row; rt.ErrNotFound reports
+// that nothing matched.
+func (q *Queries) MsUsageDelete(ctx context.Context, id int32) error {
+	res, err := q.db.ExecContext(ctx, msUsageDeleteSQL, sql.Named("id", id))
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return rt.ErrNotFound
+	}
+	return nil
+}

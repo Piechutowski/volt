@@ -194,6 +194,42 @@
     }
   },
   {
+    "type": "dataset_declaration",
+    "named": true,
+    "fields": {
+      "package": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "package_name",
+            "named": true
+          }
+        ]
+      },
+      "select": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "select_name",
+            "named": true
+          }
+        ]
+      },
+      "settings": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "settings_list",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "diagram_view_definition",
     "named": true,
     "fields": {
@@ -1560,6 +1596,10 @@
       "required": false,
       "types": [
         {
+          "type": "dataset_declaration",
+          "named": true
+        },
+        {
           "type": "resources_declaration",
           "named": true
         },
@@ -2429,6 +2469,10 @@
     "type": "comment",
     "named": true,
     "extra": true
+  },
+  {
+    "type": "dataset",
+    "named": false
   },
   {
     "type": "delete",

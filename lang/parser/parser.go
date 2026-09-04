@@ -150,11 +150,8 @@ func (p *parser) decl() (d ast.Decl) {
 		return p.selectDecl()
 	case "scope":
 		return p.scope()
-	case "dataset":
-		p.fail(t, "Dataset is reserved for a future version of Volt (§V8)")
-		return nil
-	case "get", "post", "put", "patch", "delete", "options", "head", "any", "resources":
-		p.fail(t, "routes and resources must appear inside a Scope (§V4)")
+	case "get", "post", "put", "patch", "delete", "options", "head", "any", "resources", "dataset":
+		p.fail(t, "routes, resources and datasets must appear inside a Scope (§V4)")
 		return nil
 	case "project":
 		return p.project()

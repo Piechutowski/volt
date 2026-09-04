@@ -181,6 +181,32 @@ func (x *Resources) End() token.Position {
 }
 func (x *Resources) scopeItemNode() {}
 
+// Dataset expands a group select of an imported data package into one
+// query route per member (spec, Datasets): `dataset db.browse [strip: 'da_']`.
+type Dataset struct {
+	DatasetPos token.Position
+	Pkg        *Ident // the package qualifier; required
+	Name       *Ident // the select's declared name
+	Settings   *SettingList
+}
+
+// Ref renders the reference as written.
+func (x *Dataset) Ref() string {
+	if x.Pkg != nil {
+		return x.Pkg.Name() + "." + x.Name.Name()
+	}
+	return x.Name.Name()
+}
+
+func (x *Dataset) Pos() token.Position { return x.DatasetPos }
+func (x *Dataset) End() token.Position {
+	if x.Settings != nil {
+		return x.Settings.End()
+	}
+	return x.Name.End()
+}
+func (x *Dataset) scopeItemNode() {}
+
 // RoutePath is a route or scope path: "/" or "/seg/:param(type)/*rest"
 // (spec §V4.1). Tokens within a path are contiguous — the parser rejects
 // interior whitespace.

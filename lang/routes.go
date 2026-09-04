@@ -60,6 +60,7 @@ type RouteInfo struct {
 
 	Pos           token.Position
 	FromResources bool
+	FromDataset   bool // expanded from a dataset item (§V13)
 }
 
 // QuerySource says where a query route binds one parameter from.

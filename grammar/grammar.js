@@ -523,7 +523,7 @@ module.exports = grammar({
       ),
 
     _scope_item: ($) =>
-      choice($.route, $.resources_declaration, $.scope_definition),
+      choice($.route, $.resources_declaration, $.dataset_declaration, $.scope_definition),
 
     route: ($) =>
       seq(
@@ -546,6 +546,16 @@ module.exports = grammar({
         kw('resources'),
         optional(seq(field('package', alias($.identifier, $.package_name)), '.')),
         field('table', alias($.identifier, $.table_name)),
+        optional(field('settings', $.settings_list)),
+      ),
+
+    // dataset names a group select of an imported data package (§V13):
+    // `dataset db.browse [strip: 'da_']`, one query route per member.
+    dataset_declaration: ($) =>
+      seq(
+        kw('dataset'),
+        optional(seq(field('package', alias($.identifier, $.package_name)), '.')),
+        field('select', alias($.identifier, $.select_name)),
         optional(field('settings', $.settings_list)),
       ),
 

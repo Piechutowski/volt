@@ -129,3 +129,243 @@ func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], pr
 	}
 	return res.RowsAffected()
 }
+
+// msRevenueTableSQL and msRevenueColumnsSQL are the fixed shape of MsRevenue's
+// dynamic statements; the interpreter renders everything else (D28).
+const (
+	msRevenueTableSQL   = `"ms_revenue"`
+	msRevenueColumnsSQL = `"id", "org", "year"`
+)
+
+// Typed column handles of MsRevenue (D29): inert predicate, order and
+// assignment builders for the dynamic query layer (D28). A predicate
+// built here can only enter MsRevenue queries; mixing models is a compile
+// error.
+var (
+	MsRevenueID   = rt.Column[MsRevenue, int32]{Name: "id"}
+	MsRevenueOrg  = rt.Column[MsRevenue, string]{Name: "org"}
+	MsRevenueYear = rt.Column[MsRevenue, int32]{Name: "year"}
+)
+
+// MsRevenueLimit caps how many rows MsRevenueQuery returns (D30).
+func MsRevenueLimit(n int) rt.Opt[MsRevenue] { return rt.Limit[MsRevenue](n) }
+
+// MsRevenueOffset skips n rows; keyset pagination (MsRevenueAfter) scales better (D34).
+func MsRevenueOffset(n int) rt.Opt[MsRevenue] { return rt.Offset[MsRevenue](n) }
+
+// MsRevenueDistinct deduplicates the rows MsRevenueQuery returns.
+func MsRevenueDistinct() rt.Opt[MsRevenue] { return rt.Distinct[MsRevenue]() }
+
+// MsRevenueOrderBy sorts MsRevenueQuery's rows by Asc/Desc terms built on the
+// MsRevenue column handles.
+func MsRevenueOrderBy(terms ...rt.Order[MsRevenue]) rt.Opt[MsRevenue] { return rt.OrderBy(terms...) }
+
+// MsRevenueAfter resumes strictly after the row with the given key — keyset
+// pagination (D34): one value per MsRevenueOrderBy term, in the same order.
+func MsRevenueAfter(key ...any) rt.Opt[MsRevenue] { return rt.After[MsRevenue](key...) }
+
+// MsRevenueSet collects the typed assignments of a MsRevenueUpdateWhere, built
+// with Set/SetNull on the MsRevenue column handles.
+func MsRevenueSet(assigns ...rt.Assign[MsRevenue]) []rt.Assign[MsRevenue] { return assigns }
+
+// MsRevenueQuery returns the ms_revenue rows matching every given predicate,
+// shaped by the remaining options (order, limit, offset, keyset,
+// distinct). No options means every row.
+func (q *Queries) MsRevenueQuery(ctx context.Context, opts ...rt.Opt[MsRevenue]) ([]MsRevenue, error) {
+	query, args, err := rt.SelectRender(msRevenueTableSQL, msRevenueColumnsSQL, opts)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := rt.StmtQuery(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []MsRevenue{}
+	for rows.Next() {
+		v, err := msRevenueScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// MsRevenueCount reports how many ms_revenue rows match every given predicate;
+// none counts the whole table.
+func (q *Queries) MsRevenueCount(ctx context.Context, preds ...rt.Pred[MsRevenue]) (int64, error) {
+	query, args, err := rt.CountRender(msRevenueTableSQL, preds)
+	if err != nil {
+		return 0, err
+	}
+	var n int64
+	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// MsRevenueExists reports whether any ms_revenue row matches every given predicate.
+func (q *Queries) MsRevenueExists(ctx context.Context, preds ...rt.Pred[MsRevenue]) (bool, error) {
+	query, args, err := rt.ExistsRender(msRevenueTableSQL, preds)
+	if err != nil {
+		return false, err
+	}
+	var found bool
+	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &found); err != nil {
+		return false, err
+	}
+	return found, nil
+}
+
+// MsRevenueDeleteWhere removes every ms_revenue row matching the predicates and
+// reports how many went. No effective predicate is an error, never a
+// full-table delete (D42).
+func (q *Queries) MsRevenueDeleteWhere(ctx context.Context, preds ...rt.Pred[MsRevenue]) (int64, error) {
+	query, args, err := rt.DeleteRender(msRevenueTableSQL, preds)
+	if err != nil {
+		return 0, err
+	}
+	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// MsRevenueUpdateWhere applies the typed assignments (MsRevenueSet) to every ms_revenue
+// row matching the predicates and reports how many changed — the
+// partial update of the dynamic layer (D32). No effective predicate
+// is an error, never a full-table rewrite (D42).
+func (q *Queries) MsRevenueUpdateWhere(ctx context.Context, set []rt.Assign[MsRevenue], preds ...rt.Pred[MsRevenue]) (int64, error) {
+	query, args, err := rt.UpdateRender(msRevenueTableSQL, set, preds)
+	if err != nil {
+		return 0, err
+	}
+	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// msUsageTableSQL and msUsageColumnsSQL are the fixed shape of MsUsage's
+// dynamic statements; the interpreter renders everything else (D28).
+const (
+	msUsageTableSQL   = `"ms_usage"`
+	msUsageColumnsSQL = `"id", "org", "year"`
+)
+
+// Typed column handles of MsUsage (D29): inert predicate, order and
+// assignment builders for the dynamic query layer (D28). A predicate
+// built here can only enter MsUsage queries; mixing models is a compile
+// error.
+var (
+	MsUsageID   = rt.Column[MsUsage, int32]{Name: "id"}
+	MsUsageOrg  = rt.Column[MsUsage, string]{Name: "org"}
+	MsUsageYear = rt.Column[MsUsage, int32]{Name: "year"}
+)
+
+// MsUsageLimit caps how many rows MsUsageQuery returns (D30).
+func MsUsageLimit(n int) rt.Opt[MsUsage] { return rt.Limit[MsUsage](n) }
+
+// MsUsageOffset skips n rows; keyset pagination (MsUsageAfter) scales better (D34).
+func MsUsageOffset(n int) rt.Opt[MsUsage] { return rt.Offset[MsUsage](n) }
+
+// MsUsageDistinct deduplicates the rows MsUsageQuery returns.
+func MsUsageDistinct() rt.Opt[MsUsage] { return rt.Distinct[MsUsage]() }
+
+// MsUsageOrderBy sorts MsUsageQuery's rows by Asc/Desc terms built on the
+// MsUsage column handles.
+func MsUsageOrderBy(terms ...rt.Order[MsUsage]) rt.Opt[MsUsage] { return rt.OrderBy(terms...) }
+
+// MsUsageAfter resumes strictly after the row with the given key — keyset
+// pagination (D34): one value per MsUsageOrderBy term, in the same order.
+func MsUsageAfter(key ...any) rt.Opt[MsUsage] { return rt.After[MsUsage](key...) }
+
+// MsUsageSet collects the typed assignments of a MsUsageUpdateWhere, built
+// with Set/SetNull on the MsUsage column handles.
+func MsUsageSet(assigns ...rt.Assign[MsUsage]) []rt.Assign[MsUsage] { return assigns }
+
+// MsUsageQuery returns the ms_usage rows matching every given predicate,
+// shaped by the remaining options (order, limit, offset, keyset,
+// distinct). No options means every row.
+func (q *Queries) MsUsageQuery(ctx context.Context, opts ...rt.Opt[MsUsage]) ([]MsUsage, error) {
+	query, args, err := rt.SelectRender(msUsageTableSQL, msUsageColumnsSQL, opts)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := rt.StmtQuery(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []MsUsage{}
+	for rows.Next() {
+		v, err := msUsageScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// MsUsageCount reports how many ms_usage rows match every given predicate;
+// none counts the whole table.
+func (q *Queries) MsUsageCount(ctx context.Context, preds ...rt.Pred[MsUsage]) (int64, error) {
+	query, args, err := rt.CountRender(msUsageTableSQL, preds)
+	if err != nil {
+		return 0, err
+	}
+	var n int64
+	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// MsUsageExists reports whether any ms_usage row matches every given predicate.
+func (q *Queries) MsUsageExists(ctx context.Context, preds ...rt.Pred[MsUsage]) (bool, error) {
+	query, args, err := rt.ExistsRender(msUsageTableSQL, preds)
+	if err != nil {
+		return false, err
+	}
+	var found bool
+	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &found); err != nil {
+		return false, err
+	}
+	return found, nil
+}
+
+// MsUsageDeleteWhere removes every ms_usage row matching the predicates and
+// reports how many went. No effective predicate is an error, never a
+// full-table delete (D42).
+func (q *Queries) MsUsageDeleteWhere(ctx context.Context, preds ...rt.Pred[MsUsage]) (int64, error) {
+	query, args, err := rt.DeleteRender(msUsageTableSQL, preds)
+	if err != nil {
+		return 0, err
+	}
+	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// MsUsageUpdateWhere applies the typed assignments (MsUsageSet) to every ms_usage
+// row matching the predicates and reports how many changed — the
+// partial update of the dynamic layer (D32). No effective predicate
+// is an error, never a full-table rewrite (D42).
+func (q *Queries) MsUsageUpdateWhere(ctx context.Context, set []rt.Assign[MsUsage], preds ...rt.Pred[MsUsage]) (int64, error) {
+	query, args, err := rt.UpdateRender(msUsageTableSQL, set, preds)
+	if err != nil {
+		return 0, err
+	}
+	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}

@@ -124,7 +124,7 @@ func TestVoltSyntaxErrors(t *testing.T) {
 	}{
 		{"space in path", "Scope / {\n\tget /users /:id Users.Show\n}\n", "expected identifier in route handler"},
 		{"one-part handler", "Scope / {\n\tget /users Show\n}\n", "route handler must be Controller.Action"},
-		{"dataset reserved", "Dataset da { }\n", "reserved for a future version"},
+		{"top-level dataset", "dataset db.browse\n", "must appear inside a Scope"},
 		{"import without parens", "import db\n", "expected '(' after import"},
 		{"top-level route", "get /users Users.Index\n", "must appear inside a Scope"},
 		{"colon without name", "Scope / {\n\tget /users/: Users.Show\n}\n", "':' must be followed by a parameter name"},

@@ -101,3 +101,40 @@ func TestTableGroupRenameFollowsSetUses(t *testing.T) {
 		t.Errorf("table rename produced %d edits, want the declaration, the TableGroup member and the set term: %+v", n, edit.Changes)
 	}
 }
+
+// A dataset names a select of the imported package (§V13): definition
+// and hover reach the select, and renaming the select follows into the
+// dataset while keeping the qualifier.
+func TestDatasetNavigatesToSelect(t *testing.T) {
+	const dbText = "package db\n\nTable ms_revenue {\n\tid integer [pk]\n\tyear integer [not null]\n}\n\n" +
+		"Group series {\n\tms_revenue\n}\n\nSelect browse for series where year = :year\n"
+	const appText = "package app\n\nimport (\n\tdb\n)\n\nScope /ms {\n\tdataset db.browse [strip: 'ms_']\n}\n"
+	root := voltProject(t, map[string]string{
+		"go.mod":          "module g\n",
+		"db/schema.volt":  dbText,
+		"app/routes.volt": appText,
+	})
+	d := NewDocument("file://"+filepath.Join(root, "app", "routes.volt"), appText)
+	if diags := d.LSPDiagnostics(); len(diags) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+	loc := d.Definition(posOf(t, appText, "browse", 0))
+	if loc == nil || !strings.HasSuffix(string(loc.URI), "db/schema.volt") {
+		t.Fatalf("dataset select definition = %+v, want db/schema.volt", loc)
+	}
+	h := d.Hover(posOf(t, appText, "browse", 0))
+	if h == nil || !strings.Contains(h.Contents.(protocol.MarkupContent).Value, "MsRevenueBrowse") {
+		t.Fatalf("dataset hover should list the select's methods: %+v", h)
+	}
+	edit, err := d.Rename(posOf(t, appText, "browse", 0), "list")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for uri, edits := range edit.Changes {
+		for _, e := range edits {
+			if strings.HasSuffix(string(uri), "routes.volt") && (e.Range.Start.Character != uint32(strings.Index("\tdataset db.browse", "browse")) || e.NewText != "list") {
+				t.Errorf("dataset rename edit = %+v, want only the name after the qualifier", e)
+			}
+		}
+	}
+}

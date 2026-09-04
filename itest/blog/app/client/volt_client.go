@@ -140,3 +140,19 @@ func (c *Client) APIUserPicked(ctx context.Context, ids []int32) ([]db.User, err
 	err := c.Do(ctx, "GET", volt.URL("/api/picked", q...), nil, &out)
 	return out, err
 }
+
+// MsRevenueBrowse calls GET /ms/revenue (db.MsRevenueBrowse).
+func (c *Client) MsRevenueBrowse(ctx context.Context, year int32) ([]db.MsRevenue, error) {
+	q := []volt.URLOption{volt.Query("year", volt.FormatQuery(year))}
+	var out []db.MsRevenue
+	err := c.Do(ctx, "GET", volt.URL("/ms/revenue", q...), nil, &out)
+	return out, err
+}
+
+// MsUsageBrowse calls GET /ms/usage (db.MsUsageBrowse).
+func (c *Client) MsUsageBrowse(ctx context.Context, year int32) ([]db.MsUsage, error) {
+	q := []volt.URLOption{volt.Query("year", volt.FormatQuery(year))}
+	var out []db.MsUsage
+	err := c.Do(ctx, "GET", volt.URL("/ms/usage", q...), nil, &out)
+	return out, err
+}

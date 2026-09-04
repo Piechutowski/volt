@@ -345,12 +345,14 @@ manifest carries one `*pkg.Queries` per data package. This is the
 primitive the rest of FW-2 expands: every route below is a query
 route emitted per group member.
 
-**Next: `dataset`.** A scope item binding a *group* select,
+**Landed (D69): `dataset`.** A scope item binding a *group* select,
 `dataset db.browse [strip: 'da_']`, expands to one query route per
 member table with the segment derived from the table name, and
 `only:`/`except:` to take a member out and write it by hand. It
-replaces the reserved `Dataset` word. Then `resources db.t [default]`
-for generated CRUD handlers over the seven actions.
+replaced the reserved `Dataset` word.
+
+**Next:** `resources db.t [default]` for generated CRUD handlers over
+the seven actions, and the SSE broker for live updates.
 
 **Landed (D68): the client package.** `client/volt_client.go` beside
 every routing package — typed methods per query route, raw methods

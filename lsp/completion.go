@@ -23,7 +23,7 @@ var (
 	tableBodyKeywords = []string{"indexes", "checks", "Note", "Records"}
 	scopeBodyKeywords = []string{
 		"get ", "post ", "put ", "patch ", "delete ", "options ", "head ",
-		"any ", "resources ", "Scope ",
+		"any ", "resources ", "dataset ", "Scope ",
 	}
 
 	settingsByContext = map[string][]string{
@@ -39,6 +39,7 @@ var (
 		"scope":     {"pipe: ", "error_handler: ", "name: "},
 		"route":     {"name: "},
 		"resources": {"only: (", "except: (", "param: ", "singular: ", "api"},
+		"dataset":   {"strip: ", "only: (", "except: ("},
 	}
 
 	builtinTypes = []string{
@@ -236,6 +237,8 @@ func (d *Document) settingsComplete(prefix, ctx string) []protocol.CompletionIte
 		kind = "scope"
 	case strings.HasPrefix(head, "resources") && ctx == "scope":
 		kind = "resources"
+	case strings.HasPrefix(head, "dataset") && ctx == "scope":
+		kind = "dataset"
 	case voltVerbSet[verb] && ctx == "scope":
 		kind = "route"
 	default:

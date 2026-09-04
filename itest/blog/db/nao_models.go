@@ -8,3 +8,17 @@ type User struct {
 	ID    int32  `db:"id" json:"id"`
 	Email string `db:"email" json:"email"`
 }
+
+// MsRevenue is a row of the ms_revenue table.
+type MsRevenue struct {
+	ID   int32  `db:"id" json:"id"`
+	Org  string `db:"org" json:"org"`
+	Year int32  `db:"year" json:"year"`
+}
+
+// MsUsage is a row of the ms_usage table.
+type MsUsage struct {
+	ID   int32  `db:"id" json:"id"`
+	Org  string `db:"org" json:"org"`
+	Year int32  `db:"year" json:"year"`
+}

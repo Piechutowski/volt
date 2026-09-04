@@ -310,6 +310,19 @@ func (ix *voltIndex) scopeRefs(pkg *lang.Package, path string, sc *ast.Scope) {
 			}
 			ix.refs = append(ix.refs, voltRef{hit, edit, voltSym{"table", target, it.Name.Name()}, false, it.Name.Name()})
 			ix.settingRefs(pkg, path, it.Settings)
+		case *ast.Dataset:
+			// The declaration names a select of the imported package
+			// (§V13.1): hover shows its expansion, gd lands on it, rename
+			// rewrites the name and keeps the qualifier.
+			if it.Pkg != nil {
+				if target, ok := pkg.Imports[it.Pkg.Name()]; ok {
+					edit := spanOf(it.Name)
+					hit := edit
+					hit.pos = it.Pkg.Pos()
+					ix.refs = append(ix.refs, voltRef{hit, edit, voltSym{"select", target, it.Name.Name()}, false, it.Name.Name()})
+				}
+			}
+			ix.settingRefs(pkg, path, it.Settings)
 		case *ast.Route:
 			ix.settingRefs(pkg, path, it.Settings)
 		}

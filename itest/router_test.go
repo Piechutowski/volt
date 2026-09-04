@@ -175,6 +175,9 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathAPIUserList":   {"GET", app.PathAPIUserList()},
 		"PathAPIUserGet":    {"GET", app.PathAPIUserGet(1)},
 		"PathAPIUserPicked": {"GET", app.PathAPIUserPicked(volt.Query("ids", "1"))},
+		// Dataset routes (§V13): one per member of the group select.
+		"PathMsRevenueBrowse": {"GET", app.PathMsRevenueBrowse(volt.Query("year", "2024"))},
+		"PathMsUsageBrowse":   {"GET", app.PathMsUsageBrowse(volt.Query("year", "2024"))},
 	}
 	queryRoutes := map[string]bool{} // helper -> served by a generated query handler
 	for _, r := range app.Table {

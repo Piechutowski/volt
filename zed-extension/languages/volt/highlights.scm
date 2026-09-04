@@ -102,6 +102,7 @@
   "Pipeline"
   "Scope"
   "resources"
+  "dataset"
 ] @keyword
 
 (verb) @keyword

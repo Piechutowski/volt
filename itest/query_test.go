@@ -161,7 +161,25 @@ func TestQueryRouteTable(t *testing.T) {
 			t.Errorf("%s %s: helper %q — only GET query routes have one", r.Method, r.Spelled, r.Helper)
 		}
 	}
-	if seen != 6 {
-		t.Errorf("query rows = %d, want 6", seen)
+	if seen != 8 {
+		t.Errorf("query rows = %d, want 8 (six query routes, two dataset members)", seen)
+	}
+}
+
+// TestDatasetRoutesServe: the expanded routes serve the member's select
+// with the select's parameters bound from the query string (§V13).
+func TestDatasetRoutesServe(t *testing.T) {
+	h := handlerWithDB(t)
+	for _, target := range []string{"/ms/revenue?year=2024", "/ms/usage?year=2024"} {
+		rec := call(h, "GET", target, nil)
+		if rec.Code != 200 || strings.TrimSpace(rec.Body.String()) != "[]" {
+			t.Errorf("GET %s: %d %q, want 200 []", target, rec.Code, rec.Body.String())
+		}
+	}
+	if rec := call(h, "GET", "/ms/revenue", nil); rec.Code != 400 || !strings.Contains(rec.Body.String(), "year") {
+		t.Errorf("missing year: %d %q, want 400 naming year", rec.Code, rec.Body.String())
+	}
+	if rec := call(h, "GET", "/ms/notes?year=2024", nil); rec.Code != 404 {
+		t.Errorf("a table outside the group: %d, want 404", rec.Code)
 	}
 }

@@ -606,3 +606,54 @@ func TestQueryRouteErrors(t *testing.T) {
 		})
 	}
 }
+
+// Datasets (§V13): one GET query route per member of the group select,
+// segments stripped, only/except honored, names from the method.
+func TestDatasetExpansion(t *testing.T) {
+	schema := "package db\n\nTable ms_revenue {\n\tid integer [pk]\n\tyear integer [not null]\n}\n\nTable ms_usage {\n\tid integer [pk]\n\tyear integer [not null]\n}\n\nTable ms_notes {\n\tid integer [pk]\n\tyear integer [not null]\n}\n\nGroup series {\n\tms_revenue\n\tms_usage\n\tms_notes\n}\n\nSelect browse for series where year = :year\n"
+	pr, diags := project(t, map[string]string{
+		"go.mod":         modFile,
+		"db/schema.volt": schema,
+		"app/r.volt":     "package app\n\nimport (\n\tdb\n)\n\nScope /ms [name: ms] {\n\tdataset db.browse [strip: 'ms_', except: (ms_notes)]\n}\n",
+	})
+	wantClean(t, diags)
+	routes := pr.Packages["app"].Routes
+	if len(routes) != 2 {
+		t.Fatalf("routes = %d, want 2: %v", len(routes), routes)
+	}
+	if routes[0].Pattern != "/ms/revenue" || routes[0].Query == nil || routes[0].Query.Method != "MsRevenueBrowse" ||
+		routes[0].HelperName != "MsMsRevenueBrowse" || !routes[0].FromDataset {
+		t.Errorf("first route = %+v", routes[0])
+	}
+	if routes[1].Pattern != "/ms/usage" || routes[1].Query.Method != "MsUsageBrowse" {
+		t.Errorf("second route = %+v", routes[1])
+	}
+	if p := routes[0].Query.Params; len(p) != 1 || p[0].Source != FromQuery || p[0].GoType != "int32" {
+		t.Errorf("params = %+v", p)
+	}
+
+	for _, tc := range []struct{ name, line, want string }{
+		{"only keeps", "dataset db.browse [only: (ms_usage)]", ""},
+		{"strip miss", "dataset db.browse [strip: 'x_']", "is not a prefix"},
+		{"both lists", "dataset db.browse [only: (ms_usage), except: (ms_notes)]", "cannot both be set"},
+		{"unknown select", "dataset db.Browse", `did you mean "browse"`},
+		{"bad setting", "dataset db.browse [api]", "not valid on a dataset"},
+		{"collides with a route", "dataset db.browse\n\tget /ms_usage Ms.Usage", "conflicts with the route"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pr, diags := project(t, map[string]string{
+				"go.mod":         modFile,
+				"db/schema.volt": schema,
+				"app/r.volt":     "package app\n\nimport (\n\tdb\n)\n\nScope /ms {\n\t" + tc.line + "\n}\n",
+			})
+			if tc.want == "" {
+				wantClean(t, diags)
+				if n := len(pr.Packages["app"].Routes); n != 1 {
+					t.Errorf("only: routes = %d, want 1", n)
+				}
+				return
+			}
+			wantError(t, diags, tc.want)
+		})
+	}
+}

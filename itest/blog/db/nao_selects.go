@@ -30,3 +30,43 @@ func (q *Queries) UserPicked(ctx context.Context, ids []int32) ([]User, error) {
 	}
 	return out, rows.Err()
 }
+
+const msRevenueBrowseSQL = `SELECT "id", "org", "year" FROM "ms_revenue" WHERE year = :year ORDER BY id ASC`
+
+// MsRevenueBrowse runs the "browse" select over ms_revenue (spec §V11).
+func (q *Queries) MsRevenueBrowse(ctx context.Context, year int32) ([]MsRevenue, error) {
+	rows, err := q.db.QueryContext(ctx, msRevenueBrowseSQL, sql.Named("year", year))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []MsRevenue{}
+	for rows.Next() {
+		v, err := msRevenueScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+const msUsageBrowseSQL = `SELECT "id", "org", "year" FROM "ms_usage" WHERE year = :year ORDER BY id ASC`
+
+// MsUsageBrowse runs the "browse" select over ms_usage (spec §V11).
+func (q *Queries) MsUsageBrowse(ctx context.Context, year int32) ([]MsUsage, error) {
+	rows, err := q.db.QueryContext(ctx, msUsageBrowseSQL, sql.Named("year", year))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []MsUsage{}
+	for rows.Next() {
+		v, err := msUsageScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}

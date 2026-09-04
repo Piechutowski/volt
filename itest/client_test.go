@@ -57,6 +57,14 @@ func TestClientQueryRoutes(t *testing.T) {
 			t.Fatalf("%v: second delete = %v, want volt.ErrNotFound", f, err)
 		}
 
+		// Dataset routes (§V13): the same signature for every member.
+		if _, err := c.MsRevenueBrowse(ctx, 2024); err != nil {
+			t.Fatalf("%v: dataset route = %v", f, err)
+		}
+		if _, err := c.MsUsageBrowse(ctx, 2024); err != nil {
+			t.Fatalf("%v: dataset route = %v", f, err)
+		}
+
 		// A named controller route: raw response, the echo body.
 		resp, err := c.User(ctx, 7)
 		if err != nil || resp.StatusCode != 200 {
