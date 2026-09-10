@@ -19,7 +19,7 @@ you can read, grep, and step through in a debugger.
 
        app/*.volt  ──  routes over the schema (Part II of the spec)
              │
-   volt gen ─┼──► volt_handlers.go  controller interfaces + the Controllers manifest
+   volt gen ─┼──► volt_handlers.go  controller interfaces, the Controllers manifest, NewRouter
              ├──► volt_router.go    ServeMux registrations; query routes' handlers (§V4.8); the event stream (§V4.11)
              ├──► volt_paths.go     typed reverse-URL helpers
              ├──► volt_routes.go    the route table as data

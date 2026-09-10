@@ -97,7 +97,7 @@ var allocBudget = struct {
 func TestAllocationBudget(t *testing.T) {
 	load, check, gen := corpusPhases(t, corpusRoot(t, corpus.Spec{Packages: 3, Tables: 12, Columns: 12}))
 	for _, ph := range []struct {
-		name         string
+		name        string
 		got, budget uint64
 	}{{"load", load, allocBudget.load}, {"check", check, allocBudget.check}, {"generate", gen, allocBudget.gen}} {
 		t.Logf("%-8s %10d B (budget %d B)", ph.name, ph.got, ph.budget)

@@ -21,8 +21,13 @@ Run every rule over the named packages with:
 volt vet ./...
 ```
 
-There is no per-rule switch: the rules are cheap, and a suppressed
-warning would be a rule the document lists but the tool does not run.
+`volt vet` is `volt check` plus these rules: each package's
+declarations are analyzed as one file, the way the checker sees them
+(§V1.5), alongside the one project-level rule, `vet/pipeline`, which
+reports a pipeline no scope pipes through. The language server runs
+the same rules on a file that checks clean. There is no per-rule
+switch: the rules are cheap, and a suppressed warning would be a rule
+the document lists but the tool does not run.
 
 ---
 
