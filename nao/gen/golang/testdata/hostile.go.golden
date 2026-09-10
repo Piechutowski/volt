@@ -46,3 +46,56 @@ type X2faCode struct {
 	UserID    int64     `db:"user_id" json:"user_id"`
 	ExpiresAt time.Time `db:"expires_at" json:"expires_at"`
 }
+
+// UserCreateParams are the caller-supplied columns of UserCreate. The
+// auto-increment key and defaulted columns are the database's job (D16).
+type UserCreateParams struct {
+	ID int64 `db:"id" json:"id"`
+}
+
+// CoreUserCreateParams are the caller-supplied columns of CoreUserCreate. The
+// auto-increment key and defaulted columns are the database's job (D16).
+type CoreUserCreateParams struct {
+	ID          uint64          `db:"id" json:"id"`
+	APIKey      string          `db:"api_key" json:"api_key"`
+	HomepageURL rt.Null[string] `db:"homepage_url" json:"homepage_url"`
+	HTTPStatus  rt.Null[int32]  `db:"http_status" json:"http_status"`
+	// Quoted name with a space
+	FullName       string           `db:"full name" json:"full name"`
+	PrecisionValue rt.Null[float64] `db:"precision_value" json:"precision_value"`
+	Balance        rt.Null[string]  `db:"balance" json:"balance"`
+	Kind           ECoreAuditKind   `db:"kind" json:"kind"`
+	// Column named like a Go keyword
+	Type rt.Null[string] `db:"type" json:"type"`
+	Func rt.Null[int32]  `db:"func" json:"func"`
+}
+
+// CoreUserUpdateParams are the data columns of CoreUserUpdate: every column
+// outside the primary key.
+type CoreUserUpdateParams struct {
+	APIKey      string          `db:"api_key" json:"api_key"`
+	HomepageURL rt.Null[string] `db:"homepage_url" json:"homepage_url"`
+	HTTPStatus  rt.Null[int32]  `db:"http_status" json:"http_status"`
+	// Quoted name with a space
+	FullName       string           `db:"full name" json:"full name"`
+	PrecisionValue rt.Null[float64] `db:"precision_value" json:"precision_value"`
+	Balance        rt.Null[string]  `db:"balance" json:"balance"`
+	Kind           ECoreAuditKind   `db:"kind" json:"kind"`
+	// Column named like a Go keyword
+	Type rt.Null[string] `db:"type" json:"type"`
+	Func rt.Null[int32]  `db:"func" json:"func"`
+}
+
+// X2faCodeCreateParams are the caller-supplied columns of X2faCodeCreate. The
+// auto-increment key and defaulted columns are the database's job (D16).
+type X2faCodeCreateParams struct {
+	Code      string    `db:"code" json:"code"`
+	UserID    int64     `db:"user_id" json:"user_id"`
+	ExpiresAt time.Time `db:"expires_at" json:"expires_at"`
+}
+
+// X2faCodeUpdateParams are the data columns of X2faCodeUpdate: every column
+// outside the primary key.
+type X2faCodeUpdateParams struct {
+	ExpiresAt time.Time `db:"expires_at" json:"expires_at"`
+}

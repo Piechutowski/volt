@@ -67,7 +67,7 @@ func (pl *Plan) Err() error { return pl.err }
 
 // Models renders the models file (nao_models.go) for the planned package.
 func (pl *Plan) Models(opts Options) ([]byte, error) {
-	return Generate(pl.f, pl.info, opts)
+	return modelsGenerate(pl.f, pl.info, pl.p, pl.err, opts)
 }
 
 func (pl *Plan) table(key string) (*tableModel, error) {

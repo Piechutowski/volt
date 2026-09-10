@@ -14,7 +14,12 @@ import (
 type Options struct {
 	// Source names the input, recorded in the generated headers.
 	Source string
-	// ModelsOnly emits just the structs and enums.
+	// Package overrides the package clause; empty means the Volt
+	// package's name. `volt gen -o` sets it from the directory the
+	// files land in (§V1.7).
+	Package string
+	// ModelsOnly emits just nao_models.go: the structs, params structs
+	// and enums — every type the wire carries (D77).
 	ModelsOnly bool
 	// SQL additionally emits the SQLite DDL and seed inserts.
 	SQL bool
@@ -30,6 +35,9 @@ type File struct {
 // must be free of check errors and declare data elements.
 func Generate(pkg *lang.Package, opts Options) ([]File, error) {
 	gopts := golang.Options{Package: pkg.Name, Source: opts.Source}
+	if opts.Package != "" {
+		gopts.Package = opts.Package
+	}
 	// One plan per package (D74): the checker built it; every file below
 	// reads it.
 	plan := pkg.Plan()

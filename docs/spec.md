@@ -1511,7 +1511,19 @@ package clause = "package", name, newline ;
    package, `dir/...` names every package beneath `dir` (rule 6
    applied), and no argument means the working directory. `volt gen`
    writes output for the named packages only; imports are loaded for
-   checking, never written.
+   checking, never written. An argument may also name a `.volt` file,
+   which stands for its directory's package, so a `//go:generate` line
+   can point at the file beside it.
+8. **Output placement is the caller's.** `volt gen -o DIR` writes one
+   named package's output into `DIR` instead of the package directory
+   — any directory, another module's included, since a package that
+   routes its own tables (§V4.8.6) imports nothing across packages —
+   under the package clause `DIR`'s Go files declare (or `-package`),
+   and `-parts` selects among `models`, `queries`, `router`, `client`
+   and `sql`; the client then lands beside the models (§V4.10.6). A
+   `.volt` file's own package clause stays mandatory (rule 2): it
+   names the package to the language and to the editor; only the
+   clause of what is written follows the target.
 
 ```volt
 // db/schema.volt
@@ -1834,6 +1846,13 @@ the routes through typed methods instead of hand-built requests.
 5. Client method names and reverse-URL helper names share one
    namespace per package (§V4.6); a collision is an error naming
    `name:`.
+6. **Beside the models.** `volt gen -o DIR` (§V1.7) writes the client
+   as `DIR/volt_client.go` in the package `DIR` holds instead of as a
+   subpackage, for a program that is the client — a desktop or browser
+   front end that is `package main`. The row and params types are
+   named bare, since the models written beside it declare them; the
+   constructor is `NewClient(base string) *Client`, since `New` beside
+   it may be the query layer's; nothing but the runtime is imported.
 
 ### Event routes
 
@@ -2607,6 +2626,13 @@ chain, each link runnable by `go test ./...`:
 `nao_queries.go`, `nao_dyn.go`). Informative in form; in force it is
 pinned by the generator goldens, which are gofmt-stable and compiled by
 the real Go toolchain on every `go test ./...` run.*
+
+`nao_models.go` carries every type the wire carries — the enums, the
+row structs, and the params structs `<Model>CreateParams` and
+`<Model>UpdateParams` (D77) — so a program that shares the models, a
+generated client (§V4.10) among them, needs nothing else.
+`nao_queries.go` carries the `Queries` handle and its methods, and
+imports only what their signatures name.
 
 ### Types
 

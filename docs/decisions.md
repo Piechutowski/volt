@@ -680,3 +680,26 @@ where the merge changed the facts.
   (Go cannot import main; none is generated until the client can be
   emitted beside the models), and a third spelling — the qualifier is
   the package's own name or nothing, never a keyword like `self`.
+
+- **D77 — Generation is layout-independent: `-o DIR -parts LIST`, and
+  the params structs are models** (2026-09-10, spec §V1.7, §V4.10.6,
+  Appendix A). A library with a compiler cannot dictate where the
+  compiler's output goes. `volt gen -o DIR` writes one package's files
+  into any directory — another module's included, since a package that
+  routes its own tables (D76) imports nothing across packages — under
+  the package clause that directory already declares; `-parts` picks
+  among models, queries, router, client and sql; the argument may be
+  the `.volt` file itself, so a `//go:generate` line points at the
+  file beside it. The layout this was built for is a `go.work`
+  workspace with one schema at the root and two `package main`
+  modules, a server and a desktop client, each generating its own
+  parts. The client written beside the models names their types bare
+  and its constructor `NewClient`, since `New` beside it is the query
+  layer's. For a client to need nothing but the models, the params
+  structs — the types the wire carries in — moved from
+  `nao_queries.go` to `nao_models.go`, and the queries file now imports
+  only what its signatures name. What it refuses: making the package
+  clause of a `.volt` file optional (it names the self-qualifier and
+  the package's identity to the language server; the emitted clause
+  follows the target directory instead), and any manifest or config
+  file describing layouts — the `go:generate` line is the layout.

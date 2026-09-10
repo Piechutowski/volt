@@ -22,3 +22,43 @@ type MsUsage struct {
 	Org  string `db:"org" json:"org"`
 	Year int32  `db:"year" json:"year"`
 }
+
+// UserCreateParams are the caller-supplied columns of UserCreate. The
+// auto-increment key and defaulted columns are the database's job (D16).
+type UserCreateParams struct {
+	Email string `db:"email" json:"email"`
+}
+
+// UserUpdateParams are the data columns of UserUpdate: every column
+// outside the primary key.
+type UserUpdateParams struct {
+	Email string `db:"email" json:"email"`
+}
+
+// MsRevenueCreateParams are the caller-supplied columns of MsRevenueCreate. The
+// auto-increment key and defaulted columns are the database's job (D16).
+type MsRevenueCreateParams struct {
+	Org  string `db:"org" json:"org"`
+	Year int32  `db:"year" json:"year"`
+}
+
+// MsRevenueUpdateParams are the data columns of MsRevenueUpdate: every column
+// outside the primary key.
+type MsRevenueUpdateParams struct {
+	Org  string `db:"org" json:"org"`
+	Year int32  `db:"year" json:"year"`
+}
+
+// MsUsageCreateParams are the caller-supplied columns of MsUsageCreate. The
+// auto-increment key and defaulted columns are the database's job (D16).
+type MsUsageCreateParams struct {
+	Org  string `db:"org" json:"org"`
+	Year int32  `db:"year" json:"year"`
+}
+
+// MsUsageUpdateParams are the data columns of MsUsageUpdate: every column
+// outside the primary key.
+type MsUsageUpdateParams struct {
+	Org  string `db:"org" json:"org"`
+	Year int32  `db:"year" json:"year"`
+}

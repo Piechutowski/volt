@@ -439,3 +439,37 @@ func main() { http.ListenAndServe(":0", NewRouter(Controllers{Queries: New(nil)}
 		t.Fatalf("main-package layout does not compile:\n%s", b)
 	}
 }
+
+// TestClientBesideGolden pins the client written beside the models
+// (§V4.10.6): the routing package's clause, bare row and params types,
+// NewClient, no data-package import.
+func TestClientBesideGolden(t *testing.T) {
+	files, err := Generate(fixture(t).Packages["app"], Options{Source: "package app", ClientBeside: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, has := files[ClientFile]; has {
+		t.Fatalf("%s generated alongside the beside client", ClientFile)
+	}
+	got, ok := files[ClientBesideFile]
+	if !ok {
+		t.Fatalf("%s not generated", ClientBesideFile)
+	}
+	golden := filepath.Join("testdata", "blog_app_client_beside.go.golden")
+	if *update {
+		if err := os.WriteFile(golden, got, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Errorf("%s differs from %s:\n%s", ClientBesideFile, golden, got)
+	}
+	if formatted, _ := format.Source(got); !bytes.Equal(got, formatted) {
+		t.Errorf("%s is not gofmt-canonical", ClientBesideFile)
+	}
+}

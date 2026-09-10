@@ -20,3 +20,32 @@ type UserProfile struct {
 	Bio       rt.Null[string] `db:"bio" json:"bio"`
 	AvatarURL rt.Null[string] `db:"avatar_url" json:"avatar_url"`
 }
+
+// UserCreateParams are the caller-supplied columns of UserCreate. The
+// auto-increment key and defaulted columns are the database's job (D16).
+type UserCreateParams struct {
+	ID    int64  `db:"id" json:"id"`
+	Email string `db:"email" json:"email"`
+}
+
+// UserUpdateParams are the data columns of UserUpdate: every column
+// outside the primary key.
+type UserUpdateParams struct {
+	Email string `db:"email" json:"email"`
+}
+
+// UserProfileCreateParams are the caller-supplied columns of UserProfileCreate. The
+// auto-increment key and defaulted columns are the database's job (D16).
+type UserProfileCreateParams struct {
+	// Also the FK: one profile per user
+	UserID    int64           `db:"user_id" json:"user_id"`
+	Bio       rt.Null[string] `db:"bio" json:"bio"`
+	AvatarURL rt.Null[string] `db:"avatar_url" json:"avatar_url"`
+}
+
+// UserProfileUpdateParams are the data columns of UserProfileUpdate: every column
+// outside the primary key.
+type UserProfileUpdateParams struct {
+	Bio       rt.Null[string] `db:"bio" json:"bio"`
+	AvatarURL rt.Null[string] `db:"avatar_url" json:"avatar_url"`
+}

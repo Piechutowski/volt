@@ -4,7 +4,8 @@
 //
 //	volt check  [--json] [dir]     load the project, run semantic analysis (docs/spec.md §V)
 //	volt vet    [--json] [dir]     check plus warnings for legal-but-suspicious Volt
-//	volt gen    [dir]              generate models, queries and routers
+//	volt gen    [flags] [dir|file] generate models, queries, routers and clients;
+//	                               -o DIR -parts LIST place the parts where a layout needs them
 //	volt routes [dir]              print the expanded route table
 //	volt lsp                       language server on stdin/stdout
 //	volt version                   report the tool version
@@ -76,6 +77,9 @@ func main() {
 					&cli.BoolFlag{Name: "models-only", Aliases: []string{"m"}, Usage: "emit only nao_models.go; skip the query layers"},
 					&cli.BoolFlag{Name: "sql", Usage: "also write nao_schema.sql (SQLite DDL and seed inserts)"},
 					&cli.BoolFlag{Name: "verify", Usage: "prove every generated Go file is gofmt-canonical before writing (a generator self-check)"},
+					&cli.StringFlag{Name: "o", Usage: "write into `DIR` instead of the package directory (one package); the client lands beside the models as volt_client.go"},
+					&cli.StringFlag{Name: "parts", Usage: "comma-separated `LIST` of what to write: models, queries, router, client, sql (default: every Go part)"},
+					&cli.StringFlag{Name: "package", Usage: "package clause of the written files (default: the clause of DIR's Go files, else the Volt package's name)"},
 				},
 				Action: func(_ context.Context, c *cli.Command) error {
 					return genRun(c)
@@ -129,6 +133,14 @@ func load(c *cli.Command) (pr *lang.Project, named []string, diags []diag.Diagno
 	for _, arg := range args {
 		pattern := filepath.ToSlash(arg)
 		base := arg
+		// A .volt file names its directory's package (§V1.7), so a
+		// go:generate line can point at the file it sits beside.
+		if strings.HasSuffix(base, ".volt") {
+			if st, err := os.Stat(base); err == nil && !st.IsDir() {
+				base = filepath.Dir(base)
+				pattern = filepath.ToSlash(base)
+			}
+		}
 		recursive := false
 		if strings.HasSuffix(pattern, "/...") || pattern == "..." {
 			recursive = true
@@ -219,9 +231,15 @@ func diagsPrintJSON(all []diag.Diagnostic) error {
 }
 
 // genRun implements 'volt gen': check the whole project, then write the
-// four router files into every package with routing elements, refusing
-// to clobber non-generated files (all or nothing).
+// generated files of every named package — into the package directory,
+// or with -o into a directory of the caller's choosing, -parts naming
+// which files (§V1.7) — refusing to clobber non-generated files (all
+// or nothing).
 func genRun(c *cli.Command) error {
+	parts, err := partsParse(c.String("parts"), c.Bool("models-only"), c.Bool("sql"))
+	if err != nil {
+		return cli.Exit("gen: "+err.Error(), 2)
+	}
 	pr, named, diags, err := load(c)
 	if err != nil {
 		return err
@@ -238,6 +256,24 @@ func genRun(c *cli.Command) error {
 	paths := append([]string(nil), named...)
 	sort.Strings(paths)
 
+	// -o: one package, into one directory, whose package clause is the
+	// -package flag, else that of the Go files already there, else the
+	// Volt package's own. The client then lands beside the models (D77).
+	outDir := c.String("o")
+	if outDir != "" && len(paths) != 1 {
+		return cli.Exit(fmt.Sprintf("gen: -o writes one package; %d named", len(paths)), 2)
+	}
+	clause := c.String("package")
+	if outDir != "" && clause == "" {
+		clause = goPackageName(outDir)
+	}
+	dirOf := func(pkg *lang.Package) string {
+		if outDir != "" {
+			return outDir
+		}
+		return pkg.Dir
+	}
+
 	// Collect everything first, then refuse every clobber, then write:
 	// all or nothing across the whole project. A file whose bytes are
 	// already on disk is left alone: rewriting it would only bump its
@@ -252,28 +288,33 @@ func genRun(c *cli.Command) error {
 	for _, path := range paths {
 		pkg := pr.Packages[path]
 		source := "package " + pkg.Path
+		dir := dirOf(pkg)
 
-		if pkg.HasSchema() {
+		if pkg.HasSchema() && (parts["models"] || parts["queries"] || parts["sql"]) {
 			files, err := model.Generate(pkg, model.Options{
-				Source: source, ModelsOnly: c.Bool("models-only"), SQL: c.Bool("sql"),
+				Source: source, Package: clause, ModelsOnly: !parts["queries"], SQL: parts["sql"],
 			})
 			if err != nil {
 				return cli.Exit("gen: "+err.Error(), 1)
 			}
 			for _, f := range files {
-				out = append(out, outFile{path: filepath.Join(pkg.Dir, f.Name), code: f.Code})
+				if parts[partOf(f.Name)] {
+					out = append(out, outFile{path: filepath.Join(dir, f.Name), code: f.Code})
+				}
 			}
 		}
 
-		if pkg.HasRouting() {
-			files, err := router.Generate(pkg, router.Options{Source: source})
+		if pkg.HasRouting() && (parts["router"] || parts["client"]) {
+			files, err := router.Generate(pkg, router.Options{Source: source, Package: clause, ClientBeside: outDir != ""})
 			if err != nil {
 				return cli.Exit("gen: "+err.Error(), 1)
 			}
-			for _, name := range router.Files {
-				// A main package routing its own tables has no client (§V4.10.1).
-				if code, ok := files[name]; ok {
-					out = append(out, outFile{path: filepath.Join(pkg.Dir, name), code: code})
+			for _, name := range append(append([]string{}, router.Files...), router.ClientBesideFile) {
+				// A main package routing its own tables has no client
+				// subpackage (§V4.10.1); -o writes the client beside the
+				// models instead.
+				if code, ok := files[name]; ok && parts[partOf(name)] {
+					out = append(out, outFile{path: filepath.Join(dir, name), code: code})
 				}
 			}
 		}
@@ -321,11 +362,11 @@ func genRun(c *cli.Command) error {
 	}
 	for _, path := range paths {
 		pkg := pr.Packages[path]
-		if !pkg.HasSchema() {
+		if !pkg.HasSchema() || !parts["queries"] {
 			continue
 		}
 		for _, name := range []string{"nao_selects.go", "nao_validate.go"} {
-			stale := filepath.Join(pkg.Dir, name)
+			stale := filepath.Join(dirOf(pkg), name)
 			if produced[stale] {
 				continue
 			}

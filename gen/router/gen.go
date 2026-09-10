@@ -28,6 +28,15 @@ const voltImport = "github.com/Piechutowski/volt"
 type Options struct {
 	// Source names the input (the package path), recorded in headers.
 	Source string
+	// Package overrides the package clause of the router files; empty
+	// means the Volt package's name. `volt gen -o` sets it from the
+	// directory the files land in (§V1.7).
+	Package string
+	// ClientBeside writes the client beside the models instead of as a
+	// client subpackage (§V4.10.6): ClientBesideFile in package Package,
+	// row and params types named bare, NewClient as the constructor,
+	// nothing but the runtime imported.
+	ClientBeside bool
 }
 
 // Files are the generated file names, in emission order. The client
@@ -38,6 +47,10 @@ var Files = []string{"volt_handlers.go", "volt_router.go", "volt_paths.go", "vol
 // routing package directory.
 const ClientFile = "client/volt_client.go"
 
+// ClientBesideFile is the client written beside the models by
+// Options.ClientBeside, in place of ClientFile.
+const ClientBesideFile = "volt_client.go"
+
 // Generate renders the four router files for one checked package. The
 // package must be free of check errors and contain routing elements.
 func Generate(pkg *lang.Package, opts Options) (map[string][]byte, error) {
@@ -46,12 +59,16 @@ func Generate(pkg *lang.Package, opts Options) (map[string][]byte, error) {
 	}
 	g := &generator{pkg: pkg, opts: opts}
 	out := map[string][]byte{}
+	client := ClientFile
+	if opts.ClientBeside {
+		client = ClientBesideFile
+	}
 	for name, emit := range map[string]func() error{
 		"volt_handlers.go": g.handlersEmit,
 		"volt_router.go":   g.routerEmit,
 		"volt_paths.go":    g.pathsEmit,
 		"volt_routes.go":   g.routesEmit,
-		ClientFile:         g.clientEmit,
+		client:             g.clientEmit,
 	} {
 		if name == ClientFile && g.clientOmitted() {
 			continue
@@ -77,7 +94,16 @@ func (g *generator) pf(format string, args ...any) {
 }
 
 func (g *generator) header(imports ...string) {
-	g.headerFor(g.pkg.Name, "", imports...)
+	g.headerFor(g.pkgName(), "", imports...)
+}
+
+// pkgName is the package clause of the router files: the override of
+// `volt gen -o`, else the Volt package's name.
+func (g *generator) pkgName() string {
+	if g.opts.Package != "" {
+		return g.opts.Package
+	}
+	return g.pkg.Name
 }
 
 // headerFor is header for a named package with an optional package doc.
@@ -679,9 +705,12 @@ func (g *generator) clientEmit() error {
 	for _, q := range g.dataPackages() {
 		// A package routing its own tables is imported for its row
 		// types (§V4.10.1); Generate omits the client when that package
-		// is main.
+		// is main. Beside the models (§V4.10.6) the types are this
+		// package's own and nothing is imported.
 		local = local || q.Local
-		imports = append(imports, dataImport(q))
+		if !g.opts.ClientBeside {
+			imports = append(imports, dataImport(q))
+		}
 	}
 	doc := "// Package client calls the routes of package " + g.pkg.Name + " over HTTP\n" +
 		"// (spec §V4.10): one typed method per query route, one raw method per\n" +
@@ -693,13 +722,22 @@ func (g *generator) clientEmit() error {
 			"// named controller route. It imports package " + g.pkg.Name + " for the row\n" +
 			"// types its routes name, and the volt runtime.\n"
 	}
-	g.headerFor("client", doc, imports...)
+	ctor := "New"
+	if g.opts.ClientBeside {
+		// No package doc: the file joins a package that has its own. The
+		// constructor cannot be New, which the query layer beside it
+		// declares.
+		g.headerFor(g.pkgName(), "", imports...)
+		ctor = "NewClient"
+	} else {
+		g.headerFor("client", doc, imports...)
+	}
 
 	g.pf("// Client calls package %s at Base. The embedded volt.Client carries\n", g.pkg.Name)
 	g.pf("// the http.Client and the wire format (JSON by default, or GOB).\n")
 	g.pf("type Client struct {\n\tvolt.Client\n}\n\n")
-	g.pf("// New returns a client for the server at base, e.g. \"http://localhost:8888\".\n")
-	g.pf("func New(base string) *Client {\n\treturn &Client{volt.Client{Base: base}}\n}\n\n")
+	g.pf("// %s returns a client for the server at base, e.g. \"http://localhost:8888\".\n", ctor)
+	g.pf("func %s(base string) *Client {\n\treturn &Client{volt.Client{Base: base}}\n}\n\n", ctor)
 
 	for _, r := range g.pkg.Routes {
 		if r.ClientName == "" {
@@ -728,6 +766,9 @@ func (g *generator) clientEmit() error {
 		var arg string
 		for _, p := range q.Params {
 			goType := p.GoType
+			if g.opts.ClientBeside {
+				goType = strings.TrimPrefix(goType, q.Qualifier+".") // the params struct is beside us
+			}
 			fmt.Fprintf(&sig, ", %s %s", p.Name, goType)
 			switch p.Source {
 			case lang.FromQuery:
@@ -754,6 +795,9 @@ func (g *generator) clientEmit() error {
 		result := ""
 		if q.Result != "" {
 			result = q.Qualifier + "." + q.Result
+			if g.opts.ClientBeside {
+				result = q.Result // the row type is beside us
+			}
 			if q.Many {
 				result = "[]" + result
 			}

@@ -250,7 +250,7 @@ shared plan (D74) the same fixture checks in 1.4 s and generates in
 | PERF-3 | `gen` skips unchanged outputs and reads only the marker prefix, so watchers and editors stay quiet | `DONE` |
 | PERF-4 | Emitters gofmt-canonical by construction (column alignment, operator spacing, trailing newline); go/format only in tests and behind `--verify` (D75) | `DONE` |
 | PERF-5 | Routes may name the package's own tables; one directory holds schema and routes (D76) | `DONE` |
-| PERF-6 | `volt gen -o DIR -parts LIST FILE` for go:generate-driven layouts; package clause optional | planned |
+| PERF-6 | `volt gen -o DIR -parts LIST FILE` for go:generate-driven layouts (D77); the `.volt` package clause stays mandatory, the emitted clause follows the target | `DONE` |
 | PERF-7 | Parallel schedule: parse per file, check per package, generate per package and file on a worker pool; scanner fast paths | planned |
 | PERF-8 | Language server: debounced background analysis, per-declaration memo keyed by content hash, reverse dependencies | planned |
 | PERF-9 | Flat front end: pointer-free tokens, slab-allocated AST, interned symbols, precomputed emission fragments | planned |
