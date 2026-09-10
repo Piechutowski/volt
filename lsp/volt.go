@@ -8,11 +8,8 @@
 package lsp
 
 import (
-	"path/filepath"
-
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
-	"github.com/Piechutowski/volt/lang/token"
 )
 
 // voltProjectDiags runs the project-level pipeline (lang.Load, Check,
@@ -23,18 +20,15 @@ import (
 // and nested-module directories, §V1.6) — and the caller then falls
 // back to the single-file DBML diagnostics.
 //
-// Projects are re-loaded and re-checked on every edit. That is the
-// simple, obviously-correct v0: Volt projects are small (text files a
-// human wrote), and lang.Check is a few milliseconds at that size.
+// The project is loaded and checked through the root's lang.Session
+// when the document has one (D79): an edit then costs one parse and
+// the checks of the packages that could see it. The server runs this
+// in the background, once per project per quiet moment (analysis.go);
+// a document on its own runs it here.
 func (d *Document) voltProjectDiags() ([]diag.Diagnostic, bool) {
 	path := pathFromURI(d.URI)
-	if !filepath.IsAbs(path) {
-		d.vindex = nil
-		d.vpkg = nil
-		return nil, false
-	}
-	root, err := lang.FindRoot(filepath.Dir(path))
-	if err != nil {
+	root, ok := projectRootOf(path)
+	if !ok {
 		d.vindex = nil
 		d.vpkg = nil
 		return nil, false
@@ -50,50 +44,17 @@ func (d *Document) voltProjectDiags() ([]diag.Diagnostic, bool) {
 		}
 	}
 	overlay[path] = d.Text
-	pr, err := lang.LoadOverlay(root, overlay)
-	if err != nil {
+	var session *lang.Session
+	if d.Session != nil {
+		session = d.Session(root)
+	}
+	res := projectAnalyze(root, overlay, session)
+	if res == nil || res.packageOf(path) == nil {
 		d.vindex = nil
 		d.vpkg = nil
 		return nil, false
 	}
-	d.vpkg = nil
-	for _, pkg := range pr.Packages {
-		for _, f := range pkg.Files {
-			if f.Name == path {
-				d.vpkg = pkg
-			}
-		}
-	}
-	if d.vpkg == nil {
-		d.vindex = nil
-		d.vpkg = nil
-		return nil, false
-	}
-	diags := lang.Check(pr)
-	// After Check: it is what resolves each package's imports, which
-	// the index needs to follow a `db.Post` qualifier to its package.
-	d.vindex = buildVoltIndex(pr, overlay)
-	// Vet advice only on top of a clean check, matching the single-file
-	// policy: style notes stacked on hard errors are noise while typing.
-	if !diag.HasErrors(diags) {
-		diags = append(diags, lang.Vet(pr)...)
-	}
-	// Publish per document: findings positioned in this file. A
-	// conflict with another file still shows here whenever this file
-	// holds one of its ends, because the checker names both positions.
-	// go.mod is never open in an editor, so its problems (which the
-	// messages name explicitly) surface at the top of every project
-	// file instead of nowhere.
-	modPath := filepath.Join(root, lang.ModFile)
-	var mine []diag.Diagnostic
-	for _, dg := range diags {
-		switch dg.Pos.Filename {
-		case path:
-			mine = append(mine, dg)
-		case modPath:
-			dg.Pos = token.Position{Filename: path, Line: 1, Column: 1}
-			mine = append(mine, dg)
-		}
-	}
-	return mine, true
+	d.vpkg = res.packageOf(path)
+	d.vindex = res.vindex
+	return res.docDiags(path), true
 }

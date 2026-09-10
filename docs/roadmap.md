@@ -243,9 +243,12 @@ minutes, all of it in one cubic path of the routing checker; with the
 shared plan (D74) the same fixture checks in 1.4 s and generates in
 10 s, of which 8 are gofmt; with canonical emission (D75) it generates
 in 2.7 s; with the parallel schedule (D78), on four cores, it checks
-in 0.9 s and generates in 1.3 s, `--verify` included in 3.5 s. What
-remains is the front end's allocation: 100-byte tokens and a pointer
-AST cost more in GC than in parsing (PERF-9).
+in 0.9 s and generates in 1.3 s, `--verify` included in 3.5 s; in the
+editor, with the session (D79), an edit costs about 200 ms and a
+no-op 2 ms against 770 ms for a fresh analysis. What remains is the
+front end's allocation — 100-byte tokens and a pointer AST cost more
+in GC than in parsing (PERF-9) — and the edited file's own parse and
+check (PERF-10).
 
 | ID | Work | Status |
 |---|---|---|
@@ -256,8 +259,9 @@ AST cost more in GC than in parsing (PERF-9).
 | PERF-5 | Routes may name the package's own tables; one directory holds schema and routes (D76) | `DONE` |
 | PERF-6 | `volt gen -o DIR -parts LIST FILE` for go:generate-driven layouts (D77); the `.volt` package clause stays mandatory, the emitted clause follows the target | `DONE` |
 | PERF-7 | Parallel schedule: parse per file, check per package, generate per package and file on a worker pool; scanner fast paths (D78) | `DONE` |
-| PERF-8 | Language server: debounced background analysis, per-declaration memo keyed by content hash, reverse dependencies | planned |
+| PERF-8 | Language server: debounced background analysis through a `lang.Session` — parses cached by content, per-package results memoized by input identity, no reverse index needed (D79) | `DONE` |
 | PERF-9 | Flat front end: pointer-free tokens, slab-allocated AST, interned symbols, precomputed emission fragments | planned |
+| PERF-10 | Per-declaration memoization for the one-file layout: hash each top-level declaration, relocate positions, re-check only the declarations whose text moved (the edit cycle is then bounded by the declaration, not the file) | planned |
 
 ## Non-goals
 

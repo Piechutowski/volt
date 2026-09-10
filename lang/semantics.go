@@ -20,6 +20,12 @@ import (
 // Imports, Pipelines, Routes and Controllers, and returns all
 // diagnostics including the ones collected at load time.
 func Check(pr *Project) []diag.Diagnostic {
+	return checkWith(pr, nil)
+}
+
+// checkWith is Check with an optional Session memo (D79): a package
+// whose inputs are what they were last time is restored, not re-run.
+func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 	c := &checker{pr: pr, diags: append([]diag.Diagnostic{}, pr.Diags...)}
 
 	for _, path := range c.paths() {
@@ -31,9 +37,29 @@ func Check(pr *Project) []diag.Diagnostic {
 	c.cyclesCheck()
 
 	// The heavy phases are per package and independent within a phase:
-	// each runs on every CPU (PERF-7), package by package.
+	// each runs on every CPU (PERF-7), package by package. Their
+	// diagnostics are kept per package, then appended in package order.
 	paths := c.paths()
-	c.perPackage(paths, func(cc *checker, pkg *Package) {
+	pkgDiags := make(map[string][]diag.Diagnostic, len(paths))
+	fresh := paths
+	var keys map[string]string
+	if s != nil {
+		keys = s.packageKeys(pr, paths)
+		fresh = make([]string, 0, len(paths))
+		for _, path := range paths {
+			if ds, ok := s.restore(path, keys[path], pr.Packages[path]); ok {
+				pkgDiags[path] = ds
+			} else {
+				fresh = append(fresh, path)
+			}
+		}
+	}
+	phase := func(fn func(*checker, *Package)) {
+		for i, ds := range c.perPackage(fresh, fn) {
+			pkgDiags[fresh[i]] = append(pkgDiags[fresh[i]], ds...)
+		}
+	}
+	phase(func(cc *checker, pkg *Package) {
 		info, schemaDiags := check.File(pkg.merged)
 		cc.diags = append(cc.diags, schemaDiags...)
 		pkg.schema = info
@@ -44,9 +70,17 @@ func Check(pr *Project) []diag.Diagnostic {
 	for _, path := range paths {
 		c.schemas[path] = pr.Packages[path].schema
 	}
-	c.perPackage(paths, (*checker).dataQueries)
-	c.perPackage(paths, (*checker).tableChecks)
-	c.perPackage(paths, (*checker).routing)
+	phase((*checker).dataQueries)
+	phase((*checker).tableChecks)
+	phase((*checker).routing)
+	if s != nil {
+		for _, path := range fresh {
+			s.store(path, keys[path], pr.Packages[path], pkgDiags[path])
+		}
+	}
+	for _, path := range paths {
+		c.diags = append(c.diags, pkgDiags[path]...)
+	}
 
 	diag.Sort(c.diags)
 	return c.diags
@@ -74,19 +108,17 @@ type checker struct {
 // read-only or locked — and its diagnostics are appended in package
 // order, so the output never depends on the schedule. A phase writes
 // only its own package, so the phases are barriers between them.
-func (c *checker) perPackage(paths []string, phase func(*checker, *Package)) {
+func (c *checker) perPackage(paths []string, phase func(*checker, *Package)) [][]diag.Diagnostic {
 	if c.gofuncs == nil {
 		c.gofuncs = &goFuncsCache{}
 	}
-	subs := make([]*checker, len(paths))
+	out := make([][]diag.Diagnostic, len(paths))
 	par.For(len(paths), func(i int) {
 		cc := &checker{pr: c.pr, schemas: c.schemas, gofuncs: c.gofuncs}
 		phase(cc, c.pr.Packages[paths[i]])
-		subs[i] = cc
+		out[i] = cc.diags
 	})
-	for _, cc := range subs {
-		c.diags = append(c.diags, cc.diags...)
-	}
+	return out
 }
 
 func (c *checker) paths() []string {

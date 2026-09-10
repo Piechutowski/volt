@@ -727,3 +727,32 @@ where the merge changed the facts.
   a higher GOGC trades page faults for marking and wins nothing here),
   and any phase that writes another package's fields — the barriers
   are the invariant.
+
+- **D79 — The editor keeps a session: parses by content, packages by
+  input identity, one background analysis per project** (2026-09-10,
+  roadmap PERF-8, `docs/editor.md` §3). The server used to reload and
+  re-check the whole project synchronously on every keystroke, once
+  per open document. Now `lang.Session` holds, per project root, every
+  file's last parse (reused when the text is the same — a disk file by
+  size and mtime first, so it is not even read) and every package's
+  last check results and diagnostics, keyed by a hash of its files'
+  parse identities, its Go files' stamp and its imports' keys, so a
+  change anywhere upstream changes the key and nothing needs a reverse
+  index; a package on an import cycle is never memoized. `Session.Load`
+  and `Session.Check` are proven identical to the fresh functions edit
+  by edit, with the work counted: one parse per changed file, one
+  check per package that could see it. The server records an edit
+  cheaply — the document's own front end, a mirror of the text — and
+  runs one analysis per project per quiet moment on a goroutine that
+  touches no document: it publishes from its own snapshot of the open
+  texts and every request adopts the newest result at its start, on
+  the handler goroutine, which glsp keeps single. Measured on the
+  1000-table fixture: 770 ms fresh, about 200 ms per edit, 2 ms when
+  nothing changed. What it refuses: locking inside Document (the
+  handler goroutine owns it; results cross over by adoption), a
+  cancellation token threaded through the checker (a run that lost
+  the race is simply superseded; the memo makes the waste small), and
+  identity by pointer address (a parse identity is a counter, so a
+  freed and reused address can never match). What remains: an edit
+  still re-parses its whole file and re-checks its whole package —
+  per-declaration memoization is PERF-10.

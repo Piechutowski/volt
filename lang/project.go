@@ -226,6 +226,12 @@ func hasVoltFiles(dir string) bool {
 // more, so stray .volt trees elsewhere in the module never interfere.
 // Every dir MUST lie under root; a dir without .volt files is an error.
 func LoadDirs(root string, dirs []string, overlay map[string]string) (*Project, error) {
+	return loadDirs(root, dirs, overlay, nil)
+}
+
+// loadDirs is LoadDirs with an optional Session whose parse cache
+// stands in for the parser (D79).
+func loadDirs(root string, dirs []string, overlay map[string]string, s *Session) (*Project, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -269,7 +275,7 @@ func LoadDirs(root string, dirs []string, overlay map[string]string) (*Project, 
 			}
 		}
 		sort.Strings(todo)
-		pkgs, err := pr.packagesParse(todo, overlay)
+		pkgs, err := pr.packagesParse(todo, overlay, s)
 		if err != nil {
 			return nil, err
 		}
@@ -332,10 +338,11 @@ func importExcluded(root, path string) string {
 // entry per directory, nil where it has no .volt files; the packages
 // are not yet registered with the project, and the parse diagnostics
 // are appended in directory, then file-name, order.
-func (pr *Project) packagesParse(dirs []string, overlay map[string]string) ([]*Package, error) {
+func (pr *Project) packagesParse(dirs []string, overlay map[string]string, s *Session) ([]*Package, error) {
 	type fileParse struct {
 		pkg   int
 		path  string
+		entry os.DirEntry
 		file  *ast.File
 		diags []diag.Diagnostic
 		err   error
@@ -358,11 +365,15 @@ func (pr *Project) packagesParse(dirs []string, overlay map[string]string) ([]*P
 			if pkgs[i] == nil {
 				pkgs[i] = &Package{Path: filepath.ToSlash(rel), Dir: dir, Imports: map[string]string{}}
 			}
-			jobs = append(jobs, fileParse{pkg: i, path: filepath.Join(dir, e.Name())})
+			jobs = append(jobs, fileParse{pkg: i, path: filepath.Join(dir, e.Name()), entry: e})
 		}
 	}
 	par.For(len(jobs), func(j int) {
 		job := &jobs[j]
+		if s != nil {
+			job.file, job.diags, job.err = s.parse(job.path, job.entry, overlay)
+			return
+		}
 		src, overlaid := overlay[job.path]
 		if !overlaid {
 			b, err := os.ReadFile(job.path)

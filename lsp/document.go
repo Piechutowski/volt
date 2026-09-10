@@ -35,11 +35,23 @@ type Document struct {
 	// analysis sees unsaved edits in other tabs. Nil (a lone document,
 	// as in tests) means only this document overlays its saved file.
 	Siblings func() map[string]string
+	// Session, when set, returns the caches of a project root (D79):
+	// the project pass loads and checks through them. Nil means a
+	// fresh analysis every time (a lone document, as in tests).
+	Session func(root string) *lang.Session
 
 	File  *ast.File
 	Info  *check.Info
 	Diags []diag.Diagnostic
 	Index *Index
+
+	// local is the file's own verdict — parse, single-file check, vet
+	// on a clean check — which stands when the file belongs to no
+	// project; inside one, the project analysis is the truth.
+	local []diag.Diagnostic
+	// resGen is the analysis generation the project fields came from,
+	// for a server-driven document (adopt).
+	resGen int
 
 	// vindex is the project-wide Volt symbol graph, rebuilt with the
 	// diagnostics whenever this file belongs to a Volt project. Nil for
@@ -59,40 +71,63 @@ func NewDocument(uri, text string) *Document {
 	return d
 }
 
-// Update replaces the document text and re-runs the whole front end.
+// Update replaces the document text and re-runs the whole front end:
+// the file's own pass, then the project pass. Diagnostics depend on
+// where the file lives: inside a Volt project the whole-project check
+// is the truth (this file's tables may be half of a package, §V1.5)
+// and the single-file verdicts would be wrong; alone, the DBML pass
+// stands.
 func (d *Document) Update(text string) {
-	d.Text = text
-	d.lineOffsets = d.lineOffsets[:0]
-	d.lineOffsets = append(d.lineOffsets, 0)
-	for i, b := range []byte(text) {
-		if b == '\n' {
-			d.lineOffsets = append(d.lineOffsets, i+1)
-		}
-	}
-
-	file, diags := parser.ParseFile(pathFromURI(d.URI), text)
-	info, semDiags := check.File(file)
-	// Info always comes from the single-file pass — hover, definition
-	// and completion read it. Diagnostics depend on where the file
-	// lives: inside a Volt project the whole-project check is the truth
-	// (this file's tables may be half of a package, §V1.5) and the
-	// single-file verdicts would be wrong; alone, the DBML pass stands.
+	d.UpdateLocal(text)
 	if projDiags, ok := d.voltProjectDiags(); ok {
-		diags = projDiags
-	} else {
-		diags = append(diags, semDiags...)
-		// vet warnings only make sense on files that already check clean;
-		// stacking style advice on top of hard errors is noise while typing.
-		if !diag.HasErrors(diags) {
-			diags = append(diags, vet.Run(file, info, analyzersActive()...)...)
-		}
+		d.Diags = projDiags
+	}
+	d.resGen = 0 // whatever the server has, this is at least as fresh
+}
+
+// UpdateLocal replaces the text and re-runs the file's own front end —
+// parse, single-file check, index — which hover, definition and
+// completion read. The project pass is Update's, or the server's
+// background analysis (D79); until either runs, the project fields
+// keep what they had.
+func (d *Document) UpdateLocal(text string) {
+	d.textSet(text)
+	d.File, d.Info, d.local = localAnalyze(pathFromURI(d.URI), text)
+	d.Index = NewIndex(d.File, d.Info)
+	if d.vindex == nil {
+		d.Diags = d.local
+	}
+}
+
+// textSet replaces the text and its line table.
+func (d *Document) textSet(text string) {
+	d.Text = text
+	d.lineOffsets = lineStarts(text)
+}
+
+// localAnalyze is the single-file front end: parse, check, and vet
+// advice when the file checks clean — style notes stacked on hard
+// errors are noise while typing. The diagnostics come sorted.
+func localAnalyze(path, text string) (*ast.File, *check.Info, []diag.Diagnostic) {
+	file, diags := parser.ParseFile(path, text)
+	info, semDiags := check.File(file)
+	diags = append(diags, semDiags...)
+	if !diag.HasErrors(diags) {
+		diags = append(diags, vet.Run(file, info, analyzersActive()...)...)
 	}
 	diag.Sort(diags)
+	return file, info, diags
+}
 
-	d.File = file
-	d.Info = info
-	d.Diags = diags
-	d.Index = NewIndex(file, info)
+// lineStarts returns the byte offset at which each line of text begins.
+func lineStarts(text string) []int {
+	starts := make([]int, 1, strings.Count(text, "\n")+1)
+	for i := 0; i < len(text); i++ {
+		if text[i] == '\n' {
+			starts = append(starts, i+1)
+		}
+	}
+	return starts
 }
 
 // GoFilesChanged reports whether the Go files this document's project
@@ -137,31 +172,39 @@ func pathFromURI(uri string) string {
 // columns; LSP counts 0-based lines and 0-based UTF-16 code units.
 
 // lineText returns the 0-based line without its trailing newline.
-func (d *Document) lineText(line int) string {
-	if line < 0 || line >= len(d.lineOffsets) {
+func (d *Document) lineText(line int) string { return lineTextIn(d.Text, d.lineOffsets, line) }
+
+// lineTextIn is lineText over any text and its line table.
+func lineTextIn(text string, starts []int, line int) string {
+	if line < 0 || line >= len(starts) {
 		return ""
 	}
-	start := d.lineOffsets[line]
-	end := len(d.Text)
-	if line+1 < len(d.lineOffsets) {
-		end = d.lineOffsets[line+1] - 1
+	start := starts[line]
+	end := len(text)
+	if line+1 < len(starts) {
+		end = starts[line+1] - 1
 	}
 	if start > end {
 		return ""
 	}
-	return d.Text[start:end]
+	return text[start:end]
 }
 
 // ToLSP converts a front-end position to an LSP position.
 func (d *Document) ToLSP(p token.Position) protocol.Position {
+	return lspPosition(d.Text, d.lineOffsets, p)
+}
+
+// lspPosition is ToLSP over any text and its line table, so the
+// background analysis can position diagnostics in the text it saw.
+func lspPosition(text string, starts []int, p token.Position) protocol.Position {
 	line := p.Line - 1
 	if line < 0 {
 		return protocol.Position{}
 	}
-	text := d.lineText(line)
 	col := 0
 	need := p.Column - 1
-	for _, r := range text {
+	for _, r := range lineTextIn(text, starts, line) {
 		if need <= 0 {
 			break
 		}
@@ -212,13 +255,18 @@ func isIdentByte(b byte) bool {
 // diagnosticRange widens a diagnostic's point position to the token-ish
 // span starting there, so editors underline something visible.
 func (d *Document) diagnosticRange(p token.Position) protocol.Range {
-	start := d.ToLSP(p)
+	return diagnosticRangeIn(d.Text, d.lineOffsets, p)
+}
+
+// diagnosticRangeIn is diagnosticRange over any text and its line table.
+func diagnosticRangeIn(text string, starts []int, p token.Position) protocol.Range {
+	start := lspPosition(text, starts, p)
 	off := p.Offset
 	end := off
-	for end < len(d.Text) && isIdentByte(d.Text[end]) {
+	for end < len(text) && isIdentByte(text[end]) {
 		end++
 	}
-	if end == off && off < len(d.Text) && d.Text[off] != '\n' {
+	if end == off && off < len(text) && text[off] != '\n' {
 		end = off + 1
 	}
 	width := end - off

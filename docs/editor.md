@@ -163,10 +163,15 @@ front end — it is fast enough that there is no cache to invalidate:
    gets the single-file schema pass.
 2. `lang.Check` resolves packages, imports, tables, routes, conflicts.
 3. Diagnostics are filtered per open file and published (push);
-   `go.mod` problems are remapped to line 1 of the file. After each
-   change the server re-checks and republishes **every other open
-   document** (`refreshOthers`), so cross-file diagnostics never go
-   stale.
+   `go.mod` problems are remapped to line 1 of the file. An edit
+   updates the document's own front end at once and schedules **one
+   background analysis of its project** (D79): after the edits settle
+   (75 ms), the project is loaded and checked through the root's
+   `lang.Session` — parses cached by content, per-package results
+   memoized by input identity — and every open document of the
+   project is published from that one run, so cross-file diagnostics
+   never go stale and one edit costs one parse plus the packages that
+   could see it. A request adopts the newest result at its start.
 4. Two indexes are (re)built *after* Check, from the resolved model:
    the schema occurrence index (single-file symbols: tables, columns,
    enums, partials, aliases) and the project index (`voltIndex`:
@@ -238,8 +243,14 @@ agree. The LSP picks it up automatically.
   the tool-module split; replacing it stays an open option.
 - **Full-text sync over incremental** — statelessness beats patch
   bookkeeping at these file sizes.
-- **Whole-project re-check per edit** — no dirty tracking to get
-  wrong; measured fast at realistic project sizes.
+- **Whole-project analysis per edit, memoized by identity, in the
+  background** (D79) — no dirty tracking to get wrong: a package is
+  re-checked when its files, its imports or its Go files are not the
+  objects they were, and restored otherwise. Measured on a 1000-table,
+  20-package project: an edit costs about 200 ms (the edited file's
+  parse and the packages that see it), a no-op 2 ms, against 770 ms
+  for a fresh analysis. What remains is the edited file's own parse
+  and check; per-declaration memoization is the next step (PERF-10).
 
 ## 7. Known limitations (documented trade-offs, not bugs)
 
@@ -269,8 +280,10 @@ make no claim. Existence and the spelled signature are the checker's
 (D63), so a typo or a wrong parameter type is a diagnostic at the
 reference. The Go side can move without any `.volt` buffer changing —
 a gopls rename, a newly written function — so the server registers a
-`**/*.go` file watcher with the client and re-checks every open
-document when one is saved; independently, every hover, definition,
+`**/*.go` file watcher with the client and re-analyzes every project
+with an open document when one is saved (the Go files' fingerprint is
+part of a package's memo key, so only the packages beside the change
+re-check); independently, every hover, definition,
 references, rename and completion request first compares the scanned
 Go files' fingerprint (names, sizes, mtimes) with the disk and re-runs
 the analysis when it moved, republishing diagnostics. Only saved files
