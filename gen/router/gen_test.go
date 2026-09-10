@@ -175,7 +175,7 @@ type stub struct{}
 
 func (stub) Create(w http.ResponseWriter, r *volt.Request) error { return nil }
 
-var _ http.Handler = New(Controllers{Users: stub{}})
+var _ http.Handler = NewRouter(Controllers{Users: stub{}})
 `
 	if err := os.WriteFile(filepath.Join(pkgDir, "user.go"), []byte(user), 0o644); err != nil {
 		t.Fatal(err)
@@ -273,7 +273,7 @@ func (stub) Create(w http.ResponseWriter, r *volt.Request) error             { r
 func (stub) Avatar(w http.ResponseWriter, r *volt.Request, id int32) error   { return nil }
 
 // wire proves New accepts stub implementations of every interface.
-var _ http.Handler = New(Controllers{
+var _ http.Handler = NewRouter(Controllers{
 	Admin: stub{}, Files: stub{}, Home: stub{}, Users: stub{},
 })
 `
@@ -284,5 +284,158 @@ var _ http.Handler = New(Controllers{
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("golden files do not compile:\n%s", out)
+	}
+}
+
+// TestSinglePackageCompiles proves the one-directory layout (D76): a
+// package that declares its tables and routes them itself builds with
+// its models, its router and its client together — the router names
+// the package's own Queries and params structs bare, the client imports
+// the package for its row types.
+func TestSinglePackageCompiles(t *testing.T) {
+	root := filepath.Join("..", "..", "lang", "conformance", "snippets", "valid", "v65_single_package")
+	pr, err := lang.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diags := lang.Check(pr); diag.HasErrors(diags) {
+		t.Fatalf("snippet has errors: %v", diags)
+	}
+	pkg := pr.Packages["site"]
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	gomod := "module corpus\n\ngo 1.27\n\n" +
+		"require github.com/Piechutowski/volt v0.0.0\n\n" +
+		"replace github.com/Piechutowski/volt => " + repoRoot + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	site := filepath.Join(dir, "site")
+	write := func(name string, code []byte) {
+		t.Helper()
+		path := filepath.Join(site, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, code, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	models, err := model.Generate(pkg, model.Options{Source: "package site"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range models {
+		write(f.Name, f.Code)
+	}
+	files, err := Generate(pkg, Options{Source: "package site"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range Files {
+		code, ok := files[name]
+		if !ok {
+			t.Fatalf("%s not generated", name)
+		}
+		write(name, code)
+	}
+	// The one hand-written action, and the wiring the manifest asks for.
+	write("user.go", []byte(`package site
+
+import (
+	"net/http"
+
+	"github.com/Piechutowski/volt"
+)
+
+type stub struct{}
+
+func (stub) Purge(w http.ResponseWriter, r *volt.Request, id int32) error { return nil }
+
+var _ http.Handler = NewRouter(Controllers{Tags: stub{}, Queries: &Queries{}})
+`))
+	cmd := exec.Command("go", "build", "./...")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("single-package layout does not compile:\n%s", out)
+	}
+}
+
+// TestMainPackageCompiles proves the smallest layout of all: a main
+// package at the module root declaring its tables and routing them
+// with query routes only. No controller means the handlers file names
+// no runtime type, and Go cannot import main, so no client is
+// generated (§V4.10.1).
+func TestMainPackageCompiles(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	gomod := "module smoke\n\ngo 1.27\n\n" +
+		"require github.com/Piechutowski/volt v0.0.0\n\n" +
+		"replace github.com/Piechutowski/volt => " + repoRoot + "\n"
+	files := map[string]string{
+		"go.mod": gomod,
+		"schema.volt": `package main
+
+Table posts {
+  id    integer [pk, increment]
+  title text    [not null]
+}
+
+Scope /api {
+	resources posts [default]
+	get /first main.PostGet [name: first]
+}
+`,
+		"main.go": `package main
+
+import "net/http"
+
+func main() { http.ListenAndServe(":0", NewRouter(Controllers{Queries: New(nil)})) }
+`,
+	}
+	for name, src := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pr, err := lang.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diags := lang.Check(pr); diag.HasErrors(diags) {
+		t.Fatalf("project has errors: %v", diags)
+	}
+	pkg := pr.Packages["."]
+	models, err := model.Generate(pkg, model.Options{Source: "package ."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range models {
+		if err := os.WriteFile(filepath.Join(dir, f.Name), f.Code, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, err := Generate(pkg, Options{Source: "package ."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, has := out[ClientFile]; has {
+		t.Fatalf("a client was generated for package main, which Go cannot import")
+	}
+	for name, code := range out {
+		if err := os.WriteFile(filepath.Join(dir, name), code, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cmd := exec.Command("go", "build", "./...")
+	cmd.Dir = dir
+	if b, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("main-package layout does not compile:\n%s", b)
 	}
 }

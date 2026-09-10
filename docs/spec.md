@@ -1545,9 +1545,11 @@ import path = name, { slash, name } ;
    imported into the local scope.
 4. Within one package (across all its files): importing the same path
    twice is idempotent, but with two different qualifiers it is an
-   error; two different paths MUST NOT share a qualifier; a package
-   MUST NOT import itself; **every import MUST be used** — an import
-   whose qualifier is never referenced is an error.
+   error; two different paths MUST NOT share a qualifier, nor may one
+   take the package's own name, which qualifies its own declarations
+   (§V3.2, §V4.3); a package MUST NOT import itself; **every import
+   MUST be used** — an import whose qualifier is never referenced is
+   an error.
 5. **DBML file imports are removed.** The `use` and `reuse` statements
    of Part I §7 are not part of the Volt language at any layer; a
    conforming implementation rejects them with a migration diagnostic.
@@ -1666,26 +1668,34 @@ verb  = "get" | "post" | "put" | "patch" | "delete"
 ### Handler references
 
 ```ebnf
-handler ref = name, ".", name ;
+handler ref = name, [ ".", name ] ;
 ```
 
-1. A handler is `Controller.Action` — exactly two exported Go
-   identifiers, the controller not an import qualifier, so the action
-   lives in the routes package — or `pkg.Query`, a **query
-   reference**: its first part is an import qualifier (§V2.4) and its
-   second names a generated query of that package. A query reference
-   makes the route a query route (§V4.8) with no controller at all.
+1. A handler is `Controller.Action` — two exported Go identifiers, the
+   controller neither an import qualifier nor the package's own name,
+   so the action lives in the routes package — or a **query
+   reference**, which makes the route a query route (§V4.8) with no
+   controller at all: `pkg.Query`, whose first part is an import
+   qualifier (§V2.4) and whose second names a generated query of that
+   package, or `Query` or `<package name>.Query`, a generated query of
+   the package itself (§V4.8.6), spelled as a plug is (§V3.2). The
+   runtime's own handlers are `volt.<Name>` (§V4.11).
 2. Every distinct controller becomes one generated interface; every
    distinct action one method with the route's typed parameters
    appended after `(w http.ResponseWriter, r *volt.Request)`, returning
    `error`.
 3. Two routes MAY share `Controller.Action` only with identical
    parameter signatures (names, types and wildcard-ness, in order).
+4. The generated `Controllers` manifest is one namespace: a controller
+   MUST NOT take the name of a field the manifest holds for a data
+   package (`DB`, `Queries`; §V4.8.5) or for the event broker
+   (`Events`; §V4.11). The error names the field.
 
 ### Query routes
 
-A **query route** binds a route to a generated query method of an
-imported data package instead of to a controller. Volt generated the
+A **query route** binds a route to a generated query method of a data
+package — an imported one, or the package itself when it declares the
+tables (rule 6) — instead of to a controller. Volt generated the
 method, so it knows the parameters and the row type, and it writes the
 handler: bind, call, render. Nothing is dispatched by name at runtime.
 
@@ -1739,12 +1749,23 @@ Scope /api [pipe: api] {
    prefixes followed by the method name, and only `get`/`head` query
    routes carry one — writes have no reverse URL, as with resources
    (§V5.2). `volt routes` and the route table show the reference as
-   written (`db.UserGet`) in place of `Controller.Action`.
+   written (`db.UserGet`; a query of the package itself unqualified,
+   `UserGet`) in place of `Controller.Action`.
 5. **Wiring.** The generated `Controllers` manifest (§V4.3) gains one
    field per data package that query routes go through, named by the
-   qualifier as a Go name (`db` → `DB`), typed `*<pkg>.Queries`; the
-   application constructs it with the package's `New`. No interface is
-   generated for a query route.
+   qualifier as a Go name (`db` → `DB`), typed `*<pkg>.Queries` — for
+   the package itself, `Queries *Queries` (rule 6); the application
+   constructs it with the package's `New`. No interface is generated
+   for a query route.
+6. **Own tables.** A package that declares tables MAY route them
+   itself, so one directory holds schema, routes and handlers (D76).
+   `Query` or `<package name>.Query` names its own generated query;
+   `resources t [default]` (§V5.5) and `dataset s` (§V13.1) resolve in
+   the package when bare or self-qualified. Nothing is imported, the
+   generated handlers name the package's params structs bare, and the
+   router's constructor is `NewRouter`, so it never collides with the
+   query layer's `New`. The package's own name is thereby a qualifier:
+   an import MUST NOT take it (§V2.4).
 
 ### Formats
 
@@ -1789,7 +1810,10 @@ the routes through typed methods instead of hand-built requests.
 
 1. The package is named `client` and imports only the runtime and the
    data packages the routes go through — never the routing package —
-   so a caller links no server code.
+   so a caller links no server code. The one exception is a package
+   that routes its own tables (§V4.8.6): its client imports it for the
+   row types, and so links it; when that package is `main`, which Go
+   cannot import, no client is generated.
 2. `type Client struct { volt.Client }` and `New(base string)
    *Client`. The embedded runtime client carries the origin, the
    `http.Client` and the wire format (§V4.9); a non-2xx reply comes
@@ -2026,9 +2050,11 @@ resources db.tags  [default, except: (delete)]
    written by hand as any route.
 2. `default` implies `api`: `new` and `edit` are form pages, and a
    generated handler has nothing to return for them.
-3. The table MUST be qualified (`db.users`): the CRUD lives in an
-   imported data package, as for every query route. An unqualified
-   reference is an error naming the qualified form.
+3. The table's CRUD is the data package's: an imported one for a
+   qualified table (`db.users`), this package's own for a bare or
+   self-qualified one (`users`, `app.users`; §V4.8.6), as for every
+   query route. A bare table in a package that declares none is an
+   error naming the qualified form.
 4. The key parameter is named as the generated CRUD spells the
    primary-key column (`id` for `id`), because binding is by name
    (§V4.8.2); `param:` is an error with `default`. Type and
@@ -2049,13 +2075,13 @@ resources db.tags  [default, except: (delete)]
 
 ## Datasets
 
-A **dataset** expands a group select of an imported data package into
+A **dataset** expands a group select of a data package into
 one query route per member table, so browsing every table of a group
 is one line, and the route and the query it calls are emitted from
 the same iteration and cannot disagree.
 
 ```ebnf
-dataset = "dataset", name, ".", name, [ settings ], newline ;
+dataset = "dataset", [ name, "." ], name, [ settings ], newline ;
 ```
 
 ```volt
@@ -2069,10 +2095,12 @@ Scope /da [pipe: api] {
 
 ### Dataset declaration
 
-1. `dataset` appears only inside a Scope body and names a select of
-   an imported data package, qualified (`db.browse`); the qualifier
-   marks the import used (§V2.4). A name that is not a select of that
-   package is an error, with a case-insensitive hint.
+1. `dataset` appears only inside a Scope body and names a select: of
+   an imported data package when qualified (`db.browse`), the
+   qualifier marking the import used (§V2.4); of this package when
+   bare or self-qualified (`browse`, `app.browse`; §V4.8.6). A name
+   that is not a select of that package is an error, with a
+   case-insensitive hint.
 2. For every member of the select's target (§V11.2), in member order,
    the dataset yields one `get` **query route** (§V4.8) whose path is
    the scope prefixes followed by one segment — the member's table
@@ -2121,7 +2149,7 @@ The normative output contract is the golden corpus under
 `gen/router/testdata/` and the proof suite under `itest/`. In prose:
 one `<Controller>Controller` interface per controller and a
 `Controllers` struct (§V4.3), with one `*<pkg>.Queries` field per data
-package query routes use (§V4.8); `New(Controllers) http.Handler`
+package query routes use (§V4.8); `NewRouter(Controllers) http.Handler`
 registering every route onto a `http.ServeMux` with its pipeline chain
 composed statically and its typed shim parsing parameters per §V4.1.3
 — for a query route the shim is the whole handler: it binds every
@@ -2512,7 +2540,7 @@ scope item     = route | resources | dataset | scope ;
 route          = verb, route path, handler ref, [ settings ], newline ;
 verb           = "get" | "post" | "put" | "patch" | "delete"
                | "options" | "head" | "any" ;
-handler ref    = name, ".", name ;
+handler ref    = name, [ ".", name ] ;
 
 route path     = slash, [ segment, { slash, segment } ] ;
 segment        = name
@@ -2521,7 +2549,7 @@ segment        = name
 type name      = "int" | "int32" | "int64" | "string" ;
 
 resources      = "resources", [ name, "." ], name, [ settings ], newline ;
-dataset        = "dataset", name, ".", name, [ settings ], newline ;
+dataset        = "dataset", [ name, "." ], name, [ settings ], newline ;
 
 (* setting value, extended (Part I §4.2): *)
 setting value  = (* schema-layer alternatives *) | ident list ;

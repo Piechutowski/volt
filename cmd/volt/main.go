@@ -271,7 +271,10 @@ func genRun(c *cli.Command) error {
 				return cli.Exit("gen: "+err.Error(), 1)
 			}
 			for _, name := range router.Files {
-				out = append(out, outFile{path: filepath.Join(pkg.Dir, name), code: files[name]})
+				// A main package routing its own tables has no client (§V4.10.1).
+				if code, ok := files[name]; ok {
+					out = append(out, outFile{path: filepath.Join(pkg.Dir, name), code: code})
+				}
 			}
 		}
 	}

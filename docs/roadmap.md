@@ -249,7 +249,7 @@ shared plan (D74) the same fixture checks in 1.4 s and generates in
 | PERF-2 | Scaling tests: allocation at N and 2N per phase, exact and hardware-neutral; an in-repo corpus generator with relations, enums, selects, checks and scopes | scaling tests `DONE`; corpus generator planned |
 | PERF-3 | `gen` skips unchanged outputs and reads only the marker prefix, so watchers and editors stay quiet | `DONE` |
 | PERF-4 | Emitters gofmt-canonical by construction (column alignment, operator spacing, trailing newline); go/format only in tests and behind `--verify` (D75) | `DONE` |
-| PERF-5 | Routes may name the package's own tables; one directory holds schema and routes (spec change) | planned |
+| PERF-5 | Routes may name the package's own tables; one directory holds schema and routes (D76) | `DONE` |
 | PERF-6 | `volt gen -o DIR -parts LIST FILE` for go:generate-driven layouts; package clause optional | planned |
 | PERF-7 | Parallel schedule: parse per file, check per package, generate per package and file on a worker pool; scanner fast paths | planned |
 | PERF-8 | Language server: debounced background analysis, per-declaration memo keyed by content hash, reverse dependencies | planned |
@@ -354,9 +354,8 @@ imply otherwise (D49). Each is small; none blocks FW-2.
   Pred-reference checks render with redundant parentheses.
 - **Query routes and datasets (2026-09-04).** `db.UserGet` in a
   handler slot has no editor navigation (a dataset's
-  select does). A dataset needs a qualified select; a routing package
-  cannot expand its own selects. Only `get` query routes and event
-  routes have reverse-URL helpers, by design.
+  select does). Only `get` query routes and event routes have
+  reverse-URL helpers, by design.
 - **Validation (2026-09-04, after D72).** The Go tier does not check
   enum membership (the DDL `CHECK … IN` does, hypotheses H5); typed
   checks have no `length()` term; a select's query parameters are typed

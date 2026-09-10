@@ -65,9 +65,9 @@ type Controllers struct {
 	Events *volt.Broker // event routes written volt.Events (§V4.11); nil serves nothing
 }
 
-// New builds the router: ServeMux registrations with statically
+// NewRouter builds the router: ServeMux registrations with statically
 // composed pipelines. The result is a plain http.Handler.
-func New(c Controllers) http.Handler {
+func NewRouter(c Controllers) http.Handler {
 	mux := http.NewServeMux()
 	register(mux, c)
 	return mux

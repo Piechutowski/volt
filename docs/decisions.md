@@ -524,7 +524,9 @@ where the merge changed the facts.
   be, and one raw `*http.Response` method per named controller route.
   It imports the runtime and the data packages only, so a desktop
   application shares the generated models with the server without
-  importing the server. Client method names and reverse-URL helpers
+  importing the server (the one exception, D76: a package that routes
+  its own tables is what its client imports for the row types). Client
+  method names and reverse-URL helpers
   share one namespace, because they are the same name seen from two
   sides. A non-2xx reply is a `volt.HTTPError`, and status errors
   match by code, so `errors.Is(err, volt.ErrNotFound)` reads the same
@@ -606,9 +608,8 @@ where the merge changed the facts.
   forever, with `except:` as the way to take one action back by hand.
   What it refuses: the form pages (`default` implies `api`, since a
   generated handler has nothing to render for `new` and `edit`), a
-  `param:` rename (binding is by the key's generated name), and an
-  unqualified table (the CRUD lives in the data package, as for every
-  query route).
+  `param:` rename (binding is by the key's generated name), and — until
+  D76 let a package route its own tables — an unqualified table.
 
 - **D74 — The naming plan is built once per package and shared**
   (2026-09-10, spec §V4.8, §V5.5, §V11.7, §V12). Right after the
@@ -655,3 +656,27 @@ where the merge changed the facts.
   `--no-fmt` flag or any second output shape, since there is one
   output and it is canonical; and any new emitter shape that lands
   without the fixed-point test covering it.
+
+- **D76 — A package may route its own tables; one directory holds
+  everything** (2026-09-10, spec §V2.4, §V4.3, §V4.8.6, §V4.10, §V5.5,
+  §V13.1). Volt is a library with a compiler, not a layout: it must
+  not force a project into a `db/` and an `app/` before the first
+  route can exist. The floor was two directories because a query
+  route, `resources [default]` and `dataset` could only name an
+  *imported* data package. Now a reference to the package's own
+  generated query is spelled as a plug is (§V3.2, D63): bare,
+  `PostList`, or self-qualified, `site.PostList`; a bare or
+  self-qualified `resources` or `dataset` resolves in the package
+  itself. The manifest gains `Queries *Queries` with no import, the
+  router names the params structs bare, the router's constructor is
+  `NewRouter` so it never collides with the query layer's `New` in the
+  same package, and the generated client imports the routing package
+  for its row types — the one case where a client links server code,
+  the price of having one package. Consequences: the package's own
+  name is a qualifier, so an import cannot take it (§V2.4), and the
+  `Controllers` manifest is one namespace, so a controller cannot be
+  called `Queries`, `Events` or an import's Go name (§V4.3.4). What it
+  refuses: a client for a `main` package that routes its own tables
+  (Go cannot import main; none is generated until the client can be
+  emitted beside the models), and a third spelling — the qualifier is
+  the package's own name or nothing, never a keyword like `self`.

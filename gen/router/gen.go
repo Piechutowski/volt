@@ -1,6 +1,6 @@
 // Package router generates the Volt router files for one checked
 // package (spec §V, router spec §4): volt_handlers.go (controller
-// interfaces + the New constructor), volt_router.go (ServeMux
+// interfaces + the NewRouter constructor), volt_router.go (ServeMux
 // registrations with typed shims and statically composed pipelines),
 // volt_paths.go (typed reverse-URL helpers) and volt_routes.go (the
 // introspectable route table).
@@ -53,6 +53,9 @@ func Generate(pkg *lang.Package, opts Options) (map[string][]byte, error) {
 		"volt_routes.go":   g.routesEmit,
 		ClientFile:         g.clientEmit,
 	} {
+		if name == ClientFile && g.clientOmitted() {
+			continue
+		}
 		g.out.Reset()
 		if err := emit(); err != nil {
 			return nil, err
@@ -158,6 +161,21 @@ func (g *generator) dataPackages() []*lang.QueryRef {
 	return out
 }
 
+// clientOmitted reports whether no client package can exist: the
+// routing package is main and routes its own tables, so the row types
+// the client needs live in a package Go cannot import (§V4.10.1).
+func (g *generator) clientOmitted() bool {
+	if g.pkg.Name != "main" {
+		return false
+	}
+	for _, q := range g.dataPackages() {
+		if q.Local {
+			return true
+		}
+	}
+	return false
+}
+
 // dataImport renders the import line of a data package: aliased when
 // the Volt qualifier differs from the Go package name.
 func dataImport(q *lang.QueryRef) string {
@@ -204,10 +222,18 @@ func sigParams(ps []lang.Param) string {
 /* ===== volt_handlers.go ===== */
 
 func (g *generator) handlersEmit() error {
-	imports := []string{"net/http", "", voltImport}
+	// The runtime is named by the controller interfaces (*volt.Request)
+	// and the broker field; a package of query routes alone needs
+	// neither.
+	imports := []string{"net/http", ""}
+	if len(g.pkg.Controllers) > 0 || g.hasEvents() {
+		imports = append(imports, voltImport)
+	}
 	data := g.dataPackages()
 	for _, q := range data {
-		imports = append(imports, dataImport(q))
+		if !q.Local {
+			imports = append(imports, dataImport(q))
+		}
 	}
 	g.header(imports...)
 
@@ -238,6 +264,10 @@ func (g *generator) handlersEmit() error {
 		fields.Row(name, name+"Controller")
 	}
 	for _, q := range data {
+		if q.Local {
+			fields.Row(q.Field, "*Queries", "// query routes over this package's tables, written <Method>")
+			continue
+		}
 		fields.Row(q.Field, "*"+q.Qualifier+".Queries", "// query routes written "+q.Qualifier+".<Method>")
 	}
 	if g.hasEvents() {
@@ -246,9 +276,9 @@ func (g *generator) handlersEmit() error {
 	fields.WriteTo(&g.out, "\t")
 	g.pf("}\n\n")
 
-	g.pf("// New builds the router: ServeMux registrations with statically\n")
+	g.pf("// NewRouter builds the router: ServeMux registrations with statically\n")
 	g.pf("// composed pipelines. The result is a plain http.Handler.\n")
-	g.pf("func New(c Controllers) http.Handler {\n")
+	g.pf("func NewRouter(c Controllers) http.Handler {\n")
 	g.pf("\tmux := http.NewServeMux()\n")
 	g.pf("\tregister(mux, c)\n")
 	g.pf("\treturn mux\n")
@@ -276,6 +306,9 @@ func plugExpr(ref string, pkgName string) string {
 func (g *generator) routerEmit() error {
 	imports := []string{"net/http", "", voltImport}
 	for _, q := range g.dataPackages() {
+		if q.Local {
+			continue // its types are this package's own
+		}
 		// The shim names the package only for a body type it declares.
 		for _, r := range g.pkg.Routes {
 			if r.Query != nil && r.Query.Qualifier == q.Qualifier && hasBody(r.Query) {
@@ -411,7 +444,13 @@ func queryShimBody(r *lang.RouteInfo) string {
 			fmt.Fprintf(&body, "\t\tvolt%s, err := volt.QueryParams[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name, strings.TrimPrefix(p.GoType, "[]"), p.Name)
 			args = append(args, "volt"+p.Name)
 		case lang.FromBody:
-			fmt.Fprintf(&body, "\t\tvar volt%s %s\n\t\tif err := volt.Decode(r, &volt%s); err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name, p.GoType, p.Name)
+			// A params struct of this package is named bare here, in
+			// the package that declares it (§V4.8.5).
+			goType := p.GoType
+			if q.Local {
+				goType = strings.TrimPrefix(goType, q.Qualifier+".")
+			}
+			fmt.Fprintf(&body, "\t\tvar volt%s %s\n\t\tif err := volt.Decode(r, &volt%s); err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name, goType, p.Name)
 			if p.Validates {
 				// The schema's checks, before the database sees the row (§V12.6).
 				fmt.Fprintf(&body, "\t\tif err := volt%s.Validate(); err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name)
@@ -636,13 +675,24 @@ func (g *generator) clientEmit() error {
 		imports = append(imports, "net/http")
 	}
 	imports = append(imports, "", voltImport)
+	local := false
 	for _, q := range g.dataPackages() {
+		// A package routing its own tables is imported for its row
+		// types (§V4.10.1); Generate omits the client when that package
+		// is main.
+		local = local || q.Local
 		imports = append(imports, dataImport(q))
 	}
 	doc := "// Package client calls the routes of package " + g.pkg.Name + " over HTTP\n" +
 		"// (spec §V4.10): one typed method per query route, one raw method per\n" +
 		"// named controller route. It imports the data packages and the volt\n" +
 		"// runtime only, never the server.\n"
+	if local {
+		doc = "// Package client calls the routes of package " + g.pkg.Name + " over HTTP\n" +
+			"// (spec §V4.10): one typed method per query route, one raw method per\n" +
+			"// named controller route. It imports package " + g.pkg.Name + " for the row\n" +
+			"// types its routes name, and the volt runtime.\n"
+	}
 	g.headerFor("client", doc, imports...)
 
 	g.pf("// Client calls package %s at Base. The embedded volt.Client carries\n", g.pkg.Name)

@@ -93,14 +93,16 @@ type QueryParam struct {
 	Validates bool // body param: the params struct has a Validate method the handler calls first (§V12.6)
 }
 
-// QueryRef binds a route to a generated query method of an imported
-// data package (§V4.8).
+// QueryRef binds a route to a generated query method of a data package
+// (§V4.8): an imported one, or the routing package itself when it
+// declares the tables (Local).
 type QueryRef struct {
-	Qualifier string // the import qualifier as written, e.g. "db"
-	Field     string // the Controllers field holding *pkg.Queries: the qualifier as a Go name, e.g. "DB"
+	Qualifier string // the import qualifier as written, e.g. "db"; the package's own name when Local
+	Field     string // the Controllers field holding *pkg.Queries: the qualifier as a Go name, e.g. "DB"; "Queries" when Local
 	Package   string // root-relative package path
 	Import    string // Go import path of the package
 	PkgName   string // the package's Go name (its directory name)
+	Local     bool   // the query is this package's own (§V4.8.6): no import, the field is Queries *Queries
 	Method    string // generated method name, e.g. "UserGet"
 	Params    []QueryParam
 	Result    string // row type, unqualified ("User"); "" for delete
@@ -108,8 +110,14 @@ type QueryRef struct {
 	Status    int    // success status: 200, 201 for create, 204 for delete
 }
 
-// Ref renders the reference as written, e.g. "db.UserGet".
-func (q *QueryRef) Ref() string { return q.Qualifier + "." + q.Method }
+// Ref renders the reference as written, e.g. "db.UserGet"; a query of
+// the package itself is unqualified ("UserGet").
+func (q *QueryRef) Ref() string {
+	if q.Local {
+		return q.Method
+	}
+	return q.Qualifier + "." + q.Method
+}
 
 // ControllerInfo groups the actions dispatched to one controller
 // interface, for the generator.

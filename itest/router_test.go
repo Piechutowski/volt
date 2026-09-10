@@ -130,7 +130,7 @@ func fixture(t *testing.T) (http.Handler, *volt.Broker) {
 		panic(err)
 	}
 	broker := &volt.Broker{Heartbeat: 20 * time.Millisecond}
-	return app.New(app.Controllers{
+	return app.NewRouter(app.Controllers{
 		Home: home{}, Users: users{}, Files: files{}, Admin: admin{},
 		Ops: ops{}, Tags: tags{}, Pages: pages{}, Archive: archive{},
 		DB:     q,
