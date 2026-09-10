@@ -19,17 +19,18 @@ import (
 // GenerateValidators renders nao_validate.go for the given tables.
 // fns must be non-empty; the caller decides whether the file exists.
 func GenerateValidators(f *ast.File, info *check.Info, fns []CheckFn, opts Options) ([]byte, error) {
+	return PlanBuild(f, info).Validators(fns, opts)
+}
+
+// Validators renders nao_validate.go for the planned package.
+func (pl *Plan) Validators(fns []CheckFn, opts Options) ([]byte, error) {
 	if opts.Package == "" {
 		return nil, fmt.Errorf("no package name")
 	}
-	p, err := planBuild(f, info)
-	if err != nil {
-		return nil, err
+	if pl.err != nil {
+		return nil, pl.err
 	}
-	byKey := map[string]*tableModel{}
-	for _, t := range p.tables {
-		byKey[t.ti.Key] = t
-	}
+	byKey := pl.byKey
 
 	var body strings.Builder
 	usesRt := false

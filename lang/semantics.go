@@ -34,6 +34,9 @@ func Check(pr *Project) []diag.Diagnostic {
 		c.diags = append(c.diags, schemaDiags...)
 		c.schemas[path] = info
 		pkg.schema = info
+		// The naming plan, once (D74): every later phase asks it for
+		// generated names instead of re-deriving them from the AST.
+		pkg.plan = golang.PlanBuild(pkg.merged, info)
 	}
 	for _, path := range c.paths() {
 		c.dataQueries(pr.Packages[path])
@@ -55,8 +58,9 @@ type checker struct {
 	schemas map[string]*check.Info
 
 	// per-package state during routing()
-	pkg      *Package
-	usedQual map[string]bool
+	pkg       *Package
+	usedQual  map[string]bool
+	conflicts *routeIndex // accepted routes, bucketed for the §V4.7.2 scan
 
 	// gofuncs caches each package directory's Go functions (§V3.2,
 	// §V12.5), scanned once per run.
@@ -232,6 +236,7 @@ type inherited struct {
 func (c *checker) routing(pkg *Package) {
 	c.pkg = pkg
 	c.usedQual = map[string]bool{}
+	c.conflicts = &routeIndex{byFirst: map[string][]*RouteInfo{}}
 	pkg.Pipelines = map[string]*ast.Pipeline{}
 	pkg.Controllers = map[string]*ControllerInfo{}
 
@@ -688,14 +693,13 @@ func (c *checker) queryBind(pos, qualPos token.Position, method string, params [
 	}
 	var sig []sigParam
 	found := false
-	var candidates []string
 
-	// Selects: <Model><SelectName> per member (§V11.6).
+	// Selects: <Model><SelectName> per member (§V11.6); the first member
+	// minting the name owns it.
+selects:
 	for _, si := range pkg.Selects {
 		for _, m := range si.Members {
-			mn := modelOrBase(m) + si.MethodSuffix
-			candidates = append(candidates, mn)
-			if mn != name || found {
+			if modelOrBase(m)+si.MethodSuffix != name {
 				continue
 			}
 			found = true
@@ -711,43 +715,43 @@ func (c *checker) queryBind(pos, qualPos token.Position, method string, params [
 				qr.Result = modelOrBase(m)
 			}
 			qr.Many = true
+			break selects
 		}
 	}
-	// Default CRUD (CRUD-1 to CRUD-7).
+	// Default CRUD (CRUD-1 to CRUD-7), from the package's plan (D74).
 	if !found {
-		for _, ti := range info.Tables {
-			_, methods, err := golang.CRUDMethods(pkg.Merged(), info, ti.Key)
-			if err != nil {
-				continue
+		if key, cm, ok := pkg.plan.CRUDMethod(name); ok {
+			found = true
+			for _, k := range cm.Key {
+				sig = append(sig, sigParam{name: k.GoName, goType: k.GoType})
 			}
-			for _, cm := range methods {
-				candidates = append(candidates, cm.Name)
-				if cm.Name != name || found {
-					continue
-				}
-				found = true
-				for _, k := range cm.Key {
-					sig = append(sig, sigParam{name: k.GoName, goType: k.GoType})
-				}
-				if cm.Body != "" {
-					// The params struct validates when it carries the
-					// columns of at least one check (§V12.6).
-					create, update, _ := golang.ParamsValidators(pkg.Merged(), info, ti.Key, tableChecksOf(pkg, ti.Key))
-					sig = append(sig, sigParam{name: "arg", goType: qual + "." + cm.Body, body: true,
-						validates: (cm.Op == "create" && create) || (cm.Op == "update" && update)})
-				}
-				qr.Result, qr.Many = cm.Result, cm.Many
-				switch cm.Op {
-				case "create":
-					qr.Status = 201
-				case "delete":
-					qr.Status = 204
-				}
+			if cm.Body != "" {
+				// The params struct validates when it carries the
+				// columns of at least one check (§V12.6).
+				create, update, _ := pkg.plan.ParamsValidators(key, tableChecksOf(pkg, key))
+				sig = append(sig, sigParam{name: "arg", goType: qual + "." + cm.Body, body: true,
+					validates: (cm.Op == "create" && create) || (cm.Op == "update" && update)})
+			}
+			qr.Result, qr.Many = cm.Result, cm.Many
+			switch cm.Op {
+			case "create":
+				qr.Status = 201
+			case "delete":
+				qr.Status = 204
 			}
 		}
 	}
 	if !found {
+		// Did you mean: every select method, then every CRUD method, in
+		// declaration order — only worth listing on the way to an error.
 		hint := ""
+		var candidates []string
+		for _, si := range pkg.Selects {
+			for _, m := range si.Members {
+				candidates = append(candidates, modelOrBase(m)+si.MethodSuffix)
+			}
+		}
+		candidates = append(candidates, pkg.plan.CRUDMethodNames()...)
 		for _, cand := range candidates {
 			if strings.EqualFold(cand, name) {
 				hint = fmt.Sprintf("; did you mean %q?", cand)
@@ -1047,7 +1051,7 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 			c.errorf(res.Pkg.Pos(), "V5", "package %q declares no tables; [default] needs a data package (§V5.5)", target)
 			return nil
 		}
-		_, methods, err := golang.CRUDMethods(dp.Merged(), c.schemas[target], ti.Key)
+		_, methods, err := dp.plan.CRUDMethods(ti.Key)
 		if err != nil {
 			c.errorf(res.Name.Pos(), "V5", "resources %s.%s [default]: %v (§V5.5)", qual, declared, err)
 			return nil
@@ -1293,6 +1297,7 @@ func (c *checker) pkParamType(ti *check.TableInfo, pos token.Position) (ParamTyp
 /* ===== accumulation: conflicts, helpers, controllers ===== */
 
 func (c *checker) routeAdd(r *RouteInfo, seenShape, seenHelper map[string]*RouteInfo) {
+	r.shape = shapeParse(r)
 	shape := r.Method + " " + shapeOf(r)
 	if prev, dup := seenShape[shape]; dup {
 		c.errorf(r.Pos, "V4", "route %s %s conflicts with the route at %s: identical method and path shape (§V4.7)", methodOrAny(r.Method), r.Spelled, prev.Pos)
@@ -1302,12 +1307,10 @@ func (c *checker) routeAdd(r *RouteInfo, seenShape, seenHelper map[string]*Route
 	// relation — two routes whose request sets overlap with neither more
 	// specific would panic at registration, and the checker's promise
 	// (§V4.7.3) is that a checked project never does.
-	for _, prev := range c.pkg.Routes {
-		if routesAmbiguous(prev, r) {
-			c.errorf(r.Pos, "V4", "route %s %s is ambiguous with the route at %s (%s %s): both match some requests and neither is more specific (§V4.7.2)",
-				methodOrAny(r.Method), r.Spelled, prev.Pos, methodOrAny(prev.Method), prev.Spelled)
-			return
-		}
+	if prev := c.conflicts.ambiguous(r); prev != nil {
+		c.errorf(r.Pos, "V4", "route %s %s is ambiguous with the route at %s (%s %s): both match some requests and neither is more specific (§V4.7.2)",
+			methodOrAny(r.Method), r.Spelled, prev.Pos, methodOrAny(prev.Method), prev.Spelled)
+		return
 	}
 	seenShape[shape] = r
 
@@ -1342,7 +1345,7 @@ func (c *checker) routeAdd(r *RouteInfo, seenShape, seenHelper map[string]*Route
 	}
 
 	if r.Query != nil || r.Events {
-		c.pkg.Routes = append(c.pkg.Routes, r) // no controller: the handler is generated (§V4.8) or the runtime's (§V4.11)
+		c.routeAccept(r) // no controller: the handler is generated (§V4.8) or the runtime's (§V4.11)
 		return
 	}
 	ci := c.pkg.Controllers[r.Controller]
@@ -1360,7 +1363,77 @@ func (c *checker) routeAdd(r *RouteInfo, seenShape, seenHelper map[string]*Route
 	} else {
 		ci.Actions = append(ci.Actions, &ActionInfo{Name: r.Action, Params: r.Params, Routes: []*RouteInfo{r}})
 	}
+	c.routeAccept(r)
+}
+
+// routeAccept appends an accepted route to the package's route table and
+// to the conflict index, in declaration order.
+func (c *checker) routeAccept(r *RouteInfo) {
+	r.ord = len(c.pkg.Routes)
 	c.pkg.Routes = append(c.pkg.Routes, r)
+	c.conflicts.add(r)
+}
+
+// routeIndex holds one routing package's accepted routes bucketed for
+// the §V4.7.2 ambiguity scan. Two patterns can only overlap when their
+// first segments can match the same request, so a new route is compared
+// with the routes sharing its first literal segment and with the routes
+// whose first segment matches anything — a leading parameter, or a bare
+// wildcard. The relation itself is unchanged (routesAmbiguous); only
+// the candidate set shrinks, from every accepted route to a bucket.
+type routeIndex struct {
+	byFirst map[string][]*RouteInfo // first literal segment -> routes in declaration order; "" for the root pattern
+	open    []*RouteInfo            // a leading parameter, or a bare wildcard: overlaps any first segment
+}
+
+func routeOpen(s pathShape) bool {
+	if len(s.segs) == 0 {
+		return s.wild
+	}
+	return s.segs[0] == ""
+}
+
+func routeFirst(s pathShape) string {
+	if len(s.segs) == 0 {
+		return ""
+	}
+	return s.segs[0]
+}
+
+func (ix *routeIndex) add(r *RouteInfo) {
+	if routeOpen(r.shape) {
+		ix.open = append(ix.open, r)
+		return
+	}
+	k := routeFirst(r.shape)
+	ix.byFirst[k] = append(ix.byFirst[k], r)
+}
+
+// ambiguous returns the earliest accepted route ambiguous with r, in
+// declaration order — the one the pairwise scan would have found — or
+// nil.
+func (ix *routeIndex) ambiguous(r *RouteInfo) *RouteInfo {
+	var best *RouteInfo
+	consider := func(list []*RouteInfo) {
+		for _, prev := range list {
+			if best != nil && prev.ord >= best.ord {
+				return // lists are in declaration order
+			}
+			if routesAmbiguous(prev, r) {
+				best = prev
+				return
+			}
+		}
+	}
+	consider(ix.open)
+	if routeOpen(r.shape) {
+		for _, list := range ix.byFirst {
+			consider(list) // map order is irrelevant: the minimum wins
+		}
+	} else {
+		consider(ix.byFirst[routeFirst(r.shape)])
+	}
+	return best
 }
 
 /* ===== helpers ===== */
@@ -1514,7 +1587,7 @@ func routesAmbiguous(a, b *RouteInfo) bool {
 	if !methodsOverlap(a.Method, b.Method) {
 		return false
 	}
-	sa, sb := shapeParse(a), shapeParse(b)
+	sa, sb := a.shape, b.shape
 	if !pathsOverlap(sa, sb) {
 		return false
 	}

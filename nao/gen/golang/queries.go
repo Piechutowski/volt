@@ -38,14 +38,18 @@ import (
 // is the sibling of Generate: same package, second file, models assumed
 // present.
 func GenerateQueries(f *ast.File, info *check.Info, opts Options) ([]byte, error) {
+	return PlanBuild(f, info).Queries(opts)
+}
+
+// Queries renders the queries file for the planned package.
+func (pl *Plan) Queries(opts Options) ([]byte, error) {
 	if opts.Package == "" {
 		return nil, fmt.Errorf("no package name")
 	}
-	p, err := planBuild(f, info)
-	if err != nil {
-		return nil, err
+	if pl.err != nil {
+		return nil, pl.err
 	}
-	e := &queryEmitter{plan: p, opts: opts}
+	e := &queryEmitter{plan: pl.p, opts: opts}
 	e.run()
 	src, err := format.Source([]byte(e.out.String()))
 	if err != nil {

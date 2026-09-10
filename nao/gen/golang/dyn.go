@@ -46,18 +46,22 @@ import (
 // the third sibling of Generate and GenerateQueries — same package,
 // models and the Queries type assumed present.
 func GenerateDyn(f *ast.File, info *check.Info, opts Options) ([]byte, error) {
+	return PlanBuild(f, info).Dyn(opts)
+}
+
+// Dyn renders the dynamic-query file for the planned package.
+func (pl *Plan) Dyn(opts Options) ([]byte, error) {
 	if opts.Package == "" {
 		return nil, fmt.Errorf("no package name")
 	}
-	p, err := planBuild(f, info)
-	if err != nil {
-		return nil, err
+	if pl.err != nil {
+		return nil, pl.err
 	}
-	if cs := dynNamesCheck(p, info); len(cs) > 0 {
+	if cs := dynNamesCheck(pl.p, pl.info); len(cs) > 0 {
 		c := cs[0]
 		return nil, fmt.Errorf("%s and %s both need the Go name %s; rename one (e.g. with [model:])", c.First, c.Second, c.Name)
 	}
-	e := &dynEmitter{plan: p, opts: opts}
+	e := &dynEmitter{plan: pl.p, opts: opts}
 	e.run()
 	src, err := format.Source([]byte(e.out.String()))
 	if err != nil {
@@ -90,31 +94,74 @@ type NameCollision struct {
 // file that does not survive planning reports nothing: generation
 // itself raises those errors.
 func DynNameCollisions(f *ast.File, info *check.Info) []NameCollision {
-	p, err := planBuild(f, info)
-	if err != nil {
-		return nil
+	return PlanBuild(f, info).DynNameCollisions()
+}
+
+// dynOrigin is where one minted name comes from. The description is
+// rendered only when a collision names it: a package mints one name per
+// column plus a handful per table, and nearly all of them are unique.
+type dynOrigin struct {
+	kind dynOriginKind
+	pos  token.Position
+	tm   *tableModel
+	f    *fieldPlan
+	e    *check.EnumInfo
+	v    *ast.EnumValue
+	sfx  string
+}
+
+type dynOriginKind uint8
+
+const (
+	dynQueries dynOriginKind = iota
+	dynEnum
+	dynEnumValue
+	dynModel
+	dynCreateParams
+	dynUpdateParams
+	dynHandle
+	dynWrapper
+)
+
+func (o dynOrigin) describe() string {
+	switch o.kind {
+	case dynEnum:
+		return "enum " + o.e.Decl.Name.String()
+	case dynEnumValue:
+		return fmt.Sprintf("enum %s value %q", o.e.Decl.Name.String(), o.v.Name.Name())
+	case dynModel:
+		return fmt.Sprintf("table %s (model %s)", o.tm.ti.Decl.Name.String(), o.tm.model)
+	case dynCreateParams:
+		return fmt.Sprintf("table %s (create params)", o.tm.ti.Decl.Name.String())
+	case dynUpdateParams:
+		return fmt.Sprintf("table %s (update params)", o.tm.ti.Decl.Name.String())
+	case dynHandle:
+		return fmt.Sprintf("table %s column %q (handle %s%s)", o.tm.ti.Decl.Name.String(), o.f.colName, o.tm.model, o.f.goField)
+	case dynWrapper:
+		return fmt.Sprintf("table %s (option wrapper %s%s)", o.tm.ti.Decl.Name.String(), o.tm.model, o.sfx)
 	}
-	return dynNamesCheck(p, info)
+	return "the generated Queries type"
 }
 
 func dynNamesCheck(p *plan, info *check.Info) []NameCollision {
-	type origin struct {
-		desc string
-		pos  token.Position
+	size := 1
+	for _, tm := range p.tables {
+		size += 3 + len(dynWrapperSuffixes) + len(tm.fields)
 	}
-	seen := map[string]origin{"Queries": {desc: "the generated Queries type"}}
+	seen := make(map[string]dynOrigin, size)
+	seen["Queries"] = dynOrigin{kind: dynQueries}
 	var out []NameCollision
-	add := func(name, desc string, pos token.Position) {
+	add := func(name string, o dynOrigin) {
 		prev, dup := seen[name]
 		if !dup {
-			seen[name] = origin{desc: desc, pos: pos}
+			seen[name] = o
 			return
 		}
-		first, second := prev, origin{desc: desc, pos: pos}
+		first, second := prev, o
 		if second.pos.Line < first.pos.Line || (second.pos.Line == first.pos.Line && second.pos.Column < first.pos.Column) {
 			first, second = second, first
 		}
-		out = append(out, NameCollision{Name: name, First: first.desc, Second: second.desc, Pos: second.pos})
+		out = append(out, NameCollision{Name: name, First: first.describe(), Second: second.describe(), Pos: second.pos})
 	}
 
 	for _, e := range info.Enums {
@@ -122,33 +169,32 @@ func dynNamesCheck(p *plan, info *check.Info) []NameCollision {
 		if err != nil {
 			continue // generation reports unusable names itself
 		}
-		add(typeName, "enum "+e.Decl.Name.String(), e.Decl.Pos())
+		add(typeName, dynOrigin{kind: dynEnum, e: e, pos: e.Decl.Pos()})
 		for _, v := range e.Decl.Values {
 			constName, err := goName(v.Name.Name())
 			if err != nil {
 				continue
 			}
-			add(typeName+constName, fmt.Sprintf("enum %s value %q", e.Decl.Name.String(), v.Name.Name()), v.Pos())
+			add(typeName+constName, dynOrigin{kind: dynEnumValue, e: e, v: v, pos: v.Pos()})
 		}
 	}
 	for _, tm := range p.tables {
-		tbl := tm.ti.Decl.Name.String()
 		pos := tm.ti.Decl.Pos()
-		add(tm.model, fmt.Sprintf("table %s (model %s)", tbl, tm.model), pos)
+		add(tm.model, dynOrigin{kind: dynModel, tm: tm, pos: pos})
 		if len(tm.fields) == 0 {
 			continue // no queryable shape: no queries, no dynamic layer
 		}
 		if len(tm.createFields()) > 0 {
-			add(tm.model+"CreateParams", fmt.Sprintf("table %s (create params)", tbl), pos)
+			add(tm.model+"CreateParams", dynOrigin{kind: dynCreateParams, tm: tm, pos: pos})
 		}
 		if len(tm.pk) > 0 && len(tm.nonPK()) > 0 {
-			add(tm.model+"UpdateParams", fmt.Sprintf("table %s (update params)", tbl), pos)
+			add(tm.model+"UpdateParams", dynOrigin{kind: dynUpdateParams, tm: tm, pos: pos})
 		}
 		for _, f := range tm.fields {
-			add(tm.model+f.goField, fmt.Sprintf("table %s column %q (handle %s%s)", tbl, f.colName, tm.model, f.goField), f.col.Pos())
+			add(tm.model+f.goField, dynOrigin{kind: dynHandle, tm: tm, f: f, pos: f.col.Pos()})
 		}
 		for _, sfx := range dynWrapperSuffixes {
-			add(tm.model+sfx, fmt.Sprintf("table %s (option wrapper %s%s)", tbl, tm.model, sfx), pos)
+			add(tm.model+sfx, dynOrigin{kind: dynWrapper, tm: tm, sfx: sfx, pos: pos})
 		}
 	}
 	return out

@@ -70,6 +70,9 @@ type Package struct {
 
 	// schema is the package's checked table model, set by Check.
 	schema *check.Info
+	// plan is the package's naming plan, built once by Check right after
+	// the schema pass and read by everything downstream (D74).
+	plan *golang.Plan
 
 	// merged is the synthetic single file of all declarations, in file
 	// order (sorted by name for determinism), fed to the DBML-layer
@@ -94,6 +97,11 @@ func (p *Package) Merged() *ast.File { return p.merged }
 
 // Schema returns the package's checked table model (nil before Check).
 func (p *Package) Schema() *check.Info { return p.schema }
+
+// Plan returns the package's naming plan (nil before Check): every
+// generated Go and SQL name, decided once and shared by the checker,
+// the generators and the tooling (D74).
+func (p *Package) Plan() *golang.Plan { return p.plan }
 
 // HasSchema reports whether the package declares data elements — such
 // packages get generated model, query and DDL files.

@@ -93,11 +93,8 @@ func (c *checker) dataQueries(pkg *Package) {
 	// generated type; models and enums are claimed before any select.
 	// The names are claimed from the generators' own plan (models, params
 	// types, enum types, dynamic handles and functions, the Queries
-	// handle), so the list cannot drift from the output.
-	minted, err := golang.PackageNames(pkg.merged, info)
-	if err != nil {
-		minted = map[string]string{"Queries": "the generated Queries handle", "New": "the generated constructor"}
-	}
+	// handle), so the list cannot drift from the output (D74).
+	minted := pkg.plan.Names()
 
 	seen := map[string]*ast.Select{} // tableKey+method -> declaring select
 	for _, sel := range selects {
@@ -335,7 +332,7 @@ type colBinding struct {
 
 // selectCheck resolves and types one Select (§V11) and lowers it to a
 // SelectInfo, or reports why not.
-func (c *checker) selectCheck(sel *ast.Select, info *check.Info, minted map[string]string) *SelectInfo {
+func (c *checker) selectCheck(sel *ast.Select, info *check.Info, minted *golang.Names) *SelectInfo {
 	si := &SelectInfo{Decl: sel}
 
 	// §V11.1: method suffix.
@@ -412,7 +409,7 @@ var crudMethodSuffixes = map[string]bool{
 // projectionCheck applies §V11.7: existence and field-type agreement
 // for the explicit list, the exclusion algebra for the star form, and
 // row-type name minting against the package's generated scope.
-func (c *checker) projectionCheck(sel *ast.Select, si *SelectInfo, info *check.Info, minted map[string]string) bool {
+func (c *checker) projectionCheck(sel *ast.Select, si *SelectInfo, info *check.Info, minted *golang.Names) bool {
 	type memberFields struct {
 		ti     *check.TableInfo
 		model  string
@@ -421,7 +418,7 @@ func (c *checker) projectionCheck(sel *ast.Select, si *SelectInfo, info *check.I
 	}
 	members := make([]memberFields, 0, len(si.Members))
 	for _, m := range si.Members {
-		model, fields, err := golang.ModelFields(c.pkg.merged, info, m.Key)
+		model, fields, err := c.pkg.plan.ModelFields(m.Key)
 		if err != nil {
 			c.errorf(sel.Name.Pos(), "V11", "select %q: %v (§V11.7)", sel.Name.Name(), err)
 			return false
@@ -489,7 +486,7 @@ func (c *checker) projectionCheck(sel *ast.Select, si *SelectInfo, info *check.I
 	if !sel.Star {
 		si.Cols = cols
 		si.Shared = si.MethodSuffix
-		if prev, dup := minted[si.Shared]; dup {
+		if prev, dup := minted.Lookup(si.Shared); dup {
 			c.errorf(sel.Name.Pos(), "V11", "select %q mints the shared row type %s, which collides with %s (§V11.7)",
 				sel.Name.Name(), si.Shared, prev)
 			return false
@@ -503,7 +500,7 @@ func (c *checker) projectionCheck(sel *ast.Select, si *SelectInfo, info *check.I
 				}
 			}
 		}
-		minted[si.Shared] = fmt.Sprintf("select %q's shared row type", sel.Name.Name())
+		minted.Add(si.Shared, fmt.Sprintf("select %q's shared row type", sel.Name.Name()))
 		return true
 	}
 
@@ -526,12 +523,12 @@ func (c *checker) projectionCheck(sel *ast.Select, si *SelectInfo, info *check.I
 			return false
 		}
 		name := mf.model + si.MethodSuffix
-		if prev, dup := minted[name]; dup {
+		if prev, dup := minted.Lookup(name); dup {
 			c.errorf(sel.Name.Pos(), "V11", "select %q mints the row type %s, which collides with %s (§V11.7)",
 				sel.Name.Name(), name, prev)
 			return false
 		}
-		minted[name] = fmt.Sprintf("select %q's row type for table %q", sel.Name.Name(), mf.ti.Decl.Name.Base())
+		minted.Add(name, fmt.Sprintf("select %q's row type for table %q", sel.Name.Name(), mf.ti.Decl.Name.Base()))
 	}
 	return true
 }

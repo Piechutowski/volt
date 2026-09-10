@@ -609,3 +609,26 @@ where the merge changed the facts.
   `param:` rename (binding is by the key's generated name), and an
   unqualified table (the CRUD lives in the data package, as for every
   query route).
+
+- **D74 — The naming plan is built once per package and shared**
+  (2026-09-10, spec §V4.8, §V5.5, §V11.7, §V12). Right after the
+  schema pass, `lang.Check` builds one immutable plan per package:
+  every Go and SQL name of every table and column, the generated CRUD
+  method table indexed by method name, and the §V11.7 name scope. The
+  routing checker, the select and check lowering, the five generators,
+  vet and the language server read that plan; nothing downstream
+  derives a name from the AST again. The one implementation of naming
+  (the reason the export helpers exist) stays; what changes is that it
+  runs once. The alternative was measured: helpers that answered a
+  per-table question by re-planning the whole package, called once per
+  table per action per route, made `volt check` cubic in tables per
+  package — 5·R·T²·C name derivations, 47 minutes for 1000 tables of
+  150 columns in 20 packages, against 1.4 seconds from the shared
+  plan with byte-identical output. Route conflicts follow the same
+  rule: a route's path shape is parsed once and accepted routes are
+  bucketed by first literal segment, so the §V4.7.2 scan compares
+  candidates, not every pair. What it refuses: an exported helper that
+  takes an AST and an Info and plans on the caller's behalf inside a
+  loop — the one-shot forms remain for tests and single questions,
+  never for per-route work — and a plan mutated after it is built,
+  since sharing it across goroutines is the next step.

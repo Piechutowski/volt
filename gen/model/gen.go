@@ -30,32 +30,38 @@ type File struct {
 // must be free of check errors and declare data elements.
 func Generate(pkg *lang.Package, opts Options) ([]File, error) {
 	gopts := golang.Options{Package: pkg.Name, Source: opts.Source}
+	// One plan per package (D74): the checker built it; every file below
+	// reads it.
+	plan := pkg.Plan()
+	if plan == nil {
+		plan = golang.PlanBuild(pkg.Merged(), pkg.Schema())
+	}
 
-	models, err := golang.Generate(pkg.Merged(), pkg.Schema(), gopts)
+	models, err := plan.Models(gopts)
 	if err != nil {
 		return nil, err
 	}
 	out := []File{{"nao_models.go", models}}
 
 	if !opts.ModelsOnly {
-		queries, err := golang.GenerateQueries(pkg.Merged(), pkg.Schema(), gopts)
+		queries, err := plan.Queries(gopts)
 		if err != nil {
 			return nil, err
 		}
-		dyn, err := golang.GenerateDyn(pkg.Merged(), pkg.Schema(), gopts)
+		dyn, err := plan.Dyn(gopts)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, File{"nao_queries.go", queries}, File{"nao_dyn.go", dyn})
 		if fns := pkg.SelectFns(); len(fns) > 0 {
-			selects, err := golang.GenerateSelects(pkg.Merged(), pkg.Schema(), fns, gopts)
+			selects, err := plan.Selects(fns, gopts)
 			if err != nil {
 				return nil, err
 			}
 			out = append(out, File{"nao_selects.go", selects})
 		}
 		if len(pkg.CheckFns) > 0 {
-			validators, err := golang.GenerateValidators(pkg.Merged(), pkg.Schema(), pkg.CheckFns, gopts)
+			validators, err := plan.Validators(pkg.CheckFns, gopts)
 			if err != nil {
 				return nil, err
 			}

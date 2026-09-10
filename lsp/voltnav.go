@@ -506,8 +506,12 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 	} else if len(shown) > structCap {
 		shown = shown[:structCap]
 	}
+	plan := pkg.Plan()
+	if plan == nil {
+		plan = golang.PlanBuild(pkg.Merged(), pkg.Schema())
+	}
 	for _, m := range shown {
-		row, fields, err := golang.SelectRowType(pkg.Merged(), pkg.Schema(), memberFn(m.Key))
+		row, fields, err := plan.SelectRowType(memberFn(m.Key))
 		if err != nil {
 			continue
 		}
@@ -545,7 +549,7 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 			model = mn
 		}
 		row := model
-		if r, _, err := golang.SelectRowType(pkg.Merged(), pkg.Schema(), memberFn(m.Key)); err == nil {
+		if r, _, err := plan.SelectRowType(memberFn(m.Key)); err == nil {
 			row = r
 		}
 		fmt.Fprintf(&b, "func (q *Queries) %s%s(ctx context.Context%s) ([]%s, error)\n",
