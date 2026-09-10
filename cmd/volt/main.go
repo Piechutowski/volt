@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -236,10 +237,13 @@ func genRun(c *cli.Command) error {
 	sort.Strings(paths)
 
 	// Collect everything first, then refuse every clobber, then write:
-	// all or nothing across the whole project.
+	// all or nothing across the whole project. A file whose bytes are
+	// already on disk is left alone: rewriting it would only bump its
+	// modification time and wake every editor and watcher on the tree.
 	type outFile struct {
-		path string
-		code []byte
+		path      string
+		code      []byte
+		unchanged bool
 	}
 	var out []outFile
 
@@ -255,7 +259,7 @@ func genRun(c *cli.Command) error {
 				return cli.Exit("gen: "+err.Error(), 1)
 			}
 			for _, f := range files {
-				out = append(out, outFile{filepath.Join(pkg.Dir, f.Name), f.Code})
+				out = append(out, outFile{path: filepath.Join(pkg.Dir, f.Name), code: f.Code})
 			}
 		}
 
@@ -265,7 +269,7 @@ func genRun(c *cli.Command) error {
 				return cli.Exit("gen: "+err.Error(), 1)
 			}
 			for _, name := range router.Files {
-				out = append(out, outFile{filepath.Join(pkg.Dir, name), files[name]})
+				out = append(out, outFile{path: filepath.Join(pkg.Dir, name), code: files[name]})
 			}
 		}
 	}
@@ -274,15 +278,16 @@ func genRun(c *cli.Command) error {
 		return nil
 	}
 
-	for _, f := range out {
-		// SQL carries the marker in its own comment syntax.
-		marker := []byte("// Code generated ")
-		if filepath.Ext(f.path) == ".sql" {
-			marker = []byte("-- Code generated ")
+	for i := range out {
+		f := &out[i]
+		old, err := os.ReadFile(f.path)
+		if err != nil {
+			continue // nothing there yet
 		}
-		if old, err := os.ReadFile(f.path); err == nil && !bytes.HasPrefix(old, marker) {
+		if !bytes.HasPrefix(old, genMarker(f.path)) {
 			return cli.Exit(fmt.Sprintf("gen: refusing to overwrite %s: it lacks the generated-code header", f.path), 2)
 		}
+		f.unchanged = bytes.Equal(old, f.code)
 	}
 	// An optional output that is no longer produced (every select or
 	// check removed) must not linger and keep enforcing deleted rules:
@@ -301,7 +306,7 @@ func genRun(c *cli.Command) error {
 			if produced[stale] {
 				continue
 			}
-			if old, err := os.ReadFile(stale); err == nil && bytes.HasPrefix(old, []byte("// Code generated ")) {
+			if genMarked(stale) {
 				if err := os.Remove(stale); err != nil {
 					return cli.Exit(err.Error(), 2)
 				}
@@ -310,6 +315,10 @@ func genRun(c *cli.Command) error {
 		}
 	}
 	for _, f := range out {
+		if f.unchanged {
+			fmt.Println(f.path, "(unchanged)")
+			continue
+		}
 		if err := os.MkdirAll(filepath.Dir(f.path), 0o755); err != nil {
 			return cli.Exit(err.Error(), 2)
 		}
@@ -319,6 +328,31 @@ func genRun(c *cli.Command) error {
 		fmt.Println(f.path)
 	}
 	return nil
+}
+
+// genMarker is the generated-code header a file at path must start with
+// before gen may overwrite it; SQL carries it in its own comment syntax.
+func genMarker(path string) []byte {
+	if filepath.Ext(path) == ".sql" {
+		return []byte("-- Code generated ")
+	}
+	return []byte("// Code generated ")
+}
+
+// genMarked reports whether the file at path exists and carries the
+// generated-code header, reading only as many bytes as the header needs.
+func genMarked(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	marker := genMarker(path)
+	buf := make([]byte, len(marker))
+	if _, err := io.ReadFull(f, buf); err != nil {
+		return false
+	}
+	return bytes.Equal(buf, marker)
 }
 
 // routesRun implements 'volt routes': the introspection table.
