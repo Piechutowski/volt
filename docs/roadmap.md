@@ -248,7 +248,7 @@ shared plan (D74) the same fixture checks in 1.4 s and generates in
 | PERF-1 | One naming plan per package, indexed by table and by generated method; route conflicts through a first-segment index (D74) | `DONE` |
 | PERF-2 | Scaling tests: allocation at N and 2N per phase, exact and hardware-neutral; an in-repo corpus generator with relations, enums, selects, checks and scopes | scaling tests `DONE`; corpus generator planned |
 | PERF-3 | `gen` skips unchanged outputs and reads only the marker prefix, so watchers and editors stay quiet | `DONE` |
-| PERF-4 | Emitters gofmt-canonical by construction (column alignment, operator spacing, trailing newline); go/format only in tests and behind `--verify` | planned |
+| PERF-4 | Emitters gofmt-canonical by construction (column alignment, operator spacing, trailing newline); go/format only in tests and behind `--verify` (D75) | `DONE` |
 | PERF-5 | Routes may name the package's own tables; one directory holds schema and routes (spec change) | planned |
 | PERF-6 | `volt gen -o DIR -parts LIST FILE` for go:generate-driven layouts; package clause optional | planned |
 | PERF-7 | Parallel schedule: parse per file, check per package, generate per package and file on a worker pool; scanner fast paths | planned |

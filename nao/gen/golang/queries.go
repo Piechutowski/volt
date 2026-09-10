@@ -26,10 +26,10 @@ package golang
 
 import (
 	"fmt"
-	"go/format"
 	"sort"
 	"strings"
 
+	"github.com/Piechutowski/volt/gen/align"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 )
@@ -51,12 +51,7 @@ func (pl *Plan) Queries(opts Options) ([]byte, error) {
 	}
 	e := &queryEmitter{plan: pl.p, opts: opts}
 	e.run()
-	src, err := format.Source([]byte(e.out.String()))
-	if err != nil {
-		// unreachable if the emitter is correct; surfaced loudly if not
-		return nil, fmt.Errorf("generated code does not parse: %w\n%s", err, e.out.String())
-	}
-	return src, nil
+	return align.Finish(e.out.String()), nil
 }
 
 /* ===== the plan: everything decided before a line is emitted ===== */
@@ -702,11 +697,12 @@ func (e *queryEmitter) deleteEmit(t *tableModel, lower, tbl string) {
 
 // paramFields renders the fields of a params struct, notes as doc comments.
 func (e *queryEmitter) paramFields(fields []*fieldPlan) {
-	b := &e.body
+	var rows align.Block
 	for _, f := range fields {
 		if note := settingNote(f.col.Settings); note != "" {
-			commentWriteIndent(b, note)
+			commentLines(&rows, note)
 		}
-		fmt.Fprintf(b, "\t%s %s `%s`\n", f.goField, f.goType, f.tag)
+		rows.Row(f.goField, f.goType, "`"+f.tag+"`")
 	}
+	rows.WriteTo(&e.body, "\t")
 }

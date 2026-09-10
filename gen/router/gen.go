@@ -5,18 +5,19 @@
 // volt_paths.go (typed reverse-URL helpers) and volt_routes.go (the
 // introspectable route table).
 //
-// All output passes through go/format.Source, so the generator cannot
-// emit code that does not parse, and the result is gofmt-clean by
-// construction. Generated code imports the standard library and the
-// volt runtime package only.
+// The output is gofmt-canonical by construction (D75): aligned blocks
+// are laid out by gen/align exactly as gofmt's tabwriter would, and the
+// golden tests prove gofmt is the identity on every generated file.
+// Generated code imports the standard library and the volt runtime
+// package only.
 package router
 
 import (
 	"fmt"
-	"go/format"
 	"sort"
 	"strings"
 
+	"github.com/Piechutowski/volt/gen/align"
 	"github.com/Piechutowski/volt/lang"
 )
 
@@ -56,12 +57,7 @@ func Generate(pkg *lang.Package, opts Options) (map[string][]byte, error) {
 		if err := emit(); err != nil {
 			return nil, err
 		}
-		src, err := format.Source([]byte(g.out.String()))
-		if err != nil {
-			// unreachable if the emitter is correct; surfaced loudly if not
-			return nil, fmt.Errorf("generated %s does not parse: %w\n%s", name, err, g.out.String())
-		}
-		out[name] = src
+		out[name] = align.Finish(g.out.String())
 	}
 	return out, nil
 }
@@ -89,21 +85,56 @@ func (g *generator) headerFor(pkgName, doc string, imports ...string) {
 		g.pf("%s", doc)
 	}
 	g.pf("package %s\n\n", pkgName)
-	if len(imports) > 0 {
+	groups := importGroups(imports)
+	if len(groups) > 0 {
 		g.pf("import (\n")
-		for _, im := range imports {
-			if im == "" {
+		for i, group := range groups {
+			if i > 0 {
 				g.pf("\n") // group separator
-				continue
 			}
-			if strings.Contains(im, " ") {
-				g.pf("\t%s\n", im) // already rendered: `alias "path"`
-				continue
+			for _, im := range group {
+				if strings.Contains(im, " ") {
+					g.pf("\t%s\n", im) // already rendered: `alias "path"`
+					continue
+				}
+				g.pf("\t%q\n", im)
 			}
-			g.pf("\t%q\n", im)
 		}
 		g.pf(")\n\n")
 	}
+}
+
+// importGroups splits an import list at its "" separators, drops empty
+// groups and sorts each group by import path — the order gofmt imposes
+// within a group (D75).
+func importGroups(imports []string) [][]string {
+	var groups [][]string
+	var cur []string
+	flush := func() {
+		if len(cur) == 0 {
+			return
+		}
+		sort.SliceStable(cur, func(i, j int) bool { return importPath(cur[i]) < importPath(cur[j]) })
+		groups = append(groups, cur)
+		cur = nil
+	}
+	for _, im := range imports {
+		if im == "" {
+			flush()
+			continue
+		}
+		cur = append(cur, im)
+	}
+	flush()
+	return groups
+}
+
+// importPath is the path of an import entry, aliased or plain.
+func importPath(im string) string {
+	if i := strings.IndexByte(im, ' '); i >= 0 {
+		return strings.Trim(im[i+1:], `"`)
+	}
+	return im
 }
 
 // dataPackages lists the imported data packages query routes go
@@ -202,15 +233,17 @@ func (g *generator) handlersEmit() error {
 	}
 	g.pf(".\n")
 	g.pf("type Controllers struct {\n")
+	var fields align.Block
 	for _, name := range g.controllerNames() {
-		g.pf("\t%s %sController\n", name, name)
+		fields.Row(name, name+"Controller")
 	}
 	for _, q := range data {
-		g.pf("\t%s *%s.Queries // query routes written %s.<Method>\n", q.Field, q.Qualifier, q.Qualifier)
+		fields.Row(q.Field, "*"+q.Qualifier+".Queries", "// query routes written "+q.Qualifier+".<Method>")
 	}
 	if g.hasEvents() {
-		g.pf("\tEvents *volt.Broker // event routes written volt.Events (§V4.11); nil serves nothing\n")
+		fields.Row("Events", "*volt.Broker", "// event routes written volt.Events (§V4.11); nil serves nothing")
 	}
+	fields.WriteTo(&g.out, "\t")
 	g.pf("}\n\n")
 
 	g.pf("// New builds the router: ServeMux registrations with statically\n")
@@ -308,7 +341,7 @@ func (g *generator) routerEmit() error {
 
 	for _, n := range ehNames {
 		g.pf("// errHandler%s adapts the error_handler declared in the routes.\n", n)
-		g.pf("var errHandler%s = volt.ErrorHandler(%s)\n", n, n)
+		g.pf("var errHandler%s = volt.ErrorHandler(%s)\n\n", n, n)
 	}
 	return nil
 }
@@ -481,7 +514,9 @@ func sigParamsLead(ps []lang.Param) string {
 }
 
 // pathExpr builds the Go expression producing the route's path from its
-// typed arguments, e.g. `"/users/" + volt.SegInt(int64(id))`.
+// typed arguments, e.g. `"/users/"+volt.SegInt(int64(id))`. The
+// operators carry no spaces: every use is an argument of a call with
+// two or more arguments, where gofmt prints a sum tight (D75).
 func pathExpr(r *lang.RouteInfo) string {
 	if r.Pattern == "/{$}" {
 		return `"/"`
@@ -521,7 +556,7 @@ func pathExpr(r *lang.RouteInfo) string {
 		}
 	}
 	flushLit()
-	return strings.Join(parts, " + ")
+	return strings.Join(parts, "+")
 }
 
 /* ===== volt_routes.go ===== */
@@ -532,6 +567,10 @@ func (g *generator) routesEmit() error {
 	g.pf("// Table lists every route of the package, in declaration order:\n")
 	g.pf("// the routing DSL as introspectable data ('volt routes', metrics\n")
 	g.pf("// labels, and downstream derivations read this).\n")
+	if len(g.pkg.Routes) == 0 {
+		g.pf("var Table = []volt.Route{}\n") // gofmt closes an empty literal on the same line
+		return nil
+	}
 	g.pf("var Table = []volt.Route{\n")
 	for _, r := range g.pkg.Routes {
 		if r.Query != nil {

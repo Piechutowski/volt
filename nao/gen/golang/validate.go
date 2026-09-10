@@ -8,10 +8,10 @@ package golang
 
 import (
 	"fmt"
-	"go/format"
 	"sort"
 	"strings"
 
+	"github.com/Piechutowski/volt/gen/align"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 )
@@ -72,11 +72,7 @@ func (pl *Plan) Validators(fns []CheckFn, opts Options) ([]byte, error) {
 	out.WriteString(")\n\n")
 	out.WriteString(body.String())
 
-	src, err := format.Source([]byte(out.String()))
-	if err != nil {
-		return nil, fmt.Errorf("generated validators do not parse: %w\n%s", err, out.String())
-	}
-	return src, nil
+	return align.Finish(out.String()), nil
 }
 
 // validateEmit renders one Validate method on recv over checks, each

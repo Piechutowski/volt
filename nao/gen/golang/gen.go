@@ -8,8 +8,9 @@
 // doc comments of the generated type and constants. Documentation is
 // written once, in the schema.
 //
-// All output passes through go/format.Source, so the generator cannot emit
-// code that does not parse, and the result is gofmt-clean by construction.
+// The output is gofmt-canonical by construction (D75): aligned blocks
+// are laid out by gen/align exactly as gofmt's tabwriter would, and the
+// golden tests prove gofmt is the identity on every generated file.
 // Generated code depends only on the standard library and the rt runtime
 // package (D03). Nullable columns (no "not null", not part of a primary
 // key) are rt.Null[T] values (D13), except types where nil already
@@ -18,10 +19,11 @@ package golang
 
 import (
 	"fmt"
-	"go/format"
 	"sort"
+	"strconv"
 	"strings"
 
+	"github.com/Piechutowski/volt/gen/align"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/token"
@@ -50,12 +52,7 @@ func Generate(f *ast.File, info *check.Info, opts Options) ([]byte, error) {
 	if err := g.run(); err != nil {
 		return nil, err
 	}
-	src, err := format.Source([]byte(g.out.String()))
-	if err != nil {
-		// unreachable if the emitter is correct; surfaced loudly if not
-		return nil, fmt.Errorf("generated code does not parse: %w\n%s", err, g.out.String())
-	}
-	return src, nil
+	return align.Finish(g.out.String()), nil
 }
 
 type generator struct {
@@ -177,6 +174,7 @@ func (g *generator) enumEmit(e *ast.Enum) error {
 	fmt.Fprintf(&g.body, "type %s string\n\n", typeName)
 
 	g.body.WriteString("const (\n")
+	var specs align.Block
 	seen := map[string]string{}
 	for _, v := range e.Values {
 		constName, err := goName(v.Name.Name())
@@ -189,10 +187,11 @@ func (g *generator) enumEmit(e *ast.Enum) error {
 		}
 		seen[constName] = v.Name.Name()
 		if note := settingNote(v.Settings); note != "" {
-			commentWrite(&g.body, note)
+			commentLines(&specs, note)
 		}
-		fmt.Fprintf(&g.body, "\t%s %s = %q\n", constName, typeName, v.Name.Name())
+		specs.Row(constName, typeName, "= "+strconv.Quote(v.Name.Name()))
 	}
+	specs.WriteTo(&g.body, "\t")
 	g.body.WriteString(")\n\n")
 	return nil
 }
@@ -225,11 +224,13 @@ func (g *generator) tableEmit(ti *check.TableInfo, usedNames map[string]string) 
 
 	pkCols := compositePKColumns(ti)
 	fields := map[string]string{}
+	var rows align.Block
 	for _, cd := range ti.Columns {
-		if err := g.fieldEmit(cd, pkCols, fields); err != nil {
+		if err := g.fieldEmit(cd, pkCols, fields, &rows); err != nil {
 			return fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
 		}
 	}
+	rows.WriteTo(&g.body, "\t")
 	g.body.WriteString("}\n\n")
 	return nil
 }
@@ -251,7 +252,7 @@ func compositePKColumns(ti *check.TableInfo) map[string]bool {
 	return out
 }
 
-func (g *generator) fieldEmit(cd *check.ColumnDef, pkCols map[string]bool, fields map[string]string) error {
+func (g *generator) fieldEmit(cd *check.ColumnDef, pkCols map[string]bool, fields map[string]string, rows *align.Block) error {
 	col := cd.Col
 	fieldName, err := goName(col.Name.Name())
 	if err != nil {
@@ -279,9 +280,9 @@ func (g *generator) fieldEmit(cd *check.ColumnDef, pkCols map[string]bool, field
 	}
 
 	if note := settingNote(col.Settings); note != "" {
-		commentWriteIndent(&g.body, note)
+		commentLines(rows, note)
 	}
-	fmt.Fprintf(&g.body, "\t%s %s `%s`\n", fieldName, goTypeName, fieldTag(col))
+	rows.Row(fieldName, goTypeName, "`"+fieldTag(col)+"`")
 	return nil
 }
 
@@ -372,12 +373,14 @@ func commentWrite(b *strings.Builder, text string) {
 	}
 }
 
-func commentWriteIndent(b *strings.Builder, text string) {
+// commentLines adds a note to an aligned block as doc-comment lines; a
+// comment ends the block's alignment run, as it does under gofmt.
+func commentLines(rows *align.Block, text string) {
 	for _, line := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
 		if strings.TrimSpace(line) == "" {
-			b.WriteString("\t//\n")
+			rows.Line("//")
 			continue
 		}
-		b.WriteString("\t// " + line + "\n")
+		rows.Line("// " + line)
 	}
 }

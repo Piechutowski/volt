@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go/format"
 	"io"
 	"os"
 	"path/filepath"
@@ -74,6 +75,7 @@ func main() {
 				Flags: []cli.Flag{
 					&cli.BoolFlag{Name: "models-only", Aliases: []string{"m"}, Usage: "emit only nao_models.go; skip the query layers"},
 					&cli.BoolFlag{Name: "sql", Usage: "also write nao_schema.sql (SQLite DDL and seed inserts)"},
+					&cli.BoolFlag{Name: "verify", Usage: "prove every generated Go file is gofmt-canonical before writing (a generator self-check)"},
 				},
 				Action: func(_ context.Context, c *cli.Command) error {
 					return genRun(c)
@@ -276,6 +278,24 @@ func genRun(c *cli.Command) error {
 	if len(out) == 0 {
 		fmt.Println("gen: no package declares data or routing elements; nothing to do")
 		return nil
+	}
+
+	// --verify: the generators emit gofmt-canonical Go by construction
+	// (D75); this proves it for the project at hand, the way the golden
+	// tests prove it for theirs.
+	if c.Bool("verify") {
+		for _, f := range out {
+			if filepath.Ext(f.path) != ".go" {
+				continue
+			}
+			formatted, err := format.Source(f.code)
+			if err != nil {
+				return cli.Exit(fmt.Sprintf("gen --verify: %s does not parse: %v (a generator bug)", f.path, err), 2)
+			}
+			if !bytes.Equal(formatted, f.code) {
+				return cli.Exit(fmt.Sprintf("gen --verify: %s is not gofmt-canonical (a generator bug)", f.path), 2)
+			}
+		}
 	}
 
 	for i := range out {

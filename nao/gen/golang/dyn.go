@@ -33,10 +33,11 @@ package golang
 
 import (
 	"fmt"
-	"go/format"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
+	"github.com/Piechutowski/volt/gen/align"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/token"
@@ -63,12 +64,7 @@ func (pl *Plan) Dyn(opts Options) ([]byte, error) {
 	}
 	e := &dynEmitter{plan: pl.p, opts: opts}
 	e.run()
-	src, err := format.Source([]byte(e.out.String()))
-	if err != nil {
-		// unreachable if the emitter is correct; surfaced loudly if not
-		return nil, fmt.Errorf("generated code does not parse: %w\n%s", err, e.out.String())
-	}
-	return src, nil
+	return align.Finish(e.out.String()), nil
 }
 
 /* ===== package-scope name collisions (DYN-7) ===== */
@@ -273,14 +269,16 @@ func (e *dynEmitter) handlesEmit(t *tableModel, lower, tbl string) {
 	fmt.Fprintf(b, "// built here can only enter %s queries; mixing models is a compile\n", t.model)
 	fmt.Fprintf(b, "// error.\n")
 	b.WriteString("var (\n")
+	var handles align.Block
 	for _, f := range t.fields {
 		if f.nullable {
-			fmt.Fprintf(b, "\t%s%s = rt.NullColumn[%s, %s]{Column: rt.Column[%s, %s]{Name: %q}}\n",
-				t.model, f.goField, t.model, f.baseType, t.model, f.baseType, f.colName)
+			handles.Row(t.model+f.goField, fmt.Sprintf("= rt.NullColumn[%s, %s]{Column: rt.Column[%s, %s]{Name: %q}}",
+				t.model, f.baseType, t.model, f.baseType, f.colName))
 			continue
 		}
-		fmt.Fprintf(b, "\t%s%s = rt.Column[%s, %s]{Name: %q}\n", t.model, f.goField, t.model, f.baseType, f.colName)
+		handles.Row(t.model+f.goField, fmt.Sprintf("= rt.Column[%s, %s]{Name: %q}", t.model, f.baseType, f.colName))
 	}
+	handles.WriteTo(b, "\t")
 	b.WriteString(")\n\n")
 }
 
@@ -288,19 +286,31 @@ func (e *dynEmitter) wrappersEmit(t *tableModel, tbl string) {
 	b := &e.body
 	m := t.model
 	fmt.Fprintf(b, "// %sLimit caps how many rows %sQuery returns (D30).\n", m, m)
-	fmt.Fprintf(b, "func %sLimit(n int) rt.Opt[%s] { return rt.Limit[%s](n) }\n\n", m, m, m)
+	funcLine(b, "func "+m+"Limit(n int) rt.Opt["+m+"]", "return rt.Limit["+m+"](n)")
 	fmt.Fprintf(b, "// %sOffset skips n rows; keyset pagination (%sAfter) scales better (D34).\n", m, m)
-	fmt.Fprintf(b, "func %sOffset(n int) rt.Opt[%s] { return rt.Offset[%s](n) }\n\n", m, m, m)
+	funcLine(b, "func "+m+"Offset(n int) rt.Opt["+m+"]", "return rt.Offset["+m+"](n)")
 	fmt.Fprintf(b, "// %sDistinct deduplicates the rows %sQuery returns.\n", m, m)
-	fmt.Fprintf(b, "func %sDistinct() rt.Opt[%s] { return rt.Distinct[%s]() }\n\n", m, m, m)
+	funcLine(b, "func "+m+"Distinct() rt.Opt["+m+"]", "return rt.Distinct["+m+"]()")
 	fmt.Fprintf(b, "// %sOrderBy sorts %sQuery's rows by Asc/Desc terms built on the\n// %s column handles.\n", m, m, m)
-	fmt.Fprintf(b, "func %sOrderBy(terms ...rt.Order[%s]) rt.Opt[%s] { return rt.OrderBy(terms...) }\n\n", m, m, m)
+	funcLine(b, "func "+m+"OrderBy(terms ...rt.Order["+m+"]) rt.Opt["+m+"]", "return rt.OrderBy(terms...)")
 	fmt.Fprintf(b, "// %sAfter resumes strictly after the row with the given key — keyset\n", m)
 	fmt.Fprintf(b, "// pagination (D34): one value per %sOrderBy term, in the same order.\n", m)
-	fmt.Fprintf(b, "func %sAfter(key ...any) rt.Opt[%s] { return rt.After[%s](key...) }\n\n", m, m, m)
+	funcLine(b, "func "+m+"After(key ...any) rt.Opt["+m+"]", "return rt.After["+m+"](key...)")
 	fmt.Fprintf(b, "// %sSet collects the typed assignments of a %sUpdateWhere, built\n", m, m)
 	fmt.Fprintf(b, "// with Set/SetNull on the %s column handles.\n", m)
-	fmt.Fprintf(b, "func %sSet(assigns ...rt.Assign[%s]) []rt.Assign[%s] { return assigns }\n\n", m, m, m)
+	funcLine(b, "func "+m+"Set(assigns ...rt.Assign["+m+"]) []rt.Assign["+m+"]", "return assigns")
+}
+
+// funcLine writes a one-statement function the way gofmt prints it: on
+// one line when the header and the statement together fit go/printer's
+// limit of 100 characters, otherwise with the body on its own line
+// (D75). The header runs from "func" to the result type.
+func funcLine(b *strings.Builder, header, body string) {
+	if utf8.RuneCountInString(header)+utf8.RuneCountInString(body) <= 100 {
+		b.WriteString(header + " { " + body + " }\n\n")
+		return
+	}
+	b.WriteString(header + " {\n\t" + body + "\n}\n\n")
 }
 
 func (e *dynEmitter) queryEmit(t *tableModel, lower, tbl string) {

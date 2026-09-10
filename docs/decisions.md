@@ -632,3 +632,26 @@ where the merge changed the facts.
   loop — the one-shot forms remain for tests and single questions,
   never for per-route work — and a plan mutated after it is built,
   since sharing it across goroutines is the next step.
+
+- **D75 — Generated Go is gofmt-canonical by construction; gofmt is a
+  test, not a stage** (2026-09-10, spec §V4.7.3 "gofmt-stable"). The
+  generators used to pass every file through go/format.Source, which
+  bought parse-safety and formatting at zero emitter complexity and
+  cost 80% of generation time: gofmt re-parses and re-prints every byte
+  at about 8 MB/s whatever it is handed. A source-to-source compiler
+  that needs a formatter to make its output correct does not trust its
+  output; ours is held to the bar the SQL already meets. Measured on
+  the corpus, gofmt changed exactly four things in the raw emission:
+  column alignment in struct fields and in const and var blocks, the
+  spacing of `+` inside multi-argument calls, blank-line runs and the
+  trailing newline, and the one-line form of a function whose header
+  and body exceed one hundred characters; the router also sorts imports
+  within a group. `gen/align` lays out the aligned blocks with
+  tabwriter's own rules, the emitters apply the rest, and the proof is
+  in tests: gofmt must be the identity on every golden, on every valid
+  conformance project and on the scaling fixtures, and a randomized
+  test pits `gen/align` against gofmt directly. `volt gen --verify`
+  runs the same proof on the project at hand. What it refuses: a
+  `--no-fmt` flag or any second output shape, since there is one
+  output and it is canonical; and any new emitter shape that lands
+  without the fixed-point test covering it.
