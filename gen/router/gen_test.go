@@ -3,6 +3,7 @@ package router
 import (
 	"bytes"
 	"flag"
+	"fmt"
 	"go/format"
 	"os"
 	"os/exec"
@@ -12,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/Piechutowski/volt/gen/model"
+	"github.com/Piechutowski/volt/internal/corpus"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 )
@@ -471,5 +473,83 @@ func TestClientBesideGolden(t *testing.T) {
 	}
 	if formatted, _ := format.Source(got); !bytes.Equal(got, formatted) {
 		t.Errorf("%s is not gofmt-canonical", ClientBesideFile)
+	}
+}
+
+// TestCorpusCompiles builds the synthetic corpus (internal/corpus) in
+// both layouts: every feature the corpus uses generates Go that the
+// compiler accepts, models, queries, router and client together.
+func TestCorpusCompiles(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, spec := range []corpus.Spec{{Packages: 2, Tables: 3, Columns: 9}, {Packages: 1, Tables: 3, Columns: 9, Single: true}} {
+		dir := t.TempDir()
+		if err := corpus.Write(dir, spec); err != nil {
+			t.Fatal(err)
+		}
+		gomod := "module corpus\n\ngo 1.27\n\n" +
+			"require github.com/Piechutowski/volt v0.0.0\n\n" +
+			"replace github.com/Piechutowski/volt => " + repoRoot + "\n"
+		if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		pr, err := lang.Load(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diags := lang.Check(pr); diag.HasErrors(diags) {
+			t.Fatalf("%+v: %v", spec, diags)
+		}
+		for path, pkg := range pr.Packages {
+			write := func(name string, code []byte) {
+				t.Helper()
+				full := filepath.Join(pkg.Dir, name)
+				if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(full, code, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if pkg.HasSchema() {
+				files, err := model.Generate(pkg, model.Options{Source: "package " + path})
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, f := range files {
+					write(f.Name, f.Code)
+				}
+			}
+			if pkg.HasRouting() {
+				files, err := Generate(pkg, Options{Source: "package " + path})
+				if err != nil {
+					t.Fatal(err)
+				}
+				for name, code := range files {
+					write(name, code)
+				}
+				// The controllers the corpus routes name, stubbed.
+				var stubs strings.Builder
+				fmt.Fprintf(&stubs, "package %s\n\nimport (\n\t\"net/http\"\n\n\t\"github.com/Piechutowski/volt\"\n)\n\ntype stub struct{}\n\n", pkg.Name)
+				stubs.WriteString("func (stub) Index(w http.ResponseWriter, r *volt.Request) error              { return nil }\n")
+				stubs.WriteString("func (stub) Serve(w http.ResponseWriter, r *volt.Request, path string) error { return nil }\n")
+				for name := range pkg.Controllers {
+					if name == "Stats" {
+						for _, a := range pkg.Controllers[name].Actions {
+							fmt.Fprintf(&stubs, "func (stub) %s(w http.ResponseWriter, r *volt.Request) error { return nil }\n", a.Name)
+						}
+					}
+				}
+				stubs.WriteString("\nvar _ http.Handler = NewRouter(Controllers{Home: stub{}, Files: stub{}, Stats: stub{}})\n")
+				write("stubs.go", []byte(stubs.String()))
+			}
+		}
+		cmd := exec.Command("go", "build", "./...")
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%+v does not compile:\n%s", spec, out)
+		}
 	}
 }

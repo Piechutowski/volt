@@ -119,6 +119,7 @@ volt gen --sql ./app                 # models + queries + router + DDL
 go test ./... ./lsp/... ./cmd/volt/...   # everything, ORM + tooling modules
 go test ./gen/router -update         # refresh goldens after gen changes
 go run ./cmd/volt gen ./itest/blog   # refresh the itest fixture
+go test ./lang -run '^$' -bench . -benchmem > lang/testdata/bench_baseline.txt   # refresh the (ungated) baseline
 ./scripts/sync-grammar.sh            # mirror grammar + preflight Zed
 ```
 

@@ -253,7 +253,7 @@ check (PERF-10).
 | ID | Work | Status |
 |---|---|---|
 | PERF-1 | One naming plan per package, indexed by table and by generated method; route conflicts through a first-segment index (D74) | `DONE` |
-| PERF-2 | Scaling tests: allocation at N and 2N per phase, exact and hardware-neutral; an in-repo corpus generator with relations, enums, selects, checks and scopes | scaling tests `DONE`; corpus generator planned |
+| PERF-2 | Scaling tests: allocation at N and 2N per phase, exact and hardware-neutral; `internal/corpus` generates projects of any size using every feature in both layouts, driving linearity tests in tables, packages and columns, an allocation budget per phase (gated, ten percent), compile tests, and benchmarks with a committed baseline (`lang/testdata/bench_baseline.txt`, not gated) | `DONE` |
 | PERF-3 | `gen` skips unchanged outputs and reads only the marker prefix, so watchers and editors stay quiet | `DONE` |
 | PERF-4 | Emitters gofmt-canonical by construction (column alignment, operator spacing, trailing newline); go/format only in tests and behind `--verify` (D75) | `DONE` |
 | PERF-5 | Routes may name the package's own tables; one directory holds schema and routes (D76) | `DONE` |
