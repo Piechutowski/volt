@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Piechutowski/volt/internal/par"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
@@ -28,25 +29,24 @@ func Check(pr *Project) []diag.Diagnostic {
 		c.importsResolve(pr.Packages[path])
 	}
 	c.cyclesCheck()
-	for _, path := range c.paths() {
-		pkg := pr.Packages[path]
+
+	// The heavy phases are per package and independent within a phase:
+	// each runs on every CPU (PERF-7), package by package.
+	paths := c.paths()
+	c.perPackage(paths, func(cc *checker, pkg *Package) {
 		info, schemaDiags := check.File(pkg.merged)
-		c.diags = append(c.diags, schemaDiags...)
-		c.schemas[path] = info
+		cc.diags = append(cc.diags, schemaDiags...)
 		pkg.schema = info
 		// The naming plan, once (D74): every later phase asks it for
 		// generated names instead of re-deriving them from the AST.
 		pkg.plan = golang.PlanBuild(pkg.merged, info)
+	})
+	for _, path := range paths {
+		c.schemas[path] = pr.Packages[path].schema
 	}
-	for _, path := range c.paths() {
-		c.dataQueries(pr.Packages[path])
-	}
-	for _, path := range c.paths() {
-		c.tableChecks(pr.Packages[path])
-	}
-	for _, path := range c.paths() {
-		c.routing(pr.Packages[path])
-	}
+	c.perPackage(paths, (*checker).dataQueries)
+	c.perPackage(paths, (*checker).tableChecks)
+	c.perPackage(paths, (*checker).routing)
 
 	diag.Sort(c.diags)
 	return c.diags
@@ -63,8 +63,30 @@ type checker struct {
 	conflicts *routeIndex // accepted routes, bucketed for the §V4.7.2 scan
 
 	// gofuncs caches each package directory's Go functions (§V3.2,
-	// §V12.5), scanned once per run.
-	gofuncs map[string]*goScan
+	// §V12.5), scanned once per run and shared across the per-package
+	// checkers of a phase.
+	gofuncs *goFuncsCache
+}
+
+// perPackage runs one phase over every package, on every CPU (PERF-7).
+// Each package gets its own checker — the per-package fields are its
+// own; the project, the schemas and the Go-function cache are shared,
+// read-only or locked — and its diagnostics are appended in package
+// order, so the output never depends on the schedule. A phase writes
+// only its own package, so the phases are barriers between them.
+func (c *checker) perPackage(paths []string, phase func(*checker, *Package)) {
+	if c.gofuncs == nil {
+		c.gofuncs = &goFuncsCache{}
+	}
+	subs := make([]*checker, len(paths))
+	par.For(len(paths), func(i int) {
+		cc := &checker{pr: c.pr, schemas: c.schemas, gofuncs: c.gofuncs}
+		phase(cc, c.pr.Packages[paths[i]])
+		subs[i] = cc
+	})
+	for _, cc := range subs {
+		c.diags = append(c.diags, cc.diags...)
+	}
 }
 
 func (c *checker) paths() []string {

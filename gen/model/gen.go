@@ -5,6 +5,7 @@
 package model
 
 import (
+	"github.com/Piechutowski/volt/internal/par"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/nao/gen/golang"
 	"github.com/Piechutowski/volt/nao/gen/sqlite"
@@ -45,43 +46,39 @@ func Generate(pkg *lang.Package, opts Options) ([]File, error) {
 		plan = golang.PlanBuild(pkg.Merged(), pkg.Schema())
 	}
 
-	models, err := plan.Models(gopts)
-	if err != nil {
-		return nil, err
+	// Every file reads the plan and writes its own buffer, so the files
+	// are emitted on every CPU (PERF-7) and gathered in this order.
+	type emit struct {
+		name string
+		fn   func() ([]byte, error)
 	}
-	out := []File{{"nao_models.go", models}}
-
+	emits := []emit{{"nao_models.go", func() ([]byte, error) { return plan.Models(gopts) }}}
 	if !opts.ModelsOnly {
-		queries, err := plan.Queries(gopts)
-		if err != nil {
-			return nil, err
-		}
-		dyn, err := plan.Dyn(gopts)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, File{"nao_queries.go", queries}, File{"nao_dyn.go", dyn})
+		emits = append(emits,
+			emit{"nao_queries.go", func() ([]byte, error) { return plan.Queries(gopts) }},
+			emit{"nao_dyn.go", func() ([]byte, error) { return plan.Dyn(gopts) }})
 		if fns := pkg.SelectFns(); len(fns) > 0 {
-			selects, err := plan.Selects(fns, gopts)
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, File{"nao_selects.go", selects})
+			emits = append(emits, emit{"nao_selects.go", func() ([]byte, error) { return plan.Selects(fns, gopts) }})
 		}
 		if len(pkg.CheckFns) > 0 {
-			validators, err := plan.Validators(pkg.CheckFns, gopts)
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, File{"nao_validate.go", validators})
+			emits = append(emits, emit{"nao_validate.go", func() ([]byte, error) { return plan.Validators(pkg.CheckFns, gopts) }})
 		}
 	}
 	if opts.SQL {
-		ddl, err := sqlite.Generate(pkg.Merged(), pkg.Schema(), sqlite.Options{Source: opts.Source})
+		emits = append(emits, emit{"nao_schema.sql", func() ([]byte, error) {
+			return sqlite.Generate(pkg.Merged(), pkg.Schema(), sqlite.Options{Source: opts.Source})
+		}})
+	}
+	out := make([]File, len(emits))
+	errs := make([]error, len(emits))
+	par.For(len(emits), func(i int) {
+		code, err := emits[i].fn()
+		out[i], errs[i] = File{emits[i].name, code}, err
+	})
+	for _, err := range errs {
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, File{"nao_schema.sql", ddl})
 	}
 	return out, nil
 }

@@ -241,7 +241,11 @@ component (data structures, allocation, cache behaviour) on a fixture
 of 1000 tables of 150 columns across 20 packages: `volt check` took 47
 minutes, all of it in one cubic path of the routing checker; with the
 shared plan (D74) the same fixture checks in 1.4 s and generates in
-10 s, of which 8 are gofmt. What remains is linear and parallelizable.
+10 s, of which 8 are gofmt; with canonical emission (D75) it generates
+in 2.7 s; with the parallel schedule (D78), on four cores, it checks
+in 0.9 s and generates in 1.3 s, `--verify` included in 3.5 s. What
+remains is the front end's allocation: 100-byte tokens and a pointer
+AST cost more in GC than in parsing (PERF-9).
 
 | ID | Work | Status |
 |---|---|---|
@@ -251,7 +255,7 @@ shared plan (D74) the same fixture checks in 1.4 s and generates in
 | PERF-4 | Emitters gofmt-canonical by construction (column alignment, operator spacing, trailing newline); go/format only in tests and behind `--verify` (D75) | `DONE` |
 | PERF-5 | Routes may name the package's own tables; one directory holds schema and routes (D76) | `DONE` |
 | PERF-6 | `volt gen -o DIR -parts LIST FILE` for go:generate-driven layouts (D77); the `.volt` package clause stays mandatory, the emitted clause follows the target | `DONE` |
-| PERF-7 | Parallel schedule: parse per file, check per package, generate per package and file on a worker pool; scanner fast paths | planned |
+| PERF-7 | Parallel schedule: parse per file, check per package, generate per package and file on a worker pool; scanner fast paths (D78) | `DONE` |
 | PERF-8 | Language server: debounced background analysis, per-declaration memo keyed by content hash, reverse dependencies | planned |
 | PERF-9 | Flat front end: pointer-free tokens, slab-allocated AST, interned symbols, precomputed emission fragments | planned |
 

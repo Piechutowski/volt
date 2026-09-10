@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/Piechutowski/volt/gen/align"
+	"github.com/Piechutowski/volt/internal/par"
 	"github.com/Piechutowski/volt/lang"
 )
 
@@ -57,27 +58,38 @@ func Generate(pkg *lang.Package, opts Options) (map[string][]byte, error) {
 	if !pkg.HasRouting() {
 		return nil, fmt.Errorf("package %s declares no routing elements", pkg.Path)
 	}
-	g := &generator{pkg: pkg, opts: opts}
-	out := map[string][]byte{}
-	client := ClientFile
-	if opts.ClientBeside {
-		client = ClientBesideFile
+	// Every file reads the package and writes its own generator, so the
+	// files are emitted on every CPU (PERF-7).
+	type emit struct {
+		name string
+		fn   func(*generator) error
 	}
-	for name, emit := range map[string]func() error{
-		"volt_handlers.go": g.handlersEmit,
-		"volt_router.go":   g.routerEmit,
-		"volt_paths.go":    g.pathsEmit,
-		"volt_routes.go":   g.routesEmit,
-		client:             g.clientEmit,
-	} {
-		if name == ClientFile && g.clientOmitted() {
-			continue
+	emits := []emit{
+		{"volt_handlers.go", (*generator).handlersEmit},
+		{"volt_router.go", (*generator).routerEmit},
+		{"volt_paths.go", (*generator).pathsEmit},
+		{"volt_routes.go", (*generator).routesEmit},
+	}
+	switch {
+	case opts.ClientBeside:
+		emits = append(emits, emit{ClientBesideFile, (*generator).clientEmit})
+	case !(&generator{pkg: pkg, opts: opts}).clientOmitted():
+		emits = append(emits, emit{ClientFile, (*generator).clientEmit})
+	}
+	codes := make([][]byte, len(emits))
+	errs := make([]error, len(emits))
+	par.For(len(emits), func(i int) {
+		g := &generator{pkg: pkg, opts: opts}
+		if errs[i] = emits[i].fn(g); errs[i] == nil {
+			codes[i] = align.Finish(g.out.String())
 		}
-		g.out.Reset()
-		if err := emit(); err != nil {
-			return nil, err
+	})
+	out := map[string][]byte{}
+	for i, e := range emits {
+		if errs[i] != nil {
+			return nil, errs[i]
 		}
-		out[name] = align.Finish(g.out.String())
+		out[e.name] = codes[i]
 	}
 	return out, nil
 }

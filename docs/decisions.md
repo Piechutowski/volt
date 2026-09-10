@@ -703,3 +703,27 @@ where the merge changed the facts.
   the package's identity to the language server; the emitted clause
   follows the target directory instead), and any manifest or config
   file describing layouts — the `go:generate` line is the layout.
+
+- **D78 — The schedule is per phase, per item, on every CPU, and never
+  part of the output** (2026-09-10, roadmap PERF-7). One primitive,
+  `internal/par.For(n, fn)`: a phase hands it n independent items,
+  they run on up to GOMAXPROCS goroutines, and every result lands in
+  its own index slot, so assembly happens in index order and no output
+  — diagnostics, bytes, printed lines — depends on which CPU finished
+  first. The phases: files of one import wave parse together; the
+  schema check, the plan, the query and check lowering and the routing
+  run per package, each phase a barrier before the next, each package
+  on its own checker with the project, the schemas and the Go-function
+  cache shared read-only or locked; the files of one package, and the
+  packages of one run, generate together; `--verify`, the reads of what
+  is on disk and the writes run together too. The scanner keeps ASCII
+  on a byte path, skips blanks in one loop and sizes its token slice
+  once. Measured on the 1000-table fixture, four cores: check 1.33 s to
+  0.88 s, generate 2.7 s to 1.3 s, `--verify` 9.3 s to 3.5 s; one CPU
+  is not slower than before. The proof is a test that runs the same
+  project on one CPU and on all and compares diagnostics and bytes,
+  under the race detector. What it refuses: a goroutine per item or a
+  channel pipeline (the pool is the whole design), GC tuning (measured:
+  a higher GOGC trades page faults for marking and wins nothing here),
+  and any phase that writes another package's fields — the barriers
+  are the invariant.

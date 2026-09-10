@@ -33,6 +33,7 @@ import (
 
 	"github.com/Piechutowski/volt/gen/model"
 	"github.com/Piechutowski/volt/gen/router"
+	"github.com/Piechutowski/volt/internal/par"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lsp"
@@ -285,39 +286,52 @@ func genRun(c *cli.Command) error {
 	}
 	var out []outFile
 
-	for _, path := range paths {
-		pkg := pr.Packages[path]
+	// Every package generates on its own CPU (PERF-7); the files are
+	// gathered in package order, so what is written and printed never
+	// depends on the schedule.
+	emit := func(pkg *lang.Package) ([]outFile, error) {
+		var files []outFile
 		source := "package " + pkg.Path
 		dir := dirOf(pkg)
 
 		if pkg.HasSchema() && (parts["models"] || parts["queries"] || parts["sql"]) {
-			files, err := model.Generate(pkg, model.Options{
+			gen, err := model.Generate(pkg, model.Options{
 				Source: source, Package: clause, ModelsOnly: !parts["queries"], SQL: parts["sql"],
 			})
 			if err != nil {
-				return cli.Exit("gen: "+err.Error(), 1)
+				return nil, err
 			}
-			for _, f := range files {
+			for _, f := range gen {
 				if parts[partOf(f.Name)] {
-					out = append(out, outFile{path: filepath.Join(dir, f.Name), code: f.Code})
+					files = append(files, outFile{path: filepath.Join(dir, f.Name), code: f.Code})
 				}
 			}
 		}
 
 		if pkg.HasRouting() && (parts["router"] || parts["client"]) {
-			files, err := router.Generate(pkg, router.Options{Source: source, Package: clause, ClientBeside: outDir != ""})
+			gen, err := router.Generate(pkg, router.Options{Source: source, Package: clause, ClientBeside: outDir != ""})
 			if err != nil {
-				return cli.Exit("gen: "+err.Error(), 1)
+				return nil, err
 			}
 			for _, name := range append(append([]string{}, router.Files...), router.ClientBesideFile) {
 				// A main package routing its own tables has no client
 				// subpackage (§V4.10.1); -o writes the client beside the
 				// models instead.
-				if code, ok := files[name]; ok && parts[partOf(name)] {
-					out = append(out, outFile{path: filepath.Join(dir, name), code: code})
+				if code, ok := gen[name]; ok && parts[partOf(name)] {
+					files = append(files, outFile{path: filepath.Join(dir, name), code: code})
 				}
 			}
 		}
+		return files, nil
+	}
+	perPkg := make([][]outFile, len(paths))
+	errs := make([]error, len(paths))
+	par.For(len(paths), func(i int) { perPkg[i], errs[i] = emit(pr.Packages[paths[i]]) })
+	for i := range paths {
+		if errs[i] != nil {
+			return cli.Exit("gen: "+errs[i].Error(), 1)
+		}
+		out = append(out, perPkg[i]...)
 	}
 	if len(out) == 0 {
 		fmt.Println("gen: no package declares data or routing elements; nothing to do")
@@ -328,30 +342,44 @@ func genRun(c *cli.Command) error {
 	// (D75); this proves it for the project at hand, the way the golden
 	// tests prove it for theirs.
 	if c.Bool("verify") {
-		for _, f := range out {
+		problems := make([]string, len(out))
+		par.For(len(out), func(i int) {
+			f := out[i]
 			if filepath.Ext(f.path) != ".go" {
-				continue
+				return
 			}
 			formatted, err := format.Source(f.code)
 			if err != nil {
-				return cli.Exit(fmt.Sprintf("gen --verify: %s does not parse: %v (a generator bug)", f.path, err), 2)
+				problems[i] = fmt.Sprintf("gen --verify: %s does not parse: %v (a generator bug)", f.path, err)
+			} else if !bytes.Equal(formatted, f.code) {
+				problems[i] = fmt.Sprintf("gen --verify: %s is not gofmt-canonical (a generator bug)", f.path)
 			}
-			if !bytes.Equal(formatted, f.code) {
-				return cli.Exit(fmt.Sprintf("gen --verify: %s is not gofmt-canonical (a generator bug)", f.path), 2)
+		})
+		for _, p := range problems {
+			if p != "" {
+				return cli.Exit(p, 2)
 			}
 		}
 	}
 
-	for i := range out {
+	// What is on disk already: read on every CPU, judged in order.
+	clobber := make([]string, len(out))
+	par.For(len(out), func(i int) {
 		f := &out[i]
 		old, err := os.ReadFile(f.path)
 		if err != nil {
-			continue // nothing there yet
+			return // nothing there yet
 		}
 		if !bytes.HasPrefix(old, genMarker(f.path)) {
-			return cli.Exit(fmt.Sprintf("gen: refusing to overwrite %s: it lacks the generated-code header", f.path), 2)
+			clobber[i] = f.path
+			return
 		}
 		f.unchanged = bytes.Equal(old, f.code)
+	})
+	for _, path := range clobber {
+		if path != "" {
+			return cli.Exit(fmt.Sprintf("gen: refusing to overwrite %s: it lacks the generated-code header", path), 2)
+		}
 	}
 	// An optional output that is no longer produced (every select or
 	// check removed) must not linger and keep enforcing deleted rules:
@@ -378,16 +406,25 @@ func genRun(c *cli.Command) error {
 			}
 		}
 	}
-	for _, f := range out {
+	writes := make([]error, len(out))
+	par.For(len(out), func(i int) {
+		f := out[i]
+		if f.unchanged {
+			return
+		}
+		if err := os.MkdirAll(filepath.Dir(f.path), 0o755); err != nil {
+			writes[i] = err
+			return
+		}
+		writes[i] = os.WriteFile(f.path, f.code, 0o644)
+	})
+	for i, f := range out {
+		if writes[i] != nil {
+			return cli.Exit(writes[i].Error(), 2)
+		}
 		if f.unchanged {
 			fmt.Println(f.path, "(unchanged)")
 			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(f.path), 0o755); err != nil {
-			return cli.Exit(err.Error(), 2)
-		}
-		if err := os.WriteFile(f.path, f.code, 0o644); err != nil {
-			return cli.Exit(err.Error(), 2)
 		}
 		fmt.Println(f.path)
 	}
