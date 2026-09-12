@@ -756,3 +756,21 @@ where the merge changed the facts.
   freed and reused address can never match). What remains: an edit
   still re-parses its whole file and re-checks its whole package —
   per-declaration memoization is PERF-10.
+
+- **D80 — The stress fixture is generated, never committed; `volt
+  fixture` writes it** (2026-09-12, roadmap PERF-2,
+  `cmd/volt/fixture.go`). The project the scaling tests and the
+  benchmarks run on (`internal/corpus`: every feature, both layouts,
+  any size) exists only while a test runs. A thousand-table copy would
+  be megabytes of `.volt` and, once generated, hundreds of thousands of
+  lines of Go that rot with every emitter change, so no repository
+  carries one; the generator is the single source and the binary
+  writes it on demand. `volt fixture DIR` writes the size that started
+  the performance work (twenty packages of fifty tables with a hundred
+  and fifty columns), any size by flag, one directory with `-single`,
+  so check, gen and the language server are timed by hand on the same
+  project the tests measure. What it refuses: writing into a directory
+  that holds anything (the fixture goes into a new or empty one, never
+  over a project), and a buildable module (the written go.mod requires
+  nothing; the Go files name the runtime, which the tests resolve with
+  a replace directive, and the compile proof stays `TestCorpusCompiles`).

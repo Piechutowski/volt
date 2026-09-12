@@ -7,11 +7,12 @@
 //	volt gen    [flags] [dir|file] generate models, queries, routers and clients;
 //	                               -o DIR -parts LIST place the parts where a layout needs them
 //	volt routes [dir]              print the expanded route table
+//	volt fixture [flags] DIR       write a synthetic project of every feature at any size (D80)
 //	volt lsp                       language server on stdin/stdout
 //	volt version                   report the tool version
 //
-// Every command resolves the project root by walking up from dir (or
-// the working directory) to the nearest go.mod.
+// Every command over a project resolves its root by walking up from
+// dir (or the working directory) to the nearest go.mod.
 //
 // Exit status: 0 clean (warnings do not fail), 1 errors found, 2 usage
 // or I/O problems.
@@ -42,9 +43,17 @@ import (
 const version = "0.1.0-dev"
 
 func main() {
+	if err := command().Run(context.Background(), os.Args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+}
+
+// command is the CLI: every subcommand with its flags and action.
+func command() *cli.Command {
 	jsonFlag := &cli.BoolFlag{Name: "json", Usage: "emit diagnostics as JSON"}
 
-	app := &cli.Command{
+	return &cli.Command{
 		EnableShellCompletion: true,
 		Name:                  "volt",
 		Usage:                 "the Volt language: check, lint and generate routers from .volt packages",
@@ -94,6 +103,7 @@ func main() {
 					return routesRun(c)
 				},
 			},
+			fixtureCommand(),
 			{
 				Name:  "lsp",
 				Usage: "run the Volt language server (LSP over stdin/stdout)",
@@ -110,11 +120,6 @@ func main() {
 				},
 			},
 		},
-	}
-
-	if err := app.Run(context.Background(), os.Args); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(2)
 	}
 }
 

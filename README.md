@@ -43,7 +43,7 @@ third-party deps. Importing `nao/rt` alone drags in nothing.
 | Directory        | What it is |
 |------------------|------------|
 | `*.go` (root)    | package `volt` — the runtime generated code links against: error spine, param parsing, path builders, minimal middleware |
-| `cmd/volt`       | the one binary: `check` `vet` `gen` `routes` `lsp` `version` — `gen` emits models, queries and routers. **Own module** — its CLI deps stay out of the library |
+| `cmd/volt`       | the one binary: `check` `vet` `gen` `routes` `fixture` `lsp` `version` — `gen` emits models, queries and routers; `fixture` writes a synthetic project of any size to time them by hand. **Own module** — its CLI deps stay out of the library |
 | `lang/`          | **the language**: `token` `scanner` `parser` `ast` `diag` `check` `vet` front end, plus go.mod root discovery, package/import resolution, route expansion and conflict detection; `lang/conformance/snippets/` = the executable corpus |
 | `gen/router/`    | router generator; goldens are gofmt-stable and compiled by the real toolchain |
 | `gen/model/`     | the data half: nao's models, queries and DDL, driven by the same project load |
@@ -120,6 +120,7 @@ go test ./... ./lsp/... ./cmd/volt/...   # everything, ORM + tooling modules
 go test ./gen/router -update         # refresh goldens after gen changes
 go run ./cmd/volt gen ./itest/blog   # refresh the itest fixture
 go test ./lang -run '^$' -bench . -benchmem > lang/testdata/bench_baseline.txt   # refresh the (ungated) baseline
+volt fixture ./big && time volt check ./big/...   # a 1000-table project of every feature, to time check, gen and the LSP by hand (D80)
 ./scripts/sync-grammar.sh            # mirror grammar + preflight Zed
 ```
 
