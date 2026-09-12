@@ -60,3 +60,76 @@ type LinkClick struct {
 	Day    int32  `db:"day" json:"day"`
 	Target string `db:"target" json:"target"`
 }
+
+// UserCreateParams are the caller-supplied columns of UserCreate. The
+// auto-increment key and defaulted columns are the database's job (D16).
+type UserCreateParams struct {
+	Email string `db:"email" json:"email"`
+	Name  string `db:"name" json:"displayName"`
+	// NULL until the user writes one
+	Bio rt.Null[string] `db:"bio" json:"bio"`
+}
+
+// UserUpdateParams are the data columns of UserUpdate: every column
+// outside the primary key.
+type UserUpdateParams struct {
+	Email string `db:"email" json:"email"`
+	Name  string `db:"name" json:"displayName"`
+	// NULL until the user writes one
+	Bio       rt.Null[string] `db:"bio" json:"bio"`
+	CreatedAt time.Time       `db:"created_at" json:"created_at"`
+}
+
+// OrderCreateParams are the caller-supplied columns of OrderCreate. The
+// auto-increment key and defaulted columns are the database's job (D16).
+type OrderCreateParams struct {
+	UserID   int32              `db:"user_id" json:"user_id"`
+	Total    string             `db:"total" json:"total"`
+	PlacedAt rt.Null[time.Time] `db:"placed_at" json:"placed_at"`
+}
+
+// OrderUpdateParams are the data columns of OrderUpdate: every column
+// outside the primary key.
+type OrderUpdateParams struct {
+	UserID   int32              `db:"user_id" json:"user_id"`
+	Status   EOrderStatus       `db:"status" json:"status"`
+	Total    string             `db:"total" json:"total"`
+	PlacedAt rt.Null[time.Time] `db:"placed_at" json:"placed_at"`
+}
+
+// UserTagCreateParams are the caller-supplied columns of UserTagCreate. The
+// auto-increment key and defaulted columns are the database's job (D16).
+type UserTagCreateParams struct {
+	UserID int32  `db:"user_id" json:"user_id"`
+	Tag    string `db:"tag" json:"tag"`
+}
+
+// PageViewCreateParams are the caller-supplied columns of PageViewCreate. The
+// auto-increment key and defaulted columns are the database's job (D16).
+type PageViewCreateParams struct {
+	Site string `db:"site" json:"site"`
+	Day  int32  `db:"day" json:"day"`
+}
+
+// PageViewUpdateParams are the data columns of PageViewUpdate: every column
+// outside the primary key.
+type PageViewUpdateParams struct {
+	Site string `db:"site" json:"site"`
+	Day  int32  `db:"day" json:"day"`
+	Hits int32  `db:"hits" json:"hits"`
+}
+
+// LinkClickCreateParams are the caller-supplied columns of LinkClickCreate. The
+// auto-increment key and defaulted columns are the database's job (D16).
+type LinkClickCreateParams struct {
+	Site string `db:"site" json:"site"`
+	Day  int32  `db:"day" json:"day"`
+}
+
+// LinkClickUpdateParams are the data columns of LinkClickUpdate: every column
+// outside the primary key.
+type LinkClickUpdateParams struct {
+	Site   string `db:"site" json:"site"`
+	Day    int32  `db:"day" json:"day"`
+	Target string `db:"target" json:"target"`
+}

@@ -10,7 +10,7 @@ you can read, grep, and step through in a debugger.
 ```text
         db/*.volt  ──  the single source of truth (and your ER diagram)
              │
-   volt gen ─┼──► nao_models.go    structs, enums, notes as doc comments
+   volt gen ─┼──► nao_models.go    structs, params structs, enums, notes as doc comments
              ├──► nao_queries.go   typed CRUD on a Queries handle
              ├──► nao_dyn.go       typed filter/order/limit values
              ├──► nao_selects.go   Group/Pred selects: one method per member
@@ -19,11 +19,12 @@ you can read, grep, and step through in a debugger.
 
        app/*.volt  ──  routes over the schema (Part II of the spec)
              │
-   volt gen ─┼──► volt_handlers.go  controller interfaces + the Controllers manifest
+   volt gen ─┼──► volt_handlers.go  controller interfaces, the Controllers manifest, NewRouter
              ├──► volt_router.go    ServeMux registrations; query routes' handlers (§V4.8); the event stream (§V4.11)
              ├──► volt_paths.go     typed reverse-URL helpers
              ├──► volt_routes.go    the route table as data
-             └──► client/volt_client.go  typed client: one method per query route, Events(ctx) stream (§V4.10)
+             └──► client/volt_client.go  typed client: one method per query route, Events(ctx) stream (§V4.10);
+                                         with `gen -o DIR` it is DIR/volt_client.go beside the models (D77)
 ```
 
 ## Ten seconds of it

@@ -292,9 +292,10 @@ func (ix *voltIndex) scopeRefs(pkg *lang.Package, path string, sc *ast.Scope) {
 		case *ast.Scope:
 			ix.scopeRefs(pkg, path, it)
 		case *ast.Resources:
-			// The declaration itself names the model (§V5.1).
+			// The declaration itself names the model (§V5.1): this
+			// package's own when bare or self-qualified.
 			target := path
-			if it.Pkg != nil {
+			if it.Pkg != nil && it.Pkg.Name() != pkg.Name {
 				t, ok := pkg.Imports[it.Pkg.Name()]
 				if !ok {
 					continue
@@ -311,16 +312,20 @@ func (ix *voltIndex) scopeRefs(pkg *lang.Package, path string, sc *ast.Scope) {
 			ix.refs = append(ix.refs, voltRef{hit, edit, voltSym{"table", target, it.Name.Name()}, false, it.Name.Name()})
 			ix.settingRefs(pkg, path, it.Settings)
 		case *ast.Dataset:
-			// The declaration names a select of the imported package
-			// (§V13.1): hover shows its expansion, gd lands on it, rename
-			// rewrites the name and keeps the qualifier.
-			if it.Pkg != nil {
-				if target, ok := pkg.Imports[it.Pkg.Name()]; ok {
-					edit := spanOf(it.Name)
-					hit := edit
+			// The declaration names a select of this package or of an
+			// imported one (§V13.1): hover shows its expansion, gd lands
+			// on it, rename rewrites the name and keeps the qualifier.
+			target, ok := path, true
+			if it.Pkg != nil && it.Pkg.Name() != pkg.Name {
+				target, ok = pkg.Imports[it.Pkg.Name()]
+			}
+			if ok {
+				edit := spanOf(it.Name)
+				hit := edit
+				if it.Pkg != nil {
 					hit.pos = it.Pkg.Pos()
-					ix.refs = append(ix.refs, voltRef{hit, edit, voltSym{"select", target, it.Name.Name()}, false, it.Name.Name()})
 				}
+				ix.refs = append(ix.refs, voltRef{hit, edit, voltSym{"select", target, it.Name.Name()}, false, it.Name.Name()})
 			}
 			ix.settingRefs(pkg, path, it.Settings)
 		case *ast.Route:
@@ -506,8 +511,12 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 	} else if len(shown) > structCap {
 		shown = shown[:structCap]
 	}
+	plan := pkg.Plan()
+	if plan == nil {
+		plan = golang.PlanBuild(pkg.Merged(), pkg.Schema())
+	}
 	for _, m := range shown {
-		row, fields, err := golang.SelectRowType(pkg.Merged(), pkg.Schema(), memberFn(m.Key))
+		row, fields, err := plan.SelectRowType(memberFn(m.Key))
 		if err != nil {
 			continue
 		}
@@ -545,7 +554,7 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 			model = mn
 		}
 		row := model
-		if r, _, err := golang.SelectRowType(pkg.Merged(), pkg.Schema(), memberFn(m.Key)); err == nil {
+		if r, _, err := plan.SelectRowType(memberFn(m.Key)); err == nil {
 			row = r
 		}
 		fmt.Fprintf(&b, "func (q *Queries) %s%s(ctx context.Context%s) ([]%s, error)\n",

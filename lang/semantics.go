@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Piechutowski/volt/internal/par"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
@@ -19,6 +20,12 @@ import (
 // Imports, Pipelines, Routes and Controllers, and returns all
 // diagnostics including the ones collected at load time.
 func Check(pr *Project) []diag.Diagnostic {
+	return checkWith(pr, nil)
+}
+
+// checkWith is Check with an optional Session memo (D79): a package
+// whose inputs are what they were last time is restored, not re-run.
+func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 	c := &checker{pr: pr, diags: append([]diag.Diagnostic{}, pr.Diags...)}
 
 	for _, path := range c.paths() {
@@ -28,21 +35,51 @@ func Check(pr *Project) []diag.Diagnostic {
 		c.importsResolve(pr.Packages[path])
 	}
 	c.cyclesCheck()
-	for _, path := range c.paths() {
-		pkg := pr.Packages[path]
+
+	// The heavy phases are per package and independent within a phase:
+	// each runs on every CPU (PERF-7), package by package. Their
+	// diagnostics are kept per package, then appended in package order.
+	paths := c.paths()
+	pkgDiags := make(map[string][]diag.Diagnostic, len(paths))
+	fresh := paths
+	var keys map[string]string
+	if s != nil {
+		keys = s.packageKeys(pr, paths)
+		fresh = make([]string, 0, len(paths))
+		for _, path := range paths {
+			if ds, ok := s.restore(path, keys[path], pr.Packages[path]); ok {
+				pkgDiags[path] = ds
+			} else {
+				fresh = append(fresh, path)
+			}
+		}
+	}
+	phase := func(fn func(*checker, *Package)) {
+		for i, ds := range c.perPackage(fresh, fn) {
+			pkgDiags[fresh[i]] = append(pkgDiags[fresh[i]], ds...)
+		}
+	}
+	phase(func(cc *checker, pkg *Package) {
 		info, schemaDiags := check.File(pkg.merged)
-		c.diags = append(c.diags, schemaDiags...)
-		c.schemas[path] = info
+		cc.diags = append(cc.diags, schemaDiags...)
 		pkg.schema = info
+		// The naming plan, once (D74): every later phase asks it for
+		// generated names instead of re-deriving them from the AST.
+		pkg.plan = golang.PlanBuild(pkg.merged, info)
+	})
+	for _, path := range paths {
+		c.schemas[path] = pr.Packages[path].schema
 	}
-	for _, path := range c.paths() {
-		c.dataQueries(pr.Packages[path])
+	phase((*checker).dataQueries)
+	phase((*checker).tableChecks)
+	phase((*checker).routing)
+	if s != nil {
+		for _, path := range fresh {
+			s.store(path, keys[path], pr.Packages[path], pkgDiags[path])
+		}
 	}
-	for _, path := range c.paths() {
-		c.tableChecks(pr.Packages[path])
-	}
-	for _, path := range c.paths() {
-		c.routing(pr.Packages[path])
+	for _, path := range paths {
+		c.diags = append(c.diags, pkgDiags[path]...)
 	}
 
 	diag.Sort(c.diags)
@@ -55,12 +92,33 @@ type checker struct {
 	schemas map[string]*check.Info
 
 	// per-package state during routing()
-	pkg      *Package
-	usedQual map[string]bool
+	pkg       *Package
+	usedQual  map[string]bool
+	conflicts *routeIndex // accepted routes, bucketed for the §V4.7.2 scan
 
 	// gofuncs caches each package directory's Go functions (§V3.2,
-	// §V12.5), scanned once per run.
-	gofuncs map[string]*goScan
+	// §V12.5), scanned once per run and shared across the per-package
+	// checkers of a phase.
+	gofuncs *goFuncsCache
+}
+
+// perPackage runs one phase over every package, on every CPU (PERF-7).
+// Each package gets its own checker — the per-package fields are its
+// own; the project, the schemas and the Go-function cache are shared,
+// read-only or locked — and its diagnostics are appended in package
+// order, so the output never depends on the schedule. A phase writes
+// only its own package, so the phases are barriers between them.
+func (c *checker) perPackage(paths []string, phase func(*checker, *Package)) [][]diag.Diagnostic {
+	if c.gofuncs == nil {
+		c.gofuncs = &goFuncsCache{}
+	}
+	out := make([][]diag.Diagnostic, len(paths))
+	par.For(len(paths), func(i int) {
+		cc := &checker{pr: c.pr, schemas: c.schemas, gofuncs: c.gofuncs}
+		phase(cc, c.pr.Packages[paths[i]])
+		out[i] = cc.diags
+	})
+	return out
 }
 
 func (c *checker) paths() []string {
@@ -153,6 +211,10 @@ func (c *checker) importsResolve(pkg *Package) {
 				switch {
 				case path == pkg.Path:
 					c.errorf(spec.Pos(), "V2", "a package cannot import itself (§V2.4)")
+				case qual == pkg.Name:
+					// The package's own name qualifies its own tables,
+					// queries and functions (§V3.2, §V4.3, §V5.1, §V13.1).
+					c.errorf(spec.Pos(), "V2", "import qualifier %q is this package's own name (§V2.4); alias the import", qual)
 				case !exists:
 					c.errorf(spec.Pos(), "V2", "unknown package %q: no directory of .volt files at that path under the project root (§V2.2)", path)
 				case target == pkg:
@@ -232,6 +294,7 @@ type inherited struct {
 func (c *checker) routing(pkg *Package) {
 	c.pkg = pkg
 	c.usedQual = map[string]bool{}
+	c.conflicts = &routeIndex{byFirst: map[string][]*RouteInfo{}}
 	pkg.Pipelines = map[string]*ast.Pipeline{}
 	pkg.Controllers = map[string]*ControllerInfo{}
 
@@ -257,6 +320,32 @@ func (c *checker) routing(pkg *Package) {
 	for _, d := range pkg.merged.Decls {
 		if sc, ok := d.(*ast.Scope); ok {
 			c.scopeWalk(sc, inherited{}, seenShape, seenHelper)
+		}
+	}
+
+	// §V4.3.4: the generated Controllers manifest is one namespace —
+	// controller names, the Queries field of each data package (§V4.8.5)
+	// and Events (§V4.11) — so a controller cannot take a field's name.
+	held := map[string]string{}
+	for _, r := range pkg.Routes {
+		switch {
+		case r.Query != nil && r.Query.Local:
+			held[r.Query.Field] = "this package's query routes"
+		case r.Query != nil:
+			held[r.Query.Field] = "the query routes through package " + r.Query.Qualifier
+		case r.Events:
+			held["Events"] = "the event routes (§V4.11)"
+		}
+	}
+	names := make([]string, 0, len(pkg.Controllers))
+	for name := range pkg.Controllers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if what, taken := held[name]; taken {
+			first := pkg.Controllers[name].Actions[0].Routes[0]
+			c.errorf(first.Pos, "V4", "controller %q takes the name of the Controllers field holding %s (§V4.3); rename the controller", name, what)
 		}
 	}
 
@@ -398,18 +487,24 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, seenShape, seenHelper 
 // member's table name with the strip prefix removed, the handler the
 // member's select method, bound like any query route (§V4.8).
 func (c *checker) datasetExpand(ds *ast.Dataset, inh inherited) []*RouteInfo {
-	if ds.Pkg == nil {
-		c.errorf(ds.Name.Pos(), "V13", "dataset names a select of an imported data package, qualified: dataset db.%s (§V13.1)", ds.Name.Name())
-		return nil
+	// §V13.1: the select is this package's own — bare or self-qualified,
+	// as a plug is (§V3.2) — or an imported package's, qualified.
+	qual, target, local := c.pkg.Name, c.pkg.Path, true
+	qualPos := ds.Name.Pos()
+	if ds.Pkg != nil && ds.Pkg.Name() != c.pkg.Name {
+		qual, qualPos, local = ds.Pkg.Name(), ds.Pkg.Pos(), false
+		known := false
+		if target, known = c.pkg.Imports[qual]; !known {
+			c.errorf(ds.Pkg.Pos(), "V13", "unknown package qualifier %q (§V13.1)", qual)
+			return nil
+		}
+		c.usedQual[qual] = true
 	}
-	qual := ds.Pkg.Name()
-	target, known := c.pkg.Imports[qual]
-	if !known {
-		c.errorf(ds.Pkg.Pos(), "V13", "unknown package qualifier %q (§V13.1)", qual)
-		return nil
-	}
-	c.usedQual[qual] = true
 	pkg := c.pr.Packages[target]
+	if local && len(pkg.Selects) == 0 {
+		c.errorf(ds.Name.Pos(), "V13", "package %q declares no select; a dataset names a select of this package, or of an imported data package, qualified (§V13.1)", target)
+		return nil
+	}
 	var si *SelectInfo
 	for _, cand := range pkg.Selects {
 		if cand.Decl.Name.Name() == ds.Name.Name() {
@@ -507,7 +602,7 @@ func (c *checker) datasetExpand(ds *ast.Dataset, inh inherited) []*RouteInfo {
 			continue
 		}
 		method := modelOrBase(m) + si.MethodSuffix
-		qr := c.queryBind(ds.Name.Pos(), ds.Pkg.Pos(), "GET", params, qual, target, method, func(string) token.Position { return ds.Pos() })
+		qr := c.queryBind(ds.Name.Pos(), qualPos, "GET", params, qual, target, local, method, func(string) token.Position { return ds.Pos() })
 		if qr == nil {
 			continue
 		}
@@ -558,16 +653,24 @@ func (c *checker) routeBuild(r *ast.Route, inh inherited) *RouteInfo {
 		return nil
 	}
 
-	controller, action := r.Handler.Parts[0].Name(), r.Handler.Parts[1].Name()
-	if r.Handler.Parts[0].Quoted() || r.Handler.Parts[1].Quoted() {
-		c.errorf(r.Handler.Pos(), "V4", "handler names are plain (unquoted) identifiers (§V4.1.6), found %q", r.Handler.String())
-		return nil
+	for _, part := range r.Handler.Parts {
+		if part.Quoted() {
+			c.errorf(r.Handler.Pos(), "V4", "handler names are plain (unquoted) identifiers (§V4.1.6), found %q", r.Handler.String())
+			return nil
+		}
 	}
-	// A qualified handler names a generated query of an imported data
-	// package — a query route (§V4.8) — rather than a controller.
+	// §V4.3: `Query` or `<package name>.Query` names a generated query
+	// of this package and `pkg.Query` one of an imported package — a
+	// query route (§V4.8); `volt.Events` is the runtime's; anything
+	// else is Controller.Action.
 	var query *QueryRef
 	events := false
-	if controller == "volt" {
+	controller, action := "", r.Handler.Parts[0].Name()
+	if len(r.Handler.Parts) == 2 {
+		controller, action = action, r.Handler.Parts[1].Name()
+	}
+	switch {
+	case controller == "volt":
 		// The runtime's own handlers: today exactly one, the event stream.
 		if action != "Events" {
 			c.errorf(r.Handler.Pos(), "V4", "the runtime provides no handler volt.%s; volt.Events is the event stream (§V4.11)", action)
@@ -578,16 +681,24 @@ func (c *checker) routeBuild(r *ast.Route, inh inherited) *RouteInfo {
 			return nil
 		}
 		events = true
-	} else if target, isImport := c.pkg.Imports[controller]; isImport {
-		c.usedQual[controller] = true
-		query = c.queryRef(r, method, params, controller, target)
+	case controller == "" || controller == c.pkg.Name:
+		query = c.queryRef(r, method, params, c.pkg.Name, c.pkg.Path, true)
 		if query == nil {
 			return nil
 		}
 		controller, action = "", query.Method
-	} else if !exportedIdentOK(controller) || !exportedIdentOK(action) {
-		c.errorf(r.Handler.Pos(), "V4", "handler must be Controller.Action, both exported Go identifiers (§V4.3), found %q", r.Handler.String())
-		return nil
+	default:
+		if target, isImport := c.pkg.Imports[controller]; isImport {
+			c.usedQual[controller] = true
+			query = c.queryRef(r, method, params, controller, target, false)
+			if query == nil {
+				return nil
+			}
+			controller, action = "", query.Method
+		} else if !exportedIdentOK(controller) || !exportedIdentOK(action) {
+			c.errorf(r.Handler.Pos(), "V4", "handler must be Controller.Action, both exported Go identifiers (§V4.3), found %q", r.Handler.String())
+			return nil
+		}
 	}
 
 	helper := inh.namePrefix + action
@@ -651,34 +762,50 @@ var queryValueTypes = map[string]bool{
 	"float32": true, "float64": true, "time.Time": true,
 }
 
-// queryRef resolves `pkg.Method` to a generated query of the imported
-// package — a select method (§V11.6) or a default CRUD method — and
-// binds the route's parameters to the method's (§V4.8).
-func (c *checker) queryRef(r *ast.Route, method string, params []Param, qual, target string) *QueryRef {
-	return c.queryBind(r.Handler.Parts[1].Pos(), r.Handler.Parts[0].Pos(), method, params, qual, target, r.Handler.Parts[1].Name(),
+// queryRef resolves `pkg.Method`, `Method` or `<this package>.Method`
+// to a generated query of the named package — a select method (§V11.6)
+// or a default CRUD method — and binds the route's parameters to the
+// method's (§V4.8).
+func (c *checker) queryRef(r *ast.Route, method string, params []Param, qual, target string, local bool) *QueryRef {
+	last := r.Handler.Parts[len(r.Handler.Parts)-1]
+	return c.queryBind(last.Pos(), r.Handler.Parts[0].Pos(), method, params, qual, target, local, last.Name(),
 		func(name string) token.Position { return segPos(r, name) })
 }
 
-// queryBind resolves a query method by name in the imported package and
-// binds the route's parameters; segAt locates a path parameter for
-// diagnostics. Shared by query routes and datasets.
-func (c *checker) queryBind(pos, qualPos token.Position, method string, params []Param, qual, target, name string, segAt func(string) token.Position) *QueryRef {
+// queryBind resolves a query method by name in the data package — an
+// imported one, or this package when local — and binds the route's
+// parameters; segAt locates a path parameter for diagnostics. Shared by
+// query routes, resources [default] and datasets.
+func (c *checker) queryBind(pos, qualPos token.Position, method string, params []Param, qual, target string, local bool, name string, segAt func(string) token.Position) *QueryRef {
 	pkg := c.pr.Packages[target]
 	info := c.schemas[target]
+	ref := qual + "." + name
+	if local {
+		ref = name
+	}
 	if pkg == nil || info == nil || !pkg.HasSchema() {
-		c.errorf(pos, "V4", "package %q declares no tables; a query route needs a data package (§V4.8)", target)
+		if local {
+			c.errorf(pos, "V4", "package %q declares no tables, so it has no query %s; a query of an imported data package is written qualified (§V4.8)", target, name)
+		} else {
+			c.errorf(pos, "V4", "package %q declares no tables; a query route needs a data package (§V4.8)", target)
+		}
 		return nil
 	}
-	field, err := golang.GoName(qual)
-	if err != nil {
-		c.errorf(qualPos, "V4", "import qualifier %q: %v (§V4.8)", qual, err)
-		return nil
+	// The Controllers field: the qualifier as a Go name, or Queries for
+	// the package's own handle (§V4.8.5).
+	field := "Queries"
+	if !local {
+		var err error
+		if field, err = golang.GoName(qual); err != nil {
+			c.errorf(qualPos, "V4", "import qualifier %q: %v (§V4.8)", qual, err)
+			return nil
+		}
 	}
 	importPath := c.pr.Module
 	if target != "." {
 		importPath += "/" + target
 	}
-	qr := &QueryRef{Qualifier: qual, Field: field, Package: target, Import: importPath, PkgName: pkg.Name, Method: name, Status: 200}
+	qr := &QueryRef{Qualifier: qual, Field: field, Package: target, Import: importPath, PkgName: pkg.Name, Local: local, Method: name, Status: 200}
 
 	// Signature parameters of the named method, in order.
 	type sigParam struct {
@@ -688,14 +815,13 @@ func (c *checker) queryBind(pos, qualPos token.Position, method string, params [
 	}
 	var sig []sigParam
 	found := false
-	var candidates []string
 
-	// Selects: <Model><SelectName> per member (§V11.6).
+	// Selects: <Model><SelectName> per member (§V11.6); the first member
+	// minting the name owns it.
+selects:
 	for _, si := range pkg.Selects {
 		for _, m := range si.Members {
-			mn := modelOrBase(m) + si.MethodSuffix
-			candidates = append(candidates, mn)
-			if mn != name || found {
+			if modelOrBase(m)+si.MethodSuffix != name {
 				continue
 			}
 			found = true
@@ -711,50 +837,50 @@ func (c *checker) queryBind(pos, qualPos token.Position, method string, params [
 				qr.Result = modelOrBase(m)
 			}
 			qr.Many = true
+			break selects
 		}
 	}
-	// Default CRUD (CRUD-1 to CRUD-7).
+	// Default CRUD (CRUD-1 to CRUD-7), from the package's plan (D74).
 	if !found {
-		for _, ti := range info.Tables {
-			_, methods, err := golang.CRUDMethods(pkg.Merged(), info, ti.Key)
-			if err != nil {
-				continue
+		if key, cm, ok := pkg.plan.CRUDMethod(name); ok {
+			found = true
+			for _, k := range cm.Key {
+				sig = append(sig, sigParam{name: k.GoName, goType: k.GoType})
 			}
-			for _, cm := range methods {
-				candidates = append(candidates, cm.Name)
-				if cm.Name != name || found {
-					continue
-				}
-				found = true
-				for _, k := range cm.Key {
-					sig = append(sig, sigParam{name: k.GoName, goType: k.GoType})
-				}
-				if cm.Body != "" {
-					// The params struct validates when it carries the
-					// columns of at least one check (§V12.6).
-					create, update, _ := golang.ParamsValidators(pkg.Merged(), info, ti.Key, tableChecksOf(pkg, ti.Key))
-					sig = append(sig, sigParam{name: "arg", goType: qual + "." + cm.Body, body: true,
-						validates: (cm.Op == "create" && create) || (cm.Op == "update" && update)})
-				}
-				qr.Result, qr.Many = cm.Result, cm.Many
-				switch cm.Op {
-				case "create":
-					qr.Status = 201
-				case "delete":
-					qr.Status = 204
-				}
+			if cm.Body != "" {
+				// The params struct validates when it carries the
+				// columns of at least one check (§V12.6).
+				create, update, _ := pkg.plan.ParamsValidators(key, tableChecksOf(pkg, key))
+				sig = append(sig, sigParam{name: "arg", goType: qual + "." + cm.Body, body: true,
+					validates: (cm.Op == "create" && create) || (cm.Op == "update" && update)})
+			}
+			qr.Result, qr.Many = cm.Result, cm.Many
+			switch cm.Op {
+			case "create":
+				qr.Status = 201
+			case "delete":
+				qr.Status = 204
 			}
 		}
 	}
 	if !found {
+		// Did you mean: every select method, then every CRUD method, in
+		// declaration order — only worth listing on the way to an error.
 		hint := ""
+		var candidates []string
+		for _, si := range pkg.Selects {
+			for _, m := range si.Members {
+				candidates = append(candidates, modelOrBase(m)+si.MethodSuffix)
+			}
+		}
+		candidates = append(candidates, pkg.plan.CRUDMethodNames()...)
 		for _, cand := range candidates {
 			if strings.EqualFold(cand, name) {
 				hint = fmt.Sprintf("; did you mean %q?", cand)
 				break
 			}
 		}
-		c.errorf(pos, "V4", "no generated query %s.%s in package %q%s — a query route names a select method or a default CRUD method (Get, List, Create, Update, Delete) (§V4.8)", qual, name, target, hint)
+		c.errorf(pos, "V4", "no generated query %s in package %q%s — a query route names a select method or a default CRUD method (Get, List, Create, Update, Delete) (§V4.8)", ref, target, hint)
 		return nil
 	}
 
@@ -773,13 +899,13 @@ func (c *checker) queryBind(pos, qualPos token.Position, method string, params [
 			qp.Source = FromBody
 			qp.Validates = sp.validates
 			if method != "POST" && method != "PUT" && method != "PATCH" {
-				c.errorf(pos, "V4", "%s.%s takes a request body (%s); route it with post, put or patch (§V4.8)", qual, name, sp.goType)
+				c.errorf(pos, "V4", "%s takes a request body (%s); route it with post, put or patch (§V4.8)", ref, sp.goType)
 				ok = false
 			}
 		case strings.HasPrefix(sp.goType, "[]"):
 			qp.Source = FromList
 			if pp, inPath := byName[sp.name]; inPath {
-				c.errorf(segAt(pp.Name), "V4", "list parameter %q of %s.%s cannot be a path parameter; pass it as a repeated query key (§V4.8)", sp.name, qual, name)
+				c.errorf(segAt(pp.Name), "V4", "list parameter %q of %s cannot be a path parameter; pass it as a repeated query key (§V4.8)", sp.name, ref)
 				ok = false
 			}
 		default:
@@ -787,20 +913,20 @@ func (c *checker) queryBind(pos, qualPos token.Position, method string, params [
 				qp.Source = FromPath
 				bound[sp.name] = true
 				if pp.Wild {
-					c.errorf(segAt(pp.Name), "V4", "parameter %q of %s.%s cannot be a wildcard (§V4.8)", sp.name, qual, name)
+					c.errorf(segAt(pp.Name), "V4", "parameter %q of %s cannot be a wildcard (§V4.8)", sp.name, ref)
 					ok = false
 				} else if pp.Type.GoType() != sp.goType {
 					if KnownParamType(sp.goType) {
-						c.errorf(segAt(pp.Name), "V4", "path parameter %q is %s but %s.%s takes %s; spell it :%s(%s) (§V4.8)", sp.name, pp.Type.GoType(), qual, name, sp.goType, sp.name, sp.goType)
+						c.errorf(segAt(pp.Name), "V4", "path parameter %q is %s but %s takes %s; spell it :%s(%s) (§V4.8)", sp.name, pp.Type.GoType(), ref, sp.goType, sp.name, sp.goType)
 					} else {
-						c.errorf(segAt(pp.Name), "V4", "parameter %q of %s.%s is %s, which a path segment cannot carry (§V4.1.3); pass it in the query string (§V4.8)", sp.name, qual, name, sp.goType)
+						c.errorf(segAt(pp.Name), "V4", "parameter %q of %s is %s, which a path segment cannot carry (§V4.1.3); pass it in the query string (§V4.8)", sp.name, ref, sp.goType)
 					}
 					ok = false
 				}
 			} else {
 				qp.Source = FromQuery
 				if !queryValueTypes[sp.goType] {
-					c.errorf(pos, "V4", "parameter %q of %s.%s is %s, which the query string cannot carry (§V4.8)", sp.name, qual, name, sp.goType)
+					c.errorf(pos, "V4", "parameter %q of %s is %s, which the query string cannot carry (§V4.8)", sp.name, ref, sp.goType)
 					ok = false
 				}
 			}
@@ -809,7 +935,7 @@ func (c *checker) queryBind(pos, qualPos token.Position, method string, params [
 	}
 	for _, p := range params {
 		if !bound[p.Name] {
-			c.errorf(segAt(p.Name), "V4", "path parameter %q is not a parameter of %s.%s (§V4.8)", p.Name, qual, name)
+			c.errorf(segAt(p.Name), "V4", "path parameter %q is not a parameter of %s (§V4.8)", p.Name, ref)
 			ok = false
 		}
 	}
@@ -912,18 +1038,14 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 	paramName := "id"
 
 	// §V5.5: [default] generates the handlers from the table's default
-	// CRUD, which lives in an imported data package — so the reference
-	// must be qualified, as a query route's is (§V4.8).
+	// CRUD: this package's own for a bare or self-qualified table, an
+	// imported package's for a qualified one, as for a query route (§V4.8).
 	def := false
 	if res.Settings != nil {
 		if s := res.Settings.Get("default"); s != nil {
 			def = true
 			if s.Value != nil {
 				c.errorf(s.Pos(), "V5", "default is a flag and takes no value (§V5.5)")
-			}
-			if res.Pkg == nil {
-				c.errorf(res.Name.Pos(), "V5", "resources [default] binds the table's generated CRUD, which lives in an imported data package; qualify the table: resources db.%s [default] (§V5.5)", declared)
-				return nil
 			}
 		}
 	}
@@ -1038,18 +1160,19 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 
 	// §V5.5: the CRUD methods the default handlers call, by operation.
 	var crud map[string]golang.CRUDMethod
-	qual, target := "", ""
+	qual, target, local := c.pkg.Name, c.pkg.Path, true
+	qualPos := res.Name.Pos()
+	if res.Pkg != nil && res.Pkg.Name() != c.pkg.Name {
+		qual, target, local = res.Pkg.Name(), c.pkg.Imports[res.Pkg.Name()], false
+		qualPos = res.Pkg.Pos()
+	}
 	if def {
-		qual = res.Pkg.Name()
-		target = c.pkg.Imports[qual]
+		// resourceTable resolved the table, so the package has a schema
+		// and, with it, a plan (D74).
 		dp := c.pr.Packages[target]
-		if dp == nil || !dp.HasSchema() {
-			c.errorf(res.Pkg.Pos(), "V5", "package %q declares no tables; [default] needs a data package (§V5.5)", target)
-			return nil
-		}
-		_, methods, err := golang.CRUDMethods(dp.Merged(), c.schemas[target], ti.Key)
+		_, methods, err := dp.plan.CRUDMethods(ti.Key)
 		if err != nil {
-			c.errorf(res.Name.Pos(), "V5", "resources %s.%s [default]: %v (§V5.5)", qual, declared, err)
+			c.errorf(res.Name.Pos(), "V5", "resources %s [default]: %v (§V5.5)", res.Ref(), err)
 			return nil
 		}
 		crud = map[string]golang.CRUDMethod{}
@@ -1069,7 +1192,7 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 			continue
 		}
 		if def {
-			c.errorf(res.Name.Pos(), "V5", "resources %s.%s [default]: the key parameter %q is already a parameter of the enclosing scope, and the generated CRUD fixes its name; give the scope's parameter another name (§V5.5, §V4.1.2)", qual, declared, paramName)
+			c.errorf(res.Name.Pos(), "V5", "resources %s [default]: the key parameter %q is already a parameter of the enclosing scope, and the generated CRUD fixes its name; give the scope's parameter another name (§V5.5, §V4.1.2)", res.Ref(), paramName)
 		} else {
 			c.errorf(res.Name.Pos(), "V5", "resources %q: the key parameter %q is already a parameter of the enclosing scope; rename it with [param: <name>] (§V5.3, §V4.1.2)", declared, paramName)
 		}
@@ -1123,11 +1246,11 @@ func (c *checker) resourcesExpand(res *ast.Resources, inh inherited) []*RouteInf
 		if def {
 			cm, has := crud[a.Op]
 			if !has {
-				c.errorf(res.Name.Pos(), "V5", "resources %s.%s [default]: the generated CRUD has no %s method for %q (%s); drop the action with except: (%s) (§V5.5)",
-					qual, declared, a.Op, a.Name, crudAbsent(a.Op), strings.ToLower(a.Name))
+				c.errorf(res.Name.Pos(), "V5", "resources %s [default]: the generated CRUD has no %s method for %q (%s); drop the action with except: (%s) (§V5.5)",
+					res.Ref(), a.Op, a.Name, crudAbsent(a.Op), strings.ToLower(a.Name))
 				continue
 			}
-			qr = c.queryBind(res.Name.Pos(), res.Pkg.Pos(), a.Methods[0], params, qual, target, cm.Name, func(string) token.Position { return res.Pos() })
+			qr = c.queryBind(res.Name.Pos(), qualPos, a.Methods[0], params, qual, target, local, cm.Name, func(string) token.Position { return res.Pos() })
 			if qr == nil {
 				continue
 			}
@@ -1184,7 +1307,7 @@ func crudAbsent(op string) string {
 // whose model name was written).
 func (c *checker) resourceTable(res *ast.Resources) (ti *check.TableInfo, ok, reported bool) {
 	pkgPath := c.pkg.Path
-	if res.Pkg != nil {
+	if res.Pkg != nil && res.Pkg.Name() != c.pkg.Name {
 		qual := res.Pkg.Name()
 		target, known := c.pkg.Imports[qual]
 		if !known {
@@ -1195,8 +1318,9 @@ func (c *checker) resourceTable(res *ast.Resources) (ti *check.TableInfo, ok, re
 		pkgPath = target
 	}
 	info := c.schemas[pkgPath]
-	if info == nil {
-		return nil, false, false
+	if info == nil || !c.pr.Packages[pkgPath].HasSchema() {
+		c.errorf(res.Name.Pos(), "V5", "package %q declares no tables; resources names a table of this package, or of an imported data package, qualified (§V5.1)", pkgPath)
+		return nil, false, true
 	}
 	want := res.Name.Name()
 	var caseMatch string
@@ -1293,6 +1417,7 @@ func (c *checker) pkParamType(ti *check.TableInfo, pos token.Position) (ParamTyp
 /* ===== accumulation: conflicts, helpers, controllers ===== */
 
 func (c *checker) routeAdd(r *RouteInfo, seenShape, seenHelper map[string]*RouteInfo) {
+	r.shape = shapeParse(r)
 	shape := r.Method + " " + shapeOf(r)
 	if prev, dup := seenShape[shape]; dup {
 		c.errorf(r.Pos, "V4", "route %s %s conflicts with the route at %s: identical method and path shape (§V4.7)", methodOrAny(r.Method), r.Spelled, prev.Pos)
@@ -1302,12 +1427,10 @@ func (c *checker) routeAdd(r *RouteInfo, seenShape, seenHelper map[string]*Route
 	// relation — two routes whose request sets overlap with neither more
 	// specific would panic at registration, and the checker's promise
 	// (§V4.7.3) is that a checked project never does.
-	for _, prev := range c.pkg.Routes {
-		if routesAmbiguous(prev, r) {
-			c.errorf(r.Pos, "V4", "route %s %s is ambiguous with the route at %s (%s %s): both match some requests and neither is more specific (§V4.7.2)",
-				methodOrAny(r.Method), r.Spelled, prev.Pos, methodOrAny(prev.Method), prev.Spelled)
-			return
-		}
+	if prev := c.conflicts.ambiguous(r); prev != nil {
+		c.errorf(r.Pos, "V4", "route %s %s is ambiguous with the route at %s (%s %s): both match some requests and neither is more specific (§V4.7.2)",
+			methodOrAny(r.Method), r.Spelled, prev.Pos, methodOrAny(prev.Method), prev.Spelled)
+		return
 	}
 	seenShape[shape] = r
 
@@ -1342,7 +1465,7 @@ func (c *checker) routeAdd(r *RouteInfo, seenShape, seenHelper map[string]*Route
 	}
 
 	if r.Query != nil || r.Events {
-		c.pkg.Routes = append(c.pkg.Routes, r) // no controller: the handler is generated (§V4.8) or the runtime's (§V4.11)
+		c.routeAccept(r) // no controller: the handler is generated (§V4.8) or the runtime's (§V4.11)
 		return
 	}
 	ci := c.pkg.Controllers[r.Controller]
@@ -1360,7 +1483,77 @@ func (c *checker) routeAdd(r *RouteInfo, seenShape, seenHelper map[string]*Route
 	} else {
 		ci.Actions = append(ci.Actions, &ActionInfo{Name: r.Action, Params: r.Params, Routes: []*RouteInfo{r}})
 	}
+	c.routeAccept(r)
+}
+
+// routeAccept appends an accepted route to the package's route table and
+// to the conflict index, in declaration order.
+func (c *checker) routeAccept(r *RouteInfo) {
+	r.ord = len(c.pkg.Routes)
 	c.pkg.Routes = append(c.pkg.Routes, r)
+	c.conflicts.add(r)
+}
+
+// routeIndex holds one routing package's accepted routes bucketed for
+// the §V4.7.2 ambiguity scan. Two patterns can only overlap when their
+// first segments can match the same request, so a new route is compared
+// with the routes sharing its first literal segment and with the routes
+// whose first segment matches anything — a leading parameter, or a bare
+// wildcard. The relation itself is unchanged (routesAmbiguous); only
+// the candidate set shrinks, from every accepted route to a bucket.
+type routeIndex struct {
+	byFirst map[string][]*RouteInfo // first literal segment -> routes in declaration order; "" for the root pattern
+	open    []*RouteInfo            // a leading parameter, or a bare wildcard: overlaps any first segment
+}
+
+func routeOpen(s pathShape) bool {
+	if len(s.segs) == 0 {
+		return s.wild
+	}
+	return s.segs[0] == ""
+}
+
+func routeFirst(s pathShape) string {
+	if len(s.segs) == 0 {
+		return ""
+	}
+	return s.segs[0]
+}
+
+func (ix *routeIndex) add(r *RouteInfo) {
+	if routeOpen(r.shape) {
+		ix.open = append(ix.open, r)
+		return
+	}
+	k := routeFirst(r.shape)
+	ix.byFirst[k] = append(ix.byFirst[k], r)
+}
+
+// ambiguous returns the earliest accepted route ambiguous with r, in
+// declaration order — the one the pairwise scan would have found — or
+// nil.
+func (ix *routeIndex) ambiguous(r *RouteInfo) *RouteInfo {
+	var best *RouteInfo
+	consider := func(list []*RouteInfo) {
+		for _, prev := range list {
+			if best != nil && prev.ord >= best.ord {
+				return // lists are in declaration order
+			}
+			if routesAmbiguous(prev, r) {
+				best = prev
+				return
+			}
+		}
+	}
+	consider(ix.open)
+	if routeOpen(r.shape) {
+		for _, list := range ix.byFirst {
+			consider(list) // map order is irrelevant: the minimum wins
+		}
+	} else {
+		consider(ix.byFirst[routeFirst(r.shape)])
+	}
+	return best
 }
 
 /* ===== helpers ===== */
@@ -1514,7 +1707,7 @@ func routesAmbiguous(a, b *RouteInfo) bool {
 	if !methodsOverlap(a.Method, b.Method) {
 		return false
 	}
-	sa, sb := shapeParse(a), shapeParse(b)
+	sa, sb := a.shape, b.shape
 	if !pathsOverlap(sa, sb) {
 		return false
 	}

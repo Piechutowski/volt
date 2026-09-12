@@ -4,7 +4,8 @@
 //
 //	volt check  [--json] [dir]     load the project, run semantic analysis (docs/spec.md §V)
 //	volt vet    [--json] [dir]     check plus warnings for legal-but-suspicious Volt
-//	volt gen    [dir]              generate models, queries and routers
+//	volt gen    [flags] [dir|file] generate models, queries, routers and clients;
+//	                               -o DIR -parts LIST place the parts where a layout needs them
 //	volt routes [dir]              print the expanded route table
 //	volt lsp                       language server on stdin/stdout
 //	volt version                   report the tool version
@@ -21,6 +22,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go/format"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -30,6 +33,7 @@ import (
 
 	"github.com/Piechutowski/volt/gen/model"
 	"github.com/Piechutowski/volt/gen/router"
+	"github.com/Piechutowski/volt/internal/par"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lsp"
@@ -73,6 +77,10 @@ func main() {
 				Flags: []cli.Flag{
 					&cli.BoolFlag{Name: "models-only", Aliases: []string{"m"}, Usage: "emit only nao_models.go; skip the query layers"},
 					&cli.BoolFlag{Name: "sql", Usage: "also write nao_schema.sql (SQLite DDL and seed inserts)"},
+					&cli.BoolFlag{Name: "verify", Usage: "prove every generated Go file is gofmt-canonical before writing (a generator self-check)"},
+					&cli.StringFlag{Name: "o", Usage: "write into `DIR` instead of the package directory (one package); the client lands beside the models as volt_client.go"},
+					&cli.StringFlag{Name: "parts", Usage: "comma-separated `LIST` of what to write: models, queries, router, client, sql (default: every Go part)"},
+					&cli.StringFlag{Name: "package", Usage: "package clause of the written files (default: the clause of DIR's Go files, else the Volt package's name)"},
 				},
 				Action: func(_ context.Context, c *cli.Command) error {
 					return genRun(c)
@@ -126,6 +134,14 @@ func load(c *cli.Command) (pr *lang.Project, named []string, diags []diag.Diagno
 	for _, arg := range args {
 		pattern := filepath.ToSlash(arg)
 		base := arg
+		// A .volt file names its directory's package (§V1.7), so a
+		// go:generate line can point at the file it sits beside.
+		if strings.HasSuffix(base, ".volt") {
+			if st, err := os.Stat(base); err == nil && !st.IsDir() {
+				base = filepath.Dir(base)
+				pattern = filepath.ToSlash(base)
+			}
+		}
 		recursive := false
 		if strings.HasSuffix(pattern, "/...") || pattern == "..." {
 			recursive = true
@@ -216,9 +232,15 @@ func diagsPrintJSON(all []diag.Diagnostic) error {
 }
 
 // genRun implements 'volt gen': check the whole project, then write the
-// four router files into every package with routing elements, refusing
-// to clobber non-generated files (all or nothing).
+// generated files of every named package — into the package directory,
+// or with -o into a directory of the caller's choosing, -parts naming
+// which files (§V1.7) — refusing to clobber non-generated files (all
+// or nothing).
 func genRun(c *cli.Command) error {
+	parts, err := partsParse(c.String("parts"), c.Bool("models-only"), c.Bool("sql"))
+	if err != nil {
+		return cli.Exit("gen: "+err.Error(), 2)
+	}
 	pr, named, diags, err := load(c)
 	if err != nil {
 		return err
@@ -235,53 +257,128 @@ func genRun(c *cli.Command) error {
 	paths := append([]string(nil), named...)
 	sort.Strings(paths)
 
+	// -o: one package, into one directory, whose package clause is the
+	// -package flag, else that of the Go files already there, else the
+	// Volt package's own. The client then lands beside the models (D77).
+	outDir := c.String("o")
+	if outDir != "" && len(paths) != 1 {
+		return cli.Exit(fmt.Sprintf("gen: -o writes one package; %d named", len(paths)), 2)
+	}
+	clause := c.String("package")
+	if outDir != "" && clause == "" {
+		clause = goPackageName(outDir)
+	}
+	dirOf := func(pkg *lang.Package) string {
+		if outDir != "" {
+			return outDir
+		}
+		return pkg.Dir
+	}
+
 	// Collect everything first, then refuse every clobber, then write:
-	// all or nothing across the whole project.
+	// all or nothing across the whole project. A file whose bytes are
+	// already on disk is left alone: rewriting it would only bump its
+	// modification time and wake every editor and watcher on the tree.
 	type outFile struct {
-		path string
-		code []byte
+		path      string
+		code      []byte
+		unchanged bool
 	}
 	var out []outFile
 
-	for _, path := range paths {
-		pkg := pr.Packages[path]
+	// Every package generates on its own CPU (PERF-7); the files are
+	// gathered in package order, so what is written and printed never
+	// depends on the schedule.
+	emit := func(pkg *lang.Package) ([]outFile, error) {
+		var files []outFile
 		source := "package " + pkg.Path
+		dir := dirOf(pkg)
 
-		if pkg.HasSchema() {
-			files, err := model.Generate(pkg, model.Options{
-				Source: source, ModelsOnly: c.Bool("models-only"), SQL: c.Bool("sql"),
+		if pkg.HasSchema() && (parts["models"] || parts["queries"] || parts["sql"]) {
+			gen, err := model.Generate(pkg, model.Options{
+				Source: source, Package: clause, ModelsOnly: !parts["queries"], SQL: parts["sql"],
 			})
 			if err != nil {
-				return cli.Exit("gen: "+err.Error(), 1)
+				return nil, err
 			}
-			for _, f := range files {
-				out = append(out, outFile{filepath.Join(pkg.Dir, f.Name), f.Code})
+			for _, f := range gen {
+				if parts[partOf(f.Name)] {
+					files = append(files, outFile{path: filepath.Join(dir, f.Name), code: f.Code})
+				}
 			}
 		}
 
-		if pkg.HasRouting() {
-			files, err := router.Generate(pkg, router.Options{Source: source})
+		if pkg.HasRouting() && (parts["router"] || parts["client"]) {
+			gen, err := router.Generate(pkg, router.Options{Source: source, Package: clause, ClientBeside: outDir != ""})
 			if err != nil {
-				return cli.Exit("gen: "+err.Error(), 1)
+				return nil, err
 			}
-			for _, name := range router.Files {
-				out = append(out, outFile{filepath.Join(pkg.Dir, name), files[name]})
+			for _, name := range append(append([]string{}, router.Files...), router.ClientBesideFile) {
+				// A main package routing its own tables has no client
+				// subpackage (§V4.10.1); -o writes the client beside the
+				// models instead.
+				if code, ok := gen[name]; ok && parts[partOf(name)] {
+					files = append(files, outFile{path: filepath.Join(dir, name), code: code})
+				}
 			}
 		}
+		return files, nil
+	}
+	perPkg := make([][]outFile, len(paths))
+	errs := make([]error, len(paths))
+	par.For(len(paths), func(i int) { perPkg[i], errs[i] = emit(pr.Packages[paths[i]]) })
+	for i := range paths {
+		if errs[i] != nil {
+			return cli.Exit("gen: "+errs[i].Error(), 1)
+		}
+		out = append(out, perPkg[i]...)
 	}
 	if len(out) == 0 {
 		fmt.Println("gen: no package declares data or routing elements; nothing to do")
 		return nil
 	}
 
-	for _, f := range out {
-		// SQL carries the marker in its own comment syntax.
-		marker := []byte("// Code generated ")
-		if filepath.Ext(f.path) == ".sql" {
-			marker = []byte("-- Code generated ")
+	// --verify: the generators emit gofmt-canonical Go by construction
+	// (D75); this proves it for the project at hand, the way the golden
+	// tests prove it for theirs.
+	if c.Bool("verify") {
+		problems := make([]string, len(out))
+		par.For(len(out), func(i int) {
+			f := out[i]
+			if filepath.Ext(f.path) != ".go" {
+				return
+			}
+			formatted, err := format.Source(f.code)
+			if err != nil {
+				problems[i] = fmt.Sprintf("gen --verify: %s does not parse: %v (a generator bug)", f.path, err)
+			} else if !bytes.Equal(formatted, f.code) {
+				problems[i] = fmt.Sprintf("gen --verify: %s is not gofmt-canonical (a generator bug)", f.path)
+			}
+		})
+		for _, p := range problems {
+			if p != "" {
+				return cli.Exit(p, 2)
+			}
 		}
-		if old, err := os.ReadFile(f.path); err == nil && !bytes.HasPrefix(old, marker) {
-			return cli.Exit(fmt.Sprintf("gen: refusing to overwrite %s: it lacks the generated-code header", f.path), 2)
+	}
+
+	// What is on disk already: read on every CPU, judged in order.
+	clobber := make([]string, len(out))
+	par.For(len(out), func(i int) {
+		f := &out[i]
+		old, err := os.ReadFile(f.path)
+		if err != nil {
+			return // nothing there yet
+		}
+		if !bytes.HasPrefix(old, genMarker(f.path)) {
+			clobber[i] = f.path
+			return
+		}
+		f.unchanged = bytes.Equal(old, f.code)
+	})
+	for _, path := range clobber {
+		if path != "" {
+			return cli.Exit(fmt.Sprintf("gen: refusing to overwrite %s: it lacks the generated-code header", path), 2)
 		}
 	}
 	// An optional output that is no longer produced (every select or
@@ -293,15 +390,15 @@ func genRun(c *cli.Command) error {
 	}
 	for _, path := range paths {
 		pkg := pr.Packages[path]
-		if !pkg.HasSchema() {
+		if !pkg.HasSchema() || !parts["queries"] {
 			continue
 		}
 		for _, name := range []string{"nao_selects.go", "nao_validate.go"} {
-			stale := filepath.Join(pkg.Dir, name)
+			stale := filepath.Join(dirOf(pkg), name)
 			if produced[stale] {
 				continue
 			}
-			if old, err := os.ReadFile(stale); err == nil && bytes.HasPrefix(old, []byte("// Code generated ")) {
+			if genMarked(stale) {
 				if err := os.Remove(stale); err != nil {
 					return cli.Exit(err.Error(), 2)
 				}
@@ -309,16 +406,54 @@ func genRun(c *cli.Command) error {
 			}
 		}
 	}
-	for _, f := range out {
-		if err := os.MkdirAll(filepath.Dir(f.path), 0o755); err != nil {
-			return cli.Exit(err.Error(), 2)
+	writes := make([]error, len(out))
+	par.For(len(out), func(i int) {
+		f := out[i]
+		if f.unchanged {
+			return
 		}
-		if err := os.WriteFile(f.path, f.code, 0o644); err != nil {
-			return cli.Exit(err.Error(), 2)
+		if err := os.MkdirAll(filepath.Dir(f.path), 0o755); err != nil {
+			writes[i] = err
+			return
+		}
+		writes[i] = os.WriteFile(f.path, f.code, 0o644)
+	})
+	for i, f := range out {
+		if writes[i] != nil {
+			return cli.Exit(writes[i].Error(), 2)
+		}
+		if f.unchanged {
+			fmt.Println(f.path, "(unchanged)")
+			continue
 		}
 		fmt.Println(f.path)
 	}
 	return nil
+}
+
+// genMarker is the generated-code header a file at path must start with
+// before gen may overwrite it; SQL carries it in its own comment syntax.
+func genMarker(path string) []byte {
+	if filepath.Ext(path) == ".sql" {
+		return []byte("-- Code generated ")
+	}
+	return []byte("// Code generated ")
+}
+
+// genMarked reports whether the file at path exists and carries the
+// generated-code header, reading only as many bytes as the header needs.
+func genMarked(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	marker := genMarker(path)
+	buf := make([]byte, len(marker))
+	if _, err := io.ReadFull(f, buf); err != nil {
+		return false
+	}
+	return bytes.Equal(buf, marker)
 }
 
 // routesRun implements 'volt routes': the introspection table.

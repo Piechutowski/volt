@@ -16,8 +16,15 @@ import (
 
 // LSPDiagnostics converts the front end's diagnostics for publishing.
 func (d *Document) LSPDiagnostics() []protocol.Diagnostic {
-	out := make([]protocol.Diagnostic, 0, len(d.Diags))
-	for _, dg := range d.Diags {
+	return diagnosticsLSP(d.Text, d.lineOffsets, d.Diags)
+}
+
+// diagnosticsLSP converts diagnostics positioned in text — the
+// document's, or the snapshot a background analysis saw — for
+// publishing.
+func diagnosticsLSP(text string, starts []int, diags []diag.Diagnostic) []protocol.Diagnostic {
+	out := make([]protocol.Diagnostic, 0, len(diags))
+	for _, dg := range diags {
 		severity := protocol.DiagnosticSeverityError
 		if dg.Severity == diag.Warning {
 			severity = protocol.DiagnosticSeverityWarning
@@ -27,7 +34,7 @@ func (d *Document) LSPDiagnostics() []protocol.Diagnostic {
 		// The diagnostic source names the language.
 		source := "volt"
 		out = append(out, protocol.Diagnostic{
-			Range:    d.diagnosticRange(dg.Pos),
+			Range:    diagnosticRangeIn(text, starts, dg.Pos),
 			Severity: &sev,
 			Code:     &protocol.IntegerOrString{Value: code},
 			Source:   &source,

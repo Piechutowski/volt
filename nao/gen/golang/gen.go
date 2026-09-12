@@ -1,6 +1,6 @@
 // Package golang generates Go model structs from a checked DBML file — one
-// struct per table, one string-typed enum per DBML enum, with db and json
-// struct tags.
+// struct per table, one string-typed enum per DBML enum, the params
+// structs its CRUD takes (D77), with db and json struct tags.
 //
 // DBML notes become Go doc comments at the corresponding level: the Project
 // note becomes the package comment, a table note the struct's doc comment,
@@ -8,8 +8,9 @@
 // doc comments of the generated type and constants. Documentation is
 // written once, in the schema.
 //
-// All output passes through go/format.Source, so the generator cannot emit
-// code that does not parse, and the result is gofmt-clean by construction.
+// The output is gofmt-canonical by construction (D75): aligned blocks
+// are laid out by gen/align exactly as gofmt's tabwriter would, and the
+// golden tests prove gofmt is the identity on every generated file.
 // Generated code depends only on the standard library and the rt runtime
 // package (D03). Nullable columns (no "not null", not part of a primary
 // key) are rt.Null[T] values (D13), except types where nil already
@@ -18,10 +19,11 @@ package golang
 
 import (
 	"fmt"
-	"go/format"
 	"sort"
+	"strconv"
 	"strings"
 
+	"github.com/Piechutowski/volt/gen/align"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/token"
@@ -39,23 +41,27 @@ type Options struct {
 	Source string
 }
 
-// Generate renders the models file for one checked DBML file. The file
-// must be free of check errors; Generate validates only what generation
-// itself needs (name mapping, type mapping, collisions).
+// Generate renders the models file for one checked DBML file: the enums,
+// the row structs and the params structs — every type the wire carries
+// (D77). The file must be free of check errors; Generate validates only
+// what generation itself needs (name mapping, type mapping, collisions).
 func Generate(f *ast.File, info *check.Info, opts Options) ([]byte, error) {
+	p, perr := planBuild(f, info)
+	return modelsGenerate(f, info, p, perr, opts)
+}
+
+// modelsGenerate is Generate over an already built plan (D74), whose
+// tables carry the params structs' field plans; perr is the plan's
+// build error, reported after the models' own checks have had their say.
+func modelsGenerate(f *ast.File, info *check.Info, p *plan, perr error, opts Options) ([]byte, error) {
 	if opts.Package == "" {
 		return nil, fmt.Errorf("no package name")
 	}
 	g := &generator{f: f, info: info, opts: opts, imports: map[string]bool{}}
-	if err := g.run(); err != nil {
+	if err := g.run(p, perr); err != nil {
 		return nil, err
 	}
-	src, err := format.Source([]byte(g.out.String()))
-	if err != nil {
-		// unreachable if the emitter is correct; surfaced loudly if not
-		return nil, fmt.Errorf("generated code does not parse: %w\n%s", err, g.out.String())
-	}
-	return src, nil
+	return align.Finish(g.out.String()), nil
 }
 
 type generator struct {
@@ -69,7 +75,7 @@ type generator struct {
 	body      strings.Builder
 }
 
-func (g *generator) run() error {
+func (g *generator) run(p *plan, perr error) error {
 	if err := g.enumTypesCollect(); err != nil {
 		return err
 	}
@@ -89,10 +95,54 @@ func (g *generator) run() error {
 			return err
 		}
 	}
+	// The params structs follow the models (D77): they are the types a
+	// client shares with the server, so they live in the models file.
+	// Their fields are the plan's, the same the queries bind.
+	if perr != nil {
+		return perr
+	}
+	for _, t := range p.tables {
+		g.paramsEmit(t)
+	}
 
 	g.header()
 	g.out.WriteString(g.body.String())
 	return nil
+}
+
+// paramsEmit renders the CreateParams and UpdateParams structs of one
+// table, when its CRUD takes them (CRUD-4, CRUD-5).
+func (g *generator) paramsEmit(t *tableModel) {
+	if len(t.fields) == 0 {
+		return // a columnless table has no queryable shape
+	}
+	b := &g.body
+	if fields := t.createFields(); len(fields) > 0 {
+		fmt.Fprintf(b, "// %sCreateParams are the caller-supplied columns of %sCreate. The\n", t.model, t.model)
+		fmt.Fprintf(b, "// auto-increment key and defaulted columns are the database's job (D16).\n")
+		fmt.Fprintf(b, "type %sCreateParams struct {\n", t.model)
+		paramFieldsWrite(b, fields)
+		b.WriteString("}\n\n")
+	}
+	if len(t.pk) > 0 && len(t.nonPK()) > 0 {
+		fmt.Fprintf(b, "// %sUpdateParams are the data columns of %sUpdate: every column\n// outside the primary key.\n", t.model, t.model)
+		fmt.Fprintf(b, "type %sUpdateParams struct {\n", t.model)
+		paramFieldsWrite(b, t.nonPK())
+		b.WriteString("}\n\n")
+	}
+}
+
+// paramFieldsWrite renders the fields of a params struct, aligned as
+// gofmt would, each column's note as its doc comment.
+func paramFieldsWrite(b *strings.Builder, fields []*fieldPlan) {
+	var rows align.Block
+	for _, f := range fields {
+		if note := settingNote(f.col.Settings); note != "" {
+			commentLines(&rows, note)
+		}
+		rows.Row(f.goField, f.goType, "`"+f.tag+"`")
+	}
+	rows.WriteTo(b, "\t")
 }
 
 func (g *generator) enumTypesCollect() error {
@@ -177,6 +227,7 @@ func (g *generator) enumEmit(e *ast.Enum) error {
 	fmt.Fprintf(&g.body, "type %s string\n\n", typeName)
 
 	g.body.WriteString("const (\n")
+	var specs align.Block
 	seen := map[string]string{}
 	for _, v := range e.Values {
 		constName, err := goName(v.Name.Name())
@@ -189,10 +240,11 @@ func (g *generator) enumEmit(e *ast.Enum) error {
 		}
 		seen[constName] = v.Name.Name()
 		if note := settingNote(v.Settings); note != "" {
-			commentWrite(&g.body, note)
+			commentLines(&specs, note)
 		}
-		fmt.Fprintf(&g.body, "\t%s %s = %q\n", constName, typeName, v.Name.Name())
+		specs.Row(constName, typeName, "= "+strconv.Quote(v.Name.Name()))
 	}
+	specs.WriteTo(&g.body, "\t")
 	g.body.WriteString(")\n\n")
 	return nil
 }
@@ -225,11 +277,13 @@ func (g *generator) tableEmit(ti *check.TableInfo, usedNames map[string]string) 
 
 	pkCols := compositePKColumns(ti)
 	fields := map[string]string{}
+	var rows align.Block
 	for _, cd := range ti.Columns {
-		if err := g.fieldEmit(cd, pkCols, fields); err != nil {
+		if err := g.fieldEmit(cd, pkCols, fields, &rows); err != nil {
 			return fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
 		}
 	}
+	rows.WriteTo(&g.body, "\t")
 	g.body.WriteString("}\n\n")
 	return nil
 }
@@ -251,7 +305,7 @@ func compositePKColumns(ti *check.TableInfo) map[string]bool {
 	return out
 }
 
-func (g *generator) fieldEmit(cd *check.ColumnDef, pkCols map[string]bool, fields map[string]string) error {
+func (g *generator) fieldEmit(cd *check.ColumnDef, pkCols map[string]bool, fields map[string]string, rows *align.Block) error {
 	col := cd.Col
 	fieldName, err := goName(col.Name.Name())
 	if err != nil {
@@ -279,9 +333,9 @@ func (g *generator) fieldEmit(cd *check.ColumnDef, pkCols map[string]bool, field
 	}
 
 	if note := settingNote(col.Settings); note != "" {
-		commentWriteIndent(&g.body, note)
+		commentLines(rows, note)
 	}
-	fmt.Fprintf(&g.body, "\t%s %s `%s`\n", fieldName, goTypeName, fieldTag(col))
+	rows.Row(fieldName, goTypeName, "`"+fieldTag(col)+"`")
 	return nil
 }
 
@@ -372,12 +426,14 @@ func commentWrite(b *strings.Builder, text string) {
 	}
 }
 
-func commentWriteIndent(b *strings.Builder, text string) {
+// commentLines adds a note to an aligned block as doc-comment lines; a
+// comment ends the block's alignment run, as it does under gofmt.
+func commentLines(rows *align.Block, text string) {
 	for _, line := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
 		if strings.TrimSpace(line) == "" {
-			b.WriteString("\t//\n")
+			rows.Line("//")
 			continue
 		}
-		b.WriteString("\t// " + line + "\n")
+		rows.Line("// " + line)
 	}
 }

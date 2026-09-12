@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/Piechutowski/volt/lang/token"
 )
@@ -141,8 +142,16 @@ func goFuncOf(fset *gotoken.FileSet, path string, fn *goast.FuncDecl) GoFunc {
 
 // goScan is one package directory's scan, cached per check run.
 type goScan struct {
+	once   sync.Once // the scan runs once, whichever package asks first
 	funcs  map[string]GoFunc
 	broken []string
+}
+
+// goFuncsCache holds one goScan per package directory, shared by the
+// per-package checkers of a phase (PERF-7).
+type goFuncsCache struct {
+	mu sync.Mutex
+	by map[string]*goScan
 }
 
 // GoDirStamp fingerprints the Go files of a directory — names, sizes
@@ -176,14 +185,19 @@ func GoDirStamp(dir string) string {
 // check run.
 func (c *checker) goFuncs(pkg *Package) *goScan {
 	if c.gofuncs == nil {
-		c.gofuncs = map[string]*goScan{}
+		c.gofuncs = &goFuncsCache{}
 	}
-	sc, ok := c.gofuncs[pkg.Dir]
-	if !ok {
-		funcs, broken := GoFuncsScan(pkg.Dir)
-		sc = &goScan{funcs: funcs, broken: broken}
-		c.gofuncs[pkg.Dir] = sc
+	c.gofuncs.mu.Lock()
+	if c.gofuncs.by == nil {
+		c.gofuncs.by = map[string]*goScan{}
 	}
+	sc := c.gofuncs.by[pkg.Dir]
+	if sc == nil {
+		sc = &goScan{}
+		c.gofuncs.by[pkg.Dir] = sc
+	}
+	c.gofuncs.mu.Unlock()
+	sc.once.Do(func() { sc.funcs, sc.broken = GoFuncsScan(pkg.Dir) })
 	return sc
 }
 

@@ -123,7 +123,6 @@ func TestVoltSyntaxErrors(t *testing.T) {
 		name, src, wantMsg string
 	}{
 		{"space in path", "Scope / {\n\tget /users /:id Users.Show\n}\n", "expected identifier in route handler"},
-		{"one-part handler", "Scope / {\n\tget /users Show\n}\n", "route handler must be Controller.Action"},
 		{"top-level dataset", "dataset db.browse\n", "must appear inside a Scope"},
 		{"import without parens", "import db\n", "expected '(' after import"},
 		{"top-level route", "get /users Users.Index\n", "must appear inside a Scope"},
@@ -269,5 +268,29 @@ func TestVoltLayerIsSuperset(t *testing.T) {
 	}
 	if _, ok := f.Decls[0].(*ast.Table); !ok {
 		t.Fatalf("decl is %T, want *ast.Table", f.Decls[0])
+	}
+}
+
+// Handler forms (§V4.3): Controller.Action, pkg.Query and a bare Query
+// of the package itself all parse; the checker tells them apart.
+func TestRouteHandlerForms(t *testing.T) {
+	f, diags := ParseFile("t.volt", "package app\nScope / {\n\tget /a Users.Show\n\tget /b db.UserList\n\tget /c UserList\n}\n")
+	if len(diags) != 0 {
+		t.Fatal(diags)
+	}
+	sc := f.Decls[1].(*ast.Scope)
+	want := [][]string{{"Users", "Show"}, {"db", "UserList"}, {"UserList"}}
+	if len(sc.Items) != len(want) {
+		t.Fatalf("got %d routes, want %d", len(sc.Items), len(want))
+	}
+	for i, item := range sc.Items {
+		r := item.(*ast.Route)
+		var got []string
+		for _, p := range r.Handler.Parts {
+			got = append(got, p.Name())
+		}
+		if strings.Join(got, ".") != strings.Join(want[i], ".") {
+			t.Errorf("route %d: handler parts %v, want %v", i, got, want[i])
+		}
 	}
 }

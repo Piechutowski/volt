@@ -4,8 +4,6 @@
 package golang
 
 import (
-	"fmt"
-
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 )
@@ -81,19 +79,11 @@ type CheckSpec struct {
 // exists and carries every column of at least one check. The same rule
 // decides what the validator generator emits and what a generated
 // handler calls, so the two cannot disagree.
+//
+// One-shot convenience over Plan.ParamsValidators: it plans the whole
+// file. Callers with a Package ask its Plan instead (D74).
 func ParamsValidators(f *ast.File, info *check.Info, tableKey string, checks []CheckSpec) (create, update bool, err error) {
-	p, err := planBuild(f, info)
-	if err != nil {
-		return false, false, err
-	}
-	for _, t := range p.tables {
-		if t.ti.Key != tableKey {
-			continue
-		}
-		c, u := paramsChecks(t, checks)
-		return len(c) > 0, len(u) > 0, nil
-	}
-	return false, false, fmt.Errorf("no table %q", tableKey)
+	return PlanBuild(f, info).ParamsValidators(tableKey, checks)
 }
 
 // paramsChecks splits the checks a table's params structs can evaluate:
@@ -134,56 +124,10 @@ func EnumTypeName(schema, base string) (string, error) { return enumTypeName(sch
 // ModelFields reports the exact struct fields the model generator emits
 // for the table with the given canonical key — hover-grade truth, from
 // the same plan the generator runs (spec §V11.6, Appendix A).
+//
+// One-shot convenience over Plan.ModelFields: it plans the whole file.
 func ModelFields(f *ast.File, info *check.Info, tableKey string) (model string, fields []FieldSig, err error) {
-	p, err := planBuild(f, info)
-	if err != nil {
-		return "", nil, err
-	}
-	for _, t := range p.tables {
-		if t.ti.Key != tableKey {
-			continue
-		}
-		for _, fp := range t.fields {
-			fields = append(fields, FieldSig{
-				Name: fp.goField, Col: fp.colName, Type: fp.goType,
-				Tag: fp.tag, Doc: settingNote(fp.col.Settings),
-				Nullable: fp.nullable,
-			})
-		}
-		return t.model, fields, nil
-	}
-	return "", nil, fmt.Errorf("no table %q", tableKey)
-}
-
-// PackageNames lists every package-level Go identifier the model, query
-// and dynamic generators emit for a schema, each with a description —
-// the scope a minted row type (§V11.7) must not collide with.
-func PackageNames(f *ast.File, info *check.Info) (map[string]string, error) {
-	p, err := planBuild(f, info)
-	if err != nil {
-		return nil, err
-	}
-	names := map[string]string{"Queries": "the generated Queries handle", "New": "the generated constructor"}
-	for _, t := range p.tables {
-		tbl := t.ti.Decl.Name.Base()
-		names[t.model] = fmt.Sprintf("the model of table %q", tbl)
-		names[t.model+"CreateParams"] = fmt.Sprintf("the create params of table %q", tbl)
-		names[t.model+"UpdateParams"] = fmt.Sprintf("the update params of table %q", tbl)
-		for _, suffix := range []string{"Limit", "Offset", "Distinct", "OrderBy", "After", "Set"} {
-			names[t.model+suffix] = fmt.Sprintf("the dynamic-layer function %s%s", t.model, suffix)
-		}
-		for _, fp := range t.fields {
-			names[t.model+fp.goField] = fmt.Sprintf("the dynamic column handle for %s.%s", tbl, fp.colName)
-		}
-	}
-	for _, d := range f.Decls {
-		if e, ok := d.(*ast.Enum); ok {
-			if n, err := enumTypeName(e.Name.Schema(), e.Name.Base()); err == nil {
-				names[n] = fmt.Sprintf("the enum %q", e.Name.String())
-			}
-		}
-	}
-	return names, nil
+	return PlanBuild(f, info).ModelFields(tableKey)
 }
 
 // CRUDMethod is one generated default-CRUD method of a table (CRUD-1 to
@@ -203,36 +147,8 @@ type CRUDMethod struct {
 // for one table, with the same existence rules it applies: Get, Update
 // and Delete need a primary key, Update needs a non-key column, Create
 // takes a params struct only when a column is caller-supplied (D16).
+//
+// One-shot convenience over Plan.CRUDMethods: it plans the whole file.
 func CRUDMethods(f *ast.File, info *check.Info, tableKey string) (model string, methods []CRUDMethod, err error) {
-	p, err := planBuild(f, info)
-	if err != nil {
-		return "", nil, err
-	}
-	for _, t := range p.tables {
-		if t.ti.Key != tableKey {
-			continue
-		}
-		var key []SelectParam
-		for _, fp := range t.pk {
-			key = append(key, SelectParam{SQLName: fp.param, GoName: fp.arg, GoType: fp.baseType})
-		}
-		m := t.model
-		if len(t.pk) > 0 {
-			methods = append(methods, CRUDMethod{Name: m + "Get", Op: "get", Key: key, Result: m})
-		}
-		methods = append(methods, CRUDMethod{Name: m + "List", Op: "list", Result: m, Many: true})
-		create := CRUDMethod{Name: m + "Create", Op: "create", Result: m}
-		if len(t.createFields()) > 0 {
-			create.Body = m + "CreateParams"
-		}
-		methods = append(methods, create)
-		if len(t.pk) > 0 {
-			if len(t.nonPK()) > 0 {
-				methods = append(methods, CRUDMethod{Name: m + "Update", Op: "update", Key: key, Body: m + "UpdateParams", Result: m})
-			}
-			methods = append(methods, CRUDMethod{Name: m + "Delete", Op: "delete", Key: key})
-		}
-		return t.model, methods, nil
-	}
-	return "", nil, fmt.Errorf("no table %q", tableKey)
+	return PlanBuild(f, info).CRUDMethods(tableKey)
 }

@@ -79,6 +79,34 @@ carries these; no code backs them yet:
   refs (`Home.Index`) and `error_handler:` point at Go, which this
   server does not index
 
+## Layouts
+
+Volt does not choose the directory tree. Three shapes are proven by
+tests:
+
+- **Packages** (`itest/blog`): `db/` declares the schema, `app/` the
+  routes over `db`; `volt gen ./...` writes each package's files beside
+  its `.volt` and the client into `app/client/`.
+- **One directory** (D76): a package declares its tables and routes
+  them itself — `resources posts [default]`, `get /picked PostPicked`
+  — so models, queries, router, handlers and paths share one Go
+  package.
+- **Workspace** (D77): one `schema.volt` at the root of a `go.work`
+  workspace, a server module and a client module, both `package main`,
+  each wired by its own `go:generate` line:
+
+  ```go
+  // api/main.go
+  //go:generate volt gen -o . -parts models,queries,router ../schema.volt
+
+  // gui/main.go
+  //go:generate volt gen -o . -parts models,client ../schema.volt
+  ```
+
+  `go generate ./api ./gui` from the root (`./...` stops at the root
+  module in a workspace). The client beside the models names their
+  types bare and is constructed with `NewClient`.
+
 ## Crib sheet
 
 Requires **Go 1.27+** (all three modules and go.work declare it); with the
@@ -91,6 +119,7 @@ volt gen --sql ./app                 # models + queries + router + DDL
 go test ./... ./lsp/... ./cmd/volt/...   # everything, ORM + tooling modules
 go test ./gen/router -update         # refresh goldens after gen changes
 go run ./cmd/volt gen ./itest/blog   # refresh the itest fixture
+go test ./lang -run '^$' -bench . -benchmem > lang/testdata/bench_baseline.txt   # refresh the (ungated) baseline
 ./scripts/sync-grammar.sh            # mirror grammar + preflight Zed
 ```
 

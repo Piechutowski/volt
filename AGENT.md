@@ -78,7 +78,8 @@ reverted: nao is its *name*).
 
 Three Go modules, stitched by `go.work`: the **library** at the
 root — runtime (`*.go`), `lang/` (token/scanner/parser/ast/check/vet +
-project semantics), `gen/router`, `gen/model`, `nao/` (rt, gen,
+project semantics), `gen/router`, `gen/model`, `internal/par` (the worker pool every
+phase runs on, D78), `nao/` (rt, gen,
 inflect, itest), `itest/` — stdlib-only (sqlite3 is
 test-only); and the **tools** `lsp/` and `cmd/volt/`, which carry the
 third-party deps (glsp, urfave/cli). Go floor: **1.27** (D45),
@@ -135,6 +136,7 @@ The maintainer reads code and specs fluently; explain reasoning, not
 basics. Don't write for an imagined audience: README and docs are for
 the maintainer (it's alpha; honesty over marketing). Test data must be
 neutral (blog/metrics domains — never agriculture/FADN; that fixture
-history is why). When the maintainer asks a question, answer it and
+history is why); a test that needs a project of some size writes one
+with `internal/corpus`, which uses every feature in both layouts. When the maintainer asks a question, answer it and
 stop — don't implement until asked; when they ask for work, finish it:
 build + vet + test + gofmt green, committed, pushed.

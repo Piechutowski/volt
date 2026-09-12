@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Piechutowski/volt/internal/par"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
@@ -70,6 +71,9 @@ type Package struct {
 
 	// schema is the package's checked table model, set by Check.
 	schema *check.Info
+	// plan is the package's naming plan, built once by Check right after
+	// the schema pass and read by everything downstream (D74).
+	plan *golang.Plan
 
 	// merged is the synthetic single file of all declarations, in file
 	// order (sorted by name for determinism), fed to the DBML-layer
@@ -94,6 +98,11 @@ func (p *Package) Merged() *ast.File { return p.merged }
 
 // Schema returns the package's checked table model (nil before Check).
 func (p *Package) Schema() *check.Info { return p.schema }
+
+// Plan returns the package's naming plan (nil before Check): every
+// generated Go and SQL name, decided once and shared by the checker,
+// the generators and the tooling (D74).
+func (p *Package) Plan() *golang.Plan { return p.plan }
 
 // HasSchema reports whether the package declares data elements — such
 // packages get generated model, query and DDL files.
@@ -217,6 +226,12 @@ func hasVoltFiles(dir string) bool {
 // more, so stray .volt trees elsewhere in the module never interfere.
 // Every dir MUST lie under root; a dir without .volt files is an error.
 func LoadDirs(root string, dirs []string, overlay map[string]string) (*Project, error) {
+	return loadDirs(root, dirs, overlay, nil)
+}
+
+// loadDirs is LoadDirs with an optional Session whose parse cache
+// stands in for the parser (D79).
+func loadDirs(root string, dirs []string, overlay map[string]string, s *Session) (*Project, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -246,38 +261,48 @@ func LoadDirs(root string, dirs []string, overlay map[string]string) (*Project, 
 		queue = append(queue, ad)
 	}
 
+	// One wave per import depth (PERF-7): every package of the wave is
+	// read and every file parsed on every CPU, the results taken in
+	// directory order so the diagnostics keep one order whatever the
+	// schedule.
 	seen := map[string]bool{}
-	for len(queue) > 0 {
-		dir := queue[0]
-		queue = queue[1:]
-		if seen[dir] {
-			continue
+	for wave := queue; len(wave) > 0; {
+		var todo []string
+		for _, dir := range wave {
+			if !seen[dir] {
+				seen[dir] = true
+				todo = append(todo, dir)
+			}
 		}
-		seen[dir] = true
-		pkg, err := pr.packageLoad(dir, overlay)
+		sort.Strings(todo)
+		pkgs, err := pr.packagesParse(todo, overlay, s)
 		if err != nil {
 			return nil, err
 		}
-		if pkg == nil {
-			continue
-		}
-		// Imports name root-relative package paths (§V2); an existing
-		// directory is loaded, a missing one is left for Check to report.
-		for _, f := range pkg.Files {
-			for _, d := range f.Decls {
-				id, ok := d.(*ast.ImportDecl)
-				if !ok {
-					continue
-				}
-				for _, spec := range id.Specs {
-					target := filepath.Join(abs, filepath.FromSlash(spec.PathString()))
-					if why := importExcluded(abs, spec.PathString()); why != "" {
-						pr.Diags = append(pr.Diags, diag.Errorf(spec.Pos(), "spec/V1",
-							"import %q names %s, which is not part of this project (§V1.6)", spec.PathString(), why))
+		wave = nil
+		for _, pkg := range pkgs {
+			if pkg == nil {
+				continue
+			}
+			pr.Packages[pkg.Path] = pkg
+			// Imports name root-relative package paths (§V2); an existing
+			// directory is loaded, a missing one is left for Check to report.
+			for _, f := range pkg.Files {
+				for _, d := range f.Decls {
+					id, ok := d.(*ast.ImportDecl)
+					if !ok {
 						continue
 					}
-					if hasVoltFiles(target) {
-						queue = append(queue, target)
+					for _, spec := range id.Specs {
+						target := filepath.Join(abs, filepath.FromSlash(spec.PathString()))
+						if why := importExcluded(abs, spec.PathString()); why != "" {
+							pr.Diags = append(pr.Diags, diag.Errorf(spec.Pos(), "spec/V1",
+								"import %q names %s, which is not part of this project (§V1.6)", spec.PathString(), why))
+							continue
+						}
+						if hasVoltFiles(target) {
+							wave = append(wave, target)
+						}
 					}
 				}
 			}
@@ -308,51 +333,79 @@ func importExcluded(root, path string) string {
 
 // packageLoad parses one directory's .volt files into a package (nil
 // when the directory holds none), files in name order (§V1.5).
-func (pr *Project) packageLoad(dir string, overlay map[string]string) (*Package, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
+// packagesParse reads the directories of one wave and parses every
+// .volt file of every one of them on every CPU. The result holds one
+// entry per directory, nil where it has no .volt files; the packages
+// are not yet registered with the project, and the parse diagnostics
+// are appended in directory, then file-name, order.
+func (pr *Project) packagesParse(dirs []string, overlay map[string]string, s *Session) ([]*Package, error) {
+	type fileParse struct {
+		pkg   int
+		path  string
+		entry os.DirEntry
+		file  *ast.File
+		diags []diag.Diagnostic
+		err   error
 	}
-	rel, err := filepath.Rel(pr.Root, dir)
-	if err != nil {
-		return nil, err
-	}
-	key := filepath.ToSlash(rel)
-	var pkg *Package
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".volt") {
-			continue
+	pkgs := make([]*Package, len(dirs))
+	var jobs []fileParse
+	for i, dir := range dirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return nil, err
 		}
-		path := filepath.Join(dir, e.Name())
-		src := ""
-		if text, ok := overlay[path]; ok {
-			src = text
-		} else {
-			b, err := os.ReadFile(path)
+		rel, err := filepath.Rel(pr.Root, dir)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".volt") {
+				continue
+			}
+			if pkgs[i] == nil {
+				pkgs[i] = &Package{Path: filepath.ToSlash(rel), Dir: dir, Imports: map[string]string{}}
+			}
+			jobs = append(jobs, fileParse{pkg: i, path: filepath.Join(dir, e.Name()), entry: e})
+		}
+	}
+	par.For(len(jobs), func(j int) {
+		job := &jobs[j]
+		if s != nil {
+			job.file, job.diags, job.err = s.parse(job.path, job.entry, overlay)
+			return
+		}
+		src, overlaid := overlay[job.path]
+		if !overlaid {
+			b, err := os.ReadFile(job.path)
 			if err != nil {
-				return nil, err
+				job.err = err
+				return
 			}
 			src = string(b)
 		}
-		if pkg == nil {
-			pkg = &Package{Path: key, Dir: dir, Imports: map[string]string{}}
-			pr.Packages[key] = pkg
+		job.file, job.diags = parser.ParseFile(job.path, src)
+	})
+	for j := range jobs {
+		job := &jobs[j]
+		if job.err != nil {
+			return nil, job.err
 		}
-		f, diags := parser.ParseFile(path, src)
-		pkg.Files = append(pkg.Files, f)
-		pr.Diags = append(pr.Diags, diags...)
+		pkgs[job.pkg].Files = append(pkgs[job.pkg].Files, job.file)
+		pr.Diags = append(pr.Diags, job.diags...)
 	}
-	if pkg == nil {
-		return nil, nil
+	for _, pkg := range pkgs {
+		if pkg == nil {
+			continue
+		}
+		sort.Slice(pkg.Files, func(i, j int) bool { return pkg.Files[i].Name < pkg.Files[j].Name })
+		merged := &ast.File{Name: "<package " + pkg.Path + ">"}
+		for _, f := range pkg.Files {
+			merged.Decls = append(merged.Decls, f.Decls...)
+			merged.EOF = f.EOF
+		}
+		pkg.merged = merged
 	}
-	sort.Slice(pkg.Files, func(i, j int) bool { return pkg.Files[i].Name < pkg.Files[j].Name })
-	merged := &ast.File{Name: "<package " + pkg.Path + ">"}
-	for _, f := range pkg.Files {
-		merged.Decls = append(merged.Decls, f.Decls...)
-		merged.EOF = f.EOF
-	}
-	pkg.merged = merged
-	return pkg, nil
+	return pkgs, nil
 }
 
 // goModModule reads the module directive of go.mod — the only line Volt

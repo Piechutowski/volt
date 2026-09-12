@@ -232,6 +232,37 @@ all enforced by `go test ./...`:
 | PROOF-6 | vet rules ⇄ lint.md ⇄ testdata consistency test | `DONE` (D26) |
 | PROOF-7 | v1 onward: every `Select`/`View` block prepare-validated at gen time; declared columns verified | with v1 |
 
+## P12 — Fast tooling
+
+Slow tooling is a defect. The bar: a compile a human perceives as
+instant, and a 300K-line schema through `volt gen` in under a second on
+eight cores. The audit of 2026-09-09 measured the pipeline component by
+component (data structures, allocation, cache behaviour) on a fixture
+of 1000 tables of 150 columns across 20 packages: `volt check` took 47
+minutes, all of it in one cubic path of the routing checker; with the
+shared plan (D74) the same fixture checks in 1.4 s and generates in
+10 s, of which 8 are gofmt; with canonical emission (D75) it generates
+in 2.7 s; with the parallel schedule (D78), on four cores, it checks
+in 0.9 s and generates in 1.3 s, `--verify` included in 3.5 s; in the
+editor, with the session (D79), an edit costs about 200 ms and a
+no-op 2 ms against 770 ms for a fresh analysis. What remains is the
+front end's allocation — 100-byte tokens and a pointer AST cost more
+in GC than in parsing (PERF-9) — and the edited file's own parse and
+check (PERF-10).
+
+| ID | Work | Status |
+|---|---|---|
+| PERF-1 | One naming plan per package, indexed by table and by generated method; route conflicts through a first-segment index (D74) | `DONE` |
+| PERF-2 | Scaling tests: allocation at N and 2N per phase, exact and hardware-neutral; `internal/corpus` generates projects of any size using every feature in both layouts, driving linearity tests in tables, packages and columns, an allocation budget per phase (gated, ten percent), compile tests, and benchmarks with a committed baseline (`lang/testdata/bench_baseline.txt`, not gated) | `DONE` |
+| PERF-3 | `gen` skips unchanged outputs and reads only the marker prefix, so watchers and editors stay quiet | `DONE` |
+| PERF-4 | Emitters gofmt-canonical by construction (column alignment, operator spacing, trailing newline); go/format only in tests and behind `--verify` (D75) | `DONE` |
+| PERF-5 | Routes may name the package's own tables; one directory holds schema and routes (D76) | `DONE` |
+| PERF-6 | `volt gen -o DIR -parts LIST FILE` for go:generate-driven layouts (D77); the `.volt` package clause stays mandatory, the emitted clause follows the target | `DONE` |
+| PERF-7 | Parallel schedule: parse per file, check per package, generate per package and file on a worker pool; scanner fast paths (D78) | `DONE` |
+| PERF-8 | Language server: debounced background analysis through a `lang.Session` — parses cached by content, per-package results memoized by input identity, no reverse index needed (D79) | `DONE` |
+| PERF-9 | Flat front end: pointer-free tokens, slab-allocated AST, interned symbols, precomputed emission fragments | planned |
+| PERF-10 | Per-declaration memoization for the one-file layout: hash each top-level declaration, relocate positions, re-check only the declarations whose text moved (the edit cycle is then bounded by the declaration, not the file) | planned |
+
 ## Non-goals
 
 Permanent, with reasons — see **D27**: identity map / unit of work, lazy
@@ -331,9 +362,8 @@ imply otherwise (D49). Each is small; none blocks FW-2.
   Pred-reference checks render with redundant parentheses.
 - **Query routes and datasets (2026-09-04).** `db.UserGet` in a
   handler slot has no editor navigation (a dataset's
-  select does). A dataset needs a qualified select; a routing package
-  cannot expand its own selects. Only `get` query routes and event
-  routes have reverse-URL helpers, by design.
+  select does). Only `get` query routes and event routes have
+  reverse-URL helpers, by design.
 - **Validation (2026-09-04, after D72).** The Go tier does not check
   enum membership (the DDL `CHECK … IN` does, hypotheses H5); typed
   checks have no `length()` term; a select's query parameters are typed

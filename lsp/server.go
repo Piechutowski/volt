@@ -3,6 +3,7 @@ package lsp
 import (
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
@@ -19,13 +20,26 @@ type Server struct {
 	watchSupported bool // client accepts dynamic didChangeWatchedFiles registration
 	mu             sync.Mutex
 	docs           map[string]*Document
+	// texts mirrors every open document's text by on-disk path, under
+	// mu, for the background analysis to snapshot without touching a
+	// Document (D79).
+	texts map[string]string
+	// analyses is the background analysis of each project root.
+	analyses map[string]*analysis
+	// debounce is how long edits must be quiet before a run.
+	debounce time.Duration
 
 	handler protocol.Handler
 }
 
 // NewServer wires up the LSP handler.
 func NewServer() *Server {
-	s := &Server{docs: map[string]*Document{}}
+	s := &Server{
+		docs:     map[string]*Document{},
+		texts:    map[string]string{},
+		analyses: map[string]*analysis{},
+		debounce: analysisDebounce,
+	}
 	s.handler = protocol.Handler{
 		Initialize:  s.initialize,
 		Initialized: s.initialized,
@@ -114,7 +128,7 @@ func (s *Server) watchedFilesChanged(ctx *glsp.Context, params *protocol.DidChan
 		}
 	}
 	if goTouched {
-		s.refreshOthers(ctx, "")
+		s.analysisKickAll(ctx)
 	}
 	return nil
 }
@@ -131,24 +145,41 @@ func (s *Server) freshen(ctx *glsp.Context, doc *Document) {
 }
 
 func (s *Server) didOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
-	doc := &Document{URI: params.TextDocument.URI, Siblings: s.openTexts}
+	doc := &Document{URI: params.TextDocument.URI, Siblings: s.openTexts, Session: s.sessionFor}
 	s.mu.Lock()
 	s.docs[params.TextDocument.URI] = doc
 	s.mu.Unlock()
-	doc.Update(params.TextDocument.Text)
-	s.diagnosticsPublish(ctx, doc)
-	s.refreshOthers(ctx, params.TextDocument.URI)
+	s.edited(ctx, doc, params.TextDocument.Text)
 	return nil
 }
 
+// edited records a document's new text: its own front end now, and
+// the project's analysis once the edits settle (D79). Open documents
+// of a project see each other through the overlay, so one edit changes
+// the truth of every one of them — the analysis publishes to all. A
+// document outside any project has its verdict right away.
+func (s *Server) edited(ctx *glsp.Context, doc *Document, text string) {
+	path := pathFromURI(doc.URI)
+	s.mu.Lock()
+	s.texts[path] = text
+	s.mu.Unlock()
+	doc.UpdateLocal(text)
+	if root, ok := projectRootOf(path); ok {
+		s.analysisKick(ctx, root)
+		return
+	}
+	doc.Diags = doc.local
+	s.diagnosticsPublish(ctx, doc)
+}
+
 // openTexts snapshots every open buffer keyed by on-disk path — the
-// overlay the Volt project pass feeds to lang.LoadOverlay.
+// overlay the Volt project pass feeds to the loader.
 func (s *Server) openTexts() map[string]string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make(map[string]string, len(s.docs))
-	for uri, doc := range s.docs {
-		out[pathFromURI(uri)] = doc.Text
+	out := make(map[string]string, len(s.texts))
+	for path, text := range s.texts {
+		out[path] = text
 	}
 	return out
 }
@@ -158,28 +189,31 @@ func (s *Server) didChange(ctx *glsp.Context, params *protocol.DidChangeTextDocu
 	if doc == nil {
 		return nil
 	}
+	text := doc.Text
 	for _, change := range params.ContentChanges {
 		switch c := change.(type) {
 		case protocol.TextDocumentContentChangeEventWhole:
-			doc.Update(c.Text)
+			text = c.Text
 		case protocol.TextDocumentContentChangeEvent:
 			if c.Range == nil {
-				doc.Update(c.Text)
+				text = c.Text
 				continue
 			}
+			doc.textSet(text)
 			start := doc.FromLSP(c.Range.Start)
 			end := doc.FromLSP(c.Range.End)
-			doc.Update(doc.Text[:start] + c.Text + doc.Text[end:])
+			text = text[:start] + c.Text + text[end:]
 		}
 	}
-	s.diagnosticsPublish(ctx, doc)
-	s.refreshOthers(ctx, params.TextDocument.URI)
+	s.edited(ctx, doc, text)
 	return nil
 }
 
 func (s *Server) didClose(ctx *glsp.Context, params *protocol.DidCloseTextDocumentParams) error {
+	path := pathFromURI(params.TextDocument.URI)
 	s.mu.Lock()
 	delete(s.docs, params.TextDocument.URI)
+	delete(s.texts, path)
 	s.mu.Unlock()
 	// clear stale squiggles
 	ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
@@ -187,27 +221,24 @@ func (s *Server) didClose(ctx *glsp.Context, params *protocol.DidCloseTextDocume
 		Diagnostics: []protocol.Diagnostic{},
 	})
 	// the closed buffer reverts to its saved content for everyone else
-	s.refreshOthers(ctx, params.TextDocument.URI)
+	if root, ok := projectRootOf(path); ok {
+		s.analysisKick(ctx, root)
+	}
 	return nil
 }
 
-// refreshOthers re-checks and republishes every open document except
-// the one that just changed. Open documents of a Volt project see each
-// other through the overlay, so an edit in one file changes the truth
-// of the diagnostics in all of them — without this, a fixed (or newly
-// broken) sibling keeps its stale squiggles until it is touched.
-func (s *Server) refreshOthers(ctx *glsp.Context, except string) {
+// analysisKickAll re-analyzes every project with an open document.
+func (s *Server) analysisKickAll(ctx *glsp.Context) {
 	s.mu.Lock()
-	others := make([]*Document, 0, len(s.docs))
-	for uri, doc := range s.docs {
-		if uri != except {
-			others = append(others, doc)
+	roots := map[string]bool{}
+	for uri := range s.docs {
+		if root, ok := projectRootOf(pathFromURI(uri)); ok {
+			roots[root] = true
 		}
 	}
 	s.mu.Unlock()
-	for _, doc := range others {
-		doc.Update(doc.Text)
-		s.diagnosticsPublish(ctx, doc)
+	for root := range roots {
+		s.analysisKick(ctx, root)
 	}
 }
 
@@ -218,10 +249,14 @@ func (s *Server) diagnosticsPublish(ctx *glsp.Context, doc *Document) {
 	})
 }
 
+// docGet returns the open document, carrying the newest analysis of
+// its project (adopt), so every request reads the current truth.
 func (s *Server) docGet(uri string) *Document {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.docs[uri]
+	doc := s.docs[uri]
+	s.mu.Unlock()
+	s.adopt(doc)
+	return doc
 }
 
 // ---------------------------------------------------------------------------

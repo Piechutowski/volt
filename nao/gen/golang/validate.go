@@ -8,10 +8,10 @@ package golang
 
 import (
 	"fmt"
-	"go/format"
 	"sort"
 	"strings"
 
+	"github.com/Piechutowski/volt/gen/align"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 )
@@ -19,17 +19,18 @@ import (
 // GenerateValidators renders nao_validate.go for the given tables.
 // fns must be non-empty; the caller decides whether the file exists.
 func GenerateValidators(f *ast.File, info *check.Info, fns []CheckFn, opts Options) ([]byte, error) {
+	return PlanBuild(f, info).Validators(fns, opts)
+}
+
+// Validators renders nao_validate.go for the planned package.
+func (pl *Plan) Validators(fns []CheckFn, opts Options) ([]byte, error) {
 	if opts.Package == "" {
 		return nil, fmt.Errorf("no package name")
 	}
-	p, err := planBuild(f, info)
-	if err != nil {
-		return nil, err
+	if pl.err != nil {
+		return nil, pl.err
 	}
-	byKey := map[string]*tableModel{}
-	for _, t := range p.tables {
-		byKey[t.ti.Key] = t
-	}
+	byKey := pl.byKey
 
 	var body strings.Builder
 	usesRt := false
@@ -71,11 +72,7 @@ func GenerateValidators(f *ast.File, info *check.Info, fns []CheckFn, opts Optio
 	out.WriteString(")\n\n")
 	out.WriteString(body.String())
 
-	src, err := format.Source([]byte(out.String()))
-	if err != nil {
-		return nil, fmt.Errorf("generated validators do not parse: %w\n%s", err, out.String())
-	}
-	return src, nil
+	return align.Finish(out.String()), nil
 }
 
 // validateEmit renders one Validate method on recv over checks, each

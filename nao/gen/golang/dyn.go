@@ -33,10 +33,11 @@ package golang
 
 import (
 	"fmt"
-	"go/format"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
+	"github.com/Piechutowski/volt/gen/align"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/token"
@@ -46,25 +47,24 @@ import (
 // the third sibling of Generate and GenerateQueries — same package,
 // models and the Queries type assumed present.
 func GenerateDyn(f *ast.File, info *check.Info, opts Options) ([]byte, error) {
+	return PlanBuild(f, info).Dyn(opts)
+}
+
+// Dyn renders the dynamic-query file for the planned package.
+func (pl *Plan) Dyn(opts Options) ([]byte, error) {
 	if opts.Package == "" {
 		return nil, fmt.Errorf("no package name")
 	}
-	p, err := planBuild(f, info)
-	if err != nil {
-		return nil, err
+	if pl.err != nil {
+		return nil, pl.err
 	}
-	if cs := dynNamesCheck(p, info); len(cs) > 0 {
+	if cs := dynNamesCheck(pl.p, pl.info); len(cs) > 0 {
 		c := cs[0]
 		return nil, fmt.Errorf("%s and %s both need the Go name %s; rename one (e.g. with [model:])", c.First, c.Second, c.Name)
 	}
-	e := &dynEmitter{plan: p, opts: opts}
+	e := &dynEmitter{plan: pl.p, opts: opts}
 	e.run()
-	src, err := format.Source([]byte(e.out.String()))
-	if err != nil {
-		// unreachable if the emitter is correct; surfaced loudly if not
-		return nil, fmt.Errorf("generated code does not parse: %w\n%s", err, e.out.String())
-	}
-	return src, nil
+	return align.Finish(e.out.String()), nil
 }
 
 /* ===== package-scope name collisions (DYN-7) ===== */
@@ -90,31 +90,74 @@ type NameCollision struct {
 // file that does not survive planning reports nothing: generation
 // itself raises those errors.
 func DynNameCollisions(f *ast.File, info *check.Info) []NameCollision {
-	p, err := planBuild(f, info)
-	if err != nil {
-		return nil
+	return PlanBuild(f, info).DynNameCollisions()
+}
+
+// dynOrigin is where one minted name comes from. The description is
+// rendered only when a collision names it: a package mints one name per
+// column plus a handful per table, and nearly all of them are unique.
+type dynOrigin struct {
+	kind dynOriginKind
+	pos  token.Position
+	tm   *tableModel
+	f    *fieldPlan
+	e    *check.EnumInfo
+	v    *ast.EnumValue
+	sfx  string
+}
+
+type dynOriginKind uint8
+
+const (
+	dynQueries dynOriginKind = iota
+	dynEnum
+	dynEnumValue
+	dynModel
+	dynCreateParams
+	dynUpdateParams
+	dynHandle
+	dynWrapper
+)
+
+func (o dynOrigin) describe() string {
+	switch o.kind {
+	case dynEnum:
+		return "enum " + o.e.Decl.Name.String()
+	case dynEnumValue:
+		return fmt.Sprintf("enum %s value %q", o.e.Decl.Name.String(), o.v.Name.Name())
+	case dynModel:
+		return fmt.Sprintf("table %s (model %s)", o.tm.ti.Decl.Name.String(), o.tm.model)
+	case dynCreateParams:
+		return fmt.Sprintf("table %s (create params)", o.tm.ti.Decl.Name.String())
+	case dynUpdateParams:
+		return fmt.Sprintf("table %s (update params)", o.tm.ti.Decl.Name.String())
+	case dynHandle:
+		return fmt.Sprintf("table %s column %q (handle %s%s)", o.tm.ti.Decl.Name.String(), o.f.colName, o.tm.model, o.f.goField)
+	case dynWrapper:
+		return fmt.Sprintf("table %s (option wrapper %s%s)", o.tm.ti.Decl.Name.String(), o.tm.model, o.sfx)
 	}
-	return dynNamesCheck(p, info)
+	return "the generated Queries type"
 }
 
 func dynNamesCheck(p *plan, info *check.Info) []NameCollision {
-	type origin struct {
-		desc string
-		pos  token.Position
+	size := 1
+	for _, tm := range p.tables {
+		size += 3 + len(dynWrapperSuffixes) + len(tm.fields)
 	}
-	seen := map[string]origin{"Queries": {desc: "the generated Queries type"}}
+	seen := make(map[string]dynOrigin, size)
+	seen["Queries"] = dynOrigin{kind: dynQueries}
 	var out []NameCollision
-	add := func(name, desc string, pos token.Position) {
+	add := func(name string, o dynOrigin) {
 		prev, dup := seen[name]
 		if !dup {
-			seen[name] = origin{desc: desc, pos: pos}
+			seen[name] = o
 			return
 		}
-		first, second := prev, origin{desc: desc, pos: pos}
+		first, second := prev, o
 		if second.pos.Line < first.pos.Line || (second.pos.Line == first.pos.Line && second.pos.Column < first.pos.Column) {
 			first, second = second, first
 		}
-		out = append(out, NameCollision{Name: name, First: first.desc, Second: second.desc, Pos: second.pos})
+		out = append(out, NameCollision{Name: name, First: first.describe(), Second: second.describe(), Pos: second.pos})
 	}
 
 	for _, e := range info.Enums {
@@ -122,33 +165,32 @@ func dynNamesCheck(p *plan, info *check.Info) []NameCollision {
 		if err != nil {
 			continue // generation reports unusable names itself
 		}
-		add(typeName, "enum "+e.Decl.Name.String(), e.Decl.Pos())
+		add(typeName, dynOrigin{kind: dynEnum, e: e, pos: e.Decl.Pos()})
 		for _, v := range e.Decl.Values {
 			constName, err := goName(v.Name.Name())
 			if err != nil {
 				continue
 			}
-			add(typeName+constName, fmt.Sprintf("enum %s value %q", e.Decl.Name.String(), v.Name.Name()), v.Pos())
+			add(typeName+constName, dynOrigin{kind: dynEnumValue, e: e, v: v, pos: v.Pos()})
 		}
 	}
 	for _, tm := range p.tables {
-		tbl := tm.ti.Decl.Name.String()
 		pos := tm.ti.Decl.Pos()
-		add(tm.model, fmt.Sprintf("table %s (model %s)", tbl, tm.model), pos)
+		add(tm.model, dynOrigin{kind: dynModel, tm: tm, pos: pos})
 		if len(tm.fields) == 0 {
 			continue // no queryable shape: no queries, no dynamic layer
 		}
 		if len(tm.createFields()) > 0 {
-			add(tm.model+"CreateParams", fmt.Sprintf("table %s (create params)", tbl), pos)
+			add(tm.model+"CreateParams", dynOrigin{kind: dynCreateParams, tm: tm, pos: pos})
 		}
 		if len(tm.pk) > 0 && len(tm.nonPK()) > 0 {
-			add(tm.model+"UpdateParams", fmt.Sprintf("table %s (update params)", tbl), pos)
+			add(tm.model+"UpdateParams", dynOrigin{kind: dynUpdateParams, tm: tm, pos: pos})
 		}
 		for _, f := range tm.fields {
-			add(tm.model+f.goField, fmt.Sprintf("table %s column %q (handle %s%s)", tbl, f.colName, tm.model, f.goField), f.col.Pos())
+			add(tm.model+f.goField, dynOrigin{kind: dynHandle, tm: tm, f: f, pos: f.col.Pos()})
 		}
 		for _, sfx := range dynWrapperSuffixes {
-			add(tm.model+sfx, fmt.Sprintf("table %s (option wrapper %s%s)", tbl, tm.model, sfx), pos)
+			add(tm.model+sfx, dynOrigin{kind: dynWrapper, tm: tm, sfx: sfx, pos: pos})
 		}
 	}
 	return out
@@ -227,14 +269,16 @@ func (e *dynEmitter) handlesEmit(t *tableModel, lower, tbl string) {
 	fmt.Fprintf(b, "// built here can only enter %s queries; mixing models is a compile\n", t.model)
 	fmt.Fprintf(b, "// error.\n")
 	b.WriteString("var (\n")
+	var handles align.Block
 	for _, f := range t.fields {
 		if f.nullable {
-			fmt.Fprintf(b, "\t%s%s = rt.NullColumn[%s, %s]{Column: rt.Column[%s, %s]{Name: %q}}\n",
-				t.model, f.goField, t.model, f.baseType, t.model, f.baseType, f.colName)
+			handles.Row(t.model+f.goField, fmt.Sprintf("= rt.NullColumn[%s, %s]{Column: rt.Column[%s, %s]{Name: %q}}",
+				t.model, f.baseType, t.model, f.baseType, f.colName))
 			continue
 		}
-		fmt.Fprintf(b, "\t%s%s = rt.Column[%s, %s]{Name: %q}\n", t.model, f.goField, t.model, f.baseType, f.colName)
+		handles.Row(t.model+f.goField, fmt.Sprintf("= rt.Column[%s, %s]{Name: %q}", t.model, f.baseType, f.colName))
 	}
+	handles.WriteTo(b, "\t")
 	b.WriteString(")\n\n")
 }
 
@@ -242,19 +286,31 @@ func (e *dynEmitter) wrappersEmit(t *tableModel, tbl string) {
 	b := &e.body
 	m := t.model
 	fmt.Fprintf(b, "// %sLimit caps how many rows %sQuery returns (D30).\n", m, m)
-	fmt.Fprintf(b, "func %sLimit(n int) rt.Opt[%s] { return rt.Limit[%s](n) }\n\n", m, m, m)
+	funcLine(b, "func "+m+"Limit(n int) rt.Opt["+m+"]", "return rt.Limit["+m+"](n)")
 	fmt.Fprintf(b, "// %sOffset skips n rows; keyset pagination (%sAfter) scales better (D34).\n", m, m)
-	fmt.Fprintf(b, "func %sOffset(n int) rt.Opt[%s] { return rt.Offset[%s](n) }\n\n", m, m, m)
+	funcLine(b, "func "+m+"Offset(n int) rt.Opt["+m+"]", "return rt.Offset["+m+"](n)")
 	fmt.Fprintf(b, "// %sDistinct deduplicates the rows %sQuery returns.\n", m, m)
-	fmt.Fprintf(b, "func %sDistinct() rt.Opt[%s] { return rt.Distinct[%s]() }\n\n", m, m, m)
+	funcLine(b, "func "+m+"Distinct() rt.Opt["+m+"]", "return rt.Distinct["+m+"]()")
 	fmt.Fprintf(b, "// %sOrderBy sorts %sQuery's rows by Asc/Desc terms built on the\n// %s column handles.\n", m, m, m)
-	fmt.Fprintf(b, "func %sOrderBy(terms ...rt.Order[%s]) rt.Opt[%s] { return rt.OrderBy(terms...) }\n\n", m, m, m)
+	funcLine(b, "func "+m+"OrderBy(terms ...rt.Order["+m+"]) rt.Opt["+m+"]", "return rt.OrderBy(terms...)")
 	fmt.Fprintf(b, "// %sAfter resumes strictly after the row with the given key — keyset\n", m)
 	fmt.Fprintf(b, "// pagination (D34): one value per %sOrderBy term, in the same order.\n", m)
-	fmt.Fprintf(b, "func %sAfter(key ...any) rt.Opt[%s] { return rt.After[%s](key...) }\n\n", m, m, m)
+	funcLine(b, "func "+m+"After(key ...any) rt.Opt["+m+"]", "return rt.After["+m+"](key...)")
 	fmt.Fprintf(b, "// %sSet collects the typed assignments of a %sUpdateWhere, built\n", m, m)
 	fmt.Fprintf(b, "// with Set/SetNull on the %s column handles.\n", m)
-	fmt.Fprintf(b, "func %sSet(assigns ...rt.Assign[%s]) []rt.Assign[%s] { return assigns }\n\n", m, m, m)
+	funcLine(b, "func "+m+"Set(assigns ...rt.Assign["+m+"]) []rt.Assign["+m+"]", "return assigns")
+}
+
+// funcLine writes a one-statement function the way gofmt prints it: on
+// one line when the header and the statement together fit go/printer's
+// limit of 100 characters, otherwise with the body on its own line
+// (D75). The header runs from "func" to the result type.
+func funcLine(b *strings.Builder, header, body string) {
+	if utf8.RuneCountInString(header)+utf8.RuneCountInString(body) <= 100 {
+		b.WriteString(header + " { " + body + " }\n\n")
+		return
+	}
+	b.WriteString(header + " {\n\t" + body + "\n}\n\n")
 }
 
 func (e *dynEmitter) queryEmit(t *tableModel, lower, tbl string) {

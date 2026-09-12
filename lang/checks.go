@@ -73,7 +73,7 @@ func (c *checker) requiredSpecs(ti *check.TableInfo, info *check.Info) []golang.
 			continue
 		}
 		if fields == nil {
-			_, fs, err := golang.ModelFields(c.pkg.merged, info, ti.Key)
+			_, fs, err := c.pkg.plan.ModelFields(ti.Key)
 			if err != nil {
 				return nil
 			}
@@ -207,7 +207,7 @@ type chkEnv struct {
 }
 
 func (c *checker) checkEnv(ti *check.TableInfo, ck *ast.Check, info *check.Info) *chkEnv {
-	_, fields, err := golang.ModelFields(c.pkg.merged, info, ti.Key)
+	_, fields, err := c.pkg.plan.ModelFields(ti.Key)
 	if err != nil {
 		c.errorf(ck.Pos(), "V12", "check: %v", err)
 		return nil

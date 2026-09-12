@@ -524,7 +524,9 @@ where the merge changed the facts.
   be, and one raw `*http.Response` method per named controller route.
   It imports the runtime and the data packages only, so a desktop
   application shares the generated models with the server without
-  importing the server. Client method names and reverse-URL helpers
+  importing the server (the one exception, D76: a package that routes
+  its own tables is what its client imports for the row types). Client
+  method names and reverse-URL helpers
   share one namespace, because they are the same name seen from two
   sides. A non-2xx reply is a `volt.HTTPError`, and status errors
   match by code, so `errors.Is(err, volt.ErrNotFound)` reads the same
@@ -606,6 +608,151 @@ where the merge changed the facts.
   forever, with `except:` as the way to take one action back by hand.
   What it refuses: the form pages (`default` implies `api`, since a
   generated handler has nothing to render for `new` and `edit`), a
-  `param:` rename (binding is by the key's generated name), and an
-  unqualified table (the CRUD lives in the data package, as for every
-  query route).
+  `param:` rename (binding is by the key's generated name), and — until
+  D76 let a package route its own tables — an unqualified table.
+
+- **D74 — The naming plan is built once per package and shared**
+  (2026-09-10, spec §V4.8, §V5.5, §V11.7, §V12). Right after the
+  schema pass, `lang.Check` builds one immutable plan per package:
+  every Go and SQL name of every table and column, the generated CRUD
+  method table indexed by method name, and the §V11.7 name scope. The
+  routing checker, the select and check lowering, the five generators,
+  vet and the language server read that plan; nothing downstream
+  derives a name from the AST again. The one implementation of naming
+  (the reason the export helpers exist) stays; what changes is that it
+  runs once. The alternative was measured: helpers that answered a
+  per-table question by re-planning the whole package, called once per
+  table per action per route, made `volt check` cubic in tables per
+  package — 5·R·T²·C name derivations, 47 minutes for 1000 tables of
+  150 columns in 20 packages, against 1.4 seconds from the shared
+  plan with byte-identical output. Route conflicts follow the same
+  rule: a route's path shape is parsed once and accepted routes are
+  bucketed by first literal segment, so the §V4.7.2 scan compares
+  candidates, not every pair. What it refuses: an exported helper that
+  takes an AST and an Info and plans on the caller's behalf inside a
+  loop — the one-shot forms remain for tests and single questions,
+  never for per-route work — and a plan mutated after it is built,
+  since sharing it across goroutines is the next step.
+
+- **D75 — Generated Go is gofmt-canonical by construction; gofmt is a
+  test, not a stage** (2026-09-10, spec §V4.7.3 "gofmt-stable"). The
+  generators used to pass every file through go/format.Source, which
+  bought parse-safety and formatting at zero emitter complexity and
+  cost 80% of generation time: gofmt re-parses and re-prints every byte
+  at about 8 MB/s whatever it is handed. A source-to-source compiler
+  that needs a formatter to make its output correct does not trust its
+  output; ours is held to the bar the SQL already meets. Measured on
+  the corpus, gofmt changed exactly four things in the raw emission:
+  column alignment in struct fields and in const and var blocks, the
+  spacing of `+` inside multi-argument calls, blank-line runs and the
+  trailing newline, and the one-line form of a function whose header
+  and body exceed one hundred characters; the router also sorts imports
+  within a group. `gen/align` lays out the aligned blocks with
+  tabwriter's own rules, the emitters apply the rest, and the proof is
+  in tests: gofmt must be the identity on every golden, on every valid
+  conformance project and on the scaling fixtures, and a randomized
+  test pits `gen/align` against gofmt directly. `volt gen --verify`
+  runs the same proof on the project at hand. What it refuses: a
+  `--no-fmt` flag or any second output shape, since there is one
+  output and it is canonical; and any new emitter shape that lands
+  without the fixed-point test covering it.
+
+- **D76 — A package may route its own tables; one directory holds
+  everything** (2026-09-10, spec §V2.4, §V4.3, §V4.8.6, §V4.10, §V5.5,
+  §V13.1). Volt is a library with a compiler, not a layout: it must
+  not force a project into a `db/` and an `app/` before the first
+  route can exist. The floor was two directories because a query
+  route, `resources [default]` and `dataset` could only name an
+  *imported* data package. Now a reference to the package's own
+  generated query is spelled as a plug is (§V3.2, D63): bare,
+  `PostList`, or self-qualified, `site.PostList`; a bare or
+  self-qualified `resources` or `dataset` resolves in the package
+  itself. The manifest gains `Queries *Queries` with no import, the
+  router names the params structs bare, the router's constructor is
+  `NewRouter` so it never collides with the query layer's `New` in the
+  same package, and the generated client imports the routing package
+  for its row types — the one case where a client links server code,
+  the price of having one package. Consequences: the package's own
+  name is a qualifier, so an import cannot take it (§V2.4), and the
+  `Controllers` manifest is one namespace, so a controller cannot be
+  called `Queries`, `Events` or an import's Go name (§V4.3.4). What it
+  refuses: a client for a `main` package that routes its own tables
+  (Go cannot import main; none is generated until the client can be
+  emitted beside the models), and a third spelling — the qualifier is
+  the package's own name or nothing, never a keyword like `self`.
+
+- **D77 — Generation is layout-independent: `-o DIR -parts LIST`, and
+  the params structs are models** (2026-09-10, spec §V1.7, §V4.10.6,
+  Appendix A). A library with a compiler cannot dictate where the
+  compiler's output goes. `volt gen -o DIR` writes one package's files
+  into any directory — another module's included, since a package that
+  routes its own tables (D76) imports nothing across packages — under
+  the package clause that directory already declares; `-parts` picks
+  among models, queries, router, client and sql; the argument may be
+  the `.volt` file itself, so a `//go:generate` line points at the
+  file beside it. The layout this was built for is a `go.work`
+  workspace with one schema at the root and two `package main`
+  modules, a server and a desktop client, each generating its own
+  parts. The client written beside the models names their types bare
+  and its constructor `NewClient`, since `New` beside it is the query
+  layer's. For a client to need nothing but the models, the params
+  structs — the types the wire carries in — moved from
+  `nao_queries.go` to `nao_models.go`, and the queries file now imports
+  only what its signatures name. What it refuses: making the package
+  clause of a `.volt` file optional (it names the self-qualifier and
+  the package's identity to the language server; the emitted clause
+  follows the target directory instead), and any manifest or config
+  file describing layouts — the `go:generate` line is the layout.
+
+- **D78 — The schedule is per phase, per item, on every CPU, and never
+  part of the output** (2026-09-10, roadmap PERF-7). One primitive,
+  `internal/par.For(n, fn)`: a phase hands it n independent items,
+  they run on up to GOMAXPROCS goroutines, and every result lands in
+  its own index slot, so assembly happens in index order and no output
+  — diagnostics, bytes, printed lines — depends on which CPU finished
+  first. The phases: files of one import wave parse together; the
+  schema check, the plan, the query and check lowering and the routing
+  run per package, each phase a barrier before the next, each package
+  on its own checker with the project, the schemas and the Go-function
+  cache shared read-only or locked; the files of one package, and the
+  packages of one run, generate together; `--verify`, the reads of what
+  is on disk and the writes run together too. The scanner keeps ASCII
+  on a byte path, skips blanks in one loop and sizes its token slice
+  once. Measured on the 1000-table fixture, four cores: check 1.33 s to
+  0.88 s, generate 2.7 s to 1.3 s, `--verify` 9.3 s to 3.5 s; one CPU
+  is not slower than before. The proof is a test that runs the same
+  project on one CPU and on all and compares diagnostics and bytes,
+  under the race detector. What it refuses: a goroutine per item or a
+  channel pipeline (the pool is the whole design), GC tuning (measured:
+  a higher GOGC trades page faults for marking and wins nothing here),
+  and any phase that writes another package's fields — the barriers
+  are the invariant.
+
+- **D79 — The editor keeps a session: parses by content, packages by
+  input identity, one background analysis per project** (2026-09-10,
+  roadmap PERF-8, `docs/editor.md` §3). The server used to reload and
+  re-check the whole project synchronously on every keystroke, once
+  per open document. Now `lang.Session` holds, per project root, every
+  file's last parse (reused when the text is the same — a disk file by
+  size and mtime first, so it is not even read) and every package's
+  last check results and diagnostics, keyed by a hash of its files'
+  parse identities, its Go files' stamp and its imports' keys, so a
+  change anywhere upstream changes the key and nothing needs a reverse
+  index; a package on an import cycle is never memoized. `Session.Load`
+  and `Session.Check` are proven identical to the fresh functions edit
+  by edit, with the work counted: one parse per changed file, one
+  check per package that could see it. The server records an edit
+  cheaply — the document's own front end, a mirror of the text — and
+  runs one analysis per project per quiet moment on a goroutine that
+  touches no document: it publishes from its own snapshot of the open
+  texts and every request adopts the newest result at its start, on
+  the handler goroutine, which glsp keeps single. Measured on the
+  1000-table fixture: 770 ms fresh, about 200 ms per edit, 2 ms when
+  nothing changed. What it refuses: locking inside Document (the
+  handler goroutine owns it; results cross over by adoption), a
+  cancellation token threaded through the checker (a run that lost
+  the race is simply superseded; the memo makes the waste small), and
+  identity by pointer address (a parse identity is a counter, so a
+  freed and reused address can never match). What remains: an edit
+  still re-parses its whole file and re-checks its whole package —
+  per-declaration memoization is PERF-10.

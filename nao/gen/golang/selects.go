@@ -8,10 +8,10 @@ package golang
 
 import (
 	"fmt"
-	"go/format"
 	"sort"
 	"strings"
 
+	"github.com/Piechutowski/volt/gen/align"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 )
@@ -19,17 +19,18 @@ import (
 // GenerateSelects renders nao_selects.go for the given instantiations.
 // fns must be non-empty; the caller decides whether the file exists.
 func GenerateSelects(f *ast.File, info *check.Info, fns []SelectFn, opts Options) ([]byte, error) {
+	return PlanBuild(f, info).Selects(fns, opts)
+}
+
+// Selects renders nao_selects.go for the planned package.
+func (pl *Plan) Selects(fns []SelectFn, opts Options) ([]byte, error) {
 	if opts.Package == "" {
 		return nil, fmt.Errorf("no package name")
 	}
-	p, err := planBuild(f, info)
-	if err != nil {
-		return nil, err
+	if pl.err != nil {
+		return nil, pl.err
 	}
-	byKey := map[string]*tableModel{}
-	for _, t := range p.tables {
-		byKey[t.ti.Key] = t
-	}
+	byKey := pl.byKey
 
 	var body strings.Builder
 	imports := map[string]bool{"context": true}
@@ -60,12 +61,14 @@ func GenerateSelects(f *ast.File, info *check.Info, fns []SelectFn, opts Options
 				sharedDone[fn.SharedType] = true
 				fmt.Fprintf(&body, "// %s is the shared row type of select %q (spec §V11.7):\n// one wire type, every member of the target a source.\n", fn.SharedType, lowerFirstWord(fn.MethodSuffix))
 				fmt.Fprintf(&body, "type %s struct {\n", fn.SharedType)
+				var rows align.Block
 				for _, f := range cols {
 					// The shared type belongs to the select, not to any one
 					// table: default tags, no per-table notes (A.5, §V11.7).
 					fieldImports(imports, f.goType)
-					fmt.Fprintf(&body, "\t%s %s `db:%q json:%q`\n", f.goField, f.goType, f.colName, f.colName)
+					rows.Row(f.goField, f.goType, fmt.Sprintf("`db:%q json:%q`", f.colName, f.colName))
 				}
+				rows.WriteTo(&body, "\t")
 				body.WriteString("}\n\n")
 				rowScanEmit(&body, fn.SharedType, cols)
 			}
@@ -74,13 +77,15 @@ func GenerateSelects(f *ast.File, info *check.Info, fns []SelectFn, opts Options
 			fmt.Fprintf(&body, "// %s is %s minus (%s) — a struct derivative of select %q,\n// every kept field copied verbatim (spec §V11.7).\n",
 				row, t.model, strings.Join(fn.Excluded, ", "), lowerFirstWord(fn.MethodSuffix))
 			fmt.Fprintf(&body, "type %s struct {\n", row)
+			var rows align.Block
 			for _, f := range cols {
 				fieldImports(imports, f.goType)
 				if note := settingNote(f.col.Settings); note != "" {
-					commentWriteIndent(&body, note)
+					commentLines(&rows, note)
 				}
-				fmt.Fprintf(&body, "\t%s %s `%s`\n", f.goField, f.goType, f.tag)
+				rows.Row(f.goField, f.goType, "`"+f.tag+"`")
 			}
+			rows.WriteTo(&body, "\t")
 			body.WriteString("}\n\n")
 			rowScanEmit(&body, row, cols)
 		}
@@ -103,11 +108,7 @@ func GenerateSelects(f *ast.File, info *check.Info, fns []SelectFn, opts Options
 	out.WriteString(")\n\n")
 	out.WriteString(body.String())
 
-	src, err := format.Source([]byte(out.String()))
-	if err != nil {
-		return nil, fmt.Errorf("generated selects do not parse: %w\n%s", err, out.String())
-	}
-	return src, nil
+	return align.Finish(out.String()), nil
 }
 
 // selectColumns resolves one instantiation's projected columns
@@ -200,51 +201,14 @@ func SelectSQL(t *tableModel, fn SelectFn) string {
 // SelectSQLFor is SelectSQL keyed the way callers outside the package
 // see tables; it builds the plan itself. Test helper.
 func SelectSQLFor(f *ast.File, info *check.Info, fn SelectFn) (string, error) {
-	p, err := planBuild(f, info)
-	if err != nil {
-		return "", err
-	}
-	for _, t := range p.tables {
-		if t.ti.Key == fn.TableKey {
-			return SelectSQL(t, fn), nil
-		}
-	}
-	return "", fmt.Errorf("no table %q", fn.TableKey)
+	return PlanBuild(f, info).SelectStatement(fn)
 }
 
 // SelectRowType names the row type one instantiation returns (§V11.7)
-// and reports its fields — hover-grade truth for the tooling.
+// and reports its fields — hover-grade truth for the tooling. One-shot
+// convenience over Plan.SelectRowType: it plans the whole file.
 func SelectRowType(f *ast.File, info *check.Info, fn SelectFn) (string, []FieldSig, error) {
-	p, err := planBuild(f, info)
-	if err != nil {
-		return "", nil, err
-	}
-	for _, t := range p.tables {
-		if t.ti.Key != fn.TableKey {
-			continue
-		}
-		cols, err := selectColumns(t, fn)
-		if err != nil {
-			return "", nil, err
-		}
-		row := t.model
-		switch {
-		case fn.SharedType != "":
-			row = fn.SharedType
-		case len(fn.Excluded) > 0:
-			row = t.model + fn.MethodSuffix
-		}
-		sigs := make([]FieldSig, 0, len(cols))
-		for _, fp := range cols {
-			sigs = append(sigs, FieldSig{
-				Name: fp.goField, Col: fp.colName, Type: fp.goType,
-				Tag: fp.tag, Doc: settingNote(fp.col.Settings),
-				Nullable: fp.nullable,
-			})
-		}
-		return row, sigs, nil
-	}
-	return "", nil, fmt.Errorf("no table %q", fn.TableKey)
+	return PlanBuild(f, info).SelectRowType(fn)
 }
 
 // lowerFirstWord echoes a method suffix the way the schema spells the

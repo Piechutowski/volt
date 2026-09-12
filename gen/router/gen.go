@@ -1,22 +1,24 @@
 // Package router generates the Volt router files for one checked
 // package (spec §V, router spec §4): volt_handlers.go (controller
-// interfaces + the New constructor), volt_router.go (ServeMux
+// interfaces + the NewRouter constructor), volt_router.go (ServeMux
 // registrations with typed shims and statically composed pipelines),
 // volt_paths.go (typed reverse-URL helpers) and volt_routes.go (the
 // introspectable route table).
 //
-// All output passes through go/format.Source, so the generator cannot
-// emit code that does not parse, and the result is gofmt-clean by
-// construction. Generated code imports the standard library and the
-// volt runtime package only.
+// The output is gofmt-canonical by construction (D75): aligned blocks
+// are laid out by gen/align exactly as gofmt's tabwriter would, and the
+// golden tests prove gofmt is the identity on every generated file.
+// Generated code imports the standard library and the volt runtime
+// package only.
 package router
 
 import (
 	"fmt"
-	"go/format"
 	"sort"
 	"strings"
 
+	"github.com/Piechutowski/volt/gen/align"
+	"github.com/Piechutowski/volt/internal/par"
 	"github.com/Piechutowski/volt/lang"
 )
 
@@ -27,6 +29,15 @@ const voltImport = "github.com/Piechutowski/volt"
 type Options struct {
 	// Source names the input (the package path), recorded in headers.
 	Source string
+	// Package overrides the package clause of the router files; empty
+	// means the Volt package's name. `volt gen -o` sets it from the
+	// directory the files land in (§V1.7).
+	Package string
+	// ClientBeside writes the client beside the models instead of as a
+	// client subpackage (§V4.10.6): ClientBesideFile in package Package,
+	// row and params types named bare, NewClient as the constructor,
+	// nothing but the runtime imported.
+	ClientBeside bool
 }
 
 // Files are the generated file names, in emission order. The client
@@ -37,31 +48,48 @@ var Files = []string{"volt_handlers.go", "volt_router.go", "volt_paths.go", "vol
 // routing package directory.
 const ClientFile = "client/volt_client.go"
 
+// ClientBesideFile is the client written beside the models by
+// Options.ClientBeside, in place of ClientFile.
+const ClientBesideFile = "volt_client.go"
+
 // Generate renders the four router files for one checked package. The
 // package must be free of check errors and contain routing elements.
 func Generate(pkg *lang.Package, opts Options) (map[string][]byte, error) {
 	if !pkg.HasRouting() {
 		return nil, fmt.Errorf("package %s declares no routing elements", pkg.Path)
 	}
-	g := &generator{pkg: pkg, opts: opts}
+	// Every file reads the package and writes its own generator, so the
+	// files are emitted on every CPU (PERF-7).
+	type emit struct {
+		name string
+		fn   func(*generator) error
+	}
+	emits := []emit{
+		{"volt_handlers.go", (*generator).handlersEmit},
+		{"volt_router.go", (*generator).routerEmit},
+		{"volt_paths.go", (*generator).pathsEmit},
+		{"volt_routes.go", (*generator).routesEmit},
+	}
+	switch {
+	case opts.ClientBeside:
+		emits = append(emits, emit{ClientBesideFile, (*generator).clientEmit})
+	case !(&generator{pkg: pkg, opts: opts}).clientOmitted():
+		emits = append(emits, emit{ClientFile, (*generator).clientEmit})
+	}
+	codes := make([][]byte, len(emits))
+	errs := make([]error, len(emits))
+	par.For(len(emits), func(i int) {
+		g := &generator{pkg: pkg, opts: opts}
+		if errs[i] = emits[i].fn(g); errs[i] == nil {
+			codes[i] = align.Finish(g.out.String())
+		}
+	})
 	out := map[string][]byte{}
-	for name, emit := range map[string]func() error{
-		"volt_handlers.go": g.handlersEmit,
-		"volt_router.go":   g.routerEmit,
-		"volt_paths.go":    g.pathsEmit,
-		"volt_routes.go":   g.routesEmit,
-		ClientFile:         g.clientEmit,
-	} {
-		g.out.Reset()
-		if err := emit(); err != nil {
-			return nil, err
+	for i, e := range emits {
+		if errs[i] != nil {
+			return nil, errs[i]
 		}
-		src, err := format.Source([]byte(g.out.String()))
-		if err != nil {
-			// unreachable if the emitter is correct; surfaced loudly if not
-			return nil, fmt.Errorf("generated %s does not parse: %w\n%s", name, err, g.out.String())
-		}
-		out[name] = src
+		out[e.name] = codes[i]
 	}
 	return out, nil
 }
@@ -78,7 +106,16 @@ func (g *generator) pf(format string, args ...any) {
 }
 
 func (g *generator) header(imports ...string) {
-	g.headerFor(g.pkg.Name, "", imports...)
+	g.headerFor(g.pkgName(), "", imports...)
+}
+
+// pkgName is the package clause of the router files: the override of
+// `volt gen -o`, else the Volt package's name.
+func (g *generator) pkgName() string {
+	if g.opts.Package != "" {
+		return g.opts.Package
+	}
+	return g.pkg.Name
 }
 
 // headerFor is header for a named package with an optional package doc.
@@ -89,21 +126,56 @@ func (g *generator) headerFor(pkgName, doc string, imports ...string) {
 		g.pf("%s", doc)
 	}
 	g.pf("package %s\n\n", pkgName)
-	if len(imports) > 0 {
+	groups := importGroups(imports)
+	if len(groups) > 0 {
 		g.pf("import (\n")
-		for _, im := range imports {
-			if im == "" {
+		for i, group := range groups {
+			if i > 0 {
 				g.pf("\n") // group separator
-				continue
 			}
-			if strings.Contains(im, " ") {
-				g.pf("\t%s\n", im) // already rendered: `alias "path"`
-				continue
+			for _, im := range group {
+				if strings.Contains(im, " ") {
+					g.pf("\t%s\n", im) // already rendered: `alias "path"`
+					continue
+				}
+				g.pf("\t%q\n", im)
 			}
-			g.pf("\t%q\n", im)
 		}
 		g.pf(")\n\n")
 	}
+}
+
+// importGroups splits an import list at its "" separators, drops empty
+// groups and sorts each group by import path — the order gofmt imposes
+// within a group (D75).
+func importGroups(imports []string) [][]string {
+	var groups [][]string
+	var cur []string
+	flush := func() {
+		if len(cur) == 0 {
+			return
+		}
+		sort.SliceStable(cur, func(i, j int) bool { return importPath(cur[i]) < importPath(cur[j]) })
+		groups = append(groups, cur)
+		cur = nil
+	}
+	for _, im := range imports {
+		if im == "" {
+			flush()
+			continue
+		}
+		cur = append(cur, im)
+	}
+	flush()
+	return groups
+}
+
+// importPath is the path of an import entry, aliased or plain.
+func importPath(im string) string {
+	if i := strings.IndexByte(im, ' '); i >= 0 {
+		return strings.Trim(im[i+1:], `"`)
+	}
+	return im
 }
 
 // dataPackages lists the imported data packages query routes go
@@ -125,6 +197,21 @@ func (g *generator) dataPackages() []*lang.QueryRef {
 		out[i] = seen[q]
 	}
 	return out
+}
+
+// clientOmitted reports whether no client package can exist: the
+// routing package is main and routes its own tables, so the row types
+// the client needs live in a package Go cannot import (§V4.10.1).
+func (g *generator) clientOmitted() bool {
+	if g.pkg.Name != "main" {
+		return false
+	}
+	for _, q := range g.dataPackages() {
+		if q.Local {
+			return true
+		}
+	}
+	return false
 }
 
 // dataImport renders the import line of a data package: aliased when
@@ -173,10 +260,18 @@ func sigParams(ps []lang.Param) string {
 /* ===== volt_handlers.go ===== */
 
 func (g *generator) handlersEmit() error {
-	imports := []string{"net/http", "", voltImport}
+	// The runtime is named by the controller interfaces (*volt.Request)
+	// and the broker field; a package of query routes alone needs
+	// neither.
+	imports := []string{"net/http", ""}
+	if len(g.pkg.Controllers) > 0 || g.hasEvents() {
+		imports = append(imports, voltImport)
+	}
 	data := g.dataPackages()
 	for _, q := range data {
-		imports = append(imports, dataImport(q))
+		if !q.Local {
+			imports = append(imports, dataImport(q))
+		}
 	}
 	g.header(imports...)
 
@@ -202,20 +297,26 @@ func (g *generator) handlersEmit() error {
 	}
 	g.pf(".\n")
 	g.pf("type Controllers struct {\n")
+	var fields align.Block
 	for _, name := range g.controllerNames() {
-		g.pf("\t%s %sController\n", name, name)
+		fields.Row(name, name+"Controller")
 	}
 	for _, q := range data {
-		g.pf("\t%s *%s.Queries // query routes written %s.<Method>\n", q.Field, q.Qualifier, q.Qualifier)
+		if q.Local {
+			fields.Row(q.Field, "*Queries", "// query routes over this package's tables, written <Method>")
+			continue
+		}
+		fields.Row(q.Field, "*"+q.Qualifier+".Queries", "// query routes written "+q.Qualifier+".<Method>")
 	}
 	if g.hasEvents() {
-		g.pf("\tEvents *volt.Broker // event routes written volt.Events (§V4.11); nil serves nothing\n")
+		fields.Row("Events", "*volt.Broker", "// event routes written volt.Events (§V4.11); nil serves nothing")
 	}
+	fields.WriteTo(&g.out, "\t")
 	g.pf("}\n\n")
 
-	g.pf("// New builds the router: ServeMux registrations with statically\n")
+	g.pf("// NewRouter builds the router: ServeMux registrations with statically\n")
 	g.pf("// composed pipelines. The result is a plain http.Handler.\n")
-	g.pf("func New(c Controllers) http.Handler {\n")
+	g.pf("func NewRouter(c Controllers) http.Handler {\n")
 	g.pf("\tmux := http.NewServeMux()\n")
 	g.pf("\tregister(mux, c)\n")
 	g.pf("\treturn mux\n")
@@ -243,6 +344,9 @@ func plugExpr(ref string, pkgName string) string {
 func (g *generator) routerEmit() error {
 	imports := []string{"net/http", "", voltImport}
 	for _, q := range g.dataPackages() {
+		if q.Local {
+			continue // its types are this package's own
+		}
 		// The shim names the package only for a body type it declares.
 		for _, r := range g.pkg.Routes {
 			if r.Query != nil && r.Query.Qualifier == q.Qualifier && hasBody(r.Query) {
@@ -308,7 +412,7 @@ func (g *generator) routerEmit() error {
 
 	for _, n := range ehNames {
 		g.pf("// errHandler%s adapts the error_handler declared in the routes.\n", n)
-		g.pf("var errHandler%s = volt.ErrorHandler(%s)\n", n, n)
+		g.pf("var errHandler%s = volt.ErrorHandler(%s)\n\n", n, n)
 	}
 	return nil
 }
@@ -378,7 +482,13 @@ func queryShimBody(r *lang.RouteInfo) string {
 			fmt.Fprintf(&body, "\t\tvolt%s, err := volt.QueryParams[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name, strings.TrimPrefix(p.GoType, "[]"), p.Name)
 			args = append(args, "volt"+p.Name)
 		case lang.FromBody:
-			fmt.Fprintf(&body, "\t\tvar volt%s %s\n\t\tif err := volt.Decode(r, &volt%s); err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name, p.GoType, p.Name)
+			// A params struct of this package is named bare here, in
+			// the package that declares it (§V4.8.5).
+			goType := p.GoType
+			if q.Local {
+				goType = strings.TrimPrefix(goType, q.Qualifier+".")
+			}
+			fmt.Fprintf(&body, "\t\tvar volt%s %s\n\t\tif err := volt.Decode(r, &volt%s); err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name, goType, p.Name)
 			if p.Validates {
 				// The schema's checks, before the database sees the row (§V12.6).
 				fmt.Fprintf(&body, "\t\tif err := volt%s.Validate(); err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name)
@@ -481,7 +591,9 @@ func sigParamsLead(ps []lang.Param) string {
 }
 
 // pathExpr builds the Go expression producing the route's path from its
-// typed arguments, e.g. `"/users/" + volt.SegInt(int64(id))`.
+// typed arguments, e.g. `"/users/"+volt.SegInt(int64(id))`. The
+// operators carry no spaces: every use is an argument of a call with
+// two or more arguments, where gofmt prints a sum tight (D75).
 func pathExpr(r *lang.RouteInfo) string {
 	if r.Pattern == "/{$}" {
 		return `"/"`
@@ -521,7 +633,7 @@ func pathExpr(r *lang.RouteInfo) string {
 		}
 	}
 	flushLit()
-	return strings.Join(parts, " + ")
+	return strings.Join(parts, "+")
 }
 
 /* ===== volt_routes.go ===== */
@@ -532,6 +644,10 @@ func (g *generator) routesEmit() error {
 	g.pf("// Table lists every route of the package, in declaration order:\n")
 	g.pf("// the routing DSL as introspectable data ('volt routes', metrics\n")
 	g.pf("// labels, and downstream derivations read this).\n")
+	if len(g.pkg.Routes) == 0 {
+		g.pf("var Table = []volt.Route{}\n") // gofmt closes an empty literal on the same line
+		return nil
+	}
 	g.pf("var Table = []volt.Route{\n")
 	for _, r := range g.pkg.Routes {
 		if r.Query != nil {
@@ -597,20 +713,43 @@ func (g *generator) clientEmit() error {
 		imports = append(imports, "net/http")
 	}
 	imports = append(imports, "", voltImport)
+	local := false
 	for _, q := range g.dataPackages() {
-		imports = append(imports, dataImport(q))
+		// A package routing its own tables is imported for its row
+		// types (§V4.10.1); Generate omits the client when that package
+		// is main. Beside the models (§V4.10.6) the types are this
+		// package's own and nothing is imported.
+		local = local || q.Local
+		if !g.opts.ClientBeside {
+			imports = append(imports, dataImport(q))
+		}
 	}
 	doc := "// Package client calls the routes of package " + g.pkg.Name + " over HTTP\n" +
 		"// (spec §V4.10): one typed method per query route, one raw method per\n" +
 		"// named controller route. It imports the data packages and the volt\n" +
 		"// runtime only, never the server.\n"
-	g.headerFor("client", doc, imports...)
+	if local {
+		doc = "// Package client calls the routes of package " + g.pkg.Name + " over HTTP\n" +
+			"// (spec §V4.10): one typed method per query route, one raw method per\n" +
+			"// named controller route. It imports package " + g.pkg.Name + " for the row\n" +
+			"// types its routes name, and the volt runtime.\n"
+	}
+	ctor := "New"
+	if g.opts.ClientBeside {
+		// No package doc: the file joins a package that has its own. The
+		// constructor cannot be New, which the query layer beside it
+		// declares.
+		g.headerFor(g.pkgName(), "", imports...)
+		ctor = "NewClient"
+	} else {
+		g.headerFor("client", doc, imports...)
+	}
 
 	g.pf("// Client calls package %s at Base. The embedded volt.Client carries\n", g.pkg.Name)
 	g.pf("// the http.Client and the wire format (JSON by default, or GOB).\n")
 	g.pf("type Client struct {\n\tvolt.Client\n}\n\n")
-	g.pf("// New returns a client for the server at base, e.g. \"http://localhost:8888\".\n")
-	g.pf("func New(base string) *Client {\n\treturn &Client{volt.Client{Base: base}}\n}\n\n")
+	g.pf("// %s returns a client for the server at base, e.g. \"http://localhost:8888\".\n", ctor)
+	g.pf("func %s(base string) *Client {\n\treturn &Client{volt.Client{Base: base}}\n}\n\n", ctor)
 
 	for _, r := range g.pkg.Routes {
 		if r.ClientName == "" {
@@ -639,6 +778,9 @@ func (g *generator) clientEmit() error {
 		var arg string
 		for _, p := range q.Params {
 			goType := p.GoType
+			if g.opts.ClientBeside {
+				goType = strings.TrimPrefix(goType, q.Qualifier+".") // the params struct is beside us
+			}
 			fmt.Fprintf(&sig, ", %s %s", p.Name, goType)
 			switch p.Source {
 			case lang.FromQuery:
@@ -665,6 +807,9 @@ func (g *generator) clientEmit() error {
 		result := ""
 		if q.Result != "" {
 			result = q.Qualifier + "." + q.Result
+			if g.opts.ClientBeside {
+				result = q.Result // the row type is beside us
+			}
 			if q.Many {
 				result = "[]" + result
 			}

@@ -204,14 +204,13 @@ func (p *parser) dataset() *ast.Dataset {
 	return d
 }
 
-// route = verb, route path, handler ref, [ settings ], newline (§V4.2).
+// route = verb, route path, handler ref, [ settings ], newline (§V4.2);
+// handler ref = name, [ ".", name ] (§V4.3): Controller.Action, pkg.Query,
+// or a query of the package itself, bare or self-qualified.
 func (p *parser) route() *ast.Route {
 	r := &ast.Route{VerbTok: p.next()}
 	r.Path = p.routePath()
 	r.Handler = p.goRef("route handler (§V4)")
-	if len(r.Handler.Parts) != 2 {
-		p.fail(p.toks[p.pos-1], "route handler must be Controller.Action (§V4.3), found %q", r.Handler.String())
-	}
 	if p.at(token.LBRACKET) && !p.cur().NLBefore {
 		r.Settings = p.settingList()
 	}

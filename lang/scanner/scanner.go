@@ -32,12 +32,18 @@ import (
 // continues after an error where possible, so a broken file still yields a
 // best-effort token stream for the parser.
 func Scan(filename, src string) ([]token.Token, []diag.Diagnostic) {
-	// §3.2.1: carriage returns are discarded wherever they appear.
-	src = strings.ReplaceAll(src, "\r", "")
+	// §3.2.1: carriage returns are discarded wherever they appear; a
+	// source without any is scanned in place.
+	if strings.IndexByte(src, '\r') >= 0 {
+		src = strings.ReplaceAll(src, "\r", "")
+	}
 	s := &Scanner{
 		src:  src,
 		file: filename,
 		pos:  token.Position{Filename: filename, Line: 1, Column: 1},
+		// Schema text runs about six bytes per token; sizing the slice
+		// once spares the doublings and their copies (PERF-7).
+		toks: make([]token.Token, 0, len(src)/6+16),
 	}
 	s.nlBefore = true // start of file counts as a line break
 	for state := anyScan; state != nil; {
@@ -73,6 +79,9 @@ func (s *Scanner) peek() rune {
 	if s.pos.Offset >= len(s.src) {
 		return eof
 	}
+	if c := s.src[s.pos.Offset]; c < utf8.RuneSelf {
+		return rune(c) // ASCII, the common case: no decoding
+	}
 	r, _ := utf8.DecodeRuneInString(s.src[s.pos.Offset:])
 	return r
 }
@@ -97,7 +106,10 @@ func (s *Scanner) next() rune {
 	if s.pos.Offset >= len(s.src) {
 		return eof
 	}
-	r, w := utf8.DecodeRuneInString(s.src[s.pos.Offset:])
+	r, w := rune(s.src[s.pos.Offset]), 1
+	if r >= utf8.RuneSelf {
+		r, w = utf8.DecodeRuneInString(s.src[s.pos.Offset:])
+	}
 	s.pos.Offset += w
 	if r == '\n' {
 		s.pos.Line++
@@ -147,18 +159,22 @@ func isHex(r rune) bool {
 
 // anyScan is the top-level state: it dispatches on the next rune.
 func anyScan(s *Scanner) stateFn {
+	// Blanks and line breaks in one loop, not one state round each.
+	for {
+		if r := s.peek(); r == ' ' || r == '\t' {
+			s.next()
+			s.spBefore = true
+		} else if r == '\n' {
+			s.next()
+			s.nlBefore = true
+		} else {
+			break
+		}
+	}
 	s.mark()
 	switch r := s.peek(); {
 	case r == eof:
 		return nil
-	case r == ' ' || r == '\t':
-		s.next()
-		s.spBefore = true
-		return anyScan
-	case r == '\n':
-		s.next()
-		s.nlBefore = true
-		return anyScan
 	case r == '/' && s.peekAt(1) == '/':
 		return lineCommentScan
 	case r == '/' && s.peekAt(1) == '*':
@@ -376,12 +392,28 @@ func colorScan(s *Scanner) stateFn {
 }
 
 func identScan(s *Scanner) stateFn {
+	// ASCII fast path: an identifier is nearly always [A-Za-z0-9_]
+	// bytes, one column each; the rune loop below handles the rest.
+	off := s.pos.Offset
+	for off < len(s.src) && asciiIdent[s.src[off]] {
+		off++
+	}
+	s.pos.Column += off - s.pos.Offset
+	s.pos.Offset = off
 	for isIdentChar(s.peek()) {
 		s.next()
 	}
 	s.tokEmit(token.Token{Kind: token.IDENT, Val: s.raw()})
 	return anyScan
 }
+
+// asciiIdent marks the ASCII identifier bytes (§3.4 restricted to ASCII).
+var asciiIdent = func() (t [256]bool) {
+	for c := 0; c < 256; c++ {
+		t[c] = c == '_' || ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9')
+	}
+	return t
+}()
 
 // numberOrIdentScan resolves the digit-leading ambiguity of §3.4/§3.9:
 // a token of digits (one optional dot, optional exponent) is a NUMBER; a
