@@ -231,6 +231,7 @@ all enforced by `go test ./...`:
 | PROOF-5 | `itest`: full CRUD round trips through a real driver; generated files drift-tested | `DONE` (D25) |
 | PROOF-6 | vet rules ⇄ lint.md ⇄ testdata consistency test | `DONE` (D26) |
 | PROOF-7 | v1 onward: every `Select`/`View` block prepare-validated at gen time; declared columns verified | with v1 |
+| PROOF-8 | The spec's EBNF is executable (D100): every block reads, every name is defined once, the collected grammars repeat the sections, every derived sentence parses, every one-token neighbour is decided alike by grammar and front end | `DONE` |
 
 ## P12 — Fast tooling
 

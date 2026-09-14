@@ -1312,3 +1312,55 @@ where the merge changed the facts.
   What it refuses: a memo whose answer depends on anything it did not
   record (the gate walks `itemLower` as a pure target, D86), and a
   check that writes a memo's route.
+
+- **D100 — The spec's grammar is executable: read as data, checked
+  against itself, and proven against the front end sentence by
+  sentence** (2026-09-14, `lang/ebnf`, `lang/spec_grammar_test.go`,
+  spec "Conformance and the proof chain" item 5). The EBNF was the
+  spec's centerpiece and nothing read it: the parser was written from
+  it by hand, the conformance corpus exercised the rules its authors
+  thought of, and the collected grammars were copies maintained by
+  eye. Now a reader of ISO 14977 as the Notation section lists it
+  turns every `ebnf` block into data; a language is the grammar plus
+  the lexical facts the prose states beside it, each cited: which
+  rules are tokens (§3), what lies between the symbols of the others
+  (layout, §3.2 rule 3), the longest match (§3.1), the line break
+  that ends a line-oriented production and the `}` or end of file
+  that satisfies it (§3.2 rule 2), the productions that lay out their
+  own spaces or are contiguous (Notation, §V4.1.1, §V2.2, §V10), the
+  settings list on its construct's line (§4.2 rule 5), and the cut at
+  element starts (§3.2 rule 5). From that a recognizer decides any
+  text, and a deriver produces, for every choice in every production,
+  the shortest program exercising it: 482 sentences over 146 rules.
+  The test holds four things: every block reads and every name is
+  defined once; the collected grammars repeat the sections exactly;
+  every derived sentence parses; and every text one token away from
+  one (dropped, inserted, or two exchanged, 22,802 of them) is
+  accepted by the front end exactly when the grammar accepts it. What
+  the first run found, all fixed in this commit: a `+` and a missing
+  `;` the notation does not have, an escaped backslash in a terminal,
+  `plain name`, `column name`, `settings list` and `ident list` used
+  and never defined, `column path` defined and never used, `rel op`
+  defined twice, `element kind` and `punct` missing from one grammar
+  or the other, `required` absent from the appendix, a `resources`
+  copy that had drifted, `type name` and `import spec` meaning two
+  things in the two Parts (now `param type`, `import entry` and
+  `package path`), a plain identifier that admitted a number, a `\u`
+  fallback that admitted three hex digits, an import block the
+  grammar let be empty, a star projection with nothing excluded, and
+  predicate keywords the grammar let name columns. In the parser:
+  `a a\npk` was one column and `id\ninteger` one column while a
+  settings list had to stay on its line, so the spec now states the
+  rule the parser half-had (a production that ends with `newline`
+  lies on one line, brackets aside) and the parser holds it for every
+  such production; a short `Ref` demanded a line end the grammar
+  never had; a bare `/` refused a following `{`; a type's argument
+  list refused a space before it; `not` and `in` were keywords in one
+  position and column names in another, and are keywords now. What
+  it does not model: case-insensitive keywords (§1.4, terminals are
+  matched as spelled) and every semantic constraint, which the corpus
+  keeps holding. The tree-sitter differential of `docs/editor.md` §8
+  takes the derived sentences from `go test ./lang -run
+  TestSpecGrammarSentencesParse -sentences DIR`. What it refuses: a
+  grammar edited without the test, and a parser strictness or
+  leniency the grammar does not state.

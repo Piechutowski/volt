@@ -182,7 +182,10 @@ always appear quoted (`"["`, `"{"`, `"("`) when they are part of the language
 being defined.
 
 Whitespace between symbols in a production is insignificant unless a
-production explicitly references the `newline` or `sp` nonterminals.
+production explicitly references the `newline` or `sp` nonterminals: a
+production that references `sp` lays out its own spaces, and one that
+ends with `newline` lies on one line (§3.2 rule 2). A line break is
+whitespace everywhere else.
 
 ### Character Notation (U+XXXX)
 
@@ -282,7 +285,13 @@ sp      = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
 2. DBML is **newline-sensitive**: a line break terminates statements such as
    column definitions, enum values, record rows, and settings-free field
    lines. Productions in this specification reference `newline` explicitly
-   wherever it is syntactically significant.
+   wherever it is syntactically significant. A production that ends with
+   `newline` is **line-oriented**: it lies on one line, and a line break
+   inside it is whitespace only inside brackets it opened (`[ ]`, `( )`,
+   `{ }`), so a settings list may span lines and a column's type may not
+   sit on the next line. The `newline` that ends it is also satisfied by
+   the end of the file and by a following `}`, so a block's last line may
+   close the block.
 3. Space and tab characters separate tokens and are otherwise insignificant.
 4. Indentation is never significant (except inside multi-line strings, §3.7),
    with the one exception of rule 5.
@@ -349,7 +358,7 @@ digit             = "0" | "1" | "2" | "3" | "4"
 ident char        = letter | digit ;
 
 plain identifier  = letter, { ident char }
-                  | digit, { ident char } ;    (* see constraint 2 *)
+                  | ( digit, { ident char } ) - number ;    (* constraint 2 *)
 
 quoted identifier = '"', { qi char | escape sequence }, '"' ;
 qi char           = any char - ( '"' | "\" | newline ) ;
@@ -433,7 +442,7 @@ escaped item    = "t" | "n" | "r" | "0" | "b" | "v" | "f"
                 | "\" | "'" | '"' | "`"
                 | newline
                 | "u", 4 * hex digit
-                | any char ;
+                | any char - "u" ;
 hex digit       = digit
                 | "a" | "b" | "c" | "d" | "e" | "f"
                 | "A" | "B" | "C" | "D" | "E" | "F" ;
@@ -534,7 +543,6 @@ name          = identifier ;
 
 schema name   = name ;
 table name    = [ schema name, "." ], name ;
-column path   = [ schema name, "." ], name, ".", name ;
 enum constant = name, ".", name ;        (* EnumName.value *)
 ```
 
@@ -887,9 +895,7 @@ ref endpoint     = table name, ".", column group ;
 column group     = name
                  | "(", name, { ",", name }, ")" ;
 
-rel op           = "<>" | "<" | ">" | "-" ;
-
-inline ref value = rel op, ref endpoint ;
+inline ref value = rel op, ref endpoint ;               (* rel op: §3.11 *)
                    (* value of a column's ref: setting *)
 
 ref settings     = "[", ref setting, { ",", ref setting }, "]" ;
@@ -1187,6 +1193,8 @@ import kw        = "use" | "reuse" ;
 import spec      = "*" | "{", import item, newline,
                    { import item, newline }, "}" ;
 import item      = element kind, table name, [ "as", name ] ;
+element kind     = "table" | "enum" | "tablepartial" | "note"
+                 | "schema" | "tablegroup" ;
 import path      = string ;
 ```
 
@@ -1295,7 +1303,7 @@ type arg             = number | identifier ;
 legacy flag          = "pk" | "unique" ;
 column settings      = "[", column setting, { ",", column setting }, "]" ;
 column setting       = "primary key" | "pk" | "null" | "not null"
-                     | "unique" | "increment"
+                     | "unique" | "increment" | "required"
                      | "default", ":", default value
                      | "check", ":", expression literal
                      | "note", ":", string
@@ -1327,7 +1335,6 @@ ref short            = "Ref", [ name ], ":", ref body ;
 ref body             = ref endpoint, rel op, ref endpoint, [ ref settings ] ;
 ref endpoint         = table name, ".", column group ;
 column group         = name | "(", name, { ",", name }, ")" ;
-rel op               = "<>" | "<" | ">" | "-" ;
 inline ref value     = rel op, ref endpoint ;
 ref settings         = "[", ref setting, { ",", ref setting }, "]" ;
 ref setting          = "delete", ":", ref action
@@ -1392,7 +1399,6 @@ category body        = "*" | { table name, newline } ;
 name                 = identifier ;
 schema name          = name ;
 table name           = [ schema name, "." ], name ;
-column path          = [ schema name, "." ], name, ".", name ;
 enum constant        = name, ".", name ;
 
 settings             = "[", setting, { ",", setting }, "]" ;
@@ -1421,7 +1427,7 @@ digit                = "0" | "1" | "2" | "3" | "4"
                      | "5" | "6" | "7" | "8" | "9" ;
 ident char           = letter | digit ;
 plain identifier     = letter, { ident char }
-                     | digit, { ident char } ;
+                     | ( digit, { ident char } ) - number ;
 quoted identifier    = '"', { qi char | escape sequence }, '"' ;
 qi char              = any char - ( '"' | "\" | newline ) ;
 
@@ -1437,7 +1443,7 @@ escaped item         = "t" | "n" | "r" | "0" | "b" | "v" | "f"
                      | "\" | "'" | '"' | "`"
                      | newline
                      | "u", 4 * hex digit
-                     | any char ;
+                     | any char - "u" ;
 hex digit            = digit
                      | "a" | "b" | "c" | "d" | "e" | "f"
                      | "A" | "B" | "C" | "D" | "E" | "F" ;
@@ -1452,6 +1458,9 @@ null                 = "null" ;
 color                = "#", ( 3 * hex digit | 6 * hex digit ) ;
 
 expression literal   = "`", { any char - "`" }, "`" ;
+rel op               = "<>" | "<" | ">" | "-" ;
+punct                = "{" | "}" | "[" | "]" | "(" | ")"
+                     | "," | ":" | ";" | "." | "~" | "*" ;
 ```
 
 ---
@@ -1563,16 +1572,16 @@ Table users {
 ## Imports
 
 ```ebnf
-import decl = "import", "(", { import spec }, ")" ;
-import spec = [ alias ], import path, newline ;
-alias       = name ;
-import path = name, { slash, name } ;
+import decl  = "import", "(", import entry, { import entry }, ")" ;
+import entry = [ alias ], package path, newline ;
+alias        = name ;
+package path = name, { slash, name } ;
 ```
 
 1. An import declaration is a parenthesized, newline-separated block of
-   import specs; an empty block is an error. Import declarations appear
+   import entries; an empty block is an error. Import declarations appear
    after the package clause, before other use of the imported names.
-2. An import path names a package by its directory path from the
+2. A package path names a package by its directory path from the
    project root, `/`-separated, with no `./`, no `..`, and no interior
    whitespace; its segments, and the alias, are plain (unquoted)
    identifiers (§V4.1.6). The path MUST name an existing package of
@@ -1648,9 +1657,9 @@ Pipeline api {
 route path = slash,
              [ segment, { slash, segment } ] ;
 segment    = name
-           | ":", name, [ "(", type name, ")" ]
+           | ":", name, [ "(", param type, ")" ]
            | ":", name, ".", ".", "." ;  (* three '.' tokens, contiguous *)
-type name  = "int" | "int32" | "int64" | "string" ;
+param type = "int" | "int32" | "int64" | "string" ;
 ```
 
 1. All tokens of a route path are **contiguous**: interior whitespace
@@ -2003,8 +2012,9 @@ Scope / [pipe: api, error_handler: Errors] {
 ## Resources
 
 ```ebnf
-resources = "resources", table ref, [ settings ], newline ;
-table ref = name, [ ".", name ] ;
+resources  = "resources", table ref, [ settings ], newline ;
+table ref  = name, [ ".", name ] ;
+ident list = "(", name, { ",", name }, ")" ;   (* the value of only: and except:, a setting value (§4.2) *)
 ```
 
 ### Declaration
@@ -2239,7 +2249,8 @@ its members.
 group decl = "Group", plain name,
              ( "{", { newline }, [ group members ], "}"
              | "=", group expr ), newline ;
-group members = plain name, { newline+, plain name }, { newline } ;
+group members = plain name, { newline, { newline }, plain name }, { newline } ;
+plain name    = plain identifier ;                      (* §3.4 *)
 group expr    = group term, { ( "+" | "\" ), group term } ;
 group term    = plain name
               | "(", plain name, { ",", plain name }, ")" ;
@@ -2290,16 +2301,17 @@ pred and     = pred unary, { "and", pred unary } ;
 pred unary   = [ "not" ], pred primary ;
 pred primary = "(", pred expr, ")"
              | comparison | membership | pattern | null test
-             | plain name ;                      (* reference to a Pred *)
+             | plain name - pred keyword ;       (* reference to a Pred *)
 comparison   = operand, comp op, operand ;
 comp op      = "=" | "!=" | "<" | "<=" | ">" | ">=" ;
 membership   = column ref, "in", ( "(", literal, { ",", literal }, ")" | param ) ;
 pattern      = column ref, "like", ( string | param ) ;
 null test    = column ref, "is", [ "not" ], "null" ;
 operand      = column ref | param | literal ;
-column ref   = name ;
+column ref   = name - pred keyword ;
 param        = ":", plain name ;                 (* no space after ':' *)
 literal      = number | string | boolean ;
+pred keyword = "and" | "or" | "not" | "in" | "like" | "is" | "null" ;
 ```
 
 ```volt
@@ -2309,8 +2321,10 @@ Pred fresh   { current and recent }
 Pred chosen  { org in :orgs }
 ```
 
-1. `and`, `or`, `not`, `in`, `like`, `is`, `null` are contextual
-   keywords (§3.5), case-insensitive, not reserved.
+1. `and`, `or`, `not`, `in`, `like`, `is`, `null` are keywords inside a
+   predicate expression, case-insensitive (§3.5): a column of one of
+   these names is referenced quoted (`"in" = 1`). Outside predicates
+   they are ordinary identifiers.
 2. A bare name in primary position references a Pred of the same
    package; references must exist and be acyclic.
 3. A Pred is typed **at each use site** (§V11), where a target binds
@@ -2350,12 +2364,13 @@ treated as a one-member group).
 
 ```ebnf
 select decl = "Select", plain name, [ projection ], "for", plain name,
-              [ "where", pred expr ], [ settings list ], newline ;
+              [ "where", pred expr ], [ settings ], newline ;
 
 projection  = "(", column name, { ",", column name }, ")"
-            | "(", "*", { "\\", column term }, ")" ;
+            | "(", "*", "\", column term, { "\", column term }, ")" ;
 column term = column name
             | "(", column name, { ",", column name }, ")" ;
+column name = name ;
 ```
 
 ```volt
@@ -2460,7 +2475,7 @@ database and the application. A check line takes one of three forms:
 ```ebnf
 check    = expression literal, [ check settings ], newline   (* §6.6: opaque SQL *)
          | pred expr,          [ check settings ], newline   (* typed *)
-         | go check,           [ check settings ], newline   (* Go reference *)
+         | go check,           [ check settings ], newline ; (* Go reference *)
 
 go check = go ref, "(", column name, { ",", column name }, ")" ;
 ```
@@ -2583,10 +2598,10 @@ slash          = "/" ;
 
 package clause = "package", name, newline ;
 
-import decl    = "import", "(", { import spec }, ")" ;
-import spec    = [ alias ], import path, newline ;
+import decl    = "import", "(", import entry, { import entry }, ")" ;
+import entry   = [ alias ], package path, newline ;
 alias          = name ;
-import path    = name, { slash, name } ;
+package path   = name, { slash, name } ;
 
 pipeline       = "Pipeline", name, "{", { plug }, "}" ;
 plug           = "use", go ref, newline ;
@@ -2603,11 +2618,12 @@ handler ref    = name, [ ".", name ] ;
 
 route path     = slash, [ segment, { slash, segment } ] ;
 segment        = name
-               | ":", name, [ "(", type name, ")" ]
+               | ":", name, [ "(", param type, ")" ]
                | ":", name, "." , ".", "." ;
-type name      = "int" | "int32" | "int64" | "string" ;
+param type     = "int" | "int32" | "int64" | "string" ;
 
-resources      = "resources", [ name, "." ], name, [ settings ], newline ;
+resources      = "resources", table ref, [ settings ], newline ;
+table ref      = name, [ ".", name ] ;
 dataset        = "dataset", [ name, "." ], name, [ settings ], newline ;
 
 (* setting value, extended (Part I §4.2): *)
@@ -2620,7 +2636,7 @@ predicate expression grammar they share — are collected in §V9, §V10
 and §V11, and the extended `check` forms in §V12; they are not
 duplicated here.
 
-All tokens of a `route path` and of an `import path` MUST be contiguous
+All tokens of a `route path` and of a `package path` MUST be contiguous
 (§V4.1.1, §V2.2) — the grammar above is subject to that adjacency
 constraint, which the token stream expresses via inter-token whitespace
 flags.
@@ -2655,6 +2671,15 @@ chain, each link runnable by `go test ./...`:
    generated table, the URL built by its helper is served back to the
    router and MUST dispatch to that same route. The §V4.6 property is
    not sampled; it is enumerated.
+5. **Grammar ↔ front end.** The EBNF of this document is read by test
+   (`lang/ebnf`): every block parses, every name is defined once, the
+   collected grammars repeat the sections exactly, and from the
+   grammar and the lexical rules stated beside it (§3.1, §3.2, §4.2
+   rule 5, §V4.1.1) a sentence is derived for every choice in every
+   production and MUST parse; every text one token away from one of
+   them (a token dropped, inserted, or two exchanged) MUST be accepted
+   by the front end exactly when the grammar accepts it. The grammar
+   is not a picture of the parser; it is checked against it.
 
 ---
 

@@ -16,7 +16,9 @@ way Go stdlib developers work against an RFC: `docs/spec.md` is
 normative — EBNF plus numbered constraints plus examples — and the
 implementation MUST be 100% compliant. Every constraint is executable
 (conformance corpus, `// spec: §…` tags; valid MUST pass, invalid MUST
-fail); every diagnostic cites the section it enforces; the grammar,
+fail); the grammar is executable too (D100: every sentence it
+derives parses, every one-token neighbour is decided alike by grammar
+and front end); every diagnostic cites the section it enforces; the grammar,
 the LSP, vet and the generators are all audited against the same
 document (`docs/editor.md` §8 is the checklist). When spec and code
 disagree, one of them has a bug — the fixing commit says which. Never

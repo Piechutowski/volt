@@ -32,6 +32,15 @@ func ParseFile(filename, src string) (*ast.File, []diag.Diagnostic) {
 }
 
 type parser struct {
+	// A line-oriented production (§3.2 rule 2) lies on one line: from
+	// lineBegin to endOfLine, a token on a new line is consumed only
+	// inside brackets the production opened. lineFirst tolerates the
+	// production's own first token, which begins the line.
+	line      bool
+	lineDepth int
+	lineFirst bool
+	lineCtx   string
+
 	toks  []token.Token
 	pos   int
 	diags []diag.Diagnostic
@@ -82,11 +91,42 @@ func (p *parser) qualOf(parts ...*ast.Ident) *ast.QualName {
 // bailout unwinds one declaration after an unrecoverable local error.
 type bailout struct{}
 
-func (p *parser) cur() token.Token  { return p.toks[p.pos] }
-func (p *parser) next() token.Token { t := p.toks[p.pos]; p.pos++; return t }
+func (p *parser) cur() token.Token { return p.toks[p.pos] }
+func (p *parser) next() token.Token {
+	t := p.toks[p.pos]
+	if p.line {
+		if t.NLBefore && p.lineDepth == 0 && !p.lineFirst {
+			p.fail(t, "expected end of line after %s, found %s", p.lineCtx, t)
+		}
+		p.lineFirst = false
+		switch t.Kind {
+		case token.LBRACE, token.LBRACKET, token.LPAREN:
+			p.lineDepth++
+		case token.RBRACE, token.RBRACKET, token.RPAREN:
+			p.lineDepth--
+		}
+	}
+	p.pos++
+	return t
+}
+
+// lineBegin opens a line-oriented production (§3.2 rule 2), before its
+// first token; endOfLine closes it, lineClear abandons it for a block
+// form of the same construct.
+func (p *parser) lineBegin(ctx string) {
+	p.line, p.lineDepth, p.lineFirst, p.lineCtx = true, 0, true, ctx
+}
+
+func (p *parser) lineClear() { p.line = false }
 func (p *parser) at(k token.Kind) bool {
 	return p.cur().Kind == k
 }
+
+// peekNL reports whether the token n ahead begins a new line.
+func (p *parser) peekNL(n int) bool {
+	return p.pos+n < len(p.toks) && p.toks[p.pos+n].NLBefore
+}
+
 func (p *parser) peekKind(n int) token.Kind {
 	if p.pos+n >= len(p.toks) {
 		return token.EOF
@@ -118,8 +158,11 @@ func (p *parser) expect(k token.Kind, ctx string) token.Token {
 	return p.next()
 }
 
-// endOfLine enforces the newline terminator of line-oriented productions.
+// endOfLine enforces the newline terminator of line-oriented
+// productions, satisfied by a line break, a closing brace or the end
+// of the file (§3.2 rule 2).
 func (p *parser) endOfLine(ctx string) {
+	p.line = false
 	if p.at(token.RBRACE) || p.at(token.EOF) || p.cur().NLBefore {
 		return
 	}
@@ -221,6 +264,7 @@ func (p *parser) decl() (d ast.Decl) {
 // topLevelSync skips tokens until something that can start a declaration:
 // an identifier at the start of a line, balanced past any open braces.
 func (p *parser) topLevelSync() {
+	p.line = false
 	if !p.at(token.EOF) {
 		p.next() // always make progress past the offending token
 	}
@@ -249,6 +293,7 @@ func (p *parser) topLevelSync() {
 // progress: without the initial next() an error raised on a line-initial
 // token would be retried forever.
 func (p *parser) lineSync() {
+	p.line = false
 	if !p.at(token.EOF) && !p.at(token.RBRACE) {
 		p.next()
 	}
@@ -309,6 +354,7 @@ func (p *parser) project() *ast.Project {
 			d.Notes = append(d.Notes, p.noteDef())
 			continue
 		}
+		p.lineBegin("project property (§6.1)")
 		key := p.ident("project property (§6.1)")
 		p.expect(token.COLON, "project property (§6.1)")
 		val := p.expect(token.STRING, "project property value (§6.1)")
@@ -381,6 +427,7 @@ func (p *parser) tableItem(what string) (item ast.TableItem) {
 	t := p.cur()
 	switch {
 	case t.Kind == token.TILDE:
+		p.lineBegin("partial injection (§6.9)")
 		p.next()
 		pr := &ast.PartialRef{TildePos: t.Pos, Name: p.ident("partial injection (§6.9)")}
 		p.endOfLine("partial injection (§6.9)")
@@ -404,6 +451,7 @@ func (p *parser) tableItem(what string) (item ast.TableItem) {
 // column = name, column type, { legacy flag }, [ column settings ], newline (§6.3).
 func (p *parser) column() *ast.Column {
 	c := p.columns.new()
+	p.lineBegin("column definition (§6.3)")
 	c.Name = p.ident("column name (§6.3)")
 	c.Type = p.typeRef()
 	for p.at(token.IDENT) && !p.cur().NLBefore {
@@ -419,7 +467,7 @@ func (p *parser) column() *ast.Column {
 func (p *parser) typeRef() *ast.TypeRef {
 	tr := p.types.new()
 	tr.Name = p.qualName("column type (§6.3)")
-	if p.at(token.LPAREN) && !p.cur().SpBefore {
+	if p.at(token.LPAREN) {
 		p.next()
 		for {
 			t := p.cur()
@@ -465,6 +513,7 @@ func (p *parser) indexAtom() ast.Node {
 
 func (p *parser) index() *ast.Index {
 	ix := &ast.Index{}
+	p.lineBegin("index definition (§6.5)")
 	if p.at(token.LPAREN) {
 		ix.Composite = true
 		p.next()
@@ -491,6 +540,7 @@ func (p *parser) checksBlock() *ast.ChecksBlock {
 	b := &ast.ChecksBlock{ChecksPos: p.next().Pos}
 	p.expect(token.LBRACE, "checks block (§6.6)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
+		p.lineBegin("check definition (§6.6)")
 		c := p.check()
 		if p.at(token.LBRACKET) && !p.cur().NLBefore {
 			c.Settings = p.settingList()
@@ -511,7 +561,7 @@ func (p *parser) check() *ast.Check {
 	switch {
 	case p.at(token.FUNCEXPR):
 		return &ast.Check{Expr: &ast.FuncExpr{Tok: p.next()}}
-	case p.at(token.IDENT) && !strings.EqualFold(p.cur().Val, "not") && (p.peekKind(1) == token.LPAREN ||
+	case p.at(token.IDENT) && !strings.EqualFold(p.cur().Val, "not") && !p.peekNL(1) && (p.peekKind(1) == token.LPAREN ||
 		(p.peekKind(1) == token.DOT && p.peekKind(3) == token.LPAREN)):
 		c := &ast.Check{Ref: p.goRef("check reference (§V12)")}
 		p.expect(token.LPAREN, "check reference arguments (§V12)")
@@ -541,10 +591,11 @@ func (p *parser) ref() *ast.Ref {
 		d.Name = p.ident("relationship name")
 	}
 	if p.at(token.COLON) {
+		// ref short = "Ref", [ name ], ":", ref body (§6.7): no newline
+		// ends it, so it may continue on an indented line (§3.2 rule 5).
 		p.next()
 		p.refBody(d)
 		d.SetEnd(p.toks[p.pos-1].End())
-		p.endOfLine("Ref (§6.7)")
 		return d
 	}
 	d.Long = true
@@ -629,6 +680,7 @@ func (p *parser) enum() *ast.Enum {
 	d.Name = p.qualName("enum name (§6.8)")
 	p.expect(token.LBRACE, "Enum (§6.8)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
+		p.lineBegin("enum value (§6.8)")
 		v := &ast.EnumValue{Name: p.ident("enum value (§6.8)")}
 		if p.at(token.LBRACKET) && !p.cur().NLBefore {
 			v.Settings = p.settingList()
@@ -679,6 +731,7 @@ func (p *parser) recordsRest(pos token.Position, table *ast.QualName) *ast.Recor
 
 func (p *parser) recordRow() *ast.RecordRow {
 	row := &ast.RecordRow{}
+	p.lineBegin("record row (§6.10)")
 	rowStart := true
 	for {
 		// one field: empty when the cursor sits on a separator or row end
@@ -688,6 +741,7 @@ func (p *parser) recordRow() *ast.RecordRow {
 			row.Values = append(row.Values, &ast.Empty{At: p.cur().Pos})
 		default:
 			row.Values = append(row.Values, p.recordValue())
+			rowStart = false
 		}
 		// separator: a comma on the same line (the first token of a row
 		// legitimately carries NLBefore)
@@ -728,6 +782,7 @@ func (p *parser) recordValue() ast.Node {
 
 // noteDef parses "Note: 'text'" or "Note { 'text' }" with the cursor on Note.
 func (p *parser) noteDef() *ast.Note {
+	p.lineBegin("note definition (§6.11)")
 	n := &ast.Note{NotePos: p.next().Pos}
 	if p.at(token.COLON) {
 		p.next()
@@ -736,6 +791,7 @@ func (p *parser) noteDef() *ast.Note {
 		p.endOfLine("note definition (§6.11)")
 		return n
 	}
+	p.lineClear() // the block form spans lines
 	p.expect(token.LBRACE, "note definition (§6.11)")
 	n.Text = p.litOf(p.expect(token.STRING, "note value (§6.11)"))
 	n.SetEnd(p.expect(token.RBRACE, "note definition (§6.11)").End())
@@ -768,6 +824,7 @@ func (p *parser) tableGroup() *ast.TableGroup {
 			d.Notes = append(d.Notes, p.noteDef())
 			continue
 		}
+		p.lineBegin("TableGroup member (§6.12)")
 		d.Members = append(d.Members, p.qualName("TableGroup member (§6.12)"))
 		p.endOfLine("TableGroup member (§6.12)")
 	}
@@ -789,7 +846,9 @@ func (p *parser) diagramView() *ast.DiagramView {
 			c.Wildcard = true
 		} else {
 			for !p.at(token.RBRACE) && !p.at(token.EOF) {
+				p.lineBegin("view category member (§6.13)")
 				c.Names = append(c.Names, p.qualName("view category member (§6.13)"))
+				p.endOfLine("view category member (§6.13)")
 			}
 		}
 		c.Rbrace = p.expect(token.RBRACE, "view category body (§6.13)").Pos
