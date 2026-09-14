@@ -126,14 +126,10 @@ func (c *checker) dataQueries(pkg *Package) {
 	pkg.selectIndex()
 }
 
-// lookupRecorder is the generated-name scope as a select's check may
-// see it (D86): read-only, every answer recorded, so a memo can verify
-// on a later check that the scope still answers the same.
-type lookupRecorder struct {
-	names   *golang.Names
-	lookups []nameLookup
-}
-
+// nameLookup is one question a select's check asked the generated-name
+// scope and the answer it got (D86, D93): returned by the check, kept
+// by the memo, and asked again on a later check to verify the scope
+// still answers the same.
 type nameLookup struct {
 	name, desc string
 	dup        bool
@@ -142,12 +138,6 @@ type nameLookup struct {
 // nameAdd is a name a select mints into the package's generated scope,
 // returned by its check and applied by the caller.
 type nameAdd struct{ name, desc string }
-
-func (r *lookupRecorder) Lookup(name string) (string, bool) {
-	desc, dup := r.names.Lookup(name)
-	r.lookups = append(r.lookups, nameLookup{name, desc, dup})
-	return desc, dup
-}
 
 // selectsMemo remembers a package's checked selects, each by the
 // inputs of selectCheck (D86): its declaration, its members and their
@@ -224,14 +214,13 @@ func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *gol
 			return e.si
 		}
 	}
-	rec := &lookupRecorder{names: minted}
-	si, adds, diags := selectCheck(sel, members, models, preds, rec)
+	si, lookups, adds, diags := selectCheck(sel, members, models, preds, minted)
 	for _, a := range adds {
 		minted.Add(a.name, a.desc)
 	}
 	c.diags = append(c.diags, diags...)
 	if memo != nil {
-		memo.next[sel] = &selectEntry{members: members, models: refs, preds: preds, lookups: rec.lookups, adds: adds, si: si, diags: diags}
+		memo.next[sel] = &selectEntry{members: members, models: refs, preds: preds, lookups: lookups, adds: adds, si: si, diags: diags}
 		memo.Misses++
 	}
 	return si
@@ -270,7 +259,8 @@ type memberModel struct {
 }
 
 // nameScope is what a select's check may ask of the package's
-// generated-name scope: whether a name is taken, and by what.
+// generated-name scope: whether a name is taken, and by what. The
+// check asks and never tells; what it asked is one of its results.
 type nameScope interface {
 	Lookup(name string) (desc string, dup bool)
 }
@@ -279,8 +269,8 @@ type nameScope interface {
 // inputs (D86): the declaration, its resolved members and their
 // models in the same order, the predicates its where clause names
 // (transitively, nil where a name resolves to none), and the scope.
-// It accumulates only what it returns: the names it mints and its
-// diagnostics.
+// It accumulates only what it returns: the scope's answers to what it
+// asked, the names it mints and its diagnostics.
 type selectLowering struct {
 	sel     *ast.Select
 	members []*check.TableInfo
@@ -288,8 +278,9 @@ type selectLowering struct {
 	preds   map[string]*ast.Pred
 	names   nameScope
 
-	adds  []nameAdd
-	diags []diag.Diagnostic
+	lookups []nameLookup
+	adds    []nameAdd
+	diags   []diag.Diagnostic
 }
 
 func (l *selectLowering) errorf(pos token.Position, format string, args ...any) {
@@ -297,14 +288,16 @@ func (l *selectLowering) errorf(pos token.Position, format string, args ...any) 
 }
 
 // lookup asks the scope, the select's own additions first, as one
-// growing scope would answer.
+// growing scope would answer, and keeps what the scope said.
 func (l *selectLowering) lookup(name string) (string, bool) {
 	for _, a := range l.adds {
 		if a.name == name {
 			return a.desc, true
 		}
 	}
-	return l.names.Lookup(name)
+	desc, dup := l.names.Lookup(name)
+	l.lookups = append(l.lookups, nameLookup{name, desc, dup})
+	return desc, dup
 }
 
 func (l *selectLowering) add(name, desc string) {
@@ -548,11 +541,13 @@ type colBinding struct {
 // selectCheck types one resolved Select (§V11) and lowers it to a
 // SelectInfo from exactly the inputs named on selectLowering, reading
 // nothing else and writing nothing it did not create; nil when the
-// select is in error, with the diagnostics that say why.
-func selectCheck(sel *ast.Select, members []*check.TableInfo, models []memberModel, preds map[string]*ast.Pred, names nameScope) (*SelectInfo, []nameAdd, []diag.Diagnostic) {
+// select is in error, with the diagnostics that say why. Beside the
+// info it returns what it asked the scope and was told, and the names
+// it mints.
+func selectCheck(sel *ast.Select, members []*check.TableInfo, models []memberModel, preds map[string]*ast.Pred, names nameScope) (*SelectInfo, []nameLookup, []nameAdd, []diag.Diagnostic) {
 	l := &selectLowering{sel: sel, members: members, models: models, preds: preds, names: names}
 	si := l.check()
-	return si, l.adds, l.diags
+	return si, l.lookups, l.adds, l.diags
 }
 
 func (l *selectLowering) check() *SelectInfo {

@@ -317,6 +317,11 @@ func (p *purity) reachable(fn *types.Func) map[*types.Func]bool {
 				if sel, ok := fd.pkg.TypesInfo.Selections[x]; ok {
 					if g, ok := sel.Obj().(*types.Func); ok {
 						visit(g)
+						if recv := g.Type().(*types.Signature).Recv(); recv != nil && types.IsInterface(recv.Type()) {
+							for _, impl := range p.implementations(g) {
+								visit(impl)
+							}
+						}
 					}
 				}
 			}
@@ -396,6 +401,53 @@ type purity struct {
 	closures map[*types.TypeName][]int // type -> the targets whose results reach it; -1 for a value package's type
 	targets  map[*types.Func]int
 	reach    []map[*types.Func]bool // per target, the functions it can reach
+
+	// impls are the module's implementations of each interface method
+	// a walk meets (D93), found once.
+	impls map[*types.Func][]*types.Func
+}
+
+// implementations are the methods of the module's named types that
+// stand behind an interface method: what a call through the interface
+// may run. Types outside the module are not walked; their results are
+// judged by the receiver's taint instead.
+func (p *purity) implementations(abstract *types.Func) []*types.Func {
+	if p.impls == nil {
+		p.impls = map[*types.Func][]*types.Func{}
+	}
+	if impls, done := p.impls[abstract]; done {
+		return impls
+	}
+	var impls []*types.Func
+	iface, _ := abstract.Type().(*types.Signature).Recv().Type().Underlying().(*types.Interface)
+	if iface != nil {
+		for _, pkg := range p.byPath {
+			if !strings.HasPrefix(pkg.PkgPath, module) {
+				continue
+			}
+			scope := pkg.Types.Scope()
+			for _, name := range scope.Names() {
+				tn, ok := scope.Lookup(name).(*types.TypeName)
+				if !ok || tn.IsAlias() || types.IsInterface(tn.Type()) {
+					continue
+				}
+				ptr := types.NewPointer(tn.Type())
+				if !types.Implements(ptr, iface) {
+					continue
+				}
+				if m, _, _ := types.LookupFieldOrMethod(ptr, true, abstract.Pkg(), abstract.Name()); m != nil {
+					if fn, ok := m.(*types.Func); ok {
+						if _, has := p.decls[fn]; has {
+							impls = append(impls, fn)
+						}
+					}
+				}
+			}
+		}
+	}
+	sort.Slice(impls, func(i, j int) bool { return impls[i].FullName() < impls[j].FullName() })
+	p.impls[abstract] = impls
+	return impls
 }
 
 func (p *purity) problem(pkg *packages.Package, pos ast.Node, format string, args ...any) {
@@ -989,8 +1041,11 @@ func (fa *funcAnalysis) call(x *ast.CallExpr) []bool {
 	}
 	sig := fn.Type().(*types.Signature)
 	n := sig.Results().Len()
+	if recv := sig.Recv(); recv != nil && types.IsInterface(recv.Type()) {
+		return fa.dispatch(fn, sig, recvTaint, argTaint)
+	}
 	if fn.Pkg() == nil {
-		return make([]bool, n) // universe: error.Error
+		return make([]bool, n) // universe
 	}
 	path := fn.Pkg().Path()
 	if !strings.HasPrefix(path, module) {
@@ -1002,28 +1057,9 @@ func (fa *funcAnalysis) call(x *ast.CallExpr) []bool {
 		return make([]bool, n)
 	}
 	if _, has := fa.p.decls[fn]; !has {
-		// An interface method: a read of the value it is called on,
-		// answered by whatever implements it. Only the module's own
-		// interfaces are data (ast, token, an oracle passed as input).
-		if recv := sig.Recv(); recv != nil && types.IsInterface(recv.Type()) {
-			out := make([]bool, n)
-			for i := range out {
-				out[i] = recvTaint
-			}
-			return out
-		}
-		return make([]bool, n)
+		return make([]bool, n) // declared without a body: assembly, or generated
 	}
-	params := make([]bool, sig.Params().Len())
-	for i := range params {
-		if sig.Variadic() && i == len(params)-1 {
-			for j := i; j < len(argTaint); j++ {
-				params[i] = params[i] || argTaint[j]
-			}
-		} else if i < len(argTaint) {
-			params[i] = argTaint[i]
-		}
-	}
+	params := paramTaints(sig, argTaint)
 	s := fa.p.analyze(fn, recvTaint, params)
 	fa.writes = append(fa.writes, s.writes...)
 	if _, memoized := fa.p.targets[fn]; memoized && fa.p.shared {
@@ -1036,6 +1072,46 @@ func (fa *funcAnalysis) call(x *ast.CallExpr) []bool {
 		return out
 	}
 	return s.results
+}
+
+// paramTaints spreads the arguments' taint over a signature's
+// parameters, the variadic one gathering its arguments'.
+func paramTaints(sig *types.Signature, argTaint []bool) []bool {
+	params := make([]bool, sig.Params().Len())
+	for i := range params {
+		if sig.Variadic() && i == len(params)-1 {
+			for j := i; j < len(argTaint); j++ {
+				params[i] = params[i] || argTaint[j]
+			}
+		} else if i < len(argTaint) {
+			params[i] = argTaint[i]
+		}
+	}
+	return params
+}
+
+// dispatch judges a call through an interface (D93): every method of
+// the module's types that implements it is walked with the receiver's
+// and the arguments' taint, and the results carry a tainted value
+// when any implementation's do. An implementation outside the module
+// is not seen; its results are judged by the receiver alone, which is
+// what such a call reads.
+func (fa *funcAnalysis) dispatch(abstract *types.Func, sig *types.Signature, recvTaint bool, argTaint []bool) []bool {
+	out := make([]bool, sig.Results().Len())
+	for i := range out {
+		out[i] = recvTaint
+	}
+	params := paramTaints(sig, argTaint)
+	for _, impl := range fa.p.implementations(abstract) {
+		s := fa.p.analyze(impl, recvTaint, params)
+		fa.writes = append(fa.writes, s.writes...)
+		for i := range out {
+			if i < len(s.results) && s.results[i] {
+				out[i] = true
+			}
+		}
+	}
+	return out
 }
 
 func (fa *funcAnalysis) builtin(name string, x *ast.CallExpr, argTaint []bool) []bool {
@@ -1106,6 +1182,7 @@ func TestPurityGateBites(t *testing.T) {
 		"CallsOS":             "calls into no package that keeps state",
 		"WritesResultOfInput": "writes through no input",
 		"SortsInput":          "writes through no input",
+		"CallsInterface":      "writes no package variable",
 		"Pure":                "",
 	} {
 		p.problems = nil

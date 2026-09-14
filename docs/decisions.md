@@ -977,9 +977,9 @@ where the merge changed the facts.
   name, the directory's Go functions, the predicates named; the typed
   checks' SQL is a result the package carries for the DDL, no longer
   written onto the AST node), `lang.selectCheck` (declaration, members,
-  their models, the predicates named, and a read-only name scope whose
-  answers a recorder captures; the names it mints are a result the
-  caller applies), and `lsp.tableOccurrences` (declaration, checked
+  their models, the predicates named, and a read-only name scope; what
+  it asked the scope and was told is a result beside the names it
+  mints, for the caller to verify and apply, since D93), and `lsp.tableOccurrences` (declaration, checked
   table, the table its references bind to, the tables, enums and
   partials the body names). The callers resolve the inputs, and each
   memo entry stores them and answers only when all are what they were:
@@ -996,9 +996,10 @@ where the merge changed the facts.
   The Go function scans a checks memo keys on are kept by the session
   and replaced only when a rescan differs in content, so identity means
   equality. What it refuses: a hash as a memo key (equality is exact and
-  costs nothing), an oracle the recorder does not see (the select's
-  scope is an interface with one method), and a test that samples
-  inputs at random in place of the property.
+  costs nothing), an oracle the check does not report asking (the
+  select's scope is an interface with one method, and every question
+  is a result), and a test that samples inputs at random in place of
+  the property.
 
 - **D87 — A memo key is its inputs, and a file is what it reads as
   now: nothing hashed, nothing stamped** (2026-09-14, roadmap PERF-10,
@@ -1146,3 +1147,26 @@ where the merge changed the facts.
   the function's own making. What it refuses: a cache filled on first
   use inside a memoized result, and a mutation of a node after the
   parser is done with it.
+
+- **D93 — A call through an interface runs one of the module's
+  implementations, and the gate walks every one** (2026-09-14,
+  `cmd/volt/purity_test.go`, `lang/selects.go`). D86 accepted a call
+  through an interface as a read of the value it is called on, so a
+  memoized function was pure only if every implementation it could be
+  handed was, and that was verified by reading: the AST's nodes, the
+  tokens, and the select's name scope, which recorded the questions
+  asked of it into an object the caller handed over, a write through
+  an input by another name. Now the select's check keeps its own list
+  of what it asked and was told and returns it beside the names it
+  mints; the scope it is handed is read only, and the memo verifies the
+  answers as before. The gate resolves an interface method to every
+  method of the module's named types that implements it, the universe
+  and the standard library's interfaces included, walks each with the
+  receiver's and the arguments' taint, and counts a result tainted
+  when any implementation's is; the reachability the immutability walk
+  keys on follows the same edges. An implementation outside the module
+  is not seen, and such a call's results are judged by the receiver
+  alone, which is what the call reads. A fixture proves a method one
+  implementation makes impure is refused. What it refuses: an
+  interface as a hole in the walk, and a recorder handed in as a
+  parameter.

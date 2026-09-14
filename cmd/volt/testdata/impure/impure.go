@@ -40,3 +40,19 @@ func Pure(t *Table) *Table {
 
 // SortsInput sorts its input in place: a write by a standard mutator.
 func SortsInput(t *Table) { sort.Strings(t.Rows) }
+
+// Namer is an interface one of whose implementations is impure.
+type Namer interface{ Name() string }
+
+// Noisy counts its calls.
+type Noisy struct{}
+
+func (Noisy) Name() string { counter++; return "noisy" }
+
+// Quiet answers from itself.
+type Quiet struct{ N string }
+
+func (q *Quiet) Name() string { return q.N }
+
+// CallsInterface calls a method that one implementation makes impure.
+func CallsInterface(n Namer) string { return n.Name() }
