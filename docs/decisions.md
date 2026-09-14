@@ -1107,3 +1107,14 @@ where the merge changed the facts.
   test pins a carriage return inside a token, between tokens and inside
   a multi-line string. What it refuses: rewriting the source before
   scanning it, for any reason.
+
+- **D91 — The enum set is a memo key as itself, sorted, never as a
+  spelling** (2026-09-14, `lang/check/memo.go`,
+  `nao/gen/golang/queries.go`). D86 keyed a table's check on the enum
+  keys joined by a NUL byte and a model on `key=type;` pairs. A quoted
+  identifier may hold any byte, the NUL of a `\0` escape included, so
+  neither spelling was injective: two different sets could spell the
+  same. The key is now the sorted key list, and the sorted pair list,
+  compared element by element with `slices.Equal`, the way D87 keys a
+  package. What it refuses: any serialization standing in for the
+  value it serializes, however unlikely the collision.

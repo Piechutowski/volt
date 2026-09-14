@@ -63,7 +63,7 @@ type PlanMemo struct {
 type memoModel struct {
 	tm      *tableModel
 	imports map[string]bool
-	enumSig string
+	enums   []enumType // the enum types the model was built with, sorted by key (D91)
 }
 
 // PlanBuildMemo is PlanBuild with a memo of the package's earlier

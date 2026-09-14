@@ -12,7 +12,6 @@ import (
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/token"
 	"sort"
-	"strings"
 )
 
 // Info is the semantic model of one file, produced by File.
@@ -284,14 +283,14 @@ func (c *checker) collect(f *ast.File) {
 		}
 		var checked *TableInfo
 		var diags []diag.Diagnostic
-		if e := c.memo.lookup(ti.Decl, partials, c.info.HasImports, c.enumSet.sig); e != nil {
+		if e := c.memo.lookup(ti.Decl, partials, c.info.HasImports, c.enumSet.keys); e != nil {
 			checked, diags = e.ti, e.diags
 			c.memo.store(e)
 			c.memo.Hits++
 		} else {
 			checked, diags = tableCheck(ti.Decl, ti.Key, ti.Alias, partials, c.info.HasImports, c.enumSet)
 			if c.memo != nil {
-				c.memo.store(&memoTable{ti: checked, partials: partials, hasImports: c.info.HasImports, enumSig: c.enumSet.sig, diags: diags})
+				c.memo.store(&memoTable{ti: checked, partials: partials, hasImports: c.info.HasImports, enums: c.enumSet.keys, diags: diags})
 				c.memo.Misses++
 			}
 		}
@@ -309,12 +308,13 @@ func (c *checker) collect(f *ast.File) {
 	}
 }
 
-// enumSet is the enums a table check consults, by canonical key, with
-// a signature that spells the set: two sets with the same signature
-// answer every presence question alike.
+// enumSet is the enums a table check consults, by canonical key, and
+// the same keys sorted: the set itself as a memo key, compared element
+// by element (D91). Two equal key lists answer every presence question
+// alike; no spelling of the set stands in for it.
 type enumSet struct {
 	present map[string]bool
-	sig     string
+	keys    []string
 }
 
 func enumSetOf(enums map[string]*EnumInfo) *enumSet {
@@ -323,7 +323,7 @@ func enumSetOf(enums map[string]*EnumInfo) *enumSet {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	set := &enumSet{present: make(map[string]bool, len(enums)), sig: strings.Join(keys, "\x00")}
+	set := &enumSet{present: make(map[string]bool, len(enums)), keys: keys}
 	for _, k := range keys {
 		set.present[k] = true
 	}

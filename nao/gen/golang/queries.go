@@ -26,6 +26,7 @@ package golang
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -171,7 +172,7 @@ func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 	tables := make([]built, len(info.Tables))
 	par.For(len(info.Tables), func(i int) {
 		if memo != nil {
-			if e := memo.prev[info.Tables[i]]; e != nil && e.enumSig == enums.sig {
+			if e := memo.prev[info.Tables[i]]; e != nil && slices.Equal(e.enums, enums.pairs) {
 				tables[i] = built{e.tm, e.imports, nil}
 				return
 			}
@@ -188,7 +189,7 @@ func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 					memo.next[ti] = e
 				} else {
 					memo.Misses++
-					memo.next[ti] = &memoModel{tm: b.tm, imports: b.imp, enumSig: enums.sig}
+					memo.next[ti] = &memoModel{tm: b.tm, imports: b.imp, enums: enums.pairs}
 				}
 			}
 		}
@@ -215,22 +216,24 @@ func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 }
 
 // enumTypes is the enum set as a model's input: canonical key to Go
-// type name, with a signature that spells the whole map, so two sets
-// with the same signature resolve every column type alike.
+// type name, and the same pairs sorted by key, the map itself as a
+// memo key compared element by element (D91). Two equal pair lists
+// resolve every column type alike.
 type enumTypes struct {
 	byKey map[string]string
-	sig   string
+	pairs []enumType
 }
 
+// enumType is one enum's canonical key and Go type name.
+type enumType struct{ key, typ string }
+
 func enumTypesOf(info *check.Info, byKey map[string]string) *enumTypes {
-	var sb strings.Builder
+	pairs := make([]enumType, 0, len(info.Enums))
 	for _, e := range info.Enums {
-		sb.WriteString(e.Key)
-		sb.WriteByte('=')
-		sb.WriteString(byKey[e.Key])
-		sb.WriteByte(';')
+		pairs = append(pairs, enumType{e.Key, byKey[e.Key]})
 	}
-	return &enumTypes{byKey: byKey, sig: sb.String()}
+	slices.SortFunc(pairs, func(a, b enumType) int { return strings.Compare(a.key, b.key) })
+	return &enumTypes{byKey: byKey, pairs: pairs}
 }
 
 // tableBuild is one table's model as a pure function of the checked
