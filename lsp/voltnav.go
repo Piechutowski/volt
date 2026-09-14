@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf16"
@@ -61,17 +62,18 @@ type voltIndex struct {
 	refs    []voltRef
 	texts   map[string]string                 // open buffers, for position conversion
 	gofuncs map[string]map[string]lang.GoFunc // package path -> its Go functions
-	// goStamps fingerprints each package directory's Go files as scanned
-	// (lang.GoDirStamp); a changed stamp means the Go side moved under
-	// us — a rename with gopls, a new function — and the index is stale.
-	goStamps map[string]string
+	// gosrcs holds each package directory's Go files as the index read
+	// them (lang.GoSourcesRead); different bytes on disk mean the Go
+	// side moved under us — a rename with gopls, a new function — and
+	// the index is stale (D87).
+	gosrcs map[string][]lang.GoSource
 }
 
-// goStale reports whether any package directory's Go files changed
-// since the index scanned them.
+// goStale reports whether any package directory's Go files differ from
+// what the index scanned.
 func (ix *voltIndex) goStale() bool {
-	for dir, stamp := range ix.goStamps {
-		if lang.GoDirStamp(dir) != stamp {
+	for dir, srcs := range ix.gosrcs {
+		if !slices.Equal(lang.GoSourcesRead(dir), srcs) {
 			return true
 		}
 	}
@@ -278,12 +280,13 @@ func (ix *voltIndex) goRefAdd(pkg *lang.Package, path string, ref *ast.GoRef) {
 	}
 	funcs, ok := ix.gofuncs[path]
 	if !ok {
-		funcs = lang.GoFuncsIn(pkg.Dir)
+		srcs := lang.GoSourcesRead(pkg.Dir)
+		funcs, _ = lang.GoFuncsOf(pkg.Dir, srcs)
 		ix.gofuncs[path] = funcs
-		if ix.goStamps == nil {
-			ix.goStamps = map[string]string{}
+		if ix.gosrcs == nil {
+			ix.gosrcs = map[string][]lang.GoSource{}
 		}
-		ix.goStamps[pkg.Dir] = lang.GoDirStamp(pkg.Dir)
+		ix.gosrcs[pkg.Dir] = srcs
 	}
 	if gf, found := funcs[name]; found {
 		gfCopy := gf

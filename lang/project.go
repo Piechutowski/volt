@@ -351,7 +351,6 @@ func (pr *Project) packagesParse(dirs []string, overlay map[string]string, s *Se
 	type fileParse struct {
 		pkg   int
 		path  string
-		entry os.DirEntry
 		file  *ast.File
 		diags []diag.Diagnostic
 		err   error
@@ -374,13 +373,13 @@ func (pr *Project) packagesParse(dirs []string, overlay map[string]string, s *Se
 			if pkgs[i] == nil {
 				pkgs[i] = &Package{Path: filepath.ToSlash(rel), Dir: dir, Imports: map[string]string{}}
 			}
-			jobs = append(jobs, fileParse{pkg: i, path: filepath.Join(dir, e.Name()), entry: e})
+			jobs = append(jobs, fileParse{pkg: i, path: filepath.Join(dir, e.Name())})
 		}
 	}
 	par.For(len(jobs), func(j int) {
 		job := &jobs[j]
 		if s != nil {
-			job.file, job.diags, job.err = s.parse(job.path, job.entry, overlay)
+			job.file, job.diags, job.err = s.parse(job.path, overlay)
 			return
 		}
 		src, overlaid := overlay[job.path]

@@ -125,7 +125,7 @@ what unit tests missed — do that for anything interactive.
   tracking, reflection in generated paths (D27).
 - What a session memo answers is a pure function of explicit inputs
   (D86): a top-level function whose parameters are its whole input,
-  keyed on exactly those. `cmd/volt`'s purity gate fails the build on
+  keyed on exactly those, never on a digest or a file stamp (D87). `cmd/volt`'s purity gate fails the build on
   a read of package state, a write through an input, or a call into a
   package that keeps state, transitively; a new memo adds its function
   to the gate's targets in the same commit.

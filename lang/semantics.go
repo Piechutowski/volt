@@ -42,9 +42,10 @@ func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 	paths := c.paths()
 	pkgDiags := make(map[string][]diag.Diagnostic, len(paths))
 	fresh := paths
-	var keys map[string]string
+	var keys map[string]pkgKey
 	if s != nil {
-		keys = s.packageKeys(pr, paths)
+		c.gofuncs = s.goFuncsFor(pr, paths)
+		keys = s.packageKeys(pr, paths, c.gofuncs)
 		fresh = make([]string, 0, len(paths))
 		for _, path := range paths {
 			if ds, ok := s.restore(path, keys[path], pr.Packages[path]); ok {
@@ -66,11 +67,6 @@ func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 	}
 	if s != nil {
 		c.memos = s.declMemos(fresh)
-		dirs := make([]string, 0, len(fresh))
-		for _, path := range fresh {
-			dirs = append(dirs, pr.Packages[path].Dir)
-		}
-		c.gofuncs = s.goFuncsFor(dirs)
 	}
 	phase(func(cc *checker, pkg *Package) {
 		var schemaMemo *check.Memo

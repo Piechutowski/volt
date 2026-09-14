@@ -94,9 +94,9 @@ func TestSessionMatchesFreshAnalysis(t *testing.T) {
 	_, work = sessionRound(t, &s, root, map[string]string{d2: fixed, r3: routed}, s.Stats())
 	expect("route edit in the editor", work, 1, 1)
 
-	// A save: the overlay goes, the disk changes. The file is read
-	// again (its stat moved), and being the same text as the overlay,
-	// its parse is reused; nothing checks again.
+	// A save: the overlay goes, the disk changes. The file is read,
+	// and being the same text as the overlay, its parse is reused;
+	// nothing checks again.
 	if err := os.WriteFile(d2, []byte(fixed), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -104,12 +104,89 @@ func TestSessionMatchesFreshAnalysis(t *testing.T) {
 	expect("save of the edited file", work, 0, 0)
 
 	// A Go file appearing beside a routing package's routes changes
-	// its Go-function stamp: that package checks again.
+	// its Go sources: that package checks again.
 	if err := os.WriteFile(filepath.Join(root, "r1", "mw.go"), []byte("package r1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, work = sessionRound(t, &s, root, map[string]string{r3: routed}, s.Stats())
 	expect("Go file added", work, 0, 1)
+}
+
+// TestSessionReadsWhatIsOnDisk proves the session trusts no stamp
+// (D87): a file rewritten to the same length with its modification
+// time put back is read, and the edit is seen, for a .volt file and
+// for a Go file alike. Each edit changes the diagnostics, so a stale
+// parse or a stale Go scan would differ from the fresh analysis.
+func TestSessionReadsWhatIsOnDisk(t *testing.T) {
+	root := t.TempDir()
+	write := func(name, src string) {
+		t.Helper()
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("go.mod", "module disk\n")
+	write("db/schema.volt", "package db\n\nTable users {\n\tid integer [pk, increment]\n\temail varchar [not null]\n\ttitle text\n\ttitle text\n\n\tchecks {\n\t\tEmailValid(email)\n\t}\n}\n")
+	write("db/checks.go", "package db\n\nfunc EmailValid(email string) error { return nil }\n")
+	// sameStamp rewrites one file so that its size and modification
+	// time are what they were.
+	sameStamp := func(name, from, to string) {
+		t.Helper()
+		if len(from) != len(to) {
+			t.Fatalf("%q and %q differ in length", from, to)
+		}
+		path := filepath.Join(root, name)
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		src, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(src), from) {
+			t.Fatalf("%s does not contain %q", name, from)
+		}
+		if err := os.WriteFile(path, []byte(strings.Replace(string(src), from, to, 1)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
+			t.Fatal(err)
+		}
+		after, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if after.Size() != info.Size() || !after.ModTime().Equal(info.ModTime()) {
+			t.Fatalf("precondition: %s's stamp moved", name)
+		}
+	}
+	var s lang.Session
+	expect := func(name string, got lang.SessionStats, parsed, checked int) {
+		t.Helper()
+		if got.FilesParsed != parsed || got.PackagesChecked != checked {
+			t.Errorf("%s: parsed %d files and checked %d packages; want %d and %d", name, got.FilesParsed, got.PackagesChecked, parsed, checked)
+		}
+	}
+	_, work := sessionRound(t, &s, root, nil, lang.SessionStats{})
+	expect("first load", work, 1, 1)
+	_, work = sessionRound(t, &s, root, nil, s.Stats())
+	expect("no change", work, 0, 0)
+
+	// The duplicate column renamed: the error goes.
+	sameStamp("db/schema.volt", "\ttitle text\n\ttitle text\n", "\ttitle text\n\ttitel text\n")
+	_, work = sessionRound(t, &s, root, nil, s.Stats())
+	expect("same-length edit of the .volt file", work, 1, 1)
+
+	// The Go function's parameter type changes under the reference:
+	// the check no longer matches the column.
+	sameStamp("db/checks.go", "email string", "email []byte")
+	_, work = sessionRound(t, &s, root, nil, s.Stats())
+	expect("same-length edit of the Go file", work, 0, 1)
 }
 
 // TestSessionGeneratesIdentically proves the restored package results

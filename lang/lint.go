@@ -22,9 +22,9 @@ func vetWith(pr *Project, s *Session) []diag.Diagnostic {
 	c := &checker{pr: pr}
 	paths := c.paths()
 	per := make([][]diag.Diagnostic, len(paths))
-	var keys map[string]string
+	var keys map[string]pkgKey
 	if s != nil {
-		keys = s.packageKeys(pr, paths)
+		keys = s.packageKeys(pr, paths, s.goFuncsFor(pr, paths))
 	}
 	par.For(len(paths), func(i int) {
 		pkg := pr.Packages[paths[i]]

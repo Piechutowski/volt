@@ -23,6 +23,11 @@ func TestGoFuncsScanSkipsGenerated(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	for _, src := range GoSourcesRead(dir) {
+		if want := src.Name == "nao_models.go"; src.Head != want {
+			t.Errorf("%s read as a head: %v, want %v", src.Name, src.Head, want)
+		}
+	}
 	funcs, broken := GoFuncsScan(dir)
 	if len(broken) != 0 {
 		t.Fatalf("broken: %v", broken)

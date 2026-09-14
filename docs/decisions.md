@@ -733,12 +733,11 @@ where the merge changed the facts.
   roadmap PERF-8, `docs/editor.md` §3). The server used to reload and
   re-check the whole project synchronously on every keystroke, once
   per open document. Now `lang.Session` holds, per project root, every
-  file's last parse (reused when the text is the same — a disk file by
-  size and mtime first, so it is not even read) and every package's
-  last check results and diagnostics, keyed by a hash of its files'
-  parse identities, its Go files' stamp and its imports' keys, so a
-  change anywhere upstream changes the key and nothing needs a reverse
-  index; a package on an import cycle is never memoized. `Session.Load`
+  file's last parse (reused when the text is the same) and every
+  package's last check results and diagnostics, keyed by its files'
+  parse identities, its Go functions and its imports' keys (the key is
+  those inputs themselves since D87), so a change anywhere upstream
+  changes the key and nothing needs a reverse index; a package on an import cycle is never memoized. `Session.Load`
   and `Session.Check` are proven identical to the fresh functions edit
   by edit, with the work counted: one parse per changed file, one
   check per package that could see it. The server records an edit
@@ -998,3 +997,31 @@ where the merge changed the facts.
   costs nothing), an oracle the recorder does not see (the select's
   scope is an interface with one method), and a test that samples
   inputs at random in place of the property.
+
+- **D87 — A memo key is its inputs, and a file is what it reads as
+  now: nothing hashed, nothing stamped** (2026-09-14, roadmap PERF-10,
+  `lang/session.go`, `lang/gofuncs.go`, `lsp/voltnav.go`). D79 keyed a
+  package's check on an FNV-64 hash of its inputs, skipped reading a
+  disk file whose size and mtime it had seen, and told that a Go
+  directory had moved by the names, sizes and mtimes of its files.
+  Each is a claim that is almost always true: a hash collision is
+  improbable, an edit within the mtime's resolution that keeps the
+  length is rare, a filesystem that reports a stale mtime is unusual.
+  None is provable, and "almost always" is the statistical truth D86
+  refused. Now the package key is the list of its inputs themselves,
+  for the package and each package it transitively imports: the parse
+  identity of every file and the scan object of the directory's Go
+  functions, compared element by element. A disk file is read on
+  every load and its parse reused only when the bytes are the bytes
+  of the last parse. A Go directory is read on every check, a
+  generated file by its first line only (D81), and its scan is kept
+  only when every source is byte for byte what it was, so the scan
+  object's identity is the content's; the editor's Go staleness check
+  compares the same sources. The read is the cost of knowing, and it
+  is small: the bytes come from the page cache, and a thousand-table
+  project's one edit still parses one chunk and checks one table. A
+  test rewrites a `.volt` file and a Go file to the same length with the
+  modification time put back and proves both edits are seen. What it
+  refuses: a key that is a digest of the inputs rather than the
+  inputs, and a freshness test that consults metadata in place of the
+  bytes.

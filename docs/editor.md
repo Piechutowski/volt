@@ -289,12 +289,12 @@ make no claim. Existence and the spelled signature are the checker's
 reference. The Go side can move without any `.volt` buffer changing —
 a gopls rename, a newly written function — so the server registers a
 `**/*.go` file watcher with the client and re-analyzes every project
-with an open document when one is saved (the Go files' fingerprint is
-part of a package's memo key, so only the packages beside the change
+with an open document when one is saved (the Go sources are part of
+a package's memo key, so only the packages beside the change
 re-check); independently, every hover, definition,
-references, rename and completion request first compares the scanned
-Go files' fingerprint (names, sizes, mtimes) with the disk and re-runs
-the analysis when it moved, republishing diagnostics. Only saved files
+references, rename and completion request first compares the Go
+sources it scanned with the disk, byte for byte (D87), and re-runs
+the analysis when they differ, republishing diagnostics. Only saved files
 count: the Go buffers themselves belong to gopls, not to this server. Rename on a Go reference rewrites its Volt spellings only —
 the Go declaration is gopls' job, and the existence error then points
 at whichever side is still behind. Rename on a column follows it into
