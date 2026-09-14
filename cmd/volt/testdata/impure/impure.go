@@ -3,7 +3,10 @@
 // proven to refuse each.
 package impure
 
-import "os"
+import (
+	"os"
+	"sort"
+)
 
 var counter int
 
@@ -34,3 +37,6 @@ func Pure(t *Table) *Table {
 	out.Rows = append(out.Rows, t.Rows...)
 	return out
 }
+
+// SortsInput sorts its input in place: a write by a standard mutator.
+func SortsInput(t *Table) { sort.Strings(t.Rows) }

@@ -127,8 +127,10 @@ what unit tests missed — do that for anything interactive.
   (D86): a top-level function whose parameters are its whole input,
   keyed on exactly those, never on a digest or a file stamp (D87). `cmd/volt`'s purity gate fails the build on
   a read of package state, a write through an input, or a call into a
-  package that keeps state, transitively; a new memo adds its function
-  to the gate's targets in the same commit.
+  package that keeps state, transitively; its immutability walk fails
+  the build on a write to a memoized result outside its producer, or
+  to a node or token outside the front end (D92); a new memo adds its
+  function to the gate's targets in the same commit.
 - Commit messages explain *why*; a session that produces new decisions
   appends them to `docs/decisions.md` before committing.
 

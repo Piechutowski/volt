@@ -151,12 +151,7 @@ func (pl *Plan) CRUDMethod(name string) (tableKey string, m CRUDMethod, ok bool)
 // order: the candidates a did-you-mean hint is drawn from.
 func (pl *Plan) CRUDMethodNames() []string { return pl.names }
 
-func crudMethodsOf(t *tableModel) []CRUDMethod {
-	if !t.crudDone {
-		t.crud, t.crudDone = crudMethodsBuild(t), true
-	}
-	return t.crud
-}
+func crudMethodsOf(t *tableModel) []CRUDMethod { return t.crud }
 
 func crudMethodsBuild(t *tableModel) []CRUDMethod {
 	var methods []CRUDMethod

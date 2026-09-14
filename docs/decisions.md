@@ -1118,3 +1118,31 @@ where the merge changed the facts.
   compared element by element with `slices.Equal`, the way D87 keys a
   package. What it refuses: any serialization standing in for the
   value it serializes, however unlikely the collision.
+
+- **D92 — What a memo answers is written by nobody, and the build
+  proves it** (2026-09-14, `cmd/volt/purity_test.go`,
+  `nao/gen/golang/queries.go`). D86 proved that a memoized function
+  writes nothing it did not create; nothing proved that the result
+  stayed what it was afterwards, and the first walk found a lazily
+  filled CRUD cache on the table model, written by the route expansion
+  long after the model was memoized. Now the gate walks every function
+  of the three modules with everything from outside it tainted (its
+  parameters, package state, the results of a memoized computation the
+  moment it returns them) and records every write through a tainted
+  value into a memoized result type (the types a target's results
+  reach, by field, element and pointer) and into a node or a token; a
+  write is refused unless the function it was reached from is one the
+  result's producer can reach, or the value's own maker (the parser and
+  the `ast` package for nodes; the scanner, the parser and the `token`
+  package for tokens). A standard function that writes its argument
+  (`sort`, `slices`, `maps`, `copy`, `clear`, `delete`) is a write to
+  what it is handed, in this walk and in D86's. A write to a field of
+  a struct held by value is the variable's own and counts for nothing;
+  a store of a pointer or a slice into a container writes the
+  container, so its holder is the object written. The CRUD list is
+  built with the model. A fixture proves the walk refuses a write to a
+  handed result, one made by a callee, one by a mutator and one to a
+  producer's fresh result, and passes a read, a copy and a result of
+  the function's own making. What it refuses: a cache filled on first
+  use inside a memoized result, and a mutation of a node after the
+  parser is done with it.

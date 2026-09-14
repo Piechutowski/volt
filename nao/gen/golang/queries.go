@@ -71,8 +71,7 @@ type tableModel struct {
 	fields  []*fieldPlan // effective columns in definition order
 	pk      []*fieldPlan // identity columns in key order; empty = no pk
 
-	crud     []CRUDMethod // crudMethodsOf, once: a model reused by the memo keeps it (D85)
-	crudDone bool
+	crud []CRUDMethod // built with the model: a memoized result is written by nobody (D92)
 }
 
 // fieldPlan is one column resolved into Go and SQL naming.
@@ -291,6 +290,7 @@ func tableBuild(ti *check.TableInfo, enums *enumTypes) (*tableModel, map[string]
 			}
 		}
 	}
+	tm.crud = crudMethodsBuild(tm)
 	return tm, imports, nil
 }
 
