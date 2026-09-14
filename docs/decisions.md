@@ -1053,9 +1053,9 @@ where the merge changed the facts.
   prove is that reuse is the parse from nothing, and that holds by
   construction: a chunk begins in the scanner's initial state (the
   first column after a line break, outside everything), its scan ends
-  at an element start or at the text's end and never reads past a line
-  break, so its tokens, parse and diagnostics are a function of its
-  text and of whether an element start follows; the reuse keeps a chunk
+  at an element start or at the text's end and cannot read past a line
+  break it has not consumed (D95), so its tokens, parse and diagnostics
+  are a function of its text and of whether an element start follows; the reuse keeps a chunk
   only where its text stands unchanged, where an element may stand, and
   where what follows is what followed before: an element start, which
   one scanned token decides from the bytes there, or the end of the
@@ -1187,3 +1187,19 @@ where the merge changed the facts.
   equal to the pairwise scan's at every insertion, following the
   checker's flow. What it refuses: an optimization whose equivalence
   to the rule it optimizes is asserted rather than stated and checked.
+
+- **D95 — The scanner cannot see past a line break it has not
+  consumed** (2026-09-14, `lang/scanner/scanner.go`). D88 rested on
+  the claim that a chunk's scan never reads past a line break, argued
+  by hand over the state functions: the two-rune lookahead of the
+  multi-line string opener, the many-to-many operator and the number
+  exponent. The claim is now the primitive's: `peekAt` answers the end
+  of the text for any rune beyond a line break it would have to step
+  over, while `peek` still sees the line break itself, and `next`
+  alone consumes it, which only a string or a comment does inside a
+  token. No input scans differently, since no state function ever
+  acted on what lay past a line break; a test pins the bound. A token's
+  kind and text are therefore a function of the bytes up to the line
+  break after it by construction, and a chunk scans the same whatever
+  follows its last line. What it refuses: a lookahead that could reach
+  the next chunk.

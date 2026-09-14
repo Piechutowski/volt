@@ -252,3 +252,35 @@ func TestElementStarts(t *testing.T) {
 		}
 	}
 }
+
+// TestLookaheadStopsAtLineBreak pins the bound a chunk's independence
+// rests on (D95): the scanner sees the line break ahead of it and
+// nothing past it until it consumes it.
+func TestLookaheadStopsAtLineBreak(t *testing.T) {
+	s := newScanner(token.NewFile("t", "a\r\nbc\n"), nil)
+	if s.next() != 'a' {
+		t.Fatal("expected a")
+	}
+	if got := s.peek(); got != '\n' {
+		t.Errorf("peek = %q, want the line break", got)
+	}
+	if got := s.peekAt(1); got != eof {
+		t.Errorf("peekAt(1) = %q, want eof past the line break", got)
+	}
+	if got := s.peekAt(2); got != eof {
+		t.Errorf("peekAt(2) = %q, want eof past the line break", got)
+	}
+	s.next() // the line break
+	if got, want := s.peek(), 'b'; got != want {
+		t.Errorf("after the line break peek = %q, want %q", got, want)
+	}
+	if got, want := s.peekAt(1), 'c'; got != want {
+		t.Errorf("after the line break peekAt(1) = %q, want %q", got, want)
+	}
+	if got := s.peekAt(2); got != '\n' {
+		t.Errorf("peekAt(2) = %q, want the next line break itself", got)
+	}
+	if got := s.peekAt(3); got != eof {
+		t.Errorf("peekAt(3) = %q, want eof past the next line break", got)
+	}
+}

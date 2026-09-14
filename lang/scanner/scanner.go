@@ -165,10 +165,16 @@ func (s *Scanner) peek() rune {
 	return r
 }
 
+// peekAt is the rune n runes on, or eof: at the end of the text, and
+// past a line break. The scanner cannot see beyond a line break it
+// has not consumed, and only a string or a comment consumes one
+// inside a token, so a token's kind and text are a function of the
+// bytes up to the line break after it (D95): a chunk scans the same
+// whatever follows its last line.
 func (s *Scanner) peekAt(n int) rune {
 	off := s.crSkip(s.pos.Offset)
 	for ; n > 0; n-- {
-		if off >= len(s.src) {
+		if off >= len(s.src) || s.src[off] == '\n' {
 			return eof
 		}
 		_, w := utf8.DecodeRuneInString(s.src[off:])
