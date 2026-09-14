@@ -97,8 +97,8 @@ var allocBudget = struct {
 	load, check, gen uint64
 }{
 	load:  1069912,
-	check: 2088792,
-	gen:   6703224,
+	check: 2092448,
+	gen:   6698712,
 }
 
 func TestAllocationBudget(t *testing.T) {

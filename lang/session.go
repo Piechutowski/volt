@@ -31,6 +31,7 @@ type Session struct {
 	mu    sync.Mutex
 	files map[string]*fileEntry // by absolute path
 	pkgs  map[string]*pkgEntry  // by package path
+	memos map[string]*declMemo  // per-declaration memos, by package path (D84)
 	gen   int                   // the last file identity handed out
 	stats SessionStats
 }
@@ -41,6 +42,12 @@ type SessionStats struct {
 	DeclsParsed, DeclsReused          int // top-level declarations across the files parsed (D83)
 	PackagesChecked, PackagesReused   int
 	PackagesVetted, PackagesVetReused int
+	// Within the packages checked (D84): tables whose schema check,
+	// model and lowered checks were answered by the memo, and not.
+	TablesChecked, TablesReused   int
+	ModelsBuilt, ModelsReused     int
+	ChecksLowered, ChecksReused   int
+	SelectsChecked, SelectsReused int
 }
 
 // fileEntry is one file's last parse. gen is its identity: a new parse
@@ -100,7 +107,7 @@ func (r pkgResult) restore(pkg *Package) {
 	pkg.schema, pkg.plan = r.schema, r.plan
 	pkg.Groups, pkg.Preds, pkg.Selects, pkg.CheckFns = r.groups, r.preds, r.selects, r.checkFns
 	pkg.selectIndex()
-	pkg.paramsValid = nil
+	pkg.paramsValid, pkg.checkFnByKey = nil, nil
 	pkg.Pipelines, pkg.Routes, pkg.Controllers = r.pipelines, r.routes, r.controllers
 }
 
@@ -158,6 +165,42 @@ func (s *Session) vetStore(path, key string, diags []diag.Diagnostic) {
 	}
 	if e := s.pkgs[path]; e != nil && e.key == key {
 		e.vet, e.vetOK = diags, true
+	}
+}
+
+// declMemos hands out the per-declaration memos of the packages about
+// to be checked, creating one per package on first use.
+func (s *Session) declMemos(paths []string) map[string]*declMemo {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.memos == nil {
+		s.memos = map[string]*declMemo{}
+	}
+	out := make(map[string]*declMemo, len(paths))
+	for _, p := range paths {
+		m := s.memos[p]
+		if m == nil {
+			m = &declMemo{}
+			s.memos[p] = m
+		}
+		out[p] = m
+	}
+	return out
+}
+
+// declStats adds what the memos of the packages just checked did.
+func (s *Session) declStats(memos map[string]*declMemo) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, m := range memos {
+		s.stats.TablesReused += m.schema.Hits
+		s.stats.TablesChecked += m.schema.Misses
+		s.stats.ModelsReused += m.plan.Hits
+		s.stats.ModelsBuilt += m.plan.Misses
+		s.stats.ChecksReused += m.checks.Hits
+		s.stats.ChecksLowered += m.checks.Misses
+		s.stats.SelectsReused += m.selects.Hits
+		s.stats.SelectsChecked += m.selects.Misses
 	}
 }
 

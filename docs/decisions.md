@@ -887,3 +887,42 @@ where the merge changed the facts.
   lowered on every CPU; re-checking one declaration needs each table's
   dependency on its partials, enums and refs made explicit, which is
   PERF-10's second half.
+
+- **D84 — A package is checked by declaration: what did not change is
+  answered from the last check** (2026-09-14, roadmap PERF-10,
+  `lang/check/memo.go`, `nao/gen/golang/plan.go`, `lang/checks.go`,
+  `lang/selects.go`, `lang/session.go`). After D83 an edit re-parsed
+  one declaration and then re-checked the whole package, 700 ms on
+  the thousand-table file. The checker's per-package phases now keep
+  memos across the session's checks, one per kind of result, each
+  keyed on the identity of its inputs: the parser reuses a
+  declaration's nodes exactly when its text is unchanged, and each
+  memo holds the nodes it keys on, so identity is text equality with
+  no hashing and no address ever reused underneath. The schema
+  checker answers a table from its memo when the table's node and its
+  injected partials' nodes are the objects they were, with the
+  expansion, body and column diagnostics it produced; the naming plan
+  answers a model when the checked table is the object it was and the
+  enum types spell the same; the lowered checks follow the table, its
+  model and the directory's Go files; a select follows its
+  declaration, its members and their models, the predicates it names,
+  and the generated-name scope's answers to the lookups it made, which
+  are recorded and verified, its additions to that scope replayed. A
+  memo drops every entry a check did not use. The remaining
+  per-table lookups that scanned the package (a table by bare name, a
+  table's lowered checks) are maps. The session counts tables, models,
+  checks and selects answered and not, and a test walks an edit
+  sequence asserting each count: one table edited is one table, one
+  model, one set of checks and two selects (its own and the group's);
+  the partial every table injects invalidates every table; a new enum
+  every model; the predicate every select names every select; a Go
+  file only the lowered checks; and the diagnostics equal a fresh
+  analysis at every step. Measured on the thousand-table file: the
+  check after an edit 700 ms to about 90 to 190 ms, the whole edit
+  cycle from about a second to under 200 ms. What it refuses: keying
+  on text hashes (identity is exact and free), a reverse dependency
+  index (each memo verifies its own inputs on lookup, which is the
+  same work as maintaining one and cannot go stale), and memoizing
+  routes (route expansion runs whole, about 50 ms of what remains,
+  because a resources line's routes depend on every table it names
+  and their conflicts on every other route).

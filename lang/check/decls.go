@@ -18,7 +18,16 @@ func (c *checker) declsCheck(f *ast.File) {
 		case *ast.Project:
 			// properties are free-form (§6.1.2); nothing local to check
 		case *ast.Table:
+			if ti := c.info.byTable[canonKey(d.Name)]; ti != nil && ti.Decl == d && c.reused[ti] {
+				continue // the memo carried its body and column diagnostics
+			}
+			from := len(c.diags)
 			c.tableBodyCheck(d.Name.String(), d.Settings, d.Body, true)
+			if c.memo != nil {
+				if e := c.memo.next[d]; e != nil {
+					e.diags = append(e.diags, c.diags[from:]...)
+				}
+			}
 		case *ast.TablePartial:
 			c.tableBodyCheck(d.Name.Name(), d.Settings, d.Body, false)
 		case *ast.Enum:

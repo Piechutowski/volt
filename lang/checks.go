@@ -38,11 +38,40 @@ func (c *checker) tableChecks(pkg *Package) {
 		diags []diag.Diagnostic
 	}
 	outs := make([]lowered, len(info.Tables))
+	var memo *checksMemo
+	stamp := ""
+	if c.memo != nil {
+		memo = &c.memo.checks
+		memo.Hits, memo.Misses = 0, 0
+		stamp = GoDirStamp(pkg.Dir)
+	}
+	hit := make([]*checksEntry, len(info.Tables))
 	par.For(len(info.Tables), func(i int) {
+		ti := info.Tables[i]
+		if memo != nil {
+			if e := memo.prev[ti]; e != nil && e.stamp == stamp && e.model == pkg.plan.ModelRef(ti.Key) {
+				hit[i] = e
+				outs[i] = lowered{e.specs, e.diags}
+				return
+			}
+		}
 		cc := &checker{pr: c.pr, schemas: c.schemas, pkg: pkg, gofuncs: c.gofuncs}
-		outs[i].specs = cc.tableSpecs(info.Tables[i], info)
+		outs[i].specs = cc.tableSpecs(ti, info)
 		outs[i].diags = cc.diags
 	})
+	if memo != nil {
+		memo.next = make(map[*check.TableInfo]*checksEntry, len(info.Tables))
+		for i, ti := range info.Tables {
+			if hit[i] != nil {
+				memo.Hits++
+				memo.next[ti] = hit[i]
+			} else {
+				memo.Misses++
+				memo.next[ti] = &checksEntry{model: pkg.plan.ModelRef(ti.Key), stamp: stamp, specs: outs[i].specs, diags: outs[i].diags}
+			}
+		}
+		memo.prev, memo.next = memo.next, nil
+	}
 	for i, ti := range info.Tables {
 		c.diags = append(c.diags, outs[i].diags...)
 		if specs := outs[i].specs; len(specs) > 0 {

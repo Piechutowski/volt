@@ -10,6 +10,7 @@ import (
 
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/token"
 	"github.com/Piechutowski/volt/nao/gen/golang"
 	"github.com/Piechutowski/volt/nao/gen/sqlite"
@@ -94,11 +95,17 @@ func (c *checker) dataQueries(pkg *Package) {
 	// The names are claimed from the generators' own plan (models, params
 	// types, enum types, dynamic handles and functions, the Queries
 	// handle), so the list cannot drift from the output (D74).
-	minted := pkg.plan.Names()
+	minted := &nameSet{names: pkg.plan.Names()}
 
+	var memo *selectsMemo
+	if c.memo != nil {
+		memo = &c.memo.selects
+		memo.Hits, memo.Misses = 0, 0
+		memo.next = make(map[*ast.Select]*selectEntry, len(selects))
+	}
 	seen := map[string]*ast.Select{} // tableKey+method -> declaring select
 	for _, sel := range selects {
-		if si := c.selectCheck(sel, info, minted); si != nil {
+		if si := c.selectCheckMemo(sel, info, minted, memo); si != nil {
 			for _, m := range si.Members {
 				key := m.Key + "." + si.MethodSuffix
 				if prev, dup := seen[key]; dup {
@@ -113,7 +120,155 @@ func (c *checker) dataQueries(pkg *Package) {
 			pkg.Selects = append(pkg.Selects, si)
 		}
 	}
+	if memo != nil {
+		memo.prev, memo.next = memo.next, nil
+	}
 	pkg.selectIndex()
+}
+
+// nameSet is the package's generated-name scope as the select checks
+// see it, recording every lookup and every name added so the memo can
+// replay a select's effect and verify its lookups (D84).
+type nameSet struct {
+	names   *golang.Names
+	lookups []nameLookup
+	adds    []nameAdd
+}
+
+type nameLookup struct {
+	name, desc string
+	dup        bool
+}
+
+type nameAdd struct{ name, desc string }
+
+func (n *nameSet) Lookup(name string) (string, bool) {
+	desc, dup := n.names.Lookup(name)
+	n.lookups = append(n.lookups, nameLookup{name, desc, dup})
+	return desc, dup
+}
+
+func (n *nameSet) Add(name, desc string) {
+	n.names.Add(name, desc)
+	n.adds = append(n.adds, nameAdd{name, desc})
+}
+
+// selectsMemo remembers a package's checked selects: one is good
+// while its declaration, its members, their models and the predicates
+// it names are the objects they were, and the generated-name scope
+// answers its lookups as it did (D84).
+type selectsMemo struct {
+	prev, next   map[*ast.Select]*selectEntry
+	Hits, Misses int
+}
+
+type selectEntry struct {
+	members []*check.TableInfo
+	models  []any
+	preds   []predDep
+	lookups []nameLookup
+	adds    []nameAdd
+	si      *SelectInfo
+	diags   []diag.Diagnostic
+}
+
+type predDep struct {
+	name string
+	decl *ast.Pred
+}
+
+// predLookup resolves a predicate by name, recording the dependency
+// for the select being checked.
+func (c *checker) predLookup(name string) *ast.Pred {
+	d := c.pkg.Preds[name]
+	if c.predDeps != nil {
+		*c.predDeps = append(*c.predDeps, predDep{name, d})
+	}
+	return d
+}
+
+// selectCheckMemo is selectCheck through the memo: a hit replays the
+// select's additions to the name scope and its diagnostics.
+func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *nameSet, memo *selectsMemo) *SelectInfo {
+	if memo == nil {
+		return c.selectCheck(sel, info, minted)
+	}
+	if e := memo.prev[sel]; e != nil && c.selectEntryHolds(e, minted) {
+		for _, a := range e.adds {
+			minted.names.Add(a.name, a.desc)
+		}
+		c.diags = append(c.diags, e.diags...)
+		memo.next[sel] = e
+		memo.Hits++
+		return e.si
+	}
+	var preds []predDep
+	c.predDeps = &preds
+	from, lookups, adds := len(c.diags), len(minted.lookups), len(minted.adds)
+	si := c.selectCheck(sel, info, minted)
+	c.predDeps = nil
+	e := &selectEntry{
+		preds:   preds,
+		lookups: append([]nameLookup(nil), minted.lookups[lookups:]...),
+		adds:    append([]nameAdd(nil), minted.adds[adds:]...),
+		si:      si,
+		diags:   c.diags[from:len(c.diags):len(c.diags)],
+	}
+	if si != nil {
+		e.members = si.Members
+		for _, m := range si.Members {
+			e.models = append(e.models, c.pkg.plan.ModelRef(m.Key))
+		}
+	}
+	memo.next[sel] = e
+	memo.Misses++
+	return si
+}
+
+// selectEntryHolds reports whether a memo entry's inputs are what they
+// were: the target's members and their models by identity, the
+// predicates by identity, and the name scope's answers by value.
+func (c *checker) selectEntryHolds(e *selectEntry, minted *nameSet) bool {
+	if e.si == nil {
+		return false // an errored select is checked again: its target may have appeared
+	}
+	members := c.selectMembers(e.si.Decl)
+	if len(members) != len(e.members) {
+		return false
+	}
+	for i, m := range members {
+		if m != e.members[i] || c.pkg.plan.ModelRef(m.Key) != e.models[i] {
+			return false
+		}
+	}
+	for _, p := range e.preds {
+		if c.pkg.Preds[p.name] != p.decl {
+			return false
+		}
+	}
+	for _, l := range e.lookups {
+		if desc, dup := minted.names.Lookup(l.name); dup != l.dup || desc != l.desc {
+			return false
+		}
+	}
+	return true
+}
+
+// selectMembers resolves a select's target as selectCheck does (§V11.2),
+// without diagnostics.
+func (c *checker) selectMembers(sel *ast.Select) []*check.TableInfo {
+	info := c.schemas[c.pkg.Path]
+	want := sel.Target.Name()
+	if g := c.pkg.Groups[want]; g != nil {
+		return g.Members
+	}
+	if ti := tableByBase(info, want); ti != nil {
+		return []*check.TableInfo{ti}
+	}
+	if tg := info.TableGroup(want); tg != nil {
+		return tg.Members
+	}
+	return nil
 }
 
 // selectMember is one generated select method: the select and the
@@ -229,12 +384,7 @@ func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *c
 
 // tableByBase finds a table by exact base name.
 func tableByBase(info *check.Info, want string) *check.TableInfo {
-	for _, ti := range info.Tables {
-		if ti.Decl.Name.Base() == want {
-			return ti
-		}
-	}
-	return nil
+	return info.TableByBase(want)
 }
 
 // nameMiss reports an unresolved table-or-group name with the §V5.4
@@ -357,7 +507,7 @@ type colBinding struct {
 
 // selectCheck resolves and types one Select (§V11) and lowers it to a
 // SelectInfo, or reports why not.
-func (c *checker) selectCheck(sel *ast.Select, info *check.Info, minted *golang.Names) *SelectInfo {
+func (c *checker) selectCheck(sel *ast.Select, info *check.Info, minted *nameSet) *SelectInfo {
 	si := &SelectInfo{Decl: sel}
 
 	// §V11.1: method suffix.
@@ -434,7 +584,7 @@ var crudMethodSuffixes = map[string]bool{
 // projectionCheck applies §V11.7: existence and field-type agreement
 // for the explicit list, the exclusion algebra for the star form, and
 // row-type name minting against the package's generated scope.
-func (c *checker) projectionCheck(sel *ast.Select, si *SelectInfo, info *check.Info, minted *golang.Names) bool {
+func (c *checker) projectionCheck(sel *ast.Select, si *SelectInfo, info *check.Info, minted *nameSet) bool {
 	type memberFields struct {
 		ti     *check.TableInfo
 		model  string
@@ -756,7 +906,7 @@ func (e *selectEnv) exprCheck(x ast.PredExpr, preds map[string]bool) string {
 		return "(" + e.exprCheck(x.X, preds) + ")"
 	case *ast.PredRef:
 		name := x.Name.Name()
-		d := e.c.pkg.Preds[name]
+		d := e.c.predLookup(name)
 		if d == nil {
 			e.errorf(x.Name.Pos(), "unknown predicate %q (§V10.2)", name)
 			return "1"

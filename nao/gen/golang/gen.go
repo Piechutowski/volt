@@ -46,7 +46,7 @@ type Options struct {
 // (D77). The file must be free of check errors; Generate validates only
 // what generation itself needs (name mapping, type mapping, collisions).
 func Generate(f *ast.File, info *check.Info, opts Options) ([]byte, error) {
-	p, perr := planBuild(f, info)
+	p, perr := planBuild(f, info, nil)
 	return modelsGenerate(f, info, p, perr, opts)
 }
 

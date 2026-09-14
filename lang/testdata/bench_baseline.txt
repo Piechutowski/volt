@@ -5,7 +5,7 @@ goos: linux
 goarch: amd64
 pkg: github.com/Piechutowski/volt/lang
 cpu: Intel(R) Xeon(R) Processor @ 2.80GHz
-BenchmarkLoad-4          	     410	   3156969 ns/op	 2500833 B/op	   14644 allocs/op
-BenchmarkCheck-4         	      88	  11561691 ns/op	 5490318 B/op	   60311 allocs/op
-BenchmarkGenerate-4      	      54	  19975846 ns/op	19168744 B/op	  150443 allocs/op
-BenchmarkSessionEdit-4   	     175	   6546965 ns/op	 2659871 B/op	   35789 allocs/op
+BenchmarkLoad-4          	     364	   3130014 ns/op	 2500909 B/op	   14644 allocs/op
+BenchmarkCheck-4         	      93	  11043788 ns/op	 5525635 B/op	   60508 allocs/op
+BenchmarkGenerate-4      	      60	  18524082 ns/op	19169316 B/op	  150446 allocs/op
+BenchmarkSessionEdit-4   	     234	   5322249 ns/op	 1938636 B/op	   28427 allocs/op

@@ -253,8 +253,10 @@ agree. The LSP picks it up automatically.
   declaration (D83): a file is parsed in chunks, one per top-level
   declaration, and an edit re-parses the chunk it touched and relocates
   the rest by one store per chunk, so the thousand-table one-file
-  project re-parses in 22 ms against 340 ms. What remains is the
-  edited file's package check, which still runs whole (PERF-10).
+  project re-parses in 22 ms against 340 ms. The check is by
+  declaration too (D84): tables, models, lowered checks and selects
+  whose inputs are the objects they were are answered from the last
+  check, so the same edit checks in about 100 to 200 ms against 700.
 
 ## 7. Known limitations (documented trade-offs, not bugs)
 

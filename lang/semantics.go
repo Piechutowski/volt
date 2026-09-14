@@ -64,13 +64,21 @@ func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 			pkgDiags[fresh[i]] = append(pkgDiags[fresh[i]], ds...)
 		}
 	}
+	if s != nil {
+		c.memos = s.declMemos(fresh)
+	}
 	phase(func(cc *checker, pkg *Package) {
-		info, schemaDiags := check.File(pkg.merged)
+		var schemaMemo *check.Memo
+		var planMemo *golang.PlanMemo
+		if cc.memo != nil {
+			schemaMemo, planMemo = &cc.memo.schema, &cc.memo.plan
+		}
+		info, schemaDiags := check.FileMemo(pkg.merged, schemaMemo)
 		cc.diags = append(cc.diags, schemaDiags...)
 		pkg.schema = info
 		// The naming plan, once (D74): every later phase asks it for
 		// generated names instead of re-deriving them from the AST.
-		pkg.plan = golang.PlanBuild(pkg.merged, info)
+		pkg.plan = golang.PlanBuildMemo(pkg.merged, info, planMemo)
 	})
 	for _, path := range paths {
 		c.schemas[path] = pr.Packages[path].schema
@@ -82,6 +90,7 @@ func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 		for _, path := range fresh {
 			s.store(path, keys[path], pr.Packages[path], pkgDiags[path])
 		}
+		s.declStats(c.memos)
 	}
 	for _, path := range paths {
 		c.diags = append(c.diags, pkgDiags[path]...)
@@ -105,6 +114,43 @@ type checker struct {
 	// §V12.5), scanned once per run and shared across the per-package
 	// checkers of a phase.
 	gofuncs *goFuncsCache
+
+	// memos are the per-declaration memos of the session's packages
+	// (D84), by package path; memo is the current package's, nil
+	// outside a session.
+	memos map[string]*declMemo
+	memo  *declMemo
+	// predDeps records the predicates the select being checked names,
+	// for the selects memo.
+	predDeps *[]predDep
+}
+
+// declMemo holds one package's per-declaration memos across checks
+// (D84): the schema checker's tables, the plan's models, and the
+// lowered checks.
+type declMemo struct {
+	schema  check.Memo
+	plan    golang.PlanMemo
+	checks  checksMemo
+	selects selectsMemo
+}
+
+// checksMemo remembers a table's lowered checks: good while the
+// checked table, its model and the directory's Go files are what
+// they were.
+type checksMemo struct {
+	prev, next   map[*check.TableInfo]*checksEntry
+	Hits, Misses int
+}
+
+type checksEntry struct {
+	model any
+	stamp string
+	specs []golang.CheckSpec
+	diags []diag.Diagnostic
+
+	validDone                bool // paramsValidators answered
+	validCreate, validUpdate bool
 }
 
 // perPackage runs one phase over every package, on every CPU (PERF-7).
@@ -119,7 +165,7 @@ func (c *checker) perPackage(paths []string, phase func(*checker, *Package)) [][
 	}
 	out := make([][]diag.Diagnostic, len(paths))
 	par.For(len(paths), func(i int) {
-		cc := &checker{pr: c.pr, schemas: c.schemas, gofuncs: c.gofuncs}
+		cc := &checker{pr: c.pr, schemas: c.schemas, gofuncs: c.gofuncs, memo: c.memos[paths[i]]}
 		phase(cc, c.pr.Packages[paths[i]])
 		out[i] = cc.diags
 	})
@@ -849,7 +895,7 @@ func (c *checker) queryBind(pos, qualPos token.Position, method string, params [
 			if cm.Body != "" {
 				// The params struct validates when it carries the
 				// columns of at least one check (§V12.6).
-				create, update := pkg.paramsValidators(key)
+				create, update := c.paramsValidatorsMemo(pkg, key)
 				sig = append(sig, sigParam{name: "arg", goType: qual + "." + cm.Body, body: true,
 					validates: (cm.Op == "create" && create) || (cm.Op == "update" && update)})
 			}
@@ -945,6 +991,24 @@ func (c *checker) queryBind(pos, qualPos token.Position, method string, params [
 }
 
 // tableChecksOf returns the lowered checks of one table of a package.
+// paramsValidatorsMemo is Package.paramsValidators through the
+// session's memo, where the answer outlives this check: it stands
+// while the table's lowered checks and model do (D84).
+func (c *checker) paramsValidatorsMemo(pkg *Package, tableKey string) (create, update bool) {
+	if c.memo == nil {
+		return pkg.paramsValidators(tableKey)
+	}
+	e := c.memo.checks.prev[pkg.schema.TableByKey(tableKey)]
+	if e == nil {
+		return pkg.paramsValidators(tableKey)
+	}
+	if !e.validDone {
+		e.validCreate, e.validUpdate = pkg.paramsValidators(tableKey)
+		e.validDone = true
+	}
+	return e.validCreate, e.validUpdate
+}
+
 // paramsValidators answers, once per table, whether its params structs
 // validate: every default resources route of the table asks (D81).
 func (p *Package) paramsValidators(tableKey string) (create, update bool) {
@@ -960,12 +1024,13 @@ func (p *Package) paramsValidators(tableKey string) (create, update bool) {
 }
 
 func tableChecksOf(pkg *Package, tableKey string) []golang.CheckSpec {
-	for _, fn := range pkg.CheckFns {
-		if fn.TableKey == tableKey {
-			return fn.Checks
+	if pkg.checkFnByKey == nil {
+		pkg.checkFnByKey = make(map[string][]golang.CheckSpec, len(pkg.CheckFns))
+		for _, fn := range pkg.CheckFns {
+			pkg.checkFnByKey[fn.TableKey] = fn.Checks
 		}
 	}
-	return nil
+	return pkg.checkFnByKey[tableKey]
 }
 
 // litSeg builds a synthetic literal segment for an expanded route.
@@ -1336,13 +1401,12 @@ func (c *checker) resourceTable(res *ast.Resources) (ti *check.TableInfo, ok, re
 		return nil, false, true
 	}
 	want := res.Name.Name()
+	if cand := info.TableByBase(want); cand != nil {
+		return cand, true, false
+	}
 	var caseMatch string
 	for _, cand := range info.Tables {
-		name := cand.Decl.Name.Base()
-		if name == want {
-			return cand, true, false
-		}
-		if strings.EqualFold(name, want) {
+		if name := cand.Decl.Name.Base(); strings.EqualFold(name, want) {
 			caseMatch = name
 		}
 	}

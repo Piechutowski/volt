@@ -9,6 +9,8 @@ package golang
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
@@ -19,6 +21,7 @@ import (
 // the generated CRUD method table indexed by method name. A Plan is
 // immutable after PlanBuild and safe to share between goroutines.
 type Plan struct {
+	memo *PlanMemo // nil outside the editor session
 	f    *ast.File
 	info *check.Info
 	p    *plan // nil when err != nil
@@ -41,8 +44,39 @@ type crudRef struct {
 // fails with it, so callers report the generation error where they
 // always did.
 func PlanBuild(f *ast.File, info *check.Info) *Plan {
-	pl := &Plan{f: f, info: info}
-	p, err := planBuild(f, info)
+	return PlanBuildMemo(f, info, nil)
+}
+
+// PlanMemo remembers a package's table models across builds of its
+// plan: a table that is the checked object it was, under the same
+// enum types, is the same model (D84). The zero value is ready; a
+// PlanMemo belongs to one package.
+type PlanMemo struct {
+	prev, next map[*check.TableInfo]*memoModel
+	names      *Names
+	namesOf    []*tableModel // the models names was built from
+	// Hits and Misses count the models reused and built by the last
+	// PlanBuildMemo.
+	Hits, Misses int
+}
+
+type memoModel struct {
+	tm      *tableModel
+	imports map[string]bool
+	enumSig string
+}
+
+// PlanBuildMemo is PlanBuild with a memo of the package's earlier
+// plans; a nil memo builds everything.
+func PlanBuildMemo(f *ast.File, info *check.Info, memo *PlanMemo) *Plan {
+	pl := &Plan{f: f, info: info, memo: memo}
+	if memo != nil {
+		memo.Hits, memo.Misses = 0, 0
+	}
+	p, err := planBuild(f, info, memo)
+	if memo != nil {
+		memo.prev, memo.next = memo.next, nil
+	}
 	if err != nil {
 		pl.err = err
 		return pl
@@ -68,6 +102,18 @@ func (pl *Plan) Err() error { return pl.err }
 // Models renders the models file (nao_models.go) for the planned package.
 func (pl *Plan) Models(opts Options) ([]byte, error) {
 	return modelsGenerate(pl.f, pl.info, pl.p, pl.err, opts)
+}
+
+// ModelRef is the identity of a table's model: the same value across
+// plans exactly when the model was reused from the plan's memo, so a
+// memo downstream can key on it (D84). nil when the plan has no such
+// table.
+func (pl *Plan) ModelRef(tableKey string) any {
+	t, err := pl.table(tableKey)
+	if err != nil {
+		return nil
+	}
+	return t
 }
 
 func (pl *Plan) table(key string) (*tableModel, error) {
@@ -246,6 +292,21 @@ type nameOrigin struct {
 // alone when the plan could not be built, so the checker's collision
 // rule still holds for what is certain.
 func (pl *Plan) Names() *Names {
+	// Callers add to the set they get (a select's shared row type), so
+	// the memo keeps a pristine build and hands out copies.
+	if pl.memo != nil && pl.err == nil && pl.memo.names != nil && slices.Equal(pl.memo.namesOf, pl.p.tables) {
+		return pl.memo.names.clone() // every model is the one the names were built from
+	}
+	n := pl.namesBuild()
+	if pl.memo != nil && pl.err == nil {
+		pl.memo.names, pl.memo.namesOf = n.clone(), pl.p.tables
+	}
+	return n
+}
+
+func (n *Names) clone() *Names { return &Names{origins: maps.Clone(n.origins)} }
+
+func (pl *Plan) namesBuild() *Names {
 	n := &Names{origins: map[string]nameOrigin{}}
 	n.Add("Queries", "the generated Queries handle")
 	n.Add("New", "the generated constructor")

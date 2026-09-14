@@ -142,7 +142,7 @@ func (p *plan) fieldCount() int {
 	return n
 }
 
-func planBuild(f *ast.File, info *check.Info) (*plan, error) {
+func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 	g := &generator{f: f, info: info, imports: map[string]bool{}}
 	if err := g.enumTypesCollect(); err != nil {
 		return nil, err
@@ -164,12 +164,45 @@ func planBuild(f *ast.File, info *check.Info) (*plan, error) {
 		imp map[string]bool
 		err error
 	}
+	// The enum types are the model's only input beyond its table: a
+	// memo entry is good while they spell the same.
+	enumSig := ""
+	if memo != nil {
+		var sb strings.Builder
+		for _, e := range info.Enums {
+			sb.WriteString(e.Key)
+			sb.WriteByte('=')
+			sb.WriteString(g.enumTypes[e.Key])
+			sb.WriteByte(';')
+		}
+		enumSig = sb.String()
+	}
 	tables := make([]built, len(info.Tables))
 	par.For(len(info.Tables), func(i int) {
+		if memo != nil {
+			if e := memo.prev[info.Tables[i]]; e != nil && e.enumSig == enumSig {
+				tables[i] = built{e.tm, e.imports, nil}
+				return
+			}
+		}
 		gt := &generator{f: g.f, info: g.info, enumTypes: g.enumTypes, imports: map[string]bool{}}
 		tm, err := tableBuild(gt, info.Tables[i])
 		tables[i] = built{tm, gt.imports, err}
 	})
+	if memo != nil {
+		memo.next = make(map[*check.TableInfo]*memoModel, len(info.Tables))
+		for i, ti := range info.Tables {
+			if b := tables[i]; b.err == nil {
+				if e := memo.prev[ti]; e != nil && e.tm == b.tm {
+					memo.Hits++
+					memo.next[ti] = e
+				} else {
+					memo.Misses++
+					memo.next[ti] = &memoModel{tm: b.tm, imports: b.imp, enumSig: enumSig}
+				}
+			}
+		}
+	}
 	for i, ti := range info.Tables {
 		b := tables[i]
 		if b.err != nil {

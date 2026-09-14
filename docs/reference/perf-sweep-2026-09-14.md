@@ -238,3 +238,20 @@ The check is what remains of PERF-10: the package is still checked
 whole after an edit, and its cost is spread over the naming plan, the
 schema check, route expansion and binding, none of which knows which
 declaration moved.
+
+## Follow-up the same day: the check by declaration (D84)
+
+The package check keeps memos across the session's checks, keyed on
+node identity: tables, models, lowered checks and selects whose inputs
+are the objects they were are answered from the last check. On the
+one-file stress project, one edit inside one table:
+
+| Step | Whole | By declaration |
+|---|---|---|
+| Parse after the edit | 340 ms | 22 ms |
+| Check after the edit | 700 ms | 90 to 190 ms |
+
+The spread is the collector: the heap holds the whole project and a
+cycle lands in some edits and not others. What runs whole is route
+expansion and conflict detection, about 50 ms, and the group select
+over every table, which is checked again whenever any table changes.

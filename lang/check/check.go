@@ -26,7 +26,16 @@ type Info struct {
 	TableGroups []*TableGroupInfo
 
 	byTable map[string]*TableInfo // canonical key and alias -> table
+	byBase  map[string]*TableInfo // bare name -> the first table declared with it (D84)
 }
+
+// TableByBase is the first table declared with the bare name, in any
+// schema, or nil: what an unqualified reference in a select or a
+// resources line means.
+func (i *Info) TableByBase(base string) *TableInfo { return i.byBase[base] }
+
+// TableByKey is the table with the canonical "schema.name" key, or nil.
+func (i *Info) TableByKey(key string) *TableInfo { return i.byTable[key] }
 
 // TableGroupInfo is one TableGroup with its members resolved.
 type TableGroupInfo struct {
@@ -121,15 +130,30 @@ func canonKey(q *ast.QualName) string {
 // errors are suppressed, because the definitions may live elsewhere; all
 // local constraints still apply.
 func File(f *ast.File) (*Info, []diag.Diagnostic) {
+	return FileMemo(f, nil)
+}
+
+// FileMemo is File with a memo of the file's earlier checks: a table
+// whose declaration and injected partials are the nodes they were is
+// answered from it (D84). A nil memo checks everything.
+func FileMemo(f *ast.File, memo *Memo) (*Info, []diag.Diagnostic) {
 	c := &checker{
 		info: &Info{
 			HasImports: f.HasImports(),
 			byTable:    map[string]*TableInfo{},
+			byBase:     map[string]*TableInfo{},
 		},
+		memo: memo,
+	}
+	if memo != nil {
+		memo.Hits, memo.Misses = 0, 0
 	}
 	c.collect(f)
 	c.declsCheck(f)
 	c.resolve(f)
+	if memo != nil {
+		memo.finish()
+	}
 	diag.Sort(c.diags)
 	return c.info, c.diags
 }
@@ -137,6 +161,10 @@ func File(f *ast.File) (*Info, []diag.Diagnostic) {
 type checker struct {
 	info  *Info
 	diags []diag.Diagnostic
+	memo  *Memo
+	// reused marks the tables the memo answered: their expansion, body
+	// and column checks are not run again.
+	reused map[*TableInfo]bool
 
 	partials map[string]*PartialInfo
 	enums    map[string]*EnumInfo
@@ -191,6 +219,9 @@ func (c *checker) collect(f *ast.File) {
 				}
 			}
 			c.info.byTable[key] = ti
+			if _, seen := c.info.byBase[d.Name.Base()]; !seen {
+				c.info.byBase[d.Name.Base()] = ti
+			}
 			c.info.Tables = append(c.info.Tables, ti)
 			if s := d.Name.Schema(); s != "" {
 				c.schemas[s] = true
@@ -237,10 +268,58 @@ func (c *checker) collect(f *ast.File) {
 		c.info.Partials = append(c.info.Partials, pi)
 	}
 
-	// Effective columns: expand injections in source order (§8.4).
-	for _, ti := range c.info.Tables {
+	// Effective columns: expand injections in source order (§8.4) —
+	// or, for a table the memo knows, take them as they were.
+	for i, ti := range c.info.Tables {
+		if c.memo == nil {
+			c.columnsExpand(ti)
+			continue
+		}
+		partials := c.partialsOf(ti.Decl)
+		if e := c.memo.lookup(ti.Decl, partials, c.info.HasImports); e != nil {
+			c.info.Tables[i] = e.ti
+			c.info.byTable[e.ti.Key] = e.ti
+			if c.info.byBase[e.ti.Decl.Name.Base()] == ti {
+				c.info.byBase[e.ti.Decl.Name.Base()] = e.ti
+			}
+			if e.ti.Alias != "" {
+				c.info.byTable["public."+e.ti.Alias] = e.ti
+			}
+			for _, p := range partials {
+				if p != nil {
+					c.partials[p.Name.Name()].Uses++
+				}
+			}
+			if c.reused == nil {
+				c.reused = map[*TableInfo]bool{}
+			}
+			c.reused[e.ti] = true
+			c.diags = append(c.diags, e.diags...)
+			c.memo.store(e)
+			c.memo.Hits++
+			continue
+		}
+		from := len(c.diags)
 		c.columnsExpand(ti)
+		c.memo.store(&memoTable{ti: ti, partials: partials, hasImports: c.info.HasImports, diags: c.diags[from:len(c.diags):len(c.diags)]})
+		c.memo.Misses++
 	}
+}
+
+// partialsOf lists the partial declarations a table injects, in body
+// order, nil where the name resolves to none.
+func (c *checker) partialsOf(d *ast.Table) []*ast.TablePartial {
+	var out []*ast.TablePartial
+	for _, item := range d.Body {
+		if ref, ok := item.(*ast.PartialRef); ok {
+			var p *ast.TablePartial
+			if pi := c.partials[ref.Name.Name()]; pi != nil {
+				p = pi.Decl
+			}
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // columnsExpand applies §6.9.4 conflict resolution: direct definitions win;

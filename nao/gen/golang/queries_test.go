@@ -143,7 +143,7 @@ for name, case in sorted(inp["stmts"].items()):
 			if err != nil {
 				t.Fatalf("gen/sqlite: %v", err)
 			}
-			p, err := planBuild(f, info)
+			p, err := planBuild(f, info, nil)
 			if err != nil {
 				t.Fatalf("planBuild: %v", err)
 			}

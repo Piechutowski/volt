@@ -72,6 +72,8 @@ type Package struct {
 	selectByMethod map[string]selectMember
 	// paramsValid memoizes paramsValidators per table (D81).
 	paramsValid map[string][2]bool
+	// checkFnByKey indexes CheckFns by table key (D84).
+	checkFnByKey map[string][]golang.CheckSpec
 
 	// schema is the package's checked table model, set by Check.
 	schema *check.Info
