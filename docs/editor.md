@@ -318,7 +318,7 @@ How to audit that the three components implement
 
 | Claim | Check | Where |
 |---|---|---|
-| Front end accepts/rejects exactly what the spec says | conformance corpus: `valid/` MUST pass, `invalid/` MUST fail, each snippet tagged `// spec: §…` (`.dbml` entries = the schema pass, `.volt` entries and project dirs = the project pass) | `lang/conformance/snippets/` via `go test ./lang/...` |
+| Front end accepts/rejects exactly what the spec says | conformance corpus: `valid/` MUST pass, `invalid/` MUST fail, each snippet tagged `// spec: §…` (`.dbml` entries = the schema pass, `.volt` entries and project dirs = the project pass); every diagnostic of every invalid snippet, recovery included, is a golden (D101) | `lang/conformance/snippets/` and `lang/conformance/invalid_*.golden` via `go test ./lang/...`; refresh with `-update` after reading the diff |
 | Grammar parses everything the spec allows | corpus cases (input → expected tree, incl. `:error` cases) | `grammar/test/corpus/`, `tree-sitter test` |
 | Spec grammar and front end agree | the spec's EBNF read as data (D100): every derived sentence parses, every one-token neighbour is decided alike by the grammar and the front end | `lang/spec_grammar_test.go` via `go test ./lang/...` |
 | Grammar and front end agree | every valid conformance snippet, `grammar/examples/*` and the spec's derived sentences (`go test ./lang -run TestSpecGrammarSentencesParse -sentences DIR`) must produce zero tree-sitter ERROR nodes **and** zero front-end diagnostics | differential run after grammar changes |
@@ -326,7 +326,7 @@ How to audit that the three components implement
 | Generated routers implement §V | goldens byte-compared, gofmt-stable, **compiled**; itest exercises match/404/405, typed-param 404s, pipeline order, the error spine, reverse-URL round-trip totality | `gen/router`, `itest/` |
 | Generated models implement Appendix A/B | goldens compiled; every CRUD statement prepared against the generated DDL; SQL goldens executed on real SQLite | `nao/gen/...`, `nao/itest` |
 | LSP behaves per spec | in-process unit suites: index, rename spelling rules, hover content, completion contexts, UTF-16 | `lsp/*_test.go` via `go test ./lsp/...` |
-| LSP behaves per spec, interactively | scripted stdio JSON-RPC sessions against the built binary, replaying real keystrokes — a development practice, not yet an automated test | manual; automating it is an open roadmap item |
+| LSP behaves per spec, interactively | a scripted stdio JSON-RPC session against the real server process, replaying keystrokes that break and fix a project file and asking for hover, definition, completion and symbols; every reply and published diagnostic pinned as a golden (D101) | `cmd/volt/lsp_session_test.go` and `testdata/lsp_session.golden` via `go test ./cmd/volt/...`; refresh with `-update` after reading the diff |
 
 The upstream `@dbml/parse` cross-check that established Part I's
 fidelity was retired at zero disagreements (D54); the corpus verdicts

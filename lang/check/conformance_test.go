@@ -1,6 +1,8 @@
 package check_test
 
 import (
+	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -19,6 +21,60 @@ import (
 // the upstream @dbml/parse compiler while the cross-check existed
 // (retired at 0 disagreements, D54).
 var wantRE = regexp.MustCompile(`(?m)^// want: (.+)$`)
+
+var update = flag.Bool("update", false, "rewrite the golden of the invalid schema corpus")
+
+// TestConformanceInvalidDiagnosticsPinned holds every diagnostic of
+// every invalid .dbml snippet, recovery included (§3.2 rule 6); see
+// the project half's test of the same name. Refresh with -update
+// after reading the diff.
+func TestConformanceInvalidDiagnosticsPinned(t *testing.T) {
+	files, err := filepath.Glob(filepath.Join("..", "conformance", "snippets", "invalid", "*.dbml"))
+	if err != nil || len(files) == 0 {
+		t.Fatal("no invalid .dbml snippets")
+	}
+	var b strings.Builder
+	for _, file := range files {
+		src, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		name := filepath.Base(file)
+		f, diags := parser.ParseFile(name, string(src))
+		_, semDiags := check.File(f)
+		diags = append(diags, semDiags...)
+		diag.Sort(diags)
+		fmt.Fprintf(&b, "## %s\n", name)
+		for _, d := range diags {
+			b.WriteString(d.String() + "\n")
+		}
+		b.WriteString("\n")
+	}
+	golden := filepath.Join("..", "conformance", "invalid_dbml.golden")
+	if *update {
+		if err := os.WriteFile(golden, []byte(b.String()), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatalf("%v (run with -update to write it)", err)
+	}
+	if string(want) != b.String() {
+		wl, gl := strings.Split(string(want), "\n"), strings.Split(b.String(), "\n")
+		for i := range gl {
+			if i >= len(wl) || wl[i] != gl[i] {
+				w := "<end>"
+				if i < len(wl) {
+					w = wl[i]
+				}
+				t.Fatalf("%s differs at line %d:\n--- golden\n%s\n--- got\n%s\n(run with -update after reading the diff)", golden, i+1, w, gl[i])
+			}
+		}
+		t.Fatalf("%s: got is a prefix of the golden", golden)
+	}
+}
 
 func TestConformanceCorpus(t *testing.T) {
 	root := filepath.Join("..", "conformance", "snippets")

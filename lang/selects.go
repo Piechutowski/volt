@@ -467,8 +467,15 @@ func (c *checker) predRefCycles(pkg *Package) {
 		}
 		state[name] = 2
 	}
-	for name, d := range pkg.Preds {
-		visit(name, d.Name.Pos())
+	// In name order, so the member of a cycle that is reported, and
+	// where, is a function of the input (D101).
+	names := make([]string, 0, len(pkg.Preds))
+	for name := range pkg.Preds {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		visit(name, pkg.Preds[name].Name.Pos())
 	}
 }
 

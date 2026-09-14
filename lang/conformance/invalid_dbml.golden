@@ -1,0 +1,156 @@
+## i01_unterminated_block_comment.dbml
+i01_unterminated_block_comment.dbml:3:1: error: syntax: unterminated block comment (§3.3)
+
+## i02_unterminated_string.dbml
+i02_unterminated_string.dbml:2:25: error: syntax: newline in single-line string (§3.6)
+i02_unterminated_string.dbml:3:1: error: syntax: invalid setting value (§4.2): found end of file
+i02_unterminated_string.dbml:3:1: error: syntax: expected '}' in Table (§6.2), found end of file
+
+## i03_newline_in_string.dbml
+i03_newline_in_string.dbml:2:1: error: spec/6.2: table "t" must contain at least one column or partial injection
+i03_newline_in_string.dbml:3:17: error: syntax: newline in single-line string (§3.6)
+i03_newline_in_string.dbml:4:6: error: syntax: newline in single-line string (§3.6)
+i03_newline_in_string.dbml:5:1: error: syntax: expected ']' in settings list (§4.2), found '}' "}"
+
+## i04_invalid_number.dbml
+i04_invalid_number.dbml:2:1: error: spec/6.2: table "t" must contain at least one column or partial injection
+i04_invalid_number.dbml:3:20: error: syntax: invalid number "12.3abc" (§3.9)
+i04_invalid_number.dbml:3:20: error: syntax: invalid setting value (§4.2): found illegal token "12.3abc"
+
+## i05_unterminated_funcexpr.dbml
+i05_unterminated_funcexpr.dbml:2:28: error: syntax: unterminated expression literal (§3.12)
+i05_unterminated_funcexpr.dbml:2:28: error: syntax: invalid setting value (§4.2): found end of file
+i05_unterminated_funcexpr.dbml:2:28: error: syntax: expected '}' in Table (§6.2), found end of file
+
+## i06_bad_color.dbml
+i06_bad_color.dbml:2:23: error: spec/3.11: color literal '#12ab' must be 3 or 6 hex digits
+
+## i07_unknown_element.dbml
+i07_unknown_element.dbml:2:1: error: syntax: unknown element type "View" (§5)
+
+## i08_empty_table.dbml
+i08_empty_table.dbml:2:1: error: spec/6.2: table "empty" must contain at least one column or partial injection
+
+## i09_duplicate_setting.dbml
+i09_duplicate_setting.dbml:3:19: error: spec/4.2: setting "unique" may appear at most once
+
+## i10_null_not_null.dbml
+i10_null_not_null.dbml:3:10: error: spec/6.3: "null" and "not null" cannot both be set
+
+## i11_pk_primary_key.dbml
+i11_pk_primary_key.dbml:3:15: error: spec/4.2: setting "primary key" may appear at most once
+
+## i12_duplicate_columns.dbml
+i12_duplicate_columns.dbml:4:3: error: spec/8.2: duplicate column name "id"
+
+## i13_headercolor_not_color.dbml
+i13_headercolor_not_color.dbml:2:23: error: spec/6.2: "headercolor" must be a color literal
+
+## i14_unknown_column_setting.dbml
+i14_unknown_column_setting.dbml:3:11: error: spec/6.3: unknown setting "sparkly"
+
+## i18_bad_check_setting.dbml
+i18_bad_check_setting.dbml:5:15: error: spec/6.6: unknown setting "label"
+
+## i19_ref_arity_mismatch.dbml
+i19_ref_arity_mismatch.dbml:5:17: error: spec/6.7: composite relationship endpoints must have the same number of columns: 2 vs 1
+
+## i20_bad_ref_action.dbml
+i20_bad_ref_action.dbml:4:18: error: spec/6.7: invalid referential action "explode" for 'delete'; expected cascade, restrict, set null, set default or no action
+
+## i21_ref_endpoint_no_column.dbml
+i21_ref_endpoint_no_column.dbml:4:12: error: syntax: endpoint must reference a column as [schema.]table.column (§6.7)
+
+## i22_empty_enum.dbml
+i22_empty_enum.dbml:2:1: error: spec/6.8: enum "empty_status" must contain at least one value
+
+## i23_duplicate_enum_values.dbml
+i23_duplicate_enum_values.dbml:4:3: error: spec/8.2: duplicate enum value "active"
+
+## i24_records_arity.dbml
+i24_records_arity.dbml:6:5: error: spec/6.10: record row has 3 values but 2 columns are listed
+
+## i25_two_records_blocks.dbml
+i25_two_records_blocks.dbml:3:3: error: spec/6.10: at most one records block per table
+
+## i26_toplevel_records_no_columns.dbml
+i26_toplevel_records_no_columns.dbml:3:1: error: spec/6.10: top-level records must list columns
+
+## i27_two_notes.dbml
+i27_two_notes.dbml:3:3: error: spec/6.11: at most one Note per Table body
+
+## i28_bad_tablegroup_setting.dbml
+i28_bad_tablegroup_setting.dbml:3:15: error: spec/6.12: unknown setting "headercolor"
+
+## i29_duplicate_category.dbml
+i29_duplicate_category.dbml:4:3: error: spec/6.13: category "Tables" may appear at most once per view
+
+## i30_bad_import_kind.dbml
+i30_bad_import_kind.dbml:2:1: error: spec/7: use is not part of the Volt language (§7); replace file imports with the package system — see docs/spec.md Appendix C for migration
+
+## i31_import_missing_from.dbml
+i31_import_missing_from.dbml:2:7: error: syntax: expected 'from' in import statement (§7)
+
+## i32_settings_next_line.dbml
+i32_settings_next_line.dbml:4:3: error: syntax: expected a column, indexes, checks, Note, records or '~injection' in Table body, found '[' "["
+
+## i33_ref_without_body.dbml
+i33_ref_without_body.dbml:4:1: error: syntax: expected '{' in Ref (§6.7), found end of file
+
+## i34_project_bad_value.dbml
+i34_project_bad_value.dbml:3:18: error: syntax: expected string in project property value (§6.1), found number "42"
+
+## i35_duplicate_table.dbml
+i35_duplicate_table.dbml:3:1: error: spec/8.2: duplicate table name "users"
+
+## i36_bad_default.dbml
+i36_bad_default.dbml:3:20: error: spec/6.4: default value must be a number, string, boolean, null, expression or enum constant
+
+## i37_injection_in_partial.dbml
+i37_injection_in_partial.dbml:4:3: error: spec/6.9: partial injection is not allowed inside TablePartial
+
+## i38_records_in_partial.dbml
+i38_records_in_partial.dbml:4:3: error: spec/6.9: records are not allowed inside TablePartial
+
+## i39_sticky_note_bad_setting.dbml
+i39_sticky_note_bad_setting.dbml:2:9: error: spec/6.11: unknown setting "headercolor"
+
+## i40_alias_collision.dbml
+i40_alias_collision.dbml:3:17: error: spec/8.2: table alias "users" collides with an existing table name or alias
+
+## i41_ref_long_two_bodies.dbml
+i41_ref_long_two_bodies.dbml:7:3: error: syntax: a Ref declares exactly one relationship (§6.7); found identifier "a" after the first
+
+## i42_bare_ident_record.dbml
+i42_bare_ident_record.dbml:5:17: error: spec/6.10: record values must be literals, null, true, false or enum constants; found bare identifier "a"
+
+## i43_bare_ident_default.dbml
+i43_bare_ident_default.dbml:3:19: error: spec/6.4: default value must be a number, string, boolean, null, expression or enum constant; found bare identifier "something"
+
+## i44_file_imports.dbml
+i44_file_imports.dbml:2:1: error: spec/7: use is not part of the Volt language (§7); replace file imports with the package system — see docs/spec.md Appendix C for migration
+i44_file_imports.dbml:3:1: error: spec/7: use is not part of the Volt language (§7); replace file imports with the package system — see docs/spec.md Appendix C for migration
+i44_file_imports.dbml:12:1: error: spec/7: reuse is not part of the Volt language (§7); replace file imports with the package system — see docs/spec.md Appendix C for migration
+
+## i61_tag_malformed.dbml
+i61_tag_malformed.dbml:4:22: error: spec/6.3: tag "json=name" is not one key:"value" pair — write e.g. 'json:"name"' (§6.3)
+
+## i62_tag_db_reserved.dbml
+i62_tag_db_reserved.dbml:4:22: error: spec/6.3: tag key "db" is reserved: the db tag is the scan contract (Appendix A.5)
+
+## i63_tag_duplicate_key.dbml
+i63_tag_duplicate_key.dbml:4:39: error: spec/6.3: tag key "json" appears more than once on this column (§6.3)
+
+## i78_increment_varchar.dbml
+i78_increment_varchar.dbml:4:21: error: spec/6.3: increment on "code" (varchar): only an integer column can auto-increment (§6.3, Appendix B)
+
+## i79_increment_not_pk.dbml
+i79_increment_not_pk.dbml:6:30: error: spec/6.3: increment on "counter": only the primary key auto-increments; elsewhere the keyword would be silently ignored while CreateParams omits the column (§6.3, Appendix B)
+
+## i80_increment_composite_pk.dbml
+i80_increment_composite_pk.dbml:4:20: error: spec/6.3: increment on "user_id": a composite primary key has no auto-assigned column — SQLite auto-assigns only the single-column integer key (§6.3, Appendix B)
+
+## i81_element_boundary.dbml
+i81_element_boundary.dbml:12:1: error: syntax: expected identifier in relationship endpoint (§6.7), found the start of the next element (§3.2.5)
+i81_element_boundary.dbml:12:1: error: syntax: unknown element type "tags" (§5)
+

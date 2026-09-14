@@ -342,7 +342,7 @@ func tableCheck(d *ast.Table, key, alias string, partials []*ast.TablePartial, h
 	acc := &checker{info: &Info{HasImports: hasImports}, enumSet: enums}
 	ti := &TableInfo{Decl: d, Key: key, Alias: alias}
 	acc.columnsExpand(ti, partials)
-	acc.tableBodyCheck(d.Name.String(), d.Settings, d.Body, true)
+	acc.tableBodyCheck(d.Pos(), d.Name.String(), d.Settings, d.Body, true)
 	return ti, acc.diags
 }
 

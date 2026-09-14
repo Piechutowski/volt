@@ -265,26 +265,9 @@ func (p *parser) decl() (d ast.Decl) {
 // an identifier at the start of a line, balanced past any open braces.
 func (p *parser) topLevelSync() {
 	p.line = false
-	if !p.at(token.EOF) {
-		p.next() // always make progress past the offending token
-	}
-	depth := 0
+	// The rest of the element is discarded, up to the next element
+	// start (§3.2 rule 6); the chunk being parsed holds exactly that.
 	for !p.at(token.EOF) {
-		t := p.cur()
-		switch t.Kind {
-		case token.LBRACE:
-			depth++
-		case token.RBRACE:
-			if depth > 0 {
-				depth--
-			}
-			p.next()
-			continue
-		case token.IDENT:
-			if depth == 0 && t.NLBefore {
-				return
-			}
-		}
 		p.next()
 	}
 }
@@ -300,6 +283,22 @@ func (p *parser) lineSync() {
 	for !p.at(token.EOF) && !p.at(token.RBRACE) && !p.cur().NLBefore {
 		p.next()
 	}
+}
+
+// item parses one item of a braced body, discarding the rest of its
+// line on a syntax error so the following items are parsed (§3.2 rule
+// 6). The bodies with their own item functions (a table's, a scope's,
+// a pipeline's) recover the same way in them.
+func (p *parser) item(parse func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(bailout); !ok {
+				panic(r)
+			}
+			p.lineSync()
+		}
+	}()
+	parse()
 }
 
 /* ===== import statement (§7) ===== */
@@ -350,16 +349,18 @@ func (p *parser) project() *ast.Project {
 	}
 	p.expect(token.LBRACE, "Project (§6.1)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
-		if p.atNoteDef() {
-			d.Notes = append(d.Notes, p.noteDef())
-			continue
-		}
-		p.lineBegin("project property (§6.1)")
-		key := p.ident("project property (§6.1)")
-		p.expect(token.COLON, "project property (§6.1)")
-		val := p.expect(token.STRING, "project property value (§6.1)")
-		d.Props = append(d.Props, &ast.ProjectProp{Key: key, Value: p.litOf(val)})
-		p.endOfLine("project property (§6.1)")
+		p.item(func() {
+			if p.atNoteDef() {
+				d.Notes = append(d.Notes, p.noteDef())
+				return
+			}
+			p.lineBegin("project property (§6.1)")
+			key := p.ident("project property (§6.1)")
+			p.expect(token.COLON, "project property (§6.1)")
+			val := p.expect(token.STRING, "project property value (§6.1)")
+			d.Props = append(d.Props, &ast.ProjectProp{Key: key, Value: p.litOf(val)})
+			p.endOfLine("project property (§6.1)")
+		})
 	}
 	d.Rbrace = p.expect(token.RBRACE, "Project (§6.1)").Pos
 	return d
@@ -492,7 +493,7 @@ func (p *parser) indexesBlock() *ast.IndexesBlock {
 	b := &ast.IndexesBlock{IndexesPos: p.next().Pos}
 	p.expect(token.LBRACE, "indexes block (§6.5)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
-		b.Indexes = append(b.Indexes, p.index())
+		p.item(func() { b.Indexes = append(b.Indexes, p.index()) })
 	}
 	b.Rbrace = p.expect(token.RBRACE, "indexes block (§6.5)").Pos
 	return b
@@ -540,13 +541,15 @@ func (p *parser) checksBlock() *ast.ChecksBlock {
 	b := &ast.ChecksBlock{ChecksPos: p.next().Pos}
 	p.expect(token.LBRACE, "checks block (§6.6)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
-		p.lineBegin("check definition (§6.6)")
-		c := p.check()
-		if p.at(token.LBRACKET) && !p.cur().NLBefore {
-			c.Settings = p.settingList()
-		}
-		p.endOfLine("check definition (§6.6)")
-		b.Checks = append(b.Checks, c)
+		p.item(func() {
+			p.lineBegin("check definition (§6.6)")
+			c := p.check()
+			if p.at(token.LBRACKET) && !p.cur().NLBefore {
+				c.Settings = p.settingList()
+			}
+			p.endOfLine("check definition (§6.6)")
+			b.Checks = append(b.Checks, c)
+		})
 	}
 	b.Rbrace = p.expect(token.RBRACE, "checks block (§6.6)").Pos
 	return b
@@ -680,13 +683,15 @@ func (p *parser) enum() *ast.Enum {
 	d.Name = p.qualName("enum name (§6.8)")
 	p.expect(token.LBRACE, "Enum (§6.8)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
-		p.lineBegin("enum value (§6.8)")
-		v := &ast.EnumValue{Name: p.ident("enum value (§6.8)")}
-		if p.at(token.LBRACKET) && !p.cur().NLBefore {
-			v.Settings = p.settingList()
-		}
-		p.endOfLine("enum value (§6.8)")
-		d.Values = append(d.Values, v)
+		p.item(func() {
+			p.lineBegin("enum value (§6.8)")
+			v := &ast.EnumValue{Name: p.ident("enum value (§6.8)")}
+			if p.at(token.LBRACKET) && !p.cur().NLBefore {
+				v.Settings = p.settingList()
+			}
+			p.endOfLine("enum value (§6.8)")
+			d.Values = append(d.Values, v)
+		})
 	}
 	d.Rbrace = p.expect(token.RBRACE, "Enum (§6.8)").Pos
 	return d
@@ -723,7 +728,7 @@ func (p *parser) recordsRest(pos token.Position, table *ast.QualName) *ast.Recor
 	}
 	p.expect(token.LBRACE, "records body (§6.10)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
-		d.Rows = append(d.Rows, p.recordRow())
+		p.item(func() { d.Rows = append(d.Rows, p.recordRow()) })
 	}
 	d.Rbrace = p.expect(token.RBRACE, "records body (§6.10)").Pos
 	return d
@@ -820,13 +825,15 @@ func (p *parser) tableGroup() *ast.TableGroup {
 	}
 	p.expect(token.LBRACE, "TableGroup (§6.12)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
-		if p.atNoteDef() {
-			d.Notes = append(d.Notes, p.noteDef())
-			continue
-		}
-		p.lineBegin("TableGroup member (§6.12)")
-		d.Members = append(d.Members, p.qualName("TableGroup member (§6.12)"))
-		p.endOfLine("TableGroup member (§6.12)")
+		p.item(func() {
+			if p.atNoteDef() {
+				d.Notes = append(d.Notes, p.noteDef())
+				return
+			}
+			p.lineBegin("TableGroup member (§6.12)")
+			d.Members = append(d.Members, p.qualName("TableGroup member (§6.12)"))
+			p.endOfLine("TableGroup member (§6.12)")
+		})
 	}
 	d.Rbrace = p.expect(token.RBRACE, "TableGroup (§6.12)").Pos
 	return d
@@ -846,9 +853,11 @@ func (p *parser) diagramView() *ast.DiagramView {
 			c.Wildcard = true
 		} else {
 			for !p.at(token.RBRACE) && !p.at(token.EOF) {
-				p.lineBegin("view category member (§6.13)")
-				c.Names = append(c.Names, p.qualName("view category member (§6.13)"))
-				p.endOfLine("view category member (§6.13)")
+				p.item(func() {
+					p.lineBegin("view category member (§6.13)")
+					c.Names = append(c.Names, p.qualName("view category member (§6.13)"))
+					p.endOfLine("view category member (§6.13)")
+				})
 			}
 		}
 		c.Rbrace = p.expect(token.RBRACE, "view category body (§6.13)").Pos

@@ -1364,3 +1364,34 @@ where the merge changed the facts.
   TestSpecGrammarSentencesParse -sentences DIR`. What it refuses: a
   grammar edited without the test, and a parser strictness or
   leniency the grammar does not state.
+
+- **D101 — What invalid input produces is a rule of the language and
+  a golden of the corpus, and the editor's session is a golden too**
+  (2026-09-14, spec §3.2 rule 6, `lang/conformance/invalid_*.golden`,
+  `cmd/volt/lsp_session_test.go`). The corpus held that an invalid
+  snippet is rejected, and for the reason its comment names; what
+  else the front end said about it, and what it said about the rest
+  of the file, was whatever the parser's recovery happened to do, and
+  the recovery differed by construct: a broken column, route or plug
+  line lost its line and the body went on, while a broken enum value,
+  index, record row, project property, import entry or group member
+  took its whole element down, and a broken element resumed at the
+  next line that began with an identifier, inside its own indentation
+  included, so one error bred a second. Now the spec states the rule
+  (§3.2 rule 6): a syntax error inside an element discards the rest
+  of the element, up to the next element start, and inside any
+  one-per-line body it discards the rest of the item's line and the
+  following items are parsed; the parser does exactly that, in one
+  place for the elements and one function for the bodies. With the
+  behavior a rule, every diagnostic of every invalid snippet, both
+  halves of the corpus, is a golden refreshed by `-update` after
+  reading the diff, so a change to a message, a position or the
+  recovery is a change someone reads. The editor's side is pinned the
+  same way: a scripted stdio JSON-RPC session drives the real server
+  process (the test binary run again as the server), opens a project
+  file, breaks it, adds to it, fixes it, and asks for hover,
+  definition, completion and symbols; every response and every
+  published diagnostic is the golden, the project root spelled ROOT.
+  That is the development practice of D79 and D85 as a test. What it
+  refuses: recovery that differs by construct, and a diagnostic or a
+  server reply that changes without a golden changing with it.

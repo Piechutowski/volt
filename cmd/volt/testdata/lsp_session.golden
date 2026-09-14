@@ -1,0 +1,33 @@
+initialize
+{"id":1,"jsonrpc":"2.0","result":{"capabilities":{"completionProvider":{"triggerCharacters":[".","~","[",",",":","\u003e","\u003c","-"]},"definitionProvider":true,"documentSymbolProvider":true,"hoverProvider":true,"referencesProvider":true,"renameProvider":true,"textDocumentSync":{"change":1,"openClose":true}},"serverInfo":{"name":"volt-lsp","version":"0.1.0"}}}
+
+open: a clean file
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"diagnostics":[],"uri":"file://ROOT/app/schema.volt"}}
+
+edit 1: a settings list left open
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"diagnostics":[{"code":"spec/6.2","message":"table \"posts\" must contain at least one column or partial injection","range":{"end":{"character":5,"line":2},"start":{"character":0,"line":2}},"severity":1,"source":"volt"},{"code":"syntax","message":"expected ']' in settings list (§4.2), found identifier \"title\"","range":{"end":{"character":6,"line":4},"start":{"character":1,"line":4}},"severity":1,"source":"volt"},{"code":"spec/V5","message":"table \"public.posts\" has no single-column primary key (§V5.4)","range":{"end":{"character":16,"line":9},"start":{"character":11,"line":9}},"severity":1,"source":"volt"}],"uri":"file://ROOT/app/schema.volt"}}
+
+edit 2: a verb misspelled, a table added
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"diagnostics":[{"code":"syntax","message":"expected a verb (get, post, ...), 'resources', 'dataset' or 'Scope' in Scope body (§V4), found \"gett\"","range":{"end":{"character":5,"line":8},"start":{"character":1,"line":8}},"severity":1,"source":"volt"}],"uri":"file://ROOT/app/schema.volt"}}
+
+edit 3: the verb fixed
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"diagnostics":[],"uri":"file://ROOT/app/schema.volt"}}
+
+hover on the table name
+{"id":2,"jsonrpc":"2.0","result":{"contents":{"kind":"markdown","value":"**`Table posts`** in package `app` — Go model `Post`\n\nkey: `id` → route parameter type `int32`\n\n```dbml\nTable posts {\n\tid integer [pk]\n\ttitle text\n}\n```\n\n_Routes and helpers derive from this: the URL keeps the table's name, the member helper takes the model's (§V5.4)._"},"range":{"end":{"character":11,"line":2},"start":{"character":6,"line":2}}}}
+
+hover on the resources table
+{"id":3,"jsonrpc":"2.0","result":{"contents":{"kind":"markdown","value":"**`Table posts`** in package `app` — Go model `Post`\n\nkey: `id` → route parameter type `int32`\n\n```dbml\nTable posts {\n\tid integer [pk]\n\ttitle text\n}\n```\n\n_Routes and helpers derive from this: the URL keeps the table's name, the member helper takes the model's (§V5.4)._"},"range":{"end":{"character":16,"line":9},"start":{"character":11,"line":9}}}}
+
+definition from the resources table
+{"id":4,"jsonrpc":"2.0","result":{"range":{"end":{"character":11,"line":2},"start":{"character":6,"line":2}},"uri":"file://ROOT/app/schema.volt"}}
+
+completion inside the settings list
+{"id":5,"jsonrpc":"2.0","result":[{"kind":10,"label":"pk"},{"kind":10,"label":"primary key"},{"kind":10,"label":"null"},{"kind":10,"label":"not null"},{"kind":10,"label":"unique"},{"kind":10,"label":"increment"},{"kind":10,"label":"required"},{"kind":10,"label":"default: "},{"kind":10,"label":"check: "},{"kind":10,"label":"note: "},{"kind":10,"label":"ref: "},{"kind":10,"label":"tag: "}]}
+
+document symbols
+{"id":6,"jsonrpc":"2.0","result":[{"children":[{"detail":"integer","kind":8,"name":"id","range":{"end":{"character":27,"line":3},"start":{"character":1,"line":3}},"selectionRange":{"end":{"character":3,"line":3},"start":{"character":1,"line":3}}},{"detail":"text","kind":8,"name":"title","range":{"end":{"character":22,"line":4},"start":{"character":1,"line":4}},"selectionRange":{"end":{"character":6,"line":4},"start":{"character":1,"line":4}}}],"detail":"Table","kind":23,"name":"posts","range":{"end":{"character":0,"line":5},"start":{"character":0,"line":2}},"selectionRange":{"end":{"character":11,"line":2},"start":{"character":6,"line":2}}},{"children":[{"detail":"integer","kind":8,"name":"id","range":{"end":{"character":16,"line":13},"start":{"character":1,"line":13}},"selectionRange":{"end":{"character":3,"line":13},"start":{"character":1,"line":13}}}],"detail":"Table","kind":23,"name":"tags","range":{"end":{"character":0,"line":14},"start":{"character":0,"line":12}},"selectionRange":{"end":{"character":10,"line":12},"start":{"character":6,"line":12}}}]}
+
+shutdown
+{"id":7,"jsonrpc":"2.0","result":null}
+

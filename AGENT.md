@@ -109,7 +109,9 @@ changes. Grammar changes additionally need `tree-sitter generate`,
 `tree-sitter test`, the differential checks of `docs/editor.md` §8, and
 `./scripts/sync-grammar.sh`. For LSP behavior, scripted stdio JSON-RPC
 sessions replaying the user's exact keystrokes have repeatedly caught
-what unit tests missed — do that for anything interactive.
+what unit tests missed — do that for anything interactive; one such
+session is a golden test (`cmd/volt/lsp_session_test.go`, D101), and
+a new interaction belongs in it.
 
 ## Conventions
 

@@ -47,8 +47,10 @@ func (p *parser) packageClause() *ast.PackageClause {
 func (p *parser) importDecl() *ast.ImportDecl {
 	d := &ast.ImportDecl{ImportPos: p.next().Pos}
 	p.expect(token.LPAREN, "import declaration (§V2)")
-	for !p.at(token.RPAREN) && !p.at(token.EOF) {
-		d.Specs = append(d.Specs, p.importSpec())
+	// A stray "}" ends the block too: line recovery stops at it, so
+	// the loop must not wait for ")" there.
+	for !p.at(token.RPAREN) && !p.at(token.RBRACE) && !p.at(token.EOF) {
+		p.item(func() { d.Specs = append(d.Specs, p.importSpec()) })
 	}
 	d.Rparen = p.expect(token.RPAREN, "import declaration (§V2)").End()
 	if len(d.Specs) == 0 {
@@ -331,11 +333,13 @@ func (p *parser) groupDecl() *ast.Group {
 	case p.at(token.LBRACE):
 		p.next()
 		for !p.at(token.RBRACE) && !p.at(token.EOF) {
-			name := p.ident("group member (§V9)")
-			d.Terms = append(d.Terms, &ast.GroupTerm{Names: []*ast.Ident{name}})
-			if !p.at(token.RBRACE) && !p.cur().NLBefore {
-				p.fail(p.cur(), "group members are one per line (§V9)")
-			}
+			p.item(func() {
+				name := p.ident("group member (§V9)")
+				d.Terms = append(d.Terms, &ast.GroupTerm{Names: []*ast.Ident{name}})
+				if !p.at(token.RBRACE) && !p.cur().NLBefore {
+					p.fail(p.cur(), "group members are one per line (§V9)")
+				}
+			})
 		}
 		d.EndPos = p.expect(token.RBRACE, "group declaration (§V9)").End()
 		p.endOfLine("group declaration (§V9)")

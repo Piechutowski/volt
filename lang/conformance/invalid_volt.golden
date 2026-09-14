@@ -1,0 +1,347 @@
+## i01_missing_package.volt
+app/i01_missing_package.volt:2:1: error: spec/V1: every .volt file must begin with a package clause (§V1.2)
+
+## i02_package_not_first.volt
+app/i02_package_not_first.volt:5:1: error: spec/V1: the package clause must be the first declaration in the file (§V1.2)
+app/i02_package_not_first.volt:5:1: error: spec/V1: duplicate package clause (§V1.2)
+
+## i03_use_rejected.volt
+app/i03_use_rejected.volt:4:1: error: spec/7: use is not part of the Volt language (§7); replace file imports with the package system — see docs/spec.md Appendix C for migration
+
+## i04_reuse_rejected.volt
+app/i04_reuse_rejected.volt:4:1: error: spec/7: reuse is not part of the Volt language (§7); replace file imports with the package system — see docs/spec.md Appendix C for migration
+
+## i05_empty_import.volt
+app/i05_empty_import.volt:5:1: error: syntax: empty import declaration (§V2)
+
+## i06_self_import.volt
+app/i06_self_import.volt:5:2: error: spec/V2: a package cannot import itself (§V2.4)
+
+## i07_dup_route_shape.volt
+app/i07_dup_route_shape.volt:6:2: error: spec/V4: route GET /users/:name conflicts with the route at app/i07_dup_route_shape.volt:5:2: identical method and path shape (§V4.7)
+
+## i08_helper_collision.volt
+app/i08_helper_collision.volt:6:2: error: spec/V4: reverse-URL helper or client method "Show" already produced by the route at app/i08_helper_collision.volt:5:2 (§V4.6, §V4.10); disambiguate with [name:] or a scope name
+
+## i09_signature_conflict.volt
+app/i09_signature_conflict.volt:6:2: error: spec/V4: X.Show is reached by routes with different parameter signatures (§V4.3): (id int32) vs (id int64) (first at app/i09_signature_conflict.volt:5:2)
+
+## i100_query_body_verb
+app/routes.volt:10:16: error: spec/V4: db.UserCreate takes a request body (db.UserCreateParams); route it with post, put or patch (§V4.8)
+
+## i101_query_extra_path_param
+app/routes.volt:10:13: error: spec/V4: path parameter "x" is not a parameter of db.UserList (§V4.8)
+
+## i102_query_list_in_path
+app/routes.volt:10:14: error: spec/V4: list parameter "ids" of db.UserPicked cannot be a path parameter; pass it as a repeated query key (§V4.8)
+app/routes.volt:10:14: error: spec/V4: path parameter "ids" is not a parameter of db.UserPicked (§V4.8)
+
+## i103_dataset_unknown
+app/routes.volt:10:13: error: spec/V13: no select "brows" in package "db" (§V13.1)
+
+## i104_dataset_strip
+app/routes.volt:10:2: error: spec/V13: strip: "xx_" is not a prefix of member table "ms_revenue" (§V13.2)
+app/routes.volt:10:2: error: spec/V13: strip: "xx_" is not a prefix of member table "ms_usage" (§V13.2)
+app/routes.volt:10:2: error: spec/V13: strip: "xx_" is not a prefix of member table "ms_notes" (§V13.2)
+
+## i105_dataset_only_except
+app/routes.volt:10:41: error: spec/V13: only: and except: cannot both be set on a dataset (§V13.2)
+
+## i106_dataset_unqualified
+app/routes.volt:6:2: error: spec/V2: package "db" imported and not used (§V2.4)
+app/routes.volt:10:10: error: spec/V13: package "app" declares no select; a dataset names a select of this package, or of an imported data package, qualified (§V13.1)
+
+## i107_dataset_not_member
+app/routes.volt:10:30: error: spec/V13: except: "users" is not a member of select "browse"'s target (§V13.2)
+
+## i108_event_unknown_runtime_handler.volt
+app/i108_event_unknown_runtime_handler.volt:6:14: error: spec/V4: the runtime provides no handler volt.Stream; volt.Events is the event stream (§V4.11)
+
+## i109_event_route_verb.volt
+app/i109_event_route_verb.volt:6:2: error: spec/V4: an event route is read with get (§V4.11)
+
+## i10_wildcard_not_last.volt
+app/i10_wildcard_not_last.volt:5:9: error: spec/V4: the wildcard ':p...' must be the last path segment (§V4.1.4)
+
+## i110_required_nullable.volt
+db/i110_required_nullable.volt:7:18: error: spec/6.3: required on "email" needs not null: a nullable column has no empty value to refuse, NULL is absence (§6.3)
+
+## i111_required_bool.volt
+db/i111_required_bool.volt:7:29: error: spec/6.3: required on "active" (boolean): a boolean has no empty value — every value is a value (§6.3)
+
+## i112_required_default.volt
+db/i112_required_default.volt:7:16: error: spec/6.3: "required" and "default" cannot both be set
+
+## i113_required_time.volt
+db/i113_required_time.volt:7:27: error: spec/6.3: required on "at" (timestamp): a timestamp has no empty value — every value is a value (§6.3)
+
+## i114_resources_default_unqualified
+app/routes.volt:6:2: error: spec/V2: package "db" imported and not used (§V2.4)
+app/routes.volt:10:12: error: spec/V5: package "app" declares no tables; resources names a table of this package, or of an imported data package, qualified (§V5.1)
+
+## i115_controller_field_collision.volt
+app/i115_controller_field_collision.volt:12:2: error: spec/V4: controller "Queries" takes the name of the Controllers field holding this package's query routes (§V4.3); rename the controller
+
+## i115_resources_default_param
+app/routes.volt:10:31: error: spec/V5: param: does not apply with [default]; the key parameter is named by the primary-key column, as the generated CRUD spells it (§V5.5)
+
+## i116_import_own_name
+app/routes.volt:6:2: error: spec/V2: import qualifier "app" is this package's own name (§V2.4); alias the import
+app/routes.volt:10:16: error: spec/V5: package "app" declares no tables; resources names a table of this package, or of an imported data package, qualified (§V5.1)
+
+## i116_resources_default_no_update
+app/routes.volt:10:15: error: spec/V5: resources db.marks [default]: the generated CRUD has no update method for "Update" (every column is part of the key, so there is nothing to update); drop the action with except: (update) (§V5.5)
+
+## i117_resources_param_shadow.volt
+app/i117_resources_param_shadow.volt:10:12: error: spec/V5: resources "plots": the key parameter "id" is already a parameter of the enclosing scope; rename it with [param: <name>] (§V5.3, §V4.1.2)
+
+## i118_resources_default_param_shadow
+app/routes.volt:10:15: error: spec/V5: resources db.plots [default]: the key parameter "id" is already a parameter of the enclosing scope, and the generated CRUD fixes its name; give the scope's parameter another name (§V5.5, §V4.1.2)
+
+## i11_wildcard_in_scope.volt
+app/i11_wildcard_in_scope.volt:4:10: error: spec/V4: a Scope prefix cannot contain a wildcard (§V4.1.4)
+app/i11_wildcard_in_scope.volt:4:10: error: spec/V4: the wildcard ':p...' must be the last path segment (§V4.1.4)
+
+## i12_unknown_pipeline.volt
+app/i12_unknown_pipeline.volt:4:10: error: spec/V4: unknown Pipeline "nope" (§V4.4)
+
+## i13_unknown_param_type.volt
+app/i13_unknown_param_type.volt:5:13: error: spec/V4: unknown parameter type "uuid" (§V4.1.3); valid: int, int32, int64, string
+
+## i14_dup_param.volt
+app/i14_dup_param.volt:5:9: error: spec/V4: duplicate path parameter "id" (§V4.1.2)
+
+## i15_keyword_param.volt
+app/i15_keyword_param.volt:5:9: error: spec/V4: path parameter "type" must be a valid, non-keyword Go identifier (§V4.1.2)
+
+## i16_lowercase_controller.volt
+app/i16_lowercase_controller.volt:5:9: error: spec/V4: handler must be Controller.Action, both exported Go identifiers (§V4.3), found "home.Index"
+
+## i17_one_part_handler.volt
+app/i17_one_part_handler.volt:5:9: error: spec/V4: package "app" declares no tables, so it has no query Show; a query of an imported data package is written qualified (§V4.8)
+
+## i18_dataset_reserved.volt
+app/i18_dataset_reserved.volt:4:1: error: syntax: routes, resources and datasets must appear inside a Scope (§V4)
+
+## i19_only_and_except.volt
+app/i19_only_and_except.volt:9:34: error: spec/V5: only: and except: cannot be combined (§V5.3)
+
+## i20_unknown_action.volt
+app/i20_unknown_action.volt:9:26: error: spec/V5: unknown action "browse" (§V5.2); valid: index, new, create, show, edit, update, delete
+
+## i21_unknown_table
+app/r.volt:9:15: error: spec/V5: no table "nope" in package "db" (§V5.1)
+
+## i22_scope_setting.volt
+app/i22_scope_setting.volt:4:10: error: spec/V6: setting "pipes" is not valid on a Scope (§V6); valid: pipe, name, error_handler
+
+## i23_route_setting.volt
+app/i23_route_setting.volt:5:14: error: spec/V6: setting "pipe" is not valid on a route (§V6); valid: name
+
+## i24_toplevel_route.volt
+app/i24_toplevel_route.volt:4:1: error: syntax: routes, resources and datasets must appear inside a Scope (§V4)
+
+## i25_short_ellipsis.volt
+app/i25_short_ellipsis.volt:5:14: error: syntax: wildcard ellipsis is spelled ':name...' (§V4.1)
+
+## i26_typed_wildcard.volt
+app/i26_typed_wildcard.volt:5:20: error: syntax: a wildcard cannot carry a type; ':name...' always captures a string (§V4.1)
+
+## i27_import_no_parens.volt
+app/i27_import_no_parens.volt:4:1: error: syntax: expected '(' after import (§V2); Volt uses Go-style import blocks
+
+## i28_composite_pk_model.volt
+app/i28_composite_pk_model.volt:11:12: error: spec/V5: table "public.pairs" has a composite primary key (a, b); composite keys are not routable (§V5.4)
+
+## i29_unknown_import
+app/r.volt:5:2: error: spec/V2: unknown package "nothere": no directory of .volt files at that path under the project root (§V2.2)
+app/r.volt:9:12: error: spec/V5: unknown package qualifier "nothere" (§V5.1)
+
+## i30_unused_import
+app/r.volt:5:2: error: spec/V2: package "db" imported and not used (§V2.4)
+
+## i31_cycle
+b/b.volt:4:2: error: spec/V2: import cycle: a -> b -> a (§V2.6)
+
+## i32_pkg_dir_mismatch
+app/r.volt:2:1: error: spec/V1: package name "routes" must match its directory name "app" (§V1.4)
+
+## i33_quoted_segment.volt
+app/i33_quoted_segment.volt:5:7: error: spec/V4: path segment "a b" must be a plain identifier of letters, digits and underscores (§V4.1.6)
+
+## i34_quoted_plug.volt
+app/i34_quoted_plug.volt:5:2: error: spec/V3: plug reference "weird name" must be plain, non-keyword Go identifiers (§V3.2)
+
+## i35_reserved_param.volt
+app/i35_reserved_param.volt:5:9: error: spec/V4: path parameter "volt" collides with a name in generated signatures (§V4.1.2); reserved: w, r, opts, volt
+
+## i36_reserved_param_w.volt
+app/i36_reserved_param_w.volt:5:9: error: spec/V4: path parameter "w" collides with a name in generated signatures (§V4.1.2); reserved: w, r, opts, volt
+
+## i37_ambiguous_overlap.volt
+app/i37_ambiguous_overlap.volt:8:2: error: spec/V4: route GET /:y/b is ambiguous with the route at app/i37_ambiguous_overlap.volt:7:2 (GET /a/:x): both match some requests and neither is more specific (§V4.7.2)
+
+## i38_trailing_slash.volt
+app/i38_trailing_slash.volt:5:12: error: syntax: '/' must be followed by a path segment; routes match exactly, without a trailing slash (§V4.1)
+
+## i39_qualifier_conflict
+app/r.volt:8:2: error: spec/V2: import qualifier "db" already used for package "db" (§V2.4); alias one of them
+
+## i40_package_volt.volt
+volt/i40_package_volt.volt:2:1: error: spec/V1: package name "volt" is reserved for the runtime (§V1.2); generated code could not tell your package from it
+
+## i41_spaced_param_type.volt
+app/i41_spaced_param_type.volt:5:18: error: syntax: parameter type is written ':name(type)' with no spaces (§V4.1)
+
+## i42_quoted_handler.volt
+app/i42_quoted_handler.volt:5:8: error: spec/V4: handler names are plain (unquoted) identifiers (§V4.1.6), found "Home.Index"
+
+## i43_quoted_import.volt
+app/i43_quoted_import.volt:5:2: error: syntax: import path segments are plain (unquoted) identifiers (§V2.2)
+app/i43_quoted_import.volt:7:1: error: syntax: expected ')' in import declaration (§V2), found end of file
+
+## i44_singular_collision.volt
+app/i44_singular_collision.volt:11:2: error: spec/V5: resources "posty": the collection and member reverse-URL helpers are both "Posty", because singularizing "posty" does not change it (§V5.4); set the singular explicitly, e.g. [singular: <name>]
+
+## i45_model_setting_removed.volt
+app/i45_model_setting_removed.volt:10:19: error: spec/V5: model: is not a setting; name the table in the declaration itself — `resources <table>` (§V5.1)
+
+## i46_table_case.volt
+app/i46_table_case.volt:10:12: error: spec/V5: no table "Posts" in package "app"; did you mean "posts"? names are case-sensitive (§V5.1)
+
+## i47_unqualified_unknown_table.volt
+app/i47_unqualified_unknown_table.volt:11:12: error: spec/V5: no table "ghosts" in package "app" (§V5.1)
+
+## i50_group_unknown.volt
+db/i50_group_unknown.volt:11:3: error: spec/V9: unknown group term "ms_revenu": no such table, group or TableGroup in package "db" (§V9.2)
+
+## i51_group_readd.volt
+db/i51_group_readd.volt:12:23: error: spec/V9: table "ms_revenue" is already a member (§V9.3)
+
+## i52_group_cycle.volt
+db/i52_group_cycle.volt:8:7: error: spec/V9: group "a" is part of a reference cycle (§V9.4)
+db/i52_group_cycle.volt:9:7: error: spec/V9: group "b" has no members (§V9.4)
+
+## i53_pred_type_mismatch.volt
+db/i53_pred_type_mismatch.volt:9:33: error: spec/V11: column "org" (string) is not orderable; < <= > >= need numeric or date/time operands (§V10.3)
+
+## i54_group_type_disagree.volt
+db/i54_group_type_disagree.volt:19:29: error: spec/V11: column "org" disagrees on type across "mixed": int32 in ks_seats; string in ms_revenue — the predicate cannot be checked for every member (§V11.4)
+
+## i55_param_two_types.volt
+db/i55_param_two_types.volt:10:53: error: spec/V11: parameter :v used as int32 here but string earlier — one name, one type (§V10.3)
+
+## i56_select_missing_column.volt
+db/i56_select_missing_column.volt:18:30: error: spec/V11: column "org" is missing from ms_meta — every member of "series" must have it (§V11.4)
+
+## i57_pred_cycle.volt
+db/i57_pred_cycle.volt:10:10: error: spec/V10: predicate "a" is part of a reference cycle (§V10.2)
+
+## i58_select_crud_collision.volt
+db/i58_select_crud_collision.volt:9:8: error: spec/V11: select name "List" collides with the generated CRUD surface (§V11.1)
+
+## i59_like_on_number.volt
+db/i59_like_on_number.volt:9:33: error: spec/V11: like needs a text column; "year" is int32 (§V10.3)
+
+## i60_order_direction_missing.volt
+db/i60_order_direction_missing.volt:9:65: error: spec/V11: order: every column states its direction — write "id asc" or "id desc" (§V11.5)
+
+## i64_projection_missing_column.volt
+db/i64_projection_missing_column.volt:20:23: error: spec/V11: column "hits" is missing from link_clicks — every member of "metrics" must have it (§V11.7)
+
+## i65_projection_nullability_disagrees.volt
+db/i65_projection_nullability_disagrees.volt:20:17: error: spec/V11: column "site" disagrees on field type across "metrics": rt.Null[string] in link_clicks; string in page_views — a shared row type needs one type, nullability included (§V11.7)
+
+## i66_projection_excluded_missing.volt
+db/i66_projection_excluded_missing.volt:10:20: error: spec/V11: column "hits" is missing from page_views — every member of "page_views" must have it (§V11.7)
+
+## i67_projection_excludes_everything.volt
+db/i67_projection_excludes_everything.volt:9:8: error: spec/V11: select "nothing" excludes every column of "page_views" — nothing is left to project (§V11.7)
+
+## i68_projection_row_type_collision.volt
+db/i68_projection_row_type_collision.volt:14:8: error: spec/V11: select "summary" mints the shared row type Summary, which collides with the model of table "summaries" (§V11.7)
+
+## i69_projection_duplicate_column.volt
+db/i69_projection_duplicate_column.volt:9:23: error: spec/V11: column "site" appears twice in the projection (§V11.7)
+
+## i70_star_without_exclusion.volt
+db/i70_star_without_exclusion.volt:10:14: error: syntax: a star projection needs at least one '\ column' exclusion; drop the parens to select every column (§V11.7)
+
+## i71_check_with_param.volt
+db/i71_check_with_param.volt:9:13: error: spec/V12: a check takes no :params — it judges one row, not a query (§V12.2)
+
+## i72_check_nullable_column.volt
+db/i72_check_nullable_column.volt:10:5: error: spec/V12: column "hits" is nullable; a check's Go and SQL tiers must agree, and three-valued NULL logic is not mirrored — make it not null, or use an opaque `SQL` check (§V12.3)
+
+## i73_check_unknown_column.volt
+db/i73_check_unknown_column.volt:8:5: error: spec/V12: no column "hits" in table "page_views" (§V12.2)
+
+## i74_check_foreign_package_ref.volt
+db/i74_check_foreign_package_ref.volt:10:5: error: spec/V12: a check references a function of the containing package, not of "other" — write a local wrapper (§V12.5)
+
+## i75_check_time_column.volt
+db/i75_check_time_column.volt:10:5: error: spec/V12: column "created_at" is a date/time; the Go tier cannot mirror SQL's text-time comparison — use an opaque `SQL` check or a Go reference (§V12.4)
+
+## i76_check_is_null_constant.volt
+db/i76_check_is_null_constant.volt:10:5: error: spec/V12: is null is constant in a check: its columns are not null by §V12.3
+
+## i77_check_fractional_literal.volt
+db/i77_check_fractional_literal.volt:10:13: error: spec/V12: the fractional literal 1.5 needs a float column; "hits" is int32 (§V12.4)
+
+## i81_goref_undeclared
+db/schema.volt:11:5: error: spec/V12: no function EmailValdi in package db's Go files — declare func EmailValdi(string) error beside the schema (§V12.5)
+
+## i82_goref_column_type
+db/schema.volt:11:16: error: spec/V12: column "email" (integer, Go int32) but parameter 1 of EmailValid is string — change the column type or the function: expected func EmailValid(int32) error (§V12.5)
+
+## i83_goref_param_type
+db/schema.volt:11:16: error: spec/V12: column "email" (varchar, Go string) but parameter 1 of EmailValid is int — change the column type or the function: expected func EmailValid(string) error (§V12.5)
+
+## i84_goref_arity
+db/schema.volt:11:5: error: spec/V12: EmailValid takes 2 parameter(s) but the check passes 1 column(s): found func EmailValid(email, domain string) error, expected func EmailValid(string) error (§V12.5)
+
+## i85_goref_result
+db/schema.volt:10:5: error: spec/V12: EmailValid must return exactly error: found func EmailValid(email string) bool, expected func EmailValid(string) error (§V12.5)
+
+## i86_plug_undeclared
+app/routes.volt:6:6: error: spec/V3: no function BearerAuth in package app's Go files — declare func BearerAuth(next http.Handler) http.Handler beside the routes (§V3.2)
+
+## i87_plug_not_middleware
+app/routes.volt:6:6: error: spec/V3: BearerAuth is not middleware: found func BearerAuth(w http.ResponseWriter, r *http.Request), a plug is func BearerAuth(next http.Handler) http.Handler (§V3.2)
+
+## i88_goref_excluded_file
+db/schema.volt:11:5: error: spec/V12: no function EmailValid in package db's Go files — declare func EmailValid(string) error beside the schema (§V12.5)
+
+## i89_goref_variadic
+db/schema.volt:10:5: error: spec/V12: EmailValid is variadic (func EmailValid(emails ...string) error); a check passes a fixed column list — expected func EmailValid(string) error (§V12.5)
+
+## i90_goref_generic
+db/schema.volt:11:5: error: spec/V12: EmailValid is generic (func EmailValid[T ~string](email T) error); a check cannot instantiate it — wrap it in a plain func EmailValid(string) error (§V12.5)
+
+## i91_order_duplicate_column.volt
+db/i91_order_duplicate_column.volt:10:47: error: spec/V11: column "day" appears twice in order: (§V11.5)
+
+## i92_group_minus.volt
+db/i92_group_minus.volt:18:23: error: syntax: '-' is not a group operator: set difference is spelled '\' (§V9.3)
+
+## i93_group_set_readd.volt
+db/i93_group_set_readd.volt:18:25: error: spec/V9: table "ms_revenue" is already a member (§V9.3)
+
+## i94_group_set_remove_missing.volt
+db/i94_group_set_remove_missing.volt:17:52: error: spec/V9: table "ms_dict" is not a member; nothing to remove (§V9.3)
+
+## i95_projection_minus.volt
+db/i95_projection_minus.volt:10:18: error: syntax: '-' is not a projection operator: exclusion is spelled '\' (§V11.7)
+
+## i96_list_param_time.volt
+db/i96_list_param_time.volt:10:36: error: spec/V11: column "at" (time.Time) cannot take a list parameter: JSON carries no date/time value (§V10.3)
+
+## i97_list_param_scalar_conflict.volt
+db/i97_list_param_scalar_conflict.volt:10:60: error: spec/V11: parameter :site used as string here but []string earlier — one name, one type (§V10.3)
+
+## i98_query_unknown
+app/routes.volt:10:16: error: spec/V4: no generated query db.UserLst in package "db" — a query route names a select method or a default CRUD method (Get, List, Create, Update, Delete) (§V4.8)
+
+## i99_query_path_type
+app/routes.volt:10:13: error: spec/V4: path parameter "id" is int64 but db.UserGet takes int32; spell it :id(int32) (§V4.8)
+

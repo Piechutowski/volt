@@ -305,6 +305,16 @@ sp      = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
    line or continues inside braces or a multi-line string; a settings list,
    an import block or a relationship that spills onto a first-column
    identifier line is a syntax error at that line.
+6. **Recovery.** A syntax error inside an element discards the rest of
+   that element, up to the next element start (rule 5), and the next
+   element is parsed as if the broken one were absent. Inside a braced
+   or parenthesized body of items (a table's columns, an enum's values,
+   a scope's routes, an import block's entries, and every other
+   one-per-line body), a syntax error discards the rest of the item's
+   line, up to the next line or the body's closing bracket, and the
+   following items are parsed. What a conforming front end reports
+   for invalid input is therefore determined by the input alone; the
+   conformance corpus pins every diagnostic of every invalid snippet.
 
 ```volt
 Table posts [                 // continuation lines are indented
