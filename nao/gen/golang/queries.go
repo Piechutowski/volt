@@ -71,7 +71,12 @@ type tableModel struct {
 	fields  []*fieldPlan // effective columns in definition order
 	pk      []*fieldPlan // identity columns in key order; empty = no pk
 
-	crud []CRUDMethod // built with the model: a memoized result is written by nobody (D92)
+	// Built with the model, since a memoized result is written by
+	// nobody (D92, D99): its CRUD methods, its field signatures, and
+	// the package-level names it mints.
+	crud  []CRUDMethod
+	sigs  []FieldSig
+	names []nameOrigin
 }
 
 // fieldPlan is one column resolved into Go and SQL naming.
@@ -291,6 +296,8 @@ func tableBuild(ti *check.TableInfo, enums *enumTypes) (*tableModel, map[string]
 		}
 	}
 	tm.crud = crudMethodsBuild(tm)
+	tm.sigs = fieldSigsBuild(tm)
+	tm.names = modelNamesBuild(tm)
 	return tm, imports, nil
 }
 

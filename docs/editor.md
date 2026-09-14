@@ -257,9 +257,16 @@ agree. The LSP picks it up automatically.
   project re-parses in 2 ms against 340 ms. The check is by
   declaration too (D84): tables, models, lowered checks and selects
   whose inputs are the objects they were are answered from the last
-  check, so the same edit checks in about 100 to 200 ms against 700.
-  The navigation index is kept by table too (D85), so the server's
-  whole analysis of that edit is about 100 to 160 ms.
+  check, and the routes are lowered per scope item from names the
+  model carries (D99), so the same edit checks in about 50 ms against
+  700. The navigation index is kept by table too (D85), so the
+  server's project analysis of that edit was about 100 to 160 ms
+  before D99. Measured through stdio, keystroke to diagnostics on
+  that file is still about 1.7 s: the document's own whole-file
+  front end (parse, check and vet, about 0.9 s on the handler
+  goroutine) and the package vet (about 0.3 s) dwarf the check. That
+  is a backlog entry, "The editor's keystroke path on a huge file",
+  not a property of the design.
 
 ## 7. Known limitations (documented trade-offs, not bugs)
 

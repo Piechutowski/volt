@@ -71,12 +71,16 @@ type Package struct {
 	// with CheckFns: gen/sqlite emits CHECK (<this>) for it (§V12.4).
 	CheckSQL map[*ast.Check]string
 	Selects  []*SelectInfo
-	// selectByMethod indexes Selects by generated method name (D81).
+	// selectByMethod indexes Selects by generated method name (D81);
+	// selectByName by declared name, the last declared winning (D99).
 	selectByMethod map[string]selectMember
-	// paramsValid memoizes paramsValidators per table (D81).
-	paramsValid map[string][2]bool
-	// checkFnByKey indexes CheckFns by table key (D84).
+	selectByName   map[string]*SelectInfo
+	// checkFnByKey indexes CheckFns by table key (D84), built with them.
 	checkFnByKey map[string][]golang.CheckSpec
+	// ValidByKey says, per table whose params structs validate (§V12.6),
+	// whether the create and the update one do: decided with the
+	// table's lowered checks, read by the route lowering (D99).
+	ValidByKey map[string][2]bool
 
 	// schema is the package's checked table model, set by Check.
 	schema *check.Info

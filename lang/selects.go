@@ -318,7 +318,9 @@ type selectMember struct {
 // a name owns it (§V11.6), as in the scan it replaces.
 func (p *Package) selectIndex() {
 	p.selectByMethod = make(map[string]selectMember, len(p.Selects))
+	p.selectByName = make(map[string]*SelectInfo, len(p.Selects))
 	for _, si := range p.Selects {
+		p.selectByName[si.Decl.Name.Name()] = si
 		for _, m := range si.Members {
 			name := modelOrBase(m) + si.MethodSuffix
 			if _, taken := p.selectByMethod[name]; !taken {

@@ -43,6 +43,7 @@ var pureTargets = []struct{ pkg, name string }{
 	{module + "/nao/gen/golang", "tableBuild"},
 	{module + "/lang", "tableSpecs"},
 	{module + "/lang", "selectCheck"},
+	{module + "/lang", "itemLower"},
 	{module + "/lsp", "tableOccurrences"},
 }
 
@@ -50,23 +51,27 @@ var pureTargets = []struct{ pkg, name string }{
 // lookup tables written once at initialization. The gate also proves
 // none of them is assigned anywhere but its declaration.
 var immutableVars = map[string]bool{
-	module + "/lang.crudMethodSuffixes":          true,
-	module + "/lang.compareSQL":                  true,
-	module + "/lang.goKeywords":                  true,
-	module + "/lang.reservedParamNames":          true,
-	module + "/lang/check.tableSettings":         true,
-	module + "/lang/check.columnSettings":        true,
-	module + "/lang/check.indexSettings":         true,
-	module + "/lang/check.settingsCheck":         true,
-	module + "/lang/check.refSettings":           true,
-	module + "/lang/check.integerTypes":          true,
-	module + "/lang/check.requiredKinds":         true,
-	module + "/nao/gen/golang.commonInitialisms": true,
-	module + "/nao/gen/golang.typeMap":           true,
-	module + "/nao/gen/golang.goKeywords":        true,
-	module + "/nao/gen/sqlite.sqliteKeywords":    true,
-	module + "/nao/gen/sqlite.plainIdent":        true,
-	module + "/nao/inflect.irregular":            true,
+	module + "/lang.crudMethodSuffixes":           true,
+	module + "/lang.compareSQL":                   true,
+	module + "/lang.goKeywords":                   true,
+	module + "/lang.reservedParamNames":           true,
+	module + "/lang.resourceActions":              true,
+	module + "/lang.actionByLower":                true,
+	module + "/lang.queryValueTypes":              true,
+	module + "/lang/check.tableSettings":          true,
+	module + "/lang/check.columnSettings":         true,
+	module + "/lang/check.indexSettings":          true,
+	module + "/lang/check.settingsCheck":          true,
+	module + "/lang/check.refSettings":            true,
+	module + "/lang/check.integerTypes":           true,
+	module + "/lang/check.requiredKinds":          true,
+	module + "/nao/gen/golang.commonInitialisms":  true,
+	module + "/nao/gen/golang.typeMap":            true,
+	module + "/nao/gen/golang.goKeywords":         true,
+	module + "/nao/gen/golang.dynWrapperSuffixes": true,
+	module + "/nao/gen/sqlite.sqliteKeywords":     true,
+	module + "/nao/gen/sqlite.plainIdent":         true,
+	module + "/nao/inflect.irregular":             true,
 }
 
 // pureStdlib are the standard packages whose functions keep no state:
@@ -78,6 +83,15 @@ var pureStdlib = map[string]bool{
 	"fmt":    true, // formatting: what it pools internally never reaches an answer
 	"sort":   true, // writes only what it is handed, which the gate counts as a write
 	"regexp": true, // a compiled expression answers the same question every time
+}
+
+// pureStdlibFuncs are the single standard functions trusted outside
+// pureStdlib's packages (D97): each names why. A position's offset and
+// line read the file's base through an atomic, whose Load is a read of
+// its receiver and nothing else; the package it lives in is not
+// trusted as a whole.
+var pureStdlibFuncs = map[string]bool{
+	"(*sync/atomic.Int32).Load": true,
 }
 
 // stdlibMutators are the standard functions that write through an
@@ -204,6 +218,11 @@ func TestMemoizedComputationsArePure(t *testing.T) {
 	p.immutableVarsNeverAssigned()
 	// The trusted standard packages are exactly the ones reached: an
 	// entry no target calls into is trust for nothing (D97).
+	for name := range pureStdlibFuncs {
+		if !p.stdlibFuncsUsed[name] {
+			p.problems = append(p.problems, fmt.Sprintf("pureStdlibFuncs trusts %s, which no memoized computation reaches", name))
+		}
+	}
 	for path := range pureStdlib {
 		if !p.stdlibUsed[path] {
 			p.problems = append(p.problems, fmt.Sprintf("pureStdlib trusts %s, which no memoized computation reaches", path))
@@ -416,8 +435,10 @@ type purity struct {
 	// impls are the module's implementations of each interface method
 	// a walk meets (D93), found once.
 	impls map[*types.Func][]*types.Func
-	// stdlibUsed are the standard packages the walk called into (D97).
-	stdlibUsed map[string]bool
+	// stdlibUsed are the standard packages the walk called into (D97),
+	// stdlibFuncsUsed the single trusted functions.
+	stdlibUsed      map[string]bool
+	stdlibFuncsUsed map[string]bool
 }
 
 // implementations are the methods of the module's named types that
@@ -1002,6 +1023,24 @@ func (fa *funcAnalysis) expr(e ast.Expr) bool {
 	}
 }
 
+// isStringToSlice reports whether a conversion from the type from to
+// the type to is one of the two the language specifies as copying:
+// string to []byte and string to []rune.
+func isStringToSlice(to, from types.Type) bool {
+	if from == nil {
+		return false
+	}
+	if b, ok := from.Underlying().(*types.Basic); !ok || b.Info()&types.IsString == 0 {
+		return false
+	}
+	sl, ok := to.Underlying().(*types.Slice)
+	if !ok {
+		return false
+	}
+	e, ok := sl.Elem().Underlying().(*types.Basic)
+	return ok && (e.Kind() == types.Byte || e.Kind() == types.Rune || e.Kind() == types.Uint8 || e.Kind() == types.Int32)
+}
+
 // call judges a call and reports the taint of its results.
 func (fa *funcAnalysis) call(x *ast.CallExpr) []bool {
 	argTaint := make([]bool, len(x.Args))
@@ -1012,8 +1051,13 @@ func (fa *funcAnalysis) call(x *ast.CallExpr) []bool {
 	for _, t := range argTaint {
 		anyArg = anyArg || t
 	}
-	// A conversion keeps what it converts.
+	// A conversion keeps what it converts, except one from a string
+	// to a slice of bytes or runes, which the language defines as a
+	// copy: the result is fresh memory nobody else holds.
 	if tv, ok := fa.info.Types[x.Fun]; ok && tv.IsType() {
+		if len(x.Args) == 1 && isStringToSlice(tv.Type, fa.info.Types[x.Args[0]].Type) {
+			return []bool{false}
+		}
 		return []bool{anyArg}
 	}
 	var fn *types.Func
@@ -1064,10 +1108,13 @@ func (fa *funcAnalysis) call(x *ast.CallExpr) []bool {
 	if !strings.HasPrefix(path, module) {
 		if fa.p.stdlibUsed == nil {
 			fa.p.stdlibUsed = map[string]bool{}
+			fa.p.stdlibFuncsUsed = map[string]bool{}
 		}
 		fa.p.stdlibUsed[path] = true
 		if idx, ok := stdlibMutators[fn.FullName()]; ok && idx < len(x.Args) {
 			fa.mutated(x.Args[idx])
+		} else if pureStdlibFuncs[fn.FullName()] {
+			fa.p.stdlibFuncsUsed[fn.FullName()] = true
 		} else if !pureStdlib[path] && !fa.p.shared {
 			fa.problem(x, "a pure function calls into no package that keeps state (%s)", fn.FullName())
 		}

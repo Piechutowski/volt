@@ -9,8 +9,6 @@ package golang
 
 import (
 	"fmt"
-	"maps"
-	"slices"
 
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
@@ -30,6 +28,7 @@ type Plan struct {
 	byKey   map[string]*tableModel
 	methods map[string]crudRef // generated CRUD method name -> owner; the first table declared wins
 	names   []string           // every CRUD method name in declaration order, for did-you-mean hints
+	base    *nameBase          // the models' names (§V11.7), the memo's when there is one
 }
 
 // crudRef locates one generated CRUD method.
@@ -53,8 +52,7 @@ func PlanBuild(f *ast.File, info *check.Info) *Plan {
 // PlanMemo belongs to one package.
 type PlanMemo struct {
 	prev, next map[*check.TableInfo]*memoModel
-	names      *Names
-	namesOf    []*tableModel // the models names was built from
+	base       *nameBase // the models' names, updated for the models that changed (D99)
 	// Hits and Misses count the models reused and built by the last
 	// PlanBuildMemo.
 	Hits, Misses int
@@ -82,6 +80,15 @@ func PlanBuildMemo(f *ast.File, info *check.Info, memo *PlanMemo) *Plan {
 		return pl
 	}
 	pl.p = p
+	if memo != nil {
+		if memo.base == nil {
+			memo.base = newNameBase()
+		}
+		pl.base = memo.base
+	} else {
+		pl.base = newNameBase()
+	}
+	pl.base.update(p.tables)
 	pl.byKey = make(map[string]*tableModel, len(p.tables))
 	pl.methods = make(map[string]crudRef, 5*len(p.tables))
 	for _, t := range p.tables {
@@ -200,11 +207,16 @@ func (pl *Plan) ModelFields(tableKey string) (model string, fields []FieldSig, e
 	if err != nil {
 		return "", nil, err
 	}
-	fields = make([]FieldSig, 0, len(t.fields))
+	return t.model, t.sigs, nil
+}
+
+// fieldSigsBuild is the model's field signatures, built with it (D99).
+func fieldSigsBuild(t *tableModel) []FieldSig {
+	sigs := make([]FieldSig, 0, len(t.fields))
 	for _, fp := range t.fields {
-		fields = append(fields, fieldSigOf(fp))
+		sigs = append(sigs, fieldSigOf(fp))
 	}
-	return t.model, fields, nil
+	return sigs
 }
 
 func fieldSigOf(fp *fieldPlan) FieldSig {
@@ -263,80 +275,177 @@ func (pl *Plan) DynNameCollisions() []NameCollision {
 // Names is the scope of package-level Go identifiers a package's
 // generated files mint (§V11.7): models, params structs, dynamic column
 // handles and option wrappers, enum types, the Queries handle and its
-// constructor — the scope a minted row type must not collide with. A
-// description is rendered on lookup, since nearly every name is never
-// asked about; Add records a name the checker mints itself.
+// constructor — the scope a minted row type must not collide with. It
+// is read in layers, last writer first, as the one map it replaced was
+// written (D99): the names the checker adds during a check, the enums'
+// and the two fixed names of this plan, and the models' names, which
+// the plan memo keeps across plans and updates for the models that
+// changed. A description is rendered on lookup, since nearly every
+// name is never asked about.
 type Names struct {
-	origins map[string]nameOrigin
+	base  *nameBase            // the models' names: read here, written by the plan build
+	enums map[string]*ast.Enum // enum type name -> declaration
+	added map[string]string    // what the checker minted, with its description
 }
 
 type nameKind uint8
 
 const (
-	nameLiteral      nameKind = iota // desc holds the description verbatim
-	nameModel                        // the model of table
+	nameModel        nameKind = iota // the model of table
 	nameCreateParams                 // the create params of table
 	nameUpdateParams                 // the update params of table
 	nameDynFunc                      // a dynamic-layer function, named by the key itself
 	nameHandle                       // a dynamic column handle: table + field
-	nameEnum                         // an enum type
 )
 
+// nameOrigin is one name a model mints and what it is: built with the
+// model (tableModel.names), in the order the names are minted, so the
+// scope's base can hold pointers into the models' own lists.
 type nameOrigin struct {
+	name  string
 	kind  nameKind
-	desc  string
+	idx   int // position in the model's list: a later name of the same model wins
 	table *tableModel
 	field *fieldPlan
-	enum  *ast.Enum
 }
 
-// Names returns a fresh name scope for the package: the two fixed names
-// alone when the plan could not be built, so the checker's collision
-// rule still holds for what is certain.
+// modelNamesBuild is every package-level name a model mints, in the
+// order the generators write them.
+func modelNamesBuild(t *tableModel) []nameOrigin {
+	names := make([]nameOrigin, 0, 3+len(dynWrapperSuffixes)+len(t.fields))
+	add := func(name string, kind nameKind, field *fieldPlan) {
+		names = append(names, nameOrigin{name: name, kind: kind, idx: len(names), table: t, field: field})
+	}
+	add(t.model, nameModel, nil)
+	add(t.model+"CreateParams", nameCreateParams, nil)
+	add(t.model+"UpdateParams", nameUpdateParams, nil)
+	for _, suffix := range dynWrapperSuffixes {
+		add(t.model+suffix, nameDynFunc, nil)
+	}
+	for _, fp := range t.fields {
+		add(t.model+fp.goField, nameHandle, fp)
+	}
+	return names
+}
+
+func (o *nameOrigin) describe() string {
+	switch o.kind {
+	case nameModel:
+		return fmt.Sprintf("the model of table %q", o.table.ti.Decl.Name.Base())
+	case nameCreateParams:
+		return fmt.Sprintf("the create params of table %q", o.table.ti.Decl.Name.Base())
+	case nameUpdateParams:
+		return fmt.Sprintf("the update params of table %q", o.table.ti.Decl.Name.Base())
+	case nameHandle:
+		return fmt.Sprintf("the dynamic column handle for %s.%s", o.table.ti.Decl.Name.Base(), o.field.colName)
+	}
+	return "the dynamic-layer function " + o.name
+}
+
+// nameBase is the models' names of one package, kept across plans:
+// each name's origins in the models that mint it, as pointers into the
+// models' own lists, and the models present, so a plan with one model
+// changed touches that model's names alone (D99).
+type nameBase struct {
+	origins map[string]nameSlot
+	models  map[*tableModel]bool
+	pos     map[*tableModel]int // declaration position in the current plan
+}
+
+// nameSlot is a name's origins: the first held by value, since nearly
+// every name has one, the rest in a list.
+type nameSlot struct {
+	first *nameOrigin
+	more  []*nameOrigin
+}
+
+func newNameBase() *nameBase {
+	return &nameBase{origins: map[string]nameSlot{}, models: map[*tableModel]bool{}}
+}
+
+// update makes the base the given models': the models gone are
+// removed, the models new are added, the rest stand.
+func (b *nameBase) update(tables []*tableModel) {
+	current := make(map[*tableModel]bool, len(tables))
+	b.pos = make(map[*tableModel]int, len(tables))
+	for i, t := range tables {
+		current[t] = true
+		b.pos[t] = i
+	}
+	for t := range b.models {
+		if !current[t] {
+			b.remove(t)
+		}
+	}
+	for _, t := range tables {
+		if !b.models[t] {
+			b.add(t)
+		}
+	}
+}
+
+func (b *nameBase) add(t *tableModel) {
+	b.models[t] = true
+	for i := range t.names {
+		o := &t.names[i]
+		slot := b.origins[o.name]
+		if slot.first == nil {
+			slot.first = o
+		} else {
+			slot.more = append(slot.more, o)
+		}
+		b.origins[o.name] = slot
+	}
+}
+
+func (b *nameBase) remove(t *tableModel) {
+	delete(b.models, t)
+	for i := range t.names {
+		o := &t.names[i]
+		slot := b.origins[o.name]
+		var kept []*nameOrigin
+		for _, x := range slot.more {
+			if x != o {
+				kept = append(kept, x)
+			}
+		}
+		if slot.first == o {
+			if len(kept) == 0 {
+				delete(b.origins, o.name)
+				continue
+			}
+			slot.first, kept = kept[0], kept[1:]
+		}
+		slot.more = kept
+		b.origins[o.name] = slot
+	}
+}
+
+// lookup answers the origin the one-map build would have kept for the
+// name: the model declared last, and its later name.
+func (b *nameBase) lookup(name string) *nameOrigin {
+	slot := b.origins[name]
+	best := slot.first
+	for _, o := range slot.more {
+		if b.pos[o.table] > b.pos[best.table] || (b.pos[o.table] == b.pos[best.table] && o.idx > best.idx) {
+			best = o
+		}
+	}
+	return best
+}
+
+// Names returns the package's name scope for one check: the two fixed
+// names alone when the plan could not be built, so the checker's
+// collision rule still holds for what is certain.
 func (pl *Plan) Names() *Names {
-	// Callers add to the set they get (a select's shared row type), so
-	// the memo keeps a pristine build and hands out copies.
-	if pl.memo != nil && pl.err == nil && pl.memo.names != nil && slices.Equal(pl.memo.namesOf, pl.p.tables) {
-		return pl.memo.names.clone() // every model is the one the names were built from
-	}
-	n := pl.namesBuild()
-	if pl.memo != nil && pl.err == nil {
-		pl.memo.names, pl.memo.namesOf = n.clone(), pl.p.tables
-	}
-	return n
-}
-
-func (n *Names) clone() *Names { return &Names{origins: maps.Clone(n.origins)} }
-
-func (pl *Plan) namesBuild() *Names {
-	n := &Names{origins: map[string]nameOrigin{}}
-	n.Add("Queries", "the generated Queries handle")
-	n.Add("New", "the generated constructor")
+	n := &Names{base: pl.base, enums: map[string]*ast.Enum{}, added: map[string]string{}}
 	if pl.err != nil {
 		return n
-	}
-	size := 2
-	for _, t := range pl.p.tables {
-		size += 3 + len(dynWrapperSuffixes) + len(t.fields)
-	}
-	n.origins = make(map[string]nameOrigin, size)
-	n.Add("Queries", "the generated Queries handle")
-	n.Add("New", "the generated constructor")
-	for _, t := range pl.p.tables {
-		n.origins[t.model] = nameOrigin{kind: nameModel, table: t}
-		n.origins[t.model+"CreateParams"] = nameOrigin{kind: nameCreateParams, table: t}
-		n.origins[t.model+"UpdateParams"] = nameOrigin{kind: nameUpdateParams, table: t}
-		for _, suffix := range dynWrapperSuffixes {
-			n.origins[t.model+suffix] = nameOrigin{kind: nameDynFunc}
-		}
-		for _, fp := range t.fields {
-			n.origins[t.model+fp.goField] = nameOrigin{kind: nameHandle, table: t, field: fp}
-		}
 	}
 	for _, d := range pl.f.Decls {
 		if e, ok := d.(*ast.Enum); ok {
 			if typ, err := enumTypeName(e.Name.Schema(), e.Name.Base()); err == nil {
-				n.origins[typ] = nameOrigin{kind: nameEnum, enum: e}
+				n.enums[typ] = e
 			}
 		}
 	}
@@ -346,28 +455,27 @@ func (pl *Plan) namesBuild() *Names {
 // Add records a minted name with its description; a later Add of the
 // same name replaces the earlier one.
 func (n *Names) Add(name, desc string) {
-	n.origins[name] = nameOrigin{kind: nameLiteral, desc: desc}
+	n.added[name] = desc
 }
 
 // Lookup reports whether name is taken and, if so, by what.
 func (n *Names) Lookup(name string) (desc string, ok bool) {
-	o, ok := n.origins[name]
-	if !ok {
-		return "", false
+	if desc, ok := n.added[name]; ok {
+		return desc, true
 	}
-	switch o.kind {
-	case nameModel:
-		return fmt.Sprintf("the model of table %q", o.table.ti.Decl.Name.Base()), true
-	case nameCreateParams:
-		return fmt.Sprintf("the create params of table %q", o.table.ti.Decl.Name.Base()), true
-	case nameUpdateParams:
-		return fmt.Sprintf("the update params of table %q", o.table.ti.Decl.Name.Base()), true
-	case nameDynFunc:
-		return "the dynamic-layer function " + name, true
-	case nameHandle:
-		return fmt.Sprintf("the dynamic column handle for %s.%s", o.table.ti.Decl.Name.Base(), o.field.colName), true
-	case nameEnum:
-		return fmt.Sprintf("the enum %q", o.enum.Name.String()), true
+	if e, ok := n.enums[name]; ok {
+		return fmt.Sprintf("the enum %q", e.Name.String()), true
 	}
-	return o.desc, true
+	if n.base != nil {
+		if o := n.base.lookup(name); o != nil {
+			return o.describe(), true
+		}
+	}
+	switch name {
+	case "Queries":
+		return "the generated Queries handle", true
+	case "New":
+		return "the generated constructor", true
+	}
+	return "", false
 }

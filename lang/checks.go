@@ -35,9 +35,10 @@ func (c *checker) tableChecks(pkg *Package) {
 	// writes the lowered specs, the DDL's check SQL and the
 	// diagnostics in table order, whatever the schedule.
 	type lowered struct {
-		specs []golang.CheckSpec
-		sqls  map[*ast.Check]string
-		diags []diag.Diagnostic
+		specs          []golang.CheckSpec
+		sqls           map[*ast.Check]string
+		diags          []diag.Diagnostic
+		create, update bool // the params structs validate (§V12.6): a function of the model and the specs
 	}
 	outs := make([]lowered, len(info.Tables))
 	var memo *checksMemo
@@ -54,15 +55,16 @@ func (c *checker) tableChecks(pkg *Package) {
 		if memo != nil {
 			if e := memo.prev[ti]; e != nil && e.holds(model, funcs, pkg.Name, preds) {
 				hit[i] = e
-				outs[i] = lowered{e.specs, e.sqls, e.diags}
+				outs[i] = lowered{e.specs, e.sqls, e.diags, e.validCreate, e.validUpdate}
 				return
 			}
 		}
 		_, fields, err := pkg.plan.ModelFields(ti.Key)
 		specs, sqls, diags := tableSpecs(ti, fields, err, pkg.Name, funcs, preds)
-		outs[i] = lowered{specs, sqls, diags}
+		create, update, _ := pkg.plan.ParamsValidators(ti.Key, specs)
+		outs[i] = lowered{specs, sqls, diags, create, update}
 		if memo != nil {
-			hit[i] = &checksEntry{model: model, funcs: funcs, pkgName: pkg.Name, preds: preds, specs: specs, sqls: sqls, diags: diags}
+			hit[i] = &checksEntry{model: model, funcs: funcs, pkgName: pkg.Name, preds: preds, specs: specs, sqls: sqls, diags: diags, validCreate: create, validUpdate: update}
 		}
 	})
 	if memo != nil {
@@ -78,6 +80,7 @@ func (c *checker) tableChecks(pkg *Package) {
 		memo.prev, memo.next = memo.next, nil
 	}
 	pkg.CheckSQL = map[*ast.Check]string{}
+	pkg.ValidByKey = make(map[string][2]bool, len(info.Tables))
 	for i, ti := range info.Tables {
 		c.diags = append(c.diags, outs[i].diags...)
 		for ck, sql := range outs[i].sqls {
@@ -86,6 +89,18 @@ func (c *checker) tableChecks(pkg *Package) {
 		if specs := outs[i].specs; len(specs) > 0 {
 			pkg.CheckFns = append(pkg.CheckFns, golang.CheckFn{TableKey: ti.Key, Checks: specs})
 		}
+		if outs[i].create || outs[i].update {
+			pkg.ValidByKey[ti.Key] = [2]bool{outs[i].create, outs[i].update}
+		}
+	}
+	pkg.checkIndex()
+}
+
+// checkIndex indexes the lowered checks by table key.
+func (p *Package) checkIndex() {
+	p.checkFnByKey = make(map[string][]golang.CheckSpec, len(p.CheckFns))
+	for _, fn := range p.CheckFns {
+		p.checkFnByKey[fn.TableKey] = fn.Checks
 	}
 }
 

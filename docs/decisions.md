@@ -1264,3 +1264,51 @@ where the merge changed the facts.
   says; that remains the oracle's, the goldens' and the integration
   tests' work. What it refuses: a generator whose output is first
   compiled by someone else.
+
+- **D99 — A route is lowered per scope item, from the model's own
+  names, and answered from the last check while what it looked up
+  stands** (2026-09-14, roadmap PERF-10, `lang/routes_lower.go`,
+  `lang/semantics.go`, `nao/gen/golang/plan.go`, `lang/checks.go`).
+  After D84 the routing layer still ran whole per package, and what
+  it ran was mostly rebuilding: every check asked the plan for every
+  table's minted names and field signatures again, decided every
+  table's validators again, and lowered every scope item again. Now
+  a table's CRUD methods, field signatures and minted names are built
+  with its model, in `tableBuild`, so they are the model memo's and
+  cost nothing while the model stands; the name scope is a base kept
+  with the plan memo, updated by the tables that changed, with the
+  file's enums layered on per call; whether a table's params carry
+  validators is decided with its lowered checks and travels with
+  them. The lowering of one scope item (a route, a resources, a
+  dataset) is a top-level function of the item, what its scopes
+  inherit, the package's facts and an oracle it asks about the
+  project; the oracle's answers are recorded, and the memo holds the
+  item's routes while the item is the node it was, the inherited
+  settings and facts are equal, and every recorded answer is what the
+  oracle gives now. What the check does with a lowered route, naming
+  its helper, judging it against the package's accepted routes and
+  ordering it, it does on its own copy, so the memo's routes are
+  written by nobody (D92); the path shape is parsed at lowering and
+  carried with the route. Measured on the thousand-table one-file
+  project, one keystroke inside one table: the check went from about
+  120 ms to about 50 ms mean, with one table, one model, one check,
+  two selects and two scope items redone and everything else
+  answered; the cold check is unchanged, about 0.9 s. What remains of
+  those 50 ms is the judgment the memo cannot hold, since it depends
+  on every accepted route (about 8 ms of map and trie work), the
+  replay of a thousand items' recorded answers (about 6 ms), the
+  schema check's file-wide name collection and reference resolution
+  (about 15 ms) and the collector's marking of a large live heap.
+  Known limit: the memo is by node, and a scope is one element
+  (§3.2.5), so a keystroke inside the routing scope re-parses it
+  whole and lowers every item of it again, about 30 ms for a thousand
+  on this file; keying an item on its text would need the lowering's
+  positions relocated, which is the parser's job (D83), not a memo's.
+  Measuring this exposed a larger cost outside the check: through the
+  server's stdio, the same keystroke reaches diagnostics in about
+  1.7 s, of which the check is 50 ms; the rest is the document's own
+  whole-file front end and the package vet, recorded in
+  `docs/backlog.md` ("The editor's keystroke path on a huge file").
+  What it refuses: a memo whose answer depends on anything it did not
+  record (the gate walks `itemLower` as a pure target, D86), and a
+  check that writes a memo's route.

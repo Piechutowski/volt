@@ -5,6 +5,38 @@ entry says why it is not now, so nothing is forgotten and nothing is
 started by accident. When an entry lands, delete it here in the same
 commit (D49: no doc knowingly wrong).
 
+## The editor's keystroke path on a huge file
+
+**Decided:** 2026-09-14 (with D99). **Deferred because:** the four
+provability items queued with D99 come first, and the fix reaches
+into the document model and the vet layer, each its own decision.
+
+Measured through the server's stdio on the thousand-table one-file
+project, one keystroke inside one table reaches its diagnostics in
+about 1.7 s. The session's parse and check are about 50 ms of that
+(D83, D84, D99). The rest, in order of size:
+
+1. The document's own front end, run whole on the handler goroutine
+   at every change (`localAnalyze`): a fresh parse (about 240 ms), a
+   fresh schema check (about 160 ms) and the single-file vet (about
+   540 ms). For a document inside a project its diagnostics are
+   superseded by the project's; only its AST and check serve the
+   requests that arrive before the next project result. The chore:
+   parse through the session's chunked reuse, check through the
+   memoized file check, and skip the single-file vet for a document
+   the project pass vets.
+2. The package vet, memoized per package (D81), so the one-file
+   layout vets its whole package again on every edit, about 280 ms.
+   The chore: vet per declaration, on the same memo shape as the
+   check, each analyzer a pure function of the declaration and the
+   facts it names.
+3. The debounce (75 ms), the index and the publish of a large
+   diagnostics list, together well under 200 ms.
+
+Verification is the stdio replay (a scripted session, the way D79 and
+D85 were measured), not a unit test: the number that matters is the
+one the editor sees.
+
 ## Citations by heading name
 
 **Decided:** 2026-09-03 (D64). **Deferred because:** the sweep touches

@@ -51,6 +51,7 @@ type SessionStats struct {
 	ModelsBuilt, ModelsReused     int
 	ChecksLowered, ChecksReused   int
 	SelectsChecked, SelectsReused int
+	RoutesLowered, RoutesReused   int // scope items (routes, resources, datasets) lowered and answered (D99)
 }
 
 // fileEntry is one file's last parse. gen is its identity: a new parse
@@ -123,6 +124,7 @@ type pkgResult struct {
 	selects     []*SelectInfo
 	checkFns    []golang.CheckFn
 	checkSQL    map[*ast.Check]string
+	validByKey  map[string][2]bool
 	pipelines   map[string]*ast.Pipeline
 	routes      []*RouteInfo
 	controllers map[string]*ControllerInfo
@@ -131,7 +133,7 @@ type pkgResult struct {
 func pkgCapture(pkg *Package) pkgResult {
 	return pkgResult{
 		schema: pkg.schema, plan: pkg.plan,
-		groups: pkg.Groups, preds: pkg.Preds, selects: pkg.Selects, checkFns: pkg.CheckFns, checkSQL: pkg.CheckSQL,
+		groups: pkg.Groups, preds: pkg.Preds, selects: pkg.Selects, checkFns: pkg.CheckFns, checkSQL: pkg.CheckSQL, validByKey: pkg.ValidByKey,
 		pipelines: pkg.Pipelines, routes: pkg.Routes, controllers: pkg.Controllers,
 	}
 }
@@ -144,9 +146,9 @@ func (p *Package) resultsReset() {
 
 func (r pkgResult) restore(pkg *Package) {
 	pkg.schema, pkg.plan = r.schema, r.plan
-	pkg.Groups, pkg.Preds, pkg.Selects, pkg.CheckFns, pkg.CheckSQL = r.groups, r.preds, r.selects, r.checkFns, r.checkSQL
+	pkg.Groups, pkg.Preds, pkg.Selects, pkg.CheckFns, pkg.CheckSQL, pkg.ValidByKey = r.groups, r.preds, r.selects, r.checkFns, r.checkSQL, r.validByKey
 	pkg.selectIndex()
-	pkg.paramsValid, pkg.checkFnByKey = nil, nil
+	pkg.checkIndex()
 	pkg.Pipelines, pkg.Routes, pkg.Controllers = r.pipelines, r.routes, r.controllers
 }
 
@@ -283,6 +285,8 @@ func (s *Session) declStats(memos map[string]*declMemo) {
 		s.stats.ChecksLowered += m.checks.Misses
 		s.stats.SelectsReused += m.selects.Hits
 		s.stats.SelectsChecked += m.selects.Misses
+		s.stats.RoutesReused += m.routes.Hits
+		s.stats.RoutesLowered += m.routes.Misses
 	}
 }
 

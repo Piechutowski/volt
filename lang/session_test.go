@@ -308,7 +308,7 @@ func TestSessionReparsesOneDeclaration(t *testing.T) {
 	var s lang.Session
 	// work is what one round did, in declarations parsed and in tables
 	// whose schema check, model and lowered checks were run afresh.
-	type work struct{ parsed, tables, models, checks, selects int }
+	type work struct{ parsed, tables, models, checks, selects, routes int }
 	round := func(name, text string, want work) {
 		t.Helper()
 		before := s.Stats()
@@ -328,7 +328,7 @@ func TestSessionReparsesOneDeclaration(t *testing.T) {
 		after := s.Stats()
 		did := work{after.DeclsParsed - before.DeclsParsed, after.TablesChecked - before.TablesChecked,
 			after.ModelsBuilt - before.ModelsBuilt, after.ChecksLowered - before.ChecksLowered,
-			after.SelectsChecked - before.SelectsChecked}
+			after.SelectsChecked - before.SelectsChecked, after.RoutesLowered - before.RoutesLowered}
 		if did != want {
 			t.Errorf("%s: did %+v, want %+v (reused: %d declarations, %d tables, %d models, %d checks, %d selects)", name, did, want,
 				after.DeclsReused-before.DeclsReused, after.TablesReused-before.TablesReused,
@@ -337,40 +337,48 @@ func TestSessionReparsesOneDeclaration(t *testing.T) {
 		}
 	}
 	// 12 tables, each with a projected select, and the group select
-	// over all of them: 13 selects.
-	all := work{whole.Parsed, 12, 12, 12, 13}
+	// over all of them: 13 selects; four routes, a resources per table
+	// and the dataset over the group select: 17 scope items (D99).
+	all := work{whole.Parsed, 12, 12, 12, 13, 17}
 	round("first", text, all)
-	// One table: its own select and the group select see a new member.
-	one := work{1, 1, 1, 1, 2}
+	// One table: its own select and the group select see a new member;
+	// its resources and the dataset over the group select are lowered
+	// again, the table and the select they name being new objects.
+	one := work{1, 1, 1, 1, 2, 2}
 	round("edit one table", strings.Replace(text, "c002 text [not null]", "c002 text [not null, note: 'edited']", 1), one)
 	round("break it", strings.Replace(text, "c002 text [not null]", "c002 text [not null", 1), one)
 	round("fix it", text, one)
 	// Edits accumulate from here, so each round changes one chunk.
 	cur := strings.Replace(text, "get /events        volt.Events", "get /stream        volt.Events", 1)
-	round("edit a route", cur, work{1, 0, 0, 0, 0}) // touches no table
+	// Touches no table. The scope is one element (§3.2.5), so the edit
+	// re-parses it whole and every item of it is a new node: all 17
+	// are lowered again, from the memo's lookups answered as before.
+	round("edit a route", cur, work{1, 0, 0, 0, 0, 17})
 	// The partial every table injects: every table's columns change,
 	// so every table is checked again, its model rebuilt, its checks
 	// lowered again, every select re-checked.
 	cur = strings.Replace(cur, "created_at timestamp", "created_at timestamp [note: 'stamped']", 1)
-	round("edit the partial", cur, work{1, 12, 12, 12, 13})
+	round("edit the partial", cur, work{1, 12, 12, 12, 13, 13})
 	// An enum's note: no table and no model depends on it.
 	cur = strings.Replace(cur, "retired [note: 'no longer written']", "retired [note: 'gone']", 1)
-	round("edit the enum's note", cur, work{1, 0, 0, 0, 0})
+	round("edit the enum's note", cur, work{1, 0, 0, 0, 0, 0})
 	// A new enum: the enum set is an input of every table's check (the
 	// required rule asks whether a column type is an enum) and of every
 	// model, so every table is checked again and every model rebuilt;
 	// the lowered checks and the selects follow their models.
 	cur = strings.Replace(cur, "TablePartial stamped", "Enum kind {\n\tplain\n}\n\nTablePartial stamped", 1)
-	round("add an enum", cur, work{1, 12, 12, 12, 13})
+	round("add an enum", cur, work{1, 12, 12, 12, 13, 13})
 	// The predicate every select names: every select is checked again.
 	cur = strings.Replace(cur, "Pred fresh { c001 >= :since }", "Pred fresh { c001 > :since }", 1)
-	round("edit the pred", cur, work{1, 0, 0, 0, 13})
+	// The dataset names the group select, checked again: one item.
+	round("edit the pred", cur, work{1, 0, 0, 0, 13, 1})
 	// A Go file of the package: the tables and models stand, the Go
 	// reference checks are lowered again.
 	if err := os.WriteFile(filepath.Join(root, "extra.go"), []byte("package main\n\nfunc Extra() {}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	round("add a Go file", cur, work{0, 0, 0, 12, 0})
+	// The validators are what they were, so every resources stands.
+	round("add a Go file", cur, work{0, 0, 0, 12, 0, 0})
 }
 
 // TestSessionConcurrentCallersAgreeWithFreshAnalysis proves a Session
