@@ -782,3 +782,35 @@ where the merge changed the facts.
   over a project), and a multi-package shape from the CLI (the tests
   keep both layouts; by hand, the one-file shape is the one that finds
   the limits).
+
+- **D81 — One package is checked like twenty: every per-route and
+  per-table lookup is indexed, the plan builds on every CPU, and the
+  editor memoizes warnings** (2026-09-14, roadmap PERF-11,
+  `lang/selects.go`, `lang/semantics.go`, `lang/gofuncs.go`,
+  `nao/gen/golang/queries.go`, `lang/lint.go`). The one-file stress
+  project (D80) checked in 9.4 s where twenty packages of the same
+  tables checked in 0.8 s, and the difference was not the missing
+  parallelism: binding each query route scanned every select and every
+  group member of its package building a Go name per step (twelve
+  million name builds for six thousand routes over a thousand-member
+  group); route conflicts were indexed by first literal segment, which
+  put every route of a scope in one list; the Go-reference scan parsed
+  the package's generated files, a million lines after `gen`, on every
+  check; and each default resources route recomputed its table's
+  params validators. Now a package indexes its select methods by
+  generated name once, files routes in a trie of literal prefixes so a
+  conflict check walks only the routes that could overlap, skips files
+  that open with the generated marker, memoizes the validators per
+  table, and builds the naming plan's table models on the worker pool
+  with the name collisions judged afterwards in declaration order. The
+  editor keeps a package's vet warnings under the same key as its
+  check results, so an unchanged package costs no analyzer run. The
+  scanner sizes its token slice to the measured density, a token per
+  four bytes. Measured on the one-file project, four cores: check 9.4 s
+  to 0.7 s, generate 10.7 s to about 2 s, the language server's
+  analysis 15.5 s to 2.4 s cold and 0.4 s unchanged. The linearity
+  test gained the one-file dimension, which fails on the select scan
+  and passes with the index. What it refuses: parallel parsing of one
+  file (the parser is a third of what remains and a declaration-level
+  split is PERF-10's job) and a parallel schema check inside a
+  package (its per-table cost is now small next to the parse).

@@ -168,3 +168,42 @@ func TestSessionGeneratesIdentically(t *testing.T) {
 		t.Fatalf("the memo never hit: %+v", st)
 	}
 }
+
+// TestSessionVetMemo proves Session.Vet answers from the memo exactly
+// when Session.Check did: the warnings match a fresh Vet round by
+// round, and a round that re-checked n packages re-vets n (D81).
+func TestSessionVetMemo(t *testing.T) {
+	root := scheduleFixture(t)
+	var s lang.Session
+	round := func(name string, overlay map[string]string, checked int) {
+		t.Helper()
+		before := s.Stats()
+		pr, err := s.Load(root, overlay)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.Check(pr)
+		got := diagsRender(s.Vet(pr))
+		fresh, err := lang.LoadOverlay(root, overlay)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lang.Check(fresh)
+		if want := diagsRender(lang.Vet(fresh)); got != want {
+			t.Fatalf("%s: session vet differs from a fresh vet:\n--- session\n%s--- fresh\n%s", name, got, want)
+		}
+		after := s.Stats()
+		if vetted, ch := after.PackagesVetted-before.PackagesVetted, after.PackagesChecked-before.PackagesChecked; vetted != checked || ch != checked {
+			t.Errorf("%s: vetted %d, checked %d packages; want %d (vet reused %d)", name, vetted, ch, checked, after.PackagesVetReused-before.PackagesVetReused)
+		}
+	}
+	round("first", nil, 12)
+	round("no change", nil, 0)
+	d2 := filepath.Join(root, "d2", "schema.volt")
+	src, err := os.ReadFile(d2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	round("edit", map[string]string{d2: string(src) + "\n// touched\n"}, 2)
+	round("same edit", map[string]string{d2: string(src) + "\n// touched\n"}, 0)
+}

@@ -113,6 +113,31 @@ func (c *checker) dataQueries(pkg *Package) {
 			pkg.Selects = append(pkg.Selects, si)
 		}
 	}
+	pkg.selectIndex()
+}
+
+// selectMember is one generated select method: the select and the
+// member it is minted for.
+type selectMember struct {
+	sel    *SelectInfo
+	member *check.TableInfo
+}
+
+// selectIndex builds the package's method-name index once: route
+// binding looks a query up by its generated name, and a scan over
+// every select and member per route is quadratic in a package that
+// routes every table of a wide group (D81). The first member minting
+// a name owns it (§V11.6), as in the scan it replaces.
+func (p *Package) selectIndex() {
+	p.selectByMethod = make(map[string]selectMember, len(p.Selects))
+	for _, si := range p.Selects {
+		for _, m := range si.Members {
+			name := modelOrBase(m) + si.MethodSuffix
+			if _, taken := p.selectByMethod[name]; !taken {
+				p.selectByMethod[name] = selectMember{si, m}
+			}
+		}
+	}
 }
 
 func modelOrBase(t *check.TableInfo) string {

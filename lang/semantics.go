@@ -294,7 +294,7 @@ type inherited struct {
 func (c *checker) routing(pkg *Package) {
 	c.pkg = pkg
 	c.usedQual = map[string]bool{}
-	c.conflicts = &routeIndex{byFirst: map[string][]*RouteInfo{}}
+	c.conflicts = &routeIndex{root: &routeNode{}}
 	pkg.Pipelines = map[string]*ast.Pipeline{}
 	pkg.Controllers = map[string]*ControllerInfo{}
 
@@ -818,27 +818,21 @@ func (c *checker) queryBind(pos, qualPos token.Position, method string, params [
 
 	// Selects: <Model><SelectName> per member (§V11.6); the first member
 	// minting the name owns it.
-selects:
-	for _, si := range pkg.Selects {
-		for _, m := range si.Members {
-			if modelOrBase(m)+si.MethodSuffix != name {
-				continue
-			}
-			found = true
-			for _, p := range si.Params {
-				sig = append(sig, sigParam{name: p.GoName, goType: p.GoType})
-			}
-			switch {
-			case si.Shared != "":
-				qr.Result = si.Shared
-			case len(si.Excluded) > 0:
-				qr.Result = modelOrBase(m) + si.MethodSuffix
-			default:
-				qr.Result = modelOrBase(m)
-			}
-			qr.Many = true
-			break selects
+	if sm, ok := pkg.selectByMethod[name]; ok {
+		si, m := sm.sel, sm.member
+		found = true
+		for _, p := range si.Params {
+			sig = append(sig, sigParam{name: p.GoName, goType: p.GoType})
 		}
+		switch {
+		case si.Shared != "":
+			qr.Result = si.Shared
+		case len(si.Excluded) > 0:
+			qr.Result = name
+		default:
+			qr.Result = modelOrBase(m)
+		}
+		qr.Many = true
 	}
 	// Default CRUD (CRUD-1 to CRUD-7), from the package's plan (D74).
 	if !found {
@@ -850,7 +844,7 @@ selects:
 			if cm.Body != "" {
 				// The params struct validates when it carries the
 				// columns of at least one check (§V12.6).
-				create, update, _ := pkg.plan.ParamsValidators(key, tableChecksOf(pkg, key))
+				create, update := pkg.paramsValidators(key)
 				sig = append(sig, sigParam{name: "arg", goType: qual + "." + cm.Body, body: true,
 					validates: (cm.Op == "create" && create) || (cm.Op == "update" && update)})
 			}
@@ -946,6 +940,20 @@ selects:
 }
 
 // tableChecksOf returns the lowered checks of one table of a package.
+// paramsValidators answers, once per table, whether its params structs
+// validate: every default resources route of the table asks (D81).
+func (p *Package) paramsValidators(tableKey string) (create, update bool) {
+	if v, ok := p.paramsValid[tableKey]; ok {
+		return v[0], v[1]
+	}
+	create, update, _ = p.plan.ParamsValidators(tableKey, tableChecksOf(p, tableKey))
+	if p.paramsValid == nil {
+		p.paramsValid = map[string][2]bool{}
+	}
+	p.paramsValid[tableKey] = [2]bool{create, update}
+	return create, update
+}
+
 func tableChecksOf(pkg *Package, tableKey string) []golang.CheckSpec {
 	for _, fn := range pkg.CheckFns {
 		if fn.TableKey == tableKey {
@@ -1502,31 +1510,40 @@ func (c *checker) routeAccept(r *RouteInfo) {
 // wildcard. The relation itself is unchanged (routesAmbiguous); only
 // the candidate set shrinks, from every accepted route to a bucket.
 type routeIndex struct {
-	byFirst map[string][]*RouteInfo // first literal segment -> routes in declaration order; "" for the root pattern
-	open    []*RouteInfo            // a leading parameter, or a bare wildcard: overlaps any first segment
+	root *routeNode
 }
 
-func routeOpen(s pathShape) bool {
-	if len(s.segs) == 0 {
-		return s.wild
-	}
-	return s.segs[0] == ""
-}
-
-func routeFirst(s pathShape) string {
-	if len(s.segs) == 0 {
-		return ""
-	}
-	return s.segs[0]
+// routeNode is one literal path prefix. A route is filed at the node
+// of its longest literal prefix — the segments before its first
+// parameter, wildcard or end — so every route that could overlap a
+// path is found by walking that path's own segments down the trie,
+// through every child where the path has a parameter, and no further
+// than the path's own length unless it ends in a wildcard. Keying on
+// the first literal segment alone put every route of a scope in one
+// list and made the check quadratic in a scope that routes every table
+// (D81).
+type routeNode struct {
+	routes   []*RouteInfo // literal prefix ends here, declaration order
+	children map[string]*routeNode
 }
 
 func (ix *routeIndex) add(r *RouteInfo) {
-	if routeOpen(r.shape) {
-		ix.open = append(ix.open, r)
-		return
+	n := ix.root
+	for _, seg := range r.shape.segs {
+		if seg == "" {
+			break
+		}
+		child := n.children[seg]
+		if child == nil {
+			if n.children == nil {
+				n.children = map[string]*routeNode{}
+			}
+			child = &routeNode{}
+			n.children[seg] = child
+		}
+		n = child
 	}
-	k := routeFirst(r.shape)
-	ix.byFirst[k] = append(ix.byFirst[k], r)
+	n.routes = append(n.routes, r)
 }
 
 // ambiguous returns the earliest accepted route ambiguous with r, in
@@ -1534,25 +1551,35 @@ func (ix *routeIndex) add(r *RouteInfo) {
 // nil.
 func (ix *routeIndex) ambiguous(r *RouteInfo) *RouteInfo {
 	var best *RouteInfo
-	consider := func(list []*RouteInfo) {
-		for _, prev := range list {
+	var walk func(n *routeNode, depth int)
+	walk = func(n *routeNode, depth int) {
+		for _, prev := range n.routes {
 			if best != nil && prev.ord >= best.ord {
-				return // lists are in declaration order
+				break // lists are in declaration order
 			}
 			if routesAmbiguous(prev, r) {
 				best = prev
-				return
+				break
+			}
+		}
+		switch {
+		case depth < len(r.shape.segs):
+			if seg := r.shape.segs[depth]; seg != "" {
+				if child := n.children[seg]; child != nil {
+					walk(child, depth+1)
+				}
+			} else {
+				for _, child := range n.children {
+					walk(child, depth+1) // map order is irrelevant: the minimum wins
+				}
+			}
+		case r.shape.wild:
+			for _, child := range n.children {
+				walk(child, depth+1)
 			}
 		}
 	}
-	consider(ix.open)
-	if routeOpen(r.shape) {
-		for _, list := range ix.byFirst {
-			consider(list) // map order is irrelevant: the minimum wins
-		}
-	} else {
-		consider(ix.byFirst[routeFirst(r.shape)])
-	}
+	walk(ix.root, 0)
 	return best
 }
 

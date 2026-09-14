@@ -30,6 +30,7 @@ import (
 	"strings"
 
 	"github.com/Piechutowski/volt/gen/align"
+	"github.com/Piechutowski/volt/internal/par"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 )
@@ -143,33 +144,48 @@ func planBuild(f *ast.File, info *check.Info) (*plan, error) {
 	}
 	sqlNames := map[string]string{}
 
-	for _, ti := range info.Tables {
-		tm, err := tableBuild(g, ti, typeNames, sqlNames)
-		if err != nil {
-			return nil, err
+	// Every table's model is built on its own, on every CPU, against a
+	// generator of its own for the imports it needs (D81); the name
+	// collisions between tables are then judged in declaration order,
+	// so the first error is the same whatever the schedule.
+	type built struct {
+		tm  *tableModel
+		imp map[string]bool
+		err error
+	}
+	tables := make([]built, len(info.Tables))
+	par.For(len(info.Tables), func(i int) {
+		gt := &generator{f: g.f, info: g.info, enumTypes: g.enumTypes, imports: map[string]bool{}}
+		tm, err := tableBuild(gt, info.Tables[i])
+		tables[i] = built{tm, gt.imports, err}
+	})
+	for i, ti := range info.Tables {
+		b := tables[i]
+		if b.err != nil {
+			return nil, b.err
 		}
-		p.tables = append(p.tables, tm)
+		if prev, dup := typeNames[b.tm.model]; dup {
+			return nil, fmt.Errorf("table %s and %s both map to Go type %s", ti.Decl.Name.String(), prev, b.tm.model)
+		}
+		typeNames[b.tm.model] = "table " + ti.Decl.Name.String()
+		if prev, dup := sqlNames[b.tm.sqlName]; dup {
+			return nil, fmt.Errorf("tables %s and %s both flatten to SQLite name %q", prev, ti.Decl.Name.String(), b.tm.sqlName)
+		}
+		sqlNames[b.tm.sqlName] = ti.Decl.Name.String()
+		for imp := range b.imp {
+			g.imports[imp] = true
+		}
+		p.tables = append(p.tables, b.tm)
 	}
 	return p, nil
 }
 
-func tableBuild(g *generator, ti *check.TableInfo, typeNames, sqlNames map[string]string) (*tableModel, error) {
+func tableBuild(g *generator, ti *check.TableInfo) (*tableModel, error) {
 	model, err := modelName(ti.Decl)
 	if err != nil {
 		return nil, fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
 	}
-	if prev, dup := typeNames[model]; dup {
-		return nil, fmt.Errorf("table %s and %s both map to Go type %s", ti.Decl.Name.String(), prev, model)
-	}
-	typeNames[model] = "table " + ti.Decl.Name.String()
-
-	sqlName := sqlTableName(ti.Decl.Name)
-	if prev, dup := sqlNames[sqlName]; dup {
-		return nil, fmt.Errorf("tables %s and %s both flatten to SQLite name %q", prev, ti.Decl.Name.String(), sqlName)
-	}
-	sqlNames[sqlName] = ti.Decl.Name.String()
-
-	tm := &tableModel{ti: ti, model: model, sqlName: sqlName}
+	tm := &tableModel{ti: ti, model: model, sqlName: sqlTableName(ti.Decl.Name)}
 	pkFromIndex := compositePKColumns(ti)
 	goFields := map[string]string{}
 	params := map[string]string{}

@@ -37,8 +37,9 @@ type Session struct {
 
 // SessionStats counts the work a session did and the work it skipped.
 type SessionStats struct {
-	FilesParsed, FilesReused        int
-	PackagesChecked, PackagesReused int
+	FilesParsed, FilesReused          int
+	PackagesChecked, PackagesReused   int
+	PackagesVetted, PackagesVetReused int
 }
 
 // fileEntry is one file's last parse. gen is its identity: a new parse
@@ -61,6 +62,8 @@ type pkgEntry struct {
 	key   string
 	res   pkgResult
 	diags []diag.Diagnostic
+	vet   []diag.Diagnostic // Vet's warnings, once Vet ran on this key
+	vetOK bool
 }
 
 // pkgResult is everything the per-package phases of Check write; the
@@ -88,6 +91,7 @@ func pkgCapture(pkg *Package) pkgResult {
 func (r pkgResult) restore(pkg *Package) {
 	pkg.schema, pkg.plan = r.schema, r.plan
 	pkg.Groups, pkg.Preds, pkg.Selects, pkg.CheckFns = r.groups, r.preds, r.selects, r.checkFns
+	pkg.selectIndex()
 	pkg.Pipelines, pkg.Routes, pkg.Controllers = r.pipelines, r.routes, r.controllers
 }
 
@@ -110,6 +114,42 @@ func (s *Session) LoadDirs(root string, dirs []string, overlay map[string]string
 // when it was last checked is restored instead of re-run.
 func (s *Session) Check(pr *Project) []diag.Diagnostic {
 	return checkWith(pr, s)
+}
+
+// Vet is lang.Vet through the session's memo: a package whose check
+// results were reused and whose warnings were computed before answers
+// from the memo (D81). Run after Check on the same project.
+func (s *Session) Vet(pr *Project) []diag.Diagnostic {
+	return vetWith(pr, s)
+}
+
+// vetRestore answers a package's warnings from the memo when its key
+// is current and Vet ran on it before.
+func (s *Session) vetRestore(path, key string) ([]diag.Diagnostic, bool) {
+	if key == "" {
+		return nil, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e := s.pkgs[path]
+	if e == nil || e.key != key || !e.vetOK {
+		return nil, false
+	}
+	s.stats.PackagesVetReused++
+	return e.vet, true
+}
+
+// vetStore keeps a package's warnings beside its check results.
+func (s *Session) vetStore(path, key string, diags []diag.Diagnostic) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.stats.PackagesVetted++
+	if key == "" {
+		return
+	}
+	if e := s.pkgs[path]; e != nil && e.key == key {
+		e.vet, e.vetOK = diags, true
+	}
 }
 
 // Stats reports the session's counters so far.

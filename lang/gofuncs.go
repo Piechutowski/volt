@@ -15,6 +15,7 @@ import (
 	"go/printer"
 	gotoken "go/token"
 	"go/types"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -73,6 +74,9 @@ func GoFuncsScan(dir string) (funcs map[string]GoFunc, broken []string) {
 			continue // the go tool would not compile it; neither do we count it
 		}
 		path := filepath.Join(dir, name)
+		if goFileGenerated(path) {
+			continue // volt's own output never declares a check or a plug, and it can be a million lines (D81)
+		}
 		f, perr := parser.ParseFile(fset, path, nil, parser.ParseComments|parser.SkipObjectResolution)
 		if perr != nil {
 			broken = append(broken, fmt.Sprintf("%s: %v", name, perr))
@@ -208,4 +212,19 @@ func (sc *goScan) brokenHint() string {
 		return ""
 	}
 	return " (note: " + strings.Join(sc.broken, "; ") + " — functions after a syntax error are invisible)"
+}
+
+// goFileGenerated reports whether the file opens with the generated
+// marker (^// Code generated .* DO NOT EDIT\.$), reading only its
+// first line.
+func goFileGenerated(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	var buf [256]byte
+	n, _ := io.ReadFull(f, buf[:])
+	line, _, _ := bytes.Cut(buf[:n], []byte("\n"))
+	return bytes.HasPrefix(line, []byte("// Code generated ")) && bytes.HasSuffix(bytes.TrimSpace(line), []byte("DO NOT EDIT."))
 }

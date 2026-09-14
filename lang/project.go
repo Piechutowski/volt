@@ -68,6 +68,10 @@ type Package struct {
 	// CheckFns is the validator surface (§V12), lowered by Check.
 	CheckFns []golang.CheckFn
 	Selects  []*SelectInfo
+	// selectByMethod indexes Selects by generated method name (D81).
+	selectByMethod map[string]selectMember
+	// paramsValid memoizes paramsValidators per table (D81).
+	paramsValid map[string][2]bool
 
 	// schema is the package's checked table model, set by Check.
 	schema *check.Info

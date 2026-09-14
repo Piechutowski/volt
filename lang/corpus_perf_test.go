@@ -69,10 +69,17 @@ func TestCorpusScalesLinearly(t *testing.T) {
 		{"tables", func(s corpus.Spec) corpus.Spec { s.Tables *= 2; return s }},
 		{"packages", func(s corpus.Spec) corpus.Spec { s.Packages *= 2; return s }},
 		{"columns", func(s corpus.Spec) corpus.Spec { s.Columns *= 2; return s }},
+		// One package routing every table of one group: the shape that
+		// found the quadratic route binding (D81).
+		{"single", func(s corpus.Spec) corpus.Spec { s.Single = true; s.Tables *= 2; return s }},
 	} {
 		t.Run(dim.name, func(t *testing.T) {
-			l1, c1, g1 := corpusPhases(t, corpusRoot(t, base))
-			l2, c2, g2 := corpusPhases(t, corpusRoot(t, dim.grow(base)))
+			small := base
+			if dim.name == "single" {
+				small = corpus.Spec{Tables: 128, Columns: 8, Single: true}
+			}
+			l1, c1, g1 := corpusPhases(t, corpusRoot(t, small))
+			l2, c2, g2 := corpusPhases(t, corpusRoot(t, dim.grow(small)))
 			linear(t, "load", l1, l2)
 			linear(t, "check", c1, c2)
 			linear(t, "generate", g1, g2)
@@ -89,12 +96,15 @@ func TestCorpusScalesLinearly(t *testing.T) {
 var allocBudget = struct {
 	load, check, gen uint64
 }{
-	load:  1491896,
-	check: 2342672,
-	gen:   8463680,
+	load:  1144416,
+	check: 2134176,
+	gen:   8459704,
 }
 
 func TestAllocationBudget(t *testing.T) {
+	if raceEnabled {
+		t.Skip("allocation budget is asserted without the race detector")
+	}
 	load, check, gen := corpusPhases(t, corpusRoot(t, corpus.Spec{Packages: 3, Tables: 12, Columns: 12}))
 	for _, ph := range []struct {
 		name        string

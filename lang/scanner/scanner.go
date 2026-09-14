@@ -43,7 +43,7 @@ func Scan(filename, src string) ([]token.Token, []diag.Diagnostic) {
 		pos:  token.Position{Filename: filename, Line: 1, Column: 1},
 		// Schema text runs about six bytes per token; sizing the slice
 		// once spares the doublings and their copies (PERF-7).
-		toks: make([]token.Token, 0, len(src)/6+16),
+		toks: make([]token.Token, 0, len(src)/4+16), // measured: a token per four bytes of schema (D81)
 	}
 	s.nlBefore = true // start of file counts as a line break
 	for state := anyScan; state != nil; {

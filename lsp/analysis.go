@@ -85,7 +85,11 @@ func projectAnalyze(root string, overlay map[string]string, session *lang.Sessio
 	// Vet advice only on top of a clean check, matching the single-file
 	// policy: style notes stacked on hard errors are noise while typing.
 	if !diag.HasErrors(diags) {
-		res.diags = append(res.diags, lang.Vet(pr)...)
+		if session != nil {
+			res.diags = append(res.diags, session.Vet(pr)...)
+		} else {
+			res.diags = append(res.diags, lang.Vet(pr)...)
+		}
 	}
 	return res
 }

@@ -12,15 +12,32 @@ import (
 // scope pipes through. Run after Check on a checked project. Warnings
 // never change what conforming Volt is.
 func Vet(pr *Project) []diag.Diagnostic {
+	return vetWith(pr, nil)
+}
+
+// vetWith is Vet through a session's memo when one is given: a
+// package's warnings are a function of the same inputs as its check
+// results, so they are kept under the same key (D81).
+func vetWith(pr *Project, s *Session) []diag.Diagnostic {
 	c := &checker{pr: pr}
 	paths := c.paths()
 	per := make([][]diag.Diagnostic, len(paths))
+	var keys map[string]string
+	if s != nil {
+		keys = s.packageKeys(pr, paths)
+	}
 	par.For(len(paths), func(i int) {
 		pkg := pr.Packages[paths[i]]
-		if pkg.HasSchema() {
-			per[i] = vet.Run(pkg.merged, pkg.schema, vet.All()...)
+		if s != nil {
+			if ds, ok := s.vetRestore(paths[i], keys[paths[i]]); ok {
+				per[i] = ds
+				return
+			}
 		}
-		per[i] = append(per[i], vetUnusedPipelines(pkg)...)
+		per[i] = vetPackage(pkg)
+		if s != nil {
+			s.vetStore(paths[i], keys[paths[i]], per[i])
+		}
 	})
 	var out []diag.Diagnostic
 	for _, ds := range per {
@@ -28,6 +45,15 @@ func Vet(pr *Project) []diag.Diagnostic {
 	}
 	diag.Sort(out)
 	return out
+}
+
+// vetPackage runs every analyzer over one checked package.
+func vetPackage(pkg *Package) []diag.Diagnostic {
+	var out []diag.Diagnostic
+	if pkg.HasSchema() {
+		out = vet.Run(pkg.merged, pkg.schema, vet.All()...)
+	}
+	return append(out, vetUnusedPipelines(pkg)...)
 }
 
 // vetUnusedPipelines flags pipelines no scope pipes through: dead
