@@ -344,12 +344,10 @@ func tokenPosition(t *testing.T, d *Document, needle string) (p token.Position) 
 	if off < 0 {
 		t.Fatalf("needle %q not found", needle)
 	}
-	p.Offset = off
-	p.Line = strings.Count(d.Text[:off], "\n") + 1
+	line := strings.Count(d.Text[:off], "\n") + 1
 	// column in runes
 	lineStart := strings.LastIndex(d.Text[:off], "\n") + 1
-	p.Column = len([]rune(d.Text[lineStart:off])) + 1
-	return p
+	return token.At("", off, line, len([]rune(d.Text[lineStart:off]))+1)
 }
 
 func hasLabel(items []protocol.CompletionItem, label string) bool {

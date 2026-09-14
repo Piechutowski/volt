@@ -118,11 +118,11 @@ func (res *projectResult) docDiags(path string) []diag.Diagnostic {
 	modPath := filepath.Join(res.root, lang.ModFile)
 	var mine []diag.Diagnostic
 	for _, dg := range res.diags {
-		switch dg.Pos.Filename {
+		switch dg.Pos.Filename() {
 		case path:
 			mine = append(mine, dg)
 		case modPath:
-			dg.Pos = token.Position{Filename: path, Line: 1, Column: 1}
+			dg.Pos = token.At(path, 0, 1, 1)
 			mine = append(mine, dg)
 		}
 	}

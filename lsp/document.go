@@ -198,12 +198,12 @@ func (d *Document) ToLSP(p token.Position) protocol.Position {
 // lspPosition is ToLSP over any text and its line table, so the
 // background analysis can position diagnostics in the text it saw.
 func lspPosition(text string, starts []int, p token.Position) protocol.Position {
-	line := p.Line - 1
+	line := int(p.Line) - 1
 	if line < 0 {
 		return protocol.Position{}
 	}
 	col := 0
-	need := p.Column - 1
+	need := int(p.Column) - 1
 	for _, r := range lineTextIn(text, starts, line) {
 		if need <= 0 {
 			break
@@ -261,7 +261,7 @@ func (d *Document) diagnosticRange(p token.Position) protocol.Range {
 // diagnosticRangeIn is diagnosticRange over any text and its line table.
 func diagnosticRangeIn(text string, starts []int, p token.Position) protocol.Range {
 	start := lspPosition(text, starts, p)
-	off := p.Offset
+	off := int(p.Offset)
 	end := off
 	for end < len(text) && isIdentByte(text[end]) {
 		end++

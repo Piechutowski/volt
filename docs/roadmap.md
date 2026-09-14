@@ -250,9 +250,9 @@ project (D80: the same thousand tables in one `schema.volt`) then
 exposed what per-package parallelism had hidden — a quadratic route
 binding, a first-segment route index, a Go-reference scan reading the
 generated output — and with those indexed (D81) it checks in 0.7 s on
-four cores against 9.4 s. What remains is the front end's allocation
-— 88-byte tokens and a pointer AST cost more in GC than in parsing
-(PERF-9) — and the edited file's own parse and check (PERF-10).
+four cores against 9.4 s. The front end was then flattened (D82): 48-byte
+tokens and slab-allocated nodes, a quarter off Load. What remains is
+the edited file's own parse and check (PERF-10).
 
 | ID | Work | Status |
 |---|---|---|
@@ -264,7 +264,7 @@ four cores against 9.4 s. What remains is the front end's allocation
 | PERF-6 | `volt gen -o DIR -parts LIST FILE` for go:generate-driven layouts (D77); the `.volt` package clause stays mandatory, the emitted clause follows the target | `DONE` |
 | PERF-7 | Parallel schedule: parse per file, check per package, generate per package and file on a worker pool; scanner fast paths (D78) | `DONE` |
 | PERF-8 | Language server: debounced background analysis through a `lang.Session` — parses cached by content, per-package results memoized by input identity, no reverse index needed (D79) | `DONE` |
-| PERF-9 | Flat front end: pointer-free tokens, slab-allocated AST, interned symbols, precomputed emission fragments | planned |
+| PERF-9 | Flat front end (D82): file-backed positions, 48-byte two-pointer tokens borrowing their text from the file, the parser's hottest node kinds from slabs. Load at 160 tables 35.9 ms to 27.1 ms, allocations 312K to 126K. Not done, on purpose: interned symbols (five percent, every consumer's API) and precomputed emission fragments (the emitters' allocations are per-field formatting, a separate lever) | `DONE` |
 | PERF-10 | Per-declaration memoization for the one-file layout: hash each top-level declaration, relocate positions, re-check only the declarations whose text moved (the edit cycle is then bounded by the declaration, not the file) | planned |
 | PERF-11 | One package checked like twenty (D81): select methods indexed by name, route conflicts in a literal-prefix trie, generated files skipped by the Go-reference scan, params validators memoized per table, the plan's table models built on the worker pool, vet warnings memoized in the editor session; the linearity test gained the one-file dimension. One-file stress project, four cores: check 9.4 s to 0.7 s, editor analysis 15.5 s to 2.4 s cold and 0.4 s unchanged | `DONE` |
 

@@ -232,7 +232,7 @@ func diagsPrintJSON(all []diag.Diagnostic) error {
 	out := make([]jsonDiag, 0, len(all))
 	for _, d := range all {
 		out = append(out, jsonDiag{
-			File: d.Pos.Filename, Line: d.Pos.Line, Column: d.Pos.Column,
+			File: d.Pos.Filename(), Line: int(d.Pos.Line), Column: int(d.Pos.Column),
 			Severity: d.Severity.String(), Code: d.Code, Message: d.Msg,
 		})
 	}

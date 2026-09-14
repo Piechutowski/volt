@@ -64,7 +64,7 @@ func TestVoltProjectCrossFileConflict(t *testing.T) {
 
 	found := false
 	for _, dg := range d.Diags {
-		if strings.Contains(dg.Msg, "conflict") && dg.Pos.Filename == path {
+		if strings.Contains(dg.Msg, "conflict") && dg.Pos.Filename() == path {
 			found = true
 		}
 	}

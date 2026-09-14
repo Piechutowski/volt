@@ -455,6 +455,6 @@ func goModModule(path, src string) (string, []diag.Diagnostic) {
 			}
 		}
 	}
-	return "", []diag.Diagnostic{diag.Errorf(token.Position{Filename: path, Line: 1, Column: 1},
+	return "", []diag.Diagnostic{diag.Errorf(token.At(path, 0, 1, 1),
 		"spec/V1", "%s must declare 'module <path>' (§V1.1)", ModFile)}
 }

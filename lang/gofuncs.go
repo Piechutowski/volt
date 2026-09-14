@@ -104,8 +104,8 @@ func goFuncOf(fset *gotoken.FileSet, path string, fn *goast.FuncDecl) GoFunc {
 		Name:    fn.Name.Name,
 		File:    path,
 		Generic: fn.Type.TypeParams != nil && len(fn.Type.TypeParams.List) > 0,
-		Pos:     token.Position{Filename: path, Offset: start.Offset, Line: start.Line, Column: start.Column},
-		End:     token.Position{Filename: path, Offset: end.Offset, Line: end.Line, Column: end.Column},
+		Pos:     token.At(path, start.Offset, start.Line, start.Column),
+		End:     token.At(path, end.Offset, end.Line, end.Column),
 	}
 	if fn.Type.Params != nil {
 		for _, field := range fn.Type.Params.List {

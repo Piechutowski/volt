@@ -826,3 +826,30 @@ where the merge changed the facts.
   file (the parser is a third of what remains and a declaration-level
   split is PERF-10's job) and a parallel schema check inside a
   package (its per-table cost is now small next to the parse).
+
+- **D82 — The front end is flat where it counts: file-backed positions,
+  48-byte tokens, slab-allocated nodes** (2026-09-14, roadmap PERF-9,
+  `lang/token`, `lang/scanner`, `lang/parser`). A token was 88 bytes
+  and three pointers: a position carrying the filename string, the raw
+  text and the value, each a string header, so a million-token file
+  was 82 MB of tokens for the collector to walk and every identifier
+  node carried the same. Now a `token.File` holds the name and the
+  source once; a position is that pointer plus three 32-bit offsets;
+  a token borrows its text from the file by offset and length and
+  keeps only its value, 48 bytes and two pointers; the scanner counts
+  in machine integers and mints a position only when it emits. The
+  parser hands out identifiers, qualified names, columns, types,
+  settings, setting lists and literals from slabs of 256, so a file's
+  nodes are a few hundred allocations instead of one each, and a
+  setting's name is built without a word list. Measured on the sweep
+  at 160 tables: Load 35.9 ms to 27.1 ms, 31.9 MB to 23.2 MB
+  allocated, 312 thousand allocations to 126 thousand; the stress
+  file loads in 200 ms against 330 ms. Consumers read text through
+  `Token.Text()` and the filename through `Position.Filename()`; a
+  token the source does not contain is `token.Synthetic`. What it
+  refuses: interned symbols (integers for names would change every
+  consumer's API for the map hashing the profile puts at five
+  percent), and a Position without a file pointer (an offset alone
+  cannot say which file, and diagnostics must). What remains of
+  PERF-9 is the checker's own allocation, which is the naming plan's
+  strings, not the front end's.

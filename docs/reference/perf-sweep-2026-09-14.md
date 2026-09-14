@@ -206,3 +206,20 @@ percent faster; its allocation count did not move, because those are
 the per-field `fmt` calls and string concatenations of the emitters,
 which is the next lever there. Load and Check are unchanged and the
 run-to-run noise on them is about ten percent.
+
+## Follow-up the same day: the front end flattened (D82)
+
+Positions became a file pointer plus 32-bit offsets, tokens went from
+88 bytes and three pointers to 48 and two, and the parser slab-allocates
+its hottest node kinds. Same machine, same method:
+
+| Tables | Load before | Load after |
+|---|---|---|
+| 40 | 9.2 ms, 8.0 MB, 78K allocs | 7.7 ms, 5.9 MB, 32K allocs |
+| 160 | 35.9 ms, 31.9 MB, 312K allocs | 27.1 ms, 23.2 MB, 126K allocs |
+
+Check, Vet and Generate are within noise of their previous numbers:
+their allocations are their own (the naming plan's strings, the
+emitters' formatting), not the AST's. Heap in use after Load at 160
+tables fell from 49.8 MB to 36.6 MB, which is what the editor holds
+per open project.

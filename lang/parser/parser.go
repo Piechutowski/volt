@@ -36,6 +36,47 @@ type parser struct {
 	toks  []token.Token
 	pos   int
 	diags []diag.Diagnostic
+
+	// The hottest node kinds come from slabs: a file's identifiers,
+	// columns, settings and literals are a few allocations instead of
+	// one each, and the collector has a few objects to sweep instead
+	// of a million (D82, PERF-9).
+	idents   slab[ast.Ident]
+	quals    slab[ast.QualName]
+	columns  slab[ast.Column]
+	types    slab[ast.TypeRef]
+	settings slab[ast.Setting]
+	lists    slab[ast.SettingList]
+	lits     slab[ast.BasicLit]
+}
+
+// slab hands out zero values of one node kind from chunks.
+type slab[T any] struct{ chunk []T }
+
+func (s *slab[T]) new() *T {
+	if len(s.chunk) == cap(s.chunk) {
+		s.chunk = make([]T, 0, 256)
+	}
+	s.chunk = s.chunk[:len(s.chunk)+1]
+	return &s.chunk[len(s.chunk)-1]
+}
+
+func (p *parser) identOf(t token.Token) *ast.Ident {
+	id := p.idents.new()
+	id.Tok = t
+	return id
+}
+
+func (p *parser) litOf(t token.Token) *ast.BasicLit {
+	l := p.lits.new()
+	l.Tok = t
+	return l
+}
+
+func (p *parser) qualOf(parts ...*ast.Ident) *ast.QualName {
+	q := p.quals.new()
+	q.Parts = parts
+	return q
 }
 
 // bailout unwinds one declaration after an unrecoverable local error.
@@ -86,7 +127,7 @@ func (p *parser) endOfLine(ctx string) {
 }
 
 func (p *parser) ident(ctx string) *ast.Ident {
-	return &ast.Ident{Tok: p.expect(token.IDENT, ctx)}
+	return p.identOf(p.expect(token.IDENT, ctx))
 }
 
 // qualName = [ schema name, "." ], name (§4.1).
@@ -94,9 +135,9 @@ func (p *parser) qualName(ctx string) *ast.QualName {
 	first := p.ident(ctx)
 	if p.at(token.DOT) {
 		p.next()
-		return &ast.QualName{Parts: []*ast.Ident{first, p.ident(ctx)}}
+		return p.qualOf(first, p.ident(ctx))
 	}
-	return &ast.QualName{Parts: []*ast.Ident{first}}
+	return p.qualOf(first)
 }
 
 /* ===== file = { import statement | element } (§5) ===== */
@@ -241,7 +282,7 @@ func (p *parser) useDecl() *ast.Use {
 		p.fail(p.cur(), "expected 'from' in import statement (§7)")
 	}
 	p.next()
-	d.Path = &ast.BasicLit{Tok: p.expect(token.STRING, "import path (§7)")}
+	d.Path = p.litOf(p.expect(token.STRING, "import path (§7)"))
 	return d
 }
 
@@ -271,7 +312,7 @@ func (p *parser) project() *ast.Project {
 		key := p.ident("project property (§6.1)")
 		p.expect(token.COLON, "project property (§6.1)")
 		val := p.expect(token.STRING, "project property value (§6.1)")
-		d.Props = append(d.Props, &ast.ProjectProp{Key: key, Value: &ast.BasicLit{Tok: val}})
+		d.Props = append(d.Props, &ast.ProjectProp{Key: key, Value: p.litOf(val)})
 		p.endOfLine("project property (§6.1)")
 	}
 	d.Rbrace = p.expect(token.RBRACE, "Project (§6.1)").Pos
@@ -362,7 +403,8 @@ func (p *parser) tableItem(what string) (item ast.TableItem) {
 
 // column = name, column type, { legacy flag }, [ column settings ], newline (§6.3).
 func (p *parser) column() *ast.Column {
-	c := &ast.Column{Name: p.ident("column name (§6.3)")}
+	c := p.columns.new()
+	c.Name = p.ident("column name (§6.3)")
 	c.Type = p.typeRef()
 	for p.at(token.IDENT) && !p.cur().NLBefore {
 		c.LegacyFlags = append(c.LegacyFlags, p.ident("legacy flag (§6.3)"))
@@ -375,7 +417,8 @@ func (p *parser) column() *ast.Column {
 }
 
 func (p *parser) typeRef() *ast.TypeRef {
-	tr := &ast.TypeRef{Name: p.qualName("column type (§6.3)")}
+	tr := p.types.new()
+	tr.Name = p.qualName("column type (§6.3)")
 	if p.at(token.LPAREN) && !p.cur().SpBefore {
 		p.next()
 		for {
@@ -575,7 +618,7 @@ func (p *parser) refEndpoint() *ast.RefEndpoint {
 	if len(parts) == 0 || len(parts) > 2 {
 		p.fail(p.cur(), "endpoint must be [schema.]table.column (§6.7)")
 	}
-	ep.Table = &ast.QualName{Parts: parts}
+	ep.Table = p.qualOf(parts...)
 	return ep
 }
 
@@ -662,12 +705,12 @@ func (p *parser) recordValue() ast.Node {
 	t := p.cur()
 	switch t.Kind {
 	case token.STRING, token.NUMBER:
-		return &ast.BasicLit{Tok: p.next()}
+		return p.litOf(p.next())
 	case token.FUNCEXPR:
 		return &ast.FuncExpr{Tok: p.next()}
 	case token.MINUS:
 		p.next()
-		return &ast.NegNumber{MinusPos: t.Pos, Num: &ast.BasicLit{Tok: p.expect(token.NUMBER, "record value (§6.10)")}}
+		return &ast.NegNumber{MinusPos: t.Pos, Num: p.litOf(p.expect(token.NUMBER, "record value (§6.10)"))}
 	case token.IDENT:
 		id := p.ident("record value (§6.10)")
 		if p.at(token.DOT) {
@@ -688,13 +731,13 @@ func (p *parser) noteDef() *ast.Note {
 	n := &ast.Note{NotePos: p.next().Pos}
 	if p.at(token.COLON) {
 		p.next()
-		n.Text = &ast.BasicLit{Tok: p.expect(token.STRING, "note value (§6.11)")}
+		n.Text = p.litOf(p.expect(token.STRING, "note value (§6.11)"))
 		n.SetEnd(n.Text.End())
 		p.endOfLine("note definition (§6.11)")
 		return n
 	}
 	p.expect(token.LBRACE, "note definition (§6.11)")
-	n.Text = &ast.BasicLit{Tok: p.expect(token.STRING, "note value (§6.11)")}
+	n.Text = p.litOf(p.expect(token.STRING, "note value (§6.11)"))
 	n.SetEnd(p.expect(token.RBRACE, "note definition (§6.11)").End())
 	return n
 }
@@ -706,7 +749,7 @@ func (p *parser) stickyNote() *ast.StickyNote {
 		d.Settings = p.settingList()
 	}
 	p.expect(token.LBRACE, "sticky note (§6.11)")
-	d.Text = &ast.BasicLit{Tok: p.expect(token.STRING, "sticky note value (§6.11)")}
+	d.Text = p.litOf(p.expect(token.STRING, "sticky note value (§6.11)"))
 	d.Rbrace = p.expect(token.RBRACE, "sticky note (§6.11)").Pos
 	return d
 }
@@ -762,7 +805,8 @@ func (p *parser) diagramView() *ast.DiagramView {
 // settings are legal where — and what value types they take — is decided
 // by the check package, keeping parser and semantics decoupled.
 func (p *parser) settingList() *ast.SettingList {
-	sl := &ast.SettingList{Lbrack: p.expect(token.LBRACKET, "settings list (§4.2)").Pos}
+	sl := p.lists.new()
+	sl.Lbrack = p.expect(token.LBRACKET, "settings list (§4.2)").Pos
 	for {
 		s := p.setting()
 		sl.Settings = append(sl.Settings, s)
@@ -778,15 +822,16 @@ func (p *parser) settingList() *ast.SettingList {
 
 func (p *parser) setting() *ast.Setting {
 	nameTok := p.expect(token.IDENT, "setting name (§4.2)")
-	words := []string{strings.ToLower(nameTok.Val)}
+	name := strings.ToLower(nameTok.Val) // returns the same string when already lower: no allocation
 	end := nameTok.End()
 	// multi-word setting names (§4.2.2): "not null", "primary key"
 	for p.at(token.IDENT) && !p.cur().NLBefore {
 		w := p.next()
-		words = append(words, strings.ToLower(w.Val))
+		name += " " + strings.ToLower(w.Val)
 		end = w.End()
 	}
-	s := &ast.Setting{NameTok: nameTok, Name: strings.Join(words, " ")}
+	s := p.settings.new()
+	s.NameTok, s.Name = nameTok, name
 	s.SetEnd(end)
 	if p.at(token.COLON) {
 		p.next()
@@ -800,7 +845,7 @@ func (p *parser) settingValue() ast.Node {
 	t := p.cur()
 	switch t.Kind {
 	case token.STRING, token.NUMBER, token.COLOR:
-		return &ast.BasicLit{Tok: p.next()}
+		return p.litOf(p.next())
 	case token.FUNCEXPR:
 		return &ast.FuncExpr{Tok: p.next()}
 	case token.MINUS:
@@ -809,7 +854,7 @@ func (p *parser) settingValue() ast.Node {
 			return &ast.RefValue{OpTok: op, Endpoint: p.refEndpoint()}
 		}
 		p.next()
-		return &ast.NegNumber{MinusPos: t.Pos, Num: &ast.BasicLit{Tok: p.expect(token.NUMBER, "setting value (§4.2)")}}
+		return &ast.NegNumber{MinusPos: t.Pos, Num: p.litOf(p.expect(token.NUMBER, "setting value (§4.2)"))}
 	case token.LT, token.GT, token.LTGT:
 		op := p.next()
 		return &ast.RefValue{OpTok: op, Endpoint: p.refEndpoint()}

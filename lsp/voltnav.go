@@ -80,7 +80,7 @@ func (ix *voltIndex) goStale() bool {
 
 func spanOf(n ast.Node) voltSpan {
 	p := n.Pos()
-	return voltSpan{file: p.Filename, pos: p, end: n.End()}
+	return voltSpan{file: p.Filename(), pos: p, end: n.End()}
 }
 
 // buildVoltIndex walks every package's declarations twice: definitions
@@ -120,8 +120,8 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 			first := pkg.Files[0]
 			ix.defs[voltSym{"package", path, ""}] = voltDef{span: voltSpan{
 				file: first.Name,
-				pos:  token.Position{Filename: first.Name, Line: 1, Column: 1},
-				end:  token.Position{Filename: first.Name, Line: 1, Column: 1},
+				pos:  token.At(first.Name, 0, 1, 1),
+				end:  token.At(first.Name, 0, 1, 1),
 			}}
 		}
 	}
@@ -353,7 +353,7 @@ func (ix *voltIndex) settingRefs(pkg *lang.Package, path string, list *ast.Setti
 func (ix *voltIndex) at(file string, offset int) *voltRef {
 	for i := range ix.refs {
 		r := &ix.refs[i]
-		if r.span.file == file && offset >= r.span.pos.Offset && offset <= r.span.end.Offset {
+		if r.span.file == file && offset >= int(r.span.pos.Offset) && offset <= int(r.span.end.Offset) {
 			return r
 		}
 	}
@@ -378,8 +378,8 @@ func (ix *voltIndex) location(sp voltSpan) *protocol.Location {
 	return &protocol.Location{
 		URI: "file://" + sp.file,
 		Range: protocol.Range{
-			Start: offsetToLSP(text, sp.pos.Offset),
-			End:   offsetToLSP(text, sp.end.Offset),
+			Start: offsetToLSP(text, int(sp.pos.Offset)),
+			End:   offsetToLSP(text, int(sp.end.Offset)),
 		},
 	}
 }
@@ -479,8 +479,8 @@ func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 		return nil
 	}
 	rng := protocol.Range{
-		Start: offsetToLSP(d.Text, ref.span.pos.Offset),
-		End:   offsetToLSP(d.Text, ref.span.end.Offset),
+		Start: offsetToLSP(d.Text, int(ref.span.pos.Offset)),
+		End:   offsetToLSP(d.Text, int(ref.span.end.Offset)),
 	}
 	return &protocol.Hover{
 		Contents: protocol.MarkupContent{Kind: protocol.MarkupKindMarkdown, Value: md},
@@ -627,7 +627,7 @@ func predHover(sym voltSym, def voltDef, ix *voltIndex) string {
 	}
 	md := "```volt\nPred " + sym.name + "\n```\n"
 	if text, ok := ix.texts[def.span.file]; ok && p.X != nil {
-		start, end := p.X.Pos().Offset, p.X.End().Offset
+		start, end := int(p.X.Pos().Offset), int(p.X.End().Offset)
 		if start >= 0 && end <= len(text) && start < end {
 			md += "```volt\n" + text[start:end] + "\n```\n"
 		}

@@ -397,7 +397,7 @@ func (ix *Index) add(id SymbolID, ident *ast.Ident, isDecl bool) {
 func (ix *Index) At(offset int) *Occurrence {
 	for i := range ix.Occs {
 		tok := ix.Occs[i].Ident.Tok
-		if tok.Pos.Offset <= offset && offset <= tok.End().Offset {
+		if int(tok.Pos.Offset) <= offset && offset <= int(tok.End().Offset) {
 			return &ix.Occs[i]
 		}
 	}

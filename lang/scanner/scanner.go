@@ -39,8 +39,8 @@ func Scan(filename, src string) ([]token.Token, []diag.Diagnostic) {
 	}
 	s := &Scanner{
 		src:  src,
-		file: filename,
-		pos:  token.Position{Filename: filename, Line: 1, Column: 1},
+		file: token.NewFile(filename, src),
+		pos:  cursor{line: 1, col: 1},
 		// Schema text runs about six bytes per token; sizing the slice
 		// once spares the doublings and their copies (PERF-7).
 		toks: make([]token.Token, 0, len(src)/4+16), // measured: a token per four bytes of schema (D81)
@@ -57,10 +57,10 @@ type stateFn func(*Scanner) stateFn
 
 type Scanner struct {
 	src  string
-	file string
+	file *token.File
 
-	pos   token.Position // position of next unread rune
-	start token.Position // position where the current token began
+	pos   cursor // position of next unread rune
+	start cursor // position where the current token began
 
 	nlBefore bool
 	spBefore bool
@@ -72,6 +72,14 @@ type Scanner struct {
 	// from their raw text (strings, quoted identifiers).
 	val strings.Builder
 }
+
+// cursor is a position under construction, in the machine's integers;
+// it becomes a token.Position when a token is emitted.
+type cursor struct {
+	Offset, line, col int
+}
+
+func (c cursor) position(f *token.File) token.Position { return f.At(c.Offset, c.line, c.col) }
 
 const eof = rune(-1)
 
@@ -112,10 +120,10 @@ func (s *Scanner) next() rune {
 	}
 	s.pos.Offset += w
 	if r == '\n' {
-		s.pos.Line++
-		s.pos.Column = 1
+		s.pos.line++
+		s.pos.col = 1
 	} else {
-		s.pos.Column++
+		s.pos.col++
 	}
 	return r
 }
@@ -126,15 +134,15 @@ func (s *Scanner) raw() string { return s.src[s.start.Offset:s.pos.Offset] }
 
 func (s *Scanner) emit(kind token.Kind, val string) {
 	s.toks = append(s.toks, token.Token{
-		Kind: kind, Pos: s.start, Text: s.raw(), Val: val,
+		Kind: kind, Pos: s.start.position(s.file), Len: int32(s.pos.Offset - s.start.Offset), Val: val,
 		NLBefore: s.nlBefore, SpBefore: s.spBefore || s.nlBefore,
 	})
 	s.nlBefore, s.spBefore = false, false
 }
 
 func (s *Scanner) tokEmit(t token.Token) {
-	t.Pos = s.start
-	t.Text = s.raw()
+	t.Pos = s.start.position(s.file)
+	t.Len = int32(s.pos.Offset - s.start.Offset)
 	t.NLBefore = s.nlBefore
 	t.SpBefore = s.spBefore || s.nlBefore
 	s.toks = append(s.toks, t)
@@ -142,7 +150,7 @@ func (s *Scanner) tokEmit(t token.Token) {
 }
 
 func (s *Scanner) errorf(code, format string, args ...any) {
-	s.errs = append(s.errs, diag.Errorf(s.start, code, format, args...))
+	s.errs = append(s.errs, diag.Errorf(s.start.position(s.file), code, format, args...))
 }
 
 // §3.4: letter = Unicode category L | Unicode category M | "_".
@@ -398,7 +406,7 @@ func identScan(s *Scanner) stateFn {
 	for off < len(s.src) && asciiIdent[s.src[off]] {
 		off++
 	}
-	s.pos.Column += off - s.pos.Offset
+	s.pos.col += off - s.pos.Offset
 	s.pos.Offset = off
 	for isIdentChar(s.peek()) {
 		s.next()
