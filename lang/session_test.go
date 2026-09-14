@@ -6,9 +6,11 @@ package lang_test
 // package that could see it.
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Piechutowski/volt/gen/model"
@@ -369,4 +371,60 @@ func TestSessionReparsesOneDeclaration(t *testing.T) {
 		t.Fatal(err)
 	}
 	round("add a Go file", cur, work{0, 0, 0, 12, 0})
+}
+
+// TestSessionConcurrentCallersAgreeWithFreshAnalysis proves a Session
+// serves concurrent callers one operation at a time (D96): several
+// goroutines load and check one session under overlays of their own,
+// round after round, and every result equals a fresh analysis of the
+// same overlay. Run under the race detector by the verification bar,
+// it is where the memos' one-goroutine-at-a-time invariant is
+// exercised rather than assumed.
+func TestSessionConcurrentCallersAgreeWithFreshAnalysis(t *testing.T) {
+	root := scheduleFixture(t)
+	d2 := filepath.Join(root, "d2", "schema.volt")
+	src, err := os.ReadFile(d2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := string(src)
+	var s lang.Session
+	const callers, rounds = 4, 6
+	var wg sync.WaitGroup
+	errs := make([]error, callers)
+	for c := 0; c < callers; c++ {
+		wg.Add(1)
+		go func(c int) {
+			defer wg.Done()
+			for r := 0; r < rounds; r++ {
+				text := base
+				if (c+r)%2 == 1 {
+					text = strings.Replace(base, "  title text\n", "", 1)
+				}
+				text = strings.Replace(text, "Table tags {", fmt.Sprintf("Table tags_%d_%d {", c, r), 1)
+				overlay := map[string]string{d2: text}
+				pr, err := s.Load(root, overlay)
+				if err != nil {
+					errs[c] = err
+					return
+				}
+				got := diagsRender(s.Check(pr))
+				fresh, err := lang.LoadOverlay(root, overlay)
+				if err != nil {
+					errs[c] = err
+					return
+				}
+				if want := diagsRender(lang.Check(fresh)); got != want {
+					errs[c] = fmt.Errorf("caller %d round %d: session differs from fresh\n--- session\n%s--- fresh\n%s", c, r, got, want)
+					return
+				}
+			}
+		}(c)
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 }

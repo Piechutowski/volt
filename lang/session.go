@@ -24,9 +24,13 @@ import (
 )
 
 // Session caches parses and check results for one project root. The
-// zero value is ready; a Session is safe for concurrent use.
+// zero value is ready. A Session runs one operation at a time: a
+// concurrent Load, Check or Vet waits for the one under way (D96), so
+// the memos an operation hands to its phases are one goroutine's for
+// as long as it runs, by construction.
 type Session struct {
-	mu    sync.Mutex
+	op    sync.Mutex            // held for a whole Load, Check or Vet
+	mu    sync.Mutex            // guards the maps below within an operation
 	files map[string]*fileEntry // by absolute path
 	pkgs  map[string]*pkgEntry  // by package path
 	memos map[string]*declMemo  // per-declaration memos, by package path (D84)
@@ -157,6 +161,8 @@ func (s *Session) Load(root string, overlay map[string]string) (*Project, error)
 
 // LoadDirs is the package-level LoadDirs through the session's caches.
 func (s *Session) LoadDirs(root string, dirs []string, overlay map[string]string) (*Project, error) {
+	s.op.Lock()
+	defer s.op.Unlock()
 	return loadDirs(root, dirs, overlay, s)
 }
 
@@ -164,6 +170,8 @@ func (s *Session) LoadDirs(root string, dirs []string, overlay map[string]string
 // whose files, imports (transitively) and Go files are what they were
 // when it was last checked is restored instead of re-run.
 func (s *Session) Check(pr *Project) []diag.Diagnostic {
+	s.op.Lock()
+	defer s.op.Unlock()
 	return checkWith(pr, s)
 }
 
@@ -171,6 +179,8 @@ func (s *Session) Check(pr *Project) []diag.Diagnostic {
 // results were reused and whose warnings were computed before answers
 // from the memo (D81). Run after Check on the same project.
 func (s *Session) Vet(pr *Project) []diag.Diagnostic {
+	s.op.Lock()
+	defer s.op.Unlock()
 	return vetWith(pr, s)
 }
 

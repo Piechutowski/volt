@@ -1203,3 +1203,28 @@ where the merge changed the facts.
   break after it by construction, and a chunk scans the same whatever
   follows its last line. What it refuses: a lookahead that could reach
   the next chunk.
+
+- **D96 — The shared surface is five objects, one of them runs one
+  operation at a time, and the race detector is the bar** (2026-09-14,
+  `lang/session.go`, `AGENT.md`). Freedom from data races has no static
+  proof in Go; what the toolchain can do is keep the shared surface
+  small enough to name, make each object safe by construction, and run
+  the detector on every change. The surface: the worker pool's claim
+  counter (`internal/par`), whose callers keep results in per-index
+  slots; a token file's base offset and line, atomic, since a reused
+  declaration is shared with a result a server thread may still read
+  (D83); a check run's Go scan cache and its once-per-directory scans
+  (mutex, once); the server's document and analysis tables (one
+  mutex); and the session's caches (one mutex within an operation).
+  The session also runs one operation at a time, a Load, Check or Vet
+  holding a lock for its whole length, because the server's background
+  analysis and a document's own project pass reach one session from
+  two goroutines, and the per-declaration memos an operation hands to
+  its phases are each one goroutine's only while no other operation
+  runs: that invariant was the server's discipline and is now the
+  session's construction. A test drives one session from four
+  goroutines under overlays of their own and proves every result equal
+  to a fresh analysis; the verification bar runs the language and
+  server packages under the race detector. What it refuses: a shared
+  object outside this list, and a concurrency argument that the bar
+  does not exercise.

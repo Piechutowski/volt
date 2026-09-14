@@ -97,6 +97,7 @@ tool modules — the full sweep is
 go build ./... ./lsp/... ./cmd/volt/...
 go vet   ./... ./lsp/... ./cmd/volt/...
 go test  ./... ./lsp/... ./cmd/volt/...   # conformance, goldens, itests, LSP
+go test  -race ./lang/... ./lsp/...       # the shared surface under the detector (D96)
 gofmt -l . | grep -v zed-extension        # must be empty
 ```
 
