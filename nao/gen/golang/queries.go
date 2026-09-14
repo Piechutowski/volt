@@ -131,6 +131,17 @@ func (t *tableModel) createFields() []*fieldPlan {
 	return out
 }
 
+// fieldCount is the number of columns across the planned tables: the
+// emitters size their buffers from it once instead of growing by
+// copying (D81).
+func (p *plan) fieldCount() int {
+	n := 0
+	for _, t := range p.tables {
+		n += len(t.fields)
+	}
+	return n
+}
+
 func planBuild(f *ast.File, info *check.Info) (*plan, error) {
 	g := &generator{f: f, info: info, imports: map[string]bool{}}
 	if err := g.enumTypesCollect(); err != nil {
@@ -471,11 +482,13 @@ type queryEmitter struct {
 
 func (e *queryEmitter) run() {
 	e.needImports = map[string]bool{}
+	e.body.Grow(e.plan.fieldCount() * 110) // measured: bytes of queries per column
 	for _, t := range e.plan.tables {
 		e.tableEmit(t)
 	}
 	e.header()
 	e.prologue()
+	e.out.Grow(e.body.Len())
 	e.out.WriteString(e.body.String())
 }
 

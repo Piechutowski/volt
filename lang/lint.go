@@ -51,7 +51,7 @@ func vetWith(pr *Project, s *Session) []diag.Diagnostic {
 func vetPackage(pkg *Package) []diag.Diagnostic {
 	var out []diag.Diagnostic
 	if pkg.HasSchema() {
-		out = vet.Run(pkg.merged, pkg.schema, vet.All()...)
+		out = vet.RunWithPlan(pkg.merged, pkg.schema, pkg.plan, vet.All()...)
 	}
 	return append(out, vetUnusedPipelines(pkg)...)
 }

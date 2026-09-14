@@ -98,11 +98,25 @@ func (b *Block) WriteTo(w *strings.Builder, indent string) {
 
 // Finish returns a generated file's text with every run of blank lines
 // collapsed to one and exactly one trailing newline, as gofmt leaves
-// it. Everything else about the layout is the emitter's job.
+// it, in one pass over one copy. Everything else about the layout is
+// the emitter's job.
 func Finish(text string) []byte {
-	text = strings.TrimRight(text, "\n") + "\n"
-	for strings.Contains(text, "\n\n\n") {
-		text = strings.ReplaceAll(text, "\n\n\n", "\n\n")
+	out := make([]byte, 0, len(text)+1)
+	newlines := 0
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		if c == '\n' {
+			newlines++
+			if newlines <= 2 {
+				out = append(out, c)
+			}
+			continue
+		}
+		newlines = 0
+		out = append(out, c)
 	}
-	return []byte(text)
+	for len(out) > 0 && out[len(out)-1] == '\n' {
+		out = out[:len(out)-1]
+	}
+	return append(out, '\n')
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/token"
+	golang "github.com/Piechutowski/volt/nao/gen/golang"
 )
 
 // Pass carries everything an analyzer may inspect for one file.
@@ -22,8 +23,20 @@ type Pass struct {
 	File *ast.File
 	Info *check.Info
 
+	plan     **golang.Plan // shared by the analyzers of one Run
 	analyzer *Analyzer
 	diags    *[]diag.Diagnostic
+}
+
+// Plan is the file's naming plan: the checker's own when the caller
+// handed one to RunWithPlan, else built once for all analyzers of this
+// Run. An analyzer that reasons about generated Go names asks here
+// instead of planning again (D81).
+func (p *Pass) Plan() *golang.Plan {
+	if *p.plan == nil {
+		*p.plan = golang.PlanBuild(p.File, p.Info)
+	}
+	return *p.plan
 }
 
 // Reportf records a warning attributed to the running analyzer.
@@ -62,12 +75,18 @@ func register(a *Analyzer) { registry = append(registry, a) }
 // Run executes the given analyzers (all registered ones if none are named)
 // over a checked file and returns their warnings, sorted by position.
 func Run(f *ast.File, info *check.Info, analyzers ...*Analyzer) []diag.Diagnostic {
+	return RunWithPlan(f, info, nil, analyzers...)
+}
+
+// RunWithPlan is Run with the file's naming plan already built, as the
+// checker has it, so no analyzer builds it again.
+func RunWithPlan(f *ast.File, info *check.Info, plan *golang.Plan, analyzers ...*Analyzer) []diag.Diagnostic {
 	if len(analyzers) == 0 {
 		analyzers = All()
 	}
 	var diags []diag.Diagnostic
 	for _, a := range analyzers {
-		pass := &Pass{File: f, Info: info, analyzer: a, diags: &diags}
+		pass := &Pass{File: f, Info: info, plan: &plan, analyzer: a, diags: &diags}
 		a.Run(pass)
 	}
 	diag.Sort(diags)

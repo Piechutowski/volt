@@ -7,17 +7,16 @@ func Inspect(n Node, f func(Node) bool) {
 	if n == nil || !f(n) {
 		return
 	}
-	for _, c := range children(n) {
-		Inspect(c, f)
-	}
+	eachChild(n, func(c Node) { Inspect(c, f) })
 }
 
-func children(n Node) []Node {
-	var out []Node
+// eachChild visits n's children in source order without building a
+// list: a walk over a million-node file allocates nothing (D81).
+func eachChild(n Node, visit func(Node)) {
 	add := func(ns ...Node) {
 		for _, c := range ns {
 			if c != nil {
-				out = append(out, c)
+				visit(c)
 			}
 		}
 	}
@@ -144,7 +143,6 @@ func children(n Node) []Node {
 	case *RefValue:
 		add(n.Endpoint)
 	}
-	return out
 }
 
 // identOrNil avoids the typed-nil-in-interface trap for optional fields.

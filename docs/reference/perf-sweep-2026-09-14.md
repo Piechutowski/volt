@@ -183,3 +183,26 @@ In order of expected payoff, all filed in `roadmap.md`:
    most of its 14 bytes allocated per byte emitted.
 4. PERF-10 for the editor, where the file is the unit and one edit
    should cost one declaration.
+
+## Follow-up the same day: items 2 and 3 landed
+
+Vet now takes the checker's plan (`vet.RunWithPlan`, `Pass.Plan`)
+instead of building it again, and the AST walker visits children
+through a callback instead of allocating a slice per node. Generate
+sizes each emitter's buffer from the plan's column count, grows the
+output buffer once before joining, and `align.Finish` collapses blank
+lines in one pass over one copy. Same machine, same method, rerun:
+
+| Tables | Vet before | Vet after | Generate before | Generate after |
+|---|---|---|---|---|
+| 10 | 7.8 ms, 3.3 MB, 67K allocs | 1.9 ms, 0.9 MB, 5K allocs | 11.3 ms, 9.5 MB | 10.9 ms, 7.5 MB |
+| 40 | 29.7 ms, 13.2 MB, 268K | 7.7 ms, 3.5 MB, 20K | 32.5 ms, 39.8 MB | 27.2 ms, 29.9 MB |
+| 160 | 131.9 ms, 52.9 MB, 1073K | 44.0 ms, 14.1 MB, 81K | 131.7 ms, 159.4 MB | 113.6 ms, 118.8 MB |
+
+Vet is three times faster and allocates thirteen times fewer objects;
+it is now cheaper than Check, as an analyzer pass over checked data
+should be. Generate allocates a quarter less and runs about fifteen
+percent faster; its allocation count did not move, because those are
+the per-field `fmt` calls and string concatenations of the emitters,
+which is the next lever there. Load and Check are unchanged and the
+run-to-run noise on them is about ten percent.

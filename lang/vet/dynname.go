@@ -6,15 +6,13 @@
 // the generator's own (gen/golang), so rule and generator cannot drift.
 package vet
 
-import golang "github.com/Piechutowski/volt/nao/gen/golang"
-
 func init() { register(dynName) }
 
 var dynName = &Analyzer{
 	Name: "dynname",
 	Doc:  "reports declarations whose generated dynamic-query names (column-handle sets, option wrappers) collide in Go package scope",
 	Run: func(p *Pass) {
-		for _, c := range golang.DynNameCollisions(p.File, p.Info) {
+		for _, c := range p.Plan().DynNameCollisions() {
 			p.Reportf(c.Pos, "%s and %s both generate the Go name %s; rename one (e.g. with [model: '...'])",
 				c.First, c.Second, c.Name)
 		}

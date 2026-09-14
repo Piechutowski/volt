@@ -816,7 +816,13 @@ where the merge changed the facts.
   routes and selects, not twice as many (found by the first profiling
   sweep, `docs/reference/perf-sweep-2026-09-14.md`, which is the
   committed way to measure every phase and function against table
-  count). What it refuses: parallel parsing of one
+  count). The sweep's next two findings landed the same day: vet takes
+  the checker's plan (`vet.RunWithPlan`) instead of building its own,
+  and the AST walker visits children through a callback instead of a
+  slice per node, three times faster and thirteen times fewer
+  allocations; the generators size their buffers from the plan's
+  column count and finish a file in one pass, a quarter fewer bytes
+  allocated. What it refuses: parallel parsing of one
   file (the parser is a third of what remains and a declaration-level
   split is PERF-10's job) and a parallel schema check inside a
   package (its per-table cost is now small next to the parse).

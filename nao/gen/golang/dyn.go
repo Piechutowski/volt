@@ -206,10 +206,12 @@ type dynEmitter struct {
 }
 
 func (e *dynEmitter) run() {
+	e.body.Grow(e.plan.fieldCount() * 80) // measured: bytes of dyn per column
 	for _, t := range e.plan.tables {
 		e.tableEmit(t)
 	}
 	e.header()
+	e.out.Grow(e.body.Len())
 	e.out.WriteString(e.body.String())
 }
 
