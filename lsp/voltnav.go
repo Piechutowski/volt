@@ -85,8 +85,36 @@ func spanOf(n ast.Node) voltSpan {
 
 // buildVoltIndex walks every package's declarations twice: definitions
 // first (tables and pipelines), then the references that name them.
-func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
+// voltIndexMemo is what one project's navigation index keeps across
+// builds (D85): per package, the per-table occurrence memo and the
+// select hovers by the select they were rendered for. The zero value
+// is ready; one memo per project root, used by one analysis at a time.
+type voltIndexMemo struct {
+	index  map[string]*IndexMemo
+	hovers map[*lang.SelectInfo]string
+	next   map[*lang.SelectInfo]string
+}
+
+func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndexMemo) *voltIndex {
 	ix := &voltIndex{defs: map[voltSym]voltDef{}, texts: overlay}
+	if memo != nil {
+		if memo.index == nil {
+			memo.index = map[string]*IndexMemo{}
+		}
+		memo.next = make(map[*lang.SelectInfo]string, len(memo.hovers))
+		defer func() { memo.hovers, memo.next = memo.next, nil }()
+	}
+	hover := func(pkg *lang.Package, si *lang.SelectInfo) string {
+		if memo == nil {
+			return selectHoverMD(pkg, si)
+		}
+		md, ok := memo.hovers[si]
+		if !ok {
+			md = selectHoverMD(pkg, si)
+		}
+		memo.next[si] = md
+		return md
+	}
 
 	for path, pkg := range pr.Packages {
 		for _, d := range pkg.Merged().Decls {
@@ -112,7 +140,7 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 		for _, si := range pkg.Selects {
 			d := si.Decl
 			ix.define(voltSym{"select", path, d.Name.Name()},
-				voltDef{span: spanOf(d.Name), md: selectHoverMD(pkg, si)})
+				voltDef{span: spanOf(d.Name), md: hover(pkg, si)})
 		}
 		// A package "declaration" is its first file, so an import can
 		// jump somewhere useful.
@@ -135,7 +163,14 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 		if info == nil {
 			continue
 		}
-		single := NewIndex(pkg.Merged(), info)
+		var im *IndexMemo
+		if memo != nil {
+			if im = memo.index[path]; im == nil {
+				im = &IndexMemo{}
+				memo.index[path] = im
+			}
+		}
+		single := NewIndexMemo(pkg.Merged(), info, im)
 		for _, occ := range single.Occs {
 			if occ.ID.Kind != SymTable {
 				continue

@@ -257,6 +257,8 @@ agree. The LSP picks it up automatically.
   declaration too (D84): tables, models, lowered checks and selects
   whose inputs are the objects they were are answered from the last
   check, so the same edit checks in about 100 to 200 ms against 700.
+  The navigation index is kept by table too (D85), so the server's
+  whole analysis of that edit is about 100 to 160 ms.
 
 ## 7. Known limitations (documented trade-offs, not bugs)
 

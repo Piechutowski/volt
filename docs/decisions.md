@@ -926,3 +926,32 @@ where the merge changed the facts.
   routes (route expansion runs whole, about 50 ms of what remains,
   because a resources line's routes depend on every table it names
   and their conflicts on every other route).
+
+- **D85 — The editor's navigation index is kept by table across
+  analyses** (2026-09-14, roadmap PERF-10, `lsp/index.go`,
+  `lsp/voltnav.go`, `lsp/analysis.go`). With the check by declaration
+  (D84) the server's own index became three quarters of an edit on
+  the thousand-table file: every analysis rebuilt, from the whole
+  merged file, the occurrences that power go-to-definition, references
+  and rename, and inside that walk looked a table up by bare name with
+  a scan over every table. Now each project root's analysis keeps a
+  memo per package: a table whose declaration node and checked table
+  are the objects they were contributes the occurrences it did, in
+  the three places the build puts them, with its own column
+  declarations kept in the entry's map and reached through `Decl`
+  rather than copied into the shared map on every build; the select
+  hovers are kept by the select they were rendered for, which D84
+  keeps identical while its inputs are; the occurrence slice is sized
+  from the last build; tables by bare name are a map; a model's CRUD
+  method list is computed once and travels with the model the plan
+  memo reuses. A fresh entry's map is built before the entry can be
+  shared, so a build never mutates what a request may be reading.
+  Proven equal to a fresh build, definitions and references with
+  their spans, edit by edit, with the count of tables rebuilt
+  asserted. Measured on the thousand-table file, the server's whole
+  analysis per edit: 400 to 650 ms to 106 ms best, 163 ms mean; the
+  session's parse and check are about 100 of those. What it refuses:
+  sharing the declaration map between builds (a request on the last
+  result may be reading it), and memoizing the reference walk over
+  scopes, groups and selects (linear, small, and dependent on
+  everything).

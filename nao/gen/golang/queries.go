@@ -69,6 +69,9 @@ type tableModel struct {
 	sqlName string       // flattened SQLite table name, e.g. "core_users"
 	fields  []*fieldPlan // effective columns in definition order
 	pk      []*fieldPlan // identity columns in key order; empty = no pk
+
+	crud     []CRUDMethod // crudMethodsOf, once: a model reused by the memo keeps it (D85)
+	crudDone bool
 }
 
 // fieldPlan is one column resolved into Go and SQL naming.

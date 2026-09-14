@@ -34,6 +34,7 @@ type analysis struct {
 	gen     int
 	running bool
 	session *lang.Session
+	index   voltIndexMemo // the navigation index's memo across analyses (D85)
 	result  *projectResult
 }
 
@@ -61,7 +62,7 @@ func projectRootOf(path string) (string, bool) {
 // projectAnalyze runs the project pipeline once: load through the
 // session (a fresh load without one), check, index, vet on a clean
 // check. Nil when the root does not load.
-func projectAnalyze(root string, overlay map[string]string, session *lang.Session) *projectResult {
+func projectAnalyze(root string, overlay map[string]string, session *lang.Session, memo *voltIndexMemo) *projectResult {
 	var pr *lang.Project
 	var err error
 	if session != nil {
@@ -81,7 +82,7 @@ func projectAnalyze(root string, overlay map[string]string, session *lang.Sessio
 	res := &projectResult{root: root, pr: pr, diags: diags, overlay: overlay}
 	// After Check: it is what resolves each package's imports, which
 	// the index needs to follow a `db.Post` qualifier to its package.
-	res.vindex = buildVoltIndex(pr, overlay)
+	res.vindex = buildVoltIndex(pr, overlay, memo)
 	// Vet advice only on top of a clean check, matching the single-file
 	// policy: style notes stacked on hard errors are noise while typing.
 	if !diag.HasErrors(diags) {
@@ -181,7 +182,7 @@ func (s *Server) analysisRun(ctx *glsp.Context, root string, a *analysis) {
 				break
 			}
 		}
-		res := projectAnalyze(root, s.openTexts(), a.session)
+		res := projectAnalyze(root, s.openTexts(), a.session, &a.index)
 		s.mu.Lock()
 		if res != nil {
 			res.gen = gen

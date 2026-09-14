@@ -152,6 +152,13 @@ func (pl *Plan) CRUDMethod(name string) (tableKey string, m CRUDMethod, ok bool)
 func (pl *Plan) CRUDMethodNames() []string { return pl.names }
 
 func crudMethodsOf(t *tableModel) []CRUDMethod {
+	if !t.crudDone {
+		t.crud, t.crudDone = crudMethodsBuild(t), true
+	}
+	return t.crud
+}
+
+func crudMethodsBuild(t *tableModel) []CRUDMethod {
 	var methods []CRUDMethod
 	var key []SelectParam
 	for _, fp := range t.pk {

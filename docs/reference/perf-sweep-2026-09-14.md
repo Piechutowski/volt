@@ -255,3 +255,22 @@ The spread is the collector: the heap holds the whole project and a
 cycle lands in some edits and not others. What runs whole is route
 expansion and conflict detection, about 50 ms, and the group select
 over every table, which is checked again whenever any table changes.
+
+## Follow-up the same day: the server's index (D85)
+
+With the check by declaration, the language server's own navigation
+index was three quarters of an edit: rebuilt whole on every analysis,
+with a linear table lookup inside. It is now kept by table across
+analyses, sized from the last build, with tables by bare name a map.
+The server's whole analysis of one edit on the thousand-table file,
+twelve edits:
+
+| | Before | After |
+|---|---|---|
+| Best | 400 ms | 106 ms |
+| Mean | 550 ms | 163 ms |
+
+The session's parse and check are about 100 ms of that; the rest is
+the parts of the index that still run whole and the collector, whose
+share grows with the memos' retention (heap in use about 500 MB for
+this project after a dozen edits).
