@@ -131,8 +131,9 @@ a new interaction belongs in it.
 - What a session memo answers is a pure function of explicit inputs
   (D86): a top-level function whose parameters are its whole input,
   keyed on exactly those, never on a digest or a file stamp (D87). `cmd/volt`'s purity gate fails the build on
-  a read of package state, a write through an input, or a call into a
-  package that keeps state, transitively; its immutability walk fails
+  a read of package state, a write through an input (an append to an
+  input's array included), a call through a function value it did not
+  make, or a call into a package that keeps state, transitively (D102); its immutability walk fails
   the build on a write to a memoized result outside its producer, or
   to a node or token outside the front end (D92); a new memo adds its
   function to the gate's targets in the same commit.

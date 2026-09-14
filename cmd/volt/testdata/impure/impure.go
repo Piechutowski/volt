@@ -56,3 +56,56 @@ func (q *Quiet) Name() string { return q.N }
 
 // CallsInterface calls a method that one implementation makes impure.
 func CallsInterface(n Namer) string { return n.Name() }
+
+// AppendsToInput appends to a slice of its input: with spare capacity,
+// the write lands in the input's own array.
+func AppendsToInput(t *Table) []string { return append(t.Rows, "x") }
+
+// CallsFuncValue calls a function value it did not make, which could
+// do anything.
+func CallsFuncValue(t *Table, f func(*Table)) { f(t) }
+
+// Hooked carries a function value.
+type Hooked struct{ Hook func() }
+
+// CallsFuncField calls a function value held by its input.
+func CallsFuncField(h *Hooked) { h.Hook() }
+
+// CallsOwnClosure calls a closure it made, whose body the walk covers.
+func CallsOwnClosure(t *Table) int {
+	f := func() int { return len(t.Rows) }
+	return f()
+}
+
+// RecursesThenWrites writes through what a recursive call returns:
+// the input, once the recursion bottoms out.
+func RecursesThenWrites(t *Table, n int) *Table {
+	if n == 0 {
+		return t
+	}
+	r := RecursesThenWrites(t, n-1)
+	r.Rows = nil
+	return r
+}
+
+// AppendsToOwn appends to a slice of its own making, elements from
+// the input included: fresh memory, allowed.
+func AppendsToOwn(t *Table) []string {
+	out := append([]string{}, t.Rows...)
+	out = append(out, "x")
+	return out
+}
+
+// AppendsToAlias appends to a local that aliases the input's array.
+func AppendsToAlias(t *Table) []string {
+	rows := t.Rows
+	return append(rows, "x")
+}
+
+// RecursesPurely recurses and writes nothing: allowed.
+func RecursesPurely(t *Table, n int) int {
+	if n == 0 {
+		return len(t.Rows)
+	}
+	return RecursesPurely(t, n-1) + 1
+}

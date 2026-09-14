@@ -1395,3 +1395,33 @@ where the merge changed the facts.
   That is the development practice of D79 and D85 as a test. What it
   refuses: recovery that differs by construct, and a diagnostic or a
   server reply that changes without a golden changing with it.
+
+- **D102 — The purity gate's three holes are closed: an append writes
+  the array it may share, a function value from outside is not
+  called, and a recursive analysis runs to its fixpoint**
+  (2026-09-14, `cmd/volt/purity_test.go`, `cmd/volt/testdata/impure`).
+  D86's walk let three things through. `append(t.Rows, x)` on an
+  input's slice with spare capacity writes the input's own array, and
+  the walk saw only that the result carried taint; now an append to a
+  slice whose backing array may be an input's is a write to whatever
+  holds the slice, and the walk tracks, per local, whether an array is
+  fresh (a literal, a make, an append to a fresh slice) or an alias,
+  so `append(append([]T{}, in...), x)` passes and `rows := t.Rows;
+  append(rows, x)` does not. A call through a function value the walk
+  did not see made, a func-typed parameter or field or a method
+  value, could do anything, and the walk judged it by its arguments;
+  now the purity walk refuses it, and a closure literal assigned in
+  the function, whose body the walk covers where it is written, is the
+  one function value it may call. A recursive call answered with an
+  empty summary, so a write through what the recursion returned, the
+  input once it bottomed out, went unseen; now a recursive call answers
+  with the summary found so far, the interrupted analysis repeats until
+  that summary stops growing, and a summary computed against another
+  analysis's provisional one is not remembered while that analysis is
+  under way. Each hole has its fixture, refused, beside the shapes the
+  gate must allow. The tightened gate found two things in D99's
+  lowering and both are fixed: a diagnostic position passed as a
+  closure is now a value with a method, and the appends it flagged
+  were to fresh memory, which the provenance tracking proves. What it
+  refuses: an alias the gate cannot see through, which is copied
+  instead, and a function value from outside, which is data instead.

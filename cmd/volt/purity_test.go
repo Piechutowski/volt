@@ -156,7 +156,7 @@ func gatePackages(t *testing.T) []*packages.Package {
 // walk; shared selects the immutability walk over the purity walk.
 func newPurity(t *testing.T, pkgs []*packages.Package, shared bool) *purity {
 	t.Helper()
-	p := &purity{byPath: map[string]*packages.Package{}, decls: map[*types.Func]funcDecl{}, summaries: map[string]*summary{}, active: map[string]bool{}, shared: shared}
+	p := &purity{byPath: map[string]*packages.Package{}, decls: map[*types.Func]funcDecl{}, summaries: map[string]*summary{}, active: map[string]bool{}, provisional: map[string]*summary{}, seen: map[string]bool{}, shared: shared}
 	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
 		if len(pkg.Errors) > 0 && strings.HasPrefix(pkg.PkgPath, module) {
 			t.Fatalf("%s: %v", pkg.PkgPath, pkg.Errors[0])
@@ -423,6 +423,13 @@ type purity struct {
 	summaries map[string]*summary
 	active    map[string]bool
 	problems  []string
+	// provisional is a recursive function's summary while its own
+	// analysis is under way, refined to a fixpoint (D102); hitStack
+	// records, for every analysis under way, the active analyses its
+	// walk answered with a provisional summary.
+	provisional map[string]*summary
+	hitStack    []map[string]bool
+	seen        map[string]bool // problems, reported once each
 
 	// The immutability walk (D92): every value from outside a function
 	// is tainted; writes to these types are recorded, and a target's
@@ -496,7 +503,14 @@ func (p *purity) analyze(fn *types.Func, recvTaint bool, paramTaint []bool) *sum
 		return s
 	}
 	if p.active[key] {
-		return &summary{} // a recursive call: the results are judged by the outer analysis
+		// A recursive call answers with the summary found so far; every
+		// analysis under way that consumed it repeats until the summary
+		// stops growing, and none of them is remembered while the
+		// analysis it depends on is still under way (D102).
+		for _, hits := range p.hitStack {
+			hits[key] = true
+		}
+		return p.provisional[key]
 	}
 	fd, ok := p.decls[fn]
 	if !ok {
@@ -504,40 +518,96 @@ func (p *purity) analyze(fn *types.Func, recvTaint bool, paramTaint []bool) *sum
 	}
 	p.active[key] = true
 	defer delete(p.active, key)
-	fa := &funcAnalysis{p: p, pkg: fd.pkg, info: fd.pkg.TypesInfo, taint: map[types.Object]bool{}}
+	hits := map[string]bool{}
+	p.hitStack = append(p.hitStack, hits)
+	defer func() { p.hitStack = p.hitStack[:len(p.hitStack)-1] }()
 	sig := fn.Type().(*types.Signature)
-	if sig.Recv() != nil && fd.decl.Recv != nil {
-		for _, field := range fd.decl.Recv.List {
-			for _, name := range field.Names {
-				if obj := fd.pkg.TypesInfo.Defs[name]; obj != nil {
-					fa.taint[obj] = recvTaint
+	prov := &summary{results: make([]bool, sig.Results().Len())}
+	for {
+		p.provisional[key] = prov
+		fa := &funcAnalysis{p: p, pkg: fd.pkg, info: fd.pkg.TypesInfo, taint: map[types.Object]bool{}, made: map[types.Object]bool{}, array: map[types.Object]bool{}}
+		if sig.Recv() != nil && fd.decl.Recv != nil {
+			for _, field := range fd.decl.Recv.List {
+				for _, name := range field.Names {
+					if obj := fd.pkg.TypesInfo.Defs[name]; obj != nil {
+						fa.taint[obj] = recvTaint
+					}
 				}
 			}
 		}
-	}
-	i := 0
-	for _, field := range fd.decl.Type.Params.List {
-		if len(field.Names) == 0 {
-			i++
-			continue
-		}
-		for _, name := range field.Names {
-			if obj := fd.pkg.TypesInfo.Defs[name]; obj != nil && i < len(paramTaint) {
-				fa.taint[obj] = paramTaint[i]
+		i := 0
+		for _, field := range fd.decl.Type.Params.List {
+			if len(field.Names) == 0 {
+				i++
+				continue
 			}
-			i++
+			for _, name := range field.Names {
+				if obj := fd.pkg.TypesInfo.Defs[name]; obj != nil && i < len(paramTaint) {
+					fa.taint[obj] = paramTaint[i]
+				}
+				i++
+			}
+		}
+		fa.results = make([]bool, sig.Results().Len())
+		fa.stmts(fd.decl.Body.List)
+		s := &summary{results: fa.results, writes: writesDedup(fa.writes)}
+		if !hits[key] || summaryEqual(s, prov) {
+			delete(p.provisional, key)
+			tentative := false
+			for k := range hits {
+				if k != key && p.active[k] {
+					tentative = true // computed against another analysis's provisional summary
+				}
+			}
+			if !tentative {
+				p.summaries[key] = s
+			}
+			return s
+		}
+		prov = s
+	}
+}
+
+// writesDedup keeps each write once.
+func writesDedup(ws []taintedWrite) []taintedWrite {
+	seen := map[taintedWrite]bool{}
+	out := ws[:0:0]
+	for _, w := range ws {
+		if !seen[w] {
+			seen[w] = true
+			out = append(out, w)
 		}
 	}
-	fa.results = make([]bool, sig.Results().Len())
-	fa.stmts(fd.decl.Body.List)
-	s := &summary{results: fa.results, writes: fa.writes}
-	p.summaries[key] = s
-	return s
+	return out
+}
+
+// summaryEqual reports whether two summaries of one analysis agree:
+// taint only grows between iterations, so equal sizes of deduplicated
+// writes mean equal writes.
+func summaryEqual(a, b *summary) bool {
+	if len(a.results) != len(b.results) || len(a.writes) != len(b.writes) {
+		return false
+	}
+	for i := range a.results {
+		if a.results[i] != b.results[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // funcAnalysis walks one function body, tracking which locals carry a
 // tainted value and judging every read, write and call.
 type funcAnalysis struct {
+	// made are the function values this function made itself, whose
+	// bodies its walk covered; calling any other function value is
+	// refused (D102).
+	made map[types.Object]bool
+	// array records, for a local holding a slice, whether its backing
+	// array may be an input's: false after a literal, make, or an
+	// append to a fresh slice; a local not recorded is as tainted as
+	// its value (D102).
+	array   map[types.Object]bool
 	p       *purity
 	pkg     *packages.Package
 	info    *types.Info
@@ -547,7 +617,12 @@ type funcAnalysis struct {
 }
 
 func (fa *funcAnalysis) problem(node ast.Node, format string, args ...any) {
-	fa.p.problems = append(fa.p.problems, fmt.Sprintf("%s: %s", fa.pkg.Fset.Position(node.Pos()), fmt.Sprintf(format, args...)))
+	msg := fmt.Sprintf("%s: %s", fa.pkg.Fset.Position(node.Pos()), fmt.Sprintf(format, args...))
+	if fa.p.seen[msg] {
+		return // a fixpoint iteration meets the same statements again
+	}
+	fa.p.seen[msg] = true
+	fa.p.problems = append(fa.p.problems, msg)
 }
 
 func (fa *funcAnalysis) stmts(list []ast.Stmt) {
@@ -565,6 +640,9 @@ func (fa *funcAnalysis) stmt(s ast.Stmt) {
 		taints := fa.rhsTaints(s.Rhs, len(s.Lhs))
 		for i, lhs := range s.Lhs {
 			fa.write(lhs, taints[i], s.Tok.String() == ":=")
+			if len(s.Rhs) == len(s.Lhs) {
+				fa.madeMark(lhs, s.Rhs[i])
+			}
 		}
 	case *ast.IncDecStmt:
 		fa.write(s.X, false, false)
@@ -576,6 +654,9 @@ func (fa *funcAnalysis) stmt(s ast.Stmt) {
 					for i, name := range vs.Names {
 						if obj := fa.info.Defs[name]; obj != nil {
 							fa.taint[obj] = len(vs.Values) > 0 && taints[i]
+						}
+						if i < len(vs.Values) {
+							fa.madeMark(name, vs.Values[i])
 						}
 					}
 				}
@@ -682,6 +763,66 @@ func (fa *funcAnalysis) stmt(s ast.Stmt) {
 		}
 	default:
 		fa.problem(s, "purity gate: unhandled statement %T", s)
+	}
+}
+
+// madeMark records what a variable assigned from rhs holds: a
+// function literal of this function, whose body the walk covers where
+// it is written, or a slice whose backing array is fresh or not.
+func (fa *funcAnalysis) madeMark(lhs ast.Expr, rhs ast.Expr) {
+	id, ok := lhs.(*ast.Ident)
+	if !ok {
+		return
+	}
+	obj := fa.info.Defs[id]
+	if obj == nil {
+		obj = fa.info.Uses[id]
+	}
+	if obj == nil {
+		return
+	}
+	if _, ok := ast.Unparen(rhs).(*ast.FuncLit); ok {
+		fa.made[obj] = true
+	}
+	if _, ok := obj.Type().Underlying().(*types.Slice); ok {
+		fa.array[obj] = fa.arrayTainted(rhs)
+	}
+}
+
+// arrayTainted reports whether the backing array of a slice expression
+// may be an input's: a literal, a make and an append to a fresh slice
+// give fresh memory, slicing keeps the array, a local answers what it
+// was assigned, and anything else is as tainted as its value.
+func (fa *funcAnalysis) arrayTainted(e ast.Expr) bool {
+	switch x := ast.Unparen(e).(type) {
+	case *ast.CompositeLit:
+		return false
+	case *ast.CallExpr:
+		if id, ok := ast.Unparen(x.Fun).(*ast.Ident); ok {
+			if b, ok := fa.info.Uses[id].(*types.Builtin); ok {
+				switch b.Name() {
+				case "make":
+					return false
+				case "append":
+					if len(x.Args) > 0 {
+						return fa.arrayTainted(x.Args[0])
+					}
+					return false
+				}
+			}
+		}
+		return fa.expr(e)
+	case *ast.SliceExpr:
+		return fa.arrayTainted(x.X)
+	case *ast.Ident:
+		if obj := fa.info.Uses[x]; obj != nil {
+			if t, ok := fa.array[obj]; ok {
+				return t
+			}
+		}
+		return fa.expr(e)
+	default:
+		return fa.expr(e)
 	}
 }
 
@@ -1070,7 +1211,11 @@ func (fa *funcAnalysis) call(x *ast.CallExpr) []bool {
 		case *types.Func:
 			fn = obj
 		case *types.Var:
-			// a function value: a closure analyzed where it was made, or an input
+			// a function value: a closure this function made, whose body
+			// its walk covered, or one from outside, which could do anything
+			if !fa.p.shared && !fa.made[obj] {
+				fa.problem(x, "a pure function calls no function value it did not make")
+			}
 			return []bool{anyArg || fa.taint[obj]}
 		default:
 			return []bool{anyArg}
@@ -1081,7 +1226,10 @@ func (fa *funcAnalysis) call(x *ast.CallExpr) []bool {
 			if m, ok := sel.Obj().(*types.Func); ok {
 				fn = m
 			} else {
-				// a method value or a func-typed field
+				// a method value or a func-typed field: a function value from outside
+				if !fa.p.shared {
+					fa.problem(x, "a pure function calls no function value it did not make")
+				}
 				return []bool{recvTaint || anyArg}
 			}
 		} else if obj, ok := fa.info.Uses[f.Sel].(*types.Func); ok {
@@ -1185,6 +1333,13 @@ func (fa *funcAnalysis) builtin(name string, x *ast.CallExpr, argTaint []bool) [
 		for _, a := range argTaint {
 			t = t || a
 		}
+		if len(x.Args) > 0 && fa.arrayTainted(x.Args[0]) {
+			// The backing array may be an input's: a write to it, and
+			// so to whatever holds the slice (D102). The elements are
+			// copied in, not written through.
+			written, _ := fa.sharedTarget(x.Args[0])
+			fa.taintedWrite(x.Args[0], written)
+		}
 		return []bool{t}
 	case "copy", "delete", "clear":
 		if len(x.Args) > 0 {
@@ -1247,7 +1402,15 @@ func TestPurityGateBites(t *testing.T) {
 		"WritesResultOfInput": "writes through no input",
 		"SortsInput":          "writes through no input",
 		"CallsInterface":      "writes no package variable",
+		"AppendsToInput":      "writes through no input",
+		"CallsFuncValue":      "calls no function value it did not make",
+		"CallsFuncField":      "calls no function value it did not make",
+		"RecursesThenWrites":  "writes through no input",
 		"Pure":                "",
+		"CallsOwnClosure":     "",
+		"RecursesPurely":      "",
+		"AppendsToOwn":        "",
+		"AppendsToAlias":      "writes through no input",
 	} {
 		p.problems = nil
 		fn := pkg.Types.Scope().Lookup(name).(*types.Func)

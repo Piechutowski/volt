@@ -339,7 +339,7 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 			continue
 		}
 		method := modelOrBase(m) + si.MethodSuffix
-		qr := l.queryBind(ds.Name.Pos(), qualPos, "GET", params, qual, target, local, method, func(string) token.Position { return ds.Pos() })
+		qr := l.queryBind(ds.Name.Pos(), qualPos, "GET", params, qual, target, local, method, paramAt{at: ds.Pos()})
 		if qr == nil {
 			continue
 		}
@@ -508,15 +508,14 @@ var queryValueTypes = map[string]bool{
 // method's (§V4.8).
 func (l *routeLowering) queryRef(r *ast.Route, method string, params []Param, qual, target string, local bool) *QueryRef {
 	last := r.Handler.Parts[len(r.Handler.Parts)-1]
-	return l.queryBind(last.Pos(), r.Handler.Parts[0].Pos(), method, params, qual, target, local, last.Name(),
-		func(name string) token.Position { return segPos(r, name) })
+	return l.queryBind(last.Pos(), r.Handler.Parts[0].Pos(), method, params, qual, target, local, last.Name(), paramAt{route: r})
 }
 
 // queryBind resolves a query method by name in the data package — an
 // imported one, or this package when local — and binds the route's
 // parameters; segAt locates a path parameter for diagnostics. Shared by
 // query routes, resources [default] and datasets.
-func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, params []Param, qual, target string, local bool, name string, segAt func(string) token.Position) *QueryRef {
+func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, params []Param, qual, target string, local bool, name string, segAt paramAt) *QueryRef {
 	pkgName, hasSchema, _ := l.dataPackage(target)
 	ref := qual + "." + name
 	if local {
@@ -624,7 +623,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		case strings.HasPrefix(sp.goType, "[]"):
 			qp.Source = FromList
 			if pp, inPath := byName[sp.name]; inPath {
-				l.errorf(segAt(pp.Name), "V4", "list parameter %q of %s cannot be a path parameter; pass it as a repeated query key (§V4.8)", sp.name, ref)
+				l.errorf(segAt.pos(pp.Name), "V4", "list parameter %q of %s cannot be a path parameter; pass it as a repeated query key (§V4.8)", sp.name, ref)
 				ok = false
 			}
 		default:
@@ -632,13 +631,13 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 				qp.Source = FromPath
 				bound[sp.name] = true
 				if pp.Wild {
-					l.errorf(segAt(pp.Name), "V4", "parameter %q of %s cannot be a wildcard (§V4.8)", sp.name, ref)
+					l.errorf(segAt.pos(pp.Name), "V4", "parameter %q of %s cannot be a wildcard (§V4.8)", sp.name, ref)
 					ok = false
 				} else if pp.Type.GoType() != sp.goType {
 					if KnownParamType(sp.goType) {
-						l.errorf(segAt(pp.Name), "V4", "path parameter %q is %s but %s takes %s; spell it :%s(%s) (§V4.8)", sp.name, pp.Type.GoType(), ref, sp.goType, sp.name, sp.goType)
+						l.errorf(segAt.pos(pp.Name), "V4", "path parameter %q is %s but %s takes %s; spell it :%s(%s) (§V4.8)", sp.name, pp.Type.GoType(), ref, sp.goType, sp.name, sp.goType)
 					} else {
-						l.errorf(segAt(pp.Name), "V4", "parameter %q of %s is %s, which a path segment cannot carry (§V4.1.3); pass it in the query string (§V4.8)", sp.name, ref, sp.goType)
+						l.errorf(segAt.pos(pp.Name), "V4", "parameter %q of %s is %s, which a path segment cannot carry (§V4.1.3); pass it in the query string (§V4.8)", sp.name, ref, sp.goType)
 					}
 					ok = false
 				}
@@ -654,7 +653,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	}
 	for _, p := range params {
 		if !bound[p.Name] {
-			l.errorf(segAt(p.Name), "V4", "path parameter %q is not a parameter of %s (§V4.8)", p.Name, ref)
+			l.errorf(segAt.pos(p.Name), "V4", "path parameter %q is not a parameter of %s (§V4.8)", p.Name, ref)
 			ok = false
 		}
 	}
@@ -671,6 +670,20 @@ func litSeg(n string, at token.Position) *ast.Segment {
 
 // segPos finds the position of a named parameter segment in the route's
 // own path, falling back to the route.
+// paramAt locates a path parameter for a diagnostic: in a route, the
+// segment naming it; for a dataset or a resources, the item itself.
+type paramAt struct {
+	route *ast.Route
+	at    token.Position
+}
+
+func (p paramAt) pos(name string) token.Position {
+	if p.route != nil {
+		return segPos(p.route, name)
+	}
+	return p.at
+}
+
 func segPos(r *ast.Route, name string) token.Position {
 	for _, seg := range r.Path.Segments {
 		if seg.Kind != ast.SegLit && seg.Name.Name() == name {
@@ -959,7 +972,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 					res.Ref(), a.Op, a.Name, crudAbsent(a.Op), strings.ToLower(a.Name))
 				continue
 			}
-			qr = l.queryBind(res.Name.Pos(), qualPos, a.Methods[0], params, qual, target, local, cm.Name, func(string) token.Position { return res.Pos() })
+			qr = l.queryBind(res.Name.Pos(), qualPos, a.Methods[0], params, qual, target, local, cm.Name, paramAt{at: res.Pos()})
 			if qr == nil {
 				continue
 			}
