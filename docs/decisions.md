@@ -1228,3 +1228,20 @@ where the merge changed the facts.
   server packages under the race detector. What it refuses: a shared
   object outside this list, and a concurrency argument that the bar
   does not exercise.
+
+- **D97 — The trust boundary with Go is six standard packages and one
+  constant, named, and kept no wider than what is reached**
+  (2026-09-14, `cmd/volt/purity_test.go`). Nothing inside the project
+  proves that `strings`, `strconv` and `unicode` are functions of
+  their arguments and their constant tables, that `fmt`'s internal
+  pools never reach an answer, that `sort` writes only what it is
+  handed (which the gate counts as a write since D92), or that a
+  compiled `regexp` answers the same question every time; nor that
+  `go/build`'s default context stays what it was for the life of the
+  process, which the Go function scan behind D87 keys on. These are
+  trusted, and the trust is written down here rather than implied. The
+  gate keeps the list exact: the purity walk records every standard
+  package a memoized computation calls into and fails on an entry none
+  reaches, so the first walk struck `bytes`, `cmp`, `errors`, `maps`,
+  `slices` and `unicode/utf8` from a list that had been written from
+  expectation. What it refuses: trust granted in advance of use.

@@ -69,10 +69,14 @@ var immutableVars = map[string]bool{
 	module + "/nao/inflect.irregular":            true,
 }
 
-// pureStdlib are the standard packages whose functions keep no state.
+// pureStdlib are the standard packages whose functions keep no state:
+// the trust boundary with Go (D97), kept exactly as wide as the memoized
+// computations reach, since the walk fails on an entry none of them
+// calls into.
 var pureStdlib = map[string]bool{
-	"strings": true, "strconv": true, "fmt": true, "sort": true, "slices": true, "maps": true,
-	"errors": true, "unicode": true, "unicode/utf8": true, "bytes": true, "cmp": true,
+	"strings": true, "strconv": true, "unicode": true, // functions of their arguments and of constant tables
+	"fmt":    true, // formatting: what it pools internally never reaches an answer
+	"sort":   true, // writes only what it is handed, which the gate counts as a write
 	"regexp": true, // a compiled expression answers the same question every time
 }
 
@@ -198,6 +202,13 @@ func TestMemoizedComputationsArePure(t *testing.T) {
 		p.analyze(obj, false, p.allTainted(obj))
 	}
 	p.immutableVarsNeverAssigned()
+	// The trusted standard packages are exactly the ones reached: an
+	// entry no target calls into is trust for nothing (D97).
+	for path := range pureStdlib {
+		if !p.stdlibUsed[path] {
+			p.problems = append(p.problems, fmt.Sprintf("pureStdlib trusts %s, which no memoized computation reaches", path))
+		}
+	}
 	sort.Strings(p.problems)
 	for _, problem := range p.problems {
 		t.Error(problem)
@@ -405,6 +416,8 @@ type purity struct {
 	// impls are the module's implementations of each interface method
 	// a walk meets (D93), found once.
 	impls map[*types.Func][]*types.Func
+	// stdlibUsed are the standard packages the walk called into (D97).
+	stdlibUsed map[string]bool
 }
 
 // implementations are the methods of the module's named types that
@@ -1049,6 +1062,10 @@ func (fa *funcAnalysis) call(x *ast.CallExpr) []bool {
 	}
 	path := fn.Pkg().Path()
 	if !strings.HasPrefix(path, module) {
+		if fa.p.stdlibUsed == nil {
+			fa.p.stdlibUsed = map[string]bool{}
+		}
+		fa.p.stdlibUsed[path] = true
 		if idx, ok := stdlibMutators[fn.FullName()]; ok && idx < len(x.Args) {
 			fa.mutated(x.Args[idx])
 		} else if !pureStdlib[path] && !fa.p.shared {
