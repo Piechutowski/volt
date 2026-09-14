@@ -6,9 +6,11 @@ package lang_test
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -142,5 +144,36 @@ func TestGenerateScheduleIndependent(t *testing.T) {
 				t.Fatalf("%s differs between one CPU and %d", name, runtime.GOMAXPROCS(0))
 			}
 		}
+	}
+}
+
+// TestCheckIsIdempotent proves a second Check of the same Project
+// reports the same diagnostics and leaves every package with the same
+// results as the first: the phases start from nothing each time, so a
+// tool that re-checks a loaded project (a profiler's loop, a server)
+// never sees routes or selects accumulate (D81).
+func TestCheckIsIdempotent(t *testing.T) {
+	root := scheduleFixture(t)
+	pr, err := lang.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shape := func() string {
+		var b strings.Builder
+		for _, path := range slices.Sorted(maps.Keys(pr.Packages)) {
+			pkg := pr.Packages[path]
+			fmt.Fprintf(&b, "%s: %d routes %d selects %d checkfns %d pipelines\n", path, len(pkg.Routes), len(pkg.Selects), len(pkg.CheckFns), len(pkg.Pipelines))
+		}
+		return b.String()
+	}
+	d1 := diagsRender(lang.Check(pr))
+	s1 := shape()
+	d2 := diagsRender(lang.Check(pr))
+	s2 := shape()
+	if d1 != d2 {
+		t.Fatalf("second Check differs:\n--- first\n%s--- second\n%s", d1, d2)
+	}
+	if s1 != s2 {
+		t.Fatalf("second Check left different results:\n--- first\n%s--- second\n%s", s1, s2)
 	}
 }

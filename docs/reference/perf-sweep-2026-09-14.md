@@ -1,0 +1,185 @@
+# Profiling sweep, 2026-09-14: one file, 10 to 160 tables
+
+Pinned research (D49: `reference/` is consulted, not maintained). The
+numbers are from one machine on one day; the method is repeatable and
+lives in the test suite, so a later sweep is compared against this one
+by rerunning it, not by trusting it.
+
+**Method.** `lang/profile_sweep_test.go` (`TestProfileSweep`, skipped
+unless `VOLT_SWEEP_DIR` is set) writes one-file projects with
+`internal/corpus` at 10, 20, 40, 80 and 160 tables of 150 columns, the
+stress shape of D80 at smaller sizes, and runs each phase on its own:
+Load (scan and parse), Check, Vet, Generate (every file of every
+package, DDL included). Per phase and size: the best wall time of three
+unprofiled runs, one run's allocated bytes, allocation count and heap in
+use right after the run, then enough profiled runs to fill about two
+seconds of CPU profile. The charts are drawn by the test.
+
+```sh
+VOLT_SWEEP_DIR=/tmp/sweep go test ./lang -run TestProfileSweep -count=1 -timeout 30m -v
+```
+
+Machine: 4 CPUs, Intel Xeon 2.80 GHz, go1.27.0, Linux, commit 50effa2
+plus the idempotence fix below. Nothing else was running.
+
+## Charts
+
+![Wall time per phase](perf-sweep/wall.svg)
+
+![Bytes allocated per run](perf-sweep/alloc.svg)
+
+![Heap in use after the run](perf-sweep/heap.svg)
+
+![Allocations per run](perf-sweep/allocs.svg)
+
+## Numbers
+
+Wall time, best of three, in milliseconds:
+
+| Tables | Source | Load | Check | Vet | Generate | Output |
+|---|---|---|---|---|---|---|
+| 10 | 160 KB | 2.2 | 10.5 | 7.8 | 11.3 | 0.7 MB |
+| 20 | 320 KB | 5.5 | 13.9 | 12.8 | 19.9 | 1.4 MB |
+| 40 | 640 KB | 9.2 | 25.9 | 29.7 | 32.5 | 2.9 MB |
+| 80 | 1.3 MB | 17.4 | 47.5 | 47.4 | 65.6 | 5.8 MB |
+| 160 | 2.6 MB | 35.9 | 94.4 | 131.9 | 131.7 | 11.6 MB |
+| growth 160/10 | 16× | 16.3× | 9.0× | 16.9× | 11.7× | 16× |
+
+Bytes allocated by one run, in MB, and allocations in thousands:
+
+| Tables | Load | Check | Vet | Generate |
+|---|---|---|---|---|
+| 10 | 2.0 / 20 | 3.6 / 24 | 3.3 / 67 | 9.5 / 70 |
+| 20 | 4.0 / 39 | 7.0 / 48 | 6.6 / 134 | 19.6 / 139 |
+| 40 | 8.0 / 78 | 14.0 / 95 | 13.2 / 268 | 39.8 / 278 |
+| 80 | 16.0 / 156 | 27.9 / 189 | 26.3 / 537 | 79.6 / 554 |
+| 160 | 31.9 / 312 | 55.6 / 378 | 52.9 / 1073 | 159.4 / 1108 |
+
+Per table at 160, the steady-state cost: Load 0.22 ms and 200 KB, Check
+0.59 ms and 350 KB, Vet 0.82 ms and 330 KB but 6,700 allocations,
+Generate 0.82 ms and 1 MB allocated for 72 KB of output.
+
+## Reading
+
+**Every phase is linear in tables.** Doubling the input doubles each
+phase within noise, and the 160/10 ratios sit at or under 16, the
+input ratio. Check's 9× is a fixed cost showing at 10 tables (the
+routing phase's setup and the plan's enum and import work), not
+sublinear growth. Heap in use after a run grows linearly too; nothing
+is retained across runs.
+
+**The collector takes 15 to 20 percent of every phase.** In each flat
+profile the top runtime entries are the mark phase
+(`tryDeferToSpanScan`, `scanObjectsSmall`) and span clearing. The
+front end's data is pointers: an 88-byte token, an AST node per
+allocation, positions carrying a filename string. This is the PERF-9
+floor and it is the same in every phase because every phase walks that
+data.
+
+**Vet costs more than Check at 160 tables**, and allocates three times
+as many objects. Two reasons in its profile: the dyn-name analyzer
+rebuilds the naming plan the checker already built (23 percent of
+Vet), and the generic AST walker allocates a child slice per node
+(`ast.children`, 26 percent, most of the million allocations). Vet runs
+only on demand and its warnings are memoized in the editor session, so
+this is a cost of `volt vet` on the command line, not of the edit loop.
+
+**Generate allocates 14 bytes for every byte it emits.** Its flat
+profile is `memmove` first: builders grow by copying, blocks are
+aligned by re-rendering, and every column's Go name, type and tag is
+formatted with `fmt`. The output is byte-compared before it is
+written, so a no-op regeneration pays this once and writes nothing.
+
+## Per function
+
+Cumulative share of the phase's CPU at 160 tables, this package's own
+functions, top entries. A caller and its callee both appear when the
+callee is the whole of the caller.
+
+### Load
+
+| Function | Share | What it is |
+|---|---|---|
+| `parser.ParseFile` | 64% | the parse, tokens to AST |
+| `parser.(*parser).column` | 31% | one column: name, type, settings |
+| `scanner.Scan` | 27% | the scan, bytes to tokens |
+| `parser.(*parser).settingList` | 16% | `[pk, not null, note: '...']` |
+| `parser.(*parser).typeRef` | 11% | the column type |
+| `parser.(*parser).ident` + `qualName` | 18% | identifier nodes, one allocation each |
+
+Flat: the collector, then `expect`, `tokEmit`, `next`. A column of the
+corpus is about six tokens and four allocations.
+
+### Check
+
+| Function | Share | What it is |
+|---|---|---|
+| `golang.tableBuild` / `fieldBuild` | 27% | the naming plan: Go names, types, tags per column, on the worker pool |
+| `check.File` | 13% | schema semantics: columns expanded through partials, refs, indexes |
+| `checker.routing` / `scopeWalk` | 10% | route expansion and conflict trie |
+| `checker.resourcesExpand` | 9% | default resources, five routes per table |
+| `checker.tableChecks` / `checkEnv` | 8% | typed checks lowered to Go and SQL |
+| `checker.dataQueries` | 7% | groups, preds, selects and the select index |
+| `Plan.ModelFields` | 6% | field lists asked by the check lowering |
+| `checker.queryBind` | 5% | binding a query route: now a map lookup |
+
+Flat: the collector, `ast.(*Ident).Name`, map hashing of strings,
+`SettingList.Get`. The plan's share is the cost of computing Go names
+with string building per column; it is the first candidate for
+interning (PERF-9).
+
+### Vet
+
+| Function | Share | What it is |
+|---|---|---|
+| `vet.Run` | 47% | every analyzer over the merged file |
+| `ast.Inspect` / `ast.children` | 29% | the generic walker, allocating a child slice per node |
+| `golang.tableBuild` via `DynNameCollisions` | 23% | the plan built a second time |
+| three analyzers | 7% each | the `init.func` entries are analyzer closures |
+
+The other half of Vet's cumulative time is the collector and map work
+inside the analyzers.
+
+### Generate
+
+| Function | Share | What it is |
+|---|---|---|
+| `Plan.Models` / `modelsGenerate` | 26% | structs, params structs, enums |
+| `Plan.Queries` | 17% | CRUD methods |
+| `Plan.Dyn` | 15% | one typed handle per column |
+| `generator.tableEmit` / `fieldEmit` | 24% | one table's struct and fields |
+| `align.(*Block).WriteTo` | 11% | column alignment of struct fields and tags |
+| `generator.paramsEmit` / `paramFieldsWrite` | 10% | create and update params structs |
+
+Flat: `memmove` 14%, the collector 15%, `concatstrings`,
+`SettingList.Get` (asked per field for `pk`, `unique`, `note`, ...).
+The models file is the biggest of the outputs (434K of 1.45M lines at
+a thousand tables) and the emitters' cost follows the output.
+
+## What the sweep found on its first run
+
+The first run reported Generate at 382 ms and 324 MB for 10 tables,
+which no output of 0.7 MB explains. The cause was in the method, and it
+was a real bug: `lang.Check` appended routes, selects and check
+functions to a package on every call, so a project checked twice
+carried everything twice, and the sweep's profiled loop checked
+hundreds of times. `Check` is now idempotent: a package's results are
+reset before its phases run, proven by `TestCheckIsIdempotent`, which
+failed before the fix. No user-facing path checked a project twice,
+but the language server's session and any profiler loop could have.
+
+## What to do with this
+
+In order of expected payoff, all filed in `roadmap.md`:
+
+1. PERF-9, the flat front end: tokens as offsets, AST in slabs,
+   interned names. It is the collector's 15 to 20 percent in every
+   phase plus the plan's string building, so roughly a third of Check
+   and Load.
+2. Vet: hand the analyzers the checker's plan instead of rebuilding
+   it, and give the walker a non-allocating child visit. Halves Vet.
+3. Generate: size builders from the plan (bytes per table are
+   predictable) and align blocks in place. A fifth of Generate, and
+   most of its 14 bytes allocated per byte emitted.
+4. PERF-10 for the editor, where the file is the unit and one edit
+   should cost one declaration.

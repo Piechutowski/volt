@@ -88,10 +88,17 @@ func pkgCapture(pkg *Package) pkgResult {
 	}
 }
 
+// resultsReset clears everything the per-package phases write, so a
+// second Check starts where the first did.
+func (p *Package) resultsReset() {
+	pkgResult{}.restore(p)
+}
+
 func (r pkgResult) restore(pkg *Package) {
 	pkg.schema, pkg.plan = r.schema, r.plan
 	pkg.Groups, pkg.Preds, pkg.Selects, pkg.CheckFns = r.groups, r.preds, r.selects, r.checkFns
 	pkg.selectIndex()
+	pkg.paramsValid = nil
 	pkg.Pipelines, pkg.Routes, pkg.Controllers = r.pipelines, r.routes, r.controllers
 }
 

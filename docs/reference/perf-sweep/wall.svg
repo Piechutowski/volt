@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12">
+<rect width="760" height="420" fill="#0d1117"/>
+<text x="70" y="24" fill="#e6edf3" font-size="16">Wall time per phase</text>
+<line x1="70" y1="370.0" x2="740" y2="370.0" stroke="#30363d"/>
+<text x="62" y="374.0" fill="#8b949e" text-anchor="end">0.00</text>
+<line x1="70" y1="306.0" x2="740" y2="306.0" stroke="#30363d"/>
+<text x="62" y="310.0" fill="#8b949e" text-anchor="end">26.4</text>
+<line x1="70" y1="242.0" x2="740" y2="242.0" stroke="#30363d"/>
+<text x="62" y="246.0" fill="#8b949e" text-anchor="end">52.8</text>
+<line x1="70" y1="178.0" x2="740" y2="178.0" stroke="#30363d"/>
+<text x="62" y="182.0" fill="#8b949e" text-anchor="end">79.1</text>
+<line x1="70" y1="114.0" x2="740" y2="114.0" stroke="#30363d"/>
+<text x="62" y="118.0" fill="#8b949e" text-anchor="end">106</text>
+<line x1="70" y1="50.0" x2="740" y2="50.0" stroke="#30363d"/>
+<text x="62" y="54.0" fill="#8b949e" text-anchor="end">132</text>
+<text x="14" y="210" fill="#8b949e" transform="rotate(-90 14 210)">ms</text>
+<line x1="111.9" y1="50" x2="111.9" y2="370" stroke="#30363d"/>
+<text x="111.9" y="388" fill="#8b949e" text-anchor="middle">10</text>
+<line x1="153.8" y1="50" x2="153.8" y2="370" stroke="#30363d"/>
+<text x="153.8" y="388" fill="#8b949e" text-anchor="middle">20</text>
+<line x1="237.5" y1="50" x2="237.5" y2="370" stroke="#30363d"/>
+<text x="237.5" y="388" fill="#8b949e" text-anchor="middle">40</text>
+<line x1="405.0" y1="50" x2="405.0" y2="370" stroke="#30363d"/>
+<text x="405.0" y="388" fill="#8b949e" text-anchor="middle">80</text>
+<line x1="740.0" y1="50" x2="740.0" y2="370" stroke="#30363d"/>
+<text x="740.0" y="388" fill="#8b949e" text-anchor="middle">160</text>
+<text x="405" y="412" fill="#8b949e" text-anchor="middle">tables (150 columns each, one file)</text>
+<polyline points="111.9,364.7 153.8,356.7 237.5,347.6 405.0,327.7 740.0,282.8" fill="none" stroke="#8ab4f8" stroke-width="2"/>
+<circle cx="111.9" cy="364.7" r="3" fill="#8ab4f8"/>
+<circle cx="153.8" cy="356.7" r="3" fill="#8ab4f8"/>
+<circle cx="237.5" cy="347.6" r="3" fill="#8ab4f8"/>
+<circle cx="405.0" cy="327.7" r="3" fill="#8ab4f8"/>
+<circle cx="740.0" cy="282.8" r="3" fill="#8ab4f8"/>
+<rect x="630" y="41" width="10" height="10" fill="#8ab4f8"/><text x="646" y="50" fill="#e6edf3">load</text>
+<polyline points="111.9,344.6 153.8,336.2 237.5,307.2 405.0,254.7 740.0,140.9" fill="none" stroke="#f28b82" stroke-width="2"/>
+<circle cx="111.9" cy="344.6" r="3" fill="#f28b82"/>
+<circle cx="153.8" cy="336.2" r="3" fill="#f28b82"/>
+<circle cx="237.5" cy="307.2" r="3" fill="#f28b82"/>
+<circle cx="405.0" cy="254.7" r="3" fill="#f28b82"/>
+<circle cx="740.0" cy="140.9" r="3" fill="#f28b82"/>
+<rect x="630" y="57" width="10" height="10" fill="#f28b82"/><text x="646" y="66" fill="#e6edf3">check</text>
+<polyline points="111.9,351.2 153.8,339.0 237.5,297.9 405.0,255.0 740.0,50.0" fill="none" stroke="#fdd663" stroke-width="2"/>
+<circle cx="111.9" cy="351.2" r="3" fill="#fdd663"/>
+<circle cx="153.8" cy="339.0" r="3" fill="#fdd663"/>
+<circle cx="237.5" cy="297.9" r="3" fill="#fdd663"/>
+<circle cx="405.0" cy="255.0" r="3" fill="#fdd663"/>
+<circle cx="740.0" cy="50.0" r="3" fill="#fdd663"/>
+<rect x="630" y="73" width="10" height="10" fill="#fdd663"/><text x="646" y="82" fill="#e6edf3">vet</text>
+<polyline points="111.9,342.5 153.8,321.8 237.5,291.1 405.0,210.8 740.0,50.4" fill="none" stroke="#81c995" stroke-width="2"/>
+<circle cx="111.9" cy="342.5" r="3" fill="#81c995"/>
+<circle cx="153.8" cy="321.8" r="3" fill="#81c995"/>
+<circle cx="237.5" cy="291.1" r="3" fill="#81c995"/>
+<circle cx="405.0" cy="210.8" r="3" fill="#81c995"/>
+<circle cx="740.0" cy="50.4" r="3" fill="#81c995"/>
+<rect x="630" y="89" width="10" height="10" fill="#81c995"/><text x="646" y="98" fill="#e6edf3">generate</text>
+</svg>

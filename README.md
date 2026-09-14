@@ -120,6 +120,7 @@ go test ./... ./lsp/... ./cmd/volt/...   # everything, ORM + tooling modules
 go test ./gen/router -update         # refresh goldens after gen changes
 go run ./cmd/volt gen ./itest/blog   # refresh the itest fixture
 go test ./lang -run '^$' -bench . -benchmem > lang/testdata/bench_baseline.txt   # refresh the (ungated) baseline
+VOLT_SWEEP_DIR=/tmp/sweep go test ./lang -run TestProfileSweep -count=1 -timeout 30m -v   # time and profile every phase at 10..160 tables; charts in /tmp/sweep
 volt stress ./big && time volt check ./big && time volt gen --sql ./big && time go build -C ./big ./...   # one file, 1000 tables of 150 columns: the limits of check, gen, the LSP and the Go compiler (D80)
 ./scripts/sync-grammar.sh            # mirror grammar + preflight Zed
 ```

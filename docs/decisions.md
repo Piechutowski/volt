@@ -810,7 +810,13 @@ where the merge changed the facts.
   to 0.7 s, generate 10.7 s to about 2 s, the language server's
   analysis 15.5 s to 2.4 s cold and 0.4 s unchanged. The linearity
   test gained the one-file dimension, which fails on the select scan
-  and passes with the index. What it refuses: parallel parsing of one
+  and passes with the index. `Check` is idempotent on a Project: a
+  package's results are reset before its phases run, so a server or a
+  profiling loop that checks a loaded project again sees the same
+  routes and selects, not twice as many (found by the first profiling
+  sweep, `docs/reference/perf-sweep-2026-09-14.md`, which is the
+  committed way to measure every phase and function against table
+  count). What it refuses: parallel parsing of one
   file (the parser is a third of what remains and a declaration-level
   split is PERF-10's job) and a parallel schema check inside a
   package (its per-table cost is now small next to the parse).

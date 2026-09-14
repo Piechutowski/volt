@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12">
+<rect width="760" height="420" fill="#0d1117"/>
+<text x="70" y="24" fill="#e6edf3" font-size="16">Heap in use after the run</text>
+<line x1="70" y1="370.0" x2="740" y2="370.0" stroke="#30363d"/>
+<text x="62" y="374.0" fill="#8b949e" text-anchor="end">0.00</text>
+<line x1="70" y1="306.0" x2="740" y2="306.0" stroke="#30363d"/>
+<text x="62" y="310.0" fill="#8b949e" text-anchor="end">14.8</text>
+<line x1="70" y1="242.0" x2="740" y2="242.0" stroke="#30363d"/>
+<text x="62" y="246.0" fill="#8b949e" text-anchor="end">29.5</text>
+<line x1="70" y1="178.0" x2="740" y2="178.0" stroke="#30363d"/>
+<text x="62" y="182.0" fill="#8b949e" text-anchor="end">44.3</text>
+<line x1="70" y1="114.0" x2="740" y2="114.0" stroke="#30363d"/>
+<text x="62" y="118.0" fill="#8b949e" text-anchor="end">59.1</text>
+<line x1="70" y1="50.0" x2="740" y2="50.0" stroke="#30363d"/>
+<text x="62" y="54.0" fill="#8b949e" text-anchor="end">73.9</text>
+<text x="14" y="210" fill="#8b949e" transform="rotate(-90 14 210)">MB</text>
+<line x1="111.9" y1="50" x2="111.9" y2="370" stroke="#30363d"/>
+<text x="111.9" y="388" fill="#8b949e" text-anchor="middle">10</text>
+<line x1="153.8" y1="50" x2="153.8" y2="370" stroke="#30363d"/>
+<text x="153.8" y="388" fill="#8b949e" text-anchor="middle">20</text>
+<line x1="237.5" y1="50" x2="237.5" y2="370" stroke="#30363d"/>
+<text x="237.5" y="388" fill="#8b949e" text-anchor="middle">40</text>
+<line x1="405.0" y1="50" x2="405.0" y2="370" stroke="#30363d"/>
+<text x="405.0" y="388" fill="#8b949e" text-anchor="middle">80</text>
+<line x1="740.0" y1="50" x2="740.0" y2="370" stroke="#30363d"/>
+<text x="740.0" y="388" fill="#8b949e" text-anchor="middle">160</text>
+<text x="405" y="412" fill="#8b949e" text-anchor="middle">tables (150 columns each, one file)</text>
+<polyline points="111.9,353.8 153.8,339.9 237.5,313.2 405.0,260.4 740.0,154.3" fill="none" stroke="#8ab4f8" stroke-width="2"/>
+<circle cx="111.9" cy="353.8" r="3" fill="#8ab4f8"/>
+<circle cx="153.8" cy="339.9" r="3" fill="#8ab4f8"/>
+<circle cx="237.5" cy="313.2" r="3" fill="#8ab4f8"/>
+<circle cx="405.0" cy="260.4" r="3" fill="#8ab4f8"/>
+<circle cx="740.0" cy="154.3" r="3" fill="#8ab4f8"/>
+<rect x="630" y="41" width="10" height="10" fill="#8ab4f8"/><text x="646" y="50" fill="#e6edf3">load</text>
+<polyline points="111.9,354.0 153.8,340.8 237.5,310.8 405.0,258.7 740.0,162.9" fill="none" stroke="#f28b82" stroke-width="2"/>
+<circle cx="111.9" cy="354.0" r="3" fill="#f28b82"/>
+<circle cx="153.8" cy="340.8" r="3" fill="#f28b82"/>
+<circle cx="237.5" cy="310.8" r="3" fill="#f28b82"/>
+<circle cx="405.0" cy="258.7" r="3" fill="#f28b82"/>
+<circle cx="740.0" cy="162.9" r="3" fill="#f28b82"/>
+<rect x="630" y="57" width="10" height="10" fill="#f28b82"/><text x="646" y="66" fill="#e6edf3">check</text>
+<polyline points="111.9,347.0 153.8,344.9 237.5,321.9 405.0,278.4 740.0,200.3" fill="none" stroke="#fdd663" stroke-width="2"/>
+<circle cx="111.9" cy="347.0" r="3" fill="#fdd663"/>
+<circle cx="153.8" cy="344.9" r="3" fill="#fdd663"/>
+<circle cx="237.5" cy="321.9" r="3" fill="#fdd663"/>
+<circle cx="405.0" cy="278.4" r="3" fill="#fdd663"/>
+<circle cx="740.0" cy="200.3" r="3" fill="#fdd663"/>
+<rect x="630" y="73" width="10" height="10" fill="#fdd663"/><text x="646" y="82" fill="#e6edf3">vet</text>
+<polyline points="111.9,341.6 153.8,320.5 237.5,279.3 405.0,211.6 740.0,50.0" fill="none" stroke="#81c995" stroke-width="2"/>
+<circle cx="111.9" cy="341.6" r="3" fill="#81c995"/>
+<circle cx="153.8" cy="320.5" r="3" fill="#81c995"/>
+<circle cx="237.5" cy="279.3" r="3" fill="#81c995"/>
+<circle cx="405.0" cy="211.6" r="3" fill="#81c995"/>
+<circle cx="740.0" cy="50.0" r="3" fill="#81c995"/>
+<rect x="630" y="89" width="10" height="10" fill="#81c995"/><text x="646" y="98" fill="#e6edf3">generate</text>
+</svg>

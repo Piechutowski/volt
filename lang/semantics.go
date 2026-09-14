@@ -54,6 +54,11 @@ func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 			}
 		}
 	}
+	// A package checked before answers again from nothing: Check is
+	// idempotent on a Project, whatever ran on it earlier (D81).
+	for _, path := range fresh {
+		pr.Packages[path].resultsReset()
+	}
 	phase := func(fn func(*checker, *Package)) {
 		for i, ds := range c.perPackage(fresh, fn) {
 			pkgDiags[fresh[i]] = append(pkgDiags[fresh[i]], ds...)
