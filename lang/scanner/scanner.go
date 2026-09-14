@@ -32,16 +32,13 @@ import (
 // continues after an error where possible, so a broken file still yields a
 // best-effort token stream for the parser.
 func Scan(filename, src string) ([]token.Token, []diag.Diagnostic) {
-	// §3.2.1: carriage returns are discarded wherever they appear; a
-	// source without any is scanned in place.
-	if strings.IndexByte(src, '\r') >= 0 {
-		src = strings.ReplaceAll(src, "\r", "")
-	}
 	return ScanFile(token.NewFile(filename, src))
 }
 
-// ScanFile scans a whole file whose text holds no carriage returns;
-// every position is in f. Every token that begins a top-level element
+// ScanFile scans a whole file as written; every position is in f. A
+// carriage return is discarded wherever it appears (§3.2.1) and stays
+// in the text: it keeps its byte, so offsets match the file, and has
+// no column (D90). Every token that begins a top-level element
 // (§3.2.5) is flagged; nothing stops there.
 func ScanFile(f *token.File) ([]token.Token, []diag.Diagnostic) {
 	// Schema text runs about six bytes per token; sizing the slice
@@ -118,6 +115,7 @@ type Scanner struct {
 
 	nlBefore bool
 	spBefore bool
+	cr       bool // a carriage return was stepped over inside the current token
 
 	// depth counts the open braces, never below zero: an unquoted
 	// identifier in the first column at depth zero begins a top-level
@@ -146,25 +144,35 @@ func (c cursor) position(f *token.File) token.Position { return f.At(c.Offset, c
 
 const eof = rune(-1)
 
+// crSkip is the offset of the first byte at or after off that is not a
+// carriage return: the cursor never rests on one (§3.2.1).
+func (s *Scanner) crSkip(off int) int {
+	for off < len(s.src) && s.src[off] == '\r' {
+		off++
+	}
+	return off
+}
+
 func (s *Scanner) peek() rune {
-	if s.pos.Offset >= len(s.src) {
+	off := s.crSkip(s.pos.Offset)
+	if off >= len(s.src) {
 		return eof
 	}
-	if c := s.src[s.pos.Offset]; c < utf8.RuneSelf {
+	if c := s.src[off]; c < utf8.RuneSelf {
 		return rune(c) // ASCII, the common case: no decoding
 	}
-	r, _ := utf8.DecodeRuneInString(s.src[s.pos.Offset:])
+	r, _ := utf8.DecodeRuneInString(s.src[off:])
 	return r
 }
 
 func (s *Scanner) peekAt(n int) rune {
-	off := s.pos.Offset
+	off := s.crSkip(s.pos.Offset)
 	for ; n > 0; n-- {
 		if off >= len(s.src) {
 			return eof
 		}
 		_, w := utf8.DecodeRuneInString(s.src[off:])
-		off += w
+		off = s.crSkip(off + w)
 	}
 	if off >= len(s.src) {
 		return eof
@@ -174,6 +182,10 @@ func (s *Scanner) peekAt(n int) rune {
 }
 
 func (s *Scanner) next() rune {
+	if off := s.crSkip(s.pos.Offset); off != s.pos.Offset {
+		s.pos.Offset = off // the carriage return keeps its byte and has no column
+		s.cr = true
+	}
 	if s.pos.Offset >= len(s.src) {
 		return eof
 	}
@@ -191,9 +203,24 @@ func (s *Scanner) next() rune {
 	return r
 }
 
-func (s *Scanner) mark() { s.start = s.pos; s.val.Reset() }
+// mark begins a token at the cursor, past any carriage return there.
+func (s *Scanner) mark() {
+	s.pos.Offset = s.crSkip(s.pos.Offset)
+	s.start = s.pos
+	s.val.Reset()
+	s.cr = false
+}
 
 func (s *Scanner) raw() string { return s.src[s.start.Offset:s.pos.Offset] }
+
+// rawVal is the token's text as a value: its carriage returns, if it
+// stepped over any, discarded (§3.2.1).
+func (s *Scanner) rawVal() string {
+	if s.cr {
+		return strings.ReplaceAll(s.raw(), "\r", "")
+	}
+	return s.raw()
+}
 
 func (s *Scanner) emit(kind token.Kind, val string) {
 	s.tokEmit(token.Token{Kind: kind, Val: val})
@@ -473,7 +500,7 @@ func colorScan(s *Scanner) stateFn {
 	for isIdentChar(s.peek()) {
 		s.next()
 	}
-	s.tokEmit(token.Token{Kind: token.COLOR, Val: strings.TrimPrefix(s.raw(), "#")})
+	s.tokEmit(token.Token{Kind: token.COLOR, Val: strings.TrimPrefix(s.rawVal(), "#")})
 	return anyScan
 }
 
@@ -489,7 +516,7 @@ func identScan(s *Scanner) stateFn {
 	for isIdentChar(s.peek()) {
 		s.next()
 	}
-	s.tokEmit(token.Token{Kind: token.IDENT, Val: s.raw()})
+	s.tokEmit(token.Token{Kind: token.IDENT, Val: s.rawVal()})
 	return anyScan
 }
 
@@ -525,7 +552,7 @@ func numberOrIdentScan(s *Scanner) stateFn {
 				hasLetter = true
 				continue
 			}
-			s.tokEmit(token.Token{Kind: token.NUMBER, Val: s.raw()})
+			s.tokEmit(token.Token{Kind: token.NUMBER, Val: s.rawVal()})
 			return anyScan
 		case isLetter(r):
 			hasLetter = true
@@ -533,14 +560,14 @@ func numberOrIdentScan(s *Scanner) stateFn {
 		default:
 			if hasLetter {
 				if nDots > 0 {
-					s.errorf("syntax", "invalid number %q (§3.9)", s.raw())
-					s.tokEmit(token.Token{Kind: token.ILLEGAL, Val: s.raw()})
+					s.errorf("syntax", "invalid number %q (§3.9)", s.rawVal())
+					s.tokEmit(token.Token{Kind: token.ILLEGAL, Val: s.rawVal()})
 					return anyScan
 				}
-				s.tokEmit(token.Token{Kind: token.IDENT, Val: s.raw()})
+				s.tokEmit(token.Token{Kind: token.IDENT, Val: s.rawVal()})
 				return anyScan
 			}
-			s.tokEmit(token.Token{Kind: token.NUMBER, Val: s.raw()})
+			s.tokEmit(token.Token{Kind: token.NUMBER, Val: s.rawVal()})
 			return anyScan
 		}
 	}

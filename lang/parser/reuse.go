@@ -55,9 +55,6 @@ type ReuseStats struct {
 // place that is still a chunk's. It returns the file, its diagnostics,
 // what to hand to the next parse, and the work done.
 func ParseFileReuse(filename, src string, prev *Reuse) (*ast.File, []diag.Diagnostic, *Reuse, ReuseStats) {
-	if strings.IndexByte(src, '\r') >= 0 {
-		src = strings.ReplaceAll(src, "\r", "")
-	}
 	old := map[string][]*chunk{} // candidates by first line
 	if prev != nil && prev.name == filename {
 		for _, c := range prev.chunks {

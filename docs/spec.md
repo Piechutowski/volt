@@ -276,7 +276,9 @@ sp      = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
 
 1. Carriage return (U+000D) is discarded wherever it appears and produces no
    token; files with Windows (CRLF) line endings are therefore handled
-   transparently.
+   transparently. It keeps its place in the source: a tool that reports
+   positions counts its byte in offsets and gives it no column, so every
+   position points into the file as written.
 2. DBML is **newline-sensitive**: a line break terminates statements such as
    column definitions, enum values, record rows, and settings-free field
    lines. Productions in this specification reference `newline` explicitly

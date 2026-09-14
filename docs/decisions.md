@@ -1089,3 +1089,21 @@ where the merge changed the facts.
   gate now also refuses an import of `unsafe` in any package of the
   three modules. What it refuses: reading memory the type system does
   not describe, anywhere.
+
+- **D90 — A carriage return keeps its byte and has no column**
+  (2026-09-14, spec §3.2.1, `lang/scanner/scanner.go`,
+  `lang/token/token.go`). The scanner used to strip every carriage
+  return before scanning, so on a file with Windows line endings every
+  byte offset after the first line pointed one byte early per line into
+  the text the editor holds, and the server's offset-driven features
+  (definition, references, the diagnostic's underline) drifted. Now the
+  source is scanned as written: the cursor steps over a carriage return
+  wherever it stands, counting its byte and no column, a token never
+  starts on one, a value never contains one, and a token's text is the
+  raw source, so offsets, lines and columns all describe the file the
+  editor shows. Proven: every conformance snippet parses under CRLF to
+  the same nodes and diagnostics at the same lines and columns as under
+  LF, each offset larger by the carriage returns before it; the scanner
+  test pins a carriage return inside a token, between tokens and inside
+  a multi-line string. What it refuses: rewriting the source before
+  scanning it, for any reason.

@@ -253,9 +253,12 @@ func (t Token) End() Position {
 	end := t.Pos
 	text := t.Text()
 	for _, r := range text {
-		if r == '\n' {
+		switch r {
+		case '\n':
 			end.line++
 			end.col = 0
+		case '\r':
+			continue // a byte without a column (§3.2.1)
 		}
 		end.col++
 	}

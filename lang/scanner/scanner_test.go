@@ -146,13 +146,35 @@ func TestNewlineFlag(t *testing.T) {
 }
 
 func TestCRLF(t *testing.T) {
-	// §3.2.1: CR is discarded.
+	// §3.2.1: CR is discarded; it keeps its byte and has no column
+	// (D90), so offsets match the file as written.
 	toks, errs := Scan("t", "a\r\nb")
 	if len(errs) > 0 {
 		t.Fatalf("errors: %v", errs)
 	}
 	if !toks[1].NLBefore {
 		t.Error("CRLF should still mark NLBefore")
+	}
+	if p := toks[1].Pos; p.Line() != 2 || p.Column() != 1 || p.Offset() != 3 {
+		t.Errorf("b at %s+%d, want 2:1+3", p, p.Offset())
+	}
+	if e := toks[0].End(); e.Line() != 1 || e.Column() != 2 || e.Offset() != 1 {
+		t.Errorf("a ends at %s+%d, want 1:2+1", e, e.Offset())
+	}
+	// Inside a token it is discarded from the value and kept in the
+	// text; between tokens it is neither a token nor whitespace.
+	toks, errs = Scan("t", "'''\r\n  ab\r\n'''\r\nx\ry [\r\n")
+	if len(errs) > 0 {
+		t.Fatalf("errors: %v", errs)
+	}
+	if s := toks[0]; s.Val != "ab" || s.Text() != "'''\r\n  ab\r\n'''" || s.End().Line() != 3 || s.End().Column() != 4 {
+		t.Errorf("multi-line string = %+v (text %q), want value \"ab\" ending at 3:4", s, s.Text())
+	}
+	if id := toks[1]; id.Val != "xy" || id.Text() != "x\ry" || id.Pos.Line() != 4 || id.End().Column() != 3 {
+		t.Errorf("identifier = %+v (text %q), want value \"xy\" ending at column 3", id, id.Text())
+	}
+	if br := toks[2]; br.Kind != token.LBRACKET || !br.SpBefore || br.Pos.Column() != 4 {
+		t.Errorf("bracket = %+v, want column 4 after a space", br)
 	}
 }
 

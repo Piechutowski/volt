@@ -90,7 +90,7 @@ func TestParseFileReuseIsTheParse(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		src := strings.ReplaceAll(string(raw), "\r", "")
+		src := string(raw)
 		_, _, base, _ := parser.ParseFileReuse(path, src, nil)
 		texts := parser.ChunkTexts(base)
 		offsets := []int{0}
@@ -159,4 +159,57 @@ Ref: posts.id < tags.id
 	step("append", base+"\nTable extra {\n  id integer [pk]\n}\n", 2, 4)
 	// The package clause has no double space: its chunk survives.
 	step("whole rewrite", strings.ReplaceAll(base, "  ", "\t"), 4, 1)
+}
+
+// TestParseFileCRLFPositions proves a file with Windows line endings
+// parses as its Unix twin (D90): the same nodes and diagnostics at the
+// same lines and columns, every offset larger by the carriage returns
+// before it, so a position points into the file as written.
+func TestParseFileCRLFPositions(t *testing.T) {
+	type at struct{ line, col, off int }
+	positions := func(f *ast.File) []at {
+		var out []at
+		for _, d := range f.Decls {
+			ast.Inspect(d, func(n ast.Node) bool {
+				out = append(out, at{n.Pos().Line(), n.Pos().Column(), n.Pos().Offset()}, at{n.End().Line(), n.End().Column(), n.End().Offset()})
+				return true
+			})
+		}
+		return append(out, at{f.EOF.Line(), f.EOF.Column(), f.EOF.Offset()})
+	}
+	for _, path := range snippetPaths(t) {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lf := strings.ReplaceAll(string(raw), "\r", "")
+		crlf := strings.ReplaceAll(lf, "\n", "\r\n")
+		f1, d1 := parser.ParseFile(path, lf)
+		f2, d2 := parser.ParseFile(path, crlf)
+		if a, b := diagsText(d1), diagsText(d2); a != b {
+			t.Errorf("%s: diagnostics differ under CRLF\n--- LF\n%s--- CRLF\n%s", path, a, b)
+			continue
+		}
+		p1, p2 := positions(f1), positions(f2)
+		if len(p1) != len(p2) {
+			t.Errorf("%s: %d positions under LF, %d under CRLF", path, len(p1), len(p2))
+			continue
+		}
+		for i := range p1 {
+			want := at{p1[i].line, p1[i].col, p1[i].off + p1[i].line - 1}
+			if p2[i] != want {
+				t.Errorf("%s: position %d is %+v under CRLF, want %+v", path, i, p2[i], want)
+				break
+			}
+		}
+	}
+}
+
+func diagsText(ds []diag.Diagnostic) string {
+	var b strings.Builder
+	for _, d := range ds {
+		b.WriteString(d.String())
+		b.WriteByte('\n')
+	}
+	return b.String()
 }

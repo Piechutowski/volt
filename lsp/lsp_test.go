@@ -366,3 +366,34 @@ func labels(items []protocol.CompletionItem) []string {
 	}
 	return out
 }
+
+// TestCRLFDocumentPositions proves the server's offsets point into the
+// document as the editor holds it when the file has Windows line
+// endings (D90): the diagnostic's underline covers exactly the
+// duplicate column's name, and definition on a reference resolves
+// through the byte offset the cursor maps to. Both drifted by one byte
+// per line while the scanner stripped carriage returns first.
+func TestCRLFDocumentPositions(t *testing.T) {
+	text := "Table posts {\r\n  id int [pk]\r\n  title text\r\n  title text\r\n}\r\n\r\nRef: posts.id > posts.title\r\n"
+	d := doc(t, text)
+	found := false
+	for _, dg := range d.LSPDiagnostics() {
+		if !strings.Contains(dg.Message, "duplicate column") {
+			continue
+		}
+		found = true
+		if r := dg.Range; r.Start.Line != 3 || r.Start.Character != 2 || r.End.Line != 3 || r.End.Character != 7 {
+			t.Errorf("duplicate column underlined at %+v, want line 3, characters 2 to 7", r)
+		}
+	}
+	if !found {
+		t.Fatalf("no duplicate column diagnostic: %v", d.Diags)
+	}
+	loc := d.Definition(posOf(t, text, "posts", 1))
+	if loc == nil {
+		t.Fatal("no definition for the table named in the Ref")
+	}
+	if s := loc.Range.Start; s.Line != 0 || s.Character != 6 {
+		t.Errorf("definition at %+v, want line 0 character 6", loc.Range)
+	}
+}
