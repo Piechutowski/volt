@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Piechutowski/volt/lang/token"
@@ -174,5 +175,58 @@ func TestQuotedIdent(t *testing.T) {
 	got := one(t, `"double precision"`)
 	if got.Kind != token.IDENT || !got.Quoted || got.Val != "double precision" {
 		t.Errorf("quoted ident = %+v", got)
+	}
+}
+
+// TestElementStarts pins the element boundary of §3.2.5 in the
+// scanner (D88): which tokens begin a top-level element, where a chunk
+// scan stops and what its EOF says, and what StartsDecl answers about
+// the bytes after a chunk.
+func TestElementStarts(t *testing.T) {
+	src := "Table a {\n  b int\n}\nx.y\n  indented\n\"quoted\" z\n2fa\nEnum e {\n  v\n}\n/* c */ w\n"
+	toks, errs := Scan("t", src)
+	if len(errs) != 0 {
+		t.Fatalf("errors: %v", errs)
+	}
+	var starts []string
+	for _, tk := range toks {
+		if tk.DeclStart {
+			starts = append(starts, tk.Val)
+		}
+	}
+	if want := []string{"Table", "x", "2fa", "Enum"}; strings.Join(starts, " ") != strings.Join(want, " ") {
+		t.Errorf("element starts %q, want %q", starts, want)
+	}
+
+	chunk, _, end, bound := ScanChunk(token.NewFile("t", src), nil)
+	if want := strings.Index(src, "x.y"); end != want || !bound {
+		t.Errorf("chunk ends at %d bound=%v, want %d and true", end, bound, want)
+	}
+	eof := chunk[len(chunk)-1]
+	if eof.Kind != token.EOF || eof.Val != ElementStart || eof.Pos.Line() != 4 || eof.Pos.Column() != 1 || !eof.NLBefore {
+		t.Errorf("chunk EOF = %+v, want the element start at 4:1", eof)
+	}
+	if got := len(chunk) - 1; got != 6 { // Table a { b int }
+		t.Errorf("chunk holds %d tokens, want 6", got)
+	}
+	open := "Table a {\n  b int\n"
+	if _, _, end, bound := ScanChunk(token.NewFile("t", open), nil); end != len(open) || bound {
+		t.Errorf("open chunk ends at %d bound=%v, want %d and false", end, bound, len(open))
+	}
+
+	for text, want := range map[string]bool{
+		"x.y\n":            true,
+		"2fa x\n":          true,
+		"Enum e {":         true,
+		"  indented\n":     false,
+		"\"quoted\" z\n":   false,
+		"// c\nTable a {}": false,
+		"123\n":            false,
+		"{\n":              false,
+		"":                 false,
+	} {
+		if got := StartsDecl(text); got != want {
+			t.Errorf("StartsDecl(%q) = %v, want %v", text, got, want)
+		}
 	}
 }

@@ -858,10 +858,12 @@ where the merge changed the facts.
   `lang/token`). The one-file layout made a keystroke cost the whole
   file's parse: 340 ms for the thousand-table `schema.volt`, before
   any check. Now `parser.ParseFileReuse` cuts a source into chunks, one
-  per top-level declaration — a line that begins with a letter outside
-  every brace, string and comment starts one; what precedes the first
-  is the head, and blank and comment lines between declarations belong
-  to the preceding one — and parses each chunk as a `token.File` of
+  per top-level declaration — an unquoted identifier in the first
+  column outside every brace, string and comment starts one, the
+  language's own element boundary since D88 (§3.2.5); what precedes
+  the first is the head, and blank and comment lines between
+  declarations belong to the preceding one — and parses each chunk as
+  a `token.File` of
   its own whose base offset and line say where it sits in the whole.
   The next parse of the same file keeps every chunk whose text is
   unchanged, nodes and diagnostics as they are, and relocates it by one
@@ -871,13 +873,13 @@ where the merge changed the facts.
   atomically, because a reused declaration is shared with a result a
   server thread may still be reading, and for a reused declaration the
   new place is the right one in any case. The session's every parse
-  goes through it and counts declarations parsed and reused; the
-  whole-file `ParseFile` remains for the command line. Proven: the
-  chunked parse of every conformance snippet, valid and invalid, is
-  the whole-file parse (same declarations, positions and diagnostics),
-  and an edit sequence through valid and broken states re-parses one
-  declaration per edit with the session's diagnostics equal to a fresh
-  analysis. Measured on the thousand-table file: 22 ms per edit
+  goes through it and counts declarations parsed and reused; since
+  D88 `ParseFile` is this parse from nothing, and the whole-file path
+  is gone. Proven: an edit sequence through valid and broken states
+  re-parses one declaration per edit with the session's diagnostics
+  equal to a fresh analysis (and, since D88, the parse with reuse is
+  the parse from nothing under every boundary-moving edit of every
+  snippet). Measured on the thousand-table file: 22 ms per edit
   against 340 ms. What it refuses: guessing chunk boundaries from
   keywords alone (the lexical state is tracked, so a keyword inside a
   string or a block is not a boundary), and mutating a shared chunk
@@ -1025,3 +1027,48 @@ where the merge changed the facts.
   refuses: a key that is a digest of the inputs rather than the
   inputs, and a freshness test that consults metadata in place of the
   bytes.
+
+- **D88 — An element boundary is a rule of the language, the scanner
+  cuts the chunks at it, and there is one parse** (2026-09-14, roadmap
+  PERF-10, `docs/spec.md` §3.2.5, `lang/scanner/scanner.go`,
+  `lang/parser/reuse.go`). D83's chunker was a second lexer: a loop
+  beside the scanner tracking braces, quotes, multi-line strings and
+  comments, cutting at a letter in the first column, and its agreement
+  with the parser rested on a differential test over the corpus. The
+  first probe outside the corpus found the disagreement: a `Ref`
+  continued on a first-column line, a settings list spilling onto one,
+  an import block at column one all parsed whole and failed chunked, so
+  the editor session and the command line disagreed on valid files.
+  Now the rule is the language's: an unquoted identifier in the first
+  column outside every brace, string and comment begins an element and
+  ends the one before it, complete or not (§3.2.5, with a valid and an
+  invalid snippet; a continuation line is indented, as every formatter
+  writes it). The scanner enforces it and nothing else does: it counts
+  braces, flags such a token, and a chunk scan stops before the first
+  one after its first byte, handing back an EOF standing there that a
+  diagnostic reads as "the start of the next element". `ParseFile` is
+  the chunked parse from nothing; the whole-file path is gone, so there
+  is nothing for the chunked parse to differ from. What remains to
+  prove is that reuse is the parse from nothing, and that holds by
+  construction: a chunk begins in the scanner's initial state (the
+  first column after a line break, outside everything), its scan ends
+  at an element start or at the text's end and never reads past a line
+  break, so its tokens, parse and diagnostics are a function of its
+  text and of whether an element start follows; the reuse keeps a chunk
+  only where its text stands unchanged, where an element may stand, and
+  where what follows is what followed before: an element start, which
+  one scanned token decides from the bytes there, or the end of the
+  file. A test applies, before every element of every conformance
+  snippet and at its end, each edit that moves boundaries (a new
+  element, an indented line, an unbalanced brace either way, a bare
+  identifier, a cut-short element, an open comment, an open string, a
+  comment, a deletion), undoes it, and proves the parse with reuse
+  equal to the parse from nothing both ways. Braces alone count, not
+  brackets or parentheses, so that an unclosed bracket while typing a
+  column's settings reaches no further than the body's closing brace.
+  Measured on the thousand-table file: the parse from nothing 150 ms
+  against the whole-file parse's 340 (the chunks share one parser and
+  one token buffer), an edit 2 ms against 22 (an unchanged chunk is
+  matched by its bytes and never scanned; the old chunker re-lexed the
+  whole file to find its boundaries). What it refuses: a second lexer
+  anywhere, and a boundary the parser may cross.

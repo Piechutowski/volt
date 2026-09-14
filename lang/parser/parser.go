@@ -11,6 +11,9 @@
 // On a syntax error the parser records a diagnostic and synchronizes to
 // the next line or the enclosing brace, so one broken line does not hide
 // the rest of the file (multiple errors per run, like the Go compiler).
+// A file is parsed element by element (reuse.go): the scanner cuts it
+// where an element begins (spec §3.2.5), and each piece is parsed on
+// its own, so a broken element never reaches into the next.
 package parser
 
 import (
@@ -18,24 +21,21 @@ import (
 
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/diag"
-	"github.com/Piechutowski/volt/lang/scanner"
 	"github.com/Piechutowski/volt/lang/token"
 )
 
 // ParseFile parses one DBML source file. It always returns a (possibly
 // partial) AST; diagnostics carry every lexical and syntax error found.
 func ParseFile(filename, src string) (*ast.File, []diag.Diagnostic) {
-	toks, errs := scanner.Scan(filename, src)
-	p := &parser{toks: toks, diags: errs}
-	f := p.file(filename)
-	diag.Sort(p.diags)
-	return f, p.diags
+	f, diags, _, _ := ParseFileReuse(filename, src, nil)
+	return f, diags
 }
 
 type parser struct {
 	toks  []token.Token
 	pos   int
 	diags []diag.Diagnostic
+	buf   []token.Token // the scanner's slice, reused chunk after chunk; nodes copy their tokens
 
 	// The hottest node kinds come from slabs: a file's identifiers,
 	// columns, settings and literals are a few allocations instead of

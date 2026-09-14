@@ -208,6 +208,11 @@ type Token struct {
 	NLBefore bool
 	// SpBefore reports whether any whitespace precedes this token.
 	SpBefore bool
+	// DeclStart reports that this token begins a top-level element
+	// (spec §3.2.5): an unquoted identifier in the first column of its
+	// line, outside every brace, string and comment. The element before
+	// it ends here.
+	DeclStart bool
 
 	Len int32 // bytes of source text; 0 for a synthetic token, whose Text is its Val
 
@@ -231,6 +236,12 @@ func (t Token) Text() string {
 }
 
 func (t Token) String() string {
+	if t.Kind == EOF {
+		if t.Val != "" {
+			return t.Val // a chunk's end: the next element's start (§3.2.5)
+		}
+		return t.Kind.String()
+	}
 	if text := t.Text(); text != "" {
 		return fmt.Sprintf("%s %q", t.Kind, text)
 	}

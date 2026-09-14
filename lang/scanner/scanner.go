@@ -40,24 +40,71 @@ func Scan(filename, src string) ([]token.Token, []diag.Diagnostic) {
 	return ScanFile(token.NewFile(filename, src))
 }
 
-// ScanFile scans a file, or a chunk of one, whose text holds no
-// carriage returns; every position is in f.
+// ScanFile scans a whole file whose text holds no carriage returns;
+// every position is in f. Every token that begins a top-level element
+// (§3.2.5) is flagged; nothing stops there.
 func ScanFile(f *token.File) ([]token.Token, []diag.Diagnostic) {
-	src := f.Src
-	s := &Scanner{
-		src:  src,
-		file: f,
-		pos:  cursor{line: 1, col: 1},
-		// Schema text runs about six bytes per token; sizing the slice
-		// once spares the doublings and their copies (PERF-7).
-		toks: make([]token.Token, 0, len(src)/4+16), // measured: a token per four bytes of schema (D81)
-	}
-	s.nlBefore = true // start of file counts as a line break
-	for state := anyScan; state != nil; {
-		state = state(s)
-	}
+	// Schema text runs about six bytes per token; sizing the slice
+	// once spares the doublings and their copies (PERF-7).
+	s := newScanner(f, make([]token.Token, 0, len(f.Src)/4+16)) // measured: a token per four bytes of schema (D81)
+	s.run()
 	s.emit(token.EOF, "")
 	return s.toks, s.errs
+}
+
+// ScanChunk scans the first top-level element of f's text (§3.2.5,
+// D88): the tokens before the next element start after the first
+// byte, then an EOF standing at that start, which is the end returned
+// and whose text names what it is; without one, the whole text and an
+// EOF at its end. bound reports the former: the chunk ended at an
+// element start, so the same text scans the same wherever one
+// follows it. buf is a token slice to reuse, or nil.
+func ScanChunk(f *token.File, buf []token.Token) (toks []token.Token, errs []diag.Diagnostic, end int, bound bool) {
+	s := newScanner(f, buf)
+	s.chunk = true
+	s.run()
+	if s.done {
+		s.pos = s.start // the EOF stands where the next element starts
+		s.emit(token.EOF, ElementStart)
+		return s.toks, s.errs, s.start.Offset, true
+	}
+	s.emit(token.EOF, "")
+	return s.toks, s.errs, len(s.src), false
+}
+
+// ElementStart is how a chunk's EOF reads in a diagnostic: the token
+// the parser found is the next element's start, not the file's end.
+const ElementStart = "the start of the next element (§3.2.5)"
+
+// StartsDecl reports whether text begins, at its very first byte, a
+// top-level element (§3.2.5): scanned from the initial state, its
+// first token is an unquoted identifier at offset zero. One token is
+// scanned, whatever the text's length.
+func StartsDecl(text string) bool {
+	var buf [1]token.Token
+	s := newScanner(token.NewFile("", text), buf[:0])
+	for state := anyScan; state != nil && len(s.toks) == 0; {
+		state = state(s)
+	}
+	return len(s.toks) == 1 && s.toks[0].DeclStart && s.toks[0].Pos.Offset() == 0
+}
+
+// newScanner is a scanner at the start of f's text, in the initial
+// state: outside every string, comment and brace, after a line
+// break. Every chunk begins in it (§3.2.5), which is what lets a
+// chunk scan alone.
+func newScanner(f *token.File, buf []token.Token) *Scanner {
+	s := &Scanner{src: f.Src, file: f, pos: cursor{line: 1, col: 1}, toks: buf[:0]}
+	s.nlBefore = true // start of file counts as a line break
+	return s
+}
+
+// run drives the state machine to its end, or to the element start a
+// chunk scan stops at.
+func (s *Scanner) run() {
+	for state := anyScan; state != nil && !s.done; {
+		state = state(s)
+	}
 }
 
 type stateFn func(*Scanner) stateFn
@@ -71,6 +118,15 @@ type Scanner struct {
 
 	nlBefore bool
 	spBefore bool
+
+	// depth counts the open braces, never below zero: an unquoted
+	// identifier in the first column at depth zero begins a top-level
+	// element (§3.2.5). Braces alone, so that an unclosed bracket in a
+	// body reaches no further than the body's closing brace.
+	depth int
+	// chunk asks to stop before the first element start after the
+	// first byte; done reports it was reached, s.start at it.
+	chunk, done bool
 
 	toks []token.Token
 	errs []diag.Diagnostic
@@ -140,18 +196,33 @@ func (s *Scanner) mark() { s.start = s.pos; s.val.Reset() }
 func (s *Scanner) raw() string { return s.src[s.start.Offset:s.pos.Offset] }
 
 func (s *Scanner) emit(kind token.Kind, val string) {
-	s.toks = append(s.toks, token.Token{
-		Kind: kind, Pos: s.start.position(s.file), Len: int32(s.pos.Offset - s.start.Offset), Val: val,
-		NLBefore: s.nlBefore, SpBefore: s.spBefore || s.nlBefore,
-	})
-	s.nlBefore, s.spBefore = false, false
+	s.tokEmit(token.Token{Kind: kind, Val: val})
 }
 
+// tokEmit appends the token at the marked start, flagged as an element
+// start when it is one (§3.2.5): an unquoted identifier in the first
+// column at depth zero. A chunk scan stops before the first such token
+// after the first byte, with s.start at it; the token is the next
+// chunk's, and the depth counts the token's own brace only after it is
+// kept.
 func (s *Scanner) tokEmit(t token.Token) {
 	t.Pos = s.start.position(s.file)
 	t.Len = int32(s.pos.Offset - s.start.Offset)
 	t.NLBefore = s.nlBefore
 	t.SpBefore = s.spBefore || s.nlBefore
+	t.DeclStart = t.Kind == token.IDENT && !t.Quoted && s.start.col == 1 && s.depth == 0
+	if t.DeclStart && s.chunk && s.start.Offset > 0 {
+		s.done = true
+		return
+	}
+	switch t.Kind {
+	case token.LBRACE:
+		s.depth++
+	case token.RBRACE:
+		if s.depth > 0 {
+			s.depth--
+		}
+	}
 	s.toks = append(s.toks, t)
 	s.nlBefore, s.spBefore = false, false
 }

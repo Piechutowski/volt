@@ -282,7 +282,29 @@ sp      = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
    lines. Productions in this specification reference `newline` explicitly
    wherever it is syntactically significant.
 3. Space and tab characters separate tokens and are otherwise insignificant.
-4. Indentation is never significant (except inside multi-line strings, §3.7).
+4. Indentation is never significant (except inside multi-line strings, §3.7),
+   with the one exception of rule 5.
+5. **Element boundaries.** An unquoted identifier (§3.4) in the first column
+   of a line begins a top-level element (§5) whenever it lies outside every
+   string, comment and brace: the brace depth counts `{` up and `}` down,
+   never below zero, over the tokens before it. The element before such an
+   identifier ends there, complete or not: a parser MUST NOT read past it to
+   finish an element, and MAY therefore parse each element from its own
+   text. An element that continues onto a further line either indents that
+   line or continues inside braces or a multi-line string; a settings list,
+   an import block or a relationship that spills onto a first-column
+   identifier line is a syntax error at that line.
+
+```volt
+Table posts [                 // continuation lines are indented
+  headercolor: #3498DB
+] {
+  id integer [pk]
+}
+
+Ref: posts.id >
+tags.id                       // error: a new element begins here
+```
 
 ### Comments
 
@@ -566,7 +588,9 @@ element = project
 ```
 
 1. A program is a sequence of top-level elements and import statements
-   (§7), in any order, separated by line breaks.
+   (§7), in any order, separated by line breaks. Where one element ends
+   and the next begins is lexical (§3.2.5): an unquoted identifier in the
+   first column outside every brace, string and comment.
 2. Forward references are permitted: an element may reference another
    element defined later in the file (or imported). DBML is fully
    declarative; declaration order carries no semantics.

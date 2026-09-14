@@ -1,16 +1,20 @@
 package parser
 
-// Parsing with reuse (D83, PERF-10): a file is split into chunks, one
-// per top-level declaration, each scanned and parsed as a token.File
-// of its own with a base offset and line in the whole. The next parse
-// of the same file keeps every chunk whose text is unchanged — the
-// declaration's nodes and diagnostics as they are, relocated by one
-// store of the base — and parses only the chunks that changed. Top-
-// level declarations are independent syntactically, so a chunk's parse
-// is the same whatever surrounds it; the checker sees the merged
-// declarations as always.
+// Parsing by element (D83, D88, PERF-10): a file is a sequence of
+// chunks, one per top-level element, cut where the scanner says an
+// element begins (spec §3.2.5): an unquoted identifier in the first
+// column outside every brace, string and comment. Each chunk is scanned and parsed as a
+// token.File of its own with a base offset and line in the whole, and
+// the parse of the file is the parse of its chunks in order: the
+// scanner stops at an element start, so an element cannot read past
+// the next one, and a chunk's parse is a function of its text alone.
+// The next parse of the same file keeps every chunk whose text stands
+// unchanged at a place that is still a chunk's — the element's nodes
+// and diagnostics as they are, relocated by one store of the base —
+// and scans and parses only the text between.
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/Piechutowski/volt/lang/ast"
@@ -25,12 +29,20 @@ type Reuse struct {
 	chunks []*chunk
 }
 
+// chunk is one element's text and parse. starts says its first token
+// is an element start at its first byte, so it may stand wherever an
+// element may; bound says the scan ended at an element start rather
+// than at the text's end, so its EOF reads as one and the same text
+// parses the same wherever an element follows.
 type chunk struct {
-	text  string
-	file  *token.File
-	decls []ast.Decl
-	diags []diag.Diagnostic
-	eof   token.Position
+	text   string
+	file   *token.File
+	decls  []ast.Decl
+	diags  []diag.Diagnostic
+	eof    token.Position
+	starts bool
+	bound  bool
+	lines  int // line breaks in text
 }
 
 // ReuseStats counts one parse's work in declarations.
@@ -38,43 +50,45 @@ type ReuseStats struct {
 	Reused, Parsed int
 }
 
-// ParseFileReuse parses src as ParseFile does, reusing every chunk of
-// prev (a previous parse of the same file, or nil) whose text is
-// unchanged. It returns the file, its diagnostics, what to hand to the
-// next parse, and the work done.
+// ParseFileReuse parses src, reusing every chunk of prev (a previous
+// parse of the same file, or nil) whose text stands unchanged at a
+// place that is still a chunk's. It returns the file, its diagnostics,
+// what to hand to the next parse, and the work done.
 func ParseFileReuse(filename, src string, prev *Reuse) (*ast.File, []diag.Diagnostic, *Reuse, ReuseStats) {
 	if strings.IndexByte(src, '\r') >= 0 {
 		src = strings.ReplaceAll(src, "\r", "")
 	}
-	spans := chunkSplit(src)
-	old := map[string][]*chunk{}
+	old := map[string][]*chunk{} // candidates by first line
 	if prev != nil && prev.name == filename {
 		for _, c := range prev.chunks {
-			old[c.text] = append(old[c.text], c)
+			k := lineFirst(c.text)
+			old[k] = append(old[k], c)
 		}
 	}
-	next := &Reuse{name: filename, chunks: make([]*chunk, 0, len(spans))}
+	next := &Reuse{name: filename}
 	f := &ast.File{Name: filename}
 	var diags []diag.Diagnostic
 	var st ReuseStats
-	for _, sp := range spans {
-		text := src[sp.start:sp.end]
-		var c *chunk
-		if cs := old[text]; len(cs) > 0 {
-			c, old[text] = cs[0], cs[1:]
-			c.file.Relocate(sp.start, sp.line)
+	p := &parser{} // one parser: its slabs and token buffer serve every chunk parsed here
+	pos, line := 0, 1
+	for pos < len(src) {
+		c := chunkReuse(old, src, pos)
+		if c != nil {
+			c.file.Relocate(pos, line)
 			st.Reused++
 		} else {
-			c = chunkParse(token.NewChunk(filename, text, sp.start, sp.line))
+			c = p.chunkParse(token.NewChunk(filename, src[pos:], pos, line))
 			st.Parsed++
 		}
 		next.chunks = append(next.chunks, c)
 		f.Decls = append(f.Decls, c.decls...)
 		diags = append(diags, c.diags...)
 		f.EOF = c.eof
+		pos += len(c.text)
+		line += c.lines
 	}
-	if len(spans) == 0 {
-		c := chunkParse(token.NewChunk(filename, "", 0, 1))
+	if len(next.chunks) == 0 {
+		c := p.chunkParse(token.NewChunk(filename, "", 0, 1))
 		next.chunks = append(next.chunks, c)
 		f.EOF = c.eof
 		st.Parsed++
@@ -83,114 +97,53 @@ func ParseFileReuse(filename, src string, prev *Reuse) (*ast.File, []diag.Diagno
 	return f, diags, next, st
 }
 
-// chunkParse scans and parses one chunk's declarations.
-func chunkParse(file *token.File) *chunk {
-	toks, errs := scanner.ScanFile(file)
-	p := &parser{toks: toks, diags: errs}
-	parsed := p.file(file.Name)
-	return &chunk{text: file.Src, file: file, decls: parsed.Decls, diags: p.diags, eof: parsed.EOF}
-}
-
-// chunkSpan is one chunk of the source: byte range and 1-based line.
-type chunkSpan struct {
-	start, end, line int
-}
-
-// chunkSplit cuts src at every line that begins a top-level
-// declaration: a letter in the first column, outside every brace,
-// string and comment. Whatever precedes the first declaration (the
-// package clause, comments) is the first chunk; blank and comment
-// lines between declarations belong to the preceding one. The lexical
-// state it tracks is the scanner's: braces, 'strings', ”'multi-line
-// strings”', "quoted identifiers", `function expressions`, line and
-// block comments. A split the parser then disagrees with only moves a
-// syntax error to the chunk boundary, where the parser resynchronizes
-// anyway.
-func chunkSplit(src string) []chunkSpan {
-	var spans []chunkSpan
-	depth := 0
-	var quote byte // ' " ` or 0
-	multi := false // inside '''...'''
-	block := false // inside /* */
-	start := 0
-	for i := 0; i < len(src); {
-		// The line's start decides whether it opens a chunk.
-		if i > start && depth == 0 && quote == 0 && !block && isLetterByte(src[i]) {
-			spans = append(spans, chunkSpan{start: start, end: i, line: lineOf(src, start, spans)})
-			start = i
+// chunkReuse finds a previous chunk that is the chunk at pos: its text
+// is what src holds there; it may stand there (any chunk at the start
+// of the file, an element anywhere else); and what follows it is what
+// followed it before, an element start (a property of the bytes there
+// alone, because the chunk ended at one) or the end of the file. The
+// match is consumed, so identical chunks are reused once each.
+func chunkReuse(old map[string][]*chunk, src string, pos int) *chunk {
+	rest := src[pos:]
+	key := lineFirst(rest)
+	for i, c := range old[key] {
+		if !strings.HasPrefix(rest, c.text) || (pos > 0 && !c.starts) {
+			continue
 		}
-		// Consume the line, tracking state.
-		for i < len(src) {
-			c := src[i]
-			if c == '\n' {
-				i++
-				break
-			}
-			switch {
-			case block:
-				if c == '*' && i+1 < len(src) && src[i+1] == '/' {
-					block = false
-					i += 2
-					continue
-				}
-			case multi:
-				if strings.HasPrefix(src[i:], "'''") {
-					multi = false
-					i += 3
-					continue
-				}
-			case quote != 0:
-				if c == '\\' && i+1 < len(src) {
-					i += 2
-					continue
-				}
-				if c == quote {
-					quote = 0
-				}
-			case c == '/' && i+1 < len(src) && src[i+1] == '/':
-				for i < len(src) && src[i] != '\n' {
-					i++
-				}
+		after := rest[len(c.text):]
+		if c.bound {
+			if after == "" || !scanner.StartsDecl(after) {
 				continue
-			case c == '/' && i+1 < len(src) && src[i+1] == '*':
-				block = true
-				i += 2
-				continue
-			case c == '\'':
-				if strings.HasPrefix(src[i:], "'''") {
-					multi = true
-					i += 3
-					continue
-				}
-				quote = '\''
-			case c == '"' || c == '`':
-				quote = c
-			case c == '{':
-				depth++
-			case c == '}':
-				if depth > 0 {
-					depth--
-				}
 			}
-			i++
+		} else if after != "" {
+			continue
 		}
+		old[key] = slices.Delete(old[key], i, i+1)
+		return c
 	}
-	if start < len(src) || len(spans) == 0 {
-		spans = append(spans, chunkSpan{start: start, end: len(src), line: lineOf(src, start, spans)})
-	}
-	return spans
+	return nil
 }
 
-// lineOf is the 1-based line at byte offset start, counted from the
-// previous span's start so the split stays linear.
-func lineOf(src string, start int, spans []chunkSpan) int {
-	if len(spans) == 0 {
-		return 1 + strings.Count(src[:start], "\n")
+// chunkParse scans and parses the element at the start of f's text,
+// cutting f's text to it.
+func (p *parser) chunkParse(f *token.File) *chunk {
+	toks, errs, end, bound := scanner.ScanChunk(f, p.buf)
+	f.Src = f.Src[:end]
+	p.toks, p.pos, p.diags = toks, 0, errs
+	parsed := p.file(f.Name)
+	p.buf = toks[:0]
+	return &chunk{
+		text: f.Src, file: f, decls: parsed.Decls, diags: p.diags, eof: parsed.EOF,
+		starts: toks[0].DeclStart && toks[0].Pos == f.At(0, 1, 1),
+		bound:  bound,
+		lines:  strings.Count(f.Src, "\n"),
 	}
-	prev := spans[len(spans)-1]
-	return prev.line + strings.Count(src[prev.start:start], "\n")
 }
 
-func isLetterByte(c byte) bool {
-	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_' || c >= 0x80
+// lineFirst is the first line of text, line break included.
+func lineFirst(text string) string {
+	if i := strings.IndexByte(text, '\n'); i >= 0 {
+		return text[:i+1]
+	}
+	return text
 }
