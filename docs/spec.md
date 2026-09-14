@@ -1970,7 +1970,21 @@ Scope settings (the complete set):
    position while one is strictly more specific (e.g. `/users/new` vs
    `/users/:id`) are legal, and ServeMux precedence picks the more
    specific one at runtime.
-3. This is exactly the rule `http.ServeMux` enforces by panicking at
+3. **Where an ambiguity can hide.** Call a route's *literal prefix*
+   its segments before its first parameter, wildcard or end. Two
+   routes overlap only if, at every position of the shorter fixed
+   part, the segments are equal literals or at least one is a
+   parameter, and any remaining segments of the longer are absorbed by
+   the shorter's wildcard tail. Hence a route can be ambiguous with an
+   accepted route only if the accepted route's literal prefix lies on
+   the new route's walk: the same literal where the new route has one,
+   any segment where it has a parameter, and anything at all beyond
+   its length only when it ends in a wildcard. A checker MAY therefore
+   compare a new route with the accepted routes filed under the literal
+   prefixes on that walk alone; every other accepted route matches no
+   request the new one does, and the earliest ambiguous route in
+   declaration order is found by taking the earliest among the walk's.
+4. This is exactly the rule `http.ServeMux` enforces by panicking at
    registration time. Detection therefore happens at check time, so a
    checked package always registers cleanly; the registration panic
    remains as a backstop a conforming generator never triggers.

@@ -635,7 +635,7 @@ where the merge changed the facts.
   since sharing it across goroutines is the next step.
 
 - **D75 — Generated Go is gofmt-canonical by construction; gofmt is a
-  test, not a stage** (2026-09-10, spec §V4.7.3 "gofmt-stable"). The
+  test, not a stage** (2026-09-10, spec §V7 "gofmt-stable"). The
   generators used to pass every file through go/format.Source, which
   bought parse-safety and formatting at zero emitter complexity and
   cost 80% of generation time: gofmt re-parses and re-prints every byte
@@ -1170,3 +1170,20 @@ where the merge changed the facts.
   implementation makes impure is refused. What it refuses: an
   interface as a hole in the walk, and a recorder handed in as a
   parameter.
+
+- **D94 — The route conflict trie is proven against the relation, in
+  the spec and by enumeration** (2026-09-14, spec §V4.7 rule 3,
+  `lang/semantics.go`, `lang/routes_test.go`). D81 replaced the
+  pairwise ambiguity scan with a trie of literal prefixes, and the
+  claim that the narrower candidate set loses nothing lived in a
+  comment. The claim is now a rule of the spec: two routes overlap only
+  along matching literals, parameters and a wildcard tail, so an
+  accepted route can be ambiguous with a new one only if its literal
+  prefix lies on the new route's walk, and the earliest ambiguous route
+  is the earliest on that walk. A test enumerates every shape of up to
+  three segments over two literals and a parameter, with and without a
+  wildcard tail, under every method, inserts them in declaration
+  order, in reverse and in three strides, and proves the trie's answer
+  equal to the pairwise scan's at every insertion, following the
+  checker's flow. What it refuses: an optimization whose equivalence
+  to the rule it optimizes is asserted rather than stated and checked.

@@ -1519,7 +1519,7 @@ func (c *checker) routeAdd(r *RouteInfo, seenShape, seenHelper map[string]*Route
 	// §V4.7.2: beyond exact duplicates, reject ServeMux's ambiguity
 	// relation — two routes whose request sets overlap with neither more
 	// specific would panic at registration, and the checker's promise
-	// (§V4.7.3) is that a checked project never does.
+	// (§V4.7.4) is that a checked project never does.
 	if prev := c.conflicts.ambiguous(r); prev != nil {
 		c.errorf(r.Pos, "V4", "route %s %s is ambiguous with the route at %s (%s %s): both match some requests and neither is more specific (§V4.7.2)",
 			methodOrAny(r.Method), r.Spelled, prev.Pos, methodOrAny(prev.Method), prev.Spelled)
@@ -1588,12 +1588,11 @@ func (c *checker) routeAccept(r *RouteInfo) {
 }
 
 // routeIndex holds one routing package's accepted routes bucketed for
-// the §V4.7.2 ambiguity scan. Two patterns can only overlap when their
-// first segments can match the same request, so a new route is compared
-// with the routes sharing its first literal segment and with the routes
-// whose first segment matches anything — a leading parameter, or a bare
-// wildcard. The relation itself is unchanged (routesAmbiguous); only
-// the candidate set shrinks, from every accepted route to a bucket.
+// the §V4.7.2 ambiguity scan. An accepted route can be ambiguous with
+// a new one only if its literal prefix lies on the new route's walk
+// (§V4.7.3, proven against the pairwise scan by enumeration, D94), so
+// the relation itself is unchanged (routesAmbiguous) and only the
+// candidate set shrinks, from every accepted route to the walk's.
 type routeIndex struct {
 	root *routeNode
 }
