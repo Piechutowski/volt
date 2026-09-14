@@ -1245,3 +1245,22 @@ where the merge changed the facts.
   reaches, so the first walk struck `bytes`, `cmp`, `errors`, `maps`,
   `slices` and `unicode/utf8` from a list that had been written from
   expectation. What it refuses: trust granted in advance of use.
+
+- **D98 — `gen --verify` type-checks the output in the package it lands
+  in, before writing** (2026-09-14, `cmd/volt/main.go`). The
+  generators' output was proven by oracle and by sample: every SQL
+  statement prepared against the generated DDL (D06), every golden
+  byte-compared, the blog project built and run. Whether the Go of the
+  project at hand compiles was the next build's finding. Now `--verify`
+  loads each output directory with the outputs laid over whatever is on
+  disk and type-checks the package, so a wrong signature, a missing
+  import or a name that collides with a hand-written one is this run's
+  error, at its position, and nothing is written. An error in a
+  generated file is reported as a generator bug; one in a file beside
+  the outputs leaves the check inconclusive and is reported as such.
+  The check reads export data for dependencies through the go tool, so
+  it costs a `go list` per output directory and stays behind the flag.
+  What it does not do: prove the generated code means what the spec
+  says; that remains the oracle's, the goldens' and the integration
+  tests' work. What it refuses: a generator whose output is first
+  compiled by someone else.

@@ -35,6 +35,7 @@ import (
 	"strings"
 
 	"github.com/urfave/cli/v3"
+	"golang.org/x/tools/go/packages"
 
 	"github.com/Piechutowski/volt/gen/model"
 	"github.com/Piechutowski/volt/gen/router"
@@ -91,7 +92,7 @@ func command() *cli.Command {
 				Flags: []cli.Flag{
 					&cli.BoolFlag{Name: "models-only", Aliases: []string{"m"}, Usage: "emit only nao_models.go; skip the query layers"},
 					&cli.BoolFlag{Name: "sql", Usage: "also write nao_schema.sql (SQLite DDL and seed inserts)"},
-					&cli.BoolFlag{Name: "verify", Usage: "prove every generated Go file is gofmt-canonical before writing (a generator self-check)"},
+					&cli.BoolFlag{Name: "verify", Usage: "prove every generated Go file is gofmt-canonical and type-checks in its package before writing (a generator self-check)"},
 					&cli.StringFlag{Name: "o", Usage: "write into `DIR` instead of the package directory (one package); the client lands beside the models as volt_client.go"},
 					&cli.StringFlag{Name: "parts", Usage: "comma-separated `LIST` of what to write: models, queries, router, client, sql (default: every Go part)"},
 					&cli.StringFlag{Name: "package", Usage: "package clause of the written files (default: the clause of DIR's Go files, else the Volt package's name)"},
@@ -289,11 +290,6 @@ func genRun(c *cli.Command) error {
 	// all or nothing across the whole project. A file whose bytes are
 	// already on disk is left alone: rewriting it would only bump its
 	// modification time and wake every editor and watcher on the tree.
-	type outFile struct {
-		path      string
-		code      []byte
-		unchanged bool
-	}
 	var out []outFile
 
 	// Every package generates on its own CPU (PERF-7); the files are
@@ -369,6 +365,14 @@ func genRun(c *cli.Command) error {
 			if p != "" {
 				return cli.Exit(p, 2)
 			}
+		}
+		// And the generated Go type-checks in the package it lands in
+		// (D98): every output directory is loaded with the outputs laid
+		// over it, before anything is written, so a wrong signature or
+		// a missing import is this run's error and never the next
+		// build's.
+		if p := outputsTypeCheck(out); p != "" {
+			return cli.Exit(p, 2)
 		}
 	}
 
@@ -448,6 +452,69 @@ func genMarker(path string) []byte {
 		return []byte("-- Code generated ")
 	}
 	return []byte("// Code generated ")
+}
+
+// outFile is one generated file about to be written: its path, its
+// bytes, and whether the same bytes are on disk already.
+type outFile struct {
+	path      string
+	code      []byte
+	unchanged bool
+}
+
+// outputsTypeCheck type-checks each output directory's package with
+// the outputs laid over whatever is on disk, and reports the first
+// problem: an error in a generated file is a generator bug, one in a
+// file beside it leaves the check inconclusive. "" when every package
+// checks.
+func outputsTypeCheck(out []outFile) string {
+	byDir := map[string]map[string][]byte{}
+	var dirs []string
+	generated := map[string]bool{}
+	for _, f := range out {
+		if filepath.Ext(f.path) != ".go" {
+			continue
+		}
+		dir := filepath.Dir(f.path)
+		if byDir[dir] == nil {
+			byDir[dir] = map[string][]byte{}
+			dirs = append(dirs, dir)
+		}
+		abs, err := filepath.Abs(f.path)
+		if err != nil {
+			return "gen --verify: " + err.Error()
+		}
+		byDir[dir][abs] = f.code
+		generated[abs] = true
+	}
+	sort.Strings(dirs)
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return "gen --verify: " + err.Error()
+		}
+		cfg := &packages.Config{
+			Mode:    packages.NeedName | packages.NeedFiles | packages.NeedTypes | packages.NeedSyntax | packages.NeedTypesInfo | packages.NeedImports,
+			Dir:     dir,
+			Overlay: byDir[dir],
+		}
+		pkgs, err := packages.Load(cfg, ".")
+		if err != nil {
+			return fmt.Sprintf("gen --verify: %s: %v", dir, err)
+		}
+		for _, pkg := range pkgs {
+			for _, e := range pkg.Errors {
+				file := e.Pos
+				if i := strings.IndexByte(file, ':'); i >= 0 {
+					file = file[:i]
+				}
+				if generated[file] {
+					return fmt.Sprintf("gen --verify: %v (a generator bug)", e)
+				}
+				return fmt.Sprintf("gen --verify: %v (the package the output lands in does not type-check; fix it first)", e)
+			}
+		}
+	}
+	return ""
 }
 
 // genMarked reports whether the file at path exists and carries the

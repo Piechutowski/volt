@@ -159,3 +159,35 @@ func TestStressWritesABuildableProject(t *testing.T) {
 		t.Errorf("stress over %s: %v, want a refusal", dir, err)
 	}
 }
+
+// TestGenVerifyTypeChecks proves gen --verify type-checks the
+// generated Go in the package it lands in before writing (D98): a
+// project that builds passes, and a file beside the outputs that does
+// not type-check fails the run with its position, before any output
+// is written.
+func TestGenVerifyTypeChecks(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	volt := func(args ...string) error {
+		cmd := command()
+		cmd.ExitErrHandler = func(context.Context, *cli.Command, error) {}
+		return cmd.Run(context.Background(), append([]string{"volt"}, args...))
+	}
+	dir := filepath.Join(t.TempDir(), "small")
+	if err := volt("stress", "-tables", "2", "-columns", "4", "-volt", repoRoot, dir); err != nil {
+		t.Fatalf("stress: %v", err)
+	}
+	if err := volt("gen", "--verify", dir); err != nil {
+		t.Fatalf("gen --verify on a buildable project: %v", err)
+	}
+	broken := filepath.Join(dir, "broken.go")
+	if err := os.WriteFile(broken, []byte("package main\n\nvar broken int = \"s\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err = volt("gen", "--verify", dir)
+	if err == nil || !strings.Contains(err.Error(), "does not type-check") || !strings.Contains(err.Error(), "broken.go") {
+		t.Fatalf("gen --verify beside a broken file: %v, want the type error at broken.go", err)
+	}
+}
