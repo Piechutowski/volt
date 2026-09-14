@@ -3,7 +3,6 @@ package router
 import (
 	"bytes"
 	"flag"
-	"fmt"
 	"go/format"
 	"os"
 	"os/exec"
@@ -479,20 +478,18 @@ func TestClientBesideGolden(t *testing.T) {
 // TestCorpusCompiles builds the synthetic corpus (internal/corpus) in
 // both layouts: every feature the corpus uses generates Go that the
 // compiler accepts, models, queries, router and client together.
+// TestCorpusCompiles proves both corpus layouts generate code the Go
+// toolchain builds against this checkout's runtime: the corpus stubs
+// the controllers its routes name, and the one-package layout is a
+// program at the module root (D80).
 func TestCorpusCompiles(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, spec := range []corpus.Spec{{Packages: 2, Tables: 3, Columns: 9}, {Packages: 1, Tables: 3, Columns: 9, Single: true}} {
+	for _, spec := range []corpus.Spec{{Packages: 2, Tables: 3, Columns: 9, Volt: repoRoot}, {Tables: 3, Columns: 9, Single: true, Volt: repoRoot}} {
 		dir := t.TempDir()
 		if err := corpus.Write(dir, spec); err != nil {
-			t.Fatal(err)
-		}
-		gomod := "module corpus\n\ngo 1.27\n\n" +
-			"require github.com/Piechutowski/volt v0.0.0\n\n" +
-			"replace github.com/Piechutowski/volt => " + repoRoot + "\n"
-		if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		pr, err := lang.Load(dir)
@@ -530,20 +527,6 @@ func TestCorpusCompiles(t *testing.T) {
 				for name, code := range files {
 					write(name, code)
 				}
-				// The controllers the corpus routes name, stubbed.
-				var stubs strings.Builder
-				fmt.Fprintf(&stubs, "package %s\n\nimport (\n\t\"net/http\"\n\n\t\"github.com/Piechutowski/volt\"\n)\n\ntype stub struct{}\n\n", pkg.Name)
-				stubs.WriteString("func (stub) Index(w http.ResponseWriter, r *volt.Request) error              { return nil }\n")
-				stubs.WriteString("func (stub) Serve(w http.ResponseWriter, r *volt.Request, path string) error { return nil }\n")
-				for name := range pkg.Controllers {
-					if name == "Stats" {
-						for _, a := range pkg.Controllers[name].Actions {
-							fmt.Fprintf(&stubs, "func (stub) %s(w http.ResponseWriter, r *volt.Request) error { return nil }\n", a.Name)
-						}
-					}
-				}
-				stubs.WriteString("\nvar _ http.Handler = NewRouter(Controllers{Home: stub{}, Files: stub{}, Stats: stub{}})\n")
-				write("stubs.go", []byte(stubs.String()))
 			}
 		}
 		cmd := exec.Command("go", "build", "./...")

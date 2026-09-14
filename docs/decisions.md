@@ -757,20 +757,28 @@ where the merge changed the facts.
   still re-parses its whole file and re-checks its whole package —
   per-declaration memoization is PERF-10.
 
-- **D80 — The stress fixture is generated, never committed; `volt
-  fixture` writes it** (2026-09-12, roadmap PERF-2,
-  `cmd/volt/fixture.go`). The project the scaling tests and the
+- **D80 — The stress project is generated, never committed; `volt
+  stress` writes it as one file** (2026-09-14, roadmap PERF-2,
+  `cmd/volt/main.go`). The project the scaling tests and the
   benchmarks run on (`internal/corpus`: every feature, both layouts,
   any size) exists only while a test runs. A thousand-table copy would
-  be megabytes of `.volt` and, once generated, hundreds of thousands of
-  lines of Go that rot with every emitter change, so no repository
-  carries one; the generator is the single source and the binary
-  writes it on demand. `volt fixture DIR` writes the size that started
-  the performance work (twenty packages of fifty tables with a hundred
-  and fifty columns), any size by flag, one directory with `-single`,
-  so check, gen and the language server are timed by hand on the same
-  project the tests measure. What it refuses: writing into a directory
-  that holds anything (the fixture goes into a new or empty one, never
-  over a project), and a buildable module (the written go.mod requires
-  nothing; the Go files name the runtime, which the tests resolve with
-  a replace directive, and the compile proof stays `TestCorpusCompiles`).
+  be megabytes of `.volt` and, once generated, over a million lines of
+  Go that rot with every emitter change, so no repository carries one;
+  the generator is the single source and the binary writes it on
+  demand. The stress shape is one file: `volt stress DIR` writes a
+  thousand tables of a hundred and fifty columns, every table routed
+  and in the group select, as one `schema.volt` of a `package main` at
+  the root of a module that builds, so the limits of check, gen, the
+  language server and the Go compiler on the generated code are felt
+  on the same project the tests measure, and known ahead of time. The
+  size is a flag; the default is the big one, because the point is the
+  limit. The corpus stubs the controllers its routes name and the
+  module requires the runtime through a replace onto a Volt checkout
+  (`-volt`, found through the Go tool when the working directory's
+  module resolves it), so `go build` sees every generated line. Not a
+  command for ordinary use, and the CLI stays one file: `cmd/volt` is
+  `main.go` and its test. What it refuses: writing into a directory
+  that holds anything (the project goes into a new or empty one, never
+  over a project), and a multi-package shape from the CLI (the tests
+  keep both layouts; by hand, the one-file shape is the one that finds
+  the limits).

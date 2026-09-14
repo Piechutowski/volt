@@ -1,10 +1,17 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/urfave/cli/v3"
+
+	"github.com/Piechutowski/volt/lang"
+	"github.com/Piechutowski/volt/lang/diag"
 )
 
 // TestWorkspaceLayout proves the layout `-o` and `-parts` exist for
@@ -102,4 +109,53 @@ func main() { _ = NewClient("http://localhost:8888") }
 	run(filepath.Join(root, "api"), "build", "./...")
 	run(filepath.Join(root, "gui"), "build", "./...")
 	run(filepath.Join(root, "gui"), "vet", "./...")
+}
+
+// TestStressWritesABuildableProject proves `volt stress` writes a
+// one-file package main at the module root that checks clean with the
+// tables asked for, generates through the CLI and builds against this
+// checkout's runtime, and that it refuses a directory holding anything
+// (D80). The commands run in-process: exit errors are returned, not
+// exited on.
+func TestStressWritesABuildableProject(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	volt := func(args ...string) error {
+		cmd := command()
+		cmd.ExitErrHandler = func(context.Context, *cli.Command, error) {}
+		return cmd.Run(context.Background(), append([]string{"volt"}, args...))
+	}
+	dir := filepath.Join(t.TempDir(), "big")
+	if err := volt("stress", "-tables", "3", "-columns", "9", "-volt", repoRoot, dir); err != nil {
+		t.Fatalf("stress: %v", err)
+	}
+	pr, err := lang.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diags := lang.Check(pr); diag.HasErrors(diags) {
+		t.Fatalf("stress project does not check:\n%v", diags)
+	}
+	if len(pr.Packages) != 1 {
+		t.Fatalf("%d packages, want one at the root", len(pr.Packages))
+	}
+	for _, pkg := range pr.Packages {
+		if pkg.Name != "main" || len(pkg.Schema().Tables) != 3 || len(pkg.Routes) < 15 {
+			t.Fatalf("package %s: %d tables, %d routes", pkg.Name, len(pkg.Schema().Tables), len(pkg.Routes))
+		}
+	}
+	if err := volt("gen", "--sql", dir); err != nil {
+		t.Fatalf("gen: %v", err)
+	}
+	cmd := exec.Command("go", "build", "./...")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("stress project does not build:\n%s", out)
+	}
+	err = volt("stress", "-tables", "1", "-columns", "1", dir)
+	if err == nil || !strings.Contains(err.Error(), "not empty") {
+		t.Errorf("stress over %s: %v, want a refusal", dir, err)
+	}
 }

@@ -138,7 +138,8 @@ the maintainer (it's alpha; honesty over marketing). Test data must be
 neutral (blog/metrics domains — never agriculture/FADN; that fixture
 history is why); a test that needs a project of some size writes one
 with `internal/corpus`, which uses every feature in both layouts
-(`volt fixture DIR` writes the same project to disk, at any size, for
-timing check, gen and the LSP by hand; D80). When the maintainer asks a question, answer it and
+(`volt stress DIR` writes its one-file shape to disk, a thousand tables
+by default, to feel the limits of check, gen, the LSP and the Go
+compiler by hand; D80). When the maintainer asks a question, answer it and
 stop — don't implement until asked; when they ask for work, finish it:
 build + vet + test + gofmt green, committed, pushed.
