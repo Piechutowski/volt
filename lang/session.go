@@ -32,6 +32,7 @@ type Session struct {
 	files map[string]*fileEntry // by absolute path
 	pkgs  map[string]*pkgEntry  // by package path
 	memos map[string]*declMemo  // per-declaration memos, by package path (D84)
+	scans map[string]*goScan    // each package directory's Go functions, the same object while the content is (D86)
 	gen   int                   // the last file identity handed out
 	stats SessionStats
 }
@@ -84,6 +85,7 @@ type pkgResult struct {
 	preds       map[string]*ast.Pred
 	selects     []*SelectInfo
 	checkFns    []golang.CheckFn
+	checkSQL    map[*ast.Check]string
 	pipelines   map[string]*ast.Pipeline
 	routes      []*RouteInfo
 	controllers map[string]*ControllerInfo
@@ -92,7 +94,7 @@ type pkgResult struct {
 func pkgCapture(pkg *Package) pkgResult {
 	return pkgResult{
 		schema: pkg.schema, plan: pkg.plan,
-		groups: pkg.Groups, preds: pkg.Preds, selects: pkg.Selects, checkFns: pkg.CheckFns,
+		groups: pkg.Groups, preds: pkg.Preds, selects: pkg.Selects, checkFns: pkg.CheckFns, checkSQL: pkg.CheckSQL,
 		pipelines: pkg.Pipelines, routes: pkg.Routes, controllers: pkg.Controllers,
 	}
 }
@@ -105,7 +107,7 @@ func (p *Package) resultsReset() {
 
 func (r pkgResult) restore(pkg *Package) {
 	pkg.schema, pkg.plan = r.schema, r.plan
-	pkg.Groups, pkg.Preds, pkg.Selects, pkg.CheckFns = r.groups, r.preds, r.selects, r.checkFns
+	pkg.Groups, pkg.Preds, pkg.Selects, pkg.CheckFns, pkg.CheckSQL = r.groups, r.preds, r.selects, r.checkFns, r.checkSQL
 	pkg.selectIndex()
 	pkg.paramsValid, pkg.checkFnByKey = nil, nil
 	pkg.Pipelines, pkg.Routes, pkg.Controllers = r.pipelines, r.routes, r.controllers
@@ -186,6 +188,29 @@ func (s *Session) declMemos(paths []string) map[string]*declMemo {
 		out[p] = m
 	}
 	return out
+}
+
+// goFuncsFor scans the Go files of the given directories and hands
+// back a cache seeded with them: a directory whose functions are
+// exactly what they were at the last scan keeps its scan object, so a
+// memo keyed on that identity is keyed on the content (D86).
+func (s *Session) goFuncsFor(dirs []string) *goFuncsCache {
+	cache := &goFuncsCache{by: make(map[string]*goScan, len(dirs))}
+	for _, dir := range dirs {
+		funcs, broken := GoFuncsScan(dir)
+		s.mu.Lock()
+		if s.scans == nil {
+			s.scans = map[string]*goScan{}
+		}
+		sc := s.scans[dir]
+		if sc == nil || !sc.equal(funcs, broken) {
+			sc = goScanOf(funcs, broken)
+			s.scans[dir] = sc
+		}
+		s.mu.Unlock()
+		cache.by[dir] = sc
+	}
+	return cache
 }
 
 // declStats adds what the memos of the packages just checked did.

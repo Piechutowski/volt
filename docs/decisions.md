@@ -955,3 +955,46 @@ where the merge changed the facts.
   result may be reading it), and memoizing the reference walk over
   scopes, groups and selects (linear, small, and dependent on
   everything).
+
+- **D86 — What a memo answers is a pure function of explicit inputs,
+  and the build proves it** (2026-09-14, roadmap PERF-10, `lang/check/
+  check.go`, `nao/gen/golang/queries.go`, `lang/checks.go`,
+  `lang/selects.go`, `lsp/index.go`, `cmd/volt/purity_test.go`). D84
+  and D85 keyed their memos on inputs enumerated by reading the memoized
+  code, and the examples asserted the cases enumerated. That is an
+  argument by inspection, and the first audit found what it misses: a
+  table's occurrences in the editor's index depend on the enums its
+  columns name and on the tables its inline references bind to; a
+  table's lowered checks depend on the predicates they name; a table's
+  check depends on the enum set through the required rule; none of
+  these was a key. Now every memoized computation is a top-level
+  function whose parameters are its whole input and whose results are
+  its whole effect: `check.tableCheck` (declaration, injected partials,
+  imports flag, enum set), `golang.tableBuild` (checked table, enum
+  types; the imports it needs are a result, not a write to a shared
+  generator), `lang.tableSpecs` (checked table, model fields, package
+  name, the directory's Go functions, the predicates named; the typed
+  checks' SQL is a result the package carries for the DDL, no longer
+  written onto the AST node), `lang.selectCheck` (declaration, members,
+  their models, the predicates named, and a read-only name scope whose
+  answers a recorder captures; the names it mints are a result the
+  caller applies), and `lsp.tableOccurrences` (declaration, checked
+  table, the table its references bind to, the tables, enums and
+  partials the body names). The callers resolve the inputs, and each
+  memo entry stores them and answers only when all are what they were:
+  same inputs, same function, same output, the two-line argument. The
+  side effects those functions used to have moved to the callers: use
+  counts, imports, name-scope additions. Go cannot forbid a free
+  variable, so the build does: `TestMemoizedComputationsArePure` loads
+  the module with type information and, for each target and everything
+  it calls, refuses a read of a package variable not in the allowlist
+  of once-written tables (which it proves are assigned nowhere else), a
+  write through a parameter or through a value a callee derived from
+  one, a call into a standard package that keeps state, and any
+  goroutine or channel; a fixture package proves each refusal fires.
+  The Go function scans a checks memo keys on are kept by the session
+  and replaced only when a rescan differs in content, so identity means
+  equality. What it refuses: a hash as a memo key (equality is exact and
+  costs nothing), an oracle the recorder does not see (the select's
+  scope is an interface with one method), and a test that samples
+  inputs at random in place of the property.

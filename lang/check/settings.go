@@ -370,10 +370,10 @@ func (c *checker) requiredCheck(ti *TableInfo) {
 			c.errorf(req.Pos(), "6.3", "required on %q needs not null: a nullable column has no empty value to refuse, NULL is absence (§6.3)", name)
 			continue
 		}
-		isEnum := c.enums[canonKey(col.Type.Name)] != nil
+		isEnum := c.enumSet.present[canonKey(col.Type.Name)]
 		if !isEnum && col.Type.Name.Schema() == "" && ti.Decl.Name.Schema() != "" {
 			// an unqualified enum type may live in the table's schema
-			isEnum = c.enums[ti.Decl.Name.Schema()+"."+col.Type.Name.Base()] != nil
+			isEnum = c.enumSet.present[ti.Decl.Name.Schema()+"."+col.Type.Name.Base()]
 		}
 		if _, ok := RequiredKind(col.Type.String(), isEnum); !ok {
 			c.errorf(req.Pos(), "6.3", "required on %q (%s): a %s has no empty value — every value is a value (§6.3)", name, col.Type.String(), col.Type.String())

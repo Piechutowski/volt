@@ -11,6 +11,8 @@ import (
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/token"
+	"sort"
+	"strings"
 )
 
 // Info is the semantic model of one file, produced by File.
@@ -162,9 +164,9 @@ type checker struct {
 	info  *Info
 	diags []diag.Diagnostic
 	memo  *Memo
-	// reused marks the tables the memo answered: their expansion, body
-	// and column checks are not run again.
-	reused map[*TableInfo]bool
+	// enumSet is the file's enums as the table check needs them: a
+	// pure input with a signature the memo can compare (D86).
+	enumSet *enumSet
 
 	partials map[string]*PartialInfo
 	enums    map[string]*EnumInfo
@@ -268,42 +270,80 @@ func (c *checker) collect(f *ast.File) {
 		c.info.Partials = append(c.info.Partials, pi)
 	}
 
-	// Effective columns: expand injections in source order (§8.4) —
-	// or, for a table the memo knows, take them as they were.
+	// Every table's check is a pure function of its declaration, the
+	// partials it injects, the enum set and the imports flag (D86):
+	// answered from the memo when those are what they were, computed
+	// otherwise. The use counts are the caller's, as every side effect.
+	c.enumSet = enumSetOf(c.enums)
 	for i, ti := range c.info.Tables {
-		if c.memo == nil {
-			c.columnsExpand(ti)
-			continue
-		}
 		partials := c.partialsOf(ti.Decl)
-		if e := c.memo.lookup(ti.Decl, partials, c.info.HasImports); e != nil {
-			c.info.Tables[i] = e.ti
-			c.info.byTable[e.ti.Key] = e.ti
-			if c.info.byBase[e.ti.Decl.Name.Base()] == ti {
-				c.info.byBase[e.ti.Decl.Name.Base()] = e.ti
+		for _, p := range partials {
+			if p != nil {
+				c.partials[p.Name.Name()].Uses++
 			}
-			if e.ti.Alias != "" {
-				c.info.byTable["public."+e.ti.Alias] = e.ti
-			}
-			for _, p := range partials {
-				if p != nil {
-					c.partials[p.Name.Name()].Uses++
-				}
-			}
-			if c.reused == nil {
-				c.reused = map[*TableInfo]bool{}
-			}
-			c.reused[e.ti] = true
-			c.diags = append(c.diags, e.diags...)
+		}
+		var checked *TableInfo
+		var diags []diag.Diagnostic
+		if e := c.memo.lookup(ti.Decl, partials, c.info.HasImports, c.enumSet.sig); e != nil {
+			checked, diags = e.ti, e.diags
 			c.memo.store(e)
 			c.memo.Hits++
-			continue
+		} else {
+			checked, diags = tableCheck(ti.Decl, ti.Key, ti.Alias, partials, c.info.HasImports, c.enumSet)
+			if c.memo != nil {
+				c.memo.store(&memoTable{ti: checked, partials: partials, hasImports: c.info.HasImports, enumSig: c.enumSet.sig, diags: diags})
+				c.memo.Misses++
+			}
 		}
-		from := len(c.diags)
-		c.columnsExpand(ti)
-		c.memo.store(&memoTable{ti: ti, partials: partials, hasImports: c.info.HasImports, diags: c.diags[from:len(c.diags):len(c.diags)]})
-		c.memo.Misses++
+		if checked != ti {
+			c.info.Tables[i] = checked
+			c.info.byTable[checked.Key] = checked
+			if c.info.byBase[checked.Decl.Name.Base()] == ti {
+				c.info.byBase[checked.Decl.Name.Base()] = checked
+			}
+			if checked.Alias != "" {
+				c.info.byTable["public."+checked.Alias] = checked
+			}
+		}
+		c.diags = append(c.diags, diags...)
 	}
+}
+
+// enumSet is the enums a table check consults, by canonical key, with
+// a signature that spells the set: two sets with the same signature
+// answer every presence question alike.
+type enumSet struct {
+	present map[string]bool
+	sig     string
+}
+
+func enumSetOf(enums map[string]*EnumInfo) *enumSet {
+	keys := make([]string, 0, len(enums))
+	for k := range enums {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	set := &enumSet{present: make(map[string]bool, len(enums)), sig: strings.Join(keys, "\x00")}
+	for _, k := range keys {
+		set.present[k] = true
+	}
+	return set
+}
+
+// tableCheck is one table's check as a pure function of its inputs
+// (D86): the declaration, its key and alias, the partial declarations
+// it injects in body order (nil where the name resolves to none),
+// whether imports are in play, and the enum set. It returns the
+// checked table — columns expanded per §6.9.4, indexes and checks
+// gathered — and every diagnostic of the table's body, columns,
+// expansion, increment and required rules. It reads nothing else and
+// writes nothing it did not create.
+func tableCheck(d *ast.Table, key, alias string, partials []*ast.TablePartial, hasImports bool, enums *enumSet) (*TableInfo, []diag.Diagnostic) {
+	acc := &checker{info: &Info{HasImports: hasImports}, enumSet: enums}
+	ti := &TableInfo{Decl: d, Key: key, Alias: alias}
+	acc.columnsExpand(ti, partials)
+	acc.tableBodyCheck(d.Name.String(), d.Settings, d.Body, true)
+	return ti, acc.diags
 }
 
 // partialsOf lists the partial declarations a table injects, in body
@@ -324,7 +364,7 @@ func (c *checker) partialsOf(d *ast.Table) []*ast.TablePartial {
 
 // columnsExpand applies §6.9.4 conflict resolution: direct definitions win;
 // otherwise the last-injected partial wins.
-func (c *checker) columnsExpand(ti *TableInfo) {
+func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 	type slot struct {
 		def   *ColumnDef
 		order int
@@ -354,23 +394,24 @@ func (c *checker) columnsExpand(ti *TableInfo) {
 		direct[name] = from == nil
 		order++
 	}
+	injected := 0
 	for _, item := range ti.Decl.Body {
 		switch item := item.(type) {
 		case *ast.Column:
 			addCol(item, nil)
 		case *ast.PartialRef:
-			pi, ok := c.partials[item.Name.Name()]
-			if !ok {
+			p := partials[injected]
+			injected++
+			if p == nil {
 				if !c.info.HasImports {
 					c.errorf(item.Pos(), "6.9", "unknown TablePartial %q", item.Name.Name())
 				}
 				continue
 			}
-			pi.Uses++
-			for _, pit := range pi.Decl.Body {
+			for _, pit := range p.Body {
 				switch pit := pit.(type) {
 				case *ast.Column:
-					addCol(pit, pi.Decl)
+					addCol(pit, p)
 				case *ast.IndexesBlock:
 					ti.Indexes = append(ti.Indexes, pit.Indexes...)
 				case *ast.ChecksBlock:

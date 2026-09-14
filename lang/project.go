@@ -67,6 +67,9 @@ type Package struct {
 	Preds  map[string]*ast.Pred
 	// CheckFns is the validator surface (§V12), lowered by Check.
 	CheckFns []golang.CheckFn
+	// CheckSQL is every typed check's SQL rendering, lowered by Check
+	// with CheckFns: gen/sqlite emits CHECK (<this>) for it (§V12.4).
+	CheckSQL map[*ast.Check]string
 	Selects  []*SelectInfo
 	// selectByMethod indexes Selects by generated method name (D81).
 	selectByMethod map[string]selectMember

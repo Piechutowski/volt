@@ -18,6 +18,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -152,10 +153,46 @@ type goScan struct {
 }
 
 // goFuncsCache holds one goScan per package directory, shared by the
-// per-package checkers of a phase (PERF-7).
+// per-package checkers of a phase (PERF-7). A session seeds it with
+// scans whose identity is stable while their content is (D86).
 type goFuncsCache struct {
 	mu sync.Mutex
 	by map[string]*goScan
+}
+
+// goScanOf is a finished scan: its once is spent, its content given.
+func goScanOf(funcs map[string]GoFunc, broken []string) *goScan {
+	sc := &goScan{}
+	sc.once.Do(func() { sc.funcs, sc.broken = funcs, broken })
+	return sc
+}
+
+// equal reports whether the scan's content is exactly the given one:
+// the same functions with the same signatures at the same places, and
+// the same parse-error report.
+func (sc *goScan) equal(funcs map[string]GoFunc, broken []string) bool {
+	if len(sc.funcs) != len(funcs) || !slices.Equal(sc.broken, broken) {
+		return false
+	}
+	for name, f := range funcs {
+		g, ok := sc.funcs[name]
+		if !ok || !goFuncEqual(f, g) {
+			return false
+		}
+	}
+	return true
+}
+
+func goFuncEqual(a, b GoFunc) bool {
+	return a.Name == b.Name && a.File == b.File && posEqual(a.Pos, b.Pos) && posEqual(a.End, b.End) &&
+		slices.Equal(a.Params, b.Params) && a.Variadic == b.Variadic && a.Generic == b.Generic &&
+		slices.Equal(a.Results, b.Results) && a.Sig == b.Sig && a.Doc == b.Doc
+}
+
+// posEqual compares positions by what they say, not by the file
+// object behind them, which every scan makes anew.
+func posEqual(a, b token.Position) bool {
+	return a.Filename() == b.Filename() && a.Offset() == b.Offset() && a.Line() == b.Line() && a.Column() == b.Column()
 }
 
 // GoDirStamp fingerprints the Go files of a directory — names, sizes

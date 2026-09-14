@@ -277,11 +277,12 @@ func TestSessionReparsesOneDeclaration(t *testing.T) {
 	// An enum's note: no table and no model depends on it.
 	cur = strings.Replace(cur, "retired [note: 'no longer written']", "retired [note: 'gone']", 1)
 	round("edit the enum's note", cur, work{1, 0, 0, 0, 0})
-	// A new enum: the tables' nodes are what they were, the models are
-	// not, since the set of enum types is every model's input, and the
-	// lowered checks and the selects follow their models.
+	// A new enum: the enum set is an input of every table's check (the
+	// required rule asks whether a column type is an enum) and of every
+	// model, so every table is checked again and every model rebuilt;
+	// the lowered checks and the selects follow their models.
 	cur = strings.Replace(cur, "TablePartial stamped", "Enum kind {\n\tplain\n}\n\nTablePartial stamped", 1)
-	round("add an enum", cur, work{1, 0, 12, 12, 13})
+	round("add an enum", cur, work{1, 12, 12, 12, 13})
 	// The predicate every select names: every select is checked again.
 	cur = strings.Replace(cur, "Pred fresh { c001 >= :since }", "Pred fresh { c001 > :since }", 1)
 	round("edit the pred", cur, work{1, 0, 0, 0, 13})

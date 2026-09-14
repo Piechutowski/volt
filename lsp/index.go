@@ -64,30 +64,58 @@ type IndexMemo struct {
 	Hits, Misses int
 }
 
+// tableOccs is one call of tableOccurrences: its inputs (the
+// declaration is the map key) and its outputs.
 type tableOccs struct {
-	ti              *check.TableInfo
+	ti, resolved    *check.TableInfo
+	tables          map[string]*check.TableInfo
+	enums           map[string]*check.EnumInfo
+	partials        map[string]bool
 	sym, cols, body []Occurrence // the three places a table's occurrences land, in build order
 	decls           []declEntry
-	declMap         map[SymbolID]*ast.Ident // decls with a "table:" container, built once for reuse
-	reused          bool
+	declMap         map[SymbolID]*ast.Ident // decls with a "table:" container, built with the entry
+}
+
+// holds reports whether the entry's inputs are the given ones: the
+// tables by identity, the enums by their declarations' identity, the
+// partials by presence.
+func (e *tableOccs) holds(ti, resolved *check.TableInfo, tables map[string]*check.TableInfo, enums map[string]*check.EnumInfo, partials map[string]bool) bool {
+	if e.ti != ti || e.resolved != resolved || len(e.tables) != len(tables) || len(e.enums) != len(enums) || len(e.partials) != len(partials) {
+		return false
+	}
+	for key, t := range tables {
+		if old, ok := e.tables[key]; !ok || old != t {
+			return false
+		}
+	}
+	for key, ei := range enums {
+		old, ok := e.enums[key]
+		if !ok || (old == nil) != (ei == nil) || (ei != nil && old.Decl != ei.Decl) {
+			return false
+		}
+	}
+	for name, present := range partials {
+		if old, ok := e.partials[name]; !ok || old != present {
+			return false
+		}
+	}
+	return true
 }
 
 // tableContainer is the container prefix of a column declared in a table.
 const tableContainer = "table:"
 
-// declMapOf builds the entry's per-table declaration map once.
-func (e *tableOccs) declMapOf() map[SymbolID]*ast.Ident {
-	if e.declMap == nil {
-		e.declMap = make(map[SymbolID]*ast.Ident, len(e.decls))
-		for _, d := range e.decls {
-			if strings.HasPrefix(d.id.Container, tableContainer) {
-				if _, exists := e.declMap[d.id]; !exists {
-					e.declMap[d.id] = d.ident
-				}
+// declMapOf is the per-table declaration map of an entry's declarations.
+func declMapOf(decls []declEntry) map[SymbolID]*ast.Ident {
+	m := make(map[SymbolID]*ast.Ident, len(decls))
+	for _, d := range decls {
+		if strings.HasPrefix(d.id.Container, tableContainer) {
+			if _, exists := m[d.id]; !exists {
+				m[d.id] = d.ident
 			}
 		}
 	}
-	return e.declMap
+	return m
 }
 
 type declEntry struct {
@@ -134,43 +162,6 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 	for base := range ambiguous {
 		delete(ix.byBase, base)
 	}
-	// The memo: an entry per table, reused when the table's node and
-	// checked table are the objects they were, else recorded as the
-	// build goes. A hit re-adds the declarations the table contributed
-	// and appends its occurrences where the build would have put them.
-	entries := map[*ast.Table]*tableOccs{}
-	if memo != nil {
-		memo.Hits, memo.Misses = 0, 0
-		// Sized from the last build: the occurrences are appended in
-		// one pass and the slice must not grow by copying under them.
-		ix.Occs = make([]Occurrence, 0, memo.lastLen)
-		defer func() { memo.lastLen = len(ix.Occs) }()
-		for _, ti := range info.Tables {
-			if e := memo.prev[ti.Decl]; e != nil && e.ti == ti {
-				e.reused = true
-				entries[ti.Decl] = e
-				memo.Hits++
-			} else {
-				entries[ti.Decl] = &tableOccs{ti: ti}
-				memo.Misses++
-			}
-		}
-		memo.next = entries
-		defer func() { memo.prev, memo.next = memo.next, nil }()
-	}
-	// A fresh entry's per-table map is built before the entry can be
-	// shared with a later build, so nothing mutates a shared entry.
-	defer func() {
-		for _, e := range entries {
-			if !e.reused {
-				e.declMapOf()
-			}
-		}
-	}()
-	occsFrom := func(from int) []Occurrence { return ix.Occs[from:len(ix.Occs):len(ix.Occs)] }
-	replay := func(e *tableOccs, occs []Occurrence) {
-		ix.Occs = append(ix.Occs, occs...)
-	}
 	for _, ei := range info.Enums {
 		ix.Enums[ei.Key] = ei
 	}
@@ -178,40 +169,65 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		ix.Partials[pi.Decl.Name.Name()] = pi
 	}
 
+	// Every table's occurrences are tableOccurrences, a pure function
+	// of the inputs resolved here (D86); the memo answers a table whose
+	// inputs are what they were. An entry's lists are appended where
+	// the build puts a table's occurrences: its symbol with the
+	// declarations, its columns after the partials', its body with the
+	// references.
+	entries := make(map[*ast.Table]*tableOccs, len(info.Tables))
+	if memo != nil {
+		memo.Hits, memo.Misses = 0, 0
+		// Sized from the last build: the occurrences are appended in
+		// one pass and the slice must not grow by copying under them.
+		ix.Occs = make([]Occurrence, 0, memo.lastLen)
+		defer func() { memo.lastLen = len(ix.Occs) }()
+	}
+	for _, ti := range info.Tables {
+		resolved := ix.resolveTable(ti.Decl.Name) // the table the body's references bind to
+		tables := ix.tablesNamed(ti.Decl)
+		enums := ix.enumsNamed(ti.Decl)
+		partials := ix.partialsNamed(ti.Decl)
+		var e *tableOccs
+		if memo != nil {
+			if prev := memo.prev[ti.Decl]; prev != nil && prev.holds(ti, resolved, tables, enums, partials) {
+				e = prev
+				memo.Hits++
+			}
+		}
+		if e == nil {
+			e = &tableOccs{ti: ti, resolved: resolved, tables: tables, enums: enums, partials: partials}
+			e.sym, e.cols, e.body, e.decls = tableOccurrences(ti.Decl, ti, resolved, tables, enums, partials)
+			e.declMap = declMapOf(e.decls)
+			if memo != nil {
+				memo.Misses++
+			}
+		}
+		entries[ti.Decl] = e
+	}
+	if memo != nil {
+		memo.next = entries
+		defer func() { memo.prev, memo.next = memo.next, nil }()
+	}
+	if ix.declTables == nil {
+		ix.declTables = make(map[string]*tableOccs, len(entries))
+	}
+
 	// --- declarations ---
 	for _, ti := range info.Tables {
 		e := entries[ti.Decl]
-		if e != nil && e.reused {
-			// The table's own symbol goes into the shared map; its
-			// columns stay in the entry's map, reached through Decl.
-			for _, d := range e.decls {
-				if strings.HasPrefix(d.id.Container, tableContainer) {
-					continue
-				}
-				if _, exists := ix.decls[d.id]; !exists {
-					ix.decls[d.id] = d.ident
-				}
+		// The table's own symbol goes into the shared map; its columns
+		// stay in the entry's map, reached through Decl.
+		for _, d := range e.decls {
+			if strings.HasPrefix(d.id.Container, tableContainer) {
+				continue
 			}
-			if ix.declTables == nil {
-				ix.declTables = map[string]*tableOccs{}
+			if _, exists := ix.decls[d.id]; !exists {
+				ix.decls[d.id] = d.ident
 			}
-			ix.declTables[ti.Key] = e
-			replay(e, e.sym)
-			continue
 		}
-		from := len(ix.Occs)
-		if e != nil {
-			ix.recording = &e.decls
-		}
-		id := SymbolID{SymTable, "", ti.Key}
-		ix.add(id, lastPart(ti.Decl.Name), true)
-		if ti.Decl.Alias != nil {
-			ix.add(id, ti.Decl.Alias, false)
-		}
-		if e != nil {
-			e.sym = occsFrom(from)
-			ix.recording = nil
-		}
+		ix.declTables[ti.Key] = e
+		ix.Occs = append(ix.Occs, e.sym...)
 	}
 	for _, ei := range info.Enums {
 		ix.add(SymbolID{SymEnum, "", ei.Key}, lastPart(ei.Decl.Name), true)
@@ -232,24 +248,7 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		}
 	}
 	for _, ti := range info.Tables {
-		e := entries[ti.Decl]
-		if e != nil && e.reused {
-			replay(e, e.cols)
-			continue
-		}
-		from := len(ix.Occs)
-		if e != nil {
-			ix.recording = &e.decls
-		}
-		for _, cd := range ti.Columns {
-			if cd.Partial == nil {
-				ix.add(SymbolID{SymColumn, "table:" + ti.Key, cd.Col.Name.Name()}, cd.Col.Name, true)
-			}
-		}
-		if e != nil {
-			e.cols = occsFrom(from)
-			ix.recording = nil
-		}
+		ix.Occs = append(ix.Occs, entries[ti.Decl].cols...)
 	}
 
 	// Groups shadow tables as select targets (§V11.2): a group-targeted
@@ -265,20 +264,12 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 	for _, decl := range f.Decls {
 		switch n := decl.(type) {
 		case *ast.Table:
-			e := entries[n]
-			if e != nil && e.reused {
-				replay(e, e.body)
-				continue
-			}
-			from := len(ix.Occs)
-			if e != nil {
-				ix.recording = &e.decls
-			}
-			ti := ix.resolveTable(n.Name)
-			ix.walkTableBody(n.Body, ti, "")
-			if e != nil {
-				e.body = occsFrom(from)
-				ix.recording = nil
+			if e := entries[n]; e != nil {
+				ix.Occs = append(ix.Occs, e.body...)
+			} else {
+				// A duplicate declaration the schema check skipped: its
+				// references still bind to the table that won.
+				ix.walkTableBody(n.Body, ix.resolveTable(n.Name), "")
 			}
 		case *ast.TablePartial:
 			ix.walkTableBody(n.Body, nil, n.Name.Name())
@@ -334,6 +325,160 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		}
 	}
 	return ix
+}
+
+// tableOccurrences is one table's contribution to the index as a pure
+// function of its inputs (D86): its declaration, its checked table,
+// the table its body's references bind to (the checked one, or the
+// namesake that won when this one is a duplicate), the tables its
+// inline references name by lookup key, the enums the body names by
+// canonical key, and the partials it injects by presence.
+// It returns the occurrences of the table's symbol and alias, of its
+// own column declarations, and of every reference inside its body,
+// plus the declarations it contributes, reading nothing else and
+// writing nothing it did not create.
+func tableOccurrences(d *ast.Table, ti, resolved *check.TableInfo, tables map[string]*check.TableInfo, enums map[string]*check.EnumInfo, partials map[string]bool) (sym, cols, body []Occurrence, decls []declEntry) {
+	// The walk asks its maps whether a key is declared, so the inputs'
+	// "named but absent" entries (nil) must not be present in them.
+	acc := &Index{Tables: map[string]*check.TableInfo{}, Enums: map[string]*check.EnumInfo{}, Partials: map[string]*check.PartialInfo{}, decls: map[SymbolID]*ast.Ident{}}
+	for key, t := range tables {
+		if t != nil {
+			acc.Tables[key] = t
+		}
+	}
+	for key, e := range enums {
+		if e != nil {
+			acc.Enums[key] = e
+		}
+	}
+	for name, present := range partials {
+		if present {
+			acc.Partials[name] = nil
+		}
+	}
+	acc.recording = &decls
+	id := SymbolID{SymTable, "", ti.Key}
+	acc.add(id, lastPart(d.Name), true)
+	if d.Alias != nil {
+		acc.add(id, d.Alias, false)
+	}
+	sym = acc.Occs[:len(acc.Occs):len(acc.Occs)]
+	from := len(acc.Occs)
+	for _, cd := range ti.Columns {
+		if cd.Partial == nil {
+			acc.add(SymbolID{SymColumn, "table:" + ti.Key, cd.Col.Name.Name()}, cd.Col.Name, true)
+		}
+	}
+	cols = acc.Occs[from:len(acc.Occs):len(acc.Occs)]
+	from = len(acc.Occs)
+	acc.walkTableBody(d.Body, resolved, "")
+	body = acc.Occs[from:len(acc.Occs):len(acc.Occs)]
+	return sym, cols, body, decls
+}
+
+// enumsNamed is the enums a table's body names, by canonical key, nil
+// where the name resolves to none: the column types, and the enum
+// constants in settings and records.
+func (ix *Index) enumsNamed(d *ast.Table) map[string]*check.EnumInfo {
+	out := map[string]*check.EnumInfo{}
+	name := func(key string) { out[key] = ix.Enums[key] }
+	var settings func(s *ast.SettingList)
+	settings = func(s *ast.SettingList) {
+		if s == nil {
+			return
+		}
+		for _, st := range s.Settings {
+			if ec, ok := st.Value.(*ast.EnumConst); ok {
+				name("public." + ec.Enum.Name())
+			}
+		}
+	}
+	rows := func(rows []*ast.RecordRow) {
+		for _, row := range rows {
+			for _, v := range row.Values {
+				if ec, ok := v.(*ast.EnumConst); ok {
+					name("public." + ec.Enum.Name())
+				}
+			}
+		}
+	}
+	for _, item := range d.Body {
+		switch n := item.(type) {
+		case *ast.Column:
+			if n.Type != nil && n.Type.Name != nil {
+				name(canon(n.Type.Name))
+			}
+			settings(n.Settings)
+		case *ast.IndexesBlock:
+			for _, index := range n.Indexes {
+				settings(index.Settings)
+			}
+		case *ast.Records:
+			rows(n.Rows)
+		case *ast.ChecksBlock:
+			for _, c := range n.Checks {
+				settings(c.Settings)
+			}
+		}
+	}
+	return out
+}
+
+// tablesNamed is the tables a table's body names in inline references
+// (§6.7), by the keys the walk looks them up with — the canonical
+// name, and the alias form of an unqualified one — nil where a key
+// resolves to none.
+func (ix *Index) tablesNamed(d *ast.Table) map[string]*check.TableInfo {
+	out := map[string]*check.TableInfo{}
+	endpoint := func(ep *ast.RefEndpoint) {
+		if ep == nil || ep.Table == nil {
+			return
+		}
+		key := canon(ep.Table)
+		out[key] = ix.Tables[key]
+		if ep.Table.Schema() == "" {
+			alias := "alias:" + ep.Table.Base()
+			out[alias] = ix.Tables[alias]
+		}
+	}
+	settings := func(s *ast.SettingList) {
+		if s == nil {
+			return
+		}
+		for _, st := range s.Settings {
+			if rv, ok := st.Value.(*ast.RefValue); ok {
+				endpoint(rv.Endpoint)
+			}
+		}
+	}
+	for _, item := range d.Body {
+		switch n := item.(type) {
+		case *ast.Column:
+			settings(n.Settings)
+		case *ast.IndexesBlock:
+			for _, index := range n.Indexes {
+				settings(index.Settings)
+			}
+		case *ast.ChecksBlock:
+			for _, c := range n.Checks {
+				settings(c.Settings)
+			}
+		}
+	}
+	return out
+}
+
+// partialsNamed is the partials a table's body injects, by name, with
+// whether each is declared.
+func (ix *Index) partialsNamed(d *ast.Table) map[string]bool {
+	out := map[string]bool{}
+	for _, item := range d.Body {
+		if ref, ok := item.(*ast.PartialRef); ok {
+			_, present := ix.Partials[ref.Name.Name()]
+			out[ref.Name.Name()] = present
+		}
+	}
+	return out
 }
 
 // walkTableBody records references inside one Table or TablePartial body.
@@ -560,7 +705,7 @@ func (ix *Index) Decl(id SymbolID) *ast.Ident {
 	}
 	if key, ok := strings.CutPrefix(id.Container, tableContainer); ok {
 		if e := ix.declTables[key]; e != nil {
-			return e.declMapOf()[id]
+			return e.declMap[id]
 		}
 	}
 	return nil

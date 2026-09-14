@@ -123,6 +123,12 @@ what unit tests missed — do that for anything interactive.
 - SQLite-first, all-in (D02); SQLite is the gen-time SQL checker via
   in-memory prepare (D06). Never: callbacks, lazy loading, dirty
   tracking, reflection in generated paths (D27).
+- What a session memo answers is a pure function of explicit inputs
+  (D86): a top-level function whose parameters are its whole input,
+  keyed on exactly those. `cmd/volt`'s purity gate fails the build on
+  a read of package state, a write through an input, or a call into a
+  package that keeps state, transitively; a new memo adds its function
+  to the gate's targets in the same commit.
 - Commit messages explain *why*; a session that produces new decisions
   appends them to `docs/decisions.md` before committing.
 

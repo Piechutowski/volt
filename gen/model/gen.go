@@ -66,7 +66,7 @@ func Generate(pkg *lang.Package, opts Options) ([]File, error) {
 	}
 	if opts.SQL {
 		emits = append(emits, emit{"nao_schema.sql", func() ([]byte, error) {
-			return sqlite.Generate(pkg.Merged(), pkg.Schema(), sqlite.Options{Source: opts.Source})
+			return sqlite.Generate(pkg.Merged(), pkg.Schema(), sqlite.Options{Source: opts.Source, CheckSQL: pkg.CheckSQL})
 		}})
 	}
 	out := make([]File, len(emits))

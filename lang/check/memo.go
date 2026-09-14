@@ -23,17 +23,23 @@ type Memo struct {
 	Hits, Misses int
 }
 
+// memoTable is one call of tableCheck: its inputs and its outputs.
 type memoTable struct {
 	ti         *TableInfo
 	partials   []*ast.TablePartial // the injected partials, in body order, nil for a missing one
 	hasImports bool
-	diags      []diag.Diagnostic // the table's own: expansion, body, columns
+	enumSig    string
+	diags      []diag.Diagnostic
 }
 
-// lookup answers the table for d when its inputs are what they were.
-func (m *Memo) lookup(d *ast.Table, partials []*ast.TablePartial, hasImports bool) *memoTable {
+// lookup answers the table for d when every input of tableCheck is
+// what it was; a nil memo answers nothing.
+func (m *Memo) lookup(d *ast.Table, partials []*ast.TablePartial, hasImports bool, enumSig string) *memoTable {
+	if m == nil {
+		return nil
+	}
 	e := m.prev[d]
-	if e == nil || e.hasImports != hasImports || len(e.partials) != len(partials) {
+	if e == nil || e.hasImports != hasImports || e.enumSig != enumSig || len(e.partials) != len(partials) {
 		return nil
 	}
 	for i, p := range partials {

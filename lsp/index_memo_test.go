@@ -79,7 +79,22 @@ func TestIndexMemoMatchesFreshBuild(t *testing.T) {
 	}
 	round("first", text, 12)
 	round("no change", text, 0)
-	round("edit one table", strings.Replace(text, "c002 text [not null]", "c002 text [not null, note: 'edited']", 1), 1)
-	round("edit a route", strings.Replace(text, "get /events        volt.Events", "get /stream        volt.Events", 1), 1)
+	// One table edited rebuilds two: itself, and the next table of
+	// the corpus, whose prev_id references it (an input, D86).
+	round("edit one table", strings.Replace(text, "c002 text [not null]", "c002 text [not null, note: 'edited']", 1), 2)
+	round("edit a route", strings.Replace(text, "get /events        volt.Events", "get /stream        volt.Events", 1), 2)
 	round("edit the partial", strings.Replace(text, "created_at timestamp", "created_at timestamp [note: 'stamped']", 1), 12)
+	// The enum every table's status column names: its declaration is
+	// an input of each table's occurrences (the type reference binds
+	// to it), so a change to it rebuilds every table. Another enum,
+	// named by no table, rebuilds every table too, one level down: the
+	// enum set is an input of every table's check (D86), so the checked
+	// tables are new objects and the index follows them.
+	cur := strings.Replace(text, "retired [note: 'no longer written']", "retired [note: 'gone']\n\tarchived", 1)
+	round("edit the enum", cur, 12)
+	cur = strings.Replace(cur, "TablePartial stamped", "Enum kind {\n\tplain\n}\n\nTablePartial stamped", 1)
+	round("add another enum", cur, 12)
+	// A table whose partial vanishes rebuilds, as does one whose enum does.
+	cur = strings.Replace(cur, "TablePartial stamped", "TablePartial stampedx", 1)
+	round("rename the partial", cur, 12)
 }

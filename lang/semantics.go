@@ -66,6 +66,11 @@ func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 	}
 	if s != nil {
 		c.memos = s.declMemos(fresh)
+		dirs := make([]string, 0, len(fresh))
+		for _, path := range fresh {
+			dirs = append(dirs, pr.Packages[path].Dir)
+		}
+		c.gofuncs = s.goFuncsFor(dirs)
 	}
 	phase(func(cc *checker, pkg *Package) {
 		var schemaMemo *check.Memo
@@ -120,9 +125,6 @@ type checker struct {
 	// outside a session.
 	memos map[string]*declMemo
 	memo  *declMemo
-	// predDeps records the predicates the select being checked names,
-	// for the selects memo.
-	predDeps *[]predDep
 }
 
 // declMemo holds one package's per-declaration memos across checks
@@ -143,14 +145,32 @@ type checksMemo struct {
 	Hits, Misses int
 }
 
+// checksEntry is one call of tableSpecs: its inputs (the checked
+// table is the map key) and its outputs.
 type checksEntry struct {
-	model any
-	stamp string
-	specs []golang.CheckSpec
-	diags []diag.Diagnostic
+	model   any
+	funcs   *goScan
+	pkgName string
+	preds   map[string]*ast.Pred
+	specs   []golang.CheckSpec
+	sqls    map[*ast.Check]string
+	diags   []diag.Diagnostic
 
 	validDone                bool // paramsValidators answered
 	validCreate, validUpdate bool
+}
+
+// holds reports whether the entry's inputs are the given ones.
+func (e *checksEntry) holds(model any, funcs *goScan, pkgName string, preds map[string]*ast.Pred) bool {
+	if e.model != model || e.funcs != funcs || e.pkgName != pkgName || len(e.preds) != len(preds) {
+		return false
+	}
+	for name, d := range preds {
+		if old, ok := e.preds[name]; !ok || old != d {
+			return false
+		}
+	}
+	return true
 }
 
 // perPackage runs one phase over every package, on every CPU (PERF-7).

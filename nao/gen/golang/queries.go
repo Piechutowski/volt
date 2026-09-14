@@ -158,39 +158,26 @@ func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 	}
 	sqlNames := map[string]string{}
 
-	// Every table's model is built on its own, on every CPU, against a
-	// generator of its own for the imports it needs (D81); the name
-	// collisions between tables are then judged in declaration order,
-	// so the first error is the same whatever the schedule.
+	// Every table's model is a pure function of the checked table and
+	// the enum types (D86), built on every CPU; the name collisions
+	// between tables are then judged in declaration order, so the
+	// first error is the same whatever the schedule.
 	type built struct {
 		tm  *tableModel
 		imp map[string]bool
 		err error
 	}
-	// The enum types are the model's only input beyond its table: a
-	// memo entry is good while they spell the same.
-	enumSig := ""
-	if memo != nil {
-		var sb strings.Builder
-		for _, e := range info.Enums {
-			sb.WriteString(e.Key)
-			sb.WriteByte('=')
-			sb.WriteString(g.enumTypes[e.Key])
-			sb.WriteByte(';')
-		}
-		enumSig = sb.String()
-	}
+	enums := enumTypesOf(info, g.enumTypes)
 	tables := make([]built, len(info.Tables))
 	par.For(len(info.Tables), func(i int) {
 		if memo != nil {
-			if e := memo.prev[info.Tables[i]]; e != nil && e.enumSig == enumSig {
+			if e := memo.prev[info.Tables[i]]; e != nil && e.enumSig == enums.sig {
 				tables[i] = built{e.tm, e.imports, nil}
 				return
 			}
 		}
-		gt := &generator{f: g.f, info: g.info, enumTypes: g.enumTypes, imports: map[string]bool{}}
-		tm, err := tableBuild(gt, info.Tables[i])
-		tables[i] = built{tm, gt.imports, err}
+		tm, imports, err := tableBuild(info.Tables[i], enums)
+		tables[i] = built{tm, imports, err}
 	})
 	if memo != nil {
 		memo.next = make(map[*check.TableInfo]*memoModel, len(info.Tables))
@@ -201,7 +188,7 @@ func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 					memo.next[ti] = e
 				} else {
 					memo.Misses++
-					memo.next[ti] = &memoModel{tm: b.tm, imports: b.imp, enumSig: enumSig}
+					memo.next[ti] = &memoModel{tm: b.tm, imports: b.imp, enumSig: enums.sig}
 				}
 			}
 		}
@@ -227,19 +214,43 @@ func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 	return p, nil
 }
 
-func tableBuild(g *generator, ti *check.TableInfo) (*tableModel, error) {
+// enumTypes is the enum set as a model's input: canonical key to Go
+// type name, with a signature that spells the whole map, so two sets
+// with the same signature resolve every column type alike.
+type enumTypes struct {
+	byKey map[string]string
+	sig   string
+}
+
+func enumTypesOf(info *check.Info, byKey map[string]string) *enumTypes {
+	var sb strings.Builder
+	for _, e := range info.Enums {
+		sb.WriteString(e.Key)
+		sb.WriteByte('=')
+		sb.WriteString(byKey[e.Key])
+		sb.WriteByte(';')
+	}
+	return &enumTypes{byKey: byKey, sig: sb.String()}
+}
+
+// tableBuild is one table's model as a pure function of the checked
+// table and the enum types (D86): the model with its fields, keys and
+// names, and the imports its field types need. It reads nothing else
+// and writes nothing it did not create.
+func tableBuild(ti *check.TableInfo, enums *enumTypes) (*tableModel, map[string]bool, error) {
 	model, err := modelName(ti.Decl)
 	if err != nil {
-		return nil, fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
+		return nil, nil, fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
 	}
 	tm := &tableModel{ti: ti, model: model, sqlName: sqlTableName(ti.Decl.Name)}
+	imports := map[string]bool{}
 	pkFromIndex := compositePKColumns(ti)
 	goFields := map[string]string{}
 	params := map[string]string{}
 	for _, cd := range ti.Columns {
-		fp, err := fieldBuild(g, cd, pkFromIndex, goFields, params)
+		fp, err := fieldBuild(enums.byKey, imports, cd, pkFromIndex, goFields, params)
 		if err != nil {
-			return nil, fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
+			return nil, nil, fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
 		}
 		tm.fields = append(tm.fields, fp)
 	}
@@ -277,10 +288,10 @@ func tableBuild(g *generator, ti *check.TableInfo) (*tableModel, error) {
 			}
 		}
 	}
-	return tm, nil
+	return tm, imports, nil
 }
 
-func fieldBuild(g *generator, cd *check.ColumnDef, pkFromIndex map[string]bool, goFields, params map[string]string) (*fieldPlan, error) {
+func fieldBuild(enumTypes map[string]string, imports map[string]bool, cd *check.ColumnDef, pkFromIndex map[string]bool, goFields, params map[string]string) (*fieldPlan, error) {
 	col := cd.Col
 	colName := col.Name.Name()
 
@@ -293,12 +304,12 @@ func fieldBuild(g *generator, cd *check.ColumnDef, pkFromIndex map[string]bool, 
 	}
 	goFields[goField] = colName
 
-	typ, err := typeResolve(col.Type.Name.Schema(), col.Type.Name.Base(), g.enumTypes)
+	typ, err := typeResolve(col.Type.Name.Schema(), col.Type.Name.Base(), enumTypes)
 	if err != nil {
 		return nil, fmt.Errorf("column %q: %w", colName, err)
 	}
 	if typ.imp != "" {
-		g.imports[typ.imp] = true
+		imports[typ.imp] = true
 	}
 	nullable := isNullable(col) && !pkFromIndex[colName]
 	goType := typ.name

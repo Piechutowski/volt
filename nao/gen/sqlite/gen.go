@@ -32,6 +32,10 @@ import (
 type Options struct {
 	// Source is the name of the DBML input, recorded in the header.
 	Source string
+	// CheckSQL is every typed check's SQL rendering, lowered by the
+	// Volt checker (§V12.4): one rendering serves the DDL and the
+	// generated validator. A typed check absent from it is an error.
+	CheckSQL map[*ast.Check]string
 }
 
 // Generate renders the schema file for one checked DBML file.
@@ -171,10 +175,11 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 			case ck.Pred != nil:
 				// Lowered by the Volt checker (§V12.4); one rendering
 				// serves the DDL and the generated validator.
-				if ck.SQL == "" {
+				sql, lowered := g.opts.CheckSQL[ck]
+				if !lowered {
 					return fmt.Errorf("table %s: typed check not lowered — generate through volt gen (§V12)", ti.Decl.Name.Base())
 				}
-				expr = ck.SQL
+				expr = sql
 			case ck.Ref != nil:
 				continue // validator tier only: SQLite cannot call Go (§V12.5)
 			default:
