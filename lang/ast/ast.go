@@ -396,7 +396,7 @@ func (x *Check) End() token.Position {
 	if x.Settings != nil {
 		return x.Settings.End()
 	}
-	if x.EndPos.Line != 0 {
+	if x.EndPos.Line() != 0 {
 		return x.EndPos
 	}
 	return x.Expr.End()

@@ -38,6 +38,7 @@ type Session struct {
 // SessionStats counts the work a session did and the work it skipped.
 type SessionStats struct {
 	FilesParsed, FilesReused          int
+	DeclsParsed, DeclsReused          int // top-level declarations across the files parsed (D83)
 	PackagesChecked, PackagesReused   int
 	PackagesVetted, PackagesVetReused int
 }
@@ -53,6 +54,7 @@ type fileEntry struct {
 	mtime time.Time
 	file  *ast.File
 	diags []diag.Diagnostic
+	reuse *parser.Reuse // the parse's chunks, for the next parse of this file
 }
 
 // pkgEntry is one package's last check: the key its inputs hashed to,
@@ -200,8 +202,12 @@ func (s *Session) parse(path string, entry fs.DirEntry, overlay map[string]strin
 		s.reused()
 		return prev.file, prev.diags, nil
 	}
-	file, diags := parser.ParseFile(path, text)
-	e := &fileEntry{src: text, file: file, diags: diags}
+	var prevReuse *parser.Reuse
+	if prev != nil {
+		prevReuse = prev.reuse
+	}
+	file, diags, reuse, st := parser.ParseFileReuse(path, text, prevReuse)
+	e := &fileEntry{src: text, file: file, diags: diags, reuse: reuse}
 	if !overlaid {
 		e.disk, e.size, e.mtime = true, info.Size(), info.ModTime()
 	}
@@ -213,6 +219,8 @@ func (s *Session) parse(path string, entry fs.DirEntry, overlay map[string]strin
 	e.gen = s.gen
 	s.files[path] = e
 	s.stats.FilesParsed++
+	s.stats.DeclsParsed += st.Parsed
+	s.stats.DeclsReused += st.Reused
 	s.mu.Unlock()
 	return file, diags, nil
 }

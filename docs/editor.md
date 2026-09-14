@@ -249,8 +249,12 @@ agree. The LSP picks it up automatically.
   objects they were, and restored otherwise. Measured on a 1000-table,
   20-package project: an edit costs about 200 ms (the edited file's
   parse and the packages that see it), a no-op 2 ms, against 770 ms
-  for a fresh analysis. What remains is the edited file's own parse
-  and check; per-declaration memoization is the next step (PERF-10).
+  for a fresh analysis. The edited file's own parse is now by
+  declaration (D83): a file is parsed in chunks, one per top-level
+  declaration, and an edit re-parses the chunk it touched and relocates
+  the rest by one store per chunk, so the thousand-table one-file
+  project re-parses in 22 ms against 340 ms. What remains is the
+  edited file's package check, which still runs whole (PERF-10).
 
 ## 7. Known limitations (documented trade-offs, not bugs)
 

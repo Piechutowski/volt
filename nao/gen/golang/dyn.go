@@ -154,7 +154,7 @@ func dynNamesCheck(p *plan, info *check.Info) []NameCollision {
 			return
 		}
 		first, second := prev, o
-		if second.pos.Line < first.pos.Line || (second.pos.Line == first.pos.Line && second.pos.Column < first.pos.Column) {
+		if second.pos.Line() < first.pos.Line() || (second.pos.Line() == first.pos.Line() && second.pos.Column() < first.pos.Column()) {
 			first, second = second, first
 		}
 		out = append(out, NameCollision{Name: name, First: first.describe(), Second: second.describe(), Pos: second.pos})

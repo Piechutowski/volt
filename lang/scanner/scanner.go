@@ -37,9 +37,16 @@ func Scan(filename, src string) ([]token.Token, []diag.Diagnostic) {
 	if strings.IndexByte(src, '\r') >= 0 {
 		src = strings.ReplaceAll(src, "\r", "")
 	}
+	return ScanFile(token.NewFile(filename, src))
+}
+
+// ScanFile scans a file, or a chunk of one, whose text holds no
+// carriage returns; every position is in f.
+func ScanFile(f *token.File) ([]token.Token, []diag.Diagnostic) {
+	src := f.Src
 	s := &Scanner{
 		src:  src,
-		file: token.NewFile(filename, src),
+		file: f,
 		pos:  cursor{line: 1, col: 1},
 		// Schema text runs about six bytes per token; sizing the slice
 		// once spares the doublings and their copies (PERF-7).

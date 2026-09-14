@@ -52,11 +52,11 @@ func Warningf(pos token.Position, code, format string, args ...any) Diagnostic {
 func Sort(ds []Diagnostic) {
 	sort.SliceStable(ds, func(i, j int) bool {
 		a, b := ds[i], ds[j]
-		if a.Pos.Line != b.Pos.Line {
-			return a.Pos.Line < b.Pos.Line
+		if a.Pos.Line() != b.Pos.Line() {
+			return a.Pos.Line() < b.Pos.Line()
 		}
-		if a.Pos.Column != b.Pos.Column {
-			return a.Pos.Column < b.Pos.Column
+		if a.Pos.Column() != b.Pos.Column() {
+			return a.Pos.Column() < b.Pos.Column()
 		}
 		return a.Severity < b.Severity
 	})

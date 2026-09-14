@@ -1,5 +1,7 @@
 package ast
 
+import "unsafe"
+
 // Inspect traverses the AST in depth-first order, calling f for each node.
 // If f returns false, children of the node are not visited. It plays the
 // role of go/ast's Inspect for the vet analyzers.
@@ -15,7 +17,7 @@ func Inspect(n Node, f func(Node) bool) {
 func eachChild(n Node, visit func(Node)) {
 	add := func(ns ...Node) {
 		for _, c := range ns {
-			if c != nil {
+			if !nilNode(c) {
 				visit(c)
 			}
 		}
@@ -146,6 +148,14 @@ func eachChild(n Node, visit func(Node)) {
 }
 
 // identOrNil avoids the typed-nil-in-interface trap for optional fields.
+// nilNode reports a Node that is nil or holds a nil pointer, which a
+// broken parse leaves in an optional field: Go's interface is a type
+// word and a data word, and a typed nil has an empty data word.
+func nilNode(n Node) bool {
+	type iface struct{ typ, data unsafe.Pointer }
+	return n == nil || (*iface)(unsafe.Pointer(&n)).data == nil
+}
+
 func identOrNil(x *Ident) Node {
 	if x == nil {
 		return nil

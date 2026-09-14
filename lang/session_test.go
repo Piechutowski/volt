@@ -13,8 +13,10 @@ import (
 
 	"github.com/Piechutowski/volt/gen/model"
 	"github.com/Piechutowski/volt/gen/router"
+	"github.com/Piechutowski/volt/internal/corpus"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
+	"github.com/Piechutowski/volt/lang/parser"
 )
 
 func diagsRender(ds []diag.Diagnostic) string {
@@ -206,4 +208,49 @@ func TestSessionVetMemo(t *testing.T) {
 	}
 	round("edit", map[string]string{d2: string(src) + "\n// touched\n"}, 2)
 	round("same edit", map[string]string{d2: string(src) + "\n// touched\n"}, 0)
+}
+
+// TestSessionReparsesOneDeclaration proves an edit inside one
+// declaration of a one-file project re-parses that declaration alone
+// (D83): the session's diagnostics still match a fresh analysis, and
+// the work counters say one declaration parsed, the rest reused.
+func TestSessionReparsesOneDeclaration(t *testing.T) {
+	root := t.TempDir()
+	if err := corpus.Write(root, corpus.Spec{Tables: 12, Columns: 6, Single: true}); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "schema.volt")
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(src)
+	_, _, _, whole := parser.ParseFileReuse(path, text, nil)
+	var s lang.Session
+	round := func(name, text string, wantParsed int) {
+		t.Helper()
+		before := s.Stats()
+		overlay := map[string]string{path: text}
+		pr, err := s.Load(root, overlay)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := diagsRender(s.Check(pr))
+		fresh, err := lang.LoadOverlay(root, overlay)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := diagsRender(lang.Check(fresh)); got != want {
+			t.Fatalf("%s: session differs from fresh\n--- session\n%s--- fresh\n%s", name, got, want)
+		}
+		after := s.Stats()
+		if parsed := after.DeclsParsed - before.DeclsParsed; parsed != wantParsed {
+			t.Errorf("%s: parsed %d declarations, want %d (reused %d)", name, parsed, wantParsed, after.DeclsReused-before.DeclsReused)
+		}
+	}
+	round("first", text, whole.Parsed)
+	round("edit one table", strings.Replace(text, "c002 text [not null]", "c002 text [not null, note: 'edited']", 1), 1)
+	round("break it", strings.Replace(text, "c002 text [not null]", "c002 text [not null", 1), 1)
+	round("fix it", text, 1)
+	round("edit a route", strings.Replace(text, "get /events        volt.Events", "get /stream        volt.Events", 1), 1)
 }

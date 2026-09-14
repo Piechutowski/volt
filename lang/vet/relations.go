@@ -227,10 +227,10 @@ var caseCollision = &Analyzer{
 				// warn at the later declaration; list names in source order
 				sort.Slice(group, func(i, j int) bool {
 					a, b := names[group[i]], names[group[j]]
-					if a.Line != b.Line {
-						return a.Line < b.Line
+					if a.Line() != b.Line() {
+						return a.Line() < b.Line()
 					}
-					return a.Column < b.Column
+					return a.Column() < b.Column()
 				})
 				p.Reportf(names[group[len(group)-1]], "%s names %s differ only in case", kind, strings.Join(group, " and "))
 			}

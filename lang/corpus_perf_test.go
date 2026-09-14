@@ -96,9 +96,9 @@ func TestCorpusScalesLinearly(t *testing.T) {
 var allocBudget = struct {
 	load, check, gen uint64
 }{
-	load:  1069960,
-	check: 2077912,
-	gen:   6694088,
+	load:  1069912,
+	check: 2088792,
+	gen:   6703224,
 }
 
 func TestAllocationBudget(t *testing.T) {

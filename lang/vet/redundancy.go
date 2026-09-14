@@ -209,7 +209,7 @@ var unnecessaryQuotes = &Analyzer{
 			if !ok || !id.Quoted() || !isPlainIdent(id.Name()) {
 				return true
 			}
-			key := fmt.Sprintf("%d:%s", id.Pos().Line, id.Name())
+			key := fmt.Sprintf("%d:%s", id.Pos().Line(), id.Name())
 			if seen[key] {
 				return true
 			}

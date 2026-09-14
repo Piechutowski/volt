@@ -853,3 +853,37 @@ where the merge changed the facts.
   cannot say which file, and diagnostics must). What remains of
   PERF-9 is the checker's own allocation, which is the naming plan's
   strings, not the front end's.
+
+- **D83 — A file is parsed by declaration, and an edit re-parses one**
+  (2026-09-14, roadmap PERF-10, `lang/parser/reuse.go`,
+  `lang/token`). The one-file layout made a keystroke cost the whole
+  file's parse: 340 ms for the thousand-table `schema.volt`, before
+  any check. Now `parser.ParseFileReuse` cuts a source into chunks, one
+  per top-level declaration — a line that begins with a letter outside
+  every brace, string and comment starts one; what precedes the first
+  is the head, and blank and comment lines between declarations belong
+  to the preceding one — and parses each chunk as a `token.File` of
+  its own whose base offset and line say where it sits in the whole.
+  The next parse of the same file keeps every chunk whose text is
+  unchanged, nodes and diagnostics as they are, and relocates it by one
+  store of its base; only the chunks that changed are scanned and
+  parsed. Positions are therefore relative to their chunk and answer
+  through accessors (`Offset`, `Line`, `Column`) that add the base,
+  atomically, because a reused declaration is shared with a result a
+  server thread may still be reading, and for a reused declaration the
+  new place is the right one in any case. The session's every parse
+  goes through it and counts declarations parsed and reused; the
+  whole-file `ParseFile` remains for the command line. Proven: the
+  chunked parse of every conformance snippet, valid and invalid, is
+  the whole-file parse (same declarations, positions and diagnostics),
+  and an edit sequence through valid and broken states re-parses one
+  declaration per edit with the session's diagnostics equal to a fresh
+  analysis. Measured on the thousand-table file: 22 ms per edit
+  against 340 ms. What it refuses: guessing chunk boundaries from
+  keywords alone (the lexical state is tracked, so a keyword inside a
+  string or a block is not a boundary), and mutating a shared chunk
+  anywhere but its base. What remains: the package check after an edit
+  is still whole, about 650 ms on that file with the table checks now
+  lowered on every CPU; re-checking one declaration needs each table's
+  dependency on its partials, enums and refs made explicit, which is
+  PERF-10's second half.

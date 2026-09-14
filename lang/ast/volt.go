@@ -340,7 +340,7 @@ type GroupTerm struct {
 }
 
 // Set reports whether the term was written as a parenthesized set.
-func (t *GroupTerm) Set() bool { return t.Rparen.Line > 0 }
+func (t *GroupTerm) Set() bool { return t.Rparen.Line() > 0 }
 
 // End is the term's extent: the closing paren or the last name.
 func (t *GroupTerm) End() token.Position {

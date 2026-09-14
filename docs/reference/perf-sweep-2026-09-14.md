@@ -223,3 +223,18 @@ their allocations are their own (the naming plan's strings, the
 emitters' formatting), not the AST's. Heap in use after Load at 160
 tables fell from 49.8 MB to 36.6 MB, which is what the editor holds
 per open project.
+
+## Follow-up the same day: the edit loop on the thousand-table file (D83)
+
+The session's parse is by declaration now. On the one-file stress
+project (1000 tables, 164K lines), one edit inside one table:
+
+| Step | Before | After |
+|---|---|---|
+| Parse after the edit | 340 ms, 2008 declarations | 22 ms, 1 declaration parsed, 2007 reused |
+| Check after the edit | 700 ms | 650 ms (table checks on every CPU) |
+
+The check is what remains of PERF-10: the package is still checked
+whole after an edit, and its cost is spread over the naming plan, the
+schema check, route expansion and binding, none of which knows which
+declaration moved.

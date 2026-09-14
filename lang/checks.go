@@ -11,8 +11,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Piechutowski/volt/internal/par"
+
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/token"
 	"github.com/Piechutowski/volt/nao/gen/golang"
 	"github.com/Piechutowski/volt/nao/gen/sqlite"
@@ -26,41 +29,61 @@ func (c *checker) tableChecks(pkg *Package) {
 	if info == nil {
 		return
 	}
-	for _, ti := range info.Tables {
-		var specs []golang.CheckSpec
-		// Direct and injected checks alike (§6.9.3): a partial's checks
-		// belong to every table it is injected into.
-		for _, ck := range ti.Checks {
-			var spec golang.CheckSpec
-			var ok bool
-			switch {
-			case ck.Pred != nil:
-				spec, ok = c.typedCheck(ti, ck, info)
-			case ck.Ref != nil:
-				spec, ok = c.goRefCheck(ti, ck, info)
-			default:
-				continue // opaque SQL: §6.6's business, SQL CHECK only
-			}
-			if !ok {
-				continue
-			}
-			if n := ck.Settings.Get("name"); n != nil {
-				if lit, isStr := n.Value.(*ast.BasicLit); isStr && lit.Tok.Kind == token.STRING {
-					spec.Name = lit.Tok.Val
-				}
-			}
-			specs = append(specs, spec)
-		}
-		// required columns (§6.3 extension, D72): one synthesized check
-		// per column, "non-empty" spelled per type class; gen/sqlite
-		// renders the same rule as a CHECK, both named <column>_required.
-		if req := c.requiredSpecs(ti, info); len(req) > 0 {
-			specs = append(specs, req...)
-		}
-		if len(specs) > 0 {
+	// Every table's checks are lowered on their own, on every CPU: a
+	// per-table checker shares the project, the schemas and the Go
+	// function cache (read-only or locked) and keeps its own
+	// diagnostics, appended in table order afterwards (D83).
+	type lowered struct {
+		specs []golang.CheckSpec
+		diags []diag.Diagnostic
+	}
+	outs := make([]lowered, len(info.Tables))
+	par.For(len(info.Tables), func(i int) {
+		cc := &checker{pr: c.pr, schemas: c.schemas, pkg: pkg, gofuncs: c.gofuncs}
+		outs[i].specs = cc.tableSpecs(info.Tables[i], info)
+		outs[i].diags = cc.diags
+	})
+	for i, ti := range info.Tables {
+		c.diags = append(c.diags, outs[i].diags...)
+		if specs := outs[i].specs; len(specs) > 0 {
 			pkg.CheckFns = append(pkg.CheckFns, golang.CheckFn{TableKey: ti.Key, Checks: specs})
 		}
 	}
+}
+
+// tableSpecs lowers one table's checks.
+func (c *checker) tableSpecs(ti *check.TableInfo, info *check.Info) []golang.CheckSpec {
+	var specs []golang.CheckSpec
+	// Direct and injected checks alike (§6.9.3): a partial's checks
+	// belong to every table it is injected into.
+	for _, ck := range ti.Checks {
+		var spec golang.CheckSpec
+		var ok bool
+		switch {
+		case ck.Pred != nil:
+			spec, ok = c.typedCheck(ti, ck, info)
+		case ck.Ref != nil:
+			spec, ok = c.goRefCheck(ti, ck, info)
+		default:
+			continue // opaque SQL: §6.6's business, SQL CHECK only
+		}
+		if !ok {
+			continue
+		}
+		if n := ck.Settings.Get("name"); n != nil {
+			if lit, isStr := n.Value.(*ast.BasicLit); isStr && lit.Tok.Kind == token.STRING {
+				spec.Name = lit.Tok.Val
+			}
+		}
+		specs = append(specs, spec)
+	}
+	// required columns (§6.3 extension, D72): one synthesized check
+	// per column, "non-empty" spelled per type class; gen/sqlite
+	// renders the same rule as a CHECK, both named <column>_required.
+	if req := c.requiredSpecs(ti, info); len(req) > 0 {
+		specs = append(specs, req...)
+	}
+	return specs
 }
 
 // requiredSpecs lowers every [required] column of a table to the Go

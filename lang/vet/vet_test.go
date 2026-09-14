@@ -75,17 +75,17 @@ func TestAnalyzers(t *testing.T) {
 			for _, w := range vet.Run(f, info, analyzers...) {
 				name := strings.TrimPrefix(w.Code, "vet/")
 				matched := false
-				rest := want[int(w.Pos.Line)][:0]
-				for _, n := range want[int(w.Pos.Line)] {
+				rest := want[int(w.Pos.Line())][:0]
+				for _, n := range want[int(w.Pos.Line())] {
 					if !matched && n == name {
 						matched = true
 						continue
 					}
 					rest = append(rest, n)
 				}
-				want[int(w.Pos.Line)] = rest
+				want[int(w.Pos.Line())] = rest
 				if !matched {
-					t.Errorf("unexpected warning at line %d: %s", w.Pos.Line, w)
+					t.Errorf("unexpected warning at line %d: %s", w.Pos.Line(), w)
 				}
 			}
 			for line, names := range want {

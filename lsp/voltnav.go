@@ -353,7 +353,7 @@ func (ix *voltIndex) settingRefs(pkg *lang.Package, path string, list *ast.Setti
 func (ix *voltIndex) at(file string, offset int) *voltRef {
 	for i := range ix.refs {
 		r := &ix.refs[i]
-		if r.span.file == file && offset >= int(r.span.pos.Offset) && offset <= int(r.span.end.Offset) {
+		if r.span.file == file && offset >= int(r.span.pos.Offset()) && offset <= int(r.span.end.Offset()) {
 			return r
 		}
 	}
@@ -378,8 +378,8 @@ func (ix *voltIndex) location(sp voltSpan) *protocol.Location {
 	return &protocol.Location{
 		URI: "file://" + sp.file,
 		Range: protocol.Range{
-			Start: offsetToLSP(text, int(sp.pos.Offset)),
-			End:   offsetToLSP(text, int(sp.end.Offset)),
+			Start: offsetToLSP(text, int(sp.pos.Offset())),
+			End:   offsetToLSP(text, int(sp.end.Offset())),
 		},
 	}
 }
@@ -479,8 +479,8 @@ func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 		return nil
 	}
 	rng := protocol.Range{
-		Start: offsetToLSP(d.Text, int(ref.span.pos.Offset)),
-		End:   offsetToLSP(d.Text, int(ref.span.end.Offset)),
+		Start: offsetToLSP(d.Text, int(ref.span.pos.Offset())),
+		End:   offsetToLSP(d.Text, int(ref.span.end.Offset())),
 	}
 	return &protocol.Hover{
 		Contents: protocol.MarkupContent{Kind: protocol.MarkupKindMarkdown, Value: md},
@@ -627,7 +627,7 @@ func predHover(sym voltSym, def voltDef, ix *voltIndex) string {
 	}
 	md := "```volt\nPred " + sym.name + "\n```\n"
 	if text, ok := ix.texts[def.span.file]; ok && p.X != nil {
-		start, end := int(p.X.Pos().Offset), int(p.X.End().Offset)
+		start, end := int(p.X.Pos().Offset()), int(p.X.End().Offset())
 		if start >= 0 && end <= len(text) && start < end {
 			md += "```volt\n" + text[start:end] + "\n```\n"
 		}
@@ -753,7 +753,7 @@ func (d *Document) voltRename(pos protocol.Position, newName string) (*protocol.
 		if r.sym != ref.sym || r.text != spelling {
 			continue
 		}
-		key := fmt.Sprintf("%s:%d", r.edit.file, r.edit.pos.Offset)
+		key := fmt.Sprintf("%s:%d", r.edit.file, r.edit.pos.Offset())
 		if seen[key] {
 			continue // the declaration is recorded by both passes
 		}

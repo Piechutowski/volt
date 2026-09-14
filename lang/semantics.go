@@ -573,7 +573,7 @@ func (c *checker) datasetExpand(ds *ast.Dataset, inh inherited) []*RouteInfo {
 	}
 	if only != nil && except != nil {
 		pos := onlyPos
-		if exceptPos.Line > onlyPos.Line || (exceptPos.Line == onlyPos.Line && exceptPos.Column > onlyPos.Column) {
+		if exceptPos.Line() > onlyPos.Line() || (exceptPos.Line() == onlyPos.Line() && exceptPos.Column() > onlyPos.Column()) {
 			pos = exceptPos
 		}
 		c.errorf(pos, "V13", "only: and except: cannot both be set on a dataset (§V13.2)")
