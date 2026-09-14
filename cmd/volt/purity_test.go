@@ -750,3 +750,26 @@ func TestPurityGateBites(t *testing.T) {
 		}
 	}
 }
+
+// TestNoUnsafeImports proves no package of the three modules reaches
+// for unsafe (D89): what the compiler proves about a Go program holds
+// only while nothing steps outside the type system.
+func TestNoUnsafeImports(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := &packages.Config{Mode: packages.NeedName | packages.NeedImports, Dir: root}
+	pkgs, err := packages.Load(cfg, module+"/...", module+"/lsp/...", module+"/cmd/volt/...")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pkgs) < 20 {
+		t.Fatalf("only %d packages loaded", len(pkgs))
+	}
+	for _, pkg := range pkgs {
+		if pkg.Imports["unsafe"] != nil {
+			t.Errorf("%s imports unsafe", pkg.PkgPath)
+		}
+	}
+}

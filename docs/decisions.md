@@ -1072,3 +1072,20 @@ where the merge changed the facts.
   matched by its bytes and never scanned; the old chunker re-lexed the
   whole file to find its boundaries). What it refuses: a second lexer
   anywhere, and a boundary the parser may cross.
+
+- **D89 — The walker tests each optional field as the pointer it is,
+  and nothing imports unsafe** (2026-09-14, `lang/ast/walk.go`,
+  `cmd/volt/purity_test.go`). The typed-nil guard that kept a broken
+  parse from crashing a visitor read an interface's data word through
+  `unsafe`: an implementation detail of the runtime that happens to
+  hold, and a step outside everything the compiler proves. Now every
+  child field is visited through a helper generic over the field's own
+  pointer type, whose nil test runs before the pointer becomes an
+  interface, so a field the parser left unset is skipped by type; a
+  slot typed as an interface (a declaration, a body item, an index key,
+  a record value, a setting value) is tested as one, and holds nil or a
+  node the parser built from a non-nil pointer, never a typed nil,
+  because every node the parser returns is complete or unwound. The
+  gate now also refuses an import of `unsafe` in any package of the
+  three modules. What it refuses: reading memory the type system does
+  not describe, anywhere.
