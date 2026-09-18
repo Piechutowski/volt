@@ -168,7 +168,7 @@ func (s *Server) edited(ctx *glsp.Context, doc *Document, text string) {
 		s.analysisKick(ctx, root)
 		return
 	}
-	doc.Diags = doc.local
+	doc.vetLocal()
 	s.diagnosticsPublish(ctx, doc)
 }
 

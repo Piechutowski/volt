@@ -13,23 +13,21 @@ into the document model and the vet layer, each its own decision.
 
 Measured through the server's stdio on the thousand-table one-file
 project, one keystroke inside one table reaches its diagnostics in
-about 1.7 s. The session's parse and check are about 50 ms of that
+about 0.56 s (1.7 s when this entry was written; the document's own
+whole-file front end, the largest part then, is memoized per document
+since D103). The session's parse and check are about 50 ms of that
 (D83, D84, D99). The rest, in order of size:
 
-1. The document's own front end, run whole on the handler goroutine
-   at every change (`localAnalyze`): a fresh parse (about 240 ms), a
-   fresh schema check (about 160 ms) and the single-file vet (about
-   540 ms). For a document inside a project its diagnostics are
-   superseded by the project's; only its AST and check serve the
-   requests that arrive before the next project result. The chore:
-   parse through the session's chunked reuse, check through the
-   memoized file check, and skip the single-file vet for a document
-   the project pass vets.
-2. The package vet, memoized per package (D81), so the one-file
+1. The package vet, memoized per package (D81), so the one-file
    layout vets its whole package again on every edit, about 280 ms.
    The chore: vet per declaration, on the same memo shape as the
    check, each analyzer a pure function of the declaration and the
    facts it names.
+2. The transport: with full-text sync the client sends the whole
+   file at every change and the server decodes it, about 110 ms on
+   this 4 MB file. The chore: incremental sync, which the server's
+   change handler already applies, advertised; and the document
+   version on every publish, so a client drops a stale one.
 3. The debounce (75 ms), the index and the publish of a large
    diagnostics list, together well under 200 ms.
 

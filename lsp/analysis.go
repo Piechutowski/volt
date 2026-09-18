@@ -222,7 +222,7 @@ func (s *Server) publishResult(ctx *glsp.Context, res *projectResult) {
 		if res.packageOf(path) != nil {
 			ds = res.docDiags(path)
 		} else if root, ok := projectRootOf(path); ok && root == res.root {
-			_, _, ds = localAnalyze(path, text)
+			ds = localVerdict(path, text)
 		} else {
 			continue // another project's document
 		}
@@ -258,6 +258,10 @@ func (s *Server) adopt(doc *Document) {
 	if pkg := res.packageOf(path); pkg != nil {
 		doc.vpkg, doc.vindex, doc.Diags = pkg, res.vindex, res.docDiags(path)
 	} else {
-		doc.vpkg, doc.vindex, doc.Diags = nil, nil, doc.local
+		// The loader never read this file: its own verdict is the
+		// truth, vet advice included (D103).
+		doc.vpkg, doc.vindex = nil, nil
+		doc.vetLocal()
+		doc.Diags = doc.local
 	}
 }

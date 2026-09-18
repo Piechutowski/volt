@@ -1425,3 +1425,46 @@ where the merge changed the facts.
   were to fresh memory, which the provenance tracking proves. What it
   refuses: an alias the gate cannot see through, which is copied
   instead, and a function value from outside, which is data instead.
+
+- **D103 — The document's own front end is memoized per document,
+  and the single-file vet runs only where its verdict is the truth**
+  (2026-09-18, `lsp/document.go`, `lsp/analysis.go`, `lsp/server.go`).
+  An open document ran its whole front end on the handler goroutine at
+  every change: a fresh parse, a fresh check, a fresh index and the
+  single-file vet with a model plan built for it, about 0.9 s of the
+  1.26 s a keystroke took to reach its diagnostics on the
+  thousand-table file, all of it before the background analysis had
+  begun and, for a document inside a project package, all of it
+  superseded by that analysis except the syntax tree and the check
+  the requests read meanwhile. Now a Document keeps its own reuse
+  handle, check memo and index memo, the objects D83, D84 and D85
+  gave the session, owned by the goroutine that updates the document:
+  the run touches no Document (D79) and the session's memos stay the
+  session's (D96), so nothing is shared and no lock is added. The
+  price of that separation is stated: a document and the session
+  parse the same text twice, each keeping its own chunks, and a chunk
+  pins the text it was cut from, so a document that has edited k
+  distinct declarations keeps up to k texts alive until those chunks
+  are re-cut, as the session already did. The single-file vet is no
+  longer part of the local pass. One function adds it, once per text,
+  to the document's own verdict, and only where that verdict is what
+  the editor shows: a file outside any project, before its publish; a
+  file under a project the loader never read (a `.dbml` file, an
+  excluded directory, §V1.6), when a request adopts a run that did not
+  cover it, the run itself publishing the same verdict for that file
+  through the one function that computes it without a document; a
+  lone document's Update when no project covers it. A document inside
+  a project package is vetted by the project analysis alone, never on
+  the handler goroutine. The verdicts are what they were in every
+  shape, and the memoized front end is proven equal to a fresh
+  document's edit by edit, with one declaration parsed, one table
+  checked and two tables indexed for an edit inside one table
+  (`TestDocumentReusesItsFrontEnd`, `TestServerForeignFileVerdict`).
+  Measured: the document's own pass on a 200-table file, 20 ms to
+  1.6 ms; the in-process keystroke to its publish, 30 ms to 13 ms;
+  through the server's stdio on the thousand-table file, 1.26 s to
+  about 0.56 s mean, of which the package vet (D81) and the
+  transport's decode of the whole text are most of what remains. What
+  it refuses: a vet on the handler goroutine for a document whose
+  verdict the project supersedes, and a document that borrows the
+  session's memos.

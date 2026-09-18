@@ -153,8 +153,11 @@ Speaks LSP 3.16 over stdio via `tliron/glsp`; the wiring is one
 `protocol.Handler` literal in `server.go`. Document sync is full-text:
 files are small, and full sync makes the server stateless per edit.
 
-**The per-edit pipeline.** Every open/change/close re-runs the whole
-front end — it is fast enough that there is no cache to invalidate:
+**The per-edit pipeline.** An edit updates the document's own front
+end at once, through the document's own memos (D103: the parse by
+declaration, the check by table and the occurrence index by table are
+the session's memo shapes, D83 to D85, owned by the handler goroutine),
+and schedules the project's analysis:
 
 1. Find the project root (the nearest `go.mod`, §V1.1). A file under a root is
    checked as part of its **whole project**: every open buffer is
@@ -201,6 +204,11 @@ layer:
 
 **vet runs only on error-free files** — style advice stacked on hard
 errors is noise while typing; it reappears when the file checks clean.
+And it runs only where its verdict is what the editor shows (D103): a
+file in a project package is vetted by the project analysis, never by
+the document's own pass; a file outside any project, or one under a
+project the loader never read (§V1.6), gets the single-file vet added
+to its own verdict once per text.
 
 ## 5. Extending the system — the recipes
 
@@ -267,6 +275,16 @@ agree. The LSP picks it up automatically.
   goroutine) and the package vet (about 0.3 s) dwarf the check. That
   is a backlog entry, "The editor's keystroke path on a huge file",
   not a property of the design.
+- **The document's own front end is memoized per document** (D103) —
+  the same three memo shapes the session keeps (parse by declaration,
+  check by table, index by table), owned by the handler goroutine, so
+  the run and the documents share nothing; the single-file vet is added
+  only where the document's own verdict is the truth. Measured on the
+  same keystroke through stdio: 1.26 s before (the 1.7 s above, measured
+  again on the day) to about 0.56 s mean; in process on a 200-table
+  file, the document's own pass 20 ms to 1.6 ms and the keystroke to its
+  publish 30 ms to 13 ms (`BenchmarkDocumentUpdateLocal`,
+  `BenchmarkKeystroke` in `lsp/`).
 
 ## 7. Known limitations (documented trade-offs, not bugs)
 
