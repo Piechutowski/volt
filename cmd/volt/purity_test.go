@@ -45,6 +45,7 @@ var pureTargets = []struct{ pkg, name string }{
 	{module + "/lang", "selectCheck"},
 	{module + "/lang", "itemLower"},
 	{module + "/lsp", "tableOccurrences"},
+	{module + "/lang/vet", "DeclVet"},
 }
 
 // immutableVars are package-level variables a pure function may read:

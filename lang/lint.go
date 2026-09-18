@@ -23,22 +23,29 @@ func vetWith(pr *Project, s *Session) []diag.Diagnostic {
 	paths := c.paths()
 	per := make([][]diag.Diagnostic, len(paths))
 	var keys map[string]pkgKey
+	var memos map[string]*declMemo
 	if s != nil {
 		keys = s.packageKeys(pr, paths, s.goFuncsFor(pr, paths))
+		memos = s.declMemos(paths)
 	}
 	par.For(len(paths), func(i int) {
 		pkg := pr.Packages[paths[i]]
+		var memo *vet.Memo
 		if s != nil {
 			if ds, ok := s.vetRestore(paths[i], keys[paths[i]]); ok {
 				per[i] = ds
 				return
 			}
+			memo = &memos[paths[i]].vet
 		}
-		per[i] = vetPackage(pkg)
+		per[i] = vetPackage(pkg, memo)
 		if s != nil {
 			s.vetStore(paths[i], keys[paths[i]], per[i])
 		}
 	})
+	if s != nil {
+		s.vetStats(memos)
+	}
 	var out []diag.Diagnostic
 	for _, ds := range per {
 		out = append(out, ds...)
@@ -47,11 +54,12 @@ func vetWith(pr *Project, s *Session) []diag.Diagnostic {
 	return out
 }
 
-// vetPackage runs every analyzer over one checked package.
-func vetPackage(pkg *Package) []diag.Diagnostic {
+// vetPackage runs every analyzer over one checked package, its
+// declarations through the memo when one is given (D104).
+func vetPackage(pkg *Package, memo *vet.Memo) []diag.Diagnostic {
 	var out []diag.Diagnostic
 	if pkg.HasSchema() {
-		out = vet.RunWithPlan(pkg.merged, pkg.schema, pkg.plan, vet.All()...)
+		out = vet.RunMemo(pkg.merged, pkg.schema, pkg.plan, memo, vet.All()...)
 	}
 	return append(out, vetUnusedPipelines(pkg)...)
 }

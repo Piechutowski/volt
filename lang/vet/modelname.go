@@ -4,25 +4,35 @@
 // name out loud with the [model:] extension setting.
 package vet
 
-import "github.com/Piechutowski/volt/nao/inflect"
+import (
+	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/diag"
+	"github.com/Piechutowski/volt/nao/inflect"
+)
 
 func init() { register(modelName) }
 
-var modelName = &Analyzer{
-	Name: "modelname",
-	Doc:  "reports tables whose generated Go model name is an inflector guess not pinned by [model:]",
-	Run: func(p *Pass) {
-		for _, ti := range p.Info.Tables {
-			t := ti.Decl
-			if t.Settings.Get("model") != nil {
-				continue
-			}
-			singular, ok := inflect.SingularLast(t.Name.Base())
-			if ok {
-				continue
-			}
-			p.Reportf(t.Pos(), "cannot confidently singularize %q for its Go model name (would use %q); pin it with [model: '...']",
-				t.Name.Base(), singular)
-		}
-	},
+type modelNameRule struct{ meta }
+
+var modelName = &modelNameRule{meta{
+	name: "modelname",
+	doc:  "reports tables whose generated Go model name is an inflector guess not pinned by [model:]",
+}}
+
+func (r *modelNameRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
+	var out []diag.Diagnostic
+	ti := f.Table
+	if ti == nil {
+		return out
+	}
+	t := ti.Decl
+	if t.Settings.Get("model") != nil {
+		return out
+	}
+	singular, ok := inflect.SingularLast(t.Name.Base())
+	if !ok {
+		out = append(out, r.warnf(t.Pos(), "cannot confidently singularize %q for its Go model name (would use %q); pin it with [model: '...']",
+			t.Name.Base(), singular))
+	}
+	return out
 }

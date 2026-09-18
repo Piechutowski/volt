@@ -9,6 +9,7 @@ package golang
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
@@ -267,7 +268,117 @@ func (pl *Plan) DynNameCollisions() []NameCollision {
 	if pl.err != nil {
 		return nil
 	}
-	return dynNamesCheck(pl.p, pl.info)
+	// The report is the one a walk over every minted name in minting
+	// order produces — the fixed Queries name, the enums' types and
+	// constants, then each model's names in declaration order — pairing
+	// a name minted again with the origin that minted it first, at the
+	// later of the two by position. It is computed from the collisions
+	// alone: the enums' names are few, and the names two or more
+	// models mint the base keeps across plans (D99, D104).
+	seen := map[string]dynOrigin{"Queries": {kind: dynQueries}}
+	var out []NameCollision
+	for _, e := range pl.info.Enums {
+		typeName, err := enumTypeName(e.Decl.Name.Schema(), e.Decl.Name.Base())
+		if err != nil {
+			continue // generation reports unusable names itself
+		}
+		out = dynArrive(out, seen, typeName, dynOrigin{kind: dynEnum, e: e, pos: e.Decl.Pos()})
+		for _, v := range e.Decl.Values {
+			constName, err := goName(v.Name.Name())
+			if err != nil {
+				continue
+			}
+			out = dynArrive(out, seen, typeName+constName, dynOrigin{kind: dynEnumValue, e: e, v: v, pos: v.Pos()})
+		}
+	}
+	// The models' arrivals that collide: with a name the fixed name or
+	// an enum minted first, which stays the first origin of every later
+	// arrival, or with an earlier model's.
+	type arrival struct {
+		first, o  dynOrigin
+		pos, rank int
+	}
+	var arrivals []arrival
+	for name, first := range seen {
+		for _, o := range pl.base.origins[name].all() {
+			if o.dyn {
+				arrivals = append(arrivals, arrival{first, dynOriginOf(o), pl.base.pos[o.table], o.rank})
+			}
+		}
+	}
+	for name := range pl.base.dups {
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		var origins []*nameOrigin
+		for _, o := range pl.base.origins[name].all() {
+			if o.dyn {
+				origins = append(origins, o)
+			}
+		}
+		sort.Slice(origins, func(i, j int) bool {
+			a, b := origins[i], origins[j]
+			if pl.base.pos[a.table] != pl.base.pos[b.table] {
+				return pl.base.pos[a.table] < pl.base.pos[b.table]
+			}
+			return a.rank < b.rank
+		})
+		first := dynOriginOf(origins[0])
+		for _, o := range origins[1:] {
+			arrivals = append(arrivals, arrival{first, dynOriginOf(o), pl.base.pos[o.table], o.rank})
+		}
+	}
+	// Each origin mints one name, so (pos, rank) orders the arrivals
+	// totally: the walk's order, whatever order the maps gave.
+	sort.Slice(arrivals, func(i, j int) bool {
+		a, b := arrivals[i], arrivals[j]
+		if a.pos != b.pos {
+			return a.pos < b.pos
+		}
+		return a.rank < b.rank
+	})
+	for _, a := range arrivals {
+		out = append(out, dynPair(a.o.name(), a.first, a.o))
+	}
+	return out
+}
+
+// dynArrive records one minted name: the first arrival is remembered,
+// a later one is paired with it.
+func dynArrive(out []NameCollision, seen map[string]dynOrigin, name string, o dynOrigin) []NameCollision {
+	prev, dup := seen[name]
+	if !dup {
+		seen[name] = o
+		return out
+	}
+	return append(out, dynPair(name, prev, o))
+}
+
+// dynPair reports one collision at the later of its two origins.
+func dynPair(name string, first, second dynOrigin) NameCollision {
+	if second.pos.Line() < first.pos.Line() || (second.pos.Line() == first.pos.Line() && second.pos.Column() < first.pos.Column()) {
+		first, second = second, first
+	}
+	return NameCollision{Name: name, First: first.describe(), Second: second.describe(), Pos: second.pos}
+}
+
+// dynOriginOf is a model's minted name as the collision report
+// describes it.
+func dynOriginOf(o *nameOrigin) dynOrigin {
+	d := dynOrigin{tm: o.table, pos: o.table.ti.Decl.Pos()}
+	switch o.kind {
+	case nameModel:
+		d.kind = dynModel
+	case nameCreateParams:
+		d.kind = dynCreateParams
+	case nameUpdateParams:
+		d.kind = dynUpdateParams
+	case nameHandle:
+		d.kind, d.f, d.pos = dynHandle, o.field, o.field.col.Pos()
+	case nameDynFunc:
+		d.kind, d.sfx = dynWrapper, o.name[len(o.table.model):]
+	}
+	return d
 }
 
 /* ===== the §V11.7 name scope ===== */
@@ -307,23 +418,31 @@ type nameOrigin struct {
 	idx   int // position in the model's list: a later name of the same model wins
 	table *tableModel
 	field *fieldPlan
+	// The dynamic layer mints a model's names under conditions of its
+	// own (D30): dyn says whether it mints this one, rank where the
+	// name falls in the model's minting order, which the collision
+	// report follows (DynNameCollisions).
+	dyn  bool
+	rank int
 }
 
 // modelNamesBuild is every package-level name a model mints, in the
 // order the generators write them.
 func modelNamesBuild(t *tableModel) []nameOrigin {
 	names := make([]nameOrigin, 0, 3+len(dynWrapperSuffixes)+len(t.fields))
-	add := func(name string, kind nameKind, field *fieldPlan) {
-		names = append(names, nameOrigin{name: name, kind: kind, idx: len(names), table: t, field: field})
+	add := func(name string, kind nameKind, field *fieldPlan, dyn bool, rank int) {
+		names = append(names, nameOrigin{name: name, kind: kind, idx: len(names), table: t, field: field, dyn: dyn, rank: rank})
 	}
-	add(t.model, nameModel, nil)
-	add(t.model+"CreateParams", nameCreateParams, nil)
-	add(t.model+"UpdateParams", nameUpdateParams, nil)
-	for _, suffix := range dynWrapperSuffixes {
-		add(t.model+suffix, nameDynFunc, nil)
+	// no queryable shape: no queries, no dynamic layer
+	queryable := len(t.fields) > 0
+	add(t.model, nameModel, nil, true, 0)
+	add(t.model+"CreateParams", nameCreateParams, nil, queryable && len(t.createFields()) > 0, 1)
+	add(t.model+"UpdateParams", nameUpdateParams, nil, queryable && len(t.pk) > 0 && len(t.nonPK()) > 0, 2)
+	for i, suffix := range dynWrapperSuffixes {
+		add(t.model+suffix, nameDynFunc, nil, queryable, 3+len(t.fields)+i)
 	}
-	for _, fp := range t.fields {
-		add(t.model+fp.goField, nameHandle, fp)
+	for i, fp := range t.fields {
+		add(t.model+fp.goField, nameHandle, fp, queryable, 3+i)
 	}
 	return names
 }
@@ -350,6 +469,7 @@ type nameBase struct {
 	origins map[string]nameSlot
 	models  map[*tableModel]bool
 	pos     map[*tableModel]int // declaration position in the current plan
+	dups    map[string]bool     // names two or more models mint for the dynamic layer
 }
 
 // nameSlot is a name's origins: the first held by value, since nearly
@@ -360,7 +480,7 @@ type nameSlot struct {
 }
 
 func newNameBase() *nameBase {
-	return &nameBase{origins: map[string]nameSlot{}, models: map[*tableModel]bool{}}
+	return &nameBase{origins: map[string]nameSlot{}, models: map[*tableModel]bool{}, dups: map[string]bool{}}
 }
 
 // update makes the base the given models': the models gone are
@@ -395,6 +515,7 @@ func (b *nameBase) add(t *tableModel) {
 			slot.more = append(slot.more, o)
 		}
 		b.origins[o.name] = slot
+		b.dupsMark(o.name)
 	}
 }
 
@@ -412,13 +533,39 @@ func (b *nameBase) remove(t *tableModel) {
 		if slot.first == o {
 			if len(kept) == 0 {
 				delete(b.origins, o.name)
+				b.dupsMark(o.name)
 				continue
 			}
 			slot.first, kept = kept[0], kept[1:]
 		}
 		slot.more = kept
 		b.origins[o.name] = slot
+		b.dupsMark(o.name)
 	}
+}
+
+// dupsMark keeps dups current for one name after its slot changed.
+func (b *nameBase) dupsMark(name string) {
+	n := 0
+	for _, o := range b.origins[name].all() {
+		if o.dyn {
+			n++
+		}
+	}
+	if n >= 2 {
+		b.dups[name] = true
+	} else {
+		delete(b.dups, name)
+	}
+}
+
+// all lists a slot's origins, the first first; nil for a name nobody
+// mints.
+func (s nameSlot) all() []*nameOrigin {
+	if s.first == nil {
+		return nil
+	}
+	return append([]*nameOrigin{s.first}, s.more...)
 }
 
 // lookup answers the origin the one-map build would have kept for the

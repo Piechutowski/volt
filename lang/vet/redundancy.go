@@ -9,6 +9,7 @@ import (
 
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/lang/diag"
 )
 
 func init() {
@@ -21,63 +22,74 @@ func init() {
 	register(unnecessaryQuotes)
 }
 
-var redundantNull = &Analyzer{
-	Name: "redundantnull",
-	Doc:  "reports explicit [null] settings; columns are nullable by default (spec §6.3.2)",
-	Run: func(p *Pass) {
-		ast.Inspect(p.File, func(n ast.Node) bool {
-			col, ok := n.(*ast.Column)
-			if !ok || col.Settings == nil {
-				return true
-			}
-			if s := col.Settings.Get("null"); s != nil {
-				p.Reportf(s.Pos(), "explicit 'null' is redundant; columns are nullable by default")
-			}
-			return true
-		})
-	},
+type redundantNullRule struct{ meta }
+
+var redundantNull = &redundantNullRule{meta{
+	name: "redundantnull",
+	doc:  "reports explicit [null] settings; columns are nullable by default (spec §6.3.2)",
+}}
+
+func (r *redundantNullRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
+	var out []diag.Diagnostic
+	for _, n := range nodes {
+		col, ok := n.(*ast.Column)
+		if !ok || col.Settings == nil {
+			continue
+		}
+		if s := col.Settings.Get("null"); s != nil {
+			out = append(out, r.warnf(s.Pos(), "explicit 'null' is redundant; columns are nullable by default"))
+		}
+	}
+	return out
 }
 
-var redundantIndex = &Analyzer{
-	Name: "redundantindex",
-	Doc:  "reports indexes that duplicate a column setting, another index, or combine pk with unique",
-	Run: func(p *Pass) {
-		for _, ti := range p.Info.Tables {
-			seenKeys := map[string]bool{}
-			for _, ix := range ti.Indexes {
-				if ix.Settings.Get("pk") != nil && ix.Settings.Get("unique") != nil {
-					p.Reportf(ix.Pos(), "combining 'pk' and 'unique' on one index is redundant; a primary key is already unique")
-				}
-				key := indexKey(ix)
-				if seenKeys[key] {
-					p.Reportf(ix.Pos(), "duplicate index on %s in table %q", key, ti.Decl.Name.String())
-				}
-				seenKeys[key] = true
+type redundantIndexRule struct{ meta }
 
-				// single-column index repeating a column-level constraint
-				if len(ix.Key) != 1 {
-					continue
-				}
-				id, ok := ix.Key[0].(*ast.Ident)
-				if !ok {
-					continue
-				}
-				cd := ti.Column(id.Name())
-				if cd == nil {
-					continue
-				}
-				if ix.Settings.Get("unique") != nil && columnHas(cd, "unique") {
-					p.Reportf(ix.Pos(), "unique index on %q duplicates the column's 'unique' setting", id.Name())
-				}
-				if ix.Settings.Get("unique") != nil && columnHas(cd, "pk") {
-					p.Reportf(ix.Pos(), "unique index on %q is redundant; the column is already the primary key", id.Name())
-				}
-				if ix.Settings.Get("pk") != nil && columnHas(cd, "pk") {
-					p.Reportf(ix.Pos(), "pk index on %q duplicates the column's 'pk' setting", id.Name())
-				}
-			}
+var redundantIndex = &redundantIndexRule{meta{
+	name: "redundantindex",
+	doc:  "reports indexes that duplicate a column setting, another index, or combine pk with unique",
+}}
+
+func (r *redundantIndexRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
+	var out []diag.Diagnostic
+	ti := f.Table
+	if ti == nil {
+		return out
+	}
+	seenKeys := map[string]bool{}
+	for _, ix := range ti.Indexes {
+		if ix.Settings.Get("pk") != nil && ix.Settings.Get("unique") != nil {
+			out = append(out, r.warnf(ix.Pos(), "combining 'pk' and 'unique' on one index is redundant; a primary key is already unique"))
 		}
-	},
+		key := indexKey(ix)
+		if seenKeys[key] {
+			out = append(out, r.warnf(ix.Pos(), "duplicate index on %s in table %q", key, ti.Decl.Name.String()))
+		}
+		seenKeys[key] = true
+
+		// single-column index repeating a column-level constraint
+		if len(ix.Key) != 1 {
+			continue
+		}
+		id, ok := ix.Key[0].(*ast.Ident)
+		if !ok {
+			continue
+		}
+		cd := ti.Column(id.Name())
+		if cd == nil {
+			continue
+		}
+		if ix.Settings.Get("unique") != nil && columnHas(cd, "unique") {
+			out = append(out, r.warnf(ix.Pos(), "unique index on %q duplicates the column's 'unique' setting", id.Name()))
+		}
+		if ix.Settings.Get("unique") != nil && columnHas(cd, "pk") {
+			out = append(out, r.warnf(ix.Pos(), "unique index on %q is redundant; the column is already the primary key", id.Name()))
+		}
+		if ix.Settings.Get("pk") != nil && columnHas(cd, "pk") {
+			out = append(out, r.warnf(ix.Pos(), "pk index on %q duplicates the column's 'pk' setting", id.Name()))
+		}
+	}
+	return out
 }
 
 // indexKey canonicalizes an index key for duplicate detection: column order
@@ -114,70 +126,85 @@ func columnHas(cd *check.ColumnDef, name string) bool {
 	return false
 }
 
-var emptyBody = &Analyzer{
-	Name: "emptybody",
-	Doc:  "reports empty indexes/checks blocks, TableGroups, DiagramView categories and Project bodies",
-	Run: func(p *Pass) {
-		ast.Inspect(p.File, func(n ast.Node) bool {
-			switch n := n.(type) {
-			case *ast.IndexesBlock:
-				if len(n.Indexes) == 0 {
-					p.Reportf(n.Pos(), "empty indexes block")
-				}
-			case *ast.ChecksBlock:
-				if len(n.Checks) == 0 {
-					p.Reportf(n.Pos(), "empty checks block")
-				}
-			case *ast.TableGroup:
-				if len(n.Members) == 0 {
-					p.Reportf(n.Pos(), "TableGroup %q has no members", n.Name.Name())
-				}
-			case *ast.ViewCategory:
-				if !n.Wildcard && len(n.Names) == 0 {
-					p.Reportf(n.Pos(), "empty %s category selects nothing", n.Kind.Name())
-				}
-			case *ast.Project:
-				if len(n.Props) == 0 && len(n.Notes) == 0 {
-					p.Reportf(n.Pos(), "empty Project body")
-				}
-			}
-			return true
-		})
-	},
-}
+type emptyBodyRule struct{ meta }
 
-var legacyFlag = &Analyzer{
-	Name: "legacyflag",
-	Doc:  "reports legacy bare pk/unique flags between type and settings; prefer the settings list (spec §6.3.7)",
-	Run: func(p *Pass) {
-		ast.Inspect(p.File, func(n ast.Node) bool {
-			col, ok := n.(*ast.Column)
-			if !ok {
-				return true
-			}
-			for _, f := range col.LegacyFlags {
-				p.Reportf(f.Pos(), "legacy flag %q; write it in the settings list: [%s]", f.Name(), strings.ToLower(f.Name()))
-			}
-			return true
-		})
-	},
-}
+var emptyBody = &emptyBodyRule{meta{
+	name: "emptybody",
+	doc:  "reports empty indexes/checks blocks, TableGroups, DiagramView categories and Project bodies",
+}}
 
-var shadowedColumn = &Analyzer{
-	Name: "shadowedcolumn",
-	Doc:  "reports column definitions silently overridden by spec §6.9.4 partial-injection conflict resolution",
-	Run: func(p *Pass) {
-		for _, ti := range p.Info.Tables {
-			for _, sh := range ti.Shadowed {
-				winner := ti.Column(sh.Col.Name.Name())
-				if winner == nil {
-					continue
-				}
-				p.Reportf(winner.Col.Pos(), "column %q in table %q silently overrides the definition from %s",
-					sh.Col.Name.Name(), ti.Decl.Name.String(), originOf(sh))
+func (r *emptyBodyRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
+	var out []diag.Diagnostic
+	for _, n := range nodes {
+		switch n := n.(type) {
+		case *ast.IndexesBlock:
+			if len(n.Indexes) == 0 {
+				out = append(out, r.warnf(n.Pos(), "empty indexes block"))
+			}
+		case *ast.ChecksBlock:
+			if len(n.Checks) == 0 {
+				out = append(out, r.warnf(n.Pos(), "empty checks block"))
+			}
+		case *ast.TableGroup:
+			if len(n.Members) == 0 {
+				out = append(out, r.warnf(n.Pos(), "TableGroup %q has no members", n.Name.Name()))
+			}
+		case *ast.ViewCategory:
+			if !n.Wildcard && len(n.Names) == 0 {
+				out = append(out, r.warnf(n.Pos(), "empty %s category selects nothing", n.Kind.Name()))
+			}
+		case *ast.Project:
+			if len(n.Props) == 0 && len(n.Notes) == 0 {
+				out = append(out, r.warnf(n.Pos(), "empty Project body"))
 			}
 		}
-	},
+	}
+	return out
+}
+
+type legacyFlagRule struct{ meta }
+
+var legacyFlag = &legacyFlagRule{meta{
+	name: "legacyflag",
+	doc:  "reports legacy bare pk/unique flags between type and settings; prefer the settings list (spec §6.3.7)",
+}}
+
+func (r *legacyFlagRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
+	var out []diag.Diagnostic
+	for _, n := range nodes {
+		col, ok := n.(*ast.Column)
+		if !ok {
+			continue
+		}
+		for _, fl := range col.LegacyFlags {
+			out = append(out, r.warnf(fl.Pos(), "legacy flag %q; write it in the settings list: [%s]", fl.Name(), strings.ToLower(fl.Name())))
+		}
+	}
+	return out
+}
+
+type shadowedColumnRule struct{ meta }
+
+var shadowedColumn = &shadowedColumnRule{meta{
+	name: "shadowedcolumn",
+	doc:  "reports column definitions silently overridden by spec §6.9.4 partial-injection conflict resolution",
+}}
+
+func (r *shadowedColumnRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
+	var out []diag.Diagnostic
+	ti := f.Table
+	if ti == nil {
+		return out
+	}
+	for _, sh := range ti.Shadowed {
+		winner := ti.Column(sh.Col.Name.Name())
+		if winner == nil {
+			continue
+		}
+		out = append(out, r.warnf(winner.Col.Pos(), "column %q in table %q silently overrides the definition from %s",
+			sh.Col.Name.Name(), ti.Decl.Name.String(), originOf(sh)))
+	}
+	return out
 }
 
 func originOf(cd *check.ColumnDef) string {
@@ -187,37 +214,44 @@ func originOf(cd *check.ColumnDef) string {
 	return fmt.Sprintf("TablePartial %q", cd.Partial.Name.Name())
 }
 
-var projectNotes = &Analyzer{
-	Name: "projectnotes",
-	Doc:  "reports multiple Note definitions in a Project body; only one survives in tools",
-	Run: func(p *Pass) {
-		for _, d := range p.File.Decls {
-			if pr, ok := d.(*ast.Project); ok && len(pr.Notes) > 1 {
-				p.Reportf(pr.Notes[1].Pos(), "Project has %d Note definitions; tools keep only one", len(pr.Notes))
-			}
-		}
-	},
+type projectNotesRule struct{ meta }
+
+var projectNotes = &projectNotesRule{meta{
+	name: "projectnotes",
+	doc:  "reports multiple Note definitions in a Project body; only one survives in tools",
+}}
+
+func (r *projectNotesRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
+	var out []diag.Diagnostic
+	if pr, ok := d.(*ast.Project); ok && len(pr.Notes) > 1 {
+		out = append(out, r.warnf(pr.Notes[1].Pos(), "Project has %d Note definitions; tools keep only one", len(pr.Notes)))
+	}
+	return out
 }
 
-var unnecessaryQuotes = &Analyzer{
-	Name: "unnecessaryquotes",
-	Doc:  "reports quoted identifiers that are already valid plain identifiers",
-	Run: func(p *Pass) {
-		seen := map[string]bool{} // dedupe repeated spellings per line
-		ast.Inspect(p.File, func(n ast.Node) bool {
-			id, ok := n.(*ast.Ident)
-			if !ok || !id.Quoted() || !isPlainIdent(id.Name()) {
-				return true
-			}
-			key := fmt.Sprintf("%d:%s", id.Pos().Line(), id.Name())
-			if seen[key] {
-				return true
-			}
-			seen[key] = true
-			p.Reportf(id.Pos(), "identifier %q does not need quotes", id.Name())
-			return true
-		})
-	},
+type unnecessaryQuotesRule struct{ meta }
+
+var unnecessaryQuotes = &unnecessaryQuotesRule{meta{
+	name: "unnecessaryquotes",
+	doc:  "reports quoted identifiers that are already valid plain identifiers",
+}}
+
+func (r *unnecessaryQuotesRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
+	var out []diag.Diagnostic
+	seen := map[string]bool{} // repeated spellings on one line of this declaration are reported once
+	for _, n := range nodes {
+		id, ok := n.(*ast.Ident)
+		if !ok || !id.Quoted() || !isPlainIdent(id.Name()) {
+			continue
+		}
+		key := fmt.Sprintf("%d:%s", id.Pos().Line(), id.Name())
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, r.warnf(id.Pos(), "identifier %q does not need quotes", id.Name()))
+	}
+	return out
 }
 
 func isPlainIdent(s string) bool {

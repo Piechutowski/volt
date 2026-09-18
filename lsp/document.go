@@ -198,10 +198,10 @@ func (d *Document) GoFilesChanged() bool {
 // analyzersActive is every registered vet analyzer except modelname: the
 // [model:] setting it wants is above the DBML layer, and the single-file
 // pass this feeds does not resolve it (see docs/editor.md).
-func analyzersActive() []*vet.Analyzer {
-	var out []*vet.Analyzer
+func analyzersActive() []vet.Analyzer {
+	var out []vet.Analyzer
 	for _, a := range vet.All() {
-		if a.Name != "modelname" {
+		if a.Name() != "modelname" {
 			out = append(out, a)
 		}
 	}

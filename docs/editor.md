@@ -285,6 +285,14 @@ agree. The LSP picks it up automatically.
   file, the document's own pass 20 ms to 1.6 ms and the keystroke to its
   publish 30 ms to 13 ms (`BenchmarkDocumentUpdateLocal`,
   `BenchmarkKeystroke` in `lsp/`).
+- **Vet by declaration** (D104) — a rule is a pure function of one
+  declaration and the facts the checker resolved for it, memoized by
+  declaration in the session like the check (D84); the file-wide rules
+  fold over the declarations' summaries, and the generated-name rule
+  reads the collisions the plan's name base keeps across plans (D99)
+  instead of walking every name. The same keystroke through stdio:
+  0.56 s to about 0.35 s mean; in process on the 200-table file, 13 ms
+  to about 8 ms.
 
 ## 7. Known limitations (documented trade-offs, not bugs)
 

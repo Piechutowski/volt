@@ -52,6 +52,9 @@ type SessionStats struct {
 	ChecksLowered, ChecksReused   int
 	SelectsChecked, SelectsReused int
 	RoutesLowered, RoutesReused   int // scope items (routes, resources, datasets) lowered and answered (D99)
+	// Within the packages vetted: declarations judged afresh by the
+	// rules, and answered by the memo (D104).
+	DeclsVetted, DeclsVetReused int
 }
 
 // fileEntry is one file's last parse. gen is its identity: a new parse
@@ -270,6 +273,16 @@ func (s *Session) goFuncsFor(pr *Project, paths []string) *goFuncsCache {
 		cache.by[dir] = scans[i]
 	}
 	return cache
+}
+
+// vetStats adds what the vet memos of the packages just vetted did.
+func (s *Session) vetStats(memos map[string]*declMemo) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, m := range memos {
+		s.stats.DeclsVetReused += m.vet.Hits
+		s.stats.DeclsVetted += m.vet.Misses
+	}
 }
 
 // declStats adds what the memos of the packages just checked did.

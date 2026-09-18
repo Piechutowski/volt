@@ -58,7 +58,7 @@ func (pl *Plan) Dyn(opts Options) ([]byte, error) {
 	if pl.err != nil {
 		return nil, pl.err
 	}
-	if cs := dynNamesCheck(pl.p, pl.info); len(cs) > 0 {
+	if cs := pl.DynNameCollisions(); len(cs) > 0 {
 		c := cs[0]
 		return nil, fmt.Errorf("%s and %s both need the Go name %s; rename one (e.g. with [model:])", c.First, c.Second, c.Name)
 	}
@@ -119,6 +119,24 @@ const (
 	dynWrapper
 )
 
+// name is the Go name the origin mints; the enums' and the fixed
+// name are minted by the caller, which knows them.
+func (o dynOrigin) name() string {
+	switch o.kind {
+	case dynModel:
+		return o.tm.model
+	case dynCreateParams:
+		return o.tm.model + "CreateParams"
+	case dynUpdateParams:
+		return o.tm.model + "UpdateParams"
+	case dynHandle:
+		return o.tm.model + o.f.goField
+	case dynWrapper:
+		return o.tm.model + o.sfx
+	}
+	return "Queries"
+}
+
 func (o dynOrigin) describe() string {
 	switch o.kind {
 	case dynEnum:
@@ -137,63 +155,6 @@ func (o dynOrigin) describe() string {
 		return fmt.Sprintf("table %s (option wrapper %s%s)", o.tm.ti.Decl.Name.String(), o.tm.model, o.sfx)
 	}
 	return "the generated Queries type"
-}
-
-func dynNamesCheck(p *plan, info *check.Info) []NameCollision {
-	size := 1
-	for _, tm := range p.tables {
-		size += 3 + len(dynWrapperSuffixes) + len(tm.fields)
-	}
-	seen := make(map[string]dynOrigin, size)
-	seen["Queries"] = dynOrigin{kind: dynQueries}
-	var out []NameCollision
-	add := func(name string, o dynOrigin) {
-		prev, dup := seen[name]
-		if !dup {
-			seen[name] = o
-			return
-		}
-		first, second := prev, o
-		if second.pos.Line() < first.pos.Line() || (second.pos.Line() == first.pos.Line() && second.pos.Column() < first.pos.Column()) {
-			first, second = second, first
-		}
-		out = append(out, NameCollision{Name: name, First: first.describe(), Second: second.describe(), Pos: second.pos})
-	}
-
-	for _, e := range info.Enums {
-		typeName, err := enumTypeName(e.Decl.Name.Schema(), e.Decl.Name.Base())
-		if err != nil {
-			continue // generation reports unusable names itself
-		}
-		add(typeName, dynOrigin{kind: dynEnum, e: e, pos: e.Decl.Pos()})
-		for _, v := range e.Decl.Values {
-			constName, err := goName(v.Name.Name())
-			if err != nil {
-				continue
-			}
-			add(typeName+constName, dynOrigin{kind: dynEnumValue, e: e, v: v, pos: v.Pos()})
-		}
-	}
-	for _, tm := range p.tables {
-		pos := tm.ti.Decl.Pos()
-		add(tm.model, dynOrigin{kind: dynModel, tm: tm, pos: pos})
-		if len(tm.fields) == 0 {
-			continue // no queryable shape: no queries, no dynamic layer
-		}
-		if len(tm.createFields()) > 0 {
-			add(tm.model+"CreateParams", dynOrigin{kind: dynCreateParams, tm: tm, pos: pos})
-		}
-		if len(tm.pk) > 0 && len(tm.nonPK()) > 0 {
-			add(tm.model+"UpdateParams", dynOrigin{kind: dynUpdateParams, tm: tm, pos: pos})
-		}
-		for _, f := range tm.fields {
-			add(tm.model+f.goField, dynOrigin{kind: dynHandle, tm: tm, f: f, pos: f.col.Pos()})
-		}
-		for _, sfx := range dynWrapperSuffixes {
-			add(tm.model+sfx, dynOrigin{kind: dynWrapper, tm: tm, sfx: sfx, pos: pos})
-		}
-	}
-	return out
 }
 
 /* ===== the emitter ===== */

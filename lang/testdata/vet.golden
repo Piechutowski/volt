@@ -4,6 +4,7 @@ vet:
 data/more.volt:3:7: warning: vet/unnecessaryquotes: identifier "comments" does not need quotes
 data/schema.volt:3:7: warning: vet/unnecessaryquotes: identifier "users" does not need quotes
 data/more.volt:4:3: warning: vet/unnecessaryquotes: identifier "id" does not need quotes
+data/schema.volt:4:3: warning: vet/unnecessaryquotes: identifier "id" does not need quotes
 dup/schema.volt:4:15: warning: vet/redundantnull: explicit 'null' is redundant; columns are nullable by default
 dup/schema.volt:6:3: warning: vet/casecollision: column names total and Total differ only in case
 data/more.volt:9:1: warning: vet/reftype: relationship joins comments.author_id (bigint) to users.id (integer); the types differ

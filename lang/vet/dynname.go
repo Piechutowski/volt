@@ -8,13 +8,18 @@ package vet
 
 func init() { register(dynName) }
 
-var dynName = &Analyzer{
-	Name: "dynname",
-	Doc:  "reports declarations whose generated dynamic-query names (column-handle sets, option wrappers) collide in Go package scope",
-	Run: func(p *Pass) {
-		for _, c := range p.Plan().DynNameCollisions() {
-			p.Reportf(c.Pos, "%s and %s both generate the Go name %s; rename one (e.g. with [model: '...'])",
-				c.First, c.Second, c.Name)
-		}
-	},
+// dynNameFold asks the plan, whose name base holds every model's
+// names across plans (D99), for the collisions alone.
+type dynNameFold struct{ meta }
+
+var dynName = &dynNameFold{meta{
+	name: "dynname",
+	doc:  "reports declarations whose generated dynamic-query names (column-handle sets, option wrappers) collide in Go package scope",
+}}
+
+func (fo *dynNameFold) File(p *FilePass) {
+	for _, c := range p.Plan().DynNameCollisions() {
+		p.Reportf(c.Pos, "%s and %s both generate the Go name %s; rename one (e.g. with [model: '...'])",
+			c.First, c.Second, c.Name)
+	}
 }

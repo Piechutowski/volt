@@ -39,10 +39,15 @@ func scheduleFixture(t *testing.T) string {
 	for i := 0; i < 6; i++ {
 		write(fmt.Sprintf("d%d/schema.volt", i), fmt.Sprintf(`package d%d
 
+Enum kind {
+  plain
+}
+
 Table posts {
   id    integer [pk, increment]
   title text    [not null]
   title text
+  body  text    [null]
 }
 
 Table tags {

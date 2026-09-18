@@ -1468,3 +1468,57 @@ where the merge changed the facts.
   it refuses: a vet on the handler goroutine for a document whose
   verdict the project supersedes, and a document that borrows the
   session's memos.
+
+- **D104 — Vet is judged by declaration: a rule is a pure function of
+  one declaration and its facts, the file-wide rules fold over what
+  the declarations summarized, and the generated-name rule reads the
+  collisions the name base keeps** (2026-09-18, `lang/vet/vet.go`,
+  `lang/lint.go`, `nao/gen/golang/plan.go`, `lang/testdata/vet`).
+  Each analyzer ran over the whole merged file, with `ast.Inspect`
+  and the checker's model, and the editor memoized the verdict per
+  package (D81), so the one-file layout vetted its thousand tables
+  again at every keystroke, about 280 ms, half of what remained of
+  the keystroke after D103, and the dynamic-name rule walked every
+  minted name of every model each time, a third of that. Now an
+  analyzer is a Rule, a Fold, or both. A Rule judges one declaration:
+  `Decl(d, nodes, facts)` is a pure function of the declaration's
+  syntax, its nodes in source order and the facts the checker
+  resolved for it, the checked table of a Table, the partial of a
+  TablePartial, the relationships that start at the declaration's own
+  columns, a partial's inline ref reaching every table that injects
+  it; it returns its warnings, and `vet.DeclVet` is a target of the
+  purity gate (D86), so a rule reads no package state, calls no
+  function value, walks by `ast.Children` in a stack loop rather than
+  by `ast.Inspect`, and sorts nothing the inputs reach: the one
+  ordering a rule needs, names in source order, is built by
+  insertion into fresh memory. A Fold judges the file from the
+  checker's model and a summary per declaration, the enum keys its
+  columns name and the table spellings it uses, so an enum or alias
+  nothing uses is found without a second walk; foreign-key cycles and
+  the table and enum halves of the case rule read the model alone.
+  The session keeps a vet memo per package beside its check memos
+  (D84), keyed on the declaration node with the facts' identity, the
+  checked table, the partial's declaration and use count, each
+  relationship's node, operator, endpoint tables and columns, and the
+  rule set element by element; a declaration whose inputs are the
+  objects they were answers its warnings and its summary, and the
+  package's verdict is assembled analyzer by analyzer in registration
+  order, each in declaration order, then sorted, so two warnings at
+  one position stand as they did. The generated-name rule no longer
+  rebuilds the world: the model's name list marks which names the
+  dynamic layer mints and where each falls in its minting order, the
+  base counts the names two or more models mint as models come and
+  go, and the report pairs each such arrival, and each model name an
+  enum or the fixed name minted first, with its first origin, ordered
+  by minting position: the walk's report, proven equal to the walk
+  itself edit after edit, from the collisions alone. One verdict
+  changed, and the golden pinned before the change shows it: a quoted
+  name repeated on one line was reported once per file, now once per
+  declaration, so the same line of another file reports again; the
+  rule's doc says so. Measured: the keystroke through stdio on the
+  thousand-table file, 0.56 s to about 0.35 s mean; in process on the
+  200-table file, 13 ms to about 8 ms; the session's work counters say
+  an edit inside one table judges that table and the one whose
+  relationship names it. What it refuses: a rule that reads beyond
+  its declaration and its facts (the gate walks it), and a memo entry
+  keyed on anything but the objects a rule read.

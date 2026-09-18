@@ -13,22 +13,17 @@ into the document model and the vet layer, each its own decision.
 
 Measured through the server's stdio on the thousand-table one-file
 project, one keystroke inside one table reaches its diagnostics in
-about 0.56 s (1.7 s when this entry was written; the document's own
-whole-file front end, the largest part then, is memoized per document
-since D103). The session's parse and check are about 50 ms of that
-(D83, D84, D99). The rest, in order of size:
+about 0.35 s (1.7 s when this entry was written; the document's own
+whole-file front end is memoized per document since D103, the package
+vet is by declaration since D104). The session's parse and check are
+about 50 ms of that (D83, D84, D99). The rest, in order of size:
 
-1. The package vet, memoized per package (D81), so the one-file
-   layout vets its whole package again on every edit, about 280 ms.
-   The chore: vet per declaration, on the same memo shape as the
-   check, each analyzer a pure function of the declaration and the
-   facts it names.
-2. The transport: with full-text sync the client sends the whole
+1. The transport: with full-text sync the client sends the whole
    file at every change and the server decodes it, about 110 ms on
    this 4 MB file. The chore: incremental sync, which the server's
    change handler already applies, advertised; and the document
    version on every publish, so a client drops a stale one.
-3. The debounce (75 ms), the index and the publish of a large
+2. The debounce (75 ms), the index and the publish of a large
    diagnostics list, together well under 200 ms.
 
 Verification is the stdio replay (a scripted session, the way D79 and

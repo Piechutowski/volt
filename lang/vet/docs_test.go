@@ -50,7 +50,7 @@ func TestRulesDocumentation(t *testing.T) {
 
 	registered := map[string]bool{}
 	for _, a := range vet.All() {
-		registered[a.Name] = true
+		registered[a.Name()] = true
 	}
 
 	// (2) no stale sections
@@ -62,16 +62,16 @@ func TestRulesDocumentation(t *testing.T) {
 
 	linkedAnywhere := map[string]bool{}
 	for _, a := range vet.All() {
-		sec, ok := sections[a.Name]
+		sec, ok := sections[a.Name()]
 		if !ok {
 			// (1) every analyzer documented
-			t.Errorf("analyzer %q has no '### %s' section in lint.md", a.Name, a.Name)
+			t.Errorf("analyzer %q has no '### %s' section in lint.md", a.Name(), a.Name())
 			continue
 		}
 		links := linkRE.FindAllStringSubmatch(sec, -1)
 		if len(links) == 0 {
 			// (3) every section links examples
-			t.Errorf("lint.md section %q links no testdata file", a.Name)
+			t.Errorf("lint.md section %q links no testdata file", a.Name())
 			continue
 		}
 		ranByLinked, wantInLinked := false, false
@@ -80,26 +80,26 @@ func TestRulesDocumentation(t *testing.T) {
 			linkedAnywhere[filepath.Base(rel)] = true
 			src, err := os.ReadFile(rel)
 			if err != nil {
-				t.Errorf("lint.md section %q links %s: %v", a.Name, rel, err)
+				t.Errorf("lint.md section %q links %s: %v", a.Name(), rel, err)
 				continue
 			}
 			lines := strings.Split(string(src), "\n")
 			header := strings.TrimPrefix(strings.TrimSpace(lines[0]), "// analyzers:")
 			for _, n := range strings.Split(header, ",") {
-				if strings.TrimSpace(n) == a.Name {
+				if strings.TrimSpace(n) == a.Name() {
 					ranByLinked = true
 				}
 			}
-			if strings.Contains(string(src), "//WANT") && containsWant(string(src), a.Name) {
+			if strings.Contains(string(src), "//WANT") && containsWant(string(src), a.Name()) {
 				wantInLinked = true
 			}
 		}
 		// (4) linked examples actually exercise the rule
 		if !ranByLinked {
-			t.Errorf("no file linked from lint.md section %q runs the analyzer (missing from '// analyzers:' header)", a.Name)
+			t.Errorf("no file linked from lint.md section %q runs the analyzer (missing from '// analyzers:' header)", a.Name())
 		}
 		if !wantInLinked {
-			t.Errorf("no file linked from lint.md section %q contains a bad example ('//WANT %s')", a.Name, a.Name)
+			t.Errorf("no file linked from lint.md section %q contains a bad example ('//WANT %s')", a.Name(), a.Name())
 		}
 	}
 

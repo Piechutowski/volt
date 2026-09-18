@@ -35,6 +35,17 @@ the same rules on a file that checks clean. There is no per-rule
 switch: the rules are cheap, and a suppressed warning would be a rule
 the document lists but the tool does not run.
 
+A rule is judged declaration by declaration: a pure function of one
+declaration's syntax and the facts the checker resolved for it (its
+checked table, its partial, the relationships starting at its
+columns), so an editor session re-judges only the declarations an
+edit changed (D104). The rules that need the whole file — an enum or
+alias nothing uses, a foreign-key cycle, names that differ only in
+case across tables or enums, the generated names that collide — fold
+over the checker's model and what every declaration's rules
+summarized. Two warnings at one position stand in the order the rules
+are listed below.
+
 ---
 
 ## Dead declarations
@@ -186,7 +197,10 @@ genuinely need quotes.
 
 **Limitations.** "Plain" is judged by ASCII letters/digits/underscore; a
 quoted identifier containing non-ASCII letters is not reported even though
-it may be unquotable.
+it may be unquotable. A name quoted more than once on one line of one
+declaration is reported once; the same name on the same line of another
+declaration, or of another file of the package, is reported again
+(the rule sees one declaration at a time, D104).
 
 ---
 
@@ -360,10 +374,21 @@ one file in `vet/` plus one testdata file.
 
 ## Adding a rule
 
-1. Create the analyzer in a `vet/*.go` file and `register` it.
+1. Create the analyzer in a `vet/*.go` file, a named type embedding
+   `meta` (its name and doc), and `register` it. A check on one
+   declaration implements `Rule`: `Decl(d, nodes, facts)` returns its
+   warnings from the declaration, its nodes in source order and the
+   facts the checker resolved for it, and nothing else — the purity
+   gate walks it (D86, D104): no package state, no function values, no
+   writes through an input, no sort of anything the inputs reach. A
+   check on the whole file implements `Fold`: `File(pass)` reads the
+   checker's model and the declarations' summaries. One type may be
+   both.
 2. Add `testdata/<rule>.dbml` with `// analyzers: <rule>` on line 1, bad
    lines marked `//WANT <rule>`, and good lines unmarked.
-3. Add a `### <rule>` section here linking that file.
+3. Add a `### <rule>` section here linking that file, and make the
+   rule fire in `lang/testdata/vet` so the project golden pins its
+   every warning.
 
-`TestRulesDocumentation` and `TestAnalyzers` enforce that all three exist
-and agree.
+`TestRulesDocumentation` and `TestAnalyzers` enforce that the first
+three exist and agree; `TestVetGolden` pins the fourth.

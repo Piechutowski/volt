@@ -11,6 +11,7 @@ import (
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/token"
+	"github.com/Piechutowski/volt/lang/vet"
 	"github.com/Piechutowski/volt/nao/gen/golang"
 )
 
@@ -132,6 +133,7 @@ type declMemo struct {
 	checks  checksMemo
 	selects selectsMemo
 	routes  routesMemo
+	vet     vet.Memo // the vet's, by declaration (D104)
 }
 
 // checksMemo remembers a table's lowered checks: good while the
