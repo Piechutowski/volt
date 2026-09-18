@@ -279,12 +279,12 @@ agree. The LSP picks it up automatically.
   model carries (D99), so the same edit checks in about 50 ms against
   700. The navigation index is kept by table too (D85), so the
   server's project analysis of that edit was about 100 to 160 ms
-  before D99. Measured through stdio, keystroke to diagnostics on
-  that file is still about 1.7 s: the document's own whole-file
-  front end (parse, check and vet, about 0.9 s on the handler
-  goroutine) and the package vet (about 0.3 s) dwarf the check. That
-  was a backlog entry, "The editor's keystroke path on a huge file",
-  landed as D103 to D105, the three bullets below.
+  before D99. Measured through stdio before D103, keystroke to
+  diagnostics on that file was still about 1.7 s: the document's own
+  whole-file front end (parse, check and vet, about 0.9 s on the
+  handler goroutine) and the package vet (about 0.3 s) dwarfed the
+  check. That was a backlog entry, "The editor's keystroke path on a
+  huge file", landed as D103 to D105, the three bullets below.
 - **The document's own front end is memoized per document** (D103) —
   the same three memo shapes the session keeps (parse by declaration,
   check by table, index by table), owned by the handler goroutine, so
@@ -347,8 +347,10 @@ with an open document when one is saved (the Go sources are part of
 a package's memo key, so only the packages beside the change
 re-check); independently, every hover, definition,
 references, rename and completion request first compares the Go
-sources it scanned with the disk, byte for byte (D87), and re-runs
-the analysis when they differ, republishing diagnostics. Only saved files
+sources it scanned with the disk, byte for byte (D87), and when they
+differ kicks that same background analysis, which republishes; the
+request in hand answers from the analysis it adopted, the next adopts
+the fresh one (D79, D103). Only saved files
 count: the Go buffers themselves belong to gopls, not to this server. Rename on a Go reference rewrites its Volt spellings only —
 the Go declaration is gopls' job, and the existence error then points
 at whichever side is still behind. Rename on a column follows it into
@@ -373,7 +375,7 @@ How to audit that the three components implement
 | Generated models implement Appendix A/B | goldens compiled; every CRUD statement prepared against the generated DDL; SQL goldens executed on real SQLite | `nao/gen/...`, `nao/itest` |
 | LSP behaves per spec | in-process unit suites: index, rename spelling rules, hover content, completion contexts, UTF-16 | `lsp/*_test.go` via `go test ./lsp/...` |
 | LSP behaves per spec, interactively | a scripted stdio JSON-RPC session against the real server process, replaying keystrokes that break and fix a project file, one of them as a ranged change, and asking for hover, definition, completion and symbols; every reply and published diagnostic pinned as a golden (D101) | `cmd/volt/lsp_session_test.go` and `testdata/lsp_session.golden` via `go test ./cmd/volt/...`; refresh with `-update` after reading the diff |
-| A keystroke costs what the decisions say | the whole in-process path of one keystroke inside one table of a one-file project, didChange to publish, and the document's own front end alone; compare against the numbers in §6 and in D103 to D105 | `go test ./lsp -run '^$' -bench 'BenchmarkKeystroke\|BenchmarkDocumentUpdateLocal' -benchmem` |
+| A keystroke costs what the decisions say | the whole in-process path of one keystroke inside one table of a one-file project, didChange to publish, and the document's own front end alone; compare against the numbers in §6 and in D103 to D105 | `go test ./lsp -run '^$' -bench 'BenchmarkKeystroke|BenchmarkDocumentUpdateLocal' -benchmem` |
 
 The upstream `@dbml/parse` cross-check that established Part I's
 fidelity was retired at zero disagreements (D54); the corpus verdicts

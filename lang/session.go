@@ -275,7 +275,9 @@ func (s *Session) goFuncsFor(pr *Project, paths []string) *goFuncsCache {
 	return cache
 }
 
-// vetStats adds what the vet memos of the packages just vetted did.
+// vetStats adds what the vet memos of the packages just vetted did; a
+// package the package-level memo answered (D81) ran no rule, and its
+// memo's counters are the last run's, so it is not among them.
 func (s *Session) vetStats(memos map[string]*declMemo) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

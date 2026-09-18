@@ -3,10 +3,8 @@
 // (UserEmail, UserLimit), so distinct DBML declarations can demand one Go
 // name. Generation refuses such schemas outright; this rule surfaces the
 // collision at vet time with both origins named. The name derivation is
-// the generator's own (gen/golang), so rule and generator cannot drift.
+// the generator's own (nao/gen/golang), so rule and generator cannot drift.
 package vet
-
-func init() { register(dynName) }
 
 // dynNameFold asks the plan, whose name base holds every model's
 // names across plans (D99), for the collisions alone.

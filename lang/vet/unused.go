@@ -10,12 +10,6 @@ import (
 	"github.com/Piechutowski/volt/lang/diag"
 )
 
-func init() {
-	register(unusedEnum)
-	register(unusedPartial)
-	register(unusedAlias)
-}
-
 // unusedEnumFold reads the enum keys every table's columns name from
 // the declarations' summaries.
 type unusedEnumFold struct{ meta }

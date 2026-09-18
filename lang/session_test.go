@@ -277,6 +277,13 @@ func TestSessionVetMemo(t *testing.T) {
 		if vetted, ch := after.PackagesVetted-before.PackagesVetted, after.PackagesChecked-before.PackagesChecked; vetted != checked || ch != checked {
 			t.Errorf("%s: vetted %d, checked %d packages; want %d (vet reused %d)", name, vetted, ch, checked, after.PackagesVetReused-before.PackagesVetReused)
 		}
+		// A package the memo answered ran no rule: its declarations
+		// count neither as judged nor as answered (D104).
+		if decls, answered := after.DeclsVetted-before.DeclsVetted, after.DeclsVetReused-before.DeclsVetReused; checked == 0 && (decls != 0 || answered != 0) {
+			t.Errorf("%s: no package vetted, yet %d declarations judged and %d answered", name, decls, answered)
+		} else if checked > 0 && decls == 0 {
+			t.Errorf("%s: %d packages vetted, yet no declaration judged", name, checked)
+		}
 	}
 	round("first", nil, 12)
 	round("no change", nil, 0)

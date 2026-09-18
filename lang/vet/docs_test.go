@@ -36,8 +36,10 @@ func TestRulesDocumentation(t *testing.T) {
 	// Slice the document into per-rule sections.
 	headings := headingRE.FindAllStringSubmatchIndex(doc, -1)
 	sections := map[string]string{}
+	var listed []string
 	for i, h := range headings {
 		name := doc[h[2]:h[3]]
+		listed = append(listed, name)
 		end := len(doc)
 		if i+1 < len(headings) {
 			end = headings[i+1][0]
@@ -49,8 +51,15 @@ func TestRulesDocumentation(t *testing.T) {
 	}
 
 	registered := map[string]bool{}
+	var order []string
 	for _, a := range vet.All() {
 		registered[a.Name()] = true
+		order = append(order, a.Name())
+	}
+	// (0) the rules are registered in the order the document lists
+	// them: two warnings at one position stand in that order (D104)
+	if strings.Join(order, ",") != strings.Join(listed, ",") {
+		t.Errorf("lint.md lists the rules as %v; vet.All() registers %v", listed, order)
 	}
 
 	// (2) no stale sections

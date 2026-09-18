@@ -28,6 +28,7 @@ func vetWith(pr *Project, s *Session) []diag.Diagnostic {
 		keys = s.packageKeys(pr, paths, s.goFuncsFor(pr, paths))
 		memos = s.declMemos(paths)
 	}
+	fresh := make([]bool, len(paths)) // the packages vetted, whose memos did the work
 	par.For(len(paths), func(i int) {
 		pkg := pr.Packages[paths[i]]
 		var memo *vet.Memo
@@ -37,6 +38,7 @@ func vetWith(pr *Project, s *Session) []diag.Diagnostic {
 				return
 			}
 			memo = &memos[paths[i]].vet
+			fresh[i] = true
 		}
 		per[i] = vetPackage(pkg, memo)
 		if s != nil {
@@ -44,7 +46,13 @@ func vetWith(pr *Project, s *Session) []diag.Diagnostic {
 		}
 	})
 	if s != nil {
-		s.vetStats(memos)
+		did := map[string]*declMemo{}
+		for i, path := range paths {
+			if fresh[i] {
+				did[path] = memos[path]
+			}
+		}
+		s.vetStats(did)
 	}
 	var out []diag.Diagnostic
 	for _, ds := range per {

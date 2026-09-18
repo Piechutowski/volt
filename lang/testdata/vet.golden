@@ -25,8 +25,8 @@ data/schema.volt:38:3: warning: vet/shadowedcolumn: column "updated_at" in table
 data/schema.volt:40:1: warning: vet/unusedpartial: TablePartial "orphan_partial" is declared but never injected
 data/schema.volt:42:20: warning: vet/reftype: relationship joins comments.owner_id (bigint) to users.id (integer); the types differ
 data/schema.volt:42:20: warning: vet/reftype: relationship joins posts.owner_id (bigint) to users.id (integer); the types differ
-data/more.volt:44:1: warning: vet/dynname: table e_users column "kind" (handle EUserKind) and enum user_kind both generate the Go name EUserKind; rename one (e.g. with [model: '...'])
 data/more.volt:44:1: warning: vet/unusedenum: enum "user_kind" is declared but never used as a column type
+data/more.volt:44:1: warning: vet/dynname: table e_users column "kind" (handle EUserKind) and enum user_kind both generate the Go name EUserKind; rename one (e.g. with [model: '...'])
 data/schema.volt:45:16: warning: vet/unusedalias: alias "P" of table "posts" is never used
 data/schema.volt:47:3: warning: vet/shadowedcolumn: column "id" in table "posts" silently overrides the definition from TablePartial "stamps"
 data/more.volt:48:1: warning: vet/modelname: cannot confidently singularize "bonus" for its Go model name (would use "bonus"); pin it with [model: '...']

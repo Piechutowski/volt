@@ -140,14 +140,20 @@ func (s *Server) watchedFilesChanged(ctx *glsp.Context, params *protocol.DidChan
 	return nil
 }
 
-// freshen re-runs a document's analysis before answering a request when
-// the Go files it depends on changed since — the fallback for clients
-// that do not report file changes, and for the window between a save
-// and its notification. The republished diagnostics follow.
+// freshen catches a document up on Go files that changed since its
+// project analysis — the fallback for clients that do not report file
+// changes, and for the window between a save and its notification. It
+// kicks the background analysis of the document's project, which
+// re-reads the Go files and publishes to every open document of the
+// root: the request in hand answers from the analysis it adopted, the
+// next adopts the fresh one. The project pass runs on the handler
+// goroutine for no document (D79, D103).
 func (s *Server) freshen(ctx *glsp.Context, doc *Document) {
-	if doc != nil && doc.GoFilesChanged() {
-		doc.Update(doc.Text)
-		s.diagnosticsPublish(ctx, doc)
+	if doc == nil || !doc.GoFilesChanged() {
+		return
+	}
+	if root, ok := projectRootOf(pathFromURI(doc.URI)); ok {
+		s.analysisKick(ctx, root)
 	}
 }
 

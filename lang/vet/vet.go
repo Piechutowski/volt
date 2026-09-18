@@ -123,9 +123,15 @@ func ByName(name string) Analyzer {
 	return nil
 }
 
-var registry []Analyzer
-
-func register(a Analyzer) { registry = append(registry, a) }
+// registry lists the analyzers in the order docs/lint.md documents
+// them, which TestRulesDocumentation asserts: two warnings at one
+// position stand in this order.
+var registry = []Analyzer{
+	unusedEnum, unusedPartial, unusedAlias,
+	redundantNull, redundantIndex, emptyBody, legacyFlag, shadowedColumn, projectNotes, unnecessaryQuotes,
+	missingPK, refTypeMismatch, refTargetNotUnique, selfRef, refCycle, caseCollision,
+	modelName, dynName,
+}
 
 // Run executes the given analyzers (all registered ones if none are named)
 // over a checked file and returns their warnings, sorted by position.

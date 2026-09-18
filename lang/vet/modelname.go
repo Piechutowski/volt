@@ -10,8 +10,6 @@ import (
 	"github.com/Piechutowski/volt/nao/inflect"
 )
 
-func init() { register(modelName) }
-
 type modelNameRule struct{ meta }
 
 var modelName = &modelNameRule{meta{

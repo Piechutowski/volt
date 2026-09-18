@@ -10,7 +10,7 @@ not listed here.
 file under [`testdata/`](../lang/vet/testdata/). In those files, a line ending in
 `//WANT <rule>` is a **bad** example — the analyzer MUST warn on exactly
 that line — and every unmarked line is a **good** example — the analyzer
-MUST stay silent. `go test ./vet/` verifies both directions, and
+MUST stay silent. `go test ./lang/vet/` verifies both directions, and
 `TestRulesDocumentation` fails the build if any analyzer is missing from
 this document, links to a nonexistent file, or has no bad example in its
 linked tests. The docs cannot silently drift from the code. The
@@ -44,7 +44,8 @@ alias nothing uses, a foreign-key cycle, names that differ only in
 case across tables or enums, the generated names that collide — fold
 over the checker's model and what every declaration's rules
 summarized. Two warnings at one position stand in the order the rules
-are listed below.
+are listed below, which is the order they are registered in;
+`TestRulesDocumentation` asserts the two agree.
 
 ---
 
@@ -336,7 +337,7 @@ both mint the handle `UserFooBar`.
 silent rename), but the generator can only name the first collision; this
 rule reports every collision, at the later of the two declarations, with
 both origins spelled out. The name derivation is the generator's own — the
-rule calls into `gen/golang` — so rule and generator cannot drift apart.
+rule calls into `nao/gen/golang` — so rule and generator cannot drift apart.
 The *common* near-collision is already defused structurally: enum types
 carry an `E` prefix (D11), so the idiomatic `Table orders { status
 order_status }` mints the handle `OrderStatus` and the enum type

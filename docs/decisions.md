@@ -1454,7 +1454,13 @@ where the merge changed the facts.
   through the one function that computes it without a document; a
   lone document's Update when no project covers it. A document inside
   a project package is vetted by the project analysis alone, never on
-  the handler goroutine. The verdicts are what they were in every
+  the handler goroutine: the one path that still ran the project pass
+  there, the fallback for Go files changed on disk without a
+  notification, which re-ran it at every request until an edit
+  arrived, now kicks the background analysis instead, and the request
+  in hand answers from what it adopted (found by the review of this
+  decision, `TestGoFileChangeRefreshesInBackground`). The verdicts are
+  what they were in every
   shape, and the memoized front end is proven equal to a fresh
   document's edit by edit, with one declaration parsed, one table
   checked and two tables indexed for an edit inside one table

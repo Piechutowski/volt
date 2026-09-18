@@ -13,15 +13,6 @@ import (
 	"github.com/Piechutowski/volt/lang/token"
 )
 
-func init() {
-	register(missingPK)
-	register(refTypeMismatch)
-	register(refTargetNotUnique)
-	register(selfRef)
-	register(refCycle)
-	register(caseCollision)
-}
-
 type missingPKRule struct{ meta }
 
 var missingPK = &missingPKRule{meta{

@@ -12,16 +12,6 @@ import (
 	"github.com/Piechutowski/volt/lang/diag"
 )
 
-func init() {
-	register(redundantNull)
-	register(redundantIndex)
-	register(emptyBody)
-	register(legacyFlag)
-	register(shadowedColumn)
-	register(projectNotes)
-	register(unnecessaryQuotes)
-}
-
 type redundantNullRule struct{ meta }
 
 var redundantNull = &redundantNullRule{meta{
