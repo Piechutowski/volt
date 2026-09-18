@@ -67,6 +67,9 @@ type voltIndex struct {
 	// side moved under us — a rename with gopls, a new function — and
 	// the index is stale (D87).
 	gosrcs map[string][]lang.GoSource
+	// goscans is the memo's scan table while the index is being built,
+	// nil once it is shared.
+	goscans map[string]goScanEntry
 }
 
 // goStale reports whether any package directory's Go files differ from
@@ -95,6 +98,16 @@ type voltIndexMemo struct {
 	index  map[string]*IndexMemo
 	hovers map[*lang.SelectInfo]string
 	next   map[*lang.SelectInfo]string
+	// goscans keeps each package directory's Go sources and the
+	// functions scanned from them, reused by the next build when the
+	// sources are the bytes they were (D87).
+	goscans map[string]goScanEntry
+}
+
+// goScanEntry is one directory's Go sources and their scan.
+type goScanEntry struct {
+	srcs  []lang.GoSource
+	funcs map[string]lang.GoFunc
 }
 
 func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndexMemo) *voltIndex {
@@ -103,8 +116,12 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 		if memo.index == nil {
 			memo.index = map[string]*IndexMemo{}
 		}
+		if memo.goscans == nil {
+			memo.goscans = map[string]goScanEntry{}
+		}
 		memo.next = make(map[*lang.SelectInfo]string, len(memo.hovers))
-		defer func() { memo.hovers, memo.next = memo.next, nil }()
+		ix.goscans = memo.goscans
+		defer func() { memo.hovers, memo.next = memo.next, nil; ix.goscans = nil }()
 	}
 	hover := func(pkg *lang.Package, si *lang.SelectInfo) string {
 		if memo == nil {
@@ -281,7 +298,14 @@ func (ix *voltIndex) goRefAdd(pkg *lang.Package, path string, ref *ast.GoRef) {
 	funcs, ok := ix.gofuncs[path]
 	if !ok {
 		srcs := lang.GoSourcesRead(pkg.Dir)
-		funcs, _ = lang.GoFuncsOf(pkg.Dir, srcs)
+		if e, kept := ix.goscans[pkg.Dir]; kept && slices.Equal(e.srcs, srcs) {
+			funcs = e.funcs // the last build's scan: the sources are the bytes they were (D87)
+		} else {
+			funcs, _ = lang.GoFuncsOf(pkg.Dir, srcs)
+			if ix.goscans != nil {
+				ix.goscans[pkg.Dir] = goScanEntry{srcs: srcs, funcs: funcs}
+			}
+		}
 		ix.gofuncs[path] = funcs
 		if ix.gosrcs == nil {
 			ix.gosrcs = map[string][]lang.GoSource{}
@@ -592,8 +616,8 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 			model = mn
 		}
 		row := model
-		if r, _, err := plan.SelectRowType(memberFn(m.Key)); err == nil {
-			row = r
+		if r, err := plan.SelectRowName(memberFn(m.Key)); err == nil {
+			row = r // the name alone: the fields of a thousand members are not rendered for a signature
 		}
 		fmt.Fprintf(&b, "func (q *Queries) %s%s(ctx context.Context%s) ([]%s, error)\n",
 			model, si.MethodSuffix, params.String(), row)

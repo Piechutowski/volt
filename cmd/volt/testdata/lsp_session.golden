@@ -1,17 +1,20 @@
 initialize
-{"id":1,"jsonrpc":"2.0","result":{"capabilities":{"completionProvider":{"triggerCharacters":[".","~","[",",",":","\u003e","\u003c","-"]},"definitionProvider":true,"documentSymbolProvider":true,"hoverProvider":true,"referencesProvider":true,"renameProvider":true,"textDocumentSync":{"change":1,"openClose":true}},"serverInfo":{"name":"volt-lsp","version":"0.1.0"}}}
+{"id":1,"jsonrpc":"2.0","result":{"capabilities":{"completionProvider":{"triggerCharacters":[".","~","[",",",":","\u003e","\u003c","-"]},"definitionProvider":true,"documentSymbolProvider":true,"hoverProvider":true,"referencesProvider":true,"renameProvider":true,"textDocumentSync":{"change":2,"openClose":true}},"serverInfo":{"name":"volt-lsp","version":"0.1.0"}}}
 
 open: a clean file
-{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"diagnostics":[],"uri":"file://ROOT/app/schema.volt"}}
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"diagnostics":[],"uri":"file://ROOT/app/schema.volt","version":1}}
 
 edit 1: a settings list left open
-{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"diagnostics":[{"code":"spec/6.2","message":"table \"posts\" must contain at least one column or partial injection","range":{"end":{"character":5,"line":2},"start":{"character":0,"line":2}},"severity":1,"source":"volt"},{"code":"syntax","message":"expected ']' in settings list (§4.2), found identifier \"title\"","range":{"end":{"character":6,"line":4},"start":{"character":1,"line":4}},"severity":1,"source":"volt"},{"code":"spec/V5","message":"table \"public.posts\" has no single-column primary key (§V5.4)","range":{"end":{"character":16,"line":9},"start":{"character":11,"line":9}},"severity":1,"source":"volt"}],"uri":"file://ROOT/app/schema.volt"}}
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"diagnostics":[{"code":"spec/6.2","message":"table \"posts\" must contain at least one column or partial injection","range":{"end":{"character":5,"line":2},"start":{"character":0,"line":2}},"severity":1,"source":"volt"},{"code":"syntax","message":"expected ']' in settings list (§4.2), found identifier \"title\"","range":{"end":{"character":6,"line":4},"start":{"character":1,"line":4}},"severity":1,"source":"volt"},{"code":"spec/V5","message":"table \"public.posts\" has no single-column primary key (§V5.4)","range":{"end":{"character":16,"line":9},"start":{"character":11,"line":9}},"severity":1,"source":"volt"}],"uri":"file://ROOT/app/schema.volt","version":2}}
 
 edit 2: a verb misspelled, a table added
-{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"diagnostics":[{"code":"syntax","message":"expected a verb (get, post, ...), 'resources', 'dataset' or 'Scope' in Scope body (§V4), found \"gett\"","range":{"end":{"character":5,"line":8},"start":{"character":1,"line":8}},"severity":1,"source":"volt"}],"uri":"file://ROOT/app/schema.volt"}}
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"diagnostics":[{"code":"syntax","message":"expected a verb (get, post, ...), 'resources', 'dataset' or 'Scope' in Scope body (§V4), found \"gett\"","range":{"end":{"character":5,"line":8},"start":{"character":1,"line":8}},"severity":1,"source":"volt"}],"uri":"file://ROOT/app/schema.volt","version":3}}
 
 edit 3: the verb fixed
-{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"diagnostics":[],"uri":"file://ROOT/app/schema.volt"}}
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"diagnostics":[],"uri":"file://ROOT/app/schema.volt","version":4}}
+
+edit 4: a note typed into the new table's header, as a ranged change
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"diagnostics":[],"uri":"file://ROOT/app/schema.volt","version":5}}
 
 hover on the table name
 {"id":2,"jsonrpc":"2.0","result":{"contents":{"kind":"markdown","value":"**`Table posts`** in package `app` — Go model `Post`\n\nkey: `id` → route parameter type `int32`\n\n```dbml\nTable posts {\n\tid integer [pk]\n\ttitle text\n}\n```\n\n_Routes and helpers derive from this: the URL keeps the table's name, the member helper takes the model's (§V5.4)._"},"range":{"end":{"character":11,"line":2},"start":{"character":6,"line":2}}}}

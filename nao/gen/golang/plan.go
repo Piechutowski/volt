@@ -112,6 +112,23 @@ func (pl *Plan) Models(opts Options) ([]byte, error) {
 	return modelsGenerate(pl.f, pl.info, pl.p, pl.err, opts)
 }
 
+// SelectRowName is the row type SelectRowType names, without its
+// fields: the model, the shared type, or the model with the method
+// suffix when columns are excluded.
+func (pl *Plan) SelectRowName(fn SelectFn) (string, error) {
+	t, err := pl.table(fn.TableKey)
+	if err != nil {
+		return "", err
+	}
+	switch {
+	case fn.SharedType != "":
+		return fn.SharedType, nil
+	case len(fn.Excluded) > 0:
+		return t.model + fn.MethodSuffix, nil
+	}
+	return t.model, nil
+}
+
 // ModelRef is the identity of a table's model: the same value across
 // plans exactly when the model was reused from the plan's memo, so a
 // memo downstream can key on it (D84). nil when the plan has no such

@@ -199,6 +199,14 @@ Scope / {
 			"contentChanges": []map[string]any{{"text": edited}}}, false)
 		s.notification(label, "textDocument/publishDiagnostics")
 	}
+	// typed sends one keystroke the way an incremental-sync client
+	// does (D105): the text inserted at a position, not the file.
+	typed := func(label string, version, line, character int, inserted string) {
+		at := map[string]any{"line": line, "character": character}
+		s.send("textDocument/didChange", map[string]any{"textDocument": doc(version),
+			"contentChanges": []map[string]any{{"range": map[string]any{"start": at, "end": at}, "text": inserted}}}, false)
+		s.notification(label, "textDocument/publishDiagnostics")
+	}
 
 	id := s.send("initialize", map[string]any{"processId": os.Getpid(), "rootUri": "file://" + root,
 		"capabilities": map[string]any{}}, true)
@@ -214,6 +222,7 @@ Scope / {
 	typo := strings.Replace(text, "get / Home.Index", "gett / Home.Index", 1) + "\nTable tags {\n\tid integer [pk]\n}\n"
 	change("edit 2: a verb misspelled, a table added", 3, typo)
 	change("edit 3: the verb fixed", 4, strings.Replace(typo, "gett /", "get /", 1))
+	typed("edit 4: a note typed into the new table's header, as a ranged change", 5, 12, 10, " [note: 'tagging']")
 
 	// requests on the fixed file
 	id = s.send("textDocument/hover", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 2, "character": 7}}, true)

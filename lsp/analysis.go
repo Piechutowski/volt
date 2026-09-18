@@ -41,12 +41,13 @@ type analysis struct {
 // projectResult is one analysis of one project: what every open
 // document of that root adopts.
 type projectResult struct {
-	gen     int
-	root    string
-	pr      *lang.Project
-	diags   []diag.Diagnostic
-	vindex  *voltIndex
-	overlay map[string]string // the open texts the run saw
+	gen      int
+	root     string
+	pr       *lang.Project
+	diags    []diag.Diagnostic
+	vindex   *voltIndex
+	overlay  map[string]string // the open texts the run saw
+	versions map[string]int32  // their versions, of the same moment (D105)
 }
 
 // projectRootOf finds the project a file belongs to (§V1.1); false for
@@ -182,10 +183,11 @@ func (s *Server) analysisRun(ctx *glsp.Context, root string, a *analysis) {
 				break
 			}
 		}
-		res := projectAnalyze(root, s.openTexts(), a.session, &a.index)
+		texts, versions := s.openSnapshot()
+		res := projectAnalyze(root, texts, a.session, &a.index)
 		s.mu.Lock()
 		if res != nil {
-			res.gen = gen
+			res.gen, res.versions = gen, versions
 			a.result = res
 		}
 		done := a.gen == gen
@@ -203,8 +205,10 @@ func (s *Server) analysisRun(ctx *glsp.Context, root string, a *analysis) {
 }
 
 // publishResult sends every open document of the result's project its
-// diagnostics, positioned in the text the run saw. A document the
-// loader never read gets its own single-file verdict.
+// diagnostics, positioned in the text the run saw and stamped with
+// that text's version, so a client whose buffer moved on drops them
+// (D105). A document the loader never read gets its own single-file
+// verdict.
 func (s *Server) publishResult(ctx *glsp.Context, res *projectResult) {
 	s.mu.Lock()
 	uris := make([]string, 0, len(s.docs))
@@ -228,6 +232,7 @@ func (s *Server) publishResult(ctx *glsp.Context, res *projectResult) {
 		}
 		ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
 			URI:         uri,
+			Version:     versionStamp(res.versions[path]),
 			Diagnostics: diagnosticsLSP(text, lineStarts(text), ds),
 		})
 	}

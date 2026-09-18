@@ -5,31 +5,6 @@ entry says why it is not now, so nothing is forgotten and nothing is
 started by accident. When an entry lands, delete it here in the same
 commit (D49: no doc knowingly wrong).
 
-## The editor's keystroke path on a huge file
-
-**Decided:** 2026-09-14 (with D99). **Deferred because:** the four
-provability items queued with D99 come first, and the fix reaches
-into the document model and the vet layer, each its own decision.
-
-Measured through the server's stdio on the thousand-table one-file
-project, one keystroke inside one table reaches its diagnostics in
-about 0.35 s (1.7 s when this entry was written; the document's own
-whole-file front end is memoized per document since D103, the package
-vet is by declaration since D104). The session's parse and check are
-about 50 ms of that (D83, D84, D99). The rest, in order of size:
-
-1. The transport: with full-text sync the client sends the whole
-   file at every change and the server decodes it, about 110 ms on
-   this 4 MB file. The chore: incremental sync, which the server's
-   change handler already applies, advertised; and the document
-   version on every publish, so a client drops a stale one.
-2. The debounce (75 ms), the index and the publish of a large
-   diagnostics list, together well under 200 ms.
-
-Verification is the stdio replay (a scripted session, the way D79 and
-D85 were measured), not a unit test: the number that matters is the
-one the editor sees.
-
 ## Citations by heading name
 
 **Decided:** 2026-09-03 (D64). **Deferred because:** the sweep touches

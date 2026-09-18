@@ -267,13 +267,16 @@ func lspPosition(text string, starts []int, p token.Position) protocol.Position 
 	return protocol.Position{Line: protocol.UInteger(line), Character: protocol.UInteger(col)}
 }
 
-// FromLSP converts an LSP position to a byte offset into d.Text.
+// FromLSP converts an LSP position to a byte offset into d.Text. A
+// line past the end of the text is its end; a character past the end
+// of a line is the end of that line's text, before its line break,
+// a carriage return included.
 func (d *Document) FromLSP(pos protocol.Position) int {
 	line := int(pos.Line)
 	if line >= len(d.lineOffsets) {
 		return len(d.Text)
 	}
-	text := d.lineText(line)
+	text := strings.TrimSuffix(d.lineText(line), "\r")
 	need := int(pos.Character)
 	byteCol := 0
 	for _, r := range text {

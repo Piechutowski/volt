@@ -1306,9 +1306,8 @@ where the merge changed the facts.
   positions relocated, which is the parser's job (D83), not a memo's.
   Measuring this exposed a larger cost outside the check: through the
   server's stdio, the same keystroke reaches diagnostics in about
-  1.7 s, of which the check is 50 ms; the rest is the document's own
-  whole-file front end and the package vet, recorded in
-  `docs/backlog.md` ("The editor's keystroke path on a huge file").
+  1.7 s, of which the check is 50 ms; the rest was the document's own
+  whole-file front end and the package vet, taken up by D103 to D105.
   What it refuses: a memo whose answer depends on anything it did not
   record (the gate walks `itemLower` as a pure target, D86), and a
   check that writes a memo's route.
@@ -1522,3 +1521,46 @@ where the merge changed the facts.
   relationship names it. What it refuses: a rule that reads beyond
   its declaration and its facts (the gate walks it), and a memo entry
   keyed on anything but the objects a rule read.
+
+- **D105 — The rest of the keystroke path: incremental sync, the
+  version on every publish, a hover that names a row type without
+  building it, and a Go scan kept while its sources stand**
+  (2026-09-18, `lsp/server.go`, `lsp/analysis.go`, `lsp/document.go`,
+  `lsp/voltnav.go`, `nao/gen/golang/plan.go`,
+  `cmd/volt/testdata/lsp_session.golden`). With D103 and D104 landed,
+  what a keystroke on the thousand-table file still paid was the
+  transport: full-text sync had the client send the 4 MB file at every
+  change and the server decode it, about 110 ms, chosen once for
+  statelessness. The server now advertises incremental sync and the
+  didChange handler, whose ranged branch already applied each item to
+  the text as it then stood, is pinned by a test for the cases the
+  protocol makes delicate: two items in one notification, the second
+  positioned in the text the first produced; a non-BMP character
+  counting two units; a CRLF newline deleted by a range that spans it;
+  a line past the end of the text landing at its end and a character
+  past the end of a line landing before its line break, carriage
+  return included, which is the one behavior this decision changes; a
+  whole-text item followed by ranged ones. The document's text and the
+  server's mirror are asserted equal after each. Every publish of
+  diagnostics carries the version of the text they are positioned in:
+  the run's from the snapshot it analyzed, texts and versions copied
+  under one hold of the lock so they are of one moment; the
+  document's own verdict with the current one; a close's clearing
+  publish with none. The stdio session golden gains one ranged
+  keystroke, and its four publishes their versions. Two costs of the
+  navigation index went with them: a select's hover rendered a row
+  type per member of the thousand-member group select to name it in a
+  signature, and now asks the plan for the name alone by the row
+  type's own rule, proven equal to it; and every build re-read and
+  re-parsed each package directory's Go files, and now keeps the scan
+  in the index's memo while the sources are the bytes they were (D87),
+  each build copying references into maps of its own so a request
+  reading the index during the next build shares nothing with it
+  (D85). Measured: the keystroke through stdio on the thousand-table
+  file, sent as a range, about 0.22 s mean, against 0.35 s sent as the
+  whole file, 1.26 s before D103 and 1.7 s when the backlog entry was
+  written; what remains is the debounce (75 ms, a typing-rhythm choice
+  kept, D79), the session's check (about 50 ms), the index and the
+  publish. The backlog entry is deleted. What it refuses: a publish
+  without the version of the text it judged, and a position past a
+  line's end that lands inside its line break.
