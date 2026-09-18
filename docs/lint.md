@@ -13,7 +13,13 @@ that line — and every unmarked line is a **good** example — the analyzer
 MUST stay silent. `go test ./vet/` verifies both directions, and
 `TestRulesDocumentation` fails the build if any analyzer is missing from
 this document, links to a nonexistent file, or has no bad example in its
-linked tests. The docs cannot silently drift from the code.
+linked tests. The docs cannot silently drift from the code. The
+complete verdict of one project, every rule speaking at least once
+across the files of a package, is a golden too
+([`lang/testdata/vet.golden`](../lang/testdata/vet.golden), refreshed
+with `go test ./lang -run TestVetGolden -update` after reading the
+diff): it pins position, message and how many times a rule speaks for
+one cause, so a change to how vet is computed shows its every effect.
 
 Run every rule over the named packages with:
 
