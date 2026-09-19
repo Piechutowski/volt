@@ -307,11 +307,13 @@ allocations fell by 60 percent with the flat front end (D82) and the
 chunked parse (D83); Vet is seven times faster cold and allocates
 half the bytes with a fifth of the allocations, judged by declaration
 on every CPU without a closure per node and without the walk over
-every minted name (D104); Generate is a third faster since the
-emitters were made canonical by construction and sized from the plan
-(D75, D81). The whole sweep, profiled runs included, took 36 s
-against about 3 minutes on the first day. The stress project (1000
-tables, one file) that day: `volt check` cold 1.8 s wall, `volt gen`
-with its outputs already on disk 4.1 s wall; one keystroke through the
-server's stdio about 0.22 s (D105), of which the pieces are measured
-in D105.
+every minted name (D104); Generate is a third faster, the emitters
+sized from the plan and finishing a file in one pass (D81, landed
+after the first run), the rest of the gain not attributed to a
+commit. The whole sweep, profiled runs included, took 36 s. The
+stress project (1000 tables, one file) that day: `volt check`,
+process start, load and check together, 0.8 s wall; `volt gen` with
+its outputs already on disk 1.45 s wall; the whole-file parse alone
+230 ms cold; one keystroke through the server's stdio about 0.27 s
+sent as a range, 0.44 s as the whole file, and the open about 2.1 s,
+with the pieces measured in D105.

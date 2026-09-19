@@ -1565,15 +1565,21 @@ where the merge changed the facts.
   (D85). Measured: the keystroke through stdio on the thousand-table
   file, sent as a range, about 0.22 s mean, against 0.35 s sent as the
   whole file, 1.26 s before D103 and 1.7 s when the backlog entry was
-  written. Measured piece by piece in process after this landed, one
-  keystroke costs: the document's own pass about 55 ms, most of it
-  the hit path of its occurrence index; the session's load 3 ms and
-  check about 45 ms; the project's navigation index about 55 ms at
-  best, 998 of 1000 tables answered; the vet 5 ms; the line table of
-  the 4 MB text 5 ms, built three times; the publish under a
-  millisecond; plus the debounce (75 ms, a typing-rhythm choice kept,
-  D79) and the collector, whose cycles land in some keystrokes and not
-  others. The backlog entry is deleted, and the index's hit path, the
-  cold open and the retained chunk texts are entries of their own. What it refuses: a publish
+  written. Measured again on the closing day, 2026-09-19, in one
+  sitting on the same machine class: about 0.27 s mean sent as a
+  range and 0.44 s as the whole file, every figure about a fifth
+  above the day it landed, and the pieces, timed in process the same
+  day, compose to it: the document's own pass about 55 ms, most of it
+  the hit path of its occurrence index, one of the three line tables
+  of the 4 MB text inside it; the debounce (75 ms, a typing-rhythm
+  choice kept, D79); the session's load 3 ms and check about 45 ms;
+  the project's navigation index about 55 ms at best, 998 of 1000
+  tables answered, and up to three times that when a collection lands
+  in the build; the vet 5 ms; the other two line tables 10 ms; the
+  publish under a millisecond. The open of that file is about 2.1 s
+  through stdio: the document's whole-file pass about 0.66 s, then
+  the debounce, then the project's first analysis about 1.3 s. The
+  backlog entry is deleted, and the index's hit path, the cold open
+  and the retained chunk texts are entries of their own. What it refuses: a publish
   without the version of the text it judged, and a position past a
   line's end that lands inside its line break.

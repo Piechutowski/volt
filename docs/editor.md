@@ -309,14 +309,17 @@ agree. The LSP picks it up automatically.
   thousand members' field lists, and the navigation index keeps each
   package directory's Go scan across builds while the sources are the
   bytes they were. The same keystroke through stdio, sent as a range:
-  about 0.22 s mean (0.35 s sent as the whole file), against 1.26 s
+  about 0.22 s mean the day it landed (0.35 s sent as the whole file),
+  0.27 s (0.44 s) on the closing day's re-measurement, against 1.26 s
   before D103 and 1.7 s when the entry was written; what remains,
-  measured piece by piece in process, is the document's own pass
-  (about 55 ms, most of it its occurrence index), the session's check
-  (about 45 ms), the project's navigation index (about 55 ms at best),
-  the line tables of the text (about 15 ms), the vet (5 ms), and the
-  debounce (75 ms, a typing-rhythm choice); the backlog holds the
-  index's hit path, the cold open and the retained chunk texts.
+  measured piece by piece in process on the closing day, is the
+  document's own pass (about 55 ms, most of it its occurrence index),
+  the debounce (75 ms, a typing-rhythm choice), the session's check
+  (about 45 ms), the project's navigation index (about 55 ms at best,
+  up to three times that with a collection), the line tables of the
+  text (about 15 ms) and the vet (5 ms), which compose to the whole;
+  the backlog holds the index's hit path, the cold open and the
+  retained chunk texts.
 
 ## 7. Known limitations (documented trade-offs, not bugs)
 
