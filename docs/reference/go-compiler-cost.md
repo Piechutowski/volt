@@ -27,8 +27,10 @@ setter and filter spelled out as plain Go (D03, D27).
 
 Volt's own work on this input is seconds and hundreds of megabytes:
 the check runs in 0.7 s cold and an edit costs 2 ms to parse and
-under 200 ms to check; generation is linear in the output (100 ms at
-160 tables in the sweep, not remeasured at this size since D81).
+under 200 ms to check; generation is linear in the output: `volt gen`
+on this project, outputs already on disk, takes 4.1 s wall on four
+cores, of which the check is 1.8 s (measured 2026-09-19, the sweep's
+rerun that day gives the curve below 160 tables).
 
 The Go compiler's work on the output is minutes and gigabytes. A Go
 package is one compilation unit whose whole intermediate form lives in

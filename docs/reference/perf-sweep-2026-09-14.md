@@ -274,3 +274,44 @@ The session's parse and check are about 100 ms of that; the rest is
 the parts of the index that still run whole and the collector, whose
 share grows with the memos' retention (heap in use about 500 MB for
 this project after a dozen edits).
+
+## Follow-up, 2026-09-19: the sweep rerun after D103 to D105
+
+The same method on the same shapes, the same machine class (4 CPUs,
+go1.27.0), commit f3f8278 plus the closing measurements. Wall time,
+best of three, in milliseconds, the 2026-09-14 number in parentheses:
+
+| Tables | Load | Check | Vet | Generate |
+|---|---|---|---|---|
+| 10 | 2.2 (2.2) | 7.2 (10.5) | 2.8 (7.8) | 10.9 (11.3) |
+| 20 | 3.6 (5.5) | 11.6 (13.9) | 4.9 (12.8) | 11.7 (19.9) |
+| 40 | 7.2 (9.2) | 18.7 (25.9) | 6.2 (29.7) | 24.9 (32.5) |
+| 80 | 12.7 (17.4) | 35.3 (47.5) | 9.4 (47.4) | 46.3 (65.6) |
+| 160 | 28.3 (35.9) | 72.7 (94.4) | 18.6 (131.9) | 83.7 (131.7) |
+| growth 160/10 | 12.9× | 10.1× | 6.6× | 7.7× |
+
+Bytes allocated by one run, in MB, and allocations in thousands:
+
+| Tables | Load | Check | Vet | Generate |
+|---|---|---|---|---|
+| 10 | 1.1 / 8 | 3.5 / 25 | 1.6 / 13 | 7.1 / 68 |
+| 20 | 2.0 / 16 | 6.9 / 48 | 3.2 / 27 | 14.3 / 135 |
+| 40 | 3.9 / 32 | 13.7 / 96 | 6.4 / 53 | 28.5 / 270 |
+| 80 | 7.5 / 64 | 27.4 / 190 | 12.9 / 106 | 56.7 / 540 |
+| 160 | 14.8 / 127 | 54.7 / 379 | 25.7 / 212 | 113.7 / 1080 |
+
+Per table at 160: Load 0.18 ms and 93 KB, Check 0.45 ms and 340 KB,
+Vet 0.12 ms and 160 KB with 1,300 allocations, Generate 0.52 ms and
+710 KB. What moved since the first sweep: Load's bytes halved and its
+allocations fell by 60 percent with the flat front end (D82) and the
+chunked parse (D83); Vet is seven times faster cold and allocates
+half the bytes with a fifth of the allocations, judged by declaration
+on every CPU without a closure per node and without the walk over
+every minted name (D104); Generate is a third faster since the
+emitters were made canonical by construction and sized from the plan
+(D75, D81). The whole sweep, profiled runs included, took 36 s
+against about 3 minutes on the first day. The stress project (1000
+tables, one file) that day: `volt check` cold 1.8 s wall, `volt gen`
+with its outputs already on disk 4.1 s wall; one keystroke through the
+server's stdio about 0.22 s (D105), of which the pieces are measured
+in D105.

@@ -1565,8 +1565,15 @@ where the merge changed the facts.
   (D85). Measured: the keystroke through stdio on the thousand-table
   file, sent as a range, about 0.22 s mean, against 0.35 s sent as the
   whole file, 1.26 s before D103 and 1.7 s when the backlog entry was
-  written; what remains is the debounce (75 ms, a typing-rhythm choice
-  kept, D79), the session's check (about 50 ms), the index and the
-  publish. The backlog entry is deleted. What it refuses: a publish
+  written. Measured piece by piece in process after this landed, one
+  keystroke costs: the document's own pass about 55 ms, most of it
+  the hit path of its occurrence index; the session's load 3 ms and
+  check about 45 ms; the project's navigation index about 55 ms at
+  best, 998 of 1000 tables answered; the vet 5 ms; the line table of
+  the 4 MB text 5 ms, built three times; the publish under a
+  millisecond; plus the debounce (75 ms, a typing-rhythm choice kept,
+  D79) and the collector, whose cycles land in some keystrokes and not
+  others. The backlog entry is deleted, and the index's hit path, the
+  cold open and the retained chunk texts are entries of their own. What it refuses: a publish
   without the version of the text it judged, and a position past a
   line's end that lands inside its line break.

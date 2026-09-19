@@ -310,9 +310,13 @@ agree. The LSP picks it up automatically.
   package directory's Go scan across builds while the sources are the
   bytes they were. The same keystroke through stdio, sent as a range:
   about 0.22 s mean (0.35 s sent as the whole file), against 1.26 s
-  before D103 and 1.7 s when the entry was written; what remains is
-  the debounce (75 ms, a typing-rhythm choice), the session's check
-  (about 50 ms), the index and the publish.
+  before D103 and 1.7 s when the entry was written; what remains,
+  measured piece by piece in process, is the document's own pass
+  (about 55 ms, most of it its occurrence index), the session's check
+  (about 45 ms), the project's navigation index (about 55 ms at best),
+  the line tables of the text (about 15 ms), the vet (5 ms), and the
+  debounce (75 ms, a typing-rhythm choice); the backlog holds the
+  index's hit path, the cold open and the retained chunk texts.
 
 ## 7. Known limitations (documented trade-offs, not bugs)
 
@@ -375,7 +379,7 @@ How to audit that the three components implement
 | Generated models implement Appendix A/B | goldens compiled; every CRUD statement prepared against the generated DDL; SQL goldens executed on real SQLite | `nao/gen/...`, `nao/itest` |
 | LSP behaves per spec | in-process unit suites: index, rename spelling rules, hover content, completion contexts, UTF-16 | `lsp/*_test.go` via `go test ./lsp/...` |
 | LSP behaves per spec, interactively | a scripted stdio JSON-RPC session against the real server process, replaying keystrokes that break and fix a project file, one of them as a ranged change, and asking for hover, definition, completion and symbols; every reply and published diagnostic pinned as a golden (D101) | `cmd/volt/lsp_session_test.go` and `testdata/lsp_session.golden` via `go test ./cmd/volt/...`; refresh with `-update` after reading the diff |
-| A keystroke costs what the decisions say | the whole in-process path of one keystroke inside one table of a one-file project, didChange to publish, and the document's own front end alone; compare against the numbers in §6 and in D103 to D105 | `go test ./lsp -run '^$' -bench 'BenchmarkKeystroke|BenchmarkDocumentUpdateLocal' -benchmem` |
+| A keystroke costs what the decisions say | the whole in-process path of one keystroke inside one table of a one-file project, didChange to publish, and the document's own front end alone; compare against the numbers in §6 and in D103 to D105. The bytes the keystroke's three parts allocate (the document's pass, the project analysis, the publish) are pinned exactly, within ten percent, hardware-neutral (PERF-2) | `go test ./lsp -run '^$' -bench 'BenchmarkKeystroke|BenchmarkDocumentUpdateLocal' -benchmem`; `go test ./lsp -run TestKeystrokeAllocationBudget -v` |
 
 The upstream `@dbml/parse` cross-check that established Part I's
 fidelity was retired at zero disagreements (D54); the corpus verdicts
