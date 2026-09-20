@@ -16,7 +16,9 @@ way Go stdlib developers work against an RFC: `docs/spec.md` is
 normative — EBNF plus numbered constraints plus examples — and the
 implementation MUST be 100% compliant. Every constraint is executable
 (conformance corpus, `// spec: §…` tags; valid MUST pass, invalid MUST
-fail); every diagnostic cites the section it enforces; the grammar,
+fail); the grammar is executable too (D100: every sentence it
+derives parses, every one-token neighbour is decided alike by grammar
+and front end); every diagnostic cites the section it enforces; the grammar,
 the LSP, vet and the generators are all audited against the same
 document (`docs/editor.md` §8 is the checklist). When spec and code
 disagree, one of them has a bug — the fixing commit says which. Never
@@ -97,6 +99,7 @@ tool modules — the full sweep is
 go build ./... ./lsp/... ./cmd/volt/...
 go vet   ./... ./lsp/... ./cmd/volt/...
 go test  ./... ./lsp/... ./cmd/volt/...   # conformance, goldens, itests, LSP
+go test  -race ./lang/... ./lsp/...       # the shared surface under the detector (D96)
 gofmt -l . | grep -v zed-extension        # must be empty
 ```
 
@@ -106,7 +109,9 @@ changes. Grammar changes additionally need `tree-sitter generate`,
 `tree-sitter test`, the differential checks of `docs/editor.md` §8, and
 `./scripts/sync-grammar.sh`. For LSP behavior, scripted stdio JSON-RPC
 sessions replaying the user's exact keystrokes have repeatedly caught
-what unit tests missed — do that for anything interactive.
+what unit tests missed — do that for anything interactive; one such
+session is a golden test (`cmd/volt/lsp_session_test.go`, D101), and
+a new interaction belongs in it.
 
 ## Conventions
 
@@ -123,6 +128,15 @@ what unit tests missed — do that for anything interactive.
 - SQLite-first, all-in (D02); SQLite is the gen-time SQL checker via
   in-memory prepare (D06). Never: callbacks, lazy loading, dirty
   tracking, reflection in generated paths (D27).
+- What a session memo answers is a pure function of explicit inputs
+  (D86): a top-level function whose parameters are its whole input,
+  keyed on exactly those, never on a digest or a file stamp (D87). `cmd/volt`'s purity gate fails the build on
+  a read of package state, a write through an input (an append to an
+  input's array included), a call through a function value it did not
+  make, or a call into a package that keeps state, transitively (D102); its immutability walk fails
+  the build on a write to a memoized result outside its producer, or
+  to a node or token outside the front end (D92); a new memo adds its
+  function to the gate's targets in the same commit.
 - Commit messages explain *why*; a session that produces new decisions
   appends them to `docs/decisions.md` before committing.
 
@@ -138,7 +152,8 @@ the maintainer (it's alpha; honesty over marketing). Test data must be
 neutral (blog/metrics domains — never agriculture/FADN; that fixture
 history is why); a test that needs a project of some size writes one
 with `internal/corpus`, which uses every feature in both layouts
-(`volt fixture DIR` writes the same project to disk, at any size, for
-timing check, gen and the LSP by hand; D80). When the maintainer asks a question, answer it and
+(`volt stress DIR` writes its one-file shape to disk, a thousand tables
+by default, to feel the limits of check, gen, the LSP and the Go
+compiler by hand; D80). When the maintainer asks a question, answer it and
 stop — don't implement until asked; when they ask for work, finish it:
 build + vet + test + gofmt green, committed, pushed.

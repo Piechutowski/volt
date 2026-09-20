@@ -44,7 +44,7 @@ func TestAnalyzers(t *testing.T) {
 			}
 			lines := strings.Split(string(src), "\n")
 			header := strings.TrimPrefix(strings.TrimSpace(lines[0]), "// analyzers:")
-			var analyzers []*vet.Analyzer
+			var analyzers []vet.Analyzer
 			for _, name := range strings.Split(header, ",") {
 				a := vet.ByName(strings.TrimSpace(name))
 				if a == nil {
@@ -75,17 +75,17 @@ func TestAnalyzers(t *testing.T) {
 			for _, w := range vet.Run(f, info, analyzers...) {
 				name := strings.TrimPrefix(w.Code, "vet/")
 				matched := false
-				rest := want[w.Pos.Line][:0]
-				for _, n := range want[w.Pos.Line] {
+				rest := want[int(w.Pos.Line())][:0]
+				for _, n := range want[int(w.Pos.Line())] {
 					if !matched && n == name {
 						matched = true
 						continue
 					}
 					rest = append(rest, n)
 				}
-				want[w.Pos.Line] = rest
+				want[int(w.Pos.Line())] = rest
 				if !matched {
-					t.Errorf("unexpected warning at line %d: %s", w.Pos.Line, w)
+					t.Errorf("unexpected warning at line %d: %s", w.Pos.Line(), w)
 				}
 			}
 			for line, names := range want {
@@ -128,8 +128,10 @@ TableGroup commerce { users
 
 func TestAnalyzerDocs(t *testing.T) {
 	for _, a := range vet.All() {
-		if a.Name == "" || a.Doc == "" || a.Run == nil {
-			t.Errorf("analyzer %+v is missing name, doc or run", a)
+		_, rule := a.(vet.Rule)
+		_, fold := a.(vet.Fold)
+		if a.Name() == "" || a.Doc() == "" || (!rule && !fold) {
+			t.Errorf("analyzer %+v is missing name, doc or a check", a)
 		}
 	}
 }

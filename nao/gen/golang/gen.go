@@ -46,7 +46,7 @@ type Options struct {
 // (D77). The file must be free of check errors; Generate validates only
 // what generation itself needs (name mapping, type mapping, collisions).
 func Generate(f *ast.File, info *check.Info, opts Options) ([]byte, error) {
-	p, perr := planBuild(f, info)
+	p, perr := planBuild(f, info, nil)
 	return modelsGenerate(f, info, p, perr, opts)
 }
 
@@ -81,6 +81,9 @@ func (g *generator) run(p *plan, perr error) error {
 	}
 
 	// Body first: emitting fields discovers which imports are needed.
+	if p != nil {
+		g.body.Grow(p.fieldCount() * 130) // measured: bytes of models per column
+	}
 	for _, e := range g.info.Enums {
 		if err := g.enumEmit(e.Decl); err != nil {
 			return err
@@ -106,6 +109,7 @@ func (g *generator) run(p *plan, perr error) error {
 	}
 
 	g.header()
+	g.out.Grow(g.body.Len())
 	g.out.WriteString(g.body.String())
 	return nil
 }

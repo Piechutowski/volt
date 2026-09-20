@@ -64,7 +64,7 @@ func TestVoltProjectCrossFileConflict(t *testing.T) {
 
 	found := false
 	for _, dg := range d.Diags {
-		if strings.Contains(dg.Msg, "conflict") && dg.Pos.Filename == path {
+		if strings.Contains(dg.Msg, "conflict") && dg.Pos.Filename() == path {
 			found = true
 		}
 	}
@@ -176,7 +176,7 @@ func TestVoltModDiagnosticsSurface(t *testing.T) {
 
 	found := false
 	for _, dg := range d.Diags {
-		if strings.Contains(dg.Msg, "go.mod") && dg.Pos.Line == 1 {
+		if strings.Contains(dg.Msg, "go.mod") && dg.Pos.Line() == 1 {
 			found = true
 		}
 	}

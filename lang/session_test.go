@@ -6,15 +6,19 @@ package lang_test
 // package that could see it.
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Piechutowski/volt/gen/model"
 	"github.com/Piechutowski/volt/gen/router"
+	"github.com/Piechutowski/volt/internal/corpus"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
+	"github.com/Piechutowski/volt/lang/parser"
 )
 
 func diagsRender(ds []diag.Diagnostic) string {
@@ -92,9 +96,9 @@ func TestSessionMatchesFreshAnalysis(t *testing.T) {
 	_, work = sessionRound(t, &s, root, map[string]string{d2: fixed, r3: routed}, s.Stats())
 	expect("route edit in the editor", work, 1, 1)
 
-	// A save: the overlay goes, the disk changes. The file is read
-	// again (its stat moved), and being the same text as the overlay,
-	// its parse is reused; nothing checks again.
+	// A save: the overlay goes, the disk changes. The file is read,
+	// and being the same text as the overlay, its parse is reused;
+	// nothing checks again.
 	if err := os.WriteFile(d2, []byte(fixed), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -102,12 +106,89 @@ func TestSessionMatchesFreshAnalysis(t *testing.T) {
 	expect("save of the edited file", work, 0, 0)
 
 	// A Go file appearing beside a routing package's routes changes
-	// its Go-function stamp: that package checks again.
+	// its Go sources: that package checks again.
 	if err := os.WriteFile(filepath.Join(root, "r1", "mw.go"), []byte("package r1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, work = sessionRound(t, &s, root, map[string]string{r3: routed}, s.Stats())
 	expect("Go file added", work, 0, 1)
+}
+
+// TestSessionReadsWhatIsOnDisk proves the session trusts no stamp
+// (D87): a file rewritten to the same length with its modification
+// time put back is read, and the edit is seen, for a .volt file and
+// for a Go file alike. Each edit changes the diagnostics, so a stale
+// parse or a stale Go scan would differ from the fresh analysis.
+func TestSessionReadsWhatIsOnDisk(t *testing.T) {
+	root := t.TempDir()
+	write := func(name, src string) {
+		t.Helper()
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("go.mod", "module disk\n")
+	write("db/schema.volt", "package db\n\nTable users {\n\tid integer [pk, increment]\n\temail varchar [not null]\n\ttitle text\n\ttitle text\n\n\tchecks {\n\t\tEmailValid(email)\n\t}\n}\n")
+	write("db/checks.go", "package db\n\nfunc EmailValid(email string) error { return nil }\n")
+	// sameStamp rewrites one file so that its size and modification
+	// time are what they were.
+	sameStamp := func(name, from, to string) {
+		t.Helper()
+		if len(from) != len(to) {
+			t.Fatalf("%q and %q differ in length", from, to)
+		}
+		path := filepath.Join(root, name)
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		src, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(src), from) {
+			t.Fatalf("%s does not contain %q", name, from)
+		}
+		if err := os.WriteFile(path, []byte(strings.Replace(string(src), from, to, 1)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
+			t.Fatal(err)
+		}
+		after, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if after.Size() != info.Size() || !after.ModTime().Equal(info.ModTime()) {
+			t.Fatalf("precondition: %s's stamp moved", name)
+		}
+	}
+	var s lang.Session
+	expect := func(name string, got lang.SessionStats, parsed, checked int) {
+		t.Helper()
+		if got.FilesParsed != parsed || got.PackagesChecked != checked {
+			t.Errorf("%s: parsed %d files and checked %d packages; want %d and %d", name, got.FilesParsed, got.PackagesChecked, parsed, checked)
+		}
+	}
+	_, work := sessionRound(t, &s, root, nil, lang.SessionStats{})
+	expect("first load", work, 1, 1)
+	_, work = sessionRound(t, &s, root, nil, s.Stats())
+	expect("no change", work, 0, 0)
+
+	// The duplicate column renamed: the error goes.
+	sameStamp("db/schema.volt", "\ttitle text\n\ttitle text\n", "\ttitle text\n\ttitel text\n")
+	_, work = sessionRound(t, &s, root, nil, s.Stats())
+	expect("same-length edit of the .volt file", work, 1, 1)
+
+	// The Go function's parameter type changes under the reference:
+	// the check no longer matches the column.
+	sameStamp("db/checks.go", "email string", "email []byte")
+	_, work = sessionRound(t, &s, root, nil, s.Stats())
+	expect("same-length edit of the Go file", work, 0, 1)
 }
 
 // TestSessionGeneratesIdentically proves the restored package results
@@ -166,5 +247,212 @@ func TestSessionGeneratesIdentically(t *testing.T) {
 	}
 	if st := s.Stats(); st.PackagesReused == 0 {
 		t.Fatalf("the memo never hit: %+v", st)
+	}
+}
+
+// TestSessionVetMemo proves Session.Vet answers from the memo exactly
+// when Session.Check did: the warnings match a fresh Vet round by
+// round, and a round that re-checked n packages re-vets n (D81).
+func TestSessionVetMemo(t *testing.T) {
+	root := scheduleFixture(t)
+	var s lang.Session
+	round := func(name string, overlay map[string]string, checked int) {
+		t.Helper()
+		before := s.Stats()
+		pr, err := s.Load(root, overlay)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.Check(pr)
+		got := diagsRender(s.Vet(pr))
+		fresh, err := lang.LoadOverlay(root, overlay)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lang.Check(fresh)
+		if want := diagsRender(lang.Vet(fresh)); got != want {
+			t.Fatalf("%s: session vet differs from a fresh vet:\n--- session\n%s--- fresh\n%s", name, got, want)
+		}
+		after := s.Stats()
+		if vetted, ch := after.PackagesVetted-before.PackagesVetted, after.PackagesChecked-before.PackagesChecked; vetted != checked || ch != checked {
+			t.Errorf("%s: vetted %d, checked %d packages; want %d (vet reused %d)", name, vetted, ch, checked, after.PackagesVetReused-before.PackagesVetReused)
+		}
+		// A package the memo answered ran no rule: its declarations
+		// count neither as judged nor as answered (D104).
+		if decls, answered := after.DeclsVetted-before.DeclsVetted, after.DeclsVetReused-before.DeclsVetReused; checked == 0 && (decls != 0 || answered != 0) {
+			t.Errorf("%s: no package vetted, yet %d declarations judged and %d answered", name, decls, answered)
+		} else if checked > 0 && decls == 0 {
+			t.Errorf("%s: %d packages vetted, yet no declaration judged", name, checked)
+		}
+	}
+	round("first", nil, 12)
+	round("no change", nil, 0)
+	d2 := filepath.Join(root, "d2", "schema.volt")
+	src, err := os.ReadFile(d2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	round("edit", map[string]string{d2: string(src) + "\n// touched\n"}, 2)
+	round("same edit", map[string]string{d2: string(src) + "\n// touched\n"}, 0)
+}
+
+// TestSessionReparsesOneDeclaration proves an edit inside one
+// declaration of a one-file project re-parses that declaration alone
+// (D83): the session's diagnostics still match a fresh analysis, and
+// the work counters say one declaration parsed, the rest reused.
+func TestSessionReparsesOneDeclaration(t *testing.T) {
+	root := t.TempDir()
+	if err := corpus.Write(root, corpus.Spec{Tables: 12, Columns: 6, Single: true}); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "schema.volt")
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(src)
+	_, _, _, whole := parser.ParseFileReuse(path, text, nil)
+	var s lang.Session
+	// work is what one round did, in declarations parsed and in tables
+	// whose schema check, model and lowered checks were run afresh, and
+	// in declarations the vet judged afresh (D104).
+	type work struct{ parsed, tables, models, checks, selects, routes, vetted int }
+	round := func(name, text string, want work) {
+		t.Helper()
+		before := s.Stats()
+		overlay := map[string]string{path: text}
+		pr, err := s.Load(root, overlay)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := diagsRender(s.Check(pr))
+		gotVet := diagsRender(s.Vet(pr))
+		fresh, err := lang.LoadOverlay(root, overlay)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := diagsRender(lang.Check(fresh)); got != want {
+			t.Fatalf("%s: session differs from fresh\n--- session\n%s--- fresh\n%s", name, got, want)
+		}
+		if want := diagsRender(lang.Vet(fresh)); gotVet != want {
+			t.Fatalf("%s: session vet differs from fresh\n--- session\n%s--- fresh\n%s", name, gotVet, want)
+		}
+		after := s.Stats()
+		did := work{after.DeclsParsed - before.DeclsParsed, after.TablesChecked - before.TablesChecked,
+			after.ModelsBuilt - before.ModelsBuilt, after.ChecksLowered - before.ChecksLowered,
+			after.SelectsChecked - before.SelectsChecked, after.RoutesLowered - before.RoutesLowered,
+			after.DeclsVetted - before.DeclsVetted}
+		if did != want {
+			t.Errorf("%s: did %+v, want %+v (reused: %d declarations, %d tables, %d models, %d checks, %d selects, %d vetted)", name, did, want,
+				after.DeclsReused-before.DeclsReused, after.TablesReused-before.TablesReused,
+				after.ModelsReused-before.ModelsReused, after.ChecksReused-before.ChecksReused,
+				after.SelectsReused-before.SelectsReused, after.DeclsVetReused-before.DeclsVetReused)
+		}
+	}
+	// 12 tables, each with a projected select, and the group select
+	// over all of them: 13 selects; four routes, a resources per table
+	// and the dataset over the group select: 17 scope items (D99).
+	// Every declaration is vetted once.
+	all := work{whole.Parsed, 12, 12, 12, 13, 17, whole.Parsed}
+	round("first", text, all)
+	// One table: its own select and the group select see a new member;
+	// its resources and the dataset over the group select are lowered
+	// again, the table and the select they name being new objects. The
+	// vet judges the table again and the next table, whose prev_id
+	// relationship names it.
+	one := work{1, 1, 1, 1, 2, 2, 2}
+	round("edit one table", strings.Replace(text, "c002 text [not null]", "c002 text [not null, note: 'edited']", 1), one)
+	round("break it", strings.Replace(text, "c002 text [not null]", "c002 text [not null", 1), one)
+	round("fix it", text, one)
+	// Edits accumulate from here, so each round changes one chunk.
+	cur := strings.Replace(text, "get /events        volt.Events", "get /stream        volt.Events", 1)
+	// Touches no table. The scope is one element (§3.2.5), so the edit
+	// re-parses it whole and every item of it is a new node: all 17
+	// are lowered again, from the memo's lookups answered as before;
+	// the vet judges the scope, one declaration.
+	round("edit a route", cur, work{1, 0, 0, 0, 0, 17, 1})
+	// The partial every table injects: every table's columns change,
+	// so every table is checked again, its model rebuilt, its checks
+	// lowered again, every select re-checked; the vet judges the
+	// partial and every table.
+	cur = strings.Replace(cur, "created_at timestamp", "created_at timestamp [note: 'stamped']", 1)
+	round("edit the partial", cur, work{1, 12, 12, 12, 13, 13, 13})
+	// An enum's note: no table and no model depends on it.
+	cur = strings.Replace(cur, "retired [note: 'no longer written']", "retired [note: 'gone']", 1)
+	round("edit the enum's note", cur, work{1, 0, 0, 0, 0, 0, 1})
+	// A new enum: the enum set is an input of every table's check (the
+	// required rule asks whether a column type is an enum) and of every
+	// model, so every table is checked again and every model rebuilt;
+	// the lowered checks and the selects follow their models, and the
+	// vet follows the tables, plus the enum itself.
+	cur = strings.Replace(cur, "TablePartial stamped", "Enum kind {\n\tplain\n}\n\nTablePartial stamped", 1)
+	round("add an enum", cur, work{1, 12, 12, 12, 13, 13, 13})
+	// The predicate every select names: every select is checked again.
+	cur = strings.Replace(cur, "Pred fresh { c001 >= :since }", "Pred fresh { c001 > :since }", 1)
+	// The dataset names the group select, checked again: one item.
+	round("edit the pred", cur, work{1, 0, 0, 0, 13, 1, 1})
+	// A Go file of the package: the tables and models stand, the Go
+	// reference checks are lowered again.
+	if err := os.WriteFile(filepath.Join(root, "extra.go"), []byte("package main\n\nfunc Extra() {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// The validators are what they were, so every resources stands,
+	// and so does every declaration's verdict.
+	round("add a Go file", cur, work{0, 0, 0, 12, 0, 0, 0})
+}
+
+// TestSessionConcurrentCallersAgreeWithFreshAnalysis proves a Session
+// serves concurrent callers one operation at a time (D96): several
+// goroutines load and check one session under overlays of their own,
+// round after round, and every result equals a fresh analysis of the
+// same overlay. Run under the race detector by the verification bar,
+// it is where the memos' one-goroutine-at-a-time invariant is
+// exercised rather than assumed.
+func TestSessionConcurrentCallersAgreeWithFreshAnalysis(t *testing.T) {
+	root := scheduleFixture(t)
+	d2 := filepath.Join(root, "d2", "schema.volt")
+	src, err := os.ReadFile(d2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := string(src)
+	var s lang.Session
+	const callers, rounds = 4, 6
+	var wg sync.WaitGroup
+	errs := make([]error, callers)
+	for c := 0; c < callers; c++ {
+		wg.Add(1)
+		go func(c int) {
+			defer wg.Done()
+			for r := 0; r < rounds; r++ {
+				text := base
+				if (c+r)%2 == 1 {
+					text = strings.Replace(base, "  title text\n", "", 1)
+				}
+				text = strings.Replace(text, "Table tags {", fmt.Sprintf("Table tags_%d_%d {", c, r), 1)
+				overlay := map[string]string{d2: text}
+				pr, err := s.Load(root, overlay)
+				if err != nil {
+					errs[c] = err
+					return
+				}
+				got := diagsRender(s.Check(pr))
+				fresh, err := lang.LoadOverlay(root, overlay)
+				if err != nil {
+					errs[c] = err
+					return
+				}
+				if want := diagsRender(lang.Check(fresh)); got != want {
+					errs[c] = fmt.Errorf("caller %d round %d: session differs from fresh\n--- session\n%s--- fresh\n%s", c, r, got, want)
+					return
+				}
+			}
+		}(c)
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }

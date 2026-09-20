@@ -150,11 +150,19 @@ Later patterns win in a query file, so generic rules go first.
 ## 4. The language server (`lsp/`)
 
 Speaks LSP 3.16 over stdio via `tliron/glsp`; the wiring is one
-`protocol.Handler` literal in `server.go`. Document sync is full-text:
-files are small, and full sync makes the server stateless per edit.
+`protocol.Handler` literal in `server.go`. Document sync is
+incremental (D105): the client sends each keystroke as a range and the
+text that replaces it, and the server applies every item of a change
+to the text as it then stands, positions in UTF-16 units; a client
+that still sends the whole text is served the same way. Every publish
+of diagnostics carries the version of the text they are positioned
+in, so a client whose buffer has moved on drops it.
 
-**The per-edit pipeline.** Every open/change/close re-runs the whole
-front end — it is fast enough that there is no cache to invalidate:
+**The per-edit pipeline.** An edit updates the document's own front
+end at once, through the document's own memos (D103: the parse by
+declaration, the check by table and the occurrence index by table are
+the session's memo shapes, D83 to D85, owned by the handler goroutine),
+and schedules the project's analysis:
 
 1. Find the project root (the nearest `go.mod`, §V1.1). A file under a root is
    checked as part of its **whole project**: every open buffer is
@@ -201,6 +209,11 @@ layer:
 
 **vet runs only on error-free files** — style advice stacked on hard
 errors is noise while typing; it reappears when the file checks clean.
+And it runs only where its verdict is what the editor shows (D103): a
+file in a project package is vetted by the project analysis, never by
+the document's own pass; a file outside any project, or one under a
+project the loader never read (§V1.6), gets the single-file vet added
+to its own verdict once per text.
 
 ## 5. Extending the system — the recipes
 
@@ -241,16 +254,72 @@ agree. The LSP picks it up automatically.
   types, no codegen. Its dependency tail is real (websocket, jsonrpc2,
   an LSP-3.17 rewrite would be ~300 lines over stdio) — contained by
   the tool-module split; replacing it stays an open option.
-- **Full-text sync over incremental** — statelessness beats patch
-  bookkeeping at these file sizes.
+- **Incremental sync** (D105) — full-text sync was chosen first for
+  statelessness, and cost a decode of the whole file per keystroke on
+  a large one, about 110 ms of 4 MB; the ranged branch of didChange
+  applies each item to the text as it then stands, which the sync test
+  pins item by item (two items in one notification, a CRLF newline
+  deleted, positions past the end), and the stdio session golden
+  replays one ranged keystroke.
 - **Whole-project analysis per edit, memoized by identity, in the
   background** (D79) — no dirty tracking to get wrong: a package is
   re-checked when its files, its imports or its Go files are not the
   objects they were, and restored otherwise. Measured on a 1000-table,
   20-package project: an edit costs about 200 ms (the edited file's
   parse and the packages that see it), a no-op 2 ms, against 770 ms
-  for a fresh analysis. What remains is the edited file's own parse
-  and check; per-declaration memoization is the next step (PERF-10).
+  for a fresh analysis. The edited file's own parse is now by
+  declaration (D83): a file is parsed in chunks, one per top-level
+  declaration, cut by the scanner at the language's element boundary
+  (§3.2.5, D88), and an edit re-parses the chunk it touched and relocates
+  the rest by one store per chunk, so the thousand-table one-file
+  project re-parses in 2 ms against 340 ms. The check is by
+  declaration too (D84): tables, models, lowered checks and selects
+  whose inputs are the objects they were are answered from the last
+  check, and the routes are lowered per scope item from names the
+  model carries (D99), so the same edit checks in about 50 ms against
+  700. The navigation index is kept by table too (D85), so the
+  server's project analysis of that edit was about 100 to 160 ms
+  before D99. Measured through stdio before D103, keystroke to
+  diagnostics on that file was still about 1.7 s: the document's own
+  whole-file front end (parse, check and vet, about 0.9 s on the
+  handler goroutine) and the package vet (about 0.3 s) dwarfed the
+  check. That was a backlog entry, "The editor's keystroke path on a
+  huge file", landed as D103 to D105, the three bullets below.
+- **The document's own front end is memoized per document** (D103) —
+  the same three memo shapes the session keeps (parse by declaration,
+  check by table, index by table), owned by the handler goroutine, so
+  the run and the documents share nothing; the single-file vet is added
+  only where the document's own verdict is the truth. Measured on the
+  same keystroke through stdio: 1.26 s before (the 1.7 s above, measured
+  again on the day) to about 0.56 s mean; in process on a 200-table
+  file, the document's own pass 20 ms to 1.6 ms and the keystroke to its
+  publish 30 ms to 13 ms (`BenchmarkDocumentUpdateLocal`,
+  `BenchmarkKeystroke` in `lsp/`).
+- **Vet by declaration** (D104) — a rule is a pure function of one
+  declaration and the facts the checker resolved for it, memoized by
+  declaration in the session like the check (D84); the file-wide rules
+  fold over the declarations' summaries, and the generated-name rule
+  reads the collisions the plan's name base keeps across plans (D99)
+  instead of walking every name. The same keystroke through stdio:
+  0.56 s to about 0.35 s mean; in process on the 200-table file, 13 ms
+  to about 8 ms.
+- **The rest of the keystroke path** (D105) — incremental sync spares
+  the transport the whole file, every publish carries its version, a
+  select's hover derives its signature's row name without building a
+  thousand members' field lists, and the navigation index keeps each
+  package directory's Go scan across builds while the sources are the
+  bytes they were. The same keystroke through stdio, sent as a range:
+  about 0.22 s mean the day it landed (0.35 s sent as the whole file),
+  0.27 s (0.44 s) on the closing day's re-measurement, against 1.26 s
+  before D103 and 1.7 s when the entry was written; what remains,
+  measured piece by piece in process on the closing day, is the
+  document's own pass (about 55 ms, most of it its occurrence index),
+  the debounce (75 ms, a typing-rhythm choice), the session's check
+  (about 45 ms), the project's navigation index (about 55 ms at best,
+  up to three times that with a collection), the line tables of the
+  text (about 15 ms) and the vet (5 ms), which compose to the whole;
+  the backlog holds the index's hit path, the cold open and the
+  retained chunk texts.
 
 ## 7. Known limitations (documented trade-offs, not bugs)
 
@@ -281,12 +350,14 @@ make no claim. Existence and the spelled signature are the checker's
 reference. The Go side can move without any `.volt` buffer changing —
 a gopls rename, a newly written function — so the server registers a
 `**/*.go` file watcher with the client and re-analyzes every project
-with an open document when one is saved (the Go files' fingerprint is
-part of a package's memo key, so only the packages beside the change
+with an open document when one is saved (the Go sources are part of
+a package's memo key, so only the packages beside the change
 re-check); independently, every hover, definition,
-references, rename and completion request first compares the scanned
-Go files' fingerprint (names, sizes, mtimes) with the disk and re-runs
-the analysis when it moved, republishing diagnostics. Only saved files
+references, rename and completion request first compares the Go
+sources it scanned with the disk, byte for byte (D87), and when they
+differ kicks that same background analysis, which republishes; the
+request in hand answers from the analysis it adopted, the next adopts
+the fresh one (D79, D103). Only saved files
 count: the Go buffers themselves belong to gopls, not to this server. Rename on a Go reference rewrites its Volt spellings only —
 the Go declaration is gopls' job, and the existence error then points
 at whichever side is still behind. Rename on a column follows it into
@@ -302,14 +373,16 @@ How to audit that the three components implement
 
 | Claim | Check | Where |
 |---|---|---|
-| Front end accepts/rejects exactly what the spec says | conformance corpus: `valid/` MUST pass, `invalid/` MUST fail, each snippet tagged `// spec: §…` (`.dbml` entries = the schema pass, `.volt` entries and project dirs = the project pass) | `lang/conformance/snippets/` via `go test ./lang/...` |
+| Front end accepts/rejects exactly what the spec says | conformance corpus: `valid/` MUST pass, `invalid/` MUST fail, each snippet tagged `// spec: §…` (`.dbml` entries = the schema pass, `.volt` entries and project dirs = the project pass); every diagnostic of every invalid snippet, recovery included, is a golden (D101) | `lang/conformance/snippets/` and `lang/conformance/invalid_*.golden` via `go test ./lang/...`; refresh with `-update` after reading the diff |
 | Grammar parses everything the spec allows | corpus cases (input → expected tree, incl. `:error` cases) | `grammar/test/corpus/`, `tree-sitter test` |
-| Grammar and front end agree | every valid conformance snippet and `grammar/examples/*` must produce zero tree-sitter ERROR nodes **and** zero front-end diagnostics | differential run after grammar changes |
+| Spec grammar and front end agree | the spec's EBNF read as data (D100): every derived sentence parses, every one-token neighbour is decided alike by the grammar and the front end | `lang/spec_grammar_test.go` via `go test ./lang/...` |
+| Grammar and front end agree | every valid conformance snippet, `grammar/examples/*` and the spec's derived sentences (`go test ./lang -run TestSpecGrammarSentencesParse -sentences DIR`) must produce zero tree-sitter ERROR nodes **and** zero front-end diagnostics | differential run after grammar changes |
 | Lint rules match their doc | doc ↔ registry ↔ testdata consistency test; `//WANT` markers both directions | `lang/vet/docs_test.go` against [`lint.md`](lint.md) |
 | Generated routers implement §V | goldens byte-compared, gofmt-stable, **compiled**; itest exercises match/404/405, typed-param 404s, pipeline order, the error spine, reverse-URL round-trip totality | `gen/router`, `itest/` |
 | Generated models implement Appendix A/B | goldens compiled; every CRUD statement prepared against the generated DDL; SQL goldens executed on real SQLite | `nao/gen/...`, `nao/itest` |
 | LSP behaves per spec | in-process unit suites: index, rename spelling rules, hover content, completion contexts, UTF-16 | `lsp/*_test.go` via `go test ./lsp/...` |
-| LSP behaves per spec, interactively | scripted stdio JSON-RPC sessions against the built binary, replaying real keystrokes — a development practice, not yet an automated test | manual; automating it is an open roadmap item |
+| LSP behaves per spec, interactively | a scripted stdio JSON-RPC session against the real server process, replaying keystrokes that break and fix a project file, one of them as a ranged change, and asking for hover, definition, completion and symbols; every reply and published diagnostic pinned as a golden (D101) | `cmd/volt/lsp_session_test.go` and `testdata/lsp_session.golden` via `go test ./cmd/volt/...`; refresh with `-update` after reading the diff |
+| A keystroke costs what the decisions say | the whole in-process path of one keystroke inside one table of a one-file project, didChange to publish, and the document's own front end alone; compare against the numbers in §6 and in D103 to D105. The bytes the keystroke's three parts allocate (the document's pass, the project analysis, the publish) are pinned exactly, within ten percent, hardware-neutral (PERF-2) | `go test ./lsp -run '^$' -bench 'BenchmarkKeystroke|BenchmarkDocumentUpdateLocal' -benchmem`; `go test ./lsp -run TestKeystrokeAllocationBudget -v` |
 
 The upstream `@dbml/parse` cross-check that established Part I's
 fidelity was retired at zero disagreements (D54); the corpus verdicts

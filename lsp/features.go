@@ -140,7 +140,7 @@ func refLabel(n *ast.Ref) string {
 	if n.Right != nil {
 		right = n.Right.Table.String() + "." + strings.Join(identNames(n.Right.Columns), ",")
 	}
-	return fmt.Sprintf("%s %s %s", left, n.OpTok.Text, right)
+	return fmt.Sprintf("%s %s %s", left, n.OpTok.Text(), right)
 }
 
 func identNames(ids []*ast.Ident) []string {
@@ -455,7 +455,7 @@ func valueString(v ast.Node) string {
 		return v.Enum.Name() + "." + v.Value.Name()
 	case *ast.RefValue:
 		cols := identNames(v.Endpoint.Columns)
-		return v.OpTok.Text + " " + v.Endpoint.Table.String() + "." + strings.Join(cols, ", ")
+		return v.OpTok.Text() + " " + v.Endpoint.Table.String() + "." + strings.Join(cols, ", ")
 	}
 	return ""
 }

@@ -3,9 +3,12 @@
 // projected and group selects, typed and Go-reference checks,
 // pipelines, error handlers, default resources, datasets, controller
 // and query routes, the event stream — in a neutral domain, for the
-// scaling, allocation and schedule tests and the benchmarks (PERF-2).
-// One Spec, two layouts: data packages plus a routing package that
-// imports them all, or one package holding everything (D76).
+// scaling, allocation and schedule tests and the benchmarks (PERF-2),
+// and for `volt stress`, which writes it at stress size (D80). One
+// Spec, two layouts: data packages plus a routing package that imports
+// them all, or one package main at the module root holding everything
+// in one schema.volt (D76). The controllers the routes name are
+// stubbed, so with a Volt checkout to build against the project builds.
 package corpus
 
 import (
@@ -17,10 +20,11 @@ import (
 
 // Spec sizes a project.
 type Spec struct {
-	Packages int  // data packages d01..dNN (1 in the one-package layout)
-	Tables   int  // tables per data package
-	Columns  int  // data columns per table, beyond the key and the partial
-	Single   bool // one package holds schema and routes (D76)
+	Packages int    // data packages d01..dNN (ignored in the one-package layout)
+	Tables   int    // tables per data package
+	Columns  int    // data columns per table, beyond the key and the partial
+	Single   bool   // one package main at the root holds schema and routes (D76)
+	Volt     string // Volt checkout the module's runtime is replaced with; "" writes a module that checks and generates but does not build
 }
 
 // Write materializes the project under root: go.mod, every .volt file
@@ -40,22 +44,24 @@ func Write(root string, spec Spec) error {
 
 // Files renders the project as relative path -> content.
 func Files(spec Spec) map[string]string {
-	out := map[string]string{"go.mod": "module corpus\n\ngo 1.27\n"}
+	out := map[string]string{"go.mod": goMod(spec.Volt)}
 	if spec.Single {
 		var b strings.Builder
-		b.WriteString("package site\n\n")
+		b.WriteString("package main\n\n")
 		schemaWrite(&b, spec, "site")
 		b.WriteString("\n")
 		routesWrite(&b, spec, []string{"site"}, true)
-		out["site/site.volt"] = b.String()
-		out["site/checks.go"] = checksGo("site")
-		out["site/mw.go"] = middlewareGo("site")
+		out["schema.volt"] = b.String()
+		out["checks.go"] = checksGo("main")
+		out["mw.go"] = middlewareGo("main")
+		out["main.go"] = controllersGo("main", []string{"Site"}, true)
 		return out
 	}
-	var pkgs []string
+	var pkgs, stats []string
 	for p := 1; p <= spec.Packages; p++ {
 		name := fmt.Sprintf("d%02d", p)
 		pkgs = append(pkgs, name)
+		stats = append(stats, actionOf(name))
 		var b strings.Builder
 		fmt.Fprintf(&b, "package %s\n\n", name)
 		schemaWrite(&b, spec, name)
@@ -67,8 +73,22 @@ func Files(spec Spec) map[string]string {
 	routesWrite(&b, spec, pkgs, false)
 	out["app/routes.volt"] = b.String()
 	out["app/mw.go"] = middlewareGo("app")
+	out["app/controllers.go"] = controllersGo("app", stats, false)
 	return out
 }
+
+// goMod is the module file: a require and a replace onto the Volt
+// checkout when one is given, so the generated code builds.
+func goMod(volt string) string {
+	s := "module corpus\n\ngo 1.27\n"
+	if volt != "" {
+		s += "\nrequire github.com/Piechutowski/volt v0.0.0\n\nreplace github.com/Piechutowski/volt => " + volt + "\n"
+	}
+	return s
+}
+
+// actionOf names the Stats action a scope's route calls.
+func actionOf(scope string) string { return strings.ToUpper(scope[:1]) + scope[1:] }
 
 // Table names the i-th table (1-based) of a data package.
 func Table(i int) string { return fmt.Sprintf("tb%03ds", i) }
@@ -145,7 +165,7 @@ func routesWrite(b *strings.Builder, spec Spec, pkgs []string, single bool) {
 			qual = ""
 		}
 		fmt.Fprintf(b, "\tScope /%s [name: %s] {\n", p, p)
-		fmt.Fprintf(b, "\t\tget /stats Stats.%s\n", strings.ToUpper(p[:1])+p[1:])
+		fmt.Fprintf(b, "\t\tget /stats Stats.%s\n", actionOf(p))
 		for i := 1; i <= spec.Tables; i++ {
 			fmt.Fprintf(b, "\t\tresources %s%s [default]\n", qual, Table(i))
 		}
@@ -188,4 +208,26 @@ func Errors(w http.ResponseWriter, r *volt.Request, err error) {
 	volt.DefaultErrorHandler(w, r, err)
 }
 `
+}
+
+// controllersGo stubs the controllers the routes name — Home.Index,
+// Files.Serve and one Stats action per scope — so the routing package
+// builds once generated. In the one-package layout it is main.go: the
+// router is served over a nil database, so the module links as a
+// program and the Go compiler sees every generated line.
+func controllersGo(pkg string, stats []string, main bool) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "package %s\n\nimport (\n\t\"net/http\"\n\n\tvolt \"github.com/Piechutowski/volt\"\n)\n\n", pkg)
+	b.WriteString("// stub answers every controller action the routes name.\ntype stub struct{}\n\n")
+	b.WriteString("func (stub) Index(w http.ResponseWriter, r *volt.Request) error { return nil }\n\n")
+	b.WriteString("func (stub) Serve(w http.ResponseWriter, r *volt.Request, path string) error { return nil }\n")
+	for _, a := range stats {
+		fmt.Fprintf(&b, "\nfunc (stub) %s(w http.ResponseWriter, r *volt.Request) error { return nil }\n", a)
+	}
+	if main {
+		b.WriteString("\nfunc main() {\n\thttp.ListenAndServe(\":0\", NewRouter(Controllers{Home: stub{}, Files: stub{}, Stats: stub{}, Queries: New(nil)}))\n}\n")
+	} else {
+		b.WriteString("\nvar _ http.Handler = NewRouter(Controllers{Home: stub{}, Files: stub{}, Stats: stub{}})\n")
+	}
+	return b.String()
 }

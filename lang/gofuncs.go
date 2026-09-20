@@ -15,9 +15,9 @@ import (
 	"go/printer"
 	gotoken "go/token"
 	"go/types"
+	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -43,39 +43,92 @@ type GoFunc struct {
 	Doc      string         // doc comment text, "" when absent
 }
 
-// GoFuncsIn is GoFuncsScan without the parse-error report.
-func GoFuncsIn(dir string) map[string]GoFunc {
-	funcs, _ := GoFuncsScan(dir)
-	return funcs
+// GoSource is one Go file of a package directory as the scan reads it
+// (D87): its name and its text, or its first bytes alone when they
+// carry the generated marker (D81), so a million-line output costs one
+// small read and is never parsed. Equal sources scan to equal
+// functions; a tool that keeps a scan compares the sources it read
+// with the sources on disk now, byte for byte, and nothing else.
+type GoSource struct {
+	Name string
+	Text string
+	Head bool // Text is the file's first bytes only: a generated file
 }
 
-// GoFuncsScan parses the non-test Go files directly in dir that the go
-// tool would compile for the package — go/build's file constraints:
-// no leading "_" or ".", a matching GOOS/GOARCH suffix, a satisfied
-// //go:build line — and returns its top-level functions (methods
-// excluded) by name. A file with a syntax error contributes the
-// declarations parsed before the error and is reported in broken
-// ("file: line:col message"), so a diagnostic can say why a function
-// later in that file is invisible.
-func GoFuncsScan(dir string) (funcs map[string]GoFunc, broken []string) {
-	funcs = map[string]GoFunc{}
+// GoSourcesRead reads the non-test Go files directly in dir, by name.
+// A file that cannot be read is absent, as it is for the go tool.
+func GoSourcesRead(dir string) []GoSource {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return funcs, nil
+		return nil
 	}
-	fset := gotoken.NewFileSet()
+	var srcs []GoSource
 	for _, e := range entries {
 		name := e.Name()
 		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		if ok, _ := build.Default.MatchFile(dir, name); !ok {
+		src, err := goSourceRead(filepath.Join(dir, name))
+		if err != nil {
+			continue
+		}
+		src.Name = name
+		srcs = append(srcs, src)
+	}
+	return srcs
+}
+
+// goSourceRead reads a file's first bytes and, unless they carry the
+// generated marker on the first line (^// Code generated .* DO NOT
+// EDIT\.$), the rest.
+func goSourceRead(path string) (GoSource, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return GoSource{}, err
+	}
+	defer f.Close()
+	var head [256]byte
+	n, err := io.ReadFull(f, head[:])
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		return GoSource{}, err
+	}
+	line, _, _ := bytes.Cut(head[:n], []byte("\n"))
+	if bytes.HasPrefix(line, []byte("// Code generated ")) && bytes.HasSuffix(bytes.TrimSpace(line), []byte("DO NOT EDIT.")) {
+		return GoSource{Text: string(head[:n]), Head: true}, nil
+	}
+	var text bytes.Buffer
+	text.Write(head[:n])
+	if _, err := text.ReadFrom(f); err != nil {
+		return GoSource{}, err
+	}
+	return GoSource{Text: text.String()}, nil
+}
+
+// GoFuncsOf scans a package directory's sources the way the go tool
+// would compile them — go/build's file constraints: no leading "_" or
+// ".", a matching GOOS/GOARCH suffix, a satisfied //go:build line —
+// and returns its top-level functions (methods excluded) by name. A
+// file with a syntax error contributes the declarations parsed before
+// the error and is reported in broken ("file: line:col message"), so a
+// diagnostic can say why a function later in that file is invisible.
+// The result is a function of the sources and of the process's build
+// context, which never changes.
+func GoFuncsOf(dir string, srcs []GoSource) (funcs map[string]GoFunc, broken []string) {
+	funcs = map[string]GoFunc{}
+	fset := gotoken.NewFileSet()
+	ctxt := build.Default
+	for _, src := range srcs {
+		if src.Head {
+			continue // volt's own output never declares a check or a plug (D81)
+		}
+		ctxt.OpenFile = func(string) (io.ReadCloser, error) { return io.NopCloser(strings.NewReader(src.Text)), nil }
+		if ok, _ := ctxt.MatchFile(dir, src.Name); !ok {
 			continue // the go tool would not compile it; neither do we count it
 		}
-		path := filepath.Join(dir, name)
-		f, perr := parser.ParseFile(fset, path, nil, parser.ParseComments|parser.SkipObjectResolution)
+		path := filepath.Join(dir, src.Name)
+		f, perr := parser.ParseFile(fset, path, src.Text, parser.ParseComments|parser.SkipObjectResolution)
 		if perr != nil {
-			broken = append(broken, fmt.Sprintf("%s: %v", name, perr))
+			broken = append(broken, fmt.Sprintf("%s: %v", src.Name, perr))
 		}
 		if f == nil {
 			continue
@@ -94,14 +147,19 @@ func GoFuncsScan(dir string) (funcs map[string]GoFunc, broken []string) {
 	return funcs, broken
 }
 
+// GoFuncsScan is GoFuncsOf over the sources on disk now.
+func GoFuncsScan(dir string) (funcs map[string]GoFunc, broken []string) {
+	return GoFuncsOf(dir, GoSourcesRead(dir))
+}
+
 func goFuncOf(fset *gotoken.FileSet, path string, fn *goast.FuncDecl) GoFunc {
 	start, end := fset.Position(fn.Name.Pos()), fset.Position(fn.Name.End())
 	gf := GoFunc{
 		Name:    fn.Name.Name,
 		File:    path,
 		Generic: fn.Type.TypeParams != nil && len(fn.Type.TypeParams.List) > 0,
-		Pos:     token.Position{Filename: path, Offset: start.Offset, Line: start.Line, Column: start.Column},
-		End:     token.Position{Filename: path, Offset: end.Offset, Line: end.Line, Column: end.Column},
+		Pos:     token.At(path, start.Offset, start.Line, start.Column),
+		End:     token.At(path, end.Offset, end.Line, end.Column),
 	}
 	if fn.Type.Params != nil {
 		for _, field := range fn.Type.Params.List {
@@ -148,37 +206,18 @@ type goScan struct {
 }
 
 // goFuncsCache holds one goScan per package directory, shared by the
-// per-package checkers of a phase (PERF-7).
+// per-package checkers of a phase (PERF-7). A session seeds it with
+// scans whose identity is stable while their sources are (D86, D87).
 type goFuncsCache struct {
 	mu sync.Mutex
 	by map[string]*goScan
 }
 
-// GoDirStamp fingerprints the Go files of a directory — names, sizes
-// and modification times — so a tool can tell cheaply whether a scan is
-// stale (the editor re-checks Go references when it changes).
-func GoDirStamp(dir string) string {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return ""
-	}
-	var b strings.Builder
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") {
-			continue
-		}
-		info, err := e.Info()
-		if err != nil {
-			continue
-		}
-		b.WriteString(e.Name())
-		b.WriteByte(':')
-		b.WriteString(strconv.FormatInt(info.Size(), 10))
-		b.WriteByte(':')
-		b.WriteString(strconv.FormatInt(info.ModTime().UnixNano(), 10))
-		b.WriteByte(';')
-	}
-	return b.String()
+// goScanOf is a finished scan: its once is spent, its content given.
+func goScanOf(funcs map[string]GoFunc, broken []string) *goScan {
+	sc := &goScan{}
+	sc.once.Do(func() { sc.funcs, sc.broken = funcs, broken })
+	return sc
 }
 
 // goFuncs returns the package directory's functions, scanned once per

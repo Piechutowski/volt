@@ -1,0 +1,12 @@
+// spec: §3.2.5 — an unquoted identifier in the first column outside every brace begins a new element; the Ref cannot continue there
+// want: found the start of the next element
+Table posts {
+  id integer [pk]
+}
+
+Table tags {
+  id integer [pk]
+}
+
+Ref: posts.id >
+tags.id

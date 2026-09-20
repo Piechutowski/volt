@@ -11,6 +11,7 @@ import (
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/token"
+	"sort"
 )
 
 // Info is the semantic model of one file, produced by File.
@@ -26,7 +27,16 @@ type Info struct {
 	TableGroups []*TableGroupInfo
 
 	byTable map[string]*TableInfo // canonical key and alias -> table
+	byBase  map[string]*TableInfo // bare name -> the first table declared with it (D84)
 }
+
+// TableByBase is the first table declared with the bare name, in any
+// schema, or nil: what an unqualified reference in a select or a
+// resources line means.
+func (i *Info) TableByBase(base string) *TableInfo { return i.byBase[base] }
+
+// TableByKey is the table with the canonical "schema.name" key, or nil.
+func (i *Info) TableByKey(key string) *TableInfo { return i.byTable[key] }
 
 // TableGroupInfo is one TableGroup with its members resolved.
 type TableGroupInfo struct {
@@ -121,15 +131,30 @@ func canonKey(q *ast.QualName) string {
 // errors are suppressed, because the definitions may live elsewhere; all
 // local constraints still apply.
 func File(f *ast.File) (*Info, []diag.Diagnostic) {
+	return FileMemo(f, nil)
+}
+
+// FileMemo is File with a memo of the file's earlier checks: a table
+// whose declaration and injected partials are the nodes they were is
+// answered from it (D84). A nil memo checks everything.
+func FileMemo(f *ast.File, memo *Memo) (*Info, []diag.Diagnostic) {
 	c := &checker{
 		info: &Info{
 			HasImports: f.HasImports(),
 			byTable:    map[string]*TableInfo{},
+			byBase:     map[string]*TableInfo{},
 		},
+		memo: memo,
+	}
+	if memo != nil {
+		memo.Hits, memo.Misses = 0, 0
 	}
 	c.collect(f)
 	c.declsCheck(f)
 	c.resolve(f)
+	if memo != nil {
+		memo.finish()
+	}
 	diag.Sort(c.diags)
 	return c.info, c.diags
 }
@@ -137,6 +162,10 @@ func File(f *ast.File) (*Info, []diag.Diagnostic) {
 type checker struct {
 	info  *Info
 	diags []diag.Diagnostic
+	memo  *Memo
+	// enumSet is the file's enums as the table check needs them: a
+	// pure input with a signature the memo can compare (D86).
+	enumSet *enumSet
 
 	partials map[string]*PartialInfo
 	enums    map[string]*EnumInfo
@@ -191,6 +220,9 @@ func (c *checker) collect(f *ast.File) {
 				}
 			}
 			c.info.byTable[key] = ti
+			if _, seen := c.info.byBase[d.Name.Base()]; !seen {
+				c.info.byBase[d.Name.Base()] = ti
+			}
 			c.info.Tables = append(c.info.Tables, ti)
 			if s := d.Name.Schema(); s != "" {
 				c.schemas[s] = true
@@ -237,15 +269,102 @@ func (c *checker) collect(f *ast.File) {
 		c.info.Partials = append(c.info.Partials, pi)
 	}
 
-	// Effective columns: expand injections in source order (§8.4).
-	for _, ti := range c.info.Tables {
-		c.columnsExpand(ti)
+	// Every table's check is a pure function of its declaration, the
+	// partials it injects, the enum set and the imports flag (D86):
+	// answered from the memo when those are what they were, computed
+	// otherwise. The use counts are the caller's, as every side effect.
+	c.enumSet = enumSetOf(c.enums)
+	for i, ti := range c.info.Tables {
+		partials := c.partialsOf(ti.Decl)
+		for _, p := range partials {
+			if p != nil {
+				c.partials[p.Name.Name()].Uses++
+			}
+		}
+		var checked *TableInfo
+		var diags []diag.Diagnostic
+		if e := c.memo.lookup(ti.Decl, partials, c.info.HasImports, c.enumSet.keys); e != nil {
+			checked, diags = e.ti, e.diags
+			c.memo.store(e)
+			c.memo.Hits++
+		} else {
+			checked, diags = tableCheck(ti.Decl, ti.Key, ti.Alias, partials, c.info.HasImports, c.enumSet)
+			if c.memo != nil {
+				c.memo.store(&memoTable{ti: checked, partials: partials, hasImports: c.info.HasImports, enums: c.enumSet.keys, diags: diags})
+				c.memo.Misses++
+			}
+		}
+		if checked != ti {
+			c.info.Tables[i] = checked
+			c.info.byTable[checked.Key] = checked
+			if c.info.byBase[checked.Decl.Name.Base()] == ti {
+				c.info.byBase[checked.Decl.Name.Base()] = checked
+			}
+			if checked.Alias != "" {
+				c.info.byTable["public."+checked.Alias] = checked
+			}
+		}
+		c.diags = append(c.diags, diags...)
 	}
+}
+
+// enumSet is the enums a table check consults, by canonical key, and
+// the same keys sorted: the set itself as a memo key, compared element
+// by element (D91). Two equal key lists answer every presence question
+// alike; no spelling of the set stands in for it.
+type enumSet struct {
+	present map[string]bool
+	keys    []string
+}
+
+func enumSetOf(enums map[string]*EnumInfo) *enumSet {
+	keys := make([]string, 0, len(enums))
+	for k := range enums {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	set := &enumSet{present: make(map[string]bool, len(enums)), keys: keys}
+	for _, k := range keys {
+		set.present[k] = true
+	}
+	return set
+}
+
+// tableCheck is one table's check as a pure function of its inputs
+// (D86): the declaration, its key and alias, the partial declarations
+// it injects in body order (nil where the name resolves to none),
+// whether imports are in play, and the enum set. It returns the
+// checked table — columns expanded per §6.9.4, indexes and checks
+// gathered — and every diagnostic of the table's body, columns,
+// expansion, increment and required rules. It reads nothing else and
+// writes nothing it did not create.
+func tableCheck(d *ast.Table, key, alias string, partials []*ast.TablePartial, hasImports bool, enums *enumSet) (*TableInfo, []diag.Diagnostic) {
+	acc := &checker{info: &Info{HasImports: hasImports}, enumSet: enums}
+	ti := &TableInfo{Decl: d, Key: key, Alias: alias}
+	acc.columnsExpand(ti, partials)
+	acc.tableBodyCheck(d.Pos(), d.Name.String(), d.Settings, d.Body, true)
+	return ti, acc.diags
+}
+
+// partialsOf lists the partial declarations a table injects, in body
+// order, nil where the name resolves to none.
+func (c *checker) partialsOf(d *ast.Table) []*ast.TablePartial {
+	var out []*ast.TablePartial
+	for _, item := range d.Body {
+		if ref, ok := item.(*ast.PartialRef); ok {
+			var p *ast.TablePartial
+			if pi := c.partials[ref.Name.Name()]; pi != nil {
+				p = pi.Decl
+			}
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // columnsExpand applies §6.9.4 conflict resolution: direct definitions win;
 // otherwise the last-injected partial wins.
-func (c *checker) columnsExpand(ti *TableInfo) {
+func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 	type slot struct {
 		def   *ColumnDef
 		order int
@@ -275,23 +394,24 @@ func (c *checker) columnsExpand(ti *TableInfo) {
 		direct[name] = from == nil
 		order++
 	}
+	injected := 0
 	for _, item := range ti.Decl.Body {
 		switch item := item.(type) {
 		case *ast.Column:
 			addCol(item, nil)
 		case *ast.PartialRef:
-			pi, ok := c.partials[item.Name.Name()]
-			if !ok {
+			p := partials[injected]
+			injected++
+			if p == nil {
 				if !c.info.HasImports {
 					c.errorf(item.Pos(), "6.9", "unknown TablePartial %q", item.Name.Name())
 				}
 				continue
 			}
-			pi.Uses++
-			for _, pit := range pi.Decl.Body {
+			for _, pit := range p.Body {
 				switch pit := pit.(type) {
 				case *ast.Column:
-					addCol(pit, pi.Decl)
+					addCol(pit, p)
 				case *ast.IndexesBlock:
 					ti.Indexes = append(ti.Indexes, pit.Indexes...)
 				case *ast.ChecksBlock:

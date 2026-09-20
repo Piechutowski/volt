@@ -10,10 +10,16 @@ not listed here.
 file under [`testdata/`](../lang/vet/testdata/). In those files, a line ending in
 `//WANT <rule>` is a **bad** example — the analyzer MUST warn on exactly
 that line — and every unmarked line is a **good** example — the analyzer
-MUST stay silent. `go test ./vet/` verifies both directions, and
+MUST stay silent. `go test ./lang/vet/` verifies both directions, and
 `TestRulesDocumentation` fails the build if any analyzer is missing from
 this document, links to a nonexistent file, or has no bad example in its
-linked tests. The docs cannot silently drift from the code.
+linked tests. The docs cannot silently drift from the code. The
+complete verdict of one project, every rule speaking at least once
+across the files of a package, is a golden too
+([`lang/testdata/vet.golden`](../lang/testdata/vet.golden), refreshed
+with `go test ./lang -run TestVetGolden -update` after reading the
+diff): it pins position, message and how many times a rule speaks for
+one cause, so a change to how vet is computed shows its every effect.
 
 Run every rule over the named packages with:
 
@@ -28,6 +34,18 @@ reports a pipeline no scope pipes through. The language server runs
 the same rules on a file that checks clean. There is no per-rule
 switch: the rules are cheap, and a suppressed warning would be a rule
 the document lists but the tool does not run.
+
+A rule is judged declaration by declaration: a pure function of one
+declaration's syntax and the facts the checker resolved for it (its
+checked table, its partial, the relationships starting at its
+columns), so an editor session re-judges only the declarations an
+edit changed (D104). The rules that need the whole file — an enum or
+alias nothing uses, a foreign-key cycle, names that differ only in
+case across tables or enums, the generated names that collide — fold
+over the checker's model and what every declaration's rules
+summarized. Two warnings at one position stand in the order the rules
+are listed below, which is the order they are registered in;
+`TestRulesDocumentation` asserts the two agree.
 
 ---
 
@@ -180,7 +198,10 @@ genuinely need quotes.
 
 **Limitations.** "Plain" is judged by ASCII letters/digits/underscore; a
 quoted identifier containing non-ASCII letters is not reported even though
-it may be unquotable.
+it may be unquotable. A name quoted more than once on one line of one
+declaration is reported once; the same name on the same line of another
+declaration, or of another file of the package, is reported again
+(the rule sees one declaration at a time, D104).
 
 ---
 
@@ -316,7 +337,7 @@ both mint the handle `UserFooBar`.
 silent rename), but the generator can only name the first collision; this
 rule reports every collision, at the later of the two declarations, with
 both origins spelled out. The name derivation is the generator's own — the
-rule calls into `gen/golang` — so rule and generator cannot drift apart.
+rule calls into `nao/gen/golang` — so rule and generator cannot drift apart.
 The *common* near-collision is already defused structurally: enum types
 carry an `E` prefix (D11), so the idiomatic `Table orders { status
 order_status }` mints the handle `OrderStatus` and the enum type
@@ -354,10 +375,21 @@ one file in `vet/` plus one testdata file.
 
 ## Adding a rule
 
-1. Create the analyzer in a `vet/*.go` file and `register` it.
+1. Create the analyzer in a `vet/*.go` file, a named type embedding
+   `meta` (its name and doc), and `register` it. A check on one
+   declaration implements `Rule`: `Decl(d, nodes, facts)` returns its
+   warnings from the declaration, its nodes in source order and the
+   facts the checker resolved for it, and nothing else — the purity
+   gate walks it (D86, D104): no package state, no function values, no
+   writes through an input, no sort of anything the inputs reach. A
+   check on the whole file implements `Fold`: `File(pass)` reads the
+   checker's model and the declarations' summaries. One type may be
+   both.
 2. Add `testdata/<rule>.dbml` with `// analyzers: <rule>` on line 1, bad
    lines marked `//WANT <rule>`, and good lines unmarked.
-3. Add a `### <rule>` section here linking that file.
+3. Add a `### <rule>` section here linking that file, and make the
+   rule fire in `lang/testdata/vet` so the project golden pins its
+   every warning.
 
-`TestRulesDocumentation` and `TestAnalyzers` enforce that all three exist
-and agree.
+`TestRulesDocumentation` and `TestAnalyzers` enforce that the first
+three exist and agree; `TestVetGolden` pins the fourth.

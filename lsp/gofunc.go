@@ -1,6 +1,6 @@
 // Go-reference navigation: the functions a Volt file names by rule live
 // in the containing package's own Go files (§V3.2 plugs, §V12.5
-// checks). The checker already reads them (lang.GoFuncsIn); the server
+// checks). The checker already reads them (lang.GoFuncsOf); the server
 // turns the same facts into go-to-definition and hover.
 package lsp
 

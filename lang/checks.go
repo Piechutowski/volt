@@ -11,8 +11,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Piechutowski/volt/internal/par"
+
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/token"
 	"github.com/Piechutowski/volt/nao/gen/golang"
 	"github.com/Piechutowski/volt/nao/gen/sqlite"
@@ -26,58 +29,197 @@ func (c *checker) tableChecks(pkg *Package) {
 	if info == nil {
 		return
 	}
-	for _, ti := range info.Tables {
-		var specs []golang.CheckSpec
-		// Direct and injected checks alike (§6.9.3): a partial's checks
-		// belong to every table it is injected into.
-		for _, ck := range ti.Checks {
-			var spec golang.CheckSpec
-			var ok bool
-			switch {
-			case ck.Pred != nil:
-				spec, ok = c.typedCheck(ti, ck, info)
-			case ck.Ref != nil:
-				spec, ok = c.goRefCheck(ti, ck, info)
-			default:
-				continue // opaque SQL: §6.6's business, SQL CHECK only
+	// Every table's checks are lowered by tableSpecs, a pure function
+	// of the inputs resolved here (D86), on every CPU; the memo
+	// answers a table whose inputs are what they were. The phase
+	// writes the lowered specs, the DDL's check SQL and the
+	// diagnostics in table order, whatever the schedule.
+	type lowered struct {
+		specs          []golang.CheckSpec
+		sqls           map[*ast.Check]string
+		diags          []diag.Diagnostic
+		create, update bool // the params structs validate (§V12.6): a function of the model and the specs
+	}
+	outs := make([]lowered, len(info.Tables))
+	var memo *checksMemo
+	if c.memo != nil {
+		memo = &c.memo.checks
+		memo.Hits, memo.Misses = 0, 0
+	}
+	funcs := c.goFuncs(pkg)
+	hit := make([]*checksEntry, len(info.Tables))
+	par.For(len(info.Tables), func(i int) {
+		ti := info.Tables[i]
+		model := pkg.plan.ModelRef(ti.Key)
+		preds := predsNamed(ti.Checks, pkg.Preds)
+		if memo != nil {
+			if e := memo.prev[ti]; e != nil && e.holds(model, funcs, pkg.Name, preds) {
+				hit[i] = e
+				outs[i] = lowered{e.specs, e.sqls, e.diags, e.validCreate, e.validUpdate}
+				return
 			}
-			if !ok {
-				continue
-			}
-			if n := ck.Settings.Get("name"); n != nil {
-				if lit, isStr := n.Value.(*ast.BasicLit); isStr && lit.Tok.Kind == token.STRING {
-					spec.Name = lit.Tok.Val
-				}
-			}
-			specs = append(specs, spec)
 		}
-		// required columns (§6.3 extension, D72): one synthesized check
-		// per column, "non-empty" spelled per type class; gen/sqlite
-		// renders the same rule as a CHECK, both named <column>_required.
-		if req := c.requiredSpecs(ti, info); len(req) > 0 {
-			specs = append(specs, req...)
+		_, fields, err := pkg.plan.ModelFields(ti.Key)
+		specs, sqls, diags := tableSpecs(ti, fields, err, pkg.Name, funcs, preds)
+		create, update, _ := pkg.plan.ParamsValidators(ti.Key, specs)
+		outs[i] = lowered{specs, sqls, diags, create, update}
+		if memo != nil {
+			hit[i] = &checksEntry{model: model, funcs: funcs, pkgName: pkg.Name, preds: preds, specs: specs, sqls: sqls, diags: diags, validCreate: create, validUpdate: update}
 		}
-		if len(specs) > 0 {
+	})
+	if memo != nil {
+		memo.next = make(map[*check.TableInfo]*checksEntry, len(info.Tables))
+		for i, ti := range info.Tables {
+			if _, was := memo.prev[ti]; was && memo.prev[ti] == hit[i] {
+				memo.Hits++
+			} else {
+				memo.Misses++
+			}
+			memo.next[ti] = hit[i]
+		}
+		memo.prev, memo.next = memo.next, nil
+	}
+	pkg.CheckSQL = map[*ast.Check]string{}
+	pkg.ValidByKey = make(map[string][2]bool, len(info.Tables))
+	for i, ti := range info.Tables {
+		c.diags = append(c.diags, outs[i].diags...)
+		for ck, sql := range outs[i].sqls {
+			pkg.CheckSQL[ck] = sql
+		}
+		if specs := outs[i].specs; len(specs) > 0 {
 			pkg.CheckFns = append(pkg.CheckFns, golang.CheckFn{TableKey: ti.Key, Checks: specs})
 		}
+		if outs[i].create || outs[i].update {
+			pkg.ValidByKey[ti.Key] = [2]bool{outs[i].create, outs[i].update}
+		}
 	}
+	pkg.checkIndex()
+}
+
+// checkIndex indexes the lowered checks by table key.
+func (p *Package) checkIndex() {
+	p.checkFnByKey = make(map[string][]golang.CheckSpec, len(p.CheckFns))
+	for _, fn := range p.CheckFns {
+		p.checkFnByKey[fn.TableKey] = fn.Checks
+	}
+}
+
+// lowering is one table's check lowering as a pure function of its
+// inputs (D86): the checked table, its model's fields (or why the plan
+// has none), the package name a Go reference may qualify with, the
+// package directory's Go functions, and the predicates the checks
+// name, transitively. It accumulates only what it returns: the lowered
+// specs, the SQL of every typed check for the DDL, and diagnostics.
+type lowering struct {
+	ti        *check.TableInfo
+	fields    []golang.FieldSig
+	fieldsErr error
+	pkgName   string
+	funcs     *goScan
+	preds     map[string]*ast.Pred
+
+	diags []diag.Diagnostic
+	sqls  map[*ast.Check]string
+}
+
+func (l *lowering) errorf(pos token.Position, section, format string, args ...any) {
+	l.diags = append(l.diags, diag.Errorf(pos, "spec/"+section, format, args...))
+}
+
+// tableSpecs lowers one table's checks (§V12) from exactly the inputs
+// named on lowering, reading nothing else and writing nothing it did
+// not create.
+func tableSpecs(ti *check.TableInfo, fields []golang.FieldSig, fieldsErr error, pkgName string, funcs *goScan, preds map[string]*ast.Pred) (specs []golang.CheckSpec, sqls map[*ast.Check]string, diags []diag.Diagnostic) {
+	l := &lowering{ti: ti, fields: fields, fieldsErr: fieldsErr, pkgName: pkgName, funcs: funcs, preds: preds, sqls: map[*ast.Check]string{}}
+	// Direct and injected checks alike (§6.9.3): a partial's checks
+	// belong to every table it is injected into.
+	for _, ck := range ti.Checks {
+		var spec golang.CheckSpec
+		var ok bool
+		switch {
+		case ck.Pred != nil:
+			spec, ok = l.typedCheck(ck)
+		case ck.Ref != nil:
+			spec, ok = l.goRefCheck(ck)
+		default:
+			continue // opaque SQL: §6.6's business, SQL CHECK only
+		}
+		if !ok {
+			continue
+		}
+		if n := ck.Settings.Get("name"); n != nil {
+			if lit, isStr := n.Value.(*ast.BasicLit); isStr && lit.Tok.Kind == token.STRING {
+				spec.Name = lit.Tok.Val
+			}
+		}
+		specs = append(specs, spec)
+	}
+	// required columns (§6.3 extension, D72): one synthesized check
+	// per column, "non-empty" spelled per type class; gen/sqlite
+	// renders the same rule as a CHECK, both named <column>_required.
+	if req := l.requiredSpecs(); len(req) > 0 {
+		specs = append(specs, req...)
+	}
+	return specs, l.sqls, l.diags
+}
+
+// predsNamed is the predicates a table's typed checks name,
+// transitively through the predicates' own bodies, by name; nil where
+// the name resolves to none. A pure input of the lowering.
+func predsNamed(checks []*ast.Check, all map[string]*ast.Pred) map[string]*ast.Pred {
+	var exprs []ast.PredExpr
+	for _, ck := range checks {
+		if ck.Pred != nil {
+			exprs = append(exprs, ck.Pred)
+		}
+	}
+	return predsIn(exprs, all)
+}
+
+// predsIn is the predicates the expressions name, transitively through
+// the predicates' own bodies, by name; nil where the name resolves to
+// none.
+func predsIn(exprs []ast.PredExpr, all map[string]*ast.Pred) map[string]*ast.Pred {
+	out := map[string]*ast.Pred{}
+	var walk func(x ast.PredExpr)
+	walk = func(x ast.PredExpr) {
+		switch x := x.(type) {
+		case *ast.PredBinary:
+			walk(x.X)
+			walk(x.Y)
+		case *ast.PredNot:
+			walk(x.X)
+		case *ast.PredParen:
+			walk(x.X)
+		case *ast.PredRef:
+			name := x.Name.Name()
+			if _, seen := out[name]; seen {
+				return
+			}
+			d := all[name]
+			out[name] = d
+			if d != nil {
+				walk(d.X)
+			}
+		}
+	}
+	for _, x := range exprs {
+		walk(x)
+	}
+	return out
 }
 
 // requiredSpecs lowers every [required] column of a table to the Go
 // tier's condition (§V12.8).
-func (c *checker) requiredSpecs(ti *check.TableInfo, info *check.Info) []golang.CheckSpec {
+func (l *lowering) requiredSpecs() []golang.CheckSpec {
 	var out []golang.CheckSpec
-	var fields []golang.FieldSig
-	for _, cd := range ti.Columns {
+	fields := l.fields
+	for _, cd := range l.ti.Columns {
 		if cd.Col.Settings.Get("required") == nil {
 			continue
 		}
-		if fields == nil {
-			_, fs, err := c.pkg.plan.ModelFields(ti.Key)
-			if err != nil {
-				return nil
-			}
-			fields = fs
+		if l.fieldsErr != nil {
+			return nil
 		}
 		name := cd.Col.Name.Name()
 		var f *golang.FieldSig
@@ -110,8 +252,8 @@ func (c *checker) requiredSpecs(ti *check.TableInfo, info *check.Info) []golang.
 
 // typedCheck types one predicate-form check against its table and
 // renders the SQL and Go tiers together (§V12.2-§V12.4).
-func (c *checker) typedCheck(ti *check.TableInfo, ck *ast.Check, info *check.Info) (golang.CheckSpec, bool) {
-	env := c.checkEnv(ti, ck, info)
+func (l *lowering) typedCheck(ck *ast.Check) (golang.CheckSpec, bool) {
+	env := l.checkEnv(ck)
 	if env == nil {
 		return golang.CheckSpec{}, false
 	}
@@ -119,19 +261,20 @@ func (c *checker) typedCheck(ti *check.TableInfo, ck *ast.Check, info *check.Inf
 	if env.failed {
 		return golang.CheckSpec{}, false
 	}
-	ck.SQL = sql // gen/sqlite emits CHECK (<this>) — one rendering, both tiers
+	l.sqls[ck] = sql // gen/sqlite emits CHECK (<this>) — one rendering, both tiers
 	return golang.CheckSpec{Src: sql, Cond: gocode, Cols: env.used}, true
 }
 
 // goRefCheck resolves one Go-reference check (§V12.5): a function of
 // the containing package, column arguments, validator tier only.
-func (c *checker) goRefCheck(ti *check.TableInfo, ck *ast.Check, info *check.Info) (golang.CheckSpec, bool) {
-	if q := ck.Ref.Qualifier(); q != "" && q != c.pkg.Name {
-		c.errorf(ck.Ref.Pos(), "V12",
+func (l *lowering) goRefCheck(ck *ast.Check) (golang.CheckSpec, bool) {
+	ti := l.ti
+	if q := ck.Ref.Qualifier(); q != "" && q != l.pkgName {
+		l.errorf(ck.Ref.Pos(), "V12",
 			"a check references a function of the containing package, not of %q — write a local wrapper (§V12.5)", q)
 		return golang.CheckSpec{}, false
 	}
-	env := c.checkEnv(ti, ck, info)
+	env := l.checkEnv(ck)
 	if env == nil {
 		return golang.CheckSpec{}, false
 	}
@@ -154,34 +297,34 @@ func (c *checker) goRefCheck(ti *check.TableInfo, ck *ast.Check, info *check.Inf
 	// The function must exist in this package's Go files with exactly
 	// the contract, spelled as the generated field types (§V12.5, D63):
 	// the typo and the wrong type are caught here, not by the compiler.
-	sc := c.goFuncs(c.pkg)
+	sc := l.funcs
 	gf, found := sc.funcs[name]
 	if !found {
-		c.errorf(ck.Ref.Pos(), "V12", "no function %s in package %s's Go files — declare %s beside the schema (§V12.5)%s", name, c.pkg.Name, want, sc.brokenHint())
+		l.errorf(ck.Ref.Pos(), "V12", "no function %s in package %s's Go files — declare %s beside the schema (§V12.5)%s", name, l.pkgName, want, sc.brokenHint())
 		return golang.CheckSpec{}, false
 	}
 	if gf.Generic {
-		c.errorf(ck.Ref.Pos(), "V12", "%s is generic (%s); a check cannot instantiate it — wrap it in a plain %s (§V12.5)", name, gf.Sig, want)
+		l.errorf(ck.Ref.Pos(), "V12", "%s is generic (%s); a check cannot instantiate it — wrap it in a plain %s (§V12.5)", name, gf.Sig, want)
 		return golang.CheckSpec{}, false
 	}
 	if gf.Variadic {
-		c.errorf(ck.Ref.Pos(), "V12", "%s is variadic (%s); a check passes a fixed column list — expected %s (§V12.5)", name, gf.Sig, want)
+		l.errorf(ck.Ref.Pos(), "V12", "%s is variadic (%s); a check passes a fixed column list — expected %s (§V12.5)", name, gf.Sig, want)
 		return golang.CheckSpec{}, false
 	}
 	if len(gf.Params) != len(args) {
-		c.errorf(ck.Ref.Pos(), "V12", "%s takes %d parameter(s) but the check passes %d column(s): found %s, expected %s (§V12.5)",
+		l.errorf(ck.Ref.Pos(), "V12", "%s takes %d parameter(s) but the check passes %d column(s): found %s, expected %s (§V12.5)",
 			name, len(gf.Params), len(args), gf.Sig, want)
 		return golang.CheckSpec{}, false
 	}
 	for i, prm := range gf.Params {
 		if prm.Type != argTypes[i] {
-			c.errorf(ck.Args[i].Pos(), "V12", "column %q (%s, Go %s) but parameter %d of %s is %s — change the column type or the function: expected %s (§V12.5)",
+			l.errorf(ck.Args[i].Pos(), "V12", "column %q (%s, Go %s) but parameter %d of %s is %s — change the column type or the function: expected %s (§V12.5)",
 				fields[i].Col, declTypes[i], argTypes[i], i+1, name, prm.Type, want)
 			return golang.CheckSpec{}, false
 		}
 	}
 	if len(gf.Results) != 1 || gf.Results[0] != "error" {
-		c.errorf(ck.Ref.Pos(), "V12", "%s must return exactly error: found %s, expected %s (§V12.5)", name, gf.Sig, want)
+		l.errorf(ck.Ref.Pos(), "V12", "%s must return exactly error: found %s, expected %s (§V12.5)", name, gf.Sig, want)
 		return golang.CheckSpec{}, false
 	}
 	return golang.CheckSpec{
@@ -198,7 +341,7 @@ func (c *checker) goRefCheck(ti *check.TableInfo, ck *ast.Check, info *check.Inf
 // columns; no time class — the Go tier cannot mirror SQL's text-time
 // comparison).
 type chkEnv struct {
-	c      *checker
+	l      *lowering
 	ti     *check.TableInfo
 	ck     *ast.Check
 	byCol  map[string]golang.FieldSig
@@ -206,22 +349,21 @@ type chkEnv struct {
 	used   []string // columns the check reads, first-use order (§V12.6)
 }
 
-func (c *checker) checkEnv(ti *check.TableInfo, ck *ast.Check, info *check.Info) *chkEnv {
-	_, fields, err := c.pkg.plan.ModelFields(ti.Key)
-	if err != nil {
-		c.errorf(ck.Pos(), "V12", "check: %v", err)
+func (l *lowering) checkEnv(ck *ast.Check) *chkEnv {
+	if l.fieldsErr != nil {
+		l.errorf(ck.Pos(), "V12", "check: %v", l.fieldsErr)
 		return nil
 	}
-	byCol := make(map[string]golang.FieldSig, len(fields))
-	for _, f := range fields {
+	byCol := make(map[string]golang.FieldSig, len(l.fields))
+	for _, f := range l.fields {
 		byCol[f.Col] = f
 	}
-	return &chkEnv{c: c, ti: ti, ck: ck, byCol: byCol}
+	return &chkEnv{l: l, ti: l.ti, ck: ck, byCol: byCol}
 }
 
 func (e *chkEnv) errorf(pos token.Position, format string, args ...any) {
 	e.failed = true
-	e.c.errorf(pos, "V12", format, args...)
+	e.l.errorf(pos, "V12", format, args...)
 }
 
 // fieldOf resolves a column reference under §V12's rules. typed marks
@@ -289,7 +431,7 @@ func (e *chkEnv) render(x ast.PredExpr, preds map[string]bool) (sql, gocode stri
 		return "(" + s + ")", "(" + g + ")"
 	case *ast.PredRef:
 		name := x.Name.Name()
-		d := e.c.pkg.Preds[name]
+		d := e.l.preds[name]
 		if d == nil {
 			e.errorf(x.Name.Pos(), "unknown predicate %q (§V10.2)", name)
 			return "1", "true"

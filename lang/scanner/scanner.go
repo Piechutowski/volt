@@ -32,38 +32,99 @@ import (
 // continues after an error where possible, so a broken file still yields a
 // best-effort token stream for the parser.
 func Scan(filename, src string) ([]token.Token, []diag.Diagnostic) {
-	// §3.2.1: carriage returns are discarded wherever they appear; a
-	// source without any is scanned in place.
-	if strings.IndexByte(src, '\r') >= 0 {
-		src = strings.ReplaceAll(src, "\r", "")
-	}
-	s := &Scanner{
-		src:  src,
-		file: filename,
-		pos:  token.Position{Filename: filename, Line: 1, Column: 1},
-		// Schema text runs about six bytes per token; sizing the slice
-		// once spares the doublings and their copies (PERF-7).
-		toks: make([]token.Token, 0, len(src)/6+16),
-	}
-	s.nlBefore = true // start of file counts as a line break
-	for state := anyScan; state != nil; {
-		state = state(s)
-	}
+	return ScanFile(token.NewFile(filename, src))
+}
+
+// ScanFile scans a whole file as written; every position is in f. A
+// carriage return is discarded wherever it appears (§3.2.1) and stays
+// in the text: it keeps its byte, so offsets match the file, and has
+// no column (D90). Every token that begins a top-level element
+// (§3.2.5) is flagged; nothing stops there.
+func ScanFile(f *token.File) ([]token.Token, []diag.Diagnostic) {
+	// Schema text runs about six bytes per token; sizing the slice
+	// once spares the doublings and their copies (PERF-7).
+	s := newScanner(f, make([]token.Token, 0, len(f.Src)/4+16)) // measured: a token per four bytes of schema (D81)
+	s.run()
 	s.emit(token.EOF, "")
 	return s.toks, s.errs
+}
+
+// ScanChunk scans the first top-level element of f's text (§3.2.5,
+// D88): the tokens before the next element start after the first
+// byte, then an EOF standing at that start, which is the end returned
+// and whose text names what it is; without one, the whole text and an
+// EOF at its end. bound reports the former: the chunk ended at an
+// element start, so the same text scans the same wherever one
+// follows it. buf is a token slice to reuse, or nil.
+func ScanChunk(f *token.File, buf []token.Token) (toks []token.Token, errs []diag.Diagnostic, end int, bound bool) {
+	s := newScanner(f, buf)
+	s.chunk = true
+	s.run()
+	if s.done {
+		s.pos = s.start // the EOF stands where the next element starts
+		s.emit(token.EOF, ElementStart)
+		return s.toks, s.errs, s.start.Offset, true
+	}
+	s.emit(token.EOF, "")
+	return s.toks, s.errs, len(s.src), false
+}
+
+// ElementStart is how a chunk's EOF reads in a diagnostic: the token
+// the parser found is the next element's start, not the file's end.
+const ElementStart = "the start of the next element (§3.2.5)"
+
+// StartsDecl reports whether text begins, at its very first byte, a
+// top-level element (§3.2.5): scanned from the initial state, its
+// first token is an unquoted identifier at offset zero. One token is
+// scanned, whatever the text's length.
+func StartsDecl(text string) bool {
+	var buf [1]token.Token
+	s := newScanner(token.NewFile("", text), buf[:0])
+	for state := anyScan; state != nil && len(s.toks) == 0; {
+		state = state(s)
+	}
+	return len(s.toks) == 1 && s.toks[0].DeclStart && s.toks[0].Pos.Offset() == 0
+}
+
+// newScanner is a scanner at the start of f's text, in the initial
+// state: outside every string, comment and brace, after a line
+// break. Every chunk begins in it (§3.2.5), which is what lets a
+// chunk scan alone.
+func newScanner(f *token.File, buf []token.Token) *Scanner {
+	s := &Scanner{src: f.Src, file: f, pos: cursor{line: 1, col: 1}, toks: buf[:0]}
+	s.nlBefore = true // start of file counts as a line break
+	return s
+}
+
+// run drives the state machine to its end, or to the element start a
+// chunk scan stops at.
+func (s *Scanner) run() {
+	for state := anyScan; state != nil && !s.done; {
+		state = state(s)
+	}
 }
 
 type stateFn func(*Scanner) stateFn
 
 type Scanner struct {
 	src  string
-	file string
+	file *token.File
 
-	pos   token.Position // position of next unread rune
-	start token.Position // position where the current token began
+	pos   cursor // position of next unread rune
+	start cursor // position where the current token began
 
 	nlBefore bool
 	spBefore bool
+	cr       bool // a carriage return was stepped over inside the current token
+
+	// depth counts the open braces, never below zero: an unquoted
+	// identifier in the first column at depth zero begins a top-level
+	// element (§3.2.5). Braces alone, so that an unclosed bracket in a
+	// body reaches no further than the body's closing brace.
+	depth int
+	// chunk asks to stop before the first element start after the
+	// first byte; done reports it was reached, s.start at it.
+	chunk, done bool
 
 	toks []token.Token
 	errs []diag.Diagnostic
@@ -73,27 +134,51 @@ type Scanner struct {
 	val strings.Builder
 }
 
+// cursor is a position under construction, in the machine's integers;
+// it becomes a token.Position when a token is emitted.
+type cursor struct {
+	Offset, line, col int
+}
+
+func (c cursor) position(f *token.File) token.Position { return f.At(c.Offset, c.line, c.col) }
+
 const eof = rune(-1)
 
+// crSkip is the offset of the first byte at or after off that is not a
+// carriage return: the cursor never rests on one (§3.2.1).
+func (s *Scanner) crSkip(off int) int {
+	for off < len(s.src) && s.src[off] == '\r' {
+		off++
+	}
+	return off
+}
+
 func (s *Scanner) peek() rune {
-	if s.pos.Offset >= len(s.src) {
+	off := s.crSkip(s.pos.Offset)
+	if off >= len(s.src) {
 		return eof
 	}
-	if c := s.src[s.pos.Offset]; c < utf8.RuneSelf {
+	if c := s.src[off]; c < utf8.RuneSelf {
 		return rune(c) // ASCII, the common case: no decoding
 	}
-	r, _ := utf8.DecodeRuneInString(s.src[s.pos.Offset:])
+	r, _ := utf8.DecodeRuneInString(s.src[off:])
 	return r
 }
 
+// peekAt is the rune n runes on, or eof: at the end of the text, and
+// past a line break. The scanner cannot see beyond a line break it
+// has not consumed, and only a string or a comment consumes one
+// inside a token, so a token's kind and text are a function of the
+// bytes up to the line break after it (D95): a chunk scans the same
+// whatever follows its last line.
 func (s *Scanner) peekAt(n int) rune {
-	off := s.pos.Offset
+	off := s.crSkip(s.pos.Offset)
 	for ; n > 0; n-- {
-		if off >= len(s.src) {
+		if off >= len(s.src) || s.src[off] == '\n' {
 			return eof
 		}
 		_, w := utf8.DecodeRuneInString(s.src[off:])
-		off += w
+		off = s.crSkip(off + w)
 	}
 	if off >= len(s.src) {
 		return eof
@@ -103,6 +188,10 @@ func (s *Scanner) peekAt(n int) rune {
 }
 
 func (s *Scanner) next() rune {
+	if off := s.crSkip(s.pos.Offset); off != s.pos.Offset {
+		s.pos.Offset = off // the carriage return keeps its byte and has no column
+		s.cr = true
+	}
 	if s.pos.Offset >= len(s.src) {
 		return eof
 	}
@@ -112,37 +201,67 @@ func (s *Scanner) next() rune {
 	}
 	s.pos.Offset += w
 	if r == '\n' {
-		s.pos.Line++
-		s.pos.Column = 1
+		s.pos.line++
+		s.pos.col = 1
 	} else {
-		s.pos.Column++
+		s.pos.col++
 	}
 	return r
 }
 
-func (s *Scanner) mark() { s.start = s.pos; s.val.Reset() }
+// mark begins a token at the cursor, past any carriage return there.
+func (s *Scanner) mark() {
+	s.pos.Offset = s.crSkip(s.pos.Offset)
+	s.start = s.pos
+	s.val.Reset()
+	s.cr = false
+}
 
 func (s *Scanner) raw() string { return s.src[s.start.Offset:s.pos.Offset] }
 
-func (s *Scanner) emit(kind token.Kind, val string) {
-	s.toks = append(s.toks, token.Token{
-		Kind: kind, Pos: s.start, Text: s.raw(), Val: val,
-		NLBefore: s.nlBefore, SpBefore: s.spBefore || s.nlBefore,
-	})
-	s.nlBefore, s.spBefore = false, false
+// rawVal is the token's text as a value: its carriage returns, if it
+// stepped over any, discarded (§3.2.1).
+func (s *Scanner) rawVal() string {
+	if s.cr {
+		return strings.ReplaceAll(s.raw(), "\r", "")
+	}
+	return s.raw()
 }
 
+func (s *Scanner) emit(kind token.Kind, val string) {
+	s.tokEmit(token.Token{Kind: kind, Val: val})
+}
+
+// tokEmit appends the token at the marked start, flagged as an element
+// start when it is one (§3.2.5): an unquoted identifier in the first
+// column at depth zero. A chunk scan stops before the first such token
+// after the first byte, with s.start at it; the token is the next
+// chunk's, and the depth counts the token's own brace only after it is
+// kept.
 func (s *Scanner) tokEmit(t token.Token) {
-	t.Pos = s.start
-	t.Text = s.raw()
+	t.Pos = s.start.position(s.file)
+	t.Len = int32(s.pos.Offset - s.start.Offset)
 	t.NLBefore = s.nlBefore
 	t.SpBefore = s.spBefore || s.nlBefore
+	t.DeclStart = t.Kind == token.IDENT && !t.Quoted && s.start.col == 1 && s.depth == 0
+	if t.DeclStart && s.chunk && s.start.Offset > 0 {
+		s.done = true
+		return
+	}
+	switch t.Kind {
+	case token.LBRACE:
+		s.depth++
+	case token.RBRACE:
+		if s.depth > 0 {
+			s.depth--
+		}
+	}
 	s.toks = append(s.toks, t)
 	s.nlBefore, s.spBefore = false, false
 }
 
 func (s *Scanner) errorf(code, format string, args ...any) {
-	s.errs = append(s.errs, diag.Errorf(s.start, code, format, args...))
+	s.errs = append(s.errs, diag.Errorf(s.start.position(s.file), code, format, args...))
 }
 
 // §3.4: letter = Unicode category L | Unicode category M | "_".
@@ -387,7 +506,7 @@ func colorScan(s *Scanner) stateFn {
 	for isIdentChar(s.peek()) {
 		s.next()
 	}
-	s.tokEmit(token.Token{Kind: token.COLOR, Val: strings.TrimPrefix(s.raw(), "#")})
+	s.tokEmit(token.Token{Kind: token.COLOR, Val: strings.TrimPrefix(s.rawVal(), "#")})
 	return anyScan
 }
 
@@ -398,12 +517,12 @@ func identScan(s *Scanner) stateFn {
 	for off < len(s.src) && asciiIdent[s.src[off]] {
 		off++
 	}
-	s.pos.Column += off - s.pos.Offset
+	s.pos.col += off - s.pos.Offset
 	s.pos.Offset = off
 	for isIdentChar(s.peek()) {
 		s.next()
 	}
-	s.tokEmit(token.Token{Kind: token.IDENT, Val: s.raw()})
+	s.tokEmit(token.Token{Kind: token.IDENT, Val: s.rawVal()})
 	return anyScan
 }
 
@@ -439,7 +558,7 @@ func numberOrIdentScan(s *Scanner) stateFn {
 				hasLetter = true
 				continue
 			}
-			s.tokEmit(token.Token{Kind: token.NUMBER, Val: s.raw()})
+			s.tokEmit(token.Token{Kind: token.NUMBER, Val: s.rawVal()})
 			return anyScan
 		case isLetter(r):
 			hasLetter = true
@@ -447,14 +566,14 @@ func numberOrIdentScan(s *Scanner) stateFn {
 		default:
 			if hasLetter {
 				if nDots > 0 {
-					s.errorf("syntax", "invalid number %q (§3.9)", s.raw())
-					s.tokEmit(token.Token{Kind: token.ILLEGAL, Val: s.raw()})
+					s.errorf("syntax", "invalid number %q (§3.9)", s.rawVal())
+					s.tokEmit(token.Token{Kind: token.ILLEGAL, Val: s.rawVal()})
 					return anyScan
 				}
-				s.tokEmit(token.Token{Kind: token.IDENT, Val: s.raw()})
+				s.tokEmit(token.Token{Kind: token.IDENT, Val: s.rawVal()})
 				return anyScan
 			}
-			s.tokEmit(token.Token{Kind: token.NUMBER, Val: s.raw()})
+			s.tokEmit(token.Token{Kind: token.NUMBER, Val: s.rawVal()})
 			return anyScan
 		}
 	}

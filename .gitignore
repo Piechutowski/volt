@@ -1,3 +1,5 @@
 # build outputs: `go build ./cmd/volt/...` from the root writes the binary here
 /volt
 /cmd/volt/volt
+/lang.test
+/lang/lang.test

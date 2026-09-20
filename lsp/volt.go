@@ -48,7 +48,7 @@ func (d *Document) voltProjectDiags() ([]diag.Diagnostic, bool) {
 	if d.Session != nil {
 		session = d.Session(root)
 	}
-	res := projectAnalyze(root, overlay, session)
+	res := projectAnalyze(root, overlay, session, nil)
 	if res == nil || res.packageOf(path) == nil {
 		d.vindex = nil
 		d.vpkg = nil

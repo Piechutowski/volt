@@ -67,11 +67,13 @@ type RouteInfo struct {
 	Table         string // the resources declaration's table name, when FromResources
 	FromDataset   bool   // expanded from a dataset item (§V13)
 
-	// shape is the pattern parsed once for the §V4.7.2 ambiguity
-	// relation; ord is the route's position in the package's table.
-	// Both are set when the checker accepts the route.
-	shape pathShape
-	ord   int
+	// shape is the pattern parsed for the §V4.7.2 ambiguity relation
+	// and shapeKey the method and shape as the duplicate scan keys them,
+	// both set when the route is lowered; ord is the route's position
+	// in the package's table, set when the checker accepts it.
+	shape    pathShape
+	shapeKey string
+	ord      int
 }
 
 // QuerySource says where a query route binds one parameter from.

@@ -18,9 +18,14 @@ func (c *checker) declsCheck(f *ast.File) {
 		case *ast.Project:
 			// properties are free-form (§6.1.2); nothing local to check
 		case *ast.Table:
-			c.tableBodyCheck(d.Name.String(), d.Settings, d.Body, true)
+			// A table's body is checked with its expansion, in tableCheck
+			// (D86); a duplicate declaration that expansion skipped is
+			// checked here so its own errors still show.
+			if ti := c.info.byTable[canonKey(d.Name)]; ti == nil || ti.Decl != d {
+				c.tableBodyCheck(d.Pos(), d.Name.String(), d.Settings, d.Body, true)
+			}
 		case *ast.TablePartial:
-			c.tableBodyCheck(d.Name.Name(), d.Settings, d.Body, false)
+			c.tableBodyCheck(d.Pos(), d.Name.Name(), d.Settings, d.Body, false)
 		case *ast.Enum:
 			c.enumCheck(d)
 		case *ast.Ref:
@@ -48,7 +53,9 @@ func (c *checker) useCheck(d *ast.Use) {
 
 /* ===== table bodies (§6.2, §6.9) ===== */
 
-func (c *checker) tableBodyCheck(name string, settings *ast.SettingList, body []ast.TableItem, isTable bool) {
+// tableBodyCheck checks a table's or partial's body; at is the
+// declaration's position, where an empty body is reported.
+func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.SettingList, body []ast.TableItem, isTable bool) {
 	c.settingsCheck(settings, "6.2", tableSettings)
 
 	columns := map[string]bool{}
@@ -86,7 +93,7 @@ func (c *checker) tableBodyCheck(name string, settings *ast.SettingList, body []
 		}
 	}
 	if isTable && nCols == 0 && nInject == 0 {
-		c.errorf(bodyPos(body, settings), "6.2", "table %q must contain at least one column or partial injection", name)
+		c.errorf(at, "6.2", "table %q must contain at least one column or partial injection", name)
 	}
 	if nNotes > 1 {
 		c.errorf(bodyPos(body, settings), "6.11", "at most one Note per %s body", kindWord(isTable))

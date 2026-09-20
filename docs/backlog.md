@@ -5,6 +5,54 @@ entry says why it is not now, so nothing is forgotten and nothing is
 started by accident. When an entry lands, delete it here in the same
 commit (D49: no doc knowingly wrong).
 
+## The navigation index's hit path
+
+**Decided:** 2026-09-19 (closing the keystroke chapter, D103 to
+D105). **Deferred because:** the keystroke on the thousand-table
+file is at about 0.27 s, and the two index builds are about 95 ms of
+it at best (the project's about 55, the document's about 40), more
+when a collection lands in a build; FW-2 comes first.
+
+One keystroke inside one table builds the project's navigation index
+in about 55 ms at best and the document's own occurrence index in
+about 40 ms, with 998 of 1000 tables answered from the memo (D85):
+each build still copies every table's occurrences into one fresh
+slice, about 12 MB, rebuilds the name maps, and renders the hover of
+the group select again because the select is re-checked whenever a
+member table changes. The chore: keep the occurrences by table and
+walk them without copying, keep the name maps across builds for the
+tables the memo answered, and memoize a select's hover on the members
+it renders rather than on the select object.
+
+## Cold open of the one-file layout
+
+**Decided:** 2026-09-19. **Deferred because:** an open is once per
+file, and the two parses are about a quarter of it; FW-2 comes first.
+
+Opening the thousand-table file costs the document's whole-file pass
+about 0.66 s, then the debounce, then the project's first analysis
+about 1.3 s: about 2.1 s through stdio. The parse is single-threaded,
+about 230 ms cold (D82), and runs twice, one after the other, once for
+the document and once for the session. The scanner
+cuts the chunks before any of them is parsed (D88), so the chunks
+can be parsed on the worker pool; D81 refused a parallel parse when a
+file was one unit, and that reason is gone.
+
+## Retained chunk texts
+
+**Decided:** 2026-09-19 (the price stated in D103). **Deferred
+because:** memory is not a correctness issue and the stress size
+exists to feel the limit, not to describe a project (D80).
+
+A chunk's text and its identifier tokens are substrings of the whole
+text it was cut from, so every live chunk pins that text: after
+editing k distinct declarations, the document and the session each
+keep up to k copies of the 4 MB file until those chunks are re-cut.
+Heap in use on the stress project is about 500 MB after ten edits;
+the retained texts are a growing share of it. The chore: clone a
+chunk's text and token values when it is cut, in the parser, so a
+chunk keeps its own bytes and nothing else.
+
 ## Citations by heading name
 
 **Decided:** 2026-09-03 (D64). **Deferred because:** the sweep touches

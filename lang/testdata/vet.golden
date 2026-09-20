@@ -1,0 +1,38 @@
+check:
+dup/schema.volt:8:1: error: spec/8.2: duplicate table name "t"
+vet:
+data/more.volt:3:7: warning: vet/unnecessaryquotes: identifier "comments" does not need quotes
+data/schema.volt:3:7: warning: vet/unnecessaryquotes: identifier "users" does not need quotes
+data/more.volt:4:3: warning: vet/unnecessaryquotes: identifier "id" does not need quotes
+data/schema.volt:4:3: warning: vet/unnecessaryquotes: identifier "id" does not need quotes
+dup/schema.volt:4:15: warning: vet/redundantnull: explicit 'null' is redundant; columns are nullable by default
+dup/schema.volt:6:3: warning: vet/casecollision: column names total and Total differ only in case
+data/more.volt:9:1: warning: vet/reftype: relationship joins comments.author_id (bigint) to users.id (integer); the types differ
+app/routes.volt:10:1: warning: vet/pipeline: Pipeline "dead" is declared and never piped through by any scope
+data/more.volt:10:1: warning: vet/reftarget: referenced column(s) posts.(title) are not pk or unique; the database cannot enforce this foreign key
+data/schema.volt:10:5: warning: vet/redundantindex: unique index on "id" is redundant; the column is already the primary key
+dup/schema.volt:11:1: warning: vet/casecollision: table names public.t and public.T differ only in case
+data/schema.volt:11:5: warning: vet/redundantindex: unique index on "email" duplicates the column's 'unique' setting
+data/schema.volt:13:6: warning: vet/redundantindex: duplicate index on (email, foo_bar) in table "users"
+data/more.volt:16:1: warning: vet/refcycle: foreign-key cycle between tables: a, b
+data/schema.volt:20:3: warning: vet/projectnotes: Project has 2 Note definitions; tools keep only one
+data/schema.volt:27:1: warning: vet/unusedenum: enum "orphan_status" is declared but never used as a column type
+data/more.volt:28:1: warning: vet/selfref: relationship references column employees.id on both sides
+data/more.volt:30:1: warning: vet/dynname: table users (option wrapper UserLimit) and table user_limits (model UserLimit) both generate the Go name UserLimit; rename one (e.g. with [model: '...'])
+data/more.volt:35:3: warning: vet/dynname: table users column "foo_bar" (handle UserFooBar) and table user_foos column "bar" (handle UserFooBar) both generate the Go name UserFooBar; rename one (e.g. with [model: '...'])
+data/more.volt:37:1: warning: vet/dynname: table user_foos column "bar" (handle UserFooBar) and table user_foo_bars (model UserFooBar) both generate the Go name UserFooBar; rename one (e.g. with [model: '...'])
+data/schema.volt:38:3: warning: vet/shadowedcolumn: column "updated_at" in table "posts" silently overrides the definition from TablePartial "audit_a"
+data/schema.volt:40:1: warning: vet/unusedpartial: TablePartial "orphan_partial" is declared but never injected
+data/schema.volt:42:20: warning: vet/reftype: relationship joins comments.owner_id (bigint) to users.id (integer); the types differ
+data/schema.volt:42:20: warning: vet/reftype: relationship joins posts.owner_id (bigint) to users.id (integer); the types differ
+data/more.volt:44:1: warning: vet/unusedenum: enum "user_kind" is declared but never used as a column type
+data/more.volt:44:1: warning: vet/dynname: table e_users column "kind" (handle EUserKind) and enum user_kind both generate the Go name EUserKind; rename one (e.g. with [model: '...'])
+data/schema.volt:45:16: warning: vet/unusedalias: alias "P" of table "posts" is never used
+data/schema.volt:47:3: warning: vet/shadowedcolumn: column "id" in table "posts" silently overrides the definition from TablePartial "stamps"
+data/more.volt:48:1: warning: vet/modelname: cannot confidently singularize "bonus" for its Go model name (would use "bonus"); pin it with [model: '...']
+data/more.volt:51:1: warning: vet/modelname: cannot confidently singularize "axis" for its Go model name (would use "axis"); pin it with [model: '...']
+data/schema.volt:52:14: warning: vet/redundantnull: explicit 'null' is redundant; columns are nullable by default
+data/schema.volt:53:11: warning: vet/legacyflag: legacy flag "pk"; write it in the settings list: [pk]
+data/schema.volt:61:1: warning: vet/missingpk: table "naked" has no primary key
+data/schema.volt:63:3: warning: vet/emptybody: empty indexes block
+data/schema.volt:67:1: warning: vet/emptybody: TableGroup "g" has no members

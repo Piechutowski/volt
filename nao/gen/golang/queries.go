@@ -26,10 +26,12 @@ package golang
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/Piechutowski/volt/gen/align"
+	"github.com/Piechutowski/volt/internal/par"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 )
@@ -68,6 +70,13 @@ type tableModel struct {
 	sqlName string       // flattened SQLite table name, e.g. "core_users"
 	fields  []*fieldPlan // effective columns in definition order
 	pk      []*fieldPlan // identity columns in key order; empty = no pk
+
+	// Built with the model, since a memoized result is written by
+	// nobody (D92, D99): its CRUD methods, its field signatures, and
+	// the package-level names it mints.
+	crud  []CRUDMethod
+	sigs  []FieldSig
+	names []nameOrigin
 }
 
 // fieldPlan is one column resolved into Go and SQL naming.
@@ -130,7 +139,18 @@ func (t *tableModel) createFields() []*fieldPlan {
 	return out
 }
 
-func planBuild(f *ast.File, info *check.Info) (*plan, error) {
+// fieldCount is the number of columns across the planned tables: the
+// emitters size their buffers from it once instead of growing by
+// copying (D81).
+func (p *plan) fieldCount() int {
+	n := 0
+	for _, t := range p.tables {
+		n += len(t.fields)
+	}
+	return n
+}
+
+func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 	g := &generator{f: f, info: info, imports: map[string]bool{}}
 	if err := g.enumTypesCollect(); err != nil {
 		return nil, err
@@ -143,40 +163,101 @@ func planBuild(f *ast.File, info *check.Info) (*plan, error) {
 	}
 	sqlNames := map[string]string{}
 
-	for _, ti := range info.Tables {
-		tm, err := tableBuild(g, ti, typeNames, sqlNames)
-		if err != nil {
-			return nil, err
+	// Every table's model is a pure function of the checked table and
+	// the enum types (D86), built on every CPU; the name collisions
+	// between tables are then judged in declaration order, so the
+	// first error is the same whatever the schedule.
+	type built struct {
+		tm  *tableModel
+		imp map[string]bool
+		err error
+	}
+	enums := enumTypesOf(info, g.enumTypes)
+	tables := make([]built, len(info.Tables))
+	par.For(len(info.Tables), func(i int) {
+		if memo != nil {
+			if e := memo.prev[info.Tables[i]]; e != nil && slices.Equal(e.enums, enums.pairs) {
+				tables[i] = built{e.tm, e.imports, nil}
+				return
+			}
 		}
-		p.tables = append(p.tables, tm)
+		tm, imports, err := tableBuild(info.Tables[i], enums)
+		tables[i] = built{tm, imports, err}
+	})
+	if memo != nil {
+		memo.next = make(map[*check.TableInfo]*memoModel, len(info.Tables))
+		for i, ti := range info.Tables {
+			if b := tables[i]; b.err == nil {
+				if e := memo.prev[ti]; e != nil && e.tm == b.tm {
+					memo.Hits++
+					memo.next[ti] = e
+				} else {
+					memo.Misses++
+					memo.next[ti] = &memoModel{tm: b.tm, imports: b.imp, enums: enums.pairs}
+				}
+			}
+		}
+	}
+	for i, ti := range info.Tables {
+		b := tables[i]
+		if b.err != nil {
+			return nil, b.err
+		}
+		if prev, dup := typeNames[b.tm.model]; dup {
+			return nil, fmt.Errorf("table %s and %s both map to Go type %s", ti.Decl.Name.String(), prev, b.tm.model)
+		}
+		typeNames[b.tm.model] = "table " + ti.Decl.Name.String()
+		if prev, dup := sqlNames[b.tm.sqlName]; dup {
+			return nil, fmt.Errorf("tables %s and %s both flatten to SQLite name %q", prev, ti.Decl.Name.String(), b.tm.sqlName)
+		}
+		sqlNames[b.tm.sqlName] = ti.Decl.Name.String()
+		for imp := range b.imp {
+			g.imports[imp] = true
+		}
+		p.tables = append(p.tables, b.tm)
 	}
 	return p, nil
 }
 
-func tableBuild(g *generator, ti *check.TableInfo, typeNames, sqlNames map[string]string) (*tableModel, error) {
+// enumTypes is the enum set as a model's input: canonical key to Go
+// type name, and the same pairs sorted by key, the map itself as a
+// memo key compared element by element (D91). Two equal pair lists
+// resolve every column type alike.
+type enumTypes struct {
+	byKey map[string]string
+	pairs []enumType
+}
+
+// enumType is one enum's canonical key and Go type name.
+type enumType struct{ key, typ string }
+
+func enumTypesOf(info *check.Info, byKey map[string]string) *enumTypes {
+	pairs := make([]enumType, 0, len(info.Enums))
+	for _, e := range info.Enums {
+		pairs = append(pairs, enumType{e.Key, byKey[e.Key]})
+	}
+	slices.SortFunc(pairs, func(a, b enumType) int { return strings.Compare(a.key, b.key) })
+	return &enumTypes{byKey: byKey, pairs: pairs}
+}
+
+// tableBuild is one table's model as a pure function of the checked
+// table and the enum types (D86): the model with its fields, keys and
+// names, and the imports its field types need. It reads nothing else
+// and writes nothing it did not create.
+func tableBuild(ti *check.TableInfo, enums *enumTypes) (*tableModel, map[string]bool, error) {
 	model, err := modelName(ti.Decl)
 	if err != nil {
-		return nil, fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
+		return nil, nil, fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
 	}
-	if prev, dup := typeNames[model]; dup {
-		return nil, fmt.Errorf("table %s and %s both map to Go type %s", ti.Decl.Name.String(), prev, model)
-	}
-	typeNames[model] = "table " + ti.Decl.Name.String()
-
-	sqlName := sqlTableName(ti.Decl.Name)
-	if prev, dup := sqlNames[sqlName]; dup {
-		return nil, fmt.Errorf("tables %s and %s both flatten to SQLite name %q", prev, ti.Decl.Name.String(), sqlName)
-	}
-	sqlNames[sqlName] = ti.Decl.Name.String()
-
-	tm := &tableModel{ti: ti, model: model, sqlName: sqlName}
+	tm := &tableModel{ti: ti, model: model, sqlName: sqlTableName(ti.Decl.Name)}
+	imports := map[string]bool{}
 	pkFromIndex := compositePKColumns(ti)
 	goFields := map[string]string{}
 	params := map[string]string{}
 	for _, cd := range ti.Columns {
-		fp, err := fieldBuild(g, cd, pkFromIndex, goFields, params)
+		fp, err := fieldBuild(enums.byKey, imports, cd, pkFromIndex, goFields, params)
 		if err != nil {
-			return nil, fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
+			return nil, nil, fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
 		}
 		tm.fields = append(tm.fields, fp)
 	}
@@ -214,10 +295,13 @@ func tableBuild(g *generator, ti *check.TableInfo, typeNames, sqlNames map[strin
 			}
 		}
 	}
-	return tm, nil
+	tm.crud = crudMethodsBuild(tm)
+	tm.sigs = fieldSigsBuild(tm)
+	tm.names = modelNamesBuild(tm)
+	return tm, imports, nil
 }
 
-func fieldBuild(g *generator, cd *check.ColumnDef, pkFromIndex map[string]bool, goFields, params map[string]string) (*fieldPlan, error) {
+func fieldBuild(enumTypes map[string]string, imports map[string]bool, cd *check.ColumnDef, pkFromIndex map[string]bool, goFields, params map[string]string) (*fieldPlan, error) {
 	col := cd.Col
 	colName := col.Name.Name()
 
@@ -230,12 +314,12 @@ func fieldBuild(g *generator, cd *check.ColumnDef, pkFromIndex map[string]bool, 
 	}
 	goFields[goField] = colName
 
-	typ, err := typeResolve(col.Type.Name.Schema(), col.Type.Name.Base(), g.enumTypes)
+	typ, err := typeResolve(col.Type.Name.Schema(), col.Type.Name.Base(), enumTypes)
 	if err != nil {
 		return nil, fmt.Errorf("column %q: %w", colName, err)
 	}
 	if typ.imp != "" {
-		g.imports[typ.imp] = true
+		imports[typ.imp] = true
 	}
 	nullable := isNullable(col) && !pkFromIndex[colName]
 	goType := typ.name
@@ -455,11 +539,13 @@ type queryEmitter struct {
 
 func (e *queryEmitter) run() {
 	e.needImports = map[string]bool{}
+	e.body.Grow(e.plan.fieldCount() * 110) // measured: bytes of queries per column
 	for _, t := range e.plan.tables {
 		e.tableEmit(t)
 	}
 	e.header()
 	e.prologue()
+	e.out.Grow(e.body.Len())
 	e.out.WriteString(e.body.String())
 }
 

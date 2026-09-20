@@ -17,3 +17,12 @@ removed from the repository (reproducible from that provenance).
 - [`orm-matrix.md`](orm-matrix.md) — every Rails Active Record
   capability with nao's verdict; the exhaustiveness audit behind the
   data-layer roadmap.
+
+Measurements, pinned on the day they were taken:
+
+- [`perf-sweep-2026-09-14.md`](perf-sweep-2026-09-14.md): every phase
+  of the compiler timed and profiled from 10 to 160 tables, with the
+  charts in [`perf-sweep/`](perf-sweep/).
+- [`go-compiler-cost.md`](go-compiler-cost.md): what the thousand-table
+  project generates and what the Go compiler does with it, the
+  bottleneck that is not Volt's, and the levers that are.

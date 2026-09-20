@@ -635,7 +635,7 @@ where the merge changed the facts.
   since sharing it across goroutines is the next step.
 
 - **D75 — Generated Go is gofmt-canonical by construction; gofmt is a
-  test, not a stage** (2026-09-10, spec §V4.7.3 "gofmt-stable"). The
+  test, not a stage** (2026-09-10, spec §V7 "gofmt-stable"). The
   generators used to pass every file through go/format.Source, which
   bought parse-safety and formatting at zero emitter complexity and
   cost 80% of generation time: gofmt re-parses and re-prints every byte
@@ -733,12 +733,11 @@ where the merge changed the facts.
   roadmap PERF-8, `docs/editor.md` §3). The server used to reload and
   re-check the whole project synchronously on every keystroke, once
   per open document. Now `lang.Session` holds, per project root, every
-  file's last parse (reused when the text is the same — a disk file by
-  size and mtime first, so it is not even read) and every package's
-  last check results and diagnostics, keyed by a hash of its files'
-  parse identities, its Go files' stamp and its imports' keys, so a
-  change anywhere upstream changes the key and nothing needs a reverse
-  index; a package on an import cycle is never memoized. `Session.Load`
+  file's last parse (reused when the text is the same) and every
+  package's last check results and diagnostics, keyed by its files'
+  parse identities, its Go functions and its imports' keys (the key is
+  those inputs themselves since D87), so a change anywhere upstream
+  changes the key and nothing needs a reverse index; a package on an import cycle is never memoized. `Session.Load`
   and `Session.Check` are proven identical to the fresh functions edit
   by edit, with the work counted: one parse per changed file, one
   check per package that could see it. The server records an edit
@@ -757,20 +756,830 @@ where the merge changed the facts.
   still re-parses its whole file and re-checks its whole package —
   per-declaration memoization is PERF-10.
 
-- **D80 — The stress fixture is generated, never committed; `volt
-  fixture` writes it** (2026-09-12, roadmap PERF-2,
-  `cmd/volt/fixture.go`). The project the scaling tests and the
+- **D80 — The stress project is generated, never committed; `volt
+  stress` writes it as one file** (2026-09-14, roadmap PERF-2,
+  `cmd/volt/main.go`). The project the scaling tests and the
   benchmarks run on (`internal/corpus`: every feature, both layouts,
   any size) exists only while a test runs. A thousand-table copy would
-  be megabytes of `.volt` and, once generated, hundreds of thousands of
-  lines of Go that rot with every emitter change, so no repository
-  carries one; the generator is the single source and the binary
-  writes it on demand. `volt fixture DIR` writes the size that started
-  the performance work (twenty packages of fifty tables with a hundred
-  and fifty columns), any size by flag, one directory with `-single`,
-  so check, gen and the language server are timed by hand on the same
-  project the tests measure. What it refuses: writing into a directory
-  that holds anything (the fixture goes into a new or empty one, never
-  over a project), and a buildable module (the written go.mod requires
-  nothing; the Go files name the runtime, which the tests resolve with
-  a replace directive, and the compile proof stays `TestCorpusCompiles`).
+  be megabytes of `.volt` and, once generated, over a million lines of
+  Go that rot with every emitter change, so no repository carries one;
+  the generator is the single source and the binary writes it on
+  demand. The stress shape is one file: `volt stress DIR` writes a
+  thousand tables of a hundred and fifty columns, every table routed
+  and in the group select, as one `schema.volt` of a `package main` at
+  the root of a module that builds, so the limits of check, gen, the
+  language server and the Go compiler on the generated code are felt
+  on the same project the tests measure, and known ahead of time. The
+  size is a flag; the default is the big one, because the point is the
+  limit. The corpus stubs the controllers its routes name and the
+  module requires the runtime through a replace onto a Volt checkout
+  (`-volt`, found through the Go tool when the working directory's
+  module resolves it), so `go build` sees every generated line. Not a
+  command for ordinary use, and the CLI stays one file: `cmd/volt` is
+  `main.go` and its test. What it refuses: writing into a directory
+  that holds anything (the project goes into a new or empty one, never
+  over a project), and a multi-package shape from the CLI (the tests
+  keep both layouts; by hand, the one-file shape is the one that finds
+  the limits).
+
+- **D81 — One package is checked like twenty: every per-route and
+  per-table lookup is indexed, the plan builds on every CPU, and the
+  editor memoizes warnings** (2026-09-14, roadmap PERF-11,
+  `lang/selects.go`, `lang/semantics.go`, `lang/gofuncs.go`,
+  `nao/gen/golang/queries.go`, `lang/lint.go`). The one-file stress
+  project (D80) checked in 9.4 s where twenty packages of the same
+  tables checked in 0.8 s, and the difference was not the missing
+  parallelism: binding each query route scanned every select and every
+  group member of its package building a Go name per step (twelve
+  million name builds for six thousand routes over a thousand-member
+  group); route conflicts were indexed by first literal segment, which
+  put every route of a scope in one list; the Go-reference scan parsed
+  the package's generated files, a million lines after `gen`, on every
+  check; and each default resources route recomputed its table's
+  params validators. Now a package indexes its select methods by
+  generated name once, files routes in a trie of literal prefixes so a
+  conflict check walks only the routes that could overlap, skips files
+  that open with the generated marker, memoizes the validators per
+  table, and builds the naming plan's table models on the worker pool
+  with the name collisions judged afterwards in declaration order. The
+  editor keeps a package's vet warnings under the same key as its
+  check results, so an unchanged package costs no analyzer run. The
+  scanner sizes its token slice to the measured density, a token per
+  four bytes. Measured on the one-file project, four cores: check 9.4 s
+  to 0.7 s, generate 10.7 s to about 2 s, the language server's
+  analysis 15.5 s to 2.4 s cold and 0.4 s unchanged. The linearity
+  test gained the one-file dimension, which fails on the select scan
+  and passes with the index. `Check` is idempotent on a Project: a
+  package's results are reset before its phases run, so a server or a
+  profiling loop that checks a loaded project again sees the same
+  routes and selects, not twice as many (found by the first profiling
+  sweep, `docs/reference/perf-sweep-2026-09-14.md`, which is the
+  committed way to measure every phase and function against table
+  count). The sweep's next two findings landed the same day: vet takes
+  the checker's plan (`vet.RunWithPlan`) instead of building its own,
+  and the AST walker visits children through a callback instead of a
+  slice per node, three times faster and thirteen times fewer
+  allocations; the generators size their buffers from the plan's
+  column count and finish a file in one pass, a quarter fewer bytes
+  allocated. What it refuses: parallel parsing of one
+  file (the parser is a third of what remains and a declaration-level
+  split is PERF-10's job) and a parallel schema check inside a
+  package (its per-table cost is now small next to the parse).
+
+- **D82 — The front end is flat where it counts: file-backed positions,
+  48-byte tokens, slab-allocated nodes** (2026-09-14, roadmap PERF-9,
+  `lang/token`, `lang/scanner`, `lang/parser`). A token was 88 bytes
+  and three pointers: a position carrying the filename string, the raw
+  text and the value, each a string header, so a million-token file
+  was 82 MB of tokens for the collector to walk and every identifier
+  node carried the same. Now a `token.File` holds the name and the
+  source once; a position is that pointer plus three 32-bit offsets;
+  a token borrows its text from the file by offset and length and
+  keeps only its value, 48 bytes and two pointers; the scanner counts
+  in machine integers and mints a position only when it emits. The
+  parser hands out identifiers, qualified names, columns, types,
+  settings, setting lists and literals from slabs of 256, so a file's
+  nodes are a few hundred allocations instead of one each, and a
+  setting's name is built without a word list. Measured on the sweep
+  at 160 tables: Load 35.9 ms to 27.1 ms, 31.9 MB to 23.2 MB
+  allocated, 312 thousand allocations to 126 thousand; the stress
+  file loads in 200 ms against 330 ms. Consumers read text through
+  `Token.Text()` and the filename through `Position.Filename()`; a
+  token the source does not contain is `token.Synthetic`. What it
+  refuses: interned symbols (integers for names would change every
+  consumer's API for the map hashing the profile puts at five
+  percent), and a Position without a file pointer (an offset alone
+  cannot say which file, and diagnostics must). What remains of
+  PERF-9 is the checker's own allocation, which is the naming plan's
+  strings, not the front end's.
+
+- **D83 — A file is parsed by declaration, and an edit re-parses one**
+  (2026-09-14, roadmap PERF-10, `lang/parser/reuse.go`,
+  `lang/token`). The one-file layout made a keystroke cost the whole
+  file's parse: 340 ms for the thousand-table `schema.volt`, before
+  any check. Now `parser.ParseFileReuse` cuts a source into chunks, one
+  per top-level declaration — an unquoted identifier in the first
+  column outside every brace, string and comment starts one, the
+  language's own element boundary since D88 (§3.2.5); what precedes
+  the first is the head, and blank and comment lines between
+  declarations belong to the preceding one — and parses each chunk as
+  a `token.File` of
+  its own whose base offset and line say where it sits in the whole.
+  The next parse of the same file keeps every chunk whose text is
+  unchanged, nodes and diagnostics as they are, and relocates it by one
+  store of its base; only the chunks that changed are scanned and
+  parsed. Positions are therefore relative to their chunk and answer
+  through accessors (`Offset`, `Line`, `Column`) that add the base,
+  atomically, because a reused declaration is shared with a result a
+  server thread may still be reading, and for a reused declaration the
+  new place is the right one in any case. The session's every parse
+  goes through it and counts declarations parsed and reused; since
+  D88 `ParseFile` is this parse from nothing, and the whole-file path
+  is gone. Proven: an edit sequence through valid and broken states
+  re-parses one declaration per edit with the session's diagnostics
+  equal to a fresh analysis (and, since D88, the parse with reuse is
+  the parse from nothing under every boundary-moving edit of every
+  snippet). Measured on the thousand-table file: 22 ms per edit
+  against 340 ms. What it refuses: guessing chunk boundaries from
+  keywords alone (the lexical state is tracked, so a keyword inside a
+  string or a block is not a boundary), and mutating a shared chunk
+  anywhere but its base. What remains: the package check after an edit
+  is still whole, about 650 ms on that file with the table checks now
+  lowered on every CPU; re-checking one declaration needs each table's
+  dependency on its partials, enums and refs made explicit, which is
+  PERF-10's second half.
+
+- **D84 — A package is checked by declaration: what did not change is
+  answered from the last check** (2026-09-14, roadmap PERF-10,
+  `lang/check/memo.go`, `nao/gen/golang/plan.go`, `lang/checks.go`,
+  `lang/selects.go`, `lang/session.go`). After D83 an edit re-parsed
+  one declaration and then re-checked the whole package, 700 ms on
+  the thousand-table file. The checker's per-package phases now keep
+  memos across the session's checks, one per kind of result, each
+  keyed on the identity of its inputs: the parser reuses a
+  declaration's nodes exactly when its text is unchanged, and each
+  memo holds the nodes it keys on, so identity is text equality with
+  no hashing and no address ever reused underneath. The schema
+  checker answers a table from its memo when the table's node and its
+  injected partials' nodes are the objects they were, with the
+  expansion, body and column diagnostics it produced; the naming plan
+  answers a model when the checked table is the object it was and the
+  enum types spell the same; the lowered checks follow the table, its
+  model and the directory's Go files; a select follows its
+  declaration, its members and their models, the predicates it names,
+  and the generated-name scope's answers to the lookups it made, which
+  are recorded and verified, its additions to that scope replayed. A
+  memo drops every entry a check did not use. The remaining
+  per-table lookups that scanned the package (a table by bare name, a
+  table's lowered checks) are maps. The session counts tables, models,
+  checks and selects answered and not, and a test walks an edit
+  sequence asserting each count: one table edited is one table, one
+  model, one set of checks and two selects (its own and the group's);
+  the partial every table injects invalidates every table; a new enum
+  every model; the predicate every select names every select; a Go
+  file only the lowered checks; and the diagnostics equal a fresh
+  analysis at every step. Measured on the thousand-table file: the
+  check after an edit 700 ms to about 90 to 190 ms, the whole edit
+  cycle from about a second to under 200 ms. What it refuses: keying
+  on text hashes (identity is exact and free), a reverse dependency
+  index (each memo verifies its own inputs on lookup, which is the
+  same work as maintaining one and cannot go stale), and memoizing
+  routes (route expansion runs whole, about 50 ms of what remains,
+  because a resources line's routes depend on every table it names
+  and their conflicts on every other route).
+
+- **D85 — The editor's navigation index is kept by table across
+  analyses** (2026-09-14, roadmap PERF-10, `lsp/index.go`,
+  `lsp/voltnav.go`, `lsp/analysis.go`). With the check by declaration
+  (D84) the server's own index became three quarters of an edit on
+  the thousand-table file: every analysis rebuilt, from the whole
+  merged file, the occurrences that power go-to-definition, references
+  and rename, and inside that walk looked a table up by bare name with
+  a scan over every table. Now each project root's analysis keeps a
+  memo per package: a table whose declaration node and checked table
+  are the objects they were contributes the occurrences it did, in
+  the three places the build puts them, with its own column
+  declarations kept in the entry's map and reached through `Decl`
+  rather than copied into the shared map on every build; the select
+  hovers are kept by the select they were rendered for, which D84
+  keeps identical while its inputs are; the occurrence slice is sized
+  from the last build; tables by bare name are a map; a model's CRUD
+  method list is computed once and travels with the model the plan
+  memo reuses. A fresh entry's map is built before the entry can be
+  shared, so a build never mutates what a request may be reading.
+  Proven equal to a fresh build, definitions and references with
+  their spans, edit by edit, with the count of tables rebuilt
+  asserted. Measured on the thousand-table file, the server's whole
+  analysis per edit: 400 to 650 ms to 106 ms best, 163 ms mean; the
+  session's parse and check are about 100 of those. What it refuses:
+  sharing the declaration map between builds (a request on the last
+  result may be reading it), and memoizing the reference walk over
+  scopes, groups and selects (linear, small, and dependent on
+  everything).
+
+- **D86 — What a memo answers is a pure function of explicit inputs,
+  and the build proves it** (2026-09-14, roadmap PERF-10, `lang/check/
+  check.go`, `nao/gen/golang/queries.go`, `lang/checks.go`,
+  `lang/selects.go`, `lsp/index.go`, `cmd/volt/purity_test.go`). D84
+  and D85 keyed their memos on inputs enumerated by reading the memoized
+  code, and the examples asserted the cases enumerated. That is an
+  argument by inspection, and the first audit found what it misses: a
+  table's occurrences in the editor's index depend on the enums its
+  columns name and on the tables its inline references bind to; a
+  table's lowered checks depend on the predicates they name; a table's
+  check depends on the enum set through the required rule; none of
+  these was a key. Now every memoized computation is a top-level
+  function whose parameters are its whole input and whose results are
+  its whole effect: `check.tableCheck` (declaration, injected partials,
+  imports flag, enum set), `golang.tableBuild` (checked table, enum
+  types; the imports it needs are a result, not a write to a shared
+  generator), `lang.tableSpecs` (checked table, model fields, package
+  name, the directory's Go functions, the predicates named; the typed
+  checks' SQL is a result the package carries for the DDL, no longer
+  written onto the AST node), `lang.selectCheck` (declaration, members,
+  their models, the predicates named, and a read-only name scope; what
+  it asked the scope and was told is a result beside the names it
+  mints, for the caller to verify and apply, since D93), and `lsp.tableOccurrences` (declaration, checked
+  table, the table its references bind to, the tables, enums and
+  partials the body names). The callers resolve the inputs, and each
+  memo entry stores them and answers only when all are what they were:
+  same inputs, same function, same output, the two-line argument. The
+  side effects those functions used to have moved to the callers: use
+  counts, imports, name-scope additions. Go cannot forbid a free
+  variable, so the build does: `TestMemoizedComputationsArePure` loads
+  the module with type information and, for each target and everything
+  it calls, refuses a read of a package variable not in the allowlist
+  of once-written tables (which it proves are assigned nowhere else), a
+  write through a parameter or through a value a callee derived from
+  one, a call into a standard package that keeps state, and any
+  goroutine or channel; a fixture package proves each refusal fires.
+  The Go function scans a checks memo keys on are kept by the session
+  and replaced only when a rescan differs in content, so identity means
+  equality. What it refuses: a hash as a memo key (equality is exact and
+  costs nothing), an oracle the check does not report asking (the
+  select's scope is an interface with one method, and every question
+  is a result), and a test that samples inputs at random in place of
+  the property.
+
+- **D87 — A memo key is its inputs, and a file is what it reads as
+  now: nothing hashed, nothing stamped** (2026-09-14, roadmap PERF-10,
+  `lang/session.go`, `lang/gofuncs.go`, `lsp/voltnav.go`). D79 keyed a
+  package's check on an FNV-64 hash of its inputs, skipped reading a
+  disk file whose size and mtime it had seen, and told that a Go
+  directory had moved by the names, sizes and mtimes of its files.
+  Each is a claim that is almost always true: a hash collision is
+  improbable, an edit within the mtime's resolution that keeps the
+  length is rare, a filesystem that reports a stale mtime is unusual.
+  None is provable, and "almost always" is the statistical truth D86
+  refused. Now the package key is the list of its inputs themselves,
+  for the package and each package it transitively imports: the parse
+  identity of every file and the scan object of the directory's Go
+  functions, compared element by element. A disk file is read on
+  every load and its parse reused only when the bytes are the bytes
+  of the last parse. A Go directory is read on every check, a
+  generated file by its first line only (D81), and its scan is kept
+  only when every source is byte for byte what it was, so the scan
+  object's identity is the content's; the editor's Go staleness check
+  compares the same sources. The read is the cost of knowing, and it
+  is small: the bytes come from the page cache, and a thousand-table
+  project's one edit still parses one chunk and checks one table. A
+  test rewrites a `.volt` file and a Go file to the same length with the
+  modification time put back and proves both edits are seen. What it
+  refuses: a key that is a digest of the inputs rather than the
+  inputs, and a freshness test that consults metadata in place of the
+  bytes.
+
+- **D88 — An element boundary is a rule of the language, the scanner
+  cuts the chunks at it, and there is one parse** (2026-09-14, roadmap
+  PERF-10, `docs/spec.md` §3.2.5, `lang/scanner/scanner.go`,
+  `lang/parser/reuse.go`). D83's chunker was a second lexer: a loop
+  beside the scanner tracking braces, quotes, multi-line strings and
+  comments, cutting at a letter in the first column, and its agreement
+  with the parser rested on a differential test over the corpus. The
+  first probe outside the corpus found the disagreement: a `Ref`
+  continued on a first-column line, a settings list spilling onto one,
+  an import block at column one all parsed whole and failed chunked, so
+  the editor session and the command line disagreed on valid files.
+  Now the rule is the language's: an unquoted identifier in the first
+  column outside every brace, string and comment begins an element and
+  ends the one before it, complete or not (§3.2.5, with a valid and an
+  invalid snippet; a continuation line is indented, as every formatter
+  writes it). The scanner enforces it and nothing else does: it counts
+  braces, flags such a token, and a chunk scan stops before the first
+  one after its first byte, handing back an EOF standing there that a
+  diagnostic reads as "the start of the next element". `ParseFile` is
+  the chunked parse from nothing; the whole-file path is gone, so there
+  is nothing for the chunked parse to differ from. What remains to
+  prove is that reuse is the parse from nothing, and that holds by
+  construction: a chunk begins in the scanner's initial state (the
+  first column after a line break, outside everything), its scan ends
+  at an element start or at the text's end and cannot read past a line
+  break it has not consumed (D95), so its tokens, parse and diagnostics
+  are a function of its text and of whether an element start follows; the reuse keeps a chunk
+  only where its text stands unchanged, where an element may stand, and
+  where what follows is what followed before: an element start, which
+  one scanned token decides from the bytes there, or the end of the
+  file. A test applies, before every element of every conformance
+  snippet and at its end, each edit that moves boundaries (a new
+  element, an indented line, an unbalanced brace either way, a bare
+  identifier, a cut-short element, an open comment, an open string, a
+  comment, a deletion), undoes it, and proves the parse with reuse
+  equal to the parse from nothing both ways. Braces alone count, not
+  brackets or parentheses, so that an unclosed bracket while typing a
+  column's settings reaches no further than the body's closing brace.
+  Measured on the thousand-table file: the parse from nothing 150 ms
+  against the whole-file parse's 340 (the chunks share one parser and
+  one token buffer), an edit 2 ms against 22 (an unchanged chunk is
+  matched by its bytes and never scanned; the old chunker re-lexed the
+  whole file to find its boundaries). What it refuses: a second lexer
+  anywhere, and a boundary the parser may cross.
+
+- **D89 — The walker tests each optional field as the pointer it is,
+  and nothing imports unsafe** (2026-09-14, `lang/ast/walk.go`,
+  `cmd/volt/purity_test.go`). The typed-nil guard that kept a broken
+  parse from crashing a visitor read an interface's data word through
+  `unsafe`: an implementation detail of the runtime that happens to
+  hold, and a step outside everything the compiler proves. Now every
+  child field is visited through a helper generic over the field's own
+  pointer type, whose nil test runs before the pointer becomes an
+  interface, so a field the parser left unset is skipped by type; a
+  slot typed as an interface (a declaration, a body item, an index key,
+  a record value, a setting value) is tested as one, and holds nil or a
+  node the parser built from a non-nil pointer, never a typed nil,
+  because every node the parser returns is complete or unwound. The
+  gate now also refuses an import of `unsafe` in any package of the
+  three modules. What it refuses: reading memory the type system does
+  not describe, anywhere.
+
+- **D90 — A carriage return keeps its byte and has no column**
+  (2026-09-14, spec §3.2.1, `lang/scanner/scanner.go`,
+  `lang/token/token.go`). The scanner used to strip every carriage
+  return before scanning, so on a file with Windows line endings every
+  byte offset after the first line pointed one byte early per line into
+  the text the editor holds, and the server's offset-driven features
+  (definition, references, the diagnostic's underline) drifted. Now the
+  source is scanned as written: the cursor steps over a carriage return
+  wherever it stands, counting its byte and no column, a token never
+  starts on one, a value never contains one, and a token's text is the
+  raw source, so offsets, lines and columns all describe the file the
+  editor shows. Proven: every conformance snippet parses under CRLF to
+  the same nodes and diagnostics at the same lines and columns as under
+  LF, each offset larger by the carriage returns before it; the scanner
+  test pins a carriage return inside a token, between tokens and inside
+  a multi-line string. What it refuses: rewriting the source before
+  scanning it, for any reason.
+
+- **D91 — The enum set is a memo key as itself, sorted, never as a
+  spelling** (2026-09-14, `lang/check/memo.go`,
+  `nao/gen/golang/queries.go`). D86 keyed a table's check on the enum
+  keys joined by a NUL byte and a model on `key=type;` pairs. A quoted
+  identifier may hold any byte, the NUL of a `\0` escape included, so
+  neither spelling was injective: two different sets could spell the
+  same. The key is now the sorted key list, and the sorted pair list,
+  compared element by element with `slices.Equal`, the way D87 keys a
+  package. What it refuses: any serialization standing in for the
+  value it serializes, however unlikely the collision.
+
+- **D92 — What a memo answers is written by nobody, and the build
+  proves it** (2026-09-14, `cmd/volt/purity_test.go`,
+  `nao/gen/golang/queries.go`). D86 proved that a memoized function
+  writes nothing it did not create; nothing proved that the result
+  stayed what it was afterwards, and the first walk found a lazily
+  filled CRUD cache on the table model, written by the route expansion
+  long after the model was memoized. Now the gate walks every function
+  of the three modules with everything from outside it tainted (its
+  parameters, package state, the results of a memoized computation the
+  moment it returns them) and records every write through a tainted
+  value into a memoized result type (the types a target's results
+  reach, by field, element and pointer) and into a node or a token; a
+  write is refused unless the function it was reached from is one the
+  result's producer can reach, or the value's own maker (the parser and
+  the `ast` package for nodes; the scanner, the parser and the `token`
+  package for tokens). A standard function that writes its argument
+  (`sort`, `slices`, `maps`, `copy`, `clear`, `delete`) is a write to
+  what it is handed, in this walk and in D86's. A write to a field of
+  a struct held by value is the variable's own and counts for nothing;
+  a store of a pointer or a slice into a container writes the
+  container, so its holder is the object written. The CRUD list is
+  built with the model. A fixture proves the walk refuses a write to a
+  handed result, one made by a callee, one by a mutator and one to a
+  producer's fresh result, and passes a read, a copy and a result of
+  the function's own making. What it refuses: a cache filled on first
+  use inside a memoized result, and a mutation of a node after the
+  parser is done with it.
+
+- **D93 — A call through an interface runs one of the module's
+  implementations, and the gate walks every one** (2026-09-14,
+  `cmd/volt/purity_test.go`, `lang/selects.go`). D86 accepted a call
+  through an interface as a read of the value it is called on, so a
+  memoized function was pure only if every implementation it could be
+  handed was, and that was verified by reading: the AST's nodes, the
+  tokens, and the select's name scope, which recorded the questions
+  asked of it into an object the caller handed over, a write through
+  an input by another name. Now the select's check keeps its own list
+  of what it asked and was told and returns it beside the names it
+  mints; the scope it is handed is read only, and the memo verifies the
+  answers as before. The gate resolves an interface method to every
+  method of the module's named types that implements it, the universe
+  and the standard library's interfaces included, walks each with the
+  receiver's and the arguments' taint, and counts a result tainted
+  when any implementation's is; the reachability the immutability walk
+  keys on follows the same edges. An implementation outside the module
+  is not seen, and such a call's results are judged by the receiver
+  alone, which is what the call reads. A fixture proves a method one
+  implementation makes impure is refused. What it refuses: an
+  interface as a hole in the walk, and a recorder handed in as a
+  parameter.
+
+- **D94 — The route conflict trie is proven against the relation, in
+  the spec and by enumeration** (2026-09-14, spec §V4.7 rule 3,
+  `lang/semantics.go`, `lang/routes_test.go`). D81 replaced the
+  pairwise ambiguity scan with a trie of literal prefixes, and the
+  claim that the narrower candidate set loses nothing lived in a
+  comment. The claim is now a rule of the spec: two routes overlap only
+  along matching literals, parameters and a wildcard tail, so an
+  accepted route can be ambiguous with a new one only if its literal
+  prefix lies on the new route's walk, and the earliest ambiguous route
+  is the earliest on that walk. A test enumerates every shape of up to
+  three segments over two literals and a parameter, with and without a
+  wildcard tail, under every method, inserts them in declaration
+  order, in reverse and in three strides, and proves the trie's answer
+  equal to the pairwise scan's at every insertion, following the
+  checker's flow. What it refuses: an optimization whose equivalence
+  to the rule it optimizes is asserted rather than stated and checked.
+
+- **D95 — The scanner cannot see past a line break it has not
+  consumed** (2026-09-14, `lang/scanner/scanner.go`). D88 rested on
+  the claim that a chunk's scan never reads past a line break, argued
+  by hand over the state functions: the two-rune lookahead of the
+  multi-line string opener, the many-to-many operator and the number
+  exponent. The claim is now the primitive's: `peekAt` answers the end
+  of the text for any rune beyond a line break it would have to step
+  over, while `peek` still sees the line break itself, and `next`
+  alone consumes it, which only a string or a comment does inside a
+  token. No input scans differently, since no state function ever
+  acted on what lay past a line break; a test pins the bound. A token's
+  kind and text are therefore a function of the bytes up to the line
+  break after it by construction, and a chunk scans the same whatever
+  follows its last line. What it refuses: a lookahead that could reach
+  the next chunk.
+
+- **D96 — The shared surface is five objects, one of them runs one
+  operation at a time, and the race detector is the bar** (2026-09-14,
+  `lang/session.go`, `AGENT.md`). Freedom from data races has no static
+  proof in Go; what the toolchain can do is keep the shared surface
+  small enough to name, make each object safe by construction, and run
+  the detector on every change. The surface: the worker pool's claim
+  counter (`internal/par`), whose callers keep results in per-index
+  slots; a token file's base offset and line, atomic, since a reused
+  declaration is shared with a result a server thread may still read
+  (D83); a check run's Go scan cache and its once-per-directory scans
+  (mutex, once); the server's document and analysis tables (one
+  mutex); and the session's caches (one mutex within an operation).
+  The session also runs one operation at a time, a Load, Check or Vet
+  holding a lock for its whole length, because the server's background
+  analysis and a document's own project pass reach one session from
+  two goroutines, and the per-declaration memos an operation hands to
+  its phases are each one goroutine's only while no other operation
+  runs: that invariant was the server's discipline and is now the
+  session's construction. A test drives one session from four
+  goroutines under overlays of their own and proves every result equal
+  to a fresh analysis; the verification bar runs the language and
+  server packages under the race detector. What it refuses: a shared
+  object outside this list, and a concurrency argument that the bar
+  does not exercise.
+
+- **D97 — The trust boundary with Go is six standard packages and one
+  constant, named, and kept no wider than what is reached**
+  (2026-09-14, `cmd/volt/purity_test.go`). Nothing inside the project
+  proves that `strings`, `strconv` and `unicode` are functions of
+  their arguments and their constant tables, that `fmt`'s internal
+  pools never reach an answer, that `sort` writes only what it is
+  handed (which the gate counts as a write since D92), or that a
+  compiled `regexp` answers the same question every time; nor that
+  `go/build`'s default context stays what it was for the life of the
+  process, which the Go function scan behind D87 keys on. These are
+  trusted, and the trust is written down here rather than implied. The
+  gate keeps the list exact: the purity walk records every standard
+  package a memoized computation calls into and fails on an entry none
+  reaches, so the first walk struck `bytes`, `cmp`, `errors`, `maps`,
+  `slices` and `unicode/utf8` from a list that had been written from
+  expectation. What it refuses: trust granted in advance of use.
+
+- **D98 — `gen --verify` type-checks the output in the package it lands
+  in, before writing** (2026-09-14, `cmd/volt/main.go`). The
+  generators' output was proven by oracle and by sample: every SQL
+  statement prepared against the generated DDL (D06), every golden
+  byte-compared, the blog project built and run. Whether the Go of the
+  project at hand compiles was the next build's finding. Now `--verify`
+  loads each output directory with the outputs laid over whatever is on
+  disk and type-checks the package, so a wrong signature, a missing
+  import or a name that collides with a hand-written one is this run's
+  error, at its position, and nothing is written. An error in a
+  generated file is reported as a generator bug; one in a file beside
+  the outputs leaves the check inconclusive and is reported as such.
+  The check reads export data for dependencies through the go tool, so
+  it costs a `go list` per output directory and stays behind the flag.
+  What it does not do: prove the generated code means what the spec
+  says; that remains the oracle's, the goldens' and the integration
+  tests' work. What it refuses: a generator whose output is first
+  compiled by someone else.
+
+- **D99 — A route is lowered per scope item, from the model's own
+  names, and answered from the last check while what it looked up
+  stands** (2026-09-14, roadmap PERF-10, `lang/routes_lower.go`,
+  `lang/semantics.go`, `nao/gen/golang/plan.go`, `lang/checks.go`).
+  After D84 the routing layer still ran whole per package, and what
+  it ran was mostly rebuilding: every check asked the plan for every
+  table's minted names and field signatures again, decided every
+  table's validators again, and lowered every scope item again. Now
+  a table's CRUD methods, field signatures and minted names are built
+  with its model, in `tableBuild`, so they are the model memo's and
+  cost nothing while the model stands; the name scope is a base kept
+  with the plan memo, updated by the tables that changed, with the
+  file's enums layered on per call; whether a table's params carry
+  validators is decided with its lowered checks and travels with
+  them. The lowering of one scope item (a route, a resources, a
+  dataset) is a top-level function of the item, what its scopes
+  inherit, the package's facts and an oracle it asks about the
+  project; the oracle's answers are recorded, and the memo holds the
+  item's routes while the item is the node it was, the inherited
+  settings and facts are equal, and every recorded answer is what the
+  oracle gives now. What the check does with a lowered route, naming
+  its helper, judging it against the package's accepted routes and
+  ordering it, it does on its own copy, so the memo's routes are
+  written by nobody (D92); the path shape is parsed at lowering and
+  carried with the route. Measured on the thousand-table one-file
+  project, one keystroke inside one table: the check went from about
+  120 ms to about 50 ms mean, with one table, one model, one check,
+  two selects and two scope items redone and everything else
+  answered; the cold check is unchanged, about 0.9 s. What remains of
+  those 50 ms is the judgment the memo cannot hold, since it depends
+  on every accepted route (about 8 ms of map and trie work), the
+  replay of a thousand items' recorded answers (about 6 ms), the
+  schema check's file-wide name collection and reference resolution
+  (about 15 ms) and the collector's marking of a large live heap.
+  Known limit: the memo is by node, and a scope is one element
+  (§3.2.5), so a keystroke inside the routing scope re-parses it
+  whole and lowers every item of it again, about 30 ms for a thousand
+  on this file; keying an item on its text would need the lowering's
+  positions relocated, which is the parser's job (D83), not a memo's.
+  Measuring this exposed a larger cost outside the check: through the
+  server's stdio, the same keystroke reaches diagnostics in about
+  1.7 s, of which the check is 50 ms; the rest was the document's own
+  whole-file front end and the package vet, taken up by D103 to D105.
+  What it refuses: a memo whose answer depends on anything it did not
+  record (the gate walks `itemLower` as a pure target, D86), and a
+  check that writes a memo's route.
+
+- **D100 — The spec's grammar is executable: read as data, checked
+  against itself, and proven against the front end sentence by
+  sentence** (2026-09-14, `lang/ebnf`, `lang/spec_grammar_test.go`,
+  spec "Conformance and the proof chain" item 5). The EBNF was the
+  spec's centerpiece and nothing read it: the parser was written from
+  it by hand, the conformance corpus exercised the rules its authors
+  thought of, and the collected grammars were copies maintained by
+  eye. Now a reader of ISO 14977 as the Notation section lists it
+  turns every `ebnf` block into data; a language is the grammar plus
+  the lexical facts the prose states beside it, each cited: which
+  rules are tokens (§3), what lies between the symbols of the others
+  (layout, §3.2 rule 3), the longest match (§3.1), the line break
+  that ends a line-oriented production and the `}` or end of file
+  that satisfies it (§3.2 rule 2), the productions that lay out their
+  own spaces or are contiguous (Notation, §V4.1.1, §V2.2, §V10), the
+  settings list on its construct's line (§4.2 rule 5), and the cut at
+  element starts (§3.2 rule 5). From that a recognizer decides any
+  text, and a deriver produces, for every choice in every production,
+  the shortest program exercising it: 482 sentences over 146 rules.
+  The test holds four things: every block reads and every name is
+  defined once; the collected grammars repeat the sections exactly;
+  every derived sentence parses; and every text one token away from
+  one (dropped, inserted, or two exchanged, 22,802 of them) is
+  accepted by the front end exactly when the grammar accepts it. What
+  the first run found, all fixed in this commit: a `+` and a missing
+  `;` the notation does not have, an escaped backslash in a terminal,
+  `plain name`, `column name`, `settings list` and `ident list` used
+  and never defined, `column path` defined and never used, `rel op`
+  defined twice, `element kind` and `punct` missing from one grammar
+  or the other, `required` absent from the appendix, a `resources`
+  copy that had drifted, `type name` and `import spec` meaning two
+  things in the two Parts (now `param type`, `import entry` and
+  `package path`), a plain identifier that admitted a number, a `\u`
+  fallback that admitted three hex digits, an import block the
+  grammar let be empty, a star projection with nothing excluded, and
+  predicate keywords the grammar let name columns. In the parser:
+  `a a\npk` was one column and `id\ninteger` one column while a
+  settings list had to stay on its line, so the spec now states the
+  rule the parser half-had (a production that ends with `newline`
+  lies on one line, brackets aside) and the parser holds it for every
+  such production; a short `Ref` demanded a line end the grammar
+  never had; a bare `/` refused a following `{`; a type's argument
+  list refused a space before it; `not` and `in` were keywords in one
+  position and column names in another, and are keywords now. What
+  it does not model: case-insensitive keywords (§1.4, terminals are
+  matched as spelled) and every semantic constraint, which the corpus
+  keeps holding. The tree-sitter differential of `docs/editor.md` §8
+  takes the derived sentences from `go test ./lang -run
+  TestSpecGrammarSentencesParse -sentences DIR`. What it refuses: a
+  grammar edited without the test, and a parser strictness or
+  leniency the grammar does not state.
+
+- **D101 — What invalid input produces is a rule of the language and
+  a golden of the corpus, and the editor's session is a golden too**
+  (2026-09-14, spec §3.2 rule 6, `lang/conformance/invalid_*.golden`,
+  `cmd/volt/lsp_session_test.go`). The corpus held that an invalid
+  snippet is rejected, and for the reason its comment names; what
+  else the front end said about it, and what it said about the rest
+  of the file, was whatever the parser's recovery happened to do, and
+  the recovery differed by construct: a broken column, route or plug
+  line lost its line and the body went on, while a broken enum value,
+  index, record row, project property, import entry or group member
+  took its whole element down, and a broken element resumed at the
+  next line that began with an identifier, inside its own indentation
+  included, so one error bred a second. Now the spec states the rule
+  (§3.2 rule 6): a syntax error inside an element discards the rest
+  of the element, up to the next element start, and inside any
+  one-per-line body it discards the rest of the item's line and the
+  following items are parsed; the parser does exactly that, in one
+  place for the elements and one function for the bodies. With the
+  behavior a rule, every diagnostic of every invalid snippet, both
+  halves of the corpus, is a golden refreshed by `-update` after
+  reading the diff, so a change to a message, a position or the
+  recovery is a change someone reads. The editor's side is pinned the
+  same way: a scripted stdio JSON-RPC session drives the real server
+  process (the test binary run again as the server), opens a project
+  file, breaks it, adds to it, fixes it, and asks for hover,
+  definition, completion and symbols; every response and every
+  published diagnostic is the golden, the project root spelled ROOT.
+  That is the development practice of D79 and D85 as a test. What it
+  refuses: recovery that differs by construct, and a diagnostic or a
+  server reply that changes without a golden changing with it.
+
+- **D102 — The purity gate's three holes are closed: an append writes
+  the array it may share, a function value from outside is not
+  called, and a recursive analysis runs to its fixpoint**
+  (2026-09-14, `cmd/volt/purity_test.go`, `cmd/volt/testdata/impure`).
+  D86's walk let three things through. `append(t.Rows, x)` on an
+  input's slice with spare capacity writes the input's own array, and
+  the walk saw only that the result carried taint; now an append to a
+  slice whose backing array may be an input's is a write to whatever
+  holds the slice, and the walk tracks, per local, whether an array is
+  fresh (a literal, a make, an append to a fresh slice) or an alias,
+  so `append(append([]T{}, in...), x)` passes and `rows := t.Rows;
+  append(rows, x)` does not. A call through a function value the walk
+  did not see made, a func-typed parameter or field or a method
+  value, could do anything, and the walk judged it by its arguments;
+  now the purity walk refuses it, and a closure literal assigned in
+  the function, whose body the walk covers where it is written, is the
+  one function value it may call. A recursive call answered with an
+  empty summary, so a write through what the recursion returned, the
+  input once it bottomed out, went unseen; now a recursive call answers
+  with the summary found so far, the interrupted analysis repeats until
+  that summary stops growing, and a summary computed against another
+  analysis's provisional one is not remembered while that analysis is
+  under way. Each hole has its fixture, refused, beside the shapes the
+  gate must allow. The tightened gate found two things in D99's
+  lowering and both are fixed: a diagnostic position passed as a
+  closure is now a value with a method, and the appends it flagged
+  were to fresh memory, which the provenance tracking proves. What it
+  refuses: an alias the gate cannot see through, which is copied
+  instead, and a function value from outside, which is data instead.
+
+- **D103 — The document's own front end is memoized per document,
+  and the single-file vet runs only where its verdict is the truth**
+  (2026-09-18, `lsp/document.go`, `lsp/analysis.go`, `lsp/server.go`).
+  An open document ran its whole front end on the handler goroutine at
+  every change: a fresh parse, a fresh check, a fresh index and the
+  single-file vet with a model plan built for it, about 0.9 s of the
+  1.26 s a keystroke took to reach its diagnostics on the
+  thousand-table file, all of it before the background analysis had
+  begun and, for a document inside a project package, all of it
+  superseded by that analysis except the syntax tree and the check
+  the requests read meanwhile. Now a Document keeps its own reuse
+  handle, check memo and index memo, the objects D83, D84 and D85
+  gave the session, owned by the goroutine that updates the document:
+  the run touches no Document (D79) and the session's memos stay the
+  session's (D96), so nothing is shared and no lock is added. The
+  price of that separation is stated: a document and the session
+  parse the same text twice, each keeping its own chunks, and a chunk
+  pins the text it was cut from, so a document that has edited k
+  distinct declarations keeps up to k texts alive until those chunks
+  are re-cut, as the session already did. The single-file vet is no
+  longer part of the local pass. One function adds it, once per text,
+  to the document's own verdict, and only where that verdict is what
+  the editor shows: a file outside any project, before its publish; a
+  file under a project the loader never read (a `.dbml` file, an
+  excluded directory, §V1.6), when a request adopts a run that did not
+  cover it, the run itself publishing the same verdict for that file
+  through the one function that computes it without a document; a
+  lone document's Update when no project covers it. A document inside
+  a project package is vetted by the project analysis alone, never on
+  the handler goroutine: the one path that still ran the project pass
+  there, the fallback for Go files changed on disk without a
+  notification, which re-ran it at every request until an edit
+  arrived, now kicks the background analysis instead, and the request
+  in hand answers from what it adopted (found by the review of this
+  decision, `TestGoFileChangeRefreshesInBackground`). The verdicts are
+  what they were in every
+  shape, and the memoized front end is proven equal to a fresh
+  document's edit by edit, with one declaration parsed, one table
+  checked and two tables indexed for an edit inside one table
+  (`TestDocumentReusesItsFrontEnd`, `TestServerForeignFileVerdict`).
+  Measured: the document's own pass on a 200-table file, 20 ms to
+  1.6 ms; the in-process keystroke to its publish, 30 ms to 13 ms;
+  through the server's stdio on the thousand-table file, 1.26 s to
+  about 0.56 s mean, of which the package vet (D81) and the
+  transport's decode of the whole text are most of what remains. What
+  it refuses: a vet on the handler goroutine for a document whose
+  verdict the project supersedes, and a document that borrows the
+  session's memos.
+
+- **D104 — Vet is judged by declaration: a rule is a pure function of
+  one declaration and its facts, the file-wide rules fold over what
+  the declarations summarized, and the generated-name rule reads the
+  collisions the name base keeps** (2026-09-18, `lang/vet/vet.go`,
+  `lang/lint.go`, `nao/gen/golang/plan.go`, `lang/testdata/vet`).
+  Each analyzer ran over the whole merged file, with `ast.Inspect`
+  and the checker's model, and the editor memoized the verdict per
+  package (D81), so the one-file layout vetted its thousand tables
+  again at every keystroke, about 280 ms, half of what remained of
+  the keystroke after D103, and the dynamic-name rule walked every
+  minted name of every model each time, a third of that. Now an
+  analyzer is a Rule, a Fold, or both. A Rule judges one declaration:
+  `Decl(d, nodes, facts)` is a pure function of the declaration's
+  syntax, its nodes in source order and the facts the checker
+  resolved for it, the checked table of a Table, the partial of a
+  TablePartial, the relationships that start at the declaration's own
+  columns, a partial's inline ref reaching every table that injects
+  it; it returns its warnings, and `vet.DeclVet` is a target of the
+  purity gate (D86), so a rule reads no package state, calls no
+  function value, walks by `ast.Children` in a stack loop rather than
+  by `ast.Inspect`, and sorts nothing the inputs reach: the one
+  ordering a rule needs, names in source order, is built by
+  insertion into fresh memory. A Fold judges the file from the
+  checker's model and a summary per declaration, the enum keys its
+  columns name and the table spellings it uses, so an enum or alias
+  nothing uses is found without a second walk; foreign-key cycles and
+  the table and enum halves of the case rule read the model alone.
+  The session keeps a vet memo per package beside its check memos
+  (D84), keyed on the declaration node with the facts' identity, the
+  checked table, the partial's declaration and use count, each
+  relationship's node, operator, endpoint tables and columns, and the
+  rule set element by element; a declaration whose inputs are the
+  objects they were answers its warnings and its summary, and the
+  package's verdict is assembled analyzer by analyzer in registration
+  order, each in declaration order, then sorted, so two warnings at
+  one position stand as they did. The generated-name rule no longer
+  rebuilds the world: the model's name list marks which names the
+  dynamic layer mints and where each falls in its minting order, the
+  base counts the names two or more models mint as models come and
+  go, and the report pairs each such arrival, and each model name an
+  enum or the fixed name minted first, with its first origin, ordered
+  by minting position: the walk's report, proven equal to the walk
+  itself edit after edit, from the collisions alone. One verdict
+  changed, and the golden pinned before the change shows it: a quoted
+  name repeated on one line was reported once per file, now once per
+  declaration, so the same line of another file reports again; the
+  rule's doc says so. Measured: the keystroke through stdio on the
+  thousand-table file, 0.56 s to about 0.35 s mean; in process on the
+  200-table file, 13 ms to about 8 ms; the session's work counters say
+  an edit inside one table judges that table and the one whose
+  relationship names it. What it refuses: a rule that reads beyond
+  its declaration and its facts (the gate walks it), and a memo entry
+  keyed on anything but the objects a rule read.
+
+- **D105 — The rest of the keystroke path: incremental sync, the
+  version on every publish, a hover that names a row type without
+  building it, and a Go scan kept while its sources stand**
+  (2026-09-18, `lsp/server.go`, `lsp/analysis.go`, `lsp/document.go`,
+  `lsp/voltnav.go`, `nao/gen/golang/plan.go`,
+  `cmd/volt/testdata/lsp_session.golden`). With D103 and D104 landed,
+  what a keystroke on the thousand-table file still paid was the
+  transport: full-text sync had the client send the 4 MB file at every
+  change and the server decode it, about 110 ms, chosen once for
+  statelessness. The server now advertises incremental sync and the
+  didChange handler, whose ranged branch already applied each item to
+  the text as it then stood, is pinned by a test for the cases the
+  protocol makes delicate: two items in one notification, the second
+  positioned in the text the first produced; a non-BMP character
+  counting two units; a CRLF newline deleted by a range that spans it;
+  a line past the end of the text landing at its end and a character
+  past the end of a line landing before its line break, carriage
+  return included, which is the one behavior this decision changes; a
+  whole-text item followed by ranged ones. The document's text and the
+  server's mirror are asserted equal after each. Every publish of
+  diagnostics carries the version of the text they are positioned in:
+  the run's from the snapshot it analyzed, texts and versions copied
+  under one hold of the lock so they are of one moment; the
+  document's own verdict with the current one; a close's clearing
+  publish with none. The stdio session golden gains one ranged
+  keystroke, and its four publishes their versions. Two costs of the
+  navigation index went with them: a select's hover rendered a row
+  type per member of the thousand-member group select to name it in a
+  signature, and now asks the plan for the name alone by the row
+  type's own rule, proven equal to it; and every build re-read and
+  re-parsed each package directory's Go files, and now keeps the scan
+  in the index's memo while the sources are the bytes they were (D87),
+  each build copying references into maps of its own so a request
+  reading the index during the next build shares nothing with it
+  (D85). Measured: the keystroke through stdio on the thousand-table
+  file, sent as a range, about 0.22 s mean, against 0.35 s sent as the
+  whole file, 1.26 s before D103 and 1.7 s when the backlog entry was
+  written. Measured again on the closing day, 2026-09-19, in one
+  sitting on the same machine class: about 0.27 s mean sent as a
+  range and 0.44 s as the whole file, every figure about a fifth
+  above the day it landed, and the pieces, timed in process the same
+  day, compose to it: the document's own pass about 55 ms, most of it
+  the hit path of its occurrence index, one of the three line tables
+  of the 4 MB text inside it; the debounce (75 ms, a typing-rhythm
+  choice kept, D79); the session's load 3 ms and check about 45 ms;
+  the project's navigation index about 55 ms at best, 998 of 1000
+  tables answered, and up to three times that when a collection lands
+  in the build; the vet 5 ms; the other two line tables 10 ms; the
+  publish under a millisecond. The open of that file is about 2.1 s
+  through stdio: the document's whole-file pass about 0.66 s, then
+  the debounce, then the project's first analysis about 1.3 s. The
+  backlog entry is deleted, and the index's hit path, the cold open
+  and the retained chunk texts are entries of their own. What it refuses: a publish
+  without the version of the text it judged, and a position past a
+  line's end that lands inside its line break.

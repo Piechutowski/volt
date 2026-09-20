@@ -67,7 +67,20 @@ type Package struct {
 	Preds  map[string]*ast.Pred
 	// CheckFns is the validator surface (§V12), lowered by Check.
 	CheckFns []golang.CheckFn
+	// CheckSQL is every typed check's SQL rendering, lowered by Check
+	// with CheckFns: gen/sqlite emits CHECK (<this>) for it (§V12.4).
+	CheckSQL map[*ast.Check]string
 	Selects  []*SelectInfo
+	// selectByMethod indexes Selects by generated method name (D81);
+	// selectByName by declared name, the last declared winning (D99).
+	selectByMethod map[string]selectMember
+	selectByName   map[string]*SelectInfo
+	// checkFnByKey indexes CheckFns by table key (D84), built with them.
+	checkFnByKey map[string][]golang.CheckSpec
+	// ValidByKey says, per table whose params structs validate (§V12.6),
+	// whether the create and the update one do: decided with the
+	// table's lowered checks, read by the route lowering (D99).
+	ValidByKey map[string][2]bool
 
 	// schema is the package's checked table model, set by Check.
 	schema *check.Info
@@ -342,7 +355,6 @@ func (pr *Project) packagesParse(dirs []string, overlay map[string]string, s *Se
 	type fileParse struct {
 		pkg   int
 		path  string
-		entry os.DirEntry
 		file  *ast.File
 		diags []diag.Diagnostic
 		err   error
@@ -365,13 +377,13 @@ func (pr *Project) packagesParse(dirs []string, overlay map[string]string, s *Se
 			if pkgs[i] == nil {
 				pkgs[i] = &Package{Path: filepath.ToSlash(rel), Dir: dir, Imports: map[string]string{}}
 			}
-			jobs = append(jobs, fileParse{pkg: i, path: filepath.Join(dir, e.Name()), entry: e})
+			jobs = append(jobs, fileParse{pkg: i, path: filepath.Join(dir, e.Name())})
 		}
 	}
 	par.For(len(jobs), func(j int) {
 		job := &jobs[j]
 		if s != nil {
-			job.file, job.diags, job.err = s.parse(job.path, job.entry, overlay)
+			job.file, job.diags, job.err = s.parse(job.path, overlay)
 			return
 		}
 		src, overlaid := overlay[job.path]
@@ -451,6 +463,6 @@ func goModModule(path, src string) (string, []diag.Diagnostic) {
 			}
 		}
 	}
-	return "", []diag.Diagnostic{diag.Errorf(token.Position{Filename: path, Line: 1, Column: 1},
+	return "", []diag.Diagnostic{diag.Errorf(token.At(path, 0, 1, 1),
 		"spec/V1", "%s must declare 'module <path>' (§V1.1)", ModFile)}
 }

@@ -34,18 +34,20 @@ type analysis struct {
 	gen     int
 	running bool
 	session *lang.Session
+	index   voltIndexMemo // the navigation index's memo across analyses (D85)
 	result  *projectResult
 }
 
 // projectResult is one analysis of one project: what every open
 // document of that root adopts.
 type projectResult struct {
-	gen     int
-	root    string
-	pr      *lang.Project
-	diags   []diag.Diagnostic
-	vindex  *voltIndex
-	overlay map[string]string // the open texts the run saw
+	gen      int
+	root     string
+	pr       *lang.Project
+	diags    []diag.Diagnostic
+	vindex   *voltIndex
+	overlay  map[string]string // the open texts the run saw
+	versions map[string]int32  // their versions, of the same moment (D105)
 }
 
 // projectRootOf finds the project a file belongs to (§V1.1); false for
@@ -61,7 +63,7 @@ func projectRootOf(path string) (string, bool) {
 // projectAnalyze runs the project pipeline once: load through the
 // session (a fresh load without one), check, index, vet on a clean
 // check. Nil when the root does not load.
-func projectAnalyze(root string, overlay map[string]string, session *lang.Session) *projectResult {
+func projectAnalyze(root string, overlay map[string]string, session *lang.Session, memo *voltIndexMemo) *projectResult {
 	var pr *lang.Project
 	var err error
 	if session != nil {
@@ -81,11 +83,15 @@ func projectAnalyze(root string, overlay map[string]string, session *lang.Sessio
 	res := &projectResult{root: root, pr: pr, diags: diags, overlay: overlay}
 	// After Check: it is what resolves each package's imports, which
 	// the index needs to follow a `db.Post` qualifier to its package.
-	res.vindex = buildVoltIndex(pr, overlay)
+	res.vindex = buildVoltIndex(pr, overlay, memo)
 	// Vet advice only on top of a clean check, matching the single-file
 	// policy: style notes stacked on hard errors are noise while typing.
 	if !diag.HasErrors(diags) {
-		res.diags = append(res.diags, lang.Vet(pr)...)
+		if session != nil {
+			res.diags = append(res.diags, session.Vet(pr)...)
+		} else {
+			res.diags = append(res.diags, lang.Vet(pr)...)
+		}
 	}
 	return res
 }
@@ -114,11 +120,11 @@ func (res *projectResult) docDiags(path string) []diag.Diagnostic {
 	modPath := filepath.Join(res.root, lang.ModFile)
 	var mine []diag.Diagnostic
 	for _, dg := range res.diags {
-		switch dg.Pos.Filename {
+		switch dg.Pos.Filename() {
 		case path:
 			mine = append(mine, dg)
 		case modPath:
-			dg.Pos = token.Position{Filename: path, Line: 1, Column: 1}
+			dg.Pos = token.At(path, 0, 1, 1)
 			mine = append(mine, dg)
 		}
 	}
@@ -177,10 +183,11 @@ func (s *Server) analysisRun(ctx *glsp.Context, root string, a *analysis) {
 				break
 			}
 		}
-		res := projectAnalyze(root, s.openTexts(), a.session)
+		texts, versions := s.openSnapshot()
+		res := projectAnalyze(root, texts, a.session, &a.index)
 		s.mu.Lock()
 		if res != nil {
-			res.gen = gen
+			res.gen, res.versions = gen, versions
 			a.result = res
 		}
 		done := a.gen == gen
@@ -198,8 +205,10 @@ func (s *Server) analysisRun(ctx *glsp.Context, root string, a *analysis) {
 }
 
 // publishResult sends every open document of the result's project its
-// diagnostics, positioned in the text the run saw. A document the
-// loader never read gets its own single-file verdict.
+// diagnostics, positioned in the text the run saw and stamped with
+// that text's version, so a client whose buffer moved on drops them
+// (D105). A document the loader never read gets its own single-file
+// verdict.
 func (s *Server) publishResult(ctx *glsp.Context, res *projectResult) {
 	s.mu.Lock()
 	uris := make([]string, 0, len(s.docs))
@@ -217,12 +226,13 @@ func (s *Server) publishResult(ctx *glsp.Context, res *projectResult) {
 		if res.packageOf(path) != nil {
 			ds = res.docDiags(path)
 		} else if root, ok := projectRootOf(path); ok && root == res.root {
-			_, _, ds = localAnalyze(path, text)
+			ds = localVerdict(path, text)
 		} else {
 			continue // another project's document
 		}
 		ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
 			URI:         uri,
+			Version:     versionStamp(res.versions[path]),
 			Diagnostics: diagnosticsLSP(text, lineStarts(text), ds),
 		})
 	}
@@ -253,6 +263,10 @@ func (s *Server) adopt(doc *Document) {
 	if pkg := res.packageOf(path); pkg != nil {
 		doc.vpkg, doc.vindex, doc.Diags = pkg, res.vindex, res.docDiags(path)
 	} else {
-		doc.vpkg, doc.vindex, doc.Diags = nil, nil, doc.local
+		// The loader never read this file: its own verdict is the
+		// truth, vet advice included (D103).
+		doc.vpkg, doc.vindex = nil, nil
+		doc.vetLocal()
+		doc.Diags = doc.local
 	}
 }

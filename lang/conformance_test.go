@@ -1,6 +1,8 @@
 package lang
 
 import (
+	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -10,6 +12,8 @@ import (
 
 	"github.com/Piechutowski/volt/lang/diag"
 )
+
+var update = flag.Bool("update", false, "rewrite the goldens of the invalid corpus")
 
 // The Volt half of the conformance corpus is the executable surface of
 // docs/spec.md §V: snippets under valid/ MUST check clean, snippets
@@ -41,6 +45,14 @@ func corpusEntries(t *testing.T, kind string) []string {
 // corpusRun materializes one snippet as a project and returns its
 // diagnostics.
 func corpusRun(t *testing.T, path string) []diag.Diagnostic {
+	t.Helper()
+	diags, _ := corpusRunAt(t, path)
+	return diags
+}
+
+// corpusRunAt is corpusRun with the project's root, for paths in the
+// diagnostics to be made relative.
+func corpusRunAt(t *testing.T, path string) ([]diag.Diagnostic, string) {
 	t.Helper()
 	st, err := os.Stat(path)
 	if err != nil {
@@ -89,7 +101,56 @@ func corpusRun(t *testing.T, path string) []diag.Diagnostic {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return Check(pr)
+	return Check(pr), root
+}
+
+// TestConformanceInvalidDiagnosticsPinned holds every diagnostic of
+// every invalid snippet of the project half, recovery included (§3.2
+// rule 6): what the front end reports for invalid input is a function
+// of the input alone, and a change to it is a change to this golden.
+// Refresh with -update after reading the diff.
+func TestConformanceInvalidDiagnosticsPinned(t *testing.T) {
+	var b strings.Builder
+	for _, path := range corpusEntries(t, "invalid") {
+		diags, root := corpusRunAt(t, path)
+		diag.Sort(diags)
+		fmt.Fprintf(&b, "## %s\n", filepath.Base(path))
+		for _, d := range diags {
+			b.WriteString(strings.ReplaceAll(d.String(), root+string(filepath.Separator), "") + "\n")
+		}
+		b.WriteString("\n")
+	}
+	goldenCompare(t, filepath.Join("conformance", "invalid_volt.golden"), b.String(), *update)
+}
+
+// goldenCompare compares got with the golden at path, rewriting it
+// when update is set; the first differing line is reported.
+func goldenCompare(t *testing.T, path, got string, update bool) {
+	t.Helper()
+	if update {
+		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("%v (run with -update to write it)", err)
+	}
+	if string(want) == got {
+		return
+	}
+	wl, gl := strings.Split(string(want), "\n"), strings.Split(got, "\n")
+	for i := range gl {
+		if i >= len(wl) || wl[i] != gl[i] {
+			w := "<end>"
+			if i < len(wl) {
+				w = wl[i]
+			}
+			t.Fatalf("%s differs at line %d:\n--- golden\n%s\n--- got\n%s\n(run with -update after reading the diff)", path, i+1, w, gl[i])
+		}
+	}
+	t.Fatalf("%s: got is a prefix of the golden (run with -update after reading the diff)", path)
 }
 
 func TestConformanceValid(t *testing.T) {

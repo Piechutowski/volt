@@ -3,20 +3,21 @@
 // (UserEmail, UserLimit), so distinct DBML declarations can demand one Go
 // name. Generation refuses such schemas outright; this rule surfaces the
 // collision at vet time with both origins named. The name derivation is
-// the generator's own (gen/golang), so rule and generator cannot drift.
+// the generator's own (nao/gen/golang), so rule and generator cannot drift.
 package vet
 
-import golang "github.com/Piechutowski/volt/nao/gen/golang"
+// dynNameFold asks the plan, whose name base holds every model's
+// names across plans (D99), for the collisions alone.
+type dynNameFold struct{ meta }
 
-func init() { register(dynName) }
+var dynName = &dynNameFold{meta{
+	name: "dynname",
+	doc:  "reports declarations whose generated dynamic-query names (column-handle sets, option wrappers) collide in Go package scope",
+}}
 
-var dynName = &Analyzer{
-	Name: "dynname",
-	Doc:  "reports declarations whose generated dynamic-query names (column-handle sets, option wrappers) collide in Go package scope",
-	Run: func(p *Pass) {
-		for _, c := range golang.DynNameCollisions(p.File, p.Info) {
-			p.Reportf(c.Pos, "%s and %s both generate the Go name %s; rename one (e.g. with [model: '...'])",
-				c.First, c.Second, c.Name)
-		}
-	},
+func (fo *dynNameFold) File(p *FilePass) {
+	for _, c := range p.Plan().DynNameCollisions() {
+		p.Reportf(c.Pos, "%s and %s both generate the Go name %s; rename one (e.g. with [model: '...'])",
+			c.First, c.Second, c.Name)
+	}
 }

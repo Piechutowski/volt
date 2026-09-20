@@ -7,7 +7,7 @@
 //	volt gen    [flags] [dir|file] generate models, queries, routers and clients;
 //	                               -o DIR -parts LIST place the parts where a layout needs them
 //	volt routes [dir]              print the expanded route table
-//	volt fixture [flags] DIR       write a synthetic project of every feature at any size (D80)
+//	volt stress [flags] DIR        write a one-file stress project: 1000 tables of 150 columns, every feature (D80)
 //	volt lsp                       language server on stdin/stdout
 //	volt version                   report the tool version
 //
@@ -24,16 +24,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/format"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/urfave/cli/v3"
+	"golang.org/x/tools/go/packages"
 
 	"github.com/Piechutowski/volt/gen/model"
 	"github.com/Piechutowski/volt/gen/router"
+	"github.com/Piechutowski/volt/internal/corpus"
 	"github.com/Piechutowski/volt/internal/par"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
@@ -86,7 +92,7 @@ func command() *cli.Command {
 				Flags: []cli.Flag{
 					&cli.BoolFlag{Name: "models-only", Aliases: []string{"m"}, Usage: "emit only nao_models.go; skip the query layers"},
 					&cli.BoolFlag{Name: "sql", Usage: "also write nao_schema.sql (SQLite DDL and seed inserts)"},
-					&cli.BoolFlag{Name: "verify", Usage: "prove every generated Go file is gofmt-canonical before writing (a generator self-check)"},
+					&cli.BoolFlag{Name: "verify", Usage: "prove every generated Go file is gofmt-canonical and type-checks in its package before writing (a generator self-check)"},
 					&cli.StringFlag{Name: "o", Usage: "write into `DIR` instead of the package directory (one package); the client lands beside the models as volt_client.go"},
 					&cli.StringFlag{Name: "parts", Usage: "comma-separated `LIST` of what to write: models, queries, router, client, sql (default: every Go part)"},
 					&cli.StringFlag{Name: "package", Usage: "package clause of the written files (default: the clause of DIR's Go files, else the Volt package's name)"},
@@ -103,7 +109,7 @@ func command() *cli.Command {
 					return routesRun(c)
 				},
 			},
-			fixtureCommand(),
+			stressCommand(),
 			{
 				Name:  "lsp",
 				Usage: "run the Volt language server (LSP over stdin/stdout)",
@@ -227,7 +233,7 @@ func diagsPrintJSON(all []diag.Diagnostic) error {
 	out := make([]jsonDiag, 0, len(all))
 	for _, d := range all {
 		out = append(out, jsonDiag{
-			File: d.Pos.Filename, Line: d.Pos.Line, Column: d.Pos.Column,
+			File: d.Pos.Filename(), Line: int(d.Pos.Line()), Column: int(d.Pos.Column()),
 			Severity: d.Severity.String(), Code: d.Code, Message: d.Msg,
 		})
 	}
@@ -284,11 +290,6 @@ func genRun(c *cli.Command) error {
 	// all or nothing across the whole project. A file whose bytes are
 	// already on disk is left alone: rewriting it would only bump its
 	// modification time and wake every editor and watcher on the tree.
-	type outFile struct {
-		path      string
-		code      []byte
-		unchanged bool
-	}
 	var out []outFile
 
 	// Every package generates on its own CPU (PERF-7); the files are
@@ -364,6 +365,14 @@ func genRun(c *cli.Command) error {
 			if p != "" {
 				return cli.Exit(p, 2)
 			}
+		}
+		// And the generated Go type-checks in the package it lands in
+		// (D98): every output directory is loaded with the outputs laid
+		// over it, before anything is written, so a wrong signature or
+		// a missing import is this run's error and never the next
+		// build's.
+		if p := outputsTypeCheck(out); p != "" {
+			return cli.Exit(p, 2)
 		}
 	}
 
@@ -445,6 +454,69 @@ func genMarker(path string) []byte {
 	return []byte("// Code generated ")
 }
 
+// outFile is one generated file about to be written: its path, its
+// bytes, and whether the same bytes are on disk already.
+type outFile struct {
+	path      string
+	code      []byte
+	unchanged bool
+}
+
+// outputsTypeCheck type-checks each output directory's package with
+// the outputs laid over whatever is on disk, and reports the first
+// problem: an error in a generated file is a generator bug, one in a
+// file beside it leaves the check inconclusive. "" when every package
+// checks.
+func outputsTypeCheck(out []outFile) string {
+	byDir := map[string]map[string][]byte{}
+	var dirs []string
+	generated := map[string]bool{}
+	for _, f := range out {
+		if filepath.Ext(f.path) != ".go" {
+			continue
+		}
+		dir := filepath.Dir(f.path)
+		if byDir[dir] == nil {
+			byDir[dir] = map[string][]byte{}
+			dirs = append(dirs, dir)
+		}
+		abs, err := filepath.Abs(f.path)
+		if err != nil {
+			return "gen --verify: " + err.Error()
+		}
+		byDir[dir][abs] = f.code
+		generated[abs] = true
+	}
+	sort.Strings(dirs)
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return "gen --verify: " + err.Error()
+		}
+		cfg := &packages.Config{
+			Mode:    packages.NeedName | packages.NeedFiles | packages.NeedTypes | packages.NeedSyntax | packages.NeedTypesInfo | packages.NeedImports,
+			Dir:     dir,
+			Overlay: byDir[dir],
+		}
+		pkgs, err := packages.Load(cfg, ".")
+		if err != nil {
+			return fmt.Sprintf("gen --verify: %s: %v", dir, err)
+		}
+		for _, pkg := range pkgs {
+			for _, e := range pkg.Errors {
+				file := e.Pos
+				if i := strings.IndexByte(file, ':'); i >= 0 {
+					file = file[:i]
+				}
+				if generated[file] {
+					return fmt.Sprintf("gen --verify: %v (a generator bug)", e)
+				}
+				return fmt.Sprintf("gen --verify: %v (the package the output lands in does not type-check; fix it first)", e)
+			}
+		}
+	}
+	return ""
+}
+
 // genMarked reports whether the file at path exists and carries the
 // generated-code header, reading only as many bytes as the header needs.
 func genMarked(path string) bool {
@@ -488,4 +560,143 @@ func routesRun(c *cli.Command) error {
 		}
 	}
 	return nil
+}
+
+// genParts are the names -parts accepts, each one or more generated
+// files (§V1.7): models (nao_models.go: structs, params structs, enums),
+// queries (nao_queries.go, nao_dyn.go, nao_selects.go, nao_validate.go),
+// router (volt_handlers.go, volt_router.go, volt_paths.go,
+// volt_routes.go), client (volt_client.go) and sql (nao_schema.sql).
+var genParts = []string{"models", "queries", "router", "client", "sql"}
+
+// partsParse resolves the -parts list, or the defaults the older flags
+// spell: every Go part, minus the query layers under --models-only,
+// plus the DDL under --sql.
+func partsParse(list string, modelsOnly, sql bool) (map[string]bool, error) {
+	parts := map[string]bool{}
+	if list == "" {
+		parts["models"] = true
+		parts["queries"], parts["router"], parts["client"] = !modelsOnly, true, true
+	} else {
+		for _, p := range strings.Split(list, ",") {
+			p = strings.TrimSpace(p)
+			if !slices.Contains(genParts, p) {
+				return nil, fmt.Errorf("unknown part %q in -parts; the parts are %s", p, strings.Join(genParts, ", "))
+			}
+			parts[p] = true
+		}
+	}
+	if sql {
+		parts["sql"] = true
+	}
+	return parts, nil
+}
+
+// partOf names the part a generated file belongs to.
+func partOf(name string) string {
+	switch base := filepath.Base(name); {
+	case base == "nao_models.go":
+		return "models"
+	case base == "nao_schema.sql":
+		return "sql"
+	case strings.HasPrefix(base, "nao_"):
+		return "queries"
+	case base == "volt_client.go":
+		return "client"
+	default:
+		return "router"
+	}
+}
+
+// goPackageName reads the package clause of the Go files in dir, the
+// clause `volt gen -o` writes into that directory; "" when there are
+// none. Test files are skipped, as their package may be the external one.
+func goPackageName(dir string) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	fset := token.NewFileSet()
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.PackageClauseOnly)
+		if err != nil {
+			continue
+		}
+		return f.Name.Name
+	}
+	return ""
+}
+
+// stressCommand is `volt stress`: it writes the one-file project the
+// scaling tests and the benchmarks run on (internal/corpus, PERF-2) at
+// stress size, so the limits of check, gen, the language server and
+// the Go compiler on the generated code can be felt by hand (D80). Not
+// a command for ordinary use: the defaults are a thousand tables of a
+// hundred and fifty columns, every one routed, in one schema.volt at
+// the root of a module that builds against a Volt checkout.
+func stressCommand() *cli.Command {
+	return &cli.Command{
+		Name:      "stress",
+		Usage:     "write a one-file stress project of every language feature (default: 1000 tables of 150 columns) to time check, gen, the language server and the Go compiler by hand",
+		ArgsUsage: "DIR",
+		Flags: []cli.Flag{
+			&cli.IntFlag{Name: "tables", Value: 1000, Usage: "`N` tables, chained by a relation, each routed and in the group select"},
+			&cli.IntFlag{Name: "columns", Value: 150, Usage: "`N` data columns per table"},
+			&cli.StringFlag{Name: "volt", Usage: "Volt checkout `DIR` the project builds against (default: where the working directory's module resolves github.com/Piechutowski/volt, if it does)"},
+		},
+		Action: func(_ context.Context, c *cli.Command) error {
+			return stressRun(c)
+		},
+	}
+}
+
+// stressRun writes the project. The directory must be new or empty:
+// the command never writes over anything.
+func stressRun(c *cli.Command) error {
+	if c.Args().Len() != 1 {
+		return cli.Exit("stress: one argument, the directory to write", 2)
+	}
+	dir := c.Args().First()
+	spec := corpus.Spec{Tables: c.Int("tables"), Columns: c.Int("columns"), Single: true, Volt: c.String("volt")}
+	if spec.Tables < 1 || spec.Columns < 1 {
+		return cli.Exit("stress: -tables and -columns are at least 1", 2)
+	}
+	if spec.Volt == "" {
+		spec.Volt = voltModuleDir()
+	}
+	entries, err := os.ReadDir(dir)
+	switch {
+	case err == nil && len(entries) > 0:
+		return cli.Exit(fmt.Sprintf("stress: %s is not empty; the project goes into a new or empty directory", dir), 2)
+	case err != nil && !os.IsNotExist(err):
+		return cli.Exit("stress: "+err.Error(), 2)
+	}
+	if err := corpus.Write(dir, spec); err != nil {
+		return cli.Exit("stress: "+err.Error(), 2)
+	}
+	fmt.Printf("stress: %d tables of %d columns in %s\n", spec.Tables, spec.Columns, filepath.Join(dir, "schema.volt"))
+	fmt.Printf("  volt check %s\n  volt gen --sql %s\n", dir, dir)
+	if spec.Volt == "" {
+		fmt.Println("  (no Volt checkout found; pass -volt DIR and the project builds)")
+	} else {
+		fmt.Printf("  go build -C %s ./...\n", dir)
+	}
+	fmt.Printf("  open %s in the editor\n", dir)
+	return nil
+}
+
+// voltModuleDir asks the Go tool where the working directory's module
+// resolves github.com/Piechutowski/volt: the checkout when run from
+// it, its replace or cache directory from a project that requires it,
+// "" when nothing does.
+func voltModuleDir() string {
+	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/Piechutowski/volt").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }

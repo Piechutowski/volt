@@ -36,8 +36,10 @@ func TestRulesDocumentation(t *testing.T) {
 	// Slice the document into per-rule sections.
 	headings := headingRE.FindAllStringSubmatchIndex(doc, -1)
 	sections := map[string]string{}
+	var listed []string
 	for i, h := range headings {
 		name := doc[h[2]:h[3]]
+		listed = append(listed, name)
 		end := len(doc)
 		if i+1 < len(headings) {
 			end = headings[i+1][0]
@@ -49,8 +51,15 @@ func TestRulesDocumentation(t *testing.T) {
 	}
 
 	registered := map[string]bool{}
+	var order []string
 	for _, a := range vet.All() {
-		registered[a.Name] = true
+		registered[a.Name()] = true
+		order = append(order, a.Name())
+	}
+	// (0) the rules are registered in the order the document lists
+	// them: two warnings at one position stand in that order (D104)
+	if strings.Join(order, ",") != strings.Join(listed, ",") {
+		t.Errorf("lint.md lists the rules as %v; vet.All() registers %v", listed, order)
 	}
 
 	// (2) no stale sections
@@ -62,16 +71,16 @@ func TestRulesDocumentation(t *testing.T) {
 
 	linkedAnywhere := map[string]bool{}
 	for _, a := range vet.All() {
-		sec, ok := sections[a.Name]
+		sec, ok := sections[a.Name()]
 		if !ok {
 			// (1) every analyzer documented
-			t.Errorf("analyzer %q has no '### %s' section in lint.md", a.Name, a.Name)
+			t.Errorf("analyzer %q has no '### %s' section in lint.md", a.Name(), a.Name())
 			continue
 		}
 		links := linkRE.FindAllStringSubmatch(sec, -1)
 		if len(links) == 0 {
 			// (3) every section links examples
-			t.Errorf("lint.md section %q links no testdata file", a.Name)
+			t.Errorf("lint.md section %q links no testdata file", a.Name())
 			continue
 		}
 		ranByLinked, wantInLinked := false, false
@@ -80,26 +89,26 @@ func TestRulesDocumentation(t *testing.T) {
 			linkedAnywhere[filepath.Base(rel)] = true
 			src, err := os.ReadFile(rel)
 			if err != nil {
-				t.Errorf("lint.md section %q links %s: %v", a.Name, rel, err)
+				t.Errorf("lint.md section %q links %s: %v", a.Name(), rel, err)
 				continue
 			}
 			lines := strings.Split(string(src), "\n")
 			header := strings.TrimPrefix(strings.TrimSpace(lines[0]), "// analyzers:")
 			for _, n := range strings.Split(header, ",") {
-				if strings.TrimSpace(n) == a.Name {
+				if strings.TrimSpace(n) == a.Name() {
 					ranByLinked = true
 				}
 			}
-			if strings.Contains(string(src), "//WANT") && containsWant(string(src), a.Name) {
+			if strings.Contains(string(src), "//WANT") && containsWant(string(src), a.Name()) {
 				wantInLinked = true
 			}
 		}
 		// (4) linked examples actually exercise the rule
 		if !ranByLinked {
-			t.Errorf("no file linked from lint.md section %q runs the analyzer (missing from '// analyzers:' header)", a.Name)
+			t.Errorf("no file linked from lint.md section %q runs the analyzer (missing from '// analyzers:' header)", a.Name())
 		}
 		if !wantInLinked {
-			t.Errorf("no file linked from lint.md section %q contains a bad example ('//WANT %s')", a.Name, a.Name)
+			t.Errorf("no file linked from lint.md section %q contains a bad example ('//WANT %s')", a.Name(), a.Name())
 		}
 	}
 

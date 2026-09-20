@@ -34,7 +34,7 @@ func TestSelectsPrepare(t *testing.T) {
 	if pkg == nil {
 		t.Fatal("fixture package not loaded")
 	}
-	ddl, err := sqlitegen.Generate(pkg.Merged(), pkg.Schema(), sqlitegen.Options{Source: "fixture"})
+	ddl, err := sqlitegen.Generate(pkg.Merged(), pkg.Schema(), sqlitegen.Options{Source: "fixture", CheckSQL: pkg.CheckSQL})
 	if err != nil {
 		t.Fatal(err)
 	}

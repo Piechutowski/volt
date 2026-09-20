@@ -231,6 +231,8 @@ all enforced by `go test ./...`:
 | PROOF-5 | `itest`: full CRUD round trips through a real driver; generated files drift-tested | `DONE` (D25) |
 | PROOF-6 | vet rules ⇄ lint.md ⇄ testdata consistency test | `DONE` (D26) |
 | PROOF-7 | v1 onward: every `Select`/`View` block prepare-validated at gen time; declared columns verified | with v1 |
+| PROOF-9 | Invalid input is pinned (D101): recovery is a rule of the spec (§3.2 rule 6), every diagnostic of every invalid snippet is a golden, and a scripted editor session against the real server process is a golden | `DONE` |
+| PROOF-8 | The spec's EBNF is executable (D100): every block reads, every name is defined once, the collected grammars repeat the sections, every derived sentence parses, every one-token neighbour is decided alike by grammar and front end | `DONE` |
 
 ## P12 — Fast tooling
 
@@ -245,23 +247,28 @@ shared plan (D74) the same fixture checks in 1.4 s and generates in
 in 2.7 s; with the parallel schedule (D78), on four cores, it checks
 in 0.9 s and generates in 1.3 s, `--verify` included in 3.5 s; in the
 editor, with the session (D79), an edit costs about 200 ms and a
-no-op 2 ms against 770 ms for a fresh analysis. What remains is the
-front end's allocation — 100-byte tokens and a pointer AST cost more
-in GC than in parsing (PERF-9) — and the edited file's own parse and
-check (PERF-10).
+no-op 2 ms against 770 ms for a fresh analysis. The one-file stress
+project (D80: the same thousand tables in one `schema.volt`) then
+exposed what per-package parallelism had hidden — a quadratic route
+binding, a first-segment route index, a Go-reference scan reading the
+generated output — and with those indexed (D81) it checks in 0.7 s on
+four cores against 9.4 s. The front end was then flattened (D82): 48-byte
+tokens and slab-allocated nodes, a quarter off Load. The edited file's parse and check are now by declaration
+(D83, D84): an edit on the thousand-table file costs under 200 ms.
 
 | ID | Work | Status |
 |---|---|---|
 | PERF-1 | One naming plan per package, indexed by table and by generated method; route conflicts through a first-segment index (D74) | `DONE` |
-| PERF-2 | Scaling tests: allocation at N and 2N per phase, exact and hardware-neutral; `internal/corpus` generates projects of any size using every feature in both layouts, driving linearity tests in tables, packages and columns, an allocation budget per phase (gated, ten percent), compile tests, and benchmarks with a committed baseline (`lang/testdata/bench_baseline.txt`, not gated); `volt fixture DIR` writes the same project to disk at any size, for timing check, gen and the language server by hand (D80) | `DONE` |
+| PERF-2 | Scaling tests: allocation at N and 2N per phase, exact and hardware-neutral; `internal/corpus` generates projects of any size using every feature in both layouts, driving linearity tests in tables, packages and columns, an allocation budget per phase (gated, ten percent), compile tests, and benchmarks with a committed baseline (`lang/testdata/bench_baseline.txt`, not gated); `volt stress DIR` writes its one-file shape to disk, a thousand tables of a hundred and fifty columns by default, buildable, to feel the limits of check, gen, the language server and the Go compiler by hand (D80); `TestProfileSweep` (env `VOLT_SWEEP_DIR`) times and profiles every phase at 10 to 160 tables and draws the charts, pinned as `docs/reference/perf-sweep-2026-09-14.md` (rerun 2026-09-19, the follow-up there); the bytes one keystroke's three parts allocate in the language server are pinned the same way (`lsp/keystroke_budget_test.go`, D105) | `DONE` |
 | PERF-3 | `gen` skips unchanged outputs and reads only the marker prefix, so watchers and editors stay quiet | `DONE` |
-| PERF-4 | Emitters gofmt-canonical by construction (column alignment, operator spacing, trailing newline); go/format only in tests and behind `--verify` (D75) | `DONE` |
+| PERF-4 | Emitters gofmt-canonical by construction (column alignment, operator spacing, trailing newline); go/format only in tests and behind `--verify` (D75), which also type-checks the output in its package before writing (D98) | `DONE` |
 | PERF-5 | Routes may name the package's own tables; one directory holds schema and routes (D76) | `DONE` |
 | PERF-6 | `volt gen -o DIR -parts LIST FILE` for go:generate-driven layouts (D77); the `.volt` package clause stays mandatory, the emitted clause follows the target | `DONE` |
 | PERF-7 | Parallel schedule: parse per file, check per package, generate per package and file on a worker pool; scanner fast paths (D78) | `DONE` |
 | PERF-8 | Language server: debounced background analysis through a `lang.Session` — parses cached by content, per-package results memoized by input identity, no reverse index needed (D79) | `DONE` |
-| PERF-9 | Flat front end: pointer-free tokens, slab-allocated AST, interned symbols, precomputed emission fragments | planned |
-| PERF-10 | Per-declaration memoization for the one-file layout: hash each top-level declaration, relocate positions, re-check only the declarations whose text moved (the edit cycle is then bounded by the declaration, not the file) | planned |
+| PERF-9 | Flat front end (D82): file-backed positions, 48-byte two-pointer tokens borrowing their text from the file, the parser's hottest node kinds from slabs. Load at 160 tables 35.9 ms to 27.1 ms, allocations 312K to 126K. Not done, on purpose: interned symbols (five percent, every consumer's API) and precomputed emission fragments (the emitters' allocations are per-field formatting, a separate lever) | `DONE` |
+| PERF-10 | Per-declaration memoization for the one-file layout (D83, D84): a file is parsed in chunks, one per top-level declaration, an edit re-parses the chunk it touched and relocates the rest; the package's tables, models, lowered checks and selects are answered from the last check when their inputs are the objects they were. Thousand-table file, one edit inside one table: parse 340 ms to 2 ms (22 before D88), check 700 ms to about 50 ms once the routes are lowered per scope item and the model carries its own names and signatures (D99). The server's navigation index is kept by table as well (D85): its whole analysis of that edit was 106 ms best, 163 ms mean, against 400 to 650, before D99. Through the server's stdio the keystroke reached diagnostics in about 1.7 s on that file when this landed, the document's own whole-file front end and the package vet, not the check; D103 to D105 memoized the document's front end, judged vet by declaration and made the sync incremental, and the same keystroke sent as a range reaches its diagnostics in about 0.22 s the day D105 landed, 0.27 s on the closing day's re-measurement. Every memoized computation is a pure function of explicit inputs, proven by the purity gate (D86); every memo key is the inputs themselves, nothing hashed, no size or time stamp (D87); the chunk boundary is the language's element boundary (§3.2.5), cut by the scanner, so the parse with reuse is the parse (D88) | `DONE` |
+| PERF-11 | One package checked like twenty (D81): select methods indexed by name, route conflicts in a literal-prefix trie, generated files skipped by the Go-reference scan, params validators memoized per table, the plan's table models built on the worker pool, vet warnings memoized in the editor session; the linearity test gained the one-file dimension. One-file stress project, four cores: check 9.4 s to 0.7 s, editor analysis 15.5 s to 2.4 s cold and 0.4 s unchanged | `DONE` |
 
 ## Non-goals
 

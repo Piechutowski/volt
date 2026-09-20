@@ -31,6 +31,7 @@ func (p *parser) contiguous() bool {
 
 // packageClause = "package", name, newline (§V1.2).
 func (p *parser) packageClause() *ast.PackageClause {
+	p.lineBegin("package clause (§V1)")
 	d := &ast.PackageClause{PackagePos: p.next().Pos}
 	d.Name = p.ident("package clause (§V1)")
 	if d.Name.Quoted() {
@@ -46,8 +47,10 @@ func (p *parser) packageClause() *ast.PackageClause {
 func (p *parser) importDecl() *ast.ImportDecl {
 	d := &ast.ImportDecl{ImportPos: p.next().Pos}
 	p.expect(token.LPAREN, "import declaration (§V2)")
-	for !p.at(token.RPAREN) && !p.at(token.EOF) {
-		d.Specs = append(d.Specs, p.importSpec())
+	// A stray "}" ends the block too: line recovery stops at it, so
+	// the loop must not wait for ")" there.
+	for !p.at(token.RPAREN) && !p.at(token.RBRACE) && !p.at(token.EOF) {
+		p.item(func() { d.Specs = append(d.Specs, p.importSpec()) })
 	}
 	d.Rparen = p.expect(token.RPAREN, "import declaration (§V2)").End()
 	if len(d.Specs) == 0 {
@@ -61,6 +64,7 @@ func (p *parser) importDecl() *ast.ImportDecl {
 // the line: the first is the alias, the second starts the path.
 func (p *parser) importSpec() *ast.ImportSpec {
 	spec := &ast.ImportSpec{}
+	p.lineBegin("import specifier (§V2)")
 	first := p.ident("import path (§V2)")
 	if p.at(token.IDENT) && !p.cur().NLBefore {
 		spec.Alias = first
@@ -120,6 +124,7 @@ func (p *parser) plugLine() (plug *ast.Plug) {
 	if !p.atKw("use") {
 		p.fail(p.cur(), "expected 'use' plug line in Pipeline body (§V3), found %s", p.cur())
 	}
+	p.lineBegin("plug line (§V3)")
 	plug = &ast.Plug{UsePos: p.next().Pos}
 	plug.Ref = p.goRef("plug reference (§V3)")
 	p.endOfLine("plug line (§V3)")
@@ -190,6 +195,7 @@ func (p *parser) scopeItem() (item ast.ScopeItem) {
 // dataset = "dataset", [ name, "." ], name, [ settings ], newline
 // (Datasets): a group select, expanded to one query route per member.
 func (p *parser) dataset() *ast.Dataset {
+	p.lineBegin("dataset (§V13)")
 	d := &ast.Dataset{DatasetPos: p.next().Pos}
 	d.Name = p.ident("dataset select name (§V13)")
 	if p.at(token.DOT) {
@@ -208,6 +214,7 @@ func (p *parser) dataset() *ast.Dataset {
 // handler ref = name, [ ".", name ] (§V4.3): Controller.Action, pkg.Query,
 // or a query of the package itself, bare or self-qualified.
 func (p *parser) route() *ast.Route {
+	p.lineBegin("route (§V4)")
 	r := &ast.Route{VerbTok: p.next()}
 	r.Path = p.routePath()
 	r.Handler = p.goRef("route handler (§V4)")
@@ -221,6 +228,7 @@ func (p *parser) route() *ast.Route {
 // resources = "resources", model ref, [ settings ], newline (§V5.1);
 // model ref = name, [ ".", name ].
 func (p *parser) resources() *ast.Resources {
+	p.lineBegin("resources (§V5)")
 	d := &ast.Resources{ResourcesPos: p.next().Pos}
 	d.Name = p.ident("resources model name (§V5)")
 	if p.at(token.DOT) {
@@ -286,8 +294,13 @@ func (p *parser) routePath() *ast.RoutePath {
 				seg.Kind = ast.SegWild
 			}
 			rp.Segments = append(rp.Segments, seg)
+		case token.SLASH:
+			p.fail(p.cur(), "'/' must be followed by a path segment; routes match exactly, without a trailing slash (§V4.1)")
 		default:
-			p.fail(p.cur(), "invalid path segment (§V4.1): found %s", p.cur())
+			// the token abutting a bare "/" is not the path's (§V4.1.1)
+		}
+		if len(rp.Segments) == 0 {
+			break
 		}
 		last := rp.Segments[len(rp.Segments)-1]
 		rp.SetEnd(last.End())
@@ -310,6 +323,7 @@ func (p *parser) routePath() *ast.RoutePath {
 
 // groupDecl = "Group" name ( "{" members "}" | "=" group expr ) (§V9).
 func (p *parser) groupDecl() *ast.Group {
+	p.lineBegin("group declaration (§V9)")
 	d := &ast.Group{GroupPos: p.next().Pos}
 	d.Name = p.ident("group declaration (§V9)")
 	if d.Name.Quoted() {
@@ -319,13 +333,16 @@ func (p *parser) groupDecl() *ast.Group {
 	case p.at(token.LBRACE):
 		p.next()
 		for !p.at(token.RBRACE) && !p.at(token.EOF) {
-			name := p.ident("group member (§V9)")
-			d.Terms = append(d.Terms, &ast.GroupTerm{Names: []*ast.Ident{name}})
-			if !p.at(token.RBRACE) && !p.cur().NLBefore {
-				p.fail(p.cur(), "group members are one per line (§V9)")
-			}
+			p.item(func() {
+				name := p.ident("group member (§V9)")
+				d.Terms = append(d.Terms, &ast.GroupTerm{Names: []*ast.Ident{name}})
+				if !p.at(token.RBRACE) && !p.cur().NLBefore {
+					p.fail(p.cur(), "group members are one per line (§V9)")
+				}
+			})
 		}
 		d.EndPos = p.expect(token.RBRACE, "group declaration (§V9)").End()
+		p.endOfLine("group declaration (§V9)")
 	case p.at(token.EQ):
 		p.next()
 		d.Terms = append(d.Terms, p.groupTerm(false))
@@ -368,6 +385,7 @@ func (p *parser) groupTerm(neg bool) *ast.GroupTerm {
 
 // predDecl = "Pred" name "{" pred expr "}" (§V10).
 func (p *parser) predDecl() *ast.Pred {
+	p.lineBegin("predicate declaration (§V10)")
 	d := &ast.Pred{PredPos: p.next().Pos}
 	d.Name = p.ident("predicate declaration (§V10)")
 	if d.Name.Quoted() {
@@ -376,6 +394,7 @@ func (p *parser) predDecl() *ast.Pred {
 	p.expect(token.LBRACE, "predicate declaration (§V10)")
 	d.X = p.predExpr()
 	d.Rbrace = p.expect(token.RBRACE, "predicate declaration (§V10)").End()
+	p.endOfLine("predicate declaration (§V10)")
 	return d
 }
 
@@ -422,6 +441,7 @@ func (p *parser) predPrimary() ast.PredExpr {
 		x := p.operand()
 		return p.comparisonTail(x)
 	case p.at(token.IDENT):
+		p.predKeywordCheck()
 		name := p.ident("predicate (§V10)")
 		switch {
 		case p.compOpAt(0):
@@ -441,6 +461,21 @@ func (p *parser) predPrimary() ast.PredExpr {
 	default:
 		p.fail(t, "expected a predicate expression (§V10), found %s", t)
 		return nil
+	}
+}
+
+// predKeywordCheck refuses a predicate keyword where a name is
+// expected (§V10.1): and, or, not, in, like, is and null are keywords
+// inside a predicate, and a column so named is referenced quoted.
+func (p *parser) predKeywordCheck() {
+	t := p.cur()
+	if t.Kind != token.IDENT || t.Quoted {
+		return
+	}
+	for _, kw := range [...]string{"and", "or", "not", "in", "like", "is", "null"} {
+		if strings.EqualFold(t.Val, kw) {
+			p.fail(t, "%q is a keyword inside a predicate (§V10.1); write \"%s\" to name a column", t.Val, t.Val)
+		}
 	}
 }
 
@@ -486,6 +521,7 @@ func (p *parser) operand() ast.Operand {
 	case p.at(token.IDENT) && (strings.EqualFold(t.Val, "true") || strings.EqualFold(t.Val, "false")):
 		return &ast.Lit{Tok: p.next()}
 	case p.at(token.IDENT):
+		p.predKeywordCheck()
 		return &ast.ColRef{Name: p.ident("operand (§V10)")}
 	default:
 		p.fail(t, "expected a column, :param or literal (§V10), found %s", t)
@@ -558,6 +594,7 @@ func (p *parser) predNull(col *ast.Ident) ast.PredExpr {
 // selectDecl = "Select" name "for" target [ "where" pred expr ]
 // [ settings ] newline (§V11).
 func (p *parser) selectDecl() *ast.Select {
+	p.lineBegin("select declaration (§V11)")
 	d := &ast.Select{SelectPos: p.next().Pos}
 	d.Name = p.ident("select declaration (§V11)")
 	if d.Name.Quoted() {

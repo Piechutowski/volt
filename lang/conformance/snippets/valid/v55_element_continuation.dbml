@@ -1,0 +1,14 @@
+// spec: §3.2.5 — an element continues onto further lines when they are indented or inside braces
+Table posts [
+  headercolor: #3498DB
+] {
+  id integer [pk]
+  title text
+}
+
+Table tags {
+  id integer [pk]
+}
+
+Ref:
+  posts.id > tags.id

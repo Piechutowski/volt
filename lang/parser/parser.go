@@ -11,6 +11,9 @@
 // On a syntax error the parser records a diagnostic and synchronizes to
 // the next line or the enclosing brace, so one broken line does not hide
 // the rest of the file (multiple errors per run, like the Go compiler).
+// A file is parsed element by element (reuse.go): the scanner cuts it
+// where an element begins (spec §3.2.5), and each piece is parsed on
+// its own, so a broken element never reaches into the next.
 package parser
 
 import (
@@ -18,34 +21,112 @@ import (
 
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/diag"
-	"github.com/Piechutowski/volt/lang/scanner"
 	"github.com/Piechutowski/volt/lang/token"
 )
 
 // ParseFile parses one DBML source file. It always returns a (possibly
 // partial) AST; diagnostics carry every lexical and syntax error found.
 func ParseFile(filename, src string) (*ast.File, []diag.Diagnostic) {
-	toks, errs := scanner.Scan(filename, src)
-	p := &parser{toks: toks, diags: errs}
-	f := p.file(filename)
-	diag.Sort(p.diags)
-	return f, p.diags
+	f, diags, _, _ := ParseFileReuse(filename, src, nil)
+	return f, diags
 }
 
 type parser struct {
+	// A line-oriented production (§3.2 rule 2) lies on one line: from
+	// lineBegin to endOfLine, a token on a new line is consumed only
+	// inside brackets the production opened. lineFirst tolerates the
+	// production's own first token, which begins the line.
+	line      bool
+	lineDepth int
+	lineFirst bool
+	lineCtx   string
+
 	toks  []token.Token
 	pos   int
 	diags []diag.Diagnostic
+	buf   []token.Token // the scanner's slice, reused chunk after chunk; nodes copy their tokens
+
+	// The hottest node kinds come from slabs: a file's identifiers,
+	// columns, settings and literals are a few allocations instead of
+	// one each, and the collector has a few objects to sweep instead
+	// of a million (D82, PERF-9).
+	idents   slab[ast.Ident]
+	quals    slab[ast.QualName]
+	columns  slab[ast.Column]
+	types    slab[ast.TypeRef]
+	settings slab[ast.Setting]
+	lists    slab[ast.SettingList]
+	lits     slab[ast.BasicLit]
+}
+
+// slab hands out zero values of one node kind from chunks.
+type slab[T any] struct{ chunk []T }
+
+func (s *slab[T]) new() *T {
+	if len(s.chunk) == cap(s.chunk) {
+		s.chunk = make([]T, 0, 256)
+	}
+	s.chunk = s.chunk[:len(s.chunk)+1]
+	return &s.chunk[len(s.chunk)-1]
+}
+
+func (p *parser) identOf(t token.Token) *ast.Ident {
+	id := p.idents.new()
+	id.Tok = t
+	return id
+}
+
+func (p *parser) litOf(t token.Token) *ast.BasicLit {
+	l := p.lits.new()
+	l.Tok = t
+	return l
+}
+
+func (p *parser) qualOf(parts ...*ast.Ident) *ast.QualName {
+	q := p.quals.new()
+	q.Parts = parts
+	return q
 }
 
 // bailout unwinds one declaration after an unrecoverable local error.
 type bailout struct{}
 
-func (p *parser) cur() token.Token  { return p.toks[p.pos] }
-func (p *parser) next() token.Token { t := p.toks[p.pos]; p.pos++; return t }
+func (p *parser) cur() token.Token { return p.toks[p.pos] }
+func (p *parser) next() token.Token {
+	t := p.toks[p.pos]
+	if p.line {
+		if t.NLBefore && p.lineDepth == 0 && !p.lineFirst {
+			p.fail(t, "expected end of line after %s, found %s", p.lineCtx, t)
+		}
+		p.lineFirst = false
+		switch t.Kind {
+		case token.LBRACE, token.LBRACKET, token.LPAREN:
+			p.lineDepth++
+		case token.RBRACE, token.RBRACKET, token.RPAREN:
+			p.lineDepth--
+		}
+	}
+	p.pos++
+	return t
+}
+
+// lineBegin opens a line-oriented production (§3.2 rule 2), before its
+// first token; endOfLine closes it, lineClear abandons it for a block
+// form of the same construct.
+func (p *parser) lineBegin(ctx string) {
+	p.line, p.lineDepth, p.lineFirst, p.lineCtx = true, 0, true, ctx
+}
+
+func (p *parser) lineClear() { p.line = false }
 func (p *parser) at(k token.Kind) bool {
 	return p.cur().Kind == k
 }
+
+// peekNL reports whether the token n ahead begins a new line.
+func (p *parser) peekNL(n int) bool {
+	return p.pos+n < len(p.toks) && p.toks[p.pos+n].NLBefore
+}
+
 func (p *parser) peekKind(n int) token.Kind {
 	if p.pos+n >= len(p.toks) {
 		return token.EOF
@@ -77,8 +158,11 @@ func (p *parser) expect(k token.Kind, ctx string) token.Token {
 	return p.next()
 }
 
-// endOfLine enforces the newline terminator of line-oriented productions.
+// endOfLine enforces the newline terminator of line-oriented
+// productions, satisfied by a line break, a closing brace or the end
+// of the file (§3.2 rule 2).
 func (p *parser) endOfLine(ctx string) {
+	p.line = false
 	if p.at(token.RBRACE) || p.at(token.EOF) || p.cur().NLBefore {
 		return
 	}
@@ -86,7 +170,7 @@ func (p *parser) endOfLine(ctx string) {
 }
 
 func (p *parser) ident(ctx string) *ast.Ident {
-	return &ast.Ident{Tok: p.expect(token.IDENT, ctx)}
+	return p.identOf(p.expect(token.IDENT, ctx))
 }
 
 // qualName = [ schema name, "." ], name (§4.1).
@@ -94,9 +178,9 @@ func (p *parser) qualName(ctx string) *ast.QualName {
 	first := p.ident(ctx)
 	if p.at(token.DOT) {
 		p.next()
-		return &ast.QualName{Parts: []*ast.Ident{first, p.ident(ctx)}}
+		return p.qualOf(first, p.ident(ctx))
 	}
-	return &ast.QualName{Parts: []*ast.Ident{first}}
+	return p.qualOf(first)
 }
 
 /* ===== file = { import statement | element } (§5) ===== */
@@ -180,26 +264,10 @@ func (p *parser) decl() (d ast.Decl) {
 // topLevelSync skips tokens until something that can start a declaration:
 // an identifier at the start of a line, balanced past any open braces.
 func (p *parser) topLevelSync() {
-	if !p.at(token.EOF) {
-		p.next() // always make progress past the offending token
-	}
-	depth := 0
+	p.line = false
+	// The rest of the element is discarded, up to the next element
+	// start (§3.2 rule 6); the chunk being parsed holds exactly that.
 	for !p.at(token.EOF) {
-		t := p.cur()
-		switch t.Kind {
-		case token.LBRACE:
-			depth++
-		case token.RBRACE:
-			if depth > 0 {
-				depth--
-			}
-			p.next()
-			continue
-		case token.IDENT:
-			if depth == 0 && t.NLBefore {
-				return
-			}
-		}
 		p.next()
 	}
 }
@@ -208,12 +276,29 @@ func (p *parser) topLevelSync() {
 // progress: without the initial next() an error raised on a line-initial
 // token would be retried forever.
 func (p *parser) lineSync() {
+	p.line = false
 	if !p.at(token.EOF) && !p.at(token.RBRACE) {
 		p.next()
 	}
 	for !p.at(token.EOF) && !p.at(token.RBRACE) && !p.cur().NLBefore {
 		p.next()
 	}
+}
+
+// item parses one item of a braced body, discarding the rest of its
+// line on a syntax error so the following items are parsed (§3.2 rule
+// 6). The bodies with their own item functions (a table's, a scope's,
+// a pipeline's) recover the same way in them.
+func (p *parser) item(parse func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(bailout); !ok {
+				panic(r)
+			}
+			p.lineSync()
+		}
+	}()
+	parse()
 }
 
 /* ===== import statement (§7) ===== */
@@ -241,7 +326,7 @@ func (p *parser) useDecl() *ast.Use {
 		p.fail(p.cur(), "expected 'from' in import statement (§7)")
 	}
 	p.next()
-	d.Path = &ast.BasicLit{Tok: p.expect(token.STRING, "import path (§7)")}
+	d.Path = p.litOf(p.expect(token.STRING, "import path (§7)"))
 	return d
 }
 
@@ -264,15 +349,18 @@ func (p *parser) project() *ast.Project {
 	}
 	p.expect(token.LBRACE, "Project (§6.1)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
-		if p.atNoteDef() {
-			d.Notes = append(d.Notes, p.noteDef())
-			continue
-		}
-		key := p.ident("project property (§6.1)")
-		p.expect(token.COLON, "project property (§6.1)")
-		val := p.expect(token.STRING, "project property value (§6.1)")
-		d.Props = append(d.Props, &ast.ProjectProp{Key: key, Value: &ast.BasicLit{Tok: val}})
-		p.endOfLine("project property (§6.1)")
+		p.item(func() {
+			if p.atNoteDef() {
+				d.Notes = append(d.Notes, p.noteDef())
+				return
+			}
+			p.lineBegin("project property (§6.1)")
+			key := p.ident("project property (§6.1)")
+			p.expect(token.COLON, "project property (§6.1)")
+			val := p.expect(token.STRING, "project property value (§6.1)")
+			d.Props = append(d.Props, &ast.ProjectProp{Key: key, Value: p.litOf(val)})
+			p.endOfLine("project property (§6.1)")
+		})
 	}
 	d.Rbrace = p.expect(token.RBRACE, "Project (§6.1)").Pos
 	return d
@@ -340,6 +428,7 @@ func (p *parser) tableItem(what string) (item ast.TableItem) {
 	t := p.cur()
 	switch {
 	case t.Kind == token.TILDE:
+		p.lineBegin("partial injection (§6.9)")
 		p.next()
 		pr := &ast.PartialRef{TildePos: t.Pos, Name: p.ident("partial injection (§6.9)")}
 		p.endOfLine("partial injection (§6.9)")
@@ -362,7 +451,9 @@ func (p *parser) tableItem(what string) (item ast.TableItem) {
 
 // column = name, column type, { legacy flag }, [ column settings ], newline (§6.3).
 func (p *parser) column() *ast.Column {
-	c := &ast.Column{Name: p.ident("column name (§6.3)")}
+	c := p.columns.new()
+	p.lineBegin("column definition (§6.3)")
+	c.Name = p.ident("column name (§6.3)")
 	c.Type = p.typeRef()
 	for p.at(token.IDENT) && !p.cur().NLBefore {
 		c.LegacyFlags = append(c.LegacyFlags, p.ident("legacy flag (§6.3)"))
@@ -375,8 +466,9 @@ func (p *parser) column() *ast.Column {
 }
 
 func (p *parser) typeRef() *ast.TypeRef {
-	tr := &ast.TypeRef{Name: p.qualName("column type (§6.3)")}
-	if p.at(token.LPAREN) && !p.cur().SpBefore {
+	tr := p.types.new()
+	tr.Name = p.qualName("column type (§6.3)")
+	if p.at(token.LPAREN) {
 		p.next()
 		for {
 			t := p.cur()
@@ -401,7 +493,7 @@ func (p *parser) indexesBlock() *ast.IndexesBlock {
 	b := &ast.IndexesBlock{IndexesPos: p.next().Pos}
 	p.expect(token.LBRACE, "indexes block (§6.5)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
-		b.Indexes = append(b.Indexes, p.index())
+		p.item(func() { b.Indexes = append(b.Indexes, p.index()) })
 	}
 	b.Rbrace = p.expect(token.RBRACE, "indexes block (§6.5)").Pos
 	return b
@@ -422,6 +514,7 @@ func (p *parser) indexAtom() ast.Node {
 
 func (p *parser) index() *ast.Index {
 	ix := &ast.Index{}
+	p.lineBegin("index definition (§6.5)")
 	if p.at(token.LPAREN) {
 		ix.Composite = true
 		p.next()
@@ -448,12 +541,15 @@ func (p *parser) checksBlock() *ast.ChecksBlock {
 	b := &ast.ChecksBlock{ChecksPos: p.next().Pos}
 	p.expect(token.LBRACE, "checks block (§6.6)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
-		c := p.check()
-		if p.at(token.LBRACKET) && !p.cur().NLBefore {
-			c.Settings = p.settingList()
-		}
-		p.endOfLine("check definition (§6.6)")
-		b.Checks = append(b.Checks, c)
+		p.item(func() {
+			p.lineBegin("check definition (§6.6)")
+			c := p.check()
+			if p.at(token.LBRACKET) && !p.cur().NLBefore {
+				c.Settings = p.settingList()
+			}
+			p.endOfLine("check definition (§6.6)")
+			b.Checks = append(b.Checks, c)
+		})
 	}
 	b.Rbrace = p.expect(token.RBRACE, "checks block (§6.6)").Pos
 	return b
@@ -468,7 +564,7 @@ func (p *parser) check() *ast.Check {
 	switch {
 	case p.at(token.FUNCEXPR):
 		return &ast.Check{Expr: &ast.FuncExpr{Tok: p.next()}}
-	case p.at(token.IDENT) && !strings.EqualFold(p.cur().Val, "not") && (p.peekKind(1) == token.LPAREN ||
+	case p.at(token.IDENT) && !strings.EqualFold(p.cur().Val, "not") && !p.peekNL(1) && (p.peekKind(1) == token.LPAREN ||
 		(p.peekKind(1) == token.DOT && p.peekKind(3) == token.LPAREN)):
 		c := &ast.Check{Ref: p.goRef("check reference (§V12)")}
 		p.expect(token.LPAREN, "check reference arguments (§V12)")
@@ -498,10 +594,11 @@ func (p *parser) ref() *ast.Ref {
 		d.Name = p.ident("relationship name")
 	}
 	if p.at(token.COLON) {
+		// ref short = "Ref", [ name ], ":", ref body (§6.7): no newline
+		// ends it, so it may continue on an indented line (§3.2 rule 5).
 		p.next()
 		p.refBody(d)
 		d.SetEnd(p.toks[p.pos-1].End())
-		p.endOfLine("Ref (§6.7)")
 		return d
 	}
 	d.Long = true
@@ -575,7 +672,7 @@ func (p *parser) refEndpoint() *ast.RefEndpoint {
 	if len(parts) == 0 || len(parts) > 2 {
 		p.fail(p.cur(), "endpoint must be [schema.]table.column (§6.7)")
 	}
-	ep.Table = &ast.QualName{Parts: parts}
+	ep.Table = p.qualOf(parts...)
 	return ep
 }
 
@@ -586,12 +683,15 @@ func (p *parser) enum() *ast.Enum {
 	d.Name = p.qualName("enum name (§6.8)")
 	p.expect(token.LBRACE, "Enum (§6.8)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
-		v := &ast.EnumValue{Name: p.ident("enum value (§6.8)")}
-		if p.at(token.LBRACKET) && !p.cur().NLBefore {
-			v.Settings = p.settingList()
-		}
-		p.endOfLine("enum value (§6.8)")
-		d.Values = append(d.Values, v)
+		p.item(func() {
+			p.lineBegin("enum value (§6.8)")
+			v := &ast.EnumValue{Name: p.ident("enum value (§6.8)")}
+			if p.at(token.LBRACKET) && !p.cur().NLBefore {
+				v.Settings = p.settingList()
+			}
+			p.endOfLine("enum value (§6.8)")
+			d.Values = append(d.Values, v)
+		})
 	}
 	d.Rbrace = p.expect(token.RBRACE, "Enum (§6.8)").Pos
 	return d
@@ -628,7 +728,7 @@ func (p *parser) recordsRest(pos token.Position, table *ast.QualName) *ast.Recor
 	}
 	p.expect(token.LBRACE, "records body (§6.10)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
-		d.Rows = append(d.Rows, p.recordRow())
+		p.item(func() { d.Rows = append(d.Rows, p.recordRow()) })
 	}
 	d.Rbrace = p.expect(token.RBRACE, "records body (§6.10)").Pos
 	return d
@@ -636,6 +736,7 @@ func (p *parser) recordsRest(pos token.Position, table *ast.QualName) *ast.Recor
 
 func (p *parser) recordRow() *ast.RecordRow {
 	row := &ast.RecordRow{}
+	p.lineBegin("record row (§6.10)")
 	rowStart := true
 	for {
 		// one field: empty when the cursor sits on a separator or row end
@@ -645,6 +746,7 @@ func (p *parser) recordRow() *ast.RecordRow {
 			row.Values = append(row.Values, &ast.Empty{At: p.cur().Pos})
 		default:
 			row.Values = append(row.Values, p.recordValue())
+			rowStart = false
 		}
 		// separator: a comma on the same line (the first token of a row
 		// legitimately carries NLBefore)
@@ -662,12 +764,12 @@ func (p *parser) recordValue() ast.Node {
 	t := p.cur()
 	switch t.Kind {
 	case token.STRING, token.NUMBER:
-		return &ast.BasicLit{Tok: p.next()}
+		return p.litOf(p.next())
 	case token.FUNCEXPR:
 		return &ast.FuncExpr{Tok: p.next()}
 	case token.MINUS:
 		p.next()
-		return &ast.NegNumber{MinusPos: t.Pos, Num: &ast.BasicLit{Tok: p.expect(token.NUMBER, "record value (§6.10)")}}
+		return &ast.NegNumber{MinusPos: t.Pos, Num: p.litOf(p.expect(token.NUMBER, "record value (§6.10)"))}
 	case token.IDENT:
 		id := p.ident("record value (§6.10)")
 		if p.at(token.DOT) {
@@ -685,16 +787,18 @@ func (p *parser) recordValue() ast.Node {
 
 // noteDef parses "Note: 'text'" or "Note { 'text' }" with the cursor on Note.
 func (p *parser) noteDef() *ast.Note {
+	p.lineBegin("note definition (§6.11)")
 	n := &ast.Note{NotePos: p.next().Pos}
 	if p.at(token.COLON) {
 		p.next()
-		n.Text = &ast.BasicLit{Tok: p.expect(token.STRING, "note value (§6.11)")}
+		n.Text = p.litOf(p.expect(token.STRING, "note value (§6.11)"))
 		n.SetEnd(n.Text.End())
 		p.endOfLine("note definition (§6.11)")
 		return n
 	}
+	p.lineClear() // the block form spans lines
 	p.expect(token.LBRACE, "note definition (§6.11)")
-	n.Text = &ast.BasicLit{Tok: p.expect(token.STRING, "note value (§6.11)")}
+	n.Text = p.litOf(p.expect(token.STRING, "note value (§6.11)"))
 	n.SetEnd(p.expect(token.RBRACE, "note definition (§6.11)").End())
 	return n
 }
@@ -706,7 +810,7 @@ func (p *parser) stickyNote() *ast.StickyNote {
 		d.Settings = p.settingList()
 	}
 	p.expect(token.LBRACE, "sticky note (§6.11)")
-	d.Text = &ast.BasicLit{Tok: p.expect(token.STRING, "sticky note value (§6.11)")}
+	d.Text = p.litOf(p.expect(token.STRING, "sticky note value (§6.11)"))
 	d.Rbrace = p.expect(token.RBRACE, "sticky note (§6.11)").Pos
 	return d
 }
@@ -721,12 +825,15 @@ func (p *parser) tableGroup() *ast.TableGroup {
 	}
 	p.expect(token.LBRACE, "TableGroup (§6.12)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
-		if p.atNoteDef() {
-			d.Notes = append(d.Notes, p.noteDef())
-			continue
-		}
-		d.Members = append(d.Members, p.qualName("TableGroup member (§6.12)"))
-		p.endOfLine("TableGroup member (§6.12)")
+		p.item(func() {
+			if p.atNoteDef() {
+				d.Notes = append(d.Notes, p.noteDef())
+				return
+			}
+			p.lineBegin("TableGroup member (§6.12)")
+			d.Members = append(d.Members, p.qualName("TableGroup member (§6.12)"))
+			p.endOfLine("TableGroup member (§6.12)")
+		})
 	}
 	d.Rbrace = p.expect(token.RBRACE, "TableGroup (§6.12)").Pos
 	return d
@@ -746,7 +853,11 @@ func (p *parser) diagramView() *ast.DiagramView {
 			c.Wildcard = true
 		} else {
 			for !p.at(token.RBRACE) && !p.at(token.EOF) {
-				c.Names = append(c.Names, p.qualName("view category member (§6.13)"))
+				p.item(func() {
+					p.lineBegin("view category member (§6.13)")
+					c.Names = append(c.Names, p.qualName("view category member (§6.13)"))
+					p.endOfLine("view category member (§6.13)")
+				})
 			}
 		}
 		c.Rbrace = p.expect(token.RBRACE, "view category body (§6.13)").Pos
@@ -762,7 +873,8 @@ func (p *parser) diagramView() *ast.DiagramView {
 // settings are legal where — and what value types they take — is decided
 // by the check package, keeping parser and semantics decoupled.
 func (p *parser) settingList() *ast.SettingList {
-	sl := &ast.SettingList{Lbrack: p.expect(token.LBRACKET, "settings list (§4.2)").Pos}
+	sl := p.lists.new()
+	sl.Lbrack = p.expect(token.LBRACKET, "settings list (§4.2)").Pos
 	for {
 		s := p.setting()
 		sl.Settings = append(sl.Settings, s)
@@ -778,15 +890,16 @@ func (p *parser) settingList() *ast.SettingList {
 
 func (p *parser) setting() *ast.Setting {
 	nameTok := p.expect(token.IDENT, "setting name (§4.2)")
-	words := []string{strings.ToLower(nameTok.Val)}
+	name := strings.ToLower(nameTok.Val) // returns the same string when already lower: no allocation
 	end := nameTok.End()
 	// multi-word setting names (§4.2.2): "not null", "primary key"
 	for p.at(token.IDENT) && !p.cur().NLBefore {
 		w := p.next()
-		words = append(words, strings.ToLower(w.Val))
+		name += " " + strings.ToLower(w.Val)
 		end = w.End()
 	}
-	s := &ast.Setting{NameTok: nameTok, Name: strings.Join(words, " ")}
+	s := p.settings.new()
+	s.NameTok, s.Name = nameTok, name
 	s.SetEnd(end)
 	if p.at(token.COLON) {
 		p.next()
@@ -800,7 +913,7 @@ func (p *parser) settingValue() ast.Node {
 	t := p.cur()
 	switch t.Kind {
 	case token.STRING, token.NUMBER, token.COLOR:
-		return &ast.BasicLit{Tok: p.next()}
+		return p.litOf(p.next())
 	case token.FUNCEXPR:
 		return &ast.FuncExpr{Tok: p.next()}
 	case token.MINUS:
@@ -809,7 +922,7 @@ func (p *parser) settingValue() ast.Node {
 			return &ast.RefValue{OpTok: op, Endpoint: p.refEndpoint()}
 		}
 		p.next()
-		return &ast.NegNumber{MinusPos: t.Pos, Num: &ast.BasicLit{Tok: p.expect(token.NUMBER, "setting value (§4.2)")}}
+		return &ast.NegNumber{MinusPos: t.Pos, Num: p.litOf(p.expect(token.NUMBER, "setting value (§4.2)"))}
 	case token.LT, token.GT, token.LTGT:
 		op := p.next()
 		return &ast.RefValue{OpTok: op, Endpoint: p.refEndpoint()}

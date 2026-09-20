@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf16"
@@ -61,17 +62,21 @@ type voltIndex struct {
 	refs    []voltRef
 	texts   map[string]string                 // open buffers, for position conversion
 	gofuncs map[string]map[string]lang.GoFunc // package path -> its Go functions
-	// goStamps fingerprints each package directory's Go files as scanned
-	// (lang.GoDirStamp); a changed stamp means the Go side moved under
-	// us — a rename with gopls, a new function — and the index is stale.
-	goStamps map[string]string
+	// gosrcs holds each package directory's Go files as the index read
+	// them (lang.GoSourcesRead); different bytes on disk mean the Go
+	// side moved under us — a rename with gopls, a new function — and
+	// the index is stale (D87).
+	gosrcs map[string][]lang.GoSource
+	// goscans is the memo's scan table while the index is being built,
+	// nil once it is shared.
+	goscans map[string]goScanEntry
 }
 
-// goStale reports whether any package directory's Go files changed
-// since the index scanned them.
+// goStale reports whether any package directory's Go files differ from
+// what the index scanned.
 func (ix *voltIndex) goStale() bool {
-	for dir, stamp := range ix.goStamps {
-		if lang.GoDirStamp(dir) != stamp {
+	for dir, srcs := range ix.gosrcs {
+		if !slices.Equal(lang.GoSourcesRead(dir), srcs) {
 			return true
 		}
 	}
@@ -80,13 +85,55 @@ func (ix *voltIndex) goStale() bool {
 
 func spanOf(n ast.Node) voltSpan {
 	p := n.Pos()
-	return voltSpan{file: p.Filename, pos: p, end: n.End()}
+	return voltSpan{file: p.Filename(), pos: p, end: n.End()}
 }
 
 // buildVoltIndex walks every package's declarations twice: definitions
 // first (tables and pipelines), then the references that name them.
-func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
+// voltIndexMemo is what one project's navigation index keeps across
+// builds (D85): per package, the per-table occurrence memo and the
+// select hovers by the select they were rendered for. The zero value
+// is ready; one memo per project root, used by one analysis at a time.
+type voltIndexMemo struct {
+	index  map[string]*IndexMemo
+	hovers map[*lang.SelectInfo]string
+	next   map[*lang.SelectInfo]string
+	// goscans keeps each package directory's Go sources and the
+	// functions scanned from them, reused by the next build when the
+	// sources are the bytes they were (D87).
+	goscans map[string]goScanEntry
+}
+
+// goScanEntry is one directory's Go sources and their scan.
+type goScanEntry struct {
+	srcs  []lang.GoSource
+	funcs map[string]lang.GoFunc
+}
+
+func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndexMemo) *voltIndex {
 	ix := &voltIndex{defs: map[voltSym]voltDef{}, texts: overlay}
+	if memo != nil {
+		if memo.index == nil {
+			memo.index = map[string]*IndexMemo{}
+		}
+		if memo.goscans == nil {
+			memo.goscans = map[string]goScanEntry{}
+		}
+		memo.next = make(map[*lang.SelectInfo]string, len(memo.hovers))
+		ix.goscans = memo.goscans
+		defer func() { memo.hovers, memo.next = memo.next, nil; ix.goscans = nil }()
+	}
+	hover := func(pkg *lang.Package, si *lang.SelectInfo) string {
+		if memo == nil {
+			return selectHoverMD(pkg, si)
+		}
+		md, ok := memo.hovers[si]
+		if !ok {
+			md = selectHoverMD(pkg, si)
+		}
+		memo.next[si] = md
+		return md
+	}
 
 	for path, pkg := range pr.Packages {
 		for _, d := range pkg.Merged().Decls {
@@ -112,7 +159,7 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 		for _, si := range pkg.Selects {
 			d := si.Decl
 			ix.define(voltSym{"select", path, d.Name.Name()},
-				voltDef{span: spanOf(d.Name), md: selectHoverMD(pkg, si)})
+				voltDef{span: spanOf(d.Name), md: hover(pkg, si)})
 		}
 		// A package "declaration" is its first file, so an import can
 		// jump somewhere useful.
@@ -120,8 +167,8 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 			first := pkg.Files[0]
 			ix.defs[voltSym{"package", path, ""}] = voltDef{span: voltSpan{
 				file: first.Name,
-				pos:  token.Position{Filename: first.Name, Line: 1, Column: 1},
-				end:  token.Position{Filename: first.Name, Line: 1, Column: 1},
+				pos:  token.At(first.Name, 0, 1, 1),
+				end:  token.At(first.Name, 0, 1, 1),
 			}}
 		}
 	}
@@ -135,7 +182,14 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string) *voltIndex {
 		if info == nil {
 			continue
 		}
-		single := NewIndex(pkg.Merged(), info)
+		var im *IndexMemo
+		if memo != nil {
+			if im = memo.index[path]; im == nil {
+				im = &IndexMemo{}
+				memo.index[path] = im
+			}
+		}
+		single := NewIndexMemo(pkg.Merged(), info, im)
 		for _, occ := range single.Occs {
 			if occ.ID.Kind != SymTable {
 				continue
@@ -243,12 +297,20 @@ func (ix *voltIndex) goRefAdd(pkg *lang.Package, path string, ref *ast.GoRef) {
 	}
 	funcs, ok := ix.gofuncs[path]
 	if !ok {
-		funcs = lang.GoFuncsIn(pkg.Dir)
-		ix.gofuncs[path] = funcs
-		if ix.goStamps == nil {
-			ix.goStamps = map[string]string{}
+		srcs := lang.GoSourcesRead(pkg.Dir)
+		if e, kept := ix.goscans[pkg.Dir]; kept && slices.Equal(e.srcs, srcs) {
+			funcs = e.funcs // the last build's scan: the sources are the bytes they were (D87)
+		} else {
+			funcs, _ = lang.GoFuncsOf(pkg.Dir, srcs)
+			if ix.goscans != nil {
+				ix.goscans[pkg.Dir] = goScanEntry{srcs: srcs, funcs: funcs}
+			}
 		}
-		ix.goStamps[pkg.Dir] = lang.GoDirStamp(pkg.Dir)
+		ix.gofuncs[path] = funcs
+		if ix.gosrcs == nil {
+			ix.gosrcs = map[string][]lang.GoSource{}
+		}
+		ix.gosrcs[pkg.Dir] = srcs
 	}
 	if gf, found := funcs[name]; found {
 		gfCopy := gf
@@ -353,7 +415,7 @@ func (ix *voltIndex) settingRefs(pkg *lang.Package, path string, list *ast.Setti
 func (ix *voltIndex) at(file string, offset int) *voltRef {
 	for i := range ix.refs {
 		r := &ix.refs[i]
-		if r.span.file == file && offset >= r.span.pos.Offset && offset <= r.span.end.Offset {
+		if r.span.file == file && offset >= int(r.span.pos.Offset()) && offset <= int(r.span.end.Offset()) {
 			return r
 		}
 	}
@@ -378,8 +440,8 @@ func (ix *voltIndex) location(sp voltSpan) *protocol.Location {
 	return &protocol.Location{
 		URI: "file://" + sp.file,
 		Range: protocol.Range{
-			Start: offsetToLSP(text, sp.pos.Offset),
-			End:   offsetToLSP(text, sp.end.Offset),
+			Start: offsetToLSP(text, int(sp.pos.Offset())),
+			End:   offsetToLSP(text, int(sp.end.Offset())),
 		},
 	}
 }
@@ -479,8 +541,8 @@ func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 		return nil
 	}
 	rng := protocol.Range{
-		Start: offsetToLSP(d.Text, ref.span.pos.Offset),
-		End:   offsetToLSP(d.Text, ref.span.end.Offset),
+		Start: offsetToLSP(d.Text, int(ref.span.pos.Offset())),
+		End:   offsetToLSP(d.Text, int(ref.span.end.Offset())),
 	}
 	return &protocol.Hover{
 		Contents: protocol.MarkupContent{Kind: protocol.MarkupKindMarkdown, Value: md},
@@ -554,8 +616,8 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 			model = mn
 		}
 		row := model
-		if r, _, err := plan.SelectRowType(memberFn(m.Key)); err == nil {
-			row = r
+		if r, err := plan.SelectRowName(memberFn(m.Key)); err == nil {
+			row = r // the name alone: the fields of a thousand members are not rendered for a signature
 		}
 		fmt.Fprintf(&b, "func (q *Queries) %s%s(ctx context.Context%s) ([]%s, error)\n",
 			model, si.MethodSuffix, params.String(), row)
@@ -627,7 +689,7 @@ func predHover(sym voltSym, def voltDef, ix *voltIndex) string {
 	}
 	md := "```volt\nPred " + sym.name + "\n```\n"
 	if text, ok := ix.texts[def.span.file]; ok && p.X != nil {
-		start, end := p.X.Pos().Offset, p.X.End().Offset
+		start, end := int(p.X.Pos().Offset()), int(p.X.End().Offset())
 		if start >= 0 && end <= len(text) && start < end {
 			md += "```volt\n" + text[start:end] + "\n```\n"
 		}
@@ -753,7 +815,7 @@ func (d *Document) voltRename(pos protocol.Position, newName string) (*protocol.
 		if r.sym != ref.sym || r.text != spelling {
 			continue
 		}
-		key := fmt.Sprintf("%s:%d", r.edit.file, r.edit.pos.Offset)
+		key := fmt.Sprintf("%s:%d", r.edit.file, r.edit.pos.Offset())
 		if seen[key] {
 			continue // the declaration is recorded by both passes
 		}

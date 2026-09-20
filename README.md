@@ -43,7 +43,7 @@ third-party deps. Importing `nao/rt` alone drags in nothing.
 | Directory        | What it is |
 |------------------|------------|
 | `*.go` (root)    | package `volt` — the runtime generated code links against: error spine, param parsing, path builders, minimal middleware |
-| `cmd/volt`       | the one binary: `check` `vet` `gen` `routes` `fixture` `lsp` `version` — `gen` emits models, queries and routers; `fixture` writes a synthetic project of any size to time them by hand. **Own module** — its CLI deps stay out of the library |
+| `cmd/volt`       | the one binary, one file: `check` `vet` `gen` `routes` `stress` `lsp` `version` — `gen` emits models, queries and routers; `stress` writes a one-file thousand-table project to feel the limits by hand (D80). **Own module** — its CLI deps stay out of the library |
 | `lang/`          | **the language**: `token` `scanner` `parser` `ast` `diag` `check` `vet` front end, plus go.mod root discovery, package/import resolution, route expansion and conflict detection; `lang/conformance/snippets/` = the executable corpus |
 | `gen/router/`    | router generator; goldens are gofmt-stable and compiled by the real toolchain |
 | `gen/model/`     | the data half: nao's models, queries and DDL, driven by the same project load |
@@ -120,7 +120,8 @@ go test ./... ./lsp/... ./cmd/volt/...   # everything, ORM + tooling modules
 go test ./gen/router -update         # refresh goldens after gen changes
 go run ./cmd/volt gen ./itest/blog   # refresh the itest fixture
 go test ./lang -run '^$' -bench . -benchmem > lang/testdata/bench_baseline.txt   # refresh the (ungated) baseline
-volt fixture ./big && time volt check ./big/...   # a 1000-table project of every feature, to time check, gen and the LSP by hand (D80)
+VOLT_SWEEP_DIR=/tmp/sweep go test ./lang -run TestProfileSweep -count=1 -timeout 30m -v   # time and profile every phase at 10..160 tables; charts in /tmp/sweep
+volt stress ./big && time volt check ./big && time volt gen --sql ./big && time go build -C ./big ./...   # one file, 1000 tables of 150 columns: the limits of check, gen, the LSP and the Go compiler (D80)
 ./scripts/sync-grammar.sh            # mirror grammar + preflight Zed
 ```
 

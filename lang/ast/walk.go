@@ -7,157 +7,155 @@ func Inspect(n Node, f func(Node) bool) {
 	if n == nil || !f(n) {
 		return
 	}
-	for _, c := range children(n) {
-		Inspect(c, f)
+	eachChild(n, func(c Node) { Inspect(c, f) })
+}
+
+// child visits a pointer field's node when the field is set. The nil
+// test is on the pointer, before it becomes an interface, so a field a
+// broken parse left unset never reaches a visitor as a typed nil (D89).
+func child[T any, P interface {
+	*T
+	Node
+}](visit func(Node), p P) {
+	if p != nil {
+		visit(p)
 	}
 }
 
-func children(n Node) []Node {
-	var out []Node
-	add := func(ns ...Node) {
-		for _, c := range ns {
-			if c != nil {
-				out = append(out, c)
-			}
-		}
+// children is child over a slice of pointer fields.
+func children[T any, P interface {
+	*T
+	Node
+}](visit func(Node), ps []P) {
+	for _, p := range ps {
+		child(visit, p)
 	}
+}
+
+// eachChild visits n's children in source order without building a
+// list: a walk over a million-node file allocates nothing (D81). A
+// slot typed as an interface (a declaration, a body item, an index
+// key, a record value, a setting value) holds nil or a node the parser
+// built from a non-nil pointer, never a typed nil, so the interface
+// test is exact there.
+func eachChild(n Node, visit func(Node)) {
 	switch n := n.(type) {
 	case *File:
 		for _, d := range n.Decls {
-			add(d)
+			if d != nil {
+				visit(d)
+			}
 		}
 	case *Use:
-		for _, it := range n.Items {
-			add(it)
-		}
-		add(n.Path)
+		children(visit, n.Items)
+		child(visit, n.Path)
 	case *UseItem:
-		add(n.Kind, n.Name, n.Alias)
+		child(visit, n.Kind)
+		child(visit, n.Name)
+		child(visit, n.Alias)
 	case *Project:
-		add(identOrNil(n.Name))
-		for _, p := range n.Props {
-			add(p)
-		}
-		for _, nt := range n.Notes {
-			add(nt)
-		}
+		child(visit, n.Name)
+		children(visit, n.Props)
+		children(visit, n.Notes)
 	case *ProjectProp:
-		add(n.Key, n.Value)
+		child(visit, n.Key)
+		child(visit, n.Value)
 	case *Table:
-		add(n.Name, identOrNil(n.Alias), settingsOrNil(n.Settings))
+		child(visit, n.Name)
+		child(visit, n.Alias)
+		child(visit, n.Settings)
 		for _, it := range n.Body {
-			add(it)
+			if it != nil {
+				visit(it)
+			}
 		}
 	case *TablePartial:
-		add(n.Name, settingsOrNil(n.Settings))
+		child(visit, n.Name)
+		child(visit, n.Settings)
 		for _, it := range n.Body {
-			add(it)
+			if it != nil {
+				visit(it)
+			}
 		}
 	case *Column:
-		add(n.Name, n.Type, settingsOrNil(n.Settings))
-		for _, f := range n.LegacyFlags {
-			add(f)
-		}
+		child(visit, n.Name)
+		child(visit, n.Type)
+		child(visit, n.Settings)
+		children(visit, n.LegacyFlags)
 	case *TypeRef:
-		add(n.Name)
+		child(visit, n.Name)
 	case *IndexesBlock:
-		for _, ix := range n.Indexes {
-			add(ix)
-		}
+		children(visit, n.Indexes)
 	case *Index:
-		add(n.Key...)
-		add(settingsOrNil(n.Settings))
+		for _, k := range n.Key {
+			if k != nil {
+				visit(k)
+			}
+		}
+		child(visit, n.Settings)
 	case *ChecksBlock:
-		for _, c := range n.Checks {
-			add(c)
-		}
+		children(visit, n.Checks)
 	case *Check:
-		if n.Expr != nil {
-			add(n.Expr)
-		}
-		for _, a := range n.Args {
-			add(a)
-		}
-		add(settingsOrNil(n.Settings))
+		child(visit, n.Expr)
+		children(visit, n.Args)
+		child(visit, n.Settings)
 	case *PartialRef:
-		add(n.Name)
+		child(visit, n.Name)
 	case *Note:
-		add(n.Text)
+		child(visit, n.Text)
 	case *Ref:
-		add(identOrNil(n.Name), n.Left, n.Right, settingsOrNil(n.Settings))
+		child(visit, n.Name)
+		child(visit, n.Left)
+		child(visit, n.Right)
+		child(visit, n.Settings)
 	case *RefEndpoint:
-		add(n.Table)
-		for _, c := range n.Columns {
-			add(c)
-		}
+		child(visit, n.Table)
+		children(visit, n.Columns)
 	case *Enum:
-		add(n.Name)
-		for _, v := range n.Values {
-			add(v)
-		}
+		child(visit, n.Name)
+		children(visit, n.Values)
 	case *EnumValue:
-		add(n.Name, settingsOrNil(n.Settings))
+		child(visit, n.Name)
+		child(visit, n.Settings)
 	case *Records:
-		add(n.Table)
-		for _, c := range n.Columns {
-			add(c)
-		}
-		for _, r := range n.Rows {
-			add(r)
-		}
+		child(visit, n.Table)
+		children(visit, n.Columns)
+		children(visit, n.Rows)
 	case *RecordRow:
-		add(n.Values...)
+		for _, v := range n.Values {
+			if v != nil {
+				visit(v)
+			}
+		}
 	case *StickyNote:
-		add(n.Name, settingsOrNil(n.Settings), n.Text)
+		child(visit, n.Name)
+		child(visit, n.Settings)
+		child(visit, n.Text)
 	case *TableGroup:
-		add(n.Name, settingsOrNil(n.Settings))
-		for _, m := range n.Members {
-			add(m)
-		}
-		for _, nt := range n.Notes {
-			add(nt)
-		}
+		child(visit, n.Name)
+		child(visit, n.Settings)
+		children(visit, n.Members)
+		children(visit, n.Notes)
 	case *DiagramView:
-		add(n.Name)
-		for _, c := range n.Categories {
-			add(c)
-		}
+		child(visit, n.Name)
+		children(visit, n.Categories)
 	case *ViewCategory:
-		add(n.Kind)
-		for _, nm := range n.Names {
-			add(nm)
-		}
+		child(visit, n.Kind)
+		children(visit, n.Names)
 	case *SettingList:
-		for _, s := range n.Settings {
-			add(s)
-		}
+		children(visit, n.Settings)
 	case *Setting:
-		add(n.Value)
-	case *QualName:
-		for _, p := range n.Parts {
-			add(p)
+		if n.Value != nil {
+			visit(n.Value)
 		}
+	case *QualName:
+		children(visit, n.Parts)
 	case *NegNumber:
-		add(n.Num)
+		child(visit, n.Num)
 	case *EnumConst:
-		add(n.Enum, n.Value)
+		child(visit, n.Enum)
+		child(visit, n.Value)
 	case *RefValue:
-		add(n.Endpoint)
+		child(visit, n.Endpoint)
 	}
-	return out
-}
-
-// identOrNil avoids the typed-nil-in-interface trap for optional fields.
-func identOrNil(x *Ident) Node {
-	if x == nil {
-		return nil
-	}
-	return x
-}
-
-func settingsOrNil(x *SettingList) Node {
-	if x == nil {
-		return nil
-	}
-	return x
 }

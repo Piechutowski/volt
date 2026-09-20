@@ -205,8 +205,8 @@ func TestGroupSetTerms(t *testing.T) {
 	if g.Terms[2].Neg || g.Terms[2].Set() || g.Terms[2].Names[0].Name() != "extra" {
 		t.Errorf("term 2 = %+v, want +extra", g.Terms[2])
 	}
-	if g.End().Line != 2 {
-		t.Errorf("group end line = %d, want 2", g.End().Line)
+	if g.End().Line() != 2 {
+		t.Errorf("group end line = %d, want 2", g.End().Line())
 	}
 }
 

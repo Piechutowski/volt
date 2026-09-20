@@ -10,6 +10,7 @@ import (
 
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/token"
 	"github.com/Piechutowski/volt/nao/gen/golang"
 	"github.com/Piechutowski/volt/nao/gen/sqlite"
@@ -96,9 +97,15 @@ func (c *checker) dataQueries(pkg *Package) {
 	// handle), so the list cannot drift from the output (D74).
 	minted := pkg.plan.Names()
 
+	var memo *selectsMemo
+	if c.memo != nil {
+		memo = &c.memo.selects
+		memo.Hits, memo.Misses = 0, 0
+		memo.next = make(map[*ast.Select]*selectEntry, len(selects))
+	}
 	seen := map[string]*ast.Select{} // tableKey+method -> declaring select
 	for _, sel := range selects {
-		if si := c.selectCheck(sel, info, minted); si != nil {
+		if si := c.selectCheckMemo(sel, info, minted, memo); si != nil {
 			for _, m := range si.Members {
 				key := m.Key + "." + si.MethodSuffix
 				if prev, dup := seen[key]; dup {
@@ -111,6 +118,214 @@ func (c *checker) dataQueries(pkg *Package) {
 				seen[key] = sel
 			}
 			pkg.Selects = append(pkg.Selects, si)
+		}
+	}
+	if memo != nil {
+		memo.prev, memo.next = memo.next, nil
+	}
+	pkg.selectIndex()
+}
+
+// nameLookup is one question a select's check asked the generated-name
+// scope and the answer it got (D86, D93): returned by the check, kept
+// by the memo, and asked again on a later check to verify the scope
+// still answers the same.
+type nameLookup struct {
+	name, desc string
+	dup        bool
+}
+
+// nameAdd is a name a select mints into the package's generated scope,
+// returned by its check and applied by the caller.
+type nameAdd struct{ name, desc string }
+
+// selectsMemo remembers a package's checked selects, each by the
+// inputs of selectCheck (D86): its declaration, its members and their
+// models, the predicates it names, and the generated-name scope's
+// answers to the lookups it made, recorded and verified. A hit replays
+// the select's additions to the scope and its diagnostics.
+type selectsMemo struct {
+	prev, next   map[*ast.Select]*selectEntry
+	Hits, Misses int
+}
+
+// selectEntry is one call of selectCheck: inputs and outputs.
+type selectEntry struct {
+	members []*check.TableInfo
+	models  []any // the members' models, by identity
+	preds   map[string]*ast.Pred
+	lookups []nameLookup
+	adds    []nameAdd
+	si      *SelectInfo
+	diags   []diag.Diagnostic
+}
+
+// holds reports whether the entry's inputs are the given ones and the
+// scope still answers its lookups as recorded.
+func (e *selectEntry) holds(members []*check.TableInfo, models []any, preds map[string]*ast.Pred, names *golang.Names) bool {
+	if len(members) != len(e.members) || len(preds) != len(e.preds) {
+		return false
+	}
+	for i, m := range members {
+		if m != e.members[i] || models[i] != e.models[i] {
+			return false
+		}
+	}
+	for name, d := range preds {
+		if old, ok := e.preds[name]; !ok || old != d {
+			return false
+		}
+	}
+	for _, l := range e.lookups {
+		if desc, dup := names.Lookup(l.name); dup != l.dup || desc != l.desc {
+			return false
+		}
+	}
+	return true
+}
+
+// selectCheckMemo resolves a select's inputs and runs selectCheck on
+// them, through the memo when there is one.
+func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *golang.Names, memo *selectsMemo) *SelectInfo {
+	members, ok := c.selectTarget(sel, info)
+	if !ok {
+		return nil
+	}
+	models := make([]memberModel, len(members))
+	refs := make([]any, len(members))
+	for i, m := range members {
+		model, fields, err := c.pkg.plan.ModelFields(m.Key)
+		models[i] = memberModel{model: model, fields: fields, err: err}
+		refs[i] = c.pkg.plan.ModelRef(m.Key)
+	}
+	var where []ast.PredExpr
+	if sel.Where != nil {
+		where = append(where, sel.Where)
+	}
+	preds := predsIn(where, c.pkg.Preds)
+	if memo != nil {
+		if e := memo.prev[sel]; e != nil && e.holds(members, refs, preds, minted) {
+			for _, a := range e.adds {
+				minted.Add(a.name, a.desc)
+			}
+			c.diags = append(c.diags, e.diags...)
+			memo.next[sel] = e
+			memo.Hits++
+			return e.si
+		}
+	}
+	si, lookups, adds, diags := selectCheck(sel, members, models, preds, minted)
+	for _, a := range adds {
+		minted.Add(a.name, a.desc)
+	}
+	c.diags = append(c.diags, diags...)
+	if memo != nil {
+		memo.next[sel] = &selectEntry{members: members, models: refs, preds: preds, lookups: lookups, adds: adds, si: si, diags: diags}
+		memo.Misses++
+	}
+	return si
+}
+
+// selectTarget resolves a select's target (§V11.2): a group, else a
+// table, else a TableGroup as a set. It reports an unresolved or empty
+// target and answers false; an empty group answers false silently, the
+// group having errored already.
+func (c *checker) selectTarget(sel *ast.Select, info *check.Info) ([]*check.TableInfo, bool) {
+	want := sel.Target.Name()
+	var members []*check.TableInfo
+	if g, isGroup := c.pkg.Groups[want]; isGroup {
+		members = g.Members
+	} else if ti := tableByBase(info, want); ti != nil {
+		members = []*check.TableInfo{ti}
+	} else if tg := info.TableGroup(want); tg != nil {
+		members = tg.Members
+		if len(members) == 0 {
+			c.errorf(sel.Target.Pos(), "V11", "TableGroup %q has no members to select from (§V11.2)", want)
+			return nil, false
+		}
+	} else {
+		c.nameMiss(sel.Target, info, "V11", "select target")
+		return nil, false
+	}
+	return members, len(members) > 0
+}
+
+// memberModel is one member's model as a select's check needs it: the
+// naming plan's answer for the table.
+type memberModel struct {
+	model  string
+	fields []golang.FieldSig
+	err    error
+}
+
+// nameScope is what a select's check may ask of the package's
+// generated-name scope: whether a name is taken, and by what. The
+// check asks and never tells; what it asked is one of its results.
+type nameScope interface {
+	Lookup(name string) (desc string, dup bool)
+}
+
+// selectLowering is one select's check as a pure function of its
+// inputs (D86): the declaration, its resolved members and their
+// models in the same order, the predicates its where clause names
+// (transitively, nil where a name resolves to none), and the scope.
+// It accumulates only what it returns: the scope's answers to what it
+// asked, the names it mints and its diagnostics.
+type selectLowering struct {
+	sel     *ast.Select
+	members []*check.TableInfo
+	models  []memberModel
+	preds   map[string]*ast.Pred
+	names   nameScope
+
+	lookups []nameLookup
+	adds    []nameAdd
+	diags   []diag.Diagnostic
+}
+
+func (l *selectLowering) errorf(pos token.Position, format string, args ...any) {
+	l.diags = append(l.diags, diag.Errorf(pos, "spec/V11", format, args...))
+}
+
+// lookup asks the scope, the select's own additions first, as one
+// growing scope would answer, and keeps what the scope said.
+func (l *selectLowering) lookup(name string) (string, bool) {
+	for _, a := range l.adds {
+		if a.name == name {
+			return a.desc, true
+		}
+	}
+	desc, dup := l.names.Lookup(name)
+	l.lookups = append(l.lookups, nameLookup{name, desc, dup})
+	return desc, dup
+}
+
+func (l *selectLowering) add(name, desc string) {
+	l.adds = append(l.adds, nameAdd{name, desc})
+}
+
+// selectMember is one generated select method: the select and the
+// member it is minted for.
+type selectMember struct {
+	sel    *SelectInfo
+	member *check.TableInfo
+}
+
+// selectIndex builds the package's method-name index once: route
+// binding looks a query up by its generated name, and a scan over
+// every select and member per route is quadratic in a package that
+// routes every table of a wide group (D81). The first member minting
+// a name owns it (§V11.6), as in the scan it replaces.
+func (p *Package) selectIndex() {
+	p.selectByMethod = make(map[string]selectMember, len(p.Selects))
+	p.selectByName = make(map[string]*SelectInfo, len(p.Selects))
+	for _, si := range p.Selects {
+		p.selectByName[si.Decl.Name.Name()] = si
+		for _, m := range si.Members {
+			name := modelOrBase(m) + si.MethodSuffix
+			if _, taken := p.selectByMethod[name]; !taken {
+				p.selectByMethod[name] = selectMember{si, m}
+			}
 		}
 	}
 }
@@ -204,12 +419,7 @@ func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *c
 
 // tableByBase finds a table by exact base name.
 func tableByBase(info *check.Info, want string) *check.TableInfo {
-	for _, ti := range info.Tables {
-		if ti.Decl.Name.Base() == want {
-			return ti
-		}
-	}
-	return nil
+	return info.TableByBase(want)
 }
 
 // nameMiss reports an unresolved table-or-group name with the §V5.4
@@ -257,8 +467,15 @@ func (c *checker) predRefCycles(pkg *Package) {
 		}
 		state[name] = 2
 	}
-	for name, d := range pkg.Preds {
-		visit(name, d.Name.Pos())
+	// In name order, so the member of a cycle that is reported, and
+	// where, is a function of the input (D101).
+	names := make([]string, 0, len(pkg.Preds))
+	for name := range pkg.Preds {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		visit(name, pkg.Preds[name].Name.Pos())
 	}
 }
 
@@ -330,49 +547,40 @@ type colBinding struct {
 	class  typeClass
 }
 
-// selectCheck resolves and types one Select (§V11) and lowers it to a
-// SelectInfo, or reports why not.
-func (c *checker) selectCheck(sel *ast.Select, info *check.Info, minted *golang.Names) *SelectInfo {
-	si := &SelectInfo{Decl: sel}
+// selectCheck types one resolved Select (§V11) and lowers it to a
+// SelectInfo from exactly the inputs named on selectLowering, reading
+// nothing else and writing nothing it did not create; nil when the
+// select is in error, with the diagnostics that say why. Beside the
+// info it returns what it asked the scope and was told, and the names
+// it mints.
+func selectCheck(sel *ast.Select, members []*check.TableInfo, models []memberModel, preds map[string]*ast.Pred, names nameScope) (*SelectInfo, []nameLookup, []nameAdd, []diag.Diagnostic) {
+	l := &selectLowering{sel: sel, members: members, models: models, preds: preds, names: names}
+	si := l.check()
+	return si, l.lookups, l.adds, l.diags
+}
+
+func (l *selectLowering) check() *SelectInfo {
+	sel := l.sel
+	si := &SelectInfo{Decl: sel, Members: l.members}
 
 	// §V11.1: method suffix.
 	suffix, err := golang.GoName(sel.Name.Name())
 	if err != nil {
-		c.errorf(sel.Name.Pos(), "V11", "select name %q does not map to a Go identifier: %v (§V11.1)", sel.Name.Name(), err)
+		l.errorf(sel.Name.Pos(), "select name %q does not map to a Go identifier: %v (§V11.1)", sel.Name.Name(), err)
 		return nil
 	}
 	si.MethodSuffix = suffix
 	if crudMethodSuffixes[suffix] {
-		c.errorf(sel.Name.Pos(), "V11", "select name %q collides with the generated CRUD surface (§V11.1)", suffix)
+		l.errorf(sel.Name.Pos(), "select name %q collides with the generated CRUD surface (§V11.1)", suffix)
 		return nil
 	}
 
-	// §V11.2: target — a group, else a table, else a TableGroup as a set.
-	want := sel.Target.Name()
-	if g, isGroup := c.pkg.Groups[want]; isGroup {
-		si.Members = g.Members
-	} else if ti := tableByBase(info, want); ti != nil {
-		si.Members = []*check.TableInfo{ti}
-	} else if tg := info.TableGroup(want); tg != nil {
-		si.Members = tg.Members
-		if len(si.Members) == 0 {
-			c.errorf(sel.Target.Pos(), "V11", "TableGroup %q has no members to select from (§V11.2)", want)
-			return nil
-		}
-	} else {
-		c.nameMiss(sel.Target, info, "V11", "select target")
-		return nil
-	}
-	if len(si.Members) == 0 {
-		return nil // the group already errored
-	}
-
-	if sel.Projected() && !c.projectionCheck(sel, si, info, minted) {
+	if sel.Projected() && !l.projectionCheck(si) {
 		return nil
 	}
 
 	env := &selectEnv{
-		c:       c,
+		l:       l,
 		sel:     sel,
 		members: si.Members,
 		cols:    map[string]*colBinding{},
@@ -384,7 +592,7 @@ func (c *checker) selectCheck(sel *ast.Select, info *check.Info, minted *golang.
 		whereSQL = env.exprCheck(sel.Where, map[string]bool{})
 	}
 
-	orderSQL := c.selectSettings(sel, env)
+	orderSQL := l.selectSettings(env)
 	if env.failed {
 		return nil
 	}
@@ -409,7 +617,8 @@ var crudMethodSuffixes = map[string]bool{
 // projectionCheck applies §V11.7: existence and field-type agreement
 // for the explicit list, the exclusion algebra for the star form, and
 // row-type name minting against the package's generated scope.
-func (c *checker) projectionCheck(sel *ast.Select, si *SelectInfo, info *check.Info, minted *golang.Names) bool {
+func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
+	sel := l.sel
 	type memberFields struct {
 		ti     *check.TableInfo
 		model  string
@@ -417,10 +626,10 @@ func (c *checker) projectionCheck(sel *ast.Select, si *SelectInfo, info *check.I
 		byCol  map[string]golang.FieldSig
 	}
 	members := make([]memberFields, 0, len(si.Members))
-	for _, m := range si.Members {
-		model, fields, err := c.pkg.plan.ModelFields(m.Key)
+	for i, m := range si.Members {
+		model, fields, err := l.models[i].model, l.models[i].fields, l.models[i].err
 		if err != nil {
-			c.errorf(sel.Name.Pos(), "V11", "select %q: %v (§V11.7)", sel.Name.Name(), err)
+			l.errorf(sel.Name.Pos(), "select %q: %v (§V11.7)", sel.Name.Name(), err)
 			return false
 		}
 		byCol := make(map[string]golang.FieldSig, len(fields))
@@ -435,7 +644,7 @@ func (c *checker) projectionCheck(sel *ast.Select, si *SelectInfo, info *check.I
 	for _, id := range sel.Cols {
 		name := id.Name()
 		if seen[name] {
-			c.errorf(id.Pos(), "V11", "column %q appears twice in the projection (§V11.7)", name)
+			l.errorf(id.Pos(), "column %q appears twice in the projection (§V11.7)", name)
 			ok = false
 			continue
 		}
@@ -452,7 +661,7 @@ func (c *checker) projectionCheck(sel *ast.Select, si *SelectInfo, info *check.I
 			types[f.Type] = append(types[f.Type], mf.ti.Decl.Name.Base())
 		}
 		if len(missing) > 0 {
-			c.errorf(id.Pos(), "V11", "column %q is missing from %s — every member of %q must have it (§V11.7)",
+			l.errorf(id.Pos(), "column %q is missing from %s — every member of %q must have it (§V11.7)",
 				name, tableList(missing), sel.Target.Name())
 			ok = false
 			continue
@@ -468,7 +677,7 @@ func (c *checker) projectionCheck(sel *ast.Select, si *SelectInfo, info *check.I
 				sort.Strings(types[t])
 				parts = append(parts, fmt.Sprintf("%s in %s", t, tableList(types[t])))
 			}
-			c.errorf(id.Pos(), "V11", "column %q disagrees on field type across %q: %s — a shared row type needs one type, nullability included (§V11.7)",
+			l.errorf(id.Pos(), "column %q disagrees on field type across %q: %s — a shared row type needs one type, nullability included (§V11.7)",
 				name, sel.Target.Name(), strings.Join(parts, "; "))
 			ok = false
 			continue
@@ -486,21 +695,21 @@ func (c *checker) projectionCheck(sel *ast.Select, si *SelectInfo, info *check.I
 	if !sel.Star {
 		si.Cols = cols
 		si.Shared = si.MethodSuffix
-		if prev, dup := minted.Lookup(si.Shared); dup {
-			c.errorf(sel.Name.Pos(), "V11", "select %q mints the shared row type %s, which collides with %s (§V11.7)",
+		if prev, dup := l.lookup(si.Shared); dup {
+			l.errorf(sel.Name.Pos(), "select %q mints the shared row type %s, which collides with %s (§V11.7)",
 				sel.Name.Name(), si.Shared, prev)
 			return false
 		}
 		for _, mf := range members {
 			for _, f := range mf.fields {
 				if mf.model+f.Name == si.Shared {
-					c.errorf(sel.Name.Pos(), "V11", "select %q mints the shared row type %s, which collides with the dynamic column handle for %s.%s (§V11.7)",
+					l.errorf(sel.Name.Pos(), "select %q mints the shared row type %s, which collides with the dynamic column handle for %s.%s (§V11.7)",
 						sel.Name.Name(), si.Shared, mf.ti.Decl.Name.Base(), f.Col)
 					return false
 				}
 			}
 		}
-		minted.Add(si.Shared, fmt.Sprintf("select %q's shared row type", sel.Name.Name()))
+		l.add(si.Shared, fmt.Sprintf("select %q's shared row type", sel.Name.Name()))
 		return true
 	}
 
@@ -512,30 +721,31 @@ func (c *checker) projectionCheck(sel *ast.Select, si *SelectInfo, info *check.I
 				kept++
 			}
 			if f.Name == si.MethodSuffix {
-				c.errorf(sel.Name.Pos(), "V11", "select %q mints %s%s, which collides with the dynamic column handle for %s.%s (§V11.7)",
+				l.errorf(sel.Name.Pos(), "select %q mints %s%s, which collides with the dynamic column handle for %s.%s (§V11.7)",
 					sel.Name.Name(), mf.model, si.MethodSuffix, mf.ti.Decl.Name.Base(), f.Col)
 				return false
 			}
 		}
 		if kept == 0 {
-			c.errorf(sel.Name.Pos(), "V11", "select %q excludes every column of %q — nothing is left to project (§V11.7)",
+			l.errorf(sel.Name.Pos(), "select %q excludes every column of %q — nothing is left to project (§V11.7)",
 				sel.Name.Name(), mf.ti.Decl.Name.Base())
 			return false
 		}
 		name := mf.model + si.MethodSuffix
-		if prev, dup := minted.Lookup(name); dup {
-			c.errorf(sel.Name.Pos(), "V11", "select %q mints the row type %s, which collides with %s (§V11.7)",
+		if prev, dup := l.lookup(name); dup {
+			l.errorf(sel.Name.Pos(), "select %q mints the row type %s, which collides with %s (§V11.7)",
 				sel.Name.Name(), name, prev)
 			return false
 		}
-		minted.Add(name, fmt.Sprintf("select %q's row type for table %q", sel.Name.Name(), mf.ti.Decl.Name.Base()))
+		l.add(name, fmt.Sprintf("select %q's row type for table %q", sel.Name.Name(), mf.ti.Decl.Name.Base()))
 	}
 	return true
 }
 
 // selectSettings checks the settings list ([order: ...] only, §V11.5)
 // and renders ORDER BY.
-func (c *checker) selectSettings(sel *ast.Select, env *selectEnv) string {
+func (l *selectLowering) selectSettings(env *selectEnv) string {
+	sel := l.sel
 	if sel.Settings == nil {
 		return ""
 	}
@@ -545,7 +755,7 @@ func (c *checker) selectSettings(sel *ast.Select, env *selectEnv) string {
 		case "order":
 			list, ok := s.Value.(*ast.IdentList)
 			if !ok {
-				c.errorf(s.Pos(), "V11", "order: takes a parenthesized column list (§V11.5)")
+				l.errorf(s.Pos(), "order: takes a parenthesized column list (§V11.5)")
 				continue
 			}
 			seenOrder := map[string]bool{}
@@ -555,23 +765,23 @@ func (c *checker) selectSettings(sel *ast.Select, env *selectEnv) string {
 					continue
 				}
 				if seenOrder[b.name] {
-					c.errorf(id.Pos(), "V11", "column %q appears twice in order: (§V11.5)", b.name)
+					l.errorf(id.Pos(), "column %q appears twice in order: (§V11.5)", b.name)
 					continue
 				}
 				seenOrder[b.name] = true
 				if b.class == classEqOnly {
-					c.errorf(id.Pos(), "V11", "column %q is decimal-exact, stored as text: ordering it would be lexical, not numeric (§V11.5)", b.name)
+					l.errorf(id.Pos(), "column %q is decimal-exact, stored as text: ordering it would be lexical, not numeric (§V11.5)", b.name)
 					continue
 				}
 				if b.class != classNumeric && b.class != classTime && b.class != classText {
-					c.errorf(id.Pos(), "V11", "column %q (%s) is not orderable (§V11.5)", b.name, b.goType)
+					l.errorf(id.Pos(), "column %q (%s) is not orderable (§V11.5)", b.name, b.goType)
 					continue
 				}
 				// Explicit over implicit (§V11.5): every column states
 				// its direction; there is no SQL-style silent asc.
 				mod := list.Mods[i]
 				if mod == nil {
-					c.errorf(id.Pos(), "V11", "order: every column states its direction — write %q or %q (§V11.5)", id.Name()+" asc", id.Name()+" desc")
+					l.errorf(id.Pos(), "order: every column states its direction — write %q or %q (§V11.5)", id.Name()+" asc", id.Name()+" desc")
 					continue
 				}
 				dir := " ASC"
@@ -580,13 +790,13 @@ func (c *checker) selectSettings(sel *ast.Select, env *selectEnv) string {
 				case "desc":
 					dir = " DESC"
 				default:
-					c.errorf(mod.Pos(), "V11", "order direction is asc or desc, not %q (§V11.5)", mod.Name())
+					l.errorf(mod.Pos(), "order direction is asc or desc, not %q (§V11.5)", mod.Name())
 					continue
 				}
 				parts = append(parts, sqlite.Ident(b.name)+dir)
 			}
 		default:
-			c.errorf(s.Pos(), "V11", "unknown select setting %q; selects take [order: (...)] (§V11.5)", s.Name)
+			l.errorf(s.Pos(), "unknown select setting %q; selects take [order: (...)] (§V11.5)", s.Name)
 		}
 	}
 	return strings.Join(parts, ", ")
@@ -595,7 +805,7 @@ func (c *checker) selectSettings(sel *ast.Select, env *selectEnv) string {
 // selectEnv threads the agreement rule and param typing through one
 // select's expression checking, and renders SQL as it goes.
 type selectEnv struct {
-	c         *checker
+	l         *selectLowering
 	sel       *ast.Select
 	members   []*check.TableInfo
 	cols      map[string]*colBinding
@@ -606,7 +816,7 @@ type selectEnv struct {
 
 func (e *selectEnv) errorf(pos token.Position, format string, args ...any) {
 	e.failed = true
-	e.c.errorf(pos, "V11", format, args...)
+	e.l.errorf(pos, format, args...)
 }
 
 // columnBind applies the agreement rule (§V11.4): the column must exist
@@ -731,7 +941,7 @@ func (e *selectEnv) exprCheck(x ast.PredExpr, preds map[string]bool) string {
 		return "(" + e.exprCheck(x.X, preds) + ")"
 	case *ast.PredRef:
 		name := x.Name.Name()
-		d := e.c.pkg.Preds[name]
+		d := e.l.preds[name]
 		if d == nil {
 			e.errorf(x.Name.Pos(), "unknown predicate %q (§V10.2)", name)
 			return "1"

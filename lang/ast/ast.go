@@ -374,11 +374,6 @@ type Check struct {
 	Args     []*Ident  // Go-reference arguments: columns of the table
 	EndPos   token.Position
 	Settings *SettingList
-
-	// SQL is the typed form's rendering, lowered by the Volt checker
-	// (§V12); gen/sqlite refuses to render a Pred check while it is
-	// still empty.
-	SQL string
 }
 
 func (x *Check) Pos() token.Position {
@@ -396,7 +391,7 @@ func (x *Check) End() token.Position {
 	if x.Settings != nil {
 		return x.Settings.End()
 	}
-	if x.EndPos.Line != 0 {
+	if x.EndPos.Line() != 0 {
 		return x.EndPos
 	}
 	return x.Expr.End()

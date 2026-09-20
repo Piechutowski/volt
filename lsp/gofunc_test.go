@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
@@ -304,11 +303,6 @@ func TestGoFileChangeInvalidatesIndex(t *testing.T) {
 	if err := os.WriteFile(goFile, []byte(renamed), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	future := time.Now().Add(2 * time.Second)
-	if err := os.Chtimes(goFile, future, future); err != nil {
-		t.Fatal(err)
-	}
-
 	if !d.GoFilesChanged() {
 		t.Fatal("index did not notice the Go file changed")
 	}
