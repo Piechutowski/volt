@@ -87,6 +87,10 @@ test-only); and the **tools** `lsp/` and `cmd/volt/`, which carry the
 third-party deps (glsp, urfave/cli). Go floor: **1.27** (D45),
 declared in all three go.mod files and go.work. `grammar/` +
 `zed-extension/` + `scripts/sync-grammar.sh` are the editor stack.
+`internal/perfsweep` is the profiling sweep (PERF-2), run at the
+reference sizes by `lang.TestProfileSweep` and on any machine by
+`./scripts/perf.go -out DIR` from the root, which writes the
+performance report with that machine's specification.
 
 Consequences that bite: `go test ./...` at the root does NOT cover the
 tool modules — the full sweep is

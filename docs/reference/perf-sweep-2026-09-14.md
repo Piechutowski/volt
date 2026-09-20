@@ -5,8 +5,8 @@ numbers are from one machine on one day; the method is repeatable and
 lives in the test suite, so a later sweep is compared against this one
 by rerunning it, not by trusting it.
 
-**Method.** `lang/profile_sweep_test.go` (`TestProfileSweep`, skipped
-unless `VOLT_SWEEP_DIR` is set) writes one-file projects with
+**Method.** `internal/perfsweep`, run by `lang/profile_sweep_test.go`
+(`TestProfileSweep`, skipped unless `VOLT_SWEEP_DIR` is set), writes one-file projects with
 `internal/corpus` at 10, 20, 40, 80 and 160 tables of 150 columns, the
 stress shape of D80 at smaller sizes, and runs each phase on its own:
 Load (scan and parse), Check, Vet, Generate (every file of every
@@ -18,6 +18,12 @@ seconds of CPU profile. The charts are drawn by the test.
 ```sh
 VOLT_SWEEP_DIR=/tmp/sweep go test ./lang -run TestProfileSweep -count=1 -timeout 30m -v
 ```
+
+The same sweep on any machine, extended to 320 tables and to the
+language server's keystroke at each size, with that machine's
+specification, is `./scripts/perf.go -out DIR` from the repository
+root; it writes a Markdown report with the charts and profiles beside
+it.
 
 Machine: 4 CPUs, Intel Xeon 2.80 GHz, go1.27.0, Linux, commit 50effa2
 plus the idempotence fix below. Nothing else was running.

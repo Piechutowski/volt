@@ -3,3 +3,5 @@
 /cmd/volt/volt
 /lang.test
 /lang/lang.test
+# the performance report scripts/perf.go writes by default
+/perf-report/

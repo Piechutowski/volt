@@ -1,7 +1,9 @@
 package lsp
 
 import (
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -16,9 +18,23 @@ import (
 // the publish of its diagnostics, with the debounce zeroed. The stdio
 // replay of docs/editor.md §8 measures the same path with the
 // transport; this one is repeatable enough to compare commits.
+// keystrokeSpec is the benchmarks' project: 200 tables of 12 columns
+// in one file, or the size VOLT_KEYSTROKE_TABLES and
+// VOLT_KEYSTROKE_COLUMNS name, which scripts/perf.go sets to sweep it.
+func keystrokeSpec() corpus.Spec {
+	spec := corpus.Spec{Tables: 200, Columns: 12, Single: true}
+	if n, err := strconv.Atoi(os.Getenv("VOLT_KEYSTROKE_TABLES")); err == nil && n > 0 {
+		spec.Tables = n
+	}
+	if n, err := strconv.Atoi(os.Getenv("VOLT_KEYSTROKE_COLUMNS")); err == nil && n >= 3 {
+		spec.Columns = n
+	}
+	return spec
+}
+
 func BenchmarkKeystroke(b *testing.B) {
 	root := b.TempDir()
-	spec := corpus.Spec{Tables: 200, Columns: 12, Single: true}
+	spec := keystrokeSpec()
 	if err := corpus.Write(root, spec); err != nil {
 		b.Fatal(err)
 	}
@@ -60,7 +76,7 @@ func BenchmarkKeystroke(b *testing.B) {
 // background run is even kicked.
 func BenchmarkDocumentUpdateLocal(b *testing.B) {
 	root := b.TempDir()
-	spec := corpus.Spec{Tables: 200, Columns: 12, Single: true}
+	spec := keystrokeSpec()
 	if err := corpus.Write(root, spec); err != nil {
 		b.Fatal(err)
 	}

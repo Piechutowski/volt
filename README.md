@@ -51,7 +51,7 @@ third-party deps. Importing `nao/rt` alone drags in nothing.
 | `lsp/`           | the Volt language server (`volt lsp`); project-aware diagnostics for files under a go.mod, single-file DBML pass otherwise. **Own module** — glsp and its tail stay out of the library |
 | `grammar/`       | tree-sitter grammar for the whole language |
 | `zed-extension/` | Zed glue; install via `scripts/sync-grammar.sh` + Install Dev Extension |
-| `scripts/`       | `sync-grammar.sh` — mirrors the grammar into the local git cache Zed loads dev grammars from |
+| `scripts/`       | `sync-grammar.sh` — mirrors the grammar into the local git cache Zed loads dev grammars from; `perf.go` — the performance report of this machine: the profiling sweep from 10 to 320 tables, the editor's keystroke at each size, charts and the machine's specification, as Markdown |
 | `itest/`         | committed fixture project served over httptest, drift-checked against the generator |
 | `docs/`          | **all prose lives here** (D49): `spec.md` (the language, normative) · `lint.md` · `editor.md` · `decisions.md` (the law) · `hypotheses.md` (the open questions) · `roadmap.md` (the plan) · `nao.md` · `model-layer.md` · `reference/` (pinned research) |
 | `AGENT.md`       | cross-session working doctrine for AI sessions (CLAUDE.md imports it) |
