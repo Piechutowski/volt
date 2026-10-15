@@ -1,16 +1,10 @@
 // The dynamic query layer (decisions D28-D34): predicates, orderings,
 // limits and assignments as inert data — plain values forming a small
-// expression tree, never closures and never a mutable builder. Generated
-// terminal methods (UserQuery, UserCount, ...) hand the values to the
-// interpreter here, which walks the tree once and renders SQL text and
-// bound arguments in lockstep. The interpreter is deterministic:
-// identical trees render identical SQL, which is what makes the rendered
-// text a statement-cache key (D31).
-//
+// expression tree, never closures and never a mutable builder. The
+// interpreter is deterministic: identical trees render identical SQL,
+// which is what makes the rendered text a statement-cache key (D31).
 // The layer only filters, orders and limits an existing row shape (the
-// shape rule, D32). Anything that changes what a row is — joins,
-// aggregates, projections — happens at generation time, where result
-// structs can be minted.
+// shape rule, D32).
 package rt
 
 import (
@@ -25,22 +19,16 @@ import (
 
 // Column is the typed handle of one column of model M: its methods build
 // the Pred, Order and Assign values of the dynamic query layer. M is a
-// phantom type — no value of it is ever held; it exists so a predicate
-// over one model cannot enter another model's query (a compile error,
-// D29). T is the column's Go value type; operator arguments are T, so a
-// value of the wrong type is a compile error too.
-//
-// Handles are emitted by the generator as flat per-column vars
-// (UserEmail); the operators live here, once (D29).
+// phantom type: a predicate over one model cannot enter another model's
+// query (D29). T is the column's Go value type; operator arguments are T.
 type Column[M, T any] struct {
 	// Name is the SQL column name, unquoted.
 	Name string
 }
 
 // NullColumn is the handle of a nullable column. Comparisons take plain
-// present values (T, not Null[T]): SQL comparison with NULL matches
-// nothing, so NULL is handled by its own explicit operators —
-// IsNull/IsNotNull to test, SetNull to assign.
+// present values (T, not Null[T]); NULL is tested with IsNull/IsNotNull
+// and assigned with SetNull.
 type NullColumn[M, T any] struct {
 	Column[M, T]
 }
@@ -68,8 +56,7 @@ func (c Column[M, T]) Lt(v T) Pred[M] { return c.cmp("<", v) }
 // Le is "column <= v".
 func (c Column[M, T]) Le(v T) Pred[M] { return c.cmp("<=", v) }
 
-// In is "column IN (vs...)". With no values it renders constant false:
-// membership in the empty set holds for no row.
+// In is "column IN (vs...)". With no values it renders constant false.
 func (c Column[M, T]) In(vs ...T) Pred[M] {
 	return Pred[M]{kind: predIn, col: c.Name, vals: valsAny(vs)}
 }
@@ -105,8 +92,7 @@ func (c Column[M, T]) cmpCol(op string, o Column[M, T]) Pred[M] {
 	return Pred[M]{kind: predColCmp, col: c.Name, op: op, col2: o.Name}
 }
 
-// EqCol compares two columns of the same model: "a = b" (same-shape
-// column comparison is runtime-builder material, D32).
+// EqCol compares two columns of the same model: "a = b" (D32).
 func (c Column[M, T]) EqCol(o Column[M, T]) Pred[M] { return c.cmpCol("=", o) }
 
 // NeCol is "a <> b".
@@ -149,20 +135,11 @@ func valsAny[T any](vs []T) []any {
 
 /* ===== predicates as inert data (D28) ===== */
 
-// Pred is one predicate over model M: a small immutable expression tree.
-// Predicates compose (And/Or/Not), store in variables, append
-// conditionally, and are shared across verbs — the same value drives
-// Query, Count, Exists, DeleteWhere and UpdateWhere (D32).
+// Pred is one predicate over model M: a small immutable expression tree,
+// shared across Query, Count, Exists, DeleteWhere and UpdateWhere (D32).
 //
 // The zero value is the empty predicate: it filters nothing and vanishes
-// from And, Or, Not and WHERE clauses, so conditional query building
-// needs no special cases:
-//
-//	var p rt.Pred[User]
-//	if search != "" {
-//		p = UserName.Like("%" + search + "%")
-//	}
-//	users, err := q.UserQuery(ctx, p)
+// from And, Or, Not and WHERE clauses.
 type Pred[M any] struct {
 	kind predKind
 	col  string    // leaf predicates: the left-hand column
@@ -206,11 +183,8 @@ func Not[M any](p Pred[M]) Pred[M] {
 }
 
 // Raw is the last-resort escape hatch: verbatim SQL as a predicate, with
-// '?' placeholders bound to args. It is outside the safety net (D18) —
-// nothing validates the fragment until SQLite prepares the statement —
-// and it is the one deliberate hole in the typed layer. Column and
-// parameter hygiene are the caller's problem here; prefer promoting the
-// condition to a Select block in the schema.
+// '?' placeholders bound to args. It is outside the safety net (D18):
+// nothing validates the fragment until SQLite prepares the statement.
 func Raw[M any](sql string, args ...any) Pred[M] {
 	if sql == "" {
 		return Pred[M]{}
@@ -291,8 +265,7 @@ func (p Pred[M]) render(b *strings.Builder, args *[]any) error {
 		}
 		b.WriteString(")")
 	default:
-		// unreachable through the public constructors: And/Or/Not normalize
-		// empty operands away and the renderers skip empty top-level preds
+		// unreachable through the public constructors
 		return errors.New("rt: cannot render an empty predicate")
 	}
 	return nil
@@ -317,10 +290,8 @@ type Assign[M any] struct {
 
 // Opt is one option of a dynamic query: a predicate (Pred is an Opt), an
 // ordering, a limit, an offset, a keyset position or a distinct flag.
-// Options are inert values; the generated terminal (UserQuery) hands
-// them to the interpreter in one deterministic walk. Value-less options
-// cannot infer M, so the generator emits per-model wrappers — UserLimit,
-// UserOrderBy — over the constructors here (D30).
+// Value-less options cannot infer M, so the generator emits per-model
+// wrappers (UserLimit, UserOrderBy) over the constructors here (D30).
 type Opt[M any] interface{ optApply(*querySpec[M]) }
 
 type querySpec[M any] struct {
@@ -358,22 +329,19 @@ type offsetOpt[M any] struct{ n int }
 
 func (o offsetOpt[M]) optApply(s *querySpec[M]) { s.offset, s.offsetSet = o.n, true }
 
-// Offset skips n rows; the last Offset wins. OFFSET degrades linearly
-// with depth — keyset pagination (After) is the scalable page mechanism
-// (D34).
+// Offset skips n rows; the last Offset wins. Keyset pagination (After)
+// is the scalable page mechanism (D34).
 func Offset[M any](n int) Opt[M] { return offsetOpt[M]{n: n} }
 
 type afterOpt[M any] struct{ key []any }
 
 func (o afterOpt[M]) optApply(s *querySpec[M]) { s.after, s.afterSet = o.key, true }
 
-// After positions the query strictly after the row with the given key —
-// keyset pagination (D34): pass the previous page's last row's values
-// for the ORDER BY columns, one per term, in the same order. Rendering
-// requires an OrderBy and one key value per term; for a total,
-// gap-free order include a unique column as the final tiebreak term.
-// NULLs in keyset columns are not paginated over (SQL comparisons skip
-// them); keep keyset columns NOT NULL.
+// After positions the query strictly after the row with the given key
+// (keyset pagination, D34): the previous page's last row's values for
+// the ORDER BY columns, one per term, in the same order. Rendering
+// requires an OrderBy and one key value per term. NULLs in keyset
+// columns are not paginated over; keep keyset columns NOT NULL.
 func After[M any](key ...any) Opt[M] { return afterOpt[M]{key: key} }
 
 type distinctOpt[M any] struct{}
@@ -479,8 +447,7 @@ func ExistsRender[M any](table string, preds []Pred[M]) (string, []any, error) {
 }
 
 // DeleteRender renders a predicate-guarded DELETE. No effective
-// predicate is an error, not a full-table delete: affecting every row
-// must be written out loud (a trivially true Raw predicate).
+// predicate is an error, not a full-table delete.
 func DeleteRender[M any](table string, preds []Pred[M]) (string, []any, error) {
 	where, args, err := whereRender(preds)
 	if err != nil {
@@ -493,8 +460,7 @@ func DeleteRender[M any](table string, preds []Pred[M]) (string, []any, error) {
 }
 
 // UpdateRender renders a predicate-guarded partial UPDATE from typed
-// assignments. No assignments, or no effective predicate, is an error —
-// rewriting every row must be written out loud, like DeleteRender.
+// assignments. No assignments, or no effective predicate, is an error.
 func UpdateRender[M any](table string, set []Assign[M], preds []Pred[M]) (string, []any, error) {
 	if len(set) == 0 {
 		return "", nil, errors.New("rt: UpdateWhere with no assignments has nothing to set")
@@ -581,7 +547,7 @@ func afterRender[M any](w *strings.Builder, args *[]any, orders []Order[M], key 
 }
 
 // identQuote double-quotes an identifier for SQLite, matching the
-// generators' quoting so dynamic and static SQL cannot disagree.
+// generators' quoting.
 func identQuote(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }

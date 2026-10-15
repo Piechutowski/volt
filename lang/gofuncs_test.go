@@ -6,11 +6,6 @@ import (
 	"testing"
 )
 
-// TestGoFuncsScanSkipsGenerated proves the scan for Go references
-// ignores volt's own output: a generated file is recognized by its
-// first line alone and never parsed, so a check or a plug cannot
-// resolve to it and a million generated lines cost the check nothing
-// (D81).
 func TestGoFuncsScanSkipsGenerated(t *testing.T) {
 	dir := t.TempDir()
 	files := map[string]string{

@@ -7,7 +7,6 @@ import (
 	"github.com/Piechutowski/volt/lang/token"
 )
 
-// kinds scans src and returns the token kinds without the trailing EOF.
 func kinds(t *testing.T, src string) []token.Kind {
 	t.Helper()
 	toks, errs := Scan("test.dbml", src)
@@ -34,7 +33,6 @@ func one(t *testing.T, src string) token.Token {
 }
 
 func TestMaximalMunch(t *testing.T) {
-	// §3.1: longest match wins.
 	tests := []struct {
 		src  string
 		want []token.Kind
@@ -43,7 +41,7 @@ func TestMaximalMunch(t *testing.T) {
 		{"< >", []token.Kind{token.LT, token.GT}},
 		{">1", []token.Kind{token.GT, token.NUMBER}},
 		{"user_id2", []token.Kind{token.IDENT}},
-		{"''''''", []token.Kind{token.STRING}}, // empty multi-line string, not three empties
+		{"''''''", []token.Kind{token.STRING}},
 	}
 	for _, tt := range tests {
 		got := kinds(t, tt.src)
@@ -60,7 +58,6 @@ func TestMaximalMunch(t *testing.T) {
 }
 
 func TestNumbersAndIdents(t *testing.T) {
-	// §3.4 constraint 2 and §3.9.
 	tests := []struct {
 		src  string
 		kind token.Kind
@@ -81,22 +78,20 @@ func TestNumbersAndIdents(t *testing.T) {
 			t.Errorf("Scan(%q) kind = %v, want %v", tt.src, got.Kind, tt.kind)
 		}
 	}
-	// 12.3abc is a lexical error (§3.9.3)
 	if _, errs := Scan("t", "12.3abc"); len(errs) == 0 {
 		t.Error("Scan(12.3abc): want error, got none")
 	}
 }
 
 func TestEscapes(t *testing.T) {
-	// §3.8.
 	tests := []struct{ src, val string }{
 		{`'a\tb'`, "a\tb"},
 		{`'a\nb'`, "a\nb"},
 		{`'it\'s'`, "it's"},
 		{`'back\\slash'`, `back\slash`},
 		{`'A'`, "A"},
-		{`'\q'`, "q"},      // unknown escape yields the char
-		{"'a\\\nb'", "ab"}, // line continuation
+		{`'\q'`, "q"},
+		{"'a\\\nb'", "ab"},
 	}
 	for _, tt := range tests {
 		if got := one(t, tt.src); got.Val != tt.val {
@@ -109,7 +104,6 @@ func TestEscapes(t *testing.T) {
 }
 
 func TestMultilineIndentStripping(t *testing.T) {
-	// §3.7.4.
 	src := "'''\n  line one\n  line two\n'''"
 	got := one(t, src)
 	want := "line one\nline two"
@@ -122,7 +116,6 @@ func TestMultilineIndentStripping(t *testing.T) {
 }
 
 func TestFuncExprIsRaw(t *testing.T) {
-	// §3.12: backslash is not an escape inside backticks.
 	got := one(t, "`a\\nb`")
 	if got.Val != `a\nb` {
 		t.Errorf("funcexpr val = %q, want %q", got.Val, `a\nb`)
@@ -130,7 +123,6 @@ func TestFuncExprIsRaw(t *testing.T) {
 }
 
 func TestNewlineFlag(t *testing.T) {
-	// §3.2: the NLBefore flag drives statement termination.
 	toks, _ := Scan("t", "a b\nc")
 	if toks[1].NLBefore {
 		t.Error("b should not have NLBefore")
@@ -138,7 +130,6 @@ func TestNewlineFlag(t *testing.T) {
 	if !toks[2].NLBefore {
 		t.Error("c should have NLBefore")
 	}
-	// a line comment does not swallow the newline's significance (§3.3.4)
 	toks, _ = Scan("t", "a // comment\nc")
 	if !toks[1].NLBefore {
 		t.Error("token after line comment + newline should have NLBefore")
@@ -146,8 +137,6 @@ func TestNewlineFlag(t *testing.T) {
 }
 
 func TestCRLF(t *testing.T) {
-	// §3.2.1: CR is discarded; it keeps its byte and has no column
-	// (D90), so offsets match the file as written.
 	toks, errs := Scan("t", "a\r\nb")
 	if len(errs) > 0 {
 		t.Fatalf("errors: %v", errs)
@@ -161,8 +150,6 @@ func TestCRLF(t *testing.T) {
 	if e := toks[0].End(); e.Line() != 1 || e.Column() != 2 || e.Offset() != 1 {
 		t.Errorf("a ends at %s+%d, want 1:2+1", e, e.Offset())
 	}
-	// Inside a token it is discarded from the value and kept in the
-	// text; between tokens it is neither a token nor whitespace.
 	toks, errs = Scan("t", "'''\r\n  ab\r\n'''\r\nx\ry [\r\n")
 	if len(errs) > 0 {
 		t.Fatalf("errors: %v", errs)
@@ -200,10 +187,6 @@ func TestQuotedIdent(t *testing.T) {
 	}
 }
 
-// TestElementStarts pins the element boundary of §3.2.5 in the
-// scanner (D88): which tokens begin a top-level element, where a chunk
-// scan stops and what its EOF says, and what StartsDecl answers about
-// the bytes after a chunk.
 func TestElementStarts(t *testing.T) {
 	src := "Table a {\n  b int\n}\nx.y\n  indented\n\"quoted\" z\n2fa\nEnum e {\n  v\n}\n/* c */ w\n"
 	toks, errs := Scan("t", src)
@@ -228,7 +211,7 @@ func TestElementStarts(t *testing.T) {
 	if eof.Kind != token.EOF || eof.Val != ElementStart || eof.Pos.Line() != 4 || eof.Pos.Column() != 1 || !eof.NLBefore {
 		t.Errorf("chunk EOF = %+v, want the element start at 4:1", eof)
 	}
-	if got := len(chunk) - 1; got != 6 { // Table a { b int }
+	if got := len(chunk) - 1; got != 6 {
 		t.Errorf("chunk holds %d tokens, want 6", got)
 	}
 	open := "Table a {\n  b int\n"
@@ -253,9 +236,6 @@ func TestElementStarts(t *testing.T) {
 	}
 }
 
-// TestLookaheadStopsAtLineBreak pins the bound a chunk's independence
-// rests on (D95): the scanner sees the line break ahead of it and
-// nothing past it until it consumes it.
 func TestLookaheadStopsAtLineBreak(t *testing.T) {
 	s := newScanner(token.NewFile("t", "a\r\nbc\n"), nil)
 	if s.next() != 'a' {
@@ -270,7 +250,7 @@ func TestLookaheadStopsAtLineBreak(t *testing.T) {
 	if got := s.peekAt(2); got != eof {
 		t.Errorf("peekAt(2) = %q, want eof past the line break", got)
 	}
-	s.next() // the line break
+	s.next()
 	if got, want := s.peek(), 'b'; got != want {
 		t.Errorf("after the line break peek = %q, want %q", got, want)
 	}

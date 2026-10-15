@@ -1,8 +1,7 @@
 package ast
 
 // Inspect traverses the AST in depth-first order, calling f for each node.
-// If f returns false, children of the node are not visited. It plays the
-// role of go/ast's Inspect for the vet analyzers.
+// If f returns false, children of the node are not visited.
 func Inspect(n Node, f func(Node) bool) {
 	if n == nil || !f(n) {
 		return
@@ -33,11 +32,8 @@ func children[T any, P interface {
 }
 
 // eachChild visits n's children in source order without building a
-// list: a walk over a million-node file allocates nothing (D81). A
-// slot typed as an interface (a declaration, a body item, an index
-// key, a record value, a setting value) holds nil or a node the parser
-// built from a non-nil pointer, never a typed nil, so the interface
-// test is exact there.
+// list (D81). A slot typed as an interface holds nil or a node the
+// parser built from a non-nil pointer, never a typed nil.
 func eachChild(n Node, visit func(Node)) {
 	switch n := n.(type) {
 	case *File:

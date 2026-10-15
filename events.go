@@ -14,7 +14,7 @@ import (
 
 // Event is one server-sent event (spec §V4.11): a name the client
 // dispatches on and a JSON payload. The broker assigns IDs in
-// publication order so a client that reconnects can say where it was.
+// publication order.
 type Event struct {
 	ID   uint64
 	Name string
@@ -26,8 +26,7 @@ func (e Event) Decode(v any) error { return json.Unmarshal(e.Data, v) }
 
 // Broker fans events out to every open event-stream connection and
 // keeps the last Replay events so a reconnecting client resumes from
-// its Last-Event-ID. One process, in memory: the shape the runtime
-// promises; a multi-process bus is not its job.
+// its Last-Event-ID. One process, in memory.
 type Broker struct {
 	// Replay is how many recent events are kept for resumption; 0
 	// means the default of 256.
@@ -54,9 +53,7 @@ func (b *Broker) replay() int {
 
 // Publish assigns the next ID, remembers the event for replay and
 // hands it to every subscriber. A subscriber whose buffer is full is
-// dropped — its connection ends and the client reconnects with
-// Last-Event-ID, catching up from the replay buffer — so one stalled
-// reader never blocks the publisher or the others.
+// dropped.
 func (b *Broker) Publish(name string, data any) error {
 	raw, err := json.Marshal(data)
 	if err != nil {
@@ -173,8 +170,7 @@ func writeEvent(w http.ResponseWriter, ev Event) error {
 // Stream is the client side of an event route: it connects to url,
 // delivers every event on the returned channel, and on any drop
 // reconnects with Last-Event-ID and exponential backoff (1s to 30s)
-// until ctx is done, when the channel closes. Generated clients wrap
-// it as a typed Events method.
+// until ctx is done, when the channel closes.
 func (c *Client) Stream(ctx context.Context, url string) <-chan Event {
 	out := make(chan Event, 64)
 	go func() {
@@ -203,7 +199,7 @@ func (c *Client) Stream(ctx context.Context, url string) <-chan Event {
 }
 
 // streamOnce runs one connection; it reports whether any event
-// arrived (so backoff resets), and updates last as events flow.
+// arrived, and updates last as events flow.
 func (c *Client) streamOnce(ctx context.Context, url string, last *uint64, out chan<- Event) bool {
 	req, err := http.NewRequestWithContext(ctx, "GET", c.Base+url, nil)
 	if err != nil {

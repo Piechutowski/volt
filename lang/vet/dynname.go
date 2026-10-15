@@ -1,9 +1,6 @@
-// Dynamic-layer name analyzer — feature DYN-7: the dynamic query layer
-// (decisions D28-D30) mints package-scope Go names by concatenation
-// (UserEmail, UserLimit), so distinct DBML declarations can demand one Go
-// name. Generation refuses such schemas outright; this rule surfaces the
-// collision at vet time with both origins named. The name derivation is
-// the generator's own (nao/gen/golang), so rule and generator cannot drift.
+// Dynamic-layer name analyzer (DYN-7, D28-D30): distinct DBML
+// declarations can demand one Go name; this rule surfaces the
+// collision at vet time with both origins named.
 package vet
 
 // dynNameFold asks the plan, whose name base holds every model's

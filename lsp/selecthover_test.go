@@ -1,7 +1,3 @@
-// Select hover with projections (spec §V11.7): the hover shows the
-// generated signatures and the actual output row structs — the shared
-// type once for an explicit list, the per-member derivative for the
-// star form.
 package lsp
 
 import (
@@ -48,11 +44,9 @@ func TestSelectHoverSharedRowType(t *testing.T) {
 			t.Errorf("hover missing %q:\n%s", want, md)
 		}
 	}
-	// One shared type: the struct must be rendered exactly once.
 	if strings.Count(md, "type Summary struct") != 1 {
 		t.Errorf("shared row type rendered more than once:\n%s", md)
 	}
-	// Reading order: the struct first, then the SQL, then the signatures.
 	structAt := strings.Index(md, "type Summary struct")
 	whereAt := strings.Index(md, "WHERE ")
 	funcAt := strings.Index(md, "func (q *Queries)")
@@ -82,7 +76,6 @@ func TestSelectHoverStructDerivative(t *testing.T) {
 	}
 }
 
-// A list parameter shows its slice type in the hover signature (§V10.3).
 func TestSelectHoverListParam(t *testing.T) {
 	d, text := projSelectDoc(t)
 	h := d.Hover(posOf(t, text, "chosen", 0))

@@ -126,7 +126,10 @@ a new interaction belongs in it.
   (`parser.ParseFile`, `check.File`), cursor primitives (`next`,
   `peek`), LSP handlers named after protocol methods.
 - Error messages and code comments cite spec sections (`§6.7`, `§V4.6`)
-  or decision numbers. Generated files start with the
+  or decision numbers. A comment is a contract with a citation, one or
+  two sentences, never rationale, history or measurements; tests carry
+  no prose beyond directives, the proof instruments excepted (D106).
+  Generated files start with the
   `Code generated … DO NOT EDIT.` marker; the CLI refuses to overwrite
   files lacking it. Zero runtime dependencies in generated code (D03).
 - SQLite-first, all-in (D02); SQLite is the gen-time SQL checker via

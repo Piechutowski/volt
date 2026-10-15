@@ -1,18 +1,7 @@
 // Command volt is the framework's one binary: the CLI front end over
 // the lang package and both generators — nao's models and queries for
-// data packages, routers for routing packages (D41).
-//
-//	volt check  [--json] [dir]     load the project, run semantic analysis (docs/spec.md §V)
-//	volt vet    [--json] [dir]     check plus warnings for legal-but-suspicious Volt
-//	volt gen    [flags] [dir|file] generate models, queries, routers and clients;
-//	                               -o DIR -parts LIST place the parts where a layout needs them
-//	volt routes [dir]              print the expanded route table
-//	volt stress [flags] DIR        write a one-file stress project: 1000 tables of 150 columns, every feature (D80)
-//	volt lsp                       language server on stdin/stdout
-//	volt version                   report the tool version
-//
-// Every command over a project resolves its root by walking up from
-// dir (or the working directory) to the nearest go.mod.
+// data packages, routers for routing packages (D41). Its subcommands
+// are check, vet, gen, routes, stress (D80), lsp and version.
 //
 // Exit status: 0 clean (warnings do not fail), 1 errors found, 2 usage
 // or I/O problems.
@@ -145,8 +134,7 @@ func load(c *cli.Command) (pr *lang.Project, named []string, diags []diag.Diagno
 	for _, arg := range args {
 		pattern := filepath.ToSlash(arg)
 		base := arg
-		// A .volt file names its directory's package (§V1.7), so a
-		// go:generate line can point at the file it sits beside.
+		// A .volt file names its directory's package (§V1.7).
 		if strings.HasSuffix(base, ".volt") {
 			if st, err := os.Stat(base); err == nil && !st.IsDir() {
 				base = filepath.Dir(base)
@@ -268,9 +256,8 @@ func genRun(c *cli.Command) error {
 	paths := append([]string(nil), named...)
 	sort.Strings(paths)
 
-	// -o: one package, into one directory, whose package clause is the
-	// -package flag, else that of the Go files already there, else the
-	// Volt package's own. The client then lands beside the models (D77).
+	// -o writes one package into one directory; the client then lands
+	// beside the models (D77).
 	outDir := c.String("o")
 	if outDir != "" && len(paths) != 1 {
 		return cli.Exit(fmt.Sprintf("gen: -o writes one package; %d named", len(paths)), 2)
@@ -287,9 +274,7 @@ func genRun(c *cli.Command) error {
 	}
 
 	// Collect everything first, then refuse every clobber, then write:
-	// all or nothing across the whole project. A file whose bytes are
-	// already on disk is left alone: rewriting it would only bump its
-	// modification time and wake every editor and watcher on the tree.
+	// all or nothing across the whole project.
 	var out []outFile
 
 	// Every package generates on its own CPU (PERF-7); the files are
@@ -345,8 +330,7 @@ func genRun(c *cli.Command) error {
 	}
 
 	// --verify: the generators emit gofmt-canonical Go by construction
-	// (D75); this proves it for the project at hand, the way the golden
-	// tests prove it for theirs.
+	// (D75); this proves it for the project at hand.
 	if c.Bool("verify") {
 		problems := make([]string, len(out))
 		par.For(len(out), func(i int) {
@@ -366,17 +350,13 @@ func genRun(c *cli.Command) error {
 				return cli.Exit(p, 2)
 			}
 		}
-		// And the generated Go type-checks in the package it lands in
-		// (D98): every output directory is loaded with the outputs laid
-		// over it, before anything is written, so a wrong signature or
-		// a missing import is this run's error and never the next
-		// build's.
+		// The generated Go type-checks in the package it lands in (D98),
+		// before anything is written.
 		if p := outputsTypeCheck(out); p != "" {
 			return cli.Exit(p, 2)
 		}
 	}
 
-	// What is on disk already: read on every CPU, judged in order.
 	clobber := make([]string, len(out))
 	par.For(len(out), func(i int) {
 		f := &out[i]
@@ -395,9 +375,8 @@ func genRun(c *cli.Command) error {
 			return cli.Exit(fmt.Sprintf("gen: refusing to overwrite %s: it lacks the generated-code header", path), 2)
 		}
 	}
-	// An optional output that is no longer produced (every select or
-	// check removed) must not linger and keep enforcing deleted rules:
-	// a generated file — marker present — is ours to remove.
+	// An optional output that is no longer produced must not linger: a
+	// generated file, marker present, is ours to remove.
 	produced := map[string]bool{}
 	for _, f := range out {
 		produced[f.path] = true
@@ -563,10 +542,7 @@ func routesRun(c *cli.Command) error {
 }
 
 // genParts are the names -parts accepts, each one or more generated
-// files (§V1.7): models (nao_models.go: structs, params structs, enums),
-// queries (nao_queries.go, nao_dyn.go, nao_selects.go, nao_validate.go),
-// router (volt_handlers.go, volt_router.go, volt_paths.go,
-// volt_routes.go), client (volt_client.go) and sql (nao_schema.sql).
+// files (§V1.7).
 var genParts = []string{"models", "queries", "router", "client", "sql"}
 
 // partsParse resolves the -parts list, or the defaults the older flags
@@ -608,9 +584,9 @@ func partOf(name string) string {
 	}
 }
 
-// goPackageName reads the package clause of the Go files in dir, the
-// clause `volt gen -o` writes into that directory; "" when there are
-// none. Test files are skipped, as their package may be the external one.
+// goPackageName reads the package clause of the Go files in dir; ""
+// when there are none. Test files are skipped, as their package may be
+// the external one.
 func goPackageName(dir string) string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -633,11 +609,7 @@ func goPackageName(dir string) string {
 
 // stressCommand is `volt stress`: it writes the one-file project the
 // scaling tests and the benchmarks run on (internal/corpus, PERF-2) at
-// stress size, so the limits of check, gen, the language server and
-// the Go compiler on the generated code can be felt by hand (D80). Not
-// a command for ordinary use: the defaults are a thousand tables of a
-// hundred and fifty columns, every one routed, in one schema.volt at
-// the root of a module that builds against a Volt checkout.
+// stress size (D80).
 func stressCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "stress",

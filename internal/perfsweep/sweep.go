@@ -1,10 +1,7 @@
 // Package perfsweep is the profiling sweep (PERF-2): one-file projects
 // of growing table counts, every phase timed, measured and profiled on
-// its own, the numbers charted and rendered as a Markdown report. The
-// test lang.TestProfileSweep runs it at the reference sizes; the
-// script scripts/perf.go runs it on any machine and writes the report
-// with that machine's specification. Wall clock is reported, never
-// asserted.
+// its own, the numbers charted and rendered as a Markdown report. Wall
+// clock is reported, never asserted.
 package perfsweep
 
 import (
@@ -96,8 +93,6 @@ func Run(dir string, spec Spec, log func(format string, args ...any)) ([]Row, er
 		}
 		for _, ph := range phases {
 			row := Row{Tables: tables, Phase: ph.name, SourceKB: float64(st.Size()) / 1024, Iterations: spec.Reps}
-			// Timing runs, unprofiled: the best wall time and one run's
-			// allocation and heap.
 			best := time.Duration(1<<62 - 1)
 			for i := 0; i < max(spec.Reps, 1); i++ {
 				runtime.GC()
@@ -120,7 +115,6 @@ func Run(dir string, spec Spec, log func(format string, args ...any)) ([]Row, er
 			}
 			row.WallMS = float64(best.Microseconds()) / 1000
 			if spec.Profile > 0 {
-				// The profiled runs, enough of them to register.
 				prof := filepath.Join(dir, fmt.Sprintf("%s_%03d.prof", ph.name, tables))
 				f, err := os.Create(prof)
 				if err != nil {
@@ -191,8 +185,7 @@ func generate(pr *lang.Project) (int, error) {
 	return n, nil
 }
 
-// pprofTop renders the profile's top functions, volt's own and the
-// runtime's, as pprof prints them.
+// pprofTop renders the profile's top functions as pprof prints them.
 func pprofTop(prof string, cum bool) (string, error) {
 	args := []string{"tool", "pprof", "-top", "-nodecount=25"}
 	if cum {
@@ -203,7 +196,6 @@ func pprofTop(prof string, cum bool) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("pprof %s: %w", prof, err)
 	}
-	// Drop the header down to the column line.
 	s := string(out)
 	if i := strings.Index(s, "      flat  flat%"); i >= 0 {
 		s = s[i:]

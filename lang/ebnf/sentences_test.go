@@ -23,8 +23,6 @@ func TestSentencesCoverEveryChoiceAndAreRecognized(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// the line break is rendered, never a hole; layout rules hang off
-	// no rule; ops and pair off no rule the start reaches
 	if got := strings.Join(unreachable, ","); got != "newline,sp,comment,any char,pair,op,ops" {
 		t.Errorf("unreachable %q", got)
 	}
@@ -39,13 +37,9 @@ func TestSentencesCoverEveryChoiceAndAreRecognized(t *testing.T) {
 		}
 	}
 	want := map[string][]string{
-		// block: settings taken and left, items zero, one and two
-		"block": {"Block a { }", "Block a [ a ] { }", "Block a { a a\n\t}", "Block a { a a\n\ta a\n\t}"},
-		// path: names zero, one and two, contiguous
-		"path": {"Line /\n", "Line /a/\n", "Line /a/a/\n"},
-		// name: one letter, a second letter, a digit, two more characters
-		"name": {"Block a { }", "Block aa { }", "Block a1 { }", "Block aaa { }"},
-		// program: zero, one and two elements, on lines of their own
+		"block":   {"Block a { }", "Block a [ a ] { }", "Block a { a a\n\t}", "Block a { a a\n\ta a\n\t}"},
+		"path":    {"Line /\n", "Line /a/\n", "Line /a/a/\n"},
+		"name":    {"Block a { }", "Block aa { }", "Block a1 { }", "Block aaa { }"},
 		"program": {"", "Line /\n", "Line /\n\nLine /\n"},
 	}
 	for rule, w := range want {

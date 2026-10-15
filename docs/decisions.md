@@ -1583,3 +1583,18 @@ where the merge changed the facts.
   and the retained chunk texts are entries of their own. What it refuses: a publish
   without the version of the text it judged, and a position past a
   line's end that lands inside its line break.
+- **D106 — A comment is a contract with a citation; a test carries no
+  prose** (2026-10-15). A code comment states what a thing is or does,
+  a contract a caller relies on, or an invariant the code depends on,
+  in one or two sentences, and cites the spec section or decision that
+  holds the reason. Rationale, history, alternatives, measurements and
+  descriptions of callers do not live in comments: the citation is the
+  pointer and the docs are the text. Test files carry no comments
+  beyond directives; the test's name and its got/want are its
+  documentation, with one carve-out for the proof instruments (the
+  purity gate, D86 and D92; the grammar tests, D100; the session
+  golden, D101), where each check keeps the one-sentence rule it
+  enforces. Reason: the comments had grown to a quarter of the
+  hand-written code by repeating the decisions they cited, and the
+  Ebiten codebase shows the contract-plus-number form reads fine at
+  six times this size.

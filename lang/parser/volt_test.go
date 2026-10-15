@@ -39,7 +39,6 @@ func TestVoltSampleParses(t *testing.T) {
 	if len(diags) != 0 {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
-	// Declaration inventory, in order.
 	kinds := []string{}
 	for _, d := range f.Decls {
 		switch d.(type) {
@@ -117,7 +116,6 @@ func TestVoltSampleParses(t *testing.T) {
 	}
 }
 
-// Errors the grammar must reject, each with the spec section in the message.
 func TestVoltSyntaxErrors(t *testing.T) {
 	cases := []struct {
 		name, src, wantMsg string
@@ -138,21 +136,13 @@ func TestVoltSyntaxErrors(t *testing.T) {
 		{"quoted import path", "import (\n\t\"db\"\n)\n", "plain (unquoted) identifiers"},
 		{"quoted import alias", "import (\n\t\"d\" shared/db\n)\n", "plain (unquoted) identifier"},
 		{"trailing slash on scope", "Scope /admin/ {\n\tget / A.Index\n}\n", "without a trailing slash"},
-		// An empty segment ("//") is lexically unreachable — '//' opens a
-		// line comment (§V0.2) — so the non-segment case needs another
-		// token abutting the slash. (Quoted segments parse as identifiers
-		// and are rejected by the checker, §V4.1.6.)
 		{"non-segment after slash", "Scope / {\n\tget /users/[name: root] Users.Index\n}\n", "'/' must be followed by a path segment"},
-		// Group algebra (§V9.3): difference is '\\', never '-'; a set
-		// term is a parenthesized, comma-separated list of names.
 		{"group minus", "Group narrow = wide - ms_usage\n", "set difference is spelled '\\'"},
 		{"group empty set", "Group narrow = wide \\ ()\n", "expected identifier in group set member"},
 		{"group unclosed set", "Group narrow = wide \\ (a, b\n", "expected ')'"},
-		// Projections (§V11.7) share the group algebra's spelling.
 		{"projection minus", "Select p (* - a) for t\n", "exclusion is spelled '\\'"},
 		{"projection star alone", "Select p (*) for t\n", "needs at least one"},
 		{"projection unclosed set", "Select p (* \\ (a, b for t\n", "expected ')'"},
-		// `in` takes a literal list or one :list parameter (§V10.3).
 		{"in without list", "Pred p { site in }\n", "expected '('"},
 		{"in with column", "Pred p { site in other }\n", "expected '('"},
 	}
@@ -175,9 +165,6 @@ func TestVoltSyntaxErrors(t *testing.T) {
 	}
 }
 
-// Group expressions carry set terms and the '\\' operator (§V9.3): the
-// AST records each name of a parenthesized set and whether the term
-// was written as a set, so the checker can apply names one at a time.
 func TestGroupSetTerms(t *testing.T) {
 	f, diags := ParseFile("t.volt", "package db\nGroup farm = Metrics \\ (ms_dict, ms_notes) + extra\n")
 	if len(diags) != 0 {
@@ -210,8 +197,6 @@ func TestGroupSetTerms(t *testing.T) {
 	}
 }
 
-// A star projection takes exclusions one at a time or as a set, in any
-// mix; the AST flattens them into Cols in the order written (§V11.7).
 func TestProjectionSetTerms(t *testing.T) {
 	f, diags := ParseFile("t.volt", "package db\nSelect p (* \\ a \\ (b, c) \\ d) for t\n")
 	if len(diags) != 0 {
@@ -235,8 +220,6 @@ func TestProjectionSetTerms(t *testing.T) {
 	}
 }
 
-// One broken plug line must not abort the Pipeline: the parser recovers
-// to the next line, reports each bad plug, and keeps the good ones.
 func TestPipelineRecoversPerPlug(t *testing.T) {
 	src := "Pipeline api {\n\tuse volt.RequestID\n\tRequestID\n\tBearerAuth extra\n\tuse Last\n}\n"
 	f, diags := ParseFile("p.volt", src)
@@ -255,8 +238,6 @@ func TestPipelineRecoversPerPlug(t *testing.T) {
 	}
 }
 
-// A pure-DBML file must parse exactly as before: the Volt layer is a
-// strict superset (§V0).
 func TestVoltLayerIsSuperset(t *testing.T) {
 	src := "Table users {\n\tid integer [pk]\n}\n"
 	f, diags := ParseFile("s.volt", src)
@@ -271,8 +252,6 @@ func TestVoltLayerIsSuperset(t *testing.T) {
 	}
 }
 
-// Handler forms (§V4.3): Controller.Action, pkg.Query and a bare Query
-// of the package itself all parse; the checker tells them apart.
 func TestRouteHandlerForms(t *testing.T) {
 	f, diags := ParseFile("t.volt", "package app\nScope / {\n\tget /a Users.Show\n\tget /b db.UserList\n\tget /c UserList\n}\n")
 	if len(diags) != 0 {

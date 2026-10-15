@@ -1,6 +1,5 @@
-// Model-name analyzer — decision D10: Go models are the singular of the
-// table name, derived by the deterministic inflector in the inflect
-// package. When the inflector is only guessing, the schema should say the
+// Model-name analyzer (D10): Go models are the singular of the table
+// name; when the inflector is only guessing, the schema should say the
 // name out loud with the [model:] extension setting.
 package vet
 

@@ -1,6 +1,5 @@
 // Relationship and modeling analyzers: legal schemas that are likely to
-// misbehave as databases — missing primary keys, foreign keys onto
-// non-unique columns, type drift across a relationship, dependency cycles.
+// misbehave as databases.
 package vet
 
 import (

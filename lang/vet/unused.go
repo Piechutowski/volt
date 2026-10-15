@@ -1,6 +1,5 @@
-// Unused-declaration analyzers — DBML's version of Go's "imported and not
-// used". A declared-but-unreferenced enum, partial or alias is usually a
-// leftover from a refactor.
+// Unused-declaration analyzers: a declared-but-unreferenced enum,
+// partial or alias.
 package vet
 
 import (

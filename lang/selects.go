@@ -91,10 +91,7 @@ func (c *checker) dataQueries(pkg *Package) {
 	c.predRefCycles(pkg)
 
 	// §V11.7: minted row-type names share the package scope with every
-	// generated type; models and enums are claimed before any select.
-	// The names are claimed from the generators' own plan (models, params
-	// types, enum types, dynamic handles and functions, the Queries
-	// handle), so the list cannot drift from the output (D74).
+	// generated type, claimed from the plan (D74).
 	minted := pkg.plan.Names()
 
 	var memo *selectsMemo
@@ -127,9 +124,7 @@ func (c *checker) dataQueries(pkg *Package) {
 }
 
 // nameLookup is one question a select's check asked the generated-name
-// scope and the answer it got (D86, D93): returned by the check, kept
-// by the memo, and asked again on a later check to verify the scope
-// still answers the same.
+// scope and the answer it got (D86, D93).
 type nameLookup struct {
 	name, desc string
 	dup        bool
@@ -142,8 +137,7 @@ type nameAdd struct{ name, desc string }
 // selectsMemo remembers a package's checked selects, each by the
 // inputs of selectCheck (D86): its declaration, its members and their
 // models, the predicates it names, and the generated-name scope's
-// answers to the lookups it made, recorded and verified. A hit replays
-// the select's additions to the scope and its diagnostics.
+// answers to the lookups it made.
 type selectsMemo struct {
 	prev, next   map[*ast.Select]*selectEntry
 	Hits, Misses int
@@ -311,11 +305,8 @@ type selectMember struct {
 	member *check.TableInfo
 }
 
-// selectIndex builds the package's method-name index once: route
-// binding looks a query up by its generated name, and a scan over
-// every select and member per route is quadratic in a package that
-// routes every table of a wide group (D81). The first member minting
-// a name owns it (§V11.6), as in the scan it replaces.
+// selectIndex builds the package's method-name index once (D81). The
+// first member minting a name owns it (§V11.6).
 func (p *Package) selectIndex() {
 	p.selectByMethod = make(map[string]selectMember, len(p.Selects))
 	p.selectByName = make(map[string]*SelectInfo, len(p.Selects))
@@ -778,7 +769,7 @@ func (l *selectLowering) selectSettings(env *selectEnv) string {
 					continue
 				}
 				// Explicit over implicit (§V11.5): every column states
-				// its direction; there is no SQL-style silent asc.
+				// its direction.
 				mod := list.Mods[i]
 				if mod == nil {
 					l.errorf(id.Pos(), "order: every column states its direction — write %q or %q (§V11.5)", id.Name()+" asc", id.Name()+" desc")
@@ -1064,11 +1055,9 @@ func (e *selectEnv) inCheck(x *ast.PredIn) string {
 		return "1"
 	}
 	if x.List != nil {
-		// A list parameter binds as one JSON array and is unpacked by
-		// SQLite's json_each, so the statement stays static and
-		// prepared once (§V10.3, §V11.6, D66). Time columns are
-		// excluded: JSON has no time literal, and a text round trip
-		// would silently depend on the driver's storage format.
+		// A list parameter binds as one JSON array, unpacked by json_each
+		// (§V10.3, §V11.6, D66); time columns are excluded, JSON having
+		// no time literal.
 		if b.class == classTime {
 			e.errorf(x.Col.Pos(), "column %q (%s) cannot take a list parameter: JSON carries no date/time value (§V10.3)", b.name, b.goType)
 			return "1"

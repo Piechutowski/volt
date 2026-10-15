@@ -1,9 +1,6 @@
 // Select generation (docs/spec.md §V11.6-§V11.7): one typed method per
 // (select × group member), over WHERE/ORDER fragments the checker has
-// already typed and rendered, plus the projection row types — a shared
-// struct for explicit lists, per-member struct derivatives for the
-// star form. The heavy lifting — plans, scan functions, quoting — is
-// shared with the CRUD generator.
+// already typed and rendered, plus the projection row types.
 package golang
 
 import (
@@ -17,7 +14,7 @@ import (
 )
 
 // GenerateSelects renders nao_selects.go for the given instantiations.
-// fns must be non-empty; the caller decides whether the file exists.
+// fns must be non-empty.
 func GenerateSelects(f *ast.File, info *check.Info, fns []SelectFn, opts Options) ([]byte, error) {
 	return PlanBuild(f, info).Selects(fns, opts)
 }
@@ -63,8 +60,8 @@ func (pl *Plan) Selects(fns []SelectFn, opts Options) ([]byte, error) {
 				fmt.Fprintf(&body, "type %s struct {\n", fn.SharedType)
 				var rows align.Block
 				for _, f := range cols {
-					// The shared type belongs to the select, not to any one
-					// table: default tags, no per-table notes (A.5, §V11.7).
+					// The shared type carries default tags and no per-table
+					// notes (A.5, §V11.7).
 					fieldImports(imports, f.goType)
 					rows.Row(f.goField, f.goType, fmt.Sprintf("`db:%q json:%q`", f.colName, f.colName))
 				}
@@ -175,13 +172,11 @@ func rowScanEmit(b *strings.Builder, row string, cols []*fieldPlan) {
 	b.WriteString(")\n\treturn v, err\n}\n\n")
 }
 
-// SelectSQL renders the statement for one instantiation — shared with
-// the prepare-validation tests, so what is tested is what ships.
+// SelectSQL renders the statement for one instantiation.
 func SelectSQL(t *tableModel, fn SelectFn) string {
 	cols, err := selectColumns(t, fn)
 	if err != nil {
-		// The checker refuses such an instantiation (§V11.7); surfaced
-		// loudly if a caller bypasses it.
+		// The checker refuses such an instantiation (§V11.7).
 		return "-- " + err.Error()
 	}
 	names := make([]string, len(cols))
@@ -205,8 +200,7 @@ func SelectSQLFor(f *ast.File, info *check.Info, fn SelectFn) (string, error) {
 }
 
 // SelectRowType names the row type one instantiation returns (§V11.7)
-// and reports its fields — hover-grade truth for the tooling. One-shot
-// convenience over Plan.SelectRowType: it plans the whole file.
+// and reports its fields. It plans the whole file.
 func SelectRowType(f *ast.File, info *check.Info, fn SelectFn) (string, []FieldSig, error) {
 	return PlanBuild(f, info).SelectRowType(fn)
 }

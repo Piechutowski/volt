@@ -1,10 +1,6 @@
 // The shared naming plan (decision D74): one immutable Plan per checked
 // package, built once after the schema pass and read by the Volt
-// checker, the generators, vet and the language server. Every question
-// about a generated name — what a table's CRUD methods are called, what
-// fields a model carries, which identifiers a package mints — is
-// answered from here instead of being re-derived from the AST on every
-// call, which is what made checking cubic in tables per package.
+// checker, the generators, vet and the language server.
 package golang
 
 import (
@@ -41,8 +37,7 @@ type crudRef struct {
 // PlanBuild plans one checked file (a package's merged declarations).
 // A plan that cannot be built — an unmappable column type, a Go name
 // collision — still answers: Err reports the reason and every lookup
-// fails with it, so callers report the generation error where they
-// always did.
+// fails with it.
 func PlanBuild(f *ast.File, info *check.Info) *Plan {
 	return PlanBuildMemo(f, info, nil)
 }
@@ -165,15 +160,14 @@ func (pl *Plan) CRUDMethods(tableKey string) (model string, methods []CRUDMethod
 }
 
 // CRUDMethod finds the generated CRUD method with the given name; when
-// two tables would mint it, the table declared first owns it, as the
-// query generator's declaration-order emission does.
+// two tables would mint it, the table declared first owns it.
 func (pl *Plan) CRUDMethod(name string) (tableKey string, m CRUDMethod, ok bool) {
 	ref, ok := pl.methods[name]
 	return ref.tableKey, ref.method, ok
 }
 
 // CRUDMethodNames lists every generated CRUD method name in declaration
-// order: the candidates a did-you-mean hint is drawn from.
+// order.
 func (pl *Plan) CRUDMethodNames() []string { return pl.names }
 
 func crudMethodsOf(t *tableModel) []CRUDMethod { return t.crud }
@@ -205,9 +199,7 @@ func crudMethodsBuild(t *tableModel) []CRUDMethod {
 
 // ParamsValidators reports whether the table's CreateParams and
 // UpdateParams structs get a Validate method: each does when the struct
-// exists and carries every column of at least one check. The same rule
-// decides what the validator generator emits and what a generated
-// handler calls, so the two cannot disagree.
+// exists and carries every column of at least one check.
 func (pl *Plan) ParamsValidators(tableKey string, checks []CheckSpec) (create, update bool, err error) {
 	t, err := pl.table(tableKey)
 	if err != nil {
@@ -218,8 +210,7 @@ func (pl *Plan) ParamsValidators(tableKey string, checks []CheckSpec) (create, u
 }
 
 // ModelFields reports the exact struct fields the model generator emits
-// for the table with the given canonical key — hover-grade truth, from
-// the same plan the generator runs (spec §V11.6, Appendix A).
+// for the table with the given canonical key (spec §V11.6, Appendix A).
 func (pl *Plan) ModelFields(tableKey string) (model string, fields []FieldSig, err error) {
 	t, err := pl.table(tableKey)
 	if err != nil {
@@ -246,7 +237,7 @@ func fieldSigOf(fp *fieldPlan) FieldSig {
 }
 
 // SelectRowType names the row type one instantiation returns (§V11.7)
-// and reports its fields — hover-grade truth for the tooling.
+// and reports its fields.
 func (pl *Plan) SelectRowType(fn SelectFn) (string, []FieldSig, error) {
 	t, err := pl.table(fn.TableKey)
 	if err != nil {
@@ -286,12 +277,7 @@ func (pl *Plan) DynNameCollisions() []NameCollision {
 		return nil
 	}
 	// The report is the one a walk over every minted name in minting
-	// order produces — the fixed Queries name, the enums' types and
-	// constants, then each model's names in declaration order — pairing
-	// a name minted again with the origin that minted it first, at the
-	// later of the two by position. It is computed from the collisions
-	// alone: the enums' names are few, and the names two or more
-	// models mint the base keeps across plans (D99, D104).
+	// order produces, computed from the collisions alone (D99, D104).
 	seen := map[string]dynOrigin{"Queries": {kind: dynQueries}}
 	var out []NameCollision
 	for _, e := range pl.info.Enums {
@@ -308,9 +294,6 @@ func (pl *Plan) DynNameCollisions() []NameCollision {
 			out = dynArrive(out, seen, typeName+constName, dynOrigin{kind: dynEnumValue, e: e, v: v, pos: v.Pos()})
 		}
 	}
-	// The models' arrivals that collide: with a name the fixed name or
-	// an enum minted first, which stays the first origin of every later
-	// arrival, or with an earlier model's.
 	type arrival struct {
 		first, o  dynOrigin
 		pos, rank int
@@ -346,7 +329,7 @@ func (pl *Plan) DynNameCollisions() []NameCollision {
 		}
 	}
 	// Each origin mints one name, so (pos, rank) orders the arrivals
-	// totally: the walk's order, whatever order the maps gave.
+	// totally.
 	sort.Slice(arrivals, func(i, j int) bool {
 		a, b := arrivals[i], arrivals[j]
 		if a.pos != b.pos {
@@ -403,13 +386,7 @@ func dynOriginOf(o *nameOrigin) dynOrigin {
 // Names is the scope of package-level Go identifiers a package's
 // generated files mint (§V11.7): models, params structs, dynamic column
 // handles and option wrappers, enum types, the Queries handle and its
-// constructor — the scope a minted row type must not collide with. It
-// is read in layers, last writer first, as the one map it replaced was
-// written (D99): the names the checker adds during a check, the enums'
-// and the two fixed names of this plan, and the models' names, which
-// the plan memo keeps across plans and updates for the models that
-// changed. A description is rendered on lookup, since nearly every
-// name is never asked about.
+// constructor. It is read in layers, last writer first (D99).
 type Names struct {
 	base  *nameBase            // the models' names: read here, written by the plan build
 	enums map[string]*ast.Enum // enum type name -> declaration
@@ -426,19 +403,16 @@ const (
 	nameHandle                       // a dynamic column handle: table + field
 )
 
-// nameOrigin is one name a model mints and what it is: built with the
-// model (tableModel.names), in the order the names are minted, so the
-// scope's base can hold pointers into the models' own lists.
+// nameOrigin is one name a model mints and what it is, in the order the
+// names are minted.
 type nameOrigin struct {
 	name  string
 	kind  nameKind
 	idx   int // position in the model's list: a later name of the same model wins
 	table *tableModel
 	field *fieldPlan
-	// The dynamic layer mints a model's names under conditions of its
-	// own (D30): dyn says whether it mints this one, rank where the
-	// name falls in the model's minting order, which the collision
-	// report follows (DynNameCollisions).
+	// dyn says whether the dynamic layer mints this name (D30), rank
+	// where it falls in the model's minting order.
 	dyn  bool
 	rank int
 }
@@ -478,10 +452,8 @@ func (o *nameOrigin) describe() string {
 	return "the dynamic-layer function " + o.name
 }
 
-// nameBase is the models' names of one package, kept across plans:
-// each name's origins in the models that mint it, as pointers into the
-// models' own lists, and the models present, so a plan with one model
-// changed touches that model's names alone (D99).
+// nameBase is the models' names of one package, kept across plans, so a
+// plan with one model changed touches that model's names alone (D99).
 type nameBase struct {
 	origins map[string]nameSlot
 	models  map[*tableModel]bool
@@ -489,8 +461,7 @@ type nameBase struct {
 	dups    map[string]bool     // names two or more models mint for the dynamic layer
 }
 
-// nameSlot is a name's origins: the first held by value, since nearly
-// every name has one, the rest in a list.
+// nameSlot is a name's origins.
 type nameSlot struct {
 	first *nameOrigin
 	more  []*nameOrigin
@@ -585,8 +556,8 @@ func (s nameSlot) all() []*nameOrigin {
 	return append([]*nameOrigin{s.first}, s.more...)
 }
 
-// lookup answers the origin the one-map build would have kept for the
-// name: the model declared last, and its later name.
+// lookup answers the origin kept for the name: the model declared last,
+// and its later name.
 func (b *nameBase) lookup(name string) *nameOrigin {
 	slot := b.origins[name]
 	best := slot.first
@@ -599,8 +570,7 @@ func (b *nameBase) lookup(name string) *nameOrigin {
 }
 
 // Names returns the package's name scope for one check: the two fixed
-// names alone when the plan could not be built, so the checker's
-// collision rule still holds for what is certain.
+// names alone when the plan could not be built.
 func (pl *Plan) Names() *Names {
 	n := &Names{base: pl.base, enums: map[string]*ast.Enum{}, added: map[string]string{}}
 	if pl.err != nil {

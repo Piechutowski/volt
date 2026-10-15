@@ -3,8 +3,7 @@ package volt
 import "net/http"
 
 // HTTPError is the error-to-status contract: a handler error carrying
-// its own response code. DefaultErrorHandler and user error handlers
-// map it via errors.As-compatible assertion.
+// its own response code.
 type HTTPError interface {
 	error
 	StatusCode() int
@@ -18,9 +17,7 @@ type statusError struct {
 func (e *statusError) Error() string   { return e.msg }
 func (e *statusError) StatusCode() int { return e.code }
 
-// Is matches another status error by code, so errors.Is(err,
-// volt.ErrNotFound) holds for any 404 — a generated client's reply
-// included — whatever its message.
+// Is matches another status error by code, whatever its message.
 func (e *statusError) Is(target error) bool {
 	t, ok := target.(*statusError)
 	return ok && t.code == e.code
@@ -35,8 +32,7 @@ func Error(code int, msg string) error {
 }
 
 // Sentinels for the common cases. ErrNotFound is also what generated
-// shims return when a typed path parameter fails to parse (R6: a parse
-// failure is that route's 404, never a fallthrough).
+// shims return when a typed path parameter fails to parse (R6).
 var (
 	ErrNotFound   = Error(http.StatusNotFound, "not found")
 	ErrBadRequest = Error(http.StatusBadRequest, "bad request")
@@ -44,10 +40,8 @@ var (
 )
 
 // Detail is one item of a structured failure: which check failed and
-// which columns it reads, so a form can mark the fields. It is an
-// alias of an unnamed struct on purpose: nao's runtime declares the
-// identical alias, so its errors satisfy Detailer although neither
-// package imports the other.
+// which columns it reads. It is an alias of an unnamed struct: nao's
+// runtime declares the identical alias, so its errors satisfy Detailer.
 type Detail = struct {
 	Check   string   `json:"check"`             // the check's name or rendered form
 	Columns []string `json:"columns,omitempty"` // the columns the check reads

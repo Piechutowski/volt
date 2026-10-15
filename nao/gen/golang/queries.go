@@ -1,27 +1,5 @@
-// CRUD generation (nao_queries.go): the v0 query surface of Not an ORM.
-//
-// Per table (decisions D9, D15, D16, D17):
-//
-//	UserGet(ctx, id)              by primary key; composite keys take one
-//	                              positional argument per key column
-//	UserGetMany(ctx, ids)         single-column keys only; one IN query
-//	UserGetByEmail(ctx, email)    per unique column
-//	UserList(ctx)                 every row
-//	UserCreate(ctx, params)       INSERT ... RETURNING; params exclude the
-//	                              auto-increment key and defaulted columns
-//	UserUpdate(ctx, id, params)   rewrites every non-key column, RETURNING
-//	UserDelete(ctx, id)           rt.ErrNotFound when nothing matched
-//
-// UserCount moved to the dynamic layer (dyn.go) when predicates arrived:
-// one variadic method covers both the bare and the filtered count (D32).
-//
-// Tables without a primary key get only List/Create/Count (D17). SQL uses
-// named placeholders (:email) bound with sql.Named — the placeholder is
-// the column name, so argument order cannot exist as a concept (D15).
-// Identity arguments are positional, data arguments ride in a generated
-// params struct (D15). Table and column naming matches gen/sqlite's DDL
-// (schemas flattened: core.users -> core_users), so every generated
-// statement prepares against the generated schema.
+// CRUD generation (nao_queries.go): the v0 query surface of Not an ORM
+// (decisions D9, D15, D16, D17).
 package golang
 
 import (
@@ -36,9 +14,7 @@ import (
 	"github.com/Piechutowski/volt/lang/check"
 )
 
-// GenerateQueries renders the queries file for one checked DBML file. It
-// is the sibling of Generate: same package, second file, models assumed
-// present.
+// GenerateQueries renders the queries file for one checked DBML file.
 func GenerateQueries(f *ast.File, info *check.Info, opts Options) ([]byte, error) {
 	return PlanBuild(f, info).Queries(opts)
 }
@@ -71,9 +47,8 @@ type tableModel struct {
 	fields  []*fieldPlan // effective columns in definition order
 	pk      []*fieldPlan // identity columns in key order; empty = no pk
 
-	// Built with the model, since a memoized result is written by
-	// nobody (D92, D99): its CRUD methods, its field signatures, and
-	// the package-level names it mints.
+	// Built with the model (D92, D99): its CRUD methods, its field
+	// signatures, and the package-level names it mints.
 	crud  []CRUDMethod
 	sigs  []FieldSig
 	names []nameOrigin
@@ -126,8 +101,7 @@ func (t *tableModel) isPK(f *fieldPlan) bool {
 	return false
 }
 
-// createFields returns the caller-supplied Create columns (D16): the
-// auto-increment key and defaulted columns are the database's job.
+// createFields returns the caller-supplied Create columns (D16).
 func (t *tableModel) createFields() []*fieldPlan {
 	var out []*fieldPlan
 	for _, f := range t.fields {
@@ -139,9 +113,7 @@ func (t *tableModel) createFields() []*fieldPlan {
 	return out
 }
 
-// fieldCount is the number of columns across the planned tables: the
-// emitters size their buffers from it once instead of growing by
-// copying (D81).
+// fieldCount is the number of columns across the planned tables (D81).
 func (p *plan) fieldCount() int {
 	n := 0
 	for _, t := range p.tables {
@@ -164,9 +136,8 @@ func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 	sqlNames := map[string]string{}
 
 	// Every table's model is a pure function of the checked table and
-	// the enum types (D86), built on every CPU; the name collisions
-	// between tables are then judged in declaration order, so the
-	// first error is the same whatever the schedule.
+	// the enum types (D86), built on every CPU; name collisions are
+	// judged in declaration order.
 	type built struct {
 		tm  *tableModel
 		imp map[string]bool
@@ -221,8 +192,7 @@ func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 
 // enumTypes is the enum set as a model's input: canonical key to Go
 // type name, and the same pairs sorted by key, the map itself as a
-// memo key compared element by element (D91). Two equal pair lists
-// resolve every column type alike.
+// memo key compared element by element (D91).
 type enumTypes struct {
 	byKey map[string]string
 	pairs []enumType
@@ -242,8 +212,7 @@ func enumTypesOf(info *check.Info, byKey map[string]string) *enumTypes {
 
 // tableBuild is one table's model as a pure function of the checked
 // table and the enum types (D86): the model with its fields, keys and
-// names, and the imports its field types need. It reads nothing else
-// and writes nothing it did not create.
+// names, and the imports its field types need.
 func tableBuild(ti *check.TableInfo, enums *enumTypes) (*tableModel, map[string]bool, error) {
 	model, err := modelName(ti.Decl)
 	if err != nil {
@@ -353,8 +322,7 @@ func fieldBuild(enumTypes map[string]string, imports map[string]bool, cd *check.
 /* ===== naming helpers ===== */
 
 // sqlTableName flattens the schema qualifier the same way gen/sqlite does:
-// core.users -> core_users. The generated SQL must prepare against the
-// generated DDL.
+// core.users -> core_users.
 func sqlTableName(q *ast.QualName) string {
 	if s := q.Schema(); s != "" && s != "public" {
 		return s + "_" + q.Base()
@@ -364,8 +332,7 @@ func sqlTableName(q *ast.QualName) string {
 
 // sqlParamName derives a named-placeholder name from a column name.
 // SQLite parameter names are ASCII alphanumerics plus underscore; anything
-// else becomes an underscore ("full name" -> :full_name). Collisions are
-// a generation error, caught by the caller.
+// else becomes an underscore ("full name" -> :full_name).
 func sqlParamName(colName string) string {
 	var b strings.Builder
 	for _, r := range colName {
@@ -532,8 +499,7 @@ type queryEmitter struct {
 
 	needStrings bool
 	// needImports are the packages the signatures name: the identity
-	// and unique columns' types. Every other column type belongs to the
-	// models file, params structs included (D77).
+	// and unique columns' types (D77).
 	needImports map[string]bool
 }
 
@@ -621,7 +587,6 @@ func (e *queryEmitter) tableEmit(t *tableModel) {
 	lower := argName(t.model)
 	tbl := t.ti.Decl.Name.String()
 
-	// The types the signatures below name.
 	if len(t.pk) > 0 {
 		for _, f := range t.pk {
 			e.needImports[f.imp] = true
@@ -632,7 +597,6 @@ func (e *queryEmitter) tableEmit(t *tableModel) {
 	}
 	delete(e.needImports, "")
 
-	// scan helper
 	fmt.Fprintf(b, "// %sScan reads one %s row in generated column order.\n", lower, tbl)
 	fmt.Fprintf(b, "func %sScan(r rowScanner) (%s, error) {\n\tvar v %s\n\terr := r.Scan(", lower, t.model, t.model)
 	for i, f := range t.fields {
@@ -731,8 +695,7 @@ func (e *queryEmitter) rowsScan(t *tableModel, lower string) {
 func rowsScanEmit(b *strings.Builder, model, lower string) {
 	fmt.Fprintf(b, "\tif err != nil {\n\t\treturn nil, err\n\t}\n\tdefer rows.Close()\n")
 	// Never nil: an empty result is an empty list on every wire (JSON
-	// "[]", not "null"), so a query route's reply shape does not depend
-	// on whether anything matched.
+	// "[]", not "null").
 	fmt.Fprintf(b, "\tout := []%s{}\n\tfor rows.Next() {\n", model)
 	fmt.Fprintf(b, "\t\tv, err := %sScan(rows)\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tout = append(out, v)\n\t}\n", lower)
 	fmt.Fprintf(b, "\treturn out, rows.Err()\n}\n\n")

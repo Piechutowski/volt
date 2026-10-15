@@ -7,10 +7,9 @@ import (
 )
 
 // Vet reports legal-but-suspicious Volt: every lang/vet analyzer
-// (docs/lint.md) over each package's declarations as one file, the way
-// the checker sees them, and the project-level rule for pipelines no
-// scope pipes through. Run after Check on a checked project. Warnings
-// never change what conforming Volt is.
+// (docs/lint.md) over each package's declarations as one file, and the
+// project-level rule for pipelines no scope pipes through. Run after
+// Check on a checked project.
 func Vet(pr *Project) []diag.Diagnostic {
 	return vetWith(pr, nil)
 }
@@ -72,8 +71,7 @@ func vetPackage(pkg *Package, memo *vet.Memo) []diag.Diagnostic {
 	return append(out, vetUnusedPipelines(pkg)...)
 }
 
-// vetUnusedPipelines flags pipelines no scope pipes through: dead
-// middleware declarations that silently protect nothing.
+// vetUnusedPipelines flags pipelines no scope pipes through.
 func vetUnusedPipelines(pkg *Package) []diag.Diagnostic {
 	if pkg.Pipelines == nil {
 		return nil

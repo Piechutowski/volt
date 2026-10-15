@@ -1,20 +1,9 @@
 // Package golang generates Go model structs from a checked DBML file — one
 // struct per table, one string-typed enum per DBML enum, the params
-// structs its CRUD takes (D77), with db and json struct tags.
-//
-// DBML notes become Go doc comments at the corresponding level: the Project
-// note becomes the package comment, a table note the struct's doc comment,
-// a column note the field's doc comment, and enum / enum-value notes the
-// doc comments of the generated type and constants. Documentation is
-// written once, in the schema.
-//
-// The output is gofmt-canonical by construction (D75): aligned blocks
-// are laid out by gen/align exactly as gofmt's tabwriter would, and the
-// golden tests prove gofmt is the identity on every generated file.
-// Generated code depends only on the standard library and the rt runtime
-// package (D03). Nullable columns (no "not null", not part of a primary
-// key) are rt.Null[T] values (D13), except types where nil already
-// expresses NULL ([]byte, json.RawMessage).
+// structs its CRUD takes (D77), with db and json struct tags. The output
+// is gofmt-canonical by construction (D75) and depends only on the
+// standard library and the rt runtime package (D03); nullable columns
+// are rt.Null[T] values (D13).
 package golang
 
 import (
@@ -50,9 +39,8 @@ func Generate(f *ast.File, info *check.Info, opts Options) ([]byte, error) {
 	return modelsGenerate(f, info, p, perr, opts)
 }
 
-// modelsGenerate is Generate over an already built plan (D74), whose
-// tables carry the params structs' field plans; perr is the plan's
-// build error, reported after the models' own checks have had their say.
+// modelsGenerate is Generate over an already built plan (D74); perr is
+// the plan's build error, reported after the models' own checks.
 func modelsGenerate(f *ast.File, info *check.Info, p *plan, perr error, opts Options) ([]byte, error) {
 	if opts.Package == "" {
 		return nil, fmt.Errorf("no package name")
@@ -98,9 +86,7 @@ func (g *generator) run(p *plan, perr error) error {
 			return err
 		}
 	}
-	// The params structs follow the models (D77): they are the types a
-	// client shares with the server, so they live in the models file.
-	// Their fields are the plan's, the same the queries bind.
+	// The params structs follow the models (D77).
 	if perr != nil {
 		return perr
 	}
@@ -167,10 +153,7 @@ func (g *generator) enumTypesCollect() error {
 }
 
 // enumTypeName derives the Go type of an enum: structName with an "E"
-// prefix (D11, edited with D29). The prefix keeps enum types out of the
-// flat handle namespace: 'Table orders { status order_status }' — the
-// idiomatic enum pattern — mints the handle OrderStatus and the enum
-// type EOrderStatus instead of colliding.
+// prefix (D11, D29).
 func enumTypeName(schema, base string) (string, error) {
 	n, err := structName(schema, base)
 	if err != nil {
@@ -415,8 +398,7 @@ func settingNote(sl *ast.SettingList) string {
 }
 
 func enumNote(e *ast.Enum) string {
-	// enums carry notes only on values (spec §6.8); reserved for future
-	// body-note support
+	// enums carry notes only on values (spec §6.8)
 	return ""
 }
 

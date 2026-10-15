@@ -7,10 +7,6 @@
 // the repository root:
 //
 //	./scripts/perf.go -out perf-report
-//
-// The report is for comparing one machine against itself over time,
-// or against the reference sweep in docs/reference; wall clock is
-// never asserted anywhere.
 package main
 
 import (

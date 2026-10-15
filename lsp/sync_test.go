@@ -21,12 +21,6 @@ func ranged(r *protocol.Range, text string) any {
 	return protocol.TextDocumentContentChangeEvent{Range: r, Text: text}
 }
 
-// TestIncrementalSync proves the server applies ranged changes the
-// way the protocol defines them (D105): each item of one notification
-// against the text the items before it produced, positions in UTF-16
-// units, a CRLF newline deleted by a range that spans it, a range past
-// the end of the text landing at its end, and the document's text and
-// the server's mirror agreeing afterwards.
 func TestIncrementalSync(t *testing.T) {
 	s := NewServer()
 	ctx := &glsp.Context{Notify: func(string, any) {}}
@@ -62,16 +56,13 @@ func TestIncrementalSync(t *testing.T) {
 		Text: "Table users {\n  id int [pk]\n  name text\n}\n"}}); err != nil {
 		t.Fatal(err)
 	}
-	// Two items: the second is positioned in the text after the first.
 	change(uri, 2,
 		ranged(rangeAt(1, 5, 1, 8), "integer"),
 		ranged(rangeAt(2, 11, 2, 11), " [not null]"))
 	expect(uri, "Table users {\n  id integer [pk]\n  name text [not null]\n}\n", 2)
-	// A non-BMP character counts two units; the range after it says so.
 	change(uri, 3, ranged(rangeAt(2, 7, 2, 11), "\"na😀\""))
 	change(uri, 4, ranged(rangeAt(2, 13, 2, 13), "y"))
 	expect(uri, "Table users {\n  id integer [pk]\n  name \"na😀\"y [not null]\n}\n", 4)
-	// A whole-text item replaces everything, ranged items follow it.
 	change(uri, 5, protocol.TextDocumentContentChangeEventWhole{Text: "Table t {\n  id int\n}\n"}, ranged(rangeAt(1, 8, 1, 8), " [pk]"))
 	expect(uri, "Table t {\n  id int [pk]\n}\n", 5)
 
@@ -80,23 +71,14 @@ func TestIncrementalSync(t *testing.T) {
 		Text: "Table t {\r\n  id int [pk]\r\n  x int\r\n}\r\n"}}); err != nil {
 		t.Fatal(err)
 	}
-	// The newline of line 1 deleted: from the end of its text to the
-	// start of line 2.
 	change(crlf, 2, ranged(rangeAt(1, 13, 2, 0), " "))
 	expect(crlf, "Table t {\r\n  id int [pk]   x int\r\n}\r\n", 2)
-	// A range past the end of the text lands at the end; a character
-	// past the end of a line lands at the end of the line.
 	change(crlf, 3, ranged(rangeAt(9, 0, 9, 0), "// end"), ranged(rangeAt(0, 40, 0, 40), " // head"))
 	expect(crlf, "Table t { // head\r\n  id int [pk]   x int\r\n}\r\n// end", 3)
-	// An empty text is a deletion.
 	change(crlf, 4, ranged(rangeAt(0, 9, 0, 17), ""))
 	expect(crlf, "Table t {\r\n  id int [pk]   x int\r\n}\r\n// end", 4)
 }
 
-// TestPublishCarriesVersion proves every publish names the version of
-// the text its diagnostics are positioned in: the document's own
-// verdict outside a project at once, the background run's from the
-// snapshot it analyzed, a close's clearing publish none (D105).
 func TestPublishCarriesVersion(t *testing.T) {
 	var mu sync.Mutex
 	var published []protocol.PublishDiagnosticsParams

@@ -3,13 +3,9 @@
 // interfaces + the NewRouter constructor), volt_router.go (ServeMux
 // registrations with typed shims and statically composed pipelines),
 // volt_paths.go (typed reverse-URL helpers) and volt_routes.go (the
-// introspectable route table).
-//
-// The output is gofmt-canonical by construction (D75): aligned blocks
-// are laid out by gen/align exactly as gofmt's tabwriter would, and the
-// golden tests prove gofmt is the identity on every generated file.
-// Generated code imports the standard library and the volt runtime
-// package only.
+// introspectable route table). The output is gofmt-canonical by
+// construction (D75); generated code imports the standard library and
+// the volt runtime package only.
 package router
 
 import (
@@ -30,13 +26,11 @@ type Options struct {
 	// Source names the input (the package path), recorded in headers.
 	Source string
 	// Package overrides the package clause of the router files; empty
-	// means the Volt package's name. `volt gen -o` sets it from the
-	// directory the files land in (§V1.7).
+	// means the Volt package's name (§V1.7).
 	Package string
 	// ClientBeside writes the client beside the models instead of as a
 	// client subpackage (§V4.10.6): ClientBesideFile in package Package,
-	// row and params types named bare, NewClient as the constructor,
-	// nothing but the runtime imported.
+	// NewClient as the constructor.
 	ClientBeside bool
 }
 
@@ -58,8 +52,7 @@ func Generate(pkg *lang.Package, opts Options) (map[string][]byte, error) {
 	if !pkg.HasRouting() {
 		return nil, fmt.Errorf("package %s declares no routing elements", pkg.Path)
 	}
-	// Every file reads the package and writes its own generator, so the
-	// files are emitted on every CPU (PERF-7).
+	// The files are emitted on every CPU (PERF-7).
 	type emit struct {
 		name string
 		fn   func(*generator) error
@@ -200,8 +193,7 @@ func (g *generator) dataPackages() []*lang.QueryRef {
 }
 
 // clientOmitted reports whether no client package can exist: the
-// routing package is main and routes its own tables, so the row types
-// the client needs live in a package Go cannot import (§V4.10.1).
+// routing package is main and routes its own tables (§V4.10.1).
 func (g *generator) clientOmitted() bool {
 	if g.pkg.Name != "main" {
 		return false
@@ -333,8 +325,7 @@ func pipeKey(pipes []string) string { return strings.Join(pipes, ",") }
 
 // plugExpr renders one pipeline entry as a Go expression.
 func plugExpr(ref string, pkgName string) string {
-	// self-qualified references collapse to the bare name: the generated
-	// file lives in the same Go package as the middleware.
+	// self-qualified references collapse to the bare name
 	if rest, ok := strings.CutPrefix(ref, pkgName+"."); ok {
 		return rest
 	}
@@ -363,8 +354,7 @@ func (g *generator) routerEmit() error {
 	g.pf("func register(mux *http.ServeMux, c Controllers) {\n")
 
 	// Composed pipelines: one indexed var per distinct sequence, in
-	// first-use order. Index-based names cannot collide, whatever the
-	// pipeline names are.
+	// first-use order.
 	g.pipeVars = map[string]string{}
 	var seqs [][]string
 	for _, r := range g.pkg.Routes {
@@ -694,7 +684,7 @@ func methodOrAny(m string) string {
 // volt.Client. It imports the data packages and the runtime only.
 func (g *generator) clientEmit() error {
 	// Imports follow the methods: context for any method, net/http for
-	// raw ones; a package with no client method at all still compiles.
+	// raw ones.
 	var imports []string
 	anyMethod, rawMethod := false, false
 	for _, r := range g.pkg.Routes {
@@ -716,9 +706,8 @@ func (g *generator) clientEmit() error {
 	local := false
 	for _, q := range g.dataPackages() {
 		// A package routing its own tables is imported for its row
-		// types (§V4.10.1); Generate omits the client when that package
-		// is main. Beside the models (§V4.10.6) the types are this
-		// package's own and nothing is imported.
+		// types (§V4.10.1); beside the models (§V4.10.6) nothing is
+		// imported.
 		local = local || q.Local
 		if !g.opts.ClientBeside {
 			imports = append(imports, dataImport(q))
@@ -736,8 +725,7 @@ func (g *generator) clientEmit() error {
 	}
 	ctor := "New"
 	if g.opts.ClientBeside {
-		// No package doc: the file joins a package that has its own. The
-		// constructor cannot be New, which the query layer beside it
+		// The constructor cannot be New, which the query layer beside it
 		// declares.
 		g.headerFor(g.pkgName(), "", imports...)
 		ctor = "NewClient"
@@ -793,8 +781,6 @@ func (g *generator) clientEmit() error {
 		}
 		url := "volt.URL(" + pathExpr(r) + ")"
 		if len(opts) > 0 || body.Len() > 0 {
-			// Scalar query parameters seed the option list; list
-			// parameters append to it in the loops rendered above.
 			loops := body.String()
 			body.Reset()
 			fmt.Fprintf(&body, "\tq := []volt.URLOption{%s}\n%s", strings.Join(opts, ", "), loops)

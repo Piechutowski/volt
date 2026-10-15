@@ -7,12 +7,10 @@ import (
 	"unicode/utf8"
 )
 
-// Language is a grammar with the lexical facts a recognizer needs and
-// the spec states in prose beside the productions: which rules are
-// tokens, what may lie between the symbols of the others, where a
-// required newline is satisfied without one, where symbols are
-// contiguous, and how a program is cut into elements. Each field
-// cites the rule it encodes.
+// Language is a grammar with the lexical facts a recognizer needs:
+// which rules are tokens, what may lie between the symbols of the
+// others, where a required newline is satisfied without one, where
+// symbols are contiguous, and how a program is cut into elements.
 type Language struct {
 	G *Grammar
 

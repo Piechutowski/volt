@@ -2,16 +2,7 @@ package parser
 
 // Parsing by element (D83, D88, PERF-10): a file is a sequence of
 // chunks, one per top-level element, cut where the scanner says an
-// element begins (spec §3.2.5): an unquoted identifier in the first
-// column outside every brace, string and comment. Each chunk is scanned and parsed as a
-// token.File of its own with a base offset and line in the whole, and
-// the parse of the file is the parse of its chunks in order: the
-// scanner stops at an element start, so an element cannot read past
-// the next one, and a chunk's parse is a function of its text alone.
-// The next parse of the same file keeps every chunk whose text stands
-// unchanged at a place that is still a chunk's — the element's nodes
-// and diagnostics as they are, relocated by one store of the base —
-// and scans and parses only the text between.
+// element begins (spec §3.2.5).
 
 import (
 	"slices"
@@ -30,10 +21,8 @@ type Reuse struct {
 }
 
 // chunk is one element's text and parse. starts says its first token
-// is an element start at its first byte, so it may stand wherever an
-// element may; bound says the scan ended at an element start rather
-// than at the text's end, so its EOF reads as one and the same text
-// parses the same wherever an element follows.
+// is an element start at its first byte; bound says the scan ended at
+// an element start rather than at the text's end.
 type chunk struct {
 	text   string
 	file   *token.File
@@ -97,8 +86,7 @@ func ParseFileReuse(filename, src string, prev *Reuse) (*ast.File, []diag.Diagno
 // chunkReuse finds a previous chunk that is the chunk at pos: its text
 // is what src holds there; it may stand there (any chunk at the start
 // of the file, an element anywhere else); and what follows it is what
-// followed it before, an element start (a property of the bytes there
-// alone, because the chunk ended at one) or the end of the file. The
+// followed it before, an element start or the end of the file. The
 // match is consumed, so identical chunks are reused once each.
 func chunkReuse(old map[string][]*chunk, src string, pos int) *chunk {
 	rest := src[pos:]

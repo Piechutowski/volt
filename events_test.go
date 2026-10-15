@@ -19,7 +19,6 @@ func TestBrokerFanOutReplayAndReconnect(t *testing.T) {
 	}, nil))
 	defer srv.Close()
 
-	// Published before anyone listens: replayed to a fresh subscriber.
 	if err := b.Publish("compute.started", progress{0, 3}); err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +51,6 @@ func TestBrokerFanOutReplayAndReconnect(t *testing.T) {
 		}
 	}
 
-	// Resume: a client that was at ID 3 gets only what came after.
 	b.Publish("compute.finished", progress{3, 3})
 	resumed := c.streamAfter(t, srv.URL, 3)
 	if resumed.ID != 4 || resumed.Name != "compute.finished" {
@@ -60,8 +58,6 @@ func TestBrokerFanOutReplayAndReconnect(t *testing.T) {
 	}
 }
 
-// streamAfter opens one connection with Last-Event-ID and returns the
-// first event it yields.
 func (c *Client) streamAfter(t *testing.T, base string, last uint64) Event {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -84,7 +80,6 @@ func TestBrokerDropsStalledSubscriber(t *testing.T) {
 	for i := 0; i < 2+64+1; i++ {
 		b.Publish("x", i)
 	}
-	// The channel was closed on overflow; draining it ends with !ok.
 	closed := false
 	for range 200 {
 		if _, ok := <-ch; !ok {
@@ -109,7 +104,7 @@ func TestStreamReconnectsAfterServerRestart(t *testing.T) {
 	if ev := <-events; ev.Name != "one" {
 		t.Fatalf("first = %+v", ev)
 	}
-	srv.CloseClientConnections() // the stream drops; Stream reconnects with Last-Event-ID
+	srv.CloseClientConnections()
 	time.Sleep(50 * time.Millisecond)
 	b.Publish("two", 2)
 	select {

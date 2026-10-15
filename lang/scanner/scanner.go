@@ -1,20 +1,9 @@
 // Package scanner tokenizes DBML source (spec §3), playing the role of
 // go/scanner in the Go toolchain.
 //
-// The implementation uses Rob Pike's state-function design ("Lexical
-// Scanning in Go", GTUG Sydney 2011): the scanner is a loop
-//
-//	for state := anyScan; state != nil; state = state(s) {}
-//
-// where each state is a func(*Scanner) stateFn that consumes input, emits
-// tokens, and returns the next state. Control flow lives in the type
-// system instead of an explicit state variable.
-//
 // Two rules govern tokenization (spec §3.1): left-to-right single pass,
 // and longest match. Newlines are not emitted as tokens; instead each
-// token records whether a line break precedes it (Token.NLBefore) — the
-// same trick as Go's automatic semicolon insertion, adapted to DBML's
-// newline-terminated statements.
+// token records whether a line break precedes it (Token.NLBefore).
 package scanner
 
 import (
@@ -29,8 +18,7 @@ import (
 
 // Scan tokenizes src. It always returns the tokens produced so far, with a
 // terminating EOF token, plus any lexical errors found (spec §3). Scanning
-// continues after an error where possible, so a broken file still yields a
-// best-effort token stream for the parser.
+// continues after an error where possible.
 func Scan(filename, src string) ([]token.Token, []diag.Diagnostic) {
 	return ScanFile(token.NewFile(filename, src))
 }
@@ -41,9 +29,8 @@ func Scan(filename, src string) ([]token.Token, []diag.Diagnostic) {
 // no column (D90). Every token that begins a top-level element
 // (§3.2.5) is flagged; nothing stops there.
 func ScanFile(f *token.File) ([]token.Token, []diag.Diagnostic) {
-	// Schema text runs about six bytes per token; sizing the slice
-	// once spares the doublings and their copies (PERF-7).
-	s := newScanner(f, make([]token.Token, 0, len(f.Src)/4+16)) // measured: a token per four bytes of schema (D81)
+	// The token slice is sized once (PERF-7).
+	s := newScanner(f, make([]token.Token, 0, len(f.Src)/4+16)) // a token per four bytes of schema (D81)
 	s.run()
 	s.emit(token.EOF, "")
 	return s.toks, s.errs
@@ -53,9 +40,8 @@ func ScanFile(f *token.File) ([]token.Token, []diag.Diagnostic) {
 // D88): the tokens before the next element start after the first
 // byte, then an EOF standing at that start, which is the end returned
 // and whose text names what it is; without one, the whole text and an
-// EOF at its end. bound reports the former: the chunk ended at an
-// element start, so the same text scans the same wherever one
-// follows it. buf is a token slice to reuse, or nil.
+// EOF at its end. bound reports the former. buf is a token slice to
+// reuse, or nil.
 func ScanChunk(f *token.File, buf []token.Token) (toks []token.Token, errs []diag.Diagnostic, end int, bound bool) {
 	s := newScanner(f, buf)
 	s.chunk = true
@@ -74,9 +60,8 @@ func ScanChunk(f *token.File, buf []token.Token) (toks []token.Token, errs []dia
 const ElementStart = "the start of the next element (§3.2.5)"
 
 // StartsDecl reports whether text begins, at its very first byte, a
-// top-level element (§3.2.5): scanned from the initial state, its
-// first token is an unquoted identifier at offset zero. One token is
-// scanned, whatever the text's length.
+// top-level element (§3.2.5). One token is scanned, whatever the
+// text's length.
 func StartsDecl(text string) bool {
 	var buf [1]token.Token
 	s := newScanner(token.NewFile("", text), buf[:0])
@@ -88,8 +73,7 @@ func StartsDecl(text string) bool {
 
 // newScanner is a scanner at the start of f's text, in the initial
 // state: outside every string, comment and brace, after a line
-// break. Every chunk begins in it (§3.2.5), which is what lets a
-// chunk scan alone.
+// break. Every chunk begins in it (§3.2.5).
 func newScanner(f *token.File, buf []token.Token) *Scanner {
 	s := &Scanner{src: f.Src, file: f, pos: cursor{line: 1, col: 1}, toks: buf[:0]}
 	s.nlBefore = true // start of file counts as a line break
@@ -119,8 +103,7 @@ type Scanner struct {
 
 	// depth counts the open braces, never below zero: an unquoted
 	// identifier in the first column at depth zero begins a top-level
-	// element (§3.2.5). Braces alone, so that an unclosed bracket in a
-	// body reaches no further than the body's closing brace.
+	// element (§3.2.5).
 	depth int
 	// chunk asks to stop before the first element start after the
 	// first byte; done reports it was reached, s.start at it.
@@ -168,9 +151,7 @@ func (s *Scanner) peek() rune {
 // peekAt is the rune n runes on, or eof: at the end of the text, and
 // past a line break. The scanner cannot see beyond a line break it
 // has not consumed, and only a string or a comment consumes one
-// inside a token, so a token's kind and text are a function of the
-// bytes up to the line break after it (D95): a chunk scans the same
-// whatever follows its last line.
+// inside a token (D95).
 func (s *Scanner) peekAt(n int) rune {
 	off := s.crSkip(s.pos.Offset)
 	for ; n > 0; n-- {
@@ -235,9 +216,8 @@ func (s *Scanner) emit(kind token.Kind, val string) {
 // tokEmit appends the token at the marked start, flagged as an element
 // start when it is one (§3.2.5): an unquoted identifier in the first
 // column at depth zero. A chunk scan stops before the first such token
-// after the first byte, with s.start at it; the token is the next
-// chunk's, and the depth counts the token's own brace only after it is
-// kept.
+// after the first byte, with s.start at it; the depth counts the
+// token's own brace only after it is kept.
 func (s *Scanner) tokEmit(t token.Token) {
 	t.Pos = s.start.position(s.file)
 	t.Len = int32(s.pos.Offset - s.start.Offset)
@@ -278,7 +258,6 @@ func isHex(r rune) bool {
 
 // anyScan is the top-level state: it dispatches on the next rune.
 func anyScan(s *Scanner) stateFn {
-	// Blanks and line breaks in one loop, not one state round each.
 	for {
 		if r := s.peek(); r == ' ' || r == '\t' {
 			s.next()
@@ -511,8 +490,8 @@ func colorScan(s *Scanner) stateFn {
 }
 
 func identScan(s *Scanner) stateFn {
-	// ASCII fast path: an identifier is nearly always [A-Za-z0-9_]
-	// bytes, one column each; the rune loop below handles the rest.
+	// ASCII fast path, one column per byte; the rune loop below handles
+	// the rest.
 	off := s.pos.Offset
 	for off < len(s.src) && asciiIdent[s.src[off]] {
 		off++

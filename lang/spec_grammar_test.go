@@ -22,16 +22,15 @@ import (
 // accepted by the front end exactly when the grammar accepts it.
 
 type specBlock struct {
-	line    int    // the first line of the block in spec.md
-	heading string // the nearest heading above
-	section string // the nearest ## heading above
-	part    int    // 1 (schema core) or 2 (project and routing)
+	line    int
+	heading string
+	section string
+	part    int
 	g       *ebnf.Grammar
 }
 
 func (b specBlock) collected() bool { return strings.HasPrefix(b.section, "Collected grammar") }
 
-// specGrammarBlocks reads every ```ebnf block of the spec.
 func specGrammarBlocks(t *testing.T) []specBlock {
 	t.Helper()
 	lines := strings.Split(specText(t), "\n")
@@ -71,8 +70,7 @@ func specGrammarBlocks(t *testing.T) []specBlock {
 // sections' blocks: Part I's rules, then Part II's, which may only add
 // names, except that §V12 redefines check (its first alternative is
 // §6.6's), and the collected grammar of Part II extends element and
-// setting value by reference. The lexical facts beside the grammar
-// are the spec's prose rules, each cited.
+// setting value by reference.
 func specLanguage(t *testing.T) *ebnf.Language {
 	t.Helper()
 	blocks := specGrammarBlocks(t)
@@ -204,7 +202,7 @@ func TestSpecCollectedGrammarsRepeatTheSections(t *testing.T) {
 		for _, r := range b.g.Rules {
 			seen[r.Name] = true
 			if b.part == 2 && (r.Name == "element" || r.Name == "setting value") {
-				continue // extended by reference, checked by specLanguage
+				continue
 			}
 			def, ok := sections[b.part][r.Name]
 			if !ok {
@@ -223,7 +221,6 @@ func TestSpecCollectedGrammarsRepeatTheSections(t *testing.T) {
 	}
 }
 
-// specSentences derives the grammar's sentences once per test binary.
 func specSentences(t *testing.T) (*ebnf.Language, []ebnf.Sentence) {
 	t.Helper()
 	l := specLanguage(t)
@@ -231,9 +228,6 @@ func specSentences(t *testing.T) (*ebnf.Language, []ebnf.Sentence) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Rules no program reaches: the layout rules, punct, which lists
-	// the punctuation for the reader, and pred keyword, an exclusion
-	// set referenced only on the right of an exception.
 	want := "comment, line comment, block comment, block comment body, punct, pred keyword"
 	if got := strings.Join(unreachable, ", "); got != want {
 		t.Errorf("rules no sentence reaches: %s\nwant: %s", got, want)
@@ -283,8 +277,6 @@ func TestSpecGrammarSentencesParse(t *testing.T) {
 	t.Logf("%d sentences over %d rules", len(sentences), len(byRule))
 }
 
-// specFrontEnd is the whole front end on one text: parse, load as a
-// one-package project, check. What it rejects, the language rejects.
 func specFrontEnd(t *testing.T) func(text string) bool {
 	t.Helper()
 	root := t.TempDir()

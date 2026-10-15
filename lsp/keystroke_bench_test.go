@@ -13,14 +13,6 @@ import (
 	"github.com/Piechutowski/volt/internal/corpus"
 )
 
-// BenchmarkKeystroke is the editor's whole path in process: one
-// keystroke inside one table of a one-file project, from didChange to
-// the publish of its diagnostics, with the debounce zeroed. The stdio
-// replay of docs/editor.md §8 measures the same path with the
-// transport; this one is repeatable enough to compare commits.
-// keystrokeSpec is the benchmarks' project: 200 tables of 12 columns
-// in one file, or the size VOLT_KEYSTROKE_TABLES and
-// VOLT_KEYSTROKE_COLUMNS name, which scripts/perf.go sets to sweep it.
 func keystrokeSpec() corpus.Spec {
 	spec := corpus.Spec{Tables: 200, Columns: 12, Single: true}
 	if n, err := strconv.Atoi(os.Getenv("VOLT_KEYSTROKE_TABLES")); err == nil && n > 0 {
@@ -71,9 +63,6 @@ func BenchmarkKeystroke(b *testing.B) {
 	}
 }
 
-// BenchmarkDocumentUpdateLocal is the document's own front end alone,
-// on the same keystroke: what the handler goroutine pays before the
-// background run is even kicked.
 func BenchmarkDocumentUpdateLocal(b *testing.B) {
 	root := b.TempDir()
 	spec := keystrokeSpec()

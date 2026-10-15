@@ -11,7 +11,6 @@ import (
 const navSchema = "package db\n\nTable posts {\n\tid    integer [pk]\n\ttitle text\n}\n"
 const navRoutes = "package app\n\nimport (\n\tdb\n)\n\nPipeline api {\n\tuse volt.RequestID\n}\n\nScope / [pipe: api] {\n\tresources db.posts\n}\n"
 
-// navProject materializes the two-package project both tests use.
 func navProject(t *testing.T) (root, schema, routes string) {
 	t.Helper()
 	root = voltProject(t, map[string]string{
@@ -22,9 +21,6 @@ func navProject(t *testing.T) (root, schema, routes string) {
 	return root, filepath.Join(root, "db", "schema.volt"), filepath.Join(root, "app", "routes.volt")
 }
 
-// TestVoltDefinitionCrossPackage: go-to-definition on `db.Post` in
-// routes.volt lands on `Table posts` in db/schema.volt — a different
-// file, in a different package.
 func TestVoltDefinitionCrossPackage(t *testing.T) {
 	_, schema, routes := navProject(t)
 	d := NewDocument("file://"+routes, navRoutes)
@@ -36,19 +32,16 @@ func TestVoltDefinitionCrossPackage(t *testing.T) {
 	if loc.URI != "file://"+schema {
 		t.Fatalf("definition URI = %s, want %s", loc.URI, "file://"+schema)
 	}
-	// "Table posts" is on line 3 (0-based line 2), name at column 6.
 	if loc.Range.Start.Line != 2 || loc.Range.Start.Character != 6 {
 		t.Errorf("definition range = %+v, want line 2 char 6", loc.Range.Start)
 	}
 }
 
-// TestVoltDefinitionPipeline: `pipe: api` resolves to the Pipeline
-// declaration in the same file.
 func TestVoltDefinitionPipeline(t *testing.T) {
 	_, _, routes := navProject(t)
 	d := NewDocument("file://"+routes, navRoutes)
 
-	loc := d.Definition(posOf(t, navRoutes, "api", 1)) // 0 is the declaration
+	loc := d.Definition(posOf(t, navRoutes, "api", 1))
 	if loc == nil {
 		t.Fatal("no definition for pipe: api")
 	}
@@ -57,9 +50,6 @@ func TestVoltDefinitionPipeline(t *testing.T) {
 	}
 }
 
-// TestVoltReferencesFindUses: asking for references on the table
-// declaration in schema.volt finds the `resources db.posts` use over in
-// app/routes.volt.
 func TestVoltReferencesFindUses(t *testing.T) {
 	_, schema, routes := navProject(t)
 	d := NewDocument("file://"+schema, navSchema)
@@ -79,22 +69,18 @@ func TestVoltReferencesFindUses(t *testing.T) {
 	}
 }
 
-// TestVoltDefinitionImport: the import path jumps to the package.
 func TestVoltDefinitionImport(t *testing.T) {
 	_, schema, routes := navProject(t)
 	d := NewDocument("file://"+routes, navRoutes)
 
 	pos := posOf(t, navRoutes, "\tdb\n", 0)
-	pos.Character++ // onto the identifier itself
+	pos.Character++
 	loc := d.Definition(pos)
 	if loc == nil || loc.URI != "file://"+schema {
 		t.Fatalf("import definition = %v, want %s", loc, "file://"+schema)
 	}
 }
 
-// TestVoltNavOutsideProjectIsQuiet: with no go.mod above it, the
-// project index is absent and navigation must not panic or invent
-// locations.
 func TestVoltNavOutsideProjectIsQuiet(t *testing.T) {
 	d := NewDocument("file:///lone.volt", navRoutes)
 	if d.vindex != nil {
@@ -108,8 +94,6 @@ func TestVoltNavOutsideProjectIsQuiet(t *testing.T) {
 	}
 }
 
-// TestVoltHoverTableShowsModel: hovering the table a resources
-// declaration names shows the table and the Go model it generates.
 func TestVoltHoverTableShowsModel(t *testing.T) {
 	_, _, routes := navProject(t)
 	d := NewDocument("file://"+routes, navRoutes)
@@ -124,13 +108,11 @@ func TestVoltHoverTableShowsModel(t *testing.T) {
 			t.Errorf("hover missing %q:\n%s", want, md)
 		}
 	}
-	// The routed key type is what a handler signature will use.
 	if !strings.Contains(md, "int32") {
 		t.Errorf("hover should name the key's route parameter type:\n%s", md)
 	}
 }
 
-// TestVoltHoverPipeline: hovering a pipe: reference lists its plugs.
 func TestVoltHoverPipeline(t *testing.T) {
 	_, _, routes := navProject(t)
 	d := NewDocument("file://"+routes, navRoutes)
@@ -145,8 +127,6 @@ func TestVoltHoverPipeline(t *testing.T) {
 	}
 }
 
-// TestVoltHoverDBMLStillWorks: the single-file DBML hover is unchanged
-// for symbols the project index does not own.
 func TestVoltHoverDBMLStillWorks(t *testing.T) {
 	_, schema, _ := navProject(t)
 	d := NewDocument("file://"+schema, navSchema)
@@ -156,9 +136,6 @@ func TestVoltHoverDBMLStillWorks(t *testing.T) {
 	}
 }
 
-// TestVoltRenameCrossFile: renaming the table in schema.volt must also
-// rewrite the resources declaration in routes.volt — the two files are
-// one project, so a rename that touched only one would break the other.
 func TestVoltRenameCrossFile(t *testing.T) {
 	_, schema, routes := navProject(t)
 	d := NewDocument("file://"+schema, navSchema)
@@ -184,9 +161,6 @@ func TestVoltRenameCrossFile(t *testing.T) {
 	}
 }
 
-// TestVoltRenameFromReference: the same rename started from the
-// reference side (routes.volt) works too — this is the position that
-// used to answer "nothing renameable at this position".
 func TestVoltRenameFromReference(t *testing.T) {
 	_, schema, routes := navProject(t)
 	d := NewDocument("file://"+routes, navRoutes)
@@ -203,9 +177,6 @@ func TestVoltRenameFromReference(t *testing.T) {
 	}
 }
 
-// TestVoltRenameKeepsQualifier: renaming `db.posts` from the reference
-// rewrites only the name — the `db.` qualifier must survive. (It used
-// to be swallowed because the hover hit-span doubled as the edit span.)
 func TestVoltRenameKeepsQualifier(t *testing.T) {
 	_, _, routes := navProject(t)
 	d := NewDocument("file://"+routes, navRoutes)
@@ -234,10 +205,6 @@ func TestVoltRenameKeepsQualifier(t *testing.T) {
 	}
 }
 
-// TestSiblingDiagnosticsFollowSchemaEdits: routes.volt's diagnostics
-// must track edits to the OPEN schema buffer — break the table name and
-// the error appears; revert and it clears. (The server-level republish
-// is exercised by the stdio session; this pins the recompute itself.)
 func TestSiblingDiagnosticsFollowSchemaEdits(t *testing.T) {
 	_, schema, routes := navProject(t)
 
@@ -250,7 +217,6 @@ func TestSiblingDiagnosticsFollowSchemaEdits(t *testing.T) {
 		t.Fatalf("clean project reports %v", d.Diags)
 	}
 
-	// The schema buffer renames the table: routes.volt is now wrong.
 	schemaText = strings.Replace(navSchema, "Table posts", "Table articles", 1)
 	d.Update(d.Text)
 	found := false
@@ -263,7 +229,6 @@ func TestSiblingDiagnosticsFollowSchemaEdits(t *testing.T) {
 		t.Fatalf("stale: schema renamed but no error; diags = %v", d.Diags)
 	}
 
-	// The schema buffer reverts: the error must clear.
 	schemaText = navSchema
 	d.Update(d.Text)
 	if len(d.Diags) != 0 {
@@ -271,18 +236,13 @@ func TestSiblingDiagnosticsFollowSchemaEdits(t *testing.T) {
 	}
 }
 
-// TestVoltCompleteQualifiedTables: after `db.` (and mid-word `db.p`)
-// the tables of the imported package complete, with the key in the
-// detail. This is cross-file knowledge only the project index has.
 func TestVoltCompleteQualifiedTables(t *testing.T) {
 	_, _, routes := navProject(t)
-	// Uppercase on purpose: model-name muscle memory types db.P, and
-	// the completion is how the table's real spelling is learned.
 	text := strings.Replace(navRoutes, "resources db.posts", "resources db.P", 1)
 	d := NewDocument("file://"+routes, text)
 
 	pos := posOf(t, text, "db.P", 0)
-	pos.Character += 4 // cursor after "db.P"
+	pos.Character += 4
 	items := d.Complete(pos)
 	if len(items) != 1 || items[0].Label != "posts" {
 		t.Fatalf("completion after db.P = %v, want [posts]", items)
@@ -292,8 +252,6 @@ func TestVoltCompleteQualifiedTables(t *testing.T) {
 	}
 }
 
-// TestVoltCompleteResourcesOffersTablesAndImports: right after
-// `resources ` the local tables and the import qualifiers complete.
 func TestVoltCompleteResourcesOffersTablesAndImports(t *testing.T) {
 	_, _, routes := navProject(t)
 	text := strings.Replace(navRoutes, "resources db.posts", "resources ", 1)
@@ -310,10 +268,6 @@ func TestVoltCompleteResourcesOffersTablesAndImports(t *testing.T) {
 	}
 }
 
-// TestVoltCompleteLeavesDBMLChains: a DBML dot-chain whose first
-// segment is not an import qualifier falls through to the single-file
-// completion — `users.` in a Ref still lists the table's columns, even
-// with the project index active.
 func TestVoltCompleteLeavesDBMLChains(t *testing.T) {
 	root := voltProject(t, map[string]string{
 		"go.mod": "module lsptest\n",

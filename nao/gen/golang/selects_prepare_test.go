@@ -13,11 +13,6 @@ import (
 	sqlitegen "github.com/Piechutowski/volt/nao/gen/sqlite"
 )
 
-// TestSelectsPrepare is the §V11.6 promise made executable: every select
-// statement the generator emits for the fixture package — group
-// selects, projections, typed checks in the DDL — must prepare on a
-// real SQLite loaded with the DDL gen/sqlite emits from the same schema
-// (D06). EXPLAIN compiles without running; named parameters bind NULL.
 func TestSelectsPrepare(t *testing.T) {
 	if _, err := exec.LookPath("python3"); err != nil {
 		t.Skip("python3 not available")

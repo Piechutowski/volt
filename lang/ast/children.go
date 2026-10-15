@@ -2,10 +2,7 @@ package ast
 
 // Children lists n's children in source order, the same children
 // Inspect visits, as a slice: for a walk written without function
-// values, which a memoized computation may not call (D102). The list
-// is built by a type switch of its own, kept equal to eachChild's by
-// test, because eachChild visits through a function value and so
-// cannot serve one.
+// values, which a memoized computation may not call (D102).
 func Children(n Node) []Node {
 	var out []Node
 	switch n := n.(type) {

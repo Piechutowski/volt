@@ -1,6 +1,3 @@
-// TableGroups as sets (spec §V9.2, D65): a TableGroup name in a group
-// expression or as a select target navigates, hovers, and renames like
-// any other set, and the group hover spells the algebra as written.
 package lsp
 
 import (
@@ -35,7 +32,6 @@ func TestTableGroupTermDefinitionAndHover(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
 
-	// `Metrics` inside the group expression points at the TableGroup.
 	loc := d.Definition(posOf(t, text, "Metrics", 1))
 	if loc == nil {
 		t.Fatal("no definition for the TableGroup term")
@@ -54,13 +50,11 @@ func TestTableGroupTermDefinitionAndHover(t *testing.T) {
 		}
 	}
 
-	// The select target `Metrics` resolves the same way.
 	loc = d.Definition(posOf(t, text, "Metrics", 2))
 	if loc == nil || loc.Range.Start != posOf(t, text, "Metrics", 0) {
 		t.Errorf("select target over a TableGroup did not resolve to its declaration: %+v", loc)
 	}
 
-	// The group hover spells the algebra as written: '\' and the set.
 	h = d.Hover(posOf(t, text, "series", 0))
 	if h == nil {
 		t.Fatal("no hover for the group")
@@ -75,7 +69,6 @@ func TestTableGroupTermDefinitionAndHover(t *testing.T) {
 
 func TestTableGroupRenameFollowsSetUses(t *testing.T) {
 	d, text := groupSetDoc(t)
-	// Declaration + group term + select target = 3 edits.
 	edit, err := d.Rename(posOf(t, text, "Metrics", 1), "Series")
 	if err != nil {
 		t.Fatal(err)
@@ -88,7 +81,6 @@ func TestTableGroupRenameFollowsSetUses(t *testing.T) {
 		t.Errorf("rename produced %d edits, want 3 (declaration, group term, select target): %+v", n, edit.Changes)
 	}
 
-	// A table inside a set term renames with its declaration.
 	edit, err = d.Rename(posOf(t, text, "ms_dict", 1), "ms_codes")
 	if err != nil {
 		t.Fatal(err)
@@ -102,9 +94,6 @@ func TestTableGroupRenameFollowsSetUses(t *testing.T) {
 	}
 }
 
-// A dataset names a select of the imported package (§V13): definition
-// and hover reach the select, and renaming the select follows into the
-// dataset while keeping the qualifier.
 func TestDatasetNavigatesToSelect(t *testing.T) {
 	const dbText = "package db\n\nTable ms_revenue {\n\tid integer [pk]\n\tyear integer [not null]\n}\n\n" +
 		"Group series {\n\tms_revenue\n}\n\nSelect browse for series where year = :year\n"

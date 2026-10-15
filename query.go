@@ -20,8 +20,7 @@ type QueryValue interface {
 
 // QueryParam binds one scalar parameter from the query string by name, as a
 // generated query route does (§V4.8). A missing or unparseable value is
-// a 400 naming the parameter, because a query route's parameters are
-// the contract, not options.
+// a 400 naming the parameter.
 func QueryParam[T QueryValue](r *Request, name string) (T, error) {
 	var v T
 	vals, ok := r.URL.Query()[name]
@@ -51,7 +50,7 @@ func QueryParams[T QueryValue](r *Request, name string) ([]T, error) {
 }
 
 // parseQuery parses one query-string value into the typed destination.
-// Times are RFC 3339, which is also how they render in JSON.
+// Times are RFC 3339.
 func parseQuery(s string, dst any) error {
 	var err error
 	switch d := dst.(type) {
@@ -116,8 +115,8 @@ func typeName(dst any) string {
 	return fmt.Sprintf("%T", dst)[1:] // strip the pointer star
 }
 
-// FormatQuery renders a query-string value the way QueryParam parses it:
-// the inverse a generated client uses to build URLs (§V4.10).
+// FormatQuery renders a query-string value the way QueryParam parses it
+// (§V4.10).
 func FormatQuery[T QueryValue](v T) string {
 	switch v := any(v).(type) {
 	case string:

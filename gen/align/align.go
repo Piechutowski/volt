@@ -8,8 +8,7 @@
 // tab-terminated; a column's block is a maximal run of consecutive
 // lines that carry a terminated cell in that column; each terminated
 // cell is padded to the widest cell of its block plus one space; a line
-// without cells — blank, or a comment — ends every block. Widths count
-// runes, as tabwriter does.
+// without cells — blank, or a comment — ends every block.
 package align
 
 import (
@@ -97,9 +96,7 @@ func (b *Block) WriteTo(w *strings.Builder, indent string) {
 }
 
 // Finish returns a generated file's text with every run of blank lines
-// collapsed to one and exactly one trailing newline, as gofmt leaves
-// it, in one pass over one copy. Everything else about the layout is
-// the emitter's job.
+// collapsed to one and exactly one trailing newline.
 func Finish(text string) []byte {
 	out := make([]byte, 0, len(text)+1)
 	newlines := 0

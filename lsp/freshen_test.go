@@ -12,12 +12,6 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-// TestGoFileChangeRefreshesInBackground: a Go file rewritten on disk
-// without a notification (gopls renamed the function) is caught up on
-// by the next request, through one background analysis of the project
-// rather than a project pass per request on the handler goroutine
-// (D79, D103): the requests in the window answer from what they
-// adopted, the fresh result is published once and adopted after.
 func TestGoFileChangeRefreshesInBackground(t *testing.T) {
 	root := goRefProject(t)
 	schema := filepath.Join(root, "db", "schema.volt")
@@ -57,13 +51,12 @@ func TestGoFileChangeRefreshesInBackground(t *testing.T) {
 		st := session.Stats()
 		return st.FilesParsed + st.FilesReused
 	}
-	unit := loads() // the files one project pass reads
+	unit := loads()
 	hover := protocol.Position{Line: 7, Character: 3}
 	if h, _ := s.hover(ctx, &protocol.HoverParams{TextDocumentPositionParams: protocol.TextDocumentPositionParams{TextDocument: protocol.TextDocumentIdentifier{URI: uri}, Position: hover}}); h == nil {
 		t.Fatal("precondition: the Go reference hovers before the rename")
 	}
 
-	// gopls renames the function; no notification arrives.
 	goFile := filepath.Join(root, "db", "checks.go")
 	src, err := os.ReadFile(goFile)
 	if err != nil {
@@ -80,7 +73,7 @@ func TestGoFileChangeRefreshesInBackground(t *testing.T) {
 		t.Fatalf("%d project passes ran on the requests' goroutine", passes)
 	}
 	waitPublishes(2)
-	time.Sleep(3 * s.debounce) // a kick during the run costs one more run at most
+	time.Sleep(3 * s.debounce)
 	if passes := (loads() - before) / unit; passes < 1 || passes > 2 {
 		t.Fatalf("%d project passes after five requests, want one or two", passes)
 	}

@@ -1,10 +1,8 @@
-// Pass 3: cross-element resolution (§8.3) — relationship endpoints, index
-// columns, records columns, TableGroup members, DiagramView members — and
-// duplicate-relationship detection (§6.7.9).
-//
-// When the file has use/reuse imports, names may be defined elsewhere, so
-// unresolved-name errors are suppressed (Info.HasImports); everything that
-// is resolvable locally is still checked.
+// Pass 3: cross-element resolution (§8.3) of relationship endpoints,
+// index columns, records columns, TableGroup members and DiagramView
+// members, and duplicate-relationship detection (§6.7.9). When the
+// file has use/reuse imports, unresolved-name errors are suppressed
+// (Info.HasImports).
 package check
 
 import (

@@ -19,7 +19,6 @@ import (
 
 var update = flag.Bool("update", false, "rewrite golden files")
 
-// fixture loads and checks the fixture project.
 func fixture(t *testing.T) *lang.Project {
 	t.Helper()
 	pr, err := lang.Load(filepath.Join("testdata", "blog"))
@@ -33,7 +32,6 @@ func fixture(t *testing.T) *lang.Project {
 	return pr
 }
 
-// generate loads the fixture project and generates the app package.
 func generate(t *testing.T) map[string][]byte {
 	t.Helper()
 	files, err := Generate(fixture(t).Packages["app"], Options{Source: "package app"})
@@ -71,8 +69,6 @@ func TestGolden(t *testing.T) {
 	}
 }
 
-// TestGoldenGofmtStable proves the generated code is gofmt-clean:
-// applying gofmt must be the identity function.
 func TestGoldenGofmtStable(t *testing.T) {
 	for _, name := range Files {
 		src, err := os.ReadFile(goldenPath(name))
@@ -89,8 +85,6 @@ func TestGoldenGofmtStable(t *testing.T) {
 	}
 }
 
-// TestGeneratedHeader pins the machine-readable generated-code marker
-// (https://golang.org/s/generatedcode) on the first line.
 func TestGeneratedHeader(t *testing.T) {
 	re := regexp.MustCompile(`^// Code generated .* DO NOT EDIT\.$`)
 	for _, name := range Files {
@@ -105,10 +99,6 @@ func TestGeneratedHeader(t *testing.T) {
 	}
 }
 
-// TestNoNamedRoutesCompiles: a routing package whose routes all lack
-// helpers (resources create/update/delete carry none) must still yield
-// a compilable volt_paths.go — the volt import is omitted when nothing
-// references it.
 func TestNoNamedRoutesCompiles(t *testing.T) {
 	src := t.TempDir()
 	if err := os.WriteFile(filepath.Join(src, "go.mod"), []byte("module nohelpers\n"), 0o644); err != nil {
@@ -140,7 +130,6 @@ func TestNoNamedRoutesCompiles(t *testing.T) {
 		t.Errorf("volt_paths.go missing the no-helpers note:\n%s", paths)
 	}
 
-	// The real proof: the whole output compiles.
 	dir := t.TempDir()
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
@@ -188,18 +177,12 @@ var _ http.Handler = NewRouter(Controllers{Users: stub{}})
 	}
 }
 
-// TestGoldenCompiles builds the goldens with the real Go toolchain,
-// alongside the user-side companion file the routes reference
-// (controllers are stubbed where the itest exercises them for real).
 func TestGoldenCompiles(t *testing.T) {
 	dir := t.TempDir()
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The module is the fixture's (blog): the goldens import blog/db, the
-	// data package the query routes go through (§V4.8), which is
-	// generated here by the model generator the way volt gen would.
 	gomod := "module blog\n\ngo 1.27\n\n" +
 		"require github.com/Piechutowski/volt v0.0.0\n\n" +
 		"replace github.com/Piechutowski/volt => " + repoRoot + "\n"
@@ -219,7 +202,6 @@ func TestGoldenCompiles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// The fixture's hand-written Go beside the schema (the check target).
 	hand, _ := filepath.Glob(filepath.Join("testdata", "blog", "db", "*.go"))
 	for _, path := range hand {
 		src, err := os.ReadFile(path)
@@ -246,8 +228,6 @@ func TestGoldenCompiles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// The user-side code the generated files call by declared name:
-	// the middleware and the error handler, plus controller stubs.
 	user := `package app
 
 import (
@@ -288,11 +268,6 @@ var _ http.Handler = NewRouter(Controllers{
 	}
 }
 
-// TestSinglePackageCompiles proves the one-directory layout (D76): a
-// package that declares its tables and routes them itself builds with
-// its models, its router and its client together — the router names
-// the package's own Queries and params structs bare, the client imports
-// the package for its row types.
 func TestSinglePackageCompiles(t *testing.T) {
 	root := filepath.Join("..", "..", "lang", "conformance", "snippets", "valid", "v65_single_package")
 	pr, err := lang.Load(root)
@@ -343,7 +318,6 @@ func TestSinglePackageCompiles(t *testing.T) {
 		}
 		write(name, code)
 	}
-	// The one hand-written action, and the wiring the manifest asks for.
 	write("user.go", []byte(`package site
 
 import (
@@ -365,11 +339,6 @@ var _ http.Handler = NewRouter(Controllers{Tags: stub{}, Queries: &Queries{}})
 	}
 }
 
-// TestMainPackageCompiles proves the smallest layout of all: a main
-// package at the module root declaring its tables and routing them
-// with query routes only. No controller means the handlers file names
-// no runtime type, and Go cannot import main, so no client is
-// generated (§V4.10.1).
 func TestMainPackageCompiles(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
@@ -441,9 +410,6 @@ func main() { http.ListenAndServe(":0", NewRouter(Controllers{Queries: New(nil)}
 	}
 }
 
-// TestClientBesideGolden pins the client written beside the models
-// (§V4.10.6): the routing package's clause, bare row and params types,
-// NewClient, no data-package import.
 func TestClientBesideGolden(t *testing.T) {
 	files, err := Generate(fixture(t).Packages["app"], Options{Source: "package app", ClientBeside: true})
 	if err != nil {
@@ -475,13 +441,6 @@ func TestClientBesideGolden(t *testing.T) {
 	}
 }
 
-// TestCorpusCompiles builds the synthetic corpus (internal/corpus) in
-// both layouts: every feature the corpus uses generates Go that the
-// compiler accepts, models, queries, router and client together.
-// TestCorpusCompiles proves both corpus layouts generate code the Go
-// toolchain builds against this checkout's runtime: the corpus stubs
-// the controllers its routes name, and the one-package layout is a
-// program at the module root (D80).
 func TestCorpusCompiles(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {

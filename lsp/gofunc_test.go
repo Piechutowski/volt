@@ -1,6 +1,3 @@
-// Go-reference navigation (§V3.2, §V12.5): gd on a Go-reference check
-// or a pipeline plug lands on the function in the package's Go file,
-// and hover shows its signature and doc comment.
 package lsp
 
 import (
@@ -38,7 +35,6 @@ func TestGoRefDefinitionAndHover(t *testing.T) {
 	if !strings.HasSuffix(loc.URI, "db/checks.go") {
 		t.Errorf("definition URI = %s, want db/checks.go", loc.URI)
 	}
-	// "func EmailValid" is on line 7 (0-based 6); the name starts at col 5.
 	if loc.Range.Start.Line != 6 || loc.Range.Start.Character != 5 {
 		t.Errorf("definition range = %+v, want line 6 char 5", loc.Range.Start)
 	}
@@ -86,16 +82,11 @@ func TestGoRefPipelinePlug(t *testing.T) {
 	if h == nil || !strings.Contains(h.Contents.(protocol.MarkupContent).Value, "func Auth(next http.Handler) http.Handler") {
 		t.Errorf("plug hover missing the signature: %v", h)
 	}
-	// volt.RequestID lives in the runtime, not the package: no claim made.
 	if loc := d.Definition(posOf(t, goRefRoutes, "RequestID", 0)); loc != nil {
 		t.Errorf("volt.RequestID resolved to %v; runtime plugs are not package functions", loc)
 	}
 }
 
-// TestGoRefUndeclaredIsDiagnostic: a Go reference to a function the
-// package's Go files do not declare is an error at the reference
-// (§V12.5, D63) — the typo shows up in the editor, and an unwritten
-// function reads as a to-do with its exact signature.
 func TestGoRefUndeclaredIsDiagnostic(t *testing.T) {
 	root := goRefProject(t)
 	schema := filepath.Join(root, "db", "schema.volt")
@@ -116,9 +107,6 @@ func TestGoRefUndeclaredIsDiagnostic(t *testing.T) {
 	}
 }
 
-// TestGoRefRenameRewritesVoltSpellings: renaming a Go reference in a
-// .volt file rewrites the Volt spellings only; the Go declaration is
-// gopls' job and the existence error then points at it.
 func TestGoRefRenameRewritesVoltSpellings(t *testing.T) {
 	root := goRefProject(t)
 	schema := filepath.Join(root, "db", "schema.volt")
@@ -141,9 +129,6 @@ func TestGoRefRenameRewritesVoltSpellings(t *testing.T) {
 	}
 }
 
-// TestColumnRenameFollowsIntoChecks: renaming a column rewrites its
-// uses inside the table's checks — typed operands and Go-reference
-// arguments alike.
 func TestColumnRenameFollowsIntoChecks(t *testing.T) {
 	const text = "package db\n\nTable users {\n\tid integer [pk, increment]\n\temail varchar [not null]\n\n\tchecks {\n\t\temail like '%@%'\n\t\tEmailValid(email)\n\t}\n}\n"
 	root := voltProject(t, map[string]string{
@@ -160,15 +145,11 @@ func TestColumnRenameFollowsIntoChecks(t *testing.T) {
 	for _, edits := range edit.Changes {
 		n += len(edits)
 	}
-	// declaration + like operand + Go-reference argument
 	if n != 3 {
 		t.Errorf("column rename produced %d edits, want 3 (declaration, check operand, check argument): %+v", n, edit.Changes)
 	}
 }
 
-// TestColumnRenameFollowsIntoSingleTableSelect: a select over one table
-// binds its projection, order and where columns to that table, so a
-// column rename rewrites them; a group-targeted select is left alone.
 func TestColumnRenameFollowsIntoSingleTableSelect(t *testing.T) {
 	const text = "package db\n\nTable page_views {\n\tid integer [pk, increment]\n\tsite varchar [not null]\n\tday integer [not null]\n}\n\n" +
 		"Select rows (site, day) for page_views where site = :s [order: (day desc, site asc)]\n"
@@ -185,14 +166,11 @@ func TestColumnRenameFollowsIntoSingleTableSelect(t *testing.T) {
 	for _, edits := range edit.Changes {
 		n += len(edits)
 	}
-	// declaration + projection + where + order
 	if n != 4 {
 		t.Errorf("column rename produced %d edits, want 4 (declaration, projection, where, order): %+v", n, edit.Changes)
 	}
 }
 
-// TestGoRefQualifiedRenameKeepsQualifier: renaming `db.EmailValid`
-// rewrites the name only; the package qualifier stays.
 func TestGoRefQualifiedRenameKeepsQualifier(t *testing.T) {
 	const text = "package db\n\nTable users {\n\tid integer [pk]\n\temail varchar [not null]\n\n\tchecks {\n\t\tdb.EmailValid(email)\n\t}\n}\n"
 	root := voltProject(t, map[string]string{
@@ -207,7 +185,6 @@ func TestGoRefQualifiedRenameKeepsQualifier(t *testing.T) {
 	}
 	for _, edits := range edit.Changes {
 		for _, e := range edits {
-			// The edit starts after "db." — column 5 on the check line.
 			if e.Range.Start.Character != 5 {
 				t.Errorf("rename edit starts at char %d, want 5 (the name, not the qualifier)", e.Range.Start.Character)
 			}
@@ -215,10 +192,6 @@ func TestGoRefQualifiedRenameKeepsQualifier(t *testing.T) {
 	}
 }
 
-// TestSelectColumnRefsRespectGroupShadowing: a select targeting a
-// Group that shares a table's name binds no column refs (the checker
-// resolves groups first, §V11.2), while a schema-qualified table
-// targeted by its base name does bind.
 func TestSelectColumnRefsRespectGroupShadowing(t *testing.T) {
 	const text = "package db\n\nTable core.orders {\n\tid integer [pk]\n\ttotal integer [not null]\n}\n\n" +
 		"Table page_views {\n\tid integer [pk]\n\tsite varchar [not null]\n}\n\n" +
@@ -229,7 +202,6 @@ func TestSelectColumnRefsRespectGroupShadowing(t *testing.T) {
 	root := voltProject(t, map[string]string{"go.mod": "module g\n", "db/schema.volt": text})
 	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), text)
 
-	// core.orders.total: declaration + projection + where = 3 edits.
 	edit, err := d.Rename(posOf(t, text, "total", 0), "amount")
 	if err != nil {
 		t.Fatal(err)
@@ -242,8 +214,6 @@ func TestSelectColumnRefsRespectGroupShadowing(t *testing.T) {
 		t.Errorf("schema-qualified table: rename produced %d edits, want 3: %+v", n, edit.Changes)
 	}
 
-	// page_views.site: the select targets the GROUP page_views, so only
-	// the declaration is renamed.
 	edit, err = d.Rename(posOf(t, text, "site", 0), "host")
 	if err != nil {
 		t.Fatal(err)
@@ -257,8 +227,6 @@ func TestSelectColumnRefsRespectGroupShadowing(t *testing.T) {
 	}
 }
 
-// TestPredRefInCheckNavigates: a Pred named inside a checks block has a
-// definition, and renaming the Pred follows into the check.
 func TestPredRefInCheckNavigates(t *testing.T) {
 	const text = "package db\n\nPred positive { hits >= 0 }\n\nTable page_views {\n\tid integer [pk]\n\thits integer [not null]\n\n\tchecks {\n\t\tpositive\n\t}\n}\n"
 	root := voltProject(t, map[string]string{"go.mod": "module p\n", "db/schema.volt": text})
@@ -279,9 +247,6 @@ func TestPredRefInCheckNavigates(t *testing.T) {
 	}
 }
 
-// TestGoFileChangeInvalidatesIndex: after the Go function is renamed on
-// disk (gopls' job), the document knows its facts are stale; a re-run
-// then drops the definition and reports the reference as undeclared.
 func TestGoFileChangeInvalidatesIndex(t *testing.T) {
 	root := goRefProject(t)
 	schema := filepath.Join(root, "db", "schema.volt")
@@ -293,7 +258,6 @@ func TestGoFileChangeInvalidatesIndex(t *testing.T) {
 		t.Fatal("precondition: EmailValid resolves before the rename")
 	}
 
-	// gopls renames the function; the .volt buffer is untouched.
 	goFile := filepath.Join(root, "db", "checks.go")
 	src, err := os.ReadFile(goFile)
 	if err != nil {
@@ -306,7 +270,7 @@ func TestGoFileChangeInvalidatesIndex(t *testing.T) {
 	if !d.GoFilesChanged() {
 		t.Fatal("index did not notice the Go file changed")
 	}
-	d.Update(d.Text) // what the server does before answering
+	d.Update(d.Text)
 	if loc := d.Definition(posOf(t, goRefSchema, "EmailValid", 0)); loc != nil {
 		t.Errorf("definition still resolves to the renamed function: %v", loc)
 	}

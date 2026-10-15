@@ -9,9 +9,6 @@ import (
 	"testing"
 )
 
-// TestBlockMatchesGofmt renders random struct, const and var blocks and
-// proves gofmt leaves them unchanged: the layout is gofmt's, not an
-// approximation of it.
 func TestBlockMatchesGofmt(t *testing.T) {
 	rng := rand.New(rand.NewSource(1))
 	word := func(min, max int) string {
@@ -28,8 +25,6 @@ func TestBlockMatchesGofmt(t *testing.T) {
 		var src strings.Builder
 		src.WriteString("package p\n\n")
 
-		// struct: fields with and without tags, doc comments, blank lines,
-		// an embedded field, trailing comments
 		var fields Block
 		if rng.Intn(3) == 0 {
 			fields.Row("volt.Client")
@@ -40,7 +35,7 @@ func TestBlockMatchesGofmt(t *testing.T) {
 				fields.Line("// " + word(3, 20))
 			case 1:
 				if fields.Len() > 0 {
-					fields.Line("") // gofmt drops a blank line right after the brace
+					fields.Line("")
 				}
 			}
 			cells := []string{word(1, 12), types[rng.Intn(len(types))]}
@@ -56,7 +51,6 @@ func TestBlockMatchesGofmt(t *testing.T) {
 		fields.WriteTo(&src, "\t")
 		src.WriteString("}\n\n")
 
-		// typed const block with comments between values
 		var consts Block
 		for i := 0; i < 1+rng.Intn(5); i++ {
 			if rng.Intn(3) == 0 {
@@ -68,7 +62,6 @@ func TestBlockMatchesGofmt(t *testing.T) {
 		consts.WriteTo(&src, "\t")
 		src.WriteString(")\n\n")
 
-		// var block with = alignment
 		var vars Block
 		for i := 0; i < 1+rng.Intn(5); i++ {
 			if rng.Intn(4) == 0 && vars.Len() > 0 {

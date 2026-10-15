@@ -1,8 +1,7 @@
 // Package check implements semantic analysis of a parsed DBML file — the
 // role go/types plays for Go. It validates every constraint of the spec
 // that goes beyond grammar (setting whitelists, duplicate names, reference
-// resolution, records arity) and builds an Info symbol table that the vet
-// package reuses, so analysis is done once.
+// resolution, records arity) and builds an Info symbol table.
 //
 // Diagnostic codes cite the spec section they enforce, e.g. "spec/6.7".
 package check
@@ -128,8 +127,7 @@ func canonKey(q *ast.QualName) string {
 
 // File checks one parsed file and returns its semantic model together with
 // all diagnostics. When the file imports other files (§7), unresolved-name
-// errors are suppressed, because the definitions may live elsewhere; all
-// local constraints still apply.
+// errors are suppressed; all local constraints still apply.
 func File(f *ast.File) (*Info, []diag.Diagnostic) {
 	return FileMemo(f, nil)
 }
@@ -270,9 +268,8 @@ func (c *checker) collect(f *ast.File) {
 	}
 
 	// Every table's check is a pure function of its declaration, the
-	// partials it injects, the enum set and the imports flag (D86):
-	// answered from the memo when those are what they were, computed
-	// otherwise. The use counts are the caller's, as every side effect.
+	// partials it injects, the enum set and the imports flag (D86). The
+	// use counts are the caller's, as every side effect.
 	c.enumSet = enumSetOf(c.enums)
 	for i, ti := range c.info.Tables {
 		partials := c.partialsOf(ti.Decl)
@@ -310,8 +307,7 @@ func (c *checker) collect(f *ast.File) {
 
 // enumSet is the enums a table check consults, by canonical key, and
 // the same keys sorted: the set itself as a memo key, compared element
-// by element (D91). Two equal key lists answer every presence question
-// alike; no spelling of the set stands in for it.
+// by element (D91).
 type enumSet struct {
 	present map[string]bool
 	keys    []string
@@ -334,10 +330,9 @@ func enumSetOf(enums map[string]*EnumInfo) *enumSet {
 // (D86): the declaration, its key and alias, the partial declarations
 // it injects in body order (nil where the name resolves to none),
 // whether imports are in play, and the enum set. It returns the
-// checked table — columns expanded per §6.9.4, indexes and checks
-// gathered — and every diagnostic of the table's body, columns,
-// expansion, increment and required rules. It reads nothing else and
-// writes nothing it did not create.
+// checked table, columns expanded per §6.9.4, and every diagnostic of
+// the table. It reads nothing else and writes nothing it did not
+// create.
 func tableCheck(d *ast.Table, key, alias string, partials []*ast.TablePartial, hasImports bool, enums *enumSet) (*TableInfo, []diag.Diagnostic) {
 	acc := &checker{info: &Info{HasImports: hasImports}, enumSet: enums}
 	ti := &TableInfo{Decl: d, Key: key, Alias: alias}

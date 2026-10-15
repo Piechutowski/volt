@@ -1,19 +1,15 @@
 // Package parser turns DBML source into an ast.File, mirroring go/parser.
 //
 // The parser is a hand-written recursive descent over the EBNF of the
-// specification (docs/spec.md): one method per production. Like go/parser it
-// is syntax-only — it accepts any setting name in any position, any value
+// specification (docs/spec.md): one method per production. It is
+// syntax-only: it accepts any setting name in any position, any value
 // shape the token stream allows, and unresolved names; the check package
-// judges meaning. This split keeps the front end reusable: tools that only
-// need structure (formatters, highlighters) import parser without paying
-// for analysis.
+// judges meaning.
 //
 // On a syntax error the parser records a diagnostic and synchronizes to
-// the next line or the enclosing brace, so one broken line does not hide
-// the rest of the file (multiple errors per run, like the Go compiler).
-// A file is parsed element by element (reuse.go): the scanner cuts it
-// where an element begins (spec §3.2.5), and each piece is parsed on
-// its own, so a broken element never reaches into the next.
+// the next line or the enclosing brace. A file is parsed element by
+// element (reuse.go): the scanner cuts it where an element begins (spec
+// §3.2.5), and each piece is parsed on its own.
 package parser
 
 import (
@@ -46,10 +42,7 @@ type parser struct {
 	diags []diag.Diagnostic
 	buf   []token.Token // the scanner's slice, reused chunk after chunk; nodes copy their tokens
 
-	// The hottest node kinds come from slabs: a file's identifiers,
-	// columns, settings and literals are a few allocations instead of
-	// one each, and the collector has a few objects to sweep instead
-	// of a million (D82, PERF-9).
+	// The hottest node kinds come from slabs (D82, PERF-9).
 	idents   slab[ast.Ident]
 	quals    slab[ast.QualName]
 	columns  slab[ast.Column]
@@ -273,8 +266,7 @@ func (p *parser) topLevelSync() {
 }
 
 // lineSync skips to the next line inside a braced body. It always makes
-// progress: without the initial next() an error raised on a line-initial
-// token would be retried forever.
+// progress.
 func (p *parser) lineSync() {
 	p.line = false
 	if !p.at(token.EOF) && !p.at(token.RBRACE) {
@@ -287,8 +279,7 @@ func (p *parser) lineSync() {
 
 // item parses one item of a braced body, discarding the rest of its
 // line on a syntax error so the following items are parsed (§3.2 rule
-// 6). The bodies with their own item functions (a table's, a scope's,
-// a pipeline's) recover the same way in them.
+// 6).
 func (p *parser) item(parse func()) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -412,8 +403,7 @@ func (p *parser) tableBody(what string) []ast.TableItem {
 	return items
 }
 
-// tableItem parses one body item, recovering to the next line on error so
-// a broken column does not abort the whole table.
+// tableItem parses one body item, recovering to the next line on error.
 func (p *parser) tableItem(what string) (item ast.TableItem) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -557,9 +547,7 @@ func (p *parser) checksBlock() *ast.ChecksBlock {
 
 // check parses one line of a checks block: an opaque SQL expression
 // literal (§6.6), a Go-reference call (§V12), or a typed predicate
-// expression (§V12). A name followed by '(' — bare or once-qualified —
-// can only be a Go reference: the predicate grammar never puts '('
-// after an operand.
+// expression (§V12). A name followed by '(' can only be a Go reference.
 func (p *parser) check() *ast.Check {
 	switch {
 	case p.at(token.FUNCEXPR):
@@ -869,9 +857,7 @@ func (p *parser) diagramView() *ast.DiagramView {
 
 /* ===== settings (§4.2) ===== */
 
-// settingList parses "[" setting { "," setting } "]" generically. Which
-// settings are legal where — and what value types they take — is decided
-// by the check package, keeping parser and semantics decoupled.
+// settingList parses "[" setting { "," setting } "]" generically.
 func (p *parser) settingList() *ast.SettingList {
 	sl := p.lists.new()
 	sl.Lbrack = p.expect(token.LBRACKET, "settings list (§4.2)").Pos
@@ -972,7 +958,7 @@ type multiWordValue struct{ words []*ast.Ident }
 func (m *multiWordValue) Pos() token.Position { return m.words[0].Pos() }
 func (m *multiWordValue) End() token.Position { return m.words[len(m.words)-1].End() }
 
-// Words exposes the phrase for the check package.
+// Words exposes the phrase.
 func (m *multiWordValue) Words() []string {
 	out := make([]string, len(m.words))
 	for i, w := range m.words {

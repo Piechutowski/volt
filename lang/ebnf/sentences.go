@@ -93,9 +93,7 @@ func (l *Language) Sentences() (sentences []Sentence, unreachable []string, err 
 		pieces []Piece
 		ctx    context
 	}
-	// A context through the left side of an exception could be
-	// filled with a sentence the exception excludes, so contexts
-	// avoid exceptions while any path does, then take them.
+	// contexts avoid exceptions while any path does, then take them
 	contexts := map[string]ctxEntry{start: {[]Piece{{Hole: true}}, context{top: true}}}
 	for _, throughExcept := range []bool{false, true} {
 		queue := []string{}

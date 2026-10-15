@@ -104,11 +104,8 @@ func (s *Server) initialize(_ *glsp.Context, params *protocol.InitializeParams) 
 // document sync
 
 // initialized asks the client to report Go file changes: a Go reference
-// (§V3.2, §V12.5) is checked against the package's Go files, so a
-// gopls rename or a newly written function changes the truth of a
-// .volt file the user is not editing. The request is fire-and-forget:
-// a client without dynamic registration simply never notifies, and the
-// per-request freshness check (freshen) still catches up on demand.
+// (§V3.2, §V12.5) is checked against the package's Go files. The
+// request is fire-and-forget.
 func (s *Server) initialized(ctx *glsp.Context, _ *protocol.InitializedParams) error {
 	if !s.watchSupported {
 		return nil
@@ -141,12 +138,9 @@ func (s *Server) watchedFilesChanged(ctx *glsp.Context, params *protocol.DidChan
 }
 
 // freshen catches a document up on Go files that changed since its
-// project analysis — the fallback for clients that do not report file
-// changes, and for the window between a save and its notification. It
-// kicks the background analysis of the document's project, which
-// re-reads the Go files and publishes to every open document of the
-// root: the request in hand answers from the analysis it adopted, the
-// next adopts the fresh one. The project pass runs on the handler
+// project analysis. It kicks the background analysis of the document's
+// project: the request in hand answers from the analysis it adopted,
+// the next adopts the fresh one. The project pass runs on the handler
 // goroutine for no document (D79, D103).
 func (s *Server) freshen(ctx *glsp.Context, doc *Document) {
 	if doc == nil || !doc.GoFilesChanged() {
@@ -167,11 +161,8 @@ func (s *Server) didOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocument
 }
 
 // edited records a document's new text and its version: its own front
-// end now, and the project's analysis once the edits settle (D79).
-// Open documents of a project see each other through the overlay, so
-// one edit changes the truth of every one of them — the analysis
-// publishes to all. A document outside any project has its verdict
-// right away.
+// end now, and the project's analysis once the edits settle (D79). A
+// document outside any project has its verdict right away.
 func (s *Server) edited(ctx *glsp.Context, doc *Document, text string, version int32) {
 	path := pathFromURI(doc.URI)
 	s.mu.Lock()
@@ -187,8 +178,7 @@ func (s *Server) edited(ctx *glsp.Context, doc *Document, text string, version i
 	s.diagnosticsPublish(ctx, doc)
 }
 
-// openTexts snapshots every open buffer keyed by on-disk path — the
-// overlay the Volt project pass feeds to the loader.
+// openTexts snapshots every open buffer keyed by on-disk path.
 func (s *Server) openTexts() map[string]string {
 	texts, _ := s.openSnapshot()
 	return texts
@@ -196,9 +186,7 @@ func (s *Server) openTexts() map[string]string {
 
 // openSnapshot copies every open buffer's text and version under one
 // hold of mu: the overlay a run analyzes and the versions its publish
-// stamps are of one and the same moment, so a client that drops a
-// publish whose version is not its buffer's drops exactly the stale
-// ones (D105).
+// stamps are of one and the same moment (D105).
 func (s *Server) openSnapshot() (map[string]string, map[string]int32) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -245,12 +233,10 @@ func (s *Server) didClose(ctx *glsp.Context, params *protocol.DidCloseTextDocume
 	delete(s.texts, path)
 	delete(s.versions, path)
 	s.mu.Unlock()
-	// clear stale squiggles
 	ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
 		URI:         params.TextDocument.URI,
 		Diagnostics: []protocol.Diagnostic{},
 	})
-	// the closed buffer reverts to its saved content for everyone else
 	if root, ok := projectRootOf(path); ok {
 		s.analysisKick(ctx, root)
 	}
@@ -292,7 +278,7 @@ func versionStamp(v int32) *protocol.UInteger {
 }
 
 // docGet returns the open document, carrying the newest analysis of
-// its project (adopt), so every request reads the current truth.
+// its project (adopt).
 func (s *Server) docGet(uri string) *Document {
 	s.mu.Lock()
 	doc := s.docs[uri]

@@ -168,7 +168,6 @@ func TestQueryBinding(t *testing.T) {
 	}
 	serve(t, h, req)
 
-	// A bad value is a 400 through the spine, with the parameter named.
 	rec := serve(t, func(w http.ResponseWriter, r *Request) error {
 		_, err := QueryParam[int](r, "n")
 		return err
@@ -189,8 +188,6 @@ func TestNoRowsIs404(t *testing.T) {
 
 func TestFormatQueryRoundTrip(t *testing.T) {
 	at := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
-	// Built the way a generated client builds it: FormatQuery values
-	// through volt.Query, which escapes them.
 	req := httptest.NewRequest("GET", URL("/x",
 		Query("s", FormatQuery("a b")), Query("i", FormatQuery(int32(-7))), Query("u", FormatQuery(uint64(9))),
 		Query("f", FormatQuery(1.25)), Query("b", FormatQuery(true)), Query("t", FormatQuery(at))), nil)
@@ -273,8 +270,6 @@ func TestDecodeStrictAndBounded(t *testing.T) {
 		}
 		return Render(w, r, v)
 	}
-	// An unknown JSON field is a 400 naming it as a Detail, so a form
-	// marks the field like any other failure: a typo must not vanish.
 	rec := serve(t, decode, httptest.NewRequest("POST", "/x", strings.NewReader(`{"ID":1,"Nmae":"typo"}`)))
 	if rec.Code != 400 {
 		t.Fatalf("unknown field: %d %q", rec.Code, rec.Body.String())
@@ -287,13 +282,10 @@ func TestDecodeStrictAndBounded(t *testing.T) {
 	if len(p.Details) != 1 || !reflect.DeepEqual(p.Details[0], want) {
 		t.Fatalf("details = %+v, want [%+v]", p.Details, want)
 	}
-	// The decoder stops at the first unknown field; the second is not
-	// reported. Pinned so the limitation is a known one, not a surprise.
 	rec = serve(t, decode, httptest.NewRequest("POST", "/x", strings.NewReader(`{"Nmae":1,"Nam":2}`)))
 	if rec.Code != 400 || strings.Contains(rec.Body.String(), "Nam\"") {
 		t.Fatalf("second unknown field: %d %q", rec.Code, rec.Body.String())
 	}
-	// Over the cap is a 413, and the cap is settable.
 	old := MaxBodyBytes
 	MaxBodyBytes = 16
 	defer func() { MaxBodyBytes = old }()
@@ -327,7 +319,6 @@ func TestProblemBodyRoundTrip(t *testing.T) {
 			t.Errorf("%v: a problem matches its status", f)
 		}
 	}
-	// The body itself is a Problem in the negotiated format.
 	rec := serve(t, func(w http.ResponseWriter, r *Request) error { return ErrNotFound }, httptest.NewRequest("GET", "/x", nil))
 	var p Problem
 	if rec.Code != 404 || json.Unmarshal(rec.Body.Bytes(), &p) != nil || p.Status != 404 || p.Message != "not found" {

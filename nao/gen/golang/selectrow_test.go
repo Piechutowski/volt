@@ -7,9 +7,6 @@ import (
 	"github.com/Piechutowski/volt/lang/parser"
 )
 
-// TestSelectRowNameMatchesRowType proves the name a select's row type
-// carries is the one SelectRowType names, for every shape a select
-// takes, without the fields being built (D105).
 func TestSelectRowNameMatchesRowType(t *testing.T) {
 	f, diags := parser.ParseFile("rows.dbml", "Table users {\n  id int [pk]\n  email text [not null]\n  name text\n}\n")
 	if len(diags) > 0 {

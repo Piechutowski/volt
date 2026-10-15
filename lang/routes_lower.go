@@ -4,11 +4,7 @@ package lang
 // of explicit inputs (D86, D99): a route, a resources declaration or a
 // dataset, with the context its scopes inherited, the package's own
 // facts, and an oracle it questions about the project and whose
-// answers it returns, so the session's memo can verify on the next
-// check that every answer stands and replay the item's routes and
-// diagnostics. The side effects the lowering used to have, marking an
-// import used and accepting routes, are the caller's, applied from
-// what it returns.
+// answers it returns.
 
 import (
 	"maps"
@@ -208,8 +204,7 @@ func (l *routeLowering) queryHint(path, name string) string {
 // inputs named on routeLowering, reading nothing else and writing
 // nothing it did not create. Beside the routes it returns what it
 // asked the oracle and was told, the import qualifiers it used, and
-// its diagnostics; the questions are kept only when record asks,
-// for a memo to verify.
+// its diagnostics; the questions are kept only when record asks.
 func itemLower(item ast.Node, inh inherited, facts routeFacts, env routeEnv, record bool) (routes []*RouteInfo, lookups []routeLookup, used []string, diags []diag.Diagnostic) {
 	l := &routeLowering{facts: facts, env: env, record: record}
 	switch item := item.(type) {
@@ -412,7 +407,6 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 	}
 	switch {
 	case controller == "volt":
-		// The runtime's own handlers: today exactly one, the event stream.
 		if action != "Events" {
 			l.errorf(r.Handler.Pos(), "V4", "the runtime provides no handler volt.%s; volt.Events is the event stream (§V4.11)", action)
 			return nil
@@ -513,8 +507,7 @@ func (l *routeLowering) queryRef(r *ast.Route, method string, params []Param, qu
 
 // queryBind resolves a query method by name in the data package — an
 // imported one, or this package when local — and binds the route's
-// parameters; segAt locates a path parameter for diagnostics. Shared by
-// query routes, resources [default] and datasets.
+// parameters; segAt locates a path parameter for diagnostics.
 func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, params []Param, qual, target string, local bool, name string, segAt paramAt) *QueryRef {
 	pkgName, hasSchema, _ := l.dataPackage(target)
 	ref := qual + "." + name
@@ -595,8 +588,6 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		}
 	}
 	if !found {
-		// Did you mean: every select method, then every CRUD method, in
-		// declaration order — only worth listing on the way to an error.
 		hint := l.queryHint(target, name)
 		l.errorf(pos, "V4", "no generated query %s in package %q%s — a query route names a select method or a default CRUD method (Get, List, Create, Update, Delete) (§V4.8)", ref, target, hint)
 		return nil
@@ -668,8 +659,6 @@ func litSeg(n string, at token.Position) *ast.Segment {
 	return &ast.Segment{Kind: ast.SegLit, Name: &ast.Ident{Tok: token.Token{Kind: token.IDENT, Val: n, Pos: at}}}
 }
 
-// segPos finds the position of a named parameter segment in the route's
-// own path, falling back to the route.
 // paramAt locates a path parameter for a diagnostic: in a route, the
 // segment naming it; for a dataset or a resources, the item itself.
 type paramAt struct {
@@ -700,9 +689,7 @@ func (l *routeLowering) pathParams(segs []*ast.Segment) ([]Param, bool) {
 	seen := map[string]bool{}
 	ok := true
 	for i, seg := range segs {
-		// §V4.1.6: every segment name — literal, parameter or wildcard —
-		// is a plain, unquoted identifier; anything else would flow
-		// unescaped into registration patterns and generated Go.
+		// §V4.1.6: every segment name is a plain, unquoted identifier.
 		if seg.Name.Quoted() || !goIdentOK(seg.Name.Name()) {
 			l.errorf(seg.Pos(), "V4", "path segment %q must be a plain identifier of letters, digits and underscores (§V4.1.6)", seg.Name.Name())
 			ok = false
@@ -760,8 +747,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 	paramName := "id"
 
 	// §V5.5: [default] generates the handlers from the table's default
-	// CRUD: this package's own for a bare or self-qualified table, an
-	// imported package's for a qualified one, as for a query route (§V4.8).
+	// CRUD, as for a query route (§V4.8).
 	def := false
 	if res.Settings != nil {
 		if s := res.Settings.Get("default"); s != nil {
@@ -772,10 +758,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 		}
 	}
 
-	// §V5.1: the declaration MUST name a declared table — qualified or
-	// not. Resolution gives the URL segment, the member helper (the
-	// table's model name) and the key's Go type from the primary key;
-	// there is no schemaless fallback to guess any of it from spelling.
+	// §V5.1: the declaration MUST name a declared table, qualified or not.
 	ti, ok, reported := l.resourceTable(res)
 	if reported {
 		return nil // the reference is wrong; expanding it would only add noise
@@ -907,8 +890,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 	}
 
 	// The key parameter must not repeat a parameter of the enclosing
-	// scope (§V4.1.2); say so once, at the declaration, with the fix —
-	// rather than once per member action from pathParams.
+	// scope (§V4.1.2); said once, at the declaration.
 	for _, seg := range inh.prefix {
 		if seg.Kind != ast.SegParam || seg.Name.Name() != paramName {
 			continue
@@ -960,9 +942,8 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 			helper = inh.namePrefix + "Edit" + singular
 		}
 		// §V5.5: with [default] the action is a query route over the
-		// table's CRUD method — no controller. Writes have a client
-		// method named like the form pages would be (CreateUser,
-		// UpdateUser, DeleteUser) and no reverse-URL helper (§V4.8).
+		// table's CRUD method, with no controller; writes have a client
+		// method and no reverse-URL helper (§V4.8).
 		var qr *QueryRef
 		client := ""
 		if def {
@@ -1012,8 +993,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 }
 
 // crudAbsent says why a default CRUD method can be missing (CRUD-1 to
-// CRUD-7): Update needs a non-key column to set; the others exist for
-// every table with a primary key, which §V5.4 already requires.
+// CRUD-7, §V5.4).
 func crudAbsent(op string) string {
 	if op == "update" {
 		return "every column is part of the key, so there is nothing to update"
@@ -1022,11 +1002,7 @@ func crudAbsent(op string) string {
 }
 
 // resourceTable resolves a resources declaration to the table it names
-// (§V5.1). Names are matched exactly: `Table posts` is `posts`, never
-// `Posts` or `Post`, so what is written in routes.volt is what stands
-// in the schema. Every declaration must resolve; a miss is an error
-// that names the closest thing it can (a case variant, or the table
-// whose model name was written).
+// (§V5.1), matched exactly; a miss is reported as an error.
 func (l *routeLowering) resourceTable(res *ast.Resources) (ti *check.TableInfo, ok, reported bool) {
 	pkgPath := l.facts.pkgPath
 	if res.Pkg != nil && res.Pkg.Name() != l.facts.pkgName {

@@ -9,11 +9,7 @@ import (
 
 // Null is the representation of a nullable column (decision D13): a value
 // plus a validity bit, never a pointer. The zero value is NULL. JSON shows
-// the value or null — the wire format never sees the wrapper.
-//
-//	var n rt.Null[string]        // NULL
-//	n = rt.Some("x")             // 'x'
-//	if n.Valid { use(n.V) }
+// the value or null.
 type Null[T any] struct {
 	V     T
 	Valid bool

@@ -10,9 +10,6 @@ import (
 	"github.com/Piechutowski/volt/lang/parser"
 )
 
-// Children and Inspect enumerate the same children in the same order
-// for every node of every corpus file: the two type switches are one
-// walk written twice, and this is what keeps them one.
 func TestChildrenAgreesWithInspect(t *testing.T) {
 	var files []string
 	for _, pattern := range []string{"../conformance/snippets/*/*.dbml", "../conformance/snippets/*/*.volt", "../conformance/snippets/*/*/*.volt", "../../grammar/examples/*"} {
@@ -33,8 +30,6 @@ func TestChildrenAgreesWithInspect(t *testing.T) {
 		}
 		texts[path] = string(src)
 	}
-	// and a generated project that uses every feature (D80), large
-	// enough that every node kind appears many times
 	for name, text := range corpus.Files(corpus.Spec{Packages: 2, Tables: 30, Columns: 8}) {
 		texts["corpus/"+name] = text
 	}

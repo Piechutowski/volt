@@ -1,14 +1,8 @@
 // Package corpus writes synthetic Volt projects of any size that use
-// every feature of the language — enums, partials, relations, preds,
-// projected and group selects, typed and Go-reference checks,
-// pipelines, error handlers, default resources, datasets, controller
-// and query routes, the event stream — in a neutral domain, for the
-// scaling, allocation and schedule tests and the benchmarks (PERF-2),
-// and for `volt stress`, which writes it at stress size (D80). One
+// every feature of the language in a neutral domain (PERF-2, D80). One
 // Spec, two layouts: data packages plus a routing package that imports
 // them all, or one package main at the module root holding everything
-// in one schema.volt (D76). The controllers the routes name are
-// stubbed, so with a Volt checkout to build against the project builds.
+// in one schema.volt (D76).
 package corpus
 
 import (
@@ -78,7 +72,7 @@ func Files(spec Spec) map[string]string {
 }
 
 // goMod is the module file: a require and a replace onto the Volt
-// checkout when one is given, so the generated code builds.
+// checkout when one is given.
 func goMod(volt string) string {
 	s := "module corpus\n\ngo 1.27\n"
 	if volt != "" {
@@ -94,7 +88,7 @@ func actionOf(scope string) string { return strings.ToUpper(scope[:1]) + scope[1
 func Table(i int) string { return fmt.Sprintf("tb%03ds", i) }
 
 // colTypes cycle through the column types of Appendix A with and
-// without NULL, so every model has every shape of field.
+// without NULL.
 var colTypes = []string{
 	"integer [not null]",
 	"text [not null]",
@@ -106,10 +100,7 @@ var colTypes = []string{
 	"bigint [not null]",
 }
 
-// schemaWrite renders the data declarations of one package: an enum,
-// a partial every table injects, a pred every select reuses, the
-// tables with a relation chain and checks, a group of every table, a
-// projected select per table and the group select a dataset expands.
+// schemaWrite renders the data declarations of one package.
 func schemaWrite(b *strings.Builder, spec Spec, pkg string) {
 	b.WriteString("Enum status {\n\tactive\n\tretired [note: 'no longer written']\n}\n\n")
 	b.WriteString("TablePartial stamped {\n\tcreated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]\n}\n\n")
@@ -140,12 +131,8 @@ func schemaWrite(b *strings.Builder, spec Spec, pkg string) {
 	b.WriteString("\nSelect browse for series where fresh [order: (id asc)]\n")
 }
 
-// routesWrite renders the routing declarations: a pipeline of runtime
-// and local middleware, a root scope with an error handler, a
-// controller route, a wildcard route and the event stream, then per
-// data package a named scope with a default resources per table and a
-// dataset over the group select. In the one-package layout the
-// references are bare (D76).
+// routesWrite renders the routing declarations. In the one-package
+// layout the references are bare (D76).
 func routesWrite(b *strings.Builder, spec Spec, pkgs []string, single bool) {
 	if !single {
 		b.WriteString("import (\n")
@@ -210,11 +197,8 @@ func Errors(w http.ResponseWriter, r *volt.Request, err error) {
 `
 }
 
-// controllersGo stubs the controllers the routes name — Home.Index,
-// Files.Serve and one Stats action per scope — so the routing package
-// builds once generated. In the one-package layout it is main.go: the
-// router is served over a nil database, so the module links as a
-// program and the Go compiler sees every generated line.
+// controllersGo stubs the controllers the routes name. In the
+// one-package layout it is main.go.
 func controllersGo(pkg string, stats []string, main bool) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "package %s\n\nimport (\n\t\"net/http\"\n\n\tvolt \"github.com/Piechutowski/volt\"\n)\n\n", pkg)

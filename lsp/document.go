@@ -1,11 +1,6 @@
 // Package lsp implements the Volt language server — one server for the
 // whole language, of which the DBML schema core is the inner layer (docs/spec.md
-// §V0). It wraps the front end (scanner, parser, check, vet, and the
-// lang project checker for .volt projects) behind the Language Server
-// Protocol:
-// diagnostics, completion, hover, definition, references, rename and
-// document symbols. One Document per open file holds the parse result, the
-// semantic model and the symbol occurrence index.
+// §V0).
 package lsp
 
 import (
@@ -31,13 +26,10 @@ type Document struct {
 	Text string
 
 	// Siblings, when set, snapshots every open buffer keyed by on-disk
-	// path. The Volt project pass overlays them all, so cross-file
-	// analysis sees unsaved edits in other tabs. Nil (a lone document,
-	// as in tests) means only this document overlays its saved file.
+	// path. Nil means only this document overlays its saved file.
 	Siblings func() map[string]string
-	// Session, when set, returns the caches of a project root (D79):
-	// the project pass loads and checks through them. Nil means a
-	// fresh analysis every time (a lone document, as in tests).
+	// Session, when set, returns the caches of a project root (D79).
+	// Nil means a fresh analysis every time.
 	Session func(root string) *lang.Session
 
 	File  *ast.File
@@ -58,12 +50,10 @@ type Document struct {
 	resGen int
 
 	// The document's own front end is memoized per document (D103):
-	// the parse reuses the declarations an edit did not touch (D83),
-	// the check answers the tables whose inputs are the objects they
-	// were (D84), the index keeps its occurrences by table (D85). The
-	// three belong to the goroutine that updates the document, the
-	// handler's for a server document (D79, D96); the session's own
-	// handles are the session's.
+	// the parse (D83), the check (D84) and the index (D85). The three
+	// belong to the goroutine that updates the document, the handler's
+	// for a server document (D79, D96); the session's own handles are
+	// the session's.
 	reuse      *parser.Reuse
 	schema     check.Memo
 	index      IndexMemo
@@ -71,10 +61,10 @@ type Document struct {
 
 	// vindex is the project-wide Volt symbol graph, rebuilt with the
 	// diagnostics whenever this file belongs to a Volt project. Nil for
-	// a file outside any project (navigation then stays single-file).
+	// a file outside any project.
 	vindex *voltIndex
 	// vpkg is the project package containing this file (nil outside a
-	// project): completion reads its imports and sibling declarations.
+	// project).
 	vpkg *lang.Package
 
 	lineOffsets []int // byte offset of the start of each line
@@ -88,10 +78,8 @@ func NewDocument(uri, text string) *Document {
 }
 
 // Update replaces the document text and re-runs the whole front end:
-// the file's own pass, then the project pass. Diagnostics depend on
-// where the file lives: inside a Volt project the whole-project check
-// is the truth (this file's tables may be half of a package, §V1.5)
-// and the single-file verdicts would be wrong; alone, the DBML pass
+// the file's own pass, then the project pass. Inside a Volt project
+// the whole-project check is the truth (§V1.5); alone, the DBML pass
 // stands.
 func (d *Document) Update(text string) {
 	d.UpdateLocal(text)
@@ -104,12 +92,11 @@ func (d *Document) Update(text string) {
 }
 
 // UpdateLocal replaces the text and re-runs the file's own front end —
-// parse, single-file check, index — which hover, definition and
-// completion read, through the document's own memos (D103). The
-// project pass is Update's, or the server's background analysis
-// (D79); until either runs, the project fields keep what they had.
-// The vet advice is not part of this: it is added by vetLocal, only
-// where the file's own verdict is the truth.
+// parse, single-file check, index — through the document's own memos
+// (D103). The project pass is Update's, or the server's background
+// analysis (D79); until either runs, the project fields keep what
+// they had. The vet advice is not part of this: it is added by
+// vetLocal.
 func (d *Document) UpdateLocal(text string) {
 	d.textSet(text)
 	var diags []diag.Diagnostic
@@ -131,10 +118,8 @@ func (d *Document) UpdateLocal(text string) {
 // verdict, once per text, and makes that verdict the document's when
 // no project analysis stands. It runs only where the file's own
 // verdict is the truth: a file outside any project, or one under a
-// project the loader never read (D103); a file in a project package
-// is vetted by the project analysis, never here. Vet advice comes only
-// on a clean check: style notes stacked on hard errors are noise
-// while typing.
+// project the loader never read (D103). Vet advice comes only on a
+// clean check.
 func (d *Document) vetLocal() {
 	if !d.vetted {
 		d.vetted = true
@@ -156,11 +141,8 @@ func (d *Document) textSet(text string) {
 
 // localVerdict is the single-file verdict of a text no document
 // memoizes: parse, check, and vet advice when the file checks clean.
-// The background analysis computes it for a file under a project the
-// loader never read, off the handler goroutine and so off the
-// document (D79); a document's own path is UpdateLocal and vetLocal,
-// which produce the same verdict through the document's memos. The
-// diagnostics come sorted.
+// The background analysis computes it off the handler goroutine and
+// so off the document (D79). The diagnostics come sorted.
 func localVerdict(path, text string) []diag.Diagnostic {
 	file, diags := parser.ParseFile(path, text)
 	info, semDiags := check.File(file)
@@ -184,10 +166,8 @@ func lineStarts(text string) []int {
 }
 
 // GoFilesChanged reports whether the Go files this document's project
-// analysis read have changed on disk since — the checker's D63 facts
-// and the Go-reference navigation are then stale until Update runs.
-// Only Go files that were actually scanned count: a project without
-// Go references never re-runs for this reason.
+// analysis read have changed on disk since; the checker's D63 facts
+// are then stale. Only Go files that were actually scanned count.
 func (d *Document) GoFilesChanged() bool {
 	if d.vindex == nil {
 		return false
@@ -196,8 +176,8 @@ func (d *Document) GoFilesChanged() bool {
 }
 
 // analyzersActive is every registered vet analyzer except modelname: the
-// [model:] setting it wants is above the DBML layer, and the single-file
-// pass this feeds does not resolve it (see docs/editor.md).
+// single-file pass this feeds does not resolve the [model:] setting it
+// wants (see docs/editor.md).
 func analyzersActive() []vet.Analyzer {
 	var out []vet.Analyzer
 	for _, a := range vet.All() {
@@ -208,11 +188,8 @@ func analyzersActive() []vet.Analyzer {
 	return out
 }
 
-// pathFromURI converts a file URI to the on-disk path. Editors
-// percent-encode URIs (spaces, non-ASCII), and the result is a real
-// lookup key — the project overlay and the diagnostic filter match it
-// against filepath.WalkDir paths — so it must be the decoded path, not
-// a cosmetic trim.
+// pathFromURI converts a file URI to the on-disk path; the result is a
+// real lookup key, so it must be the decoded path.
 func pathFromURI(uri string) string {
 	if u, err := url.Parse(uri); err == nil && u.Scheme == "file" {
 		return u.Path
@@ -248,8 +225,7 @@ func (d *Document) ToLSP(p token.Position) protocol.Position {
 	return lspPosition(d.Text, d.lineOffsets, p)
 }
 
-// lspPosition is ToLSP over any text and its line table, so the
-// background analysis can position diagnostics in the text it saw.
+// lspPosition is ToLSP over any text and its line table.
 func lspPosition(text string, starts []int, p token.Position) protocol.Position {
 	line := int(p.Line()) - 1
 	if line < 0 {
@@ -309,7 +285,7 @@ func isIdentByte(b byte) bool {
 }
 
 // diagnosticRange widens a diagnostic's point position to the token-ish
-// span starting there, so editors underline something visible.
+// span starting there.
 func (d *Document) diagnosticRange(p token.Position) protocol.Range {
 	return diagnosticRangeIn(d.Text, d.lineOffsets, p)
 }

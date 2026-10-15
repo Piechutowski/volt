@@ -10,19 +10,6 @@ import (
 	"github.com/Piechutowski/volt/lang/vet"
 )
 
-// TestRulesDocumentation pins docs/lint.md, the analyzer registry and the
-// testdata corpus to each other. If any of the three drifts, the build
-// fails:
-//
-//  1. every registered analyzer has a "### <name>" section in lint.md;
-//  2. every "### <name>" section documents a registered analyzer (no
-//     stale docs for removed rules);
-//  3. every section links at least one existing testdata/*.dbml file;
-//  4. among a rule's linked files, at least one runs the rule (its
-//     "// analyzers:" header names it) and contains at least one bad
-//     example ("//WANT <name>") — TestAnalyzers separately proves the
-//     bad examples warn and the good lines stay silent;
-//  5. every testdata file is linked from lint.md (no orphaned examples).
 func TestRulesDocumentation(t *testing.T) {
 	docBytes, err := os.ReadFile(filepath.Join("..", "..", "docs", "lint.md"))
 	if err != nil {
@@ -33,7 +20,6 @@ func TestRulesDocumentation(t *testing.T) {
 	headingRE := regexp.MustCompile(`(?m)^### ([a-z]+)$`)
 	linkRE := regexp.MustCompile(`\(\.\./lang/vet/(testdata/[a-z_]+\.(?:dbml|volt))\)`)
 
-	// Slice the document into per-rule sections.
 	headings := headingRE.FindAllStringSubmatchIndex(doc, -1)
 	sections := map[string]string{}
 	var listed []string
@@ -56,13 +42,10 @@ func TestRulesDocumentation(t *testing.T) {
 		registered[a.Name()] = true
 		order = append(order, a.Name())
 	}
-	// (0) the rules are registered in the order the document lists
-	// them: two warnings at one position stand in that order (D104)
 	if strings.Join(order, ",") != strings.Join(listed, ",") {
 		t.Errorf("lint.md lists the rules as %v; vet.All() registers %v", listed, order)
 	}
 
-	// (2) no stale sections
 	for name := range sections {
 		if !registered[name] {
 			t.Errorf("lint.md documents %q, which is not a registered analyzer", name)
@@ -73,13 +56,11 @@ func TestRulesDocumentation(t *testing.T) {
 	for _, a := range vet.All() {
 		sec, ok := sections[a.Name()]
 		if !ok {
-			// (1) every analyzer documented
 			t.Errorf("analyzer %q has no '### %s' section in lint.md", a.Name(), a.Name())
 			continue
 		}
 		links := linkRE.FindAllStringSubmatch(sec, -1)
 		if len(links) == 0 {
-			// (3) every section links examples
 			t.Errorf("lint.md section %q links no testdata file", a.Name())
 			continue
 		}
@@ -103,7 +84,6 @@ func TestRulesDocumentation(t *testing.T) {
 				wantInLinked = true
 			}
 		}
-		// (4) linked examples actually exercise the rule
 		if !ranByLinked {
 			t.Errorf("no file linked from lint.md section %q runs the analyzer (missing from '// analyzers:' header)", a.Name())
 		}
@@ -112,7 +92,6 @@ func TestRulesDocumentation(t *testing.T) {
 		}
 	}
 
-	// (5) no orphaned testdata
 	files, err := filepath.Glob(filepath.Join("testdata", "*.dbml"))
 	if err != nil {
 		t.Fatal(err)
@@ -132,7 +111,6 @@ func TestRulesDocumentation(t *testing.T) {
 	}
 }
 
-// containsWant reports whether src has a //WANT marker naming the analyzer.
 func containsWant(src, name string) bool {
 	for _, m := range regexp.MustCompile(`//WANT ([a-z,]+)`).FindAllStringSubmatch(src, -1) {
 		for _, n := range strings.Split(m[1], ",") {

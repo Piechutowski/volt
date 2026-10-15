@@ -14,20 +14,10 @@ import (
 	"github.com/Piechutowski/volt/lang/parser"
 )
 
-// TestConformanceCorpus runs the schema half of the spec's snippet
-// corpus (the .dbml entries of lang/conformance/snippets) through the
-// single-file front end: every valid snippet must produce zero errors,
-// every invalid snippet at least one. The verdicts were pinned against
-// the upstream @dbml/parse compiler while the cross-check existed
-// (retired at 0 disagreements, D54).
 var wantRE = regexp.MustCompile(`(?m)^// want: (.+)$`)
 
 var update = flag.Bool("update", false, "rewrite the golden of the invalid schema corpus")
 
-// TestConformanceInvalidDiagnosticsPinned holds every diagnostic of
-// every invalid .dbml snippet, recovery included (§3.2 rule 6); see
-// the project half's test of the same name. Refresh with -update
-// after reading the diff.
 func TestConformanceInvalidDiagnosticsPinned(t *testing.T) {
 	files, err := filepath.Glob(filepath.Join("..", "conformance", "snippets", "invalid", "*.dbml"))
 	if err != nil || len(files) == 0 {
@@ -103,8 +93,6 @@ func TestConformanceCorpus(t *testing.T) {
 				if gotError != group.wantError {
 					t.Errorf("want error=%v, got error=%v; diagnostics: %v", group.wantError, gotError, diags)
 				}
-				// `// want: <text>` pins the reason an invalid snippet is
-				// rejected: the rule its comment names, not an accident.
 				if m := wantRE.FindSubmatch(src); m != nil && group.wantError {
 					want := strings.TrimSpace(string(m[1]))
 					found := false

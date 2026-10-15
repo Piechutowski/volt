@@ -82,9 +82,6 @@ func compareGolden(t *testing.T, got []byte, golden string) {
 	}
 }
 
-// TestGolden regenerates every testdata schema — models and queries — and
-// byte-compares against the .go.golden files. Run with -update to accept
-// intentional changes.
 func TestGolden(t *testing.T) {
 	for _, dbml := range corpusSchemas(t) {
 		dbml := dbml
@@ -99,8 +96,6 @@ func TestGolden(t *testing.T) {
 
 func corpusSchemas(t *testing.T) []string {
 	t.Helper()
-	// .dbml fixtures are core DBML; .volt fixtures exercise the language
-	// extensions — the split makes extension regressions visible by name.
 	files, err := filepath.Glob(filepath.Join("..", "testdata", "*.dbml"))
 	if err != nil {
 		t.Fatal(err)
@@ -117,13 +112,10 @@ func corpusSchemas(t *testing.T) []string {
 	return files
 }
 
-// schemaName is the fixture's base name without the .dbml/.volt suffix.
 func schemaName(path string) string {
 	return strings.TrimSuffix(strings.TrimSuffix(filepath.Base(path), ".dbml"), ".volt")
 }
 
-// TestGoldenGofmtStable proves the generated code is gofmt-clean: applying
-// gofmt to a golden file must be the identity function.
 func TestGoldenGofmtStable(t *testing.T) {
 	for _, golden := range goldenFiles(t) {
 		src, err := os.ReadFile(golden)
@@ -141,12 +133,8 @@ func TestGoldenGofmtStable(t *testing.T) {
 	}
 }
 
-// TestGoldenCompiles builds every golden file with the real Go toolchain:
-// generated code must be valid, compilable Go, not merely parseable.
 func TestGoldenCompiles(t *testing.T) {
 	dir := t.TempDir()
-	// Generated code imports the rt runtime package (D03/D13); point the
-	// throwaway module back at this repository (the volt module root) for it.
 	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
 		t.Fatal(err)
@@ -157,8 +145,6 @@ func TestGoldenCompiles(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// One package per schema, holding both generated files: the queries
-	// reference the model structs, so they must compile together.
 	for _, golden := range goldenFiles(t) {
 		src, err := os.ReadFile(golden)
 		if err != nil {
@@ -187,8 +173,6 @@ func TestGoldenCompiles(t *testing.T) {
 	}
 }
 
-// TestGeneratedHeader pins the machine-readable generated-code marker
-// (https://golang.org/s/generatedcode) on the first line of every golden.
 func TestGeneratedHeader(t *testing.T) {
 	re := regexp.MustCompile(`^// Code generated .* DO NOT EDIT\.$`)
 	for _, golden := range goldenFiles(t) {
@@ -212,8 +196,6 @@ func goldenFiles(t *testing.T) []string {
 	return files
 }
 
-// TestGenerationErrors pins the strict failure modes: unknown types and Go
-// name collisions must fail loudly, never guess.
 func TestGenerationErrors(t *testing.T) {
 	cases := []struct {
 		name, dbml, wantErr string

@@ -6,11 +6,6 @@ import (
 	"github.com/Piechutowski/volt/lang/ast"
 )
 
-// TestInspectSkipsUnsetFields proves the walker never hands a visitor
-// a typed nil (D89): a node of every kind with every field unset, as a
-// broken parse can leave one, is visited alone, and one child set is
-// visited too. The visitor asks each node its position, which a typed
-// nil would fail.
 func TestInspectSkipsUnsetFields(t *testing.T) {
 	bare := []ast.Node{
 		&ast.File{}, &ast.Use{}, &ast.UseItem{}, &ast.Project{}, &ast.ProjectProp{},
@@ -25,7 +20,7 @@ func TestInspectSkipsUnsetFields(t *testing.T) {
 		seen := 0
 		ast.Inspect(n, func(c ast.Node) bool {
 			if c != n {
-				c.Pos() // a typed nil panics here
+				c.Pos()
 			}
 			seen++
 			return true

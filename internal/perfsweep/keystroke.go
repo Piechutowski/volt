@@ -22,8 +22,7 @@ type Keystroke struct {
 }
 
 // Keystrokes runs the language server's keystroke benchmark once per
-// size, count repetitions each, through `go test` from the repository
-// root (the server is its own module), and keeps the best repetition.
+// size, count repetitions each, and keeps the best repetition.
 func Keystrokes(repo string, sizes []int, columns, count int, log func(format string, args ...any)) ([]Keystroke, error) {
 	var out []Keystroke
 	for _, tables := range sizes {

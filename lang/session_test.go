@@ -1,10 +1,5 @@
 package lang_test
 
-// A Session's Load and Check must be indistinguishable from a fresh
-// LoadOverlay and Check, edit after edit (D79), while doing only the
-// work an edit implies: one parse per changed file, one check per
-// package that could see it.
-
 import (
 	"fmt"
 	"os"
@@ -30,9 +25,6 @@ func diagsRender(ds []diag.Diagnostic) string {
 	return b.String()
 }
 
-// sessionRound runs the session and a fresh analysis on the same
-// overlay and compares the diagnostics; it returns the session's
-// project and the work counters of this round.
 func sessionRound(t *testing.T, s *lang.Session, root string, overlay map[string]string, before lang.SessionStats) (*lang.Project, lang.SessionStats) {
 	t.Helper()
 	pr, err := s.Load(root, overlay)
@@ -55,7 +47,7 @@ func sessionRound(t *testing.T, s *lang.Session, root string, overlay map[string
 }
 
 func TestSessionMatchesFreshAnalysis(t *testing.T) {
-	root := scheduleFixture(t) // 6 data packages, 6 routing packages, errors in all
+	root := scheduleFixture(t)
 	var s lang.Session
 	expect := func(name string, got lang.SessionStats, parsed, checked int) {
 		t.Helper()
@@ -67,12 +59,9 @@ func TestSessionMatchesFreshAnalysis(t *testing.T) {
 	_, work := sessionRound(t, &s, root, nil, lang.SessionStats{})
 	expect("first load", work, 12, 12)
 
-	// Nothing changed: nothing is parsed or checked.
 	_, work = sessionRound(t, &s, root, nil, s.Stats())
 	expect("no change", work, 0, 0)
 
-	// An overlay edit in a data package: that file parses again; the
-	// package and the one routing package importing it check again.
 	d2 := filepath.Join(root, "d2", "schema.volt")
 	src, err := os.ReadFile(d2)
 	if err != nil {
@@ -82,11 +71,9 @@ func TestSessionMatchesFreshAnalysis(t *testing.T) {
 	_, work = sessionRound(t, &s, root, map[string]string{d2: fixed}, s.Stats())
 	expect("data edit in the editor", work, 1, 2)
 
-	// The same overlay again: the parse and the memo both hit.
 	_, work = sessionRound(t, &s, root, map[string]string{d2: fixed}, s.Stats())
 	expect("same overlay", work, 0, 0)
 
-	// An overlay edit in a routing package touches that package alone.
 	r3 := filepath.Join(root, "r3", "routes.volt")
 	src, err = os.ReadFile(r3)
 	if err != nil {
@@ -96,17 +83,12 @@ func TestSessionMatchesFreshAnalysis(t *testing.T) {
 	_, work = sessionRound(t, &s, root, map[string]string{d2: fixed, r3: routed}, s.Stats())
 	expect("route edit in the editor", work, 1, 1)
 
-	// A save: the overlay goes, the disk changes. The file is read,
-	// and being the same text as the overlay, its parse is reused;
-	// nothing checks again.
 	if err := os.WriteFile(d2, []byte(fixed), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, work = sessionRound(t, &s, root, map[string]string{r3: routed}, s.Stats())
 	expect("save of the edited file", work, 0, 0)
 
-	// A Go file appearing beside a routing package's routes changes
-	// its Go sources: that package checks again.
 	if err := os.WriteFile(filepath.Join(root, "r1", "mw.go"), []byte("package r1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -114,11 +96,6 @@ func TestSessionMatchesFreshAnalysis(t *testing.T) {
 	expect("Go file added", work, 0, 1)
 }
 
-// TestSessionReadsWhatIsOnDisk proves the session trusts no stamp
-// (D87): a file rewritten to the same length with its modification
-// time put back is read, and the edit is seen, for a .volt file and
-// for a Go file alike. Each edit changes the diagnostics, so a stale
-// parse or a stale Go scan would differ from the fresh analysis.
 func TestSessionReadsWhatIsOnDisk(t *testing.T) {
 	root := t.TempDir()
 	write := func(name, src string) {
@@ -134,8 +111,6 @@ func TestSessionReadsWhatIsOnDisk(t *testing.T) {
 	write("go.mod", "module disk\n")
 	write("db/schema.volt", "package db\n\nTable users {\n\tid integer [pk, increment]\n\temail varchar [not null]\n\ttitle text\n\ttitle text\n\n\tchecks {\n\t\tEmailValid(email)\n\t}\n}\n")
 	write("db/checks.go", "package db\n\nfunc EmailValid(email string) error { return nil }\n")
-	// sameStamp rewrites one file so that its size and modification
-	// time are what they were.
 	sameStamp := func(name, from, to string) {
 		t.Helper()
 		if len(from) != len(to) {
@@ -179,20 +154,15 @@ func TestSessionReadsWhatIsOnDisk(t *testing.T) {
 	_, work = sessionRound(t, &s, root, nil, s.Stats())
 	expect("no change", work, 0, 0)
 
-	// The duplicate column renamed: the error goes.
 	sameStamp("db/schema.volt", "\ttitle text\n\ttitle text\n", "\ttitle text\n\ttitel text\n")
 	_, work = sessionRound(t, &s, root, nil, s.Stats())
 	expect("same-length edit of the .volt file", work, 1, 1)
 
-	// The Go function's parameter type changes under the reference:
-	// the check no longer matches the column.
 	sameStamp("db/checks.go", "email string", "email []byte")
 	_, work = sessionRound(t, &s, root, nil, s.Stats())
 	expect("same-length edit of the Go file", work, 0, 1)
 }
 
-// TestSessionGeneratesIdentically proves the restored package results
-// carry everything the generators read: the bytes match a fresh run.
 func TestSessionGeneratesIdentically(t *testing.T) {
 	root := perfFixture(t, 6, 5, true)
 	generate := func(pr *lang.Project) map[string]string {
@@ -250,9 +220,6 @@ func TestSessionGeneratesIdentically(t *testing.T) {
 	}
 }
 
-// TestSessionVetMemo proves Session.Vet answers from the memo exactly
-// when Session.Check did: the warnings match a fresh Vet round by
-// round, and a round that re-checked n packages re-vets n (D81).
 func TestSessionVetMemo(t *testing.T) {
 	root := scheduleFixture(t)
 	var s lang.Session
@@ -277,8 +244,6 @@ func TestSessionVetMemo(t *testing.T) {
 		if vetted, ch := after.PackagesVetted-before.PackagesVetted, after.PackagesChecked-before.PackagesChecked; vetted != checked || ch != checked {
 			t.Errorf("%s: vetted %d, checked %d packages; want %d (vet reused %d)", name, vetted, ch, checked, after.PackagesVetReused-before.PackagesVetReused)
 		}
-		// A package the memo answered ran no rule: its declarations
-		// count neither as judged nor as answered (D104).
 		if decls, answered := after.DeclsVetted-before.DeclsVetted, after.DeclsVetReused-before.DeclsVetReused; checked == 0 && (decls != 0 || answered != 0) {
 			t.Errorf("%s: no package vetted, yet %d declarations judged and %d answered", name, decls, answered)
 		} else if checked > 0 && decls == 0 {
@@ -296,10 +261,6 @@ func TestSessionVetMemo(t *testing.T) {
 	round("same edit", map[string]string{d2: string(src) + "\n// touched\n"}, 0)
 }
 
-// TestSessionReparsesOneDeclaration proves an edit inside one
-// declaration of a one-file project re-parses that declaration alone
-// (D83): the session's diagnostics still match a fresh analysis, and
-// the work counters say one declaration parsed, the rest reused.
 func TestSessionReparsesOneDeclaration(t *testing.T) {
 	root := t.TempDir()
 	if err := corpus.Write(root, corpus.Spec{Tables: 12, Columns: 6, Single: true}); err != nil {
@@ -313,9 +274,6 @@ func TestSessionReparsesOneDeclaration(t *testing.T) {
 	text := string(src)
 	_, _, _, whole := parser.ParseFileReuse(path, text, nil)
 	var s lang.Session
-	// work is what one round did, in declarations parsed and in tables
-	// whose schema check, model and lowered checks were run afresh, and
-	// in declarations the vet judged afresh (D104).
 	type work struct{ parsed, tables, models, checks, selects, routes, vetted int }
 	round := func(name, text string, want work) {
 		t.Helper()
@@ -349,65 +307,28 @@ func TestSessionReparsesOneDeclaration(t *testing.T) {
 				after.SelectsReused-before.SelectsReused, after.DeclsVetReused-before.DeclsVetReused)
 		}
 	}
-	// 12 tables, each with a projected select, and the group select
-	// over all of them: 13 selects; four routes, a resources per table
-	// and the dataset over the group select: 17 scope items (D99).
-	// Every declaration is vetted once.
 	all := work{whole.Parsed, 12, 12, 12, 13, 17, whole.Parsed}
 	round("first", text, all)
-	// One table: its own select and the group select see a new member;
-	// its resources and the dataset over the group select are lowered
-	// again, the table and the select they name being new objects. The
-	// vet judges the table again and the next table, whose prev_id
-	// relationship names it.
 	one := work{1, 1, 1, 1, 2, 2, 2}
 	round("edit one table", strings.Replace(text, "c002 text [not null]", "c002 text [not null, note: 'edited']", 1), one)
 	round("break it", strings.Replace(text, "c002 text [not null]", "c002 text [not null", 1), one)
 	round("fix it", text, one)
-	// Edits accumulate from here, so each round changes one chunk.
 	cur := strings.Replace(text, "get /events        volt.Events", "get /stream        volt.Events", 1)
-	// Touches no table. The scope is one element (§3.2.5), so the edit
-	// re-parses it whole and every item of it is a new node: all 17
-	// are lowered again, from the memo's lookups answered as before;
-	// the vet judges the scope, one declaration.
 	round("edit a route", cur, work{1, 0, 0, 0, 0, 17, 1})
-	// The partial every table injects: every table's columns change,
-	// so every table is checked again, its model rebuilt, its checks
-	// lowered again, every select re-checked; the vet judges the
-	// partial and every table.
 	cur = strings.Replace(cur, "created_at timestamp", "created_at timestamp [note: 'stamped']", 1)
 	round("edit the partial", cur, work{1, 12, 12, 12, 13, 13, 13})
-	// An enum's note: no table and no model depends on it.
 	cur = strings.Replace(cur, "retired [note: 'no longer written']", "retired [note: 'gone']", 1)
 	round("edit the enum's note", cur, work{1, 0, 0, 0, 0, 0, 1})
-	// A new enum: the enum set is an input of every table's check (the
-	// required rule asks whether a column type is an enum) and of every
-	// model, so every table is checked again and every model rebuilt;
-	// the lowered checks and the selects follow their models, and the
-	// vet follows the tables, plus the enum itself.
 	cur = strings.Replace(cur, "TablePartial stamped", "Enum kind {\n\tplain\n}\n\nTablePartial stamped", 1)
 	round("add an enum", cur, work{1, 12, 12, 12, 13, 13, 13})
-	// The predicate every select names: every select is checked again.
 	cur = strings.Replace(cur, "Pred fresh { c001 >= :since }", "Pred fresh { c001 > :since }", 1)
-	// The dataset names the group select, checked again: one item.
 	round("edit the pred", cur, work{1, 0, 0, 0, 13, 1, 1})
-	// A Go file of the package: the tables and models stand, the Go
-	// reference checks are lowered again.
 	if err := os.WriteFile(filepath.Join(root, "extra.go"), []byte("package main\n\nfunc Extra() {}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// The validators are what they were, so every resources stands,
-	// and so does every declaration's verdict.
 	round("add a Go file", cur, work{0, 0, 0, 12, 0, 0, 0})
 }
 
-// TestSessionConcurrentCallersAgreeWithFreshAnalysis proves a Session
-// serves concurrent callers one operation at a time (D96): several
-// goroutines load and check one session under overlays of their own,
-// round after round, and every result equals a fresh analysis of the
-// same overlay. Run under the race detector by the verification bar,
-// it is where the memos' one-goroutine-at-a-time invariant is
-// exercised rather than assumed.
 func TestSessionConcurrentCallersAgreeWithFreshAnalysis(t *testing.T) {
 	root := scheduleFixture(t)
 	d2 := filepath.Join(root, "d2", "schema.volt")

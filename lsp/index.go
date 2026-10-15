@@ -20,8 +20,8 @@ const (
 // SymbolID names one symbol. Tables and enums use their canonical
 // "schema.name" key; columns live in a container — "table:<key>" for direct
 // definitions or "partial:<name>" for columns defined in a TablePartial, so
-// every table sharing the partial shares the symbol (a rename edits the
-// partial once). Enum values live in "enum:<key>".
+// every table sharing the partial shares the symbol. Enum values live in
+// "enum:<key>".
 type SymbolID struct {
 	Kind      SymKind
 	Container string
@@ -171,10 +171,7 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 
 	// Every table's occurrences are tableOccurrences, a pure function
 	// of the inputs resolved here (D86); the memo answers a table whose
-	// inputs are what they were. An entry's lists are appended where
-	// the build puts a table's occurrences: its symbol with the
-	// declarations, its columns after the partials', its body with the
-	// references.
+	// inputs are what they were.
 	entries := make(map[*ast.Table]*tableOccs, len(info.Tables))
 	if memo != nil {
 		memo.Hits, memo.Misses = 0, 0
@@ -277,10 +274,9 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 			ix.walkEndpoint(n.Left)
 			ix.walkEndpoint(n.Right)
 		case *ast.Select:
-			// A select over one table binds its columns to that table:
-			// projection, order and where follow a rename. A group target
-			// names an agreed column across members and is left alone —
-			// the §V11.4 error then says what went missing.
+			// A select over one table binds its columns to that table. A
+			// group target names an agreed column across members and is
+			// left alone (§V11.4).
 			if ti := ix.tableByBase(n.Target.Name()); ti != nil && !groups[n.Target.Name()] {
 				for _, col := range n.Cols {
 					ix.addColumnRef(ti, "", col)
@@ -328,15 +324,11 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 }
 
 // tableOccurrences is one table's contribution to the index as a pure
-// function of its inputs (D86): its declaration, its checked table,
-// the table its body's references bind to (the checked one, or the
-// namesake that won when this one is a duplicate), the tables its
-// inline references name by lookup key, the enums the body names by
-// canonical key, and the partials it injects by presence.
-// It returns the occurrences of the table's symbol and alias, of its
-// own column declarations, and of every reference inside its body,
-// plus the declarations it contributes, reading nothing else and
-// writing nothing it did not create.
+// function of its inputs (D86). It returns the occurrences of the
+// table's symbol and alias, of its own column declarations, and of
+// every reference inside its body, plus the declarations it
+// contributes, reading nothing else and writing nothing it did not
+// create.
 func tableOccurrences(d *ast.Table, ti, resolved *check.TableInfo, tables map[string]*check.TableInfo, enums map[string]*check.EnumInfo, partials map[string]bool) (sym, cols, body []Occurrence, decls []declEntry) {
 	// The walk asks its maps whether a key is declared, so the inputs'
 	// "named but absent" entries (nil) must not be present in them.
@@ -487,7 +479,6 @@ func (ix *Index) walkTableBody(body []ast.TableItem, ti *check.TableInfo, partia
 	for _, item := range body {
 		switch n := item.(type) {
 		case *ast.Column:
-			// column type may reference an enum
 			if ei := ix.resolveEnum(n.Type.Name); ei != nil {
 				ix.add(SymbolID{SymEnum, "", ei.Key}, lastPart(n.Type.Name), false)
 			}
@@ -525,8 +516,7 @@ func (ix *Index) walkTableBody(body []ast.TableItem, ti *check.TableInfo, partia
 }
 
 // walkPredCols records the column references of a typed check (§V12):
-// every operand names a column of the enclosing table, so a rename of
-// the column must follow it into the check.
+// every operand names a column of the enclosing table.
 func (ix *Index) walkPredCols(ti *check.TableInfo, partial string, x ast.PredExpr) {
 	switch x := x.(type) {
 	case *ast.PredBinary:

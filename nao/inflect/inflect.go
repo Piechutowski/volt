@@ -1,12 +1,7 @@
 // Package inflect derives the singular model name from a plural table
-// name (decision D10). The inflector is deliberately small and
-// deterministic: a fixed irregular list, a handful of suffix rules, and a
-// confidence bit. When the result is a guess (Singular returns ok=false),
-// vet's modelname rule tells the author to pin the name with [model:].
-//
-// English pluralization is not decidable by rules ("menus" wants menu,
-// "status" wants status); the design accepts that and makes the ambiguous
-// cases loud instead of clever.
+// name (decision D10): a fixed irregular list, a handful of suffix rules,
+// and a confidence bit. When the result is a guess, Singular returns
+// ok=false.
 package inflect
 
 import "strings"
@@ -53,11 +48,7 @@ var irregular = map[string]string{
 }
 
 // Singular converts one plural noun to singular. ok reports whether the
-// answer is confident; when false the caller should treat the result as a
-// guess (the vet modelname rule surfaces exactly these).
-//
-// Compound snake_case names are handled by SingularLast, which inflects
-// only the final segment (order_items -> order_item).
+// answer is confident; when false the result is a guess.
 func Singular(word string) (string, bool) {
 	if word == "" {
 		return word, false
@@ -79,12 +70,10 @@ func Singular(word string) (string, bool) {
 		return word[:len(word)-2], true
 
 	// houses, cases, databases, releases -> drop "s"
-	// (statuses/aliases/buses are irregular entries above)
 	case strings.HasSuffix(lower, "ses"):
 		return word[:len(word)-1], true
 
-	// endings where a trailing "s" is often not a plural marker at all:
-	// status, bonus, analysis, axis. Left unchanged, flagged as a guess.
+	// status, bonus, analysis, axis: left unchanged, flagged as a guess
 	case strings.HasSuffix(lower, "ss"), strings.HasSuffix(lower, "us"),
 		strings.HasSuffix(lower, "is"):
 		return word, false

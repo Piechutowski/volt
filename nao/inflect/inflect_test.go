@@ -8,20 +8,17 @@ func TestSingular(t *testing.T) {
 		want string
 		ok   bool
 	}{
-		// regular -s
 		{"users", "user", true},
 		{"posts", "post", true},
 		{"comments", "comment", true},
 		{"orders", "order", true},
 		{"tags", "tag", true},
 
-		// -ies
 		{"categories", "category", true},
 		{"companies", "company", true},
 		{"cities", "city", true},
-		{"ties", "tie", true}, // too short for the -ies rule; plain -s
+		{"ties", "tie", true},
 
-		// -es families
 		{"boxes", "box", true},
 		{"churches", "church", true},
 		{"dishes", "dish", true},
@@ -31,7 +28,6 @@ func TestSingular(t *testing.T) {
 		{"databases", "database", true},
 		{"releases", "release", true},
 
-		// irregular and uninflectable
 		{"people", "person", true},
 		{"children", "child", true},
 		{"statuses", "status", true},
@@ -45,19 +41,16 @@ func TestSingular(t *testing.T) {
 		{"news", "news", true},
 		{"series", "series", true},
 
-		// ambiguous endings: unchanged, flagged as guesses
 		{"status", "status", false},
 		{"bonus", "bonus", false},
 		{"menus", "menus", false},
 		{"analysis", "analysis", false},
 		{"axis", "axis", false},
 
-		// already singular: identity, confident
 		{"user", "user", true},
 		{"person", "person", true},
 		{"staff", "staff", true},
 
-		// case preservation
 		{"Users", "User", true},
 		{"PEOPLE", "PERSON", true},
 	}
@@ -81,7 +74,7 @@ func TestSingularLast(t *testing.T) {
 		{"blog_categories", "blog_category", true},
 		{"account_statuses", "account_status", true},
 		{"order_status", "order_status", false},
-		{"trailing_", "trailing_", true}, // degenerate: empty last segment, identity
+		{"trailing_", "trailing_", true},
 	}
 	for _, tc := range cases {
 		got, ok := SingularLast(tc.in)

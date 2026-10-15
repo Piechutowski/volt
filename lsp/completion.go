@@ -9,9 +9,8 @@ import (
 	"github.com/Piechutowski/volt/lang/check"
 )
 
-// Completion contexts are derived textually (the file rarely parses while a
-// line is being typed) and filled from the last semantic model, which the
-// checker returns even for files with errors.
+// Completion contexts are derived textually and filled from the last
+// semantic model, which the checker returns even for files with errors.
 
 var (
 	elementKeywords = []string{
@@ -76,13 +75,11 @@ func (d *Document) Complete(pos protocol.Position) []protocol.CompletionItem {
 	prefix := d.Text[lineStart:offset]
 	ctx := d.blockContext(int(pos.Line))
 
-	// Project-aware completions first: `db.<tables>` after an import
-	// qualifier, tables and qualifiers after `resources`.
+	// Project-aware completions first.
 	if items := d.voltComplete(prefix); items != nil {
 		return items
 	}
 
-	// ~partial injection
 	if (ctx == "table" || ctx == "tablepartial") && partialInjectRE.MatchString(prefix) {
 		return d.partialItems()
 	}
@@ -92,12 +89,10 @@ func (d *Document) Complete(pos protocol.Position) []protocol.CompletionItem {
 		return d.settingsComplete(prefix, ctx)
 	}
 
-	// endpoint chains: `users.`, `core.orders.`, `status.`
 	if m := dotChainRE.FindStringSubmatch(prefix); m != nil {
 		return d.dotChainComplete(m)
 	}
 
-	// ref bodies: `Ref: ` / `Ref name: a.b > ` / inside Ref { }
 	trimmed := strings.TrimSpace(prefix)
 	if ctx == "ref" || strings.HasPrefix(strings.ToLower(trimmed), "ref") && strings.Contains(trimmed, ":") ||
 		afterCardRE.MatchString(prefix) {
@@ -141,16 +136,11 @@ func (d *Document) blockContext(line int) string {
 	for l := line; l >= 0; l-- {
 		text := d.lineText(l)
 		if l == line {
-			// only the part left of the cursor's line matters for openers
-			// on the same line; approximate with the whole line minus any
-			// trailing close (settings brackets are handled separately).
 			text = strings.SplitN(text, "//", 2)[0]
 		}
 		opens := strings.Count(text, "{")
 		closes := strings.Count(text, "}")
 		if l == line {
-			// a `{` on the cursor line only encloses the cursor if it is
-			// before it; being conservative here is fine.
 			depth -= 0
 		}
 		depth += closes - opens
@@ -184,8 +174,6 @@ func (d *Document) blockContext(line int) string {
 			case strings.HasPrefix(head, "scope"):
 				return "scope"
 			default:
-				// unnamed opener inside another block: keep scanning with
-				// the parent block's depth.
 				depth = 0
 				continue
 			}
@@ -200,9 +188,6 @@ func (d *Document) settingsComplete(prefix, ctx string) []protocol.CompletionIte
 	if refValueRE.MatchString(segment) || afterCardRE.MatchString(segment) {
 		return d.tableItems()
 	}
-	// default: status.<values> — a dotted chain inside a settings list
-	// resolves like one anywhere else (enum values, or a schema's enums),
-	// instead of falling through to the column-setting names.
 	if defaultChainRE.MatchString(segment) {
 		if m := dotChainRE.FindStringSubmatch(segment); m != nil {
 			return d.dotChainComplete(m)
@@ -231,8 +216,7 @@ func (d *Document) settingsComplete(prefix, ctx string) []protocol.CompletionIte
 		kind = "sticky"
 	// Volt lines exist only where the grammar puts them (§V4): Scope
 	// openers at top level or nested in a Scope, routes and resources
-	// in Scope bodies. Without the context gate a column named 'scope'
-	// or 'delete' inside a Table would get route settings.
+	// in Scope bodies.
 	case strings.HasPrefix(head, "scope") && (ctx == "" || ctx == "scope"):
 		kind = "scope"
 	case strings.HasPrefix(head, "resources") && ctx == "scope":
@@ -267,27 +251,23 @@ func (d *Document) dotChainComplete(m []string) []protocol.CompletionItem {
 	var items []protocol.CompletionItem
 
 	if second != "" {
-		// schema.table. -> columns of that table
 		if ti, ok := d.Index.Tables[first+"."+second]; ok {
 			items = append(items, d.columnItems(ti)...)
 		}
 		return items
 	}
 
-	// alias. or table. -> columns
 	if ti, ok := d.Index.Tables["alias:"+first]; ok {
 		items = append(items, d.columnItems(ti)...)
 	}
 	if ti, ok := d.Index.Tables["public."+first]; ok {
 		items = append(items, d.columnItems(ti)...)
 	}
-	// enum. -> values
 	if ei, ok := d.Index.Enums["public."+first]; ok {
 		for _, v := range ei.Decl.Values {
 			items = append(items, item(v.Name.Name(), protocol.CompletionItemKindEnumMember, "value of "+ei.Decl.Name.String()))
 		}
 	}
-	// schema. -> tables and enums under it
 	for key, ti := range d.Index.Tables {
 		if strings.HasPrefix(key, first+".") {
 			items = append(items, item(ti.Decl.Name.Base(), protocol.CompletionItemKindStruct, "Table "+key))

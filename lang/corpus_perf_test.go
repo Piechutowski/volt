@@ -1,11 +1,5 @@
 package lang_test
 
-// The corpus (internal/corpus) at scale: linear growth per phase in
-// every dimension, an allocation budget that pins the absolute cost
-// of a fixed input, and benchmarks with a committed baseline
-// (testdata/bench_baseline.txt) for humans to compare against — wall
-// clock is never asserted (PERF-2).
-
 import (
 	"testing"
 
@@ -25,7 +19,6 @@ func corpusRoot(t testing.TB, spec corpus.Spec) string {
 	return root
 }
 
-// corpusPhases measures the bytes each phase allocates on a project.
 func corpusPhases(t testing.TB, root string) (load, check, gen uint64) {
 	t.Helper()
 	var pr *lang.Project
@@ -69,8 +62,6 @@ func TestCorpusScalesLinearly(t *testing.T) {
 		{"tables", func(s corpus.Spec) corpus.Spec { s.Tables *= 2; return s }},
 		{"packages", func(s corpus.Spec) corpus.Spec { s.Packages *= 2; return s }},
 		{"columns", func(s corpus.Spec) corpus.Spec { s.Columns *= 2; return s }},
-		// One package routing every table of one group: the shape that
-		// found the quadratic route binding (D81).
 		{"single", func(s corpus.Spec) corpus.Spec { s.Single = true; s.Tables *= 2; return s }},
 	} {
 		t.Run(dim.name, func(t *testing.T) {
@@ -87,12 +78,6 @@ func TestCorpusScalesLinearly(t *testing.T) {
 	}
 }
 
-// The allocation budget of a fixed corpus (3 packages, 12 tables, 12
-// columns): measured on go1.27 when the numbers were last ratcheted,
-// asserted within ten percent. A phase that grows past its budget is
-// a regression to explain, or a budget to raise in the same commit
-// with the reason; a phase that shrinks well below is a budget to
-// lower.
 var allocBudget = struct {
 	load, check, gen uint64
 }{
@@ -121,7 +106,7 @@ func TestAllocationBudget(t *testing.T) {
 	}
 }
 
-var benchSpec = corpus.Spec{Packages: 4, Tables: 25, Columns: 12} // 100 tables
+var benchSpec = corpus.Spec{Packages: 4, Tables: 25, Columns: 12}
 
 func BenchmarkLoad(b *testing.B) {
 	root := corpusRoot(b, benchSpec)
@@ -164,8 +149,6 @@ func BenchmarkGenerate(b *testing.B) {
 	}
 }
 
-// BenchmarkSessionEdit is the editor's cycle: one file changes, the
-// session re-parses it and re-checks the packages that see it.
 func BenchmarkSessionEdit(b *testing.B) {
 	root := corpusRoot(b, benchSpec)
 	var s lang.Session

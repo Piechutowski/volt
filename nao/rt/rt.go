@@ -3,12 +3,10 @@
 // (decision D03): a nullable value type, the database handle interface,
 // a transaction helper, an opener that applies the SQLite pragmas the
 // generated SQL assumes, a prepared-statement cache, and the dynamic
-// query layer (query.go) — typed column handles, predicates and options
-// as inert data, and their deterministic SQL interpreter (D28-D34).
+// query layer (D28-D34).
 //
 // The package registers no driver. The application chooses one (any
-// database/sql SQLite driver) and passes its name to Open, so rt itself
-// stays dependency-free and cgo-free.
+// database/sql SQLite driver) and passes its name to Open.
 package rt
 
 import (
@@ -18,8 +16,7 @@ import (
 )
 
 // DBTX is what generated queries need from a database handle. Both
-// *sql.DB and *sql.Tx satisfy it, which is how the same generated method
-// runs inside and outside a transaction.
+// *sql.DB and *sql.Tx satisfy it.
 type DBTX interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
@@ -28,8 +25,7 @@ type DBTX interface {
 }
 
 // ErrNotFound is returned by generated Get/Update/Delete methods when no
-// row matches the given identity. It is sql.ErrNoRows, so existing
-// errors.Is(err, sql.ErrNoRows) checks keep working.
+// row matches the given identity. It is sql.ErrNoRows.
 var ErrNotFound = sql.ErrNoRows
 
 // beginner is the subset of *sql.DB that can start a transaction.
@@ -37,10 +33,9 @@ type beginner interface {
 	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
 }
 
-// Tx runs fn inside a transaction: begin, fn, commit — with a rollback on
-// error or panic. db is typically a *sql.DB; passing a handle that cannot
-// begin a transaction (such as a *sql.Tx: SQLite has no nested
-// transactions) is an error.
+// Tx runs fn inside a transaction: begin, fn, commit, with a rollback on
+// error or panic. Passing a handle that cannot begin a transaction (such
+// as a *sql.Tx) is an error.
 func Tx(ctx context.Context, db DBTX, fn func(tx *sql.Tx) error) (err error) {
 	b, ok := db.(beginner)
 	if !ok {
@@ -70,10 +65,7 @@ func Tx(ctx context.Context, db DBTX, fn func(tx *sql.Tx) error) (err error) {
 //	busy_timeout = 5000   wait instead of failing with SQLITE_BUSY
 //	foreign_keys = ON     the generated DDL declares real foreign keys
 //
-// Pragmas are per-connection in SQLite, so Open pins the pool to a single
-// connection. SQLite has a single writer anyway; one connection makes the
-// pragmas hold for every statement and removes in-process busy contention.
-// (Read scaling across many connections can be revisited later.)
+// Open pins the pool to a single connection.
 func Open(driver, dsn string) (*sql.DB, error) {
 	db, err := sql.Open(driver, dsn)
 	if err != nil {

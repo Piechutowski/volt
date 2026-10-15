@@ -9,7 +9,6 @@ import (
 	"github.com/Piechutowski/volt/lang/diag"
 )
 
-// project materializes files into a temp dir and runs Load+Check.
 func project(t *testing.T, files map[string]string) (*Project, []diag.Diagnostic) {
 	t.Helper()
 	root := t.TempDir()
@@ -48,9 +47,6 @@ func wantError(t *testing.T, diags []diag.Diagnostic, substr string) {
 
 const modFile = "module blog\n"
 
-// The reference project: a small blog — a schema package and a routes
-// package exercising imports, model inference, resources, nesting and
-// helpers.
 var blog = map[string]string{
 	"go.mod":    modFile,
 	"app/mw.go": "package app\n\nimport (\n\t\"net/http\"\n\n\tvolt \"github.com/Piechutowski/volt\"\n)\n\nfunc BearerAuth(next http.Handler) http.Handler { return next }\nfunc Errors(w http.ResponseWriter, r *volt.Request, err error) {}\n",
@@ -108,8 +104,6 @@ func TestReferenceProject(t *testing.T) {
 		t.Error("db should not have routing")
 	}
 
-	// Route inventory. resources users with only:(index,show,create)
-	// yields 3 routes; 5 plain routes total.
 	if len(app.Routes) != 8 {
 		for _, r := range app.Routes {
 			t.Logf("route: %s", r)
@@ -149,7 +143,6 @@ func TestReferenceProject(t *testing.T) {
 		t.Errorf("typed param route wrong: %+v", avatar)
 	}
 
-	// Pipelines and error handler flow down.
 	for _, r := range app.Routes {
 		if len(r.Pipes) != 1 || r.Pipes[0] != "api" {
 			t.Errorf("route %s pipes = %v, want [api]", r.Pattern, r.Pipes)
@@ -159,7 +152,6 @@ func TestReferenceProject(t *testing.T) {
 		}
 	}
 
-	// Controller signatures.
 	users := app.Controllers["Users"]
 	if users == nil {
 		t.Fatal("Users controller missing")
@@ -188,7 +180,6 @@ Scope / {
 	})
 	wantClean(t, diags)
 	app := pr.Packages["app"]
-	// api: index, create, show, update(PATCH+PUT), delete = 6 routes
 	if len(app.Routes) != 6 {
 		t.Fatalf("routes = %d, want 6", len(app.Routes))
 	}
@@ -201,7 +192,6 @@ Scope / {
 	if !methods["PATCH"] || !methods["PUT"] {
 		t.Errorf("update methods = %v, want PATCH and PUT", methods)
 	}
-	// One Update action despite two routes.
 	if a := app.Controllers["Users"].Action("Update"); a == nil || len(a.Routes) != 2 {
 		t.Errorf("Update action should carry both routes")
 	}
@@ -223,8 +213,6 @@ Scope / {
 	})
 	wantClean(t, diags)
 	app := pr.Packages["app"]
-	// Full set is 8 routes (7 actions, Update spanning PATCH+PUT);
-	// except:(delete) removes one.
 	if len(app.Routes) != 7 {
 		for _, r := range app.Routes {
 			t.Logf("route: %s", r)
@@ -250,14 +238,12 @@ Scope / {
 }
 
 func TestResourcesSingularOverride(t *testing.T) {
-	// A name English singularization leaves alone collides with itself…
 	_, diags := project(t, map[string]string{
 		"go.mod":     modFile,
 		"app/r.volt": "package app\n\nTable posty {\n\tid integer [pk]\n}\n\nScope / {\n\tresources posty\n}\n",
 	})
 	wantError(t, diags, "set the singular explicitly")
 
-	// …and singular: is the fix, giving distinct collection/member helpers.
 	pr, diags := project(t, map[string]string{
 		"go.mod":     modFile,
 		"app/r.volt": "package app\n\nTable posty {\n\tid integer [pk]\n}\n\nScope / {\n\tresources posty [singular: post]\n}\n",
@@ -287,11 +273,9 @@ func TestResourcesNamesTable(t *testing.T) {
 	app := pr.Packages["app"]
 	helpers := map[string]bool{}
 	for _, r := range app.Routes {
-		// URL segment comes from the table…
 		if !strings.HasPrefix(r.Pattern, "/posty") {
 			t.Errorf("pattern %q should use the table name", r.Pattern)
 		}
-		// …key type from the model's primary key…
 		for _, p := range r.Params {
 			if p.Type != TInt32 {
 				t.Errorf("key type = %v on %s, want int32", p.Type, r.Pattern)
@@ -301,8 +285,6 @@ func TestResourcesNamesTable(t *testing.T) {
 			helpers[r.HelperName] = true
 		}
 	}
-	// …and the member helper from the model name ([model: 'Post']),
-	// with no inflection guess.
 	for _, want := range []string{"Posty", "Post", "NewPost", "EditPost"} {
 		if !helpers[want] {
 			t.Errorf("helper %q missing; got %v", want, helpers)
@@ -314,14 +296,12 @@ func TestResourcesNamesTable(t *testing.T) {
 }
 
 func TestResourcesRequireDeclaredTable(t *testing.T) {
-	// Unqualified miss: an error, never a schemaless resource.
 	_, diags := project(t, map[string]string{
 		"go.mod":     modFile,
 		"app/r.volt": "package app\n\nTable posts {\n\tid integer [pk]\n}\n\nScope / {\n\tresources ghosts\n}\n",
 	})
 	wantError(t, diags, `no table "ghosts" in package "app"`)
 
-	// A model name in the declaration gets pointed at its table.
 	_, diags = project(t, map[string]string{
 		"go.mod":     modFile,
 		"app/r.volt": "package app\n\nTable posts {\n\tid integer [pk]\n}\n\nScope / {\n\tresources Post\n}\n",
@@ -501,8 +481,6 @@ func TestErrors(t *testing.T) {
 }
 
 func TestFileLayoutIsInvisible(t *testing.T) {
-	// L1: the same declarations in one file or three must yield the same
-	// routes in the same order.
 	one, d1 := project(t, map[string]string{
 		"go.mod": modFile,
 		"app/all.volt": `package app
@@ -534,9 +512,6 @@ Scope / [pipe: api] {
 	}
 }
 
-// Query routes (§V4.8): a qualified handler binds a generated query;
-// parameters bind by source and the manifest field is the qualifier's
-// Go name.
 func TestQueryRoutes(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod":         modFile,
@@ -607,8 +582,6 @@ func TestQueryRouteErrors(t *testing.T) {
 	}
 }
 
-// Datasets (§V13): one GET query route per member of the group select,
-// segments stripped, only/except honored, names from the method.
 func TestDatasetExpansion(t *testing.T) {
 	schema := "package db\n\nTable ms_revenue {\n\tid integer [pk]\n\tyear integer [not null]\n}\n\nTable ms_usage {\n\tid integer [pk]\n\tyear integer [not null]\n}\n\nTable ms_notes {\n\tid integer [pk]\n\tyear integer [not null]\n}\n\nGroup series {\n\tms_revenue\n\tms_usage\n\tms_notes\n}\n\nSelect browse for series where year = :year\n"
 	pr, diags := project(t, map[string]string{
@@ -658,8 +631,6 @@ func TestDatasetExpansion(t *testing.T) {
 	}
 }
 
-// Event routes (§V4.11): volt.Events is the runtime's only handler, on
-// get, with helper and client names from the action and no controller.
 func TestEventRoute(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod":     modFile,

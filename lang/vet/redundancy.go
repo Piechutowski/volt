@@ -1,6 +1,5 @@
 // Redundancy analyzers: constructs that repeat what the language already
-// guarantees, or repeat each other. Redundancy is how two definitions
-// drift apart later.
+// guarantees, or repeat each other.
 package vet
 
 import (

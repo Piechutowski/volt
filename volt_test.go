@@ -149,8 +149,6 @@ func TestURLBuilding(t *testing.T) {
 }
 
 func TestSegDotSegments(t *testing.T) {
-	// "." and ".." must never appear as literal segments in a built URL:
-	// path cleaning would reshape them (§V4.6.2).
 	if got := Seg("."); got != "%2E" {
 		t.Errorf("Seg(.) = %q", got)
 	}

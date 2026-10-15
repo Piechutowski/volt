@@ -1,7 +1,5 @@
-// The SQL-to-Go type mapping. Generated code depends only on the standard
-// library. The table is the single place to extend when a schema uses a
-// type not listed; an unmapped type is a generation error, never a silent
-// guess (see docs/spec.md Appendix A).
+// The SQL-to-Go type mapping (docs/spec.md Appendix A). An unmapped type
+// is a generation error.
 package golang
 
 import (
@@ -48,7 +46,7 @@ var typeMap = map[string]goType{
 	"double":           {name: "float64"},
 	"double precision": {name: "float64"},
 
-	// exact numerics: strings, so money never rides a float
+	// exact numerics: strings
 	"decimal": {name: "string"},
 	"numeric": {name: "string"},
 	"money":   {name: "string"},
@@ -70,9 +68,7 @@ var typeMap = map[string]goType{
 	"string":            {name: "string"},
 	"uuid":              {name: "string"},
 
-	// date and time. Time-of-day types are strings: SQLite has no time
-	// type, drivers have no scan rule for one, and gen/sqlite stores them
-	// as TEXT ("15:04:05").
+	// date and time; time-of-day types are strings
 	"date":                        {name: "time.Time", imp: "time"},
 	"time":                        {name: "string"},
 	"timetz":                      {name: "string"},
@@ -99,8 +95,8 @@ var typeMap = map[string]goType{
 // typeResolve maps a column's DBML type to Go. enums maps canonical enum
 // keys ("public.job_status") to their generated Go type names.
 func typeResolve(schema, base string, enums map[string]string) (goType, error) {
-	// enum reference? the type may be schema-qualified or inherit the
-	// default schema (spec §6.8.4)
+	// an enum reference may be schema-qualified or inherit the default
+	// schema (spec §6.8.4)
 	key := base
 	if schema != "" {
 		key = schema + "." + base

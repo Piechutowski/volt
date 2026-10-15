@@ -1,6 +1,5 @@
 // Exported naming and typing helpers for the Volt language layer (lang
-// package): the router generator must agree byte-for-byte with the model
-// generator on names and Go types, so there is exactly one implementation.
+// package).
 package golang
 
 import (
@@ -47,8 +46,7 @@ type SelectFn struct {
 	SharedType   string   // explicit list: the one shared row type name
 }
 
-// FieldSig is one generated struct field — hover- and derivative-grade
-// truth, from the same plan the generator runs.
+// FieldSig is one generated struct field.
 type FieldSig struct {
 	Name     string // Go field name, e.g. "EditorID"
 	Col      string // source column name, e.g. "editor_id"
@@ -76,21 +74,14 @@ type CheckSpec struct {
 
 // ParamsValidators reports whether the table's CreateParams and
 // UpdateParams structs get a Validate method: each does when the struct
-// exists and carries every column of at least one check. The same rule
-// decides what the validator generator emits and what a generated
-// handler calls, so the two cannot disagree.
-//
-// One-shot convenience over Plan.ParamsValidators: it plans the whole
-// file. Callers with a Package ask its Plan instead (D74).
+// exists and carries every column of at least one check. It plans the
+// whole file (D74).
 func ParamsValidators(f *ast.File, info *check.Info, tableKey string, checks []CheckSpec) (create, update bool, err error) {
 	return PlanBuild(f, info).ParamsValidators(tableKey, checks)
 }
 
 // paramsChecks splits the checks a table's params structs can evaluate:
-// those whose columns all appear among the struct's fields. A check
-// reading a defaulted or auto-increment column (absent from
-// CreateParams, D16) or a key column (absent from UpdateParams) stays
-// with the row's Validate and the DDL.
+// those whose columns all appear among the struct's fields (D16).
 func paramsChecks(t *tableModel, checks []CheckSpec) (create, update []CheckSpec) {
 	covered := func(fields []*fieldPlan, ck CheckSpec) bool {
 		have := map[string]bool{}
@@ -118,14 +109,12 @@ func paramsChecks(t *tableModel, checks []CheckSpec) (create, update []CheckSpec
 }
 
 // EnumTypeName is the Go type name an enum declaration generates
-// (Appendix A.3), for tooling and row-type collision checks.
+// (Appendix A.3).
 func EnumTypeName(schema, base string) (string, error) { return enumTypeName(schema, base) }
 
 // ModelFields reports the exact struct fields the model generator emits
-// for the table with the given canonical key — hover-grade truth, from
-// the same plan the generator runs (spec §V11.6, Appendix A).
-//
-// One-shot convenience over Plan.ModelFields: it plans the whole file.
+// for the table with the given canonical key (spec §V11.6, Appendix A).
+// It plans the whole file.
 func ModelFields(f *ast.File, info *check.Info, tableKey string) (model string, fields []FieldSig, err error) {
 	return PlanBuild(f, info).ModelFields(tableKey)
 }
@@ -147,8 +136,7 @@ type CRUDMethod struct {
 // for one table, with the same existence rules it applies: Get, Update
 // and Delete need a primary key, Update needs a non-key column, Create
 // takes a params struct only when a column is caller-supplied (D16).
-//
-// One-shot convenience over Plan.CRUDMethods: it plans the whole file.
+// It plans the whole file.
 func CRUDMethods(f *ast.File, info *check.Info, tableKey string) (model string, methods []CRUDMethod, err error) {
 	return PlanBuild(f, info).CRUDMethods(tableKey)
 }

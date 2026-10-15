@@ -1,9 +1,7 @@
 // Go source facts for Go references (spec §V3.2, §V12.5): a .volt file
-// names Go only in the containing package's own Go files, so the
-// checker reads them with the standard library's parser — no build, no
-// gopls — and holds every reference to a declared function with the
-// exact spelled signature (D63). The Go compiler still compiles the
-// result; this catches the typo and the wrong type first.
+// names Go only in the containing package's own Go files, read with the
+// standard library's parser, and every reference is held to the exact
+// spelled signature (D63).
 package lang
 
 import (
@@ -45,10 +43,8 @@ type GoFunc struct {
 
 // GoSource is one Go file of a package directory as the scan reads it
 // (D87): its name and its text, or its first bytes alone when they
-// carry the generated marker (D81), so a million-line output costs one
-// small read and is never parsed. Equal sources scan to equal
-// functions; a tool that keeps a scan compares the sources it read
-// with the sources on disk now, byte for byte, and nothing else.
+// carry the generated marker (D81). Equal sources scan to equal
+// functions.
 type GoSource struct {
 	Name string
 	Text string
@@ -104,15 +100,12 @@ func goSourceRead(path string) (GoSource, error) {
 	return GoSource{Text: text.String()}, nil
 }
 
-// GoFuncsOf scans a package directory's sources the way the go tool
-// would compile them — go/build's file constraints: no leading "_" or
-// ".", a matching GOOS/GOARCH suffix, a satisfied //go:build line —
-// and returns its top-level functions (methods excluded) by name. A
-// file with a syntax error contributes the declarations parsed before
-// the error and is reported in broken ("file: line:col message"), so a
-// diagnostic can say why a function later in that file is invisible.
-// The result is a function of the sources and of the process's build
-// context, which never changes.
+// GoFuncsOf scans a package directory's sources under go/build's file
+// constraints and returns its top-level functions (methods excluded)
+// by name. A file with a syntax error contributes the declarations
+// parsed before the error and is reported in broken ("file: line:col
+// message"). The result is a function of the sources and of the
+// process's build context.
 func GoFuncsOf(dir string, srcs []GoSource) (funcs map[string]GoFunc, broken []string) {
 	funcs = map[string]GoFunc{}
 	fset := gotoken.NewFileSet()

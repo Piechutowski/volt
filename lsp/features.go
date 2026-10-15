@@ -19,9 +19,7 @@ func (d *Document) LSPDiagnostics() []protocol.Diagnostic {
 	return diagnosticsLSP(d.Text, d.lineOffsets, d.Diags)
 }
 
-// diagnosticsLSP converts diagnostics positioned in text — the
-// document's, or the snapshot a background analysis saw — for
-// publishing.
+// diagnosticsLSP converts diagnostics positioned in text for publishing.
 func diagnosticsLSP(text string, starts []int, diags []diag.Diagnostic) []protocol.Diagnostic {
 	out := make([]protocol.Diagnostic, 0, len(diags))
 	for _, dg := range diags {
@@ -31,7 +29,6 @@ func diagnosticsLSP(text string, starts []int, diags []diag.Diagnostic) []protoc
 		}
 		sev := severity
 		code := dg.Code
-		// The diagnostic source names the language.
 		source := "volt"
 		out = append(out, protocol.Diagnostic{
 			Range:    diagnosticRangeIn(text, starts, dg.Pos),
@@ -156,7 +153,7 @@ func identNames(ids []*ast.Ident) []string {
 
 // Definition returns the location of the declaration of the symbol at pos.
 func (d *Document) Definition(pos protocol.Position) *protocol.Location {
-	// Volt-layer symbols first: they are the ones that cross files.
+	// Volt-layer symbols first.
 	if loc := d.voltDefinition(pos); loc != nil {
 		return loc
 	}
@@ -173,10 +170,7 @@ func (d *Document) Definition(pos protocol.Position) *protocol.Location {
 
 // References returns every occurrence of the symbol at pos.
 func (d *Document) References(pos protocol.Position, includeDecl bool) []protocol.Location {
-	// The two indexes answer different halves of the question — the
-	// single-file one knows DBML uses (refs, column mentions), the
-	// project one knows Volt uses (model:, pipe:) in other files — so
-	// the answer is their union, deduplicated.
+	// The answer is the two indexes' union, deduplicated.
 	out := d.voltReferences(pos, includeDecl)
 	seen := map[protocol.Location]bool{}
 	for _, l := range out {
@@ -258,8 +252,7 @@ func isLetter(r rune) bool {
 
 // Hover renders documentation for the symbol at pos.
 func (d *Document) Hover(pos protocol.Position) *protocol.Hover {
-	// Volt-layer symbols first: model:/pipe: references describe things
-	// declared in other files, which the single-file index cannot see.
+	// Volt-layer symbols first.
 	if h := d.voltHover(pos); h != nil {
 		return h
 	}

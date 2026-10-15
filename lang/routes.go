@@ -4,10 +4,9 @@ import (
 	"github.com/Piechutowski/volt/lang/token"
 )
 
-// ParamType is the closed set of route parameter types (spec §V4.1.3).
-// The names are DBML-facing; GoType maps them to Go. The set matches the
-// Go types nao's model generator emits for primary keys, so a
-// model-inferred parameter always agrees with the model field it joins.
+// ParamType is the closed set of route parameter types (spec §V4.1.3);
+// GoType maps them to Go. The set matches the Go types nao's model
+// generator emits for primary keys.
 type ParamType string
 
 const (

@@ -1,14 +1,9 @@
 package lsp
 
-// Background analysis (D79). An edit is cheap to record and expensive
-// to understand: the server updates the document's own front end at
-// once, then analyzes the whole project once per quiet moment, on a
-// goroutine of its own, through the project's lang.Session — so one
-// edit costs one parse and the checks of the packages that could see
-// it, however many documents are open. The run touches no Document:
-// it publishes diagnostics from its own snapshot of the open texts,
-// and every request adopts the newest result at its start, on the
-// handler goroutine that owns the documents.
+// Background analysis (D79). The run touches no Document: it publishes
+// diagnostics from its own snapshot of the open texts, and every
+// request adopts the newest result at its start, on the handler
+// goroutine that owns the documents.
 
 import (
 	"path/filepath"
@@ -23,8 +18,7 @@ import (
 )
 
 // analysisDebounce is how long the last edit must be old before the
-// project is analyzed: typing stays smooth, and the result is never
-// far behind the fingers.
+// project is analyzed.
 const analysisDebounce = 75 * time.Millisecond
 
 // analysis is one project root's background analysis: the edit
@@ -82,10 +76,10 @@ func projectAnalyze(root string, overlay map[string]string, session *lang.Sessio
 	}
 	res := &projectResult{root: root, pr: pr, diags: diags, overlay: overlay}
 	// After Check: it is what resolves each package's imports, which
-	// the index needs to follow a `db.Post` qualifier to its package.
+	// the index needs.
 	res.vindex = buildVoltIndex(pr, overlay, memo)
 	// Vet advice only on top of a clean check, matching the single-file
-	// policy: style notes stacked on hard errors are noise while typing.
+	// policy.
 	if !diag.HasErrors(diags) {
 		if session != nil {
 			res.diags = append(res.diags, session.Vet(pr)...)
@@ -110,12 +104,8 @@ func (res *projectResult) packageOf(path string) *lang.Package {
 	return nil
 }
 
-// docDiags returns the diagnostics positioned in path, sorted. A
-// conflict with another file still shows here whenever this file holds
-// one of its ends, because the checker names both positions. go.mod is
-// never open in an editor, so its problems (which the messages name
-// explicitly) surface at the top of every project file instead of
-// nowhere.
+// docDiags returns the diagnostics positioned in path, sorted; go.mod's
+// problems surface at the top of every project file.
 func (res *projectResult) docDiags(path string) []diag.Diagnostic {
 	modPath := filepath.Join(res.root, lang.ModFile)
 	var mine []diag.Diagnostic
@@ -143,8 +133,7 @@ func (s *Server) analysisFor(root string) *analysis {
 	return a
 }
 
-// sessionFor returns the caches of a project root, for the documents'
-// own project pass.
+// sessionFor returns the caches of a project root.
 func (s *Server) sessionFor(root string) *lang.Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -43,8 +43,6 @@ func doc(t *testing.T, text string) *Document {
 	return NewDocument("file:///test.dbml", text)
 }
 
-// posOf returns the LSP position of the i-th byte of the needle's n-th
-// occurrence (0-based occurrence index).
 func posOf(t *testing.T, text, needle string, occurrence int) protocol.Position {
 	t.Helper()
 	off := -1
@@ -92,9 +90,6 @@ func TestVetWarningsSurface(t *testing.T) {
 }
 
 func TestModelnameAnalyzerExcluded(t *testing.T) {
-	// `status` has an -us ending that trips vet/modelname; the LSP must not
-	// run that analyzer because [model:] is a schema extension the editor
-	// does not assist yet.
 	d := doc(t, "Table status {\n  id int [pk]\n}\nTable other {\n  id int [pk]\n  s int [ref: > status.id]\n}\n")
 	for _, dg := range d.Diags {
 		if strings.Contains(dg.Code, "modelname") {
@@ -105,7 +100,6 @@ func TestModelnameAnalyzerExcluded(t *testing.T) {
 
 func TestDefinitionFromRefEndpoint(t *testing.T) {
 	d := doc(t, sample)
-	// "users" inside `Ref: users.id < ...`
 	pos := posOf(t, sample, "users.id <", 0)
 	loc := d.Definition(pos)
 	if loc == nil {
@@ -119,12 +113,12 @@ func TestDefinitionFromRefEndpoint(t *testing.T) {
 
 func TestDefinitionAliasResolvesToTable(t *testing.T) {
 	d := doc(t, sample)
-	pos := posOf(t, sample, "U.name", 0) // inline ref via alias
+	pos := posOf(t, sample, "U.name", 0)
 	loc := d.Definition(pos)
 	if loc == nil {
 		t.Fatal("no definition via alias")
 	}
-	declPos := posOf(t, sample, "users", 0) // decl in `Table users as U`
+	declPos := posOf(t, sample, "users", 0)
 	if loc.Range.Start.Line != declPos.Line {
 		t.Errorf("alias definition line = %d, want %d", loc.Range.Start.Line, declPos.Line)
 	}
@@ -133,7 +127,7 @@ func TestDefinitionAliasResolvesToTable(t *testing.T) {
 func TestDefinitionPartialInjection(t *testing.T) {
 	d := doc(t, sample)
 	pos := posOf(t, sample, "~base", 0)
-	pos.Character += 2 // inside "base"
+	pos.Character += 2
 	loc := d.Definition(pos)
 	if loc == nil {
 		t.Fatal("no definition for ~base")
@@ -146,7 +140,6 @@ func TestDefinitionPartialInjection(t *testing.T) {
 
 func TestDefinitionEnumType(t *testing.T) {
 	d := doc(t, sample)
-	// second "status" on the column line `status status [...]` is the type
 	pos := posOf(t, sample, "status status", 0)
 	pos.Character += protocol.UInteger(len("status "))
 	loc := d.Definition(pos)
@@ -163,7 +156,6 @@ func TestReferencesForTable(t *testing.T) {
 	pos := posOf(t, sample, "Table users as U", 0)
 	pos.Character += protocol.UInteger(len("Table "))
 	refs := d.References(pos, true)
-	// decl + alias decl + ref endpoint + tablegroup member = at least 4
 	if len(refs) < 4 {
 		t.Fatalf("expected >= 4 references for users, got %d: %v", len(refs), refs)
 	}
@@ -171,15 +163,12 @@ func TestReferencesForTable(t *testing.T) {
 
 func TestRenameColumnFromPartial(t *testing.T) {
 	d := doc(t, sample)
-	// rename `id` at its declaration inside the partial
 	pos := posOf(t, sample, "id int [pk]", 0)
 	edit, err := d.Rename(pos, "uid")
 	if err != nil {
 		t.Fatal(err)
 	}
 	edits := edit.Changes["file:///test.dbml"]
-	// decl in partial + `users.id` ref endpoint; core.orders.id is a
-	// DIFFERENT column and must not be touched.
 	if len(edits) != 2 {
 		t.Fatalf("expected 2 edits, got %d: %v", len(edits), edits)
 	}
@@ -239,7 +228,6 @@ func TestDocumentSymbols(t *testing.T) {
 			t.Errorf("outline missing %q: %v", want, names)
 		}
 	}
-	// users has children: ~base injection, name, status columns
 	for _, s := range syms {
 		if s.Name == "users" && len(s.Children) < 3 {
 			t.Errorf("users should have >= 3 children, got %d", len(s.Children))
@@ -265,8 +253,6 @@ func TestCompletionColumnSettings(t *testing.T) {
 	}
 }
 
-// TestCompletionDefaultEnumValues: `default: status.` inside a settings
-// list completes the enum's values, not the column-setting names.
 func TestCompletionDefaultEnumValues(t *testing.T) {
 	text := "Enum status {\n  active\n  banned\n}\n\nTable t {\n  s status [not null, default: status.\n}\n"
 	d := doc(t, text)
@@ -320,18 +306,15 @@ func TestCompletionTypesIncludeEnums(t *testing.T) {
 }
 
 func TestUTF16Conversion(t *testing.T) {
-	// 𝔘 is a surrogate pair (2 UTF-16 units, 4 UTF-8 bytes)
 	text := "Table \"𝔘ser\" {\n  id int [pk]\n}\n"
 	d := doc(t, text)
 	if len(d.Diags) != 0 {
 		t.Fatalf("unexpected diagnostics: %v", d.Diags)
 	}
-	// position of `id`: line 1, char 2 in both encodings
 	off := d.FromLSP(protocol.Position{Line: 1, Character: 2})
 	if d.Text[off:off+2] != "id" {
 		t.Errorf("FromLSP landed on %q", d.Text[off:off+2])
 	}
-	// round-trip a position after the surrogate pair on line 0
 	lsp := d.ToLSP(tokenPosition(t, d, `"𝔘ser"`))
 	if lsp.Line != 0 || lsp.Character != protocol.UInteger(len(`Table `)) {
 		t.Errorf("ToLSP = %+v", lsp)
@@ -345,7 +328,6 @@ func tokenPosition(t *testing.T, d *Document, needle string) (p token.Position) 
 		t.Fatalf("needle %q not found", needle)
 	}
 	line := strings.Count(d.Text[:off], "\n") + 1
-	// column in runes
 	lineStart := strings.LastIndex(d.Text[:off], "\n") + 1
 	return token.At("", off, line, len([]rune(d.Text[lineStart:off]))+1)
 }
@@ -367,12 +349,6 @@ func labels(items []protocol.CompletionItem) []string {
 	return out
 }
 
-// TestCRLFDocumentPositions proves the server's offsets point into the
-// document as the editor holds it when the file has Windows line
-// endings (D90): the diagnostic's underline covers exactly the
-// duplicate column's name, and definition on a reference resolves
-// through the byte offset the cursor maps to. Both drifted by one byte
-// per line while the scanner stripped carriage returns first.
 func TestCRLFDocumentPositions(t *testing.T) {
 	text := "Table posts {\r\n  id int [pk]\r\n  title text\r\n  title text\r\n}\r\n\r\nRef: posts.id > posts.title\r\n"
 	d := doc(t, text)

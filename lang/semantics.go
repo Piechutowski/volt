@@ -37,9 +37,8 @@ func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 	}
 	c.cyclesCheck()
 
-	// The heavy phases are per package and independent within a phase:
-	// each runs on every CPU (PERF-7), package by package. Their
-	// diagnostics are kept per package, then appended in package order.
+	// The per-package phases run on every CPU (PERF-7); their
+	// diagnostics are kept per package and appended in package order.
 	paths := c.paths()
 	pkgDiags := make(map[string][]diag.Diagnostic, len(paths))
 	fresh := paths
@@ -56,8 +55,7 @@ func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 			}
 		}
 	}
-	// A package checked before answers again from nothing: Check is
-	// idempotent on a Project, whatever ran on it earlier (D81).
+	// Check is idempotent on a Project, whatever ran on it earlier (D81).
 	for _, path := range fresh {
 		pr.Packages[path].resultsReset()
 	}
@@ -78,8 +76,7 @@ func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 		info, schemaDiags := check.FileMemo(pkg.merged, schemaMemo)
 		cc.diags = append(cc.diags, schemaDiags...)
 		pkg.schema = info
-		// The naming plan, once (D74): every later phase asks it for
-		// generated names instead of re-deriving them from the AST.
+		// The naming plan, built once (D74).
 		pkg.plan = golang.PlanBuildMemo(pkg.merged, info, planMemo)
 	})
 	for _, path := range paths {
@@ -172,11 +169,9 @@ func (e *checksEntry) holds(model any, funcs *goScan, pkgName string, preds map[
 }
 
 // perPackage runs one phase over every package, on every CPU (PERF-7).
-// Each package gets its own checker — the per-package fields are its
-// own; the project, the schemas and the Go-function cache are shared,
-// read-only or locked — and its diagnostics are appended in package
-// order, so the output never depends on the schedule. A phase writes
-// only its own package, so the phases are barriers between them.
+// Each package gets its own checker; the project, the schemas and the
+// Go-function cache are shared, read-only or locked; diagnostics are
+// returned in package order. A phase writes only its own package.
 func (c *checker) perPackage(paths []string, phase func(*checker, *Package)) [][]diag.Diagnostic {
 	if c.gofuncs == nil {
 		c.gofuncs = &goFuncsCache{}
@@ -385,8 +380,7 @@ func (c *checker) routing(pkg *Package) {
 	}
 
 	// Every scope item is lowered by itemLower, a pure function of the
-	// inputs resolved here (D86, D99); the memo answers an item whose
-	// inputs and the project's answers are what they were.
+	// inputs resolved here (D86, D99).
 	facts := routeFacts{pkgName: pkg.Name, pkgPath: pkg.Path, module: c.pr.Module, imports: pkg.Imports}
 	var memo *routesMemo
 	if c.memo != nil {
@@ -405,9 +399,8 @@ func (c *checker) routing(pkg *Package) {
 		memo.prev, memo.next = memo.next, nil
 	}
 
-	// §V4.3.4: the generated Controllers manifest is one namespace —
-	// controller names, the Queries field of each data package (§V4.8.5)
-	// and Events (§V4.11) — so a controller cannot take a field's name.
+	// §V4.3.4: a controller cannot take the name of a Controllers
+	// manifest field (§V4.8.5, §V4.11).
 	held := map[string]string{}
 	for _, r := range pkg.Routes {
 		switch {
@@ -440,7 +433,7 @@ func (c *checker) routing(pkg *Package) {
 }
 
 // plugCheck validates one pipeline entry (§V3.2): volt.X (runtime),
-// X or <pkg>.X (this package). Cross-package plugs are outside v0.
+// X or <pkg>.X (this package).
 func (c *checker) plugCheck(p *ast.Plug) {
 	for _, part := range p.Ref.Parts {
 		if part.Quoted() || !goIdentOK(part.Name()) || goKeywords[part.Name()] {
@@ -573,7 +566,6 @@ func (o routeOracle) tableByBase(path, base string) (*check.TableInfo, string) {
 	if ti := info.TableByBase(base); ti != nil {
 		return ti, ""
 	}
-	// A name that differs only in case is a typo worth naming.
 	caseMatch := ""
 	for _, cand := range info.Tables {
 		if name := cand.Decl.Name.Base(); strings.EqualFold(name, base) {
@@ -583,7 +575,6 @@ func (o routeOracle) tableByBase(path, base string) (*check.TableInfo, string) {
 	if caseMatch != "" {
 		return nil, fmt.Sprintf("; did you mean %q? names are case-sensitive", caseMatch)
 	}
-	// A name that spells a table's MODEL name gets pointed at the table.
 	for _, cand := range info.Tables {
 		if model, err := golang.ModelName(cand.Decl); err == nil && model == base {
 			return nil, fmt.Sprintf("; %q is the model of table %q — name the table", base, cand.Decl.Name.Base())
@@ -737,18 +728,15 @@ func (c *checker) itemLowerMemo(item ast.Node, inh inherited, facts routeFacts, 
 
 // routeAdd judges one lowered route against the package's accepted
 // ones and accepts or rejects it. It takes the route by value: the
-// lowering's route is the memo's, written by nobody (D92), and what
-// this check names, orders and accepts is its own copy.
+// lowering's route is the memo's, written by nobody (D92).
 func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteInfo) {
 	shape := r.shapeKey
 	if prev, dup := seenShape[shape]; dup {
 		c.errorf(r.Pos, "V4", "route %s %s conflicts with the route at %s: identical method and path shape (§V4.7)", methodOrAny(r.Method), r.Spelled, prev.Pos)
 		return
 	}
-	// §V4.7.2: beyond exact duplicates, reject ServeMux's ambiguity
-	// relation — two routes whose request sets overlap with neither more
-	// specific would panic at registration, and the checker's promise
-	// (§V4.7.4) is that a checked project never does.
+	// §V4.7.2: reject ServeMux's ambiguity relation; a checked project
+	// never panics at registration (§V4.7.4).
 	if prev := c.conflicts.ambiguous(&r); prev != nil {
 		c.errorf(r.Pos, "V4", "route %s %s is ambiguous with the route at %s (%s %s): both match some requests and neither is more specific (§V4.7.2)",
 			methodOrAny(r.Method), r.Spelled, prev.Pos, methodOrAny(prev.Method), prev.Spelled)
@@ -757,20 +745,13 @@ func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteI
 	seenShape[shape] = &r
 
 	// One namespace for reverse-URL helpers and client methods (§V4.6,
-	// §V4.10): a write query route has a client method and no helper,
-	// and it must not collide with either.
+	// §V4.10).
 	name := r.HelperName
 	if name == "" {
 		name = r.ClientName
 	}
 	if name != "" {
 		if prev, dup := seenHelper[name]; dup {
-			// A resources declaration colliding with itself means its
-			// table name survived singularization unchanged (nao's
-			// inflector is English), so the collection and member
-			// helpers came out identical. Neither [name:] (not a
-			// resources setting) nor a scope name helps there — both
-			// sides get the same prefix — so name the working fix.
 			if r.FromResources && prev.FromResources && r.Pos == prev.Pos {
 				c.errorf(r.Pos, "V5", "resources %q: the collection and member reverse-URL helpers are both %q, because singularizing %q does not change it (§V5.4); set the singular explicitly, e.g. [singular: <name>]",
 					prev.Table, r.HelperName, prev.Table)
@@ -820,22 +801,14 @@ func (c *checker) routeAccept(r *RouteInfo) {
 // routeIndex holds one routing package's accepted routes bucketed for
 // the §V4.7.2 ambiguity scan. An accepted route can be ambiguous with
 // a new one only if its literal prefix lies on the new route's walk
-// (§V4.7.3, proven against the pairwise scan by enumeration, D94), so
-// the relation itself is unchanged (routesAmbiguous) and only the
-// candidate set shrinks, from every accepted route to the walk's.
+// (§V4.7.3, D94).
 type routeIndex struct {
 	root *routeNode
 }
 
 // routeNode is one literal path prefix. A route is filed at the node
-// of its longest literal prefix — the segments before its first
-// parameter, wildcard or end — so every route that could overlap a
-// path is found by walking that path's own segments down the trie,
-// through every child where the path has a parameter, and no further
-// than the path's own length unless it ends in a wildcard. Keying on
-// the first literal segment alone put every route of a scope in one
-// list and made the check quadratic in a scope that routes every table
-// (D81).
+// of its longest literal prefix, the segments before its first
+// parameter, wildcard or end (D81).
 type routeNode struct {
 	routes   []*RouteInfo // literal prefix ends here, declaration order
 	children map[string]*routeNode
@@ -861,8 +834,7 @@ func (ix *routeIndex) add(r *RouteInfo) {
 }
 
 // ambiguous returns the earliest accepted route ambiguous with r, in
-// declaration order — the one the pairwise scan would have found — or
-// nil.
+// declaration order, or nil.
 func (ix *routeIndex) ambiguous(r *RouteInfo) *RouteInfo {
 	var best *RouteInfo
 	var walk func(n *routeNode, depth int)
@@ -946,10 +918,9 @@ func spelledOf(segs []*ast.Segment) string {
 	return b.String()
 }
 
-// shapeOf is the conflict key: literals by spelling, every parameter as
-// {} and every wildcard as {...} — brace characters cannot appear in a
-// literal segment (§V4.1.6), so the markers cannot collide with
-// literals named "P" or "W" or anything else (§V4.7).
+// shapeOf is the conflict key (§V4.7): literals by spelling, every
+// parameter as {} and every wildcard as {...}; braces cannot appear in
+// a literal segment (§V4.1.6).
 func shapeOf(r *RouteInfo) string {
 	var b strings.Builder
 	rest := r.Pattern
@@ -1008,8 +979,8 @@ func pathsOverlap(a, b pathShape) bool {
 	}
 	switch {
 	case i == len(a.segs) && i == len(b.segs):
-		// Both fixed parts consumed. A wildcard needs at least the
-		// trailing slash, which a fixed-length pattern cannot supply.
+		// A wildcard needs at least the trailing slash, which a
+		// fixed-length pattern cannot supply.
 		return a.wild == b.wild || (a.wild && b.wild)
 	case i == len(a.segs):
 		return a.wild // b has more segments; only a wildcard absorbs them

@@ -1,34 +1,5 @@
 // Dynamic-query generation (nao_dyn.go): the v2 surface of Not an ORM
 // (decisions D28-D34).
-//
-// Per table:
-//
-//	UserEmail, UserID, ...        the typed column handles (D29): one
-//	                              rt.Column/rt.NullColumn var per
-//	                              column, flat Model+Field names (enum
-//	                              types carry an E prefix so the
-//	                              idiomatic enum-per-column pattern
-//	                              cannot collide with a handle)
-//	UserLimit/UserOffset/...      per-model wrappers for value-less
-//	                              options (D30): Go cannot infer the
-//	                              phantom model type without a value
-//	UserQuery(ctx, opts...)       SELECT filtered/ordered/limited by
-//	                              inert option values (D28)
-//	UserCount(ctx, preds...)      count over the same predicates (D32)
-//	UserExists(ctx, preds...)     EXISTS over the same predicates
-//	UserDeleteWhere(ctx, preds...)   predicate-guarded DELETE
-//	UserUpdateWhere(ctx, set, preds...)  partial UPDATE from typed
-//	                              assignments; predicates shared (D32)
-//
-// The interpreter lives in rt (query.go); this file only mints the typed
-// handles and the terminal methods. Dynamic SQL binds positional '?'
-// placeholders rendered by the interpreter (D42); the statement cache
-// (D31) is wired through Queries.WithCache.
-//
-// Package-scope names are minted by concatenation (UserEmail, UserLimit),
-// so distinct DBML declarations can demand one Go name. Generation fails
-// loudly on any collision; the vet dynname rule reports the same
-// collisions with both origins named.
 package golang
 
 import (
@@ -43,9 +14,7 @@ import (
 	"github.com/Piechutowski/volt/lang/token"
 )
 
-// GenerateDyn renders the dynamic-query file for one checked DBML file:
-// the third sibling of Generate and GenerateQueries — same package,
-// models and the Queries type assumed present.
+// GenerateDyn renders the dynamic-query file for one checked DBML file.
 func GenerateDyn(f *ast.File, info *check.Info, opts Options) ([]byte, error) {
 	return PlanBuild(f, info).Dyn(opts)
 }
@@ -70,7 +39,7 @@ func (pl *Plan) Dyn(opts Options) ([]byte, error) {
 /* ===== package-scope name collisions (DYN-7) ===== */
 
 // dynWrapperSuffixes are the per-model option-wrapper names the emitter
-// mints (D30), shared with the collision check so the two cannot drift.
+// mints (D30).
 var dynWrapperSuffixes = []string{"Limit", "Offset", "Distinct", "OrderBy", "After", "Set"}
 
 // NameCollision is one Go package-scope name that generation would mint
@@ -83,19 +52,13 @@ type NameCollision struct {
 }
 
 // DynNameCollisions reports the package-scope Go name collisions the
-// generated files would produce — model structs, enum types and
-// constants, params structs, column handles (UserEmail) and option
-// wrappers (UserLimit, ...). It is the analysis behind the vet dynname
-// rule; GenerateDyn refuses to generate while any collision remains. A
-// file that does not survive planning reports nothing: generation
-// itself raises those errors.
+// generated files would produce. A file that does not survive planning
+// reports nothing.
 func DynNameCollisions(f *ast.File, info *check.Info) []NameCollision {
 	return PlanBuild(f, info).DynNameCollisions()
 }
 
-// dynOrigin is where one minted name comes from. The description is
-// rendered only when a collision names it: a package mints one name per
-// column plus a handful per table, and nearly all of them are unique.
+// dynOrigin is where one minted name comes from.
 type dynOrigin struct {
 	kind dynOriginKind
 	pos  token.Position
@@ -119,8 +82,7 @@ const (
 	dynWrapper
 )
 
-// name is the Go name the origin mints; the enums' and the fixed
-// name are minted by the caller, which knows them.
+// name is the Go name the origin mints.
 func (o dynOrigin) name() string {
 	switch o.kind {
 	case dynModel:
@@ -210,7 +172,6 @@ func (e *dynEmitter) tableEmit(t *tableModel) {
 	lower := argName(t.model)
 	tbl := t.ti.Decl.Name.String()
 
-	// the pre-rendered shape the interpreter fills in around
 	fmt.Fprintf(b, "// %sTableSQL and %sColumnsSQL are the fixed shape of %s's\n", lower, lower, t.model)
 	fmt.Fprintf(b, "// dynamic statements; the interpreter renders everything else (D28).\nconst (\n")
 	fmt.Fprintf(b, "\t%sTableSQL   = `%s`\n", lower, sqlIdentQuote(t.sqlName))

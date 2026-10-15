@@ -9,14 +9,11 @@ import (
 )
 
 // StmtCache is a prepared-statement cache keyed by rendered SQL text
-// (decision D31). The dynamic-query interpreter renders identical SQL for
-// identical option trees, so the text is a stable cache key; static
-// generated SQL benefits the same way. Eviction is LRU; evicted and
-// superseded statements are closed.
+// (decision D31). Eviction is LRU; evicted and superseded statements are
+// closed.
 //
 // A cache is bound to the handle its statements were prepared on: use one
-// StmtCache per *sql.DB and do not feed it transaction handles (prepare
-// on the DB and let database/sql re-prepare inside transactions).
+// StmtCache per *sql.DB and do not feed it transaction handles.
 type StmtCache struct {
 	mu      sync.Mutex
 	max     int

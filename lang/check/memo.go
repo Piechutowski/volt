@@ -3,10 +3,8 @@ package check
 // The per-table memo (D84, PERF-10): a table whose declaration node and
 // injected partials' nodes are the objects they were at the last check
 // of this file is the same checked table with the same diagnostics.
-// Node identity is the key because the parser reuses a declaration's
-// nodes exactly when its text is unchanged (D83), and the memo holds
-// the nodes it keys on, so an address is never reused under it. Every
-// entry not hit by a check is dropped after it.
+// Node identity is the key (D83); the memo holds the nodes it keys on,
+// so an address is never reused under it.
 
 import (
 	"slices"

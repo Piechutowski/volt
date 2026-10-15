@@ -1,5 +1,5 @@
 // The SQL-to-SQLite type mapping (storage affinities) and identifier
-// quoting. An unmapped type is a generation error, mirroring gen/golang.
+// quoting. An unmapped type is a generation error.
 package sqlite
 
 import (
@@ -30,7 +30,7 @@ var sqliteType = map[string]string{
 	"real": "REAL", "float4": "REAL", "float": "REAL", "float8": "REAL",
 	"double": "REAL", "double precision": "REAL",
 
-	// exact numerics as TEXT, consistent with the Go backend's string
+	// exact numerics as TEXT
 	"decimal": "TEXT", "numeric": "TEXT", "money": "TEXT",
 
 	// character data
@@ -39,12 +39,9 @@ var sqliteType = map[string]string{
 	"mediumtext": "TEXT", "longtext": "TEXT", "citext": "TEXT",
 	"string": "TEXT", "uuid": "TEXT",
 
-	// date and time: stored as ISO-8601 text (SQLite's own convention),
-	// but declared as DATE/TIMESTAMP/DATETIME — the standard SQLite-driver
-	// signal (mattn, modernc) to parse the column into a time value on
-	// scan. The declared types have NUMERIC affinity, which stores
-	// ISO-8601 strings as TEXT anyway. Time-of-day types stay TEXT:
-	// drivers have no parse rule for them (gen/golang maps them to string).
+	// date and time: declared as DATE/TIMESTAMP/DATETIME, the SQLite-driver
+	// signal to parse the column into a time value on scan; time-of-day
+	// types stay TEXT
 	"date": "DATE", "time": "TEXT", "timetz": "TEXT",
 	"time with time zone": "TEXT", "time without time zone": "TEXT",
 	"timestamp": "TIMESTAMP", "timestamptz": "TIMESTAMP",

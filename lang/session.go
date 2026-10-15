@@ -1,13 +1,9 @@
 package lang
 
-// An editor's view of a project across edits (D79). A keystroke changes
-// one file; everything else — the other files, the packages that do
-// not import the changed one — is what it was. A Session keeps the
+// An editor's view of a project across edits (D79): a Session keeps the
 // parses by content and the per-package check results by the identity
-// of their inputs, so Load re-parses the changed file and Check re-runs
-// the packages that could see it. Load and Check produce exactly the
-// Project and diagnostics of LoadOverlay and Check; a test proves it
-// edit by edit.
+// of their inputs. Load and Check produce exactly the Project and
+// diagnostics of LoadOverlay and Check.
 
 import (
 	"os"
@@ -25,9 +21,7 @@ import (
 
 // Session caches parses and check results for one project root. The
 // zero value is ready. A Session runs one operation at a time: a
-// concurrent Load, Check or Vet waits for the one under way (D96), so
-// the memos an operation hands to its phases are one goroutine's for
-// as long as it runs, by construction.
+// concurrent Load, Check or Vet waits for the one under way (D96).
 type Session struct {
 	op    sync.Mutex            // held for a whole Load, Check or Vet
 	mu    sync.Mutex            // guards the maps below within an operation
@@ -57,9 +51,8 @@ type SessionStats struct {
 	DeclsVetted, DeclsVetReused int
 }
 
-// fileEntry is one file's last parse. gen is its identity: a new parse
-// gets a new gen, so a memo keyed by gens can never match a parse that
-// no longer exists, whatever the allocator reuses.
+// fileEntry is one file's last parse; gen is its identity, new for
+// every parse.
 type fileEntry struct {
 	gen   int
 	src   string
@@ -69,9 +62,7 @@ type fileEntry struct {
 }
 
 // goDir is one package directory's Go files as the session last read
-// them, and their scan. The next read compares the sources byte for
-// byte; equal sources keep the scan object, so a memo keyed on that
-// identity is keyed on the content (D86, D87).
+// them, and their scan; equal sources keep the scan object (D86, D87).
 type goDir struct {
 	srcs []GoSource
 	scan *goScan
@@ -92,9 +83,8 @@ type pkgEntry struct {
 // the package and every package it transitively imports, in import
 // path order, the parses of its files and the Go functions of its
 // directory. Two keys are equal exactly when every input is the same
-// object; nothing is hashed. A package on an import cycle, or holding
-// a file the session did not parse, has a nil key and is never
-// memoized.
+// object. A package on an import cycle, or holding a file the session
+// did not parse, has a nil key and is never memoized.
 type pkgKey []pkgInput
 
 // pkgInput is one package's own inputs.
@@ -241,9 +231,7 @@ func (s *Session) declMemos(paths []string) map[string]*declMemo {
 // goFuncsFor reads the Go sources of every package's directory and
 // hands back a cache seeded with their scans: a directory whose
 // sources are byte for byte what they were at the last read keeps its
-// scan object, so a key holding that object is keyed on the content
-// (D87). The read is the cost of knowing; only a changed directory is
-// parsed again.
+// scan object (D87).
 func (s *Session) goFuncsFor(pr *Project, paths []string) *goFuncsCache {
 	dirs := make([]string, len(paths))
 	for i, path := range paths {
@@ -314,7 +302,7 @@ func (s *Session) Stats() SessionStats {
 
 // parse returns the file's parse, reusing the last one when the text
 // is what it was: an overlaid file by its text, a disk file by the
-// bytes read now (D87). The read is the cost of knowing.
+// bytes read now (D87).
 func (s *Session) parse(path string, overlay map[string]string) (*ast.File, []diag.Diagnostic, error) {
 	text, overlaid := overlay[path]
 	if !overlaid {

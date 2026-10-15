@@ -9,11 +9,9 @@ import (
 	"strings"
 )
 
-// Client is the wire side of a generated client package (spec §V4.10):
-// the generated methods build typed URLs and bodies and hand them here.
-// It speaks the Formats rules from the other end — Accept and
-// Content-Type from Format, the reply decoded by its Content-Type — so
-// both ends of a route agree by construction.
+// Client is the wire side of a generated client package (spec §V4.10).
+// It speaks the Formats rules from the other end: Accept and
+// Content-Type from Format, the reply decoded by its Content-Type.
 type Client struct {
 	Base   string       // server origin, e.g. "http://localhost:8888"; no trailing slash
 	HTTP   *http.Client // nil means http.DefaultClient
@@ -44,8 +42,7 @@ func (c *Client) Do(ctx context.Context, method, url string, in, out any) error 
 }
 
 // Raw issues a request to a controller route and returns the response
-// for the caller to read and close: Volt does not know what a
-// hand-written action writes.
+// for the caller to read and close.
 func (c *Client) Raw(ctx context.Context, method, url string) (*http.Response, error) {
 	return c.send(ctx, method, url, nil)
 }

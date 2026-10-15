@@ -123,7 +123,6 @@ Table t {
 }
 
 func TestKeywordsAreContextual(t *testing.T) {
-	// §3.5: no reserved words.
 	mustParse(t, `
 Table table {
   note varchar
@@ -134,8 +133,6 @@ Table table {
 }
 
 func TestErrorRecovery(t *testing.T) {
-	// One bad column must not hide errors elsewhere, and the parser must
-	// still deliver the rest of the tree (multiple errors per run).
 	f, diags := ParseFile("t", `
 Table a {
   id int [
@@ -165,7 +162,6 @@ Enum ok { v }
 }
 
 func TestPartialAST(t *testing.T) {
-	// Even a file that ends mid-table yields the declarations before it.
 	f, diags := ParseFile("t", "Table ok { id int }\nTable broken {")
 	if !diag.HasErrors(diags) {
 		t.Fatal("want errors")

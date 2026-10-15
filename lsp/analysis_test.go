@@ -12,10 +12,6 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-// TestServerAnalyzesInBackground drives the server the way an editor
-// does: open a project file with an error, get its diagnostic from the
-// background analysis, fix it, get none — and find the document
-// carrying the project's index when a request comes (D79).
 func TestServerAnalyzesInBackground(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module bg\n"), 0o644); err != nil {
@@ -80,7 +76,6 @@ func TestServerAnalyzesInBackground(t *testing.T) {
 	}
 	waitFor("clean after the fix", func(p protocol.PublishDiagnosticsParams) bool { return len(p.Diagnostics) == 0 })
 
-	// A request adopts the result: the document navigates the project.
 	doc := s.docGet(uri)
 	if doc.vindex == nil || doc.vpkg == nil || doc.vpkg.Path != "app" {
 		t.Fatalf("the document did not adopt the analysis: vindex=%v vpkg=%v", doc.vindex != nil, doc.vpkg)
@@ -88,7 +83,6 @@ func TestServerAnalyzesInBackground(t *testing.T) {
 	if len(doc.Diags) != 0 {
 		t.Fatalf("adopted diagnostics: %v", doc.Diags)
 	}
-	// Two edits, two analyses of one package, through one session.
 	if st := s.sessionFor(root).Stats(); st.PackagesChecked < 2 || st.FilesParsed < 2 {
 		t.Fatalf("session did not carry the work: %+v", st)
 	}

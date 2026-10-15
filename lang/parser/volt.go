@@ -19,9 +19,7 @@ var voltVerbs = map[string]bool{
 func isVerb(v string) bool { return voltVerbs[strings.ToLower(v)] }
 
 // contiguous reports whether the current token directly abuts the previous
-// one — no whitespace, no line break. Route and import paths are single
-// lexical islands (§V4.1.5), assembled from tokens but rejecting interior
-// space.
+// one: no whitespace, no line break (§V4.1.5).
 func (p *parser) contiguous() bool {
 	t := p.cur()
 	return !t.SpBefore && !t.NLBefore
@@ -78,8 +76,7 @@ func (p *parser) importSpec() *ast.ImportSpec {
 		}
 		spec.Path = append(spec.Path, p.ident("import path (§V2)"))
 	}
-	// Aliases and path segments name directories and qualify Go-bound
-	// references: plain identifiers only (§V2.2, §V4.1.6).
+	// Aliases and path segments are plain identifiers only (§V2.2, §V4.1.6).
 	if spec.Alias != nil && spec.Alias.Quoted() {
 		p.fail(spec.Alias.Tok, "import alias must be a plain (unquoted) identifier (§V2.2)")
 	}
@@ -108,8 +105,7 @@ func (p *parser) pipeline() *ast.Pipeline {
 	return d
 }
 
-// plugLine parses one plug line, recovering to the next line so one bad
-// plug does not abort the whole Pipeline body (matching scopeItem).
+// plugLine parses one plug line, recovering to the next line.
 func (p *parser) plugLine() (plug *ast.Plug) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -160,8 +156,7 @@ func (p *parser) scope() *ast.Scope {
 	return d
 }
 
-// scopeItem parses one Scope body item, recovering to the next line so a
-// broken route does not abort the whole scope.
+// scopeItem parses one Scope body item, recovering to the next line.
 func (p *parser) scopeItem() (item ast.ScopeItem) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -277,9 +272,9 @@ func (p *parser) routePath() *ast.RoutePath {
 				}
 				seg.Rparen = p.next().End()
 			}
-			// ":name..." — the rest-of-path wildcard (§V4.1.4). Written
+			// ":name..." is the rest-of-path wildcard (§V4.1.4), written
 			// with three contiguous '.' tokens; a type annotation cannot
-			// combine with it (the wildcard's Go type is always string).
+			// combine with it.
 			if p.at(token.DOT) && p.contiguous() {
 				for i := 0; i < 3; i++ {
 					if !p.at(token.DOT) || !p.contiguous() {
@@ -306,9 +301,8 @@ func (p *parser) routePath() *ast.RoutePath {
 		rp.SetEnd(last.End())
 		if p.at(token.SLASH) && p.contiguous() {
 			slash := p.next()
-			// Routes match exactly (§V4.4): a trailing '/' would be a
-			// distinct, silently different pattern, so it is an error, as
-			// is an empty segment ("//").
+			// Routes match exactly (§V4.4): a trailing '/' and an empty
+			// segment ("//") are errors.
 			if !p.contiguous() || (p.cur().Kind != token.IDENT && p.cur().Kind != token.COLON) {
 				p.fail(slash, "'/' must be followed by a path segment; routes match exactly, without a trailing slash (§V4.1)")
 			}
@@ -623,8 +617,7 @@ func (p *parser) selectDecl() *ast.Select {
 }
 
 // selectProjection = "(" col {"," col} ")" | "(" "*" { "\\" col term } ")"
-// where a col term is one name or a parenthesized set (§V11.7). Clauses
-// read in SQL order, so the parens precede "for".
+// where a col term is one name or a parenthesized set (§V11.7).
 func (p *parser) selectProjection(d *ast.Select) {
 	d.Lparen = p.next().Pos
 	if p.at(token.STAR) {

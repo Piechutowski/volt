@@ -37,9 +37,6 @@ func generate(t *testing.T, dbmlPath string) []byte {
 	return out
 }
 
-// TestGolden byte-compares generated DDL for the shared corpus in
-// gen/testdata against .sql.golden files. Run with -update to accept
-// intentional changes.
 func TestGolden(t *testing.T) {
 	files, err := filepath.Glob(filepath.Join("..", "testdata", "*.dbml"))
 	if err != nil {
@@ -76,11 +73,6 @@ func TestGolden(t *testing.T) {
 	}
 }
 
-// TestGoldenExecutes runs every golden schema through a real SQLite engine
-// (via Python's sqlite3 module) with foreign keys enforced — the analogue
-// of gen/golang's compile test. Host-dialect functions that appear in
-// opaque backtick expressions (now, getdate, uuid_generate_v4) are
-// registered as deterministic shims so DEFAULT clauses resolve.
 func TestGoldenExecutes(t *testing.T) {
 	if _, err := exec.LookPath("python3"); err != nil {
 		t.Skip("python3 not available")
@@ -113,7 +105,6 @@ con.execute("PRAGMA foreign_key_check").fetchall() and sys.exit("foreign key vio
 	}
 }
 
-// TestGeneratedHeader pins the generated-code marker on the first line.
 func TestGeneratedHeader(t *testing.T) {
 	re := regexp.MustCompile(`^-- Code generated .* DO NOT EDIT\.$`)
 	for _, golden := range goldenFiles(t) {
@@ -137,7 +128,6 @@ func goldenFiles(t *testing.T) []string {
 	return files
 }
 
-// TestGenerationErrors pins the strict failure modes.
 func TestGenerationErrors(t *testing.T) {
 	cases := []struct {
 		name, dbml, wantErr string
@@ -171,11 +161,11 @@ func TestGenerationErrors(t *testing.T) {
 func TestQuoting(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"users", "users"},
-		{"order", `"order"`},         // keyword
-		{"full name", `"full name"`}, // space
-		{"2fa_codes", `"2fa_codes"`}, // digit-leading
-		{"Users", `"Users"`},         // upper case is not plain
-		{`we"ird`, `"we""ird"`},      // embedded quote doubled
+		{"order", `"order"`},
+		{"full name", `"full name"`},
+		{"2fa_codes", `"2fa_codes"`},
+		{"Users", `"Users"`},
+		{`we"ird`, `"we""ird"`},
 	}
 	for _, tc := range cases {
 		if got := identQuote(tc.in); got != tc.want {

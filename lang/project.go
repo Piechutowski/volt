@@ -1,12 +1,8 @@
 // Package lang implements the project-level semantics of the Volt
 // language (docs/spec.md §V): package and import resolution, pipeline and
-// scope checking, route expansion and conflict detection. It plays the
-// role lang/check plays for the schema layer, one level up — whole
-// project instead of single file.
-//
-// The pipeline is Load (files → packages) then Check (packages →
-// routes), mirroring parse-then-check. Diagnostic codes cite the spec
-// section they enforce, e.g. "spec/V2".
+// scope checking, route expansion and conflict detection. The pipeline
+// is Load then Check; diagnostic codes cite the spec section they
+// enforce, e.g. "spec/V2".
 package lang
 
 import (
@@ -26,8 +22,7 @@ import (
 )
 
 // ModFile is the project root marker (spec §V1.1): the Go module file.
-// A Volt project is a Go module — one root, one module path, no second
-// manifest (D62).
+// A Volt project is a Go module (D62).
 const ModFile = "go.mod"
 
 // Project is a loaded Volt project: the Go module path and the packages
@@ -84,18 +79,16 @@ type Package struct {
 
 	// schema is the package's checked table model, set by Check.
 	schema *check.Info
-	// plan is the package's naming plan, built once by Check right after
-	// the schema pass and read by everything downstream (D74).
+	// plan is the package's naming plan, built once by Check (D74).
 	plan *golang.Plan
 
 	// merged is the synthetic single file of all declarations, in file
-	// order (sorted by name for determinism), fed to the DBML-layer
-	// checker for table semantics.
+	// order (sorted by name).
 	merged *ast.File
 }
 
 // HasRouting reports whether the package declares any routing elements
-// (pipelines or scopes) — such packages get generated router files.
+// (pipelines or scopes).
 func (p *Package) HasRouting() bool {
 	for _, d := range p.merged.Decls {
 		switch d.(type) {
@@ -113,12 +106,10 @@ func (p *Package) Merged() *ast.File { return p.merged }
 func (p *Package) Schema() *check.Info { return p.schema }
 
 // Plan returns the package's naming plan (nil before Check): every
-// generated Go and SQL name, decided once and shared by the checker,
-// the generators and the tooling (D74).
+// generated Go and SQL name, decided once (D74).
 func (p *Package) Plan() *golang.Plan { return p.plan }
 
-// HasSchema reports whether the package declares data elements — such
-// packages get generated model, query and DDL files.
+// HasSchema reports whether the package declares data elements.
 func (p *Package) HasSchema() bool {
 	return p.schema != nil && (len(p.schema.Tables) > 0 || len(p.schema.Enums) > 0)
 }
@@ -157,16 +148,13 @@ func FindRoot(dir string) (string, error) {
 }
 
 // Load loads every package under root — the ./... pattern (§V1.7),
-// with §V1.6's exclusions. Parse errors are collected, not fatal:
-// Check still runs on what parsed, like the rest of the toolchain.
+// with §V1.6's exclusions. Parse errors are collected, not fatal.
 func Load(root string) (*Project, error) {
 	return LoadOverlay(root, nil)
 }
 
 // LoadOverlay is Load with in-memory contents taking precedence over
 // the disk: overlay maps absolute file paths to their current text.
-// This is the language server's view of a project — open editor
-// buffers override what was last saved.
 func LoadOverlay(root string, overlay map[string]string) (*Project, error) {
 	dirs, err := PackageDirs(root, root)
 	if err != nil {
@@ -235,9 +223,8 @@ func hasVoltFiles(dir string) bool {
 }
 
 // LoadDirs loads the packages in dirs and, transitively, the packages
-// they import (§V1.7) — the way Go loads what a build needs and nothing
-// more, so stray .volt trees elsewhere in the module never interfere.
-// Every dir MUST lie under root; a dir without .volt files is an error.
+// they import (§V1.7). Every dir MUST lie under root; a dir without
+// .volt files is an error.
 func LoadDirs(root string, dirs []string, overlay map[string]string) (*Project, error) {
 	return loadDirs(root, dirs, overlay, nil)
 }
@@ -274,10 +261,8 @@ func loadDirs(root string, dirs []string, overlay map[string]string, s *Session)
 		queue = append(queue, ad)
 	}
 
-	// One wave per import depth (PERF-7): every package of the wave is
-	// read and every file parsed on every CPU, the results taken in
-	// directory order so the diagnostics keep one order whatever the
-	// schedule.
+	// One wave per import depth (PERF-7), results taken in directory
+	// order.
 	seen := map[string]bool{}
 	for wave := queue; len(wave) > 0; {
 		var todo []string
@@ -344,13 +329,11 @@ func importExcluded(root, path string) string {
 	return ""
 }
 
-// packageLoad parses one directory's .volt files into a package (nil
-// when the directory holds none), files in name order (§V1.5).
 // packagesParse reads the directories of one wave and parses every
 // .volt file of every one of them on every CPU. The result holds one
 // entry per directory, nil where it has no .volt files; the packages
 // are not yet registered with the project, and the parse diagnostics
-// are appended in directory, then file-name, order.
+// are appended in directory, then file-name, order (§V1.5).
 func (pr *Project) packagesParse(dirs []string, overlay map[string]string, s *Session) ([]*Package, error) {
 	type fileParse struct {
 		pkg   int
@@ -420,11 +403,9 @@ func (pr *Project) packagesParse(dirs []string, overlay map[string]string, s *Se
 	return pkgs, nil
 }
 
-// goModModule reads the module directive of go.mod — the only line Volt
-// needs; every other directive is Go's business and ignored. The scan
-// honors go.mod's lexical structure: // and /* */ comments are not
-// text, and a directive inside a parenthesized block (require (...))
-// is not the top-level module directive.
+// goModModule reads the module directive of go.mod, honoring its
+// lexical structure: comments are not text, and a directive inside a
+// parenthesized block is not the top-level module directive.
 func goModModule(path, src string) (string, []diag.Diagnostic) {
 	inBlockComment, depth := false, 0
 	for _, line := range strings.Split(src, "\n") {

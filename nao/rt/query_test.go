@@ -6,12 +6,7 @@ import (
 	"testing"
 )
 
-// The interpreter is pure: options in, SQL text + args out. These tests
-// pin the rendered text exactly — the text is a statement-cache key
-// (D31), so any change to rendering is a cache-behavior change and must
-// be visible in review.
-
-type m struct{} // phantom model for handle construction in tests
+type m struct{}
 
 var (
 	id    = Column[m, int64]{Name: "id"}
@@ -114,7 +109,6 @@ func TestSelectRenderEmptyPreds(t *testing.T) {
 			argsCheck(t, args)
 		})
 	}
-	// a single surviving operand collapses: no needless parens in the text
 	query, _ := selectRender(t, And(zero, email.Eq("a"), zero))
 	if want := `SELECT "id", "email", "bio" FROM "users" WHERE "email" = ?`; query != want {
 		t.Errorf("query = %q, want %q", query, want)
@@ -154,7 +148,6 @@ func TestSelectRenderOffsetWithoutLimit(t *testing.T) {
 }
 
 func TestSelectRenderAfter(t *testing.T) {
-	// single ascending term
 	query, args := selectRender(t, OrderBy(id.Asc()), After[m](int64(7)))
 	want := `SELECT "id", "email", "bio" FROM "users" WHERE ("id" > ?) ORDER BY "id"`
 	if query != want {
@@ -162,7 +155,6 @@ func TestSelectRenderAfter(t *testing.T) {
 	}
 	argsCheck(t, args, int64(7))
 
-	// mixed directions, existing WHERE, limit: the lexicographic expansion
 	query, args = selectRender(t,
 		bio.IsNotNull(),
 		OrderBy(email.Desc(), id.Asc()),
@@ -234,8 +226,6 @@ func TestDeleteUpdateRender(t *testing.T) {
 	argsCheck(t, args, "new@x", nil, int64(1))
 }
 
-// TestWholeTableGuards pins the loud refusals: a DELETE or UPDATE whose
-// predicates all vanish must not silently become a whole-table statement.
 func TestWholeTableGuards(t *testing.T) {
 	var zero Pred[m]
 	if _, _, err := DeleteRender[m](`"users"`, nil); err == nil {
@@ -250,14 +240,11 @@ func TestWholeTableGuards(t *testing.T) {
 	if _, _, err := UpdateRender(`"users"`, nil, []Pred[m]{id.Eq(1)}); err == nil {
 		t.Error("UpdateRender(no assignments): want error")
 	}
-	// the explicit way to mean "every row"
 	if _, _, err := DeleteRender(`"users"`, []Pred[m]{Raw[m]("1 = 1")}); err != nil {
 		t.Errorf("DeleteRender(Raw true): %v", err)
 	}
 }
 
-// TestRenderDeterminism pins D31's premise: the same option values render
-// the same SQL text, so the text can key the statement cache.
 func TestRenderDeterminism(t *testing.T) {
 	build := func() []Opt[m] {
 		return []Opt[m]{
@@ -277,7 +264,6 @@ func TestRenderDeterminism(t *testing.T) {
 	if !reflect.DeepEqual(a1, a2) {
 		t.Errorf("same tree bound differently: %#v vs %#v", a1, a2)
 	}
-	// different values, same shape: same text (limit is a parameter)
 	q3, _, _ := SelectRender(`"users"`, `*`, []Opt[m]{
 		Or(email.Like("%zzz%"), And(id.Gt(99), bio.IsNull())),
 		OrderBy(id.Desc()),
@@ -288,7 +274,6 @@ func TestRenderDeterminism(t *testing.T) {
 	}
 }
 
-// TestIdentQuote pins quoting: hostile identifiers stay identifiers.
 func TestIdentQuote(t *testing.T) {
 	weird := Column[m, string]{Name: `evil"col`}
 	query, _ := selectRender(t, weird.Eq("x"))

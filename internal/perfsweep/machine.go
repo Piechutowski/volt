@@ -23,7 +23,7 @@ type Machine struct {
 }
 
 // Info collects the machine's specification, each item best effort:
-// what a system does not answer stays "unknown", never a guess.
+// what a system does not answer stays "unknown".
 func Info(repo string) Machine {
 	m := Machine{Cores: runtime.NumCPU(), Arch: runtime.GOARCH, Go: runtime.Version(), Date: time.Now().Format("2006-01-02"), CPU: "unknown", OS: runtime.GOOS}
 	switch runtime.GOOS {

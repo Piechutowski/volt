@@ -1,10 +1,5 @@
 package golang
 
-// DynNameCollisions is computed from the collisions alone, which the
-// name base keeps across plans (D104). The oracle is the walk it
-// replaced: every minted name in minting order through one map. The
-// two must agree on every input, edit after edit through the memo.
-
 import (
 	"fmt"
 	"sort"
@@ -39,7 +34,7 @@ func dynNamesWalk(p *plan, info *check.Info) []NameCollision {
 	for _, e := range info.Enums {
 		typeName, err := enumTypeName(e.Decl.Name.Schema(), e.Decl.Name.Base())
 		if err != nil {
-			continue // generation reports unusable names itself
+			continue
 		}
 		add(typeName, dynOrigin{kind: dynEnum, e: e, pos: e.Decl.Pos()})
 		for _, v := range e.Decl.Values {
@@ -54,7 +49,7 @@ func dynNamesWalk(p *plan, info *check.Info) []NameCollision {
 		pos := tm.ti.Decl.Pos()
 		add(tm.model, dynOrigin{kind: dynModel, tm: tm, pos: pos})
 		if len(tm.fields) == 0 {
-			continue // no queryable shape: no queries, no dynamic layer
+			continue
 		}
 		if len(tm.createFields()) > 0 {
 			add(tm.model+"CreateParams", dynOrigin{kind: dynCreateParams, tm: tm, pos: pos})
@@ -130,8 +125,6 @@ Table user_offsets [model: 'UserOffset'] {
   id int [pk]
 }
 `
-	// edits: one adds a collision, one removes one, one renames a
-	// model, one touches an unrelated table
 	edits := []string{
 		base,
 		strings.Replace(base, "Table user_foo_bars {", "Table user_foo_bars_x {", 1),
@@ -170,7 +163,6 @@ Table user_offsets [model: 'UserOffset'] {
 			t.Fatalf("edit %d: the memoized plan's report differs from a fresh plan's\n--- memo\n%s--- fresh\n%s", i, got, fromFresh)
 		}
 	}
-	// The report's order is total, whatever order the maps give.
 	f, _ := parser.ParseFile("dyn.dbml", base)
 	info, _ := check.File(f)
 	first := collisionsRender(PlanBuild(f, info).DynNameCollisions())

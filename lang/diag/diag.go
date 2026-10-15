@@ -1,6 +1,5 @@
 // Package diag defines the diagnostic type shared by the parser, the
-// semantic checker and vet analyzers, so each stage stays decoupled while
-// producing a uniform stream of findings.
+// semantic checker and vet analyzers.
 package diag
 
 import (

@@ -19,9 +19,6 @@ func TestForVisitsEveryIndexOnce(t *testing.T) {
 	}
 }
 
-// TestForFansOut proves the items run concurrently: as many items as
-// workers rendezvous, each waiting for the others; a pool that ran
-// them one after another would never let the first one finish.
 func TestForFansOut(t *testing.T) {
 	workers := min(4, runtime.GOMAXPROCS(0))
 	if workers < 2 {

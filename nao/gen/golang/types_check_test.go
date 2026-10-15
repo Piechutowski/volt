@@ -7,10 +7,6 @@ import (
 	"github.com/Piechutowski/volt/lang/check"
 )
 
-// TestIntegerFamilyAgreesWithChecker pins lang/check's integer family
-// (the §6.3 increment rule) to this package's type map: every DBML
-// type mapping to a Go integer is an integer type there, and nothing
-// else is — the two lists cannot drift apart.
 func TestIntegerFamilyAgreesWithChecker(t *testing.T) {
 	for dbml, gt := range typeMap {
 		isInt := strings.HasPrefix(gt.name, "int") || strings.HasPrefix(gt.name, "uint")
@@ -20,11 +16,6 @@ func TestIntegerFamilyAgreesWithChecker(t *testing.T) {
 	}
 }
 
-// TestRequiredKindAgreesWithTypeMap pins lang/check's required
-// classification (§6.3 extension) to this package's type map: every
-// string-mapped type is "text", every integer/unsigned/float type is
-// "numeric", []byte and json.RawMessage are "bytes", and bool and
-// time.Time cannot be required.
 func TestRequiredKindAgreesWithTypeMap(t *testing.T) {
 	for dbml, gt := range typeMap {
 		want, ok := "", true

@@ -5,9 +5,6 @@ import (
 	"unicode"
 )
 
-// A miniature of the spec's shape: lexical rules, layout, a newline
-// rule, a contiguous rule, a same-line rule, an exception, a counted
-// repetition, and elements cut at the first column.
 const miniGrammar = `
 program    = { element } ;
 element    = block | line ;
@@ -63,27 +60,23 @@ func TestRecognizerDecidesSentences(t *testing.T) {
 		rule, text string
 		want       bool
 	}{
-		// layout between symbols, none inside tokens
 		{"block", "Block a {}", true},
 		{"block", "Block a{}", true},
 		{"block", "Block\ta // c\n{\n}", true},
 		{"block", "Blocka {}", false},
 		{"block", "Block a { x y\n}", true},
-		{"block", "Block a { x y }", true}, // "}" satisfies the newline
+		{"block", "Block a { x y }", true},
 		{"block", "Block a { x y", false},
 		{"block", "Block a { xy\n}", false},
 		{"block", "Block a { x y\n\n z w\n}", true},
 		{"block", "Block a {\n// only a comment\n}", true},
-		// a settings list stays on its line
 		{"block", "Block a [s] {}", true},
 		{"block", "Block a\n[s] {}", false},
 		{"block", "Block a [s]\n{}", true},
-		// contiguous: no layout inside a path
 		{"line", "Line /a/b/\n", true},
 		{"line", "Line /a/ b/\n", false},
-		{"line", "Line / \n", true}, // trailing layout ends the path
-		{"line", "Line /", true},    // end of text satisfies the newline
-		// longest match: a word runs to its end, a terminal to the longest
+		{"line", "Line / \n", true},
+		{"line", "Line /", true},
 		{"ops", "<>-", true},
 		{"ops", "< >", true},
 		{"ops", "<>", false},
@@ -91,14 +84,13 @@ func TestRecognizerDecidesSentences(t *testing.T) {
 		{"pair", "12", true},
 		{"pair", "1", false},
 		{"pair", "123", false},
-		// program: cut at first-column identifiers
 		{"program", "Block a {}\nBlock b {}", true},
 		{"program", "Block a {}Block b {}", true},
 		{"program", "Block a {\n}\nLine /x/\n", true},
 		{"program", "Block a [\ns] {}", false},
 		{"program", "Block a {\nx y\n}", true},
 		{"program", "Block a\n{}", true},
-		{"program", "Block\na {}", false}, // "a" starts an element and "Block" is cut short
+		{"program", "Block\na {}", false},
 		{"program", "", true},
 		{"program", "// nothing\n", true},
 		{"program", "Line /a/\nBlock b {\n\tc d\n}\n", true},
@@ -115,12 +107,12 @@ func TestElementStarts(t *testing.T) {
 		"Block a {}\nBlock b {}":   {11},
 		"Block a {\nx y\n}\nBlock": {16},
 		"Block a {\n}\n  x\ny":     {16},
-		"a\n'x\ny'\nb":             {5, 8}, // an unterminated string ends at its line
+		"a\n'x\ny'\nb":             {5, 8},
 		"a\n'''x\ny'''\nb":         {12},
 		"a\n/* x\ny */\nb":         {12},
 		"a\n// x\nb":               {7},
 		"a\n\"q\"\n1b":             {6},
-		"a\n{\nb\n}\nc\n}\nd":      {8, 12}, // depth never below zero
+		"a\n{\nb\n}\nc\n}\nd":      {8, 12},
 		"a\néb":                    {2},
 		"a\n\n\n":                  nil,
 		"a\n[\nb":                  {4},

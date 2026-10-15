@@ -7,10 +7,8 @@ import (
 	"strings"
 )
 
-// The chart's colors: a dark surface and four categorical hues stepped
-// for it, one per phase in a fixed order, validated for color-vision
-// deficiency and contrast (worst adjacent pair well clear of the
-// floor); text wears text tones, never a series color.
+// The chart's colors: a dark surface and four categorical hues, one per
+// phase in a fixed order.
 const (
 	chartSurface = "#1a1a19"
 	chartText    = "#ffffff"
@@ -50,9 +48,8 @@ func Charts(dir string, rows []Row, columns int) ([]string, error) {
 }
 
 // LineChart renders a line chart on the dark surface: x is the table
-// count, one line per named series in the order given, thin lines and
-// round markers, recessive grid and ticks, a legend and a label at
-// each line's end for two series or more.
+// count, one line per named series in the order given, with a legend
+// and end labels for two series or more.
 func LineChart(title, unit, xlabel string, xs []int, names []string, series map[string][]float64, colors map[string]string) string {
 	const w, h, left, right, top, bottom = 760, 420, 70, 90, 50, 50
 	maxY := 0.0
@@ -71,7 +68,6 @@ func LineChart(title, unit, xlabel string, xs []int, names []string, series map[
 	fmt.Fprintf(&b, `<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12">`+"\n", w, h, w, h)
 	fmt.Fprintf(&b, `<rect width="%d" height="%d" fill="%s"/>`+"\n", w, h, chartSurface)
 	fmt.Fprintf(&b, `<text x="%d" y="24" fill="%s" font-size="16">%s</text>`+"\n", left, chartText, title)
-	// Grid and y ticks.
 	for i := 0; i <= 5; i++ {
 		v := maxY * float64(i) / 5
 		y := py(v)
@@ -79,13 +75,11 @@ func LineChart(title, unit, xlabel string, xs []int, names []string, series map[
 		fmt.Fprintf(&b, `<text x="%d" y="%.1f" fill="%s" text-anchor="end">%s</text>`+"\n", left-8, y+4, chartMuted, fmtNum(v))
 	}
 	fmt.Fprintf(&b, `<text x="%d" y="%d" fill="%s" transform="rotate(-90 14 %d)">%s</text>`+"\n", 14, (h-bottom+top)/2, chartMuted, (h-bottom+top)/2, unit)
-	// x ticks at every measured size.
 	for _, x := range xs {
 		fmt.Fprintf(&b, `<line x1="%.1f" y1="%d" x2="%.1f" y2="%d" stroke="%s"/>`+"\n", px(x), top, px(x), h-bottom, chartGrid)
 		fmt.Fprintf(&b, `<text x="%.1f" y="%d" fill="%s" text-anchor="middle">%d</text>`+"\n", px(x), h-bottom+18, chartMuted, x)
 	}
 	fmt.Fprintf(&b, `<text x="%d" y="%d" fill="%s" text-anchor="middle">%s</text>`+"\n", (w+left-right)/2, h-8, chartMuted, xlabel)
-	// Lines, markers, a legend and end labels.
 	for i, name := range names {
 		vals := series[name]
 		if len(vals) == 0 {

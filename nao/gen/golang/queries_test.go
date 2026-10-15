@@ -13,16 +13,11 @@ import (
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-// stmtCase is one statement for the prepare test: named-parameter
-// statements bind a NULL defaultdict (N = -1); positional statements
-// bind exactly N NULLs.
 type stmtCase struct {
 	SQL string `json:"sql"`
 	N   int    `json:"n"`
 }
 
-// planStatements re-derives every SQL statement the CRUD emitter writes,
-// mirroring tableEmit's conditions (D17). Used by the prepare test below.
 func planStatements(t *testing.T, p *plan) map[string]stmtCase {
 	t.Helper()
 	named := func(sql string) stmtCase { return stmtCase{SQL: sql, N: -1} }
@@ -34,7 +29,6 @@ func planStatements(t *testing.T, p *plan) map[string]stmtCase {
 		if len(tm.pk) > 0 {
 			stmts[tm.model+"Get"] = named(tm.getSQL())
 			if len(tm.pk) == 1 {
-				// the emitter appends the placeholder list at run time
 				stmts[tm.model+"GetMany"] = stmtCase{SQL: tm.getManySQL() + " (?)", N: 1}
 			}
 			if len(tm.nonPK()) > 0 {
@@ -51,11 +45,6 @@ func planStatements(t *testing.T, p *plan) map[string]stmtCase {
 	return stmts
 }
 
-// planDynStatements renders, per table, what the dynamic layer would:
-// a kitchen-sink SELECT touching every column as filter, order and
-// keyset plus paging, and the Count/Exists/DeleteWhere/UpdateWhere
-// statements. The phantom model type is irrelevant to rendering, so a
-// throwaway struct instantiates the generics.
 func planDynStatements(t *testing.T, p *plan) map[string]stmtCase {
 	t.Helper()
 	type m = struct{}
@@ -106,12 +95,6 @@ func planDynStatements(t *testing.T, p *plan) map[string]stmtCase {
 	return stmts
 }
 
-// TestQueriesPrepare proves cross-generator coherence (D02, D31): every
-// statement gen/golang emits — CRUD and the dynamic layer's rendered
-// shapes alike — must prepare on a real SQLite loaded with the DDL
-// gen/sqlite emits from the same schema. EXPLAIN compiles a statement
-// without running it; named parameters bind NULL via a defaultdict,
-// positional ones bind exactly as many NULLs as the interpreter bound.
 func TestQueriesPrepare(t *testing.T) {
 	if _, err := exec.LookPath("python3"); err != nil {
 		t.Skip("python3 not available")
@@ -167,8 +150,6 @@ for name, case in sorted(inp["stmts"].items()):
 	}
 }
 
-// TestQueriesGenerationErrors pins the loud failure modes specific to the
-// queries generator.
 func TestQueriesGenerationErrors(t *testing.T) {
 	cases := []struct {
 		name, dbml, wantErr string
@@ -212,8 +193,8 @@ func TestArgNames(t *testing.T) {
 		{"HTTPStatus", "httpStatus"},
 		{"Name", "name"},
 		{"X2faCode", "x2faCode"},
-		{"Type", "type_"}, // Go keyword
-		{"Ctx", "ctx_"},   // receiver vocabulary
+		{"Type", "type_"},
+		{"Ctx", "ctx_"},
 	}
 	for _, tc := range cases {
 		if got := argName(tc.in); got != tc.want {

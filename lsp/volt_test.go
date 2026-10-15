@@ -7,8 +7,6 @@ import (
 	"testing"
 )
 
-// voltProject materializes files on disk (a real project for FindRoot
-// and LoadOverlay to see) and returns its root.
 func voltProject(t *testing.T, files map[string]string) string {
 	t.Helper()
 	root := t.TempDir()
@@ -24,10 +22,6 @@ func voltProject(t *testing.T, files map[string]string) string {
 	return root
 }
 
-// TestVoltProjectDiagnostics: a .volt file under a go.mod root is
-// checked as part of the whole project — the open buffer overlays the
-// saved file, so the unused import typed into the buffer is reported
-// even though the disk copy is clean.
 func TestVoltProjectDiagnostics(t *testing.T) {
 	root := voltProject(t, map[string]string{
 		"go.mod":          "module lsptest\n",
@@ -49,9 +43,6 @@ func TestVoltProjectDiagnostics(t *testing.T) {
 	}
 }
 
-// TestVoltProjectCrossFileConflict: the project view spans package
-// files, so a route conflicting with one declared in a sibling file is
-// caught — the single-file pass could never see it.
 func TestVoltProjectCrossFileConflict(t *testing.T) {
 	root := voltProject(t, map[string]string{
 		"go.mod":     "module lsptest\n",
@@ -73,9 +64,6 @@ func TestVoltProjectCrossFileConflict(t *testing.T) {
 	}
 }
 
-// TestVoltFileOutsideProjectKeepsDBML: with no go.mod above it, a
-// .volt file gets the single-file DBML pass — Volt declarations parse
-// (superset, §V0) without bogus squiggles, and DBML errors still show.
 func TestVoltFileOutsideProjectKeepsDBML(t *testing.T) {
 	clean := NewDocument("file:///lone.volt",
 		"package app\n\nScope / {\n\tget / Home.Index\n}\n\nTable users {\n\tid int [pk]\n}\n")
@@ -90,10 +78,6 @@ func TestVoltFileOutsideProjectKeepsDBML(t *testing.T) {
 	}
 }
 
-// TestVoltProjectSkipsForeignFiles: the project pass owns only files
-// the loader actually read. A .dbml file under a go.mod root, or a
-// .volt file in a skipped directory (§V1.6), keeps the single-file
-// pass — its diagnostics must not silently vanish.
 func TestVoltProjectSkipsForeignFiles(t *testing.T) {
 	root := voltProject(t, map[string]string{
 		"go.mod":          "module lsptest\n",
@@ -111,8 +95,6 @@ func TestVoltProjectSkipsForeignFiles(t *testing.T) {
 	}
 }
 
-// TestVoltProjectEncodedURI: editors percent-encode file URIs; the
-// decoded path must still hit the overlay and the diagnostic filter.
 func TestVoltProjectEncodedURI(t *testing.T) {
 	root := voltProject(t, map[string]string{
 		"go.mod":             "module lsptest\n",
@@ -135,9 +117,6 @@ func TestVoltProjectEncodedURI(t *testing.T) {
 	}
 }
 
-// TestVoltSiblingBuffersOverlay: cross-file analysis sees other OPEN
-// buffers, not their stale saved copies — a conflict typed into an
-// unsaved sibling shows up here.
 func TestVoltSiblingBuffersOverlay(t *testing.T) {
 	root := voltProject(t, map[string]string{
 		"go.mod":     "module lsptest\n",
@@ -146,7 +125,7 @@ func TestVoltSiblingBuffersOverlay(t *testing.T) {
 	})
 	pathA := filepath.Join(root, "app", "a.volt")
 	pathB := filepath.Join(root, "app", "b.volt")
-	bufA := "package app\n\nScope / {\n\tget /x Home.A\n}\n" // unsaved edit
+	bufA := "package app\n\nScope / {\n\tget /x Home.A\n}\n"
 
 	b := &Document{URI: "file://" + pathB, Siblings: func() map[string]string {
 		return map[string]string{pathA: bufA}
@@ -164,8 +143,6 @@ func TestVoltSiblingBuffersOverlay(t *testing.T) {
 	}
 }
 
-// TestVoltModDiagnosticsSurface: go.mod is never open in the editor,
-// so its problems attach to the top of every project file.
 func TestVoltModDiagnosticsSurface(t *testing.T) {
 	root := voltProject(t, map[string]string{
 		"go.mod":     "modul lsptest\n",
@@ -185,9 +162,6 @@ func TestVoltModDiagnosticsSurface(t *testing.T) {
 	}
 }
 
-// TestVoltSettingsGatedByContext: a Table column named like a verb or
-// 'scope' still gets column settings — the Volt settings heuristics
-// only fire where routes can exist (§V4).
 func TestVoltSettingsGatedByContext(t *testing.T) {
 	for _, src := range []string{
 		"Table t {\n\tdelete bool [\n}\n",
@@ -206,8 +180,6 @@ func TestVoltSettingsGatedByContext(t *testing.T) {
 	}
 }
 
-// TestDiagnosticSourceIsVolt: editors label diagnostics by their
-// Source field — the language's name, whichever binary serves it.
 func TestDiagnosticSourceIsVolt(t *testing.T) {
 	d := doc(t, "Table t {\n\tid int [pk]\n}\n\nTable t {\n\tid int [pk]\n}\n")
 	lsp := d.LSPDiagnostics()
@@ -219,8 +191,6 @@ func TestDiagnosticSourceIsVolt(t *testing.T) {
 	}
 }
 
-// TestVoltCompletionScopeBody: inside a Scope body the verbs,
-// 'resources' and nested 'Scope' complete.
 func TestVoltCompletionScopeBody(t *testing.T) {
 	text := "Scope / {\n\t\n}\n"
 	d := doc(t, text)
@@ -236,7 +206,6 @@ func TestVoltCompletionScopeBody(t *testing.T) {
 	}
 }
 
-// TestVoltCompletionPipelineBody: a Pipeline body offers 'use'.
 func TestVoltCompletionPipelineBody(t *testing.T) {
 	text := "Pipeline api {\n\t\n}\n"
 	d := doc(t, text)
@@ -246,8 +215,6 @@ func TestVoltCompletionPipelineBody(t *testing.T) {
 	}
 }
 
-// TestVoltCompletionScopeSettings: '[' on a Scope line offers the scope
-// settings; on a route line, the route settings.
 func TestVoltCompletionScopeSettings(t *testing.T) {
 	text := "Scope / [\n"
 	d := doc(t, text)

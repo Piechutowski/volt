@@ -1,12 +1,5 @@
 package lang_test
 
-// Scaling tests (roadmap PERF-2): the work a phase does must grow
-// linearly with its input. Wall-clock cannot be asserted on shared
-// hardware, but allocation counts can — they are exact for a given
-// toolchain, so a doubling of tables that more than triples the bytes
-// allocated is an algorithmic regression, whatever machine ran it. The
-// cubic path D74 removed would have failed these at eight times.
-
 import (
 	"fmt"
 	"os"
@@ -21,11 +14,6 @@ import (
 	"github.com/Piechutowski/volt/lang/diag"
 )
 
-// perfFixture writes a project with one data package of the given
-// tables and columns and one routing package that declares a resources
-// per table — with [default], the shape that binds every action to the
-// table's generated CRUD; without, the controller shape that only
-// exercises route expansion and conflict detection.
 func perfFixture(t *testing.T, tables, cols int, def bool) string {
 	t.Helper()
 	root := t.TempDir()
@@ -70,7 +58,6 @@ func perfFixture(t *testing.T, tables, cols int, def bool) string {
 	return root
 }
 
-// perfLoad loads and checks a fixture, failing on any diagnostic.
 func perfLoad(t *testing.T, root string) *lang.Project {
 	t.Helper()
 	dirs, err := lang.PackageDirs(root, root)
@@ -87,7 +74,6 @@ func perfLoad(t *testing.T, root string) *lang.Project {
 	return pr
 }
 
-// allocated measures the bytes fn allocates.
 func allocated(fn func()) uint64 {
 	runtime.GC()
 	var before, after runtime.MemStats
@@ -97,8 +83,6 @@ func allocated(fn func()) uint64 {
 	return after.TotalAlloc - before.TotalAlloc
 }
 
-// linear asserts that doubling the input did not more than triple the
-// allocation: linear growth is 2x, and the slack covers map growth.
 func linear(t *testing.T, what string, small, large uint64) {
 	t.Helper()
 	ratio := float64(large) / float64(small)
@@ -109,7 +93,6 @@ func linear(t *testing.T, what string, small, large uint64) {
 }
 
 func TestCheckScalesLinearlyInDefaultResources(t *testing.T) {
-	// 5·R·T²·C name derivations before D74: doubling T octupled this.
 	measure := func(tables int) uint64 {
 		root := perfFixture(t, tables, 24, true)
 		dirs, err := lang.PackageDirs(root, root)
@@ -130,8 +113,6 @@ func TestCheckScalesLinearlyInDefaultResources(t *testing.T) {
 }
 
 func TestCheckScalesLinearlyInRoutes(t *testing.T) {
-	// R²/2 pattern comparisons, each re-parsing both patterns, before the
-	// route index: doubling the routes quadrupled this.
 	measure := func(tables int) uint64 {
 		root := perfFixture(t, tables, 4, false)
 		dirs, err := lang.PackageDirs(root, root)

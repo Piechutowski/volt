@@ -102,9 +102,7 @@ func (Term) isExpr()    {}
 func (Special) isExpr() {}
 func (Ref) isExpr()     {}
 
-// Parse reads a grammar. A name defined twice is an error: the spec's
-// collected grammars repeat the sections' definitions, but each block
-// is read on its own.
+// Parse reads a grammar. A name defined twice is an error.
 func Parse(src string) (*Grammar, error) {
 	p := &parser{src: src, line: 1}
 	p.next()
@@ -159,8 +157,7 @@ func Refs(e Expr) []string {
 	return out
 }
 
-// Format writes an expression back in the notation, one line, so two
-// definitions can be compared and printed.
+// Format writes an expression back in the notation, one line.
 func Format(e Expr) string {
 	var b strings.Builder
 	format(&b, e, 0)

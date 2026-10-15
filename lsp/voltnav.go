@@ -1,8 +1,4 @@
-// Project-wide navigation for Volt-layer symbols. The single-file index
-// (index.go) resolves DBML names inside one document; this one spans the
-// project, so `model: db.Post` in app/routes.volt reaches `Table posts`
-// in db/schema.volt, and asking for references on that table finds every
-// resources declaration that names it.
+// Project-wide navigation for Volt-layer symbols.
 package lsp
 
 import (
@@ -43,8 +39,7 @@ type voltRef struct {
 	text string // the identifier as written here, for rename
 }
 
-// voltDef is a declaration: where it is, and the node itself so hover
-// can describe what was declared.
+// voltDef is a declaration: where it is, and the node itself.
 type voltDef struct {
 	span   voltSpan
 	table  *ast.Table
@@ -63,9 +58,7 @@ type voltIndex struct {
 	texts   map[string]string                 // open buffers, for position conversion
 	gofuncs map[string]map[string]lang.GoFunc // package path -> its Go functions
 	// gosrcs holds each package directory's Go files as the index read
-	// them (lang.GoSourcesRead); different bytes on disk mean the Go
-	// side moved under us — a rename with gopls, a new function — and
-	// the index is stale (D87).
+	// them; different bytes on disk mean the index is stale (D87).
 	gosrcs map[string][]lang.GoSource
 	// goscans is the memo's scan table while the index is being built,
 	// nil once it is shared.
@@ -88,12 +81,9 @@ func spanOf(n ast.Node) voltSpan {
 	return voltSpan{file: p.Filename(), pos: p, end: n.End()}
 }
 
-// buildVoltIndex walks every package's declarations twice: definitions
-// first (tables and pipelines), then the references that name them.
 // voltIndexMemo is what one project's navigation index keeps across
-// builds (D85): per package, the per-table occurrence memo and the
-// select hovers by the select they were rendered for. The zero value
-// is ready; one memo per project root, used by one analysis at a time.
+// builds (D85). The zero value is ready; one memo per project root,
+// used by one analysis at a time.
 type voltIndexMemo struct {
 	index  map[string]*IndexMemo
 	hovers map[*lang.SelectInfo]string
@@ -154,15 +144,13 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 			}
 		}
 		// Selects: definition + a prebuilt hover with the generated
-		// signatures and the rendered WHERE/ORDER — the editor answers
-		// "what does this mint, and which way does id sort" (§V11.6).
+		// signatures and the rendered WHERE/ORDER (§V11.6).
 		for _, si := range pkg.Selects {
 			d := si.Decl
 			ix.define(voltSym{"select", path, d.Name.Name()},
 				voltDef{span: spanOf(d.Name), md: hover(pkg, si)})
 		}
-		// A package "declaration" is its first file, so an import can
-		// jump somewhere useful.
+		// A package "declaration" is its first file.
 		if len(pkg.Files) > 0 {
 			first := pkg.Files[0]
 			ix.defs[voltSym{"package", path, ""}] = voltDef{span: voltSpan{
@@ -175,8 +163,7 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 
 	// The schema layer's own references to a table — Ref endpoints,
 	// TableGroup members, Records targets — indexed per package over the
-	// merged file, so every file of the package is covered with its real
-	// positions. Without this a rename would miss half the uses.
+	// merged file.
 	for path, pkg := range pr.Packages {
 		info := pkg.Schema()
 		if info == nil {
@@ -275,8 +262,8 @@ func (ix *voltIndex) checksRefs(pkg *lang.Package, path string, body []ast.Table
 
 // goRefAdd indexes a Go reference — a bare name or one qualified by the
 // containing package's own name (§V3.2, §V12.5) — and resolves it in
-// the package directory's Go files once per package. volt.* plugs live
-// in the runtime and make no claim here.
+// the package directory's Go files once per package; volt.* plugs make
+// no claim here.
 func (ix *voltIndex) goRefAdd(pkg *lang.Package, path string, ref *ast.GoRef) {
 	if ref == nil || len(ref.Parts) == 0 {
 		return
@@ -286,7 +273,6 @@ func (ix *voltIndex) goRefAdd(pkg *lang.Package, path string, ref *ast.GoRef) {
 	}
 	name := ref.Base()
 	sym := voltSym{"gofunc", path, name}
-	// Hit anywhere on `db.EmailValid`; a rename rewrites only the name.
 	hit, edit := spanOf(ref), spanOf(ref.Parts[len(ref.Parts)-1])
 	ix.refs = append(ix.refs, voltRef{hit, edit, sym, false, name})
 	if _, done := ix.defs[sym]; done {
@@ -364,8 +350,6 @@ func (ix *voltIndex) scopeRefs(pkg *lang.Package, path string, sc *ast.Scope) {
 				}
 				target = t
 			}
-			// Hover and gd hit anywhere on `db.posts`; a rename must
-			// rewrite only the name, never the qualifier.
 			edit := spanOf(it.Name)
 			hit := edit
 			if it.Pkg != nil {
@@ -375,8 +359,7 @@ func (ix *voltIndex) scopeRefs(pkg *lang.Package, path string, sc *ast.Scope) {
 			ix.settingRefs(pkg, path, it.Settings)
 		case *ast.Dataset:
 			// The declaration names a select of this package or of an
-			// imported one (§V13.1): hover shows its expansion, gd lands
-			// on it, rename rewrites the name and keeps the qualifier.
+			// imported one (§V13.1).
 			target, ok := path, true
 			if it.Pkg != nil && it.Pkg.Name() != pkg.Name {
 				target, ok = pkg.Imports[it.Pkg.Name()]
@@ -423,7 +406,7 @@ func (ix *voltIndex) at(file string, offset int) *voltRef {
 }
 
 // text returns a file's current content: the open buffer when there is
-// one (so positions match what the user sees), else the saved file.
+// one, else the saved file.
 func (ix *voltIndex) text(file string) string {
 	if t, ok := ix.texts[file]; ok {
 		return t
@@ -481,7 +464,7 @@ func (d *Document) voltDefinition(pos protocol.Position) *protocol.Location {
 }
 
 // voltReferences lists every project-wide use of the symbol under the
-// cursor — including the resources declarations naming a table.
+// cursor.
 func (d *Document) voltReferences(pos protocol.Position, includeDecl bool) []protocol.Location {
 	if d.vindex == nil {
 		return nil
@@ -503,9 +486,8 @@ func (d *Document) voltReferences(pos protocol.Position, includeDecl bool) []pro
 /* ===== hover ===== */
 
 // voltHover describes the Volt-layer symbol under the cursor. For a
-// table it spells out the mapping that is otherwise invisible in
-// routes.volt: `model: db.Post` names the *Go model* nao derives from
-// `Table posts`, not the table's own name (§V5.4.2).
+// table it spells out that `model: db.Post` names the Go model nao
+// derives from `Table posts`, not the table's own name (§V5.4.2).
 func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 	if d.vindex == nil {
 		return nil
@@ -552,8 +534,7 @@ func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 
 // selectHoverMD renders a select's generated surface: one signature
 // per member (one parameter list for all — §V11.4), the WHERE/ORDER
-// exactly as emitted, and the output row structs, so the hover answers
-// "what comes back from this query for each table" (§V11.6).
+// exactly as emitted, and the output row structs (§V11.6).
 func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 	const structCap = 4
 	var b strings.Builder
@@ -564,9 +545,8 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 		}
 	}
 
-	// 1. What comes back: the output row structs, from the same plan the
-	//    generator runs (§V11.7) — the shared type once, per-member rows
-	//    capped. The struct is what the reader wants first.
+	// The output row structs come from the same plan the generator runs
+	// (§V11.7): the shared type once, per-member rows capped.
 	shown := si.Members
 	if si.Shared != "" {
 		shown = shown[:1]
@@ -595,7 +575,6 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 		}
 	}
 
-	// 2. How it is filtered and ordered: the SQL exactly as emitted.
 	if si.WhereSQL != "" {
 		b.WriteString("```sql\nWHERE " + si.WhereSQL + "\n```\n")
 	}
@@ -603,8 +582,7 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 		b.WriteString("```sql\nORDER BY " + si.OrderSQL + "\n```\n")
 	}
 
-	// 3. How to call it: one signature per member, one parameter list
-	//    for all (§V11.4).
+	// One signature per member, one parameter list for all (§V11.4).
 	var params strings.Builder
 	for _, p := range si.Params {
 		fmt.Fprintf(&params, ", %s %s", p.GoName, p.GoType)
@@ -628,8 +606,7 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 
 // setSym resolves a name that may denote a table set: the first of the
 // given kinds that is defined in the package wins; an undefined name
-// keeps the last kind so the reference still exists (and stays a
-// diagnostic's job).
+// keeps the last kind so the reference still exists.
 func (ix *voltIndex) setSym(path, name string, kinds ...string) voltSym {
 	for _, k := range kinds {
 		if _, ok := ix.defs[voltSym{k, path, name}]; ok {
@@ -789,10 +766,8 @@ func tablePK(t *ast.Table) (name, goType string) {
 /* ===== rename ===== */
 
 // voltRename renames a Volt-layer symbol everywhere it appears in the
-// project: the declaration, the schema layer's own references, and the
-// resources declarations that name it — across files. Only occurrences
-// spelled like the one under the cursor are rewritten, so a table alias
-// keeps its own name (matching the single-file rule).
+// project. Only occurrences spelled like the one under the cursor are
+// rewritten, so a table alias keeps its own name.
 func (d *Document) voltRename(pos protocol.Position, newName string) (*protocol.WorkspaceEdit, bool) {
 	if d.vindex == nil {
 		return nil, false
@@ -804,9 +779,8 @@ func (d *Document) voltRename(pos protocol.Position, newName string) (*protocol.
 	if ref.sym.kind == "package" {
 		return nil, false // renaming a package means moving a directory
 	}
-	// A Go reference renames its Volt spellings only: the Go declaration
-	// is gopls' job, and the §V12.5/§V3.2 existence error then points at
-	// whichever side is still behind.
+	// A Go reference renames its Volt spellings only; the Go declaration
+	// is gopls' job (§V3.2, §V12.5).
 
 	spelling := ref.text
 	changes := map[protocol.DocumentUri][]protocol.TextEdit{}
@@ -833,9 +807,8 @@ func (d *Document) voltRename(pos protocol.Position, newName string) (*protocol.
 /* ===== completion ===== */
 
 // voltQualRefRE matches a possibly-partial qualified reference at the
-// end of the line: `db.`, `db.P`. The qualifier decides whether the
-// Volt layer owns the completion — only import qualifiers do, so DBML
-// dot-chains (`status.active`, `users.id`) fall through untouched.
+// end of the line: `db.`, `db.P`. Only import qualifiers are the Volt
+// layer's; DBML dot-chains fall through untouched.
 var voltQualRefRE = regexp.MustCompile(`([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z0-9_]*)$`)
 
 // voltResourcesRE matches a resources declaration being typed, with the
@@ -918,11 +891,8 @@ func (d *Document) namedDefItems(kind, partial string, itemKind protocol.Complet
 }
 
 // packageTableItems lists the tables a package declares, filtered by
-// the partial the user has typed so a manual invoke mid-word works.
-// The filter is case-insensitive — someone typing `db.P` from model
-// muscle memory should see `posts`, which is also how they learn the
-// spelling — and when it would empty the list, everything is offered
-// instead (the client fuzzy-filters anyway).
+// the partial the user has typed. The filter is case-insensitive, and
+// when it would empty the list, everything is offered instead.
 func (d *Document) packageTableItems(pkgPath, partial string) []protocol.CompletionItem {
 	type row struct{ name, detail string }
 	collect := func(filter string) []row {

@@ -10,7 +10,6 @@ import (
 	"github.com/Piechutowski/volt/lang"
 )
 
-// allocated measures the bytes fn allocates.
 func allocated(fn func()) uint64 {
 	runtime.GC()
 	var before, after runtime.MemStats
@@ -20,15 +19,6 @@ func allocated(fn func()) uint64 {
 	return after.TotalAlloc - before.TotalAlloc
 }
 
-// The allocation budget of one keystroke on a fixed one-file project
-// (200 tables of 12 columns, the benchmark's shape): the document's
-// own front end, the project analysis through the session and the
-// index memo, and the publish of the diagnostics. Measured on go1.27
-// when the numbers were last ratcheted, asserted within ten percent,
-// hardware-neutral where wall time is not (PERF-2): a part that grows
-// past its budget is a regression to explain, or a budget to raise in
-// the same commit with the reason; one that shrinks well below is a
-// budget to lower.
 var keystrokeBudget = struct {
 	document, analysis, publish uint64
 }{

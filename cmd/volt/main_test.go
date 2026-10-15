@@ -14,12 +14,6 @@ import (
 	"github.com/Piechutowski/volt/lang/diag"
 )
 
-// TestWorkspaceLayout proves the layout `-o` and `-parts` exist for
-// (D77): one schema.volt at the root of a go.work workspace, a server
-// module that is package main and gets models, queries and router, a
-// client module that is package main and gets models and the client
-// beside them — each wired by its own go:generate line. The binary is
-// built, `go generate` runs it, and both modules build.
 func TestWorkspaceLayout(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
@@ -85,10 +79,8 @@ func main() { _ = NewClient("http://localhost:8888") }
 			t.Fatalf("go %v in %s: %v\n%s", args, dir, err, out)
 		}
 	}
-	run(root, "generate", "./api", "./gui") // ./... stops at the root module in a workspace
+	run(root, "generate", "./api", "./gui")
 
-	// The parts landed where their go:generate lines put them, and
-	// nowhere else.
 	for _, want := range []string{
 		"api/nao_models.go", "api/nao_queries.go", "api/nao_dyn.go", "api/nao_selects.go",
 		"api/volt_handlers.go", "api/volt_router.go", "api/volt_paths.go", "api/volt_routes.go",
@@ -111,12 +103,6 @@ func main() { _ = NewClient("http://localhost:8888") }
 	run(filepath.Join(root, "gui"), "vet", "./...")
 }
 
-// TestStressWritesABuildableProject proves `volt stress` writes a
-// one-file package main at the module root that checks clean with the
-// tables asked for, generates through the CLI and builds against this
-// checkout's runtime, and that it refuses a directory holding anything
-// (D80). The commands run in-process: exit errors are returned, not
-// exited on.
 func TestStressWritesABuildableProject(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
@@ -160,11 +146,6 @@ func TestStressWritesABuildableProject(t *testing.T) {
 	}
 }
 
-// TestGenVerifyTypeChecks proves gen --verify type-checks the
-// generated Go in the package it lands in before writing (D98): a
-// project that builds passes, and a file beside the outputs that does
-// not type-check fails the run with its position, before any output
-// is written.
 func TestGenVerifyTypeChecks(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {

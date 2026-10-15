@@ -1,16 +1,9 @@
 // Volt-layer AST nodes (spec §V, docs/spec.md).
-//
-// The Volt language is a strict superset of the DBML core: these declarations may
-// appear alongside tables and enums in any .volt file. The DBML-layer
-// checker (package check) ignores them entirely; their semantics belong to
-// the project-level checker in the lang package.
 package ast
 
 import "github.com/Piechutowski/volt/lang/token"
 
-// PackageClause is a "package name" clause (spec §V1). At most one per
-// file, and it must be the first declaration; both constraints are
-// enforced by the lang checker.
+// PackageClause is a "package name" clause (spec §V1).
 type PackageClause struct {
 	PackagePos token.Position
 	Name       *Ident
@@ -208,8 +201,7 @@ func (x *Dataset) End() token.Position {
 func (x *Dataset) scopeItemNode() {}
 
 // RoutePath is a route or scope path: "/" or "/seg/:param(type)/*rest"
-// (spec §V4.1). Tokens within a path are contiguous — the parser rejects
-// interior whitespace.
+// (spec §V4.1). Tokens within a path are contiguous.
 type RoutePath struct {
 	SlashPos token.Position
 	Segments []*Segment
@@ -241,12 +233,8 @@ const (
 	SegWild                 // :path... — rest-of-path capture, last segment only
 )
 
-// Segment is one path segment.
-//
-// The wildcard is spelled ":name..." rather than "*name": after a slash,
-// "/*" necessarily opens a DBML block comment (§3.3), so a star-marked
-// wildcard is lexically unreachable in a superset of DBML. The ellipsis
-// form keeps one capture sigil and echoes ServeMux's "{name...}".
+// Segment is one path segment. The wildcard is spelled ":name...":
+// after a slash, "/*" opens a DBML block comment (§3.3).
 type Segment struct {
 	Kind    SegKind
 	MarkPos token.Position // position of ':'; equals Name.Pos() for literals
@@ -296,7 +284,7 @@ type IdentList struct {
 	Names  []*Ident
 	// Mods holds an optional one-word modifier per name (parallel to
 	// Names, nil entries when absent): order lists use it for asc/desc
-	// (§V11.5); other settings reject modifiers at check time.
+	// (§V11.5).
 	Mods   []*Ident
 	Rparen token.Position
 }

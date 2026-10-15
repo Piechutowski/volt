@@ -13,9 +13,6 @@ import (
 	"github.com/Piechutowski/volt/lang/parser"
 )
 
-// fileShape renders what a parse produced, positions included, so two
-// parses can be compared: declaration kinds and spans, the EOF, and
-// every diagnostic.
 func fileShape(f *ast.File, diags []diag.Diagnostic) string {
 	var b strings.Builder
 	for _, d := range f.Decls {
@@ -35,8 +32,6 @@ func fileShape(f *ast.File, diags []diag.Diagnostic) string {
 	return b.String()
 }
 
-// snippetPaths is every conformance snippet, valid and invalid, .volt
-// and .dbml: the corpus the reuse properties run over.
 func snippetPaths(t *testing.T) []string {
 	t.Helper()
 	var paths []string
@@ -54,16 +49,6 @@ func snippetPaths(t *testing.T) []string {
 	return paths
 }
 
-// TestParseFileReuseIsTheParse proves that the parse with reuse of a
-// previous parse is the parse from nothing (D88): same declarations
-// at the same positions, same diagnostics. For every conformance
-// snippet, before every element and at the end of the file, each edit
-// that can move a boundary is applied with the snippet's parse as the
-// previous one, and undone with the edited parse as the previous one;
-// both directions must equal the parse from nothing. The edits: a new
-// element, an indented line, an unbalanced brace either way, a bare
-// identifier, an element cut short, an open comment, an open string,
-// a comment, and the deletion of the element that begins there.
 func TestParseFileReuseIsTheParse(t *testing.T) {
 	inserts := []string{
 		"Table zz {\n  id integer [pk]\n}\n",
@@ -112,9 +97,6 @@ func TestParseFileReuseIsTheParse(t *testing.T) {
 	}
 }
 
-// TestParseFileReuseEdits proves that an edit re-parses the changed
-// declaration only and the result is the whole-file parse of the new
-// text, edit by edit, through valid and broken states.
 func TestParseFileReuseEdits(t *testing.T) {
 	base := `package db
 
@@ -152,19 +134,13 @@ Ref: posts.id < tags.id
 	step("first", base, 5, 0)
 	step("same", base, 0, 5)
 	step("edit tags", strings.Replace(base, "name text", "name text    [note: 'edited']", 1), 1, 4)
-	// The comment joins the enum's chunk, and the tags chunk reverts.
 	step("insert above", strings.Replace(base, "Table posts", "// a comment\n\nTable posts", 1), 2, 3)
 	step("broken posts", strings.Replace(base, "title  text", "title  text [", 1), 2, 3)
 	step("fixed", base, 1, 4)
 	step("append", base+"\nTable extra {\n  id integer [pk]\n}\n", 2, 4)
-	// The package clause has no double space: its chunk survives.
 	step("whole rewrite", strings.ReplaceAll(base, "  ", "\t"), 4, 1)
 }
 
-// TestParseFileCRLFPositions proves a file with Windows line endings
-// parses as its Unix twin (D90): the same nodes and diagnostics at the
-// same lines and columns, every offset larger by the carriage returns
-// before it, so a position points into the file as written.
 func TestParseFileCRLFPositions(t *testing.T) {
 	type at struct{ line, col, off int }
 	positions := func(f *ast.File) []at {

@@ -6,19 +6,16 @@ import (
 	"testing"
 )
 
-// TestLikeMirrorsSQLite pins the semantics the generated validators
-// rely on (spec §V12): the cases were cross-checked against SQLite's
-// LIKE with no ESCAPE clause.
 func TestLikeMirrorsSQLite(t *testing.T) {
 	cases := []struct {
 		s, p string
 		want bool
 	}{
 		{"abc", "abc", true},
-		{"abc", "ABC", true},         // ASCII case-insensitive
-		{"Straße", "straße", true},   // non-ASCII letters fold nothing…
-		{"STRASSE", "strasse", true}, // …but ASCII inside still folds
-		{"Straße", "STRASSE", false}, // ß != S
+		{"abc", "ABC", true},
+		{"Straße", "straße", true},
+		{"STRASSE", "strasse", true},
+		{"Straße", "STRASSE", false},
 		{"abc", "a%", true},
 		{"abc", "%c", true},
 		{"abc", "%b%", true},
@@ -28,7 +25,7 @@ func TestLikeMirrorsSQLite(t *testing.T) {
 		{"abc", "___", true},
 		{"", "%", true},
 		{"", "_", false},
-		{"a%c", "a\\%c", false}, // no ESCAPE clause: backslash is literal
+		{"a%c", "a\\%c", false},
 		{"anything", "%%%", true},
 		{"mail@example.com", "%@example.com", true},
 	}

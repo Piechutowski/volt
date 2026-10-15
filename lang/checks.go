@@ -1,10 +1,7 @@
 // Validation checks (docs/spec.md §V12): typed checks are §V10
 // predicate expressions over one table's not-null columns, lowered to
-// BOTH a SQL CHECK fragment (consumed by gen/sqlite through the AST)
-// and a Go condition (consumed by the validator generator) in a single
-// walk, so the two tiers cannot disagree. Go-reference checks resolve
-// their arguments here and land in the validator only — SQLite cannot
-// call Go, the documented asymmetry.
+// a SQL CHECK fragment and a Go condition in a single walk;
+// Go-reference checks land in the validator only.
 package lang
 
 import (
@@ -30,10 +27,8 @@ func (c *checker) tableChecks(pkg *Package) {
 		return
 	}
 	// Every table's checks are lowered by tableSpecs, a pure function
-	// of the inputs resolved here (D86), on every CPU; the memo
-	// answers a table whose inputs are what they were. The phase
-	// writes the lowered specs, the DDL's check SQL and the
-	// diagnostics in table order, whatever the schedule.
+	// of the inputs resolved here (D86), on every CPU; results are
+	// written in table order.
 	type lowered struct {
 		specs          []golang.CheckSpec
 		sqls           map[*ast.Check]string
@@ -155,8 +150,7 @@ func tableSpecs(ti *check.TableInfo, fields []golang.FieldSig, fieldsErr error, 
 		specs = append(specs, spec)
 	}
 	// required columns (§6.3 extension, D72): one synthesized check
-	// per column, "non-empty" spelled per type class; gen/sqlite
-	// renders the same rule as a CHECK, both named <column>_required.
+	// per column, named <column>_required.
 	if req := l.requiredSpecs(); len(req) > 0 {
 		specs = append(specs, req...)
 	}
@@ -295,8 +289,7 @@ func (l *lowering) goRefCheck(ck *ast.Check) (golang.CheckSpec, bool) {
 	want := "func " + name + "(" + strings.Join(argTypes, ", ") + ") error"
 
 	// The function must exist in this package's Go files with exactly
-	// the contract, spelled as the generated field types (§V12.5, D63):
-	// the typo and the wrong type are caught here, not by the compiler.
+	// the contract, spelled as the generated field types (§V12.5, D63).
 	sc := l.funcs
 	gf, found := sc.funcs[name]
 	if !found {
@@ -338,8 +331,7 @@ func (l *lowering) goRefCheck(ck *ast.Check) (golang.CheckSpec, bool) {
 
 // chkEnv threads one check's typing: the enclosing table's generated
 // fields, and the class rules of §V10.3 narrowed by §V12 (not-null
-// columns; no time class — the Go tier cannot mirror SQL's text-time
-// comparison).
+// columns, no time class).
 type chkEnv struct {
 	l      *lowering
 	ti     *check.TableInfo

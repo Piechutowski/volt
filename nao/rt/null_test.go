@@ -20,7 +20,6 @@ func TestNullScan(t *testing.T) {
 		t.Errorf("Scan(42) = %+v, %v", i, err)
 	}
 
-	// driver bytes into a string-kinded named type, as enum columns scan
 	type status string
 	var st Null[status]
 	if err := st.Scan([]byte("open")); err != nil || st.V != "open" {
@@ -54,7 +53,6 @@ func TestNullJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// D13: the wire format is the value or null, never a wrapper object
 	if want := `{"name":"ann","score":null}`; string(got) != want {
 		t.Errorf("Marshal = %s, want %s", got, want)
 	}

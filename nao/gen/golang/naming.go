@@ -47,8 +47,6 @@ func goName(dbmlName string) (string, error) {
 		case unicode.IsLetter(r) || unicode.IsDigit(r):
 			cur.WriteRune(r)
 		default:
-			// separators and characters Go identifiers cannot contain,
-			// including combining marks
 			flush()
 		}
 	}
@@ -75,11 +73,9 @@ func goName(dbmlName string) (string, error) {
 }
 
 // modelName derives the Go model type for a table (decision D10): the
-// singular of the table name (users -> User, order_items -> OrderItem) via
-// the deterministic inflector, or the [model: '...'] override verbatim
-// (normalized by goName). Non-public schemas are prefixed like structName.
-// When the inflector is not confident and no [model:] pins the name, the
-// vet modelname rule warns; generation itself proceeds with the guess.
+// singular of the table name (users -> User, order_items -> OrderItem),
+// or the [model: '...'] override verbatim (normalized by goName).
+// Non-public schemas are prefixed like structName.
 func modelName(t *ast.Table) (string, error) {
 	if s := t.Settings.Get("model"); s != nil {
 		if lit, ok := s.Value.(*ast.BasicLit); ok {
@@ -91,8 +87,8 @@ func modelName(t *ast.Table) (string, error) {
 }
 
 // structName derives the Go type name for a table or enum: tables in the
-// default public schema use the bare name; any other schema is prefixed so
-// core.users and public.users cannot collide (CoreUsers vs Users).
+// default public schema use the bare name; any other schema is prefixed
+// (core.users -> CoreUsers).
 func structName(schema, base string) (string, error) {
 	n, err := goName(base)
 	if err != nil {

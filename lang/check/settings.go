@@ -1,5 +1,5 @@
 // Settings validation (§4.2): per-construct whitelists, value shapes, and
-// the at-most-once rule. Table-driven so adding a setting is one map entry.
+// the at-most-once rule.
 package check
 
 import (
@@ -255,8 +255,7 @@ func validColor(v string) bool {
 }
 
 // integerTypes is the integer family of Appendix A/B: the only types an
-// increment column may have (§6.3 extension). nao/gen/golang's tests
-// pin this set against its own type map so the two cannot drift.
+// increment column may have (§6.3 extension).
 var integerTypes = map[string]bool{
 	"tinyint": true, "int2": true, "smallint": true, "smallserial": true,
 	"int": true, "integer": true, "int4": true, "mediumint": true, "serial": true,
@@ -276,9 +275,8 @@ func IntegerType(declType string) bool {
 }
 
 // incrementCheck enforces the §6.3 extension: increment is honored in
-// exactly one shape — the single-column integer primary key, SQLite's
-// rowid alias (Appendix B) — and is an error anywhere else, because a
-// keyword that is typed must be applied.
+// exactly one shape, the single-column integer primary key, SQLite's
+// rowid alias (Appendix B), and is an error anywhere else.
 func (c *checker) incrementCheck(ti *TableInfo) {
 	compositePK := false
 	for _, ix := range ti.Indexes {
@@ -317,8 +315,7 @@ func (c *checker) incrementCheck(ti *TableInfo) {
 
 // requiredKinds classifies declared types for the required setting
 // (§6.3 extension, D72): what "non-empty" means per type class. Types
-// absent here (bool, date/time) cannot be required. nao/gen/golang's
-// tests pin this against its own type map so the two cannot drift.
+// absent here (bool, date/time) cannot be required.
 var requiredKinds = map[string]string{
 	"varchar": "text", "char": "text", "text": "text", "tinytext": "text", "mediumtext": "text", "longtext": "text",
 	"citext": "text", "string": "text", "uuid": "text", "decimal": "text", "numeric": "text", "money": "text",

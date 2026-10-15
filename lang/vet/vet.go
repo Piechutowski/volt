@@ -3,15 +3,10 @@
 // answers "is this what you meant?": redundancy, silent overrides, likely
 // modeling mistakes.
 //
-// The design follows golang.org/x/tools/go/analysis in spirit: each
-// check is an Analyzer with a name and a doc string, registered once,
-// independent of every other and of the CLI. A check is judged
+// Each check is an Analyzer with a name and a doc string, judged
 // declaration by declaration (a Rule: a pure function of one
 // declaration's syntax and the facts the checker resolved for it,
-// D104), or over the whole file (a Fold: the checker's model plus what
-// every declaration's rules summarized), or both. Nothing is computed
-// twice: the rules see the check package's resolved Info, and a memo
-// answers a declaration whose inputs are the objects they were.
+// D104), or over the whole file (a Fold), or both.
 package vet
 
 import (
@@ -49,11 +44,9 @@ type Fold interface {
 
 // Facts is what the checker resolved for one declaration: the checked
 // table of a Table, the partial of a TablePartial, and the
-// relationships that start at the declaration's own columns — a Ref
-// element's, or the inline refs of a table's columns, a partial's
-// inline ref reaching every table that injects it. Nil and empty for a
-// declaration the checker refused (a duplicate table) or one it does
-// not model.
+// relationships that start at the declaration's own columns. Nil and
+// empty for a declaration the checker refused or one it does not
+// model.
 type Facts struct {
 	Table   *check.TableInfo
 	Partial *check.PartialInfo
@@ -81,8 +74,7 @@ type FilePass struct {
 
 // Plan is the file's naming plan: the checker's own when the caller
 // handed one to RunWithPlan, else built once for all folds of this
-// run. A fold that reasons about generated Go names asks here instead
-// of planning again (D81).
+// run (D81).
 func (p *FilePass) Plan() *golang.Plan {
 	if *p.plan == nil {
 		*p.plan = golang.PlanBuild(p.File, p.Info)
@@ -124,8 +116,7 @@ func ByName(name string) Analyzer {
 }
 
 // registry lists the analyzers in the order docs/lint.md documents
-// them, which TestRulesDocumentation asserts: two warnings at one
-// position stand in this order.
+// them: two warnings at one position stand in this order.
 var registry = []Analyzer{
 	unusedEnum, unusedPartial, unusedAlias,
 	redundantNull, redundantIndex, emptyBody, legacyFlag, shadowedColumn, projectNotes, unnecessaryQuotes,
@@ -246,11 +237,9 @@ type declResult struct {
 }
 
 // RunMemo is RunWithPlan through a memo of the file's earlier runs; a
-// nil memo judges every declaration. The rules judge every declaration
-// of the file, then the folds judge the file; the warnings come
-// analyzer by analyzer in registration order, each analyzer's in
-// declaration order, then sorted by position, so two warnings at one
-// position stand in the order the analyzers were registered.
+// nil memo judges every declaration. The warnings come analyzer by
+// analyzer in registration order, each analyzer's in declaration
+// order, then sorted by position.
 func RunMemo(f *ast.File, info *check.Info, plan *golang.Plan, memo *Memo, analyzers ...Analyzer) []diag.Diagnostic {
 	if len(analyzers) == 0 {
 		analyzers = All()
@@ -333,8 +322,7 @@ func RunMemo(f *ast.File, info *check.Info, plan *golang.Plan, memo *Memo, analy
 
 // factsByDecl resolves each declaration's facts from the checker's
 // model, aligned with f.Decls: a relationship belongs to the
-// declaration it starts at, the Ref element or the table whose column
-// carries the inline ref.
+// declaration it starts at.
 func factsByDecl(f *ast.File, info *check.Info) []Facts {
 	tables := make(map[*ast.Table]*check.TableInfo, len(info.Tables))
 	for _, ti := range info.Tables {

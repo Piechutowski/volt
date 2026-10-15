@@ -1,5 +1,5 @@
-// Pass 2: local (single-element) constraints — settings whitelists, value
-// types, body shape. One method per element kind, matching the spec layout.
+// Pass 2: local (single-element) constraints: settings whitelists, value
+// types, body shape.
 package check
 
 import (
@@ -18,9 +18,8 @@ func (c *checker) declsCheck(f *ast.File) {
 		case *ast.Project:
 			// properties are free-form (§6.1.2); nothing local to check
 		case *ast.Table:
-			// A table's body is checked with its expansion, in tableCheck
-			// (D86); a duplicate declaration that expansion skipped is
-			// checked here so its own errors still show.
+			// A table's body is checked in tableCheck (D86); a duplicate
+			// declaration that expansion skipped is checked here.
 			if ti := c.info.byTable[canonKey(d.Name)]; ti == nil || ti.Decl != d {
 				c.tableBodyCheck(d.Pos(), d.Name.String(), d.Settings, d.Body, true)
 			}

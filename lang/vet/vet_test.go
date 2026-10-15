@@ -13,13 +13,6 @@ import (
 	"github.com/Piechutowski/volt/lang/vet"
 )
 
-// The testdata format follows go/analysis's analysistest in miniature:
-//
-//	// analyzers: name1,name2     <- first line: which analyzers to run
-//	Table t {                     //WANT name1
-//
-// Every //WANT marker must be matched by a warning of that analyzer on
-// that line, and every produced warning must be matched by a marker.
 var wantRE = regexp.MustCompile(`//WANT ([a-z,]+)`)
 
 func TestAnalyzers(t *testing.T) {
@@ -53,7 +46,6 @@ func TestAnalyzers(t *testing.T) {
 				analyzers = append(analyzers, a)
 			}
 
-			// expectations: line -> analyzer names still unmatched
 			want := map[int][]string{}
 			for i, ln := range lines {
 				if m := wantRE.FindStringSubmatch(ln); m != nil {
@@ -97,8 +89,6 @@ func TestAnalyzers(t *testing.T) {
 	}
 }
 
-// TestCleanFile pins the zero-noise property: a well-formed schema should
-// produce no warnings at all from any analyzer.
 func TestCleanFile(t *testing.T) {
 	src := `
 Project shop { database_type: 'PostgreSQL' }

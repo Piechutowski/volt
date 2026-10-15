@@ -1,9 +1,6 @@
 // Validator generation (docs/spec.md §V12): one Validate method per
-// table that carries typed or Go-reference checks. Typed conditions
-// arrive pre-rendered by the checker — the same walk that rendered the
-// SQL CHECK, so the two tiers cannot disagree; Go-reference calls name
-// hand-written functions of the containing package, which the Go
-// compiler proves exist (the §V4.3 pattern).
+// table that carries typed or Go-reference checks. Go-reference calls
+// name hand-written functions of the containing package (§V4.3).
 package golang
 
 import (
@@ -17,7 +14,7 @@ import (
 )
 
 // GenerateValidators renders nao_validate.go for the given tables.
-// fns must be non-empty; the caller decides whether the file exists.
+// fns must be non-empty.
 func GenerateValidators(f *ast.File, info *check.Info, fns []CheckFn, opts Options) ([]byte, error) {
 	return PlanBuild(f, info).Validators(fns, opts)
 }
@@ -43,8 +40,7 @@ func (pl *Plan) Validators(fns []CheckFn, opts Options) ([]byte, error) {
 		fmt.Fprintf(&body, "// Validate evaluates every check of %s against the row's values\n// (spec §V12). Typed checks are also CHECK constraints in the DDL;\n// Go-reference checks run here only — SQLite cannot call Go.\n", t.sqlName)
 		validateEmit(&body, t.model, t.model, fn.Checks)
 
-		// Params structs validate the checks they can see (§V12.6): a
-		// generated Create/Update handler calls these before the query.
+		// Params structs validate the checks they can see (§V12.6).
 		create, update := paramsChecks(t, fn.Checks)
 		if len(create) > 0 {
 			fmt.Fprintf(&body, "// Validate evaluates the checks of %s whose columns %sCreateParams carries\n// (spec §V12.6)%s.\n", t.sqlName, t.model, skippedNote(fn.Checks, create))

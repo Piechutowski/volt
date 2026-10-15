@@ -1,8 +1,5 @@
 // Package ast declares the types used to represent DBML syntax trees,
-// mirroring the role of go/ast. The parser produces these nodes; the check
-// and vet packages consume them. Nodes carry no semantic judgment — a
-// Setting is a name and a value, whether or not that setting is legal where
-// it appeared. Legality is the check package's business.
+// mirroring the role of go/ast. Nodes carry no semantic judgment.
 package ast
 
 import "github.com/Piechutowski/volt/lang/token"
@@ -150,7 +147,7 @@ type Setting struct {
 func (x *Setting) Pos() token.Position { return x.NameTok.Pos }
 func (x *Setting) End() token.Position { return x.endPos }
 
-// SetEnd is used by the parser to record the setting's extent.
+// SetEnd records the setting's extent.
 func (x *Setting) SetEnd(p token.Position) { x.endPos = p }
 
 // ----------------------------------------------------------------------------
@@ -171,9 +168,8 @@ func (f *File) Pos() token.Position {
 }
 func (f *File) End() token.Position { return f.EOF }
 
-// HasImports reports whether the file contains use/reuse statements; when
-// it does, names may resolve in other files and the checker relaxes
-// unresolved-name errors (spec §7).
+// HasImports reports whether the file contains use/reuse statements
+// (spec §7).
 func (f *File) HasImports() bool {
 	for _, d := range f.Decls {
 		if _, ok := d.(*Use); ok {

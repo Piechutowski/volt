@@ -8,8 +8,6 @@ import (
 	"github.com/Piechutowski/volt/lang/diag"
 )
 
-// TestCorpusChecks proves both layouts check clean at a small size and
-// exercise what they claim: selects, checks, pipelines, routes.
 func TestCorpusChecks(t *testing.T) {
 	for _, spec := range []corpus.Spec{{Packages: 2, Tables: 3, Columns: 9}, {Packages: 1, Tables: 3, Columns: 9, Single: true}} {
 		root := t.TempDir()

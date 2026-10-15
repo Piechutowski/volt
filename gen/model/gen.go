@@ -1,7 +1,5 @@
 // Package model renders the data half of a Volt package: nao's model,
-// query and DDL output. It is the sibling of gen/router — same shape,
-// same contract — so `volt gen` drives both from one project load and
-// nothing needs a standalone ORM CLI.
+// query and DDL output.
 package model
 
 import (
@@ -16,8 +14,7 @@ type Options struct {
 	// Source names the input, recorded in the generated headers.
 	Source string
 	// Package overrides the package clause; empty means the Volt
-	// package's name. `volt gen -o` sets it from the directory the
-	// files land in (§V1.7).
+	// package's name (§V1.7).
 	Package string
 	// ModelsOnly emits just nao_models.go: the structs, params structs
 	// and enums — every type the wire carries (D77).
@@ -39,15 +36,14 @@ func Generate(pkg *lang.Package, opts Options) ([]File, error) {
 	if opts.Package != "" {
 		gopts.Package = opts.Package
 	}
-	// One plan per package (D74): the checker built it; every file below
-	// reads it.
+	// One plan per package (D74).
 	plan := pkg.Plan()
 	if plan == nil {
 		plan = golang.PlanBuild(pkg.Merged(), pkg.Schema())
 	}
 
-	// Every file reads the plan and writes its own buffer, so the files
-	// are emitted on every CPU (PERF-7) and gathered in this order.
+	// The files are emitted on every CPU (PERF-7) and gathered in this
+	// order.
 	type emit struct {
 		name string
 		fn   func() ([]byte, error)

@@ -8,12 +8,6 @@ import (
 	"testing"
 )
 
-// The specification's own map and its citations are kept honest by
-// test (D49, D64): the table of contents lists exactly the headings in
-// order, headings carry no numbers and are unique, and every `§…` or
-// `Appendix …` citation anywhere in the repository resolves through the
-// citation key to a heading that exists.
-
 var (
 	headingRE  = regexp.MustCompile(`(?m)^(#{1,3}) (.+)$`)
 	tocLinkRE  = regexp.MustCompile(`\[([^\]]+)\]\(#([^)]+)\)`)
@@ -83,9 +77,6 @@ func TestSpecTableOfContentsMatchesHeadings(t *testing.T) {
 	}
 }
 
-// TestSpecCitationsResolve walks the repository for citations and
-// resolves each through the citation key by longest dotted prefix (a
-// trailing component may name a rule inside the section).
 func TestSpecCitationsResolve(t *testing.T) {
 	spec := specText(t)
 	key := map[string]bool{}

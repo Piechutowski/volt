@@ -1,10 +1,5 @@
 package lang_test
 
-// Generated Go is gofmt-canonical by construction (D75): gofmt must be
-// the identity on every file the generators write. The goldens prove it
-// for their fixtures; this test proves it across the conformance corpus
-// and the scaling fixtures, so a new emitter shape cannot slip past.
-
 import (
 	"bytes"
 	"go/format"
@@ -19,8 +14,6 @@ import (
 	"github.com/Piechutowski/volt/lang/diag"
 )
 
-// canonicalCheck generates every file of a checked project and asserts
-// gofmt leaves each Go file unchanged.
 func canonicalCheck(t *testing.T, pr *lang.Project) {
 	t.Helper()
 	for path, pkg := range pr.Packages {
@@ -60,7 +53,6 @@ func canonicalAssert(t *testing.T, name string, code []byte) {
 	}
 }
 
-// firstDiff shows the first differing line of two texts with context.
 func firstDiff(a, b string) string {
 	al, bl := strings.Split(a, "\n"), strings.Split(b, "\n")
 	for i := 0; i < len(al) || i < len(bl); i++ {
@@ -88,12 +80,10 @@ func firstDiff(a, b string) string {
 }
 
 func TestGeneratedGoIsCanonical(t *testing.T) {
-	// The scaling fixtures: wide tables, default resources, controllers.
 	for _, def := range []bool{true, false} {
 		canonicalCheck(t, perfLoad(t, perfFixture(t, 3, 5, def)))
 	}
 
-	// Every valid conformance snippet that is a project directory.
 	entries, err := os.ReadDir(filepath.Join("conformance", "snippets", "valid"))
 	if err != nil {
 		t.Fatal(err)

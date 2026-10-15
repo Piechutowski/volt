@@ -7,10 +7,6 @@ import (
 	"time"
 )
 
-// TestReportRenders proves the report and its charts render from
-// measured rows: every size and phase lands in the tables, the
-// keystroke section follows, and each chart is well-formed SVG with a
-// line per phase.
 func TestReportRenders(t *testing.T) {
 	var rows []Row
 	for i, tables := range []int{10, 20} {

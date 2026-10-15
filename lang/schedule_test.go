@@ -1,9 +1,5 @@
 package lang_test
 
-// The schedule is not part of the output (PERF-7): loading, checking
-// and generating on one CPU and on every CPU yield the same
-// diagnostics in the same order, and the same bytes.
-
 import (
 	"fmt"
 	"maps"
@@ -20,9 +16,6 @@ import (
 	"github.com/Piechutowski/volt/lang/diag"
 )
 
-// scheduleFixture is a project of several data and routing packages,
-// each carrying errors of both layers, so the diagnostics come from
-// every phase and every package.
 func scheduleFixture(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -71,7 +64,6 @@ Scope /api {
 	return root
 }
 
-// withProcs runs fn with GOMAXPROCS set to n and restores it.
 func withProcs(n int, fn func()) {
 	prev := runtime.GOMAXPROCS(n)
 	defer runtime.GOMAXPROCS(prev)
@@ -152,11 +144,6 @@ func TestGenerateScheduleIndependent(t *testing.T) {
 	}
 }
 
-// TestCheckIsIdempotent proves a second Check of the same Project
-// reports the same diagnostics and leaves every package with the same
-// results as the first: the phases start from nothing each time, so a
-// tool that re-checks a loaded project (a profiler's loop, a server)
-// never sees routes or selects accumulate (D81).
 func TestCheckIsIdempotent(t *testing.T) {
 	root := scheduleFixture(t)
 	pr, err := lang.Load(root)

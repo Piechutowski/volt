@@ -15,8 +15,7 @@ import (
 // Wire formats a query route speaks (spec §V, "Formats"). The format of
 // a response is chosen by the request's Accept header, the format of a
 // request body by its Content-Type; nothing about the format ever
-// appears in the URL, so a path parameter can never be mistaken for
-// one.
+// appears in the URL.
 const (
 	MIMEJSON = "application/json"
 	MIMEGOB  = "application/x-gob"
@@ -27,7 +26,7 @@ type Format int
 
 const (
 	FormatJSON Format = iota // encoding/json: the default, and what curl sees
-	FormatGOB                // encoding/gob: the Go-native arm — a client that imports the generated models decodes rows directly
+	FormatGOB                // encoding/gob: the Go-native arm
 )
 
 // MIME is the media type the format travels under.
@@ -94,15 +93,14 @@ func Encode(w io.Writer, f Format, v any) error {
 }
 
 // MaxBodyBytes caps a request body Decode reads; a larger body is a
-// 413. Four megabytes is more than any params struct needs and less
-// than what an attacker would enjoy. Set it before serving.
+// 413. Set it before serving.
 var MaxBodyBytes int64 = 4 << 20
 
 // Decode reads the request body into v by its Content-Type: JSON when
 // the header is absent or names JSON, GOB for application/x-gob. Any
 // other type is a 415; an empty or malformed body is a 400; a JSON
-// field the struct does not declare is a 400 naming it (a typo must
-// not vanish silently); a body over MaxBodyBytes is a 413.
+// field the struct does not declare is a 400 naming it; a body over
+// MaxBodyBytes is a 413.
 func Decode(r *Request, v any) error {
 	f, ok := FormatOf(r.Header.Get("Content-Type"))
 	if !ok {
@@ -128,10 +126,7 @@ func Decode(r *Request, v any) error {
 }
 
 // unknownField recognizes encoding/json's refusal of an undeclared
-// field (`json: unknown field "Nmae"`) and returns the field's name, so
-// Decode can itemize it as a Detail like any other failure. The
-// decoder stops at the first such field. The message shape is the
-// standard library's; the test pins it.
+// field (`json: unknown field "Nmae"`) and returns the field's name.
 func unknownField(err error) (string, bool) {
 	const prefix = `json: unknown field "`
 	msg := err.Error()
@@ -160,10 +155,8 @@ func FormatOf(contentType string) (Format, bool) {
 	return FormatJSON, false
 }
 
-// DecodeBody reads one value of the format from body. It is the client
-// side's decoder too, so both ends of a generated client agree by
-// construction. An empty body is an error: a query route with a body
-// parameter needs one.
+// DecodeBody reads one value of the format from body. An empty body is
+// an error.
 func DecodeBody(f Format, body io.Reader, v any) error {
 	if f == FormatGOB {
 		return gob.NewDecoder(body).Decode(v)

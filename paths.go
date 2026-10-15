@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// URLOption augments a generated reverse-URL helper, today with query
-// parameters: paths.User(42, volt.Query("tab", "posts")).
+// URLOption augments a generated reverse-URL helper with query
+// parameters.
 type URLOption interface{ apply(*url.Values) }
 
 type queryOption struct{ k, v string }
@@ -18,8 +18,7 @@ func (q queryOption) apply(vs *url.Values) { vs.Add(q.k, q.v) }
 func Query(k, v string) URLOption { return queryOption{k, v} }
 
 // URL finishes a generated path: it appends the encoded query built
-// from opts. The path itself is assembled by the generated helper with
-// the Seg/SegInt/SegWild builders below.
+// from opts.
 func URL(path string, opts ...URLOption) string {
 	if len(opts) == 0 {
 		return path
@@ -32,9 +31,7 @@ func URL(path string, opts ...URLOption) string {
 }
 
 // Seg escapes one string path parameter. "." and ".." escape to their
-// %2E forms: PathEscape leaves dots alone, but as whole segments they
-// would change the path shape under cleaning (and ServeMux redirects
-// unclean paths), so a built URL must never contain them literally.
+// %2E forms, so a built URL never contains them literally.
 func Seg(s string) string {
 	switch s {
 	case ".":

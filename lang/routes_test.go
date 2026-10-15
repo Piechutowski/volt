@@ -6,15 +6,6 @@ import (
 	"testing"
 )
 
-// TestRouteIndexMatchesPairwiseScan proves the literal-prefix trie
-// (D81) answers exactly what the pairwise scan it replaced would
-// (§V4.7 rule 3, D94): over every path shape of up to three segments
-// drawn from two literals and a parameter, with and without a
-// wildcard tail, under every method, inserted in declaration order,
-// in reverse, and in several strides, the earliest accepted route
-// ambiguous with each new one is the same route, or none. The
-// checker's flow is followed: a route found ambiguous is not
-// accepted.
 func TestRouteIndexMatchesPairwiseScan(t *testing.T) {
 	var shapes []pathShape
 	var gen func(prefix []string)
@@ -40,7 +31,7 @@ func TestRouteIndexMatchesPairwiseScan(t *testing.T) {
 	reversed := slices.Clone(routes)
 	slices.Reverse(reversed)
 	orders["reverse"] = reversed
-	for _, stride := range []int{7, 11, 13} { // coprime with the count: each a permutation
+	for _, stride := range []int{7, 11, 13} {
 		var order []*RouteInfo
 		for i := range routes {
 			order = append(order, routes[i*stride%len(routes)])

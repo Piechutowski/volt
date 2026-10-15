@@ -10,9 +10,6 @@ import (
 	"github.com/Piechutowski/volt/lang"
 )
 
-// TestGoScanReusedAcrossBuilds proves the navigation index keeps a
-// package directory's Go scan across builds while the sources are the
-// bytes they were, and scans again when they are not (D105, D87).
 func TestGoScanReusedAcrossBuilds(t *testing.T) {
 	root := t.TempDir()
 	if err := corpus.Write(root, corpus.Spec{Tables: 4, Columns: 4, Single: true}); err != nil {

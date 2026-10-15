@@ -8,14 +8,10 @@ import (
 )
 
 // File is the source positions point into: its name and text held
-// once, so a position is a pointer plus three offsets and a token
-// borrows its text from here instead of carrying it (D82, PERF-9). A
-// File may be one chunk of a larger source — one top-level declaration
-// the editor reuses across edits — in which case its base is where the
-// chunk sits in the whole: relocating every position of a reused
-// declaration is one store here (D83, PERF-10). Bases are atomic
-// because a reused declaration is shared with results a server may
-// still be reading.
+// once (D82, PERF-9). A File may be one chunk of a larger source, in
+// which case its base is where the chunk sits in the whole (D83,
+// PERF-10). Bases are atomic because a reused declaration is shared
+// with results still being read.
 type File struct {
 	Name string
 	Src  string
@@ -48,10 +44,9 @@ func (f *File) At(offset, line, column int) Position {
 	return Position{file: f, off: int32(offset), line: int32(line), col: int32(column)}
 }
 
-// Position is a source location. Unlike go/token, DBML compiles one file at
-// a time, so a plain struct replaces the FileSet/Pos machinery. The
-// numbers are relative to the file (or chunk) the position is in; the
-// accessors answer in terms of the whole source.
+// Position is a source location. The numbers are relative to the file
+// (or chunk) the position is in; the accessors answer in terms of the
+// whole source.
 type Position struct {
 	file *File
 	off  int32 // byte offset within file, 0-based
@@ -193,9 +188,9 @@ func (k Kind) String() string {
 	return fmt.Sprintf("Kind(%d)", int(k))
 }
 
-// Token is one lexical token: 48 bytes, two pointers. Val holds the
-// processed value (escape sequences applied, quotes stripped); the raw
-// source text is borrowed from the file through Text (D81, PERF-9).
+// Token is one lexical token. Val holds the processed value (escape
+// sequences applied, quotes stripped); the raw source text is borrowed
+// from the file through Text (D81, PERF-9).
 type Token struct {
 	Kind Kind
 
@@ -203,8 +198,7 @@ type Token struct {
 	Multi  bool // STRING written as '''multi-line'''
 
 	// NLBefore reports whether a line break (or start of file) precedes
-	// this token. DBML statements are newline-terminated; this flag plays
-	// the same role as Go's automatic semicolon insertion.
+	// this token.
 	NLBefore bool
 	// SpBefore reports whether any whitespace precedes this token.
 	SpBefore bool

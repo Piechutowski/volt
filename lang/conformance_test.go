@@ -15,14 +15,6 @@ import (
 
 var update = flag.Bool("update", false, "rewrite the goldens of the invalid corpus")
 
-// The Volt half of the conformance corpus is the executable surface of
-// docs/spec.md §V: snippets under valid/ MUST check clean, snippets
-// under invalid/ MUST be rejected. A snippet is either one .volt file
-// (run as a single-package project, the package directory named from
-// its package clause) or a directory containing a complete project
-// with go.mod (D62). The .dbml entries sharing the tree are the schema
-// half, exercised by lang/check's corpus test.
-
 var pkgClauseRE = regexp.MustCompile(`(?im)^package\s+(\w+)`)
 
 func corpusEntries(t *testing.T, kind string) []string {
@@ -35,23 +27,19 @@ func corpusEntries(t *testing.T, kind string) []string {
 	out := make([]string, 0, len(entries))
 	for _, e := range entries {
 		if strings.HasSuffix(e.Name(), ".dbml") {
-			continue // the schema half; lang/check's corpus test runs it
+			continue
 		}
 		out = append(out, filepath.Join(dir, e.Name()))
 	}
 	return out
 }
 
-// corpusRun materializes one snippet as a project and returns its
-// diagnostics.
 func corpusRun(t *testing.T, path string) []diag.Diagnostic {
 	t.Helper()
 	diags, _ := corpusRunAt(t, path)
 	return diags
 }
 
-// corpusRunAt is corpusRun with the project's root, for paths in the
-// diagnostics to be made relative.
 func corpusRunAt(t *testing.T, path string) ([]diag.Diagnostic, string) {
 	t.Helper()
 	st, err := os.Stat(path)
@@ -104,11 +92,6 @@ func corpusRunAt(t *testing.T, path string) ([]diag.Diagnostic, string) {
 	return Check(pr), root
 }
 
-// TestConformanceInvalidDiagnosticsPinned holds every diagnostic of
-// every invalid snippet of the project half, recovery included (§3.2
-// rule 6): what the front end reports for invalid input is a function
-// of the input alone, and a change to it is a change to this golden.
-// Refresh with -update after reading the diff.
 func TestConformanceInvalidDiagnosticsPinned(t *testing.T) {
 	var b strings.Builder
 	for _, path := range corpusEntries(t, "invalid") {
@@ -123,8 +106,6 @@ func TestConformanceInvalidDiagnosticsPinned(t *testing.T) {
 	goldenCompare(t, filepath.Join("conformance", "invalid_volt.golden"), b.String(), *update)
 }
 
-// goldenCompare compares got with the golden at path, rewriting it
-// when update is set; the first differing line is reported.
 func goldenCompare(t *testing.T, path, got string, update bool) {
 	t.Helper()
 	if update {
@@ -171,9 +152,6 @@ func TestConformanceInvalid(t *testing.T) {
 			if !diag.HasErrors(diags) {
 				t.Errorf("invalid snippet accepted")
 			}
-			// A `// want: <substring>` line pins the reason: the snippet
-			// must be rejected for the rule its comment names, not by
-			// accident.
 			if want := corpusWant(t, path); want != "" {
 				found := false
 				for _, d := range diags {
@@ -191,8 +169,6 @@ func TestConformanceInvalid(t *testing.T) {
 
 var wantRE = regexp.MustCompile(`(?m)^// want: (.+)$`)
 
-// corpusWant returns the snippet's `// want:` pin, "" when absent. For
-// a directory snippet the first .volt file (name order) carries it.
 func corpusWant(t *testing.T, path string) string {
 	t.Helper()
 	file := path
@@ -220,8 +196,6 @@ func corpusWant(t *testing.T, path string) string {
 	return ""
 }
 
-// TestConformanceTagged pins the corpus to the spec: every snippet
-// cites the section it exercises.
 func TestConformanceTagged(t *testing.T) {
 	for _, kind := range []string{"valid", "invalid"} {
 		for _, path := range corpusEntries(t, kind) {

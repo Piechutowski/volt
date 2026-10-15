@@ -8,16 +8,6 @@ import (
 	"github.com/Piechutowski/volt/lang/diag"
 )
 
-// The complete lint verdict of one project is a golden. Every rule of
-// docs/lint.md fires at least once in testdata/vet, and the fixture
-// holds the shapes a per-declaration vet must reproduce exactly: one
-// rule speaking for one cause across two files of a package, a name
-// minted by three declarations, an enum declared after the table whose
-// handle it collides with, a partial's inline ref carried into every
-// table that injects it, a duplicate table, a pipeline no scope pipes
-// through. The golden pins position, code and message of every warning
-// and how many times each speaks, so a change to how vet is computed
-// shows its every effect here (D104).
 func TestVetGolden(t *testing.T) {
 	root := filepath.Join("testdata", "vet")
 	abs, err := filepath.Abs(root)

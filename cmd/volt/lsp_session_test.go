@@ -17,17 +17,8 @@ import (
 	"github.com/Piechutowski/volt/lsp"
 )
 
-// The language server, driven the way an editor drives it: a scripted
-// stdio JSON-RPC session against the real server process, replaying
-// keystrokes, with every response and notification pinned (D101).
-// What unit tests of the handlers miss, this catches: the framing,
-// the background analysis's publish after an edit, what an edit that
-// breaks a file reports and what fixing it reports.
-
 var updateLSP = flag.Bool("update", false, "rewrite the language server session golden")
 
-// TestLSPServe is the server process: the session test runs this test
-// binary again with the marker set and speaks to it over its pipes.
 func TestLSPServe(t *testing.T) {
 	if os.Getenv("VOLT_LSP_SERVE") != "1" {
 		t.Skip("the server side of TestLSPSession")
@@ -62,8 +53,6 @@ func (s *lspSession) send(method string, params any, request bool) int {
 	return id
 }
 
-// record writes a message to the script, keys sorted by the JSON
-// encoder, the project root spelled ROOT.
 func (s *lspSession) record(label string, m map[string]any) {
 	b, err := json.Marshal(m)
 	if err != nil {
@@ -73,7 +62,6 @@ func (s *lspSession) record(label string, m map[string]any) {
 	fmt.Fprintf(&s.script, "%s\n%s\n\n", label, text)
 }
 
-// next waits for the next message from the server.
 func (s *lspSession) next() map[string]any {
 	select {
 	case m, ok := <-s.msgs:
@@ -87,8 +75,6 @@ func (s *lspSession) next() map[string]any {
 	return nil
 }
 
-// response waits for the response to a request, recording every
-// notification that arrives before it.
 func (s *lspSession) response(label string, id int) {
 	for {
 		m := s.next()
@@ -100,7 +86,6 @@ func (s *lspSession) response(label string, id int) {
 	}
 }
 
-// notification waits for a notification of the method.
 func (s *lspSession) notification(label, method string) {
 	for {
 		m := s.next()
@@ -199,8 +184,6 @@ Scope / {
 			"contentChanges": []map[string]any{{"text": edited}}}, false)
 		s.notification(label, "textDocument/publishDiagnostics")
 	}
-	// typed sends one keystroke the way an incremental-sync client
-	// does (D105): the text inserted at a position, not the file.
 	typed := func(label string, version, line, character int, inserted string) {
 		at := map[string]any{"line": line, "character": character}
 		s.send("textDocument/didChange", map[string]any{"textDocument": doc(version),
@@ -215,8 +198,7 @@ Scope / {
 	s.send("textDocument/didOpen", map[string]any{"textDocument": map[string]any{"uri": uri, "languageId": "volt", "version": 1, "text": text}}, false)
 	s.notification("open: a clean file", "textDocument/publishDiagnostics")
 
-	// keystrokes: the settings bracket goes missing, then comes back
-	// with a second table whose route has a typo, then all is well
+	// keystrokes: the settings bracket goes missing, then comes back with a second table whose route has a typo, then all is well
 	broken := strings.Replace(text, "[pk, increment]", "[pk, increment", 1)
 	change("edit 1: a settings list left open", 2, broken)
 	typo := strings.Replace(text, "get / Home.Index", "gett / Home.Index", 1) + "\nTable tags {\n\tid integer [pk]\n}\n"
