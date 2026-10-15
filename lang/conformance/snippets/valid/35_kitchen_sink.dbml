@@ -1,4 +1,4 @@
-// spec: §5 — representative complete schema
+// spec: §program-structure — representative complete schema
 Project blog {
   database_type: 'PostgreSQL'
   Note: 'Blogging platform'

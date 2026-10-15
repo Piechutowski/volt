@@ -77,7 +77,7 @@ func (ops) Fail(w http.ResponseWriter, r *volt.Request) error {
 }
 
 // tags, pages and archive exercise the three explicit parameter types:
-// string, int and int64 (§V4.1.3).
+// string, int and int64 (§route-paths rule 3).
 type tags struct{}
 
 func (tags) Show(w http.ResponseWriter, r *volt.Request, name string) error {
@@ -101,7 +101,7 @@ func handler() http.Handler {
 }
 
 // handlerWithDB wires the fixture router over a real database (query
-// routes, §V4.8) — an in-memory SQLite loaded with the generated DDL —
+// routes, §query-routes) — an in-memory SQLite loaded with the generated DDL —
 // seeded with one user so reads by id 1 succeed.
 func handlerWithDB(t *testing.T) http.Handler {
 	h, _ := fixture(t)
@@ -109,7 +109,7 @@ func handlerWithDB(t *testing.T) http.Handler {
 }
 
 // fixture is handlerWithDB plus the event broker the router serves
-// (§V4.11), so a test can publish and watch the stream.
+// (§event-routes), so a test can publish and watch the stream.
 func fixture(t *testing.T) (http.Handler, *volt.Broker) {
 	if t == nil {
 		t = &testing.T{}
@@ -154,7 +154,7 @@ func serve(t *testing.T, h http.Handler, method, target string) (*httptest.Respo
 	return rec, body
 }
 
-// TestRoundTripTotality proves §V4.6 by enumeration, not sampling: for
+// TestRoundTripTotality proves §route-names-and-reverse-urls by enumeration, not sampling: for
 // EVERY route in the generated table that has a helper, the URL built
 // by that helper dispatches back to that same route. The count
 // assertion makes the enumeration total — a new named route without a
@@ -181,16 +181,16 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathTag":        {"GET", app.PathTag("hello world")},
 		"PathPage":       {"GET", app.PathPage(3)},
 		"PathArchive":    {"GET", app.PathArchive(1755000000123)},
-		// Query routes (§V4.8): the seeded user is id 1.
+		// Query routes (§query-routes): the seeded user is id 1.
 		"PathAPIUserList":   {"GET", app.PathAPIUserList()},
 		"PathAPIUserGet":    {"GET", app.PathAPIUserGet(1)},
 		"PathAPIUserPicked": {"GET", app.PathAPIUserPicked(volt.Query("ids", "1"))},
-		// Dataset routes (§V13): one per member of the group select.
+		// Dataset routes (§datasets): one per member of the group select.
 		"PathMsRevenueBrowse": {"GET", app.PathMsRevenueBrowse(volt.Query("year", "2024"))},
 		"PathMsUsageBrowse":   {"GET", app.PathMsUsageBrowse(volt.Query("year", "2024"))},
 		"PathRefUsers":        {"GET", app.PathRefUsers()},
 		"PathRefUser":         {"GET", app.PathRefUser(1)},
-		// The event route (§V4.11) streams forever; its round trip is
+		// The event route (§event-routes) streams forever; its round trip is
 		// TestEventRouteStreams, so the helper is listed and not served.
 		"PathEvents": {"GET", app.PathEvents()},
 	}
@@ -261,7 +261,7 @@ func TestRoundTripTotality(t *testing.T) {
 
 func TestTypedParamParseFailureIs404(t *testing.T) {
 	h := handler()
-	// §V4.1.3: a non-int32 id is this route's 404, not a fallthrough.
+	// §route-paths rule 3: a non-int32 id is this route's 404, not a fallthrough.
 	for _, target := range []string{
 		"/users/abc", "/users/abc/avatar", "/users/99999999999",
 		"/pages/abc", "/pages/99999999999999999999", // int
@@ -283,7 +283,7 @@ func TestUnknownPathIs404AndWrongMethodIs405(t *testing.T) {
 	if rec, _ := serve(t, h, "GET", "/nope"); rec.Code != 404 {
 		t.Errorf("GET /nope: %d, want 404", rec.Code)
 	}
-	// §V4.2.3: the root registers as /{$}, so an arbitrary path does
+	// §routes rule 3: the root registers as /{$}, so an arbitrary path does
 	// not fall through to it.
 	if rec, _ := serve(t, h, "GET", "/nope/deeper"); rec.Code != 404 {
 		t.Errorf("GET /nope/deeper: %d, want 404", rec.Code)
@@ -331,7 +331,7 @@ func TestWildcardCapturesRest(t *testing.T) {
 	}
 }
 
-// TestPipelineOrder proves §V4.4.2: plugs run in declaration order,
+// TestPipelineOrder proves §scopes rule 2: plugs run in declaration order,
 // outermost first — volt.RequestID, TagOuter, TagInner.
 func TestPipelineOrder(t *testing.T) {
 	h := handler()
@@ -344,7 +344,7 @@ func TestPipelineOrder(t *testing.T) {
 	}
 }
 
-// TestNestedScopePipelinesAppend proves §V4.4.1: a nested scope's pipe
+// TestNestedScopePipelinesAppend proves §scopes rule 1: a nested scope's pipe
 // appends after the ancestors' — api's plugs run before extra's.
 func TestNestedScopePipelinesAppend(t *testing.T) {
 	h := handler()
@@ -357,7 +357,7 @@ func TestNestedScopePipelinesAppend(t *testing.T) {
 	}
 }
 
-// TestHeadMatchesGet documents the inherited ServeMux rule (§V4.2.3):
+// TestHeadMatchesGet documents the inherited ServeMux rule (§routes rule 3):
 // a GET registration also serves HEAD.
 func TestHeadMatchesGet(t *testing.T) {
 	h := handler()
@@ -386,7 +386,7 @@ func TestQueryOptionsEndToEnd(t *testing.T) {
 	}
 }
 
-// TestErrorSpine proves §V4.4.3: a returned error reaches the
+// TestErrorSpine proves §scopes rule 3: a returned error reaches the
 // DSL-declared error_handler, which maps HTTPError to its status.
 func TestErrorSpine(t *testing.T) {
 	h := handler()
@@ -402,7 +402,7 @@ func TestErrorSpine(t *testing.T) {
 	}
 }
 
-// TestNearestErrorHandlerWins proves §V4.4.3's nearest-wins rule: /ops
+// TestNearestErrorHandlerWins proves §scopes rule 3's nearest-wins rule: /ops
 // declares its own error_handler, so its routes reach OpsErrors while
 // everything else still reaches the root scope's Errors.
 func TestNearestErrorHandlerWins(t *testing.T) {

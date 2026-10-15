@@ -1,7 +1,7 @@
-// Package scanner tokenizes DBML source (spec §3), playing the role of
+// Package scanner tokenizes DBML source (spec §lexical-structure), playing the role of
 // go/scanner in the Go toolchain.
 //
-// Two rules govern tokenization (spec §3.1): left-to-right single pass,
+// Two rules govern tokenization (spec §tokenization): left-to-right single pass,
 // and longest match. Newlines are not emitted as tokens; instead each
 // token records whether a line break precedes it (Token.NLBefore).
 package scanner
@@ -17,17 +17,17 @@ import (
 )
 
 // Scan tokenizes src. It always returns the tokens produced so far, with a
-// terminating EOF token, plus any lexical errors found (spec §3). Scanning
+// terminating EOF token, plus any lexical errors found (spec §lexical-structure). Scanning
 // continues after an error where possible.
 func Scan(filename, src string) ([]token.Token, []diag.Diagnostic) {
 	return ScanFile(token.NewFile(filename, src))
 }
 
 // ScanFile scans a whole file as written; every position is in f. A
-// carriage return is discarded wherever it appears (§3.2.1) and stays
+// carriage return is discarded wherever it appears (§line-structure-and-whitespace rule 1) and stays
 // in the text: it keeps its byte, so offsets match the file, and has
 // no column (decision carriage-return). Every token that begins a top-level element
-// (§3.2.5) is flagged; nothing stops there.
+// (§line-structure-and-whitespace rule 5) is flagged; nothing stops there.
 func ScanFile(f *token.File) ([]token.Token, []diag.Diagnostic) {
 	// The token slice is sized once.
 	s := newScanner(f, make([]token.Token, 0, len(f.Src)/4+16)) // a token per four bytes of schema (decision indexed-lookups)
@@ -36,7 +36,7 @@ func ScanFile(f *token.File) ([]token.Token, []diag.Diagnostic) {
 	return s.toks, s.errs
 }
 
-// ScanChunk scans the first top-level element of f's text (§3.2.5,
+// ScanChunk scans the first top-level element of f's text (§line-structure-and-whitespace rule 5,
 // decision one-parse): the tokens before the next element start after the first
 // byte, then an EOF standing at that start, which is the end returned
 // and whose text names what it is; without one, the whole text and an
@@ -57,10 +57,10 @@ func ScanChunk(f *token.File, buf []token.Token) (toks []token.Token, errs []dia
 
 // ElementStart is how a chunk's EOF reads in a diagnostic: the token
 // the parser found is the next element's start, not the file's end.
-const ElementStart = "the start of the next element (§3.2.5)"
+const ElementStart = "the start of the next element (§line-structure-and-whitespace rule 5)"
 
 // StartsDecl reports whether text begins, at its very first byte, a
-// top-level element (§3.2.5). One token is scanned, whatever the
+// top-level element (§line-structure-and-whitespace rule 5). One token is scanned, whatever the
 // text's length.
 func StartsDecl(text string) bool {
 	var buf [1]token.Token
@@ -73,7 +73,7 @@ func StartsDecl(text string) bool {
 
 // newScanner is a scanner at the start of f's text, in the initial
 // state: outside every string, comment and brace, after a line
-// break. Every chunk begins in it (§3.2.5).
+// break. Every chunk begins in it (§line-structure-and-whitespace rule 5).
 func newScanner(f *token.File, buf []token.Token) *Scanner {
 	s := &Scanner{src: f.Src, file: f, pos: cursor{line: 1, col: 1}, toks: buf[:0]}
 	s.nlBefore = true // start of file counts as a line break
@@ -103,7 +103,7 @@ type Scanner struct {
 
 	// depth counts the open braces, never below zero: an unquoted
 	// identifier in the first column at depth zero begins a top-level
-	// element (§3.2.5).
+	// element (§line-structure-and-whitespace rule 5).
 	depth int
 	// chunk asks to stop before the first element start after the
 	// first byte; done reports it was reached, s.start at it.
@@ -128,7 +128,7 @@ func (c cursor) position(f *token.File) token.Position { return f.At(c.Offset, c
 const eof = rune(-1)
 
 // crSkip is the offset of the first byte at or after off that is not a
-// carriage return: the cursor never rests on one (§3.2.1).
+// carriage return: the cursor never rests on one (§line-structure-and-whitespace rule 1).
 func (s *Scanner) crSkip(off int) int {
 	for off < len(s.src) && s.src[off] == '\r' {
 		off++
@@ -201,7 +201,7 @@ func (s *Scanner) mark() {
 func (s *Scanner) raw() string { return s.src[s.start.Offset:s.pos.Offset] }
 
 // rawVal is the token's text as a value: its carriage returns, if it
-// stepped over any, discarded (§3.2.1).
+// stepped over any, discarded (§line-structure-and-whitespace rule 1).
 func (s *Scanner) rawVal() string {
 	if s.cr {
 		return strings.ReplaceAll(s.raw(), "\r", "")
@@ -214,7 +214,7 @@ func (s *Scanner) emit(kind token.Kind, val string) {
 }
 
 // tokEmit appends the token at the marked start, flagged as an element
-// start when it is one (§3.2.5): an unquoted identifier in the first
+// start when it is one (§line-structure-and-whitespace rule 5): an unquoted identifier in the first
 // column at depth zero. A chunk scan stops before the first such token
 // after the first byte, with s.start at it; the depth counts the
 // token's own brace only after it is kept.
@@ -244,7 +244,7 @@ func (s *Scanner) errorf(code, format string, args ...any) {
 	s.errs = append(s.errs, diag.Errorf(s.start.position(s.file), code, format, args...))
 }
 
-// §3.4: letter = Unicode category L | Unicode category M | "_".
+// §identifiers: letter = Unicode category L | Unicode category M | "_".
 func isLetter(r rune) bool {
 	return r == '_' || unicode.IsLetter(r) || unicode.IsMark(r)
 }
@@ -301,7 +301,7 @@ func lineCommentScan(s *Scanner) stateFn {
 	for r := s.peek(); r != '\n' && r != eof; r = s.peek() {
 		s.next()
 	}
-	s.spBefore = true // comments are trivia (§3.3.4)
+	s.spBefore = true // comments are trivia (§comments rule 4)
 	return anyScan
 }
 
@@ -311,7 +311,7 @@ func blockCommentScan(s *Scanner) stateFn {
 	for {
 		switch {
 		case s.peek() == eof:
-			s.errorf("syntax", "unterminated block comment (§3.3)")
+			s.errorf("syntax", "unterminated block comment (§comments)")
 			return nil
 		case s.peek() == '*' && s.peekAt(1) == '/':
 			s.next()
@@ -324,7 +324,7 @@ func blockCommentScan(s *Scanner) stateFn {
 	}
 }
 
-// escapeScan handles one escape sequence (§3.8); the backslash is consumed.
+// escapeScan handles one escape sequence (§escape-sequences); the backslash is consumed.
 func (s *Scanner) escapeScan() {
 	switch r := s.next(); r {
 	case 't':
@@ -346,7 +346,7 @@ func (s *Scanner) escapeScan() {
 		hex := make([]rune, 0, 4)
 		for i := 0; i < 4; i++ {
 			if !isHex(s.peek()) {
-				s.errorf("syntax", `invalid unicode escape '\u%s': exactly 4 hex digits required (§3.8)`, string(hex))
+				s.errorf("syntax", `invalid unicode escape '\u%s': exactly 4 hex digits required (§escape-sequences)`, string(hex))
 				return
 			}
 			hex = append(hex, s.next())
@@ -356,7 +356,7 @@ func (s *Scanner) escapeScan() {
 	case eof:
 		s.val.WriteByte('\\')
 	default:
-		// §3.8: any other escaped character yields the character itself
+		// §escape-sequences: any other escaped character yields the character itself
 		s.val.WriteRune(r)
 	}
 }
@@ -366,10 +366,10 @@ func stringScan(s *Scanner) stateFn {
 	for {
 		switch r := s.peek(); r {
 		case eof:
-			s.errorf("syntax", "unterminated string (§3.6)")
+			s.errorf("syntax", "unterminated string (§string-literals)")
 			return nil
 		case '\n':
-			s.errorf("syntax", "newline in single-line string (§3.6)")
+			s.errorf("syntax", "newline in single-line string (§string-literals)")
 			return anyScan
 		case '\'':
 			s.next()
@@ -391,7 +391,7 @@ func multiStringScan(s *Scanner) stateFn {
 	for {
 		switch r := s.peek(); {
 		case r == eof:
-			s.errorf("syntax", "unterminated multi-line string (§3.7)")
+			s.errorf("syntax", "unterminated multi-line string (§multi-line-string-literals)")
 			return nil
 		case r == '\'' && s.peekAt(1) == '\'' && s.peekAt(2) == '\'':
 			s.next()
@@ -408,7 +408,7 @@ func multiStringScan(s *Scanner) stateFn {
 	}
 }
 
-// indentStrip implements §3.7.4 indentation stripping.
+// indentStrip implements §multi-line-string-literals rule 4 indentation stripping.
 func indentStrip(v string) string {
 	lines := strings.Split(v, "\n")
 	if len(lines) > 0 && strings.TrimSpace(lines[0]) == "" {
@@ -444,10 +444,10 @@ func quotedIdentScan(s *Scanner) stateFn {
 	for {
 		switch r := s.peek(); r {
 		case eof:
-			s.errorf("syntax", "unterminated quoted identifier (§3.4)")
+			s.errorf("syntax", "unterminated quoted identifier (§identifiers)")
 			return nil
 		case '\n':
-			s.errorf("syntax", "newline in quoted identifier (§3.4)")
+			s.errorf("syntax", "newline in quoted identifier (§identifiers)")
 			return anyScan
 		case '"':
 			s.next()
@@ -467,14 +467,14 @@ func funcExprScan(s *Scanner) stateFn {
 	for {
 		switch r := s.peek(); r {
 		case eof:
-			s.errorf("syntax", "unterminated expression literal (§3.12)")
+			s.errorf("syntax", "unterminated expression literal (§expression-literals)")
 			return nil
 		case '`':
 			s.next()
 			s.tokEmit(token.Token{Kind: token.FUNCEXPR, Val: s.val.String()})
 			return anyScan
 		default:
-			// §3.12: raw content, no escapes
+			// §expression-literals: raw content, no escapes
 			s.val.WriteRune(s.next())
 		}
 	}
@@ -505,7 +505,7 @@ func identScan(s *Scanner) stateFn {
 	return anyScan
 }
 
-// asciiIdent marks the ASCII identifier bytes (§3.4 restricted to ASCII).
+// asciiIdent marks the ASCII identifier bytes (§identifiers restricted to ASCII).
 var asciiIdent = func() (t [256]bool) {
 	for c := 0; c < 256; c++ {
 		t[c] = c == '_' || ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9')
@@ -513,7 +513,7 @@ var asciiIdent = func() (t [256]bool) {
 	return t
 }()
 
-// numberOrIdentScan resolves the digit-leading ambiguity of §3.4/§3.9:
+// numberOrIdentScan resolves the digit-leading ambiguity of §identifiers/§numeric-literals:
 // a token of digits (one optional dot, optional exponent) is a NUMBER; a
 // digit-leading token containing letters is an IDENT (no dot allowed).
 func numberOrIdentScan(s *Scanner) stateFn {
@@ -545,7 +545,7 @@ func numberOrIdentScan(s *Scanner) stateFn {
 		default:
 			if hasLetter {
 				if nDots > 0 {
-					s.errorf("syntax", "invalid number %q (§3.9)", s.rawVal())
+					s.errorf("syntax", "invalid number %q (§numeric-literals)", s.rawVal())
 					s.tokEmit(token.Token{Kind: token.ILLEGAL, Val: s.rawVal()})
 					return anyScan
 				}
@@ -582,7 +582,7 @@ var singleOps = map[rune]token.Kind{
 func operatorScan(s *Scanner) stateFn {
 	r := s.next()
 	if r == '<' {
-		switch s.peek() { // §3.1 longest match
+		switch s.peek() { // §tokenization longest match
 		case '>':
 			s.next()
 			s.emit(token.LTGT, "<>")
@@ -612,7 +612,7 @@ func operatorScan(s *Scanner) stateFn {
 		s.emit(k, string(r))
 		return anyScan
 	}
-	s.errorf("syntax", "unexpected character %q (§3)", string(r))
+	s.errorf("syntax", "unexpected character %q (§lexical-structure)", string(r))
 	s.tokEmit(token.Token{Kind: token.ILLEGAL, Val: string(r)})
 	return anyScan
 }

@@ -1,4 +1,4 @@
-// spec: §V13 — i105_dataset_only_except
+// spec: §datasets — i105_dataset_only_except
 // want: cannot both be set
 package app
 

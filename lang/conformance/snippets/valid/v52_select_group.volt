@@ -1,4 +1,4 @@
-// spec: §V11 — one select, one signature, every member; order setting
+// spec: §selects-over-groups — one select, one signature, every member; order setting
 package db
 
 Table ms_revenue {

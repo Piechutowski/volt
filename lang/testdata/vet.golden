@@ -1,5 +1,5 @@
 check:
-dup/schema.volt:8:1: error: spec/8.2: duplicate table name "t"
+dup/schema.volt:8:1: error: spec/namespaces-and-uniqueness: duplicate table name "t"
 vet:
 data/more.volt:3:7: warning: vet/unnecessaryquotes: identifier "comments" does not need quotes
 data/schema.volt:3:7: warning: vet/unnecessaryquotes: identifier "users" does not need quotes

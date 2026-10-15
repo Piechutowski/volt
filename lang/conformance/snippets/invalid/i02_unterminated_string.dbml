@@ -1,2 +1,2 @@
-// spec: §3.6 — unterminated string
+// spec: §string-literals — unterminated string
 Table t { id int [note: 'oops] }

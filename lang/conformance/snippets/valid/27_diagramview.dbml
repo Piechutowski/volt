@@ -1,4 +1,4 @@
-// spec: §6.13 — wildcard, lists, empty view
+// spec: §diagramview — wildcard, lists, empty view
 Table users { id int }
 Table orders { id int }
 Table core.settings { id int }

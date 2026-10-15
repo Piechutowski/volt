@@ -16,7 +16,7 @@ var (
 	elementKeywords = []string{
 		"Project", "Table", "TablePartial", "Enum", "Ref", "TableGroup",
 		"Note", "Records", "DiagramView", "use", "reuse",
-		// Volt layer (docs/spec.md §V)
+		// Volt layer (docs/spec.md Part II)
 		"package ", "import", "Pipeline", "Scope",
 	}
 	tableBodyKeywords = []string{"indexes", "checks", "Note", "Records"}
@@ -34,7 +34,7 @@ var (
 		"enumvalue": {"note: "},
 		"sticky":    {"color: "},
 		"group":     {"note: ", "color: "},
-		// Volt layer (docs/spec.md §V4-§V5)
+		// Volt layer (docs/spec.md §scopes-and-routes to §resources)
 		"scope":     {"pipe: ", "error_handler: ", "name: "},
 		"route":     {"name: "},
 		"resources": {"only: (", "except: (", "param: ", "singular: ", "api", "default"},
@@ -51,7 +51,7 @@ var (
 
 	refActionValues = []string{"cascade", "restrict", "set null", "set default", "no action"}
 
-	// voltVerbSet mirrors the parser's route verbs (docs/spec.md §V4.2).
+	// voltVerbSet mirrors the parser's route verbs (docs/spec.md §routes).
 	voltVerbSet = map[string]bool{
 		"get": true, "post": true, "put": true, "patch": true,
 		"delete": true, "options": true, "head": true, "any": true,
@@ -214,7 +214,7 @@ func (d *Document) settingsComplete(prefix, ctx string) []protocol.CompletionIte
 		kind = "ref"
 	case strings.HasPrefix(head, "note"):
 		kind = "sticky"
-	// Volt lines exist only where the grammar puts them (§V4): Scope
+	// Volt lines exist only where the grammar puts them (§scopes-and-routes): Scope
 	// openers at top level or nested in a Scope, routes and resources
 	// in Scope bodies.
 	case strings.HasPrefix(head, "scope") && (ctx == "" || ctx == "scope"):

@@ -1,9 +1,9 @@
-// Volt-layer AST nodes (spec §V, docs/spec.md).
+// Volt-layer AST nodes (spec Part II, docs/spec.md).
 package ast
 
 import "github.com/Piechutowski/volt/lang/token"
 
-// PackageClause is a "package name" clause (spec §V1).
+// PackageClause is a "package name" clause (spec §projects-and-packages).
 type PackageClause struct {
 	PackagePos token.Position
 	Name       *Ident
@@ -13,7 +13,7 @@ func (d *PackageClause) Pos() token.Position { return d.PackagePos }
 func (d *PackageClause) End() token.Position { return d.Name.End() }
 func (d *PackageClause) declNode()           {}
 
-// ImportDecl is an "import ( ... )" block (spec §V2).
+// ImportDecl is an "import ( ... )" block (spec §imports).
 type ImportDecl struct {
 	ImportPos token.Position
 	Specs     []*ImportSpec
@@ -25,7 +25,7 @@ func (d *ImportDecl) End() token.Position { return d.Rparen }
 func (d *ImportDecl) declNode()           {}
 
 // ImportSpec is one import line: [alias] path, the path written as
-// slash-separated identifiers rooted at the project root (spec §V2).
+// slash-separated identifiers rooted at the project root (spec §imports).
 type ImportSpec struct {
 	Alias *Ident   // nil when the default qualifier applies
 	Path  []*Ident // 1+ segments
@@ -49,7 +49,7 @@ func (x *ImportSpec) PathString() string {
 }
 
 // Qualifier returns the name the import is referenced by: the alias when
-// present, else the last path segment (spec §V2.3).
+// present, else the last path segment (spec §imports rule 3).
 func (x *ImportSpec) Qualifier() string {
 	if x.Alias != nil {
 		return x.Alias.Name()
@@ -84,7 +84,7 @@ func (x *GoRef) String() string {
 	return x.Parts[0].Name()
 }
 
-// Pipeline is a named middleware list (spec §V3).
+// Pipeline is a named middleware list (spec §pipelines).
 type Pipeline struct {
 	PipelinePos token.Position
 	Name        *Ident
@@ -105,7 +105,7 @@ type Plug struct {
 func (x *Plug) Pos() token.Position { return x.UsePos }
 func (x *Plug) End() token.Position { return x.Ref.End() }
 
-// Scope is a routing scope (spec §V4): a path prefix, optional settings,
+// Scope is a routing scope (spec §scopes-and-routes): a path prefix, optional settings,
 // and a body of routes, resources and nested scopes.
 type Scope struct {
 	ScopePos token.Position
@@ -127,7 +127,7 @@ type ScopeItem interface {
 	scopeItemNode()
 }
 
-// Route is one verb route line (spec §V4.2).
+// Route is one verb route line (spec §routes).
 type Route struct {
 	VerbTok  token.Token // IDENT: get, post, put, patch, delete, options, head, any
 	Path     *RoutePath
@@ -147,7 +147,7 @@ func (x *Route) scopeItemNode() {}
 // Verb returns the lowercased verb.
 func (x *Route) Verb() string { return lower(x.VerbTok.Val) }
 
-// Resources is a resources declaration (spec §V5).
+// Resources is a resources declaration (spec §resources).
 type Resources struct {
 	ResourcesPos token.Position
 	// Pkg is the package qualifier when the declaration names a model
@@ -201,7 +201,7 @@ func (x *Dataset) End() token.Position {
 func (x *Dataset) scopeItemNode() {}
 
 // RoutePath is a route or scope path: "/" or "/seg/:param(type)/*rest"
-// (spec §V4.1). Tokens within a path are contiguous.
+// (spec §route-paths). Tokens within a path are contiguous.
 type RoutePath struct {
 	SlashPos token.Position
 	Segments []*Segment
@@ -234,7 +234,7 @@ const (
 )
 
 // Segment is one path segment. The wildcard is spelled ":name...":
-// after a slash, "/*" opens a DBML block comment (§3.3).
+// after a slash, "/*" opens a DBML block comment (§comments).
 type Segment struct {
 	Kind    SegKind
 	MarkPos token.Position // position of ':'; equals Name.Pos() for literals
@@ -278,13 +278,13 @@ func (x *Segment) String() string {
 }
 
 // IdentList is a parenthesized identifier list setting value, e.g.
-// only: (index, show) (spec §V6).
+// only: (index, show) (spec §settings-whitelists).
 type IdentList struct {
 	Lparen token.Position
 	Names  []*Ident
 	// Mods holds an optional one-word modifier per name (parallel to
 	// Names, nil entries when absent): order lists use it for asc/desc
-	// (§V11.5).
+	// (§selects-over-groups rule 5).
 	Mods   []*Ident
 	Rparen token.Position
 }
@@ -302,9 +302,9 @@ func lower(s string) string {
 	return string(b)
 }
 
-/* ===== groups, predicates, selects (spec §V9-§V11) ===== */
+/* ===== groups, predicates, selects (spec §groups to §selects-over-groups) ===== */
 
-// Group is a named set of tables for generation (spec §V9): either a
+// Group is a named set of tables for generation (spec §groups): either a
 // block of members or a `+`/`\` expression over tables, groups and
 // TableGroups.
 type Group struct {
@@ -319,7 +319,7 @@ func (d *Group) End() token.Position { return d.EndPos }
 func (d *Group) declNode()           {}
 
 // GroupTerm is one term of a group expression: one name, or a
-// parenthesized set of names, added or removed (spec §V9.3).
+// parenthesized set of names, added or removed (spec §groups rule 3).
 type GroupTerm struct {
 	Neg    bool     // true for '\' terms
 	Names  []*Ident // one name, or the members of a parenthesized set
@@ -338,7 +338,7 @@ func (t *GroupTerm) End() token.Position {
 	return t.Names[len(t.Names)-1].End()
 }
 
-// Pred is a named predicate declaration (spec §V10).
+// Pred is a named predicate declaration (spec §predicates).
 type Pred struct {
 	PredPos token.Position
 	Name    *Ident
@@ -351,7 +351,7 @@ func (d *Pred) End() token.Position { return d.Rbrace }
 func (d *Pred) declNode()           {}
 
 // PredExpr is a node of the closed predicate expression language
-// (spec §V10). It is deliberately not SQL (decision expressions-are-sqlites).
+// (spec §predicates). It is deliberately not SQL (decision expressions-are-sqlites).
 type PredExpr interface {
 	Node
 	predExpr()
@@ -388,7 +388,7 @@ func (x *PredParen) Pos() token.Position { return x.Lparen }
 func (x *PredParen) End() token.Position { return x.Rparen }
 func (x *PredParen) predExpr()           {}
 
-// PredRef is a bare name referencing another Pred (spec §V10.2).
+// PredRef is a bare name referencing another Pred (spec §predicates rule 2).
 type PredRef struct {
 	Name *Ident
 }
@@ -409,7 +409,7 @@ func (x *PredCompare) End() token.Position { return x.Y.End() }
 func (x *PredCompare) predExpr()           {}
 
 // PredIn is "col in (lit, ...)" or "col in :list" — the latter a list
-// parameter, typed as a slice of the column's type (spec §V10.3).
+// parameter, typed as a slice of the column's type (spec §predicates rule 3).
 type PredIn struct {
 	Col    *Ident
 	Items  []*Lit // literal form; nil when List is set
@@ -462,7 +462,7 @@ func (x *ColRef) Pos() token.Position { return x.Name.Pos() }
 func (x *ColRef) End() token.Position { return x.Name.End() }
 func (x *ColRef) operand()            {}
 
-// Param is a ":name" query parameter (spec §V10, decision named-placeholders).
+// Param is a ":name" query parameter (spec §predicates, decision named-placeholders).
 type Param struct {
 	ColonPos token.Position
 	Name     *Ident
@@ -482,21 +482,21 @@ func (x *Lit) End() token.Position { return x.Tok.End() }
 func (x *Lit) operand()            {}
 
 // Select declares a query generated for every member of its target
-// (spec §V11).
+// (spec §selects-over-groups).
 type Select struct {
 	SelectPos token.Position
 	Name      *Ident
-	Lparen    token.Position // projection parens (§V11.7); zero when absent
+	Lparen    token.Position // projection parens (§selects-over-groups rule 7); zero when absent
 	Star      bool           // (* \\ a \\ (b, c)) star form
 	Cols      []*Ident       // explicit list, or the star form's exclusions
 	Rparen    token.Position
-	Target    *Ident   // group or table name (§V11.2)
+	Target    *Ident   // group or table name (§selects-over-groups rule 2)
 	Where     PredExpr // nil = all rows
 	Settings  *SettingList
 	EndPos    token.Position
 }
 
-// Projected reports whether the select carries a projection (§V11.7).
+// Projected reports whether the select carries a projection (§selects-over-groups rule 7).
 func (d *Select) Projected() bool { return len(d.Cols) > 0 }
 
 func (d *Select) Pos() token.Position { return d.SelectPos }

@@ -1,4 +1,4 @@
-// spec: §1.4 — keywords are case-insensitive
+// spec: §case-sensitivity-and-terminology — keywords are case-insensitive
 TABLE users {
   id INT [PK, NOT NULL]
 }

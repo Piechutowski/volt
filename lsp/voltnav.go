@@ -47,7 +47,7 @@ type voltDef struct {
 	group  *ast.Group
 	tgroup *ast.TableGroup
 	pred   *ast.Pred
-	gofn   *lang.GoFunc // Go-reference targets (§V3.2, §V12.5); nil = undeclared
+	gofn   *lang.GoFunc // Go-reference targets (§pipelines rule 2, §validation-checks rule 5); nil = undeclared
 	md     string       // prebuilt hover (selects: signatures + rendered SQL)
 }
 
@@ -130,21 +130,21 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 			switch d := d.(type) {
 			case *ast.Table:
 				// Keyed by the name as declared: references spell the
-				// table exactly (§V5.1).
+				// table exactly (§declaration).
 				ix.define(voltSym{"table", path, d.Name.Base()}, voltDef{span: spanOf(d.Name), table: d})
 			case *ast.Pipeline:
 				ix.define(voltSym{"pipeline", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), pipe: d})
 			case *ast.Group:
 				ix.define(voltSym{"group", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), group: d})
 			case *ast.TableGroup:
-				// A TableGroup is a set wherever a group is named (§V9.2, decision set-difference).
+				// A TableGroup is a set wherever a group is named (§groups rule 2, decision set-difference).
 				ix.define(voltSym{"tablegroup", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), tgroup: d})
 			case *ast.Pred:
 				ix.define(voltSym{"pred", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), pred: d})
 			}
 		}
 		// Selects: definition + a prebuilt hover with the generated
-		// signatures and the rendered WHERE/ORDER (§V11.6).
+		// signatures and the rendered WHERE/ORDER (§selects-over-groups rule 6).
 		for _, si := range pkg.Selects {
 			d := si.Decl
 			ix.define(voltSym{"select", path, d.Name.Name()},
@@ -215,10 +215,10 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 			case *ast.Table:
 				ix.checksRefs(pkg, path, d.Body)
 			case *ast.TablePartial:
-				ix.checksRefs(pkg, path, d.Body) // injected checks travel with the partial (§6.9.3)
+				ix.checksRefs(pkg, path, d.Body) // injected checks travel with the partial (§tablepartial rule 3)
 			case *ast.Group:
 				// Terms resolve tables first, then groups, then
-				// TableGroups (§V9.2).
+				// TableGroups (§groups rule 2).
 				for _, term := range d.Terms {
 					for _, id := range term.Names {
 						sp := spanOf(id)
@@ -229,7 +229,7 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 				ix.predExprRefs(path, d.X)
 			case *ast.Select:
 				// The target resolves groups first, then tables, then
-				// TableGroups (§V11.2).
+				// TableGroups (§selects-over-groups rule 2).
 				sp := spanOf(d.Target)
 				ix.refs = append(ix.refs, voltRef{sp, sp, ix.setSym(path, d.Target.Name(), "group", "table", "tablegroup"), false, d.Target.Name()})
 				if d.Where != nil {
@@ -242,7 +242,7 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 }
 
 // checksRefs indexes the Go references and Pred names inside a table
-// or partial body's checks blocks (§V12.2, §V12.5).
+// or partial body's checks blocks (§validation-checks rule 2, §validation-checks rule 5).
 func (ix *voltIndex) checksRefs(pkg *lang.Package, path string, body []ast.TableItem) {
 	for _, item := range body {
 		cb, ok := item.(*ast.ChecksBlock)
@@ -261,7 +261,7 @@ func (ix *voltIndex) checksRefs(pkg *lang.Package, path string, body []ast.Table
 }
 
 // goRefAdd indexes a Go reference — a bare name or one qualified by the
-// containing package's own name (§V3.2, §V12.5) — and resolves it in
+// containing package's own name (§pipelines rule 2, §validation-checks rule 5) — and resolves it in
 // the package directory's Go files once per package; volt.* plugs make
 // no claim here.
 func (ix *voltIndex) goRefAdd(pkg *lang.Package, path string, ref *ast.GoRef) {
@@ -307,7 +307,7 @@ func (ix *voltIndex) goRefAdd(pkg *lang.Package, path string, ref *ast.GoRef) {
 	}
 }
 
-// predExprRefs indexes the Pred references inside an expression (§V10.2).
+// predExprRefs indexes the Pred references inside an expression (§predicates rule 2).
 func (ix *voltIndex) predExprRefs(path string, x ast.PredExpr) {
 	switch x := x.(type) {
 	case *ast.PredBinary:
@@ -340,7 +340,7 @@ func (ix *voltIndex) scopeRefs(pkg *lang.Package, path string, sc *ast.Scope) {
 		case *ast.Scope:
 			ix.scopeRefs(pkg, path, it)
 		case *ast.Resources:
-			// The declaration itself names the model (§V5.1): this
+			// The declaration itself names the model (§declaration): this
 			// package's own when bare or self-qualified.
 			target := path
 			if it.Pkg != nil && it.Pkg.Name() != pkg.Name {
@@ -359,7 +359,7 @@ func (ix *voltIndex) scopeRefs(pkg *lang.Package, path string, sc *ast.Scope) {
 			ix.settingRefs(pkg, path, it.Settings)
 		case *ast.Dataset:
 			// The declaration names a select of this package or of an
-			// imported one (§V13.1).
+			// imported one (§dataset-declaration).
 			target, ok := path, true
 			if it.Pkg != nil && it.Pkg.Name() != pkg.Name {
 				target, ok = pkg.Imports[it.Pkg.Name()]
@@ -487,7 +487,7 @@ func (d *Document) voltReferences(pos protocol.Position, includeDecl bool) []pro
 
 // voltHover describes the Volt-layer symbol under the cursor. For a
 // table it spells out that `model: db.Post` names the Go model nao
-// derives from `Table posts`, not the table's own name (§V5.4.2).
+// derives from `Table posts`, not the table's own name (§table-resolution rule 2).
 func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 	if d.vindex == nil {
 		return nil
@@ -533,8 +533,8 @@ func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 }
 
 // selectHoverMD renders a select's generated surface: one signature
-// per member (one parameter list for all — §V11.4), the WHERE/ORDER
-// exactly as emitted, and the output row structs (§V11.6).
+// per member (one parameter list for all — §selects-over-groups rule 4), the WHERE/ORDER
+// exactly as emitted, and the output row structs (§selects-over-groups rule 6).
 func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 	const structCap = 4
 	var b strings.Builder
@@ -546,7 +546,7 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 	}
 
 	// The output row structs come from the same plan the generator runs
-	// (§V11.7): the shared type once, per-member rows capped.
+	// (§selects-over-groups rule 7): the shared type once, per-member rows capped.
 	shown := si.Members
 	if si.Shared != "" {
 		shown = shown[:1]
@@ -582,7 +582,7 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 		b.WriteString("```sql\nORDER BY " + si.OrderSQL + "\n```\n")
 	}
 
-	// One signature per member, one parameter list for all (§V11.4).
+	// One signature per member, one parameter list for all (§selects-over-groups rule 4).
 	var params strings.Builder
 	for _, p := range si.Params {
 		fmt.Fprintf(&params, ", %s %s", p.GoName, p.GoType)
@@ -616,7 +616,7 @@ func (ix *voltIndex) setSym(path, name string, kinds ...string) voltSym {
 	return voltSym{kinds[len(kinds)-1], path, name}
 }
 
-// groupHover lists a group's terms as written (§V9).
+// groupHover lists a group's terms as written (§groups).
 func groupHover(sym voltSym, def voltDef) string {
 	g := def.group
 	if g == nil {
@@ -643,7 +643,7 @@ func groupHover(sym voltSym, def voltDef) string {
 }
 
 // tableGroupHover lists a TableGroup's members: as a set it is what a
-// group term or select target over it expands to (§V9.2).
+// group term or select target over it expands to (§groups rule 2).
 func tableGroupHover(sym voltSym, def voltDef) string {
 	g := def.tgroup
 	if g == nil {
@@ -658,7 +658,7 @@ func tableGroupHover(sym voltSym, def voltDef) string {
 }
 
 // predHover shows the predicate's source expression when the buffer is
-// open, else just its name (§V10).
+// open, else just its name (§predicates).
 func predHover(sym voltSym, def voltDef, ix *voltIndex) string {
 	p := def.pred
 	if p == nil {
@@ -710,7 +710,7 @@ func tableModelHover(sym voltSym, def voltDef) string {
 		fmt.Fprintf(&b, "\t%s %s%s\n", col.Name.Name(), col.Type.String(), mark)
 	}
 	b.WriteString("}\n```\n\n")
-	b.WriteString("_Routes and helpers derive from this: the URL keeps the table's name, the member helper takes the model's (§V5.4)._")
+	b.WriteString("_Routes and helpers derive from this: the URL keeps the table's name, the member helper takes the model's (§table-resolution)._")
 	return b.String()
 }
 
@@ -730,7 +730,7 @@ func pipelineHover(sym voltSym, def voltDef) string {
 }
 
 // tablePK returns the single-column primary key and the Go type it maps
-// to, mirroring the checker's rule (§V5.4.3); "" when there is none or
+// to, mirroring the checker's rule (§table-resolution rule 3); "" when there is none or
 // the key is composite.
 func tablePK(t *ast.Table) (name, goType string) {
 	var names []string
@@ -780,7 +780,7 @@ func (d *Document) voltRename(pos protocol.Position, newName string) (*protocol.
 		return nil, false // renaming a package means moving a directory
 	}
 	// A Go reference renames its Volt spellings only; the Go declaration
-	// is gopls' job (§V3.2, §V12.5).
+	// is gopls' job (§pipelines rule 2, §validation-checks rule 5).
 
 	spelling := ref.text
 	changes := map[protocol.DocumentUri][]protocol.TextEdit{}
@@ -858,11 +858,11 @@ func (d *Document) voltComplete(prefix string) []protocol.CompletionItem {
 	return nil
 }
 
-// voltSelectForRE matches a select's target being typed (§V11.2).
+// voltSelectForRE matches a select's target being typed (§selects-over-groups rule 2).
 var voltSelectForRE = regexp.MustCompile(`^\s*[Ss]elect\s+\w+\s+for\s+([A-Za-z0-9_]*)$`)
 
 // voltWhereRE matches an identifier being typed inside a where clause
-// or a Pred body opened on the same line (§V10).
+// or a Pred body opened on the same line (§predicates).
 var voltWhereRE = regexp.MustCompile(`\b(?:where|and|or|not|\{)\s+([A-Za-z0-9_]*)$`)
 
 // namedDefItems lists this package's definitions of one kind.

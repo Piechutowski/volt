@@ -1,4 +1,4 @@
-// spec: §V9 — block and algebra group forms, overlap allowed
+// spec: §groups — block and algebra group forms, overlap allowed
 package db
 
 Table ms_revenue {

@@ -1,4 +1,4 @@
-// Settings validation (§4.2): per-construct whitelists, value shapes, and
+// Settings validation (§settings-lists): per-construct whitelists, value shapes, and
 // the at-most-once rule.
 package check
 
@@ -21,8 +21,8 @@ const (
 	exprValue                    // backtick expression
 	identValue                   // an identifier (e.g. index type)
 	actionValue                  // referential action; validated separately
-	defaultVal                   // §6.4 default value
-	refVal                       // §6.7 inline relationship
+	defaultVal                   // §default-values default value
+	refVal                       // §relationships-ref inline relationship
 )
 
 // settingSpec describes the settings a construct accepts.
@@ -96,7 +96,7 @@ func (c *checker) settingsCheck(sl *ast.SettingList, section string, spec settin
 			continue
 		}
 		if seen[canon] && !spec.repeatable[canon] {
-			c.errorf(s.Pos(), "4.2", "setting %q may appear at most once", s.Name)
+			c.errorf(s.Pos(), "settings-lists", "setting %q may appear at most once", s.Name)
 		}
 		seen[canon] = true
 		c.settingValueCheck(s, section, kind)
@@ -138,7 +138,7 @@ func (c *checker) settingValueCheck(s *ast.Setting, section string, kind valueKi
 			return
 		}
 		if !validColor(lit.Tok.Val) {
-			c.errorf(s.Value.Pos(), "3.11", "color literal '#%s' must be 3 or 6 hex digits", lit.Tok.Val)
+			c.errorf(s.Value.Pos(), "color-literals", "color literal '#%s' must be 3 or 6 hex digits", lit.Tok.Val)
 		}
 	case exprValue:
 		if _, ok := s.Value.(*ast.FuncExpr); !ok {
@@ -164,26 +164,26 @@ func (c *checker) settingValueCheck(s *ast.Setting, section string, kind valueKi
 	}
 }
 
-// defaultValueCheck enforces §6.4: number, string, boolean, null,
+// defaultValueCheck enforces §default-values: number, string, boolean, null,
 // expression, or a dotted enum constant — never a bare identifier.
 func (c *checker) defaultValueCheck(s *ast.Setting) {
 	switch v := s.Value.(type) {
 	case *ast.BasicLit:
 		if v.Tok.Kind == token.COLOR {
-			c.errorf(v.Pos(), "6.4", "default value must be a number, string, boolean, null, expression or enum constant")
+			c.errorf(v.Pos(), "default-values", "default value must be a number, string, boolean, null, expression or enum constant")
 		}
 	case *ast.FuncExpr, *ast.NegNumber, *ast.EnumConst:
 	case *ast.Ident:
 		low := strings.ToLower(v.Name())
 		if v.Quoted() || (low != "true" && low != "false" && low != "null") {
-			c.errorf(v.Pos(), "6.4", "default value must be a number, string, boolean, null, expression or enum constant; found bare identifier %q", v.Name())
+			c.errorf(v.Pos(), "default-values", "default value must be a number, string, boolean, null, expression or enum constant; found bare identifier %q", v.Name())
 		}
 	default:
-		c.errorf(s.Value.Pos(), "6.4", "default value must be a number, string, boolean, null, expression or enum constant")
+		c.errorf(s.Value.Pos(), "default-values", "default value must be a number, string, boolean, null, expression or enum constant")
 	}
 }
 
-// tagSettingsCheck enforces the tag: extension's shape rules (§6.3,
+// tagSettingsCheck enforces the tag: extension's shape rules (§columns,
 // decision tag-passthrough): one key:"value" pair per setting, keys unique per column, db
 // reserved for the scan contract.
 func (c *checker) tagSettingsCheck(sl *ast.SettingList) {
@@ -201,15 +201,15 @@ func (c *checker) tagSettingsCheck(sl *ast.SettingList) {
 		}
 		key, ok := tagPairKey(lit.Tok.Val)
 		if !ok {
-			c.errorf(lit.Pos(), "6.3", `tag %q is not one key:"value" pair — write e.g. 'json:"name"' (§6.3)`, lit.Tok.Val)
+			c.errorf(lit.Pos(), "columns", `tag %q is not one key:"value" pair — write e.g. 'json:"name"' (§columns)`, lit.Tok.Val)
 			continue
 		}
 		if key == "db" {
-			c.errorf(lit.Pos(), "6.3", `tag key "db" is reserved: the db tag is the scan contract (Appendix A.5)`)
+			c.errorf(lit.Pos(), "columns", `tag key "db" is reserved: the db tag is the scan contract (§struct-tags)`)
 			continue
 		}
 		if seen[key] {
-			c.errorf(lit.Pos(), "6.3", "tag key %q appears more than once on this column (§6.3)", key)
+			c.errorf(lit.Pos(), "columns", "tag key %q appears more than once on this column (§columns)", key)
 			continue
 		}
 		seen[key] = true
@@ -217,7 +217,7 @@ func (c *checker) tagSettingsCheck(sl *ast.SettingList) {
 }
 
 // tagPairKey parses one key:"value" struct-tag pair, returning its key.
-// The shape rules are §6.3's: no spaces, colons, double quotes or
+// The shape rules are §columns's: no spaces, colons, double quotes or
 // backticks in the key; a double-quoted value free of both quote kinds.
 func tagPairKey(pair string) (string, bool) {
 	i := strings.IndexByte(pair, ':')
@@ -254,8 +254,8 @@ func validColor(v string) bool {
 	return true
 }
 
-// integerTypes is the integer family of Appendix A/B: the only types an
-// increment column may have (§6.3 extension).
+// integerTypes is the integer family of §mapping-to-go/B: the only types an
+// increment column may have (§columns extension).
 var integerTypes = map[string]bool{
 	"tinyint": true, "int2": true, "smallint": true, "smallserial": true,
 	"int": true, "integer": true, "int4": true, "mediumint": true, "serial": true,
@@ -274,9 +274,9 @@ func IntegerType(declType string) bool {
 	return integerTypes[base]
 }
 
-// incrementCheck enforces the §6.3 extension: increment is honored in
+// incrementCheck enforces the §columns extension: increment is honored in
 // exactly one shape, the single-column integer primary key, SQLite's
-// rowid alias (Appendix B), and is an error anywhere else.
+// rowid alias (§mapping-to-sqlite-ddl), and is an error anywhere else.
 func (c *checker) incrementCheck(ti *TableInfo) {
 	compositePK := false
 	for _, ix := range ti.Indexes {
@@ -292,8 +292,8 @@ func (c *checker) incrementCheck(ti *TableInfo) {
 		}
 		name := col.Name.Name()
 		if !IntegerType(col.Type.String()) {
-			c.errorf(inc.Pos(), "6.3",
-				"increment on %q (%s): only an integer column can auto-increment (§6.3, Appendix B)", name, col.Type.String())
+			c.errorf(inc.Pos(), "columns",
+				"increment on %q (%s): only an integer column can auto-increment (§columns, §mapping-to-sqlite-ddl)", name, col.Type.String())
 			continue
 		}
 		isPK := col.Settings.Get("pk") != nil || col.Settings.Get("primary key") != nil
@@ -304,17 +304,17 @@ func (c *checker) incrementCheck(ti *TableInfo) {
 		}
 		switch {
 		case compositePK:
-			c.errorf(inc.Pos(), "6.3",
-				"increment on %q: a composite primary key has no auto-assigned column — SQLite auto-assigns only the single-column integer key (§6.3, Appendix B)", name)
+			c.errorf(inc.Pos(), "columns",
+				"increment on %q: a composite primary key has no auto-assigned column — SQLite auto-assigns only the single-column integer key (§columns, §mapping-to-sqlite-ddl)", name)
 		case !isPK:
-			c.errorf(inc.Pos(), "6.3",
-				"increment on %q: only the primary key auto-increments; elsewhere the keyword would be silently ignored while CreateParams omits the column (§6.3, Appendix B)", name)
+			c.errorf(inc.Pos(), "columns",
+				"increment on %q: only the primary key auto-increments; elsewhere the keyword would be silently ignored while CreateParams omits the column (§columns, §mapping-to-sqlite-ddl)", name)
 		}
 	}
 }
 
 // requiredKinds classifies declared types for the required setting
-// (§6.3 extension, decision required-and-problems): what "non-empty" means per type class. Types
+// (§columns extension, decision required-and-problems): what "non-empty" means per type class. Types
 // absent here (bool, date/time) cannot be required.
 var requiredKinds = map[string]string{
 	"varchar": "text", "char": "text", "text": "text", "tinytext": "text", "mediumtext": "text", "longtext": "text",
@@ -346,7 +346,7 @@ func RequiredKind(declType string, isEnum bool) (string, bool) {
 	return k, ok
 }
 
-// requiredCheck enforces the required setting's preconditions (§6.3
+// requiredCheck enforces the required setting's preconditions (§columns
 // extension): the column is not null (or a key) and its type has an
 // empty value to refuse.
 func (c *checker) requiredCheck(ti *TableInfo) {
@@ -364,7 +364,7 @@ func (c *checker) requiredCheck(ti *TableInfo) {
 			}
 		}
 		if !notNull {
-			c.errorf(req.Pos(), "6.3", "required on %q needs not null: a nullable column has no empty value to refuse, NULL is absence (§6.3)", name)
+			c.errorf(req.Pos(), "columns", "required on %q needs not null: a nullable column has no empty value to refuse, NULL is absence (§columns)", name)
 			continue
 		}
 		isEnum := c.enumSet.present[canonKey(col.Type.Name)]
@@ -373,7 +373,7 @@ func (c *checker) requiredCheck(ti *TableInfo) {
 			isEnum = c.enumSet.present[ti.Decl.Name.Schema()+"."+col.Type.Name.Base()]
 		}
 		if _, ok := RequiredKind(col.Type.String(), isEnum); !ok {
-			c.errorf(req.Pos(), "6.3", "required on %q (%s): a %s has no empty value — every value is a value (§6.3)", name, col.Type.String(), col.Type.String())
+			c.errorf(req.Pos(), "columns", "required on %q (%s): a %s has no empty value — every value is a value (§columns)", name, col.Type.String(), col.Type.String())
 		}
 	}
 }

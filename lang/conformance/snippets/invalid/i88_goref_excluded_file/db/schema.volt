@@ -1,4 +1,4 @@
-// spec: §V12.5 — only Go files the go tool would compile count: a
+// spec: §validation-checks rule 5 — only Go files the go tool would compile count: a
 // declaration in a _-prefixed file does not exist for the package
 // want: no function EmailValid
 package db

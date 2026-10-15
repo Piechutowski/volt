@@ -1,4 +1,4 @@
-// spec: §6.9.2 — partial body has no nested injections
+// spec: §tablepartial rule 2 — partial body has no nested injections
 TablePartial a { id int }
 TablePartial b {
   ~a

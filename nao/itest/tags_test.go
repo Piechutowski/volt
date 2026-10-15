@@ -1,4 +1,4 @@
-// Struct-tag passthrough round trip (spec §6.3 tag extension, Appendix
+// Struct-tag passthrough round trip (spec §columns tag extension, Appendix
 // A.5, decision tag-passthrough): the [tag:] on users.name reaches encoding/json in
 // the compiled program, on the model and its params struct alike.
 package itest

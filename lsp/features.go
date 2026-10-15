@@ -223,7 +223,7 @@ func (d *Document) Rename(pos protocol.Position, newName string) (*protocol.Work
 }
 
 // validIdentifier reports whether s can be written as a plain identifier
-// (spec §3.4): letters, marks, digits and _, not all digits.
+// (spec §identifiers): letters, marks, digits and _, not all digits.
 func validIdentifier(s string) bool {
 	if s == "" {
 		return false

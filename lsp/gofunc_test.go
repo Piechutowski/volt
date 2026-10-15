@@ -17,7 +17,7 @@ func goRefProject(t *testing.T) string {
 	return voltProject(t, map[string]string{
 		"go.mod":          "module goref\n",
 		"db/schema.volt":  goRefSchema,
-		"db/checks.go":    "package db\n\nimport \"errors\"\n\n// EmailValid rejects addresses without an @ — a Go-reference check\n// target (spec §V12.5).\nfunc EmailValid(email string) error {\n\tif email == \"\" {\n\t\treturn errors.New(\"empty\")\n\t}\n\treturn nil\n}\n",
+		"db/checks.go":    "package db\n\nimport \"errors\"\n\n// EmailValid rejects addresses without an @ — a Go-reference check\n// target (spec §validation-checks rule 5).\nfunc EmailValid(email string) error {\n\tif email == \"\" {\n\t\treturn errors.New(\"empty\")\n\t}\n\treturn nil\n}\n",
 		"app/routes.volt": goRefRoutes,
 		"app/mw.go":       "package app\n\nimport \"net/http\"\n\n// Auth is a pipeline plug.\nfunc Auth(next http.Handler) http.Handler { return next }\n",
 	})

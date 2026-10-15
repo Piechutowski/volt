@@ -1,4 +1,4 @@
-// spec: §V4.6.2
+// spec: §route-names-and-reverse-urls rule 2
 package app
 
 Scope / {

@@ -8,8 +8,8 @@ import (
 )
 
 // QueryValue is the set of Go types a query-string parameter can carry:
-// the scalar types the model generator emits for columns (Appendix A),
-// which are the types a select parameter can have (§V10.3).
+// the scalar types the model generator emits for columns (§mapping-to-go),
+// which are the types a select parameter can have (§predicates rule 3).
 type QueryValue interface {
 	string | bool |
 		int | int8 | int16 | int32 | int64 |
@@ -19,7 +19,7 @@ type QueryValue interface {
 }
 
 // QueryParam binds one scalar parameter from the query string by name, as a
-// generated query route does (§V4.8). A missing or unparseable value is
+// generated query route does (§query-routes). A missing or unparseable value is
 // a 400 naming the parameter.
 func QueryParam[T QueryValue](r *Request, name string) (T, error) {
 	var v T
@@ -33,7 +33,7 @@ func QueryParam[T QueryValue](r *Request, name string) (T, error) {
 	return v, nil
 }
 
-// QueryParams binds a list parameter (§V10.3): every value of a repeated
+// QueryParams binds a list parameter (§predicates rule 3): every value of a repeated
 // query key, in order. An absent key is an empty list, never an error;
 // an element that does not parse is a 400 naming the parameter.
 func QueryParams[T QueryValue](r *Request, name string) ([]T, error) {
@@ -116,7 +116,7 @@ func typeName(dst any) string {
 }
 
 // FormatQuery renders a query-string value the way QueryParam parses it
-// (§V4.10).
+// (§generated-client).
 func FormatQuery[T QueryValue](v T) string {
 	switch v := any(v).(type) {
 	case string:

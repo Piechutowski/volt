@@ -34,7 +34,7 @@ func TestVoltProjectDiagnostics(t *testing.T) {
 
 	found := false
 	for _, dg := range d.Diags {
-		if strings.HasPrefix(dg.Code, "spec/V2") && strings.Contains(dg.Msg, "import") {
+		if strings.HasPrefix(dg.Code, "spec/imports") && strings.Contains(dg.Msg, "import") {
 			found = true
 		}
 	}
@@ -108,7 +108,7 @@ func TestVoltProjectEncodedURI(t *testing.T) {
 
 	found := false
 	for _, dg := range d.Diags {
-		if strings.HasPrefix(dg.Code, "spec/V2") {
+		if strings.HasPrefix(dg.Code, "spec/imports") {
 			found = true
 		}
 	}

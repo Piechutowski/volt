@@ -87,7 +87,7 @@ func actionOf(scope string) string { return strings.ToUpper(scope[:1]) + scope[1
 // Table names the i-th table (1-based) of a data package.
 func Table(i int) string { return fmt.Sprintf("tb%03ds", i) }
 
-// colTypes cycle through the column types of Appendix A with and
+// colTypes cycle through the column types of §mapping-to-go with and
 // without NULL.
 var colTypes = []string{
 	"integer [not null]",
@@ -167,7 +167,7 @@ func checksGo(pkg string) string {
 
 import "errors"
 
-// Positive is the Go-reference check every table names (§V12.5).
+// Positive is the Go-reference check every table names (§validation-checks rule 5).
 func Positive(v int32) error {
 	if v < 0 {
 		return errors.New("negative")
@@ -187,10 +187,10 @@ import (
 	volt "github.com/Piechutowski/volt"
 )
 
-// BearerAuth is the plug the pipeline names (§V3.2).
+// BearerAuth is the plug the pipeline names (§pipelines rule 2).
 func BearerAuth(next http.Handler) http.Handler { return next }
 
-// Errors is the error_handler the root scope names (§V4.4).
+// Errors is the error_handler the root scope names (§scopes).
 func Errors(w http.ResponseWriter, r *volt.Request, err error) {
 	volt.DefaultErrorHandler(w, r, err)
 }

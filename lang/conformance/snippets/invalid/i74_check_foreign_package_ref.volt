@@ -1,4 +1,4 @@
-// spec: §V12.5 — a Go-reference check names a function of the
+// spec: §validation-checks rule 5 — a Go-reference check names a function of the
 // containing package; imported packages need a local wrapper
 package db
 

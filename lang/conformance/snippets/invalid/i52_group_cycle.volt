@@ -1,4 +1,4 @@
-// spec: §V9.4 — group references must be acyclic
+// spec: §groups rule 4 — group references must be acyclic
 package db
 
 Table ms_revenue {

@@ -1,4 +1,4 @@
-; DBML notes conventionally contain Markdown (docs/spec.md §6.11) — inject Zed's
+; DBML notes conventionally contain Markdown (docs/spec.md §notes) — inject Zed's
 ; built-in Markdown language into every note string.
 
 (note_definition

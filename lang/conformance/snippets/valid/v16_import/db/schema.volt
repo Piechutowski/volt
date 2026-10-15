@@ -1,4 +1,4 @@
-// spec: §V2.2, §V5.4 — cross-package model resolution
+// spec: §imports rule 2, §table-resolution — cross-package model resolution
 package db
 
 Table users {

@@ -104,7 +104,7 @@ func (s *Server) initialize(_ *glsp.Context, params *protocol.InitializeParams) 
 // document sync
 
 // initialized asks the client to report Go file changes: a Go reference
-// (§V3.2, §V12.5) is checked against the package's Go files. The
+// (§pipelines rule 2, §validation-checks rule 5) is checked against the package's Go files. The
 // request is fire-and-forget.
 func (s *Server) initialized(ctx *glsp.Context, _ *protocol.InitializedParams) error {
 	if !s.watchSupported {

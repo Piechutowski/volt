@@ -1,4 +1,4 @@
-// spec: §V4.2.1 — any registers without a method
+// spec: §routes rule 1 — any registers without a method
 package app
 
 Scope / {

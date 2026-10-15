@@ -1,4 +1,4 @@
-// spec: §V4.4
+// spec: §scopes
 package app
 
 Scope / [pipe: nope] {

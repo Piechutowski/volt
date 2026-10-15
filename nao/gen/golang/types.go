@@ -1,4 +1,4 @@
-// The SQL-to-Go type mapping (docs/spec.md Appendix A). An unmapped type
+// The SQL-to-Go type mapping (docs/spec.md §mapping-to-go). An unmapped type
 // is a generation error.
 package golang
 
@@ -31,7 +31,7 @@ var typeMap = map[string]goType{
 	"int8":        {name: "int64"},
 	"bigserial":   {name: "int64"},
 
-	// unsigned variants (written as quoted types in DBML, spec §6.3.1)
+	// unsigned variants (written as quoted types in DBML, spec §columns rule 1)
 	"tinyint unsigned":  {name: "uint8"},
 	"smallint unsigned": {name: "uint16"},
 	"int unsigned":      {name: "uint32"},
@@ -96,7 +96,7 @@ var typeMap = map[string]goType{
 // keys ("public.job_status") to their generated Go type names.
 func typeResolve(schema, base string, enums map[string]string) (goType, error) {
 	// an enum reference may be schema-qualified or inherit the default
-	// schema (spec §6.8.4)
+	// schema (spec §enum rule 4)
 	key := base
 	if schema != "" {
 		key = schema + "." + base

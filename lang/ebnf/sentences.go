@@ -22,7 +22,7 @@ type Piece struct {
 
 // Text joins pieces into the sentence's text: one space between two
 // tokens unless the second is glued, a tab after a required line
-// break so no token lands in the first column (§3.2 rule 5).
+// break so no token lands in the first column (§line-structure-and-whitespace rule 5).
 func Text(pieces []Piece) string {
 	var b strings.Builder
 	for i, p := range pieces {

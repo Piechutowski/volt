@@ -1,4 +1,4 @@
-// spec: §V2.2
+// spec: §imports rule 2
 package app
 
 import (

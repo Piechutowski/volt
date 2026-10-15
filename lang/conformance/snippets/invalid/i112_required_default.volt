@@ -1,4 +1,4 @@
-// spec: §V12.8, §6.3 — required and default contradict: a defaulted column is the database's value
+// spec: §validation-checks rule 8, §columns — required and default contradict: a defaulted column is the database's value
 // want: "required" and "default" cannot both be set
 package db
 

@@ -2,7 +2,7 @@ package rt
 
 import "encoding/json"
 
-// JSONList encodes a list parameter (spec §V10.3) as the JSON array a
+// JSONList encodes a list parameter (spec §predicates rule 3) as the JSON array a
 // generated select binds to `json_each(:name)`: one static statement
 // whatever the list length, prepared once (decision list-parameters). A nil or empty slice
 // is "[]", which matches no row.

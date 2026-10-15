@@ -1,7 +1,7 @@
 // Package sqlite generates SQLite DDL (nao_schema.sql) from a checked
 // DBML file: CREATE TABLE per table, CREATE INDEX per non-pk index, and
 // INSERT statements from records. Dialect decisions follow docs/spec.md
-// Appendix B.
+// §mapping-to-sqlite-ddl.
 package sqlite
 
 import (
@@ -20,7 +20,7 @@ type Options struct {
 	// Source is the name of the DBML input, recorded in the header.
 	Source string
 	// CheckSQL is every typed check's SQL rendering, lowered by the
-	// Volt checker (§V12.4). A typed check absent from it is an error.
+	// Volt checker (§validation-checks rule 4). A typed check absent from it is an error.
 	CheckSQL map[*ast.Check]string
 }
 
@@ -151,7 +151,7 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 		uniqueDone[strings.Join(pkCols, ",")] = true
 	}
 
-	// table-level checks (spec §6.6), direct and injected (§6.9.3)
+	// table-level checks (spec §checks), direct and injected (§tablepartial rule 3)
 	{
 		for _, ck := range ti.Checks {
 			var expr string
@@ -159,14 +159,14 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 			case ck.Expr != nil:
 				expr = ck.Expr.Text()
 			case ck.Pred != nil:
-				// Lowered by the Volt checker (§V12.4).
+				// Lowered by the Volt checker (§validation-checks rule 4).
 				sql, lowered := g.opts.CheckSQL[ck]
 				if !lowered {
-					return fmt.Errorf("table %s: typed check not lowered — generate through volt gen (§V12)", ti.Decl.Name.Base())
+					return fmt.Errorf("table %s: typed check not lowered — generate through volt gen (§validation-checks)", ti.Decl.Name.Base())
 				}
 				expr = sql
 			case ck.Ref != nil:
-				continue // validator tier only: SQLite cannot call Go (§V12.5)
+				continue // validator tier only: SQLite cannot call Go (§validation-checks rule 5)
 			default:
 				continue
 			}
@@ -179,7 +179,7 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 		}
 	}
 
-	// foreign keys from all three ref forms (spec §6.7)
+	// foreign keys from all three ref forms (spec §relationships-ref)
 	for _, r := range g.info.Refs {
 		fk, target, ok := fkSides(r)
 		if !ok || fk.Table != ti || target.Table == nil {
@@ -248,7 +248,7 @@ func (g *generator) columnDef(ti *check.TableInfo, cd *check.ColumnDef, pkCols [
 		parts = append(parts, "CHECK ("+identQuote(colName)+" IN ("+strings.Join(vals, ", ")+"))")
 	}
 	if columnHas(cd, "required") {
-		// The required extension (§6.3, decision required-and-problems).
+		// The required extension (§columns, decision required-and-problems).
 		kind, _ := check.RequiredKind(col.Type.String(), enumInfo != nil)
 		var expr string
 		switch kind {
@@ -350,7 +350,7 @@ func (g *generator) insertsEmit(ti *check.TableInfo, r *ast.Records) error {
 
 /* ===== value rendering ===== */
 
-// defaultSQL renders a §6.4 default value; expressions are parenthesized
+// defaultSQL renders a §default-values default value; expressions are parenthesized
 // as SQLite requires for non-literal defaults.
 func defaultSQL(v ast.Node) (string, error) {
 	switch v := v.(type) {
@@ -438,7 +438,7 @@ func columnHas(cd *check.ColumnDef, name string) bool {
 	return false
 }
 
-// fkSides mirrors spec §6.7.3: which endpoint carries the foreign key.
+// fkSides mirrors spec §relationships-ref rule 3: which endpoint carries the foreign key.
 func fkSides(r *check.RefInfo) (fk, target check.EndpointInfo, ok bool) {
 	switch r.Op {
 	case token.GT:
@@ -552,5 +552,5 @@ func contains(ss []string, s string) bool {
 }
 
 // Ident quotes an identifier for SQLite the way the DDL generator does
-// (spec §V11.6).
+// (spec §selects-over-groups rule 6).
 func Ident(name string) string { return identQuote(name) }

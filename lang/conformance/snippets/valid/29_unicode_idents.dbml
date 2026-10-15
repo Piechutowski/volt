@@ -1,4 +1,4 @@
-// spec: §3.4 — Unicode identifiers and digit-leading identifiers
+// spec: §identifiers — Unicode identifiers and digit-leading identifiers
 Table zażółć {
   gęślą int
   jaźń varchar

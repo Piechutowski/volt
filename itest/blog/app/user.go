@@ -36,7 +36,7 @@ func Errors(w http.ResponseWriter, r *volt.Request, err error) {
 }
 
 // OpsErrors is the /ops scope's own error_handler: nearest wins
-// (§V4.4.3), so routes under /ops reach this one, not Errors.
+// (§scopes rule 3), so routes under /ops reach this one, not Errors.
 func OpsErrors(w http.ResponseWriter, r *volt.Request, err error) {
 	if !r.Committed() {
 		w.Header().Set("X-Error-Handler", "ops")
@@ -44,7 +44,7 @@ func OpsErrors(w http.ResponseWriter, r *volt.Request, err error) {
 	volt.DefaultErrorHandler(w, r, err)
 }
 
-// TagExtra marks the nested scope's appended pipeline (§V4.4.1).
+// TagExtra marks the nested scope's appended pipeline (§scopes rule 1).
 func TagExtra(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("X-Order", "extra")

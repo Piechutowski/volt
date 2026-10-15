@@ -11,15 +11,15 @@ it is a question, not a plan. Numbers retire like decision numbers.
 
 **Current working position** (and what the spec implements today): the
 schema core is DBML minus the file-import system — a core-only file
-stays upstream-valid and diagrams on dbdiagram.io as-is (§V0.2,
-Appendix C), and everything beyond the core is Volt's own, additive,
+stays upstream-valid and diagrams on dbdiagram.io as-is (§layers-files-and-the-superset-rule rule 2,
+§compatibility-with-dbml), and everything beyond the core is Volt's own, additive,
 owing upstream nothing.
 
 **What's actually unsettled:** whether that compatibility keeps paying
 for itself as Volt grows. The file-import break was the first cut;
-§8.1 schemas (`auth.users`, the implicit `public`) are the next
+§schemas schemas (`auth.users`, the implicit `public`) are the next
 candidate — Rails AR treats schemas as a connection/database concern,
-not a model concern; SQLite has no schemas at all (Appendix B flattens
+not a model concern; SQLite has no schemas at all (§mapping-to-sqlite-ddl flattens
 them); and Volt packages already namespace better. Each further cut
 trades diagrammability against language coherence, and is made
 deliberately, one decision at a time, when it bites — never as a side
@@ -61,8 +61,8 @@ declaration; generated code cannot carry hand-authored tags.
 
 **Graduated part → decision tag-passthrough** (2026-09-02, built): the namespace resolution
 — first-class settings only for what Volt itself understands, plus the
-repeatable `[tag: 'key:"value"']` verbatim passthrough (spec §6.3
-extension, Appendix A.5).
+repeatable `[tag: 'key:"value"']` verbatim passthrough (spec §columns
+extension, §struct-tags).
 
 **What's actually unsettled:** which first-class settings to mint and
 when (`[sensitive]` is the candidate), and whether a Go-field-name
@@ -70,7 +70,7 @@ override (`[go:]`-style, sibling of `[model:]`) is ever needed — the
 gob rename case, since gob ignores tags.
 
 **Graduated part → decision validation-rides-checks** (2026-09-02, built): validation rides checks
-— spec §V12, `nao_validate.go`, `rt.CheckError`/`rt.Like`.
+— spec §validation-checks, `nao_validate.go`, `rt.CheckError`/`rt.Like`.
 
 Mint each surface from a real moment in the app, not in advance; every
 one added costs spec + checker + generator + corpus (the closed-predicates lesson:
@@ -79,7 +79,7 @@ closed sets, deliberately grown).
 ## H5 — Enum columns in predicates
 
 Enum-typed columns cannot be compared in the predicate language (spec
-§V10.4): `where plan = :plan` is refused. The refusal is a v1
+§predicates rule 4): `where plan = :plan` is refused. The refusal is a v1
 narrowing, not a belief: a typed enum parameter (`:plan` typed as the
 generated `EPlan`, literals checked against the enum's values) is
 well-defined in both tiers. **Belief:** it should be lifted the first

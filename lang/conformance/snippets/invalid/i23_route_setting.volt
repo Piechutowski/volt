@@ -1,4 +1,4 @@
-// spec: §V6
+// spec: §settings-whitelists
 package app
 
 Scope / {

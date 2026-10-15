@@ -1,6 +1,6 @@
 package lang
 
-// The lowering of one scope item (§V4, §V5, §V13) as a pure function
+// The lowering of one scope item (§scopes-and-routes, §resources, §datasets) as a pure function
 // of explicit inputs (decisions pure-memos, check-by-declaration): a route, a resources declaration or a
 // dataset, with the context its scopes inherited, the package's own
 // facts, and an oracle it questions about the project and whose
@@ -224,33 +224,33 @@ func itemLower(item ast.Node, inh inherited, facts routeFacts, env routeEnv, rec
 	return routes, l.lookups, l.used, l.diags
 }
 
-/* ===== datasets (§V13) ===== */
+/* ===== datasets (§datasets) ===== */
 
 // dataset turns `dataset db.browse [strip: 'da_']` into one GET query
 // route per member of the select's target: the segment is the
 // member's table name with the strip prefix removed, the handler the
-// member's select method, bound like any query route (§V4.8).
+// member's select method, bound like any query route (§query-routes).
 func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
-	// §V13.1: the select is this package's own — bare or self-qualified,
-	// as a plug is (§V3.2) — or an imported package's, qualified.
+	// §dataset-declaration: the select is this package's own — bare or self-qualified,
+	// as a plug is (§pipelines rule 2) — or an imported package's, qualified.
 	qual, target, local := l.facts.pkgName, l.facts.pkgPath, true
 	qualPos := ds.Name.Pos()
 	if ds.Pkg != nil && ds.Pkg.Name() != l.facts.pkgName {
 		qual, qualPos, local = ds.Pkg.Name(), ds.Pkg.Pos(), false
 		known := false
 		if target, known = l.importOf(qual); !known {
-			l.errorf(ds.Pkg.Pos(), "V13", "unknown package qualifier %q (§V13.1)", qual)
+			l.errorf(ds.Pkg.Pos(), "datasets", "unknown package qualifier %q (§dataset-declaration)", qual)
 			return nil
 		}
 	}
 	_, _, hasSelects := l.dataPackage(target)
 	if local && !hasSelects {
-		l.errorf(ds.Name.Pos(), "V13", "package %q declares no select; a dataset names a select of this package, or of an imported data package, qualified (§V13.1)", target)
+		l.errorf(ds.Name.Pos(), "datasets", "package %q declares no select; a dataset names a select of this package, or of an imported data package, qualified (§dataset-declaration)", target)
 		return nil
 	}
 	si, hint := l.selectByName(target, ds.Name.Name())
 	if si == nil {
-		l.errorf(ds.Name.Pos(), "V13", "no select %q in package %q%s (§V13.1)", ds.Name.Name(), target, hint)
+		l.errorf(ds.Name.Pos(), "datasets", "no select %q in package %q%s (§dataset-declaration)", ds.Name.Name(), target, hint)
 		return nil
 	}
 
@@ -267,23 +267,23 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 			case "strip":
 				lit, ok := s.Value.(*ast.BasicLit)
 				if !ok || lit.Tok.Kind != token.STRING {
-					l.errorf(s.Pos(), "V13", "strip: takes a string, the table-name prefix to drop from the URL segment (§V13.2)")
+					l.errorf(s.Pos(), "datasets", "strip: takes a string, the table-name prefix to drop from the URL segment (§dataset-settings)")
 					continue
 				}
 				strip = lit.Tok.Val
 			case "only", "except":
 				list, ok := s.Value.(*ast.IdentList)
 				if !ok {
-					l.errorf(s.Pos(), "V13", "%s: takes a table list like (da_a_a, da_b_b) (§V13.2)", s.Name)
+					l.errorf(s.Pos(), "datasets", "%s: takes a table list like (da_a_a, da_b_b) (§dataset-settings)", s.Name)
 					continue
 				}
 				set := map[string]bool{}
 				for i, id := range list.Names {
 					if list.Mods[i] != nil {
-						l.errorf(list.Mods[i].Pos(), "V13", "%s: entries are table names; %q does not belong after %q (§V13.2)", s.Name, list.Mods[i].Name(), id.Name())
+						l.errorf(list.Mods[i].Pos(), "datasets", "%s: entries are table names; %q does not belong after %q (§dataset-settings)", s.Name, list.Mods[i].Name(), id.Name())
 					}
 					if !members[id.Name()] {
-						l.errorf(id.Pos(), "V13", "%s: %q is not a member of select %q's target (§V13.2)", s.Name, id.Name(), si.Decl.Name.Name())
+						l.errorf(id.Pos(), "datasets", "%s: %q is not a member of select %q's target (§dataset-settings)", s.Name, id.Name(), si.Decl.Name.Name())
 						continue
 					}
 					set[id.Name()] = true
@@ -294,7 +294,7 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 					except, exceptPos = set, s.Pos()
 				}
 			default:
-				l.errorf(s.Pos(), "V6", "setting %q is not valid on a dataset (§V6); valid: strip, only, except", s.Name)
+				l.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a dataset (§settings-whitelists); valid: strip, only, except", s.Name)
 			}
 		}
 	}
@@ -303,7 +303,7 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 		if exceptPos.Line() > onlyPos.Line() || (exceptPos.Line() == onlyPos.Line() && exceptPos.Column() > onlyPos.Column()) {
 			pos = exceptPos
 		}
-		l.errorf(pos, "V13", "only: and except: cannot both be set on a dataset (§V13.2)")
+		l.errorf(pos, "datasets", "only: and except: cannot both be set on a dataset (§dataset-settings)")
 		return nil
 	}
 
@@ -319,12 +319,12 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 		seg := base
 		if strip != "" {
 			if !strings.HasPrefix(base, strip) {
-				l.errorf(ds.Pos(), "V13", "strip: %q is not a prefix of member table %q (§V13.2)", strip, base)
+				l.errorf(ds.Pos(), "datasets", "strip: %q is not a prefix of member table %q (§dataset-settings)", strip, base)
 				continue
 			}
 			seg = strings.TrimPrefix(base, strip)
 			if seg == "" || !goIdentOK(seg) {
-				l.errorf(ds.Pos(), "V13", "strip: %q leaves member table %q with no usable segment (§V13.2)", strip, base)
+				l.errorf(ds.Pos(), "datasets", "strip: %q leaves member table %q with no usable segment (§dataset-settings)", strip, base)
 				continue
 			}
 		}
@@ -379,7 +379,7 @@ func selfFuncRefIn(v ast.Node, pkgName string) (string, bool) {
 	return "", false
 }
 
-/* ===== routes (§V4) ===== */
+/* ===== routes (§scopes-and-routes) ===== */
 
 func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 	method := methodOf(r.Verb())
@@ -391,13 +391,13 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 
 	for _, part := range r.Handler.Parts {
 		if part.Quoted() {
-			l.errorf(r.Handler.Pos(), "V4", "handler names are plain (unquoted) identifiers (§V4.1.6), found %q", r.Handler.String())
+			l.errorf(r.Handler.Pos(), "scopes-and-routes", "handler names are plain (unquoted) identifiers (§route-paths rule 6), found %q", r.Handler.String())
 			return nil
 		}
 	}
-	// §V4.3: `Query` or `<package name>.Query` names a generated query
+	// §handler-references: `Query` or `<package name>.Query` names a generated query
 	// of this package and `pkg.Query` one of an imported package — a
-	// query route (§V4.8); `volt.Events` is the runtime's; anything
+	// query route (§query-routes); `volt.Events` is the runtime's; anything
 	// else is Controller.Action.
 	var query *QueryRef
 	events := false
@@ -408,11 +408,11 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 	switch {
 	case controller == "volt":
 		if action != "Events" {
-			l.errorf(r.Handler.Pos(), "V4", "the runtime provides no handler volt.%s; volt.Events is the event stream (§V4.11)", action)
+			l.errorf(r.Handler.Pos(), "scopes-and-routes", "the runtime provides no handler volt.%s; volt.Events is the event stream (§event-routes)", action)
 			return nil
 		}
 		if method != "GET" {
-			l.errorf(r.Pos(), "V4", "an event route is read with get (§V4.11)")
+			l.errorf(r.Pos(), "scopes-and-routes", "an event route is read with get (§event-routes)")
 			return nil
 		}
 		events = true
@@ -430,7 +430,7 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 			}
 			controller, action = "", query.Method
 		} else if !exportedIdentOK(controller) || !exportedIdentOK(action) {
-			l.errorf(r.Handler.Pos(), "V4", "handler must be Controller.Action, both exported Go identifiers (§V4.3), found %q", r.Handler.String())
+			l.errorf(r.Handler.Pos(), "scopes-and-routes", "handler must be Controller.Action, both exported Go identifiers (§handler-references), found %q", r.Handler.String())
 			return nil
 		}
 	}
@@ -440,9 +440,9 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 	if s := settingOf(r.Settings, "name"); s != nil {
 		id, ok := s.Value.(*ast.Ident)
 		if !ok {
-			l.errorf(s.Pos(), "V4", "name: takes an identifier (§V4.6)")
+			l.errorf(s.Pos(), "scopes-and-routes", "name: takes an identifier (§route-names-and-reverse-urls)")
 		} else if n, err := golang.GoName(id.Name()); err != nil {
-			l.errorf(s.Pos(), "V4", "route name %q: %v (§V4.6)", id.Name(), err)
+			l.errorf(s.Pos(), "scopes-and-routes", "route name %q: %v (§route-names-and-reverse-urls)", id.Name(), err)
 		} else {
 			helper = inh.namePrefix + n
 		}
@@ -450,7 +450,7 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 	if r.Settings != nil {
 		for _, s := range r.Settings.Settings {
 			if s.Name != "name" {
-				l.errorf(s.Pos(), "V6", "setting %q is not valid on a route (§V6); valid: name", s.Name)
+				l.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a route (§settings-whitelists); valid: name", s.Name)
 			}
 		}
 	}
@@ -458,14 +458,14 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 	if query != nil {
 		action = ""
 		// The client method carries the name for every query route; the
-		// reverse-URL helper only for reads, as with resources (§V4.8).
+		// reverse-URL helper only for reads, as with resources (§query-routes).
 		client = helper
 		if method != "GET" && method != "HEAD" {
 			helper = ""
 		}
 	}
 	if events {
-		client = helper // the client's Events method (§V4.11)
+		client = helper // the client's Events method (§event-routes)
 	}
 	return &RouteInfo{
 		Method:       method,
@@ -484,10 +484,10 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 	}
 }
 
-/* ===== query routes (§V4.8) ===== */
+/* ===== query routes (§query-routes) ===== */
 
 // queryValueTypes are the Go types a query-string parameter can carry:
-// the scalar column types of Appendix A, matched by the runtime's
+// the scalar column types of §mapping-to-go, matched by the runtime's
 // volt.QueryParam.
 var queryValueTypes = map[string]bool{
 	"string": true, "bool": true,
@@ -497,9 +497,9 @@ var queryValueTypes = map[string]bool{
 }
 
 // queryRef resolves `pkg.Method`, `Method` or `<this package>.Method`
-// to a generated query of the named package — a select method (§V11.6)
+// to a generated query of the named package — a select method (§selects-over-groups rule 6)
 // or a default CRUD method — and binds the route's parameters to the
-// method's (§V4.8).
+// method's (§query-routes).
 func (l *routeLowering) queryRef(r *ast.Route, method string, params []Param, qual, target string, local bool) *QueryRef {
 	last := r.Handler.Parts[len(r.Handler.Parts)-1]
 	return l.queryBind(last.Pos(), r.Handler.Parts[0].Pos(), method, params, qual, target, local, last.Name(), paramAt{route: r})
@@ -516,19 +516,19 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	}
 	if !hasSchema {
 		if local {
-			l.errorf(pos, "V4", "package %q declares no tables, so it has no query %s; a query of an imported data package is written qualified (§V4.8)", target, name)
+			l.errorf(pos, "scopes-and-routes", "package %q declares no tables, so it has no query %s; a query of an imported data package is written qualified (§query-routes)", target, name)
 		} else {
-			l.errorf(pos, "V4", "package %q declares no tables; a query route needs a data package (§V4.8)", target)
+			l.errorf(pos, "scopes-and-routes", "package %q declares no tables; a query route needs a data package (§query-routes)", target)
 		}
 		return nil
 	}
 	// The Controllers field: the qualifier as a Go name, or Queries for
-	// the package's own handle (§V4.8.5).
+	// the package's own handle (§query-routes rule 5).
 	field := "Queries"
 	if !local {
 		var err error
 		if field, err = golang.GoName(qual); err != nil {
-			l.errorf(qualPos, "V4", "import qualifier %q: %v (§V4.8)", qual, err)
+			l.errorf(qualPos, "scopes-and-routes", "import qualifier %q: %v (§query-routes)", qual, err)
 			return nil
 		}
 	}
@@ -547,7 +547,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	var sig []sigParam
 	found := false
 
-	// Selects: <Model><SelectName> per member (§V11.6); the first member
+	// Selects: <Model><SelectName> per member (§selects-over-groups rule 6); the first member
 	// minting the name owns it.
 	if si, m, ok := l.selectByMethod(target, name); ok {
 		found = true
@@ -573,7 +573,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 			}
 			if cm.Body != "" {
 				// The params struct validates when it carries the
-				// columns of at least one check (§V12.6).
+				// columns of at least one check (§validation-checks rule 6).
 				create, update := l.validators(target, key)
 				sig = append(sig, sigParam{name: "arg", goType: qual + "." + cm.Body, body: true,
 					validates: (cm.Op == "create" && create) || (cm.Op == "update" && update)})
@@ -589,7 +589,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	}
 	if !found {
 		hint := l.queryHint(target, name)
-		l.errorf(pos, "V4", "no generated query %s in package %q%s — a query route names a select method or a default CRUD method (Get, List, Create, Update, Delete) (§V4.8)", ref, target, hint)
+		l.errorf(pos, "scopes-and-routes", "no generated query %s in package %q%s — a query route names a select method or a default CRUD method (Get, List, Create, Update, Delete) (§query-routes)", ref, target, hint)
 		return nil
 	}
 
@@ -608,13 +608,13 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 			qp.Source = FromBody
 			qp.Validates = sp.validates
 			if method != "POST" && method != "PUT" && method != "PATCH" {
-				l.errorf(pos, "V4", "%s takes a request body (%s); route it with post, put or patch (§V4.8)", ref, sp.goType)
+				l.errorf(pos, "scopes-and-routes", "%s takes a request body (%s); route it with post, put or patch (§query-routes)", ref, sp.goType)
 				ok = false
 			}
 		case strings.HasPrefix(sp.goType, "[]"):
 			qp.Source = FromList
 			if pp, inPath := byName[sp.name]; inPath {
-				l.errorf(segAt.pos(pp.Name), "V4", "list parameter %q of %s cannot be a path parameter; pass it as a repeated query key (§V4.8)", sp.name, ref)
+				l.errorf(segAt.pos(pp.Name), "scopes-and-routes", "list parameter %q of %s cannot be a path parameter; pass it as a repeated query key (§query-routes)", sp.name, ref)
 				ok = false
 			}
 		default:
@@ -622,20 +622,20 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 				qp.Source = FromPath
 				bound[sp.name] = true
 				if pp.Wild {
-					l.errorf(segAt.pos(pp.Name), "V4", "parameter %q of %s cannot be a wildcard (§V4.8)", sp.name, ref)
+					l.errorf(segAt.pos(pp.Name), "scopes-and-routes", "parameter %q of %s cannot be a wildcard (§query-routes)", sp.name, ref)
 					ok = false
 				} else if pp.Type.GoType() != sp.goType {
 					if KnownParamType(sp.goType) {
-						l.errorf(segAt.pos(pp.Name), "V4", "path parameter %q is %s but %s takes %s; spell it :%s(%s) (§V4.8)", sp.name, pp.Type.GoType(), ref, sp.goType, sp.name, sp.goType)
+						l.errorf(segAt.pos(pp.Name), "scopes-and-routes", "path parameter %q is %s but %s takes %s; spell it :%s(%s) (§query-routes)", sp.name, pp.Type.GoType(), ref, sp.goType, sp.name, sp.goType)
 					} else {
-						l.errorf(segAt.pos(pp.Name), "V4", "parameter %q of %s is %s, which a path segment cannot carry (§V4.1.3); pass it in the query string (§V4.8)", sp.name, ref, sp.goType)
+						l.errorf(segAt.pos(pp.Name), "scopes-and-routes", "parameter %q of %s is %s, which a path segment cannot carry (§route-paths rule 3); pass it in the query string (§query-routes)", sp.name, ref, sp.goType)
 					}
 					ok = false
 				}
 			} else {
 				qp.Source = FromQuery
 				if !queryValueTypes[sp.goType] {
-					l.errorf(pos, "V4", "parameter %q of %s is %s, which the query string cannot carry (§V4.8)", sp.name, ref, sp.goType)
+					l.errorf(pos, "scopes-and-routes", "parameter %q of %s is %s, which the query string cannot carry (§query-routes)", sp.name, ref, sp.goType)
 					ok = false
 				}
 			}
@@ -644,7 +644,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	}
 	for _, p := range params {
 		if !bound[p.Name] {
-			l.errorf(segAt.pos(p.Name), "V4", "path parameter %q is not a parameter of %s (§V4.8)", p.Name, ref)
+			l.errorf(segAt.pos(p.Name), "scopes-and-routes", "path parameter %q is not a parameter of %s (§query-routes)", p.Name, ref)
 			ok = false
 		}
 	}
@@ -683,15 +683,15 @@ func segPos(r *ast.Route, name string) token.Position {
 }
 
 // pathParams validates the full segment list and derives the parameter
-// signature (§V4.1).
+// signature (§route-paths).
 func (l *routeLowering) pathParams(segs []*ast.Segment) ([]Param, bool) {
 	var params []Param
 	seen := map[string]bool{}
 	ok := true
 	for i, seg := range segs {
-		// §V4.1.6: every segment name is a plain, unquoted identifier.
+		// §route-paths rule 6: every segment name is a plain, unquoted identifier.
 		if seg.Name.Quoted() || !goIdentOK(seg.Name.Name()) {
-			l.errorf(seg.Pos(), "V4", "path segment %q must be a plain identifier of letters, digits and underscores (§V4.1.6)", seg.Name.Name())
+			l.errorf(seg.Pos(), "scopes-and-routes", "path segment %q must be a plain identifier of letters, digits and underscores (§route-paths rule 6)", seg.Name.Name())
 			ok = false
 			continue
 		}
@@ -700,31 +700,31 @@ func (l *routeLowering) pathParams(segs []*ast.Segment) ([]Param, bool) {
 			continue
 		case ast.SegWild:
 			if i != len(segs)-1 {
-				l.errorf(seg.Pos(), "V4", "the wildcard ':%s...' must be the last path segment (§V4.1.4)", seg.Name.Name())
+				l.errorf(seg.Pos(), "scopes-and-routes", "the wildcard ':%s...' must be the last path segment (§route-paths rule 4)", seg.Name.Name())
 				ok = false
 			}
 		}
 		name := seg.Name.Name()
 		if seen[name] {
-			l.errorf(seg.Pos(), "V4", "duplicate path parameter %q (§V4.1.2)", name)
+			l.errorf(seg.Pos(), "scopes-and-routes", "duplicate path parameter %q (§route-paths rule 2)", name)
 			ok = false
 			continue
 		}
 		seen[name] = true
 		if !goIdentOK(name) || goKeywords[name] {
-			l.errorf(seg.Pos(), "V4", "path parameter %q must be a valid, non-keyword Go identifier (§V4.1.2)", name)
+			l.errorf(seg.Pos(), "scopes-and-routes", "path parameter %q must be a valid, non-keyword Go identifier (§route-paths rule 2)", name)
 			ok = false
 			continue
 		}
 		if reservedParamNames[name] {
-			l.errorf(seg.Pos(), "V4", "path parameter %q collides with a name in generated signatures (§V4.1.2); reserved: w, r, opts, volt", name)
+			l.errorf(seg.Pos(), "scopes-and-routes", "path parameter %q collides with a name in generated signatures (§route-paths rule 2); reserved: w, r, opts, volt", name)
 			ok = false
 			continue
 		}
 		pt := TString
 		if seg.Type != nil {
 			if !KnownParamType(seg.Type.Name()) {
-				l.errorf(seg.Type.Pos(), "V4", "unknown parameter type %q (§V4.1.3); valid: int, int32, int64, string", seg.Type.Name())
+				l.errorf(seg.Type.Pos(), "scopes-and-routes", "unknown parameter type %q (§route-paths rule 3); valid: int, int32, int64, string", seg.Type.Name())
 				ok = false
 				continue
 			}
@@ -735,30 +735,30 @@ func (l *routeLowering) pathParams(segs []*ast.Segment) ([]Param, bool) {
 	return params, ok
 }
 
-/* ===== resources (§V5) ===== */
+/* ===== resources (§resources) ===== */
 
 func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInfo {
 	declared := res.Name.Name()
 	if res.Name.Quoted() || !goIdentOK(declared) || (res.Pkg != nil && (res.Pkg.Quoted() || !goIdentOK(res.Pkg.Name()))) {
-		l.errorf(res.Name.Pos(), "V5", "resources name %q must be a plain identifier (§V4.1.6)", res.Ref())
+		l.errorf(res.Name.Pos(), "resources", "resources name %q must be a plain identifier (§route-paths rule 6)", res.Ref())
 		return nil
 	}
 
 	paramName := "id"
 
-	// §V5.5: [default] generates the handlers from the table's default
-	// CRUD, as for a query route (§V4.8).
+	// §default-handlers: [default] generates the handlers from the table's default
+	// CRUD, as for a query route (§query-routes).
 	def := false
 	if res.Settings != nil {
 		if s := res.Settings.Get("default"); s != nil {
 			def = true
 			if s.Value != nil {
-				l.errorf(s.Pos(), "V5", "default is a flag and takes no value (§V5.5)")
+				l.errorf(s.Pos(), "resources", "default is a flag and takes no value (§default-handlers)")
 			}
 		}
 	}
 
-	// §V5.1: the declaration MUST name a declared table, qualified or not.
+	// §declaration: the declaration MUST name a declared table, qualified or not.
 	ti, ok, reported := l.resourceTable(res)
 	if reported {
 		return nil // the reference is wrong; expanding it would only add noise
@@ -777,7 +777,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 
 	controller, err := golang.GoName(tableName)
 	if err != nil {
-		l.errorf(res.Name.Pos(), "V5", "resources name %q: %v (§V5.1)", declared, err)
+		l.errorf(res.Name.Pos(), "resources", "resources name %q: %v (§declaration)", declared, err)
 		return nil
 	}
 	if singular == "" {
@@ -796,28 +796,28 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 			switch s.Name {
 			case "api":
 				if s.Value != nil {
-					l.errorf(s.Pos(), "V5", "api is a flag and takes no value (§V5.3)")
+					l.errorf(s.Pos(), "resources", "api is a flag and takes no value (§settings)")
 				}
 				api = true
 			case "default":
-				// validated above; implies api (§V5.5)
+				// validated above; implies api (§default-handlers)
 				api = true
 			case "only", "except":
 				list, ok := s.Value.(*ast.IdentList)
 				if !ok {
-					l.errorf(s.Pos(), "V5", "%s: takes an action list like (index, show) (§V5.3)", s.Name)
+					l.errorf(s.Pos(), "resources", "%s: takes an action list like (index, show) (§settings)", s.Name)
 					continue
 				}
 				for i, mod := range list.Mods {
 					if mod != nil {
-						l.errorf(mod.Pos(), "V5", "%s: entries are single action names; %q does not belong after %q (§V5.3)", s.Name, mod.Name(), list.Names[i].Name())
+						l.errorf(mod.Pos(), "resources", "%s: entries are single action names; %q does not belong after %q (§settings)", s.Name, mod.Name(), list.Names[i].Name())
 					}
 				}
 				set := map[string]bool{}
 				for _, id := range list.Names {
 					canon, known := actionByLower[strings.ToLower(id.Name())]
 					if !known {
-						l.errorf(id.Pos(), "V5", "unknown action %q (§V5.2); valid: index, new, create, show, edit, update, delete", id.Name())
+						l.errorf(id.Pos(), "resources", "unknown action %q (§the-action-table); valid: index, new, create, show, edit, update, delete", id.Name())
 						continue
 					}
 					set[canon] = true
@@ -830,40 +830,40 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 			case "singular":
 				id, ok := s.Value.(*ast.Ident)
 				if !ok || id.Quoted() || !goIdentOK(id.Name()) {
-					l.errorf(s.Pos(), "V5", "singular: takes a plain identifier (§V5.3)")
+					l.errorf(s.Pos(), "resources", "singular: takes a plain identifier (§settings)")
 					continue
 				}
 				gn, err := golang.GoName(id.Name())
 				if err != nil {
-					l.errorf(s.Pos(), "V5", "singular %q: %v (§V5.3)", id.Name(), err)
+					l.errorf(s.Pos(), "resources", "singular %q: %v (§settings)", id.Name(), err)
 					continue
 				}
 				singular = gn
 			case "param":
 				if def {
-					l.errorf(s.Pos(), "V5", "param: does not apply with [default]; the key parameter is named by the primary-key column, as the generated CRUD spells it (§V5.5)")
+					l.errorf(s.Pos(), "resources", "param: does not apply with [default]; the key parameter is named by the primary-key column, as the generated CRUD spells it (§default-handlers)")
 					continue
 				}
 				id, ok := s.Value.(*ast.Ident)
 				if !ok || !goIdentOK(id.Name()) || goKeywords[id.Name()] || reservedParamNames[id.Name()] {
-					l.errorf(s.Pos(), "V5", "param: takes a valid, non-keyword, non-reserved Go identifier (§V5.3, §V4.1.2)")
+					l.errorf(s.Pos(), "resources", "param: takes a valid, non-keyword, non-reserved Go identifier (§settings, §route-paths rule 2)")
 					continue
 				}
 				paramName = id.Name()
 			case "model":
-				l.errorf(s.Pos(), "V5", "model: is not a setting; name the table in the declaration itself — `resources <table>` (§V5.1)")
+				l.errorf(s.Pos(), "resources", "model: is not a setting; name the table in the declaration itself — `resources <table>` (§declaration)")
 			default:
-				l.errorf(s.Pos(), "V6", "setting %q is not valid on resources (§V6); valid: api, only, except, param, singular, default", s.Name)
+				l.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on resources (§settings-whitelists); valid: api, only, except, param, singular, default", s.Name)
 			}
 		}
 	}
 	if only != nil && except != nil {
-		l.errorf(exceptPos, "V5", "only: and except: cannot be combined (§V5.3)")
+		l.errorf(exceptPos, "resources", "only: and except: cannot be combined (§settings)")
 		_ = onlyPos
 		except = nil
 	}
 
-	// §V5.5: the CRUD methods the default handlers call, by operation.
+	// §default-handlers: the CRUD methods the default handlers call, by operation.
 	var crud map[string]golang.CRUDMethod
 	qual, target, local := l.facts.pkgName, l.facts.pkgPath, true
 	qualPos := res.Name.Pos()
@@ -877,7 +877,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 		// and, with it, a plan (decision one-naming-plan).
 		_, methods, err := l.modelOf(target, ti.Key)
 		if err != nil {
-			l.errorf(res.Name.Pos(), "V5", "resources %s [default]: %v (§V5.5)", res.Ref(), err)
+			l.errorf(res.Name.Pos(), "resources", "resources %s [default]: %v (§default-handlers)", res.Ref(), err)
 			return nil
 		}
 		crud = map[string]golang.CRUDMethod{}
@@ -890,15 +890,15 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 	}
 
 	// The key parameter must not repeat a parameter of the enclosing
-	// scope (§V4.1.2); said once, at the declaration.
+	// scope (§route-paths rule 2); said once, at the declaration.
 	for _, seg := range inh.prefix {
 		if seg.Kind != ast.SegParam || seg.Name.Name() != paramName {
 			continue
 		}
 		if def {
-			l.errorf(res.Name.Pos(), "V5", "resources %s [default]: the key parameter %q is already a parameter of the enclosing scope, and the generated CRUD fixes its name; give the scope's parameter another name (§V5.5, §V4.1.2)", res.Ref(), paramName)
+			l.errorf(res.Name.Pos(), "resources", "resources %s [default]: the key parameter %q is already a parameter of the enclosing scope, and the generated CRUD fixes its name; give the scope's parameter another name (§default-handlers, §route-paths rule 2)", res.Ref(), paramName)
 		} else {
-			l.errorf(res.Name.Pos(), "V5", "resources %q: the key parameter %q is already a parameter of the enclosing scope; rename it with [param: <name>] (§V5.3, §V4.1.2)", declared, paramName)
+			l.errorf(res.Name.Pos(), "resources", "resources %q: the key parameter %q is already a parameter of the enclosing scope; rename it with [param: <name>] (§settings, §route-paths rule 2)", declared, paramName)
 		}
 		return nil
 	}
@@ -941,15 +941,15 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 		case "Edit":
 			helper = inh.namePrefix + "Edit" + singular
 		}
-		// §V5.5: with [default] the action is a query route over the
+		// §default-handlers: with [default] the action is a query route over the
 		// table's CRUD method, with no controller; writes have a client
-		// method and no reverse-URL helper (§V4.8).
+		// method and no reverse-URL helper (§query-routes).
 		var qr *QueryRef
 		client := ""
 		if def {
 			cm, has := crud[a.Op]
 			if !has {
-				l.errorf(res.Name.Pos(), "V5", "resources %s [default]: the generated CRUD has no %s method for %q (%s); drop the action with except: (%s) (§V5.5)",
+				l.errorf(res.Name.Pos(), "resources", "resources %s [default]: the generated CRUD has no %s method for %q (%s); drop the action with except: (%s) (§default-handlers)",
 					res.Ref(), a.Op, a.Name, crudAbsent(a.Op), strings.ToLower(a.Name))
 				continue
 			}
@@ -992,7 +992,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 	return out
 }
 
-// crudAbsent says why a default CRUD method can be missing (§V5.4).
+// crudAbsent says why a default CRUD method can be missing (§table-resolution).
 func crudAbsent(op string) string {
 	if op == "update" {
 		return "every column is part of the key, so there is nothing to update"
@@ -1001,33 +1001,33 @@ func crudAbsent(op string) string {
 }
 
 // resourceTable resolves a resources declaration to the table it names
-// (§V5.1), matched exactly; a miss is reported as an error.
+// (§declaration), matched exactly; a miss is reported as an error.
 func (l *routeLowering) resourceTable(res *ast.Resources) (ti *check.TableInfo, ok, reported bool) {
 	pkgPath := l.facts.pkgPath
 	if res.Pkg != nil && res.Pkg.Name() != l.facts.pkgName {
 		qual := res.Pkg.Name()
 		target, known := l.importOf(qual)
 		if !known {
-			l.errorf(res.Pkg.Pos(), "V5", "unknown package qualifier %q (§V5.1)", qual)
+			l.errorf(res.Pkg.Pos(), "resources", "unknown package qualifier %q (§declaration)", qual)
 			return nil, false, true
 		}
 		pkgPath = target
 	}
 	if _, hasSchema, _ := l.dataPackage(pkgPath); !hasSchema {
-		l.errorf(res.Name.Pos(), "V5", "package %q declares no tables; resources names a table of this package, or of an imported data package, qualified (§V5.1)", pkgPath)
+		l.errorf(res.Name.Pos(), "resources", "package %q declares no tables; resources names a table of this package, or of an imported data package, qualified (§declaration)", pkgPath)
 		return nil, false, true
 	}
 	want := res.Name.Name()
 	if cand, hint := l.tableByBase(pkgPath, want); cand != nil {
 		return cand, true, false
 	} else {
-		l.errorf(res.Name.Pos(), "V5", "no table %q in package %q%s (§V5.1)", want, pkgPath, hint)
+		l.errorf(res.Name.Pos(), "resources", "no table %q in package %q%s (§declaration)", want, pkgPath, hint)
 	}
 	return nil, false, true
 }
 
 // pkParamType maps a table's primary key to a route parameter type.
-// Both declaration forms count (nao SPEC §6.3.3, §6.5.3): column-level
+// Both declaration forms count (nao SPEC §columns rule 3, §indexes rule 3): column-level
 // pk flags/settings and pk-marked indexes.
 func (l *routeLowering) pkParamType(ti *check.TableInfo, pos token.Position) (ParamType, bool) {
 	var pkNames []string
@@ -1065,28 +1065,28 @@ func (l *routeLowering) pkParamType(ti *check.TableInfo, pos token.Position) (Pa
 	}
 	switch {
 	case len(pkNames) == 0:
-		l.errorf(pos, "V5", "table %q has no single-column primary key (§V5.4)", ti.Key)
+		l.errorf(pos, "resources", "table %q has no single-column primary key (§table-resolution)", ti.Key)
 		return "", false
 	case len(pkNames) > 1:
-		l.errorf(pos, "V5", "table %q has a composite primary key (%s); composite keys are not routable (§V5.4)", ti.Key, strings.Join(pkNames, ", "))
+		l.errorf(pos, "resources", "table %q has a composite primary key (%s); composite keys are not routable (§table-resolution)", ti.Key, strings.Join(pkNames, ", "))
 		return "", false
 	}
 	cd := ti.Column(pkNames[0])
 	if cd == nil {
-		l.errorf(pos, "V5", "table %q primary-key column %q not found (§V5.4)", ti.Key, pkNames[0])
+		l.errorf(pos, "resources", "table %q primary-key column %q not found (§table-resolution)", ti.Key, pkNames[0])
 		return "", false
 	}
 	pk := cd.Col
 	goType, known := golang.GoTypeName(strings.ToLower(pk.Type.Name.String()))
 	if !known {
-		l.errorf(pos, "V5", "primary-key type %q of table %q is not a routable type (§V5.4)", pk.Type.String(), ti.Key)
+		l.errorf(pos, "resources", "primary-key type %q of table %q is not a routable type (§table-resolution)", pk.Type.String(), ti.Key)
 		return "", false
 	}
 	switch goType {
 	case "int", "int32", "int64", "string":
 		return ParamType(goType), true
 	default:
-		l.errorf(pos, "V5", "primary-key Go type %q of table %q cannot be a route parameter (§V5.4); routable: int, int32, int64, string", goType, ti.Key)
+		l.errorf(pos, "resources", "primary-key Go type %q of table %q cannot be a route parameter (§table-resolution); routable: int, int32, int64, string", goType, ti.Key)
 		return "", false
 	}
 }

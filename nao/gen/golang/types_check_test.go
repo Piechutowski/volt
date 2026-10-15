@@ -11,7 +11,7 @@ func TestIntegerFamilyAgreesWithChecker(t *testing.T) {
 	for dbml, gt := range typeMap {
 		isInt := strings.HasPrefix(gt.name, "int") || strings.HasPrefix(gt.name, "uint")
 		if got := check.IntegerType(dbml); got != isInt {
-			t.Errorf("check.IntegerType(%q) = %v, but Appendix A maps it to %s", dbml, got, gt.name)
+			t.Errorf("check.IntegerType(%q) = %v, but §mapping-to-go maps it to %s", dbml, got, gt.name)
 		}
 	}
 }
@@ -31,7 +31,7 @@ func TestRequiredKindAgreesWithTypeMap(t *testing.T) {
 		}
 		got, gotOK := check.RequiredKind(dbml, false)
 		if gotOK != ok || got != want {
-			t.Errorf("check.RequiredKind(%q) = (%q, %v), but Appendix A maps it to %s", dbml, got, gotOK, gt.name)
+			t.Errorf("check.RequiredKind(%q) = (%q, %v), but §mapping-to-go maps it to %s", dbml, got, gotOK, gt.name)
 		}
 	}
 }

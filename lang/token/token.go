@@ -109,18 +109,18 @@ func (p Position) String() string {
 
 func (p Position) IsValid() bool { return p.line > 0 }
 
-// Kind is the set of lexical token kinds (spec §3).
+// Kind is the set of lexical token kinds (spec §lexical-structure).
 type Kind uint8
 
 const (
 	ILLEGAL Kind = iota
 	EOF
 
-	IDENT    // users, "quoted name" (spec §3.4)
-	STRING   // 'text', '''multi line''' (spec §3.6, §3.7)
-	NUMBER   // 42, 3.14, 1.5e10 (spec §3.9)
-	COLOR    // #3498DB (spec §3.11)
-	FUNCEXPR // `now()` (spec §3.12)
+	IDENT    // users, "quoted name" (spec §identifiers)
+	STRING   // 'text', '''multi line''' (spec §string-literals, §multi-line-string-literals)
+	NUMBER   // 42, 3.14, 1.5e10 (spec §numeric-literals)
+	COLOR    // #3498DB (spec §color-literals)
+	FUNCEXPR // `now()` (spec §expression-literals)
 
 	LBRACE   // {
 	RBRACE   // }
@@ -133,16 +133,16 @@ const (
 	DOT      // .
 	TILDE    // ~
 	STAR     // *
-	SLASH    // / (Volt route paths and import paths, spec §V3-§V5)
+	SLASH    // / (Volt route paths and import paths, spec §pipelines to §resources)
 
 	LT    // <
 	GT    // >
 	LTGT  // <>
 	MINUS // -
 
-	// Predicate and group operators (spec §V9-§V10)
+	// Predicate and group operators (spec §groups to §predicates)
 	PLUS      // +
-	BACKSLASH // \ (group set difference, §V9.3)
+	BACKSLASH // \ (group set difference, §groups rule 3)
 	EQ        // =
 	NEQ       // !=
 	LE        // <=
@@ -203,7 +203,7 @@ type Token struct {
 	// SpBefore reports whether any whitespace precedes this token.
 	SpBefore bool
 	// DeclStart reports that this token begins a top-level element
-	// (spec §3.2.5): an unquoted identifier in the first column of its
+	// (spec §line-structure-and-whitespace rule 5): an unquoted identifier in the first column of its
 	// line, outside every brace, string and comment. The element before
 	// it ends here.
 	DeclStart bool
@@ -232,7 +232,7 @@ func (t Token) Text() string {
 func (t Token) String() string {
 	if t.Kind == EOF {
 		if t.Val != "" {
-			return t.Val // a chunk's end: the next element's start (§3.2.5)
+			return t.Val // a chunk's end: the next element's start (§line-structure-and-whitespace rule 5)
 		}
 		return t.Kind.String()
 	}
@@ -252,7 +252,7 @@ func (t Token) End() Position {
 			end.line++
 			end.col = 0
 		case '\r':
-			continue // a byte without a column (§3.2.1)
+			continue // a byte without a column (§line-structure-and-whitespace rule 1)
 		}
 		end.col++
 	}

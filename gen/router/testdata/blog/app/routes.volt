@@ -32,17 +32,17 @@ Scope / [pipe: api, error_handler: Errors] {
 		get    /picked           db.UserPicked
 	}
 
-	// A dataset (§V13): one query route per member of the group select.
+	// A dataset (§datasets): one query route per member of the group select.
 	Scope /ms {
 		dataset db.browse [strip: 'ms_']
 	}
 
-	// Default handlers (§V5.5): every action is a query route over
+	// Default handlers (§default-handlers): every action is a query route over
 	// the table's generated CRUD; no controller to write.
 	Scope /ref [name: ref] {
 		resources db.users [default]
 	}
 
-	// The event stream (§V4.11).
+	// The event stream (§event-routes).
 	get /events volt.Events
 }

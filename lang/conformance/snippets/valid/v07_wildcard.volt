@@ -1,4 +1,4 @@
-// spec: §V4.1.4 — ':name...' captures the rest of the path
+// spec: §route-paths rule 4 — ':name...' captures the rest of the path
 package app
 
 Scope / {

@@ -26,10 +26,10 @@ use is up to the file. The honest build state:
 - **Routing** — *alpha:* `package` / `import`, `Pipeline`, `Scope`,
   routes, `resources`, query routes bound to generated queries,
   `dataset`, `resources … [default]`, event routes, and a generated
-  client (spec Part II, §V).
+  client (spec Part II).
 
 Project = the Go module (tree rooted at `go.mod`, decision go-module-is-the-project). Package = directory. File
-boundaries carry no meaning (§V1.5).
+boundaries carry no meaning (§projects-and-packages rule 5).
 
 ## Layout
 

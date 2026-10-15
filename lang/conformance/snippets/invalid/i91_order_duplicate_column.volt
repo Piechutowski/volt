@@ -1,4 +1,4 @@
-// spec: §V11.5 — a column appears at most once in order:
+// spec: §selects-over-groups rule 5 — a column appears at most once in order:
 // want: appears twice in order
 package db
 

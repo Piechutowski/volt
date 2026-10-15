@@ -29,7 +29,7 @@ volt vet ./...
 
 `volt vet` is `volt check` plus these rules: each package's
 declarations are analyzed as one file, the way the checker sees them
-(§V1.5), alongside the one project-level rule, `vet/pipeline`, which
+(§projects-and-packages rule 5), alongside the one project-level rule, `vet/pipeline`, which
 reports a pipeline no scope pipes through. The language server runs
 the same rules on a file that checks clean. There is no per-rule
 switch: the rules are cheap, and a suppressed warning would be a rule
@@ -67,7 +67,7 @@ enum is dead weight that still occupies a name in its schema.
 is bad; `used_status` and the schema-qualified `core.kind` are good.
 
 **Limitations.** Analysis is per-file: a file that exports the enum to
-other files via the module system (§7) may see a false positive. Treat the
+other files via the module system (§file-imports-removed) may see a false positive. Treat the
 warning as "unused *here*".
 
 ### unusedpartial
@@ -87,7 +87,7 @@ warning as "unused *here*".
 relationship endpoint, TableGroup member, DiagramView member or records
 declaration uses.
 
-**Why.** The alias occupies a slot in the global table namespace (§8.2.1)
+**Why.** The alias occupies a slot in the global table namespace (§namespaces-and-uniqueness rule 1)
 — it can collide with future table names — while providing nothing.
 
 **Examples.** [testdata/unused.dbml](../lang/vet/testdata/unused.dbml) — `P` is bad;
@@ -107,7 +107,7 @@ guarantees.
 
 **What it does.** Reports an explicit `[null]` column setting.
 
-**Why.** Columns are nullable by default (spec §6.3.2), so `[null]` adds no
+**Why.** Columns are nullable by default (spec §columns rule 2), so `[null]` adds no
 information. Worse, it reads as if it were load-bearing, suggesting the
 author believed the default was `not null`.
 
@@ -141,7 +141,7 @@ composite indexes with different column order are different indexes.
 
 **Why.** An empty block does nothing but implies work in progress; an empty
 DiagramView category in particular reads as "show everything" but actually
-selects nothing (spec §6.13.2).
+selects nothing (spec §diagramview rule 2).
 
 **Examples.** [testdata/emptybody.dbml](../lang/vet/testdata/emptybody.dbml) —
 `Notes { * }` is good: a wildcard is a real selection.
@@ -151,7 +151,7 @@ selects nothing (spec §6.13.2).
 **What it does.** Reports the legacy bare `pk` / `unique` flags between a
 column's type and its settings list (`id int pk`).
 
-**Why.** The form survives for backward compatibility (spec §6.3.7) but
+**Why.** The form survives for backward compatibility (spec §columns rule 7) but
 splits column constraints across two syntaxes; the settings list is the
 canonical spelling.
 
@@ -161,7 +161,7 @@ canonical spelling.
 ### shadowedcolumn
 
 **What it does.** Reports a column definition that overrides another via
-partial-injection conflict resolution (spec §6.9.4) — table-over-partial or
+partial-injection conflict resolution (spec §tablepartial rule 4) — table-over-partial or
 later-partial-over-earlier-partial.
 
 **Why.** The override is **silent**: no error, last writer wins. A type or
@@ -176,7 +176,7 @@ which is invisible at the partial's definition site.
 **What it does.** Reports a `Project` body holding more than one `Note`
 definition.
 
-**Why.** Multiple notes are accepted (spec §6.11.1 exempts Project bodies)
+**Why.** Multiple notes are accepted (spec §notes rule 1 exempts Project bodies)
 but downstream tools render a single project note, so all but one are
 silently dropped. The good form is a single (possibly multi-line) note.
 
@@ -243,7 +243,7 @@ them as aliases. Prefer one spelling per schema.
 **What it does.** Reports a foreign key whose referenced ("one"-side)
 column set is not guaranteed unique: not a `pk`/`unique` column and not
 covered by a matching composite `[pk]`/`[unique]` index. The FK side per
-operator follows spec §6.7.3 (`>` left, `<` right, `-` second endpoint);
+operator follows spec §relationships-ref rule 3 (`>` left, `<` right, `-` second endpoint);
 `<>` has no FK side.
 
 **Why.** SQL requires FK targets to be unique; a schema that violates this
@@ -283,7 +283,7 @@ pattern is legitimate and covered by `selfref` only when degenerate).
 **What it does.** Reports two names in one namespace differing only in
 letter case: tables per schema, columns per table, enums per schema.
 
-**Why.** DBML names are case-sensitive (spec §1.4) but many databases and
+**Why.** DBML names are case-sensitive (spec §case-sensitivity-and-terminology) but many databases and
 most humans are not; `users` next to `Users` is a bug generator.
 
 **Examples.** [testdata/casecollision.dbml](../lang/vet/testdata/casecollision.dbml).
@@ -362,10 +362,10 @@ one file in `vet/` plus one testdata file.
 
 | Candidate | What it would report | Why deferred |
 |---|---|---|
-| `junctionhint` | `<>` many-to-many refs, reminding that SQL export materializes an implicit junction table (spec §6.7.7) | informational, not a defect; would fire on every legitimate `<>` |
+| `junctionhint` | `<>` many-to-many refs, reminding that SQL export materializes an implicit junction table (spec §relationships-ref rule 7) | informational, not a defect; would fire on every legitimate `<>` |
 | `orphantable` | tables with no relationships at all | too noisy: lookup/config tables are legitimately standalone |
-| `nullablefk` | nullable FK columns, i.e. zero-or-many cardinality (spec §8.5) | that cardinality is a valid modeling choice, not a smell |
-| `recordstypes` | record values inconsistent with column types (dates, enum membership, booleans) | needs the §6.10.4 value-typing engine; belongs in `check` when built |
+| `nullablefk` | nullable FK columns, i.e. zero-or-many cardinality (spec §nullability-and-cardinality) | that cardinality is a valid modeling choice, not a smell |
+| `recordstypes` | record values inconsistent with column types (dates, enum membership, booleans) | needs the §records-sample-data rule 4 value-typing engine; belongs in `check` when built |
 | `recordsdupkey` | duplicate primary-key values across record rows | same engine as above |
 | `sqlkeyword` | unquoted names that are reserved words in common SQL dialects (`order`, `user`) | needs per-dialect wordlists and a target-dialect setting |
 | `namingstyle` | mixed naming conventions (snake_case vs camelCase) | pure style; needs configuration machinery first |

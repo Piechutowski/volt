@@ -1,4 +1,4 @@
-// spec: §V2.6
+// spec: §imports rule 6
 package a
 
 import (

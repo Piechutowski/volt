@@ -1,4 +1,4 @@
-// spec: §6.5 — pk and unique may be combined on one index (redundant but legal)
+// spec: §indexes — pk and unique may be combined on one index (redundant but legal)
 Table t {
   id int
   indexes {

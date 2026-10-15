@@ -1,4 +1,4 @@
-// spec: §6.8 — enum with note, quoted values, schema qualification
+// spec: §enum — enum with note, quoted values, schema qualification
 Enum job_status {
   created [note: 'Waiting to be processed']
   running

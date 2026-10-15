@@ -1,4 +1,4 @@
-// spec: §V12.5 — one parameter per argument column: a two-parameter
+// spec: §validation-checks rule 5 — one parameter per argument column: a two-parameter
 // function cannot be called with one column
 // want: takes 2 parameter(s)
 package db

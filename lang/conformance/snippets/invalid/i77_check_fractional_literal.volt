@@ -1,4 +1,4 @@
-// spec: §V12.4 — a fractional literal needs a float column, or the Go
+// spec: §validation-checks rule 4 — a fractional literal needs a float column, or the Go
 // tier would not compile
 package db
 

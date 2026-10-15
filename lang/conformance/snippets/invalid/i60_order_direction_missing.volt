@@ -1,4 +1,4 @@
-// spec: §V11.5 — order directions are mandatory: no silent asc
+// spec: §selects-over-groups rule 5 — order directions are mandatory: no silent asc
 package db
 
 Table ms_revenue {

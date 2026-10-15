@@ -94,7 +94,7 @@
 (setting_value_words) @constant
 (legacy_flag) @attribute
 
-; ---------- Volt layer (docs/spec.md §V) ----------
+; ---------- Volt layer (docs/spec.md Part II) ----------
 
 [
   "package"
@@ -126,7 +126,7 @@
 ; the resources table reference
 (resources_declaration table: (table_name) @type)
 
-; ---------- groups, predicates, selects (docs/spec.md §V9-§V11) ----------
+; ---------- groups, predicates, selects (docs/spec.md §groups to §selects-over-groups) ----------
 
 [
   "Group"

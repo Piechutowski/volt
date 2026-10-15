@@ -1,4 +1,4 @@
-// spec: §V5.4
+// spec: §table-resolution
 package app
 
 Table posty {

@@ -20,11 +20,11 @@ type Language struct {
 
 	// Lexical names the rules whose sentences are character
 	// sequences: nothing lies between their symbols and, in a
-	// syntactic rule, a match is the longest one (§3.1).
+	// syntactic rule, a match is the longest one (§tokenization).
 	Lexical map[string]bool
 
 	// Layout is what may lie between two symbols of a syntactic rule
-	// (§3.2 rule 3, §3.3 rule 4): spaces, tabs and comments. A line
+	// (§line-structure-and-whitespace rule 3, §comments rule 4): spaces, tabs and comments. A line
 	// break is layout too, except before a symbol that requires one.
 	Layout Expr
 
@@ -32,16 +32,16 @@ type Language struct {
 	// with. In a syntactic rule it is also satisfied, without being
 	// consumed, by a following "}" and by the end of the text; and a
 	// production that ends with it lies on one line: a line break
-	// inside it is layout only inside brackets (§3.2 rule 2).
+	// inside it is layout only inside brackets (§line-structure-and-whitespace rule 2).
 	Newline string
 
 	// Contiguous names the syntactic rules whose symbols admit no
-	// layout between them, nested rules included (§V4.1.1, §V2.2,
-	// §V10).
+	// layout between them, nested rules included (§route-paths rule 1, §imports rule 2,
+	// §predicates).
 	Contiguous map[string]bool
 
 	// SameLine names the rules that a line break may not precede
-	// where they are referenced (§4.2 rule 5: a settings list is on
+	// where they are referenced (§settings-lists rule 5: a settings list is on
 	// the line of its construct).
 	SameLine map[string]bool
 
@@ -55,7 +55,7 @@ type Language struct {
 	Witness map[string]string
 
 	// Cut says the start rule's text is cut at every element start
-	// (§3.2 rule 5), each piece a sentence of that rule on its own.
+	// (§line-structure-and-whitespace rule 5), each piece a sentence of that rule on its own.
 	Cut bool
 
 	puncts []string // memo of terminals()
@@ -122,7 +122,7 @@ func walk(e Expr, f func(Expr)) {
 // Accepts reports whether text is a sentence of the named rule: the
 // rule matches it whole, layout at either end included when the rule
 // is syntactic. The grammar's first rule, when Cut is set, is matched
-// piecewise: the text is cut at every element start (§3.2 rule 5) and
+// piecewise: the text is cut at every element start (§line-structure-and-whitespace rule 5) and
 // every piece is a sentence of the rule on its own.
 func (l *Language) Accepts(start, text string) bool {
 	m := &matcher{l: l, text: text, memo: map[memoKey][]int{}, active: map[memoKey]bool{}}
@@ -179,7 +179,7 @@ func (m *matcher) program() bool {
 }
 
 // ElementStarts lists the offsets at which a top-level element begins
-// (§3.2 rule 5): an unquoted identifier in the first column of a line,
+// (§line-structure-and-whitespace rule 5): an unquoted identifier in the first column of a line,
 // outside every string, comment and brace, other than at offset 0.
 func ElementStarts(text string) []int {
 	var starts []int
@@ -246,7 +246,7 @@ func ElementStarts(text string) []int {
 }
 
 // isWordStart reports whether text begins an unquoted identifier: a
-// letter, a mark, an underscore or a digit (§3.4).
+// letter, a mark, an underscore or a digit (§identifiers).
 func isWordStart(text string) bool {
 	r, _ := utf8.DecodeRuneInString(text)
 	return isWordRune(r)
@@ -455,7 +455,7 @@ func (m *matcher) before(pos int, ctx context, sameLine bool) int {
 }
 
 // lineOriented reports whether a sequence ends with the newline rule:
-// it lies on one line (§3.2 rule 2).
+// it lies on one line (§line-structure-and-whitespace rule 2).
 func (l *Language) lineOriented(s Seq) bool {
 	if l.Newline == "" || len(s.Items) == 0 {
 		return false
@@ -487,7 +487,7 @@ func (l *Language) delta(e Expr) int {
 }
 
 // boundary reports whether a token matched over text[from:to] ends
-// where the scanner's longest match would (§3.1): a word does not run
+// where the scanner's longest match would (§tokenization): a word does not run
 // into a word character, and no longer terminal of the grammar begins
 // with the same text here.
 func (m *matcher) boundary(from, to int) bool {

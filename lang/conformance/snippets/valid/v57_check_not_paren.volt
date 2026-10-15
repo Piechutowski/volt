@@ -1,4 +1,4 @@
-// spec: §V12 — a check may start with the not keyword and a paren; it is
+// spec: §validation-checks — a check may start with the not keyword and a paren; it is
 // a predicate, never a Go-reference call named "not"
 package db
 

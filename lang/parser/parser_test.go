@@ -82,7 +82,7 @@ Table e { z int [ref: - f.w] }
 func TestRefLongExactlyOne(t *testing.T) {
 	_, diags := ParseFile("t", "Ref { a.x > b.y\n c.p > d.q }")
 	if !diag.HasErrors(diags) {
-		t.Error("two relationships in one Ref must be a syntax error (§6.7)")
+		t.Error("two relationships in one Ref must be a syntax error (§relationships-ref)")
 	}
 }
 

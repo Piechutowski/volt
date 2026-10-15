@@ -1,4 +1,4 @@
-// spec: §6.3 increment extension — increment applies only to the
+// spec: §columns increment extension — increment applies only to the
 // single-column primary key; elsewhere it would be silently ignored
 // want: only the primary key auto-increments
 Table users {

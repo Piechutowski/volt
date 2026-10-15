@@ -1,4 +1,4 @@
-// spec: §V2.3 — alias qualifiers
+// spec: §imports rule 3 — alias qualifiers
 package db
 
 Table posts {

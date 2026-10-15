@@ -1,4 +1,4 @@
-// spec: §V9.3 — removing a table that is not a member, even inside a set, is an error
+// spec: §groups rule 3 — removing a table that is not a member, even inside a set, is an error
 // want: is not a member
 package db
 

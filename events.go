@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// Event is one server-sent event (spec §V4.11): a name the client
+// Event is one server-sent event (spec §event-routes): a name the client
 // dispatches on and a JSON payload. The broker assigns IDs in
 // publication order.
 type Event struct {
@@ -106,7 +106,7 @@ func (b *Broker) Subscribe(after uint64) (<-chan Event, func()) {
 }
 
 // Serve is the handler of an event route (`get /events volt.Events`,
-// §V4.11): a text/event-stream response that replays from the
+// §event-routes): a text/event-stream response that replays from the
 // request's Last-Event-ID, then forwards every published event until
 // the client goes away, with keep-alive comments in between.
 func (b *Broker) Serve(w http.ResponseWriter, r *Request) error {

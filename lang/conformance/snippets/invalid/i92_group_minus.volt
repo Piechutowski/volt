@@ -1,4 +1,4 @@
-// spec: §V9.3 — '-' is not a group operator; set difference is spelled '\'
+// spec: §groups rule 3 — '-' is not a group operator; set difference is spelled '\'
 // want: set difference is spelled '\'
 package db
 

@@ -1,4 +1,4 @@
-// spec: §V5.3.1
+// spec: §settings rule 1
 package app
 
 Table users {

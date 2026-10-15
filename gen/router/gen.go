@@ -1,5 +1,5 @@
 // Package router generates the Volt router files for one checked
-// package (spec §V, router spec §4): volt_handlers.go (controller
+// package (spec Part II, router spec §common-syntactic-forms): volt_handlers.go (controller
 // interfaces + the NewRouter constructor), volt_router.go (ServeMux
 // registrations with typed shims and statically composed pipelines),
 // volt_paths.go (typed reverse-URL helpers) and volt_routes.go (the
@@ -26,16 +26,16 @@ type Options struct {
 	// Source names the input (the package path), recorded in headers.
 	Source string
 	// Package overrides the package clause of the router files; empty
-	// means the Volt package's name (§V1.7).
+	// means the Volt package's name (§projects-and-packages rule 7).
 	Package string
 	// ClientBeside writes the client beside the models instead of as a
-	// client subpackage (§V4.10.6): ClientBesideFile in package Package,
+	// client subpackage (§generated-client rule 6): ClientBesideFile in package Package,
 	// NewClient as the constructor.
 	ClientBeside bool
 }
 
 // Files are the generated file names, in emission order. The client
-// package (§V4.10) lives in a subdirectory of the routing package.
+// package (§generated-client) lives in a subdirectory of the routing package.
 var Files = []string{"volt_handlers.go", "volt_router.go", "volt_paths.go", "volt_routes.go", ClientFile}
 
 // ClientFile is the generated client package's file, relative to the
@@ -172,7 +172,7 @@ func importPath(im string) string {
 }
 
 // dataPackages lists the imported data packages query routes go
-// through, by qualifier, sorted (§V4.8).
+// through, by qualifier, sorted (§query-routes).
 func (g *generator) dataPackages() []*lang.QueryRef {
 	seen := map[string]*lang.QueryRef{}
 	for _, r := range g.pkg.Routes {
@@ -193,7 +193,7 @@ func (g *generator) dataPackages() []*lang.QueryRef {
 }
 
 // clientOmitted reports whether no client package can exist: the
-// routing package is main and routes its own tables (§V4.10.1).
+// routing package is main and routes its own tables (§generated-client rule 1).
 func (g *generator) clientOmitted() bool {
 	if g.pkg.Name != "main" {
 		return false
@@ -285,7 +285,7 @@ func (g *generator) handlersEmit() error {
 	g.pf("// Controllers is the dependency manifest of the route table: one\n")
 	g.pf("// implementation per controller named in the routes")
 	if len(data) > 0 {
-		g.pf(", and the\n// Queries handle of every data package query routes go through (§V4.8)")
+		g.pf(", and the\n// Queries handle of every data package query routes go through (§query-routes)")
 	}
 	g.pf(".\n")
 	g.pf("type Controllers struct {\n")
@@ -301,7 +301,7 @@ func (g *generator) handlersEmit() error {
 		fields.Row(q.Field, "*"+q.Qualifier+".Queries", "// query routes written "+q.Qualifier+".<Method>")
 	}
 	if g.hasEvents() {
-		fields.Row("Events", "*volt.Broker", "// event routes written volt.Events (§V4.11); nil serves nothing")
+		fields.Row("Events", "*volt.Broker", "// event routes written volt.Events (§event-routes); nil serves nothing")
 	}
 	fields.WriteTo(&g.out, "\t")
 	g.pf("}\n\n")
@@ -319,7 +319,7 @@ func (g *generator) handlersEmit() error {
 /* ===== volt_router.go ===== */
 
 // pipeKey joins a pipe sequence for dedup. Pipeline names are plain
-// identifiers (§V3.1), so "," cannot occur inside one and the key is
+// identifiers (§pipelines rule 1), so "," cannot occur inside one and the key is
 // collision-free.
 func pipeKey(pipes []string) string { return strings.Join(pipes, ",") }
 
@@ -436,7 +436,7 @@ func hasBody(q *lang.QueryRef) bool {
 }
 
 // pathParse renders the typed parse of one path parameter into the
-// shim body, returning the expression that carries its value (§V4.1.3:
+// shim body, returning the expression that carries its value (§route-paths rule 3:
 // a parse failure is the route's 404).
 func pathParse(body *strings.Builder, p lang.Param) string {
 	if p.Type == lang.TString {
@@ -451,7 +451,7 @@ func pathParse(body *strings.Builder, p lang.Param) string {
 	return "volt" + p.GoName
 }
 
-// queryShimBody renders a query route's generated handler (§V4.8): bind
+// queryShimBody renders a query route's generated handler (§query-routes): bind
 // every parameter from its source, call the query, render the result.
 func queryShimBody(r *lang.RouteInfo) string {
 	q := r.Query
@@ -473,14 +473,14 @@ func queryShimBody(r *lang.RouteInfo) string {
 			args = append(args, "volt"+p.Name)
 		case lang.FromBody:
 			// A params struct of this package is named bare here, in
-			// the package that declares it (§V4.8.5).
+			// the package that declares it (§query-routes rule 5).
 			goType := p.GoType
 			if q.Local {
 				goType = strings.TrimPrefix(goType, q.Qualifier+".")
 			}
 			fmt.Fprintf(&body, "\t\tvar volt%s %s\n\t\tif err := volt.Decode(r, &volt%s); err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name, goType, p.Name)
 			if p.Validates {
-				// The schema's checks, before the database sees the row (§V12.6).
+				// The schema's checks, before the database sees the row (§validation-checks rule 6).
 				fmt.Fprintf(&body, "\t\tif err := volt%s.Validate(); err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name)
 			}
 			args = append(args, "volt"+p.Name)
@@ -677,7 +677,7 @@ func methodOrAny(m string) string {
 	return m
 }
 
-/* ===== client/volt_client.go (§V4.10) ===== */
+/* ===== client/volt_client.go (§generated-client) ===== */
 
 // clientEmit renders the client package: one typed method per query
 // route, one raw method per named controller route, over the runtime's
@@ -706,7 +706,7 @@ func (g *generator) clientEmit() error {
 	local := false
 	for _, q := range g.dataPackages() {
 		// A package routing its own tables is imported for its row
-		// types (§V4.10.1); beside the models (§V4.10.6) nothing is
+		// types (§generated-client rule 1); beside the models (§generated-client rule 6) nothing is
 		// imported.
 		local = local || q.Local
 		if !g.opts.ClientBeside {
@@ -714,12 +714,12 @@ func (g *generator) clientEmit() error {
 		}
 	}
 	doc := "// Package client calls the routes of package " + g.pkg.Name + " over HTTP\n" +
-		"// (spec §V4.10): one typed method per query route, one raw method per\n" +
+		"// (spec §generated-client): one typed method per query route, one raw method per\n" +
 		"// named controller route. It imports the data packages and the volt\n" +
 		"// runtime only, never the server.\n"
 	if local {
 		doc = "// Package client calls the routes of package " + g.pkg.Name + " over HTTP\n" +
-			"// (spec §V4.10): one typed method per query route, one raw method per\n" +
+			"// (spec §generated-client): one typed method per query route, one raw method per\n" +
 			"// named controller route. It imports package " + g.pkg.Name + " for the row\n" +
 			"// types its routes name, and the volt runtime.\n"
 	}
@@ -748,7 +748,7 @@ func (g *generator) clientEmit() error {
 			method = "GET" // the any-verb: the client speaks GET
 		}
 		if r.Events {
-			g.pf("// %s subscribes to %s (§V4.11): every published event, reconnecting\n// with Last-Event-ID until ctx is done, when the channel closes.\n", r.ClientName, r.Spelled)
+			g.pf("// %s subscribes to %s (§event-routes): every published event, reconnecting\n// with Last-Event-ID until ctx is done, when the channel closes.\n", r.ClientName, r.Spelled)
 			g.pf("func (c *Client) %s(ctx context.Context%s) <-chan volt.Event {\n", r.ClientName, sigParams(r.Params))
 			g.pf("\treturn c.Stream(ctx, volt.URL(%s))\n}\n\n", pathExpr(r))
 			continue

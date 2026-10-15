@@ -1,4 +1,4 @@
-// spec: §V11.6 — the data package whose default CRUD the resources bind
+// spec: §selects-over-groups rule 6 — the data package whose default CRUD the resources bind
 package db
 
 Table users {

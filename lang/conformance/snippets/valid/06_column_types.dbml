@@ -1,4 +1,4 @@
-// spec: §6.3 — type arguments, quoted types, schema-qualified enum types
+// spec: §columns — type arguments, quoted types, schema-qualified enum types
 Enum v2.job_status { created }
 Table t {
   a varchar(255)

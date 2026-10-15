@@ -1,4 +1,4 @@
-// spec: §V9.3 — a parenthesized set applies one name at a time, so re-adding through it is still an error
+// spec: §groups rule 3 — a parenthesized set applies one name at a time, so re-adding through it is still an error
 // want: already a member
 package db
 

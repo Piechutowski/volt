@@ -1,4 +1,4 @@
-// spec: §V11.7 — explicit list mints one shared row type; star-minus
+// spec: §selects-over-groups rule 7 — explicit list mints one shared row type; star-minus
 // mints per-member struct derivatives; where/order columns need not be
 // projected
 package db

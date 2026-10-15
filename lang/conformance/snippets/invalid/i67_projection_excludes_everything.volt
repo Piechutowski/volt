@@ -1,4 +1,4 @@
-// spec: §V11.7 — no member may end up with zero columns
+// spec: §selects-over-groups rule 7 — no member may end up with zero columns
 package db
 
 Table page_views {

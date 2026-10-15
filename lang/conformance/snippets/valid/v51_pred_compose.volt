@@ -1,4 +1,4 @@
-// spec: §V10 — predicates compose predicates; the closed operator set
+// spec: §predicates — predicates compose predicates; the closed operator set
 package db
 
 Table ms_revenue {

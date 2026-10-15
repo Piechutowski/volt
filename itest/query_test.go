@@ -1,4 +1,4 @@
-// Query routes (spec §V4.8, §V4.9): the generated handlers bind
+// Query routes (spec §query-routes, §formats): the generated handlers bind
 // parameters from path, body and query string, call the data package's
 // queries against a real SQLite, and render in the negotiated format.
 // Every status the spec names is served here, in both formats.
@@ -59,7 +59,7 @@ func TestQueryRouteCRUDInJSON(t *testing.T) {
 		t.Fatalf("get miss: %d, want 404", rec.Code)
 	}
 	if rec = call(h, "GET", "/api/users/abc", nil); rec.Code != 404 {
-		t.Fatalf("get with a non-int32 id: %d, want 404 (§V4.1.3)", rec.Code)
+		t.Fatalf("get with a non-int32 id: %d, want 404 (§route-paths rule 3)", rec.Code)
 	}
 
 	// Update: PATCH with a body, 200 with the rewritten row.
@@ -146,7 +146,7 @@ func TestQueryRouteFormatErrors(t *testing.T) {
 }
 
 // TestQueryRouteTable: query rows carry the reference as written and no
-// controller, and only reads have helpers (§V4.8).
+// controller, and only reads have helpers (§query-routes).
 func TestQueryRouteTable(t *testing.T) {
 	seen := 0
 	for _, r := range app.Table {
@@ -167,7 +167,7 @@ func TestQueryRouteTable(t *testing.T) {
 }
 
 // TestDatasetRoutesServe: the expanded routes serve the member's select
-// with the select's parameters bound from the query string (§V13).
+// with the select's parameters bound from the query string (§datasets).
 func TestDatasetRoutesServe(t *testing.T) {
 	h := handlerWithDB(t)
 	for _, target := range []string{"/ms/revenue?year=2024", "/ms/usage?year=2024"} {
@@ -184,7 +184,7 @@ func TestDatasetRoutesServe(t *testing.T) {
 	}
 }
 
-// TestQueryRouteValidation (§V12.6, §V12.7, §V4.8.3): a violated check
+// TestQueryRouteValidation (§validation-checks rule 6, §validation-checks rule 7, §query-routes rule 3): a violated check
 // is a 422 naming the check before the database sees the row; a
 // duplicate key is a 409 naming the column; both in either format.
 func TestQueryRouteValidation(t *testing.T) {
@@ -210,7 +210,7 @@ func TestQueryRouteValidation(t *testing.T) {
 	}
 }
 
-// TestQueryRouteValidationAttribution (§V4.9.5, §V12.7): the error body
+// TestQueryRouteValidationAttribution (§formats rule 5, §validation-checks rule 7): the error body
 // is a Problem whose details name the failing check and its columns,
 // so the GUI can mark the field.
 func TestQueryRouteValidationAttribution(t *testing.T) {

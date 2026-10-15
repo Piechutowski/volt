@@ -1,4 +1,4 @@
-// spec: §6.10.4 — every record value kind, empty fields, enum constants
+// spec: §records-sample-data rule 4 — every record value kind, empty fields, enum constants
 Enum Status { active
   inactive
   pending }

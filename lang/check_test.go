@@ -228,7 +228,7 @@ Scope / {
 				t.Errorf("param: rename not applied on %s: %q", r.Pattern, p.Name)
 			}
 			if p.Type != TInt32 {
-				t.Errorf("key type = %v on %s, want int32 from the pk (§V5.4)", p.Type, r.Pattern)
+				t.Errorf("key type = %v on %s, want int32 from the pk (§table-resolution)", p.Type, r.Pattern)
 			}
 		}
 		if strings.Contains(r.Pattern, "{") && !strings.Contains(r.Pattern, "{slug}") {

@@ -1,4 +1,4 @@
-// spec: §V11.1 — a select may not shadow the generated CRUD surface
+// spec: §selects-over-groups rule 1 — a select may not shadow the generated CRUD surface
 package db
 
 Table ms_revenue {

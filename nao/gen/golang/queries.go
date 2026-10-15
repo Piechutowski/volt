@@ -59,7 +59,7 @@ type fieldPlan struct {
 	col      *ast.Column
 	colName  string // DBML/SQL column name
 	goField  string // exported struct field, e.g. "EditorID"
-	tag      string // assembled struct tag (Appendix A.5), e.g. `db:"id" json:"id"`
+	tag      string // assembled struct tag (§struct-tags), e.g. `db:"id" json:"id"`
 	goType   string // full field type, e.g. "rt.Null[int64]"
 	baseType string // goType without the Null wrapper, e.g. "int64"
 	imp      string // the import path goType needs ("time"), "" for none

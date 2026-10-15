@@ -1,4 +1,4 @@
-// spec: §6.5 — multiple indexes/checks blocks per body; contents accumulate
+// spec: §indexes — multiple indexes/checks blocks per body; contents accumulate
 Table t {
   id int
   name varchar

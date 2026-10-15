@@ -1,4 +1,4 @@
-// spec: §V1.5 — layout invariance
+// spec: §projects-and-packages rule 5 — layout invariance
 package app
 
 Table users {

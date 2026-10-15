@@ -1,4 +1,4 @@
-// spec: §V2.4
+// spec: §imports rule 4
 package app
 
 // Two different paths under one qualifier: 'db' names both db and

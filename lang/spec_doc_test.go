@@ -9,15 +9,51 @@ import (
 )
 
 var (
-	headingRE  = regexp.MustCompile(`(?m)^(#{1,3}) (.+)$`)
-	tocLinkRE  = regexp.MustCompile(`\[([^\]]+)\]\(#([^)]+)\)`)
-	keyRowRE   = regexp.MustCompile(`(?m)^\| (§V?\d+(?:\.\d+)*|Appendix [A-Z]+(?:\.\d+)?) \| \[([^\]]+)\]`)
-	citeRE     = regexp.MustCompile(`§(V?\d+(?:\.\d+)*)`)
-	appendixRE = regexp.MustCompile(`Appendix ([A-Z]{1,2})(?:\.(\d+))?`)
+	headingRE = regexp.MustCompile(`(?m)^(#{1,3}) (.+)$`)
+	tocLinkRE = regexp.MustCompile(`\[([^\]]+)\]\(#([^)]+)\)`)
+
+	// A spec citation is the sigil and a heading's anchor, with an optional
+	// numbered rule; a diagnostic code is the code prefix and the anchor.
+	specCiteRE = regexp.MustCompile(`§([a-z][a-z0-9-]*)`)
+	specCodeRE = regexp.MustCompile(`spec/([a-z][a-z0-9-]*)`)
 
 	decisionNameRE = regexp.MustCompile(`(?m)^### ([a-z0-9-]+)$`)
 	decisionCiteRE = regexp.MustCompile(`\bdecisions? ([a-z][a-z0-9]*(?:-[a-z0-9]+)+(?:, [a-z][a-z0-9]*(?:-[a-z0-9]+)+)*)`)
 )
+
+func specText(t *testing.T) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("..", "docs", "spec.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func anchorOf(title string) string {
+	a := strings.ToLower(title)
+	var b strings.Builder
+	for _, r := range a {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == ' ', r == '-', r == '_':
+			b.WriteRune(r)
+		}
+	}
+	return strings.Join(strings.Fields(b.String()), "-")
+}
+
+// specAnchors is the anchor of every heading of the spec.
+func specAnchors(t *testing.T) map[string]bool {
+	t.Helper()
+	anchors := map[string]bool{}
+	for _, m := range headingRE.FindAllStringSubmatch(specText(t), -1) {
+		anchors[anchorOf(strings.TrimSpace(m[2]))] = true
+	}
+	if len(anchors) < 60 {
+		t.Fatalf("spec looks truncated: %d headings", len(anchors))
+	}
+	return anchors
+}
 
 // repoTextFiles lists every source and prose file of the repository
 // that may carry a citation.
@@ -42,70 +78,6 @@ func repoTextFiles(t *testing.T) []string {
 		return nil
 	})
 	return files
-}
-
-// Every decision is a unique hyphenated heading of docs/decisions.md,
-// and every citation of one (`decision name`, `decisions a, b`) names
-// such a heading (decision named-sections).
-func TestDecisionCitationsResolve(t *testing.T) {
-	b, err := os.ReadFile(filepath.Join("..", "docs", "decisions.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	names := map[string]bool{}
-	for _, m := range decisionNameRE.FindAllStringSubmatch(string(b), -1) {
-		if names[m[1]] {
-			t.Errorf("decision %q is declared twice", m[1])
-		}
-		if !strings.Contains(m[1], "-") {
-			t.Errorf("decision %q: a name is hyphenated", m[1])
-		}
-		names[m[1]] = true
-	}
-	if len(names) < 50 {
-		t.Fatalf("decisions.md looks truncated: %d names", len(names))
-	}
-	var bad []string
-	for _, path := range repoTextFiles(t) {
-		src, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		for _, m := range decisionCiteRE.FindAllStringSubmatch(string(src), -1) {
-			for _, name := range strings.Split(m[1], ", ") {
-				if !names[name] {
-					bad = append(bad, path+": decision "+name)
-				}
-			}
-		}
-	}
-	if len(bad) > 0 {
-		if len(bad) > 40 {
-			bad = append(bad[:40], "…")
-		}
-		t.Errorf("decision citations that name no heading:\n%s", strings.Join(bad, "\n"))
-	}
-}
-
-func specText(t *testing.T) string {
-	t.Helper()
-	b, err := os.ReadFile(filepath.Join("..", "docs", "spec.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
-}
-
-func anchorOf(title string) string {
-	a := strings.ToLower(title)
-	var b strings.Builder
-	for _, r := range a {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == ' ', r == '-', r == '_':
-			b.WriteRune(r)
-		}
-	}
-	return strings.Join(strings.Fields(b.String()), "-")
 }
 
 func TestSpecHeadingsUnnumberedAndUnique(t *testing.T) {
@@ -148,67 +120,76 @@ func TestSpecTableOfContentsMatchesHeadings(t *testing.T) {
 	}
 }
 
+// Every spec citation and every diagnostic code
+// in the repository names a heading of the spec (decision
+// named-sections).
 func TestSpecCitationsResolve(t *testing.T) {
-	spec := specText(t)
-	key := map[string]bool{}
-	for _, m := range keyRowRE.FindAllStringSubmatch(spec, -1) {
-		key[m[1]] = true
-	}
-	if len(key) < 60 {
-		t.Fatalf("citation key looks truncated: %d rows", len(key))
-	}
-	resolves := func(id string) bool {
-		parts := strings.Split(id, ".")
-		for i := len(parts); i > 0; i-- {
-			if key[strings.Join(parts[:i], ".")] {
-				return true
-			}
-		}
-		return false
-	}
-	root := ".."
+	anchors := specAnchors(t)
 	var bad []string
-	filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		name := d.Name()
-		if d.IsDir() {
-			if name == ".git" || name == "node_modules" || name == "target" || name == "grammars" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		switch filepath.Ext(name) {
-		case ".go", ".volt", ".dbml", ".md", ".js", ".scm":
-		default:
-			return nil
-		}
+	for _, path := range repoTextFiles(t) {
 		b, err := os.ReadFile(path)
 		if err != nil {
-			return nil
+			continue
 		}
 		src := string(b)
-		for _, m := range citeRE.FindAllStringSubmatch(src, -1) {
-			if !resolves("§" + m[1]) {
+		for _, m := range specCiteRE.FindAllStringSubmatch(src, -1) {
+			if !anchors[m[1]] {
 				bad = append(bad, path+": §"+m[1])
 			}
 		}
-		for _, m := range appendixRE.FindAllStringSubmatch(src, -1) {
-			id := "Appendix " + m[1]
-			if m[2] != "" {
-				id += "." + m[2]
-			}
-			if !key[id] && !key["Appendix "+m[1]] {
-				bad = append(bad, path+": "+id)
+		for _, m := range specCodeRE.FindAllStringSubmatch(src, -1) {
+			if !anchors[m[1]] {
+				bad = append(bad, path+": spec/"+m[1])
 			}
 		}
-		return nil
-	})
+	}
 	if len(bad) > 0 {
 		if len(bad) > 40 {
 			bad = append(bad[:40], "…")
 		}
 		t.Errorf("citations that resolve to no heading:\n%s", strings.Join(bad, "\n"))
+	}
+}
+
+// Every decision is a unique hyphenated heading of docs/decisions.md,
+// and every citation of one (`decision name`, `decisions a, b`) names
+// such a heading (decision named-sections).
+func TestDecisionCitationsResolve(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "docs", "decisions.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := map[string]bool{}
+	for _, m := range decisionNameRE.FindAllStringSubmatch(string(b), -1) {
+		if names[m[1]] {
+			t.Errorf("decision %q is declared twice", m[1])
+		}
+		if !strings.Contains(m[1], "-") {
+			t.Errorf("decision %q: a name is hyphenated", m[1])
+		}
+		names[m[1]] = true
+	}
+	if len(names) < 50 {
+		t.Fatalf("decisions.md looks truncated: %d names", len(names))
+	}
+	var bad []string
+	for _, path := range repoTextFiles(t) {
+		src, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		for _, m := range decisionCiteRE.FindAllStringSubmatch(string(src), -1) {
+			for _, name := range strings.Split(m[1], ", ") {
+				if !names[name] {
+					bad = append(bad, path+": decision "+name)
+				}
+			}
+		}
+	}
+	if len(bad) > 0 {
+		if len(bad) > 40 {
+			bad = append(bad[:40], "…")
+		}
+		t.Errorf("decision citations that name no heading:\n%s", strings.Join(bad, "\n"))
 	}
 }

@@ -1,4 +1,4 @@
-// spec: §6.11 — sticky notes with color and none
+// spec: §notes — sticky notes with color and none
 Note single_line_note {
   'This is a single line note'
 }

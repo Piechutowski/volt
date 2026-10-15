@@ -1,4 +1,4 @@
-// spec: §V12.5 — the function's parameter type disagrees with the
+// spec: §validation-checks rule 5 — the function's parameter type disagrees with the
 // text column it is passed
 // want: parameter 1 of EmailValid is int
 package db

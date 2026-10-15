@@ -1,4 +1,4 @@
-// spec: §V11.7 — a minted row type must not collide with a model
+// spec: §selects-over-groups rule 7 — a minted row type must not collide with a model
 package db
 
 Table page_views {

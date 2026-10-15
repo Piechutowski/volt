@@ -46,7 +46,7 @@ Table user_tags {
 }
 
 // Two uniform metric tables plus the group/pred/select layer over them
-// (spec §V9-§V11): one select, one signature, every member.
+// (spec §groups to §selects-over-groups): one select, one signature, every member.
 Table page_views {
   id integer [pk, increment]
   site varchar [not null]
@@ -77,10 +77,10 @@ Pred since { day >= :from }
 Select rows for metrics where at [order: (day desc, id asc)]
 Select recent for metrics where at or since
 
-// §V10.3 list parameter: one JSON array, unpacked by json_each (decision list-parameters).
+// §predicates rule 3 list parameter: one JSON array, unpacked by json_each (decision list-parameters).
 Select on_sites for metrics where site in :sites [order: (id asc)]
 
-// §V11.7 projections: an explicit list mints one shared row type for
+// §selects-over-groups rule 7 projections: an explicit list mints one shared row type for
 // every member; the star form mints a per-member struct derivative.
 Select summary (site, day) for metrics where at
 Select public (* \ target) for link_clicks [order: (id asc)]

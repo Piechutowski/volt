@@ -1,4 +1,4 @@
-// spec: §V4.8 — a path parameter must spell the query parameter's Go type
+// spec: §query-routes — a path parameter must spell the query parameter's Go type
 // want: spell it :id(int32)
 package app
 

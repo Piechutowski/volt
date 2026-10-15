@@ -2,7 +2,7 @@
 
 How Volt editor support is put together — three independently testable
 components (decision editor-tooling-in-repo), why the system is shaped this way, the load-bearing
-patterns in each, and (§8) the checklist for verifying all of it
+patterns in each, and (section 8) the checklist for verifying all of it
 against [`spec.md`](spec.md).
 
 ## 1. The big picture
@@ -57,7 +57,7 @@ requirements:
 | Knows | shape only | meaning: resolution, partial injection, route conflicts |
 
 Every serious language setup (Go, Rust, TypeScript in any modern
-editor) works this way; §8's differential checks handle the risk of the
+editor) works this way; section 8's differential checks handle the risk of the
 two disagreeing. When they do, **the front end is right by
 definition**.
 
@@ -66,10 +66,10 @@ reuses it wholesale:
 
 ```
 lang/token     lexical vocabulary (Kind, Token, Position with byte Offset)
-lang/scanner   text → tokens                  (lexical errors, spec §3)
-lang/parser    tokens → ast.File              (syntax errors, spec §4–§6, §V)
-lang/check     ast.File → check.Info          (schema semantics, spec §8)
-lang           project Load/Check             (packages, imports, routes, §V)
+lang/scanner   text → tokens                  (lexical errors, spec §lexical-structure)
+lang/parser    tokens → ast.File              (syntax errors, spec §common-syntactic-forms–§element-definitions, Part II of the spec)
+lang/check     ast.File → check.Info          (schema semantics, spec §static-semantics)
+lang           project Load/Check             (packages, imports, routes, Part II of the spec)
 lang/vet       lints                          (lint.md; legal but suspicious)
 lsp            all of the above → LSP
 ```
@@ -83,38 +83,38 @@ Tree-sitter compiles `grammar.js` into a table-driven GLR parser in C
 (`src/parser.c`, committed, because Zed builds the WASM from it). The
 load-bearing patterns, each citing the spec section it implements:
 
-- **Explicit newlines, not `extras`** (§3.2). Volt is
+- **Explicit newlines, not `extras`** (§line-structure-and-whitespace). Volt is
   newline-sensitive — columns, enum values, records rows, routes and
   plugs are line-terminated. `extras` holds only `[ \t\r]` + comments,
   and every body uses one `newlineSep1` helper. Falls out for free:
   `Table t { id int name varchar }` is a syntax error (spec-correct),
   one-liners still parse, settings lists are same-line only, and a line
   comment doesn't consume its newline.
-- **Case-insensitive contextual keywords** (§3.5). Keywords are
+- **Case-insensitive contextual keywords** (§keywords). Keywords are
   generated regexes aliased to a canonical spelling; tree-sitter's
   context-aware lexing provides the "not reserved" half — `table` in
   column-name position lexes as an identifier. Known limitation: at the
   start of a table-body line, an unquoted column literally named
   `indexes`/`checks`/`note`/`records` lexes as the keyword; quoting
-  opts out (§1.4).
-- **Split string tokens for injection** (§3.6–3.7). Delimiters and
+  opts out (§case-sensitivity-and-terminology).
+- **Split string tokens for injection** (§string-literals–3.7). Delimiters and
   content are separate tokens, so `(string_content)` is a node with a
   range — exactly what `injections.scm` needs to hand note bodies to
   Markdown and backtick expressions to SQL.
-- **GLR conflict for reference chains** (§6.7). `a.b.c` in a ref
+- **GLR conflict for reference chains** (§relationships-ref). `a.b.c` in a ref
   endpoint is ambiguous at the first dot; `ref_target` is declared in
   `conflicts` and the token after the chain kills the wrong stack.
-- **Generic settings, open vocabulary** (§4.2). `settings_list` parses
+- **Generic settings, open vocabulary** (§settings-lists). `settings_list` parses
   any `[name: value]`; which keys are legal where is semantics, and the
   checker enforces it with positions the LSP surfaces. New settings
   parse without touching the grammar.
-- **The Volt layer** (§V): `package` clause, `import (…)` blocks,
+- **The Volt layer** (Part II of the spec): `package` clause, `import (…)` blocks,
   `Pipeline`, `Scope`, routes with typed parameters and `:name...`
   wildcards, `resources` with an optional package qualifier, and the
   query layer — `Group` algebra, the `Pred` expression grammar
   (prec.left or/and, keyword operators at the same precedence as other
   keywords so `not` never outlexes `Note`), `Select ... for ... where`.
-  `/` is a token per §V0.2.
+  `/` is a token per §layers-files-and-the-superset-rule rule 2.
 
 ## 3. The Zed extension (`zed-extension/`)
 
@@ -164,7 +164,7 @@ declaration, the check by table and the occurrence index by table are
 the session's memo shapes (decisions parse-by-declaration, check-by-declaration, index-by-table), owned by the handler goroutine),
 and schedules the project's analysis:
 
-1. Find the project root (the nearest `go.mod`, §V1.1). A file under a root is
+1. Find the project root (the nearest `go.mod`, §projects-and-packages rule 1). A file under a root is
    checked as part of its **whole project**: every open buffer is
    overlaid over the disk (`lang.LoadOverlay`) so unsaved edits in one
    file are visible to checks in another. A file outside any project
@@ -192,17 +192,17 @@ layer:
 - Rename rewrites exactly the identifier, never the `db.` qualifier
   (the hit-test span and the edit span are tracked separately), only
   occurrences whose spelling matches the one under the cursor, and
-  validates the new name against the identifier grammar (§3.4).
+  validates the new name against the identifier grammar (§identifiers).
 - Column identity is container-scoped; a column injected from a
   TablePartial resolves into the partial, so renaming it updates the
   partial once plus every reference through every injecting table
-  (§6.9.4).
+  (§tablepartial rule 4).
 - Completion is textual-context + semantic-fill: where-am-I is
   answered by line-prefix regexes plus a `{`/`}`-balance scanner (the
   current line usually doesn't parse mid-keystroke); candidates come
   from the last coherent semantic model — real tables after `db.`
   (case-insensitively filtered), verbs and `resources` in Scope
-  bodies, settings per construct (§4.2, §V6).
+  bodies, settings per construct (§settings-lists, §settings-whitelists).
 - Position encoding is converted at the boundary only (1-based rune
   columns ↔ 0-based UTF-16), re-derived from the line's actual text;
   nothing else does position arithmetic.
@@ -212,14 +212,14 @@ errors is noise while typing; it reappears when the file checks clean.
 And it runs only where its verdict is what the editor shows (decision editor-session): a
 file in a project package is vetted by the project analysis, never by
 the document's own pass; a file outside any project, or one under a
-project the loader never read (§V1.6), gets the single-file vet added
+project the loader never read (§projects-and-packages rule 6), gets the single-file vet added
 to its own verdict once per text.
 
 ## 5. Extending the system — the recipes
 
 **New setting on an existing construct**: grammar — nothing (generic
 settings). Checker — one row in the settings whitelist. LSP — one entry
-in `settingsByContext`. Spec — one row in the §V6 / §4.2 tables. Lint —
+in `settingsByContext`. Spec — one row in the §settings-whitelists / §settings-lists tables. Lint —
 only if misuse is *legal but suspicious*.
 
 **New element type** (a new top-level `Thing name { … }`):
@@ -242,7 +242,7 @@ markers — the docs consistency test fails the build until all three
 agree. The LSP picks it up automatically.
 
 **Grammar change**: edit `grammar.js` → `tree-sitter generate` →
-`tree-sitter test` → §8's differential checks →
+`tree-sitter test` → section 8's differential checks →
 `./scripts/sync-grammar.sh` → Rebuild in Zed.
 
 ## 6. Decisions
@@ -260,7 +260,7 @@ behind stdio.
 ## 7. Known limitations (documented trade-offs, not bugs)
 
 - **Grammar: unquoted columns named like block keywords** — `indexes`,
-  `checks`, `note`, `records` need quoting in column position (§3.5
+  `checks`, `note`, `records` need quoting in column position (§keywords
   note above); the front end, spec-exact, accepts both.
 - **Grammar: exotic string edges** — a triple-quoted string whose
   content ends in a quote immediately before the closing `'''` may
@@ -268,13 +268,13 @@ behind stdio.
   end handles it correctly.
 - **LSP: no Go-side navigation** — handler references (`Home.Index`)
   and `error_handler:` point into Go, which this server does not
-  index (roadmap). A query reference (`db.UserGet`, §V4.8) is
+  index (roadmap). A query reference (`db.UserGet`, §query-routes) is
   not navigated either; a dataset's select (`dataset db.browse`) is.
 
 ### Go references
 
 A `.volt` file names Go by rule only in the containing package's own
-Go files — pipeline plugs (§V3.2) and Go-reference checks (§V12.5).
+Go files — pipeline plugs (§pipelines rule 2) and Go-reference checks (§validation-checks rule 5).
 The server resolves those names with the standard library's Go parser
 over the package directory's non-test `*.go` files (no gopls, no
 build): go-to-definition lands on the `func`, hover shows its signature
@@ -299,7 +299,7 @@ the Go declaration is gopls' job, and the existence error then points
 at whichever side is still behind. Rename on a column follows it into
 the table's checks (typed operands and Go-reference arguments); a
 column named through a group — in a `Pred` body or a group select — is
-left alone, and the agreement error (§V11.4 for a select, §V12.2 for a
+left alone, and the agreement error (§selects-over-groups rule 4 for a select, §validation-checks rule 2 for a
 Pred used by a table's checks) names what is now missing.
 
 ## 8. The verification checklist
@@ -314,8 +314,8 @@ How to audit that the three components implement
 | Spec grammar and front end agree | the spec's EBNF read as data (decision executable-grammar): every derived sentence parses, every one-token neighbour is decided alike by the grammar and the front end | `lang/spec_grammar_test.go` via `go test ./lang/...` |
 | Grammar and front end agree | every valid conformance snippet, `grammar/examples/*` and the spec's derived sentences (`go test ./lang -run TestSpecGrammarSentencesParse -sentences DIR`) must produce zero tree-sitter ERROR nodes **and** zero front-end diagnostics | differential run after grammar changes |
 | Lint rules match their doc | doc ↔ registry ↔ testdata consistency test; `//WANT` markers both directions | `lang/vet/docs_test.go` against [`lint.md`](lint.md) |
-| Generated routers implement §V | goldens byte-compared, gofmt-stable, **compiled**; itest exercises match/404/405, typed-param 404s, pipeline order, the error spine, reverse-URL round-trip totality | `gen/router`, `itest/` |
-| Generated models implement Appendix A/B | goldens compiled; every CRUD statement prepared against the generated DDL; SQL goldens executed on real SQLite | `nao/gen/...`, `nao/itest` |
+| Generated routers implement Part II of the spec | goldens byte-compared, gofmt-stable, **compiled**; itest exercises match/404/405, typed-param 404s, pipeline order, the error spine, reverse-URL round-trip totality | `gen/router`, `itest/` |
+| Generated models implement §mapping-to-go/B | goldens compiled; every CRUD statement prepared against the generated DDL; SQL goldens executed on real SQLite | `nao/gen/...`, `nao/itest` |
 | LSP behaves per spec | in-process unit suites: index, rename spelling rules, hover content, completion contexts, UTF-16 | `lsp/*_test.go` via `go test ./lsp/...` |
 | LSP behaves per spec, interactively | a scripted stdio JSON-RPC session against the real server process, replaying keystrokes that break and fix a project file, one of them as a ranged change, and asking for hover, definition, completion and symbols; every reply and published diagnostic pinned as a golden (decision invalid-input-goldens) | `cmd/volt/lsp_session_test.go` and `testdata/lsp_session.golden` via `go test ./cmd/volt/...`; refresh with `-update` after reading the diff |
 | A keystroke costs what the decisions say | the whole in-process path of one keystroke inside one table of a one-file project, didChange to publish, and the document's own front end alone; compare against the last report of `scripts/perf.go`. The bytes the keystroke's three parts allocate (the document's pass, the project analysis, the publish) are pinned exactly, within ten percent, hardware-neutral | `go test ./lsp -run '^$' -bench 'BenchmarkKeystroke|BenchmarkDocumentUpdateLocal' -benchmem`; `go test ./lsp -run TestKeystrokeAllocationBudget -v` |
@@ -325,6 +325,6 @@ fidelity was retired at zero disagreements (decision one-corpus); the corpus ver
 it pinned are the surviving record, and a divergence-worthy upstream
 feature gets re-checked by hand when adopted.
 
-When adding a construct, every row above must gain its case — §5's
+When adding a construct, every row above must gain its case — §program-structure's
 recipes say where. A construct that exists in code but has no row here
 is unverified, and that is a bug in the process, not a smaller task.

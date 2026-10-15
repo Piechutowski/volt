@@ -1,4 +1,4 @@
-// spec: §V2.1
+// spec: §imports rule 1
 package app
 
 import db

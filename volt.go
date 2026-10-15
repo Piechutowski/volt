@@ -25,7 +25,7 @@ func (r *Request) Route() string { return r.route }
 
 // Committed reports whether the response header has been written. An
 // error returned after commit reaches the error handler in log-only
-// mode (§4.1 of the router spec).
+// mode (§names-and-qualified-names of the router spec).
 func (r *Request) Committed() bool { return r.w != nil && r.w.wrote }
 
 // HandlerFunc is the controller-side shape after parameter binding.
@@ -141,7 +141,7 @@ type Route struct {
 	Spelled    string // DSL spelling
 	Controller string
 	Action     string
-	Query      string // "pkg.Method" for a query route (§V4.8); Controller and Action are then empty
+	Query      string // "pkg.Method" for a query route (§query-routes); Controller and Action are then empty
 	Helper     string // reverse-URL function name, "" when none
 	Params     []RouteParam
 }

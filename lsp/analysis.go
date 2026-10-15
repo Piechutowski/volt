@@ -44,7 +44,7 @@ type projectResult struct {
 	versions map[string]int32  // their versions, of the same moment (decision editor-session)
 }
 
-// projectRootOf finds the project a file belongs to (§V1.1); false for
+// projectRootOf finds the project a file belongs to (§projects-and-packages rule 1); false for
 // a relative path or a file with no go.mod above it.
 func projectRootOf(path string) (string, bool) {
 	if !filepath.IsAbs(path) {
@@ -92,7 +92,7 @@ func projectAnalyze(root string, overlay map[string]string, session *lang.Sessio
 
 // packageOf returns the loaded package holding path; nil when the
 // loader never read it (it reads only .volt files and skips dot,
-// underscore and nested-module directories, §V1.6).
+// underscore and nested-module directories, §projects-and-packages rule 6).
 func (res *projectResult) packageOf(path string) *lang.Package {
 	for _, pkg := range res.pr.Packages {
 		for _, f := range pkg.Files {

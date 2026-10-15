@@ -1,4 +1,4 @@
-// spec: §V10.3 — like needs a text column
+// spec: §predicates rule 3 — like needs a text column
 package db
 
 Table ms_revenue {

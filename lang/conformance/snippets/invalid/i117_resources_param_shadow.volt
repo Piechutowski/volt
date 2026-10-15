@@ -1,4 +1,4 @@
-// spec: §V5.3 — i117_resources_param_shadow
+// spec: §settings — i117_resources_param_shadow
 // want: rename it with [param:
 package app
 

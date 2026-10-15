@@ -1,4 +1,4 @@
-// Validation round trips (spec §V12): the generated Validate methods
+// Validation round trips (spec §validation-checks): the generated Validate methods
 // agree with the DDL's CHECK constraints on typed checks, Go-reference
 // checks run in Go only, and the documented asymmetry — SQLite cannot
 // call Go — is provable at the database.
@@ -71,7 +71,7 @@ func TestValidateGoRefCheckIsGoOnly(t *testing.T) {
 		t.Error("Validate rejected a valid email")
 	}
 
-	// The documented asymmetry (§V12.5): SQLite cannot call Go, so the
+	// The documented asymmetry (§validation-checks rule 5): SQLite cannot call Go, so the
 	// database accepts what only the validator can refuse.
 	if _, err := db.ExecContext(ctx,
 		`INSERT INTO users (email, name) VALUES ('not-an-address', 'Ann')`); err != nil {
@@ -79,7 +79,7 @@ func TestValidateGoRefCheckIsGoOnly(t *testing.T) {
 	}
 }
 
-// Params structs validate the checks they can see (§V12.6): a create
+// Params structs validate the checks they can see (§validation-checks rule 6): a create
 // params struct carries email, so both users checks run before any
 // insert; page_views' counts_positive reads hits, a defaulted column
 // absent from CreateParams, so only the like check runs there.
@@ -112,7 +112,7 @@ func TestParamsValidate(t *testing.T) {
 }
 
 // TestConstraintErrorsCarryStatus: the database's refusals reach the
-// caller as rt.ConstraintError with a status (§V12.7).
+// caller as rt.ConstraintError with a status (§validation-checks rule 7).
 func TestConstraintErrorsCarryStatus(t *testing.T) {
 	_, q := newDB(t)
 	ctx := context.Background()
@@ -133,7 +133,7 @@ func TestConstraintErrorsCarryStatus(t *testing.T) {
 	}
 }
 
-// TestRequiredBothTiers (§V12.8): a required column refuses its empty
+// TestRequiredBothTiers (§validation-checks rule 8): a required column refuses its empty
 // value in Go — naming the column — and in the DDL, under the same
 // constraint name.
 func TestRequiredBothTiers(t *testing.T) {

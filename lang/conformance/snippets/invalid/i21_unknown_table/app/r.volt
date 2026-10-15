@@ -1,4 +1,4 @@
-// spec: §V5.1
+// spec: §declaration
 package app
 
 import (

@@ -4,7 +4,7 @@ import (
 	"github.com/Piechutowski/volt/lang/token"
 )
 
-// ParamType is the closed set of route parameter types (spec §V4.1.3);
+// ParamType is the closed set of route parameter types (spec §route-paths rule 3);
 // GoType maps them to Go. The set matches the Go types nao's model
 // generator emits for primary keys.
 type ParamType string
@@ -48,15 +48,15 @@ type RouteInfo struct {
 	Action     string // method name, e.g. "Show"
 
 	HelperName   string // reverse-URL function base name; "" when suppressed
-	ClientName   string // generated client method name (§V4.10): every query route, and every controller route with a helper
+	ClientName   string // generated client method name (§generated-client): every query route, and every controller route with a helper
 	Pipes        []string
 	ErrorHandler string // package-level function name; "" for the default
 
-	// Events marks an event route (`get /events volt.Events`, §V4.11):
+	// Events marks an event route (`get /events volt.Events`, §event-routes):
 	// the runtime's broker serves it; Controller/Action read "volt"/"Events".
 	Events bool
 
-	// Query is set for a query route (§V4.8): the handler is a generated
+	// Query is set for a query route (§query-routes): the handler is a generated
 	// query method of an imported data package, and Controller/Action
 	// are empty.
 	Query *QueryRef
@@ -64,9 +64,9 @@ type RouteInfo struct {
 	Pos           token.Position
 	FromResources bool
 	Table         string // the resources declaration's table name, when FromResources
-	FromDataset   bool   // expanded from a dataset item (§V13)
+	FromDataset   bool   // expanded from a dataset item (§datasets)
 
-	// shape is the pattern parsed for the §V4.7.2 ambiguity relation
+	// shape is the pattern parsed for the §route-conflicts rule 2 ambiguity relation
 	// and shapeKey the method and shape as the duplicate scan keys them,
 	// both set when the route is lowered; ord is the route's position
 	// in the package's table, set when the checker accepts it.
@@ -91,11 +91,11 @@ type QueryParam struct {
 	Name      string // Go parameter name, also the URL key
 	GoType    string // unqualified Go type ("int32", "[]string"); params structs are qualified ("db.UserCreateParams")
 	Source    QuerySource
-	Validates bool // body param: the params struct has a Validate method the handler calls first (§V12.6)
+	Validates bool // body param: the params struct has a Validate method the handler calls first (§validation-checks rule 6)
 }
 
 // QueryRef binds a route to a generated query method of a data package
-// (§V4.8): an imported one, or the routing package itself when it
+// (§query-routes): an imported one, or the routing package itself when it
 // declares the tables (Local).
 type QueryRef struct {
 	Qualifier string // the import qualifier as written, e.g. "db"; the package's own name when Local
@@ -103,7 +103,7 @@ type QueryRef struct {
 	Package   string // root-relative package path
 	Import    string // Go import path of the package
 	PkgName   string // the package's Go name (its directory name)
-	Local     bool   // the query is this package's own (§V4.8.6): no import, the field is Queries *Queries
+	Local     bool   // the query is this package's own (§query-routes rule 6): no import, the field is Queries *Queries
 	Method    string // generated method name, e.g. "UserGet"
 	Params    []QueryParam
 	Result    string // row type, unqualified ("User"); "" for delete
@@ -138,14 +138,14 @@ func (c *ControllerInfo) Action(name string) *ActionInfo {
 }
 
 // ActionInfo is one interface method: its name and parameter signature.
-// Two routes may share an action only with identical signatures (§V4.3).
+// Two routes may share an action only with identical signatures (§handler-references).
 type ActionInfo struct {
 	Name   string
 	Params []Param
 	Routes []*RouteInfo
 }
 
-// resourceActions is the canonical action table (spec §V5.2), in
+// resourceActions is the canonical action table (spec §the-action-table), in
 // definition order. Method "" is filled per action; Update expands to
 // both PATCH and PUT.
 var resourceActions = []struct {
@@ -154,7 +154,7 @@ var resourceActions = []struct {
 	Suffix  string   // path suffix after /<table>
 	OnID    bool     // route includes the key parameter
 	API     bool     // included under [api]
-	Op      string   // the default CRUD operation behind [default] (§V5.5); "" for form pages
+	Op      string   // the default CRUD operation behind [default] (§default-handlers); "" for form pages
 }{
 	{"Index", []string{"GET"}, "", false, true, "list"},
 	{"New", []string{"GET"}, "/new", false, false, ""},

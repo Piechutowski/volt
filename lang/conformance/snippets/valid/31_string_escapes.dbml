@@ -1,4 +1,4 @@
-// spec: §3.8 — escape sequences including \uHHHH and unknown escapes
+// spec: §escape-sequences — escape sequences including \uHHHH and unknown escapes
 Table t {
   a varchar [note: 'tab\there']
   b varchar [note: 'unicode A char']

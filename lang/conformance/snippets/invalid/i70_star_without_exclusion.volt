@@ -1,4 +1,4 @@
-// spec: §V11.7 — a star projection needs at least one exclusion; drop
+// spec: §selects-over-groups rule 7 — a star projection needs at least one exclusion; drop
 // the parens to select every column
 package db
 

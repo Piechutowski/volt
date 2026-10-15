@@ -1,4 +1,4 @@
-// spec: §3.6.1 — single-line string must not contain a line break
+// spec: §string-literals rule 1 — single-line string must not contain a line break
 Table t {
   id int [note: 'spans
 lines']

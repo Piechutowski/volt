@@ -1,4 +1,4 @@
-// Validation support for generated validators (docs/spec.md §V12):
+// Validation support for generated validators (docs/spec.md §validation-checks):
 // the error type every failed check reports, and the LIKE evaluator
 // that mirrors SQLite's operator.
 package rt
@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// CheckError is one failed schema check (spec §V12). Typed checks
+// CheckError is one failed schema check (spec §validation-checks). Typed checks
 // carry no Cause; a Go-reference check wraps the error the referenced
 // function returned.
 type CheckError struct {
@@ -168,7 +168,7 @@ func Constraint(err error) error {
 // Like reports whether s matches pattern under SQLite's LIKE operator
 // with no ESCAPE clause: '%' matches any sequence (empty included),
 // '_' matches exactly one character, and letters compare
-// case-insensitively for ASCII only (spec §V12).
+// case-insensitively for ASCII only (spec §validation-checks).
 func Like(s, pattern string) bool {
 	return likeMatch([]rune(s), []rune(pattern))
 }

@@ -1,4 +1,4 @@
-// spec: §3.5 — keywords are contextual, usable as ordinary names
+// spec: §keywords — keywords are contextual, usable as ordinary names
 Table table {
   note varchar
   indexes int

@@ -1,4 +1,4 @@
-// spec: §V12.8 — required is the non-empty rule in both tiers, per type class; enums count as text
+// spec: §validation-checks rule 8 — required is the non-empty rule in both tiers, per type class; enums count as text
 package db
 
 Enum plan {

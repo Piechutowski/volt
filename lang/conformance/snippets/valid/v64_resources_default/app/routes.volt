@@ -1,4 +1,4 @@
-// spec: §V5.5 — resources [default]: every surviving action is a query route over the table's CRUD; implies api; except: takes one back
+// spec: §default-handlers — resources [default]: every surviving action is a query route over the table's CRUD; implies api; except: takes one back
 package app
 
 import (

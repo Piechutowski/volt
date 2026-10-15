@@ -1,4 +1,4 @@
-// spec: §V5.4 — model resolution within the package
+// spec: §table-resolution — model resolution within the package
 package app
 
 Table users {

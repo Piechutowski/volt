@@ -1,4 +1,4 @@
-// spec: §V10.3 — a text column is not orderable: text > number is an error
+// spec: §predicates rule 3 — a text column is not orderable: text > number is an error
 package db
 
 Table ms_revenue {

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// Client is the wire side of a generated client package (spec §V4.10).
+// Client is the wire side of a generated client package (spec §generated-client).
 // It speaks the Formats rules from the other end: Accept and
 // Content-Type from Format, the reply decoded by its Content-Type.
 type Client struct {

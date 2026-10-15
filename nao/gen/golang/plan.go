@@ -25,7 +25,7 @@ type Plan struct {
 	byKey   map[string]*tableModel
 	methods map[string]crudRef // generated CRUD method name -> owner; the first table declared wins
 	names   []string           // every CRUD method name in declaration order, for did-you-mean hints
-	base    *nameBase          // the models' names (§V11.7), the memo's when there is one
+	base    *nameBase          // the models' names (§selects-over-groups rule 7), the memo's when there is one
 }
 
 // crudRef locates one generated CRUD method.
@@ -210,7 +210,7 @@ func (pl *Plan) ParamsValidators(tableKey string, checks []CheckSpec) (create, u
 }
 
 // ModelFields reports the exact struct fields the model generator emits
-// for the table with the given canonical key (spec §V11.6, Appendix A).
+// for the table with the given canonical key (spec §selects-over-groups rule 6, §mapping-to-go).
 func (pl *Plan) ModelFields(tableKey string) (model string, fields []FieldSig, err error) {
 	t, err := pl.table(tableKey)
 	if err != nil {
@@ -236,7 +236,7 @@ func fieldSigOf(fp *fieldPlan) FieldSig {
 	}
 }
 
-// SelectRowType names the row type one instantiation returns (§V11.7)
+// SelectRowType names the row type one instantiation returns (§selects-over-groups rule 7)
 // and reports its fields.
 func (pl *Plan) SelectRowType(fn SelectFn) (string, []FieldSig, error) {
 	t, err := pl.table(fn.TableKey)
@@ -381,10 +381,10 @@ func dynOriginOf(o *nameOrigin) dynOrigin {
 	return d
 }
 
-/* ===== the §V11.7 name scope ===== */
+/* ===== the §selects-over-groups rule 7 name scope ===== */
 
 // Names is the scope of package-level Go identifiers a package's
-// generated files mint (§V11.7): models, params structs, dynamic column
+// generated files mint (§selects-over-groups rule 7): models, params structs, dynamic column
 // handles and option wrappers, enum types, the Queries handle and its
 // constructor. It is read in layers, last writer first (decision check-by-declaration).
 type Names struct {

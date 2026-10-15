@@ -1,4 +1,4 @@
-// spec: §3.7 — multi-line string with escapes and continuation
+// spec: §multi-line-string-literals — multi-line string with escapes and continuation
 Project p {
   Note: '''
     # Heading

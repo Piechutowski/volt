@@ -1,4 +1,4 @@
-// spec: §V2.5
+// spec: §imports rule 5
 package app
 
 use * from './base'

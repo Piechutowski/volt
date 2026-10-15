@@ -13,7 +13,7 @@ type Node interface {
 // ----------------------------------------------------------------------------
 // Expressions and shared forms
 
-// Ident is a plain or quoted identifier (spec §3.4).
+// Ident is a plain or quoted identifier (spec §identifiers).
 type Ident struct {
 	Tok token.Token
 }
@@ -25,11 +25,11 @@ func (x *Ident) End() token.Position { return x.Tok.End() }
 func (x *Ident) Name() string { return x.Tok.Val }
 
 // Quoted reports whether the identifier was written "quoted"; quoted
-// identifiers never act as keywords (spec §1.4).
+// identifiers never act as keywords (spec §case-sensitivity-and-terminology).
 func (x *Ident) Quoted() bool { return x.Tok.Quoted }
 
 // QualName is a possibly schema-qualified name: name or schema.name
-// (spec §4.1).
+// (spec §names-and-qualified-names).
 type QualName struct {
 	Parts []*Ident // 1 or 2 elements
 }
@@ -64,7 +64,7 @@ type BasicLit struct {
 func (x *BasicLit) Pos() token.Position { return x.Tok.Pos }
 func (x *BasicLit) End() token.Position { return x.Tok.End() }
 
-// FuncExpr is a backtick expression literal (spec §3.12).
+// FuncExpr is a backtick expression literal (spec §expression-literals).
 type FuncExpr struct {
 	Tok token.Token
 }
@@ -73,7 +73,7 @@ func (x *FuncExpr) Pos() token.Position { return x.Tok.Pos }
 func (x *FuncExpr) End() token.Position { return x.Tok.End() }
 func (x *FuncExpr) Text() string        { return x.Tok.Val }
 
-// NegNumber is a minus sign applied to a number literal (spec §6.4, §6.10).
+// NegNumber is a minus sign applied to a number literal (spec §default-values, §records-sample-data).
 type NegNumber struct {
 	MinusPos token.Position
 	Num      *BasicLit
@@ -82,7 +82,7 @@ type NegNumber struct {
 func (x *NegNumber) Pos() token.Position { return x.MinusPos }
 func (x *NegNumber) End() token.Position { return x.Num.End() }
 
-// EnumConst is a dotted enum value reference, e.g. status.active (spec §4.1).
+// EnumConst is a dotted enum value reference, e.g. status.active (spec §names-and-qualified-names).
 type EnumConst struct {
 	Enum  *Ident
 	Value *Ident
@@ -91,7 +91,7 @@ type EnumConst struct {
 func (x *EnumConst) Pos() token.Position { return x.Enum.Pos() }
 func (x *EnumConst) End() token.Position { return x.Value.End() }
 
-// Empty is a record field with nothing between separators (spec §6.10).
+// Empty is a record field with nothing between separators (spec §records-sample-data).
 type Empty struct {
 	At token.Position
 }
@@ -99,7 +99,7 @@ type Empty struct {
 func (x *Empty) Pos() token.Position { return x.At }
 func (x *Empty) End() token.Position { return x.At }
 
-// RefValue is the value of a column's ref: setting (spec §6.7):
+// RefValue is the value of a column's ref: setting (spec §relationships-ref):
 // an operator followed by an endpoint.
 type RefValue struct {
 	OpTok    token.Token // LT, GT, MINUS or LTGT
@@ -110,7 +110,7 @@ func (x *RefValue) Pos() token.Position { return x.OpTok.Pos }
 func (x *RefValue) End() token.Position { return x.Endpoint.End() }
 
 // ----------------------------------------------------------------------------
-// Settings (spec §4.2)
+// Settings (spec §settings-lists)
 
 // SettingList is a bracketed, comma-separated settings list.
 type SettingList struct {
@@ -151,7 +151,7 @@ func (x *Setting) End() token.Position { return x.endPos }
 func (x *Setting) SetEnd(p token.Position) { x.endPos = p }
 
 // ----------------------------------------------------------------------------
-// File and declarations (spec §5)
+// File and declarations (spec §program-structure)
 
 // File is one parsed DBML source file.
 type File struct {
@@ -169,7 +169,7 @@ func (f *File) Pos() token.Position {
 func (f *File) End() token.Position { return f.EOF }
 
 // HasImports reports whether the file contains use/reuse statements
-// (spec §7).
+// (spec §file-imports-removed).
 func (f *File) HasImports() bool {
 	for _, d := range f.Decls {
 		if _, ok := d.(*Use); ok {
@@ -185,7 +185,7 @@ type Decl interface {
 	declNode()
 }
 
-// Use is a use/reuse import statement (spec §7).
+// Use is a use/reuse import statement (spec §file-imports-removed).
 type Use struct {
 	UsePos   token.Position
 	Reuse    bool
@@ -213,7 +213,7 @@ func (x *UseItem) End() token.Position {
 	return x.Name.End()
 }
 
-// Project is a Project element (spec §6.1).
+// Project is a Project element (spec §project).
 type Project struct {
 	ProjectPos token.Position
 	Name       *Ident // may be nil
@@ -235,7 +235,7 @@ type ProjectProp struct {
 func (x *ProjectProp) Pos() token.Position { return x.Key.Pos() }
 func (x *ProjectProp) End() token.Position { return x.Value.End() }
 
-// Table is a Table element (spec §6.2).
+// Table is a Table element (spec §table).
 type Table struct {
 	TablePos token.Position
 	Name     *QualName
@@ -249,7 +249,7 @@ func (d *Table) Pos() token.Position { return d.TablePos }
 func (d *Table) End() token.Position { return d.Rbrace }
 func (d *Table) declNode()           {}
 
-// TablePartial is a TablePartial element (spec §6.9).
+// TablePartial is a TablePartial element (spec §tablepartial).
 type TablePartial struct {
 	PartialPos token.Position
 	Name       *Ident
@@ -270,11 +270,11 @@ type TableItem interface {
 	tableItemNode()
 }
 
-// Column is one column definition (spec §6.3).
+// Column is one column definition (spec §columns).
 type Column struct {
 	Name        *Ident
 	Type        *TypeRef
-	LegacyFlags []*Ident // bare pk/unique between type and settings (§6.3.7)
+	LegacyFlags []*Ident // bare pk/unique between type and settings (§columns rule 7)
 	Settings    *SettingList
 }
 
@@ -291,7 +291,7 @@ func (x *Column) End() token.Position {
 func (x *Column) tableItemNode() {}
 
 // TypeRef is a column type: name, schema-qualified name, and optional
-// parenthesized arguments, e.g. varchar(255) or v2.job_status (spec §6.3).
+// parenthesized arguments, e.g. varchar(255) or v2.job_status (spec §columns).
 type TypeRef struct {
 	Name   *QualName
 	Args   []token.Token // NUMBER or IDENT argument tokens, verbatim
@@ -322,7 +322,7 @@ func (x *TypeRef) String() string {
 	return s
 }
 
-// IndexesBlock is one indexes { ... } block (spec §6.5).
+// IndexesBlock is one indexes { ... } block (spec §indexes).
 type IndexesBlock struct {
 	IndexesPos token.Position
 	Indexes    []*Index
@@ -349,7 +349,7 @@ func (x *Index) End() token.Position {
 	return x.Key[len(x.Key)-1].End()
 }
 
-// ChecksBlock is one checks { ... } block (spec §6.6).
+// ChecksBlock is one checks { ... } block (spec §checks).
 type ChecksBlock struct {
 	ChecksPos token.Position
 	Checks    []*Check
@@ -360,13 +360,13 @@ func (x *ChecksBlock) Pos() token.Position { return x.ChecksPos }
 func (x *ChecksBlock) End() token.Position { return x.Rbrace }
 func (x *ChecksBlock) tableItemNode()      {}
 
-// Check is one check constraint line (spec §6.6, §V12). Exactly one
+// Check is one check constraint line (spec §checks, §validation-checks). Exactly one
 // of the three forms is set: Expr (opaque SQL, the DBML core), Pred (a
-// typed §V10 expression), or Ref+Args (a Go-reference check).
+// typed §predicates expression), or Ref+Args (a Go-reference check).
 type Check struct {
 	Expr     *FuncExpr // opaque SQL; SQL CHECK only
-	Pred     PredExpr  // typed (§V12); SQL CHECK + generated validator
-	Ref      *GoRef    // Go reference (§V12); generated validator only
+	Pred     PredExpr  // typed (§validation-checks); SQL CHECK + generated validator
+	Ref      *GoRef    // Go reference (§validation-checks); generated validator only
 	Args     []*Ident  // Go-reference arguments: columns of the table
 	EndPos   token.Position
 	Settings *SettingList
@@ -393,7 +393,7 @@ func (x *Check) End() token.Position {
 	return x.Expr.End()
 }
 
-// PartialRef is a ~partial injection line (spec §6.9).
+// PartialRef is a ~partial injection line (spec §tablepartial).
 type PartialRef struct {
 	TildePos token.Position
 	Name     *Ident
@@ -403,7 +403,7 @@ func (x *PartialRef) Pos() token.Position { return x.TildePos }
 func (x *PartialRef) End() token.Position { return x.Name.End() }
 func (x *PartialRef) tableItemNode()      {}
 
-// Note is an in-body note definition (spec §6.11).
+// Note is an in-body note definition (spec §notes).
 type Note struct {
 	NotePos token.Position
 	Text    *BasicLit
@@ -415,7 +415,7 @@ func (x *Note) End() token.Position     { return x.endPos }
 func (x *Note) SetEnd(p token.Position) { x.endPos = p }
 func (x *Note) tableItemNode()          {}
 
-// Ref is a top-level relationship element, short or long form (spec §6.7).
+// Ref is a top-level relationship element, short or long form (spec §relationships-ref).
 type Ref struct {
 	RefPos   token.Position
 	Name     *Ident // may be nil
@@ -433,7 +433,7 @@ func (d *Ref) SetEnd(p token.Position) { d.endPos = p }
 func (d *Ref) declNode()               {}
 
 // RefEndpoint is one side of a relationship: a table (or alias), optionally
-// schema-qualified, and one or more columns (spec §6.7).
+// schema-qualified, and one or more columns (spec §relationships-ref).
 type RefEndpoint struct {
 	Table   *QualName
 	Columns []*Ident
@@ -444,7 +444,7 @@ func (x *RefEndpoint) Pos() token.Position     { return x.Table.Pos() }
 func (x *RefEndpoint) End() token.Position     { return x.endPos }
 func (x *RefEndpoint) SetEnd(p token.Position) { x.endPos = p }
 
-// Enum is an Enum element (spec §6.8).
+// Enum is an Enum element (spec §enum).
 type Enum struct {
 	EnumPos token.Position
 	Name    *QualName
@@ -470,7 +470,7 @@ func (x *EnumValue) End() token.Position {
 	return x.Name.End()
 }
 
-// Records is sample data, top-level or in-table (spec §6.10).
+// Records is sample data, top-level or in-table (spec §records-sample-data).
 type Records struct {
 	RecordsPos token.Position
 	Table      *QualName // nil for in-table records
@@ -494,7 +494,7 @@ type RecordRow struct {
 func (x *RecordRow) Pos() token.Position { return x.Values[0].Pos() }
 func (x *RecordRow) End() token.Position { return x.Values[len(x.Values)-1].End() }
 
-// StickyNote is a top-level named note (spec §6.11).
+// StickyNote is a top-level named note (spec §notes).
 type StickyNote struct {
 	NotePos  token.Position
 	Name     *Ident
@@ -507,7 +507,7 @@ func (d *StickyNote) Pos() token.Position { return d.NotePos }
 func (d *StickyNote) End() token.Position { return d.Rbrace }
 func (d *StickyNote) declNode()           {}
 
-// TableGroup is a TableGroup element (spec §6.12).
+// TableGroup is a TableGroup element (spec §tablegroup).
 type TableGroup struct {
 	GroupPos token.Position
 	Name     *Ident
@@ -521,7 +521,7 @@ func (d *TableGroup) Pos() token.Position { return d.GroupPos }
 func (d *TableGroup) End() token.Position { return d.Rbrace }
 func (d *TableGroup) declNode()           {}
 
-// DiagramView is a DiagramView element (spec §6.13).
+// DiagramView is a DiagramView element (spec §diagramview).
 type DiagramView struct {
 	ViewPos    token.Position
 	Name       *Ident

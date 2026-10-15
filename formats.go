@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-// Wire formats a query route speaks (spec §V, "Formats"). The format of
+// Wire formats a query route speaks (spec Part II, "Formats"). The format of
 // a response is chosen by the request's Accept header, the format of a
 // request body by its Content-Type; nothing about the format ever
 // appears in the URL.

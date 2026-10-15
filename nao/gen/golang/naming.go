@@ -29,7 +29,7 @@ var commonInitialisms = map[string]bool{
 //
 // Words are split on characters that cannot appear in a Go identifier
 // (underscores, spaces, punctuation from quoted names) and on combining
-// marks, which are valid in DBML identifiers (spec §3.4) but not in Go.
+// marks, which are valid in DBML identifiers (spec §identifiers) but not in Go.
 // Each word is title-cased, or upper-cased if it is a common initialism.
 // A leading digit is prefixed with "X" ("2fa_codes" -> "X2faCodes").
 // An error is returned when nothing usable remains.

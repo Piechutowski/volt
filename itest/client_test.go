@@ -1,4 +1,4 @@
-// The generated client (spec §V4.10) against the fixture server: the
+// The generated client (spec §generated-client) against the fixture server: the
 // typed methods round-trip the query routes in both wire formats, a
 // miss is errors.Is(err, volt.ErrNotFound), and a named controller
 // route is reachable as a raw response.
@@ -58,7 +58,7 @@ func TestClientQueryRoutes(t *testing.T) {
 			t.Fatalf("%v: second delete = %v, want volt.ErrNotFound", f, err)
 		}
 
-		// Dataset routes (§V13): the same signature for every member.
+		// Dataset routes (§datasets): the same signature for every member.
 		if _, err := c.MsRevenueBrowse(ctx, 2024); err != nil {
 			t.Fatalf("%v: dataset route = %v", f, err)
 		}
@@ -80,7 +80,7 @@ func TestClientQueryRoutes(t *testing.T) {
 	}
 }
 
-// TestEventRouteStreams (§V4.11): what the server publishes reaches
+// TestEventRouteStreams (§event-routes): what the server publishes reaches
 // every connected client through the generated Events method, in
 // order, and a late subscriber replays what it missed.
 func TestEventRouteStreams(t *testing.T) {
@@ -124,7 +124,7 @@ func TestEventRouteStreams(t *testing.T) {
 }
 
 // TestClientValidationErrors: the generated client sees the same
-// statuses as HTTPError values (§V12.7).
+// statuses as HTTPError values (§validation-checks rule 7).
 func TestClientValidationErrors(t *testing.T) {
 	srv := httptest.NewServer(handlerWithDB(t))
 	defer srv.Close()

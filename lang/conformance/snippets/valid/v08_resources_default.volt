@@ -1,4 +1,4 @@
-// spec: §V5.2 — the seven actions; update spans PATCH and PUT
+// spec: §the-action-table — the seven actions; update spans PATCH and PUT
 package app
 
 Table users {

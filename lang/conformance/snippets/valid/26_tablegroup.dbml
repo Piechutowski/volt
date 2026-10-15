@@ -1,4 +1,4 @@
-// spec: §6.12 — group with settings, note def inside, qualified member
+// spec: §tablegroup — group with settings, note def inside, qualified member
 Table merchants { id int }
 Table countries { id int }
 Table core.users { id int }

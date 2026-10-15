@@ -1,4 +1,4 @@
-// spec: §6.5 — all four index-key forms and every index setting
+// spec: §indexes — all four index-key forms and every index setting
 Table bookings {
   id integer
   country varchar

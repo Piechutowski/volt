@@ -1,4 +1,4 @@
-// spec: §V3.2 — a plug of this package must exist in its Go files
+// spec: §pipelines rule 2 — a plug of this package must exist in its Go files
 // want: no function BearerAuth
 package app
 

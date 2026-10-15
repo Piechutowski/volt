@@ -20,7 +20,7 @@ fail); the grammar is executable too (decision executable-grammar: every sentenc
 derives parses, every one-token neighbour is decided alike by grammar
 and front end); every diagnostic cites the section it enforces; the grammar,
 the LSP, vet and the generators are all audited against the same
-document (`docs/editor.md` §8 is the checklist). When spec and code
+document (`docs/editor.md` section 8 is the checklist). When spec and code
 disagree, one of them has a bug — the fixing commit says which. Never
 change behavior without changing the spec in the same commit, and
 never weaken a test to get green.
@@ -70,10 +70,11 @@ reverted: nao is its *name*).
 3. `docs/spec.md` — the language: Part I the schema core, Part II
    the project, routing and query layers, then the appendices (Go and
    SQLite mappings, DBML compatibility). Sections are named, not
-   numbered (decision named-sections); existing `§…` citations resolve through the spec's
-   Citation key until the migration to heading names lands (roadmap).
+   numbered (decision named-sections): a citation is `§` and the
+   heading's anchor, `§columns rule 2`, and a diagnostic code is
+   `spec/<anchor>`.
 4. `docs/editor.md` — grammar/extension/LSP architecture, extension
-   recipes, and the §8 verification checklist.
+   recipes, and the section 8 verification checklist.
 5. `docs/nao.md` + `docs/model-layer.md` — the data layer and the
    philosophy behind it. `docs/orm-matrix.md` — the ORM capability
    audit, pinned research: consult, don't maintain.
@@ -112,7 +113,7 @@ gofmt -l . | grep -v zed-extension        # must be empty
 Golden refresh is `go test ./gen/router -update` / `go test ./nao/gen/...
 -update` — inspect the diff; goldens exist to surface unintended output
 changes. Grammar changes additionally need `tree-sitter generate`,
-`tree-sitter test`, the differential checks of `docs/editor.md` §8, and
+`tree-sitter test`, the differential checks of `docs/editor.md` section 8, and
 `./scripts/sync-grammar.sh`. For LSP behavior, scripted stdio JSON-RPC
 sessions replaying the user's exact keystrokes have repeatedly caught
 what unit tests missed — do that for anything interactive; one such
@@ -127,7 +128,7 @@ a new interaction belongs in it.
   interface methods, `New*`/`is*`/`has*`, stdlib-parallel APIs
   (`parser.ParseFile`, `check.File`), cursor primitives (`next`,
   `peek`), LSP handlers named after protocol methods.
-- Error messages and code comments cite spec sections (`§6.7`, `§V4.6`)
+- Error messages and code comments cite spec sections (`§relationships-ref`, `§route-names-and-reverse-urls`)
   or decision names (`decision one-parse`). A comment is a contract with a citation, one or
   two sentences, never rationale, history or measurements; tests carry
   no prose beyond directives, the proof instruments excepted (decision comments-are-contracts).

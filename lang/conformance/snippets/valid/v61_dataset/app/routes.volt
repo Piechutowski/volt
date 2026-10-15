@@ -1,4 +1,4 @@
-// spec: §V13 — a dataset expands a group select into one query route per member, stripping the table prefix
+// spec: §datasets — a dataset expands a group select into one query route per member, stripping the table prefix
 package app
 
 import (

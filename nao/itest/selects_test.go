@@ -1,4 +1,4 @@
-// Select round trips (spec §V11, decision integration-over-mocks): the group-generated
+// Select round trips (spec §selects-over-groups, decision integration-over-mocks): the group-generated
 // methods run against a real SQLite through a real driver, proving the
 // checker-rendered WHERE/ORDER SQL executes and filters correctly, with
 // one signature across every member of the group.
@@ -100,7 +100,7 @@ func TestSelectProjectionSharedType(t *testing.T) {
 	seedMetrics(t, q)
 	ctx := context.Background()
 
-	// One shared row type (Summary), two sources: the §V11.7 explicit
+	// One shared row type (Summary), two sources: the §selects-over-groups rule 7 explicit
 	// list. Both methods return the same Go type.
 	pv, err := q.PageViewSummary(ctx, "alpha", 1)
 	if err != nil {
@@ -126,7 +126,7 @@ func TestSelectProjectionStructDerivative(t *testing.T) {
 	seedMetrics(t, q)
 
 	// The star form: LinkClickPublic is LinkClick minus target, every
-	// kept field copied verbatim (§V11.7).
+	// kept field copied verbatim (§selects-over-groups rule 7).
 	rows, err := q.LinkClickPublic(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -147,7 +147,7 @@ func TestSelectProjectionStructDerivative(t *testing.T) {
 }
 
 // TestSelectListParam: `site in :sites` binds one JSON array and is
-// unpacked by json_each on the real driver (§V10.3, decision list-parameters) — a
+// unpacked by json_each on the real driver (§predicates rule 3, decision list-parameters) — a
 // multi-value list, a single value, and the empty list that matches
 // nothing, with one signature across both members.
 func TestSelectListParam(t *testing.T) {

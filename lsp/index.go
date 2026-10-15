@@ -248,7 +248,7 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		ix.Occs = append(ix.Occs, entries[ti.Decl].cols...)
 	}
 
-	// Groups shadow tables as select targets (§V11.2): a group-targeted
+	// Groups shadow tables as select targets (§selects-over-groups rule 2): a group-targeted
 	// select names agreed columns, not one table's.
 	groups := map[string]bool{}
 	for _, decl := range f.Decls {
@@ -276,7 +276,7 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		case *ast.Select:
 			// A select over one table binds its columns to that table. A
 			// group target names an agreed column across members and is
-			// left alone (§V11.4).
+			// left alone (§selects-over-groups rule 4).
 			if ti := ix.tableByBase(n.Target.Name()); ti != nil && !groups[n.Target.Name()] {
 				for _, col := range n.Cols {
 					ix.addColumnRef(ti, "", col)
@@ -417,7 +417,7 @@ func (ix *Index) enumsNamed(d *ast.Table) map[string]*check.EnumInfo {
 }
 
 // tablesNamed is the tables a table's body names in inline references
-// (§6.7), by the keys the walk looks them up with — the canonical
+// (§relationships-ref), by the keys the walk looks them up with — the canonical
 // name, and the alias form of an unqualified one — nil where a key
 // resolves to none.
 func (ix *Index) tablesNamed(d *ast.Table) map[string]*check.TableInfo {
@@ -515,7 +515,7 @@ func (ix *Index) walkTableBody(body []ast.TableItem, ti *check.TableInfo, partia
 	}
 }
 
-// walkPredCols records the column references of a typed check (§V12):
+// walkPredCols records the column references of a typed check (§validation-checks):
 // every operand names a column of the enclosing table.
 func (ix *Index) walkPredCols(ti *check.TableInfo, partial string, x ast.PredExpr) {
 	switch x := x.(type) {
@@ -629,7 +629,7 @@ func (ix *Index) addColumnRef(ti *check.TableInfo, partial string, id *ast.Ident
 }
 
 // tableByBase finds the one table with the given base name (the
-// checker's §V11.2 rule for select targets), or nil when none or more
+// checker's §selects-over-groups rule 2 for select targets), or nil when none or more
 // than one matches.
 func (ix *Index) tableByBase(base string) *check.TableInfo {
 	return ix.byBase[base]

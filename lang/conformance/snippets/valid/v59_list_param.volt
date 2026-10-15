@@ -1,4 +1,4 @@
-// spec: §V10.3, §V11.6 — `in :name` is a list parameter typed as a slice of the column's type (decision list-parameters)
+// spec: §predicates rule 3, §selects-over-groups rule 6 — `in :name` is a list parameter typed as a slice of the column's type (decision list-parameters)
 package db
 
 Table page_views {

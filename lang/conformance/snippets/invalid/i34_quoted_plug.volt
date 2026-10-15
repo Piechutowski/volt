@@ -1,4 +1,4 @@
-// spec: §V3.2, §V4.1.6
+// spec: §pipelines rule 2, §route-paths rule 6
 package app
 
 Pipeline api {

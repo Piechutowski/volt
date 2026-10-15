@@ -3,7 +3,7 @@
 // Source: package app
 
 // Package client calls the routes of package app over HTTP
-// (spec §V4.10): one typed method per query route, one raw method per
+// (spec §generated-client): one typed method per query route, one raw method per
 // named controller route. It imports the data packages and the volt
 // runtime only, never the server.
 package client
@@ -160,7 +160,7 @@ func (c *Client) RefDeleteUser(ctx context.Context, id int32) error {
 	return c.Do(ctx, "DELETE", volt.URL("/ref/users/"+volt.SegInt(int64(id))), nil, nil)
 }
 
-// Events subscribes to /events (§V4.11): every published event, reconnecting
+// Events subscribes to /events (§event-routes): every published event, reconnecting
 // with Last-Event-ID until ctx is done, when the channel closes.
 func (c *Client) Events(ctx context.Context) <-chan volt.Event {
 	return c.Stream(ctx, volt.URL("/events"))

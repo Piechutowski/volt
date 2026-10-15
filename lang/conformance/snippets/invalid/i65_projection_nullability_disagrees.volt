@@ -1,4 +1,4 @@
-// spec: §V11.7 — agreement is on the generated field type, nullability
+// spec: §selects-over-groups rule 7 — agreement is on the generated field type, nullability
 // included: text and text [not null] disagree
 package db
 

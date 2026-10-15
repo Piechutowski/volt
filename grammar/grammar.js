@@ -7,26 +7,26 @@
  * ~injection, Enum, Ref (long, short and inline forms, composite endpoints),
  * TableGroup, Note (member, block and sticky forms), Records (top-level and
  * in-table), DiagramView, indexes and checks blocks, use/reuse imports —
- * plus the Volt routing layer of docs/spec.md §V: package clauses, Go-style
+ * plus the Volt routing layer of docs/spec.md Part II: package clauses, Go-style
  * import blocks, Pipeline, Scope, routes and resources. One grammar for
- * one language in three layers (§V0): every .volt file parses here,
+ * one language in three layers (§layers-files-and-the-superset-rule): every .volt file parses here,
  * whichever layer it uses.
  *
- * Design notes, driven by spec §3:
+ * Design notes, driven by spec §lexical-structure:
  *  - DBML is newline-sensitive: columns, enum values, record rows, index and
  *    check lines, project properties, group members and partial injections
  *    are newline-terminated. Newlines are therefore NOT extras; bodies use an
  *    explicit "items separated by one-or-more newlines" shape, which also
  *    accepts a final item flush against the closing brace.
- *  - Keywords are case-insensitive and NOT reserved (§3.5). Each keyword is a
+ *  - Keywords are case-insensitive and NOT reserved (§keywords). Each keyword is a
  *    case-insensitive regex aliased to its canonical spelling, with token
  *    precedence over plain identifiers. Consequence (documented limitation):
  *    an unquoted column named exactly `note`, `indexes`, `checks` or
  *    `records` needs quotes ("note") to parse as a column.
- *  - Double quotes delimit identifiers, single quotes delimit strings (§3.4,
- *    §3.6). String and expression contents are separate tokens so editors can
+ *  - Double quotes delimit identifiers, single quotes delimit strings (§identifiers,
+ *    §string-literals). String and expression contents are separate tokens so editors can
  *    inject other languages (Markdown in notes, SQL in backticks).
- *  - Settings lists are generic `[name, key: value]` (§4.2); which keys are
+ *  - Settings lists are generic `[name, key: value]` (§settings-lists); which keys are
  *    valid where is the language server's business, which also keeps the
  *    grammar open for the schema extensions.
  */
@@ -52,8 +52,8 @@ function newlineSep1(rule, $) {
 module.exports = grammar({
   name: 'volt',
 
-  // Newlines are significant; \r is discarded everywhere (§2). Comments may
-  // appear anywhere and a line comment does not consume its newline (§3.3).
+  // Newlines are significant; \r is discarded everywhere (§source-text). Comments may
+  // appear anywhere and a line comment does not consume its newline (§comments).
   extras: ($) => [/[ \t\r]/, $.comment],
 
   word: ($) => $.identifier,
@@ -85,7 +85,7 @@ module.exports = grammar({
         $.records_definition,
         $.diagram_view_definition,
         $.import_statement,
-        // Volt layer (docs/spec.md §V)
+        // Volt layer (docs/spec.md Part II)
         $.package_clause,
         $.import_block,
         $.pipeline_definition,
@@ -95,7 +95,7 @@ module.exports = grammar({
         $.select_definition,
       ),
 
-    // ==================== Project (§6.1) ====================
+    // ==================== Project (§project) ====================
 
     project_definition: ($) =>
       seq(
@@ -110,7 +110,7 @@ module.exports = grammar({
     project_property: ($) =>
       seq(field('key', $._name), ':', field('value', $.string)),
 
-    // ==================== Table (§6.2, §6.3) ====================
+    // ==================== Table (§table, §columns) ====================
 
     table_definition: ($) =>
       seq(
@@ -164,10 +164,10 @@ module.exports = grammar({
         ')',
       ),
 
-    // Bare `pk` / `unique` between type and settings (§6.3, legacy).
+    // Bare `pk` / `unique` between type and settings (§columns, legacy).
     legacy_flag: () => choice(kw('pk', 2), kw('unique', 2)),
 
-    // ==================== TablePartial (§6.9) ====================
+    // ==================== TablePartial (§tablepartial) ====================
 
     table_partial_definition: ($) =>
       seq(
@@ -186,7 +186,7 @@ module.exports = grammar({
     partial_injection: ($) =>
       seq('~', field('name', alias($._name, $.partial_name))),
 
-    // ==================== Enum (§6.8) ====================
+    // ==================== Enum (§enum) ====================
 
     enum_definition: ($) =>
       seq(
@@ -204,7 +204,7 @@ module.exports = grammar({
         optional(field('settings', $.settings_list)),
       ),
 
-    // ==================== Ref (§6.7) ====================
+    // ==================== Ref (§relationships-ref) ====================
 
     ref_definition: ($) =>
       seq(
@@ -261,7 +261,7 @@ module.exports = grammar({
         ')',
       ),
 
-    // ==================== indexes / checks (§6.5, §6.6) ====================
+    // ==================== indexes / checks (§indexes, §checks) ====================
 
     indexes_block: ($) =>
       seq(
@@ -292,7 +292,7 @@ module.exports = grammar({
         '}',
       ),
 
-    // One check line (§6.6, §V12): opaque SQL, a Go-reference call, or
+    // One check line (§checks, §validation-checks): opaque SQL, a Go-reference call, or
     // a typed predicate expression. A name followed by '(' can only be
     // a Go reference, so go_check wins that race by precedence.
     check_definition: ($) =>
@@ -313,7 +313,7 @@ module.exports = grammar({
         ),
       ),
 
-    // ==================== Note (§6.11) ====================
+    // ==================== Note (§notes) ====================
 
     // Member form inside Project/Table/TablePartial/TableGroup bodies:
     //   Note: 'text'      or      Note { 'text' }
@@ -339,7 +339,7 @@ module.exports = grammar({
         '}',
       ),
 
-    // ==================== TableGroup (§6.12) ====================
+    // ==================== TableGroup (§tablegroup) ====================
 
     table_group_definition: ($) =>
       seq(
@@ -352,7 +352,7 @@ module.exports = grammar({
         '}',
       ),
 
-    // ==================== Records (§6.10) ====================
+    // ==================== Records (§records-sample-data) ====================
 
     // Top level: Records users(id, name) { ... }
     records_definition: ($) =>
@@ -387,7 +387,7 @@ module.exports = grammar({
         '}',
       ),
 
-    // A row is comma-separated values; a value may be empty (§6.10). A row
+    // A row is comma-separated values; a value may be empty (§records-sample-data). A row
     // is either a single value or anything containing at least one comma.
     record_row: ($) =>
       choice(
@@ -409,7 +409,7 @@ module.exports = grammar({
         $.enum_constant,
       ),
 
-    // ==================== DiagramView (§6.13) ====================
+    // ==================== DiagramView (§diagramview) ====================
 
     diagram_view_definition: ($) =>
       seq(
@@ -435,7 +435,7 @@ module.exports = grammar({
         '}',
       ),
 
-    // ==================== Imports (§7) ====================
+    // ==================== Imports (§file-imports-removed) ====================
 
     import_statement: ($) =>
       seq(
@@ -460,17 +460,17 @@ module.exports = grammar({
         optional(seq(kw('as'), field('alias', $._name))),
       ),
 
-    // ==================== Volt layer (docs/spec.md §V) ====================
+    // ==================== Volt layer (docs/spec.md Part II) ====================
     // The routing dialect: package clauses, Go-style import blocks,
-    // Pipeline and Scope. Route paths are lexical islands (§V4.1.5) —
+    // Pipeline and Scope. Route paths are lexical islands (§route-paths rule 5) —
     // token.immediate stitches their segments together so interior
     // whitespace ends the path, exactly like the reference parser.
 
-    // package name (§V1.2)
+    // package name (§projects-and-packages rule 2)
     package_clause: ($) =>
       seq(kw('package'), field('name', $.identifier)),
 
-    // import ( [alias] path/segments ... ) (§V2)
+    // import ( [alias] path/segments ... ) (§imports)
     import_block: ($) =>
       seq(
         kw('import'),
@@ -495,7 +495,7 @@ module.exports = grammar({
         repeat(seq(token.immediate('/'), alias($._ident_immediate, $.identifier))),
       ),
 
-    // Pipeline name { use ref ... } (§V3)
+    // Pipeline name { use ref ... } (§pipelines)
     pipeline_definition: ($) =>
       seq(
         kw('Pipeline'),
@@ -510,7 +510,7 @@ module.exports = grammar({
 
     go_ref: ($) => seq($.identifier, optional(seq('.', $.identifier))),
 
-    // Scope path [settings] { routes | resources | Scope } (§V4)
+    // Scope path [settings] { routes | resources | Scope } (§scopes-and-routes)
     scope_definition: ($) =>
       seq(
         kw('Scope'),
@@ -540,7 +540,7 @@ module.exports = grammar({
       ),
 
     // resources names a table, optionally qualified by a package
-    // (volt §V5.1): `resources db.posts`.
+    // (volt §declaration): `resources db.posts`.
     resources_declaration: ($) =>
       seq(
         kw('resources'),
@@ -549,7 +549,7 @@ module.exports = grammar({
         optional(field('settings', $.settings_list)),
       ),
 
-    // dataset names a group select of an imported data package (§V13):
+    // dataset names a group select of an imported data package (§datasets):
     // `dataset db.browse [strip: 'da_']`, one query route per member.
     dataset_declaration: ($) =>
       seq(
@@ -559,9 +559,9 @@ module.exports = grammar({
         optional(field('settings', $.settings_list)),
       ),
 
-    // ==================== Groups, Preds, Selects (§V9-§V11) ====================
+    // ==================== Groups, Preds, Selects (§groups to §selects-over-groups) ====================
 
-    // Group name { members } | Group name = a + b - c (§V9)
+    // Group name { members } | Group name = a + b - c (§groups)
     group_definition: ($) =>
       seq(
         kw('Group'),
@@ -581,7 +581,7 @@ module.exports = grammar({
         ),
       ),
 
-    // One group term: a name, or a parenthesized set of names (§V9.3).
+    // One group term: a name, or a parenthesized set of names (§groups rule 3).
     _group_term: ($) =>
       choice(
         alias($.identifier, $.group_member),
@@ -593,7 +593,7 @@ module.exports = grammar({
         ),
       ),
 
-    // Pred name { expr } (§V10) — the closed predicate language.
+    // Pred name { expr } (§predicates) — the closed predicate language.
     pred_definition: ($) =>
       seq(
         kw('Pred'),
@@ -678,7 +678,7 @@ module.exports = grammar({
       seq(':', field('name', alias($._ident_immediate, $.parameter_name))),
 
     // Select name [(cols) | (* - cols)] for target [where expr]
-    // [settings] (§V11, §V11.7)
+    // [settings] (§selects-over-groups, §selects-over-groups rule 7)
     select_definition: ($) =>
       seq(
         kw('Select'),
@@ -690,7 +690,7 @@ module.exports = grammar({
         optional(field('settings', $.settings_list)),
       ),
 
-    // (a, b, c) or (* - a - b) (§V11.7): clauses read in SQL order
+    // (a, b, c) or (* - a - b) (§selects-over-groups rule 7): clauses read in SQL order
     select_projection: ($) =>
       seq(
         '(',
@@ -721,7 +721,7 @@ module.exports = grammar({
       ),
 
     // /users/:id(int32)/avatar, /files/:path..., or the bare root /
-    // (§V4.1). Segments abut: whitespace ends the path.
+    // (§route-paths). Segments abut: whitespace ends the path.
     route_path: ($) =>
       seq(
         '/',
@@ -759,7 +759,7 @@ module.exports = grammar({
     _ident_immediate: () =>
       token.immediate(/[0-9]*[\p{L}\p{M}_][\p{L}\p{M}\p{Nd}_]*/),
 
-    // ==================== Settings (§4.2) ====================
+    // ==================== Settings (§settings-lists) ====================
 
     settings_list: ($) =>
       seq('[', $.setting, repeat(seq(',', $.setting)), ']'),
@@ -770,7 +770,7 @@ module.exports = grammar({
         optional(seq(':', field('value', $._setting_value))),
       ),
 
-    // Setting names may be multi-word: `primary key`, `not null` (§4.2).
+    // Setting names may be multi-word: `primary key`, `not null` (§settings-lists).
     setting_name: ($) => prec.right(repeat1($._name)),
 
     _setting_value: ($) =>
@@ -788,14 +788,14 @@ module.exports = grammar({
         alias($.setting_name, $.setting_value_words),
       ),
 
-    // Parenthesized identifier list: only: (index, show) (volt §V5.3);
-    // order lists allow a one-word modifier: order: (year desc, id) (§V11.5).
+    // Parenthesized identifier list: only: (index, show) (volt §settings);
+    // order lists allow a one-word modifier: order: (year desc, id) (§selects-over-groups rule 5).
     ident_group: ($) =>
       seq('(', $._ident_item, repeat(seq(',', $._ident_item)), ')'),
 
     _ident_item: ($) => seq($._name, optional(alias($._name, $.ident_modifier))),
 
-    // value of a column's `ref:` setting: `> schema.table.column` (§6.7)
+    // value of a column's `ref:` setting: `> schema.table.column` (§relationships-ref)
     inline_ref: ($) =>
       seq(field('operator', $.cardinality), field('target', $.ref_endpoint)),
 
@@ -814,12 +814,12 @@ module.exports = grammar({
     _name: ($) => choice($.identifier, $.quoted_identifier),
 
     // Letters are Unicode L and M categories; identifiers may begin with
-    // digits (`2fa_codes`) but an all-digit token is a number (§3.4).
+    // digits (`2fa_codes`) but an all-digit token is a number (§identifiers).
     identifier: () => /[0-9]*[\p{L}\p{M}_][\p{L}\p{M}\p{Nd}_]*/,
 
     quoted_identifier: () => /"([^"\\\n]|\\[\s\S])*"/,
 
-    // Single-line ('...') and multi-line ('''...''') strings (§3.6, §3.7).
+    // Single-line ('...') and multi-line ('''...''') strings (§string-literals, §multi-line-string-literals).
     // Contents are separate tokens so editors can inject Markdown.
     string: ($) =>
       choice(
@@ -841,7 +841,7 @@ module.exports = grammar({
     _triple_string_content: () =>
       token.immediate(/([^'\\]|\\[\s\S]|'(\\[\s\S]|[^'\\])|''(\\[\s\S]|[^'\\]))+/),
 
-    // Backtick expression: opaque SQL, no escapes, may span lines (§3.12).
+    // Backtick expression: opaque SQL, no escapes, may span lines (§expression-literals).
     expression: ($) =>
       seq(
         '`',
@@ -855,7 +855,7 @@ module.exports = grammar({
 
     null: () => kw('null'),
 
-    // #rgb or #rrggbb (§3.11)
+    // #rgb or #rrggbb (§color-literals)
     color: () => /#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?/,
 
     comment: () =>

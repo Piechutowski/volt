@@ -1,4 +1,4 @@
-// spec: §6.7.2 — composite foreign keys
+// spec: §relationships-ref rule 2 — composite foreign keys
 Table merchants { id int
   country_code varchar }
 Table merchant_periods { merchant_id int

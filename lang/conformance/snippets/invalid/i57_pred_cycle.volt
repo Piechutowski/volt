@@ -1,4 +1,4 @@
-// spec: §V10.2 — predicate references must be acyclic
+// spec: §predicates rule 2 — predicate references must be acyclic
 package db
 
 Table ms_revenue {

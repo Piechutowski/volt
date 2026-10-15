@@ -3,7 +3,7 @@
 // that goes beyond grammar (setting whitelists, duplicate names, reference
 // resolution, records arity) and builds an Info symbol table.
 //
-// Diagnostic codes cite the spec section they enforce, e.g. "spec/6.7".
+// Diagnostic codes cite the spec section they enforce, e.g. "spec/relationships-ref".
 package check
 
 import (
@@ -21,8 +21,8 @@ type Info struct {
 	Refs       []*RefInfo
 	HasImports bool
 	// TableGroups in declaration order, resolved to their member tables
-	// (unknown members dropped; §6.12 reports them). A TableGroup is a
-	// set wherever Volt names one (spec §V9.2, decision set-difference).
+	// (unknown members dropped; §tablegroup reports them). A TableGroup is a
+	// set wherever Volt names one (spec §groups rule 2, decision set-difference).
 	TableGroups []*TableGroupInfo
 
 	byTable map[string]*TableInfo // canonical key and alias -> table
@@ -65,13 +65,13 @@ type TableInfo struct {
 	Alias string // "" if none
 
 	// Columns is the effective column list in definition order after
-	// injection, conflicts resolved per spec §6.9.4.
+	// injection, conflicts resolved per spec §tablepartial rule 4.
 	Columns []*ColumnDef
-	// Shadowed lists column definitions that lost a §6.9.4 conflict.
+	// Shadowed lists column definitions that lost a §tablepartial rule 4 conflict.
 	Shadowed []*ColumnDef
 
 	Indexes []*ast.Index // all indexes, direct and injected
-	Checks  []*ast.Check // all check lines, direct and injected (§6.9.3)
+	Checks  []*ast.Check // all check lines, direct and injected (§tablepartial rule 3)
 }
 
 // ColumnDef is one column definition and where it came from.
@@ -117,7 +117,7 @@ type EndpointInfo struct {
 	Pos     token.Position
 }
 
-// canonKey normalizes a table name with the default schema (spec §8.1).
+// canonKey normalizes a table name with the default schema (spec §schemas).
 func canonKey(q *ast.QualName) string {
 	if q.Schema() == "" {
 		return "public." + q.Base()
@@ -126,7 +126,7 @@ func canonKey(q *ast.QualName) string {
 }
 
 // File checks one parsed file and returns its semantic model together with
-// all diagnostics. When the file imports other files (§7), unresolved-name
+// all diagnostics. When the file imports other files (§file-imports-removed), unresolved-name
 // errors are suppressed; all local constraints still apply.
 func File(f *ast.File) (*Info, []diag.Diagnostic) {
 	return FileMemo(f, nil)
@@ -178,7 +178,7 @@ func (c *checker) errorf(pos token.Position, section, format string, args ...any
 	c.diags = append(c.diags, diag.Errorf(pos, "spec/"+section, format, args...))
 }
 
-/* ===== pass 1: collect declarations, detect duplicate names (§8.2) ===== */
+/* ===== pass 1: collect declarations, detect duplicate names (§namespaces-and-uniqueness) ===== */
 
 func (c *checker) collect(f *ast.File) {
 	c.partials = map[string]*PartialInfo{}
@@ -188,11 +188,11 @@ func (c *checker) collect(f *ast.File) {
 	c.views = map[string]*ast.DiagramView{}
 	c.schemas = map[string]bool{"public": true}
 
-	// Partials first: tables need them for injection regardless of order (§5.2).
+	// Partials first: tables need them for injection regardless of order (§program-structure rule 2).
 	for _, d := range f.Decls {
 		if tp, ok := d.(*ast.TablePartial); ok {
 			if _, dup := c.partials[tp.Name.Name()]; dup {
-				c.errorf(tp.Pos(), "8.2", "duplicate TablePartial name %q", tp.Name.Name())
+				c.errorf(tp.Pos(), "namespaces-and-uniqueness", "duplicate TablePartial name %q", tp.Name.Name())
 				continue
 			}
 			c.partials[tp.Name.Name()] = &PartialInfo{Decl: tp}
@@ -204,7 +204,7 @@ func (c *checker) collect(f *ast.File) {
 		case *ast.Table:
 			key := canonKey(d.Name)
 			if _, dup := c.info.byTable[key]; dup {
-				c.errorf(d.Pos(), "8.2", "duplicate table name %q", d.Name.String())
+				c.errorf(d.Pos(), "namespaces-and-uniqueness", "duplicate table name %q", d.Name.String())
 				continue
 			}
 			ti := &TableInfo{Decl: d, Key: key}
@@ -212,7 +212,7 @@ func (c *checker) collect(f *ast.File) {
 				ti.Alias = d.Alias.Name()
 				aliasKey := "public." + ti.Alias
 				if _, dup := c.info.byTable[aliasKey]; dup {
-					c.errorf(d.Alias.Pos(), "8.2", "table alias %q collides with an existing table name or alias", ti.Alias)
+					c.errorf(d.Alias.Pos(), "namespaces-and-uniqueness", "table alias %q collides with an existing table name or alias", ti.Alias)
 				} else {
 					c.info.byTable[aliasKey] = ti
 				}
@@ -228,7 +228,7 @@ func (c *checker) collect(f *ast.File) {
 		case *ast.Enum:
 			key := canonKey(d.Name)
 			if _, dup := c.enums[key]; dup {
-				c.errorf(d.Pos(), "8.2", "duplicate enum name %q", d.Name.String())
+				c.errorf(d.Pos(), "namespaces-and-uniqueness", "duplicate enum name %q", d.Name.String())
 				continue
 			}
 			ei := &EnumInfo{Decl: d, Key: key}
@@ -239,25 +239,25 @@ func (c *checker) collect(f *ast.File) {
 			}
 		case *ast.TableGroup:
 			if _, dup := c.groups[d.Name.Name()]; dup {
-				c.errorf(d.Pos(), "8.2", "duplicate TableGroup name %q", d.Name.Name())
+				c.errorf(d.Pos(), "namespaces-and-uniqueness", "duplicate TableGroup name %q", d.Name.Name())
 				continue
 			}
 			c.groups[d.Name.Name()] = d
 		case *ast.StickyNote:
 			if _, dup := c.sticky[d.Name.Name()]; dup {
-				c.errorf(d.Pos(), "8.2", "duplicate sticky note name %q", d.Name.Name())
+				c.errorf(d.Pos(), "namespaces-and-uniqueness", "duplicate sticky note name %q", d.Name.Name())
 				continue
 			}
 			c.sticky[d.Name.Name()] = d
 		case *ast.DiagramView:
 			if _, dup := c.views[d.Name.Name()]; dup {
-				c.errorf(d.Pos(), "8.2", "duplicate DiagramView name %q", d.Name.Name())
+				c.errorf(d.Pos(), "namespaces-and-uniqueness", "duplicate DiagramView name %q", d.Name.Name())
 				continue
 			}
 			c.views[d.Name.Name()] = d
 		case *ast.Project:
 			if c.project != nil {
-				c.errorf(d.Pos(), "6.1", "at most one Project element per file")
+				c.errorf(d.Pos(), "project", "at most one Project element per file")
 				continue
 			}
 			c.project = d
@@ -330,7 +330,7 @@ func enumSetOf(enums map[string]*EnumInfo) *enumSet {
 // (decision pure-memos): the declaration, its key and alias, the partial declarations
 // it injects in body order (nil where the name resolves to none),
 // whether imports are in play, and the enum set. It returns the
-// checked table, columns expanded per §6.9.4, and every diagnostic of
+// checked table, columns expanded per §tablepartial rule 4, and every diagnostic of
 // the table. It reads nothing else and writes nothing it did not
 // create.
 func tableCheck(d *ast.Table, key, alias string, partials []*ast.TablePartial, hasImports bool, enums *enumSet) (*TableInfo, []diag.Diagnostic) {
@@ -357,7 +357,7 @@ func (c *checker) partialsOf(d *ast.Table) []*ast.TablePartial {
 	return out
 }
 
-// columnsExpand applies §6.9.4 conflict resolution: direct definitions win;
+// columnsExpand applies §tablepartial rule 4 conflict resolution: direct definitions win;
 // otherwise the last-injected partial wins.
 func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 	type slot struct {
@@ -399,7 +399,7 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 			injected++
 			if p == nil {
 				if !c.info.HasImports {
-					c.errorf(item.Pos(), "6.9", "unknown TablePartial %q", item.Name.Name())
+					c.errorf(item.Pos(), "tablepartial", "unknown TablePartial %q", item.Name.Name())
 				}
 				continue
 			}

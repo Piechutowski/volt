@@ -1,4 +1,4 @@
-// spec: §V12 — typed checks (SQL CHECK + generated validator), named
+// spec: §validation-checks — typed checks (SQL CHECK + generated validator), named
 // checks, Pred reuse as a parameterless predicate, and Go-reference
 // checks (validator only), bare or qualified by the containing package
 package db

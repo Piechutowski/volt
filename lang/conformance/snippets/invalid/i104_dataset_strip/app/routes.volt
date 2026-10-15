@@ -1,4 +1,4 @@
-// spec: §V13 — i104_dataset_strip
+// spec: §datasets — i104_dataset_strip
 // want: is not a prefix of member table
 package app
 

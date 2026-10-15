@@ -1,4 +1,4 @@
-// spec: §V5.4.3
+// spec: §table-resolution rule 3
 package app
 
 Table pairs {

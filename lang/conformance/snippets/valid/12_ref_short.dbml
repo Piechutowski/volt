@@ -1,4 +1,4 @@
-// spec: §6.7 — short form, name, every setting and action
+// spec: §relationships-ref — short form, name, every setting and action
 Table users { id int }
 Table posts { user_id int }
 Table a { x int }

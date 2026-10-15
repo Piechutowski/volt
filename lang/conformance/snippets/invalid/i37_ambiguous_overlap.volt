@@ -1,4 +1,4 @@
-// spec: §V4.7.2
+// spec: §route-conflicts rule 2
 package app
 
 // /a/b matches both, and neither pattern is more specific than the

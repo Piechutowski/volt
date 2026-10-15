@@ -17,7 +17,7 @@ import (
 // suite always exercises current generator output. Refresh with
 // 'go run ./cmd/volt gen ./itest/blog/app' after intentional changes.
 func TestFixtureNotDrifted(t *testing.T) {
-	// The fixture is a package of this repository's Go module (§V1.1),
+	// The fixture is a package of this repository's Go module (§projects-and-packages rule 1),
 	// loaded the way 'volt gen ./itest/blog/app' loads it.
 	root, err := lang.FindRoot(".")
 	if err != nil {
@@ -49,7 +49,7 @@ func TestFixtureNotDrifted(t *testing.T) {
 		}
 	}
 
-	// The data package the query routes go through (§V4.8) is generated
+	// The data package the query routes go through (§query-routes) is generated
 	// too, with the DDL the proof suite loads. Refresh with
 	// 'go run ./cmd/volt gen --sql ./itest/blog/db'.
 	dbPkg := pr.PackageAt(filepath.Join("blog", "db"))

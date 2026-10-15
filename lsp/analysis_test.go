@@ -64,7 +64,7 @@ func TestServerAnalyzesInBackground(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor("with the handler error", func(p protocol.PublishDiagnosticsParams) bool {
-		return len(p.Diagnostics) == 1 && strings.Contains(p.Diagnostics[0].Message, "§V4.3")
+		return len(p.Diagnostics) == 1 && strings.Contains(p.Diagnostics[0].Message, "§handler-references")
 	})
 
 	fixed := strings.Replace(broken, "Users.index", "Users.Index", 1)

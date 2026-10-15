@@ -1,4 +1,4 @@
-// spec: §V5.5 — i118_resources_default_param_shadow
+// spec: §default-handlers — i118_resources_default_param_shadow
 // want: give the scope's parameter another name
 package app
 

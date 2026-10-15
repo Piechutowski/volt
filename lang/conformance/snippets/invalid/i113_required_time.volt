@@ -1,4 +1,4 @@
-// spec: §V12.8, §6.3 — a date/time has no empty value
+// spec: §validation-checks rule 8, §columns — a date/time has no empty value
 // want: has no empty value
 package db
 

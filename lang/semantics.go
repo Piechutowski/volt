@@ -15,7 +15,7 @@ import (
 	"github.com/Piechutowski/volt/nao/gen/golang"
 )
 
-// Check runs project-level semantic analysis (spec §V1–§V6) over a
+// Check runs project-level semantic analysis (spec §projects-and-packages–§settings-whitelists) over a
 // loaded project: file and package rules, import resolution, the DBML
 // layer per package, and routing expansion. It populates each package's
 // Imports, Pipelines, Routes and Controllers, and returns all
@@ -107,10 +107,10 @@ type checker struct {
 	// per-package state during routing()
 	pkg       *Package
 	usedQual  map[string]bool
-	conflicts *routeIndex // accepted routes, bucketed for the §V4.7.2 scan
+	conflicts *routeIndex // accepted routes, bucketed for the §route-conflicts rule 2 scan
 
-	// gofuncs caches each package directory's Go functions (§V3.2,
-	// §V12.5), scanned once per run and shared across the per-package
+	// gofuncs caches each package directory's Go functions (§pipelines rule 2,
+	// §validation-checks rule 5), scanned once per run and shared across the per-package
 	// checkers of a phase.
 	gofuncs *goFuncsCache
 
@@ -152,7 +152,7 @@ type checksEntry struct {
 	sqls    map[*ast.Check]string
 	diags   []diag.Diagnostic
 
-	validCreate, validUpdate bool // the params structs validate: decided with the specs (§V12.6)
+	validCreate, validUpdate bool // the params structs validate: decided with the specs (§validation-checks rule 6)
 }
 
 // holds reports whether the entry's inputs are the given ones.
@@ -201,7 +201,7 @@ func (c *checker) errorf(pos token.Position, section, format string, args ...any
 	c.diags = append(c.diags, diag.Errorf(pos, "spec/"+section, format, args...))
 }
 
-/* ===== §V1: files and packages ===== */
+/* ===== §projects-and-packages: files and packages ===== */
 
 func (c *checker) fileRules(pkg *Package) {
 	base := pkg.Path
@@ -214,38 +214,38 @@ func (c *checker) fileRules(pkg *Package) {
 			switch d := d.(type) {
 			case *ast.PackageClause:
 				if i != 0 {
-					c.errorf(d.Pos(), "V1", "the package clause must be the first declaration in the file (§V1.2)")
+					c.errorf(d.Pos(), "projects-and-packages", "the package clause must be the first declaration in the file (§projects-and-packages rule 2)")
 				}
 				if clause != nil {
-					c.errorf(d.Pos(), "V1", "duplicate package clause (§V1.2)")
+					c.errorf(d.Pos(), "projects-and-packages", "duplicate package clause (§projects-and-packages rule 2)")
 					continue
 				}
 				clause = d
 			case *ast.Use:
-				// Rejected by the schema checker (§7) — one error, not two.
+				// Rejected by the schema checker (§file-imports-removed) — one error, not two.
 			}
 		}
 		if clause == nil {
-			c.errorf(f.Pos(), "V1", "every .volt file must begin with a package clause (§V1.2)")
+			c.errorf(f.Pos(), "projects-and-packages", "every .volt file must begin with a package clause (§projects-and-packages rule 2)")
 			continue
 		}
 		name := clause.Name.Name()
 		if name == "volt" {
-			c.errorf(clause.Pos(), "V1", "package name %q is reserved for the runtime (§V1.2); generated code could not tell your package from it", name)
+			c.errorf(clause.Pos(), "projects-and-packages", "package name %q is reserved for the runtime (§projects-and-packages rule 2); generated code could not tell your package from it", name)
 			continue
 		}
 		if pkg.Name == "" {
 			pkg.Name = name
 		} else if pkg.Name != name {
-			c.errorf(clause.Pos(), "V1", "package name %q disagrees with %q declared elsewhere in the directory (§V1.3)", name, pkg.Name)
+			c.errorf(clause.Pos(), "projects-and-packages", "package name %q disagrees with %q declared elsewhere in the directory (§projects-and-packages rule 3)", name, pkg.Name)
 		}
 		if pkg.Path != "." && name != base {
-			c.errorf(clause.Pos(), "V1", "package name %q must match its directory name %q (§V1.4)", name, base)
+			c.errorf(clause.Pos(), "projects-and-packages", "package name %q must match its directory name %q (§projects-and-packages rule 4)", name, base)
 		}
 	}
 }
 
-/* ===== §V2: imports ===== */
+/* ===== §imports: imports ===== */
 
 func (c *checker) importsResolve(pkg *Package) {
 	byPath := map[string]*ast.ImportSpec{}
@@ -260,27 +260,27 @@ func (c *checker) importsResolve(pkg *Package) {
 				path := spec.PathString()
 				if prev, dup := byPath[path]; dup {
 					if prev.Qualifier() != spec.Qualifier() {
-						c.errorf(spec.Pos(), "V2", "package %q imported twice with different qualifiers %q and %q (§V2.4)", path, prev.Qualifier(), spec.Qualifier())
+						c.errorf(spec.Pos(), "imports", "package %q imported twice with different qualifiers %q and %q (§imports rule 4)", path, prev.Qualifier(), spec.Qualifier())
 					}
-					continue // idempotent across files (§V2.4)
+					continue // idempotent across files (§imports rule 4)
 				}
 				byPath[path] = spec
 
 				qual := spec.Qualifier()
 				if prev, taken := pkg.Imports[qual]; taken && prev != path {
-					c.errorf(spec.Pos(), "V2", "import qualifier %q already used for package %q (§V2.4); alias one of them", qual, prev)
+					c.errorf(spec.Pos(), "imports", "import qualifier %q already used for package %q (§imports rule 4); alias one of them", qual, prev)
 					continue
 				}
 				target, exists := c.pr.Packages[path]
 				switch {
 				case path == pkg.Path:
-					c.errorf(spec.Pos(), "V2", "a package cannot import itself (§V2.4)")
+					c.errorf(spec.Pos(), "imports", "a package cannot import itself (§imports rule 4)")
 				case qual == pkg.Name:
 					// The package's own name qualifies its own tables,
-					// queries and functions (§V3.2, §V4.3, §V5.1, §V13.1).
-					c.errorf(spec.Pos(), "V2", "import qualifier %q is this package's own name (§V2.4); alias the import", qual)
+					// queries and functions (§pipelines rule 2, §handler-references, §declaration, §dataset-declaration).
+					c.errorf(spec.Pos(), "imports", "import qualifier %q is this package's own name (§imports rule 4); alias the import", qual)
 				case !exists:
-					c.errorf(spec.Pos(), "V2", "unknown package %q: no directory of .volt files at that path under the project root (§V2.2)", path)
+					c.errorf(spec.Pos(), "imports", "unknown package %q: no directory of .volt files at that path under the project root (§imports rule 2)", path)
 				case target == pkg:
 					// unreachable; kept for clarity
 				default:
@@ -291,7 +291,7 @@ func (c *checker) importsResolve(pkg *Package) {
 	}
 }
 
-// cyclesCheck rejects import cycles between packages (§V2.6).
+// cyclesCheck rejects import cycles between packages (§imports rule 6).
 func (c *checker) cyclesCheck() {
 	const (
 		white = 0
@@ -322,7 +322,7 @@ func (c *checker) cyclesCheck() {
 						pos = s.Pos()
 					}
 				}
-				c.errorf(pos, "V2", "import cycle: %s (§V2.6)", cycleString(stack, target))
+				c.errorf(pos, "imports", "import cycle: %s (§imports rule 6)", cycleString(stack, target))
 			}
 		}
 		color[path] = black
@@ -345,9 +345,9 @@ func cycleString(stack []string, target string) string {
 	return strings.Join(append(append([]string{}, stack[start:]...), target), " -> ")
 }
 
-/* ===== §V3–§V5: routing ===== */
+/* ===== §pipelines–§resources: routing ===== */
 
-// inherited is the scope context flowing down the tree (§V4.4).
+// inherited is the scope context flowing down the tree (§scopes).
 type inherited struct {
 	prefix     []*ast.Segment
 	pipes      []string
@@ -365,11 +365,11 @@ func (c *checker) routing(pkg *Package) {
 	for _, d := range pkg.merged.Decls {
 		if pl, ok := d.(*ast.Pipeline); ok {
 			if pl.Name.Quoted() || !goIdentOK(pl.Name.Name()) {
-				c.errorf(pl.Name.Pos(), "V3", "Pipeline name %q must be a plain identifier (§V3.1)", pl.Name.Name())
+				c.errorf(pl.Name.Pos(), "pipelines", "Pipeline name %q must be a plain identifier (§pipelines rule 1)", pl.Name.Name())
 				continue
 			}
 			if _, dup := pkg.Pipelines[pl.Name.Name()]; dup {
-				c.errorf(pl.Pos(), "V3", "duplicate Pipeline name %q (§V3.1)", pl.Name.Name())
+				c.errorf(pl.Pos(), "pipelines", "duplicate Pipeline name %q (§pipelines rule 1)", pl.Name.Name())
 				continue
 			}
 			pkg.Pipelines[pl.Name.Name()] = pl
@@ -399,8 +399,8 @@ func (c *checker) routing(pkg *Package) {
 		memo.prev, memo.next = memo.next, nil
 	}
 
-	// §V4.3.4: a controller cannot take the name of a Controllers
-	// manifest field (§V4.8.5, §V4.11).
+	// §handler-references rule 4: a controller cannot take the name of a Controllers
+	// manifest field (§query-routes rule 5, §event-routes).
 	held := map[string]string{}
 	for _, r := range pkg.Routes {
 		switch {
@@ -409,7 +409,7 @@ func (c *checker) routing(pkg *Package) {
 		case r.Query != nil:
 			held[r.Query.Field] = "the query routes through package " + r.Query.Qualifier
 		case r.Events:
-			held["Events"] = "the event routes (§V4.11)"
+			held["Events"] = "the event routes (§event-routes)"
 		}
 	}
 	names := make([]string, 0, len(pkg.Controllers))
@@ -420,24 +420,24 @@ func (c *checker) routing(pkg *Package) {
 	for _, name := range names {
 		if what, taken := held[name]; taken {
 			first := pkg.Controllers[name].Actions[0].Routes[0]
-			c.errorf(first.Pos, "V4", "controller %q takes the name of the Controllers field holding %s (§V4.3); rename the controller", name, what)
+			c.errorf(first.Pos, "scopes-and-routes", "controller %q takes the name of the Controllers field holding %s (§handler-references); rename the controller", name, what)
 		}
 	}
 
-	// §V2.4: every import must be used.
+	// §imports rule 4: every import must be used.
 	for _, spec := range pkg.importSpecs {
 		if _, resolved := pkg.Imports[spec.Qualifier()]; resolved && !c.usedQual[spec.Qualifier()] {
-			c.errorf(spec.Pos(), "V2", "package %q imported and not used (§V2.4)", spec.PathString())
+			c.errorf(spec.Pos(), "imports", "package %q imported and not used (§imports rule 4)", spec.PathString())
 		}
 	}
 }
 
-// plugCheck validates one pipeline entry (§V3.2): volt.X (runtime),
+// plugCheck validates one pipeline entry (§pipelines rule 2): volt.X (runtime),
 // X or <pkg>.X (this package).
 func (c *checker) plugCheck(p *ast.Plug) {
 	for _, part := range p.Ref.Parts {
 		if part.Quoted() || !goIdentOK(part.Name()) || goKeywords[part.Name()] {
-			c.errorf(p.Pos(), "V3", "plug reference %q must be plain, non-keyword Go identifiers (§V3.2)", p.Ref.String())
+			c.errorf(p.Pos(), "pipelines", "plug reference %q must be plain, non-keyword Go identifiers (§pipelines rule 2)", p.Ref.String())
 			return
 		}
 	}
@@ -446,29 +446,29 @@ func (c *checker) plugCheck(p *ast.Plug) {
 		// the runtime's middleware: not in this package's files
 	case q == "" || q == c.pkg.Name:
 		// A function of this package: it must exist with the middleware
-		// signature, spelled exactly (§V3.2, decision go-references-by-spelling).
+		// signature, spelled exactly (§pipelines rule 2, decision go-references-by-spelling).
 		name := p.Ref.Base()
 		const want = "func %s(next http.Handler) http.Handler"
 		sc := c.goFuncs(c.pkg)
 		gf, found := sc.funcs[name]
 		if !found {
-			c.errorf(p.Ref.Pos(), "V3", "no function %s in package %s's Go files — declare "+want+" beside the routes (§V3.2)%s", name, c.pkg.Name, name, sc.brokenHint())
+			c.errorf(p.Ref.Pos(), "pipelines", "no function %s in package %s's Go files — declare "+want+" beside the routes (§pipelines rule 2)%s", name, c.pkg.Name, name, sc.brokenHint())
 			return
 		}
 		if gf.Generic {
-			c.errorf(p.Ref.Pos(), "V3", "%s is generic (%s); a plug cannot instantiate it — wrap it in a plain "+want+" (§V3.2)", name, gf.Sig, name)
+			c.errorf(p.Ref.Pos(), "pipelines", "%s is generic (%s); a plug cannot instantiate it — wrap it in a plain "+want+" (§pipelines rule 2)", name, gf.Sig, name)
 			return
 		}
 		if gf.Variadic || len(gf.Params) != 1 || gf.Params[0].Type != "http.Handler" ||
 			len(gf.Results) != 1 || gf.Results[0] != "http.Handler" {
-			c.errorf(p.Ref.Pos(), "V3", "%s is not middleware: found %s, a plug is "+want+" (§V3.2)", name, gf.Sig, name)
+			c.errorf(p.Ref.Pos(), "pipelines", "%s is not middleware: found %s, a plug is "+want+" (§pipelines rule 2)", name, gf.Sig, name)
 		}
 	default:
 		if _, isImport := c.pkg.Imports[q]; isImport {
 			c.usedQual[q] = true
-			c.errorf(p.Pos(), "V3", "cross-package plug %q is not supported in v0 (§V3.2); wrap it in a function of this package", p.Ref.String())
+			c.errorf(p.Pos(), "pipelines", "cross-package plug %q is not supported in v0 (§pipelines rule 2); wrap it in a function of this package", p.Ref.String())
 		} else {
-			c.errorf(p.Pos(), "V3", "unknown plug qualifier %q (§V3.2): expected volt.X or a function of package %q", q, c.pkg.Name)
+			c.errorf(p.Pos(), "pipelines", "unknown plug qualifier %q (§pipelines rule 2): expected volt.X or a function of package %q", q, c.pkg.Name)
 		}
 	}
 }
@@ -476,7 +476,7 @@ func (c *checker) plugCheck(p *ast.Plug) {
 func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo *routesMemo, seenShape, seenHelper map[string]*RouteInfo) {
 	for _, seg := range sc.Path.Segments {
 		if seg.Kind == ast.SegWild {
-			c.errorf(seg.Pos(), "V4", "a Scope prefix cannot contain a wildcard (§V4.1.4)")
+			c.errorf(seg.Pos(), "scopes-and-routes", "a Scope prefix cannot contain a wildcard (§route-paths rule 4)")
 		}
 	}
 	next := inherited{
@@ -491,23 +491,23 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 			case "pipe":
 				id, ok := s.Value.(*ast.Ident)
 				if !ok {
-					c.errorf(s.Pos(), "V4", "pipe: takes a Pipeline name (§V4.4)")
+					c.errorf(s.Pos(), "scopes-and-routes", "pipe: takes a Pipeline name (§scopes)")
 					continue
 				}
 				if _, exists := c.pkg.Pipelines[id.Name()]; !exists {
-					c.errorf(s.Pos(), "V4", "unknown Pipeline %q (§V4.4)", id.Name())
+					c.errorf(s.Pos(), "scopes-and-routes", "unknown Pipeline %q (§scopes)", id.Name())
 					continue
 				}
 				next.pipes = append(next.pipes, id.Name())
 			case "name":
 				id, ok := s.Value.(*ast.Ident)
 				if !ok {
-					c.errorf(s.Pos(), "V4", "name: takes an identifier (§V4.4)")
+					c.errorf(s.Pos(), "scopes-and-routes", "name: takes an identifier (§scopes)")
 					continue
 				}
 				n, err := golang.GoName(id.Name())
 				if err != nil {
-					c.errorf(s.Pos(), "V4", "scope name %q: %v (§V4.4)", id.Name(), err)
+					c.errorf(s.Pos(), "scopes-and-routes", "scope name %q: %v (§scopes)", id.Name(), err)
 					continue
 				}
 				next.namePrefix += n
@@ -519,19 +519,19 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 					const want = "func %s(w http.ResponseWriter, r *volt.Request, err error)"
 					sc := c.goFuncs(c.pkg)
 					if gf, found := sc.funcs[name]; !found {
-						c.errorf(s.Pos(), "V4", "no function %s in package %s's Go files — declare "+want+" beside the routes (§V4.4)%s", name, c.pkg.Name, name, sc.brokenHint())
+						c.errorf(s.Pos(), "scopes-and-routes", "no function %s in package %s's Go files — declare "+want+" beside the routes (§scopes)%s", name, c.pkg.Name, name, sc.brokenHint())
 					} else if gf.Generic || gf.Variadic || len(gf.Params) != 3 || gf.Params[0].Type != "http.ResponseWriter" ||
 						gf.Params[1].Type != "*volt.Request" || gf.Params[2].Type != "error" || len(gf.Results) != 0 {
-						c.errorf(s.Pos(), "V4", "%s is not an error handler: found %s, expected "+want+" (§V4.4)", name, gf.Sig, name)
+						c.errorf(s.Pos(), "scopes-and-routes", "%s is not an error handler: found %s, expected "+want+" (§scopes)", name, gf.Sig, name)
 					}
 				}
 				if !ok {
-					c.errorf(s.Pos(), "V4", "error_handler: takes a function of this package, written Name or %s.Name (§V4.5)", c.pkg.Name)
+					c.errorf(s.Pos(), "scopes-and-routes", "error_handler: takes a function of this package, written Name or %s.Name (§reserved)", c.pkg.Name)
 					continue
 				}
 				next.errHandler = name
 			default:
-				c.errorf(s.Pos(), "V6", "setting %q is not valid on a Scope (§V6); valid: pipe, name, error_handler", s.Name)
+				c.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a Scope (§settings-whitelists); valid: pipe, name, error_handler", s.Name)
 			}
 		}
 	}
@@ -732,20 +732,20 @@ func (c *checker) itemLowerMemo(item ast.Node, inh inherited, facts routeFacts, 
 func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteInfo) {
 	shape := r.shapeKey
 	if prev, dup := seenShape[shape]; dup {
-		c.errorf(r.Pos, "V4", "route %s %s conflicts with the route at %s: identical method and path shape (§V4.7)", methodOrAny(r.Method), r.Spelled, prev.Pos)
+		c.errorf(r.Pos, "scopes-and-routes", "route %s %s conflicts with the route at %s: identical method and path shape (§route-conflicts)", methodOrAny(r.Method), r.Spelled, prev.Pos)
 		return
 	}
-	// §V4.7.2: reject ServeMux's ambiguity relation; a checked project
-	// never panics at registration (§V4.7.4).
+	// §route-conflicts rule 2: reject ServeMux's ambiguity relation; a checked project
+	// never panics at registration (§route-conflicts rule 4).
 	if prev := c.conflicts.ambiguous(&r); prev != nil {
-		c.errorf(r.Pos, "V4", "route %s %s is ambiguous with the route at %s (%s %s): both match some requests and neither is more specific (§V4.7.2)",
+		c.errorf(r.Pos, "scopes-and-routes", "route %s %s is ambiguous with the route at %s (%s %s): both match some requests and neither is more specific (§route-conflicts rule 2)",
 			methodOrAny(r.Method), r.Spelled, prev.Pos, methodOrAny(prev.Method), prev.Spelled)
 		return
 	}
 	seenShape[shape] = &r
 
-	// One namespace for reverse-URL helpers and client methods (§V4.6,
-	// §V4.10).
+	// One namespace for reverse-URL helpers and client methods (§route-names-and-reverse-urls,
+	// §generated-client).
 	name := r.HelperName
 	if name == "" {
 		name = r.ClientName
@@ -753,10 +753,10 @@ func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteI
 	if name != "" {
 		if prev, dup := seenHelper[name]; dup {
 			if r.FromResources && prev.FromResources && r.Pos == prev.Pos {
-				c.errorf(r.Pos, "V5", "resources %q: the collection and member reverse-URL helpers are both %q, because singularizing %q does not change it (§V5.4); set the singular explicitly, e.g. [singular: <name>]",
+				c.errorf(r.Pos, "resources", "resources %q: the collection and member reverse-URL helpers are both %q, because singularizing %q does not change it (§table-resolution); set the singular explicitly, e.g. [singular: <name>]",
 					prev.Table, r.HelperName, prev.Table)
 			} else {
-				c.errorf(r.Pos, "V4", "reverse-URL helper or client method %q already produced by the route at %s (§V4.6, §V4.10); disambiguate with [name:] or a scope name", name, prev.Pos)
+				c.errorf(r.Pos, "scopes-and-routes", "reverse-URL helper or client method %q already produced by the route at %s (§route-names-and-reverse-urls, §generated-client); disambiguate with [name:] or a scope name", name, prev.Pos)
 			}
 			r.HelperName, r.ClientName = "", ""
 		} else {
@@ -764,12 +764,12 @@ func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteI
 		}
 	}
 	if r.Query == nil && !r.Events && r.HelperName != "" {
-		r.ClientName = r.HelperName // a named controller route gets a raw client method (§V4.10)
+		r.ClientName = r.HelperName // a named controller route gets a raw client method (§generated-client)
 	}
 
 	r.ord = len(c.pkg.Routes)
 	if r.Query != nil || r.Events {
-		c.routeAccept(&r) // no controller: the handler is generated (§V4.8) or the runtime's (§V4.11)
+		c.routeAccept(&r) // no controller: the handler is generated (§query-routes) or the runtime's (§event-routes)
 		return
 	}
 	ci := c.pkg.Controllers[r.Controller]
@@ -779,7 +779,7 @@ func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteI
 	}
 	if a := ci.Action(r.Action); a != nil {
 		if !paramsEqual(a.Params, r.Params) {
-			c.errorf(r.Pos, "V4", "%s.%s is reached by routes with different parameter signatures (§V4.3): %s vs %s (first at %s)",
+			c.errorf(r.Pos, "scopes-and-routes", "%s.%s is reached by routes with different parameter signatures (§handler-references): %s vs %s (first at %s)",
 				r.Controller, r.Action, paramsString(r.Params), paramsString(a.Params), a.Routes[0].Pos)
 			return
 		}
@@ -799,9 +799,9 @@ func (c *checker) routeAccept(r *RouteInfo) {
 }
 
 // routeIndex holds one routing package's accepted routes bucketed for
-// the §V4.7.2 ambiguity scan. An accepted route can be ambiguous with
+// the §route-conflicts rule 2 ambiguity scan. An accepted route can be ambiguous with
 // a new one only if its literal prefix lies on the new route's walk
-// (§V4.7.3, decision indexed-lookups).
+// (§route-conflicts rule 3, decision indexed-lookups).
 type routeIndex struct {
 	root *routeNode
 }
@@ -885,7 +885,7 @@ func methodOrAny(m string) string {
 	return m
 }
 
-// patternOf renders the ServeMux registration pattern (§V4.2): exact
+// patternOf renders the ServeMux registration pattern (§routes): exact
 // matching everywhere, so the root route uses the {$} end marker.
 func patternOf(segs []*ast.Segment) string {
 	if len(segs) == 0 {
@@ -918,9 +918,9 @@ func spelledOf(segs []*ast.Segment) string {
 	return b.String()
 }
 
-// shapeOf is the conflict key (§V4.7): literals by spelling, every
+// shapeOf is the conflict key (§route-conflicts): literals by spelling, every
 // parameter as {} and every wildcard as {...}; braces cannot appear in
-// a literal segment (§V4.1.6).
+// a literal segment (§route-paths rule 6).
 func shapeOf(r *RouteInfo) string {
 	var b strings.Builder
 	rest := r.Pattern
@@ -941,7 +941,7 @@ func shapeOf(r *RouteInfo) string {
 	return b.String()
 }
 
-/* ===== ServeMux ambiguity (§V4.7.2) ===== */
+/* ===== ServeMux ambiguity (§route-conflicts rule 2) ===== */
 
 // pathShape is a pattern as literal/param segments plus an optional
 // rest-of-path wildcard tail, for the ambiguity relation.
@@ -1057,7 +1057,7 @@ func settingOf(sl *ast.SettingList, name string) *ast.Setting {
 
 // reservedParamNames are identifiers that appear in generated
 // signatures and bodies: a parameter with one of these names would
-// shadow them and break the generated code (§V4.1.2).
+// shadow them and break the generated code (§route-paths rule 2).
 var reservedParamNames = map[string]bool{
 	"w": true, "r": true, "opts": true, "volt": true,
 }
@@ -1104,7 +1104,7 @@ func (r *RouteInfo) String() string {
 }
 
 // HandlerRef renders the route's handler as written: Controller.Action,
-// or pkg.Query for a query route (§V4.8).
+// or pkg.Query for a query route (§query-routes).
 func (r *RouteInfo) HandlerRef() string {
 	if r.Query != nil {
 		return r.Query.Ref()

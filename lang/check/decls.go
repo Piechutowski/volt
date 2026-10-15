@@ -16,7 +16,7 @@ func (c *checker) declsCheck(f *ast.File) {
 		case *ast.Use:
 			c.useCheck(d)
 		case *ast.Project:
-			// properties are free-form (§6.1.2); nothing local to check
+			// properties are free-form (§project rule 2); nothing local to check
 		case *ast.Table:
 			// A table's body is checked in tableCheck (decision pure-memos); a duplicate
 			// declaration that expansion skipped is checked here.
@@ -31,9 +31,9 @@ func (c *checker) declsCheck(f *ast.File) {
 			c.refSettingsCheck(d.Settings)
 			c.endpointArityCheck(d.Left, d.Right)
 		case *ast.StickyNote:
-			c.settingsCheck(d.Settings, "6.11", stickySettings)
+			c.settingsCheck(d.Settings, "notes", stickySettings)
 		case *ast.TableGroup:
-			c.settingsCheck(d.Settings, "6.12", groupSettings)
+			c.settingsCheck(d.Settings, "tablegroup", groupSettings)
 		case *ast.DiagramView:
 			c.viewCheck(d)
 		case *ast.Records:
@@ -47,15 +47,15 @@ func (c *checker) useCheck(d *ast.Use) {
 	if d.Reuse {
 		kw = "reuse"
 	}
-	c.errorf(d.Pos(), "7", "%s is not part of the Volt language (§7); replace file imports with the package system — see docs/spec.md Appendix C for migration", kw)
+	c.errorf(d.Pos(), "file-imports-removed", "%s is not part of the Volt language (§file-imports-removed); replace file imports with the package system — see docs/spec.md §compatibility-with-dbml for migration", kw)
 }
 
-/* ===== table bodies (§6.2, §6.9) ===== */
+/* ===== table bodies (§table, §tablepartial) ===== */
 
 // tableBodyCheck checks a table's or partial's body; at is the
 // declaration's position, where an empty body is reported.
 func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.SettingList, body []ast.TableItem, isTable bool) {
-	c.settingsCheck(settings, "6.2", tableSettings)
+	c.settingsCheck(settings, "table", tableSettings)
 
 	columns := map[string]bool{}
 	nCols, nInject, nNotes, nRecords := 0, 0, 0, 0
@@ -64,41 +64,41 @@ func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.S
 		case *ast.Column:
 			c.columnCheck(item)
 			if columns[item.Name.Name()] {
-				c.errorf(item.Pos(), "8.2", "duplicate column name %q", item.Name.Name())
+				c.errorf(item.Pos(), "namespaces-and-uniqueness", "duplicate column name %q", item.Name.Name())
 			}
 			columns[item.Name.Name()] = true
 			nCols++
 		case *ast.PartialRef:
 			if !isTable {
-				c.errorf(item.Pos(), "6.9", "partial injection is not allowed inside TablePartial")
+				c.errorf(item.Pos(), "tablepartial", "partial injection is not allowed inside TablePartial")
 			}
 			nInject++
 		case *ast.IndexesBlock:
 			for _, ix := range item.Indexes {
-				c.settingsCheck(ix.Settings, "6.5", indexSettings)
+				c.settingsCheck(ix.Settings, "indexes", indexSettings)
 			}
 		case *ast.ChecksBlock:
 			for _, ck := range item.Checks {
-				c.settingsCheck(ck.Settings, "6.6", settingsCheck)
+				c.settingsCheck(ck.Settings, "checks", settingsCheck)
 			}
 		case *ast.Note:
 			nNotes++
 		case *ast.Records:
 			if !isTable {
-				c.errorf(item.Pos(), "6.9", "records are not allowed inside TablePartial")
+				c.errorf(item.Pos(), "tablepartial", "records are not allowed inside TablePartial")
 			}
 			nRecords++
 			c.recordsCheck(item, false)
 		}
 	}
 	if isTable && nCols == 0 && nInject == 0 {
-		c.errorf(at, "6.2", "table %q must contain at least one column or partial injection", name)
+		c.errorf(at, "table", "table %q must contain at least one column or partial injection", name)
 	}
 	if nNotes > 1 {
-		c.errorf(bodyPos(body, settings), "6.11", "at most one Note per %s body", kindWord(isTable))
+		c.errorf(bodyPos(body, settings), "notes", "at most one Note per %s body", kindWord(isTable))
 	}
 	if nRecords > 1 {
-		c.errorf(bodyPos(body, settings), "6.10", "at most one records block per table")
+		c.errorf(bodyPos(body, settings), "records-sample-data", "at most one records block per table")
 	}
 }
 
@@ -123,37 +123,37 @@ func (c *checker) columnCheck(col *ast.Column) {
 	for _, f := range col.LegacyFlags {
 		low := strings.ToLower(f.Name())
 		if f.Quoted() || (low != "pk" && low != "unique") {
-			c.errorf(f.Pos(), "6.3", "only the legacy flags pk and unique may follow the column type; found %q", f.Name())
+			c.errorf(f.Pos(), "columns", "only the legacy flags pk and unique may follow the column type; found %q", f.Name())
 		}
 	}
-	c.settingsCheck(col.Settings, "6.3", columnSettings)
+	c.settingsCheck(col.Settings, "columns", columnSettings)
 	c.tagSettingsCheck(col.Settings)
 }
 
-/* ===== Enum (§6.8) ===== */
+/* ===== Enum (§enum) ===== */
 
 func (c *checker) enumCheck(d *ast.Enum) {
 	if len(d.Values) == 0 {
-		c.errorf(d.Pos(), "6.8", "enum %q must contain at least one value", d.Name.String())
+		c.errorf(d.Pos(), "enum", "enum %q must contain at least one value", d.Name.String())
 	}
 	seen := map[string]bool{}
 	for _, v := range d.Values {
 		if seen[v.Name.Name()] {
-			c.errorf(v.Pos(), "8.2", "duplicate enum value %q", v.Name.Name())
+			c.errorf(v.Pos(), "namespaces-and-uniqueness", "duplicate enum value %q", v.Name.Name())
 		}
 		seen[v.Name.Name()] = true
-		c.settingsCheck(v.Settings, "6.8", enumValueSettings)
+		c.settingsCheck(v.Settings, "enum", enumValueSettings)
 	}
 }
 
-/* ===== Ref (§6.7) ===== */
+/* ===== Ref (§relationships-ref) ===== */
 
 func (c *checker) endpointArityCheck(l, r *ast.RefEndpoint) {
 	if l == nil || r == nil {
 		return
 	}
 	if len(l.Columns) != len(r.Columns) {
-		c.errorf(r.Pos(), "6.7", "composite relationship endpoints must have the same number of columns: %d vs %d", len(l.Columns), len(r.Columns))
+		c.errorf(r.Pos(), "relationships-ref", "composite relationship endpoints must have the same number of columns: %d vs %d", len(l.Columns), len(r.Columns))
 	}
 }
 
@@ -163,7 +163,7 @@ var refActions = map[string]bool{
 }
 
 func (c *checker) refSettingsCheck(sl *ast.SettingList) {
-	c.settingsCheck(sl, "6.7", refSettings)
+	c.settingsCheck(sl, "relationships-ref", refSettings)
 	if sl == nil {
 		return
 	}
@@ -179,33 +179,33 @@ func (c *checker) refSettingsCheck(sl *ast.SettingList) {
 			action = strings.Join(v.Words(), " ")
 		}
 		if !refActions[action] {
-			c.errorf(s.Pos(), "6.7", "invalid referential action %q for '%s'; expected cascade, restrict, set null, set default or no action", action, s.Name)
+			c.errorf(s.Pos(), "relationships-ref", "invalid referential action %q for '%s'; expected cascade, restrict, set null, set default or no action", action, s.Name)
 		}
 	}
 }
 
-/* ===== Records (§6.10) ===== */
+/* ===== Records (§records-sample-data) ===== */
 
 func (c *checker) recordsCheck(d *ast.Records, topLevel bool) {
 	if topLevel && !d.HasColumns {
-		c.errorf(d.Pos(), "6.10", "top-level records must list columns")
+		c.errorf(d.Pos(), "records-sample-data", "top-level records must list columns")
 	}
 	for _, row := range d.Rows {
 		if d.HasColumns && len(row.Values) != len(d.Columns) {
-			c.errorf(row.Pos(), "6.10", "record row has %d values but %d columns are listed", len(row.Values), len(d.Columns))
+			c.errorf(row.Pos(), "records-sample-data", "record row has %d values but %d columns are listed", len(row.Values), len(d.Columns))
 		}
 		for _, v := range row.Values {
 			if id, ok := v.(*ast.Ident); ok {
 				low := strings.ToLower(id.Name())
 				if id.Quoted() || (low != "true" && low != "false" && low != "null") {
-					c.errorf(id.Pos(), "6.10", "record values must be literals, null, true, false or enum constants; found bare identifier %q", id.Name())
+					c.errorf(id.Pos(), "records-sample-data", "record values must be literals, null, true, false or enum constants; found bare identifier %q", id.Name())
 				}
 			}
 		}
 	}
 }
 
-/* ===== DiagramView (§6.13) ===== */
+/* ===== DiagramView (§diagramview) ===== */
 
 var categoryKinds = map[string]bool{
 	"tables": true, "notes": true, "tablegroups": true, "schemas": true,
@@ -216,11 +216,11 @@ func (c *checker) viewCheck(d *ast.DiagramView) {
 	for _, cat := range d.Categories {
 		low := strings.ToLower(cat.Kind.Name())
 		if !categoryKinds[low] || cat.Kind.Quoted() {
-			c.errorf(cat.Kind.Pos(), "6.13", "unknown view category %q; expected Tables, Notes, TableGroups or Schemas", cat.Kind.Name())
+			c.errorf(cat.Kind.Pos(), "diagramview", "unknown view category %q; expected Tables, Notes, TableGroups or Schemas", cat.Kind.Name())
 			continue
 		}
 		if seen[low] {
-			c.errorf(cat.Kind.Pos(), "6.13", "category %q may appear at most once per view", cat.Kind.Name())
+			c.errorf(cat.Kind.Pos(), "diagramview", "category %q may appear at most once per view", cat.Kind.Name())
 		}
 		seen[low] = true
 	}

@@ -1,4 +1,4 @@
-// spec: §3.2.5 — an element continues onto further lines when they are indented or inside braces
+// spec: §line-structure-and-whitespace rule 5 — an element continues onto further lines when they are indented or inside braces
 Table posts [
   headercolor: #3498DB
 ] {

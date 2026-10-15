@@ -197,6 +197,12 @@ func corpusWant(t *testing.T, path string) string {
 }
 
 func TestConformanceTagged(t *testing.T) {
+	spec := specText(t)
+	partII := map[string]bool{}
+	start, end := strings.Index(spec, "\n# Part II"), strings.Index(spec, "\n# Appendices")
+	for _, m := range headingRE.FindAllStringSubmatch(spec[start:end], -1) {
+		partII[anchorOf(strings.TrimSpace(m[2]))] = true
+	}
 	for _, kind := range []string{"valid", "invalid"} {
 		for _, path := range corpusEntries(t, kind) {
 			tagged := false
@@ -217,12 +223,14 @@ func TestConformanceTagged(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if strings.Contains(string(src), "// spec: §V") {
-					tagged = true
+				for _, m := range specCiteRE.FindAllStringSubmatch(string(src), -1) {
+					if partII[m[1]] {
+						tagged = true
+					}
 				}
 			}
 			if !tagged {
-				t.Errorf("%s carries no '// spec: §V…' tag", path)
+				t.Errorf("%s carries no '// spec: §…' tag naming a Part II section", path)
 			}
 		}
 	}

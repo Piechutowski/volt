@@ -42,7 +42,7 @@ func tableHasPK(ti *check.TableInfo) bool {
 }
 
 // fkSides returns the foreign-key endpoint and the referenced endpoint of a
-// relationship, following spec §6.7.3, or ok=false for many-to-many.
+// relationship, following spec §relationships-ref rule 3, or ok=false for many-to-many.
 func fkSides(r *check.RefInfo) (fk, target check.EndpointInfo, ok bool) {
 	switch r.Op {
 	case token.GT: // many-to-one: left is the FK

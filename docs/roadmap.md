@@ -33,7 +33,7 @@ when a consumer exists.
   - [ ] `[was:]` rename memory (with migrations)
   - [ ] `[repr: int]` enums: full String/Valuer/Scanner/JSON suite, the int never escapes the process
   - [ ] `[lock_version]` optimistic locking
-- [ ] Citations by heading name: every `§…` becomes the heading's anchor, diagnostic codes `spec/<anchor>`, the spec's Citation key deleted, the test resolves names
+- [x] Citations by heading name: every `§…` is the heading's anchor, diagnostic codes are `spec/<anchor>`, the test resolves them
 
 ## Data layer (nao)
 

@@ -1,4 +1,4 @@
-// spec: §V4.8, §V4.9 — query routes: selects and default CRUD bound by name, parameters from path, body and query string
+// spec: §query-routes, §formats — query routes: selects and default CRUD bound by name, parameters from path, body and query string
 package app
 
 import (

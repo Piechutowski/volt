@@ -15,7 +15,7 @@ type redundantNullRule struct{ meta }
 
 var redundantNull = &redundantNullRule{meta{
 	name: "redundantnull",
-	doc:  "reports explicit [null] settings; columns are nullable by default (spec §6.3.2)",
+	doc:  "reports explicit [null] settings; columns are nullable by default (spec §columns rule 2)",
 }}
 
 func (r *redundantNullRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
@@ -155,7 +155,7 @@ type legacyFlagRule struct{ meta }
 
 var legacyFlag = &legacyFlagRule{meta{
 	name: "legacyflag",
-	doc:  "reports legacy bare pk/unique flags between type and settings; prefer the settings list (spec §6.3.7)",
+	doc:  "reports legacy bare pk/unique flags between type and settings; prefer the settings list (spec §columns rule 7)",
 }}
 
 func (r *legacyFlagRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
@@ -176,7 +176,7 @@ type shadowedColumnRule struct{ meta }
 
 var shadowedColumn = &shadowedColumnRule{meta{
 	name: "shadowedcolumn",
-	doc:  "reports column definitions silently overridden by spec §6.9.4 partial-injection conflict resolution",
+	doc:  "reports column definitions silently overridden by spec §tablepartial rule 4 partial-injection conflict resolution",
 }}
 
 func (r *shadowedColumnRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {

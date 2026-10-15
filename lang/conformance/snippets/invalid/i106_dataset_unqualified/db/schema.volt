@@ -1,4 +1,4 @@
-// spec: §V9, §V11 — the group select a dataset expands
+// spec: §groups, §selects-over-groups — the group select a dataset expands
 package db
 
 Table ms_revenue {

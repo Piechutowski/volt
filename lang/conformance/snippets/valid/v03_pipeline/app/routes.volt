@@ -1,4 +1,4 @@
-// spec: §V3.1, §V3.2
+// spec: §pipelines rule 1, §pipelines rule 2
 package app
 
 Pipeline api {

@@ -1,4 +1,4 @@
-// spec: §V13 — i107_dataset_not_member
+// spec: §datasets — i107_dataset_not_member
 // want: is not a member of select
 package app
 

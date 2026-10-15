@@ -82,19 +82,19 @@ tables, with an explicit `on:` as the override.
 
 ### closed-predicates
 
-`Pred` (spec §V10) is a closed, typed language: comparisons,
+`Pred` (spec §predicates) is a closed, typed language: comparisons,
 and/or/not, in, like, is null, type-checked at every use site, and it
 never grows toward SQL. That carve-out is what keeps
 expressions-are-sqlites intact. What it cannot say belongs in raw-SQL
-Select/View blocks or the dynamic layer. Checks (§6.6) are its
+Select/View blocks or the dynamic layer. Checks (§checks) are its
 parameterless ancestors.
 
 ### group-vs-tablegroup
 
-`Group` (spec §V9) is a codegen set: overlapping freely, composed by
+`Group` (spec §groups) is a codegen set: overlapping freely, composed by
 set algebra where re-adding a member or removing a non-member is an
 error, because the algebra must say something true. `TableGroup` is a
-diagram partition. The §V11.4 agreement rule makes group selects
+diagram partition. The §selects-over-groups rule 4 agreement rule makes group selects
 honest: every referenced column exists in every member with one
 agreed type, so one WHERE rendering and one Go signature serve all.
 
@@ -109,7 +109,7 @@ operator everywhere.
 ### go-module-is-the-project
 
 A Volt project is a Go module: `go.mod` marks the root, there is no
-`volt.mod`. With it comes Go's loading model (§V1.7): tools load the
+`volt.mod`. With it comes Go's loading model (§projects-and-packages rule 7): tools load the
 named packages plus their transitive imports, and `testdata`, dot and
 underscore directories, `node_modules` and nested modules are
 excluded as Go excludes them. Root-relative imports need a root, and
@@ -123,7 +123,7 @@ parser and holds every reference to a declared top-level function
 with the exact contract: `func(http.Handler) http.Handler` for
 plugs, `func(<the columns' generated types>) error` for checks, the
 runtime's ErrorHandler shape for `error_handler:`. Types are compared
-by spelling against Appendix A's generated names, never resolved: no
+by spelling against §mapping-to-go's generated names, never resolved: no
 build, no type checker. A typo is an error at the reference; an
 unimplemented function is a to-do with its signature in the message.
 A named type where a `string` column is passed is refused; spell the
@@ -132,9 +132,11 @@ generated type.
 ### named-sections
 
 Spec sections and decisions are named, not numbered. A heading is
-stable and a number moves whenever something is inserted. Existing
-`§` citations resolve through the spec's Citation key until the
-migration to heading names lands (roadmap).
+stable and a number moves whenever something is inserted. A spec
+citation is `§` and the heading's anchor, `rule N` naming a numbered
+constraint inside it; a diagnostic code is `spec/<anchor>`; a decision
+is cited by its name. `lang/spec_doc_test.go` fails the build on a
+citation that names no heading.
 
 ### one-corpus
 
@@ -147,7 +149,7 @@ then.
 
 ### one-parse
 
-An element boundary is a rule of the language (§3.2.5): an unquoted
+An element boundary is a rule of the language (§line-structure-and-whitespace rule 5): an unquoted
 identifier in the first column outside every brace, string and
 comment begins an element and ends the one before it. The scanner
 enforces it and nothing else does; a chunk's scan stops before the
@@ -166,7 +168,7 @@ editor shows. The source is never rewritten before scanning.
 
 ### invalid-input-goldens
 
-What invalid input produces is a rule of the language (§3.2 rule 6):
+What invalid input produces is a rule of the language (§line-structure-and-whitespace rule 6):
 a syntax error inside an element discards the rest of the element up
 to the next element start, and inside a one-per-line body it discards
 the rest of the item's line. Every diagnostic of every invalid
@@ -205,7 +207,7 @@ inflector guessed. Go names use the initialisms convention (`UserID`).
 ### e-prefixed-enums
 
 Enums are string-backed, stored as TEXT with a `CHECK (col IN (…))`
-(Appendix B), and the type carries an `E` prefix (`type EOrderStatus
+(§mapping-to-sqlite-ddl), and the type carries an `E` prefix (`type EOrderStatus
 string`, `EOrderStatusPending`). The prefix keeps enum types out of
 the flat column-handle namespace: `Table orders { status
 order_status }` mints the handle `OrderStatus` and the type
@@ -269,7 +271,7 @@ truth and is rejected.
 
 A column setting earns a first-class name only when Volt itself acts
 on it. Everything else rides the repeatable `tag: 'key:"value"'`
-(spec §6.3 extension, Appendix A.5), one Go struct tag passed through
+(spec §columns extension, §struct-tags), one Go struct tag passed through
 verbatim: `db` is reserved for the scan contract, a `json` pair
 replaces the generated default, others append in declaration order,
 and params structs carry the same tags.
@@ -277,7 +279,7 @@ and params structs carry the same tags.
 ### validation-rides-checks
 
 No annotation zoo. `checks { }` lines are parameterless predicates and
-validation reuses them (spec §V12): a typed check compiles to both a
+validation reuses them (spec §validation-checks): a typed check compiles to both a
 SQL `CHECK` and a clause of the generated `Validate()`, rendered in one
 walk so the tiers cannot disagree, while a check referencing a Go
 function of the package lands in the validator only, because SQLite
@@ -424,7 +426,7 @@ error spine.
 
 A handler reference whose first part is an import qualifier, or the
 package's own name, binds the route to a generated query method, and
-Volt writes the handler (spec §V4.8, §V4.9): path parameters by name
+Volt writes the handler (spec §query-routes, §formats): path parameters by name
 with the type spelled to match, a params struct from the body by
 `Content-Type`, list parameters from a repeated query key, the rest
 from the query string, then `RenderStatus` by `Accept`. It is the one
@@ -436,7 +438,7 @@ routes; formats never ride in the URL, headers carry them. The
 ### generated-client
 
 `volt gen` writes `client/volt_client.go` beside every routing
-package (spec §V4.10): a `Client` embedding the runtime's, one typed
+package (spec §generated-client): a `Client` embedding the runtime's, one typed
 method per query route named as its helper is, one raw
 `*http.Response` method per named controller route. It imports the
 runtime and the data packages only, so a desktop application shares
@@ -450,7 +452,7 @@ volt.ErrNotFound)` reads the same on both sides.
 `dataset db.browse [strip: 'da_']` is one scope item that yields one
 GET query route per member of a group select, the segment being the
 table name minus the prefix, every route obeying the conflict and
-helper rules (spec §V13). `only:`/`except:` take a member out to
+helper rules (spec §datasets). `only:`/`except:` take a member out to
 hand-write it. The route string and the query call come from the same
 iteration and cannot disagree; every expanded route exists in the
 generated source and in `volt routes`. The reserved word `Dataset` is
@@ -458,7 +460,7 @@ retired.
 
 ### resources-default
 
-`resources db.t [default]` expands the §V5.2 action table into query
+`resources db.t [default]` expands the §the-action-table action table into query
 routes over the table's CRUD, regenerated forever, with `except:` to
 take an action back by hand. `default` implies `api`, since a
 generated handler has nothing to render for `new` and `edit`. It is
@@ -467,7 +469,7 @@ not a scaffold.
 ### server-sent-events
 
 Live updates are server-sent events through one runtime broker (spec
-§V4.11): `get /events volt.Events` is the one handler the runtime
+§event-routes): `get /events volt.Events` is the one handler the runtime
 provides, `Publish` fans out to every stream with a replay buffer for
 `Last-Event-ID`, and the generated client's `Events(ctx)` reconnects
 with backoff. One process, in memory; event names are the
@@ -479,8 +481,8 @@ Params structs get their own `Validate` over the checks they can see,
 the generated handler runs it before the query, `CheckError` and
 `ValidationError` are 422 by interface, and every generated write
 translates the driver's constraint failure into `rt.ConstraintError`,
-409 for a duplicate key and 422 otherwise (spec §V12.6, §V12.7,
-§V4.8.3). A check the struct cannot see (a defaulted column) stays
+409 for a duplicate key and 422 otherwise (spec §validation-checks rule 6, §validation-checks rule 7,
+§query-routes rule 3). A check the struct cannot see (a defaulted column) stays
 with the row and the DDL, and the method's doc comment says which.
 
 ### required-and-problems
@@ -490,15 +492,15 @@ in both tiers, named `<column>_required`, and is refused where it
 means nothing or contradicts (`null`, `default:`, `increment`).
 Errors name their columns, the spine renders a structured `Problem`
 body the client decodes, `Decode` rejects unknown JSON fields and
-caps the body (spec §V12.7, §V12.8, §V4.9.2, §V4.9.5). Messages are
+caps the body (spec §validation-checks rule 7, §validation-checks rule 8, §formats rule 2, §formats rule 5). Messages are
 not localized; the check's name is the stable key.
 
 ### self-routing-package
 
 A package may route its own tables: a query reference is spelled
 bare, `PostList`, or self-qualified, `site.PostList`, and a bare
-`resources` or `dataset` resolves in the package itself (spec §V2.4,
-§V4.3, §V4.8.6). The package's own name is a qualifier an import
+`resources` or `dataset` resolves in the package itself (spec §imports rule 4,
+§handler-references, §query-routes rule 6). The package's own name is a qualifier an import
 cannot take, the `Controllers` manifest is one namespace, the router's
 constructor is `NewRouter`, and the client imports the routing
 package for its row types. No client is generated for a `main`
@@ -509,8 +511,8 @@ package that routes its own tables.
 `volt gen -o DIR -parts LIST FILE` writes one package's files into
 any directory under the package clause that directory declares, with
 `-parts` choosing among models, queries, router, client and sql, so a
-`//go:generate` line beside a `main.go` is the layout (spec §V1.7,
-§V4.10.6). The params structs are models, so a client needs nothing
+`//go:generate` line beside a `main.go` is the layout (spec §projects-and-packages rule 7,
+§generated-client rule 6). The params structs are models, so a client needs nothing
 but `nao_models.go`. The `.volt` package clause stays mandatory, and
 there is no manifest describing layouts.
 
@@ -567,7 +569,7 @@ keeps the one-sentence rule it enforces.
 
 Right after the schema pass, `lang.Check` builds one immutable naming
 plan per package: every Go and SQL name of every table and column,
-the CRUD method table indexed by method name, the §V11.7 name scope.
+the CRUD method table indexed by method name, the §selects-over-groups rule 7 name scope.
 Everything downstream reads that plan; nothing derives a name from the
 AST again, and no helper plans on the caller's behalf inside a loop.
 
@@ -589,7 +591,7 @@ trie of literal prefixes, validators memoized per table. The
 Go-reference scan skips files that open with the generated marker.
 `Check` is idempotent on a Project: a package's results are reset
 before its phases run. The trie's equivalence to the pairwise
-ambiguity rule is a rule of the spec (§V4.7 rule 3) and is proven by
+ambiguity rule is a rule of the spec (§route-conflicts rule 3) and is proven by
 enumeration.
 
 ### flat-front-end

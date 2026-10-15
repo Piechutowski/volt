@@ -1,4 +1,4 @@
-// spec: §V4.1.2
+// spec: §route-paths rule 2
 package app
 
 Scope / {

@@ -136,7 +136,7 @@ I generate the first and third; the middle is yours.
 |---|---|---|---|
 | `presence` | validator | `DDL` `DONE` | `not null` |
 | `uniqueness` | SELECT-then-INSERT (racy!) | `DDL` `DONE` | real `UNIQUE` constraint — strictly stronger than Rails' |
-| `inclusion` | validator | `GEN` `DONE` | enum types with a DB `CHECK (col IN …)` (spec Appendix B) |
+| `inclusion` | validator | `GEN` `DONE` | enum types with a DB `CHECK (col IN …)` (spec §mapping-to-sqlite-ddl) |
 | `length` / `format` / `numericality` / `comparison` | validators | `LATER` | candidates for Volt schema settings compiling to `CHECK`s and/or a generated `Validate()`; not scheduled |
 | `acceptance` / `confirmation` | form-layer | `NO` | HTTP-form concerns, not model concerns |
 | Custom validators / contexts / conditional validation | framework | `HAND` | `func (u User) Validate() error` in a sibling file (decision sibling-files) |

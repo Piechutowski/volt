@@ -1,4 +1,4 @@
-// spec: §6.3, §6.4 — every column setting; repeatable check
+// spec: §columns, §default-values — every column setting; repeatable check
 Table t {
   id integer [pk, increment]
   id2 integer [primary key]
