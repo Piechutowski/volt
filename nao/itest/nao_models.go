@@ -62,7 +62,7 @@ type LinkClick struct {
 }
 
 // UserCreateParams are the caller-supplied columns of UserCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type UserCreateParams struct {
 	Email string `db:"email" json:"email"`
 	Name  string `db:"name" json:"displayName"`
@@ -81,7 +81,7 @@ type UserUpdateParams struct {
 }
 
 // OrderCreateParams are the caller-supplied columns of OrderCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type OrderCreateParams struct {
 	UserID   int32              `db:"user_id" json:"user_id"`
 	Total    string             `db:"total" json:"total"`
@@ -98,14 +98,14 @@ type OrderUpdateParams struct {
 }
 
 // UserTagCreateParams are the caller-supplied columns of UserTagCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type UserTagCreateParams struct {
 	UserID int32  `db:"user_id" json:"user_id"`
 	Tag    string `db:"tag" json:"tag"`
 }
 
 // PageViewCreateParams are the caller-supplied columns of PageViewCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type PageViewCreateParams struct {
 	Site string `db:"site" json:"site"`
 	Day  int32  `db:"day" json:"day"`
@@ -120,7 +120,7 @@ type PageViewUpdateParams struct {
 }
 
 // LinkClickCreateParams are the caller-supplied columns of LinkClickCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type LinkClickCreateParams struct {
 	Site string `db:"site" json:"site"`
 	Day  int32  `db:"day" json:"day"`

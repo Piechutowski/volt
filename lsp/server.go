@@ -22,11 +22,11 @@ type Server struct {
 	docs           map[string]*Document
 	// texts mirrors every open document's text by on-disk path, under
 	// mu, for the background analysis to snapshot without touching a
-	// Document (D79).
+	// Document (decision editor-session).
 	texts map[string]string
 	// versions is each open document's version as the client last
 	// numbered it, kept beside texts under mu so a publish can say
-	// which text it judged (D105).
+	// which text it judged (decision editor-session).
 	versions map[string]int32
 	// analyses is the background analysis of each project root.
 	analyses map[string]*analysis
@@ -80,7 +80,7 @@ func (s *Server) initialize(_ *glsp.Context, params *protocol.InitializeParams) 
 	capabilities := s.handler.CreateServerCapabilities()
 
 	// Incremental: the client sends the keystroke, not the file, and
-	// didChange applies each range to the text as it then stands (D105).
+	// didChange applies each range to the text as it then stands (decision editor-session).
 	syncKind := protocol.TextDocumentSyncKindIncremental
 	capabilities.TextDocumentSync = &protocol.TextDocumentSyncOptions{
 		OpenClose: boolPtr(true),
@@ -123,7 +123,7 @@ func (s *Server) initialized(ctx *glsp.Context, _ *protocol.InitializedParams) e
 }
 
 // watchedFilesChanged re-checks every open document when a Go file was
-// saved, created or deleted: D63 facts live in those files.
+// saved, created or deleted: decision go-references-by-spelling facts live in those files.
 func (s *Server) watchedFilesChanged(ctx *glsp.Context, params *protocol.DidChangeWatchedFilesParams) error {
 	goTouched := false
 	for _, ev := range params.Changes {
@@ -141,7 +141,7 @@ func (s *Server) watchedFilesChanged(ctx *glsp.Context, params *protocol.DidChan
 // project analysis. It kicks the background analysis of the document's
 // project: the request in hand answers from the analysis it adopted,
 // the next adopts the fresh one. The project pass runs on the handler
-// goroutine for no document (D79, D103).
+// goroutine for no document (decision editor-session).
 func (s *Server) freshen(ctx *glsp.Context, doc *Document) {
 	if doc == nil || !doc.GoFilesChanged() {
 		return
@@ -161,7 +161,7 @@ func (s *Server) didOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocument
 }
 
 // edited records a document's new text and its version: its own front
-// end now, and the project's analysis once the edits settle (D79). A
+// end now, and the project's analysis once the edits settle (decision editor-session). A
 // document outside any project has its verdict right away.
 func (s *Server) edited(ctx *glsp.Context, doc *Document, text string, version int32) {
 	path := pathFromURI(doc.URI)
@@ -186,7 +186,7 @@ func (s *Server) openTexts() map[string]string {
 
 // openSnapshot copies every open buffer's text and version under one
 // hold of mu: the overlay a run analyzes and the versions its publish
-// stamps are of one and the same moment (D105).
+// stamps are of one and the same moment (decision editor-session).
 func (s *Server) openSnapshot() (map[string]string, map[string]int32) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

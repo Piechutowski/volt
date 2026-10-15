@@ -28,7 +28,7 @@ type Document struct {
 	// Siblings, when set, snapshots every open buffer keyed by on-disk
 	// path. Nil means only this document overlays its saved file.
 	Siblings func() map[string]string
-	// Session, when set, returns the caches of a project root (D79).
+	// Session, when set, returns the caches of a project root (decision editor-session).
 	// Nil means a fresh analysis every time.
 	Session func(root string) *lang.Session
 
@@ -49,10 +49,10 @@ type Document struct {
 	// for a server-driven document (adopt).
 	resGen int
 
-	// The document's own front end is memoized per document (D103):
-	// the parse (D83), the check (D84) and the index (D85). The three
+	// The document's own front end is memoized per document (decision editor-session):
+	// the parse (decision parse-by-declaration), the check (decision check-by-declaration) and the index (decision index-by-table). The three
 	// belong to the goroutine that updates the document, the handler's
-	// for a server document (D79, D96); the session's own handles are
+	// for a server document (decisions editor-session, shared-surface); the session's own handles are
 	// the session's.
 	reuse      *parser.Reuse
 	schema     check.Memo
@@ -93,8 +93,8 @@ func (d *Document) Update(text string) {
 
 // UpdateLocal replaces the text and re-runs the file's own front end —
 // parse, single-file check, index — through the document's own memos
-// (D103). The project pass is Update's, or the server's background
-// analysis (D79); until either runs, the project fields keep what
+// (decision editor-session). The project pass is Update's, or the server's background
+// analysis (decision editor-session); until either runs, the project fields keep what
 // they had. The vet advice is not part of this: it is added by
 // vetLocal.
 func (d *Document) UpdateLocal(text string) {
@@ -118,7 +118,7 @@ func (d *Document) UpdateLocal(text string) {
 // verdict, once per text, and makes that verdict the document's when
 // no project analysis stands. It runs only where the file's own
 // verdict is the truth: a file outside any project, or one under a
-// project the loader never read (D103). Vet advice comes only on a
+// project the loader never read (decision editor-session). Vet advice comes only on a
 // clean check.
 func (d *Document) vetLocal() {
 	if !d.vetted {
@@ -142,7 +142,7 @@ func (d *Document) textSet(text string) {
 // localVerdict is the single-file verdict of a text no document
 // memoizes: parse, check, and vet advice when the file checks clean.
 // The background analysis computes it off the handler goroutine and
-// so off the document (D79). The diagnostics come sorted.
+// so off the document (decision editor-session). The diagnostics come sorted.
 func localVerdict(path, text string) []diag.Diagnostic {
 	file, diags := parser.ParseFile(path, text)
 	info, semDiags := check.File(file)
@@ -166,7 +166,7 @@ func lineStarts(text string) []int {
 }
 
 // GoFilesChanged reports whether the Go files this document's project
-// analysis read have changed on disk since; the checker's D63 facts
+// analysis read have changed on disk since; the checker's decision go-references-by-spelling facts
 // are then stale. Only Go files that were actually scanned count.
 func (d *Document) GoFilesChanged() bool {
 	if d.vindex == nil {

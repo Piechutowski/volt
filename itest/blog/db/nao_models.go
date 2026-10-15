@@ -24,7 +24,7 @@ type MsUsage struct {
 }
 
 // UserCreateParams are the caller-supplied columns of UserCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type UserCreateParams struct {
 	Email string `db:"email" json:"email"`
 }
@@ -36,7 +36,7 @@ type UserUpdateParams struct {
 }
 
 // MsRevenueCreateParams are the caller-supplied columns of MsRevenueCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type MsRevenueCreateParams struct {
 	Org  string `db:"org" json:"org"`
 	Year int32  `db:"year" json:"year"`
@@ -50,7 +50,7 @@ type MsRevenueUpdateParams struct {
 }
 
 // MsUsageCreateParams are the caller-supplied columns of MsUsageCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type MsUsageCreateParams struct {
 	Org  string `db:"org" json:"org"`
 	Year int32  `db:"year" json:"year"`

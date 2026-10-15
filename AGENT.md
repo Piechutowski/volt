@@ -16,7 +16,7 @@ way Go stdlib developers work against an RFC: `docs/spec.md` is
 normative — EBNF plus numbered constraints plus examples — and the
 implementation MUST be 100% compliant. Every constraint is executable
 (conformance corpus, `// spec: §…` tags; valid MUST pass, invalid MUST
-fail); the grammar is executable too (D100: every sentence it
+fail); the grammar is executable too (decision executable-grammar: every sentence it
 derives parses, every one-token neighbour is decided alike by grammar
 and front end); every diagnostic cites the section it enforces; the grammar,
 the LSP, vet and the generators are all audited against the same
@@ -25,10 +25,10 @@ disagree, one of them has a bug — the fixing commit says which. Never
 change behavior without changing the spec in the same commit, and
 never weaken a test to get green.
 
-**No doc is ever knowingly wrong (D49).** Ten maintained docs live in
-`docs/` — spec, lint, editor, decisions, hypotheses, roadmap, backlog,
-nao, model-layer, reference/ — and no other directory carries prose
-docs (root README.md/AGENT.md are the named exceptions, D49).
+**No doc is ever knowingly wrong (decision docs-doctrine).** Nine maintained docs live in
+`docs/` — spec, lint, editor, decisions, hypotheses, roadmap, nao,
+model-layer, orm-matrix — and no other directory carries prose
+docs (root README.md/AGENT.md are the named exceptions, decision docs-doctrine).
 Operational detail (paths, commands, code snippets) may appear only in
 docs a test or the compiler keeps honest; philosophy is written at an
 altitude where nothing can rot. The accepted cost, chosen deliberately:
@@ -53,38 +53,41 @@ reverted: nao is its *name*).
 
 ## Read in this order
 
-1. `docs/decisions.md` — **the law** (numbered with gaps — removed
-   decisions retire their numbers). Never contradict one
+1. `docs/decisions.md` — **the law**: each ruling under a unique
+   hyphenated name, cited as `decision one-parse` (several:
+   `decisions a, b`); a citation that names no heading fails the
+   build (`lang/spec_doc_test.go`). An entry is the ruling and its
+   reason, never its history. Never contradict one
    silently; changing a decision means editing that file in the same
    commit. New session-level rulings get appended there. What is
    *not yet* decided lives in `docs/hypotheses.md` — working beliefs,
    numbered, graduated or killed by practice; never treat one as law,
    and put new open questions there, not in decisions.
 2. `docs/roadmap.md` — **the build plan**: stable IDs, statuses
-   (updated in the landing commit). Current priority: FW-2 (Datasets;
-   unblocked — FW-1's structured Group/Pred/Select layer landed
-   2026-09-01, raw-SQL Select/View blocks remain).
+   (updated in the landing commit), with the deferred chores and the
+   reason each waits at its end. FW-2 landed 2026-09-04; next by the
+   build order is the raw-SQL half of FW-1 (SEL-1 to SEL-7).
 3. `docs/spec.md` — the language: Part I the schema core, Part II
    the project, routing and query layers, then the appendices (Go and
    SQLite mappings, DBML compatibility). Sections are named, not
-   numbered (D64); existing `§…` citations resolve through the spec's
-   Citation key until the migration in `docs/backlog.md` lands.
-   `docs/backlog.md` — scheduled chores with the reason each waits.
+   numbered (decision named-sections); existing `§…` citations resolve through the spec's
+   Citation key until the migration in the roadmap's deferred chores
+   lands.
 4. `docs/editor.md` — grammar/extension/LSP architecture, extension
    recipes, and the §8 verification checklist.
 5. `docs/nao.md` + `docs/model-layer.md` — the data layer and the
-   philosophy behind it. `docs/reference/` — pinned research
-   (framework inventories, ORM matrix): consult, don't maintain.
+   philosophy behind it. `docs/orm-matrix.md` — the ORM capability
+   audit, pinned research: consult, don't maintain.
 
 ## Repository shape
 
 Three Go modules, stitched by `go.work`: the **library** at the
 root — runtime (`*.go`), `lang/` (token/scanner/parser/ast/check/vet +
 project semantics), `gen/router`, `gen/model`, `internal/par` (the worker pool every
-phase runs on, D78), `nao/` (rt, gen,
+phase runs on, decision worker-pool), `nao/` (rt, gen,
 inflect, itest), `itest/` — stdlib-only (sqlite3 is
 test-only); and the **tools** `lsp/` and `cmd/volt/`, which carry the
-third-party deps (glsp, urfave/cli). Go floor: **1.27** (D45),
+third-party deps (glsp, urfave/cli). Go floor: **1.27** (decision newest-go),
 declared in all three go.mod files and go.work. `grammar/` +
 `zed-extension/` + `scripts/sync-grammar.sh` are the editor stack.
 `internal/perfsweep` is the profiling sweep (PERF-2), run at the
@@ -103,7 +106,7 @@ tool modules — the full sweep is
 go build ./... ./lsp/... ./cmd/volt/...
 go vet   ./... ./lsp/... ./cmd/volt/...
 go test  ./... ./lsp/... ./cmd/volt/...   # conformance, goldens, itests, LSP
-go test  -race ./lang/... ./lsp/...       # the shared surface under the detector (D96)
+go test  -race ./lang/... ./lsp/...       # the shared surface under the detector (decision shared-surface)
 gofmt -l . | grep -v zed-extension        # must be empty
 ```
 
@@ -114,35 +117,35 @@ changes. Grammar changes additionally need `tree-sitter generate`,
 `./scripts/sync-grammar.sh`. For LSP behavior, scripted stdio JSON-RPC
 sessions replaying the user's exact keystrokes have repeatedly caught
 what unit tests missed — do that for anything interactive; one such
-session is a golden test (`cmd/volt/lsp_session_test.go`, D101), and
+session is a golden test (`cmd/volt/lsp_session_test.go`, decision invalid-input-goldens), and
 a new interaction belongs in it.
 
 ## Conventions
 
 - Naming is subject-first, verb-last everywhere, hand-written code
-  included: `UserGet`, `UserCreateParams`, `EOrderStatusPending` (D09);
+  included: `UserGet`, `UserCreateParams`, `EOrderStatusPending` (decision subject-first-naming);
   internals too (`columnCheck`, `tableEmit`). Carve-outs: Go-mandated
   interface methods, `New*`/`is*`/`has*`, stdlib-parallel APIs
   (`parser.ParseFile`, `check.File`), cursor primitives (`next`,
   `peek`), LSP handlers named after protocol methods.
 - Error messages and code comments cite spec sections (`§6.7`, `§V4.6`)
-  or decision numbers. A comment is a contract with a citation, one or
+  or decision names (`decision one-parse`). A comment is a contract with a citation, one or
   two sentences, never rationale, history or measurements; tests carry
-  no prose beyond directives, the proof instruments excepted (D106).
+  no prose beyond directives, the proof instruments excepted (decision comments-are-contracts).
   Generated files start with the
   `Code generated … DO NOT EDIT.` marker; the CLI refuses to overwrite
-  files lacking it. Zero runtime dependencies in generated code (D03).
-- SQLite-first, all-in (D02); SQLite is the gen-time SQL checker via
-  in-memory prepare (D06). Never: callbacks, lazy loading, dirty
-  tracking, reflection in generated paths (D27).
+  files lacking it. Zero runtime dependencies in generated code (decision zero-dependencies).
+- SQLite-first, all-in (decision sqlite-first); SQLite is the gen-time SQL checker via
+  in-memory prepare (decision expressions-are-sqlites). Never: callbacks, lazy loading, dirty
+  tracking, reflection in generated paths (decision non-goals).
 - What a session memo answers is a pure function of explicit inputs
-  (D86): a top-level function whose parameters are its whole input,
-  keyed on exactly those, never on a digest or a file stamp (D87). `cmd/volt`'s purity gate fails the build on
+  (decision pure-memos): a top-level function whose parameters are its whole input,
+  keyed on exactly those, never on a digest or a file stamp (decision keys-are-inputs). `cmd/volt`'s purity gate fails the build on
   a read of package state, a write through an input (an append to an
   input's array included), a call through a function value it did not
-  make, or a call into a package that keeps state, transitively (D102); its immutability walk fails
+  make, or a call into a package that keeps state, transitively (decision pure-memos); its immutability walk fails
   the build on a write to a memoized result outside its producer, or
-  to a node or token outside the front end (D92); a new memo adds its
+  to a node or token outside the front end (decision immutable-results); a new memo adds its
   function to the gate's targets in the same commit.
 - Commit messages explain *why*; a session that produces new decisions
   appends them to `docs/decisions.md` before committing.
@@ -161,6 +164,6 @@ history is why); a test that needs a project of some size writes one
 with `internal/corpus`, which uses every feature in both layouts
 (`volt stress DIR` writes its one-file shape to disk, a thousand tables
 by default, to feel the limits of check, gen, the LSP and the Go
-compiler by hand; D80). When the maintainer asks a question, answer it and
+compiler by hand; decision generated-stress). When the maintainer asks a question, answer it and
 stop — don't implement until asked; when they ask for work, finish it:
 build + vet + test + gofmt green, committed, pushed.

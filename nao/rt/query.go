@@ -1,10 +1,10 @@
-// The dynamic query layer (decisions D28-D34): predicates, orderings,
+// The dynamic query layer (decisions.md, Query layer): predicates, orderings,
 // limits and assignments as inert data — plain values forming a small
 // expression tree, never closures and never a mutable builder. The
 // interpreter is deterministic: identical trees render identical SQL,
-// which is what makes the rendered text a statement-cache key (D31).
+// which is what makes the rendered text a statement-cache key (decision statement-cache).
 // The layer only filters, orders and limits an existing row shape (the
-// shape rule, D32).
+// shape rule, decision shape-rule).
 package rt
 
 import (
@@ -15,12 +15,12 @@ import (
 	"strings"
 )
 
-/* ===== typed column handles (D29) ===== */
+/* ===== typed column handles (decision flat-handles) ===== */
 
 // Column is the typed handle of one column of model M: its methods build
 // the Pred, Order and Assign values of the dynamic query layer. M is a
 // phantom type: a predicate over one model cannot enter another model's
-// query (D29). T is the column's Go value type; operator arguments are T.
+// query (decision flat-handles). T is the column's Go value type; operator arguments are T.
 type Column[M, T any] struct {
 	// Name is the SQL column name, unquoted.
 	Name string
@@ -92,7 +92,7 @@ func (c Column[M, T]) cmpCol(op string, o Column[M, T]) Pred[M] {
 	return Pred[M]{kind: predColCmp, col: c.Name, op: op, col2: o.Name}
 }
 
-// EqCol compares two columns of the same model: "a = b" (D32).
+// EqCol compares two columns of the same model: "a = b" (decision shape-rule).
 func (c Column[M, T]) EqCol(o Column[M, T]) Pred[M] { return c.cmpCol("=", o) }
 
 // NeCol is "a <> b".
@@ -133,10 +133,10 @@ func valsAny[T any](vs []T) []any {
 	return out
 }
 
-/* ===== predicates as inert data (D28) ===== */
+/* ===== predicates as inert data (decision options-are-data) ===== */
 
 // Pred is one predicate over model M: a small immutable expression tree,
-// shared across Query, Count, Exists, DeleteWhere and UpdateWhere (D32).
+// shared across Query, Count, Exists, DeleteWhere and UpdateWhere (decision shape-rule).
 //
 // The zero value is the empty predicate: it filters nothing and vanishes
 // from And, Or, Not and WHERE clauses.
@@ -183,7 +183,7 @@ func Not[M any](p Pred[M]) Pred[M] {
 }
 
 // Raw is the last-resort escape hatch: verbatim SQL as a predicate, with
-// '?' placeholders bound to args. It is outside the safety net (D18):
+// '?' placeholders bound to args. It is outside the safety net (decision sibling-files):
 // nothing validates the fragment until SQLite prepares the statement.
 func Raw[M any](sql string, args ...any) Pred[M] {
 	if sql == "" {
@@ -286,12 +286,12 @@ type Assign[M any] struct {
 	val any
 }
 
-/* ===== options (D28, D30) ===== */
+/* ===== options (decisions options-are-data, per-model-wrappers) ===== */
 
 // Opt is one option of a dynamic query: a predicate (Pred is an Opt), an
 // ordering, a limit, an offset, a keyset position or a distinct flag.
 // Value-less options cannot infer M, so the generator emits per-model
-// wrappers (UserLimit, UserOrderBy) over the constructors here (D30).
+// wrappers (UserLimit, UserOrderBy) over the constructors here (decision per-model-wrappers).
 type Opt[M any] interface{ optApply(*querySpec[M]) }
 
 type querySpec[M any] struct {
@@ -322,7 +322,7 @@ func (o limitOpt[M]) optApply(s *querySpec[M]) { s.limit, s.limitSet = o.n, true
 
 // Limit caps the number of rows returned; the last Limit wins. The value
 // is bound as a parameter, so page size does not change the SQL text
-// (one cached statement, D31).
+// (one cached statement, decision statement-cache).
 func Limit[M any](n int) Opt[M] { return limitOpt[M]{n: n} }
 
 type offsetOpt[M any] struct{ n int }
@@ -330,7 +330,7 @@ type offsetOpt[M any] struct{ n int }
 func (o offsetOpt[M]) optApply(s *querySpec[M]) { s.offset, s.offsetSet = o.n, true }
 
 // Offset skips n rows; the last Offset wins. Keyset pagination (After)
-// is the scalable page mechanism (D34).
+// is the scalable page mechanism (decision keyset-pagination).
 func Offset[M any](n int) Opt[M] { return offsetOpt[M]{n: n} }
 
 type afterOpt[M any] struct{ key []any }
@@ -338,7 +338,7 @@ type afterOpt[M any] struct{ key []any }
 func (o afterOpt[M]) optApply(s *querySpec[M]) { s.after, s.afterSet = o.key, true }
 
 // After positions the query strictly after the row with the given key
-// (keyset pagination, D34): the previous page's last row's values for
+// (keyset pagination, decision keyset-pagination): the previous page's last row's values for
 // the ORDER BY columns, one per term, in the same order. Rendering
 // requires an OrderBy and one key value per term. NULLs in keyset
 // columns are not paginated over; keep keyset columns NOT NULL.
@@ -351,12 +351,12 @@ func (distinctOpt[M]) optApply(s *querySpec[M]) { s.distinct = true }
 // Distinct deduplicates the result rows (SELECT DISTINCT).
 func Distinct[M any]() Opt[M] { return distinctOpt[M]{} }
 
-/* ===== the interpreter (D28, D31): options -> SQL + args ===== */
+/* ===== the interpreter (decisions options-are-data, statement-cache): options -> SQL + args ===== */
 
 // SelectRender renders a SELECT over the model's fixed shape: table and
 // columns come pre-rendered from generated code, everything else from
 // the options. Deterministic: identical option values render identical
-// SQL (D31). Argument order matches placeholder order by construction.
+// SQL (decision statement-cache). Argument order matches placeholder order by construction.
 func SelectRender[M any](table, columns string, opts []Opt[M]) (string, []any, error) {
 	var s querySpec[M]
 	for _, o := range opts {
@@ -505,7 +505,7 @@ func whereRender[M any](preds []Pred[M]) (string, []any, error) {
 	return w.String(), args, nil
 }
 
-// afterRender appends the keyset predicate (D34): rows strictly after
+// afterRender appends the keyset predicate (decision keyset-pagination): rows strictly after
 // the key in the query's order, as the lexicographic expansion
 //
 //	(o1 > k1) OR (o1 = k1 AND o2 > k2) OR ...
@@ -552,7 +552,7 @@ func identQuote(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }
 
-/* ===== statement execution, cache-aware (D31) ===== */
+/* ===== statement execution, cache-aware (decision statement-cache) ===== */
 
 // StmtQuery runs a row-returning statement on db, through cache when one
 // is given (nil runs directly).

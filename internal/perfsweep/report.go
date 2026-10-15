@@ -30,7 +30,7 @@ func Report(m Machine, spec Spec, rows []Row, charts []string, ks []Keystroke, k
 	fmt.Fprintf(&b, "| Run | `%s` |\n\n", command)
 
 	b.WriteString("## Method\n\n")
-	fmt.Fprintf(&b, "`internal/corpus` writes one-file projects of %s tables with %d columns each, the stress shape of D80 at every size, using every feature of the language. Each phase, Load (scan and parse), Check, Vet and Generate (every file of every package, DDL included), runs on its own: the best wall time of %d unprofiled runs, one run's allocated bytes, allocation count and heap in use right after it", joinInts(xs), spec.Columns, max(spec.Reps, 1))
+	fmt.Fprintf(&b, "`internal/corpus` writes one-file projects of %s tables with %d columns each, the stress shape of decision generated-stress at every size, using every feature of the language. Each phase, Load (scan and parse), Check, Vet and Generate (every file of every package, DDL included), runs on its own: the best wall time of %d unprofiled runs, one run's allocated bytes, allocation count and heap in use right after it", joinInts(xs), spec.Columns, max(spec.Reps, 1))
 	if spec.Profile > 0 {
 		fmt.Fprintf(&b, ", then enough profiled runs to fill about %s of CPU profile (the `.prof` files beside this report, readable with `go tool pprof`)", spec.Profile)
 	}

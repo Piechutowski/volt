@@ -1,6 +1,6 @@
 package parser
 
-// Parsing by element (D83, D88, PERF-10): a file is a sequence of
+// Parsing by element (decisions parse-by-declaration, one-parse, PERF-10): a file is a sequence of
 // chunks, one per top-level element, cut where the scanner says an
 // element begins (spec §3.2.5).
 

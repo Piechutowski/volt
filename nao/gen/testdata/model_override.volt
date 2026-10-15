@@ -1,4 +1,4 @@
-// [model:] (extension, D10) pins the Go model name where the inflector
+// [model:] (extension, decision singular-models) pins the Go model name where the inflector
 // cannot know better: "menus" strips to "menu" only by English knowledge,
 // and "order_status" is a singular the plural-table convention never fits.
 Table menus [model: 'Menu'] {

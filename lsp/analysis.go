@@ -1,6 +1,6 @@
 package lsp
 
-// Background analysis (D79). The run touches no Document: it publishes
+// Background analysis (decision editor-session). The run touches no Document: it publishes
 // diagnostics from its own snapshot of the open texts, and every
 // request adopts the newest result at its start, on the handler
 // goroutine that owns the documents.
@@ -28,7 +28,7 @@ type analysis struct {
 	gen     int
 	running bool
 	session *lang.Session
-	index   voltIndexMemo // the navigation index's memo across analyses (D85)
+	index   voltIndexMemo // the navigation index's memo across analyses (decision index-by-table)
 	result  *projectResult
 }
 
@@ -41,7 +41,7 @@ type projectResult struct {
 	diags    []diag.Diagnostic
 	vindex   *voltIndex
 	overlay  map[string]string // the open texts the run saw
-	versions map[string]int32  // their versions, of the same moment (D105)
+	versions map[string]int32  // their versions, of the same moment (decision editor-session)
 }
 
 // projectRootOf finds the project a file belongs to (§V1.1); false for
@@ -196,7 +196,7 @@ func (s *Server) analysisRun(ctx *glsp.Context, root string, a *analysis) {
 // publishResult sends every open document of the result's project its
 // diagnostics, positioned in the text the run saw and stamped with
 // that text's version, so a client whose buffer moved on drops them
-// (D105). A document the loader never read gets its own single-file
+// (decision editor-session). A document the loader never read gets its own single-file
 // verdict.
 func (s *Server) publishResult(ctx *glsp.Context, res *projectResult) {
 	s.mu.Lock()
@@ -253,7 +253,7 @@ func (s *Server) adopt(doc *Document) {
 		doc.vpkg, doc.vindex, doc.Diags = pkg, res.vindex, res.docDiags(path)
 	} else {
 		// The loader never read this file: its own verdict is the
-		// truth, vet advice included (D103).
+		// truth, vet advice included (decision editor-session).
 		doc.vpkg, doc.vindex = nil, nil
 		doc.vetLocal()
 		doc.Diags = doc.local

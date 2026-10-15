@@ -26,18 +26,18 @@ func Scan(filename, src string) ([]token.Token, []diag.Diagnostic) {
 // ScanFile scans a whole file as written; every position is in f. A
 // carriage return is discarded wherever it appears (§3.2.1) and stays
 // in the text: it keeps its byte, so offsets match the file, and has
-// no column (D90). Every token that begins a top-level element
+// no column (decision carriage-return). Every token that begins a top-level element
 // (§3.2.5) is flagged; nothing stops there.
 func ScanFile(f *token.File) ([]token.Token, []diag.Diagnostic) {
 	// The token slice is sized once (PERF-7).
-	s := newScanner(f, make([]token.Token, 0, len(f.Src)/4+16)) // a token per four bytes of schema (D81)
+	s := newScanner(f, make([]token.Token, 0, len(f.Src)/4+16)) // a token per four bytes of schema (decision indexed-lookups)
 	s.run()
 	s.emit(token.EOF, "")
 	return s.toks, s.errs
 }
 
 // ScanChunk scans the first top-level element of f's text (§3.2.5,
-// D88): the tokens before the next element start after the first
+// decision one-parse): the tokens before the next element start after the first
 // byte, then an EOF standing at that start, which is the end returned
 // and whose text names what it is; without one, the whole text and an
 // EOF at its end. bound reports the former. buf is a token slice to
@@ -151,7 +151,7 @@ func (s *Scanner) peek() rune {
 // peekAt is the rune n runes on, or eof: at the end of the text, and
 // past a line break. The scanner cannot see beyond a line break it
 // has not consumed, and only a string or a comment consumes one
-// inside a token (D95).
+// inside a token (decision one-parse).
 func (s *Scanner) peekAt(n int) rune {
 	off := s.crSkip(s.pos.Offset)
 	for ; n > 0; n-- {

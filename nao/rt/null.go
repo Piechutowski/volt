@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 )
 
-// Null is the representation of a nullable column (decision D13): a value
+// Null is the representation of a nullable column (decision null-t): a value
 // plus a validity bit, never a pointer. The zero value is NULL. JSON shows
 // the value or null.
 type Null[T any] struct {

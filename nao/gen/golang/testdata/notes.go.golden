@@ -45,7 +45,7 @@ type Tag struct {
 }
 
 // PostCreateParams are the caller-supplied columns of PostCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type PostCreateParams struct {
 	// Shown in lists and in the HTML title tag
 	Title  string      `db:"title" json:"title"`
@@ -69,7 +69,7 @@ type PostUpdateParams struct {
 }
 
 // TagCreateParams are the caller-supplied columns of TagCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type TagCreateParams struct {
 	ID   int32  `db:"id" json:"id"`
 	Name string `db:"name" json:"name"`

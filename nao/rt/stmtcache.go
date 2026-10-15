@@ -9,7 +9,7 @@ import (
 )
 
 // StmtCache is a prepared-statement cache keyed by rendered SQL text
-// (decision D31). Eviction is LRU; evicted and superseded statements are
+// (decision statement-cache). Eviction is LRU; evicted and superseded statements are
 // closed.
 //
 // A cache is bound to the handle its statements were prepared on: use one

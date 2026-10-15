@@ -19,7 +19,7 @@ type OrderStatus struct {
 }
 
 // MenuCreateParams are the caller-supplied columns of MenuCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type MenuCreateParams struct {
 	Title string `db:"title" json:"title"`
 }
@@ -32,7 +32,7 @@ type MenuUpdateParams struct {
 }
 
 // OrderStatusCreateParams are the caller-supplied columns of OrderStatusCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type OrderStatusCreateParams struct {
 	Code  string `db:"code" json:"code"`
 	Label string `db:"label" json:"label"`

@@ -27,7 +27,7 @@ func (c *checker) tableChecks(pkg *Package) {
 		return
 	}
 	// Every table's checks are lowered by tableSpecs, a pure function
-	// of the inputs resolved here (D86), on every CPU; results are
+	// of the inputs resolved here (decision pure-memos), on every CPU; results are
 	// written in table order.
 	type lowered struct {
 		specs          []golang.CheckSpec
@@ -100,7 +100,7 @@ func (p *Package) checkIndex() {
 }
 
 // lowering is one table's check lowering as a pure function of its
-// inputs (D86): the checked table, its model's fields (or why the plan
+// inputs (decision pure-memos): the checked table, its model's fields (or why the plan
 // has none), the package name a Go reference may qualify with, the
 // package directory's Go functions, and the predicates the checks
 // name, transitively. It accumulates only what it returns: the lowered
@@ -149,7 +149,7 @@ func tableSpecs(ti *check.TableInfo, fields []golang.FieldSig, fieldsErr error, 
 		}
 		specs = append(specs, spec)
 	}
-	// required columns (§6.3 extension, D72): one synthesized check
+	// required columns (§6.3 extension, decision required-and-problems): one synthesized check
 	// per column, named <column>_required.
 	if req := l.requiredSpecs(); len(req) > 0 {
 		specs = append(specs, req...)
@@ -289,7 +289,7 @@ func (l *lowering) goRefCheck(ck *ast.Check) (golang.CheckSpec, bool) {
 	want := "func " + name + "(" + strings.Join(argTypes, ", ") + ") error"
 
 	// The function must exist in this package's Go files with exactly
-	// the contract, spelled as the generated field types (§V12.5, D63).
+	// the contract, spelled as the generated field types (§V12.5, decision go-references-by-spelling).
 	sc := l.funcs
 	gf, found := sc.funcs[name]
 	if !found {

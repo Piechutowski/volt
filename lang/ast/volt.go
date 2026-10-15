@@ -351,7 +351,7 @@ func (d *Pred) End() token.Position { return d.Rbrace }
 func (d *Pred) declNode()           {}
 
 // PredExpr is a node of the closed predicate expression language
-// (spec §V10). It is deliberately not SQL (D06).
+// (spec §V10). It is deliberately not SQL (decision expressions-are-sqlites).
 type PredExpr interface {
 	Node
 	predExpr()
@@ -462,7 +462,7 @@ func (x *ColRef) Pos() token.Position { return x.Name.Pos() }
 func (x *ColRef) End() token.Position { return x.Name.End() }
 func (x *ColRef) operand()            {}
 
-// Param is a ":name" query parameter (spec §V10, D15).
+// Param is a ":name" query parameter (spec §V10, decision named-placeholders).
 type Param struct {
 	ColonPos token.Position
 	Name     *Ident

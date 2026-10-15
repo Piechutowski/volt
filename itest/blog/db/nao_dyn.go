@@ -2,7 +2,7 @@
 //
 // The dynamic query layer over the models in nao_models.go: typed
 // column handles, per-model option wrappers, and predicate-driven
-// terminals — see docs/decisions.md D28-D34.
+// terminals — see docs/decisions.md, Query layer.
 
 package db
 
@@ -12,14 +12,14 @@ import (
 )
 
 // userTableSQL and userColumnsSQL are the fixed shape of User's
-// dynamic statements; the interpreter renders everything else (D28).
+// dynamic statements; the interpreter renders everything else (decision options-are-data).
 const (
 	userTableSQL   = `"users"`
 	userColumnsSQL = `"id", "email"`
 )
 
-// Typed column handles of User (D29): inert predicate, order and
-// assignment builders for the dynamic query layer (D28). A predicate
+// Typed column handles of User (decision flat-handles): inert predicate, order and
+// assignment builders for the dynamic query layer (decision options-are-data). A predicate
 // built here can only enter User queries; mixing models is a compile
 // error.
 var (
@@ -27,10 +27,10 @@ var (
 	UserEmail = rt.Column[User, string]{Name: "email"}
 )
 
-// UserLimit caps how many rows UserQuery returns (D30).
+// UserLimit caps how many rows UserQuery returns (decision per-model-wrappers).
 func UserLimit(n int) rt.Opt[User] { return rt.Limit[User](n) }
 
-// UserOffset skips n rows; keyset pagination (UserAfter) scales better (D34).
+// UserOffset skips n rows; keyset pagination (UserAfter) scales better (decision keyset-pagination).
 func UserOffset(n int) rt.Opt[User] { return rt.Offset[User](n) }
 
 // UserDistinct deduplicates the rows UserQuery returns.
@@ -41,7 +41,7 @@ func UserDistinct() rt.Opt[User] { return rt.Distinct[User]() }
 func UserOrderBy(terms ...rt.Order[User]) rt.Opt[User] { return rt.OrderBy(terms...) }
 
 // UserAfter resumes strictly after the row with the given key — keyset
-// pagination (D34): one value per UserOrderBy term, in the same order.
+// pagination (decision keyset-pagination): one value per UserOrderBy term, in the same order.
 func UserAfter(key ...any) rt.Opt[User] { return rt.After[User](key...) }
 
 // UserSet collects the typed assignments of a UserUpdateWhere, built
@@ -101,7 +101,7 @@ func (q *Queries) UserExists(ctx context.Context, preds ...rt.Pred[User]) (bool,
 
 // UserDeleteWhere removes every users row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
-// full-table delete (D42).
+// full-table delete (decision positional-placeholders).
 func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
 	query, args, err := rt.DeleteRender(userTableSQL, preds)
 	if err != nil {
@@ -116,8 +116,8 @@ func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (
 
 // UserUpdateWhere applies the typed assignments (UserSet) to every users
 // row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer (D32). No effective predicate
-// is an error, never a full-table rewrite (D42).
+// partial update of the dynamic layer (decision shape-rule). No effective predicate
+// is an error, never a full-table rewrite (decision positional-placeholders).
 func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], preds ...rt.Pred[User]) (int64, error) {
 	query, args, err := rt.UpdateRender(userTableSQL, set, preds)
 	if err != nil {
@@ -131,14 +131,14 @@ func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], pr
 }
 
 // msRevenueTableSQL and msRevenueColumnsSQL are the fixed shape of MsRevenue's
-// dynamic statements; the interpreter renders everything else (D28).
+// dynamic statements; the interpreter renders everything else (decision options-are-data).
 const (
 	msRevenueTableSQL   = `"ms_revenue"`
 	msRevenueColumnsSQL = `"id", "org", "year"`
 )
 
-// Typed column handles of MsRevenue (D29): inert predicate, order and
-// assignment builders for the dynamic query layer (D28). A predicate
+// Typed column handles of MsRevenue (decision flat-handles): inert predicate, order and
+// assignment builders for the dynamic query layer (decision options-are-data). A predicate
 // built here can only enter MsRevenue queries; mixing models is a compile
 // error.
 var (
@@ -147,10 +147,10 @@ var (
 	MsRevenueYear = rt.Column[MsRevenue, int32]{Name: "year"}
 )
 
-// MsRevenueLimit caps how many rows MsRevenueQuery returns (D30).
+// MsRevenueLimit caps how many rows MsRevenueQuery returns (decision per-model-wrappers).
 func MsRevenueLimit(n int) rt.Opt[MsRevenue] { return rt.Limit[MsRevenue](n) }
 
-// MsRevenueOffset skips n rows; keyset pagination (MsRevenueAfter) scales better (D34).
+// MsRevenueOffset skips n rows; keyset pagination (MsRevenueAfter) scales better (decision keyset-pagination).
 func MsRevenueOffset(n int) rt.Opt[MsRevenue] { return rt.Offset[MsRevenue](n) }
 
 // MsRevenueDistinct deduplicates the rows MsRevenueQuery returns.
@@ -161,7 +161,7 @@ func MsRevenueDistinct() rt.Opt[MsRevenue] { return rt.Distinct[MsRevenue]() }
 func MsRevenueOrderBy(terms ...rt.Order[MsRevenue]) rt.Opt[MsRevenue] { return rt.OrderBy(terms...) }
 
 // MsRevenueAfter resumes strictly after the row with the given key — keyset
-// pagination (D34): one value per MsRevenueOrderBy term, in the same order.
+// pagination (decision keyset-pagination): one value per MsRevenueOrderBy term, in the same order.
 func MsRevenueAfter(key ...any) rt.Opt[MsRevenue] { return rt.After[MsRevenue](key...) }
 
 // MsRevenueSet collects the typed assignments of a MsRevenueUpdateWhere, built
@@ -221,7 +221,7 @@ func (q *Queries) MsRevenueExists(ctx context.Context, preds ...rt.Pred[MsRevenu
 
 // MsRevenueDeleteWhere removes every ms_revenue row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
-// full-table delete (D42).
+// full-table delete (decision positional-placeholders).
 func (q *Queries) MsRevenueDeleteWhere(ctx context.Context, preds ...rt.Pred[MsRevenue]) (int64, error) {
 	query, args, err := rt.DeleteRender(msRevenueTableSQL, preds)
 	if err != nil {
@@ -236,8 +236,8 @@ func (q *Queries) MsRevenueDeleteWhere(ctx context.Context, preds ...rt.Pred[MsR
 
 // MsRevenueUpdateWhere applies the typed assignments (MsRevenueSet) to every ms_revenue
 // row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer (D32). No effective predicate
-// is an error, never a full-table rewrite (D42).
+// partial update of the dynamic layer (decision shape-rule). No effective predicate
+// is an error, never a full-table rewrite (decision positional-placeholders).
 func (q *Queries) MsRevenueUpdateWhere(ctx context.Context, set []rt.Assign[MsRevenue], preds ...rt.Pred[MsRevenue]) (int64, error) {
 	query, args, err := rt.UpdateRender(msRevenueTableSQL, set, preds)
 	if err != nil {
@@ -251,14 +251,14 @@ func (q *Queries) MsRevenueUpdateWhere(ctx context.Context, set []rt.Assign[MsRe
 }
 
 // msUsageTableSQL and msUsageColumnsSQL are the fixed shape of MsUsage's
-// dynamic statements; the interpreter renders everything else (D28).
+// dynamic statements; the interpreter renders everything else (decision options-are-data).
 const (
 	msUsageTableSQL   = `"ms_usage"`
 	msUsageColumnsSQL = `"id", "org", "year"`
 )
 
-// Typed column handles of MsUsage (D29): inert predicate, order and
-// assignment builders for the dynamic query layer (D28). A predicate
+// Typed column handles of MsUsage (decision flat-handles): inert predicate, order and
+// assignment builders for the dynamic query layer (decision options-are-data). A predicate
 // built here can only enter MsUsage queries; mixing models is a compile
 // error.
 var (
@@ -267,10 +267,10 @@ var (
 	MsUsageYear = rt.Column[MsUsage, int32]{Name: "year"}
 )
 
-// MsUsageLimit caps how many rows MsUsageQuery returns (D30).
+// MsUsageLimit caps how many rows MsUsageQuery returns (decision per-model-wrappers).
 func MsUsageLimit(n int) rt.Opt[MsUsage] { return rt.Limit[MsUsage](n) }
 
-// MsUsageOffset skips n rows; keyset pagination (MsUsageAfter) scales better (D34).
+// MsUsageOffset skips n rows; keyset pagination (MsUsageAfter) scales better (decision keyset-pagination).
 func MsUsageOffset(n int) rt.Opt[MsUsage] { return rt.Offset[MsUsage](n) }
 
 // MsUsageDistinct deduplicates the rows MsUsageQuery returns.
@@ -281,7 +281,7 @@ func MsUsageDistinct() rt.Opt[MsUsage] { return rt.Distinct[MsUsage]() }
 func MsUsageOrderBy(terms ...rt.Order[MsUsage]) rt.Opt[MsUsage] { return rt.OrderBy(terms...) }
 
 // MsUsageAfter resumes strictly after the row with the given key — keyset
-// pagination (D34): one value per MsUsageOrderBy term, in the same order.
+// pagination (decision keyset-pagination): one value per MsUsageOrderBy term, in the same order.
 func MsUsageAfter(key ...any) rt.Opt[MsUsage] { return rt.After[MsUsage](key...) }
 
 // MsUsageSet collects the typed assignments of a MsUsageUpdateWhere, built
@@ -341,7 +341,7 @@ func (q *Queries) MsUsageExists(ctx context.Context, preds ...rt.Pred[MsUsage]) 
 
 // MsUsageDeleteWhere removes every ms_usage row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
-// full-table delete (D42).
+// full-table delete (decision positional-placeholders).
 func (q *Queries) MsUsageDeleteWhere(ctx context.Context, preds ...rt.Pred[MsUsage]) (int64, error) {
 	query, args, err := rt.DeleteRender(msUsageTableSQL, preds)
 	if err != nil {
@@ -356,8 +356,8 @@ func (q *Queries) MsUsageDeleteWhere(ctx context.Context, preds ...rt.Pred[MsUsa
 
 // MsUsageUpdateWhere applies the typed assignments (MsUsageSet) to every ms_usage
 // row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer (D32). No effective predicate
-// is an error, never a full-table rewrite (D42).
+// partial update of the dynamic layer (decision shape-rule). No effective predicate
+// is an error, never a full-table rewrite (decision positional-placeholders).
 func (q *Queries) MsUsageUpdateWhere(ctx context.Context, set []rt.Assign[MsUsage], preds ...rt.Pred[MsUsage]) (int64, error) {
 	query, args, err := rt.UpdateRender(msUsageTableSQL, set, preds)
 	if err != nil {

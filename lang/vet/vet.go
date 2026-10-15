@@ -6,7 +6,7 @@
 // Each check is an Analyzer with a name and a doc string, judged
 // declaration by declaration (a Rule: a pure function of one
 // declaration's syntax and the facts the checker resolved for it,
-// D104), or over the whole file (a Fold), or both.
+// decision vet-by-declaration), or over the whole file (a Fold), or both.
 package vet
 
 import (
@@ -28,7 +28,7 @@ type Analyzer interface {
 
 // Rule is a check on one declaration: a pure function of the
 // declaration, its nodes in source order (itself first) and the facts
-// the checker resolved for it (D104). It returns its warnings in the
+// the checker resolved for it (decision vet-by-declaration). It returns its warnings in the
 // order it found them.
 type Rule interface {
 	Analyzer
@@ -74,7 +74,7 @@ type FilePass struct {
 
 // Plan is the file's naming plan: the checker's own when the caller
 // handed one to RunWithPlan, else built once for all folds of this
-// run (D81).
+// run (decision indexed-lookups).
 func (p *FilePass) Plan() *golang.Plan {
 	if *p.plan == nil {
 		*p.plan = golang.PlanBuild(p.File, p.Info)
@@ -137,7 +137,7 @@ func RunWithPlan(f *ast.File, info *check.Info, plan *golang.Plan, analyzers ...
 }
 
 // Memo remembers a file's vetted declarations across its versions
-// (D104): a declaration that is the node it was, with the facts it
+// (decision vet-by-declaration): a declaration that is the node it was, with the facts it
 // had, under the rules it had, warns what it warned. The zero value is
 // ready; a Memo belongs to one file and one goroutine at a time.
 type Memo struct {
@@ -156,7 +156,7 @@ type memoDecl struct {
 	summary Summary
 }
 
-// factsKey is the identity of a declaration's facts (D87): the checked
+// factsKey is the identity of a declaration's facts (decision keys-are-inputs): the checked
 // table, the partial's declaration and use count, and each
 // relationship's node, operator, endpoint tables and columns — every
 // value a rule reads through Facts, as the object or the value it is.
@@ -357,7 +357,7 @@ func factsByDecl(f *ast.File, info *check.Info) []Facts {
 
 // DeclVet judges one declaration under the given rules: a pure
 // function of the declaration's syntax, the facts the checker resolved
-// for it and the rules (D86, D104). It answers each rule's warnings,
+// for it and the rules (decisions pure-memos, vet-by-declaration). It answers each rule's warnings,
 // in rule order, and the declaration's summary for the folds.
 func DeclVet(d ast.Decl, f Facts, rules []Rule) ([][]diag.Diagnostic, Summary) {
 	nodes := nodesOf(d)
@@ -370,7 +370,7 @@ func DeclVet(d ast.Decl, f Facts, rules []Rule) ([][]diag.Diagnostic, Summary) {
 
 // nodesOf lists a declaration's nodes in source order, itself first:
 // the order ast.Inspect visits them, produced without a function value
-// (D102) from ast.Children.
+// (decision pure-memos) from ast.Children.
 func nodesOf(root ast.Node) []ast.Node {
 	var out []ast.Node
 	stack := []ast.Node{root}

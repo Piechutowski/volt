@@ -27,7 +27,7 @@ type Rate struct {
 }
 
 // CurrencyCreateParams are the caller-supplied columns of CurrencyCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type CurrencyCreateParams struct {
 	Code string `db:"code" json:"code"`
 	Name string `db:"name" json:"name"`
@@ -40,7 +40,7 @@ type CurrencyUpdateParams struct {
 }
 
 // RateCreateParams are the caller-supplied columns of RateCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type RateCreateParams struct {
 	CurrencyCode string          `db:"currency_code" json:"currency_code"`
 	Rate         string          `db:"rate" json:"rate"`

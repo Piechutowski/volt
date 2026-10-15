@@ -1,7 +1,7 @@
-// Integration tests (decision D25): the generated CRUD runs against a
+// Integration tests (decision integration-over-mocks): the generated CRUD runs against a
 // real SQLite through a real database/sql driver — no mocks, no canned
 // rows. The driver is a test-only dependency; generated code and the rt
-// runtime stay driver-free (D03).
+// runtime stay driver-free (decision zero-dependencies).
 package itest
 
 import (
@@ -50,7 +50,7 @@ func TestUserCRUD(t *testing.T) {
 	_, q := newDB(t)
 
 	// Create: the auto-increment key and the defaulted created_at are the
-	// database's job; RETURNING brings both back (D16).
+	// database's job; RETURNING brings both back (decision create-params).
 	u, err := q.UserCreate(ctx, UserCreateParams{Email: "ann@example.com", Name: "Ann"})
 	if err != nil {
 		t.Fatalf("UserCreate: %v", err)
@@ -88,7 +88,7 @@ func TestUserCRUD(t *testing.T) {
 		t.Errorf("UserCount = %d, %v", n, err)
 	}
 
-	// Update rewrites every non-key column and returns the row (D15/D16).
+	// Update rewrites every non-key column and returns the row (decision named-placeholders/decision create-params).
 	upd, err := q.UserUpdate(ctx, u.ID, UserUpdateParams{
 		Email:     u.Email,
 		Name:      "Ann B.",
@@ -132,7 +132,7 @@ func TestOrderDefaultsEnumsAndFKs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OrderCreate: %v", err)
 	}
-	// the defaulted enum column comes back typed (D11/D16)
+	// the defaulted enum column comes back typed (decision e-prefixed-enums/decision create-params)
 	if o.Status != EOrderStatusPending {
 		t.Errorf("status = %q; want the database default %q", o.Status, EOrderStatusPending)
 	}
@@ -176,7 +176,7 @@ func TestUserTagCompositePK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UserTagCreate: %v", err)
 	}
-	// composite identity: one positional argument per key column (D15)
+	// composite identity: one positional argument per key column (decision named-placeholders)
 	got, err := q.UserTagGet(ctx, tag.UserID, tag.Tag)
 	if err != nil || got != tag {
 		t.Errorf("UserTagGet = %+v, %v", got, err)
@@ -232,7 +232,7 @@ func TestTx(t *testing.T) {
 	}
 }
 
-// TestJSONNull pins the D13 wire format: nullable columns marshal as the
+// TestJSONNull pins the decision null-t wire format: nullable columns marshal as the
 // value or null — the JSON never shows a wrapper and never omits the key.
 func TestJSONNull(t *testing.T) {
 	ctx := context.Background()
@@ -286,7 +286,7 @@ func TestStmtCache(t *testing.T) {
 	}
 	again, err := cache.Prepare(ctx, db, userGetSQL)
 	if err != nil || again != s1 {
-		t.Errorf("second Prepare returned a different statement (%p vs %p, %v); the SQL text is the cache key (D31)", again, s1, err)
+		t.Errorf("second Prepare returned a different statement (%p vs %p, %v); the SQL text is the cache key (decision statement-cache)", again, s1, err)
 	}
 
 	// LRU eviction at capacity 2

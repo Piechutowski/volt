@@ -29,15 +29,15 @@ Roadmap slices: **v0** CRUD + runtime *(shipped 2026-07-08)* · **v1** declared 
 
 | Capability | Rails | Verdict | How / why |
 |---|---|---|---|
-| Model ↔ table naming convention | `User` ↔ `users` via inflection | `GEN(v0)` `DONE` | singular model via deterministic inflector, `[model:]` override (D10) |
+| Model ↔ table naming convention | `User` ↔ `users` via inflection | `GEN(v0)` `DONE` | singular model via deterministic inflector, `[model:]` override (decision singular-models) |
 | Schema conventions (`id`, FK naming) | convention | `DBML` | explicit in the schema; conventions are *suggested* by vet, never assumed |
 | Magic timestamp columns (`created_at`/`updated_at` auto-managed) | automatic | `NO` | hidden writes; declare the columns and a DB default / trigger instead. A TablePartial replaces the convention |
-| `new` / `create` | `User.create(...)` | `GEN(v0)` `DONE` | `UserCreate(ctx, UserCreateParams)` → row via `RETURNING` (D16) |
+| `new` / `create` | `User.create(...)` | `GEN(v0)` `DONE` | `UserCreate(ctx, UserCreateParams)` → row via `RETURNING` (decision create-params) |
 | Read: find all / by pk | `User.all`, `User.find(1)` | `GEN(v0)` `DONE` | `UserList(ctx)`, `UserGet(ctx, id)` |
 | Update | `user.update(...)` | `GEN(v0)` `DONE` | `UserUpdate(ctx, id, UserUpdateParams)` — full-row by pk; partial updates are v2 |
 | Delete / destroy | `user.destroy` | `GEN(v0)` `DONE` | `UserDelete(ctx, id)`; `destroy_all` → v2 `UserDeleteWhere` |
 | Namespaced models | Ruby modules | `GEN` | DBML schemas prefix the type (`core.users` → `CoreUser`) |
-| `save` on the object | active record pattern | `NO` | objects don't persist themselves (D14) |
+| `save` on the object | active record pattern | `NO` | objects don't persist themselves (decision values-first) |
 
 ## 2. Querying (`active_record_querying.md`)
 
@@ -54,13 +54,13 @@ Roadmap slices: **v0** CRUD + runtime *(shipped 2026-07-08)* · **v1** declared 
 | `find_or_create_by` / `create_or_find_by` | upsert-ish | `GEN(v1)` | `UserUpsert` on SQLite's native `INSERT … ON CONFLICT` — race-free, unlike Rails' select-then-insert |
 | `find_or_initialize_by` | in-memory | `HAND` | trivial two-liner over `UserGetByX` + struct literal |
 | `exists?` / `any?` / `many?` | relation predicates | `RT(v2)` `DONE` | terminals `UserExists`, `UserCount` |
-| Batches (`find_each`, `in_batches`) | cursor batching | `RT(v2)` `DONE` | keyset pagination (`UserAfter(last-seen key)`), first-class: OFFSET degrades linearly and SQLite is not a small-apps database (D34) |
+| Batches (`find_each`, `in_batches`) | cursor batching | `RT(v2)` `DONE` | keyset pagination (`UserAfter(last-seen key)`), first-class: OFFSET degrades linearly and SQLite is not a small-apps database (decision keyset-pagination) |
 
 ### Conditions
 
 | Capability | Rails | Verdict | How / why |
 |---|---|---|---|
-| Hash conditions (`where(name:)`) | typed-ish | `RT(v2)` `DONE` | `UserName.Eq(v)` — generated typed handles over generic `Column[M, T]` (D29) |
+| Hash conditions (`where(name:)`) | typed-ish | `RT(v2)` `DONE` | `UserName.Eq(v)` — generated typed handles over generic `Column[M, T]` (decision flat-handles) |
 | Array/placeholder conditions | `where("x > ?", v)` | `RT(v2)` `DONE` | `Raw("x > ?", v)` escape hatch — explicit, marked, last resort |
 | Pure string conditions | discouraged | `NO` | injection surface with no type info; use `Raw` or a `Select` block |
 | NOT / OR / AND | `where.not`, `.or` | `RT(v2)` `DONE` | `Not(...)`, `Or(...)`, `And(...)` combinators |
@@ -72,7 +72,7 @@ Roadmap slices: **v0** CRUD + runtime *(shipped 2026-07-08)* · **v1** declared 
 | Capability | Rails | Verdict | How / why |
 |---|---|---|---|
 | Ordering | `order(:created_at)` | `RT(v2)` `DONE` | `UserOrderBy(UserCreatedAt.Desc())` |
-| Limit / offset | `limit/offset` | `RT(v2)` `DONE` | generated `UserLimit(n)`/`UserOffset(n)` (D30); keyset `UserAfter` shipped with them (D34) |
+| Limit / offset | `limit/offset` | `RT(v2)` `DONE` | generated `UserLimit(n)`/`UserOffset(n)` (decision per-model-wrappers); keyset `UserAfter` shipped with them (decision keyset-pagination) |
 | Select specific fields (projection) | `select(:id, :name)` | `DBML(v1)` | typed projection needs a result type → a named `Select` element generates one. Dynamic projection is `NO` — a half-filled `User` lies about its zero values |
 | Distinct | `distinct` | `RT(v2)` `DONE` | `UserDistinct()` option |
 | Group / Having / aggregates of groups | `group/having` | `DBML(v1)` | aggregate shapes belong in declared queries where the result struct is generated |
@@ -86,9 +86,9 @@ Roadmap slices: **v0** CRUD + runtime *(shipped 2026-07-08)* · **v1** declared 
 
 | Capability | Rails | Verdict | How / why |
 |---|---|---|---|
-| Named scopes | `scope :active, ->{...}` | `DBML(v1)` + `HAND` | reusable queries = named `Select` elements; reusable *predicates* = plain Go values (`var activeUsers = UserStatus.Eq(EUserStatusActive)`) composed by hand (D28) |
+| Named scopes | `scope :active, ->{...}` | `DBML(v1)` + `HAND` | reusable queries = named `Select` elements; reusable *predicates* = plain Go values (`var activeUsers = UserStatus.Eq(EUserStatusActive)`) composed by hand (decision options-are-data) |
 | Scopes with arguments | lambdas | `DBML(v1)` | declared params: `Select active_users (since timestamp)` |
-| Default scope | implicit filter on every query | `NO` | hidden query mutation — the haunted house. Explicit or nothing (D27) |
+| Default scope | implicit filter on every query | `NO` | hidden query mutation — the haunted house. Explicit or nothing (decision non-goals) |
 | Merging of scopes | `merge` | `RT(v2)` `DONE` | predicate values compose with `And`/`Or` |
 
 ### Locking & concurrency
@@ -103,8 +103,8 @@ Roadmap slices: **v0** CRUD + runtime *(shipped 2026-07-08)* · **v1** declared 
 
 | Capability | Rails | Verdict | How / why |
 |---|---|---|---|
-| `joins` / `left_outer_joins` | symbol-based | `DBML(v1)` | `Select` elements with ref-inferred joins (D08) |
-| Association loading (`includes/preload/eager_load`) | 3 strategies | `GEN(v3)` | per-ref batched loaders (D19). Note: in embedded SQLite N+1 is a function-call loop, not a network disaster — the loaders' real wins are atomicity of one query and ergonomics (D35) |
+| `joins` / `left_outer_joins` | symbol-based | `DBML(v1)` | `Select` elements with ref-inferred joins (decision expressions-are-sqlites) |
+| Association loading (`includes/preload/eager_load`) | 3 strategies | `GEN(v3)` | per-ref batched loaders (roadmap ASSOC). In embedded SQLite N+1 is a function-call loop, not a network disaster; the loaders' real wins are atomicity of one query and ergonomics |
 | `strict_loading` | raises on lazy access | `NO` | there is no lazy access to guard against — N+1-by-accident is impossible by construction |
 
 ## 3. Associations (`association_basics.md`)
@@ -121,14 +121,14 @@ Roadmap slices: **v0** CRUD + runtime *(shipped 2026-07-08)* · **v1** declared 
 | Composite-pk associations | query_constraints | `GEN(v3)` | row-value `IN ((a,b),…)` — SQLite supports it |
 | `dependent:` destroy/delete | app-level cascade | `DDL` | `ref [delete: cascade]` → real `ON DELETE CASCADE`, already generated. App-level cascade callbacks: `NO` |
 | Counter cache | cached child count | `NO` | `PostCommentsCount` is one indexed query; a DB trigger if it ever matters |
-| Inverse-of / association caching | object-graph identity | `NO` | no object graph (D14) |
-| Association callbacks / extensions | hooks on collections | `NO` | callbacks are a non-goal (D27) |
+| Inverse-of / association caching | object-graph identity | `NO` | no object graph (decision values-first) |
+| Association callbacks / extensions | hooks on collections | `NO` | callbacks are a non-goal (decision non-goals) |
 | Single-table inheritance | `type` column magic | `NO` | Go has no inheritance; model explicitly |
 | Delegated types | STI successor | `NO` | same; the polymorphic pattern (`LATER`) covers the storage shape |
 
 ## 4. Validations (`active_record_validations.md`)
 
-The stance (from [`model-layer.md`](../model-layer.md)): shape → type
+The stance (from [`model-layer.md`](model-layer.md)): shape → type
 system, invariants → hand-written methods, last resort → DB constraints.
 I generate the first and third; the middle is yours.
 
@@ -136,10 +136,10 @@ I generate the first and third; the middle is yours.
 |---|---|---|---|
 | `presence` | validator | `DDL` `DONE` | `not null` |
 | `uniqueness` | SELECT-then-INSERT (racy!) | `DDL` `DONE` | real `UNIQUE` constraint — strictly stronger than Rails' |
-| `inclusion` | validator | `GEN` `DONE` | enum types; DB `CHECK` opt-in (D12) |
+| `inclusion` | validator | `GEN` `DONE` | enum types with a DB `CHECK (col IN …)` (spec Appendix B) |
 | `length` / `format` / `numericality` / `comparison` | validators | `LATER` | candidates for Volt schema settings compiling to `CHECK`s and/or a generated `Validate()`; not scheduled |
 | `acceptance` / `confirmation` | form-layer | `NO` | HTTP-form concerns, not model concerns |
-| Custom validators / contexts / conditional validation | framework | `HAND` | `func (u User) Validate() error` in a sibling file (D18) |
+| Custom validators / contexts / conditional validation | framework | `HAND` | `func (u User) Validate() error` in a sibling file (decision sibling-files) |
 | `errors` object & rich error API | framework | `HAND`/`LATER` | plain Go errors first; a tiny multi-error type in the runtime if demand appears |
 | Skipping validations | `save(validate: false)` | `NO` | nothing implicit to skip |
 
@@ -153,15 +153,15 @@ I generate the first and third; the middle is yours.
 
 | Capability | Rails | Verdict | How / why |
 |---|---|---|---|
-| Create/drop table, add/remove/change column, indexes, FKs | hand-written `change` | `GEN(v4)` | computed diff: current DBML vs last-migrated snapshot (D20) |
+| Create/drop table, add/remove/change column, indexes, FKs | hand-written `change` | `GEN(v4)` | computed diff: current DBML vs last-migrated snapshot |
 | Rename column/table without data loss | `rename_column` | `DBML(v4)` | `[was: 'old']` provenance hint — the one thing a structural diff can't infer |
 | Reversibility (`change`/`up`/`down`) | assumed | `GEN(v4)` | down generated only when mechanically safe; otherwise marked irreversible — the reversibility lie, refused |
-| Versioning + `schema_migrations` | ordered log | `GEN(v4)` | ledger `0001_…` + table + schema content hash (D21) |
+| Versioning + `schema_migrations` | ordered log | `GEN(v4)` | ledger `0001_…` + table + schema content hash |
 | Schema dump (`schema.rb`) | derived snapshot | `NO` | unnecessary by construction — the DBML file *is* the schema statement |
 | Data migrations | discouraged mixing | `GEN(v4)` | separate ledger entry kind (plain SQL), never mixed into structural steps |
 | Seeds | `db/seed.rb` | `DONE` | `records` → generated `INSERT`s |
-| Running/rollback/status CLI | `rails db:*` | `GEN(v4)` | `dbml migrate up/down/status`, embeddable in the user's binary (D04/D23) |
-| SQLite structural change (the twelve-step rebuild) | n/a (Rails hides per-adapter) | `GEN(v4)` | owned: create-new + `INSERT…SELECT` + drop + rename in the pragma bracket (D22) |
+| Running/rollback/status CLI | `rails db:*` | `GEN(v4)` | `dbml migrate up/down/status`, embeddable in the user's binary (decision library-first) |
+| SQLite structural change (the twelve-step rebuild) | n/a (Rails hides per-adapter) | `GEN(v4)` | owned: create-new + `INSERT…SELECT` + drop + rename in the pragma bracket |
 | Multiple databases / sharding | Rails 6+ | `NO` | SQLite-first; "multiple databases" in SQLite is `ATTACH`, revisit if ever needed |
 
 ## 7. Active Model (`active_model_basics.md`)
@@ -170,7 +170,7 @@ I generate the first and third; the middle is yours.
 |---|---|---|---|
 | Table-less models, attribute API | modules | `NO` | that's just a Go struct; the language starts where Rails needs a framework |
 | Dirty tracking | changed-attribute API | `NO` | value semantics make "changed since load" meaningless; compare two values if you care |
-| Serialization | `as_json` etc. | `DONE` | `json` tags on generated structs; `Null[T]` marshals value-or-null (D13) |
+| Serialization | `as_json` etc. | `DONE` | `json` tags on generated structs; `Null[T]` marshals value-or-null (decision null-t) |
 | SecurePassword | bcrypt sugar | `HAND` | a few lines with `golang.org/x/crypto/argon2` (argon2id — bcrypt is dated) in your own file |
 | Naming / translation / lint tests | framework glue | `NO` | framework-internal machinery with no Go counterpart needed |
 
@@ -195,11 +195,11 @@ I generate the first and third; the middle is yours.
 | `context.Context` on every call | `GEN(v0)` `DONE` | first parameter, always |
 | Works inside and outside transactions | `GEN(v0)` `DONE` | `Queries` over `DBTX` (satisfied by `*sql.DB` and `*sql.Tx`), `WithTx` |
 | Connection setup & SQLite pragmas | `RT(v0)` `DONE` | `Open(driver, dsn)` helper: WAL, `busy_timeout`, `foreign_keys=ON` — the three everyone forgets |
-| SQL injection safety | `GEN` all slices | named placeholders (`:email`) everywhere, bound via `sql.Named` (D15); string interpolation never emitted |
+| SQL injection safety | `GEN` all slices | named placeholders (`:email`) everywhere, bound via `sql.Named` (decision named-placeholders); string interpolation never emitted |
 | Query logging / instrumentation | `LATER` | optional runtime hook (`func(sql string, args []any, d time.Duration)`) |
-| `ErrNotFound` semantics | `GEN(v0)` `DONE` | `rt.ErrNotFound` *is* `sql.ErrNoRows` — one sentinel, `errors.Is`-compatible both ways (D36) |
-| Prepared-statement caching | `RT(v2)` `DONE` | deterministic rendering makes SQL text the cache key (D31); wired via `Queries.WithCache` |
-| End-user report engine (arbitrary runtime queries) | `LATER` | generated schema *catalog* + quarantined interpreter returning `[]map[string]any` (D33) |
+| `ErrNotFound` semantics | `GEN(v0)` `DONE` | `rt.ErrNotFound` *is* `sql.ErrNoRows` — one sentinel, `errors.Is`-compatible both ways (decision crud-miss-semantics) |
+| Prepared-statement caching | `RT(v2)` `DONE` | deterministic rendering makes SQL text the cache key (decision statement-cache); wired via `Queries.WithCache` |
+| End-user report engine (arbitrary runtime queries) | `LATER` | generated schema *catalog* + quarantined interpreter returning `[]map[string]any` |
 
 ---
 

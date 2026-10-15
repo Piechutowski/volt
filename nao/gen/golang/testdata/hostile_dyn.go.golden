@@ -2,7 +2,7 @@
 //
 // The dynamic query layer over the models in nao_models.go: typed
 // column handles, per-model option wrappers, and predicate-driven
-// terminals — see docs/decisions.md D28-D34.
+// terminals — see docs/decisions.md, Query layer.
 
 package models
 
@@ -13,24 +13,24 @@ import (
 )
 
 // userTableSQL and userColumnsSQL are the fixed shape of User's
-// dynamic statements; the interpreter renders everything else (D28).
+// dynamic statements; the interpreter renders everything else (decision options-are-data).
 const (
 	userTableSQL   = `"users"`
 	userColumnsSQL = `"id"`
 )
 
-// Typed column handles of User (D29): inert predicate, order and
-// assignment builders for the dynamic query layer (D28). A predicate
+// Typed column handles of User (decision flat-handles): inert predicate, order and
+// assignment builders for the dynamic query layer (decision options-are-data). A predicate
 // built here can only enter User queries; mixing models is a compile
 // error.
 var (
 	UserID = rt.Column[User, int64]{Name: "id"}
 )
 
-// UserLimit caps how many rows UserQuery returns (D30).
+// UserLimit caps how many rows UserQuery returns (decision per-model-wrappers).
 func UserLimit(n int) rt.Opt[User] { return rt.Limit[User](n) }
 
-// UserOffset skips n rows; keyset pagination (UserAfter) scales better (D34).
+// UserOffset skips n rows; keyset pagination (UserAfter) scales better (decision keyset-pagination).
 func UserOffset(n int) rt.Opt[User] { return rt.Offset[User](n) }
 
 // UserDistinct deduplicates the rows UserQuery returns.
@@ -41,7 +41,7 @@ func UserDistinct() rt.Opt[User] { return rt.Distinct[User]() }
 func UserOrderBy(terms ...rt.Order[User]) rt.Opt[User] { return rt.OrderBy(terms...) }
 
 // UserAfter resumes strictly after the row with the given key — keyset
-// pagination (D34): one value per UserOrderBy term, in the same order.
+// pagination (decision keyset-pagination): one value per UserOrderBy term, in the same order.
 func UserAfter(key ...any) rt.Opt[User] { return rt.After[User](key...) }
 
 // UserSet collects the typed assignments of a UserUpdateWhere, built
@@ -101,7 +101,7 @@ func (q *Queries) UserExists(ctx context.Context, preds ...rt.Pred[User]) (bool,
 
 // UserDeleteWhere removes every users row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
-// full-table delete (D42).
+// full-table delete (decision positional-placeholders).
 func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
 	query, args, err := rt.DeleteRender(userTableSQL, preds)
 	if err != nil {
@@ -116,8 +116,8 @@ func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (
 
 // UserUpdateWhere applies the typed assignments (UserSet) to every users
 // row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer (D32). No effective predicate
-// is an error, never a full-table rewrite (D42).
+// partial update of the dynamic layer (decision shape-rule). No effective predicate
+// is an error, never a full-table rewrite (decision positional-placeholders).
 func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], preds ...rt.Pred[User]) (int64, error) {
 	query, args, err := rt.UpdateRender(userTableSQL, set, preds)
 	if err != nil {
@@ -131,14 +131,14 @@ func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], pr
 }
 
 // coreUserTableSQL and coreUserColumnsSQL are the fixed shape of CoreUser's
-// dynamic statements; the interpreter renders everything else (D28).
+// dynamic statements; the interpreter renders everything else (decision options-are-data).
 const (
 	coreUserTableSQL   = `"core_users"`
 	coreUserColumnsSQL = `"id", "api_key", "homepage_url", "http_status", "full name", "precision_value", "balance", "kind", "type", "func"`
 )
 
-// Typed column handles of CoreUser (D29): inert predicate, order and
-// assignment builders for the dynamic query layer (D28). A predicate
+// Typed column handles of CoreUser (decision flat-handles): inert predicate, order and
+// assignment builders for the dynamic query layer (decision options-are-data). A predicate
 // built here can only enter CoreUser queries; mixing models is a compile
 // error.
 var (
@@ -154,10 +154,10 @@ var (
 	CoreUserFunc           = rt.NullColumn[CoreUser, int32]{Column: rt.Column[CoreUser, int32]{Name: "func"}}
 )
 
-// CoreUserLimit caps how many rows CoreUserQuery returns (D30).
+// CoreUserLimit caps how many rows CoreUserQuery returns (decision per-model-wrappers).
 func CoreUserLimit(n int) rt.Opt[CoreUser] { return rt.Limit[CoreUser](n) }
 
-// CoreUserOffset skips n rows; keyset pagination (CoreUserAfter) scales better (D34).
+// CoreUserOffset skips n rows; keyset pagination (CoreUserAfter) scales better (decision keyset-pagination).
 func CoreUserOffset(n int) rt.Opt[CoreUser] { return rt.Offset[CoreUser](n) }
 
 // CoreUserDistinct deduplicates the rows CoreUserQuery returns.
@@ -168,7 +168,7 @@ func CoreUserDistinct() rt.Opt[CoreUser] { return rt.Distinct[CoreUser]() }
 func CoreUserOrderBy(terms ...rt.Order[CoreUser]) rt.Opt[CoreUser] { return rt.OrderBy(terms...) }
 
 // CoreUserAfter resumes strictly after the row with the given key — keyset
-// pagination (D34): one value per CoreUserOrderBy term, in the same order.
+// pagination (decision keyset-pagination): one value per CoreUserOrderBy term, in the same order.
 func CoreUserAfter(key ...any) rt.Opt[CoreUser] { return rt.After[CoreUser](key...) }
 
 // CoreUserSet collects the typed assignments of a CoreUserUpdateWhere, built
@@ -228,7 +228,7 @@ func (q *Queries) CoreUserExists(ctx context.Context, preds ...rt.Pred[CoreUser]
 
 // CoreUserDeleteWhere removes every core.users row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
-// full-table delete (D42).
+// full-table delete (decision positional-placeholders).
 func (q *Queries) CoreUserDeleteWhere(ctx context.Context, preds ...rt.Pred[CoreUser]) (int64, error) {
 	query, args, err := rt.DeleteRender(coreUserTableSQL, preds)
 	if err != nil {
@@ -243,8 +243,8 @@ func (q *Queries) CoreUserDeleteWhere(ctx context.Context, preds ...rt.Pred[Core
 
 // CoreUserUpdateWhere applies the typed assignments (CoreUserSet) to every core.users
 // row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer (D32). No effective predicate
-// is an error, never a full-table rewrite (D42).
+// partial update of the dynamic layer (decision shape-rule). No effective predicate
+// is an error, never a full-table rewrite (decision positional-placeholders).
 func (q *Queries) CoreUserUpdateWhere(ctx context.Context, set []rt.Assign[CoreUser], preds ...rt.Pred[CoreUser]) (int64, error) {
 	query, args, err := rt.UpdateRender(coreUserTableSQL, set, preds)
 	if err != nil {
@@ -258,14 +258,14 @@ func (q *Queries) CoreUserUpdateWhere(ctx context.Context, set []rt.Assign[CoreU
 }
 
 // x2faCodeTableSQL and x2faCodeColumnsSQL are the fixed shape of X2faCode's
-// dynamic statements; the interpreter renders everything else (D28).
+// dynamic statements; the interpreter renders everything else (decision options-are-data).
 const (
 	x2faCodeTableSQL   = `"2fa_codes"`
 	x2faCodeColumnsSQL = `"code", "user_id", "expires_at"`
 )
 
-// Typed column handles of X2faCode (D29): inert predicate, order and
-// assignment builders for the dynamic query layer (D28). A predicate
+// Typed column handles of X2faCode (decision flat-handles): inert predicate, order and
+// assignment builders for the dynamic query layer (decision options-are-data). A predicate
 // built here can only enter X2faCode queries; mixing models is a compile
 // error.
 var (
@@ -274,10 +274,10 @@ var (
 	X2faCodeExpiresAt = rt.Column[X2faCode, time.Time]{Name: "expires_at"}
 )
 
-// X2faCodeLimit caps how many rows X2faCodeQuery returns (D30).
+// X2faCodeLimit caps how many rows X2faCodeQuery returns (decision per-model-wrappers).
 func X2faCodeLimit(n int) rt.Opt[X2faCode] { return rt.Limit[X2faCode](n) }
 
-// X2faCodeOffset skips n rows; keyset pagination (X2faCodeAfter) scales better (D34).
+// X2faCodeOffset skips n rows; keyset pagination (X2faCodeAfter) scales better (decision keyset-pagination).
 func X2faCodeOffset(n int) rt.Opt[X2faCode] { return rt.Offset[X2faCode](n) }
 
 // X2faCodeDistinct deduplicates the rows X2faCodeQuery returns.
@@ -288,7 +288,7 @@ func X2faCodeDistinct() rt.Opt[X2faCode] { return rt.Distinct[X2faCode]() }
 func X2faCodeOrderBy(terms ...rt.Order[X2faCode]) rt.Opt[X2faCode] { return rt.OrderBy(terms...) }
 
 // X2faCodeAfter resumes strictly after the row with the given key — keyset
-// pagination (D34): one value per X2faCodeOrderBy term, in the same order.
+// pagination (decision keyset-pagination): one value per X2faCodeOrderBy term, in the same order.
 func X2faCodeAfter(key ...any) rt.Opt[X2faCode] { return rt.After[X2faCode](key...) }
 
 // X2faCodeSet collects the typed assignments of a X2faCodeUpdateWhere, built
@@ -348,7 +348,7 @@ func (q *Queries) X2faCodeExists(ctx context.Context, preds ...rt.Pred[X2faCode]
 
 // X2faCodeDeleteWhere removes every 2fa_codes row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
-// full-table delete (D42).
+// full-table delete (decision positional-placeholders).
 func (q *Queries) X2faCodeDeleteWhere(ctx context.Context, preds ...rt.Pred[X2faCode]) (int64, error) {
 	query, args, err := rt.DeleteRender(x2faCodeTableSQL, preds)
 	if err != nil {
@@ -363,8 +363,8 @@ func (q *Queries) X2faCodeDeleteWhere(ctx context.Context, preds ...rt.Pred[X2fa
 
 // X2faCodeUpdateWhere applies the typed assignments (X2faCodeSet) to every 2fa_codes
 // row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer (D32). No effective predicate
-// is an error, never a full-table rewrite (D42).
+// partial update of the dynamic layer (decision shape-rule). No effective predicate
+// is an error, never a full-table rewrite (decision positional-placeholders).
 func (q *Queries) X2faCodeUpdateWhere(ctx context.Context, set []rt.Assign[X2faCode], preds ...rt.Pred[X2faCode]) (int64, error) {
 	query, args, err := rt.UpdateRender(x2faCodeTableSQL, set, preds)
 	if err != nil {

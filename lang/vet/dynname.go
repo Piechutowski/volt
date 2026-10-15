@@ -1,10 +1,10 @@
-// Dynamic-layer name analyzer (DYN-7, D28-D30): distinct DBML
+// Dynamic-layer name analyzer (DYN-7, decisions options-are-data, flat-handles, per-model-wrappers): distinct DBML
 // declarations can demand one Go name; this rule surfaces the
 // collision at vet time with both origins named.
 package vet
 
 // dynNameFold asks the plan, whose name base holds every model's
-// names across plans (D99), for the collisions alone.
+// names across plans (decision check-by-declaration), for the collisions alone.
 type dynNameFold struct{ meta }
 
 var dynName = &dynNameFold{meta{

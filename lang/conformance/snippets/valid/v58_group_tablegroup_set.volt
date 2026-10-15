@@ -1,4 +1,4 @@
-// spec: §V9.2, §V9.3, §V11.2 — a TableGroup is a set: a group term, a select target, subtracted as a parenthesized set (D65)
+// spec: §V9.2, §V9.3, §V11.2 — a TableGroup is a set: a group term, a select target, subtracted as a parenthesized set (decision set-difference)
 package db
 
 Table ms_revenue {

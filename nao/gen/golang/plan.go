@@ -1,4 +1,4 @@
-// The shared naming plan (decision D74): one immutable Plan per checked
+// The shared naming plan (decision one-naming-plan): one immutable Plan per checked
 // package, built once after the schema pass and read by the Volt
 // checker, the generators, vet and the language server.
 package golang
@@ -12,7 +12,7 @@ import (
 )
 
 // Plan is a checked package's naming plan: every Go and SQL name of
-// every table and column, decided once (D09, D10, D13, D15-D17), plus
+// every table and column, decided once (decisions subject-first-naming, singular-models, null-t, named-placeholders, create-params, keyless-tables), plus
 // the generated CRUD method table indexed by method name. A Plan is
 // immutable after PlanBuild and safe to share between goroutines.
 type Plan struct {
@@ -44,11 +44,11 @@ func PlanBuild(f *ast.File, info *check.Info) *Plan {
 
 // PlanMemo remembers a package's table models across builds of its
 // plan: a table that is the checked object it was, under the same
-// enum types, is the same model (D84). The zero value is ready; a
+// enum types, is the same model (decision check-by-declaration). The zero value is ready; a
 // PlanMemo belongs to one package.
 type PlanMemo struct {
 	prev, next map[*check.TableInfo]*memoModel
-	base       *nameBase // the models' names, updated for the models that changed (D99)
+	base       *nameBase // the models' names, updated for the models that changed (decision check-by-declaration)
 	// Hits and Misses count the models reused and built by the last
 	// PlanBuildMemo.
 	Hits, Misses int
@@ -57,7 +57,7 @@ type PlanMemo struct {
 type memoModel struct {
 	tm      *tableModel
 	imports map[string]bool
-	enums   []enumType // the enum types the model was built with, sorted by key (D91)
+	enums   []enumType // the enum types the model was built with, sorted by key (decision keys-are-inputs)
 }
 
 // PlanBuildMemo is PlanBuild with a memo of the package's earlier
@@ -126,7 +126,7 @@ func (pl *Plan) SelectRowName(fn SelectFn) (string, error) {
 
 // ModelRef is the identity of a table's model: the same value across
 // plans exactly when the model was reused from the plan's memo, so a
-// memo downstream can key on it (D84). nil when the plan has no such
+// memo downstream can key on it (decision check-by-declaration). nil when the plan has no such
 // table.
 func (pl *Plan) ModelRef(tableKey string) any {
 	t, err := pl.table(tableKey)
@@ -150,7 +150,7 @@ func (pl *Plan) table(key string) (*tableModel, error) {
 // CRUDMethods lists the default CRUD methods the query generator emits
 // for one table, with the same existence rules it applies: Get, Update
 // and Delete need a primary key, Update needs a non-key column, Create
-// takes a params struct only when a column is caller-supplied (D16).
+// takes a params struct only when a column is caller-supplied (decision create-params).
 func (pl *Plan) CRUDMethods(tableKey string) (model string, methods []CRUDMethod, err error) {
 	t, err := pl.table(tableKey)
 	if err != nil {
@@ -219,7 +219,7 @@ func (pl *Plan) ModelFields(tableKey string) (model string, fields []FieldSig, e
 	return t.model, t.sigs, nil
 }
 
-// fieldSigsBuild is the model's field signatures, built with it (D99).
+// fieldSigsBuild is the model's field signatures, built with it (decision check-by-declaration).
 func fieldSigsBuild(t *tableModel) []FieldSig {
 	sigs := make([]FieldSig, 0, len(t.fields))
 	for _, fp := range t.fields {
@@ -277,7 +277,7 @@ func (pl *Plan) DynNameCollisions() []NameCollision {
 		return nil
 	}
 	// The report is the one a walk over every minted name in minting
-	// order produces, computed from the collisions alone (D99, D104).
+	// order produces, computed from the collisions alone (decisions check-by-declaration, vet-by-declaration).
 	seen := map[string]dynOrigin{"Queries": {kind: dynQueries}}
 	var out []NameCollision
 	for _, e := range pl.info.Enums {
@@ -386,7 +386,7 @@ func dynOriginOf(o *nameOrigin) dynOrigin {
 // Names is the scope of package-level Go identifiers a package's
 // generated files mint (§V11.7): models, params structs, dynamic column
 // handles and option wrappers, enum types, the Queries handle and its
-// constructor. It is read in layers, last writer first (D99).
+// constructor. It is read in layers, last writer first (decision check-by-declaration).
 type Names struct {
 	base  *nameBase            // the models' names: read here, written by the plan build
 	enums map[string]*ast.Enum // enum type name -> declaration
@@ -411,7 +411,7 @@ type nameOrigin struct {
 	idx   int // position in the model's list: a later name of the same model wins
 	table *tableModel
 	field *fieldPlan
-	// dyn says whether the dynamic layer mints this name (D30), rank
+	// dyn says whether the dynamic layer mints this name (decision per-model-wrappers), rank
 	// where it falls in the model's minting order.
 	dyn  bool
 	rank int
@@ -453,7 +453,7 @@ func (o *nameOrigin) describe() string {
 }
 
 // nameBase is the models' names of one package, kept across plans, so a
-// plan with one model changed touches that model's names alone (D99).
+// plan with one model changed touches that model's names alone (decision check-by-declaration).
 type nameBase struct {
 	origins map[string]nameSlot
 	models  map[*tableModel]bool

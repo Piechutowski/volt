@@ -2,7 +2,7 @@
 
 *The philosophy behind Volt's data layer. What nao is and how it
 answers this analysis: [`nao.md`](nao.md); the per-capability audit
-derived from it: [`reference/orm-matrix.md`](reference/orm-matrix.md).*
+derived from it: [`orm-matrix.md`](orm-matrix.md).*
 
 ## Why M is the hard one
 

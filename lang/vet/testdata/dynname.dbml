@@ -1,6 +1,6 @@
 // analyzers: dynname
 // The dynamic query layer mints package-scope Go names by concatenation
-// (D29-D30): Model+Field for column handles, Model+Limit/Offset/... for
+// (decisions flat-handles, per-model-wrappers): Model+Field for column handles, Model+Limit/Offset/... for
 // the option wrappers. Distinct declarations can demand the same Go
 // name; generation refuses, this rule names both origins.
 
@@ -11,7 +11,7 @@ Table users {
 
 // good: the E prefix keeps enum types out of the handle namespace —
 // orders.status mints the handle OrderStatus, the enum the type
-// EOrderStatus (D11, D29)
+// EOrderStatus (decisions e-prefixed-enums, flat-handles)
 Enum order_status {
   pending
 }

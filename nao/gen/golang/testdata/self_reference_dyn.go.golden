@@ -2,7 +2,7 @@
 //
 // The dynamic query layer over the models in nao_models.go: typed
 // column handles, per-model option wrappers, and predicate-driven
-// terminals — see docs/decisions.md D28-D34.
+// terminals — see docs/decisions.md, Query layer.
 
 package models
 
@@ -12,14 +12,14 @@ import (
 )
 
 // employeeTableSQL and employeeColumnsSQL are the fixed shape of Employee's
-// dynamic statements; the interpreter renders everything else (D28).
+// dynamic statements; the interpreter renders everything else (decision options-are-data).
 const (
 	employeeTableSQL   = `"employees"`
 	employeeColumnsSQL = `"id", "full_name", "manager_id"`
 )
 
-// Typed column handles of Employee (D29): inert predicate, order and
-// assignment builders for the dynamic query layer (D28). A predicate
+// Typed column handles of Employee (decision flat-handles): inert predicate, order and
+// assignment builders for the dynamic query layer (decision options-are-data). A predicate
 // built here can only enter Employee queries; mixing models is a compile
 // error.
 var (
@@ -28,10 +28,10 @@ var (
 	EmployeeManagerID = rt.NullColumn[Employee, int64]{Column: rt.Column[Employee, int64]{Name: "manager_id"}}
 )
 
-// EmployeeLimit caps how many rows EmployeeQuery returns (D30).
+// EmployeeLimit caps how many rows EmployeeQuery returns (decision per-model-wrappers).
 func EmployeeLimit(n int) rt.Opt[Employee] { return rt.Limit[Employee](n) }
 
-// EmployeeOffset skips n rows; keyset pagination (EmployeeAfter) scales better (D34).
+// EmployeeOffset skips n rows; keyset pagination (EmployeeAfter) scales better (decision keyset-pagination).
 func EmployeeOffset(n int) rt.Opt[Employee] { return rt.Offset[Employee](n) }
 
 // EmployeeDistinct deduplicates the rows EmployeeQuery returns.
@@ -42,7 +42,7 @@ func EmployeeDistinct() rt.Opt[Employee] { return rt.Distinct[Employee]() }
 func EmployeeOrderBy(terms ...rt.Order[Employee]) rt.Opt[Employee] { return rt.OrderBy(terms...) }
 
 // EmployeeAfter resumes strictly after the row with the given key — keyset
-// pagination (D34): one value per EmployeeOrderBy term, in the same order.
+// pagination (decision keyset-pagination): one value per EmployeeOrderBy term, in the same order.
 func EmployeeAfter(key ...any) rt.Opt[Employee] { return rt.After[Employee](key...) }
 
 // EmployeeSet collects the typed assignments of a EmployeeUpdateWhere, built
@@ -102,7 +102,7 @@ func (q *Queries) EmployeeExists(ctx context.Context, preds ...rt.Pred[Employee]
 
 // EmployeeDeleteWhere removes every employees row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
-// full-table delete (D42).
+// full-table delete (decision positional-placeholders).
 func (q *Queries) EmployeeDeleteWhere(ctx context.Context, preds ...rt.Pred[Employee]) (int64, error) {
 	query, args, err := rt.DeleteRender(employeeTableSQL, preds)
 	if err != nil {
@@ -117,8 +117,8 @@ func (q *Queries) EmployeeDeleteWhere(ctx context.Context, preds ...rt.Pred[Empl
 
 // EmployeeUpdateWhere applies the typed assignments (EmployeeSet) to every employees
 // row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer (D32). No effective predicate
-// is an error, never a full-table rewrite (D42).
+// partial update of the dynamic layer (decision shape-rule). No effective predicate
+// is an error, never a full-table rewrite (decision positional-placeholders).
 func (q *Queries) EmployeeUpdateWhere(ctx context.Context, set []rt.Assign[Employee], preds ...rt.Pred[Employee]) (int64, error) {
 	query, args, err := rt.UpdateRender(employeeTableSQL, set, preds)
 	if err != nil {

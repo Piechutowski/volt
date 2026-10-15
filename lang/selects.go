@@ -91,7 +91,7 @@ func (c *checker) dataQueries(pkg *Package) {
 	c.predRefCycles(pkg)
 
 	// §V11.7: minted row-type names share the package scope with every
-	// generated type, claimed from the plan (D74).
+	// generated type, claimed from the plan (decision one-naming-plan).
 	minted := pkg.plan.Names()
 
 	var memo *selectsMemo
@@ -124,7 +124,7 @@ func (c *checker) dataQueries(pkg *Package) {
 }
 
 // nameLookup is one question a select's check asked the generated-name
-// scope and the answer it got (D86, D93).
+// scope and the answer it got (decision pure-memos).
 type nameLookup struct {
 	name, desc string
 	dup        bool
@@ -135,7 +135,7 @@ type nameLookup struct {
 type nameAdd struct{ name, desc string }
 
 // selectsMemo remembers a package's checked selects, each by the
-// inputs of selectCheck (D86): its declaration, its members and their
+// inputs of selectCheck (decision pure-memos): its declaration, its members and their
 // models, the predicates it names, and the generated-name scope's
 // answers to the lookups it made.
 type selectsMemo struct {
@@ -260,7 +260,7 @@ type nameScope interface {
 }
 
 // selectLowering is one select's check as a pure function of its
-// inputs (D86): the declaration, its resolved members and their
+// inputs (decision pure-memos): the declaration, its resolved members and their
 // models in the same order, the predicates its where clause names
 // (transitively, nil where a name resolves to none), and the scope.
 // It accumulates only what it returns: the scope's answers to what it
@@ -305,7 +305,7 @@ type selectMember struct {
 	member *check.TableInfo
 }
 
-// selectIndex builds the package's method-name index once (D81). The
+// selectIndex builds the package's method-name index once (decision indexed-lookups). The
 // first member minting a name owns it (§V11.6).
 func (p *Package) selectIndex() {
 	p.selectByMethod = make(map[string]selectMember, len(p.Selects))
@@ -459,7 +459,7 @@ func (c *checker) predRefCycles(pkg *Package) {
 		state[name] = 2
 	}
 	// In name order, so the member of a cycle that is reported, and
-	// where, is a function of the input (D101).
+	// where, is a function of the input (decision invalid-input-goldens).
 	names := make([]string, 0, len(pkg.Preds))
 	for name := range pkg.Preds {
 		names = append(names, name)
@@ -1056,7 +1056,7 @@ func (e *selectEnv) inCheck(x *ast.PredIn) string {
 	}
 	if x.List != nil {
 		// A list parameter binds as one JSON array, unpacked by json_each
-		// (§V10.3, §V11.6, D66); time columns are excluded, JSON having
+		// (§V10.3, §V11.6, decision list-parameters); time columns are excluded, JSON having
 		// no time literal.
 		if b.class == classTime {
 			e.errorf(x.Col.Pos(), "column %q (%s) cannot take a list parameter: JSON carries no date/time value (§V10.3)", b.name, b.goType)

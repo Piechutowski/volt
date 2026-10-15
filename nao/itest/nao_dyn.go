@@ -2,7 +2,7 @@
 //
 // The dynamic query layer over the models in nao_models.go: typed
 // column handles, per-model option wrappers, and predicate-driven
-// terminals — see docs/decisions.md D28-D34.
+// terminals — see docs/decisions.md, Query layer.
 
 package itest
 
@@ -13,14 +13,14 @@ import (
 )
 
 // userTableSQL and userColumnsSQL are the fixed shape of User's
-// dynamic statements; the interpreter renders everything else (D28).
+// dynamic statements; the interpreter renders everything else (decision options-are-data).
 const (
 	userTableSQL   = `"users"`
 	userColumnsSQL = `"id", "email", "name", "bio", "created_at"`
 )
 
-// Typed column handles of User (D29): inert predicate, order and
-// assignment builders for the dynamic query layer (D28). A predicate
+// Typed column handles of User (decision flat-handles): inert predicate, order and
+// assignment builders for the dynamic query layer (decision options-are-data). A predicate
 // built here can only enter User queries; mixing models is a compile
 // error.
 var (
@@ -31,10 +31,10 @@ var (
 	UserCreatedAt = rt.Column[User, time.Time]{Name: "created_at"}
 )
 
-// UserLimit caps how many rows UserQuery returns (D30).
+// UserLimit caps how many rows UserQuery returns (decision per-model-wrappers).
 func UserLimit(n int) rt.Opt[User] { return rt.Limit[User](n) }
 
-// UserOffset skips n rows; keyset pagination (UserAfter) scales better (D34).
+// UserOffset skips n rows; keyset pagination (UserAfter) scales better (decision keyset-pagination).
 func UserOffset(n int) rt.Opt[User] { return rt.Offset[User](n) }
 
 // UserDistinct deduplicates the rows UserQuery returns.
@@ -45,7 +45,7 @@ func UserDistinct() rt.Opt[User] { return rt.Distinct[User]() }
 func UserOrderBy(terms ...rt.Order[User]) rt.Opt[User] { return rt.OrderBy(terms...) }
 
 // UserAfter resumes strictly after the row with the given key — keyset
-// pagination (D34): one value per UserOrderBy term, in the same order.
+// pagination (decision keyset-pagination): one value per UserOrderBy term, in the same order.
 func UserAfter(key ...any) rt.Opt[User] { return rt.After[User](key...) }
 
 // UserSet collects the typed assignments of a UserUpdateWhere, built
@@ -105,7 +105,7 @@ func (q *Queries) UserExists(ctx context.Context, preds ...rt.Pred[User]) (bool,
 
 // UserDeleteWhere removes every users row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
-// full-table delete (D42).
+// full-table delete (decision positional-placeholders).
 func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
 	query, args, err := rt.DeleteRender(userTableSQL, preds)
 	if err != nil {
@@ -120,8 +120,8 @@ func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (
 
 // UserUpdateWhere applies the typed assignments (UserSet) to every users
 // row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer (D32). No effective predicate
-// is an error, never a full-table rewrite (D42).
+// partial update of the dynamic layer (decision shape-rule). No effective predicate
+// is an error, never a full-table rewrite (decision positional-placeholders).
 func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], preds ...rt.Pred[User]) (int64, error) {
 	query, args, err := rt.UpdateRender(userTableSQL, set, preds)
 	if err != nil {
@@ -135,14 +135,14 @@ func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], pr
 }
 
 // orderTableSQL and orderColumnsSQL are the fixed shape of Order's
-// dynamic statements; the interpreter renders everything else (D28).
+// dynamic statements; the interpreter renders everything else (decision options-are-data).
 const (
 	orderTableSQL   = `"orders"`
 	orderColumnsSQL = `"id", "user_id", "status", "total", "placed_at"`
 )
 
-// Typed column handles of Order (D29): inert predicate, order and
-// assignment builders for the dynamic query layer (D28). A predicate
+// Typed column handles of Order (decision flat-handles): inert predicate, order and
+// assignment builders for the dynamic query layer (decision options-are-data). A predicate
 // built here can only enter Order queries; mixing models is a compile
 // error.
 var (
@@ -153,10 +153,10 @@ var (
 	OrderPlacedAt = rt.NullColumn[Order, time.Time]{Column: rt.Column[Order, time.Time]{Name: "placed_at"}}
 )
 
-// OrderLimit caps how many rows OrderQuery returns (D30).
+// OrderLimit caps how many rows OrderQuery returns (decision per-model-wrappers).
 func OrderLimit(n int) rt.Opt[Order] { return rt.Limit[Order](n) }
 
-// OrderOffset skips n rows; keyset pagination (OrderAfter) scales better (D34).
+// OrderOffset skips n rows; keyset pagination (OrderAfter) scales better (decision keyset-pagination).
 func OrderOffset(n int) rt.Opt[Order] { return rt.Offset[Order](n) }
 
 // OrderDistinct deduplicates the rows OrderQuery returns.
@@ -167,7 +167,7 @@ func OrderDistinct() rt.Opt[Order] { return rt.Distinct[Order]() }
 func OrderOrderBy(terms ...rt.Order[Order]) rt.Opt[Order] { return rt.OrderBy(terms...) }
 
 // OrderAfter resumes strictly after the row with the given key — keyset
-// pagination (D34): one value per OrderOrderBy term, in the same order.
+// pagination (decision keyset-pagination): one value per OrderOrderBy term, in the same order.
 func OrderAfter(key ...any) rt.Opt[Order] { return rt.After[Order](key...) }
 
 // OrderSet collects the typed assignments of a OrderUpdateWhere, built
@@ -227,7 +227,7 @@ func (q *Queries) OrderExists(ctx context.Context, preds ...rt.Pred[Order]) (boo
 
 // OrderDeleteWhere removes every orders row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
-// full-table delete (D42).
+// full-table delete (decision positional-placeholders).
 func (q *Queries) OrderDeleteWhere(ctx context.Context, preds ...rt.Pred[Order]) (int64, error) {
 	query, args, err := rt.DeleteRender(orderTableSQL, preds)
 	if err != nil {
@@ -242,8 +242,8 @@ func (q *Queries) OrderDeleteWhere(ctx context.Context, preds ...rt.Pred[Order])
 
 // OrderUpdateWhere applies the typed assignments (OrderSet) to every orders
 // row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer (D32). No effective predicate
-// is an error, never a full-table rewrite (D42).
+// partial update of the dynamic layer (decision shape-rule). No effective predicate
+// is an error, never a full-table rewrite (decision positional-placeholders).
 func (q *Queries) OrderUpdateWhere(ctx context.Context, set []rt.Assign[Order], preds ...rt.Pred[Order]) (int64, error) {
 	query, args, err := rt.UpdateRender(orderTableSQL, set, preds)
 	if err != nil {
@@ -257,14 +257,14 @@ func (q *Queries) OrderUpdateWhere(ctx context.Context, set []rt.Assign[Order], 
 }
 
 // userTagTableSQL and userTagColumnsSQL are the fixed shape of UserTag's
-// dynamic statements; the interpreter renders everything else (D28).
+// dynamic statements; the interpreter renders everything else (decision options-are-data).
 const (
 	userTagTableSQL   = `"user_tags"`
 	userTagColumnsSQL = `"user_id", "tag"`
 )
 
-// Typed column handles of UserTag (D29): inert predicate, order and
-// assignment builders for the dynamic query layer (D28). A predicate
+// Typed column handles of UserTag (decision flat-handles): inert predicate, order and
+// assignment builders for the dynamic query layer (decision options-are-data). A predicate
 // built here can only enter UserTag queries; mixing models is a compile
 // error.
 var (
@@ -272,10 +272,10 @@ var (
 	UserTagTag    = rt.Column[UserTag, string]{Name: "tag"}
 )
 
-// UserTagLimit caps how many rows UserTagQuery returns (D30).
+// UserTagLimit caps how many rows UserTagQuery returns (decision per-model-wrappers).
 func UserTagLimit(n int) rt.Opt[UserTag] { return rt.Limit[UserTag](n) }
 
-// UserTagOffset skips n rows; keyset pagination (UserTagAfter) scales better (D34).
+// UserTagOffset skips n rows; keyset pagination (UserTagAfter) scales better (decision keyset-pagination).
 func UserTagOffset(n int) rt.Opt[UserTag] { return rt.Offset[UserTag](n) }
 
 // UserTagDistinct deduplicates the rows UserTagQuery returns.
@@ -286,7 +286,7 @@ func UserTagDistinct() rt.Opt[UserTag] { return rt.Distinct[UserTag]() }
 func UserTagOrderBy(terms ...rt.Order[UserTag]) rt.Opt[UserTag] { return rt.OrderBy(terms...) }
 
 // UserTagAfter resumes strictly after the row with the given key — keyset
-// pagination (D34): one value per UserTagOrderBy term, in the same order.
+// pagination (decision keyset-pagination): one value per UserTagOrderBy term, in the same order.
 func UserTagAfter(key ...any) rt.Opt[UserTag] { return rt.After[UserTag](key...) }
 
 // UserTagSet collects the typed assignments of a UserTagUpdateWhere, built
@@ -346,7 +346,7 @@ func (q *Queries) UserTagExists(ctx context.Context, preds ...rt.Pred[UserTag]) 
 
 // UserTagDeleteWhere removes every user_tags row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
-// full-table delete (D42).
+// full-table delete (decision positional-placeholders).
 func (q *Queries) UserTagDeleteWhere(ctx context.Context, preds ...rt.Pred[UserTag]) (int64, error) {
 	query, args, err := rt.DeleteRender(userTagTableSQL, preds)
 	if err != nil {
@@ -361,8 +361,8 @@ func (q *Queries) UserTagDeleteWhere(ctx context.Context, preds ...rt.Pred[UserT
 
 // UserTagUpdateWhere applies the typed assignments (UserTagSet) to every user_tags
 // row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer (D32). No effective predicate
-// is an error, never a full-table rewrite (D42).
+// partial update of the dynamic layer (decision shape-rule). No effective predicate
+// is an error, never a full-table rewrite (decision positional-placeholders).
 func (q *Queries) UserTagUpdateWhere(ctx context.Context, set []rt.Assign[UserTag], preds ...rt.Pred[UserTag]) (int64, error) {
 	query, args, err := rt.UpdateRender(userTagTableSQL, set, preds)
 	if err != nil {
@@ -376,14 +376,14 @@ func (q *Queries) UserTagUpdateWhere(ctx context.Context, set []rt.Assign[UserTa
 }
 
 // pageViewTableSQL and pageViewColumnsSQL are the fixed shape of PageView's
-// dynamic statements; the interpreter renders everything else (D28).
+// dynamic statements; the interpreter renders everything else (decision options-are-data).
 const (
 	pageViewTableSQL   = `"page_views"`
 	pageViewColumnsSQL = `"id", "site", "day", "hits"`
 )
 
-// Typed column handles of PageView (D29): inert predicate, order and
-// assignment builders for the dynamic query layer (D28). A predicate
+// Typed column handles of PageView (decision flat-handles): inert predicate, order and
+// assignment builders for the dynamic query layer (decision options-are-data). A predicate
 // built here can only enter PageView queries; mixing models is a compile
 // error.
 var (
@@ -393,10 +393,10 @@ var (
 	PageViewHits = rt.Column[PageView, int32]{Name: "hits"}
 )
 
-// PageViewLimit caps how many rows PageViewQuery returns (D30).
+// PageViewLimit caps how many rows PageViewQuery returns (decision per-model-wrappers).
 func PageViewLimit(n int) rt.Opt[PageView] { return rt.Limit[PageView](n) }
 
-// PageViewOffset skips n rows; keyset pagination (PageViewAfter) scales better (D34).
+// PageViewOffset skips n rows; keyset pagination (PageViewAfter) scales better (decision keyset-pagination).
 func PageViewOffset(n int) rt.Opt[PageView] { return rt.Offset[PageView](n) }
 
 // PageViewDistinct deduplicates the rows PageViewQuery returns.
@@ -407,7 +407,7 @@ func PageViewDistinct() rt.Opt[PageView] { return rt.Distinct[PageView]() }
 func PageViewOrderBy(terms ...rt.Order[PageView]) rt.Opt[PageView] { return rt.OrderBy(terms...) }
 
 // PageViewAfter resumes strictly after the row with the given key — keyset
-// pagination (D34): one value per PageViewOrderBy term, in the same order.
+// pagination (decision keyset-pagination): one value per PageViewOrderBy term, in the same order.
 func PageViewAfter(key ...any) rt.Opt[PageView] { return rt.After[PageView](key...) }
 
 // PageViewSet collects the typed assignments of a PageViewUpdateWhere, built
@@ -467,7 +467,7 @@ func (q *Queries) PageViewExists(ctx context.Context, preds ...rt.Pred[PageView]
 
 // PageViewDeleteWhere removes every page_views row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
-// full-table delete (D42).
+// full-table delete (decision positional-placeholders).
 func (q *Queries) PageViewDeleteWhere(ctx context.Context, preds ...rt.Pred[PageView]) (int64, error) {
 	query, args, err := rt.DeleteRender(pageViewTableSQL, preds)
 	if err != nil {
@@ -482,8 +482,8 @@ func (q *Queries) PageViewDeleteWhere(ctx context.Context, preds ...rt.Pred[Page
 
 // PageViewUpdateWhere applies the typed assignments (PageViewSet) to every page_views
 // row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer (D32). No effective predicate
-// is an error, never a full-table rewrite (D42).
+// partial update of the dynamic layer (decision shape-rule). No effective predicate
+// is an error, never a full-table rewrite (decision positional-placeholders).
 func (q *Queries) PageViewUpdateWhere(ctx context.Context, set []rt.Assign[PageView], preds ...rt.Pred[PageView]) (int64, error) {
 	query, args, err := rt.UpdateRender(pageViewTableSQL, set, preds)
 	if err != nil {
@@ -497,14 +497,14 @@ func (q *Queries) PageViewUpdateWhere(ctx context.Context, set []rt.Assign[PageV
 }
 
 // linkClickTableSQL and linkClickColumnsSQL are the fixed shape of LinkClick's
-// dynamic statements; the interpreter renders everything else (D28).
+// dynamic statements; the interpreter renders everything else (decision options-are-data).
 const (
 	linkClickTableSQL   = `"link_clicks"`
 	linkClickColumnsSQL = `"id", "site", "day", "target"`
 )
 
-// Typed column handles of LinkClick (D29): inert predicate, order and
-// assignment builders for the dynamic query layer (D28). A predicate
+// Typed column handles of LinkClick (decision flat-handles): inert predicate, order and
+// assignment builders for the dynamic query layer (decision options-are-data). A predicate
 // built here can only enter LinkClick queries; mixing models is a compile
 // error.
 var (
@@ -514,10 +514,10 @@ var (
 	LinkClickTarget = rt.Column[LinkClick, string]{Name: "target"}
 )
 
-// LinkClickLimit caps how many rows LinkClickQuery returns (D30).
+// LinkClickLimit caps how many rows LinkClickQuery returns (decision per-model-wrappers).
 func LinkClickLimit(n int) rt.Opt[LinkClick] { return rt.Limit[LinkClick](n) }
 
-// LinkClickOffset skips n rows; keyset pagination (LinkClickAfter) scales better (D34).
+// LinkClickOffset skips n rows; keyset pagination (LinkClickAfter) scales better (decision keyset-pagination).
 func LinkClickOffset(n int) rt.Opt[LinkClick] { return rt.Offset[LinkClick](n) }
 
 // LinkClickDistinct deduplicates the rows LinkClickQuery returns.
@@ -528,7 +528,7 @@ func LinkClickDistinct() rt.Opt[LinkClick] { return rt.Distinct[LinkClick]() }
 func LinkClickOrderBy(terms ...rt.Order[LinkClick]) rt.Opt[LinkClick] { return rt.OrderBy(terms...) }
 
 // LinkClickAfter resumes strictly after the row with the given key — keyset
-// pagination (D34): one value per LinkClickOrderBy term, in the same order.
+// pagination (decision keyset-pagination): one value per LinkClickOrderBy term, in the same order.
 func LinkClickAfter(key ...any) rt.Opt[LinkClick] { return rt.After[LinkClick](key...) }
 
 // LinkClickSet collects the typed assignments of a LinkClickUpdateWhere, built
@@ -588,7 +588,7 @@ func (q *Queries) LinkClickExists(ctx context.Context, preds ...rt.Pred[LinkClic
 
 // LinkClickDeleteWhere removes every link_clicks row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
-// full-table delete (D42).
+// full-table delete (decision positional-placeholders).
 func (q *Queries) LinkClickDeleteWhere(ctx context.Context, preds ...rt.Pred[LinkClick]) (int64, error) {
 	query, args, err := rt.DeleteRender(linkClickTableSQL, preds)
 	if err != nil {
@@ -603,8 +603,8 @@ func (q *Queries) LinkClickDeleteWhere(ctx context.Context, preds ...rt.Pred[Lin
 
 // LinkClickUpdateWhere applies the typed assignments (LinkClickSet) to every link_clicks
 // row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer (D32). No effective predicate
-// is an error, never a full-table rewrite (D42).
+// partial update of the dynamic layer (decision shape-rule). No effective predicate
+// is an error, never a full-table rewrite (decision positional-placeholders).
 func (q *Queries) LinkClickUpdateWhere(ctx context.Context, set []rt.Assign[LinkClick], preds ...rt.Pred[LinkClick]) (int64, error) {
 	query, args, err := rt.UpdateRender(linkClickTableSQL, set, preds)
 	if err != nil {

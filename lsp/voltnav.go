@@ -58,7 +58,7 @@ type voltIndex struct {
 	texts   map[string]string                 // open buffers, for position conversion
 	gofuncs map[string]map[string]lang.GoFunc // package path -> its Go functions
 	// gosrcs holds each package directory's Go files as the index read
-	// them; different bytes on disk mean the index is stale (D87).
+	// them; different bytes on disk mean the index is stale (decision keys-are-inputs).
 	gosrcs map[string][]lang.GoSource
 	// goscans is the memo's scan table while the index is being built,
 	// nil once it is shared.
@@ -82,7 +82,7 @@ func spanOf(n ast.Node) voltSpan {
 }
 
 // voltIndexMemo is what one project's navigation index keeps across
-// builds (D85). The zero value is ready; one memo per project root,
+// builds (decision index-by-table). The zero value is ready; one memo per project root,
 // used by one analysis at a time.
 type voltIndexMemo struct {
 	index  map[string]*IndexMemo
@@ -90,7 +90,7 @@ type voltIndexMemo struct {
 	next   map[*lang.SelectInfo]string
 	// goscans keeps each package directory's Go sources and the
 	// functions scanned from them, reused by the next build when the
-	// sources are the bytes they were (D87).
+	// sources are the bytes they were (decision keys-are-inputs).
 	goscans map[string]goScanEntry
 }
 
@@ -137,7 +137,7 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 			case *ast.Group:
 				ix.define(voltSym{"group", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), group: d})
 			case *ast.TableGroup:
-				// A TableGroup is a set wherever a group is named (§V9.2, D65).
+				// A TableGroup is a set wherever a group is named (§V9.2, decision set-difference).
 				ix.define(voltSym{"tablegroup", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), tgroup: d})
 			case *ast.Pred:
 				ix.define(voltSym{"pred", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), pred: d})
@@ -285,7 +285,7 @@ func (ix *voltIndex) goRefAdd(pkg *lang.Package, path string, ref *ast.GoRef) {
 	if !ok {
 		srcs := lang.GoSourcesRead(pkg.Dir)
 		if e, kept := ix.goscans[pkg.Dir]; kept && slices.Equal(e.srcs, srcs) {
-			funcs = e.funcs // the last build's scan: the sources are the bytes they were (D87)
+			funcs = e.funcs // the last build's scan: the sources are the bytes they were (decision keys-are-inputs)
 		} else {
 			funcs, _ = lang.GoFuncsOf(pkg.Dir, srcs)
 			if ix.goscans != nil {

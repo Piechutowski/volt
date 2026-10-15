@@ -8,8 +8,8 @@ import (
 )
 
 // File is the source positions point into: its name and text held
-// once (D82, PERF-9). A File may be one chunk of a larger source, in
-// which case its base is where the chunk sits in the whole (D83,
+// once (decision flat-front-end, PERF-9). A File may be one chunk of a larger source, in
+// which case its base is where the chunk sits in the whole (decision parse-by-declaration,
 // PERF-10). Bases are atomic because a reused declaration is shared
 // with results still being read.
 type File struct {
@@ -190,7 +190,7 @@ func (k Kind) String() string {
 
 // Token is one lexical token. Val holds the processed value (escape
 // sequences applied, quotes stripped); the raw source text is borrowed
-// from the file through Text (D81, PERF-9).
+// from the file through Text (decision indexed-lookups, PERF-9).
 type Token struct {
 	Kind Kind
 

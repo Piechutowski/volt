@@ -22,7 +22,7 @@ type UserProfile struct {
 }
 
 // UserCreateParams are the caller-supplied columns of UserCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type UserCreateParams struct {
 	ID    int64  `db:"id" json:"id"`
 	Email string `db:"email" json:"email"`
@@ -35,7 +35,7 @@ type UserUpdateParams struct {
 }
 
 // UserProfileCreateParams are the caller-supplied columns of UserProfileCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type UserProfileCreateParams struct {
 	// Also the FK: one profile per user
 	UserID    int64           `db:"user_id" json:"user_id"`

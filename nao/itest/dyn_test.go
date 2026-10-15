@@ -1,6 +1,6 @@
-// Integration tests for the v2 dynamic query layer (decisions D28-D34):
+// Integration tests for the v2 dynamic query layer (decisions.md, Query layer):
 // predicates, options and typed assignments run against a real SQLite
-// through a real driver, sharing the fixture with the CRUD tests (D25).
+// through a real driver, sharing the fixture with the CRUD tests (decision integration-over-mocks).
 package itest
 
 import (
@@ -122,7 +122,7 @@ func TestUserQueryShaping(t *testing.T) {
 }
 
 // TestUserQueryKeyset walks the whole table one row at a time via After
-// (D34), over a deliberately non-unique first order term with a mixed-
+// (decision keyset-pagination), over a deliberately non-unique first order term with a mixed-
 // direction unique tiebreak — the case OFFSET pagination gets wrong when
 // rows shift between pages.
 func TestUserQueryKeyset(t *testing.T) {
@@ -204,7 +204,7 @@ func TestUserUpdateWhere(t *testing.T) {
 		t.Errorf("miss = %d, %v; want 0, nil", n, err)
 	}
 
-	// the whole-table guard (D42)
+	// the whole-table guard (decision positional-placeholders)
 	if _, err := q.UserUpdateWhere(ctx, UserSet(UserName.Set("x"))); err == nil {
 		t.Error("UserUpdateWhere without predicate: want error")
 	}
@@ -233,7 +233,7 @@ func TestUserDeleteWhere(t *testing.T) {
 
 // TestOrderDynamic exercises the enum-typed handle and a second model's
 // surface: a Pred[Order] is a different type from a Pred[User], so
-// cross-model mixups never reach the database (D29 — a compile error).
+// cross-model mixups never reach the database (decision flat-handles — a compile error).
 func TestOrderDynamic(t *testing.T) {
 	ctx := context.Background()
 	_, q := newDB(t)
@@ -248,7 +248,7 @@ func TestOrderDynamic(t *testing.T) {
 		t.Fatalf("OrderCreate: %v", err)
 	}
 
-	// both got the database default status (D16); the enum handle is typed
+	// both got the database default status (decision create-params); the enum handle is typed
 	if n, err := q.OrderCount(ctx, OrderStatus.Eq(EOrderStatusPending)); err != nil || n != 2 {
 		t.Errorf("pending count = %d, %v; want 2", n, err)
 	}
@@ -264,7 +264,7 @@ func TestOrderDynamic(t *testing.T) {
 	}
 }
 
-// TestDynStmtCache proves the D31 wiring end to end: same option shape,
+// TestDynStmtCache proves the decision statement-cache wiring end to end: same option shape,
 // different values -> one prepared statement; a new shape -> a second.
 func TestDynStmtCache(t *testing.T) {
 	ctx := context.Background()
@@ -292,7 +292,7 @@ func TestDynStmtCache(t *testing.T) {
 }
 
 // TestDynInTx runs dynamic verbs inside Queries.Tx: the transactional
-// copy drops the statement cache by construction (D31 — its statements
+// copy drops the statement cache by construction (decision statement-cache — its statements
 // belong to the outer handle) and a rollback undoes the writes.
 func TestDynInTx(t *testing.T) {
 	ctx := context.Background()

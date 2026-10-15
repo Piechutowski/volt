@@ -3,7 +3,7 @@
 // CRUD methods over the models in nao_models.go. Identity arguments
 // are positional, data arguments ride in the params structs declared
 // with the models, and the SQL
-// binds named placeholders — see docs/decisions.md D15-D17.
+// binds named placeholders — see docs/decisions.md, Generated Go.
 
 package models
 
@@ -26,14 +26,14 @@ func New(db rt.DBTX) *Queries { return &Queries{db: db} }
 
 // WithCache returns a copy of q whose dynamic queries (Query, Count,
 // Exists, DeleteWhere, UpdateWhere) run through cache: identical option
-// shapes render identical SQL, prepared once (D31). Bind a cache to a
+// shapes render identical SQL, prepared once (decision statement-cache). Bind a cache to a
 // *sql.DB, never a transaction.
 func (q *Queries) WithCache(cache *rt.StmtCache) *Queries {
 	return &Queries{db: q.db, cache: cache}
 }
 
 // WithTx returns a copy of q running on tx. The statement cache does not
-// follow: its statements are prepared on the outer handle (D31).
+// follow: its statements are prepared on the outer handle (decision statement-cache).
 func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
 
 // Tx runs fn inside a transaction: the Queries handed to fn joins it, a

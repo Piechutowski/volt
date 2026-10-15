@@ -48,13 +48,13 @@ type X2faCode struct {
 }
 
 // UserCreateParams are the caller-supplied columns of UserCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type UserCreateParams struct {
 	ID int64 `db:"id" json:"id"`
 }
 
 // CoreUserCreateParams are the caller-supplied columns of CoreUserCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type CoreUserCreateParams struct {
 	ID          uint64          `db:"id" json:"id"`
 	APIKey      string          `db:"api_key" json:"api_key"`
@@ -87,7 +87,7 @@ type CoreUserUpdateParams struct {
 }
 
 // X2faCodeCreateParams are the caller-supplied columns of X2faCodeCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type X2faCodeCreateParams struct {
 	Code      string    `db:"code" json:"code"`
 	UserID    int64     `db:"user_id" json:"user_id"`

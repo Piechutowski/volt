@@ -2,7 +2,7 @@
 //
 // The dynamic query layer over the models in nao_models.go: typed
 // column handles, per-model option wrappers, and predicate-driven
-// terminals — see docs/decisions.md D28-D34.
+// terminals — see docs/decisions.md, Query layer.
 
 package models
 
@@ -14,24 +14,24 @@ import (
 )
 
 // userTableSQL and userColumnsSQL are the fixed shape of User's
-// dynamic statements; the interpreter renders everything else (D28).
+// dynamic statements; the interpreter renders everything else (decision options-are-data).
 const (
 	userTableSQL   = `"users"`
 	userColumnsSQL = `"id"`
 )
 
-// Typed column handles of User (D29): inert predicate, order and
-// assignment builders for the dynamic query layer (D28). A predicate
+// Typed column handles of User (decision flat-handles): inert predicate, order and
+// assignment builders for the dynamic query layer (decision options-are-data). A predicate
 // built here can only enter User queries; mixing models is a compile
 // error.
 var (
 	UserID = rt.Column[User, int64]{Name: "id"}
 )
 
-// UserLimit caps how many rows UserQuery returns (D30).
+// UserLimit caps how many rows UserQuery returns (decision per-model-wrappers).
 func UserLimit(n int) rt.Opt[User] { return rt.Limit[User](n) }
 
-// UserOffset skips n rows; keyset pagination (UserAfter) scales better (D34).
+// UserOffset skips n rows; keyset pagination (UserAfter) scales better (decision keyset-pagination).
 func UserOffset(n int) rt.Opt[User] { return rt.Offset[User](n) }
 
 // UserDistinct deduplicates the rows UserQuery returns.
@@ -42,7 +42,7 @@ func UserDistinct() rt.Opt[User] { return rt.Distinct[User]() }
 func UserOrderBy(terms ...rt.Order[User]) rt.Opt[User] { return rt.OrderBy(terms...) }
 
 // UserAfter resumes strictly after the row with the given key — keyset
-// pagination (D34): one value per UserOrderBy term, in the same order.
+// pagination (decision keyset-pagination): one value per UserOrderBy term, in the same order.
 func UserAfter(key ...any) rt.Opt[User] { return rt.After[User](key...) }
 
 // UserSet collects the typed assignments of a UserUpdateWhere, built
@@ -102,7 +102,7 @@ func (q *Queries) UserExists(ctx context.Context, preds ...rt.Pred[User]) (bool,
 
 // UserDeleteWhere removes every users row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
-// full-table delete (D42).
+// full-table delete (decision positional-placeholders).
 func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
 	query, args, err := rt.DeleteRender(userTableSQL, preds)
 	if err != nil {
@@ -117,8 +117,8 @@ func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (
 
 // UserUpdateWhere applies the typed assignments (UserSet) to every users
 // row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer (D32). No effective predicate
-// is an error, never a full-table rewrite (D42).
+// partial update of the dynamic layer (decision shape-rule). No effective predicate
+// is an error, never a full-table rewrite (decision positional-placeholders).
 func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], preds ...rt.Pred[User]) (int64, error) {
 	query, args, err := rt.UpdateRender(userTableSQL, set, preds)
 	if err != nil {
@@ -132,14 +132,14 @@ func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], pr
 }
 
 // postTableSQL and postColumnsSQL are the fixed shape of Post's
-// dynamic statements; the interpreter renders everything else (D28).
+// dynamic statements; the interpreter renders everything else (decision options-are-data).
 const (
 	postTableSQL   = `"posts"`
 	postColumnsSQL = `"id", "author_id", "editor_id", "reviewed_at", "meta", "raw"`
 )
 
-// Typed column handles of Post (D29): inert predicate, order and
-// assignment builders for the dynamic query layer (D28). A predicate
+// Typed column handles of Post (decision flat-handles): inert predicate, order and
+// assignment builders for the dynamic query layer (decision options-are-data). A predicate
 // built here can only enter Post queries; mixing models is a compile
 // error.
 var (
@@ -151,10 +151,10 @@ var (
 	PostRaw        = rt.NullColumn[Post, []byte]{Column: rt.Column[Post, []byte]{Name: "raw"}}
 )
 
-// PostLimit caps how many rows PostQuery returns (D30).
+// PostLimit caps how many rows PostQuery returns (decision per-model-wrappers).
 func PostLimit(n int) rt.Opt[Post] { return rt.Limit[Post](n) }
 
-// PostOffset skips n rows; keyset pagination (PostAfter) scales better (D34).
+// PostOffset skips n rows; keyset pagination (PostAfter) scales better (decision keyset-pagination).
 func PostOffset(n int) rt.Opt[Post] { return rt.Offset[Post](n) }
 
 // PostDistinct deduplicates the rows PostQuery returns.
@@ -165,7 +165,7 @@ func PostDistinct() rt.Opt[Post] { return rt.Distinct[Post]() }
 func PostOrderBy(terms ...rt.Order[Post]) rt.Opt[Post] { return rt.OrderBy(terms...) }
 
 // PostAfter resumes strictly after the row with the given key — keyset
-// pagination (D34): one value per PostOrderBy term, in the same order.
+// pagination (decision keyset-pagination): one value per PostOrderBy term, in the same order.
 func PostAfter(key ...any) rt.Opt[Post] { return rt.After[Post](key...) }
 
 // PostSet collects the typed assignments of a PostUpdateWhere, built
@@ -225,7 +225,7 @@ func (q *Queries) PostExists(ctx context.Context, preds ...rt.Pred[Post]) (bool,
 
 // PostDeleteWhere removes every posts row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
-// full-table delete (D42).
+// full-table delete (decision positional-placeholders).
 func (q *Queries) PostDeleteWhere(ctx context.Context, preds ...rt.Pred[Post]) (int64, error) {
 	query, args, err := rt.DeleteRender(postTableSQL, preds)
 	if err != nil {
@@ -240,8 +240,8 @@ func (q *Queries) PostDeleteWhere(ctx context.Context, preds ...rt.Pred[Post]) (
 
 // PostUpdateWhere applies the typed assignments (PostSet) to every posts
 // row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer (D32). No effective predicate
-// is an error, never a full-table rewrite (D42).
+// partial update of the dynamic layer (decision shape-rule). No effective predicate
+// is an error, never a full-table rewrite (decision positional-placeholders).
 func (q *Queries) PostUpdateWhere(ctx context.Context, set []rt.Assign[Post], preds ...rt.Pred[Post]) (int64, error) {
 	query, args, err := rt.UpdateRender(postTableSQL, set, preds)
 	if err != nil {

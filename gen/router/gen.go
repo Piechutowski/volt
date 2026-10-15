@@ -4,7 +4,7 @@
 // registrations with typed shims and statically composed pipelines),
 // volt_paths.go (typed reverse-URL helpers) and volt_routes.go (the
 // introspectable route table). The output is gofmt-canonical by
-// construction (D75); generated code imports the standard library and
+// construction (decision gofmt-canonical); generated code imports the standard library and
 // the volt runtime package only.
 package router
 
@@ -140,7 +140,7 @@ func (g *generator) headerFor(pkgName, doc string, imports ...string) {
 
 // importGroups splits an import list at its "" separators, drops empty
 // groups and sorts each group by import path — the order gofmt imposes
-// within a group (D75).
+// within a group (decision gofmt-canonical).
 func importGroups(imports []string) [][]string {
 	var groups [][]string
 	var cur []string
@@ -583,7 +583,7 @@ func sigParamsLead(ps []lang.Param) string {
 // pathExpr builds the Go expression producing the route's path from its
 // typed arguments, e.g. `"/users/"+volt.SegInt(int64(id))`. The
 // operators carry no spaces: every use is an argument of a call with
-// two or more arguments, where gofmt prints a sum tight (D75).
+// two or more arguments, where gofmt prints a sum tight (decision gofmt-canonical).
 func pathExpr(r *lang.RouteInfo) string {
 	if r.Pattern == "/{$}" {
 		return `"/"`

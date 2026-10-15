@@ -20,7 +20,7 @@ type CategoryPath struct {
 }
 
 // CategoryCreateParams are the caller-supplied columns of CategoryCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type CategoryCreateParams struct {
 	ID   int32  `db:"id" json:"id"`
 	Name string `db:"name" json:"name"`
@@ -33,7 +33,7 @@ type CategoryUpdateParams struct {
 }
 
 // CategoryPathCreateParams are the caller-supplied columns of CategoryPathCreate. The
-// auto-increment key and defaulted columns are the database's job (D16).
+// auto-increment key and defaulted columns are the database's job (decision create-params).
 type CategoryPathCreateParams struct {
 	AncestorID   int32 `db:"ancestor_id" json:"ancestor_id"`
 	DescendantID int32 `db:"descendant_id" json:"descendant_id"`

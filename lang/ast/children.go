@@ -2,7 +2,7 @@ package ast
 
 // Children lists n's children in source order, the same children
 // Inspect visits, as a slice: for a walk written without function
-// values, which a memoized computation may not call (D102).
+// values, which a memoized computation may not call (decision pure-memos).
 func Children(n Node) []Node {
 	var out []Node
 	switch n := n.(type) {

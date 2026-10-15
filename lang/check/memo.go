@@ -1,9 +1,9 @@
 package check
 
-// The per-table memo (D84, PERF-10): a table whose declaration node and
+// The per-table memo (decision check-by-declaration, PERF-10): a table whose declaration node and
 // injected partials' nodes are the objects they were at the last check
 // of this file is the same checked table with the same diagnostics.
-// Node identity is the key (D83); the memo holds the nodes it keys on,
+// Node identity is the key (decision parse-by-declaration); the memo holds the nodes it keys on,
 // so an address is never reused under it.
 
 import (
@@ -28,7 +28,7 @@ type memoTable struct {
 	ti         *TableInfo
 	partials   []*ast.TablePartial // the injected partials, in body order, nil for a missing one
 	hasImports bool
-	enums      []string // the enum set, sorted: the keys themselves, not a spelling of them (D91)
+	enums      []string // the enum set, sorted: the keys themselves, not a spelling of them (decision keys-are-inputs)
 	diags      []diag.Diagnostic
 }
 

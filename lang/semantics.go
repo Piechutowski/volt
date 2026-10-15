@@ -24,7 +24,7 @@ func Check(pr *Project) []diag.Diagnostic {
 	return checkWith(pr, nil)
 }
 
-// checkWith is Check with an optional Session memo (D79): a package
+// checkWith is Check with an optional Session memo (decision editor-session): a package
 // whose inputs are what they were last time is restored, not re-run.
 func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 	c := &checker{pr: pr, diags: append([]diag.Diagnostic{}, pr.Diags...)}
@@ -55,7 +55,7 @@ func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 			}
 		}
 	}
-	// Check is idempotent on a Project, whatever ran on it earlier (D81).
+	// Check is idempotent on a Project, whatever ran on it earlier (decision indexed-lookups).
 	for _, path := range fresh {
 		pr.Packages[path].resultsReset()
 	}
@@ -76,7 +76,7 @@ func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 		info, schemaDiags := check.FileMemo(pkg.merged, schemaMemo)
 		cc.diags = append(cc.diags, schemaDiags...)
 		pkg.schema = info
-		// The naming plan, built once (D74).
+		// The naming plan, built once (decision one-naming-plan).
 		pkg.plan = golang.PlanBuildMemo(pkg.merged, info, planMemo)
 	})
 	for _, path := range paths {
@@ -115,22 +115,22 @@ type checker struct {
 	gofuncs *goFuncsCache
 
 	// memos are the per-declaration memos of the session's packages
-	// (D84), by package path; memo is the current package's, nil
+	// (decision check-by-declaration), by package path; memo is the current package's, nil
 	// outside a session.
 	memos map[string]*declMemo
 	memo  *declMemo
 }
 
 // declMemo holds one package's per-declaration memos across checks
-// (D84): the schema checker's tables, the plan's models, the lowered
-// checks, the selects, and the routes of each scope item (D99).
+// (decision check-by-declaration): the schema checker's tables, the plan's models, the lowered
+// checks, the selects, and the routes of each scope item (decision check-by-declaration).
 type declMemo struct {
 	schema  check.Memo
 	plan    golang.PlanMemo
 	checks  checksMemo
 	selects selectsMemo
 	routes  routesMemo
-	vet     vet.Memo // the vet's, by declaration (D104)
+	vet     vet.Memo // the vet's, by declaration (decision vet-by-declaration)
 }
 
 // checksMemo remembers a table's lowered checks: good while the
@@ -380,7 +380,7 @@ func (c *checker) routing(pkg *Package) {
 	}
 
 	// Every scope item is lowered by itemLower, a pure function of the
-	// inputs resolved here (D86, D99).
+	// inputs resolved here (decisions pure-memos, check-by-declaration).
 	facts := routeFacts{pkgName: pkg.Name, pkgPath: pkg.Path, module: c.pr.Module, imports: pkg.Imports}
 	var memo *routesMemo
 	if c.memo != nil {
@@ -446,7 +446,7 @@ func (c *checker) plugCheck(p *ast.Plug) {
 		// the runtime's middleware: not in this package's files
 	case q == "" || q == c.pkg.Name:
 		// A function of this package: it must exist with the middleware
-		// signature, spelled exactly (§V3.2, D63).
+		// signature, spelled exactly (§V3.2, decision go-references-by-spelling).
 		name := p.Ref.Base()
 		const want = "func %s(next http.Handler) http.Handler"
 		sc := c.goFuncs(c.pkg)
@@ -514,7 +514,7 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 			case "error_handler":
 				name, ok := selfFuncRefIn(s.Value, c.pkg.Name)
 				if ok {
-					// Held like every Go reference (D63): the function must exist
+					// Held like every Go reference (decision go-references-by-spelling): the function must exist
 					// with the runtime's ErrorHandler shape, spelled exactly.
 					const want = "func %s(w http.ResponseWriter, r *volt.Request, err error)"
 					sc := c.goFuncs(c.pkg)
@@ -546,8 +546,8 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 	}
 }
 
-// routeOracle answers a scope item's lowering about the project (D99):
-// reads only, so the gate walks it as the lowering's callee (D93).
+// routeOracle answers a scope item's lowering about the project (decision check-by-declaration):
+// reads only, so the gate walks it as the lowering's callee (decision pure-memos).
 type routeOracle struct{ c *checker }
 
 func (o routeOracle) dataPackage(path string) (string, bool, bool) {
@@ -659,7 +659,7 @@ func (o routeOracle) queryHint(path, name string) string {
 	return ""
 }
 
-// routesMemo remembers a package's lowered scope items (D99): a route,
+// routesMemo remembers a package's lowered scope items (decision check-by-declaration): a route,
 // resources or dataset declaration whose inherited context, package
 // facts and every answer the project gave it are what they were is
 // the same routes and diagnostics.
@@ -728,7 +728,7 @@ func (c *checker) itemLowerMemo(item ast.Node, inh inherited, facts routeFacts, 
 
 // routeAdd judges one lowered route against the package's accepted
 // ones and accepts or rejects it. It takes the route by value: the
-// lowering's route is the memo's, written by nobody (D92).
+// lowering's route is the memo's, written by nobody (decision immutable-results).
 func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteInfo) {
 	shape := r.shapeKey
 	if prev, dup := seenShape[shape]; dup {
@@ -801,14 +801,14 @@ func (c *checker) routeAccept(r *RouteInfo) {
 // routeIndex holds one routing package's accepted routes bucketed for
 // the §V4.7.2 ambiguity scan. An accepted route can be ambiguous with
 // a new one only if its literal prefix lies on the new route's walk
-// (§V4.7.3, D94).
+// (§V4.7.3, decision indexed-lookups).
 type routeIndex struct {
 	root *routeNode
 }
 
 // routeNode is one literal path prefix. A route is filed at the node
 // of its longest literal prefix, the segments before its first
-// parameter, wildcard or end (D81).
+// parameter, wildcard or end (decision indexed-lookups).
 type routeNode struct {
 	routes   []*RouteInfo // literal prefix ends here, declaration order
 	children map[string]*routeNode

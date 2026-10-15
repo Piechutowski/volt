@@ -1,9 +1,9 @@
 package main
 
-// The purity gate (D86) refuses, in each memoized function and
+// The purity gate (decision pure-memos) refuses, in each memoized function and
 // transitively everything it calls, reading mutable package state,
 // writing through an input, and calling into a package that keeps
-// state. The immutability gate (D92) refuses a write through a value
+// state. The immutability gate (decision immutable-results) refuses a write through a value
 // that came from outside a function to a memoized result type or to a
 // node or token, unless the function is the result's own producer or
 // the value's own maker. A value that comes out of a call whose inputs
@@ -27,7 +27,7 @@ import (
 
 const module = "github.com/Piechutowski/volt"
 
-// pureTargets are the memoized computations (D86), by package path and
+// pureTargets are the memoized computations (decision pure-memos), by package path and
 // name; each must be a top-level function.
 var pureTargets = []struct{ pkg, name string }{
 	{module + "/lang/check", "tableCheck"},
@@ -67,7 +67,7 @@ var immutableVars = map[string]bool{
 }
 
 // pureStdlib are the standard packages whose functions keep no state:
-// the trust boundary with Go (D97), kept exactly as wide as the memoized
+// the trust boundary with Go (decision trust-boundary), kept exactly as wide as the memoized
 // computations reach, since the walk fails on an entry none of them
 // calls into.
 var pureStdlib = map[string]bool{
@@ -78,7 +78,7 @@ var pureStdlib = map[string]bool{
 }
 
 // pureStdlibFuncs are the single standard functions trusted outside
-// pureStdlib's packages (D97): each names why. A position's offset and
+// pureStdlib's packages (decision trust-boundary): each names why. A position's offset and
 // line read the file's base through an atomic, whose Load is a read of
 // its receiver and nothing else; the package it lives in is not
 // trusted as a whole.
@@ -88,7 +88,7 @@ var pureStdlibFuncs = map[string]bool{
 
 // stdlibMutators are the standard functions that write through an
 // argument, by the index of the argument written: a call to one is a
-// write to it (D92). Every other function of pureStdlib only reads
+// write to it (decision immutable-results). Every other function of pureStdlib only reads
 // its arguments.
 var stdlibMutators = map[string]int{
 	"sort.Sort": 0, "sort.Stable": 0, "sort.Slice": 0, "sort.SliceStable": 0,
@@ -101,7 +101,7 @@ var stdlibMutators = map[string]int{
 
 // valuePackages declare the front end's values: nodes, tokens and
 // positions. Their types are written only by the packages that make
-// them (D92); everyone else holds them as read-only inputs.
+// them (decision immutable-results); everyone else holds them as read-only inputs.
 var valuePackages = map[string][]string{
 	module + "/lang/ast":   {module + "/lang/ast", module + "/lang/parser"},
 	module + "/lang/token": {module + "/lang/token", module + "/lang/scanner", module + "/lang/parser"},
@@ -201,7 +201,7 @@ func TestMemoizedComputationsArePure(t *testing.T) {
 	}
 	p.immutableVarsNeverAssigned()
 	// The trusted standard packages are exactly the ones reached: an
-	// entry no target calls into is trust for nothing (D97).
+	// entry no target calls into is trust for nothing (decision trust-boundary).
 	for name := range pureStdlibFuncs {
 		if !p.stdlibFuncsUsed[name] {
 			p.problems = append(p.problems, fmt.Sprintf("pureStdlibFuncs trusts %s, which no memoized computation reaches", name))
@@ -222,7 +222,7 @@ func TestMemoizedComputationsArePure(t *testing.T) {
 // modules writes, through a value that came from outside it, into a
 // memoized result type unless the function is reachable from the
 // result's producer, nor into a node or a token outside the packages
-// that make them (D92).
+// that make them (decision immutable-results).
 func TestMemoizedResultsAreImmutable(t *testing.T) {
 	p := newPurity(t, gatePackages(t), true)
 	var targets []*types.Func
@@ -399,14 +399,14 @@ type purity struct {
 	active    map[string]bool
 	problems  []string
 	// provisional is a recursive function's summary while its own
-	// analysis is under way, refined to a fixpoint (D102); hitStack
+	// analysis is under way, refined to a fixpoint (decision pure-memos); hitStack
 	// records, for every analysis under way, the active analyses its
 	// walk answered with a provisional summary.
 	provisional map[string]*summary
 	hitStack    []map[string]bool
 	seen        map[string]bool // problems, reported once each
 
-	// The immutability walk (D92): every value from outside a function
+	// The immutability walk (decision immutable-results): every value from outside a function
 	// is tainted; writes to these types are recorded, and a target's
 	// results are tainted the moment it returns them.
 	shared   bool
@@ -415,16 +415,16 @@ type purity struct {
 	reach    []map[*types.Func]bool // per target, the functions it can reach
 
 	// impls are the module's implementations of each interface method
-	// a walk meets (D93), found once.
+	// a walk meets (decision pure-memos), found once.
 	impls map[*types.Func][]*types.Func
-	// stdlibUsed are the standard packages the walk called into (D97),
+	// stdlibUsed are the standard packages the walk called into (decision trust-boundary),
 	// stdlibFuncsUsed the single trusted functions.
 	stdlibUsed      map[string]bool
 	stdlibFuncsUsed map[string]bool
 }
 
 // implementations are the methods of the module's named types that
-// stand behind an interface method (D93); types outside the module are
+// stand behind an interface method (decision pure-memos); types outside the module are
 // not walked, their results are judged by the receiver's taint instead.
 func (p *purity) implementations(abstract *types.Func) []*types.Func {
 	if p.impls == nil {
@@ -480,7 +480,7 @@ func (p *purity) analyze(fn *types.Func, recvTaint bool, paramTaint []bool) *sum
 		// A recursive call answers with the summary found so far; every
 		// analysis under way that consumed it repeats until the summary
 		// stops growing, and none of them is remembered while the
-		// analysis it depends on is still under way (D102).
+		// analysis it depends on is still under way (decision pure-memos).
 		for _, hits := range p.hitStack {
 			hits[key] = true
 		}
@@ -572,12 +572,12 @@ func summaryEqual(a, b *summary) bool {
 type funcAnalysis struct {
 	// made are the function values this function made itself, whose
 	// bodies its walk covered; calling any other function value is
-	// refused (D102).
+	// refused (decision pure-memos).
 	made map[types.Object]bool
 	// array records, for a local holding a slice, whether its backing
 	// array may be an input's: false after a literal, make, or an
 	// append to a fresh slice; a local not recorded is as tainted as
-	// its value (D102).
+	// its value (decision pure-memos).
 	array   map[types.Object]bool
 	p       *purity
 	pkg     *packages.Package
@@ -1242,7 +1242,7 @@ func paramTaints(sig *types.Signature, argTaint []bool) []bool {
 	return params
 }
 
-// dispatch judges a call through an interface (D93): every method of
+// dispatch judges a call through an interface (decision pure-memos): every method of
 // the module's types that implements it is walked with the receiver's
 // and the arguments' taint, and the results carry a tainted value
 // when any implementation's do, or when the receiver does.
@@ -1273,7 +1273,7 @@ func (fa *funcAnalysis) builtin(name string, x *ast.CallExpr, argTaint []bool) [
 		}
 		if len(x.Args) > 0 && fa.arrayTainted(x.Args[0]) {
 			// The backing array may be an input's: a write to it, and
-			// so to whatever holds the slice (D102). The elements are
+			// so to whatever holds the slice (decision pure-memos). The elements are
 			// copied in, not written through.
 			written, _ := fa.sharedTarget(x.Args[0])
 			fa.taintedWrite(x.Args[0], written)
@@ -1379,7 +1379,7 @@ func TestImmutabilityGateBites(t *testing.T) {
 }
 
 // TestNoUnsafeImports proves no package of the three modules reaches
-// for unsafe (D89).
+// for unsafe (decision no-unsafe).
 func TestNoUnsafeImports(t *testing.T) {
 	pkgs := gatePackages(t)
 	if len(pkgs) < 20 {

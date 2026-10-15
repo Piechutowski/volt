@@ -19,13 +19,17 @@ use is up to the file. The honest build state:
 - **Schema core** (DBML-derived) — *built.* Spec Part I: Project,
   Table with columns/indexes/checks, TablePartial, Records, Enum, Ref,
   TableGroup, Notes, DiagramView.
-- **Schema extensions** — *designed, not built* (roadmap FW-1/FW-3):
-  declared queries (`Select` / `View` / `Trigger`), `[was:]`,
-  `[repr:]`. Only the `[model:]` naming override has landed.
+- **Schema extensions** — *the structured half built:* `Group`, `Pred`
+  and `Select … for <group>` with projection, `[tag:]`, `[required]`,
+  `[model:]` (spec Part II, the query layer). *Not built:* raw-SQL
+  `Select` / `View` / `Trigger` blocks, `[was:]`, `[repr:]` (roadmap
+  FW-1, FW-3).
 - **Routing** — *alpha:* `package` / `import`, `Pipeline`, `Scope`,
-  routes, `resources` (spec Part II, §V).
+  routes, `resources`, query routes bound to generated queries,
+  `dataset`, `resources … [default]`, event routes, and a generated
+  client (spec Part II, §V).
 
-Project = the Go module (tree rooted at `go.mod`, D62). Package = directory. File
+Project = the Go module (tree rooted at `go.mod`, decision go-module-is-the-project). Package = directory. File
 boundaries carry no meaning (§V1.5).
 
 ## Layout
@@ -43,7 +47,7 @@ third-party deps. Importing `nao/rt` alone drags in nothing.
 | Directory        | What it is |
 |------------------|------------|
 | `*.go` (root)    | package `volt` — the runtime generated code links against: error spine, param parsing, path builders, minimal middleware |
-| `cmd/volt`       | the one binary, one file: `check` `vet` `gen` `routes` `stress` `lsp` `version` — `gen` emits models, queries and routers; `stress` writes a one-file thousand-table project to feel the limits by hand (D80). **Own module** — its CLI deps stay out of the library |
+| `cmd/volt`       | the one binary, one file: `check` `vet` `gen` `routes` `stress` `lsp` `version` — `gen` emits models, queries and routers; `stress` writes a one-file thousand-table project to feel the limits by hand (decision generated-stress). **Own module** — its CLI deps stay out of the library |
 | `lang/`          | **the language**: `token` `scanner` `parser` `ast` `diag` `check` `vet` front end, plus go.mod root discovery, package/import resolution, route expansion and conflict detection; `lang/conformance/snippets/` = the executable corpus |
 | `gen/router/`    | router generator; goldens are gofmt-stable and compiled by the real toolchain |
 | `gen/model/`     | the data half: nao's models, queries and DDL, driven by the same project load |
@@ -53,25 +57,26 @@ third-party deps. Importing `nao/rt` alone drags in nothing.
 | `zed-extension/` | Zed glue; install via `scripts/sync-grammar.sh` + Install Dev Extension |
 | `scripts/`       | `sync-grammar.sh` — mirrors the grammar into the local git cache Zed loads dev grammars from; `perf.go` — the performance report of this machine: the profiling sweep from 10 to 320 tables, the editor's keystroke at each size, charts and the machine's specification, as Markdown |
 | `itest/`         | committed fixture project served over httptest, drift-checked against the generator |
-| `docs/`          | **all prose lives here** (D49): `spec.md` (the language, normative) · `lint.md` · `editor.md` · `decisions.md` (the law) · `hypotheses.md` (the open questions) · `roadmap.md` (the plan) · `nao.md` · `model-layer.md` · `reference/` (pinned research) |
+| `docs/`          | **all prose lives here** (decision docs-doctrine): `spec.md` (the language, normative) · `lint.md` · `editor.md` · `decisions.md` (the law) · `hypotheses.md` (the open questions) · `roadmap.md` (the plan and the deferred chores) · `nao.md` · `model-layer.md` · `orm-matrix.md` (the ORM capability audit, pinned) |
 | `AGENT.md`       | cross-session working doctrine for AI sessions (CLAUDE.md imports it) |
 
 ## What is real vs. not yet
 
 Implemented and tested: the three-layer front end, project checking,
-router generation (typed params, wildcards, resources, pipelines,
-per-scope error handlers, reverse URLs), the runtime, the CLI, the
-LSP, the grammar, the Zed extension, and the whole proof chain.
+the structured query layer (groups, predicates, selects with
+projection), nao's CRUD, dynamic queries and validation, router
+generation (typed params, wildcards, resources, pipelines, per-scope
+error handlers, reverse URLs, query routes, datasets, event routes),
+the generated client, JSON and GOB rendering, the runtime, the CLI,
+the LSP, the grammar, the Zed extension, and the whole proof chain.
 
 Designed but **not implemented** — [`docs/roadmap.md`](docs/roadmap.md)
 carries these; no code backs them yet:
 
-- **the schema extensions** — the query layer (`Select`/`View`/
-  `Trigger`), `[was:]`, `[repr:]`; only `[model:]` exists today
-- **Datasets** (`Dataset` is just reserved, §V8) — the auto-CRUD grid
-  over a TableGroup (roadmap FW-2)
-- the renderer / content negotiation (HTML, JSON, GOB; roadmap FW-2);
-  the runtime has only `volt.JSON`
+- raw-SQL `Select` / `View` / `Trigger` blocks, `[was:]`, `[repr:]`
+  (roadmap FW-1 second half, FW-3)
+- associations (ASSOC), migrations (MIG), the report engine (RPT)
+- HTML rendering and typed compiled templates (FW-4)
 - `volt.WithQueries` / `WithTemplates` / `BuildDeps` options
 - plugs from imported packages (a v0 error on purpose)
 - LSP navigation beyond Volt symbols: go-to-def, hover and rename work
@@ -87,11 +92,11 @@ tests:
 - **Packages** (`itest/blog`): `db/` declares the schema, `app/` the
   routes over `db`; `volt gen ./...` writes each package's files beside
   its `.volt` and the client into `app/client/`.
-- **One directory** (D76): a package declares its tables and routes
+- **One directory** (decision self-routing-package): a package declares its tables and routes
   them itself — `resources posts [default]`, `get /picked PostPicked`
   — so models, queries, router, handlers and paths share one Go
   package.
-- **Workspace** (D77): one `schema.volt` at the root of a `go.work`
+- **Workspace** (decision layout-independent-gen): one `schema.volt` at the root of a `go.work`
   workspace, a server module and a client module, both `package main`,
   each wired by its own `go:generate` line:
 
@@ -121,7 +126,7 @@ go test ./gen/router -update         # refresh goldens after gen changes
 go run ./cmd/volt gen ./itest/blog   # refresh the itest fixture
 go test ./lang -run '^$' -bench . -benchmem > lang/testdata/bench_baseline.txt   # refresh the (ungated) baseline
 VOLT_SWEEP_DIR=/tmp/sweep go test ./lang -run TestProfileSweep -count=1 -timeout 30m -v   # time and profile every phase at 10..160 tables; charts in /tmp/sweep
-volt stress ./big && time volt check ./big && time volt gen --sql ./big && time go build -C ./big ./...   # one file, 1000 tables of 150 columns: the limits of check, gen, the LSP and the Go compiler (D80)
+volt stress ./big && time volt check ./big && time volt gen --sql ./big && time go build -C ./big ./...   # one file, 1000 tables of 150 columns: the limits of check, gen, the LSP and the Go compiler (decision generated-stress)
 ./scripts/sync-grammar.sh            # mirror grammar + preflight Zed
 ```
 

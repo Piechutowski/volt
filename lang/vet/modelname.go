@@ -1,4 +1,4 @@
-// Model-name analyzer (D10): Go models are the singular of the table
+// Model-name analyzer (decision singular-models): Go models are the singular of the table
 // name; when the inflector is only guessing, the schema should say the
 // name out loud with the [model:] extension setting.
 package vet

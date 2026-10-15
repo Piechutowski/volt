@@ -1,4 +1,4 @@
-// Package mutable is the immutability gate's fixture (D92): a producer
+// Package mutable is the immutability gate's fixture (decision immutable-results): a producer
 // and the ways its result may be touched afterwards, so the gate is
 // proven to refuse each write and to pass the rest.
 package mutable

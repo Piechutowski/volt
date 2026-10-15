@@ -39,7 +39,7 @@ A rule is judged declaration by declaration: a pure function of one
 declaration's syntax and the facts the checker resolved for it (its
 checked table, its partial, the relationships starting at its
 columns), so an editor session re-judges only the declarations an
-edit changed (D104). The rules that need the whole file — an enum or
+edit changed (decision vet-by-declaration). The rules that need the whole file — an enum or
 alias nothing uses, a foreign-key cycle, names that differ only in
 case across tables or enums, the generated names that collide — fold
 over the checker's model and what every declaration's rules
@@ -201,7 +201,7 @@ quoted identifier containing non-ASCII letters is not reported even though
 it may be unquotable. A name quoted more than once on one line of one
 declaration is reported once; the same name on the same line of another
 declaration, or of another file of the package, is reported again
-(the rule sees one declaration at a time, D104).
+(the rule sees one declaration at a time, decision vet-by-declaration).
 
 ---
 
@@ -293,7 +293,7 @@ most humans are not; `users` next to `Users` is a bug generator.
 ## Code generation
 
 Rules that guard the DBML → Go mapping (decisions
-[D09–D13](../docs/decisions.md)) rather than the schema itself.
+[Generated Go](../docs/decisions.md#generated-go)) rather than the schema itself.
 
 ### modelname
 
@@ -302,7 +302,7 @@ Rules that guard the DBML → Go mapping (decisions
 table name (endings like `-us`, `-is`, `-ss` where a trailing `s` is often
 not a plural marker at all) and no `[model: '...']` setting pins the name.
 
-**Why.** Models are singular by decision D10 (`users` → `User`), but
+**Why.** Models are singular by decision singular-models (`users` → `User`), but
 English pluralization is not decidable by rules: `menus` wants `Menu`,
 `status` wants `Status`, and a deterministic inflector cannot know which is
 which. Generation proceeds with the guess either way; this rule marks
@@ -323,7 +323,7 @@ wins; use it whenever the generated name matters.
 ### dynname
 
 **What it does.** Reports declarations whose *generated dynamic-query
-names* collide in Go package scope. The dynamic layer (decisions D28-D30)
+names* collide in Go package scope. The dynamic layer (decisions options-are-data, flat-handles, per-model-wrappers)
 mints flat names by concatenation — `<Model><Field>` for the column
 handles, `<Model>Limit`, `<Model>Offset`, `<Model>Distinct`,
 `<Model>OrderBy`, `<Model>After`, `<Model>Set` for the option wrappers —
@@ -339,7 +339,7 @@ rule reports every collision, at the later of the two declarations, with
 both origins spelled out. The name derivation is the generator's own — the
 rule calls into `nao/gen/golang` — so rule and generator cannot drift apart.
 The *common* near-collision is already defused structurally: enum types
-carry an `E` prefix (D11), so the idiomatic `Table orders { status
+carry an `E` prefix (decision e-prefixed-enums), so the idiomatic `Table orders { status
 order_status }` mints the handle `OrderStatus` and the enum type
 `EOrderStatus` without meeting.
 
@@ -380,7 +380,7 @@ one file in `vet/` plus one testdata file.
    declaration implements `Rule`: `Decl(d, nodes, facts)` returns its
    warnings from the declaration, its nodes in source order and the
    facts the checker resolved for it, and nothing else — the purity
-   gate walks it (D86, D104): no package state, no function values, no
+   gate walks it (decisions pure-memos, vet-by-declaration): no package state, no function values, no
    writes through an input, no sort of anything the inputs reach. A
    check on the whole file implements `Fold`: `File(pass)` reads the
    checker's model and the declarations' summaries. One type may be

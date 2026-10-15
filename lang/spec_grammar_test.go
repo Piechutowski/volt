@@ -14,7 +14,7 @@ import (
 	"github.com/Piechutowski/volt/lang/parser"
 )
 
-// The specification's grammar is executable (D100): every EBNF block
+// The specification's grammar is executable (decision executable-grammar): every EBNF block
 // reads as ISO 14977, every name it uses is defined once, the collected
 // grammars repeat the sections' definitions exactly, and the language
 // the grammar defines agrees with the front end: every sentence derived

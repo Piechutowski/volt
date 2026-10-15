@@ -1,7 +1,7 @@
 // Go source facts for Go references (spec §V3.2, §V12.5): a .volt file
 // names Go only in the containing package's own Go files, read with the
 // standard library's parser, and every reference is held to the exact
-// spelled signature (D63).
+// spelled signature (decision go-references-by-spelling).
 package lang
 
 import (
@@ -42,8 +42,8 @@ type GoFunc struct {
 }
 
 // GoSource is one Go file of a package directory as the scan reads it
-// (D87): its name and its text, or its first bytes alone when they
-// carry the generated marker (D81). Equal sources scan to equal
+// (decision keys-are-inputs): its name and its text, or its first bytes alone when they
+// carry the generated marker (decision indexed-lookups). Equal sources scan to equal
 // functions.
 type GoSource struct {
 	Name string
@@ -112,7 +112,7 @@ func GoFuncsOf(dir string, srcs []GoSource) (funcs map[string]GoFunc, broken []s
 	ctxt := build.Default
 	for _, src := range srcs {
 		if src.Head {
-			continue // volt's own output never declares a check or a plug (D81)
+			continue // volt's own output never declares a check or a plug (decision indexed-lookups)
 		}
 		ctxt.OpenFile = func(string) (io.ReadCloser, error) { return io.NopCloser(strings.NewReader(src.Text)), nil }
 		if ok, _ := ctxt.MatchFile(dir, src.Name); !ok {
@@ -200,7 +200,7 @@ type goScan struct {
 
 // goFuncsCache holds one goScan per package directory, shared by the
 // per-package checkers of a phase (PERF-7). A session seeds it with
-// scans whose identity is stable while their sources are (D86, D87).
+// scans whose identity is stable while their sources are (decisions pure-memos, keys-are-inputs).
 type goFuncsCache struct {
 	mu sync.Mutex
 	by map[string]*goScan
