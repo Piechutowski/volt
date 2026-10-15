@@ -1,4 +1,4 @@
-// Package par runs independent work on every CPU (roadmap PERF-7). The
+// Package par runs independent work on every CPU (decision worker-pool). The
 // caller keeps results in per-index slots, so the output is assembled
 // in index order and never depends on the schedule.
 package par

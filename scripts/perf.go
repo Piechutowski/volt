@@ -1,7 +1,7 @@
 //usr/bin/env go run "$0" "$@"; exit "$?"
 
 // perf writes the performance report of the machine it runs on: the
-// profiling sweep (PERF-2) at every size given, the language server's
+// profiling sweep at every size given, the language server's
 // keystroke at each, the charts, and the machine's specification, as
 // a Markdown file with its charts and profiles beside it. Run it from
 // the repository root:

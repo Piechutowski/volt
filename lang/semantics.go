@@ -37,7 +37,7 @@ func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 	}
 	c.cyclesCheck()
 
-	// The per-package phases run on every CPU (PERF-7); their
+	// The per-package phases run on every CPU (decision worker-pool); their
 	// diagnostics are kept per package and appended in package order.
 	paths := c.paths()
 	pkgDiags := make(map[string][]diag.Diagnostic, len(paths))
@@ -168,7 +168,7 @@ func (e *checksEntry) holds(model any, funcs *goScan, pkgName string, preds map[
 	return true
 }
 
-// perPackage runs one phase over every package, on every CPU (PERF-7).
+// perPackage runs one phase over every package, on every CPU (decision worker-pool).
 // Each package gets its own checker; the project, the schemas and the
 // Go-function cache are shared, read-only or locked; diagnostics are
 // returned in package order. A phase writes only its own package.

@@ -150,7 +150,7 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
 
 Sections are named, not numbered (decision named-sections): a reference names the heading,
 which changes only for a very good reason. Until every citation is
-migrated (roadmap, deferred chores), the Citation key at the end of this document
+migrated (roadmap), the Citation key at the end of this document
 maps the former numbers to their headings.
 
 ## Notation
@@ -2868,7 +2868,7 @@ cycle error: packages must layer.
 Former section numbers, kept so that every existing citation (`§6.3`,
 `§V11.4`, `Appendix A.5`) still resolves: the number names the heading,
 a trailing component names a numbered rule inside it. Scheduled for
-removal once citations name headings (roadmap, deferred chores).
+removal once citations name headings (roadmap).
 
 | Cited as | Heading |
 |---|---|

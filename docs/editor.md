@@ -268,7 +268,7 @@ behind stdio.
   end handles it correctly.
 - **LSP: no Go-side navigation** — handler references (`Home.Index`)
   and `error_handler:` point into Go, which this server does not
-  index (roadmap FW-6). A query reference (`db.UserGet`, §V4.8) is
+  index (roadmap). A query reference (`db.UserGet`, §V4.8) is
   not navigated either; a dataset's select (`dataset db.browse`) is.
 
 ### Go references
@@ -318,7 +318,7 @@ How to audit that the three components implement
 | Generated models implement Appendix A/B | goldens compiled; every CRUD statement prepared against the generated DDL; SQL goldens executed on real SQLite | `nao/gen/...`, `nao/itest` |
 | LSP behaves per spec | in-process unit suites: index, rename spelling rules, hover content, completion contexts, UTF-16 | `lsp/*_test.go` via `go test ./lsp/...` |
 | LSP behaves per spec, interactively | a scripted stdio JSON-RPC session against the real server process, replaying keystrokes that break and fix a project file, one of them as a ranged change, and asking for hover, definition, completion and symbols; every reply and published diagnostic pinned as a golden (decision invalid-input-goldens) | `cmd/volt/lsp_session_test.go` and `testdata/lsp_session.golden` via `go test ./cmd/volt/...`; refresh with `-update` after reading the diff |
-| A keystroke costs what the decisions say | the whole in-process path of one keystroke inside one table of a one-file project, didChange to publish, and the document's own front end alone; compare against the last report of `scripts/perf.go`. The bytes the keystroke's three parts allocate (the document's pass, the project analysis, the publish) are pinned exactly, within ten percent, hardware-neutral (PERF-2) | `go test ./lsp -run '^$' -bench 'BenchmarkKeystroke|BenchmarkDocumentUpdateLocal' -benchmem`; `go test ./lsp -run TestKeystrokeAllocationBudget -v` |
+| A keystroke costs what the decisions say | the whole in-process path of one keystroke inside one table of a one-file project, didChange to publish, and the document's own front end alone; compare against the last report of `scripts/perf.go`. The bytes the keystroke's three parts allocate (the document's pass, the project analysis, the publish) are pinned exactly, within ten percent, hardware-neutral | `go test ./lsp -run '^$' -bench 'BenchmarkKeystroke|BenchmarkDocumentUpdateLocal' -benchmem`; `go test ./lsp -run TestKeystrokeAllocationBudget -v` |
 
 The upstream `@dbml/parse` cross-check that established Part I's
 fidelity was retired at zero disagreements (decision one-corpus); the corpus verdicts

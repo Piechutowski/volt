@@ -101,7 +101,7 @@ func (g *generator) run(p *plan, perr error) error {
 }
 
 // paramsEmit renders the CreateParams and UpdateParams structs of one
-// table, when its CRUD takes them (CRUD-4, CRUD-5).
+// table, when its CRUD takes them.
 func (g *generator) paramsEmit(t *tableModel) {
 	if len(t.fields) == 0 {
 		return // a columnless table has no queryable shape

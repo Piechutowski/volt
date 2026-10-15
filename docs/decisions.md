@@ -134,7 +134,7 @@ generated type.
 Spec sections and decisions are named, not numbered. A heading is
 stable and a number moves whenever something is inserted. Existing
 `§` citations resolve through the spec's Citation key until the
-migration to heading names lands (roadmap, deferred chores).
+migration to heading names lands (roadmap).
 
 ### one-corpus
 
@@ -539,7 +539,7 @@ Turing-complete query DSL.
 corpus), `lint.md` (every rule with executable examples, drift-checked
 by build), `editor.md` (the tooling and its verification checklist),
 `decisions.md` (this file), `roadmap.md` (features with IDs and
-statuses, deferred chores included), `hypotheses.md` (open
+statuses), `hypotheses.md` (open
 questions), `nao.md`, `model-layer.md`, and `orm-matrix.md` (pinned
 research, consulted not maintained). No other directory carries prose
 docs; the root README.md and AGENT.md are the exceptions. Operational

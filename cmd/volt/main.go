@@ -277,7 +277,7 @@ func genRun(c *cli.Command) error {
 	// all or nothing across the whole project.
 	var out []outFile
 
-	// Every package generates on its own CPU (PERF-7); the files are
+	// Every package generates on its own CPU (decision worker-pool); the files are
 	// gathered in package order, so what is written and printed never
 	// depends on the schedule.
 	emit := func(pkg *lang.Package) ([]outFile, error) {
@@ -608,7 +608,7 @@ func goPackageName(dir string) string {
 }
 
 // stressCommand is `volt stress`: it writes the one-file project the
-// scaling tests and the benchmarks run on (internal/corpus, PERF-2) at
+// scaling tests and the benchmarks run on (internal/corpus, decision generated-stress) at
 // stress size (decision generated-stress).
 func stressCommand() *cli.Command {
 	return &cli.Command{

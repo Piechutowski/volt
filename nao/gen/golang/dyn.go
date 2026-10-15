@@ -36,7 +36,7 @@ func (pl *Plan) Dyn(opts Options) ([]byte, error) {
 	return align.Finish(e.out.String()), nil
 }
 
-/* ===== package-scope name collisions (DYN-7) ===== */
+/* ===== package-scope name collisions ===== */
 
 // dynWrapperSuffixes are the per-model option-wrapper names the emitter
 // mints (decision per-model-wrappers).

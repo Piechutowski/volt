@@ -52,7 +52,7 @@ func Generate(pkg *lang.Package, opts Options) (map[string][]byte, error) {
 	if !pkg.HasRouting() {
 		return nil, fmt.Errorf("package %s declares no routing elements", pkg.Path)
 	}
-	// The files are emitted on every CPU (PERF-7).
+	// The files are emitted on every CPU (decision worker-pool).
 	type emit struct {
 		name string
 		fn   func(*generator) error

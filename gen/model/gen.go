@@ -42,7 +42,7 @@ func Generate(pkg *lang.Package, opts Options) ([]File, error) {
 		plan = golang.PlanBuild(pkg.Merged(), pkg.Schema())
 	}
 
-	// The files are emitted on every CPU (PERF-7) and gathered in this
+	// The files are emitted on every CPU (decision worker-pool) and gathered in this
 	// order.
 	type emit struct {
 		name string

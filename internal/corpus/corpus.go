@@ -1,5 +1,5 @@
 // Package corpus writes synthetic Volt projects of any size that use
-// every feature of the language in a neutral domain (PERF-2, decision generated-stress). One
+// every feature of the language in a neutral domain (decision generated-stress). One
 // Spec, two layouts: data packages plus a routing package that imports
 // them all, or one package main at the module root holding everything
 // in one schema.volt (decision self-routing-package).

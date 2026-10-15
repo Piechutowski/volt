@@ -50,8 +50,8 @@ every member of its group uniformly — projection exclusions included.
 **What's actually unsettled:** whether one member should be able to
 deviate (exclude a column only for itself, override an operation only
 for one table). The shape this wants is the Dataset override ladder
-(roadmap FW-2): defaults generated, overrides declared per member,
-escape by omission. Decide when FW-2's ladder lands, so selects and
+(roadmap, the datasets' override ladder): defaults generated, overrides declared per member,
+escape by omission. Decide when that ladder lands, so selects and
 datasets end up with one override idiom, not two.
 
 ## H4 — Which field-property settings to mint, and when

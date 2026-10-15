@@ -22,8 +22,7 @@ use is up to the file. The honest build state:
 - **Schema extensions** — *the structured half built:* `Group`, `Pred`
   and `Select … for <group>` with projection, `[tag:]`, `[required]`,
   `[model:]` (spec Part II, the query layer). *Not built:* raw-SQL
-  `Select` / `View` / `Trigger` blocks, `[was:]`, `[repr:]` (roadmap
-  FW-1, FW-3).
+  `Select` / `View` / `Trigger` blocks, `[was:]`, `[repr:]` (roadmap).
 - **Routing** — *alpha:* `package` / `import`, `Pipeline`, `Scope`,
   routes, `resources`, query routes bound to generated queries,
   `dataset`, `resources … [default]`, event routes, and a generated
@@ -57,7 +56,7 @@ third-party deps. Importing `nao/rt` alone drags in nothing.
 | `zed-extension/` | Zed glue; install via `scripts/sync-grammar.sh` + Install Dev Extension |
 | `scripts/`       | `sync-grammar.sh` — mirrors the grammar into the local git cache Zed loads dev grammars from; `perf.go` — the performance report of this machine: the profiling sweep from 10 to 320 tables, the editor's keystroke at each size, charts and the machine's specification, as Markdown |
 | `itest/`         | committed fixture project served over httptest, drift-checked against the generator |
-| `docs/`          | **all prose lives here** (decision docs-doctrine): `spec.md` (the language, normative) · `lint.md` · `editor.md` · `decisions.md` (the law) · `hypotheses.md` (the open questions) · `roadmap.md` (the plan and the deferred chores) · `nao.md` · `model-layer.md` · `orm-matrix.md` (the ORM capability audit, pinned) |
+| `docs/`          | **all prose lives here** (decision docs-doctrine): `spec.md` (the language, normative) · `lint.md` · `editor.md` · `decisions.md` (the law) · `hypotheses.md` (the open questions) · `roadmap.md` (the plan) · `nao.md` · `model-layer.md` · `orm-matrix.md` (the ORM capability audit, pinned) |
 | `AGENT.md`       | cross-session working doctrine for AI sessions (CLAUDE.md imports it) |
 
 ## What is real vs. not yet
@@ -74,9 +73,9 @@ Designed but **not implemented** — [`docs/roadmap.md`](docs/roadmap.md)
 carries these; no code backs them yet:
 
 - raw-SQL `Select` / `View` / `Trigger` blocks, `[was:]`, `[repr:]`
-  (roadmap FW-1 second half, FW-3)
+  (roadmap)
 - associations (ASSOC), migrations (MIG), the report engine (RPT)
-- HTML rendering and typed compiled templates (FW-4)
+- HTML rendering and typed compiled templates
 - `volt.WithQueries` / `WithTemplates` / `BuildDeps` options
 - plugs from imported packages (a v0 error on purpose)
 - LSP navigation beyond Volt symbols: go-to-def, hover and rename work

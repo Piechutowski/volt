@@ -564,7 +564,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		}
 		qr.Many = true
 	}
-	// Default CRUD (CRUD-1 to CRUD-7), from the package's plan (decision one-naming-plan).
+	// Default CRUD, from the package's plan (decision one-naming-plan).
 	if !found {
 		if key, _, cm, ok := l.crudByName(target, name); ok {
 			found = true
@@ -992,8 +992,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 	return out
 }
 
-// crudAbsent says why a default CRUD method can be missing (CRUD-1 to
-// CRUD-7, §V5.4).
+// crudAbsent says why a default CRUD method can be missing (§V5.4).
 func crudAbsent(op string) string {
 	if op == "update" {
 		return "every column is part of the key, so there is nothing to update"

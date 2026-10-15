@@ -29,7 +29,7 @@ func Scan(filename, src string) ([]token.Token, []diag.Diagnostic) {
 // no column (decision carriage-return). Every token that begins a top-level element
 // (§3.2.5) is flagged; nothing stops there.
 func ScanFile(f *token.File) ([]token.Token, []diag.Diagnostic) {
-	// The token slice is sized once (PERF-7).
+	// The token slice is sized once.
 	s := newScanner(f, make([]token.Token, 0, len(f.Src)/4+16)) // a token per four bytes of schema (decision indexed-lookups)
 	s.run()
 	s.emit(token.EOF, "")

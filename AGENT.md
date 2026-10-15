@@ -64,15 +64,14 @@ reverted: nao is its *name*).
    numbered, graduated or killed by practice; never treat one as law,
    and put new open questions there, not in decisions.
 2. `docs/roadmap.md` — **the build plan**: stable IDs, statuses
-   (updated in the landing commit), with the deferred chores and the
-   reason each waits at its end. FW-2 landed 2026-09-04; next by the
-   build order is the raw-SQL half of FW-1 (SEL-1 to SEL-7).
+   (updated in the landing commit): a nested todo of what exists and
+   what does not. Next by the build order: the raw-SQL `Select` /
+   `View` blocks.
 3. `docs/spec.md` — the language: Part I the schema core, Part II
    the project, routing and query layers, then the appendices (Go and
    SQLite mappings, DBML compatibility). Sections are named, not
    numbered (decision named-sections); existing `§…` citations resolve through the spec's
-   Citation key until the migration in the roadmap's deferred chores
-   lands.
+   Citation key until the migration to heading names lands (roadmap).
 4. `docs/editor.md` — grammar/extension/LSP architecture, extension
    recipes, and the §8 verification checklist.
 5. `docs/nao.md` + `docs/model-layer.md` — the data layer and the
@@ -90,7 +89,7 @@ test-only); and the **tools** `lsp/` and `cmd/volt/`, which carry the
 third-party deps (glsp, urfave/cli). Go floor: **1.27** (decision newest-go),
 declared in all three go.mod files and go.work. `grammar/` +
 `zed-extension/` + `scripts/sync-grammar.sh` are the editor stack.
-`internal/perfsweep` is the profiling sweep (PERF-2), run at the
+`internal/perfsweep` is the profiling sweep, run at the
 reference sizes by `lang.TestProfileSweep` and on any machine by
 `./scripts/perf.go -out DIR` from the root, which writes the
 performance report with that machine's specification.

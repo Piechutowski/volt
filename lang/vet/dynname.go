@@ -1,4 +1,4 @@
-// Dynamic-layer name analyzer (DYN-7, decisions options-are-data, flat-handles, per-model-wrappers): distinct DBML
+// Dynamic-layer name analyzer (decisions options-are-data, flat-handles, per-model-wrappers): distinct DBML
 // declarations can demand one Go name; this rule surfaces the
 // collision at vet time with both origins named.
 package vet

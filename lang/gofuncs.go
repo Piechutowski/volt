@@ -199,7 +199,7 @@ type goScan struct {
 }
 
 // goFuncsCache holds one goScan per package directory, shared by the
-// per-package checkers of a phase (PERF-7). A session seeds it with
+// per-package checkers of a phase (decision worker-pool). A session seeds it with
 // scans whose identity is stable while their sources are (decisions pure-memos, keys-are-inputs).
 type goFuncsCache struct {
 	mu sync.Mutex

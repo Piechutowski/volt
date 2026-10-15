@@ -1,4 +1,4 @@
-// Package perfsweep is the profiling sweep (PERF-2): one-file projects
+// Package perfsweep is the profiling sweep: one-file projects
 // of growing table counts, every phase timed, measured and profiled on
 // its own, the numbers charted and rendered as a Markdown report. Wall
 // clock is reported, never asserted.

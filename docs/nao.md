@@ -82,7 +82,7 @@ split is exhaustive:
 |---|---|---|
 | nothing — fixed shapes | generated CRUD (`UserGet` … `UserDelete`) | **done** |
 | values only, uniform shapes | `Select` over a `Group` with typed `Pred` composition (§V9-§V11): one method per member, one signature | **done** |
-| values only, arbitrary SQL | raw-SQL `Select`/`View` blocks, typed functions out, prepare-validated | next — [roadmap FW-1](roadmap.md) |
+| values only, arbitrary SQL | raw-SQL `Select`/`View` blocks, typed functions out, prepare-validated | next — [roadmap](roadmap.md) |
 | filter / order / limit | typed predicate **values** (`UserEmail.Eq(x)`) over generated column handles | **done** |
 | validation | `checks` as predicates and `[required]`: SQL `CHECK` + generated `Validate()` on rows and params structs, Go-ref checks Go-only; 422/409 with per-column details through query routes (§V12, decisions validation-rides-checks, checks-on-the-api-path, required-and-problems) | **done** |
 | associations | explicit per-ref loaders, batched `IN` | scheduled |

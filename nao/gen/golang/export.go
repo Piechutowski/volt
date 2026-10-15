@@ -119,8 +119,7 @@ func ModelFields(f *ast.File, info *check.Info, tableKey string) (model string, 
 	return PlanBuild(f, info).ModelFields(tableKey)
 }
 
-// CRUDMethod is one generated default-CRUD method of a table (CRUD-1 to
-// CRUD-7), as a query route (spec §V4.8) sees it: the name to call, the
+// CRUDMethod is one generated default-CRUD method of a table, as a query route (spec §V4.8) sees it: the name to call, the
 // identity parameters in key order, the params struct it decodes, and
 // what comes back.
 type CRUDMethod struct {

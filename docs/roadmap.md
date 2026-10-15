@@ -1,496 +1,103 @@
-# Volt — Roadmap
-
-Everything left to build, organized **by problem solved**. Each feature
-has a stable ID (`CRUD-3`, `SEL-2`, `FW-1`), a slice, and a status;
-implementation sessions work off this list, and landing a feature
-updates its status in the same commit (decision docs-doctrine).
-
-Part one is the **data layer** (nao); part two is the **framework**.
-How this document relates to the others:
-
-- [`model-layer.md`](model-layer.md) names the data-layer problems;
-- [`orm-matrix.md`](orm-matrix.md) proves nothing Rails AR does is
-  unaccounted for;
-- [`decisions.md`](decisions.md) records *why* each answer is what it is;
-- [`spec.md`](spec.md) specifies what already exists;
-- **this file** says *what to build*, per problem.
-
-Statuses: `DONE` (built and tested) · `vN` (scheduled slice) · `HAND`
-(documented pattern, deliberately hand-written) · `LATER` (compatible,
-unscheduled) · `NO` (non-goal, see [decision non-goals](decisions.md)).
-
----
-
-## The ladder: where this tool sits
-
-The Go data-access ecosystem is a chain of supersets. Each layer adds one
-capability over the previous — and each maps to one piece of Not an ORM:
-
-| Layer | What it adds | Ecosystem | Not an ORM's version |
-|---|---|---|---|
-| driver | connections, `Exec`/`Query`, `Rows` | `database/sql` + a SQLite driver | the same base; `rt.Open`, `rt.DBTX` (driver stays test-only, decisions zero-dependencies, integration-over-mocks) |
-| scan ergonomics | rows → structs, named params | `sqlx` | generated per-query scan code — zero reflection, checked at compile time |
-| SQL building | composing SQL in Go at runtime | `squirrel` | v2 typed option values — **only** for filter/order/limit (decisions options-are-data, shape-rule) |
-| typed queries from SQL | write SQL, generate typed Go | `sqlc` | v1 `Select`/`View` blocks in the schema file, gen-time prepare validation (decision expressions-are-sqlites) |
-| full ORM | CRUD, associations, migrations, callbacks | Rails AR, GORM, Ent | v0 CRUD + v3 loaders + v4 migrations; callbacks/dirty tracking/lazy loading: never (decision non-goals) |
-
-I am not inventing a new problem — I am answering each rung with
-codegen instead of runtime machinery, from one authored DBML file.
-
-### Why there is no "any query" builder
-
-An ORM must let you build any query at runtime because runtime is its
-only chance to construct SQL. I have a build step, so I split "any
-query" by **what actually varies when the program runs** — and the split
-is exhaustive (decision shape-rule):
-
-| What varies at runtime | Answer | Tier | Slice |
-|---|---|---|---|
-| nothing — fixed shapes | generated CRUD (`UserGet`, …) | [CRUD](#p2--default-crud) | v0 `DONE` |
-| values only | real SQL in a declared `Select` block, `:named` params, typed function generated, prepare-validated | [SEL](#p3--custom-queries-static-shapes-select--view) | v1 |
-| filter / order / limit | typed predicate **values** (`UserEmail.Eq(x)`) over generated column handles | [DYN](#p4--dynamic-queries-runtime-composition) | v2 `DONE` |
-| the shape itself | quarantined report engine over the exported schema catalog | [RPT](#p6--ad-hoc-user-defined-queries) | LATER |
-
-The long tail an ORM covers with its query DSL lands in tier two, where
-the query language is SQL itself — already the best language for it —
-and SQLite proves every statement at generation time (decision sqlite-first). The only
-builder-shaped surface that survives is tier three, and it is inert data,
-not string assembly.
-
----
-
-## P1 — One schema, everything derived
-
-**Problem.** The same truth lives in four places (diagram, DDL, code,
-live DB) and drifts ([model-layer.md](model-layer.md)). **Answer.**
-DBML is canonical; everything else is generated from `check.Info`.
-
-| ID | Feature | Slice | Status |
-|---|---|---|---|
-| SRC-1 | Normative DBML spec (EBNF) + conformance corpus | — | `DONE` ([spec.md](spec.md); cross-check retired, decision one-corpus) |
-| SRC-2 | Full front end: scanner, parser, `check.Info`, multi-error recovery | — | `DONE` |
-| SRC-3 | `vet`: lint for legal-but-suspicious DBML, docs-enforced rules | — | `DONE` ([lint.md](lint.md), decision docs-doctrine) |
-| SRC-4 | `volt gen` → models (`nao_models.go`): structs, enums, notes → doc comments, `Null[T]`, singular names + `[model:]` | v0 | `DONE` (the Generated Go decisions) |
-| SRC-5 | `volt gen --sql` → DDL + seed `INSERT`s from `records` | v0 | `DONE` (decision temporal-types) |
-| SRC-6 | Extensions stay a projectable superset (core diagrams still work) | all | ongoing ([hypotheses H1](hypotheses.md)) |
-| SRC-7 | Every field property lives in the schema: `[tag:]` verbatim struct-tag passthrough | v0 | `DONE` (decisions schema-owns-fields, tag-passthrough; spec §6.3 + A.5) |
-
-## P2 — Default CRUD
-
-**Problem.** 90% of data access is the same eight statements per table;
-hand-writing them is boilerplate, an ORM hides them behind reflection.
-**Answer.** Generate them as plain, readable Go (v0, shipped).
-
-| ID | Feature | Slice | Status |
-|---|---|---|---|
-| CRUD-1 | `UserGet` by pk; composite pks → one positional arg per key column | v0 | `DONE` (decisions named-placeholders, keyless-tables) |
-| CRUD-2 | `UserGetMany(ids)` — one `IN` query; missing keys are absence, not error | v0 | `DONE` (decision crud-miss-semantics) |
-| CRUD-3 | `UserGetByEmail` per unique column | v0 | `DONE` |
-| CRUD-4 | `UserList`, `UserCount` | v0 | `DONE` |
-| CRUD-5 | `UserCreate(params)` — excludes auto-increment + defaulted columns, `RETURNING` (decision create-params) | v0 | `DONE` |
-| CRUD-6 | `UserUpdate(id, params)` full-row, `RETURNING`; misses → `rt.ErrNotFound` | v0 | `DONE` (decision crud-miss-semantics) |
-| CRUD-7 | `UserDelete(id)` — `RowsAffected`-checked miss | v0 | `DONE` (decision crud-miss-semantics) |
-| CRUD-8 | No-pk tables: `List`/`Create`/`Count` only | v0 | `DONE` (decision keyless-tables) |
-| CRUD-9 | Named `:param` placeholders end to end; identity positional, data in params structs | v0 | `DONE` (decision named-placeholders) |
-
-## P3 — Custom queries: static shapes (`Select` / `View`)
-
-**Problem.** Real applications need joins, aggregates, projections, CTEs,
-window functions — "almost any query". ORMs answer with a runtime DSL;
-sqlc answers with `.sql` files divorced from the schema. **Answer.**
-Declared query blocks *inside the schema file*: structure (select list,
-tables, joins, declared params) parsed by my front end and resolved
-against `check.Info`; expression bodies opaque and proven by gen-time
-prepare against the generated DDL (decision expressions-are-sqlites). Each block mints its own result
-struct (decision shape-rule) and a typed function.
-
-Requirements (syntax to be specified in spec.md when built; sketches
-are illustrative):
-
-| ID | Feature | Slice | Status |
-|---|---|---|---|
-| SEL-1 | `Select name (param type, …) { … }` block: declared params (decision expressions-are-sqlites), select list, from/joins, opaque `where`/`having`/`group by`/`order by` bodies | v1 | planned |
-| SEL-2 | Result struct minted per block (`OrderReport`), fields typed from `check.Info` + SQLite's column metadata | v1 | planned |
-| SEL-3 | Generated function `OrderReportQuery(ctx, params) ([]OrderReport, error)`; single-row variants | v1 | planned |
-| SEL-4 | Joins inferred from declared refs where unique; explicit `on:` override (decision expressions-are-sqlites) | v1 | planned |
-| SEL-5 | Gen-time prepare validation of every block against the generated DDL; column-list agreement checked (decision sqlite-first) | v1 | planned |
-| SEL-6 | `View` blocks: DDL `CREATE VIEW` + read-only struct + accessors; a view declares its columns and carries its SQL, and the prepare check verifies the two agree; triggers deferred (stateless drop-and-recreate when added) | v1 | planned |
-| SEL-7 | Narrow projections (list views without full hydration) — a `Select` block per shape is *the* mechanism | v1 | planned |
-| SEL-8 | Raw SQL strings in `.go` files: outside the safety net, escape hatch documented as "promote it to a Select block" | — | `HAND` (decision sibling-files) |
-| SEL-9 | List parameters: `col in :names` typed `[]T`, bound as one JSON array through `json_each` so the statement stays static (§V10.3, decision list-parameters) | v1 | `DONE` |
-
-## P4 — Dynamic queries: runtime composition
-
-**Problem.** Filters chosen by user input at runtime (search screens,
-admin lists) can't be enumerated at build time. **Answer.** Functional
-options as inert data (decision options-are-data): predicates are values over generated typed
-column handles, one interpreter renders SQL + positional args in
-lockstep (decision positional-placeholders), statements cached by text (decision statement-cache).
-
-| ID | Feature | Slice | Status |
-|---|---|---|---|
-| DYN-1 | Runtime core: `Pred[M]`, `And/Or/Not`, `Raw` escape hatch, deterministic interpreter, positional `?` binding | v2 | `DONE` (decisions options-are-data, positional-placeholders) |
-| DYN-2 | Generated flat handles: `UserEmail = rt.Column[User, string]{…}` (nullable columns `rt.NullColumn` with `IsNull`/`SetNull`; enum types E-prefixed to stay out of the handle namespace, decision e-prefixed-enums); operators `Eq/Ne/In/Gt/Lt/Like/IsNull/Desc/EqCol…` once in the runtime | v2 | `DONE` (decision flat-handles) |
-| DYN-3 | Generated wrappers for value-less options: `UserLimit(n)`, `UserOffset(n)`, `UserOrderBy(…)`, `UserAfter(…)`, `UserDistinct()`, `UserSet(…)` | v2 | `DONE` (decision per-model-wrappers) |
-| DYN-4 | Verbs sharing predicates: `UserQuery`, `UserCount`, `UserExists`, `UserDeleteWhere`, `UserUpdateWhere` + typed `Assign[M]` setters (partial updates land here) | v2 | `DONE` (decision shape-rule) |
-| DYN-5 | Keyset pagination first-class (`UserAfter(key)`, lexicographic expansion, mixed directions); OFFSET degrades linearly | v2 | `DONE` (decision keyset-pagination) |
-| DYN-6 | Prepared-statement cache keyed by rendered SQL (LRU), wired via `Queries.WithCache` | v2 | `DONE` (decision statement-cache) |
-| DYN-7 | vet rule `dynname`: generated package-scope name collisions (handle sets, option wrappers vs models/enums) | v2 | `DONE` (decision flat-handles) |
-
-## P5 — Associations
-
-**Problem.** A `Post` needs its `Comments`; lazy loading and struct
-fields lie about what's loaded. **Answer.** Explicit per-ref loaders,
-generated from declared refs: single and batched, one `IN` query grouped
-in memory. A `Comments` field on `Post` cannot distinguish not-loaded
-from empty, so that shape is banned. In embedded SQLite a query is a
-function call, not a round trip, so loops of queries are officially
-fine; batching is for atomicity (one query cannot interleave with
-writes) and for large N.
-
-| ID | Feature | Slice | Status |
-|---|---|---|---|
-| ASSOC-1 | Single loaders: `PostAuthorGet(ctx, post)` (FK side), `UserPostsList(ctx, user)` (one-to-many) | v3 | planned |
-| ASSOC-2 | Batched loaders: `PostCommentsLoad(ctx, posts) (map[int64][]Comment, error)` — one `IN`, grouped in memory | v3 | planned |
-| ASSOC-3 | Many-to-many through junction tables: `UserRolesLoad` walks both refs | v3 | planned |
-| ASSOC-4 | No association fields on row structs, ever — not-loaded vs empty must stay distinguishable | — | `NO` by construction (decision values-first) |
-| ASSOC-5 | Polymorphic / STI patterns | — | `HAND`/`NO` (decision non-goals; matrix §3) |
-
-## P6 — Ad-hoc (user-defined) queries
-
-**Problem.** End users composing their own reports at runtime — the one
-case where the shape is unknowable at build time. **Answer.** Quarantine
-it: one package, validated against a generated catalog of tables,
-columns, types and refs, joins only along declared refs, values only
-ever behind placeholders, output `[]map[string]any` whose sole consumer
-is serialization. The untyped region is one package.
-
-| ID | Feature | Slice | Status |
-|---|---|---|---|
-| RPT-1 | Schema catalog export: tables, columns, types, refs as runtime data | LATER | planned |
-| RPT-2 | Report engine: request validation, joins only along declared refs, placeholder-only values | LATER | planned |
-
-## P7 — Schema evolution (migrations)
-
-**Problem.** "Good luck" — the hardest sub-layer
-([model-layer.md](model-layer.md)). **Answer.** Declarative:
-diff current DBML against the last-migrated snapshot; the ledger is
-generated, ordered, hash-pinned; I own SQLite's twelve-step rebuild.
-Schema identity is semantic, never file bytes: a canonical hash of the
-checked AST's schema elements, so reformatting, comments, reordering
-and re-slicing files never perturb the ledger (forced by layout
-invariance, §V1.5). Drops are deletion from the file; renames are
-`[was: 'old']` hints; versioning lives only in the generated ledger
-and the `schema_migrations` table.
-
-| ID | Feature | Slice | Status |
-|---|---|---|---|
-| MIG-1 | Semantic diff: DBML vs snapshot (never SQL parsing); adds/drops/type changes | v4 | planned |
-| MIG-2 | Renames via `[was: 'old']` provenance hints (extension) | v4 | planned |
-| MIG-3 | Generated migration ledger + `schema_migrations` table; each migration embeds the schema content hash → drift is machine-detectable | v4 | planned |
-| MIG-4 | Owned twelve-step rebuild for changes ALTER TABLE can't do (pragma bracket, `foreign_key_check` after) | v4 | planned |
-| MIG-5 | Apply via CLI or embedded runner (`app migrate up`, `embed.FS`); **never** on app start | v4 | planned (decision library-first) |
-| MIG-6 | Irreversibility honesty: no fake `down` for destructive changes | v4 | planned |
-| MIG-7 | Data migrations (backfills) | — | `HAND`, documented pattern; kept out of schema migrations |
-
-## P8 — Data integrity (constraints & validation)
-
-**Problem.** Where validation lives (struct vs controller vs DB) and how
-much the database enforces. **Answer.** Structure is the database's job
-(generated DDL), business invariants are typed Go on the models (decision sibling-files).
-
-| ID | Feature | Slice | Status |
-|---|---|---|---|
-| INT-1 | `NOT NULL`, `UNIQUE`, FKs with `ON DELETE/UPDATE`, composite PKs, 1:1 uniqueness, `CHECK` expressions | v0 | `DONE` (DDL) |
-| INT-2 | Enums: string-backed types + constants; the DDL carries `CHECK (col IN (…))` per enum column (spec Appendix B) | v0 | `DONE` (decision e-prefixed-enums) |
-| INT-3 | Int-backed enums via `[repr: int]` (extension) — full String/Valuer/Scanner/JSON suite, int never escapes the process | LATER | planned (decision e-prefixed-enums) |
-| INT-4 | Business validation: hand-written methods in sibling files of the generated package | — | `HAND` (decision sibling-files); Go-reference checks (INT-6) formalize the entry point |
-| INT-5 | Optimistic locking via `[lock_version]` (extension): `Update` gains version check + bump | LATER | planned (matrix §2) |
-| INT-6 | Validation rides `checks`: typed predicates → SQL `CHECK` + generated `Validate()`; Go-reference checks → validator only | v0 | `DONE` (spec §V12, decision validation-rides-checks) |
-
-## P9 — Transactions & concurrency
-
-| ID | Feature | Slice | Status |
-|---|---|---|---|
-| TX-1 | `Queries` over `DBTX`: same generated methods inside and outside a tx; `WithTx`, `q.Tx(ctx, fn)` | v0 | `DONE` |
-| TX-2 | `rt.Tx`: begin/commit, rollback on error or panic | v0 | `DONE` |
-| TX-3 | Single-writer discipline: one-connection pool, WAL, `busy_timeout` via `rt.Open` | v0 | `DONE` (decision one-connection) |
-| TX-4 | Batched loaders as the *atomicity* answer to loops of reads | v3 | planned |
-| TX-5 | Nested transactions / savepoints | — | `LATER`; error today, honest about it |
-
-## P10 — Runtime & deployment
-
-| ID | Feature | Slice | Status |
-|---|---|---|---|
-| RUN-1 | `rt` package: `Null[T]` (value-or-null JSON), `DBTX`, `ErrNotFound` (= `sql.ErrNoRows`), `Open`, `StmtCache` — stdlib-only, registers no driver | v0 | `DONE` (decisions zero-dependencies, null-t, crud-miss-semantics–decision one-connection) |
-| RUN-2 | Everything library-callable; CLI is a thin wrapper | v0 | `DONE` (decision library-first) |
-| RUN-3 | User binaries embed subcommands + migrations: one self-contained deployable | v4 | planned (decision library-first) |
-| RUN-4 | Generated code header + clobber protection in the CLI | v0 | `DONE` |
-
-## P11 — Guarantees (the correctness harness)
-
-The features above are only as good as their proofs. Standing invariants,
-all enforced by `go test ./...`:
-
-| ID | Guarantee | Status |
-|---|---|---|
-| PROOF-1 | Spec ⇄ conformance corpus; verdicts pinned against upstream `@dbml/parse` before the cross-check retired at 0 disagreements (decision one-corpus) | `DONE` |
-| PROOF-2 | Generated Go: gofmt-stable goldens + compiled by the real toolchain | `DONE` |
-| PROOF-3 | Generated SQL: executes on real SQLite (`foreign_key_check` clean) | `DONE` |
-| PROOF-4 | Every generated statement prepares against the generated DDL (cross-generator coherence) | `DONE` |
-| PROOF-5 | `itest`: full CRUD round trips through a real driver; generated files drift-tested | `DONE` (decision integration-over-mocks) |
-| PROOF-6 | vet rules ⇄ lint.md ⇄ testdata consistency test | `DONE` (decision docs-doctrine) |
-| PROOF-7 | v1 onward: every `Select`/`View` block prepare-validated at gen time; declared columns verified | with v1 |
-| PROOF-9 | Invalid input is pinned (decision invalid-input-goldens): recovery is a rule of the spec (§3.2 rule 6), every diagnostic of every invalid snippet is a golden, and a scripted editor session against the real server process is a golden | `DONE` |
-| PROOF-8 | The spec's EBNF is executable (decision executable-grammar): every block reads, every name is defined once, the collected grammars repeat the sections, every derived sentence parses, every one-token neighbour is decided alike by grammar and front end | `DONE` |
-
-## P12 — Fast tooling
-
-Slow tooling is a defect. The bar: a compile a human perceives as
-instant, and a 300K-line schema through `volt gen` in under a second on
-eight cores. The audit of 2026-09-09 measured the pipeline component by
-component (data structures, allocation, cache behaviour) on a fixture
-of 1000 tables of 150 columns across 20 packages: `volt check` took 47
-minutes, all of it in one cubic path of the routing checker; with the
-shared plan (decision one-naming-plan) the same fixture checks in 1.4 s and generates in
-10 s, of which 8 are gofmt; with canonical emission (decision gofmt-canonical) it generates
-in 2.7 s; with the parallel schedule (decision worker-pool), on four cores, it checks
-in 0.9 s and generates in 1.3 s, `--verify` included in 3.5 s; in the
-editor, with the session (decision editor-session), an edit costs about 200 ms and a
-no-op 2 ms against 770 ms for a fresh analysis. The one-file stress
-project (decision generated-stress: the same thousand tables in one `schema.volt`) then
-exposed what per-package parallelism had hidden — a quadratic route
-binding, a first-segment route index, a Go-reference scan reading the
-generated output — and with those indexed (decision indexed-lookups) it checks in 0.7 s on
-four cores against 9.4 s. The front end was then flattened (decision flat-front-end): 48-byte
-tokens and slab-allocated nodes, a quarter off Load. The edited file's parse and check are now by declaration
-(decisions parse-by-declaration, check-by-declaration): an edit on the thousand-table file costs under 200 ms.
-
-| ID | Work | Status |
-|---|---|---|
-| PERF-1 | One naming plan per package, indexed by table and by generated method; route conflicts through a first-segment index (decision one-naming-plan) | `DONE` |
-| PERF-2 | Scaling tests: allocation at N and 2N per phase, exact and hardware-neutral; `internal/corpus` generates projects of any size using every feature in both layouts, driving linearity tests in tables, packages and columns, an allocation budget per phase (gated, ten percent), compile tests, and benchmarks with a committed baseline (`lang/testdata/bench_baseline.txt`, not gated); `volt stress DIR` writes its one-file shape to disk, a thousand tables of a hundred and fifty columns by default, buildable, to feel the limits of check, gen, the language server and the Go compiler by hand (decision generated-stress); `TestProfileSweep` (env `VOLT_SWEEP_DIR`) times and profiles every phase at 10 to 160 tables and draws the charts, and `go run ./scripts/perf.go` writes that report for any machine with its specification; the bytes one keystroke's three parts allocate in the language server are pinned the same way (`lsp/keystroke_budget_test.go`, decision editor-session) | `DONE` |
-| PERF-3 | `gen` skips unchanged outputs and reads only the marker prefix, so watchers and editors stay quiet | `DONE` |
-| PERF-4 | Emitters gofmt-canonical by construction (column alignment, operator spacing, trailing newline); go/format only in tests and behind `--verify` (decision gofmt-canonical), which also type-checks the output in its package before writing (decision verify-type-checks) | `DONE` |
-| PERF-5 | Routes may name the package's own tables; one directory holds schema and routes (decision self-routing-package) | `DONE` |
-| PERF-6 | `volt gen -o DIR -parts LIST FILE` for go:generate-driven layouts (decision layout-independent-gen); the `.volt` package clause stays mandatory, the emitted clause follows the target | `DONE` |
-| PERF-7 | Parallel schedule: parse per file, check per package, generate per package and file on a worker pool; scanner fast paths (decision worker-pool) | `DONE` |
-| PERF-8 | Language server: debounced background analysis through a `lang.Session` — parses cached by content, per-package results memoized by input identity, no reverse index needed (decision editor-session) | `DONE` |
-| PERF-9 | Flat front end (decision flat-front-end): file-backed positions, 48-byte two-pointer tokens borrowing their text from the file, the parser's hottest node kinds from slabs. Load at 160 tables 35.9 ms to 27.1 ms, allocations 312K to 126K. Not done, on purpose: interned symbols (five percent, every consumer's API) and precomputed emission fragments (the emitters' allocations are per-field formatting, a separate lever) | `DONE` |
-| PERF-10 | Per-declaration memoization for the one-file layout (decisions parse-by-declaration, check-by-declaration): a file is parsed in chunks, one per top-level declaration, an edit re-parses the chunk it touched and relocates the rest; the package's tables, models, lowered checks and selects are answered from the last check when their inputs are the objects they were. Thousand-table file, one edit inside one table: parse 340 ms to 2 ms (22 before decision one-parse), check 700 ms to about 50 ms once the routes are lowered per scope item and the model carries its own names and signatures (decision check-by-declaration). The server's navigation index is kept by table as well (decision index-by-table): its whole analysis of that edit was 106 ms best, 163 ms mean, against 400 to 650, before decision check-by-declaration. Through the server's stdio the keystroke reached diagnostics in about 1.7 s on that file when this landed, the document's own whole-file front end and the package vet, not the check; decision editor-session memoized the document's front end, judged vet by declaration and made the sync incremental, and the same keystroke sent as a range reaches its diagnostics in about 0.22 s the day decision editor-session landed, 0.27 s on the closing day's re-measurement. Every memoized computation is a pure function of explicit inputs, proven by the purity gate (decision pure-memos); every memo key is the inputs themselves, nothing hashed, no size or time stamp (decision keys-are-inputs); the chunk boundary is the language's element boundary (§3.2.5), cut by the scanner, so the parse with reuse is the parse (decision one-parse) | `DONE` |
-| PERF-11 | One package checked like twenty (decision indexed-lookups): select methods indexed by name, route conflicts in a literal-prefix trie, generated files skipped by the Go-reference scan, params validators memoized per table, the plan's table models built on the worker pool, vet warnings memoized in the editor session; the linearity test gained the one-file dimension. One-file stress project, four cores: check 9.4 s to 0.7 s, editor analysis 15.5 s to 2.4 s cold and 0.4 s unchanged | `DONE` |
-
-## Non-goals
-
-Permanent, with reasons — see **decision non-goals**: identity map / unit of work, lazy
-loading, active-record `Save()`, callbacks, dirty tracking, default
-scopes, single-table inheritance, reflection in generated paths, a
-Turing-complete query DSL in Go. Every one is either a lie waiting to
-happen (lazy loading, callbacks) or a worse language for a job SQL
-already does.
-
----
-
-## Build order
-
-v1 `SEL-*` → v2 `DYN-*` (+ INT-3/INT-5 opportunistically) → v3 `ASSOC-*`
-→ v4 `MIG-*` + RUN-3 → RPT-* when a consumer exists. Each feature lands
-with its PROOF-row test before it's called done.
-
----
-
-# The framework
-
-The routing layer shipped v0 (spec Part II; the proof chain runs on
-every `go test ./...`). What follows is the framework's build list, in
-priority order. The first two entries are what stand between the
-language and running a real application on it.
-
-## FW-1 — The `Select` query layer — **structured half `DONE`** (2026-09-01)
-
-Landed: `Group` (overlapping table sets with `+`/`\` algebra, §V9), `Pred`
-(the closed, statically typed predicate language, §V10) and
-`Select ... for <group> where <expr> [order: ...]` (§V11) — one typed
-method per group member, one signature for all (the §V11.4 agreement
-rule), WHERE rendered once, driver-proven in `nao/itest`. Design law:
-decisions closed-predicates, group-vs-tablegroup.
-
-Still open from the original slice, in the maintainer's build order:
-
-- **Column projection — `DONE` 2026-09-02** (spec §V11.7): an explicit
-  list mints one shared type, no list yields per-member models, and a
-  star with exclusions mints per-member derivatives. Per-single-member
-  exclusion stays hypotheses H3.
-- **Raw-SQL `Select`/`View` blocks** — real SQL declared in the schema
-  for shapes the closed language refuses (joins, aggregates), typed
-  functions out, prepare-validated (decision expressions-are-sqlites).
-
-FW-2 needs the structured half only, so Datasets are unblocked.
-
-## Known gaps (adversarial audit, 2026-09-02)
-
-Confirmed by reproduction, not yet fixed — listed so the docs never
-imply otherwise (decision docs-doctrine). Each is small; none blocks FW-2.
-
-- **Editor, cross-file.** Column occurrences are indexed per file: a
-  select, enum reference or `default: status.x` in a *sibling* `.volt`
-  file of the same package is neither navigable nor renamed from the
-  declaration. Pred hover from a sibling file shows only the name.
-- **Editor, uncovered spellings.** No hover/definition/references for
-  select parameters (`:site`), for columns inside a Pred body, or for
-  projection/order columns of a group-targeted select (by design the
-  latter are not renamed; they should still navigate). References on a
-  table list its declaration twice; hover ranges on qualified
-  references span the qualifier.
-- **Diagnostics anchoring.** A Pred that fails typing at a use site is
-  reported inside the Pred declaration, once per failing select or
-  check, without naming the use. Two same-named projected selects on
-  disjoint tables are refused with a message naming one select twice.
-  A projection over a member with an unmapped column type leaks the
-  generator's internal message.
-- **Selects.** Generated doc comments lower-case the first letter
-  of a select name instead of quoting the schema spelling.
-- **Validation.** `Validate()` does not enforce enum membership (the
-  DDL `CHECK … IN` does); `rt.Null[T]` implements JSON only, so a
-  non-JSON encoder reached through `tag:` sees the wrapper's fields;
-  Pred-reference checks render with redundant parentheses.
-- **Query routes and datasets (2026-09-04).** `db.UserGet` in a
-  handler slot has no editor navigation (a dataset's
-  select does). Only `get` query routes and event routes have
-  reverse-URL helpers, by design.
-- **Validation (2026-09-04, after decision required-and-problems).** The Go tier does not check
-  enum membership (the DDL `CHECK … IN` does, hypotheses H5); typed
-  checks have no `length()` term; a select's query parameters are typed
-  but not bounded; no `[on: create]` / `[on: update]`; messages are not
-  localized. Each has a design sketched under the deferred chores, "Validation,
-  round 3", taken when the battlefield app first needs it.
-- **CLI.** `Project.Module` is required but unused; a nonexistent
-  argument gets a loader message rather than "no such directory";
-  diagnostics print absolute paths even for relative arguments;
-  cascading import errors are not collapsed.
-
-## FW-2 — Query routes and datasets: schema-driven route expansion
-
-**Landed 2026-09-04 (decision query-routes): query routes.** `get /users/:id(int32)
-db.UserGet` binds a route to a generated query — a select method or a
-default CRUD method — and Volt writes the handler: typed binding from
-path, body and query string, rendering by `Accept` (JSON and GOB),
-404 on a row miss, 201/204 for create/delete. The `Controllers`
-manifest carries one `*pkg.Queries` per data package. This is the
-primitive the rest of FW-2 expands: every route below is a query
-route emitted per group member.
-
-**Landed (decision dataset-expansion): `dataset`.** A scope item binding a *group* select,
-`dataset db.browse [strip: 'da_']`, expands to one query route per
-member table with the segment derived from the table name, and
-`only:`/`except:` to take a member out and write it by hand. It
-replaced the reserved `Dataset` word.
-
-**Landed (decision server-sent-events): event routes.** `get /events volt.Events` serves the
-runtime's broker; `Publish` fans out with replay, the client's
-`Events(ctx)` reconnects with Last-Event-ID.
-
-**Landed (decision resources-default): `resources db.t [default]`.** Every surviving action
-becomes a query route over the table's CRUD; `default` implies `api`,
-and `except:` takes an action back by hand. FW-2 is complete.
-
-**Landed (decision generated-client): the client package.** `client/volt_client.go` beside
-every routing package — typed methods per query route, raw methods
-per named controller route, JSON or GOB, `errors.Is(err,
-volt.ErrNotFound)` on a miss.
-
-What the original design still decides, beyond what landed:
-
-- **Override ladder**, the model for every generated surface: nothing
-  → one operation on one table (the override receives the generated
-  default as `next`, to wrap or replace) → presentation only →
-  `except:` a table and hand-write it → no dataset at all. Every
-  override is visible in source and `volt routes` shows generated
-  against overridden per row; datasets regenerate forever *around*
-  what you have claimed. Hypotheses H3 waits on this ladder.
-- **Column metadata.** Lift `'Title, unit=EUR, dict=YesNo'` note
-  conventions into `Column{Title, Unit, Dict}`; promote to first-class
-  settings (`[unit:]`, `[dict:]`) later; vet warns on notes that do
-  not parse. HTML rendering is not part of the renderer seam.
-- **Honest costs.** Generated routes grow linearly with group size;
-  the note convention is load-bearing until promoted.
-
-## FW-3 — Schema extensions from the old design
-
-`[was:]` (rename memory for migrations, with MIG-\*) and `[repr:]`
-(storage representation); the migration rulings live in P7. Blocked
-behind FW-1 and the migration slice v4.
-
-## FW-4 — Action View: typed compiled templates
-
-The biggest win available after datasets, and the gateway to FW-5:
-templates compiled at gen time, variables typechecked against the
-models they render (what `html/template` cannot give). Declared in the
-language, generated as plain Go. The framework inventories this drew
-on left the repository on 2026-10-15; what they settled is in FW-5.
-
-## FW-5 — Sub-libraries worth building (Rails family, curated)
-
-Verdicts from the 2026-08 session (full argument in the session
-record): **build** Active Job analog (declared job types → typed
-`Enqueue`, the stringly-typed payload is the real pain) and Action
-Mailer analog (small once FW-4 exists — a Mailer declaration generates
-typed send functions over an SMTP runtime). **Do not build** —
-integration products, point at existing Go libraries: storage, cable
-(websockets), mailbox (inbound email), rich text. **Already have the
-part that pays** of Active Support: `nao/inflect`. Each new
-sub-library is a declaration form + a generator + a small runtime, and
-each costs a spec section, parser, checker, grammar rule, LSP
-awareness and corpus cases — the language makes sub-libraries better,
-not cheaper.
-
-## FW-6 — Router conveniences (parked)
-
-Plugs from imported packages (a v0 check error on purpose);
-`volt.WithQueries` / `WithTemplates` / `BuildDeps` runtime options;
-LSP navigation into Go symbols (handler refs `Home.Index`,
-`error_handler:`) — needs a Go-side index the server deliberately does
-not have yet.
-
-## FW-7 — Executable spec examples
-
-Extract the code blocks from spec.md and run them through the front
-end in CI, the way lint.md's examples already run — closing the last
-gap between "the spec is tested" (constraints, via the corpus) and
-"the spec's own prose is tested" (examples). Cheap, high-trust.
-
-## Deferred chores
-
-Work decided and deliberately deferred, each with the reason it
-waits, so nothing is forgotten and nothing is started by accident. An
-entry is deleted in the commit that lands it.
-
-- **Citations by heading name** (decision named-sections). Replace
-  every `§…` citation with the heading-name form and a short stable
-  diagnostic slug per section, extend `lang/spec_doc_test.go` to
-  resolve names, delete the spec's Citation key. Deferred for its
-  breadth: about nine hundred sites.
-- **Validation, round 3.** In order: `[on: create]` / `[on: update]`
-  contextual checks, the Go tier joining the matching params
-  `Validate`, the SQL tier as `BEFORE INSERT` / `BEFORE UPDATE OF`
-  triggers raising `volt check failed: <table>.<check>` so the
-  two-tier guarantee survives, triggers entering the DDL diff as
-  drop-and-recreate; enum membership in the Go tier (hypotheses H5);
-  `length()` as a numeric term over text, enum and bytes columns,
-  rendering `utf8.RuneCountInString` for text so the tiers agree;
-  `[check:]` on select parameters, Go tier only; `[message: '…']` with
-  a runtime hook keyed by `(table, check)`. Each is taken the day a
-  real rule in the battlefield app needs it. Not planned: nullable
-  columns in typed checks, named validation sets.
-- **The navigation index's hit path.** Keep occurrences by table
-  without copying, keep the name maps across builds for the tables
-  the memo answered, memoize a select's hover on the members it
-  renders. Deferred: about 95 ms of a 0.27 s keystroke on the
-  thousand-table file.
-- **Cold open of the one-file layout.** Parse the chunks on the
-  worker pool; the scanner cuts them before any is parsed (decision
-  one-parse). Deferred: an open is once per file.
-- **Retained chunk texts.** Clone a chunk's text and token values
-  when it is cut, so a chunk keeps its own bytes; today each live
-  chunk pins the whole text it was cut from. Deferred: memory, not
-  correctness.
+# Roadmap
+
+What Volt is made of and whether each piece is built. `[x]` built and
+tested, `[ ]` not built, `[~]` partly built. *hand* means a documented
+pattern, deliberately hand-written, never generated; *no* means a
+non-goal (decision non-goals). The why behind an item lives in
+[`decisions.md`](decisions.md) or the spec; a status changes in the
+commit that lands it (decision docs-doctrine). Build order: raw-SQL
+selects, then associations, then migrations, then the report engine
+when a consumer exists.
+
+## Language and front end
+
+- [x] Spec: EBNF, numbered constraints, conformance corpus
+  - [x] The grammar is executable and proven against the front end
+  - [x] Invalid input is a rule with goldens; the editor session is a golden
+  - [ ] Executable spec examples: run the spec's code blocks through the front end in CI
+- [x] Scanner, parser, checker, vet; project loading from `go.mod`
+  - [x] Parse and check by declaration; routes lowered per scope item
+  - [x] Named placeholders, Go references checked by spelling
+- [x] Schema core (DBML): Project, Table, TablePartial, Records, Enum, Ref, TableGroup, Notes, DiagramView
+- [~] Schema extensions
+  - [x] `[model:]`, `[tag:]`, `[required]`, typed `checks`
+  - [x] `Group`, `Pred`, `Select … for <group>` with projection, list parameters
+  - [ ] Raw-SQL `Select` / `View` blocks
+    - [ ] `Select name (params) { … }`: declared params, select list, from and joins, opaque where/having/group/order bodies
+    - [ ] One result struct per block, typed function, single-row variants
+    - [ ] Joins inferred from a unique declared ref, `on:` override
+    - [ ] Every block prepare-validated against the generated DDL
+    - [ ] `View`: `CREATE VIEW`, read-only struct, declared columns verified against the SQL
+    - [ ] `Trigger`: deferred, drop-and-recreate
+    - *hand* raw SQL strings in `.go` files; promote them to a block
+  - [ ] `[was:]` rename memory (with migrations)
+  - [ ] `[repr: int]` enums: full String/Valuer/Scanner/JSON suite, the int never escapes the process
+  - [ ] `[lock_version]` optimistic locking
+- [ ] Citations by heading name: every `§…` becomes the heading's anchor, diagnostic codes `spec/<anchor>`, the spec's Citation key deleted, the test resolves names
+
+## Data layer (nao)
+
+- [x] Models: structs, enums, `Null[T]`, singular names, notes as doc comments
+- [x] DDL and seed `INSERT`s from `records`
+- [x] CRUD: `Get`, `GetMany`, `GetBy*`, `List`, `Count`, `Create`, `Update`, `Delete`; keyless tables get `List`/`Create`/`Count`
+- [x] Dynamic queries: predicates as values, flat typed handles, per-model wrappers, shared verbs, keyset pagination, statement cache, `dynname` vet rule
+- [x] Validation: typed checks compile to `CHECK` and `Validate()`, Go-reference checks to the validator only, `required`, 422/409 with per-column details on the API path
+  - [ ] `[on: create]` / `[on: update]` as triggers in SQL and per-params in Go
+  - [ ] Enum membership in the Go tier (hypotheses H5)
+  - [ ] `length()` in typed checks, rune-counted on text so the tiers agree
+  - [ ] `[check:]` on select parameters, Go tier only
+  - [ ] `[message: '…']` with a runtime hook keyed by table and check
+  - *no* nullable columns in typed checks; named validation sets
+- [x] Transactions: one `Queries` over `DBTX`, `Tx` with rollback on error or panic, single-writer `Open`
+  - [ ] Savepoints
+- [ ] Associations
+  - [ ] Single loaders: `PostAuthorGet(ctx, post)`, `UserPostsList(ctx, user)`
+  - [ ] Batched loaders: `PostCommentsLoad(ctx, posts) map[int64][]Comment`, one `IN`, grouped in memory; the atomicity answer to loops of reads
+  - [ ] Many-to-many through junction tables
+  - *no* association fields on row structs; *hand* polymorphic and STI patterns
+- [ ] Migrations
+  - [ ] Semantic diff of the schema against the last-migrated snapshot, never SQL parsing; identity is a canonical hash of the checked AST
+  - [ ] Renames via `[was: 'old']`
+  - [ ] Generated ledger plus `schema_migrations`, each migration pinned to the schema hash
+  - [ ] Owned twelve-step rebuild in the pragma bracket, `foreign_key_check` after
+  - [ ] Applied by CLI or an embedded runner, never on app start; user binaries embed subcommands and migrations
+  - [ ] No fake `down` for destructive changes
+  - *hand* data migrations
+- [ ] Report engine, when a consumer exists
+  - [ ] Schema catalog exported as runtime data
+  - [ ] Quarantined interpreter: validated requests, joins only along declared refs, values only behind placeholders, `[]map[string]any` out
+
+## Framework
+
+- [x] Routing: `package`/`import`, pipelines, scopes, routes, `resources`, plugs, per-scope error handlers, reverse URLs, `ServeMux` as the matcher
+- [x] Query routes bound to generated queries; `dataset`; `resources … [default]`; event routes over the SSE broker
+- [x] Generated client beside every routing package; JSON and GOB by `Accept`
+- [x] Layouts: packages, one directory routing its own tables, `go:generate` workspaces via `-o DIR -parts LIST`
+- [ ] HTML rendering and typed compiled templates: variables type-checked against the models they render
+- [ ] Jobs: declared job types to typed `Enqueue`
+- [ ] Mailer: a declaration generating typed send functions over SMTP, once templates exist
+  - *no* storage, websockets, inbound mail, rich text: point at existing Go libraries
+- [ ] Router conveniences: plugs from imported packages, `volt.WithQueries` / `WithTemplates` / `BuildDeps`
+- [ ] Datasets' override ladder: one operation on one table receives the generated default as `next`; `volt routes` shows generated against overridden; column metadata (`Title`, `Unit`, `Dict`) from notes, later first-class settings
+
+## Tooling
+
+- [x] One binary: `check`, `vet`, `gen`, `routes`, `stress`, `lsp`, `version`; `gen --verify` type-checks the output first
+- [x] Generated Go gofmt-canonical by construction; goldens compiled by the real toolchain; every statement prepared against the generated DDL
+- [x] Parallel schedule on a worker pool; memoized sessions; the purity gate, the immutability walk, the race detector as the bar
+- [x] Language server: diagnostics, completion, hover, navigation, rename; incremental sync; keystroke under a third of a second on a thousand-table file
+  - [ ] Cross-file column occurrences: a select, enum reference or default in a sibling file is neither navigable nor renamed
+  - [ ] Hover and definition for select parameters, columns inside a Pred body, projection and order columns of a group select; references list a table once; hover ranges on qualified references exclude the qualifier
+  - [ ] Navigation into Go symbols: handler references and `error_handler:` need a Go-side index
+  - [ ] The navigation index's hit path: walk occurrences by table without copying, keep name maps across builds, memoize a select's hover on its members
+  - [ ] Cold open of the one-file layout: parse the chunks on the worker pool
+  - [ ] Retained chunk texts: a chunk keeps its own bytes rather than pinning the file it was cut from
+- [x] Tree-sitter grammar and Zed extension
+- [x] Scaling tests, allocation budgets, `volt stress`, the profiling sweep and the performance report of any machine
+- [ ] Diagnostics
+  - [ ] A Pred that fails typing at a use site is reported at the use, not once per failing select inside the declaration
+  - [ ] Two same-named projected selects on disjoint tables name both selects
+  - [ ] A projection over an unmapped column type gets a user-facing message
+  - [ ] Generated doc comments quote a select's schema spelling
+  - [ ] `rt.Null[T]` for non-JSON encoders reached through `tag:`
+  - [ ] CLI: a nonexistent argument says "no such directory"; relative paths in diagnostics for relative arguments; cascading import errors collapsed; `Project.Module` either read or dropped

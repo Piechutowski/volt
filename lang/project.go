@@ -261,7 +261,7 @@ func loadDirs(root string, dirs []string, overlay map[string]string, s *Session)
 		queue = append(queue, ad)
 	}
 
-	// One wave per import depth (PERF-7), results taken in directory
+	// One wave per import depth (decision worker-pool), results taken in directory
 	// order.
 	seen := map[string]bool{}
 	for wave := queue; len(wave) > 0; {
