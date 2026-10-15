@@ -1,0 +1,19 @@
+id = "volt"
+name = "Volt"
+version = "0.2.0"
+schema_version = 1
+authors = ["Szymon Piechutowski <106471045+Piechutowski@users.noreply.github.com>"]
+description = "Volt language support (.volt, .dbml): syntax highlighting and the Volt language server."
+repository = "https://github.com/Piechutowski/volt"
+
+[language_servers.volt]
+name = "Volt language server"
+languages = ["Volt"]
+
+# The grammar is loaded from a local git mirror of ../grammar.
+# `repository` and `commit` below are machine-specific and are rewritten by
+# scripts/sync-grammar.sh — run it once after cloning and after every grammar
+# change, then use `zed: install dev extension` / Rebuild.
+[grammars.volt]
+repository = "file:///SET-BY-scripts/sync-grammar.sh"
+commit = "0000000000000000000000000000000000000000"

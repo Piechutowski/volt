@@ -1,0 +1,4 @@
+# Zed dev-extension build artifacts
+/target
+/grammars
+*.wasm
