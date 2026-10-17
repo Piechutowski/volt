@@ -22,7 +22,7 @@ import (
 )
 
 // ModFile is the project root marker (spec §projects-and-packages rule 1): the Go module file.
-// A Volt project is a Go module (decision go-module-is-the-project).
+// A Volt project is a Go module.
 const ModFile = "go.mod"
 
 // Project is a loaded Volt project: the Go module path and the packages
@@ -66,20 +66,20 @@ type Package struct {
 	// with CheckFns: gen/sqlite emits CHECK (<this>) for it (§validation-checks rule 4).
 	CheckSQL map[*ast.Check]string
 	Selects  []*SelectInfo
-	// selectByMethod indexes Selects by generated method name (decision indexed-lookups);
-	// selectByName by declared name, the last declared winning (decision check-by-declaration).
+	// selectByMethod indexes Selects by generated method name;
+	// selectByName by declared name, the last declared winning.
 	selectByMethod map[string]selectMember
 	selectByName   map[string]*SelectInfo
-	// checkFnByKey indexes CheckFns by table key (decision check-by-declaration), built with them.
+	// checkFnByKey indexes CheckFns by table key, built with them.
 	checkFnByKey map[string][]golang.CheckSpec
 	// ValidByKey says, per table whose params structs validate (§validation-checks rule 6),
 	// whether the create and the update one do: decided with the
-	// table's lowered checks, read by the route lowering (decision check-by-declaration).
+	// table's lowered checks, read by the route lowering.
 	ValidByKey map[string][2]bool
 
 	// schema is the package's checked table model, set by Check.
 	schema *check.Info
-	// plan is the package's naming plan, built once by Check (decision one-naming-plan).
+	// plan is the package's naming plan, built once by Check.
 	plan *golang.Plan
 
 	// merged is the synthetic single file of all declarations, in file
@@ -106,7 +106,7 @@ func (p *Package) Merged() *ast.File { return p.merged }
 func (p *Package) Schema() *check.Info { return p.schema }
 
 // Plan returns the package's naming plan (nil before Check): every
-// generated Go and SQL name, decided once (decision one-naming-plan).
+// generated Go and SQL name, decided once.
 func (p *Package) Plan() *golang.Plan { return p.plan }
 
 // HasSchema reports whether the package declares data elements.
@@ -230,7 +230,7 @@ func LoadDirs(root string, dirs []string, overlay map[string]string) (*Project, 
 }
 
 // loadDirs is LoadDirs with an optional Session whose parse cache
-// stands in for the parser (decision editor-session).
+// stands in for the parser.
 func loadDirs(root string, dirs []string, overlay map[string]string, s *Session) (*Project, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
@@ -261,7 +261,7 @@ func loadDirs(root string, dirs []string, overlay map[string]string, s *Session)
 		queue = append(queue, ad)
 	}
 
-	// One wave per import depth (decision worker-pool), results taken in directory
+	// One wave per import depth, results taken in directory
 	// order.
 	seen := map[string]bool{}
 	for wave := queue; len(wave) > 0; {

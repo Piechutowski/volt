@@ -232,7 +232,7 @@ func selectEmit(b *strings.Builder, t *tableModel, fn SelectFn, cols []*fieldPla
 	for _, prm := range fn.Params {
 		fmt.Fprintf(&sig, ", %s %s", prm.GoName, prm.GoType)
 		if strings.HasPrefix(prm.GoType, "[]") {
-			// A list parameter travels as one JSON array (§selects-over-groups rule 6, decision list-parameters).
+			// A list parameter travels as one JSON array (§selects-over-groups rule 6).
 			fmt.Fprintf(&binds, ", sql.Named(%q, rt.JSONList(%s))", prm.SQLName, prm.GoName)
 			continue
 		}

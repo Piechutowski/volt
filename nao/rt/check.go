@@ -22,7 +22,7 @@ type CheckError struct {
 // body: the check, its columns, the message. It aliases the same
 // unnamed struct the volt runtime aliases, so Details() satisfies
 // volt's Detailer interface without either package importing the
-// other (decision zero-dependencies).
+// other.
 type Detail = struct {
 	Check   string   `json:"check"`
 	Columns []string `json:"columns,omitempty"`

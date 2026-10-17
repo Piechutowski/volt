@@ -2,7 +2,7 @@
 //
 // The dynamic query layer over the models in nao_models.go: typed
 // column handles, per-model option wrappers, and predicate-driven
-// terminals — see docs/decisions.md, Query layer.
+// terminals.
 
 package models
 
@@ -13,24 +13,24 @@ import (
 )
 
 // userTableSQL and userColumnsSQL are the fixed shape of User's
-// dynamic statements; the interpreter renders everything else (decision options-are-data).
+// dynamic statements; the interpreter renders everything else.
 const (
 	userTableSQL   = `"users"`
 	userColumnsSQL = `"id"`
 )
 
-// Typed column handles of User (decision flat-handles): inert predicate, order and
-// assignment builders for the dynamic query layer (decision options-are-data). A predicate
+// Typed column handles of User: inert predicate, order and
+// assignment builders for the dynamic query layer. A predicate
 // built here can only enter User queries; mixing models is a compile
 // error.
 var (
 	UserID = rt.Column[User, int64]{Name: "id"}
 )
 
-// UserLimit caps how many rows UserQuery returns (decision per-model-wrappers).
+// UserLimit caps how many rows UserQuery returns.
 func UserLimit(n int) rt.Opt[User] { return rt.Limit[User](n) }
 
-// UserOffset skips n rows; keyset pagination (UserAfter) scales better (decision keyset-pagination).
+// UserOffset skips n rows; keyset pagination (UserAfter) scales better.
 func UserOffset(n int) rt.Opt[User] { return rt.Offset[User](n) }
 
 // UserDistinct deduplicates the rows UserQuery returns.
@@ -41,7 +41,7 @@ func UserDistinct() rt.Opt[User] { return rt.Distinct[User]() }
 func UserOrderBy(terms ...rt.Order[User]) rt.Opt[User] { return rt.OrderBy(terms...) }
 
 // UserAfter resumes strictly after the row with the given key — keyset
-// pagination (decision keyset-pagination): one value per UserOrderBy term, in the same order.
+// pagination: one value per UserOrderBy term, in the same order.
 func UserAfter(key ...any) rt.Opt[User] { return rt.After[User](key...) }
 
 // UserSet collects the typed assignments of a UserUpdateWhere, built
@@ -101,7 +101,7 @@ func (q *Queries) UserExists(ctx context.Context, preds ...rt.Pred[User]) (bool,
 
 // UserDeleteWhere removes every users row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
-// full-table delete (decision positional-placeholders).
+// full-table delete.
 func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
 	query, args, err := rt.DeleteRender(userTableSQL, preds)
 	if err != nil {
@@ -116,8 +116,8 @@ func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (
 
 // UserUpdateWhere applies the typed assignments (UserSet) to every users
 // row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer (decision shape-rule). No effective predicate
-// is an error, never a full-table rewrite (decision positional-placeholders).
+// partial update of the dynamic layer. No effective predicate
+// is an error, never a full-table rewrite.
 func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], preds ...rt.Pred[User]) (int64, error) {
 	query, args, err := rt.UpdateRender(userTableSQL, set, preds)
 	if err != nil {
@@ -131,14 +131,14 @@ func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], pr
 }
 
 // roleTableSQL and roleColumnsSQL are the fixed shape of Role's
-// dynamic statements; the interpreter renders everything else (decision options-are-data).
+// dynamic statements; the interpreter renders everything else.
 const (
 	roleTableSQL   = `"roles"`
 	roleColumnsSQL = `"id", "name"`
 )
 
-// Typed column handles of Role (decision flat-handles): inert predicate, order and
-// assignment builders for the dynamic query layer (decision options-are-data). A predicate
+// Typed column handles of Role: inert predicate, order and
+// assignment builders for the dynamic query layer. A predicate
 // built here can only enter Role queries; mixing models is a compile
 // error.
 var (
@@ -146,10 +146,10 @@ var (
 	RoleName = rt.Column[Role, string]{Name: "name"}
 )
 
-// RoleLimit caps how many rows RoleQuery returns (decision per-model-wrappers).
+// RoleLimit caps how many rows RoleQuery returns.
 func RoleLimit(n int) rt.Opt[Role] { return rt.Limit[Role](n) }
 
-// RoleOffset skips n rows; keyset pagination (RoleAfter) scales better (decision keyset-pagination).
+// RoleOffset skips n rows; keyset pagination (RoleAfter) scales better.
 func RoleOffset(n int) rt.Opt[Role] { return rt.Offset[Role](n) }
 
 // RoleDistinct deduplicates the rows RoleQuery returns.
@@ -160,7 +160,7 @@ func RoleDistinct() rt.Opt[Role] { return rt.Distinct[Role]() }
 func RoleOrderBy(terms ...rt.Order[Role]) rt.Opt[Role] { return rt.OrderBy(terms...) }
 
 // RoleAfter resumes strictly after the row with the given key — keyset
-// pagination (decision keyset-pagination): one value per RoleOrderBy term, in the same order.
+// pagination: one value per RoleOrderBy term, in the same order.
 func RoleAfter(key ...any) rt.Opt[Role] { return rt.After[Role](key...) }
 
 // RoleSet collects the typed assignments of a RoleUpdateWhere, built
@@ -220,7 +220,7 @@ func (q *Queries) RoleExists(ctx context.Context, preds ...rt.Pred[Role]) (bool,
 
 // RoleDeleteWhere removes every roles row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
-// full-table delete (decision positional-placeholders).
+// full-table delete.
 func (q *Queries) RoleDeleteWhere(ctx context.Context, preds ...rt.Pred[Role]) (int64, error) {
 	query, args, err := rt.DeleteRender(roleTableSQL, preds)
 	if err != nil {
@@ -235,8 +235,8 @@ func (q *Queries) RoleDeleteWhere(ctx context.Context, preds ...rt.Pred[Role]) (
 
 // RoleUpdateWhere applies the typed assignments (RoleSet) to every roles
 // row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer (decision shape-rule). No effective predicate
-// is an error, never a full-table rewrite (decision positional-placeholders).
+// partial update of the dynamic layer. No effective predicate
+// is an error, never a full-table rewrite.
 func (q *Queries) RoleUpdateWhere(ctx context.Context, set []rt.Assign[Role], preds ...rt.Pred[Role]) (int64, error) {
 	query, args, err := rt.UpdateRender(roleTableSQL, set, preds)
 	if err != nil {
@@ -250,14 +250,14 @@ func (q *Queries) RoleUpdateWhere(ctx context.Context, set []rt.Assign[Role], pr
 }
 
 // userRoleTableSQL and userRoleColumnsSQL are the fixed shape of UserRole's
-// dynamic statements; the interpreter renders everything else (decision options-are-data).
+// dynamic statements; the interpreter renders everything else.
 const (
 	userRoleTableSQL   = `"user_roles"`
 	userRoleColumnsSQL = `"user_id", "role_id", "granted_at"`
 )
 
-// Typed column handles of UserRole (decision flat-handles): inert predicate, order and
-// assignment builders for the dynamic query layer (decision options-are-data). A predicate
+// Typed column handles of UserRole: inert predicate, order and
+// assignment builders for the dynamic query layer. A predicate
 // built here can only enter UserRole queries; mixing models is a compile
 // error.
 var (
@@ -266,10 +266,10 @@ var (
 	UserRoleGrantedAt = rt.Column[UserRole, time.Time]{Name: "granted_at"}
 )
 
-// UserRoleLimit caps how many rows UserRoleQuery returns (decision per-model-wrappers).
+// UserRoleLimit caps how many rows UserRoleQuery returns.
 func UserRoleLimit(n int) rt.Opt[UserRole] { return rt.Limit[UserRole](n) }
 
-// UserRoleOffset skips n rows; keyset pagination (UserRoleAfter) scales better (decision keyset-pagination).
+// UserRoleOffset skips n rows; keyset pagination (UserRoleAfter) scales better.
 func UserRoleOffset(n int) rt.Opt[UserRole] { return rt.Offset[UserRole](n) }
 
 // UserRoleDistinct deduplicates the rows UserRoleQuery returns.
@@ -280,7 +280,7 @@ func UserRoleDistinct() rt.Opt[UserRole] { return rt.Distinct[UserRole]() }
 func UserRoleOrderBy(terms ...rt.Order[UserRole]) rt.Opt[UserRole] { return rt.OrderBy(terms...) }
 
 // UserRoleAfter resumes strictly after the row with the given key — keyset
-// pagination (decision keyset-pagination): one value per UserRoleOrderBy term, in the same order.
+// pagination: one value per UserRoleOrderBy term, in the same order.
 func UserRoleAfter(key ...any) rt.Opt[UserRole] { return rt.After[UserRole](key...) }
 
 // UserRoleSet collects the typed assignments of a UserRoleUpdateWhere, built
@@ -340,7 +340,7 @@ func (q *Queries) UserRoleExists(ctx context.Context, preds ...rt.Pred[UserRole]
 
 // UserRoleDeleteWhere removes every user_roles row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
-// full-table delete (decision positional-placeholders).
+// full-table delete.
 func (q *Queries) UserRoleDeleteWhere(ctx context.Context, preds ...rt.Pred[UserRole]) (int64, error) {
 	query, args, err := rt.DeleteRender(userRoleTableSQL, preds)
 	if err != nil {
@@ -355,8 +355,8 @@ func (q *Queries) UserRoleDeleteWhere(ctx context.Context, preds ...rt.Pred[User
 
 // UserRoleUpdateWhere applies the typed assignments (UserRoleSet) to every user_roles
 // row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer (decision shape-rule). No effective predicate
-// is an error, never a full-table rewrite (decision positional-placeholders).
+// partial update of the dynamic layer. No effective predicate
+// is an error, never a full-table rewrite.
 func (q *Queries) UserRoleUpdateWhere(ctx context.Context, set []rt.Assign[UserRole], preds ...rt.Pred[UserRole]) (int64, error) {
 	query, args, err := rt.UpdateRender(userRoleTableSQL, set, preds)
 	if err != nil {

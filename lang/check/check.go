@@ -22,11 +22,11 @@ type Info struct {
 	HasImports bool
 	// TableGroups in declaration order, resolved to their member tables
 	// (unknown members dropped; §tablegroup reports them). A TableGroup is a
-	// set wherever Volt names one (spec §groups rule 2, decision set-difference).
+	// set wherever Volt names one (spec §groups rule 2).
 	TableGroups []*TableGroupInfo
 
 	byTable map[string]*TableInfo // canonical key and alias -> table
-	byBase  map[string]*TableInfo // bare name -> the first table declared with it (decision check-by-declaration)
+	byBase  map[string]*TableInfo // bare name -> the first table declared with it
 }
 
 // TableByBase is the first table declared with the bare name, in any
@@ -134,7 +134,7 @@ func File(f *ast.File) (*Info, []diag.Diagnostic) {
 
 // FileMemo is File with a memo of the file's earlier checks: a table
 // whose declaration and injected partials are the nodes they were is
-// answered from it (decision check-by-declaration). A nil memo checks everything.
+// answered from it. A nil memo checks everything.
 func FileMemo(f *ast.File, memo *Memo) (*Info, []diag.Diagnostic) {
 	c := &checker{
 		info: &Info{
@@ -162,7 +162,7 @@ type checker struct {
 	diags []diag.Diagnostic
 	memo  *Memo
 	// enumSet is the file's enums as the table check needs them: a
-	// pure input with a signature the memo can compare (decision pure-memos).
+	// pure input with a signature the memo can compare.
 	enumSet *enumSet
 
 	partials map[string]*PartialInfo
@@ -268,7 +268,7 @@ func (c *checker) collect(f *ast.File) {
 	}
 
 	// Every table's check is a pure function of its declaration, the
-	// partials it injects, the enum set and the imports flag (decision pure-memos). The
+	// partials it injects, the enum set and the imports flag. The
 	// use counts are the caller's, as every side effect.
 	c.enumSet = enumSetOf(c.enums)
 	for i, ti := range c.info.Tables {
@@ -307,7 +307,7 @@ func (c *checker) collect(f *ast.File) {
 
 // enumSet is the enums a table check consults, by canonical key, and
 // the same keys sorted: the set itself as a memo key, compared element
-// by element (decision keys-are-inputs).
+// by element.
 type enumSet struct {
 	present map[string]bool
 	keys    []string
@@ -327,7 +327,7 @@ func enumSetOf(enums map[string]*EnumInfo) *enumSet {
 }
 
 // tableCheck is one table's check as a pure function of its inputs
-// (decision pure-memos): the declaration, its key and alias, the partial declarations
+// : the declaration, its key and alias, the partial declarations
 // it injects in body order (nil where the name resolves to none),
 // whether imports are in play, and the enum set. It returns the
 // checked table, columns expanded per §tablepartial rule 4, and every diagnostic of

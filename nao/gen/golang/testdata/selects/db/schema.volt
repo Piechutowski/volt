@@ -1,4 +1,4 @@
-// Prepare-validation fixture (spec §selects-over-groups rule 6, decision expressions-are-sqlites): every select the
+// Prepare-validation fixture (spec §selects-over-groups rule 6): every select the
 // generator would emit for this package is prepared against the DDL
 // gen/sqlite emits from the same schema.
 package db

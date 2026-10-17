@@ -72,7 +72,7 @@ func goName(dbmlName string) (string, error) {
 	return name, nil
 }
 
-// modelName derives the Go model type for a table (decision singular-models): the
+// modelName derives the Go model type for a table: the
 // singular of the table name (users -> User, order_items -> OrderItem),
 // or the [model: '...'] override verbatim (normalized by goName).
 // Non-public schemas are prefixed like structName.

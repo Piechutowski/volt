@@ -1,7 +1,7 @@
 // Command volt is the framework's one binary: the CLI front end over
 // the lang package and both generators — nao's models and queries for
-// data packages, routers for routing packages (decision one-binary). Its subcommands
-// are check, vet, gen, routes, stress (decision generated-stress), lsp and version.
+// data packages, routers for routing packages. Its subcommands
+// are check, vet, gen, routes, stress, lsp and version.
 //
 // Exit status: 0 clean (warnings do not fail), 1 errors found, 2 usage
 // or I/O problems.
@@ -119,7 +119,7 @@ func command() *cli.Command {
 }
 
 // load resolves the packages named by the command's arguments — Go's
-// rules (decision packages-as-in-go, §projects-and-packages rule 7): none means the package in the working directory,
+// rules (§projects-and-packages rule 7): none means the package in the working directory,
 // a directory means that package, and dir/... means every package
 // beneath dir. The project root is the nearest go.mod (§projects-and-packages rule 1); the
 // named packages and their imports are loaded and checked. named lists
@@ -252,12 +252,12 @@ func genRun(c *cli.Command) error {
 	}
 
 	// Generate for the named packages only — imports are loaded for
-	// checking, never written (Go's rule, decision packages-as-in-go).
+	// checking, never written (Go's rule).
 	paths := append([]string(nil), named...)
 	sort.Strings(paths)
 
 	// -o writes one package into one directory; the client then lands
-	// beside the models (decision layout-independent-gen).
+	// beside the models.
 	outDir := c.String("o")
 	if outDir != "" && len(paths) != 1 {
 		return cli.Exit(fmt.Sprintf("gen: -o writes one package; %d named", len(paths)), 2)
@@ -277,7 +277,7 @@ func genRun(c *cli.Command) error {
 	// all or nothing across the whole project.
 	var out []outFile
 
-	// Every package generates on its own CPU (decision worker-pool); the files are
+	// Every package generates on its own CPU; the files are
 	// gathered in package order, so what is written and printed never
 	// depends on the schedule.
 	emit := func(pkg *lang.Package) ([]outFile, error) {
@@ -330,7 +330,7 @@ func genRun(c *cli.Command) error {
 	}
 
 	// --verify: the generators emit gofmt-canonical Go by construction
-	// (decision gofmt-canonical); this proves it for the project at hand.
+	//; this proves it for the project at hand.
 	if c.Bool("verify") {
 		problems := make([]string, len(out))
 		par.For(len(out), func(i int) {
@@ -350,7 +350,7 @@ func genRun(c *cli.Command) error {
 				return cli.Exit(p, 2)
 			}
 		}
-		// The generated Go type-checks in the package it lands in (decision verify-type-checks),
+		// The generated Go type-checks in the package it lands in,
 		// before anything is written.
 		if p := outputsTypeCheck(out); p != "" {
 			return cli.Exit(p, 2)
@@ -525,7 +525,7 @@ func routesRun(c *cli.Command) error {
 		return cli.Exit("routes: project has errors; fix them first (see 'volt check')", 1)
 	}
 	// Generate for the named packages only — imports are loaded for
-	// checking, never written (Go's rule, decision packages-as-in-go).
+	// checking, never written (Go's rule).
 	paths := append([]string(nil), named...)
 	sort.Strings(paths)
 	for _, path := range paths {
@@ -608,8 +608,8 @@ func goPackageName(dir string) string {
 }
 
 // stressCommand is `volt stress`: it writes the one-file project the
-// scaling tests and the benchmarks run on (internal/corpus, decision generated-stress) at
-// stress size (decision generated-stress).
+// scaling tests and the benchmarks run on (internal/corpus) at
+// stress size.
 func stressCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "stress",

@@ -2,7 +2,7 @@
 //
 // The dynamic query layer over the models in nao_models.go: typed
 // column handles, per-model option wrappers, and predicate-driven
-// terminals — see docs/decisions.md, Query layer.
+// terminals.
 
 package models
 
@@ -13,14 +13,14 @@ import (
 )
 
 // invoiceTableSQL and invoiceColumnsSQL are the fixed shape of Invoice's
-// dynamic statements; the interpreter renders everything else (decision options-are-data).
+// dynamic statements; the interpreter renders everything else.
 const (
 	invoiceTableSQL   = `"invoices"`
 	invoiceColumnsSQL = `"id", "total", "created_at", "updated_at", "deleted_at"`
 )
 
-// Typed column handles of Invoice (decision flat-handles): inert predicate, order and
-// assignment builders for the dynamic query layer (decision options-are-data). A predicate
+// Typed column handles of Invoice: inert predicate, order and
+// assignment builders for the dynamic query layer. A predicate
 // built here can only enter Invoice queries; mixing models is a compile
 // error.
 var (
@@ -31,10 +31,10 @@ var (
 	InvoiceDeletedAt = rt.NullColumn[Invoice, time.Time]{Column: rt.Column[Invoice, time.Time]{Name: "deleted_at"}}
 )
 
-// InvoiceLimit caps how many rows InvoiceQuery returns (decision per-model-wrappers).
+// InvoiceLimit caps how many rows InvoiceQuery returns.
 func InvoiceLimit(n int) rt.Opt[Invoice] { return rt.Limit[Invoice](n) }
 
-// InvoiceOffset skips n rows; keyset pagination (InvoiceAfter) scales better (decision keyset-pagination).
+// InvoiceOffset skips n rows; keyset pagination (InvoiceAfter) scales better.
 func InvoiceOffset(n int) rt.Opt[Invoice] { return rt.Offset[Invoice](n) }
 
 // InvoiceDistinct deduplicates the rows InvoiceQuery returns.
@@ -45,7 +45,7 @@ func InvoiceDistinct() rt.Opt[Invoice] { return rt.Distinct[Invoice]() }
 func InvoiceOrderBy(terms ...rt.Order[Invoice]) rt.Opt[Invoice] { return rt.OrderBy(terms...) }
 
 // InvoiceAfter resumes strictly after the row with the given key — keyset
-// pagination (decision keyset-pagination): one value per InvoiceOrderBy term, in the same order.
+// pagination: one value per InvoiceOrderBy term, in the same order.
 func InvoiceAfter(key ...any) rt.Opt[Invoice] { return rt.After[Invoice](key...) }
 
 // InvoiceSet collects the typed assignments of a InvoiceUpdateWhere, built
@@ -105,7 +105,7 @@ func (q *Queries) InvoiceExists(ctx context.Context, preds ...rt.Pred[Invoice]) 
 
 // InvoiceDeleteWhere removes every invoices row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
-// full-table delete (decision positional-placeholders).
+// full-table delete.
 func (q *Queries) InvoiceDeleteWhere(ctx context.Context, preds ...rt.Pred[Invoice]) (int64, error) {
 	query, args, err := rt.DeleteRender(invoiceTableSQL, preds)
 	if err != nil {
@@ -120,8 +120,8 @@ func (q *Queries) InvoiceDeleteWhere(ctx context.Context, preds ...rt.Pred[Invoi
 
 // InvoiceUpdateWhere applies the typed assignments (InvoiceSet) to every invoices
 // row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer (decision shape-rule). No effective predicate
-// is an error, never a full-table rewrite (decision positional-placeholders).
+// partial update of the dynamic layer. No effective predicate
+// is an error, never a full-table rewrite.
 func (q *Queries) InvoiceUpdateWhere(ctx context.Context, set []rt.Assign[Invoice], preds ...rt.Pred[Invoice]) (int64, error) {
 	query, args, err := rt.UpdateRender(invoiceTableSQL, set, preds)
 	if err != nil {

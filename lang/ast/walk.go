@@ -11,7 +11,7 @@ func Inspect(n Node, f func(Node) bool) {
 
 // child visits a pointer field's node when the field is set. The nil
 // test is on the pointer, before it becomes an interface, so a field a
-// broken parse left unset never reaches a visitor as a typed nil (decision no-unsafe).
+// broken parse left unset never reaches a visitor as a typed nil.
 func child[T any, P interface {
 	*T
 	Node
@@ -32,7 +32,7 @@ func children[T any, P interface {
 }
 
 // eachChild visits n's children in source order without building a
-// list (decision indexed-lookups). A slot typed as an interface holds nil or a node the
+// list. A slot typed as an interface holds nil or a node the
 // parser built from a non-nil pointer, never a typed nil.
 func eachChild(n Node, visit func(Node)) {
 	switch n := n.(type) {

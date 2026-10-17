@@ -16,7 +16,7 @@ type User struct {
 }
 
 // UserCreateParams are the caller-supplied columns of UserCreate. The
-// auto-increment key and defaulted columns are the database's job (decision create-params).
+// auto-increment key and defaulted columns are the database's job.
 type UserCreateParams struct {
 	UserName string `db:"user_name" json:"userName" xml:"user-name,attr"`
 	// NULL until written

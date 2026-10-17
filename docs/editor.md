@@ -4,9 +4,8 @@
 > **This project is an alpha version, and everything may change in the future.**
 
 How Volt editor support is put together — three independently testable
-components (decision editor-tooling-in-repo), why the system is shaped this way, the load-bearing
-patterns in each, and (section 8) the checklist for verifying all of it
-against [`spec.md`](spec.md).
+components, the load-bearing patterns in each, and (section 8) the
+checklist for verifying all of it against [`spec.md`](spec.md).
 
 ## 1. The big picture
 
@@ -59,10 +58,8 @@ requirements:
 | Output | concrete syntax tree | AST + semantic model + diagnostics |
 | Knows | shape only | meaning: resolution, partial injection, route conflicts |
 
-Every serious language setup (Go, Rust, TypeScript in any modern
-editor) works this way; section 8's differential checks handle the risk of the
-two disagreeing. When they do, **the front end is right by
-definition**.
+Section 8's differential checks catch the two disagreeing. When they
+do, **the front end is right by definition**.
 
 The front end is layered like the Go toolchain it mirrors, and the LSP
 reuses it wholesale:
@@ -154,7 +151,7 @@ Later patterns win in a query file, so generic rules go first.
 
 Speaks LSP 3.16 over stdio via `tliron/glsp`; the wiring is one
 `protocol.Handler` literal in `server.go`. Document sync is
-incremental (decision editor-session): the client sends each keystroke as a range and the
+incremental: the client sends each keystroke as a range and the
 text that replaces it, and the server applies every item of a change
 to the text as it then stands, positions in UTF-16 units; a client
 that still sends the whole text is served the same way. Every publish
@@ -162,9 +159,9 @@ of diagnostics carries the version of the text they are positioned
 in, so a client whose buffer has moved on drops it.
 
 **The per-edit pipeline.** An edit updates the document's own front
-end at once, through the document's own memos (decision editor-session: the parse by
+end at once, through the document's own memos (the parse by
 declaration, the check by table and the occurrence index by table are
-the session's memo shapes (decisions parse-by-declaration, check-by-declaration, index-by-table), owned by the handler goroutine),
+the session's memo shapes, owned by the handler goroutine),
 and schedules the project's analysis:
 
 1. Find the project root (the nearest `go.mod`, §projects-and-packages rule 1). A file under a root is
@@ -176,7 +173,7 @@ and schedules the project's analysis:
 3. Diagnostics are filtered per open file and published (push);
    `go.mod` problems are remapped to line 1 of the file. An edit
    updates the document's own front end at once and schedules **one
-   background analysis of its project** (decision editor-session): after the edits settle
+   background analysis of its project**: after the edits settle
    (75 ms), the project is loaded and checked through the root's
    `lang.Session` — parses cached by content, per-package results
    memoized by input identity — and every open document of the
@@ -212,7 +209,7 @@ layer:
 
 **vet runs only on error-free files** — style advice stacked on hard
 errors is noise while typing; it reappears when the file checks clean.
-And it runs only where its verdict is what the editor shows (decision editor-session): a
+And it runs only where its verdict is what the editor shows: a
 file in a project package is vetted by the project analysis, never by
 the document's own pass; a file outside any project, or one under a
 project the loader never read (§projects-and-packages rule 6), gets the single-file vet added
@@ -248,17 +245,11 @@ agree. The LSP picks it up automatically.
 `tree-sitter test` → section 8's differential checks →
 `./scripts/sync-grammar.sh` → Rebuild in Zed.
 
-## 6. Decisions
+## 6. Tooling choices
 
-The rulings behind this stack live in [`decisions.md`](decisions.md):
-editor-tooling-in-repo, editor-session, parse-by-declaration,
-check-by-declaration, index-by-table, vet-by-declaration, one-parse,
-shared-surface, invalid-input-goldens. Two tooling choices live only
-here: Go for the server, because the reference front end is Go and
-wrapping it gives spec-exact diagnostics from one implementation; and
-`tliron/glsp` over `go.lsp.dev`, maintained and complete for LSP 3.16,
-its dependency tail contained by the tool-module split and replaceable
-behind stdio.
+The server is Go and wraps the reference front end, so diagnostics come
+from one implementation. The protocol library is `tliron/glsp` (LSP
+3.16), kept out of the library module by the tool-module split.
 
 ## 7. Known limitations (documented trade-offs, not bugs)
 
@@ -285,7 +276,7 @@ and doc comment, and an undeclared name hovers as undeclared while the
 checker's diagnostic on the reference names the exact signature to
 write. `volt.*` plugs live in the runtime and
 make no claim. Existence and the spelled signature are the checker's
-(decision go-references-by-spelling), so a typo or a wrong parameter type is a diagnostic at the
+, so a typo or a wrong parameter type is a diagnostic at the
 reference. The Go side can move without any `.volt` buffer changing —
 a gopls rename, a newly written function — so the server registers a
 `**/*.go` file watcher with the client and re-analyzes every project
@@ -293,10 +284,10 @@ with an open document when one is saved (the Go sources are part of
 a package's memo key, so only the packages beside the change
 re-check); independently, every hover, definition,
 references, rename and completion request first compares the Go
-sources it scanned with the disk, byte for byte (decision keys-are-inputs), and when they
+sources it scanned with the disk, byte for byte, and when they
 differ kicks that same background analysis, which republishes; the
 request in hand answers from the analysis it adopted, the next adopts
-the fresh one (decision editor-session). Only saved files
+the fresh one. Only saved files
 count: the Go buffers themselves belong to gopls, not to this server. Rename on a Go reference rewrites its Volt spellings only —
 the Go declaration is gopls' job, and the existence error then points
 at whichever side is still behind. Rename on a column follows it into
@@ -312,19 +303,19 @@ How to audit that the three components implement
 
 | Claim | Check | Where |
 |---|---|---|
-| Front end accepts/rejects exactly what the spec says | conformance corpus: `valid/` MUST pass, `invalid/` MUST fail, each snippet tagged `// spec: §…` (`.dbml` entries = the schema pass, `.volt` entries and project dirs = the project pass); every diagnostic of every invalid snippet, recovery included, is a golden (decision invalid-input-goldens) | `lang/conformance/snippets/` and `lang/conformance/invalid_*.golden` via `go test ./lang/...`; refresh with `-update` after reading the diff |
+| Front end accepts/rejects exactly what the spec says | conformance corpus: `valid/` MUST pass, `invalid/` MUST fail, each snippet tagged `// spec: §…` (`.dbml` entries = the schema pass, `.volt` entries and project dirs = the project pass); every diagnostic of every invalid snippet, recovery included, is a golden | `lang/conformance/snippets/` and `lang/conformance/invalid_*.golden` via `go test ./lang/...`; refresh with `-update` after reading the diff |
 | Grammar parses everything the spec allows | corpus cases (input → expected tree, incl. `:error` cases) | `grammar/test/corpus/`, `tree-sitter test` |
-| Spec grammar and front end agree | the spec's EBNF read as data (decision executable-grammar): every derived sentence parses, every one-token neighbour is decided alike by the grammar and the front end | `lang/spec_grammar_test.go` via `go test ./lang/...` |
+| Spec grammar and front end agree | the spec's EBNF read as data: every derived sentence parses, every one-token neighbour is decided alike by the grammar and the front end | `lang/spec_grammar_test.go` via `go test ./lang/...` |
 | Grammar and front end agree | every valid conformance snippet, `grammar/examples/*` and the spec's derived sentences (`go test ./lang -run TestSpecGrammarSentencesParse -sentences DIR`) must produce zero tree-sitter ERROR nodes **and** zero front-end diagnostics | differential run after grammar changes |
 | Lint rules match their doc | doc ↔ registry ↔ testdata consistency test; `//WANT` markers both directions | `lang/vet/docs_test.go` against [`lint.md`](lint.md) |
 | Generated routers implement Part II of the spec | goldens byte-compared, gofmt-stable, **compiled**; itest exercises match/404/405, typed-param 404s, pipeline order, the error spine, reverse-URL round-trip totality | `gen/router`, `itest/` |
 | Generated models implement §mapping-to-go/B | goldens compiled; every CRUD statement prepared against the generated DDL; SQL goldens executed on real SQLite | `nao/gen/...`, `nao/itest` |
 | LSP behaves per spec | in-process unit suites: index, rename spelling rules, hover content, completion contexts, UTF-16 | `lsp/*_test.go` via `go test ./lsp/...` |
-| LSP behaves per spec, interactively | a scripted stdio JSON-RPC session against the real server process, replaying keystrokes that break and fix a project file, one of them as a ranged change, and asking for hover, definition, completion and symbols; every reply and published diagnostic pinned as a golden (decision invalid-input-goldens) | `cmd/volt/lsp_session_test.go` and `testdata/lsp_session.golden` via `go test ./cmd/volt/...`; refresh with `-update` after reading the diff |
-| A keystroke costs what the decisions say | the whole in-process path of one keystroke inside one table of a one-file project, didChange to publish, and the document's own front end alone; compare against the last report of `scripts/perf.go`. The bytes the keystroke's three parts allocate (the document's pass, the project analysis, the publish) are pinned exactly, within ten percent, hardware-neutral | `go test ./lsp -run '^$' -bench 'BenchmarkKeystroke|BenchmarkDocumentUpdateLocal' -benchmem`; `go test ./lsp -run TestKeystrokeAllocationBudget -v` |
+| LSP behaves per spec, interactively | a scripted stdio JSON-RPC session against the real server process, replaying keystrokes that break and fix a project file, one of them as a ranged change, and asking for hover, definition, completion and symbols; every reply and published diagnostic pinned as a golden | `cmd/volt/lsp_session_test.go` and `testdata/lsp_session.golden` via `go test ./cmd/volt/...`; refresh with `-update` after reading the diff |
+| A keystroke costs what the budget says | the whole in-process path of one keystroke inside one table of a one-file project, didChange to publish, and the document's own front end alone; compare against the last report of `scripts/perf.go`. The bytes the keystroke's three parts allocate (the document's pass, the project analysis, the publish) are pinned exactly, within ten percent, hardware-neutral | `go test ./lsp -run '^$' -bench 'BenchmarkKeystroke|BenchmarkDocumentUpdateLocal' -benchmem`; `go test ./lsp -run TestKeystrokeAllocationBudget -v` |
 
 The upstream `@dbml/parse` cross-check that established Part I's
-fidelity was retired at zero disagreements (decision one-corpus); the corpus verdicts
+fidelity was retired at zero disagreements; the corpus verdicts
 it pinned are the surviving record, and a divergence-worthy upstream
 feature gets re-checked by hand when adopted.
 

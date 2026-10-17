@@ -1,5 +1,5 @@
 // The integration fixture: one schema exercising every v0 CRUD shape and
-// the v2 dynamic query layer against a real SQLite (decision integration-over-mocks). The
+// the v2 dynamic query layer against a real SQLite. The
 // generated siblings (nao_models.go, nao_queries.go, nao_dyn.go,
 // nao_schema.sql) are checked in and drift-tested; refresh them with
 // 'volt gen ./nao/itest --sql' from the repository root.
@@ -77,7 +77,7 @@ Pred since { day >= :from }
 Select rows for metrics where at [order: (day desc, id asc)]
 Select recent for metrics where at or since
 
-// §predicates rule 3 list parameter: one JSON array, unpacked by json_each (decision list-parameters).
+// §predicates rule 3 list parameter: one JSON array, unpacked by json_each.
 Select on_sites for metrics where site in :sites [order: (id asc)]
 
 // §selects-over-groups rule 7 projections: an explicit list mints one shared row type for

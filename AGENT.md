@@ -3,182 +3,98 @@
 > [!CAUTION]
 > **This project is an alpha version, and everything may change in the future.**
 
-You are working on **Volt**: a codegen-first web framework for Go.
-Schema and routes are declared in `.volt` files (one language, grown
-outward from DBML); `volt gen` writes the models, queries, DDL, router,
-controller interfaces and reverse-URL helpers as plain Go on stdlib
-`net/http`. Personal project of one maintainer, alpha: no users, no
-backward compatibility to protect — when a better shape appears,
-propose it and restructure boldly.
+Volt is a codegen-first web framework for Go. Schema and routes are
+declared in `.volt` files; `volt gen` writes models, queries, DDL, a
+router, controller interfaces, reverse-URL helpers and a client as
+plain Go on stdlib `net/http`. One maintainer, no users, no backward
+compatibility to protect.
 
-**Nothing in this repository is set in stone.** The maintainer is
-still looking for the right design. Every document below, the
-decisions included, describes the project as it stands today so that
-work stays consistent; none of it describes how the project must be.
-Do not infer the design from what exists: when you see a better shape
-for the language, the generated code, the tooling or the docs, say so
-plainly instead of fitting into the current one. A decision is edited
-by proposing the change, never worked around silently, and never
-treated as final.
+**Nothing here is set in stone.** The design is still being searched
+for. The docs describe what is implemented today so that spec, code
+and tests stay consistent; they do not describe how the project must
+be. Do not infer the design from what exists. When a better shape
+appears, say so plainly and propose it; never work around the current
+one silently.
 
-## How we keep spec and code consistent (read this even if you read nothing else)
+## Docs
 
-**The spec is the software; the code is its proof.** Volt is built the
-way Go stdlib developers work against an RFC: `docs/spec.md` is
-normative for the implementation as it stands — EBNF plus numbered
-constraints plus examples — and the implementation MUST be 100%
-compliant with it. Normative means the two agree, not that either is
-final: the language changes by changing the spec. Every constraint is executable
-(conformance corpus, `// spec: §…` tags; valid MUST pass, invalid MUST
-fail); the grammar is executable too (decision executable-grammar: every sentence it
-derives parses, every one-token neighbour is decided alike by grammar
-and front end); every diagnostic cites the section it enforces; the grammar,
-the LSP, vet and the generators are all audited against the same
-document (`docs/editor.md` section 8 is the checklist). When spec and code
-disagree, one of them has a bug — the fixing commit says which. Never
-change behavior without changing the spec in the same commit, and
-never weaken a test to get green.
+Five files in `docs/`, nothing else carries prose:
 
-**No doc is ever knowingly wrong (decision docs-doctrine).** Nine maintained docs live in
-`docs/` — spec, lint, editor, decisions, hypotheses, roadmap, nao,
-model-layer, orm-matrix — and no other directory carries prose
-docs (root README.md/AGENT.md are the named exceptions, decision docs-doctrine).
-Operational detail (paths, commands, code snippets) may appear only in
-docs a test or the compiler keeps honest; philosophy is written at an
-altitude where nothing can rot. The accepted cost, chosen deliberately:
-**every change's blast radius includes the docs** — an API rename
-sweeps `nao.md` and the spec's examples in the same commit. That is
-the correct price for a project whose thesis is "one source of truth,
-everything else derived"; the normative docs already pay it via tests
-(`lang/vet/docs_test.go` fails the build if `lint.md` drifts).
+- `spec.md` — the language and the generated code, normative for the
+  implementation as it stands. Spec and code must agree; the language
+  changes by changing both in one commit. Every constraint has a
+  conformance snippet in `lang/conformance/snippets/` tagged with the
+  section it proves, the EBNF is executed against the parser, and
+  every diagnostic cites the section it enforces as `spec/<anchor>`.
+- `lint.md` — every vet rule with executable examples; a test fails
+  the build if it drifts.
+- `editor.md` — grammar, Zed extension, language server, and the
+  verification checklist in its section 8.
+- `hypotheses.md` — open design questions, numbered, held loosely.
+- `roadmap.md` — what is built and what is not; a status changes in
+  the commit that lands it.
 
-**Vocabulary.** Two names: **DBML** is the schema core
-(spec Part I, kept diagrammable on dbdiagram.io); **Volt** is the
-language — everything, extensions included. The word "EDBML" is
-retired; do not reintroduce it. There is no `.edbml` file type;
-extension-exercising fixtures are `.volt`, plain `.dbml` stays
-supported as input.
+No doc is ever knowingly wrong: a change whose blast radius reaches a
+doc updates the doc in the same commit. Never weaken a test to get
+green.
 
-**nao is a sub-library, not a product.** `nao/` is Volt's ORM the
-way ActiveRecord is Rails'. It has no separate go.mod, no separate CLI
-(one binary, `volt`), no separate identity in docs beyond
-`docs/nao.md`. Don't "helpfully" rename it to `orm/` (tried once,
-reverted: nao is its *name*).
+## Repository
 
-## Read in this order
+Three Go modules under `go.work`: the library at the root (runtime,
+`lang/`, `gen/`, `nao/`, `itest/`; stdlib only, sqlite3 test-only) and
+the tools `lsp/` and `cmd/volt/`, which carry the third-party
+dependencies. Go floor is the newest stable Go, declared in all three
+`go.mod` files. `grammar/`, `zed-extension/` and
+`scripts/sync-grammar.sh` are the editor stack. `go test ./...` at the
+root does not cover the tool modules.
 
-1. `docs/decisions.md` — **the current rulings**, every one of them
-   revisable: each under a unique hyphenated name, cited as
-   `decision one-parse` (several: `decisions a, b`); a citation that
-   names no heading fails the build (`lang/spec_doc_test.go`). An
-   entry is the ruling and its reason, never its history. Never
-   contradict one silently; changing a decision means editing that
-   file in the same commit, and proposing the change is always
-   welcome. New session-level rulings get appended there. What is
-   *not yet* decided lives in `docs/hypotheses.md` — working beliefs,
-   numbered, graduated or killed by practice; never treat one as
-   decided, and put new open questions there, not in decisions.
-2. `docs/roadmap.md` — **the build plan**: stable IDs, statuses
-   (updated in the landing commit): a nested todo of what exists and
-   what does not. Next by the build order: the raw-SQL `Select` /
-   `View` blocks.
-3. `docs/spec.md` — the language: Part I the schema core, Part II
-   the project, routing and query layers, then the appendices (Go and
-   SQLite mappings, DBML compatibility). Sections are named, not
-   numbered (decision named-sections): a citation is `§` and the
-   heading's anchor, `§columns rule 2`, and a diagnostic code is
-   `spec/<anchor>`.
-4. `docs/editor.md` — grammar/extension/LSP architecture, extension
-   recipes, and the section 8 verification checklist.
-5. `docs/nao.md` + `docs/model-layer.md` — the data layer and the
-   philosophy behind it. `docs/orm-matrix.md` — the ORM capability
-   audit, pinned research: consult, don't maintain.
-
-## Repository shape
-
-Three Go modules, stitched by `go.work`: the **library** at the
-root — runtime (`*.go`), `lang/` (token/scanner/parser/ast/check/vet +
-project semantics), `gen/router`, `gen/model`, `internal/par` (the worker pool every
-phase runs on, decision worker-pool), `nao/` (rt, gen,
-inflect, itest), `itest/` — stdlib-only (sqlite3 is
-test-only); and the **tools** `lsp/` and `cmd/volt/`, which carry the
-third-party deps (glsp, urfave/cli). Go floor: **1.27** (decision newest-go),
-declared in all three go.mod files and go.work. `grammar/` +
-`zed-extension/` + `scripts/sync-grammar.sh` are the editor stack.
-`internal/perfsweep` is the profiling sweep, run at the
-reference sizes by `lang.TestProfileSweep` and on any machine by
-`./scripts/perf.go -out DIR` from the root, which writes the
-performance report with that machine's specification.
-
-Consequences that bite: `go test ./...` at the root does NOT cover the
-tool modules — the full sweep is
-`go test ./... ./lsp/... ./cmd/volt/...`. Tools that lag the toolchain
-(govulncheck) need `GOTOOLCHAIN=go1.27.0 go run …`.
-
-## Verification bar (all of it, before claiming done)
+## Verification bar, all of it, before claiming done
 
 ```sh
 go build ./... ./lsp/... ./cmd/volt/...
 go vet   ./... ./lsp/... ./cmd/volt/...
-go test  ./... ./lsp/... ./cmd/volt/...   # conformance, goldens, itests, LSP
-go test  -race ./lang/... ./lsp/...       # the shared surface under the detector (decision shared-surface)
+go test  ./... ./lsp/... ./cmd/volt/...
+go test  -race ./lang/... ./lsp/...
 gofmt -l . | grep -v zed-extension        # must be empty
 ```
 
-Golden refresh is `go test ./gen/router -update` / `go test ./nao/gen/...
--update` — inspect the diff; goldens exist to surface unintended output
-changes. Grammar changes additionally need `tree-sitter generate`,
-`tree-sitter test`, the differential checks of `docs/editor.md` section 8, and
-`./scripts/sync-grammar.sh`. For LSP behavior, scripted stdio JSON-RPC
-sessions replaying the user's exact keystrokes have repeatedly caught
-what unit tests missed — do that for anything interactive; one such
-session is a golden test (`cmd/volt/lsp_session_test.go`, decision invalid-input-goldens), and
-a new interaction belongs in it.
+Golden refresh is `go test ./gen/router -update` and `go test
+./nao/gen/... -update`; read the diff, goldens exist to surface
+unintended output changes. Grammar changes also need `tree-sitter
+generate`, `tree-sitter test`, the checklist in `editor.md` section 8
+and `./scripts/sync-grammar.sh`. Anything interactive in the language
+server gets a scripted stdio session; one is a golden
+(`cmd/volt/lsp_session_test.go`).
 
 ## Conventions
 
-- Naming is subject-first, verb-last everywhere, hand-written code
-  included: `UserGet`, `UserCreateParams`, `EOrderStatusPending` (decision subject-first-naming);
-  internals too (`columnCheck`, `tableEmit`). Carve-outs: Go-mandated
-  interface methods, `New*`/`is*`/`has*`, stdlib-parallel APIs
-  (`parser.ParseFile`, `check.File`), cursor primitives (`next`,
-  `peek`), LSP handlers named after protocol methods.
-- Error messages and code comments cite spec sections (`§relationships-ref`, `§route-names-and-reverse-urls`)
-  or decision names (`decision one-parse`). A comment is a contract with a citation, one or
-  two sentences, never rationale, history or measurements; tests carry
-  no prose beyond directives, the proof instruments excepted (decision comments-are-contracts).
-  Generated files start with the
-  `Code generated … DO NOT EDIT.` marker; the CLI refuses to overwrite
-  files lacking it. Zero runtime dependencies in generated code (decision zero-dependencies).
-- SQLite-first, all-in (decision sqlite-first); SQLite is the gen-time SQL checker via
-  in-memory prepare (decision expressions-are-sqlites). Never: callbacks, lazy loading, dirty
-  tracking, reflection in generated paths (decision non-goals).
-- What a session memo answers is a pure function of explicit inputs
-  (decision pure-memos): a top-level function whose parameters are its whole input,
-  keyed on exactly those, never on a digest or a file stamp (decision keys-are-inputs). `cmd/volt`'s purity gate fails the build on
-  a read of package state, a write through an input (an append to an
-  input's array included), a call through a function value it did not
-  make, or a call into a package that keeps state, transitively (decision pure-memos); its immutability walk fails
-  the build on a write to a memoized result outside its producer, or
-  to a node or token outside the front end (decision immutable-results); a new memo adds its
-  function to the gate's targets in the same commit.
-- Commit messages explain *why*; a session that produces new decisions
-  appends them to `docs/decisions.md` before committing.
+- Names are subject-first, verb-last: `UserGet`, `UserCreateParams`,
+  `EOrderStatusPending`; internals too. Carve-outs: Go-mandated
+  interface methods, `New*`/`is*`/`has*`, stdlib-parallel APIs, cursor
+  primitives, LSP handlers named after protocol methods.
+- Comments state a contract in one or two sentences and cite the spec
+  section (`§columns rule 2`); no rationale, history or measurements.
+  Tests carry no prose beyond directives, the proof instruments
+  excepted.
+- Generated files start with the `Code generated … DO NOT EDIT.`
+  marker; the CLI refuses to overwrite a file without it. Generated
+  code imports the standard library and Volt's runtime only.
+- SQLite is the only database. Never: callbacks, lazy loading, dirty
+  tracking, reflection in generated code (spec §non-goals).
+- A memoized computation is a pure function of explicit inputs, keyed
+  on those inputs themselves; `cmd/volt`'s purity gate and
+  immutability walk enforce it, and a new memo is added to the gate's
+  targets in the same commit.
+- Test data is neutral (blog and metrics domains, never agriculture).
+  A test that needs a project of some size writes one with
+  `internal/corpus`.
+- Commit messages explain why.
 
-## Working style the maintainer expects
+## Working style
 
-Plan before building (design in the roadmap/spec first for big
-features). Integration tests over mocks for the data layer; exhaustive
-unit corpus for language code; golden files for generators. Be direct
-and honest in reports — state what failed plainly, don't oversell.
-The maintainer reads code and specs fluently; explain reasoning, not
-basics. Don't write for an imagined audience: README and docs are for
-the maintainer (it's alpha; honesty over marketing). Test data must be
-neutral (blog/metrics domains — never agriculture/FADN; that fixture
-history is why); a test that needs a project of some size writes one
-with `internal/corpus`, which uses every feature in both layouts
-(`volt stress DIR` writes its one-file shape to disk, a thousand tables
-by default, to feel the limits of check, gen, the LSP and the Go
-compiler by hand; decision generated-stress). When the maintainer asks a question, answer it and
-stop — don't implement until asked; when they ask for work, finish it:
-build + vet + test + gofmt green, committed, pushed.
+Design in the spec before building anything big. Integration tests
+over mocks for the data layer, an exhaustive corpus for the language,
+goldens for the generators. Be direct: state what failed, do not
+oversell. When the maintainer asks a question, answer it and stop.
+When they ask for work, finish it: build, vet, test and gofmt green,
+committed, pushed.

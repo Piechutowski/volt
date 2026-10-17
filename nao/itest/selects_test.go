@@ -1,4 +1,4 @@
-// Select round trips (spec §selects-over-groups, decision integration-over-mocks): the group-generated
+// Select round trips (spec §selects-over-groups): the group-generated
 // methods run against a real SQLite through a real driver, proving the
 // checker-rendered WHERE/ORDER SQL executes and filters correctly, with
 // one signature across every member of the group.
@@ -147,7 +147,7 @@ func TestSelectProjectionStructDerivative(t *testing.T) {
 }
 
 // TestSelectListParam: `site in :sites` binds one JSON array and is
-// unpacked by json_each on the real driver (§predicates rule 3, decision list-parameters) — a
+// unpacked by json_each on the real driver (§predicates rule 3) — a
 // multi-value list, a single value, and the empty list that matches
 // nothing, with one signature across both members.
 func TestSelectListParam(t *testing.T) {

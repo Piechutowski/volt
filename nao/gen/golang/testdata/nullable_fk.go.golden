@@ -27,13 +27,13 @@ type Post struct {
 }
 
 // UserCreateParams are the caller-supplied columns of UserCreate. The
-// auto-increment key and defaulted columns are the database's job (decision create-params).
+// auto-increment key and defaulted columns are the database's job.
 type UserCreateParams struct {
 	ID int64 `db:"id" json:"id"`
 }
 
 // PostCreateParams are the caller-supplied columns of PostCreate. The
-// auto-increment key and defaulted columns are the database's job (decision create-params).
+// auto-increment key and defaulted columns are the database's job.
 type PostCreateParams struct {
 	ID       int64 `db:"id" json:"id"`
 	AuthorID int64 `db:"author_id" json:"author_id"`

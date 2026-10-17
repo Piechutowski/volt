@@ -7,7 +7,7 @@ import (
 	"github.com/Piechutowski/volt/lang/check"
 )
 
-// ModelName derives the Go model type name for a table (decision singular-models):
+// ModelName derives the Go model type name for a table:
 // the [model:] override when present, else the singularized table name.
 func ModelName(t *ast.Table) (string, error) { return modelName(t) }
 
@@ -75,13 +75,13 @@ type CheckSpec struct {
 // ParamsValidators reports whether the table's CreateParams and
 // UpdateParams structs get a Validate method: each does when the struct
 // exists and carries every column of at least one check. It plans the
-// whole file (decision one-naming-plan).
+// whole file.
 func ParamsValidators(f *ast.File, info *check.Info, tableKey string, checks []CheckSpec) (create, update bool, err error) {
 	return PlanBuild(f, info).ParamsValidators(tableKey, checks)
 }
 
 // paramsChecks splits the checks a table's params structs can evaluate:
-// those whose columns all appear among the struct's fields (decision create-params).
+// those whose columns all appear among the struct's fields.
 func paramsChecks(t *tableModel, checks []CheckSpec) (create, update []CheckSpec) {
 	covered := func(fields []*fieldPlan, ck CheckSpec) bool {
 		have := map[string]bool{}
@@ -134,7 +134,7 @@ type CRUDMethod struct {
 // CRUDMethods lists the default CRUD methods the query generator emits
 // for one table, with the same existence rules it applies: Get, Update
 // and Delete need a primary key, Update needs a non-key column, Create
-// takes a params struct only when a column is caller-supplied (decision create-params).
+// takes a params struct only when a column is caller-supplied.
 // It plans the whole file.
 func CRUDMethods(f *ast.File, info *check.Info, tableKey string) (model string, methods []CRUDMethod, err error) {
 	return PlanBuild(f, info).CRUDMethods(tableKey)

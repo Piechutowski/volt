@@ -48,13 +48,13 @@ type Index struct {
 
 	// declTables holds the column declarations of the tables the memo
 	// reused, by table key: their entries stay in the memo's per-table
-	// maps instead of being copied into decls on every build (decision index-by-table).
+	// maps instead of being copied into decls on every build.
 	declTables map[string]*tableOccs
 	recording  *[]declEntry // the declarations a table's build adds, for its memo entry
 }
 
 // IndexMemo remembers a package's per-table occurrences across builds
-// of its index (decision index-by-table): a table whose declaration node and checked table
+// of its index: a table whose declaration node and checked table
 // are the objects they were contributes the occurrences it did. The
 // zero value is ready; a memo belongs to one package and one goroutine
 // at a time, and drops what a build did not use.
@@ -170,7 +170,7 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 	}
 
 	// Every table's occurrences are tableOccurrences, a pure function
-	// of the inputs resolved here (decision pure-memos); the memo answers a table whose
+	// of the inputs resolved here; the memo answers a table whose
 	// inputs are what they were.
 	entries := make(map[*ast.Table]*tableOccs, len(info.Tables))
 	if memo != nil {
@@ -324,7 +324,7 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 }
 
 // tableOccurrences is one table's contribution to the index as a pure
-// function of its inputs (decision pure-memos). It returns the occurrences of the
+// function of its inputs. It returns the occurrences of the
 // table's symbol and alias, of its own column declarations, and of
 // every reference inside its body, plus the declarations it
 // contributes, reading nothing else and writing nothing it did not

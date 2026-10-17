@@ -1,7 +1,7 @@
 package lang
 
 // The lowering of one scope item (§scopes-and-routes, §resources, §datasets) as a pure function
-// of explicit inputs (decisions pure-memos, check-by-declaration): a route, a resources declaration or a
+// of explicit inputs: a route, a resources declaration or a
 // dataset, with the context its scopes inherited, the package's own
 // facts, and an oracle it questions about the project and whose
 // answers it returns.
@@ -218,7 +218,7 @@ func itemLower(item ast.Node, inh inherited, facts routeFacts, env routeEnv, rec
 		routes = l.dataset(item, inh)
 	}
 	for _, r := range routes {
-		r.shape = shapeParse(r) // a function of the pattern: parsed here, once (decision check-by-declaration)
+		r.shape = shapeParse(r) // a function of the pattern: parsed here, once
 		r.shapeKey = r.Method + " " + shapeOf(r)
 	}
 	return routes, l.lookups, l.used, l.diags
@@ -564,7 +564,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		}
 		qr.Many = true
 	}
-	// Default CRUD, from the package's plan (decision one-naming-plan).
+	// Default CRUD, from the package's plan.
 	if !found {
 		if key, _, cm, ok := l.crudByName(target, name); ok {
 			found = true
@@ -874,7 +874,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 	}
 	if def {
 		// resourceTable resolved the table, so the package has a schema
-		// and, with it, a plan (decision one-naming-plan).
+		// and, with it, a plan.
 		_, methods, err := l.modelOf(target, ti.Key)
 		if err != nil {
 			l.errorf(res.Name.Pos(), "resources", "resources %s [default]: %v (§default-handlers)", res.Ref(), err)

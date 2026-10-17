@@ -18,7 +18,7 @@ func (c *checker) declsCheck(f *ast.File) {
 		case *ast.Project:
 			// properties are free-form (§project rule 2); nothing local to check
 		case *ast.Table:
-			// A table's body is checked in tableCheck (decision pure-memos); a duplicate
+			// A table's body is checked in tableCheck; a duplicate
 			// declaration that expansion skipped is checked here.
 			if ti := c.info.byTable[canonKey(d.Name)]; ti == nil || ti.Decl != d {
 				c.tableBodyCheck(d.Pos(), d.Name.String(), d.Settings, d.Body, true)

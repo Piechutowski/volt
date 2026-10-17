@@ -11,7 +11,7 @@ import (
 )
 
 // voltProjectDiags runs Load, Check and Vet through the root's session
-// (decision editor-session) and returns the diagnostics that point into this document. ok
+// and returns the diagnostics that point into this document. ok
 // is false when the document is in no project (§projects-and-packages rule 6), and the caller
 // then falls back to the single-file DBML diagnostics.
 func (d *Document) voltProjectDiags() ([]diag.Diagnostic, bool) {

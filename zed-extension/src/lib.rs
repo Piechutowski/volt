@@ -1,7 +1,7 @@
 //! Zed glue for the Volt language server.
 //!
 //! The extension's only job is to tell Zed how to launch the language
-//! server (a subcommand of the project's binaries, D41). The binary is
+//! server (a subcommand of the project's binary). The binary is
 //! resolved in order: the user's `lsp.volt.binary.path` setting, then
 //! `volt` on the worktree `PATH`. The extension is installed locally as
 //! a dev extension, so there is no download fallback — build the binary

@@ -248,7 +248,7 @@ func (g *generator) columnDef(ti *check.TableInfo, cd *check.ColumnDef, pkCols [
 		parts = append(parts, "CHECK ("+identQuote(colName)+" IN ("+strings.Join(vals, ", ")+"))")
 	}
 	if columnHas(cd, "required") {
-		// The required extension (§columns, decision required-and-problems).
+		// The required extension (§columns).
 		kind, _ := check.RequiredKind(col.Type.String(), enumInfo != nil)
 		var expr string
 		switch kind {

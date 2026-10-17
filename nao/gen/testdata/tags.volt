@@ -1,4 +1,4 @@
-// [tag:] (extension, decision tag-passthrough) passes struct tags through verbatim: a json
+// [tag:] (extension) passes struct tags through verbatim: a json
 // key replaces the generated default, everything else appends in
 // declaration order, and params structs carry the same tags (A.5).
 Table users {

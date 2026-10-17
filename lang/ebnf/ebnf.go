@@ -2,7 +2,7 @@
 // 14977 as the spec's Notation section lists it, with nonterminal
 // names of lowercase words separated by spaces. It gives tests the
 // grammar as data, to check it against itself and against the parser
-// (decision executable-grammar).
+// .
 package ebnf
 
 import (

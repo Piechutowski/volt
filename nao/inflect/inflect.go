@@ -1,5 +1,5 @@
 // Package inflect derives the singular model name from a plural table
-// name (decision singular-models): a fixed irregular list, a handful of suffix rules,
+// name: a fixed irregular list, a handful of suffix rules,
 // and a confidence bit. When the result is a guess, Singular returns
 // ok=false.
 package inflect

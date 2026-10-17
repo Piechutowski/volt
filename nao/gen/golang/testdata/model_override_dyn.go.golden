@@ -2,7 +2,7 @@
 //
 // The dynamic query layer over the models in nao_models.go: typed
 // column handles, per-model option wrappers, and predicate-driven
-// terminals — see docs/decisions.md, Query layer.
+// terminals.
 
 package models
 
@@ -12,14 +12,14 @@ import (
 )
 
 // menuTableSQL and menuColumnsSQL are the fixed shape of Menu's
-// dynamic statements; the interpreter renders everything else (decision options-are-data).
+// dynamic statements; the interpreter renders everything else.
 const (
 	menuTableSQL   = `"menus"`
 	menuColumnsSQL = `"id", "title", "price"`
 )
 
-// Typed column handles of Menu (decision flat-handles): inert predicate, order and
-// assignment builders for the dynamic query layer (decision options-are-data). A predicate
+// Typed column handles of Menu: inert predicate, order and
+// assignment builders for the dynamic query layer. A predicate
 // built here can only enter Menu queries; mixing models is a compile
 // error.
 var (
@@ -28,10 +28,10 @@ var (
 	MenuPrice = rt.Column[Menu, string]{Name: "price"}
 )
 
-// MenuLimit caps how many rows MenuQuery returns (decision per-model-wrappers).
+// MenuLimit caps how many rows MenuQuery returns.
 func MenuLimit(n int) rt.Opt[Menu] { return rt.Limit[Menu](n) }
 
-// MenuOffset skips n rows; keyset pagination (MenuAfter) scales better (decision keyset-pagination).
+// MenuOffset skips n rows; keyset pagination (MenuAfter) scales better.
 func MenuOffset(n int) rt.Opt[Menu] { return rt.Offset[Menu](n) }
 
 // MenuDistinct deduplicates the rows MenuQuery returns.
@@ -42,7 +42,7 @@ func MenuDistinct() rt.Opt[Menu] { return rt.Distinct[Menu]() }
 func MenuOrderBy(terms ...rt.Order[Menu]) rt.Opt[Menu] { return rt.OrderBy(terms...) }
 
 // MenuAfter resumes strictly after the row with the given key — keyset
-// pagination (decision keyset-pagination): one value per MenuOrderBy term, in the same order.
+// pagination: one value per MenuOrderBy term, in the same order.
 func MenuAfter(key ...any) rt.Opt[Menu] { return rt.After[Menu](key...) }
 
 // MenuSet collects the typed assignments of a MenuUpdateWhere, built
@@ -102,7 +102,7 @@ func (q *Queries) MenuExists(ctx context.Context, preds ...rt.Pred[Menu]) (bool,
 
 // MenuDeleteWhere removes every menus row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
-// full-table delete (decision positional-placeholders).
+// full-table delete.
 func (q *Queries) MenuDeleteWhere(ctx context.Context, preds ...rt.Pred[Menu]) (int64, error) {
 	query, args, err := rt.DeleteRender(menuTableSQL, preds)
 	if err != nil {
@@ -117,8 +117,8 @@ func (q *Queries) MenuDeleteWhere(ctx context.Context, preds ...rt.Pred[Menu]) (
 
 // MenuUpdateWhere applies the typed assignments (MenuSet) to every menus
 // row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer (decision shape-rule). No effective predicate
-// is an error, never a full-table rewrite (decision positional-placeholders).
+// partial update of the dynamic layer. No effective predicate
+// is an error, never a full-table rewrite.
 func (q *Queries) MenuUpdateWhere(ctx context.Context, set []rt.Assign[Menu], preds ...rt.Pred[Menu]) (int64, error) {
 	query, args, err := rt.UpdateRender(menuTableSQL, set, preds)
 	if err != nil {
@@ -132,14 +132,14 @@ func (q *Queries) MenuUpdateWhere(ctx context.Context, set []rt.Assign[Menu], pr
 }
 
 // orderStatusTableSQL and orderStatusColumnsSQL are the fixed shape of OrderStatus's
-// dynamic statements; the interpreter renders everything else (decision options-are-data).
+// dynamic statements; the interpreter renders everything else.
 const (
 	orderStatusTableSQL   = `"order_status"`
 	orderStatusColumnsSQL = `"code", "label"`
 )
 
-// Typed column handles of OrderStatus (decision flat-handles): inert predicate, order and
-// assignment builders for the dynamic query layer (decision options-are-data). A predicate
+// Typed column handles of OrderStatus: inert predicate, order and
+// assignment builders for the dynamic query layer. A predicate
 // built here can only enter OrderStatus queries; mixing models is a compile
 // error.
 var (
@@ -147,10 +147,10 @@ var (
 	OrderStatusLabel = rt.Column[OrderStatus, string]{Name: "label"}
 )
 
-// OrderStatusLimit caps how many rows OrderStatusQuery returns (decision per-model-wrappers).
+// OrderStatusLimit caps how many rows OrderStatusQuery returns.
 func OrderStatusLimit(n int) rt.Opt[OrderStatus] { return rt.Limit[OrderStatus](n) }
 
-// OrderStatusOffset skips n rows; keyset pagination (OrderStatusAfter) scales better (decision keyset-pagination).
+// OrderStatusOffset skips n rows; keyset pagination (OrderStatusAfter) scales better.
 func OrderStatusOffset(n int) rt.Opt[OrderStatus] { return rt.Offset[OrderStatus](n) }
 
 // OrderStatusDistinct deduplicates the rows OrderStatusQuery returns.
@@ -163,7 +163,7 @@ func OrderStatusOrderBy(terms ...rt.Order[OrderStatus]) rt.Opt[OrderStatus] {
 }
 
 // OrderStatusAfter resumes strictly after the row with the given key — keyset
-// pagination (decision keyset-pagination): one value per OrderStatusOrderBy term, in the same order.
+// pagination: one value per OrderStatusOrderBy term, in the same order.
 func OrderStatusAfter(key ...any) rt.Opt[OrderStatus] { return rt.After[OrderStatus](key...) }
 
 // OrderStatusSet collects the typed assignments of a OrderStatusUpdateWhere, built
@@ -223,7 +223,7 @@ func (q *Queries) OrderStatusExists(ctx context.Context, preds ...rt.Pred[OrderS
 
 // OrderStatusDeleteWhere removes every order_status row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
-// full-table delete (decision positional-placeholders).
+// full-table delete.
 func (q *Queries) OrderStatusDeleteWhere(ctx context.Context, preds ...rt.Pred[OrderStatus]) (int64, error) {
 	query, args, err := rt.DeleteRender(orderStatusTableSQL, preds)
 	if err != nil {
@@ -238,8 +238,8 @@ func (q *Queries) OrderStatusDeleteWhere(ctx context.Context, preds ...rt.Pred[O
 
 // OrderStatusUpdateWhere applies the typed assignments (OrderStatusSet) to every order_status
 // row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer (decision shape-rule). No effective predicate
-// is an error, never a full-table rewrite (decision positional-placeholders).
+// partial update of the dynamic layer. No effective predicate
+// is an error, never a full-table rewrite.
 func (q *Queries) OrderStatusUpdateWhere(ctx context.Context, set []rt.Assign[OrderStatus], preds ...rt.Pred[OrderStatus]) (int64, error) {
 	query, args, err := rt.UpdateRender(orderStatusTableSQL, set, preds)
 	if err != nil {

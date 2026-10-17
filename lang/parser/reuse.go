@@ -1,6 +1,6 @@
 package parser
 
-// Parsing by element (decisions parse-by-declaration, one-parse): a file is a sequence of
+// Parsing by element: a file is a sequence of
 // chunks, one per top-level element, cut where the scanner says an
 // element begins (spec §line-structure-and-whitespace rule 5).
 

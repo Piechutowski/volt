@@ -21,7 +21,7 @@ type Invoice struct {
 }
 
 // InvoiceCreateParams are the caller-supplied columns of InvoiceCreate. The
-// auto-increment key and defaulted columns are the database's job (decision create-params).
+// auto-increment key and defaulted columns are the database's job.
 type InvoiceCreateParams struct {
 	ID    int64  `db:"id" json:"id"`
 	Total string `db:"total" json:"total"`

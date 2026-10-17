@@ -1,9 +1,9 @@
 // Package golang generates Go model structs from a checked DBML file — one
 // struct per table, one string-typed enum per DBML enum, the params
-// structs its CRUD takes (decision layout-independent-gen), with db and json struct tags. The output
-// is gofmt-canonical by construction (decision gofmt-canonical) and depends only on the
-// standard library and the rt runtime package (decision zero-dependencies); nullable columns
-// are rt.Null[T] values (decision null-t).
+// structs its CRUD takes, with db and json struct tags. The output
+// is gofmt-canonical by construction and depends only on the
+// standard library and the rt runtime package; nullable columns
+// are rt.Null[T] values.
 package golang
 
 import (
@@ -19,7 +19,7 @@ import (
 )
 
 // rtImport is the runtime support package generated code may depend on
-// (the only non-stdlib import, decision zero-dependencies).
+// (the only non-stdlib import).
 const rtImport = "github.com/Piechutowski/volt/nao/rt"
 
 // Options configures generation.
@@ -32,14 +32,14 @@ type Options struct {
 
 // Generate renders the models file for one checked DBML file: the enums,
 // the row structs and the params structs — every type the wire carries
-// (decision layout-independent-gen). The file must be free of check errors; Generate validates only
+// . The file must be free of check errors; Generate validates only
 // what generation itself needs (name mapping, type mapping, collisions).
 func Generate(f *ast.File, info *check.Info, opts Options) ([]byte, error) {
 	p, perr := planBuild(f, info, nil)
 	return modelsGenerate(f, info, p, perr, opts)
 }
 
-// modelsGenerate is Generate over an already built plan (decision one-naming-plan); perr is
+// modelsGenerate is Generate over an already built plan; perr is
 // the plan's build error, reported after the models' own checks.
 func modelsGenerate(f *ast.File, info *check.Info, p *plan, perr error, opts Options) ([]byte, error) {
 	if opts.Package == "" {
@@ -86,7 +86,7 @@ func (g *generator) run(p *plan, perr error) error {
 			return err
 		}
 	}
-	// The params structs follow the models (decision layout-independent-gen).
+	// The params structs follow the models.
 	if perr != nil {
 		return perr
 	}
@@ -109,7 +109,7 @@ func (g *generator) paramsEmit(t *tableModel) {
 	b := &g.body
 	if fields := t.createFields(); len(fields) > 0 {
 		fmt.Fprintf(b, "// %sCreateParams are the caller-supplied columns of %sCreate. The\n", t.model, t.model)
-		fmt.Fprintf(b, "// auto-increment key and defaulted columns are the database's job (decision create-params).\n")
+		fmt.Fprintf(b, "// auto-increment key and defaulted columns are the database's job.\n")
 		fmt.Fprintf(b, "type %sCreateParams struct {\n", t.model)
 		paramFieldsWrite(b, fields)
 		b.WriteString("}\n\n")
@@ -153,7 +153,7 @@ func (g *generator) enumTypesCollect() error {
 }
 
 // enumTypeName derives the Go type of an enum: structName with an "E"
-// prefix (decisions e-prefixed-enums, flat-handles).
+// prefix.
 func enumTypeName(schema, base string) (string, error) {
 	n, err := structName(schema, base)
 	if err != nil {
@@ -314,7 +314,7 @@ func (g *generator) fieldEmit(cd *check.ColumnDef, pkCols map[string]bool, field
 	nullable := isNullable(col) && !pkCols[col.Name.Name()]
 	goTypeName := typ.name
 	if nullable && !typ.nilable {
-		// decision null-t: value semantics for NULL — rt.Null[T], never a pointer
+		// value semantics for NULL: rt.Null[T], never a pointer
 		goTypeName = "rt.Null[" + goTypeName + "]"
 		g.imports[rtImport] = true
 	}
@@ -328,8 +328,8 @@ func (g *generator) fieldEmit(cd *check.ColumnDef, pkCols map[string]bool, field
 
 // fieldTag assembles a column's struct tag (§struct-tags): the db scan
 // contract, then the json default — the value or null, nothing omitted
-// (decision null-t) — unless a [tag:] with key json replaces it, then every other
-// [tag:] passthrough verbatim in declaration order (decision tag-passthrough).
+// — unless a [tag:] with key json replaces it, then every other
+// [tag:] passthrough verbatim in declaration order.
 func fieldTag(col *ast.Column) string {
 	name := col.Name.Name()
 	jsonPair := `json:"` + name + `"`

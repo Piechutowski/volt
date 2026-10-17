@@ -26,18 +26,18 @@ func Scan(filename, src string) ([]token.Token, []diag.Diagnostic) {
 // ScanFile scans a whole file as written; every position is in f. A
 // carriage return is discarded wherever it appears (§line-structure-and-whitespace rule 1) and stays
 // in the text: it keeps its byte, so offsets match the file, and has
-// no column (decision carriage-return). Every token that begins a top-level element
+// no column. Every token that begins a top-level element
 // (§line-structure-and-whitespace rule 5) is flagged; nothing stops there.
 func ScanFile(f *token.File) ([]token.Token, []diag.Diagnostic) {
 	// The token slice is sized once.
-	s := newScanner(f, make([]token.Token, 0, len(f.Src)/4+16)) // a token per four bytes of schema (decision indexed-lookups)
+	s := newScanner(f, make([]token.Token, 0, len(f.Src)/4+16)) // a token per four bytes of schema
 	s.run()
 	s.emit(token.EOF, "")
 	return s.toks, s.errs
 }
 
-// ScanChunk scans the first top-level element of f's text (§line-structure-and-whitespace rule 5,
-// decision one-parse): the tokens before the next element start after the first
+// ScanChunk scans the first top-level element of f's text (§line-structure-and-whitespace rule 5):
+// the tokens before the next element start after the first
 // byte, then an EOF standing at that start, which is the end returned
 // and whose text names what it is; without one, the whole text and an
 // EOF at its end. bound reports the former. buf is a token slice to
@@ -151,7 +151,7 @@ func (s *Scanner) peek() rune {
 // peekAt is the rune n runes on, or eof: at the end of the text, and
 // past a line break. The scanner cannot see beyond a line break it
 // has not consumed, and only a string or a comment consumes one
-// inside a token (decision one-parse).
+// inside a token.
 func (s *Scanner) peekAt(n int) rune {
 	off := s.crSkip(s.pos.Offset)
 	for ; n > 0; n-- {

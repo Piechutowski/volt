@@ -6,9 +6,8 @@
 What Volt is made of and whether each piece is built. `[x]` built and
 tested, `[ ]` not built, `[~]` partly built. *hand* means a documented
 pattern, deliberately hand-written, never generated; *no* means a
-non-goal (decision non-goals). The why behind an item lives in
-[`decisions.md`](decisions.md) or the spec; a status changes in the
-commit that lands it (decision docs-doctrine). Build order: raw-SQL
+non-goal. What an item is lives in the spec; a
+status changes in the commit that lands it. Build order: raw-SQL
 selects, then associations, then migrations, then the report engine
 when a consumer exists.
 

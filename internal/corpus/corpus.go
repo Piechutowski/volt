@@ -1,8 +1,8 @@
 // Package corpus writes synthetic Volt projects of any size that use
-// every feature of the language in a neutral domain (decision generated-stress). One
+// every feature of the language in a neutral domain. One
 // Spec, two layouts: data packages plus a routing package that imports
 // them all, or one package main at the module root holding everything
-// in one schema.volt (decision self-routing-package).
+// in one schema.volt.
 package corpus
 
 import (
@@ -17,7 +17,7 @@ type Spec struct {
 	Packages int    // data packages d01..dNN (ignored in the one-package layout)
 	Tables   int    // tables per data package
 	Columns  int    // data columns per table, beyond the key and the partial
-	Single   bool   // one package main at the root holds schema and routes (decision self-routing-package)
+	Single   bool   // one package main at the root holds schema and routes
 	Volt     string // Volt checkout the module's runtime is replaced with; "" writes a module that checks and generates but does not build
 }
 
@@ -132,7 +132,7 @@ func schemaWrite(b *strings.Builder, spec Spec, pkg string) {
 }
 
 // routesWrite renders the routing declarations. In the one-package
-// layout the references are bare (decision self-routing-package).
+// layout the references are bare.
 func routesWrite(b *strings.Builder, spec Spec, pkgs []string, single bool) {
 	if !single {
 		b.WriteString("import (\n")

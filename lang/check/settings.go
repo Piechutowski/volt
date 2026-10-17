@@ -35,12 +35,12 @@ type settingSpec struct {
 
 var (
 	tableSettings = settingSpec{
-		// model is our extension (decision singular-models): the singular Go model name when the
+		// model is our extension: the singular Go model name when the
 		// inflector's guess is wrong or unwanted.
 		kinds: map[string]valueKind{"headercolor": colorValue, "note": strValue, "model": strValue},
 	}
 	columnSettings = settingSpec{
-		// tag is our extension (decision tag-passthrough): one verbatim Go struct-tag pair per
+		// tag is our extension: one verbatim Go struct-tag pair per
 		// setting, shaped and deduplicated by tagSettingsCheck.
 		kinds: map[string]valueKind{
 			"pk": flagOnly, "primary key": flagOnly,
@@ -48,7 +48,7 @@ var (
 			"unique": flagOnly, "increment": flagOnly,
 			"default": defaultVal, "check": exprValue,
 			"note": strValue, "ref": refVal, "tag": strValue,
-			"required": flagOnly, // our extension (decision required-and-problems): non-empty in both tiers
+			"required": flagOnly, // our extension: non-empty in both tiers
 		},
 		repeatable: map[string]bool{"check": true, "ref": true, "tag": true},
 		synonyms:   map[string]string{"primary key": "pk"},
@@ -183,8 +183,8 @@ func (c *checker) defaultValueCheck(s *ast.Setting) {
 	}
 }
 
-// tagSettingsCheck enforces the tag: extension's shape rules (§columns,
-// decision tag-passthrough): one key:"value" pair per setting, keys unique per column, db
+// tagSettingsCheck enforces the tag: extension's shape rules (§columns):
+// one key:"value" pair per setting, keys unique per column, db
 // reserved for the scan contract.
 func (c *checker) tagSettingsCheck(sl *ast.SettingList) {
 	if sl == nil {
@@ -314,7 +314,7 @@ func (c *checker) incrementCheck(ti *TableInfo) {
 }
 
 // requiredKinds classifies declared types for the required setting
-// (§columns extension, decision required-and-problems): what "non-empty" means per type class. Types
+// (§columns extension): what "non-empty" means per type class. Types
 // absent here (bool, date/time) cannot be required.
 var requiredKinds = map[string]string{
 	"varchar": "text", "char": "text", "text": "text", "tinytext": "text", "mediumtext": "text", "longtext": "text",

@@ -149,11 +149,13 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Names](#names)
     - [Notes become doc comments](#notes-become-doc-comments)
     - [Struct tags](#struct-tags)
+    - [Generated query surface](#generated-query-surface)
   - [Mapping to SQLite DDL](#mapping-to-sqlite-ddl)
   - [Compatibility with DBML](#compatibility-with-dbml)
+  - [Non-goals](#non-goals)
   - [License and Provenance](#license-and-provenance)
 
-Sections are named, not numbered (decision named-sections). A
+Sections are named, not numbered. A
 citation is `§` followed by the heading's anchor, the heading
 lowercased with its words joined by hyphens, and `rule N` names a
 numbered constraint inside it: `§columns rule 2`,
@@ -683,7 +685,7 @@ table setting  = "headercolor", ":", color
 
 > **Extension (this implementation).** The table setting `model: string`
 > pins the Go model name used by `volt gen` (by default the
-> singularized table name — [decision singular-models](decisions.md#singular-models)). The
+> singularized table name). The
 > setting is accepted by this front end but is not upstream DBML; the
 > `vet` rule [`modelname`](lint.md#modelname) tells you when it is
 > needed. The core grammar above is unchanged.
@@ -732,10 +734,10 @@ column setting  = "primary key" | "pk"
    an index with the `pk` setting (§indexes).
 4. **`increment`** marks the column auto-increment: the database
    assigns its value, and the generated `CreateParams` omits it
-   (§mapping-to-go, decision create-params).
+   (§mapping-to-go).
 
    > **Extension (this implementation).** Because the target is SQLite
-   > (decision sqlite-first), `increment` is honored in exactly one shape — the table's
+   >, `increment` is honored in exactly one shape — the table's
    > single-column primary key of an integer type, which becomes the
    > rowid alias (§mapping-to-sqlite-ddl) — and is an **error** anywhere else: on a
    > non-integer column, on a column that is not the primary key, or
@@ -752,7 +754,7 @@ column setting  = "primary key" | "pk"
 8. Each column definition is terminated by a line break.
 
 > **Extension (this implementation).** The column setting `required`
-> ([decision required-and-problems](decisions.md#required-and-problems)) declares that a value must be present
+> declares that a value must be present
 > in the zero-value sense: under ZII a missing input decodes to the
 > type's zero value and `not null` is satisfied, so `required` is the
 > word for "and not that either". It lowers to one check in both tiers
@@ -765,8 +767,8 @@ column setting  = "primary key" | "pk"
 >
 > **Extension (this implementation).** The column setting `tag: string`
 > (repeatable) passes one Go struct tag through to the generated field
-> verbatim ([decision tag-passthrough](decisions.md#tag-passthrough)): every field property lives in
-> the schema (decision schema-owns-fields), and the passthrough serves every encoding and
+> verbatim: every field property lives in
+> the schema, and the passthrough serves every encoding and
 > third-party library without minting a setting name per format.
 >
 > 1. The value MUST be exactly one `key:"value"` pair in Go struct-tag
@@ -1533,7 +1535,7 @@ package clause = "package", name, newline ;
 ```
 
 1. A **project** is a Go module: the directory tree rooted at the
-   nearest ancestor directory containing **`go.mod`** (decision go-module-is-the-project). Its
+   nearest ancestor directory containing **`go.mod`**. Its
    `module` directive is the project's module path; every other
    directive is Go's business and ignored. There is no second manifest.
 2. Every `.volt` file MUST begin with a package clause: its first
@@ -1653,7 +1655,7 @@ go ref   = name, [ ".", name ] ;
    the go tool would compile for it (go/build's file constraints: no
    leading `_` or `.`, a matching GOOS/GOARCH suffix, a satisfied
    `//go:build` line), with exactly one parameter spelled
-   `http.Handler` and exactly one result spelled `http.Handler` (decision go-references-by-spelling):
+   `http.Handler` and exactly one result spelled `http.Handler`:
    a missing function or another signature is an error naming the
    signature to write. The Go compiler still compiles the result; the
    checker catches the typo and the wrong shape first.
@@ -1823,7 +1825,7 @@ Scope /api [pipe: api] {
    constructs it with the package's `New`. No interface is generated
    for a query route.
 6. **Own tables.** A package that declares tables MAY route them
-   itself, so one directory holds schema, routes and handlers (decision self-routing-package).
+   itself, so one directory holds schema, routes and handlers.
    `Query` or `<package name>.Query` names its own generated query;
    `resources t [default]` (§default-handlers) and `dataset s` (§dataset-declaration) resolve in
    the package when bare or self-qualified. Nothing is imported, the
@@ -1960,7 +1962,7 @@ Scope settings (the complete set):
    plugs, composed once at generation time — never iterated per
    request.
 3. The `error_handler` function is a Go reference held like a plug
-   (decision go-references-by-spelling): it MUST exist in the package's compiled Go files with the
+: it MUST exist in the package's compiled Go files with the
    volt runtime's ErrorHandler
    shape: `func(http.ResponseWriter, *volt.Request, error)`. Routes
    without one use the runtime default.
@@ -2249,7 +2251,7 @@ standard generated-code header and are gofmt-stable.
 ## Reserved words for future layers
 
 No word is currently reserved. `Dataset` was reserved until the
-`dataset` scope item landed (Datasets, decision dataset-expansion).
+`dataset` scope item landed (Datasets).
 
 ---
 
@@ -2309,7 +2311,7 @@ Group public = Commerce \ (audit_log, api_keys)
 
 A **Pred** names a boolean expression over the columns of an as-yet
 unnamed table. The expression language is deliberately **closed** —
-it is not SQL and never grows toward it (decision expressions-are-sqlites); anything it cannot say
+it is not SQL and never grows toward it; anything it cannot say
 belongs in a raw `Select` body (reserved) or the dynamic layer.
 
 ```ebnf
@@ -2434,14 +2436,14 @@ the optional projection narrows the emitted columns.
    type per rule 7 (the model itself when there is no projection); the
    emitted SQL is
    `SELECT <projected columns> FROM <table> [WHERE …] [ORDER BY …]`
-   with SQLite named parameters (decision named-placeholders). A list parameter renders as
+   with SQLite named parameters. A list parameter renders as
    `<column> IN (SELECT value FROM json_each(:name))` and binds one
    JSON array (`rt.JSONList`), so the statement is the same text for
-   every list length and an empty list matches no row (decision list-parameters). The
+   every list length and an empty list matches no row. The
    rendering is proven by
    construction (typed operators over quoted identifiers) and by the
    generator's corpus, whose select statements are prepared against
-   the generated DDL on a real SQLite (decision expressions-are-sqlites) and executed through a real
+   the generated DDL on a real SQLite and executed through a real
    driver in `nao/itest`.
 7. **Projection and row types.** Without a projection the row type is
    the member's model and the emitted columns are all of it. With one:
@@ -2487,7 +2489,7 @@ the optional projection narrows the emitted columns.
 ## Validation checks
 
 Validation reuses `checks` (§checks) instead of minting per-rule settings:
-checks are parameterless predicates (decision closed-predicates), and one construct serves the
+checks are parameterless predicates, and one construct serves the
 database and the application. A check line takes one of three forms:
 
 ```ebnf
@@ -2550,7 +2552,7 @@ Table users {
    package's function is an error suggesting a local wrapper (the
    §pipelines rule 2). Arguments are columns of the table, `not null` (rule
    3). The contract is `func <Name>(<the columns' Go types>) error`,
-   and it is **checked** (decision go-references-by-spelling): the function MUST exist as a non-generic
+   and it is **checked**: the function MUST exist as a non-generic
    top-level function in the package directory's non-test Go files that
    the go tool would compile for it (go/build's file constraints, as
    §pipelines rule 2), take exactly one parameter per argument column with the
@@ -2578,10 +2580,10 @@ Table users {
    rendered form. The **params structs** validate too: `<Model>CreateParams`
    and `<Model>UpdateParams` each get `Validate` over the checks whose
    columns the struct carries — a check reading a defaulted or
-   auto-increment column (absent from CreateParams, decision create-params) or a key
+   auto-increment column (absent from CreateParams) or a key
    column (absent from UpdateParams) is left to the row's `Validate`
    and the DDL, and the method's doc comment names it. Nothing calls
-   `Validate` implicitly in your code — no callbacks (decision non-goals); the one
+   `Validate` implicitly in your code — no callbacks; the one
    generated caller is a query route's Create/Update handler (§query-routes rule 3).
 7. **Statuses and attribution.** A `CheckError` and a `ValidationError`
    carry status 422; the database's own refusals are translated by
@@ -2712,7 +2714,7 @@ the real Go toolchain on every `go test ./...` run.*
 
 `nao_models.go` carries every type the wire carries — the enums, the
 row structs, and the params structs `<Model>CreateParams` and
-`<Model>UpdateParams` (decision layout-independent-gen) — so a program that shares the models, a
+`<Model>UpdateParams` — so a program that shares the models, a
 generated client (§generated-client) among them, needs nothing else.
 `nao_queries.go` carries the `Queries` handle and its methods, and
 imports only what their signatures name.
@@ -2745,7 +2747,7 @@ A column is required (`T`) when it has `not null`, `pk`/`primary key`
 (setting or legacy flag), `increment`, or is covered by a `[pk]` index —
 primary keys imply NOT NULL in SQL. Everything else is nullable and
 generated as `rt.Null[T]` — a value plus a validity bit, never a pointer
-(decision null-t). Types where `nil` already expresses NULL (`[]byte`,
+. Types where `nil` already expresses NULL (`[]byte`,
 `json.RawMessage`) stay bare. In the dynamic layer, nullable columns get
 `rt.NullColumn` handles: comparisons take plain `T`, NULL is explicit
 (`IsNull`, `SetNull`).
@@ -2757,7 +2759,7 @@ generated as `rt.Null[T]` — a value plus a validity bit, never a pointer
 is `E` + the PascalCase name (`order_status` → `EOrderStatus`; a
 non-`public` schema prefixes as for models), and each value is a
 constant of that type. Model names are the
-singular of the table name (`users` → `User`, decision singular-models), overridable with
+singular of the table name (`users` → `User`), overridable with
 `[model:]` — the only model-naming override; `resources`' `singular:`
 setting (§settings) renames the route member helper, never the model.
 Non-`public` schemas prefix the type (`core.users` →
@@ -2791,13 +2793,51 @@ order:
    column setting `tag:` rejects the key `db` (§columns).
 2. `json:"<column name>"` — the JSON default. Nothing is omitted
    (`omitempty` is never generated): a document always carries every
-   column, and NULL is the value `null` (decision null-t). A column `tag:` with key
+   column, and NULL is the value `null`. A column `tag:` with key
    `json` **replaces** this pair verbatim.
 3. Every other `tag:` passthrough pair, verbatim, in declaration order.
 
 A struct derivative (§selects-over-groups rule 7) copies each kept field's assembled tag
 unchanged; an explicit-list shared row type (§selects-over-groups rule 7) carries the
 default `db`/`json` pair only.
+
+### Generated query surface
+
+Per table, on the `Queries` handle of `nao_queries.go` (`New(db
+rt.DBTX)`, `Tx`, `WithTx`, `WithCache`):
+
+1. `<Model>Get`, `<Model>Update` and `<Model>Delete` exist iff the
+   table has a primary key (a `pk` column or a `[pk]` index), one
+   positional argument per key column; `Update` also needs a non-key
+   column and rewrites every non-key column. `<Model>GetMany(ctx,
+   keys)` exists for a single-column key; missing keys are absent, not
+   errors; an empty input returns nil. `<Model>GetBy<Column>` exists
+   per column that is `unique` or covered by a single-column unique
+   index and is not the key. `<Model>List` and `<Model>Create` always
+   exist; a table without a key gets List, Create, GetBy and the
+   dynamic layer.
+2. `Get`, `GetBy*` and `Update` return `rt.ErrNotFound`
+   (`sql.ErrNoRows`) on a miss; `Delete` checks the affected count.
+   Multi-row results are empty slices, never nil, GetMany on an empty
+   input excepted.
+3. Static statements bind SQLite named parameters (`:column`) through
+   `sql.Named`; GetMany appends positional `?`. `Create` and `Update`
+   end in `RETURNING`. Every CRUD write passes its error through
+   `rt.Constraint`; `DeleteWhere` and `UpdateWhere` do not.
+4. The dynamic layer in `nao_dyn.go` mints per column a handle
+   `<Model><Field>` (`rt.Column[M, T]`, `rt.NullColumn` when nullable),
+   per model the wrappers `Limit`, `Offset`, `Distinct`, `OrderBy`,
+   `After`, `Set`, and the verbs `Query`, `Count`, `Exists`,
+   `DeleteWhere`, `UpdateWhere`. Predicates are values rendered at run
+   time with positional placeholders: an empty `In` is constant false,
+   a zero predicate vanishes, a `DeleteWhere` or `UpdateWhere` with no
+   predicate is an error, `After` is keyset pagination over the
+   `OrderBy` terms. Dynamic statements run through `rt.StmtCache` when
+   `WithCache` was set; CRUD and select methods do not use the cache;
+   `WithTx` drops it.
+5. `rt.Open(driver, dsn)` pins one connection and sets WAL,
+   `busy_timeout = 5000` and `foreign_keys = ON`. `rt.Null[T]`
+   marshals as the value or `null`.
 
 ---
 
@@ -2871,6 +2911,14 @@ cycle error: packages must layer.
 
 ---
 
+## Non-goals
+
+Volt does not generate and will not generate: an identity map or unit
+of work, lazy loading, active-record `Save()`, callbacks, dirty
+tracking, default scopes, single-table inheritance, reflection in
+generated code, a Turing-complete query language. Generated code
+imports the standard library and Volt's runtime packages only.
+
 ## License and Provenance
 
 Part I is a distillation of the DBML language as documented and
@@ -2878,7 +2926,7 @@ implemented in [holistics/dbml](https://github.com/holistics/dbml)
 (the `@dbml/parse` reference implementation). While Part I was being
 written, every corpus verdict was cross-checked against that
 implementation and the prose corrected wherever it disagreed; the
-cross-check harness was retired at zero disagreements (decision one-corpus), and the
+cross-check harness was retired at zero disagreements, and the
 corpus it pinned remains the executable record.
 Like the upstream project, this specification is licensed under the
 [Apache License 2.0](../LICENSE).

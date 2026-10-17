@@ -25,7 +25,7 @@ type Comment struct {
 }
 
 // CommentCreateParams are the caller-supplied columns of CommentCreate. The
-// auto-increment key and defaulted columns are the database's job (decision create-params).
+// auto-increment key and defaulted columns are the database's job.
 type CommentCreateParams struct {
 	CommentableType ECommentableType `db:"commentable_type" json:"commentable_type"`
 	// ID within the table selected by commentable_type

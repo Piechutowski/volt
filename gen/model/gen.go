@@ -17,7 +17,7 @@ type Options struct {
 	// package's name (§projects-and-packages rule 7).
 	Package string
 	// ModelsOnly emits just nao_models.go: the structs, params structs
-	// and enums — every type the wire carries (decision layout-independent-gen).
+	// and enums — every type the wire carries.
 	ModelsOnly bool
 	// SQL additionally emits the SQLite DDL and seed inserts.
 	SQL bool
@@ -36,13 +36,13 @@ func Generate(pkg *lang.Package, opts Options) ([]File, error) {
 	if opts.Package != "" {
 		gopts.Package = opts.Package
 	}
-	// One plan per package (decision one-naming-plan).
+	// One plan per package.
 	plan := pkg.Plan()
 	if plan == nil {
 		plan = golang.PlanBuild(pkg.Merged(), pkg.Schema())
 	}
 
-	// The files are emitted on every CPU (decision worker-pool) and gathered in this
+	// The files are emitted on every CPU and gathered in this
 	// order.
 	type emit struct {
 		name string

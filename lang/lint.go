@@ -16,7 +16,7 @@ func Vet(pr *Project) []diag.Diagnostic {
 
 // vetWith is Vet through a session's memo when one is given: a
 // package's warnings are a function of the same inputs as its check
-// results, so they are kept under the same key (decision indexed-lookups).
+// results, so they are kept under the same key.
 func vetWith(pr *Project, s *Session) []diag.Diagnostic {
 	c := &checker{pr: pr}
 	paths := c.paths()
@@ -62,7 +62,7 @@ func vetWith(pr *Project, s *Session) []diag.Diagnostic {
 }
 
 // vetPackage runs every analyzer over one checked package, its
-// declarations through the memo when one is given (decision vet-by-declaration).
+// declarations through the memo when one is given.
 func vetPackage(pkg *Package, memo *vet.Memo) []diag.Diagnostic {
 	var out []diag.Diagnostic
 	if pkg.HasSchema() {

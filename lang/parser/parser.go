@@ -42,7 +42,7 @@ type parser struct {
 	diags []diag.Diagnostic
 	buf   []token.Token // the scanner's slice, reused chunk after chunk; nodes copy their tokens
 
-	// The hottest node kinds come from slabs (decision flat-front-end).
+	// The hottest node kinds come from slabs.
 	idents   slab[ast.Ident]
 	quals    slab[ast.QualName]
 	columns  slab[ast.Column]

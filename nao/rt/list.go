@@ -4,7 +4,7 @@ import "encoding/json"
 
 // JSONList encodes a list parameter (spec §predicates rule 3) as the JSON array a
 // generated select binds to `json_each(:name)`: one static statement
-// whatever the list length, prepared once (decision list-parameters). A nil or empty slice
+// whatever the list length, prepared once. A nil or empty slice
 // is "[]", which matches no row.
 func JSONList[T any](v []T) string {
 	if len(v) == 0 {
