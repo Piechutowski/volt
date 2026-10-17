@@ -1,4 +1,4 @@
-// spec: §route-conflicts rule 2
+// spec: §route-conflicts
 package app
 
 Scope / {

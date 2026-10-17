@@ -73,7 +73,7 @@ server gets a scripted stdio session; one is a golden
   interface methods, `New*`/`is*`/`has*`, stdlib-parallel APIs, cursor
   primitives, LSP handlers named after protocol methods.
 - Comments state a contract in one or two sentences and cite the spec
-  section (`§columns rule 2`); no rationale, history or measurements.
+  section (`§columns`); no rationale, history or measurements.
   Tests carry no prose beyond directives, the proof instruments
   excepted.
 - Generated files start with the `Code generated … DO NOT EDIT.`

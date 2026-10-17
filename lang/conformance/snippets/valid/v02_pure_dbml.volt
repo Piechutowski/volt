@@ -1,4 +1,4 @@
-// spec: §layers-files-and-the-superset-rule rule 2 — the superset rule: DBML bodies are valid Volt
+// spec: §layers-files-and-the-superset-rule — the superset rule: DBML bodies are valid Volt
 package db
 
 Table users {

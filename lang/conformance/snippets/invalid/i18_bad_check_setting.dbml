@@ -1,4 +1,4 @@
-// spec: §checks rule 2 — only 'name' is a valid check setting
+// spec: §checks — only 'name' is a valid check setting
 Table t {
   id int
   checks {

@@ -1,4 +1,4 @@
-// spec: §predicates rule 3 — one param name, one type: a list use and a scalar use of :site disagree
+// spec: §predicates — one param name, one type: a list use and a scalar use of :site disagree
 // want: one name, one type
 package db
 

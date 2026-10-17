@@ -24,7 +24,7 @@ type GroupInfo struct {
 }
 
 // SelectParam is one parameter of a generated select method, in first
-// appearance order (§selects-over-groups rule 6).
+// appearance order (§selects-over-groups).
 type SelectParam struct {
 	SQLName string // as written after ':'
 	GoName  string // Go parameter name (identical today; validated)
@@ -33,7 +33,7 @@ type SelectParam struct {
 
 // SelectInfo is one checked Select (§selects-over-groups), lowered far enough that the
 // generator only substitutes the table name. The agreement rule
-// (§selects-over-groups rule 4) is what makes one WHERE/ORDER rendering serve every member.
+// (§selects-over-groups) is what makes one WHERE/ORDER rendering serve every member.
 type SelectInfo struct {
 	Decl         *ast.Select
 	MethodSuffix string // GoName of the select name, e.g. "Rows"
@@ -41,8 +41,8 @@ type SelectInfo struct {
 	WhereSQL     string // "" when no where clause
 	OrderSQL     string // "" when no order setting
 	Params       []SelectParam
-	Cols         []string // explicit projection, declared order (§selects-over-groups rule 7)
-	Excluded     []string // star-form exclusions (§selects-over-groups rule 7)
+	Cols         []string // explicit projection, declared order (§selects-over-groups)
+	Excluded     []string // star-form exclusions (§selects-over-groups)
 	Shared       string   // shared row type name; "" unless explicit list
 }
 
@@ -65,7 +65,7 @@ func (c *checker) dataQueries(pkg *Package) {
 		case *ast.Group:
 			name := d.Name.Name()
 			if _, dup := groupDecls[name]; dup {
-				c.errorf(d.Name.Pos(), "groups", "group %q redeclared (§groups rule 1)", name)
+				c.errorf(d.Name.Pos(), "groups", "group %q redeclared (§groups)", name)
 				continue
 			}
 			groupDecls[name] = d
@@ -90,7 +90,7 @@ func (c *checker) dataQueries(pkg *Package) {
 	}
 	c.predRefCycles(pkg)
 
-	// §selects-over-groups rule 7: minted row-type names share the package scope with every
+	// §selects-over-groups: minted row-type names share the package scope with every
 	// generated type, claimed from the plan.
 	minted := pkg.plan.Names()
 
@@ -107,7 +107,7 @@ func (c *checker) dataQueries(pkg *Package) {
 				key := m.Key + "." + si.MethodSuffix
 				if prev, dup := seen[key]; dup {
 					c.errorf(sel.Name.Pos(), "selects-over-groups",
-						"select %q collides with select %q on table %q — both generate %s%s (§selects-over-groups rule 1)",
+						"select %q collides with select %q on table %q — both generate %s%s (§selects-over-groups)",
 						sel.Name.Name(), prev.Name.Name(), m.Decl.Name.Base(),
 						modelOrBase(m), si.MethodSuffix)
 					break
@@ -220,7 +220,7 @@ func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *gol
 	return si
 }
 
-// selectTarget resolves a select's target (§selects-over-groups rule 2): a group, else a
+// selectTarget resolves a select's target (§selects-over-groups): a group, else a
 // table, else a TableGroup as a set. It reports an unresolved or empty
 // target and answers false; an empty group answers false silently, the
 // group having errored already.
@@ -234,7 +234,7 @@ func (c *checker) selectTarget(sel *ast.Select, info *check.Info) ([]*check.Tabl
 	} else if tg := info.TableGroup(want); tg != nil {
 		members = tg.Members
 		if len(members) == 0 {
-			c.errorf(sel.Target.Pos(), "selects-over-groups", "TableGroup %q has no members to select from (§selects-over-groups rule 2)", want)
+			c.errorf(sel.Target.Pos(), "selects-over-groups", "TableGroup %q has no members to select from (§selects-over-groups)", want)
 			return nil, false
 		}
 	} else {
@@ -306,7 +306,7 @@ type selectMember struct {
 }
 
 // selectIndex builds the package's method-name index once. The
-// first member minting a name owns it (§selects-over-groups rule 6).
+// first member minting a name owns it (§selects-over-groups).
 func (p *Package) selectIndex() {
 	p.selectByMethod = make(map[string]selectMember, len(p.Selects))
 	p.selectByName = make(map[string]*SelectInfo, len(p.Selects))
@@ -331,14 +331,14 @@ func modelOrBase(t *check.TableInfo) string {
 /* ===== groups (§groups) ===== */
 
 // groupResolve computes a group's member set, resolving group
-// references depth-first with cycle detection (§groups rule 4).
+// references depth-first with cycle detection (§groups).
 func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *check.Info, path map[string]bool) *GroupInfo {
 	if g, done := c.pkg.Groups[name]; done {
 		return g
 	}
 	d := decls[name]
 	if path[name] {
-		c.errorf(d.Name.Pos(), "groups", "group %q is part of a reference cycle (§groups rule 4)", name)
+		c.errorf(d.Name.Pos(), "groups", "group %q is part of a reference cycle (§groups)", name)
 		c.pkg.Groups[name] = &GroupInfo{Decl: d}
 		return c.pkg.Groups[name]
 	}
@@ -349,7 +349,7 @@ func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *c
 	index := map[string]int{} // table key -> position in Members, -1 = removed
 	add := func(pos token.Position, ti *check.TableInfo) {
 		if i, present := index[ti.Key]; present && i >= 0 {
-			c.errorf(pos, "groups", "table %q is already a member (§groups rule 3)", ti.Decl.Name.Base())
+			c.errorf(pos, "groups", "table %q is already a member (§groups)", ti.Decl.Name.Base())
 			return
 		}
 		index[ti.Key] = len(g.Members)
@@ -358,7 +358,7 @@ func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *c
 	remove := func(pos token.Position, ti *check.TableInfo) {
 		i, present := index[ti.Key]
 		if !present || i < 0 {
-			c.errorf(pos, "groups", "table %q is not a member; nothing to remove (§groups rule 3)", ti.Decl.Name.Base())
+			c.errorf(pos, "groups", "table %q is not a member; nothing to remove (§groups)", ti.Decl.Name.Base())
 			return
 		}
 		g.Members = append(g.Members[:i], g.Members[i+1:]...)
@@ -380,7 +380,7 @@ func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *c
 	for _, term := range d.Terms {
 		for _, id := range term.Names {
 			want := id.Name()
-			// Tables first, then groups, then TableGroups (§groups rule 2).
+			// Tables first, then groups, then TableGroups (§groups).
 			if ti := tableByBase(info, want); ti != nil {
 				apply(id.Pos(), term.Neg, ti)
 				continue
@@ -402,7 +402,7 @@ func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *c
 		}
 	}
 	if len(g.Members) == 0 {
-		c.errorf(d.Name.Pos(), "groups", "group %q has no members (§groups rule 4)", name)
+		c.errorf(d.Name.Pos(), "groups", "group %q has no members (§groups)", name)
 	}
 	c.pkg.Groups[name] = g
 	return g
@@ -419,29 +419,29 @@ func (c *checker) nameMiss(id *ast.Ident, info *check.Info, section, what string
 	want := id.Name()
 	for _, ti := range info.Tables {
 		if strings.EqualFold(ti.Decl.Name.Base(), want) {
-			c.errorf(id.Pos(), section, "unknown %s %q; did you mean %q? names are case-sensitive (§groups rule 2)", what, want, ti.Decl.Name.Base())
+			c.errorf(id.Pos(), section, "unknown %s %q; did you mean %q? names are case-sensitive (§groups)", what, want, ti.Decl.Name.Base())
 			return
 		}
 	}
 	for _, ti := range info.Tables {
 		if m, err := golang.ModelName(ti.Decl); err == nil && m == want {
-			c.errorf(id.Pos(), section, "unknown %s %q; %q is the model of table %q — name the table (§groups rule 2)", what, want, want, ti.Decl.Name.Base())
+			c.errorf(id.Pos(), section, "unknown %s %q; %q is the model of table %q — name the table (§groups)", what, want, want, ti.Decl.Name.Base())
 			return
 		}
 	}
-	c.errorf(id.Pos(), section, "unknown %s %q: no such table, group or TableGroup in package %q (§groups rule 2)", what, want, c.pkg.Path)
+	c.errorf(id.Pos(), section, "unknown %s %q: no such table, group or TableGroup in package %q (§groups)", what, want, c.pkg.Path)
 }
 
 /* ===== predicates (§predicates) ===== */
 
-// predRefCycles rejects cyclic Pred references (§predicates rule 2).
+// predRefCycles rejects cyclic Pred references (§predicates).
 func (c *checker) predRefCycles(pkg *Package) {
 	state := map[string]int{} // 0 unseen, 1 visiting, 2 done
 	var visit func(name string, at token.Position)
 	visit = func(name string, at token.Position) {
 		switch state[name] {
 		case 1:
-			c.errorf(at, "predicates", "predicate %q is part of a reference cycle (§predicates rule 2)", name)
+			c.errorf(at, "predicates", "predicate %q is part of a reference cycle (§predicates)", name)
 			return
 		case 2:
 			return
@@ -450,7 +450,7 @@ func (c *checker) predRefCycles(pkg *Package) {
 		if d := pkg.Preds[name]; d != nil {
 			predWalk(d.X, func(r *ast.PredRef) {
 				if pkg.Preds[r.Name.Name()] == nil {
-					c.errorf(r.Name.Pos(), "predicates", "unknown predicate %q (§predicates rule 2)", r.Name.Name())
+					c.errorf(r.Name.Pos(), "predicates", "unknown predicate %q (§predicates)", r.Name.Name())
 					return
 				}
 				visit(r.Name.Name(), r.Name.Pos())
@@ -487,8 +487,8 @@ func predWalk(x ast.PredExpr, f func(*ast.PredRef)) {
 
 /* ===== selects (§selects-over-groups) ===== */
 
-// typeClass buckets a declared column type for operator rules (§predicates rule 3,
-// §predicates rule 4). Agreement is judged on the Go type; orderability on the
+// typeClass buckets a declared column type for operator rules (§predicates,
+// §predicates). Agreement is judged on the Go type; orderability on the
 // declared class, so decimal (string-mapped, exact) is eq-only.
 type typeClass int
 
@@ -554,15 +554,15 @@ func (l *selectLowering) check() *SelectInfo {
 	sel := l.sel
 	si := &SelectInfo{Decl: sel, Members: l.members}
 
-	// §selects-over-groups rule 1: method suffix.
+	// §selects-over-groups: method suffix.
 	suffix, err := golang.GoName(sel.Name.Name())
 	if err != nil {
-		l.errorf(sel.Name.Pos(), "select name %q does not map to a Go identifier: %v (§selects-over-groups rule 1)", sel.Name.Name(), err)
+		l.errorf(sel.Name.Pos(), "select name %q does not map to a Go identifier: %v (§selects-over-groups)", sel.Name.Name(), err)
 		return nil
 	}
 	si.MethodSuffix = suffix
 	if crudMethodSuffixes[suffix] {
-		l.errorf(sel.Name.Pos(), "select name %q collides with the generated CRUD surface (§selects-over-groups rule 1)", suffix)
+		l.errorf(sel.Name.Pos(), "select name %q collides with the generated CRUD surface (§selects-over-groups)", suffix)
 		return nil
 	}
 
@@ -603,9 +603,9 @@ var crudMethodSuffixes = map[string]bool{
 	"CreateParams": true, "UpdateParams": true,
 }
 
-/* ===== projection (§selects-over-groups rule 7) ===== */
+/* ===== projection (§selects-over-groups) ===== */
 
-// projectionCheck applies §selects-over-groups rule 7: existence and field-type agreement
+// projectionCheck applies §selects-over-groups: existence and field-type agreement
 // for the explicit list, the exclusion algebra for the star form, and
 // row-type name minting against the package's generated scope.
 func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
@@ -620,7 +620,7 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 	for i, m := range si.Members {
 		model, fields, err := l.models[i].model, l.models[i].fields, l.models[i].err
 		if err != nil {
-			l.errorf(sel.Name.Pos(), "select %q: %v (§selects-over-groups rule 7)", sel.Name.Name(), err)
+			l.errorf(sel.Name.Pos(), "select %q: %v (§selects-over-groups)", sel.Name.Name(), err)
 			return false
 		}
 		byCol := make(map[string]golang.FieldSig, len(fields))
@@ -635,7 +635,7 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 	for _, id := range sel.Cols {
 		name := id.Name()
 		if seen[name] {
-			l.errorf(id.Pos(), "column %q appears twice in the projection (§selects-over-groups rule 7)", name)
+			l.errorf(id.Pos(), "column %q appears twice in the projection (§selects-over-groups)", name)
 			ok = false
 			continue
 		}
@@ -652,7 +652,7 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 			types[f.Type] = append(types[f.Type], mf.ti.Decl.Name.Base())
 		}
 		if len(missing) > 0 {
-			l.errorf(id.Pos(), "column %q is missing from %s — every member of %q must have it (§selects-over-groups rule 7)",
+			l.errorf(id.Pos(), "column %q is missing from %s — every member of %q must have it (§selects-over-groups)",
 				name, tableList(missing), sel.Target.Name())
 			ok = false
 			continue
@@ -668,7 +668,7 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 				sort.Strings(types[t])
 				parts = append(parts, fmt.Sprintf("%s in %s", t, tableList(types[t])))
 			}
-			l.errorf(id.Pos(), "column %q disagrees on field type across %q: %s — a shared row type needs one type, nullability included (§selects-over-groups rule 7)",
+			l.errorf(id.Pos(), "column %q disagrees on field type across %q: %s — a shared row type needs one type, nullability included (§selects-over-groups)",
 				name, sel.Target.Name(), strings.Join(parts, "; "))
 			ok = false
 			continue
@@ -687,14 +687,14 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 		si.Cols = cols
 		si.Shared = si.MethodSuffix
 		if prev, dup := l.lookup(si.Shared); dup {
-			l.errorf(sel.Name.Pos(), "select %q mints the shared row type %s, which collides with %s (§selects-over-groups rule 7)",
+			l.errorf(sel.Name.Pos(), "select %q mints the shared row type %s, which collides with %s (§selects-over-groups)",
 				sel.Name.Name(), si.Shared, prev)
 			return false
 		}
 		for _, mf := range members {
 			for _, f := range mf.fields {
 				if mf.model+f.Name == si.Shared {
-					l.errorf(sel.Name.Pos(), "select %q mints the shared row type %s, which collides with the dynamic column handle for %s.%s (§selects-over-groups rule 7)",
+					l.errorf(sel.Name.Pos(), "select %q mints the shared row type %s, which collides with the dynamic column handle for %s.%s (§selects-over-groups)",
 						sel.Name.Name(), si.Shared, mf.ti.Decl.Name.Base(), f.Col)
 					return false
 				}
@@ -712,19 +712,19 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 				kept++
 			}
 			if f.Name == si.MethodSuffix {
-				l.errorf(sel.Name.Pos(), "select %q mints %s%s, which collides with the dynamic column handle for %s.%s (§selects-over-groups rule 7)",
+				l.errorf(sel.Name.Pos(), "select %q mints %s%s, which collides with the dynamic column handle for %s.%s (§selects-over-groups)",
 					sel.Name.Name(), mf.model, si.MethodSuffix, mf.ti.Decl.Name.Base(), f.Col)
 				return false
 			}
 		}
 		if kept == 0 {
-			l.errorf(sel.Name.Pos(), "select %q excludes every column of %q — nothing is left to project (§selects-over-groups rule 7)",
+			l.errorf(sel.Name.Pos(), "select %q excludes every column of %q — nothing is left to project (§selects-over-groups)",
 				sel.Name.Name(), mf.ti.Decl.Name.Base())
 			return false
 		}
 		name := mf.model + si.MethodSuffix
 		if prev, dup := l.lookup(name); dup {
-			l.errorf(sel.Name.Pos(), "select %q mints the row type %s, which collides with %s (§selects-over-groups rule 7)",
+			l.errorf(sel.Name.Pos(), "select %q mints the row type %s, which collides with %s (§selects-over-groups)",
 				sel.Name.Name(), name, prev)
 			return false
 		}
@@ -733,7 +733,7 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 	return true
 }
 
-// selectSettings checks the settings list ([order: ...] only, §selects-over-groups rule 5)
+// selectSettings checks the settings list ([order: ...] only, §selects-over-groups)
 // and renders ORDER BY.
 func (l *selectLowering) selectSettings(env *selectEnv) string {
 	sel := l.sel
@@ -746,7 +746,7 @@ func (l *selectLowering) selectSettings(env *selectEnv) string {
 		case "order":
 			list, ok := s.Value.(*ast.IdentList)
 			if !ok {
-				l.errorf(s.Pos(), "order: takes a parenthesized column list (§selects-over-groups rule 5)")
+				l.errorf(s.Pos(), "order: takes a parenthesized column list (§selects-over-groups)")
 				continue
 			}
 			seenOrder := map[string]bool{}
@@ -756,23 +756,23 @@ func (l *selectLowering) selectSettings(env *selectEnv) string {
 					continue
 				}
 				if seenOrder[b.name] {
-					l.errorf(id.Pos(), "column %q appears twice in order: (§selects-over-groups rule 5)", b.name)
+					l.errorf(id.Pos(), "column %q appears twice in order: (§selects-over-groups)", b.name)
 					continue
 				}
 				seenOrder[b.name] = true
 				if b.class == classEqOnly {
-					l.errorf(id.Pos(), "column %q is decimal-exact, stored as text: ordering it would be lexical, not numeric (§selects-over-groups rule 5)", b.name)
+					l.errorf(id.Pos(), "column %q is decimal-exact, stored as text: ordering it would be lexical, not numeric (§selects-over-groups)", b.name)
 					continue
 				}
 				if b.class != classNumeric && b.class != classTime && b.class != classText {
-					l.errorf(id.Pos(), "column %q (%s) is not orderable (§selects-over-groups rule 5)", b.name, b.goType)
+					l.errorf(id.Pos(), "column %q (%s) is not orderable (§selects-over-groups)", b.name, b.goType)
 					continue
 				}
-				// Explicit over implicit (§selects-over-groups rule 5): every column states
+				// Explicit over implicit (§selects-over-groups): every column states
 				// its direction.
 				mod := list.Mods[i]
 				if mod == nil {
-					l.errorf(id.Pos(), "order: every column states its direction — write %q or %q (§selects-over-groups rule 5)", id.Name()+" asc", id.Name()+" desc")
+					l.errorf(id.Pos(), "order: every column states its direction — write %q or %q (§selects-over-groups)", id.Name()+" asc", id.Name()+" desc")
 					continue
 				}
 				dir := " ASC"
@@ -781,13 +781,13 @@ func (l *selectLowering) selectSettings(env *selectEnv) string {
 				case "desc":
 					dir = " DESC"
 				default:
-					l.errorf(mod.Pos(), "order direction is asc or desc, not %q (§selects-over-groups rule 5)", mod.Name())
+					l.errorf(mod.Pos(), "order direction is asc or desc, not %q (§selects-over-groups)", mod.Name())
 					continue
 				}
 				parts = append(parts, sqlite.Ident(b.name)+dir)
 			}
 		default:
-			l.errorf(s.Pos(), "unknown select setting %q; selects take [order: (...)] (§selects-over-groups rule 5)", s.Name)
+			l.errorf(s.Pos(), "unknown select setting %q; selects take [order: (...)] (§selects-over-groups)", s.Name)
 		}
 	}
 	return strings.Join(parts, ", ")
@@ -810,7 +810,7 @@ func (e *selectEnv) errorf(pos token.Position, format string, args ...any) {
 	e.l.errorf(pos, format, args...)
 }
 
-// columnBind applies the agreement rule (§selects-over-groups rule 4): the column must exist
+// columnBind applies the agreement rule (§selects-over-groups): the column must exist
 // in every member with one Go type.
 func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 	name := id.Name()
@@ -831,7 +831,7 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 		goType, ok := golang.GoTypeName(normalizeType(declType))
 		if !ok {
 			// Enum-typed or unmapped: not usable in predicates (v1).
-			e.errorf(id.Pos(), "column %q of table %q is enum-typed (%s); predicates do not compare enums in v1 — filter on a text column or use the dynamic layer (§predicates rule 4, hypotheses H5)", name, m.Decl.Name.Base(), declType)
+			e.errorf(id.Pos(), "column %q of table %q is enum-typed (%s); predicates do not compare enums in v1 — filter on a text column or use the dynamic layer (§predicates, hypotheses H5)", name, m.Decl.Name.Base(), declType)
 			return nil
 		}
 		types[goType] = append(types[goType], m.Decl.Name.Base())
@@ -839,7 +839,7 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 		classes[class] = true
 	}
 	if len(missing) > 0 {
-		e.errorf(id.Pos(), "column %q is missing from %s — every member of %q must have it (§selects-over-groups rule 4)",
+		e.errorf(id.Pos(), "column %q is missing from %s — every member of %q must have it (§selects-over-groups)",
 			name, tableList(missing), e.sel.Target.Name())
 		return nil
 	}
@@ -854,7 +854,7 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 			sort.Strings(types[t])
 			parts = append(parts, fmt.Sprintf("%s in %s", t, tableList(types[t])))
 		}
-		e.errorf(id.Pos(), "column %q disagrees on type across %q: %s — the predicate cannot be checked for every member (§selects-over-groups rule 4)",
+		e.errorf(id.Pos(), "column %q disagrees on type across %q: %s — the predicate cannot be checked for every member (§selects-over-groups)",
 			name, e.sel.Target.Name(), strings.Join(parts, "; "))
 		return nil
 	}
@@ -866,7 +866,7 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 		}
 	}
 	if class == classForbidden {
-		e.errorf(id.Pos(), "column %q (blob/json) cannot appear in a predicate (§predicates rule 3)", name)
+		e.errorf(id.Pos(), "column %q (blob/json) cannot appear in a predicate (§predicates)", name)
 		return nil
 	}
 	var goType string
@@ -893,12 +893,12 @@ func tableList(names []string) string {
 	return strings.Join(names, ", ")
 }
 
-// paramBind records a parameter's type; one name, one type (§predicates rule 3).
+// paramBind records a parameter's type; one name, one type (§predicates).
 func (e *selectEnv) paramBind(p *ast.Param, goType string) string {
 	name := p.Name.Name()
 	if prev, seen := e.params[name]; seen {
 		if prev.GoType != goType {
-			e.errorf(p.Pos(), "parameter :%s used as %s here but %s earlier — one name, one type (§predicates rule 3)", name, goType, prev.GoType)
+			e.errorf(p.Pos(), "parameter :%s used as %s here but %s earlier — one name, one type (§predicates)", name, goType, prev.GoType)
 		}
 		return ":" + name
 	}
@@ -919,7 +919,7 @@ func goParamOK(name string) bool {
 	return goIdentOK(name)
 }
 
-// exprCheck types an expression and renders its SQL (§predicates rule 3). preds
+// exprCheck types an expression and renders its SQL (§predicates). preds
 // tracks in-flight Pred expansions for cycle safety at use sites.
 func (e *selectEnv) exprCheck(x ast.PredExpr, preds map[string]bool) string {
 	switch x := x.(type) {
@@ -934,7 +934,7 @@ func (e *selectEnv) exprCheck(x ast.PredExpr, preds map[string]bool) string {
 		name := x.Name.Name()
 		d := e.l.preds[name]
 		if d == nil {
-			e.errorf(x.Name.Pos(), "unknown predicate %q (§predicates rule 2)", name)
+			e.errorf(x.Name.Pos(), "unknown predicate %q (§predicates)", name)
 			return "1"
 		}
 		if preds[name] {
@@ -993,10 +993,10 @@ func (e *selectEnv) compareCheck(x *ast.PredCompare) string {
 		switch b.class {
 		case classNumeric, classTime:
 		case classEqOnly:
-			e.errorf(x.Pos(), "column %q is decimal-exact (%s); it supports = and != only (§predicates rule 3-§predicates rule 4)", b.name, b.goType)
+			e.errorf(x.Pos(), "column %q is decimal-exact (%s); it supports = and != only (§predicates)", b.name, b.goType)
 			return "1"
 		default:
-			e.errorf(x.Pos(), "column %q (%s) is not orderable; < <= > >= need numeric or date/time operands (§predicates rule 3)", b.name, b.goType)
+			e.errorf(x.Pos(), "column %q (%s) is not orderable; < <= > >= need numeric or date/time operands (§predicates)", b.name, b.goType)
 			return "1"
 		}
 	}
@@ -1009,7 +1009,7 @@ func (e *selectEnv) compareCheck(x *ast.PredCompare) string {
 				return "1"
 			}
 			if bb.goType != b.goType {
-				e.errorf(o.Pos(), "cannot compare column %q (%s) with column %q (%s) (§predicates rule 3)", b.name, b.goType, bb.name, bb.goType)
+				e.errorf(o.Pos(), "cannot compare column %q (%s) with column %q (%s) (§predicates)", b.name, b.goType, bb.name, bb.goType)
 			}
 			return sqlite.Ident(bb.name)
 		case *ast.Param:
@@ -1027,19 +1027,19 @@ func (e *selectEnv) litRender(l *ast.Lit, b *colBinding) string {
 	switch l.Tok.Kind {
 	case token.NUMBER:
 		if b.class != classNumeric {
-			e.errorf(l.Pos(), "column %q (%s) cannot be compared with the number %s (§predicates rule 3)", b.name, b.goType, l.Tok.Val)
+			e.errorf(l.Pos(), "column %q (%s) cannot be compared with the number %s (§predicates)", b.name, b.goType, l.Tok.Val)
 			return "1"
 		}
 		return l.Tok.Val
 	case token.STRING:
 		if b.class != classText && b.class != classEqOnly && b.class != classTime {
-			e.errorf(l.Pos(), "column %q (%s) cannot be compared with the string %q (§predicates rule 3)", b.name, b.goType, l.Tok.Val)
+			e.errorf(l.Pos(), "column %q (%s) cannot be compared with the string %q (§predicates)", b.name, b.goType, l.Tok.Val)
 			return "1"
 		}
 		return "'" + strings.ReplaceAll(l.Tok.Val, "'", "''") + "'"
 	default: // true/false idents
 		if b.class != classBool {
-			e.errorf(l.Pos(), "column %q (%s) is not boolean (§predicates rule 3)", b.name, b.goType)
+			e.errorf(l.Pos(), "column %q (%s) is not boolean (§predicates)", b.name, b.goType)
 			return "1"
 		}
 		if strings.EqualFold(l.Tok.Val, "true") {
@@ -1056,10 +1056,10 @@ func (e *selectEnv) inCheck(x *ast.PredIn) string {
 	}
 	if x.List != nil {
 		// A list parameter binds as one JSON array, unpacked by json_each
-		// (§predicates rule 3, §selects-over-groups rule 6); time columns are excluded, JSON having
+		// (§predicates, §selects-over-groups); time columns are excluded, JSON having
 		// no time literal.
 		if b.class == classTime {
-			e.errorf(x.Col.Pos(), "column %q (%s) cannot take a list parameter: JSON carries no date/time value (§predicates rule 3)", b.name, b.goType)
+			e.errorf(x.Col.Pos(), "column %q (%s) cannot take a list parameter: JSON carries no date/time value (§predicates)", b.name, b.goType)
 			return "1"
 		}
 		return sqlite.Ident(b.name) + " IN (SELECT value FROM json_each(" + e.paramBind(x.List, "[]"+b.goType) + "))"
@@ -1077,7 +1077,7 @@ func (e *selectEnv) likeCheck(x *ast.PredLike) string {
 		return "1"
 	}
 	if b.class != classText {
-		e.errorf(x.Col.Pos(), "like needs a text column; %q is %s (§predicates rule 3)", b.name, b.goType)
+		e.errorf(x.Col.Pos(), "like needs a text column; %q is %s (§predicates)", b.name, b.goType)
 		return "1"
 	}
 	switch p := x.Pattern.(type) {
@@ -1092,7 +1092,7 @@ func (e *selectEnv) likeCheck(x *ast.PredLike) string {
 /* ===== lowering for the generator ===== */
 
 // SelectFns lowers the package's checked selects into per-member
-// generator instructions (§selects-over-groups rule 6).
+// generator instructions (§selects-over-groups).
 func (p *Package) SelectFns() []golang.SelectFn {
 	var out []golang.SelectFn
 	for _, si := range p.Selects {

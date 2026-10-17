@@ -17,7 +17,7 @@ import (
 // suite always exercises current generator output. Refresh with
 // 'go run ./cmd/volt gen ./itest/blog/app' after intentional changes.
 func TestFixtureNotDrifted(t *testing.T) {
-	// The fixture is a package of this repository's Go module (§projects-and-packages rule 1),
+	// The fixture is a package of this repository's Go module (§projects-and-packages),
 	// loaded the way 'volt gen ./itest/blog/app' loads it.
 	root, err := lang.FindRoot(".")
 	if err != nil {

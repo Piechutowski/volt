@@ -14,7 +14,7 @@ type Options struct {
 	// Source names the input, recorded in the generated headers.
 	Source string
 	// Package overrides the package clause; empty means the Volt
-	// package's name (§projects-and-packages rule 7).
+	// package's name (§projects-and-packages).
 	Package string
 	// ModelsOnly emits just nao_models.go: the structs, params structs
 	// and enums — every type the wire carries.

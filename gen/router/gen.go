@@ -26,10 +26,10 @@ type Options struct {
 	// Source names the input (the package path), recorded in headers.
 	Source string
 	// Package overrides the package clause of the router files; empty
-	// means the Volt package's name (§projects-and-packages rule 7).
+	// means the Volt package's name (§projects-and-packages).
 	Package string
 	// ClientBeside writes the client beside the models instead of as a
-	// client subpackage (§generated-client rule 6): ClientBesideFile in package Package,
+	// client subpackage (§generated-client): ClientBesideFile in package Package,
 	// NewClient as the constructor.
 	ClientBeside bool
 }
@@ -193,7 +193,7 @@ func (g *generator) dataPackages() []*lang.QueryRef {
 }
 
 // clientOmitted reports whether no client package can exist: the
-// routing package is main and routes its own tables (§generated-client rule 1).
+// routing package is main and routes its own tables (§generated-client).
 func (g *generator) clientOmitted() bool {
 	if g.pkg.Name != "main" {
 		return false
@@ -319,7 +319,7 @@ func (g *generator) handlersEmit() error {
 /* ===== volt_router.go ===== */
 
 // pipeKey joins a pipe sequence for dedup. Pipeline names are plain
-// identifiers (§pipelines rule 1), so "," cannot occur inside one and the key is
+// identifiers (§pipelines), so "," cannot occur inside one and the key is
 // collision-free.
 func pipeKey(pipes []string) string { return strings.Join(pipes, ",") }
 
@@ -436,7 +436,7 @@ func hasBody(q *lang.QueryRef) bool {
 }
 
 // pathParse renders the typed parse of one path parameter into the
-// shim body, returning the expression that carries its value (§route-paths rule 3:
+// shim body, returning the expression that carries its value (§route-paths:
 // a parse failure is the route's 404).
 func pathParse(body *strings.Builder, p lang.Param) string {
 	if p.Type == lang.TString {
@@ -473,14 +473,14 @@ func queryShimBody(r *lang.RouteInfo) string {
 			args = append(args, "volt"+p.Name)
 		case lang.FromBody:
 			// A params struct of this package is named bare here, in
-			// the package that declares it (§query-routes rule 5).
+			// the package that declares it (§query-routes).
 			goType := p.GoType
 			if q.Local {
 				goType = strings.TrimPrefix(goType, q.Qualifier+".")
 			}
 			fmt.Fprintf(&body, "\t\tvar volt%s %s\n\t\tif err := volt.Decode(r, &volt%s); err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name, goType, p.Name)
 			if p.Validates {
-				// The schema's checks, before the database sees the row (§validation-checks rule 6).
+				// The schema's checks, before the database sees the row (§validation-checks).
 				fmt.Fprintf(&body, "\t\tif err := volt%s.Validate(); err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name)
 			}
 			args = append(args, "volt"+p.Name)
@@ -706,7 +706,7 @@ func (g *generator) clientEmit() error {
 	local := false
 	for _, q := range g.dataPackages() {
 		// A package routing its own tables is imported for its row
-		// types (§generated-client rule 1); beside the models (§generated-client rule 6) nothing is
+		// types (§generated-client); beside the models (§generated-client) nothing is
 		// imported.
 		local = local || q.Local
 		if !g.opts.ClientBeside {

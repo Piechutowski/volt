@@ -1,4 +1,4 @@
-// spec: §namespaces-and-uniqueness rule 4 — enum values must be unique within the enum
+// spec: §namespaces-and-uniqueness — enum values must be unique within the enum
 Enum status {
   active
   active

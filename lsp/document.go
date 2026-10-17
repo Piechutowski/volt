@@ -79,7 +79,7 @@ func NewDocument(uri, text string) *Document {
 
 // Update replaces the document text and re-runs the whole front end:
 // the file's own pass, then the project pass. Inside a Volt project
-// the whole-project check is the truth (§projects-and-packages rule 5); alone, the DBML pass
+// the whole-project check is the truth (§projects-and-packages); alone, the DBML pass
 // stands.
 func (d *Document) Update(text string) {
 	d.UpdateLocal(text)

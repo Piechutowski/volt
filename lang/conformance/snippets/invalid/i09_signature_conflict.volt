@@ -1,4 +1,4 @@
-// spec: §handler-references rule 3 — one handler, two typed signatures for the same parameter
+// spec: §handler-references — one handler, two typed signatures for the same parameter
 package app
 
 Scope / {

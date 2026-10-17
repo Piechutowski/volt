@@ -1,4 +1,4 @@
-// spec: §indexes rule 4 — index type accepts any method identifier (btree/hash conventional)
+// spec: §indexes — index type accepts any method identifier (btree/hash conventional)
 Table t {
   id int
   indexes {

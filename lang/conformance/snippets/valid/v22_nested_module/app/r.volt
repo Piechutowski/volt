@@ -1,4 +1,4 @@
-// spec: §projects-and-packages rule 6
+// spec: §projects-and-packages
 package app
 
 Scope / {

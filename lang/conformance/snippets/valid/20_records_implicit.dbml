@@ -1,4 +1,4 @@
-// spec: §records-sample-data rule 1 — in-table records with implicit column list
+// spec: §records-sample-data — in-table records with implicit column list
 Table comments {
   id int [pk]
   user_id int

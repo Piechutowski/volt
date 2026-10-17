@@ -167,7 +167,7 @@ func checksGo(pkg string) string {
 
 import "errors"
 
-// Positive is the Go-reference check every table names (§validation-checks rule 5).
+// Positive is the Go-reference check every table names (§validation-checks).
 func Positive(v int32) error {
 	if v < 0 {
 		return errors.New("negative")
@@ -187,7 +187,7 @@ import (
 	volt "github.com/Piechutowski/volt"
 )
 
-// BearerAuth is the plug the pipeline names (§pipelines rule 2).
+// BearerAuth is the plug the pipeline names (§pipelines).
 func BearerAuth(next http.Handler) http.Handler { return next }
 
 // Errors is the error_handler the root scope names (§scopes).

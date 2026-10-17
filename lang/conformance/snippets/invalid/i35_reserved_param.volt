@@ -1,4 +1,4 @@
-// spec: §route-paths rule 2 — reserved parameter names shadow generated signatures
+// spec: §route-paths — reserved parameter names shadow generated signatures
 package app
 
 Scope / {

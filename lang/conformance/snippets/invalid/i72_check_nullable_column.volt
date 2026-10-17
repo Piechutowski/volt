@@ -1,4 +1,4 @@
-// spec: §validation-checks rule 3 — a typed check references not-null columns only: the
+// spec: §validation-checks — a typed check references not-null columns only: the
 // Go tier does not mirror three-valued NULL logic
 package db
 

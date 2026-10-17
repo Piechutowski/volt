@@ -1,4 +1,4 @@
-// spec: §route-paths rule 3 — the closed parameter type set
+// spec: §route-paths — the closed parameter type set
 package app
 
 Scope / {

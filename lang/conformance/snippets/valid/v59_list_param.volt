@@ -1,4 +1,4 @@
-// spec: §predicates rule 3, §selects-over-groups rule 6 — `in :name` is a list parameter typed as a slice of the column's type
+// spec: §predicates, §selects-over-groups — `in :name` is a list parameter typed as a slice of the column's type
 package db
 
 Table page_views {

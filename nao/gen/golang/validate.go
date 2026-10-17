@@ -40,14 +40,14 @@ func (pl *Plan) Validators(fns []CheckFn, opts Options) ([]byte, error) {
 		fmt.Fprintf(&body, "// Validate evaluates every check of %s against the row's values\n// (spec §validation-checks). Typed checks are also CHECK constraints in the DDL;\n// Go-reference checks run here only — SQLite cannot call Go.\n", t.sqlName)
 		validateEmit(&body, t.model, t.model, fn.Checks)
 
-		// Params structs validate the checks they can see (§validation-checks rule 6).
+		// Params structs validate the checks they can see (§validation-checks).
 		create, update := paramsChecks(t, fn.Checks)
 		if len(create) > 0 {
-			fmt.Fprintf(&body, "// Validate evaluates the checks of %s whose columns %sCreateParams carries\n// (spec §validation-checks rule 6)%s.\n", t.sqlName, t.model, skippedNote(fn.Checks, create))
+			fmt.Fprintf(&body, "// Validate evaluates the checks of %s whose columns %sCreateParams carries\n// (spec §validation-checks)%s.\n", t.sqlName, t.model, skippedNote(fn.Checks, create))
 			validateEmit(&body, t.model+"CreateParams", t.model, create)
 		}
 		if len(update) > 0 {
-			fmt.Fprintf(&body, "// Validate evaluates the checks of %s whose columns %sUpdateParams carries\n// (spec §validation-checks rule 6)%s.\n", t.sqlName, t.model, skippedNote(fn.Checks, update))
+			fmt.Fprintf(&body, "// Validate evaluates the checks of %s whose columns %sUpdateParams carries\n// (spec §validation-checks)%s.\n", t.sqlName, t.model, skippedNote(fn.Checks, update))
 			validateEmit(&body, t.model+"UpdateParams", t.model, update)
 		}
 	}

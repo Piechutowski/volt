@@ -1,4 +1,4 @@
-// spec: §selects-over-groups rule 7 — the algebra must say something true: an excluded
+// spec: §selects-over-groups — the algebra must say something true: an excluded
 // column must exist in every member
 package db
 

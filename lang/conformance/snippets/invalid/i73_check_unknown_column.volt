@@ -1,4 +1,4 @@
-// spec: §validation-checks rule 2 — check columns are columns of the enclosing table
+// spec: §validation-checks — check columns are columns of the enclosing table
 package db
 
 Table page_views {

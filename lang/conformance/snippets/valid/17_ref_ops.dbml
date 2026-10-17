@@ -1,4 +1,4 @@
-// spec: §relationships-ref rule 1 — all four cardinality operators
+// spec: §relationships-ref — all four cardinality operators
 Table users { id int }
 Table posts { user_id int }
 Table likes { user_id int }

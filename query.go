@@ -9,7 +9,7 @@ import (
 
 // QueryValue is the set of Go types a query-string parameter can carry:
 // the scalar types the model generator emits for columns (§mapping-to-go),
-// which are the types a select parameter can have (§predicates rule 3).
+// which are the types a select parameter can have (§predicates).
 type QueryValue interface {
 	string | bool |
 		int | int8 | int16 | int32 | int64 |
@@ -33,7 +33,7 @@ func QueryParam[T QueryValue](r *Request, name string) (T, error) {
 	return v, nil
 }
 
-// QueryParams binds a list parameter (§predicates rule 3): every value of a repeated
+// QueryParams binds a list parameter (§predicates): every value of a repeated
 // query key, in order. An absent key is an empty list, never an error;
 // an element that does not parse is a 400 naming the parameter.
 func QueryParams[T QueryValue](r *Request, name string) ([]T, error) {

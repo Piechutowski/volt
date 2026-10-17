@@ -1,4 +1,4 @@
-// spec: §records-sample-data rule 3 — row must supply exactly as many values as columns
+// spec: §records-sample-data — row must supply exactly as many values as columns
 Table t {
   id int
   name varchar

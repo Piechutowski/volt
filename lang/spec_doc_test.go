@@ -12,8 +12,8 @@ var (
 	headingRE = regexp.MustCompile(`(?m)^(#{1,3}) (.+)$`)
 	tocLinkRE = regexp.MustCompile(`\[([^\]]+)\]\(#([^)]+)\)`)
 
-	// A spec citation is the sigil and a heading's anchor, with an optional
-	// numbered rule; a diagnostic code is the code prefix and the anchor.
+	// A spec citation is the sigil and a heading's anchor, never a rule
+	// number; a diagnostic code is the code prefix and the anchor.
 	specCiteRE = regexp.MustCompile(`§([a-z][a-z0-9-]*)`)
 	specCodeRE = regexp.MustCompile(`spec/([a-z][a-z0-9-]*)`)
 )

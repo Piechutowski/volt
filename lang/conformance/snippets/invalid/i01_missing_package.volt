@@ -1,4 +1,4 @@
-// spec: §projects-and-packages rule 2
+// spec: §projects-and-packages
 Scope / {
 	get /x X.Y
 }

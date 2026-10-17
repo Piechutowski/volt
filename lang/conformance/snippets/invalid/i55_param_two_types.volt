@@ -1,4 +1,4 @@
-// spec: §predicates rule 3 — one parameter name, one type
+// spec: §predicates — one parameter name, one type
 package db
 
 Table ms_revenue {

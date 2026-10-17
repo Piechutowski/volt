@@ -22,7 +22,7 @@ func (v User) Validate() error {
 }
 
 // Validate evaluates the checks of users whose columns UserCreateParams carries
-// (spec §validation-checks rule 6).
+// (spec §validation-checks).
 func (v UserCreateParams) Validate() error {
 	var errs []rt.CheckError
 	if err := EmailValid(v.Email); err != nil {
@@ -32,7 +32,7 @@ func (v UserCreateParams) Validate() error {
 }
 
 // Validate evaluates the checks of users whose columns UserUpdateParams carries
-// (spec §validation-checks rule 6).
+// (spec §validation-checks).
 func (v UserUpdateParams) Validate() error {
 	var errs []rt.CheckError
 	if err := EmailValid(v.Email); err != nil {
@@ -53,7 +53,7 @@ func (v Order) Validate() error {
 }
 
 // Validate evaluates the checks of orders whose columns OrderCreateParams carries
-// (spec §validation-checks rule 6).
+// (spec §validation-checks).
 func (v OrderCreateParams) Validate() error {
 	var errs []rt.CheckError
 	if !(v.Total != "") {
@@ -63,7 +63,7 @@ func (v OrderCreateParams) Validate() error {
 }
 
 // Validate evaluates the checks of orders whose columns OrderUpdateParams carries
-// (spec §validation-checks rule 6).
+// (spec §validation-checks).
 func (v OrderUpdateParams) Validate() error {
 	var errs []rt.CheckError
 	if !(v.Total != "") {
@@ -87,7 +87,7 @@ func (v PageView) Validate() error {
 }
 
 // Validate evaluates the checks of page_views whose columns PageViewCreateParams carries
-// (spec §validation-checks rule 6); left to the row and the DDL: counts_positive.
+// (spec §validation-checks); left to the row and the DDL: counts_positive.
 func (v PageViewCreateParams) Validate() error {
 	var errs []rt.CheckError
 	if !(rt.Like(v.Site, "%_")) {
@@ -97,7 +97,7 @@ func (v PageViewCreateParams) Validate() error {
 }
 
 // Validate evaluates the checks of page_views whose columns PageViewUpdateParams carries
-// (spec §validation-checks rule 6).
+// (spec §validation-checks).
 func (v PageViewUpdateParams) Validate() error {
 	var errs []rt.CheckError
 	if !(v.Hits >= 0 && v.Day >= 1) {

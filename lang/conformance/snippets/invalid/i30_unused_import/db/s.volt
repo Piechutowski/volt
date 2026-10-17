@@ -1,4 +1,4 @@
-// spec: §imports rule 4
+// spec: §imports
 package db
 
 Table users { id integer [pk] }

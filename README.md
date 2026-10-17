@@ -31,7 +31,7 @@ Which constructs a file happens to use is up to the file. The honest build state
   client (spec Part II).
 
 Project = the Go module (tree rooted at `go.mod`). Package = directory. File
-boundaries carry no meaning (§projects-and-packages rule 5).
+boundaries carry no meaning (§projects-and-packages).
 
 ## Layout
 

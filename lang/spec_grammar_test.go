@@ -86,7 +86,7 @@ func specLanguage(t *testing.T) *ebnf.Language {
 		}
 		for _, r := range b.g.Rules {
 			switch {
-			case b.section == "Lexical Structure" || r.Name == "slash": // §lexical-structure, and the one addition of §layers-files-and-the-superset-rule rule 2
+			case b.section == "Lexical Structure" || r.Name == "slash": // §lexical-structure, and the one addition of §layers-files-and-the-superset-rule
 				lexical[r.Name] = true
 			}
 			if b.part == 2 && r.Name == "check" {
@@ -112,8 +112,8 @@ func specLanguage(t *testing.T) *ebnf.Language {
 	// A production that references sp explicitly lays out its own
 	// whitespace (Notation, EBNF): nothing else lies between its symbols.
 	contiguous := map[string]bool{
-		"route path":   true, // §route-paths rule 1
-		"package path": true, // §imports rule 2
+		"route path":   true, // §route-paths
+		"package path": true, // §imports
 		"param":        true, // §predicates, the grammar's own note
 	}
 	for _, r := range g.Rules {
@@ -128,10 +128,10 @@ func specLanguage(t *testing.T) *ebnf.Language {
 		G:          g,
 		Start:      "program",
 		Lexical:    lexical,
-		Layout:     ebnf.Rep{X: ebnf.Alt{Items: []ebnf.Expr{ebnf.Ref{Name: "sp"}, ebnf.Ref{Name: "comment"}}}}, // §line-structure-and-whitespace rule 3, §comments rule 4
-		Newline:    "newline",                                                                                  // §line-structure-and-whitespace rule 2
+		Layout:     ebnf.Rep{X: ebnf.Alt{Items: []ebnf.Expr{ebnf.Ref{Name: "sp"}, ebnf.Ref{Name: "comment"}}}}, // §line-structure-and-whitespace, §comments
+		Newline:    "newline",                                                                                  // §line-structure-and-whitespace
 		Contiguous: contiguous,
-		SameLine: map[string]bool{ // §settings-lists rule 5
+		SameLine: map[string]bool{ // §settings-lists
 			"settings": true, "table settings": true, "column settings": true, "index settings": true,
 			"check settings": true, "ref settings": true, "enum settings": true, "note settings": true,
 			"table group settings": true,
@@ -152,7 +152,7 @@ func specLanguage(t *testing.T) *ebnf.Language {
 			"any character of Unicode category L (Letter)": "a",
 			"any character of Unicode category M (Mark)":   "́",
 		},
-		Cut: true, // §line-structure-and-whitespace rule 5
+		Cut: true, // §line-structure-and-whitespace
 	}
 	if err := l.Check(); err != nil {
 		t.Fatalf("the spec's grammar is not closed:\n%v", err)

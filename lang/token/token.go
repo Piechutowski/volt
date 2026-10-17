@@ -142,7 +142,7 @@ const (
 
 	// Predicate and group operators (spec §groups to §predicates)
 	PLUS      // +
-	BACKSLASH // \ (group set difference, §groups rule 3)
+	BACKSLASH // \ (group set difference, §groups)
 	EQ        // =
 	NEQ       // !=
 	LE        // <=
@@ -203,7 +203,7 @@ type Token struct {
 	// SpBefore reports whether any whitespace precedes this token.
 	SpBefore bool
 	// DeclStart reports that this token begins a top-level element
-	// (spec §line-structure-and-whitespace rule 5): an unquoted identifier in the first column of its
+	// (spec §line-structure-and-whitespace): an unquoted identifier in the first column of its
 	// line, outside every brace, string and comment. The element before
 	// it ends here.
 	DeclStart bool
@@ -232,7 +232,7 @@ func (t Token) Text() string {
 func (t Token) String() string {
 	if t.Kind == EOF {
 		if t.Val != "" {
-			return t.Val // a chunk's end: the next element's start (§line-structure-and-whitespace rule 5)
+			return t.Val // a chunk's end: the next element's start (§line-structure-and-whitespace)
 		}
 		return t.Kind.String()
 	}
@@ -252,7 +252,7 @@ func (t Token) End() Position {
 			end.line++
 			end.col = 0
 		case '\r':
-			continue // a byte without a column (§line-structure-and-whitespace rule 1)
+			continue // a byte without a column (§line-structure-and-whitespace)
 		}
 		end.col++
 	}

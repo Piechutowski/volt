@@ -1,4 +1,4 @@
-// Select generation (docs/spec.md §selects-over-groups rule 6-§selects-over-groups rule 7): one typed method per
+// Select generation (docs/spec.md §selects-over-groups): one typed method per
 // (select × group member), over WHERE/ORDER fragments the checker has
 // already typed and rendered, plus the projection row types.
 package golang
@@ -56,12 +56,12 @@ func (pl *Plan) Selects(fns []SelectFn, opts Options) ([]byte, error) {
 		case fn.SharedType != "":
 			if !sharedDone[fn.SharedType] {
 				sharedDone[fn.SharedType] = true
-				fmt.Fprintf(&body, "// %s is the shared row type of select %q (spec §selects-over-groups rule 7):\n// one wire type, every member of the target a source.\n", fn.SharedType, lowerFirstWord(fn.MethodSuffix))
+				fmt.Fprintf(&body, "// %s is the shared row type of select %q (spec §selects-over-groups):\n// one wire type, every member of the target a source.\n", fn.SharedType, lowerFirstWord(fn.MethodSuffix))
 				fmt.Fprintf(&body, "type %s struct {\n", fn.SharedType)
 				var rows align.Block
 				for _, f := range cols {
 					// The shared type carries default tags and no per-table
-					// notes (A.5, §selects-over-groups rule 7).
+					// notes (A.5, §selects-over-groups).
 					fieldImports(imports, f.goType)
 					rows.Row(f.goField, f.goType, fmt.Sprintf("`db:%q json:%q`", f.colName, f.colName))
 				}
@@ -71,7 +71,7 @@ func (pl *Plan) Selects(fns []SelectFn, opts Options) ([]byte, error) {
 			}
 		case len(fn.Excluded) > 0:
 			row := t.model + fn.MethodSuffix
-			fmt.Fprintf(&body, "// %s is %s minus (%s) — a struct derivative of select %q,\n// every kept field copied verbatim (spec §selects-over-groups rule 7).\n",
+			fmt.Fprintf(&body, "// %s is %s minus (%s) — a struct derivative of select %q,\n// every kept field copied verbatim (spec §selects-over-groups).\n",
 				row, t.model, strings.Join(fn.Excluded, ", "), lowerFirstWord(fn.MethodSuffix))
 			fmt.Fprintf(&body, "type %s struct {\n", row)
 			var rows align.Block
@@ -109,7 +109,7 @@ func (pl *Plan) Selects(fns []SelectFn, opts Options) ([]byte, error) {
 }
 
 // selectColumns resolves one instantiation's projected columns
-// (§selects-over-groups rule 7): the explicit list in declared order, the member's fields
+// (§selects-over-groups): the explicit list in declared order, the member's fields
 // minus the star exclusions, or every field.
 func selectColumns(t *tableModel, fn SelectFn) ([]*fieldPlan, error) {
 	switch {
@@ -176,7 +176,7 @@ func rowScanEmit(b *strings.Builder, row string, cols []*fieldPlan) {
 func SelectSQL(t *tableModel, fn SelectFn) string {
 	cols, err := selectColumns(t, fn)
 	if err != nil {
-		// The checker refuses such an instantiation (§selects-over-groups rule 7).
+		// The checker refuses such an instantiation (§selects-over-groups).
 		return "-- " + err.Error()
 	}
 	names := make([]string, len(cols))
@@ -199,7 +199,7 @@ func SelectSQLFor(f *ast.File, info *check.Info, fn SelectFn) (string, error) {
 	return PlanBuild(f, info).SelectStatement(fn)
 }
 
-// SelectRowType names the row type one instantiation returns (§selects-over-groups rule 7)
+// SelectRowType names the row type one instantiation returns (§selects-over-groups)
 // and reports its fields. It plans the whole file.
 func SelectRowType(f *ast.File, info *check.Info, fn SelectFn) (string, []FieldSig, error) {
 	return PlanBuild(f, info).SelectRowType(fn)
@@ -232,7 +232,7 @@ func selectEmit(b *strings.Builder, t *tableModel, fn SelectFn, cols []*fieldPla
 	for _, prm := range fn.Params {
 		fmt.Fprintf(&sig, ", %s %s", prm.GoName, prm.GoType)
 		if strings.HasPrefix(prm.GoType, "[]") {
-			// A list parameter travels as one JSON array (§selects-over-groups rule 6).
+			// A list parameter travels as one JSON array (§selects-over-groups).
 			fmt.Fprintf(&binds, ", sql.Named(%q, rt.JSONList(%s))", prm.SQLName, prm.GoName)
 			continue
 		}

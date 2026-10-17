@@ -1,4 +1,4 @@
-// spec: §validation-checks rule 5 — a variadic parameter never matches
+// spec: §validation-checks — a variadic parameter never matches
 // want: is variadic
 package db
 

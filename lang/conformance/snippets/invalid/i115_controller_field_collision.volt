@@ -1,4 +1,4 @@
-// spec: §handler-references rule 4 — a controller cannot take the name of a Controllers field; Queries holds this package's query routes
+// spec: §handler-references — a controller cannot take the name of a Controllers field; Queries holds this package's query routes
 // want: takes the name of the Controllers field
 package app
 

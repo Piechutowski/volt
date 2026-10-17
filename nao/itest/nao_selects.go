@@ -131,7 +131,7 @@ func (q *Queries) LinkClickOnSites(ctx context.Context, sites []string) ([]LinkC
 	return out, rows.Err()
 }
 
-// Summary is the shared row type of select "summary" (spec §selects-over-groups rule 7):
+// Summary is the shared row type of select "summary" (spec §selects-over-groups):
 // one wire type, every member of the target a source.
 type Summary struct {
 	Site string `db:"site" json:"site"`
@@ -185,7 +185,7 @@ func (q *Queries) LinkClickSummary(ctx context.Context, site string, day int32) 
 }
 
 // LinkClickPublic is LinkClick minus (target) — a struct derivative of select "public",
-// every kept field copied verbatim (spec §selects-over-groups rule 7).
+// every kept field copied verbatim (spec §selects-over-groups).
 type LinkClickPublic struct {
 	ID   int32  `db:"id" json:"id"`
 	Site string `db:"site" json:"site"`

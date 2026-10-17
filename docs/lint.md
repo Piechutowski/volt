@@ -32,7 +32,7 @@ volt vet ./...
 
 `volt vet` is `volt check` plus these rules: each package's
 declarations are analyzed as one file, the way the checker sees them
-(§projects-and-packages rule 5), alongside the one project-level rule, `vet/pipeline`, which
+(§projects-and-packages), alongside the one project-level rule, `vet/pipeline`, which
 reports a pipeline no scope pipes through. The language server runs
 the same rules on a file that checks clean. There is no per-rule
 switch: the rules are cheap, and a suppressed warning would be a rule
@@ -90,7 +90,7 @@ warning as "unused *here*".
 relationship endpoint, TableGroup member, DiagramView member or records
 declaration uses.
 
-**Why.** The alias occupies a slot in the global table namespace (§namespaces-and-uniqueness rule 1)
+**Why.** The alias occupies a slot in the global table namespace (§namespaces-and-uniqueness)
 — it can collide with future table names — while providing nothing.
 
 **Examples.** [testdata/unused.dbml](../lang/vet/testdata/unused.dbml) — `P` is bad;
@@ -110,7 +110,7 @@ guarantees.
 
 **What it does.** Reports an explicit `[null]` column setting.
 
-**Why.** Columns are nullable by default (spec §columns rule 2), so `[null]` adds no
+**Why.** Columns are nullable by default (spec §columns), so `[null]` adds no
 information. Worse, it reads as if it were load-bearing, suggesting the
 author believed the default was `not null`.
 
@@ -144,7 +144,7 @@ composite indexes with different column order are different indexes.
 
 **Why.** An empty block does nothing but implies work in progress; an empty
 DiagramView category in particular reads as "show everything" but actually
-selects nothing (spec §diagramview rule 2).
+selects nothing (spec §diagramview).
 
 **Examples.** [testdata/emptybody.dbml](../lang/vet/testdata/emptybody.dbml) —
 `Notes { * }` is good: a wildcard is a real selection.
@@ -154,7 +154,7 @@ selects nothing (spec §diagramview rule 2).
 **What it does.** Reports the legacy bare `pk` / `unique` flags between a
 column's type and its settings list (`id int pk`).
 
-**Why.** The form survives for backward compatibility (spec §columns rule 7) but
+**Why.** The form survives for backward compatibility (spec §columns) but
 splits column constraints across two syntaxes; the settings list is the
 canonical spelling.
 
@@ -164,7 +164,7 @@ canonical spelling.
 ### shadowedcolumn
 
 **What it does.** Reports a column definition that overrides another via
-partial-injection conflict resolution (spec §tablepartial rule 4) — table-over-partial or
+partial-injection conflict resolution (spec §tablepartial) — table-over-partial or
 later-partial-over-earlier-partial.
 
 **Why.** The override is **silent**: no error, last writer wins. A type or
@@ -179,7 +179,7 @@ which is invisible at the partial's definition site.
 **What it does.** Reports a `Project` body holding more than one `Note`
 definition.
 
-**Why.** Multiple notes are accepted (spec §notes rule 1 exempts Project bodies)
+**Why.** Multiple notes are accepted (spec §notes exempts Project bodies)
 but downstream tools render a single project note, so all but one are
 silently dropped. The good form is a single (possibly multi-line) note.
 
@@ -246,7 +246,7 @@ them as aliases. Prefer one spelling per schema.
 **What it does.** Reports a foreign key whose referenced ("one"-side)
 column set is not guaranteed unique: not a `pk`/`unique` column and not
 covered by a matching composite `[pk]`/`[unique]` index. The FK side per
-operator follows spec §relationships-ref rule 3 (`>` left, `<` right, `-` second endpoint);
+operator follows spec §relationships-ref (`>` left, `<` right, `-` second endpoint);
 `<>` has no FK side.
 
 **Why.** SQL requires FK targets to be unique; a schema that violates this
@@ -364,10 +364,10 @@ one file in `vet/` plus one testdata file.
 
 | Candidate | What it would report | Why deferred |
 |---|---|---|
-| `junctionhint` | `<>` many-to-many refs, reminding that SQL export materializes an implicit junction table (spec §relationships-ref rule 7) | informational, not a defect; would fire on every legitimate `<>` |
+| `junctionhint` | `<>` many-to-many refs, reminding that SQL export materializes an implicit junction table (spec §relationships-ref) | informational, not a defect; would fire on every legitimate `<>` |
 | `orphantable` | tables with no relationships at all | too noisy: lookup/config tables are legitimately standalone |
 | `nullablefk` | nullable FK columns, i.e. zero-or-many cardinality (spec §nullability-and-cardinality) | that cardinality is a valid modeling choice, not a smell |
-| `recordstypes` | record values inconsistent with column types (dates, enum membership, booleans) | needs the §records-sample-data rule 4 value-typing engine; belongs in `check` when built |
+| `recordstypes` | record values inconsistent with column types (dates, enum membership, booleans) | needs the §records-sample-data value-typing engine; belongs in `check` when built |
 | `recordsdupkey` | duplicate primary-key values across record rows | same engine as above |
 | `sqlkeyword` | unquoted names that are reserved words in common SQL dialects (`order`, `user`) | needs per-dialect wordlists and a target-dialect setting |
 | `namingstyle` | mixed naming conventions (snake_case vs camelCase) | pure style; needs configuration machinery first |

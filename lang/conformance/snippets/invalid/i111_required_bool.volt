@@ -1,4 +1,4 @@
-// spec: §validation-checks rule 8, §columns — a boolean has no empty value; required means nothing on it
+// spec: §validation-checks, §columns — a boolean has no empty value; required means nothing on it
 // want: has no empty value
 package db
 

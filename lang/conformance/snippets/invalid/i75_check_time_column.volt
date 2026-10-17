@@ -1,4 +1,4 @@
-// spec: §validation-checks rule 4 — date/time columns are out: the Go tier cannot mirror
+// spec: §validation-checks — date/time columns are out: the Go tier cannot mirror
 // SQL's text-time comparison
 package db
 

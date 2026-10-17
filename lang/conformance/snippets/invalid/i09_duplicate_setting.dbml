@@ -1,4 +1,4 @@
-// spec: §settings-lists rule 4 — a setting may appear at most once
+// spec: §settings-lists — a setting may appear at most once
 Table t {
   id int [unique, unique]
 }

@@ -1,6 +1,6 @@
 // Pass 3: cross-element resolution (§reference-resolution) of relationship endpoints,
 // index columns, records columns, TableGroup members and DiagramView
-// members, and duplicate-relationship detection (§relationships-ref rule 9). When the
+// members, and duplicate-relationship detection (§relationships-ref). When the
 // file has use/reuse imports, unresolved-name errors are suppressed
 // (Info.HasImports).
 package check
@@ -51,7 +51,7 @@ func (c *checker) resolve(f *ast.File) {
 	}
 	c.duplicateRefsCheck()
 
-	// Index keys must name columns of their table (§indexes rule 2).
+	// Index keys must name columns of their table (§indexes).
 	for _, ti := range c.info.Tables {
 		for _, ix := range ti.Indexes {
 			for _, atom := range ix.Key {
@@ -123,7 +123,7 @@ func (c *checker) resolve(f *ast.File) {
 		c.info.TableGroups = append(c.info.TableGroups, gi)
 	}
 
-	// DiagramView members (§diagramview rule 3).
+	// DiagramView members (§diagramview).
 	for _, d := range f.Decls {
 		v, ok := d.(*ast.DiagramView)
 		if !ok {
@@ -184,7 +184,7 @@ func (c *checker) endpointResolve(ep *ast.RefEndpoint, lenient bool) EndpointInf
 }
 
 // refKey builds a direction-insensitive identity for a relationship
-// (§relationships-ref rule 9): endpoints are canonicalized and sorted.
+// (§relationships-ref): endpoints are canonicalized and sorted.
 func refKey(r *RefInfo) (string, bool) {
 	side := func(e EndpointInfo) (string, bool) {
 		if e.Table == nil {

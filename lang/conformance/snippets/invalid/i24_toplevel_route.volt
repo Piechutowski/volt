@@ -1,4 +1,4 @@
-// spec: §routes rule 1
+// spec: §routes
 package app
 
 get /x X.Y

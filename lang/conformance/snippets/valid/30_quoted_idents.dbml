@@ -1,4 +1,4 @@
-// spec: §identifiers rule 3 — quoted identifiers with spaces and escapes
+// spec: §identifiers — quoted identifiers with spaces and escapes
 Table "user accounts" {
   "full name" varchar
   "weird\"name" int

@@ -1,4 +1,4 @@
-// spec: §projects-and-packages rule 2
+// spec: §projects-and-packages
 package app
 
 Table t { id integer [pk] }

@@ -33,7 +33,7 @@ func (c *checker) tableChecks(pkg *Package) {
 		specs          []golang.CheckSpec
 		sqls           map[*ast.Check]string
 		diags          []diag.Diagnostic
-		create, update bool // the params structs validate (§validation-checks rule 6): a function of the model and the specs
+		create, update bool // the params structs validate (§validation-checks): a function of the model and the specs
 	}
 	outs := make([]lowered, len(info.Tables))
 	var memo *checksMemo
@@ -126,7 +126,7 @@ func (l *lowering) errorf(pos token.Position, section, format string, args ...an
 // not create.
 func tableSpecs(ti *check.TableInfo, fields []golang.FieldSig, fieldsErr error, pkgName string, funcs *goScan, preds map[string]*ast.Pred) (specs []golang.CheckSpec, sqls map[*ast.Check]string, diags []diag.Diagnostic) {
 	l := &lowering{ti: ti, fields: fields, fieldsErr: fieldsErr, pkgName: pkgName, funcs: funcs, preds: preds, sqls: map[*ast.Check]string{}}
-	// Direct and injected checks alike (§tablepartial rule 3): a partial's checks
+	// Direct and injected checks alike (§tablepartial): a partial's checks
 	// belong to every table it is injected into.
 	for _, ck := range ti.Checks {
 		var spec golang.CheckSpec
@@ -204,7 +204,7 @@ func predsIn(exprs []ast.PredExpr, all map[string]*ast.Pred) map[string]*ast.Pre
 }
 
 // requiredSpecs lowers every [required] column of a table to the Go
-// tier's condition (§validation-checks rule 8).
+// tier's condition (§validation-checks).
 func (l *lowering) requiredSpecs() []golang.CheckSpec {
 	var out []golang.CheckSpec
 	fields := l.fields
@@ -245,7 +245,7 @@ func (l *lowering) requiredSpecs() []golang.CheckSpec {
 }
 
 // typedCheck types one predicate-form check against its table and
-// renders the SQL and Go tiers together (§validation-checks rule 2-§validation-checks rule 4).
+// renders the SQL and Go tiers together (§validation-checks).
 func (l *lowering) typedCheck(ck *ast.Check) (golang.CheckSpec, bool) {
 	env := l.checkEnv(ck)
 	if env == nil {
@@ -259,13 +259,13 @@ func (l *lowering) typedCheck(ck *ast.Check) (golang.CheckSpec, bool) {
 	return golang.CheckSpec{Src: sql, Cond: gocode, Cols: env.used}, true
 }
 
-// goRefCheck resolves one Go-reference check (§validation-checks rule 5): a function of
+// goRefCheck resolves one Go-reference check (§validation-checks): a function of
 // the containing package, column arguments, validator tier only.
 func (l *lowering) goRefCheck(ck *ast.Check) (golang.CheckSpec, bool) {
 	ti := l.ti
 	if q := ck.Ref.Qualifier(); q != "" && q != l.pkgName {
 		l.errorf(ck.Ref.Pos(), "validation-checks",
-			"a check references a function of the containing package, not of %q — write a local wrapper (§validation-checks rule 5)", q)
+			"a check references a function of the containing package, not of %q — write a local wrapper (§validation-checks)", q)
 		return golang.CheckSpec{}, false
 	}
 	env := l.checkEnv(ck)
@@ -289,35 +289,35 @@ func (l *lowering) goRefCheck(ck *ast.Check) (golang.CheckSpec, bool) {
 	want := "func " + name + "(" + strings.Join(argTypes, ", ") + ") error"
 
 	// The function must exist in this package's Go files with exactly
-	// the contract, spelled as the generated field types (§validation-checks rule 5).
+	// the contract, spelled as the generated field types (§validation-checks).
 	sc := l.funcs
 	gf, found := sc.funcs[name]
 	if !found {
-		l.errorf(ck.Ref.Pos(), "validation-checks", "no function %s in package %s's Go files — declare %s beside the schema (§validation-checks rule 5)%s", name, l.pkgName, want, sc.brokenHint())
+		l.errorf(ck.Ref.Pos(), "validation-checks", "no function %s in package %s's Go files — declare %s beside the schema (§validation-checks)%s", name, l.pkgName, want, sc.brokenHint())
 		return golang.CheckSpec{}, false
 	}
 	if gf.Generic {
-		l.errorf(ck.Ref.Pos(), "validation-checks", "%s is generic (%s); a check cannot instantiate it — wrap it in a plain %s (§validation-checks rule 5)", name, gf.Sig, want)
+		l.errorf(ck.Ref.Pos(), "validation-checks", "%s is generic (%s); a check cannot instantiate it — wrap it in a plain %s (§validation-checks)", name, gf.Sig, want)
 		return golang.CheckSpec{}, false
 	}
 	if gf.Variadic {
-		l.errorf(ck.Ref.Pos(), "validation-checks", "%s is variadic (%s); a check passes a fixed column list — expected %s (§validation-checks rule 5)", name, gf.Sig, want)
+		l.errorf(ck.Ref.Pos(), "validation-checks", "%s is variadic (%s); a check passes a fixed column list — expected %s (§validation-checks)", name, gf.Sig, want)
 		return golang.CheckSpec{}, false
 	}
 	if len(gf.Params) != len(args) {
-		l.errorf(ck.Ref.Pos(), "validation-checks", "%s takes %d parameter(s) but the check passes %d column(s): found %s, expected %s (§validation-checks rule 5)",
+		l.errorf(ck.Ref.Pos(), "validation-checks", "%s takes %d parameter(s) but the check passes %d column(s): found %s, expected %s (§validation-checks)",
 			name, len(gf.Params), len(args), gf.Sig, want)
 		return golang.CheckSpec{}, false
 	}
 	for i, prm := range gf.Params {
 		if prm.Type != argTypes[i] {
-			l.errorf(ck.Args[i].Pos(), "validation-checks", "column %q (%s, Go %s) but parameter %d of %s is %s — change the column type or the function: expected %s (§validation-checks rule 5)",
+			l.errorf(ck.Args[i].Pos(), "validation-checks", "column %q (%s, Go %s) but parameter %d of %s is %s — change the column type or the function: expected %s (§validation-checks)",
 				fields[i].Col, declTypes[i], argTypes[i], i+1, name, prm.Type, want)
 			return golang.CheckSpec{}, false
 		}
 	}
 	if len(gf.Results) != 1 || gf.Results[0] != "error" {
-		l.errorf(ck.Ref.Pos(), "validation-checks", "%s must return exactly error: found %s, expected %s (§validation-checks rule 5)", name, gf.Sig, want)
+		l.errorf(ck.Ref.Pos(), "validation-checks", "%s must return exactly error: found %s, expected %s (§validation-checks)", name, gf.Sig, want)
 		return golang.CheckSpec{}, false
 	}
 	return golang.CheckSpec{
@@ -330,7 +330,7 @@ func (l *lowering) goRefCheck(ck *ast.Check) (golang.CheckSpec, bool) {
 /* ===== the dual renderer ===== */
 
 // chkEnv threads one check's typing: the enclosing table's generated
-// fields, and the class rules of §predicates rule 3 narrowed by §validation-checks (not-null
+// fields, and the class rules of §predicates narrowed by §validation-checks (not-null
 // columns, no time class).
 type chkEnv struct {
 	l      *lowering
@@ -338,7 +338,7 @@ type chkEnv struct {
 	ck     *ast.Check
 	byCol  map[string]golang.FieldSig
 	failed bool
-	used   []string // columns the check reads, first-use order (§validation-checks rule 6)
+	used   []string // columns the check reads, first-use order (§validation-checks)
 }
 
 func (l *lowering) checkEnv(ck *ast.Check) *chkEnv {
@@ -363,7 +363,7 @@ func (e *chkEnv) errorf(pos token.Position, format string, args ...any) {
 func (e *chkEnv) fieldOf(id *ast.Ident, typed bool) (golang.FieldSig, bool) {
 	f, has := e.byCol[id.Name()]
 	if !has {
-		e.errorf(id.Pos(), "no column %q in table %q (§validation-checks rule 2)", id.Name(), e.ti.Decl.Name.Base())
+		e.errorf(id.Pos(), "no column %q in table %q (§validation-checks)", id.Name(), e.ti.Decl.Name.Base())
 		return f, false
 	}
 	seen := false
@@ -377,7 +377,7 @@ func (e *chkEnv) fieldOf(id *ast.Ident, typed bool) (golang.FieldSig, bool) {
 	}
 	if f.Nullable {
 		e.errorf(id.Pos(),
-			"column %q is nullable; a check's Go and SQL tiers must agree, and three-valued NULL logic is not mirrored — make it not null, or use an opaque `SQL` check (§validation-checks rule 3)",
+			"column %q is nullable; a check's Go and SQL tiers must agree, and three-valued NULL logic is not mirrored — make it not null, or use an opaque `SQL` check (§validation-checks)",
 			id.Name())
 		return f, false
 	}
@@ -386,14 +386,14 @@ func (e *chkEnv) fieldOf(id *ast.Ident, typed bool) (golang.FieldSig, bool) {
 		switch classOf(cd.Col.Type.String()) {
 		case classTime:
 			e.errorf(id.Pos(),
-				"column %q is a date/time; the Go tier cannot mirror SQL's text-time comparison — use an opaque `SQL` check or a Go reference (§validation-checks rule 4)", id.Name())
+				"column %q is a date/time; the Go tier cannot mirror SQL's text-time comparison — use an opaque `SQL` check or a Go reference (§validation-checks)", id.Name())
 			return f, false
 		case classForbidden:
 			if _, mapped := golang.GoTypeName(normalizeType(cd.Col.Type.String())); !mapped {
-				e.errorf(id.Pos(), "column %q is enum-typed (%s); predicates do not compare enums in v1 (§predicates rule 3, hypotheses H5)", id.Name(), cd.Col.Type.String())
+				e.errorf(id.Pos(), "column %q is enum-typed (%s); predicates do not compare enums in v1 (§predicates, hypotheses H5)", id.Name(), cd.Col.Type.String())
 				return f, false
 			}
-			e.errorf(id.Pos(), "column %q (blob/json) cannot appear in a typed check (§predicates rule 3)", id.Name())
+			e.errorf(id.Pos(), "column %q (blob/json) cannot appear in a typed check (§predicates)", id.Name())
 			return f, false
 		}
 	}
@@ -405,7 +405,7 @@ func (e *chkEnv) classOfCol(name string) typeClass {
 }
 
 // render walks a typed check once, producing the SQL fragment and the
-// Go condition together — one typing, two tiers (§validation-checks rule 4).
+// Go condition together — one typing, two tiers (§validation-checks).
 func (e *chkEnv) render(x ast.PredExpr, preds map[string]bool) (sql, gocode string) {
 	switch x := x.(type) {
 	case *ast.PredBinary:
@@ -425,7 +425,7 @@ func (e *chkEnv) render(x ast.PredExpr, preds map[string]bool) (sql, gocode stri
 		name := x.Name.Name()
 		d := e.l.preds[name]
 		if d == nil {
-			e.errorf(x.Name.Pos(), "unknown predicate %q (§predicates rule 2)", name)
+			e.errorf(x.Name.Pos(), "unknown predicate %q (§predicates)", name)
 			return "1", "true"
 		}
 		if preds[name] {
@@ -443,7 +443,7 @@ func (e *chkEnv) render(x ast.PredExpr, preds map[string]bool) (sql, gocode stri
 		return e.like(x)
 	case *ast.PredNull:
 		e.errorf(x.Col.Pos(),
-			"is null is constant in a check: its columns are not null by §validation-checks rule 3")
+			"is null is constant in a check: its columns are not null by §validation-checks")
 		return "1", "true"
 	}
 	return "1", "true"
@@ -469,10 +469,10 @@ func (e *chkEnv) compare(x *ast.PredCompare) (string, string) {
 		switch class {
 		case classNumeric:
 		case classEqOnly:
-			e.errorf(x.Pos(), "column %q is decimal-exact (%s); it supports = and != only (§predicates rule 3-§predicates rule 4)", anchor.Col, anchor.Type)
+			e.errorf(x.Pos(), "column %q is decimal-exact (%s); it supports = and != only (§predicates)", anchor.Col, anchor.Type)
 			return "1", "true"
 		default:
-			e.errorf(x.Pos(), "column %q (%s) is not orderable in a check; < <= > >= need a numeric column (§validation-checks rule 4)", anchor.Col, anchor.Type)
+			e.errorf(x.Pos(), "column %q (%s) is not orderable in a check; < <= > >= need a numeric column (§validation-checks)", anchor.Col, anchor.Type)
 			return "1", "true"
 		}
 	}
@@ -489,11 +489,11 @@ func (e *chkEnv) compare(x *ast.PredCompare) (string, string) {
 				return "1", "true"
 			}
 			if f.Type != anchor.Type {
-				e.errorf(o.Pos(), "cannot compare column %q (%s) with column %q (%s) (§predicates rule 3)", anchor.Col, anchor.Type, f.Col, f.Type)
+				e.errorf(o.Pos(), "cannot compare column %q (%s) with column %q (%s) (§predicates)", anchor.Col, anchor.Type, f.Col, f.Type)
 			}
 			return sqlite.Ident(f.Col), "v." + f.Name
 		case *ast.Param:
-			e.errorf(o.Pos(), "a check takes no :params — it judges one row, not a query (§validation-checks rule 2)")
+			e.errorf(o.Pos(), "a check takes no :params — it judges one row, not a query (§validation-checks)")
 			return "1", "true"
 		case *ast.Lit:
 			return e.lit(o, anchor, class)
@@ -513,23 +513,23 @@ func (e *chkEnv) lit(l *ast.Lit, f *golang.FieldSig, class typeClass) (string, s
 	switch l.Tok.Kind {
 	case token.NUMBER:
 		if class != classNumeric {
-			e.errorf(l.Pos(), "column %q (%s) cannot be compared with the number %s (§predicates rule 3)", f.Col, f.Type, l.Tok.Val)
+			e.errorf(l.Pos(), "column %q (%s) cannot be compared with the number %s (§predicates)", f.Col, f.Type, l.Tok.Val)
 			return "1", "true"
 		}
 		if strings.ContainsAny(l.Tok.Val, ".eE") && !strings.HasPrefix(f.Type, "float") {
-			e.errorf(l.Pos(), "the fractional literal %s needs a float column; %q is %s (§validation-checks rule 4)", l.Tok.Val, f.Col, f.Type)
+			e.errorf(l.Pos(), "the fractional literal %s needs a float column; %q is %s (§validation-checks)", l.Tok.Val, f.Col, f.Type)
 			return "1", "true"
 		}
 		return l.Tok.Val, l.Tok.Val
 	case token.STRING:
 		if class != classText && class != classEqOnly {
-			e.errorf(l.Pos(), "column %q (%s) cannot be compared with the string %q (§predicates rule 3)", f.Col, f.Type, l.Tok.Val)
+			e.errorf(l.Pos(), "column %q (%s) cannot be compared with the string %q (§predicates)", f.Col, f.Type, l.Tok.Val)
 			return "1", "true"
 		}
 		return "'" + strings.ReplaceAll(l.Tok.Val, "'", "''") + "'", strconv.Quote(l.Tok.Val)
 	default: // true/false idents
 		if class != classBool {
-			e.errorf(l.Pos(), "column %q (%s) is not boolean (§predicates rule 3)", f.Col, f.Type)
+			e.errorf(l.Pos(), "column %q (%s) is not boolean (§predicates)", f.Col, f.Type)
 			return "1", "true"
 		}
 		if strings.EqualFold(l.Tok.Val, "true") {
@@ -564,12 +564,12 @@ func (e *chkEnv) like(x *ast.PredLike) (string, string) {
 		return "1", "true"
 	}
 	if e.classOfCol(f.Col) != classText {
-		e.errorf(x.Col.Pos(), "like needs a text column; %q is %s (§predicates rule 3)", f.Col, f.Type)
+		e.errorf(x.Col.Pos(), "like needs a text column; %q is %s (§predicates)", f.Col, f.Type)
 		return "1", "true"
 	}
 	pat, isLit := x.Pattern.(*ast.Lit)
 	if !isLit || pat.Tok.Kind != token.STRING {
-		e.errorf(x.Pattern.Pos(), "a check's like pattern is a string literal — no :params in checks (§validation-checks rule 2)")
+		e.errorf(x.Pattern.Pos(), "a check's like pattern is a string literal — no :params in checks (§validation-checks)")
 		return "1", "true"
 	}
 	return sqlite.Ident(f.Col) + " LIKE '" + strings.ReplaceAll(pat.Tok.Val, "'", "''") + "'",

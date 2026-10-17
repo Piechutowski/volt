@@ -28,7 +28,7 @@ func (v User) Validate() error {
 }
 
 // Validate evaluates the checks of users whose columns UserCreateParams carries
-// (spec §validation-checks rule 6).
+// (spec §validation-checks).
 func (v UserCreateParams) Validate() error {
 	var errs []rt.CheckError
 	if !(rt.Like(v.Email, "%_@%_")) {
@@ -44,7 +44,7 @@ func (v UserCreateParams) Validate() error {
 }
 
 // Validate evaluates the checks of users whose columns UserUpdateParams carries
-// (spec §validation-checks rule 6).
+// (spec §validation-checks).
 func (v UserUpdateParams) Validate() error {
 	var errs []rt.CheckError
 	if !(rt.Like(v.Email, "%_@%_")) {

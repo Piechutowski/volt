@@ -1,4 +1,4 @@
-// spec: §handler-references rule 3 — same action, identical signatures; §route-names-and-reverse-urls rule 2 requires
+// spec: §handler-references — same action, identical signatures; §route-names-and-reverse-urls requires
 // distinct helper names, provided here by [name:]
 package app
 

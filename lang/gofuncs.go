@@ -1,4 +1,4 @@
-// Go source facts for Go references (spec §pipelines rule 2, §validation-checks rule 5): a .volt file
+// Go source facts for Go references (spec §pipelines, §validation-checks): a .volt file
 // names Go only in the containing package's own Go files, read with the
 // standard library's parser, and every reference is held to the exact
 // spelled signature.

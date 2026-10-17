@@ -1,4 +1,4 @@
-// spec: §route-conflicts rule 2 — literal vs parameter is not a conflict
+// spec: §route-conflicts — literal vs parameter is not a conflict
 package app
 
 Scope / {

@@ -2,7 +2,7 @@ package parser
 
 // Parsing by element: a file is a sequence of
 // chunks, one per top-level element, cut where the scanner says an
-// element begins (spec §line-structure-and-whitespace rule 5).
+// element begins (spec §line-structure-and-whitespace).
 
 import (
 	"slices"

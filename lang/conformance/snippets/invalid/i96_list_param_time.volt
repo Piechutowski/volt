@@ -1,4 +1,4 @@
-// spec: §predicates rule 3 — a date/time column cannot take a list parameter: JSON carries no date/time value
+// spec: §predicates — a date/time column cannot take a list parameter: JSON carries no date/time value
 // want: cannot take a list parameter
 package db
 

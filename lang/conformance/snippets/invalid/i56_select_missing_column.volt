@@ -1,4 +1,4 @@
-// spec: §selects-over-groups rule 4 — every member must have every referenced column
+// spec: §selects-over-groups — every member must have every referenced column
 package db
 
 Table ms_revenue {

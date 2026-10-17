@@ -1,5 +1,5 @@
-// spec: §handler-references rule 1, §query-routes, §default-handlers rule 3, §dataset-declaration — one package declares its tables and routes them:
-// a query of the package itself is bare or self-qualified (as a plug is, §pipelines rule 2), and a
+// spec: §handler-references, §query-routes, §default-handlers, §dataset-declaration — one package declares its tables and routes them:
+// a query of the package itself is bare or self-qualified (as a plug is, §pipelines), and a
 // resources or dataset of its own tables is unqualified
 package site
 

@@ -19,7 +19,7 @@ var voltVerbs = map[string]bool{
 func isVerb(v string) bool { return voltVerbs[strings.ToLower(v)] }
 
 // contiguous reports whether the current token directly abuts the previous
-// one: no whitespace, no line break (§route-paths rule 5).
+// one: no whitespace, no line break (§route-paths).
 func (p *parser) contiguous() bool {
 	t := p.cur()
 	return !t.SpBefore && !t.NLBefore
@@ -27,7 +27,7 @@ func (p *parser) contiguous() bool {
 
 /* ===== package clause (§projects-and-packages) ===== */
 
-// packageClause = "package", name, newline (§projects-and-packages rule 2).
+// packageClause = "package", name, newline (§projects-and-packages).
 func (p *parser) packageClause() *ast.PackageClause {
 	p.lineBegin("package clause (§projects-and-packages)")
 	d := &ast.PackageClause{PackagePos: p.next().Pos}
@@ -41,7 +41,7 @@ func (p *parser) packageClause() *ast.PackageClause {
 
 /* ===== import declaration (§imports) ===== */
 
-// importDecl = "import", "(", { import spec, newline }, ")" (§imports rule 1).
+// importDecl = "import", "(", { import spec, newline }, ")" (§imports).
 func (p *parser) importDecl() *ast.ImportDecl {
 	d := &ast.ImportDecl{ImportPos: p.next().Pos}
 	p.expect(token.LPAREN, "import declaration (§imports)")
@@ -58,7 +58,7 @@ func (p *parser) importDecl() *ast.ImportDecl {
 }
 
 // importSpec = [ alias ], import path, newline; import path = name,
-// { "/", name } (§imports rule 2). An alias is present when two identifiers open
+// { "/", name } (§imports). An alias is present when two identifiers open
 // the line: the first is the alias, the second starts the path.
 func (p *parser) importSpec() *ast.ImportSpec {
 	spec := &ast.ImportSpec{}
@@ -76,13 +76,13 @@ func (p *parser) importSpec() *ast.ImportSpec {
 		}
 		spec.Path = append(spec.Path, p.ident("import path (§imports)"))
 	}
-	// Aliases and path segments are plain identifiers only (§imports rule 2, §route-paths rule 6).
+	// Aliases and path segments are plain identifiers only (§imports, §route-paths).
 	if spec.Alias != nil && spec.Alias.Quoted() {
-		p.fail(spec.Alias.Tok, "import alias must be a plain (unquoted) identifier (§imports rule 2)")
+		p.fail(spec.Alias.Tok, "import alias must be a plain (unquoted) identifier (§imports)")
 	}
 	for _, seg := range spec.Path {
 		if seg.Quoted() {
-			p.fail(seg.Tok, "import path segments are plain (unquoted) identifiers (§imports rule 2)")
+			p.fail(seg.Tok, "import path segments are plain (unquoted) identifiers (§imports)")
 		}
 	}
 	p.endOfLine("import specifier (§imports)")
@@ -91,7 +91,7 @@ func (p *parser) importSpec() *ast.ImportSpec {
 
 /* ===== Pipeline (§pipelines) ===== */
 
-// pipeline = "Pipeline", name, "{", { plug }, "}" (§pipelines rule 1).
+// pipeline = "Pipeline", name, "{", { plug }, "}" (§pipelines).
 func (p *parser) pipeline() *ast.Pipeline {
 	d := &ast.Pipeline{PipelinePos: p.next().Pos}
 	d.Name = p.ident("Pipeline name (§pipelines)")
@@ -127,7 +127,7 @@ func (p *parser) plugLine() (plug *ast.Plug) {
 	return plug
 }
 
-// goRef = name, [ ".", name ] (§pipelines rule 2).
+// goRef = name, [ ".", name ] (§pipelines).
 func (p *parser) goRef(ctx string) *ast.GoRef {
 	first := p.ident(ctx)
 	if p.at(token.DOT) {
@@ -262,7 +262,7 @@ func (p *parser) routePath() *ast.RoutePath {
 			if p.at(token.LPAREN) && p.contiguous() {
 				p.next()
 				// The annotation is part of the path's lexical island
-				// (§route-paths rule 1): every token of ':name(type)' abuts.
+				// (§route-paths): every token of ':name(type)' abuts.
 				if !p.at(token.IDENT) || !p.contiguous() {
 					p.fail(p.cur(), "parameter type is written ':name(type)' with no spaces (§route-paths)")
 				}
@@ -272,7 +272,7 @@ func (p *parser) routePath() *ast.RoutePath {
 				}
 				seg.Rparen = p.next().End()
 			}
-			// ":name..." is the rest-of-path wildcard (§route-paths rule 4), written
+			// ":name..." is the rest-of-path wildcard (§route-paths), written
 			// with three contiguous '.' tokens; a type annotation cannot
 			// combine with it.
 			if p.at(token.DOT) && p.contiguous() {
@@ -292,7 +292,7 @@ func (p *parser) routePath() *ast.RoutePath {
 		case token.SLASH:
 			p.fail(p.cur(), "'/' must be followed by a path segment; routes match exactly, without a trailing slash (§route-paths)")
 		default:
-			// the token abutting a bare "/" is not the path's (§route-paths rule 1)
+			// the token abutting a bare "/" is not the path's (§route-paths)
 		}
 		if len(rp.Segments) == 0 {
 			break
@@ -321,7 +321,7 @@ func (p *parser) groupDecl() *ast.Group {
 	d := &ast.Group{GroupPos: p.next().Pos}
 	d.Name = p.ident("group declaration (§groups)")
 	if d.Name.Quoted() {
-		p.fail(p.toks[p.pos-1], "group name must be a plain identifier (§groups rule 1)")
+		p.fail(p.toks[p.pos-1], "group name must be a plain identifier (§groups)")
 	}
 	switch {
 	case p.at(token.LBRACE):
@@ -342,7 +342,7 @@ func (p *parser) groupDecl() *ast.Group {
 		d.Terms = append(d.Terms, p.groupTerm(false))
 		for p.at(token.PLUS) || p.at(token.BACKSLASH) || p.at(token.MINUS) {
 			if p.at(token.MINUS) {
-				p.fail(p.cur(), "'-' is not a group operator: set difference is spelled '\\' (§groups rule 3)")
+				p.fail(p.cur(), "'-' is not a group operator: set difference is spelled '\\' (§groups)")
 			}
 			neg := !p.at(token.PLUS)
 			p.next()
@@ -356,22 +356,22 @@ func (p *parser) groupDecl() *ast.Group {
 	return d
 }
 
-// groupTerm = plain name | "(" plain name { "," plain name } ")" (§groups rule 3).
+// groupTerm = plain name | "(" plain name { "," plain name } ")" (§groups).
 func (p *parser) groupTerm(neg bool) *ast.GroupTerm {
 	t := &ast.GroupTerm{Neg: neg}
 	if !p.at(token.LPAREN) {
-		t.Names = append(t.Names, p.ident("group expression (§groups rule 3)"))
+		t.Names = append(t.Names, p.ident("group expression (§groups)"))
 		return t
 	}
 	t.Lparen = p.next().Pos
 	for {
-		t.Names = append(t.Names, p.ident("group set member (§groups rule 3)"))
+		t.Names = append(t.Names, p.ident("group set member (§groups)"))
 		if !p.at(token.COMMA) {
 			break
 		}
 		p.next()
 	}
-	t.Rparen = p.expect(token.RPAREN, "group set (§groups rule 3)").End()
+	t.Rparen = p.expect(token.RPAREN, "group set (§groups)").End()
 	return t
 }
 
@@ -448,7 +448,7 @@ func (p *parser) predPrimary() ast.PredExpr {
 			return p.predNull(name)
 		default:
 			if name.Quoted() {
-				p.fail(name.Tok, "a predicate reference must be a plain identifier (§predicates rule 2)")
+				p.fail(name.Tok, "a predicate reference must be a plain identifier (§predicates)")
 			}
 			return &ast.PredRef{Name: name}
 		}
@@ -459,7 +459,7 @@ func (p *parser) predPrimary() ast.PredExpr {
 }
 
 // predKeywordCheck refuses a predicate keyword where a name is
-// expected (§predicates rule 1): and, or, not, in, like, is and null are keywords
+// expected (§predicates): and, or, not, in, like, is and null are keywords
 // inside a predicate, and a column so named is referenced quoted.
 func (p *parser) predKeywordCheck() {
 	t := p.cur()
@@ -468,7 +468,7 @@ func (p *parser) predKeywordCheck() {
 	}
 	for _, kw := range [...]string{"and", "or", "not", "in", "like", "is", "null"} {
 		if strings.EqualFold(t.Val, kw) {
-			p.fail(t, "%q is a keyword inside a predicate (§predicates rule 1); write \"%s\" to name a column", t.Val, t.Val)
+			p.fail(t, "%q is a keyword inside a predicate (§predicates); write \"%s\" to name a column", t.Val, t.Val)
 		}
 	}
 }
@@ -527,7 +527,7 @@ func (p *parser) predIn(col *ast.Ident) ast.PredExpr {
 	p.next() // in
 	x := &ast.PredIn{Col: col}
 	if p.at(token.COLON) {
-		// col in :list — a list parameter (§predicates rule 3).
+		// col in :list — a list parameter (§predicates).
 		prm, ok := p.operand().(*ast.Param)
 		if !ok {
 			p.fail(p.toks[p.pos-1], "expected a :list parameter after 'in' (§predicates)")
@@ -592,7 +592,7 @@ func (p *parser) selectDecl() *ast.Select {
 	d := &ast.Select{SelectPos: p.next().Pos}
 	d.Name = p.ident("select declaration (§selects-over-groups)")
 	if d.Name.Quoted() {
-		p.fail(p.toks[p.pos-1], "select name must be a plain identifier (§selects-over-groups rule 1)")
+		p.fail(p.toks[p.pos-1], "select name must be a plain identifier (§selects-over-groups)")
 	}
 	if p.at(token.LPAREN) {
 		p.selectProjection(d)
@@ -601,7 +601,7 @@ func (p *parser) selectDecl() *ast.Select {
 		p.fail(p.cur(), "expected 'for' after the select name (§selects-over-groups)")
 	}
 	p.next()
-	d.Target = p.ident("select target (§selects-over-groups rule 2)")
+	d.Target = p.ident("select target (§selects-over-groups)")
 	d.EndPos = d.Target.End()
 	if p.atKw("where") {
 		p.next()
@@ -617,7 +617,7 @@ func (p *parser) selectDecl() *ast.Select {
 }
 
 // selectProjection = "(" col {"," col} ")" | "(" "*" { "\\" col term } ")"
-// where a col term is one name or a parenthesized set (§selects-over-groups rule 7).
+// where a col term is one name or a parenthesized set (§selects-over-groups).
 func (p *parser) selectProjection(d *ast.Select) {
 	d.Lparen = p.next().Pos
 	if p.at(token.STAR) {
@@ -625,35 +625,35 @@ func (p *parser) selectProjection(d *ast.Select) {
 		p.next()
 		for p.at(token.BACKSLASH) || p.at(token.MINUS) {
 			if p.at(token.MINUS) {
-				p.fail(p.cur(), "'-' is not a projection operator: exclusion is spelled '\\' (§selects-over-groups rule 7)")
+				p.fail(p.cur(), "'-' is not a projection operator: exclusion is spelled '\\' (§selects-over-groups)")
 			}
 			p.next()
 			if !p.at(token.LPAREN) {
-				d.Cols = append(d.Cols, p.ident("excluded column (§selects-over-groups rule 7)"))
+				d.Cols = append(d.Cols, p.ident("excluded column (§selects-over-groups)"))
 				continue
 			}
 			p.next()
 			for {
-				d.Cols = append(d.Cols, p.ident("excluded column (§selects-over-groups rule 7)"))
+				d.Cols = append(d.Cols, p.ident("excluded column (§selects-over-groups)"))
 				if !p.at(token.COMMA) {
 					break
 				}
 				p.next()
 			}
-			p.expect(token.RPAREN, "excluded column set (§selects-over-groups rule 7)")
+			p.expect(token.RPAREN, "excluded column set (§selects-over-groups)")
 		}
 		if len(d.Cols) == 0 {
-			p.fail(p.cur(), "a star projection needs at least one '\\ column' exclusion; drop the parens to select every column (§selects-over-groups rule 7)")
+			p.fail(p.cur(), "a star projection needs at least one '\\ column' exclusion; drop the parens to select every column (§selects-over-groups)")
 		}
 	} else {
 		for {
-			d.Cols = append(d.Cols, p.ident("projected column (§selects-over-groups rule 7)"))
+			d.Cols = append(d.Cols, p.ident("projected column (§selects-over-groups)"))
 			if !p.at(token.COMMA) {
 				break
 			}
 			p.next()
 		}
 	}
-	d.Rparen = p.expect(token.RPAREN, "projection (§selects-over-groups rule 7)").End()
+	d.Rparen = p.expect(token.RPAREN, "projection (§selects-over-groups)").End()
 	d.EndPos = d.Rparen
 }

@@ -1,4 +1,4 @@
-// spec: §records-sample-data rule 4 — bare identifiers other than true/false/null are not record values
+// spec: §records-sample-data — bare identifiers other than true/false/null are not record values
 Enum s { a }
 Table t {
   x s

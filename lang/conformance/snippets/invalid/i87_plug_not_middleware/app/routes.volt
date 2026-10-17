@@ -1,4 +1,4 @@
-// spec: §pipelines rule 2 — a plug is func(http.Handler) http.Handler, spelled exactly
+// spec: §pipelines — a plug is func(http.Handler) http.Handler, spelled exactly
 // want: is not middleware
 package app
 

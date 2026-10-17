@@ -1,4 +1,4 @@
-// spec: §selects-over-groups rule 7 — a listed column must exist in every member
+// spec: §selects-over-groups — a listed column must exist in every member
 package db
 
 Table page_views {

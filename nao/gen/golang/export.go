@@ -25,7 +25,7 @@ func GoTypeName(dbmlType string) (string, bool) {
 }
 
 // SelectParam is one Go parameter of a generated select method
-// (spec §selects-over-groups rule 6), in declaration order.
+// (spec §selects-over-groups), in declaration order.
 type SelectParam struct {
 	SQLName string // name bound as :name in the statement
 	GoName  string
@@ -34,7 +34,7 @@ type SelectParam struct {
 
 // SelectFn is one select instantiation: a method on Queries for one
 // member table, with WHERE/ORDER fragments rendered by the checker and
-// the §selects-over-groups rule 7 projection already validated.
+// the §selects-over-groups projection already validated.
 type SelectFn struct {
 	TableKey     string // canonical schema.name key into check.Info
 	MethodSuffix string
@@ -69,7 +69,7 @@ type CheckSpec struct {
 	Src  string   // human-readable form, reported by rt.CheckError
 	Cond string   // typed form: Go condition over v.<Field>; "" otherwise
 	Call string   // Go-reference call, e.g. "EmailValid(v.Email)"; "" otherwise
-	Cols []string // the columns the check reads, so a params struct knows whether it can evaluate it (§validation-checks rule 6)
+	Cols []string // the columns the check reads, so a params struct knows whether it can evaluate it (§validation-checks)
 }
 
 // ParamsValidators reports whether the table's CreateParams and
@@ -113,7 +113,7 @@ func paramsChecks(t *tableModel, checks []CheckSpec) (create, update []CheckSpec
 func EnumTypeName(schema, base string) (string, error) { return enumTypeName(schema, base) }
 
 // ModelFields reports the exact struct fields the model generator emits
-// for the table with the given canonical key (spec §selects-over-groups rule 6, §mapping-to-go).
+// for the table with the given canonical key (spec §selects-over-groups, §mapping-to-go).
 // It plans the whole file.
 func ModelFields(f *ast.File, info *check.Info, tableKey string) (model string, fields []FieldSig, err error) {
 	return PlanBuild(f, info).ModelFields(tableKey)

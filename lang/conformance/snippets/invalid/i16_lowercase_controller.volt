@@ -1,4 +1,4 @@
-// spec: §handler-references rule 1
+// spec: §handler-references
 package app
 
 Scope / {

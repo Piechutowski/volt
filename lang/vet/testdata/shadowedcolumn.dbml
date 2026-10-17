@@ -9,7 +9,7 @@ Table t {
   name varchar
 }
 
-// between two partials, the later injection silently wins (§tablepartial rule 4)
+// between two partials, the later injection silently wins (§tablepartial)
 TablePartial audit_a {
   updated_at timestamp
 }

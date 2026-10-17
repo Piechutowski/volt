@@ -31,7 +31,7 @@ var typeMap = map[string]goType{
 	"int8":        {name: "int64"},
 	"bigserial":   {name: "int64"},
 
-	// unsigned variants (written as quoted types in DBML, spec §columns rule 1)
+	// unsigned variants (written as quoted types in DBML, spec §columns)
 	"tinyint unsigned":  {name: "uint8"},
 	"smallint unsigned": {name: "uint16"},
 	"int unsigned":      {name: "uint32"},
@@ -96,7 +96,7 @@ var typeMap = map[string]goType{
 // keys ("public.job_status") to their generated Go type names.
 func typeResolve(schema, base string, enums map[string]string) (goType, error) {
 	// an enum reference may be schema-qualified or inherit the default
-	// schema (spec §enum rule 4)
+	// schema (spec §enum)
 	key := base
 	if schema != "" {
 		key = schema + "." + base

@@ -275,7 +275,7 @@ func (g *generator) tableEmit(ti *check.TableInfo, usedNames map[string]string) 
 	return nil
 }
 
-// compositePKColumns collects columns covered by a [pk] index (spec §indexes rule 3):
+// compositePKColumns collects columns covered by a [pk] index (spec §indexes):
 // primary-key membership implies NOT NULL in SQL even without the setting.
 func compositePKColumns(ti *check.TableInfo) map[string]bool {
 	out := map[string]bool{}
@@ -355,7 +355,7 @@ func fieldTag(col *ast.Column) string {
 	return strings.Join(parts, " ")
 }
 
-// isNullable applies spec §columns rule 2 plus SQL semantics: a column is NOT NULL
+// isNullable applies spec §columns plus SQL semantics: a column is NOT NULL
 // when marked not null, or when it is (part of) a primary key or
 // auto-increment, which imply NOT NULL in every SQL dialect.
 func isNullable(col *ast.Column) bool {

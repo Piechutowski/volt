@@ -22,7 +22,7 @@ type Info struct {
 	HasImports bool
 	// TableGroups in declaration order, resolved to their member tables
 	// (unknown members dropped; §tablegroup reports them). A TableGroup is a
-	// set wherever Volt names one (spec §groups rule 2).
+	// set wherever Volt names one (spec §groups).
 	TableGroups []*TableGroupInfo
 
 	byTable map[string]*TableInfo // canonical key and alias -> table
@@ -65,13 +65,13 @@ type TableInfo struct {
 	Alias string // "" if none
 
 	// Columns is the effective column list in definition order after
-	// injection, conflicts resolved per spec §tablepartial rule 4.
+	// injection, conflicts resolved per spec §tablepartial.
 	Columns []*ColumnDef
-	// Shadowed lists column definitions that lost a §tablepartial rule 4 conflict.
+	// Shadowed lists column definitions that lost a §tablepartial conflict.
 	Shadowed []*ColumnDef
 
 	Indexes []*ast.Index // all indexes, direct and injected
-	Checks  []*ast.Check // all check lines, direct and injected (§tablepartial rule 3)
+	Checks  []*ast.Check // all check lines, direct and injected (§tablepartial)
 }
 
 // ColumnDef is one column definition and where it came from.
@@ -188,7 +188,7 @@ func (c *checker) collect(f *ast.File) {
 	c.views = map[string]*ast.DiagramView{}
 	c.schemas = map[string]bool{"public": true}
 
-	// Partials first: tables need them for injection regardless of order (§program-structure rule 2).
+	// Partials first: tables need them for injection regardless of order (§program-structure).
 	for _, d := range f.Decls {
 		if tp, ok := d.(*ast.TablePartial); ok {
 			if _, dup := c.partials[tp.Name.Name()]; dup {
@@ -330,7 +330,7 @@ func enumSetOf(enums map[string]*EnumInfo) *enumSet {
 // : the declaration, its key and alias, the partial declarations
 // it injects in body order (nil where the name resolves to none),
 // whether imports are in play, and the enum set. It returns the
-// checked table, columns expanded per §tablepartial rule 4, and every diagnostic of
+// checked table, columns expanded per §tablepartial, and every diagnostic of
 // the table. It reads nothing else and writes nothing it did not
 // create.
 func tableCheck(d *ast.Table, key, alias string, partials []*ast.TablePartial, hasImports bool, enums *enumSet) (*TableInfo, []diag.Diagnostic) {
@@ -357,7 +357,7 @@ func (c *checker) partialsOf(d *ast.Table) []*ast.TablePartial {
 	return out
 }
 
-// columnsExpand applies §tablepartial rule 4 conflict resolution: direct definitions win;
+// columnsExpand applies §tablepartial conflict resolution: direct definitions win;
 // otherwise the last-injected partial wins.
 func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 	type slot struct {

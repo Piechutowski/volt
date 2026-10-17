@@ -232,7 +232,7 @@ func itemLower(item ast.Node, inh inherited, facts routeFacts, env routeEnv, rec
 // member's select method, bound like any query route (§query-routes).
 func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 	// §dataset-declaration: the select is this package's own — bare or self-qualified,
-	// as a plug is (§pipelines rule 2) — or an imported package's, qualified.
+	// as a plug is (§pipelines) — or an imported package's, qualified.
 	qual, target, local := l.facts.pkgName, l.facts.pkgPath, true
 	qualPos := ds.Name.Pos()
 	if ds.Pkg != nil && ds.Pkg.Name() != l.facts.pkgName {
@@ -391,7 +391,7 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 
 	for _, part := range r.Handler.Parts {
 		if part.Quoted() {
-			l.errorf(r.Handler.Pos(), "scopes-and-routes", "handler names are plain (unquoted) identifiers (§route-paths rule 6), found %q", r.Handler.String())
+			l.errorf(r.Handler.Pos(), "scopes-and-routes", "handler names are plain (unquoted) identifiers (§route-paths), found %q", r.Handler.String())
 			return nil
 		}
 	}
@@ -497,7 +497,7 @@ var queryValueTypes = map[string]bool{
 }
 
 // queryRef resolves `pkg.Method`, `Method` or `<this package>.Method`
-// to a generated query of the named package — a select method (§selects-over-groups rule 6)
+// to a generated query of the named package — a select method (§selects-over-groups)
 // or a default CRUD method — and binds the route's parameters to the
 // method's (§query-routes).
 func (l *routeLowering) queryRef(r *ast.Route, method string, params []Param, qual, target string, local bool) *QueryRef {
@@ -523,7 +523,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		return nil
 	}
 	// The Controllers field: the qualifier as a Go name, or Queries for
-	// the package's own handle (§query-routes rule 5).
+	// the package's own handle (§query-routes).
 	field := "Queries"
 	if !local {
 		var err error
@@ -547,7 +547,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	var sig []sigParam
 	found := false
 
-	// Selects: <Model><SelectName> per member (§selects-over-groups rule 6); the first member
+	// Selects: <Model><SelectName> per member (§selects-over-groups); the first member
 	// minting the name owns it.
 	if si, m, ok := l.selectByMethod(target, name); ok {
 		found = true
@@ -573,7 +573,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 			}
 			if cm.Body != "" {
 				// The params struct validates when it carries the
-				// columns of at least one check (§validation-checks rule 6).
+				// columns of at least one check (§validation-checks).
 				create, update := l.validators(target, key)
 				sig = append(sig, sigParam{name: "arg", goType: qual + "." + cm.Body, body: true,
 					validates: (cm.Op == "create" && create) || (cm.Op == "update" && update)})
@@ -628,7 +628,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 					if KnownParamType(sp.goType) {
 						l.errorf(segAt.pos(pp.Name), "scopes-and-routes", "path parameter %q is %s but %s takes %s; spell it :%s(%s) (§query-routes)", sp.name, pp.Type.GoType(), ref, sp.goType, sp.name, sp.goType)
 					} else {
-						l.errorf(segAt.pos(pp.Name), "scopes-and-routes", "parameter %q of %s is %s, which a path segment cannot carry (§route-paths rule 3); pass it in the query string (§query-routes)", sp.name, ref, sp.goType)
+						l.errorf(segAt.pos(pp.Name), "scopes-and-routes", "parameter %q of %s is %s, which a path segment cannot carry (§route-paths); pass it in the query string (§query-routes)", sp.name, ref, sp.goType)
 					}
 					ok = false
 				}
@@ -689,9 +689,9 @@ func (l *routeLowering) pathParams(segs []*ast.Segment) ([]Param, bool) {
 	seen := map[string]bool{}
 	ok := true
 	for i, seg := range segs {
-		// §route-paths rule 6: every segment name is a plain, unquoted identifier.
+		// §route-paths: every segment name is a plain, unquoted identifier.
 		if seg.Name.Quoted() || !goIdentOK(seg.Name.Name()) {
-			l.errorf(seg.Pos(), "scopes-and-routes", "path segment %q must be a plain identifier of letters, digits and underscores (§route-paths rule 6)", seg.Name.Name())
+			l.errorf(seg.Pos(), "scopes-and-routes", "path segment %q must be a plain identifier of letters, digits and underscores (§route-paths)", seg.Name.Name())
 			ok = false
 			continue
 		}
@@ -700,31 +700,31 @@ func (l *routeLowering) pathParams(segs []*ast.Segment) ([]Param, bool) {
 			continue
 		case ast.SegWild:
 			if i != len(segs)-1 {
-				l.errorf(seg.Pos(), "scopes-and-routes", "the wildcard ':%s...' must be the last path segment (§route-paths rule 4)", seg.Name.Name())
+				l.errorf(seg.Pos(), "scopes-and-routes", "the wildcard ':%s...' must be the last path segment (§route-paths)", seg.Name.Name())
 				ok = false
 			}
 		}
 		name := seg.Name.Name()
 		if seen[name] {
-			l.errorf(seg.Pos(), "scopes-and-routes", "duplicate path parameter %q (§route-paths rule 2)", name)
+			l.errorf(seg.Pos(), "scopes-and-routes", "duplicate path parameter %q (§route-paths)", name)
 			ok = false
 			continue
 		}
 		seen[name] = true
 		if !goIdentOK(name) || goKeywords[name] {
-			l.errorf(seg.Pos(), "scopes-and-routes", "path parameter %q must be a valid, non-keyword Go identifier (§route-paths rule 2)", name)
+			l.errorf(seg.Pos(), "scopes-and-routes", "path parameter %q must be a valid, non-keyword Go identifier (§route-paths)", name)
 			ok = false
 			continue
 		}
 		if reservedParamNames[name] {
-			l.errorf(seg.Pos(), "scopes-and-routes", "path parameter %q collides with a name in generated signatures (§route-paths rule 2); reserved: w, r, opts, volt", name)
+			l.errorf(seg.Pos(), "scopes-and-routes", "path parameter %q collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt", name)
 			ok = false
 			continue
 		}
 		pt := TString
 		if seg.Type != nil {
 			if !KnownParamType(seg.Type.Name()) {
-				l.errorf(seg.Type.Pos(), "scopes-and-routes", "unknown parameter type %q (§route-paths rule 3); valid: int, int32, int64, string", seg.Type.Name())
+				l.errorf(seg.Type.Pos(), "scopes-and-routes", "unknown parameter type %q (§route-paths); valid: int, int32, int64, string", seg.Type.Name())
 				ok = false
 				continue
 			}
@@ -740,7 +740,7 @@ func (l *routeLowering) pathParams(segs []*ast.Segment) ([]Param, bool) {
 func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInfo {
 	declared := res.Name.Name()
 	if res.Name.Quoted() || !goIdentOK(declared) || (res.Pkg != nil && (res.Pkg.Quoted() || !goIdentOK(res.Pkg.Name()))) {
-		l.errorf(res.Name.Pos(), "resources", "resources name %q must be a plain identifier (§route-paths rule 6)", res.Ref())
+		l.errorf(res.Name.Pos(), "resources", "resources name %q must be a plain identifier (§route-paths)", res.Ref())
 		return nil
 	}
 
@@ -846,7 +846,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 				}
 				id, ok := s.Value.(*ast.Ident)
 				if !ok || !goIdentOK(id.Name()) || goKeywords[id.Name()] || reservedParamNames[id.Name()] {
-					l.errorf(s.Pos(), "resources", "param: takes a valid, non-keyword, non-reserved Go identifier (§settings, §route-paths rule 2)")
+					l.errorf(s.Pos(), "resources", "param: takes a valid, non-keyword, non-reserved Go identifier (§settings, §route-paths)")
 					continue
 				}
 				paramName = id.Name()
@@ -890,15 +890,15 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 	}
 
 	// The key parameter must not repeat a parameter of the enclosing
-	// scope (§route-paths rule 2); said once, at the declaration.
+	// scope (§route-paths); said once, at the declaration.
 	for _, seg := range inh.prefix {
 		if seg.Kind != ast.SegParam || seg.Name.Name() != paramName {
 			continue
 		}
 		if def {
-			l.errorf(res.Name.Pos(), "resources", "resources %s [default]: the key parameter %q is already a parameter of the enclosing scope, and the generated CRUD fixes its name; give the scope's parameter another name (§default-handlers, §route-paths rule 2)", res.Ref(), paramName)
+			l.errorf(res.Name.Pos(), "resources", "resources %s [default]: the key parameter %q is already a parameter of the enclosing scope, and the generated CRUD fixes its name; give the scope's parameter another name (§default-handlers, §route-paths)", res.Ref(), paramName)
 		} else {
-			l.errorf(res.Name.Pos(), "resources", "resources %q: the key parameter %q is already a parameter of the enclosing scope; rename it with [param: <name>] (§settings, §route-paths rule 2)", declared, paramName)
+			l.errorf(res.Name.Pos(), "resources", "resources %q: the key parameter %q is already a parameter of the enclosing scope; rename it with [param: <name>] (§settings, §route-paths)", declared, paramName)
 		}
 		return nil
 	}
@@ -1027,7 +1027,7 @@ func (l *routeLowering) resourceTable(res *ast.Resources) (ti *check.TableInfo, 
 }
 
 // pkParamType maps a table's primary key to a route parameter type.
-// Both declaration forms count (nao SPEC §columns rule 3, §indexes rule 3): column-level
+// Both declaration forms count (nao SPEC §columns, §indexes): column-level
 // pk flags/settings and pk-marked indexes.
 func (l *routeLowering) pkParamType(ti *check.TableInfo, pos token.Position) (ParamType, bool) {
 	var pkNames []string

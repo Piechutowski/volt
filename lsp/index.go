@@ -248,7 +248,7 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		ix.Occs = append(ix.Occs, entries[ti.Decl].cols...)
 	}
 
-	// Groups shadow tables as select targets (§selects-over-groups rule 2): a group-targeted
+	// Groups shadow tables as select targets (§selects-over-groups): a group-targeted
 	// select names agreed columns, not one table's.
 	groups := map[string]bool{}
 	for _, decl := range f.Decls {
@@ -276,7 +276,7 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		case *ast.Select:
 			// A select over one table binds its columns to that table. A
 			// group target names an agreed column across members and is
-			// left alone (§selects-over-groups rule 4).
+			// left alone (§selects-over-groups).
 			if ti := ix.tableByBase(n.Target.Name()); ti != nil && !groups[n.Target.Name()] {
 				for _, col := range n.Cols {
 					ix.addColumnRef(ti, "", col)
@@ -629,7 +629,7 @@ func (ix *Index) addColumnRef(ti *check.TableInfo, partial string, id *ast.Ident
 }
 
 // tableByBase finds the one table with the given base name (the
-// checker's §selects-over-groups rule 2 for select targets), or nil when none or more
+// checker's §selects-over-groups for select targets), or nil when none or more
 // than one matches.
 func (ix *Index) tableByBase(base string) *check.TableInfo {
 	return ix.byBase[base]

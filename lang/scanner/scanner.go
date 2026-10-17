@@ -24,10 +24,10 @@ func Scan(filename, src string) ([]token.Token, []diag.Diagnostic) {
 }
 
 // ScanFile scans a whole file as written; every position is in f. A
-// carriage return is discarded wherever it appears (§line-structure-and-whitespace rule 1) and stays
+// carriage return is discarded wherever it appears (§line-structure-and-whitespace) and stays
 // in the text: it keeps its byte, so offsets match the file, and has
 // no column. Every token that begins a top-level element
-// (§line-structure-and-whitespace rule 5) is flagged; nothing stops there.
+// (§line-structure-and-whitespace) is flagged; nothing stops there.
 func ScanFile(f *token.File) ([]token.Token, []diag.Diagnostic) {
 	// The token slice is sized once.
 	s := newScanner(f, make([]token.Token, 0, len(f.Src)/4+16)) // a token per four bytes of schema
@@ -36,7 +36,7 @@ func ScanFile(f *token.File) ([]token.Token, []diag.Diagnostic) {
 	return s.toks, s.errs
 }
 
-// ScanChunk scans the first top-level element of f's text (§line-structure-and-whitespace rule 5):
+// ScanChunk scans the first top-level element of f's text (§line-structure-and-whitespace):
 // the tokens before the next element start after the first
 // byte, then an EOF standing at that start, which is the end returned
 // and whose text names what it is; without one, the whole text and an
@@ -57,10 +57,10 @@ func ScanChunk(f *token.File, buf []token.Token) (toks []token.Token, errs []dia
 
 // ElementStart is how a chunk's EOF reads in a diagnostic: the token
 // the parser found is the next element's start, not the file's end.
-const ElementStart = "the start of the next element (§line-structure-and-whitespace rule 5)"
+const ElementStart = "the start of the next element (§line-structure-and-whitespace)"
 
 // StartsDecl reports whether text begins, at its very first byte, a
-// top-level element (§line-structure-and-whitespace rule 5). One token is scanned, whatever the
+// top-level element (§line-structure-and-whitespace). One token is scanned, whatever the
 // text's length.
 func StartsDecl(text string) bool {
 	var buf [1]token.Token
@@ -73,7 +73,7 @@ func StartsDecl(text string) bool {
 
 // newScanner is a scanner at the start of f's text, in the initial
 // state: outside every string, comment and brace, after a line
-// break. Every chunk begins in it (§line-structure-and-whitespace rule 5).
+// break. Every chunk begins in it (§line-structure-and-whitespace).
 func newScanner(f *token.File, buf []token.Token) *Scanner {
 	s := &Scanner{src: f.Src, file: f, pos: cursor{line: 1, col: 1}, toks: buf[:0]}
 	s.nlBefore = true // start of file counts as a line break
@@ -103,7 +103,7 @@ type Scanner struct {
 
 	// depth counts the open braces, never below zero: an unquoted
 	// identifier in the first column at depth zero begins a top-level
-	// element (§line-structure-and-whitespace rule 5).
+	// element (§line-structure-and-whitespace).
 	depth int
 	// chunk asks to stop before the first element start after the
 	// first byte; done reports it was reached, s.start at it.
@@ -128,7 +128,7 @@ func (c cursor) position(f *token.File) token.Position { return f.At(c.Offset, c
 const eof = rune(-1)
 
 // crSkip is the offset of the first byte at or after off that is not a
-// carriage return: the cursor never rests on one (§line-structure-and-whitespace rule 1).
+// carriage return: the cursor never rests on one (§line-structure-and-whitespace).
 func (s *Scanner) crSkip(off int) int {
 	for off < len(s.src) && s.src[off] == '\r' {
 		off++
@@ -201,7 +201,7 @@ func (s *Scanner) mark() {
 func (s *Scanner) raw() string { return s.src[s.start.Offset:s.pos.Offset] }
 
 // rawVal is the token's text as a value: its carriage returns, if it
-// stepped over any, discarded (§line-structure-and-whitespace rule 1).
+// stepped over any, discarded (§line-structure-and-whitespace).
 func (s *Scanner) rawVal() string {
 	if s.cr {
 		return strings.ReplaceAll(s.raw(), "\r", "")
@@ -214,7 +214,7 @@ func (s *Scanner) emit(kind token.Kind, val string) {
 }
 
 // tokEmit appends the token at the marked start, flagged as an element
-// start when it is one (§line-structure-and-whitespace rule 5): an unquoted identifier in the first
+// start when it is one (§line-structure-and-whitespace): an unquoted identifier in the first
 // column at depth zero. A chunk scan stops before the first such token
 // after the first byte, with s.start at it; the depth counts the
 // token's own brace only after it is kept.
@@ -301,7 +301,7 @@ func lineCommentScan(s *Scanner) stateFn {
 	for r := s.peek(); r != '\n' && r != eof; r = s.peek() {
 		s.next()
 	}
-	s.spBefore = true // comments are trivia (§comments rule 4)
+	s.spBefore = true // comments are trivia (§comments)
 	return anyScan
 }
 
@@ -408,7 +408,7 @@ func multiStringScan(s *Scanner) stateFn {
 	}
 }
 
-// indentStrip implements §multi-line-string-literals rule 4 indentation stripping.
+// indentStrip implements §multi-line-string-literals indentation stripping.
 func indentStrip(v string) string {
 	lines := strings.Split(v, "\n")
 	if len(lines) > 0 && strings.TrimSpace(lines[0]) == "" {

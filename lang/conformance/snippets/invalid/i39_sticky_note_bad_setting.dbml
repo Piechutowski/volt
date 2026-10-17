@@ -1,2 +1,2 @@
-// spec: §notes rule 4 — only color is a sticky note setting
+// spec: §notes — only color is a sticky note setting
 Note n [headercolor: #fff] { 'text' }

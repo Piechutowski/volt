@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// EmailValid is the Go-reference check the schema names (§validation-checks rule 5). Go
+// EmailValid is the Go-reference check the schema names (§validation-checks). Go
 // ignores this testdata directory; the Volt checker reads it.
 func EmailValid(email string) error {
 	if !strings.Contains(email, "@") {

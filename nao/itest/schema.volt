@@ -77,10 +77,10 @@ Pred since { day >= :from }
 Select rows for metrics where at [order: (day desc, id asc)]
 Select recent for metrics where at or since
 
-// §predicates rule 3 list parameter: one JSON array, unpacked by json_each.
+// §predicates list parameter: one JSON array, unpacked by json_each.
 Select on_sites for metrics where site in :sites [order: (id asc)]
 
-// §selects-over-groups rule 7 projections: an explicit list mints one shared row type for
+// §selects-over-groups projections: an explicit list mints one shared row type for
 // every member; the star form mints a per-member struct derivative.
 Select summary (site, day) for metrics where at
 Select public (* \ target) for link_clicks [order: (id asc)]

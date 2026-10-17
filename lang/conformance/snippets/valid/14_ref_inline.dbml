@@ -1,4 +1,4 @@
-// spec: §relationships-ref rule 4 — inline form; repeatable ref setting
+// spec: §relationships-ref — inline form; repeatable ref setting
 Table users {
   id int [ref: < posts.user_id, ref: < reviews.user_id]
 }

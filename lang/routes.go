@@ -4,7 +4,7 @@ import (
 	"github.com/Piechutowski/volt/lang/token"
 )
 
-// ParamType is the closed set of route parameter types (spec §route-paths rule 3);
+// ParamType is the closed set of route parameter types (spec §route-paths);
 // GoType maps them to Go. The set matches the Go types nao's model
 // generator emits for primary keys.
 type ParamType string
@@ -66,7 +66,7 @@ type RouteInfo struct {
 	Table         string // the resources declaration's table name, when FromResources
 	FromDataset   bool   // expanded from a dataset item (§datasets)
 
-	// shape is the pattern parsed for the §route-conflicts rule 2 ambiguity relation
+	// shape is the pattern parsed for the §route-conflicts ambiguity relation
 	// and shapeKey the method and shape as the duplicate scan keys them,
 	// both set when the route is lowered; ord is the route's position
 	// in the package's table, set when the checker accepts it.
@@ -91,7 +91,7 @@ type QueryParam struct {
 	Name      string // Go parameter name, also the URL key
 	GoType    string // unqualified Go type ("int32", "[]string"); params structs are qualified ("db.UserCreateParams")
 	Source    QuerySource
-	Validates bool // body param: the params struct has a Validate method the handler calls first (§validation-checks rule 6)
+	Validates bool // body param: the params struct has a Validate method the handler calls first (§validation-checks)
 }
 
 // QueryRef binds a route to a generated query method of a data package
@@ -103,7 +103,7 @@ type QueryRef struct {
 	Package   string // root-relative package path
 	Import    string // Go import path of the package
 	PkgName   string // the package's Go name (its directory name)
-	Local     bool   // the query is this package's own (§query-routes rule 6): no import, the field is Queries *Queries
+	Local     bool   // the query is this package's own (§query-routes): no import, the field is Queries *Queries
 	Method    string // generated method name, e.g. "UserGet"
 	Params    []QueryParam
 	Result    string // row type, unqualified ("User"); "" for delete

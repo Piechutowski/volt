@@ -1,4 +1,4 @@
-// spec: §pipelines rule 2, §route-paths rule 6
+// spec: §pipelines, §route-paths
 package app
 
 Pipeline api {

@@ -1,4 +1,4 @@
-// spec: §validation-checks rule 5 — a Go-reference check returns exactly error
+// spec: §validation-checks — a Go-reference check returns exactly error
 // want: must return exactly error
 package db
 

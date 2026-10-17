@@ -2,7 +2,7 @@ package db
 
 import "errors"
 
-// SiteKnown is the Go-reference check target (§validation-checks rule 5): one parameter
+// SiteKnown is the Go-reference check target (§validation-checks): one parameter
 // per argument column, spelled as the generated type, returning error.
 func SiteKnown(site string) error {
 	if site == "" {

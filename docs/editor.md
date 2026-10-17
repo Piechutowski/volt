@@ -114,7 +114,7 @@ load-bearing patterns, each citing the spec section it implements:
   query layer — `Group` algebra, the `Pred` expression grammar
   (prec.left or/and, keyword operators at the same precedence as other
   keywords so `not` never outlexes `Note`), `Select ... for ... where`.
-  `/` is a token per §layers-files-and-the-superset-rule rule 2.
+  `/` is a token per §layers-files-and-the-superset-rule.
 
 ## 3. The Zed extension (`zed-extension/`)
 
@@ -164,7 +164,7 @@ declaration, the check by table and the occurrence index by table are
 the session's memo shapes, owned by the handler goroutine),
 and schedules the project's analysis:
 
-1. Find the project root (the nearest `go.mod`, §projects-and-packages rule 1). A file under a root is
+1. Find the project root (the nearest `go.mod`, §projects-and-packages). A file under a root is
    checked as part of its **whole project**: every open buffer is
    overlaid over the disk (`lang.LoadOverlay`) so unsaved edits in one
    file are visible to checks in another. A file outside any project
@@ -196,7 +196,7 @@ layer:
 - Column identity is container-scoped; a column injected from a
   TablePartial resolves into the partial, so renaming it updates the
   partial once plus every reference through every injecting table
-  (§tablepartial rule 4).
+  (§tablepartial).
 - Completion is textual-context + semantic-fill: where-am-I is
   answered by line-prefix regexes plus a `{`/`}`-balance scanner (the
   current line usually doesn't parse mid-keystroke); candidates come
@@ -212,7 +212,7 @@ errors is noise while typing; it reappears when the file checks clean.
 And it runs only where its verdict is what the editor shows: a
 file in a project package is vetted by the project analysis, never by
 the document's own pass; a file outside any project, or one under a
-project the loader never read (§projects-and-packages rule 6), gets the single-file vet added
+project the loader never read (§projects-and-packages), gets the single-file vet added
 to its own verdict once per text.
 
 ## 5. Extending the system — the recipes
@@ -268,7 +268,7 @@ from one implementation. The protocol library is `tliron/glsp` (LSP
 ### Go references
 
 A `.volt` file names Go by rule only in the containing package's own
-Go files — pipeline plugs (§pipelines rule 2) and Go-reference checks (§validation-checks rule 5).
+Go files — pipeline plugs (§pipelines) and Go-reference checks (§validation-checks).
 The server resolves those names with the standard library's Go parser
 over the package directory's non-test `*.go` files (no gopls, no
 build): go-to-definition lands on the `func`, hover shows its signature
@@ -293,7 +293,7 @@ the Go declaration is gopls' job, and the existence error then points
 at whichever side is still behind. Rename on a column follows it into
 the table's checks (typed operands and Go-reference arguments); a
 column named through a group — in a `Pred` body or a group select — is
-left alone, and the agreement error (§selects-over-groups rule 4 for a select, §validation-checks rule 2 for a
+left alone, and the agreement error (§selects-over-groups for a select, §validation-checks for a
 Pred used by a table's checks) names what is now missing.
 
 ## 8. The verification checklist

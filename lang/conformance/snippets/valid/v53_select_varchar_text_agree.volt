@@ -1,4 +1,4 @@
-// spec: §selects-over-groups rule 4 — agreement is judged on the Go type: varchar and text agree
+// spec: §selects-over-groups — agreement is judged on the Go type: varchar and text agree
 package db
 
 Table ms_revenue {

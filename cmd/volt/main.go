@@ -119,9 +119,9 @@ func command() *cli.Command {
 }
 
 // load resolves the packages named by the command's arguments — Go's
-// rules (§projects-and-packages rule 7): none means the package in the working directory,
+// rules (§projects-and-packages): none means the package in the working directory,
 // a directory means that package, and dir/... means every package
-// beneath dir. The project root is the nearest go.mod (§projects-and-packages rule 1); the
+// beneath dir. The project root is the nearest go.mod (§projects-and-packages); the
 // named packages and their imports are loaded and checked. named lists
 // the package paths the arguments selected, in argument order.
 func load(c *cli.Command) (pr *lang.Project, named []string, diags []diag.Diagnostic, err error) {
@@ -134,7 +134,7 @@ func load(c *cli.Command) (pr *lang.Project, named []string, diags []diag.Diagno
 	for _, arg := range args {
 		pattern := filepath.ToSlash(arg)
 		base := arg
-		// A .volt file names its directory's package (§projects-and-packages rule 7).
+		// A .volt file names its directory's package (§projects-and-packages).
 		if strings.HasSuffix(base, ".volt") {
 			if st, err := os.Stat(base); err == nil && !st.IsDir() {
 				base = filepath.Dir(base)
@@ -233,7 +233,7 @@ func diagsPrintJSON(all []diag.Diagnostic) error {
 // genRun implements 'volt gen': check the whole project, then write the
 // generated files of every named package — into the package directory,
 // or with -o into a directory of the caller's choosing, -parts naming
-// which files (§projects-and-packages rule 7) — refusing to clobber non-generated files (all
+// which files (§projects-and-packages) — refusing to clobber non-generated files (all
 // or nothing).
 func genRun(c *cli.Command) error {
 	parts, err := partsParse(c.String("parts"), c.Bool("models-only"), c.Bool("sql"))
@@ -306,7 +306,7 @@ func genRun(c *cli.Command) error {
 			}
 			for _, name := range append(append([]string{}, router.Files...), router.ClientBesideFile) {
 				// A main package routing its own tables has no client
-				// subpackage (§generated-client rule 1); -o writes the client beside the
+				// subpackage (§generated-client); -o writes the client beside the
 				// models instead.
 				if code, ok := gen[name]; ok && parts[partOf(name)] {
 					files = append(files, outFile{path: filepath.Join(dir, name), code: code})
@@ -542,7 +542,7 @@ func routesRun(c *cli.Command) error {
 }
 
 // genParts are the names -parts accepts, each one or more generated
-// files (§projects-and-packages rule 7).
+// files (§projects-and-packages).
 var genParts = []string{"models", "queries", "router", "client", "sql"}
 
 // partsParse resolves the -parts list, or the defaults the older flags

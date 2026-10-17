@@ -1,4 +1,4 @@
-// spec: §columns tag extension rule 2 — tag keys are unique per column
+// spec: §columns tag extension — tag keys are unique per column
 Table users {
   id   integer [pk]
   name varchar [tag: 'json:"a"', tag: 'json:"b"']

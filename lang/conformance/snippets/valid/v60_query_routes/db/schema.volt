@@ -1,4 +1,4 @@
-// spec: §selects-over-groups rule 6 — the data package a query route binds to
+// spec: §selects-over-groups — the data package a query route binds to
 package db
 
 Table users {

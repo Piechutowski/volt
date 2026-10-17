@@ -1,4 +1,4 @@
-// Hand-written Go-reference check target (spec §validation-checks rule 5): the generated
+// Hand-written Go-reference check target (spec §validation-checks): the generated
 // validator calls it directly — same package, no import, and the Go
 // compiler proves the signature.
 package itest

@@ -1,4 +1,4 @@
-// spec: §validation-checks rule 2 — a check takes no :params: it judges one row
+// spec: §validation-checks — a check takes no :params: it judges one row
 package db
 
 Table page_views {

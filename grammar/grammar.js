@@ -462,11 +462,11 @@ module.exports = grammar({
 
     // ==================== Volt layer (docs/spec.md Part II) ====================
     // The routing dialect: package clauses, Go-style import blocks,
-    // Pipeline and Scope. Route paths are lexical islands (§route-paths rule 5) —
+    // Pipeline and Scope. Route paths are lexical islands (§route-paths) —
     // token.immediate stitches their segments together so interior
     // whitespace ends the path, exactly like the reference parser.
 
-    // package name (§projects-and-packages rule 2)
+    // package name (§projects-and-packages)
     package_clause: ($) =>
       seq(kw('package'), field('name', $.identifier)),
 
@@ -581,7 +581,7 @@ module.exports = grammar({
         ),
       ),
 
-    // One group term: a name, or a parenthesized set of names (§groups rule 3).
+    // One group term: a name, or a parenthesized set of names (§groups).
     _group_term: ($) =>
       choice(
         alias($.identifier, $.group_member),
@@ -678,7 +678,7 @@ module.exports = grammar({
       seq(':', field('name', alias($._ident_immediate, $.parameter_name))),
 
     // Select name [(cols) | (* - cols)] for target [where expr]
-    // [settings] (§selects-over-groups, §selects-over-groups rule 7)
+    // [settings] (§selects-over-groups, §selects-over-groups)
     select_definition: ($) =>
       seq(
         kw('Select'),
@@ -690,7 +690,7 @@ module.exports = grammar({
         optional(field('settings', $.settings_list)),
       ),
 
-    // (a, b, c) or (* - a - b) (§selects-over-groups rule 7): clauses read in SQL order
+    // (a, b, c) or (* - a - b) (§selects-over-groups): clauses read in SQL order
     select_projection: ($) =>
       seq(
         '(',
@@ -789,7 +789,7 @@ module.exports = grammar({
       ),
 
     // Parenthesized identifier list: only: (index, show) (volt §settings);
-    // order lists allow a one-word modifier: order: (year desc, id) (§selects-over-groups rule 5).
+    // order lists allow a one-word modifier: order: (year desc, id) (§selects-over-groups).
     ident_group: ($) =>
       seq('(', $._ident_item, repeat(seq(',', $._ident_item)), ')'),
 

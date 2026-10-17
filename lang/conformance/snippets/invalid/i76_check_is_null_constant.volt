@@ -1,4 +1,4 @@
-// spec: §validation-checks rule 3 — is null is constant in a check: its columns are not
+// spec: §validation-checks — is null is constant in a check: its columns are not
 // null by rule
 package db
 

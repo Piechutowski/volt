@@ -1,4 +1,4 @@
-// spec: §selects-over-groups rule 7 — no duplicates in the projection list
+// spec: §selects-over-groups — no duplicates in the projection list
 package db
 
 Table page_views {

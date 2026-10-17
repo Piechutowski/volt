@@ -49,7 +49,7 @@ func (x *ImportSpec) PathString() string {
 }
 
 // Qualifier returns the name the import is referenced by: the alias when
-// present, else the last path segment (spec §imports rule 3).
+// present, else the last path segment (spec §imports).
 func (x *ImportSpec) Qualifier() string {
 	if x.Alias != nil {
 		return x.Alias.Name()
@@ -284,7 +284,7 @@ type IdentList struct {
 	Names  []*Ident
 	// Mods holds an optional one-word modifier per name (parallel to
 	// Names, nil entries when absent): order lists use it for asc/desc
-	// (§selects-over-groups rule 5).
+	// (§selects-over-groups).
 	Mods   []*Ident
 	Rparen token.Position
 }
@@ -319,7 +319,7 @@ func (d *Group) End() token.Position { return d.EndPos }
 func (d *Group) declNode()           {}
 
 // GroupTerm is one term of a group expression: one name, or a
-// parenthesized set of names, added or removed (spec §groups rule 3).
+// parenthesized set of names, added or removed (spec §groups).
 type GroupTerm struct {
 	Neg    bool     // true for '\' terms
 	Names  []*Ident // one name, or the members of a parenthesized set
@@ -388,7 +388,7 @@ func (x *PredParen) Pos() token.Position { return x.Lparen }
 func (x *PredParen) End() token.Position { return x.Rparen }
 func (x *PredParen) predExpr()           {}
 
-// PredRef is a bare name referencing another Pred (spec §predicates rule 2).
+// PredRef is a bare name referencing another Pred (spec §predicates).
 type PredRef struct {
 	Name *Ident
 }
@@ -409,7 +409,7 @@ func (x *PredCompare) End() token.Position { return x.Y.End() }
 func (x *PredCompare) predExpr()           {}
 
 // PredIn is "col in (lit, ...)" or "col in :list" — the latter a list
-// parameter, typed as a slice of the column's type (spec §predicates rule 3).
+// parameter, typed as a slice of the column's type (spec §predicates).
 type PredIn struct {
 	Col    *Ident
 	Items  []*Lit // literal form; nil when List is set
@@ -486,17 +486,17 @@ func (x *Lit) operand()            {}
 type Select struct {
 	SelectPos token.Position
 	Name      *Ident
-	Lparen    token.Position // projection parens (§selects-over-groups rule 7); zero when absent
+	Lparen    token.Position // projection parens (§selects-over-groups); zero when absent
 	Star      bool           // (* \\ a \\ (b, c)) star form
 	Cols      []*Ident       // explicit list, or the star form's exclusions
 	Rparen    token.Position
-	Target    *Ident   // group or table name (§selects-over-groups rule 2)
+	Target    *Ident   // group or table name (§selects-over-groups)
 	Where     PredExpr // nil = all rows
 	Settings  *SettingList
 	EndPos    token.Position
 }
 
-// Projected reports whether the select carries a projection (§selects-over-groups rule 7).
+// Projected reports whether the select carries a projection (§selects-over-groups).
 func (d *Select) Projected() bool { return len(d.Cols) > 0 }
 
 func (d *Select) Pos() token.Position { return d.SelectPos }

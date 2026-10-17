@@ -274,7 +274,7 @@ type TableItem interface {
 type Column struct {
 	Name        *Ident
 	Type        *TypeRef
-	LegacyFlags []*Ident // bare pk/unique between type and settings (§columns rule 7)
+	LegacyFlags []*Ident // bare pk/unique between type and settings (§columns)
 	Settings    *SettingList
 }
 

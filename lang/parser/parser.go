@@ -9,7 +9,7 @@
 // On a syntax error the parser records a diagnostic and synchronizes to
 // the next line or the enclosing brace. A file is parsed element by
 // element (reuse.go): the scanner cuts it where an element begins (spec
-// §line-structure-and-whitespace rule 5), and each piece is parsed on its own.
+// §line-structure-and-whitespace), and each piece is parsed on its own.
 package parser
 
 import (
@@ -28,7 +28,7 @@ func ParseFile(filename, src string) (*ast.File, []diag.Diagnostic) {
 }
 
 type parser struct {
-	// A line-oriented production (§line-structure-and-whitespace rule 2) lies on one line: from
+	// A line-oriented production (§line-structure-and-whitespace) lies on one line: from
 	// lineBegin to endOfLine, a token on a new line is consumed only
 	// inside brackets the production opened. lineFirst tolerates the
 	// production's own first token, which begins the line.
@@ -103,7 +103,7 @@ func (p *parser) next() token.Token {
 	return t
 }
 
-// lineBegin opens a line-oriented production (§line-structure-and-whitespace rule 2), before its
+// lineBegin opens a line-oriented production (§line-structure-and-whitespace), before its
 // first token; endOfLine closes it, lineClear abandons it for a block
 // form of the same construct.
 func (p *parser) lineBegin(ctx string) {
@@ -153,7 +153,7 @@ func (p *parser) expect(k token.Kind, ctx string) token.Token {
 
 // endOfLine enforces the newline terminator of line-oriented
 // productions, satisfied by a line break, a closing brace or the end
-// of the file (§line-structure-and-whitespace rule 2).
+// of the file (§line-structure-and-whitespace).
 func (p *parser) endOfLine(ctx string) {
 	p.line = false
 	if p.at(token.RBRACE) || p.at(token.EOF) || p.cur().NLBefore {
@@ -259,7 +259,7 @@ func (p *parser) decl() (d ast.Decl) {
 func (p *parser) topLevelSync() {
 	p.line = false
 	// The rest of the element is discarded, up to the next element
-	// start (§line-structure-and-whitespace rule 6); the chunk being parsed holds exactly that.
+	// start (§line-structure-and-whitespace); the chunk being parsed holds exactly that.
 	for !p.at(token.EOF) {
 		p.next()
 	}
@@ -583,7 +583,7 @@ func (p *parser) ref() *ast.Ref {
 	}
 	if p.at(token.COLON) {
 		// ref short = "Ref", [ name ], ":", ref body (§relationships-ref): no newline
-		// ends it, so it may continue on an indented line (§line-structure-and-whitespace rule 5).
+		// ends it, so it may continue on an indented line (§line-structure-and-whitespace).
 		p.next()
 		p.refBody(d)
 		d.SetEnd(p.toks[p.pos-1].End())
@@ -878,7 +878,7 @@ func (p *parser) setting() *ast.Setting {
 	nameTok := p.expect(token.IDENT, "setting name (§settings-lists)")
 	name := strings.ToLower(nameTok.Val) // returns the same string when already lower: no allocation
 	end := nameTok.End()
-	// multi-word setting names (§settings-lists rule 2): "not null", "primary key"
+	// multi-word setting names (§settings-lists): "not null", "primary key"
 	for p.at(token.IDENT) && !p.cur().NLBefore {
 		w := p.next()
 		name += " " + strings.ToLower(w.Val)
@@ -918,7 +918,7 @@ func (p *parser) settingValue() ast.Node {
 		for {
 			il.Names = append(il.Names, p.ident("identifier list (§settings-whitelists)"))
 			var mod *ast.Ident
-			if p.at(token.IDENT) && !p.cur().NLBefore { // e.g. "year desc" (§selects-over-groups rule 5)
+			if p.at(token.IDENT) && !p.cur().NLBefore { // e.g. "year desc" (§selects-over-groups)
 				mod = p.ident("identifier list (§settings-whitelists)")
 			}
 			il.Mods = append(il.Mods, mod)

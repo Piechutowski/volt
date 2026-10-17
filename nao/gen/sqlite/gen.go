@@ -20,7 +20,7 @@ type Options struct {
 	// Source is the name of the DBML input, recorded in the header.
 	Source string
 	// CheckSQL is every typed check's SQL rendering, lowered by the
-	// Volt checker (§validation-checks rule 4). A typed check absent from it is an error.
+	// Volt checker (§validation-checks). A typed check absent from it is an error.
 	CheckSQL map[*ast.Check]string
 }
 
@@ -151,7 +151,7 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 		uniqueDone[strings.Join(pkCols, ",")] = true
 	}
 
-	// table-level checks (spec §checks), direct and injected (§tablepartial rule 3)
+	// table-level checks (spec §checks), direct and injected (§tablepartial)
 	{
 		for _, ck := range ti.Checks {
 			var expr string
@@ -159,14 +159,14 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 			case ck.Expr != nil:
 				expr = ck.Expr.Text()
 			case ck.Pred != nil:
-				// Lowered by the Volt checker (§validation-checks rule 4).
+				// Lowered by the Volt checker (§validation-checks).
 				sql, lowered := g.opts.CheckSQL[ck]
 				if !lowered {
 					return fmt.Errorf("table %s: typed check not lowered — generate through volt gen (§validation-checks)", ti.Decl.Name.Base())
 				}
 				expr = sql
 			case ck.Ref != nil:
-				continue // validator tier only: SQLite cannot call Go (§validation-checks rule 5)
+				continue // validator tier only: SQLite cannot call Go (§validation-checks)
 			default:
 				continue
 			}
@@ -438,7 +438,7 @@ func columnHas(cd *check.ColumnDef, name string) bool {
 	return false
 }
 
-// fkSides mirrors spec §relationships-ref rule 3: which endpoint carries the foreign key.
+// fkSides mirrors spec §relationships-ref: which endpoint carries the foreign key.
 func fkSides(r *check.RefInfo) (fk, target check.EndpointInfo, ok bool) {
 	switch r.Op {
 	case token.GT:
@@ -552,5 +552,5 @@ func contains(ss []string, s string) bool {
 }
 
 // Ident quotes an identifier for SQLite the way the DDL generator does
-// (spec §selects-over-groups rule 6).
+// (spec §selects-over-groups).
 func Ident(name string) string { return identQuote(name) }

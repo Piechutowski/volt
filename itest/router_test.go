@@ -77,7 +77,7 @@ func (ops) Fail(w http.ResponseWriter, r *volt.Request) error {
 }
 
 // tags, pages and archive exercise the three explicit parameter types:
-// string, int and int64 (§route-paths rule 3).
+// string, int and int64 (§route-paths).
 type tags struct{}
 
 func (tags) Show(w http.ResponseWriter, r *volt.Request, name string) error {
@@ -261,7 +261,7 @@ func TestRoundTripTotality(t *testing.T) {
 
 func TestTypedParamParseFailureIs404(t *testing.T) {
 	h := handler()
-	// §route-paths rule 3: a non-int32 id is this route's 404, not a fallthrough.
+	// §route-paths: a non-int32 id is this route's 404, not a fallthrough.
 	for _, target := range []string{
 		"/users/abc", "/users/abc/avatar", "/users/99999999999",
 		"/pages/abc", "/pages/99999999999999999999", // int
@@ -283,7 +283,7 @@ func TestUnknownPathIs404AndWrongMethodIs405(t *testing.T) {
 	if rec, _ := serve(t, h, "GET", "/nope"); rec.Code != 404 {
 		t.Errorf("GET /nope: %d, want 404", rec.Code)
 	}
-	// §routes rule 3: the root registers as /{$}, so an arbitrary path does
+	// §routes: the root registers as /{$}, so an arbitrary path does
 	// not fall through to it.
 	if rec, _ := serve(t, h, "GET", "/nope/deeper"); rec.Code != 404 {
 		t.Errorf("GET /nope/deeper: %d, want 404", rec.Code)
@@ -331,7 +331,7 @@ func TestWildcardCapturesRest(t *testing.T) {
 	}
 }
 
-// TestPipelineOrder proves §scopes rule 2: plugs run in declaration order,
+// TestPipelineOrder proves §scopes: plugs run in declaration order,
 // outermost first — volt.RequestID, TagOuter, TagInner.
 func TestPipelineOrder(t *testing.T) {
 	h := handler()
@@ -344,7 +344,7 @@ func TestPipelineOrder(t *testing.T) {
 	}
 }
 
-// TestNestedScopePipelinesAppend proves §scopes rule 1: a nested scope's pipe
+// TestNestedScopePipelinesAppend proves §scopes: a nested scope's pipe
 // appends after the ancestors' — api's plugs run before extra's.
 func TestNestedScopePipelinesAppend(t *testing.T) {
 	h := handler()
@@ -357,7 +357,7 @@ func TestNestedScopePipelinesAppend(t *testing.T) {
 	}
 }
 
-// TestHeadMatchesGet documents the inherited ServeMux rule (§routes rule 3):
+// TestHeadMatchesGet documents the inherited ServeMux rule (§routes):
 // a GET registration also serves HEAD.
 func TestHeadMatchesGet(t *testing.T) {
 	h := handler()
@@ -386,7 +386,7 @@ func TestQueryOptionsEndToEnd(t *testing.T) {
 	}
 }
 
-// TestErrorSpine proves §scopes rule 3: a returned error reaches the
+// TestErrorSpine proves §scopes: a returned error reaches the
 // DSL-declared error_handler, which maps HTTPError to its status.
 func TestErrorSpine(t *testing.T) {
 	h := handler()
@@ -402,7 +402,7 @@ func TestErrorSpine(t *testing.T) {
 	}
 }
 
-// TestNearestErrorHandlerWins proves §scopes rule 3's nearest-wins rule: /ops
+// TestNearestErrorHandlerWins proves §scopes's nearest-wins rule: /ops
 // declares its own error_handler, so its routes reach OpsErrors while
 // everything else still reaches the root scope's Errors.
 func TestNearestErrorHandlerWins(t *testing.T) {

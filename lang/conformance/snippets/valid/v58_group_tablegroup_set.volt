@@ -1,4 +1,4 @@
-// spec: §groups rule 2, §groups rule 3, §selects-over-groups rule 2 — a TableGroup is a set: a group term, a select target, subtracted as a parenthesized set
+// spec: §groups, §groups, §selects-over-groups — a TableGroup is a set: a group term, a select target, subtracted as a parenthesized set
 package db
 
 Table ms_revenue {

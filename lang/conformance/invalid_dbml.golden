@@ -151,6 +151,6 @@ i79_increment_not_pk.dbml:6:30: error: spec/columns: increment on "counter": onl
 i80_increment_composite_pk.dbml:4:20: error: spec/columns: increment on "user_id": a composite primary key has no auto-assigned column — SQLite auto-assigns only the single-column integer key (§columns, §mapping-to-sqlite-ddl)
 
 ## i81_element_boundary.dbml
-i81_element_boundary.dbml:12:1: error: syntax: expected identifier in relationship endpoint (§relationships-ref), found the start of the next element (§line-structure-and-whitespace rule 5)
+i81_element_boundary.dbml:12:1: error: syntax: expected identifier in relationship endpoint (§relationships-ref), found the start of the next element (§line-structure-and-whitespace)
 i81_element_boundary.dbml:12:1: error: syntax: unknown element type "tags" (§program-structure)
 

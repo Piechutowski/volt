@@ -59,7 +59,7 @@ func TestQueryRouteCRUDInJSON(t *testing.T) {
 		t.Fatalf("get miss: %d, want 404", rec.Code)
 	}
 	if rec = call(h, "GET", "/api/users/abc", nil); rec.Code != 404 {
-		t.Fatalf("get with a non-int32 id: %d, want 404 (§route-paths rule 3)", rec.Code)
+		t.Fatalf("get with a non-int32 id: %d, want 404 (§route-paths)", rec.Code)
 	}
 
 	// Update: PATCH with a body, 200 with the rewritten row.
@@ -184,7 +184,7 @@ func TestDatasetRoutesServe(t *testing.T) {
 	}
 }
 
-// TestQueryRouteValidation (§validation-checks rule 6, §validation-checks rule 7, §query-routes rule 3): a violated check
+// TestQueryRouteValidation (§validation-checks, §validation-checks, §query-routes): a violated check
 // is a 422 naming the check before the database sees the row; a
 // duplicate key is a 409 naming the column; both in either format.
 func TestQueryRouteValidation(t *testing.T) {
@@ -210,7 +210,7 @@ func TestQueryRouteValidation(t *testing.T) {
 	}
 }
 
-// TestQueryRouteValidationAttribution (§formats rule 5, §validation-checks rule 7): the error body
+// TestQueryRouteValidationAttribution (§formats, §validation-checks): the error body
 // is a Problem whose details name the failing check and its columns,
 // so the GUI can mark the field.
 func TestQueryRouteValidationAttribution(t *testing.T) {
