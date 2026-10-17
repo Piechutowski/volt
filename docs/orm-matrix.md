@@ -1,5 +1,8 @@
 # ORM Capability Matrix
 
+> [!CAUTION]
+> **This project is an alpha version, and everything may change in the future.**
+
 Every capability of a full-grown ORM — inventoried from the Rails
 Active Record guides (Rails 8.1.x; the vendored reference copies were
 removed from the repository, provenance retained here) — with nao's

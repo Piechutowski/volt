@@ -1,14 +1,21 @@
 # Decisions
 
-The standing rulings of Volt, each under a name. A ruling is cited by
-that name: `decision sqlite-first` in a comment, a diagnostic or a
-doc, `decisions one-parse, pure-memos` for several. Names are unique
-and hyphenated; `lang/spec_doc_test.go` fails the build on a citation
-that names no heading here. A decision is changed by editing it,
-removed when it has become a spec rule or is obsolete, and never
-drifted from. An entry states the ruling and its reason. How it was
-found, what it measured and what it replaced live in git history. What
-is not yet decided lives in [`hypotheses.md`](hypotheses.md).
+> [!CAUTION]
+> **This project is an alpha version, and everything may change in the future.**
+
+The current rulings of Volt, each under a name. None of them is final:
+the project is alpha and its design is still being searched for, so
+every entry here is the best answer so far, kept in one place so that
+work is consistent and so that a better answer can be proposed against
+something written. A ruling is cited by that name: `decision
+sqlite-first` in a comment, a diagnostic or a doc, `decisions
+one-parse, pure-memos` for several. Names are unique and hyphenated;
+`lang/spec_doc_test.go` fails the build on a citation that names no
+heading here. A decision is changed by editing it, removed when it has
+become a spec rule or is obsolete, and not silently drifted from. An
+entry states the ruling and its reason. How it was found, what it
+measured and what it replaced live in git history. What is not yet
+decided lives in [`hypotheses.md`](hypotheses.md).
 
 ## Scope and identity
 

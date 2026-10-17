@@ -1,20 +1,34 @@
 # AGENT.md — how to work on Volt
 
+> [!CAUTION]
+> **This project is an alpha version, and everything may change in the future.**
+
 You are working on **Volt**: a codegen-first web framework for Go.
 Schema and routes are declared in `.volt` files (one language, grown
 outward from DBML); `volt gen` writes the models, queries, DDL, router,
 controller interfaces and reverse-URL helpers as plain Go on stdlib
 `net/http`. Personal project of one maintainer, alpha: no users, no
 backward compatibility to protect — when a better shape appears,
-propose it and restructure boldly. Locked decisions still bind until
-edited.
+propose it and restructure boldly.
 
-## The doctrine (read this even if you read nothing else)
+**Nothing in this repository is set in stone.** The maintainer is
+still looking for the right design. Every document below, the
+decisions included, describes the project as it stands today so that
+work stays consistent; none of it describes how the project must be.
+Do not infer the design from what exists: when you see a better shape
+for the language, the generated code, the tooling or the docs, say so
+plainly instead of fitting into the current one. A decision is edited
+by proposing the change, never worked around silently, and never
+treated as final.
+
+## How we keep spec and code consistent (read this even if you read nothing else)
 
 **The spec is the software; the code is its proof.** Volt is built the
 way Go stdlib developers work against an RFC: `docs/spec.md` is
-normative — EBNF plus numbered constraints plus examples — and the
-implementation MUST be 100% compliant. Every constraint is executable
+normative for the implementation as it stands — EBNF plus numbered
+constraints plus examples — and the implementation MUST be 100%
+compliant with it. Normative means the two agree, not that either is
+final: the language changes by changing the spec. Every constraint is executable
 (conformance corpus, `// spec: §…` tags; valid MUST pass, invalid MUST
 fail); the grammar is executable too (decision executable-grammar: every sentence it
 derives parses, every one-token neighbour is decided alike by grammar
@@ -53,16 +67,17 @@ reverted: nao is its *name*).
 
 ## Read in this order
 
-1. `docs/decisions.md` — **the law**: each ruling under a unique
-   hyphenated name, cited as `decision one-parse` (several:
-   `decisions a, b`); a citation that names no heading fails the
-   build (`lang/spec_doc_test.go`). An entry is the ruling and its
-   reason, never its history. Never contradict one
-   silently; changing a decision means editing that file in the same
-   commit. New session-level rulings get appended there. What is
+1. `docs/decisions.md` — **the current rulings**, every one of them
+   revisable: each under a unique hyphenated name, cited as
+   `decision one-parse` (several: `decisions a, b`); a citation that
+   names no heading fails the build (`lang/spec_doc_test.go`). An
+   entry is the ruling and its reason, never its history. Never
+   contradict one silently; changing a decision means editing that
+   file in the same commit, and proposing the change is always
+   welcome. New session-level rulings get appended there. What is
    *not yet* decided lives in `docs/hypotheses.md` — working beliefs,
-   numbered, graduated or killed by practice; never treat one as law,
-   and put new open questions there, not in decisions.
+   numbered, graduated or killed by practice; never treat one as
+   decided, and put new open questions there, not in decisions.
 2. `docs/roadmap.md` — **the build plan**: stable IDs, statuses
    (updated in the landing commit): a nested todo of what exists and
    what does not. Next by the build order: the raw-SQL `Select` /

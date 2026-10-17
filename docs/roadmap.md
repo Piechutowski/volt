@@ -1,5 +1,8 @@
 # Roadmap
 
+> [!CAUTION]
+> **This project is an alpha version, and everything may change in the future.**
+
 What Volt is made of and whether each piece is built. `[x]` built and
 tested, `[ ]` not built, `[~]` partly built. *hand* means a documented
 pattern, deliberately hand-written, never generated; *no* means a

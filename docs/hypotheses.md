@@ -1,5 +1,8 @@
 # Hypotheses
 
+> [!CAUTION]
+> **This project is an alpha version, and everything may change in the future.**
+
 Working beliefs that have **not** earned decision status: recorded so
 they are not re-argued from scratch, numbered so they can be cited, and
 held loosely. Each one either graduates — into `decisions.md`, the

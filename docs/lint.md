@@ -1,5 +1,8 @@
 # DBML Vet Rules
 
+> [!CAUTION]
+> **This project is an alpha version, and everything may change in the future.**
+
 This document specifies every `vet` analyzer: what it reports, why the
 pattern is a concern even though it is **valid DBML**, and its known
 limitations. It is the lint annex to the [language specification](spec.md);

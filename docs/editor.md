@@ -1,5 +1,8 @@
 # Editor tooling: the grammar, the Zed extension, the language server
 
+> [!CAUTION]
+> **This project is an alpha version, and everything may change in the future.**
+
 How Volt editor support is put together — three independently testable
 components (decision editor-tooling-in-repo), why the system is shaped this way, the load-bearing
 patterns in each, and (section 8) the checklist for verifying all of it

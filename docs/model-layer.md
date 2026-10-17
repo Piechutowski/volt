@@ -1,5 +1,8 @@
 # The Model Layer
 
+> [!CAUTION]
+> **This project is an alpha version, and everything may change in the future.**
+
 *The philosophy behind Volt's data layer. What nao is and how it
 answers this analysis: [`nao.md`](nao.md); the per-capability audit
 derived from it: [`orm-matrix.md`](orm-matrix.md).*

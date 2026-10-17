@@ -1,8 +1,14 @@
 # The Volt Language — Specification
 
-**Status:** Normative. The implementation in this repository MUST be
-100% compliant with this document; where they disagree, one of the two
-has a bug, and the commit that fixes it says which.
+> [!CAUTION]
+> **This project is an alpha version, and everything may change in the future.**
+
+**Status:** Normative for the implementation as it stands. The
+implementation in this repository MUST be 100% compliant with this
+document; where they disagree, one of the two has a bug, and the
+commit that fixes it says which. Normative does not mean settled: the
+language is alpha and any part of it may change, and it changes by
+changing this document.
 
 Volt is **one language**: a declarative complement to Go, grown outward
 from DBML. This specification has two parts and three appendices:

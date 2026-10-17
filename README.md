@@ -1,5 +1,8 @@
 # Volt
 
+> [!CAUTION]
+> **This project is an alpha version, and everything may change in the future.**
+
 **Status: alpha.** Personal project. The language, the generated code
 and every API in here can change without ceremony. Nothing is promised
 to anyone; [docs/spec.md](docs/spec.md) describes what the
@@ -56,7 +59,7 @@ third-party deps. Importing `nao/rt` alone drags in nothing.
 | `zed-extension/` | Zed glue; install via `scripts/sync-grammar.sh` + Install Dev Extension |
 | `scripts/`       | `sync-grammar.sh` — mirrors the grammar into the local git cache Zed loads dev grammars from; `perf.go` — the performance report of this machine: the profiling sweep from 10 to 320 tables, the editor's keystroke at each size, charts and the machine's specification, as Markdown |
 | `itest/`         | committed fixture project served over httptest, drift-checked against the generator |
-| `docs/`          | **all prose lives here** (decision docs-doctrine): `spec.md` (the language, normative) · `lint.md` · `editor.md` · `decisions.md` (the law) · `hypotheses.md` (the open questions) · `roadmap.md` (the plan) · `nao.md` · `model-layer.md` · `orm-matrix.md` (the ORM capability audit, pinned) |
+| `docs/`          | **all prose lives here** (decision docs-doctrine): `spec.md` (the language, normative) · `lint.md` · `editor.md` · `decisions.md` (the current rulings) · `hypotheses.md` (the open questions) · `roadmap.md` (the plan) · `nao.md` · `model-layer.md` · `orm-matrix.md` (the ORM capability audit, pinned) |
 | `AGENT.md`       | cross-session working doctrine for AI sessions (CLAUDE.md imports it) |
 
 ## What is real vs. not yet

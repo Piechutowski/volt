@@ -1,5 +1,8 @@
 # nao — Volt's ORM
 
+> [!CAUTION]
+> **This project is an alpha version, and everything may change in the future.**
+
 **An ORM-grade developer experience for Go + SQLite, without the ORM.**
 nao is Volt's data layer, a sub-library of the framework the way
 ActiveRecord sits inside Rails: declare tables in `.volt` files,
@@ -114,5 +117,5 @@ CRUD statement **prepared** against the generated DDL on a real SQLite,
 every SQL golden **executed** (foreign keys on, `foreign_key_check`
 after), and `nao/itest`'s round trips through a real driver. The
 feature-by-feature plan with statuses lives in
-[`roadmap.md`](roadmap.md); the design law in
+[`roadmap.md`](roadmap.md); the current rulings in
 [`decisions.md`](decisions.md).
