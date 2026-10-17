@@ -44,13 +44,10 @@ type Index struct {
 	Partials map[string]*check.PartialInfo
 
 	decls  map[SymbolID]*ast.Ident
-	byBase map[string]*check.TableInfo // bare name -> the one table with it; absent when none or several
+	byBase map[string]*check.TableInfo
 
-	// declTables holds the column declarations of the tables the memo
-	// reused, by table key: their entries stay in the memo's per-table
-	// maps instead of being copied into decls on every build.
 	declTables map[string]*tableOccs
-	recording  *[]declEntry // the declarations a table's build adds, for its memo entry
+	recording  *[]declEntry
 }
 
 // IndexMemo remembers a package's per-table occurrences across builds
@@ -60,25 +57,20 @@ type Index struct {
 // at a time, and drops what a build did not use.
 type IndexMemo struct {
 	prev, next   map[*ast.Table]*tableOccs
-	lastLen      int // occurrences of the last build, to size the next
+	lastLen      int
 	Hits, Misses int
 }
 
-// tableOccs is one call of tableOccurrences: its inputs (the
-// declaration is the map key) and its outputs.
 type tableOccs struct {
 	ti, resolved    *check.TableInfo
 	tables          map[string]*check.TableInfo
 	enums           map[string]*check.EnumInfo
 	partials        map[string]bool
-	sym, cols, body []Occurrence // the three places a table's occurrences land, in build order
+	sym, cols, body []Occurrence
 	decls           []declEntry
-	declMap         map[SymbolID]*ast.Ident // decls with a "table:" container, built with the entry
+	declMap         map[SymbolID]*ast.Ident
 }
 
-// holds reports whether the entry's inputs are the given ones: the
-// tables by identity, the enums by their declarations' identity, the
-// partials by presence.
 func (e *tableOccs) holds(ti, resolved *check.TableInfo, tables map[string]*check.TableInfo, enums map[string]*check.EnumInfo, partials map[string]bool) bool {
 	if e.ti != ti || e.resolved != resolved || len(e.tables) != len(tables) || len(e.enums) != len(enums) || len(e.partials) != len(partials) {
 		return false
@@ -102,10 +94,8 @@ func (e *tableOccs) holds(ti, resolved *check.TableInfo, tables map[string]*chec
 	return true
 }
 
-// tableContainer is the container prefix of a column declared in a table.
 const tableContainer = "table:"
 
-// declMapOf is the per-table declaration map of an entry's declarations.
 func declMapOf(decls []declEntry) map[SymbolID]*ast.Ident {
 	m := make(map[SymbolID]*ast.Ident, len(decls))
 	for _, d := range decls {
@@ -123,7 +113,6 @@ type declEntry struct {
 	ident *ast.Ident
 }
 
-// canon normalizes a possibly-qualified name with the default schema.
 func canon(q *ast.QualName) string {
 	if q.Schema() == "" {
 		return "public." + q.Base()
@@ -169,19 +158,14 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		ix.Partials[pi.Decl.Name.Name()] = pi
 	}
 
-	// Every table's occurrences are tableOccurrences, a pure function
-	// of the inputs resolved here; the memo answers a table whose
-	// inputs are what they were.
 	entries := make(map[*ast.Table]*tableOccs, len(info.Tables))
 	if memo != nil {
 		memo.Hits, memo.Misses = 0, 0
-		// Sized from the last build: the occurrences are appended in
-		// one pass and the slice must not grow by copying under them.
 		ix.Occs = make([]Occurrence, 0, memo.lastLen)
 		defer func() { memo.lastLen = len(ix.Occs) }()
 	}
 	for _, ti := range info.Tables {
-		resolved := ix.resolveTable(ti.Decl.Name) // the table the body's references bind to
+		resolved := ix.resolveTable(ti.Decl.Name)
 		tables := ix.tablesNamed(ti.Decl)
 		enums := ix.enumsNamed(ti.Decl)
 		partials := ix.partialsNamed(ti.Decl)
@@ -210,11 +194,8 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		ix.declTables = make(map[string]*tableOccs, len(entries))
 	}
 
-	// --- declarations ---
 	for _, ti := range info.Tables {
 		e := entries[ti.Decl]
-		// The table's own symbol goes into the shared map; its columns
-		// stay in the entry's map, reached through Decl.
 		for _, d := range e.decls {
 			if strings.HasPrefix(d.id.Container, tableContainer) {
 				continue
@@ -235,8 +216,6 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 	for _, pi := range info.Partials {
 		ix.add(SymbolID{SymPartial, "", pi.Decl.Name.Name()}, pi.Decl.Name, true)
 	}
-	// Column declarations, container-aware: a column written in a partial is
-	// declared once even when injected into many tables.
 	for _, pi := range info.Partials {
 		for _, item := range pi.Decl.Body {
 			if col, ok := item.(*ast.Column); ok {
@@ -248,8 +227,6 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		ix.Occs = append(ix.Occs, entries[ti.Decl].cols...)
 	}
 
-	// Groups shadow tables as select targets (§selects-over-groups): a group-targeted
-	// select names agreed columns, not one table's.
 	groups := map[string]bool{}
 	for _, decl := range f.Decls {
 		if g, ok := decl.(*ast.Group); ok {
@@ -257,15 +234,12 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		}
 	}
 
-	// --- references ---
 	for _, decl := range f.Decls {
 		switch n := decl.(type) {
 		case *ast.Table:
 			if e := entries[n]; e != nil {
 				ix.Occs = append(ix.Occs, e.body...)
 			} else {
-				// A duplicate declaration the schema check skipped: its
-				// references still bind to the table that won.
 				ix.walkTableBody(n.Body, ix.resolveTable(n.Name), "")
 			}
 		case *ast.TablePartial:
@@ -274,9 +248,6 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 			ix.walkEndpoint(n.Left)
 			ix.walkEndpoint(n.Right)
 		case *ast.Select:
-			// A select over one table binds its columns to that table. A
-			// group target names an agreed column across members and is
-			// left alone (§selects-over-groups).
 			if ti := ix.tableByBase(n.Target.Name()); ti != nil && !groups[n.Target.Name()] {
 				for _, col := range n.Cols {
 					ix.addColumnRef(ti, "", col)
@@ -323,15 +294,7 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 	return ix
 }
 
-// tableOccurrences is one table's contribution to the index as a pure
-// function of its inputs. It returns the occurrences of the
-// table's symbol and alias, of its own column declarations, and of
-// every reference inside its body, plus the declarations it
-// contributes, reading nothing else and writing nothing it did not
-// create.
 func tableOccurrences(d *ast.Table, ti, resolved *check.TableInfo, tables map[string]*check.TableInfo, enums map[string]*check.EnumInfo, partials map[string]bool) (sym, cols, body []Occurrence, decls []declEntry) {
-	// The walk asks its maps whether a key is declared, so the inputs'
-	// "named but absent" entries (nil) must not be present in them.
 	acc := &Index{Tables: map[string]*check.TableInfo{}, Enums: map[string]*check.EnumInfo{}, Partials: map[string]*check.PartialInfo{}, decls: map[SymbolID]*ast.Ident{}}
 	for key, t := range tables {
 		if t != nil {
@@ -368,9 +331,6 @@ func tableOccurrences(d *ast.Table, ti, resolved *check.TableInfo, tables map[st
 	return sym, cols, body, decls
 }
 
-// enumsNamed is the enums a table's body names, by canonical key, nil
-// where the name resolves to none: the column types, and the enum
-// constants in settings and records.
 func (ix *Index) enumsNamed(d *ast.Table) map[string]*check.EnumInfo {
 	out := map[string]*check.EnumInfo{}
 	name := func(key string) { out[key] = ix.Enums[key] }
@@ -416,10 +376,6 @@ func (ix *Index) enumsNamed(d *ast.Table) map[string]*check.EnumInfo {
 	return out
 }
 
-// tablesNamed is the tables a table's body names in inline references
-// (§relationships-ref), by the keys the walk looks them up with — the canonical
-// name, and the alias form of an unqualified one — nil where a key
-// resolves to none.
 func (ix *Index) tablesNamed(d *ast.Table) map[string]*check.TableInfo {
 	out := map[string]*check.TableInfo{}
 	endpoint := func(ep *ast.RefEndpoint) {
@@ -460,8 +416,6 @@ func (ix *Index) tablesNamed(d *ast.Table) map[string]*check.TableInfo {
 	return out
 }
 
-// partialsNamed is the partials a table's body injects, by name, with
-// whether each is declared.
 func (ix *Index) partialsNamed(d *ast.Table) map[string]bool {
 	out := map[string]bool{}
 	for _, item := range d.Body {
@@ -473,8 +427,6 @@ func (ix *Index) partialsNamed(d *ast.Table) map[string]bool {
 	return out
 }
 
-// walkTableBody records references inside one Table or TablePartial body.
-// Exactly one of ti / partial is set and names the column container.
 func (ix *Index) walkTableBody(body []ast.TableItem, ti *check.TableInfo, partial string) {
 	for _, item := range body {
 		switch n := item.(type) {
@@ -515,8 +467,6 @@ func (ix *Index) walkTableBody(body []ast.TableItem, ti *check.TableInfo, partia
 	}
 }
 
-// walkPredCols records the column references of a typed check (§validation-checks):
-// every operand names a column of the enclosing table.
 func (ix *Index) walkPredCols(ti *check.TableInfo, partial string, x ast.PredExpr) {
 	switch x := x.(type) {
 	case *ast.PredBinary:
@@ -541,8 +491,6 @@ func (ix *Index) walkPredCols(ti *check.TableInfo, partial string, x ast.PredExp
 	}
 }
 
-// walkSettings records references in setting values: inline refs and enum
-// constants (default: status.active).
 func (ix *Index) walkSettings(s *ast.SettingList) {
 	if s == nil {
 		return
@@ -582,7 +530,6 @@ func (ix *Index) walkEnumConst(ec *ast.EnumConst) {
 	}
 }
 
-// walkEndpoint records the table and column references of one ref endpoint.
 func (ix *Index) walkEndpoint(ep *ast.RefEndpoint) {
 	if ep == nil {
 		return
@@ -597,8 +544,6 @@ func (ix *Index) walkEndpoint(ep *ast.RefEndpoint) {
 	}
 }
 
-// addColumnRef resolves a column identifier against its table (or partial)
-// container and records the occurrence.
 func (ix *Index) addColumnRef(ti *check.TableInfo, partial string, id *ast.Ident) {
 	if id == nil {
 		return
@@ -628,14 +573,10 @@ func (ix *Index) addColumnRef(ti *check.TableInfo, partial string, id *ast.Ident
 	ix.add(SymbolID{SymColumn, container, id.Name()}, id, false)
 }
 
-// tableByBase finds the one table with the given base name (the
-// checker's §selects-over-groups for select targets), or nil when none or more
-// than one matches.
 func (ix *Index) tableByBase(base string) *check.TableInfo {
 	return ix.byBase[base]
 }
 
-// resolveTable resolves a table name or alias to its info.
 func (ix *Index) resolveTable(q *ast.QualName) *check.TableInfo {
 	if q == nil {
 		return nil
@@ -651,7 +592,6 @@ func (ix *Index) resolveTable(q *ast.QualName) *check.TableInfo {
 	return nil
 }
 
-// resolveEnum resolves a type name to an enum, if it names one.
 func (ix *Index) resolveEnum(q *ast.QualName) *check.EnumInfo {
 	if q == nil {
 		return nil

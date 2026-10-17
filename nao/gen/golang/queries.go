@@ -32,44 +32,38 @@ func (pl *Plan) Queries(opts Options) ([]byte, error) {
 	return align.Finish(e.out.String()), nil
 }
 
-/* ===== the plan: everything decided before a line is emitted ===== */
-
 type plan struct {
 	tables  []*tableModel
 	imports map[string]bool
 }
 
-// tableModel is one table resolved into Go and SQL naming.
 type tableModel struct {
 	ti      *check.TableInfo
-	model   string       // Go model type, e.g. "User"
-	sqlName string       // flattened SQLite table name, e.g. "core_users"
-	fields  []*fieldPlan // effective columns in definition order
-	pk      []*fieldPlan // identity columns in key order; empty = no pk
+	model   string
+	sqlName string
+	fields  []*fieldPlan
+	pk      []*fieldPlan
 
-	// Built with the model: its CRUD methods, its field
-	// signatures, and the package-level names it mints.
 	crud  []CRUDMethod
 	sigs  []FieldSig
 	names []nameOrigin
 }
 
-// fieldPlan is one column resolved into Go and SQL naming.
 type fieldPlan struct {
 	col      *ast.Column
-	colName  string // DBML/SQL column name
-	goField  string // exported struct field, e.g. "EditorID"
-	tag      string // assembled struct tag (§struct-tags), e.g. `db:"id" json:"id"`
-	goType   string // full field type, e.g. "rt.Null[int64]"
-	baseType string // goType without the Null wrapper, e.g. "int64"
-	imp      string // the import path goType needs ("time"), "" for none
-	param    string // SQL parameter name, e.g. "editor_id"
-	arg      string // positional Go argument name, e.g. "editorID"
+	colName  string
+	goField  string
+	tag      string
+	goType   string
+	baseType string
+	imp      string
+	param    string
+	arg      string
 
-	nullable   bool // NULL-admitting column: its dyn handle is a NullColumn
+	nullable   bool
 	increment  bool
 	hasDefault bool
-	unique     bool // column-level [unique] or a single-column unique index
+	unique     bool
 }
 
 func (t *tableModel) field(colName string) *fieldPlan {
@@ -81,7 +75,6 @@ func (t *tableModel) field(colName string) *fieldPlan {
 	return nil
 }
 
-// nonPK returns the data columns: everything outside the primary key.
 func (t *tableModel) nonPK() []*fieldPlan {
 	var out []*fieldPlan
 	for _, f := range t.fields {
@@ -101,7 +94,6 @@ func (t *tableModel) isPK(f *fieldPlan) bool {
 	return false
 }
 
-// createFields returns the caller-supplied Create columns.
 func (t *tableModel) createFields() []*fieldPlan {
 	var out []*fieldPlan
 	for _, f := range t.fields {
@@ -113,7 +105,6 @@ func (t *tableModel) createFields() []*fieldPlan {
 	return out
 }
 
-// fieldCount is the number of columns across the planned tables.
 func (p *plan) fieldCount() int {
 	n := 0
 	for _, t := range p.tables {
@@ -135,9 +126,6 @@ func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 	}
 	sqlNames := map[string]string{}
 
-	// Every table's model is a pure function of the checked table and
-	// the enum types, built on every CPU; name collisions are
-	// judged in declaration order.
 	type built struct {
 		tm  *tableModel
 		imp map[string]bool
@@ -190,15 +178,11 @@ func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 	return p, nil
 }
 
-// enumTypes is the enum set as a model's input: canonical key to Go
-// type name, and the same pairs sorted by key, the map itself as a
-// memo key compared element by element.
 type enumTypes struct {
 	byKey map[string]string
 	pairs []enumType
 }
 
-// enumType is one enum's canonical key and Go type name.
 type enumType struct{ key, typ string }
 
 func enumTypesOf(info *check.Info, byKey map[string]string) *enumTypes {
@@ -210,9 +194,6 @@ func enumTypesOf(info *check.Info, byKey map[string]string) *enumTypes {
 	return &enumTypes{byKey: byKey, pairs: pairs}
 }
 
-// tableBuild is one table's model as a pure function of the checked
-// table and the enum types: the model with its fields, keys and
-// names, and the imports its field types need.
 func tableBuild(ti *check.TableInfo, enums *enumTypes) (*tableModel, map[string]bool, error) {
 	model, err := modelName(ti.Decl)
 	if err != nil {
@@ -231,8 +212,6 @@ func tableBuild(ti *check.TableInfo, enums *enumTypes) (*tableModel, map[string]
 		tm.fields = append(tm.fields, fp)
 	}
 
-	// identity: column-level pk settings in definition order, then pk-index
-	// columns in index order
 	for _, f := range tm.fields {
 		if hasSetting(f.col, "pk") || hasSetting(f.col, "primary key") || hasLegacyFlag(f.col, "pk") {
 			tm.pk = append(tm.pk, f)
@@ -253,7 +232,6 @@ func tableBuild(ti *check.TableInfo, enums *enumTypes) (*tableModel, map[string]
 		}
 	}
 
-	// single-column unique indexes mark their column unique, like [unique]
 	for _, ix := range ti.Indexes {
 		if ix.Settings.Get("unique") == nil || len(ix.Key) != 1 {
 			continue
@@ -319,10 +297,6 @@ func fieldBuild(enumTypes map[string]string, imports map[string]bool, cd *check.
 	}, nil
 }
 
-/* ===== naming helpers ===== */
-
-// sqlTableName flattens the schema qualifier the same way gen/sqlite does:
-// core.users -> core_users.
 func sqlTableName(q *ast.QualName) string {
 	if s := q.Schema(); s != "" && s != "public" {
 		return s + "_" + q.Base()
@@ -330,9 +304,6 @@ func sqlTableName(q *ast.QualName) string {
 	return q.Base()
 }
 
-// sqlParamName derives a named-placeholder name from a column name.
-// SQLite parameter names are ASCII alphanumerics plus underscore; anything
-// else becomes an underscore ("full name" -> :full_name).
 func sqlParamName(colName string) string {
 	var b strings.Builder
 	for _, r := range colName {
@@ -359,9 +330,6 @@ var goKeywords = map[string]bool{
 	"switch": true, "type": true, "var": true,
 }
 
-// argName lowers an exported Go name into a positional-argument name:
-// UserID -> userID, APIKey -> apiKey, ID -> id. Keywords and the receiver
-// vocabulary get a trailing underscore.
 func argName(exported string) string {
 	runes := []rune(exported)
 	upper := 0
@@ -370,7 +338,6 @@ func argName(exported string) string {
 	}
 	switch {
 	case upper == 0:
-		// exported names start upper; non-ASCII uppercase falls here
 		if len(runes) > 0 {
 			runes[0] = []rune(strings.ToLower(string(runes[0])))[0]
 		}
@@ -379,7 +346,6 @@ func argName(exported string) string {
 			runes[i] = runes[i] - 'A' + 'a'
 		}
 	default:
-		// leading initialism followed by a word: APIKey -> apiKey
 		for i := 0; i < upper-1; i++ {
 			runes[i] = runes[i] - 'A' + 'a'
 		}
@@ -391,7 +357,6 @@ func argName(exported string) string {
 	return s
 }
 
-// sqlIdentQuote double-quotes an identifier for SQLite.
 func sqlIdentQuote(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }
@@ -408,8 +373,6 @@ func hasLegacyFlag(col *ast.Column, name string) bool {
 	}
 	return false
 }
-
-/* ===== SQL rendering (shared by the emitter and the tests) ===== */
 
 func (t *tableModel) columnList() string {
 	names := make([]string, len(t.fields))
@@ -431,8 +394,6 @@ func (t *tableModel) getSQL() string {
 	return "SELECT " + t.columnList() + " FROM " + sqlIdentQuote(t.sqlName) + " WHERE " + t.pkWhere()
 }
 
-// getManySQL renders the IN-query prefix; the caller appends the
-// placeholder list "(?, ?, ...)" at run time.
 func (t *tableModel) getManySQL() string {
 	return "SELECT " + t.columnList() + " FROM " + sqlIdentQuote(t.sqlName) + " WHERE " + sqlIdentQuote(t.pk[0].colName) + " IN"
 }
@@ -473,8 +434,6 @@ func (t *tableModel) deleteSQL() string {
 	return "DELETE FROM " + sqlIdentQuote(t.sqlName) + " WHERE " + t.pkWhere()
 }
 
-// uniqueFields returns the columns served by a GetBy method: unique
-// columns that are not already the (whole) primary key.
 func (t *tableModel) uniqueFields() []*fieldPlan {
 	var out []*fieldPlan
 	for _, f := range t.fields {
@@ -482,14 +441,12 @@ func (t *tableModel) uniqueFields() []*fieldPlan {
 			continue
 		}
 		if len(t.pk) == 1 && t.pk[0] == f {
-			continue // identical to Get
+			continue
 		}
 		out = append(out, f)
 	}
 	return out
 }
-
-/* ===== the emitter ===== */
 
 type queryEmitter struct {
 	plan *plan
@@ -498,14 +455,12 @@ type queryEmitter struct {
 	body strings.Builder
 
 	needStrings bool
-	// needImports are the packages the signatures name: the identity
-	// and unique columns' types.
 	needImports map[string]bool
 }
 
 func (e *queryEmitter) run() {
 	e.needImports = map[string]bool{}
-	e.body.Grow(e.plan.fieldCount() * 110) // measured: bytes of queries per column
+	e.body.Grow(e.plan.fieldCount() * 110)
 	for _, t := range e.plan.tables {
 		e.tableEmit(t)
 	}
@@ -517,9 +472,7 @@ func (e *queryEmitter) run() {
 
 func (e *queryEmitter) header() {
 	fmt.Fprintf(&e.out, "// Code generated by nao gen from %s; DO NOT EDIT.\n", e.opts.Source)
-	e.out.WriteString("//\n// CRUD methods over the models in nao_models.go. Identity arguments\n")
-	e.out.WriteString("// are positional, data arguments ride in the params structs declared\n// with the models, and the SQL\n")
-	e.out.WriteString("// binds named placeholders.\n\n")
+	e.out.WriteString("\n")
 	fmt.Fprintf(&e.out, "package %s\n\n", e.opts.Package)
 
 	imports := map[string]bool{"context": true, "database/sql": true, rtImport: true}
@@ -571,7 +524,6 @@ func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 	return rt.Tx(ctx, q.db, func(tx *sql.Tx) error { return fn(q.WithTx(tx)) })
 }
 
-// rowScanner is the shared surface of *sql.Row and *sql.Rows.
 type rowScanner interface {
 	Scan(dest ...any) error
 }
@@ -581,7 +533,7 @@ type rowScanner interface {
 
 func (e *queryEmitter) tableEmit(t *tableModel) {
 	if len(t.fields) == 0 {
-		return // a columnless table has no queryable shape
+		return
 	}
 	b := &e.body
 	lower := argName(t.model)
@@ -597,7 +549,6 @@ func (e *queryEmitter) tableEmit(t *tableModel) {
 	}
 	delete(e.needImports, "")
 
-	fmt.Fprintf(b, "// %sScan reads one %s row in generated column order.\n", lower, tbl)
 	fmt.Fprintf(b, "func %sScan(r rowScanner) (%s, error) {\n\tvar v %s\n\terr := r.Scan(", lower, t.model, t.model)
 	for i, f := range t.fields {
 		if i > 0 {
@@ -626,7 +577,6 @@ func (e *queryEmitter) tableEmit(t *tableModel) {
 	}
 }
 
-// identityParams renders "id int64" / "userID int64, roleID int32".
 func identityParams(t *tableModel) string {
 	parts := make([]string, len(t.pk))
 	for i, f := range t.pk {
@@ -635,7 +585,6 @@ func identityParams(t *tableModel) string {
 	return strings.Join(parts, ", ")
 }
 
-// identityArgs renders the sql.Named bindings for the key columns.
 func identityArgs(t *tableModel) string {
 	parts := make([]string, len(t.pk))
 	for i, f := range t.pk {
@@ -685,17 +634,12 @@ func (e *queryEmitter) listEmit(t *tableModel, lower, tbl string) {
 	e.rowsScan(t, lower)
 }
 
-// rowsScan emits the shared rows-loop tail of List and GetMany.
 func (e *queryEmitter) rowsScan(t *tableModel, lower string) {
 	rowsScanEmit(&e.body, t.model, lower)
 }
 
-// rowsScanEmit writes the rows-loop tail shared by every multi-row query
-// (List, GetMany, and the dynamic Query verb).
 func rowsScanEmit(b *strings.Builder, model, lower string) {
 	fmt.Fprintf(b, "\tif err != nil {\n\t\treturn nil, err\n\t}\n\tdefer rows.Close()\n")
-	// Never nil: an empty result is an empty list on every wire (JSON
-	// "[]", not "null").
 	fmt.Fprintf(b, "\tout := []%s{}\n\tfor rows.Next() {\n", model)
 	fmt.Fprintf(b, "\t\tv, err := %sScan(rows)\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tout = append(out, v)\n\t}\n", lower)
 	fmt.Fprintf(b, "\treturn out, rows.Err()\n}\n\n")
@@ -706,7 +650,6 @@ func (e *queryEmitter) createEmit(t *tableModel, lower, tbl string) {
 	fields := t.createFields()
 	fmt.Fprintf(b, "const %sCreateSQL = `%s`\n\n", lower, t.createSQL())
 
-	// The params struct lives with the models.
 	fmt.Fprintf(b, "// %sCreate inserts a %s row and returns the row the database wrote,\n// generated keys and defaults filled in.\n", t.model, tbl)
 	if len(fields) == 0 {
 		fmt.Fprintf(b, "func (q *Queries) %sCreate(ctx context.Context) (%s, error) {\n", t.model, t.model)
@@ -749,5 +692,3 @@ func (e *queryEmitter) deleteEmit(t *tableModel, lower, tbl string) {
 	fmt.Fprintf(b, "\tn, err := res.RowsAffected()\n\tif err != nil {\n\t\treturn err\n\t}\n")
 	fmt.Fprintf(b, "\tif n == 0 {\n\t\treturn rt.ErrNotFound\n\t}\n\treturn nil\n}\n\n")
 }
-
-// paramFields renders the fields of a params struct, notes as doc comments.

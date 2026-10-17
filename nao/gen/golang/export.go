@@ -80,8 +80,6 @@ func ParamsValidators(f *ast.File, info *check.Info, tableKey string, checks []C
 	return PlanBuild(f, info).ParamsValidators(tableKey, checks)
 }
 
-// paramsChecks splits the checks a table's params structs can evaluate:
-// those whose columns all appear among the struct's fields.
 func paramsChecks(t *tableModel, checks []CheckSpec) (create, update []CheckSpec) {
 	covered := func(fields []*fieldPlan, ck CheckSpec) bool {
 		have := map[string]bool{}

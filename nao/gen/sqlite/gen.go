@@ -38,7 +38,7 @@ type generator struct {
 	info *check.Info
 	opts Options
 
-	enums map[string]*check.EnumInfo // canonical key -> enum
+	enums map[string]*check.EnumInfo
 	out   strings.Builder
 }
 
@@ -62,7 +62,6 @@ func (g *generator) run() error {
 		}
 	}
 
-	// Seed data last, in source order.
 	for _, ti := range g.info.Tables {
 		for _, item := range ti.Decl.Body {
 			if r, ok := item.(*ast.Records); ok {
@@ -102,15 +101,12 @@ func canonKey(q *ast.QualName) string {
 	return q.String()
 }
 
-// sqlTableName flattens the schema qualifier: core.users -> core_users.
 func sqlTableName(q *ast.QualName) string {
 	if s := q.Schema(); s != "" && s != "public" {
 		return s + "_" + q.Base()
 	}
 	return q.Base()
 }
-
-/* ===== CREATE TABLE ===== */
 
 func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error {
 	name := sqlTableName(ti.Decl.Name)
@@ -126,7 +122,7 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 	fmt.Fprintf(&g.out, "CREATE TABLE %s (\n", identQuote(name))
 
 	pkCols := compositePKColumns(ti)
-	uniqueDone := map[string]bool{} // column sets already unique, for 1:1 dedupe
+	uniqueDone := map[string]bool{}
 
 	var lines []string
 	for _, cd := range ti.Columns {
@@ -145,13 +141,11 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 		}
 	}
 
-	// composite (or index-declared) primary key
 	if len(pkCols) > 0 {
 		lines = append(lines, "  PRIMARY KEY ("+quotedJoin(pkCols)+")")
 		uniqueDone[strings.Join(pkCols, ",")] = true
 	}
 
-	// table-level checks (spec §checks), direct and injected (§tablepartial)
 	{
 		for _, ck := range ti.Checks {
 			var expr string
@@ -159,14 +153,13 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 			case ck.Expr != nil:
 				expr = ck.Expr.Text()
 			case ck.Pred != nil:
-				// Lowered by the Volt checker (§validation-checks).
 				sql, lowered := g.opts.CheckSQL[ck]
 				if !lowered {
 					return fmt.Errorf("table %s: typed check not lowered — generate through volt gen (§validation-checks)", ti.Decl.Name.Base())
 				}
 				expr = sql
 			case ck.Ref != nil:
-				continue // validator tier only: SQLite cannot call Go (§validation-checks)
+				continue
 			default:
 				continue
 			}
@@ -179,7 +172,6 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 		}
 	}
 
-	// foreign keys from all three ref forms (spec §relationships-ref)
 	for _, r := range g.info.Refs {
 		fk, target, ok := fkSides(r)
 		if !ok || fk.Table != ti || target.Table == nil {
@@ -195,7 +187,6 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 		}
 		lines = append(lines, line)
 
-		// one-to-one: the FK side must be unique for the cardinality to hold
 		if r.Op == token.MINUS && !g.alreadyUnique(ti, fk.Columns, uniqueDone) {
 			lines = append(lines, "  UNIQUE ("+quotedJoin(fk.Columns)+")")
 			uniqueDone[strings.Join(fk.Columns, ",")] = true
@@ -225,8 +216,6 @@ func (g *generator) columnDef(ti *check.TableInfo, cd *check.ColumnDef, pkCols [
 	if singlePK {
 		parts = append(parts, "PRIMARY KEY")
 	}
-	// SQLite quirk: PRIMARY KEY does not imply NOT NULL (except the rowid
-	// alias), so pk membership always gets an explicit NOT NULL.
 	if !rowidAlias && (inPK || !isNullable(col)) {
 		parts = append(parts, "NOT NULL")
 	}
@@ -248,7 +237,6 @@ func (g *generator) columnDef(ti *check.TableInfo, cd *check.ColumnDef, pkCols [
 		parts = append(parts, "CHECK ("+identQuote(colName)+" IN ("+strings.Join(vals, ", ")+"))")
 	}
 	if columnHas(cd, "required") {
-		// The required extension (§columns).
 		kind, _ := check.RequiredKind(col.Type.String(), enumInfo != nil)
 		var expr string
 		switch kind {
@@ -276,15 +264,13 @@ func (g *generator) columnDef(ti *check.TableInfo, cd *check.ColumnDef, pkCols [
 	return strings.Join(parts, " "), nil
 }
 
-/* ===== indexes ===== */
-
 func (g *generator) indexesEmit(ti *check.TableInfo) error {
 	tbl := sqlTableName(ti.Decl.Name)
 	used := map[string]bool{}
 	n := 0
 	for _, ix := range ti.Indexes {
 		if ix.Settings.Get("pk") != nil {
-			continue // emitted as the PRIMARY KEY constraint
+			continue
 		}
 		n++
 		name := settingString(ix.Settings, "name")
@@ -313,8 +299,6 @@ func (g *generator) indexesEmit(ti *check.TableInfo) error {
 	}
 	return nil
 }
-
-/* ===== records -> INSERT ===== */
 
 func (g *generator) insertsEmit(ti *check.TableInfo, r *ast.Records) error {
 	cols := make([]string, 0)
@@ -348,10 +332,6 @@ func (g *generator) insertsEmit(ti *check.TableInfo, r *ast.Records) error {
 	return nil
 }
 
-/* ===== value rendering ===== */
-
-// defaultSQL renders a §default-values default value; expressions are parenthesized
-// as SQLite requires for non-literal defaults.
 func defaultSQL(v ast.Node) (string, error) {
 	switch v := v.(type) {
 	case *ast.FuncExpr:
@@ -367,7 +347,7 @@ func valueSQL(v ast.Node) (string, error) {
 		if v.Tok.Kind == token.STRING {
 			return stringQuote(v.Tok.Val), nil
 		}
-		return v.Tok.Val, nil // number
+		return v.Tok.Val, nil
 	case *ast.NegNumber:
 		return "-" + v.Num.Tok.Val, nil
 	case *ast.FuncExpr:
@@ -388,8 +368,6 @@ func valueSQL(v ast.Node) (string, error) {
 	}
 	return "", fmt.Errorf("unsupported value at %s", v.Pos())
 }
-
-/* ===== semantic helpers (mirroring the spec rules) ===== */
 
 func compositePKColumns(ti *check.TableInfo) []string {
 	var out []string
@@ -438,7 +416,6 @@ func columnHas(cd *check.ColumnDef, name string) bool {
 	return false
 }
 
-// fkSides mirrors spec §relationships-ref: which endpoint carries the foreign key.
 func fkSides(r *check.RefInfo) (fk, target check.EndpointInfo, ok bool) {
 	switch r.Op {
 	case token.GT:
@@ -498,8 +475,6 @@ func (g *generator) alreadyUnique(ti *check.TableInfo, cols []string, done map[s
 	}
 	return false
 }
-
-/* ===== notes ===== */
 
 func projectNote(f *ast.File) string {
 	for _, d := range f.Decls {

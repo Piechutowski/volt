@@ -10,8 +10,6 @@ import (
 	"github.com/Piechutowski/volt/gen/router"
 )
 
-// voltGen runs the real CLI ('go run ./cmd/volt gen dir') from the
-// module root, returning combined output and the exit error, if any.
 func voltGen(t *testing.T, dir string) (string, error) {
 	t.Helper()
 	cmd := exec.Command("go", "run", "./cmd/volt", "gen", dir)
@@ -41,7 +39,6 @@ func TestCLIClobberProtection(t *testing.T) {
 	write("go.mod", "module clobber\n")
 	write(filepath.Join("app", "r.volt"), "package app\n\nScope / {\n\tget / Home.Index\n}\n")
 
-	// A hand-written file squatting on a generated name.
 	hand := "package app\n\n// hand-written: mine, not the generator's\n"
 	write(filepath.Join("app", "volt_router.go"), hand)
 
@@ -65,7 +62,6 @@ func TestCLIClobberProtection(t *testing.T) {
 		}
 	}
 
-	// Clear the squatter: gen now writes all four, each with the marker.
 	if err := os.Remove(filepath.Join(appDir, "volt_router.go")); err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +79,6 @@ func TestCLIClobberProtection(t *testing.T) {
 		}
 	}
 
-	// Re-running over its own output is fine (the marker authorizes it).
 	if out, err = voltGen(t, appDir); err != nil {
 		t.Fatalf("gen is not idempotent over its own output: %v\n%s", err, out)
 	}

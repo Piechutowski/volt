@@ -58,7 +58,7 @@ type Language struct {
 	// (§line-structure-and-whitespace), each piece a sentence of that rule on its own.
 	Cut bool
 
-	puncts []string // memo of terminals()
+	puncts []string
 }
 
 // Check reports what the recognizer cannot work with: a reference to
@@ -95,7 +95,6 @@ func (l *Language) Check() error {
 	return nil
 }
 
-// walk visits every node of an expression, parents before children.
 func walk(e Expr, f func(Expr)) {
 	f(e)
 	switch x := e.(type) {
@@ -145,7 +144,6 @@ func (l *Language) Accepts(start, text string) bool {
 	return false
 }
 
-// start is the start rule's name.
 func (l *Language) start() string {
 	if l.Start != "" {
 		return l.Start
@@ -156,8 +154,6 @@ func (l *Language) start() string {
 	return ""
 }
 
-// program matches the start rule piecewise: every piece between two
-// element starts is a sentence of the start rule on its own.
 func (m *matcher) program() bool {
 	bounds := append(ElementStarts(m.text), len(m.text))
 	start := m.l.G.Lookup(m.l.start())
@@ -223,7 +219,7 @@ func ElementStarts(text string) []int {
 				j++
 			}
 			if j < len(text) && text[j] == c {
-				j++ // closed; unterminated, the line break stays to be seen
+				j++
 			}
 			i = j
 			col1 = false
@@ -245,8 +241,6 @@ func ElementStarts(text string) []int {
 	return starts
 }
 
-// isWordStart reports whether text begins an unquoted identifier: a
-// letter, a mark, an underscore or a digit (§identifiers).
 func isWordStart(text string) bool {
 	r, _ := utf8.DecodeRuneInString(text)
 	return isWordRune(r)
@@ -257,14 +251,13 @@ func isWordRune(r rune) bool {
 }
 
 type context struct {
-	lexical    bool // characters: no layout, no boundary
-	contiguous bool // syntactic, but no layout between symbols
-	top        bool // the start rule's own body: its repetitions are elements
-	line       bool // inside a production that ends with a newline
-	depth      int  // brackets open since the line began: line breaks are layout inside
+	lexical    bool
+	contiguous bool
+	top        bool
+	line       bool
+	depth      int
 }
 
-// free reports whether a line break is layout here.
 func (c context) free() bool { return !c.line || c.depth > 0 }
 
 type memoKey struct {
@@ -276,15 +269,12 @@ type memoKey struct {
 }
 
 type matcher struct {
-	l    *Language
-	text string
-	memo map[memoKey][]int
-	// active guards left recursion: a rule re-entered at the same
-	// position matches nothing there.
+	l      *Language
+	text   string
+	memo   map[memoKey][]int
 	active map[memoKey]bool
 }
 
-// rule reports every end at which the named rule matches from pos.
 func (m *matcher) rule(name string, pos int, ctx context) []int {
 	r := m.l.G.Lookup(name)
 	if r == nil {
@@ -305,8 +295,6 @@ func (m *matcher) rule(name string, pos int, ctx context) []int {
 	return ends
 }
 
-// layout skips what may lie between symbols: spaces, tabs, comments,
-// and line breaks when newlines is set.
 func (m *matcher) layout(pos int, newlines bool) int {
 	for {
 		start := pos
@@ -326,7 +314,6 @@ func (m *matcher) layout(pos int, newlines bool) int {
 	}
 }
 
-// expr reports every end at which e matches from pos.
 func (m *matcher) expr(e Expr, pos int, ctx context) []int {
 	switch x := e.(type) {
 	case Seq:
@@ -420,12 +407,11 @@ func (m *matcher) expr(e Expr, pos int, ctx context) []int {
 			return m.rule(x.Name, p, ctx)
 		}
 		if m.l.SameLine[x.Name] && !ctx.lexical && !ctx.contiguous && m.layout(pos, false) != m.layout(pos, true) {
-			return nil // a line break before a symbol that stays on its line
+			return nil
 		}
 		p := m.before(pos, ctx, false)
 		ends := m.rule(x.Name, p, ctx)
 		if !ctx.lexical && m.l.Lexical[x.Name] {
-			// a token: the longest match, and a boundary after it
 			var kept []int
 			for _, e := range ends {
 				if m.boundary(p, e) {
@@ -443,10 +429,6 @@ func (m *matcher) expr(e Expr, pos int, ctx context) []int {
 	}
 }
 
-// before skips layout before a symbol of a syntactic rule: none in a
-// lexical or contiguous context, no line break before a symbol that
-// must stay on its line, nor outside brackets on a line-oriented
-// production.
 func (m *matcher) before(pos int, ctx context, sameLine bool) int {
 	if ctx.lexical || ctx.contiguous {
 		return pos
@@ -454,8 +436,6 @@ func (m *matcher) before(pos int, ctx context, sameLine bool) int {
 	return m.layout(pos, !sameLine && ctx.free())
 }
 
-// lineOriented reports whether a sequence ends with the newline rule:
-// it lies on one line (§line-structure-and-whitespace).
 func (l *Language) lineOriented(s Seq) bool {
 	if l.Newline == "" || len(s.Items) == 0 {
 		return false
@@ -464,9 +444,6 @@ func (l *Language) lineOriented(s Seq) bool {
 	return ok && last.Name == l.Newline
 }
 
-// delta is the number of brackets an expression opens less the number
-// it closes, the same on every path through it; a rule's brackets are
-// balanced, so only a bare terminal opens or closes one.
 func (l *Language) delta(e Expr) int {
 	switch x := e.(type) {
 	case Term:
@@ -486,10 +463,6 @@ func (l *Language) delta(e Expr) int {
 	return 0
 }
 
-// boundary reports whether a token matched over text[from:to] ends
-// where the scanner's longest match would (§tokenization): a word does not run
-// into a word character, and no longer terminal of the grammar begins
-// with the same text here.
 func (m *matcher) boundary(from, to int) bool {
 	if to > from {
 		last, _ := utf8.DecodeLastRuneInString(m.text[from:to])
@@ -508,8 +481,6 @@ func (m *matcher) boundary(from, to int) bool {
 	return true
 }
 
-// terminals lists the grammar's punctuation terminals: those with no
-// word character, which the longest-match rule can fuse.
 func (l *Language) terminals() []string {
 	if l.puncts == nil {
 		seen := map[string]bool{}

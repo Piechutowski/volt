@@ -49,8 +49,6 @@ func QueryParams[T QueryValue](r *Request, name string) ([]T, error) {
 	return out, nil
 }
 
-// parseQuery parses one query-string value into the typed destination.
-// Times are RFC 3339.
 func parseQuery(s string, dst any) error {
 	var err error
 	switch d := dst.(type) {
@@ -112,7 +110,7 @@ func parseQuery(s string, dst any) error {
 }
 
 func typeName(dst any) string {
-	return fmt.Sprintf("%T", dst)[1:] // strip the pointer star
+	return fmt.Sprintf("%T", dst)[1:]
 }
 
 // FormatQuery renders a query-string value the way QueryParam parses it
@@ -130,6 +128,6 @@ func FormatQuery[T QueryValue](v T) string {
 	case float64:
 		return strconv.FormatFloat(v, 'g', -1, 64)
 	default:
-		return fmt.Sprint(v) // the integer families
+		return fmt.Sprint(v)
 	}
 }

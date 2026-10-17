@@ -10,7 +10,6 @@ import (
 	"github.com/Piechutowski/volt/lang"
 )
 
-// goFuncHover renders the hover for a resolved (or missing) reference.
 func goFuncHover(name, pkgName string, gf *lang.GoFunc) string {
 	if gf == nil {
 		return "`" + name + "` — no such function in package `" + pkgName + "`'s Go files yet; " +

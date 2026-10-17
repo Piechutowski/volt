@@ -9,14 +9,10 @@ import (
 	"github.com/Piechutowski/volt/lang/check"
 )
 
-// Completion contexts are derived textually and filled from the last
-// semantic model, which the checker returns even for files with errors.
-
 var (
 	elementKeywords = []string{
 		"Project", "Table", "TablePartial", "Enum", "Ref", "TableGroup",
 		"Note", "Records", "DiagramView", "use", "reuse",
-		// Volt layer (docs/spec.md Part II)
 		"package ", "import", "Pipeline", "Scope",
 	}
 	tableBodyKeywords = []string{"indexes", "checks", "Note", "Records"}
@@ -34,7 +30,6 @@ var (
 		"enumvalue": {"note: "},
 		"sticky":    {"color: "},
 		"group":     {"note: ", "color: "},
-		// Volt layer (docs/spec.md §scopes-and-routes to §resources)
 		"scope":     {"pipe: ", "error_handler: ", "name: "},
 		"route":     {"name: "},
 		"resources": {"only: (", "except: (", "param: ", "singular: ", "api", "default"},
@@ -51,7 +46,6 @@ var (
 
 	refActionValues = []string{"cascade", "restrict", "set null", "set default", "no action"}
 
-	// voltVerbSet mirrors the parser's route verbs (docs/spec.md §routes).
 	voltVerbSet = map[string]bool{
 		"get": true, "post": true, "put": true, "patch": true,
 		"delete": true, "options": true, "head": true, "any": true,
@@ -75,7 +69,6 @@ func (d *Document) Complete(pos protocol.Position) []protocol.CompletionItem {
 	prefix := d.Text[lineStart:offset]
 	ctx := d.blockContext(int(pos.Line))
 
-	// Project-aware completions first.
 	if items := d.voltComplete(prefix); items != nil {
 		return items
 	}
@@ -129,8 +122,6 @@ func (d *Document) Complete(pos protocol.Position) []protocol.CompletionItem {
 	return nil
 }
 
-// blockContext classifies the innermost unclosed block above the line by
-// scanning upward and tracking brace balance. "" means top level.
 func (d *Document) blockContext(line int) string {
 	depth := 0
 	for l := line; l >= 0; l-- {
@@ -214,9 +205,6 @@ func (d *Document) settingsComplete(prefix, ctx string) []protocol.CompletionIte
 		kind = "ref"
 	case strings.HasPrefix(head, "note"):
 		kind = "sticky"
-	// Volt lines exist only where the grammar puts them (§scopes-and-routes): Scope
-	// openers at top level or nested in a Scope, routes and resources
-	// in Scope bodies.
 	case strings.HasPrefix(head, "scope") && (ctx == "" || ctx == "scope"):
 		kind = "scope"
 	case strings.HasPrefix(head, "resources") && ctx == "scope":
@@ -240,8 +228,6 @@ func (d *Document) settingsComplete(prefix, ctx string) []protocol.CompletionIte
 	return keywordItemsKind(settingsByContext[kind], protocol.CompletionItemKindProperty)
 }
 
-// dotChainComplete resolves `a.` and `a.b.` chains to columns, tables of a
-// schema, or enum values.
 func (d *Document) dotChainComplete(m []string) []protocol.CompletionItem {
 	first := unquote(m[1])
 	second := ""

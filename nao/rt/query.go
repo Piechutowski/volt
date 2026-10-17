@@ -15,8 +15,6 @@ import (
 	"strings"
 )
 
-/* ===== typed column handles ===== */
-
 // Column is the typed handle of one column of model M: its methods build
 // the Pred, Order and Assign values of the dynamic query layer. M is a
 // phantom type: a predicate over one model cannot enter another model's
@@ -133,8 +131,6 @@ func valsAny[T any](vs []T) []any {
 	return out
 }
 
-/* ===== predicates as inert data ===== */
-
 // Pred is one predicate over model M: a small immutable expression tree,
 // shared across Query, Count, Exists, DeleteWhere and UpdateWhere.
 //
@@ -142,13 +138,13 @@ func valsAny[T any](vs []T) []any {
 // from And, Or, Not and WHERE clauses.
 type Pred[M any] struct {
 	kind predKind
-	col  string    // leaf predicates: the left-hand column
-	op   string    // predCmp / predColCmp: the SQL comparator
-	col2 string    // predColCmp: the right-hand column
-	vals []any     // bound values, in placeholder order
-	not  bool      // predIn: NOT IN; predNull: IS NOT NULL
-	raw  string    // predRaw: verbatim SQL
-	kids []Pred[M] // predAnd, predOr, predNot
+	col  string
+	op   string
+	col2 string
+	vals []any
+	not  bool
+	raw  string
+	kids []Pred[M]
 }
 
 type predKind uint8
@@ -208,9 +204,6 @@ func predJoin[M any](kind predKind, ps []Pred[M]) Pred[M] {
 	return Pred[M]{kind: kind, kids: kids}
 }
 
-// render appends this predicate's SQL to b and its bound values to args,
-// in lockstep. Composite operands are parenthesized, so operator
-// precedence can never reassociate a tree.
 func (p Pred[M]) render(b *strings.Builder, args *[]any) error {
 	switch p.kind {
 	case predCmp:
@@ -220,7 +213,6 @@ func (p Pred[M]) render(b *strings.Builder, args *[]any) error {
 		b.WriteString(identQuote(p.col) + " " + p.op + " " + identQuote(p.col2))
 	case predIn:
 		if len(p.vals) == 0 {
-			// membership in the empty set: constant false (true for NOT IN)
 			if p.not {
 				b.WriteString("1 = 1")
 			} else {
@@ -265,13 +257,10 @@ func (p Pred[M]) render(b *strings.Builder, args *[]any) error {
 		}
 		b.WriteString(")")
 	default:
-		// unreachable through the public constructors
 		return errors.New("rt: cannot render an empty predicate")
 	}
 	return nil
 }
-
-/* ===== orderings and assignments ===== */
 
 // Order is one ORDER BY term, built by Column.Asc/Desc.
 type Order[M any] struct {
@@ -285,8 +274,6 @@ type Assign[M any] struct {
 	col string
 	val any
 }
-
-/* ===== options ===== */
 
 // Opt is one option of a dynamic query: a predicate (Pred is an Opt), an
 // ordering, a limit, an offset, a keyset position or a distinct flag.
@@ -351,8 +338,6 @@ func (distinctOpt[M]) optApply(s *querySpec[M]) { s.distinct = true }
 // Distinct deduplicates the result rows (SELECT DISTINCT).
 func Distinct[M any]() Opt[M] { return distinctOpt[M]{} }
 
-/* ===== the interpreter: options -> SQL + args ===== */
-
 // SelectRender renders a SELECT over the model's fixed shape: table and
 // columns come pre-rendered from generated code, everything else from
 // the options. Deterministic: identical option values render identical
@@ -412,7 +397,6 @@ func SelectRender[M any](table, columns string, opts []Opt[M]) (string, []any, e
 			args = append(args, s.offset)
 		}
 	case s.offsetSet:
-		// SQLite has no bare OFFSET; LIMIT -1 means unlimited
 		b.WriteString(" LIMIT -1 OFFSET ?")
 		args = append(args, s.offset)
 	}
@@ -486,8 +470,6 @@ func UpdateRender[M any](table string, set []Assign[M], preds []Pred[M]) (string
 	return b.String(), append(args, wargs...), nil
 }
 
-// whereRender renders the non-empty predicates joined by AND, without
-// the leading WHERE keyword. An empty string means no predicate survived.
 func whereRender[M any](preds []Pred[M]) (string, []any, error) {
 	var w strings.Builder
 	var args []any
@@ -505,12 +487,6 @@ func whereRender[M any](preds []Pred[M]) (string, []any, error) {
 	return w.String(), args, nil
 }
 
-// afterRender appends the keyset predicate: rows strictly after
-// the key in the query's order, as the lexicographic expansion
-//
-//	(o1 > k1) OR (o1 = k1 AND o2 > k2) OR ...
-//
-// with the comparator flipped to < for DESC terms.
 func afterRender[M any](w *strings.Builder, args *[]any, orders []Order[M], key []any) error {
 	if len(orders) == 0 {
 		return errors.New("rt: After needs an OrderBy: a keyset is a position in some order")
@@ -546,13 +522,9 @@ func afterRender[M any](w *strings.Builder, args *[]any, orders []Order[M], key 
 	return nil
 }
 
-// identQuote double-quotes an identifier for SQLite, matching the
-// generators' quoting.
 func identQuote(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }
-
-/* ===== statement execution, cache-aware ===== */
 
 // StmtQuery runs a row-returning statement on db, through cache when one
 // is given (nil runs directly).

@@ -302,8 +302,6 @@ func lower(s string) string {
 	return string(b)
 }
 
-/* ===== groups, predicates, selects (spec §groups to §selects-over-groups) ===== */
-
 // Group is a named set of tables for generation (spec §groups): either a
 // block of members or a `+`/`\` expression over tables, groups and
 // TableGroups.

@@ -41,17 +41,15 @@ func tableHasPK(ti *check.TableInfo) bool {
 	return false
 }
 
-// fkSides returns the foreign-key endpoint and the referenced endpoint of a
-// relationship, following spec §relationships-ref, or ok=false for many-to-many.
 func fkSides(r *check.RefInfo) (fk, target check.EndpointInfo, ok bool) {
 	switch r.Op {
-	case token.GT: // many-to-one: left is the FK
+	case token.GT:
 		return r.Left, r.Right, true
-	case token.LT: // one-to-many: right is the FK
+	case token.LT:
 		return r.Right, r.Left, true
-	case token.MINUS: // one-to-one: the second endpoint is the FK
+	case token.MINUS:
 		return r.Right, r.Left, true
-	default: // <> has no FK side
+	default:
 		return fk, target, false
 	}
 }
@@ -110,8 +108,6 @@ func (r *refTargetRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagn
 	return out
 }
 
-// endpointUnique reports whether the endpoint's column set is guaranteed
-// unique: a single pk/unique column, or a matching composite pk/unique index.
 func endpointUnique(e check.EndpointInfo) bool {
 	if len(e.Columns) == 1 {
 		if cd := e.Table.Column(e.Columns[0]); cd != nil {
@@ -137,8 +133,6 @@ func endpointUnique(e check.EndpointInfo) bool {
 	return false
 }
 
-// sameColumns reports whether two column lists name the same columns
-// the same number of times, in any order.
 func sameColumns(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
@@ -182,7 +176,6 @@ func (r *selfRefRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnos
 	return out
 }
 
-// refCycleFold walks the file's foreign-key graph.
 type refCycleFold struct{ meta }
 
 var refCycle = &refCycleFold{meta{
@@ -191,7 +184,6 @@ var refCycle = &refCycleFold{meta{
 }}
 
 func (fo *refCycleFold) File(p *FilePass) {
-	// Build FK edges: table with the FK -> referenced table.
 	edges := map[*check.TableInfo][]*check.TableInfo{}
 	for _, r := range p.Info.Refs {
 		fk, target, ok := fkSides(r)
@@ -217,7 +209,6 @@ func (fo *refCycleFold) File(p *FilePass) {
 			case white:
 				visit(next)
 			case gray:
-				// found a cycle: slice it out of the stack
 				var names []string
 				for i := len(stack) - 1; i >= 0; i-- {
 					names = append(names, stack[i].Decl.Name.String())
@@ -243,8 +234,6 @@ func (fo *refCycleFold) File(p *FilePass) {
 	}
 }
 
-// caseCollisionCheck judges one table's columns as a rule and the
-// file's tables and enums as a fold.
 type caseCollisionCheck struct{ meta }
 
 var caseCollision = &caseCollisionCheck{meta{
@@ -287,14 +276,10 @@ func (c *caseCollisionCheck) File(p *FilePass) {
 	}
 }
 
-// groups reports every set of distinct names that differ only in
-// case, at the last of them by position, listing them in source order.
-// Names are distinct within a namespace; a repeated spelling counts
-// once.
 func (c *caseCollisionCheck) groups(kind string, names []string, poss []token.Position) []diag.Diagnostic {
 	var out []diag.Diagnostic
 	byLower := map[string][]int{}
-	var order []string // lower-case keys in first appearance order
+	var order []string
 	spelled := map[string]bool{}
 	for i, n := range names {
 		if spelled[n] {
@@ -312,7 +297,6 @@ func (c *caseCollisionCheck) groups(kind string, names []string, poss []token.Po
 		if len(group) < 2 {
 			continue
 		}
-		// in source order: insert each index behind the ones before it
 		var sorted []int
 		for _, i := range group {
 			var next []int
@@ -338,7 +322,6 @@ func (c *caseCollisionCheck) groups(kind string, names []string, poss []token.Po
 	return out
 }
 
-// posBefore reports whether a comes before b by line, then column.
 func posBefore(a, b token.Position) bool {
 	if a.Line() != b.Line() {
 		return a.Line() < b.Line()

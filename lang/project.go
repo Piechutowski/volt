@@ -46,8 +46,7 @@ type Package struct {
 	Files []*ast.File
 
 	// Imports maps qualifier -> imported package path, resolved by Check.
-	Imports map[string]string
-	// importSpecs is every import spec across the package's files.
+	Imports     map[string]string
 	importSpecs []*ast.ImportSpec
 
 	// Volt-layer results, populated by Check.
@@ -64,26 +63,19 @@ type Package struct {
 	CheckFns []golang.CheckFn
 	// CheckSQL is every typed check's SQL rendering, lowered by Check
 	// with CheckFns: gen/sqlite emits CHECK (<this>) for it (§validation-checks).
-	CheckSQL map[*ast.Check]string
-	Selects  []*SelectInfo
-	// selectByMethod indexes Selects by generated method name;
-	// selectByName by declared name, the last declared winning.
+	CheckSQL       map[*ast.Check]string
+	Selects        []*SelectInfo
 	selectByMethod map[string]selectMember
 	selectByName   map[string]*SelectInfo
-	// checkFnByKey indexes CheckFns by table key, built with them.
-	checkFnByKey map[string][]golang.CheckSpec
+	checkFnByKey   map[string][]golang.CheckSpec
 	// ValidByKey says, per table whose params structs validate (§validation-checks),
 	// whether the create and the update one do: decided with the
 	// table's lowered checks, read by the route lowering.
 	ValidByKey map[string][2]bool
 
-	// schema is the package's checked table model, set by Check.
 	schema *check.Info
-	// plan is the package's naming plan, built once by Check.
-	plan *golang.Plan
+	plan   *golang.Plan
 
-	// merged is the synthetic single file of all declarations, in file
-	// order (sorted by name).
 	merged *ast.File
 }
 
@@ -203,7 +195,6 @@ func PackageDirs(root, dir string) ([]string, error) {
 	return out, nil
 }
 
-// excludedDir applies §projects-and-packages's directory exclusions (Go's own rules).
 func excludedDir(name string) bool {
 	return strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") ||
 		name == "testdata" || name == "node_modules"
@@ -229,8 +220,6 @@ func LoadDirs(root string, dirs []string, overlay map[string]string) (*Project, 
 	return loadDirs(root, dirs, overlay, nil)
 }
 
-// loadDirs is LoadDirs with an optional Session whose parse cache
-// stands in for the parser.
 func loadDirs(root string, dirs []string, overlay map[string]string, s *Session) (*Project, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
@@ -261,8 +250,6 @@ func loadDirs(root string, dirs []string, overlay map[string]string, s *Session)
 		queue = append(queue, ad)
 	}
 
-	// One wave per import depth, results taken in directory
-	// order.
 	seen := map[string]bool{}
 	for wave := queue; len(wave) > 0; {
 		var todo []string
@@ -283,8 +270,6 @@ func loadDirs(root string, dirs []string, overlay map[string]string, s *Session)
 				continue
 			}
 			pr.Packages[pkg.Path] = pkg
-			// Imports name root-relative package paths (§imports); an existing
-			// directory is loaded, a missing one is left for Check to report.
 			for _, f := range pkg.Files {
 				for _, d := range f.Decls {
 					id, ok := d.(*ast.ImportDecl)
@@ -309,9 +294,6 @@ func loadDirs(root string, dirs []string, overlay map[string]string, s *Session)
 	return pr, nil
 }
 
-// importExcluded reports why a root-relative import path is outside
-// the project (§projects-and-packages): a segment the exclusions cover, or a nested
-// module boundary between the root and the target. "" means allowed.
 func importExcluded(root, path string) string {
 	dir := root
 	for _, seg := range strings.Split(path, "/") {
@@ -329,11 +311,6 @@ func importExcluded(root, path string) string {
 	return ""
 }
 
-// packagesParse reads the directories of one wave and parses every
-// .volt file of every one of them on every CPU. The result holds one
-// entry per directory, nil where it has no .volt files; the packages
-// are not yet registered with the project, and the parse diagnostics
-// are appended in directory, then file-name, order (§projects-and-packages).
 func (pr *Project) packagesParse(dirs []string, overlay map[string]string, s *Session) ([]*Package, error) {
 	type fileParse struct {
 		pkg   int
@@ -403,9 +380,6 @@ func (pr *Project) packagesParse(dirs []string, overlay map[string]string, s *Se
 	return pkgs, nil
 }
 
-// goModModule reads the module directive of go.mod, honoring its
-// lexical structure: comments are not text, and a directive inside a
-// parenthesized block is not the top-level module directive.
 func goModModule(path, src string) (string, []diag.Diagnostic) {
 	inBlockComment, depth := false, 0
 	for _, line := range strings.Split(src, "\n") {

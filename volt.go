@@ -77,8 +77,6 @@ func DefaultErrorHandler(w http.ResponseWriter, r *Request, err error) {
 	writeProblem(w, r, Problem{Status: http.StatusInternalServerError, Message: "internal server error"})
 }
 
-// writeProblem renders an error body in the negotiated format (JSON
-// when the client offered nothing usable), never caching it.
 func writeProblem(w http.ResponseWriter, r *Request, p Problem) {
 	f, _ := Negotiate(r.Request)
 	w.Header().Set("Content-Type", f.MIME())
@@ -96,7 +94,6 @@ func Chain(h http.Handler, mw ...func(http.Handler) http.Handler) http.Handler {
 	return h
 }
 
-// statusWriter records whether the header has been written.
 type statusWriter struct {
 	http.ResponseWriter
 	status int

@@ -56,7 +56,6 @@ func (r *redundantIndexRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.
 		}
 		seenKeys[key] = true
 
-		// single-column index repeating a column-level constraint
 		if len(ix.Key) != 1 {
 			continue
 		}
@@ -81,8 +80,6 @@ func (r *redundantIndexRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.
 	return out
 }
 
-// indexKey canonicalizes an index key for duplicate detection: column order
-// is significant for composite indexes, so it is preserved.
 func indexKey(ix *ast.Index) string {
 	parts := make([]string, 0, len(ix.Key))
 	for _, a := range ix.Key {
@@ -96,8 +93,6 @@ func indexKey(ix *ast.Index) string {
 	return "(" + strings.Join(parts, ", ") + ")"
 }
 
-// columnHas reports whether the column carries the given canonical setting,
-// via the settings list or a legacy flag.
 func columnHas(cd *check.ColumnDef, name string) bool {
 	if cd.Col.Settings != nil {
 		if cd.Col.Settings.Get(name) != nil {
@@ -227,7 +222,7 @@ var unnecessaryQuotes = &unnecessaryQuotesRule{meta{
 
 func (r *unnecessaryQuotesRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
 	var out []diag.Diagnostic
-	seen := map[string]bool{} // repeated spellings on one line of this declaration are reported once
+	seen := map[string]bool{}
 	for _, n := range nodes {
 		id, ok := n.(*ast.Ident)
 		if !ok || !id.Quoted() || !isPlainIdent(id.Name()) {

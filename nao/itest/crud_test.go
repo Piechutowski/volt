@@ -49,8 +49,6 @@ func TestUserCRUD(t *testing.T) {
 	ctx := context.Background()
 	_, q := newDB(t)
 
-	// Create: the auto-increment key and the defaulted created_at are the
-	// database's job; RETURNING brings both back.
 	u, err := q.UserCreate(ctx, UserCreateParams{Email: "ann@example.com", Name: "Ann"})
 	if err != nil {
 		t.Fatalf("UserCreate: %v", err)
@@ -88,7 +86,6 @@ func TestUserCRUD(t *testing.T) {
 		t.Errorf("UserCount = %d, %v", n, err)
 	}
 
-	// Update rewrites every non-key column and returns the row.
 	upd, err := q.UserUpdate(ctx, u.ID, UserUpdateParams{
 		Email:     u.Email,
 		Name:      "Ann B.",
@@ -102,7 +99,6 @@ func TestUserCRUD(t *testing.T) {
 		t.Errorf("UserUpdate returned %+v", upd)
 	}
 
-	// Identity misses are rt.ErrNotFound, which is also sql.ErrNoRows.
 	if _, err := q.UserUpdate(ctx, 999, UserUpdateParams{Email: "x@x", Name: "x", CreatedAt: u.CreatedAt}); !errors.Is(err, rt.ErrNotFound) {
 		t.Errorf("UserUpdate(999) = %v; want rt.ErrNotFound", err)
 	}
@@ -117,7 +113,6 @@ func TestUserCRUD(t *testing.T) {
 		t.Errorf("second UserDelete = %v; want rt.ErrNotFound", err)
 	}
 
-	// unique column: duplicate email must be rejected by the DDL
 	if _, err := q.UserCreate(ctx, UserCreateParams{Email: "ann@example.com", Name: "Imposter"}); err == nil {
 		t.Error("duplicate email accepted; UNIQUE constraint missing")
 	}
@@ -132,7 +127,6 @@ func TestOrderDefaultsEnumsAndFKs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OrderCreate: %v", err)
 	}
-	// the defaulted enum column comes back typed
 	if o.Status != EOrderStatusPending {
 		t.Errorf("status = %q; want the database default %q", o.Status, EOrderStatusPending)
 	}
@@ -157,7 +151,6 @@ func TestOrderDefaultsEnumsAndFKs(t *testing.T) {
 		t.Errorf("OrderUpdate returned %+v", upd)
 	}
 
-	// enum CHECK and FK are real constraints in the generated DDL
 	var ce rt.ConstraintError
 	if _, err := q.OrderCreate(ctx, OrderCreateParams{UserID: 999, Total: "1.00"}); !errors.As(err, &ce) || ce.Kind != "foreign key" {
 		t.Errorf("dangling user_id = %v; want a foreign key ConstraintError", err)
@@ -176,7 +169,6 @@ func TestUserTagCompositePK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UserTagCreate: %v", err)
 	}
-	// composite identity: one positional argument per key column
 	got, err := q.UserTagGet(ctx, tag.UserID, tag.Tag)
 	if err != nil || got != tag {
 		t.Errorf("UserTagGet = %+v, %v", got, err)
@@ -196,7 +188,6 @@ func TestTx(t *testing.T) {
 	ctx := context.Background()
 	_, q := newDB(t)
 
-	// commit: work inside fn is visible after
 	err := q.Tx(ctx, func(q *Queries) error {
 		_, err := q.UserCreate(ctx, UserCreateParams{Email: "tx@example.com", Name: "Tx"})
 		return err
@@ -208,7 +199,6 @@ func TestTx(t *testing.T) {
 		t.Errorf("after committed Tx, count = %d; want 1", n)
 	}
 
-	// rollback: a returned error undoes everything
 	sentinel := errors.New("boom")
 	err = q.Tx(ctx, func(q *Queries) error {
 		if _, err := q.UserCreate(ctx, UserCreateParams{Email: "gone@example.com", Name: "Gone"}); err != nil {
@@ -223,7 +213,6 @@ func TestTx(t *testing.T) {
 		t.Errorf("after rolled-back Tx, count = %d; want 1", n)
 	}
 
-	// SQLite has no nested transactions; a tx-backed Queries says so
 	err = q.Tx(ctx, func(inner *Queries) error {
 		return inner.Tx(ctx, func(*Queries) error { return nil })
 	})
@@ -289,7 +278,6 @@ func TestStmtCache(t *testing.T) {
 		t.Errorf("second Prepare returned a different statement (%p vs %p, %v); the SQL text is the cache key", again, s1, err)
 	}
 
-	// LRU eviction at capacity 2
 	if _, err := cache.Prepare(ctx, db, userListSQL); err != nil {
 		t.Fatal(err)
 	}

@@ -28,7 +28,6 @@ type DBTX interface {
 // row matches the given identity. It is sql.ErrNoRows.
 var ErrNotFound = sql.ErrNoRows
 
-// beginner is the subset of *sql.DB that can start a transaction.
 type beginner interface {
 	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
 }
@@ -48,7 +47,7 @@ func Tx(ctx context.Context, db DBTX, fn func(tx *sql.Tx) error) (err error) {
 	done := false
 	defer func() {
 		if !done {
-			_ = tx.Rollback() // no-op after Commit; the commit error already reports
+			_ = tx.Rollback()
 		}
 	}()
 	if err := fn(tx); err != nil {

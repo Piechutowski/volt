@@ -7,17 +7,13 @@ import (
 	"strings"
 )
 
-// goType is a resolved field type plus the import it needs, if any.
 type goType struct {
-	name    string // e.g. "int64", "time.Time"
-	imp     string // e.g. "time"; "" if none
-	nilable bool   // slice-like: nil already expresses NULL, no pointer needed
+	name    string
+	imp     string
+	nilable bool
 }
 
-// typeMap maps the lower-cased DBML type name (parenthesized arguments
-// stripped: varchar(255) -> varchar) to its Go representation.
 var typeMap = map[string]goType{
-	// integers
 	"tinyint":     {name: "int16"},
 	"int2":        {name: "int16"},
 	"smallint":    {name: "int16"},
@@ -31,14 +27,12 @@ var typeMap = map[string]goType{
 	"int8":        {name: "int64"},
 	"bigserial":   {name: "int64"},
 
-	// unsigned variants (written as quoted types in DBML, spec §columns)
 	"tinyint unsigned":  {name: "uint8"},
 	"smallint unsigned": {name: "uint16"},
 	"int unsigned":      {name: "uint32"},
 	"integer unsigned":  {name: "uint32"},
 	"bigint unsigned":   {name: "uint64"},
 
-	// floating point
 	"real":             {name: "float32"},
 	"float4":           {name: "float32"},
 	"float":            {name: "float64"},
@@ -46,16 +40,13 @@ var typeMap = map[string]goType{
 	"double":           {name: "float64"},
 	"double precision": {name: "float64"},
 
-	// exact numerics: strings
 	"decimal": {name: "string"},
 	"numeric": {name: "string"},
 	"money":   {name: "string"},
 
-	// booleans
 	"bool":    {name: "bool"},
 	"boolean": {name: "bool"},
 
-	// character data
 	"varchar":           {name: "string"},
 	"character varying": {name: "string"},
 	"char":              {name: "string"},
@@ -68,7 +59,6 @@ var typeMap = map[string]goType{
 	"string":            {name: "string"},
 	"uuid":              {name: "string"},
 
-	// date and time; time-of-day types are strings
 	"date":                        {name: "time.Time", imp: "time"},
 	"time":                        {name: "string"},
 	"timetz":                      {name: "string"},
@@ -80,7 +70,6 @@ var typeMap = map[string]goType{
 	"timestamp without time zone": {name: "time.Time", imp: "time"},
 	"datetime":                    {name: "time.Time", imp: "time"},
 
-	// documents and binary: nil expresses NULL, so never pointered
 	"json":       {name: "json.RawMessage", imp: "encoding/json", nilable: true},
 	"jsonb":      {name: "json.RawMessage", imp: "encoding/json", nilable: true},
 	"bytea":      {name: "[]byte", nilable: true},
@@ -92,11 +81,7 @@ var typeMap = map[string]goType{
 	"varbinary":  {name: "[]byte", nilable: true},
 }
 
-// typeResolve maps a column's DBML type to Go. enums maps canonical enum
-// keys ("public.job_status") to their generated Go type names.
 func typeResolve(schema, base string, enums map[string]string) (goType, error) {
-	// an enum reference may be schema-qualified or inherit the default
-	// schema (spec §enum)
 	key := base
 	if schema != "" {
 		key = schema + "." + base

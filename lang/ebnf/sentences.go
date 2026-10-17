@@ -48,8 +48,6 @@ type Sentence struct {
 	Pieces []Piece // the whole sentence, tokens of the start rule
 }
 
-// Witness must map every special sequence of the grammar to one
-// character its matcher accepts; Check verifies it.
 func (l *Language) witnessCheck() error {
 	var problems []string
 	for _, r := range l.G.Rules {
@@ -88,12 +86,10 @@ func (l *Language) Sentences() (sentences []Sentence, unreachable []string, err 
 	}
 	d := &deriver{l: l, mins: map[string]minEntry{}}
 	start := l.start()
-	// contexts by breadth-first search from the start rule
 	type ctxEntry struct {
 		pieces []Piece
 		ctx    context
 	}
-	// contexts avoid exceptions while any path does, then take them
 	contexts := map[string]ctxEntry{start: {[]Piece{{Hole: true}}, context{top: true}}}
 	for _, throughExcept := range []bool{false, true} {
 		queue := []string{}
@@ -142,8 +138,6 @@ func (l *Language) Sentences() (sentences []Sentence, unreachable []string, err 
 	return sentences, unreachable, nil
 }
 
-// substitute replaces the hole of a context with pieces, which take
-// the hole's join flags.
 func substitute(ctx []Piece, fill []Piece) []Piece {
 	out := make([]Piece, 0, len(ctx)+len(fill))
 	for _, p := range ctx {
@@ -161,8 +155,6 @@ func substitute(ctx []Piece, fill []Piece) []Piece {
 	return out
 }
 
-/* ===== derivation ===== */
-
 type minEntry struct {
 	pieces []Piece
 	ok     bool
@@ -174,10 +166,6 @@ type deriver struct {
 	active map[string]bool
 }
 
-// tokens turns a rendering made in the rule's own context into pieces
-// for the enclosing context: a lexical rule seen from a syntactic
-// context is one token; a contiguous rule's first token is not glued
-// to what precedes it.
 func (d *deriver) tokens(pieces []Piece, inner, outer context, name string) []Piece {
 	if inner.lexical && !outer.lexical {
 		text := Text(pieces)
@@ -191,8 +179,6 @@ func (d *deriver) tokens(pieces []Piece, inner, outer context, name string) []Pi
 	return pieces
 }
 
-// ref renders the named rule in its own context and returns pieces
-// for the referring context.
 func (d *deriver) ref(name string, outer context, render func(Expr, context) ([]Piece, bool)) ([]Piece, bool) {
 	inner := context{lexical: outer.lexical || d.l.Lexical[name], contiguous: outer.contiguous || d.l.Contiguous[name]}
 	r := d.l.G.Lookup(name)
@@ -209,8 +195,6 @@ func (d *deriver) ref(name string, outer context, render func(Expr, context) ([]
 	return d.tokens(pieces, inner, outer, name), true
 }
 
-// min is the shortest sentence of e, by text length; false when e
-// derives nothing finite (a cycle with no way out).
 func (d *deriver) min(e Expr, ctx context) ([]Piece, bool) {
 	switch x := e.(type) {
 	case Seq:
@@ -278,8 +262,6 @@ func (d *deriver) min(e Expr, ctx context) ([]Piece, bool) {
 	panic(fmt.Sprintf("ebnf: unhandled expression %T", e))
 }
 
-// variants are the sentences of e that exercise each choice inside
-// e once, sub-rules rendered minimal; the first is the minimum.
 func (d *deriver) variants(e Expr, ctx context) [][]Piece {
 	m, ok := d.min(e, ctx)
 	if !ok {
@@ -355,10 +337,6 @@ func (d *deriver) variants(e Expr, ctx context) [][]Piece {
 	return out
 }
 
-// hole is the shortest sentence of e that passes through a reference
-// to name, that reference rendered as a hole; the context the hole
-// sits in comes back with it. Unless throughExcept, the left side of
-// an exception is not entered.
 func (d *deriver) hole(e Expr, ctx context, name string, throughExcept bool) ([]Piece, context, bool) {
 	switch x := e.(type) {
 	case Seq:
@@ -421,14 +399,13 @@ func (d *deriver) hole(e Expr, ctx context, name string, throughExcept bool) ([]
 			return nil, ctx, false
 		}
 		if !ctx.lexical && name == d.l.Newline {
-			return nil, ctx, false // rendered as a line break, never a hole
+			return nil, ctx, false
 		}
 		return []Piece{{Hole: true, Glued: ctx.contiguous || ctx.lexical}}, ctx, true
 	}
 	return nil, ctx, false
 }
 
-// matches reports whether text is a sentence of e in ctx.
 func (d *deriver) matches(e Expr, text string, ctx context) bool {
 	m := &matcher{l: d.l, text: text, memo: map[memoKey][]int{}, active: map[memoKey]bool{}}
 	for _, end := range m.expr(e, 0, ctx) {

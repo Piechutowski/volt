@@ -16,19 +16,18 @@ import (
 // the generated CRUD method table indexed by method name. A Plan is
 // immutable after PlanBuild and safe to share between goroutines.
 type Plan struct {
-	memo *PlanMemo // nil outside the editor session
+	memo *PlanMemo
 	f    *ast.File
 	info *check.Info
-	p    *plan // nil when err != nil
+	p    *plan
 	err  error
 
 	byKey   map[string]*tableModel
-	methods map[string]crudRef // generated CRUD method name -> owner; the first table declared wins
-	names   []string           // every CRUD method name in declaration order, for did-you-mean hints
-	base    *nameBase          // the models' names (§selects-over-groups), the memo's when there is one
+	methods map[string]crudRef
+	names   []string
+	base    *nameBase
 }
 
-// crudRef locates one generated CRUD method.
 type crudRef struct {
 	tableKey string
 	method   CRUDMethod
@@ -48,7 +47,7 @@ func PlanBuild(f *ast.File, info *check.Info) *Plan {
 // PlanMemo belongs to one package.
 type PlanMemo struct {
 	prev, next map[*check.TableInfo]*memoModel
-	base       *nameBase // the models' names, updated for the models that changed
+	base       *nameBase
 	// Hits and Misses count the models reused and built by the last
 	// PlanBuildMemo.
 	Hits, Misses int
@@ -57,7 +56,7 @@ type PlanMemo struct {
 type memoModel struct {
 	tm      *tableModel
 	imports map[string]bool
-	enums   []enumType // the enum types the model was built with, sorted by key
+	enums   []enumType
 }
 
 // PlanBuildMemo is PlanBuild with a memo of the package's earlier
@@ -219,7 +218,6 @@ func (pl *Plan) ModelFields(tableKey string) (model string, fields []FieldSig, e
 	return t.model, t.sigs, nil
 }
 
-// fieldSigsBuild is the model's field signatures, built with it.
 func fieldSigsBuild(t *tableModel) []FieldSig {
 	sigs := make([]FieldSig, 0, len(t.fields))
 	for _, fp := range t.fields {
@@ -276,14 +274,12 @@ func (pl *Plan) DynNameCollisions() []NameCollision {
 	if pl.err != nil {
 		return nil
 	}
-	// The report is the one a walk over every minted name in minting
-	// order produces, computed from the collisions alone.
 	seen := map[string]dynOrigin{"Queries": {kind: dynQueries}}
 	var out []NameCollision
 	for _, e := range pl.info.Enums {
 		typeName, err := enumTypeName(e.Decl.Name.Schema(), e.Decl.Name.Base())
 		if err != nil {
-			continue // generation reports unusable names itself
+			continue
 		}
 		out = dynArrive(out, seen, typeName, dynOrigin{kind: dynEnum, e: e, pos: e.Decl.Pos()})
 		for _, v := range e.Decl.Values {
@@ -328,8 +324,6 @@ func (pl *Plan) DynNameCollisions() []NameCollision {
 			arrivals = append(arrivals, arrival{first, dynOriginOf(o), pl.base.pos[o.table], o.rank})
 		}
 	}
-	// Each origin mints one name, so (pos, rank) orders the arrivals
-	// totally.
 	sort.Slice(arrivals, func(i, j int) bool {
 		a, b := arrivals[i], arrivals[j]
 		if a.pos != b.pos {
@@ -343,8 +337,6 @@ func (pl *Plan) DynNameCollisions() []NameCollision {
 	return out
 }
 
-// dynArrive records one minted name: the first arrival is remembered,
-// a later one is paired with it.
 func dynArrive(out []NameCollision, seen map[string]dynOrigin, name string, o dynOrigin) []NameCollision {
 	prev, dup := seen[name]
 	if !dup {
@@ -354,7 +346,6 @@ func dynArrive(out []NameCollision, seen map[string]dynOrigin, name string, o dy
 	return append(out, dynPair(name, prev, o))
 }
 
-// dynPair reports one collision at the later of its two origins.
 func dynPair(name string, first, second dynOrigin) NameCollision {
 	if second.pos.Line() < first.pos.Line() || (second.pos.Line() == first.pos.Line() && second.pos.Column() < first.pos.Column()) {
 		first, second = second, first
@@ -362,8 +353,6 @@ func dynPair(name string, first, second dynOrigin) NameCollision {
 	return NameCollision{Name: name, First: first.describe(), Second: second.describe(), Pos: second.pos}
 }
 
-// dynOriginOf is a model's minted name as the collision report
-// describes it.
 func dynOriginOf(o *nameOrigin) dynOrigin {
 	d := dynOrigin{tm: o.table, pos: o.table.ti.Decl.Pos()}
 	switch o.kind {
@@ -381,50 +370,41 @@ func dynOriginOf(o *nameOrigin) dynOrigin {
 	return d
 }
 
-/* ===== the §selects-over-groups name scope ===== */
-
 // Names is the scope of package-level Go identifiers a package's
 // generated files mint (§selects-over-groups): models, params structs, dynamic column
 // handles and option wrappers, enum types, the Queries handle and its
 // constructor. It is read in layers, last writer first.
 type Names struct {
-	base  *nameBase            // the models' names: read here, written by the plan build
-	enums map[string]*ast.Enum // enum type name -> declaration
-	added map[string]string    // what the checker minted, with its description
+	base  *nameBase
+	enums map[string]*ast.Enum
+	added map[string]string
 }
 
 type nameKind uint8
 
 const (
-	nameModel        nameKind = iota // the model of table
-	nameCreateParams                 // the create params of table
-	nameUpdateParams                 // the update params of table
-	nameDynFunc                      // a dynamic-layer function, named by the key itself
-	nameHandle                       // a dynamic column handle: table + field
+	nameModel nameKind = iota
+	nameCreateParams
+	nameUpdateParams
+	nameDynFunc
+	nameHandle
 )
 
-// nameOrigin is one name a model mints and what it is, in the order the
-// names are minted.
 type nameOrigin struct {
 	name  string
 	kind  nameKind
-	idx   int // position in the model's list: a later name of the same model wins
+	idx   int
 	table *tableModel
 	field *fieldPlan
-	// dyn says whether the dynamic layer mints this name, rank
-	// where it falls in the model's minting order.
-	dyn  bool
-	rank int
+	dyn   bool
+	rank  int
 }
 
-// modelNamesBuild is every package-level name a model mints, in the
-// order the generators write them.
 func modelNamesBuild(t *tableModel) []nameOrigin {
 	names := make([]nameOrigin, 0, 3+len(dynWrapperSuffixes)+len(t.fields))
 	add := func(name string, kind nameKind, field *fieldPlan, dyn bool, rank int) {
 		names = append(names, nameOrigin{name: name, kind: kind, idx: len(names), table: t, field: field, dyn: dyn, rank: rank})
 	}
-	// no queryable shape: no queries, no dynamic layer
 	queryable := len(t.fields) > 0
 	add(t.model, nameModel, nil, true, 0)
 	add(t.model+"CreateParams", nameCreateParams, nil, queryable && len(t.createFields()) > 0, 1)
@@ -452,16 +432,13 @@ func (o *nameOrigin) describe() string {
 	return "the dynamic-layer function " + o.name
 }
 
-// nameBase is the models' names of one package, kept across plans, so a
-// plan with one model changed touches that model's names alone.
 type nameBase struct {
 	origins map[string]nameSlot
 	models  map[*tableModel]bool
-	pos     map[*tableModel]int // declaration position in the current plan
-	dups    map[string]bool     // names two or more models mint for the dynamic layer
+	pos     map[*tableModel]int
+	dups    map[string]bool
 }
 
-// nameSlot is a name's origins.
 type nameSlot struct {
 	first *nameOrigin
 	more  []*nameOrigin
@@ -471,8 +448,6 @@ func newNameBase() *nameBase {
 	return &nameBase{origins: map[string]nameSlot{}, models: map[*tableModel]bool{}, dups: map[string]bool{}}
 }
 
-// update makes the base the given models': the models gone are
-// removed, the models new are added, the rest stand.
 func (b *nameBase) update(tables []*tableModel) {
 	current := make(map[*tableModel]bool, len(tables))
 	b.pos = make(map[*tableModel]int, len(tables))
@@ -532,7 +507,6 @@ func (b *nameBase) remove(t *tableModel) {
 	}
 }
 
-// dupsMark keeps dups current for one name after its slot changed.
 func (b *nameBase) dupsMark(name string) {
 	n := 0
 	for _, o := range b.origins[name].all() {
@@ -547,8 +521,6 @@ func (b *nameBase) dupsMark(name string) {
 	}
 }
 
-// all lists a slot's origins, the first first; nil for a name nobody
-// mints.
 func (s nameSlot) all() []*nameOrigin {
 	if s.first == nil {
 		return nil
@@ -556,8 +528,6 @@ func (s nameSlot) all() []*nameOrigin {
 	return append([]*nameOrigin{s.first}, s.more...)
 }
 
-// lookup answers the origin kept for the name: the model declared last,
-// and its later name.
 func (b *nameBase) lookup(name string) *nameOrigin {
 	slot := b.origins[name]
 	best := slot.first

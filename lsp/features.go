@@ -11,15 +11,11 @@ import (
 	"github.com/Piechutowski/volt/lang/diag"
 )
 
-// ---------------------------------------------------------------------------
-// Diagnostics
-
 // LSPDiagnostics converts the front end's diagnostics for publishing.
 func (d *Document) LSPDiagnostics() []protocol.Diagnostic {
 	return diagnosticsLSP(d.Text, d.lineOffsets, d.Diags)
 }
 
-// diagnosticsLSP converts diagnostics positioned in text for publishing.
 func diagnosticsLSP(text string, starts []int, diags []diag.Diagnostic) []protocol.Diagnostic {
 	out := make([]protocol.Diagnostic, 0, len(diags))
 	for _, dg := range diags {
@@ -40,9 +36,6 @@ func diagnosticsLSP(text string, starts []int, diags []diag.Diagnostic) []protoc
 	}
 	return out
 }
-
-// ---------------------------------------------------------------------------
-// Document symbols (outline)
 
 // DocumentSymbols builds the outline tree.
 func (d *Document) DocumentSymbols() []protocol.DocumentSymbol {
@@ -148,12 +141,8 @@ func identNames(ids []*ast.Ident) []string {
 	return out
 }
 
-// ---------------------------------------------------------------------------
-// Definition / references / rename
-
 // Definition returns the location of the declaration of the symbol at pos.
 func (d *Document) Definition(pos protocol.Position) *protocol.Location {
-	// Volt-layer symbols first.
 	if loc := d.voltDefinition(pos); loc != nil {
 		return loc
 	}
@@ -170,7 +159,6 @@ func (d *Document) Definition(pos protocol.Position) *protocol.Location {
 
 // References returns every occurrence of the symbol at pos.
 func (d *Document) References(pos protocol.Position, includeDecl bool) []protocol.Location {
-	// The answer is the two indexes' union, deduplicated.
 	out := d.voltReferences(pos, includeDecl)
 	seen := map[protocol.Location]bool{}
 	for _, l := range out {
@@ -198,7 +186,6 @@ func (d *Document) Rename(pos protocol.Position, newName string) (*protocol.Work
 	if !validIdentifier(newName) {
 		return nil, fmt.Errorf("%q is not a valid Volt identifier", newName)
 	}
-	// A Volt-layer symbol renames across the whole project.
 	if edit, ok := d.voltRename(pos, newName); ok {
 		return edit, nil
 	}
@@ -222,8 +209,6 @@ func (d *Document) Rename(pos protocol.Position, newName string) (*protocol.Work
 	}, nil
 }
 
-// validIdentifier reports whether s can be written as a plain identifier
-// (spec §identifiers): letters, marks, digits and _, not all digits.
 func validIdentifier(s string) bool {
 	if s == "" {
 		return false
@@ -247,12 +232,8 @@ func isLetter(r rune) bool {
 	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r > 0x7f
 }
 
-// ---------------------------------------------------------------------------
-// Hover
-
 // Hover renders documentation for the symbol at pos.
 func (d *Document) Hover(pos protocol.Position) *protocol.Hover {
-	// Volt-layer symbols first.
 	if h := d.voltHover(pos); h != nil {
 		return h
 	}
@@ -377,7 +358,6 @@ func (d *Document) enumValueHover(id SymbolID) string {
 	return ""
 }
 
-// columnFind resolves a column SymbolID back to its AST node.
 func (d *Document) columnFind(id SymbolID) *ast.Column {
 	if name, ok := strings.CutPrefix(id.Container, "partial:"); ok {
 		pi, ok := d.Index.Partials[name]
@@ -402,7 +382,6 @@ func (d *Document) columnFind(id SymbolID) *ast.Column {
 	return nil
 }
 
-// settingsSuffix renders " — pk, not null, default: x" for hover lines.
 func settingsSuffix(s *ast.SettingList, legacy []*ast.Ident) string {
 	var parts []string
 	for _, f := range legacy {
@@ -465,5 +444,4 @@ func tableNote(t *ast.Table) string {
 	return ""
 }
 
-// unused import guard
 var _ = check.Info{}

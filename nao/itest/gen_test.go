@@ -1,8 +1,5 @@
 package itest
 
-// The generated siblings are checked in so the package always compiles;
-// this directive refreshes them after editing schema.volt:
-//
 //go:generate go run ../../cmd/volt gen --sql .
 
 import (

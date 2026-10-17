@@ -10,9 +10,6 @@ type Node interface {
 	End() token.Position // position immediately after the node
 }
 
-// ----------------------------------------------------------------------------
-// Expressions and shared forms
-
 // Ident is a plain or quoted identifier (spec §identifiers).
 type Ident struct {
 	Tok token.Token
@@ -109,9 +106,6 @@ type RefValue struct {
 func (x *RefValue) Pos() token.Position { return x.OpTok.Pos }
 func (x *RefValue) End() token.Position { return x.Endpoint.End() }
 
-// ----------------------------------------------------------------------------
-// Settings (spec §settings-lists)
-
 // SettingList is a bracketed, comma-separated settings list.
 type SettingList struct {
 	Lbrack   token.Position
@@ -149,9 +143,6 @@ func (x *Setting) End() token.Position { return x.endPos }
 
 // SetEnd records the setting's extent.
 func (x *Setting) SetEnd(p token.Position) { x.endPos = p }
-
-// ----------------------------------------------------------------------------
-// File and declarations (spec §program-structure)
 
 // File is one parsed DBML source file.
 type File struct {

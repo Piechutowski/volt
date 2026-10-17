@@ -125,8 +125,6 @@ func Decode(r *Request, v any) error {
 	return nil
 }
 
-// unknownField recognizes encoding/json's refusal of an undeclared
-// field (`json: unknown field "Nmae"`) and returns the field's name.
 func unknownField(err error) (string, bool) {
 	const prefix = `json: unknown field "`
 	msg := err.Error()

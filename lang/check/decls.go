@@ -16,10 +16,7 @@ func (c *checker) declsCheck(f *ast.File) {
 		case *ast.Use:
 			c.useCheck(d)
 		case *ast.Project:
-			// properties are free-form (§project); nothing local to check
 		case *ast.Table:
-			// A table's body is checked in tableCheck; a duplicate
-			// declaration that expansion skipped is checked here.
 			if ti := c.info.byTable[canonKey(d.Name)]; ti == nil || ti.Decl != d {
 				c.tableBodyCheck(d.Pos(), d.Name.String(), d.Settings, d.Body, true)
 			}
@@ -50,10 +47,6 @@ func (c *checker) useCheck(d *ast.Use) {
 	c.errorf(d.Pos(), "file-imports-removed", "%s is not part of the Volt language (§file-imports-removed); replace file imports with the package system — see docs/spec.md §compatibility-with-dbml for migration", kw)
 }
 
-/* ===== table bodies (§table, §tablepartial) ===== */
-
-// tableBodyCheck checks a table's or partial's body; at is the
-// declaration's position, where an empty body is reported.
 func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.SettingList, body []ast.TableItem, isTable bool) {
 	c.settingsCheck(settings, "table", tableSettings)
 
@@ -130,8 +123,6 @@ func (c *checker) columnCheck(col *ast.Column) {
 	c.tagSettingsCheck(col.Settings)
 }
 
-/* ===== Enum (§enum) ===== */
-
 func (c *checker) enumCheck(d *ast.Enum) {
 	if len(d.Values) == 0 {
 		c.errorf(d.Pos(), "enum", "enum %q must contain at least one value", d.Name.String())
@@ -145,8 +136,6 @@ func (c *checker) enumCheck(d *ast.Enum) {
 		c.settingsCheck(v.Settings, "enum", enumValueSettings)
 	}
 }
-
-/* ===== Ref (§relationships-ref) ===== */
 
 func (c *checker) endpointArityCheck(l, r *ast.RefEndpoint) {
 	if l == nil || r == nil {
@@ -184,8 +173,6 @@ func (c *checker) refSettingsCheck(sl *ast.SettingList) {
 	}
 }
 
-/* ===== Records (§records-sample-data) ===== */
-
 func (c *checker) recordsCheck(d *ast.Records, topLevel bool) {
 	if topLevel && !d.HasColumns {
 		c.errorf(d.Pos(), "records-sample-data", "top-level records must list columns")
@@ -204,8 +191,6 @@ func (c *checker) recordsCheck(d *ast.Records, topLevel bool) {
 		}
 	}
 }
-
-/* ===== DiagramView (§diagramview) ===== */
 
 var categoryKinds = map[string]bool{
 	"tables": true, "notes": true, "tablegroups": true, "schemas": true,

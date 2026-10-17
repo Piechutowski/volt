@@ -2,10 +2,6 @@ package volt
 
 import "strconv"
 
-// Typed path-parameter parsers used by generated shims. A false report
-// means the segment does not spell a value of the type; the shim
-// returns ErrNotFound (R6).
-
 // ParseInt parses a decimal int path parameter.
 func ParseInt(s string) (int, bool) {
 	v, err := strconv.ParseInt(s, 10, 0)

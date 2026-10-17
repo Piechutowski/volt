@@ -3,8 +3,6 @@
 // collision at vet time with both origins named.
 package vet
 
-// dynNameFold asks the plan, whose name base holds every model's
-// names across plans, for the collisions alone.
 type dynNameFold struct{ meta }
 
 var dynName = &dynNameFold{meta{

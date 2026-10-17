@@ -36,14 +36,11 @@ func Generate(pkg *lang.Package, opts Options) ([]File, error) {
 	if opts.Package != "" {
 		gopts.Package = opts.Package
 	}
-	// One plan per package.
 	plan := pkg.Plan()
 	if plan == nil {
 		plan = golang.PlanBuild(pkg.Merged(), pkg.Schema())
 	}
 
-	// The files are emitted on every CPU and gathered in this
-	// order.
 	type emit struct {
 		name string
 		fn   func() ([]byte, error)

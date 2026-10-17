@@ -49,9 +49,9 @@ func (f *File) At(offset, line, column int) Position {
 // whole source.
 type Position struct {
 	file *File
-	off  int32 // byte offset within file, 0-based
-	line int32 // 1-based within file
-	col  int32 // 1-based, in runes
+	off  int32
+	line int32
+	col  int32
 }
 
 // At is a position in a file known by name only: a Go file a reference
@@ -232,7 +232,7 @@ func (t Token) Text() string {
 func (t Token) String() string {
 	if t.Kind == EOF {
 		if t.Val != "" {
-			return t.Val // a chunk's end: the next element's start (§line-structure-and-whitespace)
+			return t.Val
 		}
 		return t.Kind.String()
 	}
@@ -252,7 +252,7 @@ func (t Token) End() Position {
 			end.line++
 			end.col = 0
 		case '\r':
-			continue // a byte without a column (§line-structure-and-whitespace)
+			continue
 		}
 		end.col++
 	}

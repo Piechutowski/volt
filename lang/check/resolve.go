@@ -16,7 +16,6 @@ import (
 func (c *checker) resolve(f *ast.File) {
 	lenient := c.info.HasImports
 
-	// Relationships from all three forms.
 	for _, d := range f.Decls {
 		if r, ok := d.(*ast.Ref); ok {
 			ri := &RefInfo{Node: r, Op: r.OpTok.Kind}
@@ -51,7 +50,6 @@ func (c *checker) resolve(f *ast.File) {
 	}
 	c.duplicateRefsCheck()
 
-	// Index keys must name columns of their table (§indexes).
 	for _, ti := range c.info.Tables {
 		for _, ix := range ti.Indexes {
 			for _, atom := range ix.Key {
@@ -66,7 +64,6 @@ func (c *checker) resolve(f *ast.File) {
 		}
 	}
 
-	// Records: table and column resolution (§records-sample-data).
 	for _, d := range f.Decls {
 		if r, ok := d.(*ast.Records); ok {
 			c.recordsResolve(r, nil, lenient)
@@ -97,7 +94,6 @@ func (c *checker) resolve(f *ast.File) {
 		}
 	}
 
-	// TableGroups: members exist, one group per table (§tablegroup).
 	memberOf := map[string]string{}
 	for _, d := range f.Decls {
 		g, ok := d.(*ast.TableGroup)
@@ -123,7 +119,6 @@ func (c *checker) resolve(f *ast.File) {
 		c.info.TableGroups = append(c.info.TableGroups, gi)
 	}
 
-	// DiagramView members (§diagramview).
 	for _, d := range f.Decls {
 		v, ok := d.(*ast.DiagramView)
 		if !ok {
@@ -157,7 +152,6 @@ func (c *checker) resolve(f *ast.File) {
 	}
 }
 
-// tableLookup resolves a table reference by canonical name or alias.
 func (c *checker) tableLookup(q *ast.QualName) *TableInfo {
 	return c.info.byTable[canonKey(q)]
 }
@@ -183,8 +177,6 @@ func (c *checker) endpointResolve(ep *ast.RefEndpoint, lenient bool) EndpointInf
 	return out
 }
 
-// refKey builds a direction-insensitive identity for a relationship
-// (§relationships-ref): endpoints are canonicalized and sorted.
 func refKey(r *RefInfo) (string, bool) {
 	side := func(e EndpointInfo) (string, bool) {
 		if e.Table == nil {

@@ -18,22 +18,17 @@ import (
 	"github.com/Piechutowski/volt/nao/gen/sqlite"
 )
 
-// tableChecks lowers a package's extended checks (§validation-checks). Runs after
-// dataQueries so Pred declarations are resolved.
 func (c *checker) tableChecks(pkg *Package) {
 	c.pkg = pkg
 	info := c.schemas[pkg.Path]
 	if info == nil {
 		return
 	}
-	// Every table's checks are lowered by tableSpecs, a pure function
-	// of the inputs resolved here, on every CPU; results are
-	// written in table order.
 	type lowered struct {
 		specs          []golang.CheckSpec
 		sqls           map[*ast.Check]string
 		diags          []diag.Diagnostic
-		create, update bool // the params structs validate (§validation-checks): a function of the model and the specs
+		create, update bool
 	}
 	outs := make([]lowered, len(info.Tables))
 	var memo *checksMemo
@@ -91,7 +86,6 @@ func (c *checker) tableChecks(pkg *Package) {
 	pkg.checkIndex()
 }
 
-// checkIndex indexes the lowered checks by table key.
 func (p *Package) checkIndex() {
 	p.checkFnByKey = make(map[string][]golang.CheckSpec, len(p.CheckFns))
 	for _, fn := range p.CheckFns {
@@ -99,12 +93,6 @@ func (p *Package) checkIndex() {
 	}
 }
 
-// lowering is one table's check lowering as a pure function of its
-// inputs: the checked table, its model's fields (or why the plan
-// has none), the package name a Go reference may qualify with, the
-// package directory's Go functions, and the predicates the checks
-// name, transitively. It accumulates only what it returns: the lowered
-// specs, the SQL of every typed check for the DDL, and diagnostics.
 type lowering struct {
 	ti        *check.TableInfo
 	fields    []golang.FieldSig
@@ -121,13 +109,8 @@ func (l *lowering) errorf(pos token.Position, section, format string, args ...an
 	l.diags = append(l.diags, diag.Errorf(pos, "spec/"+section, format, args...))
 }
 
-// tableSpecs lowers one table's checks (§validation-checks) from exactly the inputs
-// named on lowering, reading nothing else and writing nothing it did
-// not create.
 func tableSpecs(ti *check.TableInfo, fields []golang.FieldSig, fieldsErr error, pkgName string, funcs *goScan, preds map[string]*ast.Pred) (specs []golang.CheckSpec, sqls map[*ast.Check]string, diags []diag.Diagnostic) {
 	l := &lowering{ti: ti, fields: fields, fieldsErr: fieldsErr, pkgName: pkgName, funcs: funcs, preds: preds, sqls: map[*ast.Check]string{}}
-	// Direct and injected checks alike (§tablepartial): a partial's checks
-	// belong to every table it is injected into.
 	for _, ck := range ti.Checks {
 		var spec golang.CheckSpec
 		var ok bool
@@ -137,7 +120,7 @@ func tableSpecs(ti *check.TableInfo, fields []golang.FieldSig, fieldsErr error, 
 		case ck.Ref != nil:
 			spec, ok = l.goRefCheck(ck)
 		default:
-			continue // opaque SQL: §checks's business, SQL CHECK only
+			continue
 		}
 		if !ok {
 			continue
@@ -149,17 +132,12 @@ func tableSpecs(ti *check.TableInfo, fields []golang.FieldSig, fieldsErr error, 
 		}
 		specs = append(specs, spec)
 	}
-	// required columns (§columns extension): one synthesized check
-	// per column, named <column>_required.
 	if req := l.requiredSpecs(); len(req) > 0 {
 		specs = append(specs, req...)
 	}
 	return specs, l.sqls, l.diags
 }
 
-// predsNamed is the predicates a table's typed checks name,
-// transitively through the predicates' own bodies, by name; nil where
-// the name resolves to none. A pure input of the lowering.
 func predsNamed(checks []*ast.Check, all map[string]*ast.Pred) map[string]*ast.Pred {
 	var exprs []ast.PredExpr
 	for _, ck := range checks {
@@ -170,9 +148,6 @@ func predsNamed(checks []*ast.Check, all map[string]*ast.Pred) map[string]*ast.P
 	return predsIn(exprs, all)
 }
 
-// predsIn is the predicates the expressions name, transitively through
-// the predicates' own bodies, by name; nil where the name resolves to
-// none.
 func predsIn(exprs []ast.PredExpr, all map[string]*ast.Pred) map[string]*ast.Pred {
 	out := map[string]*ast.Pred{}
 	var walk func(x ast.PredExpr)
@@ -203,8 +178,6 @@ func predsIn(exprs []ast.PredExpr, all map[string]*ast.Pred) map[string]*ast.Pre
 	return out
 }
 
-// requiredSpecs lowers every [required] column of a table to the Go
-// tier's condition (§validation-checks).
 func (l *lowering) requiredSpecs() []golang.CheckSpec {
 	var out []golang.CheckSpec
 	fields := l.fields
@@ -228,7 +201,7 @@ func (l *lowering) requiredSpecs() []golang.CheckSpec {
 		_, isEnum := golang.GoTypeName(normalizeType(cd.Col.Type.String()))
 		kind, ok := check.RequiredKind(cd.Col.Type.String(), !isEnum)
 		if !ok {
-			continue // reported by the schema checker
+			continue
 		}
 		var cond string
 		switch kind {
@@ -244,8 +217,6 @@ func (l *lowering) requiredSpecs() []golang.CheckSpec {
 	return out
 }
 
-// typedCheck types one predicate-form check against its table and
-// renders the SQL and Go tiers together (§validation-checks).
 func (l *lowering) typedCheck(ck *ast.Check) (golang.CheckSpec, bool) {
 	env := l.checkEnv(ck)
 	if env == nil {
@@ -255,12 +226,10 @@ func (l *lowering) typedCheck(ck *ast.Check) (golang.CheckSpec, bool) {
 	if env.failed {
 		return golang.CheckSpec{}, false
 	}
-	l.sqls[ck] = sql // gen/sqlite emits CHECK (<this>) — one rendering, both tiers
+	l.sqls[ck] = sql
 	return golang.CheckSpec{Src: sql, Cond: gocode, Cols: env.used}, true
 }
 
-// goRefCheck resolves one Go-reference check (§validation-checks): a function of
-// the containing package, column arguments, validator tier only.
 func (l *lowering) goRefCheck(ck *ast.Check) (golang.CheckSpec, bool) {
 	ti := l.ti
 	if q := ck.Ref.Qualifier(); q != "" && q != l.pkgName {
@@ -288,8 +257,6 @@ func (l *lowering) goRefCheck(ck *ast.Check) (golang.CheckSpec, bool) {
 	name := ck.Ref.Base()
 	want := "func " + name + "(" + strings.Join(argTypes, ", ") + ") error"
 
-	// The function must exist in this package's Go files with exactly
-	// the contract, spelled as the generated field types (§validation-checks).
 	sc := l.funcs
 	gf, found := sc.funcs[name]
 	if !found {
@@ -327,18 +294,13 @@ func (l *lowering) goRefCheck(ck *ast.Check) (golang.CheckSpec, bool) {
 	}, true
 }
 
-/* ===== the dual renderer ===== */
-
-// chkEnv threads one check's typing: the enclosing table's generated
-// fields, and the class rules of §predicates narrowed by §validation-checks (not-null
-// columns, no time class).
 type chkEnv struct {
 	l      *lowering
 	ti     *check.TableInfo
 	ck     *ast.Check
 	byCol  map[string]golang.FieldSig
 	failed bool
-	used   []string // columns the check reads, first-use order (§validation-checks)
+	used   []string
 }
 
 func (l *lowering) checkEnv(ck *ast.Check) *chkEnv {
@@ -358,8 +320,6 @@ func (e *chkEnv) errorf(pos token.Position, format string, args ...any) {
 	e.l.errorf(pos, "validation-checks", format, args...)
 }
 
-// fieldOf resolves a column reference under §validation-checks's rules. typed marks
-// the typed-check tiers, which additionally reject the time class.
 func (e *chkEnv) fieldOf(id *ast.Ident, typed bool) (golang.FieldSig, bool) {
 	f, has := e.byCol[id.Name()]
 	if !has {
@@ -404,8 +364,6 @@ func (e *chkEnv) classOfCol(name string) typeClass {
 	return classOf(e.ti.Column(name).Col.Type.String())
 }
 
-// render walks a typed check once, producing the SQL fragment and the
-// Go condition together — one typing, two tiers (§validation-checks).
 func (e *chkEnv) render(x ast.PredExpr, preds map[string]bool) (sql, gocode string) {
 	switch x := x.(type) {
 	case *ast.PredBinary:
@@ -429,7 +387,7 @@ func (e *chkEnv) render(x ast.PredExpr, preds map[string]bool) (sql, gocode stri
 			return "1", "true"
 		}
 		if preds[name] {
-			return "1", "true" // cycle already reported by predRefCycles
+			return "1", "true"
 		}
 		preds[name] = true
 		s, g := e.render(d.X, preds)
@@ -508,7 +466,6 @@ func (e *chkEnv) compare(x *ast.PredCompare) (string, string) {
 	return s1 + " " + compareSQL[x.Op] + " " + s2, g1 + " " + goOps[x.Op] + " " + g2
 }
 
-// lit renders one literal for both tiers against the anchoring column.
 func (e *chkEnv) lit(l *ast.Lit, f *golang.FieldSig, class typeClass) (string, string) {
 	switch l.Tok.Kind {
 	case token.NUMBER:
@@ -527,7 +484,7 @@ func (e *chkEnv) lit(l *ast.Lit, f *golang.FieldSig, class typeClass) (string, s
 			return "1", "true"
 		}
 		return "'" + strings.ReplaceAll(l.Tok.Val, "'", "''") + "'", strconv.Quote(l.Tok.Val)
-	default: // true/false idents
+	default:
 		if class != classBool {
 			e.errorf(l.Pos(), "column %q (%s) is not boolean (§predicates)", f.Col, f.Type)
 			return "1", "true"

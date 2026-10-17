@@ -19,7 +19,6 @@ import (
 	"github.com/Piechutowski/volt/itest/blog/db"
 )
 
-// call issues one request with optional headers and body.
 func call(h http.Handler, method, target string, body io.Reader, headers ...string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, target, body)
 	for i := 0; i+1 < len(headers); i += 2 {
@@ -33,7 +32,6 @@ func call(h http.Handler, method, target string, body io.Reader, headers ...stri
 func TestQueryRouteCRUDInJSON(t *testing.T) {
 	h := handlerWithDB(t)
 
-	// Create: body decoded by Content-Type (absent = JSON), 201 with the row.
 	rec := call(h, "POST", "/api/users", strings.NewReader(`{"email":"two@example.com"}`))
 	if rec.Code != 201 {
 		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
@@ -43,14 +41,12 @@ func TestQueryRouteCRUDInJSON(t *testing.T) {
 		t.Fatalf("create body %q (%v)", rec.Body.String(), err)
 	}
 
-	// List: 200, both rows.
 	rec = call(h, "GET", app.PathAPIUserList(), nil)
 	var all []db.User
 	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &all) != nil || len(all) != 2 {
 		t.Fatalf("list: %d %s", rec.Code, rec.Body.String())
 	}
 
-	// Get: path parameter typed int32; a miss is the spine's 404.
 	rec = call(h, "GET", app.PathAPIUserGet(made.ID), nil)
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "two@example.com") {
 		t.Fatalf("get: %d %s", rec.Code, rec.Body.String())
@@ -62,7 +58,6 @@ func TestQueryRouteCRUDInJSON(t *testing.T) {
 		t.Fatalf("get with a non-int32 id: %d, want 404 (§route-paths)", rec.Code)
 	}
 
-	// Update: PATCH with a body, 200 with the rewritten row.
 	rec = call(h, "PATCH", "/api/users/1", strings.NewReader(`{"email":"uno@example.com"}`), "Content-Type", volt.MIMEJSON)
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "uno@example.com") {
 		t.Fatalf("update: %d %s", rec.Code, rec.Body.String())
@@ -71,7 +66,6 @@ func TestQueryRouteCRUDInJSON(t *testing.T) {
 		t.Fatalf("update miss: %d, want 404", rec.Code)
 	}
 
-	// Delete: 204 and no body; a second delete misses.
 	if rec = call(h, "DELETE", "/api/users/1", nil); rec.Code != 204 || rec.Body.Len() != 0 {
 		t.Fatalf("delete: %d %q", rec.Code, rec.Body.String())
 	}
@@ -93,12 +87,10 @@ func TestQueryRouteListParamFromRepeatedKey(t *testing.T) {
 	if len(picked) != 2 || picked[0].ID != 1 || picked[1].ID != 3 {
 		t.Fatalf("picked = %+v, want ids 1 and 3 in id order", picked)
 	}
-	// Absent key: the empty list, matching nothing — never an error.
 	rec = call(h, "GET", app.PathAPIUserPicked(), nil)
 	if rec.Code != 200 || strings.TrimSpace(rec.Body.String()) != "[]" {
 		t.Fatalf("picked with no ids: %d %q, want 200 []", rec.Code, rec.Body.String())
 	}
-	// An element that does not parse names the parameter in a 400.
 	rec = call(h, "GET", "/api/picked?ids=1&ids=x", nil)
 	if rec.Code != 400 || !strings.Contains(rec.Body.String(), "ids") {
 		t.Fatalf("bad list element: %d %q", rec.Code, rec.Body.String())
@@ -108,7 +100,6 @@ func TestQueryRouteListParamFromRepeatedKey(t *testing.T) {
 func TestQueryRouteGOBBothWays(t *testing.T) {
 	h := handlerWithDB(t)
 
-	// A GOB body creates; a GOB Accept reads rows back into the same type.
 	var buf bytes.Buffer
 	if err := gob.NewEncoder(&buf).Encode(db.UserCreateParams{Email: "gob@example.com"}); err != nil {
 		t.Fatal(err)
@@ -202,8 +193,6 @@ func TestQueryRouteValidation(t *testing.T) {
 	if rec.Code != 422 {
 		t.Fatalf("update validation: %d, want 422", rec.Code)
 	}
-	// The seeded user is one@example.com: a duplicate is the database's
-	// refusal, translated to 409 naming the column.
 	rec = call(h, "POST", "/api/users", strings.NewReader(`{"email":"one@example.com"}`))
 	if rec.Code != 409 || !strings.Contains(rec.Body.String(), "users.email") {
 		t.Fatalf("duplicate: %d %q, want 409 naming users.email", rec.Code, rec.Body.String())
@@ -230,12 +219,10 @@ func TestQueryRouteValidationAttribution(t *testing.T) {
 	if !names["email_required"] || !names["email_shape"] {
 		t.Errorf("details = %+v, want email_required and email_shape", p.Details)
 	}
-	// A typo'd field is a 400 naming it, never silently dropped.
 	rec = call(h, "POST", "/api/users", strings.NewReader(`{"emial":"x@y"}`))
 	if rec.Code != 400 || !strings.Contains(rec.Body.String(), "emial") {
 		t.Fatalf("unknown field: %d %q", rec.Code, rec.Body.String())
 	}
-	// A duplicate attributes to the column too.
 	rec = call(h, "POST", "/api/users", strings.NewReader(`{"email":"one@example.com"}`))
 	p = volt.Problem{}
 	if rec.Code != 409 || json.Unmarshal(rec.Body.Bytes(), &p) != nil || len(p.Details) != 1 || p.Details[0].Columns[0] != "email" {

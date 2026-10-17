@@ -17,21 +17,13 @@ const serverName = "volt-lsp"
 
 // Server owns the open documents and the protocol handler.
 type Server struct {
-	watchSupported bool // client accepts dynamic didChangeWatchedFiles registration
+	watchSupported bool
 	mu             sync.Mutex
 	docs           map[string]*Document
-	// texts mirrors every open document's text by on-disk path, under
-	// mu, for the background analysis to snapshot without touching a
-	// Document.
-	texts map[string]string
-	// versions is each open document's version as the client last
-	// numbered it, kept beside texts under mu so a publish can say
-	// which text it judged.
-	versions map[string]int32
-	// analyses is the background analysis of each project root.
-	analyses map[string]*analysis
-	// debounce is how long edits must be quiet before a run.
-	debounce time.Duration
+	texts          map[string]string
+	versions       map[string]int32
+	analyses       map[string]*analysis
+	debounce       time.Duration
 
 	handler protocol.Handler
 }
@@ -79,8 +71,6 @@ func (s *Server) initialize(_ *glsp.Context, params *protocol.InitializeParams) 
 	}
 	capabilities := s.handler.CreateServerCapabilities()
 
-	// Incremental: the client sends the keystroke, not the file, and
-	// didChange applies each range to the text as it then stands.
 	syncKind := protocol.TextDocumentSyncKindIncremental
 	capabilities.TextDocumentSync = &protocol.TextDocumentSyncOptions{
 		OpenClose: boolPtr(true),
@@ -100,12 +90,6 @@ func (s *Server) initialize(_ *glsp.Context, params *protocol.InitializeParams) 
 	}, nil
 }
 
-// ---------------------------------------------------------------------------
-// document sync
-
-// initialized asks the client to report Go file changes: a Go reference
-// (§pipelines, §validation-checks) is checked against the package's Go files. The
-// request is fire-and-forget.
 func (s *Server) initialized(ctx *glsp.Context, _ *protocol.InitializedParams) error {
 	if !s.watchSupported {
 		return nil
@@ -122,8 +106,6 @@ func (s *Server) initialized(ctx *glsp.Context, _ *protocol.InitializedParams) e
 	return nil
 }
 
-// watchedFilesChanged re-checks every open document when a Go file was
-// saved, created or deleted: Go-reference facts live in those files.
 func (s *Server) watchedFilesChanged(ctx *glsp.Context, params *protocol.DidChangeWatchedFilesParams) error {
 	goTouched := false
 	for _, ev := range params.Changes {
@@ -137,11 +119,6 @@ func (s *Server) watchedFilesChanged(ctx *glsp.Context, params *protocol.DidChan
 	return nil
 }
 
-// freshen catches a document up on Go files that changed since its
-// project analysis. It kicks the background analysis of the document's
-// project: the request in hand answers from the analysis it adopted,
-// the next adopts the fresh one. The project pass runs on the handler
-// goroutine for no document.
 func (s *Server) freshen(ctx *glsp.Context, doc *Document) {
 	if doc == nil || !doc.GoFilesChanged() {
 		return
@@ -160,9 +137,6 @@ func (s *Server) didOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocument
 	return nil
 }
 
-// edited records a document's new text and its version: its own front
-// end now, and the project's analysis once the edits settle. A
-// document outside any project has its verdict right away.
 func (s *Server) edited(ctx *glsp.Context, doc *Document, text string, version int32) {
 	path := pathFromURI(doc.URI)
 	s.mu.Lock()
@@ -178,15 +152,11 @@ func (s *Server) edited(ctx *glsp.Context, doc *Document, text string, version i
 	s.diagnosticsPublish(ctx, doc)
 }
 
-// openTexts snapshots every open buffer keyed by on-disk path.
 func (s *Server) openTexts() map[string]string {
 	texts, _ := s.openSnapshot()
 	return texts
 }
 
-// openSnapshot copies every open buffer's text and version under one
-// hold of mu: the overlay a run analyzes and the versions its publish
-// stamps are of one and the same moment.
 func (s *Server) openSnapshot() (map[string]string, map[string]int32) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -243,7 +213,6 @@ func (s *Server) didClose(ctx *glsp.Context, params *protocol.DidCloseTextDocume
 	return nil
 }
 
-// analysisKickAll re-analyzes every project with an open document.
 func (s *Server) analysisKickAll(ctx *glsp.Context) {
 	s.mu.Lock()
 	roots := map[string]bool{}
@@ -258,8 +227,6 @@ func (s *Server) analysisKickAll(ctx *glsp.Context) {
 	}
 }
 
-// diagnosticsPublish sends a document its own diagnostics, stamped
-// with the version of the text they are positioned in: the current one.
 func (s *Server) diagnosticsPublish(ctx *glsp.Context, doc *Document) {
 	s.mu.Lock()
 	version := s.versions[pathFromURI(doc.URI)]
@@ -271,14 +238,11 @@ func (s *Server) diagnosticsPublish(ctx *glsp.Context, doc *Document) {
 	})
 }
 
-// versionStamp is a document version as a publish carries it.
 func versionStamp(v int32) *protocol.UInteger {
 	u := protocol.UInteger(v)
 	return &u
 }
 
-// docGet returns the open document, carrying the newest analysis of
-// its project (adopt).
 func (s *Server) docGet(uri string) *Document {
 	s.mu.Lock()
 	doc := s.docs[uri]
@@ -286,9 +250,6 @@ func (s *Server) docGet(uri string) *Document {
 	s.adopt(doc)
 	return doc
 }
-
-// ---------------------------------------------------------------------------
-// language features
 
 func (s *Server) completion(ctx *glsp.Context, params *protocol.CompletionParams) (any, error) {
 	doc := s.docGet(params.TextDocument.URI)

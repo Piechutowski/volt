@@ -12,7 +12,7 @@ func JSONList[T any](v []T) string {
 	}
 	b, err := json.Marshal(v)
 	if err != nil {
-		panic("rt.JSONList: " + err.Error()) // unreachable for the admitted element types
+		panic("rt.JSONList: " + err.Error())
 	}
 	return string(b)
 }

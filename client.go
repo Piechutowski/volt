@@ -71,9 +71,6 @@ func (c *Client) send(ctx context.Context, method, url string, in any) (*http.Re
 	return hc.Do(req)
 }
 
-// problemOf turns a non-2xx reply into an error: a Problem body
-// (JSON or GOB) becomes a *ProblemError with its details; anything
-// else becomes a status error carrying the body text.
 func problemOf(resp *http.Response) error {
 	if f, ok := FormatOf(resp.Header.Get("Content-Type")); ok {
 		var p Problem

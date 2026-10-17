@@ -17,8 +17,8 @@ import (
 type StmtCache struct {
 	mu      sync.Mutex
 	max     int
-	order   *list.List               // front = most recently used; values are *cacheEntry
-	entries map[string]*list.Element // sql text -> element
+	order   *list.List
+	entries map[string]*list.Element
 	closed  bool
 }
 
@@ -54,7 +54,6 @@ func (c *StmtCache) Prepare(ctx context.Context, db DBTX, query string) (*sql.St
 	}
 	c.mu.Unlock()
 
-	// Prepare outside the lock: preparing may hit the database.
 	stmt, err := db.PrepareContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -67,7 +66,6 @@ func (c *StmtCache) Prepare(ctx context.Context, db DBTX, query string) (*sql.St
 		return nil, errors.New("rt.StmtCache: cache is closed")
 	}
 	if el, ok := c.entries[query]; ok {
-		// lost a race with another goroutine; keep the incumbent
 		_ = stmt.Close()
 		c.order.MoveToFront(el)
 		return el.Value.(*cacheEntry).stmt, nil

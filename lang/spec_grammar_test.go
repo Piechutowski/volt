@@ -14,13 +14,6 @@ import (
 	"github.com/Piechutowski/volt/lang/parser"
 )
 
-// The specification's grammar is executable: every EBNF block
-// reads as ISO 14977, every name it uses is defined once, the collected
-// grammars repeat the sections' definitions exactly, and the language
-// the grammar defines agrees with the front end: every sentence derived
-// from the grammar parses, and every text one token away from one is
-// accepted by the front end exactly when the grammar accepts it.
-
 type specBlock struct {
 	line    int
 	heading string
@@ -66,11 +59,6 @@ func specGrammarBlocks(t *testing.T) []specBlock {
 	return blocks
 }
 
-// specLanguage assembles the language of a .volt file from the
-// sections' blocks: Part I's rules, then Part II's, which may only add
-// names, except that §validation-checks redefines check (its first alternative is
-// §checks's), and the collected grammar of Part II extends element and
-// setting value by reference.
 func specLanguage(t *testing.T) *ebnf.Language {
 	t.Helper()
 	blocks := specGrammarBlocks(t)
@@ -86,11 +74,11 @@ func specLanguage(t *testing.T) *ebnf.Language {
 		}
 		for _, r := range b.g.Rules {
 			switch {
-			case b.section == "Lexical Structure" || r.Name == "slash": // §lexical-structure, and the one addition of §layers-files-and-the-superset-rule
+			case b.section == "Lexical Structure" || r.Name == "slash":
 				lexical[r.Name] = true
 			}
 			if b.part == 2 && r.Name == "check" {
-				g.Set(r) // §validation-checks extends §checks
+				g.Set(r)
 				continue
 			}
 			if err := g.Add(r); err != nil {
@@ -109,12 +97,10 @@ func specLanguage(t *testing.T) *ebnf.Language {
 		base := g.Lookup(name)
 		g.Set(&ebnf.Rule{Name: name, Expr: ebnf.Alt{Items: append(alternatives(base.Expr), ext.Items[1:]...)}, Line: base.Line})
 	}
-	// A production that references sp explicitly lays out its own
-	// whitespace (Notation, EBNF): nothing else lies between its symbols.
 	contiguous := map[string]bool{
-		"route path":   true, // §route-paths
-		"package path": true, // §imports
-		"param":        true, // §predicates, the grammar's own note
+		"route path":   true,
+		"package path": true,
+		"param":        true,
 	}
 	for _, r := range g.Rules {
 		for _, ref := range ebnf.Refs(r.Expr) {
@@ -128,10 +114,10 @@ func specLanguage(t *testing.T) *ebnf.Language {
 		G:          g,
 		Start:      "program",
 		Lexical:    lexical,
-		Layout:     ebnf.Rep{X: ebnf.Alt{Items: []ebnf.Expr{ebnf.Ref{Name: "sp"}, ebnf.Ref{Name: "comment"}}}}, // §line-structure-and-whitespace, §comments
-		Newline:    "newline",                                                                                  // §line-structure-and-whitespace
+		Layout:     ebnf.Rep{X: ebnf.Alt{Items: []ebnf.Expr{ebnf.Ref{Name: "sp"}, ebnf.Ref{Name: "comment"}}}},
+		Newline:    "newline",
 		Contiguous: contiguous,
-		SameLine: map[string]bool{ // §settings-lists
+		SameLine: map[string]bool{
 			"settings": true, "table settings": true, "column settings": true, "index settings": true,
 			"check settings": true, "ref settings": true, "enum settings": true, "note settings": true,
 			"table group settings": true,
@@ -152,7 +138,7 @@ func specLanguage(t *testing.T) *ebnf.Language {
 			"any character of Unicode category L (Letter)": "a",
 			"any character of Unicode category M (Mark)":   "́",
 		},
-		Cut: true, // §line-structure-and-whitespace
+		Cut: true,
 	}
 	if err := l.Check(); err != nil {
 		t.Fatalf("the spec's grammar is not closed:\n%v", err)
@@ -235,8 +221,6 @@ func specSentences(t *testing.T) (*ebnf.Language, []ebnf.Sentence) {
 	return l, sentences
 }
 
-// sentencesDir, when set, receives every derived sentence as a .volt
-// file, numbered, for the tree-sitter differential of docs/editor.md section 8.
 var sentencesDir = flag.String("sentences", "", "write the derived sentences of the spec's grammar to this directory")
 
 // Every sentence the grammar derives is recognized by the grammar's

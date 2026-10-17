@@ -66,10 +66,6 @@ type RouteInfo struct {
 	Table         string // the resources declaration's table name, when FromResources
 	FromDataset   bool   // expanded from a dataset item (§datasets)
 
-	// shape is the pattern parsed for the §route-conflicts ambiguity relation
-	// and shapeKey the method and shape as the duplicate scan keys them,
-	// both set when the route is lowered; ord is the route's position
-	// in the package's table, set when the checker accepts it.
 	shape    pathShape
 	shapeKey string
 	ord      int
@@ -145,16 +141,13 @@ type ActionInfo struct {
 	Routes []*RouteInfo
 }
 
-// resourceActions is the canonical action table (spec §the-action-table), in
-// definition order. Method "" is filled per action; Update expands to
-// both PATCH and PUT.
 var resourceActions = []struct {
-	Name    string   // action / interface method name
-	Methods []string // HTTP methods
-	Suffix  string   // path suffix after /<table>
-	OnID    bool     // route includes the key parameter
-	API     bool     // included under [api]
-	Op      string   // the default CRUD operation behind [default] (§default-handlers); "" for form pages
+	Name    string
+	Methods []string
+	Suffix  string
+	OnID    bool
+	API     bool
+	Op      string
 }{
 	{"Index", []string{"GET"}, "", false, true, "list"},
 	{"New", []string{"GET"}, "/new", false, false, ""},
@@ -165,8 +158,6 @@ var resourceActions = []struct {
 	{"Delete", []string{"DELETE"}, "", true, true, "delete"},
 }
 
-// actionByLower maps the lowercased action names accepted in only:/except:
-// lists to canonical names.
 var actionByLower = func() map[string]string {
 	m := map[string]string{}
 	for _, a := range resourceActions {

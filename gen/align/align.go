@@ -23,7 +23,7 @@ type Block struct {
 }
 
 type line struct {
-	cells []string // nil for a verbatim line
+	cells []string
 	text  string
 }
 

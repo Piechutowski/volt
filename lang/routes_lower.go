@@ -1,11 +1,5 @@
 package lang
 
-// The lowering of one scope item (§scopes-and-routes, §resources, §datasets) as a pure function
-// of explicit inputs: a route, a resources declaration or a
-// dataset, with the context its scopes inherited, the package's own
-// facts, and an oracle it questions about the project and whose
-// answers it returns.
-
 import (
 	"maps"
 	"strings"
@@ -18,41 +12,23 @@ import (
 	"github.com/Piechutowski/volt/nao/inflect"
 )
 
-// routeFacts are the package's own facts a scope item's lowering
-// reads, compared as values by the memo.
 type routeFacts struct {
 	pkgName, pkgPath, module string
-	imports                  map[string]string // qualifier -> package path
+	imports                  map[string]string
 }
 
 func (f routeFacts) equal(g routeFacts) bool {
 	return f.pkgName == g.pkgName && f.pkgPath == g.pkgPath && f.module == g.module && maps.Equal(f.imports, g.imports)
 }
 
-// routeEnv is what a scope item's lowering may ask of the project
-// beyond its own package's facts. Read only: every answer is an
-// identity or a value the lowering records and returns.
 type routeEnv interface {
-	// dataPackage describes a package as a query target: its Go name,
-	// whether it is loaded with a schema, whether it declares selects.
 	dataPackage(path string) (pkgName string, hasSchema, hasSelects bool)
-	// tableByBase finds a table of a package's schema by base name; the
-	// hint describes the nearest miss when there is none.
 	tableByBase(path, base string) (ti *check.TableInfo, hint string)
-	// modelOf is the identity of a table's model in its package's plan
-	// with the CRUD methods the plan mints for it, or the plan's error.
 	modelOf(path, key string) (model any, methods []golang.CRUDMethod, err error)
-	// crudByName finds the table and method a package's plan mints
-	// under a CRUD method name.
 	crudByName(path, name string) (key string, model any, cm golang.CRUDMethod, ok bool)
-	// selectByMethod finds the select and member minting a method name.
 	selectByMethod(path, name string) (sel *SelectInfo, member *check.TableInfo, ok bool)
-	// selectByName finds a package's select by declared name; the hint
-	// describes a case-insensitive match when there is none.
 	selectByName(path, name string) (si *SelectInfo, hint string)
-	// validators reports whether a table's params structs validate.
 	validators(path, key string) (create, update bool)
-	// queryHint is the did-you-mean for a query method a package lacks.
 	queryHint(path, name string) string
 }
 
@@ -69,8 +45,6 @@ const (
 	lkQueryHint
 )
 
-// routeLookup is one question a lowering asked the oracle and the
-// answer it got, by identity or by value.
 type routeLookup struct {
 	kind       lookupKind
 	path, name string
@@ -82,7 +56,6 @@ type routeLookup struct {
 	model                                  any
 }
 
-// holds reports whether the oracle still gives the recorded answer.
 func (l routeLookup) holds(env routeEnv) bool {
 	switch l.kind {
 	case lkDataPackage:
@@ -119,13 +92,10 @@ func errString(err error) string {
 	return err.Error()
 }
 
-// routeLowering is one scope item's lowering: its inputs, and what it
-// accumulates to return, the questions asked, the import qualifiers
-// used, and the diagnostics.
 type routeLowering struct {
 	facts  routeFacts
 	env    routeEnv
-	record bool // keep the questions asked: a memo will verify them
+	record bool
 
 	lookups []routeLookup
 	used    []string
@@ -136,14 +106,12 @@ func (l *routeLowering) errorf(pos token.Position, section, format string, args 
 	l.diags = append(l.diags, diag.Errorf(pos, "spec/"+section, format, args...))
 }
 
-// note keeps a question and its answer for the memo, when one asked.
 func (l *routeLowering) note(lookup routeLookup) {
 	if l.record {
 		l.lookups = append(l.lookups, lookup)
 	}
 }
 
-// importOf resolves an import qualifier, noting its use.
 func (l *routeLowering) importOf(qual string) (string, bool) {
 	path, ok := l.facts.imports[qual]
 	if ok {
@@ -200,11 +168,6 @@ func (l *routeLowering) queryHint(path, name string) string {
 	return hint
 }
 
-// itemLower lowers one scope item to its routes from exactly the
-// inputs named on routeLowering, reading nothing else and writing
-// nothing it did not create. Beside the routes it returns what it
-// asked the oracle and was told, the import qualifiers it used, and
-// its diagnostics; the questions are kept only when record asks.
 func itemLower(item ast.Node, inh inherited, facts routeFacts, env routeEnv, record bool) (routes []*RouteInfo, lookups []routeLookup, used []string, diags []diag.Diagnostic) {
 	l := &routeLowering{facts: facts, env: env, record: record}
 	switch item := item.(type) {
@@ -218,21 +181,13 @@ func itemLower(item ast.Node, inh inherited, facts routeFacts, env routeEnv, rec
 		routes = l.dataset(item, inh)
 	}
 	for _, r := range routes {
-		r.shape = shapeParse(r) // a function of the pattern: parsed here, once
+		r.shape = shapeParse(r)
 		r.shapeKey = r.Method + " " + shapeOf(r)
 	}
 	return routes, l.lookups, l.used, l.diags
 }
 
-/* ===== datasets (§datasets) ===== */
-
-// dataset turns `dataset db.browse [strip: 'da_']` into one GET query
-// route per member of the select's target: the segment is the
-// member's table name with the strip prefix removed, the handler the
-// member's select method, bound like any query route (§query-routes).
 func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
-	// §dataset-declaration: the select is this package's own — bare or self-qualified,
-	// as a plug is (§pipelines) — or an imported package's, qualified.
 	qual, target, local := l.facts.pkgName, l.facts.pkgPath, true
 	qualPos := ds.Name.Pos()
 	if ds.Pkg != nil && ds.Pkg.Name() != l.facts.pkgName {
@@ -356,8 +311,6 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 	return out
 }
 
-// selfFuncRef accepts Name or <thispackage>.Name and returns the bare
-// function name.
 func (l *routeLowering) selfFuncRef(v ast.Node) (string, bool) {
 	return selfFuncRefIn(v, l.facts.pkgName)
 }
@@ -379,8 +332,6 @@ func selfFuncRefIn(v ast.Node, pkgName string) (string, bool) {
 	return "", false
 }
 
-/* ===== routes (§scopes-and-routes) ===== */
-
 func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 	method := methodOf(r.Verb())
 	segs := append(append([]*ast.Segment{}, inh.prefix...), r.Path.Segments...)
@@ -395,10 +346,6 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 			return nil
 		}
 	}
-	// §handler-references: `Query` or `<package name>.Query` names a generated query
-	// of this package and `pkg.Query` one of an imported package — a
-	// query route (§query-routes); `volt.Events` is the runtime's; anything
-	// else is Controller.Action.
 	var query *QueryRef
 	events := false
 	controller, action := "", r.Handler.Parts[0].Name()
@@ -457,15 +404,13 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 
 	if query != nil {
 		action = ""
-		// The client method carries the name for every query route; the
-		// reverse-URL helper only for reads, as with resources (§query-routes).
 		client = helper
 		if method != "GET" && method != "HEAD" {
 			helper = ""
 		}
 	}
 	if events {
-		client = helper // the client's Events method (§event-routes)
+		client = helper
 	}
 	return &RouteInfo{
 		Method:       method,
@@ -484,11 +429,6 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 	}
 }
 
-/* ===== query routes (§query-routes) ===== */
-
-// queryValueTypes are the Go types a query-string parameter can carry:
-// the scalar column types of §mapping-to-go, matched by the runtime's
-// volt.QueryParam.
 var queryValueTypes = map[string]bool{
 	"string": true, "bool": true,
 	"int": true, "int8": true, "int16": true, "int32": true, "int64": true,
@@ -496,18 +436,11 @@ var queryValueTypes = map[string]bool{
 	"float32": true, "float64": true, "time.Time": true,
 }
 
-// queryRef resolves `pkg.Method`, `Method` or `<this package>.Method`
-// to a generated query of the named package — a select method (§selects-over-groups)
-// or a default CRUD method — and binds the route's parameters to the
-// method's (§query-routes).
 func (l *routeLowering) queryRef(r *ast.Route, method string, params []Param, qual, target string, local bool) *QueryRef {
 	last := r.Handler.Parts[len(r.Handler.Parts)-1]
 	return l.queryBind(last.Pos(), r.Handler.Parts[0].Pos(), method, params, qual, target, local, last.Name(), paramAt{route: r})
 }
 
-// queryBind resolves a query method by name in the data package — an
-// imported one, or this package when local — and binds the route's
-// parameters; segAt locates a path parameter for diagnostics.
 func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, params []Param, qual, target string, local bool, name string, segAt paramAt) *QueryRef {
 	pkgName, hasSchema, _ := l.dataPackage(target)
 	ref := qual + "." + name
@@ -522,8 +455,6 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		}
 		return nil
 	}
-	// The Controllers field: the qualifier as a Go name, or Queries for
-	// the package's own handle (§query-routes).
 	field := "Queries"
 	if !local {
 		var err error
@@ -538,7 +469,6 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	}
 	qr := &QueryRef{Qualifier: qual, Field: field, Package: target, Import: importPath, PkgName: pkgName, Local: local, Method: name, Status: 200}
 
-	// Signature parameters of the named method, in order.
 	type sigParam struct {
 		name, goType string
 		body         bool
@@ -547,8 +477,6 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	var sig []sigParam
 	found := false
 
-	// Selects: <Model><SelectName> per member (§selects-over-groups); the first member
-	// minting the name owns it.
 	if si, m, ok := l.selectByMethod(target, name); ok {
 		found = true
 		for _, p := range si.Params {
@@ -564,7 +492,6 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		}
 		qr.Many = true
 	}
-	// Default CRUD, from the package's plan.
 	if !found {
 		if key, _, cm, ok := l.crudByName(target, name); ok {
 			found = true
@@ -572,8 +499,6 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 				sig = append(sig, sigParam{name: k.GoName, goType: k.GoType})
 			}
 			if cm.Body != "" {
-				// The params struct validates when it carries the
-				// columns of at least one check (§validation-checks).
 				create, update := l.validators(target, key)
 				sig = append(sig, sigParam{name: "arg", goType: qual + "." + cm.Body, body: true,
 					validates: (cm.Op == "create" && create) || (cm.Op == "update" && update)})
@@ -593,8 +518,6 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		return nil
 	}
 
-	// Bind: path parameters by name (type spelled to match), a params
-	// struct from the body, everything else from the query string.
 	byName := map[string]Param{}
 	for _, p := range params {
 		byName[p.Name] = p
@@ -654,13 +577,10 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	return qr
 }
 
-// litSeg builds a synthetic literal segment for an expanded route.
 func litSeg(n string, at token.Position) *ast.Segment {
 	return &ast.Segment{Kind: ast.SegLit, Name: &ast.Ident{Tok: token.Token{Kind: token.IDENT, Val: n, Pos: at}}}
 }
 
-// paramAt locates a path parameter for a diagnostic: in a route, the
-// segment naming it; for a dataset or a resources, the item itself.
 type paramAt struct {
 	route *ast.Route
 	at    token.Position
@@ -682,14 +602,11 @@ func segPos(r *ast.Route, name string) token.Position {
 	return r.Pos()
 }
 
-// pathParams validates the full segment list and derives the parameter
-// signature (§route-paths).
 func (l *routeLowering) pathParams(segs []*ast.Segment) ([]Param, bool) {
 	var params []Param
 	seen := map[string]bool{}
 	ok := true
 	for i, seg := range segs {
-		// §route-paths: every segment name is a plain, unquoted identifier.
 		if seg.Name.Quoted() || !goIdentOK(seg.Name.Name()) {
 			l.errorf(seg.Pos(), "scopes-and-routes", "path segment %q must be a plain identifier of letters, digits and underscores (§route-paths)", seg.Name.Name())
 			ok = false
@@ -735,8 +652,6 @@ func (l *routeLowering) pathParams(segs []*ast.Segment) ([]Param, bool) {
 	return params, ok
 }
 
-/* ===== resources (§resources) ===== */
-
 func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInfo {
 	declared := res.Name.Name()
 	if res.Name.Quoted() || !goIdentOK(declared) || (res.Pkg != nil && (res.Pkg.Quoted() || !goIdentOK(res.Pkg.Name()))) {
@@ -746,8 +661,6 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 
 	paramName := "id"
 
-	// §default-handlers: [default] generates the handlers from the table's default
-	// CRUD, as for a query route (§query-routes).
 	def := false
 	if res.Settings != nil {
 		if s := res.Settings.Get("default"); s != nil {
@@ -758,13 +671,12 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 		}
 	}
 
-	// §declaration: the declaration MUST name a declared table, qualified or not.
 	ti, ok, reported := l.resourceTable(res)
 	if reported {
-		return nil // the reference is wrong; expanding it would only add noise
+		return nil
 	}
 	if !ok {
-		return nil // resourceTable reported the miss
+		return nil
 	}
 	tableName, singular := ti.Decl.Name.Base(), ""
 	if model, err := golang.ModelName(ti.Decl); err == nil {
@@ -800,7 +712,6 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 				}
 				api = true
 			case "default":
-				// validated above; implies api (§default-handlers)
 				api = true
 			case "only", "except":
 				list, ok := s.Value.(*ast.IdentList)
@@ -863,7 +774,6 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 		except = nil
 	}
 
-	// §default-handlers: the CRUD methods the default handlers call, by operation.
 	var crud map[string]golang.CRUDMethod
 	qual, target, local := l.facts.pkgName, l.facts.pkgPath, true
 	qualPos := res.Name.Pos()
@@ -873,8 +783,6 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 		qualPos = res.Pkg.Pos()
 	}
 	if def {
-		// resourceTable resolved the table, so the package has a schema
-		// and, with it, a plan.
 		_, methods, err := l.modelOf(target, ti.Key)
 		if err != nil {
 			l.errorf(res.Name.Pos(), "resources", "resources %s [default]: %v (§default-handlers)", res.Ref(), err)
@@ -889,8 +797,6 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 		}
 	}
 
-	// The key parameter must not repeat a parameter of the enclosing
-	// scope (§route-paths); said once, at the declaration.
 	for _, seg := range inh.prefix {
 		if seg.Kind != ast.SegParam || seg.Name.Name() != paramName {
 			continue
@@ -941,9 +847,6 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 		case "Edit":
 			helper = inh.namePrefix + "Edit" + singular
 		}
-		// §default-handlers: with [default] the action is a query route over the
-		// table's CRUD method, with no controller; writes have a client
-		// method and no reverse-URL helper (§query-routes).
 		var qr *QueryRef
 		client := ""
 		if def {
@@ -985,14 +888,13 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 			if qr != nil {
 				r.Controller, r.Action = "", ""
 			}
-			helper, client = "", "" // the names belong to the first method of the action
+			helper, client = "", ""
 			out = append(out, r)
 		}
 	}
 	return out
 }
 
-// crudAbsent says why a default CRUD method can be missing (§table-resolution).
 func crudAbsent(op string) string {
 	if op == "update" {
 		return "every column is part of the key, so there is nothing to update"
@@ -1000,8 +902,6 @@ func crudAbsent(op string) string {
 	return "the table has no primary key"
 }
 
-// resourceTable resolves a resources declaration to the table it names
-// (§declaration), matched exactly; a miss is reported as an error.
 func (l *routeLowering) resourceTable(res *ast.Resources) (ti *check.TableInfo, ok, reported bool) {
 	pkgPath := l.facts.pkgPath
 	if res.Pkg != nil && res.Pkg.Name() != l.facts.pkgName {
@@ -1026,9 +926,6 @@ func (l *routeLowering) resourceTable(res *ast.Resources) (ti *check.TableInfo, 
 	return nil, false, true
 }
 
-// pkParamType maps a table's primary key to a route parameter type.
-// Both declaration forms count (nao SPEC §columns, §indexes): column-level
-// pk flags/settings and pk-marked indexes.
 func (l *routeLowering) pkParamType(ti *check.TableInfo, pos token.Position) (ParamType, bool) {
 	var pkNames []string
 	seen := map[string]bool{}

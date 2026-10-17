@@ -198,7 +198,6 @@ Scope / {
 	s.send("textDocument/didOpen", map[string]any{"textDocument": map[string]any{"uri": uri, "languageId": "volt", "version": 1, "text": text}}, false)
 	s.notification("open: a clean file", "textDocument/publishDiagnostics")
 
-	// keystrokes: the settings bracket goes missing, then comes back with a second table whose route has a typo, then all is well
 	broken := strings.Replace(text, "[pk, increment]", "[pk, increment", 1)
 	change("edit 1: a settings list left open", 2, broken)
 	typo := strings.Replace(text, "get / Home.Index", "gett / Home.Index", 1) + "\nTable tags {\n\tid integer [pk]\n}\n"
@@ -206,7 +205,6 @@ Scope / {
 	change("edit 3: the verb fixed", 4, strings.Replace(typo, "gett /", "get /", 1))
 	typed("edit 4: a note typed into the new table's header, as a ranged change", 5, 12, 10, " [note: 'tagging']")
 
-	// requests on the fixed file
 	id = s.send("textDocument/hover", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 2, "character": 7}}, true)
 	s.response("hover on the table name", id)
 	id = s.send("textDocument/hover", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 9, "character": 12}}, true)

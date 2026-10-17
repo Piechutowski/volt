@@ -38,7 +38,6 @@ func TestResourcesDefault(t *testing.T) {
 		if err != nil || up.Email != "fer@example.com" {
 			t.Fatalf("%v: update = %+v, %v", f, up, err)
 		}
-		// A [required] column is validated before the query (§validation-checks).
 		if _, err := c.RefUpdateUser(ctx, made.ID, db.UserUpdateParams{}); !errors.Is(err, volt.Error(422, "")) {
 			t.Fatalf("%v: empty email = %v, want 422", f, err)
 		}
@@ -51,11 +50,9 @@ func TestResourcesDefault(t *testing.T) {
 		srv.Close()
 	}
 
-	// The reverse-URL helpers exist for the reads only (§default-handlers).
 	if app.PathRefUsers() != "/ref/users" || app.PathRefUser(7) != "/ref/users/7" {
 		t.Fatalf("helpers: %q %q", app.PathRefUsers(), app.PathRefUser(7))
 	}
-	// PUT shares the PATCH route's handler.
 	h := handlerWithDB(t)
 	if rec := call(h, "PUT", "/ref/users/1", nil); rec.Code != 400 {
 		t.Fatalf("put with no body: %d, want 400", rec.Code)

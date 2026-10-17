@@ -164,7 +164,6 @@ func Format(e Expr) string {
 	return b.String()
 }
 
-// Precedence for printing: alternation < sequence < exception < factor.
 func format(b *strings.Builder, e Expr, prec int) {
 	switch x := e.(type) {
 	case Seq:
@@ -224,8 +223,6 @@ func format(b *strings.Builder, e Expr, prec int) {
 	}
 }
 
-/* ===== reading ===== */
-
 type tokKind int
 
 const (
@@ -255,7 +252,6 @@ func (p *parser) errorf(line int, format string, args ...any) error {
 	return fmt.Errorf("line %d: %s", line, fmt.Sprintf(format, args...))
 }
 
-// next scans the next token, skipping layout and (* comments *).
 func (p *parser) next() {
 	if p.err != nil {
 		return
@@ -293,7 +289,6 @@ func (p *parser) scan() {
 	start := p.pos
 	switch {
 	case isLetter(c):
-		// words separated by single spaces form one name
 		for {
 			for p.pos < len(p.src) && (isLetter(p.src[p.pos]) || isDigit(p.src[p.pos])) {
 				p.pos++
@@ -405,8 +400,6 @@ func (p *parser) alt() (Expr, error) {
 	return Alt{Items: items}, nil
 }
 
-// seq reads a possibly empty sequence: empty before ";", "|" and a
-// closing bracket.
 func (p *parser) seq() (Expr, error) {
 	var items []Expr
 	if p.tok.kind == tkEOF || p.is(";") || p.is("|") || p.is("]") || p.is("}") || p.is(")") {

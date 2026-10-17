@@ -35,14 +35,11 @@ func TestValidateTypedCheckMirrorsDDL(t *testing.T) {
 		t.Errorf("expected the named check to fail, got %v", err)
 	}
 
-	// The SQL tier is the same rendering: the raw INSERT must violate
-	// the CHECK constraint.
 	if _, err := db.ExecContext(ctx,
 		`INSERT INTO page_views (site, day, hits) VALUES ('alpha', 0, -1)`); err == nil {
 		t.Error("SQL tier accepted a row the Go tier rejects — the tiers disagree")
 	}
 
-	// like rides both tiers too: site must have at least one character.
 	empty := PageView{Site: "", Day: 1}
 	if empty.Validate() == nil {
 		t.Error("Go tier accepted site = '' against site like '%_'")
@@ -71,8 +68,6 @@ func TestValidateGoRefCheckIsGoOnly(t *testing.T) {
 		t.Error("Validate rejected a valid email")
 	}
 
-	// The documented asymmetry (§validation-checks): SQLite cannot call Go, so the
-	// database accepts what only the validator can refuse.
 	if _, err := db.ExecContext(ctx,
 		`INSERT INTO users (email, name) VALUES ('not-an-address', 'Ann')`); err != nil {
 		t.Errorf("the DDL must carry no CHECK for a Go-reference check: %v", err)
@@ -104,8 +99,6 @@ func TestParamsValidate(t *testing.T) {
 	if err := pv.Validate(); err == nil {
 		t.Error("site like '%_' should fail on an empty site")
 	}
-	// hits is defaulted and absent from CreateParams: counts_positive is
-	// the row's and the DDL's business, so Day alone does not fail here.
 	if err := (PageViewCreateParams{Site: "a", Day: 0}).Validate(); err != nil {
 		t.Errorf("a check the params cannot see must not run: %v", err)
 	}

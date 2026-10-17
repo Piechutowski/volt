@@ -58,7 +58,6 @@ func TestClientQueryRoutes(t *testing.T) {
 			t.Fatalf("%v: second delete = %v, want volt.ErrNotFound", f, err)
 		}
 
-		// Dataset routes (§datasets): the same signature for every member.
 		if _, err := c.MsRevenueBrowse(ctx, 2024); err != nil {
 			t.Fatalf("%v: dataset route = %v", f, err)
 		}
@@ -66,7 +65,6 @@ func TestClientQueryRoutes(t *testing.T) {
 			t.Fatalf("%v: dataset route = %v", f, err)
 		}
 
-		// A named controller route: raw response, the echo body.
 		resp, err := c.User(ctx, 7)
 		if err != nil || resp.StatusCode != 200 {
 			t.Fatalf("%v: raw user = %v %v", f, resp, err)
@@ -111,7 +109,6 @@ func TestEventRouteStreams(t *testing.T) {
 			t.Fatalf("%s: no event", name)
 		}
 	}
-	// A subscriber arriving after the fact still sees it (replay).
 	late := c.Events(ctx)
 	select {
 	case ev := <-late:
@@ -137,7 +134,6 @@ func TestClientValidationErrors(t *testing.T) {
 	if !errors.As(err, &he) || he.StatusCode() != 422 || !strings.Contains(he.Error(), "EmailValid") {
 		t.Fatalf("invalid email = %v", err)
 	}
-	// The details survive the wire in GOB: the GUI marks the field.
 	var pe *volt.ProblemError
 	if !errors.As(err, &pe) || len(pe.Details()) == 0 || pe.Details()[0].Columns[0] != "email" {
 		t.Fatalf("no attribution through the client: %v", err)

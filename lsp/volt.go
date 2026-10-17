@@ -10,10 +10,6 @@ import (
 	"github.com/Piechutowski/volt/lang/diag"
 )
 
-// voltProjectDiags runs Load, Check and Vet through the root's session
-// and returns the diagnostics that point into this document. ok
-// is false when the document is in no project (§projects-and-packages), and the caller
-// then falls back to the single-file DBML diagnostics.
 func (d *Document) voltProjectDiags() ([]diag.Diagnostic, bool) {
 	path := pathFromURI(d.URI)
 	root, ok := projectRootOf(path)
@@ -22,8 +18,6 @@ func (d *Document) voltProjectDiags() ([]diag.Diagnostic, bool) {
 		d.vpkg = nil
 		return nil, false
 	}
-	// Every open buffer overlays its saved file; this document last, so
-	// its current text always wins.
 	overlay := map[string]string{}
 	if d.Siblings != nil {
 		for p, text := range d.Siblings() {

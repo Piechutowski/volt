@@ -72,10 +72,9 @@ server gets a scripted stdio session; one is a golden
   `EOrderStatusPending`; internals too. Carve-outs: Go-mandated
   interface methods, `New*`/`is*`/`has*`, stdlib-parallel APIs, cursor
   primitives, LSP handlers named after protocol methods.
-- Comments state a contract in one or two sentences and cite the spec
-  section (`§columns`); no rationale, history or measurements.
-  Tests carry no prose beyond directives, the proof instruments
-  excepted.
+- The only comments are doc comments on exported identifiers, one or
+  two sentences citing the spec section (`§columns`), and directives.
+  Nothing else is commented, generated code included.
 - Generated files start with the `Code generated … DO NOT EDIT.`
   marker; the CLI refuses to overwrite a file without it. Generated
   code imports the standard library and Volt's runtime only.

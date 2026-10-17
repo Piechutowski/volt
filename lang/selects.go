@@ -46,10 +46,6 @@ type SelectInfo struct {
 	Shared       string   // shared row type name; "" unless explicit list
 }
 
-/* ===== collection ===== */
-
-// dataQueries checks a package's groups, predicates and selects. Runs
-// after the schema pass (tables resolved) per package.
 func (c *checker) dataQueries(pkg *Package) {
 	c.pkg = pkg
 	info := c.schemas[pkg.Path]
@@ -90,8 +86,6 @@ func (c *checker) dataQueries(pkg *Package) {
 	}
 	c.predRefCycles(pkg)
 
-	// §selects-over-groups: minted row-type names share the package scope with every
-	// generated type, claimed from the plan.
 	minted := pkg.plan.Names()
 
 	var memo *selectsMemo
@@ -100,7 +94,7 @@ func (c *checker) dataQueries(pkg *Package) {
 		memo.Hits, memo.Misses = 0, 0
 		memo.next = make(map[*ast.Select]*selectEntry, len(selects))
 	}
-	seen := map[string]*ast.Select{} // tableKey+method -> declaring select
+	seen := map[string]*ast.Select{}
 	for _, sel := range selects {
 		if si := c.selectCheckMemo(sel, info, minted, memo); si != nil {
 			for _, m := range si.Members {
@@ -123,30 +117,21 @@ func (c *checker) dataQueries(pkg *Package) {
 	pkg.selectIndex()
 }
 
-// nameLookup is one question a select's check asked the generated-name
-// scope and the answer it got.
 type nameLookup struct {
 	name, desc string
 	dup        bool
 }
 
-// nameAdd is a name a select mints into the package's generated scope,
-// returned by its check and applied by the caller.
 type nameAdd struct{ name, desc string }
 
-// selectsMemo remembers a package's checked selects, each by the
-// inputs of selectCheck: its declaration, its members and their
-// models, the predicates it names, and the generated-name scope's
-// answers to the lookups it made.
 type selectsMemo struct {
 	prev, next   map[*ast.Select]*selectEntry
 	Hits, Misses int
 }
 
-// selectEntry is one call of selectCheck: inputs and outputs.
 type selectEntry struct {
 	members []*check.TableInfo
-	models  []any // the members' models, by identity
+	models  []any
 	preds   map[string]*ast.Pred
 	lookups []nameLookup
 	adds    []nameAdd
@@ -154,8 +139,6 @@ type selectEntry struct {
 	diags   []diag.Diagnostic
 }
 
-// holds reports whether the entry's inputs are the given ones and the
-// scope still answers its lookups as recorded.
 func (e *selectEntry) holds(members []*check.TableInfo, models []any, preds map[string]*ast.Pred, names *golang.Names) bool {
 	if len(members) != len(e.members) || len(preds) != len(e.preds) {
 		return false
@@ -178,8 +161,6 @@ func (e *selectEntry) holds(members []*check.TableInfo, models []any, preds map[
 	return true
 }
 
-// selectCheckMemo resolves a select's inputs and runs selectCheck on
-// them, through the memo when there is one.
 func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *golang.Names, memo *selectsMemo) *SelectInfo {
 	members, ok := c.selectTarget(sel, info)
 	if !ok {
@@ -220,10 +201,6 @@ func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *gol
 	return si
 }
 
-// selectTarget resolves a select's target (§selects-over-groups): a group, else a
-// table, else a TableGroup as a set. It reports an unresolved or empty
-// target and answers false; an empty group answers false silently, the
-// group having errored already.
 func (c *checker) selectTarget(sel *ast.Select, info *check.Info) ([]*check.TableInfo, bool) {
 	want := sel.Target.Name()
 	var members []*check.TableInfo
@@ -244,27 +221,16 @@ func (c *checker) selectTarget(sel *ast.Select, info *check.Info) ([]*check.Tabl
 	return members, len(members) > 0
 }
 
-// memberModel is one member's model as a select's check needs it: the
-// naming plan's answer for the table.
 type memberModel struct {
 	model  string
 	fields []golang.FieldSig
 	err    error
 }
 
-// nameScope is what a select's check may ask of the package's
-// generated-name scope: whether a name is taken, and by what. The
-// check asks and never tells; what it asked is one of its results.
 type nameScope interface {
 	Lookup(name string) (desc string, dup bool)
 }
 
-// selectLowering is one select's check as a pure function of its
-// inputs: the declaration, its resolved members and their
-// models in the same order, the predicates its where clause names
-// (transitively, nil where a name resolves to none), and the scope.
-// It accumulates only what it returns: the scope's answers to what it
-// asked, the names it mints and its diagnostics.
 type selectLowering struct {
 	sel     *ast.Select
 	members []*check.TableInfo
@@ -281,8 +247,6 @@ func (l *selectLowering) errorf(pos token.Position, format string, args ...any) 
 	l.diags = append(l.diags, diag.Errorf(pos, "spec/selects-over-groups", format, args...))
 }
 
-// lookup asks the scope, the select's own additions first, as one
-// growing scope would answer, and keeps what the scope said.
 func (l *selectLowering) lookup(name string) (string, bool) {
 	for _, a := range l.adds {
 		if a.name == name {
@@ -298,15 +262,11 @@ func (l *selectLowering) add(name, desc string) {
 	l.adds = append(l.adds, nameAdd{name, desc})
 }
 
-// selectMember is one generated select method: the select and the
-// member it is minted for.
 type selectMember struct {
 	sel    *SelectInfo
 	member *check.TableInfo
 }
 
-// selectIndex builds the package's method-name index once. The
-// first member minting a name owns it (§selects-over-groups).
 func (p *Package) selectIndex() {
 	p.selectByMethod = make(map[string]selectMember, len(p.Selects))
 	p.selectByName = make(map[string]*SelectInfo, len(p.Selects))
@@ -328,10 +288,6 @@ func modelOrBase(t *check.TableInfo) string {
 	return t.Decl.Name.Base()
 }
 
-/* ===== groups (§groups) ===== */
-
-// groupResolve computes a group's member set, resolving group
-// references depth-first with cycle detection (§groups).
 func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *check.Info, path map[string]bool) *GroupInfo {
 	if g, done := c.pkg.Groups[name]; done {
 		return g
@@ -346,7 +302,7 @@ func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *c
 	defer delete(path, name)
 
 	g := &GroupInfo{Decl: d}
-	index := map[string]int{} // table key -> position in Members, -1 = removed
+	index := map[string]int{}
 	add := func(pos token.Position, ti *check.TableInfo) {
 		if i, present := index[ti.Key]; present && i >= 0 {
 			c.errorf(pos, "groups", "table %q is already a member (§groups)", ti.Decl.Name.Base())
@@ -380,7 +336,6 @@ func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *c
 	for _, term := range d.Terms {
 		for _, id := range term.Names {
 			want := id.Name()
-			// Tables first, then groups, then TableGroups (§groups).
 			if ti := tableByBase(info, want); ti != nil {
 				apply(id.Pos(), term.Neg, ti)
 				continue
@@ -408,13 +363,10 @@ func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *c
 	return g
 }
 
-// tableByBase finds a table by exact base name.
 func tableByBase(info *check.Info, want string) *check.TableInfo {
 	return info.TableByBase(want)
 }
 
-// nameMiss reports an unresolved table-or-group name with the §table-resolution
-// did-you-mean aids.
 func (c *checker) nameMiss(id *ast.Ident, info *check.Info, section, what string) {
 	want := id.Name()
 	for _, ti := range info.Tables {
@@ -432,11 +384,8 @@ func (c *checker) nameMiss(id *ast.Ident, info *check.Info, section, what string
 	c.errorf(id.Pos(), section, "unknown %s %q: no such table, group or TableGroup in package %q (§groups)", what, want, c.pkg.Path)
 }
 
-/* ===== predicates (§predicates) ===== */
-
-// predRefCycles rejects cyclic Pred references (§predicates).
 func (c *checker) predRefCycles(pkg *Package) {
-	state := map[string]int{} // 0 unseen, 1 visiting, 2 done
+	state := map[string]int{}
 	var visit func(name string, at token.Position)
 	visit = func(name string, at token.Position) {
 		switch state[name] {
@@ -458,8 +407,6 @@ func (c *checker) predRefCycles(pkg *Package) {
 		}
 		state[name] = 2
 	}
-	// In name order, so the member of a cycle that is reported, and
-	// where, is a function of the input.
 	names := make([]string, 0, len(pkg.Preds))
 	for name := range pkg.Preds {
 		names = append(names, name)
@@ -470,7 +417,6 @@ func (c *checker) predRefCycles(pkg *Package) {
 	}
 }
 
-// predWalk visits every PredRef in an expression.
 func predWalk(x ast.PredExpr, f func(*ast.PredRef)) {
 	switch x := x.(type) {
 	case *ast.PredBinary:
@@ -485,20 +431,15 @@ func predWalk(x ast.PredExpr, f func(*ast.PredRef)) {
 	}
 }
 
-/* ===== selects (§selects-over-groups) ===== */
-
-// typeClass buckets a declared column type for operator rules (§predicates,
-// §predicates). Agreement is judged on the Go type; orderability on the
-// declared class, so decimal (string-mapped, exact) is eq-only.
 type typeClass int
 
 const (
-	classForbidden typeClass = iota // blob, json: no predicate use
+	classForbidden typeClass = iota
 	classNumeric
 	classText
 	classTime
 	classBool
-	classEqOnly // decimal/numeric/money: = != in only
+	classEqOnly
 )
 
 func classOf(declType string) typeClass {
@@ -528,22 +469,15 @@ func classOf(declType string) typeClass {
 	case goType == "bool":
 		return classBool
 	}
-	return classForbidden // []byte, json.RawMessage, enums handled below
+	return classForbidden
 }
 
-// colBinding is one column's agreed meaning across the select's members.
 type colBinding struct {
 	name   string
 	goType string
 	class  typeClass
 }
 
-// selectCheck types one resolved Select (§selects-over-groups) and lowers it to a
-// SelectInfo from exactly the inputs named on selectLowering, reading
-// nothing else and writing nothing it did not create; nil when the
-// select is in error, with the diagnostics that say why. Beside the
-// info it returns what it asked the scope and was told, and the names
-// it mints.
 func selectCheck(sel *ast.Select, members []*check.TableInfo, models []memberModel, preds map[string]*ast.Pred, names nameScope) (*SelectInfo, []nameLookup, []nameAdd, []diag.Diagnostic) {
 	l := &selectLowering{sel: sel, members: members, models: models, preds: preds, names: names}
 	si := l.check()
@@ -554,7 +488,6 @@ func (l *selectLowering) check() *SelectInfo {
 	sel := l.sel
 	si := &SelectInfo{Decl: sel, Members: l.members}
 
-	// §selects-over-groups: method suffix.
 	suffix, err := golang.GoName(sel.Name.Name())
 	if err != nil {
 		l.errorf(sel.Name.Pos(), "select name %q does not map to a Go identifier: %v (§selects-over-groups)", sel.Name.Name(), err)
@@ -593,8 +526,6 @@ func (l *selectLowering) check() *SelectInfo {
 	return si
 }
 
-// crudMethodSuffixes are the fixed per-model method suffixes the CRUD
-// and dynamic generators mint (§mapping-to-go); selects must not collide.
 var crudMethodSuffixes = map[string]bool{
 	"Get": true, "GetMany": true, "List": true, "Create": true,
 	"Update": true, "Delete": true, "Count": true, "Exists": true,
@@ -603,11 +534,6 @@ var crudMethodSuffixes = map[string]bool{
 	"CreateParams": true, "UpdateParams": true,
 }
 
-/* ===== projection (§selects-over-groups) ===== */
-
-// projectionCheck applies §selects-over-groups: existence and field-type agreement
-// for the explicit list, the exclusion algebra for the star form, and
-// row-type name minting against the package's generated scope.
 func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 	sel := l.sel
 	type memberFields struct {
@@ -642,7 +568,7 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 		seen[name] = true
 
 		var missing []string
-		types := map[string][]string{} // field type -> member tables
+		types := map[string][]string{}
 		for _, mf := range members {
 			f, has := mf.byCol[name]
 			if !has {
@@ -733,8 +659,6 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 	return true
 }
 
-// selectSettings checks the settings list ([order: ...] only, §selects-over-groups)
-// and renders ORDER BY.
 func (l *selectLowering) selectSettings(env *selectEnv) string {
 	sel := l.sel
 	if sel.Settings == nil {
@@ -768,8 +692,6 @@ func (l *selectLowering) selectSettings(env *selectEnv) string {
 					l.errorf(id.Pos(), "column %q (%s) is not orderable (§selects-over-groups)", b.name, b.goType)
 					continue
 				}
-				// Explicit over implicit (§selects-over-groups): every column states
-				// its direction.
 				mod := list.Mods[i]
 				if mod == nil {
 					l.errorf(id.Pos(), "order: every column states its direction — write %q or %q (§selects-over-groups)", id.Name()+" asc", id.Name()+" desc")
@@ -793,8 +715,6 @@ func (l *selectLowering) selectSettings(env *selectEnv) string {
 	return strings.Join(parts, ", ")
 }
 
-// selectEnv threads the agreement rule and param typing through one
-// select's expression checking, and renders SQL as it goes.
 type selectEnv struct {
 	l         *selectLowering
 	sel       *ast.Select
@@ -810,15 +730,13 @@ func (e *selectEnv) errorf(pos token.Position, format string, args ...any) {
 	e.l.errorf(pos, format, args...)
 }
 
-// columnBind applies the agreement rule (§selects-over-groups): the column must exist
-// in every member with one Go type.
 func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 	name := id.Name()
 	if b, done := e.cols[name]; done {
 		return b
 	}
 	var missing []string
-	types := map[string][]string{} // goType -> member tables
+	types := map[string][]string{}
 	classes := map[typeClass]bool{}
 	var class typeClass
 	for _, m := range e.members {
@@ -830,7 +748,6 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 		declType := cd.Col.Type.String()
 		goType, ok := golang.GoTypeName(normalizeType(declType))
 		if !ok {
-			// Enum-typed or unmapped: not usable in predicates (v1).
 			e.errorf(id.Pos(), "column %q of table %q is enum-typed (%s); predicates do not compare enums in v1 — filter on a text column or use the dynamic layer (§predicates, hypotheses H5)", name, m.Decl.Name.Base(), declType)
 			return nil
 		}
@@ -859,8 +776,6 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 		return nil
 	}
 	if len(classes) > 1 {
-		// Same Go type, different class (e.g. text vs decimal): take the
-		// stricter class so operators stay sound.
 		if classes[classEqOnly] {
 			class = classEqOnly
 		}
@@ -893,7 +808,6 @@ func tableList(names []string) string {
 	return strings.Join(names, ", ")
 }
 
-// paramBind records a parameter's type; one name, one type (§predicates).
 func (e *selectEnv) paramBind(p *ast.Param, goType string) string {
 	name := p.Name.Name()
 	if prev, seen := e.params[name]; seen {
@@ -919,8 +833,6 @@ func goParamOK(name string) bool {
 	return goIdentOK(name)
 }
 
-// exprCheck types an expression and renders its SQL (§predicates). preds
-// tracks in-flight Pred expansions for cycle safety at use sites.
 func (e *selectEnv) exprCheck(x ast.PredExpr, preds map[string]bool) string {
 	switch x := x.(type) {
 	case *ast.PredBinary:
@@ -938,7 +850,7 @@ func (e *selectEnv) exprCheck(x ast.PredExpr, preds map[string]bool) string {
 			return "1"
 		}
 		if preds[name] {
-			return "1" // cycle already reported by predRefCycles
+			return "1"
 		}
 		preds[name] = true
 		sql := "(" + e.exprCheck(d.X, preds) + ")"
@@ -971,7 +883,6 @@ var compareSQL = map[token.Kind]string{
 func (e *selectEnv) compareCheck(x *ast.PredCompare) string {
 	ordering := x.Op != token.EQ && x.Op != token.NEQ
 
-	// Resolve the column side first: it anchors the type.
 	var b *colBinding
 	colCount := 0
 	for _, side := range []ast.Operand{x.X, x.Y} {
@@ -1022,7 +933,6 @@ func (e *selectEnv) compareCheck(x *ast.PredCompare) string {
 	return render(x.X) + " " + compareSQL[x.Op] + " " + render(x.Y)
 }
 
-// litRender types a literal against a column binding and renders it.
 func (e *selectEnv) litRender(l *ast.Lit, b *colBinding) string {
 	switch l.Tok.Kind {
 	case token.NUMBER:
@@ -1037,7 +947,7 @@ func (e *selectEnv) litRender(l *ast.Lit, b *colBinding) string {
 			return "1"
 		}
 		return "'" + strings.ReplaceAll(l.Tok.Val, "'", "''") + "'"
-	default: // true/false idents
+	default:
 		if b.class != classBool {
 			e.errorf(l.Pos(), "column %q (%s) is not boolean (§predicates)", b.name, b.goType)
 			return "1"
@@ -1055,9 +965,6 @@ func (e *selectEnv) inCheck(x *ast.PredIn) string {
 		return "1"
 	}
 	if x.List != nil {
-		// A list parameter binds as one JSON array, unpacked by json_each
-		// (§predicates, §selects-over-groups); time columns are excluded, JSON having
-		// no time literal.
 		if b.class == classTime {
 			e.errorf(x.Col.Pos(), "column %q (%s) cannot take a list parameter: JSON carries no date/time value (§predicates)", b.name, b.goType)
 			return "1"
@@ -1088,8 +995,6 @@ func (e *selectEnv) likeCheck(x *ast.PredLike) string {
 	}
 	return "1"
 }
-
-/* ===== lowering for the generator ===== */
 
 // SelectFns lowers the package's checked selects into per-member
 // generator instructions (§selects-over-groups).

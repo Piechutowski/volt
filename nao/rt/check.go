@@ -204,7 +204,6 @@ func likeMatch(s, p []rune) bool {
 	return len(s) == 0
 }
 
-// asciiFold lower-cases ASCII letters only, matching SQLite's LIKE.
 func asciiFold(r rune) rune {
 	if r >= 'A' && r <= 'Z' {
 		return r + ('a' - 'A')

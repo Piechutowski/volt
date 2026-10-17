@@ -12,8 +12,6 @@ var (
 	headingRE = regexp.MustCompile(`(?m)^(#{1,3}) (.+)$`)
 	tocLinkRE = regexp.MustCompile(`\[([^\]]+)\]\(#([^)]+)\)`)
 
-	// A spec citation is the sigil and a heading's anchor, never a rule
-	// number; a diagnostic code is the code prefix and the anchor.
 	specCiteRE = regexp.MustCompile(`§([a-z][a-z0-9-]*)`)
 	specCodeRE = regexp.MustCompile(`spec/([a-z][a-z0-9-]*)`)
 )
@@ -39,7 +37,6 @@ func anchorOf(title string) string {
 	return strings.Join(strings.Fields(b.String()), "-")
 }
 
-// specAnchors is the anchor of every heading of the spec.
 func specAnchors(t *testing.T) map[string]bool {
 	t.Helper()
 	anchors := map[string]bool{}
@@ -52,8 +49,6 @@ func specAnchors(t *testing.T) map[string]bool {
 	return anchors
 }
 
-// repoTextFiles lists every source and prose file of the repository
-// that may carry a citation.
 func repoTextFiles(t *testing.T) []string {
 	t.Helper()
 	var files []string

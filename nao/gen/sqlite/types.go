@@ -11,10 +11,7 @@ import (
 	"github.com/Piechutowski/volt/lang/check"
 )
 
-// sqliteType maps the lower-cased DBML type name (arguments stripped) to
-// the SQLite storage class it should carry.
 var sqliteType = map[string]string{
-	// integers (including unsigned quoted variants)
 	"tinyint": "INTEGER", "int2": "INTEGER", "smallint": "INTEGER",
 	"smallserial": "INTEGER", "int": "INTEGER", "integer": "INTEGER",
 	"int4": "INTEGER", "mediumint": "INTEGER", "serial": "INTEGER",
@@ -23,40 +20,30 @@ var sqliteType = map[string]string{
 	"int unsigned": "INTEGER", "integer unsigned": "INTEGER",
 	"bigint unsigned": "INTEGER",
 
-	// booleans are integers 0/1 in SQLite
 	"bool": "INTEGER", "boolean": "INTEGER",
 
-	// floating point
 	"real": "REAL", "float4": "REAL", "float": "REAL", "float8": "REAL",
 	"double": "REAL", "double precision": "REAL",
 
-	// exact numerics as TEXT
 	"decimal": "TEXT", "numeric": "TEXT", "money": "TEXT",
 
-	// character data
 	"varchar": "TEXT", "character varying": "TEXT", "char": "TEXT",
 	"character": "TEXT", "text": "TEXT", "tinytext": "TEXT",
 	"mediumtext": "TEXT", "longtext": "TEXT", "citext": "TEXT",
 	"string": "TEXT", "uuid": "TEXT",
 
-	// date and time: declared as DATE/TIMESTAMP/DATETIME, the SQLite-driver
-	// signal to parse the column into a time value on scan; time-of-day
-	// types stay TEXT
 	"date": "DATE", "time": "TEXT", "timetz": "TEXT",
 	"time with time zone": "TEXT", "time without time zone": "TEXT",
 	"timestamp": "TIMESTAMP", "timestamptz": "TIMESTAMP",
 	"timestamp with time zone": "TIMESTAMP", "timestamp without time zone": "TIMESTAMP",
 	"datetime": "DATETIME",
 
-	// documents and binary
 	"json": "TEXT", "jsonb": "TEXT",
 	"bytea": "BLOB", "blob": "BLOB", "tinyblob": "BLOB",
 	"mediumblob": "BLOB", "longblob": "BLOB",
 	"binary": "BLOB", "varbinary": "BLOB",
 }
 
-// typeResolve maps a column type to its SQLite type; enum-typed columns
-// resolve to TEXT plus the enum whose values feed the CHECK constraint.
 func (g *generator) typeResolve(col *ast.Column) (string, *check.EnumInfo, error) {
 	schema, base := col.Type.Name.Schema(), col.Type.Name.Base()
 	key := "public." + base
@@ -75,11 +62,8 @@ func (g *generator) typeResolve(col *ast.Column) (string, *check.EnumInfo, error
 	return "", nil, fmt.Errorf("no SQLite mapping for type %q (extend the map in gen/sqlite/types.go)", base)
 }
 
-/* ===== identifier and string quoting ===== */
-
 var plainIdent = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
 
-// sqliteKeywords is the SQLite keyword list (https://sqlite.org/lang_keywords.html).
 var sqliteKeywords = map[string]bool{
 	"abort": true, "action": true, "add": true, "after": true, "all": true,
 	"alter": true, "always": true, "analyze": true, "and": true, "as": true,
@@ -118,8 +102,6 @@ var sqliteKeywords = map[string]bool{
 	"where": true, "window": true, "with": true, "without": true,
 }
 
-// identQuote quotes an identifier only when necessary: not a plain
-// lower-case identifier, or a SQLite keyword.
 func identQuote(name string) string {
 	if plainIdent.MatchString(name) && !sqliteKeywords[name] {
 		return name
@@ -135,7 +117,6 @@ func quotedJoin(names []string) string {
 	return strings.Join(out, ", ")
 }
 
-// stringQuote renders a SQL string literal with ” doubling.
 func stringQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }

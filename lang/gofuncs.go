@@ -74,9 +74,6 @@ func GoSourcesRead(dir string) []GoSource {
 	return srcs
 }
 
-// goSourceRead reads a file's first bytes and, unless they carry the
-// generated marker on the first line (^// Code generated .* DO NOT
-// EDIT\.$), the rest.
 func goSourceRead(path string) (GoSource, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -112,11 +109,11 @@ func GoFuncsOf(dir string, srcs []GoSource) (funcs map[string]GoFunc, broken []s
 	ctxt := build.Default
 	for _, src := range srcs {
 		if src.Head {
-			continue // volt's own output never declares a check or a plug
+			continue
 		}
 		ctxt.OpenFile = func(string) (io.ReadCloser, error) { return io.NopCloser(strings.NewReader(src.Text)), nil }
 		if ok, _ := ctxt.MatchFile(dir, src.Name); !ok {
-			continue // the go tool would not compile it; neither do we count it
+			continue
 		}
 		path := filepath.Join(dir, src.Name)
 		f, perr := parser.ParseFile(fset, path, src.Text, parser.ParseComments|parser.SkipObjectResolution)
@@ -191,30 +188,23 @@ func goFuncOf(fset *gotoken.FileSet, path string, fn *goast.FuncDecl) GoFunc {
 	return gf
 }
 
-// goScan is one package directory's scan, cached per check run.
 type goScan struct {
-	once   sync.Once // the scan runs once, whichever package asks first
+	once   sync.Once
 	funcs  map[string]GoFunc
 	broken []string
 }
 
-// goFuncsCache holds one goScan per package directory, shared by the
-// per-package checkers of a phase. A session seeds it with
-// scans whose identity is stable while their sources are.
 type goFuncsCache struct {
 	mu sync.Mutex
 	by map[string]*goScan
 }
 
-// goScanOf is a finished scan: its once is spent, its content given.
 func goScanOf(funcs map[string]GoFunc, broken []string) *goScan {
 	sc := &goScan{}
 	sc.once.Do(func() { sc.funcs, sc.broken = funcs, broken })
 	return sc
 }
 
-// goFuncs returns the package directory's functions, scanned once per
-// check run.
 func (c *checker) goFuncs(pkg *Package) *goScan {
 	if c.gofuncs == nil {
 		c.gofuncs = &goFuncsCache{}
@@ -233,8 +223,6 @@ func (c *checker) goFuncs(pkg *Package) *goScan {
 	return sc
 }
 
-// brokenHint explains an invisible function when a Go file of the
-// package failed to parse: everything after the error is unseen.
 func (sc *goScan) brokenHint() string {
 	if len(sc.broken) == 0 {
 		return ""

@@ -67,7 +67,7 @@ type FilePass struct {
 	Info      *check.Info
 	Summaries []Summary // one per File.Decls entry, in order
 
-	plan  **golang.Plan // shared by the folds of one run
+	plan  **golang.Plan
 	fold  Fold
 	diags []diag.Diagnostic
 }
@@ -87,13 +87,11 @@ func (p *FilePass) Reportf(pos token.Position, format string, args ...any) {
 	p.diags = append(p.diags, diag.Warningf(pos, "vet/"+p.fold.Name(), format, args...))
 }
 
-// meta names an analyzer.
 type meta struct{ name, doc string }
 
 func (m *meta) Name() string { return m.name }
 func (m *meta) Doc() string  { return m.doc }
 
-// warnf is one warning attributed to the analyzer.
 func (m *meta) warnf(pos token.Position, format string, args ...any) diag.Diagnostic {
 	return diag.Warningf(pos, "vet/"+m.name, format, args...)
 }
@@ -115,8 +113,6 @@ func ByName(name string) Analyzer {
 	return nil
 }
 
-// registry lists the analyzers in the order docs/lint.md documents
-// them: two warnings at one position stand in this order.
 var registry = []Analyzer{
 	unusedEnum, unusedPartial, unusedAlias,
 	redundantNull, redundantIndex, emptyBody, legacyFlag, shadowedColumn, projectNotes, unnecessaryQuotes,
@@ -147,8 +143,6 @@ type Memo struct {
 	Hits, Misses int
 }
 
-// memoDecl is one call of DeclVet: its inputs (the declaration is the
-// map key) and its outputs.
 type memoDecl struct {
 	facts   factsKey
 	rules   []Rule
@@ -156,10 +150,6 @@ type memoDecl struct {
 	summary Summary
 }
 
-// factsKey is the identity of a declaration's facts: the checked
-// table, the partial's declaration and use count, and each
-// relationship's node, operator, endpoint tables and columns — every
-// value a rule reads through Facts, as the object or the value it is.
 type factsKey struct {
 	table   *check.TableInfo
 	partial *ast.TablePartial
@@ -228,8 +218,6 @@ func rulesEqual(a, b []Rule) bool {
 	return true
 }
 
-// declResult is one declaration's verdict: each rule's warnings, in
-// rule order, and the summary the folds read.
 type declResult struct {
 	diags   [][]diag.Diagnostic
 	summary Summary
@@ -320,9 +308,6 @@ func RunMemo(f *ast.File, info *check.Info, plan *golang.Plan, memo *Memo, analy
 	return out
 }
 
-// factsByDecl resolves each declaration's facts from the checker's
-// model, aligned with f.Decls: a relationship belongs to the
-// declaration it starts at.
 func factsByDecl(f *ast.File, info *check.Info) []Facts {
 	tables := make(map[*ast.Table]*check.TableInfo, len(info.Tables))
 	for _, ti := range info.Tables {
@@ -368,9 +353,6 @@ func DeclVet(d ast.Decl, f Facts, rules []Rule) ([][]diag.Diagnostic, Summary) {
 	return out, summaryOf(nodes, f)
 }
 
-// nodesOf lists a declaration's nodes in source order, itself first:
-// the order ast.Inspect visits them, produced without a function value
-// from ast.Children.
 func nodesOf(root ast.Node) []ast.Node {
 	var out []ast.Node
 	stack := []ast.Node{root}
@@ -386,7 +368,6 @@ func nodesOf(root ast.Node) []ast.Node {
 	return out
 }
 
-// summaryOf is what the folds need of one declaration.
 func summaryOf(nodes []ast.Node, f Facts) Summary {
 	var s Summary
 	if f.Table != nil {
@@ -400,8 +381,6 @@ func summaryOf(nodes []ast.Node, f Facts) Summary {
 		}
 	}
 	for _, r := range f.Refs {
-		// endpoint tables were written as names; the syntax holds the
-		// spelling actually used
 		switch n := r.Node.(type) {
 		case *ast.Ref:
 			s.NamesUsed = nameUse(s.NamesUsed, n.Left.Table)

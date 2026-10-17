@@ -71,8 +71,6 @@ func Files(spec Spec) map[string]string {
 	return out
 }
 
-// goMod is the module file: a require and a replace onto the Volt
-// checkout when one is given.
 func goMod(volt string) string {
 	s := "module corpus\n\ngo 1.27\n"
 	if volt != "" {
@@ -81,14 +79,11 @@ func goMod(volt string) string {
 	return s
 }
 
-// actionOf names the Stats action a scope's route calls.
 func actionOf(scope string) string { return strings.ToUpper(scope[:1]) + scope[1:] }
 
 // Table names the i-th table (1-based) of a data package.
 func Table(i int) string { return fmt.Sprintf("tb%03ds", i) }
 
-// colTypes cycle through the column types of §mapping-to-go with and
-// without NULL.
 var colTypes = []string{
 	"integer [not null]",
 	"text [not null]",
@@ -100,7 +95,6 @@ var colTypes = []string{
 	"bigint [not null]",
 }
 
-// schemaWrite renders the data declarations of one package.
 func schemaWrite(b *strings.Builder, spec Spec, pkg string) {
 	b.WriteString("Enum status {\n\tactive\n\tretired [note: 'no longer written']\n}\n\n")
 	b.WriteString("TablePartial stamped {\n\tcreated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]\n}\n\n")
@@ -111,7 +105,7 @@ func schemaWrite(b *strings.Builder, spec Spec, pkg string) {
 		for c := 1; c <= spec.Columns; c++ {
 			typ := colTypes[(c-1)%len(colTypes)]
 			if c == 1 {
-				typ = "integer [not null]" // the pred's column, every table
+				typ = "integer [not null]"
 			}
 			fmt.Fprintf(b, "\tc%03d %s\n", c, typ)
 		}
@@ -131,8 +125,6 @@ func schemaWrite(b *strings.Builder, spec Spec, pkg string) {
 	b.WriteString("\nSelect browse for series where fresh [order: (id asc)]\n")
 }
 
-// routesWrite renders the routing declarations. In the one-package
-// layout the references are bare.
 func routesWrite(b *strings.Builder, spec Spec, pkgs []string, single bool) {
 	if !single {
 		b.WriteString("import (\n")
@@ -161,7 +153,6 @@ func routesWrite(b *strings.Builder, spec Spec, pkgs []string, single bool) {
 	b.WriteString("}\n")
 }
 
-// checksGo is the Go file a data package's Go-reference check names.
 func checksGo(pkg string) string {
 	return "package " + pkg + `
 
@@ -177,7 +168,6 @@ func Positive(v int32) error {
 `
 }
 
-// middlewareGo is the Go file the pipeline and the error handler name.
 func middlewareGo(pkg string) string {
 	return "package " + pkg + `
 
@@ -197,8 +187,6 @@ func Errors(w http.ResponseWriter, r *volt.Request, err error) {
 `
 }
 
-// controllersGo stubs the controllers the routes name. In the
-// one-package layout it is main.go.
 func controllersGo(pkg string, stats []string, main bool) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "package %s\n\nimport (\n\t\"net/http\"\n\n\tvolt \"github.com/Piechutowski/volt\"\n)\n\n", pkg)
