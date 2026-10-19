@@ -141,6 +141,7 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
   - [Predicates](#predicates)
   - [Selects over groups](#selects-over-groups)
   - [Validators](#validators)
+  - [Changesets](#changesets)
   - [Collected grammar (Part II)](#collected-grammar-part-ii)
   - [Conformance and the proof chain](#conformance-and-the-proof-chain)
 - **Appendices**
@@ -737,8 +738,8 @@ column setting  = "primary key" | "pk"
    single-column primary key. A composite primary key MUST be expressed as
    an index with the `pk` setting (§indexes).
 4. **`increment`** marks the column auto-increment: the database
-   assigns its value, and the generated `CreateParams` omits it
-   (§mapping-to-go).
+   assigns its value, and a changeset has no setter for it
+   (§changesets).
 
    > **Extension (this implementation).** Because the target is SQLite
    >, `increment` is honored in exactly one shape — the table's
@@ -746,7 +747,7 @@ column setting  = "primary key" | "pk"
    > rowid alias (§mapping-to-sqlite-ddl) — and is an **error** anywhere else: on a
    > non-integer column, on a column that is not the primary key, or
    > when the primary key is composite. A keyword that is typed MUST be
-   > applied; silently ignoring it while `CreateParams` drops the
+   > applied; silently ignoring it while no changeset ever marks the
    > column would insert NULL into a NOT NULL column at run time.
 5. **`ref`** declares an inline relationship (§relationships-ref). The setting MAY be
    repeated. Inline refs cannot carry names or settings.
@@ -1893,14 +1894,17 @@ for a format suffix.
    a 406 naming both.
 2. **Request bodies** follow `Content-Type`: absent or
    `application/json` decodes JSON, `application/x-gob` decodes GOB,
-   anything else is a 415; an empty or malformed body is a 400; a JSON
-   field the struct does not declare is a 400 whose body itemizes it
-   as `Detail{Check: "unknown_field", Columns: [<field>]}`,
-   so a form marks the field — a typo must not vanish silently. Only
-   the first undeclared field is reported (the decoder stops there),
-   and GOB ignores unknown fields by design, the shared struct being
-   the contract. A body over the runtime's `MaxBodyBytes` (four
-   megabytes unless set) is a 413.
+   anything else is a 415; an empty or malformed body is a 400. A write
+   body is a `<Model>Params` (§changesets): as JSON an object of the
+   columns to set by wire name, as GOB the row and the marked columns;
+   a key that names no column is a field error `unknown_field` of the
+   changeset (422), every one of them reported, so a typo never
+   vanishes silently. `volt.Decode` into a struct of a hand-written
+   controller keeps the 400 whose body itemizes the first undeclared
+   JSON field as `Detail{Check: "unknown_field", Columns: [<field>]}`;
+   GOB ignores unknown fields there, the shared struct being the
+   contract. A body over the runtime's `MaxBodyBytes` (four megabytes
+   unless set) is a 413.
 3. **GOB is the Go-native arm**: a client that imports the generated
    models package decodes rows into the same types the server
    encoded, with no schema on the wire. JSON is what browsers, curl and
@@ -1940,7 +1944,10 @@ the routes through typed methods instead of hand-built requests.
    (db.User, error)`, `APIUserDelete(ctx, id int) error`. Path
    parameters render through the same builders as `Path*` helpers,
    query-string parameters through `volt.FormatQuery`, a list as a
-   repeated key, a params struct as the body.
+   repeated key, a changeset as the body: `APIUserCreate(ctx, cs
+   db.UserChangeset) (db.User, error)`, `APIUserUpdate(ctx, id int, cs
+   db.UserChangeset) (db.User, error)`, sent as `cs.Params()`
+   (§changesets).
 4. **Every named controller route** is one raw method with the
    route's path parameters, returning `*http.Response` for the caller
    to read and close: Volt does not know what a hand-written action
@@ -1951,8 +1958,8 @@ the routes through typed methods instead of hand-built requests.
 6. **Beside the models.** `volt gen -o DIR` (§projects-and-packages) writes the client
    as `DIR/volt_client.go` in the package `DIR` holds instead of as a
    subpackage, for a program that is the client — a desktop or browser
-   front end that is `package main`. The row and params types are
-   named bare, since the models written beside it declare them; the
+   front end that is `package main`. The row, changeset and params
+   types are named bare, since the models written beside it declare them; the
    constructor is `NewClient(base string) *Client`, since `New` beside
    it may be the query layer's; nothing but the runtime is imported.
 
@@ -2204,9 +2211,10 @@ resources db.tags  [default, except: (delete)]
    like the form-page helpers `New`/`Edit` + singular would be.
    `update`'s PUT route shares the PATCH route's client method.
 7. Statuses, binding, validation and rendering are §query-routes's: 201 for
-   `create`, 204 for `delete`, 404 on a miss, `Validate()` before a
-   write when the params struct validates (§validators), the body and the
-   response in the negotiated format (§formats).
+   `create`, 204 for `delete`, 404 on a miss, the body cast into a
+   changeset with the allow lists of §query-routes and validated by the
+   write (§changesets), the body and the response in the negotiated
+   format (§formats).
 
 ## Datasets
 
@@ -2528,9 +2536,9 @@ the optional projection narrows the emitted columns.
      live in the generated package scope and MUST NOT collide with any
      generated package-level name. The checker reports collisions with
      models, enums, the `Queries` handle, another select's minted row
-     type, the generated params types (`CreateParams`/`UpdateParams`
-     select names are rejected outright), and the member tables' own
-     dynamic column handles; the Go compiler backstops the rest.
+     type, the generated changeset names (`Changeset`, `Column`,
+     `Params` and `New` select names are rejected outright), and the
+     member tables' own column handles; the Go compiler backstops the rest.
 
 ---
 
@@ -2610,42 +2618,173 @@ func EmailShape(email string) error {
    database is not a validator: uniqueness and referential integrity
    are the unique index and the foreign key, which only the database
    can close against concurrent writers, and they reach the caller as
-   `rt.ConstraintError` (rule 7).
-6. **Generation contract.** For every table with validators or
-   `required` columns, `nao_validate.go` declares
-   `func (v <Model>) Validate() error`, running rule 4 over the row's
-   values: a failed `required` contributes `rt.CheckError{Model,
-   Check: "<column>_required", Columns}`, a failed validator
-   `rt.CheckError{Model, Check: "<Name>", Columns, Cause}` wrapping
-   the returned error; the failures are returned together as one
-   `rt.ValidationError` (which unwraps to its members), nil when every
-   validator passes. `<Model>CreateParams` and `<Model>UpdateParams`
-   each get `Validate` over the validators whose columns the struct
-   carries; a validator reading a defaulted or auto-increment column
-   (absent from CreateParams) or a key column (absent from
-   UpdateParams) is left to the row's `Validate`, and the method's doc
-   comment names it. Nothing calls `Validate` implicitly in your code;
-   the one generated caller is a query route's Create or Update
-   handler (§query-routes).
-7. **Statuses and attribution.** A `CheckError` and a
-   `ValidationError` carry status 422; the database's own refusals are
-   translated by `rt.Constraint` into `rt.ConstraintError`, 409 for a
-   unique violation, 422 for a foreign-key or not-null failure, naming
-   what SQLite named. Every generated write passes its error through
-   `rt.Constraint`. Every `CheckError` carries the columns its
-   validator reads, and every one of these errors itemizes itself
-   (`Details()`: check, columns, message), which the error spine
-   renders into the error body (§formats) so a form can mark the
-   fields.
+   `*rt.Invalid` (§changesets).
+6. **Generation contract.** `Validate` is the changeset's (§changesets):
+   `nao_validate.go` declares `func (c <Model>Changeset) Validate()
+   <Model>Changeset` for every table, which runs rule 4 over `Row()`
+   and records each failed validator as a field error whose check is
+   the validator's name, whose columns are the ones it reads and whose
+   message is the returned error's. Nothing else calls a validator;
+   `Create` and `Update` call `Validate` before writing.
+7. **Statuses and attribution.** A refused write is one `*rt.Invalid`,
+   422 for failed validators and 409 for a unique violation, itemizing
+   every field error (§changesets), which the error spine renders into
+   the error body (§formats) so a form can mark the fields.
 8. **`required` columns** (Part I §columns extension) are the one
-   built-in validator: `<column>_required` refuses the type's empty
-   value, `""` for `string` and enum columns, `0` for `int` and
-   `float64`, a zero length for `[]byte`, and for a declared type the
-   test of its storage type. It is Go only, like every validator.
+   built-in rule of `Validate` (§changesets): the type's empty value is
+   refused, Go only, like every validator.
 9. **No database twin.** A validator produces no DDL. The database
    never carries a `CHECK`: an enum column is plain `TEXT`, a
    `required` column is `NOT NULL` and nothing more
    (§mapping-to-sqlite-ddl).
+
+---
+
+## Changesets
+
+A **changeset** is a generated value that carries a row, the changes
+proposed to it, and the errors found so far. It is built by pure
+functions, validated by pure functions, and written by one call at
+the end. Nothing happens to the database before that call, and
+nothing happens if the changeset is invalid. Every generated write
+takes a changeset: there is no other write path for a row.
+
+```go
+type UserChangeset struct { /* unexported: data, changes, marks, errors */ }
+type UserColumn = rt.ColumnOf[User]   // the column handles UserID, UserEmail, ...
+type UserParams = rt.Params[User]     // a write body on the wire
+
+func UserNew() UserChangeset                                     // for a create
+func (u User) Changeset() UserChangeset                          // for an update
+func (c UserChangeset) From(u User) UserChangeset                // every data column of u
+
+func (c UserChangeset) EmailSet(v string) UserChangeset          // one per column
+func (c UserChangeset) BioSet(v rt.Null[string]) UserChangeset
+func (c UserChangeset) Cast(p UserParams, allow ...UserColumn) UserChangeset
+
+func (c UserChangeset) Changed(col UserColumn) bool
+func (c UserChangeset) Row() User                                // data with changes applied
+func (c UserChangeset) Params() UserParams                       // the changes, for the wire
+func (c UserChangeset) Validate() UserChangeset                  // required, enums, validators
+func (c UserChangeset) ErrorAdd(col UserColumn, msg string) UserChangeset
+func (c UserChangeset) Errors() []rt.FieldError
+func (c UserChangeset) Valid() bool
+func (c UserChangeset) Err() error                               // *rt.Invalid, nil when valid
+
+func (q *Queries) UserCreate(ctx context.Context, c UserChangeset) (User, error)
+func (q *Queries) UserUpdate(ctx context.Context, c UserChangeset) (User, error)
+```
+
+```go
+cs := user.Changeset().Cast(params, db.UserEmail, db.UserBio).Validate()
+if !cs.Valid() {
+	return cs.Err()
+}
+user, err := q.UserUpdate(ctx, cs)
+```
+
+1. **Value semantics.** A changeset is a struct passed and returned
+   by value; every method returns a new changeset and leaves its
+   receiver as it was, so two goroutines may hold copies of one
+   changeset with no coordination. No method of a changeset touches
+   the database.
+2. **Data and changes.** `UserNew()` starts from the zero row with
+   nothing set; `u.Changeset()` starts from `u` with nothing set and
+   remembers that it was made from a row. A setter records a value
+   for one column and **marks** it; `Changed` reports the mark; a
+   column set to the value it already holds is still a change, since
+   the changeset records intent, not difference. `Row()` is the data
+   with the marked values applied. `From(u)` marks every data column
+   of `u` but the auto-increment key. The auto-increment key has no
+   setter: the database assigns it.
+3. **Setters.** One per column, named `<Field>Set` after the field's
+   Go name (§names), taking the field's Go type: `rt.Null[T]` for a
+   nullable column, so `BioSet(rt.Null[string]{})` sets NULL. The
+   fixed methods of a changeset never end in `Set`, so a setter cannot
+   collide with one; a column whose Go field would be `Changeset` is
+   an error, since the row's `Changeset` method occupies that name.
+4. **`Cast`.** For every column in `allow` that `p` carries, converts
+   the carried value to the column's Go type and sets it; a value
+   that does not convert, `null` on a non-nullable column among them,
+   is a field error with check `cast` naming the column and the type,
+   and the column is left as it was. Columns `p` does not carry are
+   untouched, which is what makes a `PATCH` body partial. A column of
+   `p` outside `allow` is ignored, never an error: the schema and the
+   handler decide what a client may write, the client cannot widen
+   it. A key of `p` that names no column of the table is a field
+   error with check `unknown_field`, so a typo never vanishes.
+5. **`Params`.** `rt.Params[M]` is a write body as the wire carries
+   it, in either format (§formats): as JSON, an object of the changed
+   columns keyed by their wire names (the `json` tag, §struct-tags),
+   `null` for NULL; as GOB, the row and the list of marked columns,
+   typed by the shared model. `c.Params()` builds one from the marks
+   of `c`; `volt.Decode` reads one from a request; `Cast` consumes
+   one. A JSON body that is not an object is a malformed body (400).
+6. **`Validate`.** Runs over `Row()`, in this order, every rule every
+   time: each `required` column (rule 9), each enum column's
+   membership in its value set (check `enum`), then every validator
+   of the table top-down (§validators). Every failure is collected as
+   a field error; the first does not stop the rest. `Validate` is
+   pure and idempotent; `Create` and `Update` call it again, so
+   forgetting it costs only an earlier error message.
+7. **Errors.** `ErrorAdd` records a field error with check `custom`
+   on a column, for a rule the controller alone can judge. `Errors`
+   lists every field error in the order recorded; `Valid` is "no
+   field errors"; `Err` is `nil` when valid and otherwise a
+   `*rt.Invalid` carrying them. `rt.FieldError` is `{Check, Columns,
+   Message}`: the check is `required`, `enum`, `cast`,
+   `unknown_field`, `custom`, a validator's name, or the database's
+   `unique`, `foreign_key`, `not_null` (rule 10); the columns are the
+   ones the check reads.
+8. **`Create` and `Update`.** `<Model>Create(ctx, c)` validates and,
+   if valid, inserts the marked columns and returns the stored row;
+   a column never marked takes its database default or, lacking one,
+   SQLite's default for its declared type; nothing marked inserts
+   `DEFAULT VALUES`. `<Model>Update(ctx, c)` validates and, if valid,
+   issues `UPDATE <table> SET <the marked columns> WHERE <the key of
+   the row the changeset was made from> RETURNING` and returns the
+   stored row; nothing marked touches nothing and returns `Row()`;
+   a changeset not made from a row (`UserNew()`) is `rt.ErrNoRow`,
+   there being no key; a vanished row is `rt.ErrNotFound`. Both
+   statements are rendered at run time from the marks and run through
+   `rt.StmtCache` when `WithCache` was set, like the dynamic layer.
+   An invalid changeset is `*rt.Invalid` from either, before any
+   statement runs.
+9. **`required`** (Part I §columns extension) is the one built-in
+   rule of `Validate`: it refuses the type's empty value, `""` for
+   `string` and enum columns, `0` for `int` and `float64`, a zero
+   length for `[]byte`, NULL for a nullable column, and for a declared
+   type the empty value of its storage type, read through the type's
+   `driver.Valuer`. It is Go only, like every validator.
+10. **`rt.Invalid`.** Every refused write is one `*rt.Invalid{Model,
+    Fields, Cause}`: the field errors of the changeset when validation
+    failed, or the database's refusal mapped onto fields when the
+    statement ran: a unique violation becomes a field error with
+    check `unique` on the index's columns, a NOT NULL violation
+    `not_null` on its column, a foreign key violation `foreign_key`
+    with no column (SQLite names none), each wrapping the driver's
+    error as `Cause`. Its status is 409 when a `unique` field error is
+    among them, 422 otherwise; it itemizes itself (`Details()`: check,
+    columns, message), which the error spine renders into the error
+    body (§formats) so a form can mark the fields. Any other database
+    error is returned as is.
+11. **Bulk paths bypass.** `UpdateWhere` and `DeleteWhere` of the
+    dynamic layer take assignments and predicates, never a row, and
+    run no validator; `Delete` runs none either. They are the
+    equivalent of raw SQL and are documented as such.
+12. **Generation contract.** `nao_models.go` declares per model the
+    changeset type, `<Model>New`, `Changeset`, `From`, the setters,
+    `Cast`, `Changed`, `Row`, `Params`, `ErrorAdd`, `Errors`, `Valid`,
+    `Err`, the aliases `<Model>Column` and `<Model>Params`, and the
+    column handles `<Model><Field>` (`rt.Column[M, T]`,
+    `rt.NullColumn` when nullable), so a program that shares the
+    models, a generated client among them, builds changesets with
+    nothing else. `nao_validate.go` declares `Validate`, which is
+    where the package's validator functions are called.
+    `nao_queries.go` declares `Create` and `Update`. The names
+    `<Model>Changeset`, `<Model>Column`, `<Model>Params` and
+    `<Model>New` join the package-scope names the `dynname` lint and
+    §selects-over-groups guard.
 
 ---
 
@@ -2821,9 +2960,8 @@ library, `nao/rt` and the packages of declared types (§types) only.
 
 ### Struct tags
 
-Every generated struct field derived from a column — on the model and
-its params structs alike — carries the same tag, assembled in this
-order:
+Every generated struct field derived from a column carries the same
+tag, assembled in this order:
 
 1. `db:"<column name>"` — the scan contract. Not overridable; the
    column setting `tag:` rejects the key `db` (§columns).
@@ -2845,7 +2983,8 @@ rt.DBTX)`, `Tx`, `WithTx`, `WithCache`):
 1. `<Model>Get`, `<Model>Update` and `<Model>Delete` exist iff the
    table has a primary key (a `pk` column or a `[pk]` index), one
    positional argument per key column; `Update` also needs a non-key
-   column and rewrites every non-key column. `<Model>GetMany(ctx,
+   column; `Create` and `Update` take a changeset and return the
+   stored row (§changesets). `<Model>GetMany(ctx,
    keys)` exists for a single-column key; missing keys are absent, not
    errors; an empty input returns nil. `<Model>GetBy<Column>` exists
    per column that is `unique` or covered by a single-column unique
@@ -2858,18 +2997,22 @@ rt.DBTX)`, `Tx`, `WithTx`, `WithCache`):
    input excepted.
 3. Static statements bind SQLite named parameters (`:column`) through
    `sql.Named`; GetMany appends positional `?`. `Create` and `Update`
-   end in `RETURNING`. Every CRUD write passes its error through
-   `rt.Constraint`; `DeleteWhere` and `UpdateWhere` do not.
-4. The dynamic layer in `nao_dyn.go` mints per column a handle
-   `<Model><Field>` (`rt.Column[M, T]`, `rt.NullColumn` when nullable),
-   per model the wrappers `Limit`, `Offset`, `Distinct`, `OrderBy`,
+   are rendered at run time from the changeset's marks, with positional
+   `?`, and end in `RETURNING` (§changesets). Every CRUD write's
+   database refusal becomes `*rt.Invalid`; `DeleteWhere` and
+   `UpdateWhere` return the driver's error.
+4. The column handles `<Model><Field>` (`rt.Column[M, T]`,
+   `rt.NullColumn` when nullable) are declared in `nao_models.go`
+   (§changesets); the dynamic layer in `nao_dyn.go` mints per model the
+   wrappers `Limit`, `Offset`, `Distinct`, `OrderBy`,
    `After`, `Set`, and the verbs `Query`, `Count`, `Exists`,
    `DeleteWhere`, `UpdateWhere`. Predicates are values rendered at run
    time with positional placeholders: an empty `In` is constant false,
    a zero predicate vanishes, a `DeleteWhere` or `UpdateWhere` with no
    predicate is an error, `After` is keyset pagination over the
    `OrderBy` terms. Dynamic statements run through `rt.StmtCache` when
-   `WithCache` was set; CRUD and select methods do not use the cache;
+   `WithCache` was set, the changeset writes among them; the static
+   CRUD and select methods do not use the cache;
    `WithTx` drops it.
 5. `rt.Open(driver, dsn)` pins one connection and sets WAL,
    `busy_timeout = 5000` and `foreign_keys = ON`. `rt.Null[T]`
