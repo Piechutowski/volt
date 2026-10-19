@@ -6,6 +6,7 @@
 package itest
 
 Type Money int
+Type pay.Cents int from 'github.com/Piechutowski/volt/nao/itest/pay'
 
 Project itest {
   note: 'Integration-test fixture for the generated query surface.'
@@ -35,8 +36,15 @@ Table orders {
   status order_status [not null, default: order_status.pending]
   total float64 [not null, required]
   tip Money [not null, default: 0]
+  fee pay.Cents [not null]
   placed_at time.Time
 }
+
+// §types rule 4, §predicates rule 5: a package-qualified declared type
+// compares with = and in, and a literal has the class of its storage.
+Select by_fee for orders where fee = :fee
+Select fees   for orders where fee in :fees [order: (id asc)]
+Select free   for orders where fee = 0
 
 // composite primary key, no auto-increment anywhere
 Table user_tags {

@@ -58,7 +58,7 @@ func repoTextFiles(t *testing.T) []string {
 		}
 		if d.IsDir() {
 			switch d.Name() {
-			case ".git", "node_modules", "target", "grammars":
+			case ".git", ".claude", "node_modules", "target", "grammars":
 				return filepath.SkipDir
 			}
 			return nil

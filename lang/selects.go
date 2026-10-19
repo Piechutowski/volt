@@ -443,7 +443,11 @@ const (
 )
 
 func classOfType(t check.ColumnType) typeClass {
-	switch t.Class() {
+	return classOfName(t.Class())
+}
+
+func classOfName(class string) typeClass {
+	switch class {
 	case "numeric":
 		return classNumeric
 	case "text":
@@ -459,9 +463,20 @@ func classOfType(t check.ColumnType) typeClass {
 }
 
 type colBinding struct {
-	name   string
-	goType string
-	class  typeClass
+	name    string
+	goType  string
+	class   typeClass
+	storage typeClass
+}
+
+func (b *colBinding) litClass() typeClass {
+	if b.class != classEqOnly {
+		return b.class
+	}
+	if b.storage == classTime {
+		return classForbidden
+	}
+	return b.storage
 }
 
 func selectCheck(sel *ast.Select, members []*check.TableInfo, models []memberModel, preds map[string]*ast.Pred, names nameScope) (*SelectInfo, []nameLookup, []nameAdd, []diag.Diagnostic) {
@@ -671,7 +686,7 @@ func (l *selectLowering) selectSettings(env *selectEnv) string {
 				}
 				seenOrder[b.name] = true
 				if b.class == classEqOnly {
-					l.errorf(id.Pos(), "column %q is decimal-exact, stored as text: ordering it would be lexical, not numeric (§selects-over-groups)", b.name)
+					l.errorf(id.Pos(), "column %q has declared type %s; a declared type cannot be ordered (§selects-over-groups)", b.name, b.goType)
 					continue
 				}
 				if b.class != classNumeric && b.class != classTime && b.class != classText {
@@ -724,7 +739,7 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 	var missing []string
 	types := map[string][]string{}
 	classes := map[typeClass]bool{}
-	var class typeClass
+	var class, storage typeClass
 	for _, m := range e.members {
 		cd := m.Column(name)
 		if cd == nil {
@@ -739,6 +754,7 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 		goType := cd.Type.Go
 		types[goType] = append(types[goType], m.Decl.Name.Base())
 		class = classOfType(cd.Type)
+		storage = classOfName(cd.Type.StorageClass())
 		classes[class] = true
 	}
 	if len(missing) > 0 {
@@ -774,7 +790,7 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 	for t := range types {
 		goType = t
 	}
-	b := &colBinding{name: name, goType: goType, class: class}
+	b := &colBinding{name: name, goType: goType, class: class, storage: storage}
 	e.cols[name] = b
 	return b
 }
@@ -882,7 +898,7 @@ func (e *selectEnv) compareCheck(x *ast.PredCompare) string {
 		switch b.class {
 		case classNumeric, classTime:
 		case classEqOnly:
-			e.errorf(x.Pos(), "column %q is decimal-exact (%s); it supports = and != only (§predicates)", b.name, b.goType)
+			e.errorf(x.Pos(), "column %q has declared type %s; a declared type compares with =, !=, in and is null only (§predicates)", b.name, b.goType)
 			return "1"
 		default:
 			e.errorf(x.Pos(), "column %q (%s) is not orderable; < <= > >= need numeric or date/time operands (§predicates)", b.name, b.goType)
@@ -912,21 +928,22 @@ func (e *selectEnv) compareCheck(x *ast.PredCompare) string {
 }
 
 func (e *selectEnv) litRender(l *ast.Lit, b *colBinding) string {
+	lit := b.litClass()
 	switch l.Tok.Kind {
 	case token.NUMBER:
-		if b.class != classNumeric {
+		if lit != classNumeric {
 			e.errorf(l.Pos(), "column %q (%s) cannot be compared with the number %s (§predicates)", b.name, b.goType, l.Tok.Val)
 			return "1"
 		}
 		return l.Tok.Val
 	case token.STRING:
-		if b.class != classText && b.class != classEqOnly && b.class != classTime {
+		if lit != classText && lit != classTime {
 			e.errorf(l.Pos(), "column %q (%s) cannot be compared with the string %q (§predicates)", b.name, b.goType, l.Tok.Val)
 			return "1"
 		}
 		return "'" + strings.ReplaceAll(l.Tok.Val, "'", "''") + "'"
 	default:
-		if b.class != classBool {
+		if lit != classBool {
 			e.errorf(l.Pos(), "column %q (%s) is not boolean (§predicates)", b.name, b.goType)
 			return "1"
 		}
@@ -945,6 +962,10 @@ func (e *selectEnv) inCheck(x *ast.PredIn) string {
 	if x.List != nil {
 		if b.class == classTime {
 			e.errorf(x.Col.Pos(), "column %q (%s) cannot take a list parameter: JSON carries no date/time value (§predicates)", b.name, b.goType)
+			return "1"
+		}
+		if b.class == classEqOnly && b.storage == classTime {
+			e.errorf(x.Col.Pos(), "column %q has declared type %s stored as time.Time; it cannot take a list parameter: JSON carries no date/time value (§predicates)", b.name, b.goType)
 			return "1"
 		}
 		return sqlite.Ident(b.name) + " IN (SELECT value FROM json_each(" + e.paramBind(x.List, "[]"+b.goType) + "))"

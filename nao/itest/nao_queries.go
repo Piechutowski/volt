@@ -159,18 +159,18 @@ func (q *Queries) UserDelete(ctx context.Context, id int) error {
 
 func orderScan(r rowScanner) (Order, error) {
 	var v Order
-	err := r.Scan(&v.ID, &v.UserID, &v.Status, &v.Total, &v.Tip, &v.PlacedAt)
+	err := r.Scan(&v.ID, &v.UserID, &v.Status, &v.Total, &v.Tip, &v.Fee, &v.PlacedAt)
 	return v, rt.Constraint(err)
 }
 
-const orderGetSQL = `SELECT "id", "user_id", "status", "total", "tip", "placed_at" FROM "orders" WHERE "id" = :id`
+const orderGetSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "id" = :id`
 
 // OrderGet fetches the orders row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) OrderGet(ctx context.Context, id int) (Order, error) {
 	return orderScan(q.db.QueryRowContext(ctx, orderGetSQL, sql.Named("id", id)))
 }
 
-const orderGetManySQL = `SELECT "id", "user_id", "status", "total", "tip", "placed_at" FROM "orders" WHERE "id" IN`
+const orderGetManySQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "id" IN`
 
 // OrderGetMany fetches the orders rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
@@ -199,7 +199,7 @@ func (q *Queries) OrderGetMany(ctx context.Context, ids []int) ([]Order, error) 
 	return out, rows.Err()
 }
 
-const orderListSQL = `SELECT "id", "user_id", "status", "total", "tip", "placed_at" FROM "orders"`
+const orderListSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders"`
 
 // OrderList returns every orders row.
 func (q *Queries) OrderList(ctx context.Context) ([]Order, error) {
@@ -219,7 +219,7 @@ func (q *Queries) OrderList(ctx context.Context) ([]Order, error) {
 	return out, rows.Err()
 }
 
-const orderCreateSQL = `INSERT INTO "orders" ("user_id", "total", "placed_at") VALUES (:user_id, :total, :placed_at) RETURNING "id", "user_id", "status", "total", "tip", "placed_at"`
+const orderCreateSQL = `INSERT INTO "orders" ("user_id", "total", "fee", "placed_at") VALUES (:user_id, :total, :fee, :placed_at) RETURNING "id", "user_id", "status", "total", "tip", "fee", "placed_at"`
 
 // OrderCreate inserts a orders row and returns the row the database wrote,
 // generated keys and defaults filled in.
@@ -227,11 +227,12 @@ func (q *Queries) OrderCreate(ctx context.Context, arg OrderCreateParams) (Order
 	return orderScan(q.db.QueryRowContext(ctx, orderCreateSQL,
 		sql.Named("user_id", arg.UserID),
 		sql.Named("total", arg.Total),
+		sql.Named("fee", arg.Fee),
 		sql.Named("placed_at", arg.PlacedAt),
 	))
 }
 
-const orderUpdateSQL = `UPDATE "orders" SET "user_id" = :user_id, "status" = :status, "total" = :total, "tip" = :tip, "placed_at" = :placed_at WHERE "id" = :id RETURNING "id", "user_id", "status", "total", "tip", "placed_at"`
+const orderUpdateSQL = `UPDATE "orders" SET "user_id" = :user_id, "status" = :status, "total" = :total, "tip" = :tip, "fee" = :fee, "placed_at" = :placed_at WHERE "id" = :id RETURNING "id", "user_id", "status", "total", "tip", "fee", "placed_at"`
 
 // OrderUpdate rewrites every non-key column of the identified orders row
 // and returns the result, or rt.ErrNotFound when no row matches.
@@ -242,6 +243,7 @@ func (q *Queries) OrderUpdate(ctx context.Context, id int, arg OrderUpdateParams
 		sql.Named("status", arg.Status),
 		sql.Named("total", arg.Total),
 		sql.Named("tip", arg.Tip),
+		sql.Named("fee", arg.Fee),
 		sql.Named("placed_at", arg.PlacedAt),
 	))
 }

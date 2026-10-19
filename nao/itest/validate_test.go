@@ -122,7 +122,7 @@ func TestRequiredIsGoOnly(t *testing.T) {
 	if d := ve.Details(); d[0].Columns[0] != "total" {
 		t.Errorf("details = %+v", d)
 	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO orders (user_id, status, total) VALUES (?, 'pending', 0)`, u.ID); err != nil {
+	if _, err := db.ExecContext(ctx, `INSERT INTO orders (user_id, status, total, fee) VALUES (?, 'pending', 0, 0)`, u.ID); err != nil {
 		t.Fatalf("the database carries no CHECK for required: %v", err)
 	}
 	if _, err := q.OrderCreate(ctx, OrderCreateParams{UserID: u.ID, Total: 1.00}); err != nil {

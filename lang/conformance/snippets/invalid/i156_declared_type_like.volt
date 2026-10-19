@@ -1,0 +1,12 @@
+// spec: §predicates: like needs a text column; a declared type is not one, whatever its storage
+// want: like needs a text column
+package db
+
+Type Slug string
+
+Table posts {
+  id   int  [pk, increment]
+  slug Slug [not null]
+}
+
+Select drafts for posts where slug like 'draft-%'

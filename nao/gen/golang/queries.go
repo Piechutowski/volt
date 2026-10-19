@@ -5,7 +5,6 @@ package golang
 import (
 	"fmt"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/Piechutowski/volt/gen/align"
@@ -479,13 +478,8 @@ func (e *queryEmitter) header() {
 	for imp := range e.needImports {
 		imports[imp] = true
 	}
-	paths := make([]string, 0, len(imports))
-	for p := range imports {
-		paths = append(paths, p)
-	}
-	sort.Strings(paths)
 	e.out.WriteString("import (\n")
-	for _, p := range paths {
+	for _, p := range importKeysSort(imports) {
 		fmt.Fprintf(&e.out, "\t%s\n", importDecl(p))
 	}
 	e.out.WriteString(")\n\n")

@@ -1,6 +1,7 @@
 package golang
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 
@@ -21,20 +22,45 @@ func typeOf(ct check.ColumnType, enumTypes map[string]string) goType {
 }
 
 func importKey(ct check.ColumnType) string {
-	if ct.Import == "" {
-		return ""
+	return importKeyOf(ct.Alias, ct.Import)
+}
+
+func importKeyOf(alias, path string) string {
+	if path == "" || alias == "" || alias == path[strings.LastIndexByte(path, '/')+1:] {
+		return path
 	}
-	if ct.Alias != "" {
-		return ct.Alias + "=" + ct.Import
+	return alias + "=" + path
+}
+
+func importSplit(key string) (alias, path string) {
+	if i := strings.IndexByte(key, '='); i >= 0 {
+		return key[:i], key[i+1:]
 	}
-	return ct.Import
+	return "", key
+}
+
+func importKeysSort(imports map[string]bool) []string {
+	keys := make([]string, 0, len(imports))
+	for k := range imports {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		ai, pi := importSplit(keys[i])
+		aj, pj := importSplit(keys[j])
+		if pi != pj {
+			return pi < pj
+		}
+		return ai < aj
+	})
+	return keys
 }
 
 // importDecl renders one import line from its key: the path, or
 // alias=path for a declared type's package (spec §types).
 func importDecl(key string) string {
-	if i := strings.IndexByte(key, '='); i >= 0 {
-		return key[:i] + " " + strconv.Quote(key[i+1:])
+	alias, path := importSplit(key)
+	if alias != "" {
+		return alias + " " + strconv.Quote(path)
 	}
-	return strconv.Quote(key)
+	return strconv.Quote(path)
 }

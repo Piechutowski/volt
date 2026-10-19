@@ -19,6 +19,7 @@ CREATE TABLE orders (
   status TEXT NOT NULL DEFAULT 'pending',
   total REAL NOT NULL,
   tip INTEGER NOT NULL DEFAULT 0,
+  fee INTEGER NOT NULL,
   placed_at TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users (id)
 );

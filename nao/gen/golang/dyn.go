@@ -4,7 +4,6 @@ package golang
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -142,13 +141,8 @@ func (e *dynEmitter) header() {
 	for imp := range e.plan.imports {
 		imports[imp] = true
 	}
-	paths := make([]string, 0, len(imports))
-	for p := range imports {
-		paths = append(paths, p)
-	}
-	sort.Strings(paths)
 	e.out.WriteString("\nimport (\n")
-	for _, p := range paths {
+	for _, p := range importKeysSort(imports) {
 		fmt.Fprintf(&e.out, "\t%s\n", importDecl(p))
 	}
 	e.out.WriteString(")\n\n")

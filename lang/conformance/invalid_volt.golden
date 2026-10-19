@@ -111,6 +111,21 @@ app/i13_unknown_param_type.volt:5:13: error: spec/scopes-and-routes: unknown par
 ## i14_dup_param.volt
 app/i14_dup_param.volt:5:9: error: spec/scopes-and-routes: duplicate path parameter "id" (§route-paths)
 
+## i155_declared_type_ordering_op.volt
+db/i155_declared_type_ordering_op.volt:12:31: error: spec/selects-over-groups: column "price" has declared type Money; a declared type compares with =, !=, in and is null only (§predicates)
+
+## i156_declared_type_like.volt
+db/i156_declared_type_like.volt:12:31: error: spec/selects-over-groups: like needs a text column; "slug" is Slug (§predicates)
+
+## i157_declared_type_order.volt
+db/i157_declared_type_order.volt:12:35: error: spec/selects-over-groups: column "price" has declared type Money; a declared type cannot be ordered (§selects-over-groups)
+
+## i158_declared_type_string_literal.volt
+db/i158_declared_type_string_literal.volt:12:37: error: spec/selects-over-groups: column "price" (Money) cannot be compared with the string "x" (§predicates)
+
+## i159_declared_type_list_time.volt
+db/i159_declared_type_list_time.volt:12:32: error: spec/selects-over-groups: column "at" has declared type Stamp stored as time.Time; it cannot take a list parameter: JSON carries no date/time value (§predicates)
+
 ## i15_keyword_param.volt
 app/i15_keyword_param.volt:5:9: error: spec/scopes-and-routes: path parameter "type" must be a valid, non-keyword Go identifier (§route-paths)
 

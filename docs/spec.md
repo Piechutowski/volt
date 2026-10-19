@@ -1009,9 +1009,11 @@ storage type = column type ;
    SQLite column (§mapping-to-sqlite-ddl), the empty value `required`
    refuses (§columns) and the literals a `default:` accepts
    (§default-values).
-3. **Contract.** The Go type MUST implement `database/sql.Scanner` and
-   `database/sql/driver.Valuer`. Generated code asserts both
-   (`var _ sql.Scanner = (*pkg.Name)(nil)`), so a type that does not
+3. **Contract.** The Go type MUST implement `database/sql.Scanner` on
+   its pointer and `database/sql/driver.Valuer` on its value, since
+   generated code scans into a pointer and binds values. Generated
+   code asserts both (`var _ sql.Scanner = (*pkg.Name)(nil)` and
+   `var _ driver.Valuer = *new(pkg.Name)`), so a type that does not
    fails to compile at the assertion, naming the type. A nullable
    column of a declared type is `rt.Null[pkg.Name]`.
 4. **In predicates.** A column of a declared type compares with `=`,
@@ -2406,14 +2408,18 @@ Pred chosen  { org in :orgs }
      site — a list and a scalar use of the same name disagree — or
      the use is an error naming both positions.
 4. An enum-typed column cannot be compared in the predicate language
-   in v1 — the only column type predicates refuse besides blob/json;
-   whether typed enum parameters should lift this is hypotheses H5.
+   in v1; with `[]byte` (rule 3) it is the only column type predicates
+   refuse. Whether typed enum parameters should lift this is
+   hypotheses H5.
 5. Type classes follow the column types (§columns): numeric = `int`
    and `float64`; text = `string`; date/time = `time.Time`; `bool`
    agrees with `bool` only. A column of a declared type (§types)
    compares with `=`, `!=`, `in` and `is null` only: a parameter in
    that position has the declared Go type, a literal has the class
-   of the storage type.
+   of the storage type, and a declared type stored as `time.Time` or
+   `[]byte` takes no literal. A list parameter of a declared type is
+   bound through the type's driver value, and a declared type stored
+   as `time.Time` cannot take one, as rule 3 says of `time.Time`.
 
 ## Selects over groups
 

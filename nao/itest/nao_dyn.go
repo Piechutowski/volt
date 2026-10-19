@@ -4,6 +4,7 @@ package itest
 
 import (
 	"context"
+	"github.com/Piechutowski/volt/nao/itest/pay"
 	"github.com/Piechutowski/volt/nao/rt"
 	"time"
 )
@@ -130,7 +131,7 @@ func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], pr
 
 const (
 	orderTableSQL   = `"orders"`
-	orderColumnsSQL = `"id", "user_id", "status", "total", "tip", "placed_at"`
+	orderColumnsSQL = `"id", "user_id", "status", "total", "tip", "fee", "placed_at"`
 )
 
 // Typed column handles of Order: inert predicate, order and
@@ -143,6 +144,7 @@ var (
 	OrderStatus   = rt.Column[Order, EOrderStatus]{Name: "status"}
 	OrderTotal    = rt.Column[Order, float64]{Name: "total"}
 	OrderTip      = rt.Column[Order, Money]{Name: "tip"}
+	OrderFee      = rt.Column[Order, pay.Cents]{Name: "fee"}
 	OrderPlacedAt = rt.NullColumn[Order, time.Time]{Column: rt.Column[Order, time.Time]{Name: "placed_at"}}
 )
 

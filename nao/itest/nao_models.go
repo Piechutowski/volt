@@ -8,6 +8,7 @@ package itest
 import (
 	"database/sql"
 	"database/sql/driver"
+	"github.com/Piechutowski/volt/nao/itest/pay"
 	"github.com/Piechutowski/volt/nao/rt"
 	"time"
 )
@@ -24,7 +25,9 @@ const (
 
 var (
 	_ sql.Scanner   = (*Money)(nil)
-	_ driver.Valuer = (*Money)(nil)
+	_ driver.Valuer = *new(Money)
+	_ sql.Scanner   = (*pay.Cents)(nil)
+	_ driver.Valuer = *new(pay.Cents)
 )
 
 // User is a row of the users table.
@@ -44,6 +47,7 @@ type Order struct {
 	Status   EOrderStatus       `db:"status" json:"status"`
 	Total    float64            `db:"total" json:"total"`
 	Tip      Money              `db:"tip" json:"tip"`
+	Fee      pay.Cents          `db:"fee" json:"fee"`
 	PlacedAt rt.Null[time.Time] `db:"placed_at" json:"placed_at"`
 }
 
@@ -93,6 +97,7 @@ type UserUpdateParams struct {
 type OrderCreateParams struct {
 	UserID   int                `db:"user_id" json:"user_id"`
 	Total    float64            `db:"total" json:"total"`
+	Fee      pay.Cents          `db:"fee" json:"fee"`
 	PlacedAt rt.Null[time.Time] `db:"placed_at" json:"placed_at"`
 }
 
@@ -103,6 +108,7 @@ type OrderUpdateParams struct {
 	Status   EOrderStatus       `db:"status" json:"status"`
 	Total    float64            `db:"total" json:"total"`
 	Tip      Money              `db:"tip" json:"tip"`
+	Fee      pay.Cents          `db:"fee" json:"fee"`
 	PlacedAt rt.Null[time.Time] `db:"placed_at" json:"placed_at"`
 }
 

@@ -5,8 +5,69 @@ package itest
 import (
 	"context"
 	"database/sql"
+	"github.com/Piechutowski/volt/nao/itest/pay"
 	"github.com/Piechutowski/volt/nao/rt"
 )
+
+const orderByFeeSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE fee = :fee`
+
+// OrderByFee runs the "byFee" select over orders (spec §selects-over-groups).
+func (q *Queries) OrderByFee(ctx context.Context, fee pay.Cents) ([]Order, error) {
+	rows, err := q.db.QueryContext(ctx, orderByFeeSQL, sql.Named("fee", fee))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Order{}
+	for rows.Next() {
+		v, err := orderScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+const orderFeesSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE fee IN (SELECT value FROM json_each(:fees)) ORDER BY id ASC`
+
+// OrderFees runs the "fees" select over orders (spec §selects-over-groups).
+func (q *Queries) OrderFees(ctx context.Context, fees []pay.Cents) ([]Order, error) {
+	rows, err := q.db.QueryContext(ctx, orderFeesSQL, sql.Named("fees", rt.JSONList(fees)))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Order{}
+	for rows.Next() {
+		v, err := orderScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+const orderFreeSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE fee = 0`
+
+// OrderFree runs the "free" select over orders (spec §selects-over-groups).
+func (q *Queries) OrderFree(ctx context.Context) ([]Order, error) {
+	rows, err := q.db.QueryContext(ctx, orderFreeSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Order{}
+	for rows.Next() {
+		v, err := orderScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
 
 const pageViewRowsSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE (site = :site AND day = :day) ORDER BY day DESC, id ASC`
 

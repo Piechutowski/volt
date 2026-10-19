@@ -8,7 +8,6 @@ package golang
 
 import (
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -107,10 +106,10 @@ func (g *generator) typesEmit() {
 	b.WriteString("var (\n")
 	for _, td := range g.info.Types {
 		if td.Path != "" {
-			g.imports[td.Key[:strings.IndexByte(td.Key, '.')]+"="+td.Path] = true
+			g.imports[importKeyOf(td.Key[:strings.IndexByte(td.Key, '.')], td.Path)] = true
 		}
 		fmt.Fprintf(b, "\t_ sql.Scanner   = (*%s)(nil)\n", td.Key)
-		fmt.Fprintf(b, "\t_ driver.Valuer = (*%s)(nil)\n", td.Key)
+		fmt.Fprintf(b, "\t_ driver.Valuer = *new(%s)\n", td.Key)
 	}
 	b.WriteString(")\n\n")
 }
@@ -182,13 +181,8 @@ func (g *generator) header() {
 	fmt.Fprintf(&g.out, "package %s\n\n", g.opts.Package)
 
 	if len(g.imports) > 0 {
-		paths := make([]string, 0, len(g.imports))
-		for p := range g.imports {
-			paths = append(paths, p)
-		}
-		sort.Strings(paths)
 		g.out.WriteString("import (\n")
-		for _, p := range paths {
+		for _, p := range importKeysSort(g.imports) {
 			fmt.Fprintf(&g.out, "\t%s\n", importDecl(p))
 		}
 		g.out.WriteString(")\n\n")
