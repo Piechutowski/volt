@@ -419,10 +419,10 @@ func (p *parser) column() *ast.Column {
 
 func (p *parser) typeRef() *ast.TypeRef {
 	tr := p.types.new()
-	if p.at(token.LBRACKET) {
+	if p.at(token.LBRACKET) && p.peekKind(1) == token.RBRACKET {
 		tr.Slice = true
 		tr.Lbrack = p.next().Pos
-		p.expect(token.RBRACKET, "the [] of a slice type (§columns)")
+		p.next()
 	}
 	tr.Name = p.qualName("column type (§columns)")
 	return tr
@@ -658,7 +658,11 @@ func (p *parser) recordRow() *ast.RecordRow {
 		switch {
 		case p.at(token.COMMA) || p.at(token.RBRACE) || p.at(token.EOF),
 			!rowStart && p.cur().NLBefore:
-			row.Values = append(row.Values, &ast.Empty{At: p.cur().Pos})
+			at := p.cur().Pos
+			if !rowStart {
+				at = p.toks[p.pos-1].End()
+			}
+			row.Values = append(row.Values, &ast.Empty{At: at})
 		default:
 			row.Values = append(row.Values, p.recordValue())
 			rowStart = false

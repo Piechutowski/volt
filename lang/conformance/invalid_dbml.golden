@@ -77,16 +77,73 @@ i134_default_null_not_null.dbml:4:29: error: spec/default-values: default of "n"
 i135_records_type_mismatch.dbml:7:8: error: spec/records-sample-data: record value for "n" (int) must be an integer, found string (§records-sample-data)
 
 ## i136_records_null_not_null.dbml
-i136_records_null_not_null.dbml:8:3: error: spec/records-sample-data: record value for "n" is null, but the column is not nullable (§records-sample-data)
+i136_records_null_not_null.dbml:7:7: error: spec/records-sample-data: record value for "n" is null, but the column is not nullable (§records-sample-data)
 
 ## i137_default_null_composite_pk.dbml
 i137_default_null_composite_pk.dbml:4:19: error: spec/default-values: default of "a" is null, but the column is not nullable (§default-values)
 
+## i138_enum_unqualified_other_schema.dbml
+i138_enum_unqualified_other_schema.dbml:6:5: error: spec/columns: column "s": unknown type "job_status"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+
+## i139_type_empty_from.dbml
+i139_type_empty_from.dbml:3:19: error: spec/types: Type "m.M" has an empty from path; the path is a non-empty import path (§types)
+i139_type_empty_from.dbml:5:5: error: spec/columns: column "m": unknown type "m.M"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+
 ## i13_headercolor_not_color.dbml
 i13_headercolor_not_color.dbml:2:23: error: spec/table: "headercolor" must be a color literal
 
+## i140_type_reserved_alias.dbml
+i140_type_reserved_alias.dbml:3:6: error: spec/types: Type "rt.X": package name "rt" is reserved by generated code (§types)
+i140_type_reserved_alias.dbml:5:5: error: spec/columns: column "x": unknown type "rt.X"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+
+## i141_type_reserved_alias_path.dbml
+i141_type_reserved_alias_path.dbml:3:6: error: spec/types: Type "sql.X": package name "sql" is reserved by generated code for "database/sql" (§types)
+i141_type_reserved_alias_path.dbml:5:5: error: spec/columns: column "x": unknown type "sql.X"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+
+## i142_slice_not_byte.dbml
+i142_slice_not_byte.dbml:4:8: error: spec/columns: column "tags": unknown type "[]string"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+
+## i143_type_duplicate.dbml
+i143_type_duplicate.dbml:4:1: error: spec/namespaces-and-uniqueness: duplicate Type name "Slug"
+
+## i144_type_enum_collision.dbml
+i144_type_enum_collision.dbml:4:6: error: spec/types: Type "status" collides with the enum of that name (§types)
+
+## i145_type_storage_enum.dbml
+i145_type_storage_enum.dbml:4:11: error: spec/types: storage type "status" of Type "Slug" is not a built-in: bool, int, float64, string, []byte or time.Time (§types)
+i145_type_storage_enum.dbml:6:5: error: spec/columns: column "s": unknown type "Slug"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+
+## i146_type_storage_type.dbml
+i146_type_storage_type.dbml:4:13: error: spec/types: storage type "Slug" of Type "Handle" is not a built-in: bool, int, float64, string, []byte or time.Time (§types)
+i146_type_storage_type.dbml:6:5: error: spec/columns: column "h": unknown type "Handle"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+
+## i147_default_enum_const_non_enum.dbml
+i147_default_enum_const_non_enum.dbml:5:19: error: spec/default-values: default of "n" (int) is an enum constant but the column is not an enum (§default-values)
+
+## i148_default_other_enum.dbml
+i148_default_other_enum.dbml:6:22: error: spec/default-values: default of "s" names enum "role", the column's enum is "status" (§default-values)
+
+## i149_default_string_time.dbml
+i149_default_string_time.dbml:4:26: error: spec/default-values: default of "at" (time.Time) must be an expression literal, found string (§default-values)
+
 ## i14_unknown_column_setting.dbml
 i14_unknown_column_setting.dbml:3:11: error: spec/columns: unknown setting "sparkly"
+
+## i150_default_bool_not_boolean.dbml
+i150_default_bool_not_boolean.dbml:4:23: error: spec/default-values: default of "live" (bool) must be a boolean, found integer (§default-values)
+
+## i151_default_fraction_int.dbml
+i151_default_fraction_int.dbml:4:19: error: spec/default-values: default of "n" (int) must be an integer, found number (§default-values)
+
+## i152_records_literal_null_not_null.dbml
+i152_records_literal_null_not_null.dbml:7:8: error: spec/records-sample-data: record value for "n" is null, but the column is not nullable (§records-sample-data)
+
+## i153_records_declared_type_mismatch.dbml
+i153_records_declared_type_mismatch.dbml:8:8: error: spec/records-sample-data: record value for "price" (money.Money) must be an integer, found string (§records-sample-data)
+
+## i154_column_without_type.dbml
+i154_column_without_type.dbml:3:1: error: spec/table: table "t" must contain at least one column or partial injection
+i154_column_without_type.dbml:4:6: error: syntax: expected identifier in column type (§columns), found '[' "["
 
 ## i19_ref_arity_mismatch.dbml
 i19_ref_arity_mismatch.dbml:5:17: error: spec/relationships-ref: composite relationship endpoints must have the same number of columns: 2 vs 1

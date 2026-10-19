@@ -121,10 +121,10 @@ func typeEnvOf(enums map[string]*EnumInfo, types map[string]*TypeInfo) *typeEnv 
 	return &typeEnv{enums: enums, types: types, keys: keys}
 }
 
-// resolve resolves a column type written in a table of tableSchema
-// (spec §columns): a built-in, then a declared type, then an enum of the
-// written schema, the public schema, or the table's own schema.
-func (e *typeEnv) resolve(tr *ast.TypeRef, tableSchema string) ColumnType {
+// resolve resolves a column type (spec §columns): a built-in, then a
+// declared type, then an enum of the written schema, public when
+// unqualified (spec §schemas).
+func (e *typeEnv) resolve(tr *ast.TypeRef) ColumnType {
 	name := tr.String()
 	if b, ok := builtins[name]; ok {
 		return b
@@ -138,12 +138,25 @@ func (e *typeEnv) resolve(tr *ast.TypeRef, tableSchema string) ColumnType {
 	if en := e.enums[canonKey(tr.Name)]; en != nil {
 		return ColumnType{Storage: "string", Enum: en}
 	}
-	if tr.Name.Schema() == "" && tableSchema != "" {
-		if en := e.enums[tableSchema+"."+tr.Name.Base()]; en != nil {
-			return ColumnType{Storage: "string", Enum: en}
-		}
-	}
 	return ColumnType{}
+}
+
+// ReservedAliases are the package names generated code imports for
+// itself, each with the one import path a Type may bind it to; an empty
+// path reserves the name outright (spec §types).
+var ReservedAliases = map[string]string{
+	"context": "context",
+	"driver":  "database/sql/driver",
+	"errors":  "errors",
+	"fmt":     "fmt",
+	"gob":     "encoding/gob",
+	"http":    "net/http",
+	"json":    "encoding/json",
+	"rt":      "",
+	"sql":     "database/sql",
+	"strings": "strings",
+	"time":    "time",
+	"volt":    "",
 }
 
 func typeAlias(name string) string {
@@ -183,13 +196,26 @@ func (c *checker) typeDeclCheck(d *ast.TypeDecl) *TypeInfo {
 		return nil
 	}
 	if d.From != nil {
-		ti.Path = d.From.Tok.Val
+		path := d.From.Tok.Val
+		if path == "" {
+			c.errorf(d.From.Pos(), "types", "Type %q has an empty from path; the path is a non-empty import path (§types)", key)
+			return nil
+		}
+		alias := d.Name.Schema()
+		if std, reserved := ReservedAliases[alias]; reserved && std != path {
+			if std == "" {
+				c.errorf(d.Name.Pos(), "types", "Type %q: package name %q is reserved by generated code (§types)", key, alias)
+			} else {
+				c.errorf(d.Name.Pos(), "types", "Type %q: package name %q is reserved by generated code for %q (§types)", key, alias, std)
+			}
+			return nil
+		}
+		ti.Path = path
 	}
 	return ti
 }
 
 func (c *checker) typesResolve(ti *TableInfo) {
-	schema := ti.Decl.Name.Schema()
 	pkIndex := map[string]bool{}
 	for _, ix := range ti.Indexes {
 		if ix.Settings.Get("pk") == nil {
@@ -203,7 +229,7 @@ func (c *checker) typesResolve(ti *TableInfo) {
 	}
 	for _, cd := range ti.Columns {
 		cd.Nullable = isNullable(cd.Col) && !pkIndex[cd.Col.Name.Name()]
-		cd.Type = c.env.resolve(cd.Col.Type, schema)
+		cd.Type = c.env.resolve(cd.Col.Type)
 		if !cd.Type.Known() {
 			c.errorf(cd.Col.Type.Pos(), "columns", "column %q: unknown type %q; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)", cd.Col.Name.Name(), cd.Col.Type.String())
 			continue
@@ -232,12 +258,11 @@ func (c *checker) recordsTypeCheck(ti *TableInfo, d *ast.Records) {
 		cols = ti.Columns
 	}
 	for _, row := range d.Rows {
-		if !d.HasColumns && len(row.Values) != len(cols) {
-			c.errorf(row.Pos(), "records-sample-data", "record row has %d values but %s has %d columns", len(row.Values), ti.Decl.Name.String(), len(cols))
+		if len(row.Values) != len(cols) {
 			continue
 		}
 		for i, v := range row.Values {
-			if i >= len(cols) || cols[i] == nil || !cols[i].Type.Known() {
+			if cols[i] == nil || !cols[i].Type.Known() {
 				continue
 			}
 			c.valueTypeCheck(cols[i], v, "records-sample-data", "record value for")
@@ -306,8 +331,11 @@ func (c *checker) valueTypeCheck(cd *ColumnDef, v ast.Node, section, what string
 func defaultKind(v ast.Node) string {
 	switch x := v.(type) {
 	case *ast.BasicLit:
-		if x.Tok.Kind == token.STRING {
+		switch x.Tok.Kind {
+		case token.STRING:
 			return "string"
+		case token.COLOR:
+			return "value"
 		}
 		if strings.ContainsAny(x.Tok.Val, ".eE") {
 			return "number"
@@ -321,6 +349,9 @@ func defaultKind(v ast.Node) string {
 	case *ast.Empty:
 		return "null"
 	case *ast.Ident:
+		if x.Quoted() {
+			return "value"
+		}
 		switch strings.ToLower(x.Name()) {
 		case "true", "false":
 			return "boolean"

@@ -725,10 +725,12 @@ column setting  = "primary key" | "pk"
    `[]byte` and `time.Time`; an enum of the package, optionally
    schema-qualified (`v2.job_status`, §enum); or a type declared with
    `Type` (§types). Anything else is an error naming the column and
-   the set. The type decides the Go field (§mapping-to-go), the SQLite
-   column (§mapping-to-sqlite-ddl), the literals a `default:` accepts
-   (§default-values), the empty value `required` refuses, and the
-   comparisons a predicate allows (§predicates).
+   the set; the `[]` of the grammar belongs to `[]byte` alone, so
+   `[]string` is an unknown type. The type decides the Go field
+   (§mapping-to-go), the SQLite column (§mapping-to-sqlite-ddl), the
+   literals a `default:` accepts (§default-values), the empty value
+   `required` refuses, and the comparisons a predicate allows
+   (§predicates).
 2. **Nullability.** Absent `not null`, a column is nullable. `null` and
    `not null` are mutually exclusive.
 3. **`pk` / `primary key`** are synonyms and mutually exclusive; they mark a
@@ -751,7 +753,7 @@ column setting  = "primary key" | "pk"
 6. **Legacy flags.** For backward compatibility, the bare words `pk` and
    `unique` MAY appear between the type and the settings list
    (`id int pk`). New documents SHOULD use the settings list instead.
-8. Each column definition is terminated by a line break.
+7. Each column definition is terminated by a line break.
 
 > **Extension (this implementation).** The column setting `required`
 > declares that a value must be present
@@ -817,8 +819,8 @@ default value = [ "-" ], number
 A bare identifier that is not `true`/`false`/`null` and not a dotted enum
 constant is **not** a valid default value.
 
-1. **Typed.** A default MUST fit the column's type (§columns): a number
-   for `int` (no fraction) and `float64`; a string for `string`;
+1. **Typed.** A default MUST fit the column's type (§columns): an
+   integer literal for `int`; a number for `float64`; a string for `string`;
    `true` or `false` for `bool`; a constant of the column's own enum
    for an enum column; for a declared type (§types), a literal of its
    storage type. `null` is a default only on a nullable column. An
@@ -988,10 +990,18 @@ storage type = column type ;
 ```
 
 1. **Name.** `pkg.Name` names the Go type `Name` of the package
-   imported from the `from` path under the alias `pkg`; generated code
-   imports it as `import pkg "path"`. A bare `Name` without `from`
-   names a type declared in a Go file of the data package itself, and
-   `from` on a bare name is an error, as is `pkg.Name` without `from`.
+   imported from the `from` path under the alias `pkg`; the path is a
+   non-empty import path, and generated code imports it as
+   `import pkg "path"`. The alias MUST NOT be a package name generated
+   code imports for itself under another path: `context`, `driver`,
+   `errors`, `fmt`, `gob`, `http`, `json`, `sql`, `strings` and `time`
+   are free only with their standard path (`sql` from `database/sql`,
+   `driver` from `database/sql/driver`, `json` from `encoding/json`,
+   `gob` from `encoding/gob`, `http` from `net/http`, the rest from
+   the path of their name), and `rt` and `volt` are never free. A bare
+   `Name` without `from` names a type declared in a Go file of the data
+   package itself, and `from` on a bare name is an error, as is
+   `pkg.Name` without `from`.
    Declared names are unique within the package and MUST NOT spell a
    built-in type or an enum.
 2. **Storage.** The storage type is one of the six built-ins
@@ -1092,8 +1102,8 @@ empty           = ;                      (* nothing between separators *)
 2. A table MUST have at most one records block.
 3. Each row MUST supply exactly as many values as listed columns.
 4. **Value typing.** Each value MUST fit the target column's type
-   (§columns), as a default must (§default-values): an integer for
-   `int`; a number for `float64`; a string for `string` and for
+   (§columns), as a default must (§default-values): an integer literal
+   for `int`; a number for `float64`; a string for `string` and for
    `time.Time` (ISO 8601 text, `'2024-01-15 10:30:00'`); `true` or
    `false` for `bool`; a constant of the column's own enum
    (`EnumName.value`) for an enum column; for a declared type, a
@@ -1106,6 +1116,11 @@ empty           = ;                      (* nothing between separators *)
    column and its type.
 
 ```volt
+Enum job_status {
+  created
+  running
+}
+
 Table users {
   id int [pk]
   name string
@@ -1113,13 +1128,20 @@ Table users {
 
   Records (id, name, status) {
     1, 'Alice', job_status.created
-    2, 'Bob', 'running'
+    2, 'Bob', job_status.running
     3, , null
   }
 }
 
-Records users(id, name, status) {
-  4, 'Carol', `default_status()`
+Table posts {
+  id int [pk]
+  user_id int [not null, ref: > users.id]
+  posted_at time.Time
+}
+
+Records posts(id, user_id, posted_at) {
+  1, 1, `CURRENT_TIMESTAMP`
+  2, 2, '2024-01-15 10:30:00'
 }
 ```
 
@@ -1254,7 +1276,8 @@ import path      = string ;
 1. Schemas are not declared; a schema exists if and only if at least one
    table or enum names it as qualifier.
 2. Every unqualified table, enum, or relationship endpoint belongs to the
-   default schema **`public`**.
+   default schema **`public`**. An unqualified enum written as a column
+   type names the `public` enum whatever schema the table is in.
 
 ### Namespaces and Uniqueness
 
@@ -1264,7 +1287,9 @@ Within one compiled schema (after imports):
    is shared with unqualified table names.
 2. Enum names MUST be unique per schema.
 3. TablePartial names, TableGroup names, sticky-note names, and DiagramView
-   names each form a single global namespace and MUST be unique.
+   names each form a single global namespace and MUST be unique. Declared
+   Type names (§types) form their own namespace, unique within the
+   package, and a Type MUST NOT spell an enum name.
 4. Column names MUST be unique within their table; enum values within their
    enum.
 
