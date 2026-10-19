@@ -76,9 +76,10 @@ type TableInfo struct {
 
 // ColumnDef is one column definition and where it came from.
 type ColumnDef struct {
-	Col     *ast.Column
-	Partial *ast.TablePartial // nil for direct definitions
-	Type    ColumnType
+	Col      *ast.Column
+	Partial  *ast.TablePartial // nil for direct definitions
+	Type     ColumnType
+	Nullable bool
 }
 
 // Column returns the effective definition of the named column, or nil.

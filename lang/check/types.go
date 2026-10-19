@@ -107,8 +107,12 @@ type typeEnv struct {
 
 func typeEnvOf(enums map[string]*EnumInfo, types map[string]*TypeInfo) *typeEnv {
 	keys := make([]string, 0, len(enums)+len(types))
-	for k := range enums {
-		keys = append(keys, "enum:"+k)
+	for k, e := range enums {
+		key := "enum:" + k
+		for _, v := range e.Decl.Values {
+			key += "," + v.Name.Name()
+		}
+		keys = append(keys, key)
 	}
 	for k, t := range types {
 		keys = append(keys, "type:"+k+"="+t.Storage.Storage+"="+t.Path)
@@ -186,7 +190,19 @@ func (c *checker) typeDeclCheck(d *ast.TypeDecl) *TypeInfo {
 
 func (c *checker) typesResolve(ti *TableInfo) {
 	schema := ti.Decl.Name.Schema()
+	pkIndex := map[string]bool{}
+	for _, ix := range ti.Indexes {
+		if ix.Settings.Get("pk") == nil {
+			continue
+		}
+		for _, k := range ix.Key {
+			if id, ok := k.(*ast.Ident); ok {
+				pkIndex[id.Name()] = true
+			}
+		}
+	}
 	for _, cd := range ti.Columns {
+		cd.Nullable = isNullable(cd.Col) && !pkIndex[cd.Col.Name.Name()]
 		cd.Type = c.env.resolve(cd.Col.Type, schema)
 		if !cd.Type.Known() {
 			c.errorf(cd.Col.Type.Pos(), "columns", "column %q: unknown type %q; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)", cd.Col.Name.Name(), cd.Col.Type.String())
@@ -259,7 +275,7 @@ func (c *checker) valueTypeCheck(cd *ColumnDef, v ast.Node, section, what string
 	case "value":
 		return
 	case "null":
-		if !isNullable(cd.Col) {
+		if !cd.Nullable {
 			c.errorf(v.Pos(), section, "%s %q is null, but the column is not nullable (§%s)", what, name, section)
 		}
 		return

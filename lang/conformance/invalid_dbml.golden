@@ -79,6 +79,9 @@ i135_records_type_mismatch.dbml:7:8: error: spec/records-sample-data: record val
 ## i136_records_null_not_null.dbml
 i136_records_null_not_null.dbml:8:3: error: spec/records-sample-data: record value for "n" is null, but the column is not nullable (§records-sample-data)
 
+## i137_default_null_composite_pk.dbml
+i137_default_null_composite_pk.dbml:4:19: error: spec/default-values: default of "a" is null, but the column is not nullable (§default-values)
+
 ## i13_headercolor_not_color.dbml
 i13_headercolor_not_color.dbml:2:23: error: spec/table: "headercolor" must be a color literal
 
