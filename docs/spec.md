@@ -15,7 +15,7 @@ from DBML. This specification has two parts and three appendices:
 
 - **[Part I — The Schema Core (DBML)](#part-i-the-schema-core-dbml)**:
   lexis, grammar and static semantics of the DBML-derived schema
-  layer. Standalone-conformant with upstream DBML.
+  layer: DBML's syntax with Go's types in place of SQL's.
 - **[Part II — The Project and Routing Layer](#part-ii-the-project-and-routing-layer)**:
   projects, packages, imports, pipelines, scopes, routes, resources,
   and the query layer.
@@ -52,7 +52,7 @@ DBML (Database Markup Language) is a declarative, database-agnostic domain-speci
 language for defining database schemas: tables, columns, indexes, constraints,
 relationships, enumerations, sample data, and documentation metadata.
 
-This document is a complete, formal specification of DBML intended for
+This document is a complete, formal specification of Volt's schema language intended for
 implementers of parsers, compilers, and tooling. Every construct is specified
 by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
 (3) a minimal example. The collected grammar appears in [Appendix IA](#appendix-ia-collected-grammar-part-i).
@@ -1411,6 +1411,8 @@ enum value           = name, [ enum settings ], newline ;
 enum settings        = "[", enum setting, { ",", enum setting }, "]" ;
 enum setting         = "note", ":", string ;
 
+(* ===== 6.8a Types ===== *)
+
 type decl            = "Type", type name, storage type, [ "from", string ], newline ;
 storage type         = column type ;
 
@@ -1555,10 +1557,12 @@ files under `invalid/` MUST be rejected.
 1. A Volt source file conventionally uses the extension **`.volt`**.
    Whether a file happens to use only the DBML core (Part I) or the
    full language follows from its content, never from its name.
-2. **Superset rule.** Every valid DBML program whose declarations avoid
-   the import statements of Part I §file-imports-removed is a valid Volt file body
-   (§imports removes `use`/`reuse`; §compatibility-with-dbml covers migration). The
-   lexical grammar is Part I §lexical-structure with one addition:
+2. **Superset rule.** Every valid Part I program is a valid Volt file
+   body: a DBML program whose column types are spelled in Volt's type
+   set (§columns) and whose declarations avoid the import statements of
+   Part I §file-imports-removed (§imports removes `use`/`reuse`;
+   §compatibility-with-dbml covers migration). The lexical grammar is
+   Part I §lexical-structure with one addition:
 
    ```ebnf
    slash = "/" ;
@@ -2494,7 +2498,7 @@ the optional projection narrows the emitted columns.
    - **Explicit list** `(a, b, c)` — at least one column, no
      duplicates. Every listed column MUST exist in every member with
      one agreed generated **field type** (§mapping-to-go — nullability
-     included, so `text` and `text [not null]` disagree); a miss or a
+     included, so `string` and `string [not null]` disagree); a miss or a
      disagreement is an error naming the members and their types. The
      row type is **one shared struct** named by the select name
      mapped per §names (select `summary` → `Summary`), serving
@@ -2717,9 +2721,10 @@ chain, each link runnable by `go test ./...`:
    `// want: <text>` line MUST be rejected with a diagnostic containing
    that text — for the rule it names, not by accident. The corpus is
    the spec's executable surface.
-2. **Schema layer preserved.** The schema conformance corpus continues to run
-   unchanged against the same front end: the superset rule (§layers-files-and-the-superset-rule) is
-   enforced, not assumed.
+2. **Schema layer preserved.** The schema corpus is Volt's own, retyped
+   when the type set closed (§columns), and runs against the same front
+   end as the full language, so the superset rule
+   (§layers-files-and-the-superset-rule) is enforced, not assumed.
 3. **Generator ↔ contract.** Goldens are byte-compared, gofmt-stable by
    test, and **compiled by the real Go toolchain** against stub
    implementations of the generated interfaces — the typed-signature
@@ -2812,7 +2817,7 @@ the dynamic layer's concatenation collisions ahead of time.
 Generated files start with the machine-readable
 `// Code generated … DO NOT EDIT.` marker; `volt gen` refuses to
 overwrite a file lacking it. Generated code imports the standard
-library and `nao/rt` only.
+library, `nao/rt` and the packages of declared types (§types) only.
 
 ### Struct tags
 
@@ -2880,7 +2885,7 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 
 | Declared | SQLite |
 |---|---|
-| enum-typed column | `TEXT`; SQLite has no enum type, and the value set is the generated Go type's (§validators) |
+| enum-typed column | `TEXT`; SQLite has no enum type, and the value set is the generated Go type's (§go-types) |
 | `core.users` (schema) | `core_users` — SQLite has no schemas; collisions are generation errors |
 | `pk` column | explicit `NOT NULL` added: SQLite's `PRIMARY KEY` does **not** imply NOT NULL |
 | `int` `[pk, increment]` | exactly `INTEGER PRIMARY KEY` (rowid alias, auto-assigned); SQLite's `AUTOINCREMENT` keyword deliberately avoided — it only adds the never-reuse-an-id bookkeeping the SQLite docs discourage. Any other `increment` placement is a check error (§columns) |
@@ -2891,7 +2896,7 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 | `int`, `bool` | `INTEGER` (booleans stored 0/1; `true`/`false` in records and defaults become 1/0) |
 | `float64` | `REAL` |
 | `string` | `TEXT` |
-| `time.Time` | `TIMESTAMP` (ISO-8601 text; the declared name is what the driver keys its time conversion on) |
+| `time.Time` | `TIMESTAMP` (ISO-8601 text; the DDL spelling is what the sqlite3 driver keys its time conversion on) |
 | `[]byte` | `BLOB` |
 | declared `Type` (§types) | the column type of its storage type |
 | backtick expressions | verbatim; parenthesized in `DEFAULT` as SQLite requires |
@@ -2912,8 +2917,8 @@ marker, with the same overwrite protection as §mapping-to-go.
 
 Volt's schema core keeps DBML's syntax with two breaks. The first is
 the type vocabulary: a column type is a Go type (§columns), so DBML's
-`varchar(255)` or `integer` is an error naming the column, and an
-imported schema is retyped once. The second is **one system**:
+`integer` is an error naming the column and the set, `varchar(255)` a
+syntax error at its parenthesis, and an imported schema is retyped once. The second is **one system**:
 DBML's file-based module machinery (Part I §file-imports-removed) — `use * from './file'`,
 selective imports with per-element kinds and `as` aliases, and `reuse`
 re-export — **is not part of the Volt language** (§imports). The parser
@@ -2950,7 +2955,7 @@ Volt does not generate and will not generate: an identity map or unit
 of work, lazy loading, active-record `Save()`, callbacks, dirty
 tracking, default scopes, single-table inheritance, reflection in
 generated code, a Turing-complete query language. Generated code
-imports the standard library and Volt's runtime packages only.
+imports the standard library, Volt's runtime packages and the packages of declared types only.
 
 ## License and Provenance
 

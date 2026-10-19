@@ -77,7 +77,7 @@ server gets a scripted stdio session; one is a golden
   Nothing else is commented, generated code included.
 - Generated files start with the `Code generated … DO NOT EDIT.`
   marker; the CLI refuses to overwrite a file without it. Generated
-  code imports the standard library and Volt's runtime only.
+  code imports the standard library, Volt's runtime and the packages of declared types only.
 - SQLite is the only database. Never: callbacks, lazy loading, dirty
   tracking, reflection in generated code (spec §non-goals).
 - A memoized computation is a pure function of explicit inputs, keyed
