@@ -203,7 +203,7 @@ func (g *generator) columnDef(ti *check.TableInfo, cd *check.ColumnDef, pkCols [
 	col := cd.Col
 	colName := col.Name.Name()
 
-	sqlType, enumInfo, err := g.typeResolve(col)
+	sqlType, enumInfo, err := g.typeResolve(cd)
 	if err != nil {
 		return "", fmt.Errorf("column %q: %w", colName, err)
 	}
@@ -237,7 +237,7 @@ func (g *generator) columnDef(ti *check.TableInfo, cd *check.ColumnDef, pkCols [
 		parts = append(parts, "CHECK ("+identQuote(colName)+" IN ("+strings.Join(vals, ", ")+"))")
 	}
 	if columnHas(cd, "required") {
-		kind, _ := check.RequiredKind(col.Type.String(), enumInfo != nil)
+		kind, _ := cd.Type.RequiredKind()
 		var expr string
 		switch kind {
 		case "text":

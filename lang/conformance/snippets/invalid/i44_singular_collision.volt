@@ -2,7 +2,7 @@
 package app
 
 Table posty {
-	id integer [pk]
+	id int [pk]
 }
 
 // "posty" survives English singularization unchanged, so the

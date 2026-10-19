@@ -2,5 +2,5 @@
 TablePartial a { id int }
 TablePartial b {
   ~a
-  name varchar
+  name string
 }

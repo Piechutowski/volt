@@ -136,7 +136,7 @@ func TestRequiredBothTiers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	empty := OrderCreateParams{UserID: u.ID, Total: ""}
+	empty := OrderCreateParams{UserID: u.ID, Total: 0}
 	var ve rt.ValidationError
 	if err := empty.Validate(); !errors.As(err, &ve) || ve[0].Check != "total_required" || ve[0].Columns[0] != "total" {
 		t.Fatalf("Go tier: %v", err)
@@ -145,10 +145,10 @@ func TestRequiredBothTiers(t *testing.T) {
 		t.Errorf("details = %+v", d)
 	}
 	var ce rt.ConstraintError
-	if _, err := db.ExecContext(ctx, `INSERT INTO orders (user_id, status, total) VALUES (?, 'pending', '')`, u.ID); !errors.As(rt.Constraint(err), &ce) || ce.Detail != "total_required" {
+	if _, err := db.ExecContext(ctx, `INSERT INTO orders (user_id, status, total) VALUES (?, 'pending', 0)`, u.ID); !errors.As(rt.Constraint(err), &ce) || ce.Detail != "total_required" {
 		t.Fatalf("SQL tier: %v", err)
 	}
-	if _, err := q.OrderCreate(ctx, OrderCreateParams{UserID: u.ID, Total: "1.00"}); err != nil {
+	if _, err := q.OrderCreate(ctx, OrderCreateParams{UserID: u.ID, Total: 1.00}); err != nil {
 		t.Fatalf("non-empty total rejected: %v", err)
 	}
 }

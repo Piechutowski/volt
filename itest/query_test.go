@@ -1,6 +1,6 @@
 // Query routes (spec §query-routes, §formats): the generated handlers bind
 // parameters from path, body and query string, call the data package's
-// queries against a real SQLite, and render in the negotiated format.
+// queries against a float64 SQLite, and render in the negotiated format.
 // Every status the spec names is served here, in both formats.
 package itest
 
@@ -55,7 +55,7 @@ func TestQueryRouteCRUDInJSON(t *testing.T) {
 		t.Fatalf("get miss: %d, want 404", rec.Code)
 	}
 	if rec = call(h, "GET", "/api/users/abc", nil); rec.Code != 404 {
-		t.Fatalf("get with a non-int32 id: %d, want 404 (§route-paths)", rec.Code)
+		t.Fatalf("get with a non-int id: %d, want 404 (§route-paths)", rec.Code)
 	}
 
 	rec = call(h, "PATCH", "/api/users/1", strings.NewReader(`{"email":"uno@example.com"}`), "Content-Type", volt.MIMEJSON)

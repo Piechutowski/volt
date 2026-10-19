@@ -2,15 +2,15 @@
 package app
 
 Table users {
-	id integer [pk]
+	id int [pk]
 }
 
 Table posts {
-	id integer [pk]
+	id int [pk]
 }
 
 Table drafts {
-	id integer [pk]
+	id int [pk]
 }
 
 Scope / {

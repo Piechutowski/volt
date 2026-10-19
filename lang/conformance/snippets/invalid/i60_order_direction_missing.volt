@@ -2,8 +2,8 @@
 package db
 
 Table ms_revenue {
-  id integer [pk]
-  year integer [not null]
+  id int [pk]
+  year int [not null]
 }
 
 Select rows for ms_revenue where year >= :y [order: (year desc, id)]

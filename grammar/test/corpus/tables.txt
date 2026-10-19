@@ -55,14 +55,14 @@ Table core.users as U [headercolor: #3498DB, note: 'main'] {
           (identifier))))))
 
 ==================
-column types: arguments, schema-qualified enum type, quoted multi-word
+column types: built-ins, the [] of []byte, qualified time.Time, schema-qualified enum
 ==================
 
 Table t {
-  name varchar(255)
-  total decimal(10, 2)
+  name string
+  data []byte
+  created time.Time
   status v2.job_status
-  size "double precision"
 }
 
 ---
@@ -76,18 +76,13 @@ Table t {
         (identifier))
       (column_type
         (type_name
-          (identifier))
-        (type_arguments
-          (number))))
+          (identifier))))
     (column_definition
       (column_name
         (identifier))
       (column_type
         (type_name
-          (identifier))
-        (type_arguments
-          (number)
-          (number))))
+          (identifier))))
     (column_definition
       (column_name
         (identifier))
@@ -100,8 +95,10 @@ Table t {
       (column_name
         (identifier))
       (column_type
+        (schema_name
+          (identifier))
         (type_name
-          (quoted_identifier))))))
+          (identifier))))))
 
 ==================
 column settings and legacy flags
@@ -112,9 +109,9 @@ Table t {
   code int unique
   a int [pk, not null, unique, increment]
   b int [primary key]
-  c text [default: 'x', note: 'col']
-  d timestamp [default: `now()`]
-  e decimal [default: -1.5]
+  c string [default: 'x', note: 'col']
+  d time.Time [default: `now()`]
+  e float64 [default: -1.5]
   f bool [default: false]
   g int [default: null]
   h status [default: status.active]
@@ -192,6 +189,8 @@ Table t {
       (column_name
         (identifier))
       (column_type
+        (schema_name
+          (identifier))
         (type_name
           (identifier)))
       (settings_list
@@ -297,7 +296,7 @@ case-insensitive keywords
 ==================
 
 TABLE users {
-  ID INT PK
+  ID int PK
 }
 table posts {
   id int
@@ -357,7 +356,7 @@ TablePartial base [headercolor: #ff0000] {
 
 Table users {
   ~base
-  name varchar
+  name string
 }
 
 ---

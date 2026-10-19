@@ -392,10 +392,7 @@ func pathParse(body *strings.Builder, p lang.Param) string {
 	if p.Type == lang.TString {
 		return fmt.Sprintf("r.PathValue(%q)", p.Name)
 	}
-	parse := map[lang.ParamType]string{
-		lang.TInt: "ParseInt", lang.TInt32: "ParseInt32", lang.TInt64: "ParseInt64",
-	}[p.Type]
-	fmt.Fprintf(body, "\t\tvolt%s, ok := volt.%s(r.PathValue(%q))\n", p.GoName, parse, p.Name)
+	fmt.Fprintf(body, "\t\tvolt%s, ok := volt.ParseInt(r.PathValue(%q))\n", p.GoName, p.Name)
 	fmt.Fprintf(body, "\t\tif !ok {\n\t\t\treturn volt.ErrNotFound\n\t\t}\n")
 	return "volt" + p.GoName
 }
@@ -544,10 +541,8 @@ func pathExpr(r *lang.RouteInfo) string {
 				parts = append(parts, "volt.SegWild("+p.GoName+")")
 			case p.Type == lang.TString:
 				parts = append(parts, "volt.Seg("+p.GoName+")")
-			case p.Type == lang.TInt64:
-				parts = append(parts, "volt.SegInt("+p.GoName+")")
 			default:
-				parts = append(parts, "volt.SegInt(int64("+p.GoName+"))")
+				parts = append(parts, "volt.SegInt("+p.GoName+")")
 			}
 		default:
 			lit += "/" + seg

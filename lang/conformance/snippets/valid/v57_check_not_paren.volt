@@ -3,9 +3,9 @@
 package db
 
 Table page_views {
-  id integer [pk]
-  hits integer [not null]
-  site varchar [not null]
+  id int [pk]
+  hits int [not null]
+  site string [not null]
 
   checks {
     not (hits < 0 or site = '')

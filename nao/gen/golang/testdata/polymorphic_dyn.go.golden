@@ -17,9 +17,9 @@ const (
 // built here can only enter Comment queries; mixing models is a compile
 // error.
 var (
-	CommentID              = rt.Column[Comment, int64]{Name: "id"}
+	CommentID              = rt.Column[Comment, int]{Name: "id"}
 	CommentCommentableType = rt.Column[Comment, ECommentableType]{Name: "commentable_type"}
-	CommentCommentableID   = rt.Column[Comment, int64]{Name: "commentable_id"}
+	CommentCommentableID   = rt.Column[Comment, int]{Name: "commentable_id"}
 	CommentBody            = rt.Column[Comment, string]{Name: "body"}
 )
 

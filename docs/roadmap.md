@@ -20,7 +20,8 @@ when a consumer exists.
 - [x] Scanner, parser, checker, vet; project loading from `go.mod`
   - [x] Parse and check by declaration; routes lowered per scope item
   - [x] Named placeholders, Go references checked by spelling
-- [x] Schema core (DBML): Project, Table, TablePartial, Records, Enum, Ref, TableGroup, Notes, DiagramView
+- [x] Schema core: Project, Table, TablePartial, Records, Enum, Type, Ref, TableGroup, Notes, DiagramView
+  - [x] Column types are a closed Go set (`bool`, `int`, `float64`, `string`, `[]byte`, `time.Time`), enums, and `Type` declarations; defaults are typed
 - [~] Schema extensions
   - [x] `[model:]`, `[tag:]`, `[required]`, typed `checks`
   - [x] `Group`, `Pred`, `Select … for <group>` with projection, list parameters
@@ -54,7 +55,7 @@ when a consumer exists.
   - [ ] Savepoints
 - [ ] Associations
   - [ ] Single loaders: `PostAuthorGet(ctx, post)`, `UserPostsList(ctx, user)`
-  - [ ] Batched loaders: `PostCommentsLoad(ctx, posts) map[int64][]Comment`, one `IN`, grouped in memory; the atomicity answer to loops of reads
+  - [ ] Batched loaders: `PostCommentsLoad(ctx, posts) map[int][]Comment`, one `IN`, grouped in memory; the atomicity answer to loops of reads
   - [ ] Many-to-many through junction tables
   - *no* association fields on row structs; *hand* polymorphic and STI patterns
 - [ ] Migrations

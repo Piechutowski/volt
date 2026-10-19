@@ -51,7 +51,7 @@ func userScan(r rowScanner) (User, error) {
 const userGetSQL = `SELECT "id", "email" FROM "users" WHERE "id" = :id`
 
 // UserGet fetches the users row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) UserGet(ctx context.Context, id int64) (User, error) {
+func (q *Queries) UserGet(ctx context.Context, id int) (User, error) {
 	return userScan(q.db.QueryRowContext(ctx, userGetSQL, sql.Named("id", id)))
 }
 
@@ -59,7 +59,7 @@ const userGetManySQL = `SELECT "id", "email" FROM "users" WHERE "id" IN`
 
 // UserGetMany fetches the users rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
-func (q *Queries) UserGetMany(ctx context.Context, ids []int64) ([]User, error) {
+func (q *Queries) UserGetMany(ctx context.Context, ids []int) ([]User, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -127,7 +127,7 @@ const userUpdateSQL = `UPDATE "users" SET "email" = :email WHERE "id" = :id RETU
 
 // UserUpdate rewrites every non-key column of the identified users row
 // and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) UserUpdate(ctx context.Context, id int64, arg UserUpdateParams) (User, error) {
+func (q *Queries) UserUpdate(ctx context.Context, id int, arg UserUpdateParams) (User, error) {
 	return userScan(q.db.QueryRowContext(ctx, userUpdateSQL,
 		sql.Named("id", id),
 		sql.Named("email", arg.Email),
@@ -138,7 +138,7 @@ const userDeleteSQL = `DELETE FROM "users" WHERE "id" = :id`
 
 // UserDelete removes the identified users row; rt.ErrNotFound reports
 // that nothing matched.
-func (q *Queries) UserDelete(ctx context.Context, id int64) error {
+func (q *Queries) UserDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, userDeleteSQL, sql.Named("id", id))
 	if err != nil {
 		return rt.Constraint(err)
@@ -162,7 +162,7 @@ func userProfileScan(r rowScanner) (UserProfile, error) {
 const userProfileGetSQL = `SELECT "user_id", "bio", "avatar_url" FROM "user_profiles" WHERE "user_id" = :user_id`
 
 // UserProfileGet fetches the user_profiles row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) UserProfileGet(ctx context.Context, userID int64) (UserProfile, error) {
+func (q *Queries) UserProfileGet(ctx context.Context, userID int) (UserProfile, error) {
 	return userProfileScan(q.db.QueryRowContext(ctx, userProfileGetSQL, sql.Named("user_id", userID)))
 }
 
@@ -170,7 +170,7 @@ const userProfileGetManySQL = `SELECT "user_id", "bio", "avatar_url" FROM "user_
 
 // UserProfileGetMany fetches the user_profiles rows whose primary key is in userIDs, in
 // database order. Missing keys are not an error; they are just absent.
-func (q *Queries) UserProfileGetMany(ctx context.Context, userIDs []int64) ([]UserProfile, error) {
+func (q *Queries) UserProfileGetMany(ctx context.Context, userIDs []int) ([]UserProfile, error) {
 	if len(userIDs) == 0 {
 		return nil, nil
 	}
@@ -231,7 +231,7 @@ const userProfileUpdateSQL = `UPDATE "user_profiles" SET "bio" = :bio, "avatar_u
 
 // UserProfileUpdate rewrites every non-key column of the identified user_profiles row
 // and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) UserProfileUpdate(ctx context.Context, userID int64, arg UserProfileUpdateParams) (UserProfile, error) {
+func (q *Queries) UserProfileUpdate(ctx context.Context, userID int, arg UserProfileUpdateParams) (UserProfile, error) {
 	return userProfileScan(q.db.QueryRowContext(ctx, userProfileUpdateSQL,
 		sql.Named("user_id", userID),
 		sql.Named("bio", arg.Bio),
@@ -243,7 +243,7 @@ const userProfileDeleteSQL = `DELETE FROM "user_profiles" WHERE "user_id" = :use
 
 // UserProfileDelete removes the identified user_profiles row; rt.ErrNotFound reports
 // that nothing matched.
-func (q *Queries) UserProfileDelete(ctx context.Context, userID int64) error {
+func (q *Queries) UserProfileDelete(ctx context.Context, userID int) error {
 	res, err := q.db.ExecContext(ctx, userProfileDeleteSQL, sql.Named("user_id", userID))
 	if err != nil {
 		return rt.Constraint(err)

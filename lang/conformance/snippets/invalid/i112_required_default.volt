@@ -3,6 +3,6 @@
 package db
 
 Table accounts {
-  id   integer [pk]
-  name varchar [not null, required, default: '']
+  id   int [pk]
+  name string [not null, required, default: '']
 }

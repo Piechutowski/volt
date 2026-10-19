@@ -1,5 +1,5 @@
 package db
 
 Table archive {
-	id integer [pk]
+	id int [pk]
 }

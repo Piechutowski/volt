@@ -2,7 +2,7 @@
 package db
 
 Table ms_revenue {
-  id integer [pk]
+  id int [pk]
 }
 
 Group series {

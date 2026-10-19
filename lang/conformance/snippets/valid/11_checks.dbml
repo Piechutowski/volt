@@ -1,7 +1,7 @@
 // spec: §checks — checks block with named constraint
 Table users {
-  wealth integer
-  debt integer
+  wealth int
+  debt int
 
   checks {
     `debt + wealth >= 0` [name: 'chk_positive_money']

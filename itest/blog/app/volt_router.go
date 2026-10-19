@@ -50,7 +50,7 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors)))
 
 	mux.Handle("GET /users/{id}", pipe0(volt.Handler("GET /users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
-		voltid, ok := volt.ParseInt32(r.PathValue("id"))
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
 			return volt.ErrNotFound
 		}
@@ -58,7 +58,7 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors)))
 
 	mux.Handle("GET /users/{id}/edit", pipe0(volt.Handler("GET /users/{id}/edit", func(w http.ResponseWriter, r *volt.Request) error {
-		voltid, ok := volt.ParseInt32(r.PathValue("id"))
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
 			return volt.ErrNotFound
 		}
@@ -66,7 +66,7 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors)))
 
 	mux.Handle("PATCH /users/{id}", pipe0(volt.Handler("PATCH /users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
-		voltid, ok := volt.ParseInt32(r.PathValue("id"))
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
 			return volt.ErrNotFound
 		}
@@ -74,7 +74,7 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors)))
 
 	mux.Handle("PUT /users/{id}", pipe0(volt.Handler("PUT /users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
-		voltid, ok := volt.ParseInt32(r.PathValue("id"))
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
 			return volt.ErrNotFound
 		}
@@ -82,7 +82,7 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors)))
 
 	mux.Handle("DELETE /users/{id}", pipe0(volt.Handler("DELETE /users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
-		voltid, ok := volt.ParseInt32(r.PathValue("id"))
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
 			return volt.ErrNotFound
 		}
@@ -90,7 +90,7 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors)))
 
 	mux.Handle("GET /users/{id}/avatar", pipe0(volt.Handler("GET /users/{id}/avatar", func(w http.ResponseWriter, r *volt.Request) error {
-		voltid, ok := volt.ParseInt32(r.PathValue("id"))
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
 			return volt.ErrNotFound
 		}
@@ -114,7 +114,7 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors)))
 
 	mux.Handle("GET /archive/{stamp}", pipe0(volt.Handler("GET /archive/{stamp}", func(w http.ResponseWriter, r *volt.Request) error {
-		voltstamp, ok := volt.ParseInt64(r.PathValue("stamp"))
+		voltstamp, ok := volt.ParseInt(r.PathValue("stamp"))
 		if !ok {
 			return volt.ErrNotFound
 		}
@@ -130,7 +130,7 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors)))
 
 	mux.Handle("GET /api/users/{id}", pipe0(volt.Handler("GET /api/users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
-		voltid, ok := volt.ParseInt32(r.PathValue("id"))
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
 			return volt.ErrNotFound
 		}
@@ -157,7 +157,7 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors)))
 
 	mux.Handle("PATCH /api/users/{id}", pipe0(volt.Handler("PATCH /api/users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
-		voltid, ok := volt.ParseInt32(r.PathValue("id"))
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
 			return volt.ErrNotFound
 		}
@@ -176,7 +176,7 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors)))
 
 	mux.Handle("DELETE /api/users/{id}", pipe0(volt.Handler("DELETE /api/users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
-		voltid, ok := volt.ParseInt32(r.PathValue("id"))
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
 			return volt.ErrNotFound
 		}
@@ -187,7 +187,7 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors)))
 
 	mux.Handle("GET /api/picked", pipe0(volt.Handler("GET /api/picked", func(w http.ResponseWriter, r *volt.Request) error {
-		voltids, err := volt.QueryParams[int32](r, "ids")
+		voltids, err := volt.QueryParams[int](r, "ids")
 		if err != nil {
 			return err
 		}
@@ -199,7 +199,7 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors)))
 
 	mux.Handle("GET /ms/revenue", pipe0(volt.Handler("GET /ms/revenue", func(w http.ResponseWriter, r *volt.Request) error {
-		voltyear, err := volt.QueryParam[int32](r, "year")
+		voltyear, err := volt.QueryParam[int](r, "year")
 		if err != nil {
 			return err
 		}
@@ -211,7 +211,7 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors)))
 
 	mux.Handle("GET /ms/usage", pipe0(volt.Handler("GET /ms/usage", func(w http.ResponseWriter, r *volt.Request) error {
-		voltyear, err := volt.QueryParam[int32](r, "year")
+		voltyear, err := volt.QueryParam[int](r, "year")
 		if err != nil {
 			return err
 		}
@@ -246,7 +246,7 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors)))
 
 	mux.Handle("GET /ref/users/{id}", pipe0(volt.Handler("GET /ref/users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
-		voltid, ok := volt.ParseInt32(r.PathValue("id"))
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
 			return volt.ErrNotFound
 		}
@@ -258,7 +258,7 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors)))
 
 	mux.Handle("PATCH /ref/users/{id}", pipe0(volt.Handler("PATCH /ref/users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
-		voltid, ok := volt.ParseInt32(r.PathValue("id"))
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
 			return volt.ErrNotFound
 		}
@@ -277,7 +277,7 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors)))
 
 	mux.Handle("PUT /ref/users/{id}", pipe0(volt.Handler("PUT /ref/users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
-		voltid, ok := volt.ParseInt32(r.PathValue("id"))
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
 			return volt.ErrNotFound
 		}
@@ -296,7 +296,7 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors)))
 
 	mux.Handle("DELETE /ref/users/{id}", pipe0(volt.Handler("DELETE /ref/users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
-		voltid, ok := volt.ParseInt32(r.PathValue("id"))
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
 			return volt.ErrNotFound
 		}

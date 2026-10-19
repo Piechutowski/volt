@@ -51,7 +51,7 @@ func categoryScan(r rowScanner) (Category, error) {
 const categoryGetSQL = `SELECT "id", "name" FROM "categories" WHERE "id" = :id`
 
 // CategoryGet fetches the categories row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) CategoryGet(ctx context.Context, id int32) (Category, error) {
+func (q *Queries) CategoryGet(ctx context.Context, id int) (Category, error) {
 	return categoryScan(q.db.QueryRowContext(ctx, categoryGetSQL, sql.Named("id", id)))
 }
 
@@ -59,7 +59,7 @@ const categoryGetManySQL = `SELECT "id", "name" FROM "categories" WHERE "id" IN`
 
 // CategoryGetMany fetches the categories rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
-func (q *Queries) CategoryGetMany(ctx context.Context, ids []int32) ([]Category, error) {
+func (q *Queries) CategoryGetMany(ctx context.Context, ids []int) ([]Category, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -119,7 +119,7 @@ const categoryUpdateSQL = `UPDATE "categories" SET "name" = :name WHERE "id" = :
 
 // CategoryUpdate rewrites every non-key column of the identified categories row
 // and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) CategoryUpdate(ctx context.Context, id int32, arg CategoryUpdateParams) (Category, error) {
+func (q *Queries) CategoryUpdate(ctx context.Context, id int, arg CategoryUpdateParams) (Category, error) {
 	return categoryScan(q.db.QueryRowContext(ctx, categoryUpdateSQL,
 		sql.Named("id", id),
 		sql.Named("name", arg.Name),
@@ -130,7 +130,7 @@ const categoryDeleteSQL = `DELETE FROM "categories" WHERE "id" = :id`
 
 // CategoryDelete removes the identified categories row; rt.ErrNotFound reports
 // that nothing matched.
-func (q *Queries) CategoryDelete(ctx context.Context, id int32) error {
+func (q *Queries) CategoryDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, categoryDeleteSQL, sql.Named("id", id))
 	if err != nil {
 		return rt.Constraint(err)
@@ -154,7 +154,7 @@ func categoryPathScan(r rowScanner) (CategoryPath, error) {
 const categoryPathGetSQL = `SELECT "ancestor_id", "descendant_id", "depth" FROM "category_paths" WHERE "ancestor_id" = :ancestor_id AND "descendant_id" = :descendant_id`
 
 // CategoryPathGet fetches the category_paths row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) CategoryPathGet(ctx context.Context, ancestorID int32, descendantID int32) (CategoryPath, error) {
+func (q *Queries) CategoryPathGet(ctx context.Context, ancestorID int, descendantID int) (CategoryPath, error) {
 	return categoryPathScan(q.db.QueryRowContext(ctx, categoryPathGetSQL, sql.Named("ancestor_id", ancestorID), sql.Named("descendant_id", descendantID)))
 }
 
@@ -194,7 +194,7 @@ const categoryPathUpdateSQL = `UPDATE "category_paths" SET "depth" = :depth WHER
 
 // CategoryPathUpdate rewrites every non-key column of the identified category_paths row
 // and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) CategoryPathUpdate(ctx context.Context, ancestorID int32, descendantID int32, arg CategoryPathUpdateParams) (CategoryPath, error) {
+func (q *Queries) CategoryPathUpdate(ctx context.Context, ancestorID int, descendantID int, arg CategoryPathUpdateParams) (CategoryPath, error) {
 	return categoryPathScan(q.db.QueryRowContext(ctx, categoryPathUpdateSQL,
 		sql.Named("ancestor_id", ancestorID),
 		sql.Named("descendant_id", descendantID),
@@ -206,7 +206,7 @@ const categoryPathDeleteSQL = `DELETE FROM "category_paths" WHERE "ancestor_id" 
 
 // CategoryPathDelete removes the identified category_paths row; rt.ErrNotFound reports
 // that nothing matched.
-func (q *Queries) CategoryPathDelete(ctx context.Context, ancestorID int32, descendantID int32) error {
+func (q *Queries) CategoryPathDelete(ctx context.Context, ancestorID int, descendantID int) error {
 	res, err := q.db.ExecContext(ctx, categoryPathDeleteSQL, sql.Named("ancestor_id", ancestorID), sql.Named("descendant_id", descendantID))
 	if err != nil {
 		return rt.Constraint(err)

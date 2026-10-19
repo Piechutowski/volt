@@ -18,7 +18,7 @@ const (
 // built here can only enter Post queries; mixing models is a compile
 // error.
 var (
-	PostID          = rt.Column[Post, int64]{Name: "id"}
+	PostID          = rt.Column[Post, int]{Name: "id"}
 	PostTitle       = rt.Column[Post, string]{Name: "title"}
 	PostStatus      = rt.Column[Post, EPostStatus]{Name: "status"}
 	PostBody        = rt.NullColumn[Post, string]{Column: rt.Column[Post, string]{Name: "body"}}
@@ -138,7 +138,7 @@ const (
 // built here can only enter Tag queries; mixing models is a compile
 // error.
 var (
-	TagID   = rt.Column[Tag, int32]{Name: "id"}
+	TagID   = rt.Column[Tag, int]{Name: "id"}
 	TagName = rt.Column[Tag, string]{Name: "name"}
 )
 

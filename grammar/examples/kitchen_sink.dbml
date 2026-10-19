@@ -30,20 +30,20 @@ Enum v2.job_status {
 
 TablePartial base_template [headercolor: #ff0000] {
   id int [pk, not null, increment]
-  created_at timestamp [default: `now()`]
+  created_at time.Time [default: `now()`]
 }
 
 Table users as U [headercolor: #3498DB, note: 'main table'] {
   ~base_template
-  name varchar(255) [not null, unique]
+  name string [not null, unique]
   full_name "double precision"
   status status [not null, default: status.active]
-  balance decimal(10,2) [default: -100.5]
+  balance float64 [default: -100.5]
   2fa_enabled bool [default: false]
   legacy_col int pk
   other unique
   job v2.job_status [default: null]
-  motto text [default: 'be kind']
+  motto string [default: 'be kind']
   ref_col int [ref: > core.orders.id, ref: - U.name]
 
   Note: 'user accounts'
@@ -67,7 +67,7 @@ Table users as U [headercolor: #3498DB, note: 'main table'] {
 Table core.orders {
   id int [pk]
   user_id int
-  total decimal(10,2)
+  total float64
 }
 
 Ref: U.id < core.orders.user_id [delete: cascade, update: no action]

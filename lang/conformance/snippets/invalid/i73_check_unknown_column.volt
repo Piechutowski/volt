@@ -2,7 +2,7 @@
 package db
 
 Table page_views {
-  id integer [pk]
+  id int [pk]
 
   checks {
     hits >= 0

@@ -6,10 +6,10 @@ package db
 Pred positive { hits >= 0 }
 
 Table page_views {
-  id integer [pk]
-  site varchar [not null]
-  hits integer [not null]
-  flag boolean [not null, default: false]
+  id int [pk]
+  site string [not null]
+  hits int [not null]
+  flag bool [not null, default: false]
 
   checks {
     positive and hits in (0, 1, 2) [name: 'hits_sane']

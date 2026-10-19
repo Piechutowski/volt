@@ -17,9 +17,9 @@ const (
 // built here can only enter Menu queries; mixing models is a compile
 // error.
 var (
-	MenuID    = rt.Column[Menu, int32]{Name: "id"}
+	MenuID    = rt.Column[Menu, int]{Name: "id"}
 	MenuTitle = rt.Column[Menu, string]{Name: "title"}
-	MenuPrice = rt.Column[Menu, string]{Name: "price"}
+	MenuPrice = rt.Column[Menu, float64]{Name: "price"}
 )
 
 // MenuLimit caps how many rows MenuQuery returns.

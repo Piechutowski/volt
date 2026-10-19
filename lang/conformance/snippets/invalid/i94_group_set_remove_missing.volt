@@ -3,15 +3,15 @@
 package db
 
 Table ms_revenue {
-  id integer [pk]
+  id int [pk]
 }
 
 Table ms_usage {
-  id integer [pk]
+  id int [pk]
 }
 
 Table ms_dict {
-  code text [pk]
+  code string [pk]
 }
 
 Group series = (ms_revenue, ms_usage) \ (ms_usage, ms_dict)

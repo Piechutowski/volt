@@ -229,3 +229,44 @@ reuse {
         (identifier)))
     (string
       (string_content))))
+
+==================
+Type declarations: imported Go type with storage and path, bare type of the package
+==================
+
+Type money.Money int from 'example.com/app/money'
+Type png.Png []byte from 'image/png'
+Type Slug string
+
+---
+
+(source_file
+  (type_definition
+    (column_type
+      (schema_name
+        (identifier))
+      (type_name
+        (identifier)))
+    (column_type
+      (type_name
+        (identifier)))
+    (string
+      (string_content)))
+  (type_definition
+    (column_type
+      (schema_name
+        (identifier))
+      (type_name
+        (identifier)))
+    (column_type
+      (type_name
+        (identifier)))
+    (string
+      (string_content)))
+  (type_definition
+    (column_type
+      (type_name
+        (identifier)))
+    (column_type
+      (type_name
+        (identifier)))))

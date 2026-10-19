@@ -30,7 +30,7 @@ Scope / [pipe: api, error_handler: Errors] {
 	resources users [api, model: db.User, only: (index, show)]
 
 	get /files/:path...        Files.Serve
-	get /users/:id(int64)/edit  Users.Edit
+	get /users/:id(int)/edit  Users.Edit
 }
 `
 
@@ -107,11 +107,11 @@ func TestVoltSampleParses(t *testing.T) {
 		t.Errorf("segment kind = %v, want SegWild", wild.Path.Segments[1].Kind)
 	}
 	typed := sc.Items[5].(*ast.Route)
-	if typed.Path.String() != "/users/:id(int64)/edit" {
+	if typed.Path.String() != "/users/:id(int)/edit" {
 		t.Errorf("typed path = %q", typed.Path.String())
 	}
 	seg := typed.Path.Segments[1]
-	if seg.Kind != ast.SegParam || seg.Name.Name() != "id" || seg.Type == nil || seg.Type.Name() != "int64" {
+	if seg.Kind != ast.SegParam || seg.Name.Name() != "id" || seg.Type == nil || seg.Type.Name() != "int" {
 		t.Errorf("typed param segment wrong: %+v", seg)
 	}
 }
@@ -126,7 +126,7 @@ func TestVoltSyntaxErrors(t *testing.T) {
 		{"top-level route", "get /users Users.Index\n", "must appear inside a Scope"},
 		{"colon without name", "Scope / {\n\tget /users/: Users.Show\n}\n", "':' must be followed by a parameter name"},
 		{"short ellipsis", "Scope / {\n\tget /files/:path.. Files.Serve\n}\n", "wildcard ellipsis is spelled"},
-		{"typed wildcard", "Scope / {\n\tget /files/:path(int64)... Files.Serve\n}\n", "cannot carry a type"},
+		{"typed wildcard", "Scope / {\n\tget /files/:path(int)... Files.Serve\n}\n", "cannot carry a type"},
 		{"empty import block", "import (\n)\n", "empty import declaration"},
 		{"space in import path", "import (\n\tshared / dicts\n)\n", "expected end of line after import specifier"},
 		{"plug without use", "Pipeline api {\n\tRequestID\n}\n", "expected 'use' plug line"},
@@ -239,7 +239,7 @@ func TestPipelineRecoversPerPlug(t *testing.T) {
 }
 
 func TestVoltLayerIsSuperset(t *testing.T) {
-	src := "Table users {\n\tid integer [pk]\n}\n"
+	src := "Table users {\n\tid int [pk]\n}\n"
 	f, diags := ParseFile("s.volt", src)
 	if len(diags) != 0 {
 		t.Fatalf("unexpected diagnostics: %v", diags)

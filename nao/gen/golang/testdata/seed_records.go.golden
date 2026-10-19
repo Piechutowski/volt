@@ -18,9 +18,9 @@ type Currency struct {
 //
 // Seeded exchange rates
 type Rate struct {
-	ID           int32           `db:"id" json:"id"`
+	ID           int             `db:"id" json:"id"`
 	CurrencyCode string          `db:"currency_code" json:"currency_code"`
-	Rate         string          `db:"rate" json:"rate"`
+	Rate         float64         `db:"rate" json:"rate"`
 	FetchedAt    time.Time       `db:"fetched_at" json:"fetched_at"`
 	Active       bool            `db:"active" json:"active"`
 	Comment      rt.Null[string] `db:"comment" json:"comment"`
@@ -43,7 +43,7 @@ type CurrencyUpdateParams struct {
 // auto-increment key and defaulted columns are the database's job.
 type RateCreateParams struct {
 	CurrencyCode string          `db:"currency_code" json:"currency_code"`
-	Rate         string          `db:"rate" json:"rate"`
+	Rate         float64         `db:"rate" json:"rate"`
 	FetchedAt    time.Time       `db:"fetched_at" json:"fetched_at"`
 	Active       bool            `db:"active" json:"active"`
 	Comment      rt.Null[string] `db:"comment" json:"comment"`
@@ -53,7 +53,7 @@ type RateCreateParams struct {
 // outside the primary key.
 type RateUpdateParams struct {
 	CurrencyCode string          `db:"currency_code" json:"currency_code"`
-	Rate         string          `db:"rate" json:"rate"`
+	Rate         float64         `db:"rate" json:"rate"`
 	FetchedAt    time.Time       `db:"fetched_at" json:"fetched_at"`
 	Active       bool            `db:"active" json:"active"`
 	Comment      rt.Null[string] `db:"comment" json:"comment"`

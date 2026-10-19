@@ -51,7 +51,7 @@ func menuScan(r rowScanner) (Menu, error) {
 const menuGetSQL = `SELECT "id", "title", "price" FROM "menus" WHERE "id" = :id`
 
 // MenuGet fetches the menus row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) MenuGet(ctx context.Context, id int32) (Menu, error) {
+func (q *Queries) MenuGet(ctx context.Context, id int) (Menu, error) {
 	return menuScan(q.db.QueryRowContext(ctx, menuGetSQL, sql.Named("id", id)))
 }
 
@@ -59,7 +59,7 @@ const menuGetManySQL = `SELECT "id", "title", "price" FROM "menus" WHERE "id" IN
 
 // MenuGetMany fetches the menus rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
-func (q *Queries) MenuGetMany(ctx context.Context, ids []int32) ([]Menu, error) {
+func (q *Queries) MenuGetMany(ctx context.Context, ids []int) ([]Menu, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -118,7 +118,7 @@ const menuUpdateSQL = `UPDATE "menus" SET "title" = :title, "price" = :price WHE
 
 // MenuUpdate rewrites every non-key column of the identified menus row
 // and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) MenuUpdate(ctx context.Context, id int32, arg MenuUpdateParams) (Menu, error) {
+func (q *Queries) MenuUpdate(ctx context.Context, id int, arg MenuUpdateParams) (Menu, error) {
 	return menuScan(q.db.QueryRowContext(ctx, menuUpdateSQL,
 		sql.Named("id", id),
 		sql.Named("title", arg.Title),
@@ -130,7 +130,7 @@ const menuDeleteSQL = `DELETE FROM "menus" WHERE "id" = :id`
 
 // MenuDelete removes the identified menus row; rt.ErrNotFound reports
 // that nothing matched.
-func (q *Queries) MenuDelete(ctx context.Context, id int32) error {
+func (q *Queries) MenuDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, menuDeleteSQL, sql.Named("id", id))
 	if err != nil {
 		return rt.Constraint(err)

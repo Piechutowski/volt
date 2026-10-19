@@ -103,6 +103,10 @@ func eachChild(n Node, visit func(Node)) {
 	case *Enum:
 		child(visit, n.Name)
 		children(visit, n.Values)
+	case *TypeDecl:
+		child(visit, n.Name)
+		child(visit, n.Storage)
+		child(visit, n.From)
 	case *EnumValue:
 		child(visit, n.Name)
 		child(visit, n.Settings)

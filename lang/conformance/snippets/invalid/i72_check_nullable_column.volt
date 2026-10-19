@@ -3,8 +3,8 @@
 package db
 
 Table page_views {
-  id integer [pk]
-  hits integer
+  id int [pk]
+  hits int
 
   checks {
     hits >= 0

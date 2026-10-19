@@ -37,14 +37,14 @@ Enum kind {
 }
 
 Table posts {
-  id    integer [pk, increment]
-  title text    [not null]
-  title text
-  body  text    [null]
+  id    int [pk, increment]
+  title string    [not null]
+  title string
+  body  string    [null]
 }
 
 Table tags {
-  id integer [pk]
+  id int [pk]
 }
 `, i))
 		write(fmt.Sprintf("r%d/routes.volt", i), fmt.Sprintf(`package r%d

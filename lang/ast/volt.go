@@ -212,7 +212,7 @@ func (x *RoutePath) Pos() token.Position     { return x.SlashPos }
 func (x *RoutePath) End() token.Position     { return x.endPos }
 func (x *RoutePath) SetEnd(p token.Position) { x.endPos = p }
 
-// String returns the canonical spelling, e.g. "/users/:id(int64)".
+// String returns the canonical spelling, e.g. "/users/:id(int)".
 func (x *RoutePath) String() string {
 	if len(x.Segments) == 0 {
 		return "/"
@@ -229,7 +229,7 @@ type SegKind int
 
 const (
 	SegLit   SegKind = iota // users
-	SegParam                // :id or :id(int64)
+	SegParam                // :id or :id(int)
 	SegWild                 // :path... — rest-of-path capture, last segment only
 )
 

@@ -17,7 +17,7 @@ const (
 // built here can only enter Category queries; mixing models is a compile
 // error.
 var (
-	CategoryID   = rt.Column[Category, int32]{Name: "id"}
+	CategoryID   = rt.Column[Category, int]{Name: "id"}
 	CategoryName = rt.Column[Category, string]{Name: "name"}
 )
 
@@ -134,9 +134,9 @@ const (
 // built here can only enter CategoryPath queries; mixing models is a compile
 // error.
 var (
-	CategoryPathAncestorID   = rt.Column[CategoryPath, int32]{Name: "ancestor_id"}
-	CategoryPathDescendantID = rt.Column[CategoryPath, int32]{Name: "descendant_id"}
-	CategoryPathDepth        = rt.Column[CategoryPath, int32]{Name: "depth"}
+	CategoryPathAncestorID   = rt.Column[CategoryPath, int]{Name: "ancestor_id"}
+	CategoryPathDescendantID = rt.Column[CategoryPath, int]{Name: "descendant_id"}
+	CategoryPathDepth        = rt.Column[CategoryPath, int]{Name: "depth"}
 )
 
 // CategoryPathLimit caps how many rows CategoryPathQuery returns.

@@ -2,8 +2,8 @@
 package db
 
 Table users {
-	id    integer [pk, increment]
-	email text    [not null, unique]
+	id    int [pk, increment]
+	email string    [not null, unique]
 }
 
 Enum status {

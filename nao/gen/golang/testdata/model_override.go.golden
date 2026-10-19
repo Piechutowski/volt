@@ -5,9 +5,9 @@ package models
 
 // Menu is a row of the menus table.
 type Menu struct {
-	ID    int32  `db:"id" json:"id"`
-	Title string `db:"title" json:"title"`
-	Price string `db:"price" json:"price"`
+	ID    int     `db:"id" json:"id"`
+	Title string  `db:"title" json:"title"`
+	Price float64 `db:"price" json:"price"`
 }
 
 // OrderStatus is a row of the order_status table.
@@ -27,8 +27,8 @@ type MenuCreateParams struct {
 // MenuUpdateParams are the data columns of MenuUpdate: every column
 // outside the primary key.
 type MenuUpdateParams struct {
-	Title string `db:"title" json:"title"`
-	Price string `db:"price" json:"price"`
+	Title string  `db:"title" json:"title"`
+	Price float64 `db:"price" json:"price"`
 }
 
 // OrderStatusCreateParams are the caller-supplied columns of OrderStatusCreate. The

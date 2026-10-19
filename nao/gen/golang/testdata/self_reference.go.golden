@@ -9,10 +9,10 @@ import (
 
 // Employee is a row of the employees table.
 type Employee struct {
-	ID       int64  `db:"id" json:"id"`
+	ID       int    `db:"id" json:"id"`
 	FullName string `db:"full_name" json:"full_name"`
 	// NULL for the CEO
-	ManagerID rt.Null[int64] `db:"manager_id" json:"manager_id"`
+	ManagerID rt.Null[int] `db:"manager_id" json:"manager_id"`
 }
 
 // EmployeeCreateParams are the caller-supplied columns of EmployeeCreate. The
@@ -20,7 +20,7 @@ type Employee struct {
 type EmployeeCreateParams struct {
 	FullName string `db:"full_name" json:"full_name"`
 	// NULL for the CEO
-	ManagerID rt.Null[int64] `db:"manager_id" json:"manager_id"`
+	ManagerID rt.Null[int] `db:"manager_id" json:"manager_id"`
 }
 
 // EmployeeUpdateParams are the data columns of EmployeeUpdate: every column
@@ -28,5 +28,5 @@ type EmployeeCreateParams struct {
 type EmployeeUpdateParams struct {
 	FullName string `db:"full_name" json:"full_name"`
 	// NULL for the CEO
-	ManagerID rt.Null[int64] `db:"manager_id" json:"manager_id"`
+	ManagerID rt.Null[int] `db:"manager_id" json:"manager_id"`
 }

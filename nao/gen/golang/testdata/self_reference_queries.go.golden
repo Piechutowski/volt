@@ -51,7 +51,7 @@ func employeeScan(r rowScanner) (Employee, error) {
 const employeeGetSQL = `SELECT "id", "full_name", "manager_id" FROM "employees" WHERE "id" = :id`
 
 // EmployeeGet fetches the employees row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) EmployeeGet(ctx context.Context, id int64) (Employee, error) {
+func (q *Queries) EmployeeGet(ctx context.Context, id int) (Employee, error) {
 	return employeeScan(q.db.QueryRowContext(ctx, employeeGetSQL, sql.Named("id", id)))
 }
 
@@ -59,7 +59,7 @@ const employeeGetManySQL = `SELECT "id", "full_name", "manager_id" FROM "employe
 
 // EmployeeGetMany fetches the employees rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
-func (q *Queries) EmployeeGetMany(ctx context.Context, ids []int64) ([]Employee, error) {
+func (q *Queries) EmployeeGetMany(ctx context.Context, ids []int) ([]Employee, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -119,7 +119,7 @@ const employeeUpdateSQL = `UPDATE "employees" SET "full_name" = :full_name, "man
 
 // EmployeeUpdate rewrites every non-key column of the identified employees row
 // and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) EmployeeUpdate(ctx context.Context, id int64, arg EmployeeUpdateParams) (Employee, error) {
+func (q *Queries) EmployeeUpdate(ctx context.Context, id int, arg EmployeeUpdateParams) (Employee, error) {
 	return employeeScan(q.db.QueryRowContext(ctx, employeeUpdateSQL,
 		sql.Named("id", id),
 		sql.Named("full_name", arg.FullName),
@@ -131,7 +131,7 @@ const employeeDeleteSQL = `DELETE FROM "employees" WHERE "id" = :id`
 
 // EmployeeDelete removes the identified employees row; rt.ErrNotFound reports
 // that nothing matched.
-func (q *Queries) EmployeeDelete(ctx context.Context, id int64) error {
+func (q *Queries) EmployeeDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, employeeDeleteSQL, sql.Named("id", id))
 	if err != nil {
 		return rt.Constraint(err)

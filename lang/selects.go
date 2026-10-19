@@ -442,32 +442,18 @@ const (
 	classEqOnly
 )
 
-func classOf(declType string) typeClass {
-	base := strings.ToLower(declType)
-	if i := strings.IndexByte(base, '('); i >= 0 {
-		base = strings.TrimSpace(base[:i])
-	}
-	switch base {
-	case "decimal", "numeric", "money":
-		return classEqOnly
-	case "bool", "boolean":
-		return classBool
-	case "date", "datetime", "timestamp", "timestamptz", "timestamp with time zone", "timestamp without time zone":
-		return classTime
-	}
-	goType, ok := golang.GoTypeName(base)
-	if !ok {
-		return classForbidden
-	}
-	switch {
-	case strings.HasPrefix(goType, "int"), strings.HasPrefix(goType, "uint"), strings.HasPrefix(goType, "float"):
+func classOfType(t check.ColumnType) typeClass {
+	switch t.Class() {
+	case "numeric":
 		return classNumeric
-	case goType == "string":
+	case "text":
 		return classText
-	case goType == "time.Time":
+	case "time":
 		return classTime
-	case goType == "bool":
+	case "bool":
 		return classBool
+	case "eq":
+		return classEqOnly
 	}
 	return classForbidden
 }
@@ -746,13 +732,13 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 			continue
 		}
 		declType := cd.Col.Type.String()
-		goType, ok := golang.GoTypeName(normalizeType(declType))
-		if !ok {
+		if cd.Type.Enum != nil {
 			e.errorf(id.Pos(), "column %q of table %q is enum-typed (%s); predicates do not compare enums in v1 — filter on a text column or use the dynamic layer (§predicates, hypotheses H5)", name, m.Decl.Name.Base(), declType)
 			return nil
 		}
+		goType := cd.Type.Go
 		types[goType] = append(types[goType], m.Decl.Name.Base())
-		class = classOf(declType)
+		class = classOfType(cd.Type)
 		classes[class] = true
 	}
 	if len(missing) > 0 {
@@ -781,7 +767,7 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 		}
 	}
 	if class == classForbidden {
-		e.errorf(id.Pos(), "column %q (blob/json) cannot appear in a predicate (§predicates)", name)
+		e.errorf(id.Pos(), "column %q ([]byte) cannot appear in a predicate (§predicates)", name)
 		return nil
 	}
 	var goType string
@@ -791,14 +777,6 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 	b := &colBinding{name: name, goType: goType, class: class}
 	e.cols[name] = b
 	return b
-}
-
-func normalizeType(t string) string {
-	base := strings.ToLower(t)
-	if i := strings.IndexByte(base, '('); i >= 0 {
-		base = strings.TrimSpace(base[:i])
-	}
-	return base
 }
 
 func tableList(names []string) string {

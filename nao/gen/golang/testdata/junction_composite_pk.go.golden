@@ -9,12 +9,12 @@ import (
 
 // User is a row of the users table.
 type User struct {
-	ID int64 `db:"id" json:"id"`
+	ID int `db:"id" json:"id"`
 }
 
 // Role is a row of the roles table.
 type Role struct {
-	ID   int32  `db:"id" json:"id"`
+	ID   int    `db:"id" json:"id"`
 	Name string `db:"name" json:"name"`
 }
 
@@ -22,21 +22,21 @@ type Role struct {
 //
 // Junction table: which user holds which role
 type UserRole struct {
-	UserID    int64     `db:"user_id" json:"user_id"`
-	RoleID    int32     `db:"role_id" json:"role_id"`
+	UserID    int       `db:"user_id" json:"user_id"`
+	RoleID    int       `db:"role_id" json:"role_id"`
 	GrantedAt time.Time `db:"granted_at" json:"granted_at"`
 }
 
 // UserCreateParams are the caller-supplied columns of UserCreate. The
 // auto-increment key and defaulted columns are the database's job.
 type UserCreateParams struct {
-	ID int64 `db:"id" json:"id"`
+	ID int `db:"id" json:"id"`
 }
 
 // RoleCreateParams are the caller-supplied columns of RoleCreate. The
 // auto-increment key and defaulted columns are the database's job.
 type RoleCreateParams struct {
-	ID   int32  `db:"id" json:"id"`
+	ID   int    `db:"id" json:"id"`
 	Name string `db:"name" json:"name"`
 }
 
@@ -49,8 +49,8 @@ type RoleUpdateParams struct {
 // UserRoleCreateParams are the caller-supplied columns of UserRoleCreate. The
 // auto-increment key and defaulted columns are the database's job.
 type UserRoleCreateParams struct {
-	UserID int64 `db:"user_id" json:"user_id"`
-	RoleID int32 `db:"role_id" json:"role_id"`
+	UserID int `db:"user_id" json:"user_id"`
+	RoleID int `db:"role_id" json:"role_id"`
 }
 
 // UserRoleUpdateParams are the data columns of UserRoleUpdate: every column

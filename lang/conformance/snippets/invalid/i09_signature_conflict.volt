@@ -2,6 +2,6 @@
 package app
 
 Scope / {
-	get /a/:id(int64) X.Show [name: showA]
-	get /b/:id(int32) X.Show [name: showB]
+	get /a/:id(int) X.Show [name: showA]
+	get /b/:id(string) X.Show [name: showB]
 }

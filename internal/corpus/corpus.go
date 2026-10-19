@@ -85,32 +85,32 @@ func actionOf(scope string) string { return strings.ToUpper(scope[:1]) + scope[1
 func Table(i int) string { return fmt.Sprintf("tb%03ds", i) }
 
 var colTypes = []string{
-	"integer [not null]",
-	"text [not null]",
-	"real",
-	"boolean [not null, default: false]",
+	"int [not null]",
+	"string [not null]",
+	"float64",
+	"bool [not null, default: false]",
 	"status [not null, default: status.active]",
-	"text",
-	"timestamp",
-	"bigint [not null]",
+	"string",
+	"time.Time",
+	"int [not null]",
 }
 
 func schemaWrite(b *strings.Builder, spec Spec, pkg string) {
 	b.WriteString("Enum status {\n\tactive\n\tretired [note: 'no longer written']\n}\n\n")
-	b.WriteString("TablePartial stamped {\n\tcreated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]\n}\n\n")
+	b.WriteString("TablePartial stamped {\n\tcreated_at time.Time [not null, default: `CURRENT_TIMESTAMP`]\n}\n\n")
 	b.WriteString("Pred fresh { c001 >= :since }\n\n")
 	for i := 1; i <= spec.Tables; i++ {
 		fmt.Fprintf(b, "Table %s [note: 'metrics table %d of %s'] {\n", Table(i), i, pkg)
-		b.WriteString("\tid integer [pk, increment]\n\t~stamped\n")
+		b.WriteString("\tid int [pk, increment]\n\t~stamped\n")
 		for c := 1; c <= spec.Columns; c++ {
 			typ := colTypes[(c-1)%len(colTypes)]
 			if c == 1 {
-				typ = "integer [not null]"
+				typ = "int [not null]"
 			}
 			fmt.Fprintf(b, "\tc%03d %s\n", c, typ)
 		}
 		if i > 1 {
-			fmt.Fprintf(b, "\tprev_id integer [ref: > %s.id]\n", Table(i-1))
+			fmt.Fprintf(b, "\tprev_id int [ref: > %s.id]\n", Table(i-1))
 		}
 		b.WriteString("\n\tchecks {\n\t\tc001 >= 0 [name: 'c001_nonneg']\n\t\tPositive(c001)\n\t}\n}\n\n")
 	}
@@ -159,7 +159,7 @@ func checksGo(pkg string) string {
 import "errors"
 
 // Positive is the Go-reference check every table names (§validation-checks).
-func Positive(v int32) error {
+func Positive(v int) error {
 	if v < 0 {
 		return errors.New("negative")
 	}

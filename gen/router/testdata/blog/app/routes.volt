@@ -20,15 +20,15 @@ Scope / [pipe: api, error_handler: Errors] {
 	resources db.users [only: (index, show, create)]
 
 	get /files/:path...          Files.Serve
-	get /users/:id(int32)/avatar Users.Avatar
+	get /users/:id(int)/avatar Users.Avatar
 	any /ping                    Home.Ping
 
 	Scope /api [name: api] {
 		get    /users            db.UserList
-		get    /users/:id(int32) db.UserGet
+		get    /users/:id(int) db.UserGet
 		post   /users            db.UserCreate
-		patch  /users/:id(int32) db.UserUpdate
-		delete /users/:id(int32) db.UserDelete
+		patch  /users/:id(int) db.UserUpdate
+		delete /users/:id(int) db.UserDelete
 		get    /picked           db.UserPicked
 	}
 

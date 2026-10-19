@@ -2,12 +2,12 @@
 Table posts [
   headercolor: #3498DB
 ] {
-  id integer [pk]
-  title text
+  id int [pk]
+  title string
 }
 
 Table tags {
-  id integer [pk]
+  id int [pk]
 }
 
 Ref:

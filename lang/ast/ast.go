@@ -281,36 +281,28 @@ func (x *Column) End() token.Position {
 }
 func (x *Column) tableItemNode() {}
 
-// TypeRef is a column type: name, schema-qualified name, and optional
-// parenthesized arguments, e.g. varchar(255) or v2.job_status (spec §columns).
+// TypeRef is a column type: a Go type name, optionally qualified by a
+// package alias or schema, with the "[]" of []byte (spec §columns).
 type TypeRef struct {
 	Name   *QualName
-	Args   []token.Token // NUMBER or IDENT argument tokens, verbatim
-	Rparen token.Position
+	Slice  bool
+	Lbrack token.Position
 }
 
-func (x *TypeRef) Pos() token.Position { return x.Name.Pos() }
-func (x *TypeRef) End() token.Position {
-	if len(x.Args) > 0 {
-		return x.Rparen
+func (x *TypeRef) Pos() token.Position {
+	if x.Slice {
+		return x.Lbrack
 	}
-	return x.Name.End()
+	return x.Name.Pos()
 }
+func (x *TypeRef) End() token.Position { return x.Name.End() }
 
-// String returns the type as written, e.g. "decimal(10,2)".
+// String returns the type as written, e.g. "[]byte" or "time.Time".
 func (x *TypeRef) String() string {
-	s := x.Name.String()
-	if len(x.Args) > 0 {
-		s += "("
-		for i, a := range x.Args {
-			if i > 0 {
-				s += ","
-			}
-			s += a.Val
-		}
-		s += ")"
+	if x.Slice {
+		return "[]" + x.Name.String()
 	}
-	return s
+	return x.Name.String()
 }
 
 // IndexesBlock is one indexes { ... } block (spec §indexes).
@@ -446,6 +438,20 @@ type Enum struct {
 func (d *Enum) Pos() token.Position { return d.EnumPos }
 func (d *Enum) End() token.Position { return d.Rbrace }
 func (d *Enum) declNode()           {}
+
+// TypeDecl is a Type element: a Go type admitted as a column type, with
+// its storage type and import path (spec §types).
+type TypeDecl struct {
+	TypePos token.Position
+	Name    *QualName
+	Storage *TypeRef
+	From    *BasicLit
+	EndPos  token.Position
+}
+
+func (d *TypeDecl) Pos() token.Position { return d.TypePos }
+func (d *TypeDecl) End() token.Position { return d.EndPos }
+func (d *TypeDecl) declNode()           {}
 
 // EnumValue is one enum member.
 type EnumValue struct {

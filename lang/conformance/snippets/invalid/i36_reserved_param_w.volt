@@ -2,5 +2,5 @@
 package app
 
 Scope / {
-	get /x/:w(int64) X.Y
+	get /x/:w(int) X.Y
 }

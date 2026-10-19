@@ -51,7 +51,7 @@ func userScan(r rowScanner) (User, error) {
 const userGetSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE "id" = :id`
 
 // UserGet fetches the users row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) UserGet(ctx context.Context, id int32) (User, error) {
+func (q *Queries) UserGet(ctx context.Context, id int) (User, error) {
 	return userScan(q.db.QueryRowContext(ctx, userGetSQL, sql.Named("id", id)))
 }
 
@@ -59,7 +59,7 @@ const userGetManySQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "
 
 // UserGetMany fetches the users rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
-func (q *Queries) UserGetMany(ctx context.Context, ids []int32) ([]User, error) {
+func (q *Queries) UserGetMany(ctx context.Context, ids []int) ([]User, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -128,7 +128,7 @@ const userUpdateSQL = `UPDATE "users" SET "email" = :email, "name" = :name, "bio
 
 // UserUpdate rewrites every non-key column of the identified users row
 // and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) UserUpdate(ctx context.Context, id int32, arg UserUpdateParams) (User, error) {
+func (q *Queries) UserUpdate(ctx context.Context, id int, arg UserUpdateParams) (User, error) {
 	return userScan(q.db.QueryRowContext(ctx, userUpdateSQL,
 		sql.Named("id", id),
 		sql.Named("email", arg.Email),
@@ -142,7 +142,7 @@ const userDeleteSQL = `DELETE FROM "users" WHERE "id" = :id`
 
 // UserDelete removes the identified users row; rt.ErrNotFound reports
 // that nothing matched.
-func (q *Queries) UserDelete(ctx context.Context, id int32) error {
+func (q *Queries) UserDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, userDeleteSQL, sql.Named("id", id))
 	if err != nil {
 		return rt.Constraint(err)
@@ -159,22 +159,22 @@ func (q *Queries) UserDelete(ctx context.Context, id int32) error {
 
 func orderScan(r rowScanner) (Order, error) {
 	var v Order
-	err := r.Scan(&v.ID, &v.UserID, &v.Status, &v.Total, &v.PlacedAt)
+	err := r.Scan(&v.ID, &v.UserID, &v.Status, &v.Total, &v.Tip, &v.PlacedAt)
 	return v, rt.Constraint(err)
 }
 
-const orderGetSQL = `SELECT "id", "user_id", "status", "total", "placed_at" FROM "orders" WHERE "id" = :id`
+const orderGetSQL = `SELECT "id", "user_id", "status", "total", "tip", "placed_at" FROM "orders" WHERE "id" = :id`
 
 // OrderGet fetches the orders row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) OrderGet(ctx context.Context, id int32) (Order, error) {
+func (q *Queries) OrderGet(ctx context.Context, id int) (Order, error) {
 	return orderScan(q.db.QueryRowContext(ctx, orderGetSQL, sql.Named("id", id)))
 }
 
-const orderGetManySQL = `SELECT "id", "user_id", "status", "total", "placed_at" FROM "orders" WHERE "id" IN`
+const orderGetManySQL = `SELECT "id", "user_id", "status", "total", "tip", "placed_at" FROM "orders" WHERE "id" IN`
 
 // OrderGetMany fetches the orders rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
-func (q *Queries) OrderGetMany(ctx context.Context, ids []int32) ([]Order, error) {
+func (q *Queries) OrderGetMany(ctx context.Context, ids []int) ([]Order, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -199,7 +199,7 @@ func (q *Queries) OrderGetMany(ctx context.Context, ids []int32) ([]Order, error
 	return out, rows.Err()
 }
 
-const orderListSQL = `SELECT "id", "user_id", "status", "total", "placed_at" FROM "orders"`
+const orderListSQL = `SELECT "id", "user_id", "status", "total", "tip", "placed_at" FROM "orders"`
 
 // OrderList returns every orders row.
 func (q *Queries) OrderList(ctx context.Context) ([]Order, error) {
@@ -219,7 +219,7 @@ func (q *Queries) OrderList(ctx context.Context) ([]Order, error) {
 	return out, rows.Err()
 }
 
-const orderCreateSQL = `INSERT INTO "orders" ("user_id", "total", "placed_at") VALUES (:user_id, :total, :placed_at) RETURNING "id", "user_id", "status", "total", "placed_at"`
+const orderCreateSQL = `INSERT INTO "orders" ("user_id", "total", "placed_at") VALUES (:user_id, :total, :placed_at) RETURNING "id", "user_id", "status", "total", "tip", "placed_at"`
 
 // OrderCreate inserts a orders row and returns the row the database wrote,
 // generated keys and defaults filled in.
@@ -231,16 +231,17 @@ func (q *Queries) OrderCreate(ctx context.Context, arg OrderCreateParams) (Order
 	))
 }
 
-const orderUpdateSQL = `UPDATE "orders" SET "user_id" = :user_id, "status" = :status, "total" = :total, "placed_at" = :placed_at WHERE "id" = :id RETURNING "id", "user_id", "status", "total", "placed_at"`
+const orderUpdateSQL = `UPDATE "orders" SET "user_id" = :user_id, "status" = :status, "total" = :total, "tip" = :tip, "placed_at" = :placed_at WHERE "id" = :id RETURNING "id", "user_id", "status", "total", "tip", "placed_at"`
 
 // OrderUpdate rewrites every non-key column of the identified orders row
 // and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) OrderUpdate(ctx context.Context, id int32, arg OrderUpdateParams) (Order, error) {
+func (q *Queries) OrderUpdate(ctx context.Context, id int, arg OrderUpdateParams) (Order, error) {
 	return orderScan(q.db.QueryRowContext(ctx, orderUpdateSQL,
 		sql.Named("id", id),
 		sql.Named("user_id", arg.UserID),
 		sql.Named("status", arg.Status),
 		sql.Named("total", arg.Total),
+		sql.Named("tip", arg.Tip),
 		sql.Named("placed_at", arg.PlacedAt),
 	))
 }
@@ -249,7 +250,7 @@ const orderDeleteSQL = `DELETE FROM "orders" WHERE "id" = :id`
 
 // OrderDelete removes the identified orders row; rt.ErrNotFound reports
 // that nothing matched.
-func (q *Queries) OrderDelete(ctx context.Context, id int32) error {
+func (q *Queries) OrderDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, orderDeleteSQL, sql.Named("id", id))
 	if err != nil {
 		return rt.Constraint(err)
@@ -273,7 +274,7 @@ func userTagScan(r rowScanner) (UserTag, error) {
 const userTagGetSQL = `SELECT "user_id", "tag" FROM "user_tags" WHERE "user_id" = :user_id AND "tag" = :tag`
 
 // UserTagGet fetches the user_tags row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) UserTagGet(ctx context.Context, userID int32, tag string) (UserTag, error) {
+func (q *Queries) UserTagGet(ctx context.Context, userID int, tag string) (UserTag, error) {
 	return userTagScan(q.db.QueryRowContext(ctx, userTagGetSQL, sql.Named("user_id", userID), sql.Named("tag", tag)))
 }
 
@@ -312,7 +313,7 @@ const userTagDeleteSQL = `DELETE FROM "user_tags" WHERE "user_id" = :user_id AND
 
 // UserTagDelete removes the identified user_tags row; rt.ErrNotFound reports
 // that nothing matched.
-func (q *Queries) UserTagDelete(ctx context.Context, userID int32, tag string) error {
+func (q *Queries) UserTagDelete(ctx context.Context, userID int, tag string) error {
 	res, err := q.db.ExecContext(ctx, userTagDeleteSQL, sql.Named("user_id", userID), sql.Named("tag", tag))
 	if err != nil {
 		return rt.Constraint(err)
@@ -336,7 +337,7 @@ func pageViewScan(r rowScanner) (PageView, error) {
 const pageViewGetSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE "id" = :id`
 
 // PageViewGet fetches the page_views row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) PageViewGet(ctx context.Context, id int32) (PageView, error) {
+func (q *Queries) PageViewGet(ctx context.Context, id int) (PageView, error) {
 	return pageViewScan(q.db.QueryRowContext(ctx, pageViewGetSQL, sql.Named("id", id)))
 }
 
@@ -344,7 +345,7 @@ const pageViewGetManySQL = `SELECT "id", "site", "day", "hits" FROM "page_views"
 
 // PageViewGetMany fetches the page_views rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
-func (q *Queries) PageViewGetMany(ctx context.Context, ids []int32) ([]PageView, error) {
+func (q *Queries) PageViewGetMany(ctx context.Context, ids []int) ([]PageView, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -404,7 +405,7 @@ const pageViewUpdateSQL = `UPDATE "page_views" SET "site" = :site, "day" = :day,
 
 // PageViewUpdate rewrites every non-key column of the identified page_views row
 // and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) PageViewUpdate(ctx context.Context, id int32, arg PageViewUpdateParams) (PageView, error) {
+func (q *Queries) PageViewUpdate(ctx context.Context, id int, arg PageViewUpdateParams) (PageView, error) {
 	return pageViewScan(q.db.QueryRowContext(ctx, pageViewUpdateSQL,
 		sql.Named("id", id),
 		sql.Named("site", arg.Site),
@@ -417,7 +418,7 @@ const pageViewDeleteSQL = `DELETE FROM "page_views" WHERE "id" = :id`
 
 // PageViewDelete removes the identified page_views row; rt.ErrNotFound reports
 // that nothing matched.
-func (q *Queries) PageViewDelete(ctx context.Context, id int32) error {
+func (q *Queries) PageViewDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, pageViewDeleteSQL, sql.Named("id", id))
 	if err != nil {
 		return rt.Constraint(err)
@@ -441,7 +442,7 @@ func linkClickScan(r rowScanner) (LinkClick, error) {
 const linkClickGetSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE "id" = :id`
 
 // LinkClickGet fetches the link_clicks row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) LinkClickGet(ctx context.Context, id int32) (LinkClick, error) {
+func (q *Queries) LinkClickGet(ctx context.Context, id int) (LinkClick, error) {
 	return linkClickScan(q.db.QueryRowContext(ctx, linkClickGetSQL, sql.Named("id", id)))
 }
 
@@ -449,7 +450,7 @@ const linkClickGetManySQL = `SELECT "id", "site", "day", "target" FROM "link_cli
 
 // LinkClickGetMany fetches the link_clicks rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
-func (q *Queries) LinkClickGetMany(ctx context.Context, ids []int32) ([]LinkClick, error) {
+func (q *Queries) LinkClickGetMany(ctx context.Context, ids []int) ([]LinkClick, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -509,7 +510,7 @@ const linkClickUpdateSQL = `UPDATE "link_clicks" SET "site" = :site, "day" = :da
 
 // LinkClickUpdate rewrites every non-key column of the identified link_clicks row
 // and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) LinkClickUpdate(ctx context.Context, id int32, arg LinkClickUpdateParams) (LinkClick, error) {
+func (q *Queries) LinkClickUpdate(ctx context.Context, id int, arg LinkClickUpdateParams) (LinkClick, error) {
 	return linkClickScan(q.db.QueryRowContext(ctx, linkClickUpdateSQL,
 		sql.Named("id", id),
 		sql.Named("site", arg.Site),
@@ -522,7 +523,7 @@ const linkClickDeleteSQL = `DELETE FROM "link_clicks" WHERE "id" = :id`
 
 // LinkClickDelete removes the identified link_clicks row; rt.ErrNotFound reports
 // that nothing matched.
-func (q *Queries) LinkClickDelete(ctx context.Context, id int32) error {
+func (q *Queries) LinkClickDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, linkClickDeleteSQL, sql.Named("id", id))
 	if err != nil {
 		return rt.Constraint(err)

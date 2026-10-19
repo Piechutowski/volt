@@ -2,8 +2,8 @@ package data
 
 Table "comments" {
   "id" int [pk]
-  post_id varchar
-  author_id bigint
+  post_id string
+  author_id string
   ~owned
 }
 Ref: comments.author_id > users.id

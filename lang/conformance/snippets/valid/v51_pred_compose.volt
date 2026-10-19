@@ -2,11 +2,11 @@
 package db
 
 Table ms_revenue {
-  id integer [pk]
-  org text [not null]
-  year integer [not null]
-  amount real [not null]
-  note text
+  id int [pk]
+  org string [not null]
+  year int [not null]
+  amount float64 [not null]
+  note string
 }
 
 Pred current { org = :org and year = :year }

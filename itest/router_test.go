@@ -42,19 +42,19 @@ type users struct{}
 func (users) Index(w http.ResponseWriter, r *volt.Request) error  { return echo(w, r) }
 func (users) New(w http.ResponseWriter, r *volt.Request) error    { return echo(w, r) }
 func (users) Create(w http.ResponseWriter, r *volt.Request) error { return echo(w, r) }
-func (users) Show(w http.ResponseWriter, r *volt.Request, id int32) error {
+func (users) Show(w http.ResponseWriter, r *volt.Request, id int) error {
 	return echo(w, r, id)
 }
-func (users) Edit(w http.ResponseWriter, r *volt.Request, id int32) error {
+func (users) Edit(w http.ResponseWriter, r *volt.Request, id int) error {
 	return echo(w, r, id)
 }
-func (users) Update(w http.ResponseWriter, r *volt.Request, id int32) error {
+func (users) Update(w http.ResponseWriter, r *volt.Request, id int) error {
 	return echo(w, r, id)
 }
-func (users) Delete(w http.ResponseWriter, r *volt.Request, id int32) error {
+func (users) Delete(w http.ResponseWriter, r *volt.Request, id int) error {
 	return echo(w, r, id)
 }
-func (users) Avatar(w http.ResponseWriter, r *volt.Request, id int32) error {
+func (users) Avatar(w http.ResponseWriter, r *volt.Request, id int) error {
 	return echo(w, r, id)
 }
 
@@ -88,7 +88,7 @@ func (pages) Show(w http.ResponseWriter, r *volt.Request, num int) error {
 
 type archive struct{}
 
-func (archive) Show(w http.ResponseWriter, r *volt.Request, stamp int64) error {
+func (archive) Show(w http.ResponseWriter, r *volt.Request, stamp int) error {
 	return echo(w, r, stamp)
 }
 
@@ -243,7 +243,7 @@ func TestRoundTripTotality(t *testing.T) {
 func TestTypedParamParseFailureIs404(t *testing.T) {
 	h := handler()
 	for _, target := range []string{
-		"/users/abc", "/users/abc/avatar", "/users/99999999999",
+		"/users/abc", "/users/abc/avatar", "/users/99999999999999999999",
 		"/pages/abc", "/pages/99999999999999999999",
 		"/archive/1.5", "/archive/99999999999999999999",
 	} {

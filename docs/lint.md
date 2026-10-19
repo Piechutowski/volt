@@ -231,15 +231,14 @@ are good.
 **What it does.** Reports a relationship whose two columns have different
 declared types, compared pairwise for composite endpoints.
 
-**Why.** DBML does not require type agreement, but the exported database
-either rejects the FK or performs implicit casts (`bigint` vs `integer`
-overflows; `varchar` vs `int` breaks joins).
+**Why.** Nothing in the schema requires type agreement, but the database
+either rejects the FK or performs implicit casts (`string` vs `int`
+breaks joins).
 
 **Examples.** [testdata/reftype.dbml](../lang/vet/testdata/reftype.dbml).
 
-**Limitations.** Types are compared as written (case-insensitively):
-`int` vs `integer` are reported as different even where a database treats
-them as aliases. Prefer one spelling per schema.
+**Limitations.** Types are compared as written: a declared type and its
+storage type are reported as different.
 
 ### reftarget
 

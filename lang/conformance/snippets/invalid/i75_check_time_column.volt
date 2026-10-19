@@ -3,8 +3,8 @@
 package db
 
 Table posts {
-  id integer [pk]
-  created_at timestamp [not null]
+  id int [pk]
+  created_at time.Time [not null]
 
   checks {
     created_at > '2020-01-01'

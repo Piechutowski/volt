@@ -239,24 +239,6 @@ func validColor(v string) bool {
 	return true
 }
 
-var integerTypes = map[string]bool{
-	"tinyint": true, "int2": true, "smallint": true, "smallserial": true,
-	"int": true, "integer": true, "int4": true, "mediumint": true, "serial": true,
-	"bigint": true, "int8": true, "bigserial": true,
-	"tinyint unsigned": true, "smallint unsigned": true, "int unsigned": true,
-	"integer unsigned": true, "bigint unsigned": true,
-}
-
-// IntegerType reports whether a declared type (arguments stripped,
-// case-insensitive) belongs to the integer family.
-func IntegerType(declType string) bool {
-	base := strings.ToLower(declType)
-	if i := strings.IndexByte(base, '('); i >= 0 {
-		base = strings.TrimSpace(base[:i])
-	}
-	return integerTypes[base]
-}
-
 func (c *checker) incrementCheck(ti *TableInfo) {
 	compositePK := false
 	for _, ix := range ti.Indexes {
@@ -271,9 +253,12 @@ func (c *checker) incrementCheck(ti *TableInfo) {
 			continue
 		}
 		name := col.Name.Name()
-		if !IntegerType(col.Type.String()) {
+		if !cd.Type.Known() {
+			continue
+		}
+		if cd.Type.Storage != "int" || cd.Type.Decl != nil {
 			c.errorf(inc.Pos(), "columns",
-				"increment on %q (%s): only an integer column can auto-increment (§columns, §mapping-to-sqlite-ddl)", name, col.Type.String())
+				"increment on %q (%s): only an int column can auto-increment (§columns, §mapping-to-sqlite-ddl)", name, col.Type.String())
 			continue
 		}
 		isPK := col.Settings.Get("pk") != nil || col.Settings.Get("primary key") != nil
@@ -293,36 +278,6 @@ func (c *checker) incrementCheck(ti *TableInfo) {
 	}
 }
 
-var requiredKinds = map[string]string{
-	"varchar": "text", "char": "text", "text": "text", "tinytext": "text", "mediumtext": "text", "longtext": "text",
-	"citext": "text", "string": "text", "uuid": "text", "decimal": "text", "numeric": "text", "money": "text",
-	"character": "text", "character varying": "text",
-	"time": "text", "timetz": "text", "time with time zone": "text", "time without time zone": "text",
-	"tinyint": "numeric", "int2": "numeric", "smallint": "numeric", "smallserial": "numeric",
-	"int": "numeric", "integer": "numeric", "int4": "numeric", "mediumint": "numeric", "serial": "numeric",
-	"bigint": "numeric", "int8": "numeric", "bigserial": "numeric",
-	"tinyint unsigned": "numeric", "smallint unsigned": "numeric", "int unsigned": "numeric",
-	"integer unsigned": "numeric", "bigint unsigned": "numeric",
-	"real": "numeric", "float4": "numeric", "float": "numeric", "float8": "numeric", "double": "numeric", "double precision": "numeric",
-	"json": "bytes", "jsonb": "bytes",
-	"bytea": "bytes", "blob": "bytes", "tinyblob": "bytes", "mediumblob": "bytes", "longblob": "bytes", "binary": "bytes", "varbinary": "bytes",
-}
-
-// RequiredKind reports how a declared type spells "non-empty": "text"
-// (not ”), "numeric" (not 0) or "bytes" (length > 0). An enum type is
-// text. Types with no empty value (bool, date/time) report false.
-func RequiredKind(declType string, isEnum bool) (string, bool) {
-	if isEnum {
-		return "text", true
-	}
-	base := strings.ToLower(declType)
-	if i := strings.IndexByte(base, '('); i >= 0 {
-		base = strings.TrimSpace(base[:i])
-	}
-	k, ok := requiredKinds[base]
-	return k, ok
-}
-
 func (c *checker) requiredCheck(ti *TableInfo) {
 	for _, cd := range ti.Columns {
 		col := cd.Col
@@ -331,21 +286,14 @@ func (c *checker) requiredCheck(ti *TableInfo) {
 			continue
 		}
 		name := col.Name.Name()
-		notNull := col.Settings.Get("not null") != nil || col.Settings.Get("pk") != nil || col.Settings.Get("primary key") != nil
-		for _, f := range col.LegacyFlags {
-			if strings.EqualFold(f.Name(), "pk") {
-				notNull = true
-			}
-		}
-		if !notNull {
+		if isNullable(col) {
 			c.errorf(req.Pos(), "columns", "required on %q needs not null: a nullable column has no empty value to refuse, NULL is absence (§columns)", name)
 			continue
 		}
-		isEnum := c.enumSet.present[canonKey(col.Type.Name)]
-		if !isEnum && col.Type.Name.Schema() == "" && ti.Decl.Name.Schema() != "" {
-			isEnum = c.enumSet.present[ti.Decl.Name.Schema()+"."+col.Type.Name.Base()]
+		if !cd.Type.Known() {
+			continue
 		}
-		if _, ok := RequiredKind(col.Type.String(), isEnum); !ok {
+		if _, ok := cd.Type.RequiredKind(); !ok {
 			c.errorf(req.Pos(), "columns", "required on %q (%s): a %s has no empty value — every value is a value (§columns)", name, col.Type.String(), col.Type.String())
 		}
 	}

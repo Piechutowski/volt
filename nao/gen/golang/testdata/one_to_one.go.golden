@@ -9,14 +9,14 @@ import (
 
 // User is a row of the users table.
 type User struct {
-	ID    int64  `db:"id" json:"id"`
+	ID    int    `db:"id" json:"id"`
 	Email string `db:"email" json:"email"`
 }
 
 // UserProfile is a row of the user_profiles table.
 type UserProfile struct {
 	// Also the FK: one profile per user
-	UserID    int64           `db:"user_id" json:"user_id"`
+	UserID    int             `db:"user_id" json:"user_id"`
 	Bio       rt.Null[string] `db:"bio" json:"bio"`
 	AvatarURL rt.Null[string] `db:"avatar_url" json:"avatar_url"`
 }
@@ -24,7 +24,7 @@ type UserProfile struct {
 // UserCreateParams are the caller-supplied columns of UserCreate. The
 // auto-increment key and defaulted columns are the database's job.
 type UserCreateParams struct {
-	ID    int64  `db:"id" json:"id"`
+	ID    int    `db:"id" json:"id"`
 	Email string `db:"email" json:"email"`
 }
 
@@ -38,7 +38,7 @@ type UserUpdateParams struct {
 // auto-increment key and defaulted columns are the database's job.
 type UserProfileCreateParams struct {
 	// Also the FK: one profile per user
-	UserID    int64           `db:"user_id" json:"user_id"`
+	UserID    int             `db:"user_id" json:"user_id"`
 	Bio       rt.Null[string] `db:"bio" json:"bio"`
 	AvatarURL rt.Null[string] `db:"avatar_url" json:"avatar_url"`
 }

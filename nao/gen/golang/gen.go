@@ -72,6 +72,7 @@ func (g *generator) run(p *plan, perr error) error {
 			return err
 		}
 	}
+	g.typesEmit()
 	usedNames := map[string]string{}
 	for _, e := range g.info.Enums {
 		usedNames[g.enumTypes[e.Key]] = "enum " + e.Decl.Name.String()
@@ -92,6 +93,26 @@ func (g *generator) run(p *plan, perr error) error {
 	g.out.Grow(g.body.Len())
 	g.out.WriteString(g.body.String())
 	return nil
+}
+
+// typesEmit asserts the Scanner and Valuer contract of every declared
+// type (spec §types).
+func (g *generator) typesEmit() {
+	if len(g.info.Types) == 0 {
+		return
+	}
+	g.imports["database/sql"] = true
+	g.imports["database/sql/driver"] = true
+	b := &g.body
+	b.WriteString("var (\n")
+	for _, td := range g.info.Types {
+		if td.Path != "" {
+			g.imports[td.Key[:strings.IndexByte(td.Key, '.')]+"="+td.Path] = true
+		}
+		fmt.Fprintf(b, "\t_ sql.Scanner   = (*%s)(nil)\n", td.Key)
+		fmt.Fprintf(b, "\t_ driver.Valuer = (*%s)(nil)\n", td.Key)
+	}
+	b.WriteString(")\n\n")
 }
 
 func (g *generator) paramsEmit(t *tableModel) {
@@ -168,7 +189,7 @@ func (g *generator) header() {
 		sort.Strings(paths)
 		g.out.WriteString("import (\n")
 		for _, p := range paths {
-			fmt.Fprintf(&g.out, "\t%q\n", p)
+			fmt.Fprintf(&g.out, "\t%s\n", importDecl(p))
 		}
 		g.out.WriteString(")\n\n")
 	}
@@ -279,10 +300,7 @@ func (g *generator) fieldEmit(cd *check.ColumnDef, pkCols map[string]bool, field
 	}
 	fields[fieldName] = col.Name.Name()
 
-	typ, err := typeResolve(col.Type.Name.Schema(), col.Type.Name.Base(), g.enumTypes)
-	if err != nil {
-		return fmt.Errorf("column %q: %w", col.Name.Name(), err)
-	}
+	typ := typeOf(cd.Type, g.enumTypes)
 	if typ.imp != "" {
 		g.imports[typ.imp] = true
 	}

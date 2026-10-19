@@ -51,7 +51,7 @@ func userScan(r rowScanner) (User, error) {
 const userGetSQL = `SELECT "id", "email" FROM "users" WHERE "id" = :id`
 
 // UserGet fetches the users row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) UserGet(ctx context.Context, id int32) (User, error) {
+func (q *Queries) UserGet(ctx context.Context, id int) (User, error) {
 	return userScan(q.db.QueryRowContext(ctx, userGetSQL, sql.Named("id", id)))
 }
 
@@ -59,7 +59,7 @@ const userGetManySQL = `SELECT "id", "email" FROM "users" WHERE "id" IN`
 
 // UserGetMany fetches the users rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
-func (q *Queries) UserGetMany(ctx context.Context, ids []int32) ([]User, error) {
+func (q *Queries) UserGetMany(ctx context.Context, ids []int) ([]User, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -126,7 +126,7 @@ const userUpdateSQL = `UPDATE "users" SET "email" = :email WHERE "id" = :id RETU
 
 // UserUpdate rewrites every non-key column of the identified users row
 // and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) UserUpdate(ctx context.Context, id int32, arg UserUpdateParams) (User, error) {
+func (q *Queries) UserUpdate(ctx context.Context, id int, arg UserUpdateParams) (User, error) {
 	return userScan(q.db.QueryRowContext(ctx, userUpdateSQL,
 		sql.Named("id", id),
 		sql.Named("email", arg.Email),
@@ -137,7 +137,7 @@ const userDeleteSQL = `DELETE FROM "users" WHERE "id" = :id`
 
 // UserDelete removes the identified users row; rt.ErrNotFound reports
 // that nothing matched.
-func (q *Queries) UserDelete(ctx context.Context, id int32) error {
+func (q *Queries) UserDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, userDeleteSQL, sql.Named("id", id))
 	if err != nil {
 		return rt.Constraint(err)
@@ -161,7 +161,7 @@ func msRevenueScan(r rowScanner) (MsRevenue, error) {
 const msRevenueGetSQL = `SELECT "id", "org", "year" FROM "ms_revenue" WHERE "id" = :id`
 
 // MsRevenueGet fetches the ms_revenue row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) MsRevenueGet(ctx context.Context, id int32) (MsRevenue, error) {
+func (q *Queries) MsRevenueGet(ctx context.Context, id int) (MsRevenue, error) {
 	return msRevenueScan(q.db.QueryRowContext(ctx, msRevenueGetSQL, sql.Named("id", id)))
 }
 
@@ -169,7 +169,7 @@ const msRevenueGetManySQL = `SELECT "id", "org", "year" FROM "ms_revenue" WHERE 
 
 // MsRevenueGetMany fetches the ms_revenue rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
-func (q *Queries) MsRevenueGetMany(ctx context.Context, ids []int32) ([]MsRevenue, error) {
+func (q *Queries) MsRevenueGetMany(ctx context.Context, ids []int) ([]MsRevenue, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -229,7 +229,7 @@ const msRevenueUpdateSQL = `UPDATE "ms_revenue" SET "org" = :org, "year" = :year
 
 // MsRevenueUpdate rewrites every non-key column of the identified ms_revenue row
 // and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) MsRevenueUpdate(ctx context.Context, id int32, arg MsRevenueUpdateParams) (MsRevenue, error) {
+func (q *Queries) MsRevenueUpdate(ctx context.Context, id int, arg MsRevenueUpdateParams) (MsRevenue, error) {
 	return msRevenueScan(q.db.QueryRowContext(ctx, msRevenueUpdateSQL,
 		sql.Named("id", id),
 		sql.Named("org", arg.Org),
@@ -241,7 +241,7 @@ const msRevenueDeleteSQL = `DELETE FROM "ms_revenue" WHERE "id" = :id`
 
 // MsRevenueDelete removes the identified ms_revenue row; rt.ErrNotFound reports
 // that nothing matched.
-func (q *Queries) MsRevenueDelete(ctx context.Context, id int32) error {
+func (q *Queries) MsRevenueDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, msRevenueDeleteSQL, sql.Named("id", id))
 	if err != nil {
 		return rt.Constraint(err)
@@ -265,7 +265,7 @@ func msUsageScan(r rowScanner) (MsUsage, error) {
 const msUsageGetSQL = `SELECT "id", "org", "year" FROM "ms_usage" WHERE "id" = :id`
 
 // MsUsageGet fetches the ms_usage row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) MsUsageGet(ctx context.Context, id int32) (MsUsage, error) {
+func (q *Queries) MsUsageGet(ctx context.Context, id int) (MsUsage, error) {
 	return msUsageScan(q.db.QueryRowContext(ctx, msUsageGetSQL, sql.Named("id", id)))
 }
 
@@ -273,7 +273,7 @@ const msUsageGetManySQL = `SELECT "id", "org", "year" FROM "ms_usage" WHERE "id"
 
 // MsUsageGetMany fetches the ms_usage rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
-func (q *Queries) MsUsageGetMany(ctx context.Context, ids []int32) ([]MsUsage, error) {
+func (q *Queries) MsUsageGetMany(ctx context.Context, ids []int) ([]MsUsage, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -333,7 +333,7 @@ const msUsageUpdateSQL = `UPDATE "ms_usage" SET "org" = :org, "year" = :year WHE
 
 // MsUsageUpdate rewrites every non-key column of the identified ms_usage row
 // and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) MsUsageUpdate(ctx context.Context, id int32, arg MsUsageUpdateParams) (MsUsage, error) {
+func (q *Queries) MsUsageUpdate(ctx context.Context, id int, arg MsUsageUpdateParams) (MsUsage, error) {
 	return msUsageScan(q.db.QueryRowContext(ctx, msUsageUpdateSQL,
 		sql.Named("id", id),
 		sql.Named("org", arg.Org),
@@ -345,7 +345,7 @@ const msUsageDeleteSQL = `DELETE FROM "ms_usage" WHERE "id" = :id`
 
 // MsUsageDelete removes the identified ms_usage row; rt.ErrNotFound reports
 // that nothing matched.
-func (q *Queries) MsUsageDelete(ctx context.Context, id int32) error {
+func (q *Queries) MsUsageDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, msUsageDeleteSQL, sql.Named("id", id))
 	if err != nil {
 		return rt.Constraint(err)

@@ -261,10 +261,7 @@ func fieldBuild(enumTypes map[string]string, imports map[string]bool, cd *check.
 	}
 	goFields[goField] = colName
 
-	typ, err := typeResolve(col.Type.Name.Schema(), col.Type.Name.Base(), enumTypes)
-	if err != nil {
-		return nil, fmt.Errorf("column %q: %w", colName, err)
-	}
+	typ := typeOf(cd.Type, enumTypes)
 	if typ.imp != "" {
 		imports[typ.imp] = true
 	}
@@ -489,7 +486,7 @@ func (e *queryEmitter) header() {
 	sort.Strings(paths)
 	e.out.WriteString("import (\n")
 	for _, p := range paths {
-		fmt.Fprintf(&e.out, "\t%q\n", p)
+		fmt.Fprintf(&e.out, "\t%s\n", importDecl(p))
 	}
 	e.out.WriteString(")\n\n")
 }

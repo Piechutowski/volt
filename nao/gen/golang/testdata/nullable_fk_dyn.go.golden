@@ -4,7 +4,6 @@ package models
 
 import (
 	"context"
-	"encoding/json"
 	"github.com/Piechutowski/volt/nao/rt"
 	"time"
 )
@@ -19,7 +18,7 @@ const (
 // built here can only enter User queries; mixing models is a compile
 // error.
 var (
-	UserID = rt.Column[User, int64]{Name: "id"}
+	UserID = rt.Column[User, int]{Name: "id"}
 )
 
 // UserLimit caps how many rows UserQuery returns.
@@ -135,11 +134,11 @@ const (
 // built here can only enter Post queries; mixing models is a compile
 // error.
 var (
-	PostID         = rt.Column[Post, int64]{Name: "id"}
-	PostAuthorID   = rt.Column[Post, int64]{Name: "author_id"}
-	PostEditorID   = rt.NullColumn[Post, int64]{Column: rt.Column[Post, int64]{Name: "editor_id"}}
+	PostID         = rt.Column[Post, int]{Name: "id"}
+	PostAuthorID   = rt.Column[Post, int]{Name: "author_id"}
+	PostEditorID   = rt.NullColumn[Post, int]{Column: rt.Column[Post, int]{Name: "editor_id"}}
 	PostReviewedAt = rt.NullColumn[Post, time.Time]{Column: rt.Column[Post, time.Time]{Name: "reviewed_at"}}
-	PostMeta       = rt.NullColumn[Post, json.RawMessage]{Column: rt.Column[Post, json.RawMessage]{Name: "meta"}}
+	PostMeta       = rt.NullColumn[Post, string]{Column: rt.Column[Post, string]{Name: "meta"}}
 	PostRaw        = rt.NullColumn[Post, []byte]{Column: rt.Column[Post, []byte]{Name: "raw"}}
 )
 

@@ -36,6 +36,7 @@ var immutableVars = map[string]bool{
 	module + "/lang.queryValueTypes":              true,
 	module + "/lang/check.tableSettings":          true,
 	module + "/lang/check.columnSettings":         true,
+	module + "/lang/check.builtins":               true,
 	module + "/lang/check.indexSettings":          true,
 	module + "/lang/check.settingsCheck":          true,
 	module + "/lang/check.refSettings":            true,

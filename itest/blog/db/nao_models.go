@@ -5,22 +5,22 @@ package db
 
 // User is a row of the users table.
 type User struct {
-	ID    int32  `db:"id" json:"id"`
+	ID    int    `db:"id" json:"id"`
 	Email string `db:"email" json:"email"`
 }
 
 // MsRevenue is a row of the ms_revenue table.
 type MsRevenue struct {
-	ID   int32  `db:"id" json:"id"`
+	ID   int    `db:"id" json:"id"`
 	Org  string `db:"org" json:"org"`
-	Year int32  `db:"year" json:"year"`
+	Year int    `db:"year" json:"year"`
 }
 
 // MsUsage is a row of the ms_usage table.
 type MsUsage struct {
-	ID   int32  `db:"id" json:"id"`
+	ID   int    `db:"id" json:"id"`
 	Org  string `db:"org" json:"org"`
-	Year int32  `db:"year" json:"year"`
+	Year int    `db:"year" json:"year"`
 }
 
 // UserCreateParams are the caller-supplied columns of UserCreate. The
@@ -39,26 +39,26 @@ type UserUpdateParams struct {
 // auto-increment key and defaulted columns are the database's job.
 type MsRevenueCreateParams struct {
 	Org  string `db:"org" json:"org"`
-	Year int32  `db:"year" json:"year"`
+	Year int    `db:"year" json:"year"`
 }
 
 // MsRevenueUpdateParams are the data columns of MsRevenueUpdate: every column
 // outside the primary key.
 type MsRevenueUpdateParams struct {
 	Org  string `db:"org" json:"org"`
-	Year int32  `db:"year" json:"year"`
+	Year int    `db:"year" json:"year"`
 }
 
 // MsUsageCreateParams are the caller-supplied columns of MsUsageCreate. The
 // auto-increment key and defaulted columns are the database's job.
 type MsUsageCreateParams struct {
 	Org  string `db:"org" json:"org"`
-	Year int32  `db:"year" json:"year"`
+	Year int    `db:"year" json:"year"`
 }
 
 // MsUsageUpdateParams are the data columns of MsUsageUpdate: every column
 // outside the primary key.
 type MsUsageUpdateParams struct {
 	Org  string `db:"org" json:"org"`
-	Year int32  `db:"year" json:"year"`
+	Year int    `db:"year" json:"year"`
 }

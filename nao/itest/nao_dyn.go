@@ -18,7 +18,7 @@ const (
 // built here can only enter User queries; mixing models is a compile
 // error.
 var (
-	UserID        = rt.Column[User, int32]{Name: "id"}
+	UserID        = rt.Column[User, int]{Name: "id"}
 	UserEmail     = rt.Column[User, string]{Name: "email"}
 	UserName      = rt.Column[User, string]{Name: "name"}
 	UserBio       = rt.NullColumn[User, string]{Column: rt.Column[User, string]{Name: "bio"}}
@@ -130,7 +130,7 @@ func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], pr
 
 const (
 	orderTableSQL   = `"orders"`
-	orderColumnsSQL = `"id", "user_id", "status", "total", "placed_at"`
+	orderColumnsSQL = `"id", "user_id", "status", "total", "tip", "placed_at"`
 )
 
 // Typed column handles of Order: inert predicate, order and
@@ -138,10 +138,11 @@ const (
 // built here can only enter Order queries; mixing models is a compile
 // error.
 var (
-	OrderID       = rt.Column[Order, int32]{Name: "id"}
-	OrderUserID   = rt.Column[Order, int32]{Name: "user_id"}
+	OrderID       = rt.Column[Order, int]{Name: "id"}
+	OrderUserID   = rt.Column[Order, int]{Name: "user_id"}
 	OrderStatus   = rt.Column[Order, EOrderStatus]{Name: "status"}
-	OrderTotal    = rt.Column[Order, string]{Name: "total"}
+	OrderTotal    = rt.Column[Order, float64]{Name: "total"}
+	OrderTip      = rt.Column[Order, Money]{Name: "tip"}
 	OrderPlacedAt = rt.NullColumn[Order, time.Time]{Column: rt.Column[Order, time.Time]{Name: "placed_at"}}
 )
 
@@ -258,7 +259,7 @@ const (
 // built here can only enter UserTag queries; mixing models is a compile
 // error.
 var (
-	UserTagUserID = rt.Column[UserTag, int32]{Name: "user_id"}
+	UserTagUserID = rt.Column[UserTag, int]{Name: "user_id"}
 	UserTagTag    = rt.Column[UserTag, string]{Name: "tag"}
 )
 
@@ -375,10 +376,10 @@ const (
 // built here can only enter PageView queries; mixing models is a compile
 // error.
 var (
-	PageViewID   = rt.Column[PageView, int32]{Name: "id"}
+	PageViewID   = rt.Column[PageView, int]{Name: "id"}
 	PageViewSite = rt.Column[PageView, string]{Name: "site"}
-	PageViewDay  = rt.Column[PageView, int32]{Name: "day"}
-	PageViewHits = rt.Column[PageView, int32]{Name: "hits"}
+	PageViewDay  = rt.Column[PageView, int]{Name: "day"}
+	PageViewHits = rt.Column[PageView, int]{Name: "hits"}
 )
 
 // PageViewLimit caps how many rows PageViewQuery returns.
@@ -494,9 +495,9 @@ const (
 // built here can only enter LinkClick queries; mixing models is a compile
 // error.
 var (
-	LinkClickID     = rt.Column[LinkClick, int32]{Name: "id"}
+	LinkClickID     = rt.Column[LinkClick, int]{Name: "id"}
 	LinkClickSite   = rt.Column[LinkClick, string]{Name: "site"}
-	LinkClickDay    = rt.Column[LinkClick, int32]{Name: "day"}
+	LinkClickDay    = rt.Column[LinkClick, int]{Name: "day"}
 	LinkClickTarget = rt.Column[LinkClick, string]{Name: "target"}
 )
 

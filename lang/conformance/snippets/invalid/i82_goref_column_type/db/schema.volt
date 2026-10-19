@@ -4,8 +4,8 @@
 package db
 
 Table users {
-  id integer [pk]
-  email integer [not null]
+  id int [pk]
+  email int [not null]
 
   checks {
     EmailValid(email)

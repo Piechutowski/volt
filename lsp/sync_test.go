@@ -53,16 +53,16 @@ func TestIncrementalSync(t *testing.T) {
 
 	uri := "file:///lone.dbml"
 	if err := s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{TextDocument: protocol.TextDocumentItem{URI: uri, Version: 1,
-		Text: "Table users {\n  id int [pk]\n  name text\n}\n"}}); err != nil {
+		Text: "Table users {\n  id int [pk]\n  name bool\n}\n"}}); err != nil {
 		t.Fatal(err)
 	}
 	change(uri, 2,
-		ranged(rangeAt(1, 5, 1, 8), "integer"),
+		ranged(rangeAt(1, 5, 1, 8), "float64"),
 		ranged(rangeAt(2, 11, 2, 11), " [not null]"))
-	expect(uri, "Table users {\n  id integer [pk]\n  name text [not null]\n}\n", 2)
+	expect(uri, "Table users {\n  id float64 [pk]\n  name bool [not null]\n}\n", 2)
 	change(uri, 3, ranged(rangeAt(2, 7, 2, 11), "\"na😀\""))
 	change(uri, 4, ranged(rangeAt(2, 13, 2, 13), "y"))
-	expect(uri, "Table users {\n  id integer [pk]\n  name \"na😀\"y [not null]\n}\n", 4)
+	expect(uri, "Table users {\n  id float64 [pk]\n  name \"na😀\"y [not null]\n}\n", 4)
 	change(uri, 5, protocol.TextDocumentContentChangeEventWhole{Text: "Table t {\n  id int\n}\n"}, ranged(rangeAt(1, 8, 1, 8), " [pk]"))
 	expect(uri, "Table t {\n  id int [pk]\n}\n", 5)
 

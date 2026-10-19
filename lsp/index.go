@@ -15,6 +15,7 @@ const (
 	SymPartial
 	SymColumn
 	SymEnumValue
+	SymType
 )
 
 // SymbolID names one symbol. Tables and enums use their canonical
@@ -41,6 +42,7 @@ type Index struct {
 
 	Tables   map[string]*check.TableInfo // canonical key AND alias -> table
 	Enums    map[string]*check.EnumInfo  // canonical key -> enum
+	Types    map[string]*check.TypeInfo  // declared name -> Type
 	Partials map[string]*check.PartialInfo
 
 	decls  map[SymbolID]*ast.Ident
@@ -65,15 +67,22 @@ type tableOccs struct {
 	ti, resolved    *check.TableInfo
 	tables          map[string]*check.TableInfo
 	enums           map[string]*check.EnumInfo
+	types           map[string]*check.TypeInfo
 	partials        map[string]bool
 	sym, cols, body []Occurrence
 	decls           []declEntry
 	declMap         map[SymbolID]*ast.Ident
 }
 
-func (e *tableOccs) holds(ti, resolved *check.TableInfo, tables map[string]*check.TableInfo, enums map[string]*check.EnumInfo, partials map[string]bool) bool {
-	if e.ti != ti || e.resolved != resolved || len(e.tables) != len(tables) || len(e.enums) != len(enums) || len(e.partials) != len(partials) {
+func (e *tableOccs) holds(ti, resolved *check.TableInfo, tables map[string]*check.TableInfo, enums map[string]*check.EnumInfo, types map[string]*check.TypeInfo, partials map[string]bool) bool {
+	if e.ti != ti || e.resolved != resolved || len(e.tables) != len(tables) || len(e.enums) != len(enums) || len(e.types) != len(types) || len(e.partials) != len(partials) {
 		return false
+	}
+	for key, t := range types {
+		old, ok := e.types[key]
+		if !ok || (old == nil) != (t == nil) || (t != nil && old.Decl != t.Decl) {
+			return false
+		}
 	}
 	for key, t := range tables {
 		if old, ok := e.tables[key]; !ok || old != t {
@@ -131,6 +140,7 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 	ix := &Index{
 		Tables:   map[string]*check.TableInfo{},
 		Enums:    map[string]*check.EnumInfo{},
+		Types:    map[string]*check.TypeInfo{},
 		Partials: map[string]*check.PartialInfo{},
 		decls:    map[SymbolID]*ast.Ident{},
 		byBase:   map[string]*check.TableInfo{},
@@ -154,6 +164,9 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 	for _, ei := range info.Enums {
 		ix.Enums[ei.Key] = ei
 	}
+	for _, td := range info.Types {
+		ix.Types[td.Key] = td
+	}
 	for _, pi := range info.Partials {
 		ix.Partials[pi.Decl.Name.Name()] = pi
 	}
@@ -168,17 +181,18 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		resolved := ix.resolveTable(ti.Decl.Name)
 		tables := ix.tablesNamed(ti.Decl)
 		enums := ix.enumsNamed(ti.Decl)
+		types := ix.typesNamed(ti.Decl)
 		partials := ix.partialsNamed(ti.Decl)
 		var e *tableOccs
 		if memo != nil {
-			if prev := memo.prev[ti.Decl]; prev != nil && prev.holds(ti, resolved, tables, enums, partials) {
+			if prev := memo.prev[ti.Decl]; prev != nil && prev.holds(ti, resolved, tables, enums, types, partials) {
 				e = prev
 				memo.Hits++
 			}
 		}
 		if e == nil {
-			e = &tableOccs{ti: ti, resolved: resolved, tables: tables, enums: enums, partials: partials}
-			e.sym, e.cols, e.body, e.decls = tableOccurrences(ti.Decl, ti, resolved, tables, enums, partials)
+			e = &tableOccs{ti: ti, resolved: resolved, tables: tables, enums: enums, types: types, partials: partials}
+			e.sym, e.cols, e.body, e.decls = tableOccurrences(ti.Decl, ti, resolved, tables, enums, types, partials)
 			e.declMap = declMapOf(e.decls)
 			if memo != nil {
 				memo.Misses++
@@ -212,6 +226,9 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		for _, v := range ei.Decl.Values {
 			ix.add(SymbolID{SymEnumValue, "enum:" + ei.Key, v.Name.Name()}, v.Name, true)
 		}
+	}
+	for _, td := range info.Types {
+		ix.add(SymbolID{SymType, "", td.Key}, lastPart(td.Decl.Name), true)
 	}
 	for _, pi := range info.Partials {
 		ix.add(SymbolID{SymPartial, "", pi.Decl.Name.Name()}, pi.Decl.Name, true)
@@ -294,8 +311,13 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 	return ix
 }
 
-func tableOccurrences(d *ast.Table, ti, resolved *check.TableInfo, tables map[string]*check.TableInfo, enums map[string]*check.EnumInfo, partials map[string]bool) (sym, cols, body []Occurrence, decls []declEntry) {
-	acc := &Index{Tables: map[string]*check.TableInfo{}, Enums: map[string]*check.EnumInfo{}, Partials: map[string]*check.PartialInfo{}, decls: map[SymbolID]*ast.Ident{}}
+func tableOccurrences(d *ast.Table, ti, resolved *check.TableInfo, tables map[string]*check.TableInfo, enums map[string]*check.EnumInfo, types map[string]*check.TypeInfo, partials map[string]bool) (sym, cols, body []Occurrence, decls []declEntry) {
+	acc := &Index{Tables: map[string]*check.TableInfo{}, Enums: map[string]*check.EnumInfo{}, Types: map[string]*check.TypeInfo{}, Partials: map[string]*check.PartialInfo{}, decls: map[SymbolID]*ast.Ident{}}
+	for key, t := range types {
+		if t != nil {
+			acc.Types[key] = t
+		}
+	}
 	for key, t := range tables {
 		if t != nil {
 			acc.Tables[key] = t
@@ -416,6 +438,16 @@ func (ix *Index) tablesNamed(d *ast.Table) map[string]*check.TableInfo {
 	return out
 }
 
+func (ix *Index) typesNamed(d *ast.Table) map[string]*check.TypeInfo {
+	out := map[string]*check.TypeInfo{}
+	for _, item := range d.Body {
+		if col, ok := item.(*ast.Column); ok && col.Type != nil && !col.Type.Slice {
+			out[col.Type.String()] = ix.Types[col.Type.String()]
+		}
+	}
+	return out
+}
+
 func (ix *Index) partialsNamed(d *ast.Table) map[string]bool {
 	out := map[string]bool{}
 	for _, item := range d.Body {
@@ -431,7 +463,9 @@ func (ix *Index) walkTableBody(body []ast.TableItem, ti *check.TableInfo, partia
 	for _, item := range body {
 		switch n := item.(type) {
 		case *ast.Column:
-			if ei := ix.resolveEnum(n.Type.Name); ei != nil {
+			if td := ix.Types[n.Type.String()]; td != nil {
+				ix.add(SymbolID{SymType, "", td.Key}, lastPart(n.Type.Name), false)
+			} else if ei := ix.resolveEnum(n.Type.Name); ei != nil {
 				ix.add(SymbolID{SymEnum, "", ei.Key}, lastPart(n.Type.Name), false)
 			}
 			ix.walkSettings(n.Settings)

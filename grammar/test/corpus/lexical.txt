@@ -7,7 +7,7 @@ Table t { // trailing
   /* block */ id int // after
   /* multi
      line */
-  name varchar
+  name string
 }
 
 ---
@@ -40,7 +40,7 @@ string escapes
 
 Table t {
   a text [note: 'it\'s fine']
-  b text [note: 'tab\there']
+  b string [note: 'tab\there']
 }
 
 ---
@@ -138,9 +138,9 @@ numbers: integer, decimal, exponent, negative default
 
 Table t {
   a int [default: 42]
-  b float [default: 3.14]
-  c float [default: 1e2]
-  d float [default: 3.14e-5]
+  b float64 [default: 3.14]
+  c float64 [default: 1e2]
+  d float64 [default: 3.14e-5]
   e int [default: -100]
 }
 

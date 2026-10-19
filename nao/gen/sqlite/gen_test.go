@@ -133,11 +133,6 @@ func TestGenerationErrors(t *testing.T) {
 		name, dbml, wantErr string
 	}{
 		{
-			name:    "unknown type",
-			dbml:    "Table t { id int [pk]\n loc geography }",
-			wantErr: "no SQLite mapping",
-		},
-		{
 			name:    "flattened table collision",
 			dbml:    "Table core.users { id int }\nTable core_users { id int }",
 			wantErr: "both flatten to SQLite name",

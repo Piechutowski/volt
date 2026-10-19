@@ -20,14 +20,14 @@ TablePartial base {
 
 Table users as U [note: 'people'] {
   ~base
-  name varchar(255) [not null, unique]
+  name string [not null, unique]
   status status [default: status.active]
 }
 
 Table core.orders {
   id int [pk]
   user_id int
-  owner_name varchar(255) [ref: > U.name]
+  owner_name string [ref: > U.name]
 }
 
 Ref: users.id < core.orders.user_id
@@ -194,7 +194,7 @@ func TestHoverTable(t *testing.T) {
 		t.Fatal("no hover for table reference")
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
-	for _, want := range []string{"Table users as U", "name varchar(255)", "people", "from ~base"} {
+	for _, want := range []string{"Table users as U", "name string", "people", "from ~base"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover missing %q:\n%s", want, md)
 		}
@@ -300,7 +300,7 @@ func TestCompletionTypesIncludeEnums(t *testing.T) {
 	d := doc(t, text)
 	line := protocol.UInteger(strings.Count(sample, "\n") + 2)
 	items := d.Complete(protocol.Position{Line: line, Character: protocol.UInteger(len("  col v"))})
-	if !hasLabel(items, "varchar") || !hasLabel(items, "status") {
+	if !hasLabel(items, "string") || !hasLabel(items, "status") {
 		t.Fatalf("type completion missing: %v", labels(items))
 	}
 }

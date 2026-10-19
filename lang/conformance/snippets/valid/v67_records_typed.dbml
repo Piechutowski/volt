@@ -1,0 +1,19 @@
+// spec: §records-sample-data — every value kind, typed against its column: integer, number, string, boolean, enum constant, null, empty field, expression
+Enum status {
+  active
+  retired
+}
+Table metrics {
+  id int [pk]
+  ratio float64 [not null]
+  label string [not null]
+  live bool [not null]
+  state status [not null]
+  note string
+  seen time.Time
+  blob []byte
+  records {
+    1, 0.5, 'first', true, status.active, null, '2024-01-15 10:30:00', `X'00'`
+    2, 3, 'second', false, status.retired, , , 
+  }
+}

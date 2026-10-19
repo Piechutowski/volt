@@ -19,7 +19,7 @@ markup began as DBML and grew outward, but it is a single language.
 Which constructs a file happens to use is up to the file. The honest build state:
 
 - **Schema core** (DBML-derived) — *built.* Spec Part I: Project,
-  Table with columns/indexes/checks, TablePartial, Records, Enum, Ref,
+  Table with columns/indexes/checks, TablePartial, Records, Enum, Type, Ref,
   TableGroup, Notes, DiagramView.
 - **Schema extensions** — *the structured half built:* `Group`, `Pred`
   and `Select … for <group>` with projection, `[tag:]`, `[required]`,

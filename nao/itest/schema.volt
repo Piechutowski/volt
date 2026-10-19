@@ -5,6 +5,8 @@
 // 'volt gen ./nao/itest --sql' from the repository root.
 package itest
 
+Type Money int
+
 Project itest {
   note: 'Integration-test fixture for the generated query surface.'
 }
@@ -16,11 +18,11 @@ Enum order_status {
 }
 
 Table users {
-  id integer [pk, increment]
-  email varchar [not null, unique]
-  name varchar [not null, tag: 'json:"displayName"']
-  bio text [note: 'NULL until the user writes one']
-  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  id int [pk, increment]
+  email string [not null, unique]
+  name string [not null, tag: 'json:"displayName"']
+  bio string [note: 'NULL until the user writes one']
+  created_at time.Time [not null, default: `CURRENT_TIMESTAMP`]
 
   checks {
     EmailValid(email)
@@ -28,17 +30,18 @@ Table users {
 }
 
 Table orders {
-  id integer [pk, increment]
-  user_id integer [not null, ref: > users.id]
+  id int [pk, increment]
+  user_id int [not null, ref: > users.id]
   status order_status [not null, default: order_status.pending]
-  total decimal(10,2) [not null, required]
-  placed_at timestamp
+  total float64 [not null, required]
+  tip Money [not null, default: 0]
+  placed_at time.Time
 }
 
 // composite primary key, no auto-increment anywhere
 Table user_tags {
-  user_id integer [not null, ref: > users.id]
-  tag varchar [not null]
+  user_id int [not null, ref: > users.id]
+  tag string [not null]
 
   indexes {
     (user_id, tag) [pk]
@@ -48,10 +51,10 @@ Table user_tags {
 // Two uniform metric tables plus the group/pred/select layer over them
 // (spec §groups to §selects-over-groups): one select, one signature, every member.
 Table page_views {
-  id integer [pk, increment]
-  site varchar [not null]
-  day integer [not null]
-  hits integer [not null, default: 0]
+  id int [pk, increment]
+  site string [not null]
+  day int [not null]
+  hits int [not null, default: 0]
 
   checks {
     hits >= 0 and day >= 1 [name: 'counts_positive']
@@ -60,10 +63,10 @@ Table page_views {
 }
 
 Table link_clicks {
-  id integer [pk, increment]
-  site varchar [not null]
-  day integer [not null]
-  target text [not null, default: '']
+  id int [pk, increment]
+  site string [not null]
+  day int [not null]
+  target string [not null, default: '']
 }
 
 Group metrics {

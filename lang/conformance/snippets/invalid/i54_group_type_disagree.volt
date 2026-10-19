@@ -2,13 +2,13 @@
 package db
 
 Table ms_revenue {
-  id integer [pk]
-  org text [not null]
+  id int [pk]
+  org string [not null]
 }
 
 Table ks_seats {
-  id integer [pk]
-  org integer [not null]
+  id int [pk]
+  org int [not null]
 }
 
 Group mixed {

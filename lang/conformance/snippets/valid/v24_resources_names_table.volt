@@ -2,7 +2,7 @@
 package app
 
 Table posty [model: 'Post'] {
-	id integer [pk]
+	id int [pk]
 }
 
 // The declaration spells the table exactly as declared; the URL keeps

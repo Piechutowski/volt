@@ -18,7 +18,7 @@ const (
 // built here can only enter User queries; mixing models is a compile
 // error.
 var (
-	UserID = rt.Column[User, int64]{Name: "id"}
+	UserID = rt.Column[User, int]{Name: "id"}
 )
 
 // UserLimit caps how many rows UserQuery returns.
@@ -134,16 +134,16 @@ const (
 // built here can only enter CoreUser queries; mixing models is a compile
 // error.
 var (
-	CoreUserID             = rt.Column[CoreUser, uint64]{Name: "id"}
+	CoreUserID             = rt.Column[CoreUser, int]{Name: "id"}
 	CoreUserAPIKey         = rt.Column[CoreUser, string]{Name: "api_key"}
 	CoreUserHomepageURL    = rt.NullColumn[CoreUser, string]{Column: rt.Column[CoreUser, string]{Name: "homepage_url"}}
-	CoreUserHTTPStatus     = rt.NullColumn[CoreUser, int32]{Column: rt.Column[CoreUser, int32]{Name: "http_status"}}
+	CoreUserHTTPStatus     = rt.NullColumn[CoreUser, int]{Column: rt.Column[CoreUser, int]{Name: "http_status"}}
 	CoreUserFullName       = rt.Column[CoreUser, string]{Name: "full name"}
 	CoreUserPrecisionValue = rt.NullColumn[CoreUser, float64]{Column: rt.Column[CoreUser, float64]{Name: "precision_value"}}
-	CoreUserBalance        = rt.NullColumn[CoreUser, string]{Column: rt.Column[CoreUser, string]{Name: "balance"}}
+	CoreUserBalance        = rt.NullColumn[CoreUser, float64]{Column: rt.Column[CoreUser, float64]{Name: "balance"}}
 	CoreUserKind           = rt.Column[CoreUser, ECoreAuditKind]{Name: "kind"}
 	CoreUserType           = rt.NullColumn[CoreUser, string]{Column: rt.Column[CoreUser, string]{Name: "type"}}
-	CoreUserFunc           = rt.NullColumn[CoreUser, int32]{Column: rt.Column[CoreUser, int32]{Name: "func"}}
+	CoreUserFunc           = rt.NullColumn[CoreUser, int]{Column: rt.Column[CoreUser, int]{Name: "func"}}
 )
 
 // CoreUserLimit caps how many rows CoreUserQuery returns.
@@ -260,7 +260,7 @@ const (
 // error.
 var (
 	X2faCodeCode      = rt.Column[X2faCode, string]{Name: "code"}
-	X2faCodeUserID    = rt.Column[X2faCode, int64]{Name: "user_id"}
+	X2faCodeUserID    = rt.Column[X2faCode, int]{Name: "user_id"}
 	X2faCodeExpiresAt = rt.Column[X2faCode, time.Time]{Name: "expires_at"}
 )
 

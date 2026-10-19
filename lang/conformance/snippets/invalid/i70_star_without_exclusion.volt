@@ -3,8 +3,8 @@
 package db
 
 Table page_views {
-  id integer [pk]
-  site varchar [not null]
+  id int [pk]
+  site string [not null]
 }
 
 Select all (*) for page_views

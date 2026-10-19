@@ -2,21 +2,21 @@
 package db
 
 Table ms_revenue {
-  id integer [pk]
-  org text [not null]
-  year integer [not null]
+  id int [pk]
+  org string [not null]
+  year int [not null]
 }
 
 Table ms_usage {
-  id integer [pk]
-  org text [not null]
-  year integer [not null]
+  id int [pk]
+  org string [not null]
+  year int [not null]
 }
 
 Table ks_costs {
-  id integer [pk]
-  org text [not null]
-  year integer [not null]
+  id int [pk]
+  org string [not null]
+  year int [not null]
 }
 
 Group series {

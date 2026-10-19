@@ -5,6 +5,6 @@ import (
 	b
 )
 
-Table users { id integer [pk] }
+Table users { id int [pk] }
 
 Scope / { resources b.users }

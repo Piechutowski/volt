@@ -430,10 +430,7 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 }
 
 var queryValueTypes = map[string]bool{
-	"string": true, "bool": true,
-	"int": true, "int8": true, "int16": true, "int32": true, "int64": true,
-	"uint": true, "uint8": true, "uint16": true, "uint32": true, "uint64": true,
-	"float32": true, "float64": true, "time.Time": true,
+	"string": true, "bool": true, "int": true, "float64": true, "time.Time": true,
 }
 
 func (l *routeLowering) queryRef(r *ast.Route, method string, params []Param, qual, target string, local bool) *QueryRef {
@@ -641,7 +638,7 @@ func (l *routeLowering) pathParams(segs []*ast.Segment) ([]Param, bool) {
 		pt := TString
 		if seg.Type != nil {
 			if !KnownParamType(seg.Type.Name()) {
-				l.errorf(seg.Type.Pos(), "scopes-and-routes", "unknown parameter type %q (§route-paths); valid: int, int32, int64, string", seg.Type.Name())
+				l.errorf(seg.Type.Pos(), "scopes-and-routes", "unknown parameter type %q (§route-paths); valid: int, string", seg.Type.Name())
 				ok = false
 				continue
 			}
@@ -974,16 +971,15 @@ func (l *routeLowering) pkParamType(ti *check.TableInfo, pos token.Position) (Pa
 		return "", false
 	}
 	pk := cd.Col
-	goType, known := golang.GoTypeName(strings.ToLower(pk.Type.Name.String()))
-	if !known {
+	if !cd.Type.Known() {
 		l.errorf(pos, "resources", "primary-key type %q of table %q is not a routable type (§table-resolution)", pk.Type.String(), ti.Key)
 		return "", false
 	}
-	switch goType {
-	case "int", "int32", "int64", "string":
+	switch goType := cd.Type.Go; goType {
+	case "int", "string":
 		return ParamType(goType), true
 	default:
-		l.errorf(pos, "resources", "primary-key Go type %q of table %q cannot be a route parameter (§table-resolution); routable: int, int32, int64, string", goType, ti.Key)
+		l.errorf(pos, "resources", "primary-key type %q of table %q cannot be a route parameter (§table-resolution); routable: int, string", pk.Type.String(), ti.Key)
 		return "", false
 	}
 }

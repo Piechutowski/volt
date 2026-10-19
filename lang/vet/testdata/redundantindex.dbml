@@ -1,8 +1,8 @@
 // analyzers: redundantindex
 Table t {
   id int [pk]
-  email varchar [unique]
-  country varchar
+  email string [unique]
+  country string
 
   indexes {
     id [unique] //WANT redundantindex

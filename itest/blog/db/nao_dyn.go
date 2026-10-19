@@ -17,7 +17,7 @@ const (
 // built here can only enter User queries; mixing models is a compile
 // error.
 var (
-	UserID    = rt.Column[User, int32]{Name: "id"}
+	UserID    = rt.Column[User, int]{Name: "id"}
 	UserEmail = rt.Column[User, string]{Name: "email"}
 )
 
@@ -134,9 +134,9 @@ const (
 // built here can only enter MsRevenue queries; mixing models is a compile
 // error.
 var (
-	MsRevenueID   = rt.Column[MsRevenue, int32]{Name: "id"}
+	MsRevenueID   = rt.Column[MsRevenue, int]{Name: "id"}
 	MsRevenueOrg  = rt.Column[MsRevenue, string]{Name: "org"}
-	MsRevenueYear = rt.Column[MsRevenue, int32]{Name: "year"}
+	MsRevenueYear = rt.Column[MsRevenue, int]{Name: "year"}
 )
 
 // MsRevenueLimit caps how many rows MsRevenueQuery returns.
@@ -252,9 +252,9 @@ const (
 // built here can only enter MsUsage queries; mixing models is a compile
 // error.
 var (
-	MsUsageID   = rt.Column[MsUsage, int32]{Name: "id"}
+	MsUsageID   = rt.Column[MsUsage, int]{Name: "id"}
 	MsUsageOrg  = rt.Column[MsUsage, string]{Name: "org"}
-	MsUsageYear = rt.Column[MsUsage, int32]{Name: "year"}
+	MsUsageYear = rt.Column[MsUsage, int]{Name: "year"}
 )
 
 // MsUsageLimit caps how many rows MsUsageQuery returns.

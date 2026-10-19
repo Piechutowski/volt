@@ -2,7 +2,7 @@
 package app
 
 Table posts {
-	id integer [pk]
+	id int [pk]
 }
 
 // model: is not a setting — the declaration names the model.

@@ -149,7 +149,7 @@ func (e *dynEmitter) header() {
 	sort.Strings(paths)
 	e.out.WriteString("\nimport (\n")
 	for _, p := range paths {
-		fmt.Fprintf(&e.out, "\t%q\n", p)
+		fmt.Fprintf(&e.out, "\t%s\n", importDecl(p))
 	}
 	e.out.WriteString(")\n\n")
 }

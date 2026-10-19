@@ -9,9 +9,10 @@ says otherwise. A hypothesis binds nothing.
 
 ## H1 — How much DBML compatibility is worth keeping
 
-Today the schema core is DBML minus file imports, so a core-only file
-pastes into dbdiagram.io. Unsettled: whether that keeps paying for
-itself. Schemas (`auth.users`, the implicit `public`) are the next
+Today the schema core is DBML's syntax minus file imports and minus
+DBML's type names, so a core-only file pastes into dbdiagram.io only
+after its types are rewritten. Unsettled: whether what remains keeps
+paying for itself. Schemas (`auth.users`, the implicit `public`) are the next
 candidate cut, since SQLite has none and packages already namespace;
 the presentation constructs (colors, TableGroup, DiagramView, sticky
 notes) are the one after, once a Volt-owned diagram tool exists.

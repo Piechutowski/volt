@@ -1,7 +1,7 @@
 // spec: §indexes — multiple indexes/checks blocks per body; contents accumulate
 Table t {
   id int
-  name varchar
+  name string
   indexes { id }
   checks { `id > 0` }
   indexes { name }

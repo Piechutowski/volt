@@ -35,6 +35,11 @@ func (c *checker) declsCheck(f *ast.File) {
 			c.viewCheck(d)
 		case *ast.Records:
 			c.recordsCheck(d, true)
+			if d.Table != nil {
+				if ti := c.info.byTable[canonKey(d.Table)]; ti != nil {
+					c.recordsTypeCheck(ti, d)
+				}
+			}
 		}
 	}
 }

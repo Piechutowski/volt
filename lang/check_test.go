@@ -53,13 +53,13 @@ var blog = map[string]string{
 	"db/schema.volt": `package db
 
 Table users {
-	id    integer [pk, increment]
-	email text    [not null, unique]
+	id    int [pk, increment]
+	email string    [not null, unique]
 }
 
 Table posts {
-	id    integer [pk, increment]
-	title text    [not null]
+	id    int [pk, increment]
+	title string    [not null]
 }
 `,
 	"app/routes.volt": `package app
@@ -84,7 +84,7 @@ Scope / [pipe: api, error_handler: Errors] {
 	resources db.users [only: (index, show, create)]
 
 	get /files/:path...       Files.Serve
-	get /users/:id(int32)/avatar  Users.Avatar
+	get /users/:id(int)/avatar  Users.Avatar
 }
 `,
 }
@@ -128,8 +128,8 @@ func TestReferenceProject(t *testing.T) {
 	if show == nil {
 		t.Fatal("resources show route missing")
 	}
-	if show.Params[0].Type != TInt32 {
-		t.Errorf("model-inferred key type = %v, want int32 (integer pk)", show.Params[0].Type)
+	if show.Params[0].Type != TInt {
+		t.Errorf("model-inferred key type = %v, want int (integer pk)", show.Params[0].Type)
 	}
 	if show.Controller != "Users" || show.Action != "Show" || show.HelperName != "User" {
 		t.Errorf("show route wrong: %+v", show)
@@ -139,7 +139,7 @@ func TestReferenceProject(t *testing.T) {
 		t.Errorf("wildcard route wrong: %+v", wild)
 	}
 	avatar := byPattern["GET /users/{id}/avatar"]
-	if avatar == nil || avatar.Params[0].Type != TInt32 {
+	if avatar == nil || avatar.Params[0].Type != TInt {
 		t.Errorf("typed param route wrong: %+v", avatar)
 	}
 
@@ -156,7 +156,7 @@ func TestReferenceProject(t *testing.T) {
 	if users == nil {
 		t.Fatal("Users controller missing")
 	}
-	if a := users.Action("Show"); a == nil || len(a.Params) != 1 || a.Params[0].Type != TInt32 {
+	if a := users.Action("Show"); a == nil || len(a.Params) != 1 || a.Params[0].Type != TInt {
 		t.Errorf("Users.Show signature wrong: %+v", users)
 	}
 	if a := users.Action("Index"); a == nil || len(a.Params) != 0 {
@@ -170,7 +170,7 @@ func TestUpdateSpansPatchAndPut(t *testing.T) {
 		"app/r.volt": `package app
 
 Table users {
-	id integer [pk]
+	id int [pk]
 }
 
 Scope / {
@@ -203,7 +203,7 @@ func TestResourcesParamExcept(t *testing.T) {
 		"app/r.volt": `package app
 
 Table posts {
-	id integer [pk]
+	id int [pk]
 }
 
 Scope / {
@@ -227,8 +227,8 @@ Scope / {
 			if p.Name != "slug" {
 				t.Errorf("param: rename not applied on %s: %q", r.Pattern, p.Name)
 			}
-			if p.Type != TInt32 {
-				t.Errorf("key type = %v on %s, want int32 from the pk (§table-resolution)", p.Type, r.Pattern)
+			if p.Type != TInt {
+				t.Errorf("key type = %v on %s, want int from the pk (§table-resolution)", p.Type, r.Pattern)
 			}
 		}
 		if strings.Contains(r.Pattern, "{") && !strings.Contains(r.Pattern, "{slug}") {
@@ -240,13 +240,13 @@ Scope / {
 func TestResourcesSingularOverride(t *testing.T) {
 	_, diags := project(t, map[string]string{
 		"go.mod":     modFile,
-		"app/r.volt": "package app\n\nTable posty {\n\tid integer [pk]\n}\n\nScope / {\n\tresources posty\n}\n",
+		"app/r.volt": "package app\n\nTable posty {\n\tid int [pk]\n}\n\nScope / {\n\tresources posty\n}\n",
 	})
 	wantError(t, diags, "set the singular explicitly")
 
 	pr, diags := project(t, map[string]string{
 		"go.mod":     modFile,
-		"app/r.volt": "package app\n\nTable posty {\n\tid integer [pk]\n}\n\nScope / {\n\tresources posty [singular: post]\n}\n",
+		"app/r.volt": "package app\n\nTable posty {\n\tid int [pk]\n}\n\nScope / {\n\tresources posty [singular: post]\n}\n",
 	})
 	wantClean(t, diags)
 	helpers := map[string]bool{}
@@ -265,7 +265,7 @@ func TestResourcesSingularOverride(t *testing.T) {
 func TestResourcesNamesTable(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod":         modFile,
-		"db/schema.volt": "package db\n\nTable posty [model: 'Post'] {\n\tid integer [pk]\n}\n",
+		"db/schema.volt": "package db\n\nTable posty [model: 'Post'] {\n\tid int [pk]\n}\n",
 		"app/r.volt":     "package app\nimport (\n\tdb\n)\nScope / {\n\tresources db.posty\n}\n",
 	})
 	wantClean(t, diags)
@@ -277,8 +277,8 @@ func TestResourcesNamesTable(t *testing.T) {
 			t.Errorf("pattern %q should use the table name", r.Pattern)
 		}
 		for _, p := range r.Params {
-			if p.Type != TInt32 {
-				t.Errorf("key type = %v on %s, want int32", p.Type, r.Pattern)
+			if p.Type != TInt {
+				t.Errorf("key type = %v on %s, want int", p.Type, r.Pattern)
 			}
 		}
 		if r.HelperName != "" {
@@ -298,13 +298,13 @@ func TestResourcesNamesTable(t *testing.T) {
 func TestResourcesRequireDeclaredTable(t *testing.T) {
 	_, diags := project(t, map[string]string{
 		"go.mod":     modFile,
-		"app/r.volt": "package app\n\nTable posts {\n\tid integer [pk]\n}\n\nScope / {\n\tresources ghosts\n}\n",
+		"app/r.volt": "package app\n\nTable posts {\n\tid int [pk]\n}\n\nScope / {\n\tresources ghosts\n}\n",
 	})
 	wantError(t, diags, `no table "ghosts" in package "app"`)
 
 	_, diags = project(t, map[string]string{
 		"go.mod":     modFile,
-		"app/r.volt": "package app\n\nTable posts {\n\tid integer [pk]\n}\n\nScope / {\n\tresources Post\n}\n",
+		"app/r.volt": "package app\n\nTable posts {\n\tid int [pk]\n}\n\nScope / {\n\tresources Post\n}\n",
 	})
 	wantError(t, diags, `is the model of table "posts"`)
 }
@@ -400,15 +400,15 @@ func TestErrors(t *testing.T) {
 		}, "cannot import itself"},
 		{"unused import", map[string]string{
 			"go.mod":     modFile,
-			"db/s.volt":  "package db\nTable users { id integer [pk] }\n",
+			"db/s.volt":  "package db\nTable users { id int [pk] }\n",
 			"app/r.volt": "package app\nimport (\n\tdb\n)\n",
 		}, "imported and not used"},
 		{"import cycle", map[string]string{
 			"go.mod":    modFile,
 			"a/a.volt":  "package a\nimport (\n\tb\n)\nScope / { resources b.users }\n",
 			"b/b.volt":  "package b\nimport (\n\ta\n)\nScope /b { resources a.users }\n",
-			"a/t.volt":  "package a\nTable users { id integer [pk] }\n",
-			"b/t2.volt": "package b\nTable users { id integer [pk] }\n",
+			"a/t.volt":  "package a\nTable users { id int [pk] }\n",
+			"b/t2.volt": "package b\nTable users { id int [pk] }\n",
 		}, "import cycle"},
 		{"duplicate route", map[string]string{
 			"go.mod":     modFile,
@@ -420,7 +420,7 @@ func TestErrors(t *testing.T) {
 		}, "already produced by the route"},
 		{"signature conflict", map[string]string{
 			"go.mod":     modFile,
-			"app/r.volt": "package app\nScope / {\n\tget /a/:id(int64) X.Show\n\tget /b/:id(int32) X.Show\n}\n",
+			"app/r.volt": "package app\nScope / {\n\tget /a/:id(int) X.Show\n\tget /b/:id(string) X.Show\n}\n",
 		}, "different parameter signatures"},
 		{"wildcard not last", map[string]string{
 			"go.mod":     modFile,
@@ -444,20 +444,20 @@ func TestErrors(t *testing.T) {
 		}, "duplicate path parameter"},
 		{"unknown table", map[string]string{
 			"go.mod":     modFile,
-			"db/s.volt":  "package db\n\nTable users {\n\tid integer [pk]\n}\n",
+			"db/s.volt":  "package db\n\nTable users {\n\tid int [pk]\n}\n",
 			"app/r.volt": "package app\nimport (\n\tdb\n)\nScope / {\n\tresources db.nope\n}\n",
 		}, "no table"},
 		{"table name case", map[string]string{
 			"go.mod":     modFile,
-			"app/r.volt": "package app\n\nTable posts {\n\tid integer [pk]\n}\n\nScope / {\n\tresources Posts\n}\n",
+			"app/r.volt": "package app\n\nTable posts {\n\tid int [pk]\n}\n\nScope / {\n\tresources Posts\n}\n",
 		}, "case-sensitive"},
 		{"only and except", map[string]string{
 			"go.mod":     modFile,
-			"app/r.volt": "package app\nTable users {\n\tid integer [pk]\n}\nScope / {\n\tresources users [only: (index), except: (show)]\n}\n",
+			"app/r.volt": "package app\nTable users {\n\tid int [pk]\n}\nScope / {\n\tresources users [only: (index), except: (show)]\n}\n",
 		}, "cannot be combined"},
 		{"unknown action", map[string]string{
 			"go.mod":     modFile,
-			"app/r.volt": "package app\nTable users {\n\tid integer [pk]\n}\nScope / {\n\tresources users [only: (browse)]\n}\n",
+			"app/r.volt": "package app\nTable users {\n\tid int [pk]\n}\nScope / {\n\tresources users [only: (browse)]\n}\n",
 		}, "unknown action"},
 		{"lowercase controller", map[string]string{
 			"go.mod":     modFile,
@@ -484,7 +484,7 @@ func TestFileLayoutIsInvisible(t *testing.T) {
 	one, d1 := project(t, map[string]string{
 		"go.mod": modFile,
 		"app/all.volt": `package app
-Table users { id integer [pk] }
+Table users { id int [pk] }
 Pipeline api { use volt.RequestID }
 Scope / [pipe: api] {
 	resources users
@@ -495,7 +495,7 @@ Scope / [pipe: api] {
 	wantClean(t, d1)
 	three, d3 := project(t, map[string]string{
 		"go.mod":       modFile,
-		"app/a_s.volt": "package app\nTable users { id integer [pk] }\n",
+		"app/a_s.volt": "package app\nTable users { id int [pk] }\n",
 		"app/b_p.volt": "package app\nPipeline api { use volt.RequestID }\n",
 		"app/c_r.volt": "package app\nScope / [pipe: api] {\n\tresources users\n\tget /about Home.About\n}\n",
 	})
@@ -515,9 +515,9 @@ Scope / [pipe: api] {
 func TestQueryRoutes(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod":         modFile,
-		"db/schema.volt": "package db\n\nTable users {\n\tid integer [pk, increment]\n\temail text [not null, unique]\n}\n\nSelect picked for users where id in :ids and email like :pat\n",
+		"db/schema.volt": "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string [not null, unique]\n}\n\nSelect picked for users where id in :ids and email like :pat\n",
 		"app/r.volt": "package app\n\nimport (\n\tdb\n)\n\nScope /api [name: api] {\n" +
-			"\tget /users/:id(int32) db.UserGet\n\tpost /users db.UserCreate\n\tget /picked db.UserPicked\n\tdelete /users/:id(int32) db.UserDelete\n}\n",
+			"\tget /users/:id(int) db.UserGet\n\tpost /users db.UserCreate\n\tget /picked db.UserPicked\n\tdelete /users/:id(int) db.UserDelete\n}\n",
 	})
 	wantClean(t, diags)
 	app := pr.Packages["app"]
@@ -528,8 +528,8 @@ func TestQueryRoutes(t *testing.T) {
 	if get == nil || get.Field != "DB" || get.Import != "blog/db" || get.Result != "User" || get.Many || get.Status != 200 {
 		t.Errorf("UserGet ref = %+v", get)
 	}
-	if len(get.Params) != 1 || get.Params[0].Source != FromPath || get.Params[0].GoType != "int32" {
-		t.Errorf("UserGet params = %+v, want id from the path as int32", get.Params)
+	if len(get.Params) != 1 || get.Params[0].Source != FromPath || get.Params[0].GoType != "int" {
+		t.Errorf("UserGet params = %+v, want id from the path as int", get.Params)
 	}
 	if app.Routes[0].HelperName != "APIUserGet" {
 		t.Errorf("helper = %q, want APIUserGet", app.Routes[0].HelperName)
@@ -542,7 +542,7 @@ func TestQueryRoutes(t *testing.T) {
 		t.Errorf("a write has no helper, got %q", app.Routes[1].HelperName)
 	}
 	picked := app.Routes[2].Query
-	if !picked.Many || len(picked.Params) != 2 || picked.Params[0].Source != FromList || picked.Params[0].GoType != "[]int32" ||
+	if !picked.Many || len(picked.Params) != 2 || picked.Params[0].Source != FromList || picked.Params[0].GoType != "[]int" ||
 		picked.Params[1].Source != FromQuery || picked.Params[1].GoType != "string" {
 		t.Errorf("UserPicked ref = %+v", picked)
 	}
@@ -553,14 +553,14 @@ func TestQueryRoutes(t *testing.T) {
 }
 
 func TestQueryRouteErrors(t *testing.T) {
-	schema := "package db\n\nTable users {\n\tid integer [pk, increment]\n\temail text [not null]\n}\n\nTable notes {\n\tbody text [not null]\n}\n\nSelect picked for users where id in :ids\n"
+	schema := "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string [not null]\n}\n\nTable notes {\n\tbody string [not null]\n}\n\nSelect picked for users where id in :ids\n"
 	cases := []struct{ name, route, want string }{
 		{"unknown", "get /x db.UserFetch", "no generated query db.UserFetch"},
 		{"case hint", "get /x db.userget", `did you mean "UserGet"`},
-		{"no pk", "get /x/:id(int32) db.NoteGet", "no generated query db.NoteGet"},
-		{"path type", "get /x/:id(int64) db.UserGet", "spell it :id(int32)"},
+		{"no pk", "get /x/:id(int) db.NoteGet", "no generated query db.NoteGet"},
+		{"path type", "get /x/:id(string) db.UserGet", "spell it :id(int)"},
 		{"body verb", "get /x db.UserCreate", "route it with post, put or patch"},
-		{"extra path param", "get /x/:n(int32) db.UserList", `path parameter "n" is not a parameter of db.UserList`},
+		{"extra path param", "get /x/:n(int) db.UserList", `path parameter "n" is not a parameter of db.UserList`},
 		{"list in path", "get /x/:ids db.UserPicked", "cannot be a path parameter"},
 		{"wildcard", "get /x/:id... db.UserGet", "cannot be a wildcard"},
 		{"not a data package", "get /x app2.Thing", "declares no tables"},
@@ -583,7 +583,7 @@ func TestQueryRouteErrors(t *testing.T) {
 }
 
 func TestDatasetExpansion(t *testing.T) {
-	schema := "package db\n\nTable ms_revenue {\n\tid integer [pk]\n\tyear integer [not null]\n}\n\nTable ms_usage {\n\tid integer [pk]\n\tyear integer [not null]\n}\n\nTable ms_notes {\n\tid integer [pk]\n\tyear integer [not null]\n}\n\nGroup series {\n\tms_revenue\n\tms_usage\n\tms_notes\n}\n\nSelect browse for series where year = :year\n"
+	schema := "package db\n\nTable ms_revenue {\n\tid int [pk]\n\tyear int [not null]\n}\n\nTable ms_usage {\n\tid int [pk]\n\tyear int [not null]\n}\n\nTable ms_notes {\n\tid int [pk]\n\tyear int [not null]\n}\n\nGroup series {\n\tms_revenue\n\tms_usage\n\tms_notes\n}\n\nSelect browse for series where year = :year\n"
 	pr, diags := project(t, map[string]string{
 		"go.mod":         modFile,
 		"db/schema.volt": schema,
@@ -601,7 +601,7 @@ func TestDatasetExpansion(t *testing.T) {
 	if routes[1].Pattern != "/ms/usage" || routes[1].Query.Method != "MsUsageBrowse" {
 		t.Errorf("second route = %+v", routes[1])
 	}
-	if p := routes[0].Query.Params; len(p) != 1 || p[0].Source != FromQuery || p[0].GoType != "int32" {
+	if p := routes[0].Query.Params; len(p) != 1 || p[0].Source != FromQuery || p[0].GoType != "int" {
 		t.Errorf("params = %+v", p)
 	}
 

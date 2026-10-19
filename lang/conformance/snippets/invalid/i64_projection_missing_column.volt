@@ -2,14 +2,14 @@
 package db
 
 Table page_views {
-  id integer [pk]
-  site varchar [not null]
-  hits integer [not null]
+  id int [pk]
+  site string [not null]
+  hits int [not null]
 }
 
 Table link_clicks {
-  id integer [pk]
-  site varchar [not null]
+  id int [pk]
+  site string [not null]
 }
 
 Group metrics {

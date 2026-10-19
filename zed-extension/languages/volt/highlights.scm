@@ -22,6 +22,7 @@
   "Table"
   "TablePartial"
   "Enum"
+  "Type"
   "Ref"
   "TableGroup"
   "Note"

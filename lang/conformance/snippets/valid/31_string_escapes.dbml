@@ -1,7 +1,7 @@
 // spec: §escape-sequences — escape sequences including \uHHHH and unknown escapes
 Table t {
-  a varchar [note: 'tab\there']
-  b varchar [note: 'unicode A char']
-  c varchar [note: 'unknown \q escape yields q']
-  d varchar [default: 'it\'s escaped']
+  a string [note: 'tab\there']
+  b string [note: 'unicode A char']
+  c string [note: 'unknown \q escape yields q']
+  d string [default: 'it\'s escaped']
 }

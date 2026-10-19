@@ -2,8 +2,8 @@
 package app
 
 Table pairs {
-	a integer
-	b integer
+	a int
+	b int
 	Indexes { (a, b) [pk] }
 }
 

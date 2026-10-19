@@ -25,7 +25,7 @@ func voltProject(t *testing.T, files map[string]string) string {
 func TestVoltProjectDiagnostics(t *testing.T) {
 	root := voltProject(t, map[string]string{
 		"go.mod":          "module lsptest\n",
-		"db/schema.volt":  "package db\n\nTable users {\n\tid integer [pk]\n}\n",
+		"db/schema.volt":  "package db\n\nTable users {\n\tid int [pk]\n}\n",
 		"app/routes.volt": "package app\n\nScope / {\n\tget / Home.Index\n}\n",
 	})
 	path := filepath.Join(root, "app", "routes.volt")
@@ -98,7 +98,7 @@ func TestVoltProjectSkipsForeignFiles(t *testing.T) {
 func TestVoltProjectEncodedURI(t *testing.T) {
 	root := voltProject(t, map[string]string{
 		"go.mod":             "module lsptest\n",
-		"db/schema.volt":     "package db\n\nTable users {\n\tid integer [pk]\n}\n",
+		"db/schema.volt":     "package db\n\nTable users {\n\tid int [pk]\n}\n",
 		"app/my routes.volt": "package app\n\nScope / {\n\tget / Home.Index\n}\n",
 	})
 	path := filepath.Join(root, "app", "my routes.volt")
@@ -165,7 +165,7 @@ func TestVoltModDiagnosticsSurface(t *testing.T) {
 func TestVoltSettingsGatedByContext(t *testing.T) {
 	for _, src := range []string{
 		"Table t {\n\tdelete bool [\n}\n",
-		"Table t {\n\tscope varchar [\n}\n",
+		"Table t {\n\tscope string [\n}\n",
 	} {
 		d := doc(t, src)
 		pos := posOf(t, src, "[", 0)

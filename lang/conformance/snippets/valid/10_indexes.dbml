@@ -1,9 +1,9 @@
 // spec: §indexes — all four index-key forms and every index setting
 Table bookings {
-  id integer
-  country varchar
-  booking_date date
-  created_at timestamp
+  id int
+  country string
+  booking_date time.Time
+  created_at time.Time
 
   indexes {
     (id, country) [pk]

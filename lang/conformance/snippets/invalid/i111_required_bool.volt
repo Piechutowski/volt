@@ -3,6 +3,6 @@
 package db
 
 Table accounts {
-  id     integer [pk]
-  active boolean [not null, required]
+  id     int [pk]
+  active bool [not null, required]
 }

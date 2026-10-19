@@ -24,7 +24,7 @@ Table account_statuses {
   id int [pk]
 }
 Table order_status { //WANT modelname
-  code varchar [pk]
+  code string [pk]
 }
 Table bonus { //WANT modelname
   id int [pk]

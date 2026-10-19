@@ -3,6 +3,6 @@
 package db
 
 Table accounts {
-  id integer [pk]
-  at timestamp [not null, required]
+  id int [pk]
+  at time.Time [not null, required]
 }

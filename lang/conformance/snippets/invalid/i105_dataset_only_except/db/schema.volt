@@ -2,21 +2,21 @@
 package db
 
 Table ms_revenue {
-  id integer [pk, increment]
-  org text [not null]
-  year integer [not null]
+  id int [pk, increment]
+  org string [not null]
+  year int [not null]
 }
 
 Table ms_usage {
-  id integer [pk, increment]
-  org text [not null]
-  year integer [not null]
+  id int [pk, increment]
+  org string [not null]
+  year int [not null]
 }
 
 Table ms_notes {
-  id integer [pk, increment]
-  org text [not null]
-  year integer [not null]
+  id int [pk, increment]
+  org string [not null]
+  year int [not null]
 }
 
 Group series {

@@ -3,7 +3,7 @@ Enum used_status { a }
 Enum orphan_status { a } //WANT unusedenum
 Enum core.kind { widget }
 
-TablePartial used_partial { created_at timestamp }
+TablePartial used_partial { created_at time.Time }
 TablePartial orphan_partial { x int } //WANT unusedpartial
 
 Table users as U {

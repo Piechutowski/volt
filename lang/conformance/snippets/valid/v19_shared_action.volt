@@ -3,6 +3,6 @@
 package app
 
 Scope / {
-	get  /users/:id(int64)  Users.Show
-	post /users/:id(int64)  Users.Show [name: showSubmit]
+	get  /users/:id(int)  Users.Show
+	post /users/:id(int)  Users.Show [name: showSubmit]
 }

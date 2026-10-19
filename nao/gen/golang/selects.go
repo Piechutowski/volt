@@ -98,7 +98,7 @@ func (pl *Plan) Selects(fns []SelectFn, opts Options) ([]byte, error) {
 	sort.Strings(paths)
 	out.WriteString("import (\n")
 	for _, imp := range paths {
-		fmt.Fprintf(&out, "\t%q\n", imp)
+		fmt.Fprintf(&out, "\t%s\n", importDecl(imp))
 	}
 	out.WriteString(")\n\n")
 	out.WriteString(body.String())
@@ -146,9 +146,6 @@ func fieldImports(imports map[string]bool, goType string) {
 	}
 	if strings.Contains(goType, "time.Time") {
 		imports["time"] = true
-	}
-	if strings.Contains(goType, "json.RawMessage") {
-		imports["encoding/json"] = true
 	}
 }
 

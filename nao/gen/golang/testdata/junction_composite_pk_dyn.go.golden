@@ -18,7 +18,7 @@ const (
 // built here can only enter User queries; mixing models is a compile
 // error.
 var (
-	UserID = rt.Column[User, int64]{Name: "id"}
+	UserID = rt.Column[User, int]{Name: "id"}
 )
 
 // UserLimit caps how many rows UserQuery returns.
@@ -134,7 +134,7 @@ const (
 // built here can only enter Role queries; mixing models is a compile
 // error.
 var (
-	RoleID   = rt.Column[Role, int32]{Name: "id"}
+	RoleID   = rt.Column[Role, int]{Name: "id"}
 	RoleName = rt.Column[Role, string]{Name: "name"}
 )
 
@@ -251,8 +251,8 @@ const (
 // built here can only enter UserRole queries; mixing models is a compile
 // error.
 var (
-	UserRoleUserID    = rt.Column[UserRole, int64]{Name: "user_id"}
-	UserRoleRoleID    = rt.Column[UserRole, int32]{Name: "role_id"}
+	UserRoleUserID    = rt.Column[UserRole, int]{Name: "user_id"}
+	UserRoleRoleID    = rt.Column[UserRole, int]{Name: "role_id"}
 	UserRoleGrantedAt = rt.Column[UserRole, time.Time]{Name: "granted_at"}
 )
 

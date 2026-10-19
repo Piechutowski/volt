@@ -15,7 +15,7 @@ CREATE TABLE core_users (
   -- Quoted name with a space
   "full name" TEXT NOT NULL,
   precision_value REAL,
-  balance TEXT,
+  balance REAL,
   kind TEXT NOT NULL CHECK (kind IN ('read write', 'admin')),
   -- Column named like a Go keyword
   type TEXT,

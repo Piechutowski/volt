@@ -60,19 +60,19 @@ func (c *Client) NewUser(ctx context.Context) (*http.Response, error) {
 	return c.Raw(ctx, "GET", volt.URL("/users/new"))
 }
 
-// User calls GET /users/:id(int32) (Users.Show); the response is the caller's to read and close.
-func (c *Client) User(ctx context.Context, id int32) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(int64(id))))
+// User calls GET /users/:id(int) (Users.Show); the response is the caller's to read and close.
+func (c *Client) User(ctx context.Context, id int) (*http.Response, error) {
+	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)))
 }
 
-// EditUser calls GET /users/:id(int32)/edit (Users.Edit); the response is the caller's to read and close.
-func (c *Client) EditUser(ctx context.Context, id int32) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(int64(id))+"/edit"))
+// EditUser calls GET /users/:id(int)/edit (Users.Edit); the response is the caller's to read and close.
+func (c *Client) EditUser(ctx context.Context, id int) (*http.Response, error) {
+	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/edit"))
 }
 
-// Avatar calls GET /users/:id(int32)/avatar (Users.Avatar); the response is the caller's to read and close.
-func (c *Client) Avatar(ctx context.Context, id int32) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(int64(id))+"/avatar"))
+// Avatar calls GET /users/:id(int)/avatar (Users.Avatar); the response is the caller's to read and close.
+func (c *Client) Avatar(ctx context.Context, id int) (*http.Response, error) {
+	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/avatar"))
 }
 
 // Serve calls GET /files/:path... (Files.Serve); the response is the caller's to read and close.
@@ -87,11 +87,11 @@ func (c *Client) Tag(ctx context.Context, name string) (*http.Response, error) {
 
 // Page calls GET /pages/:num(int) (Pages.Show); the response is the caller's to read and close.
 func (c *Client) Page(ctx context.Context, num int) (*http.Response, error) {
-	return c.Raw(ctx, "GET", volt.URL("/pages/"+volt.SegInt(int64(num))))
+	return c.Raw(ctx, "GET", volt.URL("/pages/"+volt.SegInt(num)))
 }
 
-// Archive calls GET /archive/:stamp(int64) (Archive.Show); the response is the caller's to read and close.
-func (c *Client) Archive(ctx context.Context, stamp int64) (*http.Response, error) {
+// Archive calls GET /archive/:stamp(int) (Archive.Show); the response is the caller's to read and close.
+func (c *Client) Archive(ctx context.Context, stamp int) (*http.Response, error) {
 	return c.Raw(ctx, "GET", volt.URL("/archive/"+volt.SegInt(stamp)))
 }
 
@@ -102,10 +102,10 @@ func (c *Client) APIUserList(ctx context.Context) ([]db.User, error) {
 	return out, err
 }
 
-// APIUserGet calls GET /api/users/:id(int32) (db.UserGet).
-func (c *Client) APIUserGet(ctx context.Context, id int32) (db.User, error) {
+// APIUserGet calls GET /api/users/:id(int) (db.UserGet).
+func (c *Client) APIUserGet(ctx context.Context, id int) (db.User, error) {
 	var out db.User
-	err := c.Do(ctx, "GET", volt.URL("/api/users/"+volt.SegInt(int64(id))), nil, &out)
+	err := c.Do(ctx, "GET", volt.URL("/api/users/"+volt.SegInt(id)), nil, &out)
 	return out, err
 }
 
@@ -116,20 +116,20 @@ func (c *Client) APIUserCreate(ctx context.Context, arg db.UserCreateParams) (db
 	return out, err
 }
 
-// APIUserUpdate calls PATCH /api/users/:id(int32) (db.UserUpdate).
-func (c *Client) APIUserUpdate(ctx context.Context, id int32, arg db.UserUpdateParams) (db.User, error) {
+// APIUserUpdate calls PATCH /api/users/:id(int) (db.UserUpdate).
+func (c *Client) APIUserUpdate(ctx context.Context, id int, arg db.UserUpdateParams) (db.User, error) {
 	var out db.User
-	err := c.Do(ctx, "PATCH", volt.URL("/api/users/"+volt.SegInt(int64(id))), arg, &out)
+	err := c.Do(ctx, "PATCH", volt.URL("/api/users/"+volt.SegInt(id)), arg, &out)
 	return out, err
 }
 
-// APIUserDelete calls DELETE /api/users/:id(int32) (db.UserDelete).
-func (c *Client) APIUserDelete(ctx context.Context, id int32) error {
-	return c.Do(ctx, "DELETE", volt.URL("/api/users/"+volt.SegInt(int64(id))), nil, nil)
+// APIUserDelete calls DELETE /api/users/:id(int) (db.UserDelete).
+func (c *Client) APIUserDelete(ctx context.Context, id int) error {
+	return c.Do(ctx, "DELETE", volt.URL("/api/users/"+volt.SegInt(id)), nil, nil)
 }
 
 // APIUserPicked calls GET /api/picked (db.UserPicked).
-func (c *Client) APIUserPicked(ctx context.Context, ids []int32) ([]db.User, error) {
+func (c *Client) APIUserPicked(ctx context.Context, ids []int) ([]db.User, error) {
 	q := []volt.URLOption{}
 	for _, v := range ids {
 		q = append(q, volt.Query("ids", volt.FormatQuery(v)))
@@ -140,7 +140,7 @@ func (c *Client) APIUserPicked(ctx context.Context, ids []int32) ([]db.User, err
 }
 
 // MsRevenueBrowse calls GET /ms/revenue (db.MsRevenueBrowse).
-func (c *Client) MsRevenueBrowse(ctx context.Context, year int32) ([]db.MsRevenue, error) {
+func (c *Client) MsRevenueBrowse(ctx context.Context, year int) ([]db.MsRevenue, error) {
 	q := []volt.URLOption{volt.Query("year", volt.FormatQuery(year))}
 	var out []db.MsRevenue
 	err := c.Do(ctx, "GET", volt.URL("/ms/revenue", q...), nil, &out)
@@ -148,7 +148,7 @@ func (c *Client) MsRevenueBrowse(ctx context.Context, year int32) ([]db.MsRevenu
 }
 
 // MsUsageBrowse calls GET /ms/usage (db.MsUsageBrowse).
-func (c *Client) MsUsageBrowse(ctx context.Context, year int32) ([]db.MsUsage, error) {
+func (c *Client) MsUsageBrowse(ctx context.Context, year int) ([]db.MsUsage, error) {
 	q := []volt.URLOption{volt.Query("year", volt.FormatQuery(year))}
 	var out []db.MsUsage
 	err := c.Do(ctx, "GET", volt.URL("/ms/usage", q...), nil, &out)
@@ -169,23 +169,23 @@ func (c *Client) RefCreateUser(ctx context.Context, arg db.UserCreateParams) (db
 	return out, err
 }
 
-// RefUser calls GET /ref/users/:id(int32) (db.UserGet).
-func (c *Client) RefUser(ctx context.Context, id int32) (db.User, error) {
+// RefUser calls GET /ref/users/:id(int) (db.UserGet).
+func (c *Client) RefUser(ctx context.Context, id int) (db.User, error) {
 	var out db.User
-	err := c.Do(ctx, "GET", volt.URL("/ref/users/"+volt.SegInt(int64(id))), nil, &out)
+	err := c.Do(ctx, "GET", volt.URL("/ref/users/"+volt.SegInt(id)), nil, &out)
 	return out, err
 }
 
-// RefUpdateUser calls PATCH /ref/users/:id(int32) (db.UserUpdate).
-func (c *Client) RefUpdateUser(ctx context.Context, id int32, arg db.UserUpdateParams) (db.User, error) {
+// RefUpdateUser calls PATCH /ref/users/:id(int) (db.UserUpdate).
+func (c *Client) RefUpdateUser(ctx context.Context, id int, arg db.UserUpdateParams) (db.User, error) {
 	var out db.User
-	err := c.Do(ctx, "PATCH", volt.URL("/ref/users/"+volt.SegInt(int64(id))), arg, &out)
+	err := c.Do(ctx, "PATCH", volt.URL("/ref/users/"+volt.SegInt(id)), arg, &out)
 	return out, err
 }
 
-// RefDeleteUser calls DELETE /ref/users/:id(int32) (db.UserDelete).
-func (c *Client) RefDeleteUser(ctx context.Context, id int32) error {
-	return c.Do(ctx, "DELETE", volt.URL("/ref/users/"+volt.SegInt(int64(id))), nil, nil)
+// RefDeleteUser calls DELETE /ref/users/:id(int) (db.UserDelete).
+func (c *Client) RefDeleteUser(ctx context.Context, id int) error {
+	return c.Do(ctx, "DELETE", volt.URL("/ref/users/"+volt.SegInt(id)), nil, nil)
 }
 
 // Events subscribes to /events (§event-routes): every published event, reconnecting

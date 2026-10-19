@@ -38,7 +38,7 @@ func TestKeystrokeAllocationBudget(t *testing.T) {
 	}
 	path := filepath.Join(root, "schema.volt")
 	text := corpus.Files(spec)["schema.volt"]
-	anchor := "c002 text [not null]"
+	anchor := "c002 string [not null]"
 	if !strings.Contains(text, anchor) {
 		t.Fatal("anchor")
 	}

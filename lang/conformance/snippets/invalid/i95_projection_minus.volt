@@ -3,8 +3,8 @@
 package db
 
 Table page_views {
-  id integer [pk]
-  site text [not null]
+  id int [pk]
+  site string [not null]
 }
 
 Select public (* - site) for page_views

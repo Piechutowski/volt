@@ -3,8 +3,8 @@
 package db
 
 Table users {
-  id integer [pk]
-  email varchar [not null]
+  id int [pk]
+  email string [not null]
 
   checks {
     EmailValid(email)

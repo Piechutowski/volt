@@ -11,7 +11,7 @@ import (
 const pageViewRowsSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE (site = :site AND day = :day) ORDER BY day DESC, id ASC`
 
 // PageViewRows runs the "rows" select over page_views (spec §selects-over-groups).
-func (q *Queries) PageViewRows(ctx context.Context, site string, day int32) ([]PageView, error) {
+func (q *Queries) PageViewRows(ctx context.Context, site string, day int) ([]PageView, error) {
 	rows, err := q.db.QueryContext(ctx, pageViewRowsSQL, sql.Named("site", site), sql.Named("day", day))
 	if err != nil {
 		return nil, err
@@ -31,7 +31,7 @@ func (q *Queries) PageViewRows(ctx context.Context, site string, day int32) ([]P
 const linkClickRowsSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE (site = :site AND day = :day) ORDER BY day DESC, id ASC`
 
 // LinkClickRows runs the "rows" select over link_clicks (spec §selects-over-groups).
-func (q *Queries) LinkClickRows(ctx context.Context, site string, day int32) ([]LinkClick, error) {
+func (q *Queries) LinkClickRows(ctx context.Context, site string, day int) ([]LinkClick, error) {
 	rows, err := q.db.QueryContext(ctx, linkClickRowsSQL, sql.Named("site", site), sql.Named("day", day))
 	if err != nil {
 		return nil, err
@@ -51,7 +51,7 @@ func (q *Queries) LinkClickRows(ctx context.Context, site string, day int32) ([]
 const pageViewRecentSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE (site = :site AND day = :day) OR (day >= :from)`
 
 // PageViewRecent runs the "recent" select over page_views (spec §selects-over-groups).
-func (q *Queries) PageViewRecent(ctx context.Context, site string, day int32, from int32) ([]PageView, error) {
+func (q *Queries) PageViewRecent(ctx context.Context, site string, day int, from int) ([]PageView, error) {
 	rows, err := q.db.QueryContext(ctx, pageViewRecentSQL, sql.Named("site", site), sql.Named("day", day), sql.Named("from", from))
 	if err != nil {
 		return nil, err
@@ -71,7 +71,7 @@ func (q *Queries) PageViewRecent(ctx context.Context, site string, day int32, fr
 const linkClickRecentSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE (site = :site AND day = :day) OR (day >= :from)`
 
 // LinkClickRecent runs the "recent" select over link_clicks (spec §selects-over-groups).
-func (q *Queries) LinkClickRecent(ctx context.Context, site string, day int32, from int32) ([]LinkClick, error) {
+func (q *Queries) LinkClickRecent(ctx context.Context, site string, day int, from int) ([]LinkClick, error) {
 	rows, err := q.db.QueryContext(ctx, linkClickRecentSQL, sql.Named("site", site), sql.Named("day", day), sql.Named("from", from))
 	if err != nil {
 		return nil, err
@@ -132,7 +132,7 @@ func (q *Queries) LinkClickOnSites(ctx context.Context, sites []string) ([]LinkC
 // one wire type, every member of the target a source.
 type Summary struct {
 	Site string `db:"site" json:"site"`
-	Day  int32  `db:"day" json:"day"`
+	Day  int    `db:"day" json:"day"`
 }
 
 func summaryScan(r rowScanner) (Summary, error) {
@@ -144,7 +144,7 @@ func summaryScan(r rowScanner) (Summary, error) {
 const pageViewSummarySQL = `SELECT "site", "day" FROM "page_views" WHERE (site = :site AND day = :day)`
 
 // PageViewSummary runs the "summary" select over page_views (spec §selects-over-groups).
-func (q *Queries) PageViewSummary(ctx context.Context, site string, day int32) ([]Summary, error) {
+func (q *Queries) PageViewSummary(ctx context.Context, site string, day int) ([]Summary, error) {
 	rows, err := q.db.QueryContext(ctx, pageViewSummarySQL, sql.Named("site", site), sql.Named("day", day))
 	if err != nil {
 		return nil, err
@@ -164,7 +164,7 @@ func (q *Queries) PageViewSummary(ctx context.Context, site string, day int32) (
 const linkClickSummarySQL = `SELECT "site", "day" FROM "link_clicks" WHERE (site = :site AND day = :day)`
 
 // LinkClickSummary runs the "summary" select over link_clicks (spec §selects-over-groups).
-func (q *Queries) LinkClickSummary(ctx context.Context, site string, day int32) ([]Summary, error) {
+func (q *Queries) LinkClickSummary(ctx context.Context, site string, day int) ([]Summary, error) {
 	rows, err := q.db.QueryContext(ctx, linkClickSummarySQL, sql.Named("site", site), sql.Named("day", day))
 	if err != nil {
 		return nil, err
@@ -184,9 +184,9 @@ func (q *Queries) LinkClickSummary(ctx context.Context, site string, day int32) 
 // LinkClickPublic is LinkClick minus (target) — a struct derivative of select "public",
 // every kept field copied verbatim (spec §selects-over-groups).
 type LinkClickPublic struct {
-	ID   int32  `db:"id" json:"id"`
+	ID   int    `db:"id" json:"id"`
 	Site string `db:"site" json:"site"`
-	Day  int32  `db:"day" json:"day"`
+	Day  int    `db:"day" json:"day"`
 }
 
 func linkClickPublicScan(r rowScanner) (LinkClickPublic, error) {

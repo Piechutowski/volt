@@ -253,6 +253,8 @@ func (d *Document) Hover(pos protocol.Position) *protocol.Hover {
 		md = d.columnHover(occ.ID)
 	case SymEnumValue:
 		md = d.enumValueHover(occ.ID)
+	case SymType:
+		md = d.typeHover(occ.ID.Name)
 	}
 	if md == "" {
 		return nil
@@ -303,6 +305,18 @@ func (d *Document) enumHover(key string) string {
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+func (d *Document) typeHover(key string) string {
+	td, ok := d.Index.Types[key]
+	if !ok {
+		return ""
+	}
+	md := "```volt\nType " + td.Key + " " + td.Decl.Storage.String()
+	if td.Path != "" {
+		md += " from '" + td.Path + "'"
+	}
+	return md + "\n```\n"
 }
 
 func (d *Document) partialHover(name string) string {

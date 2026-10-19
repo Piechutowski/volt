@@ -2,12 +2,12 @@
 package db
 
 Table ms_revenue {
-  id integer [pk]
-  org text [not null]
+  id int [pk]
+  org string [not null]
 }
 
 Table ms_meta {
-  id integer [pk]
+  id int [pk]
 }
 
 Group series {

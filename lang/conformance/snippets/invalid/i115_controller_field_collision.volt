@@ -3,8 +3,8 @@
 package app
 
 Table posts {
-  id    integer [pk, increment]
-  title text    [not null]
+  id    int [pk, increment]
+  title string    [not null]
 }
 
 Scope /api {

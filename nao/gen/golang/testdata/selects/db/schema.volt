@@ -4,10 +4,10 @@
 package db
 
 Table page_views {
-  id integer [pk, increment]
-  site varchar [not null]
-  day integer [not null]
-  hits integer [not null, default: 0]
+  id int [pk, increment]
+  site string [not null]
+  day int [not null]
+  hits int [not null, default: 0]
 
   checks {
     hits >= 0 [name: 'hits_positive']
@@ -15,10 +15,10 @@ Table page_views {
 }
 
 Table link_clicks {
-  id integer [pk, increment]
-  site varchar [not null]
-  day integer [not null]
-  target text [not null, default: '']
+  id int [pk, increment]
+  site string [not null]
+  day int [not null]
+  target string [not null, default: '']
 }
 
 Group metrics {

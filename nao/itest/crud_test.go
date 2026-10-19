@@ -1,5 +1,5 @@
 // Integration tests: the generated CRUD runs against a
-// real SQLite through a real database/sql driver — no mocks, no canned
+// real SQLite through a float64 database/sql driver — no mocks, no canned
 // rows. The driver is a test-only dependency; generated code and the rt
 // runtime stay driver-free.
 package itest
@@ -70,7 +70,7 @@ func TestUserCRUD(t *testing.T) {
 	}
 
 	u2 := seedUser(t, q, "bob@example.com")
-	many, err := q.UserGetMany(ctx, []int32{u.ID, u2.ID, 999})
+	many, err := q.UserGetMany(ctx, []int{u.ID, u2.ID, 999})
 	if err != nil || len(many) != 2 {
 		t.Errorf("UserGetMany = %d rows, %v; want 2 (missing keys are not errors)", len(many), err)
 	}
@@ -123,7 +123,7 @@ func TestOrderDefaultsEnumsAndFKs(t *testing.T) {
 	_, q := newDB(t)
 	u := seedUser(t, q, "ann@example.com")
 
-	o, err := q.OrderCreate(ctx, OrderCreateParams{UserID: u.ID, Total: "19.99"})
+	o, err := q.OrderCreate(ctx, OrderCreateParams{UserID: u.ID, Total: 19.99})
 	if err != nil {
 		t.Fatalf("OrderCreate: %v", err)
 	}
@@ -133,8 +133,8 @@ func TestOrderDefaultsEnumsAndFKs(t *testing.T) {
 	if o.PlacedAt.Valid {
 		t.Errorf("placed_at should be NULL, got %+v", o.PlacedAt)
 	}
-	if o.Total != "19.99" {
-		t.Errorf("total = %q; decimals ride strings, never floats", o.Total)
+	if o.Total != 19.99 {
+		t.Errorf("total = %v, want 19.99", o.Total)
 	}
 
 	placed := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
@@ -152,7 +152,7 @@ func TestOrderDefaultsEnumsAndFKs(t *testing.T) {
 	}
 
 	var ce rt.ConstraintError
-	if _, err := q.OrderCreate(ctx, OrderCreateParams{UserID: 999, Total: "1.00"}); !errors.As(err, &ce) || ce.Kind != "foreign key" {
+	if _, err := q.OrderCreate(ctx, OrderCreateParams{UserID: 999, Total: 1.00}); !errors.As(err, &ce) || ce.Kind != "foreign key" {
 		t.Errorf("dangling user_id = %v; want a foreign key ConstraintError", err)
 	}
 	if _, err := q.OrderUpdate(ctx, o.ID, OrderUpdateParams{UserID: o.UserID, Status: "teleported", Total: o.Total}); err == nil {

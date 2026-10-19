@@ -36,13 +36,7 @@ var (
 		"dataset":   {"strip: ", "only: (", "except: ("},
 	}
 
-	builtinTypes = []string{
-		"int", "integer", "bigint", "smallint", "serial", "bigserial",
-		"varchar", "char", "text", "bool", "boolean", "uuid",
-		"timestamp", "timestamptz", "date", "time", "interval",
-		"decimal", "numeric", "float", "double", "real",
-		"json", "jsonb", "bytea", "blob",
-	}
+	builtinTypes = check.Builtins
 
 	refActionValues = []string{"cascade", "restrict", "set null", "set default", "no action"}
 

@@ -2,25 +2,25 @@
 package db
 
 Table ms_revenue {
-  id integer [pk]
-  org text [not null]
-  year integer [not null]
+  id int [pk]
+  org string [not null]
+  year int [not null]
 }
 
 Table ms_usage {
-  id integer [pk]
-  org text [not null]
-  year integer [not null]
+  id int [pk]
+  org string [not null]
+  year int [not null]
 }
 
 Table ms_dict {
-  code text [pk]
-  title text [not null]
+  code string [pk]
+  title string [not null]
 }
 
 Table ms_notes {
-  id integer [pk]
-  body text [not null]
+  id int [pk]
+  body string [not null]
 }
 
 TableGroup Metrics [color: #32a891] {

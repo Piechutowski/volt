@@ -79,6 +79,7 @@ module.exports = grammar({
         $.table_definition,
         $.table_partial_definition,
         $.enum_definition,
+        $.type_definition,
         $.ref_definition,
         $.table_group_definition,
         $.sticky_note_definition,
@@ -151,17 +152,9 @@ module.exports = grammar({
 
     column_type: ($) =>
       seq(
+        optional(seq('[', ']')),
         optional(seq(field('schema', alias($._name, $.schema_name)), '.')),
         field('name', alias($._name, $.type_name)),
-        optional(field('arguments', $.type_arguments)),
-      ),
-
-    type_arguments: ($) =>
-      seq(
-        token.immediate('('),
-        choice($.number, $._name),
-        repeat(seq(',', choice($.number, $._name))),
-        ')',
       ),
 
     // Bare `pk` / `unique` between type and settings (§columns, legacy).
@@ -202,6 +195,16 @@ module.exports = grammar({
       seq(
         field('name', $._name),
         optional(field('settings', $.settings_list)),
+      ),
+
+    // ==================== Type (§types) ====================
+
+    type_definition: ($) =>
+      seq(
+        kw('Type'),
+        field('name', $.column_type),
+        field('storage', $.column_type),
+        optional(seq(kw('from'), field('path', $.string))),
       ),
 
     // ==================== Ref (§relationships-ref) ====================

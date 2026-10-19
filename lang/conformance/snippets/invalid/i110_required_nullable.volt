@@ -3,6 +3,6 @@
 package db
 
 Table accounts {
-  id    integer [pk]
-  email varchar [required]
+  id    int [pk]
+  email string [required]
 }

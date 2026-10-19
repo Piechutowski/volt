@@ -44,7 +44,7 @@ func TestClientQueryRoutes(t *testing.T) {
 		if err != nil || up.Email != "dos@example.com" {
 			t.Fatalf("%v: update = %+v, %v", f, up, err)
 		}
-		picked, err := c.APIUserPicked(ctx, []int32{made.ID, 1})
+		picked, err := c.APIUserPicked(ctx, []int{made.ID, 1})
 		if err != nil || len(picked) != 2 || picked[0].ID != 1 {
 			t.Fatalf("%v: picked = %+v, %v", f, picked, err)
 		}
@@ -93,9 +93,9 @@ func TestEventRouteStreams(t *testing.T) {
 	b := c.Events(ctx)
 	type change struct {
 		Table string
-		IDs   []int32
+		IDs   []int
 	}
-	if err := broker.Publish("table.changed", change{"users", []int32{1}}); err != nil {
+	if err := broker.Publish("table.changed", change{"users", []int{1}}); err != nil {
 		t.Fatal(err)
 	}
 	for name, ch := range map[string]<-chan volt.Event{"a": a, "b": b} {

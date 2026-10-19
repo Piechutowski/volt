@@ -9,8 +9,8 @@ import (
 )
 
 const projSchema = "package db\n\n" +
-	"Table page_views {\n\tid integer [pk, increment]\n\tsite varchar [not null]\n\tday integer [not null]\n\thits integer [not null, default: 0]\n}\n\n" +
-	"Table link_clicks {\n\tid integer [pk, increment]\n\tsite varchar [not null]\n\tday integer [not null]\n\ttarget text [not null, default: '']\n}\n\n" +
+	"Table page_views {\n\tid int [pk, increment]\n\tsite string [not null]\n\tday int [not null]\n\thits int [not null, default: 0]\n}\n\n" +
+	"Table link_clicks {\n\tid int [pk, increment]\n\tsite string [not null]\n\tday int [not null]\n\ttarget string [not null, default: '']\n}\n\n" +
 	"Group metrics {\n\tpage_views\n\tlink_clicks\n}\n\n" +
 	"Select summary (site, day) for metrics where day >= :from\n" +
 	"Select public (* \\ site) for link_clicks\n" +
@@ -34,11 +34,11 @@ func TestSelectHoverSharedRowType(t *testing.T) {
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
 	for _, want := range []string{
-		"PageViewSummary(ctx context.Context, from int32) ([]Summary, error)",
-		"LinkClickSummary(ctx context.Context, from int32) ([]Summary, error)",
+		"PageViewSummary(ctx context.Context, from int) ([]Summary, error)",
+		"LinkClickSummary(ctx context.Context, from int) ([]Summary, error)",
 		"type Summary struct",
 		"Site string",
-		"Day int32",
+		"Day int",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover missing %q:\n%s", want, md)
@@ -84,7 +84,7 @@ func TestSelectHoverListParam(t *testing.T) {
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
 	for _, want := range []string{
-		"PageViewChosen(ctx context.Context, sites []string, days []int32) ([]PageView, error)",
+		"PageViewChosen(ctx context.Context, sites []string, days []int) ([]PageView, error)",
 		"json_each(:sites)",
 	} {
 		if !strings.Contains(md, want) {

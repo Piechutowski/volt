@@ -142,16 +142,6 @@
     "type": "column_type",
     "named": true,
     "fields": {
-      "arguments": {
-        "multiple": false,
-        "required": false,
-        "types": [
-          {
-            "type": "type_arguments",
-            "named": true
-          }
-        ]
-      },
       "name": {
         "multiple": false,
         "required": true,
@@ -1895,6 +1885,10 @@
         {
           "type": "table_partial_definition",
           "named": true
+        },
+        {
+          "type": "type_definition",
+          "named": true
         }
       ]
     }
@@ -2163,26 +2157,39 @@
     }
   },
   {
-    "type": "type_arguments",
+    "type": "type_definition",
     "named": true,
-    "fields": {},
-    "children": {
-      "multiple": true,
-      "required": true,
-      "types": [
-        {
-          "type": "identifier",
-          "named": true
-        },
-        {
-          "type": "number",
-          "named": true
-        },
-        {
-          "type": "quoted_identifier",
-          "named": true
-        }
-      ]
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "column_type",
+            "named": true
+          }
+        ]
+      },
+      "path": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      },
+      "storage": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "column_type",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
@@ -2423,6 +2430,10 @@
   },
   {
     "type": "Tables",
+    "named": false
+  },
+  {
+    "type": "Type",
     "named": false
   },
   {

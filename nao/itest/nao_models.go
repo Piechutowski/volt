@@ -6,6 +6,8 @@
 package itest
 
 import (
+	"database/sql"
+	"database/sql/driver"
 	"github.com/Piechutowski/volt/nao/rt"
 	"time"
 )
@@ -20,9 +22,14 @@ const (
 	EOrderStatusDelivered EOrderStatus = "delivered"
 )
 
+var (
+	_ sql.Scanner   = (*Money)(nil)
+	_ driver.Valuer = (*Money)(nil)
+)
+
 // User is a row of the users table.
 type User struct {
-	ID    int32  `db:"id" json:"id"`
+	ID    int    `db:"id" json:"id"`
 	Email string `db:"email" json:"email"`
 	Name  string `db:"name" json:"displayName"`
 	// NULL until the user writes one
@@ -32,32 +39,33 @@ type User struct {
 
 // Order is a row of the orders table.
 type Order struct {
-	ID       int32              `db:"id" json:"id"`
-	UserID   int32              `db:"user_id" json:"user_id"`
+	ID       int                `db:"id" json:"id"`
+	UserID   int                `db:"user_id" json:"user_id"`
 	Status   EOrderStatus       `db:"status" json:"status"`
-	Total    string             `db:"total" json:"total"`
+	Total    float64            `db:"total" json:"total"`
+	Tip      Money              `db:"tip" json:"tip"`
 	PlacedAt rt.Null[time.Time] `db:"placed_at" json:"placed_at"`
 }
 
 // UserTag is a row of the user_tags table.
 type UserTag struct {
-	UserID int32  `db:"user_id" json:"user_id"`
+	UserID int    `db:"user_id" json:"user_id"`
 	Tag    string `db:"tag" json:"tag"`
 }
 
 // PageView is a row of the page_views table.
 type PageView struct {
-	ID   int32  `db:"id" json:"id"`
+	ID   int    `db:"id" json:"id"`
 	Site string `db:"site" json:"site"`
-	Day  int32  `db:"day" json:"day"`
-	Hits int32  `db:"hits" json:"hits"`
+	Day  int    `db:"day" json:"day"`
+	Hits int    `db:"hits" json:"hits"`
 }
 
 // LinkClick is a row of the link_clicks table.
 type LinkClick struct {
-	ID     int32  `db:"id" json:"id"`
+	ID     int    `db:"id" json:"id"`
 	Site   string `db:"site" json:"site"`
-	Day    int32  `db:"day" json:"day"`
+	Day    int    `db:"day" json:"day"`
 	Target string `db:"target" json:"target"`
 }
 
@@ -83,24 +91,25 @@ type UserUpdateParams struct {
 // OrderCreateParams are the caller-supplied columns of OrderCreate. The
 // auto-increment key and defaulted columns are the database's job.
 type OrderCreateParams struct {
-	UserID   int32              `db:"user_id" json:"user_id"`
-	Total    string             `db:"total" json:"total"`
+	UserID   int                `db:"user_id" json:"user_id"`
+	Total    float64            `db:"total" json:"total"`
 	PlacedAt rt.Null[time.Time] `db:"placed_at" json:"placed_at"`
 }
 
 // OrderUpdateParams are the data columns of OrderUpdate: every column
 // outside the primary key.
 type OrderUpdateParams struct {
-	UserID   int32              `db:"user_id" json:"user_id"`
+	UserID   int                `db:"user_id" json:"user_id"`
 	Status   EOrderStatus       `db:"status" json:"status"`
-	Total    string             `db:"total" json:"total"`
+	Total    float64            `db:"total" json:"total"`
+	Tip      Money              `db:"tip" json:"tip"`
 	PlacedAt rt.Null[time.Time] `db:"placed_at" json:"placed_at"`
 }
 
 // UserTagCreateParams are the caller-supplied columns of UserTagCreate. The
 // auto-increment key and defaulted columns are the database's job.
 type UserTagCreateParams struct {
-	UserID int32  `db:"user_id" json:"user_id"`
+	UserID int    `db:"user_id" json:"user_id"`
 	Tag    string `db:"tag" json:"tag"`
 }
 
@@ -108,28 +117,28 @@ type UserTagCreateParams struct {
 // auto-increment key and defaulted columns are the database's job.
 type PageViewCreateParams struct {
 	Site string `db:"site" json:"site"`
-	Day  int32  `db:"day" json:"day"`
+	Day  int    `db:"day" json:"day"`
 }
 
 // PageViewUpdateParams are the data columns of PageViewUpdate: every column
 // outside the primary key.
 type PageViewUpdateParams struct {
 	Site string `db:"site" json:"site"`
-	Day  int32  `db:"day" json:"day"`
-	Hits int32  `db:"hits" json:"hits"`
+	Day  int    `db:"day" json:"day"`
+	Hits int    `db:"hits" json:"hits"`
 }
 
 // LinkClickCreateParams are the caller-supplied columns of LinkClickCreate. The
 // auto-increment key and defaulted columns are the database's job.
 type LinkClickCreateParams struct {
 	Site string `db:"site" json:"site"`
-	Day  int32  `db:"day" json:"day"`
+	Day  int    `db:"day" json:"day"`
 }
 
 // LinkClickUpdateParams are the data columns of LinkClickUpdate: every column
 // outside the primary key.
 type LinkClickUpdateParams struct {
 	Site   string `db:"site" json:"site"`
-	Day    int32  `db:"day" json:"day"`
+	Day    int    `db:"day" json:"day"`
 	Target string `db:"target" json:"target"`
 }

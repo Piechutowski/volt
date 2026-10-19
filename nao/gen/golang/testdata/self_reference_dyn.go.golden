@@ -17,9 +17,9 @@ const (
 // built here can only enter Employee queries; mixing models is a compile
 // error.
 var (
-	EmployeeID        = rt.Column[Employee, int64]{Name: "id"}
+	EmployeeID        = rt.Column[Employee, int]{Name: "id"}
 	EmployeeFullName  = rt.Column[Employee, string]{Name: "full_name"}
-	EmployeeManagerID = rt.NullColumn[Employee, int64]{Column: rt.Column[Employee, int64]{Name: "manager_id"}}
+	EmployeeManagerID = rt.NullColumn[Employee, int]{Column: rt.Column[Employee, int]{Name: "manager_id"}}
 )
 
 // EmployeeLimit caps how many rows EmployeeQuery returns.

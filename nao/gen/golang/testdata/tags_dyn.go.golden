@@ -17,7 +17,7 @@ const (
 // built here can only enter User queries; mixing models is a compile
 // error.
 var (
-	UserID       = rt.Column[User, int32]{Name: "id"}
+	UserID       = rt.Column[User, int]{Name: "id"}
 	UserUserName = rt.Column[User, string]{Name: "user_name"}
 	UserBio      = rt.NullColumn[User, string]{Column: rt.Column[User, string]{Name: "bio"}}
 )

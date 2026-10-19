@@ -1,6 +1,6 @@
 // Integration tests for the v2 dynamic query layer:
-// predicates, options and typed assignments run against a real SQLite
-// through a real driver, sharing the fixture with the CRUD tests.
+// predicates, options and typed assignments run against a float64 SQLite
+// through a float64 driver, sharing the fixture with the CRUD tests.
 package itest
 
 import (
@@ -229,11 +229,11 @@ func TestOrderDynamic(t *testing.T) {
 	_, q := newDB(t)
 	ann, _, _ := dynSeed(t, q)
 
-	placed, err := q.OrderCreate(ctx, OrderCreateParams{UserID: ann.ID, Total: "9.99", PlacedAt: rt.Some(time.Now().UTC())})
+	placed, err := q.OrderCreate(ctx, OrderCreateParams{UserID: ann.ID, Total: 9.99, PlacedAt: rt.Some(time.Now().UTC())})
 	if err != nil {
 		t.Fatalf("OrderCreate: %v", err)
 	}
-	unplaced, err := q.OrderCreate(ctx, OrderCreateParams{UserID: ann.ID, Total: "15.00", PlacedAt: rt.Null[time.Time]{}})
+	unplaced, err := q.OrderCreate(ctx, OrderCreateParams{UserID: ann.ID, Total: 15.00, PlacedAt: rt.Null[time.Time]{}})
 	if err != nil {
 		t.Fatalf("OrderCreate: %v", err)
 	}

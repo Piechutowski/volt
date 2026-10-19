@@ -201,11 +201,6 @@ func TestGenerationErrors(t *testing.T) {
 		name, dbml, wantErr string
 	}{
 		{
-			name:    "unknown type",
-			dbml:    "Table t { id int [pk]\n loc geography }",
-			wantErr: "no Go mapping",
-		},
-		{
 			name:    "field collision",
 			dbml:    "Table t { user_id int\n \"user__id\" int }",
 			wantErr: "both map to Go field",

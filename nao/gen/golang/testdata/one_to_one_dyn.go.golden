@@ -17,7 +17,7 @@ const (
 // built here can only enter User queries; mixing models is a compile
 // error.
 var (
-	UserID    = rt.Column[User, int64]{Name: "id"}
+	UserID    = rt.Column[User, int]{Name: "id"}
 	UserEmail = rt.Column[User, string]{Name: "email"}
 )
 
@@ -134,7 +134,7 @@ const (
 // built here can only enter UserProfile queries; mixing models is a compile
 // error.
 var (
-	UserProfileUserID    = rt.Column[UserProfile, int64]{Name: "user_id"}
+	UserProfileUserID    = rt.Column[UserProfile, int]{Name: "user_id"}
 	UserProfileBio       = rt.NullColumn[UserProfile, string]{Column: rt.Column[UserProfile, string]{Name: "bio"}}
 	UserProfileAvatarURL = rt.NullColumn[UserProfile, string]{Column: rt.Column[UserProfile, string]{Name: "avatar_url"}}
 )

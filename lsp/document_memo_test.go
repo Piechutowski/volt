@@ -48,8 +48,8 @@ func TestDocumentReusesItsFrontEnd(t *testing.T) {
 		strings.Count(text, "\nGroup ") + strings.Count(text, "\nPred ") + strings.Count(text, "\nView ") + 1
 	round("first", text, decls, 12, 12)
 	round("no change", text, 0, 0, 0)
-	round("edit one table", strings.Replace(text, "c002 text [not null]", "c002 text [not null, note: 'edited']", 1), 1, 1, 2)
-	round("break the table", strings.Replace(text, "c002 text [not null]", "c002 text [not null, null]", 1), 1, 1, 2)
+	round("edit one table", strings.Replace(text, "c002 string [not null]", "c002 text [not null, note: 'edited']", 1), 1, 1, 2)
+	round("break the table", strings.Replace(text, "c002 string [not null]", "c002 text [not null, null]", 1), 1, 1, 2)
 	round("fix it", text, 1, 1, 2)
 }
 

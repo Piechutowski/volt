@@ -2,13 +2,13 @@
 package db
 
 Table ms_revenue {
-  id integer [pk]
-  org varchar(64) [not null]
+  id int [pk]
+  org string [not null]
 }
 
 Table ms_usage {
-  id integer [pk]
-  org text [not null]
+  id int [pk]
+  org string [not null]
 }
 
 Group series {

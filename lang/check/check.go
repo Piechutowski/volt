@@ -10,13 +10,13 @@ import (
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/token"
-	"sort"
 )
 
 // Info is the semantic model of one file, produced by File.
 type Info struct {
 	Tables     []*TableInfo
 	Enums      []*EnumInfo
+	Types      []*TypeInfo
 	Partials   []*PartialInfo
 	Refs       []*RefInfo
 	HasImports bool
@@ -78,6 +78,7 @@ type TableInfo struct {
 type ColumnDef struct {
 	Col     *ast.Column
 	Partial *ast.TablePartial // nil for direct definitions
+	Type    ColumnType
 }
 
 // Column returns the effective definition of the named column, or nil.
@@ -157,13 +158,14 @@ func FileMemo(f *ast.File, memo *Memo) (*Info, []diag.Diagnostic) {
 }
 
 type checker struct {
-	info    *Info
-	diags   []diag.Diagnostic
-	memo    *Memo
-	enumSet *enumSet
+	info  *Info
+	diags []diag.Diagnostic
+	memo  *Memo
+	env   *typeEnv
 
 	partials map[string]*PartialInfo
 	enums    map[string]*EnumInfo
+	types    map[string]*TypeInfo
 	groups   map[string]*ast.TableGroup
 	sticky   map[string]*ast.StickyNote
 	views    map[string]*ast.DiagramView
@@ -178,6 +180,8 @@ func (c *checker) errorf(pos token.Position, section, format string, args ...any
 func (c *checker) collect(f *ast.File) {
 	c.partials = map[string]*PartialInfo{}
 	c.enums = map[string]*EnumInfo{}
+	c.types = map[string]*TypeInfo{}
+	var typeDecls []*ast.TypeDecl
 	c.groups = map[string]*ast.TableGroup{}
 	c.sticky = map[string]*ast.StickyNote{}
 	c.views = map[string]*ast.DiagramView{}
@@ -219,6 +223,8 @@ func (c *checker) collect(f *ast.File) {
 			if s := d.Name.Schema(); s != "" {
 				c.schemas[s] = true
 			}
+		case *ast.TypeDecl:
+			typeDecls = append(typeDecls, d)
 		case *ast.Enum:
 			key := canonKey(d.Name)
 			if _, dup := c.enums[key]; dup {
@@ -261,7 +267,13 @@ func (c *checker) collect(f *ast.File) {
 		c.info.Partials = append(c.info.Partials, pi)
 	}
 
-	c.enumSet = enumSetOf(c.enums)
+	for _, d := range typeDecls {
+		if ti := c.typeDeclCheck(d); ti != nil {
+			c.types[ti.Key] = ti
+			c.info.Types = append(c.info.Types, ti)
+		}
+	}
+	c.env = typeEnvOf(c.enums, c.types)
 	for i, ti := range c.info.Tables {
 		partials := c.partialsOf(ti.Decl)
 		for _, p := range partials {
@@ -271,14 +283,14 @@ func (c *checker) collect(f *ast.File) {
 		}
 		var checked *TableInfo
 		var diags []diag.Diagnostic
-		if e := c.memo.lookup(ti.Decl, partials, c.info.HasImports, c.enumSet.keys); e != nil {
+		if e := c.memo.lookup(ti.Decl, partials, c.info.HasImports, c.env.keys); e != nil {
 			checked, diags = e.ti, e.diags
 			c.memo.store(e)
 			c.memo.Hits++
 		} else {
-			checked, diags = tableCheck(ti.Decl, ti.Key, ti.Alias, partials, c.info.HasImports, c.enumSet)
+			checked, diags = tableCheck(ti.Decl, ti.Key, ti.Alias, partials, c.info.HasImports, c.env)
 			if c.memo != nil {
-				c.memo.store(&memoTable{ti: checked, partials: partials, hasImports: c.info.HasImports, enums: c.enumSet.keys, diags: diags})
+				c.memo.store(&memoTable{ti: checked, partials: partials, hasImports: c.info.HasImports, enums: c.env.keys, diags: diags})
 				c.memo.Misses++
 			}
 		}
@@ -296,26 +308,8 @@ func (c *checker) collect(f *ast.File) {
 	}
 }
 
-type enumSet struct {
-	present map[string]bool
-	keys    []string
-}
-
-func enumSetOf(enums map[string]*EnumInfo) *enumSet {
-	keys := make([]string, 0, len(enums))
-	for k := range enums {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	set := &enumSet{present: make(map[string]bool, len(enums)), keys: keys}
-	for _, k := range keys {
-		set.present[k] = true
-	}
-	return set
-}
-
-func tableCheck(d *ast.Table, key, alias string, partials []*ast.TablePartial, hasImports bool, enums *enumSet) (*TableInfo, []diag.Diagnostic) {
-	acc := &checker{info: &Info{HasImports: hasImports}, enumSet: enums}
+func tableCheck(d *ast.Table, key, alias string, partials []*ast.TablePartial, hasImports bool, env *typeEnv) (*TableInfo, []diag.Diagnostic) {
+	acc := &checker{info: &Info{HasImports: hasImports}, env: env}
 	ti := &TableInfo{Decl: d, Key: key, Alias: alias}
 	acc.columnsExpand(ti, partials)
 	acc.tableBodyCheck(d.Pos(), d.Name.String(), d.Settings, d.Body, true)
@@ -407,6 +401,12 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 	}
 	for _, s := range slots {
 		ti.Columns = append(ti.Columns, s.def)
+	}
+	c.typesResolve(ti)
+	for _, item := range ti.Decl.Body {
+		if r, ok := item.(*ast.Records); ok {
+			c.recordsTypeCheck(ti, r)
+		}
 	}
 	c.incrementCheck(ti)
 	c.requiredCheck(ti)

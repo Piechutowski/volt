@@ -2,8 +2,8 @@
 package db
 
 Table page_views {
-  id integer [pk]
-  hits integer [not null]
+  id int [pk]
+  hits int [not null]
 
   checks {
     hits >= :min

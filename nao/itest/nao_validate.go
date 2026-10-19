@@ -42,7 +42,7 @@ func (v UserUpdateParams) Validate() error {
 // Go-reference checks run here only — SQLite cannot call Go.
 func (v Order) Validate() error {
 	var errs []rt.CheckError
-	if !(v.Total != "") {
+	if !(v.Total != 0) {
 		errs = append(errs, rt.CheckError{Model: "Order", Check: "total_required", Columns: []string{"total"}})
 	}
 	return rt.Validation(errs)
@@ -52,7 +52,7 @@ func (v Order) Validate() error {
 // (spec §validation-checks).
 func (v OrderCreateParams) Validate() error {
 	var errs []rt.CheckError
-	if !(v.Total != "") {
+	if !(v.Total != 0) {
 		errs = append(errs, rt.CheckError{Model: "Order", Check: "total_required", Columns: []string{"total"}})
 	}
 	return rt.Validation(errs)
@@ -62,7 +62,7 @@ func (v OrderCreateParams) Validate() error {
 // (spec §validation-checks).
 func (v OrderUpdateParams) Validate() error {
 	var errs []rt.CheckError
-	if !(v.Total != "") {
+	if !(v.Total != 0) {
 		errs = append(errs, rt.CheckError{Model: "Order", Check: "total_required", Columns: []string{"total"}})
 	}
 	return rt.Validation(errs)

@@ -3,7 +3,7 @@
 package app
 
 Table plots {
-  id integer [pk]
+  id int [pk]
 }
 
 Scope /farms/:id(string) {

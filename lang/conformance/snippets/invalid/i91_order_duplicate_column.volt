@@ -3,8 +3,8 @@
 package db
 
 Table page_views {
-  id integer [pk]
-  day integer [not null]
+  id int [pk]
+  day int [not null]
 }
 
 Select rows for page_views [order: (day desc, day asc)]

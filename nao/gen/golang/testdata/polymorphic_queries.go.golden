@@ -51,7 +51,7 @@ func commentScan(r rowScanner) (Comment, error) {
 const commentGetSQL = `SELECT "id", "commentable_type", "commentable_id", "body" FROM "comments" WHERE "id" = :id`
 
 // CommentGet fetches the comments row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) CommentGet(ctx context.Context, id int64) (Comment, error) {
+func (q *Queries) CommentGet(ctx context.Context, id int) (Comment, error) {
 	return commentScan(q.db.QueryRowContext(ctx, commentGetSQL, sql.Named("id", id)))
 }
 
@@ -59,7 +59,7 @@ const commentGetManySQL = `SELECT "id", "commentable_type", "commentable_id", "b
 
 // CommentGetMany fetches the comments rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
-func (q *Queries) CommentGetMany(ctx context.Context, ids []int64) ([]Comment, error) {
+func (q *Queries) CommentGetMany(ctx context.Context, ids []int) ([]Comment, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -120,7 +120,7 @@ const commentUpdateSQL = `UPDATE "comments" SET "commentable_type" = :commentabl
 
 // CommentUpdate rewrites every non-key column of the identified comments row
 // and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) CommentUpdate(ctx context.Context, id int64, arg CommentUpdateParams) (Comment, error) {
+func (q *Queries) CommentUpdate(ctx context.Context, id int, arg CommentUpdateParams) (Comment, error) {
 	return commentScan(q.db.QueryRowContext(ctx, commentUpdateSQL,
 		sql.Named("id", id),
 		sql.Named("commentable_type", arg.CommentableType),
@@ -133,7 +133,7 @@ const commentDeleteSQL = `DELETE FROM "comments" WHERE "id" = :id`
 
 // CommentDelete removes the identified comments row; rt.ErrNotFound reports
 // that nothing matched.
-func (q *Queries) CommentDelete(ctx context.Context, id int64) error {
+func (q *Queries) CommentDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, commentDeleteSQL, sql.Named("id", id))
 	if err != nil {
 		return rt.Constraint(err)

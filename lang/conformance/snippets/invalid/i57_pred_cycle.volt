@@ -2,8 +2,8 @@
 package db
 
 Table ms_revenue {
-  id integer [pk]
-  year integer [not null]
+  id int [pk]
+  year int [not null]
 }
 
 Pred a { b and year = :y }

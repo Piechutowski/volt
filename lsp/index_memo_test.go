@@ -72,9 +72,9 @@ func TestIndexMemoMatchesFreshBuild(t *testing.T) {
 	}
 	round("first", text, 12)
 	round("no change", text, 0)
-	round("edit one table", strings.Replace(text, "c002 text [not null]", "c002 text [not null, note: 'edited']", 1), 2)
+	round("edit one table", strings.Replace(text, "c002 string [not null]", "c002 string [not null, note: 'edited']", 1), 2)
 	round("edit a route", strings.Replace(text, "get /events        volt.Events", "get /stream        volt.Events", 1), 2)
-	round("edit the partial", strings.Replace(text, "created_at timestamp", "created_at timestamp [note: 'stamped']", 1), 12)
+	round("edit the partial", strings.Replace(text, "created_at time.Time", "created_at time.Time [note: 'stamped']", 1), 12)
 	cur := strings.Replace(text, "retired [note: 'no longer written']", "retired [note: 'gone']\n\tarchived", 1)
 	round("edit the enum", cur, 12)
 	cur = strings.Replace(cur, "TablePartial stamped", "Enum kind {\n\tplain\n}\n\nTablePartial stamped", 1)

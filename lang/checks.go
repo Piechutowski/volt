@@ -198,8 +198,7 @@ func (l *lowering) requiredSpecs() []golang.CheckSpec {
 		if f == nil {
 			continue
 		}
-		_, isEnum := golang.GoTypeName(normalizeType(cd.Col.Type.String()))
-		kind, ok := check.RequiredKind(cd.Col.Type.String(), !isEnum)
+		kind, ok := cd.Type.RequiredKind()
 		if !ok {
 			continue
 		}
@@ -343,17 +342,17 @@ func (e *chkEnv) fieldOf(id *ast.Ident, typed bool) (golang.FieldSig, bool) {
 	}
 	if typed {
 		cd := e.ti.Column(id.Name())
-		switch classOf(cd.Col.Type.String()) {
+		switch classOfType(cd.Type) {
 		case classTime:
 			e.errorf(id.Pos(),
 				"column %q is a date/time; the Go tier cannot mirror SQL's text-time comparison — use an opaque `SQL` check or a Go reference (§validation-checks)", id.Name())
 			return f, false
 		case classForbidden:
-			if _, mapped := golang.GoTypeName(normalizeType(cd.Col.Type.String())); !mapped {
+			if cd.Type.Enum != nil {
 				e.errorf(id.Pos(), "column %q is enum-typed (%s); predicates do not compare enums in v1 (§predicates, hypotheses H5)", id.Name(), cd.Col.Type.String())
 				return f, false
 			}
-			e.errorf(id.Pos(), "column %q (blob/json) cannot appear in a typed check (§predicates)", id.Name())
+			e.errorf(id.Pos(), "column %q ([]byte) cannot appear in a typed check (§predicates)", id.Name())
 			return f, false
 		}
 	}
@@ -361,7 +360,7 @@ func (e *chkEnv) fieldOf(id *ast.Ident, typed bool) (golang.FieldSig, bool) {
 }
 
 func (e *chkEnv) classOfCol(name string) typeClass {
-	return classOf(e.ti.Column(name).Col.Type.String())
+	return classOfType(e.ti.Column(name).Type)
 }
 
 func (e *chkEnv) render(x ast.PredExpr, preds map[string]bool) (sql, gocode string) {

@@ -9,9 +9,9 @@ import (
 )
 
 const groupSetSchema = "package db\n\n" +
-	"Table ms_revenue {\n\tid integer [pk]\n\tyear integer [not null]\n}\n\n" +
-	"Table ms_usage {\n\tid integer [pk]\n\tyear integer [not null]\n}\n\n" +
-	"Table ms_dict {\n\tcode text [pk]\n}\n\n" +
+	"Table ms_revenue {\n\tid int [pk]\n\tyear int [not null]\n}\n\n" +
+	"Table ms_usage {\n\tid int [pk]\n\tyear int [not null]\n}\n\n" +
+	"Table ms_dict {\n\tcode string [pk]\n}\n\n" +
 	"TableGroup Metrics {\n\tms_revenue\n\tms_usage\n\tms_dict\n}\n\n" +
 	"Group series = Metrics \\ (ms_dict)\n\n" +
 	"Select rows for series where year = :year\n" +
@@ -95,7 +95,7 @@ func TestTableGroupRenameFollowsSetUses(t *testing.T) {
 }
 
 func TestDatasetNavigatesToSelect(t *testing.T) {
-	const dbText = "package db\n\nTable ms_revenue {\n\tid integer [pk]\n\tyear integer [not null]\n}\n\n" +
+	const dbText = "package db\n\nTable ms_revenue {\n\tid int [pk]\n\tyear int [not null]\n}\n\n" +
 		"Group series {\n\tms_revenue\n}\n\nSelect browse for series where year = :year\n"
 	const appText = "package app\n\nimport (\n\tdb\n)\n\nScope /ms {\n\tdataset db.browse [strip: 'ms_']\n}\n"
 	root := voltProject(t, map[string]string{

@@ -51,7 +51,7 @@ func snippetPaths(t *testing.T) []string {
 
 func TestParseFileReuseIsTheParse(t *testing.T) {
 	inserts := []string{
-		"Table zz {\n  id integer [pk]\n}\n",
+		"Table zz {\n  id int [pk]\n}\n",
 		"  indented\n",
 		"{\n",
 		"}\n",
@@ -106,14 +106,14 @@ Enum status {
 }
 
 Table posts {
-  id     integer [pk, increment]
-  title  text    [not null]
+  id     int [pk, increment]
+  title  string    [not null]
   status status  [not null, default: status.active]
 }
 
 Table tags {
-  id   integer [pk, increment]
-  name text    [not null, unique]
+  id   int [pk, increment]
+  name string    [not null, unique]
 }
 
 Ref: posts.id < tags.id
@@ -133,11 +133,11 @@ Ref: posts.id < tags.id
 	}
 	step("first", base, 5, 0)
 	step("same", base, 0, 5)
-	step("edit tags", strings.Replace(base, "name text", "name text    [note: 'edited']", 1), 1, 4)
+	step("edit tags", strings.Replace(base, "name string", "name string    [note: 'edited']", 1), 1, 4)
 	step("insert above", strings.Replace(base, "Table posts", "// a comment\n\nTable posts", 1), 2, 3)
-	step("broken posts", strings.Replace(base, "title  text", "title  text [", 1), 2, 3)
+	step("broken posts", strings.Replace(base, "title  string", "title  string [", 1), 2, 3)
 	step("fixed", base, 1, 4)
-	step("append", base+"\nTable extra {\n  id integer [pk]\n}\n", 2, 4)
+	step("append", base+"\nTable extra {\n  id int [pk]\n}\n", 2, 4)
 	step("whole rewrite", strings.ReplaceAll(base, "  ", "\t"), 4, 1)
 }
 

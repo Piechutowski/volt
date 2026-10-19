@@ -2,10 +2,10 @@
 package db
 
 Table page_views {
-  id integer [pk]
-  site text [not null]
-  day integer [not null]
-  seen boolean [not null, default: false]
+  id int [pk]
+  site string [not null]
+  day int [not null]
+  seen bool [not null, default: false]
 }
 
 Pred chosen { site in :sites and day in :days }

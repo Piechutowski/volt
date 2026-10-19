@@ -9,7 +9,7 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-const goRefSchema = "package db\n\nTable users {\n\tid integer [pk, increment]\n\temail varchar [not null]\n\n\tchecks {\n\t\tEmailValid(email)\n\t\tdb.Missing(email)\n\t}\n}\n"
+const goRefSchema = "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string [not null]\n\n\tchecks {\n\t\tEmailValid(email)\n\t\tdb.Missing(email)\n\t}\n}\n"
 const goRefRoutes = "package app\n\nPipeline api {\n\tuse volt.RequestID\n\tuse Auth\n}\n"
 
 func goRefProject(t *testing.T) string {
@@ -130,7 +130,7 @@ func TestGoRefRenameRewritesVoltSpellings(t *testing.T) {
 }
 
 func TestColumnRenameFollowsIntoChecks(t *testing.T) {
-	const text = "package db\n\nTable users {\n\tid integer [pk, increment]\n\temail varchar [not null]\n\n\tchecks {\n\t\temail like '%@%'\n\t\tEmailValid(email)\n\t}\n}\n"
+	const text = "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string [not null]\n\n\tchecks {\n\t\temail like '%@%'\n\t\tEmailValid(email)\n\t}\n}\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":         "module rn\n",
 		"db/schema.volt": text,
@@ -151,7 +151,7 @@ func TestColumnRenameFollowsIntoChecks(t *testing.T) {
 }
 
 func TestColumnRenameFollowsIntoSingleTableSelect(t *testing.T) {
-	const text = "package db\n\nTable page_views {\n\tid integer [pk, increment]\n\tsite varchar [not null]\n\tday integer [not null]\n}\n\n" +
+	const text = "package db\n\nTable page_views {\n\tid int [pk, increment]\n\tsite string [not null]\n\tday int [not null]\n}\n\n" +
 		"Select rows (site, day) for page_views where site = :s [order: (day desc, site asc)]\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":         "module rn\n",
@@ -172,7 +172,7 @@ func TestColumnRenameFollowsIntoSingleTableSelect(t *testing.T) {
 }
 
 func TestGoRefQualifiedRenameKeepsQualifier(t *testing.T) {
-	const text = "package db\n\nTable users {\n\tid integer [pk]\n\temail varchar [not null]\n\n\tchecks {\n\t\tdb.EmailValid(email)\n\t}\n}\n"
+	const text = "package db\n\nTable users {\n\tid int [pk]\n\temail string [not null]\n\n\tchecks {\n\t\tdb.EmailValid(email)\n\t}\n}\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":         "module q\n",
 		"db/schema.volt": text,
@@ -193,9 +193,9 @@ func TestGoRefQualifiedRenameKeepsQualifier(t *testing.T) {
 }
 
 func TestSelectColumnRefsRespectGroupShadowing(t *testing.T) {
-	const text = "package db\n\nTable core.orders {\n\tid integer [pk]\n\ttotal integer [not null]\n}\n\n" +
-		"Table page_views {\n\tid integer [pk]\n\tsite varchar [not null]\n}\n\n" +
-		"Table link_clicks {\n\tid integer [pk]\n\tsite varchar [not null]\n}\n\n" +
+	const text = "package db\n\nTable core.orders {\n\tid int [pk]\n\ttotal int [not null]\n}\n\n" +
+		"Table page_views {\n\tid int [pk]\n\tsite string [not null]\n}\n\n" +
+		"Table link_clicks {\n\tid int [pk]\n\tsite string [not null]\n}\n\n" +
 		"Group page_views {\n\tlink_clicks\n}\n\n" +
 		"Select big (total) for orders where total > 1\n" +
 		"Select all (site) for page_views\n"
@@ -228,7 +228,7 @@ func TestSelectColumnRefsRespectGroupShadowing(t *testing.T) {
 }
 
 func TestPredRefInCheckNavigates(t *testing.T) {
-	const text = "package db\n\nPred positive { hits >= 0 }\n\nTable page_views {\n\tid integer [pk]\n\thits integer [not null]\n\n\tchecks {\n\t\tpositive\n\t}\n}\n"
+	const text = "package db\n\nPred positive { hits >= 0 }\n\nTable page_views {\n\tid int [pk]\n\thits int [not null]\n\n\tchecks {\n\t\tpositive\n\t}\n}\n"
 	root := voltProject(t, map[string]string{"go.mod": "module p\n", "db/schema.volt": text})
 	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), text)
 	if loc := d.Definition(posOf(t, text, "positive", 1)); loc == nil || loc.Range.Start.Line != 2 {

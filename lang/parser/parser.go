@@ -216,6 +216,8 @@ func (p *parser) decl() (d ast.Decl) {
 		return p.tablePartial()
 	case "enum":
 		return p.enum()
+	case "type":
+		return p.typeDecl()
 	case "ref":
 		return p.ref()
 	case "note":
@@ -417,23 +419,12 @@ func (p *parser) column() *ast.Column {
 
 func (p *parser) typeRef() *ast.TypeRef {
 	tr := p.types.new()
-	tr.Name = p.qualName("column type (§columns)")
-	if p.at(token.LPAREN) {
-		p.next()
-		for {
-			t := p.cur()
-			if t.Kind != token.NUMBER && t.Kind != token.IDENT {
-				p.fail(t, "type argument must be a number or identifier (§columns), found %s", t)
-			}
-			tr.Args = append(tr.Args, p.next())
-			if p.at(token.COMMA) {
-				p.next()
-				continue
-			}
-			break
-		}
-		tr.Rparen = p.expect(token.RPAREN, "type arguments (§columns)").End()
+	if p.at(token.LBRACKET) {
+		tr.Slice = true
+		tr.Lbrack = p.next().Pos
+		p.expect(token.RBRACKET, "the [] of a slice type (§columns)")
 	}
+	tr.Name = p.qualName("column type (§columns)")
 	return tr
 }
 
@@ -628,6 +619,20 @@ func (p *parser) enum() *ast.Enum {
 		})
 	}
 	d.Rbrace = p.expect(token.RBRACE, "Enum (§enum)").Pos
+	return d
+}
+
+func (p *parser) typeDecl() *ast.TypeDecl {
+	d := &ast.TypeDecl{TypePos: p.next().Pos}
+	d.Name = p.qualName("declared type name (§types)")
+	d.Storage = p.typeRef()
+	d.EndPos = d.Storage.End()
+	if p.at(token.IDENT) && !p.cur().NLBefore && strings.EqualFold(p.cur().Val, "from") {
+		p.next()
+		d.From = &ast.BasicLit{Tok: p.expect(token.STRING, "import path after from (§types)")}
+		d.EndPos = d.From.End()
+	}
+	p.endOfLine("Type declaration (§types)")
 	return d
 }
 

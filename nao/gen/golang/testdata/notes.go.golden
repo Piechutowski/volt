@@ -28,7 +28,7 @@ const (
 //
 // A blog post. The body-form note wins over the setting-form note.
 type Post struct {
-	ID int64 `db:"id" json:"id"`
+	ID int `db:"id" json:"id"`
 	// Shown in lists and in the HTML title tag
 	Title  string      `db:"title" json:"title"`
 	Status EPostStatus `db:"status" json:"status"`
@@ -40,7 +40,7 @@ type Post struct {
 
 // Tag is a row of the tags table.
 type Tag struct {
-	ID   int32  `db:"id" json:"id"`
+	ID   int    `db:"id" json:"id"`
 	Name string `db:"name" json:"name"`
 }
 
@@ -71,7 +71,7 @@ type PostUpdateParams struct {
 // TagCreateParams are the caller-supplied columns of TagCreate. The
 // auto-increment key and defaulted columns are the database's job.
 type TagCreateParams struct {
-	ID   int32  `db:"id" json:"id"`
+	ID   int    `db:"id" json:"id"`
 	Name string `db:"name" json:"name"`
 }
 

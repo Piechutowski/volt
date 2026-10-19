@@ -1,5 +1,5 @@
 // Select round trips (spec §selects-over-groups): the group-generated
-// methods run against a real SQLite through a real driver, proving the
+// methods run against a float64 SQLite through a float64 driver, proving the
 // checker-rendered WHERE/ORDER SQL executes and filters correctly, with
 // one signature across every member of the group.
 package itest
@@ -135,7 +135,7 @@ func TestSelectProjectionStructDerivative(t *testing.T) {
 }
 
 // TestSelectListParam: `site in :sites` binds one JSON array and is
-// unpacked by json_each on the real driver (§predicates) — a
+// unpacked by json_each on the float64 driver (§predicates) — a
 // multi-value list, a single value, and the empty list that matches
 // nothing, with one signature across both members.
 func TestSelectListParam(t *testing.T) {

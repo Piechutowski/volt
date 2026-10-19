@@ -2,5 +2,5 @@
 package db
 
 Table posts {
-	id bigint [pk]
+	id int [pk]
 }

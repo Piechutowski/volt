@@ -1,5 +1,5 @@
 // spec: §columns tag extension — the value must be one key:"value" pair
 Table users {
-  id   integer [pk]
-  name varchar [tag: 'json=name']
+  id   int [pk]
+  name string [tag: 'json=name']
 }

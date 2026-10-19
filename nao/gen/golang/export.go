@@ -14,16 +14,6 @@ func ModelName(t *ast.Table) (string, error) { return modelName(t) }
 // GoName converts a DBML name to an exported Go identifier.
 func GoName(dbmlName string) (string, error) { return goName(dbmlName) }
 
-// GoTypeName maps a DBML column type (arguments stripped, lowercased) to
-// its Go type name, reporting whether the type is known.
-func GoTypeName(dbmlType string) (string, bool) {
-	t, ok := typeMap[dbmlType]
-	if !ok {
-		return "", false
-	}
-	return t.name, true
-}
-
 // SelectParam is one Go parameter of a generated select method
 // (spec §selects-over-groups), in declaration order.
 type SelectParam struct {

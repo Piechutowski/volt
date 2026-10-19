@@ -8,7 +8,7 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-const navSchema = "package db\n\nTable posts {\n\tid    integer [pk]\n\ttitle text\n}\n"
+const navSchema = "package db\n\nTable posts {\n\tid    int [pk]\n\ttitle string\n}\n"
 const navRoutes = "package app\n\nimport (\n\tdb\n)\n\nPipeline api {\n\tuse volt.RequestID\n}\n\nScope / [pipe: api] {\n\tresources db.posts\n}\n"
 
 func navProject(t *testing.T) (root, schema, routes string) {
@@ -108,7 +108,7 @@ func TestVoltHoverTableShowsModel(t *testing.T) {
 			t.Errorf("hover missing %q:\n%s", want, md)
 		}
 	}
-	if !strings.Contains(md, "int32") {
+	if !strings.Contains(md, "int") {
 		t.Errorf("hover should name the key's route parameter type:\n%s", md)
 	}
 }
@@ -247,7 +247,7 @@ func TestVoltCompleteQualifiedTables(t *testing.T) {
 	if len(items) != 1 || items[0].Label != "posts" {
 		t.Fatalf("completion after db.P = %v, want [posts]", items)
 	}
-	if items[0].Detail == nil || !strings.Contains(*items[0].Detail, "key id int32") {
+	if items[0].Detail == nil || !strings.Contains(*items[0].Detail, "key id int") {
 		t.Errorf("detail = %v, want the key type", items[0].Detail)
 	}
 }
@@ -271,12 +271,12 @@ func TestVoltCompleteResourcesOffersTablesAndImports(t *testing.T) {
 func TestVoltCompleteLeavesDBMLChains(t *testing.T) {
 	root := voltProject(t, map[string]string{
 		"go.mod": "module lsptest\n",
-		"db/schema.volt": "package db\n\nTable users {\n\tid integer [pk]\n\temail text\n}\n\n" +
-			"Table posts {\n\tid integer [pk]\n\tauthor_id integer\n}\n\nRef: posts.author_id > users.id\n",
+		"db/schema.volt": "package db\n\nTable users {\n\tid int [pk]\n\temail string\n}\n\n" +
+			"Table posts {\n\tid int [pk]\n\tauthor_id int\n}\n\nRef: posts.author_id > users.id\n",
 	})
 	path := root + "/db/schema.volt"
-	text := "package db\n\nTable users {\n\tid integer [pk]\n\temail text\n}\n\n" +
-		"Table posts {\n\tid integer [pk]\n\tauthor_id integer\n}\n\nRef: posts.author_id > users.\n"
+	text := "package db\n\nTable users {\n\tid int [pk]\n\temail string\n}\n\n" +
+		"Table posts {\n\tid int [pk]\n\tauthor_id int\n}\n\nRef: posts.author_id > users.\n"
 	d := NewDocument("file://"+path, text)
 	if d.vpkg == nil {
 		t.Fatal("project index should be active for this file")

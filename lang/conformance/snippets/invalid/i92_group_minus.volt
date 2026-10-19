@@ -3,11 +3,11 @@
 package db
 
 Table ms_revenue {
-  id integer [pk]
+  id int [pk]
 }
 
 Table ms_usage {
-  id integer [pk]
+  id int [pk]
 }
 
 Group series {

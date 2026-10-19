@@ -107,7 +107,7 @@ func TestNoNamedRoutesCompiles(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(src, "app"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	routes := "package app\n\nTable users {\n\tid integer [pk]\n}\n\nScope / {\n\tresources users [only: (create)]\n}\n"
+	routes := "package app\n\nTable users {\n\tid int [pk]\n}\n\nScope / {\n\tresources users [only: (create)]\n}\n"
 	if err := os.WriteFile(filepath.Join(src, "app", "r.volt"), []byte(routes), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -249,9 +249,9 @@ func (stub) About(w http.ResponseWriter, r *volt.Request) error              { r
 func (stub) Ping(w http.ResponseWriter, r *volt.Request) error               { return nil }
 func (stub) Stats(w http.ResponseWriter, r *volt.Request) error              { return nil }
 func (stub) Serve(w http.ResponseWriter, r *volt.Request, path string) error { return nil }
-func (stub) Show(w http.ResponseWriter, r *volt.Request, id int32) error     { return nil }
+func (stub) Show(w http.ResponseWriter, r *volt.Request, id int) error     { return nil }
 func (stub) Create(w http.ResponseWriter, r *volt.Request) error             { return nil }
-func (stub) Avatar(w http.ResponseWriter, r *volt.Request, id int32) error   { return nil }
+func (stub) Avatar(w http.ResponseWriter, r *volt.Request, id int) error   { return nil }
 
 // wire proves New accepts stub implementations of every interface.
 var _ http.Handler = NewRouter(Controllers{
@@ -328,7 +328,7 @@ import (
 
 type stub struct{}
 
-func (stub) Purge(w http.ResponseWriter, r *volt.Request, id int32) error { return nil }
+func (stub) Purge(w http.ResponseWriter, r *volt.Request, id int) error { return nil }
 
 var _ http.Handler = NewRouter(Controllers{Tags: stub{}, Queries: &Queries{}})
 `))
@@ -353,8 +353,8 @@ func TestMainPackageCompiles(t *testing.T) {
 		"schema.volt": `package main
 
 Table posts {
-  id    integer [pk, increment]
-  title text    [not null]
+  id    int [pk, increment]
+  title string    [not null]
 }
 
 Scope /api {

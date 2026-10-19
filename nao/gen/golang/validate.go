@@ -62,7 +62,7 @@ func (pl *Plan) Validators(fns []CheckFn, opts Options) ([]byte, error) {
 	sort.Strings(imports)
 	out.WriteString("import (\n")
 	for _, imp := range imports {
-		fmt.Fprintf(&out, "\t%q\n", imp)
+		fmt.Fprintf(&out, "\t%s\n", importDecl(imp))
 	}
 	out.WriteString(")\n\n")
 	out.WriteString(body.String())

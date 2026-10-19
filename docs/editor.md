@@ -87,7 +87,7 @@ load-bearing patterns, each citing the spec section it implements:
   newline-sensitive — columns, enum values, records rows, routes and
   plugs are line-terminated. `extras` holds only `[ \t\r]` + comments,
   and every body uses one `newlineSep1` helper. Falls out for free:
-  `Table t { id int name varchar }` is a syntax error (spec-correct),
+  `Table t { id int name string }` is a syntax error (spec-correct),
   one-liners still parse, settings lists are same-line only, and a line
   comment doesn't consume its newline.
 - **Case-insensitive contextual keywords** (§keywords). Keywords are

@@ -135,9 +135,9 @@ const (
 // built here can only enter Rate queries; mixing models is a compile
 // error.
 var (
-	RateID           = rt.Column[Rate, int32]{Name: "id"}
+	RateID           = rt.Column[Rate, int]{Name: "id"}
 	RateCurrencyCode = rt.Column[Rate, string]{Name: "currency_code"}
-	RateRate         = rt.Column[Rate, string]{Name: "rate"}
+	RateRate         = rt.Column[Rate, float64]{Name: "rate"}
 	RateFetchedAt    = rt.Column[Rate, time.Time]{Name: "fetched_at"}
 	RateActive       = rt.Column[Rate, bool]{Name: "active"}
 	RateComment      = rt.NullColumn[Rate, string]{Column: rt.Column[Rate, string]{Name: "comment"}}

@@ -22,8 +22,8 @@ from DBML. This specification has two parts and three appendices:
 - **[Mapping to Go](#mapping-to-go)** and **[Mapping to SQLite DDL](#mapping-to-sqlite-ddl)**:
   the generation contracts of the data layer (informative in
   form, pinned by generator goldens in force).
-- **[Compatibility with DBML](#compatibility-with-dbml)**: what Volt accepts verbatim,
-  the one deliberate break (`use`/`reuse`), and the migration.
+- **[Compatibility with DBML](#compatibility-with-dbml)**: what of DBML's syntax
+  remains, the two deliberate breaks (types, `use`/`reuse`), and the migration.
 
 Every construct is specified by (1) a grammar production in EBNF, (2)
 an enumerated list of constraints, and (3) a minimal example. Every
@@ -41,9 +41,10 @@ suspicious schemas, every rule with executable examples — is
 
 **Version:** 1.0 (based on `@dbml/parse` reference implementation, holistics/dbml)
 **Status:** Normative.
-This part is a complete, standalone-conformant specification of DBML:
-a schema written using only Part I constructs is valid upstream DBML
-(diagrammable on dbdiagram.io as-is). The reference implementation is
+This part descends from DBML: its syntax is DBML's where DBML had one,
+its column types are Go's (§columns, §types), and DBML's file imports
+are gone (§file-imports-removed), so a Part I file is no longer
+upstream DBML. The reference implementation is
 [`lang/`](../lang/); the executable corpus is
 [`lang/conformance/snippets/`](../lang/conformance/snippets/) (the `.dbml` entries).
 
@@ -94,6 +95,7 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Checks](#checks)
     - [Relationships (Ref)](#relationships-ref)
     - [Enum](#enum)
+    - [Types](#types)
     - [TablePartial](#tablepartial)
     - [Records (Sample Data)](#records-sample-data)
     - [Notes](#notes)
@@ -144,7 +146,7 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
   - [Conformance and the proof chain](#conformance-and-the-proof-chain)
 - **Appendices**
   - [Mapping to Go](#mapping-to-go)
-    - [Types](#types)
+    - [Go types](#go-types)
     - [Nullability](#nullability)
     - [Names](#names)
     - [Notes become doc comments](#notes-become-doc-comments)
@@ -330,7 +332,7 @@ sp      = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
 Table posts [                 // continuation lines are indented
   headercolor: #3498DB
 ] {
-  id integer [pk]
+  id int [pk]
 }
 
 Ref: posts.id >
@@ -391,8 +393,7 @@ qi char           = any char - ( '"' | "\" | newline ) ;
    identifier. E.g. `2fa_codes` is an identifier; `255` is a number.
 3. A quoted identifier (`"double quoted"`) permits any characters except an
    unescaped `"` and a line break, and supports the escape sequences of §escape-sequences.
-   Use it for names containing spaces or other special characters, including
-   column types with spaces (e.g. `"double precision"`).
+   Use it for names containing spaces or other special characters.
 4. Plain and quoted identifiers are interchangeable everywhere an
    `identifier` is expected; `users` and `"users"` denote the same name.
 
@@ -403,7 +404,7 @@ as `Table` acts as a keyword only in keyword position and remains usable as an
 ordinary identifier elsewhere (e.g. a column may be named `table`).
 
 Element-type keywords: `Project`, `Table`, `TablePartial`, `TableGroup`,
-`Enum`, `Ref`, `Note`, `Records`, `DiagramView`, `indexes`, `checks`,
+`Enum`, `Type`, `Ref`, `Note`, `Records`, `DiagramView`, `indexes`, `checks`,
 `Tables`, `Notes`, `TableGroups`, `Schemas`.
 Clause keywords: `as`, `use`, `reuse`, `from`.
 Value keywords: `true`, `false`, `null`.
@@ -543,8 +544,8 @@ Punctuation roles (uniform across the language):
 | Token   | Role                                                        |
 |---------|-------------------------------------------------------------|
 | `{ }`   | element bodies (block form)                                 |
-| `[ ]`   | settings lists                                              |
-| `( )`   | composite column lists, type arguments, records column list |
+| `[ ]`   | settings lists, and the `[]` of the type `[]byte`           |
+| `( )`   | composite column lists, records column list                 |
 | `:`     | introduces an inline (single-expression) body or a setting value |
 | `,`     | separator inside `[ ]`, `( )`, and record rows              |
 | `.`     | name qualification (`schema.table.column`)                  |
@@ -610,6 +611,7 @@ element = project
         | table
         | table partial
         | enum
+        | type decl
         | ref element
         | sticky note
         | table group
@@ -692,8 +694,8 @@ table setting  = "headercolor", ":", color
 
 ```volt
 Table core.users as U [headercolor: #3498DB] {
-  id integer [pk]
-  email varchar(255) [not null, unique]
+  id int [pk]
+  email string [not null, unique]
 }
 ```
 
@@ -703,9 +705,8 @@ Table core.users as U [headercolor: #3498DB] {
 column          = name, column type, { legacy flag },
                   [ column settings ], newline ;
 
-column type     = type name, [ "(", type arg, { ",", type arg }, ")" ] ;
-type name       = [ schema name, "." ], identifier ;
-type arg        = number | identifier ;
+column type     = [ "[", "]" ], type name ;
+type name       = [ identifier, "." ], identifier ;
 
 legacy flag     = "pk" | "unique" ;
 
@@ -721,12 +722,15 @@ column setting  = "primary key" | "pk"
                 | "ref", ":", inline ref value ;
 ```
 
-1. **Type.** Any type name is accepted; DBML does not restrict the type
-   vocabulary. The type name MUST NOT contain spaces; a type containing
-   spaces MUST be written as a quoted identifier (`"double precision"`,
-   `"bigint unsigned"`). Parenthesized type arguments (`varchar(255)`,
-   `decimal(10,2)`) are preserved verbatim. A type name may be
-   schema-qualified to reference an enum (`v2.job_status`).
+1. **Type.** A column type is a Go type, matched case-sensitively, from
+   a closed set: the built-ins `bool`, `int`, `float64`, `string`,
+   `[]byte` and `time.Time`; an enum of the package, optionally
+   schema-qualified (`v2.job_status`, §enum); or a type declared with
+   `Type` (§types). Anything else is an error naming the column and
+   the set. The type decides the Go field (§mapping-to-go), the SQLite
+   column (§mapping-to-sqlite-ddl), the literals a `default:` accepts
+   (§default-values), the empty value `required` refuses, and the
+   comparisons a predicate allows (§predicates).
 2. **Nullability.** Absent `not null`, a column is nullable. `null` and
    `not null` are mutually exclusive.
 3. **`pk` / `primary key`** are synonyms and mutually exclusive; they mark a
@@ -738,7 +742,7 @@ column setting  = "primary key" | "pk"
 
    > **Extension (this implementation).** Because the target is SQLite
    >, `increment` is honored in exactly one shape — the table's
-   > single-column primary key of an integer type, which becomes the
+   > single-column primary key of type `int`, which becomes the
    > rowid alias (§mapping-to-sqlite-ddl) — and is an **error** anywhere else: on a
    > non-integer column, on a column that is not the primary key, or
    > when the primary key is composite. A keyword that is typed MUST be
@@ -758,12 +762,13 @@ column setting  = "primary key" | "pk"
 > in the zero-value sense: under ZII a missing input decodes to the
 > type's zero value and `not null` is satisfied, so `required` is the
 > word for "and not that either". It lowers to one check in both tiers
-> (§validation-checks): `<> ''` for string-mapped types
-> and enums, `<> 0` for numeric types, `length(…) > 0` for blob and
-> JSON, named `<column>_required` in the DDL and in the validator's
-> error. It MUST accompany `not null` (or a key), and is an error on a
-> `null`, `default:` or `increment` column and on a type with no empty
-> value — `bool` and date/time, where every value is a value.
+> (§validation-checks): `<> ''` for `string` and enum columns, `<> 0`
+> for `int` and `float64`, `length(…) > 0` for `[]byte`, and for a
+> declared type the check of its storage type, named
+> `<column>_required` in the DDL and in the validator's error. It MUST
+> accompany `not null` (or a key), and is an error on a `null`,
+> `default:` or `increment` column and on `bool` and `time.Time`,
+> where every value is a value.
 >
 > **Extension (this implementation).** The column setting `tag: string`
 > (repeatable) passes one Go struct tag through to the generated field
@@ -790,8 +795,8 @@ column setting  = "primary key" | "pk"
 
 ```volt
 Table users {
-  id        integer [pk]
-  user_name varchar [not null, tag: 'json:"userName"', tag: 'xml:"user-name,attr"']
+  id        int [pk]
+  user_name string [not null, tag: 'json:"userName"', tag: 'xml:"user-name,attr"']
 }
 ```
 
@@ -816,6 +821,16 @@ default value = [ "-" ], number
 
 A bare identifier that is not `true`/`false`/`null` and not a dotted enum
 constant is **not** a valid default value.
+
+1. **Typed.** A default MUST fit the column's type (§columns): a number
+   for `int` (no fraction) and `float64`; a string for `string`;
+   `true` or `false` for `bool`; a constant of the column's own enum
+   for an enum column; for a declared type (§types), a literal of its
+   storage type. `null` is a default only on a nullable column. An
+   expression literal is accepted on any column and is SQLite's to
+   judge. `[]byte` and `time.Time` columns take only an expression
+   literal or `null`. A default that does not fit is an error naming
+   the column and its type.
 
 ### Indexes
 
@@ -850,9 +865,9 @@ index setting  = "type", ":", identifier
 
 ```volt
 Table bookings {
-  id integer
-  country varchar
-  booking_date date
+  id int
+  country string
+  booking_date time.Time
 
   indexes {
     (id, country) [pk]
@@ -889,8 +904,8 @@ check setting  = "name", ":", string ;
 
 ```volt
 Table users {
-  wealth integer
-  debt integer
+  wealth int
+  debt int
 
   checks {
     `debt + wealth >= 0` [name: 'chk_positive_money']
@@ -970,7 +985,7 @@ Ref {
 
 // inline form
 Table posts {
-  user_id integer [ref: > core.users.id]
+  user_id int [ref: > core.users.id]
 }
 ```
 
@@ -999,6 +1014,50 @@ Enum job_status {
   running
   done
   failure
+}
+```
+
+### Types
+
+A **Type** declaration admits a Go type of the application as a column
+type. The schema names the Go type, where it comes from and how SQLite
+stores it; the Go type does the rest.
+
+```ebnf
+type decl    = "Type", type name, storage type, [ "from", string ], newline ;
+storage type = column type ;
+```
+
+1. **Name.** `pkg.Name` names the Go type `Name` of the package
+   imported from the `from` path under the alias `pkg`; generated code
+   imports it as `import pkg "path"`. A bare `Name` without `from`
+   names a type declared in a Go file of the data package itself, and
+   `from` on a bare name is an error, as is `pkg.Name` without `from`.
+   Declared names are unique within the package and MUST NOT spell a
+   built-in type or an enum.
+2. **Storage.** The storage type is one of the six built-ins
+   (§columns), never an enum or another declared type. It fixes the
+   SQLite column (§mapping-to-sqlite-ddl), the empty value `required`
+   refuses (§columns) and the literals a `default:` accepts
+   (§default-values).
+3. **Contract.** The Go type MUST implement `database/sql.Scanner` and
+   `database/sql/driver.Valuer`. Generated code asserts both
+   (`var _ sql.Scanner = (*pkg.Name)(nil)`), so a type that does not
+   fails to compile at the assertion, naming the type. A nullable
+   column of a declared type is `rt.Null[pkg.Name]`.
+4. **In predicates.** A column of a declared type compares with `=`,
+   `!=`, `in` and `is null` only (§predicates).
+
+```volt
+Type money.Money int    from 'example.com/app/money'
+Type png.Png     []byte from 'image/png'
+Type Slug        string
+
+Table products {
+  id    int         [pk, increment]
+  slug  Slug        [not null, unique]
+  price money.Money [not null]
+  icon  png.Png
 }
 ```
 
@@ -1034,12 +1093,12 @@ partial injection = "~", name, newline ;
 ```volt
 TablePartial base_template [headercolor: #ff0000] {
   id int [pk, not null]
-  created_at timestamp [default: `now()`]
+  created_at time.Time [default: `now()`]
 }
 
 Table users {
   ~base_template
-  name varchar
+  name string
 }
 ```
 
@@ -1073,22 +1132,24 @@ empty           = ;                      (* nothing between separators *)
    all table columns in definition order (after partial injection, §partial-injection-order).
 2. A table MUST have at most one records block.
 3. Each row MUST supply exactly as many values as listed columns.
-4. **Value typing.** Each value is checked against the target column's type:
-   - Strings are single-quoted. Timestamps/dates are strings in ISO 8601 or
-     other unambiguous formats (`'2024-01-15 10:30:00'`, `'2024-01-15'`).
-   - Booleans accept, case-insensitively: `true`, `false`, `'true'`,
-     `'false'`, `'Y'`, `'N'`, `'T'`, `'F'`, `1`, `0`, `'1'`, `'0'`.
-   - Null is `null`, an empty field (nothing between commas), or the empty
-     string `''` for non-string columns.
-   - Enum values are written as `EnumName.value` or as a string literal of
-     the value. A bare identifier (other than `true`/`false`/`null`) is
-     **not** a valid record value.
-   - Expression literals (backticks) pass through unchecked.
+4. **Value typing.** Each value MUST fit the target column's type
+   (§columns), as a default must (§default-values): an integer for
+   `int`; a number for `float64`; a string for `string` and for
+   `time.Time` (ISO 8601 text, `'2024-01-15 10:30:00'`); `true` or
+   `false` for `bool`; a constant of the column's own enum
+   (`EnumName.value`) for an enum column; for a declared type, a
+   literal of its storage type. `null` and an empty field (nothing
+   between commas) are NULL and are allowed only on a nullable column.
+   A `[]byte` column takes an expression literal or NULL. An expression
+   literal (backticks) is accepted on any column and is SQLite's to
+   judge. A bare identifier other than `true`, `false` and `null` is
+   **not** a value. A value that does not fit is an error naming the
+   column and its type.
 
 ```volt
 Table users {
   id int [pk]
-  name varchar
+  name string
   status job_status
 
   Records (id, name, status) {
@@ -1283,7 +1344,7 @@ above.
 program              = { import statement | element } ;
 
 element              = project | table | table partial | enum
-                     | ref element | sticky note | table group
+                     | type decl | ref element | sticky note | table group
                      | records element | diagram view ;
 
 (* ===== 7. Module system ===== *)
@@ -1317,9 +1378,8 @@ table setting        = "headercolor", ":", color
 
 column               = name, column type, { legacy flag },
                        [ column settings ], newline ;
-column type          = type name, [ "(", type arg, { ",", type arg }, ")" ] ;
-type name            = [ schema name, "." ], identifier ;
-type arg             = number | identifier ;
+column type          = [ "[", "]" ], type name ;
+type name            = [ identifier, "." ], identifier ;
 legacy flag          = "pk" | "unique" ;
 column settings      = "[", column setting, { ",", column setting }, "]" ;
 column setting       = "primary key" | "pk" | "null" | "not null"
@@ -1370,6 +1430,9 @@ enum                 = "Enum", table name, "{", { enum value }, "}" ;
 enum value           = name, [ enum settings ], newline ;
 enum settings        = "[", enum setting, { ",", enum setting }, "]" ;
 enum setting         = "note", ":", string ;
+
+type decl            = "Type", type name, storage type, [ "from", string ], newline ;
+storage type         = column type ;
 
 (* ===== 6.9 TablePartial ===== *)
 
@@ -1585,7 +1648,7 @@ package clause = "package", name, newline ;
 package db
 
 Table users {
-	id integer [pk, increment]
+	id int [pk, increment]
 }
 ```
 
@@ -1679,7 +1742,7 @@ route path = slash,
 segment    = name
            | ":", name, [ "(", param type, ")" ]
            | ":", name, ".", ".", "." ;  (* three '.' tokens, contiguous *)
-param type = "int" | "int32" | "int64" | "string" ;
+param type = "int" | "string" ;
 ```
 
 1. All tokens of a route path are **contiguous**: interior whitespace
@@ -1693,8 +1756,8 @@ param type = "int" | "int32" | "int64" | "string" ;
    in generated signatures and would be shadowed), and MUST be unique
    within the route's full path (scope prefixes included).
 3. A parameter's type defaults to `string`; the closed type set is
-   `int`, `int32`, `int64`, `string`, chosen to coincide with the Go
-   types the model generator emits for routable primary keys.
+   `int` and `string`, the Go types the model generator emits for
+   routable primary keys.
    **Types shape handler signatures, never matching**: a request
    segment that fails to parse as the declared type is that route's
    404, not a fallthrough to a sibling route.
@@ -1771,10 +1834,10 @@ import ( db )
 
 Scope /api [pipe: api] {
 	get    /users            db.UserList
-	get    /users/:id(int32) db.UserGet
+	get    /users/:id(int) db.UserGet
 	post   /users            db.UserCreate
-	patch  /users/:id(int32) db.UserUpdate
-	delete /users/:id(int32) db.UserDelete
+	patch  /users/:id(int) db.UserUpdate
+	delete /users/:id(int) db.UserDelete
 	get    /picked           db.UserPicked      // Select picked for users where id in :ids
 }
 ```
@@ -1790,7 +1853,7 @@ Scope /api [pipe: api] {
    binds from exactly one source, decided at generation time:
    - a **path parameter** of the route with the same name binds it.
      Its declared type MUST spell the method's Go type
-     (`:id(int32)` for `id int32`; `string` needs no annotation); a
+     (`:id(int)` for `id int`; `string` needs no annotation); a
      type a segment cannot carry (§route-paths) goes in the query string.
      A wildcard cannot bind a query parameter;
    - a **params struct** (`<Model>CreateParams`, `<Model>UpdateParams`)
@@ -1889,8 +1952,8 @@ the routes through typed methods instead of hand-built requests.
 3. **Every query route** (§query-routes) is one typed method, named as its
    helper would be (scope name prefixes and the method name, or
    `name:`), with the query's parameters in signature order and the
-   query's result: `func (c *Client) APIUserGet(ctx, id int32)
-   (db.User, error)`, `APIUserDelete(ctx, id int32) error`. Path
+   query's result: `func (c *Client) APIUserGet(ctx, id int)
+   (db.User, error)`, `APIUserDelete(ctx, id int) error`. Path
    parameters render through the same builders as `Path*` helpers,
    query-string parameters through `volt.FormatQuery`, a list as a
    repeated key, a params struct as the body.
@@ -2025,7 +2088,7 @@ Scope / [pipe: api, error_handler: Errors] {
 		get /stats   Admin.Stats
 	}
 	get /files/:path...           Files.Serve
-	get /users/:id(int32)/avatar  Users.Avatar
+	get /users/:id(int)/avatar  Users.Avatar
 }
 ```
 
@@ -2097,10 +2160,9 @@ ident list = "(", name, { ",", name }, ")" ;   (* the value of only: and except:
    the right spelling. A qualified name that matches nothing is an
    error; an unqualified one that matches nothing is a resource
    without a schema (clause 6).
-3. The resolved table MUST have a single-column primary key whose
-   Go type is `int`, `int32`, `int64` or `string`; that type
-   becomes the key parameter's type. Composite, missing, or unroutable
-   keys are errors.
+3. The resolved table MUST have a single-column primary key of type
+   `int` or `string`; that type becomes the key parameter's type.
+   Composite, missing, or unroutable keys are errors.
 4. A resolved declaration fixes every derived name from the schema:
    the URL segment and the controller come from the table name as
    written, and the member helper from the table's **model** name (the
@@ -2357,10 +2419,10 @@ Pred chosen  { org in :orgs }
    - `like` requires a text column and a text pattern;
    - `in` items must all match the column's type;
    - `in :name` makes `:name` a **list parameter**: its Go type is a
-     slice of the column's generated type (`[]string`, `[]int32`),
-     and the column MUST NOT be date/time-typed — JSON, the list's
+     slice of the column's generated type (`[]string`, `[]int`),
+     and the column MUST NOT be `time.Time` — JSON, the list's
      wire form (§selects-over-groups), carries no date/time value;
-   - blob and JSON columns may not appear in predicates;
+   - `[]byte` columns may not appear in predicates;
    - a `param` adopts the type of the expression position it appears
      in; one param name MUST resolve to one type across the whole use
      site — a list and a scalar use of the same name disagree — or
@@ -2368,11 +2430,12 @@ Pred chosen  { org in :orgs }
 4. An enum-typed column cannot be compared in the predicate language
    in v1 — the only column type predicates refuse besides blob/json;
    whether typed enum parameters should lift this is hypotheses H5.
-5. Type classes are defined by the §mapping-to-go mapping: two column
-   types agree iff they map to the same Go type; numeric = the
-   integer, unsigned and float families; text = `string`-mapped;
-   date/time = `time.Time`-mapped. `decimal`/`money` map to `string`
-   and are therefore **not** orderable in a predicate — deliberate.
+5. Type classes follow the column types (§columns): numeric = `int`
+   and `float64`; text = `string`; date/time = `time.Time`; `bool`
+   agrees with `bool` only. A column of a declared type (§types)
+   compares with `=`, `!=`, `in` and `is null` only: a parameter in
+   that position has the declared Go type, a literal has the class
+   of the storage type.
 5. Checks (Part I §checks) are the parameterless ancestors of predicates;
    unifying them onto this language is planned, not yet specified.
 
@@ -2425,9 +2488,8 @@ the optional projection narrows the emitted columns.
    — and the emitted SQL spells it out (`ORDER BY year DESC, id ASC`).
    Order columns obey the agreement rule and MUST be orderable (§predicates) or text —
    ORDER BY text is SQL's own collation, allowed here — and MUST appear
-   at most once. A decimal column is neither: it is stored as text
-   (§mapping-to-sqlite-ddl), so ordering it would be lexical, not numeric — an
-   error.
+   at most once. A column of a declared type (§types) is neither: it
+   compares for equality only, so ordering it is an error.
 6. Generation contract (with §mapping-to-go): per member, a method on
    `Queries` —
    `func (q *Queries) <Model><SelectName>(ctx context.Context, <params>) ([]<Row>, error)`
@@ -2502,8 +2564,8 @@ go check = go ref, "(", column name, { ",", column name }, ")" ;
 
 ```volt
 Table users {
-  email varchar [not null]
-  hits  integer [not null]
+  email string [not null]
+  hits  int [not null]
 
   checks {
     hits >= 0 and hits in (0, 1, 2)  [name: 'hits_sane']
@@ -2557,7 +2619,7 @@ Table users {
    the go tool would compile for it (go/build's file constraints, as
    §pipelines), take exactly one parameter per argument column with the
    column's generated Go type spelled exactly (§mapping-to-go: `string`,
-   `int32`, `time.Time`, `[]byte`, an enum's generated type name
+   `int`, `time.Time`, `[]byte`, an enum's generated type name
    `E<Enum>` — a variadic parameter never matches), and return exactly
    `error`. Each violation is its own error — undeclared, generic,
    variadic, wrong arity, a parameter whose spelled type disagrees with
@@ -2640,7 +2702,7 @@ route path     = slash, [ segment, { slash, segment } ] ;
 segment        = name
                | ":", name, [ "(", param type, ")" ]
                | ":", name, "." , ".", "." ;
-param type     = "int" | "int32" | "int64" | "string" ;
+param type     = "int" | "string" ;
 
 resources      = "resources", table ref, [ settings ], newline ;
 table ref      = name, [ ".", name ] ;
@@ -2719,36 +2781,26 @@ generated client (§generated-client) among them, needs nothing else.
 `nao_queries.go` carries the `Queries` handle and its methods, and
 imports only what their signatures name.
 
-### Types
+### Go types
 
-Lower-cased declared type, parenthesized arguments ignored. An unmapped
-type is a **generation error** naming the column — never a silent guess.
+A column type is a Go type (§columns), so the mapping is the identity
+for the built-ins; the checker has already refused anything outside
+the set.
 
-| Declared types | Go |
+| Declared | Go |
 |---|---|
-| `tinyint`, `int2`, `smallint`, `smallserial` | `int16` |
-| `int`, `integer`, `int4`, `mediumint`, `serial` | `int32` |
-| `bigint`, `int8`, `bigserial` | `int64` |
-| `"tinyint unsigned"` / `"smallint unsigned"` / `"int unsigned"` / `"bigint unsigned"` | `uint8` / `uint16` / `uint32` / `uint64` |
-| `real`, `float4` | `float32` |
-| `float`, `float8`, `double`, `"double precision"` | `float64` |
-| `decimal`, `numeric`, `money` | `string` (exact; money never rides a float) |
-| `bool`, `boolean` | `bool` |
-| `varchar`, `char`, `text` family, `citext`, `string`, `uuid` | `string` |
-| `date`, `timestamp*`, `datetime` | `time.Time` |
-| `time`, `timetz` (time of day) | `string` (SQLite has no time type; stored as TEXT) |
-| `json`, `jsonb` | `json.RawMessage` |
-| `bytea`, `blob` family, `binary`, `varbinary` | `[]byte` |
+| `bool`, `int`, `float64`, `string`, `time.Time` | the same |
+| `[]byte` | `[]byte`; nil is NULL, never wrapped |
 | enum type (optionally schema-qualified) | generated `type X string` + constants |
+| declared `Type pkg.Name` (§types) | `pkg.Name`, imported as `import pkg "path"` |
 
 ### Nullability
 
 A column is required (`T`) when it has `not null`, `pk`/`primary key`
 (setting or legacy flag), `increment`, or is covered by a `[pk]` index —
 primary keys imply NOT NULL in SQL. Everything else is nullable and
-generated as `rt.Null[T]` — a value plus a validity bit, never a pointer
-. Types where `nil` already expresses NULL (`[]byte`,
-`json.RawMessage`) stay bare. In the dynamic layer, nullable columns get
+generated as `rt.Null[T]` — a value plus a validity bit, never a pointer.
+`[]byte`, where `nil` already expresses NULL, stays bare. In the dynamic layer, nullable columns get
 `rt.NullColumn` handles: comparisons take plain `T`, NULL is explicit
 (`IsNull`, `SetNull`).
 
@@ -2852,20 +2904,21 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 | enum-typed column | `TEXT` + `CHECK (col IN ('a', 'b'))` — SQLite has no enum type |
 | `core.users` (schema) | `core_users` — SQLite has no schemas; collisions are generation errors |
 | `pk` column | explicit `NOT NULL` added: SQLite's `PRIMARY KEY` does **not** imply NOT NULL |
-| integer `[pk, increment]` | exactly `INTEGER PRIMARY KEY` (rowid alias, auto-assigned); SQLite's `AUTOINCREMENT` keyword deliberately avoided — it only adds the never-reuse-an-id bookkeeping the SQLite docs discourage. Any other `increment` placement is a check error (§columns) |
+| `int` `[pk, increment]` | exactly `INTEGER PRIMARY KEY` (rowid alias, auto-assigned); SQLite's `AUTOINCREMENT` keyword deliberately avoided — it only adds the never-reuse-an-id bookkeeping the SQLite docs discourage. Any other `increment` placement is a check error (§columns) |
 | composite pk (`[pk]` index) | `PRIMARY KEY (a, b)` table constraint; members get `NOT NULL` |
 | refs (`>`, `<`, `-`) | `FOREIGN KEY … REFERENCES` with `ON DELETE` / `ON UPDATE`; FK side per §relationships-ref |
 | one-to-one (`-`) | adds `UNIQUE` on the FK column unless something already guarantees it |
 | many-to-many (`<>`) | nothing — model the junction table explicitly |
-| ints / bools | `INTEGER` (booleans stored 0/1; `true`/`false` in records and defaults become 1/0) |
-| floats | `REAL` |
-| decimal / numeric / money | `TEXT` (exact, consistent with §mapping-to-go's `string`) |
-| strings / uuid / dates / json | `TEXT` (dates as ISO-8601, SQLite's convention) |
-| bytea / blob family | `BLOB` |
+| `int`, `bool` | `INTEGER` (booleans stored 0/1; `true`/`false` in records and defaults become 1/0) |
+| `float64` | `REAL` |
+| `string` | `TEXT` |
+| `time.Time` | `TIMESTAMP` (ISO-8601 text; the declared name is what the driver keys its time conversion on) |
+| `[]byte` | `BLOB` |
+| declared `Type` (§types) | the column type of its storage type |
 | backtick expressions | verbatim; parenthesized in `DEFAULT` as SQLite requires |
 | typed checks (§validation-checks) | `CHECK (<the §validation-checks rendering>)`; Go-reference checks emit nothing — SQLite cannot call Go |
 | `records` | multi-row `INSERT` statements after all tables, in source order; empty fields become `NULL` |
-| unknown type | generation **error** naming the column |
+| unknown type | check error naming the column (§columns); the generator never sees one |
 
 Identifiers are quoted only when needed (not a plain lower-case name,
 or a SQLite keyword): `order` → `"order"`, `full name` → `"full name"`,
@@ -2878,9 +2931,10 @@ marker, with the same overwrite protection as §mapping-to-go.
 
 ## Compatibility with DBML
 
-Volt accepts the entire DBML core of Part I verbatim: a schema using
-only Part I constructs is upstream-valid DBML and pastes into
-dbdiagram.io unchanged. The compatibility break is **one system**:
+Volt's schema core keeps DBML's syntax with two breaks. The first is
+the type vocabulary: a column type is a Go type (§columns), so DBML's
+`varchar(255)` or `integer` is an error naming the column, and an
+imported schema is retyped once. The second is **one system**:
 DBML's file-based module machinery (Part I §file-imports-removed) — `use * from './file'`,
 selective imports with per-element kinds and `as` aliases, and `reuse`
 re-export — **is not part of the Volt language** (§imports). The parser

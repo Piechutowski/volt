@@ -1,10 +1,10 @@
 // spec: §keywords — keywords are contextual, usable as ordinary names
 Table table {
-  note varchar
+  note string
   indexes int
   checks int
   records int
-  ref varchar
+  ref string
   enum int
   from int
   as int

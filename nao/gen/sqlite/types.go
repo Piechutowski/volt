@@ -7,59 +7,27 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 )
 
+// sqliteType is the column type per storage type (spec §mapping-to-sqlite-ddl).
 var sqliteType = map[string]string{
-	"tinyint": "INTEGER", "int2": "INTEGER", "smallint": "INTEGER",
-	"smallserial": "INTEGER", "int": "INTEGER", "integer": "INTEGER",
-	"int4": "INTEGER", "mediumint": "INTEGER", "serial": "INTEGER",
-	"bigint": "INTEGER", "int8": "INTEGER", "bigserial": "INTEGER",
-	"tinyint unsigned": "INTEGER", "smallint unsigned": "INTEGER",
-	"int unsigned": "INTEGER", "integer unsigned": "INTEGER",
-	"bigint unsigned": "INTEGER",
-
-	"bool": "INTEGER", "boolean": "INTEGER",
-
-	"real": "REAL", "float4": "REAL", "float": "REAL", "float8": "REAL",
-	"double": "REAL", "double precision": "REAL",
-
-	"decimal": "TEXT", "numeric": "TEXT", "money": "TEXT",
-
-	"varchar": "TEXT", "character varying": "TEXT", "char": "TEXT",
-	"character": "TEXT", "text": "TEXT", "tinytext": "TEXT",
-	"mediumtext": "TEXT", "longtext": "TEXT", "citext": "TEXT",
-	"string": "TEXT", "uuid": "TEXT",
-
-	"date": "DATE", "time": "TEXT", "timetz": "TEXT",
-	"time with time zone": "TEXT", "time without time zone": "TEXT",
-	"timestamp": "TIMESTAMP", "timestamptz": "TIMESTAMP",
-	"timestamp with time zone": "TIMESTAMP", "timestamp without time zone": "TIMESTAMP",
-	"datetime": "DATETIME",
-
-	"json": "TEXT", "jsonb": "TEXT",
-	"bytea": "BLOB", "blob": "BLOB", "tinyblob": "BLOB",
-	"mediumblob": "BLOB", "longblob": "BLOB",
-	"binary": "BLOB", "varbinary": "BLOB",
+	"bool":      "INTEGER",
+	"int":       "INTEGER",
+	"float64":   "REAL",
+	"string":    "TEXT",
+	"time.Time": "TIMESTAMP",
+	"[]byte":    "BLOB",
 }
 
-func (g *generator) typeResolve(col *ast.Column) (string, *check.EnumInfo, error) {
-	schema, base := col.Type.Name.Schema(), col.Type.Name.Base()
-	key := "public." + base
-	if schema != "" {
-		key = schema + "." + base
+func (g *generator) typeResolve(cd *check.ColumnDef) (string, *check.EnumInfo, error) {
+	if !cd.Type.Known() {
+		return "", nil, fmt.Errorf("unknown type %q", cd.Col.Type.String())
 	}
-	if e, ok := g.enums[key]; ok {
-		return "TEXT", e, nil
+	if cd.Type.Enum != nil {
+		return "TEXT", cd.Type.Enum, nil
 	}
-	if schema != "" {
-		return "", nil, fmt.Errorf("type %s.%s does not name a known enum", schema, base)
-	}
-	if t, ok := sqliteType[strings.ToLower(base)]; ok {
-		return t, nil, nil
-	}
-	return "", nil, fmt.Errorf("no SQLite mapping for type %q (extend the map in gen/sqlite/types.go)", base)
+	return sqliteType[cd.Type.Storage], nil, nil
 }
 
 var plainIdent = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)

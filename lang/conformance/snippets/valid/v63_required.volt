@@ -7,10 +7,10 @@ Enum plan {
 }
 
 Table accounts {
-  id     integer [pk, increment]
-  email  varchar [not null, required, unique]
-  seats  integer [not null, required]
+  id     int [pk, increment]
+  email  string [not null, required, unique]
+  seats  int [not null, required]
   tier   plan    [not null, required]
-  avatar blob    [not null, required]
-  price  decimal(10,2) [not null, required]
+  avatar []byte    [not null, required]
+  price  float64 [not null, required]
 }

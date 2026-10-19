@@ -11,15 +11,13 @@ type ParamType string
 
 const (
 	TInt    ParamType = "int"
-	TInt32  ParamType = "int32"
-	TInt64  ParamType = "int64"
 	TString ParamType = "string"
 )
 
 // KnownParamType reports whether s names a parameter type.
 func KnownParamType(s string) bool {
 	switch ParamType(s) {
-	case TInt, TInt32, TInt64, TString:
+	case TInt, TString:
 		return true
 	}
 	return false
@@ -41,7 +39,7 @@ type Param struct {
 type RouteInfo struct {
 	Method  string // "GET", ... ; "" for the any-verb (matches every method)
 	Pattern string // ServeMux registration pattern, e.g. "/users/{id}"
-	Spelled string // canonical DSL spelling, e.g. "/users/:id(int64)"
+	Spelled string // canonical DSL spelling, e.g. "/users/:id(int)"
 	Params  []Param
 
 	Controller string // Go interface base name, e.g. "Users"

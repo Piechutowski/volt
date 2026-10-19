@@ -23,6 +23,6 @@ Scope / [pipe: api, error_handler: Errors] {
 
 	resources db.users [only: (index, show, create)]
 
-	get /users/:id(int32)/avatar Users.Avatar
+	get /users/:id(int)/avatar Users.Avatar
 	get /files/:path...          Files.Serve
 }

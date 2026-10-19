@@ -2,5 +2,5 @@
 package app
 
 Scope / {
-	get /f/:p(int64)... F.S
+	get /f/:p(int)... F.S
 }

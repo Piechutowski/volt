@@ -24,7 +24,7 @@ app/i07_dup_route_shape.volt:6:2: error: spec/scopes-and-routes: route GET /user
 app/i08_helper_collision.volt:6:2: error: spec/scopes-and-routes: reverse-URL helper or client method "Show" already produced by the route at app/i08_helper_collision.volt:5:2 (§route-names-and-reverse-urls, §generated-client); disambiguate with [name:] or a scope name
 
 ## i09_signature_conflict.volt
-app/i09_signature_conflict.volt:6:2: error: spec/scopes-and-routes: X.Show is reached by routes with different parameter signatures (§handler-references): (id int32) vs (id int64) (first at app/i09_signature_conflict.volt:5:2)
+app/i09_signature_conflict.volt:6:2: error: spec/scopes-and-routes: X.Show is reached by routes with different parameter signatures (§handler-references): (id string) vs (id int) (first at app/i09_signature_conflict.volt:5:2)
 
 ## i100_query_body_verb
 app/routes.volt:10:16: error: spec/scopes-and-routes: db.UserCreate takes a request body (db.UserCreateParams); route it with post, put or patch (§query-routes)
@@ -64,16 +64,16 @@ app/i109_event_route_verb.volt:6:2: error: spec/scopes-and-routes: an event rout
 app/i10_wildcard_not_last.volt:5:9: error: spec/scopes-and-routes: the wildcard ':p...' must be the last path segment (§route-paths)
 
 ## i110_required_nullable.volt
-db/i110_required_nullable.volt:7:18: error: spec/columns: required on "email" needs not null: a nullable column has no empty value to refuse, NULL is absence (§columns)
+db/i110_required_nullable.volt:7:17: error: spec/columns: required on "email" needs not null: a nullable column has no empty value to refuse, NULL is absence (§columns)
 
 ## i111_required_bool.volt
-db/i111_required_bool.volt:7:29: error: spec/columns: required on "active" (boolean): a boolean has no empty value — every value is a value (§columns)
+db/i111_required_bool.volt:7:26: error: spec/columns: required on "active" (bool): a bool has no empty value — every value is a value (§columns)
 
 ## i112_required_default.volt
-db/i112_required_default.volt:7:16: error: spec/columns: "required" and "default" cannot both be set
+db/i112_required_default.volt:7:15: error: spec/columns: "required" and "default" cannot both be set
 
 ## i113_required_time.volt
-db/i113_required_time.volt:7:27: error: spec/columns: required on "at" (timestamp): a timestamp has no empty value — every value is a value (§columns)
+db/i113_required_time.volt:7:27: error: spec/columns: required on "at" (time.Time): a time.Time has no empty value — every value is a value (§columns)
 
 ## i114_resources_default_unqualified
 app/routes.volt:6:2: error: spec/imports: package "db" imported and not used (§imports)
@@ -106,7 +106,7 @@ app/i11_wildcard_in_scope.volt:4:10: error: spec/scopes-and-routes: the wildcard
 app/i12_unknown_pipeline.volt:4:10: error: spec/scopes-and-routes: unknown Pipeline "nope" (§scopes)
 
 ## i13_unknown_param_type.volt
-app/i13_unknown_param_type.volt:5:13: error: spec/scopes-and-routes: unknown parameter type "uuid" (§route-paths); valid: int, int32, int64, string
+app/i13_unknown_param_type.volt:5:13: error: spec/scopes-and-routes: unknown parameter type "uuid" (§route-paths); valid: int, string
 
 ## i14_dup_param.volt
 app/i14_dup_param.volt:5:9: error: spec/scopes-and-routes: duplicate path parameter "id" (§route-paths)
@@ -145,7 +145,7 @@ app/i24_toplevel_route.volt:4:1: error: syntax: routes, resources and datasets m
 app/i25_short_ellipsis.volt:5:14: error: syntax: wildcard ellipsis is spelled ':name...' (§route-paths)
 
 ## i26_typed_wildcard.volt
-app/i26_typed_wildcard.volt:5:20: error: syntax: a wildcard cannot carry a type; ':name...' always captures a string (§route-paths)
+app/i26_typed_wildcard.volt:5:18: error: syntax: a wildcard cannot carry a type; ':name...' always captures a string (§route-paths)
 
 ## i27_import_no_parens.volt
 app/i27_import_no_parens.volt:4:1: error: syntax: expected '(' after import (§imports); Volt uses Go-style import blocks
@@ -226,10 +226,10 @@ db/i52_group_cycle.volt:9:7: error: spec/groups: group "b" has no members (§gro
 db/i53_pred_type_mismatch.volt:9:33: error: spec/selects-over-groups: column "org" (string) is not orderable; < <= > >= need numeric or date/time operands (§predicates)
 
 ## i54_group_type_disagree.volt
-db/i54_group_type_disagree.volt:19:29: error: spec/selects-over-groups: column "org" disagrees on type across "mixed": int32 in ks_seats; string in ms_revenue — the predicate cannot be checked for every member (§selects-over-groups)
+db/i54_group_type_disagree.volt:19:29: error: spec/selects-over-groups: column "org" disagrees on type across "mixed": int in ks_seats; string in ms_revenue — the predicate cannot be checked for every member (§selects-over-groups)
 
 ## i55_param_two_types.volt
-db/i55_param_two_types.volt:10:53: error: spec/selects-over-groups: parameter :v used as int32 here but string earlier — one name, one type (§predicates)
+db/i55_param_two_types.volt:10:53: error: spec/selects-over-groups: parameter :v used as int here but string earlier — one name, one type (§predicates)
 
 ## i56_select_missing_column.volt
 db/i56_select_missing_column.volt:18:30: error: spec/selects-over-groups: column "org" is missing from ms_meta — every member of "series" must have it (§selects-over-groups)
@@ -241,7 +241,7 @@ db/i57_pred_cycle.volt:10:10: error: spec/predicates: predicate "a" is part of a
 db/i58_select_crud_collision.volt:9:8: error: spec/selects-over-groups: select name "List" collides with the generated CRUD surface (§selects-over-groups)
 
 ## i59_like_on_number.volt
-db/i59_like_on_number.volt:9:33: error: spec/selects-over-groups: like needs a text column; "year" is int32 (§predicates)
+db/i59_like_on_number.volt:9:33: error: spec/selects-over-groups: like needs a text column; "year" is int (§predicates)
 
 ## i60_order_direction_missing.volt
 db/i60_order_direction_missing.volt:9:65: error: spec/selects-over-groups: order: every column states its direction — write "id asc" or "id desc" (§selects-over-groups)
@@ -286,16 +286,16 @@ db/i75_check_time_column.volt:10:5: error: spec/validation-checks: column "creat
 db/i76_check_is_null_constant.volt:10:5: error: spec/validation-checks: is null is constant in a check: its columns are not null by §validation-checks
 
 ## i77_check_fractional_literal.volt
-db/i77_check_fractional_literal.volt:10:13: error: spec/validation-checks: the fractional literal 1.5 needs a float column; "hits" is int32 (§validation-checks)
+db/i77_check_fractional_literal.volt:10:13: error: spec/validation-checks: the fractional literal 1.5 needs a float column; "hits" is int (§validation-checks)
 
 ## i81_goref_undeclared
 db/schema.volt:11:5: error: spec/validation-checks: no function EmailValdi in package db's Go files — declare func EmailValdi(string) error beside the schema (§validation-checks)
 
 ## i82_goref_column_type
-db/schema.volt:11:16: error: spec/validation-checks: column "email" (integer, Go int32) but parameter 1 of EmailValid is string — change the column type or the function: expected func EmailValid(int32) error (§validation-checks)
+db/schema.volt:11:16: error: spec/validation-checks: column "email" (int, Go int) but parameter 1 of EmailValid is string — change the column type or the function: expected func EmailValid(int) error (§validation-checks)
 
 ## i83_goref_param_type
-db/schema.volt:11:16: error: spec/validation-checks: column "email" (varchar, Go string) but parameter 1 of EmailValid is int — change the column type or the function: expected func EmailValid(string) error (§validation-checks)
+db/schema.volt:11:16: error: spec/validation-checks: column "email" (string, Go string) but parameter 1 of EmailValid is int — change the column type or the function: expected func EmailValid(string) error (§validation-checks)
 
 ## i84_goref_arity
 db/schema.volt:11:5: error: spec/validation-checks: EmailValid takes 2 parameter(s) but the check passes 1 column(s): found func EmailValid(email, domain string) error, expected func EmailValid(string) error (§validation-checks)
@@ -343,5 +343,5 @@ db/i97_list_param_scalar_conflict.volt:10:60: error: spec/selects-over-groups: p
 app/routes.volt:10:16: error: spec/scopes-and-routes: no generated query db.UserLst in package "db" — a query route names a select method or a default CRUD method (Get, List, Create, Update, Delete) (§query-routes)
 
 ## i99_query_path_type
-app/routes.volt:10:13: error: spec/scopes-and-routes: path parameter "id" is int64 but db.UserGet takes int32; spell it :id(int32) (§query-routes)
+app/routes.volt:10:13: error: spec/scopes-and-routes: path parameter "id" is string but db.UserGet takes int; spell it :id(int) (§query-routes)
 

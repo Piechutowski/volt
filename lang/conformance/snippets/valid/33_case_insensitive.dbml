@@ -1,6 +1,6 @@
 // spec: §case-sensitivity-and-terminology — keywords are case-insensitive
 TABLE users {
-  id INT [PK, NOT NULL]
+  id int [PK, NOT NULL]
 }
 enum status { active }
 table posts { user_id int [Ref: > users.id] }

@@ -177,6 +177,16 @@ func Children(n Node) []Node {
 		if n.Settings != nil {
 			out = append(out, n.Settings)
 		}
+	case *TypeDecl:
+		if n.Name != nil {
+			out = append(out, n.Name)
+		}
+		if n.Storage != nil {
+			out = append(out, n.Storage)
+		}
+		if n.From != nil {
+			out = append(out, n.From)
+		}
 	case *Records:
 		if n.Table != nil {
 			out = append(out, n.Table)

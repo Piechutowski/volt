@@ -146,6 +146,6 @@ type Route struct {
 // RouteParam describes one captured parameter of a table row.
 type RouteParam struct {
 	Name string
-	Type string // int, int32, int64, string
+	Type string // int, string
 	Wild bool
 }

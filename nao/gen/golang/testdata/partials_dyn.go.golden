@@ -18,8 +18,8 @@ const (
 // built here can only enter Invoice queries; mixing models is a compile
 // error.
 var (
-	InvoiceID        = rt.Column[Invoice, int64]{Name: "id"}
-	InvoiceTotal     = rt.Column[Invoice, string]{Name: "total"}
+	InvoiceID        = rt.Column[Invoice, int]{Name: "id"}
+	InvoiceTotal     = rt.Column[Invoice, float64]{Name: "total"}
 	InvoiceCreatedAt = rt.Column[Invoice, time.Time]{Name: "created_at"}
 	InvoiceUpdatedAt = rt.NullColumn[Invoice, time.Time]{Column: rt.Column[Invoice, time.Time]{Name: "updated_at"}}
 	InvoiceDeletedAt = rt.NullColumn[Invoice, time.Time]{Column: rt.Column[Invoice, time.Time]{Name: "deleted_at"}}
