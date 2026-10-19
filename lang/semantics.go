@@ -77,7 +77,7 @@ func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 		c.schemas[path] = pr.Packages[path].schema
 	}
 	phase((*checker).dataQueries)
-	phase((*checker).tableChecks)
+	phase((*checker).tableValidators)
 	phase((*checker).routing)
 	if s != nil {
 		for _, path := range fresh {
@@ -126,24 +126,14 @@ type checksEntry struct {
 	model   any
 	funcs   *goScan
 	pkgName string
-	preds   map[string]*ast.Pred
-	specs   []golang.CheckSpec
-	sqls    map[*ast.Check]string
+	specs   []golang.ValidatorSpec
 	diags   []diag.Diagnostic
 
 	validCreate, validUpdate bool
 }
 
-func (e *checksEntry) holds(model any, funcs *goScan, pkgName string, preds map[string]*ast.Pred) bool {
-	if e.model != model || e.funcs != funcs || e.pkgName != pkgName || len(e.preds) != len(preds) {
-		return false
-	}
-	for name, d := range preds {
-		if old, ok := e.preds[name]; !ok || old != d {
-			return false
-		}
-	}
-	return true
+func (e *checksEntry) holds(model any, funcs *goScan, pkgName string) bool {
+	return e.model == model && e.funcs == funcs && e.pkgName == pkgName
 }
 
 func (c *checker) perPackage(paths []string, phase func(*checker, *Package)) [][]diag.Diagnostic {

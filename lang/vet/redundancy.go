@@ -114,7 +114,7 @@ type emptyBodyRule struct{ meta }
 
 var emptyBody = &emptyBodyRule{meta{
 	name: "emptybody",
-	doc:  "reports empty indexes/checks blocks, TableGroups, DiagramView categories and Project bodies",
+	doc:  "reports empty indexes/validators blocks, TableGroups, DiagramView categories and Project bodies",
 }}
 
 func (r *emptyBodyRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
@@ -125,9 +125,9 @@ func (r *emptyBodyRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagn
 			if len(n.Indexes) == 0 {
 				out = append(out, r.warnf(n.Pos(), "empty indexes block"))
 			}
-		case *ast.ChecksBlock:
-			if len(n.Checks) == 0 {
-				out = append(out, r.warnf(n.Pos(), "empty checks block"))
+		case *ast.ValidatorsBlock:
+			if len(n.Validators) == 0 {
+				out = append(out, r.warnf(n.Pos(), "empty validators block"))
 			}
 		case *ast.TableGroup:
 			if len(n.Members) == 0 {

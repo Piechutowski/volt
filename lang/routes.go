@@ -85,7 +85,7 @@ type QueryParam struct {
 	Name      string // Go parameter name, also the URL key
 	GoType    string // unqualified Go type ("int32", "[]string"); params structs are qualified ("db.UserCreateParams")
 	Source    QuerySource
-	Validates bool // body param: the params struct has a Validate method the handler calls first (§validation-checks)
+	Validates bool // body param: the params struct has a Validate method the handler calls first (§validators)
 }
 
 // QueryRef binds a route to a generated query method of a data package

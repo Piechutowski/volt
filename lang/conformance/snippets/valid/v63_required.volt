@@ -1,4 +1,4 @@
-// spec: §validation-checks — required is the non-empty rule in both tiers, per type class; enums count as text
+// spec: §validators — required is the non-empty rule in both tiers, per type class; enums count as text
 package db
 
 Enum plan {

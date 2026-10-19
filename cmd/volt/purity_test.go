@@ -38,7 +38,6 @@ var immutableVars = map[string]bool{
 	module + "/lang/check.columnSettings":         true,
 	module + "/lang/check.builtins":               true,
 	module + "/lang/check.indexSettings":          true,
-	module + "/lang/check.settingsCheck":          true,
 	module + "/lang/check.refSettings":            true,
 	module + "/lang/check.integerTypes":           true,
 	module + "/lang/check.requiredKinds":          true,
@@ -52,7 +51,7 @@ var immutableVars = map[string]bool{
 }
 
 var pureStdlib = map[string]bool{
-	"strings": true, "strconv": true, "unicode": true,
+	"strings": true, "unicode": true,
 	"fmt":    true,
 	"sort":   true,
 	"regexp": true,

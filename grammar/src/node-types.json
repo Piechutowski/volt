@@ -10,55 +10,6 @@
     "fields": {}
   },
   {
-    "type": "check_definition",
-    "named": true,
-    "fields": {
-      "settings": {
-        "multiple": false,
-        "required": false,
-        "types": [
-          {
-            "type": "settings_list",
-            "named": true
-          }
-        ]
-      }
-    },
-    "children": {
-      "multiple": false,
-      "required": true,
-      "types": [
-        {
-          "type": "expression",
-          "named": true
-        },
-        {
-          "type": "go_check",
-          "named": true
-        },
-        {
-          "type": "pred_expr",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
-    "type": "checks_block",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": true,
-      "required": false,
-      "types": [
-        {
-          "type": "check_definition",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
     "type": "column_definition",
     "named": true,
     "fields": {
@@ -397,32 +348,6 @@
           }
         ]
       }
-    }
-  },
-  {
-    "type": "go_check",
-    "named": true,
-    "fields": {
-      "ref": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "go_ref",
-            "named": true
-          }
-        ]
-      }
-    },
-    "children": {
-      "multiple": true,
-      "required": true,
-      "types": [
-        {
-          "type": "column_ref",
-          "named": true
-        }
-      ]
     }
   },
   {
@@ -2008,10 +1933,6 @@
       "required": false,
       "types": [
         {
-          "type": "checks_block",
-          "named": true
-        },
-        {
           "type": "column_definition",
           "named": true
         },
@@ -2029,6 +1950,10 @@
         },
         {
           "type": "records_block",
+          "named": true
+        },
+        {
+          "type": "validators_block",
           "named": true
         }
       ]
@@ -2138,10 +2063,6 @@
       "required": false,
       "types": [
         {
-          "type": "checks_block",
-          "named": true
-        },
-        {
           "type": "column_definition",
           "named": true
         },
@@ -2151,6 +2072,10 @@
         },
         {
           "type": "note_definition",
+          "named": true
+        },
+        {
+          "type": "validators_block",
           "named": true
         }
       ]
@@ -2206,6 +2131,47 @@
         },
         {
           "type": "quoted_identifier",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "validator",
+    "named": true,
+    "fields": {
+      "ref": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "go_ref",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "column_ref",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "validators_block",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "validator",
           "named": true
         }
       ]
@@ -2465,10 +2431,6 @@
     "named": false
   },
   {
-    "type": "checks",
-    "named": false
-  },
-  {
     "type": "color",
     "named": true
   },
@@ -2643,6 +2605,10 @@
   },
   {
     "type": "use",
+    "named": false
+  },
+  {
+    "type": "validators",
     "named": false
   },
   {

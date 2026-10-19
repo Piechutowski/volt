@@ -1,9 +1,9 @@
-// spec: §indexes — multiple indexes/checks blocks per body; contents accumulate
+// spec: §indexes, §validators — multiple indexes and validators blocks per body; contents accumulate
 Table t {
   id int
   name string
   indexes { id }
-  checks { `id > 0` }
+  validators { IDPositive(id) }
   indexes { name }
-  checks { `id < 100` }
+  validators { IDSmall(id) }
 }

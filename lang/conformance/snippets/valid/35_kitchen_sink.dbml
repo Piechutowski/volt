@@ -32,8 +32,8 @@ Table posts {
   author_id int [not null, ref: > U.id]
   ~timestamps
 
-  checks {
-    `length(title) > 0` [name: 'chk_title']
+  validators {
+    TitleShape(title)
   }
 
   records (id, title, status, author_id) {

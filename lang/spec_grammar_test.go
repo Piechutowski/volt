@@ -77,10 +77,6 @@ func specLanguage(t *testing.T) *ebnf.Language {
 			case b.section == "Lexical Structure" || r.Name == "slash":
 				lexical[r.Name] = true
 			}
-			if b.part == 2 && r.Name == "check" {
-				g.Set(r)
-				continue
-			}
 			if err := g.Add(r); err != nil {
 				t.Fatalf("docs/spec.md:%d (%s): %v: a name is defined once, and a section that needs another's rule references it", b.line, b.heading, err)
 			}
@@ -119,7 +115,7 @@ func specLanguage(t *testing.T) *ebnf.Language {
 		Contiguous: contiguous,
 		SameLine: map[string]bool{
 			"settings": true, "table settings": true, "column settings": true, "index settings": true,
-			"check settings": true, "ref settings": true, "enum settings": true, "note settings": true,
+			"ref settings": true, "enum settings": true, "note settings": true,
 			"table group settings": true,
 		},
 		Specials: map[string]func(rune) bool{
@@ -159,14 +155,14 @@ func TestSpecGrammarReadsAndIsClosed(t *testing.T) {
 
 // The collected grammars are copies: Appendix IA repeats every rule
 // of Part I's sections and nothing else; Appendix VA repeats every
-// rule of Part II's sections but the query layer's (§groups to §validation-checks, which
+// rule of Part II's sections but the query layer's (§groups to §validators, which
 // it says it leaves in place), extends element and setting value by
 // reference, and defines nothing of its own.
 func TestSpecCollectedGrammarsRepeatTheSections(t *testing.T) {
 	blocks := specGrammarBlocks(t)
 	sections := map[int]map[string]string{1: {}, 2: {}}
 	where := map[string]string{}
-	notCollected := map[string]bool{"Groups": true, "Predicates": true, "Selects over groups": true, "Validation checks": true}
+	notCollected := map[string]bool{"Groups": true, "Predicates": true, "Selects over groups": true, "Validators": true}
 	expected := map[int]map[string]bool{1: {}, 2: {}}
 	for _, b := range blocks {
 		if b.collected() {

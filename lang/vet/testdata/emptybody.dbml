@@ -5,7 +5,7 @@ Table t {
   id int
   indexes { //WANT emptybody
   }
-  checks { //WANT emptybody
+  validators { //WANT emptybody
   }
 }
 TableGroup g { //WANT emptybody

@@ -254,7 +254,7 @@ func (d *TablePartial) End() token.Position { return d.Rbrace }
 func (d *TablePartial) declNode()           {}
 
 // TableItem is implemented by everything that can appear in a Table or
-// TablePartial body: *Column, *IndexesBlock, *ChecksBlock, *Note,
+// TablePartial body: *Column, *IndexesBlock, *ValidatorsBlock, *Note,
 // *PartialRef, *Records.
 type TableItem interface {
 	Node
@@ -332,49 +332,27 @@ func (x *Index) End() token.Position {
 	return x.Key[len(x.Key)-1].End()
 }
 
-// ChecksBlock is one checks { ... } block (spec §checks).
-type ChecksBlock struct {
-	ChecksPos token.Position
-	Checks    []*Check
-	Rbrace    token.Position
+// ValidatorsBlock is a validators block (spec §validators).
+type ValidatorsBlock struct {
+	ValidatorsPos token.Position
+	Validators    []*Validator
+	Rbrace        token.Position
 }
 
-func (x *ChecksBlock) Pos() token.Position { return x.ChecksPos }
-func (x *ChecksBlock) End() token.Position { return x.Rbrace }
-func (x *ChecksBlock) tableItemNode()      {}
+func (x *ValidatorsBlock) Pos() token.Position { return x.ValidatorsPos }
+func (x *ValidatorsBlock) End() token.Position { return x.Rbrace }
+func (x *ValidatorsBlock) tableItemNode()      {}
 
-// Check is one check constraint line (spec §checks, §validation-checks). Exactly one
-// of the three forms is set: Expr (opaque SQL, the DBML core), Pred (a
-// typed §predicates expression), or Ref+Args (a Go-reference check).
-type Check struct {
-	Expr     *FuncExpr // opaque SQL; SQL CHECK only
-	Pred     PredExpr  // typed (§validation-checks); SQL CHECK + generated validator
-	Ref      *GoRef    // Go reference (§validation-checks); generated validator only
-	Args     []*Ident  // Go-reference arguments: columns of the table
-	EndPos   token.Position
-	Settings *SettingList
+// Validator is one validator line: a Go function of the package applied
+// to columns of the table (spec §validators).
+type Validator struct {
+	Ref    *GoRef
+	Args   []*Ident
+	EndPos token.Position
 }
 
-func (x *Check) Pos() token.Position {
-	switch {
-	case x.Expr != nil:
-		return x.Expr.Pos()
-	case x.Pred != nil:
-		return x.Pred.Pos()
-	case x.Ref != nil:
-		return x.Ref.Pos()
-	}
-	return x.EndPos
-}
-func (x *Check) End() token.Position {
-	if x.Settings != nil {
-		return x.Settings.End()
-	}
-	if x.EndPos.Line() != 0 {
-		return x.EndPos
-	}
-	return x.Expr.End()
-}
+func (x *Validator) Pos() token.Position { return x.Ref.Pos() }
+func (x *Validator) End() token.Position { return x.EndPos }
 
 // PartialRef is a ~partial injection line (spec §tablepartial).
 type PartialRef struct {

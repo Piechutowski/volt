@@ -113,23 +113,20 @@ func Children(n Node) []Node {
 		if n.Settings != nil {
 			out = append(out, n.Settings)
 		}
-	case *ChecksBlock:
-		for _, c := range n.Checks {
-			if c != nil {
-				out = append(out, c)
+	case *ValidatorsBlock:
+		for _, v := range n.Validators {
+			if v != nil {
+				out = append(out, v)
 			}
 		}
-	case *Check:
-		if n.Expr != nil {
-			out = append(out, n.Expr)
+	case *Validator:
+		if n.Ref != nil {
+			out = append(out, n.Ref)
 		}
 		for _, a := range n.Args {
 			if a != nil {
 				out = append(out, a)
 			}
-		}
-		if n.Settings != nil {
-			out = append(out, n.Settings)
 		}
 	case *PartialRef:
 		if n.Name != nil {

@@ -8,10 +8,6 @@ Table page_views {
   site string [not null]
   day int [not null]
   hits int [not null, default: 0]
-
-  checks {
-    hits >= 0 [name: 'hits_positive']
-  }
 }
 
 Table link_clicks {

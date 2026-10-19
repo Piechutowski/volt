@@ -75,10 +75,7 @@ func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.S
 			for _, ix := range item.Indexes {
 				c.settingsCheck(ix.Settings, "indexes", indexSettings)
 			}
-		case *ast.ChecksBlock:
-			for _, ck := range item.Checks {
-				c.settingsCheck(ck.Settings, "checks", settingsCheck)
-			}
+		case *ast.ValidatorsBlock:
 		case *ast.Note:
 			nNotes++
 		case *ast.Records:

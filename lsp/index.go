@@ -389,10 +389,6 @@ func (ix *Index) enumsNamed(d *ast.Table) map[string]*check.EnumInfo {
 			}
 		case *ast.Records:
 			rows(n.Rows)
-		case *ast.ChecksBlock:
-			for _, c := range n.Checks {
-				settings(c.Settings)
-			}
 		}
 	}
 	return out
@@ -428,10 +424,6 @@ func (ix *Index) tablesNamed(d *ast.Table) map[string]*check.TableInfo {
 		case *ast.IndexesBlock:
 			for _, index := range n.Indexes {
 				settings(index.Settings)
-			}
-		case *ast.ChecksBlock:
-			for _, c := range n.Checks {
-				settings(c.Settings)
 			}
 		}
 	}
@@ -487,13 +479,9 @@ func (ix *Index) walkTableBody(body []ast.TableItem, ti *check.TableInfo, partia
 				ix.addColumnRef(ti, "", c)
 			}
 			ix.walkRecordRows(n.Rows)
-		case *ast.ChecksBlock:
-			for _, c := range n.Checks {
-				ix.walkSettings(c.Settings)
-				if c.Pred != nil {
-					ix.walkPredCols(ti, partial, c.Pred)
-				}
-				for _, a := range c.Args {
+		case *ast.ValidatorsBlock:
+			for _, v := range n.Validators {
+				for _, a := range v.Args {
 					ix.addColumnRef(ti, partial, a)
 				}
 			}

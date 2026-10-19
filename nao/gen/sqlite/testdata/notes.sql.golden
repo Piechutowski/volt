@@ -12,7 +12,7 @@ CREATE TABLE posts (
   id INTEGER PRIMARY KEY,
   -- Shown in lists and in the HTML title tag
   title TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('draft', 'published', 'archived')),
+  status TEXT NOT NULL,
   -- Raw markdown source.
   -- Rendered to HTML at publish time.
   body TEXT,

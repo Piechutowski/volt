@@ -1,6 +1,5 @@
-// Validation support for generated validators (docs/spec.md §validation-checks):
-// the error type every failed check reports, and the LIKE evaluator
-// that mirrors SQLite's operator.
+// Validation support for generated validators (docs/spec.md §validators):
+// the error types a failed validator and a refused write report.
 package rt
 
 import (
@@ -8,9 +7,8 @@ import (
 	"strings"
 )
 
-// CheckError is one failed schema check (spec §validation-checks). Typed checks
-// carry no Cause; a Go-reference check wraps the error the referenced
-// function returned.
+// CheckError is one failed validator (spec §validators): a required
+// column carries no Cause; a validator wraps the error it returned.
 type CheckError struct {
 	Model   string   // the Go model name, e.g. "User"
 	Check   string   // the check's [name:] when set, else its rendered form
@@ -163,50 +161,4 @@ func Constraint(err error) error {
 		return ConstraintError{Kind: strings.ToLower(kind), Detail: detail, Cause: err}
 	}
 	return err
-}
-
-// Like reports whether s matches pattern under SQLite's LIKE operator
-// with no ESCAPE clause: '%' matches any sequence (empty included),
-// '_' matches exactly one character, and letters compare
-// case-insensitively for ASCII only (spec §validation-checks).
-func Like(s, pattern string) bool {
-	return likeMatch([]rune(s), []rune(pattern))
-}
-
-func likeMatch(s, p []rune) bool {
-	for len(p) > 0 {
-		switch p[0] {
-		case '%':
-			for len(p) > 0 && p[0] == '%' {
-				p = p[1:]
-			}
-			if len(p) == 0 {
-				return true
-			}
-			for i := 0; i <= len(s); i++ {
-				if likeMatch(s[i:], p) {
-					return true
-				}
-			}
-			return false
-		case '_':
-			if len(s) == 0 {
-				return false
-			}
-			s, p = s[1:], p[1:]
-		default:
-			if len(s) == 0 || asciiFold(s[0]) != asciiFold(p[0]) {
-				return false
-			}
-			s, p = s[1:], p[1:]
-		}
-	}
-	return len(s) == 0
-}
-
-func asciiFold(r rune) rune {
-	if r >= 'A' && r <= 'Z' {
-		return r + ('a' - 'A')
-	}
-	return r
 }

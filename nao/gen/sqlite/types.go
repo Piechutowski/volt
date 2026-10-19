@@ -20,14 +20,11 @@ var sqliteType = map[string]string{
 	"[]byte":    "BLOB",
 }
 
-func (g *generator) typeResolve(cd *check.ColumnDef) (string, *check.EnumInfo, error) {
+func (g *generator) typeResolve(cd *check.ColumnDef) (string, error) {
 	if !cd.Type.Known() {
-		return "", nil, fmt.Errorf("unknown type %q", cd.Col.Type.String())
+		return "", fmt.Errorf("unknown type %q", cd.Col.Type.String())
 	}
-	if cd.Type.Enum != nil {
-		return "TEXT", cd.Type.Enum, nil
-	}
-	return sqliteType[cd.Type.Storage], nil, nil
+	return sqliteType[cd.Type.Storage], nil
 }
 
 var plainIdent = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)

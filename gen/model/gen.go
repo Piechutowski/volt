@@ -53,13 +53,13 @@ func Generate(pkg *lang.Package, opts Options) ([]File, error) {
 		if fns := pkg.SelectFns(); len(fns) > 0 {
 			emits = append(emits, emit{"nao_selects.go", func() ([]byte, error) { return plan.Selects(fns, gopts) }})
 		}
-		if len(pkg.CheckFns) > 0 {
-			emits = append(emits, emit{"nao_validate.go", func() ([]byte, error) { return plan.Validators(pkg.CheckFns, gopts) }})
+		if len(pkg.Validators) > 0 {
+			emits = append(emits, emit{"nao_validate.go", func() ([]byte, error) { return plan.Validators(pkg.Validators, gopts) }})
 		}
 	}
 	if opts.SQL {
 		emits = append(emits, emit{"nao_schema.sql", func() ([]byte, error) {
-			return sqlite.Generate(pkg.Merged(), pkg.Schema(), sqlite.Options{Source: opts.Source, CheckSQL: pkg.CheckSQL})
+			return sqlite.Generate(pkg.Merged(), pkg.Schema(), sqlite.Options{Source: opts.Source})
 		}})
 	}
 	out := make([]File, len(emits))

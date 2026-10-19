@@ -1,5 +1,5 @@
 // Go-reference navigation: the functions a Volt file names by rule live
-// in the containing package's own Go files (§pipelines plugs, §validation-checks
+// in the containing package's own Go files (§pipelines plugs, §validators
 // checks).
 package lsp
 
@@ -13,7 +13,7 @@ import (
 func goFuncHover(name, pkgName string, gf *lang.GoFunc) string {
 	if gf == nil {
 		return "`" + name + "` — no such function in package `" + pkgName + "`'s Go files yet; " +
-			"declare it in this package (the diagnostic on the reference names the exact signature — §pipelines for plugs, §validation-checks for checks)"
+			"declare it in this package (the diagnostic on the reference names the exact signature — §pipelines for plugs, §validators for checks)"
 	}
 	var b strings.Builder
 	b.WriteString("```go\n" + gf.Sig + "\n```\n")

@@ -109,7 +109,7 @@ func TestSessionReadsWhatIsOnDisk(t *testing.T) {
 		}
 	}
 	write("go.mod", "module disk\n")
-	write("db/schema.volt", "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string [not null]\n\ttitle string\n\ttitle string\n\n\tchecks {\n\t\tEmailValid(email)\n\t}\n}\n")
+	write("db/schema.volt", "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string [not null]\n\ttitle string\n\ttitle string\n\n\tvalidators {\n\t\tEmailValid(email)\n\t}\n}\n")
 	write("db/checks.go", "package db\n\nfunc EmailValid(email string) error { return nil }\n")
 	sameStamp := func(name, from, to string) {
 		t.Helper()

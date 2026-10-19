@@ -82,12 +82,11 @@ func eachChild(n Node, visit func(Node)) {
 			}
 		}
 		child(visit, n.Settings)
-	case *ChecksBlock:
-		children(visit, n.Checks)
-	case *Check:
-		child(visit, n.Expr)
+	case *ValidatorsBlock:
+		children(visit, n.Validators)
+	case *Validator:
+		child(visit, n.Ref)
 		children(visit, n.Args)
-		child(visit, n.Settings)
 	case *PartialRef:
 		child(visit, n.Name)
 	case *Note:

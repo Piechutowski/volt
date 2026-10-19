@@ -1,4 +1,4 @@
-// spec: §validation-checks — one parameter per argument column: a two-parameter
+// spec: §validators — one parameter per argument column: a two-parameter
 // function cannot be called with one column
 // want: takes 2 parameter(s)
 package db
@@ -7,7 +7,7 @@ Table users {
   id int [pk]
   email string [not null]
 
-  checks {
+  validators {
     EmailValid(email)
   }
 }

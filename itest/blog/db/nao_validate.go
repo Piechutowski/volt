@@ -7,50 +7,50 @@ import (
 )
 
 // Validate evaluates every check of users against the row's values
-// (spec §validation-checks). Typed checks are also CHECK constraints in the DDL;
+// (spec §validators). Typed checks are also CHECK constraints in the DDL;
 // Go-reference checks run here only — SQLite cannot call Go.
 func (v User) Validate() error {
 	var errs []rt.CheckError
-	if !(rt.Like(v.Email, "%_@%_")) {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "email_shape", Columns: []string{"email"}})
-	}
-	if err := EmailValid(v.Email); err != nil {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Columns: []string{"email"}, Cause: err})
-	}
 	if !(v.Email != "") {
 		errs = append(errs, rt.CheckError{Model: "User", Check: "email_required", Columns: []string{"email"}})
+	}
+	if err := EmailShape(v.Email); err != nil {
+		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailShape", Columns: []string{"email"}, Cause: err})
+	}
+	if err := EmailValid(v.Email); err != nil {
+		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid", Columns: []string{"email"}, Cause: err})
 	}
 	return rt.Validation(errs)
 }
 
 // Validate evaluates the checks of users whose columns UserCreateParams carries
-// (spec §validation-checks).
+// (spec §validators).
 func (v UserCreateParams) Validate() error {
 	var errs []rt.CheckError
-	if !(rt.Like(v.Email, "%_@%_")) {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "email_shape", Columns: []string{"email"}})
-	}
-	if err := EmailValid(v.Email); err != nil {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Columns: []string{"email"}, Cause: err})
-	}
 	if !(v.Email != "") {
 		errs = append(errs, rt.CheckError{Model: "User", Check: "email_required", Columns: []string{"email"}})
+	}
+	if err := EmailShape(v.Email); err != nil {
+		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailShape", Columns: []string{"email"}, Cause: err})
+	}
+	if err := EmailValid(v.Email); err != nil {
+		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid", Columns: []string{"email"}, Cause: err})
 	}
 	return rt.Validation(errs)
 }
 
 // Validate evaluates the checks of users whose columns UserUpdateParams carries
-// (spec §validation-checks).
+// (spec §validators).
 func (v UserUpdateParams) Validate() error {
 	var errs []rt.CheckError
-	if !(rt.Like(v.Email, "%_@%_")) {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "email_shape", Columns: []string{"email"}})
-	}
-	if err := EmailValid(v.Email); err != nil {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Columns: []string{"email"}, Cause: err})
-	}
 	if !(v.Email != "") {
 		errs = append(errs, rt.CheckError{Model: "User", Check: "email_required", Columns: []string{"email"}})
+	}
+	if err := EmailShape(v.Email); err != nil {
+		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailShape", Columns: []string{"email"}, Cause: err})
+	}
+	if err := EmailValid(v.Email); err != nil {
+		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid", Columns: []string{"email"}, Cause: err})
 	}
 	return rt.Validation(errs)
 }

@@ -85,9 +85,6 @@ i13_headercolor_not_color.dbml:2:23: error: spec/table: "headercolor" must be a 
 ## i14_unknown_column_setting.dbml
 i14_unknown_column_setting.dbml:3:11: error: spec/columns: unknown setting "sparkly"
 
-## i18_bad_check_setting.dbml
-i18_bad_check_setting.dbml:5:15: error: spec/checks: unknown setting "label"
-
 ## i19_ref_arity_mismatch.dbml
 i19_ref_arity_mismatch.dbml:5:17: error: spec/relationships-ref: composite relationship endpoints must have the same number of columns: 2 vs 1
 
@@ -128,7 +125,7 @@ i30_bad_import_kind.dbml:2:1: error: spec/file-imports-removed: use is not part 
 i31_import_missing_from.dbml:2:7: error: syntax: expected 'from' in import statement (§file-imports-removed)
 
 ## i32_settings_next_line.dbml
-i32_settings_next_line.dbml:4:3: error: syntax: expected a column, indexes, checks, Note, records or '~injection' in Table body, found '[' "["
+i32_settings_next_line.dbml:4:3: error: syntax: expected a column, indexes, validators, Note, records or '~injection' in Table body, found '[' "["
 
 ## i33_ref_without_body.dbml
 i33_ref_without_body.dbml:4:1: error: syntax: expected '{' in Ref (§relationships-ref), found end of file

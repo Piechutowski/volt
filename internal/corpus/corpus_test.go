@@ -23,8 +23,8 @@ func TestCorpusChecks(t *testing.T) {
 			t.Fatalf("%+v does not check:\n%v", spec, diags)
 		}
 		for path, pkg := range pr.Packages {
-			if pkg.HasSchema() && (len(pkg.Selects) != spec.Tables+1 || len(pkg.CheckFns) != spec.Tables) {
-				t.Errorf("%+v %s: %d selects, %d check tables", spec, path, len(pkg.Selects), len(pkg.CheckFns))
+			if pkg.HasSchema() && (len(pkg.Selects) != spec.Tables+1 || len(pkg.Validators) != spec.Tables) {
+				t.Errorf("%+v %s: %d selects, %d check tables", spec, path, len(pkg.Selects), len(pkg.Validators))
 			}
 			if pkg.HasRouting() && (len(pkg.Pipelines) != 1 || len(pkg.Routes) < 5*spec.Tables) {
 				t.Errorf("%+v %s: %d pipelines, %d routes", spec, path, len(pkg.Pipelines), len(pkg.Routes))

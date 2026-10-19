@@ -154,7 +154,7 @@ func TestCheckIsIdempotent(t *testing.T) {
 		var b strings.Builder
 		for _, path := range slices.Sorted(maps.Keys(pr.Packages)) {
 			pkg := pr.Packages[path]
-			fmt.Fprintf(&b, "%s: %d routes %d selects %d checkfns %d pipelines\n", path, len(pkg.Routes), len(pkg.Selects), len(pkg.CheckFns), len(pkg.Pipelines))
+			fmt.Fprintf(&b, "%s: %d routes %d selects %d checkfns %d pipelines\n", path, len(pkg.Routes), len(pkg.Selects), len(pkg.Validators), len(pkg.Pipelines))
 		}
 		return b.String()
 	}

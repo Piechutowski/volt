@@ -267,41 +267,20 @@ db/i69_projection_duplicate_column.volt:9:23: error: spec/selects-over-groups: c
 ## i70_star_without_exclusion.volt
 db/i70_star_without_exclusion.volt:10:14: error: syntax: a star projection needs at least one '\ column' exclusion; drop the parens to select every column (§selects-over-groups)
 
-## i71_check_with_param.volt
-db/i71_check_with_param.volt:9:13: error: spec/validation-checks: a check takes no :params — it judges one row, not a query (§validation-checks)
-
-## i72_check_nullable_column.volt
-db/i72_check_nullable_column.volt:10:5: error: spec/validation-checks: column "hits" is nullable; a check's Go and SQL tiers must agree, and three-valued NULL logic is not mirrored — make it not null, or use an opaque `SQL` check (§validation-checks)
-
-## i73_check_unknown_column.volt
-db/i73_check_unknown_column.volt:8:5: error: spec/validation-checks: no column "hits" in table "page_views" (§validation-checks)
-
-## i74_check_foreign_package_ref.volt
-db/i74_check_foreign_package_ref.volt:10:5: error: spec/validation-checks: a check references a function of the containing package, not of "other" — write a local wrapper (§validation-checks)
-
-## i75_check_time_column.volt
-db/i75_check_time_column.volt:10:5: error: spec/validation-checks: column "created_at" is a date/time; the Go tier cannot mirror SQL's text-time comparison — use an opaque `SQL` check or a Go reference (§validation-checks)
-
-## i76_check_is_null_constant.volt
-db/i76_check_is_null_constant.volt:10:5: error: spec/validation-checks: is null is constant in a check: its columns are not null by §validation-checks
-
-## i77_check_fractional_literal.volt
-db/i77_check_fractional_literal.volt:10:13: error: spec/validation-checks: the fractional literal 1.5 needs a float column; "hits" is int (§validation-checks)
-
 ## i81_goref_undeclared
-db/schema.volt:11:5: error: spec/validation-checks: no function EmailValdi in package db's Go files — declare func EmailValdi(string) error beside the schema (§validation-checks)
+db/schema.volt:11:5: error: spec/validators: no function EmailValdi in package db's Go files — declare func EmailValdi(string) error beside the schema (§validators)
 
 ## i82_goref_column_type
-db/schema.volt:11:16: error: spec/validation-checks: column "email" (int, Go int) but parameter 1 of EmailValid is string — change the column type or the function: expected func EmailValid(int) error (§validation-checks)
+db/schema.volt:11:16: error: spec/validators: column "email" (int, Go int) but parameter 1 of EmailValid is string — change the column type or the function: expected func EmailValid(int) error (§validators)
 
 ## i83_goref_param_type
-db/schema.volt:11:16: error: spec/validation-checks: column "email" (string, Go string) but parameter 1 of EmailValid is int — change the column type or the function: expected func EmailValid(string) error (§validation-checks)
+db/schema.volt:11:16: error: spec/validators: column "email" (string, Go string) but parameter 1 of EmailValid is int — change the column type or the function: expected func EmailValid(string) error (§validators)
 
 ## i84_goref_arity
-db/schema.volt:11:5: error: spec/validation-checks: EmailValid takes 2 parameter(s) but the check passes 1 column(s): found func EmailValid(email, domain string) error, expected func EmailValid(string) error (§validation-checks)
+db/schema.volt:11:5: error: spec/validators: EmailValid takes 2 parameter(s) but the validator passes 1 column(s): found func EmailValid(email, domain string) error, expected func EmailValid(string) error (§validators)
 
 ## i85_goref_result
-db/schema.volt:10:5: error: spec/validation-checks: EmailValid must return exactly error: found func EmailValid(email string) bool, expected func EmailValid(string) error (§validation-checks)
+db/schema.volt:10:5: error: spec/validators: EmailValid must return exactly error: found func EmailValid(email string) bool, expected func EmailValid(string) error (§validators)
 
 ## i86_plug_undeclared
 app/routes.volt:6:6: error: spec/pipelines: no function BearerAuth in package app's Go files — declare func BearerAuth(next http.Handler) http.Handler beside the routes (§pipelines)
@@ -310,13 +289,13 @@ app/routes.volt:6:6: error: spec/pipelines: no function BearerAuth in package ap
 app/routes.volt:6:6: error: spec/pipelines: BearerAuth is not middleware: found func BearerAuth(w http.ResponseWriter, r *http.Request), a plug is func BearerAuth(next http.Handler) http.Handler (§pipelines)
 
 ## i88_goref_excluded_file
-db/schema.volt:11:5: error: spec/validation-checks: no function EmailValid in package db's Go files — declare func EmailValid(string) error beside the schema (§validation-checks)
+db/schema.volt:11:5: error: spec/validators: no function EmailValid in package db's Go files — declare func EmailValid(string) error beside the schema (§validators)
 
 ## i89_goref_variadic
-db/schema.volt:10:5: error: spec/validation-checks: EmailValid is variadic (func EmailValid(emails ...string) error); a check passes a fixed column list — expected func EmailValid(string) error (§validation-checks)
+db/schema.volt:10:5: error: spec/validators: EmailValid is variadic (func EmailValid(emails ...string) error); a validator passes a fixed column list — expected func EmailValid(string) error (§validators)
 
 ## i90_goref_generic
-db/schema.volt:11:5: error: spec/validation-checks: EmailValid is generic (func EmailValid[T ~string](email T) error); a check cannot instantiate it — wrap it in a plain func EmailValid(string) error (§validation-checks)
+db/schema.volt:11:5: error: spec/validators: EmailValid is generic (func EmailValid[T ~string](email T) error); a validator cannot instantiate it — wrap it in a plain func EmailValid(string) error (§validators)
 
 ## i91_order_duplicate_column.volt
 db/i91_order_duplicate_column.volt:10:47: error: spec/selects-over-groups: column "day" appears twice in order: (§selects-over-groups)

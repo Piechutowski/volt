@@ -92,7 +92,6 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Columns](#columns)
     - [Default Values](#default-values)
     - [Indexes](#indexes)
-    - [Checks](#checks)
     - [Relationships (Ref)](#relationships-ref)
     - [Enum](#enum)
     - [Types](#types)
@@ -141,7 +140,7 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
   - [Groups](#groups)
   - [Predicates](#predicates)
   - [Selects over groups](#selects-over-groups)
-  - [Validation checks](#validation-checks)
+  - [Validators](#validators)
   - [Collected grammar (Part II)](#collected-grammar-part-ii)
   - [Conformance and the proof chain](#conformance-and-the-proof-chain)
 - **Appendices**
@@ -404,7 +403,7 @@ as `Table` acts as a keyword only in keyword position and remains usable as an
 ordinary identifier elsewhere (e.g. a column may be named `table`).
 
 Element-type keywords: `Project`, `Table`, `TablePartial`, `TableGroup`,
-`Enum`, `Type`, `Ref`, `Note`, `Records`, `DiagramView`, `indexes`, `checks`,
+`Enum`, `Type`, `Ref`, `Note`, `Records`, `DiagramView`, `indexes`, `validators`,
 `Tables`, `Notes`, `TableGroups`, `Schemas`.
 Clause keywords: `as`, `use`, `reuse`, `from`.
 Value keywords: `true`, `false`, `null`.
@@ -529,7 +528,7 @@ expression literal = "`", { any char - "`" }, "`" ;
    literal backtick.
 2. May span multiple lines.
 3. Used for computed defaults (`` default: `now()` ``), expression indexes,
-   check expressions, and expression values in records.
+   and expression values in records.
 
 ### Operators and Punctuation
 
@@ -594,7 +593,7 @@ setting value = string | number | boolean | null
 3. Each element section below enumerates *which* settings are valid there;
    a setting not listed for a construct is invalid in that position.
 4. Within one settings list, each setting MUST appear at most once. The
-   only exceptions are the column settings `check` and `ref` (§columns), which
+   only exceptions are the column settings `ref` and `tag` (§columns), which
    MAY be repeated. Settings that are synonyms (`pk` / `primary key`) count
    as one setting for this rule.
 5. A settings list MUST appear on the same line as (the end of) the
@@ -664,7 +663,7 @@ table alias    = "as", name ;
 
 table body     = { column
                  | indexes block
-                 | checks block
+                 | validators block
                  | note def
                  | partial injection
                  | records block
@@ -717,7 +716,6 @@ column setting  = "primary key" | "pk"
                 | "increment"
                 | "required"                          (* extension, below *)
                 | "default", ":", default value
-                | "check", ":", expression literal
                 | "note", ":", string
                 | "ref", ":", inline ref value ;
 ```
@@ -748,11 +746,9 @@ column setting  = "primary key" | "pk"
    > when the primary key is composite. A keyword that is typed MUST be
    > applied; silently ignoring it while `CreateParams` drops the
    > column would insert NULL into a NOT NULL column at run time.
-5. **`check`** attaches a single-column check constraint; the setting MAY be
-   repeated to attach multiple checks.
-6. **`ref`** declares an inline relationship (§relationships-ref). The setting MAY be
+5. **`ref`** declares an inline relationship (§relationships-ref). The setting MAY be
    repeated. Inline refs cannot carry names or settings.
-7. **Legacy flags.** For backward compatibility, the bare words `pk` and
+6. **Legacy flags.** For backward compatibility, the bare words `pk` and
    `unique` MAY appear between the type and the settings list
    (`id int pk`). New documents SHOULD use the settings list instead.
 8. Each column definition is terminated by a line break.
@@ -761,14 +757,13 @@ column setting  = "primary key" | "pk"
 > declares that a value must be present
 > in the zero-value sense: under ZII a missing input decodes to the
 > type's zero value and `not null` is satisfied, so `required` is the
-> word for "and not that either". It lowers to one check in both tiers
-> (§validation-checks): `<> ''` for `string` and enum columns, `<> 0`
-> for `int` and `float64`, `length(…) > 0` for `[]byte`, and for a
-> declared type the check of its storage type, named
-> `<column>_required` in the DDL and in the validator's error. It MUST
-> accompany `not null` (or a key), and is an error on a `null`,
-> `default:` or `increment` column and on `bool` and `time.Time`,
-> where every value is a value.
+> word for "and not that either". It is the one built-in validator
+> (§validators), named `<column>_required`: it refuses `""` for
+> `string` and enum columns, `0` for `int` and `float64`, a zero
+> length for `[]byte`, and for a declared type the empty value of its
+> storage type. It MUST accompany `not null` (or a key), and is an
+> error on a `null`, `default:` or `increment` column and on `bool`
+> and `time.Time`, where every value is a value.
 >
 > **Extension (this implementation).** The column setting `tag: string`
 > (repeatable) passes one Go struct tag through to the generated field
@@ -873,42 +868,6 @@ Table bookings {
     (id, country) [pk]
     booking_date [name: 'idx_booking_date', type: hash]
     (country, `lower(country)`) [unique]
-  }
-}
-```
-
-### Checks
-
-A `checks` block declares table-level check constraints (constraints over one
-or many columns). It may appear inside a `Table` or `TablePartial` body. A
-body MAY contain more than one `checks` block; their contents accumulate.
-
-```ebnf
-checks block   = "checks", "{", { check }, "}" ;
-check          = expression literal, [ check settings ], newline ;
-
-check settings = "[", check setting, { ",", check setting }, "]" ;
-check setting  = "name", ":", string ;
-```
-
-1. The expression is opaque SQL (§expression-literals); DBML does not parse or validate it.
-2. `name` names the generated constraint.
-3. Single-column checks MAY alternatively be written as a `check:` column
-   setting (§columns).
-
-> **Extension (this implementation).** In the Volt layer a check line
-> may also be a typed predicate expression or a Go-reference call —
-> §validation-checks defines both forms, their static rules, and what each tier
-> generates. The opaque form above stays exactly as upstream DBML has
-> it: SQL CHECK only, never validated.
-
-```volt
-Table users {
-  wealth int
-  debt int
-
-  checks {
-    `debt + wealth >= 0` [name: 'chk_positive_money']
   }
 }
 ```
@@ -1071,7 +1030,7 @@ table partial     = "TablePartial", name, [ table settings ],
                     "{", partial body, "}" ;
 partial body      = { column
                     | indexes block
-                    | checks block
+                    | validators block
                     | note def
                     } ;
 
@@ -1370,7 +1329,7 @@ project property     = identifier, ":", string, newline ;
 table                = "Table", table name, [ table alias ],
                        [ table settings ], "{", table body, "}" ;
 table alias          = "as", name ;
-table body           = { column | indexes block | checks block
+table body           = { column | indexes block | validators block
                        | note def | partial injection | records block } ;
 table settings       = "[", table setting, { ",", table setting }, "]" ;
 table setting        = "headercolor", ":", color
@@ -1385,7 +1344,6 @@ column settings      = "[", column setting, { ",", column setting }, "]" ;
 column setting       = "primary key" | "pk" | "null" | "not null"
                      | "unique" | "increment" | "required"
                      | "default", ":", default value
-                     | "check", ":", expression literal
                      | "note", ":", string
                      | "ref", ":", inline ref value ;
 default value        = [ "-" ], number | string | boolean | null
@@ -1401,11 +1359,6 @@ index setting        = "type", ":", identifier
                      | "name", ":", string
                      | "unique" | "pk"
                      | "note", ":", string ;
-
-checks block         = "checks", "{", { check }, "}" ;
-check                = expression literal, [ check settings ], newline ;
-check settings       = "[", check setting, { ",", check setting }, "]" ;
-check setting        = "name", ":", string ;
 
 (* ===== 6.7 Ref ===== *)
 
@@ -1438,7 +1391,7 @@ storage type         = column type ;
 
 table partial        = "TablePartial", name, [ table settings ],
                        "{", partial body, "}" ;
-partial body         = { column | indexes block | checks block | note def } ;
+partial body         = { column | indexes block | validators block | note def } ;
 partial injection    = "~", name, newline ;
 
 (* ===== 6.10 Records ===== *)
@@ -1871,9 +1824,9 @@ Scope /api [pipe: api] {
    a delete with 204 and no body. A query's row miss (`rt.ErrNotFound`,
    which is `sql.ErrNoRows`) is a 404 through the error spine. A
    Create or Update handler calls the params struct's `Validate`
-   (§validation-checks) before the query when it has one, so a violated check is a
-   422 naming the check; a constraint the database refuses is a 409
-   (duplicate key) or 422 naming the constraint (§validation-checks). Any other
+   (§validators) before the query when it has one, so a failed validator is a
+   422 naming it; a constraint the database refuses is a 409
+   (duplicate key) or 422 naming the constraint (§validators). Any other
    error is the spine's 500.
 4. **Names.** The helper name (§route-names-and-reverse-urls) defaults to the scope name
    prefixes followed by the method name, and only `get`/`head` query
@@ -2221,7 +2174,7 @@ resources db.tags  [default, except: (delete)]
    `update`'s PUT route shares the PATCH route's client method.
 7. Statuses, binding, validation and rendering are §query-routes's: 201 for
    `create`, 204 for `delete`, 404 on a miss, `Validate()` before a
-   write when the params struct validates (§validation-checks), the body and the
+   write when the params struct validates (§validators), the body and the
    response in the negotiated format (§formats).
 
 ## Datasets
@@ -2436,8 +2389,6 @@ Pred chosen  { org in :orgs }
    compares with `=`, `!=`, `in` and `is null` only: a parameter in
    that position has the declared Go type, a literal has the class
    of the storage type.
-5. Checks (Part I §checks) are the parameterless ancestors of predicates;
-   unifying them onto this language is planned, not yet specified.
 
 ## Selects over groups
 
@@ -2548,121 +2499,118 @@ the optional projection narrows the emitted columns.
 
 ---
 
-## Validation checks
+## Validators
 
-Validation reuses `checks` (§checks) instead of minting per-rule settings:
-checks are parameterless predicates, and one construct serves the
-database and the application. A check line takes one of three forms:
+A **validator** is a Go function of the data package that takes the
+values of some columns of a table and returns an error. The schema
+names which validators guard which columns; the generator calls them
+from the generated `Validate` methods; the functions remain ordinary
+Go that any code may call. Nothing about a validator reaches the
+database.
 
 ```ebnf
-check    = expression literal, [ check settings ], newline   (* §checks: opaque SQL *)
-         | pred expr,          [ check settings ], newline   (* typed *)
-         | go check,           [ check settings ], newline ; (* Go reference *)
-
-go check = go ref, "(", column name, { ",", column name }, ")" ;
+validators block = "validators", "{", { validator }, "}" ;
+validator        = go ref, "(", column name, { ",", column name }, ")", newline ;
 ```
+
+`validators block` is an alternative of `table body` and of
+`table partial body` (§table, §tablepartial); a body MAY contain more
+than one, and their lines accumulate, injected partials' first
+(§partial-injection-order).
 
 ```volt
 Table users {
-  email string [not null]
-  hits  int [not null]
+  email string [not null, required]
+  hits  int    [not null]
 
-  checks {
-    hits >= 0 and hits in (0, 1, 2)  [name: 'hits_sane']
-    email like '%@%'
-    EmailValid(email)
-    `length(email) < 255`
+  validators {
+    EmailShape(email)
+    HitsSane(hits)
+    Consistent(email, hits)
   }
 }
 ```
 
-1. **What each tier gets.** A **typed** check compiles to BOTH a SQL
-   `CHECK (<rendering>)` in the DDL (§mapping-to-sqlite-ddl) and a clause of the
-   generated validator — early, friendly errors in Go; the database
-   stays the last line of defense. A **Go-reference** check lands in
-   the validator only: SQLite cannot call Go — that asymmetry is
-   documented here, not hidden. An **opaque SQL** check stays §checks's:
-   DDL only.
-2. **Typed checks are §predicates expressions with two narrowings.** A check
-   judges one row of one table, so (a) it MUST NOT contain `:params`,
-   and (b) every referenced column MUST be a column of the enclosing
-   table (after partial injection). Package `Pred` declarations MAY be
-   referenced and are expanded in place — a check is a parameterless
-   predicate — subject to the same two rules after expansion. A
-   `like` pattern is a string literal.
-3. **Not-null columns only.** Every column a typed check references
-   MUST be `not null`. The Go tier and the SQL tier MUST agree, and
-   the Go tier does not mirror SQL's three-valued NULL logic — a
-   nullable column is an error pointing at `not null` or an opaque
-   SQL check. Consequently `is null` / `is not null` are constant
-   inside a check and are errors.
-4. **One rendering, two tiers.** The checker types and renders a typed
-   check once, producing the SQL fragment and the Go condition in the
-   same walk: `and` → `AND` and `&&`, `or` → `OR` and `||`, `not` →
-   `NOT` and `!`, comparisons and `in` to their Go operators, and
-   `like` to `rt.Like`, whose semantics are pinned to SQLite's LIKE
-   (no ESCAPE clause) by the runtime's own test corpus. Two further
-   narrowings keep the tiers provably identical: date/time columns are
-   rejected (SQL compares text timestamps lexically; Go compares
-   `time.Time` — use an opaque SQL check or a Go reference), and a
-   fractional number literal requires a float column (the Go tier
-   must compile). Ordering comparisons follow §predicates with
-   numeric-only ordering.
-5. **Go-reference checks.** `go ref` names a function of the
-   **containing package** — bare (`EmailValid`) or qualified by the
-   package's own name (`db.EmailValid`); referencing an imported
-   package's function is an error suggesting a local wrapper (the
-   §pipelines). Arguments are columns of the table, `not null` (rule
-   3). The contract is `func <Name>(<the columns' Go types>) error`,
-   and it is **checked**: the function MUST exist as a non-generic
-   top-level function in the package directory's non-test Go files that
-   the go tool would compile for it (go/build's file constraints, as
-   §pipelines), take exactly one parameter per argument column with the
-   column's generated Go type spelled exactly (§mapping-to-go: `string`,
-   `int`, `time.Time`, `[]byte`, an enum's generated type name
-   `E<Enum>` — a variadic parameter never matches), and return exactly
-   `error`. Each violation is its own error — undeclared, generic,
-   variadic, wrong arity, a parameter whose spelled type disagrees with
-   the column, a wrong result — and every message names the exact
-   signature to write, so an unimplemented reference reads as a to-do.
-   A Go file with a syntax error hides the declarations after the
-   error; the undeclared message then names the file and position. The Go compiler still compiles the result and remains the
-   authority on what a spelled type denotes (a `type Email string`
-   parameter would compile against a `string` column but is refused
-   here: spell the generated type).
-6. **Generation contract.** For every table with typed or Go-reference
-   checks, `nao_validate.go` declares
-   `func (v <Model>) Validate() error`, evaluating every check in
-   declaration order against the row's values: a failed typed check
-   contributes `rt.CheckError{Model, Check}`, a failed Go reference
-   `rt.CheckError{Model, Check, Cause}` wrapping the returned error;
-   the failures are returned together as one `rt.ValidationError`
-   (which unwraps to its members), nil when every check passes.
-   `Check` is the check's `name:` setting when present, else its
-   rendered form. The **params structs** validate too: `<Model>CreateParams`
-   and `<Model>UpdateParams` each get `Validate` over the checks whose
-   columns the struct carries — a check reading a defaulted or
-   auto-increment column (absent from CreateParams) or a key
-   column (absent from UpdateParams) is left to the row's `Validate`
-   and the DDL, and the method's doc comment names it. Nothing calls
-   `Validate` implicitly in your code — no callbacks; the one
-   generated caller is a query route's Create/Update handler (§query-routes).
-7. **Statuses and attribution.** A `CheckError` and a `ValidationError`
-   carry status 422; the database's own refusals are translated by
-   `rt.Constraint` into `rt.ConstraintError` — 409 for a unique
-   violation, 422 for a check, foreign-key or not-null failure —
-   naming what SQLite named (the column, the check). Every generated
-   write passes its error through `rt.Constraint`, so a violated
-   constraint reaches an error spine or a caller with a status and a
-   reason, never as an opaque driver error. Every `CheckError` carries
-   the **columns** its check reads, and every one of these errors
-   itemizes itself (`Details()`: check, columns, message), which the
-   error spine renders into the error body (§formats) so a form can
-   mark the fields.
-8. **`required` columns** (Part I §columns extension) lower to one check
-   each, named `<column>_required`, in both tiers: the Go condition on
-   the row and the params structs, and a `CHECK` in the DDL, spelled
-   per type class (`<> ''`, `<> 0`, `length(…) > 0`).
+```go
+func EmailShape(email string) error {
+	if !strings.Contains(email, "@") {
+		return errors.New("needs an @")
+	}
+	return nil
+}
+```
+
+1. **Resolution.** `go ref` names a function of the **containing
+   package**, bare (`EmailShape`) or qualified by the package's own
+   name (`db.EmailShape`); an imported package's function is an error
+   suggesting a local wrapper. The function MUST exist as an exported,
+   non-generic, top-level function in the package directory's non-test
+   Go files that the go tool would compile for it (go/build's file
+   constraints, as §pipelines); a file carrying the generated marker
+   is invisible. A lower-case name is an error before resolution is
+   attempted: a validator is part of the package's API.
+2. **Signature.** The contract is `func <Name>(<the columns' Go
+   types>) error`, and it is checked: exactly one parameter per listed
+   column, in order, each spelled exactly as the column's generated Go
+   type (§mapping-to-go: `string`, `int`, `time.Time`, `[]byte`,
+   `rt.Null[T]` for a nullable column, an enum's `E<Enum>`, a declared
+   type's own name), a variadic parameter never matching, and exactly
+   one result, `error`. Each violation is its own error, undeclared,
+   unexported, generic, variadic, wrong arity, a parameter whose
+   spelled type disagrees with the column, a wrong result, and every
+   message names the exact signature to write, so an unimplemented
+   reference reads as a to-do. A Go file with a syntax error hides the
+   declarations after the error; the undeclared message then names the
+   file and position. The Go compiler remains the authority on what a
+   spelled type denotes.
+3. **Columns.** Each `column name` MUST be a column of the enclosing
+   table after partial injection. A column MAY appear in any number of
+   validators and MAY be listed more than once in one.
+4. **Order.** Validators run top-down, in declaration order, every one
+   of them, every time; `required` runs first. Every failure is
+   collected; the first does not stop the rest.
+5. **Pure.** A validator receives values and returns an error. The
+   generator never calls it except from `Validate`, and it receives
+   no database handle, no context and no row. A rule that needs the
+   database is not a validator: uniqueness and referential integrity
+   are the unique index and the foreign key, which only the database
+   can close against concurrent writers, and they reach the caller as
+   `rt.ConstraintError` (rule 7).
+6. **Generation contract.** For every table with validators or
+   `required` columns, `nao_validate.go` declares
+   `func (v <Model>) Validate() error`, running rule 4 over the row's
+   values: a failed `required` contributes `rt.CheckError{Model,
+   Check: "<column>_required", Columns}`, a failed validator
+   `rt.CheckError{Model, Check: "<Name>", Columns, Cause}` wrapping
+   the returned error; the failures are returned together as one
+   `rt.ValidationError` (which unwraps to its members), nil when every
+   validator passes. `<Model>CreateParams` and `<Model>UpdateParams`
+   each get `Validate` over the validators whose columns the struct
+   carries; a validator reading a defaulted or auto-increment column
+   (absent from CreateParams) or a key column (absent from
+   UpdateParams) is left to the row's `Validate`, and the method's doc
+   comment names it. Nothing calls `Validate` implicitly in your code;
+   the one generated caller is a query route's Create or Update
+   handler (§query-routes).
+7. **Statuses and attribution.** A `CheckError` and a
+   `ValidationError` carry status 422; the database's own refusals are
+   translated by `rt.Constraint` into `rt.ConstraintError`, 409 for a
+   unique violation, 422 for a foreign-key or not-null failure, naming
+   what SQLite named. Every generated write passes its error through
+   `rt.Constraint`. Every `CheckError` carries the columns its
+   validator reads, and every one of these errors itemizes itself
+   (`Details()`: check, columns, message), which the error spine
+   renders into the error body (§formats) so a form can mark the
+   fields.
+8. **`required` columns** (Part I §columns extension) are the one
+   built-in validator: `<column>_required` refuses the type's empty
+   value, `""` for `string` and enum columns, `0` for `int` and
+   `float64`, a zero length for `[]byte`, and for a declared type the
+   test of its storage type. It is Go only, like every validator.
+9. **No database twin.** A validator produces no DDL. The database
+   never carries a `CHECK`: an enum column is plain `TEXT`, a
+   `required` column is `NOT NULL` and nothing more
+   (§mapping-to-sqlite-ddl).
 
 ---
 
@@ -2715,7 +2663,7 @@ ident list     = "(", name, { ",", name }, ")" ;
 
 The `group decl`, `pred decl` and `select decl` productions — with the
 predicate expression grammar they share — are collected in §groups, §predicates
-and §selects-over-groups, and the extended `check` forms in §validation-checks; they are not
+and §selects-over-groups, and the validators block in §validators; they are not
 duplicated here.
 
 All tokens of a `route path` and of a `package path` MUST be contiguous
@@ -2901,7 +2849,7 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 
 | Declared | SQLite |
 |---|---|
-| enum-typed column | `TEXT` + `CHECK (col IN ('a', 'b'))` — SQLite has no enum type |
+| enum-typed column | `TEXT`; SQLite has no enum type, and the value set is the generated Go type's (§validators) |
 | `core.users` (schema) | `core_users` — SQLite has no schemas; collisions are generation errors |
 | `pk` column | explicit `NOT NULL` added: SQLite's `PRIMARY KEY` does **not** imply NOT NULL |
 | `int` `[pk, increment]` | exactly `INTEGER PRIMARY KEY` (rowid alias, auto-assigned); SQLite's `AUTOINCREMENT` keyword deliberately avoided — it only adds the never-reuse-an-id bookkeeping the SQLite docs discourage. Any other `increment` placement is a check error (§columns) |
@@ -2916,7 +2864,7 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 | `[]byte` | `BLOB` |
 | declared `Type` (§types) | the column type of its storage type |
 | backtick expressions | verbatim; parenthesized in `DEFAULT` as SQLite requires |
-| typed checks (§validation-checks) | `CHECK (<the §validation-checks rendering>)`; Go-reference checks emit nothing — SQLite cannot call Go |
+| validators, `required` | nothing; the database never carries a `CHECK` (§validators) |
 | `records` | multi-row `INSERT` statements after all tables, in source order; empty fields become `NULL` |
 | unknown type | check error naming the column (§columns); the generator never sees one |
 

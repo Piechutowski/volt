@@ -8,5 +8,5 @@ Table t {
   d bool [default: false]
   e string [default: null]
   f time.Time [default: `now() - interval '5 days'`]
-  g int [check: `g > 0`, check: `g < 100`]
+  g int
 }

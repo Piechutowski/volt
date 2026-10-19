@@ -24,7 +24,7 @@ Table users {
   bio string [note: 'NULL until the user writes one']
   created_at time.Time [not null, default: `CURRENT_TIMESTAMP`]
 
-  checks {
+  validators {
     EmailValid(email)
   }
 }
@@ -56,9 +56,9 @@ Table page_views {
   day int [not null]
   hits int [not null, default: 0]
 
-  checks {
-    hits >= 0 and day >= 1 [name: 'counts_positive']
-    site like '%_'
+  validators {
+    CountsPositive(hits, day)
+    SiteShape(site)
   }
 }
 

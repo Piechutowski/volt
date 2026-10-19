@@ -23,7 +23,7 @@ when a consumer exists.
 - [x] Schema core: Project, Table, TablePartial, Records, Enum, Type, Ref, TableGroup, Notes, DiagramView
   - [x] Column types are a closed Go set (`bool`, `int`, `float64`, `string`, `[]byte`, `time.Time`), enums, and `Type` declarations; defaults are typed
 - [~] Schema extensions
-  - [x] `[model:]`, `[tag:]`, `[required]`, typed `checks`
+  - [x] `[model:]`, `[tag:]`, `[required]`, `validators`
   - [x] `Group`, `Pred`, `Select … for <group>` with projection, list parameters
   - [ ] Raw-SQL `Select` / `View` blocks
     - [ ] `Select name (params) { … }`: declared params, select list, from and joins, opaque where/having/group/order bodies
@@ -44,13 +44,11 @@ when a consumer exists.
 - [x] DDL and seed `INSERT`s from `records`
 - [x] CRUD: `Get`, `GetMany`, `GetBy*`, `List`, `Count`, `Create`, `Update`, `Delete`; keyless tables get `List`/`Create`/`Count`
 - [x] Dynamic queries: predicates as values, flat typed handles, per-model wrappers, shared verbs, keyset pagination, statement cache, `dynname` vet rule
-- [x] Validation: typed checks compile to `CHECK` and `Validate()`, Go-reference checks to the validator only, `required`, 422/409 with per-column details on the API path
+- [x] Validation: validators are exported Go functions of the package named in the schema, `required` is the built-in one, nothing reaches the DDL; `Validate()` on models and params, 422/409 with per-column details on the API path
   - [ ] `[on: create]` / `[on: update]` as triggers in SQL and per-params in Go
   - [ ] Enum membership in the Go tier (hypotheses H5)
-  - [ ] `length()` in typed checks, rune-counted on text so the tiers agree
-  - [ ] `[check:]` on select parameters, Go tier only
   - [ ] `[message: '…']` with a runtime hook keyed by table and check
-  - *no* nullable columns in typed checks; named validation sets
+  - *no* named validation sets
 - [x] Transactions: one `Queries` over `DBTX`, `Tx` with rollback on error or panic, single-writer `Open`
   - [ ] Savepoints
 - [ ] Associations

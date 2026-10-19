@@ -46,32 +46,33 @@ type FieldSig struct {
 	Nullable bool   // NULL-admitting column (§nullability)
 }
 
-// CheckFn is one table's validator surface (spec §validation-checks): the checks a
-// generated Validate method evaluates.
-type CheckFn struct {
-	TableKey string // canonical schema.name key into check.Info
-	Checks   []CheckSpec
+// ValidatorFn is one table's validator surface (spec §validators): what
+// its generated Validate methods run.
+type ValidatorFn struct {
+	TableKey   string
+	Validators []ValidatorSpec
 }
 
-// CheckSpec is one lowered check, rendered by the Volt checker.
-type CheckSpec struct {
+// ValidatorSpec is one lowered validator, or a required column, rendered
+// by the Volt checker (spec §validators).
+type ValidatorSpec struct {
 	Name string   // the check's [name:] setting, "" when absent
 	Src  string   // human-readable form, reported by rt.CheckError
 	Cond string   // typed form: Go condition over v.<Field>; "" otherwise
 	Call string   // Go-reference call, e.g. "EmailValid(v.Email)"; "" otherwise
-	Cols []string // the columns the check reads, so a params struct knows whether it can evaluate it (§validation-checks)
+	Cols []string // the columns the check reads, so a params struct knows whether it can evaluate it (§validators)
 }
 
 // ParamsValidators reports whether the table's CreateParams and
 // UpdateParams structs get a Validate method: each does when the struct
 // exists and carries every column of at least one check. It plans the
 // whole file.
-func ParamsValidators(f *ast.File, info *check.Info, tableKey string, checks []CheckSpec) (create, update bool, err error) {
+func ParamsValidators(f *ast.File, info *check.Info, tableKey string, checks []ValidatorSpec) (create, update bool, err error) {
 	return PlanBuild(f, info).ParamsValidators(tableKey, checks)
 }
 
-func paramsChecks(t *tableModel, checks []CheckSpec) (create, update []CheckSpec) {
-	covered := func(fields []*fieldPlan, ck CheckSpec) bool {
+func paramsChecks(t *tableModel, checks []ValidatorSpec) (create, update []ValidatorSpec) {
+	covered := func(fields []*fieldPlan, ck ValidatorSpec) bool {
 		have := map[string]bool{}
 		for _, f := range fields {
 			have[f.colName] = true

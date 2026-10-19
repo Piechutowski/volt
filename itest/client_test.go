@@ -121,7 +121,7 @@ func TestEventRouteStreams(t *testing.T) {
 }
 
 // TestClientValidationErrors: the generated client sees the same
-// statuses as HTTPError values (§validation-checks).
+// statuses as HTTPError values (§validators).
 func TestClientValidationErrors(t *testing.T) {
 	srv := httptest.NewServer(handlerWithDB(t))
 	defer srv.Close()

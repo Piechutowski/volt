@@ -25,8 +25,8 @@
 (indexes_block
   "indexes" @name) @item
 
-(checks_block
-  "checks" @name) @item
+(validators_block
+  "validators" @name) @item
 
 (ref_definition
   "Ref" @context

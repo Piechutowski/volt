@@ -188,9 +188,9 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 					ix.goRefAdd(pkg, path, plug.Ref)
 				}
 			case *ast.Table:
-				ix.checksRefs(pkg, path, d.Body)
+				ix.validatorsRefs(pkg, path, d.Body)
 			case *ast.TablePartial:
-				ix.checksRefs(pkg, path, d.Body)
+				ix.validatorsRefs(pkg, path, d.Body)
 			case *ast.Group:
 				for _, term := range d.Terms {
 					for _, id := range term.Names {
@@ -212,19 +212,14 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 	return ix
 }
 
-func (ix *voltIndex) checksRefs(pkg *lang.Package, path string, body []ast.TableItem) {
+func (ix *voltIndex) validatorsRefs(pkg *lang.Package, path string, body []ast.TableItem) {
 	for _, item := range body {
-		cb, ok := item.(*ast.ChecksBlock)
+		vb, ok := item.(*ast.ValidatorsBlock)
 		if !ok {
 			continue
 		}
-		for _, ck := range cb.Checks {
-			if ck.Ref != nil {
-				ix.goRefAdd(pkg, path, ck.Ref)
-			}
-			if ck.Pred != nil {
-				ix.predExprRefs(path, ck.Pred)
-			}
+		for _, v := range vb.Validators {
+			ix.goRefAdd(pkg, path, v.Ref)
 		}
 	}
 }

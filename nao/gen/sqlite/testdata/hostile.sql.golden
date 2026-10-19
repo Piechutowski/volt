@@ -16,7 +16,7 @@ CREATE TABLE core_users (
   "full name" TEXT NOT NULL,
   precision_value REAL,
   balance REAL,
-  kind TEXT NOT NULL CHECK (kind IN ('read write', 'admin')),
+  kind TEXT NOT NULL,
   -- Column named like a Go keyword
   type TEXT,
   func INTEGER

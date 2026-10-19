@@ -54,8 +54,8 @@ Table users as U [headercolor: #3498DB, note: 'main table'] {
     `floor(balance)`
   }
 
-  checks {
-    `balance >= -1000` [name: 'balance_floor']
+  validators {
+    BalanceFloor(balance)
   }
 
   Records (id, name) {

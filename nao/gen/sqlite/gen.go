@@ -19,9 +19,6 @@ import (
 type Options struct {
 	// Source is the name of the DBML input, recorded in the header.
 	Source string
-	// CheckSQL is every typed check's SQL rendering, lowered by the
-	// Volt checker (§validation-checks). A typed check absent from it is an error.
-	CheckSQL map[*ast.Check]string
 }
 
 // Generate renders the schema file for one checked DBML file.
@@ -146,32 +143,6 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 		uniqueDone[strings.Join(pkCols, ",")] = true
 	}
 
-	{
-		for _, ck := range ti.Checks {
-			var expr string
-			switch {
-			case ck.Expr != nil:
-				expr = ck.Expr.Text()
-			case ck.Pred != nil:
-				sql, lowered := g.opts.CheckSQL[ck]
-				if !lowered {
-					return fmt.Errorf("table %s: typed check not lowered — generate through volt gen (§validation-checks)", ti.Decl.Name.Base())
-				}
-				expr = sql
-			case ck.Ref != nil:
-				continue
-			default:
-				continue
-			}
-			line := "  "
-			if n := settingString(ck.Settings, "name"); n != "" {
-				line += "CONSTRAINT " + identQuote(n) + " "
-			}
-			line += "CHECK (" + expr + ")"
-			lines = append(lines, line)
-		}
-	}
-
 	for _, r := range g.info.Refs {
 		fk, target, ok := fkSides(r)
 		if !ok || fk.Table != ti || target.Table == nil {
@@ -203,7 +174,7 @@ func (g *generator) columnDef(ti *check.TableInfo, cd *check.ColumnDef, pkCols [
 	col := cd.Col
 	colName := col.Name.Name()
 
-	sqlType, enumInfo, err := g.typeResolve(cd)
+	sqlType, err := g.typeResolve(cd)
 	if err != nil {
 		return "", fmt.Errorf("column %q: %w", colName, err)
 	}
@@ -228,38 +199,6 @@ func (g *generator) columnDef(ti *check.TableInfo, cd *check.ColumnDef, pkCols [
 			return "", fmt.Errorf("column %q: %w", colName, err)
 		}
 		parts = append(parts, "DEFAULT "+def)
-	}
-	if enumInfo != nil {
-		var vals []string
-		for _, v := range enumInfo.Decl.Values {
-			vals = append(vals, stringQuote(v.Name.Name()))
-		}
-		parts = append(parts, "CHECK ("+identQuote(colName)+" IN ("+strings.Join(vals, ", ")+"))")
-	}
-	if columnHas(cd, "required") {
-		kind, _ := cd.Type.RequiredKind()
-		var expr string
-		switch kind {
-		case "text":
-			expr = identQuote(colName) + " <> ''"
-		case "numeric":
-			expr = identQuote(colName) + " <> 0"
-		case "bytes":
-			expr = "length(" + identQuote(colName) + ") > 0"
-		}
-		if expr != "" {
-			parts = append(parts, "CONSTRAINT "+identQuote(colName+"_required")+" CHECK ("+expr+")")
-		}
-	}
-	if col.Settings != nil {
-		for _, s := range col.Settings.Settings {
-			if s.Name != "check" {
-				continue
-			}
-			if fe, ok := s.Value.(*ast.FuncExpr); ok {
-				parts = append(parts, "CHECK ("+fe.Text()+")")
-			}
-		}
 	}
 	return strings.Join(parts, " "), nil
 }

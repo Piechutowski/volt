@@ -348,17 +348,16 @@ Select public (* \ (password_hash, email)) for accounts
     (select_target)))
 
 ==================
-validation checks
+validators
 ==================
 
 Table page_views {
   hits int [not null]
   site string [not null]
 
-  checks {
-    hits >= 0 and site like '%_' [name: 'sane']
+  validators {
+    CountsPositive(hits)
     EmailValid(site)
-    `hits < 1000000`
   }
 }
 
@@ -390,27 +389,12 @@ Table page_views {
           (setting_name
             (identifier)
             (identifier)))))
-    (checks_block
-      (check_definition
-        (pred_expr
-          (pred_compare
-            (column_ref)
-            (number))
-          (pred_like
-            (column_ref)
-            (string
-              (string_content))))
-        (settings_list
-          (setting
-            (setting_name
-              (identifier))
-            (string
-              (string_content)))))
-      (check_definition
-        (go_check
-          (go_ref
-            (identifier))
-          (column_ref)))
-      (check_definition
-        (expression
-          (expression_content))))))
+    (validators_block
+      (validator
+        (go_ref
+          (identifier))
+        (column_ref))
+      (validator
+        (go_ref
+          (identifier))
+        (column_ref)))))

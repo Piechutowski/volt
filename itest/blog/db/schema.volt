@@ -4,8 +4,8 @@ Table users {
 	id    int [pk, increment]
 	email string    [not null, required, unique]
 
-	checks {
-		email like '%_@%_' [name: 'email_shape']
+	validators {
+		EmailShape(email)
 		EmailValid(email)
 	}
 }

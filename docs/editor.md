@@ -95,7 +95,7 @@ load-bearing patterns, each citing the spec section it implements:
   context-aware lexing provides the "not reserved" half — `table` in
   column-name position lexes as an identifier. Known limitation: at the
   start of a table-body line, an unquoted column literally named
-  `indexes`/`checks`/`note`/`records` lexes as the keyword; quoting
+  `indexes`/`validators`/`note`/`records` lexes as the keyword; quoting
   opts out (§case-sensitivity-and-terminology).
 - **Split string tokens for injection** (§string-literals–3.7). Delimiters and
   content are separate tokens, so `(string_content)` is a node with a
@@ -254,7 +254,7 @@ from one implementation. The protocol library is `tliron/glsp` (LSP
 ## 7. Known limitations (documented trade-offs, not bugs)
 
 - **Grammar: unquoted columns named like block keywords** — `indexes`,
-  `checks`, `note`, `records` need quoting in column position (§keywords
+  `validators`, `note`, `records` need quoting in column position (§keywords
   note above); the front end, spec-exact, accepts both.
 - **Grammar: exotic string edges** — a triple-quoted string whose
   content ends in a quote immediately before the closing `'''` may
@@ -268,7 +268,7 @@ from one implementation. The protocol library is `tliron/glsp` (LSP
 ### Go references
 
 A `.volt` file names Go by rule only in the containing package's own
-Go files — pipeline plugs (§pipelines) and Go-reference checks (§validation-checks).
+Go files — pipeline plugs (§pipelines) and validators (§validators).
 The server resolves those names with the standard library's Go parser
 over the package directory's non-test `*.go` files (no gopls, no
 build): go-to-definition lands on the `func`, hover shows its signature
@@ -291,10 +291,9 @@ the fresh one. Only saved files
 count: the Go buffers themselves belong to gopls, not to this server. Rename on a Go reference rewrites its Volt spellings only —
 the Go declaration is gopls' job, and the existence error then points
 at whichever side is still behind. Rename on a column follows it into
-the table's checks (typed operands and Go-reference arguments); a
-column named through a group — in a `Pred` body or a group select — is
-left alone, and the agreement error (§selects-over-groups for a select, §validation-checks for a
-Pred used by a table's checks) names what is now missing.
+the table's validators (their arguments); a column named through a
+group, in a `Pred` body or a group select, is left alone, and the
+agreement error (§selects-over-groups) names what is now missing.
 
 ## 8. The verification checklist
 

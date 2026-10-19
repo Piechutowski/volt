@@ -7,38 +7,38 @@ import (
 )
 
 // Validate evaluates every check of users against the row's values
-// (spec §validation-checks). Typed checks are also CHECK constraints in the DDL;
+// (spec §validators). Typed checks are also CHECK constraints in the DDL;
 // Go-reference checks run here only — SQLite cannot call Go.
 func (v User) Validate() error {
 	var errs []rt.CheckError
 	if err := EmailValid(v.Email); err != nil {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Columns: []string{"email"}, Cause: err})
+		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid", Columns: []string{"email"}, Cause: err})
 	}
 	return rt.Validation(errs)
 }
 
 // Validate evaluates the checks of users whose columns UserCreateParams carries
-// (spec §validation-checks).
+// (spec §validators).
 func (v UserCreateParams) Validate() error {
 	var errs []rt.CheckError
 	if err := EmailValid(v.Email); err != nil {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Columns: []string{"email"}, Cause: err})
+		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid", Columns: []string{"email"}, Cause: err})
 	}
 	return rt.Validation(errs)
 }
 
 // Validate evaluates the checks of users whose columns UserUpdateParams carries
-// (spec §validation-checks).
+// (spec §validators).
 func (v UserUpdateParams) Validate() error {
 	var errs []rt.CheckError
 	if err := EmailValid(v.Email); err != nil {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid(email)", Columns: []string{"email"}, Cause: err})
+		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid", Columns: []string{"email"}, Cause: err})
 	}
 	return rt.Validation(errs)
 }
 
 // Validate evaluates every check of orders against the row's values
-// (spec §validation-checks). Typed checks are also CHECK constraints in the DDL;
+// (spec §validators). Typed checks are also CHECK constraints in the DDL;
 // Go-reference checks run here only — SQLite cannot call Go.
 func (v Order) Validate() error {
 	var errs []rt.CheckError
@@ -49,7 +49,7 @@ func (v Order) Validate() error {
 }
 
 // Validate evaluates the checks of orders whose columns OrderCreateParams carries
-// (spec §validation-checks).
+// (spec §validators).
 func (v OrderCreateParams) Validate() error {
 	var errs []rt.CheckError
 	if !(v.Total != 0) {
@@ -59,7 +59,7 @@ func (v OrderCreateParams) Validate() error {
 }
 
 // Validate evaluates the checks of orders whose columns OrderUpdateParams carries
-// (spec §validation-checks).
+// (spec §validators).
 func (v OrderUpdateParams) Validate() error {
 	var errs []rt.CheckError
 	if !(v.Total != 0) {
@@ -69,38 +69,38 @@ func (v OrderUpdateParams) Validate() error {
 }
 
 // Validate evaluates every check of page_views against the row's values
-// (spec §validation-checks). Typed checks are also CHECK constraints in the DDL;
+// (spec §validators). Typed checks are also CHECK constraints in the DDL;
 // Go-reference checks run here only — SQLite cannot call Go.
 func (v PageView) Validate() error {
 	var errs []rt.CheckError
-	if !(v.Hits >= 0 && v.Day >= 1) {
-		errs = append(errs, rt.CheckError{Model: "PageView", Check: "counts_positive", Columns: []string{"hits", "day"}})
+	if err := CountsPositive(v.Hits, v.Day); err != nil {
+		errs = append(errs, rt.CheckError{Model: "PageView", Check: "CountsPositive", Columns: []string{"hits", "day"}, Cause: err})
 	}
-	if !(rt.Like(v.Site, "%_")) {
-		errs = append(errs, rt.CheckError{Model: "PageView", Check: "site LIKE '%_'", Columns: []string{"site"}})
+	if err := SiteShape(v.Site); err != nil {
+		errs = append(errs, rt.CheckError{Model: "PageView", Check: "SiteShape", Columns: []string{"site"}, Cause: err})
 	}
 	return rt.Validation(errs)
 }
 
 // Validate evaluates the checks of page_views whose columns PageViewCreateParams carries
-// (spec §validation-checks); left to the row and the DDL: counts_positive.
+// (spec §validators); left to the row and the DDL: CountsPositive.
 func (v PageViewCreateParams) Validate() error {
 	var errs []rt.CheckError
-	if !(rt.Like(v.Site, "%_")) {
-		errs = append(errs, rt.CheckError{Model: "PageView", Check: "site LIKE '%_'", Columns: []string{"site"}})
+	if err := SiteShape(v.Site); err != nil {
+		errs = append(errs, rt.CheckError{Model: "PageView", Check: "SiteShape", Columns: []string{"site"}, Cause: err})
 	}
 	return rt.Validation(errs)
 }
 
 // Validate evaluates the checks of page_views whose columns PageViewUpdateParams carries
-// (spec §validation-checks).
+// (spec §validators).
 func (v PageViewUpdateParams) Validate() error {
 	var errs []rt.CheckError
-	if !(v.Hits >= 0 && v.Day >= 1) {
-		errs = append(errs, rt.CheckError{Model: "PageView", Check: "counts_positive", Columns: []string{"hits", "day"}})
+	if err := CountsPositive(v.Hits, v.Day); err != nil {
+		errs = append(errs, rt.CheckError{Model: "PageView", Check: "CountsPositive", Columns: []string{"hits", "day"}, Cause: err})
 	}
-	if !(rt.Like(v.Site, "%_")) {
-		errs = append(errs, rt.CheckError{Model: "PageView", Check: "site LIKE '%_'", Columns: []string{"site"}})
+	if err := SiteShape(v.Site); err != nil {
+		errs = append(errs, rt.CheckError{Model: "PageView", Check: "SiteShape", Columns: []string{"site"}, Cause: err})
 	}
 	return rt.Validation(errs)
 }

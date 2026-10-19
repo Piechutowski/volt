@@ -6,36 +6,6 @@ import (
 	"testing"
 )
 
-func TestLikeMirrorsSQLite(t *testing.T) {
-	cases := []struct {
-		s, p string
-		want bool
-	}{
-		{"abc", "abc", true},
-		{"abc", "ABC", true},
-		{"Straße", "straße", true},
-		{"STRASSE", "strasse", true},
-		{"Straße", "STRASSE", false},
-		{"abc", "a%", true},
-		{"abc", "%c", true},
-		{"abc", "%b%", true},
-		{"abc", "a_c", true},
-		{"abc", "a_d", false},
-		{"abc", "____", false},
-		{"abc", "___", true},
-		{"", "%", true},
-		{"", "_", false},
-		{"a%c", "a\\%c", false},
-		{"anything", "%%%", true},
-		{"mail@example.com", "%@example.com", true},
-	}
-	for _, c := range cases {
-		if got := Like(c.s, c.p); got != c.want {
-			t.Errorf("Like(%q, %q) = %v, want %v", c.s, c.p, got, c.want)
-		}
-	}
-}
-
 func TestCheckErrorUnwraps(t *testing.T) {
 	cause := errors.New("not an address")
 	e := CheckError{Model: "User", Check: "EmailValid(email)", Cause: cause}

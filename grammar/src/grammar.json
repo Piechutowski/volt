@@ -431,7 +431,7 @@
         },
         {
           "type": "SYMBOL",
-          "name": "checks_block"
+          "name": "validators_block"
         },
         {
           "type": "SYMBOL",
@@ -770,7 +770,7 @@
         },
         {
           "type": "SYMBOL",
-          "name": "checks_block"
+          "name": "validators_block"
         },
         {
           "type": "SYMBOL",
@@ -1432,7 +1432,7 @@
         }
       ]
     },
-    "checks_block": {
+    "validators_block": {
       "type": "SEQ",
       "members": [
         {
@@ -1444,12 +1444,12 @@
               "value": 1,
               "content": {
                 "type": "PATTERN",
-                "value": "[cC][hH][eE][cC][kK][sS]"
+                "value": "[vV][aA][lL][iI][dD][aA][tT][oO][rR][sS]"
               }
             }
           },
           "named": false,
-          "value": "checks"
+          "value": "validators"
         },
         {
           "type": "STRING",
@@ -1470,7 +1470,7 @@
               "members": [
                 {
                   "type": "SYMBOL",
-                  "name": "check_definition"
+                  "name": "validator"
                 },
                 {
                   "type": "REPEAT",
@@ -1486,7 +1486,7 @@
                       },
                       {
                         "type": "SYMBOL",
-                        "name": "check_definition"
+                        "name": "validator"
                       }
                     ]
                   }
@@ -1511,98 +1511,56 @@
         }
       ]
     },
-    "check_definition": {
+    "validator": {
       "type": "SEQ",
       "members": [
         {
-          "type": "CHOICE",
-          "members": [
-            {
-              "type": "SYMBOL",
-              "name": "expression"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "go_check"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "pred_expr"
-            }
-          ]
+          "type": "FIELD",
+          "name": "ref",
+          "content": {
+            "type": "SYMBOL",
+            "name": "go_ref"
+          }
         },
         {
-          "type": "CHOICE",
-          "members": [
-            {
-              "type": "FIELD",
-              "name": "settings",
-              "content": {
-                "type": "SYMBOL",
-                "name": "settings_list"
+          "type": "STRING",
+          "value": "("
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "identifier"
+          },
+          "named": true,
+          "value": "column_ref"
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "STRING",
+                "value": ","
+              },
+              {
+                "type": "ALIAS",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "identifier"
+                },
+                "named": true,
+                "value": "column_ref"
               }
-            },
-            {
-              "type": "BLANK"
-            }
-          ]
+            ]
+          }
+        },
+        {
+          "type": "STRING",
+          "value": ")"
         }
       ]
-    },
-    "go_check": {
-      "type": "PREC",
-      "value": 2,
-      "content": {
-        "type": "SEQ",
-        "members": [
-          {
-            "type": "FIELD",
-            "name": "ref",
-            "content": {
-              "type": "SYMBOL",
-              "name": "go_ref"
-            }
-          },
-          {
-            "type": "STRING",
-            "value": "("
-          },
-          {
-            "type": "ALIAS",
-            "content": {
-              "type": "SYMBOL",
-              "name": "identifier"
-            },
-            "named": true,
-            "value": "column_ref"
-          },
-          {
-            "type": "REPEAT",
-            "content": {
-              "type": "SEQ",
-              "members": [
-                {
-                  "type": "STRING",
-                  "value": ","
-                },
-                {
-                  "type": "ALIAS",
-                  "content": {
-                    "type": "SYMBOL",
-                    "name": "identifier"
-                  },
-                  "named": true,
-                  "value": "column_ref"
-                }
-              ]
-            }
-          },
-          {
-            "type": "STRING",
-            "value": ")"
-          }
-        ]
-      }
     },
     "note_definition": {
       "type": "SEQ",

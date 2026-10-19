@@ -9,7 +9,7 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-const goRefSchema = "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string [not null]\n\n\tchecks {\n\t\tEmailValid(email)\n\t\tdb.Missing(email)\n\t}\n}\n"
+const goRefSchema = "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string [not null]\n\n\tvalidators {\n\t\tEmailValid(email)\n\t\tdb.Missing(email)\n\t}\n}\n"
 const goRefRoutes = "package app\n\nPipeline api {\n\tuse volt.RequestID\n\tuse Auth\n}\n"
 
 func goRefProject(t *testing.T) string {
@@ -17,7 +17,7 @@ func goRefProject(t *testing.T) string {
 	return voltProject(t, map[string]string{
 		"go.mod":          "module goref\n",
 		"db/schema.volt":  goRefSchema,
-		"db/checks.go":    "package db\n\nimport \"errors\"\n\n// EmailValid rejects addresses without an @ — a Go-reference check\n// target (spec §validation-checks).\nfunc EmailValid(email string) error {\n\tif email == \"\" {\n\t\treturn errors.New(\"empty\")\n\t}\n\treturn nil\n}\n",
+		"db/checks.go":    "package db\n\nimport \"errors\"\n\n// EmailValid rejects addresses without an @ — a Go-reference check\n// target (spec §validators).\nfunc EmailValid(email string) error {\n\tif email == \"\" {\n\t\treturn errors.New(\"empty\")\n\t}\n\treturn nil\n}\n",
 		"app/routes.volt": goRefRoutes,
 		"app/mw.go":       "package app\n\nimport \"net/http\"\n\n// Auth is a pipeline plug.\nfunc Auth(next http.Handler) http.Handler { return next }\n",
 	})
@@ -130,7 +130,7 @@ func TestGoRefRenameRewritesVoltSpellings(t *testing.T) {
 }
 
 func TestColumnRenameFollowsIntoChecks(t *testing.T) {
-	const text = "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string [not null]\n\n\tchecks {\n\t\temail like '%@%'\n\t\tEmailValid(email)\n\t}\n}\n"
+	const text = "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string [not null]\n\n\tvalidators {\n\t\tEmailValid(email)\n\t}\n}\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":         "module rn\n",
 		"db/schema.volt": text,
@@ -145,8 +145,8 @@ func TestColumnRenameFollowsIntoChecks(t *testing.T) {
 	for _, edits := range edit.Changes {
 		n += len(edits)
 	}
-	if n != 3 {
-		t.Errorf("column rename produced %d edits, want 3 (declaration, check operand, check argument): %+v", n, edit.Changes)
+	if n != 2 {
+		t.Errorf("column rename produced %d edits, want 2 (declaration, validator argument): %+v", n, edit.Changes)
 	}
 }
 
@@ -172,7 +172,7 @@ func TestColumnRenameFollowsIntoSingleTableSelect(t *testing.T) {
 }
 
 func TestGoRefQualifiedRenameKeepsQualifier(t *testing.T) {
-	const text = "package db\n\nTable users {\n\tid int [pk]\n\temail string [not null]\n\n\tchecks {\n\t\tdb.EmailValid(email)\n\t}\n}\n"
+	const text = "package db\n\nTable users {\n\tid int [pk]\n\temail string [not null]\n\n\tvalidators {\n\t\tdb.EmailValid(email)\n\t}\n}\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":         "module q\n",
 		"db/schema.volt": text,
@@ -224,26 +224,6 @@ func TestSelectColumnRefsRespectGroupShadowing(t *testing.T) {
 	}
 	if n != 1 {
 		t.Errorf("group-shadowed select: rename produced %d edits, want 1 (declaration only): %+v", n, edit.Changes)
-	}
-}
-
-func TestPredRefInCheckNavigates(t *testing.T) {
-	const text = "package db\n\nPred positive { hits >= 0 }\n\nTable page_views {\n\tid int [pk]\n\thits int [not null]\n\n\tchecks {\n\t\tpositive\n\t}\n}\n"
-	root := voltProject(t, map[string]string{"go.mod": "module p\n", "db/schema.volt": text})
-	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), text)
-	if loc := d.Definition(posOf(t, text, "positive", 1)); loc == nil || loc.Range.Start.Line != 2 {
-		t.Errorf("Pred reference inside checks did not resolve to the declaration: %v", loc)
-	}
-	edit, err := d.Rename(posOf(t, text, "positive", 0), "nonneg")
-	if err != nil {
-		t.Fatal(err)
-	}
-	n := 0
-	for _, edits := range edit.Changes {
-		n += len(edits)
-	}
-	if n != 2 {
-		t.Errorf("Pred rename produced %d edits, want 2 (declaration + check use): %+v", n, edit.Changes)
 	}
 }
 

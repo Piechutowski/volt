@@ -199,7 +199,7 @@ func crudMethodsBuild(t *tableModel) []CRUDMethod {
 // ParamsValidators reports whether the table's CreateParams and
 // UpdateParams structs get a Validate method: each does when the struct
 // exists and carries every column of at least one check.
-func (pl *Plan) ParamsValidators(tableKey string, checks []CheckSpec) (create, update bool, err error) {
+func (pl *Plan) ParamsValidators(tableKey string, checks []ValidatorSpec) (create, update bool, err error) {
 	t, err := pl.table(tableKey)
 	if err != nil {
 		return false, false, err

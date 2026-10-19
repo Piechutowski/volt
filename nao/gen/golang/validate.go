@@ -1,4 +1,4 @@
-// Validator generation (docs/spec.md §validation-checks): one Validate method per
+// Validator generation (docs/spec.md §validators): one Validate method per
 // table that carries typed or Go-reference checks. Go-reference calls
 // name hand-written functions of the containing package (§handler-references).
 package golang
@@ -15,12 +15,12 @@ import (
 
 // GenerateValidators renders nao_validate.go for the given tables.
 // fns must be non-empty.
-func GenerateValidators(f *ast.File, info *check.Info, fns []CheckFn, opts Options) ([]byte, error) {
+func GenerateValidators(f *ast.File, info *check.Info, fns []ValidatorFn, opts Options) ([]byte, error) {
 	return PlanBuild(f, info).Validators(fns, opts)
 }
 
 // Validators renders nao_validate.go for the planned package.
-func (pl *Plan) Validators(fns []CheckFn, opts Options) ([]byte, error) {
+func (pl *Plan) Validators(fns []ValidatorFn, opts Options) ([]byte, error) {
 	if opts.Package == "" {
 		return nil, fmt.Errorf("no package name")
 	}
@@ -37,16 +37,16 @@ func (pl *Plan) Validators(fns []CheckFn, opts Options) ([]byte, error) {
 			return nil, fmt.Errorf("validator: no table %q in the plan", fn.TableKey)
 		}
 		usesRt = true
-		fmt.Fprintf(&body, "// Validate evaluates every check of %s against the row's values\n// (spec §validation-checks). Typed checks are also CHECK constraints in the DDL;\n// Go-reference checks run here only — SQLite cannot call Go.\n", t.sqlName)
-		validateEmit(&body, t.model, t.model, fn.Checks)
+		fmt.Fprintf(&body, "// Validate evaluates every check of %s against the row's values\n// (spec §validators). Typed checks are also CHECK constraints in the DDL;\n// Go-reference checks run here only — SQLite cannot call Go.\n", t.sqlName)
+		validateEmit(&body, t.model, t.model, fn.Validators)
 
-		create, update := paramsChecks(t, fn.Checks)
+		create, update := paramsChecks(t, fn.Validators)
 		if len(create) > 0 {
-			fmt.Fprintf(&body, "// Validate evaluates the checks of %s whose columns %sCreateParams carries\n// (spec §validation-checks)%s.\n", t.sqlName, t.model, skippedNote(fn.Checks, create))
+			fmt.Fprintf(&body, "// Validate evaluates the checks of %s whose columns %sCreateParams carries\n// (spec §validators)%s.\n", t.sqlName, t.model, skippedNote(fn.Validators, create))
 			validateEmit(&body, t.model+"CreateParams", t.model, create)
 		}
 		if len(update) > 0 {
-			fmt.Fprintf(&body, "// Validate evaluates the checks of %s whose columns %sUpdateParams carries\n// (spec §validation-checks)%s.\n", t.sqlName, t.model, skippedNote(fn.Checks, update))
+			fmt.Fprintf(&body, "// Validate evaluates the checks of %s whose columns %sUpdateParams carries\n// (spec §validators)%s.\n", t.sqlName, t.model, skippedNote(fn.Validators, update))
 			validateEmit(&body, t.model+"UpdateParams", t.model, update)
 		}
 	}
@@ -70,7 +70,7 @@ func (pl *Plan) Validators(fns []CheckFn, opts Options) ([]byte, error) {
 	return align.Finish(out.String()), nil
 }
 
-func validateEmit(body *strings.Builder, recv, model string, checks []CheckSpec) {
+func validateEmit(body *strings.Builder, recv, model string, checks []ValidatorSpec) {
 	fmt.Fprintf(body, "func (v %s) Validate() error {\n\tvar errs []rt.CheckError\n", recv)
 	for _, ck := range checks {
 		name := ck.Name
@@ -93,7 +93,7 @@ func validateEmit(body *strings.Builder, recv, model string, checks []CheckSpec)
 	body.WriteString("\treturn rt.Validation(errs)\n}\n\n")
 }
 
-func skippedNote(all, kept []CheckSpec) string {
+func skippedNote(all, kept []ValidatorSpec) string {
 	var skipped []string
 	for _, ck := range all {
 		found := false

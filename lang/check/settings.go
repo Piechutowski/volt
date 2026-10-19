@@ -40,11 +40,11 @@ var (
 			"pk": flagOnly, "primary key": flagOnly,
 			"null": flagOnly, "not null": flagOnly,
 			"unique": flagOnly, "increment": flagOnly,
-			"default": defaultVal, "check": exprValue,
-			"note": strValue, "ref": refVal, "tag": strValue,
+			"default": defaultVal,
+			"note":    strValue, "ref": refVal, "tag": strValue,
 			"required": flagOnly,
 		},
-		repeatable: map[string]bool{"check": true, "ref": true, "tag": true},
+		repeatable: map[string]bool{"ref": true, "tag": true},
 		synonyms:   map[string]string{"primary key": "pk"},
 		conflicts:  [][2]string{{"null", "not null"}, {"required", "null"}, {"required", "default"}, {"required", "increment"}},
 	}
@@ -53,9 +53,6 @@ var (
 			"type": identValue, "name": strValue,
 			"unique": flagOnly, "pk": flagOnly, "note": strValue,
 		},
-	}
-	settingsCheck = settingSpec{
-		kinds: map[string]valueKind{"name": strValue},
 	}
 	refSettings = settingSpec{
 		kinds: map[string]valueKind{

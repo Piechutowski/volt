@@ -15,17 +15,16 @@ var (
 		"Note", "Records", "DiagramView", "use", "reuse",
 		"package ", "import", "Pipeline", "Scope",
 	}
-	tableBodyKeywords = []string{"indexes", "checks", "Note", "Records"}
+	tableBodyKeywords = []string{"indexes", "validators", "Note", "Records"}
 	scopeBodyKeywords = []string{
 		"get ", "post ", "put ", "patch ", "delete ", "options ", "head ",
 		"any ", "resources ", "dataset ", "Scope ",
 	}
 
 	settingsByContext = map[string][]string{
-		"column":    {"pk", "primary key", "null", "not null", "unique", "increment", "required", "default: ", "check: ", "note: ", "ref: ", "tag: "},
+		"column":    {"pk", "primary key", "null", "not null", "unique", "increment", "required", "default: ", "note: ", "ref: ", "tag: "},
 		"table":     {"headercolor: ", "note: "},
 		"index":     {"type: ", "name: ", "unique", "pk", "note: "},
-		"check":     {"name: "},
 		"ref":       {"delete: ", "update: ", "color: ", "inactive"},
 		"enumvalue": {"note: "},
 		"sticky":    {"color: "},
@@ -134,8 +133,8 @@ func (d *Document) blockContext(line int) string {
 			switch {
 			case strings.HasPrefix(head, "indexes"):
 				return "indexes"
-			case strings.HasPrefix(head, "checks"):
-				return "checks"
+			case strings.HasPrefix(head, "validators"):
+				return "validators"
 			case strings.HasPrefix(head, "tablepartial"):
 				return "tablepartial"
 			case strings.HasPrefix(head, "tablegroup"):
@@ -211,8 +210,6 @@ func (d *Document) settingsComplete(prefix, ctx string) []protocol.CompletionIte
 		switch ctx {
 		case "indexes":
 			kind = "index"
-		case "checks":
-			kind = "check"
 		case "enum":
 			kind = "enumvalue"
 		case "ref":

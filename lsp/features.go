@@ -98,8 +98,8 @@ func (d *Document) tableChildren(body []ast.TableItem) []protocol.DocumentSymbol
 			kids = append(kids, d.symbol("~"+n.Name.Name(), "injected partial", protocol.SymbolKindInterface, n, n.Name, nil))
 		case *ast.IndexesBlock:
 			kids = append(kids, d.symbol("indexes", "", protocol.SymbolKindProperty, n, n, nil))
-		case *ast.ChecksBlock:
-			kids = append(kids, d.symbol("checks", "", protocol.SymbolKindProperty, n, n, nil))
+		case *ast.ValidatorsBlock:
+			kids = append(kids, d.symbol("validators", "", protocol.SymbolKindProperty, n, n, nil))
 		}
 	}
 	return kids

@@ -59,16 +59,12 @@ type Package struct {
 	// resolved by Check.
 	Groups map[string]*GroupInfo
 	Preds  map[string]*ast.Pred
-	// CheckFns is the validator surface (§validation-checks), lowered by Check.
-	CheckFns []golang.CheckFn
-	// CheckSQL is every typed check's SQL rendering, lowered by Check
-	// with CheckFns: gen/sqlite emits CHECK (<this>) for it (§validation-checks).
-	CheckSQL       map[*ast.Check]string
+	// Validators is the validator surface (§validators), lowered by Check.
+	Validators     []golang.ValidatorFn
 	Selects        []*SelectInfo
 	selectByMethod map[string]selectMember
 	selectByName   map[string]*SelectInfo
-	checkFnByKey   map[string][]golang.CheckSpec
-	// ValidByKey says, per table whose params structs validate (§validation-checks),
+	// ValidByKey says, per table whose params structs validate (§validators),
 	// whether the create and the update one do: decided with the
 	// table's lowered checks, read by the route lowering.
 	ValidByKey map[string][2]bool

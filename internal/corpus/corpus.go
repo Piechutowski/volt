@@ -112,7 +112,7 @@ func schemaWrite(b *strings.Builder, spec Spec, pkg string) {
 		if i > 1 {
 			fmt.Fprintf(b, "\tprev_id int [ref: > %s.id]\n", Table(i-1))
 		}
-		b.WriteString("\n\tchecks {\n\t\tc001 >= 0 [name: 'c001_nonneg']\n\t\tPositive(c001)\n\t}\n}\n\n")
+		b.WriteString("\n\tvalidators {\n\t\tPositive(c001)\n\t}\n}\n\n")
 	}
 	b.WriteString("Group series {\n")
 	for i := 1; i <= spec.Tables; i++ {
@@ -158,7 +158,7 @@ func checksGo(pkg string) string {
 
 import "errors"
 
-// Positive is the Go-reference check every table names (§validation-checks).
+// Positive is the validator every table names (§validators).
 func Positive(v int) error {
 	if v < 0 {
 		return errors.New("negative")

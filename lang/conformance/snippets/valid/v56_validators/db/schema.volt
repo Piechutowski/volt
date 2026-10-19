@@ -1,4 +1,4 @@
-// spec: §validation-checks — typed checks (SQL CHECK + generated validator), named
+// spec: §validators — typed checks (SQL CHECK + generated validator), named
 // checks, Pred reuse as a parameterless predicate, and Go-reference
 // checks (validator only), bare or qualified by the containing package
 package db
@@ -11,9 +11,7 @@ Table page_views {
   hits int [not null]
   flag bool [not null, default: false]
 
-  checks {
-    positive and hits in (0, 1, 2) [name: 'hits_sane']
-    site like '%_' or flag = true
+  validators {
     SiteKnown(site)
     db.SiteKnown(site)
   }

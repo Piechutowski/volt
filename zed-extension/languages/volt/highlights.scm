@@ -29,7 +29,7 @@
   "Records"
   "DiagramView"
   "indexes"
-  "checks"
+  "validators"
   "as"
   "use"
   "reuse"

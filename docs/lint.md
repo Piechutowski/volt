@@ -138,7 +138,7 @@ composite indexes with different column order are different indexes.
 
 ### emptybody
 
-**What it does.** Reports empty `indexes {}` and `checks {}` blocks, empty
+**What it does.** Reports empty `indexes {}` and `validators {}` blocks, empty
 `TableGroup` bodies, empty (non-wildcard) DiagramView categories, and empty
 `Project` bodies.
 
@@ -366,8 +366,7 @@ one file in `vet/` plus one testdata file.
 | `junctionhint` | `<>` many-to-many refs, reminding that SQL export materializes an implicit junction table (spec §relationships-ref) | informational, not a defect; would fire on every legitimate `<>` |
 | `orphantable` | tables with no relationships at all | too noisy: lookup/config tables are legitimately standalone |
 | `nullablefk` | nullable FK columns, i.e. zero-or-many cardinality (spec §nullability-and-cardinality) | that cardinality is a valid modeling choice, not a smell |
-| `recordstypes` | record values inconsistent with column types (dates, enum membership, booleans) | needs the §records-sample-data value-typing engine; belongs in `check` when built |
-| `recordsdupkey` | duplicate primary-key values across record rows | same engine as above |
+| `recordsdupkey` | duplicate primary-key values across record rows | belongs in `check` beside record value typing (§records-sample-data) |
 | `sqlkeyword` | unquoted names that are reserved words in common SQL dialects (`order`, `user`) | needs per-dialect wordlists and a target-dialect setting |
 | `namingstyle` | mixed naming conventions (snake_case vs camelCase) | pure style; needs configuration machinery first |
 | `unusedstickynote` | sticky notes not shown by any DiagramView | views are optional; most files have none, so every note would warn |

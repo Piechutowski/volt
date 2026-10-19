@@ -6,7 +6,7 @@
  * Project, Table (settings, alias, columns, legacy flags), TablePartial and
  * ~injection, Enum, Ref (long, short and inline forms, composite endpoints),
  * TableGroup, Note (member, block and sticky forms), Records (top-level and
- * in-table), DiagramView, indexes and checks blocks, use/reuse imports —
+ * in-table), DiagramView, indexes and validators blocks, use/reuse imports —
  * plus the Volt routing layer of docs/spec.md Part II: package clauses, Go-style
  * import blocks, Pipeline, Scope, routes and resources. One grammar for
  * one language in three layers (§layers-files-and-the-superset-rule): every .volt file parses here,
@@ -21,7 +21,7 @@
  *  - Keywords are case-insensitive and NOT reserved (§keywords). Each keyword is a
  *    case-insensitive regex aliased to its canonical spelling, with token
  *    precedence over plain identifiers. Consequence (documented limitation):
- *    an unquoted column named exactly `note`, `indexes`, `checks` or
+ *    an unquoted column named exactly `note`, `indexes`, `validators` or
  *    `records` needs quotes ("note") to parse as a column.
  *  - Double quotes delimit identifiers, single quotes delimit strings (§identifiers,
  *    §string-literals). String and expression contents are separate tokens so editors can
@@ -129,7 +129,7 @@ module.exports = grammar({
       choice(
         $.column_definition,
         $.indexes_block,
-        $.checks_block,
+        $.validators_block,
         $.note_definition,
         $.partial_injection,
         $.records_block,
@@ -174,7 +174,7 @@ module.exports = grammar({
       ),
 
     _partial_item: ($) =>
-      choice($.column_definition, $.indexes_block, $.checks_block, $.note_definition),
+      choice($.column_definition, $.indexes_block, $.validators_block, $.note_definition),
 
     partial_injection: ($) =>
       seq('~', field('name', alias($._name, $.partial_name))),
@@ -264,7 +264,7 @@ module.exports = grammar({
         ')',
       ),
 
-    // ==================== indexes / checks (§indexes, §checks) ====================
+    // ==================== indexes / validators (§indexes, §validators) ====================
 
     indexes_block: ($) =>
       seq(
@@ -286,34 +286,23 @@ module.exports = grammar({
     composite_index: ($) =>
       seq('(', $._index_atom, repeat(seq(',', $._index_atom)), ')'),
 
-    checks_block: ($) =>
+    validators_block: ($) =>
       seq(
-        kw('checks'),
+        kw('validators'),
         '{',
         repeat($._newline),
-        optional(newlineSep1($.check_definition, $)),
+        optional(newlineSep1($.validator, $)),
         '}',
       ),
 
-    // One check line (§checks, §validation-checks): opaque SQL, a Go-reference call, or
-    // a typed predicate expression. A name followed by '(' can only be
-    // a Go reference, so go_check wins that race by precedence.
-    check_definition: ($) =>
+    // One validator line (§validators): a Go function of the package over columns.
+    validator: ($) =>
       seq(
-        choice($.expression, $.go_check, $.pred_expr),
-        optional(field('settings', $.settings_list)),
-      ),
-
-    go_check: ($) =>
-      prec(
-        2,
-        seq(
-          field('ref', $.go_ref),
-          '(',
-          alias($.identifier, $.column_ref),
-          repeat(seq(',', alias($.identifier, $.column_ref))),
-          ')',
-        ),
+        field('ref', $.go_ref),
+        '(',
+        alias($.identifier, $.column_ref),
+        repeat(seq(',', alias($.identifier, $.column_ref))),
+        ')',
       ),
 
     // ==================== Note (§notes) ====================

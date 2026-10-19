@@ -388,8 +388,8 @@ func (p *parser) tableItem(what string) (item ast.TableItem) {
 		return pr
 	case p.atKw("indexes") && p.peekKind(1) == token.LBRACE:
 		return p.indexesBlock()
-	case p.atKw("checks") && p.peekKind(1) == token.LBRACE:
-		return p.checksBlock()
+	case p.atKw("validators") && p.peekKind(1) == token.LBRACE:
+		return p.validatorsBlock()
 	case p.atNoteDef():
 		return p.noteDef()
 	case p.atKw("records") && (p.peekKind(1) == token.LPAREN || p.peekKind(1) == token.LBRACE):
@@ -397,7 +397,7 @@ func (p *parser) tableItem(what string) (item ast.TableItem) {
 	case t.Kind == token.IDENT:
 		return p.column()
 	default:
-		p.fail(t, "expected a column, indexes, checks, Note, records or '~injection' in %s body, found %s", what, t)
+		p.fail(t, "expected a column, indexes, validators, Note, records or '~injection' in %s body, found %s", what, t)
 		return nil
 	}
 }
@@ -476,48 +476,28 @@ func (p *parser) index() *ast.Index {
 	return ix
 }
 
-func (p *parser) checksBlock() *ast.ChecksBlock {
-	b := &ast.ChecksBlock{ChecksPos: p.next().Pos}
-	p.expect(token.LBRACE, "checks block (§checks)")
+func (p *parser) validatorsBlock() *ast.ValidatorsBlock {
+	b := &ast.ValidatorsBlock{ValidatorsPos: p.next().Pos}
+	p.expect(token.LBRACE, "validators block (§validators)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		p.item(func() {
-			p.lineBegin("check definition (§checks)")
-			c := p.check()
-			if p.at(token.LBRACKET) && !p.cur().NLBefore {
-				c.Settings = p.settingList()
+			p.lineBegin("validator (§validators)")
+			v := &ast.Validator{Ref: p.goRef("validator reference (§validators)")}
+			p.expect(token.LPAREN, "validator arguments (§validators)")
+			for {
+				v.Args = append(v.Args, p.ident("validator argument (§validators)"))
+				if !p.at(token.COMMA) {
+					break
+				}
+				p.next()
 			}
-			p.endOfLine("check definition (§checks)")
-			b.Checks = append(b.Checks, c)
+			v.EndPos = p.expect(token.RPAREN, "validator arguments (§validators)").End()
+			p.endOfLine("validator (§validators)")
+			b.Validators = append(b.Validators, v)
 		})
 	}
-	b.Rbrace = p.expect(token.RBRACE, "checks block (§checks)").Pos
+	b.Rbrace = p.expect(token.RBRACE, "validators block (§validators)").Pos
 	return b
-}
-
-func (p *parser) check() *ast.Check {
-	switch {
-	case p.at(token.FUNCEXPR):
-		return &ast.Check{Expr: &ast.FuncExpr{Tok: p.next()}}
-	case p.at(token.IDENT) && !strings.EqualFold(p.cur().Val, "not") && !p.peekNL(1) && (p.peekKind(1) == token.LPAREN ||
-		(p.peekKind(1) == token.DOT && p.peekKind(3) == token.LPAREN)):
-		c := &ast.Check{Ref: p.goRef("check reference (§validation-checks)")}
-		p.expect(token.LPAREN, "check reference arguments (§validation-checks)")
-		for {
-			c.Args = append(c.Args, p.ident("check reference argument (§validation-checks)"))
-			if !p.at(token.COMMA) {
-				break
-			}
-			p.next()
-		}
-		c.EndPos = p.expect(token.RPAREN, "check reference arguments (§validation-checks)").End()
-		return c
-	default:
-		c := &ast.Check{Pred: p.predExpr()}
-		if c.Pred != nil {
-			c.EndPos = c.Pred.End()
-		}
-		return c
-	}
 }
 
 func (p *parser) ref() *ast.Ref {

@@ -175,7 +175,7 @@ func TestDatasetRoutesServe(t *testing.T) {
 	}
 }
 
-// TestQueryRouteValidation (§validation-checks, §validation-checks, §query-routes): a violated check
+// TestQueryRouteValidation (§validators, §query-routes): a violated check
 // is a 422 naming the check before the database sees the row; a
 // duplicate key is a 409 naming the column; both in either format.
 func TestQueryRouteValidation(t *testing.T) {
@@ -183,11 +183,11 @@ func TestQueryRouteValidation(t *testing.T) {
 
 	rec := call(h, "POST", "/api/users", strings.NewReader(`{"email":"nope"}`))
 	if rec.Code != 422 || !strings.Contains(rec.Body.String(), "EmailValid") {
-		t.Fatalf("Go-reference check: %d %q, want 422 naming the check", rec.Code, rec.Body.String())
+		t.Fatalf("validator: %d %q, want 422 naming the validator", rec.Code, rec.Body.String())
 	}
 	rec = call(h, "POST", "/api/users", strings.NewReader(`{"email":"@"}`))
-	if rec.Code != 422 || !strings.Contains(rec.Body.String(), "email_shape") {
-		t.Fatalf("typed check: %d %q, want 422 naming email_shape", rec.Code, rec.Body.String())
+	if rec.Code != 422 || !strings.Contains(rec.Body.String(), "EmailShape") {
+		t.Fatalf("second validator: %d %q, want 422 naming EmailShape", rec.Code, rec.Body.String())
 	}
 	rec = call(h, "PATCH", "/api/users/1", strings.NewReader(`{"email":"nope"}`))
 	if rec.Code != 422 {
@@ -199,7 +199,7 @@ func TestQueryRouteValidation(t *testing.T) {
 	}
 }
 
-// TestQueryRouteValidationAttribution (§formats, §validation-checks): the error body
+// TestQueryRouteValidationAttribution (§formats, §validators): the error body
 // is a Problem whose details name the failing check and its columns,
 // so the GUI can mark the field.
 func TestQueryRouteValidationAttribution(t *testing.T) {
@@ -216,8 +216,8 @@ func TestQueryRouteValidationAttribution(t *testing.T) {
 		}
 		names[d.Check] = true
 	}
-	if !names["email_required"] || !names["email_shape"] {
-		t.Errorf("details = %+v, want email_required and email_shape", p.Details)
+	if !names["email_required"] || !names["EmailShape"] {
+		t.Errorf("details = %+v, want email_required and EmailShape", p.Details)
 	}
 	rec = call(h, "POST", "/api/users", strings.NewReader(`{"emial":"x@y"}`))
 	if rec.Code != 400 || !strings.Contains(rec.Body.String(), "emial") {

@@ -997,3 +997,33 @@ func (p *Package) SelectFns() []golang.SelectFn {
 	}
 	return out
 }
+
+func predsIn(exprs []ast.PredExpr, all map[string]*ast.Pred) map[string]*ast.Pred {
+	out := map[string]*ast.Pred{}
+	var walk func(x ast.PredExpr)
+	walk = func(x ast.PredExpr) {
+		switch x := x.(type) {
+		case *ast.PredBinary:
+			walk(x.X)
+			walk(x.Y)
+		case *ast.PredNot:
+			walk(x.X)
+		case *ast.PredParen:
+			walk(x.X)
+		case *ast.PredRef:
+			name := x.Name.Name()
+			if _, seen := out[name]; seen {
+				return
+			}
+			d := all[name]
+			out[name] = d
+			if d != nil {
+				walk(d.X)
+			}
+		}
+	}
+	for _, x := range exprs {
+		walk(x)
+	}
+	return out
+}

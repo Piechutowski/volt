@@ -70,8 +70,8 @@ type TableInfo struct {
 	// Shadowed lists column definitions that lost a §tablepartial conflict.
 	Shadowed []*ColumnDef
 
-	Indexes []*ast.Index // all indexes, direct and injected
-	Checks  []*ast.Check // all check lines, direct and injected (§tablepartial)
+	Indexes    []*ast.Index // all indexes, direct and injected
+	Validators []*ast.Validator
 }
 
 // ColumnDef is one column definition and where it came from.
@@ -378,14 +378,14 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 					addCol(pit, p)
 				case *ast.IndexesBlock:
 					ti.Indexes = append(ti.Indexes, pit.Indexes...)
-				case *ast.ChecksBlock:
-					ti.Checks = append(ti.Checks, pit.Checks...)
+				case *ast.ValidatorsBlock:
+					ti.Validators = append(ti.Validators, pit.Validators...)
 				}
 			}
 		case *ast.IndexesBlock:
 			ti.Indexes = append(ti.Indexes, item.Indexes...)
-		case *ast.ChecksBlock:
-			ti.Checks = append(ti.Checks, item.Checks...)
+		case *ast.ValidatorsBlock:
+			ti.Validators = append(ti.Validators, item.Validators...)
 		}
 	}
 	slots := make([]*slot, 0, len(byName))
