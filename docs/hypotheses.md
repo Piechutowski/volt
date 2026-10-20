@@ -7,12 +7,11 @@ Open design questions, numbered so they can be cited, held loosely.
 One graduates into the spec when it is built, or dies when practice
 says otherwise. A hypothesis binds nothing.
 
-## H1 — How much DBML compatibility is worth keeping
+## H1 — Which schema-core constructs pay for themselves
 
-Today the schema core is DBML's syntax minus file imports and minus
-DBML's type names, so a core-only file pastes into dbdiagram.io only
-after its types are rewritten. Unsettled: whether what remains keeps
-paying for itself. Schemas (`auth.users`, the implicit `public`) are the next
+Today the schema core keeps every construct it has, whether or not a
+generator acts on it. Unsettled: whether each one keeps paying for
+itself. Schemas (`auth.users`, the implicit `public`) are the first
 candidate cut, since SQLite has none and packages already namespace;
 the presentation constructs (colors, TableGroup, DiagramView, sticky
 notes) are the one after, once a Volt-owned diagram tool exists.

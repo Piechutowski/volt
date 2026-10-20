@@ -13,7 +13,7 @@ import (
 	"github.com/Piechutowski/volt/lang/check"
 )
 
-// GenerateValidators renders nao_validate.go for one checked DBML file;
+// GenerateValidators renders nao_validate.go for one checked schema file;
 // fns carries the validators the Volt checker lowered, none for a plain
 // schema.
 func GenerateValidators(f *ast.File, info *check.Info, fns []ValidatorFn, opts Options) ([]byte, error) {

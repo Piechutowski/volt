@@ -144,11 +144,11 @@ for name, case in sorted(inp["stmts"].items()):
     except Exception as e:
         sys.exit(f"{name}: {e}\n  {stmt}")
 `
-	for _, dbml := range corpusSchemas(t) {
-		dbml := dbml
-		t.Run(strings.TrimSuffix(strings.TrimPrefix(dbml, "../testdata/"), ".dbml"), func(t *testing.T) {
-			f, info := parseChecked(t, dbml)
-			ddl, err := sqlitegen.Generate(f, info, sqlitegen.Options{Source: dbml})
+	for _, schema := range corpusSchemas(t) {
+		schema := schema
+		t.Run(strings.TrimSuffix(strings.TrimPrefix(schema, "../testdata/"), ".volt"), func(t *testing.T) {
+			f, info := parseChecked(t, schema)
+			ddl, err := sqlitegen.Generate(f, info, sqlitegen.Options{Source: schema})
 			if err != nil {
 				t.Fatalf("gen/sqlite: %v", err)
 			}
@@ -178,22 +178,22 @@ for name, case in sorted(inp["stmts"].items()):
 
 func TestQueriesGenerationErrors(t *testing.T) {
 	cases := []struct {
-		name, dbml, wantErr string
+		name, src, wantErr string
 	}{
 		{
 			name:    "model collision after singularization",
-			dbml:    "Table users { id int [pk] }\nTable \"user\" { id int [pk] }",
+			src:     "Table users { id int [pk] }\nTable \"user\" { id int [pk] }",
 			wantErr: "both map to Go type",
 		},
 		{
 			name:    "reserved model name",
-			dbml:    "Table jobs [model: 'Queries'] { id int [pk] }",
+			src:     "Table jobs [model: 'Queries'] { id int [pk] }",
 			wantErr: "Queries",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f, diags := parser.ParseFile("t", tc.dbml)
+			f, diags := parser.ParseFile("t", tc.src)
 			info, semDiags := check.File(f)
 			if diag.HasErrors(append(diags, semDiags...)) {
 				t.Fatalf("input unexpectedly invalid: %v %v", diags, semDiags)

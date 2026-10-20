@@ -1,5 +1,5 @@
 // Package sqlite generates SQLite DDL (nao_schema.sql) from a checked
-// DBML file: CREATE TABLE per table, CREATE INDEX per non-pk index, and
+// schema file: CREATE TABLE per table, CREATE INDEX per non-pk index, and
 // INSERT statements from records. Dialect decisions follow docs/spec.md
 // §mapping-to-sqlite-ddl.
 package sqlite
@@ -17,11 +17,11 @@ import (
 
 // Options configures generation.
 type Options struct {
-	// Source is the name of the DBML input, recorded in the header.
+	// Source is the name of the schema input, recorded in the header.
 	Source string
 }
 
-// Generate renders the schema file for one checked DBML file.
+// Generate renders the schema file for one checked schema file.
 func Generate(f *ast.File, info *check.Info, opts Options) ([]byte, error) {
 	g := &generator{f: f, info: info, opts: opts}
 	if err := g.run(); err != nil {

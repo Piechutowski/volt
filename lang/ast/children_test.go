@@ -12,7 +12,7 @@ import (
 
 func TestChildrenAgreesWithInspect(t *testing.T) {
 	var files []string
-	for _, pattern := range []string{"../conformance/snippets/*/*.dbml", "../conformance/snippets/*/*.volt", "../conformance/snippets/*/*/*.volt", "../../grammar/examples/*"} {
+	for _, pattern := range []string{"../conformance/snippets/*/*.volt", "../conformance/snippets/*/*/*.volt", "../../grammar/examples/*"} {
 		m, err := filepath.Glob(pattern)
 		if err != nil {
 			t.Fatal(err)

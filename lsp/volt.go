@@ -1,7 +1,7 @@
 // Volt-layer support. Volt is one language in three layers (docs/spec.md
 // §layers-files-and-the-superset-rule), and this is one server for all of it. A file that belongs to a
 // Volt project — a go.mod root above it (§projects-and-packages) — is checked as part of
-// that whole project; a file with no project keeps the single-file DBML
+// that whole project; a file with no project keeps the single-file schema
 // pass.
 package lsp
 

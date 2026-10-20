@@ -67,7 +67,7 @@ func TestServerForeignFileVerdict(t *testing.T) {
 		"go.mod":          "module lsptest\n",
 		"app/routes.volt": "package app\n\nScope / {\n\tget / Home.Index\n}\n",
 	})
-	path := filepath.Join(root, "app", "notes.dbml")
+	path := filepath.Join(root, "app", "notes.txt")
 	s := NewServer()
 	s.debounce = 0
 	var mu sync.Mutex

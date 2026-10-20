@@ -14,7 +14,7 @@ import (
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-// GenerateDyn renders the dynamic-query file for one checked DBML file.
+// GenerateDyn renders the dynamic-query file for one checked schema file.
 func GenerateDyn(f *ast.File, info *check.Info, opts Options) ([]byte, error) {
 	return PlanBuild(f, info).Dyn(opts)
 }

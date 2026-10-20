@@ -1,4 +1,4 @@
-// Package scanner tokenizes DBML source (spec §lexical-structure), playing the role of
+// Package scanner tokenizes Volt source (spec §lexical-structure), playing the role of
 // go/scanner in the Go toolchain.
 //
 // Two rules govern tokenization (spec §tokenization): left-to-right single pass,

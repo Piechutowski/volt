@@ -40,7 +40,7 @@ TableGroup g {
 
 func doc(t *testing.T, text string) *Document {
 	t.Helper()
-	return NewDocument("file:///test.dbml", text)
+	return NewDocument("file:///test.volt", text)
 }
 
 func posOf(t *testing.T, text, needle string, occurrence int) protocol.Position {
@@ -168,7 +168,7 @@ func TestRenameColumnFromPartial(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	edits := edit.Changes["file:///test.dbml"]
+	edits := edit.Changes["file:///test.volt"]
 	if len(edits) != 2 {
 		t.Fatalf("expected 2 edits, got %d: %v", len(edits), edits)
 	}

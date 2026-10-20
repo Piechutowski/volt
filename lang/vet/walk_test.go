@@ -16,18 +16,16 @@ import (
 func walkSources(t *testing.T) map[string]string {
 	t.Helper()
 	out := map[string]string{}
-	for _, pattern := range []string{"*.dbml", "*.volt"} {
-		files, err := filepath.Glob(filepath.Join("testdata", pattern))
+	files, err := filepath.Glob(filepath.Join("testdata", "*.volt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		src, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, file := range files {
-			src, err := os.ReadFile(file)
-			if err != nil {
-				t.Fatal(err)
-			}
-			out[file] = string(src)
-		}
+		out[file] = string(src)
 	}
 	for name, src := range corpus.Files(corpus.Spec{Packages: 2, Tables: 6, Columns: 5}) {
 		out["corpus/"+name] = src

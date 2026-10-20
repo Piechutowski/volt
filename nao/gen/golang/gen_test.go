@@ -20,55 +20,55 @@ import (
 
 var update = flag.Bool("update", false, "rewrite golden files")
 
-func parseChecked(t *testing.T, dbmlPath string) (*ast.File, *check.Info) {
+func parseChecked(t *testing.T, path string) (*ast.File, *check.Info) {
 	t.Helper()
-	src, err := os.ReadFile(dbmlPath)
+	src, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	f, diags := parser.ParseFile(filepath.Base(dbmlPath), string(src))
+	f, diags := parser.ParseFile(filepath.Base(path), string(src))
 	info, semDiags := check.File(f)
 	diags = append(diags, semDiags...)
 	if diag.HasErrors(diags) {
-		t.Fatalf("test input must be valid DBML: %v", diags)
+		t.Fatalf("test input must check clean: %v", diags)
 	}
 	return f, info
 }
 
-func generate(t *testing.T, dbmlPath string) []byte {
+func generate(t *testing.T, path string) []byte {
 	t.Helper()
-	f, info := parseChecked(t, dbmlPath)
-	out, err := Generate(f, info, Options{Package: "models", Source: filepath.Base(dbmlPath)})
+	f, info := parseChecked(t, path)
+	out, err := Generate(f, info, Options{Package: "models", Source: filepath.Base(path)})
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
 	return out
 }
 
-func generateQueries(t *testing.T, dbmlPath string) []byte {
+func generateQueries(t *testing.T, path string) []byte {
 	t.Helper()
-	f, info := parseChecked(t, dbmlPath)
-	out, err := GenerateQueries(f, info, Options{Package: "models", Source: filepath.Base(dbmlPath)})
+	f, info := parseChecked(t, path)
+	out, err := GenerateQueries(f, info, Options{Package: "models", Source: filepath.Base(path)})
 	if err != nil {
 		t.Fatalf("GenerateQueries: %v", err)
 	}
 	return out
 }
 
-func generateDyn(t *testing.T, dbmlPath string) []byte {
+func generateDyn(t *testing.T, path string) []byte {
 	t.Helper()
-	f, info := parseChecked(t, dbmlPath)
-	out, err := GenerateDyn(f, info, Options{Package: "models", Source: filepath.Base(dbmlPath)})
+	f, info := parseChecked(t, path)
+	out, err := GenerateDyn(f, info, Options{Package: "models", Source: filepath.Base(path)})
 	if err != nil {
 		t.Fatalf("GenerateDyn: %v", err)
 	}
 	return out
 }
 
-func generateValidators(t *testing.T, dbmlPath string) []byte {
+func generateValidators(t *testing.T, path string) []byte {
 	t.Helper()
-	f, info := parseChecked(t, dbmlPath)
-	out, err := GenerateValidators(f, info, nil, Options{Package: "models", Source: filepath.Base(dbmlPath)})
+	f, info := parseChecked(t, path)
+	out, err := GenerateValidators(f, info, nil, Options{Package: "models", Source: filepath.Base(path)})
 	if err != nil {
 		t.Fatalf("GenerateValidators: %v", err)
 	}
@@ -93,29 +93,24 @@ func compareGolden(t *testing.T, got []byte, golden string) {
 }
 
 func TestGolden(t *testing.T) {
-	for _, dbml := range corpusSchemas(t) {
-		dbml := dbml
-		name := schemaName(dbml)
+	for _, schema := range corpusSchemas(t) {
+		schema := schema
+		name := schemaName(schema)
 		t.Run(name, func(t *testing.T) {
-			compareGolden(t, generate(t, dbml), filepath.Join("testdata", name+".go.golden"))
-			compareGolden(t, generateQueries(t, dbml), filepath.Join("testdata", name+"_queries.go.golden"))
-			compareGolden(t, generateDyn(t, dbml), filepath.Join("testdata", name+"_dyn.go.golden"))
-			compareGolden(t, generateValidators(t, dbml), filepath.Join("testdata", name+"_validate.go.golden"))
+			compareGolden(t, generate(t, schema), filepath.Join("testdata", name+".go.golden"))
+			compareGolden(t, generateQueries(t, schema), filepath.Join("testdata", name+"_queries.go.golden"))
+			compareGolden(t, generateDyn(t, schema), filepath.Join("testdata", name+"_dyn.go.golden"))
+			compareGolden(t, generateValidators(t, schema), filepath.Join("testdata", name+"_validate.go.golden"))
 		})
 	}
 }
 
 func corpusSchemas(t *testing.T) []string {
 	t.Helper()
-	files, err := filepath.Glob(filepath.Join("..", "testdata", "*.dbml"))
+	files, err := filepath.Glob(filepath.Join("..", "testdata", "*.volt"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	extended, err := filepath.Glob(filepath.Join("..", "testdata", "*.volt"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	files = append(files, extended...)
 	sort.Strings(files)
 	if len(files) == 0 {
 		t.Fatal("no shared corpus schemas in gen/testdata")
@@ -124,7 +119,7 @@ func corpusSchemas(t *testing.T) []string {
 }
 
 func schemaName(path string) string {
-	return strings.TrimSuffix(strings.TrimSuffix(filepath.Base(path), ".dbml"), ".volt")
+	return strings.TrimSuffix(filepath.Base(path), ".volt")
 }
 
 func TestGoldenGofmtStable(t *testing.T) {
@@ -220,32 +215,32 @@ func goldenFiles(t *testing.T) []string {
 
 func TestGenerationErrors(t *testing.T) {
 	cases := []struct {
-		name, dbml, wantErr string
+		name, src, wantErr string
 	}{
 		{
 			name:    "field collision",
-			dbml:    "Table t { user_id int\n \"user__id\" int }",
+			src:     "Table t { user_id int\n \"user__id\" int }",
 			wantErr: "both map to Go field",
 		},
 		{
 			name:    "struct collision",
-			dbml:    "Table user_roles { id int }\nTable \"user roles\" { id int }",
+			src:     "Table user_roles { id int }\nTable \"user roles\" { id int }",
 			wantErr: "both map to Go type",
 		},
 		{
 			name:    "unusable name",
-			dbml:    "Table t { \"++\" int }",
+			src:     "Table t { \"++\" int }",
 			wantErr: "no characters usable",
 		},
 		{
 			name:    "package-scope name collision",
-			dbml:    "Table clashes { id int [pk]\n new int\n column int\n params int }",
+			src:     "Table clashes { id int [pk]\n new int\n column int\n params int }",
 			wantErr: "both need the Go name",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f, diags := parser.ParseFile("t", tc.dbml)
+			f, diags := parser.ParseFile("t", tc.src)
 			info, semDiags := check.File(f)
 			if diag.HasErrors(append(diags, semDiags...)) {
 				t.Fatalf("input unexpectedly invalid: %v %v", diags, semDiags)

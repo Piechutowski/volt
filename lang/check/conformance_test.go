@@ -18,13 +18,33 @@ var wantRE = regexp.MustCompile(`(?m)^// want: (.+)$`)
 
 var update = flag.Bool("update", false, "rewrite the golden of the invalid schema corpus")
 
-func TestConformanceInvalidDiagnosticsPinned(t *testing.T) {
-	files, err := filepath.Glob(filepath.Join("..", "conformance", "snippets", "invalid", "*.dbml"))
-	if err != nil || len(files) == 0 {
-		t.Fatal("no invalid .dbml snippets")
+var pkgClauseRE = regexp.MustCompile(`(?im)^package\s+\w+`)
+
+func schemaSnippets(t *testing.T, dir string) []string {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join(dir, "*.volt"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	var b strings.Builder
+	var out []string
 	for _, file := range files {
+		src, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !pkgClauseRE.Match(src) {
+			out = append(out, file)
+		}
+	}
+	if len(out) == 0 {
+		t.Fatalf("no schema snippets in %s", dir)
+	}
+	return out
+}
+
+func TestConformanceInvalidDiagnosticsPinned(t *testing.T) {
+	var b strings.Builder
+	for _, file := range schemaSnippets(t, filepath.Join("..", "conformance", "snippets", "invalid")) {
 		src, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatal(err)
@@ -40,7 +60,7 @@ func TestConformanceInvalidDiagnosticsPinned(t *testing.T) {
 		}
 		b.WriteString("\n")
 	}
-	golden := filepath.Join("..", "conformance", "invalid_dbml.golden")
+	golden := filepath.Join("..", "conformance", "invalid_schema.golden")
 	if *update {
 		if err := os.WriteFile(golden, []byte(b.String()), 0o644); err != nil {
 			t.Fatal(err)
@@ -75,11 +95,7 @@ func TestConformanceCorpus(t *testing.T) {
 		{"valid", false},
 		{"invalid", true},
 	} {
-		files, err := filepath.Glob(filepath.Join(root, group.dir, "*.dbml"))
-		if err != nil || len(files) == 0 {
-			t.Fatalf("no snippets in %s", filepath.Join(root, group.dir))
-		}
-		for _, file := range files {
+		for _, file := range schemaSnippets(t, filepath.Join(root, group.dir)) {
 			file := file
 			t.Run(group.dir+"/"+filepath.Base(file), func(t *testing.T) {
 				src, err := os.ReadFile(file)

@@ -15,7 +15,7 @@ import (
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-// GenerateQueries renders the queries file for one checked DBML file.
+// GenerateQueries renders the queries file for one checked schema file.
 func GenerateQueries(f *ast.File, info *check.Info, opts Options) ([]byte, error) {
 	return PlanBuild(f, info).Queries(opts)
 }

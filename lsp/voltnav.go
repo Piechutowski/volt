@@ -627,7 +627,7 @@ func tableModelHover(sym voltSym, def voltDef) string {
 		}
 	}
 
-	b.WriteString("```dbml\n")
+	b.WriteString("```volt\n")
 	fmt.Fprintf(&b, "Table %s {\n", t.Name.String())
 	for _, item := range t.Body {
 		col, ok := item.(*ast.Column)

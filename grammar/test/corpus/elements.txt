@@ -204,7 +204,7 @@ use * from './base'
 reuse {
   table auth.users as u
   schema billing
-} from './auth.dbml'
+} from './auth.volt'
 
 ---
 

@@ -1,4 +1,4 @@
-// Dynamic-layer name analyzer: distinct DBML
+// Dynamic-layer name analyzer: distinct schema
 // declarations can demand one Go name; this rule surfaces the
 // collision at vet time with both origins named.
 package vet

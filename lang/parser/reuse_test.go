@@ -37,7 +37,7 @@ func snippetPaths(t *testing.T) []string {
 	var paths []string
 	for _, dir := range []string{"valid", "invalid"} {
 		filepath.WalkDir(filepath.Join("..", "conformance", "snippets", dir), func(path string, d os.DirEntry, err error) error {
-			if err == nil && !d.IsDir() && (strings.HasSuffix(path, ".volt") || strings.HasSuffix(path, ".dbml")) {
+			if err == nil && !d.IsDir() && strings.HasSuffix(path, ".volt") {
 				paths = append(paths, path)
 			}
 			return nil

@@ -10,7 +10,7 @@ import (
 
 func mustParse(t *testing.T, src string) *ast.File {
 	t.Helper()
-	f, diags := ParseFile("test.dbml", src)
+	f, diags := ParseFile("test.volt", src)
 	if diag.HasErrors(diags) {
 		t.Fatalf("ParseFile errors: %v", diags)
 	}

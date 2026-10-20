@@ -1,6 +1,6 @@
 // Volt-layer productions (spec Part II, docs/spec.md): the
 // package clause, Go-style imports, pipelines, scopes, routes and
-// resources. One method per production, in the style of the DBML layer.
+// resources. One method per production, in the style of the schema layer.
 package parser
 
 import (

@@ -1,4 +1,4 @@
-// Kitchen-sink example: every DBML construct from docs/spec.md Part I.
+// Kitchen-sink example: every schema construct of docs/spec.md Part I.
 /* block comment
    spanning lines */
 

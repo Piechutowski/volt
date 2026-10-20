@@ -18,19 +18,19 @@ import (
 
 var update = flag.Bool("update", false, "rewrite golden files")
 
-func generate(t *testing.T, dbmlPath string) []byte {
+func generate(t *testing.T, path string) []byte {
 	t.Helper()
-	src, err := os.ReadFile(dbmlPath)
+	src, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	f, diags := parser.ParseFile(filepath.Base(dbmlPath), string(src))
+	f, diags := parser.ParseFile(filepath.Base(path), string(src))
 	info, semDiags := check.File(f)
 	diags = append(diags, semDiags...)
 	if diag.HasErrors(diags) {
-		t.Fatalf("test input must be valid DBML: %v", diags)
+		t.Fatalf("test input must check clean: %v", diags)
 	}
-	out, err := Generate(f, info, Options{Source: filepath.Base(dbmlPath)})
+	out, err := Generate(f, info, Options{Source: filepath.Base(path)})
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -38,15 +38,10 @@ func generate(t *testing.T, dbmlPath string) []byte {
 }
 
 func TestGolden(t *testing.T) {
-	files, err := filepath.Glob(filepath.Join("..", "testdata", "*.dbml"))
+	files, err := filepath.Glob(filepath.Join("..", "testdata", "*.volt"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	extended, err := filepath.Glob(filepath.Join("..", "testdata", "*.volt"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	files = append(files, extended...)
 	own, err := filepath.Glob(filepath.Join("testdata", "*.volt"))
 	if err != nil {
 		t.Fatal(err)
@@ -56,11 +51,11 @@ func TestGolden(t *testing.T) {
 	if len(files) == 0 {
 		t.Fatal("no shared corpus schemas in gen/testdata")
 	}
-	for _, dbml := range files {
-		dbml := dbml
-		t.Run(filepath.Base(dbml), func(t *testing.T) {
-			got := generate(t, dbml)
-			golden := filepath.Join("testdata", strings.TrimSuffix(strings.TrimSuffix(filepath.Base(dbml), ".dbml"), ".volt")+".sql.golden")
+	for _, schema := range files {
+		schema := schema
+		t.Run(filepath.Base(schema), func(t *testing.T) {
+			got := generate(t, schema)
+			golden := filepath.Join("testdata", strings.TrimSuffix(filepath.Base(schema), ".volt")+".sql.golden")
 			if *update {
 				if err := os.WriteFile(golden, got, 0o644); err != nil {
 					t.Fatal(err)
@@ -135,17 +130,17 @@ func goldenFiles(t *testing.T) []string {
 
 func TestGenerationErrors(t *testing.T) {
 	cases := []struct {
-		name, dbml, wantErr string
+		name, src, wantErr string
 	}{
 		{
 			name:    "flattened table collision",
-			dbml:    "Table core.users { id int }\nTable core_users { id int }",
+			src:     "Table core.users { id int }\nTable core_users { id int }",
 			wantErr: "both flatten to SQLite name",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f, diags := parser.ParseFile("t", tc.dbml)
+			f, diags := parser.ParseFile("t", tc.src)
 			info, semDiags := check.File(f)
 			if diag.HasErrors(append(diags, semDiags...)) {
 				t.Fatalf("input unexpectedly invalid: %v %v", diags, semDiags)

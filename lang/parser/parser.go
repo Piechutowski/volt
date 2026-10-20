@@ -1,4 +1,4 @@
-// Package parser turns DBML source into an ast.File, mirroring go/parser.
+// Package parser turns Volt source into an ast.File, mirroring go/parser.
 //
 // The parser is a hand-written recursive descent over the EBNF of the
 // specification (docs/spec.md): one method per production. It is
@@ -20,7 +20,7 @@ import (
 	"github.com/Piechutowski/volt/lang/token"
 )
 
-// ParseFile parses one DBML source file. It always returns a (possibly
+// ParseFile parses one Volt source file. It always returns a (possibly
 // partial) AST; diagnostics carry every lexical and syntax error found.
 func ParseFile(filename, src string) (*ast.File, []diag.Diagnostic) {
 	f, diags, _, _ := ParseFileReuse(filename, src, nil)

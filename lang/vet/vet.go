@@ -1,5 +1,5 @@
-// Package vet reports DBML that is legal but suspicious — the analogue of
-// go vet. Where the check package answers "is this valid DBML?", vet
+// Package vet reports Volt that is legal but suspicious — the analogue of
+// go vet. Where the check package answers "is this valid Volt?", vet
 // answers "is this what you meant?": redundancy, silent overrides, likely
 // modeling mistakes.
 //

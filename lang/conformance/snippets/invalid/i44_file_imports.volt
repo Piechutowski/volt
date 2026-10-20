@@ -8,5 +8,5 @@ use {
   note reminder
   schema auth
   tablegroup auth_core
-} from './auth.dbml'
+} from './auth.volt'
 reuse * from './common/index'

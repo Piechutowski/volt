@@ -26,12 +26,22 @@ func corpusEntries(t *testing.T, kind string) []string {
 	}
 	out := make([]string, 0, len(entries))
 	for _, e := range entries {
-		if strings.HasSuffix(e.Name(), ".dbml") {
+		path := filepath.Join(dir, e.Name())
+		if !e.IsDir() && !hasPackageClause(t, path) {
 			continue
 		}
-		out = append(out, filepath.Join(dir, e.Name()))
+		out = append(out, path)
 	}
 	return out
+}
+
+func hasPackageClause(t *testing.T, path string) bool {
+	t.Helper()
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pkgClauseRE.Match(src)
 }
 
 func corpusRun(t *testing.T, path string) []diag.Diagnostic {

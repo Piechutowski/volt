@@ -17,10 +17,10 @@ edit 4: a note typed into the new table's header, as a ranged change
 {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"diagnostics":[],"uri":"file://ROOT/app/schema.volt","version":5}}
 
 hover on the table name
-{"id":2,"jsonrpc":"2.0","result":{"contents":{"kind":"markdown","value":"**`Table posts`** in package `app` — Go model `Post`\n\nkey: `id` → route parameter type `int`\n\n```dbml\nTable posts {\n\tid int [pk]\n\ttitle string\n}\n```\n\n_Routes and helpers derive from this: the URL keeps the table's name, the member helper takes the model's (§table-resolution)._"},"range":{"end":{"character":11,"line":2},"start":{"character":6,"line":2}}}}
+{"id":2,"jsonrpc":"2.0","result":{"contents":{"kind":"markdown","value":"**`Table posts`** in package `app` — Go model `Post`\n\nkey: `id` → route parameter type `int`\n\n```volt\nTable posts {\n\tid int [pk]\n\ttitle string\n}\n```\n\n_Routes and helpers derive from this: the URL keeps the table's name, the member helper takes the model's (§table-resolution)._"},"range":{"end":{"character":11,"line":2},"start":{"character":6,"line":2}}}}
 
 hover on the resources table
-{"id":3,"jsonrpc":"2.0","result":{"contents":{"kind":"markdown","value":"**`Table posts`** in package `app` — Go model `Post`\n\nkey: `id` → route parameter type `int`\n\n```dbml\nTable posts {\n\tid int [pk]\n\ttitle string\n}\n```\n\n_Routes and helpers derive from this: the URL keeps the table's name, the member helper takes the model's (§table-resolution)._"},"range":{"end":{"character":16,"line":13},"start":{"character":11,"line":13}}}}
+{"id":3,"jsonrpc":"2.0","result":{"contents":{"kind":"markdown","value":"**`Table posts`** in package `app` — Go model `Post`\n\nkey: `id` → route parameter type `int`\n\n```volt\nTable posts {\n\tid int [pk]\n\ttitle string\n}\n```\n\n_Routes and helpers derive from this: the URL keeps the table's name, the member helper takes the model's (§table-resolution)._"},"range":{"end":{"character":16,"line":13},"start":{"character":11,"line":13}}}}
 
 hover on the migration name
 {"id":4,"jsonrpc":"2.0","result":{"contents":{"kind":"markdown","value":"```volt\nMigration 0001__posts\n```\nmigration 1 of 1, reversible\n"},"range":{"end":{"character":21,"line":16},"start":{"character":10,"line":16}}}}

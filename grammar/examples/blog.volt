@@ -1,5 +1,5 @@
-// A Volt routing package (docs/spec.md Part II) — the layer above the DBML
-// kitchen sink next door. One language: this file and kitchen_sink.dbml
+// A Volt routing package (docs/spec.md Part II) — the layer above the schema
+// kitchen sink next door. One language: this file and kitchen_sink.volt
 // parse with the same grammar.
 package app
 

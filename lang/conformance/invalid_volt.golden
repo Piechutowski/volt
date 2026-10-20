@@ -1,4 +1,4 @@
-## i01_missing_package.volt
+## i01_missing_package
 app/i01_missing_package.volt:2:1: error: spec/projects-and-packages: every .volt file must begin with a package clause (§projects-and-packages)
 
 ## i02_package_not_first.volt
@@ -6,10 +6,10 @@ app/i02_package_not_first.volt:5:1: error: spec/projects-and-packages: the packa
 app/i02_package_not_first.volt:5:1: error: spec/projects-and-packages: duplicate package clause (§projects-and-packages)
 
 ## i03_use_rejected.volt
-app/i03_use_rejected.volt:4:1: error: spec/file-imports-removed: use is not part of the Volt language (§file-imports-removed); replace file imports with the package system — see docs/spec.md §compatibility-with-dbml for migration
+app/i03_use_rejected.volt:4:1: error: spec/file-imports-removed: use is not part of the Volt language (§file-imports-removed); files of one package share a namespace without imports, and another package is reached through an import block (§imports)
 
 ## i04_reuse_rejected.volt
-app/i04_reuse_rejected.volt:4:1: error: spec/file-imports-removed: reuse is not part of the Volt language (§file-imports-removed); replace file imports with the package system — see docs/spec.md §compatibility-with-dbml for migration
+app/i04_reuse_rejected.volt:4:1: error: spec/file-imports-removed: reuse is not part of the Volt language (§file-imports-removed); files of one package share a namespace without imports, and another package is reached through an import block (§imports)
 
 ## i05_empty_import.volt
 app/i05_empty_import.volt:5:1: error: syntax: empty import declaration (§imports)

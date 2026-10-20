@@ -16,7 +16,7 @@ import (
 )
 
 // Check runs project-level semantic analysis (spec §projects-and-packages–§settings-whitelists) over a
-// loaded project: file and package rules, import resolution, the DBML
+// loaded project: file and package rules, import resolution, the schema
 // layer per package, and routing expansion. It populates each package's
 // Imports, Pipelines, Routes and Controllers, and returns all
 // diagnostics including the ones collected at load time.

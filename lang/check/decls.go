@@ -48,7 +48,7 @@ func (c *checker) useCheck(d *ast.Use) {
 	if d.Reuse {
 		kw = "reuse"
 	}
-	c.errorf(d.Pos(), "file-imports-removed", "%s is not part of the Volt language (§file-imports-removed); replace file imports with the package system — see docs/spec.md §compatibility-with-dbml for migration", kw)
+	c.errorf(d.Pos(), "file-imports-removed", "%s is not part of the Volt language (§file-imports-removed); files of one package share a namespace without imports, and another package is reached through an import block (§imports)", kw)
 }
 
 func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.SettingList, body []ast.TableItem, isTable bool) {

@@ -12,8 +12,8 @@ import (
 // the [model:] override when present, else the singularized table name.
 func ModelName(t *ast.Table) (string, error) { return modelName(t) }
 
-// GoName converts a DBML name to an exported Go identifier.
-func GoName(dbmlName string) (string, error) { return goName(dbmlName) }
+// GoName converts a schema name to an exported Go identifier.
+func GoName(schemaName string) (string, error) { return goName(schemaName) }
 
 // SelectParam is one Go parameter of a generated select method
 // (spec §selects-over-groups), in declaration order.

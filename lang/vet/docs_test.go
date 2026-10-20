@@ -18,7 +18,7 @@ func TestRulesDocumentation(t *testing.T) {
 	doc := string(docBytes)
 
 	headingRE := regexp.MustCompile(`(?m)^### ([a-z]+)$`)
-	linkRE := regexp.MustCompile(`\(\.\./lang/vet/(testdata/[a-z_]+\.(?:dbml|volt))\)`)
+	linkRE := regexp.MustCompile(`\(\.\./lang/vet/(testdata/[a-z_]+\.volt)\)`)
 
 	headings := headingRE.FindAllStringSubmatchIndex(doc, -1)
 	sections := map[string]string{}
@@ -92,15 +92,10 @@ func TestRulesDocumentation(t *testing.T) {
 		}
 	}
 
-	files, err := filepath.Glob(filepath.Join("testdata", "*.dbml"))
+	files, err := filepath.Glob(filepath.Join("testdata", "*.volt"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	extended, err := filepath.Glob(filepath.Join("testdata", "*.volt"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	files = append(files, extended...)
 	if len(files) == 0 {
 		t.Fatal("no testdata files")
 	}

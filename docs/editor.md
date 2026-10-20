@@ -131,7 +131,7 @@ load-bearing patterns, each citing the spec section it implements:
 extension.toml               manifest: ids, [grammars.volt], [language_servers.volt]
 Cargo.toml, src/lib.rs       Rust glue, compiled BY ZED to WASM at install time
 languages/volt/
-  config.toml                registration: name, suffixes (volt, dbml), comments, brackets
+  config.toml                registration: name, suffix (volt), comments, brackets
   highlights.scm  outline.scm  indents.scm  brackets.scm  injections.scm
 ```
 
@@ -251,7 +251,7 @@ only if misuse is *legal but suspicious*.
 6. Conformance: `valid/` and `invalid/` snippets tagged `// spec: §…`.
 
 **New lint**: one analyzer file + `register()`, a `### name` section in
-[`lint.md`](lint.md), a `testdata/*.dbml` (or `.volt`) with `//WANT`
+[`lint.md`](lint.md), a `testdata/*.volt` with `//WANT`
 markers — the docs consistency test fails the build until all three
 agree. The LSP picks it up automatically.
 
@@ -316,7 +316,7 @@ How to audit that the three components implement
 
 | Claim | Check | Where |
 |---|---|---|
-| Front end accepts/rejects exactly what the spec says | conformance corpus: `valid/` MUST pass, `invalid/` MUST fail, each snippet tagged `// spec: §…` (`.dbml` entries = the schema pass, `.volt` entries and project dirs = the project pass); every diagnostic of every invalid snippet, recovery included, is a golden | `lang/conformance/snippets/` and `lang/conformance/invalid_*.golden` via `go test ./lang/...`; refresh with `-update` after reading the diff |
+| Front end accepts/rejects exactly what the spec says | conformance corpus: `valid/` MUST pass, `invalid/` MUST fail, each snippet tagged `// spec: §…` (files without a `package` clause = the schema pass, files with one and project dirs = the project pass); every diagnostic of every invalid snippet, recovery included, is a golden | `lang/conformance/snippets/` and `lang/conformance/invalid_*.golden` via `go test ./lang/...`; refresh with `-update` after reading the diff |
 | Grammar parses everything the spec allows | corpus cases (input → expected tree, incl. `:error` cases) | `grammar/test/corpus/`, `tree-sitter test` |
 | Spec grammar and front end agree | the spec's EBNF read as data: every derived sentence parses, every one-token neighbour is decided alike by the grammar and the front end | `lang/spec_grammar_test.go` via `go test ./lang/...` |
 | Grammar and front end agree | every valid conformance snippet, `grammar/examples/*` and the spec's derived sentences (`go test ./lang -run TestSpecGrammarSentencesParse -sentences DIR`) must produce zero tree-sitter ERROR nodes **and** zero front-end diagnostics | differential run after grammar changes |
@@ -327,10 +327,9 @@ How to audit that the three components implement
 | LSP behaves per spec, interactively | a scripted stdio JSON-RPC session against the real server process, replaying keystrokes that break and fix a project file, one of them as a ranged change, and asking for hover, definition, completion and symbols; every reply and published diagnostic pinned as a golden | `cmd/volt/lsp_session_test.go` and `testdata/lsp_session.golden` via `go test ./cmd/volt/...`; refresh with `-update` after reading the diff |
 | A keystroke costs what the budget says | the whole in-process path of one keystroke inside one table of a one-file project, didChange to publish, and the document's own front end alone; compare against the last report of `scripts/perf.go`. The bytes the keystroke's three parts allocate (the document's pass, the project analysis, the publish) are pinned exactly, within ten percent, hardware-neutral | `go test ./lsp -run '^$' -bench 'BenchmarkKeystroke|BenchmarkDocumentUpdateLocal' -benchmem`; `go test ./lsp -run TestKeystrokeAllocationBudget -v` |
 
-The upstream `@dbml/parse` cross-check that established Part I's
-fidelity was retired at zero disagreements; the corpus verdicts
-it pinned are the surviving record, and a divergence-worthy upstream
-feature gets re-checked by hand when adopted.
+The cross-check against the implementation Part I descends from
+(spec §license-and-provenance) was retired at zero disagreements;
+the corpus verdicts it pinned are the surviving record.
 
 When adding a construct, every row above must gain its case — §program-structure's
 recipes say where. A construct that exists in code but has no row here

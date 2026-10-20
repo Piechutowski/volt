@@ -1,4 +1,4 @@
-// Package ast declares the types used to represent DBML syntax trees,
+// Package ast declares the types used to represent Volt syntax trees,
 // mirroring the role of go/ast. Nodes carry no semantic judgment.
 package ast
 
@@ -144,7 +144,7 @@ func (x *Setting) End() token.Position { return x.endPos }
 // SetEnd records the setting's extent.
 func (x *Setting) SetEnd(p token.Position) { x.endPos = p }
 
-// File is one parsed DBML source file.
+// File is one parsed Volt source file.
 type File struct {
 	Name  string // file name as given to the parser
 	Decls []Decl // top-level declarations in source order

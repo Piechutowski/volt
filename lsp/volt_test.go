@@ -64,7 +64,7 @@ func TestVoltProjectCrossFileConflict(t *testing.T) {
 	}
 }
 
-func TestVoltFileOutsideProjectKeepsDBML(t *testing.T) {
+func TestVoltFileOutsideProjectKeepsSchemaPass(t *testing.T) {
 	clean := NewDocument("file:///lone.volt",
 		"package app\n\nScope / {\n\tget / Home.Index\n}\n\nTable users {\n\tid int [pk]\n}\n")
 	if len(clean.Diags) != 0 {
@@ -85,9 +85,9 @@ func TestVoltProjectSkipsForeignFiles(t *testing.T) {
 	})
 	dup := "Table t {\n\tid int [pk]\n}\n\nTable t {\n\tid int [pk]\n}\n"
 
-	dbml := NewDocument("file://"+filepath.Join(root, "app", "notes.dbml"), dup)
-	if len(dbml.Diags) == 0 {
-		t.Error("duplicate table in a .dbml file under a Volt project went unreported")
+	foreign := NewDocument("file://"+filepath.Join(root, "app", "notes.txt"), dup)
+	if len(foreign.Diags) == 0 {
+		t.Error("duplicate table in a file the loader does not read under a Volt project went unreported")
 	}
 	draft := NewDocument("file://"+filepath.Join(root, "_drafts", "x.volt"), dup)
 	if len(draft.Diags) == 0 {

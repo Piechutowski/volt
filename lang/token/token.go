@@ -1,4 +1,4 @@
-// Package token defines the lexical tokens of DBML and source positions,
+// Package token defines the lexical tokens of Volt and source positions,
 // mirroring the role of go/token in the Go toolchain.
 package token
 

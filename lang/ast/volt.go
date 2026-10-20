@@ -234,7 +234,7 @@ const (
 )
 
 // Segment is one path segment. The wildcard is spelled ":name...":
-// after a slash, "/*" opens a DBML block comment (§comments).
+// after a slash, "/*" opens a block comment (§comments).
 type Segment struct {
 	Kind    SegKind
 	MarkPos token.Position // position of ':'; equals Name.Pos() for literals

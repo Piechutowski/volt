@@ -1,4 +1,4 @@
-// Identifier conversion: DBML names (snake_case, quoted, Unicode) to
+// Identifier conversion: schema names (snake_case, quoted, Unicode) to
 // exported Go names, following the Go community conventions for
 // initialisms (user_id -> UserID, not UserId).
 package golang
@@ -23,7 +23,7 @@ var commonInitialisms = map[string]bool{
 	"xml": true, "xmpp": true, "xsrf": true, "xss": true,
 }
 
-func goName(dbmlName string) (string, error) {
+func goName(schemaName string) (string, error) {
 	var words []string
 	var cur strings.Builder
 	flush := func() {
@@ -32,7 +32,7 @@ func goName(dbmlName string) (string, error) {
 			cur.Reset()
 		}
 	}
-	for _, r := range dbmlName {
+	for _, r := range schemaName {
 		switch {
 		case unicode.IsLetter(r) || unicode.IsDigit(r):
 			cur.WriteRune(r)
@@ -42,7 +42,7 @@ func goName(dbmlName string) (string, error) {
 	}
 	flush()
 	if len(words) == 0 {
-		return "", fmt.Errorf("name %q contains no characters usable in a Go identifier", dbmlName)
+		return "", fmt.Errorf("name %q contains no characters usable in a Go identifier", schemaName)
 	}
 
 	var b strings.Builder

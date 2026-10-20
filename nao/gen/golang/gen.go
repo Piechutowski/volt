@@ -1,6 +1,6 @@
-// Package golang generates Go model structs from a checked DBML file: one
+// Package golang generates Go model structs from a checked schema file: one
 // struct per table with its changeset and column handles (spec
-// §changesets), one string-typed enum per DBML enum, with db and json
+// §changesets), one string-typed enum per Enum declaration, with db and json
 // struct tags. The output is gofmt-canonical by construction and depends
 // only on the standard library and the rt runtime package; nullable
 // columns are rt.Null[T] values.
@@ -23,11 +23,11 @@ const rtImport = "github.com/Piechutowski/volt/nao/rt"
 type Options struct {
 	// Package is the package name of the generated file.
 	Package string
-	// Source is the name of the DBML input, recorded in the header.
+	// Source is the name of the schema input, recorded in the header.
 	Source string
 }
 
-// Generate renders the models file for one checked DBML file: the enums,
+// Generate renders the models file for one checked schema file: the enums,
 // the row structs and their changesets, every type the wire carries.
 // The file must be free of check errors; Generate validates only what
 // generation itself needs (name mapping, type mapping, collisions).

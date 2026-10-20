@@ -64,7 +64,7 @@ func repoTextFiles(t *testing.T) []string {
 			return nil
 		}
 		switch filepath.Ext(d.Name()) {
-		case ".go", ".volt", ".dbml", ".md", ".js", ".scm", ".golden", ".sql":
+		case ".go", ".volt", ".md", ".js", ".scm", ".golden", ".sql":
 			files = append(files, path)
 		}
 		return nil

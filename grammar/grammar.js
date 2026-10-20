@@ -1,8 +1,8 @@
 /**
- * Tree-sitter grammar for the Volt language (.volt files): DBML, the
+ * Tree-sitter grammar for the Volt language (.volt files): the schema core,
  * the schema extensions, and the routing layer above them.
  *
- * Covers the full DBML specification in docs/spec.md Part I:
+ * Covers the full schema language of docs/spec.md Part I:
  * Project, Table (settings, alias, columns, legacy flags), TablePartial and
  * ~injection, Enum, Ref (long, short and inline forms, composite endpoints),
  * TableGroup, Note (member, block and sticky forms), Records (top-level and
@@ -13,7 +13,7 @@
  * whichever layer it uses.
  *
  * Design notes, driven by spec §lexical-structure:
- *  - DBML is newline-sensitive: columns, enum values, record rows, index and
+ *  - Volt is newline-sensitive: columns, enum values, record rows, index and
  *    check lines, project properties, group members and partial injections
  *    are newline-terminated. Newlines are therefore NOT extras; bodies use an
  *    explicit "items separated by one-or-more newlines" shape, which also

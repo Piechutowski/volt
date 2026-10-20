@@ -141,7 +141,7 @@ Table user_offsets [model: 'UserOffset'] {
 	var schema check.Memo
 	var memo PlanMemo
 	for i, src := range edits {
-		f, diags, next, _ := parser.ParseFileReuse("dyn.dbml", src, reuse)
+		f, diags, next, _ := parser.ParseFileReuse("dyn.volt", src, reuse)
 		reuse = next
 		if len(diags) > 0 {
 			t.Fatalf("edit %d: %v", i, diags)
@@ -167,7 +167,7 @@ Table user_offsets [model: 'UserOffset'] {
 			t.Fatalf("edit %d: the memoized plan's report differs from a fresh plan's\n--- memo\n%s--- fresh\n%s", i, got, fromFresh)
 		}
 	}
-	f, _ := parser.ParseFile("dyn.dbml", base)
+	f, _ := parser.ParseFile("dyn.volt", base)
 	info, _ := check.File(f)
 	first := collisionsRender(PlanBuild(f, info).DynNameCollisions())
 	for i := 0; i < 20; i++ {

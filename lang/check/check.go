@@ -1,4 +1,4 @@
-// Package check implements semantic analysis of a parsed DBML file — the
+// Package check implements semantic analysis of one parsed schema file — the
 // role go/types plays for Go. It validates every constraint of the spec
 // that goes beyond grammar (setting whitelists, duplicate names, reference
 // resolution, records arity) and builds an Info symbol table.

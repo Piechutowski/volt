@@ -10,20 +10,19 @@ commit that fixes it says which. Normative does not mean settled: the
 language is alpha and any part of it may change, and it changes by
 changing this document.
 
-Volt is **one language**: a declarative complement to Go, grown outward
-from DBML. This specification has two parts and three appendices:
+Volt is **one language**: a declarative complement to Go. This
+specification has two parts and the appendices:
 
-- **[Part I — The Schema Core (DBML)](#part-i-the-schema-core-dbml)**:
-  lexis, grammar and static semantics of the DBML-derived schema
-  layer: DBML's syntax with Go's types in place of SQL's.
+- **[Part I — The Schema Core](#part-i-the-schema-core)**: lexis,
+  grammar and static semantics of the schema language: tables,
+  columns, indexes, refs, enums, types, partials, records, notes,
+  groups and diagram views, with Go's types as the column types.
 - **[Part II — The Project and Routing Layer](#part-ii-the-project-and-routing-layer)**:
   projects, packages, imports, pipelines, scopes, routes, resources,
   and the query layer.
 - **[Mapping to Go](#mapping-to-go)** and **[Mapping to SQLite DDL](#mapping-to-sqlite-ddl)**:
   the generation contracts of the data layer (informative in
   form, pinned by generator goldens in force).
-- **[Compatibility with DBML](#compatibility-with-dbml)**: what of DBML's syntax
-  remains, the two deliberate breaks (types, `use`/`reuse`), and the migration.
 
 Every construct is specified by (1) a grammar production in EBNF, (2)
 an enumerated list of constraints, and (3) a minimal example. Every
@@ -37,31 +36,33 @@ suspicious schemas, every rule with executable examples — is
 
 ---
 
-# Part I — The Schema Core (DBML)
+# Part I — The Schema Core
 
-**Version:** 1.0 (based on `@dbml/parse` reference implementation, holistics/dbml)
 **Status:** Normative.
-This part descends from DBML: its syntax is DBML's where DBML had one,
-its column types are Go's (§columns, §types), and DBML's file imports
-are gone (§file-imports-removed), so a Part I file is no longer
-upstream DBML. The reference implementation is
-[`lang/`](../lang/); the executable corpus is
-[`lang/conformance/snippets/`](../lang/conformance/snippets/) (the `.dbml` entries).
+Part I is Volt's schema language: tables, columns, indexes, refs,
+enums, types, partials, records, notes, groups and diagram views,
+with column types drawn from Go (§columns, §types). A Part I file
+body is a valid Volt file body (§layers-files-and-the-superset-rule).
+The reference implementation is [`lang/`](../lang/); the executable
+corpus is [`lang/conformance/snippets/`](../lang/conformance/snippets/),
+where the snippets without a `package` clause are Part I's
+(§conformance-and-the-proof-chain).
 
-DBML (Database Markup Language) is a declarative, database-agnostic domain-specific
-language for defining database schemas: tables, columns, indexes, constraints,
-relationships, enumerations, sample data, and documentation metadata.
+The schema language is declarative: it defines tables, columns,
+indexes, constraints, relationships, enumerations, sample data and
+documentation metadata, and leaves storage to the generators
+(§mapping-to-sqlite-ddl).
 
 This document is a complete, formal specification of Volt's schema language intended for
 implementers of parsers, compilers, and tooling. Every construct is specified
 by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
-(3) a minimal example. The collected grammar appears in [Appendix IA](#appendix-ia-collected-grammar-part-i).
+(3) a minimal example. The collected grammar appears in [Collected grammar (Part I)](#collected-grammar-part-i).
 
 ---
 
 ## Table of Contents
 
-- **Part I — The Schema Core (DBML)**
+- **Part I — The Schema Core**
   - [Notation](#notation)
     - [EBNF](#ebnf)
     - [Character Notation (U+XXXX)](#character-notation-uxxxx)
@@ -157,7 +158,6 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Struct tags](#struct-tags)
     - [Generated query surface](#generated-query-surface)
   - [Mapping to SQLite DDL](#mapping-to-sqlite-ddl)
-  - [Compatibility with DBML](#compatibility-with-dbml)
   - [Non-goals](#non-goals)
   - [License and Provenance](#license-and-provenance)
 
@@ -193,7 +193,7 @@ ISO/IEC 14977. Nonterminal names are lowercase words separated by spaces
 | `(* … *)`     | Comment inside the grammar                                     |
 
 Note that the square brackets, braces, and parentheses of the *EBNF
-meta-language* are distinct from the DBML tokens `[ ]`, `{ }`, `( )`, which
+meta-language* are distinct from the language's tokens `[ ]`, `{ }`, `( )`, which
 always appear quoted (`"["`, `"{"`, `"("`) when they are part of the language
 being defined.
 
@@ -240,7 +240,7 @@ approximate category L with ASCII `[a-zA-Z]`.
 
 ### Case Sensitivity and Terminology
 
-**Case sensitivity.** All DBML *keywords* (terminals spelled with letters in
+**Case sensitivity.** All *keywords* (terminals spelled with letters in
 this grammar, e.g. `"Table"`, `"pk"`, `"not null"`) are matched
 **case-insensitively**: `Table`, `table`, and `TABLE` are equivalent.
 User-defined names (identifiers) preserve case; implementations MUST treat
@@ -253,10 +253,11 @@ interpreted as described in RFC 2119.
 
 ## Source Text
 
-1. A DBML source file is a sequence of Unicode characters, conventionally
-   encoded as UTF-8, conventionally using the file extension `.dbml`.
+1. A Volt source file is a sequence of Unicode characters, conventionally
+   encoded as UTF-8, using the file extension `.volt` (§layers-files-and-the-superset-rule).
 2. A *program* (§program-structure) is the content of one source file. Multiple files are
-   related only through the module system (§file-imports-removed).
+   related only through packages (§projects-and-packages); file imports are
+   not part of the language (§file-imports-removed).
 
 ---
 
@@ -298,7 +299,7 @@ sp      = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
    transparently. It keeps its place in the source: a tool that reports
    positions counts its byte in offsets and gives it no column, so every
    position points into the file as written.
-2. DBML is **newline-sensitive**: a line break terminates statements such as
+2. Volt is **newline-sensitive**: a line break terminates statements such as
    column definitions, enum values, record rows, and settings-free field
    lines. Productions in this specification reference `newline` explicitly
    wherever it is syntactically significant. A production that ends with
@@ -403,7 +404,7 @@ qi char           = any char - ( '"' | "\" | newline ) ;
 
 ### Keywords
 
-DBML has **no reserved words**. All keywords are contextual: a keyword such
+Volt has **no reserved words**. All keywords are contextual: a keyword such
 as `Table` acts as a keyword only in keyword position and remains usable as an
 ordinary identifier elsewhere (e.g. a column may be named `table`).
 
@@ -633,7 +634,7 @@ element = project
    and the next begins is lexical (§line-structure-and-whitespace): an unquoted identifier in the
    first column outside every brace, string and comment.
 2. Forward references are permitted: an element may reference another
-   element defined later in the file (or imported). DBML is fully
+   element defined later in the file (or imported). The language is fully
    declarative; declaration order carries no semantics.
 
 ---
@@ -694,10 +695,9 @@ table setting  = "headercolor", ":", color
    settings.
 4. Column names MUST be unique within a table after partial injection (§partial-injection-order).
 
-> **Extension (this implementation).** The table setting `model: string`
+> **The `model` setting.** The table setting `model: string`
 > pins the Go model name used by `volt gen` (by default the
 > singularized table name). The
-> setting is accepted by this front end but is not upstream DBML; the
 > `vet` rule [`modelname`](lint.md#modelname) tells you when it is
 > needed. The core grammar above is unchanged.
 
@@ -778,7 +778,7 @@ column setting  = "primary key" | "pk"
 > error on a `null`, `default:` or `increment` column and on `bool`
 > and `time.Time`, where every value is a value.
 >
-> **Extension (this implementation).** The column setting `tag: string`
+> **The `tag` setting.** The column setting `tag: string`
 > (repeatable) passes one Go struct tag through to the generated field
 > verbatim: every field property lives in
 > the schema, and the passthrough serves every encoding and
@@ -796,7 +796,6 @@ column setting  = "primary key" | "pk"
 >    appended after the generated pair, in declaration order
 >    (§struct-tags).
 >
-> The setting is accepted by this front end but is not upstream DBML.
 > Note that `encoding/gob` ignores struct tags entirely: renaming a
 > field for gob is a Go-field-name concern, not a tag concern, and has
 > no surface here.
@@ -1263,15 +1262,24 @@ DiagramView sales_view {
 
 ## File Imports (removed)
 
-DBML's file-based module system — `use * from './file'`, selective
-import with per-element kinds and `as` aliases, and `reuse` re-export —
-**is not part of the Volt language**. Splitting a schema across files
-needs no imports at all: a package is a directory and every file in it
-shares one namespace (§projects-and-packages); cross-package references go through the
-package system (§imports). The rationale and the mechanical migration are
-§compatibility-with-dbml.
+An earlier file-import syntax (`use * from './file'`, selective
+import with per-element kinds and `as` aliases, and `reuse` re-export)
+is recognized only to be refused: it **is not part of the Volt
+language**. Splitting a schema across files needs no imports at all: a
+package is a directory and every file in it shares one namespace
+(§projects-and-packages); cross-package references go through the
+package system (§imports). All four forms managed one problem, name
+conflicts caused by dumping imported declarations into the importer's
+scope, and qualified access (`db.users`) makes those conflicts
+impossible, so the machinery solving them has no place. Files that
+imported each other become one package; genuinely separate concerns
+become separate packages, imported by name (§imports) and qualified at
+every reference; an alias (`use { table users as u }`) has no
+equivalent and needs none, since the package qualifier disambiguates;
+a re-export chain flattens, each consumer importing the defining
+package directly.
 
-A conforming implementation recognizes the historical forms in order to
+A conforming implementation recognizes the refused forms in order to
 reject them precisely:
 
 ```ebnf
@@ -1286,8 +1294,9 @@ import path      = string ;
 ```
 
 1. An `import statement` anywhere in a file is an **error** (code
-   `spec/7`), at every layer: the single-file schema pass and the
-   project pass alike. The diagnostic points at §compatibility-with-dbml.
+   `spec/file-imports-removed`), at every layer: the single-file schema
+   pass and the project pass alike. The diagnostic names the package
+   system as the replacement.
 2. No other behavior attaches to the statement: it declares nothing,
    imports nothing, and suppresses only cascading unresolved-name
    noise within its file.
@@ -1579,13 +1588,14 @@ files under `invalid/` MUST be rejected.
 ## Layers, files and the superset rule
 
 1. A Volt source file conventionally uses the extension **`.volt`**.
-   Whether a file happens to use only the DBML core (Part I) or the
+   Whether a file happens to use only the schema core (Part I) or the
    full language follows from its content, never from its name.
-2. **Superset rule.** Every valid Part I program is a valid Volt file
-   body: a DBML program whose column types are spelled in Volt's type
-   set (§columns) and whose declarations avoid the import statements of
-   Part I §file-imports-removed (§imports removes `use`/`reuse`;
-   §compatibility-with-dbml covers migration). The lexical grammar is
+2. **Layering rule.** The full language is a superset of Part I: every
+   valid Part I program is a valid Volt file body, and a file body
+   means the same at every layer. Part II adds the package clause and
+   its own declarations and takes nothing away; the import statements
+   of Part I §file-imports-removed are refused at every layer alike
+   (§imports). The lexical grammar is
    Part I §lexical-structure with one addition:
 
    ```ebnf
@@ -1595,8 +1605,8 @@ files under `invalid/` MUST be rejected.
    `/` is a token wherever it is not the start of a `//` or `/*`
    comment. Consequence: **`/*` always opens a block comment**, which
    is why the rest-of-path wildcard is spelled `:name...` (§route-paths)
-   and not `*name` — after a slash, a star-marked wildcard is lexically
-   unreachable in a superset of DBML.
+   and not `*name` — after a slash, a star-marked wildcard would open a
+   block comment.
 3. Declaration order and file assignment carry no semantics (§projects-and-packages).
 
 ## Projects and packages
@@ -1690,11 +1700,12 @@ package path = name, { slash, name } ;
    (§pipelines, §handler-references); a package MUST NOT import itself; **every import
    MUST be used** — an import whose qualifier is never referenced is
    an error.
-5. **DBML file imports are removed.** The `use` and `reuse` statements
+5. **File imports are removed.** The `use` and `reuse` statements
    of Part I §file-imports-removed are not part of the Volt language at any layer; a
-   conforming implementation rejects them with a migration diagnostic.
-   (The parser MAY still recognize the syntax so the DBML conformance
-   corpus remains checkable; acceptance is what is forbidden.)
+   conforming implementation rejects them with a diagnostic naming the
+   package system. (The parser MAY still recognize the syntax so the
+   schema conformance corpus remains checkable; acceptance is what is
+   forbidden.)
 6. **Import cycles are errors.** The package import graph MUST be
    acyclic.
 
@@ -3360,15 +3371,18 @@ executable conformance surface narrows the gap deliberately. The v0
 chain, each link runnable by `go test ./...`:
 
 1. **Corpus ↔ spec.** Every snippet in `lang/conformance/snippets/`
-   — a `.volt`/`.dbml` file, or a directory whose first `.volt` file
+   — a `.volt` file, or a directory whose first `.volt` file
    carries the tag — cites a `// spec: §…` section; `valid/` MUST check
    clean, `invalid/` MUST be rejected, and an invalid snippet with a
    `// want: <text>` line MUST be rejected with a diagnostic containing
-   that text — for the rule it names, not by accident. The corpus is
-   the spec's executable surface.
-2. **Schema layer preserved.** The schema corpus is Volt's own, retyped
-   when the type set closed (§columns), and runs against the same front
-   end as the full language, so the superset rule
+   that text — for the rule it names, not by accident. Content, not
+   name, tells the layers apart: a snippet file without a `package`
+   clause is a Part I file body and runs through the schema pass alone
+   (`lang/check`); a file with a package clause, and every directory,
+   runs through the project pass. The corpus is the spec's executable
+   surface.
+2. **Schema layer preserved.** The Part I corpus runs against the same
+   front end as the full language, so the layering rule
    (§layers-files-and-the-superset-rule) is enforced, not assumed.
 3. **Generator ↔ contract.** Goldens are byte-compared, gofmt-stable by
    test, and **compiled by the real Go toolchain** against stub
@@ -3569,42 +3583,6 @@ or a SQLite keyword): `order` → `"order"`, `full name` → `"full name"`,
 and column notes → comments above their DDL. Output opens with
 `PRAGMA foreign_keys = ON;` and the `-- Code generated … DO NOT EDIT.`
 marker, with the same overwrite protection as §mapping-to-go.
-
----
-
-## Compatibility with DBML
-
-Volt's schema core keeps DBML's syntax with two breaks. The first is
-the type vocabulary: a column type is a Go type (§columns), so DBML's
-`integer` is an error naming the column and the set, `varchar(255)` a
-syntax error at its parenthesis, and an imported schema is retyped once. The second is **one system**:
-DBML's file-based module machinery (Part I §file-imports-removed) — `use * from './file'`,
-selective imports with per-element kinds and `as` aliases, and `reuse`
-re-export — **is not part of the Volt language** (§imports). The parser
-still recognizes the §file-imports-removed forms so tooling can diagnose them precisely;
-the checker rejects them with a diagnostic pointing here.
-
-**Why.** All four mechanisms manage one problem — name conflicts caused
-by dumping imported declarations into the importer's scope. Volt's
-package system (§projects-and-packages–§imports, qualified access only: `db.users`) makes those
-conflicts impossible, so the machinery solving them is deleted rather
-than carried. Circular file imports (legal in DBML) become the §imports
-cycle error: packages must layer.
-
-**Migration** from a multi-file DBML project, mechanically:
-
-1. Files that imported each other become **one package**: put them in
-   one directory, delete the `use`/`reuse` lines, add the same
-   `package` clause to each file. Intra-package references need no
-   import at all.
-2. Genuinely separate concerns become **separate directories**, each
-   with its own `package` clause; importers name them in an
-   `import (…)` block (§imports) and qualify references (`db.users`).
-3. Aliased imports (`use { table users as u }`) have no equivalent and
-   need none: the package qualifier disambiguates (`auth.users` vs
-   `billing.users`); a package alias (§imports) shortens the qualifier.
-4. `reuse` re-export chains flatten: each consumer imports the real
-   defining package directly.
 
 ---
 

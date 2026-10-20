@@ -150,7 +150,7 @@ func TestVoltHoverPipeline(t *testing.T) {
 	}
 }
 
-func TestVoltHoverDBMLStillWorks(t *testing.T) {
+func TestVoltHoverSchemaStillWorks(t *testing.T) {
 	_, schema, _ := navProject(t)
 	d := NewDocument("file://"+schema, navSchema)
 
@@ -291,7 +291,7 @@ func TestVoltCompleteResourcesOffersTablesAndImports(t *testing.T) {
 	}
 }
 
-func TestVoltCompleteLeavesDBMLChains(t *testing.T) {
+func TestVoltCompleteLeavesSchemaChains(t *testing.T) {
 	root := voltProject(t, map[string]string{
 		"go.mod": "module lsptest\n",
 		"db/schema.volt": "package db\n\nTable users {\n\tid int [pk]\n\temail string\n}\n\n" +
@@ -312,6 +312,6 @@ func TestVoltCompleteLeavesDBMLChains(t *testing.T) {
 		labels[it.Label] = true
 	}
 	if !labels["id"] || !labels["email"] {
-		t.Errorf("DBML ref-chain completion lost: %v", labels)
+		t.Errorf("schema ref-chain completion lost: %v", labels)
 	}
 }

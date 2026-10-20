@@ -15,10 +15,10 @@ nao — its ORM — generates the models and queries. Everything
 resolves at compile time.
 
 **One language, one file extension.** A `.volt` file is Volt — the
-markup began as DBML and grew outward, but it is a single language.
+markup grew outward from its schema core, but it is a single language.
 Which constructs a file happens to use is up to the file. The honest build state:
 
-- **Schema core** (DBML-derived) — *built.* Spec Part I: Project,
+- **Schema core** — *built.* Spec Part I: Project,
   Table with columns/indexes/validators, TablePartial, Records, Enum, Type, Ref,
   TableGroup, Notes, DiagramView.
 - **Schema extensions** — *the structured half built:* `Group`, `Pred`
@@ -65,7 +65,7 @@ third-party deps. Importing `nao/rt` alone drags in nothing.
 | `gen/router/`    | router generator; goldens are gofmt-stable and compiled by the real toolchain |
 | `gen/model/`     | the data half: nao's models, queries and DDL, driven by the same project load |
 | `nao/`           | **nao — the ORM**: model + query + SQLite generation (`nao/gen`), its runtime (`nao/rt`), inflector and integration tests |
-| `lsp/`           | the Volt language server (`volt lsp`); project-aware diagnostics for files under a go.mod, single-file DBML pass otherwise. **Own module** — glsp and its tail stay out of the library |
+| `lsp/`           | the Volt language server (`volt lsp`); project-aware diagnostics for files under a go.mod, single-file schema pass otherwise. **Own module** — glsp and its tail stay out of the library |
 | `grammar/`       | tree-sitter grammar for the whole language |
 | `zed-extension/` | Zed glue; install via `scripts/sync-grammar.sh` + Install Dev Extension |
 | `scripts/`       | `sync-grammar.sh` — mirrors the grammar into the local git cache Zed loads dev grammars from; `perf.go` — the performance report of this machine: the profiling sweep from 10 to 320 tables, the editor's keystroke at each size, charts and the machine's specification, as Markdown |
