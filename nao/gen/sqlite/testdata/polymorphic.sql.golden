@@ -11,4 +11,4 @@ CREATE TABLE comments (
   commentable_id INTEGER NOT NULL,
   body TEXT NOT NULL
 );
-CREATE INDEX idx_comments_1 ON comments (commentable_type, commentable_id);
+CREATE INDEX idx_comments_commentable_type_commentable_id ON comments (commentable_type, commentable_id);

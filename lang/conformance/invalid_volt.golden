@@ -138,11 +138,65 @@ app/routes.volt:10:17: error: spec/query-routes: list parameter "prices" of db.P
 ## i162_column_changeset.volt
 db/i162_column_changeset.volt:7:3: error: spec/changesets: column "changeset" of table "drafts" maps to the Go field Changeset, the name of the row's changeset method; rename the column (§changesets)
 
+## i163_migration_name_shape.volt
+db/i163_migration_name_shape.volt:9:11: error: spec/migrations: migration name "001__init" is not four or more digits, two underscores and a label, like 0001__create_users (§migrations)
+
+## i164_migration_duplicate_name.volt
+db/i164_migration_duplicate_name.volt:15:11: error: spec/migrations: duplicate migration name "0001__init": migration names are unique within the package (§migrations)
+
+## i165_migration_column_type.volt
+db/i165_migration_column_type.volt:18:11: error: spec/migrations: column "state": type "status" is not a built-in; a migration column is bool, int, float64, string, []byte or time.Time, since the database holds the storage type (§migrations)
+
+## i166_migration_setting_tag.volt
+db/i166_migration_setting_tag.volt:18:21: error: spec/migrations: tag: describes the Go struct field, not the database, and is not a migration setting (§migrations)
+
+## i167_migration_setting_required.volt
+db/i167_migration_setting_required.volt:13:29: error: spec/migrations: required describes Go-side validation, not the database, and is not a migration setting (§migrations)
+
+## i168_migration_setting_model.volt
+db/i168_migration_setting_model.volt:11:17: error: spec/migrations: model: names the Go model, not the database, and is not a migration setting (§migrations)
+
+## i169_migration_create_table_empty.volt
+db/i169_migration_create_table_empty.volt:10:3: error: spec/migrations: create table "users" must declare at least one column (§migrations)
+
 ## i16_lowercase_controller.volt
 app/i16_lowercase_controller.volt:5:9: error: spec/scopes-and-routes: handler must be Controller.Action, both exported Go identifiers (§handler-references), found "home.Index"
 
+## i170_migration_add_not_null_no_default.volt
+db/i170_migration_add_not_null_no_default.volt:18:9: error: spec/migrations: add "name" to table "users": a not null column needs a default:, since the rows already in the table must be filled (§migrations)
+
+## i171_migration_add_pk.volt
+db/i171_migration_add_pk.volt:18:17: error: spec/migrations: add "id" to table "users": pk cannot be added to an existing table; use rebuild table (§migrations)
+
+## i172_migration_add_ref_not_null.volt
+db/i172_migration_add_ref_not_null.volt:25:44: error: spec/migrations: add "user_id" to table "posts": a column with ref: must be nullable when added, since the rows already in the table reference nothing; use rebuild table for a not null foreign key (§migrations)
+
+## i173_migration_rebuild_null_source.volt
+db/i173_migration_rebuild_null_source.volt:20:5: error: spec/migrations: rebuild table "users" in migration "0002__email": column "email" is not null but its source is NULL, since no column of that name exists before the rebuild; give it a from: or a default: (§migrations)
+
+## i174_migration_flat_drop_table.volt
+db/i174_migration_flat_drop_table.volt:13:3: error: spec/migrations: migration "0001__init" is a flat body, which runs backward as the inverses of its operations, but drop table audit has no body to recreate the table from; mark the migration irreversible or write it as up { } down { } (§migrations)
+
+## i175_migration_flat_drop_column.volt
+db/i175_migration_flat_drop_column.volt:17:3: error: spec/migrations: migration "0002__no_bio" is a flat body, which runs backward as the inverses of its operations, but drop bio in alter table users carries no type to add the column back with; mark the migration irreversible or write it as up { } down { } (§migrations)
+
+## i176_migration_flat_rebuild.volt
+db/i176_migration_flat_rebuild.volt:18:3: error: spec/migrations: migration "0002__int_hits" is a flat body, which runs backward as the inverses of its operations, but rebuild table users forgets the old shape; mark the migration irreversible or write it as up { } down { } (§migrations)
+
+## i177_migration_flat_exec.volt
+db/i177_migration_flat_exec.volt:13:3: error: spec/migrations: migration "0001__init" is a flat body, which runs backward as the inverses of its operations, but exec carries no down:; mark the migration irreversible or write it as up { } down { } (§migrations)
+
+## i178_migration_down_without_up.volt
+db/i178_migration_down_without_up.volt:10:3: error: syntax: a down block follows an up block; write up { } down { } (§migrations)
+
 ## i17_one_part_handler.volt
 app/i17_one_part_handler.volt:5:9: error: spec/scopes-and-routes: package "app" declares no tables, so it has no query Show; a query of an imported data package is written qualified (§query-routes)
+
+## i180_migration_add_expression_default.volt
+db/i180_migration_add_expression_default.volt:18:47: error: spec/migrations: add "created" to table "users": the default must be a literal; SQLite's ADD COLUMN takes no expression default (§migrations)
+
+## i181_migration_no_tables.volt
+db/i181_migration_no_tables.volt:5:1: error: spec/migrations: migration "0001__init" in a package that declares no tables: a migration is an element of the package whose tables it migrates (§migrations)
 
 ## i18_dataset_reserved.volt
 app/i18_dataset_reserved.volt:4:1: error: syntax: routes, resources and datasets must appear inside a Scope (§scopes-and-routes)

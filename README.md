@@ -29,6 +29,13 @@ Which constructs a file happens to use is up to the file. The honest build state
   routes, `resources`, query routes bound to generated queries,
   `dataset`, `resources … [default]`, event routes, and a generated
   client (spec Part II).
+- **Migrations**, *the language half built:* a `Migration` element
+  in the data package holds hand-written structural operations
+  (`create table`, `alter table`, `rebuild table`, `exec`, ...),
+  checked, highlighted and outlined like any other element (spec
+  §migrations). *Not built:* the fold that verifies every migration
+  against the schema on a real SQLite, the ledger, and
+  `volt migration new`, `check`, `up` (roadmap).
 
 Project = the Go module (tree rooted at `go.mod`). Package = directory. File
 boundaries carry no meaning (§projects-and-packages).
@@ -76,7 +83,9 @@ carries these; no code backs them yet:
 
 - raw-SQL `Select` / `View` / `Trigger` blocks, `[was:]`, `[repr:]`
   (roadmap)
-- associations (ASSOC), migrations (MIG), the report engine (RPT)
+- associations (ASSOC), the running half of migrations (the fold, the
+  ledger, the `volt migration` CLI, `volt_migrations.go`), the report
+  engine (RPT)
 - HTML rendering and typed compiled templates
 - `volt.WithQueries` / `WithTemplates` / `BuildDeps` options
 - plugs from imported packages (a v0 error on purpose)

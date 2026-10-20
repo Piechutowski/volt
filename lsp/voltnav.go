@@ -128,6 +128,12 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 			ix.define(voltSym{"select", path, d.Name.Name()},
 				voltDef{span: spanOf(d.Name), md: hover(pkg, si)})
 		}
+		if info := pkg.Schema(); info != nil {
+			for i, mi := range info.Migrations {
+				ix.define(voltSym{"migration", path, mi.Name},
+					voltDef{span: spanOf(mi.Decl.Name), md: migrationHoverMD(mi, i, len(info.Migrations))})
+			}
+		}
 		if len(pkg.Files) > 0 {
 			first := pkg.Files[0]
 			ix.defs[voltSym{"package", path, ""}] = voltDef{span: voltSpan{
@@ -452,7 +458,7 @@ func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 		md = tableGroupHover(ref.sym, def)
 	case "pred":
 		md = predHover(ref.sym, def, d.vindex)
-	case "select", "gofunc":
+	case "select", "gofunc", "migration":
 		md = def.md
 	}
 	if md == "" {

@@ -74,6 +74,7 @@ func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.S
 		case *ast.IndexesBlock:
 			for _, ix := range item.Indexes {
 				c.settingsCheck(ix.Settings, "indexes", indexSettings)
+				c.indexNameCheck(name, ix)
 			}
 		case *ast.ValidatorsBlock:
 		case *ast.Note:
@@ -115,14 +116,18 @@ func bodyPos(body []ast.TableItem, settings *ast.SettingList) token.Position {
 }
 
 func (c *checker) columnCheck(col *ast.Column) {
+	c.legacyFlagsCheck(col)
+	c.settingsCheck(col.Settings, "columns", columnSettings)
+	c.tagSettingsCheck(col.Settings)
+}
+
+func (c *checker) legacyFlagsCheck(col *ast.Column) {
 	for _, f := range col.LegacyFlags {
 		low := strings.ToLower(f.Name())
 		if f.Quoted() || (low != "pk" && low != "unique") {
 			c.errorf(f.Pos(), "columns", "only the legacy flags pk and unique may follow the column type; found %q", f.Name())
 		}
 	}
-	c.settingsCheck(col.Settings, "columns", columnSettings)
-	c.tagSettingsCheck(col.Settings)
 }
 
 func (c *checker) enumCheck(d *ast.Enum) {

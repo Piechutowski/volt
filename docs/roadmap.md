@@ -21,6 +21,7 @@ when a consumer exists.
   - [x] Parse and check by declaration; routes lowered per scope item
   - [x] Named placeholders, Go references checked by spelling
 - [x] Schema core: Project, Table, TablePartial, Records, Enum, Type, Ref, TableGroup, Notes, DiagramView
+- [x] `Migration`: the element, its contextual keywords and its twelve checks; what runs it is under the data layer
   - [x] Column types are a closed Go set (`bool`, `int`, `float64`, `string`, `[]byte`, `time.Time`), enums, and `Type` declarations; defaults are typed
 - [~] Schema extensions
   - [x] `[model:]`, `[tag:]`, `[required]`, `validators`
@@ -56,14 +57,16 @@ when a consumer exists.
   - [ ] Batched loaders: `PostCommentsLoad(ctx, posts) map[int][]Comment`, one `IN`, grouped in memory; the atomicity answer to loops of reads
   - [ ] Many-to-many through junction tables
   - *no* association fields on row structs; *hand* polymorphic and STI patterns
-- [ ] Migrations
-  - [ ] Semantic diff of the schema against the last-migrated snapshot, never SQL parsing; identity is a canonical hash of the checked AST
-  - [ ] Renames via `[was: 'old']`
-  - [ ] Generated ledger plus `schema_migrations`, each migration pinned to the schema hash
-  - [ ] Owned twelve-step rebuild in the pragma bracket, `foreign_key_check` after
-  - [ ] Applied by CLI or an embedded runner, never on app start; user binaries embed subcommands and migrations
-  - [ ] No fake `down` for destructive changes
-  - *hand* data migrations
+- [~] Migrations
+  - [x] The `Migration` element: hand-written structural operations in a flat body or `up { } down { }`, checked by rules 1 to 12 of §migrations without the schema, in the grammar, the outline, completion and hover
+  - [x] Index names derive from the table and the key columns, an expression index carries `name:`, `where:` makes an index partial (§indexes)
+  - [ ] The fold: every migration applied to an empty SQLite, compared with the schema's DDL table by table; `volt gen` fails on drift (§the-fold)
+  - [ ] The ledger `volt_migrations` and `rt.MigrateUp`, `rt.MigrateDown`, `rt.MigrateStatus` (§migration-ledger)
+  - [ ] `volt migration new | check | up | down | status | sql`, and `volt_migrations.go` with `Migrate` for the binary (§migration-tooling)
+  - [ ] The pragma bracket around `rebuild table` and `drop table`, `foreign_key_check` before commit; `no transaction` for what needs it
+  - [ ] No fake `down`: an irreversible migration refuses `down` with its name
+  - [ ] The migration generator over the drift report; renames via `[was: 'old']`
+  - *hand* data migrations, as `exec`
 - [ ] Report engine, when a consumer exists
   - [ ] Schema catalog exported as runtime data
   - [ ] Quarantined interpreter: validated requests, joins only along declared refs, values only behind placeholders, `[]map[string]any` out

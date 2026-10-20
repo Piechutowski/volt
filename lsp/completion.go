@@ -12,10 +12,15 @@ import (
 var (
 	elementKeywords = []string{
 		"Project", "Table", "TablePartial", "Enum", "Type", "Ref", "TableGroup",
-		"Note", "Records", "DiagramView", "use", "reuse",
+		"Note", "Records", "DiagramView", "Migration", "use", "reuse",
 		"package ", "import", "Pipeline", "Scope",
 	}
-	tableBodyKeywords = []string{"indexes", "validators", "Note", "Records"}
+	tableBodyKeywords     = []string{"indexes", "validators", "Note", "Records"}
+	migrationBodyKeywords = []string{
+		"create table ", "create index ", "drop table ", "drop index ",
+		"rename table ", "alter table ", "rebuild table ", "exec ", "up {", "down {",
+	}
+	alterBodyKeywords = []string{"add ", "drop ", "rename "}
 	scopeBodyKeywords = []string{
 		"get ", "post ", "put ", "patch ", "delete ", "options ", "head ",
 		"any ", "resources ", "dataset ", "Scope ",
@@ -24,7 +29,8 @@ var (
 	settingsByContext = map[string][]string{
 		"column":    {"pk", "primary key", "null", "not null", "unique", "increment", "required", "default: ", "note: ", "ref: ", "tag: "},
 		"table":     {"headercolor: ", "note: "},
-		"index":     {"type: ", "name: ", "unique", "pk", "note: "},
+		"index":     {"type: ", "name: ", "unique", "pk", "where: ", "note: "},
+		"migration": {"irreversible", "no transaction", "note: "},
 		"ref":       {"delete: ", "update: ", "color: ", "inactive"},
 		"enumvalue": {"note: "},
 		"sticky":    {"color: "},
@@ -53,6 +59,8 @@ var (
 	actionValueRE   = regexp.MustCompile(`(?i)\b(delete|update)\s*:\s*\w*$`)
 	columnShapeRE   = regexp.MustCompile(`^\s*([\p{L}\p{M}\d_]+|"[^"]*")\s+[\p{L}\p{M}\d_".]*$`)
 	lineStartRE     = regexp.MustCompile(`^\s*[\p{L}\p{M}\d_"~]*$`)
+	shapeHeadRE     = regexp.MustCompile(`^(create|rebuild|drop) table\b`)
+	upDownHeadRE    = regexp.MustCompile(`^(up|down)\s*\{`)
 )
 
 // Complete computes completion items for the position.
@@ -111,6 +119,14 @@ func (d *Document) Complete(pos protocol.Position) []protocol.CompletionItem {
 		if lineStartRE.MatchString(prefix) {
 			return keywordItems([]string{"use "})
 		}
+	case "migration":
+		if lineStartRE.MatchString(prefix) {
+			return keywordItems(migrationBodyKeywords)
+		}
+	case "alter":
+		if lineStartRE.MatchString(prefix) {
+			return keywordItems(alterBodyKeywords)
+		}
 	}
 	return nil
 }
@@ -157,6 +173,12 @@ func (d *Document) blockContext(line int) string {
 				return "pipeline"
 			case strings.HasPrefix(head, "scope"):
 				return "scope"
+			case strings.HasPrefix(head, "migration"), upDownHeadRE.MatchString(head):
+				return "migration"
+			case shapeHeadRE.MatchString(head):
+				return "table"
+			case strings.HasPrefix(head, "alter table"):
+				return "alter"
 			default:
 				depth = 0
 				continue
@@ -200,6 +222,8 @@ func (d *Document) settingsComplete(prefix, ctx string) []protocol.CompletionIte
 		kind = "sticky"
 	case strings.HasPrefix(head, "scope") && (ctx == "" || ctx == "scope"):
 		kind = "scope"
+	case strings.HasPrefix(head, "migration") && ctx == "":
+		kind = "migration"
 	case strings.HasPrefix(head, "resources") && ctx == "scope":
 		kind = "resources"
 	case strings.HasPrefix(head, "dataset") && ctx == "scope":

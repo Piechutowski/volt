@@ -12,8 +12,9 @@ Table bookings {
     (country, booking_date) [unique]
     booking_date [type: hash]
     booking_date [type: btree]
-    (`id*2`)
-    (`id*3`, `getdate()`)
-    (`id*3`, id)
+    (`id*2`) [name: 'idx_bookings_double']
+    (`id*3`, `getdate()`) [name: 'idx_bookings_triple_now']
+    (`id*3`, id) [name: 'idx_bookings_triple_id']
+    country [where: `country <> ''`]
   }
 }

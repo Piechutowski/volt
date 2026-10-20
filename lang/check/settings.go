@@ -29,6 +29,9 @@ type settingSpec struct {
 	repeatable map[string]bool
 	synonyms   map[string]string
 	conflicts  [][2]string
+	// forbidden maps a setting name to the diagnostic it gets: a
+	// setting known elsewhere that this construct refuses for a reason.
+	forbidden map[string]string
 }
 
 var (
@@ -52,6 +55,7 @@ var (
 		kinds: map[string]valueKind{
 			"type": identValue, "name": strValue,
 			"unique": flagOnly, "pk": flagOnly, "note": strValue,
+			"where": exprValue,
 		},
 	}
 	refSettings = settingSpec{
@@ -80,6 +84,10 @@ func (c *checker) settingsCheck(sl *ast.SettingList, section string, spec settin
 		canon := s.Name
 		if alt, ok := spec.synonyms[canon]; ok {
 			canon = alt
+		}
+		if why, bad := spec.forbidden[s.Name]; bad {
+			c.errorf(s.Pos(), section, "%s", why)
+			continue
 		}
 		kind, known := spec.kinds[s.Name]
 		if !known {

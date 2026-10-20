@@ -109,6 +109,68 @@ func eachChild(n Node, visit func(Node)) {
 	case *EnumValue:
 		child(visit, n.Name)
 		child(visit, n.Settings)
+	case *Migration:
+		child(visit, n.Name)
+		child(visit, n.Settings)
+		for _, op := range n.Up {
+			if op != nil {
+				visit(op)
+			}
+		}
+		for _, op := range n.Down {
+			if op != nil {
+				visit(op)
+			}
+		}
+	case *CreateTable:
+		child(visit, n.Name)
+		for _, it := range n.Body {
+			if it != nil {
+				visit(it)
+			}
+		}
+	case *DropTable:
+		child(visit, n.Name)
+		for _, it := range n.Body {
+			if it != nil {
+				visit(it)
+			}
+		}
+	case *RenameTable:
+		child(visit, n.From)
+		child(visit, n.To)
+	case *AlterTable:
+		child(visit, n.Name)
+		for _, it := range n.Items {
+			if it != nil {
+				visit(it)
+			}
+		}
+	case *AlterAdd:
+		child(visit, n.Column)
+	case *AlterDrop:
+		child(visit, n.Name)
+		child(visit, n.Type)
+		child(visit, n.Settings)
+	case *AlterRename:
+		child(visit, n.From)
+		child(visit, n.To)
+	case *RebuildTable:
+		child(visit, n.Name)
+		for _, it := range n.Body {
+			if it != nil {
+				visit(it)
+			}
+		}
+	case *CreateIndex:
+		child(visit, n.Table)
+		child(visit, n.Index)
+	case *DropIndex:
+		child(visit, n.Table)
+		child(visit, n.Index)
+	case *Exec:
+		child(visit, n.SQL)
+		child(visit, n.Settings)
 	case *Records:
 		child(visit, n.Table)
 		children(visit, n.Columns)

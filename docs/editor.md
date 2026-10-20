@@ -115,6 +115,15 @@ load-bearing patterns, each citing the spec section it implements:
   (prec.left or/and, keyword operators at the same precedence as other
   keywords so `not` never outlexes `Note`), `Select ... for ... where`.
   `/` is a token per §layers-files-and-the-superset-rule.
+- **Keywords of a migration body are tokens of the migration rules
+  only** (§migrations, §keywords). `up`, `down`, `create`, `drop`,
+  `rename`, `alter`, `rebuild`, `exec`, `table`, `index`, `add` and
+  `to` appear as `kw()` tokens inside `migration_definition` and its
+  operations and nowhere else, so the context-aware lexer never
+  considers them where a column name is expected: `Table t { up int }`
+  parses as a column named `up`, and `rename to to down` inside an
+  `alter table` renames the column `to`. The corpus case
+  `migrations.txt` proves both.
 
 ## 3. The Zed extension (`zed-extension/`)
 
@@ -202,7 +211,12 @@ layer:
   current line usually doesn't parse mid-keystroke); candidates come
   from the last coherent semantic model — real tables after `db.`
   (case-insensitively filtered), verbs and `resources` in Scope
-  bodies, settings per construct (§settings-lists, §settings-whitelists).
+  bodies, operations in a Migration body, settings per construct
+  (§settings-lists, §settings-whitelists).
+- A migration's name hovers as its position among the package's
+  migrations in name order ("migration 2 of 3") and whether it runs
+  backward (§migrations); the project index answers it, so a
+  migration alone in its own file counts its siblings.
 - Position encoding is converted at the boundary only (1-based rune
   columns ↔ 0-based UTF-16), re-derived from the line's actual text;
   nothing else does position arithmetic.

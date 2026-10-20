@@ -228,6 +228,8 @@ func (p *parser) decl() (d ast.Decl) {
 		return p.recordsDecl()
 	case "diagramview":
 		return p.diagramView()
+	case "migration":
+		return p.migration()
 	default:
 		p.fail(t, "unknown element type %q (§program-structure)", t.Val)
 		return nil
@@ -452,8 +454,14 @@ func (p *parser) indexAtom() ast.Node {
 }
 
 func (p *parser) index() *ast.Index {
-	ix := &ast.Index{}
 	p.lineBegin("index definition (§indexes)")
+	ix := p.indexRest()
+	p.endOfLine("index definition (§indexes)")
+	return ix
+}
+
+func (p *parser) indexRest() *ast.Index {
+	ix := &ast.Index{}
 	if p.at(token.LPAREN) {
 		ix.Composite = true
 		p.next()
@@ -472,7 +480,6 @@ func (p *parser) index() *ast.Index {
 	if p.at(token.LBRACKET) && !p.cur().NLBefore {
 		ix.Settings = p.settingList()
 	}
-	p.endOfLine("index definition (§indexes)")
 	return ix
 }
 

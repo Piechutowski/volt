@@ -206,37 +206,66 @@ func (g *generator) columnDef(ti *check.TableInfo, cd *check.ColumnDef, pkCols [
 func (g *generator) indexesEmit(ti *check.TableInfo) error {
 	tbl := sqlTableName(ti.Decl.Name)
 	used := map[string]bool{}
-	n := 0
 	for _, ix := range ti.Indexes {
 		if ix.Settings.Get("pk") != nil {
 			continue
 		}
-		n++
-		name := settingString(ix.Settings, "name")
-		if name == "" {
-			name = fmt.Sprintf("idx_%s_%d", tbl, n)
+		name, err := IndexName(tbl, ix)
+		if err != nil {
+			return fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
 		}
 		if used[name] {
 			return fmt.Errorf("table %s: duplicate index name %q", ti.Decl.Name.String(), name)
 		}
 		used[name] = true
-
-		stmt := "CREATE INDEX"
-		if ix.Settings.Get("unique") != nil {
-			stmt = "CREATE UNIQUE INDEX"
-		}
-		var keys []string
-		for _, atom := range ix.Key {
-			switch a := atom.(type) {
-			case *ast.Ident:
-				keys = append(keys, identQuote(a.Name()))
-			case *ast.FuncExpr:
-				keys = append(keys, "("+a.Text()+")")
-			}
-		}
-		fmt.Fprintf(&g.out, "%s %s ON %s (%s);\n", stmt, identQuote(name), identQuote(tbl), strings.Join(keys, ", "))
+		g.out.WriteString(IndexDDL(tbl, name, ix) + "\n")
 	}
 	return nil
+}
+
+// IndexName is the SQLite name of an index (spec §indexes,
+// §mapping-to-sqlite-ddl): name: when given, else idx_<table>_<col>
+// [_<col>...] over a key of columns; an expression key without name:
+// is an error.
+func IndexName(table string, ix *ast.Index) (string, error) {
+	if name := settingString(ix.Settings, "name"); name != "" {
+		return name, nil
+	}
+	parts := []string{"idx", table}
+	for _, atom := range ix.Key {
+		id, ok := atom.(*ast.Ident)
+		if !ok {
+			return "", fmt.Errorf("index on %s has an expression in its key and no name: (§indexes)", table)
+		}
+		parts = append(parts, id.Name())
+	}
+	return strings.Join(parts, "_"), nil
+}
+
+// IndexDDL renders one CREATE INDEX statement (spec §mapping-to-sqlite-ddl):
+// UNIQUE for unique, the key's columns quoted and its expressions
+// parenthesized, WHERE for a partial index.
+func IndexDDL(table, name string, ix *ast.Index) string {
+	stmt := "CREATE INDEX"
+	if ix.Settings.Get("unique") != nil {
+		stmt = "CREATE UNIQUE INDEX"
+	}
+	var keys []string
+	for _, atom := range ix.Key {
+		switch a := atom.(type) {
+		case *ast.Ident:
+			keys = append(keys, identQuote(a.Name()))
+		case *ast.FuncExpr:
+			keys = append(keys, "("+a.Text()+")")
+		}
+	}
+	where := ""
+	if s := ix.Settings.Get("where"); s != nil {
+		if fe, ok := s.Value.(*ast.FuncExpr); ok {
+			where = " WHERE " + fe.Text()
+		}
+	}
+	return fmt.Sprintf("%s %s ON %s (%s)%s;", stmt, identQuote(name), identQuote(table), strings.Join(keys, ", "), where)
 }
 
 func (g *generator) insertsEmit(ti *check.TableInfo, r *ast.Records) error {

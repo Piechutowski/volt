@@ -51,7 +51,7 @@ Table users as U [headercolor: #3498DB, note: 'main table'] {
   indexes {
     (id, `lower(name)`) [name: 'ix_main', unique]
     created_at [type: btree, note: 'time queries']
-    `floor(balance)`
+    `floor(balance)` [name: 'ix_balance_floor']
   }
 
   validators {

@@ -145,6 +145,9 @@ i153_records_declared_type_mismatch.dbml:8:8: error: spec/records-sample-data: r
 i154_column_without_type.dbml:3:1: error: spec/table: table "t" must contain at least one column or partial injection
 i154_column_without_type.dbml:4:6: error: syntax: expected identifier in column type (§columns), found '[' "["
 
+## i179_index_expression_unnamed.dbml
+i179_index_expression_unnamed.dbml:8:6: error: spec/indexes: index (`lower(email)`) on "users" has an expression in its key and must carry name:, since a name derives from columns only (§indexes)
+
 ## i19_ref_arity_mismatch.dbml
 i19_ref_arity_mismatch.dbml:5:17: error: spec/relationships-ref: composite relationship endpoints must have the same number of columns: 2 vs 1
 

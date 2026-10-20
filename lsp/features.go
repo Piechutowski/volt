@@ -85,6 +85,8 @@ func (d *Document) DocumentSymbols() []protocol.DocumentSymbol {
 			out = append(out, d.symbol(label, "", protocol.SymbolKindArray, n, n, nil))
 		case *ast.DiagramView:
 			out = append(out, d.symbol(n.Name.Name(), "DiagramView", protocol.SymbolKindObject, n, n.Name, nil))
+		case *ast.Migration:
+			out = append(out, d.symbol(n.Name.Name(), "Migration", protocol.SymbolKindModule, n, n.Name, nil))
 		}
 	}
 	return out
@@ -239,6 +241,9 @@ func (d *Document) Hover(pos protocol.Position) *protocol.Hover {
 	if h := d.voltHover(pos); h != nil {
 		return h
 	}
+	if h := d.migrationHover(pos); h != nil {
+		return h
+	}
 	occ := d.Index.At(d.FromLSP(pos))
 	if occ == nil {
 		return nil
@@ -307,6 +312,34 @@ func (d *Document) enumHover(key string) string {
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+func (d *Document) migrationHover(pos protocol.Position) *protocol.Hover {
+	off := d.FromLSP(pos)
+	for i, mi := range d.Info.Migrations {
+		name := mi.Decl.Name
+		if off < int(name.Pos().Offset()) || off > int(name.End().Offset()) {
+			continue
+		}
+		rng := d.tokenRange(name.Tok)
+		return &protocol.Hover{
+			Contents: protocol.MarkupContent{Kind: protocol.MarkupKindMarkdown, Value: migrationHoverMD(mi, i, len(d.Info.Migrations))},
+			Range:    &rng,
+		}
+	}
+	return nil
+}
+
+func migrationHoverMD(mi *check.MigrationInfo, i, n int) string {
+	way := "reversible"
+	if !mi.Reversible {
+		way = "irreversible"
+	}
+	md := fmt.Sprintf("```volt\nMigration %s\n```\nmigration %d of %d, %s\n", mi.Name, i+1, n, way)
+	if note := settingString(mi.Decl.Settings, "note"); note != "" {
+		md += "\n---\n" + note + "\n"
+	}
+	return md
 }
 
 func (d *Document) typeHover(key string) string {
@@ -459,5 +492,3 @@ func tableNote(t *ast.Table) string {
 	}
 	return ""
 }
-
-var _ = check.Info{}

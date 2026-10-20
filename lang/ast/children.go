@@ -184,6 +184,108 @@ func Children(n Node) []Node {
 		if n.From != nil {
 			out = append(out, n.From)
 		}
+	case *Migration:
+		if n.Name != nil {
+			out = append(out, n.Name)
+		}
+		if n.Settings != nil {
+			out = append(out, n.Settings)
+		}
+		for _, op := range n.Up {
+			if op != nil {
+				out = append(out, op)
+			}
+		}
+		for _, op := range n.Down {
+			if op != nil {
+				out = append(out, op)
+			}
+		}
+	case *CreateTable:
+		if n.Name != nil {
+			out = append(out, n.Name)
+		}
+		for _, it := range n.Body {
+			if it != nil {
+				out = append(out, it)
+			}
+		}
+	case *DropTable:
+		if n.Name != nil {
+			out = append(out, n.Name)
+		}
+		for _, it := range n.Body {
+			if it != nil {
+				out = append(out, it)
+			}
+		}
+	case *RenameTable:
+		if n.From != nil {
+			out = append(out, n.From)
+		}
+		if n.To != nil {
+			out = append(out, n.To)
+		}
+	case *AlterTable:
+		if n.Name != nil {
+			out = append(out, n.Name)
+		}
+		for _, it := range n.Items {
+			if it != nil {
+				out = append(out, it)
+			}
+		}
+	case *AlterAdd:
+		if n.Column != nil {
+			out = append(out, n.Column)
+		}
+	case *AlterDrop:
+		if n.Name != nil {
+			out = append(out, n.Name)
+		}
+		if n.Type != nil {
+			out = append(out, n.Type)
+		}
+		if n.Settings != nil {
+			out = append(out, n.Settings)
+		}
+	case *AlterRename:
+		if n.From != nil {
+			out = append(out, n.From)
+		}
+		if n.To != nil {
+			out = append(out, n.To)
+		}
+	case *RebuildTable:
+		if n.Name != nil {
+			out = append(out, n.Name)
+		}
+		for _, it := range n.Body {
+			if it != nil {
+				out = append(out, it)
+			}
+		}
+	case *CreateIndex:
+		if n.Table != nil {
+			out = append(out, n.Table)
+		}
+		if n.Index != nil {
+			out = append(out, n.Index)
+		}
+	case *DropIndex:
+		if n.Table != nil {
+			out = append(out, n.Table)
+		}
+		if n.Index != nil {
+			out = append(out, n.Index)
+		}
+	case *Exec:
+		if n.SQL != nil {
+			out = append(out, n.SQL)
+		}
+		if n.Settings != nil {
+			out = append(out, n.Settings)
+		}
 	case *Records:
 		if n.Table != nil {
 			out = append(out, n.Table)

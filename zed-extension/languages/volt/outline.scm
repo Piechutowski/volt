@@ -85,3 +85,7 @@
 (select_definition
   "Select" @context
   name: (select_name) @name) @item
+
+(migration_definition
+  "Migration" @context
+  name: (migration_name) @name) @item

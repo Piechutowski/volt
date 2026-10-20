@@ -24,6 +24,8 @@ type Info struct {
 	// (unknown members dropped; §tablegroup reports them). A TableGroup is a
 	// set wherever Volt names one (spec §groups).
 	TableGroups []*TableGroupInfo
+	// Migrations in name order, the order they apply in (spec §migrations).
+	Migrations []*MigrationInfo
 
 	byTable map[string]*TableInfo
 	byBase  map[string]*TableInfo
@@ -149,6 +151,7 @@ func FileMemo(f *ast.File, memo *Memo) (*Info, []diag.Diagnostic) {
 		memo.Hits, memo.Misses = 0, 0
 	}
 	c.collect(f)
+	c.migrationsCheck(f)
 	c.declsCheck(f)
 	c.resolve(f)
 	if memo != nil {

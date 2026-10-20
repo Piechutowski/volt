@@ -147,6 +147,26 @@
   "null"
 ] @keyword.operator
 
+; ---------- migrations (docs/spec.md §migrations) ----------
+
+[
+  "Migration"
+  "up"
+  "down"
+  "create"
+  "drop"
+  "rename"
+  "alter"
+  "rebuild"
+  "exec"
+  "table"
+  "index"
+  "add"
+  "to"
+] @keyword
+
+(migration_name) @label
+
 (group_name) @type
 (group_member) @type
 (group_definition ["+" "\\"] @operator)

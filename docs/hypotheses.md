@@ -60,10 +60,13 @@ it, including whether `volt gen` ships a SQLite to do the preparing.
 
 ## H7 — Migrations
 
-Belief: the schema file is authored, the ledger is derived. A
-migration is a generated entry pinning the canonical hash of the
-checked schema before and after, listing its operations and their
-SQLite realization, prepare-validated against the previous snapshot.
-Rename provenance lives in the entry, captured at diff time by a
-question, a flag, or the editor's rename refactoring, never in the
-schema file. Unsettled: all of it.
+Belief: the schema says what the database is, a migration says how
+one database becomes the next, and both are written by hand. A
+migration is a `Migration` element of the data package, a list of
+structural operations that is deliberately untyped, since it may say
+anything that was once true; what is verified is the composition, the
+fold of every migration onto an empty SQLite against the schema's DDL
+(§migrations, §the-fold). Unsettled: the generator that writes the
+next migration from the drift report, how a rename is told from a
+drop and an add (`[was:]` in the schema, or a question at diff time),
+and whether `volt gen` should fail or only warn on drift.

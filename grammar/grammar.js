@@ -94,6 +94,7 @@ module.exports = grammar({
         $.group_definition,
         $.pred_definition,
         $.select_definition,
+        $.migration_definition,
       ),
 
     // ==================== Project (§project) ====================
@@ -755,6 +756,119 @@ module.exports = grammar({
     // An identifier glued to the previous token (route and import paths).
     _ident_immediate: () =>
       token.immediate(/[0-9]*[\p{L}\p{M}_][\p{L}\p{M}\p{Nd}_]*/),
+
+    // ==================== Migration (§migrations) ====================
+    // The words of a migration body are keyword tokens here and nowhere
+    // else, so the context-aware lexer keeps `up` or `table` a column
+    // name in a Table body (§keywords).
+
+    migration_definition: ($) =>
+      seq(
+        kw('Migration'),
+        field('name', alias($.identifier, $.migration_name)),
+        optional(field('settings', $.settings_list)),
+        '{',
+        repeat($._newline),
+        optional(
+          choice(
+            newlineSep1($._operation, $),
+            seq(
+              $.up_block,
+              repeat($._newline),
+              optional(seq($.down_block, repeat($._newline))),
+            ),
+          ),
+        ),
+        '}',
+      ),
+
+    up_block: ($) => seq(kw('up'), $._operations_body),
+
+    down_block: ($) => seq(kw('down'), $._operations_body),
+
+    _operations_body: ($) =>
+      seq('{', repeat($._newline), optional(newlineSep1($._operation, $)), '}'),
+
+    _operation: ($) =>
+      choice(
+        $.create_table_op,
+        $.drop_table_op,
+        $.rename_table_op,
+        $.alter_table_op,
+        $.rebuild_table_op,
+        $.create_index_op,
+        $.drop_index_op,
+        $.exec_op,
+      ),
+
+    create_table_op: ($) =>
+      seq(kw('create'), kw('table'), field('table', alias($._name, $.table_name)), $._shape_body),
+
+    drop_table_op: ($) =>
+      seq(kw('drop'), kw('table'), field('table', alias($._name, $.table_name)), optional($._shape_body)),
+
+    rename_table_op: ($) =>
+      seq(
+        kw('rename'),
+        kw('table'),
+        field('from', alias($._name, $.table_name)),
+        kw('to'),
+        field('to', alias($._name, $.table_name)),
+      ),
+
+    alter_table_op: ($) =>
+      seq(
+        kw('alter'),
+        kw('table'),
+        field('table', alias($._name, $.table_name)),
+        '{',
+        repeat($._newline),
+        optional(newlineSep1($._alter_item, $)),
+        '}',
+      ),
+
+    _alter_item: ($) => choice($.add_column, $.drop_column, $.rename_column),
+
+    add_column: ($) => seq(kw('add'), $.column_definition),
+
+    // The type and settings are the dropped column's shape, written for
+    // reversibility (§migrations).
+    drop_column: ($) =>
+      seq(
+        kw('drop'),
+        field('name', alias($._name, $.column_name)),
+        optional(seq(field('type', $.column_type), optional(field('settings', $.settings_list)))),
+      ),
+
+    rename_column: ($) =>
+      seq(
+        kw('rename'),
+        field('from', alias($._name, $.column_name)),
+        kw('to'),
+        field('to', alias($._name, $.column_name)),
+      ),
+
+    rebuild_table_op: ($) =>
+      seq(kw('rebuild'), kw('table'), field('table', alias($._name, $.table_name)), $._shape_body),
+
+    // Columns and indexes blocks only: no injection, validators, records
+    // or Note (§migrations).
+    _shape_body: ($) =>
+      seq(
+        '{',
+        repeat($._newline),
+        optional(newlineSep1(choice($.column_definition, $.indexes_block), $)),
+        '}',
+      ),
+
+    create_index_op: ($) =>
+      seq(kw('create'), kw('index'), field('table', alias($._name, $.table_name)), $.index_definition),
+
+    drop_index_op: ($) =>
+      seq(kw('drop'), kw('index'), field('table', alias($._name, $.table_name)), $.index_definition),
+
+    exec_op: ($) =>
+      seq(kw('exec'), field('sql', $.string), optional(field('settings', $.settings_list))),
 
     // ==================== Settings (§settings-lists) ====================
 

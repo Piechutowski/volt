@@ -215,18 +215,25 @@ func (c *checker) typeDeclCheck(d *ast.TypeDecl) *TypeInfo {
 	return ti
 }
 
-func (c *checker) typesResolve(ti *TableInfo) {
-	pkIndex := map[string]bool{}
-	for _, ix := range ti.Indexes {
+// pkIndexColumns names the columns of the composite primary key, which
+// are not nullable whatever their settings say (spec §indexes).
+func pkIndexColumns(indexes []*ast.Index) map[string]bool {
+	out := map[string]bool{}
+	for _, ix := range indexes {
 		if ix.Settings.Get("pk") == nil {
 			continue
 		}
 		for _, k := range ix.Key {
 			if id, ok := k.(*ast.Ident); ok {
-				pkIndex[id.Name()] = true
+				out[id.Name()] = true
 			}
 		}
 	}
+	return out
+}
+
+func (c *checker) typesResolve(ti *TableInfo) {
+	pkIndex := pkIndexColumns(ti.Indexes)
 	for _, cd := range ti.Columns {
 		cd.Nullable = isNullable(cd.Col) && !pkIndex[cd.Col.Name.Name()]
 		cd.Type = c.env.resolve(cd.Col.Type)

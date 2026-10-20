@@ -64,6 +64,7 @@ func specLanguage(t *testing.T) *ebnf.Language {
 	blocks := specGrammarBlocks(t)
 	g := &ebnf.Grammar{}
 	lexical := map[string]bool{}
+	tokenShaped := map[string]bool{"slash": true, "migration name": true, "label": true}
 	var va *specBlock
 	for i, b := range blocks {
 		if b.collected() {
@@ -74,7 +75,7 @@ func specLanguage(t *testing.T) *ebnf.Language {
 		}
 		for _, r := range b.g.Rules {
 			switch {
-			case b.section == "Lexical Structure" || r.Name == "slash":
+			case b.section == "Lexical Structure" || tokenShaped[r.Name]:
 				lexical[r.Name] = true
 			}
 			if err := g.Add(r); err != nil {
@@ -116,7 +117,7 @@ func specLanguage(t *testing.T) *ebnf.Language {
 		SameLine: map[string]bool{
 			"settings": true, "table settings": true, "column settings": true, "index settings": true,
 			"ref settings": true, "enum settings": true, "note settings": true,
-			"table group settings": true,
+			"table group settings": true, "migration settings": true,
 		},
 		Specials: map[string]func(rune) bool{
 			"U+000A LINE FEED":      oneOf("\n"),

@@ -142,6 +142,10 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
   - [Selects over groups](#selects-over-groups)
   - [Validators](#validators)
   - [Changesets](#changesets)
+  - [Migrations](#migrations)
+    - [The fold](#the-fold)
+    - [Migration ledger](#migration-ledger)
+    - [Migration tooling](#migration-tooling)
   - [Collected grammar (Part II)](#collected-grammar-part-ii)
   - [Conformance and the proof chain](#conformance-and-the-proof-chain)
 - **Appendices**
@@ -404,11 +408,16 @@ as `Table` acts as a keyword only in keyword position and remains usable as an
 ordinary identifier elsewhere (e.g. a column may be named `table`).
 
 Element-type keywords: `Project`, `Table`, `TablePartial`, `TableGroup`,
-`Enum`, `Type`, `Ref`, `Note`, `Records`, `DiagramView`, `indexes`, `validators`,
-`Tables`, `Notes`, `TableGroups`, `Schemas`.
+`Enum`, `Type`, `Ref`, `Note`, `Records`, `DiagramView`, `Migration`,
+`indexes`, `validators`, `Tables`, `Notes`, `TableGroups`, `Schemas`.
 Clause keywords: `as`, `use`, `reuse`, `from`.
 Value keywords: `true`, `false`, `null`.
 All are case-insensitive (§case-sensitivity-and-terminology).
+
+The words of a migration body (`up`, `down`, `create`, `drop`, `rename`,
+`alter`, `rebuild`, `exec`, `table`, `index`, `add`, `to`) are keywords
+inside a `Migration` only (§migrations); elsewhere they are identifiers,
+so a column may be named `up` or `to`.
 
 ### String Literals
 
@@ -848,6 +857,7 @@ index setting  = "type", ":", identifier
                | "name", ":", string
                | "unique"
                | "pk"
+               | "where", ":", expression literal
                | "note", ":", string ;
 ```
 
@@ -860,6 +870,16 @@ index setting  = "type", ":", identifier
    permitted.
 4. `type` selects the index method. Any identifier is accepted; the
    conventional, portable values are `btree` and `hash`.
+5. **Name.** An index without `name:` whose key is columns only is
+   named `idx_<table>_<col>[_<col>...]` from the SQLite table name
+   and its key columns in order (§mapping-to-sqlite-ddl), so that a
+   schema and a migration (§migrations) name one index one way;
+   `name:` overrides it. An index with an expression atom MUST carry
+   `name:`, since no name derives from an expression. A `pk` index is
+   a table constraint and has no name.
+6. **`where`** takes an expression literal and makes the index
+   partial: the DDL carries it as `WHERE <expr>`, verbatim and
+   SQLite's to judge.
 
 ```volt
 Table bookings {
@@ -870,7 +890,8 @@ Table bookings {
   indexes {
     (id, country) [pk]
     booking_date [name: 'idx_booking_date', type: hash]
-    (country, `lower(country)`) [unique]
+    (country, `lower(country)`) [unique, name: 'idx_bookings_country_ci']
+    booking_date [where: `country <> ''`]
   }
 }
 ```
@@ -1386,6 +1407,7 @@ index settings       = "[", index setting, { ",", index setting }, "]" ;
 index setting        = "type", ":", identifier
                      | "name", ":", string
                      | "unique" | "pk"
+                     | "where", ":", expression literal
                      | "note", ":", string ;
 
 (* ===== 6.7 Ref ===== *)
@@ -2303,7 +2325,9 @@ composed statically and its typed shim parsing parameters per §route-paths
 parameter per §query-routes, calls the query and renders per §formats;
 `Path*` helpers per §route-names-and-reverse-urls; a `Table []volt.Route` mirroring the
 expanded route list in declaration order, with `Query` set on query
-routes; and the client package of §generated-client. All generated files carry the
+routes; and the client package of §generated-client. For a data package that
+declares migrations, `volt_migrations.go` carries them in statement form
+(§migration-tooling). All generated files carry the
 standard generated-code header and are gofmt-stable.
 
 ## Reserved words for future layers
@@ -2797,6 +2821,301 @@ user, err := q.UserUpdate(ctx, cs)
 
 ---
 
+## Migrations
+
+A **migration** is a named list of structural operations, written by
+hand or by a tool over the drift report (§the-fold). Migrations are
+separate from the schema: the schema says what the database is, a
+migration says how one database becomes the next. A migration is not
+checked against the schema operation by operation, since it may say
+anything that was once true; the composition of all of them is
+(§the-fold).
+
+```ebnf
+migration          = "Migration", migration name, [ migration settings ],
+                     "{", migration body, "}" ;
+migration name     = digit, digit, digit, digit, { digit }, "__", label ;
+label              = ( letter | digit ), { letter | digit } ;
+
+migration settings = "[", migration setting, { ",", migration setting }, "]" ;
+migration setting  = "irreversible"
+                   | "no transaction"
+                   | "note", ":", string ;
+
+migration body     = { operation }
+                   | "up", "{", { operation }, "}",
+                     [ "down", "{", { operation }, "}" ] ;
+
+operation          = create table op | drop table op | rename table op
+                   | alter table op  | rebuild table op
+                   | create index op | drop index op
+                   | exec op ;
+
+create table op    = "create", "table", name, "{", shape body, "}" ;
+drop table op      = "drop", "table", name, [ "{", shape body, "}" ], newline ;
+rename table op    = "rename", "table", name, "to", name, newline ;
+
+alter table op     = "alter", "table", name, "{", { alter item }, "}" ;
+alter item         = "add", column
+                   | "drop", name, [ column type, [ column settings ] ], newline
+                   | "rename", name, "to", name, newline ;
+
+rebuild table op   = "rebuild", "table", name, "{", shape body, "}" ;
+
+create index op    = "create", "index", name, index key,
+                     [ index settings ], newline ;
+drop index op      = "drop", "index", name, index key,
+                     [ index settings ], newline ;
+
+exec op            = "exec", string, [ exec settings ], newline ;
+exec settings      = "[", "down", ":", string, "]" ;
+
+shape body         = { column | indexes block } ;
+```
+
+`column`, `column type`, `column settings`, `index key`,
+`index settings` and `indexes block` are the productions of the
+schema core (§columns, §indexes), narrowed by the rules below. The
+words of a migration body (`up`, `down`, `create`, `drop`, `rename`,
+`alter`, `rebuild`, `exec`, `table`, `index`, `add`, `to`) are
+keywords inside a `Migration` only; elsewhere they are identifiers.
+
+```volt
+Migration 0002__users_bio {
+  alter table users {
+    add bio string
+    rename name to full_name
+  }
+  create index users (full_name)
+}
+```
+
+1. **Placement.** A migration is an element of the data package it
+   migrates: the package that declares the tables. It may stand in
+   any `.volt` file of that package, alone, among other migrations,
+   or beside the schema. No file name and no directory is prescribed.
+   A package that declares no tables MUST NOT declare migrations.
+   Migrations are never imported (§imports).
+2. **Name and order.** A migration name is a run of at least four
+   digits, two underscores and a label; it is a plain identifier
+   (§identifiers) and MUST be unique within the package. Migrations
+   apply in byte order of their names, which is numeric order of the
+   run while the runs share a width. The name is the whole order; the
+   file and the position within it carry no meaning
+   (§projects-and-packages). `volt migration new LABEL` mints the
+   next name: one more than the greatest run among the package's
+   migrations, zero-padded to four digits, or wider when the greatest
+   run is wider, then `__`, then the label.
+3. **Self-contained.** A migration references nothing declared
+   elsewhere. Table, column and index names are plain names, not
+   resolved against the schema. A column type MUST be one of the six
+   built-in types (§columns); an enum or a declared type is not a
+   type here, since the database holds its storage type. A partial
+   injection, a `validators` block, a records block and a `Note` are
+   not part of a `shape body`.
+4. **Settings whitelist.** In a migration, a column setting is one of
+   `pk`, `primary key`, `increment`, `null`, `not null`, `unique`,
+   `default:`, `ref:`, `note:`, and in a `rebuild` also `from:` (rule
+   9). An index setting is one of `unique`, `pk`, `name:`, `where:`,
+   `note:`. `tag:`, `required` and `model:` describe Go and are errors
+   here, as is `headercolor:`.
+5. **`create table`.** The body MUST contain at least one column;
+   names are unique within it. It lowers by the DDL mapping exactly
+   as the schema's `Table` does (§mapping-to-sqlite-ddl), index names
+   included.
+6. **`drop table`.** Drops the table and, with it, its indexes. The
+   optional body is the shape being dropped and exists only so that
+   the migration is reversible (rule 12).
+7. **`rename table`.** `ALTER TABLE … RENAME TO`. Foreign keys that
+   reference the table follow it; index names do not, and are kept
+   as they are.
+8. **`alter table`.** Each item is one `ALTER TABLE` statement, in
+   the written order. `add` is `ADD COLUMN` under SQLite's rules,
+   checked here rather than at run time: a `not null` column MUST
+   carry a `default:`; the default MUST be a literal; `pk` and
+   `increment` are errors; `ref:` requires the column to be nullable;
+   `unique` lowers to the added column plus a `CREATE UNIQUE INDEX`
+   on it. `drop` is `DROP COLUMN`; the optional type and settings are
+   the dropped column's shape, for reversibility. `rename` is
+   `RENAME COLUMN`.
+9. **`rebuild table`.** The one operation for every change SQLite
+   cannot `ALTER`: a type, a nullability, a default, a primary key, a
+   foreign key. The body is the new shape. It lowers to: create
+   `<table>__new` from the body; `INSERT INTO <table>__new (<cols>)
+   SELECT <sources> FROM <table>`; `DROP TABLE <table>`; `ALTER TABLE
+   <table>__new RENAME TO <table>`; create every index of the body.
+   The source of a column is, in order: its `from:` expression
+   literal if given; the old column of the same name; its `default:`;
+   `NULL`. A `not null` column whose source is `NULL` is an error.
+   Nothing but the body survives the rebuild: an index not restated
+   in it is gone.
+10. **`create index`, `drop index`.** The index is identified by its
+    table and key exactly as in a schema `indexes` block, so the
+    schema and the migration name the same index the same way: the
+    DDL mapping assigns the name from the table and the key columns,
+    `name:` overrides it, and an index with an expression atom MUST
+    carry `name:` (§indexes). `where:` takes an expression literal and
+    makes the index partial.
+11. **`exec`.** The string is one or more SQL statements run
+    verbatim, for whatever the operations above do not say: a data
+    fix, a view, a trigger, a `PRAGMA`. `down:` is its inverse. With
+    `no transaction` on the migration, `exec` statements run outside
+    any transaction, each on its own.
+12. **Reversibility.** A flat body runs forward as written and
+    backward as the inverses of its operations in reverse order. The
+    inverses are: `create table` and `drop table` with a body;
+    `rename table` and `rename table` reversed; `add` and `drop` with
+    a type; `rename` and `rename` reversed; `create index` and `drop
+    index`; `exec` with `down:` and its `down:`. A flat body with an
+    operation that has no inverse (`drop table` without a body,
+    `drop` without a type, `rebuild table`, `exec` without `down:`)
+    is an error naming that operation, unless the migration is marked
+    `irreversible` or written as `up { } down { }`. A `down` block
+    runs as written; an `up` block without a `down` is irreversible.
+13. **Transactions and foreign keys.** A migration runs in one
+    transaction with the ledger write (§migration-ledger). A
+    migration that contains a `rebuild table` or a `drop table` is
+    bracketed by `PRAGMA foreign_keys = OFF` before `BEGIN`, `PRAGMA
+    foreign_key_check` before `COMMIT`, and `PRAGMA foreign_keys =
+    ON` after; a non-empty check result rolls the migration back. The
+    tool does this; a migration never spells it. `no transaction`
+    disables the bracket and the transaction, for an `exec` that
+    needs it (another `PRAGMA`, `VACUUM`).
+
+### The fold
+
+Migrations are untyped so that they may say anything that was once
+true. What is checked instead is their composition.
+
+1. **Definition.** The fold of a package is the structure of an empty
+   in-memory SQLite database after every migration of the package has
+   been applied in name order. The **target** is the structure of an
+   empty in-memory database after the schema's generated DDL
+   (§mapping-to-sqlite-ddl) has been applied.
+2. **Structure** is, per table: its name; its columns as a set, each
+   with name, declared type, `NOT NULL`, default as SQLite reports it
+   and primary-key membership (`PRAGMA table_xinfo`); its foreign keys
+   (`PRAGMA foreign_key_list`); its indexes with name, uniqueness,
+   partial predicate and key (`PRAGMA index_list`, `PRAGMA
+   index_xinfo`). Nothing else is compared: not column order, not row
+   data, not SQL text, not the order of statements, and never the
+   ledger table (§migration-ledger).
+3. **Drift.** `volt migration check` compares fold and target and
+   reports every difference, table by table, as the operations that
+   would close it. Zero differences is the success condition. `volt
+   gen` runs the same check for a package that declares at least one
+   migration and fails on drift, so a schema edit without its
+   migration never generates; a package without migrations is
+   unmigrated and generates as before.
+4. **Lemma.** Because the fold runs on the engine that will run the
+   migrations, a migration SQLite would refuse (dropping an indexed
+   column, say) is refused at check time, with SQLite's own message.
+   The one run-time exception is a `not null` column added to a
+   table that already has rows, which the fold's empty database
+   cannot see and rule 8 guards by requiring a default.
+5. **Generation.** The drift report is the input of a migration
+   generator: it writes the operations that close the drift as a new
+   `Migration` for the user to edit. A rename is a drop and an add
+   until the user says otherwise. The generator is a tool over the
+   language, not part of it.
+
+### Migration ledger
+
+1. **The table.** Applied migrations are recorded in
+   `volt_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT
+   NULL)`, created on first use. The row is written in the
+   migration's transaction, or, with `no transaction`, after its last
+   statement.
+2. **Pending** is every migration of the package whose name has no
+   row, including one that sorts before an applied one; `status`
+   lists such a migration as out of order and `up` applies it anyway,
+   in name order among the pending.
+3. **Down** removes the applied migration with the greatest name by
+   running its inverse (§migrations rule 12) and deleting its row; an
+   irreversible migration refuses with its name.
+
+### Migration tooling
+
+1. **CLI.** `volt migration new LABEL [DIR]` writes
+   `<name>.volt` holding `package <name>` and an empty `Migration
+   <name> { }` into the package at `DIR` (the current directory when
+   absent); the user may move the element to any file of the
+   package. `volt migration check [DIR]` is the fold (§the-fold).
+   `volt migration up|down|status DSN [DIR]` operate on the SQLite
+   database at `DSN`, a file path or a `file:` URI. `volt migration
+   sql [DIR]` prints every migration's statements in both directions
+   for review. The tool carries its own SQLite (the `mattn/go-sqlite3`
+   driver); the library and the runtime carry none.
+2. **Generated.** For a package that declares migrations, `volt gen`
+   writes `volt_migrations.go` beside the other generated files:
+   `var Migrations = []rt.Migration{…}` in name order, each with its
+   name, up statements, down statements (nil when irreversible) and
+   its transaction and foreign-key bracket flags; and `func
+   Migrate(ctx context.Context, db *sql.DB) error`, which applies
+   every pending migration through `rt.MigrateUp` and is called by
+   nothing unless the application calls it. With it, a binary
+   migrates its own database and a test builds a fresh one with one
+   call, without the `volt` tool or the `.volt` files.
+3. **Runtime.** `rt.Migration` is the statement form of one
+   migration; `rt.MigrateUp(ctx, db, migrations)` applies the pending
+   ones and returns their names; `rt.MigrateDown(ctx, db, migrations)`
+   reverts the last applied one and returns its name; `rt.
+   MigrateStatus(ctx, db, migrations)` lists each migration with
+   whether and when it was applied and whether it is out of order.
+   The CLI's `up`, `down` and `status` are these three over the
+   statements lowered from the `.volt` files.
+4. **No implicit schema change.** Neither `volt gen` nor the runtime
+   ever alters a database from the schema alone. The schema is the
+   target; a migration is the only path to it.
+
+```volt
+package db
+
+Table users {
+  id        int    [pk, increment]
+  email     string [not null, unique, required]
+  full_name string [not null, required]
+  bio       string
+  hits      int    [not null, default: 0]
+
+  validators {
+    EmailShape(email)
+    HitsSane(hits)
+  }
+}
+
+Migration 0001__create_users {
+  create table users {
+    id    int    [pk, increment]
+    email string [not null, unique]
+    name  string [not null]
+    hits  string [not null, default: '0']
+  }
+}
+
+Migration 0002__users_bio_and_int_hits [irreversible] {
+  alter table users {
+    add bio string
+    rename name to full_name
+  }
+  rebuild table users {
+    id        int    [pk, increment]
+    email     string [not null, unique]
+    full_name string [not null]
+    bio       string
+    hits      int    [not null, default: 0, from: `CAST(hits AS INTEGER)`]
+  }
+}
+```
+
+The `validators` block and the two `required` settings changed
+nothing in the database and appear in no migration; they changed
+`UserChangeset.Validate`. The second migration is irreversible
+because the rebuild forgets the old type of `hits`; the first is
+reversible on its own.
+
+---
+
 ## Collected grammar (Part II)
 
 Additions to the collected grammar of Part I, Appendix IA. The
@@ -2805,7 +3124,7 @@ Additions to the collected grammar of Part I, Appendix IA. The
 ```ebnf
 element        = (* Part I Appendix IA alternatives *)
                | package clause | import decl | pipeline | scope
-               | group decl | pred decl | select decl ;
+               | group decl | pred decl | select decl | migration ;
 
 slash          = "/" ;
 
@@ -2838,6 +3157,37 @@ param type     = "int" | "string" ;
 resources      = "resources", table ref, [ settings ], newline ;
 table ref      = name, [ ".", name ] ;
 dataset        = "dataset", [ name, "." ], name, [ settings ], newline ;
+
+migration          = "Migration", migration name, [ migration settings ],
+                     "{", migration body, "}" ;
+migration name     = digit, digit, digit, digit, { digit }, "__", label ;
+label              = ( letter | digit ), { letter | digit } ;
+migration settings = "[", migration setting, { ",", migration setting }, "]" ;
+migration setting  = "irreversible"
+                   | "no transaction"
+                   | "note", ":", string ;
+migration body     = { operation }
+                   | "up", "{", { operation }, "}",
+                     [ "down", "{", { operation }, "}" ] ;
+operation          = create table op | drop table op | rename table op
+                   | alter table op  | rebuild table op
+                   | create index op | drop index op
+                   | exec op ;
+create table op    = "create", "table", name, "{", shape body, "}" ;
+drop table op      = "drop", "table", name, [ "{", shape body, "}" ], newline ;
+rename table op    = "rename", "table", name, "to", name, newline ;
+alter table op     = "alter", "table", name, "{", { alter item }, "}" ;
+alter item         = "add", column
+                   | "drop", name, [ column type, [ column settings ] ], newline
+                   | "rename", name, "to", name, newline ;
+rebuild table op   = "rebuild", "table", name, "{", shape body, "}" ;
+create index op    = "create", "index", name, index key,
+                     [ index settings ], newline ;
+drop index op      = "drop", "index", name, index key,
+                     [ index settings ], newline ;
+exec op            = "exec", string, [ exec settings ], newline ;
+exec settings      = "[", "down", ":", string, "]" ;
+shape body         = { column | indexes block } ;
 
 (* setting value, extended (Part I §settings-lists): *)
 setting value  = (* schema-layer alternatives *) | ident list ;
@@ -3046,6 +3396,7 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 | `pk` column | explicit `NOT NULL` added: SQLite's `PRIMARY KEY` does **not** imply NOT NULL |
 | `int` `[pk, increment]` | exactly `INTEGER PRIMARY KEY` (rowid alias, auto-assigned); SQLite's `AUTOINCREMENT` keyword deliberately avoided — it only adds the never-reuse-an-id bookkeeping the SQLite docs discourage. Any other `increment` placement is a check error (§columns) |
 | composite pk (`[pk]` index) | `PRIMARY KEY (a, b)` table constraint; members get `NOT NULL` |
+| index | `CREATE INDEX <name> ON <table> (<key>)`, `UNIQUE` for `unique`, `WHERE <expr>` for `where:` (§indexes); the name is `name:` when given, else `idx_<table>_<col>[_<col>...]` from the SQLite table name and the key columns; two indexes of one table that derive one name are a generation error |
 | refs (`>`, `<`, `-`) | `FOREIGN KEY … REFERENCES` with `ON DELETE` / `ON UPDATE`; FK side per §relationships-ref |
 | one-to-one (`-`) | adds `UNIQUE` on the FK column unless something already guarantees it |
 | many-to-many (`<>`) | nothing — model the junction table explicitly |

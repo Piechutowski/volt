@@ -17,4 +17,4 @@ CREATE TABLE category_paths (
   FOREIGN KEY (ancestor_id) REFERENCES categories (id),
   FOREIGN KEY (descendant_id) REFERENCES categories (id)
 );
-CREATE INDEX idx_category_paths_1 ON category_paths (descendant_id);
+CREATE INDEX idx_category_paths_descendant_id ON category_paths (descendant_id);
