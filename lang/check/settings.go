@@ -270,7 +270,7 @@ func (c *checker) incrementCheck(ti *TableInfo) {
 				"increment on %q: a composite primary key has no auto-assigned column — SQLite auto-assigns only the single-column integer key (§columns, §mapping-to-sqlite-ddl)", name)
 		case !isPK:
 			c.errorf(inc.Pos(), "columns",
-				"increment on %q: only the primary key auto-increments; elsewhere the keyword would be silently ignored while CreateParams omits the column (§columns, §mapping-to-sqlite-ddl)", name)
+				"increment on %q: only the primary key auto-increments; elsewhere the keyword would be silently ignored while no changeset ever marks the column (§columns, §mapping-to-sqlite-ddl)", name)
 		}
 	}
 }

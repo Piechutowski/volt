@@ -3,11 +3,158 @@
 // Package models contains data models generated from model_override.volt.
 package models
 
+import (
+	"github.com/Piechutowski/volt/nao/rt"
+)
+
 // Menu is a row of the menus table.
 type Menu struct {
 	ID    int     `db:"id" json:"id"`
 	Title string  `db:"title" json:"title"`
 	Price float64 `db:"price" json:"price"`
+}
+
+// MenuColumn is a column handle of Menu, the element of a Cast allow list
+// (spec §changesets).
+type MenuColumn = rt.ColumnOf[Menu]
+
+// MenuParams is a menus write body as the wire carries it (spec §changesets).
+type MenuParams = rt.Params[Menu]
+
+// Typed column handles of Menu: the Cast allow list of a changeset, and
+// the inert predicate, order and assignment builders of the dynamic
+// query layer. A predicate built here can only enter Menu queries;
+// mixing models is a compile error.
+var (
+	MenuID    = rt.Column[Menu, int]{Name: "id"}
+	MenuTitle = rt.Column[Menu, string]{Name: "title"}
+	MenuPrice = rt.Column[Menu, float64]{Name: "price"}
+)
+
+// MenuChangeset carries a menus row, the changes proposed to it and the
+// errors found so far (spec §changesets). It is a value: every method
+// returns a new changeset and leaves its receiver as it was.
+type MenuChangeset struct {
+	data  Menu
+	vals  Menu
+	row   bool
+	set   [3]bool
+	errs  []rt.FieldError
+	valid []rt.FieldError
+}
+
+// MenuNew starts a changeset for a menus row to create.
+func MenuNew() MenuChangeset { return MenuChangeset{} }
+
+// Changeset starts a changeset for an update of r.
+func (r Menu) Changeset() MenuChangeset { return MenuChangeset{data: r, row: true} }
+
+// From marks every data column of r but the auto-increment key.
+func (c MenuChangeset) From(r Menu) MenuChangeset {
+	c = c.TitleSet(r.Title)
+	c = c.PriceSet(r.Price)
+	return c
+}
+
+// TitleSet sets title.
+func (c MenuChangeset) TitleSet(v string) MenuChangeset {
+	c.vals.Title, c.set[1] = v, true
+	return c
+}
+
+// PriceSet sets price.
+func (c MenuChangeset) PriceSet(v float64) MenuChangeset {
+	c.vals.Price, c.set[2] = v, true
+	return c
+}
+
+// Cast sets every column of allow that p carries, recording a cast
+// error for a value that does not convert and an unknown_field error
+// for a key that names no column (spec §changesets).
+func (c MenuChangeset) Cast(p MenuParams, allow ...MenuColumn) MenuChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "title", "price")...)
+	for _, col := range allow {
+		switch col.ColumnName() {
+		case "title":
+			if v, ok, err := rt.Field(p, "title", false, func(r *Menu) string { return r.Title }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "title")
+			} else if ok {
+				c = c.TitleSet(v)
+			}
+		case "price":
+			if v, ok, err := rt.Field(p, "price", false, func(r *Menu) float64 { return r.Price }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "price")
+			} else if ok {
+				c = c.PriceSet(v)
+			}
+		}
+	}
+	return c
+}
+
+// Changed reports whether col was set.
+func (c MenuChangeset) Changed(col MenuColumn) bool {
+	switch col.ColumnName() {
+	case "id":
+		return c.set[0]
+	case "title":
+		return c.set[1]
+	case "price":
+		return c.set[2]
+	}
+	return false
+}
+
+// Row is the data with the changes applied.
+func (c MenuChangeset) Row() Menu {
+	r := c.data
+	if c.set[1] {
+		r.Title = c.vals.Title
+	}
+	if c.set[2] {
+		r.Price = c.vals.Price
+	}
+	return r
+}
+
+// Params is the changes of c as a write body.
+func (c MenuChangeset) Params() MenuParams {
+	var set []string
+	if c.set[1] {
+		set = append(set, "title")
+	}
+	if c.set[2] {
+		set = append(set, "price")
+	}
+	return rt.ParamsOf(c.Row(), set)
+}
+
+// ErrorAdd records a field error with check custom on col.
+func (c MenuChangeset) ErrorAdd(col MenuColumn, msg string) MenuChangeset {
+	return c.errorAdd("custom", msg, col.ColumnName())
+}
+
+func (c MenuChangeset) errorAdd(check, msg string, cols ...string) MenuChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.FieldError{Check: check, Columns: cols, Message: msg})
+	return c
+}
+
+// Errors lists every field error recorded so far: casts and custom
+// errors first, then the last Validate's findings.
+func (c MenuChangeset) Errors() []rt.FieldError {
+	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
+}
+
+// Valid reports whether no field error was recorded.
+func (c MenuChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
+
+// Err is nil when c is valid and otherwise the *rt.Invalid carrying its
+// field errors.
+func (c MenuChangeset) Err() error {
+	if c.Valid() {
+		return nil
+	}
+	return &rt.Invalid{Model: "Menu", Fields: c.Errors()}
 }
 
 // OrderStatus is a row of the order_status table.
@@ -18,28 +165,144 @@ type OrderStatus struct {
 	Label string `db:"label" json:"label"`
 }
 
-// MenuCreateParams are the caller-supplied columns of MenuCreate. The
-// auto-increment key and defaulted columns are the database's job.
-type MenuCreateParams struct {
-	Title string `db:"title" json:"title"`
+// OrderStatusColumn is a column handle of OrderStatus, the element of a Cast allow list
+// (spec §changesets).
+type OrderStatusColumn = rt.ColumnOf[OrderStatus]
+
+// OrderStatusParams is a order_status write body as the wire carries it (spec §changesets).
+type OrderStatusParams = rt.Params[OrderStatus]
+
+// Typed column handles of OrderStatus: the Cast allow list of a changeset, and
+// the inert predicate, order and assignment builders of the dynamic
+// query layer. A predicate built here can only enter OrderStatus queries;
+// mixing models is a compile error.
+var (
+	OrderStatusCode  = rt.Column[OrderStatus, string]{Name: "code"}
+	OrderStatusLabel = rt.Column[OrderStatus, string]{Name: "label"}
+)
+
+// OrderStatusChangeset carries a order_status row, the changes proposed to it and the
+// errors found so far (spec §changesets). It is a value: every method
+// returns a new changeset and leaves its receiver as it was.
+type OrderStatusChangeset struct {
+	data  OrderStatus
+	vals  OrderStatus
+	row   bool
+	set   [2]bool
+	errs  []rt.FieldError
+	valid []rt.FieldError
 }
 
-// MenuUpdateParams are the data columns of MenuUpdate: every column
-// outside the primary key.
-type MenuUpdateParams struct {
-	Title string  `db:"title" json:"title"`
-	Price float64 `db:"price" json:"price"`
+// OrderStatusNew starts a changeset for a order_status row to create.
+func OrderStatusNew() OrderStatusChangeset { return OrderStatusChangeset{} }
+
+// Changeset starts a changeset for an update of r.
+func (r OrderStatus) Changeset() OrderStatusChangeset {
+	return OrderStatusChangeset{data: r, row: true}
 }
 
-// OrderStatusCreateParams are the caller-supplied columns of OrderStatusCreate. The
-// auto-increment key and defaulted columns are the database's job.
-type OrderStatusCreateParams struct {
-	Code  string `db:"code" json:"code"`
-	Label string `db:"label" json:"label"`
+// From marks every data column of r but the auto-increment key.
+func (c OrderStatusChangeset) From(r OrderStatus) OrderStatusChangeset {
+	c = c.CodeSet(r.Code)
+	c = c.LabelSet(r.Label)
+	return c
 }
 
-// OrderStatusUpdateParams are the data columns of OrderStatusUpdate: every column
-// outside the primary key.
-type OrderStatusUpdateParams struct {
-	Label string `db:"label" json:"label"`
+// CodeSet sets code.
+func (c OrderStatusChangeset) CodeSet(v string) OrderStatusChangeset {
+	c.vals.Code, c.set[0] = v, true
+	return c
+}
+
+// LabelSet sets label.
+func (c OrderStatusChangeset) LabelSet(v string) OrderStatusChangeset {
+	c.vals.Label, c.set[1] = v, true
+	return c
+}
+
+// Cast sets every column of allow that p carries, recording a cast
+// error for a value that does not convert and an unknown_field error
+// for a key that names no column (spec §changesets).
+func (c OrderStatusChangeset) Cast(p OrderStatusParams, allow ...OrderStatusColumn) OrderStatusChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "code", "label")...)
+	for _, col := range allow {
+		switch col.ColumnName() {
+		case "code":
+			if v, ok, err := rt.Field(p, "code", false, func(r *OrderStatus) string { return r.Code }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "code")
+			} else if ok {
+				c = c.CodeSet(v)
+			}
+		case "label":
+			if v, ok, err := rt.Field(p, "label", false, func(r *OrderStatus) string { return r.Label }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "label")
+			} else if ok {
+				c = c.LabelSet(v)
+			}
+		}
+	}
+	return c
+}
+
+// Changed reports whether col was set.
+func (c OrderStatusChangeset) Changed(col OrderStatusColumn) bool {
+	switch col.ColumnName() {
+	case "code":
+		return c.set[0]
+	case "label":
+		return c.set[1]
+	}
+	return false
+}
+
+// Row is the data with the changes applied.
+func (c OrderStatusChangeset) Row() OrderStatus {
+	r := c.data
+	if c.set[0] {
+		r.Code = c.vals.Code
+	}
+	if c.set[1] {
+		r.Label = c.vals.Label
+	}
+	return r
+}
+
+// Params is the changes of c as a write body.
+func (c OrderStatusChangeset) Params() OrderStatusParams {
+	var set []string
+	if c.set[0] {
+		set = append(set, "code")
+	}
+	if c.set[1] {
+		set = append(set, "label")
+	}
+	return rt.ParamsOf(c.Row(), set)
+}
+
+// ErrorAdd records a field error with check custom on col.
+func (c OrderStatusChangeset) ErrorAdd(col OrderStatusColumn, msg string) OrderStatusChangeset {
+	return c.errorAdd("custom", msg, col.ColumnName())
+}
+
+func (c OrderStatusChangeset) errorAdd(check, msg string, cols ...string) OrderStatusChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.FieldError{Check: check, Columns: cols, Message: msg})
+	return c
+}
+
+// Errors lists every field error recorded so far: casts and custom
+// errors first, then the last Validate's findings.
+func (c OrderStatusChangeset) Errors() []rt.FieldError {
+	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
+}
+
+// Valid reports whether no field error was recorded.
+func (c OrderStatusChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
+
+// Err is nil when c is valid and otherwise the *rt.Invalid carrying its
+// field errors.
+func (c OrderStatusChangeset) Err() error {
+	if c.Valid() {
+		return nil
+	}
+	return &rt.Invalid{Model: "OrderStatus", Fields: c.Errors()}
 }

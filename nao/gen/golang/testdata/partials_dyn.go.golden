@@ -5,24 +5,11 @@ package models
 import (
 	"context"
 	"github.com/Piechutowski/volt/nao/rt"
-	"time"
 )
 
 const (
 	invoiceTableSQL   = `"invoices"`
 	invoiceColumnsSQL = `"id", "total", "created_at", "updated_at", "deleted_at"`
-)
-
-// Typed column handles of Invoice: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter Invoice queries; mixing models is a compile
-// error.
-var (
-	InvoiceID        = rt.Column[Invoice, int]{Name: "id"}
-	InvoiceTotal     = rt.Column[Invoice, float64]{Name: "total"}
-	InvoiceCreatedAt = rt.Column[Invoice, time.Time]{Name: "created_at"}
-	InvoiceUpdatedAt = rt.NullColumn[Invoice, time.Time]{Column: rt.Column[Invoice, time.Time]{Name: "updated_at"}}
-	InvoiceDeletedAt = rt.NullColumn[Invoice, time.Time]{Column: rt.Column[Invoice, time.Time]{Name: "deleted_at"}}
 )
 
 // InvoiceLimit caps how many rows InvoiceQuery returns.

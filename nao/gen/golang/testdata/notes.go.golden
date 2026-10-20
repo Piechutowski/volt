@@ -38,45 +38,335 @@ type Post struct {
 	PublishedAt rt.Null[time.Time] `db:"published_at" json:"published_at"`
 }
 
+// PostColumn is a column handle of Post, the element of a Cast allow list
+// (spec §changesets).
+type PostColumn = rt.ColumnOf[Post]
+
+// PostParams is a posts write body as the wire carries it (spec §changesets).
+type PostParams = rt.Params[Post]
+
+// Typed column handles of Post: the Cast allow list of a changeset, and
+// the inert predicate, order and assignment builders of the dynamic
+// query layer. A predicate built here can only enter Post queries;
+// mixing models is a compile error.
+var (
+	PostID          = rt.Column[Post, int]{Name: "id"}
+	PostTitle       = rt.Column[Post, string]{Name: "title"}
+	PostStatus      = rt.Column[Post, EPostStatus]{Name: "status"}
+	PostBody        = rt.NullColumn[Post, string]{Column: rt.Column[Post, string]{Name: "body"}}
+	PostPublishedAt = rt.NullColumn[Post, time.Time]{Column: rt.Column[Post, time.Time]{Name: "published_at"}}
+)
+
+// PostChangeset carries a posts row, the changes proposed to it and the
+// errors found so far (spec §changesets). It is a value: every method
+// returns a new changeset and leaves its receiver as it was.
+type PostChangeset struct {
+	data  Post
+	vals  Post
+	row   bool
+	set   [5]bool
+	errs  []rt.FieldError
+	valid []rt.FieldError
+}
+
+// PostNew starts a changeset for a posts row to create.
+func PostNew() PostChangeset { return PostChangeset{} }
+
+// Changeset starts a changeset for an update of r.
+func (r Post) Changeset() PostChangeset { return PostChangeset{data: r, row: true} }
+
+// From marks every data column of r but the auto-increment key.
+func (c PostChangeset) From(r Post) PostChangeset {
+	c = c.TitleSet(r.Title)
+	c = c.StatusSet(r.Status)
+	c = c.BodySet(r.Body)
+	c = c.PublishedAtSet(r.PublishedAt)
+	return c
+}
+
+// TitleSet sets title.
+func (c PostChangeset) TitleSet(v string) PostChangeset {
+	c.vals.Title, c.set[1] = v, true
+	return c
+}
+
+// StatusSet sets status.
+func (c PostChangeset) StatusSet(v EPostStatus) PostChangeset {
+	c.vals.Status, c.set[2] = v, true
+	return c
+}
+
+// BodySet sets body; an invalid rt.Null sets NULL.
+func (c PostChangeset) BodySet(v rt.Null[string]) PostChangeset {
+	c.vals.Body, c.set[3] = v, true
+	return c
+}
+
+// PublishedAtSet sets published_at; an invalid rt.Null sets NULL.
+func (c PostChangeset) PublishedAtSet(v rt.Null[time.Time]) PostChangeset {
+	c.vals.PublishedAt, c.set[4] = v, true
+	return c
+}
+
+// Cast sets every column of allow that p carries, recording a cast
+// error for a value that does not convert and an unknown_field error
+// for a key that names no column (spec §changesets).
+func (c PostChangeset) Cast(p PostParams, allow ...PostColumn) PostChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "title", "status", "body", "published_at")...)
+	for _, col := range allow {
+		switch col.ColumnName() {
+		case "title":
+			if v, ok, err := rt.Field(p, "title", false, func(r *Post) string { return r.Title }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "title")
+			} else if ok {
+				c = c.TitleSet(v)
+			}
+		case "status":
+			if v, ok, err := rt.Field(p, "status", false, func(r *Post) EPostStatus { return r.Status }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "status")
+			} else if ok {
+				c = c.StatusSet(v)
+			}
+		case "body":
+			if v, ok, err := rt.Field(p, "body", true, func(r *Post) rt.Null[string] { return r.Body }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "body")
+			} else if ok {
+				c = c.BodySet(v)
+			}
+		case "published_at":
+			if v, ok, err := rt.Field(p, "published_at", true, func(r *Post) rt.Null[time.Time] { return r.PublishedAt }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "published_at")
+			} else if ok {
+				c = c.PublishedAtSet(v)
+			}
+		}
+	}
+	return c
+}
+
+// Changed reports whether col was set.
+func (c PostChangeset) Changed(col PostColumn) bool {
+	switch col.ColumnName() {
+	case "id":
+		return c.set[0]
+	case "title":
+		return c.set[1]
+	case "status":
+		return c.set[2]
+	case "body":
+		return c.set[3]
+	case "published_at":
+		return c.set[4]
+	}
+	return false
+}
+
+// Row is the data with the changes applied.
+func (c PostChangeset) Row() Post {
+	r := c.data
+	if c.set[1] {
+		r.Title = c.vals.Title
+	}
+	if c.set[2] {
+		r.Status = c.vals.Status
+	}
+	if c.set[3] {
+		r.Body = c.vals.Body
+	}
+	if c.set[4] {
+		r.PublishedAt = c.vals.PublishedAt
+	}
+	return r
+}
+
+// Params is the changes of c as a write body.
+func (c PostChangeset) Params() PostParams {
+	var set []string
+	if c.set[1] {
+		set = append(set, "title")
+	}
+	if c.set[2] {
+		set = append(set, "status")
+	}
+	if c.set[3] {
+		set = append(set, "body")
+	}
+	if c.set[4] {
+		set = append(set, "published_at")
+	}
+	return rt.ParamsOf(c.Row(), set)
+}
+
+// ErrorAdd records a field error with check custom on col.
+func (c PostChangeset) ErrorAdd(col PostColumn, msg string) PostChangeset {
+	return c.errorAdd("custom", msg, col.ColumnName())
+}
+
+func (c PostChangeset) errorAdd(check, msg string, cols ...string) PostChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.FieldError{Check: check, Columns: cols, Message: msg})
+	return c
+}
+
+// Errors lists every field error recorded so far: casts and custom
+// errors first, then the last Validate's findings.
+func (c PostChangeset) Errors() []rt.FieldError {
+	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
+}
+
+// Valid reports whether no field error was recorded.
+func (c PostChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
+
+// Err is nil when c is valid and otherwise the *rt.Invalid carrying its
+// field errors.
+func (c PostChangeset) Err() error {
+	if c.Valid() {
+		return nil
+	}
+	return &rt.Invalid{Model: "Post", Fields: c.Errors()}
+}
+
 // Tag is a row of the tags table.
 type Tag struct {
 	ID   int    `db:"id" json:"id"`
 	Name string `db:"name" json:"name"`
 }
 
-// PostCreateParams are the caller-supplied columns of PostCreate. The
-// auto-increment key and defaulted columns are the database's job.
-type PostCreateParams struct {
-	// Shown in lists and in the HTML title tag
-	Title  string      `db:"title" json:"title"`
-	Status EPostStatus `db:"status" json:"status"`
-	// Raw markdown source.
-	// Rendered to HTML at publish time.
-	Body        rt.Null[string]    `db:"body" json:"body"`
-	PublishedAt rt.Null[time.Time] `db:"published_at" json:"published_at"`
+// TagColumn is a column handle of Tag, the element of a Cast allow list
+// (spec §changesets).
+type TagColumn = rt.ColumnOf[Tag]
+
+// TagParams is a tags write body as the wire carries it (spec §changesets).
+type TagParams = rt.Params[Tag]
+
+// Typed column handles of Tag: the Cast allow list of a changeset, and
+// the inert predicate, order and assignment builders of the dynamic
+// query layer. A predicate built here can only enter Tag queries;
+// mixing models is a compile error.
+var (
+	TagID   = rt.Column[Tag, int]{Name: "id"}
+	TagName = rt.Column[Tag, string]{Name: "name"}
+)
+
+// TagChangeset carries a tags row, the changes proposed to it and the
+// errors found so far (spec §changesets). It is a value: every method
+// returns a new changeset and leaves its receiver as it was.
+type TagChangeset struct {
+	data  Tag
+	vals  Tag
+	row   bool
+	set   [2]bool
+	errs  []rt.FieldError
+	valid []rt.FieldError
 }
 
-// PostUpdateParams are the data columns of PostUpdate: every column
-// outside the primary key.
-type PostUpdateParams struct {
-	// Shown in lists and in the HTML title tag
-	Title  string      `db:"title" json:"title"`
-	Status EPostStatus `db:"status" json:"status"`
-	// Raw markdown source.
-	// Rendered to HTML at publish time.
-	Body        rt.Null[string]    `db:"body" json:"body"`
-	PublishedAt rt.Null[time.Time] `db:"published_at" json:"published_at"`
+// TagNew starts a changeset for a tags row to create.
+func TagNew() TagChangeset { return TagChangeset{} }
+
+// Changeset starts a changeset for an update of r.
+func (r Tag) Changeset() TagChangeset { return TagChangeset{data: r, row: true} }
+
+// From marks every data column of r but the auto-increment key.
+func (c TagChangeset) From(r Tag) TagChangeset {
+	c = c.IDSet(r.ID)
+	c = c.NameSet(r.Name)
+	return c
 }
 
-// TagCreateParams are the caller-supplied columns of TagCreate. The
-// auto-increment key and defaulted columns are the database's job.
-type TagCreateParams struct {
-	ID   int    `db:"id" json:"id"`
-	Name string `db:"name" json:"name"`
+// IDSet sets id.
+func (c TagChangeset) IDSet(v int) TagChangeset {
+	c.vals.ID, c.set[0] = v, true
+	return c
 }
 
-// TagUpdateParams are the data columns of TagUpdate: every column
-// outside the primary key.
-type TagUpdateParams struct {
-	Name string `db:"name" json:"name"`
+// NameSet sets name.
+func (c TagChangeset) NameSet(v string) TagChangeset {
+	c.vals.Name, c.set[1] = v, true
+	return c
+}
+
+// Cast sets every column of allow that p carries, recording a cast
+// error for a value that does not convert and an unknown_field error
+// for a key that names no column (spec §changesets).
+func (c TagChangeset) Cast(p TagParams, allow ...TagColumn) TagChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "name")...)
+	for _, col := range allow {
+		switch col.ColumnName() {
+		case "id":
+			if v, ok, err := rt.Field(p, "id", false, func(r *Tag) int { return r.ID }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "id")
+			} else if ok {
+				c = c.IDSet(v)
+			}
+		case "name":
+			if v, ok, err := rt.Field(p, "name", false, func(r *Tag) string { return r.Name }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "name")
+			} else if ok {
+				c = c.NameSet(v)
+			}
+		}
+	}
+	return c
+}
+
+// Changed reports whether col was set.
+func (c TagChangeset) Changed(col TagColumn) bool {
+	switch col.ColumnName() {
+	case "id":
+		return c.set[0]
+	case "name":
+		return c.set[1]
+	}
+	return false
+}
+
+// Row is the data with the changes applied.
+func (c TagChangeset) Row() Tag {
+	r := c.data
+	if c.set[0] {
+		r.ID = c.vals.ID
+	}
+	if c.set[1] {
+		r.Name = c.vals.Name
+	}
+	return r
+}
+
+// Params is the changes of c as a write body.
+func (c TagChangeset) Params() TagParams {
+	var set []string
+	if c.set[0] {
+		set = append(set, "id")
+	}
+	if c.set[1] {
+		set = append(set, "name")
+	}
+	return rt.ParamsOf(c.Row(), set)
+}
+
+// ErrorAdd records a field error with check custom on col.
+func (c TagChangeset) ErrorAdd(col TagColumn, msg string) TagChangeset {
+	return c.errorAdd("custom", msg, col.ColumnName())
+}
+
+func (c TagChangeset) errorAdd(check, msg string, cols ...string) TagChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.FieldError{Check: check, Columns: cols, Message: msg})
+	return c
+}
+
+// Errors lists every field error recorded so far: casts and custom
+// errors first, then the last Validate's findings.
+func (c TagChangeset) Errors() []rt.FieldError {
+	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
+}
+
+// Valid reports whether no field error was recorded.
+func (c TagChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
+
+// Err is nil when c is valid and otherwise the *rt.Invalid carrying its
+// field errors.
+func (c TagChangeset) Err() error {
+	if c.Valid() {
+		return nil
+	}
+	return &rt.Invalid{Model: "Tag", Fields: c.Errors()}
 }

@@ -20,25 +20,208 @@ type Invoice struct {
 	DeletedAt rt.Null[time.Time] `db:"deleted_at" json:"deleted_at"`
 }
 
-// InvoiceCreateParams are the caller-supplied columns of InvoiceCreate. The
-// auto-increment key and defaulted columns are the database's job.
-type InvoiceCreateParams struct {
-	ID    int     `db:"id" json:"id"`
-	Total float64 `db:"total" json:"total"`
-	// NULL until first update
-	UpdatedAt rt.Null[time.Time] `db:"updated_at" json:"updated_at"`
-	// Override: also records who deleted, see audit log
-	DeletedAt rt.Null[time.Time] `db:"deleted_at" json:"deleted_at"`
+// InvoiceColumn is a column handle of Invoice, the element of a Cast allow list
+// (spec §changesets).
+type InvoiceColumn = rt.ColumnOf[Invoice]
+
+// InvoiceParams is a invoices write body as the wire carries it (spec §changesets).
+type InvoiceParams = rt.Params[Invoice]
+
+// Typed column handles of Invoice: the Cast allow list of a changeset, and
+// the inert predicate, order and assignment builders of the dynamic
+// query layer. A predicate built here can only enter Invoice queries;
+// mixing models is a compile error.
+var (
+	InvoiceID        = rt.Column[Invoice, int]{Name: "id"}
+	InvoiceTotal     = rt.Column[Invoice, float64]{Name: "total"}
+	InvoiceCreatedAt = rt.Column[Invoice, time.Time]{Name: "created_at"}
+	InvoiceUpdatedAt = rt.NullColumn[Invoice, time.Time]{Column: rt.Column[Invoice, time.Time]{Name: "updated_at"}}
+	InvoiceDeletedAt = rt.NullColumn[Invoice, time.Time]{Column: rt.Column[Invoice, time.Time]{Name: "deleted_at"}}
+)
+
+// InvoiceChangeset carries a invoices row, the changes proposed to it and the
+// errors found so far (spec §changesets). It is a value: every method
+// returns a new changeset and leaves its receiver as it was.
+type InvoiceChangeset struct {
+	data  Invoice
+	vals  Invoice
+	row   bool
+	set   [5]bool
+	errs  []rt.FieldError
+	valid []rt.FieldError
 }
 
-// InvoiceUpdateParams are the data columns of InvoiceUpdate: every column
-// outside the primary key.
-type InvoiceUpdateParams struct {
-	Total float64 `db:"total" json:"total"`
-	// Set on insert
-	CreatedAt time.Time `db:"created_at" json:"created_at"`
-	// NULL until first update
-	UpdatedAt rt.Null[time.Time] `db:"updated_at" json:"updated_at"`
-	// Override: also records who deleted, see audit log
-	DeletedAt rt.Null[time.Time] `db:"deleted_at" json:"deleted_at"`
+// InvoiceNew starts a changeset for a invoices row to create.
+func InvoiceNew() InvoiceChangeset { return InvoiceChangeset{} }
+
+// Changeset starts a changeset for an update of r.
+func (r Invoice) Changeset() InvoiceChangeset { return InvoiceChangeset{data: r, row: true} }
+
+// From marks every data column of r but the auto-increment key.
+func (c InvoiceChangeset) From(r Invoice) InvoiceChangeset {
+	c = c.IDSet(r.ID)
+	c = c.TotalSet(r.Total)
+	c = c.CreatedAtSet(r.CreatedAt)
+	c = c.UpdatedAtSet(r.UpdatedAt)
+	c = c.DeletedAtSet(r.DeletedAt)
+	return c
+}
+
+// IDSet sets id.
+func (c InvoiceChangeset) IDSet(v int) InvoiceChangeset {
+	c.vals.ID, c.set[0] = v, true
+	return c
+}
+
+// TotalSet sets total.
+func (c InvoiceChangeset) TotalSet(v float64) InvoiceChangeset {
+	c.vals.Total, c.set[1] = v, true
+	return c
+}
+
+// CreatedAtSet sets created_at.
+func (c InvoiceChangeset) CreatedAtSet(v time.Time) InvoiceChangeset {
+	c.vals.CreatedAt, c.set[2] = v, true
+	return c
+}
+
+// UpdatedAtSet sets updated_at; an invalid rt.Null sets NULL.
+func (c InvoiceChangeset) UpdatedAtSet(v rt.Null[time.Time]) InvoiceChangeset {
+	c.vals.UpdatedAt, c.set[3] = v, true
+	return c
+}
+
+// DeletedAtSet sets deleted_at; an invalid rt.Null sets NULL.
+func (c InvoiceChangeset) DeletedAtSet(v rt.Null[time.Time]) InvoiceChangeset {
+	c.vals.DeletedAt, c.set[4] = v, true
+	return c
+}
+
+// Cast sets every column of allow that p carries, recording a cast
+// error for a value that does not convert and an unknown_field error
+// for a key that names no column (spec §changesets).
+func (c InvoiceChangeset) Cast(p InvoiceParams, allow ...InvoiceColumn) InvoiceChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "total", "created_at", "updated_at", "deleted_at")...)
+	for _, col := range allow {
+		switch col.ColumnName() {
+		case "id":
+			if v, ok, err := rt.Field(p, "id", false, func(r *Invoice) int { return r.ID }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "id")
+			} else if ok {
+				c = c.IDSet(v)
+			}
+		case "total":
+			if v, ok, err := rt.Field(p, "total", false, func(r *Invoice) float64 { return r.Total }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "total")
+			} else if ok {
+				c = c.TotalSet(v)
+			}
+		case "created_at":
+			if v, ok, err := rt.Field(p, "created_at", false, func(r *Invoice) time.Time { return r.CreatedAt }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "created_at")
+			} else if ok {
+				c = c.CreatedAtSet(v)
+			}
+		case "updated_at":
+			if v, ok, err := rt.Field(p, "updated_at", true, func(r *Invoice) rt.Null[time.Time] { return r.UpdatedAt }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "updated_at")
+			} else if ok {
+				c = c.UpdatedAtSet(v)
+			}
+		case "deleted_at":
+			if v, ok, err := rt.Field(p, "deleted_at", true, func(r *Invoice) rt.Null[time.Time] { return r.DeletedAt }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "deleted_at")
+			} else if ok {
+				c = c.DeletedAtSet(v)
+			}
+		}
+	}
+	return c
+}
+
+// Changed reports whether col was set.
+func (c InvoiceChangeset) Changed(col InvoiceColumn) bool {
+	switch col.ColumnName() {
+	case "id":
+		return c.set[0]
+	case "total":
+		return c.set[1]
+	case "created_at":
+		return c.set[2]
+	case "updated_at":
+		return c.set[3]
+	case "deleted_at":
+		return c.set[4]
+	}
+	return false
+}
+
+// Row is the data with the changes applied.
+func (c InvoiceChangeset) Row() Invoice {
+	r := c.data
+	if c.set[0] {
+		r.ID = c.vals.ID
+	}
+	if c.set[1] {
+		r.Total = c.vals.Total
+	}
+	if c.set[2] {
+		r.CreatedAt = c.vals.CreatedAt
+	}
+	if c.set[3] {
+		r.UpdatedAt = c.vals.UpdatedAt
+	}
+	if c.set[4] {
+		r.DeletedAt = c.vals.DeletedAt
+	}
+	return r
+}
+
+// Params is the changes of c as a write body.
+func (c InvoiceChangeset) Params() InvoiceParams {
+	var set []string
+	if c.set[0] {
+		set = append(set, "id")
+	}
+	if c.set[1] {
+		set = append(set, "total")
+	}
+	if c.set[2] {
+		set = append(set, "created_at")
+	}
+	if c.set[3] {
+		set = append(set, "updated_at")
+	}
+	if c.set[4] {
+		set = append(set, "deleted_at")
+	}
+	return rt.ParamsOf(c.Row(), set)
+}
+
+// ErrorAdd records a field error with check custom on col.
+func (c InvoiceChangeset) ErrorAdd(col InvoiceColumn, msg string) InvoiceChangeset {
+	return c.errorAdd("custom", msg, col.ColumnName())
+}
+
+func (c InvoiceChangeset) errorAdd(check, msg string, cols ...string) InvoiceChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.FieldError{Check: check, Columns: cols, Message: msg})
+	return c
+}
+
+// Errors lists every field error recorded so far: casts and custom
+// errors first, then the last Validate's findings.
+func (c InvoiceChangeset) Errors() []rt.FieldError {
+	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
+}
+
+// Valid reports whether no field error was recorded.
+func (c InvoiceChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
+
+// Err is nil when c is valid and otherwise the *rt.Invalid carrying its
+// field errors.
+func (c InvoiceChangeset) Err() error {
+	if c.Valid() {
+		return nil
+	}
+	return &rt.Invalid{Model: "Invoice", Fields: c.Errors()}
 }

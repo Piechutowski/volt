@@ -19,10 +19,11 @@ type Queries struct {
 // New returns Queries running on db.
 func New(db rt.DBTX) *Queries { return &Queries{db: db} }
 
-// WithCache returns a copy of q whose dynamic queries (Query, Count,
-// Exists, DeleteWhere, UpdateWhere) run through cache: identical option
-// shapes render identical SQL, prepared once. Bind a cache to a
-// *sql.DB, never a transaction.
+// WithCache returns a copy of q whose run-time rendered statements (the
+// changeset writes Create and Update, and the dynamic Query, Count,
+// Exists, DeleteWhere, UpdateWhere) run through cache: identical shapes
+// render identical SQL, prepared once. Bind a cache to a *sql.DB, never
+// a transaction.
 func (q *Queries) WithCache(cache *rt.StmtCache) *Queries {
 	return &Queries{db: q.db, cache: cache}
 }
@@ -38,14 +39,10 @@ func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 	return rt.Tx(ctx, q.db, func(tx *sql.Tx) error { return fn(q.WithTx(tx)) })
 }
 
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
-func menuScan(r rowScanner) (Menu, error) {
+func menuScan(r rt.Row) (Menu, error) {
 	var v Menu
 	err := r.Scan(&v.ID, &v.Title, &v.Price)
-	return v, rt.Constraint(err)
+	return v, rt.Refused("Menu", err)
 }
 
 const menuGetSQL = `SELECT "id", "title", "price" FROM "menus" WHERE "id" = :id`
@@ -104,26 +101,58 @@ func (q *Queries) MenuList(ctx context.Context) ([]Menu, error) {
 	return out, rows.Err()
 }
 
-const menuCreateSQL = `INSERT INTO "menus" ("title") VALUES (:title) RETURNING "id", "title", "price"`
-
-// MenuCreate inserts a menus row and returns the row the database wrote,
-// generated keys and defaults filled in.
-func (q *Queries) MenuCreate(ctx context.Context, arg MenuCreateParams) (Menu, error) {
-	return menuScan(q.db.QueryRowContext(ctx, menuCreateSQL,
-		sql.Named("title", arg.Title),
-	))
+// MenuCreate validates c and inserts its marked columns, returning the
+// stored menus row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) MenuCreate(ctx context.Context, c MenuChangeset) (Menu, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return Menu{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "title"), append(args, v.Title)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "price"), append(args, v.Price)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(menuTableSQL, cols, menuColumnsSQL), args...)
+	if err != nil {
+		return Menu{}, err
+	}
+	return menuScan(row)
 }
 
-const menuUpdateSQL = `UPDATE "menus" SET "title" = :title, "price" = :price WHERE "id" = :id RETURNING "id", "title", "price"`
-
-// MenuUpdate rewrites every non-key column of the identified menus row
-// and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) MenuUpdate(ctx context.Context, id int, arg MenuUpdateParams) (Menu, error) {
-	return menuScan(q.db.QueryRowContext(ctx, menuUpdateSQL,
-		sql.Named("id", id),
-		sql.Named("title", arg.Title),
-		sql.Named("price", arg.Price),
-	))
+// MenuUpdate validates c and writes its marked columns to the menus row it
+// was made from, returning the stored row; nothing marked returns the row
+// untouched (spec §changesets).
+func (q *Queries) MenuUpdate(ctx context.Context, c MenuChangeset) (Menu, error) {
+	if !c.row {
+		return Menu{}, rt.ErrNoRow
+	}
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return Menu{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "title"), append(args, v.Title)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "price"), append(args, v.Price)
+	}
+	if len(cols) == 0 {
+		return v, nil
+	}
+	args = append(args, c.data.ID)
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(menuTableSQL, cols, []string{"id"}, menuColumnsSQL), args...)
+	if err != nil {
+		return Menu{}, err
+	}
+	return menuScan(row)
 }
 
 const menuDeleteSQL = `DELETE FROM "menus" WHERE "id" = :id`
@@ -133,7 +162,7 @@ const menuDeleteSQL = `DELETE FROM "menus" WHERE "id" = :id`
 func (q *Queries) MenuDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, menuDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return rt.Constraint(err)
+		return rt.Refused("Menu", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -145,10 +174,10 @@ func (q *Queries) MenuDelete(ctx context.Context, id int) error {
 	return nil
 }
 
-func orderStatusScan(r rowScanner) (OrderStatus, error) {
+func orderStatusScan(r rt.Row) (OrderStatus, error) {
 	var v OrderStatus
 	err := r.Scan(&v.Code, &v.Label)
-	return v, rt.Constraint(err)
+	return v, rt.Refused("OrderStatus", err)
 }
 
 const orderStatusGetSQL = `SELECT "code", "label" FROM "order_status" WHERE "code" = :code`
@@ -215,26 +244,58 @@ func (q *Queries) OrderStatusList(ctx context.Context) ([]OrderStatus, error) {
 	return out, rows.Err()
 }
 
-const orderStatusCreateSQL = `INSERT INTO "order_status" ("code", "label") VALUES (:code, :label) RETURNING "code", "label"`
-
-// OrderStatusCreate inserts a order_status row and returns the row the database wrote,
-// generated keys and defaults filled in.
-func (q *Queries) OrderStatusCreate(ctx context.Context, arg OrderStatusCreateParams) (OrderStatus, error) {
-	return orderStatusScan(q.db.QueryRowContext(ctx, orderStatusCreateSQL,
-		sql.Named("code", arg.Code),
-		sql.Named("label", arg.Label),
-	))
+// OrderStatusCreate validates c and inserts its marked columns, returning the
+// stored order_status row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) OrderStatusCreate(ctx context.Context, c OrderStatusChangeset) (OrderStatus, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return OrderStatus{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[0] {
+		cols, args = append(cols, "code"), append(args, v.Code)
+	}
+	if c.set[1] {
+		cols, args = append(cols, "label"), append(args, v.Label)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(orderStatusTableSQL, cols, orderStatusColumnsSQL), args...)
+	if err != nil {
+		return OrderStatus{}, err
+	}
+	return orderStatusScan(row)
 }
 
-const orderStatusUpdateSQL = `UPDATE "order_status" SET "label" = :label WHERE "code" = :code RETURNING "code", "label"`
-
-// OrderStatusUpdate rewrites every non-key column of the identified order_status row
-// and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) OrderStatusUpdate(ctx context.Context, code string, arg OrderStatusUpdateParams) (OrderStatus, error) {
-	return orderStatusScan(q.db.QueryRowContext(ctx, orderStatusUpdateSQL,
-		sql.Named("code", code),
-		sql.Named("label", arg.Label),
-	))
+// OrderStatusUpdate validates c and writes its marked columns to the order_status row it
+// was made from, returning the stored row; nothing marked returns the row
+// untouched (spec §changesets).
+func (q *Queries) OrderStatusUpdate(ctx context.Context, c OrderStatusChangeset) (OrderStatus, error) {
+	if !c.row {
+		return OrderStatus{}, rt.ErrNoRow
+	}
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return OrderStatus{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[0] {
+		cols, args = append(cols, "code"), append(args, v.Code)
+	}
+	if c.set[1] {
+		cols, args = append(cols, "label"), append(args, v.Label)
+	}
+	if len(cols) == 0 {
+		return v, nil
+	}
+	args = append(args, c.data.Code)
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(orderStatusTableSQL, cols, []string{"code"}, orderStatusColumnsSQL), args...)
+	if err != nil {
+		return OrderStatus{}, err
+	}
+	return orderStatusScan(row)
 }
 
 const orderStatusDeleteSQL = `DELETE FROM "order_status" WHERE "code" = :code`
@@ -244,7 +305,7 @@ const orderStatusDeleteSQL = `DELETE FROM "order_status" WHERE "code" = :code`
 func (q *Queries) OrderStatusDelete(ctx context.Context, code string) error {
 	res, err := q.db.ExecContext(ctx, orderStatusDeleteSQL, sql.Named("code", code))
 	if err != nil {
-		return rt.Constraint(err)
+		return rt.Refused("OrderStatus", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {

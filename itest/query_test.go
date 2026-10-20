@@ -101,7 +101,7 @@ func TestQueryRouteGOBBothWays(t *testing.T) {
 	h := handlerWithDB(t)
 
 	var buf bytes.Buffer
-	if err := gob.NewEncoder(&buf).Encode(db.UserCreateParams{Email: "gob@example.com"}); err != nil {
+	if err := gob.NewEncoder(&buf).Encode(db.UserNew().EmailSet("gob@example.com").Params()); err != nil {
 		t.Fatal(err)
 	}
 	rec := call(h, "POST", "/api/users", &buf, "Content-Type", volt.MIMEGOB, "Accept", volt.MIMEGOB)

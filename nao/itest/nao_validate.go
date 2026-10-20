@@ -6,101 +6,67 @@ import (
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-// Validate evaluates every check of users against the row's values
-// (spec §validators). Typed checks are also CHECK constraints in the DDL;
-// Go-reference checks run here only — SQLite cannot call Go.
-func (v User) Validate() error {
-	var errs []rt.CheckError
+// Validate runs required, enum membership and the validators of users
+// over the row, every one every time, replacing the findings of an
+// earlier Validate (spec §changesets, §validators).
+func (c UserChangeset) Validate() UserChangeset {
+	v := c.Row()
+	var errs []rt.FieldError
 	if err := EmailValid(v.Email); err != nil {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid", Columns: []string{"email"}, Cause: err})
+		errs = append(errs, rt.FieldError{Check: "EmailValid", Columns: []string{"email"}, Message: err.Error()})
 	}
-	return rt.Validation(errs)
+	c.valid = errs
+	return c
 }
 
-// Validate evaluates the checks of users whose columns UserCreateParams carries
-// (spec §validators).
-func (v UserCreateParams) Validate() error {
-	var errs []rt.CheckError
-	if err := EmailValid(v.Email); err != nil {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid", Columns: []string{"email"}, Cause: err})
+// Validate runs required, enum membership and the validators of orders
+// over the row, every one every time, replacing the findings of an
+// earlier Validate (spec §changesets, §validators).
+func (c OrderChangeset) Validate() OrderChangeset {
+	v := c.Row()
+	var errs []rt.FieldError
+	if v.Total == 0 {
+		errs = append(errs, rt.FieldError{Check: "required", Columns: []string{"total"}, Message: "total is required"})
 	}
-	return rt.Validation(errs)
+	if c.set[2] || c.row {
+		switch v.Status {
+		case EOrderStatusPending, EOrderStatusShipped, EOrderStatusDelivered:
+		default:
+			errs = append(errs, rt.FieldError{Check: "enum", Columns: []string{"status"}, Message: "status is not a value of order_status"})
+		}
+	}
+	c.valid = errs
+	return c
 }
 
-// Validate evaluates the checks of users whose columns UserUpdateParams carries
-// (spec §validators).
-func (v UserUpdateParams) Validate() error {
-	var errs []rt.CheckError
-	if err := EmailValid(v.Email); err != nil {
-		errs = append(errs, rt.CheckError{Model: "User", Check: "EmailValid", Columns: []string{"email"}, Cause: err})
-	}
-	return rt.Validation(errs)
+// Validate runs required, enum membership and the validators of user_tags
+// over the row, every one every time, replacing the findings of an
+// earlier Validate (spec §changesets, §validators).
+func (c UserTagChangeset) Validate() UserTagChangeset {
+	c.valid = nil
+	return c
 }
 
-// Validate evaluates every check of orders against the row's values
-// (spec §validators). Typed checks are also CHECK constraints in the DDL;
-// Go-reference checks run here only — SQLite cannot call Go.
-func (v Order) Validate() error {
-	var errs []rt.CheckError
-	if !(v.Total != 0) {
-		errs = append(errs, rt.CheckError{Model: "Order", Check: "total_required", Columns: []string{"total"}})
-	}
-	return rt.Validation(errs)
-}
-
-// Validate evaluates the checks of orders whose columns OrderCreateParams carries
-// (spec §validators).
-func (v OrderCreateParams) Validate() error {
-	var errs []rt.CheckError
-	if !(v.Total != 0) {
-		errs = append(errs, rt.CheckError{Model: "Order", Check: "total_required", Columns: []string{"total"}})
-	}
-	return rt.Validation(errs)
-}
-
-// Validate evaluates the checks of orders whose columns OrderUpdateParams carries
-// (spec §validators).
-func (v OrderUpdateParams) Validate() error {
-	var errs []rt.CheckError
-	if !(v.Total != 0) {
-		errs = append(errs, rt.CheckError{Model: "Order", Check: "total_required", Columns: []string{"total"}})
-	}
-	return rt.Validation(errs)
-}
-
-// Validate evaluates every check of page_views against the row's values
-// (spec §validators). Typed checks are also CHECK constraints in the DDL;
-// Go-reference checks run here only — SQLite cannot call Go.
-func (v PageView) Validate() error {
-	var errs []rt.CheckError
+// Validate runs required, enum membership and the validators of page_views
+// over the row, every one every time, replacing the findings of an
+// earlier Validate (spec §changesets, §validators).
+func (c PageViewChangeset) Validate() PageViewChangeset {
+	v := c.Row()
+	var errs []rt.FieldError
 	if err := CountsPositive(v.Hits, v.Day); err != nil {
-		errs = append(errs, rt.CheckError{Model: "PageView", Check: "CountsPositive", Columns: []string{"hits", "day"}, Cause: err})
+		errs = append(errs, rt.FieldError{Check: "CountsPositive", Columns: []string{"hits", "day"}, Message: err.Error()})
 	}
 	if err := SiteShape(v.Site); err != nil {
-		errs = append(errs, rt.CheckError{Model: "PageView", Check: "SiteShape", Columns: []string{"site"}, Cause: err})
+		errs = append(errs, rt.FieldError{Check: "SiteShape", Columns: []string{"site"}, Message: err.Error()})
 	}
-	return rt.Validation(errs)
+	c.valid = errs
+	return c
 }
 
-// Validate evaluates the checks of page_views whose columns PageViewCreateParams carries
-// (spec §validators); left to the row and the DDL: CountsPositive.
-func (v PageViewCreateParams) Validate() error {
-	var errs []rt.CheckError
-	if err := SiteShape(v.Site); err != nil {
-		errs = append(errs, rt.CheckError{Model: "PageView", Check: "SiteShape", Columns: []string{"site"}, Cause: err})
-	}
-	return rt.Validation(errs)
-}
-
-// Validate evaluates the checks of page_views whose columns PageViewUpdateParams carries
-// (spec §validators).
-func (v PageViewUpdateParams) Validate() error {
-	var errs []rt.CheckError
-	if err := CountsPositive(v.Hits, v.Day); err != nil {
-		errs = append(errs, rt.CheckError{Model: "PageView", Check: "CountsPositive", Columns: []string{"hits", "day"}, Cause: err})
-	}
-	if err := SiteShape(v.Site); err != nil {
-		errs = append(errs, rt.CheckError{Model: "PageView", Check: "SiteShape", Columns: []string{"site"}, Cause: err})
-	}
-	return rt.Validation(errs)
+// Validate runs required, enum membership and the validators of link_clicks
+// over the row, every one every time, replacing the findings of an
+// earlier Validate (spec §changesets, §validators).
+func (c LinkClickChangeset) Validate() LinkClickChangeset {
+	c.valid = nil
+	return c
 }

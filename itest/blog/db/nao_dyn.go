@@ -12,15 +12,6 @@ const (
 	userColumnsSQL = `"id", "email"`
 )
 
-// Typed column handles of User: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter User queries; mixing models is a compile
-// error.
-var (
-	UserID    = rt.Column[User, int]{Name: "id"}
-	UserEmail = rt.Column[User, string]{Name: "email"}
-)
-
 // UserLimit caps how many rows UserQuery returns.
 func UserLimit(n int) rt.Opt[User] { return rt.Limit[User](n) }
 
@@ -129,16 +120,6 @@ const (
 	msRevenueColumnsSQL = `"id", "org", "year"`
 )
 
-// Typed column handles of MsRevenue: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter MsRevenue queries; mixing models is a compile
-// error.
-var (
-	MsRevenueID   = rt.Column[MsRevenue, int]{Name: "id"}
-	MsRevenueOrg  = rt.Column[MsRevenue, string]{Name: "org"}
-	MsRevenueYear = rt.Column[MsRevenue, int]{Name: "year"}
-)
-
 // MsRevenueLimit caps how many rows MsRevenueQuery returns.
 func MsRevenueLimit(n int) rt.Opt[MsRevenue] { return rt.Limit[MsRevenue](n) }
 
@@ -245,16 +226,6 @@ func (q *Queries) MsRevenueUpdateWhere(ctx context.Context, set []rt.Assign[MsRe
 const (
 	msUsageTableSQL   = `"ms_usage"`
 	msUsageColumnsSQL = `"id", "org", "year"`
-)
-
-// Typed column handles of MsUsage: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter MsUsage queries; mixing models is a compile
-// error.
-var (
-	MsUsageID   = rt.Column[MsUsage, int]{Name: "id"}
-	MsUsageOrg  = rt.Column[MsUsage, string]{Name: "org"}
-	MsUsageYear = rt.Column[MsUsage, int]{Name: "year"}
 )
 
 // MsUsageLimit caps how many rows MsUsageQuery returns.

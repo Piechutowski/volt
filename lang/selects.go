@@ -532,7 +532,7 @@ var crudMethodSuffixes = map[string]bool{
 	"Update": true, "Delete": true, "Count": true, "Exists": true,
 	"Query": true, "DeleteWhere": true, "UpdateWhere": true,
 	"Limit": true, "Offset": true, "OrderBy": true,
-	"CreateParams": true, "UpdateParams": true,
+	"Changeset": true, "Column": true, "Params": true, "New": true,
 }
 
 func (l *selectLowering) projectionCheck(si *SelectInfo) bool {

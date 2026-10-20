@@ -535,7 +535,7 @@ func TestQueryRoutes(t *testing.T) {
 		t.Errorf("helper = %q, want APIUserGet", app.Routes[0].HelperName)
 	}
 	create := app.Routes[1].Query
-	if create.Status != 201 || len(create.Params) != 1 || create.Params[0].Source != FromBody || create.Params[0].GoType != "db.UserCreateParams" {
+	if create.Status != 201 || len(create.Params) != 1 || create.Params[0].Source != FromBody || create.Params[0].GoType != "db.UserChangeset" {
 		t.Errorf("UserCreate ref = %+v", create)
 	}
 	if app.Routes[1].HelperName != "" {

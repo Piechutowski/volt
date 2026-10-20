@@ -12,16 +12,6 @@ const (
 	menuColumnsSQL = `"id", "title", "price"`
 )
 
-// Typed column handles of Menu: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter Menu queries; mixing models is a compile
-// error.
-var (
-	MenuID    = rt.Column[Menu, int]{Name: "id"}
-	MenuTitle = rt.Column[Menu, string]{Name: "title"}
-	MenuPrice = rt.Column[Menu, float64]{Name: "price"}
-)
-
 // MenuLimit caps how many rows MenuQuery returns.
 func MenuLimit(n int) rt.Opt[Menu] { return rt.Limit[Menu](n) }
 
@@ -128,15 +118,6 @@ func (q *Queries) MenuUpdateWhere(ctx context.Context, set []rt.Assign[Menu], pr
 const (
 	orderStatusTableSQL   = `"order_status"`
 	orderStatusColumnsSQL = `"code", "label"`
-)
-
-// Typed column handles of OrderStatus: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter OrderStatus queries; mixing models is a compile
-// error.
-var (
-	OrderStatusCode  = rt.Column[OrderStatus, string]{Name: "code"}
-	OrderStatusLabel = rt.Column[OrderStatus, string]{Name: "label"}
 )
 
 // OrderStatusLimit caps how many rows OrderStatusQuery returns.

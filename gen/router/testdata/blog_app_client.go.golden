@@ -80,16 +80,16 @@ func (c *Client) APIUserGet(ctx context.Context, id int) (db.User, error) {
 }
 
 // APIUserCreate calls POST /api/users (db.UserCreate).
-func (c *Client) APIUserCreate(ctx context.Context, arg db.UserCreateParams) (db.User, error) {
+func (c *Client) APIUserCreate(ctx context.Context, cs db.UserChangeset) (db.User, error) {
 	var out db.User
-	err := c.Do(ctx, "POST", volt.URL("/api/users"), arg, &out)
+	err := c.Do(ctx, "POST", volt.URL("/api/users"), cs.Params(), &out)
 	return out, err
 }
 
 // APIUserUpdate calls PATCH /api/users/:id(int) (db.UserUpdate).
-func (c *Client) APIUserUpdate(ctx context.Context, id int, arg db.UserUpdateParams) (db.User, error) {
+func (c *Client) APIUserUpdate(ctx context.Context, id int, cs db.UserChangeset) (db.User, error) {
 	var out db.User
-	err := c.Do(ctx, "PATCH", volt.URL("/api/users/"+volt.SegInt(id)), arg, &out)
+	err := c.Do(ctx, "PATCH", volt.URL("/api/users/"+volt.SegInt(id)), cs.Params(), &out)
 	return out, err
 }
 
@@ -133,9 +133,9 @@ func (c *Client) RefUsers(ctx context.Context) ([]db.User, error) {
 }
 
 // RefCreateUser calls POST /ref/users (db.UserCreate).
-func (c *Client) RefCreateUser(ctx context.Context, arg db.UserCreateParams) (db.User, error) {
+func (c *Client) RefCreateUser(ctx context.Context, cs db.UserChangeset) (db.User, error) {
 	var out db.User
-	err := c.Do(ctx, "POST", volt.URL("/ref/users"), arg, &out)
+	err := c.Do(ctx, "POST", volt.URL("/ref/users"), cs.Params(), &out)
 	return out, err
 }
 
@@ -147,9 +147,9 @@ func (c *Client) RefUser(ctx context.Context, id int) (db.User, error) {
 }
 
 // RefUpdateUser calls PATCH /ref/users/:id(int) (db.UserUpdate).
-func (c *Client) RefUpdateUser(ctx context.Context, id int, arg db.UserUpdateParams) (db.User, error) {
+func (c *Client) RefUpdateUser(ctx context.Context, id int, cs db.UserChangeset) (db.User, error) {
 	var out db.User
-	err := c.Do(ctx, "PATCH", volt.URL("/ref/users/"+volt.SegInt(id)), arg, &out)
+	err := c.Do(ctx, "PATCH", volt.URL("/ref/users/"+volt.SegInt(id)), cs.Params(), &out)
 	return out, err
 }
 

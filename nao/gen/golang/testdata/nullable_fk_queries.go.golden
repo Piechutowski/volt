@@ -19,10 +19,11 @@ type Queries struct {
 // New returns Queries running on db.
 func New(db rt.DBTX) *Queries { return &Queries{db: db} }
 
-// WithCache returns a copy of q whose dynamic queries (Query, Count,
-// Exists, DeleteWhere, UpdateWhere) run through cache: identical option
-// shapes render identical SQL, prepared once. Bind a cache to a
-// *sql.DB, never a transaction.
+// WithCache returns a copy of q whose run-time rendered statements (the
+// changeset writes Create and Update, and the dynamic Query, Count,
+// Exists, DeleteWhere, UpdateWhere) run through cache: identical shapes
+// render identical SQL, prepared once. Bind a cache to a *sql.DB, never
+// a transaction.
 func (q *Queries) WithCache(cache *rt.StmtCache) *Queries {
 	return &Queries{db: q.db, cache: cache}
 }
@@ -38,14 +39,10 @@ func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 	return rt.Tx(ctx, q.db, func(tx *sql.Tx) error { return fn(q.WithTx(tx)) })
 }
 
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
-func userScan(r rowScanner) (User, error) {
+func userScan(r rt.Row) (User, error) {
 	var v User
 	err := r.Scan(&v.ID)
-	return v, rt.Constraint(err)
+	return v, rt.Refused("User", err)
 }
 
 const userGetSQL = `SELECT "id" FROM "users" WHERE "id" = :id`
@@ -104,14 +101,24 @@ func (q *Queries) UserList(ctx context.Context) ([]User, error) {
 	return out, rows.Err()
 }
 
-const userCreateSQL = `INSERT INTO "users" ("id") VALUES (:id) RETURNING "id"`
-
-// UserCreate inserts a users row and returns the row the database wrote,
-// generated keys and defaults filled in.
-func (q *Queries) UserCreate(ctx context.Context, arg UserCreateParams) (User, error) {
-	return userScan(q.db.QueryRowContext(ctx, userCreateSQL,
-		sql.Named("id", arg.ID),
-	))
+// UserCreate validates c and inserts its marked columns, returning the
+// stored users row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) UserCreate(ctx context.Context, c UserChangeset) (User, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return User{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[0] {
+		cols, args = append(cols, "id"), append(args, v.ID)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(userTableSQL, cols, userColumnsSQL), args...)
+	if err != nil {
+		return User{}, err
+	}
+	return userScan(row)
 }
 
 const userDeleteSQL = `DELETE FROM "users" WHERE "id" = :id`
@@ -121,7 +128,7 @@ const userDeleteSQL = `DELETE FROM "users" WHERE "id" = :id`
 func (q *Queries) UserDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, userDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return rt.Constraint(err)
+		return rt.Refused("User", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -133,10 +140,10 @@ func (q *Queries) UserDelete(ctx context.Context, id int) error {
 	return nil
 }
 
-func postScan(r rowScanner) (Post, error) {
+func postScan(r rt.Row) (Post, error) {
 	var v Post
 	err := r.Scan(&v.ID, &v.AuthorID, &v.EditorID, &v.ReviewedAt, &v.Meta, &v.Raw)
-	return v, rt.Constraint(err)
+	return v, rt.Refused("Post", err)
 }
 
 const postGetSQL = `SELECT "id", "author_id", "editor_id", "reviewed_at", "meta", "raw" FROM "posts" WHERE "id" = :id`
@@ -195,34 +202,82 @@ func (q *Queries) PostList(ctx context.Context) ([]Post, error) {
 	return out, rows.Err()
 }
 
-const postCreateSQL = `INSERT INTO "posts" ("id", "author_id", "editor_id", "reviewed_at", "meta", "raw") VALUES (:id, :author_id, :editor_id, :reviewed_at, :meta, :raw) RETURNING "id", "author_id", "editor_id", "reviewed_at", "meta", "raw"`
-
-// PostCreate inserts a posts row and returns the row the database wrote,
-// generated keys and defaults filled in.
-func (q *Queries) PostCreate(ctx context.Context, arg PostCreateParams) (Post, error) {
-	return postScan(q.db.QueryRowContext(ctx, postCreateSQL,
-		sql.Named("id", arg.ID),
-		sql.Named("author_id", arg.AuthorID),
-		sql.Named("editor_id", arg.EditorID),
-		sql.Named("reviewed_at", arg.ReviewedAt),
-		sql.Named("meta", arg.Meta),
-		sql.Named("raw", arg.Raw),
-	))
+// PostCreate validates c and inserts its marked columns, returning the
+// stored posts row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) PostCreate(ctx context.Context, c PostChangeset) (Post, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return Post{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[0] {
+		cols, args = append(cols, "id"), append(args, v.ID)
+	}
+	if c.set[1] {
+		cols, args = append(cols, "author_id"), append(args, v.AuthorID)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "editor_id"), append(args, v.EditorID)
+	}
+	if c.set[3] {
+		cols, args = append(cols, "reviewed_at"), append(args, v.ReviewedAt)
+	}
+	if c.set[4] {
+		cols, args = append(cols, "meta"), append(args, v.Meta)
+	}
+	if c.set[5] {
+		cols, args = append(cols, "raw"), append(args, v.Raw)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(postTableSQL, cols, postColumnsSQL), args...)
+	if err != nil {
+		return Post{}, err
+	}
+	return postScan(row)
 }
 
-const postUpdateSQL = `UPDATE "posts" SET "author_id" = :author_id, "editor_id" = :editor_id, "reviewed_at" = :reviewed_at, "meta" = :meta, "raw" = :raw WHERE "id" = :id RETURNING "id", "author_id", "editor_id", "reviewed_at", "meta", "raw"`
-
-// PostUpdate rewrites every non-key column of the identified posts row
-// and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) PostUpdate(ctx context.Context, id int, arg PostUpdateParams) (Post, error) {
-	return postScan(q.db.QueryRowContext(ctx, postUpdateSQL,
-		sql.Named("id", id),
-		sql.Named("author_id", arg.AuthorID),
-		sql.Named("editor_id", arg.EditorID),
-		sql.Named("reviewed_at", arg.ReviewedAt),
-		sql.Named("meta", arg.Meta),
-		sql.Named("raw", arg.Raw),
-	))
+// PostUpdate validates c and writes its marked columns to the posts row it
+// was made from, returning the stored row; nothing marked returns the row
+// untouched (spec §changesets).
+func (q *Queries) PostUpdate(ctx context.Context, c PostChangeset) (Post, error) {
+	if !c.row {
+		return Post{}, rt.ErrNoRow
+	}
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return Post{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[0] {
+		cols, args = append(cols, "id"), append(args, v.ID)
+	}
+	if c.set[1] {
+		cols, args = append(cols, "author_id"), append(args, v.AuthorID)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "editor_id"), append(args, v.EditorID)
+	}
+	if c.set[3] {
+		cols, args = append(cols, "reviewed_at"), append(args, v.ReviewedAt)
+	}
+	if c.set[4] {
+		cols, args = append(cols, "meta"), append(args, v.Meta)
+	}
+	if c.set[5] {
+		cols, args = append(cols, "raw"), append(args, v.Raw)
+	}
+	if len(cols) == 0 {
+		return v, nil
+	}
+	args = append(args, c.data.ID)
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(postTableSQL, cols, []string{"id"}, postColumnsSQL), args...)
+	if err != nil {
+		return Post{}, err
+	}
+	return postScan(row)
 }
 
 const postDeleteSQL = `DELETE FROM "posts" WHERE "id" = :id`
@@ -232,7 +287,7 @@ const postDeleteSQL = `DELETE FROM "posts" WHERE "id" = :id`
 func (q *Queries) PostDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, postDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return rt.Constraint(err)
+		return rt.Refused("Post", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {

@@ -196,7 +196,7 @@ type Summary struct {
 	Day  int    `db:"day" json:"day"`
 }
 
-func summaryScan(r rowScanner) (Summary, error) {
+func summaryScan(r rt.Row) (Summary, error) {
 	var v Summary
 	err := r.Scan(&v.Site, &v.Day)
 	return v, err
@@ -250,7 +250,7 @@ type LinkClickPublic struct {
 	Day  int    `db:"day" json:"day"`
 }
 
-func linkClickPublicScan(r rowScanner) (LinkClickPublic, error) {
+func linkClickPublicScan(r rt.Row) (LinkClickPublic, error) {
 	var v LinkClickPublic
 	err := r.Scan(&v.ID, &v.Site, &v.Day)
 	return v, err

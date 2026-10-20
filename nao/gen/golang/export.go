@@ -47,54 +47,19 @@ type FieldSig struct {
 }
 
 // ValidatorFn is one table's validator surface (spec §validators): what
-// its generated Validate methods run.
+// its changeset's Validate runs after required and enum membership.
 type ValidatorFn struct {
 	TableKey   string
 	Validators []ValidatorSpec
 }
 
-// ValidatorSpec is one lowered validator, or a required column, rendered
-// by the Volt checker (spec §validators).
+// ValidatorSpec is one lowered validator, rendered by the Volt checker
+// (spec §validators).
 type ValidatorSpec struct {
-	Name string   // the check's [name:] setting, "" when absent
-	Src  string   // human-readable form, reported by rt.CheckError
-	Cond string   // typed form: Go condition over v.<Field>; "" otherwise
-	Call string   // Go-reference call, e.g. "EmailValid(v.Email)"; "" otherwise
-	Cols []string // the columns the check reads, so a params struct knows whether it can evaluate it (§validators)
-}
-
-// ParamsValidators reports whether the table's CreateParams and
-// UpdateParams structs get a Validate method: each does when the struct
-// exists and carries every column of at least one check. It plans the
-// whole file.
-func ParamsValidators(f *ast.File, info *check.Info, tableKey string, checks []ValidatorSpec) (create, update bool, err error) {
-	return PlanBuild(f, info).ParamsValidators(tableKey, checks)
-}
-
-func paramsChecks(t *tableModel, checks []ValidatorSpec) (create, update []ValidatorSpec) {
-	covered := func(fields []*fieldPlan, ck ValidatorSpec) bool {
-		have := map[string]bool{}
-		for _, f := range fields {
-			have[f.colName] = true
-		}
-		for _, col := range ck.Cols {
-			if !have[col] {
-				return false
-			}
-		}
-		return len(ck.Cols) > 0
-	}
-	cf := t.createFields()
-	uf := t.nonPK()
-	for _, ck := range checks {
-		if len(cf) > 0 && covered(cf, ck) {
-			create = append(create, ck)
-		}
-		if len(t.pk) > 0 && len(uf) > 0 && covered(uf, ck) {
-			update = append(update, ck)
-		}
-	}
-	return create, update
+	Name string   // the validator's function name, the check of its field error
+	Src  string   // human-readable form, e.g. "EmailValid(email)"
+	Call string   // Go call over the row, e.g. "EmailValid(v.Email)"
+	Cols []string // the columns the validator reads, in first-appearance order
 }
 
 // EnumTypeName is the Go type name an enum declaration generates
@@ -108,14 +73,19 @@ func ModelFields(f *ast.File, info *check.Info, tableKey string) (model string, 
 	return PlanBuild(f, info).ModelFields(tableKey)
 }
 
-// CRUDMethod is one generated default-CRUD method of a table, as a query route (spec §query-routes) sees it: the name to call, the
-// identity parameters in key order, the params struct it decodes, and
-// what comes back.
+// CRUDMethod is one generated default-CRUD method of a table, as a query
+// route (spec §query-routes) sees it: the name to call, the identity
+// parameters in key order, the changeset a write takes and how the route
+// builds it (spec §changesets), and what comes back.
 type CRUDMethod struct {
 	Name   string        // method name, e.g. "UserGet"
 	Op     string        // get | list | create | update | delete
 	Key    []SelectParam // identity parameters (get, update, delete); nil otherwise
-	Body   string        // params struct type (create, update); "" when the method takes none
+	Body   string        // changeset type (create, update), e.g. "UserChangeset"; "" otherwise
+	Params string        // write body type the route decodes, e.g. "UserParams"; "" otherwise
+	New    string        // constructor a create starts from, e.g. "UserNew"; "" otherwise
+	Get    string        // loader an update reads the row with, e.g. "UserGet"; "" otherwise
+	Allow  []string      // column handles the route's Cast allows, e.g. "UserEmail"; nil otherwise
 	Result string        // row type; "" for delete
 	Many   bool          // slice result (list)
 }
@@ -123,8 +93,8 @@ type CRUDMethod struct {
 // CRUDMethods lists the default CRUD methods the query generator emits
 // for one table, with the same existence rules it applies: Get, Update
 // and Delete need a primary key, Update needs a non-key column, Create
-// takes a params struct only when a column is caller-supplied.
-// It plans the whole file.
+// and Update take a changeset (spec §changesets). It plans the whole
+// file.
 func CRUDMethods(f *ast.File, info *check.Info, tableKey string) (model string, methods []CRUDMethod, err error) {
 	return PlanBuild(f, info).CRUDMethods(tableKey)
 }

@@ -94,7 +94,6 @@ type pkgResult struct {
 	preds       map[string]*ast.Pred
 	selects     []*SelectInfo
 	validators  []golang.ValidatorFn
-	validByKey  map[string][2]bool
 	pipelines   map[string]*ast.Pipeline
 	routes      []*RouteInfo
 	controllers map[string]*ControllerInfo
@@ -103,7 +102,7 @@ type pkgResult struct {
 func pkgCapture(pkg *Package) pkgResult {
 	return pkgResult{
 		schema: pkg.schema, plan: pkg.plan,
-		groups: pkg.Groups, preds: pkg.Preds, selects: pkg.Selects, validators: pkg.Validators, validByKey: pkg.ValidByKey,
+		groups: pkg.Groups, preds: pkg.Preds, selects: pkg.Selects, validators: pkg.Validators,
 		pipelines: pkg.Pipelines, routes: pkg.Routes, controllers: pkg.Controllers,
 	}
 }
@@ -114,7 +113,7 @@ func (p *Package) resultsReset() {
 
 func (r pkgResult) restore(pkg *Package) {
 	pkg.schema, pkg.plan = r.schema, r.plan
-	pkg.Groups, pkg.Preds, pkg.Selects, pkg.Validators, pkg.ValidByKey = r.groups, r.preds, r.selects, r.validators, r.validByKey
+	pkg.Groups, pkg.Preds, pkg.Selects, pkg.Validators = r.groups, r.preds, r.selects, r.validators
 	pkg.selectIndex()
 	pkg.Pipelines, pkg.Routes, pkg.Controllers = r.pipelines, r.routes, r.controllers
 }

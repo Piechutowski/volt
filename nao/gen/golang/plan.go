@@ -149,7 +149,7 @@ func (pl *Plan) table(key string) (*tableModel, error) {
 // CRUDMethods lists the default CRUD methods the query generator emits
 // for one table, with the same existence rules it applies: Get, Update
 // and Delete need a primary key, Update needs a non-key column, Create
-// takes a params struct only when a column is caller-supplied.
+// and Update take a changeset (spec §changesets).
 func (pl *Plan) CRUDMethods(tableKey string) (model string, methods []CRUDMethod, err error) {
 	t, err := pl.table(tableKey)
 	if err != nil {
@@ -182,30 +182,16 @@ func crudMethodsBuild(t *tableModel) []CRUDMethod {
 		methods = append(methods, CRUDMethod{Name: m + "Get", Op: "get", Key: key, Result: m})
 	}
 	methods = append(methods, CRUDMethod{Name: m + "List", Op: "list", Result: m, Many: true})
-	create := CRUDMethod{Name: m + "Create", Op: "create", Result: m}
-	if len(t.createFields()) > 0 {
-		create.Body = m + "CreateParams"
-	}
-	methods = append(methods, create)
+	methods = append(methods, CRUDMethod{Name: m + "Create", Op: "create", Body: m + "Changeset", Params: m + "Params",
+		New: m + "New", Allow: t.handles(t.settable()), Result: m})
 	if len(t.pk) > 0 {
 		if len(t.nonPK()) > 0 {
-			methods = append(methods, CRUDMethod{Name: m + "Update", Op: "update", Key: key, Body: m + "UpdateParams", Result: m})
+			methods = append(methods, CRUDMethod{Name: m + "Update", Op: "update", Key: key, Body: m + "Changeset", Params: m + "Params",
+				Get: m + "Get", Allow: t.handles(t.nonPK()), Result: m})
 		}
 		methods = append(methods, CRUDMethod{Name: m + "Delete", Op: "delete", Key: key})
 	}
 	return methods
-}
-
-// ParamsValidators reports whether the table's CreateParams and
-// UpdateParams structs get a Validate method: each does when the struct
-// exists and carries every column of at least one check.
-func (pl *Plan) ParamsValidators(tableKey string, checks []ValidatorSpec) (create, update bool, err error) {
-	t, err := pl.table(tableKey)
-	if err != nil {
-		return false, false, err
-	}
-	c, u := paramsChecks(t, checks)
-	return len(c) > 0, len(u) > 0, nil
 }
 
 // ModelFields reports the exact struct fields the model generator emits
@@ -358,10 +344,14 @@ func dynOriginOf(o *nameOrigin) dynOrigin {
 	switch o.kind {
 	case nameModel:
 		d.kind = dynModel
-	case nameCreateParams:
-		d.kind = dynCreateParams
-	case nameUpdateParams:
-		d.kind = dynUpdateParams
+	case nameChangeset:
+		d.kind = dynChangeset
+	case nameColumn:
+		d.kind = dynColumn
+	case nameParams:
+		d.kind = dynParams
+	case nameNew:
+		d.kind = dynNew
 	case nameHandle:
 		d.kind, d.f, d.pos = dynHandle, o.field, o.field.col.Pos()
 	case nameDynFunc:
@@ -371,7 +361,8 @@ func dynOriginOf(o *nameOrigin) dynOrigin {
 }
 
 // Names is the scope of package-level Go identifiers a package's
-// generated files mint (§selects-over-groups): models, params structs, dynamic column
+// generated files mint (§selects-over-groups): models, changesets with
+// their column and params aliases and constructors (§changesets), column
 // handles and option wrappers, enum types, the Queries handle and its
 // constructor. It is read in layers, last writer first.
 type Names struct {
@@ -384,8 +375,10 @@ type nameKind uint8
 
 const (
 	nameModel nameKind = iota
-	nameCreateParams
-	nameUpdateParams
+	nameChangeset
+	nameColumn
+	nameParams
+	nameNew
 	nameDynFunc
 	nameHandle
 )
@@ -401,19 +394,21 @@ type nameOrigin struct {
 }
 
 func modelNamesBuild(t *tableModel) []nameOrigin {
-	names := make([]nameOrigin, 0, 3+len(dynWrapperSuffixes)+len(t.fields))
+	names := make([]nameOrigin, 0, 5+len(dynWrapperSuffixes)+len(t.fields))
 	add := func(name string, kind nameKind, field *fieldPlan, dyn bool, rank int) {
 		names = append(names, nameOrigin{name: name, kind: kind, idx: len(names), table: t, field: field, dyn: dyn, rank: rank})
 	}
 	queryable := len(t.fields) > 0
 	add(t.model, nameModel, nil, true, 0)
-	add(t.model+"CreateParams", nameCreateParams, nil, queryable && len(t.createFields()) > 0, 1)
-	add(t.model+"UpdateParams", nameUpdateParams, nil, queryable && len(t.pk) > 0 && len(t.nonPK()) > 0, 2)
+	add(t.model+"Changeset", nameChangeset, nil, queryable, 1)
+	add(t.model+"Column", nameColumn, nil, queryable, 2)
+	add(t.model+"Params", nameParams, nil, queryable, 3)
+	add(t.model+"New", nameNew, nil, queryable, 4)
 	for i, suffix := range dynWrapperSuffixes {
-		add(t.model+suffix, nameDynFunc, nil, queryable, 3+len(t.fields)+i)
+		add(t.model+suffix, nameDynFunc, nil, queryable, 5+len(t.fields)+i)
 	}
 	for i, fp := range t.fields {
-		add(t.model+fp.goField, nameHandle, fp, queryable, 3+i)
+		add(t.model+fp.goField, nameHandle, fp, queryable, 5+i)
 	}
 	return names
 }
@@ -422,12 +417,16 @@ func (o *nameOrigin) describe() string {
 	switch o.kind {
 	case nameModel:
 		return fmt.Sprintf("the model of table %q", o.table.ti.Decl.Name.Base())
-	case nameCreateParams:
-		return fmt.Sprintf("the create params of table %q", o.table.ti.Decl.Name.Base())
-	case nameUpdateParams:
-		return fmt.Sprintf("the update params of table %q", o.table.ti.Decl.Name.Base())
+	case nameChangeset:
+		return fmt.Sprintf("the changeset of table %q", o.table.ti.Decl.Name.Base())
+	case nameColumn:
+		return fmt.Sprintf("the column handle type of table %q", o.table.ti.Decl.Name.Base())
+	case nameParams:
+		return fmt.Sprintf("the write body type of table %q", o.table.ti.Decl.Name.Base())
+	case nameNew:
+		return fmt.Sprintf("the changeset constructor of table %q", o.table.ti.Decl.Name.Base())
 	case nameHandle:
-		return fmt.Sprintf("the dynamic column handle for %s.%s", o.table.ti.Decl.Name.Base(), o.field.colName)
+		return fmt.Sprintf("the column handle for %s.%s", o.table.ti.Decl.Name.Base(), o.field.colName)
 	}
 	return "the dynamic-layer function " + o.name
 }

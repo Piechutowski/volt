@@ -82,10 +82,21 @@ const (
 // QueryParam is one parameter of a query route's method, in signature
 // order after ctx.
 type QueryParam struct {
-	Name      string // Go parameter name, also the URL key
-	GoType    string // unqualified Go type ("int", "[]string"); params structs are qualified ("db.UserCreateParams")
-	Source    QuerySource
-	Validates bool // body param: the params struct has a Validate method the handler calls first (§validators)
+	Name   string // Go parameter name, also the URL key
+	GoType string // unqualified Go type ("int", "[]string"); a changeset is qualified ("db.UserChangeset")
+	Source QuerySource
+}
+
+// ChangesetBind is how a query route builds the changeset of a write
+// (spec §query-routes, §changesets): the body decodes as Params and is
+// cast into New() for a create, or into the Changeset of the row Get
+// loads by the key for an update, allowing the Allow columns. The names
+// are unqualified.
+type ChangesetBind struct {
+	Params string   // write body type, e.g. "UserParams"
+	New    string   // constructor of a create, e.g. "UserNew"; "" for an update
+	Get    string   // row loader of an update, e.g. "UserGet"; "" for a create
+	Allow  []string // column handles the cast allows, e.g. "UserEmail"
 }
 
 // QueryRef binds a route to a generated query method of a data package
@@ -100,9 +111,10 @@ type QueryRef struct {
 	Local     bool   // the query is this package's own (§query-routes): no import, the field is Queries *Queries
 	Method    string // generated method name, e.g. "UserGet"
 	Params    []QueryParam
-	Result    string // row type, unqualified ("User"); "" for delete
-	Many      bool   // slice result
-	Status    int    // success status: 200, 201 for create, 204 for delete
+	Changeset *ChangesetBind // how a write's body becomes its changeset (§changesets); nil for a read
+	Result    string         // row type, unqualified ("User"); "" for delete
+	Many      bool           // slice result
+	Status    int            // success status: 200, 201 for create, 204 for delete
 }
 
 // Ref renders the reference as written, e.g. "db.UserGet"; a query of

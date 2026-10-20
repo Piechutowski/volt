@@ -16,11 +16,11 @@ func TestDeclaredTypeRoundTrip(t *testing.T) {
 	_, q := newDB(t)
 	u := seedUser(t, q, "ann@example.com")
 
-	paid, err := q.OrderCreate(ctx, OrderCreateParams{UserID: u.ID, Total: 9.99, Fee: pay.Cents(250)})
+	paid, err := q.OrderCreate(ctx, OrderNew().UserIDSet(u.ID).TotalSet(9.99).FeeSet(pay.Cents(250)))
 	if err != nil {
 		t.Fatalf("OrderCreate: %v", err)
 	}
-	free, err := q.OrderCreate(ctx, OrderCreateParams{UserID: u.ID, Total: 1.00})
+	free, err := q.OrderCreate(ctx, OrderNew().UserIDSet(u.ID).TotalSet(1.00).FeeSet(0))
 	if err != nil {
 		t.Fatalf("OrderCreate: %v", err)
 	}

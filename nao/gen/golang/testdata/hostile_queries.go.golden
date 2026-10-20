@@ -19,10 +19,11 @@ type Queries struct {
 // New returns Queries running on db.
 func New(db rt.DBTX) *Queries { return &Queries{db: db} }
 
-// WithCache returns a copy of q whose dynamic queries (Query, Count,
-// Exists, DeleteWhere, UpdateWhere) run through cache: identical option
-// shapes render identical SQL, prepared once. Bind a cache to a
-// *sql.DB, never a transaction.
+// WithCache returns a copy of q whose run-time rendered statements (the
+// changeset writes Create and Update, and the dynamic Query, Count,
+// Exists, DeleteWhere, UpdateWhere) run through cache: identical shapes
+// render identical SQL, prepared once. Bind a cache to a *sql.DB, never
+// a transaction.
 func (q *Queries) WithCache(cache *rt.StmtCache) *Queries {
 	return &Queries{db: q.db, cache: cache}
 }
@@ -38,14 +39,10 @@ func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 	return rt.Tx(ctx, q.db, func(tx *sql.Tx) error { return fn(q.WithTx(tx)) })
 }
 
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
-func userScan(r rowScanner) (User, error) {
+func userScan(r rt.Row) (User, error) {
 	var v User
 	err := r.Scan(&v.ID)
-	return v, rt.Constraint(err)
+	return v, rt.Refused("User", err)
 }
 
 const userGetSQL = `SELECT "id" FROM "users" WHERE "id" = :id`
@@ -104,14 +101,24 @@ func (q *Queries) UserList(ctx context.Context) ([]User, error) {
 	return out, rows.Err()
 }
 
-const userCreateSQL = `INSERT INTO "users" ("id") VALUES (:id) RETURNING "id"`
-
-// UserCreate inserts a users row and returns the row the database wrote,
-// generated keys and defaults filled in.
-func (q *Queries) UserCreate(ctx context.Context, arg UserCreateParams) (User, error) {
-	return userScan(q.db.QueryRowContext(ctx, userCreateSQL,
-		sql.Named("id", arg.ID),
-	))
+// UserCreate validates c and inserts its marked columns, returning the
+// stored users row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) UserCreate(ctx context.Context, c UserChangeset) (User, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return User{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[0] {
+		cols, args = append(cols, "id"), append(args, v.ID)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(userTableSQL, cols, userColumnsSQL), args...)
+	if err != nil {
+		return User{}, err
+	}
+	return userScan(row)
 }
 
 const userDeleteSQL = `DELETE FROM "users" WHERE "id" = :id`
@@ -121,7 +128,7 @@ const userDeleteSQL = `DELETE FROM "users" WHERE "id" = :id`
 func (q *Queries) UserDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, userDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return rt.Constraint(err)
+		return rt.Refused("User", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -133,10 +140,10 @@ func (q *Queries) UserDelete(ctx context.Context, id int) error {
 	return nil
 }
 
-func coreUserScan(r rowScanner) (CoreUser, error) {
+func coreUserScan(r rt.Row) (CoreUser, error) {
 	var v CoreUser
 	err := r.Scan(&v.ID, &v.APIKey, &v.HomepageURL, &v.HTTPStatus, &v.FullName, &v.PrecisionValue, &v.Balance, &v.Kind, &v.Type, &v.Func)
-	return v, rt.Constraint(err)
+	return v, rt.Refused("CoreUser", err)
 }
 
 const coreUserGetSQL = `SELECT "id", "api_key", "homepage_url", "http_status", "full name", "precision_value", "balance", "kind", "type", "func" FROM "core_users" WHERE "id" = :id`
@@ -195,42 +202,106 @@ func (q *Queries) CoreUserList(ctx context.Context) ([]CoreUser, error) {
 	return out, rows.Err()
 }
 
-const coreUserCreateSQL = `INSERT INTO "core_users" ("id", "api_key", "homepage_url", "http_status", "full name", "precision_value", "balance", "kind", "type", "func") VALUES (:id, :api_key, :homepage_url, :http_status, :full_name, :precision_value, :balance, :kind, :type, :func) RETURNING "id", "api_key", "homepage_url", "http_status", "full name", "precision_value", "balance", "kind", "type", "func"`
-
-// CoreUserCreate inserts a core.users row and returns the row the database wrote,
-// generated keys and defaults filled in.
-func (q *Queries) CoreUserCreate(ctx context.Context, arg CoreUserCreateParams) (CoreUser, error) {
-	return coreUserScan(q.db.QueryRowContext(ctx, coreUserCreateSQL,
-		sql.Named("id", arg.ID),
-		sql.Named("api_key", arg.APIKey),
-		sql.Named("homepage_url", arg.HomepageURL),
-		sql.Named("http_status", arg.HTTPStatus),
-		sql.Named("full_name", arg.FullName),
-		sql.Named("precision_value", arg.PrecisionValue),
-		sql.Named("balance", arg.Balance),
-		sql.Named("kind", arg.Kind),
-		sql.Named("type", arg.Type),
-		sql.Named("func", arg.Func),
-	))
+// CoreUserCreate validates c and inserts its marked columns, returning the
+// stored core.users row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) CoreUserCreate(ctx context.Context, c CoreUserChangeset) (CoreUser, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return CoreUser{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[0] {
+		cols, args = append(cols, "id"), append(args, v.ID)
+	}
+	if c.set[1] {
+		cols, args = append(cols, "api_key"), append(args, v.APIKey)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "homepage_url"), append(args, v.HomepageURL)
+	}
+	if c.set[3] {
+		cols, args = append(cols, "http_status"), append(args, v.HTTPStatus)
+	}
+	if c.set[4] {
+		cols, args = append(cols, "full name"), append(args, v.FullName)
+	}
+	if c.set[5] {
+		cols, args = append(cols, "precision_value"), append(args, v.PrecisionValue)
+	}
+	if c.set[6] {
+		cols, args = append(cols, "balance"), append(args, v.Balance)
+	}
+	if c.set[7] {
+		cols, args = append(cols, "kind"), append(args, v.Kind)
+	}
+	if c.set[8] {
+		cols, args = append(cols, "type"), append(args, v.Type)
+	}
+	if c.set[9] {
+		cols, args = append(cols, "func"), append(args, v.Func)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(coreUserTableSQL, cols, coreUserColumnsSQL), args...)
+	if err != nil {
+		return CoreUser{}, err
+	}
+	return coreUserScan(row)
 }
 
-const coreUserUpdateSQL = `UPDATE "core_users" SET "api_key" = :api_key, "homepage_url" = :homepage_url, "http_status" = :http_status, "full name" = :full_name, "precision_value" = :precision_value, "balance" = :balance, "kind" = :kind, "type" = :type, "func" = :func WHERE "id" = :id RETURNING "id", "api_key", "homepage_url", "http_status", "full name", "precision_value", "balance", "kind", "type", "func"`
-
-// CoreUserUpdate rewrites every non-key column of the identified core.users row
-// and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) CoreUserUpdate(ctx context.Context, id int, arg CoreUserUpdateParams) (CoreUser, error) {
-	return coreUserScan(q.db.QueryRowContext(ctx, coreUserUpdateSQL,
-		sql.Named("id", id),
-		sql.Named("api_key", arg.APIKey),
-		sql.Named("homepage_url", arg.HomepageURL),
-		sql.Named("http_status", arg.HTTPStatus),
-		sql.Named("full_name", arg.FullName),
-		sql.Named("precision_value", arg.PrecisionValue),
-		sql.Named("balance", arg.Balance),
-		sql.Named("kind", arg.Kind),
-		sql.Named("type", arg.Type),
-		sql.Named("func", arg.Func),
-	))
+// CoreUserUpdate validates c and writes its marked columns to the core.users row it
+// was made from, returning the stored row; nothing marked returns the row
+// untouched (spec §changesets).
+func (q *Queries) CoreUserUpdate(ctx context.Context, c CoreUserChangeset) (CoreUser, error) {
+	if !c.row {
+		return CoreUser{}, rt.ErrNoRow
+	}
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return CoreUser{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[0] {
+		cols, args = append(cols, "id"), append(args, v.ID)
+	}
+	if c.set[1] {
+		cols, args = append(cols, "api_key"), append(args, v.APIKey)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "homepage_url"), append(args, v.HomepageURL)
+	}
+	if c.set[3] {
+		cols, args = append(cols, "http_status"), append(args, v.HTTPStatus)
+	}
+	if c.set[4] {
+		cols, args = append(cols, "full name"), append(args, v.FullName)
+	}
+	if c.set[5] {
+		cols, args = append(cols, "precision_value"), append(args, v.PrecisionValue)
+	}
+	if c.set[6] {
+		cols, args = append(cols, "balance"), append(args, v.Balance)
+	}
+	if c.set[7] {
+		cols, args = append(cols, "kind"), append(args, v.Kind)
+	}
+	if c.set[8] {
+		cols, args = append(cols, "type"), append(args, v.Type)
+	}
+	if c.set[9] {
+		cols, args = append(cols, "func"), append(args, v.Func)
+	}
+	if len(cols) == 0 {
+		return v, nil
+	}
+	args = append(args, c.data.ID)
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(coreUserTableSQL, cols, []string{"id"}, coreUserColumnsSQL), args...)
+	if err != nil {
+		return CoreUser{}, err
+	}
+	return coreUserScan(row)
 }
 
 const coreUserDeleteSQL = `DELETE FROM "core_users" WHERE "id" = :id`
@@ -240,7 +311,7 @@ const coreUserDeleteSQL = `DELETE FROM "core_users" WHERE "id" = :id`
 func (q *Queries) CoreUserDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, coreUserDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return rt.Constraint(err)
+		return rt.Refused("CoreUser", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -252,10 +323,10 @@ func (q *Queries) CoreUserDelete(ctx context.Context, id int) error {
 	return nil
 }
 
-func x2faCodeScan(r rowScanner) (X2faCode, error) {
+func x2faCodeScan(r rt.Row) (X2faCode, error) {
 	var v X2faCode
 	err := r.Scan(&v.Code, &v.UserID, &v.ExpiresAt)
-	return v, rt.Constraint(err)
+	return v, rt.Refused("X2faCode", err)
 }
 
 const x2faCodeGetSQL = `SELECT "code", "user_id", "expires_at" FROM "2fa_codes" WHERE "user_id" = :user_id AND "code" = :code`
@@ -285,28 +356,65 @@ func (q *Queries) X2faCodeList(ctx context.Context) ([]X2faCode, error) {
 	return out, rows.Err()
 }
 
-const x2faCodeCreateSQL = `INSERT INTO "2fa_codes" ("code", "user_id", "expires_at") VALUES (:code, :user_id, :expires_at) RETURNING "code", "user_id", "expires_at"`
-
-// X2faCodeCreate inserts a 2fa_codes row and returns the row the database wrote,
-// generated keys and defaults filled in.
-func (q *Queries) X2faCodeCreate(ctx context.Context, arg X2faCodeCreateParams) (X2faCode, error) {
-	return x2faCodeScan(q.db.QueryRowContext(ctx, x2faCodeCreateSQL,
-		sql.Named("code", arg.Code),
-		sql.Named("user_id", arg.UserID),
-		sql.Named("expires_at", arg.ExpiresAt),
-	))
+// X2faCodeCreate validates c and inserts its marked columns, returning the
+// stored 2fa_codes row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) X2faCodeCreate(ctx context.Context, c X2faCodeChangeset) (X2faCode, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return X2faCode{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[0] {
+		cols, args = append(cols, "code"), append(args, v.Code)
+	}
+	if c.set[1] {
+		cols, args = append(cols, "user_id"), append(args, v.UserID)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "expires_at"), append(args, v.ExpiresAt)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(x2faCodeTableSQL, cols, x2faCodeColumnsSQL), args...)
+	if err != nil {
+		return X2faCode{}, err
+	}
+	return x2faCodeScan(row)
 }
 
-const x2faCodeUpdateSQL = `UPDATE "2fa_codes" SET "expires_at" = :expires_at WHERE "user_id" = :user_id AND "code" = :code RETURNING "code", "user_id", "expires_at"`
-
-// X2faCodeUpdate rewrites every non-key column of the identified 2fa_codes row
-// and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) X2faCodeUpdate(ctx context.Context, userID int, code string, arg X2faCodeUpdateParams) (X2faCode, error) {
-	return x2faCodeScan(q.db.QueryRowContext(ctx, x2faCodeUpdateSQL,
-		sql.Named("user_id", userID),
-		sql.Named("code", code),
-		sql.Named("expires_at", arg.ExpiresAt),
-	))
+// X2faCodeUpdate validates c and writes its marked columns to the 2fa_codes row it
+// was made from, returning the stored row; nothing marked returns the row
+// untouched (spec §changesets).
+func (q *Queries) X2faCodeUpdate(ctx context.Context, c X2faCodeChangeset) (X2faCode, error) {
+	if !c.row {
+		return X2faCode{}, rt.ErrNoRow
+	}
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return X2faCode{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[0] {
+		cols, args = append(cols, "code"), append(args, v.Code)
+	}
+	if c.set[1] {
+		cols, args = append(cols, "user_id"), append(args, v.UserID)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "expires_at"), append(args, v.ExpiresAt)
+	}
+	if len(cols) == 0 {
+		return v, nil
+	}
+	args = append(args, c.data.UserID)
+	args = append(args, c.data.Code)
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(x2faCodeTableSQL, cols, []string{"user_id", "code"}, x2faCodeColumnsSQL), args...)
+	if err != nil {
+		return X2faCode{}, err
+	}
+	return x2faCodeScan(row)
 }
 
 const x2faCodeDeleteSQL = `DELETE FROM "2fa_codes" WHERE "user_id" = :user_id AND "code" = :code`
@@ -316,7 +424,7 @@ const x2faCodeDeleteSQL = `DELETE FROM "2fa_codes" WHERE "user_id" = :user_id AN
 func (q *Queries) X2faCodeDelete(ctx context.Context, userID int, code string) error {
 	res, err := q.db.ExecContext(ctx, x2faCodeDeleteSQL, sql.Named("user_id", userID), sql.Named("code", code))
 	if err != nil {
-		return rt.Constraint(err)
+		return rt.Refused("X2faCode", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {

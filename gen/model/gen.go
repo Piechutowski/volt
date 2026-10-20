@@ -16,8 +16,8 @@ type Options struct {
 	// Package overrides the package clause; empty means the Volt
 	// package's name (§projects-and-packages).
 	Package string
-	// ModelsOnly emits just nao_models.go: the structs, params structs
-	// and enums — every type the wire carries.
+	// ModelsOnly emits just nao_models.go: the structs, their changesets
+	// and the enums, every type the wire carries (spec §changesets).
 	ModelsOnly bool
 	// SQL additionally emits the SQLite DDL and seed inserts.
 	SQL bool
@@ -49,12 +49,10 @@ func Generate(pkg *lang.Package, opts Options) ([]File, error) {
 	if !opts.ModelsOnly {
 		emits = append(emits,
 			emit{"nao_queries.go", func() ([]byte, error) { return plan.Queries(gopts) }},
-			emit{"nao_dyn.go", func() ([]byte, error) { return plan.Dyn(gopts) }})
+			emit{"nao_dyn.go", func() ([]byte, error) { return plan.Dyn(gopts) }},
+			emit{"nao_validate.go", func() ([]byte, error) { return plan.Validators(pkg.Validators, gopts) }})
 		if fns := pkg.SelectFns(); len(fns) > 0 {
 			emits = append(emits, emit{"nao_selects.go", func() ([]byte, error) { return plan.Selects(fns, gopts) }})
-		}
-		if len(pkg.Validators) > 0 {
-			emits = append(emits, emit{"nao_validate.go", func() ([]byte, error) { return plan.Validators(pkg.Validators, gopts) }})
 		}
 	}
 	if opts.SQL {

@@ -65,6 +65,16 @@ func generateDyn(t *testing.T, dbmlPath string) []byte {
 	return out
 }
 
+func generateValidators(t *testing.T, dbmlPath string) []byte {
+	t.Helper()
+	f, info := parseChecked(t, dbmlPath)
+	out, err := GenerateValidators(f, info, nil, Options{Package: "models", Source: filepath.Base(dbmlPath)})
+	if err != nil {
+		t.Fatalf("GenerateValidators: %v", err)
+	}
+	return out
+}
+
 func compareGolden(t *testing.T, got []byte, golden string) {
 	t.Helper()
 	if *update {
@@ -90,6 +100,7 @@ func TestGolden(t *testing.T) {
 			compareGolden(t, generate(t, dbml), filepath.Join("testdata", name+".go.golden"))
 			compareGolden(t, generateQueries(t, dbml), filepath.Join("testdata", name+"_queries.go.golden"))
 			compareGolden(t, generateDyn(t, dbml), filepath.Join("testdata", name+"_dyn.go.golden"))
+			compareGolden(t, generateValidators(t, dbml), filepath.Join("testdata", name+"_validate.go.golden"))
 		})
 	}
 }
@@ -157,6 +168,8 @@ func TestGoldenCompiles(t *testing.T) {
 			base, outName = strings.TrimSuffix(base, "_queries"), "nao_queries.go"
 		case strings.HasSuffix(base, "_dyn"):
 			base, outName = strings.TrimSuffix(base, "_dyn"), "nao_dyn.go"
+		case strings.HasSuffix(base, "_validate"):
+			base, outName = strings.TrimSuffix(base, "_validate"), "nao_validate.go"
 		}
 		pkgDir := filepath.Join(dir, "p", base)
 		if err := os.MkdirAll(pkgDir, 0o755); err != nil {

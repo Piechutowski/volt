@@ -27,7 +27,7 @@ app/i08_helper_collision.volt:6:2: error: spec/scopes-and-routes: reverse-URL he
 app/i09_signature_conflict.volt:6:2: error: spec/scopes-and-routes: X.Show is reached by routes with different parameter signatures (§handler-references): (id string) vs (id int) (first at app/i09_signature_conflict.volt:5:2)
 
 ## i100_query_body_verb
-app/routes.volt:10:16: error: spec/scopes-and-routes: db.UserCreate takes a request body (db.UserCreateParams); route it with post, put or patch (§query-routes)
+app/routes.volt:10:16: error: spec/scopes-and-routes: db.UserCreate takes a request body (db.UserChangeset); route it with post, put or patch (§query-routes)
 
 ## i101_query_extra_path_param
 app/routes.volt:10:13: error: spec/scopes-and-routes: path parameter "x" is not a parameter of db.UserList (§query-routes)
@@ -134,6 +134,9 @@ app/routes.volt:10:18: error: spec/query-routes: parameter "price" of db.Product
 
 ## i161_query_declared_type_list
 app/routes.volt:10:17: error: spec/query-routes: list parameter "prices" of db.ProductPriced is []money.Money, which the query string cannot carry (§query-routes)
+
+## i162_column_changeset.volt
+db/i162_column_changeset.volt:7:3: error: spec/changesets: column "changeset" of table "drafts" maps to the Go field Changeset, the name of the row's changeset method; rename the column (§changesets)
 
 ## i16_lowercase_controller.volt
 app/i16_lowercase_controller.volt:5:9: error: spec/scopes-and-routes: handler must be Controller.Action, both exported Go identifiers (§handler-references), found "home.Index"

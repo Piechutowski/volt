@@ -5,20 +5,11 @@ package models
 import (
 	"context"
 	"github.com/Piechutowski/volt/nao/rt"
-	"time"
 )
 
 const (
 	userTableSQL   = `"users"`
 	userColumnsSQL = `"id"`
-)
-
-// Typed column handles of User: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter User queries; mixing models is a compile
-// error.
-var (
-	UserID = rt.Column[User, int]{Name: "id"}
 )
 
 // UserLimit caps how many rows UserQuery returns.
@@ -127,19 +118,6 @@ func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], pr
 const (
 	postTableSQL   = `"posts"`
 	postColumnsSQL = `"id", "author_id", "editor_id", "reviewed_at", "meta", "raw"`
-)
-
-// Typed column handles of Post: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter Post queries; mixing models is a compile
-// error.
-var (
-	PostID         = rt.Column[Post, int]{Name: "id"}
-	PostAuthorID   = rt.Column[Post, int]{Name: "author_id"}
-	PostEditorID   = rt.NullColumn[Post, int]{Column: rt.Column[Post, int]{Name: "editor_id"}}
-	PostReviewedAt = rt.NullColumn[Post, time.Time]{Column: rt.Column[Post, time.Time]{Name: "reviewed_at"}}
-	PostMeta       = rt.NullColumn[Post, string]{Column: rt.Column[Post, string]{Name: "meta"}}
-	PostRaw        = rt.NullColumn[Post, []byte]{Column: rt.Column[Post, []byte]{Name: "raw"}}
 )
 
 // PostLimit caps how many rows PostQuery returns.

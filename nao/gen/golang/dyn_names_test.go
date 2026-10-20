@@ -13,7 +13,7 @@ import (
 func dynNamesWalk(p *plan, info *check.Info) []NameCollision {
 	size := 1
 	for _, tm := range p.tables {
-		size += 3 + len(dynWrapperSuffixes) + len(tm.fields)
+		size += 5 + len(dynWrapperSuffixes) + len(tm.fields)
 	}
 	seen := make(map[string]dynOrigin, size)
 	seen["Queries"] = dynOrigin{kind: dynQueries}
@@ -51,12 +51,10 @@ func dynNamesWalk(p *plan, info *check.Info) []NameCollision {
 		if len(tm.fields) == 0 {
 			continue
 		}
-		if len(tm.createFields()) > 0 {
-			add(tm.model+"CreateParams", dynOrigin{kind: dynCreateParams, tm: tm, pos: pos})
-		}
-		if len(tm.pk) > 0 && len(tm.nonPK()) > 0 {
-			add(tm.model+"UpdateParams", dynOrigin{kind: dynUpdateParams, tm: tm, pos: pos})
-		}
+		add(tm.model+"Changeset", dynOrigin{kind: dynChangeset, tm: tm, pos: pos})
+		add(tm.model+"Column", dynOrigin{kind: dynColumn, tm: tm, pos: pos})
+		add(tm.model+"Params", dynOrigin{kind: dynParams, tm: tm, pos: pos})
+		add(tm.model+"New", dynOrigin{kind: dynNew, tm: tm, pos: pos})
 		for _, f := range tm.fields {
 			add(tm.model+f.goField, dynOrigin{kind: dynHandle, tm: tm, f: f, pos: f.col.Pos()})
 		}
@@ -106,13 +104,19 @@ Enum user_kind {
 Enum e_user {
   x
 }
-Table pinned [model: 'UserCreateParams'] {
+Table pinned [model: 'UserChangeset'] {
   id int [pk]
   n int
 }
-Table pinned_update [model: 'UserUpdateParams'] {
+Table pinned_update [model: 'UserNew'] {
   id int [pk]
   n int
+}
+Table user_columns {
+  id int [pk]
+}
+Table user_params {
+  id int [pk]
 }
 Table nokey {
   a int

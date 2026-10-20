@@ -5,24 +5,11 @@ package models
 import (
 	"context"
 	"github.com/Piechutowski/volt/nao/rt"
-	"time"
 )
 
 const (
 	postTableSQL   = `"posts"`
 	postColumnsSQL = `"id", "title", "status", "body", "published_at"`
-)
-
-// Typed column handles of Post: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter Post queries; mixing models is a compile
-// error.
-var (
-	PostID          = rt.Column[Post, int]{Name: "id"}
-	PostTitle       = rt.Column[Post, string]{Name: "title"}
-	PostStatus      = rt.Column[Post, EPostStatus]{Name: "status"}
-	PostBody        = rt.NullColumn[Post, string]{Column: rt.Column[Post, string]{Name: "body"}}
-	PostPublishedAt = rt.NullColumn[Post, time.Time]{Column: rt.Column[Post, time.Time]{Name: "published_at"}}
 )
 
 // PostLimit caps how many rows PostQuery returns.
@@ -131,15 +118,6 @@ func (q *Queries) PostUpdateWhere(ctx context.Context, set []rt.Assign[Post], pr
 const (
 	tagTableSQL   = `"tags"`
 	tagColumnsSQL = `"id", "name"`
-)
-
-// Typed column handles of Tag: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter Tag queries; mixing models is a compile
-// error.
-var (
-	TagID   = rt.Column[Tag, int]{Name: "id"}
-	TagName = rt.Column[Tag, string]{Name: "name"}
 )
 
 // TagLimit caps how many rows TagQuery returns.

@@ -12,15 +12,6 @@ const (
 	userColumnsSQL = `"id", "email"`
 )
 
-// Typed column handles of User: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter User queries; mixing models is a compile
-// error.
-var (
-	UserID    = rt.Column[User, int]{Name: "id"}
-	UserEmail = rt.Column[User, string]{Name: "email"}
-)
-
 // UserLimit caps how many rows UserQuery returns.
 func UserLimit(n int) rt.Opt[User] { return rt.Limit[User](n) }
 
@@ -127,16 +118,6 @@ func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], pr
 const (
 	userProfileTableSQL   = `"user_profiles"`
 	userProfileColumnsSQL = `"user_id", "bio", "avatar_url"`
-)
-
-// Typed column handles of UserProfile: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter UserProfile queries; mixing models is a compile
-// error.
-var (
-	UserProfileUserID    = rt.Column[UserProfile, int]{Name: "user_id"}
-	UserProfileBio       = rt.NullColumn[UserProfile, string]{Column: rt.Column[UserProfile, string]{Name: "bio"}}
-	UserProfileAvatarURL = rt.NullColumn[UserProfile, string]{Column: rt.Column[UserProfile, string]{Name: "avatar_url"}}
 )
 
 // UserProfileLimit caps how many rows UserProfileQuery returns.

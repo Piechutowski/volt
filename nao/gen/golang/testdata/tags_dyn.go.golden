@@ -12,16 +12,6 @@ const (
 	userColumnsSQL = `"id", "user_name", "bio"`
 )
 
-// Typed column handles of User: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter User queries; mixing models is a compile
-// error.
-var (
-	UserID       = rt.Column[User, int]{Name: "id"}
-	UserUserName = rt.Column[User, string]{Name: "user_name"}
-	UserBio      = rt.NullColumn[User, string]{Column: rt.Column[User, string]{Name: "bio"}}
-)
-
 // UserLimit caps how many rows UserQuery returns.
 func UserLimit(n int) rt.Opt[User] { return rt.Limit[User](n) }
 

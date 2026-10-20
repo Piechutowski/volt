@@ -64,6 +64,16 @@ func (e *Invalid) StatusCode() int {
 	return 422
 }
 
+// Detail is the itemized form the volt runtime renders into an error
+// body: the check, its columns, the message. It aliases the same unnamed
+// struct the volt runtime aliases, so Details() satisfies volt's Detailer
+// interface without either package importing the other.
+type Detail = struct {
+	Check   string   `json:"check"`
+	Columns []string `json:"columns,omitempty"`
+	Message string   `json:"message"`
+}
+
 // Details itemizes every field error (the volt Detailer contract).
 func (e *Invalid) Details() []Detail {
 	out := make([]Detail, len(e.Fields))

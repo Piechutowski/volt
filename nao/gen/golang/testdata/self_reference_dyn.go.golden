@@ -12,16 +12,6 @@ const (
 	employeeColumnsSQL = `"id", "full_name", "manager_id"`
 )
 
-// Typed column handles of Employee: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter Employee queries; mixing models is a compile
-// error.
-var (
-	EmployeeID        = rt.Column[Employee, int]{Name: "id"}
-	EmployeeFullName  = rt.Column[Employee, string]{Name: "full_name"}
-	EmployeeManagerID = rt.NullColumn[Employee, int]{Column: rt.Column[Employee, int]{Name: "manager_id"}}
-)
-
 // EmployeeLimit caps how many rows EmployeeQuery returns.
 func EmployeeLimit(n int) rt.Opt[Employee] { return rt.Limit[Employee](n) }
 

@@ -22,7 +22,7 @@ func TestResourcesDefault(t *testing.T) {
 		c.Format = f
 		ctx := context.Background()
 
-		made, err := c.RefCreateUser(ctx, db.UserCreateParams{Email: "ref@example.com"})
+		made, err := c.RefCreateUser(ctx, db.UserNew().EmailSet("ref@example.com"))
 		if err != nil || made.ID == 0 {
 			t.Fatalf("%v: create = %+v, %v", f, made, err)
 		}
@@ -34,11 +34,11 @@ func TestResourcesDefault(t *testing.T) {
 		if err != nil || one.Email != "ref@example.com" {
 			t.Fatalf("%v: show = %+v, %v", f, one, err)
 		}
-		up, err := c.RefUpdateUser(ctx, made.ID, db.UserUpdateParams{Email: "fer@example.com"})
+		up, err := c.RefUpdateUser(ctx, made.ID, db.UserNew().EmailSet("fer@example.com"))
 		if err != nil || up.Email != "fer@example.com" {
 			t.Fatalf("%v: update = %+v, %v", f, up, err)
 		}
-		if _, err := c.RefUpdateUser(ctx, made.ID, db.UserUpdateParams{}); !errors.Is(err, volt.Error(422, "")) {
+		if _, err := c.RefUpdateUser(ctx, made.ID, db.UserNew()); !errors.Is(err, volt.Error(422, "")) {
 			t.Fatalf("%v: empty email = %v, want 422", f, err)
 		}
 		if err := c.RefDeleteUser(ctx, made.ID); err != nil {

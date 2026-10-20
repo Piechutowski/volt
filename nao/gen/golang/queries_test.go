@@ -21,18 +21,28 @@ type stmtCase struct {
 func planStatements(t *testing.T, p *plan) map[string]stmtCase {
 	t.Helper()
 	named := func(sql string) stmtCase { return stmtCase{SQL: sql, N: -1} }
+	cols := func(fields []*fieldPlan) []string {
+		out := make([]string, len(fields))
+		for i, f := range fields {
+			out[i] = f.colName
+		}
+		return out
+	}
 	stmts := map[string]stmtCase{}
 	for _, tm := range p.tables {
 		if len(tm.fields) == 0 {
 			continue
 		}
+		table, returning := sqlIdentQuote(tm.sqlName), tm.columnList()
 		if len(tm.pk) > 0 {
 			stmts[tm.model+"Get"] = named(tm.getSQL())
 			if len(tm.pk) == 1 {
 				stmts[tm.model+"GetMany"] = stmtCase{SQL: tm.getManySQL() + " (?)", N: 1}
 			}
-			if len(tm.nonPK()) > 0 {
-				stmts[tm.model+"Update"] = named(tm.updateSQL())
+			if set := cols(tm.nonPK()); len(set) > 0 {
+				key := cols(tm.pk)
+				stmts[tm.model+"UpdateOne"] = stmtCase{SQL: rt.UpdateRowRender(table, set[:1], key, returning), N: 1 + len(key)}
+				stmts[tm.model+"UpdateAll"] = stmtCase{SQL: rt.UpdateRowRender(table, set, key, returning), N: len(set) + len(key)}
 			}
 			stmts[tm.model+"Delete"] = named(tm.deleteSQL())
 		}
@@ -40,7 +50,11 @@ func planStatements(t *testing.T, p *plan) map[string]stmtCase {
 			stmts[tm.model+"GetBy"+f.goField] = named(tm.getBySQL(f))
 		}
 		stmts[tm.model+"List"] = named(tm.listSQL())
-		stmts[tm.model+"Create"] = named(tm.createSQL())
+		stmts[tm.model+"CreateDefaults"] = stmtCase{SQL: rt.InsertRender(table, nil, returning), N: 0}
+		if set := cols(tm.settable()); len(set) > 0 {
+			stmts[tm.model+"CreateOne"] = stmtCase{SQL: rt.InsertRender(table, set[:1], returning), N: 1}
+			stmts[tm.model+"CreateAll"] = stmtCase{SQL: rt.InsertRender(table, set, returning), N: len(set)}
+		}
 	}
 	return stmts
 }

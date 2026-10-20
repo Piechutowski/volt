@@ -51,15 +51,20 @@ type tableModel struct {
 type fieldPlan struct {
 	col      *ast.Column
 	colName  string
+	wire     string
 	goField  string
 	tag      string
 	goType   string
 	baseType string
+	storage  string
+	enum     *check.EnumInfo
 	imp      string
 	param    string
 	arg      string
 
 	nullable   bool
+	declared   bool
+	required   bool
 	increment  bool
 	hasDefault bool
 	unique     bool
@@ -93,15 +98,32 @@ func (t *tableModel) isPK(f *fieldPlan) bool {
 	return false
 }
 
-func (t *tableModel) createFields() []*fieldPlan {
+func (t *tableModel) settable() []*fieldPlan {
 	var out []*fieldPlan
 	for _, f := range t.fields {
-		if f.increment || f.hasDefault {
+		if f.increment {
 			continue
 		}
 		out = append(out, f)
 	}
 	return out
+}
+
+func (t *tableModel) handles(fields []*fieldPlan) []string {
+	out := make([]string, len(fields))
+	for i, f := range fields {
+		out[i] = t.model + f.goField
+	}
+	return out
+}
+
+func (t *tableModel) index(f *fieldPlan) int {
+	for i, g := range t.fields {
+		if g == f {
+			return i
+		}
+	}
+	return -1
 }
 
 func (p *plan) fieldCount() int {
@@ -276,21 +298,47 @@ func fieldBuild(enumTypes map[string]string, imports map[string]bool, cd *check.
 	}
 	params[param] = colName
 
+	tag := fieldTag(col)
 	return &fieldPlan{
 		col:        col,
 		colName:    colName,
+		wire:       wireName(colName, tag),
 		goField:    goField,
-		tag:        fieldTag(col),
+		tag:        tag,
 		goType:     goType,
 		baseType:   typ.name,
+		storage:    cd.Type.Storage,
+		enum:       cd.Type.Enum,
 		imp:        typ.imp,
 		param:      param,
 		arg:        argName(goField),
 		nullable:   nullable,
+		declared:   cd.Type.Decl != nil,
+		required:   hasSetting(col, "required"),
 		increment:  hasSetting(col, "increment"),
 		hasDefault: col.Settings.Get("default") != nil,
 		unique:     hasSetting(col, "unique"),
 	}, nil
+}
+
+// wireName is the key a column has in a JSON document: the name its json
+// tag gives it, the column name when the tag names none (spec §struct-tags).
+func wireName(colName, tag string) string {
+	const key = `json:"`
+	i := strings.Index(tag, key)
+	if i < 0 {
+		return colName
+	}
+	rest := tag[i+len(key):]
+	j := strings.IndexByte(rest, '"')
+	if j < 0 {
+		return colName
+	}
+	name, _, _ := strings.Cut(rest[:j], ",")
+	if name == "" || name == "-" {
+		return colName
+	}
+	return name
 }
 
 func sqlTableName(q *ast.QualName) string {
@@ -402,30 +450,6 @@ func (t *tableModel) listSQL() string {
 	return "SELECT " + t.columnList() + " FROM " + sqlIdentQuote(t.sqlName)
 }
 
-func (t *tableModel) createSQL() string {
-	fields := t.createFields()
-	if len(fields) == 0 {
-		return "INSERT INTO " + sqlIdentQuote(t.sqlName) + " DEFAULT VALUES RETURNING " + t.columnList()
-	}
-	cols := make([]string, len(fields))
-	vals := make([]string, len(fields))
-	for i, f := range fields {
-		cols[i] = sqlIdentQuote(f.colName)
-		vals[i] = ":" + f.param
-	}
-	return "INSERT INTO " + sqlIdentQuote(t.sqlName) + " (" + strings.Join(cols, ", ") + ") VALUES (" +
-		strings.Join(vals, ", ") + ") RETURNING " + t.columnList()
-}
-
-func (t *tableModel) updateSQL() string {
-	sets := make([]string, 0, len(t.fields))
-	for _, f := range t.nonPK() {
-		sets = append(sets, sqlIdentQuote(f.colName)+" = :"+f.param)
-	}
-	return "UPDATE " + sqlIdentQuote(t.sqlName) + " SET " + strings.Join(sets, ", ") +
-		" WHERE " + t.pkWhere() + " RETURNING " + t.columnList()
-}
-
 func (t *tableModel) deleteSQL() string {
 	return "DELETE FROM " + sqlIdentQuote(t.sqlName) + " WHERE " + t.pkWhere()
 }
@@ -456,7 +480,7 @@ type queryEmitter struct {
 
 func (e *queryEmitter) run() {
 	e.needImports = map[string]bool{}
-	e.body.Grow(e.plan.fieldCount() * 110)
+	e.body.Grow(e.plan.fieldCount()*200 + len(e.plan.tables)*2000)
 	for _, t := range e.plan.tables {
 		e.tableEmit(t)
 	}
@@ -496,10 +520,11 @@ type Queries struct {
 // New returns Queries running on db.
 func New(db rt.DBTX) *Queries { return &Queries{db: db} }
 
-// WithCache returns a copy of q whose dynamic queries (Query, Count,
-// Exists, DeleteWhere, UpdateWhere) run through cache: identical option
-// shapes render identical SQL, prepared once. Bind a cache to a
-// *sql.DB, never a transaction.
+// WithCache returns a copy of q whose run-time rendered statements (the
+// changeset writes Create and Update, and the dynamic Query, Count,
+// Exists, DeleteWhere, UpdateWhere) run through cache: identical shapes
+// render identical SQL, prepared once. Bind a cache to a *sql.DB, never
+// a transaction.
 func (q *Queries) WithCache(cache *rt.StmtCache) *Queries {
 	return &Queries{db: q.db, cache: cache}
 }
@@ -513,10 +538,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
 // handle that can begin a transaction (a *sql.DB).
 func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 	return rt.Tx(ctx, q.db, func(tx *sql.Tx) error { return fn(q.WithTx(tx)) })
-}
-
-type rowScanner interface {
-	Scan(dest ...any) error
 }
 
 `)
@@ -540,14 +561,14 @@ func (e *queryEmitter) tableEmit(t *tableModel) {
 	}
 	delete(e.needImports, "")
 
-	fmt.Fprintf(b, "func %sScan(r rowScanner) (%s, error) {\n\tvar v %s\n\terr := r.Scan(", lower, t.model, t.model)
+	fmt.Fprintf(b, "func %sScan(r rt.Row) (%s, error) {\n\tvar v %s\n\terr := r.Scan(", lower, t.model, t.model)
 	for i, f := range t.fields {
 		if i > 0 {
 			b.WriteString(", ")
 		}
 		b.WriteString("&v." + f.goField)
 	}
-	b.WriteString(")\n\treturn v, rt.Constraint(err)\n}\n\n")
+	fmt.Fprintf(b, ")\n\treturn v, rt.Refused(%q, err)\n}\n\n", t.model)
 
 	if len(t.pk) > 0 {
 		e.getEmit(t, lower, tbl)
@@ -638,39 +659,43 @@ func rowsScanEmit(b *strings.Builder, model, lower string) {
 
 func (e *queryEmitter) createEmit(t *tableModel, lower, tbl string) {
 	b := &e.body
-	fields := t.createFields()
-	fmt.Fprintf(b, "const %sCreateSQL = `%s`\n\n", lower, t.createSQL())
-
-	fmt.Fprintf(b, "// %sCreate inserts a %s row and returns the row the database wrote,\n// generated keys and defaults filled in.\n", t.model, tbl)
-	if len(fields) == 0 {
-		fmt.Fprintf(b, "func (q *Queries) %sCreate(ctx context.Context) (%s, error) {\n", t.model, t.model)
-		fmt.Fprintf(b, "\treturn %sScan(q.db.QueryRowContext(ctx, %sCreateSQL))\n}\n\n", lower, lower)
-		return
-	}
-	fmt.Fprintf(b, "func (q *Queries) %sCreate(ctx context.Context, arg %sCreateParams) (%s, error) {\n", t.model, t.model, t.model)
-	fmt.Fprintf(b, "\treturn %sScan(q.db.QueryRowContext(ctx, %sCreateSQL,\n", lower, lower)
-	for _, f := range fields {
-		fmt.Fprintf(b, "\t\tsql.Named(%q, arg.%s),\n", f.param, f.goField)
-	}
-	b.WriteString("\t))\n}\n\n")
+	fmt.Fprintf(b, "// %sCreate validates c and inserts its marked columns, returning the\n", t.model)
+	fmt.Fprintf(b, "// stored %s row; nothing marked inserts the defaults (spec §changesets).\n", tbl)
+	fmt.Fprintf(b, "func (q *Queries) %sCreate(ctx context.Context, c %sChangeset) (%s, error) {\n", t.model, t.model, t.model)
+	fmt.Fprintf(b, "\tc = c.Validate()\n\tif err := c.Err(); err != nil {\n\t\treturn %s{}, err\n\t}\n", t.model)
+	markedArgsEmit(b, t)
+	fmt.Fprintf(b, "\trow, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(%sTableSQL, cols, %sColumnsSQL), args...)\n", lower, lower)
+	fmt.Fprintf(b, "\tif err != nil {\n\t\treturn %s{}, err\n\t}\n\treturn %sScan(row)\n}\n\n", t.model, lower)
 }
 
 func (e *queryEmitter) updateEmit(t *tableModel, lower, tbl string) {
 	b := &e.body
-	fields := t.nonPK()
-	fmt.Fprintf(b, "const %sUpdateSQL = `%s`\n\n", lower, t.updateSQL())
+	fmt.Fprintf(b, "// %sUpdate validates c and writes its marked columns to the %s row it\n", t.model, tbl)
+	fmt.Fprintf(b, "// was made from, returning the stored row; nothing marked returns the row\n")
+	fmt.Fprintf(b, "// untouched (spec §changesets).\n")
+	fmt.Fprintf(b, "func (q *Queries) %sUpdate(ctx context.Context, c %sChangeset) (%s, error) {\n", t.model, t.model, t.model)
+	fmt.Fprintf(b, "\tif !c.row {\n\t\treturn %s{}, rt.ErrNoRow\n\t}\n", t.model)
+	fmt.Fprintf(b, "\tc = c.Validate()\n\tif err := c.Err(); err != nil {\n\t\treturn %s{}, err\n\t}\n", t.model)
+	markedArgsEmit(b, t)
+	b.WriteString("\tif len(cols) == 0 {\n\t\treturn v, nil\n\t}\n")
+	keys := make([]string, len(t.pk))
+	for i, f := range t.pk {
+		fmt.Fprintf(b, "\targs = append(args, c.data.%s)\n", f.goField)
+		keys[i] = f.colName
+	}
+	fmt.Fprintf(b, "\trow, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(%sTableSQL, cols, %#v, %sColumnsSQL), args...)\n", lower, keys, lower)
+	fmt.Fprintf(b, "\tif err != nil {\n\t\treturn %s{}, err\n\t}\n\treturn %sScan(row)\n}\n\n", t.model, lower)
+}
 
-	fmt.Fprintf(b, "// %sUpdate rewrites every non-key column of the identified %s row\n", t.model, tbl)
-	fmt.Fprintf(b, "// and returns the result, or rt.ErrNotFound when no row matches.\n")
-	fmt.Fprintf(b, "func (q *Queries) %sUpdate(ctx context.Context, %s, arg %sUpdateParams) (%s, error) {\n", t.model, identityParams(t), t.model, t.model)
-	fmt.Fprintf(b, "\treturn %sScan(q.db.QueryRowContext(ctx, %sUpdateSQL,\n", lower, lower)
-	for _, f := range t.pk {
-		fmt.Fprintf(b, "\t\tsql.Named(%q, %s),\n", f.param, f.arg)
+func markedArgsEmit(b *strings.Builder, t *tableModel) {
+	settable := t.settable()
+	if len(settable) > 0 {
+		b.WriteString("\tv := c.Row()\n")
 	}
-	for _, f := range fields {
-		fmt.Fprintf(b, "\t\tsql.Named(%q, arg.%s),\n", f.param, f.goField)
+	b.WriteString("\tvar cols []string\n\tvar args []any\n")
+	for _, f := range settable {
+		fmt.Fprintf(b, "\tif c.set[%d] {\n\t\tcols, args = append(cols, %q), append(args, v.%s)\n\t}\n", t.index(f), f.colName, f.goField)
 	}
-	b.WriteString("\t))\n}\n\n")
 }
 
 func (e *queryEmitter) deleteEmit(t *tableModel, lower, tbl string) {
@@ -679,7 +704,7 @@ func (e *queryEmitter) deleteEmit(t *tableModel, lower, tbl string) {
 	fmt.Fprintf(b, "// %sDelete removes the identified %s row; rt.ErrNotFound reports\n// that nothing matched.\n", t.model, tbl)
 	fmt.Fprintf(b, "func (q *Queries) %sDelete(ctx context.Context, %s) error {\n", t.model, identityParams(t))
 	fmt.Fprintf(b, "\tres, err := q.db.ExecContext(ctx, %sDeleteSQL, %s)\n", lower, identityArgs(t))
-	fmt.Fprintf(b, "\tif err != nil {\n\t\treturn rt.Constraint(err)\n\t}\n")
+	fmt.Fprintf(b, "\tif err != nil {\n\t\treturn rt.Refused(%q, err)\n\t}\n", t.model)
 	fmt.Fprintf(b, "\tn, err := res.RowsAffected()\n\tif err != nil {\n\t\treturn err\n\t}\n")
 	fmt.Fprintf(b, "\tif n == 0 {\n\t\treturn rt.ErrNotFound\n\t}\n\treturn nil\n}\n\n")
 }

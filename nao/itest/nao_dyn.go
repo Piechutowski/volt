@@ -4,26 +4,12 @@ package itest
 
 import (
 	"context"
-	"github.com/Piechutowski/volt/nao/itest/pay"
 	"github.com/Piechutowski/volt/nao/rt"
-	"time"
 )
 
 const (
 	userTableSQL   = `"users"`
 	userColumnsSQL = `"id", "email", "name", "bio", "created_at"`
-)
-
-// Typed column handles of User: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter User queries; mixing models is a compile
-// error.
-var (
-	UserID        = rt.Column[User, int]{Name: "id"}
-	UserEmail     = rt.Column[User, string]{Name: "email"}
-	UserName      = rt.Column[User, string]{Name: "name"}
-	UserBio       = rt.NullColumn[User, string]{Column: rt.Column[User, string]{Name: "bio"}}
-	UserCreatedAt = rt.Column[User, time.Time]{Name: "created_at"}
 )
 
 // UserLimit caps how many rows UserQuery returns.
@@ -134,20 +120,6 @@ const (
 	orderColumnsSQL = `"id", "user_id", "status", "total", "tip", "fee", "placed_at"`
 )
 
-// Typed column handles of Order: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter Order queries; mixing models is a compile
-// error.
-var (
-	OrderID       = rt.Column[Order, int]{Name: "id"}
-	OrderUserID   = rt.Column[Order, int]{Name: "user_id"}
-	OrderStatus   = rt.Column[Order, EOrderStatus]{Name: "status"}
-	OrderTotal    = rt.Column[Order, float64]{Name: "total"}
-	OrderTip      = rt.Column[Order, Money]{Name: "tip"}
-	OrderFee      = rt.Column[Order, pay.Cents]{Name: "fee"}
-	OrderPlacedAt = rt.NullColumn[Order, time.Time]{Column: rt.Column[Order, time.Time]{Name: "placed_at"}}
-)
-
 // OrderLimit caps how many rows OrderQuery returns.
 func OrderLimit(n int) rt.Opt[Order] { return rt.Limit[Order](n) }
 
@@ -254,15 +226,6 @@ func (q *Queries) OrderUpdateWhere(ctx context.Context, set []rt.Assign[Order], 
 const (
 	userTagTableSQL   = `"user_tags"`
 	userTagColumnsSQL = `"user_id", "tag"`
-)
-
-// Typed column handles of UserTag: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter UserTag queries; mixing models is a compile
-// error.
-var (
-	UserTagUserID = rt.Column[UserTag, int]{Name: "user_id"}
-	UserTagTag    = rt.Column[UserTag, string]{Name: "tag"}
 )
 
 // UserTagLimit caps how many rows UserTagQuery returns.
@@ -373,17 +336,6 @@ const (
 	pageViewColumnsSQL = `"id", "site", "day", "hits"`
 )
 
-// Typed column handles of PageView: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter PageView queries; mixing models is a compile
-// error.
-var (
-	PageViewID   = rt.Column[PageView, int]{Name: "id"}
-	PageViewSite = rt.Column[PageView, string]{Name: "site"}
-	PageViewDay  = rt.Column[PageView, int]{Name: "day"}
-	PageViewHits = rt.Column[PageView, int]{Name: "hits"}
-)
-
 // PageViewLimit caps how many rows PageViewQuery returns.
 func PageViewLimit(n int) rt.Opt[PageView] { return rt.Limit[PageView](n) }
 
@@ -490,17 +442,6 @@ func (q *Queries) PageViewUpdateWhere(ctx context.Context, set []rt.Assign[PageV
 const (
 	linkClickTableSQL   = `"link_clicks"`
 	linkClickColumnsSQL = `"id", "site", "day", "target"`
-)
-
-// Typed column handles of LinkClick: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter LinkClick queries; mixing models is a compile
-// error.
-var (
-	LinkClickID     = rt.Column[LinkClick, int]{Name: "id"}
-	LinkClickSite   = rt.Column[LinkClick, string]{Name: "site"}
-	LinkClickDay    = rt.Column[LinkClick, int]{Name: "day"}
-	LinkClickTarget = rt.Column[LinkClick, string]{Name: "target"}
 )
 
 // LinkClickLimit caps how many rows LinkClickQuery returns.

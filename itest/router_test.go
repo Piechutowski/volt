@@ -117,7 +117,7 @@ func fixture(t *testing.T) (http.Handler, *volt.Broker) {
 		panic(err)
 	}
 	q := db.New(sqlDB)
-	if _, err := q.UserCreate(context.Background(), db.UserCreateParams{Email: "one@example.com"}); err != nil {
+	if _, err := q.UserCreate(context.Background(), db.UserNew().EmailSet("one@example.com")); err != nil {
 		panic(err)
 	}
 	broker := &volt.Broker{Heartbeat: 20 * time.Millisecond}

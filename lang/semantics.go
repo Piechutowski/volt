@@ -128,8 +128,6 @@ type checksEntry struct {
 	pkgName string
 	specs   []golang.ValidatorSpec
 	diags   []diag.Diagnostic
-
-	validCreate, validUpdate bool
 }
 
 func (e *checksEntry) holds(model any, funcs *goScan, pkgName string) bool {
@@ -565,15 +563,6 @@ func (o routeOracle) selectByName(path, name string) (*SelectInfo, string) {
 		}
 	}
 	return nil, hint
-}
-
-func (o routeOracle) validators(path, key string) (bool, bool) {
-	pkg := o.c.pr.Packages[path]
-	if pkg == nil {
-		return false, false
-	}
-	v := pkg.ValidByKey[key]
-	return v[0], v[1]
 }
 
 func (o routeOracle) queryHint(path, name string) string {

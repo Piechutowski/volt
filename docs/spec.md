@@ -760,11 +760,11 @@ column setting  = "primary key" | "pk"
 > declares that a value must be present
 > in the zero-value sense: under ZII a missing input decodes to the
 > type's zero value and `not null` is satisfied, so `required` is the
-> word for "and not that either". It is the one built-in validator
-> (§validators), named `<column>_required`: it refuses `""` for
-> `string` and enum columns, `0` for `int` and `float64`, a zero
-> length for `[]byte`, and for a declared type the empty value of its
-> storage type. It MUST accompany `not null` (or a key), and is an
+> word for "and not that either". It is the one built-in rule of
+> `Validate` (§changesets), the field error with check `required`: it
+> refuses `""` for `string` and enum columns, `0` for `int` and
+> `float64`, a zero length for `[]byte`, and for a declared type the
+> empty value of its storage type. It MUST accompany `not null` (or a key), and is an
 > error on a `null`, `default:` or `increment` column and on `bool`
 > and `time.Time`, where every value is a value.
 >
@@ -2726,11 +2726,13 @@ user, err := q.UserUpdate(ctx, cs)
    one. A JSON body that is not an object is a malformed body (400).
 6. **`Validate`.** Runs over `Row()`, in this order, every rule every
    time: each `required` column (rule 9), each enum column's
-   membership in its value set (check `enum`), then every validator
-   of the table top-down (§validators). Every failure is collected as
-   a field error; the first does not stop the rest. `Validate` is
-   pure and idempotent; `Create` and `Update` call it again, so
-   forgetting it costs only an earlier error message.
+   membership in its value set (check `enum`), skipping a column a
+   create leaves unmarked, since the database's default is written in
+   its place (rule 8), then every validator of the table top-down
+   (§validators). Every failure is collected as a field error; the
+   first does not stop the rest. `Validate` is pure and idempotent;
+   `Create` and `Update` call it again, so forgetting it costs only an
+   earlier error message.
 7. **Errors.** `ErrorAdd` records a field error with check `custom`
    on a column, for a rule the controller alone can judge. `Errors`
    lists every field error in the order recorded; `Valid` is "no

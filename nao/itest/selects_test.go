@@ -14,19 +14,19 @@ import (
 func seedMetrics(t *testing.T, q *Queries) {
 	t.Helper()
 	ctx := context.Background()
-	for _, r := range []PageViewCreateParams{
-		{Site: "alpha", Day: 1},
-		{Site: "alpha", Day: 1},
-		{Site: "alpha", Day: 2},
-		{Site: "beta", Day: 1},
+	for _, r := range []PageViewChangeset{
+		PageViewNew().SiteSet("alpha").DaySet(1),
+		PageViewNew().SiteSet("alpha").DaySet(1),
+		PageViewNew().SiteSet("alpha").DaySet(2),
+		PageViewNew().SiteSet("beta").DaySet(1),
 	} {
 		if _, err := q.PageViewCreate(ctx, r); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for _, r := range []LinkClickCreateParams{
-		{Site: "alpha", Day: 1},
-		{Site: "beta", Day: 2},
+	for _, r := range []LinkClickChangeset{
+		LinkClickNew().SiteSet("alpha").DaySet(1),
+		LinkClickNew().SiteSet("beta").DaySet(2),
 	} {
 		if _, err := q.LinkClickCreate(ctx, r); err != nil {
 			t.Fatal(err)

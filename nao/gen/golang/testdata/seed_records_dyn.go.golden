@@ -5,21 +5,11 @@ package models
 import (
 	"context"
 	"github.com/Piechutowski/volt/nao/rt"
-	"time"
 )
 
 const (
 	currencyTableSQL   = `"currencies"`
 	currencyColumnsSQL = `"code", "name"`
-)
-
-// Typed column handles of Currency: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter Currency queries; mixing models is a compile
-// error.
-var (
-	CurrencyCode = rt.Column[Currency, string]{Name: "code"}
-	CurrencyName = rt.Column[Currency, string]{Name: "name"}
 )
 
 // CurrencyLimit caps how many rows CurrencyQuery returns.
@@ -128,19 +118,6 @@ func (q *Queries) CurrencyUpdateWhere(ctx context.Context, set []rt.Assign[Curre
 const (
 	rateTableSQL   = `"rates"`
 	rateColumnsSQL = `"id", "currency_code", "rate", "fetched_at", "active", "comment"`
-)
-
-// Typed column handles of Rate: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter Rate queries; mixing models is a compile
-// error.
-var (
-	RateID           = rt.Column[Rate, int]{Name: "id"}
-	RateCurrencyCode = rt.Column[Rate, string]{Name: "currency_code"}
-	RateRate         = rt.Column[Rate, float64]{Name: "rate"}
-	RateFetchedAt    = rt.Column[Rate, time.Time]{Name: "fetched_at"}
-	RateActive       = rt.Column[Rate, bool]{Name: "active"}
-	RateComment      = rt.NullColumn[Rate, string]{Column: rt.Column[Rate, string]{Name: "comment"}}
 )
 
 // RateLimit caps how many rows RateQuery returns.

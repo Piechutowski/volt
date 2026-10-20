@@ -64,10 +64,6 @@ type Package struct {
 	Selects        []*SelectInfo
 	selectByMethod map[string]selectMember
 	selectByName   map[string]*SelectInfo
-	// ValidByKey says, per table whose params structs validate (§validators),
-	// whether the create and the update one do: decided with the
-	// table's lowered checks, read by the route lowering.
-	ValidByKey map[string][2]bool
 
 	schema *check.Info
 	plan   *golang.Plan

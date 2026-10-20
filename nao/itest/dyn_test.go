@@ -19,7 +19,7 @@ func dynSeed(t *testing.T, q *Queries) (ann, bea, bob User) {
 	t.Helper()
 	ctx := context.Background()
 	create := func(email, name string, bio rt.Null[string]) User {
-		u, err := q.UserCreate(ctx, UserCreateParams{Email: email, Name: name, Bio: bio})
+		u, err := q.UserCreate(ctx, UserNew().EmailSet(email).NameSet(name).BioSet(bio))
 		if err != nil {
 			t.Fatalf("UserCreate(%s): %v", email, err)
 		}
@@ -229,11 +229,11 @@ func TestOrderDynamic(t *testing.T) {
 	_, q := newDB(t)
 	ann, _, _ := dynSeed(t, q)
 
-	placed, err := q.OrderCreate(ctx, OrderCreateParams{UserID: ann.ID, Total: 9.99, PlacedAt: rt.Some(time.Now().UTC())})
+	placed, err := q.OrderCreate(ctx, OrderNew().UserIDSet(ann.ID).TotalSet(9.99).FeeSet(0).PlacedAtSet(rt.Some(time.Now().UTC())))
 	if err != nil {
 		t.Fatalf("OrderCreate: %v", err)
 	}
-	unplaced, err := q.OrderCreate(ctx, OrderCreateParams{UserID: ann.ID, Total: 15.00, PlacedAt: rt.Null[time.Time]{}})
+	unplaced, err := q.OrderCreate(ctx, OrderNew().UserIDSet(ann.ID).TotalSet(15.00).FeeSet(0).PlacedAtSet(rt.Null[time.Time]{}))
 	if err != nil {
 		t.Fatalf("OrderCreate: %v", err)
 	}

@@ -5,20 +5,11 @@ package models
 import (
 	"context"
 	"github.com/Piechutowski/volt/nao/rt"
-	"time"
 )
 
 const (
 	userTableSQL   = `"users"`
 	userColumnsSQL = `"id"`
-)
-
-// Typed column handles of User: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter User queries; mixing models is a compile
-// error.
-var (
-	UserID = rt.Column[User, int]{Name: "id"}
 )
 
 // UserLimit caps how many rows UserQuery returns.
@@ -129,15 +120,6 @@ const (
 	roleColumnsSQL = `"id", "name"`
 )
 
-// Typed column handles of Role: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter Role queries; mixing models is a compile
-// error.
-var (
-	RoleID   = rt.Column[Role, int]{Name: "id"}
-	RoleName = rt.Column[Role, string]{Name: "name"}
-)
-
 // RoleLimit caps how many rows RoleQuery returns.
 func RoleLimit(n int) rt.Opt[Role] { return rt.Limit[Role](n) }
 
@@ -244,16 +226,6 @@ func (q *Queries) RoleUpdateWhere(ctx context.Context, set []rt.Assign[Role], pr
 const (
 	userRoleTableSQL   = `"user_roles"`
 	userRoleColumnsSQL = `"user_id", "role_id", "granted_at"`
-)
-
-// Typed column handles of UserRole: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter UserRole queries; mixing models is a compile
-// error.
-var (
-	UserRoleUserID    = rt.Column[UserRole, int]{Name: "user_id"}
-	UserRoleRoleID    = rt.Column[UserRole, int]{Name: "role_id"}
-	UserRoleGrantedAt = rt.Column[UserRole, time.Time]{Name: "granted_at"}
 )
 
 // UserRoleLimit caps how many rows UserRoleQuery returns.

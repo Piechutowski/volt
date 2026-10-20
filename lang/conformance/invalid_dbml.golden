@@ -238,7 +238,7 @@ i63_tag_duplicate_key.dbml:4:38: error: spec/columns: tag key "json" appears mor
 i78_increment_varchar.dbml:4:20: error: spec/columns: increment on "code" (string): only an int column can auto-increment (§columns, §mapping-to-sqlite-ddl)
 
 ## i79_increment_not_pk.dbml
-i79_increment_not_pk.dbml:6:26: error: spec/columns: increment on "counter": only the primary key auto-increments; elsewhere the keyword would be silently ignored while CreateParams omits the column (§columns, §mapping-to-sqlite-ddl)
+i79_increment_not_pk.dbml:6:26: error: spec/columns: increment on "counter": only the primary key auto-increments; elsewhere the keyword would be silently ignored while no changeset ever marks the column (§columns, §mapping-to-sqlite-ddl)
 
 ## i80_increment_composite_pk.dbml
 i80_increment_composite_pk.dbml:4:16: error: spec/columns: increment on "user_id": a composite primary key has no auto-assigned column — SQLite auto-assigns only the single-column integer key (§columns, §mapping-to-sqlite-ddl)

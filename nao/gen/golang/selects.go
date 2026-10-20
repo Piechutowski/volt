@@ -29,7 +29,7 @@ func (pl *Plan) Selects(fns []SelectFn, opts Options) ([]byte, error) {
 	byKey := pl.byKey
 
 	var body strings.Builder
-	imports := map[string]bool{"context": true}
+	imports := map[string]bool{"context": true, rtImport: true}
 	sharedDone := map[string]bool{}
 	for _, fn := range fns {
 		t := byKey[fn.TableKey]
@@ -154,7 +154,7 @@ func (t *tableModel) typeImport(goType string) string {
 
 func rowScanEmit(b *strings.Builder, row string, cols []*fieldPlan) {
 	lower := argName(row)
-	fmt.Fprintf(b, "func %sScan(r rowScanner) (%s, error) {\n\tvar v %s\n\terr := r.Scan(", lower, row, row)
+	fmt.Fprintf(b, "func %sScan(r rt.Row) (%s, error) {\n\tvar v %s\n\terr := r.Scan(", lower, row, row)
 	for i, f := range cols {
 		if i > 0 {
 			b.WriteString(", ")

@@ -70,8 +70,10 @@ const (
 	dynEnum
 	dynEnumValue
 	dynModel
-	dynCreateParams
-	dynUpdateParams
+	dynChangeset
+	dynColumn
+	dynParams
+	dynNew
 	dynHandle
 	dynWrapper
 )
@@ -80,10 +82,14 @@ func (o dynOrigin) name() string {
 	switch o.kind {
 	case dynModel:
 		return o.tm.model
-	case dynCreateParams:
-		return o.tm.model + "CreateParams"
-	case dynUpdateParams:
-		return o.tm.model + "UpdateParams"
+	case dynChangeset:
+		return o.tm.model + "Changeset"
+	case dynColumn:
+		return o.tm.model + "Column"
+	case dynParams:
+		return o.tm.model + "Params"
+	case dynNew:
+		return o.tm.model + "New"
 	case dynHandle:
 		return o.tm.model + o.f.goField
 	case dynWrapper:
@@ -100,10 +106,14 @@ func (o dynOrigin) describe() string {
 		return fmt.Sprintf("enum %s value %q", o.e.Decl.Name.String(), o.v.Name.Name())
 	case dynModel:
 		return fmt.Sprintf("table %s (model %s)", o.tm.ti.Decl.Name.String(), o.tm.model)
-	case dynCreateParams:
-		return fmt.Sprintf("table %s (create params)", o.tm.ti.Decl.Name.String())
-	case dynUpdateParams:
-		return fmt.Sprintf("table %s (update params)", o.tm.ti.Decl.Name.String())
+	case dynChangeset:
+		return fmt.Sprintf("table %s (changeset %sChangeset)", o.tm.ti.Decl.Name.String(), o.tm.model)
+	case dynColumn:
+		return fmt.Sprintf("table %s (column handle type %sColumn)", o.tm.ti.Decl.Name.String(), o.tm.model)
+	case dynParams:
+		return fmt.Sprintf("table %s (write body %sParams)", o.tm.ti.Decl.Name.String(), o.tm.model)
+	case dynNew:
+		return fmt.Sprintf("table %s (constructor %sNew)", o.tm.ti.Decl.Name.String(), o.tm.model)
 	case dynHandle:
 		return fmt.Sprintf("table %s column %q (handle %s%s)", o.tm.ti.Decl.Name.String(), o.f.colName, o.tm.model, o.f.goField)
 	case dynWrapper:
@@ -138,9 +148,6 @@ func (e *dynEmitter) header() {
 		return
 	}
 	imports := map[string]bool{"context": true, rtImport: true}
-	for imp := range e.plan.imports {
-		imports[imp] = true
-	}
 	e.out.WriteString("\nimport (\n")
 	for _, p := range importKeysSort(imports) {
 		fmt.Fprintf(&e.out, "\t%s\n", importDecl(p))
@@ -160,33 +167,12 @@ func (e *dynEmitter) tableEmit(t *tableModel) {
 	fmt.Fprintf(b, "\t%sTableSQL   = `%s`\n", lower, sqlIdentQuote(t.sqlName))
 	fmt.Fprintf(b, "\t%sColumnsSQL = `%s`\n)\n\n", lower, t.columnList())
 
-	e.handlesEmit(t, lower, tbl)
 	e.wrappersEmit(t, tbl)
 	e.queryEmit(t, lower, tbl)
 	e.countEmit(t, lower, tbl)
 	e.existsEmit(t, lower, tbl)
 	e.deleteWhereEmit(t, lower, tbl)
 	e.updateWhereEmit(t, lower, tbl)
-}
-
-func (e *dynEmitter) handlesEmit(t *tableModel, lower, tbl string) {
-	b := &e.body
-	fmt.Fprintf(b, "// Typed column handles of %s: inert predicate, order and\n", t.model)
-	fmt.Fprintf(b, "// assignment builders for the dynamic query layer. A predicate\n")
-	fmt.Fprintf(b, "// built here can only enter %s queries; mixing models is a compile\n", t.model)
-	fmt.Fprintf(b, "// error.\n")
-	b.WriteString("var (\n")
-	var handles align.Block
-	for _, f := range t.fields {
-		if f.nullable {
-			handles.Row(t.model+f.goField, fmt.Sprintf("= rt.NullColumn[%s, %s]{Column: rt.Column[%s, %s]{Name: %q}}",
-				t.model, f.baseType, t.model, f.baseType, f.colName))
-			continue
-		}
-		handles.Row(t.model+f.goField, fmt.Sprintf("= rt.Column[%s, %s]{Name: %q}", t.model, f.baseType, f.colName))
-	}
-	handles.WriteTo(b, "\t")
-	b.WriteString(")\n\n")
 }
 
 func (e *dynEmitter) wrappersEmit(t *tableModel, tbl string) {
@@ -209,7 +195,7 @@ func (e *dynEmitter) wrappersEmit(t *tableModel, tbl string) {
 }
 
 func funcLine(b *strings.Builder, header, body string) {
-	if utf8.RuneCountInString(header)+utf8.RuneCountInString(body) <= 100 {
+	if utf8.RuneCountInString(header)+utf8.RuneCountInString(body) < 100 {
 		b.WriteString(header + " { " + body + " }\n\n")
 		return
 	}

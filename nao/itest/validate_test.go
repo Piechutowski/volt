@@ -1,3 +1,7 @@
+// Validate round trips (spec §changesets, §validators): required, enum
+// membership and the hand-written validators run in Go over the changeset,
+// every write validates before it touches the database, and the database
+// carries no twin of any rule.
 package itest
 
 import (
@@ -13,22 +17,24 @@ func TestValidatorsRunTopDownAndOnlyInGo(t *testing.T) {
 	db, q := newDB(t)
 	ctx := context.Background()
 
-	good := PageView{Site: "alpha", Day: 1, Hits: 3}
-	if err := good.Validate(); err != nil {
-		t.Fatalf("valid row rejected: %v", err)
+	if good := PageViewNew().SiteSet("alpha").DaySet(1).HitsSet(3).Validate(); !good.Valid() || good.Err() != nil {
+		t.Fatalf("valid row rejected: %v", good.Errors())
 	}
-	if _, err := q.PageViewCreate(ctx, PageViewCreateParams{Site: "alpha", Day: 1}); err != nil {
+	if _, err := q.PageViewCreate(ctx, PageViewNew().SiteSet("alpha").DaySet(1)); err != nil {
 		t.Fatalf("valid row rejected by the database: %v", err)
 	}
 
-	bad := PageView{Site: "", Day: 0, Hits: -1}
-	err := bad.Validate()
-	var ve rt.ValidationError
-	if !errors.As(err, &ve) || len(ve) != 2 || ve[0].Check != "CountsPositive" || ve[1].Check != "SiteShape" {
-		t.Fatalf("every validator runs, in declaration order: %v", err)
+	bad := PageViewNew().SiteSet("").DaySet(0).HitsSet(-1).Validate()
+	errs := bad.Errors()
+	if len(errs) != 2 || errs[0].Check != "CountsPositive" || errs[1].Check != "SiteShape" {
+		t.Fatalf("every validator runs, in declaration order: %+v", errs)
 	}
-	if ve[0].Cause == nil || len(ve[0].Columns) != 2 || ve[0].Columns[0] != "hits" || ve[0].Columns[1] != "day" {
-		t.Errorf("a failed validator carries its cause and columns: %+v", ve[0])
+	if errs[0].Message == "" || len(errs[0].Columns) != 2 || errs[0].Columns[0] != "hits" || errs[0].Columns[1] != "day" {
+		t.Errorf("a failed validator carries its message and the columns it reads: %+v", errs[0])
+	}
+	var inv *rt.Invalid
+	if err := bad.Err(); !errors.As(err, &inv) || inv.Model != "PageView" || inv.StatusCode() != 422 || len(inv.Details()) != 2 {
+		t.Errorf("Err is the *rt.Invalid of the field errors: %v", err)
 	}
 
 	if _, err := db.ExecContext(ctx,
@@ -41,17 +47,12 @@ func TestValidatorIsGoOnly(t *testing.T) {
 	db, _ := newDB(t)
 	ctx := context.Background()
 
-	bad := User{Email: "not-an-address", Name: "Ann"}
-	err := bad.Validate()
-	if err == nil {
-		t.Fatal("Validate accepted an invalid email")
+	bad := UserNew().EmailSet("not-an-address").NameSet("Ann").Validate()
+	errs := bad.Errors()
+	if len(errs) != 1 || errs[0].Check != "EmailValid" || errs[0].Columns[0] != "email" || !strings.Contains(errs[0].Message, "not an email address") {
+		t.Errorf("a validator failure carries its name, column and message, got %+v", errs)
 	}
-	var ce rt.CheckError
-	if !errors.As(err, &ce) || ce.Cause == nil || ce.Check != "EmailValid" {
-		t.Errorf("a validator failure carries its cause and name, got %v", err)
-	}
-
-	if (User{Email: "ann@example.com", Name: "Ann"}).Validate() != nil {
+	if !UserNew().EmailSet("ann@example.com").NameSet("Ann").Validate().Valid() {
 		t.Error("Validate rejected a valid email")
 	}
 
@@ -61,71 +62,83 @@ func TestValidatorIsGoOnly(t *testing.T) {
 	}
 }
 
-func TestParamsValidate(t *testing.T) {
-	bad := UserCreateParams{Email: "nope", Name: "N"}
-	err := bad.Validate()
-	var ve rt.ValidationError
-	if !errors.As(err, &ve) || len(ve) != 1 || ve[0].Check != "EmailValid" {
-		t.Fatalf("UserCreateParams.Validate = %v, want the validator failure", err)
+func TestWritesValidateBeforeTouchingTheDatabase(t *testing.T) {
+	_, q := newDB(t)
+	ctx := context.Background()
+
+	_, err := q.UserCreate(ctx, UserNew().EmailSet("nope").NameSet("N"))
+	inv := invalidOf(t, err, "EmailValid", "email")
+	if inv.StatusCode() != 422 || inv.Cause != nil || inv.Details()[0].Columns[0] != "email" {
+		t.Errorf("a failed validator is a 422 with no driver error beneath it: %+v", inv)
 	}
-	if sc, ok := err.(interface{ StatusCode() int }); !ok || sc.StatusCode() != 422 {
-		t.Errorf("a validation failure is a 422, got %v", err)
-	}
-	if (UserCreateParams{Email: "ok@example.com"}).Validate() != nil {
-		t.Error("valid params rejected")
-	}
-	if (UserUpdateParams{Email: "still@example.com"}).Validate() != nil {
-		t.Error("valid update params rejected")
+	if n, _ := q.UserCount(ctx); n != 0 {
+		t.Errorf("an invalid changeset must write nothing, count = %d", n)
 	}
 
-	pv := PageViewCreateParams{Site: "", Day: 1}
-	if err := pv.Validate(); err == nil {
-		t.Error("SiteShape should fail on an empty site")
+	u := seedUser(t, q, "ann@example.com")
+	if _, err := q.UserUpdate(ctx, u.Changeset().EmailSet("nope")); !errors.As(err, &inv) || inv.Fields[0].Check != "EmailValid" {
+		t.Errorf("Update validates too: %v", err)
 	}
-	if err := (PageViewCreateParams{Site: "a", Day: 0}).Validate(); err != nil {
-		t.Errorf("a validator reading a column the params do not carry must not run: %v", err)
+	if again, _ := q.UserGet(ctx, u.ID); again.Email != u.Email {
+		t.Errorf("a refused update must leave the row as it was: %+v", again)
+	}
+
+	twice := UserNew().EmailSet("nope").NameSet("N").Validate().Validate()
+	if len(twice.Errors()) != 1 {
+		t.Errorf("Validate is idempotent, got %+v", twice.Errors())
+	}
+	fixed := twice.EmailSet("ann@example.com").Validate()
+	if !fixed.Valid() {
+		t.Errorf("a later Validate replaces the earlier findings: %+v", fixed.Errors())
 	}
 }
 
-func TestConstraintErrorsCarryStatus(t *testing.T) {
+func TestInvalidCarriesStatus(t *testing.T) {
 	db, q := newDB(t)
 	ctx := context.Background()
-	if _, err := q.UserCreate(ctx, UserCreateParams{Email: "one@example.com", Name: "One"}); err != nil {
+	if _, err := q.UserCreate(ctx, UserNew().EmailSet("one@example.com").NameSet("One")); err != nil {
 		t.Fatal(err)
 	}
-	_, err := q.UserCreate(ctx, UserCreateParams{Email: "one@example.com", Name: "Two"})
-	var ce rt.ConstraintError
-	if !errors.As(err, &ce) || ce.Kind != "unique" || ce.Detail != "users.email" || ce.StatusCode() != 409 {
-		t.Fatalf("duplicate = %v (%+v)", err, ce)
+	_, err := q.UserCreate(ctx, UserNew().EmailSet("one@example.com").NameSet("Two"))
+	inv := invalidOf(t, err, "unique", "email")
+	if inv.StatusCode() != 409 || inv.Model != "User" || !errors.Is(err, inv.Cause) || inv.Cause == nil {
+		t.Fatalf("duplicate = %v (%+v)", err, inv)
 	}
-	if !strings.Contains(err.Error(), "users.email already exists") {
+	if !strings.Contains(err.Error(), "User: email: already exists") {
 		t.Errorf("message = %q", err.Error())
 	}
-	_, err = db.ExecContext(ctx, `INSERT INTO users (email) VALUES ('two@example.com')`)
-	if !errors.As(rt.Constraint(err), &ce) || ce.Kind != "not null" || ce.StatusCode() != 422 {
-		t.Fatalf("not-null violation = %v (%+v)", err, ce)
+	if d := inv.Details(); len(d) != 1 || d[0].Check != "unique" || d[0].Columns[0] != "email" {
+		t.Errorf("details = %+v", d)
+	}
+
+	_, raw := db.ExecContext(ctx, `INSERT INTO users (email) VALUES ('two@example.com')`)
+	if inv := invalidOf(t, rt.Refused("User", raw), "not_null", "name"); inv.StatusCode() != 422 {
+		t.Fatalf("not-null violation = %v (%+v)", raw, inv)
 	}
 }
 
-func TestRequiredIsGoOnly(t *testing.T) {
+func TestRequiredIsAFieldErrorOnly(t *testing.T) {
 	db, q := newDB(t)
 	ctx := context.Background()
-	u, err := q.UserCreate(ctx, UserCreateParams{Email: "r@example.com", Name: "R"})
-	if err != nil {
-		t.Fatal(err)
+	u := seedUser(t, q, "r@example.com")
+
+	unmarked := OrderNew().UserIDSet(u.ID).FeeSet(0).Validate()
+	if errs := unmarked.Errors(); len(errs) != 1 || errs[0].Check != "required" || errs[0].Columns[0] != "total" || errs[0].Message != "total is required" {
+		t.Fatalf("an unmarked required column on a create: %+v", errs)
 	}
-	empty := OrderCreateParams{UserID: u.ID, Total: 0}
-	var ve rt.ValidationError
-	if err := empty.Validate(); !errors.As(err, &ve) || ve[0].Check != "total_required" || ve[0].Columns[0] != "total" {
-		t.Fatalf("required: %v", err)
+	zero := OrderNew().UserIDSet(u.ID).TotalSet(0).FeeSet(0).Validate()
+	if errs := zero.Errors(); len(errs) != 1 || errs[0].Check != "required" {
+		t.Fatalf("the explicit empty value is refused too: %+v", errs)
 	}
-	if d := ve.Details(); d[0].Columns[0] != "total" {
-		t.Errorf("details = %+v", d)
+	_, err := q.OrderCreate(ctx, OrderNew().UserIDSet(u.ID).FeeSet(0))
+	if inv := invalidOf(t, err, "required", "total"); inv.StatusCode() != 422 {
+		t.Errorf("Create refuses it with a 422: %+v", inv)
 	}
+
 	if _, err := db.ExecContext(ctx, `INSERT INTO orders (user_id, status, total, fee) VALUES (?, 'pending', 0, 0)`, u.ID); err != nil {
 		t.Fatalf("the database carries no CHECK for required: %v", err)
 	}
-	if _, err := q.OrderCreate(ctx, OrderCreateParams{UserID: u.ID, Total: 1.00}); err != nil {
+	if _, err := q.OrderCreate(ctx, OrderNew().UserIDSet(u.ID).TotalSet(1.00).FeeSet(0)); err != nil {
 		t.Fatalf("non-empty total rejected: %v", err)
 	}
 }

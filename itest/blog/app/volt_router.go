@@ -142,14 +142,12 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors)))
 
 	mux.Handle("POST /api/users", pipe0(volt.Handler("POST /api/users", func(w http.ResponseWriter, r *volt.Request) error {
-		var voltarg db.UserCreateParams
-		if err := volt.Decode(r, &voltarg); err != nil {
+		var voltparams db.UserParams
+		if err := volt.Decode(r, &voltparams); err != nil {
 			return err
 		}
-		if err := voltarg.Validate(); err != nil {
-			return err
-		}
-		out, err := c.DB.UserCreate(r.Context(), voltarg)
+		voltcs := db.UserNew().Cast(voltparams, db.UserEmail)
+		out, err := c.DB.UserCreate(r.Context(), voltcs)
 		if err != nil {
 			return err
 		}
@@ -161,14 +159,16 @@ func register(mux *http.ServeMux, c Controllers) {
 		if !ok {
 			return volt.ErrNotFound
 		}
-		var voltarg db.UserUpdateParams
-		if err := volt.Decode(r, &voltarg); err != nil {
+		var voltparams db.UserParams
+		if err := volt.Decode(r, &voltparams); err != nil {
 			return err
 		}
-		if err := voltarg.Validate(); err != nil {
+		voltrow, err := c.DB.UserGet(r.Context(), voltid)
+		if err != nil {
 			return err
 		}
-		out, err := c.DB.UserUpdate(r.Context(), voltid, voltarg)
+		voltcs := voltrow.Changeset().Cast(voltparams, db.UserEmail)
+		out, err := c.DB.UserUpdate(r.Context(), voltcs)
 		if err != nil {
 			return err
 		}
@@ -231,14 +231,12 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors)))
 
 	mux.Handle("POST /ref/users", pipe0(volt.Handler("POST /ref/users", func(w http.ResponseWriter, r *volt.Request) error {
-		var voltarg db.UserCreateParams
-		if err := volt.Decode(r, &voltarg); err != nil {
+		var voltparams db.UserParams
+		if err := volt.Decode(r, &voltparams); err != nil {
 			return err
 		}
-		if err := voltarg.Validate(); err != nil {
-			return err
-		}
-		out, err := c.DB.UserCreate(r.Context(), voltarg)
+		voltcs := db.UserNew().Cast(voltparams, db.UserEmail)
+		out, err := c.DB.UserCreate(r.Context(), voltcs)
 		if err != nil {
 			return err
 		}
@@ -262,14 +260,16 @@ func register(mux *http.ServeMux, c Controllers) {
 		if !ok {
 			return volt.ErrNotFound
 		}
-		var voltarg db.UserUpdateParams
-		if err := volt.Decode(r, &voltarg); err != nil {
+		var voltparams db.UserParams
+		if err := volt.Decode(r, &voltparams); err != nil {
 			return err
 		}
-		if err := voltarg.Validate(); err != nil {
+		voltrow, err := c.DB.UserGet(r.Context(), voltid)
+		if err != nil {
 			return err
 		}
-		out, err := c.DB.UserUpdate(r.Context(), voltid, voltarg)
+		voltcs := voltrow.Changeset().Cast(voltparams, db.UserEmail)
+		out, err := c.DB.UserUpdate(r.Context(), voltcs)
 		if err != nil {
 			return err
 		}
@@ -281,14 +281,16 @@ func register(mux *http.ServeMux, c Controllers) {
 		if !ok {
 			return volt.ErrNotFound
 		}
-		var voltarg db.UserUpdateParams
-		if err := volt.Decode(r, &voltarg); err != nil {
+		var voltparams db.UserParams
+		if err := volt.Decode(r, &voltparams); err != nil {
 			return err
 		}
-		if err := voltarg.Validate(); err != nil {
+		voltrow, err := c.DB.UserGet(r.Context(), voltid)
+		if err != nil {
 			return err
 		}
-		out, err := c.DB.UserUpdate(r.Context(), voltid, voltarg)
+		voltcs := voltrow.Changeset().Cast(voltparams, db.UserEmail)
+		out, err := c.DB.UserUpdate(r.Context(), voltcs)
 		if err != nil {
 			return err
 		}

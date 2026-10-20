@@ -19,10 +19,11 @@ type Queries struct {
 // New returns Queries running on db.
 func New(db rt.DBTX) *Queries { return &Queries{db: db} }
 
-// WithCache returns a copy of q whose dynamic queries (Query, Count,
-// Exists, DeleteWhere, UpdateWhere) run through cache: identical option
-// shapes render identical SQL, prepared once. Bind a cache to a
-// *sql.DB, never a transaction.
+// WithCache returns a copy of q whose run-time rendered statements (the
+// changeset writes Create and Update, and the dynamic Query, Count,
+// Exists, DeleteWhere, UpdateWhere) run through cache: identical shapes
+// render identical SQL, prepared once. Bind a cache to a *sql.DB, never
+// a transaction.
 func (q *Queries) WithCache(cache *rt.StmtCache) *Queries {
 	return &Queries{db: q.db, cache: cache}
 }
@@ -38,14 +39,10 @@ func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 	return rt.Tx(ctx, q.db, func(tx *sql.Tx) error { return fn(q.WithTx(tx)) })
 }
 
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
-func userScan(r rowScanner) (User, error) {
+func userScan(r rt.Row) (User, error) {
 	var v User
 	err := r.Scan(&v.ID, &v.Email)
-	return v, rt.Constraint(err)
+	return v, rt.Refused("User", err)
 }
 
 const userGetSQL = `SELECT "id", "email" FROM "users" WHERE "id" = :id`
@@ -112,25 +109,52 @@ func (q *Queries) UserList(ctx context.Context) ([]User, error) {
 	return out, rows.Err()
 }
 
-const userCreateSQL = `INSERT INTO "users" ("email") VALUES (:email) RETURNING "id", "email"`
-
-// UserCreate inserts a users row and returns the row the database wrote,
-// generated keys and defaults filled in.
-func (q *Queries) UserCreate(ctx context.Context, arg UserCreateParams) (User, error) {
-	return userScan(q.db.QueryRowContext(ctx, userCreateSQL,
-		sql.Named("email", arg.Email),
-	))
+// UserCreate validates c and inserts its marked columns, returning the
+// stored users row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) UserCreate(ctx context.Context, c UserChangeset) (User, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return User{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "email"), append(args, v.Email)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(userTableSQL, cols, userColumnsSQL), args...)
+	if err != nil {
+		return User{}, err
+	}
+	return userScan(row)
 }
 
-const userUpdateSQL = `UPDATE "users" SET "email" = :email WHERE "id" = :id RETURNING "id", "email"`
-
-// UserUpdate rewrites every non-key column of the identified users row
-// and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) UserUpdate(ctx context.Context, id int, arg UserUpdateParams) (User, error) {
-	return userScan(q.db.QueryRowContext(ctx, userUpdateSQL,
-		sql.Named("id", id),
-		sql.Named("email", arg.Email),
-	))
+// UserUpdate validates c and writes its marked columns to the users row it
+// was made from, returning the stored row; nothing marked returns the row
+// untouched (spec §changesets).
+func (q *Queries) UserUpdate(ctx context.Context, c UserChangeset) (User, error) {
+	if !c.row {
+		return User{}, rt.ErrNoRow
+	}
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return User{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "email"), append(args, v.Email)
+	}
+	if len(cols) == 0 {
+		return v, nil
+	}
+	args = append(args, c.data.ID)
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(userTableSQL, cols, []string{"id"}, userColumnsSQL), args...)
+	if err != nil {
+		return User{}, err
+	}
+	return userScan(row)
 }
 
 const userDeleteSQL = `DELETE FROM "users" WHERE "id" = :id`
@@ -140,7 +164,7 @@ const userDeleteSQL = `DELETE FROM "users" WHERE "id" = :id`
 func (q *Queries) UserDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, userDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return rt.Constraint(err)
+		return rt.Refused("User", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -152,10 +176,10 @@ func (q *Queries) UserDelete(ctx context.Context, id int) error {
 	return nil
 }
 
-func msRevenueScan(r rowScanner) (MsRevenue, error) {
+func msRevenueScan(r rt.Row) (MsRevenue, error) {
 	var v MsRevenue
 	err := r.Scan(&v.ID, &v.Org, &v.Year)
-	return v, rt.Constraint(err)
+	return v, rt.Refused("MsRevenue", err)
 }
 
 const msRevenueGetSQL = `SELECT "id", "org", "year" FROM "ms_revenue" WHERE "id" = :id`
@@ -214,27 +238,58 @@ func (q *Queries) MsRevenueList(ctx context.Context) ([]MsRevenue, error) {
 	return out, rows.Err()
 }
 
-const msRevenueCreateSQL = `INSERT INTO "ms_revenue" ("org", "year") VALUES (:org, :year) RETURNING "id", "org", "year"`
-
-// MsRevenueCreate inserts a ms_revenue row and returns the row the database wrote,
-// generated keys and defaults filled in.
-func (q *Queries) MsRevenueCreate(ctx context.Context, arg MsRevenueCreateParams) (MsRevenue, error) {
-	return msRevenueScan(q.db.QueryRowContext(ctx, msRevenueCreateSQL,
-		sql.Named("org", arg.Org),
-		sql.Named("year", arg.Year),
-	))
+// MsRevenueCreate validates c and inserts its marked columns, returning the
+// stored ms_revenue row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) MsRevenueCreate(ctx context.Context, c MsRevenueChangeset) (MsRevenue, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return MsRevenue{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "org"), append(args, v.Org)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "year"), append(args, v.Year)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(msRevenueTableSQL, cols, msRevenueColumnsSQL), args...)
+	if err != nil {
+		return MsRevenue{}, err
+	}
+	return msRevenueScan(row)
 }
 
-const msRevenueUpdateSQL = `UPDATE "ms_revenue" SET "org" = :org, "year" = :year WHERE "id" = :id RETURNING "id", "org", "year"`
-
-// MsRevenueUpdate rewrites every non-key column of the identified ms_revenue row
-// and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) MsRevenueUpdate(ctx context.Context, id int, arg MsRevenueUpdateParams) (MsRevenue, error) {
-	return msRevenueScan(q.db.QueryRowContext(ctx, msRevenueUpdateSQL,
-		sql.Named("id", id),
-		sql.Named("org", arg.Org),
-		sql.Named("year", arg.Year),
-	))
+// MsRevenueUpdate validates c and writes its marked columns to the ms_revenue row it
+// was made from, returning the stored row; nothing marked returns the row
+// untouched (spec §changesets).
+func (q *Queries) MsRevenueUpdate(ctx context.Context, c MsRevenueChangeset) (MsRevenue, error) {
+	if !c.row {
+		return MsRevenue{}, rt.ErrNoRow
+	}
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return MsRevenue{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "org"), append(args, v.Org)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "year"), append(args, v.Year)
+	}
+	if len(cols) == 0 {
+		return v, nil
+	}
+	args = append(args, c.data.ID)
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(msRevenueTableSQL, cols, []string{"id"}, msRevenueColumnsSQL), args...)
+	if err != nil {
+		return MsRevenue{}, err
+	}
+	return msRevenueScan(row)
 }
 
 const msRevenueDeleteSQL = `DELETE FROM "ms_revenue" WHERE "id" = :id`
@@ -244,7 +299,7 @@ const msRevenueDeleteSQL = `DELETE FROM "ms_revenue" WHERE "id" = :id`
 func (q *Queries) MsRevenueDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, msRevenueDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return rt.Constraint(err)
+		return rt.Refused("MsRevenue", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -256,10 +311,10 @@ func (q *Queries) MsRevenueDelete(ctx context.Context, id int) error {
 	return nil
 }
 
-func msUsageScan(r rowScanner) (MsUsage, error) {
+func msUsageScan(r rt.Row) (MsUsage, error) {
 	var v MsUsage
 	err := r.Scan(&v.ID, &v.Org, &v.Year)
-	return v, rt.Constraint(err)
+	return v, rt.Refused("MsUsage", err)
 }
 
 const msUsageGetSQL = `SELECT "id", "org", "year" FROM "ms_usage" WHERE "id" = :id`
@@ -318,27 +373,58 @@ func (q *Queries) MsUsageList(ctx context.Context) ([]MsUsage, error) {
 	return out, rows.Err()
 }
 
-const msUsageCreateSQL = `INSERT INTO "ms_usage" ("org", "year") VALUES (:org, :year) RETURNING "id", "org", "year"`
-
-// MsUsageCreate inserts a ms_usage row and returns the row the database wrote,
-// generated keys and defaults filled in.
-func (q *Queries) MsUsageCreate(ctx context.Context, arg MsUsageCreateParams) (MsUsage, error) {
-	return msUsageScan(q.db.QueryRowContext(ctx, msUsageCreateSQL,
-		sql.Named("org", arg.Org),
-		sql.Named("year", arg.Year),
-	))
+// MsUsageCreate validates c and inserts its marked columns, returning the
+// stored ms_usage row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) MsUsageCreate(ctx context.Context, c MsUsageChangeset) (MsUsage, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return MsUsage{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "org"), append(args, v.Org)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "year"), append(args, v.Year)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(msUsageTableSQL, cols, msUsageColumnsSQL), args...)
+	if err != nil {
+		return MsUsage{}, err
+	}
+	return msUsageScan(row)
 }
 
-const msUsageUpdateSQL = `UPDATE "ms_usage" SET "org" = :org, "year" = :year WHERE "id" = :id RETURNING "id", "org", "year"`
-
-// MsUsageUpdate rewrites every non-key column of the identified ms_usage row
-// and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) MsUsageUpdate(ctx context.Context, id int, arg MsUsageUpdateParams) (MsUsage, error) {
-	return msUsageScan(q.db.QueryRowContext(ctx, msUsageUpdateSQL,
-		sql.Named("id", id),
-		sql.Named("org", arg.Org),
-		sql.Named("year", arg.Year),
-	))
+// MsUsageUpdate validates c and writes its marked columns to the ms_usage row it
+// was made from, returning the stored row; nothing marked returns the row
+// untouched (spec §changesets).
+func (q *Queries) MsUsageUpdate(ctx context.Context, c MsUsageChangeset) (MsUsage, error) {
+	if !c.row {
+		return MsUsage{}, rt.ErrNoRow
+	}
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return MsUsage{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "org"), append(args, v.Org)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "year"), append(args, v.Year)
+	}
+	if len(cols) == 0 {
+		return v, nil
+	}
+	args = append(args, c.data.ID)
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(msUsageTableSQL, cols, []string{"id"}, msUsageColumnsSQL), args...)
+	if err != nil {
+		return MsUsage{}, err
+	}
+	return msUsageScan(row)
 }
 
 const msUsageDeleteSQL = `DELETE FROM "ms_usage" WHERE "id" = :id`
@@ -348,7 +434,7 @@ const msUsageDeleteSQL = `DELETE FROM "ms_usage" WHERE "id" = :id`
 func (q *Queries) MsUsageDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, msUsageDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return rt.Constraint(err)
+		return rt.Refused("MsUsage", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {

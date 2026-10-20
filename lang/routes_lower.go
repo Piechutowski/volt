@@ -28,7 +28,6 @@ type routeEnv interface {
 	crudByName(path, name string) (key string, model any, cm golang.CRUDMethod, ok bool)
 	selectByMethod(path, name string) (sel *SelectInfo, member *check.TableInfo, ok bool)
 	selectByName(path, name string) (si *SelectInfo, hint string)
-	validators(path, key string) (create, update bool)
 	queryHint(path, name string) string
 }
 
@@ -41,7 +40,6 @@ const (
 	lkCrudByName
 	lkSelectByMethod
 	lkSelectByName
-	lkValidators
 	lkQueryHint
 )
 
@@ -49,11 +47,11 @@ type routeLookup struct {
 	kind       lookupKind
 	path, name string
 
-	pkgName, key, hint, err                string
-	hasSchema, hasSelects, ok, create, ok2 bool
-	ti, member                             *check.TableInfo
-	sel                                    *SelectInfo
-	model                                  any
+	pkgName, key, hint, err   string
+	hasSchema, hasSelects, ok bool
+	ti, member                *check.TableInfo
+	sel                       *SelectInfo
+	model                     any
 }
 
 func (l routeLookup) holds(env routeEnv) bool {
@@ -76,9 +74,6 @@ func (l routeLookup) holds(env routeEnv) bool {
 	case lkSelectByName:
 		si, hint := env.selectByName(l.path, l.name)
 		return si == l.sel && hint == l.hint
-	case lkValidators:
-		c, u := env.validators(l.path, l.key)
-		return c == l.create && u == l.ok2
 	case lkQueryHint:
 		return env.queryHint(l.path, l.name) == l.hint
 	}
@@ -154,12 +149,6 @@ func (l *routeLowering) selectByName(path, name string) (*SelectInfo, string) {
 	si, hint := l.env.selectByName(path, name)
 	l.note(routeLookup{kind: lkSelectByName, path: path, name: name, sel: si, hint: hint})
 	return si, hint
-}
-
-func (l *routeLowering) validators(path, key string) (bool, bool) {
-	c, u := l.env.validators(path, key)
-	l.note(routeLookup{kind: lkValidators, path: path, key: key, create: c, ok2: u})
-	return c, u
 }
 
 func (l *routeLowering) queryHint(path, name string) string {
@@ -469,7 +458,6 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	type sigParam struct {
 		name, goType string
 		body         bool
-		validates    bool
 	}
 	var sig []sigParam
 	found := false
@@ -490,15 +478,14 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		qr.Many = true
 	}
 	if !found {
-		if key, _, cm, ok := l.crudByName(target, name); ok {
+		if _, _, cm, ok := l.crudByName(target, name); ok {
 			found = true
 			for _, k := range cm.Key {
 				sig = append(sig, sigParam{name: k.GoName, goType: k.GoType})
 			}
 			if cm.Body != "" {
-				create, update := l.validators(target, key)
-				sig = append(sig, sigParam{name: "arg", goType: qual + "." + cm.Body, body: true,
-					validates: (cm.Op == "create" && create) || (cm.Op == "update" && update)})
+				sig = append(sig, sigParam{name: "cs", goType: qual + "." + cm.Body, body: true})
+				qr.Changeset = &ChangesetBind{Params: cm.Params, New: cm.New, Get: cm.Get, Allow: cm.Allow}
 			}
 			qr.Result, qr.Many = cm.Result, cm.Many
 			switch cm.Op {
@@ -526,7 +513,6 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		switch {
 		case sp.body:
 			qp.Source = FromBody
-			qp.Validates = sp.validates
 			if method != "POST" && method != "PUT" && method != "PATCH" {
 				l.errorf(pos, "scopes-and-routes", "%s takes a request body (%s); route it with post, put or patch (§query-routes)", ref, sp.goType)
 				ok = false

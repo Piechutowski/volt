@@ -19,10 +19,11 @@ type Queries struct {
 // New returns Queries running on db.
 func New(db rt.DBTX) *Queries { return &Queries{db: db} }
 
-// WithCache returns a copy of q whose dynamic queries (Query, Count,
-// Exists, DeleteWhere, UpdateWhere) run through cache: identical option
-// shapes render identical SQL, prepared once. Bind a cache to a
-// *sql.DB, never a transaction.
+// WithCache returns a copy of q whose run-time rendered statements (the
+// changeset writes Create and Update, and the dynamic Query, Count,
+// Exists, DeleteWhere, UpdateWhere) run through cache: identical shapes
+// render identical SQL, prepared once. Bind a cache to a *sql.DB, never
+// a transaction.
 func (q *Queries) WithCache(cache *rt.StmtCache) *Queries {
 	return &Queries{db: q.db, cache: cache}
 }
@@ -38,14 +39,10 @@ func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 	return rt.Tx(ctx, q.db, func(tx *sql.Tx) error { return fn(q.WithTx(tx)) })
 }
 
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
-func userScan(r rowScanner) (User, error) {
+func userScan(r rt.Row) (User, error) {
 	var v User
 	err := r.Scan(&v.ID, &v.Email, &v.Name, &v.Bio, &v.CreatedAt)
-	return v, rt.Constraint(err)
+	return v, rt.Refused("User", err)
 }
 
 const userGetSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE "id" = :id`
@@ -112,30 +109,70 @@ func (q *Queries) UserList(ctx context.Context) ([]User, error) {
 	return out, rows.Err()
 }
 
-const userCreateSQL = `INSERT INTO "users" ("email", "name", "bio") VALUES (:email, :name, :bio) RETURNING "id", "email", "name", "bio", "created_at"`
-
-// UserCreate inserts a users row and returns the row the database wrote,
-// generated keys and defaults filled in.
-func (q *Queries) UserCreate(ctx context.Context, arg UserCreateParams) (User, error) {
-	return userScan(q.db.QueryRowContext(ctx, userCreateSQL,
-		sql.Named("email", arg.Email),
-		sql.Named("name", arg.Name),
-		sql.Named("bio", arg.Bio),
-	))
+// UserCreate validates c and inserts its marked columns, returning the
+// stored users row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) UserCreate(ctx context.Context, c UserChangeset) (User, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return User{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "email"), append(args, v.Email)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "name"), append(args, v.Name)
+	}
+	if c.set[3] {
+		cols, args = append(cols, "bio"), append(args, v.Bio)
+	}
+	if c.set[4] {
+		cols, args = append(cols, "created_at"), append(args, v.CreatedAt)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(userTableSQL, cols, userColumnsSQL), args...)
+	if err != nil {
+		return User{}, err
+	}
+	return userScan(row)
 }
 
-const userUpdateSQL = `UPDATE "users" SET "email" = :email, "name" = :name, "bio" = :bio, "created_at" = :created_at WHERE "id" = :id RETURNING "id", "email", "name", "bio", "created_at"`
-
-// UserUpdate rewrites every non-key column of the identified users row
-// and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) UserUpdate(ctx context.Context, id int, arg UserUpdateParams) (User, error) {
-	return userScan(q.db.QueryRowContext(ctx, userUpdateSQL,
-		sql.Named("id", id),
-		sql.Named("email", arg.Email),
-		sql.Named("name", arg.Name),
-		sql.Named("bio", arg.Bio),
-		sql.Named("created_at", arg.CreatedAt),
-	))
+// UserUpdate validates c and writes its marked columns to the users row it
+// was made from, returning the stored row; nothing marked returns the row
+// untouched (spec §changesets).
+func (q *Queries) UserUpdate(ctx context.Context, c UserChangeset) (User, error) {
+	if !c.row {
+		return User{}, rt.ErrNoRow
+	}
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return User{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "email"), append(args, v.Email)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "name"), append(args, v.Name)
+	}
+	if c.set[3] {
+		cols, args = append(cols, "bio"), append(args, v.Bio)
+	}
+	if c.set[4] {
+		cols, args = append(cols, "created_at"), append(args, v.CreatedAt)
+	}
+	if len(cols) == 0 {
+		return v, nil
+	}
+	args = append(args, c.data.ID)
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(userTableSQL, cols, []string{"id"}, userColumnsSQL), args...)
+	if err != nil {
+		return User{}, err
+	}
+	return userScan(row)
 }
 
 const userDeleteSQL = `DELETE FROM "users" WHERE "id" = :id`
@@ -145,7 +182,7 @@ const userDeleteSQL = `DELETE FROM "users" WHERE "id" = :id`
 func (q *Queries) UserDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, userDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return rt.Constraint(err)
+		return rt.Refused("User", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -157,10 +194,10 @@ func (q *Queries) UserDelete(ctx context.Context, id int) error {
 	return nil
 }
 
-func orderScan(r rowScanner) (Order, error) {
+func orderScan(r rt.Row) (Order, error) {
 	var v Order
 	err := r.Scan(&v.ID, &v.UserID, &v.Status, &v.Total, &v.Tip, &v.Fee, &v.PlacedAt)
-	return v, rt.Constraint(err)
+	return v, rt.Refused("Order", err)
 }
 
 const orderGetSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "id" = :id`
@@ -219,33 +256,82 @@ func (q *Queries) OrderList(ctx context.Context) ([]Order, error) {
 	return out, rows.Err()
 }
 
-const orderCreateSQL = `INSERT INTO "orders" ("user_id", "total", "fee", "placed_at") VALUES (:user_id, :total, :fee, :placed_at) RETURNING "id", "user_id", "status", "total", "tip", "fee", "placed_at"`
-
-// OrderCreate inserts a orders row and returns the row the database wrote,
-// generated keys and defaults filled in.
-func (q *Queries) OrderCreate(ctx context.Context, arg OrderCreateParams) (Order, error) {
-	return orderScan(q.db.QueryRowContext(ctx, orderCreateSQL,
-		sql.Named("user_id", arg.UserID),
-		sql.Named("total", arg.Total),
-		sql.Named("fee", arg.Fee),
-		sql.Named("placed_at", arg.PlacedAt),
-	))
+// OrderCreate validates c and inserts its marked columns, returning the
+// stored orders row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) OrderCreate(ctx context.Context, c OrderChangeset) (Order, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return Order{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "user_id"), append(args, v.UserID)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "status"), append(args, v.Status)
+	}
+	if c.set[3] {
+		cols, args = append(cols, "total"), append(args, v.Total)
+	}
+	if c.set[4] {
+		cols, args = append(cols, "tip"), append(args, v.Tip)
+	}
+	if c.set[5] {
+		cols, args = append(cols, "fee"), append(args, v.Fee)
+	}
+	if c.set[6] {
+		cols, args = append(cols, "placed_at"), append(args, v.PlacedAt)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(orderTableSQL, cols, orderColumnsSQL), args...)
+	if err != nil {
+		return Order{}, err
+	}
+	return orderScan(row)
 }
 
-const orderUpdateSQL = `UPDATE "orders" SET "user_id" = :user_id, "status" = :status, "total" = :total, "tip" = :tip, "fee" = :fee, "placed_at" = :placed_at WHERE "id" = :id RETURNING "id", "user_id", "status", "total", "tip", "fee", "placed_at"`
-
-// OrderUpdate rewrites every non-key column of the identified orders row
-// and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) OrderUpdate(ctx context.Context, id int, arg OrderUpdateParams) (Order, error) {
-	return orderScan(q.db.QueryRowContext(ctx, orderUpdateSQL,
-		sql.Named("id", id),
-		sql.Named("user_id", arg.UserID),
-		sql.Named("status", arg.Status),
-		sql.Named("total", arg.Total),
-		sql.Named("tip", arg.Tip),
-		sql.Named("fee", arg.Fee),
-		sql.Named("placed_at", arg.PlacedAt),
-	))
+// OrderUpdate validates c and writes its marked columns to the orders row it
+// was made from, returning the stored row; nothing marked returns the row
+// untouched (spec §changesets).
+func (q *Queries) OrderUpdate(ctx context.Context, c OrderChangeset) (Order, error) {
+	if !c.row {
+		return Order{}, rt.ErrNoRow
+	}
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return Order{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "user_id"), append(args, v.UserID)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "status"), append(args, v.Status)
+	}
+	if c.set[3] {
+		cols, args = append(cols, "total"), append(args, v.Total)
+	}
+	if c.set[4] {
+		cols, args = append(cols, "tip"), append(args, v.Tip)
+	}
+	if c.set[5] {
+		cols, args = append(cols, "fee"), append(args, v.Fee)
+	}
+	if c.set[6] {
+		cols, args = append(cols, "placed_at"), append(args, v.PlacedAt)
+	}
+	if len(cols) == 0 {
+		return v, nil
+	}
+	args = append(args, c.data.ID)
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(orderTableSQL, cols, []string{"id"}, orderColumnsSQL), args...)
+	if err != nil {
+		return Order{}, err
+	}
+	return orderScan(row)
 }
 
 const orderDeleteSQL = `DELETE FROM "orders" WHERE "id" = :id`
@@ -255,7 +341,7 @@ const orderDeleteSQL = `DELETE FROM "orders" WHERE "id" = :id`
 func (q *Queries) OrderDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, orderDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return rt.Constraint(err)
+		return rt.Refused("Order", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -267,10 +353,10 @@ func (q *Queries) OrderDelete(ctx context.Context, id int) error {
 	return nil
 }
 
-func userTagScan(r rowScanner) (UserTag, error) {
+func userTagScan(r rt.Row) (UserTag, error) {
 	var v UserTag
 	err := r.Scan(&v.UserID, &v.Tag)
-	return v, rt.Constraint(err)
+	return v, rt.Refused("UserTag", err)
 }
 
 const userTagGetSQL = `SELECT "user_id", "tag" FROM "user_tags" WHERE "user_id" = :user_id AND "tag" = :tag`
@@ -300,15 +386,27 @@ func (q *Queries) UserTagList(ctx context.Context) ([]UserTag, error) {
 	return out, rows.Err()
 }
 
-const userTagCreateSQL = `INSERT INTO "user_tags" ("user_id", "tag") VALUES (:user_id, :tag) RETURNING "user_id", "tag"`
-
-// UserTagCreate inserts a user_tags row and returns the row the database wrote,
-// generated keys and defaults filled in.
-func (q *Queries) UserTagCreate(ctx context.Context, arg UserTagCreateParams) (UserTag, error) {
-	return userTagScan(q.db.QueryRowContext(ctx, userTagCreateSQL,
-		sql.Named("user_id", arg.UserID),
-		sql.Named("tag", arg.Tag),
-	))
+// UserTagCreate validates c and inserts its marked columns, returning the
+// stored user_tags row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) UserTagCreate(ctx context.Context, c UserTagChangeset) (UserTag, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return UserTag{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[0] {
+		cols, args = append(cols, "user_id"), append(args, v.UserID)
+	}
+	if c.set[1] {
+		cols, args = append(cols, "tag"), append(args, v.Tag)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(userTagTableSQL, cols, userTagColumnsSQL), args...)
+	if err != nil {
+		return UserTag{}, err
+	}
+	return userTagScan(row)
 }
 
 const userTagDeleteSQL = `DELETE FROM "user_tags" WHERE "user_id" = :user_id AND "tag" = :tag`
@@ -318,7 +416,7 @@ const userTagDeleteSQL = `DELETE FROM "user_tags" WHERE "user_id" = :user_id AND
 func (q *Queries) UserTagDelete(ctx context.Context, userID int, tag string) error {
 	res, err := q.db.ExecContext(ctx, userTagDeleteSQL, sql.Named("user_id", userID), sql.Named("tag", tag))
 	if err != nil {
-		return rt.Constraint(err)
+		return rt.Refused("UserTag", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -330,10 +428,10 @@ func (q *Queries) UserTagDelete(ctx context.Context, userID int, tag string) err
 	return nil
 }
 
-func pageViewScan(r rowScanner) (PageView, error) {
+func pageViewScan(r rt.Row) (PageView, error) {
 	var v PageView
 	err := r.Scan(&v.ID, &v.Site, &v.Day, &v.Hits)
-	return v, rt.Constraint(err)
+	return v, rt.Refused("PageView", err)
 }
 
 const pageViewGetSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE "id" = :id`
@@ -392,28 +490,64 @@ func (q *Queries) PageViewList(ctx context.Context) ([]PageView, error) {
 	return out, rows.Err()
 }
 
-const pageViewCreateSQL = `INSERT INTO "page_views" ("site", "day") VALUES (:site, :day) RETURNING "id", "site", "day", "hits"`
-
-// PageViewCreate inserts a page_views row and returns the row the database wrote,
-// generated keys and defaults filled in.
-func (q *Queries) PageViewCreate(ctx context.Context, arg PageViewCreateParams) (PageView, error) {
-	return pageViewScan(q.db.QueryRowContext(ctx, pageViewCreateSQL,
-		sql.Named("site", arg.Site),
-		sql.Named("day", arg.Day),
-	))
+// PageViewCreate validates c and inserts its marked columns, returning the
+// stored page_views row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) PageViewCreate(ctx context.Context, c PageViewChangeset) (PageView, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return PageView{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "site"), append(args, v.Site)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "day"), append(args, v.Day)
+	}
+	if c.set[3] {
+		cols, args = append(cols, "hits"), append(args, v.Hits)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(pageViewTableSQL, cols, pageViewColumnsSQL), args...)
+	if err != nil {
+		return PageView{}, err
+	}
+	return pageViewScan(row)
 }
 
-const pageViewUpdateSQL = `UPDATE "page_views" SET "site" = :site, "day" = :day, "hits" = :hits WHERE "id" = :id RETURNING "id", "site", "day", "hits"`
-
-// PageViewUpdate rewrites every non-key column of the identified page_views row
-// and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) PageViewUpdate(ctx context.Context, id int, arg PageViewUpdateParams) (PageView, error) {
-	return pageViewScan(q.db.QueryRowContext(ctx, pageViewUpdateSQL,
-		sql.Named("id", id),
-		sql.Named("site", arg.Site),
-		sql.Named("day", arg.Day),
-		sql.Named("hits", arg.Hits),
-	))
+// PageViewUpdate validates c and writes its marked columns to the page_views row it
+// was made from, returning the stored row; nothing marked returns the row
+// untouched (spec §changesets).
+func (q *Queries) PageViewUpdate(ctx context.Context, c PageViewChangeset) (PageView, error) {
+	if !c.row {
+		return PageView{}, rt.ErrNoRow
+	}
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return PageView{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "site"), append(args, v.Site)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "day"), append(args, v.Day)
+	}
+	if c.set[3] {
+		cols, args = append(cols, "hits"), append(args, v.Hits)
+	}
+	if len(cols) == 0 {
+		return v, nil
+	}
+	args = append(args, c.data.ID)
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(pageViewTableSQL, cols, []string{"id"}, pageViewColumnsSQL), args...)
+	if err != nil {
+		return PageView{}, err
+	}
+	return pageViewScan(row)
 }
 
 const pageViewDeleteSQL = `DELETE FROM "page_views" WHERE "id" = :id`
@@ -423,7 +557,7 @@ const pageViewDeleteSQL = `DELETE FROM "page_views" WHERE "id" = :id`
 func (q *Queries) PageViewDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, pageViewDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return rt.Constraint(err)
+		return rt.Refused("PageView", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -435,10 +569,10 @@ func (q *Queries) PageViewDelete(ctx context.Context, id int) error {
 	return nil
 }
 
-func linkClickScan(r rowScanner) (LinkClick, error) {
+func linkClickScan(r rt.Row) (LinkClick, error) {
 	var v LinkClick
 	err := r.Scan(&v.ID, &v.Site, &v.Day, &v.Target)
-	return v, rt.Constraint(err)
+	return v, rt.Refused("LinkClick", err)
 }
 
 const linkClickGetSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE "id" = :id`
@@ -497,28 +631,64 @@ func (q *Queries) LinkClickList(ctx context.Context) ([]LinkClick, error) {
 	return out, rows.Err()
 }
 
-const linkClickCreateSQL = `INSERT INTO "link_clicks" ("site", "day") VALUES (:site, :day) RETURNING "id", "site", "day", "target"`
-
-// LinkClickCreate inserts a link_clicks row and returns the row the database wrote,
-// generated keys and defaults filled in.
-func (q *Queries) LinkClickCreate(ctx context.Context, arg LinkClickCreateParams) (LinkClick, error) {
-	return linkClickScan(q.db.QueryRowContext(ctx, linkClickCreateSQL,
-		sql.Named("site", arg.Site),
-		sql.Named("day", arg.Day),
-	))
+// LinkClickCreate validates c and inserts its marked columns, returning the
+// stored link_clicks row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) LinkClickCreate(ctx context.Context, c LinkClickChangeset) (LinkClick, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return LinkClick{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "site"), append(args, v.Site)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "day"), append(args, v.Day)
+	}
+	if c.set[3] {
+		cols, args = append(cols, "target"), append(args, v.Target)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(linkClickTableSQL, cols, linkClickColumnsSQL), args...)
+	if err != nil {
+		return LinkClick{}, err
+	}
+	return linkClickScan(row)
 }
 
-const linkClickUpdateSQL = `UPDATE "link_clicks" SET "site" = :site, "day" = :day, "target" = :target WHERE "id" = :id RETURNING "id", "site", "day", "target"`
-
-// LinkClickUpdate rewrites every non-key column of the identified link_clicks row
-// and returns the result, or rt.ErrNotFound when no row matches.
-func (q *Queries) LinkClickUpdate(ctx context.Context, id int, arg LinkClickUpdateParams) (LinkClick, error) {
-	return linkClickScan(q.db.QueryRowContext(ctx, linkClickUpdateSQL,
-		sql.Named("id", id),
-		sql.Named("site", arg.Site),
-		sql.Named("day", arg.Day),
-		sql.Named("target", arg.Target),
-	))
+// LinkClickUpdate validates c and writes its marked columns to the link_clicks row it
+// was made from, returning the stored row; nothing marked returns the row
+// untouched (spec §changesets).
+func (q *Queries) LinkClickUpdate(ctx context.Context, c LinkClickChangeset) (LinkClick, error) {
+	if !c.row {
+		return LinkClick{}, rt.ErrNoRow
+	}
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return LinkClick{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "site"), append(args, v.Site)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "day"), append(args, v.Day)
+	}
+	if c.set[3] {
+		cols, args = append(cols, "target"), append(args, v.Target)
+	}
+	if len(cols) == 0 {
+		return v, nil
+	}
+	args = append(args, c.data.ID)
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(linkClickTableSQL, cols, []string{"id"}, linkClickColumnsSQL), args...)
+	if err != nil {
+		return LinkClick{}, err
+	}
+	return linkClickScan(row)
 }
 
 const linkClickDeleteSQL = `DELETE FROM "link_clicks" WHERE "id" = :id`
@@ -528,7 +698,7 @@ const linkClickDeleteSQL = `DELETE FROM "link_clicks" WHERE "id" = :id`
 func (q *Queries) LinkClickDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, linkClickDeleteSQL, sql.Named("id", id))
 	if err != nil {
-		return rt.Constraint(err)
+		return rt.Refused("LinkClick", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {

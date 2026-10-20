@@ -5,20 +5,11 @@ package models
 import (
 	"context"
 	"github.com/Piechutowski/volt/nao/rt"
-	"time"
 )
 
 const (
 	userTableSQL   = `"users"`
 	userColumnsSQL = `"id"`
-)
-
-// Typed column handles of User: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter User queries; mixing models is a compile
-// error.
-var (
-	UserID = rt.Column[User, int]{Name: "id"}
 )
 
 // UserLimit caps how many rows UserQuery returns.
@@ -129,23 +120,6 @@ const (
 	coreUserColumnsSQL = `"id", "api_key", "homepage_url", "http_status", "full name", "precision_value", "balance", "kind", "type", "func"`
 )
 
-// Typed column handles of CoreUser: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter CoreUser queries; mixing models is a compile
-// error.
-var (
-	CoreUserID             = rt.Column[CoreUser, int]{Name: "id"}
-	CoreUserAPIKey         = rt.Column[CoreUser, string]{Name: "api_key"}
-	CoreUserHomepageURL    = rt.NullColumn[CoreUser, string]{Column: rt.Column[CoreUser, string]{Name: "homepage_url"}}
-	CoreUserHTTPStatus     = rt.NullColumn[CoreUser, int]{Column: rt.Column[CoreUser, int]{Name: "http_status"}}
-	CoreUserFullName       = rt.Column[CoreUser, string]{Name: "full name"}
-	CoreUserPrecisionValue = rt.NullColumn[CoreUser, float64]{Column: rt.Column[CoreUser, float64]{Name: "precision_value"}}
-	CoreUserBalance        = rt.NullColumn[CoreUser, float64]{Column: rt.Column[CoreUser, float64]{Name: "balance"}}
-	CoreUserKind           = rt.Column[CoreUser, ECoreAuditKind]{Name: "kind"}
-	CoreUserType           = rt.NullColumn[CoreUser, string]{Column: rt.Column[CoreUser, string]{Name: "type"}}
-	CoreUserFunc           = rt.NullColumn[CoreUser, int]{Column: rt.Column[CoreUser, int]{Name: "func"}}
-)
-
 // CoreUserLimit caps how many rows CoreUserQuery returns.
 func CoreUserLimit(n int) rt.Opt[CoreUser] { return rt.Limit[CoreUser](n) }
 
@@ -252,16 +226,6 @@ func (q *Queries) CoreUserUpdateWhere(ctx context.Context, set []rt.Assign[CoreU
 const (
 	x2faCodeTableSQL   = `"2fa_codes"`
 	x2faCodeColumnsSQL = `"code", "user_id", "expires_at"`
-)
-
-// Typed column handles of X2faCode: inert predicate, order and
-// assignment builders for the dynamic query layer. A predicate
-// built here can only enter X2faCode queries; mixing models is a compile
-// error.
-var (
-	X2faCodeCode      = rt.Column[X2faCode, string]{Name: "code"}
-	X2faCodeUserID    = rt.Column[X2faCode, int]{Name: "user_id"}
-	X2faCodeExpiresAt = rt.Column[X2faCode, time.Time]{Name: "expires_at"}
 )
 
 // X2faCodeLimit caps how many rows X2faCodeQuery returns.

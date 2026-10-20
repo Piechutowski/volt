@@ -416,14 +416,24 @@ func queryShimBody(r *lang.RouteInfo) string {
 			fmt.Fprintf(&body, "\t\tvolt%s, err := volt.QueryParams[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name, strings.TrimPrefix(p.GoType, "[]"), p.Name)
 			args = append(args, "volt"+p.Name)
 		case lang.FromBody:
-			goType := p.GoType
-			if q.Local {
-				goType = strings.TrimPrefix(goType, q.Qualifier+".")
+			cb := q.Changeset
+			name := func(n string) string {
+				if q.Local {
+					return n
+				}
+				return q.Qualifier + "." + n
 			}
-			fmt.Fprintf(&body, "\t\tvar volt%s %s\n\t\tif err := volt.Decode(r, &volt%s); err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name, goType, p.Name)
-			if p.Validates {
-				fmt.Fprintf(&body, "\t\tif err := volt%s.Validate(); err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name)
+			fmt.Fprintf(&body, "\t\tvar voltparams %s\n\t\tif err := volt.Decode(r, &voltparams); err != nil {\n\t\t\treturn err\n\t\t}\n", name(cb.Params))
+			start := name(cb.New) + "()"
+			if cb.Get != "" {
+				fmt.Fprintf(&body, "\t\tvoltrow, err := c.%s.%s(r.Context()%s)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", q.Field, cb.Get, prefixEach(args, ", "))
+				args, start = nil, "voltrow.Changeset()"
 			}
+			allow := make([]string, len(cb.Allow))
+			for i, h := range cb.Allow {
+				allow[i] = name(h)
+			}
+			fmt.Fprintf(&body, "\t\tvolt%s := %s.Cast(voltparams%s)\n", p.Name, start, prefixEach(allow, ", "))
 			args = append(args, "volt"+p.Name)
 		}
 	}
@@ -700,7 +710,7 @@ func (g *generator) clientEmit() error {
 		}
 		in := "nil"
 		if arg != "" {
-			in = arg
+			in = arg + ".Params()"
 		}
 		result := ""
 		if q.Result != "" {
