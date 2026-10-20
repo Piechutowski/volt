@@ -1,11 +1,11 @@
 package migrate
 
 import (
-	"fmt"
 	"bytes"
 	"context"
 	"database/sql"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
