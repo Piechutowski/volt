@@ -304,12 +304,22 @@ Migration 0003__words {
               (identifier))))))))
 
 ==================
-migration: an empty body and a down block without an up block
-:error
+migration: an empty body
 ==================
 
 Migration 0004__empty {
 }
+
+---
+
+(source_file
+  (migration_definition
+    (migration_name)))
+
+==================
+migration: a down block without an up block
+:error
+==================
 
 Migration 0005__bad {
   down {

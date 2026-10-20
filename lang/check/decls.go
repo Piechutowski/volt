@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/Piechutowski/volt/lang/ast"
-	"github.com/Piechutowski/volt/lang/parser"
 	"github.com/Piechutowski/volt/lang/token"
 )
 
@@ -167,14 +166,7 @@ func (c *checker) refSettingsCheck(sl *ast.SettingList) {
 		if s.Name != "delete" && s.Name != "update" {
 			continue
 		}
-		action := ""
-		switch v := s.Value.(type) {
-		case *ast.Ident:
-			action = strings.ToLower(v.Name())
-		case parser.MultiWord:
-			action = strings.Join(v.Words(), " ")
-		}
-		if !refActions[action] {
+		if action := refActionOf(s); !refActions[action] {
 			c.errorf(s.Pos(), "relationships-ref", "invalid referential action %q for '%s'; expected cascade, restrict, set null, set default or no action", action, s.Name)
 		}
 	}

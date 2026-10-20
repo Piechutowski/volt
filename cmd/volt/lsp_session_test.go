@@ -120,6 +120,13 @@ Scope / {
 	get / Home.Index
 	resources posts
 }
+
+Migration 0001__posts {
+	create table posts {
+		id int [pk, increment]
+		title string [not null]
+	}
+}
 `,
 	}
 	for name, text := range files {
@@ -208,12 +215,14 @@ Scope / {
 	typo := strings.Replace(text, "get / Home.Index", "gett / Home.Index", 1) + "\nTable tags {\n\tid int [pk]\n}\n"
 	change("edit 2: a verb misspelled, a table added", 3, typo)
 	change("edit 3: the verb fixed", 4, strings.Replace(typo, "gett /", "get /", 1))
-	typed("edit 4: a note typed into the new table's header, as a ranged change", 5, 16, 10, " [note: 'tagging']")
+	typed("edit 4: a note typed into the new table's header, as a ranged change", 5, 23, 10, " [note: 'tagging']")
 
 	id = s.send("textDocument/hover", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 2, "character": 7}}, true)
 	s.response("hover on the table name", id)
 	id = s.send("textDocument/hover", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 13, "character": 12}}, true)
 	s.response("hover on the resources table", id)
+	id = s.send("textDocument/hover", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 16, "character": 12}}, true)
+	s.response("hover on the migration name", id)
 	id = s.send("textDocument/definition", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 13, "character": 12}}, true)
 	s.response("definition from the resources table", id)
 	id = s.send("textDocument/definition", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 7, "character": 4}}, true)

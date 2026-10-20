@@ -73,6 +73,48 @@ func TestCompletionMigrationBody(t *testing.T) {
 	}
 }
 
+func TestCompletionMigrationShapeSettings(t *testing.T) {
+	text := "Migration 0001__a {\n\tcreate table t {\n\t\tid int [\n\t\tindexes {\n\t\t\tid [\n\t\t}\n\t}\n" +
+		"\talter table t {\n\t\tadd bio string [\n\t}\n\trebuild table t {\n\t\tid int [\n\t}\n\tcreate index t id [\n}\n"
+	d := doc(t, text)
+	cases := []struct {
+		where         string
+		bracket       int
+		want, refused []string
+	}{
+		{"create table column", 0, []string{"ref:", "delete:", "update:", "note:"}, []string{"required", "tag:", "from:"}},
+		{"shape indexes", 1, []string{"pk", "where:", "name:"}, []string{"type:"}},
+		{"alter add", 2, []string{"default:", "ref:"}, []string{"required", "tag:", "from:"}},
+		{"rebuild column", 3, []string{"from:", "ref:"}, []string{"required", "tag:"}},
+		{"standalone create index", 4, []string{"unique", "name:", "where:"}, []string{"pk", "type:"}},
+	}
+	for _, c := range cases {
+		pos := posOf(t, text, "[", c.bracket)
+		pos.Character++
+		items := d.Complete(pos)
+		for _, w := range c.want {
+			if !hasWord(items, w) {
+				t.Errorf("%s: completion lacks %q; got %v", c.where, w, labels(items))
+			}
+		}
+		for _, r := range c.refused {
+			if hasWord(items, r) {
+				t.Errorf("%s: completion offers %q, which is not a migration setting; got %v", c.where, r, labels(items))
+			}
+		}
+	}
+	text = "Migration 0001__a {\n\tcreate table t {\n\t\tid i\n\t\t\n\t}\n}\n"
+	d = doc(t, text)
+	items := d.Complete(protocol.Position{Line: 2, Character: protocol.UInteger(len("\t\tid i"))})
+	if !hasWord(items, "int") || len(items) != len(builtinTypes) {
+		t.Errorf("shape column type completion = %v, want the built-ins only", labels(items))
+	}
+	items = d.Complete(protocol.Position{Line: 3, Character: 2})
+	if !hasWord(items, "indexes") || len(items) != 1 {
+		t.Errorf("shape body completion = %v, want indexes only", labels(items))
+	}
+}
+
 func TestCompletionIndexWhere(t *testing.T) {
 	text := "Table t {\n\tid int\n\tindexes {\n\t\tid [\n\t}\n}\n"
 	d := doc(t, text)

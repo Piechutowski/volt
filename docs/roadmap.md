@@ -8,8 +8,8 @@ tested, `[ ]` not built, `[~]` partly built. *hand* means a documented
 pattern, deliberately hand-written, never generated; *no* means a
 non-goal. What an item is lives in the spec; a
 status changes in the commit that lands it. Build order: raw-SQL
-selects, then associations, then migrations, then the report engine
-when a consumer exists.
+selects, then associations, then the migration generator, then the
+report engine when a consumer exists.
 
 ## Language and front end
 
@@ -87,7 +87,7 @@ when a consumer exists.
 
 ## Tooling
 
-- [x] One binary: `check`, `vet`, `gen`, `routes`, `stress`, `lsp`, `version`; `gen --verify` type-checks the output first
+- [x] One binary: `check`, `vet`, `gen`, `routes`, `stress`, `migration`, `lsp`, `version`; `gen --verify` type-checks the output first
 - [x] Generated Go gofmt-canonical by construction; goldens compiled by the real toolchain; every statement prepared against the generated DDL
 - [x] Parallel schedule on a worker pool; memoized sessions; the purity gate, the immutability walk, the race detector as the bar
 - [x] Language server: diagnostics, completion, hover, navigation, rename; incremental sync; keystroke under a third of a second on a thousand-table file

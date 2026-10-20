@@ -39,6 +39,11 @@ var (
 		"route":     {"name: "},
 		"resources": {"only: (", "except: (", "param: ", "singular: ", "api", "default"},
 		"dataset":   {"strip: ", "only: (", "except: ("},
+
+		"migrationcolumn": {"pk", "primary key", "null", "not null", "unique", "increment", "default: ", "ref: ", "delete: ", "update: ", "note: "},
+		"rebuildcolumn":   {"pk", "primary key", "null", "not null", "unique", "increment", "default: ", "ref: ", "delete: ", "update: ", "note: ", "from: "},
+		"migrationindex":  {"unique", "pk", "name: ", "where: ", "note: "},
+		"standaloneindex": {"unique", "name: ", "where: ", "note: "},
 	}
 
 	builtinTypes = check.Builtins
@@ -68,7 +73,7 @@ func (d *Document) Complete(pos protocol.Position) []protocol.CompletionItem {
 	offset := d.FromLSP(pos)
 	lineStart := d.lineOffsets[min(int(pos.Line), len(d.lineOffsets)-1)]
 	prefix := d.Text[lineStart:offset]
-	ctx := d.blockContext(int(pos.Line))
+	ctx, outer := d.blockContexts(int(pos.Line))
 
 	if items := d.voltComplete(prefix); items != nil {
 		return items
@@ -80,7 +85,7 @@ func (d *Document) Complete(pos protocol.Position) []protocol.CompletionItem {
 
 	inSettings := strings.Count(prefix, "[") > strings.Count(prefix, "]")
 	if inSettings {
-		return d.settingsComplete(prefix, ctx)
+		return d.settingsComplete(prefix, ctx, outer)
 	}
 
 	if m := dotChainRE.FindStringSubmatch(prefix); m != nil {
@@ -127,68 +132,85 @@ func (d *Document) Complete(pos protocol.Position) []protocol.CompletionItem {
 		if lineStartRE.MatchString(prefix) {
 			return keywordItems(alterBodyKeywords)
 		}
+	case "shape", "rebuild":
+		if columnShapeRE.MatchString(prefix) && !lineStartRE.MatchString(prefix) {
+			return keywordItemsKind(builtinTypes, protocol.CompletionItemKindStruct)
+		}
+		if lineStartRE.MatchString(prefix) {
+			return keywordItems([]string{"indexes"})
+		}
 	}
 	return nil
 }
 
-func (d *Document) blockContext(line int) string {
+func (d *Document) blockContexts(line int) (ctx, outer string) {
 	depth := 0
 	for l := line; l >= 0; l-- {
 		text := d.lineText(l)
 		if l == line {
 			text = strings.SplitN(text, "//", 2)[0]
 		}
-		opens := strings.Count(text, "{")
-		closes := strings.Count(text, "}")
-		if l == line {
-			depth -= 0
+		depth += strings.Count(text, "}") - strings.Count(text, "{")
+		if depth >= 0 {
+			continue
 		}
-		depth += closes - opens
-		if depth < 0 {
-			head := strings.ToLower(strings.TrimSpace(text))
-			switch {
-			case strings.HasPrefix(head, "indexes"):
-				return "indexes"
-			case strings.HasPrefix(head, "validators"):
-				return "validators"
-			case strings.HasPrefix(head, "tablepartial"):
-				return "tablepartial"
-			case strings.HasPrefix(head, "tablegroup"):
-				return "tablegroup"
-			case strings.HasPrefix(head, "table"):
-				return "table"
-			case strings.HasPrefix(head, "enum"):
-				return "enum"
-			case strings.HasPrefix(head, "project"):
-				return "project"
-			case strings.HasPrefix(head, "records"):
-				return "records"
-			case strings.HasPrefix(head, "ref"):
-				return "ref"
-			case strings.HasPrefix(head, "diagramview"):
-				return "diagramview"
-			case strings.HasPrefix(head, "note"):
-				return "note"
-			case strings.HasPrefix(head, "pipeline"):
-				return "pipeline"
-			case strings.HasPrefix(head, "scope"):
-				return "scope"
-			case strings.HasPrefix(head, "migration"), upDownHeadRE.MatchString(head):
-				return "migration"
-			case shapeHeadRE.MatchString(head):
-				return "table"
-			case strings.HasPrefix(head, "alter table"):
-				return "alter"
-			default:
-				depth = 0
-				continue
+		depth = 0
+		head := headContext(strings.ToLower(strings.TrimSpace(text)))
+		switch {
+		case head == "":
+		case ctx == "":
+			ctx = head
+			if head != "indexes" {
+				return ctx, ""
 			}
+		default:
+			return ctx, head
 		}
+	}
+	return ctx, ""
+}
+
+func headContext(head string) string {
+	switch {
+	case strings.HasPrefix(head, "indexes"):
+		return "indexes"
+	case strings.HasPrefix(head, "validators"):
+		return "validators"
+	case strings.HasPrefix(head, "tablepartial"):
+		return "tablepartial"
+	case strings.HasPrefix(head, "tablegroup"):
+		return "tablegroup"
+	case strings.HasPrefix(head, "table"):
+		return "table"
+	case strings.HasPrefix(head, "enum"):
+		return "enum"
+	case strings.HasPrefix(head, "project"):
+		return "project"
+	case strings.HasPrefix(head, "records"):
+		return "records"
+	case strings.HasPrefix(head, "ref"):
+		return "ref"
+	case strings.HasPrefix(head, "diagramview"):
+		return "diagramview"
+	case strings.HasPrefix(head, "note"):
+		return "note"
+	case strings.HasPrefix(head, "pipeline"):
+		return "pipeline"
+	case strings.HasPrefix(head, "scope"):
+		return "scope"
+	case strings.HasPrefix(head, "migration"), upDownHeadRE.MatchString(head):
+		return "migration"
+	case strings.HasPrefix(head, "rebuild table"):
+		return "rebuild"
+	case shapeHeadRE.MatchString(head):
+		return "shape"
+	case strings.HasPrefix(head, "alter table"):
+		return "alter"
 	}
 	return ""
 }
 
-func (d *Document) settingsComplete(prefix, ctx string) []protocol.CompletionItem {
+func (d *Document) settingsComplete(prefix, ctx, outer string) []protocol.CompletionItem {
 	segment := prefix[strings.LastIndexAny(prefix, "[,")+1:]
 
 	if refValueRE.MatchString(segment) || afterCardRE.MatchString(segment) {
@@ -230,14 +252,23 @@ func (d *Document) settingsComplete(prefix, ctx string) []protocol.CompletionIte
 		kind = "dataset"
 	case voltVerbSet[verb] && ctx == "scope":
 		kind = "route"
+	case (strings.HasPrefix(head, "create index") || strings.HasPrefix(head, "drop index")) && ctx == "migration":
+		kind = "standaloneindex"
 	default:
 		switch ctx {
 		case "indexes":
 			kind = "index"
+			if outer == "shape" || outer == "rebuild" {
+				kind = "migrationindex"
+			}
 		case "enum":
 			kind = "enumvalue"
 		case "ref":
 			kind = "ref"
+		case "shape", "alter":
+			kind = "migrationcolumn"
+		case "rebuild":
+			kind = "rebuildcolumn"
 		}
 	}
 	return keywordItemsKind(settingsByContext[kind], protocol.CompletionItemKindProperty)

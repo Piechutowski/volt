@@ -1680,7 +1680,9 @@ package path = name, { slash, name } ;
 3. The imported package is referenced through its **qualifier**: the
    alias when given, else the last path segment. All cross-package
    references are qualifier-prefixed (`db.User`); nothing is ever
-   imported into the local scope.
+   imported into the local scope. A `Migration` is not an importable
+   element: it belongs to the package whose tables it migrates, and
+   nothing of another package may name it (§migrations).
 4. Within one package (across all its files): importing the same path
    twice is idempotent, but with two different qualifiers it is an
    error; two different paths MUST NOT share a qualifier, nor may one
@@ -2589,9 +2591,9 @@ the optional projection narrows the emitted columns.
    offending members and their types — the predicate must be checkable
    for all members or it does not compile.
 5. Settings: `order:` takes a parenthesized list of `column asc` /
-   `column desc` pairs. The direction is **mandatory** — SQL's silent
-   `asc` default is deliberately not inherited; explicit over implicit
-   — and the emitted SQL spells it out (`ORDER BY "year" DESC, "id" ASC`).
+   `column desc` pairs. The direction is **mandatory**: SQL's silent
+   `asc` default is deliberately not inherited, explicit over implicit,
+   and the emitted SQL spells it out (`ORDER BY "year" DESC, "id" ASC`).
    Order columns obey the agreement rule and MUST be orderable (§predicates) or text —
    ORDER BY text is SQL's own collation, allowed here — and MUST appear
    at most once. A column of a declared type (§types) is neither: it
@@ -2997,14 +2999,18 @@ Migration 0002__users_bio {
    Migrations are never imported (§imports).
 2. **Name and order.** A migration name is a run of at least four
    digits, two underscores and a label; it is a plain identifier
-   (§identifiers) and MUST be unique within the package. Migrations
+   (§identifiers) and MUST be unique within the package. Every
+   migration name of a package MUST have the same digit-run width; a
+   package mixing widths is an error naming both names. Migrations
    apply in byte order of their names, which is numeric order of the
-   run while the runs share a width. The name is the whole order; the
+   run since the runs share a width. The name is the whole order; the
    file and the position within it carry no meaning
    (§projects-and-packages). `volt migration new LABEL` mints the
-   next name: one more than the greatest run among the package's
-   migrations, zero-padded to four digits, or wider when the greatest
-   run is wider, then `__`, then the label.
+   next name at the package's width: one more than the greatest run
+   among the package's migrations, zero-padded to that width (four
+   digits in a package without migrations), then `__`, then the
+   label; when the next number does not fit the width it is an error
+   telling the user to widen every name.
 3. **Self-contained.** A migration references nothing declared
    elsewhere. Table, column and index names are plain names, not
    resolved against the schema. A column type MUST be one of the six
@@ -3014,17 +3020,27 @@ Migration 0002__users_bio {
    not part of a `shape body`.
 4. **Settings whitelist.** In a migration, a column setting is one of
    `pk`, `primary key`, `increment`, `null`, `not null`, `unique`,
-   `default:`, `ref:`, `note:`, and in a `rebuild` also `from:` (rule
-   9). An index setting is one of `unique`, `pk`, `name:`, `where:`,
-   `note:`. `tag:`, `required` and `model:` describe Go and are errors
-   here, as is `headercolor:`.
+   `default:`, `ref:`, `delete:`, `update:`, `note:`, and in a
+   `rebuild` also `from:` (rule 9); `from:` anywhere else is an error.
+   `ref:` takes `>` or `-` only: the declaring column holds the key,
+   and `<` and `<>` reference the other way and are not a column's to
+   declare. `delete:` and `update:` take the referential actions of
+   §relationships-ref (`cascade`, `restrict`, `set null`, `set
+   default`, `no action`) for the column's `ref:`, so that a schema
+   foreign key with an action can be matched; without a `ref:` they
+   are errors. An index setting is one of `unique`, `pk` (in a shape
+   body only, rule 10), `name:`, `where:`, `note:`; `type:` is an
+   error, since SQLite has no index methods. `tag:`, `required` and
+   `model:` describe Go and are errors here, as is `headercolor:`. An
+   `exec` takes `down:` and no other setting.
 5. **`create table`.** The body MUST contain at least one column;
    names are unique within it. It lowers by the DDL mapping exactly
    as the schema's `Table` does (§mapping-to-sqlite-ddl), index names
    included.
 6. **`drop table`.** Drops the table and, with it, its indexes. The
    optional body is the shape being dropped and exists only so that
-   the migration is reversible (rule 12).
+   the migration is reversible (rule 12); when written, it MUST
+   contain at least one column, as a `create table` body must.
 7. **`rename table`.** `ALTER TABLE … RENAME TO`. Foreign keys that
    reference the table follow it; index names do not, and are kept
    as they are.
@@ -3033,28 +3049,41 @@ Migration 0002__users_bio {
    checked here rather than at run time: a `not null` column MUST
    carry a `default:`; the default MUST be a literal; `pk` and
    `increment` are errors; `ref:` requires the column to be nullable;
-   `unique` lowers to the added column plus a `CREATE UNIQUE INDEX`
-   on it. `drop` is `DROP COLUMN`; the optional type and settings are
-   the dropped column's shape, for reversibility. `rename` is
-   `RENAME COLUMN`.
+   a column with `ref:` has no `default:` other than `null`, since
+   SQLite refuses to add a `REFERENCES` column with another default
+   to a table that has rows; `unique` lowers to the added column plus
+   a `CREATE UNIQUE INDEX` on it. `drop` is `DROP COLUMN`; the
+   optional type and settings are the dropped column's shape, the
+   inverse `add` (rule 12). `rename` is `RENAME COLUMN`.
 9. **`rebuild table`.** The one operation for every change SQLite
    cannot `ALTER`: a type, a nullability, a default, a primary key, a
-   foreign key. The body is the new shape. It lowers to: create
-   `<table>__new` from the body; `INSERT INTO <table>__new (<cols>)
-   SELECT <sources> FROM <table>`; `DROP TABLE <table>`; `ALTER TABLE
-   <table>__new RENAME TO <table>`; create every index of the body.
-   The source of a column is, in order: its `from:` expression
-   literal if given; the old column of the same name; its `default:`;
-   `NULL`. A `not null` column whose source is `NULL` is an error.
+   foreign key. The body is the new shape and MUST contain at least
+   one column. It lowers to: create `<table>__new` from the body;
+   `INSERT INTO <table>__new (<cols>) SELECT <sources> FROM <table>`;
+   `DROP TABLE <table>`; `ALTER TABLE <table>__new RENAME TO
+   <table>`; create every index of the body. The source of a column
+   is, in order: its `from:` expression literal if given; the old
+   column of the same name; its `default:`; `NULL`. A `not null`
+   column whose source is `NULL` is an error, except a rowid alias
+   (`int [pk, increment]`) introduced by the rebuild, which takes
+   `NULL` as its source and the database assigns it. The source order
+   is checked here for a table the package's migrations created; a
+   table of unknown shape takes the old column of the same name when
+   the fold has it and otherwise errors at fold time (§the-fold).
    Nothing but the body survives the rebuild: an index not restated
-   in it is gone.
+   in it is gone. A rebuild of a table that a view references, or
+   that a trigger on another table references, needs an `exec`
+   dropping and recreating them around it; a trigger on the rebuilt
+   table itself goes with it; the fold surfaces both.
 10. **`create index`, `drop index`.** The index is identified by its
     table and key exactly as in a schema `indexes` block, so the
     schema and the migration name the same index the same way: the
     DDL mapping assigns the name from the table and the key columns,
     `name:` overrides it, and an index with an expression atom MUST
     carry `name:` (§indexes). `where:` takes an expression literal and
-    makes the index partial.
+    makes the index partial. `pk` is not a setting of these
+    operations: a primary key is a table constraint, declared in a
+    `create table` or `rebuild table` body.
 11. **`exec`.** The string is one or more SQL statements run
     verbatim, for whatever the operations above do not say: a data
     fix, a view, a trigger, a `PRAGMA`. `down:` is its inverse. With
@@ -3064,11 +3093,13 @@ Migration 0002__users_bio {
     backward as the inverses of its operations in reverse order. The
     inverses are: `create table` and `drop table` with a body;
     `rename table` and `rename table` reversed; `add` and `drop` with
-    a type; `rename` and `rename` reversed; `create index` and `drop
-    index`; `exec` with `down:` and its `down:`. A flat body with an
-    operation that has no inverse (`drop table` without a body,
-    `drop` without a type, `rebuild table`, `exec` without `down:`)
-    is an error naming that operation, unless the migration is marked
+    a type, whose shape is the inverse `add` and MUST satisfy rule
+    8's `add` rules; `rename` and `rename` reversed; `create index`
+    and `drop index`; `exec` with `down:` and its `down:`. A flat
+    body with an operation that has no inverse (`drop table` without
+    a body, `drop` without a type, `rebuild table`, `exec` without
+    `down:`) is an error naming that operation, reported at the item
+    inside an `alter table`, unless the migration is marked
     `irreversible` or written as `up { } down { }`. A `down` block
     runs as written; an `up` block without a `down` is irreversible.
 13. **Transactions and foreign keys.** A migration runs in one
@@ -3096,9 +3127,12 @@ true. What is checked instead is their composition.
    and primary-key membership (`PRAGMA table_xinfo`); its foreign keys
    (`PRAGMA foreign_key_list`); its indexes with name, uniqueness,
    partial predicate and key (`PRAGMA index_list`, `PRAGMA
-   index_xinfo`). Nothing else is compared: not column order, not row
-   data, not SQL text, not the order of statements, and never the
-   ledger table (§migration-ledger).
+   index_xinfo`). The index of a `UNIQUE` column constraint (SQLite's
+   autoindex) is matched by key against any unique index without a
+   predicate; every other index is compared by name. Nothing else is
+   compared: not column order, not row data, not SQL text, not the
+   order of statements, and never the ledger table
+   (§migration-ledger).
 3. **Drift.** `volt migration check` compares fold and target and
    reports every difference, table by table, as the operations that
    would close it. Zero differences is the success condition. `volt
@@ -3112,18 +3146,21 @@ true. What is checked instead is their composition.
    The one run-time exception is a `not null` column added to a
    table that already has rows, which the fold's empty database
    cannot see and `alter table` (§migrations) guards by requiring a
-   default.
+   default. The check also runs every reversible migration's down and
+   up again in the fold database, so an inverse SQLite would refuse is
+   refused at check time as well.
 5. **Generation.** The drift report is the input of a migration
-   generator: it writes the operations that close the drift as a new
-   `Migration` for the user to edit. A rename is a drop and an add
-   until the user says otherwise. The generator is a tool over the
-   language, not part of it.
+   generator (not built): it writes the operations that close the
+   drift as a new `Migration` for the user to edit. A rename is a
+   drop and an add until the user says otherwise. The generator is a
+   tool over the language, not part of it.
 
 ### Migration ledger
 
 1. **The table.** Applied migrations are recorded in
    `volt_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT
-   NULL)`, created on first use. The row is written in the
+   NULL)`, created on first use; `applied_at` is the time of
+   application in RFC 3339, UTC. The row is written in the
    migration's transaction, or, with `no transaction`, after its last
    statement.
 2. **Pending** is every migration of the package whose name has no
@@ -3142,10 +3179,17 @@ true. What is checked instead is their composition.
    absent); the user may move the element to any file of the
    package. `volt migration check [DIR]` is the fold (§the-fold).
    `volt migration up|down|status DSN [DIR]` operate on the SQLite
-   database at `DSN`, a file path or a `file:` URI. `volt migration
-   sql [DIR]` prints every migration's statements in both directions
-   for review. The tool carries its own SQLite (the `mattn/go-sqlite3`
-   driver); the library and the runtime carry none.
+   database at `DSN`, a file path or a `file:` URI: `up` creates the
+   database when it is missing, `status` and `down` open an existing
+   one only (a missing file is an error and nothing is created), and
+   all three refuse `:memory:`. `volt migration sql [DIR]` prints
+   every migration's statements in both directions for review. Exit
+   codes: 1 for drift or a migration SQLite refuses, 2 for usage and
+   I/O, the same from `gen`. The tool carries its own SQLite (the
+   `mattn/go-sqlite3` driver) and needs cgo, a C compiler at build
+   time, for it; a `volt` built without cgo refuses the migration
+   commands and the fold with a message saying so. The library and
+   the runtime carry no SQLite.
 2. **Generated.** For a package that declares migrations, `volt gen`
    writes `volt_migrations.go` beside the other generated files:
    `var Migrations = []rt.Migration{…}` in name order, each with its
@@ -3153,17 +3197,20 @@ true. What is checked instead is their composition.
    its transaction and foreign-key bracket flags; and `func
    Migrate(ctx context.Context, db *sql.DB) error`, which applies
    every pending migration through `rt.MigrateUp` and is called by
-   nothing unless the application calls it. With it, a binary
-   migrates its own database and a test builds a fresh one with one
-   call, without the `volt` tool or the `.volt` files.
+   nothing unless the application calls it. The file belongs to the
+   queries part (`-parts queries`) and is absent with `-parts
+   models`. With it, a binary migrates its own database and a test
+   builds a fresh one with one call, without the `volt` tool or the
+   `.volt` files.
 3. **Runtime.** `rt.Migration` is the statement form of one
    migration; `rt.MigrateUp(ctx, db, migrations)` applies the pending
    ones and returns their names; `rt.MigrateDown(ctx, db, migrations)`
    reverts the last applied one and returns its name; `rt.
    MigrateStatus(ctx, db, migrations)` lists each migration with
-   whether and when it was applied and whether it is out of order.
-   The CLI's `up`, `down` and `status` are these three over the
-   statements lowered from the `.volt` files.
+   whether and when it was applied and whether it is out of order,
+   and every ledger row that no migration of the package names,
+   marked as such. The CLI's `up`, `down` and `status` are these
+   three over the statements lowered from the `.volt` files.
 4. **No implicit schema change.** Neither `volt gen` nor the runtime
    ever alters a database from the schema alone. The schema is the
    target; a migration is the only path to it.

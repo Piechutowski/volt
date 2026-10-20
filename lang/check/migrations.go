@@ -5,10 +5,13 @@
 package check
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/parser"
+	"github.com/Piechutowski/volt/lang/token"
 )
 
 // MigrationInfo is one Migration element (spec §migrations).
@@ -31,7 +34,9 @@ var (
 		"pk": flagOnly, "primary key": flagOnly,
 		"null": flagOnly, "not null": flagOnly,
 		"unique": flagOnly, "increment": flagOnly,
-		"default": defaultVal, "ref": refVal, "note": strValue,
+		"default": defaultVal, "ref": refVal,
+		"delete": actionValue, "update": actionValue,
+		"note": strValue,
 	}
 	migrationForbidden = map[string]string{
 		"tag":         "tag: describes the Go struct field, not the database, and is not a migration setting (§migrations)",
@@ -44,10 +49,10 @@ var (
 		repeatable: map[string]bool{"ref": true},
 		synonyms:   map[string]string{"primary key": "pk"},
 		conflicts:  [][2]string{{"null", "not null"}},
-		forbidden:  migrationForbidden,
+		forbidden:  mapWith(migrationForbidden, "from", "from: names the source of a rebuilt column and is a setting of rebuild table only (§migrations)"),
 	}
 	rebuildColumnSettings = settingSpec{
-		kinds:      withKind(migrationColumnKinds, "from", exprValue),
+		kinds:      mapWith(migrationColumnKinds, "from", exprValue),
 		repeatable: map[string]bool{"ref": true},
 		synonyms:   map[string]string{"primary key": "pk"},
 		conflicts:  [][2]string{{"null", "not null"}},
@@ -58,18 +63,21 @@ var (
 			"unique": flagOnly, "pk": flagOnly,
 			"name": strValue, "where": exprValue, "note": strValue,
 		},
+		forbidden: map[string]string{
+			"type": "type: names an index method, which SQLite does not have, and is not a migration setting (§migrations)",
+		},
 	}
 	execSettings = settingSpec{
 		kinds: map[string]valueKind{"down": strValue},
 	}
 )
 
-func withKind(kinds map[string]valueKind, name string, kind valueKind) map[string]valueKind {
-	out := make(map[string]valueKind, len(kinds)+1)
-	for k, v := range kinds {
-		out[k] = v
+func mapWith[V any](m map[string]V, name string, v V) map[string]V {
+	out := make(map[string]V, len(m)+1)
+	for k, x := range m {
+		out[k] = x
 	}
-	out[name] = kind
+	out[name] = v
 	return out
 }
 
@@ -102,7 +110,26 @@ func (c *checker) migrationsCheck(f *ast.File) {
 	sort.SliceStable(c.info.Migrations, func(i, j int) bool {
 		return c.info.Migrations[i].Name < c.info.Migrations[j].Name
 	})
+	c.migrationWidthCheck()
 	c.rebuildSourcesCheck()
+}
+
+// migrationWidthCheck enforces one digit-run width across the package's
+// migration names, so that byte order and numeric order agree (spec
+// §migrations rule 2); a name of another width than the narrowest is
+// reported with the first name of that width.
+func (c *checker) migrationWidthCheck() {
+	var narrowest *MigrationInfo
+	for _, mi := range c.info.Migrations {
+		if narrowest == nil || len(mi.Number) < len(narrowest.Number) {
+			narrowest = mi
+		}
+	}
+	for _, mi := range c.info.Migrations {
+		if len(mi.Number) != len(narrowest.Number) {
+			c.errorf(mi.Decl.Name.Pos(), "migrations", "migration names %q and %q differ in digit width: every migration name of a package has the same width, so that byte order and numeric order agree; widen every name (§migrations)", narrowest.Name, mi.Name)
+		}
+	}
 }
 
 func migrationNameParts(name string) (number, label string, ok bool) {
@@ -132,13 +159,11 @@ func (c *checker) migrationCheck(d *ast.Migration) *MigrationInfo {
 		reversible = reversible && d.HasDown()
 	} else {
 		for _, op := range d.Up {
-			why := inverseMissing(op)
-			if why == "" {
-				continue
-			}
-			reversible = false
-			if !irreversible {
-				c.errorf(op.Pos(), "migrations", "migration %q is a flat body, which runs backward as the inverses of its operations, but %s; mark the migration irreversible or write it as up { } down { } (§migrations)", name, why)
+			for _, m := range inversesMissing(op) {
+				reversible = false
+				if !irreversible {
+					c.errorf(m.pos, "migrations", "migration %q is a flat body, which runs backward as the inverses of its operations, but %s; mark the migration irreversible or write it as up { } down { } (§migrations)", name, m.why)
+				}
 			}
 		}
 	}
@@ -148,59 +173,64 @@ func (c *checker) migrationCheck(d *ast.Migration) *MigrationInfo {
 	return &MigrationInfo{Decl: d, Name: name, Number: number, Label: label, Reversible: reversible}
 }
 
-// inverseMissing says why an operation has no inverse, or "" when it
-// has one (spec §migrations rule 12).
-func inverseMissing(op ast.Operation) string {
+type missingInverse struct {
+	pos token.Position
+	why string
+}
+
+// inversesMissing lists what in an operation has no inverse, an alter
+// table item at its own position (spec §migrations rule 12).
+func inversesMissing(op ast.Operation) []missingInverse {
 	switch op := op.(type) {
 	case *ast.DropTable:
 		if !op.HasBody() {
-			return "drop table " + op.Name.Name() + " has no body to recreate the table from"
+			return []missingInverse{{op.Pos(), "drop table " + op.Name.Name() + " has no body to recreate the table from"}}
 		}
 	case *ast.AlterTable:
+		var out []missingInverse
 		for _, item := range op.Items {
 			if d, ok := item.(*ast.AlterDrop); ok && d.Type == nil {
-				return "drop " + d.Name.Name() + " in alter table " + op.Name.Name() + " carries no type to add the column back with"
+				out = append(out, missingInverse{d.Pos(), "drop " + d.Name.Name() + " in alter table " + op.Name.Name() + " carries no type to add the column back with"})
 			}
 		}
+		return out
 	case *ast.RebuildTable:
-		return "rebuild table " + op.Name.Name() + " forgets the old shape"
+		return []missingInverse{{op.Pos(), "rebuild table " + op.Name.Name() + " forgets the old shape"}}
 	case *ast.Exec:
 		if op.DownSQL() == nil {
-			return "exec carries no down:"
+			return []missingInverse{{op.Pos(), "exec carries no down:"}}
 		}
 	}
-	return ""
+	return nil
 }
 
 func (c *checker) operationsCheck(ops []ast.Operation) {
 	for _, op := range ops {
 		switch op := op.(type) {
 		case *ast.CreateTable:
-			shape := c.shapeBodyCheck(op.Name.Name(), op.Body, migrationColumnSettings)
-			if len(shape.Columns) == 0 {
-				c.errorf(op.Pos(), "migrations", "create table %q must declare at least one column (§migrations)", op.Name.Name())
-			}
+			c.shapeBodyCheck("create table", op.Name.Name(), op.Pos(), op.Body, migrationColumnSettings)
 		case *ast.DropTable:
 			if op.HasBody() {
-				c.shapeBodyCheck(op.Name.Name(), op.Body, migrationColumnSettings)
+				c.shapeBodyCheck("drop table", op.Name.Name(), op.Pos(), op.Body, migrationColumnSettings)
 			}
 		case *ast.AlterTable:
 			for _, item := range op.Items {
 				switch item := item.(type) {
 				case *ast.AlterAdd:
-					c.addColumnCheck(op.Name.Name(), item.Column)
+					c.addColumnCheck(item.Column, fmt.Sprintf("add %q to table %q", item.Column.Name.Name(), op.Name.Name()))
 				case *ast.AlterDrop:
 					if item.Type != nil {
-						c.migrationColumnCheck(&ast.Column{Name: item.Name, Type: item.Type, Settings: item.Settings}, migrationColumnSettings, nil)
+						shape := &ast.Column{Name: item.Name, Type: item.Type, Settings: item.Settings}
+						c.addColumnCheck(shape, fmt.Sprintf("drop %q from table %q, whose shape is the inverse add", item.Name.Name(), op.Name.Name()))
 					}
 				}
 			}
 		case *ast.RebuildTable:
-			c.shapeBodyCheck(op.Name.Name(), op.Body, rebuildColumnSettings)
+			c.shapeBodyCheck("rebuild table", op.Name.Name(), op.Pos(), op.Body, rebuildColumnSettings)
 		case *ast.CreateIndex:
-			c.migrationIndexCheck(op.Table.Name(), op.Index)
+			c.migrationIndexCheck(op.Table.Name(), op.Index, true)
 		case *ast.DropIndex:
-			c.migrationIndexCheck(op.Table.Name(), op.Index)
+			c.migrationIndexCheck(op.Table.Name(), op.Index, true)
 		case *ast.Exec:
 			c.settingsCheck(op.Settings, "migrations", execSettings)
 		}
@@ -209,8 +239,8 @@ func (c *checker) operationsCheck(ops []ast.Operation) {
 
 // shapeBodyCheck checks the body of a create, drop or rebuild table
 // operation as the schema checks a table (spec §migrations rules 3 to
-// 5) and returns its columns and indexes.
-func (c *checker) shapeBodyCheck(table string, body []ast.TableItem, spec settingSpec) *TableInfo {
+// 6 and 9) and returns its columns and indexes.
+func (c *checker) shapeBodyCheck(what, table string, pos token.Position, body []ast.TableItem, spec settingSpec) *TableInfo {
 	ti := &TableInfo{}
 	for _, item := range body {
 		if b, ok := item.(*ast.IndexesBlock); ok {
@@ -230,20 +260,25 @@ func (c *checker) shapeBodyCheck(table string, body []ast.TableItem, spec settin
 			ti.Columns = append(ti.Columns, c.migrationColumnCheck(item, spec, pk))
 		case *ast.IndexesBlock:
 			for _, ix := range item.Indexes {
-				c.migrationIndexCheck(table, ix)
+				c.migrationIndexCheck(table, ix, false)
 			}
 		}
+	}
+	if len(ti.Columns) == 0 {
+		c.errorf(pos, "migrations", "%s %q: the body must declare at least one column (§migrations)", what, table)
 	}
 	c.incrementCheck(ti)
 	return ti
 }
 
 // migrationColumnCheck checks one column of a migration: its settings
-// against the whitelist, its type against the built-ins, its default
-// against the type (spec §migrations rules 3 and 4).
+// against the whitelist, its ref: against the directions a column may
+// declare, its type against the built-ins, its default against the
+// type (spec §migrations rules 3 and 4).
 func (c *checker) migrationColumnCheck(col *ast.Column, spec settingSpec, pk map[string]bool) *ColumnDef {
 	c.legacyFlagsCheck(col)
 	c.settingsCheck(col.Settings, "migrations", spec)
+	c.migrationRefCheck(col)
 	cd := &ColumnDef{Col: col, Nullable: isNullable(col) && !pk[col.Name.Name()]}
 	typ, ok := builtins[col.Type.String()]
 	if !ok {
@@ -255,40 +290,96 @@ func (c *checker) migrationColumnCheck(col *ast.Column, spec settingSpec, pk map
 	return cd
 }
 
-// addColumnCheck enforces SQLite's ADD COLUMN rules on an add item
-// (spec §migrations rule 8).
-func (c *checker) addColumnCheck(table string, col *ast.Column) {
-	cd := c.migrationColumnCheck(col, migrationColumnSettings, nil)
+func (c *checker) migrationRefCheck(col *ast.Column) {
+	if col.Settings == nil {
+		return
+	}
 	name := col.Name.Name()
+	hasRef := col.Settings.Get("ref") != nil
+	for _, s := range col.Settings.Settings {
+		switch s.Name {
+		case "ref":
+			rv, ok := s.Value.(*ast.RefValue)
+			if !ok {
+				continue
+			}
+			if op := rv.OpTok.Kind; op == token.LT || op == token.LTGT {
+				c.errorf(s.Pos(), "migrations", "column %q: ref: takes > or - in a migration, since the declaring column holds the key; %s references the other way and is not this column's to declare (§migrations)", name, op)
+			}
+		case "delete", "update":
+			if !hasRef {
+				c.errorf(s.Pos(), "migrations", "column %q: %s: names the action of the column's ref:, and the column declares none (§migrations)", name, s.Name)
+				continue
+			}
+			if action := refActionOf(s); !refActions[action] {
+				c.errorf(s.Pos(), "migrations", "column %q: invalid referential action %q for '%s'; expected cascade, restrict, set null, set default or no action (§migrations)", name, action, s.Name)
+			}
+		}
+	}
+}
+
+func refActionOf(s *ast.Setting) string {
+	switch v := s.Value.(type) {
+	case *ast.Ident:
+		return strings.ToLower(v.Name())
+	case parser.MultiWord:
+		return strings.Join(v.Words(), " ")
+	}
+	return ""
+}
+
+// addColumnCheck enforces SQLite's ADD COLUMN rules on an added column
+// and on the shape of a dropped one, which is the inverse add (spec
+// §migrations rules 8 and 12); head names the item for the diagnostic.
+func (c *checker) addColumnCheck(col *ast.Column, head string) {
+	cd := c.migrationColumnCheck(col, migrationColumnSettings, nil)
 	keyed := false
 	for _, s := range []string{"pk", "primary key", "increment"} {
 		if setting := col.Settings.Get(s); setting != nil {
 			keyed = true
-			c.errorf(setting.Pos(), "migrations", "add %q to table %q: %s cannot be added to an existing table; use rebuild table (§migrations)", name, table, s)
+			c.errorf(setting.Pos(), "migrations", "%s: %s cannot be added to an existing table; use rebuild table (§migrations)", head, s)
 		}
 	}
 	for _, f := range col.LegacyFlags {
 		if strings.EqualFold(f.Name(), "pk") {
 			keyed = true
-			c.errorf(f.Pos(), "migrations", "add %q to table %q: pk cannot be added to an existing table; use rebuild table (§migrations)", name, table)
+			c.errorf(f.Pos(), "migrations", "%s: pk cannot be added to an existing table; use rebuild table (§migrations)", head)
 		}
 	}
 	def := col.Settings.Get("default")
 	if !cd.Nullable && def == nil && !keyed {
-		c.errorf(col.Pos(), "migrations", "add %q to table %q: a not null column needs a default:, since the rows already in the table must be filled (§migrations)", name, table)
+		c.errorf(col.Pos(), "migrations", "%s: a not null column needs a default:, since the rows already in the table must be filled (§migrations)", head)
 	}
 	if def != nil {
 		if _, expr := def.Value.(*ast.FuncExpr); expr {
-			c.errorf(def.Value.Pos(), "migrations", "add %q to table %q: the default must be a literal; SQLite's ADD COLUMN takes no expression default (§migrations)", name, table)
+			c.errorf(def.Value.Pos(), "migrations", "%s: the default must be a literal; SQLite's ADD COLUMN takes no expression default (§migrations)", head)
 		}
 	}
-	if ref := col.Settings.Get("ref"); ref != nil && !cd.Nullable {
-		c.errorf(ref.Pos(), "migrations", "add %q to table %q: a column with ref: must be nullable when added, since the rows already in the table reference nothing; use rebuild table for a not null foreign key (§migrations)", name, table)
+	ref := col.Settings.Get("ref")
+	if ref == nil {
+		return
+	}
+	if !cd.Nullable {
+		c.errorf(ref.Pos(), "migrations", "%s: a column with ref: must be nullable when added, since the rows already in the table reference nothing; use rebuild table for a not null foreign key (§migrations)", head)
+	}
+	if def != nil && !isNullIdent(def.Value) {
+		c.errorf(def.Value.Pos(), "migrations", "%s: a column with ref: takes no default but null, since SQLite refuses to add a REFERENCES column with another default to a table that has rows (§migrations)", head)
 	}
 }
 
-func (c *checker) migrationIndexCheck(table string, ix *ast.Index) {
+func isNullIdent(n ast.Node) bool {
+	id, ok := n.(*ast.Ident)
+	return ok && !id.Quoted() && strings.EqualFold(id.Name(), "null")
+}
+
+// migrationIndexCheck checks an index of a shape body or, standalone, of
+// a create index or drop index operation, where pk is not a setting
+// since a primary key is a table constraint (spec §migrations rule 10).
+func (c *checker) migrationIndexCheck(table string, ix *ast.Index, standalone bool) {
 	c.settingsCheck(ix.Settings, "migrations", migrationIndexSettings)
+	if pk := ix.Settings.Get("pk"); pk != nil && standalone {
+		c.errorf(pk.Pos(), "migrations", "index %s on %q: pk is not a setting of a standalone create index or drop index, since a primary key is a table constraint, declared in a create table or rebuild table body (§migrations)", indexKeyString(ix), table)
+	}
 	c.indexNameCheck(table, ix)
 }
 
@@ -325,8 +416,9 @@ func indexKeyString(ix *ast.Index) string {
 // rebuildSourcesCheck follows the column names of every table through
 // the package's migrations in name order, so that a rebuild's not null
 // column whose source would be NULL, no from:, no default:, no old
-// column of its name, is an error (spec §migrations rule 9). A table
-// no create table operation made is unknown and goes unchecked.
+// column of its name, is an error (spec §migrations rule 9). A rowid
+// alias (int [pk, increment]) takes NULL and the database assigns it.
+// A table no create table operation made is unknown and goes unchecked.
 func (c *checker) rebuildSourcesCheck() {
 	tables := map[string][]string{}
 	for _, mi := range c.info.Migrations {
@@ -381,7 +473,7 @@ func (c *checker) rebuildSourceCheck(mig string, op *ast.RebuildTable, old []str
 			continue
 		}
 		name := col.Name.Name()
-		if isNullable(col) && !pk[name] || col.Settings.Get("from") != nil || col.Settings.Get("default") != nil || contains(old, name) {
+		if isNullable(col) && !pk[name] || col.Settings.Get("increment") != nil || col.Settings.Get("from") != nil || col.Settings.Get("default") != nil || contains(old, name) {
 			continue
 		}
 		c.errorf(col.Pos(), "migrations", "rebuild table %q in migration %q: column %q is not null but its source is NULL, since no column of that name exists before the rebuild; give it a from: or a default: (§migrations)", op.Name.Name(), mig, name)
