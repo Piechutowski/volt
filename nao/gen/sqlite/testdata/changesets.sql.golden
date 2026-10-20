@@ -13,7 +13,16 @@ CREATE TABLE posts (
   rank INTEGER NOT NULL DEFAULT -1,
   draft INTEGER NOT NULL DEFAULT 1,
   caption TEXT DEFAULT 'none',
-  ratio REAL NOT NULL DEFAULT 0.5
+  ratio REAL NOT NULL DEFAULT 0.5,
+  weight REAL DEFAULT 1,
+  scale REAL DEFAULT 2.0,
+  kilo REAL DEFAULT 1e3,
+  shift REAL DEFAULT -3,
+  hits INTEGER DEFAULT 0,
+  views INTEGER NOT NULL DEFAULT 0,
+  label TEXT DEFAULT '',
+  flag INTEGER DEFAULT 0,
+  secret TEXT
 );
 
 CREATE TABLE post_tags (

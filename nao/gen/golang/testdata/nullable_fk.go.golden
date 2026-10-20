@@ -20,10 +20,10 @@ type UserColumn = rt.ColumnOf[User]
 // UserParams is a users write body as the wire carries it (spec §changesets).
 type UserParams = rt.Params[User]
 
-// Typed column handles of User: the Cast allow list of a changeset, and
-// the inert predicate, order and assignment builders of the dynamic
-// query layer. A predicate built here can only enter User queries;
-// mixing models is a compile error.
+// Typed column handles of User (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter User
+// queries; mixing models is a compile error.
 var (
 	UserID = rt.Column[User, int]{Name: "id"}
 )
@@ -44,16 +44,18 @@ type UserChangeset struct {
 // defaults in place (spec §changesets).
 func UserNew() UserChangeset { return UserChangeset{} }
 
-// Changeset starts a changeset for an update of r.
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
 func (r User) Changeset() UserChangeset { return UserChangeset{data: r, row: true} }
 
-// From marks every data column of r but the auto-increment key.
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
 func (c UserChangeset) From(r User) UserChangeset {
 	c = c.IDSet(r.ID)
 	return c
 }
 
-// IDSet sets id.
+// IDSet sets id and marks it (spec §changesets).
 func (c UserChangeset) IDSet(v int) UserChangeset {
 	c.vals.ID, c.set[0] = v, true
 	return c
@@ -67,7 +69,7 @@ func (c UserChangeset) Cast(p UserParams, allow ...UserColumn) UserChangeset {
 	for _, col := range allow {
 		switch col.ColumnName() {
 		case "id":
-			if v, ok, err := rt.Field(p, "id", false, func(r *User) int { return r.ID }); err != nil {
+			if v, ok, err := rt.Field(p, "id", "int", false, func(r *User) int { return r.ID }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "id")
 			} else if ok {
 				c = c.IDSet(v)
@@ -77,7 +79,7 @@ func (c UserChangeset) Cast(p UserParams, allow ...UserColumn) UserChangeset {
 	return c
 }
 
-// Changed reports whether col was set.
+// Changed reports whether col is marked (spec §changesets).
 func (c UserChangeset) Changed(col UserColumn) bool {
 	switch col.ColumnName() {
 	case "id":
@@ -86,7 +88,7 @@ func (c UserChangeset) Changed(col UserColumn) bool {
 	return false
 }
 
-// Row is the data with the changes applied.
+// Row is the data with the marked values applied (spec §changesets).
 func (c UserChangeset) Row() User {
 	r := c.data
 	if c.set[0] {
@@ -95,16 +97,18 @@ func (c UserChangeset) Row() User {
 	return r
 }
 
-// Params is the changes of c as a write body.
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
 func (c UserChangeset) Params() UserParams {
-	var set []string
+	var marks []rt.Mark
 	if c.set[0] {
-		set = append(set, "id")
+		marks = append(marks, rt.Mark{Wire: "id", Value: c.vals.ID})
 	}
-	return rt.ParamsOf(c.Row(), set)
+	return rt.ParamsOf(c.Row(), marks...)
 }
 
-// ErrorAdd records a field error with check custom on col.
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
 func (c UserChangeset) ErrorAdd(col UserColumn, msg string) UserChangeset {
 	return c.errorAdd("custom", msg, col.ColumnName())
 }
@@ -114,17 +118,17 @@ func (c UserChangeset) errorAdd(check, msg string, cols ...string) UserChangeset
 	return c
 }
 
-// Errors lists every field error recorded so far: casts and custom
-// errors first, then the last Validate's findings.
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
 func (c UserChangeset) Errors() []rt.FieldError {
 	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
 }
 
-// Valid reports whether no field error was recorded.
+// Valid reports whether no field error was recorded (spec §changesets).
 func (c UserChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
 
 // Err is nil when c is valid and otherwise the *rt.Invalid carrying its
-// field errors.
+// field errors (spec §changesets).
 func (c UserChangeset) Err() error {
 	if c.Valid() {
 		return nil
@@ -151,10 +155,10 @@ type PostColumn = rt.ColumnOf[Post]
 // PostParams is a posts write body as the wire carries it (spec §changesets).
 type PostParams = rt.Params[Post]
 
-// Typed column handles of Post: the Cast allow list of a changeset, and
-// the inert predicate, order and assignment builders of the dynamic
-// query layer. A predicate built here can only enter Post queries;
-// mixing models is a compile error.
+// Typed column handles of Post (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter Post
+// queries; mixing models is a compile error.
 var (
 	PostID         = rt.Column[Post, int]{Name: "id"}
 	PostAuthorID   = rt.Column[Post, int]{Name: "author_id"}
@@ -180,10 +184,12 @@ type PostChangeset struct {
 // defaults in place (spec §changesets).
 func PostNew() PostChangeset { return PostChangeset{} }
 
-// Changeset starts a changeset for an update of r.
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
 func (r Post) Changeset() PostChangeset { return PostChangeset{data: r, row: true} }
 
-// From marks every data column of r but the auto-increment key.
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
 func (c PostChangeset) From(r Post) PostChangeset {
 	c = c.IDSet(r.ID)
 	c = c.AuthorIDSet(r.AuthorID)
@@ -194,37 +200,40 @@ func (c PostChangeset) From(r Post) PostChangeset {
 	return c
 }
 
-// IDSet sets id.
+// IDSet sets id and marks it (spec §changesets).
 func (c PostChangeset) IDSet(v int) PostChangeset {
 	c.vals.ID, c.set[0] = v, true
 	return c
 }
 
-// AuthorIDSet sets author_id.
+// AuthorIDSet sets author_id and marks it (spec §changesets).
 func (c PostChangeset) AuthorIDSet(v int) PostChangeset {
 	c.vals.AuthorID, c.set[1] = v, true
 	return c
 }
 
-// EditorIDSet sets editor_id; an invalid rt.Null sets NULL.
+// EditorIDSet sets editor_id and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
 func (c PostChangeset) EditorIDSet(v rt.Null[int]) PostChangeset {
 	c.vals.EditorID, c.set[2] = v, true
 	return c
 }
 
-// ReviewedAtSet sets reviewed_at; an invalid rt.Null sets NULL.
+// ReviewedAtSet sets reviewed_at and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
 func (c PostChangeset) ReviewedAtSet(v rt.Null[time.Time]) PostChangeset {
 	c.vals.ReviewedAt, c.set[3] = v, true
 	return c
 }
 
-// MetaSet sets meta; an invalid rt.Null sets NULL.
+// MetaSet sets meta and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
 func (c PostChangeset) MetaSet(v rt.Null[string]) PostChangeset {
 	c.vals.Meta, c.set[4] = v, true
 	return c
 }
 
-// RawSet sets raw.
+// RawSet sets raw and marks it (spec §changesets).
 func (c PostChangeset) RawSet(v []byte) PostChangeset {
 	c.vals.Raw, c.set[5] = v, true
 	return c
@@ -238,37 +247,37 @@ func (c PostChangeset) Cast(p PostParams, allow ...PostColumn) PostChangeset {
 	for _, col := range allow {
 		switch col.ColumnName() {
 		case "id":
-			if v, ok, err := rt.Field(p, "id", false, func(r *Post) int { return r.ID }); err != nil {
+			if v, ok, err := rt.Field(p, "id", "int", false, func(r *Post) int { return r.ID }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "id")
 			} else if ok {
 				c = c.IDSet(v)
 			}
 		case "author_id":
-			if v, ok, err := rt.Field(p, "author_id", false, func(r *Post) int { return r.AuthorID }); err != nil {
+			if v, ok, err := rt.Field(p, "author_id", "int", false, func(r *Post) int { return r.AuthorID }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "author_id")
 			} else if ok {
 				c = c.AuthorIDSet(v)
 			}
 		case "editor_id":
-			if v, ok, err := rt.Field(p, "editor_id", true, func(r *Post) rt.Null[int] { return r.EditorID }); err != nil {
+			if v, ok, err := rt.Field(p, "editor_id", "int", true, func(r *Post) rt.Null[int] { return r.EditorID }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "editor_id")
 			} else if ok {
 				c = c.EditorIDSet(v)
 			}
 		case "reviewed_at":
-			if v, ok, err := rt.Field(p, "reviewed_at", true, func(r *Post) rt.Null[time.Time] { return r.ReviewedAt }); err != nil {
+			if v, ok, err := rt.Field(p, "reviewed_at", "time.Time", true, func(r *Post) rt.Null[time.Time] { return r.ReviewedAt }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "reviewed_at")
 			} else if ok {
 				c = c.ReviewedAtSet(v)
 			}
 		case "meta":
-			if v, ok, err := rt.Field(p, "meta", true, func(r *Post) rt.Null[string] { return r.Meta }); err != nil {
+			if v, ok, err := rt.Field(p, "meta", "string", true, func(r *Post) rt.Null[string] { return r.Meta }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "meta")
 			} else if ok {
 				c = c.MetaSet(v)
 			}
 		case "raw":
-			if v, ok, err := rt.Field(p, "raw", true, func(r *Post) []byte { return r.Raw }); err != nil {
+			if v, ok, err := rt.Field(p, "raw", "[]byte", true, func(r *Post) []byte { return r.Raw }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "raw")
 			} else if ok {
 				c = c.RawSet(v)
@@ -278,7 +287,7 @@ func (c PostChangeset) Cast(p PostParams, allow ...PostColumn) PostChangeset {
 	return c
 }
 
-// Changed reports whether col was set.
+// Changed reports whether col is marked (spec §changesets).
 func (c PostChangeset) Changed(col PostColumn) bool {
 	switch col.ColumnName() {
 	case "id":
@@ -297,7 +306,7 @@ func (c PostChangeset) Changed(col PostColumn) bool {
 	return false
 }
 
-// Row is the data with the changes applied.
+// Row is the data with the marked values applied (spec §changesets).
 func (c PostChangeset) Row() Post {
 	r := c.data
 	if c.set[0] {
@@ -321,31 +330,33 @@ func (c PostChangeset) Row() Post {
 	return r
 }
 
-// Params is the changes of c as a write body.
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
 func (c PostChangeset) Params() PostParams {
-	var set []string
+	var marks []rt.Mark
 	if c.set[0] {
-		set = append(set, "id")
+		marks = append(marks, rt.Mark{Wire: "id", Value: c.vals.ID})
 	}
 	if c.set[1] {
-		set = append(set, "author_id")
+		marks = append(marks, rt.Mark{Wire: "author_id", Value: c.vals.AuthorID})
 	}
 	if c.set[2] {
-		set = append(set, "editor_id")
+		marks = append(marks, rt.Mark{Wire: "editor_id", Value: c.vals.EditorID})
 	}
 	if c.set[3] {
-		set = append(set, "reviewed_at")
+		marks = append(marks, rt.Mark{Wire: "reviewed_at", Value: c.vals.ReviewedAt})
 	}
 	if c.set[4] {
-		set = append(set, "meta")
+		marks = append(marks, rt.Mark{Wire: "meta", Value: c.vals.Meta})
 	}
 	if c.set[5] {
-		set = append(set, "raw")
+		marks = append(marks, rt.Mark{Wire: "raw", Value: c.vals.Raw})
 	}
-	return rt.ParamsOf(c.Row(), set)
+	return rt.ParamsOf(c.Row(), marks...)
 }
 
-// ErrorAdd records a field error with check custom on col.
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
 func (c PostChangeset) ErrorAdd(col PostColumn, msg string) PostChangeset {
 	return c.errorAdd("custom", msg, col.ColumnName())
 }
@@ -355,17 +366,17 @@ func (c PostChangeset) errorAdd(check, msg string, cols ...string) PostChangeset
 	return c
 }
 
-// Errors lists every field error recorded so far: casts and custom
-// errors first, then the last Validate's findings.
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
 func (c PostChangeset) Errors() []rt.FieldError {
 	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
 }
 
-// Valid reports whether no field error was recorded.
+// Valid reports whether no field error was recorded (spec §changesets).
 func (c PostChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
 
 // Err is nil when c is valid and otherwise the *rt.Invalid carrying its
-// field errors.
+// field errors (spec §changesets).
 func (c PostChangeset) Err() error {
 	if c.Valid() {
 		return nil

@@ -21,10 +21,10 @@ type MenuColumn = rt.ColumnOf[Menu]
 // MenuParams is a menus write body as the wire carries it (spec §changesets).
 type MenuParams = rt.Params[Menu]
 
-// Typed column handles of Menu: the Cast allow list of a changeset, and
-// the inert predicate, order and assignment builders of the dynamic
-// query layer. A predicate built here can only enter Menu queries;
-// mixing models is a compile error.
+// Typed column handles of Menu (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter Menu
+// queries; mixing models is a compile error.
 var (
 	MenuID    = rt.Column[Menu, int]{Name: "id"}
 	MenuTitle = rt.Column[Menu, string]{Name: "title"}
@@ -47,23 +47,25 @@ type MenuChangeset struct {
 // defaults in place (spec §changesets).
 func MenuNew() MenuChangeset { return MenuChangeset{} }
 
-// Changeset starts a changeset for an update of r.
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
 func (r Menu) Changeset() MenuChangeset { return MenuChangeset{data: r, row: true} }
 
-// From marks every data column of r but the auto-increment key.
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
 func (c MenuChangeset) From(r Menu) MenuChangeset {
 	c = c.TitleSet(r.Title)
 	c = c.PriceSet(r.Price)
 	return c
 }
 
-// TitleSet sets title.
+// TitleSet sets title and marks it (spec §changesets).
 func (c MenuChangeset) TitleSet(v string) MenuChangeset {
 	c.vals.Title, c.set[1] = v, true
 	return c
 }
 
-// PriceSet sets price.
+// PriceSet sets price and marks it (spec §changesets).
 func (c MenuChangeset) PriceSet(v float64) MenuChangeset {
 	c.vals.Price, c.set[2] = v, true
 	return c
@@ -77,13 +79,13 @@ func (c MenuChangeset) Cast(p MenuParams, allow ...MenuColumn) MenuChangeset {
 	for _, col := range allow {
 		switch col.ColumnName() {
 		case "title":
-			if v, ok, err := rt.Field(p, "title", false, func(r *Menu) string { return r.Title }); err != nil {
+			if v, ok, err := rt.Field(p, "title", "string", false, func(r *Menu) string { return r.Title }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "title")
 			} else if ok {
 				c = c.TitleSet(v)
 			}
 		case "price":
-			if v, ok, err := rt.Field(p, "price", false, func(r *Menu) float64 { return r.Price }); err != nil {
+			if v, ok, err := rt.Field(p, "price", "float64", false, func(r *Menu) float64 { return r.Price }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "price")
 			} else if ok {
 				c = c.PriceSet(v)
@@ -93,7 +95,7 @@ func (c MenuChangeset) Cast(p MenuParams, allow ...MenuColumn) MenuChangeset {
 	return c
 }
 
-// Changed reports whether col was set.
+// Changed reports whether col is marked (spec §changesets).
 func (c MenuChangeset) Changed(col MenuColumn) bool {
 	switch col.ColumnName() {
 	case "id":
@@ -106,7 +108,7 @@ func (c MenuChangeset) Changed(col MenuColumn) bool {
 	return false
 }
 
-// Row is the data with the changes applied.
+// Row is the data with the marked values applied (spec §changesets).
 func (c MenuChangeset) Row() Menu {
 	r := c.data
 	if c.set[1] {
@@ -118,19 +120,21 @@ func (c MenuChangeset) Row() Menu {
 	return r
 }
 
-// Params is the changes of c as a write body.
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
 func (c MenuChangeset) Params() MenuParams {
-	var set []string
+	var marks []rt.Mark
 	if c.set[1] {
-		set = append(set, "title")
+		marks = append(marks, rt.Mark{Wire: "title", Value: c.vals.Title})
 	}
 	if c.set[2] {
-		set = append(set, "price")
+		marks = append(marks, rt.Mark{Wire: "price", Value: c.vals.Price})
 	}
-	return rt.ParamsOf(c.Row(), set)
+	return rt.ParamsOf(c.Row(), marks...)
 }
 
-// ErrorAdd records a field error with check custom on col.
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
 func (c MenuChangeset) ErrorAdd(col MenuColumn, msg string) MenuChangeset {
 	return c.errorAdd("custom", msg, col.ColumnName())
 }
@@ -140,17 +144,17 @@ func (c MenuChangeset) errorAdd(check, msg string, cols ...string) MenuChangeset
 	return c
 }
 
-// Errors lists every field error recorded so far: casts and custom
-// errors first, then the last Validate's findings.
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
 func (c MenuChangeset) Errors() []rt.FieldError {
 	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
 }
 
-// Valid reports whether no field error was recorded.
+// Valid reports whether no field error was recorded (spec §changesets).
 func (c MenuChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
 
 // Err is nil when c is valid and otherwise the *rt.Invalid carrying its
-// field errors.
+// field errors (spec §changesets).
 func (c MenuChangeset) Err() error {
 	if c.Valid() {
 		return nil
@@ -173,10 +177,10 @@ type OrderStatusColumn = rt.ColumnOf[OrderStatus]
 // OrderStatusParams is a order_status write body as the wire carries it (spec §changesets).
 type OrderStatusParams = rt.Params[OrderStatus]
 
-// Typed column handles of OrderStatus: the Cast allow list of a changeset, and
-// the inert predicate, order and assignment builders of the dynamic
-// query layer. A predicate built here can only enter OrderStatus queries;
-// mixing models is a compile error.
+// Typed column handles of OrderStatus (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter OrderStatus
+// queries; mixing models is a compile error.
 var (
 	OrderStatusCode  = rt.Column[OrderStatus, string]{Name: "code"}
 	OrderStatusLabel = rt.Column[OrderStatus, string]{Name: "label"}
@@ -198,25 +202,27 @@ type OrderStatusChangeset struct {
 // defaults in place (spec §changesets).
 func OrderStatusNew() OrderStatusChangeset { return OrderStatusChangeset{} }
 
-// Changeset starts a changeset for an update of r.
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
 func (r OrderStatus) Changeset() OrderStatusChangeset {
 	return OrderStatusChangeset{data: r, row: true}
 }
 
-// From marks every data column of r but the auto-increment key.
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
 func (c OrderStatusChangeset) From(r OrderStatus) OrderStatusChangeset {
 	c = c.CodeSet(r.Code)
 	c = c.LabelSet(r.Label)
 	return c
 }
 
-// CodeSet sets code.
+// CodeSet sets code and marks it (spec §changesets).
 func (c OrderStatusChangeset) CodeSet(v string) OrderStatusChangeset {
 	c.vals.Code, c.set[0] = v, true
 	return c
 }
 
-// LabelSet sets label.
+// LabelSet sets label and marks it (spec §changesets).
 func (c OrderStatusChangeset) LabelSet(v string) OrderStatusChangeset {
 	c.vals.Label, c.set[1] = v, true
 	return c
@@ -230,13 +236,13 @@ func (c OrderStatusChangeset) Cast(p OrderStatusParams, allow ...OrderStatusColu
 	for _, col := range allow {
 		switch col.ColumnName() {
 		case "code":
-			if v, ok, err := rt.Field(p, "code", false, func(r *OrderStatus) string { return r.Code }); err != nil {
+			if v, ok, err := rt.Field(p, "code", "string", false, func(r *OrderStatus) string { return r.Code }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "code")
 			} else if ok {
 				c = c.CodeSet(v)
 			}
 		case "label":
-			if v, ok, err := rt.Field(p, "label", false, func(r *OrderStatus) string { return r.Label }); err != nil {
+			if v, ok, err := rt.Field(p, "label", "string", false, func(r *OrderStatus) string { return r.Label }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "label")
 			} else if ok {
 				c = c.LabelSet(v)
@@ -246,7 +252,7 @@ func (c OrderStatusChangeset) Cast(p OrderStatusParams, allow ...OrderStatusColu
 	return c
 }
 
-// Changed reports whether col was set.
+// Changed reports whether col is marked (spec §changesets).
 func (c OrderStatusChangeset) Changed(col OrderStatusColumn) bool {
 	switch col.ColumnName() {
 	case "code":
@@ -257,7 +263,7 @@ func (c OrderStatusChangeset) Changed(col OrderStatusColumn) bool {
 	return false
 }
 
-// Row is the data with the changes applied.
+// Row is the data with the marked values applied (spec §changesets).
 func (c OrderStatusChangeset) Row() OrderStatus {
 	r := c.data
 	if c.set[0] {
@@ -269,19 +275,21 @@ func (c OrderStatusChangeset) Row() OrderStatus {
 	return r
 }
 
-// Params is the changes of c as a write body.
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
 func (c OrderStatusChangeset) Params() OrderStatusParams {
-	var set []string
+	var marks []rt.Mark
 	if c.set[0] {
-		set = append(set, "code")
+		marks = append(marks, rt.Mark{Wire: "code", Value: c.vals.Code})
 	}
 	if c.set[1] {
-		set = append(set, "label")
+		marks = append(marks, rt.Mark{Wire: "label", Value: c.vals.Label})
 	}
-	return rt.ParamsOf(c.Row(), set)
+	return rt.ParamsOf(c.Row(), marks...)
 }
 
-// ErrorAdd records a field error with check custom on col.
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
 func (c OrderStatusChangeset) ErrorAdd(col OrderStatusColumn, msg string) OrderStatusChangeset {
 	return c.errorAdd("custom", msg, col.ColumnName())
 }
@@ -291,17 +299,17 @@ func (c OrderStatusChangeset) errorAdd(check, msg string, cols ...string) OrderS
 	return c
 }
 
-// Errors lists every field error recorded so far: casts and custom
-// errors first, then the last Validate's findings.
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
 func (c OrderStatusChangeset) Errors() []rt.FieldError {
 	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
 }
 
-// Valid reports whether no field error was recorded.
+// Valid reports whether no field error was recorded (spec §changesets).
 func (c OrderStatusChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
 
 // Err is nil when c is valid and otherwise the *rt.Invalid carrying its
-// field errors.
+// field errors (spec §changesets).
 func (c OrderStatusChangeset) Err() error {
 	if c.Valid() {
 		return nil

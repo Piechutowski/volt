@@ -27,10 +27,10 @@ type InvoiceColumn = rt.ColumnOf[Invoice]
 // InvoiceParams is a invoices write body as the wire carries it (spec §changesets).
 type InvoiceParams = rt.Params[Invoice]
 
-// Typed column handles of Invoice: the Cast allow list of a changeset, and
-// the inert predicate, order and assignment builders of the dynamic
-// query layer. A predicate built here can only enter Invoice queries;
-// mixing models is a compile error.
+// Typed column handles of Invoice (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter Invoice
+// queries; mixing models is a compile error.
 var (
 	InvoiceID        = rt.Column[Invoice, int]{Name: "id"}
 	InvoiceTotal     = rt.Column[Invoice, float64]{Name: "total"}
@@ -55,10 +55,12 @@ type InvoiceChangeset struct {
 // defaults in place (spec §changesets).
 func InvoiceNew() InvoiceChangeset { return InvoiceChangeset{} }
 
-// Changeset starts a changeset for an update of r.
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
 func (r Invoice) Changeset() InvoiceChangeset { return InvoiceChangeset{data: r, row: true} }
 
-// From marks every data column of r but the auto-increment key.
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
 func (c InvoiceChangeset) From(r Invoice) InvoiceChangeset {
 	c = c.IDSet(r.ID)
 	c = c.TotalSet(r.Total)
@@ -68,31 +70,33 @@ func (c InvoiceChangeset) From(r Invoice) InvoiceChangeset {
 	return c
 }
 
-// IDSet sets id.
+// IDSet sets id and marks it (spec §changesets).
 func (c InvoiceChangeset) IDSet(v int) InvoiceChangeset {
 	c.vals.ID, c.set[0] = v, true
 	return c
 }
 
-// TotalSet sets total.
+// TotalSet sets total and marks it (spec §changesets).
 func (c InvoiceChangeset) TotalSet(v float64) InvoiceChangeset {
 	c.vals.Total, c.set[1] = v, true
 	return c
 }
 
-// CreatedAtSet sets created_at.
+// CreatedAtSet sets created_at and marks it (spec §changesets).
 func (c InvoiceChangeset) CreatedAtSet(v time.Time) InvoiceChangeset {
 	c.vals.CreatedAt, c.set[2] = v, true
 	return c
 }
 
-// UpdatedAtSet sets updated_at; an invalid rt.Null sets NULL.
+// UpdatedAtSet sets updated_at and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
 func (c InvoiceChangeset) UpdatedAtSet(v rt.Null[time.Time]) InvoiceChangeset {
 	c.vals.UpdatedAt, c.set[3] = v, true
 	return c
 }
 
-// DeletedAtSet sets deleted_at; an invalid rt.Null sets NULL.
+// DeletedAtSet sets deleted_at and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
 func (c InvoiceChangeset) DeletedAtSet(v rt.Null[time.Time]) InvoiceChangeset {
 	c.vals.DeletedAt, c.set[4] = v, true
 	return c
@@ -106,31 +110,31 @@ func (c InvoiceChangeset) Cast(p InvoiceParams, allow ...InvoiceColumn) InvoiceC
 	for _, col := range allow {
 		switch col.ColumnName() {
 		case "id":
-			if v, ok, err := rt.Field(p, "id", false, func(r *Invoice) int { return r.ID }); err != nil {
+			if v, ok, err := rt.Field(p, "id", "int", false, func(r *Invoice) int { return r.ID }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "id")
 			} else if ok {
 				c = c.IDSet(v)
 			}
 		case "total":
-			if v, ok, err := rt.Field(p, "total", false, func(r *Invoice) float64 { return r.Total }); err != nil {
+			if v, ok, err := rt.Field(p, "total", "float64", false, func(r *Invoice) float64 { return r.Total }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "total")
 			} else if ok {
 				c = c.TotalSet(v)
 			}
 		case "created_at":
-			if v, ok, err := rt.Field(p, "created_at", false, func(r *Invoice) time.Time { return r.CreatedAt }); err != nil {
+			if v, ok, err := rt.Field(p, "created_at", "time.Time", false, func(r *Invoice) time.Time { return r.CreatedAt }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "created_at")
 			} else if ok {
 				c = c.CreatedAtSet(v)
 			}
 		case "updated_at":
-			if v, ok, err := rt.Field(p, "updated_at", true, func(r *Invoice) rt.Null[time.Time] { return r.UpdatedAt }); err != nil {
+			if v, ok, err := rt.Field(p, "updated_at", "time.Time", true, func(r *Invoice) rt.Null[time.Time] { return r.UpdatedAt }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "updated_at")
 			} else if ok {
 				c = c.UpdatedAtSet(v)
 			}
 		case "deleted_at":
-			if v, ok, err := rt.Field(p, "deleted_at", true, func(r *Invoice) rt.Null[time.Time] { return r.DeletedAt }); err != nil {
+			if v, ok, err := rt.Field(p, "deleted_at", "time.Time", true, func(r *Invoice) rt.Null[time.Time] { return r.DeletedAt }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "deleted_at")
 			} else if ok {
 				c = c.DeletedAtSet(v)
@@ -140,7 +144,7 @@ func (c InvoiceChangeset) Cast(p InvoiceParams, allow ...InvoiceColumn) InvoiceC
 	return c
 }
 
-// Changed reports whether col was set.
+// Changed reports whether col is marked (spec §changesets).
 func (c InvoiceChangeset) Changed(col InvoiceColumn) bool {
 	switch col.ColumnName() {
 	case "id":
@@ -157,7 +161,7 @@ func (c InvoiceChangeset) Changed(col InvoiceColumn) bool {
 	return false
 }
 
-// Row is the data with the changes applied.
+// Row is the data with the marked values applied (spec §changesets).
 func (c InvoiceChangeset) Row() Invoice {
 	r := c.data
 	if c.set[0] {
@@ -178,28 +182,30 @@ func (c InvoiceChangeset) Row() Invoice {
 	return r
 }
 
-// Params is the changes of c as a write body.
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
 func (c InvoiceChangeset) Params() InvoiceParams {
-	var set []string
+	var marks []rt.Mark
 	if c.set[0] {
-		set = append(set, "id")
+		marks = append(marks, rt.Mark{Wire: "id", Value: c.vals.ID})
 	}
 	if c.set[1] {
-		set = append(set, "total")
+		marks = append(marks, rt.Mark{Wire: "total", Value: c.vals.Total})
 	}
 	if c.set[2] {
-		set = append(set, "created_at")
+		marks = append(marks, rt.Mark{Wire: "created_at", Value: c.vals.CreatedAt})
 	}
 	if c.set[3] {
-		set = append(set, "updated_at")
+		marks = append(marks, rt.Mark{Wire: "updated_at", Value: c.vals.UpdatedAt})
 	}
 	if c.set[4] {
-		set = append(set, "deleted_at")
+		marks = append(marks, rt.Mark{Wire: "deleted_at", Value: c.vals.DeletedAt})
 	}
-	return rt.ParamsOf(c.Row(), set)
+	return rt.ParamsOf(c.Row(), marks...)
 }
 
-// ErrorAdd records a field error with check custom on col.
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
 func (c InvoiceChangeset) ErrorAdd(col InvoiceColumn, msg string) InvoiceChangeset {
 	return c.errorAdd("custom", msg, col.ColumnName())
 }
@@ -209,17 +215,17 @@ func (c InvoiceChangeset) errorAdd(check, msg string, cols ...string) InvoiceCha
 	return c
 }
 
-// Errors lists every field error recorded so far: casts and custom
-// errors first, then the last Validate's findings.
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
 func (c InvoiceChangeset) Errors() []rt.FieldError {
 	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
 }
 
-// Valid reports whether no field error was recorded.
+// Valid reports whether no field error was recorded (spec §changesets).
 func (c InvoiceChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
 
 // Err is nil when c is valid and otherwise the *rt.Invalid carrying its
-// field errors.
+// field errors (spec §changesets).
 func (c InvoiceChangeset) Err() error {
 	if c.Valid() {
 		return nil

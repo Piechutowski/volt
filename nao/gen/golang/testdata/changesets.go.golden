@@ -28,6 +28,15 @@ type Post struct {
 	Draft    bool                 `db:"draft" json:"draft"`
 	Caption  rt.Null[string]      `db:"caption" json:"caption"`
 	Ratio    float64              `db:"ratio" json:"ratio"`
+	Weight   rt.Null[float64]     `db:"weight" json:"weight"`
+	Scale    rt.Null[float64]     `db:"scale" json:"scale"`
+	Kilo     rt.Null[float64]     `db:"kilo" json:"kilo"`
+	Shift    rt.Null[float64]     `db:"shift" json:"shift"`
+	Hits     rt.Null[int]         `db:"hits" json:"hits,omitempty"`
+	Views    int                  `db:"views" json:"views"`
+	Label    rt.Null[string]      `db:"label" json:"label"`
+	Flag     rt.Null[bool]        `db:"flag" json:"flag"`
+	Secret   rt.Null[string]      `db:"secret" json:"-"`
 }
 
 // PostColumn is a column handle of Post, the element of a Cast allow list
@@ -37,10 +46,10 @@ type PostColumn = rt.ColumnOf[Post]
 // PostParams is a posts write body as the wire carries it (spec §changesets).
 type PostParams = rt.Params[Post]
 
-// Typed column handles of Post: the Cast allow list of a changeset, and
-// the inert predicate, order and assignment builders of the dynamic
-// query layer. A predicate built here can only enter Post queries;
-// mixing models is a compile error.
+// Typed column handles of Post (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter Post
+// queries; mixing models is a compile error.
 var (
 	PostID       = rt.Column[Post, int]{Name: "id"}
 	PostSlug     = rt.Column[Post, string]{Name: "slug"}
@@ -53,6 +62,15 @@ var (
 	PostDraft    = rt.Column[Post, bool]{Name: "draft"}
 	PostCaption  = rt.NullColumn[Post, string]{Column: rt.Column[Post, string]{Name: "caption"}}
 	PostRatio    = rt.Column[Post, float64]{Name: "ratio"}
+	PostWeight   = rt.NullColumn[Post, float64]{Column: rt.Column[Post, float64]{Name: "weight"}}
+	PostScale    = rt.NullColumn[Post, float64]{Column: rt.Column[Post, float64]{Name: "scale"}}
+	PostKilo     = rt.NullColumn[Post, float64]{Column: rt.Column[Post, float64]{Name: "kilo"}}
+	PostShift    = rt.NullColumn[Post, float64]{Column: rt.Column[Post, float64]{Name: "shift"}}
+	PostHits     = rt.NullColumn[Post, int]{Column: rt.Column[Post, int]{Name: "hits"}}
+	PostViews    = rt.Column[Post, int]{Name: "views"}
+	PostLabel    = rt.NullColumn[Post, string]{Column: rt.Column[Post, string]{Name: "label"}}
+	PostFlag     = rt.NullColumn[Post, bool]{Column: rt.Column[Post, bool]{Name: "flag"}}
+	PostSecret   = rt.NullColumn[Post, string]{Column: rt.Column[Post, string]{Name: "secret"}}
 )
 
 // PostChangeset carries a posts row, the changes proposed to it and the
@@ -62,7 +80,7 @@ type PostChangeset struct {
 	data  Post
 	vals  Post
 	row   bool
-	set   [11]bool
+	set   [20]bool
 	errs  []rt.FieldError
 	valid []rt.FieldError
 }
@@ -70,13 +88,15 @@ type PostChangeset struct {
 // PostNew starts a changeset for a posts row to create, the schema's literal
 // defaults in place (spec §changesets).
 func PostNew() PostChangeset {
-	return PostChangeset{data: Post{State: EVisibilityPublic, Reviewed: rt.Some(EVisibilityUnlisted), Rank: -1, Draft: true, Caption: rt.Some("none"), Ratio: 0.5}}
+	return PostChangeset{data: Post{State: EVisibilityPublic, Reviewed: rt.Some(EVisibilityUnlisted), Rank: -1, Draft: true, Caption: rt.Some("none"), Ratio: 0.5, Weight: rt.Some(1.0), Scale: rt.Some(2.0), Kilo: rt.Some(1000.0), Shift: rt.Some(-3.0), Hits: rt.Some(0), Label: rt.Some(""), Flag: rt.Some(false)}}
 }
 
-// Changeset starts a changeset for an update of r.
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
 func (r Post) Changeset() PostChangeset { return PostChangeset{data: r, row: true} }
 
-// From marks every data column of r but the auto-increment key.
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
 func (c PostChangeset) From(r Post) PostChangeset {
 	c = c.SlugSet(r.Slug)
 	c = c.WordsSet(r.Words)
@@ -88,66 +108,139 @@ func (c PostChangeset) From(r Post) PostChangeset {
 	c = c.DraftSet(r.Draft)
 	c = c.CaptionSet(r.Caption)
 	c = c.RatioSet(r.Ratio)
+	c = c.WeightSet(r.Weight)
+	c = c.ScaleSet(r.Scale)
+	c = c.KiloSet(r.Kilo)
+	c = c.ShiftSet(r.Shift)
+	c = c.HitsSet(r.Hits)
+	c = c.ViewsSet(r.Views)
+	c = c.LabelSet(r.Label)
+	c = c.FlagSet(r.Flag)
+	c = c.SecretSet(r.Secret)
 	return c
 }
 
-// SlugSet sets slug.
+// SlugSet sets slug and marks it (spec §changesets).
 func (c PostChangeset) SlugSet(v string) PostChangeset {
 	c.vals.Slug, c.set[1] = v, true
 	return c
 }
 
-// WordsSet sets words.
+// WordsSet sets words and marks it (spec §changesets).
 func (c PostChangeset) WordsSet(v int) PostChangeset {
 	c.vals.Words, c.set[2] = v, true
 	return c
 }
 
-// ScoreSet sets score.
+// ScoreSet sets score and marks it (spec §changesets).
 func (c PostChangeset) ScoreSet(v float64) PostChangeset {
 	c.vals.Score, c.set[3] = v, true
 	return c
 }
 
-// CoverSet sets cover.
+// CoverSet sets cover and marks it (spec §changesets).
 func (c PostChangeset) CoverSet(v []byte) PostChangeset {
 	c.vals.Cover, c.set[4] = v, true
 	return c
 }
 
-// StateSet sets state.
+// StateSet sets state and marks it (spec §changesets).
 func (c PostChangeset) StateSet(v EVisibility) PostChangeset {
 	c.vals.State, c.set[5] = v, true
 	return c
 }
 
-// ReviewedSet sets reviewed; an invalid rt.Null sets NULL.
+// ReviewedSet sets reviewed and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
 func (c PostChangeset) ReviewedSet(v rt.Null[EVisibility]) PostChangeset {
 	c.vals.Reviewed, c.set[6] = v, true
 	return c
 }
 
-// RankSet sets rank.
+// RankSet sets rank and marks it (spec §changesets).
 func (c PostChangeset) RankSet(v int) PostChangeset {
 	c.vals.Rank, c.set[7] = v, true
 	return c
 }
 
-// DraftSet sets draft.
+// DraftSet sets draft and marks it (spec §changesets).
 func (c PostChangeset) DraftSet(v bool) PostChangeset {
 	c.vals.Draft, c.set[8] = v, true
 	return c
 }
 
-// CaptionSet sets caption; an invalid rt.Null sets NULL.
+// CaptionSet sets caption and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
 func (c PostChangeset) CaptionSet(v rt.Null[string]) PostChangeset {
 	c.vals.Caption, c.set[9] = v, true
 	return c
 }
 
-// RatioSet sets ratio.
+// RatioSet sets ratio and marks it (spec §changesets).
 func (c PostChangeset) RatioSet(v float64) PostChangeset {
 	c.vals.Ratio, c.set[10] = v, true
+	return c
+}
+
+// WeightSet sets weight and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
+func (c PostChangeset) WeightSet(v rt.Null[float64]) PostChangeset {
+	c.vals.Weight, c.set[11] = v, true
+	return c
+}
+
+// ScaleSet sets scale and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
+func (c PostChangeset) ScaleSet(v rt.Null[float64]) PostChangeset {
+	c.vals.Scale, c.set[12] = v, true
+	return c
+}
+
+// KiloSet sets kilo and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
+func (c PostChangeset) KiloSet(v rt.Null[float64]) PostChangeset {
+	c.vals.Kilo, c.set[13] = v, true
+	return c
+}
+
+// ShiftSet sets shift and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
+func (c PostChangeset) ShiftSet(v rt.Null[float64]) PostChangeset {
+	c.vals.Shift, c.set[14] = v, true
+	return c
+}
+
+// HitsSet sets hits and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
+func (c PostChangeset) HitsSet(v rt.Null[int]) PostChangeset {
+	c.vals.Hits, c.set[15] = v, true
+	return c
+}
+
+// ViewsSet sets views and marks it (spec §changesets).
+func (c PostChangeset) ViewsSet(v int) PostChangeset {
+	c.vals.Views, c.set[16] = v, true
+	return c
+}
+
+// LabelSet sets label and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
+func (c PostChangeset) LabelSet(v rt.Null[string]) PostChangeset {
+	c.vals.Label, c.set[17] = v, true
+	return c
+}
+
+// FlagSet sets flag and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
+func (c PostChangeset) FlagSet(v rt.Null[bool]) PostChangeset {
+	c.vals.Flag, c.set[18] = v, true
+	return c
+}
+
+// SecretSet sets secret and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
+func (c PostChangeset) SecretSet(v rt.Null[string]) PostChangeset {
+	c.vals.Secret, c.set[19] = v, true
 	return c
 }
 
@@ -155,75 +248,129 @@ func (c PostChangeset) RatioSet(v float64) PostChangeset {
 // error for a value that does not convert and an unknown_field error
 // for a key that names no column (spec §changesets).
 func (c PostChangeset) Cast(p PostParams, allow ...PostColumn) PostChangeset {
-	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "slug", "words", "score", "cover", "state", "reviewed", "rank", "draft", "caption", "ratio")...)
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "slug", "words", "score", "cover", "state", "reviewed", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret")...)
 	for _, col := range allow {
 		switch col.ColumnName() {
 		case "slug":
-			if v, ok, err := rt.Field(p, "slug", false, func(r *Post) string { return r.Slug }); err != nil {
+			if v, ok, err := rt.Field(p, "slug", "string", false, func(r *Post) string { return r.Slug }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "slug")
 			} else if ok {
 				c = c.SlugSet(v)
 			}
 		case "words":
-			if v, ok, err := rt.Field(p, "words", false, func(r *Post) int { return r.Words }); err != nil {
+			if v, ok, err := rt.Field(p, "words", "int", false, func(r *Post) int { return r.Words }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "words")
 			} else if ok {
 				c = c.WordsSet(v)
 			}
 		case "score":
-			if v, ok, err := rt.Field(p, "score", false, func(r *Post) float64 { return r.Score }); err != nil {
+			if v, ok, err := rt.Field(p, "score", "float64", false, func(r *Post) float64 { return r.Score }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "score")
 			} else if ok {
 				c = c.ScoreSet(v)
 			}
 		case "cover":
-			if v, ok, err := rt.Field(p, "cover", false, func(r *Post) []byte { return r.Cover }); err != nil {
+			if v, ok, err := rt.Field(p, "cover", "[]byte", false, func(r *Post) []byte { return r.Cover }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "cover")
 			} else if ok {
 				c = c.CoverSet(v)
 			}
 		case "state":
-			if v, ok, err := rt.Field(p, "state", false, func(r *Post) EVisibility { return r.State }); err != nil {
+			if v, ok, err := rt.Field(p, "state", "visibility", false, func(r *Post) EVisibility { return r.State }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "state")
 			} else if ok {
 				c = c.StateSet(v)
 			}
 		case "reviewed":
-			if v, ok, err := rt.Field(p, "reviewed", true, func(r *Post) rt.Null[EVisibility] { return r.Reviewed }); err != nil {
+			if v, ok, err := rt.Field(p, "reviewed", "visibility", true, func(r *Post) rt.Null[EVisibility] { return r.Reviewed }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "reviewed")
 			} else if ok {
 				c = c.ReviewedSet(v)
 			}
 		case "rank":
-			if v, ok, err := rt.Field(p, "rank", false, func(r *Post) int { return r.Rank }); err != nil {
+			if v, ok, err := rt.Field(p, "rank", "int", false, func(r *Post) int { return r.Rank }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "rank")
 			} else if ok {
 				c = c.RankSet(v)
 			}
 		case "draft":
-			if v, ok, err := rt.Field(p, "draft", false, func(r *Post) bool { return r.Draft }); err != nil {
+			if v, ok, err := rt.Field(p, "draft", "bool", false, func(r *Post) bool { return r.Draft }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "draft")
 			} else if ok {
 				c = c.DraftSet(v)
 			}
 		case "caption":
-			if v, ok, err := rt.Field(p, "caption", true, func(r *Post) rt.Null[string] { return r.Caption }); err != nil {
+			if v, ok, err := rt.Field(p, "caption", "string", true, func(r *Post) rt.Null[string] { return r.Caption }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "caption")
 			} else if ok {
 				c = c.CaptionSet(v)
 			}
 		case "ratio":
-			if v, ok, err := rt.Field(p, "ratio", false, func(r *Post) float64 { return r.Ratio }); err != nil {
+			if v, ok, err := rt.Field(p, "ratio", "float64", false, func(r *Post) float64 { return r.Ratio }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "ratio")
 			} else if ok {
 				c = c.RatioSet(v)
+			}
+		case "weight":
+			if v, ok, err := rt.Field(p, "weight", "float64", true, func(r *Post) rt.Null[float64] { return r.Weight }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "weight")
+			} else if ok {
+				c = c.WeightSet(v)
+			}
+		case "scale":
+			if v, ok, err := rt.Field(p, "scale", "float64", true, func(r *Post) rt.Null[float64] { return r.Scale }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "scale")
+			} else if ok {
+				c = c.ScaleSet(v)
+			}
+		case "kilo":
+			if v, ok, err := rt.Field(p, "kilo", "float64", true, func(r *Post) rt.Null[float64] { return r.Kilo }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "kilo")
+			} else if ok {
+				c = c.KiloSet(v)
+			}
+		case "shift":
+			if v, ok, err := rt.Field(p, "shift", "float64", true, func(r *Post) rt.Null[float64] { return r.Shift }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "shift")
+			} else if ok {
+				c = c.ShiftSet(v)
+			}
+		case "hits":
+			if v, ok, err := rt.Field(p, "hits", "int", true, func(r *Post) rt.Null[int] { return r.Hits }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "hits")
+			} else if ok {
+				c = c.HitsSet(v)
+			}
+		case "views":
+			if v, ok, err := rt.Field(p, "views", "int", false, func(r *Post) int { return r.Views }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "views")
+			} else if ok {
+				c = c.ViewsSet(v)
+			}
+		case "label":
+			if v, ok, err := rt.Field(p, "label", "string", true, func(r *Post) rt.Null[string] { return r.Label }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "label")
+			} else if ok {
+				c = c.LabelSet(v)
+			}
+		case "flag":
+			if v, ok, err := rt.Field(p, "flag", "bool", true, func(r *Post) rt.Null[bool] { return r.Flag }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "flag")
+			} else if ok {
+				c = c.FlagSet(v)
+			}
+		case "secret":
+			if v, ok, err := rt.Field(p, "secret", "string", true, func(r *Post) rt.Null[string] { return r.Secret }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "secret")
+			} else if ok {
+				c = c.SecretSet(v)
 			}
 		}
 	}
 	return c
 }
 
-// Changed reports whether col was set.
+// Changed reports whether col is marked (spec §changesets).
 func (c PostChangeset) Changed(col PostColumn) bool {
 	switch col.ColumnName() {
 	case "id":
@@ -248,11 +395,29 @@ func (c PostChangeset) Changed(col PostColumn) bool {
 		return c.set[9]
 	case "ratio":
 		return c.set[10]
+	case "weight":
+		return c.set[11]
+	case "scale":
+		return c.set[12]
+	case "kilo":
+		return c.set[13]
+	case "shift":
+		return c.set[14]
+	case "hits":
+		return c.set[15]
+	case "views":
+		return c.set[16]
+	case "label":
+		return c.set[17]
+	case "flag":
+		return c.set[18]
+	case "secret":
+		return c.set[19]
 	}
 	return false
 }
 
-// Row is the data with the changes applied.
+// Row is the data with the marked values applied (spec §changesets).
 func (c PostChangeset) Row() Post {
 	r := c.data
 	if c.set[1] {
@@ -285,46 +450,102 @@ func (c PostChangeset) Row() Post {
 	if c.set[10] {
 		r.Ratio = c.vals.Ratio
 	}
+	if c.set[11] {
+		r.Weight = c.vals.Weight
+	}
+	if c.set[12] {
+		r.Scale = c.vals.Scale
+	}
+	if c.set[13] {
+		r.Kilo = c.vals.Kilo
+	}
+	if c.set[14] {
+		r.Shift = c.vals.Shift
+	}
+	if c.set[15] {
+		r.Hits = c.vals.Hits
+	}
+	if c.set[16] {
+		r.Views = c.vals.Views
+	}
+	if c.set[17] {
+		r.Label = c.vals.Label
+	}
+	if c.set[18] {
+		r.Flag = c.vals.Flag
+	}
+	if c.set[19] {
+		r.Secret = c.vals.Secret
+	}
 	return r
 }
 
-// Params is the changes of c as a write body.
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
 func (c PostChangeset) Params() PostParams {
-	var set []string
+	var marks []rt.Mark
 	if c.set[1] {
-		set = append(set, "slug")
+		marks = append(marks, rt.Mark{Wire: "slug", Value: c.vals.Slug})
 	}
 	if c.set[2] {
-		set = append(set, "words")
+		marks = append(marks, rt.Mark{Wire: "words", Value: c.vals.Words})
 	}
 	if c.set[3] {
-		set = append(set, "score")
+		marks = append(marks, rt.Mark{Wire: "score", Value: c.vals.Score})
 	}
 	if c.set[4] {
-		set = append(set, "cover")
+		marks = append(marks, rt.Mark{Wire: "cover", Value: c.vals.Cover})
 	}
 	if c.set[5] {
-		set = append(set, "state")
+		marks = append(marks, rt.Mark{Wire: "state", Value: c.vals.State})
 	}
 	if c.set[6] {
-		set = append(set, "reviewed")
+		marks = append(marks, rt.Mark{Wire: "reviewed", Value: c.vals.Reviewed})
 	}
 	if c.set[7] {
-		set = append(set, "rank")
+		marks = append(marks, rt.Mark{Wire: "rank", Value: c.vals.Rank})
 	}
 	if c.set[8] {
-		set = append(set, "draft")
+		marks = append(marks, rt.Mark{Wire: "draft", Value: c.vals.Draft})
 	}
 	if c.set[9] {
-		set = append(set, "caption")
+		marks = append(marks, rt.Mark{Wire: "caption", Value: c.vals.Caption})
 	}
 	if c.set[10] {
-		set = append(set, "ratio")
+		marks = append(marks, rt.Mark{Wire: "ratio", Value: c.vals.Ratio})
 	}
-	return rt.ParamsOf(c.Row(), set)
+	if c.set[11] {
+		marks = append(marks, rt.Mark{Wire: "weight", Value: c.vals.Weight})
+	}
+	if c.set[12] {
+		marks = append(marks, rt.Mark{Wire: "scale", Value: c.vals.Scale})
+	}
+	if c.set[13] {
+		marks = append(marks, rt.Mark{Wire: "kilo", Value: c.vals.Kilo})
+	}
+	if c.set[14] {
+		marks = append(marks, rt.Mark{Wire: "shift", Value: c.vals.Shift})
+	}
+	if c.set[15] {
+		marks = append(marks, rt.Mark{Wire: "hits", Value: c.vals.Hits})
+	}
+	if c.set[16] {
+		marks = append(marks, rt.Mark{Wire: "views", Value: c.vals.Views})
+	}
+	if c.set[17] {
+		marks = append(marks, rt.Mark{Wire: "label", Value: c.vals.Label})
+	}
+	if c.set[18] {
+		marks = append(marks, rt.Mark{Wire: "flag", Value: c.vals.Flag})
+	}
+	if c.set[19] {
+		marks = append(marks, rt.Mark{Wire: "secret", Value: c.vals.Secret})
+	}
+	return rt.ParamsOf(c.Row(), marks...)
 }
 
-// ErrorAdd records a field error with check custom on col.
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
 func (c PostChangeset) ErrorAdd(col PostColumn, msg string) PostChangeset {
 	return c.errorAdd("custom", msg, col.ColumnName())
 }
@@ -334,17 +555,17 @@ func (c PostChangeset) errorAdd(check, msg string, cols ...string) PostChangeset
 	return c
 }
 
-// Errors lists every field error recorded so far: casts and custom
-// errors first, then the last Validate's findings.
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
 func (c PostChangeset) Errors() []rt.FieldError {
 	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
 }
 
-// Valid reports whether no field error was recorded.
+// Valid reports whether no field error was recorded (spec §changesets).
 func (c PostChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
 
 // Err is nil when c is valid and otherwise the *rt.Invalid carrying its
-// field errors.
+// field errors (spec §changesets).
 func (c PostChangeset) Err() error {
 	if c.Valid() {
 		return nil
@@ -365,10 +586,10 @@ type PostTagColumn = rt.ColumnOf[PostTag]
 // PostTagParams is a post_tags write body as the wire carries it (spec §changesets).
 type PostTagParams = rt.Params[PostTag]
 
-// Typed column handles of PostTag: the Cast allow list of a changeset, and
-// the inert predicate, order and assignment builders of the dynamic
-// query layer. A predicate built here can only enter PostTag queries;
-// mixing models is a compile error.
+// Typed column handles of PostTag (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter PostTag
+// queries; mixing models is a compile error.
 var (
 	PostTagPostID = rt.Column[PostTag, int]{Name: "post_id"}
 	PostTagTag    = rt.Column[PostTag, string]{Name: "tag"}
@@ -390,23 +611,25 @@ type PostTagChangeset struct {
 // defaults in place (spec §changesets).
 func PostTagNew() PostTagChangeset { return PostTagChangeset{} }
 
-// Changeset starts a changeset for an update of r.
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
 func (r PostTag) Changeset() PostTagChangeset { return PostTagChangeset{data: r, row: true} }
 
-// From marks every data column of r but the auto-increment key.
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
 func (c PostTagChangeset) From(r PostTag) PostTagChangeset {
 	c = c.PostIDSet(r.PostID)
 	c = c.TagSet(r.Tag)
 	return c
 }
 
-// PostIDSet sets post_id.
+// PostIDSet sets post_id and marks it (spec §changesets).
 func (c PostTagChangeset) PostIDSet(v int) PostTagChangeset {
 	c.vals.PostID, c.set[0] = v, true
 	return c
 }
 
-// TagSet sets tag.
+// TagSet sets tag and marks it (spec §changesets).
 func (c PostTagChangeset) TagSet(v string) PostTagChangeset {
 	c.vals.Tag, c.set[1] = v, true
 	return c
@@ -420,13 +643,13 @@ func (c PostTagChangeset) Cast(p PostTagParams, allow ...PostTagColumn) PostTagC
 	for _, col := range allow {
 		switch col.ColumnName() {
 		case "post_id":
-			if v, ok, err := rt.Field(p, "post_id", false, func(r *PostTag) int { return r.PostID }); err != nil {
+			if v, ok, err := rt.Field(p, "post_id", "int", false, func(r *PostTag) int { return r.PostID }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "post_id")
 			} else if ok {
 				c = c.PostIDSet(v)
 			}
 		case "tag":
-			if v, ok, err := rt.Field(p, "tag", false, func(r *PostTag) string { return r.Tag }); err != nil {
+			if v, ok, err := rt.Field(p, "tag", "string", false, func(r *PostTag) string { return r.Tag }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "tag")
 			} else if ok {
 				c = c.TagSet(v)
@@ -436,7 +659,7 @@ func (c PostTagChangeset) Cast(p PostTagParams, allow ...PostTagColumn) PostTagC
 	return c
 }
 
-// Changed reports whether col was set.
+// Changed reports whether col is marked (spec §changesets).
 func (c PostTagChangeset) Changed(col PostTagColumn) bool {
 	switch col.ColumnName() {
 	case "post_id":
@@ -447,7 +670,7 @@ func (c PostTagChangeset) Changed(col PostTagColumn) bool {
 	return false
 }
 
-// Row is the data with the changes applied.
+// Row is the data with the marked values applied (spec §changesets).
 func (c PostTagChangeset) Row() PostTag {
 	r := c.data
 	if c.set[0] {
@@ -459,19 +682,21 @@ func (c PostTagChangeset) Row() PostTag {
 	return r
 }
 
-// Params is the changes of c as a write body.
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
 func (c PostTagChangeset) Params() PostTagParams {
-	var set []string
+	var marks []rt.Mark
 	if c.set[0] {
-		set = append(set, "post_id")
+		marks = append(marks, rt.Mark{Wire: "post_id", Value: c.vals.PostID})
 	}
 	if c.set[1] {
-		set = append(set, "tag")
+		marks = append(marks, rt.Mark{Wire: "tag", Value: c.vals.Tag})
 	}
-	return rt.ParamsOf(c.Row(), set)
+	return rt.ParamsOf(c.Row(), marks...)
 }
 
-// ErrorAdd records a field error with check custom on col.
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
 func (c PostTagChangeset) ErrorAdd(col PostTagColumn, msg string) PostTagChangeset {
 	return c.errorAdd("custom", msg, col.ColumnName())
 }
@@ -481,17 +706,17 @@ func (c PostTagChangeset) errorAdd(check, msg string, cols ...string) PostTagCha
 	return c
 }
 
-// Errors lists every field error recorded so far: casts and custom
-// errors first, then the last Validate's findings.
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
 func (c PostTagChangeset) Errors() []rt.FieldError {
 	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
 }
 
-// Valid reports whether no field error was recorded.
+// Valid reports whether no field error was recorded (spec §changesets).
 func (c PostTagChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
 
 // Err is nil when c is valid and otherwise the *rt.Invalid carrying its
-// field errors.
+// field errors (spec §changesets).
 func (c PostTagChangeset) Err() error {
 	if c.Valid() {
 		return nil
@@ -511,10 +736,10 @@ type PingColumn = rt.ColumnOf[Ping]
 // PingParams is a pings write body as the wire carries it (spec §changesets).
 type PingParams = rt.Params[Ping]
 
-// Typed column handles of Ping: the Cast allow list of a changeset, and
-// the inert predicate, order and assignment builders of the dynamic
-// query layer. A predicate built here can only enter Ping queries;
-// mixing models is a compile error.
+// Typed column handles of Ping (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter Ping
+// queries; mixing models is a compile error.
 var (
 	PingID = rt.Column[Ping, int]{Name: "id"}
 )
@@ -535,10 +760,12 @@ type PingChangeset struct {
 // defaults in place (spec §changesets).
 func PingNew() PingChangeset { return PingChangeset{} }
 
-// Changeset starts a changeset for an update of r.
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
 func (r Ping) Changeset() PingChangeset { return PingChangeset{data: r, row: true} }
 
-// From marks every data column of r but the auto-increment key.
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
 func (c PingChangeset) From(r Ping) PingChangeset {
 	return c
 }
@@ -551,7 +778,7 @@ func (c PingChangeset) Cast(p PingParams, allow ...PingColumn) PingChangeset {
 	return c
 }
 
-// Changed reports whether col was set.
+// Changed reports whether col is marked (spec §changesets).
 func (c PingChangeset) Changed(col PingColumn) bool {
 	switch col.ColumnName() {
 	case "id":
@@ -560,18 +787,20 @@ func (c PingChangeset) Changed(col PingColumn) bool {
 	return false
 }
 
-// Row is the data with the changes applied.
+// Row is the data with the marked values applied (spec §changesets).
 func (c PingChangeset) Row() Ping {
 	return c.data
 }
 
-// Params is the changes of c as a write body.
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
 func (c PingChangeset) Params() PingParams {
-	var set []string
-	return rt.ParamsOf(c.Row(), set)
+	var marks []rt.Mark
+	return rt.ParamsOf(c.Row(), marks...)
 }
 
-// ErrorAdd records a field error with check custom on col.
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
 func (c PingChangeset) ErrorAdd(col PingColumn, msg string) PingChangeset {
 	return c.errorAdd("custom", msg, col.ColumnName())
 }
@@ -581,17 +810,17 @@ func (c PingChangeset) errorAdd(check, msg string, cols ...string) PingChangeset
 	return c
 }
 
-// Errors lists every field error recorded so far: casts and custom
-// errors first, then the last Validate's findings.
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
 func (c PingChangeset) Errors() []rt.FieldError {
 	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
 }
 
-// Valid reports whether no field error was recorded.
+// Valid reports whether no field error was recorded (spec §changesets).
 func (c PingChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
 
 // Err is nil when c is valid and otherwise the *rt.Invalid carrying its
-// field errors.
+// field errors (spec §changesets).
 func (c PingChangeset) Err() error {
 	if c.Valid() {
 		return nil

@@ -21,6 +21,15 @@ Table posts {
   draft    bool [not null, default: true]
   caption  string [default: 'none']
   ratio    float64 [not null, default: 0.5]
+  weight   float64 [default: 1]
+  scale    float64 [default: 2.0]
+  kilo     float64 [default: 1e3]
+  shift    float64 [default: -3]
+  hits     int [default: 0, tag: 'json:"hits,omitempty"']
+  views    int [not null, default: 0]
+  label    string [default: '']
+  flag     bool [default: false]
+  secret   string [tag: 'json:"-"']
 }
 
 Table post_tags {

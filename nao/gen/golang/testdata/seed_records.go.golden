@@ -21,10 +21,10 @@ type CurrencyColumn = rt.ColumnOf[Currency]
 // CurrencyParams is a currencies write body as the wire carries it (spec §changesets).
 type CurrencyParams = rt.Params[Currency]
 
-// Typed column handles of Currency: the Cast allow list of a changeset, and
-// the inert predicate, order and assignment builders of the dynamic
-// query layer. A predicate built here can only enter Currency queries;
-// mixing models is a compile error.
+// Typed column handles of Currency (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter Currency
+// queries; mixing models is a compile error.
 var (
 	CurrencyCode = rt.Column[Currency, string]{Name: "code"}
 	CurrencyName = rt.Column[Currency, string]{Name: "name"}
@@ -46,23 +46,25 @@ type CurrencyChangeset struct {
 // defaults in place (spec §changesets).
 func CurrencyNew() CurrencyChangeset { return CurrencyChangeset{} }
 
-// Changeset starts a changeset for an update of r.
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
 func (r Currency) Changeset() CurrencyChangeset { return CurrencyChangeset{data: r, row: true} }
 
-// From marks every data column of r but the auto-increment key.
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
 func (c CurrencyChangeset) From(r Currency) CurrencyChangeset {
 	c = c.CodeSet(r.Code)
 	c = c.NameSet(r.Name)
 	return c
 }
 
-// CodeSet sets code.
+// CodeSet sets code and marks it (spec §changesets).
 func (c CurrencyChangeset) CodeSet(v string) CurrencyChangeset {
 	c.vals.Code, c.set[0] = v, true
 	return c
 }
 
-// NameSet sets name.
+// NameSet sets name and marks it (spec §changesets).
 func (c CurrencyChangeset) NameSet(v string) CurrencyChangeset {
 	c.vals.Name, c.set[1] = v, true
 	return c
@@ -76,13 +78,13 @@ func (c CurrencyChangeset) Cast(p CurrencyParams, allow ...CurrencyColumn) Curre
 	for _, col := range allow {
 		switch col.ColumnName() {
 		case "code":
-			if v, ok, err := rt.Field(p, "code", false, func(r *Currency) string { return r.Code }); err != nil {
+			if v, ok, err := rt.Field(p, "code", "string", false, func(r *Currency) string { return r.Code }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "code")
 			} else if ok {
 				c = c.CodeSet(v)
 			}
 		case "name":
-			if v, ok, err := rt.Field(p, "name", false, func(r *Currency) string { return r.Name }); err != nil {
+			if v, ok, err := rt.Field(p, "name", "string", false, func(r *Currency) string { return r.Name }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "name")
 			} else if ok {
 				c = c.NameSet(v)
@@ -92,7 +94,7 @@ func (c CurrencyChangeset) Cast(p CurrencyParams, allow ...CurrencyColumn) Curre
 	return c
 }
 
-// Changed reports whether col was set.
+// Changed reports whether col is marked (spec §changesets).
 func (c CurrencyChangeset) Changed(col CurrencyColumn) bool {
 	switch col.ColumnName() {
 	case "code":
@@ -103,7 +105,7 @@ func (c CurrencyChangeset) Changed(col CurrencyColumn) bool {
 	return false
 }
 
-// Row is the data with the changes applied.
+// Row is the data with the marked values applied (spec §changesets).
 func (c CurrencyChangeset) Row() Currency {
 	r := c.data
 	if c.set[0] {
@@ -115,19 +117,21 @@ func (c CurrencyChangeset) Row() Currency {
 	return r
 }
 
-// Params is the changes of c as a write body.
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
 func (c CurrencyChangeset) Params() CurrencyParams {
-	var set []string
+	var marks []rt.Mark
 	if c.set[0] {
-		set = append(set, "code")
+		marks = append(marks, rt.Mark{Wire: "code", Value: c.vals.Code})
 	}
 	if c.set[1] {
-		set = append(set, "name")
+		marks = append(marks, rt.Mark{Wire: "name", Value: c.vals.Name})
 	}
-	return rt.ParamsOf(c.Row(), set)
+	return rt.ParamsOf(c.Row(), marks...)
 }
 
-// ErrorAdd records a field error with check custom on col.
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
 func (c CurrencyChangeset) ErrorAdd(col CurrencyColumn, msg string) CurrencyChangeset {
 	return c.errorAdd("custom", msg, col.ColumnName())
 }
@@ -137,17 +141,17 @@ func (c CurrencyChangeset) errorAdd(check, msg string, cols ...string) CurrencyC
 	return c
 }
 
-// Errors lists every field error recorded so far: casts and custom
-// errors first, then the last Validate's findings.
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
 func (c CurrencyChangeset) Errors() []rt.FieldError {
 	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
 }
 
-// Valid reports whether no field error was recorded.
+// Valid reports whether no field error was recorded (spec §changesets).
 func (c CurrencyChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
 
 // Err is nil when c is valid and otherwise the *rt.Invalid carrying its
-// field errors.
+// field errors (spec §changesets).
 func (c CurrencyChangeset) Err() error {
 	if c.Valid() {
 		return nil
@@ -174,10 +178,10 @@ type RateColumn = rt.ColumnOf[Rate]
 // RateParams is a rates write body as the wire carries it (spec §changesets).
 type RateParams = rt.Params[Rate]
 
-// Typed column handles of Rate: the Cast allow list of a changeset, and
-// the inert predicate, order and assignment builders of the dynamic
-// query layer. A predicate built here can only enter Rate queries;
-// mixing models is a compile error.
+// Typed column handles of Rate (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter Rate
+// queries; mixing models is a compile error.
 var (
 	RateID           = rt.Column[Rate, int]{Name: "id"}
 	RateCurrencyCode = rt.Column[Rate, string]{Name: "currency_code"}
@@ -203,10 +207,12 @@ type RateChangeset struct {
 // defaults in place (spec §changesets).
 func RateNew() RateChangeset { return RateChangeset{} }
 
-// Changeset starts a changeset for an update of r.
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
 func (r Rate) Changeset() RateChangeset { return RateChangeset{data: r, row: true} }
 
-// From marks every data column of r but the auto-increment key.
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
 func (c RateChangeset) From(r Rate) RateChangeset {
 	c = c.CurrencyCodeSet(r.CurrencyCode)
 	c = c.RateSet(r.Rate)
@@ -216,31 +222,32 @@ func (c RateChangeset) From(r Rate) RateChangeset {
 	return c
 }
 
-// CurrencyCodeSet sets currency_code.
+// CurrencyCodeSet sets currency_code and marks it (spec §changesets).
 func (c RateChangeset) CurrencyCodeSet(v string) RateChangeset {
 	c.vals.CurrencyCode, c.set[1] = v, true
 	return c
 }
 
-// RateSet sets rate.
+// RateSet sets rate and marks it (spec §changesets).
 func (c RateChangeset) RateSet(v float64) RateChangeset {
 	c.vals.Rate, c.set[2] = v, true
 	return c
 }
 
-// FetchedAtSet sets fetched_at.
+// FetchedAtSet sets fetched_at and marks it (spec §changesets).
 func (c RateChangeset) FetchedAtSet(v time.Time) RateChangeset {
 	c.vals.FetchedAt, c.set[3] = v, true
 	return c
 }
 
-// ActiveSet sets active.
+// ActiveSet sets active and marks it (spec §changesets).
 func (c RateChangeset) ActiveSet(v bool) RateChangeset {
 	c.vals.Active, c.set[4] = v, true
 	return c
 }
 
-// CommentSet sets comment; an invalid rt.Null sets NULL.
+// CommentSet sets comment and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
 func (c RateChangeset) CommentSet(v rt.Null[string]) RateChangeset {
 	c.vals.Comment, c.set[5] = v, true
 	return c
@@ -254,31 +261,31 @@ func (c RateChangeset) Cast(p RateParams, allow ...RateColumn) RateChangeset {
 	for _, col := range allow {
 		switch col.ColumnName() {
 		case "currency_code":
-			if v, ok, err := rt.Field(p, "currency_code", false, func(r *Rate) string { return r.CurrencyCode }); err != nil {
+			if v, ok, err := rt.Field(p, "currency_code", "string", false, func(r *Rate) string { return r.CurrencyCode }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "currency_code")
 			} else if ok {
 				c = c.CurrencyCodeSet(v)
 			}
 		case "rate":
-			if v, ok, err := rt.Field(p, "rate", false, func(r *Rate) float64 { return r.Rate }); err != nil {
+			if v, ok, err := rt.Field(p, "rate", "float64", false, func(r *Rate) float64 { return r.Rate }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "rate")
 			} else if ok {
 				c = c.RateSet(v)
 			}
 		case "fetched_at":
-			if v, ok, err := rt.Field(p, "fetched_at", false, func(r *Rate) time.Time { return r.FetchedAt }); err != nil {
+			if v, ok, err := rt.Field(p, "fetched_at", "time.Time", false, func(r *Rate) time.Time { return r.FetchedAt }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "fetched_at")
 			} else if ok {
 				c = c.FetchedAtSet(v)
 			}
 		case "active":
-			if v, ok, err := rt.Field(p, "active", false, func(r *Rate) bool { return r.Active }); err != nil {
+			if v, ok, err := rt.Field(p, "active", "bool", false, func(r *Rate) bool { return r.Active }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "active")
 			} else if ok {
 				c = c.ActiveSet(v)
 			}
 		case "comment":
-			if v, ok, err := rt.Field(p, "comment", true, func(r *Rate) rt.Null[string] { return r.Comment }); err != nil {
+			if v, ok, err := rt.Field(p, "comment", "string", true, func(r *Rate) rt.Null[string] { return r.Comment }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "comment")
 			} else if ok {
 				c = c.CommentSet(v)
@@ -288,7 +295,7 @@ func (c RateChangeset) Cast(p RateParams, allow ...RateColumn) RateChangeset {
 	return c
 }
 
-// Changed reports whether col was set.
+// Changed reports whether col is marked (spec §changesets).
 func (c RateChangeset) Changed(col RateColumn) bool {
 	switch col.ColumnName() {
 	case "id":
@@ -307,7 +314,7 @@ func (c RateChangeset) Changed(col RateColumn) bool {
 	return false
 }
 
-// Row is the data with the changes applied.
+// Row is the data with the marked values applied (spec §changesets).
 func (c RateChangeset) Row() Rate {
 	r := c.data
 	if c.set[1] {
@@ -328,28 +335,30 @@ func (c RateChangeset) Row() Rate {
 	return r
 }
 
-// Params is the changes of c as a write body.
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
 func (c RateChangeset) Params() RateParams {
-	var set []string
+	var marks []rt.Mark
 	if c.set[1] {
-		set = append(set, "currency_code")
+		marks = append(marks, rt.Mark{Wire: "currency_code", Value: c.vals.CurrencyCode})
 	}
 	if c.set[2] {
-		set = append(set, "rate")
+		marks = append(marks, rt.Mark{Wire: "rate", Value: c.vals.Rate})
 	}
 	if c.set[3] {
-		set = append(set, "fetched_at")
+		marks = append(marks, rt.Mark{Wire: "fetched_at", Value: c.vals.FetchedAt})
 	}
 	if c.set[4] {
-		set = append(set, "active")
+		marks = append(marks, rt.Mark{Wire: "active", Value: c.vals.Active})
 	}
 	if c.set[5] {
-		set = append(set, "comment")
+		marks = append(marks, rt.Mark{Wire: "comment", Value: c.vals.Comment})
 	}
-	return rt.ParamsOf(c.Row(), set)
+	return rt.ParamsOf(c.Row(), marks...)
 }
 
-// ErrorAdd records a field error with check custom on col.
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
 func (c RateChangeset) ErrorAdd(col RateColumn, msg string) RateChangeset {
 	return c.errorAdd("custom", msg, col.ColumnName())
 }
@@ -359,17 +368,17 @@ func (c RateChangeset) errorAdd(check, msg string, cols ...string) RateChangeset
 	return c
 }
 
-// Errors lists every field error recorded so far: casts and custom
-// errors first, then the last Validate's findings.
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
 func (c RateChangeset) Errors() []rt.FieldError {
 	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
 }
 
-// Valid reports whether no field error was recorded.
+// Valid reports whether no field error was recorded (spec §changesets).
 func (c RateChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
 
 // Err is nil when c is valid and otherwise the *rt.Invalid carrying its
-// field errors.
+// field errors (spec §changesets).
 func (c RateChangeset) Err() error {
 	if c.Valid() {
 		return nil

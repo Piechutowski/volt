@@ -22,10 +22,10 @@ type EmployeeColumn = rt.ColumnOf[Employee]
 // EmployeeParams is a employees write body as the wire carries it (spec §changesets).
 type EmployeeParams = rt.Params[Employee]
 
-// Typed column handles of Employee: the Cast allow list of a changeset, and
-// the inert predicate, order and assignment builders of the dynamic
-// query layer. A predicate built here can only enter Employee queries;
-// mixing models is a compile error.
+// Typed column handles of Employee (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter Employee
+// queries; mixing models is a compile error.
 var (
 	EmployeeID        = rt.Column[Employee, int]{Name: "id"}
 	EmployeeFullName  = rt.Column[Employee, string]{Name: "full_name"}
@@ -48,23 +48,26 @@ type EmployeeChangeset struct {
 // defaults in place (spec §changesets).
 func EmployeeNew() EmployeeChangeset { return EmployeeChangeset{} }
 
-// Changeset starts a changeset for an update of r.
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
 func (r Employee) Changeset() EmployeeChangeset { return EmployeeChangeset{data: r, row: true} }
 
-// From marks every data column of r but the auto-increment key.
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
 func (c EmployeeChangeset) From(r Employee) EmployeeChangeset {
 	c = c.FullNameSet(r.FullName)
 	c = c.ManagerIDSet(r.ManagerID)
 	return c
 }
 
-// FullNameSet sets full_name.
+// FullNameSet sets full_name and marks it (spec §changesets).
 func (c EmployeeChangeset) FullNameSet(v string) EmployeeChangeset {
 	c.vals.FullName, c.set[1] = v, true
 	return c
 }
 
-// ManagerIDSet sets manager_id; an invalid rt.Null sets NULL.
+// ManagerIDSet sets manager_id and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
 func (c EmployeeChangeset) ManagerIDSet(v rt.Null[int]) EmployeeChangeset {
 	c.vals.ManagerID, c.set[2] = v, true
 	return c
@@ -78,13 +81,13 @@ func (c EmployeeChangeset) Cast(p EmployeeParams, allow ...EmployeeColumn) Emplo
 	for _, col := range allow {
 		switch col.ColumnName() {
 		case "full_name":
-			if v, ok, err := rt.Field(p, "full_name", false, func(r *Employee) string { return r.FullName }); err != nil {
+			if v, ok, err := rt.Field(p, "full_name", "string", false, func(r *Employee) string { return r.FullName }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "full_name")
 			} else if ok {
 				c = c.FullNameSet(v)
 			}
 		case "manager_id":
-			if v, ok, err := rt.Field(p, "manager_id", true, func(r *Employee) rt.Null[int] { return r.ManagerID }); err != nil {
+			if v, ok, err := rt.Field(p, "manager_id", "int", true, func(r *Employee) rt.Null[int] { return r.ManagerID }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "manager_id")
 			} else if ok {
 				c = c.ManagerIDSet(v)
@@ -94,7 +97,7 @@ func (c EmployeeChangeset) Cast(p EmployeeParams, allow ...EmployeeColumn) Emplo
 	return c
 }
 
-// Changed reports whether col was set.
+// Changed reports whether col is marked (spec §changesets).
 func (c EmployeeChangeset) Changed(col EmployeeColumn) bool {
 	switch col.ColumnName() {
 	case "id":
@@ -107,7 +110,7 @@ func (c EmployeeChangeset) Changed(col EmployeeColumn) bool {
 	return false
 }
 
-// Row is the data with the changes applied.
+// Row is the data with the marked values applied (spec §changesets).
 func (c EmployeeChangeset) Row() Employee {
 	r := c.data
 	if c.set[1] {
@@ -119,19 +122,21 @@ func (c EmployeeChangeset) Row() Employee {
 	return r
 }
 
-// Params is the changes of c as a write body.
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
 func (c EmployeeChangeset) Params() EmployeeParams {
-	var set []string
+	var marks []rt.Mark
 	if c.set[1] {
-		set = append(set, "full_name")
+		marks = append(marks, rt.Mark{Wire: "full_name", Value: c.vals.FullName})
 	}
 	if c.set[2] {
-		set = append(set, "manager_id")
+		marks = append(marks, rt.Mark{Wire: "manager_id", Value: c.vals.ManagerID})
 	}
-	return rt.ParamsOf(c.Row(), set)
+	return rt.ParamsOf(c.Row(), marks...)
 }
 
-// ErrorAdd records a field error with check custom on col.
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
 func (c EmployeeChangeset) ErrorAdd(col EmployeeColumn, msg string) EmployeeChangeset {
 	return c.errorAdd("custom", msg, col.ColumnName())
 }
@@ -141,17 +146,17 @@ func (c EmployeeChangeset) errorAdd(check, msg string, cols ...string) EmployeeC
 	return c
 }
 
-// Errors lists every field error recorded so far: casts and custom
-// errors first, then the last Validate's findings.
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
 func (c EmployeeChangeset) Errors() []rt.FieldError {
 	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
 }
 
-// Valid reports whether no field error was recorded.
+// Valid reports whether no field error was recorded (spec §changesets).
 func (c EmployeeChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
 
 // Err is nil when c is valid and otherwise the *rt.Invalid carrying its
-// field errors.
+// field errors (spec §changesets).
 func (c EmployeeChangeset) Err() error {
 	if c.Valid() {
 		return nil

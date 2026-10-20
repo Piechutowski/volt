@@ -86,8 +86,9 @@ func (e *Invalid) Details() []Detail {
 // Refused translates a driver error into an *Invalid (spec §changesets):
 // "UNIQUE constraint failed: t.a, t.b" is a unique field error on a and
 // b, "NOT NULL constraint failed: t.a" a not_null one on a, "FOREIGN KEY
-// constraint failed" a foreign_key one with no column. Any other error is
-// returned unchanged.
+// constraint failed" a foreign_key one with no column; a trailing result
+// code such as " (2067)" is not part of the last column. Any other error
+// is returned unchanged.
 func Refused(model string, err error) error {
 	if err == nil {
 		return nil
@@ -104,7 +105,7 @@ func Refused(model string, err error) error {
 			continue
 		}
 		f := FieldError{Check: k.check, Message: k.message}
-		detail := strings.TrimSpace(strings.TrimPrefix(msg[i+len(prefix):], ":"))
+		detail := resultCodeTrim(strings.TrimSpace(strings.TrimPrefix(msg[i+len(prefix):], ":")))
 		if detail != "" && k.check != "foreign_key" {
 			for _, c := range strings.Split(detail, ",") {
 				c = strings.TrimSpace(c)
@@ -117,6 +118,26 @@ func Refused(model string, err error) error {
 		return &Invalid{Model: model, Fields: []FieldError{f}, Cause: err}
 	}
 	return err
+}
+
+func resultCodeTrim(detail string) string {
+	if !strings.HasSuffix(detail, ")") {
+		return detail
+	}
+	i := strings.LastIndex(detail, " (")
+	if i < 0 {
+		return detail
+	}
+	code := detail[i+2 : len(detail)-1]
+	if code == "" {
+		return detail
+	}
+	for _, r := range code {
+		if r < '0' || r > '9' {
+			return detail
+		}
+	}
+	return detail[:i]
 }
 
 // ErrNoRow is Update on a changeset that was not made from a row (spec
@@ -137,23 +158,37 @@ func (Column[M, T]) columnOf(M) {}
 
 // Params is a write body as the wire carries it (spec §changesets): as
 // JSON an object of the changed columns keyed by wire name, as GOB the
-// row and the list of marked wire names. A changeset's Params builds
-// one, volt.Decode reads one, Cast consumes one.
+// row and the marked columns, typed by the shared model. A changeset's
+// Params builds one from its marks, volt.Decode reads one, Cast consumes
+// one; a body keeps its arm through a GOB round trip.
 type Params[M any] struct {
 	fields map[string]json.RawMessage
 	row    *M
 	set    []string
+	marks  []Mark
 }
 
-// ParamsOf builds the Params a changeset sends: the row and the wire
-// names it marked.
-func ParamsOf[M any](row M, set []string) Params[M] {
-	return Params[M]{row: &row, set: slices.Clone(set)}
+// Mark is one marked column as a changeset hands it to ParamsOf (spec
+// §changesets): the wire name and the value set.
+type Mark struct {
+	Wire  string
+	Value any
+}
+
+// ParamsOf builds the Params a changeset sends: the row and one Mark per
+// marked column.
+func ParamsOf[M any](row M, marks ...Mark) Params[M] {
+	set := make([]string, len(marks))
+	for i, m := range marks {
+		set[i] = m.Wire
+	}
+	return Params[M]{row: &row, set: set, marks: slices.Clone(marks)}
 }
 
 type paramsWire[M any] struct {
-	Row M
-	Set []string
+	Row    M
+	Set    []string
+	Fields map[string]json.RawMessage
 }
 
 // UnmarshalJSON reads a JSON object; anything else is an error.
@@ -165,51 +200,54 @@ func (p *Params[M]) UnmarshalJSON(b []byte) error {
 	if m == nil {
 		return errors.New("a write body is a JSON object")
 	}
-	p.fields, p.row, p.set = m, nil, nil
+	*p = Params[M]{fields: m}
 	return nil
 }
 
-// MarshalJSON writes the object of the marked columns by wire name.
+// MarshalJSON writes the object of the marked columns by wire name, each
+// value as encoding/json renders it: an rt.Null as the value or null,
+// []byte as base64, time.Time as RFC 3339.
 func (p Params[M]) MarshalJSON() ([]byte, error) {
-	if p.row == nil {
-		if p.fields == nil {
-			return []byte("{}"), nil
-		}
-		return json.Marshal(p.fields)
-	}
-	all, err := json.Marshal(*p.row)
-	if err != nil {
-		return nil, err
-	}
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal(all, &m); err != nil {
-		return nil, err
-	}
-	out := make(map[string]json.RawMessage, len(p.set))
-	for _, w := range p.set {
-		if v, ok := m[w]; ok {
-			out[w] = v
+	fields := p.fields
+	if p.marks != nil {
+		var err error
+		if fields, err = marksJSON(p.marks); err != nil {
+			return nil, err
 		}
 	}
-	return json.Marshal(out)
+	if fields == nil {
+		return []byte("{}"), nil
+	}
+	return json.Marshal(fields)
 }
 
-// GobEncode writes the row and the marked wire names; a Params read from
-// JSON is converted through the row first.
-func (p Params[M]) GobEncode() ([]byte, error) {
-	w := paramsWire[M]{Set: p.set}
-	switch {
-	case p.row != nil:
-		w.Row = *p.row
-	case p.fields != nil:
-		b, err := json.Marshal(p.fields)
+func marksJSON(marks []Mark) (map[string]json.RawMessage, error) {
+	out := make(map[string]json.RawMessage, len(marks))
+	for _, m := range marks {
+		v, err := json.Marshal(m.Value)
 		if err != nil {
 			return nil, err
 		}
-		if err := json.Unmarshal(b, &w.Row); err != nil {
-			return nil, err
+		out[m.Wire] = v
+	}
+	return out, nil
+}
+
+// GobEncode writes the arm p holds: the row, the marked wire names and
+// the marks' JSON for a Params a changeset built, the JSON object alone
+// for one read from JSON, so Field and MarshalJSON answer the same on
+// both sides of the trip.
+func (p Params[M]) GobEncode() ([]byte, error) {
+	w := paramsWire[M]{Fields: p.fields}
+	if p.row != nil {
+		w.Row, w.Set = *p.row, p.set
+		if p.marks != nil {
+			fields, err := marksJSON(p.marks)
+			if err != nil {
+				return nil, err
+			}
+			w.Fields = fields
 		}
-		w.Set = p.Keys()
 	}
 	var buf bytes.Buffer
 	if err := gob.NewEncoder(&buf).Encode(w); err != nil {
@@ -218,13 +256,17 @@ func (p Params[M]) GobEncode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// GobDecode reads what GobEncode wrote.
+// GobDecode reads what GobEncode wrote; a body with no marked column is
+// the empty JSON object either way.
 func (p *Params[M]) GobDecode(b []byte) error {
 	var w paramsWire[M]
 	if err := gob.NewDecoder(bytes.NewReader(b)).Decode(&w); err != nil {
 		return err
 	}
-	p.fields, p.row, p.set = nil, &w.Row, w.Set
+	*p = Params[M]{fields: w.Fields}
+	if len(w.Set) > 0 {
+		p.row, p.set = &w.Row, w.Set
+	}
 	return nil
 }
 
@@ -252,10 +294,11 @@ func (p Params[M]) Keys() []string {
 }
 
 // Field reads one column of p (spec §changesets): present is false when p
-// does not carry the wire name; a JSON value that does not convert to T,
-// or null when nullable is false, is an error naming the wire name. get
-// reads the column from the row of a GOB body.
-func Field[M, T any](p Params[M], wire string, nullable bool, get func(*M) T) (v T, present bool, err error) {
+// does not carry the wire name; a JSON value that does not convert to T
+// is the error "<wire>: expected <typ>", null when nullable is false
+// "<wire>: null is not allowed (<typ>)", typ being the column's type as
+// the schema spells it. get reads the column from the row of a GOB body.
+func Field[M, T any](p Params[M], wire, typ string, nullable bool, get func(*M) T) (v T, present bool, err error) {
 	if p.row != nil {
 		if !slices.Contains(p.set, wire) {
 			return v, false, nil
@@ -268,12 +311,12 @@ func Field[M, T any](p Params[M], wire string, nullable bool, get func(*M) T) (v
 	}
 	if bytes.Equal(bytes.TrimSpace(raw), jsonNull) {
 		if !nullable {
-			return v, true, fmt.Errorf("%s cannot be null", wire)
+			return v, true, fmt.Errorf("%s: null is not allowed (%s)", wire, typ)
 		}
 		return v, true, nil
 	}
 	if err := json.Unmarshal(raw, &v); err != nil {
-		return v, true, fmt.Errorf("%s cannot be read as %T", wire, v)
+		return v, true, fmt.Errorf("%s: expected %s", wire, typ)
 	}
 	return v, true, nil
 }

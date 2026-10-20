@@ -32,8 +32,7 @@ type Options struct {
 // The file must be free of check errors; Generate validates only what
 // generation itself needs (name mapping, type mapping, collisions).
 func Generate(f *ast.File, info *check.Info, opts Options) ([]byte, error) {
-	p, perr := planBuild(f, info, nil)
-	return modelsGenerate(f, info, p, perr, opts)
+	return PlanBuild(f, info).Models(opts)
 }
 
 func modelsGenerate(f *ast.File, info *check.Info, p *plan, perr error, opts Options) ([]byte, error) {
@@ -64,7 +63,7 @@ func (g *generator) run(p *plan, perr error) error {
 	}
 
 	if p != nil {
-		g.body.Grow(p.fieldCount()*700 + len(p.tables)*1800)
+		g.body.Grow(p.fieldCount()*700 + len(p.tables)*4000)
 	}
 	for _, e := range g.info.Enums {
 		if err := g.enumEmit(e.Decl); err != nil {
@@ -132,10 +131,10 @@ func (g *generator) changesetEmit(t *tableModel) {
 	fmt.Fprintf(b, "// %sParams is a %s write body as the wire carries it (spec §changesets).\n", m, tbl)
 	fmt.Fprintf(b, "type %sParams = rt.Params[%s]\n\n", m, m)
 
-	fmt.Fprintf(b, "// Typed column handles of %s: the Cast allow list of a changeset, and\n", m)
-	fmt.Fprintf(b, "// the inert predicate, order and assignment builders of the dynamic\n")
-	fmt.Fprintf(b, "// query layer. A predicate built here can only enter %s queries;\n", m)
-	fmt.Fprintf(b, "// mixing models is a compile error.\n")
+	fmt.Fprintf(b, "// Typed column handles of %s (spec §changesets): the Cast allow list of\n", m)
+	fmt.Fprintf(b, "// a changeset, and the inert predicate, order and assignment builders\n")
+	fmt.Fprintf(b, "// of the dynamic query layer. A predicate built here can only enter %s\n", m)
+	fmt.Fprintf(b, "// queries; mixing models is a compile error.\n")
 	b.WriteString("var (\n")
 	var handles align.Block
 	for _, f := range t.fields {
@@ -169,10 +168,10 @@ func (g *generator) changesetEmit(t *tableModel) {
 		newBody = fmt.Sprintf("return %sChangeset{data: %s%s}", m, m, seed)
 	}
 	funcLine(b, fmt.Sprintf("func %sNew() %sChangeset", m, m), newBody)
-	fmt.Fprintf(b, "// Changeset starts a changeset for an update of r.\n")
+	fmt.Fprintf(b, "// Changeset starts a changeset for an update of r, nothing set (spec\n// §changesets).\n")
 	funcLine(b, fmt.Sprintf("func (r %s) Changeset() %sChangeset", m, m), fmt.Sprintf("return %sChangeset{data: r, row: true}", m))
 
-	fmt.Fprintf(b, "// From marks every data column of r but the auto-increment key.\n")
+	fmt.Fprintf(b, "// From marks every data column of r but the auto-increment key (spec\n// §changesets).\n")
 	fmt.Fprintf(b, "func (c %sChangeset) From(r %s) %sChangeset {\n", m, m, m)
 	for _, f := range settable {
 		fmt.Fprintf(b, "\tc = c.%sSet(r.%s)\n", f.goField, f.goField)
@@ -181,9 +180,9 @@ func (g *generator) changesetEmit(t *tableModel) {
 
 	for _, f := range settable {
 		if f.nullable && !strings.HasPrefix(f.goType, "[]") {
-			fmt.Fprintf(b, "// %sSet sets %s; an invalid rt.Null sets NULL.\n", f.goField, f.colName)
+			fmt.Fprintf(b, "// %sSet sets %s and marks it; an invalid rt.Null sets NULL (spec\n// §changesets).\n", f.goField, f.colName)
 		} else {
-			fmt.Fprintf(b, "// %sSet sets %s.\n", f.goField, f.colName)
+			fmt.Fprintf(b, "// %sSet sets %s and marks it (spec §changesets).\n", f.goField, f.colName)
 		}
 		fmt.Fprintf(b, "func (c %sChangeset) %sSet(v %s) %sChangeset {\n", m, f.goField, f.goType, m)
 		fmt.Fprintf(b, "\tc.vals.%s, c.set[%d] = v, true\n\treturn c\n}\n\n", f.goField, t.index(f))
@@ -202,7 +201,7 @@ func (g *generator) changesetEmit(t *tableModel) {
 		b.WriteString("\tfor _, col := range allow {\n\t\tswitch col.ColumnName() {\n")
 		for _, f := range settable {
 			fmt.Fprintf(b, "\t\tcase %q:\n", f.colName)
-			fmt.Fprintf(b, "\t\t\tif v, ok, err := rt.Field(p, %q, %t, func(r *%s) %s { return r.%s }); err != nil {\n", f.wire, f.nullable, m, f.goType, f.goField)
+			fmt.Fprintf(b, "\t\t\tif v, ok, err := rt.Field(p, %q, %q, %t, func(r *%s) %s { return r.%s }); err != nil {\n", f.wire, f.col.Type.String(), f.nullable, m, f.goType, f.goField)
 			fmt.Fprintf(b, "\t\t\t\tc = c.errorAdd(\"cast\", err.Error(), %q)\n", f.colName)
 			fmt.Fprintf(b, "\t\t\t} else if ok {\n\t\t\t\tc = c.%sSet(v)\n\t\t\t}\n", f.goField)
 		}
@@ -210,14 +209,14 @@ func (g *generator) changesetEmit(t *tableModel) {
 	}
 	b.WriteString("\treturn c\n}\n\n")
 
-	fmt.Fprintf(b, "// Changed reports whether col was set.\n")
+	fmt.Fprintf(b, "// Changed reports whether col is marked (spec §changesets).\n")
 	fmt.Fprintf(b, "func (c %sChangeset) Changed(col %sColumn) bool {\n\tswitch col.ColumnName() {\n", m, m)
 	for i, f := range t.fields {
 		fmt.Fprintf(b, "\tcase %q:\n\t\treturn c.set[%d]\n", f.colName, i)
 	}
 	b.WriteString("\t}\n\treturn false\n}\n\n")
 
-	fmt.Fprintf(b, "// Row is the data with the changes applied.\n")
+	fmt.Fprintf(b, "// Row is the data with the marked values applied (spec §changesets).\n")
 	fmt.Fprintf(b, "func (c %sChangeset) Row() %s {\n", m, m)
 	if len(settable) == 0 {
 		b.WriteString("\treturn c.data\n}\n\n")
@@ -229,28 +228,28 @@ func (g *generator) changesetEmit(t *tableModel) {
 		b.WriteString("\treturn r\n}\n\n")
 	}
 
-	fmt.Fprintf(b, "// Params is the changes of c as a write body.\n")
-	fmt.Fprintf(b, "func (c %sChangeset) Params() %sParams {\n\tvar set []string\n", m, m)
+	fmt.Fprintf(b, "// Params is the marked columns of c as a write body, each under its\n// wire name (spec §changesets).\n")
+	fmt.Fprintf(b, "func (c %sChangeset) Params() %sParams {\n\tvar marks []rt.Mark\n", m, m)
 	for _, f := range settable {
-		fmt.Fprintf(b, "\tif c.set[%d] {\n\t\tset = append(set, %q)\n\t}\n", t.index(f), f.wire)
+		fmt.Fprintf(b, "\tif c.set[%d] {\n\t\tmarks = append(marks, rt.Mark{Wire: %q, Value: c.vals.%s})\n\t}\n", t.index(f), f.wire, f.goField)
 	}
-	b.WriteString("\treturn rt.ParamsOf(c.Row(), set)\n}\n\n")
+	b.WriteString("\treturn rt.ParamsOf(c.Row(), marks...)\n}\n\n")
 
-	fmt.Fprintf(b, "// ErrorAdd records a field error with check custom on col.\n")
+	fmt.Fprintf(b, "// ErrorAdd records a field error with check custom on col (spec\n// §changesets).\n")
 	fmt.Fprintf(b, "func (c %sChangeset) ErrorAdd(col %sColumn, msg string) %sChangeset {\n", m, m, m)
 	b.WriteString("\treturn c.errorAdd(\"custom\", msg, col.ColumnName())\n}\n\n")
 	fmt.Fprintf(b, "func (c %sChangeset) errorAdd(check, msg string, cols ...string) %sChangeset {\n", m, m)
 	b.WriteString("\tc.errs = rt.FieldErrorsAppend(c.errs, rt.FieldError{Check: check, Columns: cols, Message: msg})\n\treturn c\n}\n\n")
 
-	fmt.Fprintf(b, "// Errors lists every field error recorded so far: casts and custom\n")
-	fmt.Fprintf(b, "// errors first, then the last Validate's findings.\n")
+	fmt.Fprintf(b, "// Errors lists every field error recorded so far (spec §changesets): casts\n")
+	fmt.Fprintf(b, "// and custom errors first, then the last Validate's findings.\n")
 	fmt.Fprintf(b, "func (c %sChangeset) Errors() []rt.FieldError {\n", m)
 	b.WriteString("\treturn rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)\n}\n\n")
 
-	fmt.Fprintf(b, "// Valid reports whether no field error was recorded.\n")
+	fmt.Fprintf(b, "// Valid reports whether no field error was recorded (spec §changesets).\n")
 	funcLine(b, fmt.Sprintf("func (c %sChangeset) Valid() bool", m), "return len(c.errs) == 0 && len(c.valid) == 0")
 
-	fmt.Fprintf(b, "// Err is nil when c is valid and otherwise the *rt.Invalid carrying its\n// field errors.\n")
+	fmt.Fprintf(b, "// Err is nil when c is valid and otherwise the *rt.Invalid carrying its\n// field errors (spec §changesets).\n")
 	fmt.Fprintf(b, "func (c %sChangeset) Err() error {\n\tif c.Valid() {\n\t\treturn nil\n\t}\n", m)
 	fmt.Fprintf(b, "\treturn &rt.Invalid{Model: %q, Fields: c.Errors()}\n}\n\n", m)
 }
@@ -520,24 +519,27 @@ func (t *tableModel) defaultsGo() string {
 	return "{" + strings.Join(parts, ", ") + "}"
 }
 
+// defaultGo renders the literal default a <Model>New seeds for one column
+// (spec §changesets rule 2): a Go constant of the column's type, wrapped
+// in rt.Some when nullable. A zero literal on a non-nullable column is
+// the zero value and needs no seed; on a nullable column it is a value,
+// not NULL, and is seeded.
 func (f *fieldPlan) defaultGo() (string, bool) {
 	s := f.col.Settings.Get("default")
 	if s == nil || f.declared || f.increment {
 		return "", false
 	}
 	var expr string
+	var zero bool
 	switch v := s.Value.(type) {
 	case *ast.BasicLit:
 		if v.Tok.Kind == token.STRING {
-			if v.Tok.Val == "" {
-				return "", false
-			}
-			expr = strconv.Quote(v.Tok.Val)
+			expr, zero = strconv.Quote(v.Tok.Val), v.Tok.Val == ""
 		} else {
-			expr = numberGo(v.Tok.Val, f.storage)
+			expr, zero = numberGo(v.Tok.Val, f.storage)
 		}
 	case *ast.NegNumber:
-		expr = numberGo("-"+v.Num.Tok.Val, f.storage)
+		expr, zero = numberGo("-"+v.Num.Tok.Val, f.storage)
 	case *ast.EnumConst:
 		name, err := goName(v.Value.Name())
 		if err != nil {
@@ -545,14 +547,18 @@ func (f *fieldPlan) defaultGo() (string, bool) {
 		}
 		expr = f.baseType + name
 	case *ast.Ident:
-		if !strings.EqualFold(v.Name(), "true") {
+		switch {
+		case strings.EqualFold(v.Name(), "true"):
+			expr = "true"
+		case strings.EqualFold(v.Name(), "false"):
+			expr, zero = "false", true
+		default:
 			return "", false
 		}
-		expr = "true"
 	default:
 		return "", false
 	}
-	if expr == "" {
+	if expr == "" || (zero && !f.nullable) {
 		return "", false
 	}
 	if f.nullable {
@@ -561,17 +567,24 @@ func (f *fieldPlan) defaultGo() (string, bool) {
 	return expr, true
 }
 
-func numberGo(lit, storage string) string {
-	if storage == "int" {
+func numberGo(lit, storage string) (expr string, zero bool) {
+	switch storage {
+	case "int":
 		n, err := strconv.ParseInt(lit, 10, 64)
-		if err != nil || n == 0 {
-			return ""
+		if err != nil {
+			return "", false
 		}
-		return strconv.FormatInt(n, 10)
+		return strconv.FormatInt(n, 10), n == 0
+	case "float64":
+		x, err := strconv.ParseFloat(lit, 64)
+		if err != nil {
+			return "", false
+		}
+		expr = strconv.FormatFloat(x, 'g', -1, 64)
+		if !strings.ContainsAny(expr, ".eE") {
+			expr += ".0"
+		}
+		return expr, x == 0
 	}
-	x, err := strconv.ParseFloat(lit, 64)
-	if err != nil || x == 0 {
-		return ""
-	}
-	return strconv.FormatFloat(x, 'g', -1, 64)
+	return "", false
 }

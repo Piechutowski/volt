@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -74,10 +73,10 @@ func TestCastTypeMismatchIsAFieldError(t *testing.T) {
 	for _, e := range errs {
 		byCol[e.Columns[0]] = e
 	}
-	if e := byCol["created_at"]; e.Check != "cast" || !strings.Contains(e.Message, "created_at cannot be read as time.Time") {
+	if e := byCol["created_at"]; e.Check != "cast" || e.Message != "created_at: expected time.Time" {
 		t.Errorf("created_at: %+v", e)
 	}
-	if e := byCol["email"]; e.Check != "cast" || !strings.Contains(e.Message, "email cannot be null") {
+	if e := byCol["email"]; e.Check != "cast" || e.Message != "email: null is not allowed (string)" {
 		t.Errorf("email: %+v", e)
 	}
 	if cs.Changed(UserCreatedAt) || cs.Row().Email != "keep@example.com" {

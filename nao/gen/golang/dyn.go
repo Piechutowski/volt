@@ -27,9 +27,8 @@ func (pl *Plan) Dyn(opts Options) ([]byte, error) {
 	if pl.err != nil {
 		return nil, pl.err
 	}
-	if cs := pl.DynNameCollisions(); len(cs) > 0 {
-		c := cs[0]
-		return nil, fmt.Errorf("%s and %s both need the Go name %s; rename one (e.g. with [model:])", c.First, c.Second, c.Name)
+	if err := pl.nameCollisionErr(); err != nil {
+		return nil, err
 	}
 	e := &dynEmitter{plan: pl.p, opts: opts}
 	e.run()

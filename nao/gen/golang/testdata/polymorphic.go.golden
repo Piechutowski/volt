@@ -35,10 +35,10 @@ type CommentColumn = rt.ColumnOf[Comment]
 // CommentParams is a comments write body as the wire carries it (spec §changesets).
 type CommentParams = rt.Params[Comment]
 
-// Typed column handles of Comment: the Cast allow list of a changeset, and
-// the inert predicate, order and assignment builders of the dynamic
-// query layer. A predicate built here can only enter Comment queries;
-// mixing models is a compile error.
+// Typed column handles of Comment (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter Comment
+// queries; mixing models is a compile error.
 var (
 	CommentID              = rt.Column[Comment, int]{Name: "id"}
 	CommentCommentableType = rt.Column[Comment, ECommentableType]{Name: "commentable_type"}
@@ -62,10 +62,12 @@ type CommentChangeset struct {
 // defaults in place (spec §changesets).
 func CommentNew() CommentChangeset { return CommentChangeset{} }
 
-// Changeset starts a changeset for an update of r.
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
 func (r Comment) Changeset() CommentChangeset { return CommentChangeset{data: r, row: true} }
 
-// From marks every data column of r but the auto-increment key.
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
 func (c CommentChangeset) From(r Comment) CommentChangeset {
 	c = c.CommentableTypeSet(r.CommentableType)
 	c = c.CommentableIDSet(r.CommentableID)
@@ -73,19 +75,19 @@ func (c CommentChangeset) From(r Comment) CommentChangeset {
 	return c
 }
 
-// CommentableTypeSet sets commentable_type.
+// CommentableTypeSet sets commentable_type and marks it (spec §changesets).
 func (c CommentChangeset) CommentableTypeSet(v ECommentableType) CommentChangeset {
 	c.vals.CommentableType, c.set[1] = v, true
 	return c
 }
 
-// CommentableIDSet sets commentable_id.
+// CommentableIDSet sets commentable_id and marks it (spec §changesets).
 func (c CommentChangeset) CommentableIDSet(v int) CommentChangeset {
 	c.vals.CommentableID, c.set[2] = v, true
 	return c
 }
 
-// BodySet sets body.
+// BodySet sets body and marks it (spec §changesets).
 func (c CommentChangeset) BodySet(v string) CommentChangeset {
 	c.vals.Body, c.set[3] = v, true
 	return c
@@ -99,19 +101,19 @@ func (c CommentChangeset) Cast(p CommentParams, allow ...CommentColumn) CommentC
 	for _, col := range allow {
 		switch col.ColumnName() {
 		case "commentable_type":
-			if v, ok, err := rt.Field(p, "commentable_type", false, func(r *Comment) ECommentableType { return r.CommentableType }); err != nil {
+			if v, ok, err := rt.Field(p, "commentable_type", "commentable_type", false, func(r *Comment) ECommentableType { return r.CommentableType }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "commentable_type")
 			} else if ok {
 				c = c.CommentableTypeSet(v)
 			}
 		case "commentable_id":
-			if v, ok, err := rt.Field(p, "commentable_id", false, func(r *Comment) int { return r.CommentableID }); err != nil {
+			if v, ok, err := rt.Field(p, "commentable_id", "int", false, func(r *Comment) int { return r.CommentableID }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "commentable_id")
 			} else if ok {
 				c = c.CommentableIDSet(v)
 			}
 		case "body":
-			if v, ok, err := rt.Field(p, "body", false, func(r *Comment) string { return r.Body }); err != nil {
+			if v, ok, err := rt.Field(p, "body", "string", false, func(r *Comment) string { return r.Body }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "body")
 			} else if ok {
 				c = c.BodySet(v)
@@ -121,7 +123,7 @@ func (c CommentChangeset) Cast(p CommentParams, allow ...CommentColumn) CommentC
 	return c
 }
 
-// Changed reports whether col was set.
+// Changed reports whether col is marked (spec §changesets).
 func (c CommentChangeset) Changed(col CommentColumn) bool {
 	switch col.ColumnName() {
 	case "id":
@@ -136,7 +138,7 @@ func (c CommentChangeset) Changed(col CommentColumn) bool {
 	return false
 }
 
-// Row is the data with the changes applied.
+// Row is the data with the marked values applied (spec §changesets).
 func (c CommentChangeset) Row() Comment {
 	r := c.data
 	if c.set[1] {
@@ -151,22 +153,24 @@ func (c CommentChangeset) Row() Comment {
 	return r
 }
 
-// Params is the changes of c as a write body.
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
 func (c CommentChangeset) Params() CommentParams {
-	var set []string
+	var marks []rt.Mark
 	if c.set[1] {
-		set = append(set, "commentable_type")
+		marks = append(marks, rt.Mark{Wire: "commentable_type", Value: c.vals.CommentableType})
 	}
 	if c.set[2] {
-		set = append(set, "commentable_id")
+		marks = append(marks, rt.Mark{Wire: "commentable_id", Value: c.vals.CommentableID})
 	}
 	if c.set[3] {
-		set = append(set, "body")
+		marks = append(marks, rt.Mark{Wire: "body", Value: c.vals.Body})
 	}
-	return rt.ParamsOf(c.Row(), set)
+	return rt.ParamsOf(c.Row(), marks...)
 }
 
-// ErrorAdd records a field error with check custom on col.
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
 func (c CommentChangeset) ErrorAdd(col CommentColumn, msg string) CommentChangeset {
 	return c.errorAdd("custom", msg, col.ColumnName())
 }
@@ -176,17 +180,17 @@ func (c CommentChangeset) errorAdd(check, msg string, cols ...string) CommentCha
 	return c
 }
 
-// Errors lists every field error recorded so far: casts and custom
-// errors first, then the last Validate's findings.
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
 func (c CommentChangeset) Errors() []rt.FieldError {
 	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
 }
 
-// Valid reports whether no field error was recorded.
+// Valid reports whether no field error was recorded (spec §changesets).
 func (c CommentChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
 
 // Err is nil when c is valid and otherwise the *rt.Invalid carrying its
-// field errors.
+// field errors (spec §changesets).
 func (c CommentChangeset) Err() error {
 	if c.Valid() {
 		return nil

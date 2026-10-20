@@ -20,10 +20,10 @@ type CategoryColumn = rt.ColumnOf[Category]
 // CategoryParams is a categories write body as the wire carries it (spec §changesets).
 type CategoryParams = rt.Params[Category]
 
-// Typed column handles of Category: the Cast allow list of a changeset, and
-// the inert predicate, order and assignment builders of the dynamic
-// query layer. A predicate built here can only enter Category queries;
-// mixing models is a compile error.
+// Typed column handles of Category (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter Category
+// queries; mixing models is a compile error.
 var (
 	CategoryID   = rt.Column[Category, int]{Name: "id"}
 	CategoryName = rt.Column[Category, string]{Name: "name"}
@@ -45,23 +45,25 @@ type CategoryChangeset struct {
 // defaults in place (spec §changesets).
 func CategoryNew() CategoryChangeset { return CategoryChangeset{} }
 
-// Changeset starts a changeset for an update of r.
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
 func (r Category) Changeset() CategoryChangeset { return CategoryChangeset{data: r, row: true} }
 
-// From marks every data column of r but the auto-increment key.
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
 func (c CategoryChangeset) From(r Category) CategoryChangeset {
 	c = c.IDSet(r.ID)
 	c = c.NameSet(r.Name)
 	return c
 }
 
-// IDSet sets id.
+// IDSet sets id and marks it (spec §changesets).
 func (c CategoryChangeset) IDSet(v int) CategoryChangeset {
 	c.vals.ID, c.set[0] = v, true
 	return c
 }
 
-// NameSet sets name.
+// NameSet sets name and marks it (spec §changesets).
 func (c CategoryChangeset) NameSet(v string) CategoryChangeset {
 	c.vals.Name, c.set[1] = v, true
 	return c
@@ -75,13 +77,13 @@ func (c CategoryChangeset) Cast(p CategoryParams, allow ...CategoryColumn) Categ
 	for _, col := range allow {
 		switch col.ColumnName() {
 		case "id":
-			if v, ok, err := rt.Field(p, "id", false, func(r *Category) int { return r.ID }); err != nil {
+			if v, ok, err := rt.Field(p, "id", "int", false, func(r *Category) int { return r.ID }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "id")
 			} else if ok {
 				c = c.IDSet(v)
 			}
 		case "name":
-			if v, ok, err := rt.Field(p, "name", false, func(r *Category) string { return r.Name }); err != nil {
+			if v, ok, err := rt.Field(p, "name", "string", false, func(r *Category) string { return r.Name }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "name")
 			} else if ok {
 				c = c.NameSet(v)
@@ -91,7 +93,7 @@ func (c CategoryChangeset) Cast(p CategoryParams, allow ...CategoryColumn) Categ
 	return c
 }
 
-// Changed reports whether col was set.
+// Changed reports whether col is marked (spec §changesets).
 func (c CategoryChangeset) Changed(col CategoryColumn) bool {
 	switch col.ColumnName() {
 	case "id":
@@ -102,7 +104,7 @@ func (c CategoryChangeset) Changed(col CategoryColumn) bool {
 	return false
 }
 
-// Row is the data with the changes applied.
+// Row is the data with the marked values applied (spec §changesets).
 func (c CategoryChangeset) Row() Category {
 	r := c.data
 	if c.set[0] {
@@ -114,19 +116,21 @@ func (c CategoryChangeset) Row() Category {
 	return r
 }
 
-// Params is the changes of c as a write body.
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
 func (c CategoryChangeset) Params() CategoryParams {
-	var set []string
+	var marks []rt.Mark
 	if c.set[0] {
-		set = append(set, "id")
+		marks = append(marks, rt.Mark{Wire: "id", Value: c.vals.ID})
 	}
 	if c.set[1] {
-		set = append(set, "name")
+		marks = append(marks, rt.Mark{Wire: "name", Value: c.vals.Name})
 	}
-	return rt.ParamsOf(c.Row(), set)
+	return rt.ParamsOf(c.Row(), marks...)
 }
 
-// ErrorAdd records a field error with check custom on col.
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
 func (c CategoryChangeset) ErrorAdd(col CategoryColumn, msg string) CategoryChangeset {
 	return c.errorAdd("custom", msg, col.ColumnName())
 }
@@ -136,17 +140,17 @@ func (c CategoryChangeset) errorAdd(check, msg string, cols ...string) CategoryC
 	return c
 }
 
-// Errors lists every field error recorded so far: casts and custom
-// errors first, then the last Validate's findings.
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
 func (c CategoryChangeset) Errors() []rt.FieldError {
 	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
 }
 
-// Valid reports whether no field error was recorded.
+// Valid reports whether no field error was recorded (spec §changesets).
 func (c CategoryChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
 
 // Err is nil when c is valid and otherwise the *rt.Invalid carrying its
-// field errors.
+// field errors (spec §changesets).
 func (c CategoryChangeset) Err() error {
 	if c.Valid() {
 		return nil
@@ -171,10 +175,10 @@ type CategoryPathColumn = rt.ColumnOf[CategoryPath]
 // CategoryPathParams is a category_paths write body as the wire carries it (spec §changesets).
 type CategoryPathParams = rt.Params[CategoryPath]
 
-// Typed column handles of CategoryPath: the Cast allow list of a changeset, and
-// the inert predicate, order and assignment builders of the dynamic
-// query layer. A predicate built here can only enter CategoryPath queries;
-// mixing models is a compile error.
+// Typed column handles of CategoryPath (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter CategoryPath
+// queries; mixing models is a compile error.
 var (
 	CategoryPathAncestorID   = rt.Column[CategoryPath, int]{Name: "ancestor_id"}
 	CategoryPathDescendantID = rt.Column[CategoryPath, int]{Name: "descendant_id"}
@@ -197,12 +201,14 @@ type CategoryPathChangeset struct {
 // defaults in place (spec §changesets).
 func CategoryPathNew() CategoryPathChangeset { return CategoryPathChangeset{} }
 
-// Changeset starts a changeset for an update of r.
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
 func (r CategoryPath) Changeset() CategoryPathChangeset {
 	return CategoryPathChangeset{data: r, row: true}
 }
 
-// From marks every data column of r but the auto-increment key.
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
 func (c CategoryPathChangeset) From(r CategoryPath) CategoryPathChangeset {
 	c = c.AncestorIDSet(r.AncestorID)
 	c = c.DescendantIDSet(r.DescendantID)
@@ -210,19 +216,19 @@ func (c CategoryPathChangeset) From(r CategoryPath) CategoryPathChangeset {
 	return c
 }
 
-// AncestorIDSet sets ancestor_id.
+// AncestorIDSet sets ancestor_id and marks it (spec §changesets).
 func (c CategoryPathChangeset) AncestorIDSet(v int) CategoryPathChangeset {
 	c.vals.AncestorID, c.set[0] = v, true
 	return c
 }
 
-// DescendantIDSet sets descendant_id.
+// DescendantIDSet sets descendant_id and marks it (spec §changesets).
 func (c CategoryPathChangeset) DescendantIDSet(v int) CategoryPathChangeset {
 	c.vals.DescendantID, c.set[1] = v, true
 	return c
 }
 
-// DepthSet sets depth.
+// DepthSet sets depth and marks it (spec §changesets).
 func (c CategoryPathChangeset) DepthSet(v int) CategoryPathChangeset {
 	c.vals.Depth, c.set[2] = v, true
 	return c
@@ -236,19 +242,19 @@ func (c CategoryPathChangeset) Cast(p CategoryPathParams, allow ...CategoryPathC
 	for _, col := range allow {
 		switch col.ColumnName() {
 		case "ancestor_id":
-			if v, ok, err := rt.Field(p, "ancestor_id", false, func(r *CategoryPath) int { return r.AncestorID }); err != nil {
+			if v, ok, err := rt.Field(p, "ancestor_id", "int", false, func(r *CategoryPath) int { return r.AncestorID }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "ancestor_id")
 			} else if ok {
 				c = c.AncestorIDSet(v)
 			}
 		case "descendant_id":
-			if v, ok, err := rt.Field(p, "descendant_id", false, func(r *CategoryPath) int { return r.DescendantID }); err != nil {
+			if v, ok, err := rt.Field(p, "descendant_id", "int", false, func(r *CategoryPath) int { return r.DescendantID }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "descendant_id")
 			} else if ok {
 				c = c.DescendantIDSet(v)
 			}
 		case "depth":
-			if v, ok, err := rt.Field(p, "depth", false, func(r *CategoryPath) int { return r.Depth }); err != nil {
+			if v, ok, err := rt.Field(p, "depth", "int", false, func(r *CategoryPath) int { return r.Depth }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "depth")
 			} else if ok {
 				c = c.DepthSet(v)
@@ -258,7 +264,7 @@ func (c CategoryPathChangeset) Cast(p CategoryPathParams, allow ...CategoryPathC
 	return c
 }
 
-// Changed reports whether col was set.
+// Changed reports whether col is marked (spec §changesets).
 func (c CategoryPathChangeset) Changed(col CategoryPathColumn) bool {
 	switch col.ColumnName() {
 	case "ancestor_id":
@@ -271,7 +277,7 @@ func (c CategoryPathChangeset) Changed(col CategoryPathColumn) bool {
 	return false
 }
 
-// Row is the data with the changes applied.
+// Row is the data with the marked values applied (spec §changesets).
 func (c CategoryPathChangeset) Row() CategoryPath {
 	r := c.data
 	if c.set[0] {
@@ -286,22 +292,24 @@ func (c CategoryPathChangeset) Row() CategoryPath {
 	return r
 }
 
-// Params is the changes of c as a write body.
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
 func (c CategoryPathChangeset) Params() CategoryPathParams {
-	var set []string
+	var marks []rt.Mark
 	if c.set[0] {
-		set = append(set, "ancestor_id")
+		marks = append(marks, rt.Mark{Wire: "ancestor_id", Value: c.vals.AncestorID})
 	}
 	if c.set[1] {
-		set = append(set, "descendant_id")
+		marks = append(marks, rt.Mark{Wire: "descendant_id", Value: c.vals.DescendantID})
 	}
 	if c.set[2] {
-		set = append(set, "depth")
+		marks = append(marks, rt.Mark{Wire: "depth", Value: c.vals.Depth})
 	}
-	return rt.ParamsOf(c.Row(), set)
+	return rt.ParamsOf(c.Row(), marks...)
 }
 
-// ErrorAdd records a field error with check custom on col.
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
 func (c CategoryPathChangeset) ErrorAdd(col CategoryPathColumn, msg string) CategoryPathChangeset {
 	return c.errorAdd("custom", msg, col.ColumnName())
 }
@@ -311,17 +319,17 @@ func (c CategoryPathChangeset) errorAdd(check, msg string, cols ...string) Categ
 	return c
 }
 
-// Errors lists every field error recorded so far: casts and custom
-// errors first, then the last Validate's findings.
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
 func (c CategoryPathChangeset) Errors() []rt.FieldError {
 	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
 }
 
-// Valid reports whether no field error was recorded.
+// Valid reports whether no field error was recorded (spec §changesets).
 func (c CategoryPathChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
 
 // Err is nil when c is valid and otherwise the *rt.Invalid carrying its
-// field errors.
+// field errors (spec §changesets).
 func (c CategoryPathChangeset) Err() error {
 	if c.Valid() {
 		return nil

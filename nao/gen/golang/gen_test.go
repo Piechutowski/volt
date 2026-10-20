@@ -237,6 +237,11 @@ func TestGenerationErrors(t *testing.T) {
 			dbml:    "Table t { \"++\" int }",
 			wantErr: "no characters usable",
 		},
+		{
+			name:    "package-scope name collision",
+			dbml:    "Table clashes { id int [pk]\n new int\n column int\n params int }",
+			wantErr: "both need the Go name",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

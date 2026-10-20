@@ -101,9 +101,27 @@ func PlanBuildMemo(f *ast.File, info *check.Info, memo *PlanMemo) *Plan {
 // Err reports why the plan could not be built, or nil.
 func (pl *Plan) Err() error { return pl.err }
 
-// Models renders the models file (nao_models.go) for the planned package.
+// Models renders the models file (nao_models.go) for the planned package;
+// a package-scope name the file would declare twice is an error, as it
+// is for Dyn (spec §changesets rule 12).
 func (pl *Plan) Models(opts Options) ([]byte, error) {
-	return modelsGenerate(pl.f, pl.info, pl.p, pl.err, opts)
+	out, err := modelsGenerate(pl.f, pl.info, pl.p, pl.err, opts)
+	if err != nil {
+		return nil, err
+	}
+	if err := pl.nameCollisionErr(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (pl *Plan) nameCollisionErr() error {
+	cs := pl.DynNameCollisions()
+	if len(cs) == 0 {
+		return nil
+	}
+	c := cs[0]
+	return fmt.Errorf("%s and %s both need the Go name %s; rename one (e.g. with [model:])", c.First, c.Second, c.Name)
 }
 
 // SelectRowName is the row type SelectRowType names, without its

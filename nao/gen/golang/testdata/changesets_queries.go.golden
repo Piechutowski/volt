@@ -40,11 +40,11 @@ func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 
 func postScan(r rt.Row) (Post, error) {
 	var v Post
-	err := r.Scan(&v.ID, &v.Slug, &v.Words, &v.Score, &v.Cover, &v.State, &v.Reviewed, &v.Rank, &v.Draft, &v.Caption, &v.Ratio)
+	err := r.Scan(&v.ID, &v.Slug, &v.Words, &v.Score, &v.Cover, &v.State, &v.Reviewed, &v.Rank, &v.Draft, &v.Caption, &v.Ratio, &v.Weight, &v.Scale, &v.Kilo, &v.Shift, &v.Hits, &v.Views, &v.Label, &v.Flag, &v.Secret)
 	return v, rt.Refused("Post", err)
 }
 
-const postGetSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "rank", "draft", "caption", "ratio" FROM "posts" WHERE "id" = ?`
+const postGetSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret" FROM "posts" WHERE "id" = ?`
 
 // PostGet fetches the posts row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) PostGet(ctx context.Context, id int) (Post, error) {
@@ -77,7 +77,7 @@ func (q *Queries) PostGetMany(ctx context.Context, ids []int) ([]Post, error) {
 	return out, rows.Err()
 }
 
-const postGetBySlugSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "rank", "draft", "caption", "ratio" FROM "posts" WHERE "slug" = ?`
+const postGetBySlugSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret" FROM "posts" WHERE "slug" = ?`
 
 // PostGetBySlug fetches the posts row with the given slug (a unique column),
 // or rt.ErrNotFound.
@@ -85,7 +85,7 @@ func (q *Queries) PostGetBySlug(ctx context.Context, slug string) (Post, error) 
 	return postScan(q.db.QueryRowContext(ctx, postGetBySlugSQL, slug))
 }
 
-const postListSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "rank", "draft", "caption", "ratio" FROM "posts"`
+const postListSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret" FROM "posts"`
 
 // PostList returns every posts row.
 func (q *Queries) PostList(ctx context.Context) ([]Post, error) {
@@ -145,6 +145,33 @@ func (q *Queries) PostCreate(ctx context.Context, c PostChangeset) (Post, error)
 	if c.set[10] {
 		cols, args = append(cols, "ratio"), append(args, v.Ratio)
 	}
+	if c.set[11] {
+		cols, args = append(cols, "weight"), append(args, v.Weight)
+	}
+	if c.set[12] {
+		cols, args = append(cols, "scale"), append(args, v.Scale)
+	}
+	if c.set[13] {
+		cols, args = append(cols, "kilo"), append(args, v.Kilo)
+	}
+	if c.set[14] {
+		cols, args = append(cols, "shift"), append(args, v.Shift)
+	}
+	if c.set[15] {
+		cols, args = append(cols, "hits"), append(args, v.Hits)
+	}
+	if c.set[16] {
+		cols, args = append(cols, "views"), append(args, v.Views)
+	}
+	if c.set[17] {
+		cols, args = append(cols, "label"), append(args, v.Label)
+	}
+	if c.set[18] {
+		cols, args = append(cols, "flag"), append(args, v.Flag)
+	}
+	if c.set[19] {
+		cols, args = append(cols, "secret"), append(args, v.Secret)
+	}
 	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(postTableSQL, cols, postColumnsSQL), args...)
 	if err != nil {
 		return Post{}, err
@@ -195,6 +222,33 @@ func (q *Queries) PostUpdate(ctx context.Context, c PostChangeset) (Post, error)
 	}
 	if c.set[10] {
 		cols, args = append(cols, "ratio"), append(args, v.Ratio)
+	}
+	if c.set[11] {
+		cols, args = append(cols, "weight"), append(args, v.Weight)
+	}
+	if c.set[12] {
+		cols, args = append(cols, "scale"), append(args, v.Scale)
+	}
+	if c.set[13] {
+		cols, args = append(cols, "kilo"), append(args, v.Kilo)
+	}
+	if c.set[14] {
+		cols, args = append(cols, "shift"), append(args, v.Shift)
+	}
+	if c.set[15] {
+		cols, args = append(cols, "hits"), append(args, v.Hits)
+	}
+	if c.set[16] {
+		cols, args = append(cols, "views"), append(args, v.Views)
+	}
+	if c.set[17] {
+		cols, args = append(cols, "label"), append(args, v.Label)
+	}
+	if c.set[18] {
+		cols, args = append(cols, "flag"), append(args, v.Flag)
+	}
+	if c.set[19] {
+		cols, args = append(cols, "secret"), append(args, v.Secret)
 	}
 	if len(cols) == 0 {
 		return v, nil

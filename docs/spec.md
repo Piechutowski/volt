@@ -2814,21 +2814,30 @@ user, err := q.UserUpdate(ctx, cs)
    an error, since the row's `Changeset` method occupies that name.
 4. **`Cast`.** For every column in `allow` that `p` carries, converts
    the carried value to the column's Go type and sets it; a value
-   that does not convert, `null` on a non-nullable column among them,
-   is a field error with check `cast` naming the column and the type,
-   and the column is left as it was. Columns `p` does not carry are
-   untouched, which is what makes a `PATCH` body partial. A column of
-   `p` outside `allow` is ignored, never an error: the schema and the
-   handler decide what a client may write, the client cannot widen
-   it. A key of `p` that names no column of the table is a field
-   error with check `unknown_field`, so a typo never vanishes.
+   that does not convert is a field error with check `cast` on the
+   column whose message names the key as sent and the column's type
+   as the schema spells it (`displayName: expected string`), `null`
+   on a non-nullable column among them likewise (`email: null is not
+   allowed (string)`), and the column is left as it was. Columns `p`
+   does not carry are untouched, which is what makes a `PATCH` body
+   partial. A column of `p` outside `allow` is ignored, never an
+   error: the schema and the handler decide what a client may write,
+   the client cannot widen it. A key of `p` that names no column of
+   the table is a field error with check `unknown_field`, so a typo
+   never vanishes.
 5. **`Params`.** `rt.Params[M]` is a write body as the wire carries
    it, in either format (§formats): as JSON, an object of the changed
    columns keyed by their wire names (the `json` tag, §struct-tags),
-   `null` for NULL; as GOB, the row and the list of marked columns,
-   typed by the shared model. `c.Params()` builds one from the marks
-   of `c`; `volt.Decode` reads one from a request; `Cast` consumes
-   one. A JSON body that is not an object is a malformed body (400).
+   each value as `encoding/json` renders it and `null` for NULL, a
+   marked column always among them whatever else its tag says; as
+   GOB, the row and the list of marked columns, typed by the shared
+   model. `c.Params()` builds one from the marks of `c`, each an
+   `rt.Mark` of wire name and value; `volt.Decode` reads one from a
+   request; `Cast` consumes one. A body keeps its arm through a GOB
+   re-encoding: one read from JSON carries its JSON object, so `Cast`
+   reads it the same on either side, and one built from marks carries
+   their JSON too. A JSON body that is not an object is a malformed
+   body (400).
 6. **`Validate`.** Runs over `Row()`, in this order, every rule every
    time: each `required` column (rule 9), each enum column's
    membership in its value set (check `enum`), then every validator
