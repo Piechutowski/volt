@@ -7,6 +7,7 @@ package rt
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"sort"
 	"time"
@@ -21,8 +22,8 @@ type Migration struct {
 	// when the migration is irreversible (spec §migrations rule 12).
 	Up, Down []string
 	// NoTransaction runs the statements outside any transaction, one
-	// by one, with the ledger write after the last (spec §migrations
-	// rule 13).
+	// by one, with the ledger write after the last, and disables the
+	// foreign-key bracket (spec §migrations rule 13).
 	NoTransaction bool
 	// ForeignKeysOff brackets the migration with PRAGMA foreign_keys =
 	// OFF, PRAGMA foreign_key_check before the commit and PRAGMA
@@ -47,21 +48,28 @@ type MigrationStatus struct {
 
 const (
 	ledgerDDL    = "CREATE TABLE IF NOT EXISTS volt_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)"
+	ledgerExists = "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'volt_migrations'"
 	ledgerSelect = "SELECT name, applied_at FROM volt_migrations"
+	ledgerHasRow = "SELECT count(*) FROM volt_migrations WHERE name = ?"
 	ledgerInsert = "INSERT INTO volt_migrations (name, applied_at) VALUES (?, ?)"
 	ledgerDelete = "DELETE FROM volt_migrations WHERE name = ?"
 )
 
 // MigrateUp applies every pending migration in name order and returns
-// the names applied, in order (spec §migration-ledger rule 2). It stops
-// at the first failure, which names the migration, the statement and
-// its index, and returns what was applied before it.
+// the names applied, in order (spec §migration-ledger rule 2). Each
+// migration runs under an immediate transaction that re-reads its
+// ledger row first, so that two runners over one database apply it
+// once. It stops at the first failure, which names the migration, the
+// statement and its index, and returns what was applied before it.
 func MigrateUp(ctx context.Context, db *sql.DB, migrations []Migration) (applied []string, err error) {
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, ledgerDDL); err != nil {
+		return nil, fmt.Errorf("rt: creating volt_migrations: %w", err)
+	}
 	done, err := ledgerRead(ctx, conn)
 	if err != nil {
 		return nil, err
@@ -75,10 +83,13 @@ func MigrateUp(ctx context.Context, db *sql.DB, migrations []Migration) (applied
 	sort.SliceStable(pending, func(i, j int) bool { return pending[i].Name < pending[j].Name })
 	for _, m := range pending {
 		at := time.Now().UTC().Format(time.RFC3339)
-		if err := migrationRun(ctx, conn, m, m.Up, ledgerInsert, m.Name, at); err != nil {
+		skipped, err := migrationRun(ctx, conn, m, m.Up, false, ledgerInsert, m.Name, at)
+		if err != nil {
 			return applied, err
 		}
-		applied = append(applied, m.Name)
+		if !skipped {
+			applied = append(applied, m.Name)
+		}
 	}
 	return applied, nil
 }
@@ -86,7 +97,8 @@ func MigrateUp(ctx context.Context, db *sql.DB, migrations []Migration) (applied
 // MigrateDown reverts the applied migration with the greatest name by
 // running its down statements and deleting its row, and returns its
 // name (spec §migration-ledger rule 3). An irreversible migration, a
-// ledger row no migration has and an empty ledger are errors.
+// ledger row no migration has, an empty ledger and a row another
+// runner deleted first are errors.
 func MigrateDown(ctx context.Context, db *sql.DB, migrations []Migration) (name string, err error) {
 	conn, err := db.Conn(ctx)
 	if err != nil {
@@ -119,8 +131,12 @@ func MigrateDown(ctx context.Context, db *sql.DB, migrations []Migration) (name 
 	case m.Down == nil:
 		return "", fmt.Errorf("rt.MigrateDown: migration %s is irreversible", last)
 	}
-	if err := migrationRun(ctx, conn, *m, m.Down, ledgerDelete, m.Name); err != nil {
+	skipped, err := migrationRun(ctx, conn, *m, m.Down, true, ledgerDelete, m.Name)
+	if err != nil {
 		return "", err
+	}
+	if skipped {
+		return "", fmt.Errorf("rt.MigrateDown: migration %s is no longer applied; another runner reverted it", last)
 	}
 	return last, nil
 }
@@ -128,7 +144,8 @@ func MigrateDown(ctx context.Context, db *sql.DB, migrations []Migration) (name 
 // MigrateStatus lists every migration of the package and every ledger
 // row, in name order, with whether and when each was applied and
 // whether a pending one is out of order (spec §migration-tooling rule
-// 3).
+// 3). It only reads: a database without the ledger has nothing
+// applied, and a read-only connection serves.
 func MigrateStatus(ctx context.Context, db *sql.DB, migrations []Migration) ([]MigrationStatus, error) {
 	conn, err := db.Conn(ctx)
 	if err != nil {
@@ -173,15 +190,19 @@ func MigrateStatus(ctx context.Context, db *sql.DB, migrations []Migration) ([]M
 }
 
 func ledgerRead(ctx context.Context, conn *sql.Conn) (map[string]string, error) {
-	if _, err := conn.ExecContext(ctx, ledgerDDL); err != nil {
-		return nil, fmt.Errorf("rt: creating volt_migrations: %w", err)
+	var exists int
+	if err := conn.QueryRowContext(ctx, ledgerExists).Scan(&exists); err != nil {
+		return nil, fmt.Errorf("rt: reading volt_migrations: %w", err)
+	}
+	done := map[string]string{}
+	if exists == 0 {
+		return done, nil
 	}
 	rows, err := conn.QueryContext(ctx, ledgerSelect)
 	if err != nil {
 		return nil, fmt.Errorf("rt: reading volt_migrations: %w", err)
 	}
 	defer rows.Close()
-	done := map[string]string{}
 	for rows.Next() {
 		var name, at string
 		if err := rows.Scan(&name, &at); err != nil {
@@ -192,64 +213,97 @@ func ledgerRead(ctx context.Context, conn *sql.Conn) (map[string]string, error) 
 	return done, rows.Err()
 }
 
+func ledgerHas(ctx context.Context, conn *sql.Conn, name string) (bool, error) {
+	var n int
+	if err := conn.QueryRowContext(ctx, ledgerHasRow, name).Scan(&n); err != nil {
+		return false, fmt.Errorf("migration %s: ledger: %w", name, err)
+	}
+	return n > 0, nil
+}
+
 // migrationRun runs one direction of m on conn and then the ledger
-// statement: in one transaction, or statement by statement with
-// NoTransaction, inside the foreign-key bracket with ForeignKeysOff
-// (spec §migrations rule 13).
-func migrationRun(ctx context.Context, conn *sql.Conn, m Migration, stmts []string, ledger string, args ...any) (err error) {
-	if m.ForeignKeysOff {
+// statement: under one immediate transaction, or statement by statement
+// with NoTransaction, inside the foreign-key bracket with ForeignKeysOff
+// and no NoTransaction (spec §migrations rule 13). It re-reads the
+// ledger row once the transaction holds the write lock, or right before
+// the first statement, and skips the migration when the row is not as
+// the direction expects: present before a down, absent before an up.
+func migrationRun(ctx context.Context, conn *sql.Conn, m Migration, stmts []string, rowBefore bool, ledger string, args ...any) (skipped bool, err error) {
+	if m.ForeignKeysOff && !m.NoTransaction {
 		if _, err := conn.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
-			return fmt.Errorf("migration %s: PRAGMA foreign_keys = OFF: %w", m.Name, err)
+			return false, fmt.Errorf("migration %s: PRAGMA foreign_keys = OFF: %w", m.Name, err)
 		}
 		defer func() {
-			if _, e := conn.ExecContext(ctx, "PRAGMA foreign_keys = ON"); e != nil && err == nil {
+			if _, e := conn.ExecContext(context.Background(), "PRAGMA foreign_keys = ON"); e != nil && err == nil {
 				err = fmt.Errorf("migration %s: PRAGMA foreign_keys = ON: %w", m.Name, e)
 			}
 		}()
 	}
 	if m.NoTransaction {
-		for i, s := range stmts {
-			if _, err := conn.ExecContext(ctx, s); err != nil {
-				return statementError(m.Name, i, s, err)
-			}
+		has, err := ledgerHas(ctx, conn, m.Name)
+		if err != nil {
+			return false, err
 		}
-		if m.ForeignKeysOff {
-			if err := foreignKeyCheck(ctx, conn, m.Name); err != nil {
-				return err
-			}
+		if has != rowBefore {
+			return true, nil
+		}
+		if err := statementsRun(ctx, conn, m, stmts); err != nil {
+			return false, err
 		}
 		if _, err := conn.ExecContext(ctx, ledger, args...); err != nil {
-			return fmt.Errorf("migration %s: ledger: %w", m.Name, err)
+			return false, fmt.Errorf("migration %s: ledger: %w", m.Name, err)
 		}
-		return nil
+		return false, nil
 	}
-	tx, err := conn.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("migration %s: %w", m.Name, err)
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return false, fmt.Errorf("migration %s: %w", m.Name, err)
 	}
 	committed := false
 	defer func() {
-		if !committed {
-			_ = tx.Rollback()
+		if committed {
+			return
+		}
+		if _, e := conn.ExecContext(context.Background(), "ROLLBACK"); e != nil {
+			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
 		}
 	}()
+	has, err := ledgerHas(ctx, conn, m.Name)
+	if err != nil {
+		return false, err
+	}
+	if has != rowBefore {
+		return true, nil
+	}
+	if err := statementsRun(ctx, conn, m, stmts); err != nil {
+		return false, err
+	}
+	if m.ForeignKeysOff {
+		if err := foreignKeyCheck(ctx, conn, m.Name); err != nil {
+			return false, err
+		}
+	}
+	if _, err := conn.ExecContext(ctx, ledger, args...); err != nil {
+		return false, fmt.Errorf("migration %s: ledger: %w", m.Name, err)
+	}
+	if err := ctx.Err(); err != nil {
+		return false, fmt.Errorf("migration %s: commit: %w", m.Name, err)
+	}
+	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+		return false, fmt.Errorf("migration %s: commit: %w", m.Name, err)
+	}
+	committed = true
+	return false, nil
+}
+
+func statementsRun(ctx context.Context, conn *sql.Conn, m Migration, stmts []string) error {
 	for i, s := range stmts {
-		if _, err := tx.ExecContext(ctx, s); err != nil {
+		if err := ctx.Err(); err != nil {
+			return statementError(m.Name, i, s, err)
+		}
+		if _, err := conn.ExecContext(ctx, s); err != nil {
 			return statementError(m.Name, i, s, err)
 		}
 	}
-	if m.ForeignKeysOff {
-		if err := foreignKeyCheck(ctx, tx, m.Name); err != nil {
-			return err
-		}
-	}
-	if _, err := tx.ExecContext(ctx, ledger, args...); err != nil {
-		return fmt.Errorf("migration %s: ledger: %w", m.Name, err)
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("migration %s: commit: %w", m.Name, err)
-	}
-	committed = true
 	return nil
 }
 
@@ -257,15 +311,11 @@ func statementError(name string, i int, stmt string, err error) error {
 	return fmt.Errorf("migration %s: statement %d: %w\n  %s", name, i+1, err, stmt)
 }
 
-type querier interface {
-	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-}
-
 // foreignKeyCheck fails when PRAGMA foreign_key_check reports a row,
 // naming the migration and the first offending table (spec §migrations
 // rule 13).
-func foreignKeyCheck(ctx context.Context, q querier, name string) error {
-	rows, err := q.QueryContext(ctx, "PRAGMA foreign_key_check")
+func foreignKeyCheck(ctx context.Context, conn *sql.Conn, name string) error {
+	rows, err := conn.QueryContext(ctx, "PRAGMA foreign_key_check")
 	if err != nil {
 		return fmt.Errorf("migration %s: PRAGMA foreign_key_check: %w", name, err)
 	}

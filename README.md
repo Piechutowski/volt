@@ -156,7 +156,7 @@ Requires **Go 1.27+** (all three modules and go.work declare it); with the
 default `GOTOOLCHAIN=auto` an older `go` fetches it automatically.
 
 ```sh
-go install ./cmd/volt
+go install ./cmd/volt                # with cgo (a C compiler on the path): the tool carries its own SQLite
 volt check ./app && volt gen ./app && volt routes ./app
 volt gen --sql ./app                 # models + queries + router + DDL
 go test ./... ./lsp/... ./cmd/volt/...   # everything, ORM + tooling modules

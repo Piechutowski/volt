@@ -3,21 +3,48 @@ package rt
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
+	sqlite3 "github.com/mattn/go-sqlite3"
 )
 
 func migrateDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := Open("sqlite3", filepath.Join(t.TempDir(), "m.db"))
+	return migrateDBAt(t, "sqlite3", filepath.Join(t.TempDir(), "m.db"))
+}
+
+func migrateDBAt(t *testing.T, driver, path string) *sql.DB {
+	t.Helper()
+	db, err := Open(driver, path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
 	return db
+}
+
+var cancelHook struct {
+	sync.Mutex
+	fn func()
+}
+
+func init() {
+	sql.Register("sqlite3_cancel", &sqlite3.SQLiteDriver{
+		ConnectHook: func(c *sqlite3.SQLiteConn) error {
+			return c.RegisterFunc("cancel_ctx", func() int64 {
+				cancelHook.Lock()
+				defer cancelHook.Unlock()
+				if cancelHook.fn != nil {
+					cancelHook.fn()
+				}
+				return 1
+			}, false)
+		},
+	})
 }
 
 var blogMigrations = []Migration{
@@ -215,6 +242,136 @@ func TestMigrateNoTransactionRunsWhatATransactionCannot(t *testing.T) {
 	status, err := MigrateStatus(ctx, db, []Migration{vacuum})
 	if err != nil || !status[0].Applied {
 		t.Errorf("status after a no-transaction migration: %+v %v", status, err)
+	}
+}
+
+func TestMigrateUpConcurrentRunnersApplyOnce(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "shared.db")
+	var all []Migration
+	for _, table := range []string{"posts", "comments", "tags"} {
+		all = append(all, Migration{
+			Name: fmt.Sprintf("%04d__%s", len(all)+1, table),
+			Up:   []string{fmt.Sprintf("CREATE TABLE %s AS WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 200000) SELECT count(*) AS n FROM c", table)},
+			Down: []string{"DROP TABLE " + table},
+		})
+	}
+	const runners = 2
+	dbs := make([]*sql.DB, runners)
+	applied := make([][]string, runners)
+	errs := make([]error, runners)
+	for i := range dbs {
+		dbs[i] = migrateDBAt(t, "sqlite3", path)
+	}
+	var start, done sync.WaitGroup
+	start.Add(1)
+	for i := range dbs {
+		done.Add(1)
+		go func() {
+			defer done.Done()
+			start.Wait()
+			applied[i], errs[i] = MigrateUp(ctx, dbs[i], all)
+		}()
+	}
+	start.Done()
+	done.Wait()
+	total := 0
+	for i := range errs {
+		if errs[i] != nil {
+			t.Fatalf("runner %d: %v", i, errs[i])
+		}
+		total += len(applied[i])
+	}
+	if total != len(all) {
+		t.Fatalf("%d applications of %d migrations: %v", total, len(all), applied)
+	}
+	var rows int
+	if err := dbs[0].QueryRow("SELECT count(*) FROM volt_migrations").Scan(&rows); err != nil || rows != len(all) {
+		t.Errorf("%d ledger rows %v, want %d", rows, err, len(all))
+	}
+	for _, table := range []string{"posts", "comments", "tags"} {
+		if !tableExists(t, dbs[1], table) {
+			t.Errorf("table %s missing after two runners", table)
+		}
+	}
+}
+
+func TestMigrateNoTransactionDisablesTheBracket(t *testing.T) {
+	ctx := context.Background()
+	db := migrateDB(t)
+	seen := Migration{
+		Name:           "0001__fk_seen",
+		Up:             []string{"CREATE TABLE fk_seen AS SELECT foreign_keys AS fk FROM pragma_foreign_keys"},
+		NoTransaction:  true,
+		ForeignKeysOff: true,
+	}
+	if _, err := MigrateUp(ctx, db, []Migration{seen}); err != nil {
+		t.Fatal(err)
+	}
+	var fk int
+	if err := db.QueryRow("SELECT fk FROM fk_seen").Scan(&fk); err != nil || fk != 1 {
+		t.Errorf("foreign_keys during a no-transaction migration = %d %v, want 1: the bracket is off", fk, err)
+	}
+}
+
+func TestMigrateBracketRestoresForeignKeysOnCancel(t *testing.T) {
+	db := migrateDBAt(t, "sqlite3_cancel", filepath.Join(t.TempDir(), "c.db"))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cancelHook.Lock()
+	cancelHook.fn = cancel
+	cancelHook.Unlock()
+	defer func() {
+		cancelHook.Lock()
+		cancelHook.fn = nil
+		cancelHook.Unlock()
+	}()
+	cancelled := Migration{
+		Name:           "0001__cancelled",
+		Up:             []string{"SELECT cancel_ctx()", "CREATE TABLE after_cancel (id INTEGER PRIMARY KEY)"},
+		ForeignKeysOff: true,
+	}
+	if _, err := MigrateUp(ctx, db, []Migration{cancelled}); err == nil {
+		t.Fatal("a context cancelled inside the migration applied it")
+	}
+	var fk int
+	if err := db.QueryRow("PRAGMA foreign_keys").Scan(&fk); err != nil || fk != 1 {
+		t.Errorf("PRAGMA foreign_keys = %d %v after the cancelled bracket, want 1", fk, err)
+	}
+	if tableExists(t, db, "after_cancel") {
+		t.Error("the cancelled migration was not rolled back")
+	}
+	status, err := MigrateStatus(context.Background(), db, []Migration{cancelled})
+	if err != nil || status[0].Applied {
+		t.Errorf("status after the cancelled migration: %+v %v, want pending", status, err)
+	}
+}
+
+func TestMigrateStatusOnlyReads(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "ro.db")
+	db := migrateDBAt(t, "sqlite3", path)
+	status, err := MigrateStatus(ctx, db, blogMigrations)
+	if err != nil || len(status) != 2 || status[0].Applied || status[1].Applied {
+		t.Fatalf("status over an empty database: %+v %v, want two pending rows", status, err)
+	}
+	if _, err := MigrateDown(ctx, db, blogMigrations); err == nil || !strings.Contains(err.Error(), "no migration is applied") {
+		t.Fatalf("down over an empty database: %v, want the refusal", err)
+	}
+	if tableExists(t, db, "volt_migrations") {
+		t.Fatal("status or down created the ledger")
+	}
+	if _, err := MigrateUp(ctx, db, blogMigrations); err != nil {
+		t.Fatal(err)
+	}
+	ro, err := sql.Open("sqlite3", "file:"+path+"?mode=ro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ro.Close()
+	status, err = MigrateStatus(ctx, ro, blogMigrations)
+	if err != nil || len(status) != 2 || !status[0].Applied || !status[1].Applied {
+		t.Fatalf("status over a read-only connection: %+v %v, want two applied rows", status, err)
 	}
 }
 

@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"io"
 	"os"
@@ -113,8 +115,50 @@ func TestMigrationCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = voltRun(t, "migration", "check", broken)
-	if exitCode(err) != 2 || !strings.Contains(err.Error(), "0003__bad") || !strings.Contains(err.Error(), "no such table") {
-		t.Errorf("check over a migration SQLite refuses: exit %d (%v), want 2 with SQLite's message", exitCode(err), err)
+	if exitCode(err) != 1 || !strings.Contains(err.Error(), "0003__bad") || !strings.Contains(err.Error(), "no such table") {
+		t.Errorf("check over a migration SQLite refuses: exit %d (%v), want 1 with SQLite's message", exitCode(err), err)
+	}
+	_, err = voltRun(t, "gen", broken)
+	if exitCode(err) != 1 || !strings.Contains(err.Error(), "0003__bad") || !strings.Contains(err.Error(), "no such table") {
+		t.Errorf("gen over a migration SQLite refuses: exit %d (%v), want 1 with SQLite's message", exitCode(err), err)
+	}
+}
+
+func TestMigrationCheckRunsEveryDown(t *testing.T) {
+	dir := fixtureCopy(t)
+	src := "package blog\n\nMigration 0003__bad_down {\n  up {\n    exec 'CREATE TABLE scratch (id INTEGER)'\n    exec 'DROP TABLE scratch'\n  }\n  down {\n    exec 'DROP TABLE missing'\n  }\n}\n"
+	if err := os.WriteFile(filepath.Join(dir, "0003__bad_down.volt"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := voltRun(t, "migration", "check", dir)
+	if exitCode(err) != 1 {
+		t.Fatalf("check over a down block SQLite refuses: exit %d (%v), want 1", exitCode(err), err)
+	}
+	for _, want := range []string{"on the way down", "0003__bad_down", "no such table: missing"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q lacks %q", err, want)
+		}
+	}
+	_, err = voltRun(t, "gen", dir)
+	if exitCode(err) != 1 || !strings.Contains(err.Error(), "on the way down") {
+		t.Errorf("gen over a down block SQLite refuses: exit %d (%v), want 1", exitCode(err), err)
+	}
+}
+
+type stubDriver struct{}
+
+func (stubDriver) Open(string) (driver.Conn, error) {
+	return nil, errors.New("Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work. This is a stub")
+}
+
+func TestSQLiteGuard(t *testing.T) {
+	if err := sqliteGuard(sqliteDriver); err != nil {
+		t.Fatalf("the guard refuses a working driver: %v", err)
+	}
+	sql.Register("sqlite3_stub", stubDriver{})
+	err := sqliteGuard("sqlite3_stub")
+	if exitCode(err) != 2 || !strings.Contains(err.Error(), "cgo") || !strings.Contains(err.Error(), "C compiler") {
+		t.Fatalf("the guard over the stub: exit %d (%v), want 2 naming cgo and a C compiler", exitCode(err), err)
 	}
 }
 
@@ -181,16 +225,45 @@ func TestMigrationNew(t *testing.T) {
 	if exitCode(err) != 2 || !strings.Contains(err.Error(), "refusing") {
 		t.Errorf("new over an existing file: %v, want a refusal", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "0002__add_views.volt"), []byte("package db\n\nMigration 00010__wide {\n}\n"), 0o644); err != nil {
-		t.Fatal(err)
+	wider := map[string]string{
+		"0001__init.volt":      "package db\n\nMigration 00001__init {\n}\n",
+		"0002__add_views.volt": "package db\n\nMigration 00010__wide {\n}\n",
+	}
+	for name, src := range wider {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	out, err = voltRun(t, "migration", "new", "next", dir)
 	if err != nil || !strings.HasSuffix(strings.TrimSpace(out), "00011__next.volt") {
 		t.Errorf("new after a wider run: %q %v, want 00011__next.volt", out, err)
 	}
-	_, err = voltRun(t, "migration", "new", "bad-label", dir)
-	if exitCode(err) != 2 {
-		t.Errorf("new with a bad label: exit %d (%v), want 2", exitCode(err), err)
+	out, err = voltRun(t, "migration", "new", "été_2026", dir)
+	if err != nil || !strings.HasSuffix(strings.TrimSpace(out), "00012__été_2026.volt") {
+		t.Errorf("new with a Unicode label: %q %v, want 00012__été_2026.volt", out, err)
+	}
+	for _, label := range []string{"bad-label", "a.b", "", "two words"} {
+		_, err = voltRun(t, "migration", "new", label, dir)
+		if exitCode(err) != 2 {
+			t.Errorf("new with label %q: exit %d (%v), want 2", label, exitCode(err), err)
+		}
+	}
+	full := filepath.Join(t.TempDir(), "full")
+	if err := os.MkdirAll(full, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(full, "go.mod"), []byte("module full\n\ngo 1.27\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(full, "schema.volt"), []byte("package db\n\nTable posts {\n  id int [pk, increment]\n}\n\nMigration 9999__last {\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err = voltRun(t, "migration", "new", "overflow", full)
+	if exitCode(err) != 2 || !strings.Contains(err.Error(), "10000") || !strings.Contains(err.Error(), "widen every migration name to 5 digits") {
+		t.Errorf("new past the run's width: exit %d (%v), want 2 telling the user to widen every name", exitCode(err), err)
+	}
+	if entries, _ := os.ReadDir(full); len(entries) != 2 {
+		t.Errorf("new past the run's width wrote a file: %v", entries)
 	}
 	empty := filepath.Join(t.TempDir(), "empty")
 	if err := os.MkdirAll(empty, 0o755); err != nil {
@@ -211,11 +284,16 @@ func TestMigrationNew(t *testing.T) {
 func TestMigrationUpStatusDown(t *testing.T) {
 	dir := fixtureCopy(t)
 	dsn := filepath.Join(t.TempDir(), "blog.db")
-	out, err := voltRun(t, "migration", "status", dsn, dir)
-	if err != nil || !strings.Contains(out, "0001__create_posts  pending") || !strings.Contains(out, "0002__comments      pending") {
-		t.Fatalf("status before up: %v\n%s", err, out)
+	for _, sub := range []string{"status", "down"} {
+		_, err := voltRun(t, "migration", sub, dsn, dir)
+		if exitCode(err) != 2 || !strings.Contains(err.Error(), "unable to open database file") {
+			t.Errorf("%s over a missing database: exit %d (%v), want 2", sub, exitCode(err), err)
+		}
+		if _, err := os.Stat(dsn); err == nil {
+			t.Fatalf("%s created the missing database", sub)
+		}
 	}
-	out, err = voltRun(t, "migration", "up", dsn, dir)
+	out, err := voltRun(t, "migration", "up", dsn, dir)
 	if err != nil || out != "applied 0001__create_posts\napplied 0002__comments\n" {
 		t.Fatalf("up: %v\n%s", err, out)
 	}
@@ -235,9 +313,80 @@ func TestMigrationUpStatusDown(t *testing.T) {
 	if err != nil || !strings.Contains(out, "0002__comments      pending") || !strings.Contains(out, "0001__create_posts  applied") {
 		t.Fatalf("status after down: %v\n%s", err, out)
 	}
+	ledgerWrite(t, dsn, "INSERT INTO volt_migrations (name, applied_at) VALUES ('0005__elsewhere', '2026-01-01T00:00:00Z')")
+	out, err = voltRun(t, "migration", "status", dsn, dir)
+	if err != nil || !strings.Contains(out, "0005__elsewhere     applied 2026-01-01T00:00:00Z (not in the package)") {
+		t.Fatalf("status with a ledger row no migration names: %v\n%s", err, out)
+	}
+	out, err = voltRun(t, "migration", "status", "file:"+dsn, dir)
+	if err != nil || !strings.Contains(out, "0005__elsewhere") {
+		t.Fatalf("status over a file: URI: %v\n%s", err, out)
+	}
 	_, err = voltRun(t, "migration", "up", dir)
 	if exitCode(err) != 2 {
 		t.Errorf("up without a DSN: exit %d (%v), want 2", exitCode(err), err)
+	}
+	for _, sub := range []string{"up", "down", "status"} {
+		for _, memory := range []string{":memory:", "file::memory:?cache=shared", "file:x.db?mode=memory"} {
+			_, err = voltRun(t, "migration", sub, memory, dir)
+			if exitCode(err) != 2 || !strings.Contains(err.Error(), "holds nothing") {
+				t.Errorf("%s over %s: exit %d (%v), want 2", sub, memory, exitCode(err), err)
+			}
+		}
+	}
+	_, err = voltRun(t, "migration", "up", filepath.Join(t.TempDir(), "absent", "blog.db"), dir)
+	if exitCode(err) != 2 || !strings.Contains(err.Error(), "unable to open database file") {
+		t.Errorf("up over a database that cannot be opened: exit %d (%v), want 2", exitCode(err), err)
+	}
+}
+
+func TestMigrationStatusLeavesTheDatabaseAlone(t *testing.T) {
+	dir := fixtureCopy(t)
+	dsn := filepath.Join(t.TempDir(), "plain.db")
+	ledgerWrite(t, dsn, "CREATE TABLE unrelated (id INTEGER)")
+	out, err := voltRun(t, "migration", "status", dsn, dir)
+	if err != nil || strings.Count(out, "pending") != 2 {
+		t.Fatalf("status over a database without the ledger: %v\n%s", err, out)
+	}
+	db, err := sql.Open(sqliteDriver, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var mode string
+	if err := db.QueryRow("PRAGMA journal_mode").Scan(&mode); err != nil || mode != "delete" {
+		t.Errorf("journal_mode %q %v after status, want delete: a read-only question changed the database", mode, err)
+	}
+	var tables int
+	if err := db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type = 'table'").Scan(&tables); err != nil || tables != 1 {
+		t.Errorf("%d tables %v after status, want the one unrelated table: status created the ledger", tables, err)
+	}
+}
+
+func ledgerWrite(t *testing.T, dsn, stmt string) {
+	t.Helper()
+	db, err := sql.Open(sqliteDriver, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(stmt); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDSNWithMode(t *testing.T) {
+	cases := map[string]string{
+		"blog.db":                        "file:blog.db?mode=ro",
+		"/var/lib/app/blog.db":           "file:/var/lib/app/blog.db?mode=ro",
+		"odd name#1.db":                  "file:odd%20name%231.db?mode=ro",
+		"file:blog.db":                   "file:blog.db?mode=ro",
+		"file:blog.db?_txlock=immediate": "file:blog.db?_txlock=immediate&mode=ro",
+	}
+	for dsn, want := range cases {
+		if got := dsnWithMode(dsn, "ro"); got != want {
+			t.Errorf("dsnWithMode(%q) = %q, want %q", dsn, got, want)
+		}
 	}
 }
 

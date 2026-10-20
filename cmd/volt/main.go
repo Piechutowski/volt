@@ -3,8 +3,9 @@
 // data packages, routers for routing packages. Its subcommands
 // are check, vet, gen, migration, routes, stress, lsp and version.
 //
-// Exit status: 0 clean (warnings do not fail), 1 errors found, 2 usage
-// or I/O problems.
+// Exit status: 0 clean (warnings do not fail), 1 errors found
+// (diagnostics, drift, a migration SQLite refuses), 2 usage or I/O
+// problems (a database that cannot be opened among them).
 package main
 
 import (
@@ -82,7 +83,7 @@ func command() *cli.Command {
 					&cli.BoolFlag{Name: "sql", Usage: "also write nao_schema.sql (SQLite DDL and seed inserts)"},
 					&cli.BoolFlag{Name: "verify", Usage: "prove every generated Go file is gofmt-canonical and type-checks in its package before writing (a generator self-check)"},
 					&cli.StringFlag{Name: "o", Usage: "write into `DIR` instead of the package directory (one package); the client lands beside the models as volt_client.go"},
-					&cli.StringFlag{Name: "parts", Usage: "comma-separated `LIST` of what to write: models, queries, router, client, sql (default: every Go part)"},
+					&cli.StringFlag{Name: "parts", Usage: "comma-separated `LIST` of what to write: models, queries (the query layers and volt_migrations.go), router, client, sql (default: every Go part)"},
 					&cli.StringFlag{Name: "package", Usage: "package clause of the written files (default: the clause of DIR's Go files, else the Volt package's name)"},
 				},
 				Action: func(ctx context.Context, c *cli.Command) error {
@@ -246,6 +247,9 @@ func genRun(ctx context.Context, c *cli.Command) error {
 		pkg := pr.Packages[path]
 		if pkg.Schema() == nil || len(pkg.Schema().Migrations) == 0 {
 			continue
+		}
+		if err := sqliteGuard(sqliteDriver); err != nil {
+			return err
 		}
 		drifts, err := foldCheck(ctx, pkg)
 		if err != nil {
