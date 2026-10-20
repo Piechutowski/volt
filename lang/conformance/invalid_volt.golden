@@ -204,6 +204,12 @@ app/routes.volt:10:18: error: spec/query-routes: db.UserUpdate loads the row to 
 ## i18_dataset_reserved.volt
 app/i18_dataset_reserved.volt:4:1: error: syntax: routes, resources and datasets must appear inside a Scope (§scopes-and-routes)
 
+## i190_literal_int_overflow.volt
+db/i190_literal_int_overflow.volt:10:40: error: spec/selects-over-groups: literal 9223372036854775808 does not fit int, the storage type of column "hits" (§predicates)
+
+## i191_literal_float_infinite.volt
+db/i191_literal_float_infinite.volt:10:41: error: spec/selects-over-groups: literal 1e400 does not fit float64, the storage type of column "score" (§predicates)
+
 ## i19_only_and_except.volt
 app/i19_only_and_except.volt:9:34: error: spec/resources: only: and except: cannot be combined (§settings)
 

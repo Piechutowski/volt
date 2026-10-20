@@ -2449,6 +2449,12 @@ Pred chosen  { org in :orgs }
      `text_column > 'a'` are both errors; order text in SQL, §selects-over-groups);
    - `like` requires a text column and a text pattern;
    - `in` items must all match the column's type;
+   - a numeric literal MUST be representable in the column's storage
+     type (§columns): against `int` it is an integer literal that fits
+     int64, against `float64` a finite value; `9223372036854775808`,
+     `1e400`, and `1.5` or `1e2` against `int` are errors. The generated
+     method binds the literal in canonical Go form, so `-010`, `007`
+     and `1E2` bind `-10`, `7` and `100.0`;
    - `in :name` makes `:name` a **list parameter**: its Go type is a
      slice of the column's generated type (`[]string`, `[]int`),
      and the column MUST NOT be `time.Time` — JSON, the list's
@@ -2491,7 +2497,9 @@ Pred chosen  { org in :orgs }
    - a pattern is `"col" LIKE ?`, `"col" NOT LIKE ?`; a null test
      `"col" IS NULL`, `"col" IS NOT NULL`;
    - `and` and `or` of two or more operands are parenthesized,
-     `(a AND b AND c)`; one operand is itself; `not` is `NOT (x)`;
+     `(a AND b AND c)`; one operand is itself; `not` is `NOT (x)`, and
+     when x brings its own parentheses (an `and`/`or` group, a raw
+     fragment) they serve: `NOT ("a" = ? OR "b" = ?)`;
    - a value is always an argument behind a positional `?`, in
      left-to-right order of the text: a literal written in a Volt
      predicate is bound by the generated method like a parameter, the
@@ -2499,9 +2507,29 @@ Pred chosen  { org in :orgs }
      and `-1` of `LIMIT -1 OFFSET ?` are structure, not values);
    - an ordering is `ORDER BY "col" ASC, "other" DESC`, the direction
      always spelled;
+   - a WHERE clause is the statement's predicates joined by ` AND `,
+     each spelled as above, and is omitted when none survives;
+   - the keyset position `After(k1, …, kn)` over `ORDER BY t1, …, tn`
+     is one more predicate of the WHERE clause, `t1 > k1 or (t1 = k1
+     and t2 > k2) or …` with `<` for a DESC term, spelled by the rules
+     above: `("t1" > ? OR ("t1" = ? AND "t2" > ?))`, and a single term
+     `"t1" > ?`;
    - a select is `SELECT [DISTINCT ]<columns> FROM <table>[ WHERE
      <predicate>][ ORDER BY <terms>][ LIMIT ?[ OFFSET ?]]`, the column
-     list and the table the pre-rendered constants of the model.
+     list and the table the pre-rendered constants of the model; an
+     offset without a limit is `LIMIT -1 OFFSET ?`;
+   - a count is `SELECT count(*) FROM <table>[ WHERE <predicate>]`, an
+     existence test `SELECT EXISTS (SELECT 1 FROM <table>[ WHERE
+     <predicate>])`;
+   - a delete is `DELETE FROM <table> WHERE <predicate>` and a partial
+     update `UPDATE <table> SET "c" = ?, … WHERE <predicate>`, the
+     assignments' values bound before the predicate's; neither renders
+     without an effective predicate;
+   - a changeset's insert (§changesets) is `INSERT INTO <table> ("c", …)
+     VALUES (?, …) RETURNING <columns>`, or `INSERT INTO <table> DEFAULT
+     VALUES RETURNING <columns>` when no column is marked, and its
+     update `UPDATE <table> SET "c" = ?, … WHERE "k" = ?[ AND "k2" = ?]
+     RETURNING <columns>`, the key columns bound after the assignments.
    A test renders a corpus of predicates once through the typed
    handles and once from Volt source and compares the bytes; the
    generator goldens and the integration tests prepare the constants

@@ -175,6 +175,8 @@ func TestGoldenCompiles(t *testing.T) {
 			base, outName = strings.TrimSuffix(base, "_dyn"), "nao_dyn.go"
 		case strings.HasSuffix(base, "_validate"):
 			base, outName = strings.TrimSuffix(base, "_validate"), "nao_validate.go"
+		case strings.HasSuffix(base, "_selects"):
+			base, outName = strings.TrimSuffix(base, "_selects"), "nao_selects.go"
 		case strings.HasSuffix(base, "_migrations"):
 			base, outName = strings.TrimSuffix(base, "_migrations"), "volt_migrations.go"
 		}

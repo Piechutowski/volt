@@ -71,10 +71,13 @@ func TestSelectRenderOperators(t *testing.T) {
 		{"and", And(email.Eq("a"), id.Gt(1)), `("email" = ? AND "id" > ?)`, []any{"a", int64(1)}},
 		{"or", Or(email.Eq("a"), bio.IsNull()), `("email" = ? OR "bio" IS NULL)`, []any{"a"}},
 		{"not", Not(email.Eq("a")), `NOT ("email" = ?)`, []any{"a"}},
+		{"not not", Not(Not(email.Eq("a"))), `NOT (NOT ("email" = ?))`, []any{"a"}},
+		{"not group", Not(Or(email.Eq("a"), bio.IsNull())), `NOT ("email" = ? OR "bio" IS NULL)`, []any{"a"}},
+		{"not raw", Not(Raw[m]("length(email) > ?", 3)), `NOT (length(email) > ?)`, []any{3}},
 		{
 			"nested",
 			And(Or(id.Lt(1), id.Gt(9)), Not(And(email.Eq("a"), bio.IsNotNull()))),
-			`(("id" < ? OR "id" > ?) AND NOT (("email" = ? AND "bio" IS NOT NULL)))`,
+			`(("id" < ? OR "id" > ?) AND NOT ("email" = ? AND "bio" IS NOT NULL))`,
 			[]any{int64(1), int64(9), "a"},
 		},
 	}
@@ -152,7 +155,7 @@ func TestSelectRenderOffsetWithoutLimit(t *testing.T) {
 
 func TestSelectRenderAfter(t *testing.T) {
 	query, args := selectRender(t, OrderBy(id.Asc()), After[m](int64(7)))
-	want := `SELECT "id", "email", "bio" FROM "users" WHERE ("id" > ?) ORDER BY "id" ASC`
+	want := `SELECT "id", "email", "bio" FROM "users" WHERE "id" > ? ORDER BY "id" ASC`
 	if query != want {
 		t.Errorf("query = %q, want %q", query, want)
 	}
@@ -165,11 +168,49 @@ func TestSelectRenderAfter(t *testing.T) {
 		Limit[m](2),
 	)
 	want = `SELECT "id", "email", "bio" FROM "users" WHERE "bio" IS NOT NULL AND ` +
-		`(("email" < ?) OR ("email" = ? AND "id" > ?)) ORDER BY "email" DESC, "id" ASC LIMIT ?`
+		`("email" < ? OR ("email" = ? AND "id" > ?)) ORDER BY "email" DESC, "id" ASC LIMIT ?`
 	if query != want {
 		t.Errorf("query = %q, want %q", query, want)
 	}
 	argsCheck(t, args, "bob@x", "bob@x", int64(3), 2)
+}
+
+func TestSelectRenderAfterIsAPredicate(t *testing.T) {
+	name := Column[m, string]{Name: "name"}
+	cases := []struct {
+		label string
+		opts  []Opt[m]
+		preds []Pred[m]
+	}{
+		{
+			"one term",
+			[]Opt[m]{OrderBy(id.Asc()), After[m](int64(7))},
+			[]Pred[m]{id.Gt(7)},
+		},
+		{
+			"two terms",
+			[]Opt[m]{email.Like("%x"), OrderBy(email.Desc(), id.Asc()), After[m]("bob@x", int64(3))},
+			[]Pred[m]{email.Like("%x"), Or(email.Lt("bob@x"), And(email.Eq("bob@x"), id.Gt(3)))},
+		},
+		{
+			"three terms",
+			[]Opt[m]{OrderBy(name.Asc(), email.Desc(), id.Asc()), After[m]("n", "e", int64(1))},
+			[]Pred[m]{Or(name.Gt("n"), And(name.Eq("n"), email.Lt("e")), And(name.Eq("n"), email.Eq("e"), id.Gt(1)))},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.label, func(t *testing.T) {
+			got, gotArgs := selectRender(t, tc.opts...)
+			want, wantArgs, err := WhereRender(tc.preds)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(got, " WHERE "+want+" ORDER BY ") {
+				t.Errorf("After renders\n  %s\nthe equivalent predicate\n  %s", got, want)
+			}
+			argsCheck(t, gotArgs, wantArgs...)
+		})
+	}
 }
 
 func TestSelectRenderAfterErrors(t *testing.T) {

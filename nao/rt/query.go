@@ -265,8 +265,13 @@ func (p Pred[M]) render(b *strings.Builder, args *[]any) error {
 		}
 		b.WriteString(")")
 	case predNot:
+		k := p.kids[0]
+		if k.kind == predAnd || k.kind == predOr || k.kind == predRaw {
+			b.WriteString("NOT ")
+			return k.render(b, args)
+		}
 		b.WriteString("NOT (")
-		if err := p.kids[0].render(b, args); err != nil {
+		if err := k.render(b, args); err != nil {
 			return err
 		}
 		b.WriteString(")")
@@ -340,7 +345,8 @@ func (o afterOpt[M]) optApply(s *querySpec[M]) { s.after, s.afterSet = o.key, tr
 
 // After positions the query strictly after the row with the given key
 // (keyset pagination): the previous page's last row's values for
-// the ORDER BY columns, one per term, in the same order. Rendering
+// the ORDER BY columns, one per term, in the same order. It renders as
+// one more predicate of the WHERE clause (spec §predicates rule 6) and
 // requires an OrderBy and one key value per term. NULLs in keyset
 // columns are not paginated over; keep keyset columns NOT NULL.
 func After[M any](key ...any) Opt[M] { return afterOpt[M]{key: key} }
@@ -373,17 +379,17 @@ func SelectRender[M any](table, columns string, opts []Opt[M]) (string, []any, e
 	}
 	b.WriteString(columns + " FROM " + table)
 
-	where, wargs, err := WhereRender(s.preds)
-	if err != nil {
-		return "", nil, err
-	}
+	preds := s.preds
 	if s.afterSet {
-		var w strings.Builder
-		w.WriteString(where)
-		if err := afterRender(&w, &wargs, s.orders, s.after); err != nil {
+		after, err := afterPred(s.orders, s.after)
+		if err != nil {
 			return "", nil, err
 		}
-		where = w.String()
+		preds = append(preds, after)
+	}
+	where, wargs, err := WhereRender(preds)
+	if err != nil {
+		return "", nil, err
 	}
 	if where != "" {
 		b.WriteString(" WHERE " + where)
@@ -514,39 +520,27 @@ func OrderRender[M any](terms []Order[M]) string {
 	return b.String()
 }
 
-func afterRender[M any](w *strings.Builder, args *[]any, orders []Order[M], key []any) error {
+func afterPred[M any](orders []Order[M], key []any) (Pred[M], error) {
 	if len(orders) == 0 {
-		return errors.New("rt: After needs an OrderBy: a keyset is a position in some order")
+		return Pred[M]{}, errors.New("rt: After needs an OrderBy: a keyset is a position in some order")
 	}
 	if len(key) != len(orders) {
-		return fmt.Errorf("rt: After got %d key values for %d ORDER BY terms; pass the previous row's value for every term", len(key), len(orders))
+		return Pred[M]{}, fmt.Errorf("rt: After got %d key values for %d ORDER BY terms; pass the previous row's value for every term", len(key), len(orders))
 	}
-	if w.Len() > 0 {
-		w.WriteString(" AND ")
-	}
-	if len(orders) > 1 {
-		w.WriteString("(")
-	}
+	terms := make([]Pred[M], 0, len(orders))
 	for i, o := range orders {
-		if i > 0 {
-			w.WriteString(" OR ")
-		}
-		w.WriteString("(")
+		conj := make([]Pred[M], 0, i+1)
 		for j := 0; j < i; j++ {
-			w.WriteString(Ident(orders[j].col) + " = ? AND ")
-			*args = append(*args, key[j])
+			conj = append(conj, Pred[M]{kind: predCmp, col: orders[j].col, op: "=", vals: []any{key[j]}})
 		}
-		cmp := " > ?"
+		op := ">"
 		if o.desc {
-			cmp = " < ?"
+			op = "<"
 		}
-		w.WriteString(Ident(o.col) + cmp + ")")
-		*args = append(*args, key[i])
+		conj = append(conj, Pred[M]{kind: predCmp, col: o.col, op: op, vals: []any{key[i]}})
+		terms = append(terms, And(conj...))
 	}
-	if len(orders) > 1 {
-		w.WriteString(")")
-	}
-	return nil
+	return Or(terms...), nil
 }
 
 // Ident is the one spelling of an identifier in every statement (spec

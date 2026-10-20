@@ -31,7 +31,7 @@ func (pl *Plan) Selects(fns []SelectFn, opts Options) ([]byte, error) {
 	byKey := pl.byKey
 
 	var body strings.Builder
-	imports := map[string]bool{"context": true, rtImport: true}
+	imports := map[string]bool{"context": true}
 	sharedDone := map[string]bool{}
 	for _, fn := range fns {
 		t := byKey[fn.TableKey]
@@ -61,6 +61,7 @@ func (pl *Plan) Selects(fns []SelectFn, opts Options) ([]byte, error) {
 				rows.WriteTo(&body, "\t")
 				body.WriteString("}\n\n")
 				rowScanEmit(&body, fn.SharedType, cols)
+				imports[rtImport] = true
 			}
 		case len(fn.Excluded) > 0:
 			row := t.model + fn.MethodSuffix
@@ -78,8 +79,9 @@ func (pl *Plan) Selects(fns []SelectFn, opts Options) ([]byte, error) {
 			rows.WriteTo(&body, "\t")
 			body.WriteString("}\n\n")
 			rowScanEmit(&body, row, cols)
+			imports[rtImport] = true
 		}
-		if err := selectEmit(&body, t, fn, cols); err != nil {
+		if err := selectEmit(&body, imports, t, fn, cols); err != nil {
 			return nil, err
 		}
 	}
@@ -200,7 +202,7 @@ func lowerFirstWord(s string) string {
 	return strings.ToLower(s[:1]) + s[1:]
 }
 
-func selectEmit(b *strings.Builder, t *tableModel, fn SelectFn, cols []*fieldPlan) error {
+func selectEmit(b *strings.Builder, imports map[string]bool, t *tableModel, fn SelectFn, cols []*fieldPlan) error {
 	row, scanPrefix := t.model, argName(t.model)
 	switch {
 	case fn.SharedType != "":
@@ -225,6 +227,11 @@ func selectEmit(b *strings.Builder, t *tableModel, fn SelectFn, cols []*fieldPla
 	binds := ""
 	if len(args) > 0 {
 		binds = ", " + strings.Join(args, ", ")
+	}
+	for _, a := range args {
+		if strings.HasPrefix(a, "rt.") {
+			imports[rtImport] = true
+		}
 	}
 	fmt.Fprintf(b, "// %s runs the %q select over %s (spec §selects-over-groups).\n", name, lowerFirstWord(fn.MethodSuffix), t.sqlName)
 	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context%s) ([]%s, error) {\n", name, sig.String(), row)

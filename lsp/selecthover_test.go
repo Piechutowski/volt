@@ -14,7 +14,8 @@ const projSchema = "package db\n\n" +
 	"Group metrics {\n\tpage_views\n\tlink_clicks\n}\n\n" +
 	"Select summary (site, day) for metrics where day >= :from\n" +
 	"Select public (* \\ site) for link_clicks\n" +
-	"Select chosen for metrics where site in :sites and day in :days\n"
+	"Select chosen for metrics where site in :sites and day in :days\n" +
+	"Select busy for page_views where hits > 10 and site = :site and day in :days\n"
 
 func projSelectDoc(t *testing.T) (*Document, string) {
 	t.Helper()
@@ -39,6 +40,7 @@ func TestSelectHoverSharedRowType(t *testing.T) {
 		"type Summary struct",
 		"Site string",
 		"Day int",
+		"WHERE \"day\" >= ?\n```\nbinds: `from`\n",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover missing %q:\n%s", want, md)
@@ -86,9 +88,27 @@ func TestSelectHoverListParam(t *testing.T) {
 	for _, want := range []string{
 		"PageViewChosen(ctx context.Context, sites []string, days []int) ([]PageView, error)",
 		"json_each(?)",
+		"binds: `rt.JSONList(sites)`, `rt.JSONList(days)`",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover missing %q:\n%s", want, md)
 		}
+	}
+}
+
+func TestSelectHoverBindsInPlaceholderOrder(t *testing.T) {
+	d, text := projSelectDoc(t)
+	h := d.Hover(posOf(t, text, "busy", 0))
+	if h == nil {
+		t.Fatal("no hover for the busy select")
+	}
+	md := h.Contents.(protocol.MarkupContent).Value
+	want := "```sql\nWHERE (\"hits\" > ? AND \"site\" = ? AND \"day\" IN (SELECT value FROM json_each(?)))\n```\n" +
+		"binds: `10`, `site`, `rt.JSONList(days)`\n"
+	if !strings.Contains(md, want) {
+		t.Errorf("hover missing %q:\n%s", want, md)
+	}
+	if !strings.Contains(md, "PageViewBusy(ctx context.Context, site string, days []int) ([]PageView, error)") {
+		t.Errorf("hover missing the signature:\n%s", md)
 	}
 }

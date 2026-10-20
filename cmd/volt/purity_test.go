@@ -51,8 +51,10 @@ var immutableVars = map[string]bool{
 
 var pureStdlib = map[string]bool{
 	"strings": true, "unicode": true,
-	"fmt":  true,
-	"sort": true,
+	"fmt":     true,
+	"sort":    true,
+	"strconv": true,
+	"errors":  true,
 }
 
 var pureStdlibFuncs = map[string]bool{
@@ -283,12 +285,12 @@ func (p *purity) reachable(fn *types.Func) map[*types.Func]bool {
 			switch x := n.(type) {
 			case *ast.Ident:
 				if g, ok := fd.pkg.TypesInfo.Uses[x].(*types.Func); ok {
-					visit(g)
+					visit(g.Origin())
 				}
 			case *ast.SelectorExpr:
 				if sel, ok := fd.pkg.TypesInfo.Selections[x]; ok {
 					if g, ok := sel.Obj().(*types.Func); ok {
-						visit(g)
+						visit(g.Origin())
 						if recv := g.Type().(*types.Signature).Recv(); recv != nil && types.IsInterface(recv.Type()) {
 							for _, impl := range p.implementations(g) {
 								visit(impl)
@@ -1086,6 +1088,7 @@ func (fa *funcAnalysis) call(x *ast.CallExpr) []bool {
 		fa.expr(x.Fun)
 		return []bool{anyArg}
 	}
+	fn = fn.Origin()
 	sig := fn.Type().(*types.Signature)
 	n := sig.Results().Len()
 	if recv := sig.Recv(); recv != nil && types.IsInterface(recv.Type()) {

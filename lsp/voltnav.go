@@ -514,6 +514,9 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 
 	if si.WhereSQL != "" {
 		b.WriteString("```sql\nWHERE " + si.WhereSQL + "\n```\n")
+		if len(si.Binds) > 0 {
+			b.WriteString("binds: `" + strings.Join(si.Binds, "`, `") + "`\n\n")
+		}
 	}
 	if si.OrderSQL != "" {
 		b.WriteString("```sql\nORDER BY " + si.OrderSQL + "\n```\n")

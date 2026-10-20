@@ -7,6 +7,7 @@ package lang
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Piechutowski/volt/lang/ast"
@@ -42,6 +43,7 @@ type SelectInfo struct {
 	Where        rt.GenPred    // the where clause; the zero value when none
 	Order        []rt.GenOrder // the order: terms, in declared order
 	WhereSQL     string        // Where as the renderer spells it; "" when none
+	Binds        []string      // the Go expressions behind WhereSQL's placeholders, in order
 	OrderSQL     string        // Order as the renderer spells it; "" when none
 	Params       []SelectParam
 	Cols         []string // explicit projection, declared order (§selects-over-groups)
@@ -466,10 +468,11 @@ func classOfName(class string) typeClass {
 }
 
 type colBinding struct {
-	name    string
-	goType  string
-	class   typeClass
-	storage typeClass
+	name      string
+	goType    string
+	storageGo string
+	class     typeClass
+	storage   typeClass
 }
 
 func (b *colBinding) litClass() typeClass {
@@ -524,14 +527,19 @@ func (l *selectLowering) check() *SelectInfo {
 	if env.failed {
 		return nil
 	}
-	whereSQL, _, err := rt.WhereRender([]rt.GenPred{where})
+	whereSQL, slots, err := rt.WhereRender([]rt.GenPred{where})
 	if err != nil {
 		l.errorf(sel.Name.Pos(), "select %q: %v (§predicates)", sel.Name.Name(), err)
 		return nil
 	}
+	binds := make([]string, len(slots))
+	for i, slot := range slots {
+		binds[i] = fmt.Sprint(slot)
+	}
 	si.Where = where
 	si.Order = order
 	si.WhereSQL = whereSQL
+	si.Binds = binds
 	si.OrderSQL = rt.OrderRender(order)
 	si.Params = env.paramList
 	return si
@@ -750,6 +758,7 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 	types := map[string][]string{}
 	classes := map[typeClass]bool{}
 	var class, storage typeClass
+	var storageGo string
 	for _, m := range e.members {
 		cd := m.Column(name)
 		if cd == nil {
@@ -765,6 +774,7 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 		types[goType] = append(types[goType], m.Decl.Name.Base())
 		class = classOfType(cd.Type)
 		storage = classOfName(cd.Type.StorageClass())
+		storageGo = cd.Type.Storage
 		classes[class] = true
 	}
 	if len(missing) > 0 {
@@ -800,7 +810,7 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 	for t := range types {
 		goType = t
 	}
-	b := &colBinding{name: name, goType: goType, class: class, storage: storage}
+	b := &colBinding{name: name, goType: goType, storageGo: storageGo, class: class, storage: storage}
 	e.cols[name] = b
 	return b
 }
@@ -986,7 +996,12 @@ func (e *selectEnv) litSlot(l *ast.Lit, b *colBinding) (string, bool) {
 			e.errorf(l.Pos(), "column %q (%s) cannot be compared with the number %s (§predicates)", b.name, b.goType, l.Tok.Val)
 			return "", false
 		}
-		return numberGo(l.Tok.Val), true
+		slot, err := numberGo(l.Tok.Val, b.storageGo)
+		if err != nil {
+			e.errorf(l.Pos(), "literal %s does not fit %s, the storage type of column %q (§predicates)", l.Tok.Val, b.storageGo, b.name)
+			return "", false
+		}
+		return slot, true
 	case token.STRING:
 		if lit != classText && lit != classTime {
 			e.errorf(l.Pos(), "column %q (%s) cannot be compared with the string %q (§predicates)", b.name, b.goType, l.Tok.Val)
@@ -1005,14 +1020,23 @@ func (e *selectEnv) litSlot(l *ast.Lit, b *colBinding) (string, bool) {
 	}
 }
 
-func numberGo(val string) string {
-	if strings.ContainsAny(val, ".eE") {
-		return val
+func numberGo(val, storage string) (string, error) {
+	if storage == "float64" {
+		f, err := strconv.ParseFloat(val, 64)
+		if err != nil {
+			return "", err
+		}
+		s := strconv.FormatFloat(f, 'g', -1, 64)
+		if !strings.ContainsAny(s, ".eE") {
+			s += ".0"
+		}
+		return s, nil
 	}
-	if trimmed := strings.TrimLeft(val, "0"); trimmed != "" {
-		return trimmed
+	n, err := strconv.ParseInt(val, 10, 64)
+	if err != nil {
+		return "", err
 	}
-	return "0"
+	return strconv.FormatInt(n, 10), nil
 }
 
 func (e *selectEnv) inLower(x *ast.PredIn) rt.GenPred {

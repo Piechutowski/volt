@@ -104,8 +104,18 @@ func TestSelectRenderMatchesTypedHandles(t *testing.T) {
 		{"param left", ":since <= day", "", typed(rDay.Ge(0)), []string{"since"}},
 		{"param right", "day >= :since", "", typed(rDay.Ge(0)), []string{"since"}},
 		{"float literal", "score = 1.5", "", typed(rScore.Eq(0)), []string{"1.5"}},
-		{"exponent literal", "score > 1e2", "", typed(rScore.Gt(0)), []string{"1e2"}},
+		{"fraction literal", "score < 0.5", "", typed(rScore.Lt(0)), []string{"0.5"}},
+		{"negative float literal", "score < -2.5", "", typed(rScore.Lt(0)), []string{"-2.5"}},
+		{"exponent literal", "score > 1e2", "", typed(rScore.Gt(0)), []string{"100.0"}},
+		{"upper exponent literal", "score > 1E2", "", typed(rScore.Gt(0)), []string{"100.0"}},
+		{"fraction exponent literal", "score > 1.5E3", "", typed(rScore.Gt(0)), []string{"1500.0"}},
+		{"exponent literal against float64", "score >= 1e3", "", typed(rScore.Ge(0)), []string{"1000.0"}},
+		{"integer literal against float64", "score >= 3", "", typed(rScore.Ge(0)), []string{"3.0"}},
 		{"leading zero literal", "day = 007", "", typed(rDay.Eq(0)), []string{"7"}},
+		{"negative leading zero literal", "day = -010", "", typed(rDay.Eq(0)), []string{"-10"}},
+		{"negative octal-looking literal", "day = -08", "", typed(rDay.Eq(0)), []string{"-8"}},
+		{"negative literal", "day > -1", "", typed(rDay.Gt(0)), []string{"-1"}},
+		{"int64 bounds", "day in (9223372036854775807, -9223372036854775808)", "", typed(rDay.In(0, 0)), []string{"9223372036854775807", "-9223372036854775808"}},
 		{"bool literal", "flag = true", "", typed(rFlag.Eq(false)), []string{"true"}},
 		{"string escape", `site = 'it\'s "x"'`, "", typed(rSite.Eq("")), []string{`"it's \"x\""`}},
 		{"two columns", "day < hits", "", typed(rDay.LtCol(rHits)), nil},
@@ -178,11 +188,36 @@ func TestSelectInfoCarriesRendererFragments(t *testing.T) {
 	if want := `("site" = ? AND "day" IN (SELECT value FROM json_each(?)))`; si.WhereSQL != want {
 		t.Errorf("WhereSQL = %q, want %q", si.WhereSQL, want)
 	}
+	if want := []string{"site", "rt.JSONList(days)"}; !reflect.DeepEqual(si.Binds, want) {
+		t.Errorf("Binds = %q, want %q", si.Binds, want)
+	}
 	if want := `"day" DESC, "id" ASC`; si.OrderSQL != want {
 		t.Errorf("OrderSQL = %q, want %q", si.OrderSQL, want)
 	}
 	wantParams := []SelectParam{{GoName: "site", GoType: "string"}, {GoName: "days", GoType: "[]int"}}
 	if !reflect.DeepEqual(si.Params, wantParams) {
 		t.Errorf("Params = %+v, want %+v", si.Params, wantParams)
+	}
+}
+
+func TestSelectLiteralOutsideStorageRefused(t *testing.T) {
+	cases := []struct{ name, where, want string }{
+		{"int overflow", "hits > 9223372036854775808", "literal 9223372036854775808 does not fit int"},
+		{"int underflow", "hits < -9223372036854775809", "literal -9223372036854775809 does not fit int"},
+		{"float literal against int", "hits = 1.5", "literal 1.5 does not fit int"},
+		{"exponent literal against int", "hits = 1e2", "literal 1e2 does not fit int"},
+		{"float overflow", "score > 1e400", "literal 1e400 does not fit float64"},
+		{"in item overflow", "hits in (1, 9223372036854775808)", "literal 9223372036854775808 does not fit int"},
+		{"declared type storage", "cents = 9223372036854775808", "literal 9223372036854775808 does not fit int, the storage type of column \"cents\""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, diags := project(t, map[string]string{
+				"go.mod": modFile,
+				"db/schema.volt": "package db\n\nType money int\n\nTable page_views {\n\tid int [pk, increment]\n\thits int [not null]\n\tscore float64 [not null]\n\tcents money [not null]\n}\n\n" +
+					"Select c for page_views where " + tc.where + "\n",
+			})
+			wantError(t, diags, tc.want)
+		})
 	}
 }
