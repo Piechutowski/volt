@@ -2968,8 +2968,9 @@ drop table op      = "drop", "table", name, [ "{", shape body, "}" ], newline ;
 rename table op    = "rename", "table", name, "to", name, newline ;
 
 alter table op     = "alter", "table", name, "{", { alter item }, "}" ;
-alter item         = "add", column
-                   | "drop", name, [ column type, [ column settings ] ], newline
+alter item         = "add", migration column
+                   | "drop", name,
+                     [ column type, [ migration column settings ] ], newline
                    | "rename", name, "to", name, newline ;
 
 rebuild table op   = "rebuild", "table", name, "{", shape body, "}" ;
@@ -2982,12 +2983,25 @@ drop index op      = "drop", "index", name, index key,
 exec op            = "exec", string, [ exec settings ], newline ;
 exec settings      = "[", "down", ":", string, "]" ;
 
-shape body         = { column | indexes block } ;
+shape body         = { migration column | indexes block } ;
+
+migration column          = name, column type, { legacy flag },
+                            [ migration column settings ], newline ;
+migration column settings = "[", migration column setting,
+                            { ",", migration column setting }, "]" ;
+migration column setting  = column setting
+                          | "from", ":", expression literal
+                          | "delete", ":", ref action
+                          | "update", ":", ref action ;
 ```
 
-`column`, `column type`, `column settings`, `index key`,
-`index settings` and `indexes block` are the productions of the
-schema core (§columns, §indexes), narrowed by the rules below. The
+`column type`, `legacy flag`, `column setting`, `index key`, `index
+settings` and `indexes block` are the productions of the schema core
+(§columns, §indexes) and `ref action` is that of §relationships-ref,
+all narrowed by the rules below; a migration column adds `from:`
+(rule 9) and the referential actions `delete:` and `update:` (rule
+4) to the column settings, since the schema declares the actions on
+a `Ref` and a migration has no `Ref`. The
 words of a migration body (`up`, `down`, `create`, `drop`, `rename`,
 `alter`, `rebuild`, `exec`, `table`, `index`, `add`, `to`) are
 keywords inside a `Migration` only; elsewhere they are identifiers.
@@ -3064,8 +3078,11 @@ Migration 0002__users_bio {
    SQLite refuses to add a `REFERENCES` column with another default
    to a table that has rows; `unique` lowers to the added column plus
    a `CREATE UNIQUE INDEX` on it. `drop` is `DROP COLUMN`; the
-   optional type and settings are the dropped column's shape, the
-   inverse `add` (rule 12). `rename` is `RENAME COLUMN`.
+   optional type and settings are the dropped column's shape, which
+   in a flat body is the inverse `add` and MUST satisfy the `add`
+   rules above (rule 12), and inside an `up { }` or `down { }` block
+   is checked as a column only, since there the inverse is written
+   out. `rename` is `RENAME COLUMN`.
 9. **`rebuild table`.** The one operation for every change SQLite
    cannot `ALTER`: a type, a nullability, a default, a primary key, a
    foreign key. The body is the new shape and MUST contain at least
@@ -3097,15 +3114,19 @@ Migration 0002__users_bio {
     `create table` or `rebuild table` body.
 11. **`exec`.** The string is one or more SQL statements run
     verbatim, for whatever the operations above do not say: a data
-    fix, a view, a trigger, a `PRAGMA`. `down:` is its inverse. With
-    `no transaction` on the migration, `exec` statements run outside
-    any transaction, each on its own.
+    fix, a view, a trigger, a `PRAGMA`. A foreign key over several
+    columns has no shape item; a table that needs one is written
+    with `exec`, its `CREATE TABLE` verbatim, and the drift report
+    says so. `down:` is its inverse. With `no transaction` on the
+    migration, `exec` statements run outside any transaction, each
+    on its own.
 12. **Reversibility.** A flat body runs forward as written and
     backward as the inverses of its operations in reverse order. The
     inverses are: `create table` and `drop table` with a body;
     `rename table` and `rename table` reversed; `add` and `drop` with
     a type, whose shape is the inverse `add` and MUST satisfy rule
-    8's `add` rules; `rename` and `rename` reversed; `create index`
+    8's `add` rules, in a flat body alone, where the inverse is
+    derived from it; `rename` and `rename` reversed; `create index`
     and `drop index`; `exec` with `down:` and its `down:`. A flat
     body with an operation that has no inverse (`drop table` without
     a body, `drop` without a type, `rebuild table`, `exec` without
@@ -3113,6 +3134,8 @@ Migration 0002__users_bio {
     inside an `alter table`, unless the migration is marked
     `irreversible` or written as `up { } down { }`. A `down` block
     runs as written; an `up` block without a `down` is irreversible.
+    Inside the blocks nothing is derived: a typed `drop` there is a
+    column, checked as one, not an inverse `add`.
 13. **Transactions and foreign keys.** A migration runs in one
     transaction with the ledger write (§migration-ledger). A
     migration that contains a `rebuild table` or a `drop table` is
@@ -3157,9 +3180,12 @@ true. What is checked instead is their composition.
    The one run-time exception is a `not null` column added to a
    table that already has rows, which the fold's empty database
    cannot see and `alter table` (§migrations) guards by requiring a
-   default. The check also runs every reversible migration's down and
-   up again in the fold database, so an inverse SQLite would refuse is
-   refused at check time as well.
+   default. Once the fold is read, the check also reverts the
+   reversible migrations above the last irreversible one, from the
+   top down, and applies them again in the fold database, so an
+   inverse SQLite would refuse is refused at check time as well; a
+   down cannot pass an irreversible migration, so the migrations
+   below it are not run backward.
 5. **Generation.** The drift report is the input of a migration
    generator (not built): it writes the operations that close the
    drift as a new `Migration` for the user to edit. A rename is a
@@ -3195,12 +3221,15 @@ true. What is checked instead is their composition.
    one only (a missing file is an error and nothing is created), and
    all three refuse `:memory:`. `volt migration sql [DIR]` prints
    every migration's statements in both directions for review. Exit
-   codes: 1 for drift or a migration SQLite refuses, 2 for usage and
-   I/O, the same from `gen`. The tool carries its own SQLite (the
-   `mattn/go-sqlite3` driver) and needs cgo, a C compiler at build
-   time, for it; a `volt` built without cgo refuses the migration
-   commands and the fold with a message saying so. The library and
-   the runtime carry no SQLite.
+   codes, the same from `gen`: 1 for drift and for an error in the
+   migrations themselves, a statement SQLite refuses in either
+   direction, an irreversible migration asked to go down, a migration
+   that does not lower; 2 for usage and I/O, a database that cannot
+   be opened, is locked past its busy timeout or fails otherwise. The
+   tool carries its own SQLite (the `mattn/go-sqlite3` driver) and
+   needs cgo, a C compiler at build time, for it; a `volt` built
+   without cgo refuses the migration commands and the fold with a
+   message saying so. The library and the runtime carry no SQLite.
 2. **Generated.** For a package that declares migrations, `volt gen`
    writes `volt_migrations.go` beside the other generated files:
    `var Migrations = []rt.Migration{…}` in name order, each with its
@@ -3221,7 +3250,12 @@ true. What is checked instead is their composition.
    whether and when it was applied and whether it is out of order,
    and every ledger row that no migration of the package names,
    marked as such. The CLI's `up`, `down` and `status` are these
-   three over the statements lowered from the `.volt` files.
+   three over the statements lowered from the `.volt` files. A
+   migration that does not run, a statement SQLite refuses, a failed
+   foreign-key check or a down asked of an irreversible migration, is
+   an `*rt.MigrationError` naming the migration, the direction and
+   the statement, so that a caller tells it from the database
+   failing.
 4. **No implicit schema change.** Neither `volt gen` nor the runtime
    ever alters a database from the schema alone. The schema is the
    target; a migration is the only path to it.
@@ -3335,8 +3369,9 @@ create table op    = "create", "table", name, "{", shape body, "}" ;
 drop table op      = "drop", "table", name, [ "{", shape body, "}" ], newline ;
 rename table op    = "rename", "table", name, "to", name, newline ;
 alter table op     = "alter", "table", name, "{", { alter item }, "}" ;
-alter item         = "add", column
-                   | "drop", name, [ column type, [ column settings ] ], newline
+alter item         = "add", migration column
+                   | "drop", name,
+                     [ column type, [ migration column settings ] ], newline
                    | "rename", name, "to", name, newline ;
 rebuild table op   = "rebuild", "table", name, "{", shape body, "}" ;
 create index op    = "create", "index", name, index key,
@@ -3345,7 +3380,15 @@ drop index op      = "drop", "index", name, index key,
                      [ index settings ], newline ;
 exec op            = "exec", string, [ exec settings ], newline ;
 exec settings      = "[", "down", ":", string, "]" ;
-shape body         = { column | indexes block } ;
+shape body         = { migration column | indexes block } ;
+migration column          = name, column type, { legacy flag },
+                            [ migration column settings ], newline ;
+migration column settings = "[", migration column setting,
+                            { ",", migration column setting }, "]" ;
+migration column setting  = column setting
+                          | "from", ":", expression literal
+                          | "delete", ":", ref action
+                          | "update", ":", ref action ;
 
 (* setting value, extended (Part I §settings-lists): *)
 setting value  = (* schema-layer alternatives *) | ident list ;

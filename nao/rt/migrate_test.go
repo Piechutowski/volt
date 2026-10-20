@@ -3,6 +3,7 @@ package rt
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -134,6 +135,10 @@ func TestMigrateDownRevertsTheLast(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "0002__comments") || !strings.Contains(err.Error(), "irreversible") {
 		t.Fatalf("down over an irreversible migration: %v, want a refusal naming it", err)
 	}
+	var me *MigrationError
+	if !errors.As(err, &me) || !errors.Is(err, ErrIrreversible) || me.Name != "0002__comments" || me.Direction != "down" || me.Index != 0 {
+		t.Errorf("the refusal is %#v, want a MigrationError for 0002__comments down caused by ErrIrreversible", err)
+	}
 	if !tableExists(t, db, "comments") {
 		t.Error("the refusal dropped the table")
 	}
@@ -187,6 +192,10 @@ func TestMigrateBracketRollsBackDanglingForeignKeys(t *testing.T) {
 	_, err := MigrateUp(ctx, db, append(blogMigrations, drop))
 	if err == nil || !strings.Contains(err.Error(), "0003__drop_posts") || !strings.Contains(err.Error(), "comments") {
 		t.Fatalf("bracket: %v, want the check failure naming the migration and the table", err)
+	}
+	var me *MigrationError
+	if !errors.As(err, &me) || me.Name != "0003__drop_posts" || me.Direction != "up" || me.Index != 0 {
+		t.Errorf("the check failure is %#v, want a MigrationError for 0003__drop_posts up with no statement", err)
 	}
 	if !tableExists(t, db, "posts") || tableExists(t, db, "posts_log") {
 		t.Error("the failed migration was not rolled back")
@@ -387,6 +396,16 @@ func TestMigrateUpReportsTheFailingStatement(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q lacks %q", err, want)
 		}
+	}
+	var me *MigrationError
+	if !errors.As(err, &me) {
+		t.Fatalf("%T is not a MigrationError", err)
+	}
+	if me.Name != "0001__bad" || me.Direction != "up" || me.Index != 2 || me.SQL != "CREATE TABLE a (id INTEGER)" || me.Cause == nil || !strings.Contains(me.Cause.Error(), "already exists") {
+		t.Errorf("MigrationError %+v, want 0001__bad up, statement 2, its SQL and SQLite's cause", me)
+	}
+	if errors.Unwrap(err) != me.Cause {
+		t.Error("the MigrationError does not unwrap to its cause")
 	}
 	if tableExists(t, db, "a") {
 		t.Error("the failed migration left its first statement applied")

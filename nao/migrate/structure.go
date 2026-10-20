@@ -508,7 +508,8 @@ func columnIn(name string, cols []Column) bool {
 // addRefusal says why alter table cannot add the column under SQLite's
 // rules (spec §migrations rule 8), or "" when add makes it: a primary
 // key column, a not null column without a default, an expression
-// default and a not null foreign key all take a rebuild.
+// default, a not null foreign key and a foreign key with a default
+// other than NULL all take a rebuild.
 func addRefusal(t *Table, c Column) string {
 	switch {
 	case c.PK != 0:
@@ -519,6 +520,8 @@ func addRefusal(t *Table, c Column) string {
 		return "has an expression default, which add cannot take: rebuild the table"
 	case c.NotNull && columnReferences(t, c.Name):
 		return "is a not null foreign key, which add cannot make: rebuild the table"
+	case c.Default != "" && !strings.EqualFold(c.Default, "NULL") && columnReferences(t, c.Name):
+		return "is a foreign key with a default, which add cannot make, since SQLite refuses to add a REFERENCES column with a default other than NULL to a table that has rows: rebuild the table"
 	}
 	return ""
 }

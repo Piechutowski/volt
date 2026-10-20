@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -132,12 +133,16 @@ func migrationCheckRun(ctx context.Context, c *cli.Command) error {
 	if err != nil {
 		return err
 	}
+	ms, err := migrationsLowered("migration check: ", pkg)
+	if err != nil {
+		return err
+	}
 	if err := sqliteGuard(sqliteDriver); err != nil {
 		return err
 	}
-	drifts, err := foldCheck(ctx, pkg)
+	drifts, err := foldCheck(ctx, pkg, ms)
 	if err != nil {
-		return cli.Exit("migration check: "+err.Error(), 1)
+		return migrationExit("migration check: ", err)
 	}
 	if len(drifts) == 0 {
 		fmt.Printf("package %s: the fold of %d migration(s) matches the schema\n", pkg.Path, len(pkg.Schema().Migrations))
@@ -155,9 +160,9 @@ func migrationSQLRun(_ context.Context, c *cli.Command) error {
 	if err != nil {
 		return err
 	}
-	ms, err := migrate.Lower(pkg.Schema())
+	ms, err := migrationsLowered("migration sql: ", pkg)
 	if err != nil {
-		return cli.Exit("migration sql: "+err.Error(), 2)
+		return err
 	}
 	fmt.Print(migrate.SQLText(ms))
 	return nil
@@ -174,7 +179,7 @@ func migrationUpRun(ctx context.Context, c *cli.Command) error {
 		fmt.Println("applied", name)
 	}
 	if err != nil {
-		return cli.Exit("migration up: "+err.Error(), 1)
+		return migrationExit("migration up: ", err)
 	}
 	if len(applied) == 0 {
 		fmt.Printf("nothing to apply: %d migration(s) applied\n", len(ms))
@@ -190,7 +195,7 @@ func migrationDownRun(ctx context.Context, c *cli.Command) error {
 	defer db.Close()
 	name, err := rt.MigrateDown(ctx, db, ms)
 	if err != nil {
-		return cli.Exit("migration down: "+err.Error(), 1)
+		return migrationExit("migration down: ", err)
 	}
 	fmt.Println("reverted", name)
 	return nil
@@ -204,7 +209,7 @@ func migrationStatusRun(ctx context.Context, c *cli.Command) error {
 	defer db.Close()
 	status, err := rt.MigrateStatus(ctx, db, ms)
 	if err != nil {
-		return cli.Exit("migration status: "+err.Error(), 1)
+		return migrationExit("migration status: ", err)
 	}
 	width := 0
 	for _, s := range status {
@@ -260,6 +265,30 @@ func migrationPackage(dir string) (*lang.Package, error) {
 	return pkg, nil
 }
 
+// migrationsLowered lowers the package's migrations to their statement
+// form; a migration that does not lower is an error in the migrations
+// themselves, exit 1 under prefix (spec §migration-tooling rule 1).
+func migrationsLowered(prefix string, pkg *lang.Package) ([]rt.Migration, error) {
+	ms, err := migrate.Lower(pkg.Schema())
+	if err != nil {
+		return nil, cli.Exit(prefix+err.Error(), 1)
+	}
+	return ms, nil
+}
+
+// migrationExit maps a failure of the fold or of a database command to
+// its exit code (spec §migration-tooling rule 1): 1 for a migration
+// that did not run, a statement SQLite refused or a down asked of an
+// irreversible one, which is an rt.MigrationError; 2 for everything
+// else, which is the database or the machine.
+func migrationExit(prefix string, err error) error {
+	var me *rt.MigrationError
+	if errors.As(err, &me) {
+		return cli.Exit(prefix+err.Error(), 1)
+	}
+	return cli.Exit(prefix+err.Error(), 2)
+}
+
 func migrationDatabase(ctx context.Context, c *cli.Command, sub string) (*sql.DB, []rt.Migration, error) {
 	if c.Args().Len() < 1 || c.Args().Len() > 2 {
 		return nil, nil, cli.Exit("migration "+sub+": DSN [DIR]", 2)
@@ -272,9 +301,9 @@ func migrationDatabase(ctx context.Context, c *cli.Command, sub string) (*sql.DB
 	if err != nil {
 		return nil, nil, err
 	}
-	ms, err := migrate.Lower(pkg.Schema())
+	ms, err := migrationsLowered("migration "+sub+": ", pkg)
 	if err != nil {
-		return nil, nil, cli.Exit("migration "+sub+": "+err.Error(), 2)
+		return nil, nil, err
 	}
 	if err := sqliteGuard(sqliteDriver); err != nil {
 		return nil, nil, err
@@ -302,7 +331,22 @@ func databaseOpen(ctx context.Context, sub, dsn string) (*sql.DB, error) {
 	case "down":
 		dsn = dsnWithMode(dsn, "rw")
 	}
+	if err := databasePing(ctx, dsn); err != nil {
+		return nil, err
+	}
 	return rt.Open(sqliteDriver, dsn)
+}
+
+// databasePing opens one connection to dsn and closes it, so that a
+// database that cannot be opened is reported as that, before rt.Open
+// runs its pragmas on it and reports the first of them instead.
+func databasePing(ctx context.Context, dsn string) error {
+	db, err := sql.Open(sqliteDriver, dsn)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	return db.PingContext(ctx)
 }
 
 func dsnIsMemory(dsn string) bool {
@@ -336,17 +380,14 @@ func sqliteGuard(driver string) error {
 	return cli.Exit("volt's SQLite does not work: "+err.Error(), 2)
 }
 
-// foldCheck applies the package's migrations to one empty in-memory
-// database and its schema's DDL to another, and returns the drift
-// between them (spec §the-fold). A migration SQLite refuses stops the
-// fold with SQLite's own message, in either direction: once the fold is
-// read, the reversible migrations are reverted from the top and applied
-// again (§the-fold rule 4).
-func foldCheck(ctx context.Context, pkg *lang.Package) ([]migrate.Drift, error) {
-	ms, err := migrate.Lower(pkg.Schema())
-	if err != nil {
-		return nil, err
-	}
+// foldCheck applies the package's migrations, lowered to ms, to one
+// empty in-memory database and its schema's DDL to another, and returns
+// the drift between them (spec §the-fold). A migration SQLite refuses
+// stops the fold with SQLite's own message, in either direction: once
+// the fold is read, the reversible migrations above the last
+// irreversible one are reverted from the top and applied again
+// (§the-fold rule 4).
+func foldCheck(ctx context.Context, pkg *lang.Package, ms []rt.Migration) ([]migrate.Drift, error) {
 	ddl, err := sqlite.Generate(pkg.Merged(), pkg.Schema(), sqlite.Options{Source: "package " + pkg.Path})
 	if err != nil {
 		return nil, err
@@ -357,7 +398,7 @@ func foldCheck(ctx context.Context, pkg *lang.Package) ([]migrate.Drift, error) 
 	}
 	defer foldDB.Close()
 	if _, err := rt.MigrateUp(ctx, foldDB, ms); err != nil {
-		return nil, fmt.Errorf("the fold stopped: %w", err)
+		return nil, foldStopped("", err)
 	}
 	targetDB, err := rt.Open(sqliteDriver, ":memory:")
 	if err != nil {
@@ -386,13 +427,29 @@ func foldRoundTrip(ctx context.Context, db *sql.DB, ms []rt.Migration) error {
 	sort.Slice(byName, func(i, j int) bool { return byName[i].Name < byName[j].Name })
 	for i := len(byName) - 1; i >= 0 && byName[i].Down != nil; i-- {
 		if _, err := rt.MigrateDown(ctx, db, ms); err != nil {
-			return fmt.Errorf("the fold stopped on the way down: %w", err)
+			return foldStopped(" on the way down", err)
 		}
 	}
 	if _, err := rt.MigrateUp(ctx, db, ms); err != nil {
-		return fmt.Errorf("the fold stopped on the way up again: %w", err)
+		return foldStopped(" on the way up again", err)
 	}
 	return nil
+}
+
+const viewOrTriggerHint = "a view or trigger over a rebuilt table is dropped and recreated with exec (§migrations)"
+
+// foldStopped wraps a failure of the fold at stage with the one hint the
+// statement cannot carry: SQLite refuses the rename that ends a rebuild
+// when a view, or a trigger on another table, reads the table, and
+// names it (spec §migrations rules 9 and 11).
+func foldStopped(stage string, err error) error {
+	var me *rt.MigrationError
+	if errors.As(err, &me) && strings.Contains(me.SQL, " RENAME TO ") {
+		if cause := me.Cause.Error(); strings.HasPrefix(cause, "error in view ") || strings.HasPrefix(cause, "error in trigger ") {
+			return fmt.Errorf("the fold stopped%s: %w\n%s", stage, err, viewOrTriggerHint)
+		}
+	}
+	return fmt.Errorf("the fold stopped%s: %w", stage, err)
 }
 
 func driftReport(w io.Writer, pkg *lang.Package, drifts []migrate.Drift) {

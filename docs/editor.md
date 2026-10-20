@@ -140,7 +140,8 @@ The glue implements one trait method,
 `lsp.volt.binary.path`, then `worktree.which("volt")` — plus optional
 passthrough of `initialization_options`/settings. No
 download-from-releases step: this extension is local-first, and
-`go install ./cmd/volt` is the installer.
+`go install ./cmd/volt` is the installer, with cgo (a C compiler on
+the path), since the tool carries its own SQLite.
 
 **The local grammar mirror** (`scripts/sync-grammar.sh`): Zed loads
 grammars from a *git repository* even for dev extensions. The script

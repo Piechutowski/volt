@@ -147,6 +147,14 @@ CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
 		unclosed: "rule 9 refuses the rebuild while comments.post_id, not null and new, has no from: or default:; the user supplies one",
 	},
 	{
+		name:   "a foreign key with a default only in the schema is a rebuild",
+		fold:   strings.Replace(strings.Replace(postsDDL, "  post_id INTEGER NOT NULL,\n", "", 1), "  body TEXT,\n  FOREIGN KEY (post_id) REFERENCES posts (id)\n", "  body TEXT\n", 1),
+		target: strings.Replace(postsDDL, "post_id INTEGER NOT NULL", "post_id INTEGER DEFAULT 0", 1),
+		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [default: 0, ref: > posts.id]\n  body string\n}"},
+		reason: "foreign key comments (post_id) references posts (id) is in the schema but not in the fold",
+		also:   "column comments.post_id is in the schema but not in the fold and is a foreign key with a default, which add cannot make",
+	},
+	{
 		name:   "a type change is a rebuild",
 		fold:   strings.Replace(postsDDL, "views INTEGER NOT NULL DEFAULT 0", "views TEXT NOT NULL DEFAULT '0'", 1),
 		target: postsDDL,
@@ -201,12 +209,11 @@ CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
 		reason: "foreign key comments (post_id) references posts (id) is in the schema but not in the fold; foreign key comments (post_id) references posts (id) [delete: cascade] is in the fold but not in the schema",
 	},
 	{
-		name:     "referential actions read back as delete: and update:",
-		fold:     postsDDL,
-		target:   strings.Replace(postsDDL, "REFERENCES posts (id)", "REFERENCES posts (id) ON DELETE CASCADE ON UPDATE SET NULL", 1),
-		want:     []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [not null, ref: > posts.id, delete: cascade, update: set null]\n  body string\n}"},
-		reason:   "foreign key comments (post_id) references posts (id) [delete: cascade, update: set null] is in the schema but not in the fold",
-		unclosed: "the checker's migration whitelist does not yet admit delete: and update: in the drift; TestForeignKeyActionsRoundTrip lowers the body without it",
+		name:   "referential actions read back as delete: and update:",
+		fold:   postsDDL,
+		target: strings.Replace(postsDDL, "REFERENCES posts (id)", "REFERENCES posts (id) ON DELETE CASCADE ON UPDATE SET NULL", 1),
+		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [not null, ref: > posts.id, delete: cascade, update: set null]\n  body string\n}"},
+		reason: "foreign key comments (post_id) references posts (id) [delete: cascade, update: set null] is in the schema but not in the fold",
 	},
 	{
 		name:   "a unique constraint only in the fold is a rebuild",
@@ -299,9 +306,9 @@ func TestDiff(t *testing.T) {
 // migration that made the fold, pass the checker, lower, run and leave
 // no drift behind, in the order reported. The fold's migration is its
 // tables as shapeVolt renders them, so it also proves the rendering
-// reads back as the structure it came from. The pair lowers from the
-// parsed file alone, since the checker's whitelist does not yet admit
-// the delete: and update: a fold's foreign key may carry.
+// reads back as the structure it came from; the pair stands beside
+// one schema table, since a migration is an element of a package that
+// declares tables.
 func TestDriftCloses(t *testing.T) {
 	ctx := context.Background()
 	for _, tc := range diffCases {
@@ -325,9 +332,9 @@ func TestDriftCloses(t *testing.T) {
 				ops = append(ops, operationIndent(d.Volt))
 			}
 			closing := "Migration 0001__close [irreversible] {\n" + strings.Join(ops, "\n") + "\n}\n"
-			parseChecked(t, "close.volt", "package db\n\nTable keep {\n  id int [pk]\n}\n\n"+closing)
-			src := "package db\n\nMigration 0000__fold {\n" + strings.Join(made, "\n") + "\n}\n\n" + closing
-			ms, err := Lower(parsedInfo(t, src))
+			src := "package db\n\nTable keep {\n  id int [pk]\n}\n\nMigration 0000__fold {\n" + strings.Join(made, "\n") + "\n}\n\n" + closing
+			_, info := parseChecked(t, "close.volt", src)
+			ms, err := Lower(info)
 			if err != nil {
 				t.Fatalf("%v\n%s", err, src)
 			}

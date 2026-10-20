@@ -150,8 +150,8 @@ func (c *checker) migrationCheck(d *ast.Migration) *MigrationInfo {
 		c.errorf(d.Name.Pos(), "migrations", "migration name %q is not four or more digits, two underscores and a label, like 0001__create_users (§migrations)", name)
 	}
 	c.settingsCheck(d.Settings, "migrations", migrationSettings)
-	c.operationsCheck(d.Up)
-	c.operationsCheck(d.Down)
+	c.operationsCheck(d.Up, !d.UpDown)
+	c.operationsCheck(d.Down, false)
 
 	irreversible := d.Settings.Get("irreversible") != nil
 	reversible := !irreversible
@@ -204,7 +204,10 @@ func inversesMissing(op ast.Operation) []missingInverse {
 	return nil
 }
 
-func (c *checker) operationsCheck(ops []ast.Operation) {
+// operationsCheck checks the operations of one body; flat says the
+// body is a flat one, whose typed drops are inverse adds (spec
+// §migrations rules 8 and 12).
+func (c *checker) operationsCheck(ops []ast.Operation, flat bool) {
 	for _, op := range ops {
 		switch op := op.(type) {
 		case *ast.CreateTable:
@@ -219,9 +222,14 @@ func (c *checker) operationsCheck(ops []ast.Operation) {
 				case *ast.AlterAdd:
 					c.addColumnCheck(item.Column, fmt.Sprintf("add %q to table %q", item.Column.Name.Name(), op.Name.Name()))
 				case *ast.AlterDrop:
-					if item.Type != nil {
-						shape := &ast.Column{Name: item.Name, Type: item.Type, Settings: item.Settings}
+					if item.Type == nil {
+						break
+					}
+					shape := &ast.Column{Name: item.Name, Type: item.Type, Settings: item.Settings}
+					if flat {
 						c.addColumnCheck(shape, fmt.Sprintf("drop %q from table %q, whose shape is the inverse add", item.Name.Name(), op.Name.Name()))
+					} else {
+						c.migrationColumnCheck(shape, migrationColumnSettings, nil)
 					}
 				}
 			}
@@ -329,8 +337,9 @@ func refActionOf(s *ast.Setting) string {
 }
 
 // addColumnCheck enforces SQLite's ADD COLUMN rules on an added column
-// and on the shape of a dropped one, which is the inverse add (spec
-// §migrations rules 8 and 12); head names the item for the diagnostic.
+// and, in a flat body, on the shape of a dropped one, which is the
+// inverse add (spec §migrations rules 8 and 12); head names the item
+// for the diagnostic.
 func (c *checker) addColumnCheck(col *ast.Column, head string) {
 	cd := c.migrationColumnCheck(col, migrationColumnSettings, nil)
 	keyed := false

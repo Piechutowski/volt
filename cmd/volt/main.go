@@ -248,12 +248,16 @@ func genRun(ctx context.Context, c *cli.Command) error {
 		if pkg.Schema() == nil || len(pkg.Schema().Migrations) == 0 {
 			continue
 		}
+		ms, err := migrationsLowered("gen: package "+pkg.Path+": ", pkg)
+		if err != nil {
+			return err
+		}
 		if err := sqliteGuard(sqliteDriver); err != nil {
 			return err
 		}
-		drifts, err := foldCheck(ctx, pkg)
+		drifts, err := foldCheck(ctx, pkg, ms)
 		if err != nil {
-			return cli.Exit("gen: package "+pkg.Path+": "+err.Error(), 1)
+			return migrationExit("gen: package "+pkg.Path+": ", err)
 		}
 		if len(drifts) > 0 {
 			driftReport(os.Stdout, pkg, drifts)

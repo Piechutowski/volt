@@ -122,6 +122,86 @@ func TestMigrationCheck(t *testing.T) {
 	if exitCode(err) != 1 || !strings.Contains(err.Error(), "0003__bad") || !strings.Contains(err.Error(), "no such table") {
 		t.Errorf("gen over a migration SQLite refuses: exit %d (%v), want 1 with SQLite's message", exitCode(err), err)
 	}
+	viewed := fixtureCopy(t)
+	rebuild := "package blog\n\nMigration 0003__view [irreversible] {\n  exec 'CREATE VIEW post_titles AS SELECT title FROM posts'\n  rebuild table posts {\n    id    int    [pk, increment]\n    title string [not null]\n    body  string\n    views int    [not null, default: 0]\n\n    indexes {\n      views\n    }\n  }\n}\n"
+	if err := os.WriteFile(filepath.Join(viewed, "0003__view.volt"), []byte(rebuild), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"migration", "check", viewed}, {"gen", viewed}} {
+		_, err = voltRun(t, args...)
+		if exitCode(err) != 1 {
+			t.Errorf("%s over a rebuild under a view: exit %d (%v), want 1", args[0], exitCode(err), err)
+			continue
+		}
+		for _, want := range []string{"0003__view", "error in view post_titles", "RENAME TO posts", viewOrTriggerHint} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("%s over a rebuild under a view: error %q lacks %q", args[0], err, want)
+			}
+		}
+	}
+}
+
+// TestMigrationExitCodes pins the two exit codes of the database
+// commands (spec §migration-tooling rule 1): 1 for an error in the
+// migrations themselves, from every command alike, and 2 for a database
+// that fails.
+func TestMigrationExitCodes(t *testing.T) {
+	unlowerable := filepath.Join(t.TempDir(), "db")
+	if err := os.MkdirAll(unlowerable, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		"go.mod":      "module unlowerable\n\ngo 1.27\n",
+		"schema.volt": "package db\n\nTable posts {\n  id int [pk, increment]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int\n\n    indexes {\n      n\n      n [unique]\n    }\n  }\n}\n",
+	}
+	for name, src := range files {
+		if err := os.WriteFile(filepath.Join(unlowerable, name), []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fresh := filepath.Join(t.TempDir(), "fresh.db")
+	for _, args := range [][]string{{"migration", "sql", unlowerable}, {"migration", "check", unlowerable}, {"migration", "up", fresh, unlowerable}, {"gen", unlowerable}} {
+		_, err := voltRun(t, args...)
+		if exitCode(err) != 1 || !strings.Contains(err.Error(), `duplicate index name "idx_posts_n"`) {
+			t.Errorf("%s over a migration that does not lower: exit %d (%v), want 1 naming the index", strings.Join(args[:2], " "), exitCode(err), err)
+		}
+	}
+
+	dir := fixtureCopy(t)
+	dsn := filepath.Join(t.TempDir(), "blog.db")
+	_, err := voltRun(t, "migration", "down", dsn, dir)
+	if exitCode(err) != 2 {
+		t.Errorf("down over a missing database: exit %d (%v), want 2", exitCode(err), err)
+	}
+	if out, err := voltRun(t, "migration", "up", dsn, dir); err != nil {
+		t.Fatalf("up: %v\n%s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "0003__bad.volt"), []byte("package blog\n\nMigration 0003__bad [irreversible] {\n  exec 'DROP TABLE missing'\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err = voltRun(t, "migration", "up", dsn, dir)
+	if exitCode(err) != 1 || !strings.Contains(err.Error(), "0003__bad") || !strings.Contains(err.Error(), "no such table") {
+		t.Errorf("up over a migration SQLite refuses: exit %d (%v), want 1 with SQLite's message", exitCode(err), err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "0003__bad.volt"), []byte("package blog\n\nMigration 0003__bump [irreversible] {\n  exec 'PRAGMA user_version = 3'\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := voltRun(t, "migration", "up", dsn, dir); err != nil || out != "applied 0003__bump\n" {
+		t.Fatalf("up over the irreversible migration: %v\n%s", err, out)
+	}
+	_, err = voltRun(t, "migration", "down", dsn, dir)
+	if exitCode(err) != 1 || !strings.Contains(err.Error(), "0003__bump") || !strings.Contains(err.Error(), "irreversible") {
+		t.Errorf("down over an irreversible migration: exit %d (%v), want 1 naming it", exitCode(err), err)
+	}
+
+	broken := filepath.Join(t.TempDir(), "broken.db")
+	ledgerWrite(t, broken, "CREATE TABLE volt_migrations (name TEXT PRIMARY KEY)")
+	for _, sub := range []string{"status", "up", "down"} {
+		_, err := voltRun(t, "migration", sub, broken, dir)
+		if exitCode(err) != 2 || !strings.Contains(err.Error(), "applied_at") {
+			t.Errorf("%s over a database whose ledger cannot be read: exit %d (%v), want 2 with SQLite's message", sub, exitCode(err), err)
+		}
+	}
 }
 
 func TestMigrationCheckRunsEveryDown(t *testing.T) {
@@ -286,8 +366,8 @@ func TestMigrationUpStatusDown(t *testing.T) {
 	dsn := filepath.Join(t.TempDir(), "blog.db")
 	for _, sub := range []string{"status", "down"} {
 		_, err := voltRun(t, "migration", sub, dsn, dir)
-		if exitCode(err) != 2 || !strings.Contains(err.Error(), "unable to open database file") {
-			t.Errorf("%s over a missing database: exit %d (%v), want 2", sub, exitCode(err), err)
+		if exitCode(err) != 2 || !strings.Contains(err.Error(), dsn+": unable to open database file") {
+			t.Errorf("%s over a missing database: exit %d (%v), want 2 reporting the open", sub, exitCode(err), err)
 		}
 		if _, err := os.Stat(dsn); err == nil {
 			t.Fatalf("%s created the missing database", sub)

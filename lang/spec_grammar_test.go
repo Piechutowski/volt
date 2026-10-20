@@ -118,6 +118,7 @@ func specLanguage(t *testing.T) *ebnf.Language {
 			"settings": true, "table settings": true, "column settings": true, "index settings": true,
 			"ref settings": true, "enum settings": true, "note settings": true,
 			"table group settings": true, "migration settings": true,
+			"migration column settings": true,
 		},
 		Specials: map[string]func(rune) bool{
 			"U+000A LINE FEED":      oneOf("\n"),

@@ -403,12 +403,12 @@ Migration 0001__rebuild [irreversible] {
 }
 
 // TestLowerRebuildIntroducingARowidAlias pins NULL as the source of an
-// int [pk, increment] column the old table lacks (spec §migrations rule
-// 9); the lowering is read from the parsed file alone, since the
-// checker's rule 9 does not yet admit the alias.
+// int [pk, increment] column the old table lacks, the one not null
+// column the checker admits without a source (spec §migrations rule 9).
 func TestLowerRebuildIntroducingARowidAlias(t *testing.T) {
 	src := "package db\n\nTable posts {\n  id int [pk, increment]\n  n  int\n}\n\nMigration 0001__init {\n  create table posts {\n    n int\n  }\n}\n\nMigration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id int [pk, increment]\n    n  int\n  }\n}\n"
-	ms, err := Lower(parsedInfo(t, src))
+	_, info := parseChecked(t, "t.volt", src)
+	ms, err := Lower(info)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -420,19 +420,4 @@ func TestLowerRebuildIntroducingARowidAlias(t *testing.T) {
 	if _, err := rt.MigrateUp(context.Background(), db, ms); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func parsedInfo(t *testing.T, src string) *check.Info {
-	t.Helper()
-	f, diags := parser.ParseFile("t.volt", src)
-	if diag.HasErrors(diags) {
-		t.Fatalf("test input must parse: %v", diags)
-	}
-	info := &check.Info{}
-	for _, d := range f.Decls {
-		if m, ok := d.(*ast.Migration); ok {
-			info.Migrations = append(info.Migrations, &check.MigrationInfo{Decl: m, Name: m.Name.Name(), Reversible: m.Settings.Get("irreversible") == nil})
-		}
-	}
-	return info
 }
