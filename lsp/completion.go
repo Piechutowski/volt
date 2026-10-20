@@ -11,7 +11,7 @@ import (
 
 var (
 	elementKeywords = []string{
-		"Project", "Table", "TablePartial", "Enum", "Ref", "TableGroup",
+		"Project", "Table", "TablePartial", "Enum", "Type", "Ref", "TableGroup",
 		"Note", "Records", "DiagramView", "use", "reuse",
 		"package ", "import", "Pipeline", "Scope",
 	}
@@ -294,6 +294,9 @@ func (d *Document) enumItems() []protocol.CompletionItem {
 func (d *Document) typeItems() []protocol.CompletionItem {
 	items := keywordItemsKind(builtinTypes, protocol.CompletionItemKindStruct)
 	items = append(items, d.enumItems()...)
+	for _, ti := range d.Info.Types {
+		items = append(items, item(ti.Decl.Name.String(), protocol.CompletionItemKindClass, "Type"))
+	}
 	return items
 }
 

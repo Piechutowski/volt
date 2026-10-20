@@ -231,6 +231,15 @@ reuse {
       (string_content))))
 
 ==================
+Type name takes no slice prefix
+:error
+==================
+
+Type []Slug string
+
+---
+
+==================
 Type declarations: imported Go type with storage and path, bare type of the package
 ==================
 
@@ -242,31 +251,28 @@ Type Slug string
 
 (source_file
   (type_definition
-    (column_type
+    (type_name
       (schema_name
         (identifier))
-      (type_name
-        (identifier)))
+      (identifier))
     (column_type
       (type_name
         (identifier)))
     (string
       (string_content)))
   (type_definition
-    (column_type
+    (type_name
       (schema_name
         (identifier))
-      (type_name
-        (identifier)))
+      (identifier))
     (column_type
       (type_name
         (identifier)))
     (string
       (string_content)))
   (type_definition
-    (column_type
-      (type_name
-        (identifier)))
+    (type_name
+      (identifier))
     (column_type
       (type_name
         (identifier)))))

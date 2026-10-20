@@ -102,16 +102,6 @@
             "named": true
           }
         ]
-      },
-      "schema": {
-        "multiple": false,
-        "required": false,
-        "types": [
-          {
-            "type": "schema_name",
-            "named": true
-          }
-        ]
       }
     }
   },
@@ -2090,7 +2080,7 @@
         "required": true,
         "types": [
           {
-            "type": "column_type",
+            "type": "type_name",
             "named": true
           }
         ]
@@ -2120,20 +2110,31 @@
   {
     "type": "type_name",
     "named": true,
-    "fields": {},
-    "children": {
-      "multiple": false,
-      "required": false,
-      "types": [
-        {
-          "type": "identifier",
-          "named": true
-        },
-        {
-          "type": "quoted_identifier",
-          "named": true
-        }
-      ]
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
+          }
+        ]
+      },
+      "schema": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "schema_name",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {

@@ -83,7 +83,7 @@ const (
 // order after ctx.
 type QueryParam struct {
 	Name      string // Go parameter name, also the URL key
-	GoType    string // unqualified Go type ("int32", "[]string"); params structs are qualified ("db.UserCreateParams")
+	GoType    string // unqualified Go type ("int", "[]string"); params structs are qualified ("db.UserCreateParams")
 	Source    QuerySource
 	Validates bool // body param: the params struct has a Validate method the handler calls first (§validators)
 }

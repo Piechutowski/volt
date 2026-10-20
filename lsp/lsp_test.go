@@ -239,7 +239,7 @@ func TestCompletionTopLevel(t *testing.T) {
 	text := sample + "\nT"
 	d := doc(t, text)
 	items := d.Complete(protocol.Position{Line: protocol.UInteger(strings.Count(text, "\n")), Character: 1})
-	if !hasLabel(items, "Table") || !hasLabel(items, "TablePartial") {
+	if !hasLabel(items, "Table") || !hasLabel(items, "TablePartial") || !hasLabel(items, "Type") {
 		t.Fatalf("top-level completion missing element keywords: %v", labels(items))
 	}
 }
@@ -302,6 +302,41 @@ func TestCompletionTypesIncludeEnums(t *testing.T) {
 	items := d.Complete(protocol.Position{Line: line, Character: protocol.UInteger(len("  col v"))})
 	if !hasLabel(items, "string") || !hasLabel(items, "status") {
 		t.Fatalf("type completion missing: %v", labels(items))
+	}
+}
+
+func TestCompletionTypesIncludeDeclaredTypes(t *testing.T) {
+	text := "Type money.Money int from 'example.com/app/money'\nType Slug string\n\nTable products {\n  col S\n}\n"
+	d := doc(t, text)
+	items := d.Complete(protocol.Position{Line: 4, Character: protocol.UInteger(len("  col S"))})
+	for _, want := range []string{"money.Money", "Slug"} {
+		if !hasLabel(items, want) {
+			t.Errorf("type completion missing declared type %q: %v", want, labels(items))
+		}
+	}
+	for _, it := range items {
+		if (it.Label == "money.Money" || it.Label == "Slug") && (it.Detail == nil || *it.Detail != "Type") {
+			t.Errorf("declared type %q should carry the detail Type, got %v", it.Label, it.Detail)
+		}
+	}
+}
+
+func TestDocumentSymbolsTypeDecl(t *testing.T) {
+	d := doc(t, "Type money.Money int from 'example.com/app/money'\nType Slug string\n")
+	syms := d.DocumentSymbols()
+	got := map[string]protocol.DocumentSymbol{}
+	for _, s := range syms {
+		got[s.Name] = s
+	}
+	for _, want := range []string{"money.Money", "Slug"} {
+		s, ok := got[want]
+		if !ok {
+			t.Errorf("outline missing Type %q: %v", want, syms)
+			continue
+		}
+		if s.Detail == nil || *s.Detail != "Type" {
+			t.Errorf("Type %q detail = %v, want Type", want, s.Detail)
+		}
 	}
 }
 

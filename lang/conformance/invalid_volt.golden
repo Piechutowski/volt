@@ -129,6 +129,12 @@ db/i159_declared_type_list_time.volt:12:32: error: spec/selects-over-groups: col
 ## i15_keyword_param.volt
 app/i15_keyword_param.volt:5:9: error: spec/scopes-and-routes: path parameter "type" must be a valid, non-keyword Go identifier (§route-paths)
 
+## i160_query_declared_type_param
+app/routes.volt:10:18: error: spec/query-routes: parameter "price" of db.ProductCosting is money.Money, which the query string cannot carry (§query-routes)
+
+## i161_query_declared_type_list
+app/routes.volt:10:17: error: spec/query-routes: list parameter "prices" of db.ProductPriced is []money.Money, which the query string cannot carry (§query-routes)
+
 ## i16_lowercase_controller.volt
 app/i16_lowercase_controller.volt:5:9: error: spec/scopes-and-routes: handler must be Controller.Action, both exported Go identifiers (§handler-references), found "home.Index"
 

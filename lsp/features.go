@@ -64,6 +64,8 @@ func (d *Document) DocumentSymbols() []protocol.DocumentSymbol {
 				kids = append(kids, d.symbol(v.Name.Name(), "", protocol.SymbolKindEnumMember, v, v.Name, nil))
 			}
 			out = append(out, d.symbol(n.Name.String(), "Enum", protocol.SymbolKindEnum, n, n.Name, kids))
+		case *ast.TypeDecl:
+			out = append(out, d.symbol(n.Name.String(), "Type", protocol.SymbolKindClass, n, n.Name, nil))
 		case *ast.Ref:
 			name := refLabel(n)
 			var sel ast.Node = n

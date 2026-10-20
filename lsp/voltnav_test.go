@@ -108,8 +108,31 @@ func TestVoltHoverTableShowsModel(t *testing.T) {
 			t.Errorf("hover missing %q:\n%s", want, md)
 		}
 	}
-	if !strings.Contains(md, "int") {
+	if !strings.Contains(md, "route parameter type `int`") {
 		t.Errorf("hover should name the key's route parameter type:\n%s", md)
+	}
+}
+
+func TestVoltHoverTableKeyNotRoutable(t *testing.T) {
+	schema := "package db\n\nTable samples {\n\tid    float64 [pk]\n\tlabel string\n}\n"
+	routes := "package app\n\nimport (\n\tdb\n)\n\nScope / {\n\tresources db.samples\n}\n"
+	root := voltProject(t, map[string]string{
+		"go.mod":          "module nav\n",
+		"db/schema.volt":  schema,
+		"app/routes.volt": routes,
+	})
+	d := NewDocument("file://"+filepath.Join(root, "app", "routes.volt"), routes)
+
+	h := d.Hover(posOf(t, routes, "db.samples", 0))
+	if h == nil {
+		t.Fatal("no hover for db.samples")
+	}
+	md := h.Contents.(protocol.MarkupContent).Value
+	if !strings.Contains(md, "key: `id`\n") {
+		t.Errorf("hover should name the key:\n%s", md)
+	}
+	if strings.Contains(md, "route parameter type") {
+		t.Errorf("a float64 key is not a route parameter type:\n%s", md)
 	}
 }
 

@@ -568,6 +568,19 @@
           ]
         },
         {
+          "type": "FIELD",
+          "name": "name",
+          "content": {
+            "type": "SYMBOL",
+            "name": "type_name"
+          }
+        }
+      ]
+    },
+    "type_name": {
+      "type": "SEQ",
+      "members": [
+        {
           "type": "CHOICE",
           "members": [
             {
@@ -601,13 +614,8 @@
           "type": "FIELD",
           "name": "name",
           "content": {
-            "type": "ALIAS",
-            "content": {
-              "type": "SYMBOL",
-              "name": "_name"
-            },
-            "named": true,
-            "value": "type_name"
+            "type": "SYMBOL",
+            "name": "_name"
           }
         }
       ]
@@ -940,7 +948,7 @@
           "name": "name",
           "content": {
             "type": "SYMBOL",
-            "name": "column_type"
+            "name": "type_name"
           }
         },
         {

@@ -537,6 +537,10 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 				l.errorf(segAt.pos(pp.Name), "scopes-and-routes", "list parameter %q of %s cannot be a path parameter; pass it as a repeated query key (§query-routes)", sp.name, ref)
 				ok = false
 			}
+			if !queryValueTypes[strings.TrimPrefix(sp.goType, "[]")] {
+				l.errorf(pos, "query-routes", "list parameter %q of %s is %s, which the query string cannot carry (§query-routes)", sp.name, ref, sp.goType)
+				ok = false
+			}
 		default:
 			if pp, inPath := byName[sp.name]; inPath {
 				qp.Source = FromPath
@@ -555,7 +559,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 			} else {
 				qp.Source = FromQuery
 				if !queryValueTypes[sp.goType] {
-					l.errorf(pos, "scopes-and-routes", "parameter %q of %s is %s, which the query string cannot carry (§query-routes)", sp.name, ref, sp.goType)
+					l.errorf(pos, "query-routes", "parameter %q of %s is %s, which the query string cannot carry (§query-routes)", sp.name, ref, sp.goType)
 					ok = false
 				}
 			}

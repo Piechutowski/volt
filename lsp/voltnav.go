@@ -14,7 +14,6 @@ import (
 
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/ast"
-	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/token"
 	"github.com/Piechutowski/volt/nao/gen/golang"
 )
@@ -675,7 +674,7 @@ func tablePK(t *ast.Table) (name, goType string) {
 	name = names[0]
 	for _, item := range t.Body {
 		if col, ok := item.(*ast.Column); ok && col.Name.Name() == name {
-			if _, known := check.Builtin(col.Type.String()); known {
+			if lang.KnownParamType(col.Type.String()) {
 				goType = col.Type.String()
 			}
 		}

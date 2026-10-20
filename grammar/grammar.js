@@ -153,8 +153,13 @@ module.exports = grammar({
     column_type: ($) =>
       seq(
         optional(seq('[', ']')),
+        field('name', $.type_name),
+      ),
+
+    type_name: ($) =>
+      seq(
         optional(seq(field('schema', alias($._name, $.schema_name)), '.')),
-        field('name', alias($._name, $.type_name)),
+        field('name', $._name),
       ),
 
     // Bare `pk` / `unique` between type and settings (§columns, legacy).
@@ -202,7 +207,7 @@ module.exports = grammar({
     type_definition: ($) =>
       seq(
         kw('Type'),
-        field('name', $.column_type),
+        field('name', $.type_name),
         field('storage', $.column_type),
         optional(seq(kw('from'), field('path', $.string))),
       ),
@@ -712,7 +717,7 @@ module.exports = grammar({
         ')',
       ),
 
-    // /users/:id(int32)/avatar, /files/:path..., or the bare root /
+    // /users/:id(int)/avatar, /files/:path..., or the bare root /
     // (§route-paths). Segments abut: whitespace ends the path.
     route_path: ($) =>
       seq(

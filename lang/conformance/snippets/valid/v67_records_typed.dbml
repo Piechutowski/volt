@@ -9,7 +9,7 @@ Table metrics {
   label string [not null]
   live bool [not null]
   state status [not null]
-  note string
+  memo string
   seen time.Time
   blob []byte
   records {

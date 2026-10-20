@@ -87,17 +87,17 @@ Table t {
       (column_name
         (identifier))
       (column_type
-        (schema_name
-          (identifier))
         (type_name
+          (schema_name
+            (identifier))
           (identifier))))
     (column_definition
       (column_name
         (identifier))
       (column_type
-        (schema_name
-          (identifier))
         (type_name
+          (schema_name
+            (identifier))
           (identifier))))))
 
 ==================
@@ -189,9 +189,9 @@ Table t {
       (column_name
         (identifier))
       (column_type
-        (schema_name
-          (identifier))
         (type_name
+          (schema_name
+            (identifier))
           (identifier)))
       (settings_list
         (setting
@@ -398,7 +398,7 @@ two columns on one line is an error
 :error
 ==================
 
-Table t { id int name varchar }
+Table t { id int name string }
 
 ---
 

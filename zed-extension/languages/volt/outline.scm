@@ -15,6 +15,10 @@
   "Enum" @context
   name: (table_name) @name) @item
 
+(type_definition
+  "Type" @context
+  name: (type_name) @name) @item
+
 (enum_value
   name: (_) @name) @item
 

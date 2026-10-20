@@ -7,15 +7,11 @@ import (
 	"time"
 )
 
-// QueryValue is the set of Go types a query-string parameter can carry:
-// the scalar types the model generator emits for columns (§mapping-to-go),
-// which are the types a select parameter can have (§predicates).
+// QueryValue is the set of Go types a query-string parameter can carry: the
+// scalar column types bool, int, float64, string and time.Time (§columns),
+// the only types a query route binds from the query string (§query-routes).
 type QueryValue interface {
-	string | bool |
-		int | int8 | int16 | int32 | int64 |
-		uint | uint8 | uint16 | uint32 | uint64 |
-		float32 | float64 |
-		time.Time
+	string | bool | int | float64 | time.Time
 }
 
 // QueryParam binds one scalar parameter from the query string by name, as a
@@ -60,42 +56,6 @@ func parseQuery(s string, dst any) error {
 		var v int64
 		v, err = strconv.ParseInt(s, 10, 0)
 		*d = int(v)
-	case *int8:
-		var v int64
-		v, err = strconv.ParseInt(s, 10, 8)
-		*d = int8(v)
-	case *int16:
-		var v int64
-		v, err = strconv.ParseInt(s, 10, 16)
-		*d = int16(v)
-	case *int32:
-		var v int64
-		v, err = strconv.ParseInt(s, 10, 32)
-		*d = int32(v)
-	case *int64:
-		*d, err = strconv.ParseInt(s, 10, 64)
-	case *uint:
-		var v uint64
-		v, err = strconv.ParseUint(s, 10, 0)
-		*d = uint(v)
-	case *uint8:
-		var v uint64
-		v, err = strconv.ParseUint(s, 10, 8)
-		*d = uint8(v)
-	case *uint16:
-		var v uint64
-		v, err = strconv.ParseUint(s, 10, 16)
-		*d = uint16(v)
-	case *uint32:
-		var v uint64
-		v, err = strconv.ParseUint(s, 10, 32)
-		*d = uint32(v)
-	case *uint64:
-		*d, err = strconv.ParseUint(s, 10, 64)
-	case *float32:
-		var v float64
-		v, err = strconv.ParseFloat(s, 32)
-		*d = float32(v)
 	case *float64:
 		*d, err = strconv.ParseFloat(s, 64)
 	case *time.Time:
@@ -123,8 +83,6 @@ func FormatQuery[T QueryValue](v T) string {
 		return strconv.FormatBool(v)
 	case time.Time:
 		return v.Format(time.RFC3339)
-	case float32:
-		return strconv.FormatFloat(float64(v), 'g', -1, 32)
 	case float64:
 		return strconv.FormatFloat(v, 'g', -1, 64)
 	default:

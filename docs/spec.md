@@ -1849,8 +1849,12 @@ Scope /api [pipe: api] {
    - every other parameter binds from the **query string** by name,
      parsed to its type; a missing or unparseable value is a 400 that
      names the parameter.
-   A path parameter the method does not take is an error: the route
-   would capture a value nothing consumes.
+   A parameter binds from the query string only when its type is
+   `string`, `bool`, `int`, `float64` or `time.Time`, or a slice of one
+   of those (a list parameter); a select with a parameter of any other
+   type, a declared type (§types) included, is not a query route, and
+   the route is an error. A path parameter the method does not take is
+   an error: the route would capture a value nothing consumes.
 3. **Response.** The result renders in the negotiated format
    (Formats): rows or a row with status 200, a created row with 201,
    a delete with 204 and no body. A query's row miss (`rt.ErrNotFound`,
@@ -2916,6 +2920,10 @@ the set.
 | `[]byte` | `[]byte`; nil is NULL, never wrapped |
 | enum type (optionally schema-qualified) | generated `type X string` + constants |
 | declared `Type pkg.Name` (§types) | `pkg.Name`, imported as `import pkg "path"` |
+
+`int` is Go's `int`: Volt targets 64-bit platforms (amd64 and arm64),
+so a route parameter or primary key of type `int` carries the full
+SQLite INTEGER range there, and only there.
 
 ### Nullability
 
