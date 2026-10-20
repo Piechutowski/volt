@@ -201,6 +201,18 @@ db/i181_migration_no_tables.volt:5:1: error: spec/migrations: migration "0001__i
 ## i182_query_update_key
 app/routes.volt:10:18: error: spec/query-routes: db.UserUpdate loads the row to update by "id", which must be a path parameter of the route; spell it :id(int) (§query-routes)
 
+## i185_select_name_changeset.volt
+db/i185_select_name_changeset.volt:10:8: error: spec/selects-over-groups: select name "Changeset" collides with the generated CRUD surface (§selects-over-groups)
+
+## i186_select_name_column.volt
+db/i186_select_name_column.volt:10:8: error: spec/selects-over-groups: select name "Column" collides with the generated CRUD surface (§selects-over-groups)
+
+## i187_select_name_params.volt
+db/i187_select_name_params.volt:10:8: error: spec/selects-over-groups: select name "Params" collides with the generated CRUD surface (§selects-over-groups)
+
+## i188_select_name_new.volt
+db/i188_select_name_new.volt:10:8: error: spec/selects-over-groups: select name "New" collides with the generated CRUD surface (§selects-over-groups)
+
 ## i18_dataset_reserved.volt
 app/i18_dataset_reserved.volt:4:1: error: syntax: routes, resources and datasets must appear inside a Scope (§scopes-and-routes)
 

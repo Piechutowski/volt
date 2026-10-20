@@ -769,11 +769,12 @@ column setting  = "primary key" | "pk"
 > declares that a value must be present
 > in the zero-value sense: under ZII a missing input decodes to the
 > type's zero value and `not null` is satisfied, so `required` is the
-> word for "and not that either". It is the one built-in rule of
-> `Validate` (§changesets), the field error with check `required`: it
-> refuses `""` for `string` and enum columns, `0` for `int` and
-> `float64`, a zero length for `[]byte`, and for a declared type the
-> empty value of its storage type. It MUST accompany `not null` (or a key), and is an
+> word for "and not that either". It is one of the two built-in rules
+> of `Validate` (§changesets), beside enum membership, and the one the
+> schema switches on per column, the field error with check
+> `required`: it refuses `""` for `string` and enum columns, `0` for
+> `int` and `float64`, a zero length for `[]byte`, and for a declared
+> type the empty value of its storage type. It MUST accompany `not null` (or a key), and is an
 > error on a `null`, `default:` or `increment` column and on `bool`
 > and `time.Time`, where every value is a value.
 >
@@ -1865,7 +1866,7 @@ Scope /api [pipe: api] {
      A wildcard cannot bind a query parameter;
    - a **changeset** parameter (`<Model>Create`, `<Model>Update`)
      binds from the **request body**: the body decodes as
-     `<Model>Params` by `Content-Type` (Formats; §changesets rule 5)
+     `<Model>Params` by `Content-Type` (Formats; §changesets, `Params`)
      and is cast into a changeset. `Create` casts into `<Model>New()`
      allowing every column but the auto-increment key; `Update` loads
      the row by the key path parameters with `<Model>Get` (a miss is a
@@ -1895,8 +1896,8 @@ Scope /api [pipe: api] {
    a delete with 204 and no body. A query's row miss (`rt.ErrNotFound`,
    which is `sql.ErrNoRows`) is a 404 through the error spine. A
    refused write is a `*rt.Invalid` through the error spine: 409 for
-   a unique violation, 422 otherwise, itemized per field (§changesets
-   rule 10), an unknown key of the body among the fields. Any other
+   a unique violation, 422 otherwise, itemized per field (§changesets,
+   `rt.Invalid`), an unknown key of the body among the fields. Any other
    error is the spine's 500.
 4. **Names.** The helper name (§route-names-and-reverse-urls) defaults to the scope name
    prefixes followed by the method name, and only `get`/`head` query
@@ -2601,8 +2602,8 @@ the optional projection narrows the emitted columns.
    — parameters in first-appearance order over the expanded
    expression, each typed by §predicates; `<Row>` is the member's row
    type (the model itself when there is no projection); the
-   emitted SQL is the runtime renderer's output (§predicates rule
-   6), `SELECT <projected columns> FROM <table> [WHERE …] [ORDER BY
+   emitted SQL is the runtime renderer's output (§predicates,
+   rendering), `SELECT <projected columns> FROM <table> [WHERE …] [ORDER BY
    …]` with positional `?` placeholders, the method binding its
    parameters and the expression's literals in the order the text
    names them. A list parameter renders as `<column> IN (SELECT value
@@ -2743,9 +2744,10 @@ func EmailShape(email string) error {
    422 for failed validators and 409 for a unique violation, itemizing
    every field error (§changesets), which the error spine renders into
    the error body (§formats) so a form can mark the fields.
-8. **`required` columns** (Part I §columns extension) are the one
-   built-in rule of `Validate` (§changesets): the type's empty value is
-   refused, Go only, like every validator.
+8. **`required` columns** (Part I §columns extension) carry the one
+   built-in rule of `Validate` the schema switches on per column; the
+   other, enum membership, every enum column gets (§changesets). The
+   type's empty value is refused, Go only, like every validator.
 9. **No database twin.** A validator produces no DDL. The database
    never carries a `CHECK`: an enum column is plain `TEXT`, a
    `required` column is `NOT NULL` and nothing more
@@ -2856,7 +2858,8 @@ user, err := q.UserUpdate(ctx, cs)
    earlier error message.
 7. **Errors.** `ErrorAdd` records a field error with check `custom`
    on a column, for a rule the controller alone can judge. `Errors`
-   lists every field error in the order recorded; `Valid` is "no
+   lists the `cast`, `unknown_field` and `custom` errors in the order
+   recorded, then the findings of the last `Validate`; `Valid` is "no
    field errors"; `Err` is `nil` when valid and otherwise a
    `*rt.Invalid` carrying them. `rt.FieldError` is `{Check, Columns,
    Message}`: the check is `required`, `enum`, `cast`,
@@ -2866,8 +2869,9 @@ user, err := q.UserUpdate(ctx, cs)
 8. **`Create` and `Update`.** `<Model>Create(ctx, c)` validates and,
    if valid, inserts the marked columns and returns the stored row;
    a column never marked takes its database default or, lacking one,
-   SQLite's default for its declared type; nothing marked inserts
-   `DEFAULT VALUES`. `<Model>Update(ctx, c)` validates and, if valid,
+   NULL, which a `NOT NULL` column refuses as a `not_null` field error
+   (rule 10); nothing marked inserts `DEFAULT VALUES`.
+   `<Model>Update(ctx, c)` validates and, if valid,
    issues `UPDATE <table> SET <the marked columns> WHERE <the key of
    the row the changeset was made from> RETURNING` and returns the
    stored row; nothing marked touches nothing and returns `Row()`;
@@ -2877,11 +2881,12 @@ user, err := q.UserUpdate(ctx, cs)
    `rt.StmtCache` when `WithCache` was set, like the dynamic layer.
    An invalid changeset is `*rt.Invalid` from either, before any
    statement runs.
-9. **`required`** (Part I §columns extension) is the one built-in
-   rule of `Validate`: it refuses the type's empty value, `""` for
-   `string` and enum columns, `0` for `int` and `float64`, a zero
-   length for `[]byte`, NULL for a nullable column, and for a declared
-   type the empty value of its storage type, read through the type's
+9. **`required`** (Part I §columns extension) is one of the two
+   built-in rules of `Validate`, beside enum membership (rule 6), and
+   the one the schema switches on per column: it refuses the type's
+   empty value, `""` for `string` and enum columns, `0` for `int` and
+   `float64`, a zero length for `[]byte`, and for a declared type the
+   empty value of its storage type, read through the type's
    `driver.Valuer`. It is Go only, like every validator.
 10. **`rt.Invalid`.** Every refused write is one `*rt.Invalid{Model,
     Fields, Cause}`: the field errors of the changeset when validation
@@ -3106,7 +3111,8 @@ true. What is checked instead is their composition.
    column, say) is refused at check time, with SQLite's own message.
    The one run-time exception is a `not null` column added to a
    table that already has rows, which the fold's empty database
-   cannot see and rule 8 guards by requiring a default.
+   cannot see and `alter table` (§migrations) guards by requiring a
+   default.
 5. **Generation.** The drift report is the input of a migration
    generator: it writes the operations that close the drift as a new
    `Migration` for the user to edit. A rename is a drop and an add
@@ -3125,8 +3131,8 @@ true. What is checked instead is their composition.
    lists such a migration as out of order and `up` applies it anyway,
    in name order among the pending.
 3. **Down** removes the applied migration with the greatest name by
-   running its inverse (§migrations rule 12) and deleting its row; an
-   irreversible migration refuses with its name.
+   running its inverse (§migrations, reversibility) and deleting its
+   row; an irreversible migration refuses with its name.
 
 ### Migration tooling
 
@@ -3352,9 +3358,9 @@ the real Go toolchain on every `go test ./...` run.*
 
 `nao_models.go` carries every type the wire carries: the enums, the
 row structs, the changesets with their column handles and
-`<Model>Params` (§changesets rule 12), so a program that shares the
-models, a generated client (§generated-client) among them, needs
-nothing else.
+`<Model>Params` (§changesets, generation contract), so a program that
+shares the models, a generated client (§generated-client) among them,
+needs nothing else.
 `nao_queries.go` carries the `Queries` handle and its methods, and
 imports only what their signatures name.
 
@@ -3381,9 +3387,10 @@ A column is required (`T`) when it has `not null`, `pk`/`primary key`
 (setting or legacy flag), `increment`, or is covered by a `[pk]` index —
 primary keys imply NOT NULL in SQL. Everything else is nullable and
 generated as `rt.Null[T]` — a value plus a validity bit, never a pointer.
-`[]byte`, where `nil` already expresses NULL, stays bare. In the dynamic layer, nullable columns get
-`rt.NullColumn` handles: comparisons take plain `T`, NULL is explicit
-(`IsNull`, `SetNull`).
+`[]byte`, where `nil` already expresses NULL, stays bare. A nullable
+column's handle, declared in `nao_models.go` with the rest
+(§changesets, §generated-query-surface), is an `rt.NullColumn`:
+comparisons take plain `T`, NULL is explicit (`IsNull`, `SetNull`).
 
 ### Names
 
@@ -3453,7 +3460,7 @@ rt.DBTX)`, `Tx`, `WithTx`, `WithCache`):
    (`sql.ErrNoRows`) on a miss; `Delete` checks the affected count.
    Multi-row results are empty slices, never nil, GetMany on an empty
    input excepted.
-3. Every statement is rendered by the runtime (§predicates rule 6):
+3. Every statement is rendered by the runtime (§predicates, rendering):
    `Get`, `GetBy*`, `List`, `Delete` and the select methods are
    constants rendered at generation time, bound positionally in the
    order the text names their parameters; `GetMany` renders at run
@@ -3468,7 +3475,7 @@ rt.DBTX)`, `Tx`, `WithTx`, `WithCache`):
    wrappers `Limit`, `Offset`, `Distinct`, `OrderBy`,
    `After`, `Set`, and the verbs `Query`, `Count`, `Exists`,
    `DeleteWhere`, `UpdateWhere`. Predicates are values rendered by the
-   one renderer (§predicates rule 6): an empty `In` is constant false,
+   one renderer (§predicates, rendering): an empty `In` is constant false,
    a zero predicate vanishes, a `DeleteWhere` or `UpdateWhere` with no
    predicate is an error, `After` is keyset pagination over the
    `OrderBy` terms. Dynamic statements run through `rt.StmtCache` when

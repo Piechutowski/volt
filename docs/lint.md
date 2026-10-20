@@ -349,7 +349,10 @@ order_status }` mints the handle `OrderStatus` and the enum type
 **Examples.** [testdata/dynname.dbml](../lang/vet/testdata/dynname.dbml) — `users`,
 `orders` and the `order_status` enum coexist fine (the `E` prefix at
 work); `user_limits` (model = users' `UserLimit` wrapper), `user_foos.bar`
-and `user_foo_bars` (handle/model = users' `UserFooBar` handle) all warn.
+and `user_foo_bars` (handle/model = users' `UserFooBar` handle),
+`users.new` (handle = users' own `UserNew` constructor), `user_columns`
+(model = users' `UserColumn` alias) and the pinned models `UserParams`
+and `UserChangeset` (users' write body and changeset) all warn.
 
 **Limitations.** Per-file, like every rule here. A schema that fails
 generation planning altogether (unusable names, field collisions) reports

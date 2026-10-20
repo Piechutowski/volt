@@ -315,3 +315,25 @@ func TestDynInTx(t *testing.T) {
 		t.Errorf("after commit count = %d, %v; want 1", n, err)
 	}
 }
+
+// TestUserUpdateWhereRunsNoValidator pins the bulk-path bypass of
+// §changesets: UpdateWhere takes assignments, never a row, so a value
+// EmailValid refuses in Validate is written and read back unchanged.
+func TestUserUpdateWhereRunsNoValidator(t *testing.T) {
+	ctx := context.Background()
+	_, q := newDB(t)
+	ann, _, _ := dynSeed(t, q)
+
+	const bad = "not-an-address"
+	if UserNew().EmailSet(bad).Validate().Valid() {
+		t.Fatalf("EmailValid accepted %q; the test needs a value Validate refuses", bad)
+	}
+	n, err := q.UserUpdateWhere(ctx, UserSet(UserEmail.Set(bad)), UserID.Eq(ann.ID))
+	if err != nil || n != 1 {
+		t.Fatalf("UserUpdateWhere = %d, %v; want 1 row and no validator", n, err)
+	}
+	got, err := q.UserGet(ctx, ann.ID)
+	if err != nil || got.Email != bad {
+		t.Errorf("after the bulk write: %+v, %v; want email %q", got, err, bad)
+	}
+}

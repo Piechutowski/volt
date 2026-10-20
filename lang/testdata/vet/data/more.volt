@@ -51,3 +51,13 @@ Table bonus {
 Table axis {
   id int [pk]
 }
+
+Table user_columns {
+  id int [pk]
+}
+Table user_params [model: 'UserParams'] {
+  id int [pk]
+}
+Table drafts [model: 'UserChangeset'] {
+  id int [pk]
+}

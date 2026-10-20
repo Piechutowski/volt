@@ -6,6 +6,7 @@ Table "users" {
   foo_bar int
   total int
   status post_status [not null]
+  new int
   indexes {
     id [unique]
     email [unique]
