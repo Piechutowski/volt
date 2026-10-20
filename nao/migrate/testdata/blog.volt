@@ -19,11 +19,12 @@ Table posts {
 }
 
 Table comments {
-  id      int    [pk, increment]
-  post_id int    [not null, ref: > posts.id]
-  author  string [not null]
-  body    string [not null]
-  flagged bool   [not null, default: false]
+  id       int    [pk, increment]
+  post_id  int    [not null, ref: > posts.id]
+  author   string [not null]
+  body     string [not null]
+  flagged  bool   [not null, default: false]
+  nickname string [unique]
 
   indexes {
     (post_id, author)
@@ -37,6 +38,12 @@ Table post_tags {
   indexes {
     (post_id, tag) [pk]
   }
+}
+
+Table post_details {
+  id      int    [pk, increment]
+  post_id int    [not null, ref: - posts.id]
+  summary string
 }
 
 Migration 0001__create_posts {
@@ -124,5 +131,16 @@ Migration 0005__comments_flagged {
     alter table comments {
       drop flagged
     }
+  }
+}
+
+Migration 0006__nicknames_and_details {
+  alter table comments {
+    add nickname string [unique]
+  }
+  create table post_details {
+    id      int    [pk, increment]
+    post_id int    [not null, ref: - posts.id]
+    summary string
   }
 }

@@ -19,7 +19,11 @@ import (
 // Lower renders every migration of info in both directions, in name
 // order (spec §migrations rules 5 to 13): the up statements as written,
 // the down statements as the down block or the inverses of a flat body
-// in reverse order, nil when the migration is irreversible.
+// in reverse order, nil when the migration is irreversible. It has no
+// database: the shape of a table follows from the migrations alone, so
+// a rebuild of a table no create table of theirs made reads every
+// column of its body from the old table, and a column the table lacks
+// is SQLite's error when the fold runs (§the-fold rule 4).
 func Lower(info *check.Info) ([]rt.Migration, error) {
 	l := &lowerer{tables: map[string][]string{}}
 	out := make([]rt.Migration, 0, len(info.Migrations))
@@ -43,10 +47,10 @@ type lowerer struct {
 func (l *lowerer) migration(mi *check.MigrationInfo) (rt.Migration, error) {
 	d := mi.Decl
 	m := rt.Migration{
-		Name:           mi.Name,
-		NoTransaction:  d.Settings.Get("no transaction") != nil,
-		ForeignKeysOff: bracketNeeded(d.Up) || bracketNeeded(d.Down),
+		Name:          mi.Name,
+		NoTransaction: d.Settings.Get("no transaction") != nil,
 	}
+	m.ForeignKeysOff = !m.NoTransaction && (bracketNeeded(d.Up) || bracketNeeded(d.Down))
 	up, err := l.operations(d.Up)
 	if err != nil {
 		return m, err
@@ -76,8 +80,8 @@ func (l *lowerer) migration(mi *check.MigrationInfo) (rt.Migration, error) {
 }
 
 // bracketNeeded reports whether the operations hold a rebuild table or
-// a drop table, which the foreign-key bracket surrounds (spec
-// §migrations rule 13).
+// a drop table, which the foreign-key bracket surrounds unless no
+// transaction disables it (spec §migrations rule 13).
 func bracketNeeded(ops []ast.Operation) bool {
 	for _, op := range ops {
 		switch op.(type) {
@@ -165,6 +169,12 @@ func (l *lowerer) alter(op *ast.AlterTable) ([]string, error) {
 // rebuild lowers a rebuild table to its five steps (spec §migrations
 // rule 9): the new table, the copy, the drop, the rename and the
 // body's indexes, named for the table as it stands after the rename.
+// The source of a column of a table the migrations created is its
+// from:, else the old column of its name, else its default:, else
+// NULL, which is what a rowid alias the rebuild introduces reads. A
+// table no create table made is of unknown shape, and every column of
+// the body reads the old column of its name, since without a fold the
+// lowering cannot tell which exist.
 func (l *lowerer) rebuild(op *ast.RebuildTable) ([]string, error) {
 	table := op.Name.Name()
 	tmp := table + "__new"
@@ -187,7 +197,9 @@ func (l *lowerer) rebuild(op *ast.RebuildTable) ([]string, error) {
 			if fe, ok := col.Settings.Get("from").Value.(*ast.FuncExpr); ok {
 				src = fe.Text()
 			}
-		case !known || contains(old, name):
+		case !known:
+			src = sqlite.Ident(name)
+		case contains(old, name):
 			src = sqlite.Ident(name)
 		case col.Settings.Get("default") != nil:
 			d, err := sqlite.DefaultSQL(col.Settings.Get("default").Value)

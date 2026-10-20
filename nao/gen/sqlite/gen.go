@@ -391,6 +391,9 @@ func colHas(col *ast.Column, name string) bool {
 	return false
 }
 
+// fkSides names the foreign-key endpoint and the one it references
+// (spec §relationships-ref rule 3): the left of >, the right of <, the
+// right of - in a Ref element and the declaring column of an inline -.
 func fkSides(r *check.RefInfo) (fk, target check.EndpointInfo, ok bool) {
 	switch r.Op {
 	case token.GT:
@@ -398,6 +401,9 @@ func fkSides(r *check.RefInfo) (fk, target check.EndpointInfo, ok bool) {
 	case token.LT:
 		return r.Right, r.Left, true
 	case token.MINUS:
+		if r.Inline {
+			return r.Left, r.Right, true
+		}
 		return r.Right, r.Left, true
 	default:
 		return fk, target, false
@@ -406,10 +412,14 @@ func fkSides(r *check.RefInfo) (fk, target check.EndpointInfo, ok bool) {
 
 func refAction(r *check.RefInfo, kind string) string {
 	ref, ok := r.Node.(*ast.Ref)
-	if !ok || ref.Settings == nil {
+	if !ok {
 		return ""
 	}
-	s := ref.Settings.Get(kind)
+	return actionWord(ref.Settings, kind)
+}
+
+func actionWord(sl *ast.SettingList, kind string) string {
+	s := sl.Get(kind)
 	if s == nil {
 		return ""
 	}

@@ -47,6 +47,11 @@ func TestGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 	files = append(files, extended...)
+	own, err := filepath.Glob(filepath.Join("testdata", "*.volt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files = append(files, own...)
 	sort.Strings(files)
 	if len(files) == 0 {
 		t.Fatal("no shared corpus schemas in gen/testdata")

@@ -116,6 +116,25 @@ FROM posts`,
 			`ALTER TABLE comments DROP COLUMN flagged`,
 		},
 	},
+	{
+		Name: "0006__nicknames_and_details",
+		Up: []string{
+			`ALTER TABLE comments ADD COLUMN nickname TEXT`,
+			`CREATE UNIQUE INDEX idx_comments_nickname ON comments (nickname)`,
+			`CREATE TABLE post_details (
+  id INTEGER PRIMARY KEY,
+  post_id INTEGER NOT NULL,
+  summary TEXT,
+  FOREIGN KEY (post_id) REFERENCES posts (id),
+  UNIQUE (post_id)
+)`,
+		},
+		Down: []string{
+			`DROP TABLE post_details`,
+			`DROP INDEX idx_comments_nickname`,
+			`ALTER TABLE comments DROP COLUMN nickname`,
+		},
+	},
 }
 
 // Migrate applies every pending migration of Migrations to db (spec

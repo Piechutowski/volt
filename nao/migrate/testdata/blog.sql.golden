@@ -87,3 +87,19 @@ VACUUM;
 ALTER TABLE comments ADD COLUMN flagged INTEGER NOT NULL DEFAULT 0;
 -- down
 ALTER TABLE comments DROP COLUMN flagged;
+
+-- 0006__nicknames_and_details
+-- up
+ALTER TABLE comments ADD COLUMN nickname TEXT;
+CREATE UNIQUE INDEX idx_comments_nickname ON comments (nickname);
+CREATE TABLE post_details (
+  id INTEGER PRIMARY KEY,
+  post_id INTEGER NOT NULL,
+  summary TEXT,
+  FOREIGN KEY (post_id) REFERENCES posts (id),
+  UNIQUE (post_id)
+);
+-- down
+DROP TABLE post_details;
+DROP INDEX idx_comments_nickname;
+ALTER TABLE comments DROP COLUMN nickname;

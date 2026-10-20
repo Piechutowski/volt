@@ -45,8 +45,11 @@ func DefaultSQL(v ast.Node) (string, error) { return defaultSQL(v) }
 
 // TableDDL renders the CREATE TABLE statement of a shape body, without
 // the trailing semicolon (spec §migrations rules 5, 6 and 9): the
-// columns, a composite primary key, and a foreign key per inline ref:,
-// with the UNIQUE of a one-to-one ref.
+// columns, a composite primary key, and a foreign key per inline ref:
+// with its delete: and update: actions (§relationships-ref rule 5). A
+// one-to-one ref: adds UNIQUE unless the column is unique already, by
+// its own setting, as the single primary key or through a unique or pk
+// index of the body, as the schema's Table decides it.
 func TableDDL(table string, body []ast.TableItem) (string, error) {
 	pkCols := pkKeyColumns(body)
 	var lines, constraints []string
@@ -65,9 +68,9 @@ func TableDDL(table string, body []ast.TableItem) (string, error) {
 			return "", fmt.Errorf("table %s: %w", table, err)
 		}
 		lines = append(lines, line)
-		unique := colHas(col, "unique") || (colHas(col, "pk") && len(pkCols) == 0)
+		unique := colHas(col, "unique") || (colHas(col, "pk") && len(pkCols) == 0) || indexedUnique(body, name)
 		for _, rv := range refSettings(col) {
-			fk, err := inlineForeignKey(name, rv)
+			fk, err := inlineForeignKey(col, rv)
 			if err != nil {
 				return "", fmt.Errorf("table %s: %w", table, err)
 			}
@@ -116,8 +119,9 @@ func IndexesDDL(table string, body []ast.TableItem) ([]string, error) {
 
 // ColumnDDL renders the definition of a column added by ALTER TABLE
 // ADD COLUMN (spec §migrations rule 8): its type, NOT NULL, DEFAULT
-// and REFERENCES. The flag says the column is unique, which the caller
-// lowers to a CREATE UNIQUE INDEX, since SQLite takes no UNIQUE here.
+// and REFERENCES with its delete: and update: actions. The flag says
+// the column is unique, which the caller lowers to a CREATE UNIQUE
+// INDEX, since SQLite takes no UNIQUE here.
 func ColumnDDL(col *ast.Column) (def string, unique bool, err error) {
 	name := col.Name.Name()
 	sqlType, ok := TypeSQL(col.Type.String())
@@ -140,12 +144,32 @@ func ColumnDDL(col *ast.Column) (def string, unique bool, err error) {
 		if err := refDirectionCheck(name, rv); err != nil {
 			return "", false, err
 		}
-		parts = append(parts, "REFERENCES "+identQuote(sqlTableName(rv.Endpoint.Table))+" ("+quotedJoin(identNames(rv.Endpoint.Columns))+")")
+		parts = append(parts, "REFERENCES "+referenceSQL(col, rv))
 		if rv.OpTok.Kind == token.MINUS {
 			unique = true
 		}
 	}
 	return strings.Join(parts, " "), unique, nil
+}
+
+// indexedUnique reports whether an index of the body makes the column
+// unique on its own: a unique or pk index whose key is that column.
+func indexedUnique(body []ast.TableItem, column string) bool {
+	for _, item := range body {
+		block, ok := item.(*ast.IndexesBlock)
+		if !ok {
+			continue
+		}
+		for _, ix := range block.Indexes {
+			if (ix.Settings.Get("pk") == nil && ix.Settings.Get("unique") == nil) || len(ix.Key) != 1 {
+				continue
+			}
+			if id, ok := ix.Key[0].(*ast.Ident); ok && id.Name() == column {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func pkKeyColumns(body []ast.TableItem) []string {
@@ -190,12 +214,26 @@ func refDirectionCheck(column string, rv *ast.RefValue) error {
 	return fmt.Errorf("column %q: ref: %s puts the foreign key in the other table; a migration column's ref: is > or - (§migrations)", column, strings.Trim(rv.OpTok.Kind.String(), "'"))
 }
 
-func inlineForeignKey(column string, rv *ast.RefValue) (string, error) {
-	if err := refDirectionCheck(column, rv); err != nil {
+func inlineForeignKey(col *ast.Column, rv *ast.RefValue) (string, error) {
+	name := col.Name.Name()
+	if err := refDirectionCheck(name, rv); err != nil {
 		return "", err
 	}
-	return "  FOREIGN KEY (" + identQuote(column) + ") REFERENCES " +
-		identQuote(sqlTableName(rv.Endpoint.Table)) + " (" + quotedJoin(identNames(rv.Endpoint.Columns)) + ")", nil
+	return "  FOREIGN KEY (" + identQuote(name) + ") REFERENCES " + referenceSQL(col, rv), nil
+}
+
+// referenceSQL renders the referenced table and columns of a ref: with
+// the ON DELETE and ON UPDATE clauses of the column's delete: and
+// update: settings (spec §migrations rule 4, §relationships-ref rule 5).
+func referenceSQL(col *ast.Column, rv *ast.RefValue) string {
+	out := identQuote(sqlTableName(rv.Endpoint.Table)) + " (" + quotedJoin(identNames(rv.Endpoint.Columns)) + ")"
+	if a := actionWord(col.Settings, "delete"); a != "" {
+		out += " ON DELETE " + strings.ToUpper(a)
+	}
+	if a := actionWord(col.Settings, "update"); a != "" {
+		out += " ON UPDATE " + strings.ToUpper(a)
+	}
+	return out
 }
 
 func identNames(ids []*ast.Ident) []string {

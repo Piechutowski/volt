@@ -386,9 +386,11 @@ type Drift struct {
 // that would make the fold the target, table by table in name order
 // (spec §the-fold rule 3). A missing or extra table is a create or a
 // drop; a column only on one side is an add or a drop; a column that
-// differs, a foreign key that differs or a unique constraint the target
-// lacks is a rebuild of the whole table; an index only on one side or
-// changed is a create or a drop.
+// differs, a foreign key that differs, a unique constraint the target
+// lacks or a column add cannot make (§migrations rule 8) is a rebuild
+// of the whole table; an index only on one side or changed is a create
+// or a drop, the drops of a table before its column drops, since
+// SQLite drops no column an index uses.
 func Diff(target, fold Schema) []Drift {
 	names := map[string]bool{}
 	for _, t := range target.Tables {
@@ -407,7 +409,8 @@ func Diff(target, fold Schema) []Drift {
 		tt, ft := target.Table(name), fold.Table(name)
 		switch {
 		case ft == nil:
-			out = append(out, Drift{Table: name, Volt: "create table " + name + " {\n" + shapeVolt(tt) + "}", Reason: fmt.Sprintf("table %s is in the schema but not in the fold", name)})
+			reasons := append([]string{fmt.Sprintf("table %s is in the schema but not in the fold", name)}, compositeForeignKeyReasons(tt)...)
+			out = append(out, Drift{Table: name, Volt: "create table " + name + " {\n" + shapeVolt(tt) + "}", Reason: strings.Join(reasons, "; ")})
 		case tt == nil:
 			out = append(out, Drift{Table: name, Volt: "drop table " + name, Reason: fmt.Sprintf("table %s is in the fold but not in the schema", name)})
 		default:
@@ -433,16 +436,29 @@ func tableDiff(target, fold *Table) []Drift {
 			drops = append(drops, fc)
 		}
 	}
-	reasons = append(reasons, foreignKeysDiff(target, fold)...)
+	added := map[string]bool{}
+	var refusals []string
+	for _, c := range adds {
+		if why := addRefusal(target, c); why != "" {
+			refusals = append(refusals, fmt.Sprintf("column %s.%s is in the schema but not in the fold and %s", target.Name, c.Name, why))
+			continue
+		}
+		added[c.Name] = true
+	}
+	reasons = append(reasons, foreignKeysDiff(target, fold, added)...)
 	creates, dropsIx, constraintReasons := indexesDiff(target, fold)
 	reasons = append(reasons, constraintReasons...)
+	reasons = append(reasons, refusals...)
 	if len(reasons) > 0 {
 		for _, c := range adds {
-			reasons = append(reasons, fmt.Sprintf("column %s.%s is in the schema but not in the fold", target.Name, c.Name))
+			if added[c.Name] {
+				reasons = append(reasons, fmt.Sprintf("column %s.%s is in the schema but not in the fold", target.Name, c.Name))
+			}
 		}
 		for _, c := range drops {
 			reasons = append(reasons, fmt.Sprintf("column %s.%s is in the fold but not in the schema", target.Name, c.Name))
 		}
+		reasons = append(reasons, compositeForeignKeyReasons(target)...)
 		return []Drift{{Table: target.Name, Volt: "rebuild table " + target.Name + " {\n" + shapeVolt(target) + "}", Reason: strings.Join(reasons, "; ")}}
 	}
 	var out []Drift
@@ -453,18 +469,18 @@ func tableDiff(target, fold *Table) []Drift {
 			Reason: fmt.Sprintf("column %s.%s is in the schema but not in the fold", target.Name, c.Name),
 		})
 	}
-	for _, c := range drops {
-		out = append(out, Drift{
-			Table:  target.Name,
-			Volt:   "alter table " + target.Name + " {\n  drop " + c.Name + "\n}",
-			Reason: fmt.Sprintf("column %s.%s is in the fold but not in the schema", target.Name, c.Name),
-		})
-	}
 	for _, ix := range dropsIx {
 		out = append(out, Drift{
 			Table:  target.Name,
 			Volt:   "drop index " + target.Name + " " + indexVolt(target.Name, ix),
 			Reason: fmt.Sprintf("index %s on %s is in the fold but not in the schema", indexDescribe(ix), target.Name),
+		})
+	}
+	for _, c := range drops {
+		out = append(out, Drift{
+			Table:  target.Name,
+			Volt:   "alter table " + target.Name + " {\n  drop " + c.Name + "\n}",
+			Reason: fmt.Sprintf("column %s.%s is in the fold but not in the schema", target.Name, c.Name),
 		})
 	}
 	for _, ix := range creates {
@@ -487,6 +503,48 @@ func columnIn(name string, cols []Column) bool {
 		}
 	}
 	return false
+}
+
+// addRefusal says why alter table cannot add the column under SQLite's
+// rules (spec §migrations rule 8), or "" when add makes it: a primary
+// key column, a not null column without a default, an expression
+// default and a not null foreign key all take a rebuild.
+func addRefusal(t *Table, c Column) string {
+	switch {
+	case c.PK != 0:
+		return "is in the primary key, which add cannot make: rebuild the table"
+	case c.NotNull && c.Default == "":
+		return "is not null without a default, which add cannot fill: rebuild the table with a from: or a default: for it, or add it with a default:"
+	case c.Default != "" && strings.HasPrefix(defaultVolt(c.Default), "`"):
+		return "has an expression default, which add cannot take: rebuild the table"
+	case c.NotNull && columnReferences(t, c.Name):
+		return "is a not null foreign key, which add cannot make: rebuild the table"
+	}
+	return ""
+}
+
+func columnReferences(t *Table, column string) bool {
+	for _, fk := range t.ForeignKeys {
+		for _, from := range fk.From {
+			if from == column {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// compositeForeignKeyReasons says, for every foreign key over several
+// columns, that no shape body holds it, so the table's CREATE TABLE is
+// written with exec (spec §migrations rule 11).
+func compositeForeignKeyReasons(t *Table) []string {
+	var out []string
+	for _, fk := range t.ForeignKeys {
+		if len(fk.From) > 1 {
+			out = append(out, fmt.Sprintf("foreign key %s is over several columns, which no shape body holds: write the CREATE TABLE of %s with exec", foreignKeyDescribe(t.Name, fk), t.Name))
+		}
+	}
+	return out
 }
 
 func columnDiff(table string, target, fold Column) []string {
@@ -528,9 +586,15 @@ func defaultDescribe(d string) string {
 	return d
 }
 
-func foreignKeysDiff(target, fold *Table) []string {
+// foreignKeysDiff names the foreign keys only one side has, leaving out
+// a one-column key of the target whose column an add carries as its
+// ref: (spec §migrations rule 8).
+func foreignKeysDiff(target, fold *Table, added map[string]bool) []string {
 	var out []string
 	for _, fk := range target.ForeignKeys {
+		if len(fk.From) == 1 && added[fk.From[0]] {
+			continue
+		}
 		if !foreignKeyIn(fk, fold.ForeignKeys) {
 			out = append(out, fmt.Sprintf("foreign key %s is in the schema but not in the fold", foreignKeyDescribe(target.Name, fk)))
 		}
@@ -558,8 +622,28 @@ func foreignKeyEqual(a, b ForeignKey) bool {
 		strings.EqualFold(a.OnUpdate, b.OnUpdate) && strings.EqualFold(a.OnDelete, b.OnDelete)
 }
 
+// foreignKeyDescribe names a foreign key as the reason text does, with
+// its referential actions in the spelling of the delete: and update:
+// settings when they are not NO ACTION (spec §relationships-ref rule 5).
 func foreignKeyDescribe(table string, fk ForeignKey) string {
-	return fmt.Sprintf("%s (%s) references %s (%s)", table, strings.Join(fk.From, ", "), fk.Table, strings.Join(fk.To, ", "))
+	out := fmt.Sprintf("%s (%s) references %s (%s)", table, strings.Join(fk.From, ", "), fk.Table, strings.Join(fk.To, ", "))
+	if actions := actionsVolt(fk); len(actions) > 0 {
+		out += " [" + strings.Join(actions, ", ") + "]"
+	}
+	return out
+}
+
+// actionsVolt renders the delete: and update: settings of a foreign key
+// whose actions SQLite reports as other than NO ACTION, its default.
+func actionsVolt(fk ForeignKey) []string {
+	var out []string
+	if a := strings.ToLower(fk.OnDelete); a != "" && a != "no action" {
+		out = append(out, "delete: "+a)
+	}
+	if a := strings.ToLower(fk.OnUpdate); a != "" && a != "no action" {
+		out = append(out, "update: "+a)
+	}
+	return out
 }
 
 // indexesDiff matches the indexes of two tables, named ones by name and
@@ -661,7 +745,7 @@ func shapeVolt(t *Table) string {
 	}
 	for _, fk := range t.ForeignKeys {
 		if len(fk.From) > 1 {
-			lines = append(lines, "// foreign key ("+strings.Join(fk.From, ", ")+") references "+fk.Table+" ("+strings.Join(fk.To, ", ")+"): write it as a Ref element")
+			lines = append(lines, "// foreign key "+foreignKeyDescribe(t.Name, fk)+" has no shape item: write the table's CREATE TABLE with exec")
 		}
 	}
 	if len(lines) > 0 {
@@ -692,7 +776,8 @@ func pkColumns(t *Table) []string {
 // columnVolt renders one column as a migration writes it (spec
 // §migrations rule 3): the built-in type, pk and increment for a rowid
 // alias, not null, unique for a one-column unique constraint, default:
-// and ref: for a one-column foreign key.
+// and ref: for a one-column foreign key with its delete: and update:
+// actions.
 func columnVolt(t *Table, c Column) string {
 	typ := sqlite.TypeVolt(c.Type)
 	if typ == "" {
@@ -721,6 +806,7 @@ func columnVolt(t *Table, c Column) string {
 	for _, fk := range t.ForeignKeys {
 		if len(fk.From) == 1 && fk.From[0] == c.Name {
 			settings = append(settings, "ref: > "+fk.Table+"."+fk.To[0])
+			settings = append(settings, actionsVolt(fk)...)
 		}
 	}
 	if len(settings) == 0 {
