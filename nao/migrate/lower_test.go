@@ -1,6 +1,7 @@
 package migrate
 
 import (
+	"fmt"
 	"bytes"
 	"context"
 	"database/sql"
@@ -302,7 +303,7 @@ func TestReversibleFlatBodyRoundTrips(t *testing.T) {
 	_ = f
 }
 
-func TestLowerRefusesAForeignKeyInTheOtherTable(t *testing.T) {
+func TestRefDirectionIsRefusedByCheckAndByLower(t *testing.T) {
 	src := `package db
 
 Table users {
@@ -315,7 +316,12 @@ Migration 0001__init {
   }
 }
 `
-	_, info := parseChecked(t, "t.volt", src)
+	f, diags := parser.ParseFile("t.volt", src)
+	info, semDiags := check.File(f)
+	diags = append(diags, semDiags...)
+	if !diag.HasErrors(diags) || !strings.Contains(fmt.Sprint(diags), "ref: takes > or -") {
+		t.Fatalf("check: %v, want the §migrations refusal of ref: <", diags)
+	}
 	_, err := Lower(info)
 	if err == nil || !strings.Contains(err.Error(), "0001__init") || !strings.Contains(err.Error(), "ref: <") {
 		t.Fatalf("Lower: %v, want a refusal naming the migration and the operator", err)
