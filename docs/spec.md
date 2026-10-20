@@ -2471,6 +2471,41 @@ Pred chosen  { org in :orgs }
    `[]byte` takes no literal. A list parameter of a declared type is
    bound through the type's driver value, and a declared type stored
    as `time.Time` cannot take one, as rule 3 says of `time.Time`.
+6. **Rendering.** There is one SQL renderer, the runtime's
+   (`rt.SelectRender` and its siblings), and every statement Volt
+   emits is its output: the dynamic layer calls it at run time, the
+   generator calls it at generation time over the same tree and
+   writes the result into the statement constants, so the same
+   predicate spells the same bytes on both paths. Its spellings are
+   fixed and it produces no other:
+   - an identifier is always double-quoted (`"email"`), a `"` inside
+     it doubled;
+   - a comparison is `"col" <op> ?` or `"col" <op> "other"` with
+     `<op>` one of `=`, `!=`, `<`, `<=`, `>`, `>=`; `!=` is the one
+     spelling of inequality, `<>` is never produced and the dynamic
+     layer has no operator for it;
+   - membership in values is `"col" IN (?, ?)`, `NOT IN` likewise; an
+     empty list is the constant `1 = 0` (`1 = 1` negated); a list
+     parameter is `"col" IN (SELECT value FROM json_each(?))`, bound
+     as one JSON array (`rt.JSONList`);
+   - a pattern is `"col" LIKE ?`, `"col" NOT LIKE ?`; a null test
+     `"col" IS NULL`, `"col" IS NOT NULL`;
+   - `and` and `or` of two or more operands are parenthesized,
+     `(a AND b AND c)`; one operand is itself; `not` is `NOT (x)`;
+   - a value is always an argument behind a positional `?`, in
+     left-to-right order of the text: a literal written in a Volt
+     predicate is bound by the generated method like a parameter, the
+     statement text carries no literal (the constants `1 = 0`, `1 = 1`
+     and `-1` of `LIMIT -1 OFFSET ?` are structure, not values);
+   - an ordering is `ORDER BY "col" ASC, "other" DESC`, the direction
+     always spelled;
+   - a select is `SELECT [DISTINCT ]<columns> FROM <table>[ WHERE
+     <predicate>][ ORDER BY <terms>][ LIMIT ?[ OFFSET ?]]`, the column
+     list and the table the pre-rendered constants of the model.
+   A test renders a corpus of predicates once through the typed
+   handles and once from Volt source and compares the bytes; the
+   generator goldens and the integration tests prepare the constants
+   on a real SQLite.
 
 ## Selects over groups
 
@@ -2518,7 +2553,7 @@ the optional projection narrows the emitted columns.
 5. Settings: `order:` takes a parenthesized list of `column asc` /
    `column desc` pairs. The direction is **mandatory** — SQL's silent
    `asc` default is deliberately not inherited; explicit over implicit
-   — and the emitted SQL spells it out (`ORDER BY year DESC, id ASC`).
+   — and the emitted SQL spells it out (`ORDER BY "year" DESC, "id" ASC`).
    Order columns obey the agreement rule and MUST be orderable (§predicates) or text —
    ORDER BY text is SQL's own collation, allowed here — and MUST appear
    at most once. A column of a declared type (§types) is neither: it
@@ -2529,12 +2564,14 @@ the optional projection narrows the emitted columns.
    — parameters in first-appearance order over the expanded
    expression, each typed by §predicates; `<Row>` is the member's row
    type (the model itself when there is no projection); the
-   emitted SQL is
-   `SELECT <projected columns> FROM <table> [WHERE …] [ORDER BY …]`
-   with SQLite named parameters. A list parameter renders as
-   `<column> IN (SELECT value FROM json_each(:name))` and binds one
-   JSON array (`rt.JSONList`), so the statement is the same text for
-   every list length and an empty list matches no row. The
+   emitted SQL is the runtime renderer's output (§predicates rule
+   6), `SELECT <projected columns> FROM <table> [WHERE …] [ORDER BY
+   …]` with positional `?` placeholders, the method binding its
+   parameters and the expression's literals in the order the text
+   names them. A list parameter renders as `<column> IN (SELECT value
+   FROM json_each(?))` and binds one JSON array (`rt.JSONList`), so
+   the statement is the same text for every list length and an empty
+   list matches no row. The
    rendering is proven by
    construction (typed operators over quoted identifiers) and by the
    generator's corpus, whose select statements are prepared against
@@ -3370,19 +3407,22 @@ rt.DBTX)`, `Tx`, `WithTx`, `WithCache`):
    (`sql.ErrNoRows`) on a miss; `Delete` checks the affected count.
    Multi-row results are empty slices, never nil, GetMany on an empty
    input excepted.
-3. Static statements bind SQLite named parameters (`:column`) through
-   `sql.Named`; GetMany appends positional `?`. `Create` and `Update`
-   are rendered at run time from the changeset's marks, with positional
-   `?`, and end in `RETURNING` (§changesets). Every CRUD write's
-   database refusal becomes `*rt.Invalid`; `DeleteWhere` and
-   `UpdateWhere` return the driver's error.
+3. Every statement is rendered by the runtime (§predicates rule 6):
+   `Get`, `GetBy*`, `List`, `Delete` and the select methods are
+   constants rendered at generation time, bound positionally in the
+   order the text names their parameters; `GetMany` renders at run
+   time, its `IN` list varying with the input, and does not use the
+   statement cache. `Create` and `Update` are rendered at run time
+   from the changeset's marks and end in `RETURNING` (§changesets).
+   Every CRUD write's database refusal becomes `*rt.Invalid`;
+   `DeleteWhere` and `UpdateWhere` return the driver's error.
 4. The column handles `<Model><Field>` (`rt.Column[M, T]`,
    `rt.NullColumn` when nullable) are declared in `nao_models.go`
    (§changesets); the dynamic layer in `nao_dyn.go` mints per model the
    wrappers `Limit`, `Offset`, `Distinct`, `OrderBy`,
    `After`, `Set`, and the verbs `Query`, `Count`, `Exists`,
-   `DeleteWhere`, `UpdateWhere`. Predicates are values rendered at run
-   time with positional placeholders: an empty `In` is constant false,
+   `DeleteWhere`, `UpdateWhere`. Predicates are values rendered by the
+   one renderer (§predicates rule 6): an empty `In` is constant false,
    a zero predicate vanishes, a `DeleteWhere` or `UpdateWhere` with no
    predicate is an error, `After` is keyset pagination over the
    `OrderBy` terms. Dynamic statements run through `rt.StmtCache` when

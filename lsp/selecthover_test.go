@@ -85,7 +85,7 @@ func TestSelectHoverListParam(t *testing.T) {
 	md := h.Contents.(protocol.MarkupContent).Value
 	for _, want := range []string{
 		"PageViewChosen(ctx context.Context, sites []string, days []int) ([]PageView, error)",
-		"json_each(:sites)",
+		"json_each(?)",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover missing %q:\n%s", want, md)

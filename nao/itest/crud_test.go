@@ -288,7 +288,7 @@ func TestStmtCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	var u User
-	if err := s1.QueryRowContext(ctx, sql.Named("id", 1)).Scan(&u.ID, &u.Email, &u.Name, &u.Bio, &u.CreatedAt); err != nil {
+	if err := s1.QueryRowContext(ctx, 1).Scan(&u.ID, &u.Email, &u.Name, &u.Bio, &u.CreatedAt); err != nil {
 		t.Fatalf("cached statement: %v", err)
 	}
 	again, err := cache.Prepare(ctx, db, userGetSQL)

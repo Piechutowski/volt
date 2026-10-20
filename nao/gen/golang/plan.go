@@ -175,7 +175,7 @@ func crudMethodsBuild(t *tableModel) []CRUDMethod {
 	var methods []CRUDMethod
 	var key []SelectParam
 	for _, fp := range t.pk {
-		key = append(key, SelectParam{SQLName: fp.param, GoName: fp.arg, GoType: fp.baseType})
+		key = append(key, SelectParam{GoName: fp.arg, GoType: fp.baseType})
 	}
 	m := t.model
 	if len(t.pk) > 0 {
@@ -245,13 +245,15 @@ func (pl *Plan) SelectRowType(fn SelectFn) (string, []FieldSig, error) {
 	return row, sigs, nil
 }
 
-// SelectStatement renders the SQL one select instantiation runs.
-func (pl *Plan) SelectStatement(fn SelectFn) (string, error) {
+// SelectStatement renders the SQL one select instantiation runs through
+// the runtime (spec §predicates rule 6), with the Go expressions the
+// method binds in placeholder order.
+func (pl *Plan) SelectStatement(fn SelectFn) (string, []string, error) {
 	t, err := pl.table(fn.TableKey)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return SelectSQL(t, fn), nil
+	return SelectSQL(t, fn)
 }
 
 // DynNameCollisions reports the package-scope Go name collisions the

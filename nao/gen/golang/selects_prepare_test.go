@@ -37,28 +37,32 @@ func TestSelectsPrepare(t *testing.T) {
 	if len(fns) < 4 {
 		t.Fatalf("fixture declares too few select instantiations: %d", len(fns))
 	}
-	stmts := map[string]string{}
+	type stmtCase struct {
+		SQL string `json:"sql"`
+		N   int    `json:"n"`
+	}
+	stmts := map[string]stmtCase{}
 	for _, fn := range fns {
-		sql, err := golang.SelectSQLFor(pkg.Merged(), pkg.Schema(), fn)
+		sql, args, err := golang.SelectSQLFor(pkg.Merged(), pkg.Schema(), fn)
 		if err != nil {
 			t.Fatal(err)
 		}
-		stmts[fn.TableKey+"."+fn.MethodSuffix] = sql
+		stmts[fn.TableKey+"."+fn.MethodSuffix] = stmtCase{SQL: sql, N: len(args)}
 	}
 	input, err := json.Marshal(map[string]any{"ddl": string(ddl), "stmts": stmts})
 	if err != nil {
 		t.Fatal(err)
 	}
 	const driver = `
-import sqlite3, sys, json, collections
+import sqlite3, sys, json
 inp = json.load(sys.stdin)
 con = sqlite3.connect(":memory:")
 con.execute("PRAGMA foreign_keys = ON")
 con.executescript(inp["ddl"])
-named = collections.defaultdict(lambda: None)
-for name, stmt in sorted(inp["stmts"].items()):
+for name, case in sorted(inp["stmts"].items()):
+    stmt, n = case["sql"], case["n"]
     try:
-        con.execute("EXPLAIN " + stmt, named)
+        con.execute("EXPLAIN " + stmt, [None] * n)
     except Exception as e:
         sys.exit(f"{name}: {e}\n  {stmt}")
 `

@@ -5,6 +5,7 @@ package golang
 import (
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
 // ModelName derives the Go model type name for a table:
@@ -17,19 +18,19 @@ func GoName(dbmlName string) (string, error) { return goName(dbmlName) }
 // SelectParam is one Go parameter of a generated select method
 // (spec §selects-over-groups), in declaration order.
 type SelectParam struct {
-	SQLName string // name bound as :name in the statement
-	GoName  string
-	GoType  string // e.g. "string", "int64", "time.Time"
+	GoName string
+	GoType string // e.g. "string", "int64", "time.Time"
 }
 
 // SelectFn is one select instantiation: a method on Queries for one
-// member table, with WHERE/ORDER fragments rendered by the checker and
-// the §selects-over-groups projection already validated.
+// member table, over the predicate tree and order terms the checker
+// lowered (spec §predicates rule 6) and the §selects-over-groups
+// projection already validated.
 type SelectFn struct {
 	TableKey     string // canonical schema.name key into check.Info
 	MethodSuffix string
-	WhereSQL     string
-	OrderSQL     string
+	Where        rt.GenPred    // the zero value when the select has no where clause
+	Order        []rt.GenOrder // nil when it has no order: setting
 	Params       []SelectParam
 	Cols         []string // explicit projection, declared order; nil = all
 	Excluded     []string // star-form exclusions; nil = none

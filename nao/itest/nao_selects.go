@@ -4,16 +4,15 @@ package itest
 
 import (
 	"context"
-	"database/sql"
 	"github.com/Piechutowski/volt/nao/itest/pay"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-const orderByFeeSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE fee = :fee`
+const orderByFeeSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "fee" = ?`
 
 // OrderByFee runs the "byFee" select over orders (spec §selects-over-groups).
 func (q *Queries) OrderByFee(ctx context.Context, fee pay.Cents) ([]Order, error) {
-	rows, err := q.db.QueryContext(ctx, orderByFeeSQL, sql.Named("fee", fee))
+	rows, err := q.db.QueryContext(ctx, orderByFeeSQL, fee)
 	if err != nil {
 		return nil, err
 	}
@@ -29,11 +28,11 @@ func (q *Queries) OrderByFee(ctx context.Context, fee pay.Cents) ([]Order, error
 	return out, rows.Err()
 }
 
-const orderFeesSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE fee IN (SELECT value FROM json_each(:fees)) ORDER BY id ASC`
+const orderFeesSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "fee" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
 
 // OrderFees runs the "fees" select over orders (spec §selects-over-groups).
 func (q *Queries) OrderFees(ctx context.Context, fees []pay.Cents) ([]Order, error) {
-	rows, err := q.db.QueryContext(ctx, orderFeesSQL, sql.Named("fees", rt.JSONList(fees)))
+	rows, err := q.db.QueryContext(ctx, orderFeesSQL, rt.JSONList(fees))
 	if err != nil {
 		return nil, err
 	}
@@ -49,11 +48,11 @@ func (q *Queries) OrderFees(ctx context.Context, fees []pay.Cents) ([]Order, err
 	return out, rows.Err()
 }
 
-const orderFreeSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE fee = 0`
+const orderFreeSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "fee" = ?`
 
 // OrderFree runs the "free" select over orders (spec §selects-over-groups).
 func (q *Queries) OrderFree(ctx context.Context) ([]Order, error) {
-	rows, err := q.db.QueryContext(ctx, orderFreeSQL)
+	rows, err := q.db.QueryContext(ctx, orderFreeSQL, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -69,11 +68,11 @@ func (q *Queries) OrderFree(ctx context.Context) ([]Order, error) {
 	return out, rows.Err()
 }
 
-const pageViewRowsSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE (site = :site AND day = :day) ORDER BY day DESC, id ASC`
+const pageViewRowsSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE ("site" = ? AND "day" = ?) ORDER BY "day" DESC, "id" ASC`
 
 // PageViewRows runs the "rows" select over page_views (spec §selects-over-groups).
 func (q *Queries) PageViewRows(ctx context.Context, site string, day int) ([]PageView, error) {
-	rows, err := q.db.QueryContext(ctx, pageViewRowsSQL, sql.Named("site", site), sql.Named("day", day))
+	rows, err := q.db.QueryContext(ctx, pageViewRowsSQL, site, day)
 	if err != nil {
 		return nil, err
 	}
@@ -89,11 +88,11 @@ func (q *Queries) PageViewRows(ctx context.Context, site string, day int) ([]Pag
 	return out, rows.Err()
 }
 
-const linkClickRowsSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE (site = :site AND day = :day) ORDER BY day DESC, id ASC`
+const linkClickRowsSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE ("site" = ? AND "day" = ?) ORDER BY "day" DESC, "id" ASC`
 
 // LinkClickRows runs the "rows" select over link_clicks (spec §selects-over-groups).
 func (q *Queries) LinkClickRows(ctx context.Context, site string, day int) ([]LinkClick, error) {
-	rows, err := q.db.QueryContext(ctx, linkClickRowsSQL, sql.Named("site", site), sql.Named("day", day))
+	rows, err := q.db.QueryContext(ctx, linkClickRowsSQL, site, day)
 	if err != nil {
 		return nil, err
 	}
@@ -109,11 +108,11 @@ func (q *Queries) LinkClickRows(ctx context.Context, site string, day int) ([]Li
 	return out, rows.Err()
 }
 
-const pageViewRecentSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE (site = :site AND day = :day) OR (day >= :from)`
+const pageViewRecentSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE (("site" = ? AND "day" = ?) OR "day" >= ?)`
 
 // PageViewRecent runs the "recent" select over page_views (spec §selects-over-groups).
 func (q *Queries) PageViewRecent(ctx context.Context, site string, day int, from int) ([]PageView, error) {
-	rows, err := q.db.QueryContext(ctx, pageViewRecentSQL, sql.Named("site", site), sql.Named("day", day), sql.Named("from", from))
+	rows, err := q.db.QueryContext(ctx, pageViewRecentSQL, site, day, from)
 	if err != nil {
 		return nil, err
 	}
@@ -129,11 +128,11 @@ func (q *Queries) PageViewRecent(ctx context.Context, site string, day int, from
 	return out, rows.Err()
 }
 
-const linkClickRecentSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE (site = :site AND day = :day) OR (day >= :from)`
+const linkClickRecentSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE (("site" = ? AND "day" = ?) OR "day" >= ?)`
 
 // LinkClickRecent runs the "recent" select over link_clicks (spec §selects-over-groups).
 func (q *Queries) LinkClickRecent(ctx context.Context, site string, day int, from int) ([]LinkClick, error) {
-	rows, err := q.db.QueryContext(ctx, linkClickRecentSQL, sql.Named("site", site), sql.Named("day", day), sql.Named("from", from))
+	rows, err := q.db.QueryContext(ctx, linkClickRecentSQL, site, day, from)
 	if err != nil {
 		return nil, err
 	}
@@ -149,11 +148,11 @@ func (q *Queries) LinkClickRecent(ctx context.Context, site string, day int, fro
 	return out, rows.Err()
 }
 
-const pageViewOnSitesSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE site IN (SELECT value FROM json_each(:sites)) ORDER BY id ASC`
+const pageViewOnSitesSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE "site" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
 
 // PageViewOnSites runs the "onSites" select over page_views (spec §selects-over-groups).
 func (q *Queries) PageViewOnSites(ctx context.Context, sites []string) ([]PageView, error) {
-	rows, err := q.db.QueryContext(ctx, pageViewOnSitesSQL, sql.Named("sites", rt.JSONList(sites)))
+	rows, err := q.db.QueryContext(ctx, pageViewOnSitesSQL, rt.JSONList(sites))
 	if err != nil {
 		return nil, err
 	}
@@ -169,11 +168,11 @@ func (q *Queries) PageViewOnSites(ctx context.Context, sites []string) ([]PageVi
 	return out, rows.Err()
 }
 
-const linkClickOnSitesSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE site IN (SELECT value FROM json_each(:sites)) ORDER BY id ASC`
+const linkClickOnSitesSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE "site" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
 
 // LinkClickOnSites runs the "onSites" select over link_clicks (spec §selects-over-groups).
 func (q *Queries) LinkClickOnSites(ctx context.Context, sites []string) ([]LinkClick, error) {
-	rows, err := q.db.QueryContext(ctx, linkClickOnSitesSQL, sql.Named("sites", rt.JSONList(sites)))
+	rows, err := q.db.QueryContext(ctx, linkClickOnSitesSQL, rt.JSONList(sites))
 	if err != nil {
 		return nil, err
 	}
@@ -202,11 +201,11 @@ func summaryScan(r rt.Row) (Summary, error) {
 	return v, err
 }
 
-const pageViewSummarySQL = `SELECT "site", "day" FROM "page_views" WHERE (site = :site AND day = :day)`
+const pageViewSummarySQL = `SELECT "site", "day" FROM "page_views" WHERE ("site" = ? AND "day" = ?)`
 
 // PageViewSummary runs the "summary" select over page_views (spec §selects-over-groups).
 func (q *Queries) PageViewSummary(ctx context.Context, site string, day int) ([]Summary, error) {
-	rows, err := q.db.QueryContext(ctx, pageViewSummarySQL, sql.Named("site", site), sql.Named("day", day))
+	rows, err := q.db.QueryContext(ctx, pageViewSummarySQL, site, day)
 	if err != nil {
 		return nil, err
 	}
@@ -222,11 +221,11 @@ func (q *Queries) PageViewSummary(ctx context.Context, site string, day int) ([]
 	return out, rows.Err()
 }
 
-const linkClickSummarySQL = `SELECT "site", "day" FROM "link_clicks" WHERE (site = :site AND day = :day)`
+const linkClickSummarySQL = `SELECT "site", "day" FROM "link_clicks" WHERE ("site" = ? AND "day" = ?)`
 
 // LinkClickSummary runs the "summary" select over link_clicks (spec §selects-over-groups).
 func (q *Queries) LinkClickSummary(ctx context.Context, site string, day int) ([]Summary, error) {
-	rows, err := q.db.QueryContext(ctx, linkClickSummarySQL, sql.Named("site", site), sql.Named("day", day))
+	rows, err := q.db.QueryContext(ctx, linkClickSummarySQL, site, day)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +255,7 @@ func linkClickPublicScan(r rt.Row) (LinkClickPublic, error) {
 	return v, err
 }
 
-const linkClickPublicSQL = `SELECT "id", "site", "day" FROM "link_clicks" ORDER BY id ASC`
+const linkClickPublicSQL = `SELECT "id", "site", "day" FROM "link_clicks" ORDER BY "id" ASC`
 
 // LinkClickPublic runs the "public" select over link_clicks (spec §selects-over-groups).
 func (q *Queries) LinkClickPublic(ctx context.Context) ([]LinkClickPublic, error) {

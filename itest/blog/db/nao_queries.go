@@ -6,7 +6,6 @@ import (
 	"context"
 	"database/sql"
 	"github.com/Piechutowski/volt/nao/rt"
-	"strings"
 )
 
 // Queries bundles the generated CRUD over one database handle: a
@@ -45,14 +44,12 @@ func userScan(r rt.Row) (User, error) {
 	return v, rt.Refused("User", err)
 }
 
-const userGetSQL = `SELECT "id", "email" FROM "users" WHERE "id" = :id`
+const userGetSQL = `SELECT "id", "email" FROM "users" WHERE "id" = ?`
 
 // UserGet fetches the users row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) UserGet(ctx context.Context, id int) (User, error) {
-	return userScan(q.db.QueryRowContext(ctx, userGetSQL, sql.Named("id", id)))
+	return userScan(q.db.QueryRowContext(ctx, userGetSQL, id))
 }
-
-const userGetManySQL = `SELECT "id", "email" FROM "users" WHERE "id" IN`
 
 // UserGetMany fetches the users rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
@@ -60,11 +57,10 @@ func (q *Queries) UserGetMany(ctx context.Context, ids []int) ([]User, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	args := make([]any, len(ids))
-	for i, k := range ids {
-		args[i] = k
+	query, args, err := rt.SelectRender(userTableSQL, userColumnsSQL, []rt.Opt[User]{UserID.In(ids...)})
+	if err != nil {
+		return nil, err
 	}
-	query := userGetManySQL + " (?" + strings.Repeat(", ?", len(ids)-1) + ")"
 	rows, err := q.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -81,12 +77,12 @@ func (q *Queries) UserGetMany(ctx context.Context, ids []int) ([]User, error) {
 	return out, rows.Err()
 }
 
-const userGetByEmailSQL = `SELECT "id", "email" FROM "users" WHERE "email" = :email`
+const userGetByEmailSQL = `SELECT "id", "email" FROM "users" WHERE "email" = ?`
 
 // UserGetByEmail fetches the users row with the given email (a unique column),
 // or rt.ErrNotFound.
 func (q *Queries) UserGetByEmail(ctx context.Context, email string) (User, error) {
-	return userScan(q.db.QueryRowContext(ctx, userGetByEmailSQL, sql.Named("email", email)))
+	return userScan(q.db.QueryRowContext(ctx, userGetByEmailSQL, email))
 }
 
 const userListSQL = `SELECT "id", "email" FROM "users"`
@@ -157,12 +153,12 @@ func (q *Queries) UserUpdate(ctx context.Context, c UserChangeset) (User, error)
 	return userScan(row)
 }
 
-const userDeleteSQL = `DELETE FROM "users" WHERE "id" = :id`
+const userDeleteSQL = `DELETE FROM "users" WHERE "id" = ?`
 
 // UserDelete removes the identified users row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) UserDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, userDeleteSQL, sql.Named("id", id))
+	res, err := q.db.ExecContext(ctx, userDeleteSQL, id)
 	if err != nil {
 		return rt.Refused("User", err)
 	}
@@ -182,14 +178,12 @@ func msRevenueScan(r rt.Row) (MsRevenue, error) {
 	return v, rt.Refused("MsRevenue", err)
 }
 
-const msRevenueGetSQL = `SELECT "id", "org", "year" FROM "ms_revenue" WHERE "id" = :id`
+const msRevenueGetSQL = `SELECT "id", "org", "year" FROM "ms_revenue" WHERE "id" = ?`
 
 // MsRevenueGet fetches the ms_revenue row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) MsRevenueGet(ctx context.Context, id int) (MsRevenue, error) {
-	return msRevenueScan(q.db.QueryRowContext(ctx, msRevenueGetSQL, sql.Named("id", id)))
+	return msRevenueScan(q.db.QueryRowContext(ctx, msRevenueGetSQL, id))
 }
-
-const msRevenueGetManySQL = `SELECT "id", "org", "year" FROM "ms_revenue" WHERE "id" IN`
 
 // MsRevenueGetMany fetches the ms_revenue rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
@@ -197,11 +191,10 @@ func (q *Queries) MsRevenueGetMany(ctx context.Context, ids []int) ([]MsRevenue,
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	args := make([]any, len(ids))
-	for i, k := range ids {
-		args[i] = k
+	query, args, err := rt.SelectRender(msRevenueTableSQL, msRevenueColumnsSQL, []rt.Opt[MsRevenue]{MsRevenueID.In(ids...)})
+	if err != nil {
+		return nil, err
 	}
-	query := msRevenueGetManySQL + " (?" + strings.Repeat(", ?", len(ids)-1) + ")"
 	rows, err := q.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -292,12 +285,12 @@ func (q *Queries) MsRevenueUpdate(ctx context.Context, c MsRevenueChangeset) (Ms
 	return msRevenueScan(row)
 }
 
-const msRevenueDeleteSQL = `DELETE FROM "ms_revenue" WHERE "id" = :id`
+const msRevenueDeleteSQL = `DELETE FROM "ms_revenue" WHERE "id" = ?`
 
 // MsRevenueDelete removes the identified ms_revenue row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) MsRevenueDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, msRevenueDeleteSQL, sql.Named("id", id))
+	res, err := q.db.ExecContext(ctx, msRevenueDeleteSQL, id)
 	if err != nil {
 		return rt.Refused("MsRevenue", err)
 	}
@@ -317,14 +310,12 @@ func msUsageScan(r rt.Row) (MsUsage, error) {
 	return v, rt.Refused("MsUsage", err)
 }
 
-const msUsageGetSQL = `SELECT "id", "org", "year" FROM "ms_usage" WHERE "id" = :id`
+const msUsageGetSQL = `SELECT "id", "org", "year" FROM "ms_usage" WHERE "id" = ?`
 
 // MsUsageGet fetches the ms_usage row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) MsUsageGet(ctx context.Context, id int) (MsUsage, error) {
-	return msUsageScan(q.db.QueryRowContext(ctx, msUsageGetSQL, sql.Named("id", id)))
+	return msUsageScan(q.db.QueryRowContext(ctx, msUsageGetSQL, id))
 }
-
-const msUsageGetManySQL = `SELECT "id", "org", "year" FROM "ms_usage" WHERE "id" IN`
 
 // MsUsageGetMany fetches the ms_usage rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
@@ -332,11 +323,10 @@ func (q *Queries) MsUsageGetMany(ctx context.Context, ids []int) ([]MsUsage, err
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	args := make([]any, len(ids))
-	for i, k := range ids {
-		args[i] = k
+	query, args, err := rt.SelectRender(msUsageTableSQL, msUsageColumnsSQL, []rt.Opt[MsUsage]{MsUsageID.In(ids...)})
+	if err != nil {
+		return nil, err
 	}
-	query := msUsageGetManySQL + " (?" + strings.Repeat(", ?", len(ids)-1) + ")"
 	rows, err := q.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -427,12 +417,12 @@ func (q *Queries) MsUsageUpdate(ctx context.Context, c MsUsageChangeset) (MsUsag
 	return msUsageScan(row)
 }
 
-const msUsageDeleteSQL = `DELETE FROM "ms_usage" WHERE "id" = :id`
+const msUsageDeleteSQL = `DELETE FROM "ms_usage" WHERE "id" = ?`
 
 // MsUsageDelete removes the identified ms_usage row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) MsUsageDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, msUsageDeleteSQL, sql.Named("id", id))
+	res, err := q.db.ExecContext(ctx, msUsageDeleteSQL, id)
 	if err != nil {
 		return rt.Refused("MsUsage", err)
 	}

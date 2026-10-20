@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 )
 
-// JSONList encodes a list parameter (spec §predicates) as the JSON array a
-// generated select binds to `json_each(:name)`: one static statement
+// JSONList encodes a list parameter (spec §predicates rule 6) as the JSON
+// array a generated select binds to `json_each(?)`: one static statement
 // whatever the list length, prepared once. An element that implements
 // driver.Valuer is encoded as its driver value, the form the column
 // holds. A nil or empty slice is "[]", which matches no row.

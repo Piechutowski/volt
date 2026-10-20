@@ -49,7 +49,7 @@ func TestSelectRenderOperators(t *testing.T) {
 		args []any
 	}{
 		{"eq", email.Eq("a"), `"email" = ?`, []any{"a"}},
-		{"ne", email.Ne("a"), `"email" <> ?`, []any{"a"}},
+		{"ne", email.Ne("a"), `"email" != ?`, []any{"a"}},
 		{"gt", id.Gt(4), `"id" > ?`, []any{int64(4)}},
 		{"ge", id.Ge(4), `"id" >= ?`, []any{int64(4)}},
 		{"lt", id.Lt(4), `"id" < ?`, []any{int64(4)}},
@@ -60,9 +60,12 @@ func TestSelectRenderOperators(t *testing.T) {
 		{"in empty", id.In(), `1 = 0`, nil},
 		{"notin", id.NotIn(1), `"id" NOT IN (?)`, []any{int64(1)}},
 		{"notin empty", id.NotIn(), `1 = 1`, nil},
+		{"inlist", id.InList([]int64{1, 2}), `"id" IN (SELECT value FROM json_each(?))`, []any{"[1,2]"}},
+		{"inlist empty", id.InList(nil), `"id" IN (SELECT value FROM json_each(?))`, []any{"[]"}},
 		{"isnull", bio.IsNull(), `"bio" IS NULL`, nil},
 		{"isnotnull", bio.IsNotNull(), `"bio" IS NOT NULL`, nil},
 		{"eqcol", email.EqCol(Column[m, string]{Name: "name"}), `"email" = "name"`, nil},
+		{"necol", email.NeCol(Column[m, string]{Name: "name"}), `"email" != "name"`, nil},
 		{"ltcol", id.LtCol(Column[m, int64]{Name: "parent_id"}), `"id" < "parent_id"`, nil},
 		{"raw", Raw[m]("length(email) > ?", 3), `(length(email) > ?)`, []any{3}},
 		{"and", And(email.Eq("a"), id.Gt(1)), `("email" = ? AND "id" > ?)`, []any{"a", int64(1)}},
@@ -132,7 +135,7 @@ func TestSelectRenderShaping(t *testing.T) {
 		Limit[m](10),
 		Offset[m](20),
 	)
-	want := `SELECT DISTINCT "id", "email", "bio" FROM "users" WHERE "email" LIKE ? ORDER BY "email", "id" DESC LIMIT ? OFFSET ?`
+	want := `SELECT DISTINCT "id", "email", "bio" FROM "users" WHERE "email" LIKE ? ORDER BY "email" ASC, "id" DESC LIMIT ? OFFSET ?`
 	if query != want {
 		t.Errorf("query = %q, want %q", query, want)
 	}
@@ -149,7 +152,7 @@ func TestSelectRenderOffsetWithoutLimit(t *testing.T) {
 
 func TestSelectRenderAfter(t *testing.T) {
 	query, args := selectRender(t, OrderBy(id.Asc()), After[m](int64(7)))
-	want := `SELECT "id", "email", "bio" FROM "users" WHERE ("id" > ?) ORDER BY "id"`
+	want := `SELECT "id", "email", "bio" FROM "users" WHERE ("id" > ?) ORDER BY "id" ASC`
 	if query != want {
 		t.Errorf("query = %q, want %q", query, want)
 	}
@@ -162,7 +165,7 @@ func TestSelectRenderAfter(t *testing.T) {
 		Limit[m](2),
 	)
 	want = `SELECT "id", "email", "bio" FROM "users" WHERE "bio" IS NOT NULL AND ` +
-		`(("email" < ?) OR ("email" = ? AND "id" > ?)) ORDER BY "email" DESC, "id" LIMIT ?`
+		`(("email" < ?) OR ("email" = ? AND "id" > ?)) ORDER BY "email" DESC, "id" ASC LIMIT ?`
 	if query != want {
 		t.Errorf("query = %q, want %q", query, want)
 	}

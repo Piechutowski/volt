@@ -6,7 +6,6 @@ import (
 	"context"
 	"database/sql"
 	"github.com/Piechutowski/volt/nao/rt"
-	"strings"
 )
 
 // Queries bundles the generated CRUD over one database handle: a
@@ -45,14 +44,12 @@ func commentScan(r rt.Row) (Comment, error) {
 	return v, rt.Refused("Comment", err)
 }
 
-const commentGetSQL = `SELECT "id", "commentable_type", "commentable_id", "body" FROM "comments" WHERE "id" = :id`
+const commentGetSQL = `SELECT "id", "commentable_type", "commentable_id", "body" FROM "comments" WHERE "id" = ?`
 
 // CommentGet fetches the comments row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) CommentGet(ctx context.Context, id int) (Comment, error) {
-	return commentScan(q.db.QueryRowContext(ctx, commentGetSQL, sql.Named("id", id)))
+	return commentScan(q.db.QueryRowContext(ctx, commentGetSQL, id))
 }
-
-const commentGetManySQL = `SELECT "id", "commentable_type", "commentable_id", "body" FROM "comments" WHERE "id" IN`
 
 // CommentGetMany fetches the comments rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
@@ -60,11 +57,10 @@ func (q *Queries) CommentGetMany(ctx context.Context, ids []int) ([]Comment, err
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	args := make([]any, len(ids))
-	for i, k := range ids {
-		args[i] = k
+	query, args, err := rt.SelectRender(commentTableSQL, commentColumnsSQL, []rt.Opt[Comment]{CommentID.In(ids...)})
+	if err != nil {
+		return nil, err
 	}
-	query := commentGetManySQL + " (?" + strings.Repeat(", ?", len(ids)-1) + ")"
 	rows, err := q.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -161,12 +157,12 @@ func (q *Queries) CommentUpdate(ctx context.Context, c CommentChangeset) (Commen
 	return commentScan(row)
 }
 
-const commentDeleteSQL = `DELETE FROM "comments" WHERE "id" = :id`
+const commentDeleteSQL = `DELETE FROM "comments" WHERE "id" = ?`
 
 // CommentDelete removes the identified comments row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) CommentDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, commentDeleteSQL, sql.Named("id", id))
+	res, err := q.db.ExecContext(ctx, commentDeleteSQL, id)
 	if err != nil {
 		return rt.Refused("Comment", err)
 	}

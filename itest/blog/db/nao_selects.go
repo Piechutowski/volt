@@ -4,15 +4,14 @@ package db
 
 import (
 	"context"
-	"database/sql"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-const userPickedSQL = `SELECT "id", "email" FROM "users" WHERE id IN (SELECT value FROM json_each(:ids)) ORDER BY id ASC`
+const userPickedSQL = `SELECT "id", "email" FROM "users" WHERE "id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
 
 // UserPicked runs the "picked" select over users (spec §selects-over-groups).
 func (q *Queries) UserPicked(ctx context.Context, ids []int) ([]User, error) {
-	rows, err := q.db.QueryContext(ctx, userPickedSQL, sql.Named("ids", rt.JSONList(ids)))
+	rows, err := q.db.QueryContext(ctx, userPickedSQL, rt.JSONList(ids))
 	if err != nil {
 		return nil, err
 	}
@@ -28,11 +27,11 @@ func (q *Queries) UserPicked(ctx context.Context, ids []int) ([]User, error) {
 	return out, rows.Err()
 }
 
-const msRevenueBrowseSQL = `SELECT "id", "org", "year" FROM "ms_revenue" WHERE year = :year ORDER BY id ASC`
+const msRevenueBrowseSQL = `SELECT "id", "org", "year" FROM "ms_revenue" WHERE "year" = ? ORDER BY "id" ASC`
 
 // MsRevenueBrowse runs the "browse" select over ms_revenue (spec §selects-over-groups).
 func (q *Queries) MsRevenueBrowse(ctx context.Context, year int) ([]MsRevenue, error) {
-	rows, err := q.db.QueryContext(ctx, msRevenueBrowseSQL, sql.Named("year", year))
+	rows, err := q.db.QueryContext(ctx, msRevenueBrowseSQL, year)
 	if err != nil {
 		return nil, err
 	}
@@ -48,11 +47,11 @@ func (q *Queries) MsRevenueBrowse(ctx context.Context, year int) ([]MsRevenue, e
 	return out, rows.Err()
 }
 
-const msUsageBrowseSQL = `SELECT "id", "org", "year" FROM "ms_usage" WHERE year = :year ORDER BY id ASC`
+const msUsageBrowseSQL = `SELECT "id", "org", "year" FROM "ms_usage" WHERE "year" = ? ORDER BY "id" ASC`
 
 // MsUsageBrowse runs the "browse" select over ms_usage (spec §selects-over-groups).
 func (q *Queries) MsUsageBrowse(ctx context.Context, year int) ([]MsUsage, error) {
-	rows, err := q.db.QueryContext(ctx, msUsageBrowseSQL, sql.Named("year", year))
+	rows, err := q.db.QueryContext(ctx, msUsageBrowseSQL, year)
 	if err != nil {
 		return nil, err
 	}

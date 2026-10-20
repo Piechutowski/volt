@@ -51,9 +51,8 @@ var immutableVars = map[string]bool{
 
 var pureStdlib = map[string]bool{
 	"strings": true, "unicode": true,
-	"fmt":    true,
-	"sort":   true,
-	"regexp": true,
+	"fmt":  true,
+	"sort": true,
 }
 
 var pureStdlibFuncs = map[string]bool{

@@ -1,6 +1,7 @@
 // Select generation (docs/spec.md §selects-over-groups): one typed method per
-// (select × group member), over WHERE/ORDER fragments the checker has
-// already typed and rendered, plus the projection row types.
+// (select × group member), its statement rendered by the runtime from the
+// predicate tree the checker lowered (§predicates rule 6), plus the
+// projection row types.
 package golang
 
 import (
@@ -10,6 +11,7 @@ import (
 	"github.com/Piechutowski/volt/gen/align"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
 // GenerateSelects renders nao_selects.go for the given instantiations.
@@ -36,13 +38,7 @@ func (pl *Plan) Selects(fns []SelectFn, opts Options) ([]byte, error) {
 		if t == nil {
 			return nil, fmt.Errorf("select %s: no table %q in the plan", fn.MethodSuffix, fn.TableKey)
 		}
-		if len(fn.Params) > 0 {
-			imports["database/sql"] = true
-		}
 		for _, prm := range fn.Params {
-			if strings.HasPrefix(prm.GoType, "[]") {
-				imports[rtImport] = true
-			}
 			if imp := t.typeImport(strings.TrimPrefix(prm.GoType, "[]")); imp != "" {
 				imports[imp] = true
 			}
@@ -83,7 +79,9 @@ func (pl *Plan) Selects(fns []SelectFn, opts Options) ([]byte, error) {
 			body.WriteString("}\n\n")
 			rowScanEmit(&body, row, cols)
 		}
-		selectEmit(&body, t, fn, cols)
+		if err := selectEmit(&body, t, fn, cols); err != nil {
+			return nil, err
+		}
 	}
 
 	var out strings.Builder
@@ -164,29 +162,28 @@ func rowScanEmit(b *strings.Builder, row string, cols []*fieldPlan) {
 	b.WriteString(")\n\treturn v, err\n}\n\n")
 }
 
-// SelectSQL renders the statement for one instantiation.
-func SelectSQL(t *tableModel, fn SelectFn) string {
+func selectRender(t *tableModel, fn SelectFn, cols []*fieldPlan) (string, []string, error) {
+	opts := []rt.Opt[rt.Gen]{fn.Where}
+	if len(fn.Order) > 0 {
+		opts = append(opts, rt.OrderBy(fn.Order...))
+	}
+	return genRender(rt.SelectRender(rt.Ident(t.sqlName), columnList(cols), opts))
+}
+
+// SelectSQL renders the statement of one instantiation through the
+// runtime (spec §predicates rule 6) and lists the Go expressions its
+// method binds, in placeholder order.
+func SelectSQL(t *tableModel, fn SelectFn) (string, []string, error) {
 	cols, err := selectColumns(t, fn)
 	if err != nil {
-		return "-- " + err.Error()
+		return "", nil, err
 	}
-	names := make([]string, len(cols))
-	for i, f := range cols {
-		names[i] = sqlIdentQuote(f.colName)
-	}
-	sql := "SELECT " + strings.Join(names, ", ") + " FROM " + sqlIdentQuote(t.sqlName)
-	if fn.WhereSQL != "" {
-		sql += " WHERE " + fn.WhereSQL
-	}
-	if fn.OrderSQL != "" {
-		sql += " ORDER BY " + fn.OrderSQL
-	}
-	return sql
+	return selectRender(t, fn, cols)
 }
 
 // SelectSQLFor is SelectSQL keyed the way callers outside the package
 // see tables; it builds the plan itself. Test helper.
-func SelectSQLFor(f *ast.File, info *check.Info, fn SelectFn) (string, error) {
+func SelectSQLFor(f *ast.File, info *check.Info, fn SelectFn) (string, []string, error) {
 	return PlanBuild(f, info).SelectStatement(fn)
 }
 
@@ -203,7 +200,7 @@ func lowerFirstWord(s string) string {
 	return strings.ToLower(s[:1]) + s[1:]
 }
 
-func selectEmit(b *strings.Builder, t *tableModel, fn SelectFn, cols []*fieldPlan) {
+func selectEmit(b *strings.Builder, t *tableModel, fn SelectFn, cols []*fieldPlan) error {
 	row, scanPrefix := t.model, argName(t.model)
 	switch {
 	case fn.SharedType != "":
@@ -215,19 +212,23 @@ func selectEmit(b *strings.Builder, t *tableModel, fn SelectFn, cols []*fieldPla
 	name := t.model + fn.MethodSuffix
 	constName := argName(t.model) + fn.MethodSuffix + "SQL"
 
-	fmt.Fprintf(b, "const %s = `%s`\n\n", constName, SelectSQL(t, fn))
+	sql, args, err := selectRender(t, fn, cols)
+	if err != nil {
+		return fmt.Errorf("select %s: %w", name, err)
+	}
+	fmt.Fprintf(b, "const %s = `%s`\n\n", constName, sql)
 
-	var sig, binds strings.Builder
+	var sig strings.Builder
 	for _, prm := range fn.Params {
 		fmt.Fprintf(&sig, ", %s %s", prm.GoName, prm.GoType)
-		if strings.HasPrefix(prm.GoType, "[]") {
-			fmt.Fprintf(&binds, ", sql.Named(%q, rt.JSONList(%s))", prm.SQLName, prm.GoName)
-			continue
-		}
-		fmt.Fprintf(&binds, ", sql.Named(%q, %s)", prm.SQLName, prm.GoName)
+	}
+	binds := ""
+	if len(args) > 0 {
+		binds = ", " + strings.Join(args, ", ")
 	}
 	fmt.Fprintf(b, "// %s runs the %q select over %s (spec §selects-over-groups).\n", name, lowerFirstWord(fn.MethodSuffix), t.sqlName)
 	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context%s) ([]%s, error) {\n", name, sig.String(), row)
-	fmt.Fprintf(b, "\trows, err := q.db.QueryContext(ctx, %s%s)\n", constName, binds.String())
+	fmt.Fprintf(b, "\trows, err := q.db.QueryContext(ctx, %s%s)\n", constName, binds)
 	rowsScanEmit(b, row, scanPrefix)
+	return nil
 }

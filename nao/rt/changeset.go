@@ -343,7 +343,7 @@ func InsertRender(table string, cols []string, returning string) string {
 		if i > 0 {
 			b.WriteString(", ")
 		}
-		b.WriteString(identQuote(c))
+		b.WriteString(Ident(c))
 	}
 	b.WriteString(") VALUES (")
 	for i := range cols {
@@ -366,14 +366,14 @@ func UpdateRowRender(table string, set, key []string, returning string) string {
 		if i > 0 {
 			b.WriteString(", ")
 		}
-		b.WriteString(identQuote(c) + " = ?")
+		b.WriteString(Ident(c) + " = ?")
 	}
 	b.WriteString(" WHERE ")
 	for i, c := range key {
 		if i > 0 {
 			b.WriteString(" AND ")
 		}
-		b.WriteString(identQuote(c) + " = ?")
+		b.WriteString(Ident(c) + " = ?")
 	}
 	b.WriteString(" RETURNING " + returning)
 	return b.String()

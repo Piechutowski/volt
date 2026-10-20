@@ -6,7 +6,6 @@ import (
 	"context"
 	"database/sql"
 	"github.com/Piechutowski/volt/nao/rt"
-	"strings"
 )
 
 // Queries bundles the generated CRUD over one database handle: a
@@ -45,14 +44,12 @@ func userScan(r rt.Row) (User, error) {
 	return v, rt.Refused("User", err)
 }
 
-const userGetSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE "id" = :id`
+const userGetSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE "id" = ?`
 
 // UserGet fetches the users row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) UserGet(ctx context.Context, id int) (User, error) {
-	return userScan(q.db.QueryRowContext(ctx, userGetSQL, sql.Named("id", id)))
+	return userScan(q.db.QueryRowContext(ctx, userGetSQL, id))
 }
-
-const userGetManySQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE "id" IN`
 
 // UserGetMany fetches the users rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
@@ -60,11 +57,10 @@ func (q *Queries) UserGetMany(ctx context.Context, ids []int) ([]User, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	args := make([]any, len(ids))
-	for i, k := range ids {
-		args[i] = k
+	query, args, err := rt.SelectRender(userTableSQL, userColumnsSQL, []rt.Opt[User]{UserID.In(ids...)})
+	if err != nil {
+		return nil, err
 	}
-	query := userGetManySQL + " (?" + strings.Repeat(", ?", len(ids)-1) + ")"
 	rows, err := q.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -81,12 +77,12 @@ func (q *Queries) UserGetMany(ctx context.Context, ids []int) ([]User, error) {
 	return out, rows.Err()
 }
 
-const userGetByEmailSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE "email" = :email`
+const userGetByEmailSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE "email" = ?`
 
 // UserGetByEmail fetches the users row with the given email (a unique column),
 // or rt.ErrNotFound.
 func (q *Queries) UserGetByEmail(ctx context.Context, email string) (User, error) {
-	return userScan(q.db.QueryRowContext(ctx, userGetByEmailSQL, sql.Named("email", email)))
+	return userScan(q.db.QueryRowContext(ctx, userGetByEmailSQL, email))
 }
 
 const userListSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users"`
@@ -175,12 +171,12 @@ func (q *Queries) UserUpdate(ctx context.Context, c UserChangeset) (User, error)
 	return userScan(row)
 }
 
-const userDeleteSQL = `DELETE FROM "users" WHERE "id" = :id`
+const userDeleteSQL = `DELETE FROM "users" WHERE "id" = ?`
 
 // UserDelete removes the identified users row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) UserDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, userDeleteSQL, sql.Named("id", id))
+	res, err := q.db.ExecContext(ctx, userDeleteSQL, id)
 	if err != nil {
 		return rt.Refused("User", err)
 	}
@@ -200,14 +196,12 @@ func orderScan(r rt.Row) (Order, error) {
 	return v, rt.Refused("Order", err)
 }
 
-const orderGetSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "id" = :id`
+const orderGetSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "id" = ?`
 
 // OrderGet fetches the orders row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) OrderGet(ctx context.Context, id int) (Order, error) {
-	return orderScan(q.db.QueryRowContext(ctx, orderGetSQL, sql.Named("id", id)))
+	return orderScan(q.db.QueryRowContext(ctx, orderGetSQL, id))
 }
-
-const orderGetManySQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "id" IN`
 
 // OrderGetMany fetches the orders rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
@@ -215,11 +209,10 @@ func (q *Queries) OrderGetMany(ctx context.Context, ids []int) ([]Order, error) 
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	args := make([]any, len(ids))
-	for i, k := range ids {
-		args[i] = k
+	query, args, err := rt.SelectRender(orderTableSQL, orderColumnsSQL, []rt.Opt[Order]{OrderID.In(ids...)})
+	if err != nil {
+		return nil, err
 	}
-	query := orderGetManySQL + " (?" + strings.Repeat(", ?", len(ids)-1) + ")"
 	rows, err := q.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -334,12 +327,12 @@ func (q *Queries) OrderUpdate(ctx context.Context, c OrderChangeset) (Order, err
 	return orderScan(row)
 }
 
-const orderDeleteSQL = `DELETE FROM "orders" WHERE "id" = :id`
+const orderDeleteSQL = `DELETE FROM "orders" WHERE "id" = ?`
 
 // OrderDelete removes the identified orders row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) OrderDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, orderDeleteSQL, sql.Named("id", id))
+	res, err := q.db.ExecContext(ctx, orderDeleteSQL, id)
 	if err != nil {
 		return rt.Refused("Order", err)
 	}
@@ -359,11 +352,11 @@ func userTagScan(r rt.Row) (UserTag, error) {
 	return v, rt.Refused("UserTag", err)
 }
 
-const userTagGetSQL = `SELECT "user_id", "tag" FROM "user_tags" WHERE "user_id" = :user_id AND "tag" = :tag`
+const userTagGetSQL = `SELECT "user_id", "tag" FROM "user_tags" WHERE "user_id" = ? AND "tag" = ?`
 
 // UserTagGet fetches the user_tags row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) UserTagGet(ctx context.Context, userID int, tag string) (UserTag, error) {
-	return userTagScan(q.db.QueryRowContext(ctx, userTagGetSQL, sql.Named("user_id", userID), sql.Named("tag", tag)))
+	return userTagScan(q.db.QueryRowContext(ctx, userTagGetSQL, userID, tag))
 }
 
 const userTagListSQL = `SELECT "user_id", "tag" FROM "user_tags"`
@@ -409,12 +402,12 @@ func (q *Queries) UserTagCreate(ctx context.Context, c UserTagChangeset) (UserTa
 	return userTagScan(row)
 }
 
-const userTagDeleteSQL = `DELETE FROM "user_tags" WHERE "user_id" = :user_id AND "tag" = :tag`
+const userTagDeleteSQL = `DELETE FROM "user_tags" WHERE "user_id" = ? AND "tag" = ?`
 
 // UserTagDelete removes the identified user_tags row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) UserTagDelete(ctx context.Context, userID int, tag string) error {
-	res, err := q.db.ExecContext(ctx, userTagDeleteSQL, sql.Named("user_id", userID), sql.Named("tag", tag))
+	res, err := q.db.ExecContext(ctx, userTagDeleteSQL, userID, tag)
 	if err != nil {
 		return rt.Refused("UserTag", err)
 	}
@@ -434,14 +427,12 @@ func pageViewScan(r rt.Row) (PageView, error) {
 	return v, rt.Refused("PageView", err)
 }
 
-const pageViewGetSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE "id" = :id`
+const pageViewGetSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE "id" = ?`
 
 // PageViewGet fetches the page_views row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) PageViewGet(ctx context.Context, id int) (PageView, error) {
-	return pageViewScan(q.db.QueryRowContext(ctx, pageViewGetSQL, sql.Named("id", id)))
+	return pageViewScan(q.db.QueryRowContext(ctx, pageViewGetSQL, id))
 }
-
-const pageViewGetManySQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE "id" IN`
 
 // PageViewGetMany fetches the page_views rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
@@ -449,11 +440,10 @@ func (q *Queries) PageViewGetMany(ctx context.Context, ids []int) ([]PageView, e
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	args := make([]any, len(ids))
-	for i, k := range ids {
-		args[i] = k
+	query, args, err := rt.SelectRender(pageViewTableSQL, pageViewColumnsSQL, []rt.Opt[PageView]{PageViewID.In(ids...)})
+	if err != nil {
+		return nil, err
 	}
-	query := pageViewGetManySQL + " (?" + strings.Repeat(", ?", len(ids)-1) + ")"
 	rows, err := q.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -550,12 +540,12 @@ func (q *Queries) PageViewUpdate(ctx context.Context, c PageViewChangeset) (Page
 	return pageViewScan(row)
 }
 
-const pageViewDeleteSQL = `DELETE FROM "page_views" WHERE "id" = :id`
+const pageViewDeleteSQL = `DELETE FROM "page_views" WHERE "id" = ?`
 
 // PageViewDelete removes the identified page_views row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) PageViewDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, pageViewDeleteSQL, sql.Named("id", id))
+	res, err := q.db.ExecContext(ctx, pageViewDeleteSQL, id)
 	if err != nil {
 		return rt.Refused("PageView", err)
 	}
@@ -575,14 +565,12 @@ func linkClickScan(r rt.Row) (LinkClick, error) {
 	return v, rt.Refused("LinkClick", err)
 }
 
-const linkClickGetSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE "id" = :id`
+const linkClickGetSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE "id" = ?`
 
 // LinkClickGet fetches the link_clicks row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) LinkClickGet(ctx context.Context, id int) (LinkClick, error) {
-	return linkClickScan(q.db.QueryRowContext(ctx, linkClickGetSQL, sql.Named("id", id)))
+	return linkClickScan(q.db.QueryRowContext(ctx, linkClickGetSQL, id))
 }
-
-const linkClickGetManySQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE "id" IN`
 
 // LinkClickGetMany fetches the link_clicks rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
@@ -590,11 +578,10 @@ func (q *Queries) LinkClickGetMany(ctx context.Context, ids []int) ([]LinkClick,
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	args := make([]any, len(ids))
-	for i, k := range ids {
-		args[i] = k
+	query, args, err := rt.SelectRender(linkClickTableSQL, linkClickColumnsSQL, []rt.Opt[LinkClick]{LinkClickID.In(ids...)})
+	if err != nil {
+		return nil, err
 	}
-	query := linkClickGetManySQL + " (?" + strings.Repeat(", ?", len(ids)-1) + ")"
 	rows, err := q.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -691,12 +678,12 @@ func (q *Queries) LinkClickUpdate(ctx context.Context, c LinkClickChangeset) (Li
 	return linkClickScan(row)
 }
 
-const linkClickDeleteSQL = `DELETE FROM "link_clicks" WHERE "id" = :id`
+const linkClickDeleteSQL = `DELETE FROM "link_clicks" WHERE "id" = ?`
 
 // LinkClickDelete removes the identified link_clicks row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) LinkClickDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, linkClickDeleteSQL, sql.Named("id", id))
+	res, err := q.db.ExecContext(ctx, linkClickDeleteSQL, id)
 	if err != nil {
 		return rt.Refused("LinkClick", err)
 	}

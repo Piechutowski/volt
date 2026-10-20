@@ -6,7 +6,6 @@ import (
 	"context"
 	"database/sql"
 	"github.com/Piechutowski/volt/nao/rt"
-	"strings"
 )
 
 // Queries bundles the generated CRUD over one database handle: a
@@ -45,14 +44,12 @@ func categoryScan(r rt.Row) (Category, error) {
 	return v, rt.Refused("Category", err)
 }
 
-const categoryGetSQL = `SELECT "id", "name" FROM "categories" WHERE "id" = :id`
+const categoryGetSQL = `SELECT "id", "name" FROM "categories" WHERE "id" = ?`
 
 // CategoryGet fetches the categories row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) CategoryGet(ctx context.Context, id int) (Category, error) {
-	return categoryScan(q.db.QueryRowContext(ctx, categoryGetSQL, sql.Named("id", id)))
+	return categoryScan(q.db.QueryRowContext(ctx, categoryGetSQL, id))
 }
-
-const categoryGetManySQL = `SELECT "id", "name" FROM "categories" WHERE "id" IN`
 
 // CategoryGetMany fetches the categories rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
@@ -60,11 +57,10 @@ func (q *Queries) CategoryGetMany(ctx context.Context, ids []int) ([]Category, e
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	args := make([]any, len(ids))
-	for i, k := range ids {
-		args[i] = k
+	query, args, err := rt.SelectRender(categoryTableSQL, categoryColumnsSQL, []rt.Opt[Category]{CategoryID.In(ids...)})
+	if err != nil {
+		return nil, err
 	}
-	query := categoryGetManySQL + " (?" + strings.Repeat(", ?", len(ids)-1) + ")"
 	rows, err := q.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -155,12 +151,12 @@ func (q *Queries) CategoryUpdate(ctx context.Context, c CategoryChangeset) (Cate
 	return categoryScan(row)
 }
 
-const categoryDeleteSQL = `DELETE FROM "categories" WHERE "id" = :id`
+const categoryDeleteSQL = `DELETE FROM "categories" WHERE "id" = ?`
 
 // CategoryDelete removes the identified categories row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) CategoryDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, categoryDeleteSQL, sql.Named("id", id))
+	res, err := q.db.ExecContext(ctx, categoryDeleteSQL, id)
 	if err != nil {
 		return rt.Refused("Category", err)
 	}
@@ -180,11 +176,11 @@ func categoryPathScan(r rt.Row) (CategoryPath, error) {
 	return v, rt.Refused("CategoryPath", err)
 }
 
-const categoryPathGetSQL = `SELECT "ancestor_id", "descendant_id", "depth" FROM "category_paths" WHERE "ancestor_id" = :ancestor_id AND "descendant_id" = :descendant_id`
+const categoryPathGetSQL = `SELECT "ancestor_id", "descendant_id", "depth" FROM "category_paths" WHERE "ancestor_id" = ? AND "descendant_id" = ?`
 
 // CategoryPathGet fetches the category_paths row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) CategoryPathGet(ctx context.Context, ancestorID int, descendantID int) (CategoryPath, error) {
-	return categoryPathScan(q.db.QueryRowContext(ctx, categoryPathGetSQL, sql.Named("ancestor_id", ancestorID), sql.Named("descendant_id", descendantID)))
+	return categoryPathScan(q.db.QueryRowContext(ctx, categoryPathGetSQL, ancestorID, descendantID))
 }
 
 const categoryPathListSQL = `SELECT "ancestor_id", "descendant_id", "depth" FROM "category_paths"`
@@ -268,12 +264,12 @@ func (q *Queries) CategoryPathUpdate(ctx context.Context, c CategoryPathChangese
 	return categoryPathScan(row)
 }
 
-const categoryPathDeleteSQL = `DELETE FROM "category_paths" WHERE "ancestor_id" = :ancestor_id AND "descendant_id" = :descendant_id`
+const categoryPathDeleteSQL = `DELETE FROM "category_paths" WHERE "ancestor_id" = ? AND "descendant_id" = ?`
 
 // CategoryPathDelete removes the identified category_paths row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) CategoryPathDelete(ctx context.Context, ancestorID int, descendantID int) error {
-	res, err := q.db.ExecContext(ctx, categoryPathDeleteSQL, sql.Named("ancestor_id", ancestorID), sql.Named("descendant_id", descendantID))
+	res, err := q.db.ExecContext(ctx, categoryPathDeleteSQL, ancestorID, descendantID)
 	if err != nil {
 		return rt.Refused("CategoryPath", err)
 	}

@@ -1,5 +1,6 @@
-// CRUD generation (nao_queries.go): the v0 query surface of Not an ORM
-// .
+// CRUD generation (nao_queries.go): the static query surface of Not an
+// ORM, every statement rendered by the runtime (docs/spec.md
+// §generated-query-surface, §predicates rule 6).
 package golang
 
 import (
@@ -11,6 +12,7 @@ import (
 	"github.com/Piechutowski/volt/internal/par"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
 // GenerateQueries renders the queries file for one checked DBML file.
@@ -28,6 +30,9 @@ func (pl *Plan) Queries(opts Options) ([]byte, error) {
 	}
 	e := &queryEmitter{plan: pl.p, opts: opts}
 	e.run()
+	if e.err != nil {
+		return nil, e.err
+	}
 	return align.Finish(e.out.String()), nil
 }
 
@@ -59,7 +64,6 @@ type fieldPlan struct {
 	storage  string
 	enum     *check.EnumInfo
 	imp      string
-	param    string
 	arg      string
 
 	nullable   bool
@@ -224,9 +228,8 @@ func tableBuild(ti *check.TableInfo, enums *enumTypes) (*tableModel, map[string]
 	imports := map[string]bool{}
 	pkFromIndex := compositePKColumns(ti)
 	goFields := map[string]string{}
-	params := map[string]string{}
 	for _, cd := range ti.Columns {
-		fp, err := fieldBuild(enums.byKey, imports, cd, pkFromIndex, goFields, params)
+		fp, err := fieldBuild(enums.byKey, imports, cd, pkFromIndex, goFields)
 		if err != nil {
 			return nil, nil, fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
 		}
@@ -269,7 +272,7 @@ func tableBuild(ti *check.TableInfo, enums *enumTypes) (*tableModel, map[string]
 	return tm, imports, nil
 }
 
-func fieldBuild(enumTypes map[string]string, imports map[string]bool, cd *check.ColumnDef, pkFromIndex map[string]bool, goFields, params map[string]string) (*fieldPlan, error) {
+func fieldBuild(enumTypes map[string]string, imports map[string]bool, cd *check.ColumnDef, pkFromIndex map[string]bool, goFields map[string]string) (*fieldPlan, error) {
 	col := cd.Col
 	colName := col.Name.Name()
 
@@ -292,12 +295,6 @@ func fieldBuild(enumTypes map[string]string, imports map[string]bool, cd *check.
 		goType = "rt.Null[" + goType + "]"
 	}
 
-	param := sqlParamName(colName)
-	if prev, dup := params[param]; dup {
-		return nil, fmt.Errorf("columns %q and %q both map to SQL parameter name %q", prev, colName, param)
-	}
-	params[param] = colName
-
 	tag := fieldTag(col)
 	return &fieldPlan{
 		col:        col,
@@ -310,7 +307,6 @@ func fieldBuild(enumTypes map[string]string, imports map[string]bool, cd *check.
 		storage:    cd.Type.Storage,
 		enum:       cd.Type.Enum,
 		imp:        typ.imp,
-		param:      param,
 		arg:        argName(goField),
 		nullable:   nullable,
 		declared:   cd.Type.Decl != nil,
@@ -346,23 +342,6 @@ func sqlTableName(q *ast.QualName) string {
 		return s + "_" + q.Base()
 	}
 	return q.Base()
-}
-
-func sqlParamName(colName string) string {
-	var b strings.Builder
-	for _, r := range colName {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_':
-			b.WriteRune(r)
-		default:
-			b.WriteByte('_')
-		}
-	}
-	s := b.String()
-	if s == "" || (s[0] >= '0' && s[0] <= '9') {
-		s = "p" + s
-	}
-	return s
 }
 
 var goKeywords = map[string]bool{
@@ -401,10 +380,6 @@ func argName(exported string) string {
 	return s
 }
 
-func sqlIdentQuote(s string) string {
-	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
-}
-
 func hasSetting(col *ast.Column, name string) bool {
 	return col.Settings.Get(name) != nil
 }
@@ -418,40 +393,64 @@ func hasLegacyFlag(col *ast.Column, name string) bool {
 	return false
 }
 
-func (t *tableModel) columnList() string {
-	names := make([]string, len(t.fields))
-	for i, f := range t.fields {
-		names[i] = sqlIdentQuote(f.colName)
+func columnList(fields []*fieldPlan) string {
+	names := make([]string, len(fields))
+	for i, f := range fields {
+		names[i] = rt.Ident(f.colName)
 	}
 	return strings.Join(names, ", ")
 }
 
-func (t *tableModel) pkWhere() string {
-	conds := make([]string, len(t.pk))
+func (t *tableModel) columnList() string { return columnList(t.fields) }
+
+func (t *tableModel) tableSQL() string { return rt.Ident(t.sqlName) }
+
+func (t *tableModel) keyPreds() []rt.GenPred {
+	preds := make([]rt.GenPred, len(t.pk))
 	for i, f := range t.pk {
-		conds[i] = sqlIdentQuote(f.colName) + " = :" + f.param
+		preds[i] = rt.Column[rt.Gen, any]{Name: f.colName}.Eq(f.arg)
 	}
-	return strings.Join(conds, " AND ")
+	return preds
 }
 
-func (t *tableModel) getSQL() string {
-	return "SELECT " + t.columnList() + " FROM " + sqlIdentQuote(t.sqlName) + " WHERE " + t.pkWhere()
+func predOpts(preds []rt.GenPred) []rt.Opt[rt.Gen] {
+	opts := make([]rt.Opt[rt.Gen], len(preds))
+	for i, p := range preds {
+		opts[i] = p
+	}
+	return opts
 }
 
-func (t *tableModel) getManySQL() string {
-	return "SELECT " + t.columnList() + " FROM " + sqlIdentQuote(t.sqlName) + " WHERE " + sqlIdentQuote(t.pk[0].colName) + " IN"
+func genRender(sql string, args []any, err error) (string, []string, error) {
+	if err != nil {
+		return "", nil, err
+	}
+	exprs := make([]string, len(args))
+	for i, a := range args {
+		expr, ok := a.(string)
+		if !ok {
+			return "", nil, fmt.Errorf("value slot %d holds %T, not Go source", i, a)
+		}
+		exprs[i] = expr
+	}
+	return sql, exprs, nil
 }
 
-func (t *tableModel) getBySQL(f *fieldPlan) string {
-	return "SELECT " + t.columnList() + " FROM " + sqlIdentQuote(t.sqlName) + " WHERE " + sqlIdentQuote(f.colName) + " = :" + f.param
+func (t *tableModel) getSQL() (string, []string, error) {
+	return genRender(rt.SelectRender(t.tableSQL(), t.columnList(), predOpts(t.keyPreds())))
 }
 
-func (t *tableModel) listSQL() string {
-	return "SELECT " + t.columnList() + " FROM " + sqlIdentQuote(t.sqlName)
+func (t *tableModel) getBySQL(f *fieldPlan) (string, []string, error) {
+	by := rt.Column[rt.Gen, any]{Name: f.colName}.Eq(f.arg)
+	return genRender(rt.SelectRender(t.tableSQL(), t.columnList(), []rt.Opt[rt.Gen]{by}))
 }
 
-func (t *tableModel) deleteSQL() string {
-	return "DELETE FROM " + sqlIdentQuote(t.sqlName) + " WHERE " + t.pkWhere()
+func (t *tableModel) listSQL() (string, []string, error) {
+	return genRender(rt.SelectRender[rt.Gen](t.tableSQL(), t.columnList(), nil))
+}
+
+func (t *tableModel) deleteSQL() (string, []string, error) {
+	return genRender(rt.DeleteRender(t.tableSQL(), t.keyPreds()))
 }
 
 func (t *tableModel) uniqueFields() []*fieldPlan {
@@ -473,9 +472,15 @@ type queryEmitter struct {
 	opts Options
 	out  strings.Builder
 	body strings.Builder
+	err  error
 
-	needStrings bool
 	needImports map[string]bool
+}
+
+func (e *queryEmitter) fail(t *tableModel, what string, err error) {
+	if e.err == nil {
+		e.err = fmt.Errorf("table %s: %s: %w", t.ti.Decl.Name.String(), what, err)
+	}
 }
 
 func (e *queryEmitter) run() {
@@ -496,9 +501,6 @@ func (e *queryEmitter) header() {
 	fmt.Fprintf(&e.out, "package %s\n\n", e.opts.Package)
 
 	imports := map[string]bool{"context": true, "database/sql": true, rtImport: true}
-	if e.needStrings {
-		imports["strings"] = true
-	}
 	for imp := range e.needImports {
 		imports[imp] = true
 	}
@@ -597,49 +599,53 @@ func identityParams(t *tableModel) string {
 	return strings.Join(parts, ", ")
 }
 
-func identityArgs(t *tableModel) string {
-	parts := make([]string, len(t.pk))
-	for i, f := range t.pk {
-		parts[i] = fmt.Sprintf("sql.Named(%q, %s)", f.param, f.arg)
-	}
-	return strings.Join(parts, ", ")
-}
-
 func (e *queryEmitter) getEmit(t *tableModel, lower, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "const %sGetSQL = `%s`\n\n", lower, t.getSQL())
+	sql, args, err := t.getSQL()
+	if err != nil {
+		e.fail(t, "Get", err)
+		return
+	}
+	fmt.Fprintf(b, "const %sGetSQL = `%s`\n\n", lower, sql)
 	fmt.Fprintf(b, "// %sGet fetches the %s row with the given primary key, or rt.ErrNotFound.\n", t.model, tbl)
 	fmt.Fprintf(b, "func (q *Queries) %sGet(ctx context.Context, %s) (%s, error) {\n", t.model, identityParams(t), t.model)
-	fmt.Fprintf(b, "\treturn %sScan(q.db.QueryRowContext(ctx, %sGetSQL, %s))\n}\n\n", lower, lower, identityArgs(t))
+	fmt.Fprintf(b, "\treturn %sScan(q.db.QueryRowContext(ctx, %sGetSQL, %s))\n}\n\n", lower, lower, strings.Join(args, ", "))
 }
 
 func (e *queryEmitter) getManyEmit(t *tableModel, lower, tbl string) {
-	e.needStrings = true
 	b := &e.body
 	key := t.pk[0]
-	fmt.Fprintf(b, "const %sGetManySQL = `%s`\n\n", lower, t.getManySQL())
 	fmt.Fprintf(b, "// %sGetMany fetches the %s rows whose primary key is in %ss, in\n", t.model, tbl, key.arg)
 	fmt.Fprintf(b, "// database order. Missing keys are not an error; they are just absent.\n")
 	fmt.Fprintf(b, "func (q *Queries) %sGetMany(ctx context.Context, %ss []%s) ([]%s, error) {\n", t.model, key.arg, key.goType, t.model)
 	fmt.Fprintf(b, "\tif len(%ss) == 0 {\n\t\treturn nil, nil\n\t}\n", key.arg)
-	fmt.Fprintf(b, "\targs := make([]any, len(%ss))\n", key.arg)
-	fmt.Fprintf(b, "\tfor i, k := range %ss {\n\t\targs[i] = k\n\t}\n", key.arg)
-	fmt.Fprintf(b, "\tquery := %sGetManySQL + \" (?\" + strings.Repeat(\", ?\", len(%ss)-1) + \")\"\n", lower, key.arg)
-	fmt.Fprintf(b, "\trows, err := q.db.QueryContext(ctx, query, args...)\n")
+	fmt.Fprintf(b, "\tquery, args, err := rt.SelectRender(%sTableSQL, %sColumnsSQL, []rt.Opt[%s]{%s%s.In(%ss...)})\n", lower, lower, t.model, t.model, key.goField, key.arg)
+	b.WriteString("\tif err != nil {\n\t\treturn nil, err\n\t}\n")
+	b.WriteString("\trows, err := q.db.QueryContext(ctx, query, args...)\n")
 	e.rowsScan(t, lower)
 }
 
 func (e *queryEmitter) getByEmit(t *tableModel, f *fieldPlan, lower, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "const %sGetBy%sSQL = `%s`\n\n", lower, f.goField, t.getBySQL(f))
+	sql, args, err := t.getBySQL(f)
+	if err != nil {
+		e.fail(t, "GetBy"+f.goField, err)
+		return
+	}
+	fmt.Fprintf(b, "const %sGetBy%sSQL = `%s`\n\n", lower, f.goField, sql)
 	fmt.Fprintf(b, "// %sGetBy%s fetches the %s row with the given %s (a unique column),\n// or rt.ErrNotFound.\n", t.model, f.goField, tbl, f.colName)
 	fmt.Fprintf(b, "func (q *Queries) %sGetBy%s(ctx context.Context, %s %s) (%s, error) {\n", t.model, f.goField, f.arg, f.goType, t.model)
-	fmt.Fprintf(b, "\treturn %sScan(q.db.QueryRowContext(ctx, %sGetBy%sSQL, sql.Named(%q, %s)))\n}\n\n", lower, lower, f.goField, f.param, f.arg)
+	fmt.Fprintf(b, "\treturn %sScan(q.db.QueryRowContext(ctx, %sGetBy%sSQL, %s))\n}\n\n", lower, lower, f.goField, strings.Join(args, ", "))
 }
 
 func (e *queryEmitter) listEmit(t *tableModel, lower, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "const %sListSQL = `%s`\n\n", lower, t.listSQL())
+	sql, _, err := t.listSQL()
+	if err != nil {
+		e.fail(t, "List", err)
+		return
+	}
+	fmt.Fprintf(b, "const %sListSQL = `%s`\n\n", lower, sql)
 	fmt.Fprintf(b, "// %sList returns every %s row.\n", t.model, tbl)
 	fmt.Fprintf(b, "func (q *Queries) %sList(ctx context.Context) ([]%s, error) {\n", t.model, t.model)
 	fmt.Fprintf(b, "\trows, err := q.db.QueryContext(ctx, %sListSQL)\n", lower)
@@ -700,10 +706,15 @@ func markedArgsEmit(b *strings.Builder, t *tableModel) {
 
 func (e *queryEmitter) deleteEmit(t *tableModel, lower, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "const %sDeleteSQL = `%s`\n\n", lower, t.deleteSQL())
+	sql, args, err := t.deleteSQL()
+	if err != nil {
+		e.fail(t, "Delete", err)
+		return
+	}
+	fmt.Fprintf(b, "const %sDeleteSQL = `%s`\n\n", lower, sql)
 	fmt.Fprintf(b, "// %sDelete removes the identified %s row; rt.ErrNotFound reports\n// that nothing matched.\n", t.model, tbl)
 	fmt.Fprintf(b, "func (q *Queries) %sDelete(ctx context.Context, %s) error {\n", t.model, identityParams(t))
-	fmt.Fprintf(b, "\tres, err := q.db.ExecContext(ctx, %sDeleteSQL, %s)\n", lower, identityArgs(t))
+	fmt.Fprintf(b, "\tres, err := q.db.ExecContext(ctx, %sDeleteSQL, %s)\n", lower, strings.Join(args, ", "))
 	fmt.Fprintf(b, "\tif err != nil {\n\t\treturn rt.Refused(%q, err)\n\t}\n", t.model)
 	fmt.Fprintf(b, "\tn, err := res.RowsAffected()\n\tif err != nil {\n\t\treturn err\n\t}\n")
 	fmt.Fprintf(b, "\tif n == 0 {\n\t\treturn rt.ErrNotFound\n\t}\n\treturn nil\n}\n\n")

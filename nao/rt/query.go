@@ -1,10 +1,11 @@
-// The dynamic query layer: predicates, orderings,
-// limits and assignments as inert data — plain values forming a small
-// expression tree, never closures and never a mutable builder. The
-// interpreter is deterministic: identical trees render identical SQL,
-// which is what makes the rendered text a statement-cache key.
-// The layer only filters, orders and limits an existing row shape (the
-// shape rule).
+// The dynamic query layer and the one SQL renderer (spec §predicates
+// rule 6): predicates, orderings, limits and assignments as inert data,
+// plain values forming a small expression tree, never closures and never
+// a mutable builder. The interpreter is deterministic: identical trees
+// render identical SQL, which is what makes the rendered text a
+// statement-cache key, and the generator renders its statement constants
+// through the same functions. The layer only filters, orders and limits
+// an existing row shape (the shape rule).
 package rt
 
 import (
@@ -39,8 +40,9 @@ func (c Column[M, T]) cmp(op string, v T) Pred[M] {
 // NULL with IsNull.
 func (c Column[M, T]) Eq(v T) Pred[M] { return c.cmp("=", v) }
 
-// Ne is "column <> v". Rows where the column is NULL never match.
-func (c Column[M, T]) Ne(v T) Pred[M] { return c.cmp("<>", v) }
+// Ne is "column != v", the one spelling of inequality (spec §predicates
+// rule 6). Rows where the column is NULL never match.
+func (c Column[M, T]) Ne(v T) Pred[M] { return c.cmp("!=", v) }
 
 // Gt is "column > v".
 func (c Column[M, T]) Gt(v T) Pred[M] { return c.cmp(">", v) }
@@ -63,6 +65,14 @@ func (c Column[M, T]) In(vs ...T) Pred[M] {
 // true. Rows where the column is NULL never match a non-empty NOT IN.
 func (c Column[M, T]) NotIn(vs ...T) Pred[M] {
 	return Pred[M]{kind: predIn, col: c.Name, vals: valsAny(vs), not: true}
+}
+
+// InList is "column IN (SELECT value FROM json_each(?))" over the list
+// as one JSON array (spec §predicates rule 6), the dynamic twin of a
+// select's list parameter: one statement text whatever the length, and
+// an empty list matches no row.
+func (c Column[M, T]) InList(vs []T) Pred[M] {
+	return Pred[M]{kind: predInList, col: c.Name, vals: []any{JSONList(vs)}}
 }
 
 // Like is "column LIKE pattern" (SQLite LIKE: case-insensitive ASCII,
@@ -93,8 +103,8 @@ func (c Column[M, T]) cmpCol(op string, o Column[M, T]) Pred[M] {
 // EqCol compares two columns of the same model: "a = b".
 func (c Column[M, T]) EqCol(o Column[M, T]) Pred[M] { return c.cmpCol("=", o) }
 
-// NeCol is "a <> b".
-func (c Column[M, T]) NeCol(o Column[M, T]) Pred[M] { return c.cmpCol("<>", o) }
+// NeCol is "a != b" (spec §predicates rule 6).
+func (c Column[M, T]) NeCol(o Column[M, T]) Pred[M] { return c.cmpCol("!=", o) }
 
 // GtCol is "a > b".
 func (c Column[M, T]) GtCol(o Column[M, T]) Pred[M] { return c.cmpCol(">", o) }
@@ -154,6 +164,7 @@ const (
 	predCmp
 	predColCmp
 	predIn
+	predInList
 	predNull
 	predRaw
 	predAnd
@@ -207,10 +218,10 @@ func predJoin[M any](kind predKind, ps []Pred[M]) Pred[M] {
 func (p Pred[M]) render(b *strings.Builder, args *[]any) error {
 	switch p.kind {
 	case predCmp:
-		b.WriteString(identQuote(p.col) + " " + p.op + " ?")
+		b.WriteString(Ident(p.col) + " " + p.op + " ?")
 		*args = append(*args, p.vals[0])
 	case predColCmp:
-		b.WriteString(identQuote(p.col) + " " + p.op + " " + identQuote(p.col2))
+		b.WriteString(Ident(p.col) + " " + p.op + " " + Ident(p.col2))
 	case predIn:
 		if len(p.vals) == 0 {
 			if p.not {
@@ -220,14 +231,17 @@ func (p Pred[M]) render(b *strings.Builder, args *[]any) error {
 			}
 			return nil
 		}
-		b.WriteString(identQuote(p.col))
+		b.WriteString(Ident(p.col))
 		if p.not {
 			b.WriteString(" NOT")
 		}
 		b.WriteString(" IN (?" + strings.Repeat(", ?", len(p.vals)-1) + ")")
 		*args = append(*args, p.vals...)
+	case predInList:
+		b.WriteString(Ident(p.col) + " IN (SELECT value FROM json_each(?))")
+		*args = append(*args, p.vals[0])
 	case predNull:
-		b.WriteString(identQuote(p.col) + " IS")
+		b.WriteString(Ident(p.col) + " IS")
 		if p.not {
 			b.WriteString(" NOT")
 		}
@@ -338,10 +352,11 @@ func (distinctOpt[M]) optApply(s *querySpec[M]) { s.distinct = true }
 // Distinct deduplicates the result rows (SELECT DISTINCT).
 func Distinct[M any]() Opt[M] { return distinctOpt[M]{} }
 
-// SelectRender renders a SELECT over the model's fixed shape: table and
-// columns come pre-rendered from generated code, everything else from
-// the options. Deterministic: identical option values render identical
-// SQL. Argument order matches placeholder order by construction.
+// SelectRender renders a SELECT over the model's fixed shape (spec
+// §predicates rule 6): table and columns come pre-rendered from generated
+// code, everything else from the options. Deterministic: identical option
+// values render identical SQL. Argument order matches placeholder order
+// by construction.
 func SelectRender[M any](table, columns string, opts []Opt[M]) (string, []any, error) {
 	var s querySpec[M]
 	for _, o := range opts {
@@ -358,7 +373,7 @@ func SelectRender[M any](table, columns string, opts []Opt[M]) (string, []any, e
 	}
 	b.WriteString(columns + " FROM " + table)
 
-	where, wargs, err := whereRender(s.preds)
+	where, wargs, err := WhereRender(s.preds)
 	if err != nil {
 		return "", nil, err
 	}
@@ -376,16 +391,7 @@ func SelectRender[M any](table, columns string, opts []Opt[M]) (string, []any, e
 	}
 
 	if len(s.orders) > 0 {
-		b.WriteString(" ORDER BY ")
-		for i, o := range s.orders {
-			if i > 0 {
-				b.WriteString(", ")
-			}
-			b.WriteString(identQuote(o.col))
-			if o.desc {
-				b.WriteString(" DESC")
-			}
-		}
+		b.WriteString(" ORDER BY " + OrderRender(s.orders))
 	}
 
 	switch {
@@ -406,7 +412,7 @@ func SelectRender[M any](table, columns string, opts []Opt[M]) (string, []any, e
 // CountRender renders "SELECT count(*)" filtered by the predicates; none
 // counts the whole table.
 func CountRender[M any](table string, preds []Pred[M]) (string, []any, error) {
-	where, args, err := whereRender(preds)
+	where, args, err := WhereRender(preds)
 	if err != nil {
 		return "", nil, err
 	}
@@ -419,7 +425,7 @@ func CountRender[M any](table string, preds []Pred[M]) (string, []any, error) {
 
 // ExistsRender renders "SELECT EXISTS (...)" over the predicates.
 func ExistsRender[M any](table string, preds []Pred[M]) (string, []any, error) {
-	where, args, err := whereRender(preds)
+	where, args, err := WhereRender(preds)
 	if err != nil {
 		return "", nil, err
 	}
@@ -433,7 +439,7 @@ func ExistsRender[M any](table string, preds []Pred[M]) (string, []any, error) {
 // DeleteRender renders a predicate-guarded DELETE. No effective
 // predicate is an error, not a full-table delete.
 func DeleteRender[M any](table string, preds []Pred[M]) (string, []any, error) {
-	where, args, err := whereRender(preds)
+	where, args, err := WhereRender(preds)
 	if err != nil {
 		return "", nil, err
 	}
@@ -456,10 +462,10 @@ func UpdateRender[M any](table string, set []Assign[M], preds []Pred[M]) (string
 		if i > 0 {
 			b.WriteString(", ")
 		}
-		b.WriteString(identQuote(a.col) + " = ?")
+		b.WriteString(Ident(a.col) + " = ?")
 		args = append(args, a.val)
 	}
-	where, wargs, err := whereRender(preds)
+	where, wargs, err := WhereRender(preds)
 	if err != nil {
 		return "", nil, err
 	}
@@ -470,7 +476,10 @@ func UpdateRender[M any](table string, set []Assign[M], preds []Pred[M]) (string
 	return b.String(), append(args, wargs...), nil
 }
 
-func whereRender[M any](preds []Pred[M]) (string, []any, error) {
+// WhereRender renders the text after WHERE for the conjunction of the
+// predicates (spec §predicates rule 6), "" when none survives; every
+// statement renderer reads its WHERE clause from it.
+func WhereRender[M any](preds []Pred[M]) (string, []any, error) {
 	var w strings.Builder
 	var args []any
 	for _, p := range preds {
@@ -485,6 +494,24 @@ func whereRender[M any](preds []Pred[M]) (string, []any, error) {
 		}
 	}
 	return w.String(), args, nil
+}
+
+// OrderRender renders the text after ORDER BY for the terms (spec
+// §predicates rule 6), every direction spelled.
+func OrderRender[M any](terms []Order[M]) string {
+	var b strings.Builder
+	for i, o := range terms {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(Ident(o.col))
+		if o.desc {
+			b.WriteString(" DESC")
+		} else {
+			b.WriteString(" ASC")
+		}
+	}
+	return b.String()
 }
 
 func afterRender[M any](w *strings.Builder, args *[]any, orders []Order[M], key []any) error {
@@ -506,14 +533,14 @@ func afterRender[M any](w *strings.Builder, args *[]any, orders []Order[M], key 
 		}
 		w.WriteString("(")
 		for j := 0; j < i; j++ {
-			w.WriteString(identQuote(orders[j].col) + " = ? AND ")
+			w.WriteString(Ident(orders[j].col) + " = ? AND ")
 			*args = append(*args, key[j])
 		}
 		cmp := " > ?"
 		if o.desc {
 			cmp = " < ?"
 		}
-		w.WriteString(identQuote(o.col) + cmp + ")")
+		w.WriteString(Ident(o.col) + cmp + ")")
 		*args = append(*args, key[i])
 	}
 	if len(orders) > 1 {
@@ -522,8 +549,10 @@ func afterRender[M any](w *strings.Builder, args *[]any, orders []Order[M], key 
 	return nil
 }
 
-func identQuote(s string) string {
-	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
+// Ident is the one spelling of an identifier in every statement (spec
+// §predicates rule 6): always double-quoted, a quote inside doubled.
+func Ident(name string) string {
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }
 
 // StmtQuery runs a row-returning statement on db, through cache when one

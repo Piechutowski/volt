@@ -1,6 +1,7 @@
 // Groups, predicates and selects (docs/spec.md §groups to §selects-over-groups): resolution,
 // the column-agreement rule, the typed closed expression language, and
-// the lowering to SQL fragments the generator emits verbatim.
+// the lowering to the runtime's predicate trees, which the one renderer
+// turns into the generated statements (§predicates rule 6).
 package lang
 
 import (
@@ -13,7 +14,7 @@ import (
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/token"
 	"github.com/Piechutowski/volt/nao/gen/golang"
-	"github.com/Piechutowski/volt/nao/gen/sqlite"
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
 // GroupInfo is one resolved Group (§groups): its declaration and member
@@ -26,20 +27,22 @@ type GroupInfo struct {
 // SelectParam is one parameter of a generated select method, in first
 // appearance order (§selects-over-groups).
 type SelectParam struct {
-	SQLName string // as written after ':'
-	GoName  string // Go parameter name (identical today; validated)
-	GoType  string // e.g. "string", "int64", "time.Time"
+	GoName string // Go parameter name, the name written after ':'
+	GoType string // e.g. "string", "int64", "time.Time"
 }
 
-// SelectInfo is one checked Select (§selects-over-groups), lowered far enough that the
-// generator only substitutes the table name. The agreement rule
-// (§selects-over-groups) is what makes one WHERE/ORDER rendering serve every member.
+// SelectInfo is one checked Select (§selects-over-groups), lowered to the
+// runtime's trees (§predicates rule 6), which the generator renders with
+// each member's table and columns. The agreement rule
+// (§selects-over-groups) is what makes one tree serve every member.
 type SelectInfo struct {
 	Decl         *ast.Select
 	MethodSuffix string // GoName of the select name, e.g. "Rows"
 	Members      []*check.TableInfo
-	WhereSQL     string // "" when no where clause
-	OrderSQL     string // "" when no order setting
+	Where        rt.GenPred    // the where clause; the zero value when none
+	Order        []rt.GenOrder // the order: terms, in declared order
+	WhereSQL     string        // Where as the renderer spells it; "" when none
+	OrderSQL     string        // Order as the renderer spells it; "" when none
 	Params       []SelectParam
 	Cols         []string // explicit projection, declared order (§selects-over-groups)
 	Excluded     []string // star-form exclusions (§selects-over-groups)
@@ -512,17 +515,24 @@ func (l *selectLowering) check() *SelectInfo {
 		params:  map[string]*SelectParam{},
 	}
 
-	whereSQL := ""
+	var where rt.GenPred
 	if sel.Where != nil {
-		whereSQL = env.exprCheck(sel.Where, map[string]bool{})
+		where = env.exprLower(sel.Where, map[string]bool{})
 	}
 
-	orderSQL := l.selectSettings(env)
+	order := l.selectSettings(env)
 	if env.failed {
 		return nil
 	}
+	whereSQL, _, err := rt.WhereRender([]rt.GenPred{where})
+	if err != nil {
+		l.errorf(sel.Name.Pos(), "select %q: %v (§predicates)", sel.Name.Name(), err)
+		return nil
+	}
+	si.Where = where
+	si.Order = order
 	si.WhereSQL = whereSQL
-	si.OrderSQL = orderSQL
+	si.OrderSQL = rt.OrderRender(order)
 	si.Params = env.paramList
 	return si
 }
@@ -660,12 +670,12 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 	return true
 }
 
-func (l *selectLowering) selectSettings(env *selectEnv) string {
+func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 	sel := l.sel
 	if sel.Settings == nil {
-		return ""
+		return nil
 	}
-	var parts []string
+	var terms []rt.GenOrder
 	for _, s := range sel.Settings.Settings {
 		switch strings.ToLower(s.Name) {
 		case "order":
@@ -698,22 +708,22 @@ func (l *selectLowering) selectSettings(env *selectEnv) string {
 					l.errorf(id.Pos(), "order: every column states its direction — write %q or %q (§selects-over-groups)", id.Name()+" asc", id.Name()+" desc")
 					continue
 				}
-				dir := " ASC"
+				desc := false
 				switch strings.ToLower(mod.Name()) {
 				case "asc":
 				case "desc":
-					dir = " DESC"
+					desc = true
 				default:
 					l.errorf(mod.Pos(), "order direction is asc or desc, not %q (§selects-over-groups)", mod.Name())
 					continue
 				}
-				parts = append(parts, sqlite.Ident(b.name)+dir)
+				terms = append(terms, rt.OrderTerm(b.name, desc))
 			}
 		default:
 			l.errorf(s.Pos(), "unknown select setting %q; selects take [order: (...)] (§selects-over-groups)", s.Name)
 		}
 	}
-	return strings.Join(parts, ", ")
+	return terms
 }
 
 type selectEnv struct {
@@ -808,16 +818,16 @@ func (e *selectEnv) paramBind(p *ast.Param, goType string) string {
 		if prev.GoType != goType {
 			e.errorf(p.Pos(), "parameter :%s used as %s here but %s earlier — one name, one type (§predicates)", name, goType, prev.GoType)
 		}
-		return ":" + name
+		return name
 	}
 	if !goParamOK(name) {
 		e.errorf(p.Name.Pos(), "parameter name %q does not work as a Go parameter (§predicates)", name)
-		return ":" + name
+		return name
 	}
-	sp := SelectParam{SQLName: name, GoName: name, GoType: goType}
+	sp := SelectParam{GoName: name, GoType: goType}
 	e.params[name] = &sp
 	e.paramList = append(e.paramList, sp)
-	return ":" + name
+	return name
 }
 
 func goParamOK(name string) bool {
@@ -827,46 +837,57 @@ func goParamOK(name string) bool {
 	return goIdentOK(name)
 }
 
-func (e *selectEnv) exprCheck(x ast.PredExpr, preds map[string]bool) string {
+func (e *selectEnv) exprLower(x ast.PredExpr, preds map[string]bool) rt.GenPred {
 	switch x := x.(type) {
 	case *ast.PredBinary:
-		op := strings.ToUpper(x.Op)
-		return e.exprCheck(x.X, preds) + " " + op + " " + e.exprCheck(x.Y, preds)
+		operands := e.operandsLower(x, x.Op, preds, nil)
+		if x.Op == "or" {
+			return rt.Or(operands...)
+		}
+		return rt.And(operands...)
 	case *ast.PredNot:
-		return "NOT " + e.exprCheck(x.X, preds)
+		return rt.Not(e.exprLower(x.X, preds))
 	case *ast.PredParen:
-		return "(" + e.exprCheck(x.X, preds) + ")"
+		return e.exprLower(x.X, preds)
 	case *ast.PredRef:
 		name := x.Name.Name()
 		d := e.l.preds[name]
 		if d == nil {
 			e.errorf(x.Name.Pos(), "unknown predicate %q (§predicates)", name)
-			return "1"
+			return rt.GenPred{}
 		}
 		if preds[name] {
-			return "1"
+			return rt.GenPred{}
 		}
 		preds[name] = true
-		sql := "(" + e.exprCheck(d.X, preds) + ")"
+		p := e.exprLower(d.X, preds)
 		delete(preds, name)
-		return sql
+		return p
 	case *ast.PredCompare:
-		return e.compareCheck(x)
+		return e.compareLower(x)
 	case *ast.PredIn:
-		return e.inCheck(x)
+		return e.inLower(x)
 	case *ast.PredLike:
-		return e.likeCheck(x)
+		return e.likeLower(x)
 	case *ast.PredNull:
 		b := e.columnBind(x.Col)
 		if b == nil {
-			return "1"
+			return rt.GenPred{}
 		}
 		if x.Not {
-			return sqlite.Ident(b.name) + " IS NOT NULL"
+			return rt.PredNotNull(b.name)
 		}
-		return sqlite.Ident(b.name) + " IS NULL"
+		return rt.PredNull(b.name)
 	}
-	return "1"
+	return rt.GenPred{}
+}
+
+func (e *selectEnv) operandsLower(x ast.PredExpr, op string, preds map[string]bool, acc []rt.GenPred) []rt.GenPred {
+	if b, ok := x.(*ast.PredBinary); ok && b.Op == op {
+		acc = e.operandsLower(b.X, op, preds, acc)
+		return e.operandsLower(b.Y, op, preds, acc)
+	}
+	return append(acc, e.exprLower(x, preds))
 }
 
 var compareSQL = map[token.Kind]string{
@@ -874,7 +895,21 @@ var compareSQL = map[token.Kind]string{
 	token.LE: "<=", token.GT: ">", token.GE: ">=",
 }
 
-func (e *selectEnv) compareCheck(x *ast.PredCompare) string {
+func compareFlip(op token.Kind) token.Kind {
+	switch op {
+	case token.LT:
+		return token.GT
+	case token.LE:
+		return token.GE
+	case token.GT:
+		return token.LT
+	case token.GE:
+		return token.LE
+	}
+	return op
+}
+
+func (e *selectEnv) compareLower(x *ast.PredCompare) rt.GenPred {
 	ordering := x.Op != token.EQ && x.Op != token.NEQ
 
 	var b *colBinding
@@ -889,110 +924,145 @@ func (e *selectEnv) compareCheck(x *ast.PredCompare) string {
 	}
 	if colCount == 0 {
 		e.errorf(x.Pos(), "a comparison needs a column on one side (§predicates)")
-		return "1"
+		return rt.GenPred{}
 	}
 	if b == nil {
-		return "1"
+		return rt.GenPred{}
 	}
 	if ordering {
 		switch b.class {
 		case classNumeric, classTime:
 		case classEqOnly:
 			e.errorf(x.Pos(), "column %q has declared type %s; a declared type compares with =, !=, in and is null only (§predicates)", b.name, b.goType)
-			return "1"
+			return rt.GenPred{}
 		default:
 			e.errorf(x.Pos(), "column %q (%s) is not orderable; < <= > >= need numeric or date/time operands (§predicates)", b.name, b.goType)
-			return "1"
+			return rt.GenPred{}
 		}
 	}
 
-	render := func(o ast.Operand) string {
-		switch o := o.(type) {
-		case *ast.ColRef:
-			bb := e.columnBind(o.Name)
-			if bb == nil {
-				return "1"
-			}
-			if bb.goType != b.goType {
-				e.errorf(o.Pos(), "cannot compare column %q (%s) with column %q (%s) (§predicates)", b.name, b.goType, bb.name, bb.goType)
-			}
-			return sqlite.Ident(bb.name)
-		case *ast.Param:
-			return e.paramBind(o, b.goType)
-		case *ast.Lit:
-			return e.litRender(o, b)
-		}
-		return "1"
+	left, right, op := x.X, x.Y, x.Op
+	if _, isCol := left.(*ast.ColRef); !isCol {
+		left, right, op = right, left, compareFlip(op)
 	}
-	return render(x.X) + " " + compareSQL[x.Op] + " " + render(x.Y)
+	col := e.columnBind(left.(*ast.ColRef).Name)
+	if col == nil {
+		return rt.GenPred{}
+	}
+	var p rt.GenPred
+	var err error
+	switch o := right.(type) {
+	case *ast.ColRef:
+		other := e.columnBind(o.Name)
+		if other == nil {
+			return rt.GenPred{}
+		}
+		if other.goType != col.goType {
+			e.errorf(o.Pos(), "cannot compare column %q (%s) with column %q (%s) (§predicates)", col.name, col.goType, other.name, other.goType)
+			return rt.GenPred{}
+		}
+		p, err = rt.PredColCmp(col.name, compareSQL[op], other.name)
+	case *ast.Param:
+		p, err = rt.PredCmp(col.name, compareSQL[op], e.paramBind(o, col.goType))
+	case *ast.Lit:
+		slot, ok := e.litSlot(o, col)
+		if !ok {
+			return rt.GenPred{}
+		}
+		p, err = rt.PredCmp(col.name, compareSQL[op], slot)
+	}
+	if err != nil {
+		e.errorf(x.Pos(), "%v (§predicates)", err)
+		return rt.GenPred{}
+	}
+	return p
 }
 
-func (e *selectEnv) litRender(l *ast.Lit, b *colBinding) string {
+func (e *selectEnv) litSlot(l *ast.Lit, b *colBinding) (string, bool) {
 	lit := b.litClass()
 	switch l.Tok.Kind {
 	case token.NUMBER:
 		if lit != classNumeric {
 			e.errorf(l.Pos(), "column %q (%s) cannot be compared with the number %s (§predicates)", b.name, b.goType, l.Tok.Val)
-			return "1"
+			return "", false
 		}
-		return l.Tok.Val
+		return numberGo(l.Tok.Val), true
 	case token.STRING:
 		if lit != classText && lit != classTime {
 			e.errorf(l.Pos(), "column %q (%s) cannot be compared with the string %q (§predicates)", b.name, b.goType, l.Tok.Val)
-			return "1"
+			return "", false
 		}
-		return "'" + strings.ReplaceAll(l.Tok.Val, "'", "''") + "'"
+		return fmt.Sprintf("%q", l.Tok.Val), true
 	default:
 		if lit != classBool {
 			e.errorf(l.Pos(), "column %q (%s) is not boolean (§predicates)", b.name, b.goType)
-			return "1"
+			return "", false
 		}
 		if strings.EqualFold(l.Tok.Val, "true") {
-			return "1"
+			return "true", true
 		}
-		return "0"
+		return "false", true
 	}
 }
 
-func (e *selectEnv) inCheck(x *ast.PredIn) string {
+func numberGo(val string) string {
+	if strings.ContainsAny(val, ".eE") {
+		return val
+	}
+	if trimmed := strings.TrimLeft(val, "0"); trimmed != "" {
+		return trimmed
+	}
+	return "0"
+}
+
+func (e *selectEnv) inLower(x *ast.PredIn) rt.GenPred {
 	b := e.columnBind(x.Col)
 	if b == nil {
-		return "1"
+		return rt.GenPred{}
 	}
 	if x.List != nil {
 		if b.class == classTime {
 			e.errorf(x.Col.Pos(), "column %q (%s) cannot take a list parameter: JSON carries no date/time value (§predicates)", b.name, b.goType)
-			return "1"
+			return rt.GenPred{}
 		}
 		if b.class == classEqOnly && b.storage == classTime {
 			e.errorf(x.Col.Pos(), "column %q has declared type %s stored as time.Time; it cannot take a list parameter: JSON carries no date/time value (§predicates)", b.name, b.goType)
-			return "1"
+			return rt.GenPred{}
 		}
-		return sqlite.Ident(b.name) + " IN (SELECT value FROM json_each(" + e.paramBind(x.List, "[]"+b.goType) + "))"
+		return rt.PredInList(b.name, "rt.JSONList("+e.paramBind(x.List, "[]"+b.goType)+")")
 	}
-	var items []string
+	slots := make([]any, 0, len(x.Items))
+	ok := true
 	for _, it := range x.Items {
-		items = append(items, e.litRender(it, b))
+		slot, good := e.litSlot(it, b)
+		if !good {
+			ok = false
+			continue
+		}
+		slots = append(slots, slot)
 	}
-	return sqlite.Ident(b.name) + " IN (" + strings.Join(items, ", ") + ")"
+	if !ok {
+		return rt.GenPred{}
+	}
+	return rt.PredIn(b.name, slots...)
 }
 
-func (e *selectEnv) likeCheck(x *ast.PredLike) string {
+func (e *selectEnv) likeLower(x *ast.PredLike) rt.GenPred {
 	b := e.columnBind(x.Col)
 	if b == nil {
-		return "1"
+		return rt.GenPred{}
 	}
 	if b.class != classText {
 		e.errorf(x.Col.Pos(), "like needs a text column; %q is %s (§predicates)", b.name, b.goType)
-		return "1"
+		return rt.GenPred{}
 	}
 	switch p := x.Pattern.(type) {
 	case *ast.Lit:
-		return sqlite.Ident(b.name) + " LIKE '" + strings.ReplaceAll(p.Tok.Val, "'", "''") + "'"
+		return rt.PredLike(b.name, fmt.Sprintf("%q", p.Tok.Val))
 	case *ast.Param:
-		return sqlite.Ident(b.name) + " LIKE " + e.paramBind(p, "string")
+		return rt.PredLike(b.name, e.paramBind(p, "string"))
 	}
-	return "1"
+	return rt.GenPred{}
 }
 
 // SelectFns lowers the package's checked selects into per-member
@@ -1004,8 +1074,8 @@ func (p *Package) SelectFns() []golang.SelectFn {
 			fn := golang.SelectFn{
 				TableKey:     m.Key,
 				MethodSuffix: si.MethodSuffix,
-				WhereSQL:     si.WhereSQL,
-				OrderSQL:     si.OrderSQL,
+				Where:        si.Where,
+				Order:        si.Order,
 				Cols:         si.Cols,
 				Excluded:     si.Excluded,
 				SharedType:   si.Shared,

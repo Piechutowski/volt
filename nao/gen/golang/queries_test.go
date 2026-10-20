@@ -20,7 +20,14 @@ type stmtCase struct {
 
 func planStatements(t *testing.T, p *plan) map[string]stmtCase {
 	t.Helper()
-	named := func(sql string) stmtCase { return stmtCase{SQL: sql, N: -1} }
+	type m = struct{}
+	stmts := map[string]stmtCase{}
+	static := func(name, sql string, args []string, err error) {
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		stmts[name] = stmtCase{SQL: sql, N: len(args)}
+	}
 	cols := func(fields []*fieldPlan) []string {
 		out := make([]string, len(fields))
 		for i, f := range fields {
@@ -28,28 +35,35 @@ func planStatements(t *testing.T, p *plan) map[string]stmtCase {
 		}
 		return out
 	}
-	stmts := map[string]stmtCase{}
 	for _, tm := range p.tables {
 		if len(tm.fields) == 0 {
 			continue
 		}
-		table, returning := sqlIdentQuote(tm.sqlName), tm.columnList()
+		table, returning := rt.Ident(tm.sqlName), tm.columnList()
 		if len(tm.pk) > 0 {
-			stmts[tm.model+"Get"] = named(tm.getSQL())
+			sql, args, err := tm.getSQL()
+			static(tm.model+"Get", sql, args, err)
 			if len(tm.pk) == 1 {
-				stmts[tm.model+"GetMany"] = stmtCase{SQL: tm.getManySQL() + " (?)", N: 1}
+				many, margs, err := rt.SelectRender(table, returning, []rt.Opt[m]{rt.Column[m, any]{Name: tm.pk[0].colName}.In(nil)})
+				if err != nil {
+					t.Fatalf("%sGetMany: %v", tm.model, err)
+				}
+				stmts[tm.model+"GetMany"] = stmtCase{SQL: many, N: len(margs)}
 			}
 			if set := cols(tm.nonPK()); len(set) > 0 {
 				key := cols(tm.pk)
 				stmts[tm.model+"UpdateOne"] = stmtCase{SQL: rt.UpdateRowRender(table, set[:1], key, returning), N: 1 + len(key)}
 				stmts[tm.model+"UpdateAll"] = stmtCase{SQL: rt.UpdateRowRender(table, set, key, returning), N: len(set) + len(key)}
 			}
-			stmts[tm.model+"Delete"] = named(tm.deleteSQL())
+			sql, args, err = tm.deleteSQL()
+			static(tm.model+"Delete", sql, args, err)
 		}
 		for _, f := range tm.uniqueFields() {
-			stmts[tm.model+"GetBy"+f.goField] = named(tm.getBySQL(f))
+			sql, args, err := tm.getBySQL(f)
+			static(tm.model+"GetBy"+f.goField, sql, args, err)
 		}
-		stmts[tm.model+"List"] = named(tm.listSQL())
+		sql, args, err := tm.listSQL()
+		static(tm.model+"List", sql, args, err)
 		stmts[tm.model+"CreateDefaults"] = stmtCase{SQL: rt.InsertRender(table, nil, returning), N: 0}
 		if set := cols(tm.settable()); len(set) > 0 {
 			stmts[tm.model+"CreateOne"] = stmtCase{SQL: rt.InsertRender(table, set[:1], returning), N: 1}
@@ -73,7 +87,7 @@ func planDynStatements(t *testing.T, p *plan) map[string]stmtCase {
 		if len(tm.fields) == 0 {
 			continue
 		}
-		table := sqlIdentQuote(tm.sqlName)
+		table := rt.Ident(tm.sqlName)
 		cols := tm.columnList()
 		var preds []rt.Pred[m]
 		var orders []rt.Order[m]
@@ -88,7 +102,7 @@ func planDynStatements(t *testing.T, p *plan) map[string]stmtCase {
 
 		sql, args, err := rt.SelectRender(table, cols, []rt.Opt[m]{
 			rt.And(preds...),
-			rt.Or(first.IsNull(), rt.Not(first.Eq(nil)), first.In(nil, nil), first.EqCol(first)),
+			rt.Or(first.IsNull(), rt.Not(first.Eq(nil)), first.In(nil, nil), first.EqCol(first), first.InList(nil)),
 			rt.Distinct[m](),
 			rt.OrderBy(orders...),
 			rt.After[m](key...),
@@ -114,7 +128,7 @@ func TestQueriesPrepare(t *testing.T) {
 		t.Skip("python3 not available")
 	}
 	const driver = `
-import sqlite3, sys, json, collections, datetime, uuid
+import sqlite3, sys, json, datetime, uuid
 inp = json.load(sys.stdin)
 con = sqlite3.connect(":memory:")
 con.execute("PRAGMA foreign_keys = ON")
@@ -123,12 +137,10 @@ con.create_function("now", 0, _now, deterministic=True)
 con.create_function("getdate", 0, _now, deterministic=True)
 con.create_function("uuid_generate_v4", 0, lambda: str(uuid.uuid4()), deterministic=True)
 con.executescript(inp["ddl"])
-named = collections.defaultdict(lambda: None)
 for name, case in sorted(inp["stmts"].items()):
     stmt, n = case["sql"], case["n"]
-    params = named if n < 0 else [None] * n
     try:
-        con.execute("EXPLAIN " + stmt, params)
+        con.execute("EXPLAIN " + stmt, [None] * n)
     except Exception as e:
         sys.exit(f"{name}: {e}\n  {stmt}")
 `
@@ -178,11 +190,6 @@ func TestQueriesGenerationErrors(t *testing.T) {
 			dbml:    "Table jobs [model: 'Queries'] { id int [pk] }",
 			wantErr: "Queries",
 		},
-		{
-			name:    "sql parameter collision",
-			dbml:    "Table t { \"żb\" int [pk]\n \"įb\" int }",
-			wantErr: "SQL parameter name",
-		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -213,21 +220,6 @@ func TestArgNames(t *testing.T) {
 	for _, tc := range cases {
 		if got := argName(tc.in); got != tc.want {
 			t.Errorf("argName(%q) = %q, want %q", tc.in, got, tc.want)
-		}
-	}
-}
-
-func TestSQLParamNames(t *testing.T) {
-	cases := []struct{ in, want string }{
-		{"email", "email"},
-		{"full name", "full_name"},
-		{"user_id", "user_id"},
-		{"2fa", "p2fa"},
-		{"żółć", "____"},
-	}
-	for _, tc := range cases {
-		if got := sqlParamName(tc.in); got != tc.want {
-			t.Errorf("sqlParamName(%q) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
 }

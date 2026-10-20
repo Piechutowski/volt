@@ -11,6 +11,7 @@ import (
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/token"
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
 // GenerateDyn renders the dynamic-query file for one checked DBML file.
@@ -164,7 +165,7 @@ func (e *dynEmitter) tableEmit(t *tableModel) {
 	tbl := t.ti.Decl.Name.String()
 
 	b.WriteString("const (\n")
-	fmt.Fprintf(b, "\t%sTableSQL   = `%s`\n", lower, sqlIdentQuote(t.sqlName))
+	fmt.Fprintf(b, "\t%sTableSQL   = `%s`\n", lower, rt.Ident(t.sqlName))
 	fmt.Fprintf(b, "\t%sColumnsSQL = `%s`\n)\n\n", lower, t.columnList())
 
 	e.wrappersEmit(t, tbl)
