@@ -27,7 +27,7 @@ app/i08_helper_collision.volt:6:2: error: spec/scopes-and-routes: reverse-URL he
 app/i09_signature_conflict.volt:6:2: error: spec/scopes-and-routes: X.Show is reached by routes with different parameter signatures (§handler-references): (id string) vs (id int) (first at app/i09_signature_conflict.volt:5:2)
 
 ## i100_query_body_verb
-app/routes.volt:10:16: error: spec/scopes-and-routes: db.UserCreate takes a request body (db.UserChangeset); route it with post, put or patch (§query-routes)
+app/routes.volt:10:16: error: spec/scopes-and-routes: db.UserCreate takes a request body (db.UserParams); route it with post, put or patch (§query-routes)
 
 ## i101_query_extra_path_param
 app/routes.volt:10:13: error: spec/scopes-and-routes: path parameter "x" is not a parameter of db.UserList (§query-routes)
@@ -197,6 +197,9 @@ db/i180_migration_add_expression_default.volt:18:47: error: spec/migrations: add
 
 ## i181_migration_no_tables.volt
 db/i181_migration_no_tables.volt:5:1: error: spec/migrations: migration "0001__init" in a package that declares no tables: a migration is an element of the package whose tables it migrates (§migrations)
+
+## i182_query_update_key
+app/routes.volt:10:18: error: spec/query-routes: db.UserUpdate loads the row to update by "id", which must be a path parameter of the route; spell it :id(int) (§query-routes)
 
 ## i18_dataset_reserved.volt
 app/i18_dataset_reserved.volt:4:1: error: syntax: routes, resources and datasets must appear inside a Scope (§scopes-and-routes)

@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -27,6 +28,24 @@ func call(h http.Handler, method, target string, body io.Reader, headers ...stri
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return rec
+}
+
+func problemOf(t *testing.T, rec *httptest.ResponseRecorder, status int) volt.Problem {
+	t.Helper()
+	var p volt.Problem
+	if rec.Code != status || json.Unmarshal(rec.Body.Bytes(), &p) != nil || p.Status != status {
+		t.Fatalf("%d %q, want %d with a Problem body", rec.Code, rec.Body.String(), status)
+	}
+	return p
+}
+
+func detailNamed(details []volt.Detail, check string, columns ...string) bool {
+	for _, d := range details {
+		if d.Check == check && slices.Equal(d.Columns, columns) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestQueryRouteCRUDInJSON(t *testing.T) {
@@ -59,8 +78,14 @@ func TestQueryRouteCRUDInJSON(t *testing.T) {
 	}
 
 	rec = call(h, "PATCH", "/api/users/1", strings.NewReader(`{"email":"uno@example.com"}`), "Content-Type", volt.MIMEJSON)
-	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "uno@example.com") {
+	var updated db.User
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &updated) != nil || updated.ID != 1 || updated.Email != "uno@example.com" {
 		t.Fatalf("update: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = call(h, "PATCH", "/api/users/1", strings.NewReader(`{}`))
+	var same db.User
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &same) != nil || same != updated {
+		t.Fatalf("empty update: %d %s, want 200 with the unchanged row (§changesets)", rec.Code, rec.Body.String())
 	}
 	if rec = call(h, "PATCH", "/api/users/999", strings.NewReader(`{"email":"x@example.com"}`)); rec.Code != 404 {
 		t.Fatalf("update miss: %d, want 404", rec.Code)
@@ -134,6 +159,12 @@ func TestQueryRouteFormatErrors(t *testing.T) {
 	if rec := call(h, "POST", "/api/users", strings.NewReader("{oops")); rec.Code != 400 {
 		t.Errorf("malformed body: %d, want 400", rec.Code)
 	}
+	if rec := call(h, "POST", "/api/users", strings.NewReader(`["x@example.com"]`)); rec.Code != 400 {
+		t.Errorf("a body that is not an object: %d, want 400 (§changesets)", rec.Code)
+	}
+	if rec := call(h, "PATCH", "/api/users/999", strings.NewReader("{oops")); rec.Code != 400 {
+		t.Errorf("malformed body for a missing row: %d, want 400; the body is decoded before the row is loaded (§query-routes)", rec.Code)
+	}
 }
 
 // TestQueryRouteTable: query rows carry the reference as written and no
@@ -175,57 +206,62 @@ func TestDatasetRoutesServe(t *testing.T) {
 	}
 }
 
-// TestQueryRouteValidation (§validators, §query-routes): a violated check
-// is a 422 naming the check before the database sees the row; a
-// duplicate key is a 409 naming the column; both in either format.
+// TestQueryRouteValidation (§validators, §query-routes, §changesets): a
+// failed validator is a 422 whose details name it and its column,
+// before the database sees the row; a duplicate key is a 409 with a
+// unique detail on the index's column.
 func TestQueryRouteValidation(t *testing.T) {
 	h := handlerWithDB(t)
 
-	rec := call(h, "POST", "/api/users", strings.NewReader(`{"email":"nope"}`))
-	if rec.Code != 422 || !strings.Contains(rec.Body.String(), "EmailValid") {
-		t.Fatalf("validator: %d %q, want 422 naming the validator", rec.Code, rec.Body.String())
+	p := problemOf(t, call(h, "POST", "/api/users", strings.NewReader(`{"email":"nope"}`)), 422)
+	if !detailNamed(p.Details, "EmailValid", "email") {
+		t.Fatalf("validator: details = %+v, want EmailValid on email", p.Details)
 	}
-	rec = call(h, "POST", "/api/users", strings.NewReader(`{"email":"@"}`))
-	if rec.Code != 422 || !strings.Contains(rec.Body.String(), "EmailShape") {
-		t.Fatalf("second validator: %d %q, want 422 naming EmailShape", rec.Code, rec.Body.String())
+	p = problemOf(t, call(h, "POST", "/api/users", strings.NewReader(`{"email":"@"}`)), 422)
+	if !detailNamed(p.Details, "EmailShape", "email") {
+		t.Fatalf("second validator: details = %+v, want EmailShape on email", p.Details)
 	}
-	rec = call(h, "PATCH", "/api/users/1", strings.NewReader(`{"email":"nope"}`))
-	if rec.Code != 422 {
-		t.Fatalf("update validation: %d, want 422", rec.Code)
+	p = problemOf(t, call(h, "PATCH", "/api/users/1", strings.NewReader(`{"email":"nope"}`)), 422)
+	if !detailNamed(p.Details, "EmailValid", "email") {
+		t.Fatalf("update validation: details = %+v, want EmailValid on email", p.Details)
 	}
-	rec = call(h, "POST", "/api/users", strings.NewReader(`{"email":"one@example.com"}`))
-	if rec.Code != 409 || !strings.Contains(rec.Body.String(), "users.email") {
-		t.Fatalf("duplicate: %d %q, want 409 naming users.email", rec.Code, rec.Body.String())
+	if rec := call(h, "GET", app.PathAPIUserGet(1), nil); !strings.Contains(rec.Body.String(), "one@example.com") {
+		t.Fatalf("a refused update reached the row: %s", rec.Body.String())
+	}
+	p = problemOf(t, call(h, "POST", "/api/users", strings.NewReader(`{"email":"one@example.com"}`)), 409)
+	if len(p.Details) != 1 || !detailNamed(p.Details, "unique", "email") {
+		t.Fatalf("duplicate: details = %+v, want one unique detail on email", p.Details)
 	}
 }
 
-// TestQueryRouteValidationAttribution (§formats, §validators): the error body
-// is a Problem whose details name the failing check and its columns,
-// so the GUI can mark the field.
+// TestQueryRouteValidationAttribution (§formats, §changesets): the error
+// body is a Problem whose details name every failing check and its
+// columns, so the GUI can mark the fields; a key that names no column
+// is an unknown_field detail of the same 422, never dropped.
 func TestQueryRouteValidationAttribution(t *testing.T) {
 	h := handlerWithDB(t)
-	rec := call(h, "POST", "/api/users", strings.NewReader(`{"email":""}`))
-	var p volt.Problem
-	if rec.Code != 422 || json.Unmarshal(rec.Body.Bytes(), &p) != nil {
-		t.Fatalf("empty email: %d %q", rec.Code, rec.Body.String())
-	}
-	names := map[string]bool{}
+	p := problemOf(t, call(h, "POST", "/api/users", strings.NewReader(`{"email":""}`)), 422)
 	for _, d := range p.Details {
 		if len(d.Columns) != 1 || d.Columns[0] != "email" {
 			t.Errorf("detail %+v should name the email column", d)
 		}
-		names[d.Check] = true
 	}
-	if !names["email_required"] || !names["EmailShape"] {
-		t.Errorf("details = %+v, want email_required and EmailShape", p.Details)
+	for _, check := range []string{"required", "EmailShape", "EmailValid"} {
+		if !detailNamed(p.Details, check, "email") {
+			t.Errorf("details = %+v, want %s on email", p.Details, check)
+		}
 	}
-	rec = call(h, "POST", "/api/users", strings.NewReader(`{"emial":"x@y"}`))
-	if rec.Code != 400 || !strings.Contains(rec.Body.String(), "emial") {
-		t.Fatalf("unknown field: %d %q", rec.Code, rec.Body.String())
+	p = problemOf(t, call(h, "POST", "/api/users", strings.NewReader(`{"emial":"x@y.example","email":"x@y.example"}`)), 422)
+	if len(p.Details) != 1 || !detailNamed(p.Details, "unknown_field", "emial") {
+		t.Fatalf("unknown field: details = %+v, want one unknown_field detail on emial", p.Details)
 	}
-	rec = call(h, "POST", "/api/users", strings.NewReader(`{"email":"one@example.com"}`))
-	p = volt.Problem{}
-	if rec.Code != 409 || json.Unmarshal(rec.Body.Bytes(), &p) != nil || len(p.Details) != 1 || p.Details[0].Columns[0] != "email" {
-		t.Fatalf("duplicate: %d %q", rec.Code, rec.Body.String())
+	p = problemOf(t, call(h, "PATCH", "/api/users/1", strings.NewReader(`{"emial":"x@y.example"}`)), 422)
+	if !detailNamed(p.Details, "unknown_field", "emial") {
+		t.Fatalf("unknown field on update: details = %+v, want unknown_field on emial", p.Details)
+	}
+	rec := call(h, "POST", "/api/users", strings.NewReader(`{"id":7,"email":"seven@example.com"}`))
+	var made db.User
+	if rec.Code != 201 || json.Unmarshal(rec.Body.Bytes(), &made) != nil || made.ID == 7 || made.Email != "seven@example.com" {
+		t.Fatalf("a column outside the allow list is ignored, never an error (§changesets): %d %s", rec.Code, rec.Body.String())
 	}
 }

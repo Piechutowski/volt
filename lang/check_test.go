@@ -560,6 +560,8 @@ func TestQueryRouteErrors(t *testing.T) {
 		{"no pk", "get /x/:id(int) db.NoteGet", "no generated query db.NoteGet"},
 		{"path type", "get /x/:id(string) db.UserGet", "spell it :id(int)"},
 		{"body verb", "get /x db.UserCreate", "route it with post, put or patch"},
+		{"update key", "patch /x db.UserUpdate", `db.UserUpdate loads the row to update by "id", which must be a path parameter of the route; spell it :id(int)`},
+		{"update key elsewhere", "patch /x/:email db.UserUpdate", `path parameter "email" is not a parameter of db.UserUpdate`},
 		{"extra path param", "get /x/:n(int) db.UserList", `path parameter "n" is not a parameter of db.UserList`},
 		{"list in path", "get /x/:ids db.UserPicked", "cannot be a path parameter"},
 		{"wildcard", "get /x/:id... db.UserGet", "cannot be a wildcard"},

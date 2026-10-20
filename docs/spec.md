@@ -1863,9 +1863,17 @@ Scope /api [pipe: api] {
      (`:id(int)` for `id int`; `string` needs no annotation); a
      type a segment cannot carry (§route-paths) goes in the query string.
      A wildcard cannot bind a query parameter;
-   - a **params struct** (`<Model>CreateParams`, `<Model>UpdateParams`)
-     binds from the **request body**, decoded by `Content-Type`
-     (Formats). The route's verb MUST be `post`, `put` or `patch`;
+   - a **changeset** parameter (`<Model>Create`, `<Model>Update`)
+     binds from the **request body**: the body decodes as
+     `<Model>Params` by `Content-Type` (Formats; §changesets rule 5)
+     and is cast into a changeset. `Create` casts into `<Model>New()`
+     allowing every column but the auto-increment key; `Update` loads
+     the row by the key path parameters with `<Model>Get` (a miss is a
+     404), casts into its `Changeset()` allowing every non-key column,
+     and the route MUST carry every key column as a path parameter.
+     The body is decoded before the row is loaded, so a malformed body
+     is a 400 whether or not the row exists. The route's verb MUST be
+     `post`, `put` or `patch`;
    - a **list parameter** (§predicates) binds from the **repeated query
      key** of its name; absent means the empty list;
    - every other parameter binds from the **query string** by name,
@@ -1876,15 +1884,15 @@ Scope /api [pipe: api] {
    of those (a list parameter); a select with a parameter of any other
    type, a declared type (§types) included, is not a query route, and
    the route is an error. A path parameter the method does not take is
-   an error: the route would capture a value nothing consumes.
+   an error: the route would capture a value nothing consumes; the key
+   of an `Update` is consumed by the load.
 3. **Response.** The result renders in the negotiated format
    (Formats): rows or a row with status 200, a created row with 201,
    a delete with 204 and no body. A query's row miss (`rt.ErrNotFound`,
    which is `sql.ErrNoRows`) is a 404 through the error spine. A
-   Create or Update handler calls the params struct's `Validate`
-   (§validators) before the query when it has one, so a failed validator is a
-   422 naming it; a constraint the database refuses is a 409
-   (duplicate key) or 422 naming the constraint (§validators). Any other
+   refused write is a `*rt.Invalid` through the error spine: 409 for
+   a unique violation, 422 otherwise, itemized per field (§changesets
+   rule 10), an unknown key of the body among the fields. Any other
    error is the spine's 500.
 4. **Names.** The helper name (§route-names-and-reverse-urls) defaults to the scope name
    prefixes followed by the method name, and only `get`/`head` query
@@ -1903,7 +1911,7 @@ Scope /api [pipe: api] {
    `Query` or `<package name>.Query` names its own generated query;
    `resources t [default]` (§default-handlers) and `dataset s` (§dataset-declaration) resolve in
    the package when bare or self-qualified. Nothing is imported, the
-   generated handlers name the package's params structs bare, and the
+   generated handlers name the package's changesets bare, and the
    router's constructor is `NewRouter`, so it never collides with the
    query layer's `New`. The package's own name is thereby a qualifier:
    an import MUST NOT take it (§imports).
@@ -1973,7 +1981,10 @@ the routes through typed methods instead of hand-built requests.
    repeated key, a changeset as the body: `APIUserCreate(ctx, cs
    db.UserChangeset) (db.User, error)`, `APIUserUpdate(ctx, id int, cs
    db.UserChangeset) (db.User, error)`, sent as `cs.Params()`
-   (§changesets).
+   (§changesets). A changeset built from `<Model>New()` is the carrier
+   of changes on the client side, so an update needs no row in hand:
+   `APIUserUpdate(ctx, id, db.UserNew().EmailSet(e))` sets one column
+   of row `id`.
 4. **Every named controller route** is one raw method with the
    route's path parameters, returning `*http.Response` for the caller
    to read and close: Volt does not know what a hand-written action
@@ -3256,10 +3267,11 @@ chain, each link runnable by `go test ./...`:
 pinned by the generator goldens, which are gofmt-stable and compiled by
 the real Go toolchain on every `go test ./...` run.*
 
-`nao_models.go` carries every type the wire carries — the enums, the
-row structs, and the params structs `<Model>CreateParams` and
-`<Model>UpdateParams` — so a program that shares the models, a
-generated client (§generated-client) among them, needs nothing else.
+`nao_models.go` carries every type the wire carries: the enums, the
+row structs, the changesets with their column handles and
+`<Model>Params` (§changesets rule 12), so a program that shares the
+models, a generated client (§generated-client) among them, needs
+nothing else.
 `nao_queries.go` carries the `Queries` handle and its methods, and
 imports only what their signatures name.
 

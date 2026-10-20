@@ -120,8 +120,9 @@ func TestEventRouteStreams(t *testing.T) {
 	}
 }
 
-// TestClientValidationErrors: the generated client sees the same
-// statuses as HTTPError values (§validators).
+// TestClientValidationErrors: the generated client sees a refused
+// write as a *volt.ProblemError carrying the status and the field
+// details the server itemized (§formats, §changesets), in GOB too.
 func TestClientValidationErrors(t *testing.T) {
 	srv := httptest.NewServer(handlerWithDB(t))
 	defer srv.Close()
@@ -131,15 +132,22 @@ func TestClientValidationErrors(t *testing.T) {
 
 	_, err := c.APIUserCreate(ctx, db.UserNew().EmailSet("nope"))
 	var he volt.HTTPError
-	if !errors.As(err, &he) || he.StatusCode() != 422 || !strings.Contains(he.Error(), "EmailValid") {
+	if !errors.As(err, &he) || he.StatusCode() != 422 {
 		t.Fatalf("invalid email = %v", err)
 	}
 	var pe *volt.ProblemError
-	if !errors.As(err, &pe) || len(pe.Details()) == 0 || pe.Details()[0].Columns[0] != "email" {
+	if !errors.As(err, &pe) || !detailNamed(pe.Details(), "EmailValid", "email") {
 		t.Fatalf("no attribution through the client: %v", err)
 	}
+	_, err = c.APIUserUpdate(ctx, 1, db.UserNew().EmailSet(""))
+	if !errors.As(err, &pe) || pe.StatusCode() != 422 || !detailNamed(pe.Details(), "required", "email") {
+		t.Fatalf("empty email on update = %v, want 422 with required on email", err)
+	}
 	_, err = c.APIUserCreate(ctx, db.UserNew().EmailSet("one@example.com"))
-	if !errors.As(err, &he) || he.StatusCode() != 409 {
-		t.Fatalf("duplicate = %v", err)
+	if !errors.As(err, &pe) || pe.StatusCode() != 409 || !detailNamed(pe.Details(), "unique", "email") {
+		t.Fatalf("duplicate = %v, want 409 with unique on email", err)
+	}
+	if _, err := c.APIUserUpdate(ctx, 999, db.UserNew().EmailSet("x@example.com")); !errors.Is(err, volt.ErrNotFound) {
+		t.Fatalf("update of a missing row = %v, want volt.ErrNotFound", err)
 	}
 }

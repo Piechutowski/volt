@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Piechutowski/volt"
@@ -38,8 +39,13 @@ func TestResourcesDefault(t *testing.T) {
 		if err != nil || up.Email != "fer@example.com" {
 			t.Fatalf("%v: update = %+v, %v", f, up, err)
 		}
-		if _, err := c.RefUpdateUser(ctx, made.ID, db.UserNew()); !errors.Is(err, volt.Error(422, "")) {
-			t.Fatalf("%v: empty email = %v, want 422", f, err)
+		same, err := c.RefUpdateUser(ctx, made.ID, db.UserNew())
+		if err != nil || same != up {
+			t.Fatalf("%v: empty update = %+v, %v; want the unchanged row (§changesets)", f, same, err)
+		}
+		var pe *volt.ProblemError
+		if _, err := c.RefUpdateUser(ctx, made.ID, db.UserNew().EmailSet("")); !errors.As(err, &pe) || pe.StatusCode() != 422 || !detailNamed(pe.Details(), "required", "email") {
+			t.Fatalf("%v: empty email = %v, want 422 with required on email", f, err)
 		}
 		if err := c.RefDeleteUser(ctx, made.ID); err != nil {
 			t.Fatalf("%v: delete = %v", f, err)
@@ -56,5 +62,8 @@ func TestResourcesDefault(t *testing.T) {
 	h := handlerWithDB(t)
 	if rec := call(h, "PUT", "/ref/users/1", nil); rec.Code != 400 {
 		t.Fatalf("put with no body: %d, want 400", rec.Code)
+	}
+	if rec := call(h, "PUT", "/ref/users/1", strings.NewReader(`{}`)); rec.Code != 200 || !strings.Contains(rec.Body.String(), "one@example.com") {
+		t.Fatalf("put with an empty object: %d %s, want 200 with the unchanged row", rec.Code, rec.Body.String())
 	}
 }

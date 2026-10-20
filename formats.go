@@ -96,11 +96,14 @@ func Encode(w io.Writer, f Format, v any) error {
 // 413. Set it before serving.
 var MaxBodyBytes int64 = 4 << 20
 
-// Decode reads the request body into v by its Content-Type: JSON when
-// the header is absent or names JSON, GOB for application/x-gob. Any
-// other type is a 415; an empty or malformed body is a 400; a JSON
-// field the struct does not declare is a 400 naming it; a body over
-// MaxBodyBytes is a 413.
+// Decode reads the request body into v by its Content-Type (spec
+// §formats): JSON when the header is absent or names JSON, GOB for
+// application/x-gob. Any other type is a 415; an empty or malformed
+// body is a 400; a body over MaxBodyBytes is a 413. Into a struct of a
+// hand-written controller, a JSON field the struct does not declare is
+// a 400 naming it; a write body of a query route decodes into the
+// model's Params, which keeps every key for the changeset's Cast to
+// judge (§changesets).
 func Decode(r *Request, v any) error {
 	f, ok := FormatOf(r.Header.Get("Content-Type"))
 	if !ok {

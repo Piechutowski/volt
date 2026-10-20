@@ -457,7 +457,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 
 	type sigParam struct {
 		name, goType string
-		body         bool
+		body, key    bool
 	}
 	var sig []sigParam
 	found := false
@@ -481,7 +481,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		if _, _, cm, ok := l.crudByName(target, name); ok {
 			found = true
 			for _, k := range cm.Key {
-				sig = append(sig, sigParam{name: k.GoName, goType: k.GoType})
+				sig = append(sig, sigParam{name: k.GoName, goType: k.GoType, key: cm.Op == "update"})
 			}
 			if cm.Body != "" {
 				sig = append(sig, sigParam{name: "cs", goType: qual + "." + cm.Body, body: true})
@@ -514,7 +514,11 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		case sp.body:
 			qp.Source = FromBody
 			if method != "POST" && method != "PUT" && method != "PATCH" {
-				l.errorf(pos, "scopes-and-routes", "%s takes a request body (%s); route it with post, put or patch (§query-routes)", ref, sp.goType)
+				body := qr.Changeset.Params
+				if !local {
+					body = qual + "." + body
+				}
+				l.errorf(pos, "scopes-and-routes", "%s takes a request body (%s); route it with post, put or patch (§query-routes)", ref, body)
 				ok = false
 			}
 		case strings.HasPrefix(sp.goType, "[]"):
@@ -542,6 +546,9 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 					}
 					ok = false
 				}
+			} else if sp.key {
+				l.errorf(pos, "query-routes", "%s loads the row to update by %q, which must be a path parameter of the route; spell it :%s(%s) (§query-routes)", ref, sp.name, sp.name, sp.goType)
+				ok = false
 			} else {
 				qp.Source = FromQuery
 				if !queryValueTypes[sp.goType] {
