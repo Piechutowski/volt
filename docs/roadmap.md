@@ -43,11 +43,12 @@ when a consumer exists.
 
 - [x] Models: structs, enums, `Null[T]`, singular names, notes as doc comments
 - [x] DDL and seed `INSERT`s from `records`
-- [x] CRUD: `Get`, `GetMany`, `GetBy*`, `List`, `Count`, `Create`, `Update`, `Delete`; keyless tables get `List`/`Create`/`Count`
+- [x] CRUD: `Get`, `GetMany`, `GetBy*`, `List`, `Count`, `Create`, `Update`, `Delete`; keyless tables get `List`/`Create`/`Count`; `Create` and `Update` take a changeset and return the stored row
 - [x] Dynamic queries: predicates as values, flat typed handles, per-model wrappers, shared verbs, keyset pagination, statement cache, `dynname` vet rule
-- [x] Validation: validators are exported Go functions of the package named in the schema, `required` is the built-in one, nothing reaches the DDL; `Validate()` on models and params, 422/409 with per-column details on the API path
-  - [ ] `[on: create]` / `[on: update]` as triggers in SQL and per-params in Go
-  - [ ] Enum membership in the Go tier (hypotheses H5)
+- [x] Changesets: the single write path (§changesets); `<Model>New()` and `row.Changeset()`, one setter per column, `Cast` of a `rt.Params[M]` wire body behind an allow list, `Validate`, `Create` and `Update` rendered from the marked columns; every refused write, a failed validator or the database's own refusal alike, is one `*rt.Invalid` itemizing its field errors, 409 for a `unique` violation, 422 otherwise
+- [x] Validation: validators are exported Go functions of the package named in the schema, `required` is the built-in one, nothing reaches the DDL; `Validate()` on the changeset runs `required`, enum membership and the validators, every failure collected; the API path answers with the changeset's `*rt.Invalid`
+  - [ ] `[on: create]` / `[on: update]` as triggers in SQL and, in Go, by whether the changeset was made from a row
+  - [x] Enum membership in the Go tier: the `enum` check of `Validate`
   - [ ] `[message: '…']` with a runtime hook keyed by table and check
   - *no* named validation sets
 - [x] Transactions: one `Queries` over `DBTX`, `Tx` with rollback on error or panic, single-writer `Open`

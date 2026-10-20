@@ -324,15 +324,17 @@ wins; use it whenever the generated name matters.
 ### dynname
 
 **What it does.** Reports declarations whose *generated dynamic-query
-names* collide in Go package scope. The dynamic layer
-mints flat names by concatenation — `<Model><Field>` for the column
-handles, `<Model>Limit`, `<Model>Offset`, `<Model>Distinct`,
-`<Model>OrderBy`, `<Model>After`, `<Model>Set` for the option wrappers —
-alongside the model structs, params structs, enum types and enum
-constants, so two distinct DBML declarations can flatten to one Go
-identifier: `Table user_limits` mints model `UserLimit`, exactly the
-option wrapper of `Table users`; `users.foo_bar` and `user_foos.bar`
-both mint the handle `UserFooBar`.
+names* collide in Go package scope. Generation mints flat
+package-scope names by concatenation from the model name: the model
+struct itself, the changeset `<Model>Changeset`, the aliases
+`<Model>Column` and `<Model>Params`, the constructor `<Model>New`
+(§changesets), the column handles `<Model><Field>`, and the option
+wrappers `<Model>Limit`, `<Model>Offset`, `<Model>Distinct`,
+`<Model>OrderBy`, `<Model>After`, `<Model>Set` of the dynamic layer,
+alongside the enum types and enum constants, so two distinct
+declarations can flatten to one Go identifier: `Table user_limits`
+mints model `UserLimit`, exactly the option wrapper of `Table users`;
+`users.foo_bar` and `user_foos.bar` both mint the handle `UserFooBar`.
 
 **Why.** `volt gen` refuses such schemas outright (loud failure, never a
 silent rename), but the generator can only name the first collision; this

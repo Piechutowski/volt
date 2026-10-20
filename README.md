@@ -72,7 +72,7 @@ third-party deps. Importing `nao/rt` alone drags in nothing.
 
 Implemented and tested: the three-layer front end, project checking,
 the structured query layer (groups, predicates, selects with
-projection), nao's CRUD, dynamic queries and validation, router
+projection), nao's CRUD over changesets, dynamic queries and validation, router
 generation (typed params, wildcards, resources, pipelines, per-scope
 error handlers, reverse URLs, query routes, datasets, event routes),
 the generated client, JSON and GOB rendering, the runtime, the CLI,
@@ -121,6 +121,30 @@ tests:
   `go generate ./api ./gui` from the root (`./...` stops at the root
   module in a workspace). The client beside the models names their
   types bare and is constructed with `NewClient`.
+
+## Writing a row
+
+Every generated write takes a changeset (spec §changesets): a value
+built by pure functions, validated by pure functions and written by
+one call at the end. Nothing reaches the database before that call,
+and nothing reaches it when the changeset is invalid.
+
+```go
+user, err := q.UserCreate(ctx, db.UserNew().EmailSet("a@b.example"))
+
+cs := user.Changeset().BioSet(rt.Some("writes Go")).Validate()
+if !cs.Valid() {
+	return cs.Err()
+}
+user, err = q.UserUpdate(ctx, cs)
+```
+
+A request body is a `db.UserParams`, read by `volt.Decode` and cast
+behind an allow list, `cs.Cast(params, db.UserEmail, db.UserBio)`, so a
+client never widens what the handler lets it write. A refused write,
+a failed validator or the database's own refusal alike, is one
+`*rt.Invalid` itemizing every field error, 409 for a unique violation
+and 422 otherwise, which the error spine renders into the error body.
 
 ## Crib sheet
 

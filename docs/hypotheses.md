@@ -19,11 +19,14 @@ notes) are the one after, once a Volt-owned diagram tool exists.
 
 ## H2 — nao's ergonomic surface
 
-Today each scan is a fresh plain struct: no identity map, no `Save()`,
-no association fields. Unsettled: which conveniences join it. A
-convenience is welcome iff it can be generated as visible, compiled Go
-(explicit association loaders, generated join structs). Lazy loading,
-callbacks, dirty tracking and identity maps stay out (§non-goals).
+Today each scan is a fresh plain struct and every write is a changeset
+(§changesets): no identity map, no `Save()`, no association fields. A
+changeset's marks are declared intent, not dirty tracking: a column set
+to the value it already holds is still written. Unsettled: which
+conveniences join it. A convenience is welcome iff it can be generated
+as visible, compiled Go (explicit association loaders, generated join
+structs). Lazy loading, callbacks, dirty tracking and identity maps
+stay out (§non-goals).
 
 ## H3 — Member-scoped select overrides
 

@@ -68,7 +68,7 @@ server gets a scripted stdio session; one is a golden
 
 ## Conventions
 
-- Names are subject-first, verb-last: `UserGet`, `UserCreateParams`,
+- Names are subject-first, verb-last: `UserGet`, `UserChangeset`,
   `EOrderStatusPending`; internals too. Carve-outs: Go-mandated
   interface methods, `New*`/`is*`/`has*`, stdlib-parallel APIs, cursor
   primitives, LSP handlers named after protocol methods.
