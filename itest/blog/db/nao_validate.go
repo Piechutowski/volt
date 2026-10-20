@@ -25,6 +25,14 @@ func (c UserChangeset) Validate() UserChangeset {
 	return c
 }
 
+// Validate runs required, enum membership and the validators of tags
+// over the row, every one every time, replacing the findings of an
+// earlier Validate (spec §changesets, §validators).
+func (c TagChangeset) Validate() TagChangeset {
+	c.valid = nil
+	return c
+}
+
 // Validate runs required, enum membership and the validators of ms_revenue
 // over the row, every one every time, replacing the findings of an
 // earlier Validate (spec §changesets, §validators).

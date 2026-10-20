@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/itest/blog/app"
@@ -165,6 +166,35 @@ func TestQueryRouteFormatErrors(t *testing.T) {
 	if rec := call(h, "PATCH", "/api/users/999", strings.NewReader("{oops")); rec.Code != 400 {
 		t.Errorf("malformed body for a missing row: %d, want 400; the body is decoded before the row is loaded (§query-routes)", rec.Code)
 	}
+	if rec := call(h, "POST", "/api/users", strings.NewReader(`{"email":"html@example.com"}`), "Accept", "text/html"); rec.Code != 406 {
+		t.Errorf("unacceptable Accept on a write: %d, want 406", rec.Code)
+	}
+	var all []db.User
+	if rec := call(h, "GET", app.PathAPIUserList(), nil); rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &all) != nil || len(all) != 1 {
+		t.Errorf("a 406 write changed the table: %d %s; negotiation happens before anything runs (§formats)", rec.Code, rec.Body.String())
+	}
+}
+
+// TestQueryRouteTimeParam (§query-routes, §generated-client): a time.Time
+// parameter binds from the query string as RFC 3339, so the route and
+// the client import time; an unparseable or missing value is a 400.
+func TestQueryRouteTimeParam(t *testing.T) {
+	h := handlerWithDB(t)
+	rec := call(h, "GET", app.PathAPIUserSince(volt.Query("since", "2000-01-01T00:00:00Z")), nil)
+	var rows []db.User
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &rows) != nil || len(rows) != 1 || rows[0].CreatedAt.IsZero() {
+		t.Fatalf("since 2000: %d %s, want the seeded row with its created_at", rec.Code, rec.Body.String())
+	}
+	rec = call(h, "GET", app.PathAPIUserSince(volt.Query("since", volt.FormatQuery(time.Date(2999, 1, 1, 0, 0, 0, 0, time.UTC)))), nil)
+	if rec.Code != 200 || strings.TrimSpace(rec.Body.String()) != "[]" {
+		t.Fatalf("since 2999: %d %s, want 200 []", rec.Code, rec.Body.String())
+	}
+	if rec = call(h, "GET", "/api/since?since=yesterday", nil); rec.Code != 400 || !strings.Contains(rec.Body.String(), "since") {
+		t.Fatalf("unparseable time: %d %q, want 400 naming since", rec.Code, rec.Body.String())
+	}
+	if rec = call(h, "GET", "/api/since", nil); rec.Code != 400 {
+		t.Fatalf("missing time: %d, want 400", rec.Code)
+	}
 }
 
 // TestQueryRouteTable: query rows carry the reference as written and no
@@ -183,8 +213,8 @@ func TestQueryRouteTable(t *testing.T) {
 			t.Errorf("%s %s: helper %q — only GET query routes have one", r.Method, r.Spelled, r.Helper)
 		}
 	}
-	if seen != 14 {
-		t.Errorf("query rows = %d, want 14 (six query routes, two dataset members, six resources [default] routes)", seen)
+	if seen != 21 {
+		t.Errorf("query rows = %d, want 21 (seven query routes, two dataset members, twelve resources [default] routes)", seen)
 	}
 }
 

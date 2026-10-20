@@ -44,6 +44,7 @@ Scope / [pipe: api, error_handler: Errors] {
 		patch  /users/:id(int) db.UserUpdate
 		delete /users/:id(int) db.UserDelete
 		get    /picked           db.UserPicked
+		get    /since            db.UserSince
 	}
 
 	// A dataset (§datasets): one query route per member of the group select.
@@ -55,6 +56,7 @@ Scope / [pipe: api, error_handler: Errors] {
 	// the table's generated CRUD; no controller to write.
 	Scope /ref [name: ref] {
 		resources db.users [default]
+		resources db.tags  [default]
 	}
 
 	// The event stream (§event-routes).

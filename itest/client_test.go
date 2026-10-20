@@ -33,6 +33,13 @@ func TestClientQueryRoutes(t *testing.T) {
 		if err != nil || len(all) != 2 {
 			t.Fatalf("%v: list = %+v, %v", f, all, err)
 		}
+		since, err := c.APIUserSince(ctx, time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC))
+		if err != nil || len(since) != 2 {
+			t.Fatalf("%v: since 2000 = %+v, %v; a time.Time parameter travels as RFC 3339 (§generated-client)", f, since, err)
+		}
+		if none, err := c.APIUserSince(ctx, time.Date(2999, 1, 1, 0, 0, 0, 0, time.UTC)); err != nil || len(none) != 0 {
+			t.Fatalf("%v: since 2999 = %+v, %v", f, none, err)
+		}
 		one, err := c.APIUserGet(ctx, made.ID)
 		if err != nil || one.ID != made.ID {
 			t.Fatalf("%v: get = %+v, %v", f, one, err)

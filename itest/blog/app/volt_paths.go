@@ -91,6 +91,11 @@ func PathAPIUserPicked(opts ...volt.URLOption) string {
 	return volt.URL("/api/picked", opts...)
 }
 
+// PathAPIUserSince returns the path for GET /api/since (db.UserSince).
+func PathAPIUserSince(opts ...volt.URLOption) string {
+	return volt.URL("/api/since", opts...)
+}
+
 // PathMsRevenueBrowse returns the path for GET /ms/revenue (db.MsRevenueBrowse).
 func PathMsRevenueBrowse(opts ...volt.URLOption) string {
 	return volt.URL("/ms/revenue", opts...)
@@ -109,6 +114,16 @@ func PathRefUsers(opts ...volt.URLOption) string {
 // PathRefUser returns the path for GET /ref/users/:id(int) (db.UserGet).
 func PathRefUser(id int, opts ...volt.URLOption) string {
 	return volt.URL("/ref/users/"+volt.SegInt(id), opts...)
+}
+
+// PathRefTags returns the path for GET /ref/tags (db.TagList).
+func PathRefTags(opts ...volt.URLOption) string {
+	return volt.URL("/ref/tags", opts...)
+}
+
+// PathRefTag returns the path for GET /ref/tags/:slug(string) (db.TagGet).
+func PathRefTag(slug string, opts ...volt.URLOption) string {
+	return volt.URL("/ref/tags/"+volt.Seg(slug), opts...)
 }
 
 // PathEvents returns the path for GET /events (volt.Events).

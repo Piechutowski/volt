@@ -48,9 +48,13 @@ func TestNegotiate(t *testing.T) {
 		if tc.accept != "" {
 			req.Header.Set("Accept", tc.accept)
 		}
-		got, ok := Negotiate(req)
-		if got != tc.want || ok != tc.ok {
-			t.Errorf("Accept %q: got (%v, %v), want (%v, %v)", tc.accept, got, ok, tc.want, tc.ok)
+		got, err := Negotiate(&Request{Request: req})
+		if got != tc.want || (err == nil) != tc.ok {
+			t.Errorf("Accept %q: got (%v, %v), want (%v, ok=%v)", tc.accept, got, err, tc.want, tc.ok)
+		}
+		var he HTTPError
+		if !tc.ok && (!errors.As(err, &he) || he.StatusCode() != http.StatusNotAcceptable) {
+			t.Errorf("Accept %q: err = %v, want a 406", tc.accept, err)
 		}
 	}
 }

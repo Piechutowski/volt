@@ -296,8 +296,26 @@ func plugExpr(ref string, pkgName string) string {
 	return ref
 }
 
+func (g *generator) timeParams() bool {
+	for _, r := range g.pkg.Routes {
+		if r.Query == nil {
+			continue
+		}
+		for _, p := range r.Query.Params {
+			if strings.TrimPrefix(p.GoType, "[]") == "time.Time" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (g *generator) routerEmit() error {
-	imports := []string{"net/http", "", voltImport}
+	imports := []string{"net/http"}
+	if g.timeParams() {
+		imports = append(imports, "time")
+	}
+	imports = append(imports, "", voltImport)
 	for _, q := range g.dataPackages() {
 		if q.Local {
 			continue
@@ -397,23 +415,23 @@ func pathParse(body *strings.Builder, p lang.Param) string {
 	return "volt" + p.GoName
 }
 
-func queryShimBody(r *lang.RouteInfo) string {
+func (g *generator) queryShimBody(r *lang.RouteInfo) {
 	q := r.Query
-	var body strings.Builder
 	byName := map[string]lang.Param{}
 	for _, p := range r.Params {
 		byName[p.Name] = p
 	}
+	g.pf("\t\tif _, err := volt.Negotiate(r); err != nil {\n\t\t\treturn err\n\t\t}\n")
 	args := make([]string, 0, len(q.Params))
 	for _, p := range q.Params {
 		switch p.Source {
 		case lang.FromPath:
-			args = append(args, pathParse(&body, byName[p.Name]))
+			args = append(args, pathParse(&g.out, byName[p.Name]))
 		case lang.FromQuery:
-			fmt.Fprintf(&body, "\t\tvolt%s, err := volt.QueryParam[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name, p.GoType, p.Name)
+			g.pf("\t\tvolt%s, err := volt.QueryParam[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name, p.GoType, p.Name)
 			args = append(args, "volt"+p.Name)
 		case lang.FromList:
-			fmt.Fprintf(&body, "\t\tvolt%s, err := volt.QueryParams[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name, strings.TrimPrefix(p.GoType, "[]"), p.Name)
+			g.pf("\t\tvolt%s, err := volt.QueryParams[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name, strings.TrimPrefix(p.GoType, "[]"), p.Name)
 			args = append(args, "volt"+p.Name)
 		case lang.FromBody:
 			cb := q.Changeset
@@ -423,29 +441,28 @@ func queryShimBody(r *lang.RouteInfo) string {
 				}
 				return q.Qualifier + "." + n
 			}
-			fmt.Fprintf(&body, "\t\tvar voltparams %s\n\t\tif err := volt.Decode(r, &voltparams); err != nil {\n\t\t\treturn err\n\t\t}\n", name(cb.Params))
+			g.pf("\t\tvar volt_params %s\n\t\tif err := volt.Decode(r, &volt_params); err != nil {\n\t\t\treturn err\n\t\t}\n", name(cb.Params))
 			start := name(cb.New) + "()"
 			if cb.Get != "" {
-				fmt.Fprintf(&body, "\t\tvoltrow, err := c.%s.%s(r.Context()%s)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", q.Field, cb.Get, prefixEach(args, ", "))
-				args, start = nil, "voltrow.Changeset()"
+				g.pf("\t\tvolt_row, err := c.%s.%s(r.Context()%s)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", q.Field, cb.Get, prefixEach(args, ", "))
+				args, start = nil, "volt_row.Changeset()"
 			}
 			allow := make([]string, len(cb.Allow))
 			for i, h := range cb.Allow {
 				allow[i] = name(h)
 			}
-			fmt.Fprintf(&body, "\t\tvolt%s := %s.Cast(voltparams%s)\n", p.Name, start, prefixEach(allow, ", "))
-			args = append(args, "volt"+p.Name)
+			g.pf("\t\tvolt_cs := %s.Cast(volt_params%s)\n", start, prefixEach(allow, ", "))
+			args = append(args, "volt_cs")
 		}
 	}
 	call := fmt.Sprintf("c.%s.%s(r.Context()%s)", q.Field, q.Method, prefixEach(args, ", "))
 	if q.Result == "" {
-		fmt.Fprintf(&body, "\t\tif err := %s; err != nil {\n\t\t\treturn err\n\t\t}\n", call)
-		fmt.Fprintf(&body, "\t\treturn volt.RenderStatus(w, r, %d, nil)\n", q.Status)
-		return body.String()
+		g.pf("\t\tif err := %s; err != nil {\n\t\t\treturn err\n\t\t}\n", call)
+		g.pf("\t\treturn volt.RenderStatus(w, r, %d, nil)\n", q.Status)
+		return
 	}
-	fmt.Fprintf(&body, "\t\tout, err := %s\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", call)
-	fmt.Fprintf(&body, "\t\treturn volt.RenderStatus(w, r, %d, out)\n", q.Status)
-	return body.String()
+	g.pf("\t\tout, err := %s\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", call)
+	g.pf("\t\treturn volt.RenderStatus(w, r, %d, out)\n", q.Status)
 }
 
 func (g *generator) routeEmit(r *lang.RouteInfo) {
@@ -454,32 +471,34 @@ func (g *generator) routeEmit(r *lang.RouteInfo) {
 	if r.ErrorHandler != "" {
 		eh = "errHandler" + r.ErrorHandler
 	}
+	pipe := ""
+	if len(r.Pipes) > 0 {
+		pipe = g.pipeVars[pipeKey(r.Pipes)]
+	}
 
-	g.pf("\n")
-
-	shim := fmt.Sprintf("volt.Handler(%q, func(w http.ResponseWriter, r *volt.Request) error {\n", pattern)
+	g.pf("\n\tmux.Handle(%q, ", pattern)
+	if pipe != "" {
+		g.pf("%s(", pipe)
+	}
+	g.pf("volt.Handler(%q, func(w http.ResponseWriter, r *volt.Request) error {\n", pattern)
 	switch {
 	case r.Events:
-		shim += "\t\tif c.Events == nil {\n\t\t\treturn volt.Error(http.StatusServiceUnavailable, \"no event broker configured\")\n\t\t}\n"
-		shim += fmt.Sprintf("\t\treturn c.Events.Serve(w, r)\n\t}, %s)", eh)
+		g.pf("\t\tif c.Events == nil {\n\t\t\treturn volt.Error(http.StatusServiceUnavailable, \"no event broker configured\")\n\t\t}\n")
+		g.pf("\t\treturn c.Events.Serve(w, r)\n")
 	case r.Query != nil:
-		shim += queryShimBody(r)
-		shim += fmt.Sprintf("\t}, %s)", eh)
+		g.queryShimBody(r)
 	default:
-		var body strings.Builder
 		call := make([]string, 0, len(r.Params))
 		for _, p := range r.Params {
-			call = append(call, pathParse(&body, p))
+			call = append(call, pathParse(&g.out, p))
 		}
-		shim += body.String()
-		shim += fmt.Sprintf("\t\treturn c.%s.%s(w, r%s)\n\t}, %s)", r.Controller, r.Action, prefixEach(call, ", "), eh)
+		g.pf("\t\treturn c.%s.%s(w, r%s)\n", r.Controller, r.Action, prefixEach(call, ", "))
 	}
-
-	if len(r.Pipes) > 0 {
-		g.pf("\tmux.Handle(%q, %s(%s))\n", pattern, g.pipeVars[pipeKey(r.Pipes)], shim)
-	} else {
-		g.pf("\tmux.Handle(%q, %s)\n", pattern, shim)
+	g.pf("\t}, %s)", eh)
+	if pipe != "" {
+		g.pf(")")
 	}
+	g.pf(")\n")
 }
 
 func (g *generator) pathsEmit() error {
@@ -628,6 +647,9 @@ func (g *generator) clientEmit() error {
 	}
 	if rawMethod {
 		imports = append(imports, "net/http")
+	}
+	if g.timeParams() {
+		imports = append(imports, "time")
 	}
 	imports = append(imports, "", voltImport)
 	local := false

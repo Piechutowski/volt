@@ -628,7 +628,7 @@ func (l *routeLowering) pathParams(segs []*ast.Segment) ([]Param, bool) {
 			continue
 		}
 		if reservedParamNames[name] {
-			l.errorf(seg.Pos(), "scopes-and-routes", "path parameter %q collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt", name)
+			l.errorf(seg.Pos(), "scopes-and-routes", "path parameter %q collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs", name)
 			ok = false
 			continue
 		}

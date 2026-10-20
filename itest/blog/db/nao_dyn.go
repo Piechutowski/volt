@@ -9,7 +9,7 @@ import (
 
 const (
 	userTableSQL   = `"users"`
-	userColumnsSQL = `"id", "email"`
+	userColumnsSQL = `"id", "email", "created_at"`
 )
 
 // UserLimit caps how many rows UserQuery returns.
@@ -105,6 +105,114 @@ func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (
 // is an error, never a full-table rewrite.
 func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], preds ...rt.Pred[User]) (int64, error) {
 	query, args, err := rt.UpdateRender(userTableSQL, set, preds)
+	if err != nil {
+		return 0, err
+	}
+	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+const (
+	tagTableSQL   = `"tags"`
+	tagColumnsSQL = `"slug", "name"`
+)
+
+// TagLimit caps how many rows TagQuery returns.
+func TagLimit(n int) rt.Opt[Tag] { return rt.Limit[Tag](n) }
+
+// TagOffset skips n rows; keyset pagination (TagAfter) scales better.
+func TagOffset(n int) rt.Opt[Tag] { return rt.Offset[Tag](n) }
+
+// TagDistinct deduplicates the rows TagQuery returns.
+func TagDistinct() rt.Opt[Tag] { return rt.Distinct[Tag]() }
+
+// TagOrderBy sorts TagQuery's rows by Asc/Desc terms built on the
+// Tag column handles.
+func TagOrderBy(terms ...rt.Order[Tag]) rt.Opt[Tag] { return rt.OrderBy(terms...) }
+
+// TagAfter resumes strictly after the row with the given key — keyset
+// pagination: one value per TagOrderBy term, in the same order.
+func TagAfter(key ...any) rt.Opt[Tag] { return rt.After[Tag](key...) }
+
+// TagSet collects the typed assignments of a TagUpdateWhere, built
+// with Set/SetNull on the Tag column handles.
+func TagSet(assigns ...rt.Assign[Tag]) []rt.Assign[Tag] { return assigns }
+
+// TagQuery returns the tags rows matching every given predicate,
+// shaped by the remaining options (order, limit, offset, keyset,
+// distinct). No options means every row.
+func (q *Queries) TagQuery(ctx context.Context, opts ...rt.Opt[Tag]) ([]Tag, error) {
+	query, args, err := rt.SelectRender(tagTableSQL, tagColumnsSQL, opts)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := rt.StmtQuery(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Tag{}
+	for rows.Next() {
+		v, err := tagScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// TagCount reports how many tags rows match every given predicate;
+// none counts the whole table.
+func (q *Queries) TagCount(ctx context.Context, preds ...rt.Pred[Tag]) (int64, error) {
+	query, args, err := rt.CountRender(tagTableSQL, preds)
+	if err != nil {
+		return 0, err
+	}
+	var n int64
+	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// TagExists reports whether any tags row matches every given predicate.
+func (q *Queries) TagExists(ctx context.Context, preds ...rt.Pred[Tag]) (bool, error) {
+	query, args, err := rt.ExistsRender(tagTableSQL, preds)
+	if err != nil {
+		return false, err
+	}
+	var found bool
+	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &found); err != nil {
+		return false, err
+	}
+	return found, nil
+}
+
+// TagDeleteWhere removes every tags row matching the predicates and
+// reports how many went. No effective predicate is an error, never a
+// full-table delete.
+func (q *Queries) TagDeleteWhere(ctx context.Context, preds ...rt.Pred[Tag]) (int64, error) {
+	query, args, err := rt.DeleteRender(tagTableSQL, preds)
+	if err != nil {
+		return 0, err
+	}
+	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// TagUpdateWhere applies the typed assignments (TagSet) to every tags
+// row matching the predicates and reports how many changed — the
+// partial update of the dynamic layer. No effective predicate
+// is an error, never a full-table rewrite.
+func (q *Queries) TagUpdateWhere(ctx context.Context, set []rt.Assign[Tag], preds ...rt.Pred[Tag]) (int64, error) {
+	query, args, err := rt.UpdateRender(tagTableSQL, set, preds)
 	if err != nil {
 		return 0, err
 	}

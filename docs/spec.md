@@ -1759,7 +1759,7 @@ param type = "int" | "string" ;
    different pattern.
 2. A `:name` segment captures one path segment as a parameter. The
    parameter name MUST be a valid, non-keyword Go identifier, MUST NOT
-   be one of the reserved names `w`, `r`, `opts`, `volt` (they appear
+   be one of the reserved names `w`, `r`, `opts`, `volt`, `cs` (they appear
    in generated signatures and would be shadowed), and MUST be unique
    within the route's full path (scope prefixes included).
 3. A parameter's type defaults to `string`; the closed type set is
@@ -1872,8 +1872,12 @@ Scope /api [pipe: api] {
      404), casts into its `Changeset()` allowing every non-key column,
      and the route MUST carry every key column as a path parameter.
      The body is decoded before the row is loaded, so a malformed body
-     is a 400 whether or not the row exists. The route's verb MUST be
-     `post`, `put` or `patch`;
+     is a 400 whether or not the row exists. A write route always takes
+     a body, `{}` when nothing is set: a table whose only column is the
+     auto-increment key still needs `{}`. The route's verb MUST be
+     `post`, `put` or `patch`; `put` is accepted as a spelling of the
+     same partial update as `patch`, the handler being the same cast,
+     and nothing the body leaves out is reset;
    - a **list parameter** (§predicates) binds from the **repeated query
      key** of its name; absent means the empty list;
    - every other parameter binds from the **query string** by name,
@@ -1925,7 +1929,8 @@ for a format suffix.
 1. **Responses** follow `Accept`: the first listed media type that is
    `application/json`, `application/x-gob`, `application/*` or `*/*`
    decides; an absent header means JSON; a header offering neither is
-   a 406 naming both.
+   a 406 naming both. Negotiation happens before the handler runs
+   anything: a 406 decodes no body, loads no row and writes nothing.
 2. **Request bodies** follow `Content-Type`: absent or
    `application/json` decodes JSON, `application/x-gob` decodes GOB,
    anything else is a 415; an empty or malformed body is a 400. A write
@@ -1944,8 +1949,9 @@ for a format suffix.
    encoded, with no schema on the wire. JSON is what browsers, curl and
    every other language see.
 4. The runtime exposes the same rules to hand-written controllers as
-   `volt.Render`, `volt.RenderStatus` and `volt.Decode`, so a
-   controller route can speak both formats without repeating them.
+   `volt.Negotiate`, `volt.Render`, `volt.RenderStatus` and
+   `volt.Decode`, so a controller route can speak both formats without
+   repeating them.
 5. **Error bodies** are structured: the default error handler writes a
    `volt.Problem` — status, message, and details (check, columns,
    message) when the error itemizes them — in the negotiated format,
@@ -2246,7 +2252,10 @@ resources db.tags  [default, except: (delete)]
    reverse URL (writes never do, §query-routes) and a client method named
    `Create`/`Update`/`Delete` + singular, prefixed by the scope name
    like the form-page helpers `New`/`Edit` + singular would be.
-   `update`'s PUT route shares the PATCH route's client method.
+   `update`'s PUT route shares the PATCH route's client method, and
+   PUT is accepted as a spelling of the same partial update as PATCH:
+   the handler is the same cast, and nothing the body leaves out is
+   reset.
 7. Statuses, binding, validation and rendering are §query-routes's: 201 for
    `create`, 204 for `delete`, 404 on a miss, the body cast into a
    changeset with the allow lists of §query-routes and validated by the

@@ -5,6 +5,7 @@ package app
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/Piechutowski/volt"
 )
@@ -104,6 +105,28 @@ func (c *Client) APIUserPicked(ctx context.Context, ids []int) ([]User, error) {
 	return out, err
 }
 
+// APIUserSince calls GET /api/since (db.UserSince).
+func (c *Client) APIUserSince(ctx context.Context, since time.Time) ([]User, error) {
+	q := []volt.URLOption{volt.Query("since", volt.FormatQuery(since))}
+	var out []User
+	err := c.Do(ctx, "GET", volt.URL("/api/since", q...), nil, &out)
+	return out, err
+}
+
+// APIUserRoleGet calls GET /api/roles/:userID(int)/:roleID(int) (db.UserRoleGet).
+func (c *Client) APIUserRoleGet(ctx context.Context, userID int, roleID int) (UserRole, error) {
+	var out UserRole
+	err := c.Do(ctx, "GET", volt.URL("/api/roles/"+volt.SegInt(userID)+"/"+volt.SegInt(roleID)), nil, &out)
+	return out, err
+}
+
+// APIUserRoleUpdate calls PATCH /api/roles/:userID(int)/:roleID(int) (db.UserRoleUpdate).
+func (c *Client) APIUserRoleUpdate(ctx context.Context, userID int, roleID int, cs UserRoleChangeset) (UserRole, error) {
+	var out UserRole
+	err := c.Do(ctx, "PATCH", volt.URL("/api/roles/"+volt.SegInt(userID)+"/"+volt.SegInt(roleID)), cs.Params(), &out)
+	return out, err
+}
+
 // MsRevenueBrowse calls GET /ms/revenue (db.MsRevenueBrowse).
 func (c *Client) MsRevenueBrowse(ctx context.Context, year int) ([]MsRevenue, error) {
 	q := []volt.URLOption{volt.Query("year", volt.FormatQuery(year))}
@@ -151,6 +174,39 @@ func (c *Client) RefUpdateUser(ctx context.Context, id int, cs UserChangeset) (U
 // RefDeleteUser calls DELETE /ref/users/:id(int) (db.UserDelete).
 func (c *Client) RefDeleteUser(ctx context.Context, id int) error {
 	return c.Do(ctx, "DELETE", volt.URL("/ref/users/"+volt.SegInt(id)), nil, nil)
+}
+
+// RefTags calls GET /ref/tags (db.TagList).
+func (c *Client) RefTags(ctx context.Context) ([]Tag, error) {
+	var out []Tag
+	err := c.Do(ctx, "GET", volt.URL("/ref/tags"), nil, &out)
+	return out, err
+}
+
+// RefCreateTag calls POST /ref/tags (db.TagCreate).
+func (c *Client) RefCreateTag(ctx context.Context, cs TagChangeset) (Tag, error) {
+	var out Tag
+	err := c.Do(ctx, "POST", volt.URL("/ref/tags"), cs.Params(), &out)
+	return out, err
+}
+
+// RefTag calls GET /ref/tags/:slug(string) (db.TagGet).
+func (c *Client) RefTag(ctx context.Context, slug string) (Tag, error) {
+	var out Tag
+	err := c.Do(ctx, "GET", volt.URL("/ref/tags/"+volt.Seg(slug)), nil, &out)
+	return out, err
+}
+
+// RefUpdateTag calls PATCH /ref/tags/:slug(string) (db.TagUpdate).
+func (c *Client) RefUpdateTag(ctx context.Context, slug string, cs TagChangeset) (Tag, error) {
+	var out Tag
+	err := c.Do(ctx, "PATCH", volt.URL("/ref/tags/"+volt.Seg(slug)), cs.Params(), &out)
+	return out, err
+}
+
+// RefDeleteTag calls DELETE /ref/tags/:slug(string) (db.TagDelete).
+func (c *Client) RefDeleteTag(ctx context.Context, slug string) error {
+	return c.Do(ctx, "DELETE", volt.URL("/ref/tags/"+volt.Seg(slug)), nil, nil)
 }
 
 // Events subscribes to /events (§event-routes): every published event, reconnecting

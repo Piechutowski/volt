@@ -5,6 +5,7 @@ package itest
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http/httptest"
 	"strings"
@@ -65,5 +66,70 @@ func TestResourcesDefault(t *testing.T) {
 	}
 	if rec := call(h, "PUT", "/ref/users/1", strings.NewReader(`{}`)); rec.Code != 200 || !strings.Contains(rec.Body.String(), "one@example.com") {
 		t.Fatalf("put with an empty object: %d %s, want 200 with the unchanged row", rec.Code, rec.Body.String())
+	}
+}
+
+// TestResourcesDefaultStringKey (§default-handlers, §query-routes): a table
+// keyed by a string column without increment takes its key in the
+// create body, and an update ignores a body that names the key, which
+// is outside the update's allow list.
+func TestResourcesDefaultStringKey(t *testing.T) {
+	h := handlerWithDB(t)
+	rec := call(h, "POST", "/ref/tags", strings.NewReader(`{"slug":"sqlite","name":"SQLite"}`))
+	var made db.Tag
+	if rec.Code != 201 || json.Unmarshal(rec.Body.Bytes(), &made) != nil || made.Slug != "sqlite" || made.Name != "SQLite" {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = call(h, "GET", app.PathRefTag("sqlite"), nil)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"slug":"sqlite"`) {
+		t.Fatalf("show: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = call(h, "PATCH", "/ref/tags/sqlite", strings.NewReader(`{"name":"SQLite 3"}`))
+	var up db.Tag
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &up) != nil || up.Slug != "sqlite" || up.Name != "SQLite 3" {
+		t.Fatalf("update: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = call(h, "PUT", "/ref/tags/sqlite", strings.NewReader(`{"slug":"renamed","name":"SQLite"}`))
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &up) != nil || up.Slug != "sqlite" || up.Name != "SQLite" {
+		t.Fatalf("update naming the key: %d %s, want 200 with the key unchanged (§query-routes)", rec.Code, rec.Body.String())
+	}
+	if rec = call(h, "GET", app.PathRefTag("renamed"), nil); rec.Code != 404 {
+		t.Fatalf("the key named in an update body was applied: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec = call(h, "DELETE", "/ref/tags/sqlite", nil); rec.Code != 204 || rec.Body.Len() != 0 {
+		t.Fatalf("delete: %d %q", rec.Code, rec.Body.String())
+	}
+	if rec = call(h, "GET", app.PathRefTag("sqlite"), nil); rec.Code != 404 {
+		t.Fatalf("after delete: %d, want 404", rec.Code)
+	}
+
+	for _, f := range []volt.Format{volt.FormatJSON, volt.FormatGOB} {
+		srv := httptest.NewServer(handlerWithDB(t))
+		c := client.New(srv.URL)
+		c.Format = f
+		ctx := context.Background()
+		made, err := c.RefCreateTag(ctx, db.TagNew().SlugSet("rust").NameSet("Rust"))
+		if err != nil || made.Slug != "rust" {
+			t.Fatalf("%v: create = %+v, %v", f, made, err)
+		}
+		all, err := c.RefTags(ctx)
+		if err != nil || len(all) != 2 {
+			t.Fatalf("%v: index = %+v, %v", f, all, err)
+		}
+		up, err := c.RefUpdateTag(ctx, "rust", db.TagNew().NameSet("Rust lang"))
+		if err != nil || up.Slug != "rust" || up.Name != "Rust lang" {
+			t.Fatalf("%v: update = %+v, %v", f, up, err)
+		}
+		one, err := c.RefTag(ctx, "rust")
+		if err != nil || one != up {
+			t.Fatalf("%v: show = %+v, %v", f, one, err)
+		}
+		if err := c.RefDeleteTag(ctx, "rust"); err != nil {
+			t.Fatalf("%v: delete = %v", f, err)
+		}
+		if _, err := c.RefTag(ctx, "rust"); !errors.Is(err, volt.ErrNotFound) {
+			t.Fatalf("%v: after delete = %v, want volt.ErrNotFound", f, err)
+		}
+		srv.Close()
 	}
 }

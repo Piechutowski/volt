@@ -1,8 +1,9 @@
 package db
 
 Table users {
-	id    int [pk, increment]
-	email string    [not null, required, unique]
+	id         int       [pk, increment]
+	email      string    [not null, required, unique]
+	created_at time.Time [not null, default: `CURRENT_TIMESTAMP`]
 
 	validators {
 		EmailShape(email)
@@ -11,6 +12,12 @@ Table users {
 }
 
 Select picked for users where id in :ids [order: (id asc)]
+Select since for users where created_at > :since [order: (id asc)]
+
+Table tags {
+	slug string [pk]
+	name string [not null]
+}
 
 Table ms_revenue {
 	id   int [pk, increment]

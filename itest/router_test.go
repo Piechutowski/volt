@@ -120,6 +120,9 @@ func fixture(t *testing.T) (http.Handler, *volt.Broker) {
 	if _, err := q.UserCreate(context.Background(), db.UserNew().EmailSet("one@example.com")); err != nil {
 		panic(err)
 	}
+	if _, err := q.TagCreate(context.Background(), db.TagNew().SlugSet("go").NameSet("Go")); err != nil {
+		panic(err)
+	}
 	broker := &volt.Broker{Heartbeat: 20 * time.Millisecond}
 	return app.NewRouter(app.Controllers{
 		Home: home{}, Users: users{}, Files: files{}, Admin: admin{},
@@ -173,10 +176,13 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathAPIUserList":     {"GET", app.PathAPIUserList()},
 		"PathAPIUserGet":      {"GET", app.PathAPIUserGet(1)},
 		"PathAPIUserPicked":   {"GET", app.PathAPIUserPicked(volt.Query("ids", "1"))},
+		"PathAPIUserSince":    {"GET", app.PathAPIUserSince(volt.Query("since", "2000-01-01T00:00:00Z"))},
 		"PathMsRevenueBrowse": {"GET", app.PathMsRevenueBrowse(volt.Query("year", "2024"))},
 		"PathMsUsageBrowse":   {"GET", app.PathMsUsageBrowse(volt.Query("year", "2024"))},
 		"PathRefUsers":        {"GET", app.PathRefUsers()},
 		"PathRefUser":         {"GET", app.PathRefUser(1)},
+		"PathRefTags":         {"GET", app.PathRefTags()},
+		"PathRefTag":          {"GET", app.PathRefTag("go")},
 		"PathEvents":          {"GET", app.PathEvents()},
 	}
 	queryRoutes := map[string]bool{}

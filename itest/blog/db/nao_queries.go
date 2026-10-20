@@ -40,11 +40,11 @@ func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 
 func userScan(r rt.Row) (User, error) {
 	var v User
-	err := r.Scan(&v.ID, &v.Email)
+	err := r.Scan(&v.ID, &v.Email, &v.CreatedAt)
 	return v, rt.Refused("User", err)
 }
 
-const userGetSQL = `SELECT "id", "email" FROM "users" WHERE "id" = ?`
+const userGetSQL = `SELECT "id", "email", "created_at" FROM "users" WHERE "id" = ?`
 
 // UserGet fetches the users row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) UserGet(ctx context.Context, id int) (User, error) {
@@ -77,7 +77,7 @@ func (q *Queries) UserGetMany(ctx context.Context, ids []int) ([]User, error) {
 	return out, rows.Err()
 }
 
-const userGetByEmailSQL = `SELECT "id", "email" FROM "users" WHERE "email" = ?`
+const userGetByEmailSQL = `SELECT "id", "email", "created_at" FROM "users" WHERE "email" = ?`
 
 // UserGetByEmail fetches the users row with the given email (a unique column),
 // or rt.ErrNotFound.
@@ -85,7 +85,7 @@ func (q *Queries) UserGetByEmail(ctx context.Context, email string) (User, error
 	return userScan(q.db.QueryRowContext(ctx, userGetByEmailSQL, email))
 }
 
-const userListSQL = `SELECT "id", "email" FROM "users"`
+const userListSQL = `SELECT "id", "email", "created_at" FROM "users"`
 
 // UserList returns every users row.
 func (q *Queries) UserList(ctx context.Context) ([]User, error) {
@@ -118,6 +118,9 @@ func (q *Queries) UserCreate(ctx context.Context, c UserChangeset) (User, error)
 	if c.set[1] {
 		cols, args = append(cols, "email"), append(args, v.Email)
 	}
+	if c.set[2] {
+		cols, args = append(cols, "created_at"), append(args, v.CreatedAt)
+	}
 	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(userTableSQL, cols, userColumnsSQL), args...)
 	if err != nil {
 		return User{}, err
@@ -142,6 +145,9 @@ func (q *Queries) UserUpdate(ctx context.Context, c UserChangeset) (User, error)
 	if c.set[1] {
 		cols, args = append(cols, "email"), append(args, v.Email)
 	}
+	if c.set[2] {
+		cols, args = append(cols, "created_at"), append(args, v.CreatedAt)
+	}
 	if len(cols) == 0 {
 		return v, nil
 	}
@@ -161,6 +167,138 @@ func (q *Queries) UserDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, userDeleteSQL, id)
 	if err != nil {
 		return rt.Refused("User", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return rt.ErrNotFound
+	}
+	return nil
+}
+
+func tagScan(r rt.Row) (Tag, error) {
+	var v Tag
+	err := r.Scan(&v.Slug, &v.Name)
+	return v, rt.Refused("Tag", err)
+}
+
+const tagGetSQL = `SELECT "slug", "name" FROM "tags" WHERE "slug" = ?`
+
+// TagGet fetches the tags row with the given primary key, or rt.ErrNotFound.
+func (q *Queries) TagGet(ctx context.Context, slug string) (Tag, error) {
+	return tagScan(q.db.QueryRowContext(ctx, tagGetSQL, slug))
+}
+
+// TagGetMany fetches the tags rows whose primary key is in slugs, in
+// database order. Missing keys are not an error; they are just absent.
+func (q *Queries) TagGetMany(ctx context.Context, slugs []string) ([]Tag, error) {
+	if len(slugs) == 0 {
+		return nil, nil
+	}
+	query, args, err := rt.SelectRender(tagTableSQL, tagColumnsSQL, []rt.Opt[Tag]{TagSlug.In(slugs...)})
+	if err != nil {
+		return nil, err
+	}
+	rows, err := q.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Tag{}
+	for rows.Next() {
+		v, err := tagScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+const tagListSQL = `SELECT "slug", "name" FROM "tags"`
+
+// TagList returns every tags row.
+func (q *Queries) TagList(ctx context.Context) ([]Tag, error) {
+	rows, err := q.db.QueryContext(ctx, tagListSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Tag{}
+	for rows.Next() {
+		v, err := tagScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// TagCreate validates c and inserts its marked columns, returning the
+// stored tags row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) TagCreate(ctx context.Context, c TagChangeset) (Tag, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return Tag{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[0] {
+		cols, args = append(cols, "slug"), append(args, v.Slug)
+	}
+	if c.set[1] {
+		cols, args = append(cols, "name"), append(args, v.Name)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(tagTableSQL, cols, tagColumnsSQL), args...)
+	if err != nil {
+		return Tag{}, err
+	}
+	return tagScan(row)
+}
+
+// TagUpdate validates c and writes its marked columns to the tags row it
+// was made from, returning the stored row; nothing marked returns the row
+// untouched (spec §changesets).
+func (q *Queries) TagUpdate(ctx context.Context, c TagChangeset) (Tag, error) {
+	if !c.row {
+		return Tag{}, rt.ErrNoRow
+	}
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return Tag{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[0] {
+		cols, args = append(cols, "slug"), append(args, v.Slug)
+	}
+	if c.set[1] {
+		cols, args = append(cols, "name"), append(args, v.Name)
+	}
+	if len(cols) == 0 {
+		return v, nil
+	}
+	args = append(args, c.data.Slug)
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(tagTableSQL, cols, []string{"slug"}, tagColumnsSQL), args...)
+	if err != nil {
+		return Tag{}, err
+	}
+	return tagScan(row)
+}
+
+const tagDeleteSQL = `DELETE FROM "tags" WHERE "slug" = ?`
+
+// TagDelete removes the identified tags row; rt.ErrNotFound reports
+// that nothing matched.
+func (q *Queries) TagDelete(ctx context.Context, slug string) error {
+	res, err := q.db.ExecContext(ctx, tagDeleteSQL, slug)
+	if err != nil {
+		return rt.Refused("Tag", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {

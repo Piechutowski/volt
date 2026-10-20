@@ -5,13 +5,34 @@ package db
 import (
 	"context"
 	"github.com/Piechutowski/volt/nao/rt"
+	"time"
 )
 
-const userPickedSQL = `SELECT "id", "email" FROM "users" WHERE "id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
+const userPickedSQL = `SELECT "id", "email", "created_at" FROM "users" WHERE "id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
 
 // UserPicked runs the "picked" select over users (spec §selects-over-groups).
 func (q *Queries) UserPicked(ctx context.Context, ids []int) ([]User, error) {
 	rows, err := q.db.QueryContext(ctx, userPickedSQL, rt.JSONList(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []User{}
+	for rows.Next() {
+		v, err := userScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+const userSinceSQL = `SELECT "id", "email", "created_at" FROM "users" WHERE "created_at" > ? ORDER BY "id" ASC`
+
+// UserSince runs the "since" select over users (spec §selects-over-groups).
+func (q *Queries) UserSince(ctx context.Context, since time.Time) ([]User, error) {
+	rows, err := q.db.QueryContext(ctx, userSinceSQL, since)
 	if err != nil {
 		return nil, err
 	}

@@ -932,7 +932,7 @@ func settingOf(sl *ast.SettingList, name string) *ast.Setting {
 }
 
 var reservedParamNames = map[string]bool{
-	"w": true, "r": true, "opts": true, "volt": true,
+	"w": true, "r": true, "opts": true, "volt": true, "cs": true,
 }
 
 var goKeywords = map[string]bool{

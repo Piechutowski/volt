@@ -9,6 +9,7 @@ package client
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/itest/blog/db"
@@ -139,6 +140,14 @@ func (c *Client) APIUserPicked(ctx context.Context, ids []int) ([]db.User, error
 	return out, err
 }
 
+// APIUserSince calls GET /api/since (db.UserSince).
+func (c *Client) APIUserSince(ctx context.Context, since time.Time) ([]db.User, error) {
+	q := []volt.URLOption{volt.Query("since", volt.FormatQuery(since))}
+	var out []db.User
+	err := c.Do(ctx, "GET", volt.URL("/api/since", q...), nil, &out)
+	return out, err
+}
+
 // MsRevenueBrowse calls GET /ms/revenue (db.MsRevenueBrowse).
 func (c *Client) MsRevenueBrowse(ctx context.Context, year int) ([]db.MsRevenue, error) {
 	q := []volt.URLOption{volt.Query("year", volt.FormatQuery(year))}
@@ -186,6 +195,39 @@ func (c *Client) RefUpdateUser(ctx context.Context, id int, cs db.UserChangeset)
 // RefDeleteUser calls DELETE /ref/users/:id(int) (db.UserDelete).
 func (c *Client) RefDeleteUser(ctx context.Context, id int) error {
 	return c.Do(ctx, "DELETE", volt.URL("/ref/users/"+volt.SegInt(id)), nil, nil)
+}
+
+// RefTags calls GET /ref/tags (db.TagList).
+func (c *Client) RefTags(ctx context.Context) ([]db.Tag, error) {
+	var out []db.Tag
+	err := c.Do(ctx, "GET", volt.URL("/ref/tags"), nil, &out)
+	return out, err
+}
+
+// RefCreateTag calls POST /ref/tags (db.TagCreate).
+func (c *Client) RefCreateTag(ctx context.Context, cs db.TagChangeset) (db.Tag, error) {
+	var out db.Tag
+	err := c.Do(ctx, "POST", volt.URL("/ref/tags"), cs.Params(), &out)
+	return out, err
+}
+
+// RefTag calls GET /ref/tags/:slug(string) (db.TagGet).
+func (c *Client) RefTag(ctx context.Context, slug string) (db.Tag, error) {
+	var out db.Tag
+	err := c.Do(ctx, "GET", volt.URL("/ref/tags/"+volt.Seg(slug)), nil, &out)
+	return out, err
+}
+
+// RefUpdateTag calls PATCH /ref/tags/:slug(string) (db.TagUpdate).
+func (c *Client) RefUpdateTag(ctx context.Context, slug string, cs db.TagChangeset) (db.Tag, error) {
+	var out db.Tag
+	err := c.Do(ctx, "PATCH", volt.URL("/ref/tags/"+volt.Seg(slug)), cs.Params(), &out)
+	return out, err
+}
+
+// RefDeleteTag calls DELETE /ref/tags/:slug(string) (db.TagDelete).
+func (c *Client) RefDeleteTag(ctx context.Context, slug string) error {
+	return c.Do(ctx, "DELETE", volt.URL("/ref/tags/"+volt.Seg(slug)), nil, nil)
 }
 
 // Events subscribes to /events (§event-routes): every published event, reconnecting

@@ -37,14 +37,16 @@ func (f Format) MIME() string {
 	return MIMEJSON
 }
 
-// Negotiate picks the response format from Accept: the first listed
-// media type that is JSON, GOB, `application/*` or `*/*` decides; an
-// absent or empty header means JSON; a header that offers nothing the
-// server speaks reports false (the caller answers 406).
-func Negotiate(r *http.Request) (Format, bool) {
+// Negotiate picks the response format from Accept (spec §formats rule 1):
+// the first listed media type that is JSON, GOB, `application/*` or `*/*`
+// decides, and an absent or empty header means JSON. A header that offers
+// nothing the server speaks is the 406 error naming both formats; a
+// generated query route negotiates before it runs anything, so that 406
+// decodes no body, loads no row and writes nothing.
+func Negotiate(r *Request) (Format, error) {
 	accept := r.Header.Get("Accept")
 	if strings.TrimSpace(accept) == "" {
-		return FormatJSON, true
+		return FormatJSON, nil
 	}
 	for _, part := range strings.Split(accept, ",") {
 		mt, _, err := mime.ParseMediaType(strings.TrimSpace(part))
@@ -53,12 +55,12 @@ func Negotiate(r *http.Request) (Format, bool) {
 		}
 		switch mt {
 		case MIMEGOB:
-			return FormatGOB, true
+			return FormatGOB, nil
 		case MIMEJSON, "application/*", "*/*":
-			return FormatJSON, true
+			return FormatJSON, nil
 		}
 	}
-	return FormatJSON, false
+	return FormatJSON, Error(http.StatusNotAcceptable, "acceptable formats: "+MIMEJSON+", "+MIMEGOB)
 }
 
 // Render writes v as the response in the negotiated format with status
@@ -71,9 +73,9 @@ func Render(w http.ResponseWriter, r *Request, v any) error {
 // RenderStatus is Render with an explicit status (201 for a created
 // row, for instance). A nil v writes the status and no body.
 func RenderStatus(w http.ResponseWriter, r *Request, status int, v any) error {
-	f, ok := Negotiate(r.Request)
-	if !ok {
-		return Error(http.StatusNotAcceptable, "acceptable formats: "+MIMEJSON+", "+MIMEGOB)
+	f, err := Negotiate(r)
+	if err != nil {
+		return err
 	}
 	if v == nil {
 		w.WriteHeader(status)

@@ -210,6 +210,9 @@ db/i190_literal_int_overflow.volt:10:40: error: spec/selects-over-groups: litera
 ## i191_literal_float_infinite.volt
 db/i191_literal_float_infinite.volt:10:41: error: spec/selects-over-groups: literal 1e400 does not fit float64, the storage type of column "score" (§predicates)
 
+## i199_reserved_param_cs
+app/routes.volt:11:15: error: spec/scopes-and-routes: path parameter "cs" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs
+
 ## i19_only_and_except.volt
 app/i19_only_and_except.volt:9:34: error: spec/resources: only: and except: cannot be combined (§settings)
 
@@ -260,10 +263,10 @@ app/i33_quoted_segment.volt:5:7: error: spec/scopes-and-routes: path segment "a 
 app/i34_quoted_plug.volt:5:2: error: spec/pipelines: plug reference "weird name" must be plain, non-keyword Go identifiers (§pipelines)
 
 ## i35_reserved_param.volt
-app/i35_reserved_param.volt:5:9: error: spec/scopes-and-routes: path parameter "volt" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt
+app/i35_reserved_param.volt:5:9: error: spec/scopes-and-routes: path parameter "volt" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs
 
 ## i36_reserved_param_w.volt
-app/i36_reserved_param_w.volt:5:9: error: spec/scopes-and-routes: path parameter "w" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt
+app/i36_reserved_param_w.volt:5:9: error: spec/scopes-and-routes: path parameter "w" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs
 
 ## i37_ambiguous_overlap.volt
 app/i37_ambiguous_overlap.volt:8:2: error: spec/scopes-and-routes: route GET /:y/b is ambiguous with the route at app/i37_ambiguous_overlap.volt:7:2 (GET /a/:x): both match some requests and neither is more specific (§route-conflicts)

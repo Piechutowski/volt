@@ -78,7 +78,7 @@ func DefaultErrorHandler(w http.ResponseWriter, r *Request, err error) {
 }
 
 func writeProblem(w http.ResponseWriter, r *Request, p Problem) {
-	f, _ := Negotiate(r.Request)
+	f, _ := Negotiate(r)
 	w.Header().Set("Content-Type", f.MIME())
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(p.Status)
