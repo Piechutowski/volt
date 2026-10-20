@@ -43,7 +43,9 @@ green.
 Three Go modules under `go.work`: the library at the root (runtime,
 `lang/`, `gen/`, `nao/`, `itest/`; stdlib only, sqlite3 test-only) and
 the tools `lsp/` and `cmd/volt/`, which carry the third-party
-dependencies. Go floor is the newest stable Go, declared in all three
+dependencies; `cmd/volt` carries the `mattn/go-sqlite3` driver for the
+fold and `volt migration up`, while the library and the runtime
+register none. Go floor is the newest stable Go, declared in all three
 `go.mod` files. `grammar/`, `zed-extension/` and
 `scripts/sync-grammar.sh` are the editor stack. `go test ./...` at the
 root does not cover the tool modules.

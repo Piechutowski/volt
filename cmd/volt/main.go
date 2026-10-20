@@ -1,7 +1,7 @@
 // Command volt is the framework's one binary: the CLI front end over
 // the lang package and both generators — nao's models and queries for
 // data packages, routers for routing packages. Its subcommands
-// are check, vet, gen, routes, stress, lsp and version.
+// are check, vet, gen, migration, routes, stress, lsp and version.
 //
 // Exit status: 0 clean (warnings do not fail), 1 errors found, 2 usage
 // or I/O problems.
@@ -85,10 +85,11 @@ func command() *cli.Command {
 					&cli.StringFlag{Name: "parts", Usage: "comma-separated `LIST` of what to write: models, queries, router, client, sql (default: every Go part)"},
 					&cli.StringFlag{Name: "package", Usage: "package clause of the written files (default: the clause of DIR's Go files, else the Volt package's name)"},
 				},
-				Action: func(_ context.Context, c *cli.Command) error {
-					return genRun(c)
+				Action: func(ctx context.Context, c *cli.Command) error {
+					return genRun(ctx, c)
 				},
 			},
+			migrationCommand(),
 			{
 				Name:      "routes",
 				Usage:     "print the expanded route table (verb, path, handler, helper)",
@@ -222,7 +223,7 @@ func diagsPrintJSON(all []diag.Diagnostic) error {
 	return enc.Encode(out)
 }
 
-func genRun(c *cli.Command) error {
+func genRun(ctx context.Context, c *cli.Command) error {
 	parts, err := partsParse(c.String("parts"), c.Bool("models-only"), c.Bool("sql"))
 	if err != nil {
 		return cli.Exit("gen: "+err.Error(), 2)
@@ -240,6 +241,21 @@ func genRun(c *cli.Command) error {
 
 	paths := append([]string(nil), named...)
 	sort.Strings(paths)
+
+	for _, path := range paths {
+		pkg := pr.Packages[path]
+		if pkg.Schema() == nil || len(pkg.Schema().Migrations) == 0 {
+			continue
+		}
+		drifts, err := foldCheck(ctx, pkg)
+		if err != nil {
+			return cli.Exit("gen: package "+pkg.Path+": "+err.Error(), 1)
+		}
+		if len(drifts) > 0 {
+			driftReport(os.Stdout, pkg, drifts)
+			return cli.Exit(fmt.Sprintf("gen: package %s: the schema and its migrations drift; write the migration that closes it (see 'volt migration check %s')", pkg.Path, pkg.Dir), 1)
+		}
+	}
 
 	outDir := c.String("o")
 	if outDir != "" && len(paths) != 1 {
@@ -355,7 +371,7 @@ func genRun(c *cli.Command) error {
 		if !pkg.HasSchema() || !parts["queries"] {
 			continue
 		}
-		for _, name := range []string{"nao_selects.go", "nao_validate.go"} {
+		for _, name := range []string{"nao_selects.go", "nao_validate.go", "volt_migrations.go"} {
 			stale := filepath.Join(dirOf(pkg), name)
 			if produced[stale] {
 				continue
@@ -524,7 +540,7 @@ func partOf(name string) string {
 		return "models"
 	case base == "nao_schema.sql":
 		return "sql"
-	case strings.HasPrefix(base, "nao_"):
+	case strings.HasPrefix(base, "nao_"), base == "volt_migrations.go":
 		return "queries"
 	case base == "volt_client.go":
 		return "client"

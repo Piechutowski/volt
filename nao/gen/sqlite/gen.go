@@ -171,17 +171,21 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 }
 
 func (g *generator) columnDef(ti *check.TableInfo, cd *check.ColumnDef, pkCols []string) (string, error) {
-	col := cd.Col
-	colName := col.Name.Name()
-
 	sqlType, err := g.typeResolve(cd)
 	if err != nil {
-		return "", fmt.Errorf("column %q: %w", colName, err)
+		return "", fmt.Errorf("column %q: %w", cd.Col.Name.Name(), err)
 	}
+	return columnLine(cd.Col, sqlType, pkCols)
+}
 
-	singlePK := columnHas(cd, "pk") && len(pkCols) == 0
+// columnLine renders one column definition of a CREATE TABLE (spec
+// §mapping-to-sqlite-ddl): the rowid alias for int [pk, increment],
+// NOT NULL for a pk or not null column, UNIQUE and DEFAULT.
+func columnLine(col *ast.Column, sqlType string, pkCols []string) (string, error) {
+	colName := col.Name.Name()
+	singlePK := colHas(col, "pk") && len(pkCols) == 0
 	inPK := singlePK || contains(pkCols, colName)
-	rowidAlias := singlePK && sqlType == "INTEGER" && columnHas(cd, "increment")
+	rowidAlias := singlePK && sqlType == "INTEGER" && colHas(col, "increment")
 
 	parts := []string{"  " + identQuote(colName), sqlType}
 	if singlePK {
@@ -190,7 +194,7 @@ func (g *generator) columnDef(ti *check.TableInfo, cd *check.ColumnDef, pkCols [
 	if !rowidAlias && (inPK || !isNullable(col)) {
 		parts = append(parts, "NOT NULL")
 	}
-	if columnHas(cd, "unique") {
+	if colHas(col, "unique") {
 		parts = append(parts, "UNIQUE")
 	}
 	if s := col.Settings.Get("default"); s != nil {
@@ -218,7 +222,7 @@ func (g *generator) indexesEmit(ti *check.TableInfo) error {
 			return fmt.Errorf("table %s: duplicate index name %q", ti.Decl.Name.String(), name)
 		}
 		used[name] = true
-		g.out.WriteString(IndexDDL(tbl, name, ix) + "\n")
+		g.out.WriteString(IndexDDL(tbl, name, ix) + ";\n")
 	}
 	return nil
 }
@@ -242,9 +246,10 @@ func IndexName(table string, ix *ast.Index) (string, error) {
 	return strings.Join(parts, "_"), nil
 }
 
-// IndexDDL renders one CREATE INDEX statement (spec §mapping-to-sqlite-ddl):
-// UNIQUE for unique, the key's columns quoted and its expressions
-// parenthesized, WHERE for a partial index.
+// IndexDDL renders one CREATE INDEX statement without the trailing
+// semicolon (spec §mapping-to-sqlite-ddl): UNIQUE for unique, the key's
+// columns quoted and its expressions parenthesized, WHERE for a partial
+// index.
 func IndexDDL(table, name string, ix *ast.Index) string {
 	stmt := "CREATE INDEX"
 	if ix.Settings.Get("unique") != nil {
@@ -265,7 +270,7 @@ func IndexDDL(table, name string, ix *ast.Index) string {
 			where = " WHERE " + fe.Text()
 		}
 	}
-	return fmt.Sprintf("%s %s ON %s (%s)%s;", stmt, identQuote(name), identQuote(table), strings.Join(keys, ", "), where)
+	return fmt.Sprintf("%s %s ON %s (%s)%s", stmt, identQuote(name), identQuote(table), strings.Join(keys, ", "), where)
 }
 
 func (g *generator) insertsEmit(ti *check.TableInfo, r *ast.Records) error {
@@ -367,16 +372,18 @@ func isNullable(col *ast.Column) bool {
 	return true
 }
 
-func columnHas(cd *check.ColumnDef, name string) bool {
-	if cd.Col.Settings != nil {
-		if cd.Col.Settings.Get(name) != nil {
+func columnHas(cd *check.ColumnDef, name string) bool { return colHas(cd.Col, name) }
+
+func colHas(col *ast.Column, name string) bool {
+	if col.Settings != nil {
+		if col.Settings.Get(name) != nil {
 			return true
 		}
-		if name == "pk" && cd.Col.Settings.Get("primary key") != nil {
+		if name == "pk" && col.Settings.Get("primary key") != nil {
 			return true
 		}
 	}
-	for _, f := range cd.Col.LegacyFlags {
+	for _, f := range col.LegacyFlags {
 		if strings.EqualFold(f.Name(), name) {
 			return true
 		}

@@ -133,15 +133,20 @@ func TestGoldenGofmtStable(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		formatted, err := format.Source(src)
-		if err != nil {
-			t.Errorf("%s does not parse: %v", golden, err)
-			continue
-		}
-		if !bytes.Equal(src, formatted) {
+		if !gofmtStable(t, src) {
 			t.Errorf("%s is not gofmt-stable", golden)
 		}
 	}
+}
+
+func gofmtStable(t *testing.T, src []byte) bool {
+	t.Helper()
+	formatted, err := format.Source(src)
+	if err != nil {
+		t.Errorf("output does not parse: %v", err)
+		return false
+	}
+	return bytes.Equal(src, formatted)
 }
 
 func TestGoldenCompiles(t *testing.T) {
@@ -170,6 +175,8 @@ func TestGoldenCompiles(t *testing.T) {
 			base, outName = strings.TrimSuffix(base, "_dyn"), "nao_dyn.go"
 		case strings.HasSuffix(base, "_validate"):
 			base, outName = strings.TrimSuffix(base, "_validate"), "nao_validate.go"
+		case strings.HasSuffix(base, "_migrations"):
+			base, outName = strings.TrimSuffix(base, "_migrations"), "volt_migrations.go"
 		}
 		pkgDir := filepath.Join(dir, "p", base)
 		if err := os.MkdirAll(pkgDir, 0o755); err != nil {

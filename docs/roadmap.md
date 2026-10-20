@@ -61,11 +61,11 @@ when a consumer exists.
 - [~] Migrations
   - [x] The `Migration` element: hand-written structural operations in a flat body or `up { } down { }`, checked by rules 1 to 12 of §migrations without the schema, in the grammar, the outline, completion and hover
   - [x] Index names derive from the table and the key columns, an expression index carries `name:`, `where:` makes an index partial (§indexes)
-  - [ ] The fold: every migration applied to an empty SQLite, compared with the schema's DDL table by table; `volt gen` fails on drift (§the-fold)
-  - [ ] The ledger `volt_migrations` and `rt.MigrateUp`, `rt.MigrateDown`, `rt.MigrateStatus` (§migration-ledger)
-  - [ ] `volt migration new | check | up | down | status | sql`, and `volt_migrations.go` with `Migrate` for the binary (§migration-tooling)
-  - [ ] The pragma bracket around `rebuild table` and `drop table`, `foreign_key_check` before commit; `no transaction` for what needs it
-  - [ ] No fake `down`: an irreversible migration refuses `down` with its name
+  - [x] The fold: every migration applied to an empty SQLite, compared with the schema's DDL table by table; `volt gen` fails on drift (§the-fold)
+  - [x] The ledger `volt_migrations` and `rt.MigrateUp`, `rt.MigrateDown`, `rt.MigrateStatus` (§migration-ledger)
+  - [x] `volt migration new | check | up | down | status | sql`, and `volt_migrations.go` with `Migrate` for the binary (§migration-tooling)
+  - [x] The pragma bracket around `rebuild table` and `drop table`, `foreign_key_check` before commit; `no transaction` for what needs it
+  - [x] No fake `down`: an irreversible migration refuses `down` with its name
   - [ ] The migration generator over the drift report; renames via `[was: 'old']`
   - *hand* data migrations, as `exec`
 - [ ] Report engine, when a consumer exists

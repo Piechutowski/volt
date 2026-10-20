@@ -3085,7 +3085,7 @@ true. What is checked instead is their composition.
 ### Migration tooling
 
 1. **CLI.** `volt migration new LABEL [DIR]` writes
-   `<name>.volt` holding `package <name>` and an empty `Migration
+   `<name>.volt` holding the package clause and an empty `Migration
    <name> { }` into the package at `DIR` (the current directory when
    absent); the user may move the element to any file of the
    package. `volt migration check [DIR]` is the fold (§the-fold).

@@ -1,0 +1,89 @@
+-- 0001__create_posts
+-- up
+CREATE TABLE articles (
+  id INTEGER PRIMARY KEY,
+  slug TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  body TEXT,
+  hits INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX idx_articles_hits ON articles (hits) WHERE hits > 0;
+ALTER TABLE articles RENAME TO posts;
+ALTER TABLE posts RENAME COLUMN hits TO views;
+ALTER TABLE posts ADD COLUMN published INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE posts ADD COLUMN draft TEXT;
+ALTER TABLE posts DROP COLUMN draft;
+DROP INDEX idx_articles_hits;
+CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
+CREATE INDEX idx_posts_title_ci ON posts ((lower(title)));
+UPDATE posts SET views = 0 WHERE views < 0;
+-- down
+UPDATE posts SET views = 0 WHERE views < 0;
+DROP INDEX idx_posts_title_ci;
+DROP INDEX idx_posts_views;
+CREATE INDEX idx_articles_hits ON posts (views) WHERE views > 0;
+ALTER TABLE posts ADD COLUMN draft TEXT;
+ALTER TABLE posts DROP COLUMN draft;
+ALTER TABLE posts DROP COLUMN published;
+ALTER TABLE posts RENAME COLUMN views TO hits;
+ALTER TABLE posts RENAME TO articles;
+DROP TABLE articles;
+
+-- 0002__comments_and_tags
+-- up
+CREATE TABLE comments (
+  id INTEGER PRIMARY KEY,
+  post_id INTEGER NOT NULL,
+  author TEXT NOT NULL,
+  body TEXT NOT NULL,
+  FOREIGN KEY (post_id) REFERENCES posts (id)
+);
+CREATE INDEX idx_comments_post_id_author ON comments (post_id, author);
+CREATE TABLE post_tags (
+  post_id INTEGER NOT NULL,
+  tag TEXT NOT NULL,
+  PRIMARY KEY (post_id, tag),
+  FOREIGN KEY (post_id) REFERENCES posts (id)
+);
+CREATE TABLE scratch (
+  id INTEGER PRIMARY KEY NOT NULL
+);
+DROP TABLE scratch;
+-- down
+CREATE TABLE scratch (
+  id INTEGER PRIMARY KEY NOT NULL
+);
+DROP TABLE scratch;
+DROP TABLE post_tags;
+DROP TABLE comments;
+
+-- 0003__posts_created_at
+-- up
+CREATE TABLE posts__new (
+  id INTEGER PRIMARY KEY,
+  slug TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  body TEXT,
+  views INTEGER NOT NULL DEFAULT 0,
+  published INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+INSERT INTO posts__new (id, slug, title, body, views, published, created_at)
+SELECT id, slug, title, body, max(views, 0), published, (CURRENT_TIMESTAMP)
+FROM posts;
+DROP TABLE posts;
+ALTER TABLE posts__new RENAME TO posts;
+CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
+CREATE INDEX idx_posts_title_ci ON posts ((lower(title)));
+-- irreversible
+
+-- 0004__vacuum
+-- up
+VACUUM;
+-- irreversible
+
+-- 0005__comments_flagged
+-- up
+ALTER TABLE comments ADD COLUMN flagged INTEGER NOT NULL DEFAULT 0;
+-- down
+ALTER TABLE comments DROP COLUMN flagged;

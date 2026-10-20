@@ -69,7 +69,12 @@ migration is a `Migration` element of the data package, a list of
 structural operations that is deliberately untyped, since it may say
 anything that was once true; what is verified is the composition, the
 fold of every migration onto an empty SQLite against the schema's DDL
-(§migrations, §the-fold). Unsettled: the generator that writes the
-next migration from the drift report, how a rename is told from a
-drop and an add (`[was:]` in the schema, or a question at diff time),
-and whether `volt gen` should fail or only warn on drift.
+(§migrations, §the-fold). Settled by building it: `volt gen` fails on
+drift rather than warning, since code generated against a database no
+migration produces is the bug the fold exists to catch; and a UNIQUE
+constraint and a unique index on the same key are one structure to
+the fold, since SQLite names constraint indexes by ordinal and `add
+... [unique]` can only lower to an index. Unsettled: the generator
+that writes the next migration from the drift report, and how a
+rename is told from a drop and an add (`[was:]` in the schema, or a
+question at diff time).

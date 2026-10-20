@@ -18,6 +18,8 @@ type Options struct {
 	Package string
 	// ModelsOnly emits just nao_models.go: the structs, their changesets
 	// and the enums, every type the wire carries (spec §changesets).
+	// Otherwise the query layers follow, and volt_migrations.go for a
+	// package that declares migrations (spec §migration-tooling).
 	ModelsOnly bool
 	// SQL additionally emits the SQLite DDL and seed inserts.
 	SQL bool
@@ -53,6 +55,11 @@ func Generate(pkg *lang.Package, opts Options) ([]File, error) {
 			emit{"nao_validate.go", func() ([]byte, error) { return plan.Validators(pkg.Validators, gopts) }})
 		if fns := pkg.SelectFns(); len(fns) > 0 {
 			emits = append(emits, emit{"nao_selects.go", func() ([]byte, error) { return plan.Selects(fns, gopts) }})
+		}
+		if len(pkg.Schema().Migrations) > 0 {
+			emits = append(emits, emit{"volt_migrations.go", func() ([]byte, error) {
+				return golang.GenerateMigrations(pkg.Merged(), pkg.Schema(), gopts)
+			}})
 		}
 	}
 	if opts.SQL {

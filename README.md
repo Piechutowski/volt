@@ -29,13 +29,18 @@ Which constructs a file happens to use is up to the file. The honest build state
   routes, `resources`, query routes bound to generated queries,
   `dataset`, `resources … [default]`, event routes, and a generated
   client (spec Part II).
-- **Migrations**, *the language half built:* a `Migration` element
-  in the data package holds hand-written structural operations
-  (`create table`, `alter table`, `rebuild table`, `exec`, ...),
-  checked, highlighted and outlined like any other element (spec
-  §migrations). *Not built:* the fold that verifies every migration
-  against the schema on a real SQLite, the ledger, and
-  `volt migration new`, `check`, `up` (roadmap).
+- **Migrations**, *alpha:* a `Migration` element in the data package
+  holds hand-written structural operations (`create table`, `alter
+  table`, `rebuild table`, `exec`, ...), checked, highlighted and
+  outlined like any other element. `volt migration new` mints the
+  next one, `volt migration check` folds every migration onto an
+  empty SQLite and reports the drift from the schema as the
+  operations that would close it (`volt gen` refuses to generate on
+  drift), and `volt migration up` applies the pending ones to a
+  database through the `volt_migrations` ledger, as does the
+  generated `volt_migrations.go` from inside a binary (spec
+  §migrations). *Not built:* the generator that writes a migration
+  from the drift report, `[was:]` renames (roadmap).
 
 Project = the Go module (tree rooted at `go.mod`). Package = directory. File
 boundaries carry no meaning (§projects-and-packages).
@@ -83,9 +88,8 @@ carries these; no code backs them yet:
 
 - raw-SQL `Select` / `View` / `Trigger` blocks, `[was:]`, `[repr:]`
   (roadmap)
-- associations (ASSOC), the running half of migrations (the fold, the
-  ledger, the `volt migration` CLI, `volt_migrations.go`), the report
-  engine (RPT)
+- associations (ASSOC), the migration generator over the drift report,
+  the report engine (RPT)
 - HTML rendering and typed compiled templates
 - `volt.WithQueries` / `WithTemplates` / `BuildDeps` options
 - plugs from imported packages (a v0 error on purpose)
