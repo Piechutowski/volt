@@ -2692,8 +2692,13 @@ user, err := q.UserUpdate(ctx, cs)
    receiver as it was, so two goroutines may hold copies of one
    changeset with no coordination. No method of a changeset touches
    the database.
-2. **Data and changes.** `UserNew()` starts from the zero row with
-   nothing set; `u.Changeset()` starts from `u` with nothing set and
+2. **Data and changes.** `UserNew()` starts from the zero row with the schema's literal
+   defaults in place (a number, string, boolean or enum-constant
+   `default:` of a built-in or enum column, §default-values) and
+   nothing set, so `Row()` and `Validate` see what the database writes
+   for an unmarked column; an expression default, and a declared
+   type's default, are the database's alone and read as the zero
+   value until the row is stored; `u.Changeset()` starts from `u` with nothing set and
    remembers that it was made from a row. A setter records a value
    for one column and **marks** it; `Changed` reports the mark; a
    column set to the value it already holds is still a change, since
@@ -2726,10 +2731,8 @@ user, err := q.UserUpdate(ctx, cs)
    one. A JSON body that is not an object is a malformed body (400).
 6. **`Validate`.** Runs over `Row()`, in this order, every rule every
    time: each `required` column (rule 9), each enum column's
-   membership in its value set (check `enum`), skipping a column a
-   create leaves unmarked, since the database's default is written in
-   its place (rule 8), then every validator of the table top-down
-   (§validators). Every failure is collected as a field error; the
+   membership in its value set (check `enum`), then every validator
+   of the table top-down (§validators). Every failure is collected as a field error; the
    first does not stop the rest. `Validate` is pure and idempotent;
    `Create` and `Update` call it again, so forgetting it costs only an
    earlier error message.

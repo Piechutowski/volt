@@ -58,7 +58,8 @@ type CommentChangeset struct {
 	valid []rt.FieldError
 }
 
-// CommentNew starts a changeset for a comments row to create.
+// CommentNew starts a changeset for a comments row to create, the schema's literal
+// defaults in place (spec §changesets).
 func CommentNew() CommentChangeset { return CommentChangeset{} }
 
 // Changeset starts a changeset for an update of r.

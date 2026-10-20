@@ -51,7 +51,8 @@ type InvoiceChangeset struct {
 	valid []rt.FieldError
 }
 
-// InvoiceNew starts a changeset for a invoices row to create.
+// InvoiceNew starts a changeset for a invoices row to create, the schema's literal
+// defaults in place (spec §changesets).
 func InvoiceNew() InvoiceChangeset { return InvoiceChangeset{} }
 
 // Changeset starts a changeset for an update of r.

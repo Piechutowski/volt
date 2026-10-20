@@ -186,8 +186,14 @@ func TestEnumMembershipIsAFieldError(t *testing.T) {
 	if len(errs) != 2 || errs[0].Check != "required" || errs[1].Check != "enum" || errs[1].Columns[0] != "status" || errs[1].Message != "status is not a value of order_status" {
 		t.Errorf("required first, then enum membership: %+v", errs)
 	}
+	if got := OrderNew().Row().Status; got != EOrderStatusPending {
+		t.Errorf("OrderNew seeds the literal default: status %q, want pending", got)
+	}
 	if errs := OrderNew().TotalSet(1).Validate().Errors(); len(errs) != 0 {
-		t.Errorf("an unmarked enum column on a create takes the database default and is not checked: %+v", errs)
+		t.Errorf("an unmarked enum column on a create holds its default and passes: %+v", errs)
+	}
+	if errs := OrderNew().TotalSet(1).StatusSet("").Validate().Errors(); len(errs) != 1 || errs[0].Check != "enum" {
+		t.Errorf("an enum column blanked on a create is checked: %+v", errs)
 	}
 	if errs := (Order{Status: "teleported", Total: 1}).Changeset().Validate().Errors(); len(errs) != 1 || errs[0].Check != "enum" {
 		t.Errorf("a row's enum column is always checked: %+v", errs)

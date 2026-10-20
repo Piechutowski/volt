@@ -71,7 +71,8 @@ type UserChangeset struct {
 	valid []rt.FieldError
 }
 
-// UserNew starts a changeset for a users row to create.
+// UserNew starts a changeset for a users row to create, the schema's literal
+// defaults in place (spec §changesets).
 func UserNew() UserChangeset { return UserChangeset{} }
 
 // Changeset starts a changeset for an update of r.
@@ -271,8 +272,9 @@ type OrderChangeset struct {
 	valid []rt.FieldError
 }
 
-// OrderNew starts a changeset for a orders row to create.
-func OrderNew() OrderChangeset { return OrderChangeset{} }
+// OrderNew starts a changeset for a orders row to create, the schema's literal
+// defaults in place (spec §changesets).
+func OrderNew() OrderChangeset { return OrderChangeset{data: Order{Status: EOrderStatusPending}} }
 
 // Changeset starts a changeset for an update of r.
 func (r Order) Changeset() OrderChangeset { return OrderChangeset{data: r, row: true} }
@@ -503,7 +505,8 @@ type UserTagChangeset struct {
 	valid []rt.FieldError
 }
 
-// UserTagNew starts a changeset for a user_tags row to create.
+// UserTagNew starts a changeset for a user_tags row to create, the schema's literal
+// defaults in place (spec §changesets).
 func UserTagNew() UserTagChangeset { return UserTagChangeset{} }
 
 // Changeset starts a changeset for an update of r.
@@ -653,7 +656,8 @@ type PageViewChangeset struct {
 	valid []rt.FieldError
 }
 
-// PageViewNew starts a changeset for a page_views row to create.
+// PageViewNew starts a changeset for a page_views row to create, the schema's literal
+// defaults in place (spec §changesets).
 func PageViewNew() PageViewChangeset { return PageViewChangeset{} }
 
 // Changeset starts a changeset for an update of r.
@@ -826,7 +830,8 @@ type LinkClickChangeset struct {
 	valid []rt.FieldError
 }
 
-// LinkClickNew starts a changeset for a link_clicks row to create.
+// LinkClickNew starts a changeset for a link_clicks row to create, the schema's literal
+// defaults in place (spec §changesets).
 func LinkClickNew() LinkClickChangeset { return LinkClickChangeset{} }
 
 // Changeset starts a changeset for an update of r.

@@ -43,7 +43,8 @@ type MenuChangeset struct {
 	valid []rt.FieldError
 }
 
-// MenuNew starts a changeset for a menus row to create.
+// MenuNew starts a changeset for a menus row to create, the schema's literal
+// defaults in place (spec §changesets).
 func MenuNew() MenuChangeset { return MenuChangeset{} }
 
 // Changeset starts a changeset for an update of r.
@@ -193,7 +194,8 @@ type OrderStatusChangeset struct {
 	valid []rt.FieldError
 }
 
-// OrderStatusNew starts a changeset for a order_status row to create.
+// OrderStatusNew starts a changeset for a order_status row to create, the schema's literal
+// defaults in place (spec §changesets).
 func OrderStatusNew() OrderStatusChangeset { return OrderStatusChangeset{} }
 
 // Changeset starts a changeset for an update of r.

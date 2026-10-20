@@ -49,7 +49,8 @@ type UserChangeset struct {
 	valid []rt.FieldError
 }
 
-// UserNew starts a changeset for a users row to create.
+// UserNew starts a changeset for a users row to create, the schema's literal
+// defaults in place (spec §changesets).
 func UserNew() UserChangeset { return UserChangeset{} }
 
 // Changeset starts a changeset for an update of r.
@@ -194,7 +195,8 @@ type CoreUserChangeset struct {
 	valid []rt.FieldError
 }
 
-// CoreUserNew starts a changeset for a core.users row to create.
+// CoreUserNew starts a changeset for a core.users row to create, the schema's literal
+// defaults in place (spec §changesets).
 func CoreUserNew() CoreUserChangeset { return CoreUserChangeset{} }
 
 // Changeset starts a changeset for an update of r.
@@ -510,7 +512,8 @@ type X2faCodeChangeset struct {
 	valid []rt.FieldError
 }
 
-// X2faCodeNew starts a changeset for a 2fa_codes row to create.
+// X2faCodeNew starts a changeset for a 2fa_codes row to create, the schema's literal
+// defaults in place (spec §changesets).
 func X2faCodeNew() X2faCodeChangeset { return X2faCodeChangeset{} }
 
 // Changeset starts a changeset for an update of r.

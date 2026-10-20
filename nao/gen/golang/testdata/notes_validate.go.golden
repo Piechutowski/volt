@@ -12,12 +12,10 @@ import (
 func (c PostChangeset) Validate() PostChangeset {
 	v := c.Row()
 	var errs []rt.FieldError
-	if c.set[2] || c.row {
-		switch v.Status {
-		case EPostStatusDraft, EPostStatusPublished, EPostStatusArchived:
-		default:
-			errs = append(errs, rt.FieldError{Check: "enum", Columns: []string{"status"}, Message: "status is not a value of post_status"})
-		}
+	switch v.Status {
+	case EPostStatusDraft, EPostStatusPublished, EPostStatusArchived:
+	default:
+		errs = append(errs, rt.FieldError{Check: "enum", Columns: []string{"status"}, Message: "status is not a value of post_status"})
 	}
 	c.valid = errs
 	return c

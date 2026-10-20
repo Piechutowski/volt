@@ -9,7 +9,7 @@ import (
 
 const (
 	postTableSQL   = `"posts"`
-	postColumnsSQL = `"id", "slug", "words", "score", "cover", "state", "reviewed"`
+	postColumnsSQL = `"id", "slug", "words", "score", "cover", "state", "reviewed", "rank", "draft", "caption", "ratio"`
 )
 
 // PostLimit caps how many rows PostQuery returns.

@@ -42,7 +42,8 @@ type CurrencyChangeset struct {
 	valid []rt.FieldError
 }
 
-// CurrencyNew starts a changeset for a currencies row to create.
+// CurrencyNew starts a changeset for a currencies row to create, the schema's literal
+// defaults in place (spec §changesets).
 func CurrencyNew() CurrencyChangeset { return CurrencyChangeset{} }
 
 // Changeset starts a changeset for an update of r.
@@ -198,7 +199,8 @@ type RateChangeset struct {
 	valid []rt.FieldError
 }
 
-// RateNew starts a changeset for a rates row to create.
+// RateNew starts a changeset for a rates row to create, the schema's literal
+// defaults in place (spec §changesets).
 func RateNew() RateChangeset { return RateChangeset{} }
 
 // Changeset starts a changeset for an update of r.

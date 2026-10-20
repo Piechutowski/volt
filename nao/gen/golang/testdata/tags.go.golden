@@ -44,7 +44,8 @@ type UserChangeset struct {
 	valid []rt.FieldError
 }
 
-// UserNew starts a changeset for a users row to create.
+// UserNew starts a changeset for a users row to create, the schema's literal
+// defaults in place (spec §changesets).
 func UserNew() UserChangeset { return UserChangeset{} }
 
 // Changeset starts a changeset for an update of r.

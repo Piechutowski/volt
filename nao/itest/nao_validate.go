@@ -28,12 +28,10 @@ func (c OrderChangeset) Validate() OrderChangeset {
 	if v.Total == 0 {
 		errs = append(errs, rt.FieldError{Check: "required", Columns: []string{"total"}, Message: "total is required"})
 	}
-	if c.set[2] || c.row {
-		switch v.Status {
-		case EOrderStatusPending, EOrderStatusShipped, EOrderStatusDelivered:
-		default:
-			errs = append(errs, rt.FieldError{Check: "enum", Columns: []string{"status"}, Message: "status is not a value of order_status"})
-		}
+	switch v.Status {
+	case EOrderStatusPending, EOrderStatusShipped, EOrderStatusDelivered:
+	default:
+		errs = append(errs, rt.FieldError{Check: "enum", Columns: []string{"status"}, Message: "status is not a value of order_status"})
 	}
 	c.valid = errs
 	return c

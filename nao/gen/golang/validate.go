@@ -70,7 +70,7 @@ func validateEmit(b *strings.Builder, t *tableModel, specs []ValidatorSpec) bool
 	}
 	for _, f := range t.fields {
 		if f.enum != nil {
-			enumEmit(&checks, t, f)
+			enumEmit(&checks, f)
 		}
 	}
 	for _, ck := range specs {
@@ -108,7 +108,7 @@ func requiredEmit(b *strings.Builder, f *fieldPlan) {
 	fmt.Fprintf(b, "\t\terrs = append(errs, rt.FieldError{Check: \"required\", Columns: []string{%q}, Message: %q})\n\t}\n", f.colName, f.colName+" is required")
 }
 
-func enumEmit(b *strings.Builder, t *tableModel, f *fieldPlan) {
+func enumEmit(b *strings.Builder, f *fieldPlan) {
 	var consts []string
 	for _, v := range f.enum.Decl.Values {
 		name, err := goName(v.Name.Name())
@@ -118,12 +118,16 @@ func enumEmit(b *strings.Builder, t *tableModel, f *fieldPlan) {
 		consts = append(consts, f.baseType+name)
 	}
 	value := "v." + f.goField
-	guard := fmt.Sprintf("c.set[%d] || c.row", t.index(f))
+	indent := "\t"
 	if f.nullable {
 		value += ".V"
-		guard = "(" + guard + ") && v." + f.goField + ".Valid"
+		fmt.Fprintf(b, "\tif v.%s.Valid {\n", f.goField)
+		indent = "\t\t"
 	}
 	msg := f.colName + " is not a value of " + f.enum.Decl.Name.String()
-	fmt.Fprintf(b, "\tif %s {\n\t\tswitch %s {\n\t\tcase %s:\n\t\tdefault:\n", guard, value, strings.Join(consts, ", "))
-	fmt.Fprintf(b, "\t\t\terrs = append(errs, rt.FieldError{Check: \"enum\", Columns: []string{%q}, Message: %s})\n\t\t}\n\t}\n", f.colName, strconv.Quote(msg))
+	fmt.Fprintf(b, "%sswitch %s {\n%scase %s:\n%sdefault:\n", indent, value, indent, strings.Join(consts, ", "), indent)
+	fmt.Fprintf(b, "%s\terrs = append(errs, rt.FieldError{Check: \"enum\", Columns: []string{%q}, Message: %s})\n%s}\n", indent, f.colName, strconv.Quote(msg), indent)
+	if f.nullable {
+		b.WriteString("\t}\n")
+	}
 }

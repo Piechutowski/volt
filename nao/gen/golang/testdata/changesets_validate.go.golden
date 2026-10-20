@@ -24,14 +24,12 @@ func (c PostChangeset) Validate() PostChangeset {
 	if len(v.Cover) == 0 {
 		errs = append(errs, rt.FieldError{Check: "required", Columns: []string{"cover"}, Message: "cover is required"})
 	}
-	if c.set[5] || c.row {
-		switch v.State {
-		case EVisibilityPublic, EVisibilityUnlisted:
-		default:
-			errs = append(errs, rt.FieldError{Check: "enum", Columns: []string{"state"}, Message: "state is not a value of visibility"})
-		}
+	switch v.State {
+	case EVisibilityPublic, EVisibilityUnlisted:
+	default:
+		errs = append(errs, rt.FieldError{Check: "enum", Columns: []string{"state"}, Message: "state is not a value of visibility"})
 	}
-	if (c.set[6] || c.row) && v.Reviewed.Valid {
+	if v.Reviewed.Valid {
 		switch v.Reviewed.V {
 		case EVisibilityPublic, EVisibilityUnlisted:
 		default:

@@ -24,6 +24,10 @@ type Post struct {
 	Cover    []byte               `db:"cover" json:"cover"`
 	State    EVisibility          `db:"state" json:"state"`
 	Reviewed rt.Null[EVisibility] `db:"reviewed" json:"reviewed"`
+	Rank     int                  `db:"rank" json:"rank"`
+	Draft    bool                 `db:"draft" json:"draft"`
+	Caption  rt.Null[string]      `db:"caption" json:"caption"`
+	Ratio    float64              `db:"ratio" json:"ratio"`
 }
 
 // PostColumn is a column handle of Post, the element of a Cast allow list
@@ -45,6 +49,10 @@ var (
 	PostCover    = rt.Column[Post, []byte]{Name: "cover"}
 	PostState    = rt.Column[Post, EVisibility]{Name: "state"}
 	PostReviewed = rt.NullColumn[Post, EVisibility]{Column: rt.Column[Post, EVisibility]{Name: "reviewed"}}
+	PostRank     = rt.Column[Post, int]{Name: "rank"}
+	PostDraft    = rt.Column[Post, bool]{Name: "draft"}
+	PostCaption  = rt.NullColumn[Post, string]{Column: rt.Column[Post, string]{Name: "caption"}}
+	PostRatio    = rt.Column[Post, float64]{Name: "ratio"}
 )
 
 // PostChangeset carries a posts row, the changes proposed to it and the
@@ -54,13 +62,16 @@ type PostChangeset struct {
 	data  Post
 	vals  Post
 	row   bool
-	set   [7]bool
+	set   [11]bool
 	errs  []rt.FieldError
 	valid []rt.FieldError
 }
 
-// PostNew starts a changeset for a posts row to create.
-func PostNew() PostChangeset { return PostChangeset{} }
+// PostNew starts a changeset for a posts row to create, the schema's literal
+// defaults in place (spec §changesets).
+func PostNew() PostChangeset {
+	return PostChangeset{data: Post{State: EVisibilityPublic, Reviewed: rt.Some(EVisibilityUnlisted), Rank: -1, Draft: true, Caption: rt.Some("none"), Ratio: 0.5}}
+}
 
 // Changeset starts a changeset for an update of r.
 func (r Post) Changeset() PostChangeset { return PostChangeset{data: r, row: true} }
@@ -73,6 +84,10 @@ func (c PostChangeset) From(r Post) PostChangeset {
 	c = c.CoverSet(r.Cover)
 	c = c.StateSet(r.State)
 	c = c.ReviewedSet(r.Reviewed)
+	c = c.RankSet(r.Rank)
+	c = c.DraftSet(r.Draft)
+	c = c.CaptionSet(r.Caption)
+	c = c.RatioSet(r.Ratio)
 	return c
 }
 
@@ -112,11 +127,35 @@ func (c PostChangeset) ReviewedSet(v rt.Null[EVisibility]) PostChangeset {
 	return c
 }
 
+// RankSet sets rank.
+func (c PostChangeset) RankSet(v int) PostChangeset {
+	c.vals.Rank, c.set[7] = v, true
+	return c
+}
+
+// DraftSet sets draft.
+func (c PostChangeset) DraftSet(v bool) PostChangeset {
+	c.vals.Draft, c.set[8] = v, true
+	return c
+}
+
+// CaptionSet sets caption; an invalid rt.Null sets NULL.
+func (c PostChangeset) CaptionSet(v rt.Null[string]) PostChangeset {
+	c.vals.Caption, c.set[9] = v, true
+	return c
+}
+
+// RatioSet sets ratio.
+func (c PostChangeset) RatioSet(v float64) PostChangeset {
+	c.vals.Ratio, c.set[10] = v, true
+	return c
+}
+
 // Cast sets every column of allow that p carries, recording a cast
 // error for a value that does not convert and an unknown_field error
 // for a key that names no column (spec §changesets).
 func (c PostChangeset) Cast(p PostParams, allow ...PostColumn) PostChangeset {
-	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "slug", "words", "score", "cover", "state", "reviewed")...)
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "slug", "words", "score", "cover", "state", "reviewed", "rank", "draft", "caption", "ratio")...)
 	for _, col := range allow {
 		switch col.ColumnName() {
 		case "slug":
@@ -155,6 +194,30 @@ func (c PostChangeset) Cast(p PostParams, allow ...PostColumn) PostChangeset {
 			} else if ok {
 				c = c.ReviewedSet(v)
 			}
+		case "rank":
+			if v, ok, err := rt.Field(p, "rank", false, func(r *Post) int { return r.Rank }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "rank")
+			} else if ok {
+				c = c.RankSet(v)
+			}
+		case "draft":
+			if v, ok, err := rt.Field(p, "draft", false, func(r *Post) bool { return r.Draft }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "draft")
+			} else if ok {
+				c = c.DraftSet(v)
+			}
+		case "caption":
+			if v, ok, err := rt.Field(p, "caption", true, func(r *Post) rt.Null[string] { return r.Caption }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "caption")
+			} else if ok {
+				c = c.CaptionSet(v)
+			}
+		case "ratio":
+			if v, ok, err := rt.Field(p, "ratio", false, func(r *Post) float64 { return r.Ratio }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "ratio")
+			} else if ok {
+				c = c.RatioSet(v)
+			}
 		}
 	}
 	return c
@@ -177,6 +240,14 @@ func (c PostChangeset) Changed(col PostColumn) bool {
 		return c.set[5]
 	case "reviewed":
 		return c.set[6]
+	case "rank":
+		return c.set[7]
+	case "draft":
+		return c.set[8]
+	case "caption":
+		return c.set[9]
+	case "ratio":
+		return c.set[10]
 	}
 	return false
 }
@@ -202,6 +273,18 @@ func (c PostChangeset) Row() Post {
 	if c.set[6] {
 		r.Reviewed = c.vals.Reviewed
 	}
+	if c.set[7] {
+		r.Rank = c.vals.Rank
+	}
+	if c.set[8] {
+		r.Draft = c.vals.Draft
+	}
+	if c.set[9] {
+		r.Caption = c.vals.Caption
+	}
+	if c.set[10] {
+		r.Ratio = c.vals.Ratio
+	}
 	return r
 }
 
@@ -225,6 +308,18 @@ func (c PostChangeset) Params() PostParams {
 	}
 	if c.set[6] {
 		set = append(set, "reviewed")
+	}
+	if c.set[7] {
+		set = append(set, "rank")
+	}
+	if c.set[8] {
+		set = append(set, "draft")
+	}
+	if c.set[9] {
+		set = append(set, "caption")
+	}
+	if c.set[10] {
+		set = append(set, "ratio")
 	}
 	return rt.ParamsOf(c.Row(), set)
 }
@@ -291,7 +386,8 @@ type PostTagChangeset struct {
 	valid []rt.FieldError
 }
 
-// PostTagNew starts a changeset for a post_tags row to create.
+// PostTagNew starts a changeset for a post_tags row to create, the schema's literal
+// defaults in place (spec §changesets).
 func PostTagNew() PostTagChangeset { return PostTagChangeset{} }
 
 // Changeset starts a changeset for an update of r.
@@ -435,7 +531,8 @@ type PingChangeset struct {
 	valid []rt.FieldError
 }
 
-// PingNew starts a changeset for a pings row to create.
+// PingNew starts a changeset for a pings row to create, the schema's literal
+// defaults in place (spec §changesets).
 func PingNew() PingChangeset { return PingChangeset{} }
 
 // Changeset starts a changeset for an update of r.

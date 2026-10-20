@@ -41,18 +41,18 @@ func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 
 func postScan(r rt.Row) (Post, error) {
 	var v Post
-	err := r.Scan(&v.ID, &v.Slug, &v.Words, &v.Score, &v.Cover, &v.State, &v.Reviewed)
+	err := r.Scan(&v.ID, &v.Slug, &v.Words, &v.Score, &v.Cover, &v.State, &v.Reviewed, &v.Rank, &v.Draft, &v.Caption, &v.Ratio)
 	return v, rt.Refused("Post", err)
 }
 
-const postGetSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed" FROM "posts" WHERE "id" = :id`
+const postGetSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "rank", "draft", "caption", "ratio" FROM "posts" WHERE "id" = :id`
 
 // PostGet fetches the posts row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) PostGet(ctx context.Context, id int) (Post, error) {
 	return postScan(q.db.QueryRowContext(ctx, postGetSQL, sql.Named("id", id)))
 }
 
-const postGetManySQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed" FROM "posts" WHERE "id" IN`
+const postGetManySQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "rank", "draft", "caption", "ratio" FROM "posts" WHERE "id" IN`
 
 // PostGetMany fetches the posts rows whose primary key is in ids, in
 // database order. Missing keys are not an error; they are just absent.
@@ -81,7 +81,7 @@ func (q *Queries) PostGetMany(ctx context.Context, ids []int) ([]Post, error) {
 	return out, rows.Err()
 }
 
-const postGetBySlugSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed" FROM "posts" WHERE "slug" = :slug`
+const postGetBySlugSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "rank", "draft", "caption", "ratio" FROM "posts" WHERE "slug" = :slug`
 
 // PostGetBySlug fetches the posts row with the given slug (a unique column),
 // or rt.ErrNotFound.
@@ -89,7 +89,7 @@ func (q *Queries) PostGetBySlug(ctx context.Context, slug string) (Post, error) 
 	return postScan(q.db.QueryRowContext(ctx, postGetBySlugSQL, sql.Named("slug", slug)))
 }
 
-const postListSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed" FROM "posts"`
+const postListSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "rank", "draft", "caption", "ratio" FROM "posts"`
 
 // PostList returns every posts row.
 func (q *Queries) PostList(ctx context.Context) ([]Post, error) {
@@ -137,6 +137,18 @@ func (q *Queries) PostCreate(ctx context.Context, c PostChangeset) (Post, error)
 	if c.set[6] {
 		cols, args = append(cols, "reviewed"), append(args, v.Reviewed)
 	}
+	if c.set[7] {
+		cols, args = append(cols, "rank"), append(args, v.Rank)
+	}
+	if c.set[8] {
+		cols, args = append(cols, "draft"), append(args, v.Draft)
+	}
+	if c.set[9] {
+		cols, args = append(cols, "caption"), append(args, v.Caption)
+	}
+	if c.set[10] {
+		cols, args = append(cols, "ratio"), append(args, v.Ratio)
+	}
 	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(postTableSQL, cols, postColumnsSQL), args...)
 	if err != nil {
 		return Post{}, err
@@ -175,6 +187,18 @@ func (q *Queries) PostUpdate(ctx context.Context, c PostChangeset) (Post, error)
 	}
 	if c.set[6] {
 		cols, args = append(cols, "reviewed"), append(args, v.Reviewed)
+	}
+	if c.set[7] {
+		cols, args = append(cols, "rank"), append(args, v.Rank)
+	}
+	if c.set[8] {
+		cols, args = append(cols, "draft"), append(args, v.Draft)
+	}
+	if c.set[9] {
+		cols, args = append(cols, "caption"), append(args, v.Caption)
+	}
+	if c.set[10] {
+		cols, args = append(cols, "ratio"), append(args, v.Ratio)
 	}
 	if len(cols) == 0 {
 		return v, nil

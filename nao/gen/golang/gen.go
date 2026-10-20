@@ -163,8 +163,12 @@ func (g *generator) changesetEmit(t *tableModel) {
 	fields.WriteTo(b, "\t")
 	b.WriteString("}\n\n")
 
-	fmt.Fprintf(b, "// %sNew starts a changeset for a %s row to create.\n", m, tbl)
-	funcLine(b, fmt.Sprintf("func %sNew() %sChangeset", m, m), fmt.Sprintf("return %sChangeset{}", m))
+	fmt.Fprintf(b, "// %sNew starts a changeset for a %s row to create, the schema's literal\n// defaults in place (spec §changesets).\n", m, tbl)
+	newBody := fmt.Sprintf("return %sChangeset{}", m)
+	if seed := t.defaultsGo(); seed != "" {
+		newBody = fmt.Sprintf("return %sChangeset{data: %s%s}", m, m, seed)
+	}
+	funcLine(b, fmt.Sprintf("func %sNew() %sChangeset", m, m), newBody)
 	fmt.Fprintf(b, "// Changeset starts a changeset for an update of r.\n")
 	funcLine(b, fmt.Sprintf("func (r %s) Changeset() %sChangeset", m, m), fmt.Sprintf("return %sChangeset{data: r, row: true}", m))
 
@@ -501,4 +505,73 @@ func commentLines(rows *align.Block, text string) {
 		}
 		rows.Line("// " + line)
 	}
+}
+
+func (t *tableModel) defaultsGo() string {
+	var parts []string
+	for _, f := range t.fields {
+		if expr, ok := f.defaultGo(); ok {
+			parts = append(parts, f.goField+": "+expr)
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "{" + strings.Join(parts, ", ") + "}"
+}
+
+func (f *fieldPlan) defaultGo() (string, bool) {
+	s := f.col.Settings.Get("default")
+	if s == nil || f.declared || f.increment {
+		return "", false
+	}
+	var expr string
+	switch v := s.Value.(type) {
+	case *ast.BasicLit:
+		if v.Tok.Kind == token.STRING {
+			if v.Tok.Val == "" {
+				return "", false
+			}
+			expr = strconv.Quote(v.Tok.Val)
+		} else {
+			expr = numberGo(v.Tok.Val, f.storage)
+		}
+	case *ast.NegNumber:
+		expr = numberGo("-"+v.Num.Tok.Val, f.storage)
+	case *ast.EnumConst:
+		name, err := goName(v.Value.Name())
+		if err != nil {
+			return "", false
+		}
+		expr = f.baseType + name
+	case *ast.Ident:
+		if !strings.EqualFold(v.Name(), "true") {
+			return "", false
+		}
+		expr = "true"
+	default:
+		return "", false
+	}
+	if expr == "" {
+		return "", false
+	}
+	if f.nullable {
+		expr = "rt.Some(" + expr + ")"
+	}
+	return expr, true
+}
+
+func numberGo(lit, storage string) string {
+	if storage == "int" {
+		n, err := strconv.ParseInt(lit, 10, 64)
+		if err != nil || n == 0 {
+			return ""
+		}
+		return strconv.FormatInt(n, 10)
+	}
+	x, err := strconv.ParseFloat(lit, 64)
+	if err != nil || x == 0 {
+		return ""
+	}
+	return strconv.FormatFloat(x, 'g', -1, 64)
 }

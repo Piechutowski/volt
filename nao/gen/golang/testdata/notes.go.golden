@@ -69,7 +69,8 @@ type PostChangeset struct {
 	valid []rt.FieldError
 }
 
-// PostNew starts a changeset for a posts row to create.
+// PostNew starts a changeset for a posts row to create, the schema's literal
+// defaults in place (spec §changesets).
 func PostNew() PostChangeset { return PostChangeset{} }
 
 // Changeset starts a changeset for an update of r.
@@ -259,7 +260,8 @@ type TagChangeset struct {
 	valid []rt.FieldError
 }
 
-// TagNew starts a changeset for a tags row to create.
+// TagNew starts a changeset for a tags row to create, the schema's literal
+// defaults in place (spec §changesets).
 func TagNew() TagChangeset { return TagChangeset{} }
 
 // Changeset starts a changeset for an update of r.

@@ -20,12 +20,10 @@ func (c UserChangeset) Validate() UserChangeset {
 func (c CoreUserChangeset) Validate() CoreUserChangeset {
 	v := c.Row()
 	var errs []rt.FieldError
-	if c.set[7] || c.row {
-		switch v.Kind {
-		case ECoreAuditKindReadWrite, ECoreAuditKindAdmin:
-		default:
-			errs = append(errs, rt.FieldError{Check: "enum", Columns: []string{"kind"}, Message: "kind is not a value of core.audit_kind"})
-		}
+	switch v.Kind {
+	case ECoreAuditKindReadWrite, ECoreAuditKindAdmin:
+	default:
+		errs = append(errs, rt.FieldError{Check: "enum", Columns: []string{"kind"}, Message: "kind is not a value of core.audit_kind"})
 	}
 	c.valid = errs
 	return c

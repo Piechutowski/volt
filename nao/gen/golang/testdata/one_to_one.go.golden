@@ -41,7 +41,8 @@ type UserChangeset struct {
 	valid []rt.FieldError
 }
 
-// UserNew starts a changeset for a users row to create.
+// UserNew starts a changeset for a users row to create, the schema's literal
+// defaults in place (spec §changesets).
 func UserNew() UserChangeset { return UserChangeset{} }
 
 // Changeset starts a changeset for an update of r.
@@ -190,7 +191,8 @@ type UserProfileChangeset struct {
 	valid []rt.FieldError
 }
 
-// UserProfileNew starts a changeset for a user_profiles row to create.
+// UserProfileNew starts a changeset for a user_profiles row to create, the schema's literal
+// defaults in place (spec §changesets).
 func UserProfileNew() UserProfileChangeset { return UserProfileChangeset{} }
 
 // Changeset starts a changeset for an update of r.

@@ -44,7 +44,8 @@ type EmployeeChangeset struct {
 	valid []rt.FieldError
 }
 
-// EmployeeNew starts a changeset for a employees row to create.
+// EmployeeNew starts a changeset for a employees row to create, the schema's literal
+// defaults in place (spec §changesets).
 func EmployeeNew() EmployeeChangeset { return EmployeeChangeset{} }
 
 // Changeset starts a changeset for an update of r.

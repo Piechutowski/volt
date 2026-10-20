@@ -41,7 +41,8 @@ type CategoryChangeset struct {
 	valid []rt.FieldError
 }
 
-// CategoryNew starts a changeset for a categories row to create.
+// CategoryNew starts a changeset for a categories row to create, the schema's literal
+// defaults in place (spec §changesets).
 func CategoryNew() CategoryChangeset { return CategoryChangeset{} }
 
 // Changeset starts a changeset for an update of r.
@@ -192,7 +193,8 @@ type CategoryPathChangeset struct {
 	valid []rt.FieldError
 }
 
-// CategoryPathNew starts a changeset for a category_paths row to create.
+// CategoryPathNew starts a changeset for a category_paths row to create, the schema's literal
+// defaults in place (spec §changesets).
 func CategoryPathNew() CategoryPathChangeset { return CategoryPathChangeset{} }
 
 // Changeset starts a changeset for an update of r.

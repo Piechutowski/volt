@@ -16,7 +16,11 @@ Table posts {
   score    float64 [not null, required]
   cover    []byte [not null, required]
   state    visibility [not null, default: visibility.public]
-  reviewed visibility
+  reviewed visibility [default: visibility.unlisted]
+  rank     int [not null, default: -1]
+  draft    bool [not null, default: true]
+  caption  string [default: 'none']
+  ratio    float64 [not null, default: 0.5]
 }
 
 Table post_tags {

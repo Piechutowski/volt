@@ -9,7 +9,11 @@ CREATE TABLE posts (
   score REAL NOT NULL,
   cover BLOB NOT NULL,
   state TEXT NOT NULL DEFAULT 'public',
-  reviewed TEXT
+  reviewed TEXT DEFAULT 'unlisted',
+  rank INTEGER NOT NULL DEFAULT -1,
+  draft INTEGER NOT NULL DEFAULT 1,
+  caption TEXT DEFAULT 'none',
+  ratio REAL NOT NULL DEFAULT 0.5
 );
 
 CREATE TABLE post_tags (
