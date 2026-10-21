@@ -22,6 +22,26 @@ report engine when a consumer exists.
   - [x] Named placeholders, Go references checked by spelling
 - [x] Schema core: Project, Table, TablePartial, Records, Enum, Type, Ref, TableGroup, Notes, DiagramView
   - [x] One spelling per meaning: `pk` is the key, a column is NOT NULL unless it carries `null`, settings follow the type in brackets only, the files of a package share a namespace without imports
+- [ ] One spelling per meaning, decided in review and built in steps; docs/entropy-and-purity-report.md keeps what is still open
+  - [ ] Step 1, removals
+    - [ ] Enums go: `Type OrderState string` with Go constants and a membership validator replaces `Enum`. In the same commit, a declared type whose Go declaration spells its storage type (`bool`, `int`, `float64`, `string`) needs no Scanner or Valuer, `<Model>New` seeds its literal defaults, `required` compares it directly, its bare name joins the generated name scope so a collision is a check error, and `-o DIR` with a bare declared type is refused
+    - [ ] Diagram-only constructs go: `headercolor`, Ref `color` and `inactive`, `TableGroup` (`Group` is the one set of tables, in the tables' namespace), sticky notes, `DiagramView`, the color literal
+    - [ ] A note has one spelling, the `note:` setting; the body `Note: '...'` and `Note { '...' }` forms go
+    - [ ] Relationships have one direction, the foreign key on the left: `<`, `-` and `<>` go; an inline ref is `ref: users.id` with no operator; the Ref element keeps only `Ref: posts.author_id > users.id`, without the long form or a name; a one-to-one is `unique` plus a ref
+    - [ ] Table aliases (`as`) and schema qualification go; a table is named by its name only
+    - [ ] Settings nothing reads go: index `type:` and `note:`, `note:` on migrations, migration columns and migration indexes; a TablePartial takes no settings and no note
+    - [ ] NULL has one spelling: `default: null` goes, a record row writes `null`, and an empty field is an error
+    - [ ] The spec says what the code does: punctuation table, the doubled exclusion backslash, the multi-line string and `import ( db )` examples, §table-resolution clause 2, the empty Reserved headings, version relics
+  - [ ] Step 2, case and names
+    - [ ] Volt is case-sensitive. Words that open an element or a block are capitalized (`Table`, `TablePartial`, `Type`, `Ref`, `Group`, `Pred`, `Select`, `Records`, `Indexes`, `Validators`, `Migration`, `Scope`, `Pipeline`, `Project`); every other word is lowercase (settings and values, `true`, `false`, `null`, clause words, route words, migration operations, `package`, `import`); a wrong case is a syntax error naming the right spelling
+    - [ ] Identifiers are Go identifiers: quoted identifiers go
+    - [ ] Strings escape as in Go: only `\\`, `\'`, `\n` and `\t`; every other backslash sequence, line continuation included, is an error
+    - [ ] A package names its own declarations bare; `pkg.Name` always names an import (or `volt.`), and the rule that an import may not take the package's own name goes
+  - [ ] Step 3, keys and indexes
+    - [ ] `pk` is a column setting only: several `pk` columns form one composite key in declaration order, the `[pk]` index form goes, `increment` only on a single `int` pk
+    - [ ] A single-column index is the column setting `unique` or `index`, emitted as `CREATE [UNIQUE] INDEX` with a derived name; the `Indexes` block holds composite, expression and partial indexes only, and a plain single-column index there is an error; a partial or expression unique index never makes a column unique (GetBy, foreign-key targets); the fold compares indexes by table, key, uniqueness and condition, not by name; two indexes of one table with the same name are a check error
+  - [ ] Step 4, routes
+    - [ ] `:slug(string)` goes, a bare path parameter is a string; PUT goes, PATCH is the partial update; a query route's verb is fixed by the generated method (List, Get and selects `get`, Create `post`, Update `patch`, Delete `delete`)
 - [x] `Migration`: the element, its contextual keywords and its twelve checks; what runs it is under the data layer
   - [x] Column types are a closed Go set (`bool`, `int`, `float64`, `string`, `[]byte`, `time.Time`), enums, and `Type` declarations; defaults are typed
 - [~] Schema extensions

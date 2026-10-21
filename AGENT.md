@@ -18,7 +18,7 @@ one silently.
 
 ## Docs
 
-Five files in `docs/`, nothing else carries prose:
+Six files in `docs/`, nothing else carries prose:
 
 - `spec.md` — the language and the generated code, normative for the
   implementation as it stands. Spec and code must agree; the language
@@ -33,6 +33,10 @@ Five files in `docs/`, nothing else carries prose:
 - `hypotheses.md` — open design questions, numbered, held loosely.
 - `roadmap.md` — what is built and what is not; a status changes in
   the commit that lands it.
+- `entropy-and-purity-report.md`: the review items not yet decided,
+  places where Volt says one thing two ways and effects that could be
+  pure; an item leaves it in the commit that decides it, and a decided
+  item to build goes to `roadmap.md`.
 
 No doc is ever knowingly wrong: a change whose blast radius reaches a
 doc updates the doc in the same commit. Never weaken a test to get
