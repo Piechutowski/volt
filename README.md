@@ -3,47 +3,11 @@
 > [!CAUTION]
 > **This project is an alpha version, and everything may change in the future.**
 
-**Status: alpha.** Personal project. The language, the generated code
-and every API in here can change without ceremony. Nothing is promised
-to anyone; [docs/spec.md](docs/spec.md) describes what the
-implementation does today, not a stability contract.
-
 Volt is my codegen-first web framework for Go: schema and routes are
 declared in `.volt` files, `volt gen` writes the router, controller
 interfaces and reverse-URL helpers onto plain `net/http.ServeMux`, and
 nao — its ORM — generates the models and queries. Everything
 resolves at compile time.
-
-**One language, one file extension.** A `.volt` file is Volt — the
-markup grew outward from its schema core, but it is a single language.
-Which constructs a file happens to use is up to the file. The honest build state:
-
-- **Schema core** — *built.* Spec Part I: Project,
-  Table with columns/indexes/validators, TablePartial, Records, Enum, Type, Ref,
-  TableGroup, Notes, DiagramView.
-- **Schema extensions** — *the structured half built:* `Group`, `Pred`
-  and `Select … for <group>` with projection, `[tag:]`, `[required]`,
-  `[model:]` (spec Part II, the query layer). *Not built:* raw-SQL
-  `Select` / `View` / `Trigger` blocks, `[was:]`, `[repr:]` (roadmap).
-- **Routing** — *alpha:* `package` / `import`, `Pipeline`, `Scope`,
-  routes, `resources`, query routes bound to generated queries,
-  `dataset`, `resources … [default]`, event routes, and a generated
-  client (spec Part II).
-- **Migrations**, *alpha:* a `Migration` element in the data package
-  holds hand-written structural operations (`create table`, `alter
-  table`, `rebuild table`, `exec`, ...), checked, highlighted and
-  outlined like any other element. `volt migration new` mints the
-  next one, `volt migration check` folds every migration onto an
-  empty SQLite and reports the drift from the schema as the
-  operations that would close it (`volt gen` refuses to generate on
-  drift), and `volt migration up` applies the pending ones to a
-  database through the `volt_migrations` ledger, as does the
-  generated `volt_migrations.go` from inside a binary (spec
-  §migrations). *Not built:* the generator that writes a migration
-  from the drift report, `[was:]` renames (roadmap).
-
-Project = the Go module (tree rooted at `go.mod`). Package = directory. File
-boundaries carry no meaning (§projects-and-packages).
 
 ## Layout
 
@@ -73,82 +37,6 @@ third-party deps. Importing `nao/rt` alone drags in nothing.
 | `docs/`          | `spec.md` (the language and the generated code, normative) · `lint.md` (vet rules) · `editor.md` (grammar, extension, language server) · `hypotheses.md` (open design questions) · `roadmap.md` (what is built) |
 | `AGENT.md`       | cross-session working doctrine for AI sessions (CLAUDE.md imports it) |
 
-## What is real vs. not yet
-
-Implemented and tested: the three-layer front end, project checking,
-the structured query layer (groups, predicates, selects with
-projection), nao's CRUD over changesets, dynamic queries and validation, router
-generation (typed params, wildcards, resources, pipelines, per-scope
-error handlers, reverse URLs, query routes, datasets, event routes),
-the generated client, JSON and GOB rendering, the runtime, the CLI,
-the LSP, the grammar, the Zed extension, and the whole proof chain.
-
-Designed but **not implemented** — [`docs/roadmap.md`](docs/roadmap.md)
-carries these; no code backs them yet:
-
-- raw-SQL `Select` / `View` / `Trigger` blocks, `[was:]`, `[repr:]`
-  (roadmap)
-- associations (ASSOC), the migration generator over the drift report,
-  the report engine (RPT)
-- HTML rendering and typed compiled templates
-- `volt.WithQueries` / `WithTemplates` / `BuildDeps` options
-- plugs from imported packages (a v0 error on purpose)
-- LSP navigation beyond Volt symbols: go-to-def, hover and rename work
-  across the project for tables, pipelines and imports, but handler
-  refs (`Home.Index`) and `error_handler:` point at Go, which this
-  server does not index
-
-## Layouts
-
-Volt does not choose the directory tree. Three shapes are proven by
-tests:
-
-- **Packages** (`itest/blog`): `db/` declares the schema, `app/` the
-  routes over `db`; `volt gen ./...` writes each package's files beside
-  its `.volt` and the client into `app/client/`.
-- **One directory**: a package declares its tables and routes
-  them itself — `resources posts [default]`, `get /picked PostPicked`
-  — so models, queries, router, handlers and paths share one Go
-  package.
-- **Workspace**: one `schema.volt` at the root of a `go.work`
-  workspace, a server module and a client module, both `package main`,
-  each wired by its own `go:generate` line:
-
-  ```go
-  // api/main.go
-  //go:generate volt gen -o . -parts models,queries,router ../schema.volt
-
-  // gui/main.go
-  //go:generate volt gen -o . -parts models,client ../schema.volt
-  ```
-
-  `go generate ./api ./gui` from the root (`./...` stops at the root
-  module in a workspace). The client beside the models names their
-  types bare and is constructed with `NewClient`.
-
-## Writing a row
-
-Every generated write takes a changeset (spec §changesets): a value
-built by pure functions, validated by pure functions and written by
-one call at the end. Nothing reaches the database before that call,
-and nothing reaches it when the changeset is invalid.
-
-```go
-user, err := q.UserCreate(ctx, db.UserNew().EmailSet("a@b.example"))
-
-cs := user.Changeset().BioSet(rt.Some("writes Go")).Validate()
-if !cs.Valid() {
-	return cs.Err()
-}
-user, err = q.UserUpdate(ctx, cs)
-```
-
-A request body is a `db.UserParams`, read by `volt.Decode` and cast
-behind an allow list, `cs.Cast(params, db.UserEmail, db.UserBio)`, so a
-client never widens what the handler lets it write. A refused write,
-a failed validator or the database's own refusal alike, is one
-`*rt.Invalid` itemizing every field error, 409 for a unique violation
-and 422 otherwise, which the error spine renders into the error body.
 
 ## Crib sheet
 
@@ -167,5 +55,3 @@ VOLT_SWEEP_DIR=/tmp/sweep go test ./lang -run TestProfileSweep -count=1 -timeout
 volt stress ./big && time volt check ./big && time volt gen --sql ./big && time go build -C ./big ./...   # one file, 1000 tables of 150 columns: the limits of check, gen, the LSP and the Go compiler
 ./scripts/sync-grammar.sh            # mirror grammar + preflight Zed
 ```
-
-Apache-2.0.

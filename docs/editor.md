@@ -11,7 +11,7 @@ checklist for verifying all of it against [`spec.md`](spec.md).
 
 ```
                         ┌────────────────────── Zed process ──────────────────────┐
-                        │                                                          │
+                        │                                                         │
    grammar/             │   ┌───────────────┐        ┌───────────────────────┐    │
    grammar.js ──generate──▶ │ parser.c→WASM │        │ extension WASM (glue) │    │
                         │   │  incremental  │        │  zed-extension/src/   │    │

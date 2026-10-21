@@ -3,10 +3,6 @@
 > [!CAUTION]
 > **This project is an alpha version, and everything may change in the future.**
 
-Open design questions, numbered so they can be cited, held loosely.
-One graduates into the spec when it is built, or dies when practice
-says otherwise. A hypothesis binds nothing.
-
 ## H1 — Which schema-core constructs pay for themselves
 
 Today the schema core keeps every construct it has, whether or not a

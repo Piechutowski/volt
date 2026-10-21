@@ -34,7 +34,6 @@ report engine when a consumer exists.
     - [ ] `View`: `CREATE VIEW`, read-only struct, declared columns verified against the SQL
     - [ ] `Trigger`: deferred, drop-and-recreate
     - *hand* raw SQL strings in `.go` files; promote them to a block
-  - [ ] `[was:]` rename memory (with migrations)
   - [ ] `[repr: int]` enums: full String/Valuer/Scanner/JSON suite, the int never escapes the process
   - [ ] `[lock_version]` optimistic locking
 - [x] Citations by heading name: every `§…` is the heading's anchor, diagnostic codes are `spec/<anchor>`, the test resolves them
@@ -66,7 +65,6 @@ report engine when a consumer exists.
   - [x] `volt migration new | check | up | down | status | sql`, and `volt_migrations.go` with `Migrate` for the binary (§migration-tooling)
   - [x] The pragma bracket around `rebuild table` and `drop table`, `foreign_key_check` before commit; `no transaction` for what needs it
   - [x] No fake `down`: an irreversible migration refuses `down` with its name
-  - [ ] The migration generator over the drift report; renames via `[was: 'old']`
   - *hand* data migrations, as `exec`
 - [ ] Report engine, when a consumer exists
   - [ ] Schema catalog exported as runtime data
