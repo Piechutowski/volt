@@ -300,6 +300,44 @@ db/schema.volt:6:9: error: spec/columns: column "rank": unknown type "int32"; a 
 ## i21_unknown_table
 app/r.volt:9:15: error: spec/resources: no table "nope" in package "db" (§declaration)
 
+## i221_unknown_type_group_errors_stay.volt
+db/i221_unknown_type_group_errors_stay.volt:12:8: error: spec/columns: column "hits": unknown type "int32"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+db/i221_unknown_type_group_errors_stay.volt:55:31: error: spec/selects-over-groups: column "hits" is missing from link_clicks — every member of "lacking" must have it (§selects-over-groups)
+db/i221_unknown_type_group_errors_stay.volt:56:30: error: spec/selects-over-groups: column "hits" disagrees on type across "split": int in feed_reads; string in search_hits — the predicate cannot be checked for every member (§selects-over-groups)
+db/i221_unknown_type_group_errors_stay.volt:57:29: error: spec/selects-over-groups: column "hits" of table "mood_marks" is enum-typed (mood); predicates do not compare enums in v1 — filter on a text column or use the dynamic layer (§predicates, hypotheses H5)
+db/i221_unknown_type_group_errors_stay.volt:58:15: error: spec/selects-over-groups: column "hits" is missing from link_clicks — every member of "lacking" must have it (§selects-over-groups)
+db/i221_unknown_type_group_errors_stay.volt:59:16: error: spec/selects-over-groups: column "hits" disagrees on field type across "split": int in feed_reads; string in search_hits — a shared row type needs one type, nullability included (§selects-over-groups)
+db/i221_unknown_type_group_errors_stay.volt:61:8: error: spec/selects-over-groups: select "counted" mints the shared row type Counted, which collides with the model of table "counteds" (§selects-over-groups)
+db/i221_unknown_type_group_errors_stay.volt:62:44: error: spec/selects-over-groups: column "nope" is missing from page_views — every member of "page_views" must have it (§selects-over-groups)
+db/i221_unknown_type_group_errors_stay.volt:63:8: error: spec/selects-over-groups: select "hits" mints PageViewHits, which collides with the dynamic column handle for page_views.hits (§selects-over-groups)
+db/i221_unknown_type_group_errors_stay.volt:64:8: error: spec/selects-over-groups: select "page_view_hits" mints the shared row type PageViewHits, which collides with the column handle for page_views.hits (§selects-over-groups)
+
+## i222_unknown_type_validator_errors_stay
+db/schema.volt:8:9: error: spec/columns: column "rank": unknown type "int32"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+db/schema.volt:11:5: error: spec/validators: no function RankSane in package db's Go files — declare func RankSane beside the schema (§validators)
+db/schema.volt:12:5: error: spec/validators: TwoArgs takes 2 parameter(s) but the validator passes 1 column(s): found func TwoArgs(rank int, email string) error, expected func TwoArgs (§validators)
+db/schema.volt:13:17: error: spec/validators: column "email" (string, Go string) but parameter 2 of Mixed is int — change the column type or the function: expected func Mixed (§validators)
+db/schema.volt:14:17: error: spec/validators: no column "nope" in table "authors" (§validators)
+
+## i223_unknown_type_route_errors_stay
+db/schema.volt:4:9: error: spec/columns: column "id": unknown type "int64"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+db/schema.volt:6:9: error: spec/columns: column "rank": unknown type "int32"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+app/routes.volt:10:28: error: spec/scopes-and-routes: db.AuthorUpdate takes a request body (db.AuthorParams); route it with post, put or patch (§query-routes)
+app/routes.volt:11:28: error: spec/scopes-and-routes: path parameter "extra" is not a parameter of db.AuthorDelete (§query-routes)
+app/routes.volt:12:16: error: spec/scopes-and-routes: parameter "id" of db.AuthorGet cannot be a wildcard (§query-routes)
+app/routes.volt:13:19: error: spec/query-routes: db.AuthorUpdate loads the row to update by "id", which must be a path parameter of the route (§query-routes)
+app/routes.volt:15:3: error: spec/scopes-and-routes: route GET /api/ranked conflicts with the route at app/routes.volt:14:3: identical method and path shape (§route-conflicts)
+app/routes.volt:16:3: error: spec/scopes-and-routes: reverse-URL helper or client method "AuthorRanked" already produced by the route at app/routes.volt:14:3 (§route-names-and-reverse-urls, §generated-client); disambiguate with [name:] or a scope name
+app/routes.volt:17:44: error: spec/settings-whitelists: setting "colour" is not valid on a route (§settings-whitelists); valid: name
+app/routes.volt:19:17: error: spec/scopes-and-routes: path parameter "zzz" is not a parameter of db.AuthorShown (§query-routes)
+app/routes.volt:20:29: error: spec/datasets: only: "posts" is not a member of select "ranked"'s target (§dataset-settings)
+app/routes.volt:20:37: error: spec/settings-whitelists: setting "colour" is not valid on a dataset (§settings-whitelists); valid: strip, only, except
+app/routes.volt:21:19: error: spec/scopes-and-routes: no generated query db.AuthorMissing in package "db" — a query route names a select method or a default CRUD method (Get, List, Create, Update, Delete) (§query-routes)
+app/routes.volt:22:14: error: spec/datasets: no select "missing" in package "db" (§dataset-declaration)
+
+## i224_failed_type_reported_once
+db/schema.volt:5:12: error: spec/types: storage type "int32" of Type "Score" is not a built-in: bool, int, float64, string, []byte or time.Time (§types)
+
 ## i22_scope_setting.volt
 app/i22_scope_setting.volt:4:10: error: spec/settings-whitelists: setting "pipes" is not valid on a Scope (§settings-whitelists); valid: pipe, name, error_handler
 

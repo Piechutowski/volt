@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -259,6 +260,64 @@ func TestSessionVetMemo(t *testing.T) {
 	}
 	round("edit", map[string]string{d2: string(src) + "\n// touched\n"}, 2)
 	round("same edit", map[string]string{d2: string(src) + "\n// touched\n"}, 0)
+}
+
+func TestSessionBindsUnresolvedSelects(t *testing.T) {
+	root := t.TempDir()
+	write := func(name, src string) string {
+		t.Helper()
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	write("go.mod", "module unresolved\n")
+	schema := "package db\n\nTable authors {\n\tid int [pk, increment]\n\trank int32 [not null]\n}\n\nTable tags {\n\tid int [pk, increment]\n\tname string [not null]\n}\n\nSelect ranked for authors where rank >= :min\n"
+	schemaPath := write("db/schema.volt", schema)
+	routes := "package app\n\nimport (\n\tdb\n)\n\nScope /api {\n\tget /ranked db.AuthorRanked [name: RankedRows]\n\tget /ranked/:min db.AuthorRanked [name: RankedFrom]\n\tdataset db.ranked\n}\n"
+	routesPath := write("app/routes.volt", routes)
+
+	var s lang.Session
+	round := func(name string, overlay map[string]string, want ...string) {
+		t.Helper()
+		pr, _ := sessionRound(t, &s, root, overlay, s.Stats())
+		if sels := pr.Packages["db"].Selects; len(sels) != 1 || !sels[0].Unresolved || !slices.Equal(sels[0].UnknownCols, []string{"rank"}) {
+			t.Fatalf("%s: want the one select kept and unresolved over rank, got %+v", name, sels)
+		}
+		fresh, err := lang.LoadOverlay(root, overlay)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var errs []string
+		for _, d := range lang.Check(fresh) {
+			if d.Severity == diag.Error {
+				errs = append(errs, d.String())
+			}
+		}
+		want = append([]string{`unknown type "int32"`}, want...)
+		ok := len(errs) == len(want)
+		for i := 0; ok && i < len(want); i++ {
+			ok = strings.Contains(errs[i], want[i])
+		}
+		if !ok {
+			t.Fatalf("%s: want errors containing %q, got:\n%s", name, want, strings.Join(errs, "\n"))
+		}
+	}
+	round("first load", nil)
+	routed := strings.Replace(routes, "Scope /api {\n", "Scope /api {\n\tget /tags db.TagList\n", 1)
+	round("route edit", map[string]string{routesPath: routed})
+	reused := s.Stats().SelectsReused
+	noted := strings.Replace(schema, "name string [not null]", "name string [not null, note: 'shown']", 1)
+	round("data edit", map[string]string{schemaPath: noted, routesPath: routed})
+	if s.Stats().SelectsReused == reused {
+		t.Errorf("the data edit checked the unresolved select afresh; want it answered by the memo")
+	}
+	clash := strings.Replace(routed, "\tdataset db.ranked\n", "\tdataset db.ranked\n\tget /ranked Home.Index\n", 1)
+	round("conflicting route", map[string]string{schemaPath: noted, routesPath: clash}, "conflicts with the route at")
 }
 
 func TestSessionReparsesOneDeclaration(t *testing.T) {

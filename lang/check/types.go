@@ -100,13 +100,14 @@ func Builtin(name string) (ColumnType, bool) {
 }
 
 type typeEnv struct {
-	enums map[string]*EnumInfo
-	types map[string]*TypeInfo
-	keys  []string
+	enums  map[string]*EnumInfo
+	types  map[string]*TypeInfo
+	failed map[string]bool
+	keys   []string
 }
 
-func typeEnvOf(enums map[string]*EnumInfo, types map[string]*TypeInfo) *typeEnv {
-	keys := make([]string, 0, len(enums)+len(types))
+func typeEnvOf(enums map[string]*EnumInfo, types map[string]*TypeInfo, failed map[string]bool) *typeEnv {
+	keys := make([]string, 0, len(enums)+len(types)+len(failed))
 	for k, e := range enums {
 		key := "enum:" + k
 		for _, v := range e.Decl.Values {
@@ -117,8 +118,11 @@ func typeEnvOf(enums map[string]*EnumInfo, types map[string]*TypeInfo) *typeEnv 
 	for k, t := range types {
 		keys = append(keys, "type:"+k+"="+t.Storage.Storage+"="+t.Path)
 	}
+	for k := range failed {
+		keys = append(keys, "failed:"+k)
+	}
 	sort.Strings(keys)
-	return &typeEnv{enums: enums, types: types, keys: keys}
+	return &typeEnv{enums: enums, types: types, failed: failed, keys: keys}
 }
 
 // resolve resolves a column type (spec §columns): a built-in, then a
@@ -238,6 +242,9 @@ func (c *checker) typesResolve(ti *TableInfo) {
 		cd.Nullable = isNullable(cd.Col) && !pkIndex[cd.Col.Name.Name()]
 		cd.Type = c.env.resolve(cd.Col.Type)
 		if !cd.Type.Known() {
+			if c.env.failed[cd.Col.Type.String()] {
+				continue
+			}
 			c.errorf(cd.Col.Type.Pos(), "columns", "column %q: unknown type %q; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)", cd.Col.Name.Name(), cd.Col.Type.String())
 			continue
 		}

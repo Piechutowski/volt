@@ -238,7 +238,9 @@ breaks joins).
 **Examples.** [testdata/reftype.volt](../lang/vet/testdata/reftype.volt).
 
 **Limitations.** Types are compared as written: a declared type and its
-storage type are reported as different.
+storage type are reported as different. A pair with a column of unknown
+type is not compared; the checker reports that type once, at the
+column (spec §columns).
 
 ### reftarget
 

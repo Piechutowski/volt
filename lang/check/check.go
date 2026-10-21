@@ -271,13 +271,17 @@ func (c *checker) collect(f *ast.File) {
 		c.info.Partials = append(c.info.Partials, pi)
 	}
 
+	failed := map[string]bool{}
 	for _, d := range typeDecls {
 		if ti := c.typeDeclCheck(d); ti != nil {
 			c.types[ti.Key] = ti
 			c.info.Types = append(c.info.Types, ti)
+		} else {
+			failed[d.Name.String()] = true
 		}
 	}
-	c.env = typeEnvOf(c.enums, c.types)
+	c.env = typeEnvOf(c.enums, c.types, failed)
+	reported := map[diag.Diagnostic]bool{}
 	for i, ti := range c.info.Tables {
 		partials := c.partialsOf(ti.Decl)
 		for _, p := range partials {
@@ -308,8 +312,31 @@ func (c *checker) collect(f *ast.File) {
 				c.info.byTable["public."+checked.Alias] = checked
 			}
 		}
-		c.diags = append(c.diags, diags...)
+		c.diags = append(c.diags, partialTypeDedupe(checked, diags, reported)...)
 	}
+}
+
+func partialTypeDedupe(ti *TableInfo, diags []diag.Diagnostic, reported map[diag.Diagnostic]bool) []diag.Diagnostic {
+	at := map[token.Position]bool{}
+	for _, cd := range ti.Columns {
+		if cd.Partial != nil && !cd.Type.Known() {
+			at[cd.Col.Type.Pos()] = true
+		}
+	}
+	if len(at) == 0 {
+		return diags
+	}
+	out := make([]diag.Diagnostic, 0, len(diags))
+	for _, d := range diags {
+		if at[d.Pos] {
+			if reported[d] {
+				continue
+			}
+			reported[d] = true
+		}
+		out = append(out, d)
+	}
+	return out
 }
 
 func tableCheck(d *ast.Table, key, alias string, partials []*ast.TablePartial, hasImports bool, env *typeEnv) (*TableInfo, []diag.Diagnostic) {

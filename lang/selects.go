@@ -49,6 +49,10 @@ type SelectInfo struct {
 	Cols         []string // explicit projection, declared order (§selects-over-groups)
 	Excluded     []string // star-form exclusions (§selects-over-groups)
 	Shared       string   // shared row type name; "" unless explicit list
+	Unresolved   bool     // a column of unknown type stopped the lowering (§columns); never generated
+	UnknownCols  []string // the columns of unknown type behind Unresolved, sorted
+
+	paramsPartial bool
 }
 
 func (c *checker) dataQueries(pkg *Package) {
@@ -246,6 +250,7 @@ type selectLowering struct {
 	lookups []nameLookup
 	adds    []nameAdd
 	diags   []diag.Diagnostic
+	unknown []string
 }
 
 func (l *selectLowering) errorf(pos token.Position, format string, args ...any) {
@@ -265,6 +270,15 @@ func (l *selectLowering) lookup(name string) (string, bool) {
 
 func (l *selectLowering) add(name, desc string) {
 	l.adds = append(l.adds, nameAdd{name, desc})
+}
+
+func (l *selectLowering) unknownAdd(name string) {
+	for _, n := range l.unknown {
+		if n == name {
+			return
+		}
+	}
+	l.unknown = append(l.unknown, name)
 }
 
 type selectMember struct {
@@ -509,6 +523,7 @@ func (l *selectLowering) check() *SelectInfo {
 	if sel.Projected() && !l.projectionCheck(si) {
 		return nil
 	}
+	l.keptUnknown()
 
 	env := &selectEnv{
 		l:       l,
@@ -522,10 +537,18 @@ func (l *selectLowering) check() *SelectInfo {
 	if sel.Where != nil {
 		where = env.exprLower(sel.Where, map[string]bool{})
 	}
+	si.paramsPartial = env.dropped
 
 	order := l.selectSettings(env)
 	if env.failed {
 		return nil
+	}
+	if len(l.unknown) > 0 {
+		si.Unresolved = true
+		si.UnknownCols = l.unknown
+		sort.Strings(si.UnknownCols)
+		si.Params = env.paramList
+		return si
 	}
 	whereSQL, slots, err := rt.WhereRender([]rt.GenPred{where})
 	if err != nil {
@@ -592,6 +615,10 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 			f, has := mf.byCol[name]
 			if !has {
 				missing = append(missing, mf.ti.Decl.Name.Base())
+				continue
+			}
+			if cd := mf.ti.Column(name); !sel.Star && cd != nil && !cd.Type.Known() {
+				l.unknownAdd(name)
 				continue
 			}
 			types[f.Type] = append(types[f.Type], mf.ti.Decl.Name.Base())
@@ -678,6 +705,24 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 	return true
 }
 
+func (l *selectLowering) keptUnknown() {
+	sel := l.sel
+	if sel.Projected() && !sel.Star {
+		return
+	}
+	excluded := map[string]bool{}
+	for _, id := range sel.Cols {
+		excluded[id.Name()] = true
+	}
+	for _, m := range l.members {
+		for _, cd := range m.Columns {
+			if name := cd.Col.Name.Name(); !cd.Type.Known() && !excluded[name] {
+				l.unknownAdd(name)
+			}
+		}
+	}
+}
+
 func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 	sel := l.sel
 	if sel.Settings == nil {
@@ -742,6 +787,7 @@ type selectEnv struct {
 	params    map[string]*SelectParam
 	paramList []SelectParam
 	failed    bool
+	dropped   bool
 }
 
 func (e *selectEnv) errorf(pos token.Position, format string, args ...any) {
@@ -760,6 +806,7 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 	var class, storage typeClass
 	var forbiddenType string
 	var storageGo string
+	unknown := false
 	for _, m := range e.members {
 		cd := m.Column(name)
 		if cd == nil {
@@ -772,7 +819,8 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 			return nil
 		}
 		if !cd.Type.Known() {
-			return nil
+			unknown = true
+			continue
 		}
 		forbiddenType = declType
 		goType := cd.Type.Go
@@ -800,6 +848,11 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 		}
 		e.errorf(id.Pos(), "column %q disagrees on type across %q: %s — the predicate cannot be checked for every member (§selects-over-groups)",
 			name, e.sel.Target.Name(), strings.Join(parts, "; "))
+		return nil
+	}
+	if unknown {
+		e.l.unknownAdd(name)
+		e.dropped = true
 		return nil
 	}
 	if len(classes) > 1 {
@@ -1095,10 +1148,14 @@ func (e *selectEnv) likeLower(x *ast.PredLike) rt.GenPred {
 }
 
 // SelectFns lowers the package's checked selects into per-member
-// generator instructions (§selects-over-groups).
+// generator instructions (§selects-over-groups); an unresolved select
+// (§columns) is never lowered.
 func (p *Package) SelectFns() []golang.SelectFn {
 	var out []golang.SelectFn
 	for _, si := range p.Selects {
+		if si.Unresolved {
+			continue
+		}
 		for _, m := range si.Members {
 			fn := golang.SelectFn{
 				TableKey:     m.Key,

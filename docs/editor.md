@@ -218,6 +218,12 @@ layer:
   migrations in name order ("migration 2 of 3") and whether it runs
   backward (§migrations); the project index answers it, so a
   migration alone in its own file counts its siblings.
+- A select hovers as its row types, its rendered `WHERE` and `ORDER
+  BY`, and its method signatures. A select kept unresolved by a column
+  of unknown type (§columns) hovers as its header, its row types with
+  that field spelled in its declared type and marked unknown, and one
+  line naming the unknown columns; never an empty Go type, and never a
+  signature or SQL that its dropped terms would make wrong.
 - Position encoding is converted at the boundary only (1-based rune
   columns ↔ 0-based UTF-16), re-derived from the line's actual text;
   nothing else does position arithmetic.

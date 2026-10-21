@@ -71,7 +71,7 @@ func (r *refTypeRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnos
 		for i := 0; i < n; i++ {
 			lc := ref.Left.Table.Column(ref.Left.Columns[i])
 			rc := ref.Right.Table.Column(ref.Right.Columns[i])
-			if lc == nil || rc == nil {
+			if lc == nil || rc == nil || !lc.Type.Known() || !rc.Type.Known() {
 				continue
 			}
 			lt, rt := lc.Col.Type.String(), rc.Col.Type.String()

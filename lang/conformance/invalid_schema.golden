@@ -42,15 +42,12 @@ i11_pk_primary_key.volt:3:15: error: spec/settings-lists: setting "primary key" 
 
 ## i126_type_storage.volt
 i126_type_storage.volt:3:11: error: spec/types: storage type "text" of Type "Slug" is not a built-in: bool, int, float64, string, []byte or time.Time (§types)
-i126_type_storage.volt:5:5: error: spec/columns: column "s": unknown type "Slug"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
 
 ## i127_type_bare_from.volt
 i127_type_bare_from.volt:3:23: error: spec/types: Type "Slug" is a type of this package and takes no from path (§types)
-i127_type_bare_from.volt:5:5: error: spec/columns: column "s": unknown type "Slug"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
 
 ## i128_type_pkg_no_from.volt
 i128_type_pkg_no_from.volt:3:6: error: spec/types: Type "money.Money" names a package but has no from path (§types)
-i128_type_pkg_no_from.volt:5:5: error: spec/columns: column "m": unknown type "money.Money"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
 
 ## i129_type_builtin_name.volt
 i129_type_builtin_name.volt:3:6: error: spec/types: Type "string" spells a built-in type (§types)
@@ -87,18 +84,15 @@ i138_enum_unqualified_other_schema.volt:6:5: error: spec/columns: column "s": un
 
 ## i139_type_empty_from.volt
 i139_type_empty_from.volt:3:19: error: spec/types: Type "m.M" has an empty from path; the path is a non-empty import path (§types)
-i139_type_empty_from.volt:5:5: error: spec/columns: column "m": unknown type "m.M"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
 
 ## i13_headercolor_not_color.volt
 i13_headercolor_not_color.volt:2:23: error: spec/table: "headercolor" must be a color literal
 
 ## i140_type_reserved_alias.volt
 i140_type_reserved_alias.volt:3:6: error: spec/types: Type "rt.X": package name "rt" is reserved by generated code (§types)
-i140_type_reserved_alias.volt:5:5: error: spec/columns: column "x": unknown type "rt.X"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
 
 ## i141_type_reserved_alias_path.volt
 i141_type_reserved_alias_path.volt:3:6: error: spec/types: Type "sql.X": package name "sql" is reserved by generated code for "database/sql" (§types)
-i141_type_reserved_alias_path.volt:5:5: error: spec/columns: column "x": unknown type "sql.X"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
 
 ## i142_slice_not_byte.volt
 i142_slice_not_byte.volt:4:8: error: spec/columns: column "tags": unknown type "[]string"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
@@ -111,11 +105,9 @@ i144_type_enum_collision.volt:4:6: error: spec/types: Type "status" collides wit
 
 ## i145_type_storage_enum.volt
 i145_type_storage_enum.volt:4:11: error: spec/types: storage type "status" of Type "Slug" is not a built-in: bool, int, float64, string, []byte or time.Time (§types)
-i145_type_storage_enum.volt:6:5: error: spec/columns: column "s": unknown type "Slug"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
 
 ## i146_type_storage_type.volt
 i146_type_storage_type.volt:4:13: error: spec/types: storage type "Slug" of Type "Handle" is not a built-in: bool, int, float64, string, []byte or time.Time (§types)
-i146_type_storage_type.volt:6:5: error: spec/columns: column "h": unknown type "Handle"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
 
 ## i147_default_enum_const_non_enum.volt
 i147_default_enum_const_non_enum.volt:5:19: error: spec/default-values: default of "n" (int) is an enum constant but the column is not an enum (§default-values)
@@ -156,6 +148,9 @@ i20_bad_ref_action.volt:4:18: error: spec/relationships-ref: invalid referential
 
 ## i21_ref_endpoint_no_column.volt
 i21_ref_endpoint_no_column.volt:4:12: error: syntax: endpoint must reference a column as [schema.]table.column (§relationships-ref)
+
+## i220_unknown_type_partial_once.volt
+i220_unknown_type_partial_once.volt:4:11: error: spec/columns: column "version": unknown type "int64"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
 
 ## i22_empty_enum.volt
 i22_empty_enum.volt:2:1: error: spec/enum: enum "empty_status" must contain at least one value

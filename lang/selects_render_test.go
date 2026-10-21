@@ -221,3 +221,53 @@ func TestSelectLiteralOutsideStorageRefused(t *testing.T) {
 		})
 	}
 }
+
+func TestSelectUnresolvedKeptNotGenerated(t *testing.T) {
+	pr, diags := project(t, map[string]string{
+		"go.mod": modFile,
+		"db/schema.volt": "package db\n\nTable authors {\n\tid int [pk, increment]\n\temail string [not null]\n\trank int32 [not null]\n}\n\n" +
+			"Select ranked for authors where rank >= :min and email = :e [order: (rank desc)]\n" +
+			"Select shown (rank, email) for authors\n" +
+			"Select brief (* \\ rank) for authors\n" +
+			"Select byemail for authors where email = :e\n",
+	})
+	if len(diags) != 1 || !strings.Contains(diags[0].Msg, `unknown type "int32"`) {
+		t.Fatalf("want the one unknown-type error, got %v", diags)
+	}
+	got := map[string]*SelectInfo{}
+	for _, si := range pr.Packages["db"].Selects {
+		got[si.Decl.Name.Name()] = si
+	}
+	for _, tc := range []struct {
+		name       string
+		unresolved bool
+		partial    bool
+		params     []SelectParam
+	}{
+		{"ranked", true, true, []SelectParam{{GoName: "e", GoType: "string"}}},
+		{"shown", true, false, nil},
+		{"brief", false, false, nil},
+		{"byemail", true, false, []SelectParam{{GoName: "e", GoType: "string"}}},
+	} {
+		si := got[tc.name]
+		if si == nil {
+			t.Errorf("select %s was dropped; an unresolved select is kept", tc.name)
+			continue
+		}
+		var unknown []string
+		if tc.unresolved {
+			unknown = []string{"rank"}
+		}
+		if si.Unresolved != tc.unresolved || !reflect.DeepEqual(si.UnknownCols, unknown) || si.paramsPartial != tc.partial || !reflect.DeepEqual(si.Params, tc.params) {
+			t.Errorf("select %s: Unresolved %v UnknownCols %q partial %v Params %+v; want %v %q %v %+v",
+				tc.name, si.Unresolved, si.UnknownCols, si.paramsPartial, si.Params, tc.unresolved, unknown, tc.partial, tc.params)
+		}
+		if si.Unresolved && (si.WhereSQL != "" || si.OrderSQL != "" || len(si.Binds) > 0) {
+			t.Errorf("select %s is unresolved but carries rendered SQL: %q %q %q", tc.name, si.WhereSQL, si.OrderSQL, si.Binds)
+		}
+	}
+	fns := pr.Packages["db"].SelectFns()
+	if len(fns) != 1 || fns[0].MethodSuffix != "Brief" {
+		t.Errorf("SelectFns = %+v; want only Brief, the generator never sees an unresolved select", fns)
+	}
+}

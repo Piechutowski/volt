@@ -460,10 +460,10 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		body, key    bool
 	}
 	var sig []sigParam
-	found := false
+	found, partial := false, false
 
 	if si, m, ok := l.selectByMethod(target, name); ok {
-		found = true
+		found, partial = true, si.paramsPartial
 		for _, p := range si.Params {
 			sig = append(sig, sigParam{name: p.GoName, goType: p.GoType})
 		}
@@ -501,11 +501,6 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		l.errorf(pos, "scopes-and-routes", "no generated query %s in package %q%s — a query route names a select method or a default CRUD method (Get, List, Create, Update, Delete) (§query-routes)", ref, target, hint)
 		return nil
 	}
-	for _, sp := range sig {
-		if sp.goType == "" {
-			return nil
-		}
-	}
 
 	byName := map[string]Param{}
 	for _, p := range params {
@@ -514,6 +509,18 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	bound := map[string]bool{}
 	ok := true
 	for _, sp := range sig {
+		if sp.goType == "" {
+			if pp, inPath := byName[sp.name]; inPath {
+				bound[sp.name] = true
+				if pp.Wild {
+					l.errorf(segAt.pos(pp.Name), "scopes-and-routes", "parameter %q of %s cannot be a wildcard (§query-routes)", sp.name, ref)
+				}
+			} else if sp.key {
+				l.errorf(pos, "query-routes", "%s loads the row to update by %q, which must be a path parameter of the route (§query-routes)", ref, sp.name)
+			}
+			ok = false
+			continue
+		}
 		qp := QueryParam{Name: sp.name, GoType: sp.goType}
 		switch {
 		case sp.body:
@@ -566,6 +573,9 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	}
 	for _, p := range params {
 		if !bound[p.Name] {
+			if partial {
+				continue
+			}
 			l.errorf(segAt.pos(p.Name), "scopes-and-routes", "path parameter %q is not a parameter of %s (§query-routes)", p.Name, ref)
 			ok = false
 		}

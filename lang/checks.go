@@ -132,19 +132,22 @@ func (l *lowering) validatorSpec(v *ast.Validator) (golang.ValidatorSpec, bool) 
 		byCol[f.Col] = f
 	}
 	var args, src, argTypes, declTypes, used []string
+	var unknown []bool
+	anyUnknown := false
 	for _, a := range v.Args {
 		f, has := byCol[a.Name()]
 		if !has {
 			l.errorf(a.Pos(), "no column %q in table %q (§validators)", a.Name(), l.ti.Decl.Name.Base())
 			return golang.ValidatorSpec{}, false
 		}
-		if cd := l.ti.Column(a.Name()); cd != nil && !cd.Type.Known() {
-			return golang.ValidatorSpec{}, false
-		}
+		cd := l.ti.Column(a.Name())
+		isUnknown := cd != nil && !cd.Type.Known()
+		anyUnknown = anyUnknown || isUnknown
+		unknown = append(unknown, isUnknown)
 		args = append(args, "v."+f.Name)
 		src = append(src, a.Name())
 		argTypes = append(argTypes, f.Type)
-		declTypes = append(declTypes, l.ti.Column(a.Name()).Col.Type.String())
+		declTypes = append(declTypes, cd.Col.Type.String())
 		seen := false
 		for _, u := range used {
 			if u == a.Name() {
@@ -156,6 +159,9 @@ func (l *lowering) validatorSpec(v *ast.Validator) (golang.ValidatorSpec, bool) 
 		}
 	}
 	want := "func " + name + "(" + strings.Join(argTypes, ", ") + ") error"
+	if anyUnknown {
+		want = "func " + name
+	}
 
 	sc := l.funcs
 	gf, found := sc.funcs[name]
@@ -177,7 +183,7 @@ func (l *lowering) validatorSpec(v *ast.Validator) (golang.ValidatorSpec, bool) 
 		return golang.ValidatorSpec{}, false
 	}
 	for i, prm := range gf.Params {
-		if prm.Type != argTypes[i] {
+		if !unknown[i] && prm.Type != argTypes[i] {
 			l.errorf(v.Args[i].Pos(), "column %q (%s, Go %s) but parameter %d of %s is %s — change the column type or the function: expected %s (§validators)",
 				src[i], declTypes[i], argTypes[i], i+1, name, prm.Type, want)
 			return golang.ValidatorSpec{}, false
@@ -185,6 +191,9 @@ func (l *lowering) validatorSpec(v *ast.Validator) (golang.ValidatorSpec, bool) 
 	}
 	if len(gf.Results) != 1 || gf.Results[0] != "error" {
 		l.errorf(v.Ref.Pos(), "%s must return exactly error: found %s, expected %s (§validators)", name, gf.Sig, want)
+		return golang.ValidatorSpec{}, false
+	}
+	if anyUnknown {
 		return golang.ValidatorSpec{}, false
 	}
 	return golang.ValidatorSpec{

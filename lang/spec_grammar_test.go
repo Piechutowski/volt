@@ -89,7 +89,7 @@ func specLanguage(t *testing.T) *ebnf.Language {
 	for _, name := range []string{"element", "setting value"} {
 		ext, ok := va.g.Lookup(name).Expr.(ebnf.Alt)
 		if !ok || len(ext.Items) < 2 || ebnf.Format(ext.Items[0]) != "" {
-			t.Fatalf("Appendix VA: %s must extend Part I's by reference, an empty first alternative", name)
+			t.Fatalf("Collected grammar (Part II): %s must extend Part I's by reference, an empty first alternative", name)
 		}
 		base := g.Lookup(name)
 		g.Set(&ebnf.Rule{Name: name, Expr: ebnf.Alt{Items: append(alternatives(base.Expr), ext.Items[1:]...)}, Line: base.Line})
@@ -155,9 +155,9 @@ func TestSpecGrammarReadsAndIsClosed(t *testing.T) {
 	specLanguage(t)
 }
 
-// The collected grammars are copies: Appendix IA repeats every rule
-// of Part I's sections and nothing else; Appendix VA repeats every
-// rule of Part II's sections but the query layer's (§groups to §validators, which
+// The collected grammars are copies: Collected grammar (Part I) repeats
+// every rule of Part I's sections and nothing else; Collected grammar
+// (Part II) repeats every rule of Part II's sections but the query layer's (§groups to §validators, which
 // it says it leaves in place), extends element and setting value by
 // reference, and defines nothing of its own.
 func TestSpecCollectedGrammarsRepeatTheSections(t *testing.T) {

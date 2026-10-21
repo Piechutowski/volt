@@ -14,6 +14,7 @@ import (
 
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/token"
 	"github.com/Piechutowski/volt/nao/gen/golang"
 )
@@ -494,6 +495,9 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 	if plan == nil {
 		plan = golang.PlanBuild(pkg.Merged(), pkg.Schema())
 	}
+	if si.Unresolved {
+		b.WriteString("```volt\n" + selectHead(si.Decl) + "\n```\n")
+	}
 	for _, m := range shown {
 		row, fields, err := plan.SelectRowType(memberFn(m.Key))
 		if err != nil {
@@ -502,7 +506,7 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 		b.WriteString("```go\n")
 		fmt.Fprintf(&b, "type %s struct {\n", row)
 		for _, f := range fields {
-			fmt.Fprintf(&b, "\t%s %s\n", f.Name, f.Type)
+			fmt.Fprintf(&b, "\t%s %s\n", f.Name, fieldTypeMD(m, f))
 		}
 		b.WriteString("}\n```\n")
 	}
@@ -510,6 +514,14 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 		if n := len(si.Members) - len(shown); n > 0 {
 			fmt.Fprintf(&b, "*… and %d more member structs*\n", n)
 		}
+	}
+	if si.Unresolved {
+		noun, verb := "column", "has"
+		if len(si.UnknownCols) > 1 {
+			noun, verb = "columns", "have"
+		}
+		fmt.Fprintf(&b, "unresolved: %s %s %s an unknown type (§columns)\n", noun, strings.Join(si.UnknownCols, ", "), verb)
+		return b.String()
 	}
 
 	if si.WhereSQL != "" {
@@ -541,6 +553,29 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 	}
 	b.WriteString("```\n")
 	return b.String()
+}
+
+func fieldTypeMD(m *check.TableInfo, f golang.FieldSig) string {
+	if f.Type != "" {
+		return f.Type
+	}
+	if cd := m.Column(f.Col); cd != nil {
+		return cd.Col.Type.String() + " // unknown type (§columns)"
+	}
+	return "// unknown type (§columns)"
+}
+
+func selectHead(d *ast.Select) string {
+	head := "Select " + d.Name.Name()
+	if d.Projected() {
+		cols := identNames(d.Cols)
+		if d.Star {
+			head += " (* \\ " + strings.Join(cols, " \\ ") + ")"
+		} else {
+			head += " (" + strings.Join(cols, ", ") + ")"
+		}
+	}
+	return head + " for " + d.Target.Name()
 }
 
 func (ix *voltIndex) setSym(path, name string, kinds ...string) voltSym {

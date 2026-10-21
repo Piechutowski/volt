@@ -737,8 +737,22 @@ column setting  = "primary key" | "pk"
    `Type` (§types). Anything else is an error naming the column and
    the set; the `[]` of the grammar belongs to `[]byte` alone, so
    `[]string` is an unknown type. An unknown type is reported once, at
-   the column: a select, a validator or a route that uses the column
-   reports nothing further about its type. The type decides the Go field
+   the column, even when a TablePartial injects the column into several
+   tables (§tablepartial): a select, a validator or a route that uses
+   the column reports nothing further about its type. A select that
+   uses such a column, in its predicate, its order, its projection or
+   as a column its row type keeps, is kept unresolved: it generates no
+   method, and the query routes and datasets that name it are checked
+   as for any select (§query-routes, §dataset-declaration). One check
+   is skipped: when a predicate term over the column is dropped, a
+   path parameter that none of the select's remaining parameters names
+   is not reported, since it may belong to the dropped term. An error
+   that does not depend on the type, such as a group member that lacks
+   the column, a route conflict, a setting a route or dataset does not
+   take, or a validator function that does not exist, is reported as
+   usual. A column whose type names a `Type` declaration in error
+   reports nothing: the declaration's error (§types) stands for it.
+   The type decides the Go field
    (§mapping-to-go), the SQLite column (§mapping-to-sqlite-ddl), the
    literals a `default:` accepts (§default-values), the empty value
    `required` refuses, and the comparisons a predicate allows
@@ -1573,14 +1587,14 @@ punct                = "{" | "}" | "[" | "]" | "(" | ")"
 routes, resources)
 **Status:** Normative for the v0 implementation in this repository.
 Part I specifies the schema core; this part specifies everything Volt
-adds above it. Section numbers here are prefixed **Part II of the spec** so the two
-parts cross-reference without collision; diagnostics cite the section
-they enforce (`spec/V4`).
+adds above it. Both parts cite sections by heading name, never by
+number, and a diagnostic cites the section it enforces as
+`spec/<anchor>` (`spec/scopes-and-routes`).
 
 Every construct below is specified by (1) a grammar production in EBNF
 (notation of Part I §notation), (2) an enumerated list of constraints, and
 (3) a minimal example. The collected grammar appears in
-[Appendix VA](#appendix-va-collected-grammar). The executable companion
+[Collected grammar (Part II)](#collected-grammar-part-ii). The executable companion
 is the conformance corpus in [`lang/conformance/snippets/`](../lang/conformance/snippets/):
 files under `valid/` MUST be accepted by a conforming implementation,
 files under `invalid/` MUST be rejected.
@@ -2345,7 +2359,7 @@ an element is an error on that element):
 | resources | `api`, `only`, `except`, `param`, `singular`, `default` |
 | dataset | `strip`, `only`, `except` |
 
-The identifier-list value form `(a, b, c)` (production in Appendix VA)
+The identifier-list value form `(a, b, c)` (production in Collected grammar (Part II))
 is valid only where a setting explicitly takes an action list.
 
 ## Generation contract (informative)
@@ -3312,11 +3326,11 @@ reversible on its own.
 
 ## Collected grammar (Part II)
 
-Additions to the collected grammar of Part I, Appendix IA. The
+Additions to Collected grammar (Part I). The
 `element` production is extended:
 
 ```ebnf
-element        = (* Part I Appendix IA alternatives *)
+element        = (* Collected grammar (Part I) alternatives *)
                | package clause | import decl | pipeline | scope
                | group decl | pred decl | select decl | migration ;
 

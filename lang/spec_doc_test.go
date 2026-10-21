@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"unicode"
 )
 
 var (
@@ -14,8 +15,12 @@ var (
 	tocLinkRE = regexp.MustCompile(`\[([^\]]+)\]\(#([^)]+)\)`)
 
 	specCiteRE     = regexp.MustCompile(`§([a-z][a-z0-9-]*)`)
-	specNumberedRE = regexp.MustCompile(`§\s?[0-9]|\bAppendix [A-Z]\b|\bspec/[0-9]`)
-	specCodeRE     = regexp.MustCompile(`spec/([a-z][a-z0-9-]*)`)
+	specNumberedRE = regexp.MustCompile(`§[\s\x{00a0}]*[0-9A-Z]|\bAppendix [A-Z]+\b|\bspec/[A-Z]*[0-9]`)
+	specRFCRE      = regexp.MustCompile(`RFC[\s\x{00a0}]+[0-9]+,?[\s\x{00a0}]*$`)
+	specCodeRE     = regexp.MustCompile(`spec/([A-Za-z0-9][A-Za-z0-9-]*)`)
+	mdAnchorLinkRE = regexp.MustCompile(`\]\(([A-Za-z0-9_./-]*\.md)?#([^)\s]+)(?:\s+"[^"]*")?\)`)
+	mdRefDefRE     = regexp.MustCompile(`^ {0,3}\[[^\]]+\]:\s*([A-Za-z0-9_./-]*\.md)?#(\S+)`)
+	mdHeadingRE    = regexp.MustCompile(`^#{1,6} (.+)$`)
 )
 
 func specText(t *testing.T) string {
@@ -66,7 +71,7 @@ func repoTextFiles(t *testing.T) []string {
 			return nil
 		}
 		switch filepath.Ext(d.Name()) {
-		case ".go", ".volt", ".md", ".js", ".scm", ".golden", ".sql":
+		case ".go", ".volt", ".md", ".js", ".scm", ".golden", ".sql", ".sh", ".toml", ".rs", ".txt":
 			files = append(files, path)
 		}
 		return nil
@@ -145,6 +150,47 @@ func TestSpecCitationsResolve(t *testing.T) {
 	}
 }
 
+func numberedCitations(line string) []string {
+	var out []string
+	for _, loc := range specNumberedRE.FindAllStringIndex(line, -1) {
+		if specRFCRE.MatchString(line[:loc[0]]) {
+			continue
+		}
+		out = append(out, line[loc[0]:loc[1]])
+	}
+	return out
+}
+
+func TestNumberedCitationsCaught(t *testing.T) {
+	sect, nbsp := "\u00a7", "\u00a0"
+	for line, want := range map[string]string{
+		"see " + sect + "6.3":                            sect + "6",
+		"see " + sect + " 6.3":                           sect + " 6",
+		"see " + sect + nbsp + "6.3":                     sect + nbsp + "6",
+		"see " + sect + " " + nbsp + " 12":               sect + " " + nbsp + " 1",
+		"in Append" + "ix B":                             "Append" + "ix B",
+		"in Append" + "ix VA, collected":                 "Append" + "ix VA",
+		"cites spec/" + "V4":                             "spec/" + "V4",
+		"cites spec/" + "4":                              "spec/" + "4",
+		"a date per RFC 3339 " + sect + "5.6":            "",
+		"a URI per RFC 3986 Append" + "ix A":             "",
+		"RFC 3339 " + sect + "5.6 but " + sect + "2":     sect + "2",
+		"cites " + sect + "columns and spec/columns":     "",
+		"see the Appendices":                             "",
+		"see " + sect + "V4.1.4":                         sect + "V",
+		"see " + sect + "IA, collected":                  sect + "I",
+		"a date per RFC 3339, " + sect + "5.6":           "",
+		"a date per RFC" + nbsp + "3339 " + sect + "5.6": "",
+		"a date per RFC 3339" + nbsp + sect + "5.6":      "",
+		"RFC 3339, " + sect + "5.6, then " + sect + "V4": sect + "V",
+	} {
+		got := strings.Join(numberedCitations(line), ",")
+		if got != want {
+			t.Errorf("numberedCitations(%q) = %q, want %q", line, got, want)
+		}
+	}
+}
+
 func TestSpecCitationsNeverNumbered(t *testing.T) {
 	var bad []string
 	for _, path := range repoTextFiles(t) {
@@ -153,12 +199,131 @@ func TestSpecCitationsNeverNumbered(t *testing.T) {
 			continue
 		}
 		for i, line := range strings.Split(string(b), "\n") {
-			if m := specNumberedRE.FindString(line); m != "" {
+			for _, m := range numberedCitations(line) {
 				bad = append(bad, fmt.Sprintf("%s:%d: %q", path, i+1, m))
 			}
 		}
 	}
 	if len(bad) > 0 {
 		t.Errorf("citations by number; a citation names a heading, numbers move and names stay:\n%s", strings.Join(bad, "\n"))
+	}
+}
+
+func githubAnchorOf(title string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(title) {
+		switch {
+		case r == ' ':
+			b.WriteRune('-')
+		case r == '-', r == '_', unicode.IsLetter(r), unicode.IsDigit(r):
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func mdProse(src string) []string {
+	lines := strings.Split(src, "\n")
+	fence := ""
+	for i, line := range lines {
+		trimmed := strings.TrimLeft(line, " ")
+		switch {
+		case fence != "":
+			if strings.HasPrefix(trimmed, fence) {
+				fence = ""
+			}
+			lines[i] = ""
+		case strings.HasPrefix(trimmed, "```"), strings.HasPrefix(trimmed, "~~~"):
+			fence = trimmed[:3]
+			lines[i] = ""
+		}
+	}
+	return lines
+}
+
+func mdAnchors(src string) map[string]bool {
+	set := map[string]bool{}
+	for _, line := range mdProse(src) {
+		if m := mdHeadingRE.FindStringSubmatch(line); m != nil {
+			title := strings.TrimSpace(m[1])
+			set[anchorOf(title)] = true
+			set[githubAnchorOf(title)] = true
+		}
+	}
+	return set
+}
+
+type mdLink struct {
+	line         int
+	file, anchor string
+}
+
+func mdAnchorLinks(src string) []mdLink {
+	var out []mdLink
+	for i, line := range mdProse(src) {
+		for _, m := range mdAnchorLinkRE.FindAllStringSubmatch(line, -1) {
+			out = append(out, mdLink{i + 1, m[1], m[2]})
+		}
+		if m := mdRefDefRE.FindStringSubmatch(line); m != nil {
+			out = append(out, mdLink{i + 1, m[1], m[2]})
+		}
+	}
+	return out
+}
+
+func TestMarkdownAnchorLinksParsed(t *testing.T) {
+	src := "# Real\n\n```md\n# Ghost\n[in code](#ghost)\n```\n\n" +
+		"[plain](#real) [titled](#real \"a title\") [other](lint.md#rules)\n\n[ref]: #ghost\n[far]: spec.md#columns \"t\"\n"
+	if set := mdAnchors(src); !set["real"] || set["ghost"] {
+		t.Errorf("mdAnchors = %v; want the heading outside the fence only", set)
+	}
+	want := []mdLink{{8, "", "real"}, {8, "", "real"}, {8, "lint.md", "rules"}, {10, "", "ghost"}, {11, "spec.md", "columns"}}
+	if got := mdAnchorLinks(src); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("mdAnchorLinks = %v, want %v", got, want)
+	}
+}
+
+func TestMarkdownAnchorLinksResolve(t *testing.T) {
+	docs, err := filepath.Glob(filepath.Join("..", "docs", "*.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := append(docs, filepath.Join("..", "README.md"))
+	anchors := map[string]map[string]bool{}
+	anchorsOf := func(path string) (map[string]bool, bool) {
+		path = filepath.Clean(path)
+		if set, done := anchors[path]; done {
+			return set, set != nil
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			anchors[path] = nil
+			return nil, false
+		}
+		anchors[path] = mdAnchors(string(b))
+		return anchors[path], true
+	}
+	var bad []string
+	for _, path := range files {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, l := range mdAnchorLinks(string(b)) {
+			target := path
+			if l.file != "" {
+				target = filepath.Join(filepath.Dir(path), l.file)
+			}
+			set, exists := anchorsOf(target)
+			switch {
+			case !exists:
+				bad = append(bad, fmt.Sprintf("%s:%d: %s#%s: no such file", path, l.line, l.file, l.anchor))
+			case !set[l.anchor]:
+				bad = append(bad, fmt.Sprintf("%s:%d: %s#%s", path, l.line, l.file, l.anchor))
+			}
+		}
+	}
+	if len(bad) > 0 {
+		t.Errorf("markdown links whose anchor names no heading:\n%s", strings.Join(bad, "\n"))
 	}
 }

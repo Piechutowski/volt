@@ -120,3 +120,27 @@ func TestAnalyzerDocs(t *testing.T) {
 		}
 	}
 }
+
+func TestRefTypeSkipsUnknownTypes(t *testing.T) {
+	src := `
+Table authors {
+  id int64 [pk, increment]
+}
+Table posts {
+  id int [pk, increment]
+  author_id int [not null, ref: > authors.id]
+  editor_id string [ref: > authors.id]
+}
+`
+	f, diags := parser.ParseFile("unknown.volt", src)
+	if diag.HasErrors(diags) {
+		t.Fatalf("parse errors: %v", diags)
+	}
+	info, semDiags := check.File(f)
+	if len(semDiags) != 1 || !strings.Contains(semDiags[0].Msg, `unknown type "int64"`) {
+		t.Fatalf("want the one unknown-type error, got %v", semDiags)
+	}
+	if ws := vet.Run(f, info, vet.ByName("reftype")); len(ws) > 0 {
+		t.Errorf("reftype compared a column of unknown type: %v", ws)
+	}
+}
