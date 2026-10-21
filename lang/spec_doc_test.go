@@ -1,6 +1,7 @@
 package lang
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,8 +13,9 @@ var (
 	headingRE = regexp.MustCompile(`(?m)^(#{1,3}) (.+)$`)
 	tocLinkRE = regexp.MustCompile(`\[([^\]]+)\]\(#([^)]+)\)`)
 
-	specCiteRE = regexp.MustCompile(`§([a-z][a-z0-9-]*)`)
-	specCodeRE = regexp.MustCompile(`spec/([a-z][a-z0-9-]*)`)
+	specCiteRE     = regexp.MustCompile(`§([a-z][a-z0-9-]*)`)
+	specNumberedRE = regexp.MustCompile(`§\s?[0-9]|\bAppendix [A-Z]\b|\bspec/[0-9]`)
+	specCodeRE     = regexp.MustCompile(`spec/([a-z][a-z0-9-]*)`)
 )
 
 func specText(t *testing.T) string {
@@ -140,5 +142,23 @@ func TestSpecCitationsResolve(t *testing.T) {
 			bad = append(bad[:40], "…")
 		}
 		t.Errorf("citations that resolve to no heading:\n%s", strings.Join(bad, "\n"))
+	}
+}
+
+func TestSpecCitationsNeverNumbered(t *testing.T) {
+	var bad []string
+	for _, path := range repoTextFiles(t) {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		for i, line := range strings.Split(string(b), "\n") {
+			if m := specNumberedRE.FindString(line); m != "" {
+				bad = append(bad, fmt.Sprintf("%s:%d: %q", path, i+1, m))
+			}
+		}
+	}
+	if len(bad) > 0 {
+		t.Errorf("citations by number; a citation names a heading, numbers move and names stay:\n%s", strings.Join(bad, "\n"))
 	}
 }

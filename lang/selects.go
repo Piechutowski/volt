@@ -758,6 +758,7 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 	types := map[string][]string{}
 	classes := map[typeClass]bool{}
 	var class, storage typeClass
+	var forbiddenType string
 	var storageGo string
 	for _, m := range e.members {
 		cd := m.Column(name)
@@ -770,6 +771,10 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 			e.errorf(id.Pos(), "column %q of table %q is enum-typed (%s); predicates do not compare enums in v1 — filter on a text column or use the dynamic layer (§predicates, hypotheses H5)", name, m.Decl.Name.Base(), declType)
 			return nil
 		}
+		if !cd.Type.Known() {
+			return nil
+		}
+		forbiddenType = declType
 		goType := cd.Type.Go
 		types[goType] = append(types[goType], m.Decl.Name.Base())
 		class = classOfType(cd.Type)
@@ -803,7 +808,7 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 		}
 	}
 	if class == classForbidden {
-		e.errorf(id.Pos(), "column %q ([]byte) cannot appear in a predicate (§predicates)", name)
+		e.errorf(id.Pos(), "column %q (%s) cannot appear in a predicate (§predicates)", name, forbiddenType)
 		return nil
 	}
 	var goType string

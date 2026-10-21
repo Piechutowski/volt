@@ -138,6 +138,9 @@ func (l *lowering) validatorSpec(v *ast.Validator) (golang.ValidatorSpec, bool) 
 			l.errorf(a.Pos(), "no column %q in table %q (§validators)", a.Name(), l.ti.Decl.Name.Base())
 			return golang.ValidatorSpec{}, false
 		}
+		if cd := l.ti.Column(a.Name()); cd != nil && !cd.Type.Known() {
+			return golang.ValidatorSpec{}, false
+		}
 		args = append(args, "v."+f.Name)
 		src = append(src, a.Name())
 		argTypes = append(argTypes, f.Type)

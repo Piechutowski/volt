@@ -501,6 +501,11 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		l.errorf(pos, "scopes-and-routes", "no generated query %s in package %q%s — a query route names a select method or a default CRUD method (Get, List, Create, Update, Delete) (§query-routes)", ref, target, hint)
 		return nil
 	}
+	for _, sp := range sig {
+		if sp.goType == "" {
+			return nil
+		}
+	}
 
 	byName := map[string]Param{}
 	for _, p := range params {
@@ -969,7 +974,6 @@ func (l *routeLowering) pkParamType(ti *check.TableInfo, pos token.Position) (Pa
 	}
 	pk := cd.Col
 	if !cd.Type.Known() {
-		l.errorf(pos, "resources", "primary-key type %q of table %q is not a routable type (§table-resolution)", pk.Type.String(), ti.Key)
 		return "", false
 	}
 	switch goType := cd.Type.Go; goType {

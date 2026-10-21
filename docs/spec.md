@@ -736,7 +736,9 @@ column setting  = "primary key" | "pk"
    schema-qualified (`v2.job_status`, §enum); or a type declared with
    `Type` (§types). Anything else is an error naming the column and
    the set; the `[]` of the grammar belongs to `[]byte` alone, so
-   `[]string` is an unknown type. The type decides the Go field
+   `[]string` is an unknown type. An unknown type is reported once, at
+   the column: a select, a validator or a route that uses the column
+   reports nothing further about its type. The type decides the Go field
    (§mapping-to-go), the SQLite column (§mapping-to-sqlite-ddl), the
    literals a `default:` accepts (§default-values), the empty value
    `required` refuses, and the comparisons a predicate allows

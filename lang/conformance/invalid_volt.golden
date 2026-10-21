@@ -293,6 +293,10 @@ db/i217_migration_duplicate_column.volt:14:5: error: spec/migrations: duplicate 
 ## i218_migration_action_without_ref.volt
 db/i218_migration_action_without_ref.volt:13:18: error: spec/migrations: column "user_id": delete: names the action of the column's ref:, and the column declares none (§migrations)
 
+## i219_unknown_type_reported_once
+db/schema.volt:4:9: error: spec/columns: column "id": unknown type "int64"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+db/schema.volt:6:9: error: spec/columns: column "rank": unknown type "int32"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+
 ## i21_unknown_table
 app/r.volt:9:15: error: spec/resources: no table "nope" in package "db" (§declaration)
 
