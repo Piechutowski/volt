@@ -35,13 +35,6 @@ func eachChild(n Node, visit func(Node)) {
 				visit(d)
 			}
 		}
-	case *Use:
-		children(visit, n.Items)
-		child(visit, n.Path)
-	case *UseItem:
-		child(visit, n.Kind)
-		child(visit, n.Name)
-		child(visit, n.Alias)
 	case *Project:
 		child(visit, n.Name)
 		children(visit, n.Props)
@@ -70,7 +63,6 @@ func eachChild(n Node, visit func(Node)) {
 		child(visit, n.Name)
 		child(visit, n.Type)
 		child(visit, n.Settings)
-		children(visit, n.LegacyFlags)
 	case *TypeRef:
 		child(visit, n.Name)
 	case *IndexesBlock:

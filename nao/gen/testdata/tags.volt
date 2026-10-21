@@ -4,6 +4,6 @@
 // casts from (A.5, §changesets).
 Table users {
   id        int [pk, increment]
-  user_name string [not null, tag: 'json:"userName"', tag: 'xml:"user-name,attr"']
-  bio       string [note: 'NULL until written', tag: 'msgpack:"bio,omitempty"']
+  user_name string [tag: 'json:"userName"', tag: 'xml:"user-name,attr"']
+  bio       string [null, note: 'NULL until written', tag: 'msgpack:"bio,omitempty"']
 }

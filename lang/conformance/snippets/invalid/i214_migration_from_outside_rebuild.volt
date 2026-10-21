@@ -4,12 +4,12 @@ package db
 
 Table users {
   id   int [pk]
-  hits int [not null, default: 0]
+  hits int [default: 0]
 }
 
 Migration 0001__init {
   create table users {
     id   int [pk]
-    hits int [not null, default: 0, from: `0`]
+    hits int [default: 0, from: `0`]
   }
 }

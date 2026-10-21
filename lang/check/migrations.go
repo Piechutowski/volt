@@ -31,8 +31,7 @@ var (
 		kinds: map[string]valueKind{"irreversible": flagOnly, "no transaction": flagOnly, "note": strValue},
 	}
 	migrationColumnKinds = map[string]valueKind{
-		"pk": flagOnly, "primary key": flagOnly,
-		"null": flagOnly, "not null": flagOnly,
+		"pk": flagOnly, "null": flagOnly,
 		"unique": flagOnly, "increment": flagOnly,
 		"default": defaultVal, "ref": refVal,
 		"delete": actionValue, "update": actionValue,
@@ -47,15 +46,11 @@ var (
 	migrationColumnSettings = settingSpec{
 		kinds:      migrationColumnKinds,
 		repeatable: map[string]bool{"ref": true},
-		synonyms:   map[string]string{"primary key": "pk"},
-		conflicts:  [][2]string{{"null", "not null"}},
 		forbidden:  mapWith(migrationForbidden, "from", "from: names the source of a rebuilt column and is a setting of rebuild table only (§migrations)"),
 	}
 	rebuildColumnSettings = settingSpec{
 		kinds:      mapWith(migrationColumnKinds, "from", exprValue),
 		repeatable: map[string]bool{"ref": true},
-		synonyms:   map[string]string{"primary key": "pk"},
-		conflicts:  [][2]string{{"null", "not null"}},
 		forbidden:  migrationForbidden,
 	}
 	migrationIndexSettings = settingSpec{
@@ -282,12 +277,14 @@ func (c *checker) shapeBodyCheck(what, table string, pos token.Position, body []
 // migrationColumnCheck checks one column of a migration: its settings
 // against the whitelist, its ref: against the directions a column may
 // declare, its type against the built-ins, its default against the
-// type (spec §migrations rules 3 and 4).
+// type, and null against its key (spec §migrations rules 3 and 4,
+// §columns).
 func (c *checker) migrationColumnCheck(col *ast.Column, spec settingSpec, pk map[string]bool) *ColumnDef {
-	c.legacyFlagsCheck(col)
 	c.settingsCheck(col.Settings, "migrations", spec)
 	c.migrationRefCheck(col)
-	cd := &ColumnDef{Col: col, Nullable: isNullable(col) && !pk[col.Name.Name()]}
+	c.pkNullCheck(col)
+	c.pkIndexNullCheck(col, pk)
+	cd := &ColumnDef{Col: col, Nullable: isNullable(col)}
 	typ, ok := builtins[col.Type.String()]
 	if !ok {
 		c.errorf(col.Type.Pos(), "migrations", "column %q: type %q is not a built-in; a migration column is bool, int, float64, string, []byte or time.Time, since the database holds the storage type (§migrations)", col.Name.Name(), col.Type.String())
@@ -343,21 +340,15 @@ func refActionOf(s *ast.Setting) string {
 func (c *checker) addColumnCheck(col *ast.Column, head string) {
 	cd := c.migrationColumnCheck(col, migrationColumnSettings, nil)
 	keyed := false
-	for _, s := range []string{"pk", "primary key", "increment"} {
+	for _, s := range []string{"pk", "increment"} {
 		if setting := col.Settings.Get(s); setting != nil {
 			keyed = true
 			c.errorf(setting.Pos(), "migrations", "%s: %s cannot be added to an existing table; use rebuild table (§migrations)", head, s)
 		}
 	}
-	for _, f := range col.LegacyFlags {
-		if strings.EqualFold(f.Name(), "pk") {
-			keyed = true
-			c.errorf(f.Pos(), "migrations", "%s: pk cannot be added to an existing table; use rebuild table (§migrations)", head)
-		}
-	}
 	def := col.Settings.Get("default")
 	if !cd.Nullable && def == nil && !keyed {
-		c.errorf(col.Pos(), "migrations", "%s: a not null column needs a default:, since the rows already in the table must be filled (§migrations)", head)
+		c.errorf(col.Pos(), "migrations", "%s: a column without null is NOT NULL and needs a default:, since the rows already in the table must be filled (§migrations)", head)
 	}
 	if def != nil {
 		if _, expr := def.Value.(*ast.FuncExpr); expr {
@@ -369,7 +360,7 @@ func (c *checker) addColumnCheck(col *ast.Column, head string) {
 		return
 	}
 	if !cd.Nullable {
-		c.errorf(ref.Pos(), "migrations", "%s: a column with ref: must be nullable when added, since the rows already in the table reference nothing; use rebuild table for a not null foreign key (§migrations)", head)
+		c.errorf(ref.Pos(), "migrations", "%s: a column with ref: carries null when added, since the rows already in the table reference nothing; use rebuild table for a NOT NULL foreign key (§migrations)", head)
 	}
 	if def != nil && !isNullIdent(def.Value) {
 		c.errorf(def.Value.Pos(), "migrations", "%s: a column with ref: takes no default but null, since SQLite refuses to add a REFERENCES column with another default to a table that has rows (§migrations)", head)
@@ -423,7 +414,7 @@ func indexKeyString(ix *ast.Index) string {
 }
 
 // rebuildSourcesCheck follows the column names of every table through
-// the package's migrations in name order, so that a rebuild's not null
+// the package's migrations in name order, so that a rebuild's NOT NULL
 // column whose source would be NULL, no from:, no default:, no old
 // column of its name, is an error (spec §migrations rule 9). A rowid
 // alias (int [pk, increment]) takes NULL and the database assigns it.
@@ -469,23 +460,16 @@ func (c *checker) rebuildSourcesCheck() {
 }
 
 func (c *checker) rebuildSourceCheck(mig string, op *ast.RebuildTable, old []string) {
-	var indexes []*ast.Index
-	for _, item := range op.Body {
-		if b, ok := item.(*ast.IndexesBlock); ok {
-			indexes = append(indexes, b.Indexes...)
-		}
-	}
-	pk := pkIndexColumns(indexes)
 	for _, item := range op.Body {
 		col, ok := item.(*ast.Column)
 		if !ok {
 			continue
 		}
 		name := col.Name.Name()
-		if isNullable(col) && !pk[name] || col.Settings.Get("increment") != nil || col.Settings.Get("from") != nil || col.Settings.Get("default") != nil || contains(old, name) {
+		if isNullable(col) || col.Settings.Get("increment") != nil || col.Settings.Get("from") != nil || col.Settings.Get("default") != nil || contains(old, name) {
 			continue
 		}
-		c.errorf(col.Pos(), "migrations", "rebuild table %q in migration %q: column %q is not null but its source is NULL, since no column of that name exists before the rebuild; give it a from: or a default: (§migrations)", op.Name.Name(), mig, name)
+		c.errorf(col.Pos(), "migrations", "rebuild table %q in migration %q: column %q is NOT NULL but its source is NULL, since no column of that name exists before the rebuild; give it a from: or a default: (§migrations)", op.Name.Name(), mig, name)
 	}
 }
 

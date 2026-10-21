@@ -58,11 +58,11 @@ func TestIncrementalSync(t *testing.T) {
 	}
 	change(uri, 2,
 		ranged(rangeAt(1, 5, 1, 8), "float64"),
-		ranged(rangeAt(2, 11, 2, 11), " [not null]"))
-	expect(uri, "Table users {\n  id float64 [pk]\n  name bool [not null]\n}\n", 2)
+		ranged(rangeAt(2, 11, 2, 11), " [null]"))
+	expect(uri, "Table users {\n  id float64 [pk]\n  name bool [null]\n}\n", 2)
 	change(uri, 3, ranged(rangeAt(2, 7, 2, 11), "\"na😀\""))
 	change(uri, 4, ranged(rangeAt(2, 13, 2, 13), "y"))
-	expect(uri, "Table users {\n  id float64 [pk]\n  name \"na😀\"y [not null]\n}\n", 4)
+	expect(uri, "Table users {\n  id float64 [pk]\n  name \"na😀\"y [null]\n}\n", 4)
 	change(uri, 5, protocol.TextDocumentContentChangeEventWhole{Text: "Table t {\n  id int\n}\n"}, ranged(rangeAt(1, 8, 1, 8), " [pk]"))
 	expect(uri, "Table t {\n  id int [pk]\n}\n", 5)
 

@@ -32,7 +32,7 @@ func BenchmarkKeystroke(b *testing.B) {
 	}
 	path := filepath.Join(root, "schema.volt")
 	text := corpus.Files(spec)["schema.volt"]
-	anchor := "c002 text [not null]"
+	anchor := "c002 string\n"
 	if !strings.Contains(text, anchor) {
 		b.Fatal("anchor")
 	}
@@ -52,7 +52,7 @@ func BenchmarkKeystroke(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; b.Loop(); i++ {
-		edited := strings.Replace(text, anchor, anchor[:len(anchor)-1]+", note: '"+strings.Repeat("x", 1+i%5)+"']", 1)
+		edited := strings.Replace(text, anchor, "c002 string [note: '"+strings.Repeat("x", 1+i%5)+"']\n", 1)
 		if err := s.didChange(ctx, &protocol.DidChangeTextDocumentParams{
 			TextDocument:   protocol.VersionedTextDocumentIdentifier{TextDocumentIdentifier: protocol.TextDocumentIdentifier{URI: uri}, Version: protocol.Integer(i + 2)},
 			ContentChanges: []any{protocol.TextDocumentContentChangeEventWhole{Text: edited}},
@@ -71,13 +71,13 @@ func BenchmarkDocumentUpdateLocal(b *testing.B) {
 	}
 	path := filepath.Join(root, "schema.volt")
 	text := corpus.Files(spec)["schema.volt"]
-	anchor := "c002 text [not null]"
+	anchor := "c002 string\n"
 	d := &Document{URI: "file://" + path}
 	d.UpdateLocal(text)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; b.Loop(); i++ {
-		edited := strings.Replace(text, anchor, anchor[:len(anchor)-1]+", note: '"+strings.Repeat("x", 1+i%5)+"']", 1)
+		edited := strings.Replace(text, anchor, "c002 string [note: '"+strings.Repeat("x", 1+i%5)+"']\n", 1)
 		d.UpdateLocal(edited)
 	}
 }

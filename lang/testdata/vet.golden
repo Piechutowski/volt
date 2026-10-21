@@ -5,7 +5,6 @@ data/more.volt:3:7: warning: vet/unnecessaryquotes: identifier "comments" does n
 data/schema.volt:3:7: warning: vet/unnecessaryquotes: identifier "users" does not need quotes
 data/more.volt:4:3: warning: vet/unnecessaryquotes: identifier "id" does not need quotes
 data/schema.volt:4:3: warning: vet/unnecessaryquotes: identifier "id" does not need quotes
-dup/schema.volt:4:15: warning: vet/redundantnull: explicit 'null' is redundant; columns are nullable by default
 dup/schema.volt:6:3: warning: vet/casecollision: column names total and Total differ only in case
 data/more.volt:9:1: warning: vet/reftype: relationship joins comments.author_id (string) to users.id (int); the types differ
 data/schema.volt:9:3: warning: vet/dynname: table users (constructor UserNew) and table users column "new" (handle UserNew) both generate the Go name UserNew; rename one (e.g. with [model: '...'])
@@ -32,8 +31,6 @@ data/schema.volt:46:16: warning: vet/unusedalias: alias "P" of table "posts" is 
 data/more.volt:48:1: warning: vet/modelname: cannot confidently singularize "bonus" for its Go model name (would use "bonus"); pin it with [model: '...']
 data/schema.volt:48:3: warning: vet/shadowedcolumn: column "id" in table "posts" silently overrides the definition from TablePartial "stamps"
 data/more.volt:51:1: warning: vet/modelname: cannot confidently singularize "axis" for its Go model name (would use "axis"); pin it with [model: '...']
-data/schema.volt:53:14: warning: vet/redundantnull: explicit 'null' is redundant; columns are nullable by default
-data/schema.volt:54:11: warning: vet/legacyflag: legacy flag "pk"; write it in the settings list: [pk]
 data/more.volt:55:1: warning: vet/dynname: table users (column handle type UserColumn) and table user_columns (model UserColumn) both generate the Go name UserColumn; rename one (e.g. with [model: '...'])
 data/more.volt:58:1: warning: vet/dynname: table users (write body UserParams) and table user_params (model UserParams) both generate the Go name UserParams; rename one (e.g. with [model: '...'])
 data/more.volt:61:1: warning: vet/dynname: table users (changeset UserChangeset) and table drafts (model UserChangeset) both generate the Go name UserChangeset; rename one (e.g. with [model: '...'])

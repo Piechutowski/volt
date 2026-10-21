@@ -285,7 +285,7 @@ func (d *Document) tableHover(key string) string {
 	}
 	fmt.Fprintf(&b, "```volt\n%s\n```\n", header)
 	for _, cd := range ti.Columns {
-		line := "- `" + cd.Col.Name.Name() + " " + cd.Col.Type.String() + "`" + settingsSuffix(cd.Col.Settings, cd.Col.LegacyFlags)
+		line := "- `" + cd.Col.Name.Name() + " " + cd.Col.Type.String() + "`" + settingsSuffix(cd.Col.Settings)
 		if cd.Partial != nil {
 			line += " *(from ~" + cd.Partial.Name.Name() + ")*"
 		}
@@ -363,7 +363,7 @@ func (d *Document) partialHover(name string) string {
 	fmt.Fprintf(&b, "```volt\nTablePartial %s\n```\n", name)
 	for _, item := range pi.Decl.Body {
 		if col, ok := item.(*ast.Column); ok {
-			b.WriteString("- `" + col.Name.Name() + " " + col.Type.String() + "`" + settingsSuffix(col.Settings, col.LegacyFlags) + "\n")
+			b.WriteString("- `" + col.Name.Name() + " " + col.Type.String() + "`" + settingsSuffix(col.Settings) + "\n")
 		}
 	}
 	fmt.Fprintf(&b, "\nInjected %d time(s).\n", pi.Uses)
@@ -377,7 +377,7 @@ func (d *Document) columnHover(id SymbolID) string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "```volt\n%s %s\n```\n", col.Name.Name(), col.Type.String())
-	if s := settingsSuffix(col.Settings, col.LegacyFlags); s != "" {
+	if s := settingsSuffix(col.Settings); s != "" {
 		b.WriteString(strings.TrimSpace(s) + "\n")
 	}
 	if strings.HasPrefix(id.Container, "partial:") {
@@ -431,11 +431,8 @@ func (d *Document) columnFind(id SymbolID) *ast.Column {
 	return nil
 }
 
-func settingsSuffix(s *ast.SettingList, legacy []*ast.Ident) string {
+func settingsSuffix(s *ast.SettingList) string {
 	var parts []string
-	for _, f := range legacy {
-		parts = append(parts, f.Name())
-	}
 	if s != nil {
 		for _, setting := range s.Settings {
 			if setting.Name == "note" {

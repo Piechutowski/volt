@@ -4,7 +4,7 @@ package db
 
 Table page_views {
   id int [pk]
-  site string [not null]
+  site string
 }
 
 Select picked for page_views where site in :site or site = :site

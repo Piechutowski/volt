@@ -3,20 +3,20 @@ package db
 
 Table ms_revenue {
   id int [pk, increment]
-  org string [not null]
-  year int [not null]
+  org string
+  year int
 }
 
 Table ms_usage {
   id int [pk, increment]
-  org string [not null]
-  year int [not null]
+  org string
+  year int
 }
 
 Table ms_notes {
   id int [pk, increment]
-  org string [not null]
-  year int [not null]
+  org string
+  year int
 }
 
 Group series {

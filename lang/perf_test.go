@@ -38,7 +38,7 @@ func perfFixture(t *testing.T, tables, cols int, def bool) string {
 			if c%2 == 1 {
 				typ = "int"
 			}
-			fmt.Fprintf(&db, "\tc%03d %s [not null]\n", c, typ)
+			fmt.Fprintf(&db, "\tc%03d %s\n", c, typ)
 		}
 		db.WriteString("}\n\n")
 	}

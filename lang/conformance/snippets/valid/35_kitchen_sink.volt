@@ -10,13 +10,13 @@ Enum post_status {
 }
 
 TablePartial timestamps {
-  created_at time.Time [default: `now()`, not null]
+  created_at time.Time [default: `now()`]
   updated_at time.Time
 }
 
 Table users as U [headercolor: #175EE8] {
   id int [pk, increment]
-  username string [not null, unique]
+  username string [unique]
   ~timestamps
   Note: 'Registered users'
 
@@ -27,9 +27,9 @@ Table users as U [headercolor: #175EE8] {
 
 Table posts {
   id int [pk]
-  title string [not null]
+  title string
   status post_status [default: post_status.draft]
-  author_id int [not null, ref: > U.id]
+  author_id int [ref: > U.id]
   ~timestamps
 
   validators {

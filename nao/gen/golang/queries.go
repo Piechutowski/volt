@@ -226,10 +226,9 @@ func tableBuild(ti *check.TableInfo, enums *enumTypes) (*tableModel, map[string]
 	}
 	tm := &tableModel{ti: ti, model: model, sqlName: sqlTableName(ti.Decl.Name)}
 	imports := map[string]bool{}
-	pkFromIndex := compositePKColumns(ti)
 	goFields := map[string]string{}
 	for _, cd := range ti.Columns {
-		fp, err := fieldBuild(enums.byKey, imports, cd, pkFromIndex, goFields)
+		fp, err := fieldBuild(enums.byKey, imports, cd, goFields)
 		if err != nil {
 			return nil, nil, fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
 		}
@@ -237,7 +236,7 @@ func tableBuild(ti *check.TableInfo, enums *enumTypes) (*tableModel, map[string]
 	}
 
 	for _, f := range tm.fields {
-		if hasSetting(f.col, "pk") || hasSetting(f.col, "primary key") || hasLegacyFlag(f.col, "pk") {
+		if hasSetting(f.col, "pk") {
 			tm.pk = append(tm.pk, f)
 		}
 	}
@@ -272,7 +271,7 @@ func tableBuild(ti *check.TableInfo, enums *enumTypes) (*tableModel, map[string]
 	return tm, imports, nil
 }
 
-func fieldBuild(enumTypes map[string]string, imports map[string]bool, cd *check.ColumnDef, pkFromIndex map[string]bool, goFields map[string]string) (*fieldPlan, error) {
+func fieldBuild(enumTypes map[string]string, imports map[string]bool, cd *check.ColumnDef, goFields map[string]string) (*fieldPlan, error) {
 	col := cd.Col
 	colName := col.Name.Name()
 
@@ -289,7 +288,7 @@ func fieldBuild(enumTypes map[string]string, imports map[string]bool, cd *check.
 	if typ.imp != "" {
 		imports[typ.imp] = true
 	}
-	nullable := isNullable(col) && !pkFromIndex[colName]
+	nullable := isNullable(col)
 	goType := typ.name
 	if nullable && !typ.nilable {
 		goType = "rt.Null[" + goType + "]"
@@ -382,15 +381,6 @@ func argName(exported string) string {
 
 func hasSetting(col *ast.Column, name string) bool {
 	return col.Settings.Get(name) != nil
-}
-
-func hasLegacyFlag(col *ast.Column, name string) bool {
-	for _, f := range col.LegacyFlags {
-		if strings.EqualFold(f.Name(), name) {
-			return true
-		}
-	}
-	return false
 }
 
 func columnList(fields []*fieldPlan) string {

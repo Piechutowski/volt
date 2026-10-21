@@ -9,8 +9,8 @@ import (
 )
 
 const projSchema = "package db\n\n" +
-	"Table page_views {\n\tid int [pk, increment]\n\tsite string [not null]\n\tday int [not null]\n\thits int [not null, default: 0]\n}\n\n" +
-	"Table link_clicks {\n\tid int [pk, increment]\n\tsite string [not null]\n\tday int [not null]\n\ttarget string [not null, default: '']\n}\n\n" +
+	"Table page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n\thits int [default: 0]\n}\n\n" +
+	"Table link_clicks {\n\tid int [pk, increment]\n\tsite string\n\tday int\n\ttarget string [default: '']\n}\n\n" +
 	"Group metrics {\n\tpage_views\n\tlink_clicks\n}\n\n" +
 	"Select summary (site, day) for metrics where day >= :from\n" +
 	"Select public (* \\ site) for link_clicks\n" +
@@ -114,7 +114,7 @@ func TestSelectHoverBindsInPlaceholderOrder(t *testing.T) {
 }
 
 const unresolvedSchema = "package db\n\n" +
-	"Table authors {\n\tid int [pk, increment]\n\temail string [not null]\n\trank int32 [not null]\n}\n\n" +
+	"Table authors {\n\tid int [pk, increment]\n\temail string\n\trank int32\n}\n\n" +
 	"Select ranked for authors where rank >= :min and email = :e [order: (rank desc)]\n" +
 	"Select shown (rank, email) for authors\n" +
 	"Select byemail for authors where email = :e\n"

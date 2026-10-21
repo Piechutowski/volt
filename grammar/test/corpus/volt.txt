@@ -352,8 +352,8 @@ validators
 ==================
 
 Table page_views {
-  hits int [not null]
-  site string [not null]
+  hits int
+  site string
 
   validators {
     CountsPositive(hits)
@@ -372,23 +372,13 @@ Table page_views {
         (identifier))
       (column_type
         (type_name
-          (identifier)))
-      (settings_list
-        (setting
-          (setting_name
-            (identifier)
-            (identifier)))))
+          (identifier))))
     (column_definition
       (column_name
         (identifier))
       (column_type
         (type_name
-          (identifier)))
-      (settings_list
-        (setting
-          (setting_name
-            (identifier)
-            (identifier)))))
+          (identifier))))
     (validators_block
       (validator
         (go_ref

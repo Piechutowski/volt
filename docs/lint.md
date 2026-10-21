@@ -69,9 +69,9 @@ enum is dead weight that still occupies a name in its schema.
 **Examples.** [testdata/unused.volt](../lang/vet/testdata/unused.volt) — `orphan_status`
 is bad; `used_status` and the schema-qualified `core.kind` are good.
 
-**Limitations.** Analysis is per-file: a file that exports the enum to
-other files via the module system (§file-imports-removed) may see a false positive. Treat the
-warning as "unused *here*".
+**Limitations.** Analysis is per-package: the files of a package are
+analyzed as one (§projects-and-packages), and a use from outside the
+package is not seen. Treat the warning as "unused *here*".
 
 ### unusedpartial
 
@@ -82,7 +82,7 @@ warning as "unused *here*".
 **Examples.** [testdata/unused.volt](../lang/vet/testdata/unused.volt) —
 `orphan_partial` is bad; `used_partial` is good.
 
-**Limitations.** Per-file, as above.
+**Limitations.** Per-package, as above.
 
 ### unusedalias
 
@@ -96,7 +96,7 @@ declaration uses.
 **Examples.** [testdata/unused.volt](../lang/vet/testdata/unused.volt) — `P` is bad;
 `U` (used by `Ref: U.id < posts.id`) is good.
 
-**Limitations.** Per-file, as above.
+**Limitations.** Per-package, as above.
 
 ---
 
@@ -105,17 +105,6 @@ declaration uses.
 Two ways of saying the same thing eventually disagree. Each of these
 patterns states something the language (or another line) already
 guarantees.
-
-### redundantnull
-
-**What it does.** Reports an explicit `[null]` column setting.
-
-**Why.** Columns are nullable by default (spec §columns), so `[null]` adds no
-information. Worse, it reads as if it were load-bearing, suggesting the
-author believed the default was `not null`.
-
-**Examples.** [testdata/redundantnull.volt](../lang/vet/testdata/redundantnull.volt) —
-`[null]` is bad; `[not null]` and no setting are good.
 
 ### redundantindex
 
@@ -148,18 +137,6 @@ selects nothing (spec §diagramview).
 
 **Examples.** [testdata/emptybody.volt](../lang/vet/testdata/emptybody.volt) —
 `Notes { * }` is good: a wildcard is a real selection.
-
-### legacyflag
-
-**What it does.** Reports the legacy bare `pk` / `unique` flags between a
-column's type and its settings list (`id int pk`).
-
-**Why.** The form survives for backward compatibility (spec §columns) but
-splits column constraints across two syntaxes; the settings list is the
-canonical spelling.
-
-**Examples.** [testdata/legacyflag.volt](../lang/vet/testdata/legacyflag.volt) —
-`ok int [pk]` is the good spelling.
 
 ### shadowedcolumn
 
@@ -215,16 +192,14 @@ family where a warning most often prevents a production incident.
 
 ### missingpk
 
-**What it does.** Reports a table with no primary key: no `pk`/`primary
-key` column setting (including via injected partials and legacy flags) and
-no `[pk]` index.
+**What it does.** Reports a table with no primary key: no `pk` column
+setting (including via injected partials) and no `[pk]` index.
 
 **Why.** Tables without primary keys defeat replication, upserts, ORMs and
 row identity in general. Almost always an oversight.
 
-**Examples.** [testdata/missingpk.volt](../lang/vet/testdata/missingpk.volt) — all
-three ways of declaring a pk (column setting, composite index, legacy flag)
-are good.
+**Examples.** [testdata/missingpk.volt](../lang/vet/testdata/missingpk.volt): both
+ways of declaring a pk (column setting, composite index) are good.
 
 ### reftype
 

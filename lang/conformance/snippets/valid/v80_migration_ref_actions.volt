@@ -7,13 +7,13 @@ Table users {
 
 Table profiles {
   id      int [pk, increment]
-  user_id int [not null, unique, ref: - users.id]
+  user_id int [unique, ref: - users.id]
 }
 
 Table posts {
   id      int [pk, increment]
-  user_id int [not null]
-  editor  int
+  user_id int
+  editor  int [null]
 }
 
 Ref: posts.user_id > users.id [delete: cascade, update: restrict]
@@ -25,16 +25,16 @@ Migration 0001__init {
   }
   create table profiles {
     id      int [pk, increment]
-    user_id int [not null, unique, ref: - users.id]
+    user_id int [unique, ref: - users.id]
   }
   create table posts {
     id      int [pk, increment]
-    user_id int [not null, ref: > users.id, delete: cascade, update: restrict]
+    user_id int [ref: > users.id, delete: cascade, update: restrict]
   }
 }
 
 Migration 0002__posts_editor {
   alter table posts {
-    add editor int [default: null, ref: > users.id, delete: set null]
+    add editor int [null, default: null, ref: > users.id, delete: set null]
   }
 }

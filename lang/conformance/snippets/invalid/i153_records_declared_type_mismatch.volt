@@ -3,7 +3,7 @@
 Type money.Money int from 'example.com/app/money'
 Table t {
   id int [pk]
-  price money.Money [not null]
+  price money.Money
   records {
     1, 'free'
   }

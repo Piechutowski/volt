@@ -9,9 +9,6 @@ Table has_index_pk {
     (a, b) [pk]
   }
 }
-Table has_legacy_pk {
-  id int pk
-}
 Table naked { //WANT missingpk
   id int
 }

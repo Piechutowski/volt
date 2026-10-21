@@ -6,7 +6,7 @@ Type Money int
 
 Table orders {
   id    int   [pk, increment]
-  price Money [not null]
+  price Money
 }
 
 Select cheap for orders where price < :limit

@@ -4,5 +4,5 @@ package db
 
 Table accounts {
   id int [pk]
-  at time.Time [not null, required]
+  at time.Time [required]
 }

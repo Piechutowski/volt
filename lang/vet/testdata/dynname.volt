@@ -21,7 +21,7 @@ Enum order_status {
 }
 Table orders {
   id int [pk]
-  status order_status [not null]
+  status order_status
 }
 
 // model UserLimit collides with users' generated UserLimit option wrapper

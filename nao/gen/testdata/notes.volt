@@ -17,18 +17,18 @@ Enum post_status {
 
 Table posts [note: 'Setting-style note: loses to the body note below'] {
   id int [pk, increment]
-  title string [not null, note: 'Shown in lists and in the HTML title tag']
-  status post_status [not null]
-  body string [note: '''
+  title string [note: 'Shown in lists and in the HTML title tag']
+  status post_status
+  body string [null, note: '''
     Raw markdown source.
     Rendered to HTML at publish time.
   ''']
-  published_at time.Time
+  published_at time.Time [null]
 
   Note: 'A blog post. The body-form note wins over the setting-form note.'
 }
 
 Table tags {
   id int [pk]
-  name string [not null, unique]
+  name string [unique]
 }

@@ -2,8 +2,8 @@ package db
 
 Table users {
 	id         int       [pk, increment]
-	email      string    [not null, required, unique]
-	created_at time.Time [not null, default: `CURRENT_TIMESTAMP`]
+	email      string    [required, unique]
+	created_at time.Time [default: `CURRENT_TIMESTAMP`]
 
 	validators {
 		EmailShape(email)
@@ -16,19 +16,19 @@ Select since for users where created_at > :since [order: (id asc)]
 
 Table tags {
 	slug string [pk]
-	name string [not null]
+	name string
 }
 
 Table ms_revenue {
 	id   int [pk, increment]
-	org  string    [not null]
-	year int [not null]
+	org  string
+	year int
 }
 
 Table ms_usage {
 	id   int [pk, increment]
-	org  string    [not null]
-	year int [not null]
+	org  string
+	year int
 }
 
 Group series {

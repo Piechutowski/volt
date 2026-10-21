@@ -1,15 +1,15 @@
 // spec: §selects-over-groups — agreement is on the generated field type, nullability
-// included: text and text [not null] disagree
+// included: string and string [null] disagree
 package db
 
 Table page_views {
   id int [pk]
-  site string [not null]
+  site string
 }
 
 Table link_clicks {
   id int [pk]
-  site string
+  site string [null]
 }
 
 Group metrics {

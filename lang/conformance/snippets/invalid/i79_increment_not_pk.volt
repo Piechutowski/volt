@@ -3,5 +3,5 @@
 // want: only the primary key auto-increments
 Table users {
   id int [pk]
-  counter int [not null, increment]
+  counter int [increment]
 }

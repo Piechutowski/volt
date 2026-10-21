@@ -4,5 +4,5 @@ package db
 
 Table drafts {
   id int [pk]
-  changeset string [not null]
+  changeset string
 }

@@ -1,7 +1,7 @@
 package dup
 
 Table t {
-  id int [pk, null]
+  id int [pk]
   total int
   Total int
 }

@@ -1,5 +1,5 @@
-// spec: §migrations, a column with ref: is nullable when added, since the rows already there reference nothing
-// want: must be nullable when added
+// spec: §migrations, a column with ref: carries null when added, since the rows already there reference nothing
+// want: carries null when added
 package db
 
 Table users {
@@ -8,7 +8,7 @@ Table users {
 
 Table posts {
   id      int [pk]
-  user_id int [not null, ref: > users.id]
+  user_id int [ref: > users.id]
 }
 
 Migration 0001__init {
@@ -22,6 +22,6 @@ Migration 0001__init {
 
 Migration 0002__post_owner {
   alter table posts {
-    add user_id int [not null, default: 0, ref: > users.id]
+    add user_id int [default: 0, ref: > users.id]
   }
 }

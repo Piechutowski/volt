@@ -5,7 +5,7 @@ package db
 
 Table users {
   id int [pk]
-  email string [not null]
+  email string
 
   validators {
     EmailValid(email)

@@ -38,8 +38,8 @@ Enum kind {
 
 Table posts {
   id    int [pk, increment]
-  title string    [not null]
   title string
+  title string [null]
   body  string    [null]
 }
 

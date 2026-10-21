@@ -32,15 +32,12 @@
   "validators"
   "as"
   "use"
-  "reuse"
   "from"
   "Tables"
   "Notes"
   "TableGroups"
   "Schemas"
 ] @keyword
-
-(element_kind) @keyword
 
 ; ---------- operators and punctuation ----------
 
@@ -93,7 +90,6 @@
 
 (settings_list (setting name: (_) @attribute))
 (setting_value_words) @constant
-(legacy_flag) @attribute
 
 ; ---------- Volt layer (docs/spec.md Part II) ----------
 

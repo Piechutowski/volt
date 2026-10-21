@@ -2,7 +2,7 @@
 // want: must be an integer, found string
 Table t {
   id int [pk]
-  n int [not null]
+  n int
   records {
     1, 'seven'
   }

@@ -18,19 +18,18 @@ type Memo struct {
 }
 
 type memoTable struct {
-	ti         *TableInfo
-	partials   []*ast.TablePartial
-	hasImports bool
-	enums      []string
-	diags      []diag.Diagnostic
+	ti       *TableInfo
+	partials []*ast.TablePartial
+	enums    []string
+	diags    []diag.Diagnostic
 }
 
-func (m *Memo) lookup(d *ast.Table, partials []*ast.TablePartial, hasImports bool, enums []string) *memoTable {
+func (m *Memo) lookup(d *ast.Table, partials []*ast.TablePartial, enums []string) *memoTable {
 	if m == nil {
 		return nil
 	}
 	e := m.prev[d]
-	if e == nil || e.hasImports != hasImports || !slices.Equal(e.enums, enums) || len(e.partials) != len(partials) {
+	if e == nil || !slices.Equal(e.enums, enums) || len(e.partials) != len(partials) {
 		return nil
 	}
 	for i, p := range partials {

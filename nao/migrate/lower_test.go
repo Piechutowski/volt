@@ -134,7 +134,7 @@ func TestLowerNoTransactionDisablesTheBracket(t *testing.T) {
 }
 
 func TestLowerRefusesTwoIndexesOfOneName(t *testing.T) {
-	src := "package db\n\nTable posts {\n  id int [pk, increment]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int\n\n    indexes {\n      n\n      n [unique]\n    }\n  }\n}\n"
+	src := "package db\n\nTable posts {\n  id int [pk, increment]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null]\n\n    indexes {\n      n\n      n [unique]\n    }\n  }\n}\n"
 	_, info := parseChecked(t, "t.volt", src)
 	_, err := Lower(info)
 	if err == nil || !strings.Contains(err.Error(), "0001__init") || !strings.Contains(err.Error(), `duplicate index name "idx_posts_n"`) {
@@ -144,7 +144,7 @@ func TestLowerRefusesTwoIndexesOfOneName(t *testing.T) {
 
 func TestRebuildForgetsAnIndexNotRestated(t *testing.T) {
 	ctx := context.Background()
-	src := "package db\n\nTable posts {\n  id int [pk, increment]\n  n  int\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int\n\n    indexes {\n      n\n    }\n  }\n}\n\nMigration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id int [pk, increment]\n    n  int\n  }\n}\n"
+	src := "package db\n\nTable posts {\n  id int [pk, increment]\n  n  int [null]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null]\n\n    indexes {\n      n\n    }\n  }\n}\n\nMigration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id int [pk, increment]\n    n  int [null]\n  }\n}\n"
 	_, info := parseChecked(t, "t.volt", src)
 	ms, err := Lower(info)
 	if err != nil {
@@ -173,9 +173,9 @@ func TestRebuildForgetsAnIndexNotRestated(t *testing.T) {
 // the rebuild.
 func TestRebuildUnderAViewOrTriggerFailsAtTheRename(t *testing.T) {
 	ctx := context.Background()
-	const schema = "package db\n\nTable posts {\n  id    int    [pk, increment]\n  title string [not null]\n}\n\nTable comments {\n  id      int [pk, increment]\n  post_id int [not null]\n}\n\n"
-	const tables = "  create table posts {\n    id    int [pk, increment]\n    title string\n  }\n  create table comments {\n    id      int [pk, increment]\n    post_id int [not null]\n  }\n"
-	const rebuild = "Migration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id    int    [pk, increment]\n    title string [not null, default: '']\n  }\n}\n"
+	const schema = "package db\n\nTable posts {\n  id    int    [pk, increment]\n  title string\n}\n\nTable comments {\n  id      int [pk, increment]\n  post_id int\n}\n\n"
+	const tables = "  create table posts {\n    id    int [pk, increment]\n    title string [null]\n  }\n  create table comments {\n    id      int [pk, increment]\n    post_id int\n  }\n"
+	const rebuild = "Migration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id    int    [pk, increment]\n    title string [default: '']\n  }\n}\n"
 	cases := []struct{ object, exec string }{
 		{"view post_titles", "exec 'CREATE VIEW post_titles AS SELECT title FROM posts' [down: 'DROP VIEW post_titles']"},
 		{"trigger comments_touch_posts", "exec 'CREATE TRIGGER comments_touch_posts AFTER INSERT ON comments BEGIN UPDATE posts SET title = title WHERE id = NEW.post_id; END' [down: 'DROP TRIGGER comments_touch_posts']"},
@@ -333,24 +333,24 @@ func TestLowerRebuildSources(t *testing.T) {
 
 Table users {
   id    int    [pk, increment]
-  email string [not null]
-  hits  int    [not null, default: 0]
-  note  string
+  email string
+  hits  int    [default: 0]
+  note  string [null]
 }
 
 Migration 0001__init {
   create table users {
     id   int    [pk, increment]
-    mail string [not null]
+    mail string
   }
 }
 
 Migration 0002__rebuild [irreversible] {
   rebuild table users {
     id    int    [pk, increment]
-    email string [not null, from: ` + "`mail`" + `]
-    hits  int    [not null, default: 0]
-    note  string
+    email string [from: ` + "`mail`" + `]
+    hits  int    [default: 0]
+    note  string [null]
   }
 }
 `
@@ -379,15 +379,15 @@ func TestLowerRebuildSourcesOfAnUnknownTable(t *testing.T) {
 
 Table users {
   id   int    [pk, increment]
-  hits int    [not null, default: 0]
-  note string
+  hits int    [default: 0]
+  note string [null]
 }
 
 Migration 0001__rebuild [irreversible] {
   rebuild table users {
     id   int    [pk, increment]
-    hits int    [not null, default: 0]
-    note string
+    hits int    [default: 0]
+    note string [null]
   }
 }
 `
@@ -403,10 +403,10 @@ Migration 0001__rebuild [irreversible] {
 }
 
 // TestLowerRebuildIntroducingARowidAlias pins NULL as the source of an
-// int [pk, increment] column the old table lacks, the one not null
+// int [pk, increment] column the old table lacks, the one NOT NULL
 // column the checker admits without a source (spec §migrations rule 9).
 func TestLowerRebuildIntroducingARowidAlias(t *testing.T) {
-	src := "package db\n\nTable posts {\n  id int [pk, increment]\n  n  int\n}\n\nMigration 0001__init {\n  create table posts {\n    n int\n  }\n}\n\nMigration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id int [pk, increment]\n    n  int\n  }\n}\n"
+	src := "package db\n\nTable posts {\n  id int [pk, increment]\n  n  int [null]\n}\n\nMigration 0001__init {\n  create table posts {\n    n int [null]\n  }\n}\n\nMigration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id int [pk, increment]\n    n  int [null]\n  }\n}\n"
 	_, info := parseChecked(t, "t.volt", src)
 	ms, err := Lower(info)
 	if err != nil {

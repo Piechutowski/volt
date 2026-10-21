@@ -101,14 +101,12 @@ Table t {
           (identifier))))))
 
 ==================
-column settings and legacy flags
+column settings
 ==================
 
 Table t {
-  id int pk
-  code int unique
-  a int [pk, not null, unique, increment]
-  b int [primary key]
+  a int [pk, unique, increment]
+  b int [null]
   c string [default: 'x', note: 'col']
   d time.Time [default: `now()`]
   e float64 [default: -1.5]
@@ -129,27 +127,9 @@ Table t {
       (column_type
         (type_name
           (identifier)))
-      (legacy_flag))
-    (column_definition
-      (column_name
-        (identifier))
-      (column_type
-        (type_name
-          (identifier)))
-      (legacy_flag))
-    (column_definition
-      (column_name
-        (identifier))
-      (column_type
-        (type_name
-          (identifier)))
       (settings_list
         (setting
           (setting_name
-            (identifier)))
-        (setting
-          (setting_name
-            (identifier)
             (identifier)))
         (setting
           (setting_name
@@ -166,7 +146,6 @@ Table t {
       (settings_list
         (setting
           (setting_name
-            (identifier)
             (identifier)))))
     (column_definition
       (column_name
@@ -296,7 +275,7 @@ case-insensitive keywords
 ==================
 
 TABLE users {
-  ID int PK
+  ID int [PK]
 }
 table posts {
   id int
@@ -314,7 +293,10 @@ table posts {
       (column_type
         (type_name
           (identifier)))
-      (legacy_flag)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))))))
   (table_definition
     (table_name
       (identifier))
@@ -324,6 +306,17 @@ table posts {
       (column_type
         (type_name
           (identifier))))))
+
+==================
+a bare flag after the column type is not a column
+:error
+==================
+
+Table t {
+  id int pk
+}
+
+---
 
 ==================
 identifier starting with digits

@@ -3,24 +3,24 @@ package db
 
 Table ms_revenue {
   id int [pk]
-  org string [not null]
-  year int [not null]
+  org string
+  year int
 }
 
 Table ms_usage {
   id int [pk]
-  org string [not null]
-  year int [not null]
+  org string
+  year int
 }
 
 Table ms_dict {
   code string [pk]
-  title string [not null]
+  title string
 }
 
 Table ms_notes {
   id int [pk]
-  body string [not null]
+  body string
 }
 
 TableGroup Metrics [color: #32a891] {

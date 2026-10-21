@@ -5,26 +5,26 @@ package site
 
 Table posts {
   id    int [pk, increment]
-  title string    [not null]
+  title string
 }
 
 Table tags {
   id   int [pk, increment]
-  name string    [not null, unique]
+  name string    [unique]
 }
 
 Select picked for posts where id in :ids [order: (id asc)]
 
 Table ms_revenue {
   id   int [pk, increment]
-  org  string    [not null]
-  year int [not null]
+  org  string
+  year int
 }
 
 Table ms_usage {
   id   int [pk, increment]
-  org  string    [not null]
-  year int [not null]
+  org  string
+  year int
 }
 
 Group series {

@@ -3,12 +3,12 @@ package db
 
 Table ms_revenue {
   id int [pk]
-  org string [not null]
+  org string
 }
 
 Table ks_seats {
   id int [pk]
-  org int [not null]
+  org int
 }
 
 Group mixed {

@@ -4,12 +4,12 @@ package db
 
 Table posts {
   id      int [pk]
-  user_id int
+  user_id int [null]
 }
 
 Migration 0001__init {
   create table posts {
     id      int [pk]
-    user_id int [delete: cascade]
+    user_id int [null, delete: cascade]
   }
 }

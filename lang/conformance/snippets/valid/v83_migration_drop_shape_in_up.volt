@@ -8,20 +8,20 @@ Table users {
 Migration 0001__init {
   create table users {
     id   int [pk, increment]
-    hits int [not null]
+    hits int
   }
 }
 
 Migration 0002__users_trim {
   up {
     alter table users {
-      drop hits int [not null]
+      drop hits int
     }
   }
   down {
     rebuild table users {
       id   int [pk, increment]
-      hits int [not null, default: 0]
+      hits int [default: 0]
     }
   }
 }

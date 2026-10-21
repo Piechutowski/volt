@@ -12,7 +12,7 @@ import (
 var (
 	elementKeywords = []string{
 		"Project", "Table", "TablePartial", "Enum", "Type", "Ref", "TableGroup",
-		"Note", "Records", "DiagramView", "Migration", "use", "reuse",
+		"Note", "Records", "DiagramView", "Migration",
 		"package ", "import", "Pipeline", "Scope",
 	}
 	tableBodyKeywords     = []string{"indexes", "validators", "Note", "Records"}
@@ -27,7 +27,7 @@ var (
 	}
 
 	settingsByContext = map[string][]string{
-		"column":    {"pk", "primary key", "null", "not null", "unique", "increment", "required", "default: ", "note: ", "ref: ", "tag: "},
+		"column":    {"pk", "null", "unique", "increment", "required", "default: ", "note: ", "ref: ", "tag: "},
 		"table":     {"headercolor: ", "note: "},
 		"index":     {"type: ", "name: ", "unique", "pk", "where: ", "note: "},
 		"migration": {"irreversible", "no transaction", "note: "},
@@ -40,8 +40,8 @@ var (
 		"resources": {"only: (", "except: (", "param: ", "singular: ", "api", "default"},
 		"dataset":   {"strip: ", "only: (", "except: ("},
 
-		"migrationcolumn": {"pk", "primary key", "null", "not null", "unique", "increment", "default: ", "ref: ", "delete: ", "update: ", "note: "},
-		"rebuildcolumn":   {"pk", "primary key", "null", "not null", "unique", "increment", "default: ", "ref: ", "delete: ", "update: ", "note: ", "from: "},
+		"migrationcolumn": {"pk", "null", "unique", "increment", "default: ", "ref: ", "delete: ", "update: ", "note: "},
+		"rebuildcolumn":   {"pk", "null", "unique", "increment", "default: ", "ref: ", "delete: ", "update: ", "note: ", "from: "},
 		"migrationindex":  {"unique", "pk", "name: ", "where: ", "note: "},
 		"standaloneindex": {"unique", "name: ", "where: ", "note: "},
 	}

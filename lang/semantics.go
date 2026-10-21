@@ -181,7 +181,6 @@ func (c *checker) fileRules(pkg *Package) {
 					continue
 				}
 				clause = d
-			case *ast.Use:
 			}
 		}
 		if clause == nil {

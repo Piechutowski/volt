@@ -4,8 +4,8 @@ package db
 
 Table authors {
   id    int    [pk, increment]
-  email string [not null]
-  rank  int32  [not null]
+  email string
+  rank  int32
 
   validators {
     RankSane(rank)

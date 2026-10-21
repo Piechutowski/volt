@@ -48,8 +48,8 @@ func TestDocumentReusesItsFrontEnd(t *testing.T) {
 		strings.Count(text, "\nGroup ") + strings.Count(text, "\nPred ") + strings.Count(text, "\nView ") + 1
 	round("first", text, decls, 12, 12)
 	round("no change", text, 0, 0, 0)
-	round("edit one table", strings.Replace(text, "c002 string [not null]", "c002 text [not null, note: 'edited']", 1), 1, 1, 2)
-	round("break the table", strings.Replace(text, "c002 string [not null]", "c002 text [not null, null]", 1), 1, 1, 2)
+	round("edit one table", strings.Replace(text, "c002 string\n", "c002 text [note: 'edited']\n", 1), 1, 1, 2)
+	round("break the table", strings.Replace(text, "c002 string\n", "c002 text [null, null]\n", 1), 1, 1, 2)
 	round("fix it", text, 1, 1, 2)
 }
 
@@ -82,13 +82,13 @@ func TestServerForeignFileVerdict(t *testing.T) {
 	}}
 	uri := "file://" + path
 	if err := s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{
-		TextDocument: protocol.TextDocumentItem{URI: uri, Text: "Table t {\n  id int [pk, null]\n}\n"},
+		TextDocument: protocol.TextDocumentItem{URI: uri, Text: "Table t {\n  id int [pk]\n  indexes {\n  }\n}\n"},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	hasVet := func(ds []protocol.Diagnostic) bool {
 		for _, dg := range ds {
-			if dg.Code != nil && dg.Code.Value == "vet/redundantnull" {
+			if dg.Code != nil && dg.Code.Value == "vet/emptybody" {
 				return true
 			}
 		}

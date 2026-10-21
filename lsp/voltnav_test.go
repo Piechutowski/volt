@@ -8,7 +8,7 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-const navSchema = "package db\n\nTable posts {\n\tid    int [pk]\n\ttitle string\n}\n"
+const navSchema = "package db\n\nTable posts {\n\tid    int [pk]\n\ttitle string [null]\n}\n"
 const navRoutes = "package app\n\nimport (\n\tdb\n)\n\nPipeline api {\n\tuse volt.RequestID\n}\n\nScope / [pipe: api] {\n\tresources db.posts\n}\n"
 
 func navProject(t *testing.T) (root, schema, routes string) {
@@ -114,7 +114,7 @@ func TestVoltHoverTableShowsModel(t *testing.T) {
 }
 
 func TestVoltHoverTableKeyNotRoutable(t *testing.T) {
-	schema := "package db\n\nTable samples {\n\tid    float64 [pk]\n\tlabel string\n}\n"
+	schema := "package db\n\nTable samples {\n\tid    float64 [pk]\n\tlabel string  [null]\n}\n"
 	routes := "package app\n\nimport (\n\tdb\n)\n\nScope / {\n\tresources db.samples\n}\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":          "module nav\n",
@@ -294,12 +294,12 @@ func TestVoltCompleteResourcesOffersTablesAndImports(t *testing.T) {
 func TestVoltCompleteLeavesSchemaChains(t *testing.T) {
 	root := voltProject(t, map[string]string{
 		"go.mod": "module lsptest\n",
-		"db/schema.volt": "package db\n\nTable users {\n\tid int [pk]\n\temail string\n}\n\n" +
-			"Table posts {\n\tid int [pk]\n\tauthor_id int\n}\n\nRef: posts.author_id > users.id\n",
+		"db/schema.volt": "package db\n\nTable users {\n\tid int [pk]\n\temail string [null]\n}\n\n" +
+			"Table posts {\n\tid int [pk]\n\tauthor_id int [null]\n}\n\nRef: posts.author_id > users.id\n",
 	})
 	path := root + "/db/schema.volt"
-	text := "package db\n\nTable users {\n\tid int [pk]\n\temail string\n}\n\n" +
-		"Table posts {\n\tid int [pk]\n\tauthor_id int\n}\n\nRef: posts.author_id > users.\n"
+	text := "package db\n\nTable users {\n\tid int [pk]\n\temail string [null]\n}\n\n" +
+		"Table posts {\n\tid int [pk]\n\tauthor_id int [null]\n}\n\nRef: posts.author_id > users.\n"
 	d := NewDocument("file://"+path, text)
 	if d.vpkg == nil {
 		t.Fatal("project index should be active for this file")

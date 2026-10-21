@@ -3,21 +3,21 @@ package db
 
 Table posts {
   id    int    [pk, increment]
-  title string [not null]
-  slug  string [not null]
+  title string
+  slug  string
 }
 
 Migration 0001__create_posts {
   create table posts {
     id    int    [pk, increment]
-    title string [not null]
+    title string
   }
 }
 
 Migration 0002__posts_slug {
   up {
     alter table posts {
-      add slug string [not null, default: '']
+      add slug string [default: '']
     }
     exec 'UPDATE posts SET slug = lower(title)'
   }

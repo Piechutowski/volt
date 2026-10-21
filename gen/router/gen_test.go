@@ -354,7 +354,7 @@ func TestMainPackageCompiles(t *testing.T) {
 
 Table posts {
   id    int [pk, increment]
-  title string    [not null]
+  title string
 }
 
 Scope /api {

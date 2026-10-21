@@ -6,7 +6,7 @@ Type Money int
 
 Table orders {
   id    int   [pk, increment]
-  price Money [not null]
+  price Money
 }
 
 Select sorted for orders [order: (price asc)]

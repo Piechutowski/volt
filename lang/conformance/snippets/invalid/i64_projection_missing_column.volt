@@ -3,13 +3,13 @@ package db
 
 Table page_views {
   id int [pk]
-  site string [not null]
-  hits int [not null]
+  site string
+  hits int
 }
 
 Table link_clicks {
   id int [pk]
-  site string [not null]
+  site string
 }
 
 Group metrics {

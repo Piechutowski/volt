@@ -6,7 +6,7 @@ Type Stamp time.Time
 
 Table events {
   id int   [pk, increment]
-  at Stamp [not null]
+  at Stamp
 }
 
 Select picked for events where at in :stamps

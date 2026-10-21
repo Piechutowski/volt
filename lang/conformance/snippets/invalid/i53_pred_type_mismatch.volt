@@ -3,7 +3,7 @@ package db
 
 Table ms_revenue {
   id int [pk]
-  org string [not null]
+  org string
 }
 
 Select bad for ms_revenue where org > 1

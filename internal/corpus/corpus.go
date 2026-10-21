@@ -85,19 +85,19 @@ func actionOf(scope string) string { return strings.ToUpper(scope[:1]) + scope[1
 func Table(i int) string { return fmt.Sprintf("tb%03ds", i) }
 
 var colTypes = []string{
-	"int [not null]",
-	"string [not null]",
-	"float64",
-	"bool [not null, default: false]",
-	"status [not null, default: status.active]",
+	"int",
 	"string",
-	"time.Time",
-	"int [not null]",
+	"float64 [null]",
+	"bool [default: false]",
+	"status [default: status.active]",
+	"string [null]",
+	"time.Time [null]",
+	"int",
 }
 
 func schemaWrite(b *strings.Builder, spec Spec, pkg string) {
 	b.WriteString("Enum status {\n\tactive\n\tretired [note: 'no longer written']\n}\n\n")
-	b.WriteString("TablePartial stamped {\n\tcreated_at time.Time [not null, default: `CURRENT_TIMESTAMP`]\n}\n\n")
+	b.WriteString("TablePartial stamped {\n\tcreated_at time.Time [default: `CURRENT_TIMESTAMP`]\n}\n\n")
 	b.WriteString("Pred fresh { c001 >= :since }\n\n")
 	for i := 1; i <= spec.Tables; i++ {
 		fmt.Fprintf(b, "Table %s [note: 'metrics table %d of %s'] {\n", Table(i), i, pkg)
@@ -105,12 +105,12 @@ func schemaWrite(b *strings.Builder, spec Spec, pkg string) {
 		for c := 1; c <= spec.Columns; c++ {
 			typ := colTypes[(c-1)%len(colTypes)]
 			if c == 1 {
-				typ = "int [not null]"
+				typ = "int"
 			}
 			fmt.Fprintf(b, "\tc%03d %s\n", c, typ)
 		}
 		if i > 1 {
-			fmt.Fprintf(b, "\tprev_id int [ref: > %s.id]\n", Table(i-1))
+			fmt.Fprintf(b, "\tprev_id int [null, ref: > %s.id]\n", Table(i-1))
 		}
 		b.WriteString("\n\tvalidators {\n\t\tPositive(c001)\n\t}\n}\n\n")
 	}

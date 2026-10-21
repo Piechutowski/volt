@@ -3,9 +3,9 @@ package db
 
 Table page_views {
   id int [pk]
-  site string [not null]
-  day int [not null]
-  seen bool [not null, default: false]
+  site string
+  day int
+  seen bool [default: false]
 }
 
 Pred chosen { site in :sites and day in :days }

@@ -11,27 +11,6 @@ import (
 	"github.com/Piechutowski/volt/lang/diag"
 )
 
-type redundantNullRule struct{ meta }
-
-var redundantNull = &redundantNullRule{meta{
-	name: "redundantnull",
-	doc:  "reports explicit [null] settings; columns are nullable by default (spec §columns)",
-}}
-
-func (r *redundantNullRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
-	var out []diag.Diagnostic
-	for _, n := range nodes {
-		col, ok := n.(*ast.Column)
-		if !ok || col.Settings == nil {
-			continue
-		}
-		if s := col.Settings.Get("null"); s != nil {
-			out = append(out, r.warnf(s.Pos(), "explicit 'null' is redundant; columns are nullable by default"))
-		}
-	}
-	return out
-}
-
 type redundantIndexRule struct{ meta }
 
 var redundantIndex = &redundantIndexRule{meta{
@@ -93,22 +72,7 @@ func indexKey(ix *ast.Index) string {
 	return "(" + strings.Join(parts, ", ") + ")"
 }
 
-func columnHas(cd *check.ColumnDef, name string) bool {
-	if cd.Col.Settings != nil {
-		if cd.Col.Settings.Get(name) != nil {
-			return true
-		}
-		if name == "pk" && cd.Col.Settings.Get("primary key") != nil {
-			return true
-		}
-	}
-	for _, f := range cd.Col.LegacyFlags {
-		if strings.EqualFold(f.Name(), name) {
-			return true
-		}
-	}
-	return false
-}
+func columnHas(cd *check.ColumnDef, name string) bool { return cd.Col.Settings.Get(name) != nil }
 
 type emptyBodyRule struct{ meta }
 
@@ -141,27 +105,6 @@ func (r *emptyBodyRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagn
 			if len(n.Props) == 0 && len(n.Notes) == 0 {
 				out = append(out, r.warnf(n.Pos(), "empty Project body"))
 			}
-		}
-	}
-	return out
-}
-
-type legacyFlagRule struct{ meta }
-
-var legacyFlag = &legacyFlagRule{meta{
-	name: "legacyflag",
-	doc:  "reports legacy bare pk/unique flags between type and settings; prefer the settings list (spec §columns)",
-}}
-
-func (r *legacyFlagRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
-	var out []diag.Diagnostic
-	for _, n := range nodes {
-		col, ok := n.(*ast.Column)
-		if !ok {
-			continue
-		}
-		for _, fl := range col.LegacyFlags {
-			out = append(out, r.warnf(fl.Pos(), "legacy flag %q; write it in the settings list: [%s]", fl.Name(), strings.ToLower(fl.Name())))
 		}
 	}
 	return out

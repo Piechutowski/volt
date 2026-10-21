@@ -20,7 +20,7 @@ func mustParse(t *testing.T, src string) *ast.File {
 func TestTableShape(t *testing.T) {
 	f := mustParse(t, `
 Table core.users as U [headercolor: #3498DB] {
-  id int [pk, not null]
+  id int [pk]
   name string
   Note: 'people'
   indexes {
@@ -45,8 +45,8 @@ Table core.users as U [headercolor: #3498DB] {
 		t.Fatalf("body items = %d, want 4", len(tb.Body))
 	}
 	col := tb.Body[0].(*ast.Column)
-	if col.Settings.Get("not null") == nil {
-		t.Error("multi-word setting 'not null' not canonicalized")
+	if col.Settings.Get("pk") == nil {
+		t.Error("setting 'pk' missing")
 	}
 	typ := tb.Body[1].(*ast.Column).Type
 	if typ.String() != "string" {
@@ -55,6 +55,13 @@ Table core.users as U [headercolor: #3498DB] {
 	ix := tb.Body[3].(*ast.IndexesBlock).Indexes[0]
 	if !ix.Composite || len(ix.Key) != 2 {
 		t.Errorf("index composite=%v keys=%d", ix.Composite, len(ix.Key))
+	}
+}
+
+func TestMultiWordSettingCanonical(t *testing.T) {
+	f := mustParse(t, "Migration 0001__a [No   Transaction] {\n}\n")
+	if f.Decls[0].(*ast.Migration).Settings.Get("no transaction") == nil {
+		t.Error("multi-word setting 'No   Transaction' not canonicalized")
 	}
 }
 

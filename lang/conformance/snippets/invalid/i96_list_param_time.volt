@@ -4,7 +4,7 @@ package db
 
 Table page_views {
   id int [pk]
-  at time.Time [not null]
+  at time.Time
 }
 
 Select picked for page_views where at in :stamps

@@ -1,8 +1,6 @@
 // Pass 3: cross-element resolution (§reference-resolution) of relationship endpoints,
 // index columns, records columns, TableGroup members and DiagramView
-// members, and duplicate-relationship detection (§relationships-ref). When the
-// file has use/reuse imports, unresolved-name errors are suppressed
-// (Info.HasImports).
+// members, and duplicate-relationship detection (§relationships-ref).
 package check
 
 import (
@@ -14,13 +12,11 @@ import (
 )
 
 func (c *checker) resolve(f *ast.File) {
-	lenient := c.info.HasImports
-
 	for _, d := range f.Decls {
 		if r, ok := d.(*ast.Ref); ok {
 			ri := &RefInfo{Node: r, Op: r.OpTok.Kind}
-			ri.Left = c.endpointResolve(r.Left, lenient)
-			ri.Right = c.endpointResolve(r.Right, lenient)
+			ri.Left = c.endpointResolve(r.Left)
+			ri.Right = c.endpointResolve(r.Right)
 			c.info.Refs = append(c.info.Refs, ri)
 		}
 	}
@@ -40,7 +36,7 @@ func (c *checker) resolve(f *ast.File) {
 					Columns: []string{cd.Col.Name.Name()},
 					Pos:     s.Pos(),
 				}
-				ri.Right = c.endpointResolve(rv.Endpoint, lenient)
+				ri.Right = c.endpointResolve(rv.Endpoint)
 				if len(ri.Right.Columns) != 1 {
 					c.errorf(rv.Endpoint.Pos(), "relationships-ref", "an inline ref endpoint has exactly one column")
 				}
@@ -66,14 +62,14 @@ func (c *checker) resolve(f *ast.File) {
 
 	for _, d := range f.Decls {
 		if r, ok := d.(*ast.Records); ok {
-			c.recordsResolve(r, nil, lenient)
+			c.recordsResolve(r, nil)
 		}
 	}
 	recordsSeen := map[string]token.Position{}
 	for _, ti := range c.info.Tables {
 		for _, item := range ti.Decl.Body {
 			if r, ok := item.(*ast.Records); ok {
-				c.recordsResolve(r, ti, lenient)
+				c.recordsResolve(r, ti)
 			}
 		}
 	}
@@ -104,9 +100,7 @@ func (c *checker) resolve(f *ast.File) {
 		for _, m := range g.Members {
 			ti := c.tableLookup(m)
 			if ti == nil {
-				if !lenient {
-					c.errorf(m.Pos(), "tablegroup", "unknown table %q in TableGroup %q", m.String(), g.Name.Name())
-				}
+				c.errorf(m.Pos(), "tablegroup", "unknown table %q in TableGroup %q", m.String(), g.Name.Name())
 				continue
 			}
 			if prev, ok := memberOf[ti.Key]; ok {
@@ -125,7 +119,7 @@ func (c *checker) resolve(f *ast.File) {
 			continue
 		}
 		for _, cat := range v.Categories {
-			if cat.Wildcard || lenient {
+			if cat.Wildcard {
 				continue
 			}
 			for _, nm := range cat.Names {
@@ -156,16 +150,14 @@ func (c *checker) tableLookup(q *ast.QualName) *TableInfo {
 	return c.info.byTable[canonKey(q)]
 }
 
-func (c *checker) endpointResolve(ep *ast.RefEndpoint, lenient bool) EndpointInfo {
+func (c *checker) endpointResolve(ep *ast.RefEndpoint) EndpointInfo {
 	out := EndpointInfo{Pos: ep.Pos()}
 	for _, col := range ep.Columns {
 		out.Columns = append(out.Columns, col.Name())
 	}
 	ti := c.tableLookup(ep.Table)
 	if ti == nil {
-		if !lenient {
-			c.errorf(ep.Table.Pos(), "reference-resolution", "unknown table %q in relationship endpoint", ep.Table.String())
-		}
+		c.errorf(ep.Table.Pos(), "reference-resolution", "unknown table %q in relationship endpoint", ep.Table.String())
 		return out
 	}
 	out.Table = ti
@@ -209,13 +201,11 @@ func (c *checker) duplicateRefsCheck() {
 	}
 }
 
-func (c *checker) recordsResolve(r *ast.Records, ti *TableInfo, lenient bool) {
+func (c *checker) recordsResolve(r *ast.Records, ti *TableInfo) {
 	if r.Table != nil {
 		ti = c.tableLookup(r.Table)
 		if ti == nil {
-			if !lenient {
-				c.errorf(r.Table.Pos(), "records-sample-data", "unknown table %q in records", r.Table.String())
-			}
+			c.errorf(r.Table.Pos(), "records-sample-data", "unknown table %q in records", r.Table.String())
 			return
 		}
 	}

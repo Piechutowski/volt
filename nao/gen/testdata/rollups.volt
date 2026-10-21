@@ -6,18 +6,18 @@ package metrics
 
 Table page_views {
   id    int [pk, increment]
-  site  string [not null]
-  day   int [not null]
-  hits  int [not null, default: 0]
-  score float64 [not null, default: 0]
-  note  string
+  site  string
+  day   int
+  hits  int [default: 0]
+  score float64 [default: 0]
+  note  string [null]
 }
 
 Table link_clicks {
   id     int [pk, increment]
-  site   string [not null]
-  day    int [not null]
-  target string [not null, default: '']
+  site   string
+  day    int
+  target string [default: '']
 }
 
 Group traffic {

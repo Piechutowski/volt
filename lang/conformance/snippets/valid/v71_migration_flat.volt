@@ -3,9 +3,9 @@ package db
 
 Table users {
   id        int    [pk, increment]
-  email     string [not null, unique]
-  full_name string [not null]
-  bio       string
+  email     string [unique]
+  full_name string
+  bio       string [null]
 
   indexes {
     full_name
@@ -15,14 +15,14 @@ Table users {
 Migration 0001__create_users {
   create table users {
     id    int    [pk, increment]
-    email string [not null, unique]
-    name  string [not null]
+    email string [unique]
+    name  string
   }
 }
 
 Migration 0002__users_bio {
   alter table users {
-    add bio string
+    add bio string [null]
     rename name to full_name
   }
   create index users (full_name)

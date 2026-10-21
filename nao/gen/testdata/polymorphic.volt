@@ -9,9 +9,9 @@ Table comments [note: '''
   in whichever table the type names. No FK can enforce this.
 '''] {
   id int [pk, increment]
-  commentable_type commentable_type [not null]
-  commentable_id int [not null, note: 'ID within the table selected by commentable_type']
-  body string [not null]
+  commentable_type commentable_type
+  commentable_id int [note: 'ID within the table selected by commentable_type']
+  body string
 
   indexes {
     (commentable_type, commentable_id)

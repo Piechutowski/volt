@@ -14,12 +14,11 @@ import (
 
 // Info is the semantic model of one file, produced by File.
 type Info struct {
-	Tables     []*TableInfo
-	Enums      []*EnumInfo
-	Types      []*TypeInfo
-	Partials   []*PartialInfo
-	Refs       []*RefInfo
-	HasImports bool
+	Tables   []*TableInfo
+	Enums    []*EnumInfo
+	Types    []*TypeInfo
+	Partials []*PartialInfo
+	Refs     []*RefInfo
 	// TableGroups in declaration order, resolved to their member tables
 	// (unknown members dropped; §tablegroup reports them). A TableGroup is a
 	// set wherever Volt names one (spec §groups).
@@ -129,8 +128,7 @@ func canonKey(q *ast.QualName) string {
 }
 
 // File checks one parsed file and returns its semantic model together with
-// all diagnostics. When the file imports other files (§file-imports-removed), unresolved-name
-// errors are suppressed; all local constraints still apply.
+// all diagnostics.
 func File(f *ast.File) (*Info, []diag.Diagnostic) {
 	return FileMemo(f, nil)
 }
@@ -141,9 +139,8 @@ func File(f *ast.File) (*Info, []diag.Diagnostic) {
 func FileMemo(f *ast.File, memo *Memo) (*Info, []diag.Diagnostic) {
 	c := &checker{
 		info: &Info{
-			HasImports: f.HasImports(),
-			byTable:    map[string]*TableInfo{},
-			byBase:     map[string]*TableInfo{},
+			byTable: map[string]*TableInfo{},
+			byBase:  map[string]*TableInfo{},
 		},
 		memo: memo,
 	}
@@ -291,14 +288,14 @@ func (c *checker) collect(f *ast.File) {
 		}
 		var checked *TableInfo
 		var diags []diag.Diagnostic
-		if e := c.memo.lookup(ti.Decl, partials, c.info.HasImports, c.env.keys); e != nil {
+		if e := c.memo.lookup(ti.Decl, partials, c.env.keys); e != nil {
 			checked, diags = e.ti, e.diags
 			c.memo.store(e)
 			c.memo.Hits++
 		} else {
-			checked, diags = tableCheck(ti.Decl, ti.Key, ti.Alias, partials, c.info.HasImports, c.env)
+			checked, diags = tableCheck(ti.Decl, ti.Key, ti.Alias, partials, c.env)
 			if c.memo != nil {
-				c.memo.store(&memoTable{ti: checked, partials: partials, hasImports: c.info.HasImports, enums: c.env.keys, diags: diags})
+				c.memo.store(&memoTable{ti: checked, partials: partials, enums: c.env.keys, diags: diags})
 				c.memo.Misses++
 			}
 		}
@@ -339,8 +336,8 @@ func partialTypeDedupe(ti *TableInfo, diags []diag.Diagnostic, reported map[diag
 	return out
 }
 
-func tableCheck(d *ast.Table, key, alias string, partials []*ast.TablePartial, hasImports bool, env *typeEnv) (*TableInfo, []diag.Diagnostic) {
-	acc := &checker{info: &Info{HasImports: hasImports}, env: env}
+func tableCheck(d *ast.Table, key, alias string, partials []*ast.TablePartial, env *typeEnv) (*TableInfo, []diag.Diagnostic) {
+	acc := &checker{info: &Info{}, env: env}
 	ti := &TableInfo{Decl: d, Key: key, Alias: alias}
 	acc.columnsExpand(ti, partials)
 	acc.tableBodyCheck(d.Pos(), d.Name.String(), d.Settings, d.Body, true)
@@ -398,9 +395,7 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 			p := partials[injected]
 			injected++
 			if p == nil {
-				if !c.info.HasImports {
-					c.errorf(item.Pos(), "tablepartial", "unknown TablePartial %q", item.Name.Name())
-				}
+				c.errorf(item.Pos(), "tablepartial", "unknown TablePartial %q", item.Name.Name())
 				continue
 			}
 			for _, pit := range p.Body {

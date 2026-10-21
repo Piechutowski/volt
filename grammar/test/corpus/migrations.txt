@@ -5,7 +5,7 @@ migration: flat body with every operation
 Migration 0001__create_users {
   create table users {
     id    int    [pk, increment]
-    email string [not null, unique]
+    email string [unique]
 
     indexes {
       email [unique]
@@ -13,9 +13,9 @@ Migration 0001__create_users {
   }
   rename table users to people
   alter table people {
-    add bio string
+    add bio string [null]
     rename email to mail
-    drop legacy string [not null]
+    drop legacy string [default: 'x']
   }
   create index people (mail) [unique]
   drop index people bio
@@ -55,10 +55,6 @@ Migration 0001__create_users {
         (settings_list
           (setting
             (setting_name
-              (identifier)
-              (identifier)))
-          (setting
-            (setting_name
               (identifier)))))
       (indexes_block
         (index_definition
@@ -82,7 +78,11 @@ Migration 0001__create_users {
             (identifier))
           (column_type
             (type_name
-              (identifier)))))
+              (identifier)))
+          (settings_list
+            (setting
+              (setting_name
+                (identifier))))))
       (rename_column
         (column_name
           (identifier))
@@ -97,8 +97,9 @@ Migration 0001__create_users {
         (settings_list
           (setting
             (setting_name
-              (identifier)
-              (identifier))))))
+              (identifier))
+            (string
+              (string_content))))))
     (create_index_op
       (table_name
         (identifier))
@@ -147,7 +148,7 @@ Migration 0002__int_hits [irreversible, no transaction, note: 'hits were text'] 
   up {
     rebuild table users {
       id   int [pk]
-      hits int [not null, default: 0, from: `CAST(hits AS INTEGER)`]
+      hits int [default: 0, from: `CAST(hits AS INTEGER)`]
     }
   }
   down {
@@ -194,10 +195,6 @@ Migration 0002__int_hits [irreversible, no transaction, note: 'hits were text'] 
             (type_name
               (identifier)))
           (settings_list
-            (setting
-              (setting_name
-                (identifier)
-                (identifier)))
             (setting
               (setting_name
                 (identifier))

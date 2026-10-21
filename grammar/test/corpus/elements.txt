@@ -197,38 +197,13 @@ DiagramView overview {
     (view_category)))
 
 ==================
-imports: wildcard and item list
+use is not an element
+:error
 ==================
 
 use * from './base'
-reuse {
-  table auth.users as u
-  schema billing
-} from './auth.volt'
 
 ---
-
-(source_file
-  (import_statement
-    (wildcard)
-    (string
-      (string_content)))
-  (import_statement
-    (import_item
-      (element_kind
-        (identifier))
-      (table_name
-        (schema_name
-          (identifier))
-        (identifier))
-      (identifier))
-    (import_item
-      (element_kind
-        (identifier))
-      (table_name
-        (identifier)))
-    (string
-      (string_content))))
 
 ==================
 Type name takes no slice prefix

@@ -6,7 +6,7 @@ Type Money int
 
 Table orders {
   id    int   [pk, increment]
-  price Money [not null]
+  price Money
 }
 
 Select odd for orders where price = 'x'

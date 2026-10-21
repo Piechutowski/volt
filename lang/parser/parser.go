@@ -182,11 +182,9 @@ func (p *parser) decl() (d ast.Decl) {
 
 	t := p.cur()
 	if t.Kind != token.IDENT {
-		p.fail(t, "expected an element type or use/reuse at top level (§program-structure), found %s", t)
+		p.fail(t, "expected an element type at top level (§program-structure), found %s", t)
 	}
 	switch strings.ToLower(t.Val) {
-	case "use", "reuse":
-		return p.useDecl()
 	case "package":
 		return p.packageClause()
 	case "import":
@@ -263,43 +261,6 @@ func (p *parser) item(parse func()) {
 		}
 	}()
 	parse()
-}
-
-func (p *parser) useDecl() *ast.Use {
-	kw := p.next()
-	d := &ast.Use{UsePos: kw.Pos, Reuse: strings.EqualFold(kw.Val, "reuse")}
-	switch {
-	case p.at(token.STAR):
-		p.next()
-		d.Wildcard = true
-	case p.at(token.LBRACE):
-		p.next()
-		for !p.at(token.RBRACE) && !p.at(token.EOF) && !p.atKw("from") {
-			d.Items = append(d.Items, p.useItem())
-		}
-		p.expect(token.RBRACE, "import specifier list (§file-imports-removed)")
-		if len(d.Items) == 0 {
-			p.fail(p.cur(), "selective import requires at least one item (§file-imports-removed)")
-		}
-	default:
-		p.fail(p.cur(), "expected '*' or '{' after use/reuse (§file-imports-removed)")
-	}
-	if !p.atKw("from") {
-		p.fail(p.cur(), "expected 'from' in import statement (§file-imports-removed)")
-	}
-	p.next()
-	d.Path = p.litOf(p.expect(token.STRING, "import path (§file-imports-removed)"))
-	return d
-}
-
-func (p *parser) useItem() *ast.UseItem {
-	it := &ast.UseItem{Kind: p.ident("import item kind (§file-imports-removed)")}
-	it.Name = p.qualName("import item name (§file-imports-removed)")
-	if p.atKw("as") {
-		p.next()
-		it.Alias = p.ident("import alias (§file-imports-removed)")
-	}
-	return it
 }
 
 func (p *parser) project() *ast.Project {
@@ -409,8 +370,11 @@ func (p *parser) column() *ast.Column {
 	p.lineBegin("column definition (§columns)")
 	c.Name = p.ident("column name (§columns)")
 	c.Type = p.typeRef()
-	for p.at(token.IDENT) && !p.cur().NLBefore {
-		c.LegacyFlags = append(c.LegacyFlags, p.ident("legacy flag (§columns)"))
+	if !p.cur().NLBefore && !p.at(token.LBRACKET) && !p.at(token.RBRACE) && !p.at(token.EOF) {
+		p.errorf(p.cur(), "expected a settings list or end of line after the column type (§columns), found %s", p.cur())
+		for !p.at(token.EOF) && !p.at(token.RBRACE) && !p.cur().NLBefore {
+			p.next()
+		}
 	}
 	if p.at(token.LBRACKET) && !p.cur().NLBefore {
 		c.Settings = p.settingList()

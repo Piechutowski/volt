@@ -1,6 +1,6 @@
 // spec: §tablepartial — partial with settings, indexes; injection into table
 TablePartial base_template [headercolor: #ff0000] {
-  id int [pk, not null]
+  id int [pk]
   created_at time.Time [default: `now()`]
 }
 TablePartial email_index {

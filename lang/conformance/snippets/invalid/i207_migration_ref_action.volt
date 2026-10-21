@@ -8,7 +8,7 @@ Table users {
 
 Table posts {
   id      int [pk]
-  user_id int [ref: > users.id]
+  user_id int [null, ref: > users.id]
 }
 
 Migration 0001__init {
@@ -17,6 +17,6 @@ Migration 0001__init {
   }
   create table posts {
     id      int [pk]
-    user_id int [ref: > users.id, delete: explode]
+    user_id int [null, ref: > users.id, delete: explode]
   }
 }

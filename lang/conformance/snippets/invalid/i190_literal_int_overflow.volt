@@ -4,7 +4,7 @@ package db
 
 Table page_views {
   id int [pk]
-  hits int [not null]
+  hits int
 }
 
 Select big for page_views where hits > 9223372036854775808

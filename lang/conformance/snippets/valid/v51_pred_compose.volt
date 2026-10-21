@@ -3,9 +3,9 @@ package db
 
 Table ms_revenue {
   id int [pk]
-  org string [not null]
-  year int [not null]
-  amount float64 [not null]
+  org string
+  year int
+  amount float64
   note string
 }
 

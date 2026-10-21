@@ -6,7 +6,7 @@ Type Slug string
 
 Table posts {
   id   int  [pk, increment]
-  slug Slug [not null]
+  slug Slug
 }
 
 Select drafts for posts where slug like 'draft-%'

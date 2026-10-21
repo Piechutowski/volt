@@ -364,11 +364,10 @@ func (g *generator) tableEmit(ti *check.TableInfo, usedNames map[string]string) 
 	}
 	fmt.Fprintf(&g.body, "type %s struct {\n", name)
 
-	pkCols := compositePKColumns(ti)
 	fields := map[string]string{}
 	var rows align.Block
 	for _, cd := range ti.Columns {
-		if err := g.fieldEmit(cd, pkCols, fields, &rows); err != nil {
+		if err := g.fieldEmit(cd, fields, &rows); err != nil {
 			return fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
 		}
 	}
@@ -377,22 +376,7 @@ func (g *generator) tableEmit(ti *check.TableInfo, usedNames map[string]string) 
 	return nil
 }
 
-func compositePKColumns(ti *check.TableInfo) map[string]bool {
-	out := map[string]bool{}
-	for _, ix := range ti.Indexes {
-		if ix.Settings.Get("pk") == nil {
-			continue
-		}
-		for _, atom := range ix.Key {
-			if id, ok := atom.(*ast.Ident); ok {
-				out[id.Name()] = true
-			}
-		}
-	}
-	return out
-}
-
-func (g *generator) fieldEmit(cd *check.ColumnDef, pkCols map[string]bool, fields map[string]string, rows *align.Block) error {
+func (g *generator) fieldEmit(cd *check.ColumnDef, fields map[string]string, rows *align.Block) error {
 	col := cd.Col
 	fieldName, err := goName(col.Name.Name())
 	if err != nil {
@@ -408,7 +392,7 @@ func (g *generator) fieldEmit(cd *check.ColumnDef, pkCols map[string]bool, field
 		g.imports[typ.imp] = true
 	}
 
-	nullable := isNullable(col) && !pkCols[col.Name.Name()]
+	nullable := isNullable(col)
 	goTypeName := typ.name
 	if nullable && !typ.nilable {
 		goTypeName = "rt.Null[" + goTypeName + "]"
@@ -447,20 +431,9 @@ func fieldTag(col *ast.Column) string {
 	return strings.Join(parts, " ")
 }
 
-func isNullable(col *ast.Column) bool {
-	s := col.Settings
-	if s != nil {
-		if s.Get("not null") != nil || s.Get("pk") != nil || s.Get("primary key") != nil || s.Get("increment") != nil {
-			return false
-		}
-	}
-	for _, f := range col.LegacyFlags {
-		if strings.EqualFold(f.Name(), "pk") {
-			return false
-		}
-	}
-	return true
-}
+// isNullable reports whether the column admits NULL, which the null
+// setting alone decides (spec §columns).
+func isNullable(col *ast.Column) bool { return col.Settings.Get("null") != nil }
 
 func tableNote(t *ast.Table) string {
 	for _, item := range t.Body {
