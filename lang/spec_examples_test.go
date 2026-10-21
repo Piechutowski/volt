@@ -98,7 +98,13 @@ func TestSpecExamplesRun(t *testing.T) {
 				}
 			}
 		case "invalid":
-			if !diag.HasErrors(exampleDiagnostics(t, ex.text)) {
+			var real []diag.Diagnostic
+			for _, d := range exampleDiagnostics(t, ex.text) {
+				if d.Code != "spec/conformance-and-the-proof-chain" {
+					real = append(real, d)
+				}
+			}
+			if !diag.HasErrors(real) {
 				t.Errorf("%s: the example is marked invalid, and the front end accepts it", where)
 			}
 		case "fragment":

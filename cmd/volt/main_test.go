@@ -187,6 +187,14 @@ Table orders {
 	if err := volt("gen", "-o", out, "-parts", "sql", filepath.Join(root, "db")); err != nil {
 		t.Fatalf("gen -o -parts sql writes no Go, so a bare Type does not matter: %v", err)
 	}
+	for _, own := range []string{filepath.Join(root, "db"), filepath.Join(root, "db") + string(filepath.Separator)} {
+		if err := volt("gen", "-o", own, "-parts", "models", filepath.Join(root, "db")); err != nil {
+			t.Fatalf("gen -o %s names the package's own directory, where its Go files are: %v", own, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "db", "nao_models.go")); err != nil {
+		t.Errorf("gen -o into the package's own directory wrote no models: %v", err)
+	}
 	if err := volt("gen", filepath.Join(root, "db")); err != nil {
 		t.Fatalf("gen beside the schema: %v", err)
 	}

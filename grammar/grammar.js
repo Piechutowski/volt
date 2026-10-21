@@ -13,7 +13,7 @@
  *
  * Design notes, driven by spec §lexical-structure:
  *  - Volt is newline-sensitive: columns, record rows, index and
- *    check lines, project properties, group members and partial injections
+ *    validator lines, project properties, group members and partial injections
  *    are newline-terminated. Newlines are therefore NOT extras; bodies use an
  *    explicit "items separated by one-or-more newlines" shape, which also
  *    accepts a final item flush against the closing brace.
@@ -399,7 +399,7 @@ module.exports = grammar({
 
     // ==================== Groups, Preds, Selects (§groups to §selects-over-groups) ====================
 
-    // Group name { members } | Group name = a + b - c (§groups)
+    // Group name { members } | Group name = a + b \ c (§groups)
     group_definition: ($) =>
       seq(
         kw('Group'),
@@ -515,8 +515,8 @@ module.exports = grammar({
     query_param: ($) =>
       seq(':', field('name', alias($._ident_immediate, $.parameter_name))),
 
-    // Select name [(cols) | (* - cols)] for target [where expr]
-    // [settings] (§selects-over-groups, §selects-over-groups)
+    // Select name [(cols) | (* \ cols)] for target [where expr]
+    // [settings] (§selects-over-groups, §predicates)
     select_definition: ($) =>
       seq(
         kw('Select'),
@@ -528,7 +528,7 @@ module.exports = grammar({
         optional(field('settings', $.settings_list)),
       ),
 
-    // (a, b, c) or (* - a - b) (§selects-over-groups): clauses read in SQL order
+    // (a, b, c) or (* \ a \ b) (§selects-over-groups): clauses read in SQL order
     select_projection: ($) =>
       seq(
         '(',
@@ -691,8 +691,8 @@ module.exports = grammar({
     rebuild_table_op: ($) =>
       seq(kw('rebuild'), kw('table'), field('table', alias($._name, $.table_name)), $._shape_body),
 
-    // Columns and indexes blocks only: no injection, validators, records
-    // or Note (§migrations).
+    // Columns and indexes blocks only: no injection, validators or records
+    // (§migrations).
     _shape_body: ($) =>
       seq(
         '{',
@@ -726,16 +726,17 @@ module.exports = grammar({
     _line_breaks: ($) => repeat1($._newline),
 
     // `ref:` takes an endpoint, table.column (§relationships-ref); every other
-    // setting takes a value.
+    // setting takes a value. A line break may follow the `:`
+    // (§line-structure-and-whitespace).
     setting: ($) =>
       choice(
         seq(
           field('name', alias(kw('ref'), $.setting_name)),
-          optional(seq(':', field('value', $.ref_endpoint))),
+          optional(seq(':', optional($._line_breaks), field('value', $.ref_endpoint))),
         ),
         seq(
           field('name', $.setting_name),
-          optional(seq(':', field('value', $._setting_value))),
+          optional(seq(':', optional($._line_breaks), field('value', $._setting_value))),
         ),
       ),
 
@@ -757,8 +758,17 @@ module.exports = grammar({
 
     // Parenthesized identifier list: only: (index, show) (volt §settings);
     // order lists allow a one-word modifier: order: (year desc, id) (§selects-over-groups).
+    // It stands inside a settings list, so a line break between its items is
+    // whitespace (§line-structure-and-whitespace).
     ident_group: ($) =>
-      seq('(', $._ident_item, repeat(seq(',', $._ident_item)), ')'),
+      seq(
+        '(',
+        optional($._line_breaks),
+        $._ident_item,
+        repeat(seq(optional($._line_breaks), ',', optional($._line_breaks), $._ident_item)),
+        optional($._line_breaks),
+        ')',
+      ),
 
     _ident_item: ($) => seq($._name, optional(alias($._name, $.ident_modifier))),
 

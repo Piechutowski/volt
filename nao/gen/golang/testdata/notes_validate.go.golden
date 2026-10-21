@@ -2,11 +2,20 @@
 
 package models
 
+import (
+	"github.com/Piechutowski/volt/nao/rt"
+)
+
 // Validate runs required and the validators of posts over the row,
 // every one every time, replacing the findings of an earlier Validate
 // (spec §changesets, §validators).
 func (c PostChangeset) Validate() PostChangeset {
-	c.valid = nil
+	v := c.Row()
+	var errs []rt.FieldError
+	if err := PostStateKnown(v.Status); err != nil {
+		errs = append(errs, rt.FieldError{Check: "PostStateKnown", Columns: []string{"status"}, Message: err.Error()})
+	}
+	c.valid = errs
 	return c
 }
 

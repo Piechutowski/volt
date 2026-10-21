@@ -323,6 +323,33 @@ Select all for ms_usage
     (select_target)))
 
 ==================
+select with an order list spanning lines
+==================
+
+Select rows for series [order: (
+  year desc,
+  id asc
+)]
+
+---
+
+(source_file
+  (select_definition
+    (select_name)
+    (select_target)
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (ident_group
+          (identifier)
+          (ident_modifier
+            (identifier))
+          (identifier)
+          (ident_modifier
+            (identifier)))))))
+
+==================
 select projections
 ==================
 

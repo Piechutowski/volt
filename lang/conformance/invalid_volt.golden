@@ -382,8 +382,24 @@ db/schema.volt:5:6: error: spec/types: Type OrderStatus takes the Go name of the
 ## i264_select_row_takes_type_name
 db/schema.volt:13:8: error: spec/selects-over-groups: select "summary" mints the shared row type Summary, which collides with the declared type Summary (§selects-over-groups)
 
+## i266_type_takes_router_name
+app/schema.volt:5:6: error: spec/types: Type Controllers takes the Go name of the generated Controllers manifest; a declared type is named apart from the names generated code declares (§types)
+app/schema.volt:6:6: error: spec/types: Type NewRouter takes the Go name of the generated router constructor; a declared type is named apart from the names generated code declares (§types)
+app/schema.volt:7:6: error: spec/types: Type PagesController takes the Go name of the generated controller interface of Pages; a declared type is named apart from the names generated code declares (§types)
+app/schema.volt:8:6: error: spec/types: Type PathHome takes the Go name of the generated reverse-URL helper of GET /; a declared type is named apart from the names generated code declares (§types)
+
+## i267_type_takes_migration_name
+db/schema.volt:5:6: error: spec/types: Type Migrations takes the Go name of the generated migration list; a declared type is named apart from the names generated code declares (§types)
+db/schema.volt:6:6: error: spec/types: Type Migrate takes the Go name of the generated migration runner; a declared type is named apart from the names generated code declares (§types)
+
+## i268_declared_type_list_bytes.volt
+db/i268_declared_type_list_bytes.volt:13:31: error: spec/selects-over-groups: column "icon" has declared type blob.Blob stored as []byte; it cannot take a list parameter: JSON carries no blob, and its text never equals the stored bytes (§predicates)
+
 ## i26_typed_wildcard.volt
 app/i26_typed_wildcard.volt:5:18: error: syntax: a wildcard cannot carry a type; ':name...' always captures a string (§route-paths)
+
+## i272_group_note.volt
+db/i272_group_note.volt:8:15: error: syntax: expected '{' or '=' after the group name (§groups)
 
 ## i27_import_no_parens.volt
 app/i27_import_no_parens.volt:4:1: error: syntax: expected '(' after import (§imports); Volt uses Go-style import blocks

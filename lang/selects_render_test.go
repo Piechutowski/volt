@@ -214,7 +214,7 @@ func TestSelectLiteralOutsideStorageRefused(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, diags := project(t, map[string]string{
 				"go.mod": modFile,
-				"db/schema.volt": "package db\n\nType money int\n\nTable page_views {\n\tid int [pk, increment]\n\thits int\n\tscore float64\n\tcents money\n}\n\n" +
+				"db/schema.volt": "package db\n\nType Money int\n\nTable page_views {\n\tid int [pk, increment]\n\thits int\n\tscore float64\n\tcents Money\n}\n\n" +
 					"Select c for page_views where " + tc.where + "\n",
 			})
 			wantError(t, diags, tc.want)

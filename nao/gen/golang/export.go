@@ -27,7 +27,7 @@ type SelectParam struct {
 // lowered (spec §predicates rule 6) and the §selects-over-groups
 // projection already validated.
 type SelectFn struct {
-	TableKey     string // canonical schema.name key into check.Info
+	TableKey     string // the table's name, its key into check.Info
 	MethodSuffix string
 	Where        rt.GenPred    // the zero value when the select has no where clause
 	Order        []rt.GenOrder // nil when it has no order: setting

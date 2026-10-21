@@ -167,11 +167,11 @@ i242_pk_index_settings.volt:9:47: error: spec/indexes: index (post_id, tag) on "
 ## i244_partial_index_duplicate.volt
 i244_partial_index_duplicate.volt:22:3: error: spec/tablepartial: TablePartial "emails" injects index (email) into table "users", which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)
 i244_partial_index_duplicate.volt:24:3: error: spec/tablepartial: TablePartial "stamps_again" injects index (created_at) into table "users", which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)
+i244_partial_index_duplicate.volt:32:3: error: spec/tablepartial: TablePartial "stamps" injects index (created_at) into table "posts", which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)
 
 ## i245_records_empty_field.volt
 i245_records_empty_field.volt:8:8: error: syntax: empty record field: every field holds a value, and NULL is written null (§records-sample-data)
 i245_records_empty_field.volt:9:5: error: syntax: empty record field: every field holds a value, and NULL is written null (§records-sample-data)
-i245_records_empty_field.volt:10:5: error: spec/records-sample-data: record row has 2 values but 3 columns are listed
 i245_records_empty_field.volt:10:11: error: syntax: empty record field after the last ',': every field holds a value, and NULL is written null (§records-sample-data)
 
 ## i246_ref_inline_twice.volt
@@ -235,8 +235,27 @@ i260_default_dotted_name.volt:6:26: error: spec/default-values: default value mu
 ## i261_record_dotted_name.volt
 i261_record_dotted_name.volt:9:13: error: syntax: a dotted name is not a record value: a record value is a literal, true, false or null, and a declared type takes a literal of its storage type (§records-sample-data)
 
+## i265_type_unexported_name.volt
+i265_type_unexported_name.volt:3:6: error: spec/types: Type "slug" is not an exported Go name; a declared type's name begins with an upper-case letter, as Slug does (§types)
+i265_type_unexported_name.volt:4:6: error: spec/types: Type "money.amount" names an unexported Go type of package money, which no other package can name (§types)
+
+## i269_table_unknown_setting.volt
+i269_table_unknown_setting.volt:3:14: error: spec/table: unknown setting "headercolor" (§table)
+
 ## i26_toplevel_records_no_columns.volt
 i26_toplevel_records_no_columns.volt:3:1: error: spec/records-sample-data: top-level records must list columns
+
+## i270_ref_note.volt
+i270_ref_note.volt:10:32: error: spec/relationships-ref: unknown setting "note" (§relationships-ref)
+
+## i271_type_note.volt
+i271_type_note.volt:2:18: error: syntax: expected end of line after Type declaration (§types), found '[' "["
+
+## i273_inline_ref_action.volt
+i273_inline_ref_action.volt:8:31: error: spec/columns: unknown setting "delete" (§columns)
+
+## i274_inline_ref_column_group.volt
+i274_inline_ref_column_group.volt:12:25: error: spec/relationships-ref: an inline ref endpoint has exactly one column
 
 ## i32_settings_next_line.volt
 i32_settings_next_line.volt:4:3: error: syntax: expected a column, indexes, validators, records or '~injection' in Table body, found '[' "["

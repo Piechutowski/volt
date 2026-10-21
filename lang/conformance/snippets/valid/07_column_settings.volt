@@ -1,4 +1,4 @@
-// spec: §columns, §default-values — every column setting; repeatable check
+// spec: §columns, §default-values, pk, increment, unique, null, note: and typed defaults
 Table t {
   id int [pk, increment]
   a string [unique, default: 'direct', note: 'source']

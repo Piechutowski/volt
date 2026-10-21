@@ -9,6 +9,7 @@ import (
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
+	"github.com/Piechutowski/volt/lang/token"
 )
 
 // LSPDiagnostics converts the front end's diagnostics for publishing.
@@ -161,9 +162,8 @@ func (d *Document) References(pos protocol.Position, includeDecl bool) []protoco
 	return out
 }
 
-// Rename renames the symbol at pos. Only occurrences spelled like the ident
-// under the cursor are rewritten: renaming a table by its name leaves alias
-// usages alone, and renaming the alias leaves the table name alone.
+// Rename renames the symbol at pos, rewriting every occurrence spelled like
+// the identifier under the cursor.
 func (d *Document) Rename(pos protocol.Position, newName string) (*protocol.WorkspaceEdit, error) {
 	if !validIdentifier(newName) {
 		return nil, fmt.Errorf("%q is not a valid Volt identifier", newName)
@@ -370,7 +370,9 @@ func settingsSuffix(s *ast.SettingList) string {
 				continue
 			}
 			part := setting.Name
-			if setting.Value != nil {
+			if lit, ok := setting.Value.(*ast.BasicLit); ok && lit.Tok.Kind == token.STRING {
+				part += ": " + lit.Tok.Text()
+			} else if setting.Value != nil {
 				part += ": " + valueString(setting.Value)
 			}
 			parts = append(parts, part)
@@ -404,6 +406,9 @@ func valueString(v ast.Node) string {
 		return v.Qual.Name() + "." + v.Name.Name()
 	case *ast.RefEndpoint:
 		cols := identNames(v.Columns)
+		if len(cols) > 1 {
+			return v.Table.Name() + ".(" + strings.Join(cols, ", ") + ")"
+		}
 		return v.Table.Name() + "." + strings.Join(cols, ", ")
 	}
 	return ""

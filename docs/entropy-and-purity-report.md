@@ -133,7 +133,7 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 - [model: 'Person'] must be a string (model: Person is rejected)
 - [singular: post], [param: plot_id], [name: root] must be identifiers (name: 'web' is rejected)
-- index [name: 'idx_booking_date'] is a string, while index [type: hash] is an identifier
+- index [name: 'idx_booking_date'] is a string, while a route's [name: root] is an identifier
 - [strip: 'da_'] is a string, although da_ is an identifier
 
 **Proposal.** A value that names something (a Go name, a SQL name, a name prefix) is an identifier: model: Person, name: idx_booking_date, strip: da_. Strings remain for prose (note:), paths (from) and opaque text (tag:).
@@ -695,7 +695,7 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 - column handles <Model><Field> (PostSlug)
 - option wrappers <Model>Limit/Offset/Distinct/OrderBy/After/Set; <Model>Changeset/Column/Params/New; select row types <Model><Select>
-- the package's bare declared types, which share the scope; one that takes a generated name is a check error suggesting a free one (§types), so the type of orders.status is OrderState and not OrderStatus
+- the package's bare declared types, which share the scope and are exported; one that takes an exported generated name, the router's and the migration list's included, is a check error, suggesting a free one beside a model's names (§types), so the type of orders.status is OrderState and not OrderStatus
 - the dynname vet rule and generator errors catch whatever still collides
 
 **Proposal.** Decide whether one rule can replace the collision machinery. For example, group column handles per model (var PostC = struct{ ID rt.Column[Post, int]; ... }, used as PostC.Slug.Eq(...)) so a field name can never meet a wrapper or changeset name. The enum removal took the E prefix out; the removals proposed elsewhere (OrderBy, Set, Distinct, Valid) shrink the set further.

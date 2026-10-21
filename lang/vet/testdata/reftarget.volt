@@ -45,8 +45,8 @@ Table invites {
 Ref: invites.handle > accounts.handle
 Ref: invites.email > accounts.email //WANT reftarget
 
-// inline -: the declaring column is the foreign key and the endpoint
-// it names is the target
+// a one-to-one, unique beside a ref: the declaring column is the
+// foreign key and the endpoint it names is the target
 Table bios {
   id int [pk]
   user_id int [null, unique, ref: users.id]

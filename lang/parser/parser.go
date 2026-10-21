@@ -536,7 +536,11 @@ func (p *parser) recordsRest(pos token.Position, table *ast.Ident) *ast.Records 
 	}
 	p.expect(token.LBRACE, "records body (§records-sample-data)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
-		p.item(func() { d.Rows = append(d.Rows, p.recordRow()) })
+		p.item(func() {
+			if row := p.recordRow(); row != nil {
+				d.Rows = append(d.Rows, row)
+			}
+		})
 	}
 	d.Rbrace = p.expect(token.RBRACE, "records body (§records-sample-data)").Pos
 	return d
@@ -549,7 +553,7 @@ func (p *parser) recordRow() *ast.RecordRow {
 		if len(row.Values) > 0 && (p.cur().NLBefore || p.at(token.RBRACE) || p.at(token.EOF)) {
 			p.errorf(p.toks[p.pos-1], "empty record field after the last ',': every field holds a value, and NULL is written null (§records-sample-data)")
 			p.lineClear()
-			return row
+			return nil
 		}
 		if p.at(token.COMMA) || p.at(token.RBRACE) || p.at(token.EOF) {
 			p.fail(p.cur(), "empty record field: every field holds a value, and NULL is written null (§records-sample-data)")

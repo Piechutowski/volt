@@ -330,6 +330,10 @@ sp      = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
    conformance corpus pins every diagnostic of every invalid snippet.
 
 ```volt invalid
+Table users {
+  id int [pk]
+}
+
 Table posts {
   id int [pk]
   author_id int
@@ -1039,13 +1043,23 @@ storage type = column type ;
    schema pass, which reads no Go file, does not. `from` on a bare name
    is an error, as is `pkg.Name` without `from`.
    Declared names are unique within the package and MUST NOT spell a
-   built-in type. A bare name shares the package scope with the names
-   generated code declares (§names), so it MUST NOT be one of them: a
-   model, a changeset with its aliases and constructor, a column
-   handle, an option wrapper, the `Queries` handle or its constructor
-   `New`; the error suggests a name that is free. The type of a column
-   is therefore named apart from the column's handle: `orders.status`
-   mints the handle `OrderStatus`, so its type is `OrderState`.
+   built-in type. A declared type names an exported Go type: `Name`,
+   bare or after `pkg.`, MUST begin with an upper-case letter, since
+   models other packages import carry it and no other package can
+   name an unexported type; the import names and the unexported
+   helpers of generated code are thereby never taken. A bare name
+   shares the package scope with the exported names generated code
+   declares (§names), so it MUST NOT be one of them: a model, a
+   changeset with its aliases and constructor, a column handle, an
+   option wrapper, the `Queries` handle or its constructor `New`, in a
+   package that declares migrations `Migrations` and `Migrate`
+   (§migration-tooling), and in a package that routes the router's
+   `Controllers`, `NewRouter`, `Table`, each `<Name>Controller`
+   interface and each `Path<Helper>` function
+   (§route-names-and-reverse-urls); the error on a model's name
+   suggests a name that is free. The type of a column is therefore
+   named apart from the column's handle: `orders.status` mints the
+   handle `OrderStatus`, so its type is `OrderState`.
 2. **Storage.** The storage type is one of the six built-ins
    (§columns), never another declared type. It fixes the
    SQLite column (§mapping-to-sqlite-ddl), the empty value `required`
@@ -1084,10 +1098,12 @@ storage type = column type ;
    (§predicates). The database stores the storage type and carries no
    `CHECK` (§validators).
 6. **Output elsewhere.** `volt gen -o DIR` (§projects-and-packages)
-   writing Go for a package that declares a bare type is an error
-   naming the fix: the type lives in the package's own Go files, which
-   do not travel to `DIR`, so it is declared in a package of its own
-   and named `Type pkg.Name storage from 'path'`.
+   writing Go for a package that declares a bare type, to a `DIR`
+   other than the package's own directory, is an error naming the
+   fix: the type lives in the package's own Go files, which do not
+   travel to `DIR`, so it is declared in a package of its own and
+   named `Type pkg.Name storage from 'path'`. `-o` naming the
+   package's own directory writes where `gen` without it does.
 
 ```volt
 Type money.Money int    from 'example.com/app/money'
@@ -1190,9 +1206,13 @@ partial injection = "~", name, newline ;
    1. A column written directly in the table overrides any partial's.
    2. Otherwise the **last-injected** partial (in source order) wins.
 5. **Indexes are not overridden.** An index a partial injects whose key
-   is the key of an index of the table, or of an index another partial
-   injects, is an error: an index is declared once, in the table or in
-   one partial.
+   is the key of an index of the table, or of an index another
+   injection brings (another partial, or the same partial injected
+   again), is an error: an index is declared once, in the table or in
+   one partial. Two indexes on one key inside one partial are not this
+   error; they are that partial's own redundancy, as two in a table
+   body are. A partial injected twice lists each of its validators
+   once.
 
 ```volt
 TablePartial base_template {
@@ -1598,9 +1618,9 @@ package clause = "package", name, newline ;
    `.volt` file's own package clause stays mandatory: it
    names the package to the language and to the editor; only the
    clause of what is written follows the target. A package that
-   declares a bare `Type` writes no Go to `DIR`, since the type lives
-   in the package's own Go files (rule 9, §types); `-parts sql` alone
-   is unaffected.
+   declares a bare `Type` writes no Go to a `DIR` other than its own
+   directory, since the type lives in the package's own Go files
+   (rule 9, §types); `-parts sql` alone is unaffected.
 9. **Go files.** A package's Go files are the non-test `.go` files of
    its directory that the go tool would compile for it (go/build's
    file constraints), less those carrying the generated marker. The Go
@@ -2439,9 +2459,11 @@ Pred chosen  { org in :orgs }
    of the storage type, and a declared type stored as `time.Time` or
    `[]byte` takes no literal. A list parameter of a declared type is
    bound as one JSON array of its values, by kind for a kinded type
-   and through the type's driver value otherwise (§types), and a
-   declared type stored as `time.Time` cannot take one, as rule 3
-   says of `time.Time`.
+   and through the type's driver value otherwise (§types). A declared
+   type stored as `time.Time` cannot take one, as rule 3 says of
+   `time.Time`, and neither can one stored as `[]byte`: JSON carries
+   no blob, and the text its bytes would travel as never equals the
+   stored value.
 6. **Rendering.** There is one SQL renderer, the runtime's
    (`rt.SelectRender` and its siblings), and every statement Volt
    emits is its output: the dynamic layer calls it at run time, the
@@ -3116,7 +3138,9 @@ true. What is checked instead is their composition.
    (§mapping-to-sqlite-ddl) has been applied.
 2. **Structure** is, per table: its name; its columns as a set, each
    with name, declared type, `NOT NULL`, default as SQLite reports it
-   and primary-key membership (`PRAGMA table_xinfo`); its foreign keys
+   (a default of `NULL`, in any case, read as none, since it means
+   what no default means, §default-values) and primary-key membership
+   (`PRAGMA table_xinfo`); its foreign keys
    (`PRAGMA foreign_key_list`); its indexes with name, uniqueness,
    partial predicate and key (`PRAGMA index_list`, `PRAGMA
    index_xinfo`). The index of a `UNIQUE` column constraint (SQLite's
@@ -3481,8 +3505,9 @@ prefixed (`2fa_codes` → `X2faCode`). Two declarations mapping to the
 same Go identifier is a generation error; the `dynname` lint reports
 the dynamic layer's concatenation collisions ahead of time. A bare
 declared type shares this scope, since the data package's own Go
-files declare it, and one that takes a generated name is a check
-error that suggests a free one (§types).
+files declare it. Its name is exported, so the unexported names of
+generated code never meet it, and one that takes an exported
+generated name, a router's included, is a check error (§types).
 
 ### Notes become doc comments
 

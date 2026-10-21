@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -262,5 +263,49 @@ func TestGoFileChangeInvalidatesIndex(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("the reference must now be reported as undeclared; diags = %v", d.Diags)
+	}
+}
+
+func TestGoFileChangeNoticedForBareTypesAndErrorHandlers(t *testing.T) {
+	for _, tc := range []struct {
+		name, file, text, goFile, goSrc, missing string
+	}{
+		{
+			name:    "bare Type",
+			file:    "db/schema.volt",
+			text:    "package db\n\nType Slug string\n\nTable posts {\n\tid   int  [pk, increment]\n\tslug Slug\n}\n",
+			goFile:  "db/types.go",
+			goSrc:   "package db\n\n// Slug is a URL segment (§types).\ntype Slug string\n",
+			missing: "Type Slug is declared in no Go file",
+		},
+		{
+			name:    "error handler",
+			file:    "app/routes.volt",
+			text:    "package app\n\nScope / [error_handler: Errors] {\n\tget / volt.Events\n}\n",
+			goFile:  "app/errors.go",
+			goSrc:   "package app\n\nimport (\n\t\"net/http\"\n\n\t\"github.com/Piechutowski/volt\"\n)\n\n// Errors renders failures (§scopes).\nfunc Errors(w http.ResponseWriter, r *volt.Request, err error) {}\n",
+			missing: "no function Errors",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := voltProject(t, map[string]string{"go.mod": "module fresh\n", tc.file: tc.text})
+			d := NewDocument("file://"+filepath.Join(root, tc.file), tc.text)
+			if !strings.Contains(fmt.Sprint(d.Diags), tc.missing) {
+				t.Fatalf("precondition: %q is reported before the Go file exists; diags = %v", tc.missing, d.Diags)
+			}
+			if d.GoFilesChanged() {
+				t.Fatal("fresh index reports stale Go files")
+			}
+			if err := os.WriteFile(filepath.Join(root, tc.goFile), []byte(tc.goSrc), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if !d.GoFilesChanged() {
+				t.Fatalf("the index did not notice %s, which the check of the %s reads (§projects-and-packages)", tc.goFile, tc.name)
+			}
+			d.Update(d.Text)
+			if strings.Contains(fmt.Sprint(d.Diags), tc.missing) {
+				t.Errorf("after the update %q is still reported: %v", tc.missing, d.Diags)
+			}
+		})
 	}
 }

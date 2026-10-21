@@ -322,11 +322,15 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 					addCol(pit, p)
 				case *ast.IndexesBlock:
 					for _, ix := range pit.Indexes {
-						injections = append(injections, indexInjection{ix, item, p})
+						injections = append(injections, indexInjection{ix, len(ti.Indexes), item, p})
+						ti.Indexes = append(ti.Indexes, ix)
 					}
-					ti.Indexes = append(ti.Indexes, pit.Indexes...)
 				case *ast.ValidatorsBlock:
-					ti.Validators = append(ti.Validators, pit.Validators...)
+					for _, v := range pit.Validators {
+						if !validatorListed(ti.Validators, v) {
+							ti.Validators = append(ti.Validators, v)
+						}
+					}
 				}
 			}
 		case *ast.IndexesBlock:
@@ -362,27 +366,38 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 	c.requiredCheck(ti)
 }
 
+func validatorListed(list []*ast.Validator, v *ast.Validator) bool {
+	for _, w := range list {
+		if w == v {
+			return true
+		}
+	}
+	return false
+}
+
 type indexInjection struct {
 	ix      *ast.Index
+	pos     int
 	at      *ast.PartialRef
 	partial *ast.TablePartial
 }
 
 // partialIndexCheck enforces that an index injected by a partial has a
-// key no other index of the table has, declared in the body or injected
-// by another partial: indexes are not overridden (spec §tablepartial).
+// key no other index of the table has, declared in the body or brought
+// by another injection, the same partial injected again included
+// (spec §tablepartial).
 func (c *checker) partialIndexCheck(ti *TableInfo, injections []indexInjection) {
-	injectedAt := map[*ast.Index]int{}
-	for i, inj := range injections {
-		injectedAt[inj.ix] = i
+	injectedBy := make(map[int]*ast.PartialRef, len(injections))
+	for _, inj := range injections {
+		injectedBy[inj.pos] = inj.at
 	}
-	for i, inj := range injections {
+	for _, inj := range injections {
 		key := indexAtoms(inj.ix)
-		for _, other := range ti.Indexes {
-			if other == inj.ix || indexAtoms(other) != key {
+		for pos, other := range ti.Indexes {
+			if pos == inj.pos || indexAtoms(other) != key {
 				continue
 			}
-			if j, injected := injectedAt[other]; injected && j > i {
+			if at, injected := injectedBy[pos]; injected && (at == inj.at || pos > inj.pos) {
 				continue
 			}
 			c.errorf(inj.at.Pos(), "tablepartial", "TablePartial %q injects index (%s) into table %q, which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)", inj.partial.Name.Name(), key, ti.Key)

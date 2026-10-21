@@ -1,11 +1,14 @@
 package lsp
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
 
+	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/parser"
 	"github.com/Piechutowski/volt/lang/token"
 )
 
@@ -156,7 +159,7 @@ func TestReferencesForTable(t *testing.T) {
 	pos.Character += protocol.UInteger(len("Table "))
 	refs := d.References(pos, true)
 	if len(refs) < 3 {
-		t.Fatalf("expected >= 3 references for users (declaration, inline ref, Ref endpoint), got %d: %v", len(refs), refs)
+		t.Fatalf("expected >= 3 references for users (declaration, inline ref, Ref endpoint; a Group member is a reference in a package, which TestGroupRenameFollowsSetUses covers), got %d: %v", len(refs), refs)
 	}
 }
 
@@ -282,6 +285,106 @@ func TestCompletionInlineRefTables(t *testing.T) {
 	items := d.Complete(protocol.Position{Line: 1, Character: protocol.UInteger(len("  x int [ref: "))})
 	if !hasLabel(items, "users") || !hasLabel(items, "orders") {
 		t.Fatalf("inline ref completion missing tables: %v", labels(items))
+	}
+}
+
+func TestCompletionTopLevelOffersQueryElements(t *testing.T) {
+	text := sample + "\nS"
+	d := doc(t, text)
+	items := d.Complete(protocol.Position{Line: protocol.UInteger(strings.Count(text, "\n")), Character: 1})
+	for _, want := range []string{"Group", "Pred", "Select"} {
+		if !hasLabel(items, want) {
+			t.Errorf("top-level completion misses %s (§groups, §predicates, §selects-over-groups): %v", want, labels(items))
+		}
+	}
+}
+
+func TestCompletionSettingsPerHeader(t *testing.T) {
+	text := sample + "\nTablePartial tp [\nType Slug string [\nTable t2 [\nSelect s for users [\nTable t3 {\n  tablename string [\n  refcount int [\n}\n"
+	d := doc(t, text)
+	at := func(needle string) []string {
+		pos := posOf(t, text, needle, 0)
+		pos.Character += protocol.UInteger(len(needle))
+		return labels(d.Complete(pos))
+	}
+	if got := at("TablePartial tp ["); len(got) != 0 {
+		t.Errorf("a TablePartial takes no settings (§tablepartial), completion offers %v", got)
+	}
+	if got := at("Type Slug string ["); len(got) != 0 {
+		t.Errorf("a Type takes no settings (§types), completion offers %v", got)
+	}
+	if got := strings.Join(at("Table t2 ["), " "); got != "note:  model: " {
+		t.Errorf("table settings are note and model (§table), completion offers %q", got)
+	}
+	if got := strings.Join(at("Select s for users ["), " "); got != "order: (" {
+		t.Errorf("a select takes order: (§selects-over-groups), completion offers %q", got)
+	}
+	for _, needle := range []string{"  tablename string [", "  refcount int ["} {
+		if got := at(needle); !slices.Contains(got, "pk") || slices.Contains(got, "model: ") || slices.Contains(got, "delete: ") {
+			t.Errorf("%q is a column whose name starts like an element keyword; completion offers %v, want the column settings", needle, got)
+		}
+	}
+}
+
+func TestCompletionGroupBody(t *testing.T) {
+	text := sample + "\nGroup gg {\n  \n}\n"
+	d := doc(t, text)
+	items := d.Complete(protocol.Position{Line: protocol.UInteger(strings.Count(sample, "\n") + 2), Character: 2})
+	if !hasLabel(items, "users") || !hasLabel(items, "orders") || hasLabel(items, "Table") {
+		t.Fatalf("a Group body completes members, tables, not element keywords (§groups): %v", labels(items))
+	}
+}
+
+func TestCompletionInlineRefColumns(t *testing.T) {
+	text := sample + "\nTable t4 {\n  uid int [ref: users.\n  vid int [pk, ref: users.\n  wid int [ref: > \n}\n"
+	d := doc(t, text)
+	for _, needle := range []string{"  uid int [ref: users.", "  vid int [pk, ref: users."} {
+		pos := posOf(t, text, needle, 0)
+		pos.Character += protocol.UInteger(len(needle))
+		if items := d.Complete(pos); !hasLabel(items, "name") || hasLabel(items, "pk") {
+			t.Errorf("%q completes the columns of users (§relationships-ref), got %v", needle, labels(items))
+		}
+	}
+	pos := posOf(t, text, "  wid int [ref: > ", 0)
+	pos.Character += protocol.UInteger(len("  wid int [ref: > "))
+	if items := d.Complete(pos); hasLabel(items, "users") {
+		t.Errorf("an inline ref takes no operator (§relationships-ref), completion offers tables after it: %v", labels(items))
+	}
+}
+
+func TestCompletionDefaultValuesFollowTheColumnType(t *testing.T) {
+	text := "Type Flag bool\nType Slug string\n\nTable t {\n  a string [default: \n  b Slug [default: \n  c Flag [default: \n}\n"
+	d := doc(t, text)
+	for needle, want := range map[string]bool{"  a string [default: ": false, "  b Slug [default: ": false, "  c Flag [default: ": true} {
+		pos := posOf(t, text, needle, 0)
+		pos.Character += protocol.UInteger(len(needle))
+		if got := hasLabel(d.Complete(pos), "true"); got != want {
+			t.Errorf("%q offers true: %v, want %v (§default-values)", needle, got, want)
+		}
+	}
+}
+
+func TestHoverShowsAStringDefaultQuoted(t *testing.T) {
+	d := doc(t, sample)
+	h := d.Hover(posOf(t, sample, "status Status", 0))
+	if h == nil {
+		t.Fatal("no hover on the status column")
+	}
+	if md := h.Contents.(protocol.MarkupContent).Value; !strings.Contains(md, "default: 'active'") {
+		t.Errorf("a string default hovers as written, quoted (§default-values): %s", md)
+	}
+}
+
+func TestValueStringSpellsACompositeEndpoint(t *testing.T) {
+	f, _ := parser.ParseFile("x.volt", "Table periods {\n  a int [ref: merchants.(id, country_code)]\n  b int [ref: merchants.id]\n}\n")
+	var got []string
+	for _, item := range f.Decls[0].(*ast.Table).Body {
+		if col, ok := item.(*ast.Column); ok {
+			got = append(got, valueString(col.Settings.Get("ref").Value))
+		}
+	}
+	if want := []string{"merchants.(id, country_code)", "merchants.id"}; !slices.Equal(got, want) {
+		t.Errorf("ref endpoints render as %q, want %q (§relationships-ref)", got, want)
 	}
 }
 

@@ -303,8 +303,7 @@ func lower(s string) string {
 }
 
 // Group is a named set of tables for generation (spec §groups): either a
-// block of members or a `+`/`\` expression over tables, groups and
-// TableGroups.
+// block of members or a `+`/`\` expression over tables and groups.
 type Group struct {
 	GroupPos token.Position
 	Name     *Ident

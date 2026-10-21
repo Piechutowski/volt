@@ -1,4 +1,4 @@
-// spec: §indexes, a [pk] index takes no name:, where: or type:
+// spec: §indexes, a [pk] index takes no name: or where:
 // want: which it does not take
 Table post_tags {
   post_id    int

@@ -1117,6 +1117,10 @@ func (e *selectEnv) inLower(x *ast.PredIn) rt.GenPred {
 			e.errorf(x.Col.Pos(), "column %q has declared type %s stored as time.Time; it cannot take a list parameter: JSON carries no date/time value (§predicates)", b.name, b.goType)
 			return rt.GenPred{}
 		}
+		if b.class == classEqOnly && b.storage == classForbidden {
+			e.errorf(x.Col.Pos(), "column %q has declared type %s stored as []byte; it cannot take a list parameter: JSON carries no blob, and its text never equals the stored bytes (§predicates)", b.name, b.goType)
+			return rt.GenPred{}
+		}
 		return rt.PredInList(b.name, "rt.JSONList("+e.paramBind(x.List, "[]"+b.goType)+")")
 	}
 	slots := make([]any, 0, len(x.Items))

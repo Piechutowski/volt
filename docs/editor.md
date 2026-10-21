@@ -89,8 +89,10 @@ load-bearing patterns, each citing the spec section it implements:
   and every body uses one `newlineSep1` helper. Falls out for free:
   `Table t { id int name string }` is a syntax error (spec-correct),
   one-liners still parse, and a line comment doesn't consume its
-  newline. A settings list takes line breaks inside its brackets, so
-  it may span lines; the other continuations the spec allows are
+  newline. A settings list takes line breaks inside its brackets
+  (around a setting, around a comma, after a `:` and between the
+  items of a parenthesized value), so it may span lines; a break
+  before a `:` and the other continuations the spec allows are
   limitations (section 7).
 - **Case-insensitive contextual keywords** (§keywords). Keywords are
   generated regexes aliased to a canonical spelling; tree-sitter's
@@ -216,8 +218,11 @@ layer:
   current line usually doesn't parse mid-keystroke); candidates come
   from the last coherent semantic model — real tables after `db.`
   (case-insensitively filtered), verbs and `resources` in Scope
-  bodies, operations in a Migration body, settings per construct
-  (§settings-lists, §settings-whitelists).
+  bodies, tables and groups in a Group body, operations in a
+  Migration body, the columns of the named table after `ref: table.`,
+  settings per construct and none on a construct that takes none
+  (§settings-lists, §settings-whitelists), and `true`/`false` after
+  `default:` only on a column stored as `bool`.
 - A migration's name hovers as its position among the package's
   migrations in name order ("migration 2 of 3") and whether it runs
   backward (§migrations); the project index answers it, so a
@@ -286,33 +291,38 @@ from one implementation. The protocol library is `tliron/glsp` (LSP
   content ends in a quote immediately before the closing `'''` may
   tokenize differently from the spec's maximal-munch rule; the front
   end handles it correctly.
-- **Grammar: continuations other than a settings list.** An element
-  continued on an indented line (`Ref:` with its relationship on the
-  next line, §line-structure-and-whitespace) and a parenthesized list
-  spanning lines (a composite index key, a records column list, a
-  composite ref endpoint) draw an ERROR node, since a line break
-  there is not whitespace to the grammar; the front end accepts them.
-- **Grammar: an unsigned exponent in a record row.** A record value
-  such as `1e5` lexes as an identifier and draws an ERROR node;
-  `1e+5`, `1.5` and an exponent in a setting value parse. The front
-  end reads every one of them as a number (§numeric-literals).
+- **Grammar: continuations outside a settings list, and a break
+  before a setting's `:`.** An element continued on an indented line
+  (`Ref:` with its relationship on the next line,
+  §line-structure-and-whitespace), a parenthesized list spanning
+  lines outside a settings list (a composite index key, a records
+  column list, a composite ref endpoint) and a line break between a
+  setting's name and its `:` (`[default` then `: 1` on the next line)
+  draw an ERROR node, since a line break there is not whitespace to
+  the grammar; the front end accepts them.
 - **LSP: no Go-side navigation.** Handler references (`Home.Index`)
   and `error_handler:` point into Go, which this server does not
   index (roadmap). A query reference (`db.UserGet`, §query-routes) is
   not navigated either; a dataset's select (`dataset db.browse`) is.
+  Definition and hover on a bare declared type stay on its `Type`
+  line and do not open the Go type (§types).
 
 ### Go references
 
 A `.volt` file names Go by rule only in the containing package's own
-Go files — pipeline plugs (§pipelines) and validators (§validators).
-The server resolves those names with the standard library's Go parser
+Go files (§projects-and-packages): pipeline plugs (§pipelines),
+validators (§validators), error handlers (§scopes) and bare declared
+types (§types). The server resolves plugs and validators with the
+standard library's Go parser
 over the package directory's non-test `*.go` files (no gopls, no
 build): go-to-definition lands on the `func`, hover shows its signature
 and doc comment, and an undeclared name hovers as undeclared while the
 checker's diagnostic on the reference names the exact signature to
 write. `volt.*` plugs live in the runtime and
-make no claim. Existence and the spelled signature are the checker's
-, so a typo or a wrong parameter type is a diagnostic at the
+make no claim. Error handlers and bare types are not navigated
+(section 7), but their existence, and a handler's signature, are
+checked like the rest. Existence and the spelled signature are the
+checker's, so a typo or a wrong parameter type is a diagnostic at the
 reference. The Go side can move without any `.volt` buffer changing —
 a gopls rename, a newly written function — so the server registers a
 `**/*.go` file watcher with the client and re-analyzes every project
@@ -341,7 +351,7 @@ How to audit that the three components implement
 | Front end accepts/rejects exactly what the spec says | conformance corpus: `valid/` MUST pass, `invalid/` MUST fail, each snippet tagged `// spec: §…` (files without a `package` clause = the schema pass, files with one and project dirs = the project pass); every diagnostic of every invalid snippet, recovery included, is a golden | `lang/conformance/snippets/` and `lang/conformance/invalid_*.golden` via `go test ./lang/...`; refresh with `-update` after reading the diff |
 | Grammar parses everything the spec allows | corpus cases (input → expected tree, incl. `:error` cases) | `grammar/test/corpus/`, `tree-sitter test` |
 | Spec grammar and front end agree | the spec's EBNF read as data: every derived sentence parses, every one-token neighbour is decided alike by the grammar and the front end | `lang/spec_grammar_test.go` via `go test ./lang/...` |
-| Grammar and front end agree | every valid conformance snippet (the files its loader reads, so not `testdata/` or a nested module) and `grammar/examples/*` must produce zero front-end diagnostics, and every derived sentence of the spec's grammar (`go test ./lang -run TestSpecGrammarSentencesParse -sentences DIR`) zero parser diagnostics; all of them must produce zero tree-sitter ERROR nodes, except where a limitation of section 7 applies: today `34_no_reserved_words` (unquoted columns named like block keywords), `v55_element_continuation` (a `Ref:` continued on an indented line), and the derived sentences with an unsigned exponent in a record row | differential run after grammar changes |
+| Grammar and front end agree | every valid conformance snippet (the files its loader reads, so not `testdata/` or a nested module) and `grammar/examples/*` must produce zero front-end diagnostics, and every derived sentence of the spec's grammar (`go test ./lang -run TestSpecGrammarSentencesParse -sentences DIR`) zero parser diagnostics; all of them must produce zero tree-sitter ERROR nodes, except where a limitation of section 7 applies: today `34_no_reserved_words` (unquoted columns named like block keywords) and `v55_element_continuation` (a `Ref:` continued on an indented line) | differential run after grammar changes |
 | Spec examples run | every `volt` block of `spec.md` (§conformance-and-the-proof-chain): a plain block is a whole file the front end accepts, a block fenced `volt invalid` one it rejects, a block fenced `volt fragment` a piece of a file that parses alone; any other fence marker fails | `lang/spec_examples_test.go` via `go test ./lang/...` |
 | Lint rules match their doc | doc ↔ registry ↔ testdata consistency test; `//WANT` markers both directions | `lang/vet/docs_test.go` against [`lint.md`](lint.md) |
 | Generated routers implement Part II of the spec | goldens byte-compared, gofmt-stable, **compiled**; itest exercises match/404/405, typed-param 404s, pipeline order, the error spine, reverse-URL round-trip totality | `gen/router`, `itest/` |

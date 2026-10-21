@@ -14,6 +14,7 @@ var (
 		"Project", "Table", "TablePartial", "Type", "Ref",
 		"Records", "Migration",
 		"package ", "import", "Pipeline", "Scope",
+		"Group", "Pred", "Select",
 	}
 	tableBodyKeywords     = []string{"indexes", "validators", "Records"}
 	migrationBodyKeywords = []string{
@@ -29,7 +30,8 @@ var (
 	settingsByContext = map[string][]string{
 		"column":    {"pk", "null", "unique", "increment", "required", "default: ", "note: ", "ref: ", "tag: "},
 		"project":   {"note: "},
-		"table":     {"note: "},
+		"table":     {"note: ", "model: "},
+		"select":    {"order: ("},
 		"index":     {"name: ", "unique", "pk", "where: "},
 		"migration": {"irreversible", "no transaction"},
 		"ref":       {"delete: ", "update: "},
@@ -56,8 +58,11 @@ var (
 	partialInjectRE = regexp.MustCompile(`~\s*[\w"]*$`)
 	dotChainRE      = regexp.MustCompile(`([\p{L}\p{M}\d_]+|"[^"]*")(\.([\p{L}\p{M}\d_]+|"[^"]*"))?\.$`)
 	refValueRE      = regexp.MustCompile(`(?i)\bref\s*:\s*$`)
-	afterCardRE     = regexp.MustCompile(`>\s*$`)
+	refDotRE        = regexp.MustCompile(`(?i)\bref\s*:\s*([\p{L}\p{M}\d_]+|"[^"]*")\.$`)
+	refHeadRE       = regexp.MustCompile(`(?i)^\s*ref\s*:\s*[\p{L}\p{M}\d_"]*$`)
+	refTargetRE     = regexp.MustCompile(`(?i)^\s*ref\s*:[^>]*>\s*[\p{L}\p{M}\d_"]*$`)
 	defaultValueRE  = regexp.MustCompile(`(?i)\bdefault\s*:\s*$`)
+	columnTypeRE    = regexp.MustCompile(`^\s*(?:add\s+)?(?:[\p{L}\p{M}\d_]+|"[^"]*")\s+([\p{L}\p{M}\d_.\[\]]+)\s*\[`)
 	actionValueRE   = regexp.MustCompile(`(?i)\b(delete|update)\s*:\s*\w*$`)
 	columnShapeRE   = regexp.MustCompile(`^\s*([\p{L}\p{M}\d_]+|"[^"]*")\s+[\p{L}\p{M}\d_".]*$`)
 	lineStartRE     = regexp.MustCompile(`^\s*[\p{L}\p{M}\d_"~]*$`)
@@ -82,16 +87,19 @@ func (d *Document) Complete(pos protocol.Position) []protocol.CompletionItem {
 
 	inSettings := strings.Count(prefix, "[") > strings.Count(prefix, "]")
 	if inSettings {
-		return d.settingsComplete(prefix, ctx, outer)
+		top := true
+		if pos.Line > 0 {
+			start, _ := d.blockContexts(int(pos.Line) - 1)
+			top = start == ""
+		}
+		return d.settingsComplete(prefix, ctx, outer, top)
 	}
 
 	if m := dotChainRE.FindStringSubmatch(prefix); m != nil {
 		return d.dotChainComplete(m)
 	}
 
-	trimmed := strings.TrimSpace(prefix)
-	if ctx == "ref" || strings.HasPrefix(strings.ToLower(trimmed), "ref") && strings.Contains(trimmed, ":") ||
-		afterCardRE.MatchString(prefix) {
+	if ctx == "ref" || ctx == "" && (refHeadRE.MatchString(prefix) || refTargetRE.MatchString(prefix)) {
 		return d.tableItems()
 	}
 
@@ -99,6 +107,10 @@ func (d *Document) Complete(pos protocol.Position) []protocol.CompletionItem {
 	case "":
 		if lineStartRE.MatchString(prefix) {
 			return keywordItems(elementKeywords)
+		}
+	case "group":
+		if lineStartRE.MatchString(prefix) {
+			return d.groupMemberItems(strings.TrimSpace(prefix))
 		}
 	case "table", "tablepartial":
 		if columnShapeRE.MatchString(prefix) && !lineStartRE.MatchString(prefix) {
@@ -171,6 +183,8 @@ func headContext(head string) string {
 		return "validators"
 	case strings.HasPrefix(head, "tablepartial"):
 		return "tablepartial"
+	case strings.HasPrefix(head, "group"):
+		return "group"
 	case strings.HasPrefix(head, "table"):
 		return "table"
 	case strings.HasPrefix(head, "project"):
@@ -195,14 +209,23 @@ func headContext(head string) string {
 	return ""
 }
 
-func (d *Document) settingsComplete(prefix, ctx, outer string) []protocol.CompletionItem {
+func (d *Document) settingsComplete(prefix, ctx, outer string, top bool) []protocol.CompletionItem {
 	segment := prefix[strings.LastIndexAny(prefix, "[,")+1:]
 
-	if refValueRE.MatchString(segment) || afterCardRE.MatchString(segment) {
+	if refValueRE.MatchString(segment) {
 		return d.tableItems()
 	}
+	if m := refDotRE.FindStringSubmatch(segment); m != nil {
+		if ti, ok := d.Index.Tables[unquote(m[1])]; ok {
+			return d.columnItems(ti)
+		}
+		return nil
+	}
 	if defaultValueRE.MatchString(segment) {
-		return keywordItemsKind([]string{"true", "false"}, protocol.CompletionItemKindValue)
+		if d.columnIsBool(prefix) {
+			return keywordItemsKind([]string{"true", "false"}, protocol.CompletionItemKindValue)
+		}
+		return nil
 	}
 	if actionValueRE.MatchString(segment) {
 		return keywordItemsKind(refActionValues, protocol.CompletionItemKindValue)
@@ -211,16 +234,21 @@ func (d *Document) settingsComplete(prefix, ctx, outer string) []protocol.Comple
 	kind := "column"
 	head := strings.ToLower(strings.TrimSpace(prefix))
 	verb := strings.SplitN(head, " ", 2)[0]
+	header := func(word string) bool { return top && strings.HasPrefix(head, word) }
 	switch {
-	case strings.HasPrefix(head, "table") && !strings.HasPrefix(head, "tablepartial"):
+	case header("tablepartial"), header("group"), header("type "):
+		return nil
+	case header("table"):
 		kind = "table"
-	case strings.HasPrefix(head, "project") && ctx == "":
+	case header("project"):
 		kind = "project"
-	case strings.HasPrefix(head, "ref"):
+	case header("ref"):
 		kind = "ref"
-	case strings.HasPrefix(head, "scope") && (ctx == "" || ctx == "scope"):
+	case header("select"):
+		kind = "select"
+	case strings.HasPrefix(head, "scope") && (top || ctx == "scope"):
 		kind = "scope"
-	case strings.HasPrefix(head, "migration") && ctx == "":
+	case header("migration"):
 		kind = "migration"
 	case strings.HasPrefix(head, "resources") && ctx == "scope":
 		kind = "resources"
@@ -246,6 +274,30 @@ func (d *Document) settingsComplete(prefix, ctx, outer string) []protocol.Comple
 		}
 	}
 	return keywordItemsKind(settingsByContext[kind], protocol.CompletionItemKindProperty)
+}
+
+func (d *Document) columnIsBool(prefix string) bool {
+	m := columnTypeRE.FindStringSubmatch(prefix)
+	if m == nil {
+		return true
+	}
+	if m[1] == "bool" {
+		return true
+	}
+	for _, ti := range d.Info.Types {
+		if ti.Key == m[1] {
+			return ti.Storage.Storage == "bool"
+		}
+	}
+	return false
+}
+
+func (d *Document) groupMemberItems(partial string) []protocol.CompletionItem {
+	if d.vpkg == nil || d.vindex == nil {
+		return d.tableItems()
+	}
+	items := d.packageTableItems(d.vpkg.Path, partial)
+	return append(items, d.namedDefItems("group", partial, protocol.CompletionItemKindStruct)...)
 }
 
 func (d *Document) dotChainComplete(m []string) []protocol.CompletionItem {

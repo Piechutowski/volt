@@ -27,6 +27,12 @@ func (c PostChangeset) Validate() PostChangeset {
 	if v.Audience == "" {
 		errs = append(errs, rt.FieldError{Check: "required", Columns: []string{"audience"}, Message: "audience is required"})
 	}
+	if err := VisibilityKnown(v.State); err != nil {
+		errs = append(errs, rt.FieldError{Check: "VisibilityKnown", Columns: []string{"state"}, Message: err.Error()})
+	}
+	if err := VisibilityKnownNull(v.Reviewed); err != nil {
+		errs = append(errs, rt.FieldError{Check: "VisibilityKnownNull", Columns: []string{"reviewed"}, Message: err.Error()})
+	}
 	c.valid = errs
 	return c
 }

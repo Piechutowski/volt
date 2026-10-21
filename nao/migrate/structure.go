@@ -36,7 +36,7 @@ type Column struct {
 	Name    string
 	Type    string // the declared type as written
 	NotNull bool
-	Default string // the default as SQLite stores it; "" when none
+	Default string // the default as SQLite stores it; "" when none or NULL (spec §default-values)
 	PK      int    // 1-based position in the primary key; 0 outside it
 }
 
@@ -125,6 +125,9 @@ func tableRead(ctx context.Context, db *sql.DB, name string) (Table, error) {
 		}
 		if hidden != 0 {
 			continue
+		}
+		if strings.EqualFold(dflt.String, "NULL") {
+			dflt.String = ""
 		}
 		t.Columns = append(t.Columns, Column{Name: col, Type: typ, NotNull: notnull != 0, Default: dflt.String, PK: pk})
 	}
@@ -645,7 +648,7 @@ func foreignKeyEqual(a, b ForeignKey) bool {
 
 // foreignKeyDescribe names a foreign key as the reason text does, with
 // its referential actions in the spelling of the delete: and update:
-// settings when they are not NO ACTION (spec §relationships-ref rule 5).
+// settings when they are not NO ACTION (spec §relationships-ref).
 func foreignKeyDescribe(table string, fk ForeignKey) string {
 	out := fmt.Sprintf("%s (%s) references %s (%s)", table, strings.Join(fk.From, ", "), fk.Table, strings.Join(fk.To, ", "))
 	if actions := actionsVolt(fk); len(actions) > 0 {

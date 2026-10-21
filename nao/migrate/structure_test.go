@@ -88,6 +88,13 @@ CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
 		reason: "index (slug) on posts is in the schema but not in the fold",
 	},
 	{
+		name:   "a NULL default is no default",
+		fold:   postsDDL,
+		target: postsDDL + "CREATE TABLE notes (id INTEGER PRIMARY KEY, memo TEXT DEFAULT NULL, aside TEXT DEFAULT (null));",
+		want:   []string{"create table notes {\n  id int [pk, increment]\n  memo string [null]\n  aside string [null]\n}"},
+		reason: "table notes is in the schema but not in the fold",
+	},
+	{
 		name:   "a table only in the fold",
 		fold:   postsDDL + "CREATE TABLE scratch (id INTEGER PRIMARY KEY);",
 		target: postsDDL,

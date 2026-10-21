@@ -225,6 +225,40 @@ Table s {
         (number)))))
 
 ==================
+records: an unsigned exponent is a number
+==================
+
+Table metrics {
+  value float64 [pk]
+  Records {
+    1e5
+    2E10
+  }
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier)))))
+    (records_block
+      (record_row
+        (number))
+      (record_row
+        (number)))))
+
+==================
 records: an empty field is an error
 :error
 ==================

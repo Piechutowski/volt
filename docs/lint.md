@@ -112,19 +112,23 @@ and a `Project` with neither properties nor a `note:` (spec §project).
 
 **Examples.** [testdata/emptybody.volt](../lang/vet/testdata/emptybody.volt):
 every empty block warns; the table's column is the good line.
+[testdata/emptybody_note.volt](../lang/vet/testdata/emptybody_note.volt):
+a `Project` that carries only a note is not empty, and draws nothing.
 
 ### shadowedcolumn
 
 **What it does.** Reports a column definition that overrides another via
 partial-injection conflict resolution (spec §tablepartial) — table-over-partial or
-later-partial-over-earlier-partial.
+later-partial-over-earlier-partial, and the columns of a partial a table
+injects more than once, which come in twice.
 
 **Why.** The override is **silent**: no error, last writer wins. A type or
 constraint change in the losing partial then has no effect on this table,
 which is invisible at the partial's definition site.
 
-**Examples.** [testdata/shadowedcolumn.volt](../lang/vet/testdata/shadowedcolumn.volt)
-— both conflict directions are bad; non-overlapping columns are good.
+**Examples.** [testdata/shadowedcolumn.volt](../lang/vet/testdata/shadowedcolumn.volt):
+both conflict directions and a partial injected twice are bad;
+non-overlapping columns are good.
 
 ### unnecessaryquotes
 
@@ -331,8 +335,8 @@ one file in `vet/` plus one testdata file.
    gate walks it: no package state, no function values, no
    writes through an input, no sort of anything the inputs reach. A
    check on the whole file implements `Fold`: `File(pass)` reads the
-   checker's model and the declarations' summaries. One type may be
-   both.
+   checker's model and its naming plan (`FilePass.Info`,
+   `FilePass.Plan()`). One type may be both.
 2. Add `testdata/<rule>.volt` with `// analyzers: <rule>` on line 1, bad
    lines marked `//WANT <rule>`, and good lines unmarked.
 3. Add a `### <rule>` section here linking that file, and make the

@@ -45,7 +45,7 @@ func DefaultSQL(v ast.Node) (string, error) { return defaultSQL(v) }
 // TableDDL renders the CREATE TABLE statement of a shape body, without
 // the trailing semicolon (spec §migrations rules 5, 6 and 9): the
 // columns, a composite primary key, and a foreign key per inline ref:
-// with its delete: and update: actions (§relationships-ref rule 5), as
+// with its delete: and update: actions (§relationships-ref), as
 // the schema's Table decides them.
 func TableDDL(table string, body []ast.TableItem) (string, error) {
 	pkCols := pkKeyColumns(body)
@@ -167,7 +167,7 @@ func refEndpoint(col *ast.Column) *ast.RefEndpoint {
 
 // referenceSQL renders the referenced table and columns of a ref: with
 // the ON DELETE and ON UPDATE clauses of the column's delete: and
-// update: settings (spec §migrations rule 4, §relationships-ref rule 5).
+// update: settings (spec §migrations rule 4, §relationships-ref).
 func referenceSQL(col *ast.Column, ep *ast.RefEndpoint) string {
 	out := identQuote(ep.Table.Name()) + " (" + quotedJoin(identNames(ep.Columns)) + ")"
 	if a := actionWord(col.Settings, "delete"); a != "" {

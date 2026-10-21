@@ -124,6 +124,11 @@ func (r *shadowedColumnRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.
 		if winner == nil {
 			continue
 		}
+		if winner.Col == sh.Col {
+			out = append(out, r.warnf(winner.Col.Pos(), "column %q comes into table %q twice, since the table injects %s more than once",
+				sh.Col.Name.Name(), ti.Decl.Name.Name(), originOf(sh)))
+			continue
+		}
 		out = append(out, r.warnf(winner.Col.Pos(), "column %q in table %q silently overrides the definition from %s",
 			sh.Col.Name.Name(), ti.Decl.Name.Name(), originOf(sh)))
 	}

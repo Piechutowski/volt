@@ -24,7 +24,7 @@ report engine when a consumer exists.
   - [x] One spelling per meaning: `pk` is the key, a column is NOT NULL unless it carries `null`, settings follow the type in brackets only, the files of a package share a namespace without imports
 - [ ] One spelling per meaning, decided in review and built in steps; docs/entropy-and-purity-report.md keeps what is still open
   - [x] Step 1, removals
-    - [x] Enums go: `Type OrderState string` with Go constants and a membership validator replaces `Enum`. In the same commit, a declared type whose Go declaration spells its storage type (`bool`, `int`, `float64`, `string`) needs no Scanner or Valuer, `<Model>New` seeds its literal defaults, `required` compares it directly, its bare name joins the generated name scope so a collision is a check error, and `-o DIR` with a bare declared type is refused
+    - [x] Enums go: `Type OrderState string` with Go constants and a membership validator replaces `Enum`. In the same commit, a declared type whose Go declaration spells its storage type (`bool`, `int`, `float64`, `string`) needs no Scanner or Valuer, `<Model>New` seeds its literal defaults, `required` compares it directly, its name is exported and a bare one joins the generated name scope (the router's and the migration list's names included) so a collision is a check error, and `-o DIR` with a bare declared type is refused unless DIR is the package's own directory
     - [x] Diagram-only constructs go: `headercolor`, Ref `color` and `inactive`, `TableGroup` (`Group` is the one set of tables, in the tables' namespace), sticky notes, `DiagramView`, the color literal
     - [x] A note has one spelling, the `note:` setting; the body `Note: '...'` and `Note { '...' }` forms go
     - [x] Relationships have one direction, the foreign key on the left: `<`, `-` and `<>` go; an inline ref is `ref: users.id` with no operator; the Ref element keeps only `Ref: posts.author_id > users.id`, without the long form or a name; a one-to-one is `unique` plus a ref
@@ -112,7 +112,7 @@ report engine when a consumer exists.
 - [x] Language server: diagnostics, completion, hover, navigation, rename; incremental sync; keystroke under a third of a second on a thousand-table file
   - [ ] Cross-file column occurrences: a select or a `Type` reference in a sibling file is neither navigable nor renamed
   - [ ] Hover and definition for select parameters, columns inside a Pred body, projection and order columns of a group select; references list a table once; hover ranges on qualified references exclude the qualifier
-  - [ ] Navigation into Go symbols: handler references and `error_handler:` need a Go-side index
+  - [ ] Navigation into Go symbols: handler references, `error_handler:` and bare declared types need a Go-side index
   - [ ] The navigation index's hit path: walk occurrences by table without copying, keep name maps across builds, memoize a select's hover on its members
   - [ ] Cold open of the one-file layout: parse the chunks on the worker pool
   - [ ] Retained chunk texts: a chunk keeps its own bytes rather than pinning the file it was cut from

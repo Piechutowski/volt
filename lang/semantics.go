@@ -376,6 +376,7 @@ func (c *checker) routing(pkg *Package) {
 			c.errorf(first.Pos, "scopes-and-routes", "controller %q takes the name of the Controllers field holding %s (§handler-references); rename the controller", name, what)
 		}
 	}
+	c.typesRouterCheck(pkg)
 
 	for _, spec := range pkg.importSpecs {
 		if _, resolved := pkg.Imports[spec.Qualifier()]; resolved && !c.usedQual[spec.Qualifier()] {

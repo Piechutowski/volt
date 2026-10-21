@@ -568,6 +568,9 @@ func bareTypesTravel(pkg *lang.Package, outDir string) error {
 	if pkg.Schema() == nil {
 		return nil
 	}
+	if abs, err := filepath.Abs(outDir); err == nil && filepath.Clean(abs) == filepath.Clean(pkg.Dir) {
+		return nil
+	}
 	for _, td := range pkg.Schema().Types {
 		if td.Path != "" {
 			continue

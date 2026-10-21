@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/token"
@@ -158,6 +159,23 @@ var ReservedAliases = map[string]string{
 	"volt":    "",
 }
 
+func exported(name string) bool {
+	for _, r := range name {
+		return unicode.IsUpper(r)
+	}
+	return false
+}
+
+func exportedSpelling(name string) string {
+	for _, r := range name {
+		if up := unicode.ToUpper(r); up != r {
+			return string(up) + name[len(string(r)):]
+		}
+		break
+	}
+	return "X" + name
+}
+
 func typeAlias(name string) string {
 	if i := strings.IndexByte(name, '.'); i >= 0 {
 		return name[:i]
@@ -188,6 +206,14 @@ func (c *checker) typeDeclCheck(d *ast.TypeDecl) *TypeInfo {
 		return nil
 	case d.Name.Qualifier() == "" && d.From != nil:
 		c.errorf(d.From.Pos(), "types", "Type %q is a type of this package and takes no from path (§types)", key)
+		return nil
+	}
+	if base := d.Name.Base(); !exported(base) {
+		if d.Name.Qualifier() == "" {
+			c.errorf(d.Name.Pos(), "types", "Type %q is not an exported Go name; a declared type's name begins with an upper-case letter, as %s does (§types)", key, exportedSpelling(base))
+		} else {
+			c.errorf(d.Name.Pos(), "types", "Type %q names an unexported Go type of package %s, which no other package can name (§types)", key, d.Name.Qualifier())
+		}
 		return nil
 	}
 	if d.From != nil {

@@ -1,4 +1,4 @@
-// spec: §tablepartial, an index is not overridden: one a partial injects may not repeat the key of an index of the table or of another partial
+// spec: §tablepartial, an index is not overridden: one a partial injects may not repeat the key of an index of the table or of another injection, the same partial injected twice included
 // want: which has an index on that key already
 TablePartial emails {
   email string
@@ -25,4 +25,9 @@ Table users {
   indexes {
     email
   }
+}
+Table posts {
+  id int [pk]
+  ~stamps
+  ~stamps
 }

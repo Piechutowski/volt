@@ -34,6 +34,40 @@ func (c *checker) typesGoCheck(pkg *Package, info *check.Info, sc *goScan) {
 		if desc, taken := names.Generated(td.Key); taken {
 			c.errorf(td.Decl.Name.Pos(), "types", "Type %s takes the Go name of %s; a declared type is named apart from the names generated code declares, e.g. %s (§types)",
 				td.Key, desc, typeNameFree(names, td.Key))
+		} else if desc, taken := migrationNames[td.Key]; taken && len(info.Migrations) > 0 {
+			c.errorf(td.Decl.Name.Pos(), "types", "Type %s takes the Go name of %s; a declared type is named apart from the names generated code declares (§types)", td.Key, desc)
+		}
+	}
+}
+
+var migrationNames = map[string]string{
+	"Migrations": "the generated migration list",
+	"Migrate":    "the generated migration runner",
+}
+
+func (c *checker) typesRouterCheck(pkg *Package) {
+	if pkg.schema == nil || !pkg.HasRouting() {
+		return
+	}
+	router := map[string]string{
+		"Controllers": "the generated Controllers manifest",
+		"NewRouter":   "the generated router constructor",
+		"Table":       "the generated route table",
+	}
+	for name := range pkg.Controllers {
+		router[name+"Controller"] = "the generated controller interface of " + name
+	}
+	for _, r := range pkg.Routes {
+		if r.HelperName != "" {
+			router["Path"+r.HelperName] = "the generated reverse-URL helper of " + methodOrAny(r.Method) + " " + r.Spelled
+		}
+	}
+	for _, td := range pkg.schema.Types {
+		if td.Path != "" {
+			continue
+		}
+		if desc, taken := router[td.Key]; taken {
+			c.errorf(td.Decl.Name.Pos(), "types", "Type %s takes the Go name of %s; a declared type is named apart from the names generated code declares (§types)", td.Key, desc)
 		}
 	}
 }

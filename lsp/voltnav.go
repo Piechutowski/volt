@@ -194,6 +194,10 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 				ix.validatorsRefs(pkg, path, d.Body)
 			case *ast.TablePartial:
 				ix.validatorsRefs(pkg, path, d.Body)
+			case *ast.TypeDecl:
+				if d.Name != nil && d.Name.Qualifier() == "" {
+					ix.goSourcesNote(pkg)
+				}
 			case *ast.Group:
 				for _, term := range d.Terms {
 					for _, id := range term.Names {
@@ -246,7 +250,7 @@ func (ix *voltIndex) goRefAdd(pkg *lang.Package, path string, ref *ast.GoRef) {
 	}
 	funcs, ok := ix.gofuncs[path]
 	if !ok {
-		srcs := lang.GoSourcesRead(pkg.Dir)
+		srcs := ix.goSourcesNote(pkg)
 		if e, kept := ix.goscans[pkg.Dir]; kept && slices.Equal(e.srcs, srcs) {
 			funcs = e.funcs
 		} else {
@@ -256,10 +260,6 @@ func (ix *voltIndex) goRefAdd(pkg *lang.Package, path string, ref *ast.GoRef) {
 			}
 		}
 		ix.gofuncs[path] = funcs
-		if ix.gosrcs == nil {
-			ix.gosrcs = map[string][]lang.GoSource{}
-		}
-		ix.gosrcs[pkg.Dir] = srcs
 	}
 	if gf, found := funcs[name]; found {
 		gfCopy := gf
@@ -268,6 +268,18 @@ func (ix *voltIndex) goRefAdd(pkg *lang.Package, path string, ref *ast.GoRef) {
 	} else {
 		ix.defs[sym] = voltDef{md: goFuncHover(name, pkg.Name, nil)}
 	}
+}
+
+func (ix *voltIndex) goSourcesNote(pkg *lang.Package) []lang.GoSource {
+	if srcs, ok := ix.gosrcs[pkg.Dir]; ok {
+		return srcs
+	}
+	srcs := lang.GoSourcesRead(pkg.Dir)
+	if ix.gosrcs == nil {
+		ix.gosrcs = map[string][]lang.GoSource{}
+	}
+	ix.gosrcs[pkg.Dir] = srcs
+	return srcs
 }
 
 func (ix *voltIndex) predExprRefs(path string, x ast.PredExpr) {
@@ -346,6 +358,8 @@ func (ix *voltIndex) settingRefs(pkg *lang.Package, path string, list *ast.Setti
 				sp := spanOf(id)
 				ix.refs = append(ix.refs, voltRef{sp, sp, voltSym{"pipeline", path, id.Name()}, false, id.Name()})
 			}
+		case "error_handler":
+			ix.goSourcesNote(pkg)
 		}
 	}
 }

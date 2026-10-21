@@ -144,7 +144,7 @@ Migration 0001__create_users {
 migration: settings, up and down blocks, a rebuild with from:
 ==================
 
-Migration 0002__int_hits [irreversible, no transaction, note: 'hits were text'] {
+Migration 0002__int_hits [irreversible, no transaction] {
   up {
     rebuild table users {
       id   int [pk]
@@ -168,12 +168,7 @@ Migration 0002__int_hits [irreversible, no transaction, note: 'hits were text'] 
       (setting
         (setting_name
           (identifier)
-          (identifier)))
-      (setting
-        (setting_name
-          (identifier))
-        (string
-          (string_content))))
+          (identifier))))
     (up_block
       (rebuild_table_op
         (table_name

@@ -21,3 +21,13 @@ Table u {
   ~audit_b
   x int
 }
+
+// a partial injected twice brings each of its columns twice
+TablePartial stamps {
+  created_at time.Time //WANT shadowedcolumn
+}
+Table v {
+  id int
+  ~stamps
+  ~stamps
+}

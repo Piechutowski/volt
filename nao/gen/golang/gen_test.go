@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -105,11 +106,53 @@ func generateDyn(t *testing.T, path string) []byte {
 func generateValidators(t *testing.T, path string) []byte {
 	t.Helper()
 	f, info := parseChecked(t, path)
-	out, err := GenerateValidators(f, info, nil, Options{Package: "models", Source: filepath.Base(path)})
+	out, err := GenerateValidators(f, info, validatorFns(t, f, info), Options{Package: "models", Source: filepath.Base(path)})
 	if err != nil {
 		t.Fatalf("GenerateValidators: %v", err)
 	}
 	return out
+}
+
+func validatorFns(t *testing.T, f *ast.File, info *check.Info) []ValidatorFn {
+	t.Helper()
+	var fns []ValidatorFn
+	for _, ti := range info.Tables {
+		if len(ti.Validators) == 0 {
+			continue
+		}
+		_, fields, err := ModelFields(f, info, ti.Key)
+		if err != nil {
+			t.Fatalf("ModelFields(%s): %v", ti.Key, err)
+		}
+		byCol := map[string]string{}
+		for _, fs := range fields {
+			byCol[fs.Col] = fs.Name
+		}
+		fn := ValidatorFn{TableKey: ti.Key}
+		for _, v := range ti.Validators {
+			var args, src, cols []string
+			for _, a := range v.Args {
+				field, ok := byCol[a.Name()]
+				if !ok {
+					t.Fatalf("validator %s of %s names no column %q", v.Ref.String(), ti.Key, a.Name())
+				}
+				args = append(args, "v."+field)
+				src = append(src, a.Name())
+				if !slices.Contains(cols, a.Name()) {
+					cols = append(cols, a.Name())
+				}
+			}
+			name := v.Ref.Base()
+			fn.Validators = append(fn.Validators, ValidatorSpec{
+				Name: name,
+				Src:  name + "(" + strings.Join(src, ", ") + ")",
+				Call: name + "(" + strings.Join(args, ", ") + ")",
+				Cols: cols,
+			})
+		}
+		fns = append(fns, fn)
+	}
+	return fns
 }
 
 func compareGolden(t *testing.T, got []byte, golden string) {

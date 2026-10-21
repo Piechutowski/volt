@@ -108,3 +108,24 @@ Table t {
 ---
 
 
+==================
+use is not an element
+:error
+==================
+
+use * from './base'
+
+---
+
+
+
+==================
+Type name takes no slice prefix
+:error
+==================
+
+Type []Slug string
+
+---
+
+

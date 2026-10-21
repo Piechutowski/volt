@@ -2,6 +2,10 @@
 
 package models
 
+import (
+	"github.com/Piechutowski/volt/nao/rt"
+)
+
 // Validate runs required and the validators of users over the row,
 // every one every time, replacing the findings of an earlier Validate
 // (spec §changesets, §validators).
@@ -14,7 +18,12 @@ func (c UserChangeset) Validate() UserChangeset {
 // every one every time, replacing the findings of an earlier Validate
 // (spec §changesets, §validators).
 func (c CoreUserChangeset) Validate() CoreUserChangeset {
-	c.valid = nil
+	v := c.Row()
+	var errs []rt.FieldError
+	if err := CoreAuditKindKnown(v.Kind); err != nil {
+		errs = append(errs, rt.FieldError{Check: "CoreAuditKindKnown", Columns: []string{"kind"}, Message: err.Error()})
+	}
+	c.valid = errs
 	return c
 }
 
