@@ -1,6 +1,0 @@
-// spec: §columns rule 7 — legacy bare pk / unique between type and settings
-Table t {
-  id int pk
-  email varchar unique
-  code int pk unique [not null]
-}

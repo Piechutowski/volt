@@ -43,7 +43,7 @@ func Seg(s string) string {
 }
 
 // SegInt renders an integer path parameter.
-func SegInt(v int64) string { return strconv.FormatInt(v, 10) }
+func SegInt(v int) string { return strconv.Itoa(v) }
 
 // SegWild escapes a rest-of-path value, preserving its '/' separators.
 // Each element gets Seg's treatment, dot segments included.

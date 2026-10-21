@@ -1,6 +1,6 @@
 name = "Volt"
 grammar = "volt"
-path_suffixes = ["volt", "dbml"]
+path_suffixes = ["volt"]
 line_comments = ["// "]
 block_comment = ["/* ", " */"]
 tab_size = 2

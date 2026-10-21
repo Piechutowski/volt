@@ -10,7 +10,7 @@ import (
 
 func mustParse(t *testing.T, src string) *ast.File {
 	t.Helper()
-	f, diags := ParseFile("test.dbml", src)
+	f, diags := ParseFile("test.volt", src)
 	if diag.HasErrors(diags) {
 		t.Fatalf("ParseFile errors: %v", diags)
 	}
@@ -20,8 +20,8 @@ func mustParse(t *testing.T, src string) *ast.File {
 func TestTableShape(t *testing.T) {
 	f := mustParse(t, `
 Table core.users as U [headercolor: #3498DB] {
-  id integer [pk, not null]
-  name varchar(255)
+  id int [pk, not null]
+  name string
   Note: 'people'
   indexes {
     (id, name) [unique]
@@ -49,8 +49,8 @@ Table core.users as U [headercolor: #3498DB] {
 		t.Error("multi-word setting 'not null' not canonicalized")
 	}
 	typ := tb.Body[1].(*ast.Column).Type
-	if typ.String() != "varchar(255)" {
-		t.Errorf("type = %q, want varchar(255)", typ.String())
+	if typ.String() != "string" {
+		t.Errorf("type = %q, want string", typ.String())
 	}
 	ix := tb.Body[3].(*ast.IndexesBlock).Indexes[0]
 	if !ix.Composite || len(ix.Key) != 2 {
@@ -125,9 +125,9 @@ Table t {
 func TestKeywordsAreContextual(t *testing.T) {
 	mustParse(t, `
 Table table {
-  note varchar
+  note string
   indexes int
-  ref varchar
+  ref string
 }
 `)
 }
@@ -136,7 +136,7 @@ func TestErrorRecovery(t *testing.T) {
 	f, diags := ParseFile("t", `
 Table a {
   id int [
-  name varchar
+  name string
 }
 Table b {
   ] broken

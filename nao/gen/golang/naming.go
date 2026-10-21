@@ -1,4 +1,4 @@
-// Identifier conversion: DBML names (snake_case, quoted, Unicode) to
+// Identifier conversion: schema names (snake_case, quoted, Unicode) to
 // exported Go names, following the Go community conventions for
 // initialisms (user_id -> UserID, not UserId).
 package golang
@@ -12,8 +12,6 @@ import (
 	"github.com/Piechutowski/volt/nao/inflect"
 )
 
-// commonInitialisms is the golint list: word parts that appear in all-caps
-// in idiomatic Go names.
 var commonInitialisms = map[string]bool{
 	"acl": true, "api": true, "ascii": true, "cpu": true, "css": true,
 	"db": true, "dns": true, "eof": true, "guid": true, "html": true,
@@ -25,15 +23,7 @@ var commonInitialisms = map[string]bool{
 	"xml": true, "xmpp": true, "xsrf": true, "xss": true,
 }
 
-// goName converts a DBML name to an exported Go identifier.
-//
-// Words are split on characters that cannot appear in a Go identifier
-// (underscores, spaces, punctuation from quoted names) and on combining
-// marks, which are valid in DBML identifiers (spec §identifiers) but not in Go.
-// Each word is title-cased, or upper-cased if it is a common initialism.
-// A leading digit is prefixed with "X" ("2fa_codes" -> "X2faCodes").
-// An error is returned when nothing usable remains.
-func goName(dbmlName string) (string, error) {
+func goName(schemaName string) (string, error) {
 	var words []string
 	var cur strings.Builder
 	flush := func() {
@@ -42,7 +32,7 @@ func goName(dbmlName string) (string, error) {
 			cur.Reset()
 		}
 	}
-	for _, r := range dbmlName {
+	for _, r := range schemaName {
 		switch {
 		case unicode.IsLetter(r) || unicode.IsDigit(r):
 			cur.WriteRune(r)
@@ -52,7 +42,7 @@ func goName(dbmlName string) (string, error) {
 	}
 	flush()
 	if len(words) == 0 {
-		return "", fmt.Errorf("name %q contains no characters usable in a Go identifier", dbmlName)
+		return "", fmt.Errorf("name %q contains no characters usable in a Go identifier", schemaName)
 	}
 
 	var b strings.Builder
@@ -72,10 +62,6 @@ func goName(dbmlName string) (string, error) {
 	return name, nil
 }
 
-// modelName derives the Go model type for a table (decision singular-models): the
-// singular of the table name (users -> User, order_items -> OrderItem),
-// or the [model: '...'] override verbatim (normalized by goName).
-// Non-public schemas are prefixed like structName.
 func modelName(t *ast.Table) (string, error) {
 	if s := t.Settings.Get("model"); s != nil {
 		if lit, ok := s.Value.(*ast.BasicLit); ok {
@@ -86,9 +72,6 @@ func modelName(t *ast.Table) (string, error) {
 	return structName(t.Name.Schema(), singular)
 }
 
-// structName derives the Go type name for a table or enum: tables in the
-// default public schema use the bare name; any other schema is prefixed
-// (core.users -> CoreUsers).
 func structName(schema, base string) (string, error) {
 	n, err := goName(base)
 	if err != nil {

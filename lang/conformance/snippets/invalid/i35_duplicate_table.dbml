@@ -1,3 +1,0 @@
-// spec: §namespaces-and-uniqueness rule 1 — table names must be unique per schema
-Table users { id int }
-Table users { name varchar }

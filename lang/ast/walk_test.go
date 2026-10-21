@@ -10,11 +10,14 @@ func TestInspectSkipsUnsetFields(t *testing.T) {
 	bare := []ast.Node{
 		&ast.File{}, &ast.Use{}, &ast.UseItem{}, &ast.Project{}, &ast.ProjectProp{},
 		&ast.Table{}, &ast.TablePartial{}, &ast.Column{}, &ast.TypeRef{}, &ast.IndexesBlock{},
-		&ast.Index{Key: []ast.Node{nil}}, &ast.ChecksBlock{}, &ast.Check{}, &ast.PartialRef{}, &ast.Note{},
+		&ast.Index{Key: []ast.Node{nil}}, &ast.ValidatorsBlock{}, &ast.Validator{}, &ast.PartialRef{}, &ast.Note{},
 		&ast.Ref{}, &ast.RefEndpoint{}, &ast.Enum{}, &ast.EnumValue{}, &ast.Records{},
 		&ast.RecordRow{Values: []ast.Node{nil}}, &ast.StickyNote{}, &ast.TableGroup{}, &ast.DiagramView{},
 		&ast.ViewCategory{}, &ast.SettingList{}, &ast.Setting{}, &ast.QualName{}, &ast.NegNumber{},
 		&ast.EnumConst{}, &ast.RefValue{},
+		&ast.Migration{}, &ast.CreateTable{}, &ast.DropTable{}, &ast.RenameTable{}, &ast.AlterTable{},
+		&ast.AlterAdd{}, &ast.AlterDrop{}, &ast.AlterRename{}, &ast.RebuildTable{}, &ast.CreateIndex{},
+		&ast.DropIndex{}, &ast.Exec{},
 	}
 	count := func(n ast.Node) int {
 		seen := 0
@@ -34,8 +37,12 @@ func TestInspectSkipsUnsetFields(t *testing.T) {
 	}
 	name := &ast.Ident{}
 	partial := []ast.Node{
-		&ast.Table{Alias: name}, &ast.Column{Name: name}, &ast.Ref{Name: name}, &ast.Check{Args: []*ast.Ident{name}},
+		&ast.Table{Alias: name}, &ast.Column{Name: name}, &ast.Ref{Name: name}, &ast.Validator{Args: []*ast.Ident{name}},
 		&ast.EnumConst{Value: name}, &ast.Setting{Value: name}, &ast.Index{Key: []ast.Node{name}},
+		&ast.Migration{Name: name}, &ast.CreateTable{Name: name}, &ast.DropTable{Name: name},
+		&ast.RenameTable{To: name}, &ast.AlterTable{Name: name}, &ast.AlterDrop{Name: name},
+		&ast.AlterRename{From: name}, &ast.RebuildTable{Name: name}, &ast.CreateIndex{Table: name},
+		&ast.DropIndex{Table: name},
 	}
 	for _, n := range partial {
 		if got := count(n); got != 2 {

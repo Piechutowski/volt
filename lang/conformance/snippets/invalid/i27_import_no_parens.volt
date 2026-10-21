@@ -1,4 +1,4 @@
-// spec: §imports rule 1
+// spec: §imports
 package app
 
 import db

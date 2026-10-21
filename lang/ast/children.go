@@ -2,7 +2,7 @@ package ast
 
 // Children lists n's children in source order, the same children
 // Inspect visits, as a slice: for a walk written without function
-// values, which a memoized computation may not call (decision pure-memos).
+// values, which a memoized computation may not call.
 func Children(n Node) []Node {
 	var out []Node
 	switch n := n.(type) {
@@ -113,23 +113,20 @@ func Children(n Node) []Node {
 		if n.Settings != nil {
 			out = append(out, n.Settings)
 		}
-	case *ChecksBlock:
-		for _, c := range n.Checks {
-			if c != nil {
-				out = append(out, c)
+	case *ValidatorsBlock:
+		for _, v := range n.Validators {
+			if v != nil {
+				out = append(out, v)
 			}
 		}
-	case *Check:
-		if n.Expr != nil {
-			out = append(out, n.Expr)
+	case *Validator:
+		if n.Ref != nil {
+			out = append(out, n.Ref)
 		}
 		for _, a := range n.Args {
 			if a != nil {
 				out = append(out, a)
 			}
-		}
-		if n.Settings != nil {
-			out = append(out, n.Settings)
 		}
 	case *PartialRef:
 		if n.Name != nil {
@@ -173,6 +170,118 @@ func Children(n Node) []Node {
 	case *EnumValue:
 		if n.Name != nil {
 			out = append(out, n.Name)
+		}
+		if n.Settings != nil {
+			out = append(out, n.Settings)
+		}
+	case *TypeDecl:
+		if n.Name != nil {
+			out = append(out, n.Name)
+		}
+		if n.Storage != nil {
+			out = append(out, n.Storage)
+		}
+		if n.From != nil {
+			out = append(out, n.From)
+		}
+	case *Migration:
+		if n.Name != nil {
+			out = append(out, n.Name)
+		}
+		if n.Settings != nil {
+			out = append(out, n.Settings)
+		}
+		for _, op := range n.Up {
+			if op != nil {
+				out = append(out, op)
+			}
+		}
+		for _, op := range n.Down {
+			if op != nil {
+				out = append(out, op)
+			}
+		}
+	case *CreateTable:
+		if n.Name != nil {
+			out = append(out, n.Name)
+		}
+		for _, it := range n.Body {
+			if it != nil {
+				out = append(out, it)
+			}
+		}
+	case *DropTable:
+		if n.Name != nil {
+			out = append(out, n.Name)
+		}
+		for _, it := range n.Body {
+			if it != nil {
+				out = append(out, it)
+			}
+		}
+	case *RenameTable:
+		if n.From != nil {
+			out = append(out, n.From)
+		}
+		if n.To != nil {
+			out = append(out, n.To)
+		}
+	case *AlterTable:
+		if n.Name != nil {
+			out = append(out, n.Name)
+		}
+		for _, it := range n.Items {
+			if it != nil {
+				out = append(out, it)
+			}
+		}
+	case *AlterAdd:
+		if n.Column != nil {
+			out = append(out, n.Column)
+		}
+	case *AlterDrop:
+		if n.Name != nil {
+			out = append(out, n.Name)
+		}
+		if n.Type != nil {
+			out = append(out, n.Type)
+		}
+		if n.Settings != nil {
+			out = append(out, n.Settings)
+		}
+	case *AlterRename:
+		if n.From != nil {
+			out = append(out, n.From)
+		}
+		if n.To != nil {
+			out = append(out, n.To)
+		}
+	case *RebuildTable:
+		if n.Name != nil {
+			out = append(out, n.Name)
+		}
+		for _, it := range n.Body {
+			if it != nil {
+				out = append(out, it)
+			}
+		}
+	case *CreateIndex:
+		if n.Table != nil {
+			out = append(out, n.Table)
+		}
+		if n.Index != nil {
+			out = append(out, n.Index)
+		}
+	case *DropIndex:
+		if n.Table != nil {
+			out = append(out, n.Table)
+		}
+		if n.Index != nil {
+			out = append(out, n.Index)
+		}
+	case *Exec:
+		if n.SQL != nil {
+			out = append(out, n.SQL)
 		}
 		if n.Settings != nil {
 			out = append(out, n.Settings)

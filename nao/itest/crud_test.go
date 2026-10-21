@@ -1,7 +1,6 @@
-// Integration tests (decision integration-over-mocks): the generated CRUD runs against a
-// real SQLite through a real database/sql driver — no mocks, no canned
-// rows. The driver is a test-only dependency; generated code and the rt
-// runtime stay driver-free (decision zero-dependencies).
+// Integration tests: the generated CRUD runs against a real SQLite through
+// a real database/sql driver, no mocks, no canned rows. The driver is a
+// test-only dependency; generated code and the rt runtime stay driver-free.
 package itest
 
 import (
@@ -38,20 +37,32 @@ func newDB(t *testing.T) (*sql.DB, *Queries) {
 
 func seedUser(t *testing.T, q *Queries, email string) User {
 	t.Helper()
-	u, err := q.UserCreate(context.Background(), UserCreateParams{Email: email, Name: "Ann"})
+	u, err := q.UserCreate(context.Background(), UserNew().EmailSet(email).NameSet("Ann"))
 	if err != nil {
 		t.Fatalf("UserCreate: %v", err)
 	}
 	return u
 }
 
+// invalidOf asserts err is an *rt.Invalid carrying exactly the given
+// check on the given columns and returns it.
+func invalidOf(t *testing.T, err error, check string, cols ...string) *rt.Invalid {
+	t.Helper()
+	var inv *rt.Invalid
+	if !errors.As(err, &inv) {
+		t.Fatalf("want *rt.Invalid with check %s, got %v", check, err)
+	}
+	if len(inv.Fields) != 1 || inv.Fields[0].Check != check || strings.Join(inv.Fields[0].Columns, ",") != strings.Join(cols, ",") {
+		t.Fatalf("want one %s field error on %v, got %+v", check, cols, inv.Fields)
+	}
+	return inv
+}
+
 func TestUserCRUD(t *testing.T) {
 	ctx := context.Background()
 	_, q := newDB(t)
 
-	// Create: the auto-increment key and the defaulted created_at are the
-	// database's job; RETURNING brings both back (decision create-params).
-	u, err := q.UserCreate(ctx, UserCreateParams{Email: "ann@example.com", Name: "Ann"})
+	u, err := q.UserCreate(ctx, UserNew().EmailSet("ann@example.com").NameSet("Ann"))
 	if err != nil {
 		t.Fatalf("UserCreate: %v", err)
 	}
@@ -72,7 +83,7 @@ func TestUserCRUD(t *testing.T) {
 	}
 
 	u2 := seedUser(t, q, "bob@example.com")
-	many, err := q.UserGetMany(ctx, []int32{u.ID, u2.ID, 999})
+	many, err := q.UserGetMany(ctx, []int{u.ID, u2.ID, 999})
 	if err != nil || len(many) != 2 {
 		t.Errorf("UserGetMany = %d rows, %v; want 2 (missing keys are not errors)", len(many), err)
 	}
@@ -88,23 +99,19 @@ func TestUserCRUD(t *testing.T) {
 		t.Errorf("UserCount = %d, %v", n, err)
 	}
 
-	// Update rewrites every non-key column and returns the row (decision named-placeholders/decision create-params).
-	upd, err := q.UserUpdate(ctx, u.ID, UserUpdateParams{
-		Email:     u.Email,
-		Name:      "Ann B.",
-		Bio:       rt.Some("hi there"),
-		CreatedAt: u.CreatedAt,
-	})
+	upd, err := q.UserUpdate(ctx, u.Changeset().NameSet("Ann B.").BioSet(rt.Some("hi there")))
 	if err != nil {
 		t.Fatalf("UserUpdate: %v", err)
 	}
 	if upd.Name != "Ann B." || !upd.Bio.Valid || upd.Bio.V != "hi there" {
 		t.Errorf("UserUpdate returned %+v", upd)
 	}
+	if upd.Email != u.Email || !upd.CreatedAt.Equal(u.CreatedAt) {
+		t.Errorf("an update writes the marked columns only; email and created_at changed: %+v", upd)
+	}
 
-	// Identity misses are rt.ErrNotFound, which is also sql.ErrNoRows.
-	if _, err := q.UserUpdate(ctx, 999, UserUpdateParams{Email: "x@x", Name: "x", CreatedAt: u.CreatedAt}); !errors.Is(err, rt.ErrNotFound) {
-		t.Errorf("UserUpdate(999) = %v; want rt.ErrNotFound", err)
+	if _, err := q.UserUpdate(ctx, User{ID: 999, Email: "x@x", Name: "x"}.Changeset().NameSet("y")); !errors.Is(err, rt.ErrNotFound) {
+		t.Errorf("UserUpdate of a vanished row = %v; want rt.ErrNotFound", err)
 	}
 	if _, err := q.UserGet(ctx, 999); !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("UserGet(999) = %v; want sql.ErrNoRows compatibility", err)
@@ -117,53 +124,56 @@ func TestUserCRUD(t *testing.T) {
 		t.Errorf("second UserDelete = %v; want rt.ErrNotFound", err)
 	}
 
-	// unique column: duplicate email must be rejected by the DDL
-	if _, err := q.UserCreate(ctx, UserCreateParams{Email: "ann@example.com", Name: "Imposter"}); err == nil {
-		t.Error("duplicate email accepted; UNIQUE constraint missing")
+	_, err = q.UserCreate(ctx, UserNew().EmailSet("ann@example.com").NameSet("Imposter"))
+	if inv := invalidOf(t, err, "unique", "email"); inv.StatusCode() != 409 || inv.Cause == nil {
+		t.Errorf("a duplicate email is a 409 wrapping the driver's error: %+v", inv)
 	}
 }
 
 func TestOrderDefaultsEnumsAndFKs(t *testing.T) {
 	ctx := context.Background()
-	_, q := newDB(t)
+	db, q := newDB(t)
 	u := seedUser(t, q, "ann@example.com")
 
-	o, err := q.OrderCreate(ctx, OrderCreateParams{UserID: u.ID, Total: "19.99"})
+	o, err := q.OrderCreate(ctx, OrderNew().UserIDSet(u.ID).TotalSet(19.99).FeeSet(0))
 	if err != nil {
 		t.Fatalf("OrderCreate: %v", err)
 	}
-	// the defaulted enum column comes back typed (decision e-prefixed-enums/decision create-params)
 	if o.Status != EOrderStatusPending {
-		t.Errorf("status = %q; want the database default %q", o.Status, EOrderStatusPending)
+		t.Errorf("status = %q; want the database default %q for an unmarked column", o.Status, EOrderStatusPending)
 	}
-	if o.PlacedAt.Valid {
-		t.Errorf("placed_at should be NULL, got %+v", o.PlacedAt)
+	if o.Tip != 0 || o.PlacedAt.Valid {
+		t.Errorf("tip and placed_at take their defaults, got %+v", o)
 	}
-	if o.Total != "19.99" {
-		t.Errorf("total = %q; decimals ride strings, never floats", o.Total)
+	if o.Total != 19.99 {
+		t.Errorf("total = %v, want 19.99", o.Total)
 	}
 
 	placed := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
-	upd, err := q.OrderUpdate(ctx, o.ID, OrderUpdateParams{
-		UserID:   o.UserID,
-		Status:   EOrderStatusShipped,
-		Total:    o.Total,
-		PlacedAt: rt.Some(placed),
-	})
+	upd, err := q.OrderUpdate(ctx, o.Changeset().StatusSet(EOrderStatusShipped).PlacedAtSet(rt.Some(placed)))
 	if err != nil {
 		t.Fatalf("OrderUpdate: %v", err)
 	}
-	if upd.Status != EOrderStatusShipped || !upd.PlacedAt.Valid || !upd.PlacedAt.V.Equal(placed) {
+	if upd.Status != EOrderStatusShipped || !upd.PlacedAt.Valid || !upd.PlacedAt.V.Equal(placed) || upd.Total != o.Total {
 		t.Errorf("OrderUpdate returned %+v", upd)
 	}
 
-	// enum CHECK and FK are real constraints in the generated DDL
-	var ce rt.ConstraintError
-	if _, err := q.OrderCreate(ctx, OrderCreateParams{UserID: 999, Total: "1.00"}); !errors.As(err, &ce) || ce.Kind != "foreign key" {
-		t.Errorf("dangling user_id = %v; want a foreign key ConstraintError", err)
+	_, err = q.OrderCreate(ctx, OrderNew().UserIDSet(999).TotalSet(1.00).FeeSet(0))
+	if inv := invalidOf(t, err, "foreign_key"); inv.StatusCode() != 422 || inv.Cause == nil {
+		t.Errorf("a dangling user_id is a 422 foreign_key field error without a column: %+v", inv)
 	}
-	if _, err := q.OrderUpdate(ctx, o.ID, OrderUpdateParams{UserID: o.UserID, Status: "teleported", Total: o.Total}); err == nil {
-		t.Error("invalid enum value accepted; CHECK constraint missing")
+
+	_, err = q.OrderCreate(ctx, OrderNew().UserIDSet(u.ID).TotalSet(1.00))
+	if inv := invalidOf(t, err, "not_null", "fee"); inv.StatusCode() != 422 {
+		t.Errorf("an unmarked NOT NULL column without a default is a 422 not_null field error: %+v", inv)
+	}
+
+	_, err = q.OrderUpdate(ctx, o.Changeset().StatusSet("teleported"))
+	if inv := invalidOf(t, err, "enum", "status"); inv.StatusCode() != 422 || inv.Cause != nil {
+		t.Errorf("a value outside the enum is a 422 enum field error before any statement runs: %+v", inv)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE orders SET status = 'teleported' WHERE id = ?`, o.ID); err != nil {
+		t.Errorf("the database carries no CHECK for an enum column: %v", err)
 	}
 }
 
@@ -172,17 +182,17 @@ func TestUserTagCompositePK(t *testing.T) {
 	_, q := newDB(t)
 	u := seedUser(t, q, "ann@example.com")
 
-	tag, err := q.UserTagCreate(ctx, UserTagCreateParams{UserID: u.ID, Tag: "vip"})
+	tag, err := q.UserTagCreate(ctx, UserTagNew().UserIDSet(u.ID).TagSet("vip"))
 	if err != nil {
 		t.Fatalf("UserTagCreate: %v", err)
 	}
-	// composite identity: one positional argument per key column (decision named-placeholders)
 	got, err := q.UserTagGet(ctx, tag.UserID, tag.Tag)
 	if err != nil || got != tag {
 		t.Errorf("UserTagGet = %+v, %v", got, err)
 	}
-	if _, err := q.UserTagCreate(ctx, UserTagCreateParams{UserID: u.ID, Tag: "vip"}); err == nil {
-		t.Error("duplicate composite key accepted")
+	_, err = q.UserTagCreate(ctx, UserTagNew().From(tag))
+	if inv := invalidOf(t, err, "unique", "user_id", "tag"); inv.StatusCode() != 409 {
+		t.Errorf("a duplicate composite key names both columns: %+v", inv)
 	}
 	if err := q.UserTagDelete(ctx, tag.UserID, tag.Tag); err != nil {
 		t.Errorf("UserTagDelete: %v", err)
@@ -196,9 +206,8 @@ func TestTx(t *testing.T) {
 	ctx := context.Background()
 	_, q := newDB(t)
 
-	// commit: work inside fn is visible after
 	err := q.Tx(ctx, func(q *Queries) error {
-		_, err := q.UserCreate(ctx, UserCreateParams{Email: "tx@example.com", Name: "Tx"})
+		_, err := q.UserCreate(ctx, UserNew().EmailSet("tx@example.com").NameSet("Tx"))
 		return err
 	})
 	if err != nil {
@@ -208,10 +217,9 @@ func TestTx(t *testing.T) {
 		t.Errorf("after committed Tx, count = %d; want 1", n)
 	}
 
-	// rollback: a returned error undoes everything
 	sentinel := errors.New("boom")
 	err = q.Tx(ctx, func(q *Queries) error {
-		if _, err := q.UserCreate(ctx, UserCreateParams{Email: "gone@example.com", Name: "Gone"}); err != nil {
+		if _, err := q.UserCreate(ctx, UserNew().EmailSet("gone@example.com").NameSet("Gone")); err != nil {
 			return err
 		}
 		return sentinel
@@ -223,7 +231,6 @@ func TestTx(t *testing.T) {
 		t.Errorf("after rolled-back Tx, count = %d; want 1", n)
 	}
 
-	// SQLite has no nested transactions; a tx-backed Queries says so
 	err = q.Tx(ctx, func(inner *Queries) error {
 		return inner.Tx(ctx, func(*Queries) error { return nil })
 	})
@@ -232,8 +239,8 @@ func TestTx(t *testing.T) {
 	}
 }
 
-// TestJSONNull pins the decision null-t wire format: nullable columns marshal as the
-// value or null — the JSON never shows a wrapper and never omits the key.
+// TestJSONNull pins the Null[T] wire format: nullable columns marshal as the
+// value or null, the JSON never shows a wrapper and never omits the key.
 func TestJSONNull(t *testing.T) {
 	ctx := context.Background()
 	_, q := newDB(t)
@@ -247,7 +254,7 @@ func TestJSONNull(t *testing.T) {
 		t.Errorf("NULL bio marshals as %s; want \"bio\":null", doc)
 	}
 
-	upd, err := q.UserUpdate(ctx, u.ID, UserUpdateParams{Email: u.Email, Name: u.Name, Bio: rt.Some("hi"), CreatedAt: u.CreatedAt})
+	upd, err := q.UserUpdate(ctx, u.Changeset().BioSet(rt.Some("hi")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,15 +288,14 @@ func TestStmtCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	var u User
-	if err := s1.QueryRowContext(ctx, sql.Named("id", 1)).Scan(&u.ID, &u.Email, &u.Name, &u.Bio, &u.CreatedAt); err != nil {
+	if err := s1.QueryRowContext(ctx, 1).Scan(&u.ID, &u.Email, &u.Name, &u.Bio, &u.CreatedAt); err != nil {
 		t.Fatalf("cached statement: %v", err)
 	}
 	again, err := cache.Prepare(ctx, db, userGetSQL)
 	if err != nil || again != s1 {
-		t.Errorf("second Prepare returned a different statement (%p vs %p, %v); the SQL text is the cache key (decision statement-cache)", again, s1, err)
+		t.Errorf("second Prepare returned a different statement (%p vs %p, %v); the SQL text is the cache key", again, s1, err)
 	}
 
-	// LRU eviction at capacity 2
 	if _, err := cache.Prepare(ctx, db, userListSQL); err != nil {
 		t.Fatal(err)
 	}

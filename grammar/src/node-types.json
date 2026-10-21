@@ -1,5 +1,54 @@
 [
   {
+    "type": "add_column",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "column_definition",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "alter_table_op",
+    "named": true,
+    "fields": {
+      "table": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "table_name",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "add_column",
+          "named": true
+        },
+        {
+          "type": "drop_column",
+          "named": true
+        },
+        {
+          "type": "rename_column",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "boolean",
     "named": true,
     "fields": {}
@@ -8,55 +57,6 @@
     "type": "cardinality",
     "named": true,
     "fields": {}
-  },
-  {
-    "type": "check_definition",
-    "named": true,
-    "fields": {
-      "settings": {
-        "multiple": false,
-        "required": false,
-        "types": [
-          {
-            "type": "settings_list",
-            "named": true
-          }
-        ]
-      }
-    },
-    "children": {
-      "multiple": false,
-      "required": true,
-      "types": [
-        {
-          "type": "expression",
-          "named": true
-        },
-        {
-          "type": "go_check",
-          "named": true
-        },
-        {
-          "type": "pred_expr",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
-    "type": "checks_block",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": true,
-      "required": false,
-      "types": [
-        {
-          "type": "check_definition",
-          "named": true
-        }
-      ]
-    }
   },
   {
     "type": "column_definition",
@@ -142,32 +142,12 @@
     "type": "column_type",
     "named": true,
     "fields": {
-      "arguments": {
-        "multiple": false,
-        "required": false,
-        "types": [
-          {
-            "type": "type_arguments",
-            "named": true
-          }
-        ]
-      },
       "name": {
         "multiple": false,
         "required": true,
         "types": [
           {
             "type": "type_name",
-            "named": true
-          }
-        ]
-      },
-      "schema": {
-        "multiple": false,
-        "required": false,
-        "types": [
-          {
-            "type": "schema_name",
             "named": true
           }
         ]
@@ -188,6 +168,62 @@
         },
         {
           "type": "expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "create_index_op",
+    "named": true,
+    "fields": {
+      "table": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "table_name",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "index_definition",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "create_table_op",
+    "named": true,
+    "fields": {
+      "table": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "table_name",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "column_definition",
+          "named": true
+        },
+        {
+          "type": "indexes_block",
           "named": true
         }
       ]
@@ -254,6 +290,141 @@
       "types": [
         {
           "type": "view_category",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "down_block",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "alter_table_op",
+          "named": true
+        },
+        {
+          "type": "create_index_op",
+          "named": true
+        },
+        {
+          "type": "create_table_op",
+          "named": true
+        },
+        {
+          "type": "drop_index_op",
+          "named": true
+        },
+        {
+          "type": "drop_table_op",
+          "named": true
+        },
+        {
+          "type": "exec_op",
+          "named": true
+        },
+        {
+          "type": "rebuild_table_op",
+          "named": true
+        },
+        {
+          "type": "rename_table_op",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "drop_column",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "column_name",
+            "named": true
+          }
+        ]
+      },
+      "settings": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "settings_list",
+            "named": true
+          }
+        ]
+      },
+      "type": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "column_type",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "drop_index_op",
+    "named": true,
+    "fields": {
+      "table": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "table_name",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "index_definition",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "drop_table_op",
+    "named": true,
+    "fields": {
+      "table": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "table_name",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "column_definition",
+          "named": true
+        },
+        {
+          "type": "indexes_block",
           "named": true
         }
       ]
@@ -394,6 +565,32 @@
     }
   },
   {
+    "type": "exec_op",
+    "named": true,
+    "fields": {
+      "settings": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "settings_list",
+            "named": true
+          }
+        ]
+      },
+      "sql": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "expression",
     "named": true,
     "fields": {
@@ -407,32 +604,6 @@
           }
         ]
       }
-    }
-  },
-  {
-    "type": "go_check",
-    "named": true,
-    "fields": {
-      "ref": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "go_ref",
-            "named": true
-          }
-        ]
-      }
-    },
-    "children": {
-      "multiple": true,
-      "required": true,
-      "types": [
-        {
-          "type": "column_ref",
-          "named": true
-        }
-      ]
     }
   },
   {
@@ -767,6 +938,78 @@
     "type": "legacy_flag",
     "named": true,
     "fields": {}
+  },
+  {
+    "type": "migration_definition",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "migration_name",
+            "named": true
+          }
+        ]
+      },
+      "settings": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "settings_list",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "alter_table_op",
+          "named": true
+        },
+        {
+          "type": "create_index_op",
+          "named": true
+        },
+        {
+          "type": "create_table_op",
+          "named": true
+        },
+        {
+          "type": "down_block",
+          "named": true
+        },
+        {
+          "type": "drop_index_op",
+          "named": true
+        },
+        {
+          "type": "drop_table_op",
+          "named": true
+        },
+        {
+          "type": "exec_op",
+          "named": true
+        },
+        {
+          "type": "rebuild_table_op",
+          "named": true
+        },
+        {
+          "type": "rename_table_op",
+          "named": true
+        },
+        {
+          "type": "up_block",
+          "named": true
+        }
+      ]
+    }
   },
   {
     "type": "note_definition",
@@ -1191,6 +1434,36 @@
     }
   },
   {
+    "type": "rebuild_table_op",
+    "named": true,
+    "fields": {
+      "table": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "table_name",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "column_definition",
+          "named": true
+        },
+        {
+          "type": "indexes_block",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "record_row",
     "named": true,
     "fields": {},
@@ -1444,6 +1717,58 @@
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "rename_column",
+    "named": true,
+    "fields": {
+      "from": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "column_name",
+            "named": true
+          }
+        ]
+      },
+      "to": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "column_name",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "rename_table_op",
+    "named": true,
+    "fields": {
+      "from": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "table_name",
+            "named": true
+          }
+        ]
+      },
+      "to": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "table_name",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
@@ -1849,6 +2174,10 @@
           "named": true
         },
         {
+          "type": "migration_definition",
+          "named": true
+        },
+        {
           "type": "package_clause",
           "named": true
         },
@@ -1894,6 +2223,10 @@
         },
         {
           "type": "table_partial_definition",
+          "named": true
+        },
+        {
+          "type": "type_definition",
           "named": true
         }
       ]
@@ -2014,10 +2347,6 @@
       "required": false,
       "types": [
         {
-          "type": "checks_block",
-          "named": true
-        },
-        {
           "type": "column_definition",
           "named": true
         },
@@ -2035,6 +2364,10 @@
         },
         {
           "type": "records_block",
+          "named": true
+        },
+        {
+          "type": "validators_block",
           "named": true
         }
       ]
@@ -2112,6 +2445,20 @@
           }
         ]
       }
+    },
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "quoted_identifier",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -2144,10 +2491,6 @@
       "required": false,
       "types": [
         {
-          "type": "checks_block",
-          "named": true
-        },
-        {
           "type": "column_definition",
           "named": true
         },
@@ -2158,47 +2501,159 @@
         {
           "type": "note_definition",
           "named": true
+        },
+        {
+          "type": "validators_block",
+          "named": true
         }
       ]
     }
   },
   {
-    "type": "type_arguments",
+    "type": "type_definition",
     "named": true,
-    "fields": {},
-    "children": {
-      "multiple": true,
-      "required": true,
-      "types": [
-        {
-          "type": "identifier",
-          "named": true
-        },
-        {
-          "type": "number",
-          "named": true
-        },
-        {
-          "type": "quoted_identifier",
-          "named": true
-        }
-      ]
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "type_name",
+            "named": true
+          }
+        ]
+      },
+      "path": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      },
+      "storage": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "column_type",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
     "type": "type_name",
     "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
+          }
+        ]
+      },
+      "schema": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "schema_name",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "up_block",
+    "named": true,
     "fields": {},
     "children": {
-      "multiple": false,
+      "multiple": true,
       "required": false,
       "types": [
         {
-          "type": "identifier",
+          "type": "alter_table_op",
           "named": true
         },
         {
-          "type": "quoted_identifier",
+          "type": "create_index_op",
+          "named": true
+        },
+        {
+          "type": "create_table_op",
+          "named": true
+        },
+        {
+          "type": "drop_index_op",
+          "named": true
+        },
+        {
+          "type": "drop_table_op",
+          "named": true
+        },
+        {
+          "type": "exec_op",
+          "named": true
+        },
+        {
+          "type": "rebuild_table_op",
+          "named": true
+        },
+        {
+          "type": "rename_table_op",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "validator",
+    "named": true,
+    "fields": {
+      "ref": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "go_ref",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "column_ref",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "validators_block",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "validator",
           "named": true
         }
       ]
@@ -2366,6 +2821,10 @@
     "named": false
   },
   {
+    "type": "Migration",
+    "named": false
+  },
+  {
     "type": "Note",
     "named": false
   },
@@ -2426,6 +2885,10 @@
     "named": false
   },
   {
+    "type": "Type",
+    "named": false
+  },
+  {
     "type": "[",
     "named": false
   },
@@ -2442,6 +2905,14 @@
     "named": false
   },
   {
+    "type": "add",
+    "named": false
+  },
+  {
+    "type": "alter",
+    "named": false
+  },
+  {
     "type": "and",
     "named": false
   },
@@ -2451,10 +2922,6 @@
   },
   {
     "type": "as",
-    "named": false
-  },
-  {
-    "type": "checks",
     "named": false
   },
   {
@@ -2471,11 +2938,27 @@
     "extra": true
   },
   {
+    "type": "create",
+    "named": false
+  },
+  {
     "type": "dataset",
     "named": false
   },
   {
     "type": "delete",
+    "named": false
+  },
+  {
+    "type": "down",
+    "named": false
+  },
+  {
+    "type": "drop",
+    "named": false
+  },
+  {
+    "type": "exec",
     "named": false
   },
   {
@@ -2523,6 +3006,10 @@
     "named": false
   },
   {
+    "type": "index",
+    "named": false
+  },
+  {
     "type": "indexes",
     "named": false
   },
@@ -2533,6 +3020,10 @@
   {
     "type": "like",
     "named": false
+  },
+  {
+    "type": "migration_name",
+    "named": true
   },
   {
     "type": "not",
@@ -2603,6 +3094,14 @@
     "named": true
   },
   {
+    "type": "rebuild",
+    "named": false
+  },
+  {
+    "type": "rename",
+    "named": false
+  },
+  {
     "type": "resources",
     "named": false
   },
@@ -2623,6 +3122,14 @@
     "named": true
   },
   {
+    "type": "table",
+    "named": false
+  },
+  {
+    "type": "to",
+    "named": false
+  },
+  {
     "type": "true",
     "named": false
   },
@@ -2631,7 +3138,15 @@
     "named": false
   },
   {
+    "type": "up",
+    "named": false
+  },
+  {
     "type": "use",
+    "named": false
+  },
+  {
+    "type": "validators",
     "named": false
   },
   {

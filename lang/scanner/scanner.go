@@ -1,4 +1,4 @@
-// Package scanner tokenizes DBML source (spec §lexical-structure), playing the role of
+// Package scanner tokenizes Volt source (spec §lexical-structure), playing the role of
 // go/scanner in the Go toolchain.
 //
 // Two rules govern tokenization (spec §tokenization): left-to-right single pass,
@@ -24,20 +24,19 @@ func Scan(filename, src string) ([]token.Token, []diag.Diagnostic) {
 }
 
 // ScanFile scans a whole file as written; every position is in f. A
-// carriage return is discarded wherever it appears (§line-structure-and-whitespace rule 1) and stays
+// carriage return is discarded wherever it appears (§line-structure-and-whitespace) and stays
 // in the text: it keeps its byte, so offsets match the file, and has
-// no column (decision carriage-return). Every token that begins a top-level element
-// (§line-structure-and-whitespace rule 5) is flagged; nothing stops there.
+// no column. Every token that begins a top-level element
+// (§line-structure-and-whitespace) is flagged; nothing stops there.
 func ScanFile(f *token.File) ([]token.Token, []diag.Diagnostic) {
-	// The token slice is sized once.
-	s := newScanner(f, make([]token.Token, 0, len(f.Src)/4+16)) // a token per four bytes of schema (decision indexed-lookups)
+	s := newScanner(f, make([]token.Token, 0, len(f.Src)/4+16))
 	s.run()
 	s.emit(token.EOF, "")
 	return s.toks, s.errs
 }
 
-// ScanChunk scans the first top-level element of f's text (§line-structure-and-whitespace rule 5,
-// decision one-parse): the tokens before the next element start after the first
+// ScanChunk scans the first top-level element of f's text (§line-structure-and-whitespace):
+// the tokens before the next element start after the first
 // byte, then an EOF standing at that start, which is the end returned
 // and whose text names what it is; without one, the whole text and an
 // EOF at its end. bound reports the former. buf is a token slice to
@@ -47,7 +46,7 @@ func ScanChunk(f *token.File, buf []token.Token) (toks []token.Token, errs []dia
 	s.chunk = true
 	s.run()
 	if s.done {
-		s.pos = s.start // the EOF stands where the next element starts
+		s.pos = s.start
 		s.emit(token.EOF, ElementStart)
 		return s.toks, s.errs, s.start.Offset, true
 	}
@@ -57,10 +56,10 @@ func ScanChunk(f *token.File, buf []token.Token) (toks []token.Token, errs []dia
 
 // ElementStart is how a chunk's EOF reads in a diagnostic: the token
 // the parser found is the next element's start, not the file's end.
-const ElementStart = "the start of the next element (§line-structure-and-whitespace rule 5)"
+const ElementStart = "the start of the next element (§line-structure-and-whitespace)"
 
 // StartsDecl reports whether text begins, at its very first byte, a
-// top-level element (§line-structure-and-whitespace rule 5). One token is scanned, whatever the
+// top-level element (§line-structure-and-whitespace). One token is scanned, whatever the
 // text's length.
 func StartsDecl(text string) bool {
 	var buf [1]token.Token
@@ -71,17 +70,12 @@ func StartsDecl(text string) bool {
 	return len(s.toks) == 1 && s.toks[0].DeclStart && s.toks[0].Pos.Offset() == 0
 }
 
-// newScanner is a scanner at the start of f's text, in the initial
-// state: outside every string, comment and brace, after a line
-// break. Every chunk begins in it (§line-structure-and-whitespace rule 5).
 func newScanner(f *token.File, buf []token.Token) *Scanner {
 	s := &Scanner{src: f.Src, file: f, pos: cursor{line: 1, col: 1}, toks: buf[:0]}
-	s.nlBefore = true // start of file counts as a line break
+	s.nlBefore = true
 	return s
 }
 
-// run drives the state machine to its end, or to the element start a
-// chunk scan stops at.
 func (s *Scanner) run() {
 	for state := anyScan; state != nil && !s.done; {
 		state = state(s)
@@ -94,31 +88,22 @@ type Scanner struct {
 	src  string
 	file *token.File
 
-	pos   cursor // position of next unread rune
-	start cursor // position where the current token began
+	pos   cursor
+	start cursor
 
 	nlBefore bool
 	spBefore bool
-	cr       bool // a carriage return was stepped over inside the current token
+	cr       bool
 
-	// depth counts the open braces, never below zero: an unquoted
-	// identifier in the first column at depth zero begins a top-level
-	// element (§line-structure-and-whitespace rule 5).
-	depth int
-	// chunk asks to stop before the first element start after the
-	// first byte; done reports it was reached, s.start at it.
+	depth       int
 	chunk, done bool
 
 	toks []token.Token
 	errs []diag.Diagnostic
 
-	// val accumulates the processed value for tokens whose Val differs
-	// from their raw text (strings, quoted identifiers).
 	val strings.Builder
 }
 
-// cursor is a position under construction, in the machine's integers;
-// it becomes a token.Position when a token is emitted.
 type cursor struct {
 	Offset, line, col int
 }
@@ -127,8 +112,6 @@ func (c cursor) position(f *token.File) token.Position { return f.At(c.Offset, c
 
 const eof = rune(-1)
 
-// crSkip is the offset of the first byte at or after off that is not a
-// carriage return: the cursor never rests on one (§line-structure-and-whitespace rule 1).
 func (s *Scanner) crSkip(off int) int {
 	for off < len(s.src) && s.src[off] == '\r' {
 		off++
@@ -142,16 +125,12 @@ func (s *Scanner) peek() rune {
 		return eof
 	}
 	if c := s.src[off]; c < utf8.RuneSelf {
-		return rune(c) // ASCII, the common case: no decoding
+		return rune(c)
 	}
 	r, _ := utf8.DecodeRuneInString(s.src[off:])
 	return r
 }
 
-// peekAt is the rune n runes on, or eof: at the end of the text, and
-// past a line break. The scanner cannot see beyond a line break it
-// has not consumed, and only a string or a comment consumes one
-// inside a token (decision one-parse).
 func (s *Scanner) peekAt(n int) rune {
 	off := s.crSkip(s.pos.Offset)
 	for ; n > 0; n-- {
@@ -170,7 +149,7 @@ func (s *Scanner) peekAt(n int) rune {
 
 func (s *Scanner) next() rune {
 	if off := s.crSkip(s.pos.Offset); off != s.pos.Offset {
-		s.pos.Offset = off // the carriage return keeps its byte and has no column
+		s.pos.Offset = off
 		s.cr = true
 	}
 	if s.pos.Offset >= len(s.src) {
@@ -190,7 +169,6 @@ func (s *Scanner) next() rune {
 	return r
 }
 
-// mark begins a token at the cursor, past any carriage return there.
 func (s *Scanner) mark() {
 	s.pos.Offset = s.crSkip(s.pos.Offset)
 	s.start = s.pos
@@ -200,8 +178,6 @@ func (s *Scanner) mark() {
 
 func (s *Scanner) raw() string { return s.src[s.start.Offset:s.pos.Offset] }
 
-// rawVal is the token's text as a value: its carriage returns, if it
-// stepped over any, discarded (§line-structure-and-whitespace rule 1).
 func (s *Scanner) rawVal() string {
 	if s.cr {
 		return strings.ReplaceAll(s.raw(), "\r", "")
@@ -213,11 +189,6 @@ func (s *Scanner) emit(kind token.Kind, val string) {
 	s.tokEmit(token.Token{Kind: kind, Val: val})
 }
 
-// tokEmit appends the token at the marked start, flagged as an element
-// start when it is one (§line-structure-and-whitespace rule 5): an unquoted identifier in the first
-// column at depth zero. A chunk scan stops before the first such token
-// after the first byte, with s.start at it; the depth counts the
-// token's own brace only after it is kept.
 func (s *Scanner) tokEmit(t token.Token) {
 	t.Pos = s.start.position(s.file)
 	t.Len = int32(s.pos.Offset - s.start.Offset)
@@ -244,7 +215,6 @@ func (s *Scanner) errorf(code, format string, args ...any) {
 	s.errs = append(s.errs, diag.Errorf(s.start.position(s.file), code, format, args...))
 }
 
-// §identifiers: letter = Unicode category L | Unicode category M | "_".
 func isLetter(r rune) bool {
 	return r == '_' || unicode.IsLetter(r) || unicode.IsMark(r)
 }
@@ -254,9 +224,6 @@ func isHex(r rune) bool {
 	return isDigit(r) || ('a' <= r && r <= 'f') || ('A' <= r && r <= 'F')
 }
 
-/* ===== state functions ===== */
-
-// anyScan is the top-level state: it dispatches on the next rune.
 func anyScan(s *Scanner) stateFn {
 	for {
 		if r := s.peek(); r == ' ' || r == '\t' {
@@ -301,13 +268,13 @@ func lineCommentScan(s *Scanner) stateFn {
 	for r := s.peek(); r != '\n' && r != eof; r = s.peek() {
 		s.next()
 	}
-	s.spBefore = true // comments are trivia (§comments rule 4)
+	s.spBefore = true
 	return anyScan
 }
 
 func blockCommentScan(s *Scanner) stateFn {
 	s.next()
-	s.next() // consume /*
+	s.next()
 	for {
 		switch {
 		case s.peek() == eof:
@@ -324,7 +291,6 @@ func blockCommentScan(s *Scanner) stateFn {
 	}
 }
 
-// escapeScan handles one escape sequence (§escape-sequences); the backslash is consumed.
 func (s *Scanner) escapeScan() {
 	switch r := s.next(); r {
 	case 't':
@@ -341,7 +307,7 @@ func (s *Scanner) escapeScan() {
 		s.val.WriteByte('\v')
 	case 'f':
 		s.val.WriteByte('\f')
-	case '\n': // line continuation
+	case '\n':
 	case 'u':
 		hex := make([]rune, 0, 4)
 		for i := 0; i < 4; i++ {
@@ -356,13 +322,12 @@ func (s *Scanner) escapeScan() {
 	case eof:
 		s.val.WriteByte('\\')
 	default:
-		// §escape-sequences: any other escaped character yields the character itself
 		s.val.WriteRune(r)
 	}
 }
 
 func stringScan(s *Scanner) stateFn {
-	s.next() // opening '
+	s.next()
 	for {
 		switch r := s.peek(); r {
 		case eof:
@@ -387,7 +352,7 @@ func stringScan(s *Scanner) stateFn {
 func multiStringScan(s *Scanner) stateFn {
 	s.next()
 	s.next()
-	s.next() // opening '''
+	s.next()
 	for {
 		switch r := s.peek(); {
 		case r == eof:
@@ -408,7 +373,6 @@ func multiStringScan(s *Scanner) stateFn {
 	}
 }
 
-// indentStrip implements §multi-line-string-literals rule 4 indentation stripping.
 func indentStrip(v string) string {
 	lines := strings.Split(v, "\n")
 	if len(lines) > 0 && strings.TrimSpace(lines[0]) == "" {
@@ -440,7 +404,7 @@ func indentStrip(v string) string {
 }
 
 func quotedIdentScan(s *Scanner) stateFn {
-	s.next() // opening "
+	s.next()
 	for {
 		switch r := s.peek(); r {
 		case eof:
@@ -463,7 +427,7 @@ func quotedIdentScan(s *Scanner) stateFn {
 }
 
 func funcExprScan(s *Scanner) stateFn {
-	s.next() // opening `
+	s.next()
 	for {
 		switch r := s.peek(); r {
 		case eof:
@@ -474,14 +438,13 @@ func funcExprScan(s *Scanner) stateFn {
 			s.tokEmit(token.Token{Kind: token.FUNCEXPR, Val: s.val.String()})
 			return anyScan
 		default:
-			// §expression-literals: raw content, no escapes
 			s.val.WriteRune(s.next())
 		}
 	}
 }
 
 func colorScan(s *Scanner) stateFn {
-	s.next() // #
+	s.next()
 	for isIdentChar(s.peek()) {
 		s.next()
 	}
@@ -490,8 +453,6 @@ func colorScan(s *Scanner) stateFn {
 }
 
 func identScan(s *Scanner) stateFn {
-	// ASCII fast path, one column per byte; the rune loop below handles
-	// the rest.
 	off := s.pos.Offset
 	for off < len(s.src) && asciiIdent[s.src[off]] {
 		off++
@@ -505,7 +466,6 @@ func identScan(s *Scanner) stateFn {
 	return anyScan
 }
 
-// asciiIdent marks the ASCII identifier bytes (§identifiers restricted to ASCII).
 var asciiIdent = func() (t [256]bool) {
 	for c := 0; c < 256; c++ {
 		t[c] = c == '_' || ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9')
@@ -513,9 +473,6 @@ var asciiIdent = func() (t [256]bool) {
 	return t
 }()
 
-// numberOrIdentScan resolves the digit-leading ambiguity of §identifiers/§numeric-literals:
-// a token of digits (one optional dot, optional exponent) is a NUMBER; a
-// digit-leading token containing letters is an IDENT (no dot allowed).
 func numberOrIdentScan(s *Scanner) stateFn {
 	nDots, hasLetter := 0, false
 	for {
@@ -582,7 +539,7 @@ var singleOps = map[rune]token.Kind{
 func operatorScan(s *Scanner) stateFn {
 	r := s.next()
 	if r == '<' {
-		switch s.peek() { // §tokenization longest match
+		switch s.peek() {
 		case '>':
 			s.next()
 			s.emit(token.LTGT, "<>")

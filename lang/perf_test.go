@@ -32,11 +32,11 @@ func perfFixture(t *testing.T, tables, cols int, def bool) string {
 	var db strings.Builder
 	db.WriteString("package db\n\n")
 	for i := 1; i <= tables; i++ {
-		fmt.Fprintf(&db, "Table m_t%04ds {\n\tid integer [pk, increment]\n", i)
+		fmt.Fprintf(&db, "Table m_t%04ds {\n\tid int [pk, increment]\n", i)
 		for c := 1; c < cols; c++ {
-			typ := "text"
+			typ := "string"
 			if c%2 == 1 {
-				typ = "integer"
+				typ = "int"
 			}
 			fmt.Fprintf(&db, "\tc%03d %s [not null]\n", c, typ)
 		}

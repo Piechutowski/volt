@@ -1,6 +1,6 @@
-// Integration tests for the v2 dynamic query layer (decisions.md, Query layer):
-// predicates, options and typed assignments run against a real SQLite
-// through a real driver, sharing the fixture with the CRUD tests (decision integration-over-mocks).
+// Integration tests for the v2 dynamic query layer:
+// predicates, options and typed assignments run against a float64 SQLite
+// through a float64 driver, sharing the fixture with the CRUD tests.
 package itest
 
 import (
@@ -13,16 +13,13 @@ import (
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-// errTxAbort is the sentinel a test callback returns to force a rollback.
 var errTxAbort = errors.New("abort")
 
-// dynSeed creates three users: two sharing a name (for tiebreak
-// pagination), one with a bio (the others stay NULL).
 func dynSeed(t *testing.T, q *Queries) (ann, bea, bob User) {
 	t.Helper()
 	ctx := context.Background()
 	create := func(email, name string, bio rt.Null[string]) User {
-		u, err := q.UserCreate(ctx, UserCreateParams{Email: email, Name: name, Bio: bio})
+		u, err := q.UserCreate(ctx, UserNew().EmailSet(email).NameSet(name).BioSet(bio))
 		if err != nil {
 			t.Fatalf("UserCreate(%s): %v", email, err)
 		}
@@ -50,7 +47,7 @@ func TestUserQueryPredicates(t *testing.T) {
 	cases := []struct {
 		name string
 		opts []rt.Opt[User]
-		want []string // expected emails, in id order
+		want []string
 	}{
 		{"eq", []rt.Opt[User]{UserEmail.Eq("ann@example.com")}, []string{"ann@example.com"}},
 		{"like", []rt.Opt[User]{UserEmail.Like("b%")}, []string{"bea@example.com", "bob@example.com"}},
@@ -122,7 +119,7 @@ func TestUserQueryShaping(t *testing.T) {
 }
 
 // TestUserQueryKeyset walks the whole table one row at a time via After
-// (decision keyset-pagination), over a deliberately non-unique first order term with a mixed-
+// , over a deliberately non-unique first order term with a mixed-
 // direction unique tiebreak — the case OFFSET pagination gets wrong when
 // rows shift between pages.
 func TestUserQueryKeyset(t *testing.T) {
@@ -146,12 +143,10 @@ func TestUserQueryKeyset(t *testing.T) {
 		walked = append(walked, last.Email)
 		opts = append(append([]rt.Opt[User]{}, base...), UserAfter(last.Name, last.ID))
 	}
-	// name asc gives Ann first; the two "Bo" rows come id-descending
 	if want := []string{"ann@example.com", "bob@example.com", "bea@example.com"}; !equalStrings(walked, want) {
 		t.Errorf("keyset walk = %v, want %v", walked, want)
 	}
 
-	// misuse fails loudly, not wrongly
 	if _, err := q.UserQuery(ctx, UserAfter("x")); err == nil || !strings.Contains(err.Error(), "OrderBy") {
 		t.Errorf("After without OrderBy: err = %v", err)
 	}
@@ -181,7 +176,6 @@ func TestUserUpdateWhere(t *testing.T) {
 	_, q := newDB(t)
 	ann, _, _ := dynSeed(t, q)
 
-	// partial update: only bio moves, everything else stays
 	n, err := q.UserUpdateWhere(ctx, UserSet(UserBio.Set("beekeeper")), UserID.Eq(ann.ID))
 	if err != nil || n != 1 {
 		t.Fatalf("UserUpdateWhere = %d, %v; want 1 row", n, err)
@@ -191,7 +185,6 @@ func TestUserUpdateWhere(t *testing.T) {
 		t.Errorf("after update: %+v, %v", got, err)
 	}
 
-	// SetNull is the explicit way back to NULL
 	if n, err := q.UserUpdateWhere(ctx, UserSet(UserBio.SetNull()), UserID.Eq(ann.ID)); err != nil || n != 1 {
 		t.Fatalf("SetNull = %d, %v", n, err)
 	}
@@ -199,16 +192,13 @@ func TestUserUpdateWhere(t *testing.T) {
 		t.Errorf("bio still set after SetNull: %+v", got.Bio)
 	}
 
-	// predicates that match nothing affect nothing, without error
 	if n, err := q.UserUpdateWhere(ctx, UserSet(UserName.Set("x")), UserID.Eq(99)); err != nil || n != 0 {
 		t.Errorf("miss = %d, %v; want 0, nil", n, err)
 	}
 
-	// the whole-table guard (decision positional-placeholders)
 	if _, err := q.UserUpdateWhere(ctx, UserSet(UserName.Set("x"))); err == nil {
 		t.Error("UserUpdateWhere without predicate: want error")
 	}
-	// ... and the explicit way to mean it
 	if n, err := q.UserUpdateWhere(ctx, UserSet(UserName.Set("Everyone")), rt.Raw[User]("1 = 1")); err != nil || n != 3 {
 		t.Errorf("explicit all-rows update = %d, %v; want 3", n, err)
 	}
@@ -233,22 +223,21 @@ func TestUserDeleteWhere(t *testing.T) {
 
 // TestOrderDynamic exercises the enum-typed handle and a second model's
 // surface: a Pred[Order] is a different type from a Pred[User], so
-// cross-model mixups never reach the database (decision flat-handles — a compile error).
+// cross-model mixups never reach the database (a compile error).
 func TestOrderDynamic(t *testing.T) {
 	ctx := context.Background()
 	_, q := newDB(t)
 	ann, _, _ := dynSeed(t, q)
 
-	placed, err := q.OrderCreate(ctx, OrderCreateParams{UserID: ann.ID, Total: "9.99", PlacedAt: rt.Some(time.Now().UTC())})
+	placed, err := q.OrderCreate(ctx, OrderNew().UserIDSet(ann.ID).TotalSet(9.99).FeeSet(0).PlacedAtSet(rt.Some(time.Now().UTC())))
 	if err != nil {
 		t.Fatalf("OrderCreate: %v", err)
 	}
-	unplaced, err := q.OrderCreate(ctx, OrderCreateParams{UserID: ann.ID, Total: "15.00", PlacedAt: rt.Null[time.Time]{}})
+	unplaced, err := q.OrderCreate(ctx, OrderNew().UserIDSet(ann.ID).TotalSet(15.00).FeeSet(0).PlacedAtSet(rt.Null[time.Time]{}))
 	if err != nil {
 		t.Fatalf("OrderCreate: %v", err)
 	}
 
-	// both got the database default status (decision create-params); the enum handle is typed
 	if n, err := q.OrderCount(ctx, OrderStatus.Eq(EOrderStatusPending)); err != nil || n != 2 {
 		t.Errorf("pending count = %d, %v; want 2", n, err)
 	}
@@ -264,7 +253,7 @@ func TestOrderDynamic(t *testing.T) {
 	}
 }
 
-// TestDynStmtCache proves the decision statement-cache wiring end to end: same option shape,
+// TestDynStmtCache proves the statement cache wiring end to end: same option shape,
 // different values -> one prepared statement; a new shape -> a second.
 func TestDynStmtCache(t *testing.T) {
 	ctx := context.Background()
@@ -292,7 +281,7 @@ func TestDynStmtCache(t *testing.T) {
 }
 
 // TestDynInTx runs dynamic verbs inside Queries.Tx: the transactional
-// copy drops the statement cache by construction (decision statement-cache — its statements
+// copy drops the statement cache by construction (its statements
 // belong to the outer handle) and a rollback undoes the writes.
 func TestDynInTx(t *testing.T) {
 	ctx := context.Background()
@@ -324,5 +313,27 @@ func TestDynInTx(t *testing.T) {
 	}
 	if n, err := q.UserCount(ctx); err != nil || n != 1 {
 		t.Errorf("after commit count = %d, %v; want 1", n, err)
+	}
+}
+
+// TestUserUpdateWhereRunsNoValidator pins the bulk-path bypass of
+// §changesets: UpdateWhere takes assignments, never a row, so a value
+// EmailValid refuses in Validate is written and read back unchanged.
+func TestUserUpdateWhereRunsNoValidator(t *testing.T) {
+	ctx := context.Background()
+	_, q := newDB(t)
+	ann, _, _ := dynSeed(t, q)
+
+	const bad = "not-an-address"
+	if UserNew().EmailSet(bad).Validate().Valid() {
+		t.Fatalf("EmailValid accepted %q; the test needs a value Validate refuses", bad)
+	}
+	n, err := q.UserUpdateWhere(ctx, UserSet(UserEmail.Set(bad)), UserID.Eq(ann.ID))
+	if err != nil || n != 1 {
+		t.Fatalf("UserUpdateWhere = %d, %v; want 1 row and no validator", n, err)
+	}
+	got, err := q.UserGet(ctx, ann.ID)
+	if err != nil || got.Email != bad {
+		t.Errorf("after the bulk write: %+v, %v; want email %q", got, err, bad)
 	}
 }

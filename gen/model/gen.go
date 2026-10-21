@@ -14,10 +14,12 @@ type Options struct {
 	// Source names the input, recorded in the generated headers.
 	Source string
 	// Package overrides the package clause; empty means the Volt
-	// package's name (§projects-and-packages rule 7).
+	// package's name (§projects-and-packages).
 	Package string
-	// ModelsOnly emits just nao_models.go: the structs, params structs
-	// and enums — every type the wire carries (decision layout-independent-gen).
+	// ModelsOnly emits just nao_models.go: the structs, their changesets
+	// and the enums, every type the wire carries (spec §changesets).
+	// Otherwise the query layers follow, and volt_migrations.go for a
+	// package that declares migrations (spec §migration-tooling).
 	ModelsOnly bool
 	// SQL additionally emits the SQLite DDL and seed inserts.
 	SQL bool
@@ -36,14 +38,11 @@ func Generate(pkg *lang.Package, opts Options) ([]File, error) {
 	if opts.Package != "" {
 		gopts.Package = opts.Package
 	}
-	// One plan per package (decision one-naming-plan).
 	plan := pkg.Plan()
 	if plan == nil {
 		plan = golang.PlanBuild(pkg.Merged(), pkg.Schema())
 	}
 
-	// The files are emitted on every CPU (decision worker-pool) and gathered in this
-	// order.
 	type emit struct {
 		name string
 		fn   func() ([]byte, error)
@@ -52,17 +51,20 @@ func Generate(pkg *lang.Package, opts Options) ([]File, error) {
 	if !opts.ModelsOnly {
 		emits = append(emits,
 			emit{"nao_queries.go", func() ([]byte, error) { return plan.Queries(gopts) }},
-			emit{"nao_dyn.go", func() ([]byte, error) { return plan.Dyn(gopts) }})
+			emit{"nao_dyn.go", func() ([]byte, error) { return plan.Dyn(gopts) }},
+			emit{"nao_validate.go", func() ([]byte, error) { return plan.Validators(pkg.Validators, gopts) }})
 		if fns := pkg.SelectFns(); len(fns) > 0 {
 			emits = append(emits, emit{"nao_selects.go", func() ([]byte, error) { return plan.Selects(fns, gopts) }})
 		}
-		if len(pkg.CheckFns) > 0 {
-			emits = append(emits, emit{"nao_validate.go", func() ([]byte, error) { return plan.Validators(pkg.CheckFns, gopts) }})
+		if len(pkg.Schema().Migrations) > 0 {
+			emits = append(emits, emit{"volt_migrations.go", func() ([]byte, error) {
+				return golang.GenerateMigrations(pkg.Merged(), pkg.Schema(), gopts)
+			}})
 		}
 	}
 	if opts.SQL {
 		emits = append(emits, emit{"nao_schema.sql", func() ([]byte, error) {
-			return sqlite.Generate(pkg.Merged(), pkg.Schema(), sqlite.Options{Source: opts.Source, CheckSQL: pkg.CheckSQL})
+			return sqlite.Generate(pkg.Merged(), pkg.Schema(), sqlite.Options{Source: opts.Source})
 		}})
 	}
 	out := make([]File, len(emits))

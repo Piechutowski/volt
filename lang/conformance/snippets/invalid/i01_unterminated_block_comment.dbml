@@ -1,3 +1,0 @@
-// spec: §comments rule 2 — block comment must be terminated before EOF
-Table t { id int }
-/* never closed

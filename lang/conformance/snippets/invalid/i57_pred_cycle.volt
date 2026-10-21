@@ -1,9 +1,9 @@
-// spec: §predicates rule 2 — predicate references must be acyclic
+// spec: §predicates — predicate references must be acyclic
 package db
 
 Table ms_revenue {
-  id integer [pk]
-  year integer [not null]
+  id int [pk]
+  year int [not null]
 }
 
 Pred a { b and year = :y }

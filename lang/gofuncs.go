@@ -1,7 +1,7 @@
-// Go source facts for Go references (spec §pipelines rule 2, §validation-checks rule 5): a .volt file
+// Go source facts for Go references (spec §pipelines, §validators): a .volt file
 // names Go only in the containing package's own Go files, read with the
 // standard library's parser, and every reference is held to the exact
-// spelled signature (decision go-references-by-spelling).
+// spelled signature.
 package lang
 
 import (
@@ -42,8 +42,8 @@ type GoFunc struct {
 }
 
 // GoSource is one Go file of a package directory as the scan reads it
-// (decision keys-are-inputs): its name and its text, or its first bytes alone when they
-// carry the generated marker (decision indexed-lookups). Equal sources scan to equal
+// : its name and its text, or its first bytes alone when they
+// carry the generated marker. Equal sources scan to equal
 // functions.
 type GoSource struct {
 	Name string
@@ -74,9 +74,6 @@ func GoSourcesRead(dir string) []GoSource {
 	return srcs
 }
 
-// goSourceRead reads a file's first bytes and, unless they carry the
-// generated marker on the first line (^// Code generated .* DO NOT
-// EDIT\.$), the rest.
 func goSourceRead(path string) (GoSource, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -112,11 +109,11 @@ func GoFuncsOf(dir string, srcs []GoSource) (funcs map[string]GoFunc, broken []s
 	ctxt := build.Default
 	for _, src := range srcs {
 		if src.Head {
-			continue // volt's own output never declares a check or a plug (decision indexed-lookups)
+			continue
 		}
 		ctxt.OpenFile = func(string) (io.ReadCloser, error) { return io.NopCloser(strings.NewReader(src.Text)), nil }
 		if ok, _ := ctxt.MatchFile(dir, src.Name); !ok {
-			continue // the go tool would not compile it; neither do we count it
+			continue
 		}
 		path := filepath.Join(dir, src.Name)
 		f, perr := parser.ParseFile(fset, path, src.Text, parser.ParseComments|parser.SkipObjectResolution)
@@ -191,30 +188,23 @@ func goFuncOf(fset *gotoken.FileSet, path string, fn *goast.FuncDecl) GoFunc {
 	return gf
 }
 
-// goScan is one package directory's scan, cached per check run.
 type goScan struct {
-	once   sync.Once // the scan runs once, whichever package asks first
+	once   sync.Once
 	funcs  map[string]GoFunc
 	broken []string
 }
 
-// goFuncsCache holds one goScan per package directory, shared by the
-// per-package checkers of a phase (decision worker-pool). A session seeds it with
-// scans whose identity is stable while their sources are (decisions pure-memos, keys-are-inputs).
 type goFuncsCache struct {
 	mu sync.Mutex
 	by map[string]*goScan
 }
 
-// goScanOf is a finished scan: its once is spent, its content given.
 func goScanOf(funcs map[string]GoFunc, broken []string) *goScan {
 	sc := &goScan{}
 	sc.once.Do(func() { sc.funcs, sc.broken = funcs, broken })
 	return sc
 }
 
-// goFuncs returns the package directory's functions, scanned once per
-// check run.
 func (c *checker) goFuncs(pkg *Package) *goScan {
 	if c.gofuncs == nil {
 		c.gofuncs = &goFuncsCache{}
@@ -233,8 +223,6 @@ func (c *checker) goFuncs(pkg *Package) *goScan {
 	return sc
 }
 
-// brokenHint explains an invisible function when a Go file of the
-// package failed to parse: everything after the error is unseen.
 func (sc *goScan) brokenHint() string {
 	if len(sc.broken) == 0 {
 		return ""

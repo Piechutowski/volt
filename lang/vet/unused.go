@@ -9,8 +9,6 @@ import (
 	"github.com/Piechutowski/volt/lang/diag"
 )
 
-// unusedEnumFold reads the enum keys every table's columns name from
-// the declarations' summaries.
 type unusedEnumFold struct{ meta }
 
 var unusedEnum = &unusedEnumFold{meta{
@@ -47,8 +45,6 @@ func (r *unusedPartialRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.D
 	return out
 }
 
-// unusedAliasFold reads the unqualified table spellings every
-// declaration uses from the summaries.
 type unusedAliasFold struct{ meta }
 
 var unusedAlias = &unusedAliasFold{meta{

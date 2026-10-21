@@ -1,0 +1,252 @@
+## i01_unterminated_block_comment.volt
+i01_unterminated_block_comment.volt:3:1: error: syntax: unterminated block comment (§comments)
+
+## i02_unterminated_string.volt
+i02_unterminated_string.volt:2:25: error: syntax: newline in single-line string (§string-literals)
+i02_unterminated_string.volt:3:1: error: syntax: invalid setting value (§settings-lists): found end of file
+i02_unterminated_string.volt:3:1: error: syntax: expected '}' in Table (§table), found end of file
+
+## i03_newline_in_string.volt
+i03_newline_in_string.volt:2:1: error: spec/table: table "t" must contain at least one column or partial injection
+i03_newline_in_string.volt:3:17: error: syntax: newline in single-line string (§string-literals)
+i03_newline_in_string.volt:4:6: error: syntax: newline in single-line string (§string-literals)
+i03_newline_in_string.volt:5:1: error: syntax: expected ']' in settings list (§settings-lists), found '}' "}"
+
+## i04_invalid_number.volt
+i04_invalid_number.volt:2:1: error: spec/table: table "t" must contain at least one column or partial injection
+i04_invalid_number.volt:3:20: error: syntax: invalid number "12.3abc" (§numeric-literals)
+i04_invalid_number.volt:3:20: error: syntax: invalid setting value (§settings-lists): found illegal token "12.3abc"
+
+## i05_unterminated_funcexpr.volt
+i05_unterminated_funcexpr.volt:2:28: error: syntax: unterminated expression literal (§expression-literals)
+i05_unterminated_funcexpr.volt:2:28: error: syntax: invalid setting value (§settings-lists): found end of file
+i05_unterminated_funcexpr.volt:2:28: error: syntax: expected '}' in Table (§table), found end of file
+
+## i06_bad_color.volt
+i06_bad_color.volt:2:23: error: spec/color-literals: color literal '#12ab' must be 3 or 6 hex digits
+
+## i07_unknown_element.volt
+i07_unknown_element.volt:2:1: error: syntax: unknown element type "View" (§program-structure)
+
+## i08_empty_table.volt
+i08_empty_table.volt:2:1: error: spec/table: table "empty" must contain at least one column or partial injection
+
+## i09_duplicate_setting.volt
+i09_duplicate_setting.volt:3:19: error: spec/settings-lists: setting "unique" may appear at most once
+
+## i10_null_not_null.volt
+i10_null_not_null.volt:3:10: error: spec/columns: "null" and "not null" cannot both be set
+
+## i11_pk_primary_key.volt
+i11_pk_primary_key.volt:3:15: error: spec/settings-lists: setting "primary key" may appear at most once
+
+## i126_type_storage.volt
+i126_type_storage.volt:3:11: error: spec/types: storage type "text" of Type "Slug" is not a built-in: bool, int, float64, string, []byte or time.Time (§types)
+i126_type_storage.volt:5:5: error: spec/columns: column "s": unknown type "Slug"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+
+## i127_type_bare_from.volt
+i127_type_bare_from.volt:3:23: error: spec/types: Type "Slug" is a type of this package and takes no from path (§types)
+i127_type_bare_from.volt:5:5: error: spec/columns: column "s": unknown type "Slug"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+
+## i128_type_pkg_no_from.volt
+i128_type_pkg_no_from.volt:3:6: error: spec/types: Type "money.Money" names a package but has no from path (§types)
+i128_type_pkg_no_from.volt:5:5: error: spec/columns: column "m": unknown type "money.Money"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+
+## i129_type_builtin_name.volt
+i129_type_builtin_name.volt:3:6: error: spec/types: Type "string" spells a built-in type (§types)
+
+## i12_duplicate_columns.volt
+i12_duplicate_columns.volt:4:3: error: spec/namespaces-and-uniqueness: duplicate column name "id"
+
+## i130_default_type_mismatch.volt
+i130_default_type_mismatch.volt:4:19: error: spec/default-values: default of "n" (int) must be an integer, found string (§default-values)
+
+## i131_unknown_type.volt
+i131_unknown_type.volt:4:8: error: spec/columns: column "name": unknown type "varchar"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+
+## i132_default_wrong_enum.volt
+i132_default_wrong_enum.volt:5:22: error: spec/default-values: default of "s": "gone" is not a value of enum "status" (§default-values)
+
+## i133_increment_declared_type.volt
+i133_increment_declared_type.volt:5:14: error: spec/columns: increment on "id" (ID): only an int column can auto-increment (§columns, §mapping-to-sqlite-ddl)
+
+## i134_default_null_not_null.volt
+i134_default_null_not_null.volt:4:29: error: spec/default-values: default of "n" is null, but the column is not nullable (§default-values)
+
+## i135_records_type_mismatch.volt
+i135_records_type_mismatch.volt:7:8: error: spec/records-sample-data: record value for "n" (int) must be an integer, found string (§records-sample-data)
+
+## i136_records_null_not_null.volt
+i136_records_null_not_null.volt:7:7: error: spec/records-sample-data: record value for "n" is null, but the column is not nullable (§records-sample-data)
+
+## i137_default_null_composite_pk.volt
+i137_default_null_composite_pk.volt:4:19: error: spec/default-values: default of "a" is null, but the column is not nullable (§default-values)
+
+## i138_enum_unqualified_other_schema.volt
+i138_enum_unqualified_other_schema.volt:6:5: error: spec/columns: column "s": unknown type "job_status"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+
+## i139_type_empty_from.volt
+i139_type_empty_from.volt:3:19: error: spec/types: Type "m.M" has an empty from path; the path is a non-empty import path (§types)
+i139_type_empty_from.volt:5:5: error: spec/columns: column "m": unknown type "m.M"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+
+## i13_headercolor_not_color.volt
+i13_headercolor_not_color.volt:2:23: error: spec/table: "headercolor" must be a color literal
+
+## i140_type_reserved_alias.volt
+i140_type_reserved_alias.volt:3:6: error: spec/types: Type "rt.X": package name "rt" is reserved by generated code (§types)
+i140_type_reserved_alias.volt:5:5: error: spec/columns: column "x": unknown type "rt.X"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+
+## i141_type_reserved_alias_path.volt
+i141_type_reserved_alias_path.volt:3:6: error: spec/types: Type "sql.X": package name "sql" is reserved by generated code for "database/sql" (§types)
+i141_type_reserved_alias_path.volt:5:5: error: spec/columns: column "x": unknown type "sql.X"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+
+## i142_slice_not_byte.volt
+i142_slice_not_byte.volt:4:8: error: spec/columns: column "tags": unknown type "[]string"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+
+## i143_type_duplicate.volt
+i143_type_duplicate.volt:4:1: error: spec/namespaces-and-uniqueness: duplicate Type name "Slug"
+
+## i144_type_enum_collision.volt
+i144_type_enum_collision.volt:4:6: error: spec/types: Type "status" collides with the enum of that name (§types)
+
+## i145_type_storage_enum.volt
+i145_type_storage_enum.volt:4:11: error: spec/types: storage type "status" of Type "Slug" is not a built-in: bool, int, float64, string, []byte or time.Time (§types)
+i145_type_storage_enum.volt:6:5: error: spec/columns: column "s": unknown type "Slug"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+
+## i146_type_storage_type.volt
+i146_type_storage_type.volt:4:13: error: spec/types: storage type "Slug" of Type "Handle" is not a built-in: bool, int, float64, string, []byte or time.Time (§types)
+i146_type_storage_type.volt:6:5: error: spec/columns: column "h": unknown type "Handle"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+
+## i147_default_enum_const_non_enum.volt
+i147_default_enum_const_non_enum.volt:5:19: error: spec/default-values: default of "n" (int) is an enum constant but the column is not an enum (§default-values)
+
+## i148_default_other_enum.volt
+i148_default_other_enum.volt:6:22: error: spec/default-values: default of "s" names enum "role", the column's enum is "status" (§default-values)
+
+## i149_default_string_time.volt
+i149_default_string_time.volt:4:26: error: spec/default-values: default of "at" (time.Time) must be an expression literal, found string (§default-values)
+
+## i14_unknown_column_setting.volt
+i14_unknown_column_setting.volt:3:11: error: spec/columns: unknown setting "sparkly"
+
+## i150_default_bool_not_boolean.volt
+i150_default_bool_not_boolean.volt:4:23: error: spec/default-values: default of "live" (bool) must be a boolean, found integer (§default-values)
+
+## i151_default_fraction_int.volt
+i151_default_fraction_int.volt:4:19: error: spec/default-values: default of "n" (int) must be an integer, found number (§default-values)
+
+## i152_records_literal_null_not_null.volt
+i152_records_literal_null_not_null.volt:7:8: error: spec/records-sample-data: record value for "n" is null, but the column is not nullable (§records-sample-data)
+
+## i153_records_declared_type_mismatch.volt
+i153_records_declared_type_mismatch.volt:8:8: error: spec/records-sample-data: record value for "price" (money.Money) must be an integer, found string (§records-sample-data)
+
+## i154_column_without_type.volt
+i154_column_without_type.volt:3:1: error: spec/table: table "t" must contain at least one column or partial injection
+i154_column_without_type.volt:4:6: error: syntax: expected identifier in column type (§columns), found '[' "["
+
+## i179_index_expression_unnamed.volt
+i179_index_expression_unnamed.volt:8:6: error: spec/indexes: index (`lower(email)`) on "users" has an expression in its key and must carry name:, since a name derives from columns only (§indexes)
+
+## i19_ref_arity_mismatch.volt
+i19_ref_arity_mismatch.volt:5:17: error: spec/relationships-ref: composite relationship endpoints must have the same number of columns: 2 vs 1
+
+## i20_bad_ref_action.volt
+i20_bad_ref_action.volt:4:18: error: spec/relationships-ref: invalid referential action "explode" for 'delete'; expected cascade, restrict, set null, set default or no action
+
+## i21_ref_endpoint_no_column.volt
+i21_ref_endpoint_no_column.volt:4:12: error: syntax: endpoint must reference a column as [schema.]table.column (§relationships-ref)
+
+## i22_empty_enum.volt
+i22_empty_enum.volt:2:1: error: spec/enum: enum "empty_status" must contain at least one value
+
+## i23_duplicate_enum_values.volt
+i23_duplicate_enum_values.volt:4:3: error: spec/namespaces-and-uniqueness: duplicate enum value "active"
+
+## i24_records_arity.volt
+i24_records_arity.volt:6:5: error: spec/records-sample-data: record row has 3 values but 2 columns are listed
+
+## i25_two_records_blocks.volt
+i25_two_records_blocks.volt:3:3: error: spec/records-sample-data: at most one records block per table
+
+## i26_toplevel_records_no_columns.volt
+i26_toplevel_records_no_columns.volt:3:1: error: spec/records-sample-data: top-level records must list columns
+
+## i27_two_notes.volt
+i27_two_notes.volt:3:3: error: spec/notes: at most one Note per Table body
+
+## i28_bad_tablegroup_setting.volt
+i28_bad_tablegroup_setting.volt:3:15: error: spec/tablegroup: unknown setting "headercolor"
+
+## i29_duplicate_category.volt
+i29_duplicate_category.volt:4:3: error: spec/diagramview: category "Tables" may appear at most once per view
+
+## i30_bad_import_kind.volt
+i30_bad_import_kind.volt:2:1: error: spec/file-imports-removed: use is not part of the Volt language (§file-imports-removed); files of one package share a namespace without imports, and another package is reached through an import block (§imports)
+
+## i31_import_missing_from.volt
+i31_import_missing_from.volt:2:7: error: syntax: expected 'from' in import statement (§file-imports-removed)
+
+## i32_settings_next_line.volt
+i32_settings_next_line.volt:4:3: error: syntax: expected a column, indexes, validators, Note, records or '~injection' in Table body, found '[' "["
+
+## i33_ref_without_body.volt
+i33_ref_without_body.volt:4:1: error: syntax: expected '{' in Ref (§relationships-ref), found end of file
+
+## i34_project_bad_value.volt
+i34_project_bad_value.volt:3:18: error: syntax: expected string in project property value (§project), found number "42"
+
+## i35_duplicate_table.volt
+i35_duplicate_table.volt:3:1: error: spec/namespaces-and-uniqueness: duplicate table name "users"
+
+## i36_bad_default.volt
+i36_bad_default.volt:3:20: error: spec/default-values: default value must be a number, string, boolean, null, expression or enum constant
+
+## i37_injection_in_partial.volt
+i37_injection_in_partial.volt:4:3: error: spec/tablepartial: partial injection is not allowed inside TablePartial
+
+## i38_records_in_partial.volt
+i38_records_in_partial.volt:4:3: error: spec/tablepartial: records are not allowed inside TablePartial
+
+## i39_sticky_note_bad_setting.volt
+i39_sticky_note_bad_setting.volt:2:9: error: spec/notes: unknown setting "headercolor"
+
+## i40_alias_collision.volt
+i40_alias_collision.volt:3:17: error: spec/namespaces-and-uniqueness: table alias "users" collides with an existing table name or alias
+
+## i41_ref_long_two_bodies.volt
+i41_ref_long_two_bodies.volt:7:3: error: syntax: a Ref declares exactly one relationship (§relationships-ref); found identifier "a" after the first
+
+## i42_bare_ident_record.volt
+i42_bare_ident_record.volt:5:17: error: spec/records-sample-data: record values must be literals, null, true, false or enum constants; found bare identifier "a"
+
+## i43_bare_ident_default.volt
+i43_bare_ident_default.volt:3:19: error: spec/default-values: default value must be a number, string, boolean, null, expression or enum constant; found bare identifier "something"
+
+## i44_file_imports.volt
+i44_file_imports.volt:2:1: error: spec/file-imports-removed: use is not part of the Volt language (§file-imports-removed); files of one package share a namespace without imports, and another package is reached through an import block (§imports)
+i44_file_imports.volt:3:1: error: spec/file-imports-removed: use is not part of the Volt language (§file-imports-removed); files of one package share a namespace without imports, and another package is reached through an import block (§imports)
+i44_file_imports.volt:12:1: error: spec/file-imports-removed: reuse is not part of the Volt language (§file-imports-removed); files of one package share a namespace without imports, and another package is reached through an import block (§imports)
+
+## i61_tag_malformed.volt
+i61_tag_malformed.volt:4:21: error: spec/columns: tag "json=name" is not one key:"value" pair — write e.g. 'json:"name"' (§columns)
+
+## i62_tag_db_reserved.volt
+i62_tag_db_reserved.volt:4:21: error: spec/columns: tag key "db" is reserved: the db tag is the scan contract (§struct-tags)
+
+## i63_tag_duplicate_key.volt
+i63_tag_duplicate_key.volt:4:38: error: spec/columns: tag key "json" appears more than once on this column (§columns)
+
+## i78_increment_varchar.volt
+i78_increment_varchar.volt:4:20: error: spec/columns: increment on "code" (string): only an int column can auto-increment (§columns, §mapping-to-sqlite-ddl)
+
+## i79_increment_not_pk.volt
+i79_increment_not_pk.volt:6:26: error: spec/columns: increment on "counter": only the primary key auto-increments; elsewhere the keyword would be silently ignored while no changeset ever marks the column (§columns, §mapping-to-sqlite-ddl)
+
+## i80_increment_composite_pk.volt
+i80_increment_composite_pk.volt:4:16: error: spec/columns: increment on "user_id": a composite primary key has no auto-assigned column — SQLite auto-assigns only the single-column integer key (§columns, §mapping-to-sqlite-ddl)
+
+## i81_element_boundary.volt
+i81_element_boundary.volt:12:1: error: syntax: expected identifier in relationship endpoint (§relationships-ref), found the start of the next element (§line-structure-and-whitespace)
+i81_element_boundary.volt:12:1: error: syntax: unknown element type "tags" (§program-structure)
+

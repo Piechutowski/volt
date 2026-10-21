@@ -1,5 +1,0 @@
-// spec: §columns increment extension — increment needs an integer column
-// want: only an integer column can auto-increment
-Table users {
-  code varchar [pk, increment]
-}

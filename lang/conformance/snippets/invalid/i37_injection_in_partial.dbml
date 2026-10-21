@@ -1,6 +1,0 @@
-// spec: §tablepartial rule 2 — partial body has no nested injections
-TablePartial a { id int }
-TablePartial b {
-  ~a
-  name varchar
-}

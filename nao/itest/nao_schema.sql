@@ -16,8 +16,10 @@ CREATE TABLE users (
 CREATE TABLE orders (
   id INTEGER PRIMARY KEY,
   user_id INTEGER NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'shipped', 'delivered')),
-  total TEXT NOT NULL CONSTRAINT total_required CHECK (total <> ''),
+  status TEXT NOT NULL DEFAULT 'pending',
+  total REAL NOT NULL,
+  tip INTEGER NOT NULL DEFAULT 0,
+  fee INTEGER NOT NULL,
   placed_at TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users (id)
 );
@@ -33,9 +35,7 @@ CREATE TABLE page_views (
   id INTEGER PRIMARY KEY,
   site TEXT NOT NULL,
   day INTEGER NOT NULL,
-  hits INTEGER NOT NULL DEFAULT 0,
-  CONSTRAINT counts_positive CHECK (hits >= 0 AND day >= 1),
-  CHECK (site LIKE '%_')
+  hits INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE link_clicks (

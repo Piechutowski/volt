@@ -1,10 +1,10 @@
-// spec: §handler-references rule 4 — a controller cannot take the name of a Controllers field; Queries holds this package's query routes
+// spec: §handler-references — a controller cannot take the name of a Controllers field; Queries holds this package's query routes
 // want: takes the name of the Controllers field
 package app
 
 Table posts {
-  id    integer [pk, increment]
-  title text    [not null]
+  id    int [pk, increment]
+  title string    [not null]
 }
 
 Scope /api {

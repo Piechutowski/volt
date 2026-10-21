@@ -40,7 +40,6 @@ func Keystrokes(repo string, sizes []int, columns, count int, log func(format st
 		sc := bufio.NewScanner(bytes.NewReader(raw))
 		for sc.Scan() {
 			f := strings.Fields(sc.Text())
-			// BenchmarkKeystroke-8  126  9683428 ns/op  6133665 B/op  35263 allocs/op
 			if len(f) < 8 || !strings.HasPrefix(f[0], "BenchmarkKeystroke") || f[3] != "ns/op" {
 				continue
 			}

@@ -1,6 +1,6 @@
-// spec: §route-paths rule 4
+// spec: §route-paths
 package app
 
 Scope / {
-	get /f/:p(int64)... F.S
+	get /f/:p(int)... F.S
 }

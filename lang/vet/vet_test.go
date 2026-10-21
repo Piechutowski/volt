@@ -16,15 +16,10 @@ import (
 var wantRE = regexp.MustCompile(`//WANT ([a-z,]+)`)
 
 func TestAnalyzers(t *testing.T) {
-	files, err := filepath.Glob(filepath.Join("testdata", "*.dbml"))
+	files, err := filepath.Glob(filepath.Join("testdata", "*.volt"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	extended, err := filepath.Glob(filepath.Join("testdata", "*.volt"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	files = append(files, extended...)
 	if len(files) == 0 {
 		t.Fatal("no testdata files")
 	}
@@ -57,11 +52,11 @@ func TestAnalyzers(t *testing.T) {
 
 			f, diags := parser.ParseFile(file, string(src))
 			if diag.HasErrors(diags) {
-				t.Fatalf("test input must be valid DBML; parse errors: %v", diags)
+				t.Fatalf("test input must check clean; parse errors: %v", diags)
 			}
 			info, semDiags := check.File(f)
 			if diag.HasErrors(semDiags) {
-				t.Fatalf("test input must be valid DBML; check errors: %v", semDiags)
+				t.Fatalf("test input must check clean; check errors: %v", semDiags)
 			}
 
 			for _, w := range vet.Run(f, info, analyzers...) {
@@ -105,7 +100,7 @@ Table orders {
 TableGroup commerce { users
   orders }
 `
-	f, diags := parser.ParseFile("clean.dbml", src)
+	f, diags := parser.ParseFile("clean.volt", src)
 	info, semDiags := check.File(f)
 	diags = append(diags, semDiags...)
 	if diag.HasErrors(diags) {

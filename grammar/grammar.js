@@ -1,19 +1,19 @@
 /**
- * Tree-sitter grammar for the Volt language (.volt files): DBML, the
+ * Tree-sitter grammar for the Volt language (.volt files): the schema core,
  * the schema extensions, and the routing layer above them.
  *
- * Covers the full DBML specification in docs/spec.md Part I:
+ * Covers the full schema language of docs/spec.md Part I:
  * Project, Table (settings, alias, columns, legacy flags), TablePartial and
  * ~injection, Enum, Ref (long, short and inline forms, composite endpoints),
  * TableGroup, Note (member, block and sticky forms), Records (top-level and
- * in-table), DiagramView, indexes and checks blocks, use/reuse imports —
+ * in-table), DiagramView, indexes and validators blocks, use/reuse imports —
  * plus the Volt routing layer of docs/spec.md Part II: package clauses, Go-style
  * import blocks, Pipeline, Scope, routes and resources. One grammar for
  * one language in three layers (§layers-files-and-the-superset-rule): every .volt file parses here,
  * whichever layer it uses.
  *
  * Design notes, driven by spec §lexical-structure:
- *  - DBML is newline-sensitive: columns, enum values, record rows, index and
+ *  - Volt is newline-sensitive: columns, enum values, record rows, index and
  *    check lines, project properties, group members and partial injections
  *    are newline-terminated. Newlines are therefore NOT extras; bodies use an
  *    explicit "items separated by one-or-more newlines" shape, which also
@@ -21,7 +21,7 @@
  *  - Keywords are case-insensitive and NOT reserved (§keywords). Each keyword is a
  *    case-insensitive regex aliased to its canonical spelling, with token
  *    precedence over plain identifiers. Consequence (documented limitation):
- *    an unquoted column named exactly `note`, `indexes`, `checks` or
+ *    an unquoted column named exactly `note`, `indexes`, `validators` or
  *    `records` needs quotes ("note") to parse as a column.
  *  - Double quotes delimit identifiers, single quotes delimit strings (§identifiers,
  *    §string-literals). String and expression contents are separate tokens so editors can
@@ -79,6 +79,7 @@ module.exports = grammar({
         $.table_definition,
         $.table_partial_definition,
         $.enum_definition,
+        $.type_definition,
         $.ref_definition,
         $.table_group_definition,
         $.sticky_note_definition,
@@ -93,6 +94,7 @@ module.exports = grammar({
         $.group_definition,
         $.pred_definition,
         $.select_definition,
+        $.migration_definition,
       ),
 
     // ==================== Project (§project) ====================
@@ -128,7 +130,7 @@ module.exports = grammar({
       choice(
         $.column_definition,
         $.indexes_block,
-        $.checks_block,
+        $.validators_block,
         $.note_definition,
         $.partial_injection,
         $.records_block,
@@ -151,17 +153,14 @@ module.exports = grammar({
 
     column_type: ($) =>
       seq(
-        optional(seq(field('schema', alias($._name, $.schema_name)), '.')),
-        field('name', alias($._name, $.type_name)),
-        optional(field('arguments', $.type_arguments)),
+        optional(seq('[', ']')),
+        field('name', $.type_name),
       ),
 
-    type_arguments: ($) =>
+    type_name: ($) =>
       seq(
-        token.immediate('('),
-        choice($.number, $._name),
-        repeat(seq(',', choice($.number, $._name))),
-        ')',
+        optional(seq(field('schema', alias($._name, $.schema_name)), '.')),
+        field('name', $._name),
       ),
 
     // Bare `pk` / `unique` between type and settings (§columns, legacy).
@@ -181,7 +180,7 @@ module.exports = grammar({
       ),
 
     _partial_item: ($) =>
-      choice($.column_definition, $.indexes_block, $.checks_block, $.note_definition),
+      choice($.column_definition, $.indexes_block, $.validators_block, $.note_definition),
 
     partial_injection: ($) =>
       seq('~', field('name', alias($._name, $.partial_name))),
@@ -202,6 +201,16 @@ module.exports = grammar({
       seq(
         field('name', $._name),
         optional(field('settings', $.settings_list)),
+      ),
+
+    // ==================== Type (§types) ====================
+
+    type_definition: ($) =>
+      seq(
+        kw('Type'),
+        field('name', $.type_name),
+        field('storage', $.column_type),
+        optional(seq(kw('from'), field('path', $.string))),
       ),
 
     // ==================== Ref (§relationships-ref) ====================
@@ -261,7 +270,7 @@ module.exports = grammar({
         ')',
       ),
 
-    // ==================== indexes / checks (§indexes, §checks) ====================
+    // ==================== indexes / validators (§indexes, §validators) ====================
 
     indexes_block: ($) =>
       seq(
@@ -283,34 +292,23 @@ module.exports = grammar({
     composite_index: ($) =>
       seq('(', $._index_atom, repeat(seq(',', $._index_atom)), ')'),
 
-    checks_block: ($) =>
+    validators_block: ($) =>
       seq(
-        kw('checks'),
+        kw('validators'),
         '{',
         repeat($._newline),
-        optional(newlineSep1($.check_definition, $)),
+        optional(newlineSep1($.validator, $)),
         '}',
       ),
 
-    // One check line (§checks, §validation-checks): opaque SQL, a Go-reference call, or
-    // a typed predicate expression. A name followed by '(' can only be
-    // a Go reference, so go_check wins that race by precedence.
-    check_definition: ($) =>
+    // One validator line (§validators): a Go function of the package over columns.
+    validator: ($) =>
       seq(
-        choice($.expression, $.go_check, $.pred_expr),
-        optional(field('settings', $.settings_list)),
-      ),
-
-    go_check: ($) =>
-      prec(
-        2,
-        seq(
-          field('ref', $.go_ref),
-          '(',
-          alias($.identifier, $.column_ref),
-          repeat(seq(',', alias($.identifier, $.column_ref))),
-          ')',
-        ),
+        field('ref', $.go_ref),
+        '(',
+        alias($.identifier, $.column_ref),
+        repeat(seq(',', alias($.identifier, $.column_ref))),
+        ')',
       ),
 
     // ==================== Note (§notes) ====================
@@ -462,11 +460,11 @@ module.exports = grammar({
 
     // ==================== Volt layer (docs/spec.md Part II) ====================
     // The routing dialect: package clauses, Go-style import blocks,
-    // Pipeline and Scope. Route paths are lexical islands (§route-paths rule 5) —
+    // Pipeline and Scope. Route paths are lexical islands (§route-paths) —
     // token.immediate stitches their segments together so interior
     // whitespace ends the path, exactly like the reference parser.
 
-    // package name (§projects-and-packages rule 2)
+    // package name (§projects-and-packages)
     package_clause: ($) =>
       seq(kw('package'), field('name', $.identifier)),
 
@@ -581,7 +579,7 @@ module.exports = grammar({
         ),
       ),
 
-    // One group term: a name, or a parenthesized set of names (§groups rule 3).
+    // One group term: a name, or a parenthesized set of names (§groups).
     _group_term: ($) =>
       choice(
         alias($.identifier, $.group_member),
@@ -678,7 +676,7 @@ module.exports = grammar({
       seq(':', field('name', alias($._ident_immediate, $.parameter_name))),
 
     // Select name [(cols) | (* - cols)] for target [where expr]
-    // [settings] (§selects-over-groups, §selects-over-groups rule 7)
+    // [settings] (§selects-over-groups, §selects-over-groups)
     select_definition: ($) =>
       seq(
         kw('Select'),
@@ -690,7 +688,7 @@ module.exports = grammar({
         optional(field('settings', $.settings_list)),
       ),
 
-    // (a, b, c) or (* - a - b) (§selects-over-groups rule 7): clauses read in SQL order
+    // (a, b, c) or (* - a - b) (§selects-over-groups): clauses read in SQL order
     select_projection: ($) =>
       seq(
         '(',
@@ -720,7 +718,7 @@ module.exports = grammar({
         ')',
       ),
 
-    // /users/:id(int32)/avatar, /files/:path..., or the bare root /
+    // /users/:id(int)/avatar, /files/:path..., or the bare root /
     // (§route-paths). Segments abut: whitespace ends the path.
     route_path: ($) =>
       seq(
@@ -759,6 +757,119 @@ module.exports = grammar({
     _ident_immediate: () =>
       token.immediate(/[0-9]*[\p{L}\p{M}_][\p{L}\p{M}\p{Nd}_]*/),
 
+    // ==================== Migration (§migrations) ====================
+    // The words of a migration body are keyword tokens here and nowhere
+    // else, so the context-aware lexer keeps `up` or `table` a column
+    // name in a Table body (§keywords).
+
+    migration_definition: ($) =>
+      seq(
+        kw('Migration'),
+        field('name', alias($.identifier, $.migration_name)),
+        optional(field('settings', $.settings_list)),
+        '{',
+        repeat($._newline),
+        optional(
+          choice(
+            newlineSep1($._operation, $),
+            seq(
+              $.up_block,
+              repeat($._newline),
+              optional(seq($.down_block, repeat($._newline))),
+            ),
+          ),
+        ),
+        '}',
+      ),
+
+    up_block: ($) => seq(kw('up'), $._operations_body),
+
+    down_block: ($) => seq(kw('down'), $._operations_body),
+
+    _operations_body: ($) =>
+      seq('{', repeat($._newline), optional(newlineSep1($._operation, $)), '}'),
+
+    _operation: ($) =>
+      choice(
+        $.create_table_op,
+        $.drop_table_op,
+        $.rename_table_op,
+        $.alter_table_op,
+        $.rebuild_table_op,
+        $.create_index_op,
+        $.drop_index_op,
+        $.exec_op,
+      ),
+
+    create_table_op: ($) =>
+      seq(kw('create'), kw('table'), field('table', alias($._name, $.table_name)), $._shape_body),
+
+    drop_table_op: ($) =>
+      seq(kw('drop'), kw('table'), field('table', alias($._name, $.table_name)), optional($._shape_body)),
+
+    rename_table_op: ($) =>
+      seq(
+        kw('rename'),
+        kw('table'),
+        field('from', alias($._name, $.table_name)),
+        kw('to'),
+        field('to', alias($._name, $.table_name)),
+      ),
+
+    alter_table_op: ($) =>
+      seq(
+        kw('alter'),
+        kw('table'),
+        field('table', alias($._name, $.table_name)),
+        '{',
+        repeat($._newline),
+        optional(newlineSep1($._alter_item, $)),
+        '}',
+      ),
+
+    _alter_item: ($) => choice($.add_column, $.drop_column, $.rename_column),
+
+    add_column: ($) => seq(kw('add'), $.column_definition),
+
+    // The type and settings are the dropped column's shape, written for
+    // reversibility (§migrations).
+    drop_column: ($) =>
+      seq(
+        kw('drop'),
+        field('name', alias($._name, $.column_name)),
+        optional(seq(field('type', $.column_type), optional(field('settings', $.settings_list)))),
+      ),
+
+    rename_column: ($) =>
+      seq(
+        kw('rename'),
+        field('from', alias($._name, $.column_name)),
+        kw('to'),
+        field('to', alias($._name, $.column_name)),
+      ),
+
+    rebuild_table_op: ($) =>
+      seq(kw('rebuild'), kw('table'), field('table', alias($._name, $.table_name)), $._shape_body),
+
+    // Columns and indexes blocks only: no injection, validators, records
+    // or Note (§migrations).
+    _shape_body: ($) =>
+      seq(
+        '{',
+        repeat($._newline),
+        optional(newlineSep1(choice($.column_definition, $.indexes_block), $)),
+        '}',
+      ),
+
+    create_index_op: ($) =>
+      seq(kw('create'), kw('index'), field('table', alias($._name, $.table_name)), $.index_definition),
+
+    drop_index_op: ($) =>
+      seq(kw('drop'), kw('index'), field('table', alias($._name, $.table_name)), $.index_definition),
+
+    exec_op: ($) =>
+      seq(kw('exec'), field('sql', $.string), optional(field('settings', $.settings_list))),
+
     // ==================== Settings (§settings-lists) ====================
 
     settings_list: ($) =>
@@ -789,7 +900,7 @@ module.exports = grammar({
       ),
 
     // Parenthesized identifier list: only: (index, show) (volt §settings);
-    // order lists allow a one-word modifier: order: (year desc, id) (§selects-over-groups rule 5).
+    // order lists allow a one-word modifier: order: (year desc, id) (§selects-over-groups).
     ident_group: ($) =>
       seq('(', $._ident_item, repeat(seq(',', $._ident_item)), ')'),
 

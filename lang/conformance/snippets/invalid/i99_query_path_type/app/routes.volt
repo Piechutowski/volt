@@ -1,5 +1,5 @@
 // spec: §query-routes — a path parameter must spell the query parameter's Go type
-// want: spell it :id(int32)
+// want: spell it :id(int)
 package app
 
 import (
@@ -7,5 +7,5 @@ import (
 )
 
 Scope /api {
-	get /users/:id(int64) db.UserGet
+	get /users/:id(string) db.UserGet
 }

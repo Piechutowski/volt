@@ -11,15 +11,11 @@ import (
 	"github.com/Piechutowski/volt/lang/diag"
 )
 
-// ---------------------------------------------------------------------------
-// Diagnostics
-
 // LSPDiagnostics converts the front end's diagnostics for publishing.
 func (d *Document) LSPDiagnostics() []protocol.Diagnostic {
 	return diagnosticsLSP(d.Text, d.lineOffsets, d.Diags)
 }
 
-// diagnosticsLSP converts diagnostics positioned in text for publishing.
 func diagnosticsLSP(text string, starts []int, diags []diag.Diagnostic) []protocol.Diagnostic {
 	out := make([]protocol.Diagnostic, 0, len(diags))
 	for _, dg := range diags {
@@ -40,9 +36,6 @@ func diagnosticsLSP(text string, starts []int, diags []diag.Diagnostic) []protoc
 	}
 	return out
 }
-
-// ---------------------------------------------------------------------------
-// Document symbols (outline)
 
 // DocumentSymbols builds the outline tree.
 func (d *Document) DocumentSymbols() []protocol.DocumentSymbol {
@@ -71,6 +64,8 @@ func (d *Document) DocumentSymbols() []protocol.DocumentSymbol {
 				kids = append(kids, d.symbol(v.Name.Name(), "", protocol.SymbolKindEnumMember, v, v.Name, nil))
 			}
 			out = append(out, d.symbol(n.Name.String(), "Enum", protocol.SymbolKindEnum, n, n.Name, kids))
+		case *ast.TypeDecl:
+			out = append(out, d.symbol(n.Name.String(), "Type", protocol.SymbolKindClass, n, n.Name, nil))
 		case *ast.Ref:
 			name := refLabel(n)
 			var sel ast.Node = n
@@ -90,6 +85,8 @@ func (d *Document) DocumentSymbols() []protocol.DocumentSymbol {
 			out = append(out, d.symbol(label, "", protocol.SymbolKindArray, n, n, nil))
 		case *ast.DiagramView:
 			out = append(out, d.symbol(n.Name.Name(), "DiagramView", protocol.SymbolKindObject, n, n.Name, nil))
+		case *ast.Migration:
+			out = append(out, d.symbol(n.Name.Name(), "Migration", protocol.SymbolKindModule, n, n.Name, nil))
 		}
 	}
 	return out
@@ -105,8 +102,8 @@ func (d *Document) tableChildren(body []ast.TableItem) []protocol.DocumentSymbol
 			kids = append(kids, d.symbol("~"+n.Name.Name(), "injected partial", protocol.SymbolKindInterface, n, n.Name, nil))
 		case *ast.IndexesBlock:
 			kids = append(kids, d.symbol("indexes", "", protocol.SymbolKindProperty, n, n, nil))
-		case *ast.ChecksBlock:
-			kids = append(kids, d.symbol("checks", "", protocol.SymbolKindProperty, n, n, nil))
+		case *ast.ValidatorsBlock:
+			kids = append(kids, d.symbol("validators", "", protocol.SymbolKindProperty, n, n, nil))
 		}
 	}
 	return kids
@@ -148,12 +145,8 @@ func identNames(ids []*ast.Ident) []string {
 	return out
 }
 
-// ---------------------------------------------------------------------------
-// Definition / references / rename
-
 // Definition returns the location of the declaration of the symbol at pos.
 func (d *Document) Definition(pos protocol.Position) *protocol.Location {
-	// Volt-layer symbols first.
 	if loc := d.voltDefinition(pos); loc != nil {
 		return loc
 	}
@@ -170,7 +163,6 @@ func (d *Document) Definition(pos protocol.Position) *protocol.Location {
 
 // References returns every occurrence of the symbol at pos.
 func (d *Document) References(pos protocol.Position, includeDecl bool) []protocol.Location {
-	// The answer is the two indexes' union, deduplicated.
 	out := d.voltReferences(pos, includeDecl)
 	seen := map[protocol.Location]bool{}
 	for _, l := range out {
@@ -198,7 +190,6 @@ func (d *Document) Rename(pos protocol.Position, newName string) (*protocol.Work
 	if !validIdentifier(newName) {
 		return nil, fmt.Errorf("%q is not a valid Volt identifier", newName)
 	}
-	// A Volt-layer symbol renames across the whole project.
 	if edit, ok := d.voltRename(pos, newName); ok {
 		return edit, nil
 	}
@@ -222,8 +213,6 @@ func (d *Document) Rename(pos protocol.Position, newName string) (*protocol.Work
 	}, nil
 }
 
-// validIdentifier reports whether s can be written as a plain identifier
-// (spec §identifiers): letters, marks, digits and _, not all digits.
 func validIdentifier(s string) bool {
 	if s == "" {
 		return false
@@ -247,13 +236,12 @@ func isLetter(r rune) bool {
 	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r > 0x7f
 }
 
-// ---------------------------------------------------------------------------
-// Hover
-
 // Hover renders documentation for the symbol at pos.
 func (d *Document) Hover(pos protocol.Position) *protocol.Hover {
-	// Volt-layer symbols first.
 	if h := d.voltHover(pos); h != nil {
+		return h
+	}
+	if h := d.migrationHover(pos); h != nil {
 		return h
 	}
 	occ := d.Index.At(d.FromLSP(pos))
@@ -272,6 +260,8 @@ func (d *Document) Hover(pos protocol.Position) *protocol.Hover {
 		md = d.columnHover(occ.ID)
 	case SymEnumValue:
 		md = d.enumValueHover(occ.ID)
+	case SymType:
+		md = d.typeHover(occ.ID.Name)
 	}
 	if md == "" {
 		return nil
@@ -322,6 +312,46 @@ func (d *Document) enumHover(key string) string {
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+func (d *Document) migrationHover(pos protocol.Position) *protocol.Hover {
+	off := d.FromLSP(pos)
+	for i, mi := range d.Info.Migrations {
+		name := mi.Decl.Name
+		if off < int(name.Pos().Offset()) || off > int(name.End().Offset()) {
+			continue
+		}
+		rng := d.tokenRange(name.Tok)
+		return &protocol.Hover{
+			Contents: protocol.MarkupContent{Kind: protocol.MarkupKindMarkdown, Value: migrationHoverMD(mi, i, len(d.Info.Migrations))},
+			Range:    &rng,
+		}
+	}
+	return nil
+}
+
+func migrationHoverMD(mi *check.MigrationInfo, i, n int) string {
+	way := "reversible"
+	if !mi.Reversible {
+		way = "irreversible"
+	}
+	md := fmt.Sprintf("```volt\nMigration %s\n```\nmigration %d of %d, %s\n", mi.Name, i+1, n, way)
+	if note := settingString(mi.Decl.Settings, "note"); note != "" {
+		md += "\n---\n" + note + "\n"
+	}
+	return md
+}
+
+func (d *Document) typeHover(key string) string {
+	td, ok := d.Index.Types[key]
+	if !ok {
+		return ""
+	}
+	md := "```volt\nType " + td.Key + " " + td.Decl.Storage.String()
+	if td.Path != "" {
+		md += " from '" + td.Path + "'"
+	}
+	return md + "\n```\n"
 }
 
 func (d *Document) partialHover(name string) string {
@@ -377,7 +407,6 @@ func (d *Document) enumValueHover(id SymbolID) string {
 	return ""
 }
 
-// columnFind resolves a column SymbolID back to its AST node.
 func (d *Document) columnFind(id SymbolID) *ast.Column {
 	if name, ok := strings.CutPrefix(id.Container, "partial:"); ok {
 		pi, ok := d.Index.Partials[name]
@@ -402,7 +431,6 @@ func (d *Document) columnFind(id SymbolID) *ast.Column {
 	return nil
 }
 
-// settingsSuffix renders " — pk, not null, default: x" for hover lines.
 func settingsSuffix(s *ast.SettingList, legacy []*ast.Ident) string {
 	var parts []string
 	for _, f := range legacy {
@@ -464,6 +492,3 @@ func tableNote(t *ast.Table) string {
 	}
 	return ""
 }
-
-// unused import guard
-var _ = check.Info{}

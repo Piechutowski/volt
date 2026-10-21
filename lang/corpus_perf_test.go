@@ -83,7 +83,7 @@ var allocBudget = struct {
 }{
 	load:  1069912,
 	check: 2092448,
-	gen:   6698712,
+	gen:   7567336,
 }
 
 func TestAllocationBudget(t *testing.T) {

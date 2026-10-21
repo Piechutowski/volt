@@ -2,7 +2,7 @@
 package app
 
 Table posty {
-	id integer [pk]
+	id int [pk]
 }
 
 // singular: makes the member helpers PathPost/PathNewPost/PathEditPost

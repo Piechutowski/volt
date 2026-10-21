@@ -9,9 +9,6 @@ func Inspect(n Node, f func(Node) bool) {
 	eachChild(n, func(c Node) { Inspect(c, f) })
 }
 
-// child visits a pointer field's node when the field is set. The nil
-// test is on the pointer, before it becomes an interface, so a field a
-// broken parse left unset never reaches a visitor as a typed nil (decision no-unsafe).
 func child[T any, P interface {
 	*T
 	Node
@@ -21,7 +18,6 @@ func child[T any, P interface {
 	}
 }
 
-// children is child over a slice of pointer fields.
 func children[T any, P interface {
 	*T
 	Node
@@ -31,9 +27,6 @@ func children[T any, P interface {
 	}
 }
 
-// eachChild visits n's children in source order without building a
-// list (decision indexed-lookups). A slot typed as an interface holds nil or a node the
-// parser built from a non-nil pointer, never a typed nil.
 func eachChild(n Node, visit func(Node)) {
 	switch n := n.(type) {
 	case *File:
@@ -89,12 +82,11 @@ func eachChild(n Node, visit func(Node)) {
 			}
 		}
 		child(visit, n.Settings)
-	case *ChecksBlock:
-		children(visit, n.Checks)
-	case *Check:
-		child(visit, n.Expr)
+	case *ValidatorsBlock:
+		children(visit, n.Validators)
+	case *Validator:
+		child(visit, n.Ref)
 		children(visit, n.Args)
-		child(visit, n.Settings)
 	case *PartialRef:
 		child(visit, n.Name)
 	case *Note:
@@ -110,8 +102,74 @@ func eachChild(n Node, visit func(Node)) {
 	case *Enum:
 		child(visit, n.Name)
 		children(visit, n.Values)
+	case *TypeDecl:
+		child(visit, n.Name)
+		child(visit, n.Storage)
+		child(visit, n.From)
 	case *EnumValue:
 		child(visit, n.Name)
+		child(visit, n.Settings)
+	case *Migration:
+		child(visit, n.Name)
+		child(visit, n.Settings)
+		for _, op := range n.Up {
+			if op != nil {
+				visit(op)
+			}
+		}
+		for _, op := range n.Down {
+			if op != nil {
+				visit(op)
+			}
+		}
+	case *CreateTable:
+		child(visit, n.Name)
+		for _, it := range n.Body {
+			if it != nil {
+				visit(it)
+			}
+		}
+	case *DropTable:
+		child(visit, n.Name)
+		for _, it := range n.Body {
+			if it != nil {
+				visit(it)
+			}
+		}
+	case *RenameTable:
+		child(visit, n.From)
+		child(visit, n.To)
+	case *AlterTable:
+		child(visit, n.Name)
+		for _, it := range n.Items {
+			if it != nil {
+				visit(it)
+			}
+		}
+	case *AlterAdd:
+		child(visit, n.Column)
+	case *AlterDrop:
+		child(visit, n.Name)
+		child(visit, n.Type)
+		child(visit, n.Settings)
+	case *AlterRename:
+		child(visit, n.From)
+		child(visit, n.To)
+	case *RebuildTable:
+		child(visit, n.Name)
+		for _, it := range n.Body {
+			if it != nil {
+				visit(it)
+			}
+		}
+	case *CreateIndex:
+		child(visit, n.Table)
+		child(visit, n.Index)
+	case *DropIndex:
+		child(visit, n.Table)
+		child(visit, n.Index)
+	case *Exec:
+		child(visit, n.SQL)
 		child(visit, n.Settings)
 	case *Records:
 		child(visit, n.Table)

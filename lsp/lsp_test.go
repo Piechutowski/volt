@@ -20,14 +20,14 @@ TablePartial base {
 
 Table users as U [note: 'people'] {
   ~base
-  name varchar(255) [not null, unique]
+  name string [not null, unique]
   status status [default: status.active]
 }
 
 Table core.orders {
   id int [pk]
   user_id int
-  owner_name varchar(255) [ref: > U.name]
+  owner_name string [ref: > U.name]
 }
 
 Ref: users.id < core.orders.user_id
@@ -40,7 +40,7 @@ TableGroup g {
 
 func doc(t *testing.T, text string) *Document {
 	t.Helper()
-	return NewDocument("file:///test.dbml", text)
+	return NewDocument("file:///test.volt", text)
 }
 
 func posOf(t *testing.T, text, needle string, occurrence int) protocol.Position {
@@ -168,7 +168,7 @@ func TestRenameColumnFromPartial(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	edits := edit.Changes["file:///test.dbml"]
+	edits := edit.Changes["file:///test.volt"]
 	if len(edits) != 2 {
 		t.Fatalf("expected 2 edits, got %d: %v", len(edits), edits)
 	}
@@ -194,7 +194,7 @@ func TestHoverTable(t *testing.T) {
 		t.Fatal("no hover for table reference")
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
-	for _, want := range []string{"Table users as U", "name varchar(255)", "people", "from ~base"} {
+	for _, want := range []string{"Table users as U", "name string", "people", "from ~base"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover missing %q:\n%s", want, md)
 		}
@@ -239,7 +239,7 @@ func TestCompletionTopLevel(t *testing.T) {
 	text := sample + "\nT"
 	d := doc(t, text)
 	items := d.Complete(protocol.Position{Line: protocol.UInteger(strings.Count(text, "\n")), Character: 1})
-	if !hasLabel(items, "Table") || !hasLabel(items, "TablePartial") {
+	if !hasLabel(items, "Table") || !hasLabel(items, "TablePartial") || !hasLabel(items, "Type") {
 		t.Fatalf("top-level completion missing element keywords: %v", labels(items))
 	}
 }
@@ -300,8 +300,43 @@ func TestCompletionTypesIncludeEnums(t *testing.T) {
 	d := doc(t, text)
 	line := protocol.UInteger(strings.Count(sample, "\n") + 2)
 	items := d.Complete(protocol.Position{Line: line, Character: protocol.UInteger(len("  col v"))})
-	if !hasLabel(items, "varchar") || !hasLabel(items, "status") {
+	if !hasLabel(items, "string") || !hasLabel(items, "status") {
 		t.Fatalf("type completion missing: %v", labels(items))
+	}
+}
+
+func TestCompletionTypesIncludeDeclaredTypes(t *testing.T) {
+	text := "Type money.Money int from 'example.com/app/money'\nType Slug string\n\nTable products {\n  col S\n}\n"
+	d := doc(t, text)
+	items := d.Complete(protocol.Position{Line: 4, Character: protocol.UInteger(len("  col S"))})
+	for _, want := range []string{"money.Money", "Slug"} {
+		if !hasLabel(items, want) {
+			t.Errorf("type completion missing declared type %q: %v", want, labels(items))
+		}
+	}
+	for _, it := range items {
+		if (it.Label == "money.Money" || it.Label == "Slug") && (it.Detail == nil || *it.Detail != "Type") {
+			t.Errorf("declared type %q should carry the detail Type, got %v", it.Label, it.Detail)
+		}
+	}
+}
+
+func TestDocumentSymbolsTypeDecl(t *testing.T) {
+	d := doc(t, "Type money.Money int from 'example.com/app/money'\nType Slug string\n")
+	syms := d.DocumentSymbols()
+	got := map[string]protocol.DocumentSymbol{}
+	for _, s := range syms {
+		got[s.Name] = s
+	}
+	for _, want := range []string{"money.Money", "Slug"} {
+		s, ok := got[want]
+		if !ok {
+			t.Errorf("outline missing Type %q: %v", want, syms)
+			continue
+		}
+		if s.Detail == nil || *s.Detail != "Type" {
+			t.Errorf("Type %q detail = %v, want Type", want, s.Detail)
+		}
 	}
 }
 

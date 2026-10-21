@@ -21,13 +21,13 @@ import (
 	"github.com/Piechutowski/volt/nao/gen/golang"
 )
 
-// ModFile is the project root marker (spec §projects-and-packages rule 1): the Go module file.
-// A Volt project is a Go module (decision go-module-is-the-project).
+// ModFile is the project root marker (spec §projects-and-packages): the Go module file.
+// A Volt project is a Go module.
 const ModFile = "go.mod"
 
 // Project is a loaded Volt project: the Go module path and the packages
 // (directories of .volt files) that were loaded — the ones asked for
-// and, transitively, the ones they import (§projects-and-packages rule 7).
+// and, transitively, the ones they import (§projects-and-packages).
 type Project struct {
 	Root     string // absolute path of the directory holding go.mod
 	Module   string // the Go module path, from go.mod's module directive
@@ -46,8 +46,7 @@ type Package struct {
 	Files []*ast.File
 
 	// Imports maps qualifier -> imported package path, resolved by Check.
-	Imports map[string]string
-	// importSpecs is every import spec across the package's files.
+	Imports     map[string]string
 	importSpecs []*ast.ImportSpec
 
 	// Volt-layer results, populated by Check.
@@ -60,30 +59,15 @@ type Package struct {
 	// resolved by Check.
 	Groups map[string]*GroupInfo
 	Preds  map[string]*ast.Pred
-	// CheckFns is the validator surface (§validation-checks), lowered by Check.
-	CheckFns []golang.CheckFn
-	// CheckSQL is every typed check's SQL rendering, lowered by Check
-	// with CheckFns: gen/sqlite emits CHECK (<this>) for it (§validation-checks rule 4).
-	CheckSQL map[*ast.Check]string
-	Selects  []*SelectInfo
-	// selectByMethod indexes Selects by generated method name (decision indexed-lookups);
-	// selectByName by declared name, the last declared winning (decision check-by-declaration).
+	// Validators is the validator surface (§validators), lowered by Check.
+	Validators     []golang.ValidatorFn
+	Selects        []*SelectInfo
 	selectByMethod map[string]selectMember
 	selectByName   map[string]*SelectInfo
-	// checkFnByKey indexes CheckFns by table key (decision check-by-declaration), built with them.
-	checkFnByKey map[string][]golang.CheckSpec
-	// ValidByKey says, per table whose params structs validate (§validation-checks rule 6),
-	// whether the create and the update one do: decided with the
-	// table's lowered checks, read by the route lowering (decision check-by-declaration).
-	ValidByKey map[string][2]bool
 
-	// schema is the package's checked table model, set by Check.
 	schema *check.Info
-	// plan is the package's naming plan, built once by Check (decision one-naming-plan).
-	plan *golang.Plan
+	plan   *golang.Plan
 
-	// merged is the synthetic single file of all declarations, in file
-	// order (sorted by name).
 	merged *ast.File
 }
 
@@ -106,7 +90,7 @@ func (p *Package) Merged() *ast.File { return p.merged }
 func (p *Package) Schema() *check.Info { return p.schema }
 
 // Plan returns the package's naming plan (nil before Check): every
-// generated Go and SQL name, decided once (decision one-naming-plan).
+// generated Go and SQL name, decided once.
 func (p *Package) Plan() *golang.Plan { return p.plan }
 
 // HasSchema reports whether the package declares data elements.
@@ -129,7 +113,7 @@ func (pr *Project) PackageAt(dir string) *Package {
 }
 
 // FindRoot walks up from dir to the nearest directory holding go.mod
-// (spec §projects-and-packages rule 1): the Go module is the Volt project.
+// (spec §projects-and-packages): the Go module is the Volt project.
 func FindRoot(dir string) (string, error) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
@@ -141,14 +125,14 @@ func FindRoot(dir string) (string, error) {
 		}
 		parent := filepath.Dir(abs)
 		if parent == abs {
-			return "", fmt.Errorf("no %s found in %s or any parent directory (a Volt project is a Go module, §projects-and-packages rule 1)", ModFile, dir)
+			return "", fmt.Errorf("no %s found in %s or any parent directory (a Volt project is a Go module, §projects-and-packages)", ModFile, dir)
 		}
 		abs = parent
 	}
 }
 
-// Load loads every package under root — the ./... pattern (§projects-and-packages rule 7),
-// with §projects-and-packages rule 6's exclusions. Parse errors are collected, not fatal.
+// Load loads every package under root — the ./... pattern (§projects-and-packages),
+// with §projects-and-packages's exclusions. Parse errors are collected, not fatal.
 func Load(root string) (*Project, error) {
 	return LoadOverlay(root, nil)
 }
@@ -164,7 +148,7 @@ func LoadOverlay(root string, overlay map[string]string) (*Project, error) {
 }
 
 // PackageDirs enumerates the directories under dir that hold .volt
-// files — the ./... pattern — applying §projects-and-packages rule 6: directories named with a
+// files — the ./... pattern — applying §projects-and-packages: directories named with a
 // leading dot or underscore, testdata and node_modules are skipped, and
 // so is any subtree with its own go.mod (a different project).
 func PackageDirs(root, dir string) ([]string, error) {
@@ -203,7 +187,6 @@ func PackageDirs(root, dir string) ([]string, error) {
 	return out, nil
 }
 
-// excludedDir applies §projects-and-packages rule 6's directory exclusions (Go's own rules).
 func excludedDir(name string) bool {
 	return strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") ||
 		name == "testdata" || name == "node_modules"
@@ -223,14 +206,12 @@ func hasVoltFiles(dir string) bool {
 }
 
 // LoadDirs loads the packages in dirs and, transitively, the packages
-// they import (§projects-and-packages rule 7). Every dir MUST lie under root; a dir without
+// they import (§projects-and-packages). Every dir MUST lie under root; a dir without
 // .volt files is an error.
 func LoadDirs(root string, dirs []string, overlay map[string]string) (*Project, error) {
 	return loadDirs(root, dirs, overlay, nil)
 }
 
-// loadDirs is LoadDirs with an optional Session whose parse cache
-// stands in for the parser (decision editor-session).
 func loadDirs(root string, dirs []string, overlay map[string]string, s *Session) (*Project, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
@@ -261,8 +242,6 @@ func loadDirs(root string, dirs []string, overlay map[string]string, s *Session)
 		queue = append(queue, ad)
 	}
 
-	// One wave per import depth (decision worker-pool), results taken in directory
-	// order.
 	seen := map[string]bool{}
 	for wave := queue; len(wave) > 0; {
 		var todo []string
@@ -283,8 +262,6 @@ func loadDirs(root string, dirs []string, overlay map[string]string, s *Session)
 				continue
 			}
 			pr.Packages[pkg.Path] = pkg
-			// Imports name root-relative package paths (§imports); an existing
-			// directory is loaded, a missing one is left for Check to report.
 			for _, f := range pkg.Files {
 				for _, d := range f.Decls {
 					id, ok := d.(*ast.ImportDecl)
@@ -295,7 +272,7 @@ func loadDirs(root string, dirs []string, overlay map[string]string, s *Session)
 						target := filepath.Join(abs, filepath.FromSlash(spec.PathString()))
 						if why := importExcluded(abs, spec.PathString()); why != "" {
 							pr.Diags = append(pr.Diags, diag.Errorf(spec.Pos(), "spec/projects-and-packages",
-								"import %q names %s, which is not part of this project (§projects-and-packages rule 6)", spec.PathString(), why))
+								"import %q names %s, which is not part of this project (§projects-and-packages)", spec.PathString(), why))
 							continue
 						}
 						if hasVoltFiles(target) {
@@ -309,9 +286,6 @@ func loadDirs(root string, dirs []string, overlay map[string]string, s *Session)
 	return pr, nil
 }
 
-// importExcluded reports why a root-relative import path is outside
-// the project (§projects-and-packages rule 6): a segment the exclusions cover, or a nested
-// module boundary between the root and the target. "" means allowed.
 func importExcluded(root, path string) string {
 	dir := root
 	for _, seg := range strings.Split(path, "/") {
@@ -329,11 +303,6 @@ func importExcluded(root, path string) string {
 	return ""
 }
 
-// packagesParse reads the directories of one wave and parses every
-// .volt file of every one of them on every CPU. The result holds one
-// entry per directory, nil where it has no .volt files; the packages
-// are not yet registered with the project, and the parse diagnostics
-// are appended in directory, then file-name, order (§projects-and-packages rule 5).
 func (pr *Project) packagesParse(dirs []string, overlay map[string]string, s *Session) ([]*Package, error) {
 	type fileParse struct {
 		pkg   int
@@ -403,9 +372,6 @@ func (pr *Project) packagesParse(dirs []string, overlay map[string]string, s *Se
 	return pkgs, nil
 }
 
-// goModModule reads the module directive of go.mod, honoring its
-// lexical structure: comments are not text, and a directive inside a
-// parenthesized block is not the top-level module directive.
 func goModModule(path, src string) (string, []diag.Diagnostic) {
 	inBlockComment, depth := false, 0
 	for _, line := range strings.Split(src, "\n") {
@@ -445,5 +411,5 @@ func goModModule(path, src string) (string, []diag.Diagnostic) {
 		}
 	}
 	return "", []diag.Diagnostic{diag.Errorf(token.At(path, 0, 1, 1),
-		"spec/projects-and-packages", "%s must declare 'module <path>' (§projects-and-packages rule 1)", ModFile)}
+		"spec/projects-and-packages", "%s must declare 'module <path>' (§projects-and-packages)", ModFile)}
 }

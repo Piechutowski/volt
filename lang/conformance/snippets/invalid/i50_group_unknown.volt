@@ -1,9 +1,9 @@
-// spec: §groups rule 2 — a group term must name a table, group or TableGroup
+// spec: §groups — a group term must name a table, group or TableGroup
 // want: no such table, group or TableGroup
 package db
 
 Table ms_revenue {
-  id integer [pk]
+  id int [pk]
 }
 
 Group series {

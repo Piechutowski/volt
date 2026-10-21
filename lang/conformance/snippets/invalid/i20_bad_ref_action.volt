@@ -1,0 +1,4 @@
+// spec: §relationships-ref — referential action must be one of the five listed
+Table a { x int }
+Table b { id int }
+Ref: a.x > b.id [delete: explode]

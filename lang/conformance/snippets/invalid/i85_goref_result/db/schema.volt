@@ -1,12 +1,12 @@
-// spec: §validation-checks rule 5 — a Go-reference check returns exactly error
+// spec: §validators — a Go-reference check returns exactly error
 // want: must return exactly error
 package db
 
 Table users {
-  id integer [pk]
-  email varchar [not null]
+  id int [pk]
+  email string [not null]
 
-  checks {
+  validators {
     EmailValid(email)
   }
 }

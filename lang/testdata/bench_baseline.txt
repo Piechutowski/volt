@@ -1,4 +1,4 @@
-# Benchmark baseline for lang (PERF-2). Not gated: compare by hand after a change,
+# Benchmark baseline for lang. Not gated: compare by hand after a change,
 # refresh with: go test ./lang -run '^$' -bench . -benchmem > lang/testdata/bench_baseline.txt
 # 2026-09-14 go1.27.0 4 CPUs: Intel(R) Xeon(R) Processor @ 2.80GHz
 goos: linux

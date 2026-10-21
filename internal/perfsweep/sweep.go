@@ -158,8 +158,6 @@ func Run(dir string, spec Spec, log func(format string, args ...any)) ([]Row, er
 	return rows, nil
 }
 
-// generate renders every file of every package and returns the bytes
-// emitted.
 func generate(pr *lang.Project) (int, error) {
 	n := 0
 	for path, pkg := range pr.Packages {
@@ -185,7 +183,6 @@ func generate(pr *lang.Project) (int, error) {
 	return n, nil
 }
 
-// pprofTop renders the profile's top functions as pprof prints them.
 func pprofTop(prof string, cum bool) (string, error) {
 	args := []string{"tool", "pprof", "-top", "-nodecount=25"}
 	if cum {

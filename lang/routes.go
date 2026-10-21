@@ -4,22 +4,20 @@ import (
 	"github.com/Piechutowski/volt/lang/token"
 )
 
-// ParamType is the closed set of route parameter types (spec §route-paths rule 3);
+// ParamType is the closed set of route parameter types (spec §route-paths);
 // GoType maps them to Go. The set matches the Go types nao's model
 // generator emits for primary keys.
 type ParamType string
 
 const (
 	TInt    ParamType = "int"
-	TInt32  ParamType = "int32"
-	TInt64  ParamType = "int64"
 	TString ParamType = "string"
 )
 
 // KnownParamType reports whether s names a parameter type.
 func KnownParamType(s string) bool {
 	switch ParamType(s) {
-	case TInt, TInt32, TInt64, TString:
+	case TInt, TString:
 		return true
 	}
 	return false
@@ -41,7 +39,7 @@ type Param struct {
 type RouteInfo struct {
 	Method  string // "GET", ... ; "" for the any-verb (matches every method)
 	Pattern string // ServeMux registration pattern, e.g. "/users/{id}"
-	Spelled string // canonical DSL spelling, e.g. "/users/:id(int64)"
+	Spelled string // canonical DSL spelling, e.g. "/users/:id(int)"
 	Params  []Param
 
 	Controller string // Go interface base name, e.g. "Users"
@@ -66,10 +64,6 @@ type RouteInfo struct {
 	Table         string // the resources declaration's table name, when FromResources
 	FromDataset   bool   // expanded from a dataset item (§datasets)
 
-	// shape is the pattern parsed for the §route-conflicts rule 2 ambiguity relation
-	// and shapeKey the method and shape as the duplicate scan keys them,
-	// both set when the route is lowered; ord is the route's position
-	// in the package's table, set when the checker accepts it.
 	shape    pathShape
 	shapeKey string
 	ord      int
@@ -88,10 +82,22 @@ const (
 // QueryParam is one parameter of a query route's method, in signature
 // order after ctx.
 type QueryParam struct {
-	Name      string // Go parameter name, also the URL key
-	GoType    string // unqualified Go type ("int32", "[]string"); params structs are qualified ("db.UserCreateParams")
-	Source    QuerySource
-	Validates bool // body param: the params struct has a Validate method the handler calls first (§validation-checks rule 6)
+	Name   string // Go parameter name, also the URL key
+	GoType string // unqualified Go type ("int", "[]string"); a changeset is qualified ("db.UserChangeset")
+	Source QuerySource
+}
+
+// ChangesetBind is how a query route builds the changeset of a write
+// (spec §query-routes, §changesets): the body decodes as Params and is
+// cast into New() for a create, or into the Changeset of the row Get
+// loads by the key for an update, allowing the Allow columns. The key
+// is the FromPath parameters that precede the body in Params; every
+// key column of an update is one. The names are unqualified.
+type ChangesetBind struct {
+	Params string   // write body type, e.g. "UserParams"
+	New    string   // constructor of a create, e.g. "UserNew"; "" for an update
+	Get    string   // row loader of an update, e.g. "UserGet"; "" for a create
+	Allow  []string // column handles the cast allows, e.g. "UserEmail"
 }
 
 // QueryRef binds a route to a generated query method of a data package
@@ -103,12 +109,13 @@ type QueryRef struct {
 	Package   string // root-relative package path
 	Import    string // Go import path of the package
 	PkgName   string // the package's Go name (its directory name)
-	Local     bool   // the query is this package's own (§query-routes rule 6): no import, the field is Queries *Queries
+	Local     bool   // the query is this package's own (§query-routes): no import, the field is Queries *Queries
 	Method    string // generated method name, e.g. "UserGet"
 	Params    []QueryParam
-	Result    string // row type, unqualified ("User"); "" for delete
-	Many      bool   // slice result
-	Status    int    // success status: 200, 201 for create, 204 for delete
+	Changeset *ChangesetBind // how a write's body becomes its changeset (§changesets); nil for a read
+	Result    string         // row type, unqualified ("User"); "" for delete
+	Many      bool           // slice result
+	Status    int            // success status: 200, 201 for create, 204 for delete
 }
 
 // Ref renders the reference as written, e.g. "db.UserGet"; a query of
@@ -145,16 +152,13 @@ type ActionInfo struct {
 	Routes []*RouteInfo
 }
 
-// resourceActions is the canonical action table (spec §the-action-table), in
-// definition order. Method "" is filled per action; Update expands to
-// both PATCH and PUT.
 var resourceActions = []struct {
-	Name    string   // action / interface method name
-	Methods []string // HTTP methods
-	Suffix  string   // path suffix after /<table>
-	OnID    bool     // route includes the key parameter
-	API     bool     // included under [api]
-	Op      string   // the default CRUD operation behind [default] (§default-handlers); "" for form pages
+	Name    string
+	Methods []string
+	Suffix  string
+	OnID    bool
+	API     bool
+	Op      string
 }{
 	{"Index", []string{"GET"}, "", false, true, "list"},
 	{"New", []string{"GET"}, "/new", false, false, ""},
@@ -165,8 +169,6 @@ var resourceActions = []struct {
 	{"Delete", []string{"DELETE"}, "", true, true, "delete"},
 }
 
-// actionByLower maps the lowercased action names accepted in only:/except:
-// lists to canonical names.
 var actionByLower = func() map[string]string {
 	m := map[string]string{}
 	for _, a := range resourceActions {

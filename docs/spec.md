@@ -1,23 +1,28 @@
 # The Volt Language — Specification
 
-**Status:** Normative. The implementation in this repository MUST be
-100% compliant with this document; where they disagree, one of the two
-has a bug, and the commit that fixes it says which.
+> [!CAUTION]
+> **This project is an alpha version, and everything may change in the future.**
 
-Volt is **one language**: a declarative complement to Go, grown outward
-from DBML. This specification has two parts and three appendices:
+**Status:** Normative for the implementation as it stands. The
+implementation in this repository MUST be 100% compliant with this
+document; where they disagree, one of the two has a bug, and the
+commit that fixes it says which. Normative does not mean settled: the
+language is alpha and any part of it may change, and it changes by
+changing this document.
 
-- **[Part I — The Schema Core (DBML)](#part-i-the-schema-core-dbml)**:
-  lexis, grammar and static semantics of the DBML-derived schema
-  layer. Standalone-conformant with upstream DBML.
+Volt is **one language**: a declarative complement to Go. This
+specification has two parts and the appendices:
+
+- **[Part I — The Schema Core](#part-i-the-schema-core)**: lexis,
+  grammar and static semantics of the schema language: tables,
+  columns, indexes, refs, enums, types, partials, records, notes,
+  groups and diagram views, with Go's types as the column types.
 - **[Part II — The Project and Routing Layer](#part-ii-the-project-and-routing-layer)**:
   projects, packages, imports, pipelines, scopes, routes, resources,
   and the query layer.
 - **[Mapping to Go](#mapping-to-go)** and **[Mapping to SQLite DDL](#mapping-to-sqlite-ddl)**:
   the generation contracts of the data layer (informative in
   form, pinned by generator goldens in force).
-- **[Compatibility with DBML](#compatibility-with-dbml)**: what Volt accepts verbatim,
-  the one deliberate break (`use`/`reuse`), and the migration.
 
 Every construct is specified by (1) a grammar production in EBNF, (2)
 an enumerated list of constraints, and (3) a minimal example. Every
@@ -31,30 +36,33 @@ suspicious schemas, every rule with executable examples — is
 
 ---
 
-# Part I — The Schema Core (DBML)
+# Part I — The Schema Core
 
-**Version:** 1.0 (based on `@dbml/parse` reference implementation, holistics/dbml)
 **Status:** Normative.
-This part is a complete, standalone-conformant specification of DBML:
-a schema written using only Part I constructs is valid upstream DBML
-(diagrammable on dbdiagram.io as-is). The reference implementation is
-[`lang/`](../lang/); the executable corpus is
-[`lang/conformance/snippets/`](../lang/conformance/snippets/) (the `.dbml` entries).
+Part I is Volt's schema language: tables, columns, indexes, refs,
+enums, types, partials, records, notes, groups and diagram views,
+with column types drawn from Go (§columns, §types). A Part I file
+body is a valid Volt file body (§layers-files-and-the-superset-rule).
+The reference implementation is [`lang/`](../lang/); the executable
+corpus is [`lang/conformance/snippets/`](../lang/conformance/snippets/),
+where the snippets without a `package` clause are Part I's
+(§conformance-and-the-proof-chain).
 
-DBML (Database Markup Language) is a declarative, database-agnostic domain-specific
-language for defining database schemas: tables, columns, indexes, constraints,
-relationships, enumerations, sample data, and documentation metadata.
+The schema language is declarative: it defines tables, columns,
+indexes, constraints, relationships, enumerations, sample data and
+documentation metadata, and leaves storage to the generators
+(§mapping-to-sqlite-ddl).
 
-This document is a complete, formal specification of DBML intended for
+This document is a complete, formal specification of Volt's schema language intended for
 implementers of parsers, compilers, and tooling. Every construct is specified
 by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
-(3) a minimal example. The collected grammar appears in [Appendix IA](#appendix-ia-collected-grammar-part-i).
+(3) a minimal example. The collected grammar appears in [Collected grammar (Part I)](#collected-grammar-part-i).
 
 ---
 
 ## Table of Contents
 
-- **Part I — The Schema Core (DBML)**
+- **Part I — The Schema Core**
   - [Notation](#notation)
     - [EBNF](#ebnf)
     - [Character Notation (U+XXXX)](#character-notation-uxxxx)
@@ -85,9 +93,9 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Columns](#columns)
     - [Default Values](#default-values)
     - [Indexes](#indexes)
-    - [Checks](#checks)
     - [Relationships (Ref)](#relationships-ref)
     - [Enum](#enum)
+    - [Types](#types)
     - [TablePartial](#tablepartial)
     - [Records (Sample Data)](#records-sample-data)
     - [Notes](#notes)
@@ -133,25 +141,31 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
   - [Groups](#groups)
   - [Predicates](#predicates)
   - [Selects over groups](#selects-over-groups)
-  - [Validation checks](#validation-checks)
+  - [Validators](#validators)
+  - [Changesets](#changesets)
+  - [Migrations](#migrations)
+    - [The fold](#the-fold)
+    - [Migration ledger](#migration-ledger)
+    - [Migration tooling](#migration-tooling)
   - [Collected grammar (Part II)](#collected-grammar-part-ii)
   - [Conformance and the proof chain](#conformance-and-the-proof-chain)
 - **Appendices**
   - [Mapping to Go](#mapping-to-go)
-    - [Types](#types)
+    - [Go types](#go-types)
     - [Nullability](#nullability)
     - [Names](#names)
     - [Notes become doc comments](#notes-become-doc-comments)
     - [Struct tags](#struct-tags)
+    - [Generated query surface](#generated-query-surface)
   - [Mapping to SQLite DDL](#mapping-to-sqlite-ddl)
-  - [Compatibility with DBML](#compatibility-with-dbml)
+  - [Non-goals](#non-goals)
   - [License and Provenance](#license-and-provenance)
 
-Sections are named, not numbered (decision named-sections). A
-citation is `§` followed by the heading's anchor, the heading
-lowercased with its words joined by hyphens, and `rule N` names a
-numbered constraint inside it: `§columns rule 2`,
-`§selects-over-groups rule 4`, `§struct-tags`. Diagnostic codes are
+Sections are named, not numbered. A citation is `§` followed by the
+heading's anchor, the heading lowercased with its words joined by
+hyphens: `§columns`, `§selects-over-groups`, `§struct-tags`. A
+citation never carries a constraint's number; numbers move, names
+stay. Diagnostic codes are
 `spec/<anchor>`. A citation that names no heading fails the build
 (`lang/spec_doc_test.go`).
 
@@ -179,14 +193,14 @@ ISO/IEC 14977. Nonterminal names are lowercase words separated by spaces
 | `(* … *)`     | Comment inside the grammar                                     |
 
 Note that the square brackets, braces, and parentheses of the *EBNF
-meta-language* are distinct from the DBML tokens `[ ]`, `{ }`, `( )`, which
+meta-language* are distinct from the language's tokens `[ ]`, `{ }`, `( )`, which
 always appear quoted (`"["`, `"{"`, `"("`) when they are part of the language
 being defined.
 
 Whitespace between symbols in a production is insignificant unless a
 production explicitly references the `newline` or `sp` nonterminals: a
 production that references `sp` lays out its own spaces, and one that
-ends with `newline` lies on one line (§line-structure-and-whitespace rule 2). A line break is
+ends with `newline` lies on one line (§line-structure-and-whitespace). A line break is
 whitespace everywhere else.
 
 ### Character Notation (U+XXXX)
@@ -226,7 +240,7 @@ approximate category L with ASCII `[a-zA-Z]`.
 
 ### Case Sensitivity and Terminology
 
-**Case sensitivity.** All DBML *keywords* (terminals spelled with letters in
+**Case sensitivity.** All *keywords* (terminals spelled with letters in
 this grammar, e.g. `"Table"`, `"pk"`, `"not null"`) are matched
 **case-insensitively**: `Table`, `table`, and `TABLE` are equivalent.
 User-defined names (identifiers) preserve case; implementations MUST treat
@@ -239,10 +253,11 @@ interpreted as described in RFC 2119.
 
 ## Source Text
 
-1. A DBML source file is a sequence of Unicode characters, conventionally
-   encoded as UTF-8, conventionally using the file extension `.dbml`.
+1. A Volt source file is a sequence of Unicode characters, conventionally
+   encoded as UTF-8, using the file extension `.volt` (§layers-files-and-the-superset-rule).
 2. A *program* (§program-structure) is the content of one source file. Multiple files are
-   related only through the module system (§file-imports-removed).
+   related only through packages (§projects-and-packages); file imports are
+   not part of the language (§file-imports-removed).
 
 ---
 
@@ -284,7 +299,7 @@ sp      = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
    transparently. It keeps its place in the source: a tool that reports
    positions counts its byte in offsets and gives it no column, so every
    position points into the file as written.
-2. DBML is **newline-sensitive**: a line break terminates statements such as
+2. Volt is **newline-sensitive**: a line break terminates statements such as
    column definitions, enum values, record rows, and settings-free field
    lines. Productions in this specification reference `newline` explicitly
    wherever it is syntactically significant. A production that ends with
@@ -296,7 +311,7 @@ sp      = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
    close the block.
 3. Space and tab characters separate tokens and are otherwise insignificant.
 4. Indentation is never significant (except inside multi-line strings, §multi-line-string-literals),
-   with the one exception of rule 5.
+   with the one exception of element boundaries.
 5. **Element boundaries.** An unquoted identifier (§identifiers) in the first column
    of a line begins a top-level element (§program-structure) whenever it lies outside every
    string, comment and brace: the brace depth counts `{` up and `}` down,
@@ -308,7 +323,7 @@ sp      = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
    an import block or a relationship that spills onto a first-column
    identifier line is a syntax error at that line.
 6. **Recovery.** A syntax error inside an element discards the rest of
-   that element, up to the next element start (rule 5), and the next
+   that element, up to the next element start, and the next
    element is parsed as if the broken one were absent. Inside a braced
    or parenthesized body of items (a table's columns, an enum's values,
    a scope's routes, an import block's entries, and every other
@@ -322,7 +337,7 @@ sp      = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
 Table posts [                 // continuation lines are indented
   headercolor: #3498DB
 ] {
-  id integer [pk]
+  id int [pk]
 }
 
 Ref: posts.id >
@@ -370,7 +385,7 @@ digit             = "0" | "1" | "2" | "3" | "4"
 ident char        = letter | digit ;
 
 plain identifier  = letter, { ident char }
-                  | ( digit, { ident char } ) - number ;    (* constraint 2 *)
+                  | ( digit, { ident char } ) - number ;    (* digits alone are a number *)
 
 quoted identifier = '"', { qi char | escape sequence }, '"' ;
 qi char           = any char - ( '"' | "\" | newline ) ;
@@ -383,23 +398,27 @@ qi char           = any char - ( '"' | "\" | newline ) ;
    identifier. E.g. `2fa_codes` is an identifier; `255` is a number.
 3. A quoted identifier (`"double quoted"`) permits any characters except an
    unescaped `"` and a line break, and supports the escape sequences of §escape-sequences.
-   Use it for names containing spaces or other special characters, including
-   column types with spaces (e.g. `"double precision"`).
+   Use it for names containing spaces or other special characters.
 4. Plain and quoted identifiers are interchangeable everywhere an
    `identifier` is expected; `users` and `"users"` denote the same name.
 
 ### Keywords
 
-DBML has **no reserved words**. All keywords are contextual: a keyword such
+Volt has **no reserved words**. All keywords are contextual: a keyword such
 as `Table` acts as a keyword only in keyword position and remains usable as an
 ordinary identifier elsewhere (e.g. a column may be named `table`).
 
 Element-type keywords: `Project`, `Table`, `TablePartial`, `TableGroup`,
-`Enum`, `Ref`, `Note`, `Records`, `DiagramView`, `indexes`, `checks`,
-`Tables`, `Notes`, `TableGroups`, `Schemas`.
+`Enum`, `Type`, `Ref`, `Note`, `Records`, `DiagramView`, `Migration`,
+`indexes`, `validators`, `Tables`, `Notes`, `TableGroups`, `Schemas`.
 Clause keywords: `as`, `use`, `reuse`, `from`.
 Value keywords: `true`, `false`, `null`.
 All are case-insensitive (§case-sensitivity-and-terminology).
+
+The words of a migration body (`up`, `down`, `create`, `drop`, `rename`,
+`alter`, `rebuild`, `exec`, `table`, `index`, `add`, `to`) are keywords
+inside a `Migration` only (§migrations); elsewhere they are identifiers,
+so a column may be named `up` or `to`.
 
 ### String Literals
 
@@ -520,7 +539,7 @@ expression literal = "`", { any char - "`" }, "`" ;
    literal backtick.
 2. May span multiple lines.
 3. Used for computed defaults (`` default: `now()` ``), expression indexes,
-   check expressions, and expression values in records.
+   and expression values in records.
 
 ### Operators and Punctuation
 
@@ -535,8 +554,8 @@ Punctuation roles (uniform across the language):
 | Token   | Role                                                        |
 |---------|-------------------------------------------------------------|
 | `{ }`   | element bodies (block form)                                 |
-| `[ ]`   | settings lists                                              |
-| `( )`   | composite column lists, type arguments, records column list |
+| `[ ]`   | settings lists, and the `[]` of the type `[]byte`           |
+| `( )`   | composite column lists, records column list                 |
 | `:`     | introduces an inline (single-expression) body or a setting value |
 | `,`     | separator inside `[ ]`, `( )`, and record rows              |
 | `.`     | name qualification (`schema.table.column`)                  |
@@ -585,7 +604,7 @@ setting value = string | number | boolean | null
 3. Each element section below enumerates *which* settings are valid there;
    a setting not listed for a construct is invalid in that position.
 4. Within one settings list, each setting MUST appear at most once. The
-   only exceptions are the column settings `check` and `ref` (§columns), which
+   only exceptions are the column settings `ref` and `tag` (§columns), which
    MAY be repeated. Settings that are synonyms (`pk` / `primary key`) count
    as one setting for this rule.
 5. A settings list MUST appear on the same line as (the end of) the
@@ -602,6 +621,7 @@ element = project
         | table
         | table partial
         | enum
+        | type decl
         | ref element
         | sticky note
         | table group
@@ -611,10 +631,10 @@ element = project
 
 1. A program is a sequence of top-level elements and import statements
    (§file-imports-removed), in any order, separated by line breaks. Where one element ends
-   and the next begins is lexical (§line-structure-and-whitespace rule 5): an unquoted identifier in the
+   and the next begins is lexical (§line-structure-and-whitespace): an unquoted identifier in the
    first column outside every brace, string and comment.
 2. Forward references are permitted: an element may reference another
-   element defined later in the file (or imported). DBML is fully
+   element defined later in the file (or imported). The language is fully
    declarative; declaration order carries no semantics.
 
 ---
@@ -654,7 +674,7 @@ table alias    = "as", name ;
 
 table body     = { column
                  | indexes block
-                 | checks block
+                 | validators block
                  | note def
                  | partial injection
                  | records block
@@ -675,17 +695,16 @@ table setting  = "headercolor", ":", color
    settings.
 4. Column names MUST be unique within a table after partial injection (§partial-injection-order).
 
-> **Extension (this implementation).** The table setting `model: string`
+> **The `model` setting.** The table setting `model: string`
 > pins the Go model name used by `volt gen` (by default the
-> singularized table name — [decision singular-models](decisions.md#singular-models)). The
-> setting is accepted by this front end but is not upstream DBML; the
+> singularized table name). The
 > `vet` rule [`modelname`](lint.md#modelname) tells you when it is
 > needed. The core grammar above is unchanged.
 
 ```volt
 Table core.users as U [headercolor: #3498DB] {
-  id integer [pk]
-  email varchar(255) [not null, unique]
+  id int [pk]
+  email string [not null, unique]
 }
 ```
 
@@ -695,9 +714,8 @@ Table core.users as U [headercolor: #3498DB] {
 column          = name, column type, { legacy flag },
                   [ column settings ], newline ;
 
-column type     = type name, [ "(", type arg, { ",", type arg }, ")" ] ;
-type name       = [ schema name, "." ], identifier ;
-type arg        = number | identifier ;
+column type     = [ "[", "]" ], type name ;
+type name       = [ identifier, "." ], identifier ;
 
 legacy flag     = "pk" | "unique" ;
 
@@ -708,59 +726,62 @@ column setting  = "primary key" | "pk"
                 | "increment"
                 | "required"                          (* extension, below *)
                 | "default", ":", default value
-                | "check", ":", expression literal
                 | "note", ":", string
                 | "ref", ":", inline ref value ;
 ```
 
-1. **Type.** Any type name is accepted; DBML does not restrict the type
-   vocabulary. The type name MUST NOT contain spaces; a type containing
-   spaces MUST be written as a quoted identifier (`"double precision"`,
-   `"bigint unsigned"`). Parenthesized type arguments (`varchar(255)`,
-   `decimal(10,2)`) are preserved verbatim. A type name may be
-   schema-qualified to reference an enum (`v2.job_status`).
+1. **Type.** A column type is a Go type, matched case-sensitively, from
+   a closed set: the built-ins `bool`, `int`, `float64`, `string`,
+   `[]byte` and `time.Time`; an enum of the package, optionally
+   schema-qualified (`v2.job_status`, §enum); or a type declared with
+   `Type` (§types). Anything else is an error naming the column and
+   the set; the `[]` of the grammar belongs to `[]byte` alone, so
+   `[]string` is an unknown type. The type decides the Go field
+   (§mapping-to-go), the SQLite column (§mapping-to-sqlite-ddl), the
+   literals a `default:` accepts (§default-values), the empty value
+   `required` refuses, and the comparisons a predicate allows
+   (§predicates).
 2. **Nullability.** Absent `not null`, a column is nullable. `null` and
    `not null` are mutually exclusive.
 3. **`pk` / `primary key`** are synonyms and mutually exclusive; they mark a
    single-column primary key. A composite primary key MUST be expressed as
    an index with the `pk` setting (§indexes).
 4. **`increment`** marks the column auto-increment: the database
-   assigns its value, and the generated `CreateParams` omits it
-   (§mapping-to-go, decision create-params).
+   assigns its value, and a changeset has no setter for it
+   (§changesets).
 
    > **Extension (this implementation).** Because the target is SQLite
-   > (decision sqlite-first), `increment` is honored in exactly one shape — the table's
-   > single-column primary key of an integer type, which becomes the
+   >, `increment` is honored in exactly one shape — the table's
+   > single-column primary key of type `int`, which becomes the
    > rowid alias (§mapping-to-sqlite-ddl) — and is an **error** anywhere else: on a
    > non-integer column, on a column that is not the primary key, or
    > when the primary key is composite. A keyword that is typed MUST be
-   > applied; silently ignoring it while `CreateParams` drops the
+   > applied; silently ignoring it while no changeset ever marks the
    > column would insert NULL into a NOT NULL column at run time.
-5. **`check`** attaches a single-column check constraint; the setting MAY be
-   repeated to attach multiple checks.
-6. **`ref`** declares an inline relationship (§relationships-ref). The setting MAY be
+5. **`ref`** declares an inline relationship (§relationships-ref). The setting MAY be
    repeated. Inline refs cannot carry names or settings.
-7. **Legacy flags.** For backward compatibility, the bare words `pk` and
+6. **Legacy flags.** For backward compatibility, the bare words `pk` and
    `unique` MAY appear between the type and the settings list
    (`id int pk`). New documents SHOULD use the settings list instead.
-8. Each column definition is terminated by a line break.
+7. Each column definition is terminated by a line break.
 
 > **Extension (this implementation).** The column setting `required`
-> ([decision required-and-problems](decisions.md#required-and-problems)) declares that a value must be present
+> declares that a value must be present
 > in the zero-value sense: under ZII a missing input decodes to the
 > type's zero value and `not null` is satisfied, so `required` is the
-> word for "and not that either". It lowers to one check in both tiers
-> (Part II, Validation checks rule 8): `<> ''` for string-mapped types
-> and enums, `<> 0` for numeric types, `length(…) > 0` for blob and
-> JSON, named `<column>_required` in the DDL and in the validator's
-> error. It MUST accompany `not null` (or a key), and is an error on a
-> `null`, `default:` or `increment` column and on a type with no empty
-> value — `bool` and date/time, where every value is a value.
+> word for "and not that either". It is one of the two built-in rules
+> of `Validate` (§changesets), beside enum membership, and the one the
+> schema switches on per column, the field error with check
+> `required`: it refuses `""` for `string` and enum columns, `0` for
+> `int` and `float64`, a zero length for `[]byte`, and for a declared
+> type the empty value of its storage type. It MUST accompany `not null` (or a key), and is an
+> error on a `null`, `default:` or `increment` column and on `bool`
+> and `time.Time`, where every value is a value.
 >
-> **Extension (this implementation).** The column setting `tag: string`
+> **The `tag` setting.** The column setting `tag: string`
 > (repeatable) passes one Go struct tag through to the generated field
-> verbatim ([decision tag-passthrough](decisions.md#tag-passthrough)): every field property lives in
-> the schema (decision schema-owns-fields), and the passthrough serves every encoding and
+> verbatim: every field property lives in
+> the schema, and the passthrough serves every encoding and
 > third-party library without minting a setting name per format.
 >
 > 1. The value MUST be exactly one `key:"value"` pair in Go struct-tag
@@ -775,15 +796,14 @@ column setting  = "primary key" | "pk"
 >    appended after the generated pair, in declaration order
 >    (§struct-tags).
 >
-> The setting is accepted by this front end but is not upstream DBML.
 > Note that `encoding/gob` ignores struct tags entirely: renaming a
 > field for gob is a Go-field-name concern, not a tag concern, and has
 > no surface here.
 
 ```volt
 Table users {
-  id        integer [pk]
-  user_name varchar [not null, tag: 'json:"userName"', tag: 'xml:"user-name,attr"']
+  id        int [pk]
+  user_name string [not null, tag: 'json:"userName"', tag: 'xml:"user-name,attr"']
 }
 ```
 
@@ -809,6 +829,16 @@ default value = [ "-" ], number
 A bare identifier that is not `true`/`false`/`null` and not a dotted enum
 constant is **not** a valid default value.
 
+1. **Typed.** A default MUST fit the column's type (§columns): an
+   integer literal for `int`; a number for `float64`; a string for `string`;
+   `true` or `false` for `bool`; a constant of the column's own enum
+   for an enum column; for a declared type (§types), a literal of its
+   storage type. `null` is a default only on a nullable column. An
+   expression literal is accepted on any column and is SQLite's to
+   judge. `[]byte` and `time.Time` columns take only an expression
+   literal or `null`. A default that does not fit is an error naming
+   the column and its type.
+
 ### Indexes
 
 An `indexes` block may appear inside a `Table` or `TablePartial` body. A
@@ -827,6 +857,7 @@ index setting  = "type", ":", identifier
                | "name", ":", string
                | "unique"
                | "pk"
+               | "where", ":", expression literal
                | "note", ":", string ;
 ```
 
@@ -839,53 +870,28 @@ index setting  = "type", ":", identifier
    permitted.
 4. `type` selects the index method. Any identifier is accepted; the
    conventional, portable values are `btree` and `hash`.
+5. **Name.** An index without `name:` whose key is columns only is
+   named `idx_<table>_<col>[_<col>...]` from the SQLite table name
+   and its key columns in order (§mapping-to-sqlite-ddl), so that a
+   schema and a migration (§migrations) name one index one way;
+   `name:` overrides it. An index with an expression atom MUST carry
+   `name:`, since no name derives from an expression. A `pk` index is
+   a table constraint and has no name.
+6. **`where`** takes an expression literal and makes the index
+   partial: the DDL carries it as `WHERE <expr>`, verbatim and
+   SQLite's to judge.
 
 ```volt
 Table bookings {
-  id integer
-  country varchar
-  booking_date date
+  id int
+  country string
+  booking_date time.Time
 
   indexes {
     (id, country) [pk]
     booking_date [name: 'idx_booking_date', type: hash]
-    (country, `lower(country)`) [unique]
-  }
-}
-```
-
-### Checks
-
-A `checks` block declares table-level check constraints (constraints over one
-or many columns). It may appear inside a `Table` or `TablePartial` body. A
-body MAY contain more than one `checks` block; their contents accumulate.
-
-```ebnf
-checks block   = "checks", "{", { check }, "}" ;
-check          = expression literal, [ check settings ], newline ;
-
-check settings = "[", check setting, { ",", check setting }, "]" ;
-check setting  = "name", ":", string ;
-```
-
-1. The expression is opaque SQL (§expression-literals); DBML does not parse or validate it.
-2. `name` names the generated constraint.
-3. Single-column checks MAY alternatively be written as a `check:` column
-   setting (§columns).
-
-> **Extension (this implementation).** In the Volt layer a check line
-> may also be a typed predicate expression or a Go-reference call —
-> §validation-checks defines both forms, their static rules, and what each tier
-> generates. The opaque form above stays exactly as upstream DBML has
-> it: SQL CHECK only, never validated.
-
-```volt
-Table users {
-  wealth integer
-  debt integer
-
-  checks {
-    `debt + wealth >= 0` [name: 'chk_positive_money']
+    (country, `lower(country)`) [unique, name: 'idx_bookings_country_ci']
+    booking_date [where: `country <> ''`]
   }
 }
 ```
@@ -943,7 +949,7 @@ ref action       = "cascade" | "restrict" | "set null"
    SQL export; it MAY equivalently be modeled explicitly with two
    many-to-one relationships.
 8. Zero-or-one / zero-or-many cardinality is not written explicitly; it is
-   derived from the nullability of the foreign-key column (§columns rule 2).
+   derived from the nullability of the foreign-key column (§columns).
 9. Duplicate relationships between the same column sets are invalid,
    regardless of direction: `a.x > b.y` and `b.y < a.x` are the same
    relationship.
@@ -962,7 +968,7 @@ Ref {
 
 // inline form
 Table posts {
-  user_id integer [ref: > core.users.id]
+  user_id int [ref: > core.users.id]
 }
 ```
 
@@ -994,6 +1000,60 @@ Enum job_status {
 }
 ```
 
+### Types
+
+A **Type** declaration admits a Go type of the application as a column
+type. The schema names the Go type, where it comes from and how SQLite
+stores it; the Go type does the rest.
+
+```ebnf
+type decl    = "Type", type name, storage type, [ "from", string ], newline ;
+storage type = column type ;
+```
+
+1. **Name.** `pkg.Name` names the Go type `Name` of the package
+   imported from the `from` path under the alias `pkg`; the path is a
+   non-empty import path, and generated code imports it as
+   `import pkg "path"`. The alias MUST NOT be a package name generated
+   code imports for itself under another path: `context`, `driver`,
+   `errors`, `fmt`, `gob`, `http`, `json`, `sql`, `strings` and `time`
+   are free only with their standard path (`sql` from `database/sql`,
+   `driver` from `database/sql/driver`, `json` from `encoding/json`,
+   `gob` from `encoding/gob`, `http` from `net/http`, the rest from
+   the path of their name), and `rt` and `volt` are never free. A bare
+   `Name` without `from` names a type declared in a Go file of the data
+   package itself, and `from` on a bare name is an error, as is
+   `pkg.Name` without `from`.
+   Declared names are unique within the package and MUST NOT spell a
+   built-in type or an enum.
+2. **Storage.** The storage type is one of the six built-ins
+   (§columns), never an enum or another declared type. It fixes the
+   SQLite column (§mapping-to-sqlite-ddl), the empty value `required`
+   refuses (§columns) and the literals a `default:` accepts
+   (§default-values).
+3. **Contract.** The Go type MUST implement `database/sql.Scanner` on
+   its pointer and `database/sql/driver.Valuer` on its value, since
+   generated code scans into a pointer and binds values. Generated
+   code asserts both (`var _ sql.Scanner = (*pkg.Name)(nil)` and
+   `var _ driver.Valuer = *new(pkg.Name)`), so a type that does not
+   fails to compile at the assertion, naming the type. A nullable
+   column of a declared type is `rt.Null[pkg.Name]`.
+4. **In predicates.** A column of a declared type compares with `=`,
+   `!=`, `in` and `is null` only (§predicates).
+
+```volt
+Type money.Money int    from 'example.com/app/money'
+Type png.Png     []byte from 'image/png'
+Type Slug        string
+
+Table products {
+  id    int         [pk, increment]
+  slug  Slug        [not null, unique]
+  price money.Money [not null]
+  icon  png.Png
+}
+```
+
 ### TablePartial
 
 A `TablePartial` declares a reusable fragment of a table body. Tables inject
@@ -1004,7 +1064,7 @@ table partial     = "TablePartial", name, [ table settings ],
                     "{", partial body, "}" ;
 partial body      = { column
                     | indexes block
-                    | checks block
+                    | validators block
                     | note def
                     } ;
 
@@ -1026,12 +1086,12 @@ partial injection = "~", name, newline ;
 ```volt
 TablePartial base_template [headercolor: #ff0000] {
   id int [pk, not null]
-  created_at timestamp [default: `now()`]
+  created_at time.Time [default: `now()`]
 }
 
 Table users {
   ~base_template
-  name varchar
+  name string
 }
 ```
 
@@ -1065,33 +1125,47 @@ empty           = ;                      (* nothing between separators *)
    all table columns in definition order (after partial injection, §partial-injection-order).
 2. A table MUST have at most one records block.
 3. Each row MUST supply exactly as many values as listed columns.
-4. **Value typing.** Each value is checked against the target column's type:
-   - Strings are single-quoted. Timestamps/dates are strings in ISO 8601 or
-     other unambiguous formats (`'2024-01-15 10:30:00'`, `'2024-01-15'`).
-   - Booleans accept, case-insensitively: `true`, `false`, `'true'`,
-     `'false'`, `'Y'`, `'N'`, `'T'`, `'F'`, `1`, `0`, `'1'`, `'0'`.
-   - Null is `null`, an empty field (nothing between commas), or the empty
-     string `''` for non-string columns.
-   - Enum values are written as `EnumName.value` or as a string literal of
-     the value. A bare identifier (other than `true`/`false`/`null`) is
-     **not** a valid record value.
-   - Expression literals (backticks) pass through unchecked.
+4. **Value typing.** Each value MUST fit the target column's type
+   (§columns), as a default must (§default-values): an integer literal
+   for `int`; a number for `float64`; a string for `string` and for
+   `time.Time` (ISO 8601 text, `'2024-01-15 10:30:00'`); `true` or
+   `false` for `bool`; a constant of the column's own enum
+   (`EnumName.value`) for an enum column; for a declared type, a
+   literal of its storage type. `null` and an empty field (nothing
+   between commas) are NULL and are allowed only on a nullable column.
+   A `[]byte` column takes an expression literal or NULL. An expression
+   literal (backticks) is accepted on any column and is SQLite's to
+   judge. A bare identifier other than `true`, `false` and `null` is
+   **not** a value. A value that does not fit is an error naming the
+   column and its type.
 
 ```volt
+Enum job_status {
+  created
+  running
+}
+
 Table users {
   id int [pk]
-  name varchar
+  name string
   status job_status
 
   Records (id, name, status) {
     1, 'Alice', job_status.created
-    2, 'Bob', 'running'
+    2, 'Bob', job_status.running
     3, , null
   }
 }
 
-Records users(id, name, status) {
-  4, 'Carol', `default_status()`
+Table posts {
+  id int [pk]
+  user_id int [not null, ref: > users.id]
+  posted_at time.Time
+}
+
+Records posts(id, user_id, posted_at) {
+  1, 1, `CURRENT_TIMESTAMP`
+  2, 2, '2024-01-15 10:30:00'
 }
 ```
 
@@ -1188,15 +1262,24 @@ DiagramView sales_view {
 
 ## File Imports (removed)
 
-DBML's file-based module system — `use * from './file'`, selective
-import with per-element kinds and `as` aliases, and `reuse` re-export —
-**is not part of the Volt language**. Splitting a schema across files
-needs no imports at all: a package is a directory and every file in it
-shares one namespace (§projects-and-packages); cross-package references go through the
-package system (§imports). The rationale and the mechanical migration are
-§compatibility-with-dbml.
+An earlier file-import syntax (`use * from './file'`, selective
+import with per-element kinds and `as` aliases, and `reuse` re-export)
+is recognized only to be refused: it **is not part of the Volt
+language**. Splitting a schema across files needs no imports at all: a
+package is a directory and every file in it shares one namespace
+(§projects-and-packages); cross-package references go through the
+package system (§imports). All four forms managed one problem, name
+conflicts caused by dumping imported declarations into the importer's
+scope, and qualified access (`db.users`) makes those conflicts
+impossible, so the machinery solving them has no place. Files that
+imported each other become one package; genuinely separate concerns
+become separate packages, imported by name (§imports) and qualified at
+every reference; an alias (`use { table users as u }`) has no
+equivalent and needs none, since the package qualifier disambiguates;
+a re-export chain flattens, each consumer importing the defining
+package directly.
 
-A conforming implementation recognizes the historical forms in order to
+A conforming implementation recognizes the refused forms in order to
 reject them precisely:
 
 ```ebnf
@@ -1211,8 +1294,9 @@ import path      = string ;
 ```
 
 1. An `import statement` anywhere in a file is an **error** (code
-   `spec/7`), at every layer: the single-file schema pass and the
-   project pass alike. The diagnostic points at §compatibility-with-dbml.
+   `spec/file-imports-removed`), at every layer: the single-file schema
+   pass and the project pass alike. The diagnostic names the package
+   system as the replacement.
 2. No other behavior attaches to the statement: it declares nothing,
    imports nothing, and suppresses only cascading unresolved-name
    noise within its file.
@@ -1226,7 +1310,8 @@ import path      = string ;
 1. Schemas are not declared; a schema exists if and only if at least one
    table or enum names it as qualifier.
 2. Every unqualified table, enum, or relationship endpoint belongs to the
-   default schema **`public`**.
+   default schema **`public`**. An unqualified enum written as a column
+   type names the `public` enum whatever schema the table is in.
 
 ### Namespaces and Uniqueness
 
@@ -1236,7 +1321,9 @@ Within one compiled schema (after imports):
    is shared with unqualified table names.
 2. Enum names MUST be unique per schema.
 3. TablePartial names, TableGroup names, sticky-note names, and DiagramView
-   names each form a single global namespace and MUST be unique.
+   names each form a single global namespace and MUST be unique. Declared
+   Type names (§types) form their own namespace, unique within the
+   package, and a Type MUST NOT spell an enum name.
 4. Column names MUST be unique within their table; enum values within their
    enum.
 
@@ -1254,7 +1341,7 @@ Within one compiled schema (after imports):
 1. Injections are expanded in source order; the effective column order of a
    table is the concatenation of injected and direct columns in source
    order (this order also drives implicit records column lists, §records-sample-data).
-2. Conflicts resolve per §tablepartial rule 4.
+2. Conflicts resolve per §tablepartial.
 
 ### Nullability and Cardinality
 
@@ -1275,7 +1362,7 @@ above.
 program              = { import statement | element } ;
 
 element              = project | table | table partial | enum
-                     | ref element | sticky note | table group
+                     | type decl | ref element | sticky note | table group
                      | records element | diagram view ;
 
 (* ===== 7. Module system ===== *)
@@ -1301,7 +1388,7 @@ project property     = identifier, ":", string, newline ;
 table                = "Table", table name, [ table alias ],
                        [ table settings ], "{", table body, "}" ;
 table alias          = "as", name ;
-table body           = { column | indexes block | checks block
+table body           = { column | indexes block | validators block
                        | note def | partial injection | records block } ;
 table settings       = "[", table setting, { ",", table setting }, "]" ;
 table setting        = "headercolor", ":", color
@@ -1309,15 +1396,13 @@ table setting        = "headercolor", ":", color
 
 column               = name, column type, { legacy flag },
                        [ column settings ], newline ;
-column type          = type name, [ "(", type arg, { ",", type arg }, ")" ] ;
-type name            = [ schema name, "." ], identifier ;
-type arg             = number | identifier ;
+column type          = [ "[", "]" ], type name ;
+type name            = [ identifier, "." ], identifier ;
 legacy flag          = "pk" | "unique" ;
 column settings      = "[", column setting, { ",", column setting }, "]" ;
 column setting       = "primary key" | "pk" | "null" | "not null"
                      | "unique" | "increment" | "required"
                      | "default", ":", default value
-                     | "check", ":", expression literal
                      | "note", ":", string
                      | "ref", ":", inline ref value ;
 default value        = [ "-" ], number | string | boolean | null
@@ -1332,12 +1417,8 @@ index settings       = "[", index setting, { ",", index setting }, "]" ;
 index setting        = "type", ":", identifier
                      | "name", ":", string
                      | "unique" | "pk"
+                     | "where", ":", expression literal
                      | "note", ":", string ;
-
-checks block         = "checks", "{", { check }, "}" ;
-check                = expression literal, [ check settings ], newline ;
-check settings       = "[", check setting, { ",", check setting }, "]" ;
-check setting        = "name", ":", string ;
 
 (* ===== 6.7 Ref ===== *)
 
@@ -1363,11 +1444,16 @@ enum value           = name, [ enum settings ], newline ;
 enum settings        = "[", enum setting, { ",", enum setting }, "]" ;
 enum setting         = "note", ":", string ;
 
+(* ===== 6.8a Types ===== *)
+
+type decl            = "Type", type name, storage type, [ "from", string ], newline ;
+storage type         = column type ;
+
 (* ===== 6.9 TablePartial ===== *)
 
 table partial        = "TablePartial", name, [ table settings ],
                        "{", partial body, "}" ;
-partial body         = { column | indexes block | checks block | note def } ;
+partial body         = { column | indexes block | validators block | note def } ;
 partial injection    = "~", name, newline ;
 
 (* ===== 6.10 Records ===== *)
@@ -1502,12 +1588,15 @@ files under `invalid/` MUST be rejected.
 ## Layers, files and the superset rule
 
 1. A Volt source file conventionally uses the extension **`.volt`**.
-   Whether a file happens to use only the DBML core (Part I) or the
+   Whether a file happens to use only the schema core (Part I) or the
    full language follows from its content, never from its name.
-2. **Superset rule.** Every valid DBML program whose declarations avoid
-   the import statements of Part I §file-imports-removed is a valid Volt file body
-   (§imports rule 5 removes `use`/`reuse`; §compatibility-with-dbml covers migration). The
-   lexical grammar is Part I §lexical-structure with one addition:
+2. **Layering rule.** The full language is a superset of Part I: every
+   valid Part I program is a valid Volt file body, and a file body
+   means the same at every layer. Part II adds the package clause and
+   its own declarations and takes nothing away; the import statements
+   of Part I §file-imports-removed are refused at every layer alike
+   (§imports). The lexical grammar is
+   Part I §lexical-structure with one addition:
 
    ```ebnf
    slash = "/" ;
@@ -1515,10 +1604,10 @@ files under `invalid/` MUST be rejected.
 
    `/` is a token wherever it is not the start of a `//` or `/*`
    comment. Consequence: **`/*` always opens a block comment**, which
-   is why the rest-of-path wildcard is spelled `:name...` (§route-paths rule 4)
-   and not `*name` — after a slash, a star-marked wildcard is lexically
-   unreachable in a superset of DBML.
-3. Declaration order and file assignment carry no semantics (§projects-and-packages rule 5).
+   is why the rest-of-path wildcard is spelled `:name...` (§route-paths)
+   and not `*name` — after a slash, a star-marked wildcard would open a
+   block comment.
+3. Declaration order and file assignment carry no semantics (§projects-and-packages).
 
 ## Projects and packages
 
@@ -1527,7 +1616,7 @@ package clause = "package", name, newline ;
 ```
 
 1. A **project** is a Go module: the directory tree rooted at the
-   nearest ancestor directory containing **`go.mod`** (decision go-module-is-the-project). Its
+   nearest ancestor directory containing **`go.mod`**. Its
    `module` directive is the project's module path; every other
    directive is Go's business and ignored. There is no second manifest.
 2. Every `.volt` file MUST begin with a package clause: its first
@@ -1538,7 +1627,7 @@ package clause = "package", name, newline ;
 3. A **package** is a directory: all `.volt` files in one directory
    MUST declare the same package name, and share one namespace per
    element kind (tables, enums, partials, pipelines, scopes — each per
-   Part I §namespaces-and-uniqueness extended with §pipelines rule 1 and §scopes-and-routes).
+   Part I §namespaces-and-uniqueness extended with §pipelines and §scopes-and-routes).
 4. In every directory other than the project root, the package name
    MUST equal the directory's base name. The root directory's package
    may take any name.
@@ -1555,8 +1644,8 @@ package clause = "package", name, newline ;
    about and, transitively, the packages they import (§imports) — nothing
    else, so stray `.volt` trees elsewhere in the module never
    interfere. Packages are named as in Go: a directory names its
-   package, `dir/...` names every package beneath `dir` (rule 6
-   applied), and no argument means the working directory. `volt gen`
+   package, `dir/...` names every package beneath `dir`, the excluded
+   directories skipped, and no argument means the working directory. `volt gen`
    writes output for the named packages only; imports are loaded for
    checking, never written. An argument may also name a `.volt` file,
    which stands for its directory's package, so a `//go:generate` line
@@ -1564,11 +1653,11 @@ package clause = "package", name, newline ;
 8. **Output placement is the caller's.** `volt gen -o DIR` writes one
    named package's output into `DIR` instead of the package directory
    — any directory, another module's included, since a package that
-   routes its own tables (§query-routes rule 6) imports nothing across packages —
+   routes its own tables (§query-routes) imports nothing across packages —
    under the package clause `DIR`'s Go files declare (or `-package`),
    and `-parts` selects among `models`, `queries`, `router`, `client`
-   and `sql`; the client then lands beside the models (§generated-client rule 6). A
-   `.volt` file's own package clause stays mandatory (rule 2): it
+   and `sql`; the client then lands beside the models (§generated-client). A
+   `.volt` file's own package clause stays mandatory: it
    names the package to the language and to the editor; only the
    clause of what is written follows the target.
 
@@ -1577,7 +1666,7 @@ package clause = "package", name, newline ;
 package db
 
 Table users {
-	id integer [pk, increment]
+	id int [pk, increment]
 }
 ```
 
@@ -1596,24 +1685,27 @@ package path = name, { slash, name } ;
 2. A package path names a package by its directory path from the
    project root, `/`-separated, with no `./`, no `..`, and no interior
    whitespace; its segments, and the alias, are plain (unquoted)
-   identifiers (§route-paths rule 6). The path MUST name an existing package of
+   identifiers (§route-paths). The path MUST name an existing package of
    the project.
 3. The imported package is referenced through its **qualifier**: the
    alias when given, else the last path segment. All cross-package
    references are qualifier-prefixed (`db.User`); nothing is ever
-   imported into the local scope.
+   imported into the local scope. A `Migration` is not an importable
+   element: it belongs to the package whose tables it migrates, and
+   nothing of another package may name it (§migrations).
 4. Within one package (across all its files): importing the same path
    twice is idempotent, but with two different qualifiers it is an
    error; two different paths MUST NOT share a qualifier, nor may one
    take the package's own name, which qualifies its own declarations
-   (§pipelines rule 2, §handler-references); a package MUST NOT import itself; **every import
+   (§pipelines, §handler-references); a package MUST NOT import itself; **every import
    MUST be used** — an import whose qualifier is never referenced is
    an error.
-5. **DBML file imports are removed.** The `use` and `reuse` statements
+5. **File imports are removed.** The `use` and `reuse` statements
    of Part I §file-imports-removed are not part of the Volt language at any layer; a
-   conforming implementation rejects them with a migration diagnostic.
-   (The parser MAY still recognize the syntax so the DBML conformance
-   corpus remains checkable; acceptance is what is forbidden.)
+   conforming implementation rejects them with a diagnostic naming the
+   package system. (The parser MAY still recognize the syntax so the
+   schema conformance corpus remains checkable; acceptance is what is
+   forbidden.)
 6. **Import cycles are errors.** The package import graph MUST be
    acyclic.
 
@@ -1647,7 +1739,7 @@ go ref   = name, [ ".", name ] ;
    the go tool would compile for it (go/build's file constraints: no
    leading `_` or `.`, a matching GOOS/GOARCH suffix, a satisfied
    `//go:build` line), with exactly one parameter spelled
-   `http.Handler` and exactly one result spelled `http.Handler` (decision go-references-by-spelling):
+   `http.Handler` and exactly one result spelled `http.Handler`:
    a missing function or another signature is an error naming the
    signature to write. The Go compiler still compiles the result; the
    checker catches the typo and the wrong shape first.
@@ -1671,7 +1763,7 @@ route path = slash,
 segment    = name
            | ":", name, [ "(", param type, ")" ]
            | ":", name, ".", ".", "." ;  (* three '.' tokens, contiguous *)
-param type = "int" | "int32" | "int64" | "string" ;
+param type = "int" | "string" ;
 ```
 
 1. All tokens of a route path are **contiguous**: interior whitespace
@@ -1681,19 +1773,19 @@ param type = "int" | "int32" | "int64" | "string" ;
    different pattern.
 2. A `:name` segment captures one path segment as a parameter. The
    parameter name MUST be a valid, non-keyword Go identifier, MUST NOT
-   be one of the reserved names `w`, `r`, `opts`, `volt` (they appear
+   be one of the reserved names `w`, `r`, `opts`, `volt`, `cs` (they appear
    in generated signatures and would be shadowed), and MUST be unique
    within the route's full path (scope prefixes included).
 3. A parameter's type defaults to `string`; the closed type set is
-   `int`, `int32`, `int64`, `string`, chosen to coincide with the Go
-   types the model generator emits for routable primary keys.
+   `int` and `string`, the Go types the model generator emits for
+   routable primary keys.
    **Types shape handler signatures, never matching**: a request
    segment that fails to parse as the declared type is that route's
    404, not a fallthrough to a sibling route.
 4. `:name...` captures the rest of the path (a **wildcard**), always as
    `string`. It MUST be the last segment of the full path, MUST NOT
    carry a type, and MUST NOT appear in a Scope prefix. (Spelling
-   rationale: §layers-files-and-the-superset-rule rule 2.)
+   rationale: §layers-files-and-the-superset-rule.)
 5. Grammar note: a path is assembled from ordinary tokens; the
    contiguity rule of clause 1 is what makes it one lexical island.
 6. Every segment name — literal, parameter or wildcard — MUST be a
@@ -1701,10 +1793,10 @@ param type = "int" | "int32" | "int64" | "string" ;
    underscores. Segment names flow verbatim into registration patterns
    and generated Go; the closed character set is what makes that safe
    (and is why `{`/`}` can serve as the collision-free conflict markers
-   of §route-conflicts rule 1). The same constraint applies to the `resources` table
+   of §route-conflicts). The same constraint applies to the `resources` table
    name (§declaration), to the identifiers of pipeline names and plug
    references (§pipelines), to route handler names (§handler-references), and to import
-   aliases and path segments (§imports rule 2).
+   aliases and path segments (§imports).
 
 ### Routes
 
@@ -1735,9 +1827,9 @@ handler ref = name, [ ".", name ] ;
    so the action lives in the routes package — or a **query
    reference**, which makes the route a query route (§query-routes) with no
    controller at all: `pkg.Query`, whose first part is an import
-   qualifier (§imports rule 4) and whose second names a generated query of that
+   qualifier (§imports) and whose second names a generated query of that
    package, or `Query` or `<package name>.Query`, a generated query of
-   the package itself (§query-routes rule 6), spelled as a plug is (§pipelines rule 2). The
+   the package itself (§query-routes), spelled as a plug is (§pipelines). The
    runtime's own handlers are `volt.<Name>` (§event-routes).
 2. Every distinct controller becomes one generated interface; every
    distinct action one method with the route's typed parameters
@@ -1747,14 +1839,14 @@ handler ref = name, [ ".", name ] ;
    parameter signatures (names, types and wildcard-ness, in order).
 4. The generated `Controllers` manifest is one namespace: a controller
    MUST NOT take the name of a field the manifest holds for a data
-   package (`DB`, `Queries`; §query-routes rule 5) or for the event broker
+   package (`DB`, `Queries`; §query-routes) or for the event broker
    (`Events`; §event-routes). The error names the field.
 
 ### Query routes
 
 A **query route** binds a route to a generated query method of a data
 package — an imported one, or the package itself when it declares the
-tables (rule 6) — instead of to a controller. Volt generated the
+tables — instead of to a controller. Volt generated the
 method, so it knows the parameters and the row type, and it writes the
 handler: bind, call, render. Nothing is dispatched by name at runtime.
 
@@ -1763,16 +1855,16 @@ import ( db )
 
 Scope /api [pipe: api] {
 	get    /users            db.UserList
-	get    /users/:id(int32) db.UserGet
+	get    /users/:id(int) db.UserGet
 	post   /users            db.UserCreate
-	patch  /users/:id(int32) db.UserUpdate
-	delete /users/:id(int32) db.UserDelete
+	patch  /users/:id(int) db.UserUpdate
+	delete /users/:id(int) db.UserDelete
 	get    /picked           db.UserPicked      // Select picked for users where id in :ids
 }
 ```
 
 1. **Which methods qualify.** A select method, `<Model><SelectName>`
-   per member (§selects-over-groups rule 6), or a default CRUD method of a table:
+   per member (§selects-over-groups), or a default CRUD method of a table:
    `<Model>Get`, `<Model>List`, `<Model>Create`, `<Model>Update`,
    `<Model>Delete`, each only where the query generator emits it
    (`Get`/`Update`/`Delete` need a primary key, `Update` a non-key
@@ -1782,27 +1874,43 @@ Scope /api [pipe: api] {
    binds from exactly one source, decided at generation time:
    - a **path parameter** of the route with the same name binds it.
      Its declared type MUST spell the method's Go type
-     (`:id(int32)` for `id int32`; `string` needs no annotation); a
-     type a segment cannot carry (§route-paths rule 3) goes in the query string.
+     (`:id(int)` for `id int`; `string` needs no annotation); a
+     type a segment cannot carry (§route-paths) goes in the query string.
      A wildcard cannot bind a query parameter;
-   - a **params struct** (`<Model>CreateParams`, `<Model>UpdateParams`)
-     binds from the **request body**, decoded by `Content-Type`
-     (Formats). The route's verb MUST be `post`, `put` or `patch`;
-   - a **list parameter** (§predicates rule 3) binds from the **repeated query
+   - a **changeset** parameter (`<Model>Create`, `<Model>Update`)
+     binds from the **request body**: the body decodes as
+     `<Model>Params` by `Content-Type` (Formats; §changesets, `Params`)
+     and is cast into a changeset. `Create` casts into `<Model>New()`
+     allowing every column but the auto-increment key; `Update` loads
+     the row by the key path parameters with `<Model>Get` (a miss is a
+     404), casts into its `Changeset()` allowing every non-key column,
+     and the route MUST carry every key column as a path parameter.
+     The body is decoded before the row is loaded, so a malformed body
+     is a 400 whether or not the row exists. A write route always takes
+     a body, `{}` when nothing is set: a table whose only column is the
+     auto-increment key still needs `{}`. The route's verb MUST be
+     `post`, `put` or `patch`; `put` is accepted as a spelling of the
+     same partial update as `patch`, the handler being the same cast,
+     and nothing the body leaves out is reset;
+   - a **list parameter** (§predicates) binds from the **repeated query
      key** of its name; absent means the empty list;
    - every other parameter binds from the **query string** by name,
      parsed to its type; a missing or unparseable value is a 400 that
      names the parameter.
-   A path parameter the method does not take is an error: the route
-   would capture a value nothing consumes.
+   A parameter binds from the query string only when its type is
+   `string`, `bool`, `int`, `float64` or `time.Time`, or a slice of one
+   of those (a list parameter); a select with a parameter of any other
+   type, a declared type (§types) included, is not a query route, and
+   the route is an error. A path parameter the method does not take is
+   an error: the route would capture a value nothing consumes; the key
+   of an `Update` is consumed by the load.
 3. **Response.** The result renders in the negotiated format
    (Formats): rows or a row with status 200, a created row with 201,
    a delete with 204 and no body. A query's row miss (`rt.ErrNotFound`,
    which is `sql.ErrNoRows`) is a 404 through the error spine. A
-   Create or Update handler calls the params struct's `Validate`
-   (§validation-checks rule 6) before the query when it has one, so a violated check is a
-   422 naming the check; a constraint the database refuses is a 409
-   (duplicate key) or 422 naming the constraint (§validation-checks rule 7). Any other
+   refused write is a `*rt.Invalid` through the error spine: 409 for
+   a unique violation, 422 otherwise, itemized per field (§changesets,
+   `rt.Invalid`), an unknown key of the body among the fields. Any other
    error is the spine's 500.
 4. **Names.** The helper name (§route-names-and-reverse-urls) defaults to the scope name
    prefixes followed by the method name, and only `get`/`head` query
@@ -1813,18 +1921,18 @@ Scope /api [pipe: api] {
 5. **Wiring.** The generated `Controllers` manifest (§handler-references) gains one
    field per data package that query routes go through, named by the
    qualifier as a Go name (`db` → `DB`), typed `*<pkg>.Queries` — for
-   the package itself, `Queries *Queries` (rule 6); the application
+   the package itself, `Queries *Queries`; the application
    constructs it with the package's `New`. No interface is generated
    for a query route.
 6. **Own tables.** A package that declares tables MAY route them
-   itself, so one directory holds schema, routes and handlers (decision self-routing-package).
+   itself, so one directory holds schema, routes and handlers.
    `Query` or `<package name>.Query` names its own generated query;
    `resources t [default]` (§default-handlers) and `dataset s` (§dataset-declaration) resolve in
    the package when bare or self-qualified. Nothing is imported, the
-   generated handlers name the package's params structs bare, and the
+   generated handlers name the package's changesets bare, and the
    router's constructor is `NewRouter`, so it never collides with the
    query layer's `New`. The package's own name is thereby a qualifier:
-   an import MUST NOT take it (§imports rule 4).
+   an import MUST NOT take it (§imports).
 
 ### Formats
 
@@ -1835,24 +1943,29 @@ for a format suffix.
 1. **Responses** follow `Accept`: the first listed media type that is
    `application/json`, `application/x-gob`, `application/*` or `*/*`
    decides; an absent header means JSON; a header offering neither is
-   a 406 naming both.
+   a 406 naming both. Negotiation happens before the handler runs
+   anything: a 406 decodes no body, loads no row and writes nothing.
 2. **Request bodies** follow `Content-Type`: absent or
    `application/json` decodes JSON, `application/x-gob` decodes GOB,
-   anything else is a 415; an empty or malformed body is a 400; a JSON
-   field the struct does not declare is a 400 whose body itemizes it
-   (rule 5) as `Detail{Check: "unknown_field", Columns: [<field>]}`,
-   so a form marks the field — a typo must not vanish silently. Only
-   the first undeclared field is reported (the decoder stops there),
-   and GOB ignores unknown fields by design, the shared struct being
-   the contract. A body over the runtime's `MaxBodyBytes` (four
-   megabytes unless set) is a 413.
+   anything else is a 415; an empty or malformed body is a 400. A write
+   body is a `<Model>Params` (§changesets): as JSON an object of the
+   columns to set by wire name, as GOB the row and the marked columns;
+   a key that names no column is a field error `unknown_field` of the
+   changeset (422), every one of them reported, so a typo never
+   vanishes silently. `volt.Decode` into a struct of a hand-written
+   controller keeps the 400 whose body itemizes the first undeclared
+   JSON field as `Detail{Check: "unknown_field", Columns: [<field>]}`;
+   GOB ignores unknown fields there, the shared struct being the
+   contract. A body over the runtime's `MaxBodyBytes` (four megabytes
+   unless set) is a 413.
 3. **GOB is the Go-native arm**: a client that imports the generated
    models package decodes rows into the same types the server
    encoded, with no schema on the wire. JSON is what browsers, curl and
    every other language see.
 4. The runtime exposes the same rules to hand-written controllers as
-   `volt.Render`, `volt.RenderStatus` and `volt.Decode`, so a
-   controller route can speak both formats without repeating them.
+   `volt.Negotiate`, `volt.Render`, `volt.RenderStatus` and
+   `volt.Decode`, so a controller route can speak both formats without
+   repeating them.
 5. **Error bodies** are structured: the default error handler writes a
    `volt.Problem` — status, message, and details (check, columns,
    message) when the error itemizes them — in the negotiated format,
@@ -1870,7 +1983,7 @@ the routes through typed methods instead of hand-built requests.
 1. The package is named `client` and imports only the runtime and the
    data packages the routes go through — never the routing package —
    so a caller links no server code. The one exception is a package
-   that routes its own tables (§query-routes rule 6): its client imports it for the
+   that routes its own tables (§query-routes): its client imports it for the
    row types, and so links it; when that package is `main`, which Go
    cannot import, no client is generated.
 2. `type Client struct { volt.Client }` and `New(base string)
@@ -1881,11 +1994,17 @@ the routes through typed methods instead of hand-built requests.
 3. **Every query route** (§query-routes) is one typed method, named as its
    helper would be (scope name prefixes and the method name, or
    `name:`), with the query's parameters in signature order and the
-   query's result: `func (c *Client) APIUserGet(ctx, id int32)
-   (db.User, error)`, `APIUserDelete(ctx, id int32) error`. Path
+   query's result: `func (c *Client) APIUserGet(ctx, id int)
+   (db.User, error)`, `APIUserDelete(ctx, id int) error`. Path
    parameters render through the same builders as `Path*` helpers,
    query-string parameters through `volt.FormatQuery`, a list as a
-   repeated key, a params struct as the body.
+   repeated key, a changeset as the body: `APIUserCreate(ctx, cs
+   db.UserChangeset) (db.User, error)`, `APIUserUpdate(ctx, id int, cs
+   db.UserChangeset) (db.User, error)`, sent as `cs.Params()`
+   (§changesets). A changeset built from `<Model>New()` is the carrier
+   of changes on the client side, so an update needs no row in hand:
+   `APIUserUpdate(ctx, id, db.UserNew().EmailSet(e))` sets one column
+   of row `id`.
 4. **Every named controller route** is one raw method with the
    route's path parameters, returning `*http.Response` for the caller
    to read and close: Volt does not know what a hand-written action
@@ -1893,11 +2012,11 @@ the routes through typed methods instead of hand-built requests.
 5. Client method names and reverse-URL helper names share one
    namespace per package (§route-names-and-reverse-urls); a collision is an error naming
    `name:`.
-6. **Beside the models.** `volt gen -o DIR` (§projects-and-packages rule 7) writes the client
+6. **Beside the models.** `volt gen -o DIR` (§projects-and-packages) writes the client
    as `DIR/volt_client.go` in the package `DIR` holds instead of as a
    subpackage, for a program that is the client — a desktop or browser
-   front end that is `package main`. The row and params types are
-   named bare, since the models written beside it declare them; the
+   front end that is `package main`. The row, changeset and params
+   types are named bare, since the models written beside it declare them; the
    constructor is `NewClient(base string) *Client`, since `New` beside
    it may be the query layer's; nothing but the runtime is imported.
 
@@ -1954,7 +2073,7 @@ Scope settings (the complete set):
    plugs, composed once at generation time — never iterated per
    request.
 3. The `error_handler` function is a Go reference held like a plug
-   (decision go-references-by-spelling): it MUST exist in the package's compiled Go files with the
+: it MUST exist in the package's compiled Go files with the
    volt runtime's ErrorHandler
    shape: `func(http.ResponseWriter, *volt.Request, error)`. Routes
    without one use the runtime default.
@@ -1978,7 +2097,7 @@ Scope settings (the complete set):
 
 1. A route's **shape** is its full path with every parameter replaced
    by `{}` and every wildcard by `{...}`; literals compare by spelling.
-   (Braces cannot appear in a literal segment, §route-paths rule 6, so the markers
+   (Braces cannot appear in a literal segment, §route-paths, so the markers
    cannot collide with any literal.)
 2. Two routes **overlap** when some request matches both: their methods
    overlap (equal, or either is `any`) and their paths overlap (some
@@ -2017,7 +2136,7 @@ Scope / [pipe: api, error_handler: Errors] {
 		get /stats   Admin.Stats
 	}
 	get /files/:path...           Files.Serve
-	get /users/:id(int32)/avatar  Users.Avatar
+	get /users/:id(int)/avatar  Users.Avatar
 }
 ```
 
@@ -2068,12 +2187,12 @@ ident list = "(", name, { ",", name }, ")" ;   (* the value of only: and except:
    unknown names are errors. `only` and `except` MUST NOT be combined.
    `only`/`except` filter the action set after `api`.
 2. The key parameter's type always comes from the resolved table's
-   primary key (§table-resolution rule 3).
-3. `singular` overrides the inflector of §table-resolution rule 2. It is required
+   primary key (§table-resolution).
+3. `singular` overrides the inflector of §table-resolution. It is required
    whenever singularization leaves the name unchanged, which would
    otherwise make the collection and member helpers collide.
 4. The key parameter MUST NOT repeat a parameter of the enclosing
-   scope (§route-paths rule 2): `Scope /farms/:id { resources plots }` is an
+   scope (§route-paths): `Scope /farms/:id { resources plots }` is an
    error, reported once at the declaration, naming `param:` as the
    fix (`[param: plot_id]`). Under `[default]` the name is the
    generated CRUD's and cannot move, so the scope's parameter is the
@@ -2083,16 +2202,15 @@ ident list = "(", name, { ",", name }, ")" ;   (* the value of only: and except:
 
 1. The declaration names a **table** of this package (`posts`) or of an
    imported package (`db.posts`); a qualified reference marks the
-   import used (§imports rule 4).
+   import used (§imports).
 2. The name matches the table's declared name **exactly**: names are
    case-sensitive, and a name differing only in case is an error naming
    the right spelling. A qualified name that matches nothing is an
    error; an unqualified one that matches nothing is a resource
    without a schema (clause 6).
-3. The resolved table MUST have a single-column primary key whose
-   Go type is `int`, `int32`, `int64` or `string`; that type
-   becomes the key parameter's type. Composite, missing, or unroutable
-   keys are errors.
+3. The resolved table MUST have a single-column primary key of type
+   `int` or `string`; that type becomes the key parameter's type.
+   Composite, missing, or unroutable keys are errors.
 4. A resolved declaration fixes every derived name from the schema:
    the URL segment and the controller come from the table name as
    written, and the member helper from the table's **model** name (the
@@ -2133,26 +2251,30 @@ resources db.tags  [default, except: (delete)]
    generated handler has nothing to return for them.
 3. The table's CRUD is the data package's: an imported one for a
    qualified table (`db.users`), this package's own for a bare or
-   self-qualified one (`users`, `app.users`; §query-routes rule 6), as for every
+   self-qualified one (`users`, `app.users`; §query-routes), as for every
    query route. A bare table in a package that declares none is an
    error naming the qualified form.
 4. The key parameter is named as the generated CRUD spells the
    primary-key column (`id` for `id`), because binding is by name
-   (§query-routes rule 2); `param:` is an error with `default`. Type and
-   routability follow §table-resolution rule 3 unchanged.
+   (§query-routes); `param:` is an error with `default`. Type and
+   routability follow §table-resolution unchanged.
 5. An action whose CRUD method does not exist is an error naming the
    `except:` that drops it — `update` on a table whose every column is
    part of the key (there is nothing to set).
 6. Naming: `index` and `show` keep their reverse-URL helpers and
    client methods (§table-resolution); `create`, `update` and `delete` have no
-   reverse URL (writes never do, §query-routes rule 6) and a client method named
+   reverse URL (writes never do, §query-routes) and a client method named
    `Create`/`Update`/`Delete` + singular, prefixed by the scope name
    like the form-page helpers `New`/`Edit` + singular would be.
-   `update`'s PUT route shares the PATCH route's client method.
+   `update`'s PUT route shares the PATCH route's client method, and
+   PUT is accepted as a spelling of the same partial update as PATCH:
+   the handler is the same cast, and nothing the body leaves out is
+   reset.
 7. Statuses, binding, validation and rendering are §query-routes's: 201 for
-   `create`, 204 for `delete`, 404 on a miss, `Validate()` before a
-   write when the params struct validates (§validation-checks rule 6), the body and the
-   response in the negotiated format (§formats).
+   `create`, 204 for `delete`, 404 on a miss, the body cast into a
+   changeset with the allow lists of §query-routes and validated by the
+   write (§changesets), the body and the response in the negotiated
+   format (§formats).
 
 ## Datasets
 
@@ -2178,18 +2300,18 @@ Scope /da [pipe: api] {
 
 1. `dataset` appears only inside a Scope body and names a select: of
    an imported data package when qualified (`db.browse`), the
-   qualifier marking the import used (§imports rule 4); of this package when
-   bare or self-qualified (`browse`, `app.browse`; §query-routes rule 6). A name
+   qualifier marking the import used (§imports); of this package when
+   bare or self-qualified (`browse`, `app.browse`; §query-routes). A name
    that is not a select of that package is an error, with a
    case-insensitive hint.
-2. For every member of the select's target (§selects-over-groups rule 2), in member order,
+2. For every member of the select's target (§selects-over-groups), in member order,
    the dataset yields one `get` **query route** (§query-routes) whose path is
    the scope prefixes followed by one segment — the member's table
    name, with the `strip:` prefix removed — and whose handler is the
    member's select method (`<Model><SelectName>`). Every parameter of
    the select binds from the query string, a list parameter as a
-   repeated key (§query-routes rule 2). The helper and client method names are the
-   scope name prefixes followed by the method name (§query-routes rule 4).
+   repeated key (§query-routes). The helper and client method names are the
+   scope name prefixes followed by the method name (§query-routes).
 3. Expanded routes obey every rule of routes: conflicts (§route-conflicts), one
    helper namespace (§route-names-and-reverse-urls, §generated-client). To hand-write one member's route,
    take it out with `except:` and declare it beside the dataset.
@@ -2203,7 +2325,7 @@ Scope /da [pipe: api] {
 | `except` | table list | drop these members |
 
 1. `strip:` MUST be a prefix of every kept member's name, and what
-   remains MUST be a usable segment (§route-paths rule 6); otherwise an error
+   remains MUST be a usable segment (§route-paths); otherwise an error
    names the member. Without `strip:` the segment is the table name.
 2. Names in `only`/`except` are members of the select's target,
    spelled exactly; an unknown name is an error. `only` and `except`
@@ -2232,18 +2354,20 @@ one `<Controller>Controller` interface per controller and a
 `Controllers` struct (§handler-references), with one `*<pkg>.Queries` field per data
 package query routes use (§query-routes); `NewRouter(Controllers) http.Handler`
 registering every route onto a `http.ServeMux` with its pipeline chain
-composed statically and its typed shim parsing parameters per §route-paths rule 3
+composed statically and its typed shim parsing parameters per §route-paths
 — for a query route the shim is the whole handler: it binds every
 parameter per §query-routes, calls the query and renders per §formats;
 `Path*` helpers per §route-names-and-reverse-urls; a `Table []volt.Route` mirroring the
 expanded route list in declaration order, with `Query` set on query
-routes; and the client package of §generated-client. All generated files carry the
+routes; and the client package of §generated-client. For a data package that
+declares migrations, `volt_migrations.go` carries them in statement form
+(§migration-tooling). All generated files carry the
 standard generated-code header and are gofmt-stable.
 
 ## Reserved words for future layers
 
 No word is currently reserved. `Dataset` was reserved until the
-`dataset` scope item landed (Datasets, decision dataset-expansion).
+`dataset` scope item landed (Datasets).
 
 ---
 
@@ -2303,7 +2427,7 @@ Group public = Commerce \ (audit_log, api_keys)
 
 A **Pred** names a boolean expression over the columns of an as-yet
 unnamed table. The expression language is deliberately **closed** —
-it is not SQL and never grows toward it (decision expressions-are-sqlites); anything it cannot say
+it is not SQL and never grows toward it; anything it cannot say
 belongs in a raw `Select` body (reserved) or the dynamic layer.
 
 ```ebnf
@@ -2341,32 +2465,98 @@ Pred chosen  { org in :orgs }
    package; references must exist and be acyclic.
 3. A Pred is typed **at each use site** (§selects-over-groups), where a target binds
    its column names. The rules:
-   - a `column ref` must resolve in the target's environment (§selects-over-groups rule 4);
+   - a `column ref` must resolve in the target's environment (§selects-over-groups);
    - `=` and `!=` require both operands to share a type class;
    - `<` `<=` `>` `>=` require numeric or date/time operands — text is
      **not** orderable here (`text_column > 1` and
-     `text_column > 'a'` are both errors; order text in SQL, §selects-over-groups rule 6);
+     `text_column > 'a'` are both errors; order text in SQL, §selects-over-groups);
    - `like` requires a text column and a text pattern;
    - `in` items must all match the column's type;
+   - a numeric literal MUST be representable in the column's storage
+     type (§columns): against `int` it is an integer literal that fits
+     int64, against `float64` a finite value; `9223372036854775808`,
+     `1e400`, and `1.5` or `1e2` against `int` are errors. The generated
+     method binds the literal in canonical Go form, so `-010`, `007`
+     and `1E2` bind `-10`, `7` and `100.0`;
    - `in :name` makes `:name` a **list parameter**: its Go type is a
-     slice of the column's generated type (`[]string`, `[]int32`),
-     and the column MUST NOT be date/time-typed — JSON, the list's
-     wire form (§selects-over-groups rule 6), carries no date/time value;
-   - blob and JSON columns may not appear in predicates;
+     slice of the column's generated type (`[]string`, `[]int`),
+     and the column MUST NOT be `time.Time` — JSON, the list's
+     wire form (§selects-over-groups), carries no date/time value;
+   - `[]byte` columns may not appear in predicates;
    - a `param` adopts the type of the expression position it appears
      in; one param name MUST resolve to one type across the whole use
      site — a list and a scalar use of the same name disagree — or
      the use is an error naming both positions.
 4. An enum-typed column cannot be compared in the predicate language
-   in v1 — the only column type predicates refuse besides blob/json;
-   whether typed enum parameters should lift this is hypotheses H5.
-5. Type classes are defined by the §mapping-to-go mapping: two column
-   types agree iff they map to the same Go type; numeric = the
-   integer, unsigned and float families; text = `string`-mapped;
-   date/time = `time.Time`-mapped. `decimal`/`money` map to `string`
-   and are therefore **not** orderable in a predicate — deliberate.
-5. Checks (Part I §checks) are the parameterless ancestors of predicates;
-   unifying them onto this language is planned, not yet specified.
+   in v1; with `[]byte` (rule 3) it is the only column type predicates
+   refuse. Whether typed enum parameters should lift this is
+   hypotheses H5.
+5. Type classes follow the column types (§columns): numeric = `int`
+   and `float64`; text = `string`; date/time = `time.Time`; `bool`
+   agrees with `bool` only. A column of a declared type (§types)
+   compares with `=`, `!=`, `in` and `is null` only: a parameter in
+   that position has the declared Go type, a literal has the class
+   of the storage type, and a declared type stored as `time.Time` or
+   `[]byte` takes no literal. A list parameter of a declared type is
+   bound through the type's driver value, and a declared type stored
+   as `time.Time` cannot take one, as rule 3 says of `time.Time`.
+6. **Rendering.** There is one SQL renderer, the runtime's
+   (`rt.SelectRender` and its siblings), and every statement Volt
+   emits is its output: the dynamic layer calls it at run time, the
+   generator calls it at generation time over the same tree and
+   writes the result into the statement constants, so the same
+   predicate spells the same bytes on both paths. Its spellings are
+   fixed and it produces no other:
+   - an identifier is always double-quoted (`"email"`), a `"` inside
+     it doubled;
+   - a comparison is `"col" <op> ?` or `"col" <op> "other"` with
+     `<op>` one of `=`, `!=`, `<`, `<=`, `>`, `>=`; `!=` is the one
+     spelling of inequality, `<>` is never produced and the dynamic
+     layer has no operator for it;
+   - membership in values is `"col" IN (?, ?)`, `NOT IN` likewise; an
+     empty list is the constant `1 = 0` (`1 = 1` negated); a list
+     parameter is `"col" IN (SELECT value FROM json_each(?))`, bound
+     as one JSON array (`rt.JSONList`);
+   - a pattern is `"col" LIKE ?`, `"col" NOT LIKE ?`; a null test
+     `"col" IS NULL`, `"col" IS NOT NULL`;
+   - `and` and `or` of two or more operands are parenthesized,
+     `(a AND b AND c)`; one operand is itself; `not` is `NOT (x)`, and
+     when x brings its own parentheses (an `and`/`or` group, a raw
+     fragment) they serve: `NOT ("a" = ? OR "b" = ?)`;
+   - a value is always an argument behind a positional `?`, in
+     left-to-right order of the text: a literal written in a Volt
+     predicate is bound by the generated method like a parameter, the
+     statement text carries no literal (the constants `1 = 0`, `1 = 1`
+     and `-1` of `LIMIT -1 OFFSET ?` are structure, not values);
+   - an ordering is `ORDER BY "col" ASC, "other" DESC`, the direction
+     always spelled;
+   - a WHERE clause is the statement's predicates joined by ` AND `,
+     each spelled as above, and is omitted when none survives;
+   - the keyset position `After(k1, …, kn)` over `ORDER BY t1, …, tn`
+     is one more predicate of the WHERE clause, `t1 > k1 or (t1 = k1
+     and t2 > k2) or …` with `<` for a DESC term, spelled by the rules
+     above: `("t1" > ? OR ("t1" = ? AND "t2" > ?))`, and a single term
+     `"t1" > ?`;
+   - a select is `SELECT [DISTINCT ]<columns> FROM <table>[ WHERE
+     <predicate>][ ORDER BY <terms>][ LIMIT ?[ OFFSET ?]]`, the column
+     list and the table the pre-rendered constants of the model; an
+     offset without a limit is `LIMIT -1 OFFSET ?`;
+   - a count is `SELECT count(*) FROM <table>[ WHERE <predicate>]`, an
+     existence test `SELECT EXISTS (SELECT 1 FROM <table>[ WHERE
+     <predicate>])`;
+   - a delete is `DELETE FROM <table> WHERE <predicate>` and a partial
+     update `UPDATE <table> SET "c" = ?, … WHERE <predicate>`, the
+     assignments' values bound before the predicate's; neither renders
+     without an effective predicate;
+   - a changeset's insert (§changesets) is `INSERT INTO <table> ("c", …)
+     VALUES (?, …) RETURNING <columns>`, or `INSERT INTO <table> DEFAULT
+     VALUES RETURNING <columns>` when no column is marked, and its
+     update `UPDATE <table> SET "c" = ?, … WHERE "k" = ?[ AND "k2" = ?]
+     RETURNING <columns>`, the key columns bound after the assignments.
+   A test renders a corpus of predicates once through the typed
+   handles and once from Volt source and compares the bytes; the
+   generator goldens and the integration tests prepare the constants
+   on a real SQLite.
 
 ## Selects over groups
 
@@ -2402,47 +2592,48 @@ the optional projection narrows the emitted columns.
    with a generated CRUD/dynamic method name, or between two selects
    on an overlapping member, is an error.
 2. `for` resolves case-sensitively to a group, else a table, else a
-   TableGroup — whose members are the target set (§groups rule 2 aids apply).
+   TableGroup — whose members are the target set (§groups aids apply).
 3. `where` takes a full §predicates expression — named Preds, inline
    comparisons, and any composition of the two. Omitted = all rows.
 4. **The agreement rule.** Every column referenced by the `where`
    expression (Pred references expanded) and by `order:` MUST exist in
-   **every** member, and all members MUST agree on its type (§predicates rule 4).
+   **every** member, and all members MUST agree on its type (§predicates).
    A missing column or a type disagreement is an error naming the
    offending members and their types — the predicate must be checkable
    for all members or it does not compile.
 5. Settings: `order:` takes a parenthesized list of `column asc` /
-   `column desc` pairs. The direction is **mandatory** — SQL's silent
-   `asc` default is deliberately not inherited; explicit over implicit
-   — and the emitted SQL spells it out (`ORDER BY year DESC, id ASC`).
-   Order columns obey rule 4 and MUST be orderable (§predicates rule 3) or text —
+   `column desc` pairs. The direction is **mandatory**: SQL's silent
+   `asc` default is deliberately not inherited, explicit over implicit,
+   and the emitted SQL spells it out (`ORDER BY "year" DESC, "id" ASC`).
+   Order columns obey the agreement rule and MUST be orderable (§predicates) or text —
    ORDER BY text is SQL's own collation, allowed here — and MUST appear
-   at most once. A decimal column is neither: it is stored as text
-   (§mapping-to-sqlite-ddl), so ordering it would be lexical, not numeric — an
-   error.
+   at most once. A column of a declared type (§types) is neither: it
+   compares for equality only, so ordering it is an error.
 6. Generation contract (with §mapping-to-go): per member, a method on
    `Queries` —
    `func (q *Queries) <Model><SelectName>(ctx context.Context, <params>) ([]<Row>, error)`
    — parameters in first-appearance order over the expanded
-   expression, each typed by rule §predicates rule 3; `<Row>` is the member's row
-   type per rule 7 (the model itself when there is no projection); the
-   emitted SQL is
-   `SELECT <projected columns> FROM <table> [WHERE …] [ORDER BY …]`
-   with SQLite named parameters (decision named-placeholders). A list parameter renders as
-   `<column> IN (SELECT value FROM json_each(:name))` and binds one
-   JSON array (`rt.JSONList`), so the statement is the same text for
-   every list length and an empty list matches no row (decision list-parameters). The
+   expression, each typed by §predicates; `<Row>` is the member's row
+   type (the model itself when there is no projection); the
+   emitted SQL is the runtime renderer's output (§predicates,
+   rendering), `SELECT <projected columns> FROM <table> [WHERE …] [ORDER BY
+   …]` with positional `?` placeholders, the method binding its
+   parameters and the expression's literals in the order the text
+   names them. A list parameter renders as `<column> IN (SELECT value
+   FROM json_each(?))` and binds one JSON array (`rt.JSONList`), so
+   the statement is the same text for every list length and an empty
+   list matches no row. The
    rendering is proven by
    construction (typed operators over quoted identifiers) and by the
    generator's corpus, whose select statements are prepared against
-   the generated DDL on a real SQLite (decision expressions-are-sqlites) and executed through a real
+   the generated DDL on a real SQLite and executed through a real
    driver in `nao/itest`.
 7. **Projection and row types.** Without a projection the row type is
    the member's model and the emitted columns are all of it. With one:
    - **Explicit list** `(a, b, c)` — at least one column, no
      duplicates. Every listed column MUST exist in every member with
      one agreed generated **field type** (§mapping-to-go — nullability
-     included, so `text` and `text [not null]` disagree); a miss or a
+     included, so `string` and `string [not null]` disagree); a miss or a
      disagreement is an error naming the members and their types. The
      row type is **one shared struct** named by the select name
      mapped per §names (select `summary` → `Summary`), serving
@@ -2456,9 +2647,9 @@ the optional projection narrows the emitted columns.
      generated enum type.
    - **Star with exclusions** `(* \\ a \\ b)`, or as a set
      `(* \\ (a, b))` — the same `\\` and set term as group algebra
-     (§groups rule 3); `-` is an error naming `\\`. At least one exclusion,
+     (§groups); `-` is an error naming `\\`. At least one exclusion,
      no duplicates. Every excluded column MUST exist in every member
-     (§groups rule 3: the algebra must say something true), and no member may
+     (§groups: the algebra must say something true), and no member may
      end up with zero columns. Each member projects its own columns,
      in declaration order, minus the exclusions, minting a per-member
      **struct derivative** named `<Model><SelectName>`
@@ -2472,127 +2663,648 @@ the optional projection narrows the emitted columns.
      live in the generated package scope and MUST NOT collide with any
      generated package-level name. The checker reports collisions with
      models, enums, the `Queries` handle, another select's minted row
-     type, the generated params types (`CreateParams`/`UpdateParams`
-     select names are rejected outright), and the member tables' own
-     dynamic column handles; the Go compiler backstops the rest.
+     type, the generated changeset names (`Changeset`, `Column`,
+     `Params` and `New` select names are rejected outright), and the
+     member tables' own column handles; the Go compiler backstops the rest.
 
 ---
 
-## Validation checks
+## Validators
 
-Validation reuses `checks` (§checks) instead of minting per-rule settings:
-checks are parameterless predicates (decision closed-predicates), and one construct serves the
-database and the application. A check line takes one of three forms:
+A **validator** is a Go function of the data package that takes the
+values of some columns of a table and returns an error. The schema
+names which validators guard which columns; the generator calls them
+from the generated `Validate` methods; the functions remain ordinary
+Go that any code may call. Nothing about a validator reaches the
+database.
 
 ```ebnf
-check    = expression literal, [ check settings ], newline   (* §checks: opaque SQL *)
-         | pred expr,          [ check settings ], newline   (* typed *)
-         | go check,           [ check settings ], newline ; (* Go reference *)
-
-go check = go ref, "(", column name, { ",", column name }, ")" ;
+validators block = "validators", "{", { validator }, "}" ;
+validator        = go ref, "(", column name, { ",", column name }, ")", newline ;
 ```
+
+`validators block` is an alternative of `table body` and of
+`table partial body` (§table, §tablepartial); a body MAY contain more
+than one, and their lines accumulate, injected partials' first
+(§partial-injection-order).
 
 ```volt
 Table users {
-  email varchar [not null]
-  hits  integer [not null]
+  email string [not null, required]
+  hits  int    [not null]
 
-  checks {
-    hits >= 0 and hits in (0, 1, 2)  [name: 'hits_sane']
-    email like '%@%'
-    EmailValid(email)
-    `length(email) < 255`
+  validators {
+    EmailShape(email)
+    HitsSane(hits)
+    Consistent(email, hits)
   }
 }
 ```
 
-1. **What each tier gets.** A **typed** check compiles to BOTH a SQL
-   `CHECK (<rendering>)` in the DDL (§mapping-to-sqlite-ddl) and a clause of the
-   generated validator — early, friendly errors in Go; the database
-   stays the last line of defense. A **Go-reference** check lands in
-   the validator only: SQLite cannot call Go — that asymmetry is
-   documented here, not hidden. An **opaque SQL** check stays §checks's:
-   DDL only.
-2. **Typed checks are §predicates expressions with two narrowings.** A check
-   judges one row of one table, so (a) it MUST NOT contain `:params`,
-   and (b) every referenced column MUST be a column of the enclosing
-   table (after partial injection). Package `Pred` declarations MAY be
-   referenced and are expanded in place — a check is a parameterless
-   predicate — subject to the same two rules after expansion. A
-   `like` pattern is a string literal.
-3. **Not-null columns only.** Every column a typed check references
-   MUST be `not null`. The Go tier and the SQL tier MUST agree, and
-   the Go tier does not mirror SQL's three-valued NULL logic — a
-   nullable column is an error pointing at `not null` or an opaque
-   SQL check. Consequently `is null` / `is not null` are constant
-   inside a check and are errors.
-4. **One rendering, two tiers.** The checker types and renders a typed
-   check once, producing the SQL fragment and the Go condition in the
-   same walk: `and` → `AND` and `&&`, `or` → `OR` and `||`, `not` →
-   `NOT` and `!`, comparisons and `in` to their Go operators, and
-   `like` to `rt.Like`, whose semantics are pinned to SQLite's LIKE
-   (no ESCAPE clause) by the runtime's own test corpus. Two further
-   narrowings keep the tiers provably identical: date/time columns are
-   rejected (SQL compares text timestamps lexically; Go compares
-   `time.Time` — use an opaque SQL check or a Go reference), and a
-   fractional number literal requires a float column (the Go tier
-   must compile). Ordering comparisons follow §predicates rule 3-§predicates rule 4 with
-   numeric-only ordering.
-5. **Go-reference checks.** `go ref` names a function of the
-   **containing package** — bare (`EmailValid`) or qualified by the
-   package's own name (`db.EmailValid`); referencing an imported
-   package's function is an error suggesting a local wrapper (the
-   §pipelines rule 2). Arguments are columns of the table, `not null` (rule
-   3). The contract is `func <Name>(<the columns' Go types>) error`,
-   and it is **checked** (decision go-references-by-spelling): the function MUST exist as a non-generic
-   top-level function in the package directory's non-test Go files that
-   the go tool would compile for it (go/build's file constraints, as
-   §pipelines rule 2), take exactly one parameter per argument column with the
-   column's generated Go type spelled exactly (§mapping-to-go: `string`,
-   `int32`, `time.Time`, `[]byte`, an enum's generated type name
-   `E<Enum>` — a variadic parameter never matches), and return exactly
-   `error`. Each violation is its own error — undeclared, generic,
-   variadic, wrong arity, a parameter whose spelled type disagrees with
-   the column, a wrong result — and every message names the exact
-   signature to write, so an unimplemented reference reads as a to-do.
-   A Go file with a syntax error hides the declarations after the
-   error; the undeclared message then names the file and position. The Go compiler still compiles the result and remains the
-   authority on what a spelled type denotes (a `type Email string`
-   parameter would compile against a `string` column but is refused
-   here: spell the generated type).
-6. **Generation contract.** For every table with typed or Go-reference
-   checks, `nao_validate.go` declares
-   `func (v <Model>) Validate() error`, evaluating every check in
-   declaration order against the row's values: a failed typed check
-   contributes `rt.CheckError{Model, Check}`, a failed Go reference
-   `rt.CheckError{Model, Check, Cause}` wrapping the returned error;
-   the failures are returned together as one `rt.ValidationError`
-   (which unwraps to its members), nil when every check passes.
-   `Check` is the check's `name:` setting when present, else its
-   rendered form. The **params structs** validate too: `<Model>CreateParams`
-   and `<Model>UpdateParams` each get `Validate` over the checks whose
-   columns the struct carries — a check reading a defaulted or
-   auto-increment column (absent from CreateParams, decision create-params) or a key
-   column (absent from UpdateParams) is left to the row's `Validate`
-   and the DDL, and the method's doc comment names it. Nothing calls
-   `Validate` implicitly in your code — no callbacks (decision non-goals); the one
-   generated caller is a query route's Create/Update handler (§query-routes rule 3).
-7. **Statuses and attribution.** A `CheckError` and a `ValidationError`
-   carry status 422; the database's own refusals are translated by
-   `rt.Constraint` into `rt.ConstraintError` — 409 for a unique
-   violation, 422 for a check, foreign-key or not-null failure —
-   naming what SQLite named (the column, the check). Every generated
-   write passes its error through `rt.Constraint`, so a violated
-   constraint reaches an error spine or a caller with a status and a
-   reason, never as an opaque driver error. Every `CheckError` carries
-   the **columns** its check reads, and every one of these errors
-   itemizes itself (`Details()`: check, columns, message), which the
-   error spine renders into the error body (§formats rule 5) so a form can
-   mark the fields.
-8. **`required` columns** (Part I §columns extension) lower to one check
-   each, named `<column>_required`, in both tiers: the Go condition on
-   the row and the params structs, and a `CHECK` in the DDL, spelled
-   per type class (`<> ''`, `<> 0`, `length(…) > 0`).
+```go
+func EmailShape(email string) error {
+	if !strings.Contains(email, "@") {
+		return errors.New("needs an @")
+	}
+	return nil
+}
+```
+
+1. **Resolution.** `go ref` names a function of the **containing
+   package**, bare (`EmailShape`) or qualified by the package's own
+   name (`db.EmailShape`); an imported package's function is an error
+   suggesting a local wrapper. The function MUST exist as an exported,
+   non-generic, top-level function in the package directory's non-test
+   Go files that the go tool would compile for it (go/build's file
+   constraints, as §pipelines); a file carrying the generated marker
+   is invisible. A lower-case name is an error before resolution is
+   attempted: a validator is part of the package's API.
+2. **Signature.** The contract is `func <Name>(<the columns' Go
+   types>) error`, and it is checked: exactly one parameter per listed
+   column, in order, each spelled exactly as the column's generated Go
+   type (§mapping-to-go: `string`, `int`, `time.Time`, `[]byte`,
+   `rt.Null[T]` for a nullable column, an enum's `E<Enum>`, a declared
+   type's own name), a variadic parameter never matching, and exactly
+   one result, `error`. Each violation is its own error, undeclared,
+   unexported, generic, variadic, wrong arity, a parameter whose
+   spelled type disagrees with the column, a wrong result, and every
+   message names the exact signature to write, so an unimplemented
+   reference reads as a to-do. A Go file with a syntax error hides the
+   declarations after the error; the undeclared message then names the
+   file and position. The Go compiler remains the authority on what a
+   spelled type denotes.
+3. **Columns.** Each `column name` MUST be a column of the enclosing
+   table after partial injection. A column MAY appear in any number of
+   validators and MAY be listed more than once in one.
+4. **Order.** Validators run top-down, in declaration order, every one
+   of them, every time; `required` runs first. Every failure is
+   collected; the first does not stop the rest.
+5. **Pure.** A validator receives values and returns an error. The
+   generator never calls it except from `Validate`, and it receives
+   no database handle, no context and no row. A rule that needs the
+   database is not a validator: uniqueness and referential integrity
+   are the unique index and the foreign key, which only the database
+   can close against concurrent writers, and they reach the caller as
+   `*rt.Invalid` (§changesets).
+6. **Generation contract.** `Validate` is the changeset's (§changesets):
+   `nao_validate.go` declares `func (c <Model>Changeset) Validate()
+   <Model>Changeset` for every table, which runs rule 4 over `Row()`
+   and records each failed validator as a field error whose check is
+   the validator's name, whose columns are the ones it reads and whose
+   message is the returned error's. Nothing else calls a validator;
+   `Create` and `Update` call `Validate` before writing.
+7. **Statuses and attribution.** A refused write is one `*rt.Invalid`,
+   422 for failed validators and 409 for a unique violation, itemizing
+   every field error (§changesets), which the error spine renders into
+   the error body (§formats) so a form can mark the fields.
+8. **`required` columns** (Part I §columns extension) carry the one
+   built-in rule of `Validate` the schema switches on per column; the
+   other, enum membership, every enum column gets (§changesets). The
+   type's empty value is refused, Go only, like every validator.
+9. **No database twin.** A validator produces no DDL. The database
+   never carries a `CHECK`: an enum column is plain `TEXT`, a
+   `required` column is `NOT NULL` and nothing more
+   (§mapping-to-sqlite-ddl).
+
+---
+
+## Changesets
+
+A **changeset** is a generated value that carries a row, the changes
+proposed to it, and the errors found so far. It is built by pure
+functions, validated by pure functions, and written by one call at
+the end. Nothing happens to the database before that call, and
+nothing happens if the changeset is invalid. Every generated write
+takes a changeset: there is no other write path for a row.
+
+```go
+type UserChangeset struct { /* unexported: data, changes, marks, errors */ }
+type UserColumn = rt.ColumnOf[User]   // the column handles UserID, UserEmail, ...
+type UserParams = rt.Params[User]     // a write body on the wire
+
+func UserNew() UserChangeset                                     // for a create
+func (u User) Changeset() UserChangeset                          // for an update
+func (c UserChangeset) From(u User) UserChangeset                // every data column of u
+
+func (c UserChangeset) EmailSet(v string) UserChangeset          // one per column
+func (c UserChangeset) BioSet(v rt.Null[string]) UserChangeset
+func (c UserChangeset) Cast(p UserParams, allow ...UserColumn) UserChangeset
+
+func (c UserChangeset) Changed(col UserColumn) bool
+func (c UserChangeset) Row() User                                // data with changes applied
+func (c UserChangeset) Params() UserParams                       // the changes, for the wire
+func (c UserChangeset) Validate() UserChangeset                  // required, enums, validators
+func (c UserChangeset) ErrorAdd(col UserColumn, msg string) UserChangeset
+func (c UserChangeset) Errors() []rt.FieldError
+func (c UserChangeset) Valid() bool
+func (c UserChangeset) Err() error                               // *rt.Invalid, nil when valid
+
+func (q *Queries) UserCreate(ctx context.Context, c UserChangeset) (User, error)
+func (q *Queries) UserUpdate(ctx context.Context, c UserChangeset) (User, error)
+```
+
+```go
+cs := user.Changeset().Cast(params, db.UserEmail, db.UserBio).Validate()
+if !cs.Valid() {
+	return cs.Err()
+}
+user, err := q.UserUpdate(ctx, cs)
+```
+
+1. **Value semantics.** A changeset is a struct passed and returned
+   by value; every method returns a new changeset and leaves its
+   receiver as it was, so two goroutines may hold copies of one
+   changeset with no coordination. No method of a changeset touches
+   the database.
+2. **Data and changes.** `UserNew()` starts from the zero row with the schema's literal
+   defaults in place (a number, string, boolean or enum-constant
+   `default:` of a built-in or enum column, §default-values) and
+   nothing set, so `Row()` and `Validate` see what the database writes
+   for an unmarked column; an expression default, and a declared
+   type's default, are the database's alone and read as the zero
+   value until the row is stored; `u.Changeset()` starts from `u` with nothing set and
+   remembers that it was made from a row. A setter records a value
+   for one column and **marks** it; `Changed` reports the mark; a
+   column set to the value it already holds is still a change, since
+   the changeset records intent, not difference. `Row()` is the data
+   with the marked values applied. `From(u)` marks every data column
+   of `u` but the auto-increment key. The auto-increment key has no
+   setter: the database assigns it.
+3. **Setters.** One per column, named `<Field>Set` after the field's
+   Go name (§names), taking the field's Go type: `rt.Null[T]` for a
+   nullable column, so `BioSet(rt.Null[string]{})` sets NULL. The
+   fixed methods of a changeset never end in `Set`, so a setter cannot
+   collide with one; a column whose Go field would be `Changeset` is
+   an error, since the row's `Changeset` method occupies that name.
+4. **`Cast`.** For every column in `allow` that `p` carries, converts
+   the carried value to the column's Go type and sets it; a value
+   that does not convert is a field error with check `cast` on the
+   column whose message names the key as sent and the column's type
+   as the schema spells it (`displayName: expected string`), `null`
+   on a non-nullable column among them likewise (`email: null is not
+   allowed (string)`), and the column is left as it was. Columns `p`
+   does not carry are untouched, which is what makes a `PATCH` body
+   partial. A column of `p` outside `allow` is ignored, never an
+   error: the schema and the handler decide what a client may write,
+   the client cannot widen it. A key of `p` that names no column of
+   the table is a field error with check `unknown_field`, so a typo
+   never vanishes.
+5. **`Params`.** `rt.Params[M]` is a write body as the wire carries
+   it, in either format (§formats): as JSON, an object of the changed
+   columns keyed by their wire names (the `json` tag, §struct-tags),
+   each value as `encoding/json` renders it and `null` for NULL, a
+   marked column always among them whatever else its tag says; as
+   GOB, the row and the list of marked columns, typed by the shared
+   model. `c.Params()` builds one from the marks of `c`, each an
+   `rt.Mark` of wire name and value; `volt.Decode` reads one from a
+   request; `Cast` consumes one. A body keeps its arm through a GOB
+   re-encoding: one read from JSON carries its JSON object, so `Cast`
+   reads it the same on either side, and one built from marks carries
+   their JSON too. A JSON body that is not an object is a malformed
+   body (400).
+6. **`Validate`.** Runs over `Row()`, in this order, every rule every
+   time: each `required` column (rule 9), each enum column's
+   membership in its value set (check `enum`), then every validator
+   of the table top-down (§validators). Every failure is collected as a field error; the
+   first does not stop the rest. `Validate` is pure and idempotent;
+   `Create` and `Update` call it again, so forgetting it costs only an
+   earlier error message.
+7. **Errors.** `ErrorAdd` records a field error with check `custom`
+   on a column, for a rule the controller alone can judge. `Errors`
+   lists the `cast`, `unknown_field` and `custom` errors in the order
+   recorded, then the findings of the last `Validate`; `Valid` is "no
+   field errors"; `Err` is `nil` when valid and otherwise a
+   `*rt.Invalid` carrying them. `rt.FieldError` is `{Check, Columns,
+   Message}`: the check is `required`, `enum`, `cast`,
+   `unknown_field`, `custom`, a validator's name, or the database's
+   `unique`, `foreign_key`, `not_null` (rule 10); the columns are the
+   ones the check reads.
+8. **`Create` and `Update`.** `<Model>Create(ctx, c)` validates and,
+   if valid, inserts the marked columns and returns the stored row;
+   a column never marked takes its database default or, lacking one,
+   NULL, which a `NOT NULL` column refuses as a `not_null` field error
+   (rule 10); nothing marked inserts `DEFAULT VALUES`.
+   `<Model>Update(ctx, c)` validates and, if valid,
+   issues `UPDATE <table> SET <the marked columns> WHERE <the key of
+   the row the changeset was made from> RETURNING` and returns the
+   stored row; nothing marked touches nothing and returns `Row()`;
+   a changeset not made from a row (`UserNew()`) is `rt.ErrNoRow`,
+   there being no key; a vanished row is `rt.ErrNotFound`. Both
+   statements are rendered at run time from the marks and run through
+   `rt.StmtCache` when `WithCache` was set, like the dynamic layer.
+   An invalid changeset is `*rt.Invalid` from either, before any
+   statement runs.
+9. **`required`** (Part I §columns extension) is one of the two
+   built-in rules of `Validate`, beside enum membership (rule 6), and
+   the one the schema switches on per column: it refuses the type's
+   empty value, `""` for `string` and enum columns, `0` for `int` and
+   `float64`, a zero length for `[]byte`, and for a declared type the
+   empty value of its storage type, read through the type's
+   `driver.Valuer`. It is Go only, like every validator.
+10. **`rt.Invalid`.** Every refused write is one `*rt.Invalid{Model,
+    Fields, Cause}`: the field errors of the changeset when validation
+    failed, or the database's refusal mapped onto fields when the
+    statement ran: a unique violation becomes a field error with
+    check `unique` on the index's columns, a NOT NULL violation
+    `not_null` on its column, a foreign key violation `foreign_key`
+    with no column (SQLite names none), each wrapping the driver's
+    error as `Cause`. Its status is 409 when a `unique` field error is
+    among them, 422 otherwise; it itemizes itself (`Details()`: check,
+    columns, message), which the error spine renders into the error
+    body (§formats) so a form can mark the fields. Any other database
+    error is returned as is.
+11. **Bulk paths bypass.** `UpdateWhere` and `DeleteWhere` of the
+    dynamic layer take assignments and predicates, never a row, and
+    run no validator; `Delete` runs none either. They are the
+    equivalent of raw SQL and are documented as such.
+12. **Generation contract.** `nao_models.go` declares per model the
+    changeset type, `<Model>New`, `Changeset`, `From`, the setters,
+    `Cast`, `Changed`, `Row`, `Params`, `ErrorAdd`, `Errors`, `Valid`,
+    `Err`, the aliases `<Model>Column` and `<Model>Params`, and the
+    column handles `<Model><Field>` (`rt.Column[M, T]`,
+    `rt.NullColumn` when nullable), so a program that shares the
+    models, a generated client among them, builds changesets with
+    nothing else. `nao_validate.go` declares `Validate`, which is
+    where the package's validator functions are called.
+    `nao_queries.go` declares `Create` and `Update`. The names
+    `<Model>Changeset`, `<Model>Column`, `<Model>Params` and
+    `<Model>New` join the package-scope names the `dynname` lint and
+    §selects-over-groups guard.
+
+---
+
+## Migrations
+
+A **migration** is a named list of structural operations, written by
+hand or by a tool over the drift report (§the-fold). Migrations are
+separate from the schema: the schema says what the database is, a
+migration says how one database becomes the next. A migration is not
+checked against the schema operation by operation, since it may say
+anything that was once true; the composition of all of them is
+(§the-fold).
+
+```ebnf
+migration          = "Migration", migration name, [ migration settings ],
+                     "{", migration body, "}" ;
+migration name     = digit, digit, digit, digit, { digit }, "__", label ;
+label              = ( letter | digit ), { letter | digit } ;
+
+migration settings = "[", migration setting, { ",", migration setting }, "]" ;
+migration setting  = "irreversible"
+                   | "no transaction"
+                   | "note", ":", string ;
+
+migration body     = { operation }
+                   | "up", "{", { operation }, "}",
+                     [ "down", "{", { operation }, "}" ] ;
+
+operation          = create table op | drop table op | rename table op
+                   | alter table op  | rebuild table op
+                   | create index op | drop index op
+                   | exec op ;
+
+create table op    = "create", "table", name, "{", shape body, "}" ;
+drop table op      = "drop", "table", name, [ "{", shape body, "}" ], newline ;
+rename table op    = "rename", "table", name, "to", name, newline ;
+
+alter table op     = "alter", "table", name, "{", { alter item }, "}" ;
+alter item         = "add", migration column
+                   | "drop", name,
+                     [ column type, [ migration column settings ] ], newline
+                   | "rename", name, "to", name, newline ;
+
+rebuild table op   = "rebuild", "table", name, "{", shape body, "}" ;
+
+create index op    = "create", "index", name, index key,
+                     [ index settings ], newline ;
+drop index op      = "drop", "index", name, index key,
+                     [ index settings ], newline ;
+
+exec op            = "exec", string, [ exec settings ], newline ;
+exec settings      = "[", "down", ":", string, "]" ;
+
+shape body         = { migration column | indexes block } ;
+
+migration column          = name, column type, { legacy flag },
+                            [ migration column settings ], newline ;
+migration column settings = "[", migration column setting,
+                            { ",", migration column setting }, "]" ;
+migration column setting  = column setting
+                          | "from", ":", expression literal
+                          | "delete", ":", ref action
+                          | "update", ":", ref action ;
+```
+
+`column type`, `legacy flag`, `column setting`, `index key`, `index
+settings` and `indexes block` are the productions of the schema core
+(§columns, §indexes) and `ref action` is that of §relationships-ref,
+all narrowed by the rules below; a migration column adds `from:`
+(rule 9) and the referential actions `delete:` and `update:` (rule
+4) to the column settings, since the schema declares the actions on
+a `Ref` and a migration has no `Ref`. The
+words of a migration body (`up`, `down`, `create`, `drop`, `rename`,
+`alter`, `rebuild`, `exec`, `table`, `index`, `add`, `to`) are
+keywords inside a `Migration` only; elsewhere they are identifiers.
+
+```volt
+Migration 0002__users_bio {
+  alter table users {
+    add bio string
+    rename name to full_name
+  }
+  create index users (full_name)
+}
+```
+
+1. **Placement.** A migration is an element of the data package it
+   migrates: the package that declares the tables. It may stand in
+   any `.volt` file of that package, alone, among other migrations,
+   or beside the schema. No file name and no directory is prescribed.
+   A package that declares no tables MUST NOT declare migrations.
+   Migrations are never imported (§imports).
+2. **Name and order.** A migration name is a run of at least four
+   digits, two underscores and a label; it is a plain identifier
+   (§identifiers) and MUST be unique within the package. Every
+   migration name of a package MUST have the same digit-run width; a
+   package mixing widths is an error naming both names. Migrations
+   apply in byte order of their names, which is numeric order of the
+   run since the runs share a width. The name is the whole order; the
+   file and the position within it carry no meaning
+   (§projects-and-packages). `volt migration new LABEL` mints the
+   next name at the package's width: one more than the greatest run
+   among the package's migrations, zero-padded to that width (four
+   digits in a package without migrations), then `__`, then the
+   label; when the next number does not fit the width it is an error
+   telling the user to widen every name.
+3. **Self-contained.** A migration references nothing declared
+   elsewhere. Table, column and index names are plain names, not
+   resolved against the schema. A column type MUST be one of the six
+   built-in types (§columns); an enum or a declared type is not a
+   type here, since the database holds its storage type. A partial
+   injection, a `validators` block, a records block and a `Note` are
+   not part of a `shape body`.
+4. **Settings whitelist.** In a migration, a column setting is one of
+   `pk`, `primary key`, `increment`, `null`, `not null`, `unique`,
+   `default:`, `ref:`, `delete:`, `update:`, `note:`, and in a
+   `rebuild` also `from:` (rule 9); `from:` anywhere else is an error.
+   `ref:` takes `>` or `-` only: the declaring column holds the key,
+   and `<` and `<>` reference the other way and are not a column's to
+   declare. `delete:` and `update:` take the referential actions of
+   §relationships-ref (`cascade`, `restrict`, `set null`, `set
+   default`, `no action`) for the column's `ref:`, so that a schema
+   foreign key with an action can be matched; without a `ref:` they
+   are errors. An index setting is one of `unique`, `pk` (in a shape
+   body only, rule 10), `name:`, `where:`, `note:`; `type:` is an
+   error, since SQLite has no index methods. `tag:`, `required` and
+   `model:` describe Go and are errors here, as is `headercolor:`. An
+   `exec` takes `down:` and no other setting.
+5. **`create table`.** The body MUST contain at least one column;
+   names are unique within it. It lowers by the DDL mapping exactly
+   as the schema's `Table` does (§mapping-to-sqlite-ddl), index names
+   included.
+6. **`drop table`.** Drops the table and, with it, its indexes. The
+   optional body is the shape being dropped and exists only so that
+   the migration is reversible (rule 12); when written, it MUST
+   contain at least one column, as a `create table` body must.
+7. **`rename table`.** `ALTER TABLE … RENAME TO`. Foreign keys that
+   reference the table follow it; index names do not, and are kept
+   as they are.
+8. **`alter table`.** Each item is one `ALTER TABLE` statement, in
+   the written order. `add` is `ADD COLUMN` under SQLite's rules,
+   checked here rather than at run time: a `not null` column MUST
+   carry a `default:`; the default MUST be a literal; `pk` and
+   `increment` are errors; `ref:` requires the column to be nullable;
+   a column with `ref:` has no `default:` other than `null`, since
+   SQLite refuses to add a `REFERENCES` column with another default
+   to a table that has rows; `unique` lowers to the added column plus
+   a `CREATE UNIQUE INDEX` on it. `drop` is `DROP COLUMN`; the
+   optional type and settings are the dropped column's shape, which
+   in a flat body is the inverse `add` and MUST satisfy the `add`
+   rules above (rule 12), and inside an `up { }` or `down { }` block
+   is checked as a column only, since there the inverse is written
+   out. `rename` is `RENAME COLUMN`.
+9. **`rebuild table`.** The one operation for every change SQLite
+   cannot `ALTER`: a type, a nullability, a default, a primary key, a
+   foreign key. The body is the new shape and MUST contain at least
+   one column. It lowers to: create `<table>__new` from the body;
+   `INSERT INTO <table>__new (<cols>) SELECT <sources> FROM <table>`;
+   `DROP TABLE <table>`; `ALTER TABLE <table>__new RENAME TO
+   <table>`; create every index of the body. The source of a column
+   is, in order: its `from:` expression literal if given; the old
+   column of the same name; its `default:`; `NULL`. A `not null`
+   column whose source is `NULL` is an error, except a rowid alias
+   (`int [pk, increment]`) introduced by the rebuild, which takes
+   `NULL` as its source and the database assigns it. The source order
+   is checked here for a table the package's migrations created; a
+   table of unknown shape takes the old column of the same name when
+   the fold has it and otherwise errors at fold time (§the-fold).
+   Nothing but the body survives the rebuild: an index not restated
+   in it is gone. A rebuild of a table that a view references, or
+   that a trigger on another table references, needs an `exec`
+   dropping and recreating them around it; a trigger on the rebuilt
+   table itself goes with it; the fold surfaces both.
+10. **`create index`, `drop index`.** The index is identified by its
+    table and key exactly as in a schema `indexes` block, so the
+    schema and the migration name the same index the same way: the
+    DDL mapping assigns the name from the table and the key columns,
+    `name:` overrides it, and an index with an expression atom MUST
+    carry `name:` (§indexes). `where:` takes an expression literal and
+    makes the index partial. `pk` is not a setting of these
+    operations: a primary key is a table constraint, declared in a
+    `create table` or `rebuild table` body.
+11. **`exec`.** The string is one or more SQL statements run
+    verbatim, for whatever the operations above do not say: a data
+    fix, a view, a trigger, a `PRAGMA`. A foreign key over several
+    columns has no shape item; a table that needs one is written
+    with `exec`, its `CREATE TABLE` verbatim, and the drift report
+    says so. `down:` is its inverse. With `no transaction` on the
+    migration, `exec` statements run outside any transaction, each
+    on its own.
+12. **Reversibility.** A flat body runs forward as written and
+    backward as the inverses of its operations in reverse order. The
+    inverses are: `create table` and `drop table` with a body;
+    `rename table` and `rename table` reversed; `add` and `drop` with
+    a type, whose shape is the inverse `add` and MUST satisfy rule
+    8's `add` rules, in a flat body alone, where the inverse is
+    derived from it; `rename` and `rename` reversed; `create index`
+    and `drop index`; `exec` with `down:` and its `down:`. A flat
+    body with an operation that has no inverse (`drop table` without
+    a body, `drop` without a type, `rebuild table`, `exec` without
+    `down:`) is an error naming that operation, reported at the item
+    inside an `alter table`, unless the migration is marked
+    `irreversible` or written as `up { } down { }`. A `down` block
+    runs as written; an `up` block without a `down` is irreversible.
+    Inside the blocks nothing is derived: a typed `drop` there is a
+    column, checked as one, not an inverse `add`.
+13. **Transactions and foreign keys.** A migration runs in one
+    transaction with the ledger write (§migration-ledger). A
+    migration that contains a `rebuild table` or a `drop table` is
+    bracketed by `PRAGMA foreign_keys = OFF` before `BEGIN`, `PRAGMA
+    foreign_key_check` before `COMMIT`, and `PRAGMA foreign_keys =
+    ON` after; a non-empty check result rolls the migration back. The
+    tool does this; a migration never spells it. `no transaction`
+    disables the bracket and the transaction, for an `exec` that
+    needs it (another `PRAGMA`, `VACUUM`).
+
+### The fold
+
+Migrations are untyped so that they may say anything that was once
+true. What is checked instead is their composition.
+
+1. **Definition.** The fold of a package is the structure of an empty
+   in-memory SQLite database after every migration of the package has
+   been applied in name order. The **target** is the structure of an
+   empty in-memory database after the schema's generated DDL
+   (§mapping-to-sqlite-ddl) has been applied.
+2. **Structure** is, per table: its name; its columns as a set, each
+   with name, declared type, `NOT NULL`, default as SQLite reports it
+   and primary-key membership (`PRAGMA table_xinfo`); its foreign keys
+   (`PRAGMA foreign_key_list`); its indexes with name, uniqueness,
+   partial predicate and key (`PRAGMA index_list`, `PRAGMA
+   index_xinfo`). The index of a `UNIQUE` column constraint (SQLite's
+   autoindex) is matched by key against any unique index without a
+   predicate; every other index is compared by name. Nothing else is
+   compared: not column order, not row data, not SQL text, not the
+   order of statements, and never the ledger table
+   (§migration-ledger).
+3. **Drift.** `volt migration check` compares fold and target and
+   reports every difference, table by table, as the operations that
+   would close it. Zero differences is the success condition. `volt
+   gen` runs the same check for a package that declares at least one
+   migration and fails on drift, so a schema edit without its
+   migration never generates; a package without migrations is
+   unmigrated and generates as before.
+4. **Lemma.** Because the fold runs on the engine that will run the
+   migrations, a migration SQLite would refuse (dropping an indexed
+   column, say) is refused at check time, with SQLite's own message.
+   The one run-time exception is a `not null` column added to a
+   table that already has rows, which the fold's empty database
+   cannot see and `alter table` (§migrations) guards by requiring a
+   default. Once the fold is read, the check also reverts the
+   reversible migrations above the last irreversible one, from the
+   top down, and applies them again in the fold database, so an
+   inverse SQLite would refuse is refused at check time as well; a
+   down cannot pass an irreversible migration, so the migrations
+   below it are not run backward.
+5. **Generation.** The drift report is the input of a migration
+   generator (not built): it writes the operations that close the
+   drift as a new `Migration` for the user to edit. A rename is a
+   drop and an add until the user says otherwise. The generator is a
+   tool over the language, not part of it.
+
+### Migration ledger
+
+1. **The table.** Applied migrations are recorded in
+   `volt_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT
+   NULL)`, created on first use; `applied_at` is the time of
+   application in RFC 3339, UTC. The row is written in the
+   migration's transaction, or, with `no transaction`, after its last
+   statement.
+2. **Pending** is every migration of the package whose name has no
+   row, including one that sorts before an applied one; `status`
+   lists such a migration as out of order and `up` applies it anyway,
+   in name order among the pending.
+3. **Down** removes the applied migration with the greatest name by
+   running its inverse (§migrations, reversibility) and deleting its
+   row; an irreversible migration refuses with its name.
+
+### Migration tooling
+
+1. **CLI.** `volt migration new LABEL [DIR]` writes
+   `<name>.volt` holding the package clause and an empty `Migration
+   <name> { }` into the package at `DIR` (the current directory when
+   absent); the user may move the element to any file of the
+   package. `volt migration check [DIR]` is the fold (§the-fold).
+   `volt migration up|down|status DSN [DIR]` operate on the SQLite
+   database at `DSN`, a file path or a `file:` URI: `up` creates the
+   database when it is missing, `status` and `down` open an existing
+   one only (a missing file is an error and nothing is created), and
+   all three refuse `:memory:`. `volt migration sql [DIR]` prints
+   every migration's statements in both directions for review. Exit
+   codes, the same from `gen`: 1 for drift and for an error in the
+   migrations themselves, a statement SQLite refuses in either
+   direction, an irreversible migration asked to go down, a migration
+   that does not lower; 2 for usage and I/O, a database that cannot
+   be opened, is locked past its busy timeout or fails otherwise. The
+   tool carries its own SQLite (the `mattn/go-sqlite3` driver) and
+   needs cgo, a C compiler at build time, for it; a `volt` built
+   without cgo refuses the migration commands and the fold with a
+   message saying so. The library and the runtime carry no SQLite.
+2. **Generated.** For a package that declares migrations, `volt gen`
+   writes `volt_migrations.go` beside the other generated files:
+   `var Migrations = []rt.Migration{…}` in name order, each with its
+   name, up statements, down statements (nil when irreversible) and
+   its transaction and foreign-key bracket flags; and `func
+   Migrate(ctx context.Context, db *sql.DB) error`, which applies
+   every pending migration through `rt.MigrateUp` and is called by
+   nothing unless the application calls it. The file belongs to the
+   queries part (`-parts queries`) and is absent with `-parts
+   models`. With it, a binary migrates its own database and a test
+   builds a fresh one with one call, without the `volt` tool or the
+   `.volt` files.
+3. **Runtime.** `rt.Migration` is the statement form of one
+   migration; `rt.MigrateUp(ctx, db, migrations)` applies the pending
+   ones and returns their names; `rt.MigrateDown(ctx, db, migrations)`
+   reverts the last applied one and returns its name; `rt.
+   MigrateStatus(ctx, db, migrations)` lists each migration with
+   whether and when it was applied and whether it is out of order,
+   and every ledger row that no migration of the package names,
+   marked as such. The CLI's `up`, `down` and `status` are these
+   three over the statements lowered from the `.volt` files. A
+   migration that does not run, a statement SQLite refuses, a failed
+   foreign-key check or a down asked of an irreversible migration, is
+   an `*rt.MigrationError` naming the migration, the direction and
+   the statement, so that a caller tells it from the database
+   failing.
+4. **No implicit schema change.** Neither `volt gen` nor the runtime
+   ever alters a database from the schema alone. The schema is the
+   target; a migration is the only path to it.
+
+```volt
+package db
+
+Table users {
+  id        int    [pk, increment]
+  email     string [not null, unique, required]
+  full_name string [not null, required]
+  bio       string
+  hits      int    [not null, default: 0]
+
+  validators {
+    EmailShape(email)
+    HitsSane(hits)
+  }
+}
+
+Migration 0001__create_users {
+  create table users {
+    id    int    [pk, increment]
+    email string [not null, unique]
+    name  string [not null]
+    hits  string [not null, default: '0']
+  }
+}
+
+Migration 0002__users_bio_and_int_hits [irreversible] {
+  alter table users {
+    add bio string
+    rename name to full_name
+  }
+  rebuild table users {
+    id        int    [pk, increment]
+    email     string [not null, unique]
+    full_name string [not null]
+    bio       string
+    hits      int    [not null, default: 0, from: `CAST(hits AS INTEGER)`]
+  }
+}
+```
+
+The `validators` block and the two `required` settings changed
+nothing in the database and appear in no migration; they changed
+`UserChangeset.Validate`. The second migration is irreversible
+because the rebuild forgets the old type of `hits`; the first is
+reversible on its own.
 
 ---
 
@@ -2604,7 +3316,7 @@ Additions to the collected grammar of Part I, Appendix IA. The
 ```ebnf
 element        = (* Part I Appendix IA alternatives *)
                | package clause | import decl | pipeline | scope
-               | group decl | pred decl | select decl ;
+               | group decl | pred decl | select decl | migration ;
 
 slash          = "/" ;
 
@@ -2632,11 +3344,51 @@ route path     = slash, [ segment, { slash, segment } ] ;
 segment        = name
                | ":", name, [ "(", param type, ")" ]
                | ":", name, "." , ".", "." ;
-param type     = "int" | "int32" | "int64" | "string" ;
+param type     = "int" | "string" ;
 
 resources      = "resources", table ref, [ settings ], newline ;
 table ref      = name, [ ".", name ] ;
 dataset        = "dataset", [ name, "." ], name, [ settings ], newline ;
+
+migration          = "Migration", migration name, [ migration settings ],
+                     "{", migration body, "}" ;
+migration name     = digit, digit, digit, digit, { digit }, "__", label ;
+label              = ( letter | digit ), { letter | digit } ;
+migration settings = "[", migration setting, { ",", migration setting }, "]" ;
+migration setting  = "irreversible"
+                   | "no transaction"
+                   | "note", ":", string ;
+migration body     = { operation }
+                   | "up", "{", { operation }, "}",
+                     [ "down", "{", { operation }, "}" ] ;
+operation          = create table op | drop table op | rename table op
+                   | alter table op  | rebuild table op
+                   | create index op | drop index op
+                   | exec op ;
+create table op    = "create", "table", name, "{", shape body, "}" ;
+drop table op      = "drop", "table", name, [ "{", shape body, "}" ], newline ;
+rename table op    = "rename", "table", name, "to", name, newline ;
+alter table op     = "alter", "table", name, "{", { alter item }, "}" ;
+alter item         = "add", migration column
+                   | "drop", name,
+                     [ column type, [ migration column settings ] ], newline
+                   | "rename", name, "to", name, newline ;
+rebuild table op   = "rebuild", "table", name, "{", shape body, "}" ;
+create index op    = "create", "index", name, index key,
+                     [ index settings ], newline ;
+drop index op      = "drop", "index", name, index key,
+                     [ index settings ], newline ;
+exec op            = "exec", string, [ exec settings ], newline ;
+exec settings      = "[", "down", ":", string, "]" ;
+shape body         = { migration column | indexes block } ;
+migration column          = name, column type, { legacy flag },
+                            [ migration column settings ], newline ;
+migration column settings = "[", migration column setting,
+                            { ",", migration column setting }, "]" ;
+migration column setting  = column setting
+                          | "from", ":", expression literal
+                          | "delete", ":", ref action
+                          | "update", ":", ref action ;
 
 (* setting value, extended (Part I §settings-lists): *)
 setting value  = (* schema-layer alternatives *) | ident list ;
@@ -2645,11 +3397,11 @@ ident list     = "(", name, { ",", name }, ")" ;
 
 The `group decl`, `pred decl` and `select decl` productions — with the
 predicate expression grammar they share — are collected in §groups, §predicates
-and §selects-over-groups, and the extended `check` forms in §validation-checks; they are not
+and §selects-over-groups, and the validators block in §validators; they are not
 duplicated here.
 
 All tokens of a `route path` and of a `package path` MUST be contiguous
-(§route-paths rule 1, §imports rule 2) — the grammar above is subject to that adjacency
+(§route-paths, §imports) — the grammar above is subject to that adjacency
 constraint, which the token stream expresses via inter-token whitespace
 flags.
 
@@ -2662,23 +3414,27 @@ executable conformance surface narrows the gap deliberately. The v0
 chain, each link runnable by `go test ./...`:
 
 1. **Corpus ↔ spec.** Every snippet in `lang/conformance/snippets/`
-   — a `.volt`/`.dbml` file, or a directory whose first `.volt` file
+   — a `.volt` file, or a directory whose first `.volt` file
    carries the tag — cites a `// spec: §…` section; `valid/` MUST check
    clean, `invalid/` MUST be rejected, and an invalid snippet with a
    `// want: <text>` line MUST be rejected with a diagnostic containing
-   that text — for the rule it names, not by accident. The corpus is
-   the spec's executable surface.
-2. **Schema layer preserved.** The schema conformance corpus continues to run
-   unchanged against the same front end: the superset rule (§layers-files-and-the-superset-rule rule 2) is
-   enforced, not assumed.
+   that text — for the rule it names, not by accident. Content, not
+   name, tells the layers apart: a snippet file without a `package`
+   clause is a Part I file body and runs through the schema pass alone
+   (`lang/check`); a file with a package clause, and every directory,
+   runs through the project pass. The corpus is the spec's executable
+   surface.
+2. **Schema layer preserved.** The Part I corpus runs against the same
+   front end as the full language, so the layering rule
+   (§layers-files-and-the-superset-rule) is enforced, not assumed.
 3. **Generator ↔ contract.** Goldens are byte-compared, gofmt-stable by
    test, and **compiled by the real Go toolchain** against stub
    implementations of the generated interfaces — the typed-signature
    contract (§handler-references) is checked by the Go compiler itself.
 4. **Router semantics.** The `itest/` fixture app is generated,
    committed, drift-checked against regeneration, and exercised over
-   httptest: match and 404/405 behavior, typed-parameter 404s (§route-paths rule 3),
-   pipeline order (§scopes), the error spine (§scopes rule 3), and
+   httptest: match and 404/405 behavior, typed-parameter 404s (§route-paths),
+   pipeline order (§scopes), the error spine (§scopes), and
    **reverse-URL round-trip totality** — for every route in the
    generated table, the URL built by its helper is served back to the
    router and MUST dispatch to that same route. The §route-names-and-reverse-urls property is
@@ -2686,8 +3442,8 @@ chain, each link runnable by `go test ./...`:
 5. **Grammar ↔ front end.** The EBNF of this document is read by test
    (`lang/ebnf`): every block parses, every name is defined once, the
    collected grammars repeat the sections exactly, and from the
-   grammar and the lexical rules stated beside it (§tokenization, §line-structure-and-whitespace, §settings-lists
-   rule 5, §route-paths rule 1) a sentence is derived for every choice in every
+   grammar and the lexical rules stated beside it (§tokenization, §line-structure-and-whitespace, §settings-lists,
+   §route-paths) a sentence is derived for every choice in every
    production and MUST parse; every text one token away from one of
    them (a token dropped, inserted, or two exchanged) MUST be accepted
    by the front end exactly when the grammar accepts it. The grammar
@@ -2704,45 +3460,41 @@ chain, each link runnable by `go test ./...`:
 pinned by the generator goldens, which are gofmt-stable and compiled by
 the real Go toolchain on every `go test ./...` run.*
 
-`nao_models.go` carries every type the wire carries — the enums, the
-row structs, and the params structs `<Model>CreateParams` and
-`<Model>UpdateParams` (decision layout-independent-gen) — so a program that shares the models, a
-generated client (§generated-client) among them, needs nothing else.
+`nao_models.go` carries every type the wire carries: the enums, the
+row structs, the changesets with their column handles and
+`<Model>Params` (§changesets, generation contract), so a program that
+shares the models, a generated client (§generated-client) among them,
+needs nothing else.
 `nao_queries.go` carries the `Queries` handle and its methods, and
 imports only what their signatures name.
 
-### Types
+### Go types
 
-Lower-cased declared type, parenthesized arguments ignored. An unmapped
-type is a **generation error** naming the column — never a silent guess.
+A column type is a Go type (§columns), so the mapping is the identity
+for the built-ins; the checker has already refused anything outside
+the set.
 
-| Declared types | Go |
+| Declared | Go |
 |---|---|
-| `tinyint`, `int2`, `smallint`, `smallserial` | `int16` |
-| `int`, `integer`, `int4`, `mediumint`, `serial` | `int32` |
-| `bigint`, `int8`, `bigserial` | `int64` |
-| `"tinyint unsigned"` / `"smallint unsigned"` / `"int unsigned"` / `"bigint unsigned"` | `uint8` / `uint16` / `uint32` / `uint64` |
-| `real`, `float4` | `float32` |
-| `float`, `float8`, `double`, `"double precision"` | `float64` |
-| `decimal`, `numeric`, `money` | `string` (exact; money never rides a float) |
-| `bool`, `boolean` | `bool` |
-| `varchar`, `char`, `text` family, `citext`, `string`, `uuid` | `string` |
-| `date`, `timestamp*`, `datetime` | `time.Time` |
-| `time`, `timetz` (time of day) | `string` (SQLite has no time type; stored as TEXT) |
-| `json`, `jsonb` | `json.RawMessage` |
-| `bytea`, `blob` family, `binary`, `varbinary` | `[]byte` |
+| `bool`, `int`, `float64`, `string`, `time.Time` | the same |
+| `[]byte` | `[]byte`; nil is NULL, never wrapped |
 | enum type (optionally schema-qualified) | generated `type X string` + constants |
+| declared `Type pkg.Name` (§types) | `pkg.Name`, imported as `import pkg "path"` |
+
+`int` is Go's `int`: Volt targets 64-bit platforms (amd64 and arm64),
+so a route parameter or primary key of type `int` carries the full
+SQLite INTEGER range there, and only there.
 
 ### Nullability
 
 A column is required (`T`) when it has `not null`, `pk`/`primary key`
 (setting or legacy flag), `increment`, or is covered by a `[pk]` index —
 primary keys imply NOT NULL in SQL. Everything else is nullable and
-generated as `rt.Null[T]` — a value plus a validity bit, never a pointer
-(decision null-t). Types where `nil` already expresses NULL (`[]byte`,
-`json.RawMessage`) stay bare. In the dynamic layer, nullable columns get
-`rt.NullColumn` handles: comparisons take plain `T`, NULL is explicit
-(`IsNull`, `SetNull`).
+generated as `rt.Null[T]` — a value plus a validity bit, never a pointer.
+`[]byte`, where `nil` already expresses NULL, stays bare. A nullable
+column's handle, declared in `nao_models.go` with the rest
+(§changesets, §generated-query-surface), is an `rt.NullColumn`:
+comparisons take plain `T`, NULL is explicit (`IsNull`, `SetNull`).
 
 ### Names
 
@@ -2751,7 +3503,7 @@ generated as `rt.Null[T]` — a value plus a validity bit, never a pointer
 is `E` + the PascalCase name (`order_status` → `EOrderStatus`; a
 non-`public` schema prefixes as for models), and each value is a
 constant of that type. Model names are the
-singular of the table name (`users` → `User`, decision singular-models), overridable with
+singular of the table name (`users` → `User`), overridable with
 `[model:]` — the only model-naming override; `resources`' `singular:`
 setting (§settings) renames the route member helper, never the model.
 Non-`public` schemas prefix the type (`core.users` →
@@ -2768,30 +3520,75 @@ the dynamic layer's concatenation collisions ahead of time.
 | `Table` (body form wins over `[note:]`) | struct doc comment |
 | column | field doc comment |
 | enum value | constant doc comment |
-| injected partial column | travels with the column; a §tablepartial rule 4 override brings its own note |
+| injected partial column | travels with the column; a §tablepartial override brings its own note |
 
 Generated files start with the machine-readable
 `// Code generated … DO NOT EDIT.` marker; `volt gen` refuses to
 overwrite a file lacking it. Generated code imports the standard
-library and `nao/rt` only.
+library, `nao/rt` and the packages of declared types (§types) only.
 
 ### Struct tags
 
-Every generated struct field derived from a column — on the model and
-its params structs alike — carries the same tag, assembled in this
-order:
+Every generated struct field derived from a column carries the same
+tag, assembled in this order:
 
 1. `db:"<column name>"` — the scan contract. Not overridable; the
    column setting `tag:` rejects the key `db` (§columns).
 2. `json:"<column name>"` — the JSON default. Nothing is omitted
    (`omitempty` is never generated): a document always carries every
-   column, and NULL is the value `null` (decision null-t). A column `tag:` with key
+   column, and NULL is the value `null`. A column `tag:` with key
    `json` **replaces** this pair verbatim.
 3. Every other `tag:` passthrough pair, verbatim, in declaration order.
 
-A struct derivative (§selects-over-groups rule 7) copies each kept field's assembled tag
-unchanged; an explicit-list shared row type (§selects-over-groups rule 7) carries the
+A struct derivative (§selects-over-groups) copies each kept field's assembled tag
+unchanged; an explicit-list shared row type (§selects-over-groups) carries the
 default `db`/`json` pair only.
+
+### Generated query surface
+
+Per table, on the `Queries` handle of `nao_queries.go` (`New(db
+rt.DBTX)`, `Tx`, `WithTx`, `WithCache`):
+
+1. `<Model>Get`, `<Model>Update` and `<Model>Delete` exist iff the
+   table has a primary key (a `pk` column or a `[pk]` index), one
+   positional argument per key column; `Update` also needs a non-key
+   column; `Create` and `Update` take a changeset and return the
+   stored row (§changesets). `<Model>GetMany(ctx,
+   keys)` exists for a single-column key; missing keys are absent, not
+   errors; an empty input returns nil. `<Model>GetBy<Column>` exists
+   per column that is `unique` or covered by a single-column unique
+   index and is not the key. `<Model>List` and `<Model>Create` always
+   exist; a table without a key gets List, Create, GetBy and the
+   dynamic layer.
+2. `Get`, `GetBy*` and `Update` return `rt.ErrNotFound`
+   (`sql.ErrNoRows`) on a miss; `Delete` checks the affected count.
+   Multi-row results are empty slices, never nil, GetMany on an empty
+   input excepted.
+3. Every statement is rendered by the runtime (§predicates, rendering):
+   `Get`, `GetBy*`, `List`, `Delete` and the select methods are
+   constants rendered at generation time, bound positionally in the
+   order the text names their parameters; `GetMany` renders at run
+   time, its `IN` list varying with the input, and does not use the
+   statement cache. `Create` and `Update` are rendered at run time
+   from the changeset's marks and end in `RETURNING` (§changesets).
+   Every CRUD write's database refusal becomes `*rt.Invalid`;
+   `DeleteWhere` and `UpdateWhere` return the driver's error.
+4. The column handles `<Model><Field>` (`rt.Column[M, T]`,
+   `rt.NullColumn` when nullable) are declared in `nao_models.go`
+   (§changesets); the dynamic layer in `nao_dyn.go` mints per model the
+   wrappers `Limit`, `Offset`, `Distinct`, `OrderBy`,
+   `After`, `Set`, and the verbs `Query`, `Count`, `Exists`,
+   `DeleteWhere`, `UpdateWhere`. Predicates are values rendered by the
+   one renderer (§predicates, rendering): an empty `In` is constant false,
+   a zero predicate vanishes, a `DeleteWhere` or `UpdateWhere` with no
+   predicate is an error, `After` is keyset pagination over the
+   `OrderBy` terms. Dynamic statements run through `rt.StmtCache` when
+   `WithCache` was set, the changeset writes among them; the static
+   CRUD and select methods do not use the cache;
+   `WithTx` drops it.
+5. `rt.Open(driver, dsn)` pins one connection and sets WAL,
+   `busy_timeout = 5000` and `foreign_keys = ON`. `rt.Null[T]`
+   marshals as the value or `null`.
 
 ---
 
@@ -2803,23 +3600,25 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 
 | Declared | SQLite |
 |---|---|
-| enum-typed column | `TEXT` + `CHECK (col IN ('a', 'b'))` — SQLite has no enum type |
+| enum-typed column | `TEXT`; SQLite has no enum type, and the value set is the generated Go type's (§go-types) |
 | `core.users` (schema) | `core_users` — SQLite has no schemas; collisions are generation errors |
 | `pk` column | explicit `NOT NULL` added: SQLite's `PRIMARY KEY` does **not** imply NOT NULL |
-| integer `[pk, increment]` | exactly `INTEGER PRIMARY KEY` (rowid alias, auto-assigned); SQLite's `AUTOINCREMENT` keyword deliberately avoided — it only adds the never-reuse-an-id bookkeeping the SQLite docs discourage. Any other `increment` placement is a check error (§columns) |
+| `int` `[pk, increment]` | exactly `INTEGER PRIMARY KEY` (rowid alias, auto-assigned); SQLite's `AUTOINCREMENT` keyword deliberately avoided — it only adds the never-reuse-an-id bookkeeping the SQLite docs discourage. Any other `increment` placement is a check error (§columns) |
 | composite pk (`[pk]` index) | `PRIMARY KEY (a, b)` table constraint; members get `NOT NULL` |
-| refs (`>`, `<`, `-`) | `FOREIGN KEY … REFERENCES` with `ON DELETE` / `ON UPDATE`; FK side per §relationships-ref rule 3 |
+| index | `CREATE INDEX <name> ON <table> (<key>)`, `UNIQUE` for `unique`, `WHERE <expr>` for `where:` (§indexes); the name is `name:` when given, else `idx_<table>_<col>[_<col>...]` from the SQLite table name and the key columns; two indexes of one table that derive one name are a generation error |
+| refs (`>`, `<`, `-`) | `FOREIGN KEY … REFERENCES` with `ON DELETE` / `ON UPDATE`; FK side per §relationships-ref |
 | one-to-one (`-`) | adds `UNIQUE` on the FK column unless something already guarantees it |
 | many-to-many (`<>`) | nothing — model the junction table explicitly |
-| ints / bools | `INTEGER` (booleans stored 0/1; `true`/`false` in records and defaults become 1/0) |
-| floats | `REAL` |
-| decimal / numeric / money | `TEXT` (exact, consistent with §mapping-to-go's `string`) |
-| strings / uuid / dates / json | `TEXT` (dates as ISO-8601, SQLite's convention) |
-| bytea / blob family | `BLOB` |
+| `int`, `bool` | `INTEGER` (booleans stored 0/1; `true`/`false` in records and defaults become 1/0) |
+| `float64` | `REAL` |
+| `string` | `TEXT` |
+| `time.Time` | `TIMESTAMP` (ISO-8601 text; the DDL spelling is what the sqlite3 driver keys its time conversion on) |
+| `[]byte` | `BLOB` |
+| declared `Type` (§types) | the column type of its storage type |
 | backtick expressions | verbatim; parenthesized in `DEFAULT` as SQLite requires |
-| typed checks (§validation-checks) | `CHECK (<the §validation-checks rule 4 rendering>)`; Go-reference checks emit nothing — SQLite cannot call Go |
+| validators, `required` | nothing; the database never carries a `CHECK` (§validators) |
 | `records` | multi-row `INSERT` statements after all tables, in source order; empty fields become `NULL` |
-| unknown type | generation **error** naming the column |
+| unknown type | check error naming the column (§columns); the generator never sees one |
 
 Identifiers are quoted only when needed (not a plain lower-case name,
 or a SQLite keyword): `order` → `"order"`, `full name` → `"full name"`,
@@ -2830,40 +3629,13 @@ marker, with the same overwrite protection as §mapping-to-go.
 
 ---
 
-## Compatibility with DBML
+## Non-goals
 
-Volt accepts the entire DBML core of Part I verbatim: a schema using
-only Part I constructs is upstream-valid DBML and pastes into
-dbdiagram.io unchanged. The compatibility break is **one system**:
-DBML's file-based module machinery (Part I §file-imports-removed) — `use * from './file'`,
-selective imports with per-element kinds and `as` aliases, and `reuse`
-re-export — **is not part of the Volt language** (§imports rule 5). The parser
-still recognizes the §file-imports-removed forms so tooling can diagnose them precisely;
-the checker rejects them with a diagnostic pointing here.
-
-**Why.** All four mechanisms manage one problem — name conflicts caused
-by dumping imported declarations into the importer's scope. Volt's
-package system (§projects-and-packages–§imports, qualified access only: `db.users`) makes those
-conflicts impossible, so the machinery solving them is deleted rather
-than carried. Circular file imports (legal in DBML) become the §imports
-cycle error: packages must layer.
-
-**Migration** from a multi-file DBML project, mechanically:
-
-1. Files that imported each other become **one package**: put them in
-   one directory, delete the `use`/`reuse` lines, add the same
-   `package` clause to each file. Intra-package references need no
-   import at all.
-2. Genuinely separate concerns become **separate directories**, each
-   with its own `package` clause; importers name them in an
-   `import (…)` block (§imports) and qualify references (`db.users`).
-3. Aliased imports (`use { table users as u }`) have no equivalent and
-   need none: the package qualifier disambiguates (`auth.users` vs
-   `billing.users`); a package alias (§imports rule 2) shortens the qualifier.
-4. `reuse` re-export chains flatten: each consumer imports the real
-   defining package directly.
-
----
+Volt does not generate and will not generate: an identity map or unit
+of work, lazy loading, active-record `Save()`, callbacks, dirty
+tracking, default scopes, single-table inheritance, reflection in
+generated code, a Turing-complete query language. Generated code
+imports the standard library, Volt's runtime packages and the packages of declared types only.
 
 ## License and Provenance
 
@@ -2872,7 +3644,7 @@ implemented in [holistics/dbml](https://github.com/holistics/dbml)
 (the `@dbml/parse` reference implementation). While Part I was being
 written, every corpus verdict was cross-checked against that
 implementation and the prose corrected wherever it disagreed; the
-cross-check harness was retired at zero disagreements (decision one-corpus), and the
+cross-check harness was retired at zero disagreements, and the
 corpus it pinned remains the executable record.
 Like the upstream project, this specification is licensed under the
 [Apache License 2.0](../LICENSE).

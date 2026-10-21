@@ -1,4 +1,0 @@
-// spec: §relationships-ref rule 5 — referential action must be one of the five listed
-Table a { x int }
-Table b { id int }
-Ref: a.x > b.id [delete: explode]

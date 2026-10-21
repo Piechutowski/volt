@@ -1,8 +1,8 @@
-// spec: §settings rule 1
+// spec: §settings
 package app
 
 Table users {
-	id integer [pk]
+	id int [pk]
 }
 
 Scope / {

@@ -2,7 +2,7 @@
 package app
 
 Table posts {
-	id integer [pk]
+	id int [pk]
 }
 
 // Names are case-sensitive: the table is "posts", not "Posts".

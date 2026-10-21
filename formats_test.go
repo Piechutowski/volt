@@ -48,9 +48,13 @@ func TestNegotiate(t *testing.T) {
 		if tc.accept != "" {
 			req.Header.Set("Accept", tc.accept)
 		}
-		got, ok := Negotiate(req)
-		if got != tc.want || ok != tc.ok {
-			t.Errorf("Accept %q: got (%v, %v), want (%v, %v)", tc.accept, got, ok, tc.want, tc.ok)
+		got, err := Negotiate(&Request{Request: req})
+		if got != tc.want || (err == nil) != tc.ok {
+			t.Errorf("Accept %q: got (%v, %v), want (%v, ok=%v)", tc.accept, got, err, tc.want, tc.ok)
+		}
+		var he HTTPError
+		if !tc.ok && (!errors.As(err, &he) || he.StatusCode() != http.StatusNotAcceptable) {
+			t.Errorf("Accept %q: err = %v, want a 406", tc.accept, err)
 		}
 	}
 }
@@ -134,7 +138,7 @@ func TestDecodeByContentType(t *testing.T) {
 func TestQueryBinding(t *testing.T) {
 	req := httptest.NewRequest("GET", "/x?rok=2024&idgr=a&idgr=b&flag=true&at=2024-01-02T03:04:05Z&f=1.5", nil)
 	h := func(w http.ResponseWriter, r *Request) error {
-		rok, err := QueryParam[int32](r, "rok")
+		rok, err := QueryParam[int](r, "rok")
 		if err != nil || rok != 2024 {
 			t.Errorf("rok = %d, %v", rok, err)
 		}
@@ -154,14 +158,14 @@ func TestQueryBinding(t *testing.T) {
 		if err != nil || f != 1.5 {
 			t.Errorf("f = %v, %v", f, err)
 		}
-		none, err := QueryParams[int64](r, "none")
+		none, err := QueryParams[int](r, "none")
 		if err != nil || len(none) != 0 {
 			t.Errorf("absent list = %v, %v; want empty, nil", none, err)
 		}
-		if _, err := QueryParam[int32](r, "missing"); err == nil || !strings.Contains(err.Error(), "missing") {
+		if _, err := QueryParam[int](r, "missing"); err == nil || !strings.Contains(err.Error(), "missing") {
 			t.Errorf("missing scalar should be a 400 naming it: %v", err)
 		}
-		if _, err := QueryParam[int32](r, "idgr"); err == nil || !strings.Contains(err.Error(), "idgr") {
+		if _, err := QueryParam[int](r, "idgr"); err == nil || !strings.Contains(err.Error(), "idgr") {
 			t.Errorf("unparseable scalar should be a 400 naming it: %v", err)
 		}
 		return nil
@@ -189,17 +193,14 @@ func TestNoRowsIs404(t *testing.T) {
 func TestFormatQueryRoundTrip(t *testing.T) {
 	at := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
 	req := httptest.NewRequest("GET", URL("/x",
-		Query("s", FormatQuery("a b")), Query("i", FormatQuery(int32(-7))), Query("u", FormatQuery(uint64(9))),
+		Query("s", FormatQuery("a b")), Query("i", FormatQuery(-7)),
 		Query("f", FormatQuery(1.25)), Query("b", FormatQuery(true)), Query("t", FormatQuery(at))), nil)
 	r := &Request{Request: req}
 	if v, _ := QueryParam[string](r, "s"); v != "a b" {
 		t.Errorf("s = %q", v)
 	}
-	if v, _ := QueryParam[int32](r, "i"); v != -7 {
+	if v, _ := QueryParam[int](r, "i"); v != -7 {
 		t.Errorf("i = %d", v)
-	}
-	if v, _ := QueryParam[uint64](r, "u"); v != 9 {
-		t.Errorf("u = %d", v)
 	}
 	if v, _ := QueryParam[float64](r, "f"); v != 1.25 {
 		t.Errorf("f = %v", v)

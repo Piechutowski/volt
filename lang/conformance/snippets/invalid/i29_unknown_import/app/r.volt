@@ -1,4 +1,4 @@
-// spec: §imports rule 2
+// spec: §imports
 package app
 
 import (

@@ -1,10 +1,11 @@
 // Command volt is the framework's one binary: the CLI front end over
 // the lang package and both generators — nao's models and queries for
-// data packages, routers for routing packages (decision one-binary). Its subcommands
-// are check, vet, gen, routes, stress (decision generated-stress), lsp and version.
+// data packages, routers for routing packages. Its subcommands
+// are check, vet, gen, migration, routes, stress, lsp and version.
 //
-// Exit status: 0 clean (warnings do not fail), 1 errors found, 2 usage
-// or I/O problems.
+// Exit status: 0 clean (warnings do not fail), 1 errors found
+// (diagnostics, drift, a migration SQLite refuses), 2 usage or I/O
+// problems (a database that cannot be opened among them).
 package main
 
 import (
@@ -44,7 +45,6 @@ func main() {
 	}
 }
 
-// command is the CLI: every subcommand with its flags and action.
 func command() *cli.Command {
 	jsonFlag := &cli.BoolFlag{Name: "json", Usage: "emit diagnostics as JSON"}
 
@@ -83,13 +83,14 @@ func command() *cli.Command {
 					&cli.BoolFlag{Name: "sql", Usage: "also write nao_schema.sql (SQLite DDL and seed inserts)"},
 					&cli.BoolFlag{Name: "verify", Usage: "prove every generated Go file is gofmt-canonical and type-checks in its package before writing (a generator self-check)"},
 					&cli.StringFlag{Name: "o", Usage: "write into `DIR` instead of the package directory (one package); the client lands beside the models as volt_client.go"},
-					&cli.StringFlag{Name: "parts", Usage: "comma-separated `LIST` of what to write: models, queries, router, client, sql (default: every Go part)"},
+					&cli.StringFlag{Name: "parts", Usage: "comma-separated `LIST` of what to write: models, queries (the query layers and volt_migrations.go), router, client, sql (default: every Go part)"},
 					&cli.StringFlag{Name: "package", Usage: "package clause of the written files (default: the clause of DIR's Go files, else the Volt package's name)"},
 				},
-				Action: func(_ context.Context, c *cli.Command) error {
-					return genRun(c)
+				Action: func(ctx context.Context, c *cli.Command) error {
+					return genRun(ctx, c)
 				},
 			},
+			migrationCommand(),
 			{
 				Name:      "routes",
 				Usage:     "print the expanded route table (verb, path, handler, helper)",
@@ -118,12 +119,6 @@ func command() *cli.Command {
 	}
 }
 
-// load resolves the packages named by the command's arguments — Go's
-// rules (decision packages-as-in-go, §projects-and-packages rule 7): none means the package in the working directory,
-// a directory means that package, and dir/... means every package
-// beneath dir. The project root is the nearest go.mod (§projects-and-packages rule 1); the
-// named packages and their imports are loaded and checked. named lists
-// the package paths the arguments selected, in argument order.
 func load(c *cli.Command) (pr *lang.Project, named []string, diags []diag.Diagnostic, err error) {
 	args := c.Args().Slice()
 	if len(args) == 0 {
@@ -134,7 +129,6 @@ func load(c *cli.Command) (pr *lang.Project, named []string, diags []diag.Diagno
 	for _, arg := range args {
 		pattern := filepath.ToSlash(arg)
 		base := arg
-		// A .volt file names its directory's package (§projects-and-packages rule 7).
 		if strings.HasSuffix(base, ".volt") {
 			if st, err := os.Stat(base); err == nil && !st.IsDir() {
 				base = filepath.Dir(base)
@@ -230,12 +224,7 @@ func diagsPrintJSON(all []diag.Diagnostic) error {
 	return enc.Encode(out)
 }
 
-// genRun implements 'volt gen': check the whole project, then write the
-// generated files of every named package — into the package directory,
-// or with -o into a directory of the caller's choosing, -parts naming
-// which files (§projects-and-packages rule 7) — refusing to clobber non-generated files (all
-// or nothing).
-func genRun(c *cli.Command) error {
+func genRun(ctx context.Context, c *cli.Command) error {
 	parts, err := partsParse(c.String("parts"), c.Bool("models-only"), c.Bool("sql"))
 	if err != nil {
 		return cli.Exit("gen: "+err.Error(), 2)
@@ -251,13 +240,31 @@ func genRun(c *cli.Command) error {
 		return cli.Exit("gen: project has errors; fix them first (see 'volt check')", 1)
 	}
 
-	// Generate for the named packages only — imports are loaded for
-	// checking, never written (Go's rule, decision packages-as-in-go).
 	paths := append([]string(nil), named...)
 	sort.Strings(paths)
 
-	// -o writes one package into one directory; the client then lands
-	// beside the models (decision layout-independent-gen).
+	for _, path := range paths {
+		pkg := pr.Packages[path]
+		if pkg.Schema() == nil || len(pkg.Schema().Migrations) == 0 {
+			continue
+		}
+		ms, err := migrationsLowered("gen: package "+pkg.Path+": ", pkg)
+		if err != nil {
+			return err
+		}
+		if err := sqliteGuard(sqliteDriver); err != nil {
+			return err
+		}
+		drifts, err := foldCheck(ctx, pkg, ms)
+		if err != nil {
+			return migrationExit("gen: package "+pkg.Path+": ", err)
+		}
+		if len(drifts) > 0 {
+			driftReport(os.Stdout, pkg, drifts)
+			return cli.Exit(fmt.Sprintf("gen: package %s: the schema and its migrations drift; write the migration that closes it (see 'volt migration check %s')", pkg.Path, pkg.Dir), 1)
+		}
+	}
+
 	outDir := c.String("o")
 	if outDir != "" && len(paths) != 1 {
 		return cli.Exit(fmt.Sprintf("gen: -o writes one package; %d named", len(paths)), 2)
@@ -273,13 +280,8 @@ func genRun(c *cli.Command) error {
 		return pkg.Dir
 	}
 
-	// Collect everything first, then refuse every clobber, then write:
-	// all or nothing across the whole project.
 	var out []outFile
 
-	// Every package generates on its own CPU (decision worker-pool); the files are
-	// gathered in package order, so what is written and printed never
-	// depends on the schedule.
 	emit := func(pkg *lang.Package) ([]outFile, error) {
 		var files []outFile
 		source := "package " + pkg.Path
@@ -305,9 +307,6 @@ func genRun(c *cli.Command) error {
 				return nil, err
 			}
 			for _, name := range append(append([]string{}, router.Files...), router.ClientBesideFile) {
-				// A main package routing its own tables has no client
-				// subpackage (§generated-client rule 1); -o writes the client beside the
-				// models instead.
 				if code, ok := gen[name]; ok && parts[partOf(name)] {
 					files = append(files, outFile{path: filepath.Join(dir, name), code: code})
 				}
@@ -329,8 +328,6 @@ func genRun(c *cli.Command) error {
 		return nil
 	}
 
-	// --verify: the generators emit gofmt-canonical Go by construction
-	// (decision gofmt-canonical); this proves it for the project at hand.
 	if c.Bool("verify") {
 		problems := make([]string, len(out))
 		par.For(len(out), func(i int) {
@@ -350,8 +347,6 @@ func genRun(c *cli.Command) error {
 				return cli.Exit(p, 2)
 			}
 		}
-		// The generated Go type-checks in the package it lands in (decision verify-type-checks),
-		// before anything is written.
 		if p := outputsTypeCheck(out); p != "" {
 			return cli.Exit(p, 2)
 		}
@@ -362,7 +357,7 @@ func genRun(c *cli.Command) error {
 		f := &out[i]
 		old, err := os.ReadFile(f.path)
 		if err != nil {
-			return // nothing there yet
+			return
 		}
 		if !bytes.HasPrefix(old, genMarker(f.path)) {
 			clobber[i] = f.path
@@ -375,8 +370,6 @@ func genRun(c *cli.Command) error {
 			return cli.Exit(fmt.Sprintf("gen: refusing to overwrite %s: it lacks the generated-code header", path), 2)
 		}
 	}
-	// An optional output that is no longer produced must not linger: a
-	// generated file, marker present, is ours to remove.
 	produced := map[string]bool{}
 	for _, f := range out {
 		produced[f.path] = true
@@ -386,7 +379,7 @@ func genRun(c *cli.Command) error {
 		if !pkg.HasSchema() || !parts["queries"] {
 			continue
 		}
-		for _, name := range []string{"nao_selects.go", "nao_validate.go"} {
+		for _, name := range []string{"nao_selects.go", "nao_validate.go", "volt_migrations.go"} {
 			stale := filepath.Join(dirOf(pkg), name)
 			if produced[stale] {
 				continue
@@ -424,8 +417,6 @@ func genRun(c *cli.Command) error {
 	return nil
 }
 
-// genMarker is the generated-code header a file at path must start with
-// before gen may overwrite it; SQL carries it in its own comment syntax.
 func genMarker(path string) []byte {
 	if filepath.Ext(path) == ".sql" {
 		return []byte("-- Code generated ")
@@ -433,19 +424,12 @@ func genMarker(path string) []byte {
 	return []byte("// Code generated ")
 }
 
-// outFile is one generated file about to be written: its path, its
-// bytes, and whether the same bytes are on disk already.
 type outFile struct {
 	path      string
 	code      []byte
 	unchanged bool
 }
 
-// outputsTypeCheck type-checks each output directory's package with
-// the outputs laid over whatever is on disk, and reports the first
-// problem: an error in a generated file is a generator bug, one in a
-// file beside it leaves the check inconclusive. "" when every package
-// checks.
 func outputsTypeCheck(out []outFile) string {
 	byDir := map[string]map[string][]byte{}
 	var dirs []string
@@ -496,8 +480,6 @@ func outputsTypeCheck(out []outFile) string {
 	return ""
 }
 
-// genMarked reports whether the file at path exists and carries the
-// generated-code header, reading only as many bytes as the header needs.
 func genMarked(path string) bool {
 	f, err := os.Open(path)
 	if err != nil {
@@ -512,7 +494,6 @@ func genMarked(path string) bool {
 	return bytes.Equal(buf, marker)
 }
 
-// routesRun implements 'volt routes': the introspection table.
 func routesRun(c *cli.Command) error {
 	pr, named, diags, err := load(c)
 	if err != nil {
@@ -524,8 +505,6 @@ func routesRun(c *cli.Command) error {
 		}
 		return cli.Exit("routes: project has errors; fix them first (see 'volt check')", 1)
 	}
-	// Generate for the named packages only — imports are loaded for
-	// checking, never written (Go's rule, decision packages-as-in-go).
 	paths := append([]string(nil), named...)
 	sort.Strings(paths)
 	for _, path := range paths {
@@ -541,13 +520,8 @@ func routesRun(c *cli.Command) error {
 	return nil
 }
 
-// genParts are the names -parts accepts, each one or more generated
-// files (§projects-and-packages rule 7).
 var genParts = []string{"models", "queries", "router", "client", "sql"}
 
-// partsParse resolves the -parts list, or the defaults the older flags
-// spell: every Go part, minus the query layers under --models-only,
-// plus the DDL under --sql.
 func partsParse(list string, modelsOnly, sql bool) (map[string]bool, error) {
 	parts := map[string]bool{}
 	if list == "" {
@@ -568,14 +542,13 @@ func partsParse(list string, modelsOnly, sql bool) (map[string]bool, error) {
 	return parts, nil
 }
 
-// partOf names the part a generated file belongs to.
 func partOf(name string) string {
 	switch base := filepath.Base(name); {
 	case base == "nao_models.go":
 		return "models"
 	case base == "nao_schema.sql":
 		return "sql"
-	case strings.HasPrefix(base, "nao_"):
+	case strings.HasPrefix(base, "nao_"), base == "volt_migrations.go":
 		return "queries"
 	case base == "volt_client.go":
 		return "client"
@@ -584,9 +557,6 @@ func partOf(name string) string {
 	}
 }
 
-// goPackageName reads the package clause of the Go files in dir; ""
-// when there are none. Test files are skipped, as their package may be
-// the external one.
 func goPackageName(dir string) string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -607,9 +577,6 @@ func goPackageName(dir string) string {
 	return ""
 }
 
-// stressCommand is `volt stress`: it writes the one-file project the
-// scaling tests and the benchmarks run on (internal/corpus, decision generated-stress) at
-// stress size (decision generated-stress).
 func stressCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "stress",
@@ -626,8 +593,6 @@ func stressCommand() *cli.Command {
 	}
 }
 
-// stressRun writes the project. The directory must be new or empty:
-// the command never writes over anything.
 func stressRun(c *cli.Command) error {
 	if c.Args().Len() != 1 {
 		return cli.Exit("stress: one argument, the directory to write", 2)
@@ -661,10 +626,6 @@ func stressRun(c *cli.Command) error {
 	return nil
 }
 
-// voltModuleDir asks the Go tool where the working directory's module
-// resolves github.com/Piechutowski/volt: the checkout when run from
-// it, its replace or cache directory from a project that requires it,
-// "" when nothing does.
 func voltModuleDir() string {
 	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/Piechutowski/volt").Output()
 	if err != nil {

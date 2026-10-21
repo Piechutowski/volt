@@ -121,14 +121,14 @@ func TestChainOrder(t *testing.T) {
 }
 
 func TestParsers(t *testing.T) {
-	if v, ok := ParseInt64("42"); !ok || v != 42 {
-		t.Error("ParseInt64(42)")
+	if v, ok := ParseInt("42"); !ok || v != 42 {
+		t.Error("ParseInt(42)")
 	}
-	if _, ok := ParseInt64("4x"); ok {
-		t.Error("ParseInt64(4x) should fail")
+	if _, ok := ParseInt("4x"); ok {
+		t.Error("ParseInt(4x) should fail")
 	}
-	if _, ok := ParseInt32("2147483648"); ok {
-		t.Error("ParseInt32 overflow should fail")
+	if _, ok := ParseInt("99999999999999999999"); ok {
+		t.Error("ParseInt overflow should fail")
 	}
 	if v, ok := ParseInt("-7"); !ok || v != -7 {
 		t.Error("ParseInt(-7)")

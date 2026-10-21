@@ -1,13 +1,15 @@
 # Roadmap
 
+> [!CAUTION]
+> **This project is an alpha version, and everything may change in the future.**
+
 What Volt is made of and whether each piece is built. `[x]` built and
 tested, `[ ]` not built, `[~]` partly built. *hand* means a documented
 pattern, deliberately hand-written, never generated; *no* means a
-non-goal (decision non-goals). The why behind an item lives in
-[`decisions.md`](decisions.md) or the spec; a status changes in the
-commit that lands it (decision docs-doctrine). Build order: raw-SQL
-selects, then associations, then migrations, then the report engine
-when a consumer exists.
+non-goal. What an item is lives in the spec; a
+status changes in the commit that lands it. Build order: raw-SQL
+selects, then associations, then the migration generator, then the
+report engine when a consumer exists.
 
 ## Language and front end
 
@@ -18,9 +20,11 @@ when a consumer exists.
 - [x] Scanner, parser, checker, vet; project loading from `go.mod`
   - [x] Parse and check by declaration; routes lowered per scope item
   - [x] Named placeholders, Go references checked by spelling
-- [x] Schema core (DBML): Project, Table, TablePartial, Records, Enum, Ref, TableGroup, Notes, DiagramView
+- [x] Schema core: Project, Table, TablePartial, Records, Enum, Type, Ref, TableGroup, Notes, DiagramView
+- [x] `Migration`: the element, its contextual keywords and its twelve checks; what runs it is under the data layer
+  - [x] Column types are a closed Go set (`bool`, `int`, `float64`, `string`, `[]byte`, `time.Time`), enums, and `Type` declarations; defaults are typed
 - [~] Schema extensions
-  - [x] `[model:]`, `[tag:]`, `[required]`, typed `checks`
+  - [x] `[model:]`, `[tag:]`, `[required]`, `validators`
   - [x] `Group`, `Pred`, `Select … for <group>` with projection, list parameters
   - [ ] Raw-SQL `Select` / `View` blocks
     - [ ] `Select name (params) { … }`: declared params, select list, from and joins, opaque where/having/group/order bodies
@@ -39,30 +43,31 @@ when a consumer exists.
 
 - [x] Models: structs, enums, `Null[T]`, singular names, notes as doc comments
 - [x] DDL and seed `INSERT`s from `records`
-- [x] CRUD: `Get`, `GetMany`, `GetBy*`, `List`, `Count`, `Create`, `Update`, `Delete`; keyless tables get `List`/`Create`/`Count`
+- [x] CRUD: `Get`, `GetMany`, `GetBy*`, `List`, `Count`, `Create`, `Update`, `Delete`; keyless tables get `List`/`Create`/`Count`; `Create` and `Update` take a changeset and return the stored row
 - [x] Dynamic queries: predicates as values, flat typed handles, per-model wrappers, shared verbs, keyset pagination, statement cache, `dynname` vet rule
-- [x] Validation: typed checks compile to `CHECK` and `Validate()`, Go-reference checks to the validator only, `required`, 422/409 with per-column details on the API path
-  - [ ] `[on: create]` / `[on: update]` as triggers in SQL and per-params in Go
-  - [ ] Enum membership in the Go tier (hypotheses H5)
-  - [ ] `length()` in typed checks, rune-counted on text so the tiers agree
-  - [ ] `[check:]` on select parameters, Go tier only
+- [x] Changesets: the single write path (§changesets); `<Model>New()` and `row.Changeset()`, one setter per column, `Cast` of a `rt.Params[M]` wire body behind an allow list, `Validate`, `Create` and `Update` rendered from the marked columns; every refused write, a failed validator or the database's own refusal alike, is one `*rt.Invalid` itemizing its field errors, 409 for a `unique` violation, 422 otherwise
+- [x] Validation: validators are exported Go functions of the package named in the schema, `required` is the built-in one, nothing reaches the DDL; `Validate()` on the changeset runs `required`, enum membership and the validators, every failure collected; the API path answers with the changeset's `*rt.Invalid`
+  - [ ] `[on: create]` / `[on: update]` as triggers in SQL and, in Go, by whether the changeset was made from a row
+  - [x] Enum membership in the Go tier: the `enum` check of `Validate`
   - [ ] `[message: '…']` with a runtime hook keyed by table and check
-  - *no* nullable columns in typed checks; named validation sets
+  - *no* named validation sets
 - [x] Transactions: one `Queries` over `DBTX`, `Tx` with rollback on error or panic, single-writer `Open`
   - [ ] Savepoints
 - [ ] Associations
   - [ ] Single loaders: `PostAuthorGet(ctx, post)`, `UserPostsList(ctx, user)`
-  - [ ] Batched loaders: `PostCommentsLoad(ctx, posts) map[int64][]Comment`, one `IN`, grouped in memory; the atomicity answer to loops of reads
+  - [ ] Batched loaders: `PostCommentsLoad(ctx, posts) map[int][]Comment`, one `IN`, grouped in memory; the atomicity answer to loops of reads
   - [ ] Many-to-many through junction tables
   - *no* association fields on row structs; *hand* polymorphic and STI patterns
-- [ ] Migrations
-  - [ ] Semantic diff of the schema against the last-migrated snapshot, never SQL parsing; identity is a canonical hash of the checked AST
-  - [ ] Renames via `[was: 'old']`
-  - [ ] Generated ledger plus `schema_migrations`, each migration pinned to the schema hash
-  - [ ] Owned twelve-step rebuild in the pragma bracket, `foreign_key_check` after
-  - [ ] Applied by CLI or an embedded runner, never on app start; user binaries embed subcommands and migrations
-  - [ ] No fake `down` for destructive changes
-  - *hand* data migrations
+- [~] Migrations
+  - [x] The `Migration` element: hand-written structural operations in a flat body or `up { } down { }`, checked by rules 1 to 12 of §migrations without the schema, in the grammar, the outline, completion and hover
+  - [x] Index names derive from the table and the key columns, an expression index carries `name:`, `where:` makes an index partial (§indexes)
+  - [x] The fold: every migration applied to an empty SQLite, compared with the schema's DDL table by table; `volt gen` fails on drift (§the-fold)
+  - [x] The ledger `volt_migrations` and `rt.MigrateUp`, `rt.MigrateDown`, `rt.MigrateStatus` (§migration-ledger)
+  - [x] `volt migration new | check | up | down | status | sql`, and `volt_migrations.go` with `Migrate` for the binary (§migration-tooling)
+  - [x] The pragma bracket around `rebuild table` and `drop table`, `foreign_key_check` before commit; `no transaction` for what needs it
+  - [x] No fake `down`: an irreversible migration refuses `down` with its name
+  - [ ] The migration generator over the drift report; renames via `[was: 'old']`
+  - *hand* data migrations, as `exec`
 - [ ] Report engine, when a consumer exists
   - [ ] Schema catalog exported as runtime data
   - [ ] Quarantined interpreter: validated requests, joins only along declared refs, values only behind placeholders, `[]map[string]any` out
@@ -82,7 +87,7 @@ when a consumer exists.
 
 ## Tooling
 
-- [x] One binary: `check`, `vet`, `gen`, `routes`, `stress`, `lsp`, `version`; `gen --verify` type-checks the output first
+- [x] One binary: `check`, `vet`, `gen`, `routes`, `stress`, `migration`, `lsp`, `version`; `gen --verify` type-checks the output first
 - [x] Generated Go gofmt-canonical by construction; goldens compiled by the real toolchain; every statement prepared against the generated DDL
 - [x] Parallel schedule on a worker pool; memoized sessions; the purity gate, the immutability walk, the race detector as the bar
 - [x] Language server: diagnostics, completion, hover, navigation, rename; incremental sync; keystroke under a third of a second on a thousand-table file

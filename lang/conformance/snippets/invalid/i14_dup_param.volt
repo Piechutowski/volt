@@ -1,4 +1,4 @@
-// spec: §route-paths rule 2
+// spec: §route-paths
 package app
 
 Scope /u/:id {

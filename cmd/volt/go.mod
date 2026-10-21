@@ -5,6 +5,7 @@ go 1.27
 require (
 	github.com/Piechutowski/volt v0.0.0
 	github.com/Piechutowski/volt/lsp v0.0.0
+	github.com/mattn/go-sqlite3 v1.14.47
 	github.com/urfave/cli/v3 v3.10.1
 	golang.org/x/tools v0.50.0
 )

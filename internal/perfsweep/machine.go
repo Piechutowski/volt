@@ -68,7 +68,6 @@ func Info(repo string) Machine {
 	return m
 }
 
-// procValue reads the first "key : value" line of a /proc file.
 func procValue(path, key string) string {
 	f, err := os.Open(path)
 	if err != nil {
@@ -85,7 +84,6 @@ func procValue(path, key string) string {
 	return ""
 }
 
-// osRelease is PRETTY_NAME of /etc/os-release.
 func osRelease() string {
 	f, err := os.Open("/etc/os-release")
 	if err != nil {
@@ -101,7 +99,6 @@ func osRelease() string {
 	return ""
 }
 
-// run returns a command's trimmed output, "" when it fails.
 func run(name string, args ...string) string {
 	out, err := exec.Command(name, args...).Output()
 	if err != nil {

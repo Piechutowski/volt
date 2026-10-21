@@ -1,5 +1,0 @@
-// spec: §diagramview rule 1 — each category at most once per view
-DiagramView v {
-  Tables { * }
-  Tables { * }
-}

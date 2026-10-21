@@ -1,16 +1,5 @@
 package main
 
-// The purity gate (decision pure-memos) refuses, in each memoized function and
-// transitively everything it calls, reading mutable package state,
-// writing through an input, and calling into a package that keeps
-// state. The immutability gate (decision immutable-results) refuses a write through a value
-// that came from outside a function to a memoized result type or to a
-// node or token, unless the function is the result's own producer or
-// the value's own maker. A value that comes out of a call whose inputs
-// were tainted is tainted, a closure's parameters are assumed to carry
-// inputs, and a standard function that writes its argument is a write;
-// a write to a field of a struct held by value counts for nothing.
-
 import (
 	"fmt"
 	"go/ast"
@@ -27,8 +16,6 @@ import (
 
 const module = "github.com/Piechutowski/volt"
 
-// pureTargets are the memoized computations (decision pure-memos), by package path and
-// name; each must be a top-level function.
 var pureTargets = []struct{ pkg, name string }{
 	{module + "/lang/check", "tableCheck"},
 	{module + "/nao/gen/golang", "tableBuild"},
@@ -39,9 +26,6 @@ var pureTargets = []struct{ pkg, name string }{
 	{module + "/lang/vet", "DeclVet"},
 }
 
-// immutableVars are package-level variables a pure function may read:
-// lookup tables written once at initialization. The gate also proves
-// none of them is assigned anywhere but its declaration.
 var immutableVars = map[string]bool{
 	module + "/lang.crudMethodSuffixes":           true,
 	module + "/lang.compareSQL":                   true,
@@ -52,11 +36,10 @@ var immutableVars = map[string]bool{
 	module + "/lang.queryValueTypes":              true,
 	module + "/lang/check.tableSettings":          true,
 	module + "/lang/check.columnSettings":         true,
+	module + "/lang/check.builtins":               true,
 	module + "/lang/check.indexSettings":          true,
-	module + "/lang/check.settingsCheck":          true,
 	module + "/lang/check.refSettings":            true,
-	module + "/lang/check.integerTypes":           true,
-	module + "/lang/check.requiredKinds":          true,
+	module + "/lang/check.ReservedAliases":        true,
 	module + "/nao/gen/golang.commonInitialisms":  true,
 	module + "/nao/gen/golang.typeMap":            true,
 	module + "/nao/gen/golang.goKeywords":         true,
@@ -66,30 +49,18 @@ var immutableVars = map[string]bool{
 	module + "/nao/inflect.irregular":             true,
 }
 
-// pureStdlib are the standard packages whose functions keep no state:
-// the trust boundary with Go (decision trust-boundary), kept exactly as wide as the memoized
-// computations reach, since the walk fails on an entry none of them
-// calls into.
 var pureStdlib = map[string]bool{
-	"strings": true, "strconv": true, "unicode": true, // functions of their arguments and of constant tables
-	"fmt":    true, // formatting: what it pools internally never reaches an answer
-	"sort":   true, // writes only what it is handed, which the gate counts as a write
-	"regexp": true, // a compiled expression answers the same question every time
+	"strings": true, "unicode": true,
+	"fmt":     true,
+	"sort":    true,
+	"strconv": true,
+	"errors":  true,
 }
 
-// pureStdlibFuncs are the single standard functions trusted outside
-// pureStdlib's packages (decision trust-boundary): each names why. A position's offset and
-// line read the file's base through an atomic, whose Load is a read of
-// its receiver and nothing else; the package it lives in is not
-// trusted as a whole.
 var pureStdlibFuncs = map[string]bool{
 	"(*sync/atomic.Int32).Load": true,
 }
 
-// stdlibMutators are the standard functions that write through an
-// argument, by the index of the argument written: a call to one is a
-// write to it (decision immutable-results). Every other function of pureStdlib only reads
-// its arguments.
 var stdlibMutators = map[string]int{
 	"sort.Sort": 0, "sort.Stable": 0, "sort.Slice": 0, "sort.SliceStable": 0,
 	"sort.Strings": 0, "sort.Ints": 0, "sort.Float64s": 0,
@@ -99,16 +70,11 @@ var stdlibMutators = map[string]int{
 	"maps.Copy": 0, "maps.DeleteFunc": 0,
 }
 
-// valuePackages declare the front end's values: nodes, tokens and
-// positions. Their types are written only by the packages that make
-// them (decision immutable-results); everyone else holds them as read-only inputs.
 var valuePackages = map[string][]string{
 	module + "/lang/ast":   {module + "/lang/ast", module + "/lang/parser"},
 	module + "/lang/token": {module + "/lang/token", module + "/lang/scanner", module + "/lang/parser"},
 }
 
-// closureStops are packages whose types a memoized result may hold
-// without their being results.
 var closureStops = map[string]bool{module + "/lang/diag": true}
 
 const fixtureImpure = module + "/cmd/volt/testdata/impure"
@@ -200,8 +166,6 @@ func TestMemoizedComputationsArePure(t *testing.T) {
 		p.analyze(obj, false, p.allTainted(obj))
 	}
 	p.immutableVarsNeverAssigned()
-	// The trusted standard packages are exactly the ones reached: an
-	// entry no target calls into is trust for nothing (decision trust-boundary).
 	for name := range pureStdlibFuncs {
 		if !p.stdlibFuncsUsed[name] {
 			p.problems = append(p.problems, fmt.Sprintf("pureStdlibFuncs trusts %s, which no memoized computation reaches", name))
@@ -222,7 +186,7 @@ func TestMemoizedComputationsArePure(t *testing.T) {
 // modules writes, through a value that came from outside it, into a
 // memoized result type unless the function is reachable from the
 // result's producer, nor into a node or a token outside the packages
-// that make them (decision immutable-results).
+// that make them.
 func TestMemoizedResultsAreImmutable(t *testing.T) {
 	p := newPurity(t, gatePackages(t), true)
 	var targets []*types.Func
@@ -305,8 +269,6 @@ func (p *purity) producersSet(targets []*types.Func) {
 	}
 }
 
-// reachable is every function a call from fn can reach by static
-// resolution, fn itself included.
 func (p *purity) reachable(fn *types.Func) map[*types.Func]bool {
 	out := map[*types.Func]bool{}
 	var visit func(f *types.Func)
@@ -323,12 +285,12 @@ func (p *purity) reachable(fn *types.Func) map[*types.Func]bool {
 			switch x := n.(type) {
 			case *ast.Ident:
 				if g, ok := fd.pkg.TypesInfo.Uses[x].(*types.Func); ok {
-					visit(g)
+					visit(g.Origin())
 				}
 			case *ast.SelectorExpr:
 				if sel, ok := fd.pkg.TypesInfo.Selections[x]; ok {
 					if g, ok := sel.Obj().(*types.Func); ok {
-						visit(g)
+						visit(g.Origin())
 						if recv := g.Type().(*types.Signature).Recv(); recv != nil && types.IsInterface(recv.Type()) {
 							for _, impl := range p.implementations(g) {
 								visit(impl)
@@ -355,10 +317,6 @@ func (p *purity) startingPoints(keep func(path string) bool) []*types.Func {
 	return out
 }
 
-// writesOutsideProducers walks fn with everything it was handed as
-// tainted and returns the writes to memoized result types, nodes and
-// tokens that fn may not make: it is neither reachable from the
-// result's producer nor in the value's own package.
 func (p *purity) writesOutsideProducers(fn *types.Func) []taintedWrite {
 	var out []taintedWrite
 	for _, w := range p.analyze(fn, true, p.allTainted(fn)).writes {
@@ -393,39 +351,25 @@ type taintedWrite struct {
 }
 
 type purity struct {
-	byPath    map[string]*packages.Package
-	decls     map[*types.Func]funcDecl
-	summaries map[string]*summary
-	active    map[string]bool
-	problems  []string
-	// provisional is a recursive function's summary while its own
-	// analysis is under way, refined to a fixpoint (decision pure-memos); hitStack
-	// records, for every analysis under way, the active analyses its
-	// walk answered with a provisional summary.
+	byPath      map[string]*packages.Package
+	decls       map[*types.Func]funcDecl
+	summaries   map[string]*summary
+	active      map[string]bool
+	problems    []string
 	provisional map[string]*summary
 	hitStack    []map[string]bool
-	seen        map[string]bool // problems, reported once each
+	seen        map[string]bool
 
-	// The immutability walk (decision immutable-results): every value from outside a function
-	// is tainted; writes to these types are recorded, and a target's
-	// results are tainted the moment it returns them.
 	shared   bool
-	closures map[*types.TypeName][]int // type -> the targets whose results reach it; -1 for a value package's type
+	closures map[*types.TypeName][]int
 	targets  map[*types.Func]int
-	reach    []map[*types.Func]bool // per target, the functions it can reach
+	reach    []map[*types.Func]bool
 
-	// impls are the module's implementations of each interface method
-	// a walk meets (decision pure-memos), found once.
-	impls map[*types.Func][]*types.Func
-	// stdlibUsed are the standard packages the walk called into (decision trust-boundary),
-	// stdlibFuncsUsed the single trusted functions.
+	impls           map[*types.Func][]*types.Func
 	stdlibUsed      map[string]bool
 	stdlibFuncsUsed map[string]bool
 }
 
-// implementations are the methods of the module's named types that
-// stand behind an interface method (decision pure-memos); types outside the module are
-// not walked, their results are judged by the receiver's taint instead.
 func (p *purity) implementations(abstract *types.Func) []*types.Func {
 	if p.impls == nil {
 		p.impls = map[*types.Func][]*types.Func{}
@@ -469,18 +413,12 @@ func (p *purity) problem(pkg *packages.Package, pos ast.Node, format string, arg
 	p.problems = append(p.problems, fmt.Sprintf("%s: %s", pkg.Fset.Position(pos.Pos()), fmt.Sprintf(format, args...)))
 }
 
-// analyze checks fn under the given taint (receiver first when there
-// is one, then the parameters in order) and returns its summary.
 func (p *purity) analyze(fn *types.Func, recvTaint bool, paramTaint []bool) *summary {
 	key := fn.FullName() + "/" + fmt.Sprint(recvTaint, paramTaint)
 	if s := p.summaries[key]; s != nil {
 		return s
 	}
 	if p.active[key] {
-		// A recursive call answers with the summary found so far; every
-		// analysis under way that consumed it repeats until the summary
-		// stops growing, and none of them is remembered while the
-		// analysis it depends on is still under way (decision pure-memos).
 		for _, hits := range p.hitStack {
 			hits[key] = true
 		}
@@ -530,7 +468,7 @@ func (p *purity) analyze(fn *types.Func, recvTaint bool, paramTaint []bool) *sum
 			tentative := false
 			for k := range hits {
 				if k != key && p.active[k] {
-					tentative = true // computed against another analysis's provisional summary
+					tentative = true
 				}
 			}
 			if !tentative {
@@ -554,9 +492,6 @@ func writesDedup(ws []taintedWrite) []taintedWrite {
 	return out
 }
 
-// summaryEqual reports whether two summaries of one analysis agree;
-// taint only grows between iterations, so equal sizes of deduplicated
-// writes mean equal writes.
 func summaryEqual(a, b *summary) bool {
 	if len(a.results) != len(b.results) || len(a.writes) != len(b.writes) {
 		return false
@@ -570,14 +505,7 @@ func summaryEqual(a, b *summary) bool {
 }
 
 type funcAnalysis struct {
-	// made are the function values this function made itself, whose
-	// bodies its walk covered; calling any other function value is
-	// refused (decision pure-memos).
-	made map[types.Object]bool
-	// array records, for a local holding a slice, whether its backing
-	// array may be an input's: false after a literal, make, or an
-	// append to a fresh slice; a local not recorded is as tainted as
-	// its value (decision pure-memos).
+	made    map[types.Object]bool
 	array   map[types.Object]bool
 	p       *purity
 	pkg     *packages.Package
@@ -590,7 +518,7 @@ type funcAnalysis struct {
 func (fa *funcAnalysis) problem(node ast.Node, format string, args ...any) {
 	msg := fmt.Sprintf("%s: %s", fa.pkg.Fset.Position(node.Pos()), fmt.Sprintf(format, args...))
 	if fa.p.seen[msg] {
-		return // a fixpoint iteration meets the same statements again
+		return
 	}
 	fa.p.seen[msg] = true
 	fa.p.problems = append(fa.p.problems, msg)
@@ -756,10 +684,6 @@ func (fa *funcAnalysis) madeMark(lhs ast.Expr, rhs ast.Expr) {
 	}
 }
 
-// arrayTainted reports whether the backing array of a slice expression
-// may be an input's: a literal, a make and an append to a fresh slice
-// give fresh memory, slicing keeps the array, a local answers what it
-// was assigned, and anything else is as tainted as its value.
 func (fa *funcAnalysis) arrayTainted(e ast.Expr) bool {
 	switch x := ast.Unparen(e).(type) {
 	case *ast.CompositeLit:
@@ -819,10 +743,6 @@ func (fa *funcAnalysis) rhsTaints(rhs []ast.Expr, n int) []bool {
 	return out
 }
 
-// write judges an assignment to lhs: a write that reaches memory
-// beyond the root variable's own value, through a pointer, a slice or
-// a map, is a write to the object there, refused or recorded when it
-// is reached through a tainted value.
 func (fa *funcAnalysis) write(lhs ast.Expr, tainted bool, define bool) {
 	if id, ok := lhs.(*ast.Ident); ok {
 		if id.Name == "_" {
@@ -848,7 +768,7 @@ func (fa *funcAnalysis) write(lhs ast.Expr, tainted bool, define bool) {
 	}
 	written, shared := fa.sharedTarget(lhs)
 	if !shared {
-		fa.expr(lhs) // a field of a value the variable holds itself
+		fa.expr(lhs)
 		return
 	}
 	viaTainted := false
@@ -873,10 +793,6 @@ func (fa *funcAnalysis) write(lhs ast.Expr, tainted bool, define bool) {
 	}
 }
 
-// taintedWrite judges a write through a tainted value to an object of
-// the named type written (nil when unnamed): a purity walk refuses it,
-// an immutability walk records it when the type is a memoized result's
-// or a value package's.
 func (fa *funcAnalysis) taintedWrite(node ast.Node, written *types.TypeName) {
 	if !fa.p.shared {
 		fa.problem(node, "a pure function writes through no input")
@@ -887,10 +803,6 @@ func (fa *funcAnalysis) taintedWrite(node ast.Node, written *types.TypeName) {
 	}
 }
 
-// sharedTarget reports whether a write to lhs reaches memory beyond
-// the root variable's own value, which it does when the path passes a
-// pointer, a slice or a map; the object written is the innermost
-// struct behind such a step.
 func (fa *funcAnalysis) sharedTarget(lhs ast.Expr) (written *types.TypeName, shared bool) {
 	step := func(t types.Type) {
 		shared = true
@@ -936,9 +848,6 @@ func (fa *funcAnalysis) sharedTarget(lhs ast.Expr) (written *types.TypeName, sha
 	}
 }
 
-// structOf is the named struct type t is; nil otherwise, since a store
-// into a container of anything else writes nothing behind it and the
-// object written is the container's holder.
 func structOf(t types.Type) *types.TypeName {
 	if x, ok := types.Unalias(t).(*types.Named); ok {
 		if _, ok := x.Underlying().(*types.Struct); ok {
@@ -960,9 +869,6 @@ func elemOf(t types.Type) types.Type {
 	return t
 }
 
-// mutated judges a call that writes the container it is handed as an
-// argument: the object written is the container's elements when they
-// are structs, its holder otherwise.
 func (fa *funcAnalysis) mutated(arg ast.Expr) {
 	if !fa.expr(arg) {
 		return
@@ -1029,7 +935,7 @@ func (fa *funcAnalysis) expr(e ast.Expr) bool {
 					return false
 				}
 				if fa.p.shared {
-					return true // package state: shared with everyone
+					return true
 				}
 				fa.problem(x, "a pure function reads no package variable (%s.%s)", v.Pkg().Path(), v.Name())
 				return false
@@ -1079,12 +985,11 @@ func (fa *funcAnalysis) expr(e ast.Expr) bool {
 				fa.expr(elt)
 			}
 		}
-		return false // a value the function created
+		return false
 	case *ast.KeyValueExpr:
 		fa.expr(x.Key)
 		return fa.expr(x.Value)
 	case *ast.FuncLit:
-		// A closure runs in this scope; its parameters may be handed inputs.
 		for _, field := range x.Type.Params.List {
 			for _, name := range field.Names {
 				if obj := fa.info.Defs[name]; obj != nil {
@@ -1137,9 +1042,6 @@ func (fa *funcAnalysis) call(x *ast.CallExpr) []bool {
 	for _, t := range argTaint {
 		anyArg = anyArg || t
 	}
-	// A conversion keeps what it converts, except one from a string
-	// to a slice of bytes or runes, which the language defines as a
-	// copy: the result is fresh memory nobody else holds.
 	if tv, ok := fa.info.Types[x.Fun]; ok && tv.IsType() {
 		if len(x.Args) == 1 && isStringToSlice(tv.Type, fa.info.Types[x.Args[0]].Type) {
 			return []bool{false}
@@ -1175,7 +1077,7 @@ func (fa *funcAnalysis) call(x *ast.CallExpr) []bool {
 				return []bool{recvTaint || anyArg}
 			}
 		} else if obj, ok := fa.info.Uses[f.Sel].(*types.Func); ok {
-			fn = obj // pkg.Func
+			fn = obj
 		} else {
 			return []bool{anyArg}
 		}
@@ -1186,13 +1088,14 @@ func (fa *funcAnalysis) call(x *ast.CallExpr) []bool {
 		fa.expr(x.Fun)
 		return []bool{anyArg}
 	}
+	fn = fn.Origin()
 	sig := fn.Type().(*types.Signature)
 	n := sig.Results().Len()
 	if recv := sig.Recv(); recv != nil && types.IsInterface(recv.Type()) {
 		return fa.dispatch(fn, sig, recvTaint, argTaint)
 	}
 	if fn.Pkg() == nil {
-		return make([]bool, n) // universe
+		return make([]bool, n)
 	}
 	path := fn.Pkg().Path()
 	if !strings.HasPrefix(path, module) {
@@ -1211,14 +1114,12 @@ func (fa *funcAnalysis) call(x *ast.CallExpr) []bool {
 		return make([]bool, n)
 	}
 	if _, has := fa.p.decls[fn]; !has {
-		return make([]bool, n) // declared without a body: assembly, or generated
+		return make([]bool, n)
 	}
 	params := paramTaints(sig, argTaint)
 	s := fa.p.analyze(fn, recvTaint, params)
 	fa.writes = append(fa.writes, s.writes...)
 	if _, memoized := fa.p.targets[fn]; memoized && fa.p.shared {
-		// A memoized computation's results are its memo's the moment
-		// they return: nobody writes them.
 		out := make([]bool, n)
 		for i := range out {
 			out[i] = true
@@ -1242,10 +1143,6 @@ func paramTaints(sig *types.Signature, argTaint []bool) []bool {
 	return params
 }
 
-// dispatch judges a call through an interface (decision pure-memos): every method of
-// the module's types that implements it is walked with the receiver's
-// and the arguments' taint, and the results carry a tainted value
-// when any implementation's do, or when the receiver does.
 func (fa *funcAnalysis) dispatch(abstract *types.Func, sig *types.Signature, recvTaint bool, argTaint []bool) []bool {
 	out := make([]bool, sig.Results().Len())
 	for i := range out {
@@ -1272,9 +1169,6 @@ func (fa *funcAnalysis) builtin(name string, x *ast.CallExpr, argTaint []bool) [
 			t = t || a
 		}
 		if len(x.Args) > 0 && fa.arrayTainted(x.Args[0]) {
-			// The backing array may be an input's: a write to it, and
-			// so to whatever holds the slice (decision pure-memos). The elements are
-			// copied in, not written through.
 			written, _ := fa.sharedTarget(x.Args[0])
 			fa.taintedWrite(x.Args[0], written)
 		}
@@ -1290,8 +1184,6 @@ func (fa *funcAnalysis) builtin(name string, x *ast.CallExpr, argTaint []bool) [
 	return []bool{false}
 }
 
-// immutableVarsNeverAssigned proves the allowlisted tables are written
-// only by their declarations.
 func (p *purity) immutableVarsNeverAssigned() {
 	for _, pkg := range p.byPath {
 		if !strings.HasPrefix(pkg.PkgPath, module) {
@@ -1379,7 +1271,7 @@ func TestImmutabilityGateBites(t *testing.T) {
 }
 
 // TestNoUnsafeImports proves no package of the three modules reaches
-// for unsafe (decision no-unsafe).
+// for unsafe.
 func TestNoUnsafeImports(t *testing.T) {
 	pkgs := gatePackages(t)
 	if len(pkgs) < 20 {

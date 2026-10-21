@@ -1,4 +1,4 @@
-// spec: §scopes rule 1 — prefixes concatenate, pipes append, names prefix
+// spec: §scopes — prefixes concatenate, pipes append, names prefix
 package app
 
 Pipeline a { use volt.RequestID }

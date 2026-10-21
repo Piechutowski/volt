@@ -1,13 +1,13 @@
-// spec: §validation-checks rule 5 — only Go files the go tool would compile count: a
+// spec: §validators — only Go files the go tool would compile count: a
 // declaration in a _-prefixed file does not exist for the package
 // want: no function EmailValid
 package db
 
 Table users {
-  id integer [pk]
-  email varchar [not null]
+  id int [pk]
+  email string [not null]
 
-  checks {
+  validators {
     EmailValid(email)
   }
 }

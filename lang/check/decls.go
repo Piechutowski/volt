@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/Piechutowski/volt/lang/ast"
-	"github.com/Piechutowski/volt/lang/parser"
 	"github.com/Piechutowski/volt/lang/token"
 )
 
@@ -16,10 +15,7 @@ func (c *checker) declsCheck(f *ast.File) {
 		case *ast.Use:
 			c.useCheck(d)
 		case *ast.Project:
-			// properties are free-form (§project rule 2); nothing local to check
 		case *ast.Table:
-			// A table's body is checked in tableCheck (decision pure-memos); a duplicate
-			// declaration that expansion skipped is checked here.
 			if ti := c.info.byTable[canonKey(d.Name)]; ti == nil || ti.Decl != d {
 				c.tableBodyCheck(d.Pos(), d.Name.String(), d.Settings, d.Body, true)
 			}
@@ -38,6 +34,11 @@ func (c *checker) declsCheck(f *ast.File) {
 			c.viewCheck(d)
 		case *ast.Records:
 			c.recordsCheck(d, true)
+			if d.Table != nil {
+				if ti := c.info.byTable[canonKey(d.Table)]; ti != nil {
+					c.recordsTypeCheck(ti, d)
+				}
+			}
 		}
 	}
 }
@@ -47,13 +48,9 @@ func (c *checker) useCheck(d *ast.Use) {
 	if d.Reuse {
 		kw = "reuse"
 	}
-	c.errorf(d.Pos(), "file-imports-removed", "%s is not part of the Volt language (§file-imports-removed); replace file imports with the package system — see docs/spec.md §compatibility-with-dbml for migration", kw)
+	c.errorf(d.Pos(), "file-imports-removed", "%s is not part of the Volt language (§file-imports-removed); files of one package share a namespace without imports, and another package is reached through an import block (§imports)", kw)
 }
 
-/* ===== table bodies (§table, §tablepartial) ===== */
-
-// tableBodyCheck checks a table's or partial's body; at is the
-// declaration's position, where an empty body is reported.
 func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.SettingList, body []ast.TableItem, isTable bool) {
 	c.settingsCheck(settings, "table", tableSettings)
 
@@ -76,11 +73,9 @@ func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.S
 		case *ast.IndexesBlock:
 			for _, ix := range item.Indexes {
 				c.settingsCheck(ix.Settings, "indexes", indexSettings)
+				c.indexNameCheck(name, ix)
 			}
-		case *ast.ChecksBlock:
-			for _, ck := range item.Checks {
-				c.settingsCheck(ck.Settings, "checks", settingsCheck)
-			}
+		case *ast.ValidatorsBlock:
 		case *ast.Note:
 			nNotes++
 		case *ast.Records:
@@ -120,17 +115,19 @@ func bodyPos(body []ast.TableItem, settings *ast.SettingList) token.Position {
 }
 
 func (c *checker) columnCheck(col *ast.Column) {
+	c.legacyFlagsCheck(col)
+	c.settingsCheck(col.Settings, "columns", columnSettings)
+	c.tagSettingsCheck(col.Settings)
+}
+
+func (c *checker) legacyFlagsCheck(col *ast.Column) {
 	for _, f := range col.LegacyFlags {
 		low := strings.ToLower(f.Name())
 		if f.Quoted() || (low != "pk" && low != "unique") {
 			c.errorf(f.Pos(), "columns", "only the legacy flags pk and unique may follow the column type; found %q", f.Name())
 		}
 	}
-	c.settingsCheck(col.Settings, "columns", columnSettings)
-	c.tagSettingsCheck(col.Settings)
 }
-
-/* ===== Enum (§enum) ===== */
 
 func (c *checker) enumCheck(d *ast.Enum) {
 	if len(d.Values) == 0 {
@@ -145,8 +142,6 @@ func (c *checker) enumCheck(d *ast.Enum) {
 		c.settingsCheck(v.Settings, "enum", enumValueSettings)
 	}
 }
-
-/* ===== Ref (§relationships-ref) ===== */
 
 func (c *checker) endpointArityCheck(l, r *ast.RefEndpoint) {
 	if l == nil || r == nil {
@@ -171,20 +166,11 @@ func (c *checker) refSettingsCheck(sl *ast.SettingList) {
 		if s.Name != "delete" && s.Name != "update" {
 			continue
 		}
-		action := ""
-		switch v := s.Value.(type) {
-		case *ast.Ident:
-			action = strings.ToLower(v.Name())
-		case parser.MultiWord:
-			action = strings.Join(v.Words(), " ")
-		}
-		if !refActions[action] {
+		if action := refActionOf(s); !refActions[action] {
 			c.errorf(s.Pos(), "relationships-ref", "invalid referential action %q for '%s'; expected cascade, restrict, set null, set default or no action", action, s.Name)
 		}
 	}
 }
-
-/* ===== Records (§records-sample-data) ===== */
 
 func (c *checker) recordsCheck(d *ast.Records, topLevel bool) {
 	if topLevel && !d.HasColumns {
@@ -204,8 +190,6 @@ func (c *checker) recordsCheck(d *ast.Records, topLevel bool) {
 		}
 	}
 }
-
-/* ===== DiagramView (§diagramview) ===== */
 
 var categoryKinds = map[string]bool{
 	"tables": true, "notes": true, "tablegroups": true, "schemas": true,

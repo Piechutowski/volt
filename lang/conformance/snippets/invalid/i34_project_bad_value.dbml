@@ -1,4 +1,0 @@
-// spec: §project rule 2 — project property value must be a string
-Project p {
-  database_type: 42
-}

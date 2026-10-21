@@ -1,26 +1,26 @@
-// spec: §groups rule 2, §groups rule 3, §selects-over-groups rule 2 — a TableGroup is a set: a group term, a select target, subtracted as a parenthesized set (decision set-difference)
+// spec: §groups, §groups, §selects-over-groups — a TableGroup is a set: a group term, a select target, subtracted as a parenthesized set
 package db
 
 Table ms_revenue {
-  id integer [pk]
-  org text [not null]
-  year integer [not null]
+  id int [pk]
+  org string [not null]
+  year int [not null]
 }
 
 Table ms_usage {
-  id integer [pk]
-  org text [not null]
-  year integer [not null]
+  id int [pk]
+  org string [not null]
+  year int [not null]
 }
 
 Table ms_dict {
-  code text [pk]
-  title text [not null]
+  code string [pk]
+  title string [not null]
 }
 
 Table ms_notes {
-  id integer [pk]
-  body text [not null]
+  id int [pk]
+  body string [not null]
 }
 
 TableGroup Metrics [color: #32a891] {

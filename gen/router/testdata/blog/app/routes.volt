@@ -20,16 +20,19 @@ Scope / [pipe: api, error_handler: Errors] {
 	resources db.users [only: (index, show, create)]
 
 	get /files/:path...          Files.Serve
-	get /users/:id(int32)/avatar Users.Avatar
+	get /users/:id(int)/avatar Users.Avatar
 	any /ping                    Home.Ping
 
 	Scope /api [name: api] {
 		get    /users            db.UserList
-		get    /users/:id(int32) db.UserGet
+		get    /users/:id(int) db.UserGet
 		post   /users            db.UserCreate
-		patch  /users/:id(int32) db.UserUpdate
-		delete /users/:id(int32) db.UserDelete
+		patch  /users/:id(int) db.UserUpdate
+		delete /users/:id(int) db.UserDelete
 		get    /picked           db.UserPicked
+		get    /since            db.UserSince
+		get    /roles/:userID(int)/:roleID(int) db.UserRoleGet
+		patch  /roles/:userID(int)/:roleID(int) db.UserRoleUpdate
 	}
 
 	// A dataset (§datasets): one query route per member of the group select.
@@ -41,6 +44,7 @@ Scope / [pipe: api, error_handler: Errors] {
 	// the table's generated CRUD; no controller to write.
 	Scope /ref [name: ref] {
 		resources db.users [default]
+		resources db.tags  [default]
 	}
 
 	// The event stream (§event-routes).

@@ -1,5 +1,0 @@
-// spec: §settings-lists rule 5 — settings must be on the same line as the construct
-Table t {
-  id int
-  [pk]
-}

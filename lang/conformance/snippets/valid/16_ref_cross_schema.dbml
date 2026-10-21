@@ -1,7 +1,0 @@
-// spec: §relationships-ref — cross-schema endpoints
-Table core.users { id integer }
-Table blogging.posts {
-  user_id integer [ref: > core.users.id]
-}
-Table blogging.comments { user_id integer }
-Ref: blogging.comments.user_id > core.users.id

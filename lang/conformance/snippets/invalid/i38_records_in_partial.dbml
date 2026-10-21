@@ -1,5 +1,0 @@
-// spec: §tablepartial rule 2 — partial body has no records
-TablePartial p {
-  id int
-  records (id) { 1 }
-}

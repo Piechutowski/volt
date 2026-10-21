@@ -1,21 +1,21 @@
-## i01_missing_package.volt
-app/i01_missing_package.volt:2:1: error: spec/projects-and-packages: every .volt file must begin with a package clause (§projects-and-packages rule 2)
+## i01_missing_package
+app/i01_missing_package.volt:2:1: error: spec/projects-and-packages: every .volt file must begin with a package clause (§projects-and-packages)
 
 ## i02_package_not_first.volt
-app/i02_package_not_first.volt:5:1: error: spec/projects-and-packages: the package clause must be the first declaration in the file (§projects-and-packages rule 2)
-app/i02_package_not_first.volt:5:1: error: spec/projects-and-packages: duplicate package clause (§projects-and-packages rule 2)
+app/i02_package_not_first.volt:5:1: error: spec/projects-and-packages: the package clause must be the first declaration in the file (§projects-and-packages)
+app/i02_package_not_first.volt:5:1: error: spec/projects-and-packages: duplicate package clause (§projects-and-packages)
 
 ## i03_use_rejected.volt
-app/i03_use_rejected.volt:4:1: error: spec/file-imports-removed: use is not part of the Volt language (§file-imports-removed); replace file imports with the package system — see docs/spec.md §compatibility-with-dbml for migration
+app/i03_use_rejected.volt:4:1: error: spec/file-imports-removed: use is not part of the Volt language (§file-imports-removed); files of one package share a namespace without imports, and another package is reached through an import block (§imports)
 
 ## i04_reuse_rejected.volt
-app/i04_reuse_rejected.volt:4:1: error: spec/file-imports-removed: reuse is not part of the Volt language (§file-imports-removed); replace file imports with the package system — see docs/spec.md §compatibility-with-dbml for migration
+app/i04_reuse_rejected.volt:4:1: error: spec/file-imports-removed: reuse is not part of the Volt language (§file-imports-removed); files of one package share a namespace without imports, and another package is reached through an import block (§imports)
 
 ## i05_empty_import.volt
 app/i05_empty_import.volt:5:1: error: syntax: empty import declaration (§imports)
 
 ## i06_self_import.volt
-app/i06_self_import.volt:5:2: error: spec/imports: a package cannot import itself (§imports rule 4)
+app/i06_self_import.volt:5:2: error: spec/imports: a package cannot import itself (§imports)
 
 ## i07_dup_route_shape.volt
 app/i07_dup_route_shape.volt:6:2: error: spec/scopes-and-routes: route GET /users/:name conflicts with the route at app/i07_dup_route_shape.volt:5:2: identical method and path shape (§route-conflicts)
@@ -24,10 +24,10 @@ app/i07_dup_route_shape.volt:6:2: error: spec/scopes-and-routes: route GET /user
 app/i08_helper_collision.volt:6:2: error: spec/scopes-and-routes: reverse-URL helper or client method "Show" already produced by the route at app/i08_helper_collision.volt:5:2 (§route-names-and-reverse-urls, §generated-client); disambiguate with [name:] or a scope name
 
 ## i09_signature_conflict.volt
-app/i09_signature_conflict.volt:6:2: error: spec/scopes-and-routes: X.Show is reached by routes with different parameter signatures (§handler-references): (id int32) vs (id int64) (first at app/i09_signature_conflict.volt:5:2)
+app/i09_signature_conflict.volt:6:2: error: spec/scopes-and-routes: X.Show is reached by routes with different parameter signatures (§handler-references): (id string) vs (id int) (first at app/i09_signature_conflict.volt:5:2)
 
 ## i100_query_body_verb
-app/routes.volt:10:16: error: spec/scopes-and-routes: db.UserCreate takes a request body (db.UserCreateParams); route it with post, put or patch (§query-routes)
+app/routes.volt:10:16: error: spec/scopes-and-routes: db.UserCreate takes a request body (db.UserParams); route it with post, put or patch (§query-routes)
 
 ## i101_query_extra_path_param
 app/routes.volt:10:13: error: spec/scopes-and-routes: path parameter "x" is not a parameter of db.UserList (§query-routes)
@@ -48,7 +48,7 @@ app/routes.volt:10:2: error: spec/datasets: strip: "xx_" is not a prefix of memb
 app/routes.volt:10:41: error: spec/datasets: only: and except: cannot both be set on a dataset (§dataset-settings)
 
 ## i106_dataset_unqualified
-app/routes.volt:6:2: error: spec/imports: package "db" imported and not used (§imports rule 4)
+app/routes.volt:6:2: error: spec/imports: package "db" imported and not used (§imports)
 app/routes.volt:10:10: error: spec/datasets: package "app" declares no select; a dataset names a select of this package, or of an imported data package, qualified (§dataset-declaration)
 
 ## i107_dataset_not_member
@@ -61,22 +61,22 @@ app/i108_event_unknown_runtime_handler.volt:6:14: error: spec/scopes-and-routes:
 app/i109_event_route_verb.volt:6:2: error: spec/scopes-and-routes: an event route is read with get (§event-routes)
 
 ## i10_wildcard_not_last.volt
-app/i10_wildcard_not_last.volt:5:9: error: spec/scopes-and-routes: the wildcard ':p...' must be the last path segment (§route-paths rule 4)
+app/i10_wildcard_not_last.volt:5:9: error: spec/scopes-and-routes: the wildcard ':p...' must be the last path segment (§route-paths)
 
 ## i110_required_nullable.volt
-db/i110_required_nullable.volt:7:18: error: spec/columns: required on "email" needs not null: a nullable column has no empty value to refuse, NULL is absence (§columns)
+db/i110_required_nullable.volt:7:17: error: spec/columns: required on "email" needs not null: a nullable column has no empty value to refuse, NULL is absence (§columns)
 
 ## i111_required_bool.volt
-db/i111_required_bool.volt:7:29: error: spec/columns: required on "active" (boolean): a boolean has no empty value — every value is a value (§columns)
+db/i111_required_bool.volt:7:26: error: spec/columns: required on "active" (bool): a bool has no empty value — every value is a value (§columns)
 
 ## i112_required_default.volt
-db/i112_required_default.volt:7:16: error: spec/columns: "required" and "default" cannot both be set
+db/i112_required_default.volt:7:15: error: spec/columns: "required" and "default" cannot both be set
 
 ## i113_required_time.volt
-db/i113_required_time.volt:7:27: error: spec/columns: required on "at" (timestamp): a timestamp has no empty value — every value is a value (§columns)
+db/i113_required_time.volt:7:27: error: spec/columns: required on "at" (time.Time): a time.Time has no empty value — every value is a value (§columns)
 
 ## i114_resources_default_unqualified
-app/routes.volt:6:2: error: spec/imports: package "db" imported and not used (§imports rule 4)
+app/routes.volt:6:2: error: spec/imports: package "db" imported and not used (§imports)
 app/routes.volt:10:12: error: spec/resources: package "app" declares no tables; resources names a table of this package, or of an imported data package, qualified (§declaration)
 
 ## i115_controller_field_collision.volt
@@ -86,48 +86,212 @@ app/i115_controller_field_collision.volt:12:2: error: spec/scopes-and-routes: co
 app/routes.volt:10:31: error: spec/resources: param: does not apply with [default]; the key parameter is named by the primary-key column, as the generated CRUD spells it (§default-handlers)
 
 ## i116_import_own_name
-app/routes.volt:6:2: error: spec/imports: import qualifier "app" is this package's own name (§imports rule 4); alias the import
+app/routes.volt:6:2: error: spec/imports: import qualifier "app" is this package's own name (§imports); alias the import
 app/routes.volt:10:16: error: spec/resources: package "app" declares no tables; resources names a table of this package, or of an imported data package, qualified (§declaration)
 
 ## i116_resources_default_no_update
 app/routes.volt:10:15: error: spec/resources: resources db.marks [default]: the generated CRUD has no update method for "Update" (every column is part of the key, so there is nothing to update); drop the action with except: (update) (§default-handlers)
 
 ## i117_resources_param_shadow.volt
-app/i117_resources_param_shadow.volt:10:12: error: spec/resources: resources "plots": the key parameter "id" is already a parameter of the enclosing scope; rename it with [param: <name>] (§settings, §route-paths rule 2)
+app/i117_resources_param_shadow.volt:10:12: error: spec/resources: resources "plots": the key parameter "id" is already a parameter of the enclosing scope; rename it with [param: <name>] (§settings, §route-paths)
 
 ## i118_resources_default_param_shadow
-app/routes.volt:10:15: error: spec/resources: resources db.plots [default]: the key parameter "id" is already a parameter of the enclosing scope, and the generated CRUD fixes its name; give the scope's parameter another name (§default-handlers, §route-paths rule 2)
+app/routes.volt:10:15: error: spec/resources: resources db.plots [default]: the key parameter "id" is already a parameter of the enclosing scope, and the generated CRUD fixes its name; give the scope's parameter another name (§default-handlers, §route-paths)
 
 ## i11_wildcard_in_scope.volt
-app/i11_wildcard_in_scope.volt:4:10: error: spec/scopes-and-routes: a Scope prefix cannot contain a wildcard (§route-paths rule 4)
-app/i11_wildcard_in_scope.volt:4:10: error: spec/scopes-and-routes: the wildcard ':p...' must be the last path segment (§route-paths rule 4)
+app/i11_wildcard_in_scope.volt:4:10: error: spec/scopes-and-routes: a Scope prefix cannot contain a wildcard (§route-paths)
+app/i11_wildcard_in_scope.volt:4:10: error: spec/scopes-and-routes: the wildcard ':p...' must be the last path segment (§route-paths)
 
 ## i12_unknown_pipeline.volt
 app/i12_unknown_pipeline.volt:4:10: error: spec/scopes-and-routes: unknown Pipeline "nope" (§scopes)
 
 ## i13_unknown_param_type.volt
-app/i13_unknown_param_type.volt:5:13: error: spec/scopes-and-routes: unknown parameter type "uuid" (§route-paths rule 3); valid: int, int32, int64, string
+app/i13_unknown_param_type.volt:5:13: error: spec/scopes-and-routes: unknown parameter type "uuid" (§route-paths); valid: int, string
 
 ## i14_dup_param.volt
-app/i14_dup_param.volt:5:9: error: spec/scopes-and-routes: duplicate path parameter "id" (§route-paths rule 2)
+app/i14_dup_param.volt:5:9: error: spec/scopes-and-routes: duplicate path parameter "id" (§route-paths)
+
+## i155_declared_type_ordering_op.volt
+db/i155_declared_type_ordering_op.volt:12:31: error: spec/selects-over-groups: column "price" has declared type Money; a declared type compares with =, !=, in and is null only (§predicates)
+
+## i156_declared_type_like.volt
+db/i156_declared_type_like.volt:12:31: error: spec/selects-over-groups: like needs a text column; "slug" is Slug (§predicates)
+
+## i157_declared_type_order.volt
+db/i157_declared_type_order.volt:12:35: error: spec/selects-over-groups: column "price" has declared type Money; a declared type cannot be ordered (§selects-over-groups)
+
+## i158_declared_type_string_literal.volt
+db/i158_declared_type_string_literal.volt:12:37: error: spec/selects-over-groups: column "price" (Money) cannot be compared with the string "x" (§predicates)
+
+## i159_declared_type_list_time.volt
+db/i159_declared_type_list_time.volt:12:32: error: spec/selects-over-groups: column "at" has declared type Stamp stored as time.Time; it cannot take a list parameter: JSON carries no date/time value (§predicates)
 
 ## i15_keyword_param.volt
-app/i15_keyword_param.volt:5:9: error: spec/scopes-and-routes: path parameter "type" must be a valid, non-keyword Go identifier (§route-paths rule 2)
+app/i15_keyword_param.volt:5:9: error: spec/scopes-and-routes: path parameter "type" must be a valid, non-keyword Go identifier (§route-paths)
+
+## i160_query_declared_type_param
+app/routes.volt:10:18: error: spec/query-routes: parameter "price" of db.ProductCosting is money.Money, which the query string cannot carry (§query-routes)
+
+## i161_query_declared_type_list
+app/routes.volt:10:17: error: spec/query-routes: list parameter "prices" of db.ProductPriced is []money.Money, which the query string cannot carry (§query-routes)
+
+## i162_column_changeset.volt
+db/i162_column_changeset.volt:7:3: error: spec/changesets: column "changeset" of table "drafts" maps to the Go field Changeset, the name of the row's changeset method; rename the column (§changesets)
+
+## i163_migration_name_shape.volt
+db/i163_migration_name_shape.volt:9:11: error: spec/migrations: migration name "001__init" is not four or more digits, two underscores and a label, like 0001__create_users (§migrations)
+
+## i164_migration_duplicate_name.volt
+db/i164_migration_duplicate_name.volt:15:11: error: spec/migrations: duplicate migration name "0001__init": migration names are unique within the package (§migrations)
+
+## i165_migration_column_type.volt
+db/i165_migration_column_type.volt:18:11: error: spec/migrations: column "state": type "status" is not a built-in; a migration column is bool, int, float64, string, []byte or time.Time, since the database holds the storage type (§migrations)
+
+## i166_migration_setting_tag.volt
+db/i166_migration_setting_tag.volt:18:21: error: spec/migrations: tag: describes the Go struct field, not the database, and is not a migration setting (§migrations)
+
+## i167_migration_setting_required.volt
+db/i167_migration_setting_required.volt:13:29: error: spec/migrations: required describes Go-side validation, not the database, and is not a migration setting (§migrations)
+
+## i168_migration_setting_model.volt
+db/i168_migration_setting_model.volt:11:17: error: spec/migrations: model: names the Go model, not the database, and is not a migration setting (§migrations)
+
+## i169_migration_create_table_empty.volt
+db/i169_migration_create_table_empty.volt:10:3: error: spec/migrations: create table "users": the body must declare at least one column (§migrations)
 
 ## i16_lowercase_controller.volt
 app/i16_lowercase_controller.volt:5:9: error: spec/scopes-and-routes: handler must be Controller.Action, both exported Go identifiers (§handler-references), found "home.Index"
 
+## i170_migration_add_not_null_no_default.volt
+db/i170_migration_add_not_null_no_default.volt:18:9: error: spec/migrations: add "name" to table "users": a not null column needs a default:, since the rows already in the table must be filled (§migrations)
+
+## i171_migration_add_pk.volt
+db/i171_migration_add_pk.volt:18:17: error: spec/migrations: add "id" to table "users": pk cannot be added to an existing table; use rebuild table (§migrations)
+
+## i172_migration_add_ref_not_null.volt
+db/i172_migration_add_ref_not_null.volt:25:41: error: spec/migrations: add "user_id" to table "posts": a column with ref: takes no default but null, since SQLite refuses to add a REFERENCES column with another default to a table that has rows (§migrations)
+db/i172_migration_add_ref_not_null.volt:25:44: error: spec/migrations: add "user_id" to table "posts": a column with ref: must be nullable when added, since the rows already in the table reference nothing; use rebuild table for a not null foreign key (§migrations)
+
+## i173_migration_rebuild_null_source.volt
+db/i173_migration_rebuild_null_source.volt:20:5: error: spec/migrations: rebuild table "users" in migration "0002__email": column "email" is not null but its source is NULL, since no column of that name exists before the rebuild; give it a from: or a default: (§migrations)
+
+## i174_migration_flat_drop_table.volt
+db/i174_migration_flat_drop_table.volt:13:3: error: spec/migrations: migration "0001__init" is a flat body, which runs backward as the inverses of its operations, but drop table audit has no body to recreate the table from; mark the migration irreversible or write it as up { } down { } (§migrations)
+
+## i175_migration_flat_drop_column.volt
+db/i175_migration_flat_drop_column.volt:18:5: error: spec/migrations: migration "0002__no_bio" is a flat body, which runs backward as the inverses of its operations, but drop bio in alter table users carries no type to add the column back with; mark the migration irreversible or write it as up { } down { } (§migrations)
+
+## i176_migration_flat_rebuild.volt
+db/i176_migration_flat_rebuild.volt:18:3: error: spec/migrations: migration "0002__int_hits" is a flat body, which runs backward as the inverses of its operations, but rebuild table users forgets the old shape; mark the migration irreversible or write it as up { } down { } (§migrations)
+
+## i177_migration_flat_exec.volt
+db/i177_migration_flat_exec.volt:13:3: error: spec/migrations: migration "0001__init" is a flat body, which runs backward as the inverses of its operations, but exec carries no down:; mark the migration irreversible or write it as up { } down { } (§migrations)
+
+## i178_migration_down_without_up.volt
+db/i178_migration_down_without_up.volt:10:3: error: syntax: a down block follows an up block; write up { } down { } (§migrations)
+
 ## i17_one_part_handler.volt
 app/i17_one_part_handler.volt:5:9: error: spec/scopes-and-routes: package "app" declares no tables, so it has no query Show; a query of an imported data package is written qualified (§query-routes)
+
+## i180_migration_add_expression_default.volt
+db/i180_migration_add_expression_default.volt:18:47: error: spec/migrations: add "created" to table "users": the default must be a literal; SQLite's ADD COLUMN takes no expression default (§migrations)
+
+## i181_migration_no_tables.volt
+db/i181_migration_no_tables.volt:5:1: error: spec/migrations: migration "0001__init" in a package that declares no tables: a migration is an element of the package whose tables it migrates (§migrations)
+
+## i182_query_update_key
+app/routes.volt:10:18: error: spec/query-routes: db.UserUpdate loads the row to update by "id", which must be a path parameter of the route; spell it :id(int) (§query-routes)
+
+## i185_select_name_changeset.volt
+db/i185_select_name_changeset.volt:10:8: error: spec/selects-over-groups: select name "Changeset" collides with the generated CRUD surface (§selects-over-groups)
+
+## i186_select_name_column.volt
+db/i186_select_name_column.volt:10:8: error: spec/selects-over-groups: select name "Column" collides with the generated CRUD surface (§selects-over-groups)
+
+## i187_select_name_params.volt
+db/i187_select_name_params.volt:10:8: error: spec/selects-over-groups: select name "Params" collides with the generated CRUD surface (§selects-over-groups)
+
+## i188_select_name_new.volt
+db/i188_select_name_new.volt:10:8: error: spec/selects-over-groups: select name "New" collides with the generated CRUD surface (§selects-over-groups)
 
 ## i18_dataset_reserved.volt
 app/i18_dataset_reserved.volt:4:1: error: syntax: routes, resources and datasets must appear inside a Scope (§scopes-and-routes)
 
+## i190_literal_int_overflow.volt
+db/i190_literal_int_overflow.volt:10:40: error: spec/selects-over-groups: literal 9223372036854775808 does not fit int, the storage type of column "hits" (§predicates)
+
+## i191_literal_float_infinite.volt
+db/i191_literal_float_infinite.volt:10:41: error: spec/selects-over-groups: literal 1e400 does not fit float64, the storage type of column "score" (§predicates)
+
+## i199_reserved_param_cs
+app/routes.volt:11:15: error: spec/scopes-and-routes: path parameter "cs" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs
+
 ## i19_only_and_except.volt
 app/i19_only_and_except.volt:9:34: error: spec/resources: only: and except: cannot be combined (§settings)
 
+## i200_migration_name_width.volt
+db/i200_migration_name_width.volt:16:11: error: spec/migrations: migration names "0001__init" and "00002__bio" differ in digit width: every migration name of a package has the same width, so that byte order and numeric order agree; widen every name (§migrations)
+
+## i201_migration_drop_shape_not_null_no_default.volt
+db/i201_migration_drop_shape_not_null_no_default.volt:18:10: error: spec/migrations: drop "bio" from table "users", whose shape is the inverse add: a not null column needs a default:, since the rows already in the table must be filled (§migrations)
+
+## i202_migration_drop_shape_pk.volt
+db/i202_migration_drop_shape_pk.volt:18:18: error: spec/migrations: drop "id" from table "users", whose shape is the inverse add: pk cannot be added to an existing table; use rebuild table (§migrations)
+
+## i203_migration_drop_table_empty_body.volt
+db/i203_migration_drop_table_empty_body.volt:13:3: error: spec/migrations: drop table "audit": the body must declare at least one column (§migrations)
+
+## i204_migration_rebuild_empty_body.volt
+db/i204_migration_rebuild_empty_body.volt:16:3: error: spec/migrations: rebuild table "users": the body must declare at least one column (§migrations)
+
+## i205_migration_index_pk.volt
+db/i205_migration_index_pk.volt:13:26: error: spec/migrations: index id on "users": pk is not a setting of a standalone create index or drop index, since a primary key is a table constraint, declared in a create table or rebuild table body (§migrations)
+
+## i206_migration_ref_direction.volt
+db/i206_migration_ref_direction.volt:16:17: error: spec/migrations: column "id": ref: takes > or - in a migration, since the declaring column holds the key; '<' references the other way and is not this column's to declare (§migrations)
+
+## i207_migration_ref_action.volt
+db/i207_migration_ref_action.volt:20:35: error: spec/migrations: column "user_id": invalid referential action "explode" for 'delete'; expected cascade, restrict, set null, set default or no action (§migrations)
+
+## i208_migration_add_ref_default.volt
+db/i208_migration_add_ref_default.volt:25:31: error: spec/migrations: add "user_id" to table "posts": a column with ref: takes no default but null, since SQLite refuses to add a REFERENCES column with another default to a table that has rows (§migrations)
+
+## i209_migration_shape_partial.volt
+db/i209_migration_shape_partial.volt:17:5: error: syntax: a migration's shape body holds columns and indexes only; a partial injection, a validators block, a records block and a Note are not part of it (§migrations)
+
 ## i20_unknown_action.volt
 app/i20_unknown_action.volt:9:26: error: spec/resources: unknown action "browse" (§the-action-table); valid: index, new, create, show, edit, update, delete
+
+## i210_migration_shape_validators.volt
+db/i210_migration_shape_validators.volt:15:5: error: syntax: a migration's shape body holds columns and indexes only; a partial injection, a validators block, a records block and a Note are not part of it (§migrations)
+db/i210_migration_shape_validators.volt:16:17: error: syntax: expected identifier in column type (§columns), found '(' "("
+db/i210_migration_shape_validators.volt:19:1: error: syntax: expected an element type or use/reuse at top level (§program-structure), found '}' "}"
+
+## i211_migration_shape_records.volt
+db/i211_migration_shape_records.volt:15:5: error: syntax: a migration's shape body holds columns and indexes only; a partial injection, a validators block, a records block and a Note are not part of it (§migrations)
+db/i211_migration_shape_records.volt:16:7: error: syntax: expected a column or an indexes block in create table (§migrations), found number "1"
+db/i211_migration_shape_records.volt:19:1: error: syntax: expected an element type or use/reuse at top level (§program-structure), found '}' "}"
+
+## i212_migration_shape_note.volt
+db/i212_migration_shape_note.volt:15:5: error: syntax: a migration's shape body holds columns and indexes only; a partial injection, a validators block, a records block and a Note are not part of it (§migrations)
+
+## i213_migration_setting_headercolor.volt
+db/i213_migration_setting_headercolor.volt:11:17: error: spec/migrations: headercolor: describes the diagram, not the database, and is not a migration setting (§migrations)
+
+## i214_migration_from_outside_rebuild.volt
+db/i214_migration_from_outside_rebuild.volt:13:37: error: spec/migrations: from: names the source of a rebuilt column and is a setting of rebuild table only (§migrations)
+
+## i215_migration_index_type.volt
+db/i215_migration_index_type.volt:19:28: error: spec/migrations: type: names an index method, which SQLite does not have, and is not a migration setting (§migrations)
+
+## i216_migration_exec_setting.volt
+db/i216_migration_exec_setting.volt:13:68: error: spec/migrations: unknown setting "note"
+
+## i217_migration_duplicate_column.volt
+db/i217_migration_duplicate_column.volt:14:5: error: spec/migrations: duplicate column name "name" in table "users" (§migrations)
+
+## i218_migration_action_without_ref.volt
+db/i218_migration_action_without_ref.volt:13:18: error: spec/migrations: column "user_id": delete: names the action of the column's ref:, and the column declares none (§migrations)
 
 ## i21_unknown_table
 app/r.volt:9:15: error: spec/resources: no table "nope" in package "db" (§declaration)
@@ -145,7 +309,7 @@ app/i24_toplevel_route.volt:4:1: error: syntax: routes, resources and datasets m
 app/i25_short_ellipsis.volt:5:14: error: syntax: wildcard ellipsis is spelled ':name...' (§route-paths)
 
 ## i26_typed_wildcard.volt
-app/i26_typed_wildcard.volt:5:20: error: syntax: a wildcard cannot carry a type; ':name...' always captures a string (§route-paths)
+app/i26_typed_wildcard.volt:5:18: error: syntax: a wildcard cannot carry a type; ':name...' always captures a string (§route-paths)
 
 ## i27_import_no_parens.volt
 app/i27_import_no_parens.volt:4:1: error: syntax: expected '(' after import (§imports); Volt uses Go-style import blocks
@@ -154,50 +318,50 @@ app/i27_import_no_parens.volt:4:1: error: syntax: expected '(' after import (§i
 app/i28_composite_pk_model.volt:11:12: error: spec/resources: table "public.pairs" has a composite primary key (a, b); composite keys are not routable (§table-resolution)
 
 ## i29_unknown_import
-app/r.volt:5:2: error: spec/imports: unknown package "nothere": no directory of .volt files at that path under the project root (§imports rule 2)
+app/r.volt:5:2: error: spec/imports: unknown package "nothere": no directory of .volt files at that path under the project root (§imports)
 app/r.volt:9:12: error: spec/resources: unknown package qualifier "nothere" (§declaration)
 
 ## i30_unused_import
-app/r.volt:5:2: error: spec/imports: package "db" imported and not used (§imports rule 4)
+app/r.volt:5:2: error: spec/imports: package "db" imported and not used (§imports)
 
 ## i31_cycle
-b/b.volt:4:2: error: spec/imports: import cycle: a -> b -> a (§imports rule 6)
+b/b.volt:4:2: error: spec/imports: import cycle: a -> b -> a (§imports)
 
 ## i32_pkg_dir_mismatch
-app/r.volt:2:1: error: spec/projects-and-packages: package name "routes" must match its directory name "app" (§projects-and-packages rule 4)
+app/r.volt:2:1: error: spec/projects-and-packages: package name "routes" must match its directory name "app" (§projects-and-packages)
 
 ## i33_quoted_segment.volt
-app/i33_quoted_segment.volt:5:7: error: spec/scopes-and-routes: path segment "a b" must be a plain identifier of letters, digits and underscores (§route-paths rule 6)
+app/i33_quoted_segment.volt:5:7: error: spec/scopes-and-routes: path segment "a b" must be a plain identifier of letters, digits and underscores (§route-paths)
 
 ## i34_quoted_plug.volt
-app/i34_quoted_plug.volt:5:2: error: spec/pipelines: plug reference "weird name" must be plain, non-keyword Go identifiers (§pipelines rule 2)
+app/i34_quoted_plug.volt:5:2: error: spec/pipelines: plug reference "weird name" must be plain, non-keyword Go identifiers (§pipelines)
 
 ## i35_reserved_param.volt
-app/i35_reserved_param.volt:5:9: error: spec/scopes-and-routes: path parameter "volt" collides with a name in generated signatures (§route-paths rule 2); reserved: w, r, opts, volt
+app/i35_reserved_param.volt:5:9: error: spec/scopes-and-routes: path parameter "volt" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs
 
 ## i36_reserved_param_w.volt
-app/i36_reserved_param_w.volt:5:9: error: spec/scopes-and-routes: path parameter "w" collides with a name in generated signatures (§route-paths rule 2); reserved: w, r, opts, volt
+app/i36_reserved_param_w.volt:5:9: error: spec/scopes-and-routes: path parameter "w" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs
 
 ## i37_ambiguous_overlap.volt
-app/i37_ambiguous_overlap.volt:8:2: error: spec/scopes-and-routes: route GET /:y/b is ambiguous with the route at app/i37_ambiguous_overlap.volt:7:2 (GET /a/:x): both match some requests and neither is more specific (§route-conflicts rule 2)
+app/i37_ambiguous_overlap.volt:8:2: error: spec/scopes-and-routes: route GET /:y/b is ambiguous with the route at app/i37_ambiguous_overlap.volt:7:2 (GET /a/:x): both match some requests and neither is more specific (§route-conflicts)
 
 ## i38_trailing_slash.volt
 app/i38_trailing_slash.volt:5:12: error: syntax: '/' must be followed by a path segment; routes match exactly, without a trailing slash (§route-paths)
 
 ## i39_qualifier_conflict
-app/r.volt:8:2: error: spec/imports: import qualifier "db" already used for package "db" (§imports rule 4); alias one of them
+app/r.volt:8:2: error: spec/imports: import qualifier "db" already used for package "db" (§imports); alias one of them
 
 ## i40_package_volt.volt
-volt/i40_package_volt.volt:2:1: error: spec/projects-and-packages: package name "volt" is reserved for the runtime (§projects-and-packages rule 2); generated code could not tell your package from it
+volt/i40_package_volt.volt:2:1: error: spec/projects-and-packages: package name "volt" is reserved for the runtime (§projects-and-packages); generated code could not tell your package from it
 
 ## i41_spaced_param_type.volt
 app/i41_spaced_param_type.volt:5:18: error: syntax: parameter type is written ':name(type)' with no spaces (§route-paths)
 
 ## i42_quoted_handler.volt
-app/i42_quoted_handler.volt:5:8: error: spec/scopes-and-routes: handler names are plain (unquoted) identifiers (§route-paths rule 6), found "Home.Index"
+app/i42_quoted_handler.volt:5:8: error: spec/scopes-and-routes: handler names are plain (unquoted) identifiers (§route-paths), found "Home.Index"
 
 ## i43_quoted_import.volt
-app/i43_quoted_import.volt:5:2: error: syntax: import path segments are plain (unquoted) identifiers (§imports rule 2)
+app/i43_quoted_import.volt:5:2: error: syntax: import path segments are plain (unquoted) identifiers (§imports)
 app/i43_quoted_import.volt:7:1: error: syntax: expected ')' in import declaration (§imports), found end of file
 
 ## i44_singular_collision.volt
@@ -213,135 +377,114 @@ app/i46_table_case.volt:10:12: error: spec/resources: no table "Posts" in packag
 app/i47_unqualified_unknown_table.volt:11:12: error: spec/resources: no table "ghosts" in package "app" (§declaration)
 
 ## i50_group_unknown.volt
-db/i50_group_unknown.volt:11:3: error: spec/groups: unknown group term "ms_revenu": no such table, group or TableGroup in package "db" (§groups rule 2)
+db/i50_group_unknown.volt:11:3: error: spec/groups: unknown group term "ms_revenu": no such table, group or TableGroup in package "db" (§groups)
 
 ## i51_group_readd.volt
-db/i51_group_readd.volt:12:23: error: spec/groups: table "ms_revenue" is already a member (§groups rule 3)
+db/i51_group_readd.volt:12:23: error: spec/groups: table "ms_revenue" is already a member (§groups)
 
 ## i52_group_cycle.volt
-db/i52_group_cycle.volt:8:7: error: spec/groups: group "a" is part of a reference cycle (§groups rule 4)
-db/i52_group_cycle.volt:9:7: error: spec/groups: group "b" has no members (§groups rule 4)
+db/i52_group_cycle.volt:8:7: error: spec/groups: group "a" is part of a reference cycle (§groups)
+db/i52_group_cycle.volt:9:7: error: spec/groups: group "b" has no members (§groups)
 
 ## i53_pred_type_mismatch.volt
-db/i53_pred_type_mismatch.volt:9:33: error: spec/selects-over-groups: column "org" (string) is not orderable; < <= > >= need numeric or date/time operands (§predicates rule 3)
+db/i53_pred_type_mismatch.volt:9:33: error: spec/selects-over-groups: column "org" (string) is not orderable; < <= > >= need numeric or date/time operands (§predicates)
 
 ## i54_group_type_disagree.volt
-db/i54_group_type_disagree.volt:19:29: error: spec/selects-over-groups: column "org" disagrees on type across "mixed": int32 in ks_seats; string in ms_revenue — the predicate cannot be checked for every member (§selects-over-groups rule 4)
+db/i54_group_type_disagree.volt:19:29: error: spec/selects-over-groups: column "org" disagrees on type across "mixed": int in ks_seats; string in ms_revenue — the predicate cannot be checked for every member (§selects-over-groups)
 
 ## i55_param_two_types.volt
-db/i55_param_two_types.volt:10:53: error: spec/selects-over-groups: parameter :v used as int32 here but string earlier — one name, one type (§predicates rule 3)
+db/i55_param_two_types.volt:10:53: error: spec/selects-over-groups: parameter :v used as int here but string earlier — one name, one type (§predicates)
 
 ## i56_select_missing_column.volt
-db/i56_select_missing_column.volt:18:30: error: spec/selects-over-groups: column "org" is missing from ms_meta — every member of "series" must have it (§selects-over-groups rule 4)
+db/i56_select_missing_column.volt:18:30: error: spec/selects-over-groups: column "org" is missing from ms_meta — every member of "series" must have it (§selects-over-groups)
 
 ## i57_pred_cycle.volt
-db/i57_pred_cycle.volt:10:10: error: spec/predicates: predicate "a" is part of a reference cycle (§predicates rule 2)
+db/i57_pred_cycle.volt:10:10: error: spec/predicates: predicate "a" is part of a reference cycle (§predicates)
 
 ## i58_select_crud_collision.volt
-db/i58_select_crud_collision.volt:9:8: error: spec/selects-over-groups: select name "List" collides with the generated CRUD surface (§selects-over-groups rule 1)
+db/i58_select_crud_collision.volt:9:8: error: spec/selects-over-groups: select name "List" collides with the generated CRUD surface (§selects-over-groups)
 
 ## i59_like_on_number.volt
-db/i59_like_on_number.volt:9:33: error: spec/selects-over-groups: like needs a text column; "year" is int32 (§predicates rule 3)
+db/i59_like_on_number.volt:9:33: error: spec/selects-over-groups: like needs a text column; "year" is int (§predicates)
 
 ## i60_order_direction_missing.volt
-db/i60_order_direction_missing.volt:9:65: error: spec/selects-over-groups: order: every column states its direction — write "id asc" or "id desc" (§selects-over-groups rule 5)
+db/i60_order_direction_missing.volt:9:65: error: spec/selects-over-groups: order: every column states its direction — write "id asc" or "id desc" (§selects-over-groups)
 
 ## i64_projection_missing_column.volt
-db/i64_projection_missing_column.volt:20:23: error: spec/selects-over-groups: column "hits" is missing from link_clicks — every member of "metrics" must have it (§selects-over-groups rule 7)
+db/i64_projection_missing_column.volt:20:23: error: spec/selects-over-groups: column "hits" is missing from link_clicks — every member of "metrics" must have it (§selects-over-groups)
 
 ## i65_projection_nullability_disagrees.volt
-db/i65_projection_nullability_disagrees.volt:20:17: error: spec/selects-over-groups: column "site" disagrees on field type across "metrics": rt.Null[string] in link_clicks; string in page_views — a shared row type needs one type, nullability included (§selects-over-groups rule 7)
+db/i65_projection_nullability_disagrees.volt:20:17: error: spec/selects-over-groups: column "site" disagrees on field type across "metrics": rt.Null[string] in link_clicks; string in page_views — a shared row type needs one type, nullability included (§selects-over-groups)
 
 ## i66_projection_excluded_missing.volt
-db/i66_projection_excluded_missing.volt:10:20: error: spec/selects-over-groups: column "hits" is missing from page_views — every member of "page_views" must have it (§selects-over-groups rule 7)
+db/i66_projection_excluded_missing.volt:10:20: error: spec/selects-over-groups: column "hits" is missing from page_views — every member of "page_views" must have it (§selects-over-groups)
 
 ## i67_projection_excludes_everything.volt
-db/i67_projection_excludes_everything.volt:9:8: error: spec/selects-over-groups: select "nothing" excludes every column of "page_views" — nothing is left to project (§selects-over-groups rule 7)
+db/i67_projection_excludes_everything.volt:9:8: error: spec/selects-over-groups: select "nothing" excludes every column of "page_views" — nothing is left to project (§selects-over-groups)
 
 ## i68_projection_row_type_collision.volt
-db/i68_projection_row_type_collision.volt:14:8: error: spec/selects-over-groups: select "summary" mints the shared row type Summary, which collides with the model of table "summaries" (§selects-over-groups rule 7)
+db/i68_projection_row_type_collision.volt:14:8: error: spec/selects-over-groups: select "summary" mints the shared row type Summary, which collides with the model of table "summaries" (§selects-over-groups)
 
 ## i69_projection_duplicate_column.volt
-db/i69_projection_duplicate_column.volt:9:23: error: spec/selects-over-groups: column "site" appears twice in the projection (§selects-over-groups rule 7)
+db/i69_projection_duplicate_column.volt:9:23: error: spec/selects-over-groups: column "site" appears twice in the projection (§selects-over-groups)
 
 ## i70_star_without_exclusion.volt
-db/i70_star_without_exclusion.volt:10:14: error: syntax: a star projection needs at least one '\ column' exclusion; drop the parens to select every column (§selects-over-groups rule 7)
-
-## i71_check_with_param.volt
-db/i71_check_with_param.volt:9:13: error: spec/validation-checks: a check takes no :params — it judges one row, not a query (§validation-checks rule 2)
-
-## i72_check_nullable_column.volt
-db/i72_check_nullable_column.volt:10:5: error: spec/validation-checks: column "hits" is nullable; a check's Go and SQL tiers must agree, and three-valued NULL logic is not mirrored — make it not null, or use an opaque `SQL` check (§validation-checks rule 3)
-
-## i73_check_unknown_column.volt
-db/i73_check_unknown_column.volt:8:5: error: spec/validation-checks: no column "hits" in table "page_views" (§validation-checks rule 2)
-
-## i74_check_foreign_package_ref.volt
-db/i74_check_foreign_package_ref.volt:10:5: error: spec/validation-checks: a check references a function of the containing package, not of "other" — write a local wrapper (§validation-checks rule 5)
-
-## i75_check_time_column.volt
-db/i75_check_time_column.volt:10:5: error: spec/validation-checks: column "created_at" is a date/time; the Go tier cannot mirror SQL's text-time comparison — use an opaque `SQL` check or a Go reference (§validation-checks rule 4)
-
-## i76_check_is_null_constant.volt
-db/i76_check_is_null_constant.volt:10:5: error: spec/validation-checks: is null is constant in a check: its columns are not null by §validation-checks rule 3
-
-## i77_check_fractional_literal.volt
-db/i77_check_fractional_literal.volt:10:13: error: spec/validation-checks: the fractional literal 1.5 needs a float column; "hits" is int32 (§validation-checks rule 4)
+db/i70_star_without_exclusion.volt:10:14: error: syntax: a star projection needs at least one '\ column' exclusion; drop the parens to select every column (§selects-over-groups)
 
 ## i81_goref_undeclared
-db/schema.volt:11:5: error: spec/validation-checks: no function EmailValdi in package db's Go files — declare func EmailValdi(string) error beside the schema (§validation-checks rule 5)
+db/schema.volt:11:5: error: spec/validators: no function EmailValdi in package db's Go files — declare func EmailValdi(string) error beside the schema (§validators)
 
 ## i82_goref_column_type
-db/schema.volt:11:16: error: spec/validation-checks: column "email" (integer, Go int32) but parameter 1 of EmailValid is string — change the column type or the function: expected func EmailValid(int32) error (§validation-checks rule 5)
+db/schema.volt:11:16: error: spec/validators: column "email" (int, Go int) but parameter 1 of EmailValid is string — change the column type or the function: expected func EmailValid(int) error (§validators)
 
 ## i83_goref_param_type
-db/schema.volt:11:16: error: spec/validation-checks: column "email" (varchar, Go string) but parameter 1 of EmailValid is int — change the column type or the function: expected func EmailValid(string) error (§validation-checks rule 5)
+db/schema.volt:11:16: error: spec/validators: column "email" (string, Go string) but parameter 1 of EmailValid is int — change the column type or the function: expected func EmailValid(string) error (§validators)
 
 ## i84_goref_arity
-db/schema.volt:11:5: error: spec/validation-checks: EmailValid takes 2 parameter(s) but the check passes 1 column(s): found func EmailValid(email, domain string) error, expected func EmailValid(string) error (§validation-checks rule 5)
+db/schema.volt:11:5: error: spec/validators: EmailValid takes 2 parameter(s) but the validator passes 1 column(s): found func EmailValid(email, domain string) error, expected func EmailValid(string) error (§validators)
 
 ## i85_goref_result
-db/schema.volt:10:5: error: spec/validation-checks: EmailValid must return exactly error: found func EmailValid(email string) bool, expected func EmailValid(string) error (§validation-checks rule 5)
+db/schema.volt:10:5: error: spec/validators: EmailValid must return exactly error: found func EmailValid(email string) bool, expected func EmailValid(string) error (§validators)
 
 ## i86_plug_undeclared
-app/routes.volt:6:6: error: spec/pipelines: no function BearerAuth in package app's Go files — declare func BearerAuth(next http.Handler) http.Handler beside the routes (§pipelines rule 2)
+app/routes.volt:6:6: error: spec/pipelines: no function BearerAuth in package app's Go files — declare func BearerAuth(next http.Handler) http.Handler beside the routes (§pipelines)
 
 ## i87_plug_not_middleware
-app/routes.volt:6:6: error: spec/pipelines: BearerAuth is not middleware: found func BearerAuth(w http.ResponseWriter, r *http.Request), a plug is func BearerAuth(next http.Handler) http.Handler (§pipelines rule 2)
+app/routes.volt:6:6: error: spec/pipelines: BearerAuth is not middleware: found func BearerAuth(w http.ResponseWriter, r *http.Request), a plug is func BearerAuth(next http.Handler) http.Handler (§pipelines)
 
 ## i88_goref_excluded_file
-db/schema.volt:11:5: error: spec/validation-checks: no function EmailValid in package db's Go files — declare func EmailValid(string) error beside the schema (§validation-checks rule 5)
+db/schema.volt:11:5: error: spec/validators: no function EmailValid in package db's Go files — declare func EmailValid(string) error beside the schema (§validators)
 
 ## i89_goref_variadic
-db/schema.volt:10:5: error: spec/validation-checks: EmailValid is variadic (func EmailValid(emails ...string) error); a check passes a fixed column list — expected func EmailValid(string) error (§validation-checks rule 5)
+db/schema.volt:10:5: error: spec/validators: EmailValid is variadic (func EmailValid(emails ...string) error); a validator passes a fixed column list — expected func EmailValid(string) error (§validators)
 
 ## i90_goref_generic
-db/schema.volt:11:5: error: spec/validation-checks: EmailValid is generic (func EmailValid[T ~string](email T) error); a check cannot instantiate it — wrap it in a plain func EmailValid(string) error (§validation-checks rule 5)
+db/schema.volt:11:5: error: spec/validators: EmailValid is generic (func EmailValid[T ~string](email T) error); a validator cannot instantiate it — wrap it in a plain func EmailValid(string) error (§validators)
 
 ## i91_order_duplicate_column.volt
-db/i91_order_duplicate_column.volt:10:47: error: spec/selects-over-groups: column "day" appears twice in order: (§selects-over-groups rule 5)
+db/i91_order_duplicate_column.volt:10:47: error: spec/selects-over-groups: column "day" appears twice in order: (§selects-over-groups)
 
 ## i92_group_minus.volt
-db/i92_group_minus.volt:18:23: error: syntax: '-' is not a group operator: set difference is spelled '\' (§groups rule 3)
+db/i92_group_minus.volt:18:23: error: syntax: '-' is not a group operator: set difference is spelled '\' (§groups)
 
 ## i93_group_set_readd.volt
-db/i93_group_set_readd.volt:18:25: error: spec/groups: table "ms_revenue" is already a member (§groups rule 3)
+db/i93_group_set_readd.volt:18:25: error: spec/groups: table "ms_revenue" is already a member (§groups)
 
 ## i94_group_set_remove_missing.volt
-db/i94_group_set_remove_missing.volt:17:52: error: spec/groups: table "ms_dict" is not a member; nothing to remove (§groups rule 3)
+db/i94_group_set_remove_missing.volt:17:52: error: spec/groups: table "ms_dict" is not a member; nothing to remove (§groups)
 
 ## i95_projection_minus.volt
-db/i95_projection_minus.volt:10:18: error: syntax: '-' is not a projection operator: exclusion is spelled '\' (§selects-over-groups rule 7)
+db/i95_projection_minus.volt:10:18: error: syntax: '-' is not a projection operator: exclusion is spelled '\' (§selects-over-groups)
 
 ## i96_list_param_time.volt
-db/i96_list_param_time.volt:10:36: error: spec/selects-over-groups: column "at" (time.Time) cannot take a list parameter: JSON carries no date/time value (§predicates rule 3)
+db/i96_list_param_time.volt:10:36: error: spec/selects-over-groups: column "at" (time.Time) cannot take a list parameter: JSON carries no date/time value (§predicates)
 
 ## i97_list_param_scalar_conflict.volt
-db/i97_list_param_scalar_conflict.volt:10:60: error: spec/selects-over-groups: parameter :site used as string here but []string earlier — one name, one type (§predicates rule 3)
+db/i97_list_param_scalar_conflict.volt:10:60: error: spec/selects-over-groups: parameter :site used as string here but []string earlier — one name, one type (§predicates)
 
 ## i98_query_unknown
 app/routes.volt:10:16: error: spec/scopes-and-routes: no generated query db.UserLst in package "db" — a query route names a select method or a default CRUD method (Get, List, Create, Update, Delete) (§query-routes)
 
 ## i99_query_path_type
-app/routes.volt:10:13: error: spec/scopes-and-routes: path parameter "id" is int64 but db.UserGet takes int32; spell it :id(int32) (§query-routes)
+app/routes.volt:10:13: error: spec/scopes-and-routes: path parameter "id" is string but db.UserGet takes int; spell it :id(int) (§query-routes)
 

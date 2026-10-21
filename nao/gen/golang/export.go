@@ -5,41 +5,32 @@ package golang
 import (
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
-// ModelName derives the Go model type name for a table (decision singular-models):
+// ModelName derives the Go model type name for a table:
 // the [model:] override when present, else the singularized table name.
 func ModelName(t *ast.Table) (string, error) { return modelName(t) }
 
-// GoName converts a DBML name to an exported Go identifier.
-func GoName(dbmlName string) (string, error) { return goName(dbmlName) }
-
-// GoTypeName maps a DBML column type (arguments stripped, lowercased) to
-// its Go type name, reporting whether the type is known.
-func GoTypeName(dbmlType string) (string, bool) {
-	t, ok := typeMap[dbmlType]
-	if !ok {
-		return "", false
-	}
-	return t.name, true
-}
+// GoName converts a schema name to an exported Go identifier.
+func GoName(schemaName string) (string, error) { return goName(schemaName) }
 
 // SelectParam is one Go parameter of a generated select method
-// (spec §selects-over-groups rule 6), in declaration order.
+// (spec §selects-over-groups), in declaration order.
 type SelectParam struct {
-	SQLName string // name bound as :name in the statement
-	GoName  string
-	GoType  string // e.g. "string", "int64", "time.Time"
+	GoName string
+	GoType string // e.g. "string", "int64", "time.Time"
 }
 
 // SelectFn is one select instantiation: a method on Queries for one
-// member table, with WHERE/ORDER fragments rendered by the checker and
-// the §selects-over-groups rule 7 projection already validated.
+// member table, over the predicate tree and order terms the checker
+// lowered (spec §predicates rule 6) and the §selects-over-groups
+// projection already validated.
 type SelectFn struct {
 	TableKey     string // canonical schema.name key into check.Info
 	MethodSuffix string
-	WhereSQL     string
-	OrderSQL     string
+	Where        rt.GenPred    // the zero value when the select has no where clause
+	Order        []rt.GenOrder // nil when it has no order: setting
 	Params       []SelectParam
 	Cols         []string // explicit projection, declared order; nil = all
 	Excluded     []string // star-form exclusions; nil = none
@@ -56,56 +47,20 @@ type FieldSig struct {
 	Nullable bool   // NULL-admitting column (§nullability)
 }
 
-// CheckFn is one table's validator surface (spec §validation-checks): the checks a
-// generated Validate method evaluates.
-type CheckFn struct {
-	TableKey string // canonical schema.name key into check.Info
-	Checks   []CheckSpec
+// ValidatorFn is one table's validator surface (spec §validators): what
+// its changeset's Validate runs after required and enum membership.
+type ValidatorFn struct {
+	TableKey   string
+	Validators []ValidatorSpec
 }
 
-// CheckSpec is one lowered check, rendered by the Volt checker.
-type CheckSpec struct {
-	Name string   // the check's [name:] setting, "" when absent
-	Src  string   // human-readable form, reported by rt.CheckError
-	Cond string   // typed form: Go condition over v.<Field>; "" otherwise
-	Call string   // Go-reference call, e.g. "EmailValid(v.Email)"; "" otherwise
-	Cols []string // the columns the check reads, so a params struct knows whether it can evaluate it (§validation-checks rule 6)
-}
-
-// ParamsValidators reports whether the table's CreateParams and
-// UpdateParams structs get a Validate method: each does when the struct
-// exists and carries every column of at least one check. It plans the
-// whole file (decision one-naming-plan).
-func ParamsValidators(f *ast.File, info *check.Info, tableKey string, checks []CheckSpec) (create, update bool, err error) {
-	return PlanBuild(f, info).ParamsValidators(tableKey, checks)
-}
-
-// paramsChecks splits the checks a table's params structs can evaluate:
-// those whose columns all appear among the struct's fields (decision create-params).
-func paramsChecks(t *tableModel, checks []CheckSpec) (create, update []CheckSpec) {
-	covered := func(fields []*fieldPlan, ck CheckSpec) bool {
-		have := map[string]bool{}
-		for _, f := range fields {
-			have[f.colName] = true
-		}
-		for _, col := range ck.Cols {
-			if !have[col] {
-				return false
-			}
-		}
-		return len(ck.Cols) > 0
-	}
-	cf := t.createFields()
-	uf := t.nonPK()
-	for _, ck := range checks {
-		if len(cf) > 0 && covered(cf, ck) {
-			create = append(create, ck)
-		}
-		if len(t.pk) > 0 && len(uf) > 0 && covered(uf, ck) {
-			update = append(update, ck)
-		}
-	}
-	return create, update
+// ValidatorSpec is one lowered validator, rendered by the Volt checker
+// (spec §validators).
+type ValidatorSpec struct {
+	Name string   // the validator's function name, the check of its field error
+	Src  string   // human-readable form, e.g. "EmailValid(email)"
+	Call string   // Go call over the row, e.g. "EmailValid(v.Email)"
+	Cols []string // the columns the validator reads, in first-appearance order
 }
 
 // EnumTypeName is the Go type name an enum declaration generates
@@ -113,20 +68,25 @@ func paramsChecks(t *tableModel, checks []CheckSpec) (create, update []CheckSpec
 func EnumTypeName(schema, base string) (string, error) { return enumTypeName(schema, base) }
 
 // ModelFields reports the exact struct fields the model generator emits
-// for the table with the given canonical key (spec §selects-over-groups rule 6, §mapping-to-go).
+// for the table with the given canonical key (spec §selects-over-groups, §mapping-to-go).
 // It plans the whole file.
 func ModelFields(f *ast.File, info *check.Info, tableKey string) (model string, fields []FieldSig, err error) {
 	return PlanBuild(f, info).ModelFields(tableKey)
 }
 
-// CRUDMethod is one generated default-CRUD method of a table, as a query route (spec §query-routes) sees it: the name to call, the
-// identity parameters in key order, the params struct it decodes, and
-// what comes back.
+// CRUDMethod is one generated default-CRUD method of a table, as a query
+// route (spec §query-routes) sees it: the name to call, the identity
+// parameters in key order, the changeset a write takes and how the route
+// builds it (spec §changesets), and what comes back.
 type CRUDMethod struct {
 	Name   string        // method name, e.g. "UserGet"
 	Op     string        // get | list | create | update | delete
 	Key    []SelectParam // identity parameters (get, update, delete); nil otherwise
-	Body   string        // params struct type (create, update); "" when the method takes none
+	Body   string        // changeset type (create, update), e.g. "UserChangeset"; "" otherwise
+	Params string        // write body type the route decodes, e.g. "UserParams"; "" otherwise
+	New    string        // constructor a create starts from, e.g. "UserNew"; "" otherwise
+	Get    string        // loader an update reads the row with, e.g. "UserGet"; "" otherwise
+	Allow  []string      // column handles the route's Cast allows, e.g. "UserEmail"; nil otherwise
 	Result string        // row type; "" for delete
 	Many   bool          // slice result (list)
 }
@@ -134,8 +94,8 @@ type CRUDMethod struct {
 // CRUDMethods lists the default CRUD methods the query generator emits
 // for one table, with the same existence rules it applies: Get, Update
 // and Delete need a primary key, Update needs a non-key column, Create
-// takes a params struct only when a column is caller-supplied (decision create-params).
-// It plans the whole file.
+// and Update take a changeset (spec §changesets). It plans the whole
+// file.
 func CRUDMethods(f *ast.File, info *check.Info, tableKey string) (model string, methods []CRUDMethod, err error) {
 	return PlanBuild(f, info).CRUDMethods(tableKey)
 }

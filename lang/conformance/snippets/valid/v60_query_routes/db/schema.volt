@@ -1,10 +1,10 @@
-// spec: §selects-over-groups rule 6 — the data package a query route binds to
+// spec: §selects-over-groups — the data package a query route binds to
 package db
 
 Table users {
-  id    integer [pk, increment]
-  email text    [not null, unique]
-  name  text    [not null, default: '']
+  id    int [pk, increment]
+  email string    [not null, unique]
+  name  string    [not null, default: '']
 }
 
 Select picked for users where id in :ids [order: (id asc)]

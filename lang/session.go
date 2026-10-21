@@ -1,10 +1,5 @@
 package lang
 
-// An editor's view of a project across edits (decision editor-session): a Session keeps the
-// parses by content and the per-package check results by the identity
-// of their inputs. Load and Check produce exactly the Project and
-// diagnostics of LoadOverlay and Check.
-
 import (
 	"os"
 	"slices"
@@ -21,80 +16,65 @@ import (
 
 // Session caches parses and check results for one project root. The
 // zero value is ready. A Session runs one operation at a time: a
-// concurrent Load, Check or Vet waits for the one under way (decision shared-surface).
+// concurrent Load, Check or Vet waits for the one under way.
 type Session struct {
-	op    sync.Mutex            // held for a whole Load, Check or Vet
-	mu    sync.Mutex            // guards the maps below within an operation
-	files map[string]*fileEntry // by absolute path
-	pkgs  map[string]*pkgEntry  // by package path
-	memos map[string]*declMemo  // per-declaration memos, by package path (decision check-by-declaration)
-	scans map[string]*goDir     // each package directory's Go sources and their scan (decision keys-are-inputs)
-	gen   int                   // the last file identity handed out
+	op    sync.Mutex
+	mu    sync.Mutex
+	files map[string]*fileEntry
+	pkgs  map[string]*pkgEntry
+	memos map[string]*declMemo
+	scans map[string]*goDir
+	gen   int
 	stats SessionStats
 }
 
 // SessionStats counts the work a session did and the work it skipped.
 type SessionStats struct {
 	FilesParsed, FilesReused          int
-	DeclsParsed, DeclsReused          int // top-level declarations across the files parsed (decision parse-by-declaration)
+	DeclsParsed, DeclsReused          int // top-level declarations across the files parsed
 	PackagesChecked, PackagesReused   int
 	PackagesVetted, PackagesVetReused int
-	// Within the packages checked (decision check-by-declaration): tables whose schema check,
+	// Within the packages checked: tables whose schema check,
 	// model and lowered checks were answered by the memo, and not.
 	TablesChecked, TablesReused   int
 	ModelsBuilt, ModelsReused     int
 	ChecksLowered, ChecksReused   int
 	SelectsChecked, SelectsReused int
-	RoutesLowered, RoutesReused   int // scope items (routes, resources, datasets) lowered and answered (decision check-by-declaration)
+	RoutesLowered, RoutesReused   int // scope items (routes, resources, datasets) lowered and answered
 	// Within the packages vetted: declarations judged afresh by the
-	// rules, and answered by the memo (decision vet-by-declaration).
+	// rules, and answered by the memo.
 	DeclsVetted, DeclsVetReused int
 }
 
-// fileEntry is one file's last parse; gen is its identity, new for
-// every parse.
 type fileEntry struct {
 	gen   int
 	src   string
 	file  *ast.File
 	diags []diag.Diagnostic
-	reuse *parser.Reuse // the parse's chunks, for the next parse of this file
+	reuse *parser.Reuse
 }
 
-// goDir is one package directory's Go files as the session last read
-// them, and their scan; equal sources keep the scan object (decisions pure-memos, keys-are-inputs).
 type goDir struct {
 	srcs []GoSource
 	scan *goScan
 }
 
-// pkgEntry is one package's last check: the key of its inputs, the
-// fields the per-package phases wrote, and the diagnostics they
-// produced.
 type pkgEntry struct {
 	key   pkgKey
 	res   pkgResult
 	diags []diag.Diagnostic
-	vet   []diag.Diagnostic // Vet's warnings, once Vet ran on this key
+	vet   []diag.Diagnostic
 	vetOK bool
 }
 
-// pkgKey is the exact identity of a package's check inputs (decision keys-are-inputs): for
-// the package and every package it transitively imports, in import
-// path order, the parses of its files and the Go functions of its
-// directory. Two keys are equal exactly when every input is the same
-// object. A package on an import cycle, or holding a file the session
-// did not parse, has a nil key and is never memoized.
 type pkgKey []pkgInput
 
-// pkgInput is one package's own inputs.
 type pkgInput struct {
 	path  string
-	files []int   // the gen of each file's parse, in file order
-	funcs *goScan // the directory's Go functions: one object while its sources are
+	files []int
+	funcs *goScan
 }
 
-// equal reports whether two keys name the same inputs.
 func (k pkgKey) equal(o pkgKey) bool {
 	if k == nil || o == nil || len(k) != len(o) {
 		return false
@@ -107,17 +87,13 @@ func (k pkgKey) equal(o pkgKey) bool {
 	return true
 }
 
-// pkgResult is everything the per-package phases of Check write; the
-// values are immutable once written, so restoring them shares them.
 type pkgResult struct {
 	schema      *check.Info
 	plan        *golang.Plan
 	groups      map[string]*GroupInfo
 	preds       map[string]*ast.Pred
 	selects     []*SelectInfo
-	checkFns    []golang.CheckFn
-	checkSQL    map[*ast.Check]string
-	validByKey  map[string][2]bool
+	validators  []golang.ValidatorFn
 	pipelines   map[string]*ast.Pipeline
 	routes      []*RouteInfo
 	controllers map[string]*ControllerInfo
@@ -126,22 +102,19 @@ type pkgResult struct {
 func pkgCapture(pkg *Package) pkgResult {
 	return pkgResult{
 		schema: pkg.schema, plan: pkg.plan,
-		groups: pkg.Groups, preds: pkg.Preds, selects: pkg.Selects, checkFns: pkg.CheckFns, checkSQL: pkg.CheckSQL, validByKey: pkg.ValidByKey,
+		groups: pkg.Groups, preds: pkg.Preds, selects: pkg.Selects, validators: pkg.Validators,
 		pipelines: pkg.Pipelines, routes: pkg.Routes, controllers: pkg.Controllers,
 	}
 }
 
-// resultsReset clears everything the per-package phases write, so a
-// second Check starts where the first did.
 func (p *Package) resultsReset() {
 	pkgResult{}.restore(p)
 }
 
 func (r pkgResult) restore(pkg *Package) {
 	pkg.schema, pkg.plan = r.schema, r.plan
-	pkg.Groups, pkg.Preds, pkg.Selects, pkg.CheckFns, pkg.CheckSQL, pkg.ValidByKey = r.groups, r.preds, r.selects, r.checkFns, r.checkSQL, r.validByKey
+	pkg.Groups, pkg.Preds, pkg.Selects, pkg.Validators = r.groups, r.preds, r.selects, r.validators
 	pkg.selectIndex()
-	pkg.checkIndex()
 	pkg.Pipelines, pkg.Routes, pkg.Controllers = r.pipelines, r.routes, r.controllers
 }
 
@@ -172,15 +145,13 @@ func (s *Session) Check(pr *Project) []diag.Diagnostic {
 
 // Vet is lang.Vet through the session's memo: a package whose check
 // results were reused and whose warnings were computed before answers
-// from the memo (decision indexed-lookups). Run after Check on the same project.
+// from the memo. Run after Check on the same project.
 func (s *Session) Vet(pr *Project) []diag.Diagnostic {
 	s.op.Lock()
 	defer s.op.Unlock()
 	return vetWith(pr, s)
 }
 
-// vetRestore answers a package's warnings from the memo when its key
-// is current and Vet ran on it before.
 func (s *Session) vetRestore(path string, key pkgKey) ([]diag.Diagnostic, bool) {
 	if key == nil {
 		return nil, false
@@ -195,7 +166,6 @@ func (s *Session) vetRestore(path string, key pkgKey) ([]diag.Diagnostic, bool) 
 	return e.vet, true
 }
 
-// vetStore keeps a package's warnings beside its check results.
 func (s *Session) vetStore(path string, key pkgKey, diags []diag.Diagnostic) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -208,8 +178,6 @@ func (s *Session) vetStore(path string, key pkgKey, diags []diag.Diagnostic) {
 	}
 }
 
-// declMemos hands out the per-declaration memos of the packages about
-// to be checked, creating one per package on first use.
 func (s *Session) declMemos(paths []string) map[string]*declMemo {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -228,10 +196,6 @@ func (s *Session) declMemos(paths []string) map[string]*declMemo {
 	return out
 }
 
-// goFuncsFor reads the Go sources of every package's directory and
-// hands back a cache seeded with their scans: a directory whose
-// sources are byte for byte what they were at the last read keeps its
-// scan object (decision keys-are-inputs).
 func (s *Session) goFuncsFor(pr *Project, paths []string) *goFuncsCache {
 	dirs := make([]string, len(paths))
 	for i, path := range paths {
@@ -263,9 +227,6 @@ func (s *Session) goFuncsFor(pr *Project, paths []string) *goFuncsCache {
 	return cache
 }
 
-// vetStats adds what the vet memos of the packages just vetted did; a
-// package the package-level memo answered (decision indexed-lookups) ran no rule, and its
-// memo's counters are the last run's, so it is not among them.
 func (s *Session) vetStats(memos map[string]*declMemo) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -275,7 +236,6 @@ func (s *Session) vetStats(memos map[string]*declMemo) {
 	}
 }
 
-// declStats adds what the memos of the packages just checked did.
 func (s *Session) declStats(memos map[string]*declMemo) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -300,9 +260,6 @@ func (s *Session) Stats() SessionStats {
 	return s.stats
 }
 
-// parse returns the file's parse, reusing the last one when the text
-// is what it was: an overlaid file by its text, a disk file by the
-// bytes read now (decision keys-are-inputs).
 func (s *Session) parse(path string, overlay map[string]string) (*ast.File, []diag.Diagnostic, error) {
 	text, overlaid := overlay[path]
 	if !overlaid {
@@ -345,21 +302,16 @@ func (s *Session) reused() {
 	s.mu.Unlock()
 }
 
-// packageKeys lists each package's inputs (decision keys-are-inputs): its own files' parse
-// identities and Go functions, and those of every package it imports,
-// transitively, so a change anywhere upstream changes the key. A
-// package on an import cycle, or holding a file the session did not
-// parse, gets nil and is never memoized.
 func (s *Session) packageKeys(pr *Project, paths []string, funcs *goFuncsCache) map[string]pkgKey {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	keys := map[string]pkgKey{}
-	state := map[string]int{} // 1 visiting, 2 done
+	state := map[string]int{}
 	var visit func(path string) pkgKey
 	visit = func(path string) pkgKey {
 		switch state[path] {
 		case 1:
-			return nil // a cycle: importsResolve reports it; nothing to memoize
+			return nil
 		case 2:
 			return keys[path]
 		}
@@ -404,8 +356,6 @@ func (s *Session) packageKeys(pr *Project, paths []string, funcs *goFuncsCache) 
 	return keys
 }
 
-// restore hands a package its memoized results and diagnostics when
-// its key matches; false means it must be checked.
 func (s *Session) restore(path string, key pkgKey, pkg *Package) ([]diag.Diagnostic, bool) {
 	if key == nil {
 		return nil, false
@@ -421,7 +371,6 @@ func (s *Session) restore(path string, key pkgKey, pkg *Package) ([]diag.Diagnos
 	return e.diags, true
 }
 
-// store memoizes a freshly checked package under its key.
 func (s *Session) store(path string, key pkgKey, pkg *Package, diags []diag.Diagnostic) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

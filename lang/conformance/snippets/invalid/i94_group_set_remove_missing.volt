@@ -1,17 +1,17 @@
-// spec: §groups rule 3 — removing a table that is not a member, even inside a set, is an error
+// spec: §groups — removing a table that is not a member, even inside a set, is an error
 // want: is not a member
 package db
 
 Table ms_revenue {
-  id integer [pk]
+  id int [pk]
 }
 
 Table ms_usage {
-  id integer [pk]
+  id int [pk]
 }
 
 Table ms_dict {
-  code text [pk]
+  code string [pk]
 }
 
 Group series = (ms_revenue, ms_usage) \ (ms_usage, ms_dict)

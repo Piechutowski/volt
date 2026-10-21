@@ -9,7 +9,7 @@ import (
 
 func kinds(t *testing.T, src string) []token.Kind {
 	t.Helper()
-	toks, errs := Scan("test.dbml", src)
+	toks, errs := Scan("test.volt", src)
 	if len(errs) > 0 {
 		t.Fatalf("Scan(%q) errors: %v", src, errs)
 	}
@@ -22,7 +22,7 @@ func kinds(t *testing.T, src string) []token.Kind {
 
 func one(t *testing.T, src string) token.Token {
 	t.Helper()
-	toks, errs := Scan("test.dbml", src)
+	toks, errs := Scan("test.volt", src)
 	if len(errs) > 0 {
 		t.Fatalf("Scan(%q) errors: %v", src, errs)
 	}

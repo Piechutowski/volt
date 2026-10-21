@@ -8,7 +8,7 @@ import (
 )
 
 func TestSelectRowNameMatchesRowType(t *testing.T) {
-	f, diags := parser.ParseFile("rows.dbml", "Table users {\n  id int [pk]\n  email text [not null]\n  name text\n}\n")
+	f, diags := parser.ParseFile("rows.volt", "Table users {\n  id int [pk]\n  email string [not null]\n  name string\n}\n")
 	if len(diags) > 0 {
 		t.Fatal(diags)
 	}

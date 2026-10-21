@@ -1,13 +1,13 @@
-// spec: §groups rule 3 — '-' is not a group operator; set difference is spelled '\'
+// spec: §groups — '-' is not a group operator; set difference is spelled '\'
 // want: set difference is spelled '\'
 package db
 
 Table ms_revenue {
-  id integer [pk]
+  id int [pk]
 }
 
 Table ms_usage {
-  id integer [pk]
+  id int [pk]
 }
 
 Group series {

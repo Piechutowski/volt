@@ -1,0 +1,329 @@
+==================
+migration: flat body with every operation
+==================
+
+Migration 0001__create_users {
+  create table users {
+    id    int    [pk, increment]
+    email string [not null, unique]
+
+    indexes {
+      email [unique]
+    }
+  }
+  rename table users to people
+  alter table people {
+    add bio string
+    rename email to mail
+    drop legacy string [not null]
+  }
+  create index people (mail) [unique]
+  drop index people bio
+  drop table audit {
+    id int [pk]
+  }
+  exec 'VACUUM' [down: 'SELECT 1']
+}
+
+---
+
+(source_file
+  (migration_definition
+    (migration_name)
+    (create_table_op
+      (table_name
+        (identifier))
+      (column_definition
+        (column_name
+          (identifier))
+        (column_type
+          (type_name
+            (identifier)))
+        (settings_list
+          (setting
+            (setting_name
+              (identifier)))
+          (setting
+            (setting_name
+              (identifier)))))
+      (column_definition
+        (column_name
+          (identifier))
+        (column_type
+          (type_name
+            (identifier)))
+        (settings_list
+          (setting
+            (setting_name
+              (identifier)
+              (identifier)))
+          (setting
+            (setting_name
+              (identifier)))))
+      (indexes_block
+        (index_definition
+          (column_name
+            (identifier))
+          (settings_list
+            (setting
+              (setting_name
+                (identifier)))))))
+    (rename_table_op
+      (table_name
+        (identifier))
+      (table_name
+        (identifier)))
+    (alter_table_op
+      (table_name
+        (identifier))
+      (add_column
+        (column_definition
+          (column_name
+            (identifier))
+          (column_type
+            (type_name
+              (identifier)))))
+      (rename_column
+        (column_name
+          (identifier))
+        (column_name
+          (identifier)))
+      (drop_column
+        (column_name
+          (identifier))
+        (column_type
+          (type_name
+            (identifier)))
+        (settings_list
+          (setting
+            (setting_name
+              (identifier)
+              (identifier))))))
+    (create_index_op
+      (table_name
+        (identifier))
+      (index_definition
+        (composite_index
+          (column_name
+            (identifier)))
+        (settings_list
+          (setting
+            (setting_name
+              (identifier))))))
+    (drop_index_op
+      (table_name
+        (identifier))
+      (index_definition
+        (column_name
+          (identifier))))
+    (drop_table_op
+      (table_name
+        (identifier))
+      (column_definition
+        (column_name
+          (identifier))
+        (column_type
+          (type_name
+            (identifier)))
+        (settings_list
+          (setting
+            (setting_name
+              (identifier))))))
+    (exec_op
+      (string
+        (string_content))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (string
+            (string_content)))))))
+
+==================
+migration: settings, up and down blocks, a rebuild with from:
+==================
+
+Migration 0002__int_hits [irreversible, no transaction, note: 'hits were text'] {
+  up {
+    rebuild table users {
+      id   int [pk]
+      hits int [not null, default: 0, from: `CAST(hits AS INTEGER)`]
+    }
+  }
+  down {
+    drop table users
+  }
+}
+
+---
+
+(source_file
+  (migration_definition
+    (migration_name)
+    (settings_list
+      (setting
+        (setting_name
+          (identifier)))
+      (setting
+        (setting_name
+          (identifier)
+          (identifier)))
+      (setting
+        (setting_name
+          (identifier))
+        (string
+          (string_content))))
+    (up_block
+      (rebuild_table_op
+        (table_name
+          (identifier))
+        (column_definition
+          (column_name
+            (identifier))
+          (column_type
+            (type_name
+              (identifier)))
+          (settings_list
+            (setting
+              (setting_name
+                (identifier)))))
+        (column_definition
+          (column_name
+            (identifier))
+          (column_type
+            (type_name
+              (identifier)))
+          (settings_list
+            (setting
+              (setting_name
+                (identifier)
+                (identifier)))
+            (setting
+              (setting_name
+                (identifier))
+              (number))
+            (setting
+              (setting_name
+                (identifier))
+              (expression
+                (expression_content)))))))
+    (down_block
+      (drop_table_op
+        (table_name
+          (identifier))))))
+
+==================
+migration: the body's words are column names in a Table and names in an alter
+==================
+
+Table t {
+  up     int [pk]
+  to     string
+  table  string
+  create string
+  drop   string
+  add    string
+}
+
+Migration 0003__words {
+  alter table t {
+    rename to to down
+    drop index string
+    add rename string
+  }
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier)))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))))
+  (migration_definition
+    (migration_name)
+    (alter_table_op
+      (table_name
+        (identifier))
+      (rename_column
+        (column_name
+          (identifier))
+        (column_name
+          (identifier)))
+      (drop_column
+        (column_name
+          (identifier))
+        (column_type
+          (type_name
+            (identifier))))
+      (add_column
+        (column_definition
+          (column_name
+            (identifier))
+          (column_type
+            (type_name
+              (identifier))))))))
+
+==================
+migration: an empty body
+==================
+
+Migration 0004__empty {
+}
+
+---
+
+(source_file
+  (migration_definition
+    (migration_name)))
+
+==================
+migration: a down block without an up block
+:error
+==================
+
+Migration 0005__bad {
+  down {
+  }
+}
+
+---

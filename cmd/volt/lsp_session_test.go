@@ -103,17 +103,29 @@ func TestLSPSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	files := map[string]string{
-		"go.mod": "module session\n\ngo 1.27\n",
+		"go.mod":       "module session\n\ngo 1.27\n",
+		"app/title.go": "package app\n\n// TitleShape keeps a title non-blank.\nfunc TitleShape(title string) error { return nil }\n",
 		"app/schema.volt": `package app
 
 Table posts {
-	id integer [pk, increment]
-	title text [not null]
+	id int [pk, increment]
+	title string [not null]
+
+	validators {
+		TitleShape(title)
+	}
 }
 
 Scope / {
 	get / Home.Index
 	resources posts
+}
+
+Migration 0001__posts {
+	create table posts {
+		id int [pk, increment]
+		title string [not null]
+	}
 }
 `,
 	}
@@ -198,22 +210,24 @@ Scope / {
 	s.send("textDocument/didOpen", map[string]any{"textDocument": map[string]any{"uri": uri, "languageId": "volt", "version": 1, "text": text}}, false)
 	s.notification("open: a clean file", "textDocument/publishDiagnostics")
 
-	// keystrokes: the settings bracket goes missing, then comes back with a second table whose route has a typo, then all is well
 	broken := strings.Replace(text, "[pk, increment]", "[pk, increment", 1)
 	change("edit 1: a settings list left open", 2, broken)
-	typo := strings.Replace(text, "get / Home.Index", "gett / Home.Index", 1) + "\nTable tags {\n\tid integer [pk]\n}\n"
+	typo := strings.Replace(text, "get / Home.Index", "gett / Home.Index", 1) + "\nTable tags {\n\tid int [pk]\n}\n"
 	change("edit 2: a verb misspelled, a table added", 3, typo)
 	change("edit 3: the verb fixed", 4, strings.Replace(typo, "gett /", "get /", 1))
-	typed("edit 4: a note typed into the new table's header, as a ranged change", 5, 12, 10, " [note: 'tagging']")
+	typed("edit 4: a note typed into the new table's header, as a ranged change", 5, 23, 10, " [note: 'tagging']")
 
-	// requests on the fixed file
 	id = s.send("textDocument/hover", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 2, "character": 7}}, true)
 	s.response("hover on the table name", id)
-	id = s.send("textDocument/hover", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 9, "character": 12}}, true)
+	id = s.send("textDocument/hover", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 13, "character": 12}}, true)
 	s.response("hover on the resources table", id)
-	id = s.send("textDocument/definition", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 9, "character": 12}}, true)
+	id = s.send("textDocument/hover", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 16, "character": 12}}, true)
+	s.response("hover on the migration name", id)
+	id = s.send("textDocument/definition", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 13, "character": 12}}, true)
 	s.response("definition from the resources table", id)
-	id = s.send("textDocument/completion", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 3, "character": 25}}, true)
+	id = s.send("textDocument/definition", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 7, "character": 4}}, true)
+	s.response("definition from a validator into its Go function", id)
+	id = s.send("textDocument/completion", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 3, "character": 21}}, true)
 	s.response("completion inside the settings list", id)
 	id = s.send("textDocument/documentSymbol", map[string]any{"textDocument": map[string]any{"uri": uri}}, true)
 	s.response("document symbols", id)

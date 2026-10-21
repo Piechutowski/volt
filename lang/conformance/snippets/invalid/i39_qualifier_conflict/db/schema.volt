@@ -1,5 +1,5 @@
 package db
 
 Table users {
-	id integer [pk]
+	id int [pk]
 }

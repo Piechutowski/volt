@@ -67,7 +67,7 @@ func TestSessionMatchesFreshAnalysis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixed := strings.Replace(string(src), "  title text\n", "", 1)
+	fixed := strings.Replace(string(src), "  title string\n", "", 1)
 	_, work = sessionRound(t, &s, root, map[string]string{d2: fixed}, s.Stats())
 	expect("data edit in the editor", work, 1, 2)
 
@@ -109,7 +109,7 @@ func TestSessionReadsWhatIsOnDisk(t *testing.T) {
 		}
 	}
 	write("go.mod", "module disk\n")
-	write("db/schema.volt", "package db\n\nTable users {\n\tid integer [pk, increment]\n\temail varchar [not null]\n\ttitle text\n\ttitle text\n\n\tchecks {\n\t\tEmailValid(email)\n\t}\n}\n")
+	write("db/schema.volt", "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string [not null]\n\ttitle string\n\ttitle string\n\n\tvalidators {\n\t\tEmailValid(email)\n\t}\n}\n")
 	write("db/checks.go", "package db\n\nfunc EmailValid(email string) error { return nil }\n")
 	sameStamp := func(name, from, to string) {
 		t.Helper()
@@ -154,7 +154,7 @@ func TestSessionReadsWhatIsOnDisk(t *testing.T) {
 	_, work = sessionRound(t, &s, root, nil, s.Stats())
 	expect("no change", work, 0, 0)
 
-	sameStamp("db/schema.volt", "\ttitle text\n\ttitle text\n", "\ttitle text\n\ttitel text\n")
+	sameStamp("db/schema.volt", "\ttitle string\n\ttitle string\n", "\ttitle string\n\ttitel string\n")
 	_, work = sessionRound(t, &s, root, nil, s.Stats())
 	expect("same-length edit of the .volt file", work, 1, 1)
 
@@ -195,7 +195,7 @@ func TestSessionGeneratesIdentically(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	edited := strings.Replace(string(src), "Table m_t0001s {\n", "Table m_t0001s {\n  extra text\n", 1)
+	edited := strings.Replace(string(src), "Table m_t0001s {\n", "Table m_t0001s {\n  extra string\n", 1)
 	for i, overlay := range []map[string]string{nil, {schema: edited}, {schema: edited}, nil} {
 		pr, _ := sessionRound(t, &s, root, overlay, s.Stats())
 		fresh, err := lang.LoadOverlay(root, overlay)
@@ -310,12 +310,12 @@ func TestSessionReparsesOneDeclaration(t *testing.T) {
 	all := work{whole.Parsed, 12, 12, 12, 13, 17, whole.Parsed}
 	round("first", text, all)
 	one := work{1, 1, 1, 1, 2, 2, 2}
-	round("edit one table", strings.Replace(text, "c002 text [not null]", "c002 text [not null, note: 'edited']", 1), one)
-	round("break it", strings.Replace(text, "c002 text [not null]", "c002 text [not null", 1), one)
+	round("edit one table", strings.Replace(text, "c002 string [not null]", "c002 string [not null, note: 'edited']", 1), one)
+	round("break it", strings.Replace(text, "c002 string [not null]", "c002 string [not null", 1), one)
 	round("fix it", text, one)
 	cur := strings.Replace(text, "get /events        volt.Events", "get /stream        volt.Events", 1)
 	round("edit a route", cur, work{1, 0, 0, 0, 0, 17, 1})
-	cur = strings.Replace(cur, "created_at timestamp", "created_at timestamp [note: 'stamped']", 1)
+	cur = strings.Replace(cur, "created_at time.Time", "created_at time.Time [note: 'stamped']", 1)
 	round("edit the partial", cur, work{1, 12, 12, 12, 13, 13, 13})
 	cur = strings.Replace(cur, "retired [note: 'no longer written']", "retired [note: 'gone']", 1)
 	round("edit the enum's note", cur, work{1, 0, 0, 0, 0, 0, 1})
@@ -348,7 +348,7 @@ func TestSessionConcurrentCallersAgreeWithFreshAnalysis(t *testing.T) {
 			for r := 0; r < rounds; r++ {
 				text := base
 				if (c+r)%2 == 1 {
-					text = strings.Replace(base, "  title text\n", "", 1)
+					text = strings.Replace(base, "  title string\n", "", 1)
 				}
 				text = strings.Replace(text, "Table tags {", fmt.Sprintf("Table tags_%d_%d {", c, r), 1)
 				overlay := map[string]string{d2: text}

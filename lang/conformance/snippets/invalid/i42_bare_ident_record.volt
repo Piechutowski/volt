@@ -1,0 +1,6 @@
+// spec: §records-sample-data — bare identifiers other than true/false/null are not record values
+Enum s { a }
+Table t {
+  x s
+  records (x) { a }
+}

@@ -9,5 +9,5 @@ Scope /api [name: api] {
 	resources db.users [default]
 	resources db.tags  [default, except: (delete)]
 
-	delete /tags/:id(int32) Tags.Purge
+	delete /tags/:id(int) Tags.Purge
 }

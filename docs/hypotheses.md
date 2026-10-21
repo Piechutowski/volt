@@ -1,88 +1,79 @@
 # Hypotheses
 
-Working beliefs that have **not** earned decision status: recorded so
-they are not re-argued from scratch, numbered so they can be cited, and
-held loosely. Each one either graduates — into `decisions.md`, the
-spec, or the roadmap — or dies, when practice supplies the evidence.
-Unlike decisions, a hypothesis binds nothing; unlike a roadmap entry,
-it is a question, not a plan. Numbers retire like decision numbers.
+> [!CAUTION]
+> **This project is an alpha version, and everything may change in the future.**
 
-## H1 — How much DBML compatibility is worth keeping
+Open design questions, numbered so they can be cited, held loosely.
+One graduates into the spec when it is built, or dies when practice
+says otherwise. A hypothesis binds nothing.
 
-**Current working position** (and what the spec implements today): the
-schema core is DBML minus the file-import system — a core-only file
-stays upstream-valid and diagrams on dbdiagram.io as-is (§layers-files-and-the-superset-rule rule 2,
-§compatibility-with-dbml), and everything beyond the core is Volt's own, additive,
-owing upstream nothing.
+## H1 — Which schema-core constructs pay for themselves
 
-**What's actually unsettled:** whether that compatibility keeps paying
-for itself as Volt grows. The file-import break was the first cut;
-§schemas schemas (`auth.users`, the implicit `public`) are the next
-candidate — Rails AR treats schemas as a connection/database concern,
-not a model concern; SQLite has no schemas at all (§mapping-to-sqlite-ddl flattens
-them); and Volt packages already namespace better. Each further cut
-trades diagrammability against language coherence, and is made
-deliberately, one decision at a time, when it bites — never as a side
-effect.
+Today the schema core keeps every construct it has, whether or not a
+generator acts on it. Unsettled: whether each one keeps paying for
+itself. Schemas (`auth.users`, the implicit `public`) are the first
+candidate cut, since SQLite has none and packages already namespace;
+the presentation constructs (colors, TableGroup, DiagramView, sticky
+notes) are the one after, once a Volt-owned diagram tool exists.
 
 ## H2 — nao's ergonomic surface
 
-**Current working position:** values first — each scan is a fresh
-plain struct; no identity map, no `Save()`, no association fields on
-row structs (decision values-first).
-
-**What's actually unsettled:** which Active-Record-grade conveniences
-belong in nao at all. The maintainer is building a real application on
-Volt; the app is the experiment. When a convenience is missed in
-practice, it gets a verdict against `reference/orm-matrix.md`, and it
-is welcome **iff it can be generated** — visible, compile-checked,
-plain Go (candidates: association ergonomics via explicit loaders,
-generated join structs, validations compiling to `CHECK`s and a
-validator surface). The immovable line is the non-goals decision's: no lazy loading,
-callbacks, dirty tracking, identity map — those are runtime magic by
-nature, not by implementation choice.
+Today each scan is a fresh plain struct and every write is a changeset
+(§changesets): no identity map, no `Save()`, no association fields. A
+changeset's marks are declared intent, not dirty tracking: a column set
+to the value it already holds is still written. Unsettled: which
+conveniences join it. A convenience is welcome iff it can be generated
+as visible, compiled Go (explicit association loaders, generated join
+structs). Lazy loading, callbacks, dirty tracking and identity maps
+stay out (§non-goals).
 
 ## H3 — Member-scoped select overrides
 
-**Current working position:** everything a `Select` says applies to
-every member of its group uniformly — projection exclusions included.
+Today everything a `Select` says applies to every member of its group.
+Unsettled: whether one member may deviate. Decide together with the
+dataset override ladder so selects and datasets share one idiom.
 
-**What's actually unsettled:** whether one member should be able to
-deviate (exclude a column only for itself, override an operation only
-for one table). The shape this wants is the Dataset override ladder
-(roadmap, the datasets' override ladder): defaults generated, overrides declared per member,
-escape by omission. Decide when that ladder lands, so selects and
-datasets end up with one override idiom, not two.
+## H4 — Which field-property settings to mint
 
-## H4 — Which field-property settings to mint, and when
-
-**Settled part → decision schema-owns-fields:** every per-field property lives on the column
-declaration; generated code cannot carry hand-authored tags.
-
-**Graduated part → decision tag-passthrough** (2026-09-02, built): the namespace resolution
-— first-class settings only for what Volt itself understands, plus the
-repeatable `[tag: 'key:"value"']` verbatim passthrough (spec §columns
-extension, §struct-tags).
-
-**What's actually unsettled:** which first-class settings to mint and
-when (`[sensitive]` is the candidate), and whether a Go-field-name
-override (`[go:]`-style, sibling of `[model:]`) is ever needed — the
-gob rename case, since gob ignores tags.
-
-**Graduated part → decision validation-rides-checks** (2026-09-02, built): validation rides checks
-— spec §validation-checks, `nao_validate.go`, `rt.CheckError`/`rt.Like`.
-
-Mint each surface from a real moment in the app, not in advance; every
-one added costs spec + checker + generator + corpus (the closed-predicates lesson:
-closed sets, deliberately grown).
+Today every per-field property is a column setting, and anything Volt
+does not act on rides `[tag: 'key:"value"']` verbatim. Unsettled: which
+first-class settings to add (`[sensitive]` is the candidate) and
+whether a Go-field-name override is ever needed. Mint each from a real
+need; every one costs spec, checker, generator and corpus.
 
 ## H5 — Enum columns in predicates
 
-Enum-typed columns cannot be compared in the predicate language (spec
-§predicates rule 4): `where plan = :plan` is refused. The refusal is a v1
-narrowing, not a belief: a typed enum parameter (`:plan` typed as the
-generated `EPlan`, literals checked against the enum's values) is
-well-defined in both tiers. **Belief:** it should be lifted the first
-time a real app filters by an enum, with parameters typed as the enum
-and `in (a, b)` literals validated against the declared values —
-never as loose strings.
+Today enum columns cannot be compared in the predicate language.
+Unsettled only in timing: a parameter typed as the generated enum with
+literals checked against the declared values is well defined in both
+tiers and should land the first time an application filters by an
+enum.
+
+## H6 — Raw-SQL query blocks
+
+Belief: structure is Volt's and expressions are SQLite's. A declared
+raw-SQL `Select` or `View` block would have its select list, tables,
+joins and parameters parsed by Volt's front end and its WHERE, HAVING
+and other expression bodies left opaque and validated by preparing
+them against the generated DDL. Parameters of an opaque body must be
+declared, since nothing else can type them; joins follow a unique
+declared ref with an explicit `on:` as the override. Unsettled: all of
+it, including whether `volt gen` ships a SQLite to do the preparing.
+
+## H7 — Migrations
+
+Belief: the schema says what the database is, a migration says how
+one database becomes the next, and both are written by hand. A
+migration is a `Migration` element of the data package, a list of
+structural operations that is deliberately untyped, since it may say
+anything that was once true; what is verified is the composition, the
+fold of every migration onto an empty SQLite against the schema's DDL
+(§migrations, §the-fold). Settled by building it: `volt gen` fails on
+drift rather than warning, since code generated against a database no
+migration produces is the bug the fold exists to catch; and a UNIQUE
+constraint and a unique index on the same key are one structure to
+the fold, since SQLite names constraint indexes by ordinal and `add
+... [unique]` can only lower to an index. Unsettled: the generator
+that writes the next migration from the drift report, and how a
+rename is told from a drop and an add (`[was:]` in the schema, or a
+question at diff time).

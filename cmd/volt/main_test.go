@@ -32,8 +32,8 @@ func TestWorkspaceLayout(t *testing.T) {
 		"schema.volt": `package main
 
 Table posts {
-  id    integer [pk, increment]
-  title text    [not null]
+  id    int [pk, increment]
+  title string    [not null]
 }
 
 Select picked for posts where id in :ids [order: (id asc)]

@@ -8,7 +8,7 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-const navSchema = "package db\n\nTable posts {\n\tid    integer [pk]\n\ttitle text\n}\n"
+const navSchema = "package db\n\nTable posts {\n\tid    int [pk]\n\ttitle string\n}\n"
 const navRoutes = "package app\n\nimport (\n\tdb\n)\n\nPipeline api {\n\tuse volt.RequestID\n}\n\nScope / [pipe: api] {\n\tresources db.posts\n}\n"
 
 func navProject(t *testing.T) (root, schema, routes string) {
@@ -108,8 +108,31 @@ func TestVoltHoverTableShowsModel(t *testing.T) {
 			t.Errorf("hover missing %q:\n%s", want, md)
 		}
 	}
-	if !strings.Contains(md, "int32") {
+	if !strings.Contains(md, "route parameter type `int`") {
 		t.Errorf("hover should name the key's route parameter type:\n%s", md)
+	}
+}
+
+func TestVoltHoverTableKeyNotRoutable(t *testing.T) {
+	schema := "package db\n\nTable samples {\n\tid    float64 [pk]\n\tlabel string\n}\n"
+	routes := "package app\n\nimport (\n\tdb\n)\n\nScope / {\n\tresources db.samples\n}\n"
+	root := voltProject(t, map[string]string{
+		"go.mod":          "module nav\n",
+		"db/schema.volt":  schema,
+		"app/routes.volt": routes,
+	})
+	d := NewDocument("file://"+filepath.Join(root, "app", "routes.volt"), routes)
+
+	h := d.Hover(posOf(t, routes, "db.samples", 0))
+	if h == nil {
+		t.Fatal("no hover for db.samples")
+	}
+	md := h.Contents.(protocol.MarkupContent).Value
+	if !strings.Contains(md, "key: `id`\n") {
+		t.Errorf("hover should name the key:\n%s", md)
+	}
+	if strings.Contains(md, "route parameter type") {
+		t.Errorf("a float64 key is not a route parameter type:\n%s", md)
 	}
 }
 
@@ -127,7 +150,7 @@ func TestVoltHoverPipeline(t *testing.T) {
 	}
 }
 
-func TestVoltHoverDBMLStillWorks(t *testing.T) {
+func TestVoltHoverSchemaStillWorks(t *testing.T) {
 	_, schema, _ := navProject(t)
 	d := NewDocument("file://"+schema, navSchema)
 
@@ -247,7 +270,7 @@ func TestVoltCompleteQualifiedTables(t *testing.T) {
 	if len(items) != 1 || items[0].Label != "posts" {
 		t.Fatalf("completion after db.P = %v, want [posts]", items)
 	}
-	if items[0].Detail == nil || !strings.Contains(*items[0].Detail, "key id int32") {
+	if items[0].Detail == nil || !strings.Contains(*items[0].Detail, "key id int") {
 		t.Errorf("detail = %v, want the key type", items[0].Detail)
 	}
 }
@@ -268,15 +291,15 @@ func TestVoltCompleteResourcesOffersTablesAndImports(t *testing.T) {
 	}
 }
 
-func TestVoltCompleteLeavesDBMLChains(t *testing.T) {
+func TestVoltCompleteLeavesSchemaChains(t *testing.T) {
 	root := voltProject(t, map[string]string{
 		"go.mod": "module lsptest\n",
-		"db/schema.volt": "package db\n\nTable users {\n\tid integer [pk]\n\temail text\n}\n\n" +
-			"Table posts {\n\tid integer [pk]\n\tauthor_id integer\n}\n\nRef: posts.author_id > users.id\n",
+		"db/schema.volt": "package db\n\nTable users {\n\tid int [pk]\n\temail string\n}\n\n" +
+			"Table posts {\n\tid int [pk]\n\tauthor_id int\n}\n\nRef: posts.author_id > users.id\n",
 	})
 	path := root + "/db/schema.volt"
-	text := "package db\n\nTable users {\n\tid integer [pk]\n\temail text\n}\n\n" +
-		"Table posts {\n\tid integer [pk]\n\tauthor_id integer\n}\n\nRef: posts.author_id > users.\n"
+	text := "package db\n\nTable users {\n\tid int [pk]\n\temail string\n}\n\n" +
+		"Table posts {\n\tid int [pk]\n\tauthor_id int\n}\n\nRef: posts.author_id > users.\n"
 	d := NewDocument("file://"+path, text)
 	if d.vpkg == nil {
 		t.Fatal("project index should be active for this file")
@@ -289,6 +312,6 @@ func TestVoltCompleteLeavesDBMLChains(t *testing.T) {
 		labels[it.Label] = true
 	}
 	if !labels["id"] || !labels["email"] {
-		t.Errorf("DBML ref-chain completion lost: %v", labels)
+		t.Errorf("schema ref-chain completion lost: %v", labels)
 	}
 }

@@ -1,9 +1,9 @@
-// spec: §predicates rule 3 — like needs a text column
+// spec: §predicates — like needs a text column
 package db
 
 Table ms_revenue {
-  id integer [pk]
-  year integer [not null]
+  id int [pk]
+  year int [not null]
 }
 
 Select bad for ms_revenue where year like 'x%'

@@ -61,14 +61,14 @@ Table t {
           (expression_content))))))
 
 ==================
-checks block
+validators block
 ==================
 
 Table t {
   balance int
-  checks {
-    `balance >= 0` [name: 'nonneg']
-    `balance < 1000000`
+  validators {
+    BalanceFloor(balance)
+    db.BalanceCap(balance)
   }
 }
 
@@ -84,19 +84,16 @@ Table t {
       (column_type
         (type_name
           (identifier))))
-    (checks_block
-      (check_definition
-        (expression
-          (expression_content))
-        (settings_list
-          (setting
-            (setting_name
-              (identifier))
-            (string
-              (string_content)))))
-      (check_definition
-        (expression
-          (expression_content))))))
+    (validators_block
+      (validator
+        (go_ref
+          (identifier))
+        (column_ref))
+      (validator
+        (go_ref
+          (identifier)
+          (identifier))
+        (column_ref)))))
 
 ==================
 note forms: member colon and block

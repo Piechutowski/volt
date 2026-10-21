@@ -1,5 +1,8 @@
 # Volt
 
+> [!CAUTION]
+> **This project is an alpha version, and everything may change in the future.**
+
 **Status: alpha.** Personal project. The language, the generated code
 and every API in here can change without ceremony. Nothing is promised
 to anyone; [docs/spec.md](docs/spec.md) describes what the
@@ -12,12 +15,11 @@ nao — its ORM — generates the models and queries. Everything
 resolves at compile time.
 
 **One language, one file extension.** A `.volt` file is Volt — the
-markup began as DBML and grew outward, but it is a single language
-(the word "EDBML" is retired). Which constructs a file happens to
-use is up to the file. The honest build state:
+markup grew outward from its schema core, but it is a single language.
+Which constructs a file happens to use is up to the file. The honest build state:
 
-- **Schema core** (DBML-derived) — *built.* Spec Part I: Project,
-  Table with columns/indexes/checks, TablePartial, Records, Enum, Ref,
+- **Schema core** — *built.* Spec Part I: Project,
+  Table with columns/indexes/validators, TablePartial, Records, Enum, Type, Ref,
   TableGroup, Notes, DiagramView.
 - **Schema extensions** — *the structured half built:* `Group`, `Pred`
   and `Select … for <group>` with projection, `[tag:]`, `[required]`,
@@ -27,9 +29,21 @@ use is up to the file. The honest build state:
   routes, `resources`, query routes bound to generated queries,
   `dataset`, `resources … [default]`, event routes, and a generated
   client (spec Part II).
+- **Migrations**, *alpha:* a `Migration` element in the data package
+  holds hand-written structural operations (`create table`, `alter
+  table`, `rebuild table`, `exec`, ...), checked, highlighted and
+  outlined like any other element. `volt migration new` mints the
+  next one, `volt migration check` folds every migration onto an
+  empty SQLite and reports the drift from the schema as the
+  operations that would close it (`volt gen` refuses to generate on
+  drift), and `volt migration up` applies the pending ones to a
+  database through the `volt_migrations` ledger, as does the
+  generated `volt_migrations.go` from inside a binary (spec
+  §migrations). *Not built:* the generator that writes a migration
+  from the drift report, `[was:]` renames (roadmap).
 
-Project = the Go module (tree rooted at `go.mod`, decision go-module-is-the-project). Package = directory. File
-boundaries carry no meaning (§projects-and-packages rule 5).
+Project = the Go module (tree rooted at `go.mod`). Package = directory. File
+boundaries carry no meaning (§projects-and-packages).
 
 ## Layout
 
@@ -46,24 +60,24 @@ third-party deps. Importing `nao/rt` alone drags in nothing.
 | Directory        | What it is |
 |------------------|------------|
 | `*.go` (root)    | package `volt` — the runtime generated code links against: error spine, param parsing, path builders, minimal middleware |
-| `cmd/volt`       | the one binary, one file: `check` `vet` `gen` `routes` `stress` `lsp` `version` — `gen` emits models, queries and routers; `stress` writes a one-file thousand-table project to feel the limits by hand (decision generated-stress). **Own module** — its CLI deps stay out of the library |
+| `cmd/volt`       | the one binary, one file: `check` `vet` `gen` `routes` `stress` `migration` `lsp` `version` — `gen` emits models, queries and routers; `stress` writes a one-file thousand-table project to feel the limits by hand. **Own module** — its CLI deps stay out of the library |
 | `lang/`          | **the language**: `token` `scanner` `parser` `ast` `diag` `check` `vet` front end, plus go.mod root discovery, package/import resolution, route expansion and conflict detection; `lang/conformance/snippets/` = the executable corpus |
 | `gen/router/`    | router generator; goldens are gofmt-stable and compiled by the real toolchain |
 | `gen/model/`     | the data half: nao's models, queries and DDL, driven by the same project load |
 | `nao/`           | **nao — the ORM**: model + query + SQLite generation (`nao/gen`), its runtime (`nao/rt`), inflector and integration tests |
-| `lsp/`           | the Volt language server (`volt lsp`); project-aware diagnostics for files under a go.mod, single-file DBML pass otherwise. **Own module** — glsp and its tail stay out of the library |
+| `lsp/`           | the Volt language server (`volt lsp`); project-aware diagnostics for files under a go.mod, single-file schema pass otherwise. **Own module** — glsp and its tail stay out of the library |
 | `grammar/`       | tree-sitter grammar for the whole language |
 | `zed-extension/` | Zed glue; install via `scripts/sync-grammar.sh` + Install Dev Extension |
 | `scripts/`       | `sync-grammar.sh` — mirrors the grammar into the local git cache Zed loads dev grammars from; `perf.go` — the performance report of this machine: the profiling sweep from 10 to 320 tables, the editor's keystroke at each size, charts and the machine's specification, as Markdown |
 | `itest/`         | committed fixture project served over httptest, drift-checked against the generator |
-| `docs/`          | **all prose lives here** (decision docs-doctrine): `spec.md` (the language, normative) · `lint.md` · `editor.md` · `decisions.md` (the law) · `hypotheses.md` (the open questions) · `roadmap.md` (the plan) · `nao.md` · `model-layer.md` · `orm-matrix.md` (the ORM capability audit, pinned) |
+| `docs/`          | `spec.md` (the language and the generated code, normative) · `lint.md` (vet rules) · `editor.md` (grammar, extension, language server) · `hypotheses.md` (open design questions) · `roadmap.md` (what is built) |
 | `AGENT.md`       | cross-session working doctrine for AI sessions (CLAUDE.md imports it) |
 
 ## What is real vs. not yet
 
 Implemented and tested: the three-layer front end, project checking,
 the structured query layer (groups, predicates, selects with
-projection), nao's CRUD, dynamic queries and validation, router
+projection), nao's CRUD over changesets, dynamic queries and validation, router
 generation (typed params, wildcards, resources, pipelines, per-scope
 error handlers, reverse URLs, query routes, datasets, event routes),
 the generated client, JSON and GOB rendering, the runtime, the CLI,
@@ -74,7 +88,8 @@ carries these; no code backs them yet:
 
 - raw-SQL `Select` / `View` / `Trigger` blocks, `[was:]`, `[repr:]`
   (roadmap)
-- associations (ASSOC), migrations (MIG), the report engine (RPT)
+- associations (ASSOC), the migration generator over the drift report,
+  the report engine (RPT)
 - HTML rendering and typed compiled templates
 - `volt.WithQueries` / `WithTemplates` / `BuildDeps` options
 - plugs from imported packages (a v0 error on purpose)
@@ -91,11 +106,11 @@ tests:
 - **Packages** (`itest/blog`): `db/` declares the schema, `app/` the
   routes over `db`; `volt gen ./...` writes each package's files beside
   its `.volt` and the client into `app/client/`.
-- **One directory** (decision self-routing-package): a package declares its tables and routes
+- **One directory**: a package declares its tables and routes
   them itself — `resources posts [default]`, `get /picked PostPicked`
   — so models, queries, router, handlers and paths share one Go
   package.
-- **Workspace** (decision layout-independent-gen): one `schema.volt` at the root of a `go.work`
+- **Workspace**: one `schema.volt` at the root of a `go.work`
   workspace, a server module and a client module, both `package main`,
   each wired by its own `go:generate` line:
 
@@ -111,13 +126,37 @@ tests:
   module in a workspace). The client beside the models names their
   types bare and is constructed with `NewClient`.
 
+## Writing a row
+
+Every generated write takes a changeset (spec §changesets): a value
+built by pure functions, validated by pure functions and written by
+one call at the end. Nothing reaches the database before that call,
+and nothing reaches it when the changeset is invalid.
+
+```go
+user, err := q.UserCreate(ctx, db.UserNew().EmailSet("a@b.example"))
+
+cs := user.Changeset().BioSet(rt.Some("writes Go")).Validate()
+if !cs.Valid() {
+	return cs.Err()
+}
+user, err = q.UserUpdate(ctx, cs)
+```
+
+A request body is a `db.UserParams`, read by `volt.Decode` and cast
+behind an allow list, `cs.Cast(params, db.UserEmail, db.UserBio)`, so a
+client never widens what the handler lets it write. A refused write,
+a failed validator or the database's own refusal alike, is one
+`*rt.Invalid` itemizing every field error, 409 for a unique violation
+and 422 otherwise, which the error spine renders into the error body.
+
 ## Crib sheet
 
 Requires **Go 1.27+** (all three modules and go.work declare it); with the
 default `GOTOOLCHAIN=auto` an older `go` fetches it automatically.
 
 ```sh
-go install ./cmd/volt
+go install ./cmd/volt                # with cgo (a C compiler on the path): the tool carries its own SQLite
 volt check ./app && volt gen ./app && volt routes ./app
 volt gen --sql ./app                 # models + queries + router + DDL
 go test ./... ./lsp/... ./cmd/volt/...   # everything, ORM + tooling modules
@@ -125,7 +164,7 @@ go test ./gen/router -update         # refresh goldens after gen changes
 go run ./cmd/volt gen ./itest/blog   # refresh the itest fixture
 go test ./lang -run '^$' -bench . -benchmem > lang/testdata/bench_baseline.txt   # refresh the (ungated) baseline
 VOLT_SWEEP_DIR=/tmp/sweep go test ./lang -run TestProfileSweep -count=1 -timeout 30m -v   # time and profile every phase at 10..160 tables; charts in /tmp/sweep
-volt stress ./big && time volt check ./big && time volt gen --sql ./big && time go build -C ./big ./...   # one file, 1000 tables of 150 columns: the limits of check, gen, the LSP and the Go compiler (decision generated-stress)
+volt stress ./big && time volt check ./big && time volt gen --sql ./big && time go build -C ./big ./...   # one file, 1000 tables of 150 columns: the limits of check, gen, the LSP and the Go compiler
 ./scripts/sync-grammar.sh            # mirror grammar + preflight Zed
 ```
 

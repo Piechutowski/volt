@@ -1,11 +1,11 @@
-// spec: §predicates rule 3, §selects-over-groups rule 6 — `in :name` is a list parameter typed as a slice of the column's type (decision list-parameters)
+// spec: §predicates, §selects-over-groups — `in :name` is a list parameter typed as a slice of the column's type
 package db
 
 Table page_views {
-  id integer [pk]
-  site text [not null]
-  day integer [not null]
-  seen boolean [not null, default: false]
+  id int [pk]
+  site string [not null]
+  day int [not null]
+  seen bool [not null, default: false]
 }
 
 Pred chosen { site in :sites and day in :days }

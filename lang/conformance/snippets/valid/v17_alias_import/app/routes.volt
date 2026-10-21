@@ -1,4 +1,4 @@
-// spec: §imports rule 3 — an aliased import
+// spec: §imports — an aliased import
 package app
 
 import (

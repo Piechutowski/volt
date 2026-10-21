@@ -1,5 +1,5 @@
 // Package lsp implements the Volt language server — one server for the
-// whole language, of which the DBML schema core is the inner layer (docs/spec.md
+// whole language, of which the schema core is the inner layer (docs/spec.md
 // §layers-files-and-the-superset-rule).
 package lsp
 
@@ -28,7 +28,7 @@ type Document struct {
 	// Siblings, when set, snapshots every open buffer keyed by on-disk
 	// path. Nil means only this document overlays its saved file.
 	Siblings func() map[string]string
-	// Session, when set, returns the caches of a project root (decision editor-session).
+	// Session, when set, returns the caches of a project root.
 	// Nil means a fresh analysis every time.
 	Session func(root string) *lang.Session
 
@@ -37,37 +37,19 @@ type Document struct {
 	Diags []diag.Diagnostic
 	Index *Index
 
-	// local is the file's own verdict — parse, single-file check, and
-	// vet on a clean check once vetLocal has run — which stands when
-	// the file belongs to no project package; inside one, the project
-	// analysis is the truth.
-	local []diag.Diagnostic
-	// clean says the file's own parse and check found no error; vetted
-	// says vetLocal has added the vet advice to local for this text.
+	local         []diag.Diagnostic
 	clean, vetted bool
-	// resGen is the analysis generation the project fields came from,
-	// for a server-driven document (adopt).
-	resGen int
+	resGen        int
 
-	// The document's own front end is memoized per document (decision editor-session):
-	// the parse (decision parse-by-declaration), the check (decision check-by-declaration) and the index (decision index-by-table). The three
-	// belong to the goroutine that updates the document, the handler's
-	// for a server document (decisions editor-session, shared-surface); the session's own handles are
-	// the session's.
 	reuse      *parser.Reuse
 	schema     check.Memo
 	index      IndexMemo
 	parseStats parser.ReuseStats
 
-	// vindex is the project-wide Volt symbol graph, rebuilt with the
-	// diagnostics whenever this file belongs to a Volt project. Nil for
-	// a file outside any project.
 	vindex *voltIndex
-	// vpkg is the project package containing this file (nil outside a
-	// project).
-	vpkg *lang.Package
+	vpkg   *lang.Package
 
-	lineOffsets []int // byte offset of the start of each line
+	lineOffsets []int
 }
 
 // NewDocument analyzes text and returns a ready document.
@@ -79,7 +61,7 @@ func NewDocument(uri, text string) *Document {
 
 // Update replaces the document text and re-runs the whole front end:
 // the file's own pass, then the project pass. Inside a Volt project
-// the whole-project check is the truth (§projects-and-packages rule 5); alone, the DBML pass
+// the whole-project check is the truth (§projects-and-packages); alone, the schema pass
 // stands.
 func (d *Document) Update(text string) {
 	d.UpdateLocal(text)
@@ -88,13 +70,13 @@ func (d *Document) Update(text string) {
 	} else {
 		d.vetLocal()
 	}
-	d.resGen = 0 // whatever the server has, this is at least as fresh
+	d.resGen = 0
 }
 
 // UpdateLocal replaces the text and re-runs the file's own front end —
 // parse, single-file check, index — through the document's own memos
-// (decision editor-session). The project pass is Update's, or the server's background
-// analysis (decision editor-session); until either runs, the project fields keep what
+// . The project pass is Update's, or the server's background
+// analysis; until either runs, the project fields keep what
 // they had. The vet advice is not part of this: it is added by
 // vetLocal.
 func (d *Document) UpdateLocal(text string) {
@@ -114,12 +96,6 @@ func (d *Document) UpdateLocal(text string) {
 	}
 }
 
-// vetLocal adds the single-file vet advice to the document's own
-// verdict, once per text, and makes that verdict the document's when
-// no project analysis stands. It runs only where the file's own
-// verdict is the truth: a file outside any project, or one under a
-// project the loader never read (decision editor-session). Vet advice comes only on a
-// clean check.
 func (d *Document) vetLocal() {
 	if !d.vetted {
 		d.vetted = true
@@ -133,16 +109,11 @@ func (d *Document) vetLocal() {
 	}
 }
 
-// textSet replaces the text and its line table.
 func (d *Document) textSet(text string) {
 	d.Text = text
 	d.lineOffsets = lineStarts(text)
 }
 
-// localVerdict is the single-file verdict of a text no document
-// memoizes: parse, check, and vet advice when the file checks clean.
-// The background analysis computes it off the handler goroutine and
-// so off the document (decision editor-session). The diagnostics come sorted.
 func localVerdict(path, text string) []diag.Diagnostic {
 	file, diags := parser.ParseFile(path, text)
 	info, semDiags := check.File(file)
@@ -154,7 +125,6 @@ func localVerdict(path, text string) []diag.Diagnostic {
 	return diags
 }
 
-// lineStarts returns the byte offset at which each line of text begins.
 func lineStarts(text string) []int {
 	starts := make([]int, 1, strings.Count(text, "\n")+1)
 	for i := 0; i < len(text); i++ {
@@ -166,7 +136,7 @@ func lineStarts(text string) []int {
 }
 
 // GoFilesChanged reports whether the Go files this document's project
-// analysis read have changed on disk since; the checker's decision go-references-by-spelling facts
+// analysis read have changed on disk since; the checker's Go-reference facts
 // are then stale. Only Go files that were actually scanned count.
 func (d *Document) GoFilesChanged() bool {
 	if d.vindex == nil {
@@ -175,9 +145,6 @@ func (d *Document) GoFilesChanged() bool {
 	return d.vindex.goStale()
 }
 
-// analyzersActive is every registered vet analyzer except modelname: the
-// single-file pass this feeds does not resolve the [model:] setting it
-// wants (see docs/editor.md).
 func analyzersActive() []vet.Analyzer {
 	var out []vet.Analyzer
 	for _, a := range vet.All() {
@@ -188,8 +155,6 @@ func analyzersActive() []vet.Analyzer {
 	return out
 }
 
-// pathFromURI converts a file URI to the on-disk path; the result is a
-// real lookup key, so it must be the decoded path.
 func pathFromURI(uri string) string {
 	if u, err := url.Parse(uri); err == nil && u.Scheme == "file" {
 		return u.Path
@@ -197,14 +162,8 @@ func pathFromURI(uri string) string {
 	return strings.TrimPrefix(uri, "file://")
 }
 
-// ---------------------------------------------------------------------------
-// Position conversion. token.Position counts 1-based lines and 1-based rune
-// columns; LSP counts 0-based lines and 0-based UTF-16 code units.
-
-// lineText returns the 0-based line without its trailing newline.
 func (d *Document) lineText(line int) string { return lineTextIn(d.Text, d.lineOffsets, line) }
 
-// lineTextIn is lineText over any text and its line table.
 func lineTextIn(text string, starts []int, line int) string {
 	if line < 0 || line >= len(starts) {
 		return ""
@@ -225,7 +184,6 @@ func (d *Document) ToLSP(p token.Position) protocol.Position {
 	return lspPosition(d.Text, d.lineOffsets, p)
 }
 
-// lspPosition is ToLSP over any text and its line table.
 func lspPosition(text string, starts []int, p token.Position) protocol.Position {
 	line := int(p.Line()) - 1
 	if line < 0 {
@@ -274,23 +232,18 @@ func (d *Document) RangeOf(n ast.Node) protocol.Range {
 	return protocol.Range{Start: d.ToLSP(n.Pos()), End: d.ToLSP(n.End())}
 }
 
-// tokenRange converts a token's extent to an LSP range.
 func (d *Document) tokenRange(t token.Token) protocol.Range {
 	return protocol.Range{Start: d.ToLSP(t.Pos), End: d.ToLSP(t.End())}
 }
 
-// isIdentByte loosely matches identifier bytes for diagnostic ranges.
 func isIdentByte(b byte) bool {
 	return b == '_' || b >= '0' && b <= '9' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= 0x80
 }
 
-// diagnosticRange widens a diagnostic's point position to the token-ish
-// span starting there.
 func (d *Document) diagnosticRange(p token.Position) protocol.Range {
 	return diagnosticRangeIn(d.Text, d.lineOffsets, p)
 }
 
-// diagnosticRangeIn is diagnosticRange over any text and its line table.
 func diagnosticRangeIn(text string, starts []int, p token.Position) protocol.Range {
 	start := lspPosition(text, starts, p)
 	off := int(p.Offset())

@@ -1,8 +1,8 @@
 // Package corpus writes synthetic Volt projects of any size that use
-// every feature of the language in a neutral domain (decision generated-stress). One
+// every feature of the language in a neutral domain. One
 // Spec, two layouts: data packages plus a routing package that imports
 // them all, or one package main at the module root holding everything
-// in one schema.volt (decision self-routing-package).
+// in one schema.volt.
 package corpus
 
 import (
@@ -17,7 +17,7 @@ type Spec struct {
 	Packages int    // data packages d01..dNN (ignored in the one-package layout)
 	Tables   int    // tables per data package
 	Columns  int    // data columns per table, beyond the key and the partial
-	Single   bool   // one package main at the root holds schema and routes (decision self-routing-package)
+	Single   bool   // one package main at the root holds schema and routes
 	Volt     string // Volt checkout the module's runtime is replaced with; "" writes a module that checks and generates but does not build
 }
 
@@ -71,8 +71,6 @@ func Files(spec Spec) map[string]string {
 	return out
 }
 
-// goMod is the module file: a require and a replace onto the Volt
-// checkout when one is given.
 func goMod(volt string) string {
 	s := "module corpus\n\ngo 1.27\n"
 	if volt != "" {
@@ -81,44 +79,40 @@ func goMod(volt string) string {
 	return s
 }
 
-// actionOf names the Stats action a scope's route calls.
 func actionOf(scope string) string { return strings.ToUpper(scope[:1]) + scope[1:] }
 
 // Table names the i-th table (1-based) of a data package.
 func Table(i int) string { return fmt.Sprintf("tb%03ds", i) }
 
-// colTypes cycle through the column types of §mapping-to-go with and
-// without NULL.
 var colTypes = []string{
-	"integer [not null]",
-	"text [not null]",
-	"real",
-	"boolean [not null, default: false]",
+	"int [not null]",
+	"string [not null]",
+	"float64",
+	"bool [not null, default: false]",
 	"status [not null, default: status.active]",
-	"text",
-	"timestamp",
-	"bigint [not null]",
+	"string",
+	"time.Time",
+	"int [not null]",
 }
 
-// schemaWrite renders the data declarations of one package.
 func schemaWrite(b *strings.Builder, spec Spec, pkg string) {
 	b.WriteString("Enum status {\n\tactive\n\tretired [note: 'no longer written']\n}\n\n")
-	b.WriteString("TablePartial stamped {\n\tcreated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]\n}\n\n")
+	b.WriteString("TablePartial stamped {\n\tcreated_at time.Time [not null, default: `CURRENT_TIMESTAMP`]\n}\n\n")
 	b.WriteString("Pred fresh { c001 >= :since }\n\n")
 	for i := 1; i <= spec.Tables; i++ {
 		fmt.Fprintf(b, "Table %s [note: 'metrics table %d of %s'] {\n", Table(i), i, pkg)
-		b.WriteString("\tid integer [pk, increment]\n\t~stamped\n")
+		b.WriteString("\tid int [pk, increment]\n\t~stamped\n")
 		for c := 1; c <= spec.Columns; c++ {
 			typ := colTypes[(c-1)%len(colTypes)]
 			if c == 1 {
-				typ = "integer [not null]" // the pred's column, every table
+				typ = "int [not null]"
 			}
 			fmt.Fprintf(b, "\tc%03d %s\n", c, typ)
 		}
 		if i > 1 {
-			fmt.Fprintf(b, "\tprev_id integer [ref: > %s.id]\n", Table(i-1))
+			fmt.Fprintf(b, "\tprev_id int [ref: > %s.id]\n", Table(i-1))
 		}
-		b.WriteString("\n\tchecks {\n\t\tc001 >= 0 [name: 'c001_nonneg']\n\t\tPositive(c001)\n\t}\n}\n\n")
+		b.WriteString("\n\tvalidators {\n\t\tPositive(c001)\n\t}\n}\n\n")
 	}
 	b.WriteString("Group series {\n")
 	for i := 1; i <= spec.Tables; i++ {
@@ -131,8 +125,6 @@ func schemaWrite(b *strings.Builder, spec Spec, pkg string) {
 	b.WriteString("\nSelect browse for series where fresh [order: (id asc)]\n")
 }
 
-// routesWrite renders the routing declarations. In the one-package
-// layout the references are bare (decision self-routing-package).
 func routesWrite(b *strings.Builder, spec Spec, pkgs []string, single bool) {
 	if !single {
 		b.WriteString("import (\n")
@@ -161,14 +153,13 @@ func routesWrite(b *strings.Builder, spec Spec, pkgs []string, single bool) {
 	b.WriteString("}\n")
 }
 
-// checksGo is the Go file a data package's Go-reference check names.
 func checksGo(pkg string) string {
 	return "package " + pkg + `
 
 import "errors"
 
-// Positive is the Go-reference check every table names (§validation-checks rule 5).
-func Positive(v int32) error {
+// Positive is the validator every table names (§validators).
+func Positive(v int) error {
 	if v < 0 {
 		return errors.New("negative")
 	}
@@ -177,7 +168,6 @@ func Positive(v int32) error {
 `
 }
 
-// middlewareGo is the Go file the pipeline and the error handler name.
 func middlewareGo(pkg string) string {
 	return "package " + pkg + `
 
@@ -187,7 +177,7 @@ import (
 	volt "github.com/Piechutowski/volt"
 )
 
-// BearerAuth is the plug the pipeline names (§pipelines rule 2).
+// BearerAuth is the plug the pipeline names (§pipelines).
 func BearerAuth(next http.Handler) http.Handler { return next }
 
 // Errors is the error_handler the root scope names (§scopes).
@@ -197,8 +187,6 @@ func Errors(w http.ResponseWriter, r *volt.Request, err error) {
 `
 }
 
-// controllersGo stubs the controllers the routes name. In the
-// one-package layout it is main.go.
 func controllersGo(pkg string, stats []string, main bool) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "package %s\n\nimport (\n\t\"net/http\"\n\n\tvolt \"github.com/Piechutowski/volt\"\n)\n\n", pkg)

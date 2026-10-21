@@ -1,0 +1,8 @@
+// spec: §indexes — index type accepts any method identifier (btree/hash conventional)
+Table t {
+  id int
+  indexes {
+    id [type: gin]
+    (`lower(id)`) [type: gist, name: 'idx_t_lower_id']
+  }
+}

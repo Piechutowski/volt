@@ -1,9 +1,5 @@
 package parser
 
-// Parsing by element (decisions parse-by-declaration, one-parse): a file is a sequence of
-// chunks, one per top-level element, cut where the scanner says an
-// element begins (spec §line-structure-and-whitespace rule 5).
-
 import (
 	"slices"
 	"strings"
@@ -20,9 +16,6 @@ type Reuse struct {
 	chunks []*chunk
 }
 
-// chunk is one element's text and parse. starts says its first token
-// is an element start at its first byte; bound says the scan ended at
-// an element start rather than at the text's end.
 type chunk struct {
 	text   string
 	file   *token.File
@@ -31,7 +24,7 @@ type chunk struct {
 	eof    token.Position
 	starts bool
 	bound  bool
-	lines  int // line breaks in text
+	lines  int
 }
 
 // ReuseStats counts one parse's work in declarations.
@@ -44,7 +37,7 @@ type ReuseStats struct {
 // place that is still a chunk's. It returns the file, its diagnostics,
 // what to hand to the next parse, and the work done.
 func ParseFileReuse(filename, src string, prev *Reuse) (*ast.File, []diag.Diagnostic, *Reuse, ReuseStats) {
-	old := map[string][]*chunk{} // candidates by first line
+	old := map[string][]*chunk{}
 	if prev != nil && prev.name == filename {
 		for _, c := range prev.chunks {
 			k := lineFirst(c.text)
@@ -55,7 +48,7 @@ func ParseFileReuse(filename, src string, prev *Reuse) (*ast.File, []diag.Diagno
 	f := &ast.File{Name: filename}
 	var diags []diag.Diagnostic
 	var st ReuseStats
-	p := &parser{} // one parser: its slabs and token buffer serve every chunk parsed here
+	p := &parser{}
 	pos, line := 0, 1
 	for pos < len(src) {
 		c := chunkReuse(old, src, pos)
@@ -83,11 +76,6 @@ func ParseFileReuse(filename, src string, prev *Reuse) (*ast.File, []diag.Diagno
 	return f, diags, next, st
 }
 
-// chunkReuse finds a previous chunk that is the chunk at pos: its text
-// is what src holds there; it may stand there (any chunk at the start
-// of the file, an element anywhere else); and what follows it is what
-// followed it before, an element start or the end of the file. The
-// match is consumed, so identical chunks are reused once each.
 func chunkReuse(old map[string][]*chunk, src string, pos int) *chunk {
 	rest := src[pos:]
 	key := lineFirst(rest)
@@ -109,8 +97,6 @@ func chunkReuse(old map[string][]*chunk, src string, pos int) *chunk {
 	return nil
 }
 
-// chunkParse scans and parses the element at the start of f's text,
-// cutting f's text to it.
 func (p *parser) chunkParse(f *token.File) *chunk {
 	toks, errs, end, bound := scanner.ScanChunk(f, p.buf)
 	f.Src = f.Src[:end]
@@ -125,7 +111,6 @@ func (p *parser) chunkParse(f *token.File) *chunk {
 	}
 }
 
-// lineFirst is the first line of text, line break included.
 func lineFirst(text string) string {
 	if i := strings.IndexByte(text, '\n'); i >= 0 {
 		return text[:i+1]

@@ -1,12 +1,12 @@
-// spec: §selects-over-groups rule 6 — the data package whose default CRUD the resources bind
+// spec: §selects-over-groups — the data package whose default CRUD the resources bind
 package db
 
 Table users {
-  id    integer [pk, increment]
-  email text    [not null, unique]
+  id    int [pk, increment]
+  email string    [not null, unique]
 }
 
 Table tags {
-  id   integer [pk, increment]
-  name text    [not null]
+  id   int [pk, increment]
+  name string    [not null]
 }

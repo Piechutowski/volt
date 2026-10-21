@@ -1,4 +1,4 @@
-// Package token defines the lexical tokens of DBML and source positions,
+// Package token defines the lexical tokens of Volt and source positions,
 // mirroring the role of go/token in the Go toolchain.
 package token
 
@@ -8,8 +8,8 @@ import (
 )
 
 // File is the source positions point into: its name and text held
-// once (decision flat-front-end). A File may be one chunk of a larger source, in
-// which case its base is where the chunk sits in the whole (decision parse-by-declaration).
+// once. A File may be one chunk of a larger source, in
+// which case its base is where the chunk sits in the whole.
 // Bases are atomic because a reused declaration is shared
 // with results still being read.
 type File struct {
@@ -49,9 +49,9 @@ func (f *File) At(offset, line, column int) Position {
 // whole source.
 type Position struct {
 	file *File
-	off  int32 // byte offset within file, 0-based
-	line int32 // 1-based within file
-	col  int32 // 1-based, in runes
+	off  int32
+	line int32
+	col  int32
 }
 
 // At is a position in a file known by name only: a Go file a reference
@@ -142,7 +142,7 @@ const (
 
 	// Predicate and group operators (spec §groups to §predicates)
 	PLUS      // +
-	BACKSLASH // \ (group set difference, §groups rule 3)
+	BACKSLASH // \ (group set difference, §groups)
 	EQ        // =
 	NEQ       // !=
 	LE        // <=
@@ -190,7 +190,7 @@ func (k Kind) String() string {
 
 // Token is one lexical token. Val holds the processed value (escape
 // sequences applied, quotes stripped); the raw source text is borrowed
-// from the file through Text (decision flat-front-end).
+// from the file through Text.
 type Token struct {
 	Kind Kind
 
@@ -203,7 +203,7 @@ type Token struct {
 	// SpBefore reports whether any whitespace precedes this token.
 	SpBefore bool
 	// DeclStart reports that this token begins a top-level element
-	// (spec §line-structure-and-whitespace rule 5): an unquoted identifier in the first column of its
+	// (spec §line-structure-and-whitespace): an unquoted identifier in the first column of its
 	// line, outside every brace, string and comment. The element before
 	// it ends here.
 	DeclStart bool
@@ -232,7 +232,7 @@ func (t Token) Text() string {
 func (t Token) String() string {
 	if t.Kind == EOF {
 		if t.Val != "" {
-			return t.Val // a chunk's end: the next element's start (§line-structure-and-whitespace rule 5)
+			return t.Val
 		}
 		return t.Kind.String()
 	}
@@ -252,7 +252,7 @@ func (t Token) End() Position {
 			end.line++
 			end.col = 0
 		case '\r':
-			continue // a byte without a column (§line-structure-and-whitespace rule 1)
+			continue
 		}
 		end.col++
 	}

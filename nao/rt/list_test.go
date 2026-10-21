@@ -1,6 +1,9 @@
 package rt
 
-import "testing"
+import (
+	"database/sql/driver"
+	"testing"
+)
 
 func TestJSONList(t *testing.T) {
 	if got := JSONList[string](nil); got != "[]" {
@@ -17,5 +20,15 @@ func TestJSONList(t *testing.T) {
 	}
 	if got := JSONList([]float64{1.5}); got != "[1.5]" {
 		t.Errorf("floats = %q", got)
+	}
+}
+
+type siteTag struct{ name string }
+
+func (s siteTag) Value() (driver.Value, error) { return "site:" + s.name, nil }
+
+func TestJSONListValuer(t *testing.T) {
+	if got := JSONList([]siteTag{{"alpha"}, {"beta"}}); got != `["site:alpha","site:beta"]` {
+		t.Errorf("valuers = %q, want the driver values", got)
 	}
 }

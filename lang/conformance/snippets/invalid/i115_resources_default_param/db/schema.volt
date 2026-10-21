@@ -1,10 +1,10 @@
 package db
 
 Table users {
-  id    integer [pk, increment]
-  email text    [not null, unique]
+  id    int [pk, increment]
+  email string    [not null, unique]
 }
 
 Table marks {
-  id integer [pk]
+  id int [pk]
 }

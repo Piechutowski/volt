@@ -1,15 +1,15 @@
-// spec: §selects-over-groups rule 7 — agreement is on the generated field type, nullability
+// spec: §selects-over-groups — agreement is on the generated field type, nullability
 // included: text and text [not null] disagree
 package db
 
 Table page_views {
-  id integer [pk]
-  site text [not null]
+  id int [pk]
+  site string [not null]
 }
 
 Table link_clicks {
-  id integer [pk]
-  site text
+  id int [pk]
+  site string
 }
 
 Group metrics {

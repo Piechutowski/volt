@@ -1,12 +1,12 @@
-// spec: §validation-checks rule 5 — a variadic parameter never matches
+// spec: §validators — a variadic parameter never matches
 // want: is variadic
 package db
 
 Table users {
-  id integer [pk]
-  email varchar [not null]
+  id int [pk]
+  email string [not null]
 
-  checks {
+  validators {
     EmailValid(email)
   }
 }

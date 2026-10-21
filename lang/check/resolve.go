@@ -1,6 +1,6 @@
 // Pass 3: cross-element resolution (§reference-resolution) of relationship endpoints,
 // index columns, records columns, TableGroup members and DiagramView
-// members, and duplicate-relationship detection (§relationships-ref rule 9). When the
+// members, and duplicate-relationship detection (§relationships-ref). When the
 // file has use/reuse imports, unresolved-name errors are suppressed
 // (Info.HasImports).
 package check
@@ -16,7 +16,6 @@ import (
 func (c *checker) resolve(f *ast.File) {
 	lenient := c.info.HasImports
 
-	// Relationships from all three forms.
 	for _, d := range f.Decls {
 		if r, ok := d.(*ast.Ref); ok {
 			ri := &RefInfo{Node: r, Op: r.OpTok.Kind}
@@ -51,7 +50,6 @@ func (c *checker) resolve(f *ast.File) {
 	}
 	c.duplicateRefsCheck()
 
-	// Index keys must name columns of their table (§indexes rule 2).
 	for _, ti := range c.info.Tables {
 		for _, ix := range ti.Indexes {
 			for _, atom := range ix.Key {
@@ -66,7 +64,6 @@ func (c *checker) resolve(f *ast.File) {
 		}
 	}
 
-	// Records: table and column resolution (§records-sample-data).
 	for _, d := range f.Decls {
 		if r, ok := d.(*ast.Records); ok {
 			c.recordsResolve(r, nil, lenient)
@@ -97,7 +94,6 @@ func (c *checker) resolve(f *ast.File) {
 		}
 	}
 
-	// TableGroups: members exist, one group per table (§tablegroup).
 	memberOf := map[string]string{}
 	for _, d := range f.Decls {
 		g, ok := d.(*ast.TableGroup)
@@ -123,7 +119,6 @@ func (c *checker) resolve(f *ast.File) {
 		c.info.TableGroups = append(c.info.TableGroups, gi)
 	}
 
-	// DiagramView members (§diagramview rule 3).
 	for _, d := range f.Decls {
 		v, ok := d.(*ast.DiagramView)
 		if !ok {
@@ -157,7 +152,6 @@ func (c *checker) resolve(f *ast.File) {
 	}
 }
 
-// tableLookup resolves a table reference by canonical name or alias.
 func (c *checker) tableLookup(q *ast.QualName) *TableInfo {
 	return c.info.byTable[canonKey(q)]
 }
@@ -183,8 +177,6 @@ func (c *checker) endpointResolve(ep *ast.RefEndpoint, lenient bool) EndpointInf
 	return out
 }
 
-// refKey builds a direction-insensitive identity for a relationship
-// (§relationships-ref rule 9): endpoints are canonicalized and sorted.
 func refKey(r *RefInfo) (string, bool) {
 	side := func(e EndpointInfo) (string, bool) {
 		if e.Table == nil {

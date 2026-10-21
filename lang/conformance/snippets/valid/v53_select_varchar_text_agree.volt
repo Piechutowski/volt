@@ -1,14 +1,14 @@
-// spec: §selects-over-groups rule 4 — agreement is judged on the Go type: varchar and text agree
+// spec: §selects-over-groups — agreement is judged on the Go type: varchar and text agree
 package db
 
 Table ms_revenue {
-  id integer [pk]
-  org varchar(64) [not null]
+  id int [pk]
+  org string [not null]
 }
 
 Table ms_usage {
-  id integer [pk]
-  org text [not null]
+  id int [pk]
+  org string [not null]
 }
 
 Group series {

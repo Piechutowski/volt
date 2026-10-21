@@ -204,7 +204,7 @@ use * from './base'
 reuse {
   table auth.users as u
   schema billing
-} from './auth.dbml'
+} from './auth.volt'
 
 ---
 
@@ -229,3 +229,50 @@ reuse {
         (identifier)))
     (string
       (string_content))))
+
+==================
+Type name takes no slice prefix
+:error
+==================
+
+Type []Slug string
+
+---
+
+==================
+Type declarations: imported Go type with storage and path, bare type of the package
+==================
+
+Type money.Money int from 'example.com/app/money'
+Type png.Png []byte from 'image/png'
+Type Slug string
+
+---
+
+(source_file
+  (type_definition
+    (type_name
+      (schema_name
+        (identifier))
+      (identifier))
+    (column_type
+      (type_name
+        (identifier)))
+    (string
+      (string_content)))
+  (type_definition
+    (type_name
+      (schema_name
+        (identifier))
+      (identifier))
+    (column_type
+      (type_name
+        (identifier)))
+    (string
+      (string_content)))
+  (type_definition
+    (type_name
+      (identifier))
+    (column_type
+      (type_name
+        (identifier)))))

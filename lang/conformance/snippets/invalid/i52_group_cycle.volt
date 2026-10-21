@@ -1,8 +1,8 @@
-// spec: §groups rule 4 — group references must be acyclic
+// spec: §groups — group references must be acyclic
 package db
 
 Table ms_revenue {
-  id integer [pk]
+  id int [pk]
 }
 
 Group a = b + ms_revenue

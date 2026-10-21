@@ -1,9 +1,12 @@
-# DBML Vet Rules
+# Volt Vet Rules
+
+> [!CAUTION]
+> **This project is an alpha version, and everything may change in the future.**
 
 This document specifies every `vet` analyzer: what it reports, why the
-pattern is a concern even though it is **valid DBML**, and its known
+pattern is a concern even though it is **valid Volt**, and its known
 limitations. It is the lint annex to the [language specification](spec.md);
-errors (invalid DBML) are the [check package's](../lang/check/) business and are
+errors (invalid Volt) are the [check package's](../lang/check/) business and are
 not listed here.
 
 **The examples are executable, not prose.** Each rule links to its test
@@ -29,7 +32,7 @@ volt vet ./...
 
 `volt vet` is `volt check` plus these rules: each package's
 declarations are analyzed as one file, the way the checker sees them
-(§projects-and-packages rule 5), alongside the one project-level rule, `vet/pipeline`, which
+(§projects-and-packages), alongside the one project-level rule, `vet/pipeline`, which
 reports a pipeline no scope pipes through. The language server runs
 the same rules on a file that checks clean. There is no per-rule
 switch: the rules are cheap, and a suppressed warning would be a rule
@@ -39,7 +42,7 @@ A rule is judged declaration by declaration: a pure function of one
 declaration's syntax and the facts the checker resolved for it (its
 checked table, its partial, the relationships starting at its
 columns), so an editor session re-judges only the declarations an
-edit changed (decision vet-by-declaration). The rules that need the whole file — an enum or
+edit changed. The rules that need the whole file — an enum or
 alias nothing uses, a foreign-key cycle, names that differ only in
 case across tables or enums, the generated names that collide — fold
 over the checker's model and what every declaration's rules
@@ -63,7 +66,7 @@ type.
 **Why.** An enum's only effect is through columns typed with it; an unused
 enum is dead weight that still occupies a name in its schema.
 
-**Examples.** [testdata/unused.dbml](../lang/vet/testdata/unused.dbml) — `orphan_status`
+**Examples.** [testdata/unused.volt](../lang/vet/testdata/unused.volt) — `orphan_status`
 is bad; `used_status` and the schema-qualified `core.kind` are good.
 
 **Limitations.** Analysis is per-file: a file that exports the enum to
@@ -76,7 +79,7 @@ warning as "unused *here*".
 
 **Why.** Same as `unusedenum`; partials exist only to be injected.
 
-**Examples.** [testdata/unused.dbml](../lang/vet/testdata/unused.dbml) —
+**Examples.** [testdata/unused.volt](../lang/vet/testdata/unused.volt) —
 `orphan_partial` is bad; `used_partial` is good.
 
 **Limitations.** Per-file, as above.
@@ -87,10 +90,10 @@ warning as "unused *here*".
 relationship endpoint, TableGroup member, DiagramView member or records
 declaration uses.
 
-**Why.** The alias occupies a slot in the global table namespace (§namespaces-and-uniqueness rule 1)
+**Why.** The alias occupies a slot in the global table namespace (§namespaces-and-uniqueness)
 — it can collide with future table names — while providing nothing.
 
-**Examples.** [testdata/unused.dbml](../lang/vet/testdata/unused.dbml) — `P` is bad;
+**Examples.** [testdata/unused.volt](../lang/vet/testdata/unused.volt) — `P` is bad;
 `U` (used by `Ref: U.id < posts.id`) is good.
 
 **Limitations.** Per-file, as above.
@@ -107,11 +110,11 @@ guarantees.
 
 **What it does.** Reports an explicit `[null]` column setting.
 
-**Why.** Columns are nullable by default (spec §columns rule 2), so `[null]` adds no
+**Why.** Columns are nullable by default (spec §columns), so `[null]` adds no
 information. Worse, it reads as if it were load-bearing, suggesting the
 author believed the default was `not null`.
 
-**Examples.** [testdata/redundantnull.dbml](../lang/vet/testdata/redundantnull.dbml) —
+**Examples.** [testdata/redundantnull.volt](../lang/vet/testdata/redundantnull.volt) —
 `[null]` is bad; `[not null]` and no setting are good.
 
 ### redundantindex
@@ -126,7 +129,7 @@ author believed the default was `not null`.
 write) or a second spelling of the same constraint that can drift from the
 first.
 
-**Examples.** [testdata/redundantindex.dbml](../lang/vet/testdata/redundantindex.dbml)
+**Examples.** [testdata/redundantindex.volt](../lang/vet/testdata/redundantindex.volt)
 — note that `(email, country)` and `(country, id)` coexisting is good:
 composite indexes with different column order are different indexes.
 
@@ -135,15 +138,15 @@ composite indexes with different column order are different indexes.
 
 ### emptybody
 
-**What it does.** Reports empty `indexes {}` and `checks {}` blocks, empty
+**What it does.** Reports empty `indexes {}` and `validators {}` blocks, empty
 `TableGroup` bodies, empty (non-wildcard) DiagramView categories, and empty
 `Project` bodies.
 
 **Why.** An empty block does nothing but implies work in progress; an empty
 DiagramView category in particular reads as "show everything" but actually
-selects nothing (spec §diagramview rule 2).
+selects nothing (spec §diagramview).
 
-**Examples.** [testdata/emptybody.dbml](../lang/vet/testdata/emptybody.dbml) —
+**Examples.** [testdata/emptybody.volt](../lang/vet/testdata/emptybody.volt) —
 `Notes { * }` is good: a wildcard is a real selection.
 
 ### legacyflag
@@ -151,24 +154,24 @@ selects nothing (spec §diagramview rule 2).
 **What it does.** Reports the legacy bare `pk` / `unique` flags between a
 column's type and its settings list (`id int pk`).
 
-**Why.** The form survives for backward compatibility (spec §columns rule 7) but
+**Why.** The form survives for backward compatibility (spec §columns) but
 splits column constraints across two syntaxes; the settings list is the
 canonical spelling.
 
-**Examples.** [testdata/legacyflag.dbml](../lang/vet/testdata/legacyflag.dbml) —
+**Examples.** [testdata/legacyflag.volt](../lang/vet/testdata/legacyflag.volt) —
 `ok int [pk]` is the good spelling.
 
 ### shadowedcolumn
 
 **What it does.** Reports a column definition that overrides another via
-partial-injection conflict resolution (spec §tablepartial rule 4) — table-over-partial or
+partial-injection conflict resolution (spec §tablepartial) — table-over-partial or
 later-partial-over-earlier-partial.
 
 **Why.** The override is **silent**: no error, last writer wins. A type or
 constraint change in the losing partial then has no effect on this table,
 which is invisible at the partial's definition site.
 
-**Examples.** [testdata/shadowedcolumn.dbml](../lang/vet/testdata/shadowedcolumn.dbml)
+**Examples.** [testdata/shadowedcolumn.volt](../lang/vet/testdata/shadowedcolumn.volt)
 — both conflict directions are bad; non-overlapping columns are good.
 
 ### projectnotes
@@ -176,11 +179,11 @@ which is invisible at the partial's definition site.
 **What it does.** Reports a `Project` body holding more than one `Note`
 definition.
 
-**Why.** Multiple notes are accepted (spec §notes rule 1 exempts Project bodies)
+**Why.** Multiple notes are accepted (spec §notes exempts Project bodies)
 but downstream tools render a single project note, so all but one are
 silently dropped. The good form is a single (possibly multi-line) note.
 
-**Examples.** [testdata/projectnotes.dbml](../lang/vet/testdata/projectnotes.dbml).
+**Examples.** [testdata/projectnotes.volt](../lang/vet/testdata/projectnotes.volt).
 
 ### unnecessaryquotes
 
@@ -192,7 +195,7 @@ some SQL dialect); when it does not, the quotes are visual noise and invite
 inconsistent spellings of the same name.
 
 **Examples.**
-[testdata/unnecessaryquotes.dbml](../lang/vet/testdata/unnecessaryquotes.dbml) —
+[testdata/unnecessaryquotes.volt](../lang/vet/testdata/unnecessaryquotes.volt) —
 `"full name"` and `"double precision"` are good: they contain spaces and
 genuinely need quotes.
 
@@ -201,13 +204,13 @@ quoted identifier containing non-ASCII letters is not reported even though
 it may be unquotable. A name quoted more than once on one line of one
 declaration is reported once; the same name on the same line of another
 declaration, or of another file of the package, is reported again
-(the rule sees one declaration at a time, decision vet-by-declaration).
+(the rule sees one declaration at a time).
 
 ---
 
 ## Modeling traps
 
-Valid DBML that describes a database likely to misbehave. This is the
+Valid Volt that describes a database likely to misbehave. This is the
 family where a warning most often prevents a production incident.
 
 ### missingpk
@@ -219,7 +222,7 @@ no `[pk]` index.
 **Why.** Tables without primary keys defeat replication, upserts, ORMs and
 row identity in general. Almost always an oversight.
 
-**Examples.** [testdata/missingpk.dbml](../lang/vet/testdata/missingpk.dbml) — all
+**Examples.** [testdata/missingpk.volt](../lang/vet/testdata/missingpk.volt) — all
 three ways of declaring a pk (column setting, composite index, legacy flag)
 are good.
 
@@ -228,29 +231,28 @@ are good.
 **What it does.** Reports a relationship whose two columns have different
 declared types, compared pairwise for composite endpoints.
 
-**Why.** DBML does not require type agreement, but the exported database
-either rejects the FK or performs implicit casts (`bigint` vs `integer`
-overflows; `varchar` vs `int` breaks joins).
+**Why.** Nothing in the schema requires type agreement, but the database
+either rejects the FK or performs implicit casts (`string` vs `int`
+breaks joins).
 
-**Examples.** [testdata/reftype.dbml](../lang/vet/testdata/reftype.dbml).
+**Examples.** [testdata/reftype.volt](../lang/vet/testdata/reftype.volt).
 
-**Limitations.** Types are compared as written (case-insensitively):
-`int` vs `integer` are reported as different even where a database treats
-them as aliases. Prefer one spelling per schema.
+**Limitations.** Types are compared as written: a declared type and its
+storage type are reported as different.
 
 ### reftarget
 
 **What it does.** Reports a foreign key whose referenced ("one"-side)
 column set is not guaranteed unique: not a `pk`/`unique` column and not
 covered by a matching composite `[pk]`/`[unique]` index. The FK side per
-operator follows spec §relationships-ref rule 3 (`>` left, `<` right, `-` second endpoint);
+operator follows spec §relationships-ref (`>` left, `<` right, `-` second endpoint);
 `<>` has no FK side.
 
 **Why.** SQL requires FK targets to be unique; a schema that violates this
 fails at export or, worse, models a "to-one" relationship that the data
 cannot uphold.
 
-**Examples.** [testdata/reftarget.dbml](../lang/vet/testdata/reftarget.dbml) — the
+**Examples.** [testdata/reftarget.volt](../lang/vet/testdata/reftarget.volt) — the
 composite case shows that only an index with **the same column set** makes
 a composite target unique.
 
@@ -262,7 +264,7 @@ sides (`employees.id - employees.id`).
 **Why.** A column trivially equals itself; the relationship is either a
 typo for a hierarchy edge (`manager_id > id`) or meaningless.
 
-**Examples.** [testdata/selfref.dbml](../lang/vet/testdata/selfref.dbml) —
+**Examples.** [testdata/selfref.volt](../lang/vet/testdata/selfref.volt) —
 `manager_id > id` (a real hierarchy) is good.
 
 ### refcycle
@@ -274,7 +276,7 @@ tables (`a → b → a`), each cycle once.
 constraints or nullable columns, and bulk loads/dumps need special
 handling. Sometimes intentional — then the warning documents the decision.
 
-**Examples.** [testdata/refcycle.dbml](../lang/vet/testdata/refcycle.dbml) — the
+**Examples.** [testdata/refcycle.volt](../lang/vet/testdata/refcycle.volt) — the
 acyclic `c → a` edge is good; self-references are excluded (that hierarchy
 pattern is legitimate and covered by `selfref` only when degenerate).
 
@@ -283,17 +285,16 @@ pattern is legitimate and covered by `selfref` only when degenerate).
 **What it does.** Reports two names in one namespace differing only in
 letter case: tables per schema, columns per table, enums per schema.
 
-**Why.** DBML names are case-sensitive (spec §case-sensitivity-and-terminology) but many databases and
+**Why.** Volt names are case-sensitive (spec §case-sensitivity-and-terminology) but many databases and
 most humans are not; `users` next to `Users` is a bug generator.
 
-**Examples.** [testdata/casecollision.dbml](../lang/vet/testdata/casecollision.dbml).
+**Examples.** [testdata/casecollision.volt](../lang/vet/testdata/casecollision.volt).
 
 ---
 
 ## Code generation
 
-Rules that guard the DBML → Go mapping (decisions
-[Generated Go](../docs/decisions.md#generated-go)) rather than the schema itself.
+Rules that guard the schema → Go mapping (spec §mapping-to-go) rather than the schema itself.
 
 ### modelname
 
@@ -302,7 +303,7 @@ Rules that guard the DBML → Go mapping (decisions
 table name (endings like `-us`, `-is`, `-ss` where a trailing `s` is often
 not a plural marker at all) and no `[model: '...']` setting pins the name.
 
-**Why.** Models are singular by decision singular-models (`users` → `User`), but
+**Why.** Models are singular by the singular-model rule (`users` → `User`), but
 English pluralization is not decidable by rules: `menus` wants `Menu`,
 `status` wants `Status`, and a deterministic inflector cannot know which is
 which. Generation proceeds with the guess either way; this rule marks
@@ -323,15 +324,17 @@ wins; use it whenever the generated name matters.
 ### dynname
 
 **What it does.** Reports declarations whose *generated dynamic-query
-names* collide in Go package scope. The dynamic layer (decisions options-are-data, flat-handles, per-model-wrappers)
-mints flat names by concatenation — `<Model><Field>` for the column
-handles, `<Model>Limit`, `<Model>Offset`, `<Model>Distinct`,
-`<Model>OrderBy`, `<Model>After`, `<Model>Set` for the option wrappers —
-alongside the model structs, params structs, enum types and enum
-constants, so two distinct DBML declarations can flatten to one Go
-identifier: `Table user_limits` mints model `UserLimit`, exactly the
-option wrapper of `Table users`; `users.foo_bar` and `user_foos.bar`
-both mint the handle `UserFooBar`.
+names* collide in Go package scope. Generation mints flat
+package-scope names by concatenation from the model name: the model
+struct itself, the changeset `<Model>Changeset`, the aliases
+`<Model>Column` and `<Model>Params`, the constructor `<Model>New`
+(§changesets), the column handles `<Model><Field>`, and the option
+wrappers `<Model>Limit`, `<Model>Offset`, `<Model>Distinct`,
+`<Model>OrderBy`, `<Model>After`, `<Model>Set` of the dynamic layer,
+alongside the enum types and enum constants, so two distinct
+declarations can flatten to one Go identifier: `Table user_limits`
+mints model `UserLimit`, exactly the option wrapper of `Table users`;
+`users.foo_bar` and `user_foos.bar` both mint the handle `UserFooBar`.
 
 **Why.** `volt gen` refuses such schemas outright (loud failure, never a
 silent rename), but the generator can only name the first collision; this
@@ -339,14 +342,17 @@ rule reports every collision, at the later of the two declarations, with
 both origins spelled out. The name derivation is the generator's own — the
 rule calls into `nao/gen/golang` — so rule and generator cannot drift apart.
 The *common* near-collision is already defused structurally: enum types
-carry an `E` prefix (decision e-prefixed-enums), so the idiomatic `Table orders { status
+carry an `E` prefix, so the idiomatic `Table orders { status
 order_status }` mints the handle `OrderStatus` and the enum type
 `EOrderStatus` without meeting.
 
-**Examples.** [testdata/dynname.dbml](../lang/vet/testdata/dynname.dbml) — `users`,
+**Examples.** [testdata/dynname.volt](../lang/vet/testdata/dynname.volt) — `users`,
 `orders` and the `order_status` enum coexist fine (the `E` prefix at
 work); `user_limits` (model = users' `UserLimit` wrapper), `user_foos.bar`
-and `user_foo_bars` (handle/model = users' `UserFooBar` handle) all warn.
+and `user_foo_bars` (handle/model = users' `UserFooBar` handle),
+`users.new` (handle = users' own `UserNew` constructor), `user_columns`
+(model = users' `UserColumn` alias) and the pinned models `UserParams`
+and `UserChangeset` (users' write body and changeset) all warn.
 
 **Limitations.** Per-file, like every rule here. A schema that fails
 generation planning altogether (unusable names, field collisions) reports
@@ -362,11 +368,10 @@ one file in `vet/` plus one testdata file.
 
 | Candidate | What it would report | Why deferred |
 |---|---|---|
-| `junctionhint` | `<>` many-to-many refs, reminding that SQL export materializes an implicit junction table (spec §relationships-ref rule 7) | informational, not a defect; would fire on every legitimate `<>` |
+| `junctionhint` | `<>` many-to-many refs, reminding that SQL export materializes an implicit junction table (spec §relationships-ref) | informational, not a defect; would fire on every legitimate `<>` |
 | `orphantable` | tables with no relationships at all | too noisy: lookup/config tables are legitimately standalone |
 | `nullablefk` | nullable FK columns, i.e. zero-or-many cardinality (spec §nullability-and-cardinality) | that cardinality is a valid modeling choice, not a smell |
-| `recordstypes` | record values inconsistent with column types (dates, enum membership, booleans) | needs the §records-sample-data rule 4 value-typing engine; belongs in `check` when built |
-| `recordsdupkey` | duplicate primary-key values across record rows | same engine as above |
+| `recordsdupkey` | duplicate primary-key values across record rows | belongs in `check` beside record value typing (§records-sample-data) |
 | `sqlkeyword` | unquoted names that are reserved words in common SQL dialects (`order`, `user`) | needs per-dialect wordlists and a target-dialect setting |
 | `namingstyle` | mixed naming conventions (snake_case vs camelCase) | pure style; needs configuration machinery first |
 | `unusedstickynote` | sticky notes not shown by any DiagramView | views are optional; most files have none, so every note would warn |
@@ -380,12 +385,12 @@ one file in `vet/` plus one testdata file.
    declaration implements `Rule`: `Decl(d, nodes, facts)` returns its
    warnings from the declaration, its nodes in source order and the
    facts the checker resolved for it, and nothing else — the purity
-   gate walks it (decisions pure-memos, vet-by-declaration): no package state, no function values, no
+   gate walks it: no package state, no function values, no
    writes through an input, no sort of anything the inputs reach. A
    check on the whole file implements `Fold`: `File(pass)` reads the
    checker's model and the declarations' summaries. One type may be
    both.
-2. Add `testdata/<rule>.dbml` with `// analyzers: <rule>` on line 1, bad
+2. Add `testdata/<rule>.volt` with `// analyzers: <rule>` on line 1, bad
    lines marked `//WANT <rule>`, and good lines unmarked.
 3. Add a `### <rule>` section here linking that file, and make the
    rule fire in `lang/testdata/vet` so the project golden pins its

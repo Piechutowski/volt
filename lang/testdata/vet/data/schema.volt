@@ -1,11 +1,12 @@
 package data
 
 Table "users" {
-  "id" integer [pk]
-  email varchar [unique]
+  "id" int [pk]
+  email string [unique]
   foo_bar int
   total int
   status post_status [not null]
+  new int
   indexes {
     id [unique]
     email [unique]
@@ -29,23 +30,23 @@ Enum core.kind { widget }
 
 TablePartial stamps {
   id int
-  created_at timestamp
+  created_at time.Time
 }
 TablePartial audit_a {
-  updated_at timestamp
+  updated_at time.Time
 }
 TablePartial audit_b {
-  updated_at "timestamp with time zone"
+  updated_at time.Time
 }
 TablePartial orphan_partial { x int }
 TablePartial owned {
-  owner_id bigint [ref: > users.id]
+  owner_id string [ref: > users.id]
 }
 
 Table posts as P {
   ~stamps
-  id varchar
-  title varchar
+  id string
+  title string
   ~owned
   ~audit_a
   ~audit_b

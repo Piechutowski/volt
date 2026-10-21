@@ -1,6 +1,6 @@
-// spec: §projects-and-packages rule 5 — layout invariance
+// spec: §projects-and-packages — layout invariance
 package app
 
 Table users {
-	id integer [pk]
+	id int [pk]
 }

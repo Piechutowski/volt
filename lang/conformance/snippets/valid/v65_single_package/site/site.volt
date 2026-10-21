@@ -1,30 +1,30 @@
-// spec: §handler-references rule 1, §query-routes, §default-handlers rule 3, §dataset-declaration — one package declares its tables and routes them:
-// a query of the package itself is bare or self-qualified (as a plug is, §pipelines rule 2), and a
+// spec: §handler-references, §query-routes, §default-handlers, §dataset-declaration — one package declares its tables and routes them:
+// a query of the package itself is bare or self-qualified (as a plug is, §pipelines), and a
 // resources or dataset of its own tables is unqualified
 package site
 
 Table posts {
-  id    integer [pk, increment]
-  title text    [not null]
+  id    int [pk, increment]
+  title string    [not null]
 }
 
 Table tags {
-  id   integer [pk, increment]
-  name text    [not null, unique]
+  id   int [pk, increment]
+  name string    [not null, unique]
 }
 
 Select picked for posts where id in :ids [order: (id asc)]
 
 Table ms_revenue {
-  id   integer [pk, increment]
-  org  text    [not null]
-  year integer [not null]
+  id   int [pk, increment]
+  org  string    [not null]
+  year int [not null]
 }
 
 Table ms_usage {
-  id   integer [pk, increment]
-  org  text    [not null]
-  year integer [not null]
+  id   int [pk, increment]
+  org  string    [not null]
+  year int [not null]
 }
 
 Group series {
@@ -40,7 +40,7 @@ Scope /api [name: api] {
 
 	get    /picked          PostPicked
 	get    /chosen          site.PostPicked [name: chosen]
-	delete /tags/:id(int32) Tags.Purge
+	delete /tags/:id(int) Tags.Purge
 
 	dataset browse [strip: 'ms_']
 }

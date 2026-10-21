@@ -10,47 +10,44 @@ import (
 	"github.com/Piechutowski/volt/lang/token"
 )
 
-// valueKind describes what value shape a setting accepts.
 type valueKind int
 
 const (
-	flagOnly    valueKind = iota // no value allowed
-	strValue                     // string literal
-	colorValue                   // color literal (3 or 6 hex digits)
-	colorOrNone                  // color literal or the identifier none
-	exprValue                    // backtick expression
-	identValue                   // an identifier (e.g. index type)
-	actionValue                  // referential action; validated separately
-	defaultVal                   // §default-values default value
-	refVal                       // §relationships-ref inline relationship
+	flagOnly valueKind = iota
+	strValue
+	colorValue
+	colorOrNone
+	exprValue
+	identValue
+	actionValue
+	defaultVal
+	refVal
 )
 
-// settingSpec describes the settings a construct accepts.
 type settingSpec struct {
 	kinds      map[string]valueKind
 	repeatable map[string]bool
-	synonyms   map[string]string // alt spelling -> canonical
-	conflicts  [][2]string       // mutually exclusive pairs
+	synonyms   map[string]string
+	conflicts  [][2]string
+	// forbidden maps a setting name to the diagnostic it gets: a
+	// setting known elsewhere that this construct refuses for a reason.
+	forbidden map[string]string
 }
 
 var (
 	tableSettings = settingSpec{
-		// model is our extension (decision singular-models): the singular Go model name when the
-		// inflector's guess is wrong or unwanted.
 		kinds: map[string]valueKind{"headercolor": colorValue, "note": strValue, "model": strValue},
 	}
 	columnSettings = settingSpec{
-		// tag is our extension (decision tag-passthrough): one verbatim Go struct-tag pair per
-		// setting, shaped and deduplicated by tagSettingsCheck.
 		kinds: map[string]valueKind{
 			"pk": flagOnly, "primary key": flagOnly,
 			"null": flagOnly, "not null": flagOnly,
 			"unique": flagOnly, "increment": flagOnly,
-			"default": defaultVal, "check": exprValue,
-			"note": strValue, "ref": refVal, "tag": strValue,
-			"required": flagOnly, // our extension (decision required-and-problems): non-empty in both tiers
+			"default": defaultVal,
+			"note":    strValue, "ref": refVal, "tag": strValue,
+			"required": flagOnly,
 		},
-		repeatable: map[string]bool{"check": true, "ref": true, "tag": true},
+		repeatable: map[string]bool{"ref": true, "tag": true},
 		synonyms:   map[string]string{"primary key": "pk"},
 		conflicts:  [][2]string{{"null", "not null"}, {"required", "null"}, {"required", "default"}, {"required", "increment"}},
 	}
@@ -58,10 +55,8 @@ var (
 		kinds: map[string]valueKind{
 			"type": identValue, "name": strValue,
 			"unique": flagOnly, "pk": flagOnly, "note": strValue,
+			"where": exprValue,
 		},
-	}
-	settingsCheck = settingSpec{
-		kinds: map[string]valueKind{"name": strValue},
 	}
 	refSettings = settingSpec{
 		kinds: map[string]valueKind{
@@ -89,6 +84,10 @@ func (c *checker) settingsCheck(sl *ast.SettingList, section string, spec settin
 		canon := s.Name
 		if alt, ok := spec.synonyms[canon]; ok {
 			canon = alt
+		}
+		if why, bad := spec.forbidden[s.Name]; bad {
+			c.errorf(s.Pos(), section, "%s", why)
+			continue
 		}
 		kind, known := spec.kinds[s.Name]
 		if !known {
@@ -151,7 +150,6 @@ func (c *checker) settingValueCheck(s *ast.Setting, section string, kind valueKi
 	case actionValue:
 		switch s.Value.(type) {
 		case *ast.Ident, parser.MultiWord:
-			// the action vocabulary is validated in refSettingsCheck
 		default:
 			c.errorf(s.Value.Pos(), section, "%q must be a referential action", s.Name)
 		}
@@ -164,8 +162,6 @@ func (c *checker) settingValueCheck(s *ast.Setting, section string, kind valueKi
 	}
 }
 
-// defaultValueCheck enforces §default-values: number, string, boolean, null,
-// expression, or a dotted enum constant — never a bare identifier.
 func (c *checker) defaultValueCheck(s *ast.Setting) {
 	switch v := s.Value.(type) {
 	case *ast.BasicLit:
@@ -183,9 +179,6 @@ func (c *checker) defaultValueCheck(s *ast.Setting) {
 	}
 }
 
-// tagSettingsCheck enforces the tag: extension's shape rules (§columns,
-// decision tag-passthrough): one key:"value" pair per setting, keys unique per column, db
-// reserved for the scan contract.
 func (c *checker) tagSettingsCheck(sl *ast.SettingList) {
 	if sl == nil {
 		return
@@ -197,7 +190,7 @@ func (c *checker) tagSettingsCheck(sl *ast.SettingList) {
 		}
 		lit, ok := s.Value.(*ast.BasicLit)
 		if !ok || lit.Tok.Kind != token.STRING {
-			continue // shape already reported by settingValueCheck
+			continue
 		}
 		key, ok := tagPairKey(lit.Tok.Val)
 		if !ok {
@@ -216,9 +209,6 @@ func (c *checker) tagSettingsCheck(sl *ast.SettingList) {
 	}
 }
 
-// tagPairKey parses one key:"value" struct-tag pair, returning its key.
-// The shape rules are §columns's: no spaces, colons, double quotes or
-// backticks in the key; a double-quoted value free of both quote kinds.
 func tagPairKey(pair string) (string, bool) {
 	i := strings.IndexByte(pair, ':')
 	if i <= 0 {
@@ -254,29 +244,6 @@ func validColor(v string) bool {
 	return true
 }
 
-// integerTypes is the integer family of §mapping-to-go/B: the only types an
-// increment column may have (§columns extension).
-var integerTypes = map[string]bool{
-	"tinyint": true, "int2": true, "smallint": true, "smallserial": true,
-	"int": true, "integer": true, "int4": true, "mediumint": true, "serial": true,
-	"bigint": true, "int8": true, "bigserial": true,
-	"tinyint unsigned": true, "smallint unsigned": true, "int unsigned": true,
-	"integer unsigned": true, "bigint unsigned": true,
-}
-
-// IntegerType reports whether a declared type (arguments stripped,
-// case-insensitive) belongs to the integer family.
-func IntegerType(declType string) bool {
-	base := strings.ToLower(declType)
-	if i := strings.IndexByte(base, '('); i >= 0 {
-		base = strings.TrimSpace(base[:i])
-	}
-	return integerTypes[base]
-}
-
-// incrementCheck enforces the §columns extension: increment is honored in
-// exactly one shape, the single-column integer primary key, SQLite's
-// rowid alias (§mapping-to-sqlite-ddl), and is an error anywhere else.
 func (c *checker) incrementCheck(ti *TableInfo) {
 	compositePK := false
 	for _, ix := range ti.Indexes {
@@ -291,9 +258,12 @@ func (c *checker) incrementCheck(ti *TableInfo) {
 			continue
 		}
 		name := col.Name.Name()
-		if !IntegerType(col.Type.String()) {
+		if !cd.Type.Known() {
+			continue
+		}
+		if cd.Type.Storage != "int" || cd.Type.Decl != nil {
 			c.errorf(inc.Pos(), "columns",
-				"increment on %q (%s): only an integer column can auto-increment (§columns, §mapping-to-sqlite-ddl)", name, col.Type.String())
+				"increment on %q (%s): only an int column can auto-increment (§columns, §mapping-to-sqlite-ddl)", name, col.Type.String())
 			continue
 		}
 		isPK := col.Settings.Get("pk") != nil || col.Settings.Get("primary key") != nil
@@ -308,47 +278,11 @@ func (c *checker) incrementCheck(ti *TableInfo) {
 				"increment on %q: a composite primary key has no auto-assigned column — SQLite auto-assigns only the single-column integer key (§columns, §mapping-to-sqlite-ddl)", name)
 		case !isPK:
 			c.errorf(inc.Pos(), "columns",
-				"increment on %q: only the primary key auto-increments; elsewhere the keyword would be silently ignored while CreateParams omits the column (§columns, §mapping-to-sqlite-ddl)", name)
+				"increment on %q: only the primary key auto-increments; elsewhere the keyword would be silently ignored while no changeset ever marks the column (§columns, §mapping-to-sqlite-ddl)", name)
 		}
 	}
 }
 
-// requiredKinds classifies declared types for the required setting
-// (§columns extension, decision required-and-problems): what "non-empty" means per type class. Types
-// absent here (bool, date/time) cannot be required.
-var requiredKinds = map[string]string{
-	"varchar": "text", "char": "text", "text": "text", "tinytext": "text", "mediumtext": "text", "longtext": "text",
-	"citext": "text", "string": "text", "uuid": "text", "decimal": "text", "numeric": "text", "money": "text",
-	"character": "text", "character varying": "text",
-	"time": "text", "timetz": "text", "time with time zone": "text", "time without time zone": "text",
-	"tinyint": "numeric", "int2": "numeric", "smallint": "numeric", "smallserial": "numeric",
-	"int": "numeric", "integer": "numeric", "int4": "numeric", "mediumint": "numeric", "serial": "numeric",
-	"bigint": "numeric", "int8": "numeric", "bigserial": "numeric",
-	"tinyint unsigned": "numeric", "smallint unsigned": "numeric", "int unsigned": "numeric",
-	"integer unsigned": "numeric", "bigint unsigned": "numeric",
-	"real": "numeric", "float4": "numeric", "float": "numeric", "float8": "numeric", "double": "numeric", "double precision": "numeric",
-	"json": "bytes", "jsonb": "bytes",
-	"bytea": "bytes", "blob": "bytes", "tinyblob": "bytes", "mediumblob": "bytes", "longblob": "bytes", "binary": "bytes", "varbinary": "bytes",
-}
-
-// RequiredKind reports how a declared type spells "non-empty": "text"
-// (not ”), "numeric" (not 0) or "bytes" (length > 0). An enum type is
-// text. Types with no empty value (bool, date/time) report false.
-func RequiredKind(declType string, isEnum bool) (string, bool) {
-	if isEnum {
-		return "text", true
-	}
-	base := strings.ToLower(declType)
-	if i := strings.IndexByte(base, '('); i >= 0 {
-		base = strings.TrimSpace(base[:i])
-	}
-	k, ok := requiredKinds[base]
-	return k, ok
-}
-
-// requiredCheck enforces the required setting's preconditions (§columns
-// extension): the column is not null (or a key) and its type has an
-// empty value to refuse.
 func (c *checker) requiredCheck(ti *TableInfo) {
 	for _, cd := range ti.Columns {
 		col := cd.Col
@@ -357,22 +291,14 @@ func (c *checker) requiredCheck(ti *TableInfo) {
 			continue
 		}
 		name := col.Name.Name()
-		notNull := col.Settings.Get("not null") != nil || col.Settings.Get("pk") != nil || col.Settings.Get("primary key") != nil
-		for _, f := range col.LegacyFlags {
-			if strings.EqualFold(f.Name(), "pk") {
-				notNull = true
-			}
-		}
-		if !notNull {
+		if isNullable(col) {
 			c.errorf(req.Pos(), "columns", "required on %q needs not null: a nullable column has no empty value to refuse, NULL is absence (§columns)", name)
 			continue
 		}
-		isEnum := c.enumSet.present[canonKey(col.Type.Name)]
-		if !isEnum && col.Type.Name.Schema() == "" && ti.Decl.Name.Schema() != "" {
-			// an unqualified enum type may live in the table's schema
-			isEnum = c.enumSet.present[ti.Decl.Name.Schema()+"."+col.Type.Name.Base()]
+		if !cd.Type.Known() {
+			continue
 		}
-		if _, ok := RequiredKind(col.Type.String(), isEnum); !ok {
+		if _, ok := cd.Type.RequiredKind(); !ok {
 			c.errorf(req.Pos(), "columns", "required on %q (%s): a %s has no empty value — every value is a value (§columns)", name, col.Type.String(), col.Type.String())
 		}
 	}

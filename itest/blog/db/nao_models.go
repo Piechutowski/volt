@@ -3,62 +3,623 @@
 // Package db contains data models generated from package itest/blog/db.
 package db
 
+import (
+	"github.com/Piechutowski/volt/nao/rt"
+	"time"
+)
+
 // User is a row of the users table.
 type User struct {
-	ID    int32  `db:"id" json:"id"`
-	Email string `db:"email" json:"email"`
+	ID        int       `db:"id" json:"id"`
+	Email     string    `db:"email" json:"email"`
+	CreatedAt time.Time `db:"created_at" json:"created_at"`
+}
+
+// UserColumn is a column handle of User, the element of a Cast allow list
+// (spec §changesets).
+type UserColumn = rt.ColumnOf[User]
+
+// UserParams is a users write body as the wire carries it (spec §changesets).
+type UserParams = rt.Params[User]
+
+// Typed column handles of User (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter User
+// queries; mixing models is a compile error.
+var (
+	UserID        = rt.Column[User, int]{Name: "id"}
+	UserEmail     = rt.Column[User, string]{Name: "email"}
+	UserCreatedAt = rt.Column[User, time.Time]{Name: "created_at"}
+)
+
+// UserChangeset carries a users row, the changes proposed to it and the
+// errors found so far (spec §changesets). It is a value: every method
+// returns a new changeset and leaves its receiver as it was.
+type UserChangeset struct {
+	data  User
+	vals  User
+	row   bool
+	set   [3]bool
+	errs  []rt.FieldError
+	valid []rt.FieldError
+}
+
+// UserNew starts a changeset for a users row to create, the schema's literal
+// defaults in place (spec §changesets).
+func UserNew() UserChangeset { return UserChangeset{} }
+
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
+func (r User) Changeset() UserChangeset { return UserChangeset{data: r, row: true} }
+
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
+func (c UserChangeset) From(r User) UserChangeset {
+	c = c.EmailSet(r.Email)
+	c = c.CreatedAtSet(r.CreatedAt)
+	return c
+}
+
+// EmailSet sets email and marks it (spec §changesets).
+func (c UserChangeset) EmailSet(v string) UserChangeset {
+	c.vals.Email, c.set[1] = v, true
+	return c
+}
+
+// CreatedAtSet sets created_at and marks it (spec §changesets).
+func (c UserChangeset) CreatedAtSet(v time.Time) UserChangeset {
+	c.vals.CreatedAt, c.set[2] = v, true
+	return c
+}
+
+// Cast sets every column of allow that p carries, recording a cast
+// error for a value that does not convert and an unknown_field error
+// for a key that names no column (spec §changesets).
+func (c UserChangeset) Cast(p UserParams, allow ...UserColumn) UserChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "email", "created_at")...)
+	for _, col := range allow {
+		switch col.ColumnName() {
+		case "email":
+			if v, ok, err := rt.Field(p, "email", "string", false, func(r *User) string { return r.Email }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "email")
+			} else if ok {
+				c = c.EmailSet(v)
+			}
+		case "created_at":
+			if v, ok, err := rt.Field(p, "created_at", "time.Time", false, func(r *User) time.Time { return r.CreatedAt }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "created_at")
+			} else if ok {
+				c = c.CreatedAtSet(v)
+			}
+		}
+	}
+	return c
+}
+
+// Changed reports whether col is marked (spec §changesets).
+func (c UserChangeset) Changed(col UserColumn) bool {
+	switch col.ColumnName() {
+	case "id":
+		return c.set[0]
+	case "email":
+		return c.set[1]
+	case "created_at":
+		return c.set[2]
+	}
+	return false
+}
+
+// Row is the data with the marked values applied (spec §changesets).
+func (c UserChangeset) Row() User {
+	r := c.data
+	if c.set[1] {
+		r.Email = c.vals.Email
+	}
+	if c.set[2] {
+		r.CreatedAt = c.vals.CreatedAt
+	}
+	return r
+}
+
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
+func (c UserChangeset) Params() UserParams {
+	var marks []rt.Mark
+	if c.set[1] {
+		marks = append(marks, rt.Mark{Wire: "email", Value: c.vals.Email})
+	}
+	if c.set[2] {
+		marks = append(marks, rt.Mark{Wire: "created_at", Value: c.vals.CreatedAt})
+	}
+	return rt.ParamsOf(c.Row(), marks...)
+}
+
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
+func (c UserChangeset) ErrorAdd(col UserColumn, msg string) UserChangeset {
+	return c.errorAdd("custom", msg, col.ColumnName())
+}
+
+func (c UserChangeset) errorAdd(check, msg string, cols ...string) UserChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.FieldError{Check: check, Columns: cols, Message: msg})
+	return c
+}
+
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
+func (c UserChangeset) Errors() []rt.FieldError {
+	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
+}
+
+// Valid reports whether no field error was recorded (spec §changesets).
+func (c UserChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
+
+// Err is nil when c is valid and otherwise the *rt.Invalid carrying its
+// field errors (spec §changesets).
+func (c UserChangeset) Err() error {
+	if c.Valid() {
+		return nil
+	}
+	return &rt.Invalid{Model: "User", Fields: c.Errors()}
+}
+
+// Tag is a row of the tags table.
+type Tag struct {
+	Slug string `db:"slug" json:"slug"`
+	Name string `db:"name" json:"name"`
+}
+
+// TagColumn is a column handle of Tag, the element of a Cast allow list
+// (spec §changesets).
+type TagColumn = rt.ColumnOf[Tag]
+
+// TagParams is a tags write body as the wire carries it (spec §changesets).
+type TagParams = rt.Params[Tag]
+
+// Typed column handles of Tag (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter Tag
+// queries; mixing models is a compile error.
+var (
+	TagSlug = rt.Column[Tag, string]{Name: "slug"}
+	TagName = rt.Column[Tag, string]{Name: "name"}
+)
+
+// TagChangeset carries a tags row, the changes proposed to it and the
+// errors found so far (spec §changesets). It is a value: every method
+// returns a new changeset and leaves its receiver as it was.
+type TagChangeset struct {
+	data  Tag
+	vals  Tag
+	row   bool
+	set   [2]bool
+	errs  []rt.FieldError
+	valid []rt.FieldError
+}
+
+// TagNew starts a changeset for a tags row to create, the schema's literal
+// defaults in place (spec §changesets).
+func TagNew() TagChangeset { return TagChangeset{} }
+
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
+func (r Tag) Changeset() TagChangeset { return TagChangeset{data: r, row: true} }
+
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
+func (c TagChangeset) From(r Tag) TagChangeset {
+	c = c.SlugSet(r.Slug)
+	c = c.NameSet(r.Name)
+	return c
+}
+
+// SlugSet sets slug and marks it (spec §changesets).
+func (c TagChangeset) SlugSet(v string) TagChangeset {
+	c.vals.Slug, c.set[0] = v, true
+	return c
+}
+
+// NameSet sets name and marks it (spec §changesets).
+func (c TagChangeset) NameSet(v string) TagChangeset {
+	c.vals.Name, c.set[1] = v, true
+	return c
+}
+
+// Cast sets every column of allow that p carries, recording a cast
+// error for a value that does not convert and an unknown_field error
+// for a key that names no column (spec §changesets).
+func (c TagChangeset) Cast(p TagParams, allow ...TagColumn) TagChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "slug", "name")...)
+	for _, col := range allow {
+		switch col.ColumnName() {
+		case "slug":
+			if v, ok, err := rt.Field(p, "slug", "string", false, func(r *Tag) string { return r.Slug }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "slug")
+			} else if ok {
+				c = c.SlugSet(v)
+			}
+		case "name":
+			if v, ok, err := rt.Field(p, "name", "string", false, func(r *Tag) string { return r.Name }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "name")
+			} else if ok {
+				c = c.NameSet(v)
+			}
+		}
+	}
+	return c
+}
+
+// Changed reports whether col is marked (spec §changesets).
+func (c TagChangeset) Changed(col TagColumn) bool {
+	switch col.ColumnName() {
+	case "slug":
+		return c.set[0]
+	case "name":
+		return c.set[1]
+	}
+	return false
+}
+
+// Row is the data with the marked values applied (spec §changesets).
+func (c TagChangeset) Row() Tag {
+	r := c.data
+	if c.set[0] {
+		r.Slug = c.vals.Slug
+	}
+	if c.set[1] {
+		r.Name = c.vals.Name
+	}
+	return r
+}
+
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
+func (c TagChangeset) Params() TagParams {
+	var marks []rt.Mark
+	if c.set[0] {
+		marks = append(marks, rt.Mark{Wire: "slug", Value: c.vals.Slug})
+	}
+	if c.set[1] {
+		marks = append(marks, rt.Mark{Wire: "name", Value: c.vals.Name})
+	}
+	return rt.ParamsOf(c.Row(), marks...)
+}
+
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
+func (c TagChangeset) ErrorAdd(col TagColumn, msg string) TagChangeset {
+	return c.errorAdd("custom", msg, col.ColumnName())
+}
+
+func (c TagChangeset) errorAdd(check, msg string, cols ...string) TagChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.FieldError{Check: check, Columns: cols, Message: msg})
+	return c
+}
+
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
+func (c TagChangeset) Errors() []rt.FieldError {
+	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
+}
+
+// Valid reports whether no field error was recorded (spec §changesets).
+func (c TagChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
+
+// Err is nil when c is valid and otherwise the *rt.Invalid carrying its
+// field errors (spec §changesets).
+func (c TagChangeset) Err() error {
+	if c.Valid() {
+		return nil
+	}
+	return &rt.Invalid{Model: "Tag", Fields: c.Errors()}
 }
 
 // MsRevenue is a row of the ms_revenue table.
 type MsRevenue struct {
-	ID   int32  `db:"id" json:"id"`
+	ID   int    `db:"id" json:"id"`
 	Org  string `db:"org" json:"org"`
-	Year int32  `db:"year" json:"year"`
+	Year int    `db:"year" json:"year"`
+}
+
+// MsRevenueColumn is a column handle of MsRevenue, the element of a Cast allow list
+// (spec §changesets).
+type MsRevenueColumn = rt.ColumnOf[MsRevenue]
+
+// MsRevenueParams is a ms_revenue write body as the wire carries it (spec §changesets).
+type MsRevenueParams = rt.Params[MsRevenue]
+
+// Typed column handles of MsRevenue (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter MsRevenue
+// queries; mixing models is a compile error.
+var (
+	MsRevenueID   = rt.Column[MsRevenue, int]{Name: "id"}
+	MsRevenueOrg  = rt.Column[MsRevenue, string]{Name: "org"}
+	MsRevenueYear = rt.Column[MsRevenue, int]{Name: "year"}
+)
+
+// MsRevenueChangeset carries a ms_revenue row, the changes proposed to it and the
+// errors found so far (spec §changesets). It is a value: every method
+// returns a new changeset and leaves its receiver as it was.
+type MsRevenueChangeset struct {
+	data  MsRevenue
+	vals  MsRevenue
+	row   bool
+	set   [3]bool
+	errs  []rt.FieldError
+	valid []rt.FieldError
+}
+
+// MsRevenueNew starts a changeset for a ms_revenue row to create, the schema's literal
+// defaults in place (spec §changesets).
+func MsRevenueNew() MsRevenueChangeset { return MsRevenueChangeset{} }
+
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
+func (r MsRevenue) Changeset() MsRevenueChangeset { return MsRevenueChangeset{data: r, row: true} }
+
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
+func (c MsRevenueChangeset) From(r MsRevenue) MsRevenueChangeset {
+	c = c.OrgSet(r.Org)
+	c = c.YearSet(r.Year)
+	return c
+}
+
+// OrgSet sets org and marks it (spec §changesets).
+func (c MsRevenueChangeset) OrgSet(v string) MsRevenueChangeset {
+	c.vals.Org, c.set[1] = v, true
+	return c
+}
+
+// YearSet sets year and marks it (spec §changesets).
+func (c MsRevenueChangeset) YearSet(v int) MsRevenueChangeset {
+	c.vals.Year, c.set[2] = v, true
+	return c
+}
+
+// Cast sets every column of allow that p carries, recording a cast
+// error for a value that does not convert and an unknown_field error
+// for a key that names no column (spec §changesets).
+func (c MsRevenueChangeset) Cast(p MsRevenueParams, allow ...MsRevenueColumn) MsRevenueChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "org", "year")...)
+	for _, col := range allow {
+		switch col.ColumnName() {
+		case "org":
+			if v, ok, err := rt.Field(p, "org", "string", false, func(r *MsRevenue) string { return r.Org }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "org")
+			} else if ok {
+				c = c.OrgSet(v)
+			}
+		case "year":
+			if v, ok, err := rt.Field(p, "year", "int", false, func(r *MsRevenue) int { return r.Year }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "year")
+			} else if ok {
+				c = c.YearSet(v)
+			}
+		}
+	}
+	return c
+}
+
+// Changed reports whether col is marked (spec §changesets).
+func (c MsRevenueChangeset) Changed(col MsRevenueColumn) bool {
+	switch col.ColumnName() {
+	case "id":
+		return c.set[0]
+	case "org":
+		return c.set[1]
+	case "year":
+		return c.set[2]
+	}
+	return false
+}
+
+// Row is the data with the marked values applied (spec §changesets).
+func (c MsRevenueChangeset) Row() MsRevenue {
+	r := c.data
+	if c.set[1] {
+		r.Org = c.vals.Org
+	}
+	if c.set[2] {
+		r.Year = c.vals.Year
+	}
+	return r
+}
+
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
+func (c MsRevenueChangeset) Params() MsRevenueParams {
+	var marks []rt.Mark
+	if c.set[1] {
+		marks = append(marks, rt.Mark{Wire: "org", Value: c.vals.Org})
+	}
+	if c.set[2] {
+		marks = append(marks, rt.Mark{Wire: "year", Value: c.vals.Year})
+	}
+	return rt.ParamsOf(c.Row(), marks...)
+}
+
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
+func (c MsRevenueChangeset) ErrorAdd(col MsRevenueColumn, msg string) MsRevenueChangeset {
+	return c.errorAdd("custom", msg, col.ColumnName())
+}
+
+func (c MsRevenueChangeset) errorAdd(check, msg string, cols ...string) MsRevenueChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.FieldError{Check: check, Columns: cols, Message: msg})
+	return c
+}
+
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
+func (c MsRevenueChangeset) Errors() []rt.FieldError {
+	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
+}
+
+// Valid reports whether no field error was recorded (spec §changesets).
+func (c MsRevenueChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
+
+// Err is nil when c is valid and otherwise the *rt.Invalid carrying its
+// field errors (spec §changesets).
+func (c MsRevenueChangeset) Err() error {
+	if c.Valid() {
+		return nil
+	}
+	return &rt.Invalid{Model: "MsRevenue", Fields: c.Errors()}
 }
 
 // MsUsage is a row of the ms_usage table.
 type MsUsage struct {
-	ID   int32  `db:"id" json:"id"`
+	ID   int    `db:"id" json:"id"`
 	Org  string `db:"org" json:"org"`
-	Year int32  `db:"year" json:"year"`
+	Year int    `db:"year" json:"year"`
 }
 
-// UserCreateParams are the caller-supplied columns of UserCreate. The
-// auto-increment key and defaulted columns are the database's job (decision create-params).
-type UserCreateParams struct {
-	Email string `db:"email" json:"email"`
+// MsUsageColumn is a column handle of MsUsage, the element of a Cast allow list
+// (spec §changesets).
+type MsUsageColumn = rt.ColumnOf[MsUsage]
+
+// MsUsageParams is a ms_usage write body as the wire carries it (spec §changesets).
+type MsUsageParams = rt.Params[MsUsage]
+
+// Typed column handles of MsUsage (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter MsUsage
+// queries; mixing models is a compile error.
+var (
+	MsUsageID   = rt.Column[MsUsage, int]{Name: "id"}
+	MsUsageOrg  = rt.Column[MsUsage, string]{Name: "org"}
+	MsUsageYear = rt.Column[MsUsage, int]{Name: "year"}
+)
+
+// MsUsageChangeset carries a ms_usage row, the changes proposed to it and the
+// errors found so far (spec §changesets). It is a value: every method
+// returns a new changeset and leaves its receiver as it was.
+type MsUsageChangeset struct {
+	data  MsUsage
+	vals  MsUsage
+	row   bool
+	set   [3]bool
+	errs  []rt.FieldError
+	valid []rt.FieldError
 }
 
-// UserUpdateParams are the data columns of UserUpdate: every column
-// outside the primary key.
-type UserUpdateParams struct {
-	Email string `db:"email" json:"email"`
+// MsUsageNew starts a changeset for a ms_usage row to create, the schema's literal
+// defaults in place (spec §changesets).
+func MsUsageNew() MsUsageChangeset { return MsUsageChangeset{} }
+
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
+func (r MsUsage) Changeset() MsUsageChangeset { return MsUsageChangeset{data: r, row: true} }
+
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
+func (c MsUsageChangeset) From(r MsUsage) MsUsageChangeset {
+	c = c.OrgSet(r.Org)
+	c = c.YearSet(r.Year)
+	return c
 }
 
-// MsRevenueCreateParams are the caller-supplied columns of MsRevenueCreate. The
-// auto-increment key and defaulted columns are the database's job (decision create-params).
-type MsRevenueCreateParams struct {
-	Org  string `db:"org" json:"org"`
-	Year int32  `db:"year" json:"year"`
+// OrgSet sets org and marks it (spec §changesets).
+func (c MsUsageChangeset) OrgSet(v string) MsUsageChangeset {
+	c.vals.Org, c.set[1] = v, true
+	return c
 }
 
-// MsRevenueUpdateParams are the data columns of MsRevenueUpdate: every column
-// outside the primary key.
-type MsRevenueUpdateParams struct {
-	Org  string `db:"org" json:"org"`
-	Year int32  `db:"year" json:"year"`
+// YearSet sets year and marks it (spec §changesets).
+func (c MsUsageChangeset) YearSet(v int) MsUsageChangeset {
+	c.vals.Year, c.set[2] = v, true
+	return c
 }
 
-// MsUsageCreateParams are the caller-supplied columns of MsUsageCreate. The
-// auto-increment key and defaulted columns are the database's job (decision create-params).
-type MsUsageCreateParams struct {
-	Org  string `db:"org" json:"org"`
-	Year int32  `db:"year" json:"year"`
+// Cast sets every column of allow that p carries, recording a cast
+// error for a value that does not convert and an unknown_field error
+// for a key that names no column (spec §changesets).
+func (c MsUsageChangeset) Cast(p MsUsageParams, allow ...MsUsageColumn) MsUsageChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "org", "year")...)
+	for _, col := range allow {
+		switch col.ColumnName() {
+		case "org":
+			if v, ok, err := rt.Field(p, "org", "string", false, func(r *MsUsage) string { return r.Org }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "org")
+			} else if ok {
+				c = c.OrgSet(v)
+			}
+		case "year":
+			if v, ok, err := rt.Field(p, "year", "int", false, func(r *MsUsage) int { return r.Year }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "year")
+			} else if ok {
+				c = c.YearSet(v)
+			}
+		}
+	}
+	return c
 }
 
-// MsUsageUpdateParams are the data columns of MsUsageUpdate: every column
-// outside the primary key.
-type MsUsageUpdateParams struct {
-	Org  string `db:"org" json:"org"`
-	Year int32  `db:"year" json:"year"`
+// Changed reports whether col is marked (spec §changesets).
+func (c MsUsageChangeset) Changed(col MsUsageColumn) bool {
+	switch col.ColumnName() {
+	case "id":
+		return c.set[0]
+	case "org":
+		return c.set[1]
+	case "year":
+		return c.set[2]
+	}
+	return false
+}
+
+// Row is the data with the marked values applied (spec §changesets).
+func (c MsUsageChangeset) Row() MsUsage {
+	r := c.data
+	if c.set[1] {
+		r.Org = c.vals.Org
+	}
+	if c.set[2] {
+		r.Year = c.vals.Year
+	}
+	return r
+}
+
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
+func (c MsUsageChangeset) Params() MsUsageParams {
+	var marks []rt.Mark
+	if c.set[1] {
+		marks = append(marks, rt.Mark{Wire: "org", Value: c.vals.Org})
+	}
+	if c.set[2] {
+		marks = append(marks, rt.Mark{Wire: "year", Value: c.vals.Year})
+	}
+	return rt.ParamsOf(c.Row(), marks...)
+}
+
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
+func (c MsUsageChangeset) ErrorAdd(col MsUsageColumn, msg string) MsUsageChangeset {
+	return c.errorAdd("custom", msg, col.ColumnName())
+}
+
+func (c MsUsageChangeset) errorAdd(check, msg string, cols ...string) MsUsageChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.FieldError{Check: check, Columns: cols, Message: msg})
+	return c
+}
+
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
+func (c MsUsageChangeset) Errors() []rt.FieldError {
+	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
+}
+
+// Valid reports whether no field error was recorded (spec §changesets).
+func (c MsUsageChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
+
+// Err is nil when c is valid and otherwise the *rt.Invalid carrying its
+// field errors (spec §changesets).
+func (c MsUsageChangeset) Err() error {
+	if c.Valid() {
+		return nil
+	}
+	return &rt.Invalid{Model: "MsUsage", Fields: c.Errors()}
 }

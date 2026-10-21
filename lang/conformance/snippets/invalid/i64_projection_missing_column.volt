@@ -1,15 +1,15 @@
-// spec: §selects-over-groups rule 7 — a listed column must exist in every member
+// spec: §selects-over-groups — a listed column must exist in every member
 package db
 
 Table page_views {
-  id integer [pk]
-  site varchar [not null]
-  hits integer [not null]
+  id int [pk]
+  site string [not null]
+  hits int [not null]
 }
 
 Table link_clicks {
-  id integer [pk]
-  site varchar [not null]
+  id int [pk]
+  site string [not null]
 }
 
 Group metrics {

@@ -15,7 +15,7 @@ type redundantNullRule struct{ meta }
 
 var redundantNull = &redundantNullRule{meta{
 	name: "redundantnull",
-	doc:  "reports explicit [null] settings; columns are nullable by default (spec §columns rule 2)",
+	doc:  "reports explicit [null] settings; columns are nullable by default (spec §columns)",
 }}
 
 func (r *redundantNullRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
@@ -56,7 +56,6 @@ func (r *redundantIndexRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.
 		}
 		seenKeys[key] = true
 
-		// single-column index repeating a column-level constraint
 		if len(ix.Key) != 1 {
 			continue
 		}
@@ -81,8 +80,6 @@ func (r *redundantIndexRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.
 	return out
 }
 
-// indexKey canonicalizes an index key for duplicate detection: column order
-// is significant for composite indexes, so it is preserved.
 func indexKey(ix *ast.Index) string {
 	parts := make([]string, 0, len(ix.Key))
 	for _, a := range ix.Key {
@@ -96,8 +93,6 @@ func indexKey(ix *ast.Index) string {
 	return "(" + strings.Join(parts, ", ") + ")"
 }
 
-// columnHas reports whether the column carries the given canonical setting,
-// via the settings list or a legacy flag.
 func columnHas(cd *check.ColumnDef, name string) bool {
 	if cd.Col.Settings != nil {
 		if cd.Col.Settings.Get(name) != nil {
@@ -119,7 +114,7 @@ type emptyBodyRule struct{ meta }
 
 var emptyBody = &emptyBodyRule{meta{
 	name: "emptybody",
-	doc:  "reports empty indexes/checks blocks, TableGroups, DiagramView categories and Project bodies",
+	doc:  "reports empty indexes/validators blocks, TableGroups, DiagramView categories and Project bodies",
 }}
 
 func (r *emptyBodyRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
@@ -130,9 +125,9 @@ func (r *emptyBodyRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagn
 			if len(n.Indexes) == 0 {
 				out = append(out, r.warnf(n.Pos(), "empty indexes block"))
 			}
-		case *ast.ChecksBlock:
-			if len(n.Checks) == 0 {
-				out = append(out, r.warnf(n.Pos(), "empty checks block"))
+		case *ast.ValidatorsBlock:
+			if len(n.Validators) == 0 {
+				out = append(out, r.warnf(n.Pos(), "empty validators block"))
 			}
 		case *ast.TableGroup:
 			if len(n.Members) == 0 {
@@ -155,7 +150,7 @@ type legacyFlagRule struct{ meta }
 
 var legacyFlag = &legacyFlagRule{meta{
 	name: "legacyflag",
-	doc:  "reports legacy bare pk/unique flags between type and settings; prefer the settings list (spec §columns rule 7)",
+	doc:  "reports legacy bare pk/unique flags between type and settings; prefer the settings list (spec §columns)",
 }}
 
 func (r *legacyFlagRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
@@ -176,7 +171,7 @@ type shadowedColumnRule struct{ meta }
 
 var shadowedColumn = &shadowedColumnRule{meta{
 	name: "shadowedcolumn",
-	doc:  "reports column definitions silently overridden by spec §tablepartial rule 4 partial-injection conflict resolution",
+	doc:  "reports column definitions silently overridden by spec §tablepartial partial-injection conflict resolution",
 }}
 
 func (r *shadowedColumnRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
@@ -227,7 +222,7 @@ var unnecessaryQuotes = &unnecessaryQuotesRule{meta{
 
 func (r *unnecessaryQuotesRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
 	var out []diag.Diagnostic
-	seen := map[string]bool{} // repeated spellings on one line of this declaration are reported once
+	seen := map[string]bool{}
 	for _, n := range nodes {
 		id, ok := n.(*ast.Ident)
 		if !ok || !id.Quoted() || !isPlainIdent(id.Name()) {

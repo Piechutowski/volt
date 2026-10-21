@@ -2,8 +2,8 @@ package data
 
 Table "comments" {
   "id" int [pk]
-  post_id varchar
-  author_id bigint
+  post_id string
+  author_id string
   ~owned
 }
 Ref: comments.author_id > users.id
@@ -49,5 +49,15 @@ Table bonus {
   id int [pk]
 }
 Table axis {
+  id int [pk]
+}
+
+Table user_columns {
+  id int [pk]
+}
+Table user_params [model: 'UserParams'] {
+  id int [pk]
+}
+Table drafts [model: 'UserChangeset'] {
   id int [pk]
 }

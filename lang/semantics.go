@@ -16,7 +16,7 @@ import (
 )
 
 // Check runs project-level semantic analysis (spec §projects-and-packages–§settings-whitelists) over a
-// loaded project: file and package rules, import resolution, the DBML
+// loaded project: file and package rules, import resolution, the schema
 // layer per package, and routing expansion. It populates each package's
 // Imports, Pipelines, Routes and Controllers, and returns all
 // diagnostics including the ones collected at load time.
@@ -24,8 +24,6 @@ func Check(pr *Project) []diag.Diagnostic {
 	return checkWith(pr, nil)
 }
 
-// checkWith is Check with an optional Session memo (decision editor-session): a package
-// whose inputs are what they were last time is restored, not re-run.
 func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 	c := &checker{pr: pr, diags: append([]diag.Diagnostic{}, pr.Diags...)}
 
@@ -37,8 +35,6 @@ func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 	}
 	c.cyclesCheck()
 
-	// The per-package phases run on every CPU (decision worker-pool); their
-	// diagnostics are kept per package and appended in package order.
 	paths := c.paths()
 	pkgDiags := make(map[string][]diag.Diagnostic, len(paths))
 	fresh := paths
@@ -55,7 +51,6 @@ func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 			}
 		}
 	}
-	// Check is idempotent on a Project, whatever ran on it earlier (decision indexed-lookups).
 	for _, path := range fresh {
 		pr.Packages[path].resultsReset()
 	}
@@ -76,14 +71,13 @@ func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 		info, schemaDiags := check.FileMemo(pkg.merged, schemaMemo)
 		cc.diags = append(cc.diags, schemaDiags...)
 		pkg.schema = info
-		// The naming plan, built once (decision one-naming-plan).
 		pkg.plan = golang.PlanBuildMemo(pkg.merged, info, planMemo)
 	})
 	for _, path := range paths {
 		c.schemas[path] = pr.Packages[path].schema
 	}
 	phase((*checker).dataQueries)
-	phase((*checker).tableChecks)
+	phase((*checker).tableValidators)
 	phase((*checker).routing)
 	if s != nil {
 		for _, path := range fresh {
@@ -104,74 +98,42 @@ type checker struct {
 	diags   []diag.Diagnostic
 	schemas map[string]*check.Info
 
-	// per-package state during routing()
 	pkg       *Package
 	usedQual  map[string]bool
-	conflicts *routeIndex // accepted routes, bucketed for the §route-conflicts rule 2 scan
+	conflicts *routeIndex
 
-	// gofuncs caches each package directory's Go functions (§pipelines rule 2,
-	// §validation-checks rule 5), scanned once per run and shared across the per-package
-	// checkers of a phase.
 	gofuncs *goFuncsCache
 
-	// memos are the per-declaration memos of the session's packages
-	// (decision check-by-declaration), by package path; memo is the current package's, nil
-	// outside a session.
 	memos map[string]*declMemo
 	memo  *declMemo
 }
 
-// declMemo holds one package's per-declaration memos across checks
-// (decision check-by-declaration): the schema checker's tables, the plan's models, the lowered
-// checks, the selects, and the routes of each scope item (decision check-by-declaration).
 type declMemo struct {
 	schema  check.Memo
 	plan    golang.PlanMemo
 	checks  checksMemo
 	selects selectsMemo
 	routes  routesMemo
-	vet     vet.Memo // the vet's, by declaration (decision vet-by-declaration)
+	vet     vet.Memo
 }
 
-// checksMemo remembers a table's lowered checks: good while the
-// checked table, its model and the directory's Go files are what
-// they were.
 type checksMemo struct {
 	prev, next   map[*check.TableInfo]*checksEntry
 	Hits, Misses int
 }
 
-// checksEntry is one call of tableSpecs: its inputs (the checked
-// table is the map key) and its outputs.
 type checksEntry struct {
 	model   any
 	funcs   *goScan
 	pkgName string
-	preds   map[string]*ast.Pred
-	specs   []golang.CheckSpec
-	sqls    map[*ast.Check]string
+	specs   []golang.ValidatorSpec
 	diags   []diag.Diagnostic
-
-	validCreate, validUpdate bool // the params structs validate: decided with the specs (§validation-checks rule 6)
 }
 
-// holds reports whether the entry's inputs are the given ones.
-func (e *checksEntry) holds(model any, funcs *goScan, pkgName string, preds map[string]*ast.Pred) bool {
-	if e.model != model || e.funcs != funcs || e.pkgName != pkgName || len(e.preds) != len(preds) {
-		return false
-	}
-	for name, d := range preds {
-		if old, ok := e.preds[name]; !ok || old != d {
-			return false
-		}
-	}
-	return true
+func (e *checksEntry) holds(model any, funcs *goScan, pkgName string) bool {
+	return e.model == model && e.funcs == funcs && e.pkgName == pkgName
 }
 
-// perPackage runs one phase over every package, on every CPU (decision worker-pool).
-// Each package gets its own checker; the project, the schemas and the
-// Go-function cache are shared, read-only or locked; diagnostics are
-// returned in package order. A phase writes only its own package.
 func (c *checker) perPackage(paths []string, phase func(*checker, *Package)) [][]diag.Diagnostic {
 	if c.gofuncs == nil {
 		c.gofuncs = &goFuncsCache{}
@@ -201,8 +163,6 @@ func (c *checker) errorf(pos token.Position, section, format string, args ...any
 	c.diags = append(c.diags, diag.Errorf(pos, "spec/"+section, format, args...))
 }
 
-/* ===== §projects-and-packages: files and packages ===== */
-
 func (c *checker) fileRules(pkg *Package) {
 	base := pkg.Path
 	if i := strings.LastIndex(base, "/"); i >= 0 {
@@ -214,38 +174,35 @@ func (c *checker) fileRules(pkg *Package) {
 			switch d := d.(type) {
 			case *ast.PackageClause:
 				if i != 0 {
-					c.errorf(d.Pos(), "projects-and-packages", "the package clause must be the first declaration in the file (§projects-and-packages rule 2)")
+					c.errorf(d.Pos(), "projects-and-packages", "the package clause must be the first declaration in the file (§projects-and-packages)")
 				}
 				if clause != nil {
-					c.errorf(d.Pos(), "projects-and-packages", "duplicate package clause (§projects-and-packages rule 2)")
+					c.errorf(d.Pos(), "projects-and-packages", "duplicate package clause (§projects-and-packages)")
 					continue
 				}
 				clause = d
 			case *ast.Use:
-				// Rejected by the schema checker (§file-imports-removed) — one error, not two.
 			}
 		}
 		if clause == nil {
-			c.errorf(f.Pos(), "projects-and-packages", "every .volt file must begin with a package clause (§projects-and-packages rule 2)")
+			c.errorf(f.Pos(), "projects-and-packages", "every .volt file must begin with a package clause (§projects-and-packages)")
 			continue
 		}
 		name := clause.Name.Name()
 		if name == "volt" {
-			c.errorf(clause.Pos(), "projects-and-packages", "package name %q is reserved for the runtime (§projects-and-packages rule 2); generated code could not tell your package from it", name)
+			c.errorf(clause.Pos(), "projects-and-packages", "package name %q is reserved for the runtime (§projects-and-packages); generated code could not tell your package from it", name)
 			continue
 		}
 		if pkg.Name == "" {
 			pkg.Name = name
 		} else if pkg.Name != name {
-			c.errorf(clause.Pos(), "projects-and-packages", "package name %q disagrees with %q declared elsewhere in the directory (§projects-and-packages rule 3)", name, pkg.Name)
+			c.errorf(clause.Pos(), "projects-and-packages", "package name %q disagrees with %q declared elsewhere in the directory (§projects-and-packages)", name, pkg.Name)
 		}
 		if pkg.Path != "." && name != base {
-			c.errorf(clause.Pos(), "projects-and-packages", "package name %q must match its directory name %q (§projects-and-packages rule 4)", name, base)
+			c.errorf(clause.Pos(), "projects-and-packages", "package name %q must match its directory name %q (§projects-and-packages)", name, base)
 		}
 	}
 }
-
-/* ===== §imports: imports ===== */
 
 func (c *checker) importsResolve(pkg *Package) {
 	byPath := map[string]*ast.ImportSpec{}
@@ -260,29 +217,26 @@ func (c *checker) importsResolve(pkg *Package) {
 				path := spec.PathString()
 				if prev, dup := byPath[path]; dup {
 					if prev.Qualifier() != spec.Qualifier() {
-						c.errorf(spec.Pos(), "imports", "package %q imported twice with different qualifiers %q and %q (§imports rule 4)", path, prev.Qualifier(), spec.Qualifier())
+						c.errorf(spec.Pos(), "imports", "package %q imported twice with different qualifiers %q and %q (§imports)", path, prev.Qualifier(), spec.Qualifier())
 					}
-					continue // idempotent across files (§imports rule 4)
+					continue
 				}
 				byPath[path] = spec
 
 				qual := spec.Qualifier()
 				if prev, taken := pkg.Imports[qual]; taken && prev != path {
-					c.errorf(spec.Pos(), "imports", "import qualifier %q already used for package %q (§imports rule 4); alias one of them", qual, prev)
+					c.errorf(spec.Pos(), "imports", "import qualifier %q already used for package %q (§imports); alias one of them", qual, prev)
 					continue
 				}
 				target, exists := c.pr.Packages[path]
 				switch {
 				case path == pkg.Path:
-					c.errorf(spec.Pos(), "imports", "a package cannot import itself (§imports rule 4)")
+					c.errorf(spec.Pos(), "imports", "a package cannot import itself (§imports)")
 				case qual == pkg.Name:
-					// The package's own name qualifies its own tables,
-					// queries and functions (§pipelines rule 2, §handler-references, §declaration, §dataset-declaration).
-					c.errorf(spec.Pos(), "imports", "import qualifier %q is this package's own name (§imports rule 4); alias the import", qual)
+					c.errorf(spec.Pos(), "imports", "import qualifier %q is this package's own name (§imports); alias the import", qual)
 				case !exists:
-					c.errorf(spec.Pos(), "imports", "unknown package %q: no directory of .volt files at that path under the project root (§imports rule 2)", path)
+					c.errorf(spec.Pos(), "imports", "unknown package %q: no directory of .volt files at that path under the project root (§imports)", path)
 				case target == pkg:
-					// unreachable; kept for clarity
 				default:
 					pkg.Imports[qual] = path
 				}
@@ -291,7 +245,6 @@ func (c *checker) importsResolve(pkg *Package) {
 	}
 }
 
-// cyclesCheck rejects import cycles between packages (§imports rule 6).
 func (c *checker) cyclesCheck() {
 	const (
 		white = 0
@@ -315,14 +268,13 @@ func (c *checker) cyclesCheck() {
 			case white:
 				visit(target)
 			case grey:
-				// report at the spec that closes the cycle
 				pos := pkg.merged.Pos()
 				for _, s := range pkg.importSpecs {
 					if s.PathString() == target {
 						pos = s.Pos()
 					}
 				}
-				c.errorf(pos, "imports", "import cycle: %s (§imports rule 6)", cycleString(stack, target))
+				c.errorf(pos, "imports", "import cycle: %s (§imports)", cycleString(stack, target))
 			}
 		}
 		color[path] = black
@@ -345,9 +297,6 @@ func cycleString(stack []string, target string) string {
 	return strings.Join(append(append([]string{}, stack[start:]...), target), " -> ")
 }
 
-/* ===== §pipelines–§resources: routing ===== */
-
-// inherited is the scope context flowing down the tree (§scopes).
 type inherited struct {
 	prefix     []*ast.Segment
 	pipes      []string
@@ -365,11 +314,11 @@ func (c *checker) routing(pkg *Package) {
 	for _, d := range pkg.merged.Decls {
 		if pl, ok := d.(*ast.Pipeline); ok {
 			if pl.Name.Quoted() || !goIdentOK(pl.Name.Name()) {
-				c.errorf(pl.Name.Pos(), "pipelines", "Pipeline name %q must be a plain identifier (§pipelines rule 1)", pl.Name.Name())
+				c.errorf(pl.Name.Pos(), "pipelines", "Pipeline name %q must be a plain identifier (§pipelines)", pl.Name.Name())
 				continue
 			}
 			if _, dup := pkg.Pipelines[pl.Name.Name()]; dup {
-				c.errorf(pl.Pos(), "pipelines", "duplicate Pipeline name %q (§pipelines rule 1)", pl.Name.Name())
+				c.errorf(pl.Pos(), "pipelines", "duplicate Pipeline name %q (§pipelines)", pl.Name.Name())
 				continue
 			}
 			pkg.Pipelines[pl.Name.Name()] = pl
@@ -379,8 +328,6 @@ func (c *checker) routing(pkg *Package) {
 		}
 	}
 
-	// Every scope item is lowered by itemLower, a pure function of the
-	// inputs resolved here (decisions pure-memos, check-by-declaration).
 	facts := routeFacts{pkgName: pkg.Name, pkgPath: pkg.Path, module: c.pr.Module, imports: pkg.Imports}
 	var memo *routesMemo
 	if c.memo != nil {
@@ -399,8 +346,6 @@ func (c *checker) routing(pkg *Package) {
 		memo.prev, memo.next = memo.next, nil
 	}
 
-	// §handler-references rule 4: a controller cannot take the name of a Controllers
-	// manifest field (§query-routes rule 5, §event-routes).
 	held := map[string]string{}
 	for _, r := range pkg.Routes {
 		switch {
@@ -424,51 +369,45 @@ func (c *checker) routing(pkg *Package) {
 		}
 	}
 
-	// §imports rule 4: every import must be used.
 	for _, spec := range pkg.importSpecs {
 		if _, resolved := pkg.Imports[spec.Qualifier()]; resolved && !c.usedQual[spec.Qualifier()] {
-			c.errorf(spec.Pos(), "imports", "package %q imported and not used (§imports rule 4)", spec.PathString())
+			c.errorf(spec.Pos(), "imports", "package %q imported and not used (§imports)", spec.PathString())
 		}
 	}
 }
 
-// plugCheck validates one pipeline entry (§pipelines rule 2): volt.X (runtime),
-// X or <pkg>.X (this package).
 func (c *checker) plugCheck(p *ast.Plug) {
 	for _, part := range p.Ref.Parts {
 		if part.Quoted() || !goIdentOK(part.Name()) || goKeywords[part.Name()] {
-			c.errorf(p.Pos(), "pipelines", "plug reference %q must be plain, non-keyword Go identifiers (§pipelines rule 2)", p.Ref.String())
+			c.errorf(p.Pos(), "pipelines", "plug reference %q must be plain, non-keyword Go identifiers (§pipelines)", p.Ref.String())
 			return
 		}
 	}
 	switch q := p.Ref.Qualifier(); {
 	case q == "volt":
-		// the runtime's middleware: not in this package's files
 	case q == "" || q == c.pkg.Name:
-		// A function of this package: it must exist with the middleware
-		// signature, spelled exactly (§pipelines rule 2, decision go-references-by-spelling).
 		name := p.Ref.Base()
 		const want = "func %s(next http.Handler) http.Handler"
 		sc := c.goFuncs(c.pkg)
 		gf, found := sc.funcs[name]
 		if !found {
-			c.errorf(p.Ref.Pos(), "pipelines", "no function %s in package %s's Go files — declare "+want+" beside the routes (§pipelines rule 2)%s", name, c.pkg.Name, name, sc.brokenHint())
+			c.errorf(p.Ref.Pos(), "pipelines", "no function %s in package %s's Go files — declare "+want+" beside the routes (§pipelines)%s", name, c.pkg.Name, name, sc.brokenHint())
 			return
 		}
 		if gf.Generic {
-			c.errorf(p.Ref.Pos(), "pipelines", "%s is generic (%s); a plug cannot instantiate it — wrap it in a plain "+want+" (§pipelines rule 2)", name, gf.Sig, name)
+			c.errorf(p.Ref.Pos(), "pipelines", "%s is generic (%s); a plug cannot instantiate it — wrap it in a plain "+want+" (§pipelines)", name, gf.Sig, name)
 			return
 		}
 		if gf.Variadic || len(gf.Params) != 1 || gf.Params[0].Type != "http.Handler" ||
 			len(gf.Results) != 1 || gf.Results[0] != "http.Handler" {
-			c.errorf(p.Ref.Pos(), "pipelines", "%s is not middleware: found %s, a plug is "+want+" (§pipelines rule 2)", name, gf.Sig, name)
+			c.errorf(p.Ref.Pos(), "pipelines", "%s is not middleware: found %s, a plug is "+want+" (§pipelines)", name, gf.Sig, name)
 		}
 	default:
 		if _, isImport := c.pkg.Imports[q]; isImport {
 			c.usedQual[q] = true
-			c.errorf(p.Pos(), "pipelines", "cross-package plug %q is not supported in v0 (§pipelines rule 2); wrap it in a function of this package", p.Ref.String())
+			c.errorf(p.Pos(), "pipelines", "cross-package plug %q is not supported in v0 (§pipelines); wrap it in a function of this package", p.Ref.String())
 		} else {
-			c.errorf(p.Pos(), "pipelines", "unknown plug qualifier %q (§pipelines rule 2): expected volt.X or a function of package %q", q, c.pkg.Name)
+			c.errorf(p.Pos(), "pipelines", "unknown plug qualifier %q (§pipelines): expected volt.X or a function of package %q", q, c.pkg.Name)
 		}
 	}
 }
@@ -476,7 +415,7 @@ func (c *checker) plugCheck(p *ast.Plug) {
 func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo *routesMemo, seenShape, seenHelper map[string]*RouteInfo) {
 	for _, seg := range sc.Path.Segments {
 		if seg.Kind == ast.SegWild {
-			c.errorf(seg.Pos(), "scopes-and-routes", "a Scope prefix cannot contain a wildcard (§route-paths rule 4)")
+			c.errorf(seg.Pos(), "scopes-and-routes", "a Scope prefix cannot contain a wildcard (§route-paths)")
 		}
 	}
 	next := inherited{
@@ -514,8 +453,6 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 			case "error_handler":
 				name, ok := selfFuncRefIn(s.Value, c.pkg.Name)
 				if ok {
-					// Held like every Go reference (decision go-references-by-spelling): the function must exist
-					// with the runtime's ErrorHandler shape, spelled exactly.
 					const want = "func %s(w http.ResponseWriter, r *volt.Request, err error)"
 					sc := c.goFuncs(c.pkg)
 					if gf, found := sc.funcs[name]; !found {
@@ -546,8 +483,6 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 	}
 }
 
-// routeOracle answers a scope item's lowering about the project (decision check-by-declaration):
-// reads only, so the gate walks it as the lowering's callee (decision pure-memos).
 type routeOracle struct{ c *checker }
 
 func (o routeOracle) dataPackage(path string) (string, bool, bool) {
@@ -630,15 +565,6 @@ func (o routeOracle) selectByName(path, name string) (*SelectInfo, string) {
 	return nil, hint
 }
 
-func (o routeOracle) validators(path, key string) (bool, bool) {
-	pkg := o.c.pr.Packages[path]
-	if pkg == nil {
-		return false, false
-	}
-	v := pkg.ValidByKey[key]
-	return v[0], v[1]
-}
-
 func (o routeOracle) queryHint(path, name string) string {
 	pkg := o.c.pr.Packages[path]
 	if pkg == nil || pkg.plan == nil {
@@ -659,16 +585,11 @@ func (o routeOracle) queryHint(path, name string) string {
 	return ""
 }
 
-// routesMemo remembers a package's lowered scope items (decision check-by-declaration): a route,
-// resources or dataset declaration whose inherited context, package
-// facts and every answer the project gave it are what they were is
-// the same routes and diagnostics.
 type routesMemo struct {
 	prev, next   map[ast.Node]*routesEntry
 	Hits, Misses int
 }
 
-// routesEntry is one call of itemLower: inputs and outputs.
 type routesEntry struct {
 	inh     inherited
 	facts   routeFacts
@@ -678,8 +599,6 @@ type routesEntry struct {
 	diags   []diag.Diagnostic
 }
 
-// holds reports whether the entry's inputs are the given ones and the
-// oracle still answers its questions as recorded.
 func (e *routesEntry) holds(inh inherited, facts routeFacts, env routeEnv) bool {
 	if !inheritedEqual(e.inh, inh) || !e.facts.equal(facts) {
 		return false
@@ -696,9 +615,6 @@ func inheritedEqual(a, b inherited) bool {
 	return slices.Equal(a.prefix, b.prefix) && slices.Equal(a.pipes, b.pipes) && a.errHandler == b.errHandler && a.namePrefix == b.namePrefix
 }
 
-// itemLowerMemo lowers one scope item through the memo when there is
-// one: a hit replays the item's diagnostics and used imports and
-// answers its routes; a miss runs itemLower and keeps the call.
 func (c *checker) itemLowerMemo(item ast.Node, inh inherited, facts routeFacts, memo *routesMemo) []*RouteInfo {
 	env := routeOracle{c}
 	if memo != nil {
@@ -724,28 +640,19 @@ func (c *checker) itemLowerMemo(item ast.Node, inh inherited, facts routeFacts, 
 	return routes
 }
 
-/* ===== accumulation: conflicts, helpers, controllers ===== */
-
-// routeAdd judges one lowered route against the package's accepted
-// ones and accepts or rejects it. It takes the route by value: the
-// lowering's route is the memo's, written by nobody (decision immutable-results).
 func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteInfo) {
 	shape := r.shapeKey
 	if prev, dup := seenShape[shape]; dup {
 		c.errorf(r.Pos, "scopes-and-routes", "route %s %s conflicts with the route at %s: identical method and path shape (§route-conflicts)", methodOrAny(r.Method), r.Spelled, prev.Pos)
 		return
 	}
-	// §route-conflicts rule 2: reject ServeMux's ambiguity relation; a checked project
-	// never panics at registration (§route-conflicts rule 4).
 	if prev := c.conflicts.ambiguous(&r); prev != nil {
-		c.errorf(r.Pos, "scopes-and-routes", "route %s %s is ambiguous with the route at %s (%s %s): both match some requests and neither is more specific (§route-conflicts rule 2)",
+		c.errorf(r.Pos, "scopes-and-routes", "route %s %s is ambiguous with the route at %s (%s %s): both match some requests and neither is more specific (§route-conflicts)",
 			methodOrAny(r.Method), r.Spelled, prev.Pos, methodOrAny(prev.Method), prev.Spelled)
 		return
 	}
 	seenShape[shape] = &r
 
-	// One namespace for reverse-URL helpers and client methods (§route-names-and-reverse-urls,
-	// §generated-client).
 	name := r.HelperName
 	if name == "" {
 		name = r.ClientName
@@ -764,12 +671,12 @@ func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteI
 		}
 	}
 	if r.Query == nil && !r.Events && r.HelperName != "" {
-		r.ClientName = r.HelperName // a named controller route gets a raw client method (§generated-client)
+		r.ClientName = r.HelperName
 	}
 
 	r.ord = len(c.pkg.Routes)
 	if r.Query != nil || r.Events {
-		c.routeAccept(&r) // no controller: the handler is generated (§query-routes) or the runtime's (§event-routes)
+		c.routeAccept(&r)
 		return
 	}
 	ci := c.pkg.Controllers[r.Controller]
@@ -790,27 +697,17 @@ func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteI
 	c.routeAccept(&r)
 }
 
-// routeAccept appends an accepted route to the package's route table and
-// to the conflict index, in declaration order; its ord is already the
-// table's length.
 func (c *checker) routeAccept(r *RouteInfo) {
 	c.pkg.Routes = append(c.pkg.Routes, r)
 	c.conflicts.add(r)
 }
 
-// routeIndex holds one routing package's accepted routes bucketed for
-// the §route-conflicts rule 2 ambiguity scan. An accepted route can be ambiguous with
-// a new one only if its literal prefix lies on the new route's walk
-// (§route-conflicts rule 3, decision indexed-lookups).
 type routeIndex struct {
 	root *routeNode
 }
 
-// routeNode is one literal path prefix. A route is filed at the node
-// of its longest literal prefix, the segments before its first
-// parameter, wildcard or end (decision indexed-lookups).
 type routeNode struct {
-	routes   []*RouteInfo // literal prefix ends here, declaration order
+	routes   []*RouteInfo
 	children map[string]*routeNode
 }
 
@@ -833,15 +730,13 @@ func (ix *routeIndex) add(r *RouteInfo) {
 	n.routes = append(n.routes, r)
 }
 
-// ambiguous returns the earliest accepted route ambiguous with r, in
-// declaration order, or nil.
 func (ix *routeIndex) ambiguous(r *RouteInfo) *RouteInfo {
 	var best *RouteInfo
 	var walk func(n *routeNode, depth int)
 	walk = func(n *routeNode, depth int) {
 		for _, prev := range n.routes {
 			if best != nil && prev.ord >= best.ord {
-				break // lists are in declaration order
+				break
 			}
 			if routesAmbiguous(prev, r) {
 				best = prev
@@ -856,7 +751,7 @@ func (ix *routeIndex) ambiguous(r *RouteInfo) *RouteInfo {
 				}
 			} else {
 				for _, child := range n.children {
-					walk(child, depth+1) // map order is irrelevant: the minimum wins
+					walk(child, depth+1)
 				}
 			}
 		case r.shape.wild:
@@ -868,8 +763,6 @@ func (ix *routeIndex) ambiguous(r *RouteInfo) *RouteInfo {
 	walk(ix.root, 0)
 	return best
 }
-
-/* ===== helpers ===== */
 
 func methodOf(verb string) string {
 	if verb == "any" {
@@ -885,8 +778,6 @@ func methodOrAny(m string) string {
 	return m
 }
 
-// patternOf renders the ServeMux registration pattern (§routes): exact
-// matching everywhere, so the root route uses the {$} end marker.
 func patternOf(segs []*ast.Segment) string {
 	if len(segs) == 0 {
 		return "/{$}"
@@ -918,9 +809,6 @@ func spelledOf(segs []*ast.Segment) string {
 	return b.String()
 }
 
-// shapeOf is the conflict key (§route-conflicts): literals by spelling, every
-// parameter as {} and every wildcard as {...}; braces cannot appear in
-// a literal segment (§route-paths rule 6).
 func shapeOf(r *RouteInfo) string {
 	var b strings.Builder
 	rest := r.Pattern
@@ -941,12 +829,8 @@ func shapeOf(r *RouteInfo) string {
 	return b.String()
 }
 
-/* ===== ServeMux ambiguity (§route-conflicts rule 2) ===== */
-
-// pathShape is a pattern as literal/param segments plus an optional
-// rest-of-path wildcard tail, for the ambiguity relation.
 type pathShape struct {
-	segs []string // literal spelling, or "" for a parameter
+	segs []string
 	wild bool
 }
 
@@ -968,7 +852,6 @@ func shapeParse(r *RouteInfo) pathShape {
 	return s
 }
 
-// pathsOverlap reports whether some request path matches both shapes.
 func pathsOverlap(a, b pathShape) bool {
 	i := 0
 	for ; i < len(a.segs) && i < len(b.segs); i++ {
@@ -979,17 +862,14 @@ func pathsOverlap(a, b pathShape) bool {
 	}
 	switch {
 	case i == len(a.segs) && i == len(b.segs):
-		// A wildcard needs at least the trailing slash, which a
-		// fixed-length pattern cannot supply.
 		return a.wild == b.wild || (a.wild && b.wild)
 	case i == len(a.segs):
-		return a.wild // b has more segments; only a wildcard absorbs them
+		return a.wild
 	default:
 		return b.wild
 	}
 }
 
-// pathSubset reports whether every path matched by a is matched by b.
 func pathSubset(a, b pathShape) bool {
 	if len(a.segs) < len(b.segs) {
 		return false
@@ -1005,16 +885,12 @@ func pathSubset(a, b pathShape) bool {
 	if len(a.segs) > len(b.segs) || a.wild {
 		return b.wild
 	}
-	// equal length, a not wild: b must also end without demanding more
 	return !b.wild || a.wild
 }
 
-// methodsOverlap / methodSubset treat "" (any) as the method wildcard.
 func methodsOverlap(a, b string) bool { return a == "" || b == "" || a == b }
 func methodSubset(a, b string) bool   { return b == "" || a == b }
 
-// routesAmbiguous is Go's ServeMux rule: two patterns conflict when
-// their request sets overlap and neither matches a subset of the other.
 func routesAmbiguous(a, b *RouteInfo) bool {
 	if !methodsOverlap(a.Method, b.Method) {
 		return false
@@ -1055,11 +931,8 @@ func settingOf(sl *ast.SettingList, name string) *ast.Setting {
 	return sl.Get(name)
 }
 
-// reservedParamNames are identifiers that appear in generated
-// signatures and bodies: a parameter with one of these names would
-// shadow them and break the generated code (§route-paths rule 2).
 var reservedParamNames = map[string]bool{
-	"w": true, "r": true, "opts": true, "volt": true,
+	"w": true, "r": true, "opts": true, "volt": true, "cs": true,
 }
 
 var goKeywords = map[string]bool{
@@ -1070,7 +943,6 @@ var goKeywords = map[string]bool{
 	"select": true, "struct": true, "switch": true, "type": true, "var": true,
 }
 
-// goIdentOK reports whether s is a plain ASCII Go identifier.
 func goIdentOK(s string) bool {
 	if s == "" {
 		return false
@@ -1089,7 +961,6 @@ func goIdentOK(s string) bool {
 	return true
 }
 
-// exportedIdentOK additionally requires an uppercase first letter.
 func exportedIdentOK(s string) bool {
 	return goIdentOK(s) && s[0] >= 'A' && s[0] <= 'Z'
 }

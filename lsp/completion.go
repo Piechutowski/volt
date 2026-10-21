@@ -9,49 +9,47 @@ import (
 	"github.com/Piechutowski/volt/lang/check"
 )
 
-// Completion contexts are derived textually and filled from the last
-// semantic model, which the checker returns even for files with errors.
-
 var (
 	elementKeywords = []string{
-		"Project", "Table", "TablePartial", "Enum", "Ref", "TableGroup",
-		"Note", "Records", "DiagramView", "use", "reuse",
-		// Volt layer (docs/spec.md Part II)
+		"Project", "Table", "TablePartial", "Enum", "Type", "Ref", "TableGroup",
+		"Note", "Records", "DiagramView", "Migration", "use", "reuse",
 		"package ", "import", "Pipeline", "Scope",
 	}
-	tableBodyKeywords = []string{"indexes", "checks", "Note", "Records"}
+	tableBodyKeywords     = []string{"indexes", "validators", "Note", "Records"}
+	migrationBodyKeywords = []string{
+		"create table ", "create index ", "drop table ", "drop index ",
+		"rename table ", "alter table ", "rebuild table ", "exec ", "up {", "down {",
+	}
+	alterBodyKeywords = []string{"add ", "drop ", "rename "}
 	scopeBodyKeywords = []string{
 		"get ", "post ", "put ", "patch ", "delete ", "options ", "head ",
 		"any ", "resources ", "dataset ", "Scope ",
 	}
 
 	settingsByContext = map[string][]string{
-		"column":    {"pk", "primary key", "null", "not null", "unique", "increment", "required", "default: ", "check: ", "note: ", "ref: ", "tag: "},
+		"column":    {"pk", "primary key", "null", "not null", "unique", "increment", "required", "default: ", "note: ", "ref: ", "tag: "},
 		"table":     {"headercolor: ", "note: "},
-		"index":     {"type: ", "name: ", "unique", "pk", "note: "},
-		"check":     {"name: "},
+		"index":     {"type: ", "name: ", "unique", "pk", "where: ", "note: "},
+		"migration": {"irreversible", "no transaction", "note: "},
 		"ref":       {"delete: ", "update: ", "color: ", "inactive"},
 		"enumvalue": {"note: "},
 		"sticky":    {"color: "},
 		"group":     {"note: ", "color: "},
-		// Volt layer (docs/spec.md §scopes-and-routes to §resources)
 		"scope":     {"pipe: ", "error_handler: ", "name: "},
 		"route":     {"name: "},
 		"resources": {"only: (", "except: (", "param: ", "singular: ", "api", "default"},
 		"dataset":   {"strip: ", "only: (", "except: ("},
+
+		"migrationcolumn": {"pk", "primary key", "null", "not null", "unique", "increment", "default: ", "ref: ", "delete: ", "update: ", "note: "},
+		"rebuildcolumn":   {"pk", "primary key", "null", "not null", "unique", "increment", "default: ", "ref: ", "delete: ", "update: ", "note: ", "from: "},
+		"migrationindex":  {"unique", "pk", "name: ", "where: ", "note: "},
+		"standaloneindex": {"unique", "name: ", "where: ", "note: "},
 	}
 
-	builtinTypes = []string{
-		"int", "integer", "bigint", "smallint", "serial", "bigserial",
-		"varchar", "char", "text", "bool", "boolean", "uuid",
-		"timestamp", "timestamptz", "date", "time", "interval",
-		"decimal", "numeric", "float", "double", "real",
-		"json", "jsonb", "bytea", "blob",
-	}
+	builtinTypes = check.Builtins
 
 	refActionValues = []string{"cascade", "restrict", "set null", "set default", "no action"}
 
-	// voltVerbSet mirrors the parser's route verbs (docs/spec.md §routes).
 	voltVerbSet = map[string]bool{
 		"get": true, "post": true, "put": true, "patch": true,
 		"delete": true, "options": true, "head": true, "any": true,
@@ -66,6 +64,8 @@ var (
 	actionValueRE   = regexp.MustCompile(`(?i)\b(delete|update)\s*:\s*\w*$`)
 	columnShapeRE   = regexp.MustCompile(`^\s*([\p{L}\p{M}\d_]+|"[^"]*")\s+[\p{L}\p{M}\d_".]*$`)
 	lineStartRE     = regexp.MustCompile(`^\s*[\p{L}\p{M}\d_"~]*$`)
+	shapeHeadRE     = regexp.MustCompile(`^(create|rebuild|drop) table\b`)
+	upDownHeadRE    = regexp.MustCompile(`^(up|down)\s*\{`)
 )
 
 // Complete computes completion items for the position.
@@ -73,9 +73,8 @@ func (d *Document) Complete(pos protocol.Position) []protocol.CompletionItem {
 	offset := d.FromLSP(pos)
 	lineStart := d.lineOffsets[min(int(pos.Line), len(d.lineOffsets)-1)]
 	prefix := d.Text[lineStart:offset]
-	ctx := d.blockContext(int(pos.Line))
+	ctx, outer := d.blockContexts(int(pos.Line))
 
-	// Project-aware completions first.
 	if items := d.voltComplete(prefix); items != nil {
 		return items
 	}
@@ -86,7 +85,7 @@ func (d *Document) Complete(pos protocol.Position) []protocol.CompletionItem {
 
 	inSettings := strings.Count(prefix, "[") > strings.Count(prefix, "]")
 	if inSettings {
-		return d.settingsComplete(prefix, ctx)
+		return d.settingsComplete(prefix, ctx, outer)
 	}
 
 	if m := dotChainRE.FindStringSubmatch(prefix); m != nil {
@@ -125,64 +124,93 @@ func (d *Document) Complete(pos protocol.Position) []protocol.CompletionItem {
 		if lineStartRE.MatchString(prefix) {
 			return keywordItems([]string{"use "})
 		}
+	case "migration":
+		if lineStartRE.MatchString(prefix) {
+			return keywordItems(migrationBodyKeywords)
+		}
+	case "alter":
+		if lineStartRE.MatchString(prefix) {
+			return keywordItems(alterBodyKeywords)
+		}
+	case "shape", "rebuild":
+		if columnShapeRE.MatchString(prefix) && !lineStartRE.MatchString(prefix) {
+			return keywordItemsKind(builtinTypes, protocol.CompletionItemKindStruct)
+		}
+		if lineStartRE.MatchString(prefix) {
+			return keywordItems([]string{"indexes"})
+		}
 	}
 	return nil
 }
 
-// blockContext classifies the innermost unclosed block above the line by
-// scanning upward and tracking brace balance. "" means top level.
-func (d *Document) blockContext(line int) string {
+func (d *Document) blockContexts(line int) (ctx, outer string) {
 	depth := 0
 	for l := line; l >= 0; l-- {
 		text := d.lineText(l)
 		if l == line {
 			text = strings.SplitN(text, "//", 2)[0]
 		}
-		opens := strings.Count(text, "{")
-		closes := strings.Count(text, "}")
-		if l == line {
-			depth -= 0
+		depth += strings.Count(text, "}") - strings.Count(text, "{")
+		if depth >= 0 {
+			continue
 		}
-		depth += closes - opens
-		if depth < 0 {
-			head := strings.ToLower(strings.TrimSpace(text))
-			switch {
-			case strings.HasPrefix(head, "indexes"):
-				return "indexes"
-			case strings.HasPrefix(head, "checks"):
-				return "checks"
-			case strings.HasPrefix(head, "tablepartial"):
-				return "tablepartial"
-			case strings.HasPrefix(head, "tablegroup"):
-				return "tablegroup"
-			case strings.HasPrefix(head, "table"):
-				return "table"
-			case strings.HasPrefix(head, "enum"):
-				return "enum"
-			case strings.HasPrefix(head, "project"):
-				return "project"
-			case strings.HasPrefix(head, "records"):
-				return "records"
-			case strings.HasPrefix(head, "ref"):
-				return "ref"
-			case strings.HasPrefix(head, "diagramview"):
-				return "diagramview"
-			case strings.HasPrefix(head, "note"):
-				return "note"
-			case strings.HasPrefix(head, "pipeline"):
-				return "pipeline"
-			case strings.HasPrefix(head, "scope"):
-				return "scope"
-			default:
-				depth = 0
-				continue
+		depth = 0
+		head := headContext(strings.ToLower(strings.TrimSpace(text)))
+		switch {
+		case head == "":
+		case ctx == "":
+			ctx = head
+			if head != "indexes" {
+				return ctx, ""
 			}
+		default:
+			return ctx, head
 		}
+	}
+	return ctx, ""
+}
+
+func headContext(head string) string {
+	switch {
+	case strings.HasPrefix(head, "indexes"):
+		return "indexes"
+	case strings.HasPrefix(head, "validators"):
+		return "validators"
+	case strings.HasPrefix(head, "tablepartial"):
+		return "tablepartial"
+	case strings.HasPrefix(head, "tablegroup"):
+		return "tablegroup"
+	case strings.HasPrefix(head, "table"):
+		return "table"
+	case strings.HasPrefix(head, "enum"):
+		return "enum"
+	case strings.HasPrefix(head, "project"):
+		return "project"
+	case strings.HasPrefix(head, "records"):
+		return "records"
+	case strings.HasPrefix(head, "ref"):
+		return "ref"
+	case strings.HasPrefix(head, "diagramview"):
+		return "diagramview"
+	case strings.HasPrefix(head, "note"):
+		return "note"
+	case strings.HasPrefix(head, "pipeline"):
+		return "pipeline"
+	case strings.HasPrefix(head, "scope"):
+		return "scope"
+	case strings.HasPrefix(head, "migration"), upDownHeadRE.MatchString(head):
+		return "migration"
+	case strings.HasPrefix(head, "rebuild table"):
+		return "rebuild"
+	case shapeHeadRE.MatchString(head):
+		return "shape"
+	case strings.HasPrefix(head, "alter table"):
+		return "alter"
 	}
 	return ""
 }
 
-func (d *Document) settingsComplete(prefix, ctx string) []protocol.CompletionItem {
+func (d *Document) settingsComplete(prefix, ctx, outer string) []protocol.CompletionItem {
 	segment := prefix[strings.LastIndexAny(prefix, "[,")+1:]
 
 	if refValueRE.MatchString(segment) || afterCardRE.MatchString(segment) {
@@ -214,34 +242,38 @@ func (d *Document) settingsComplete(prefix, ctx string) []protocol.CompletionIte
 		kind = "ref"
 	case strings.HasPrefix(head, "note"):
 		kind = "sticky"
-	// Volt lines exist only where the grammar puts them (§scopes-and-routes): Scope
-	// openers at top level or nested in a Scope, routes and resources
-	// in Scope bodies.
 	case strings.HasPrefix(head, "scope") && (ctx == "" || ctx == "scope"):
 		kind = "scope"
+	case strings.HasPrefix(head, "migration") && ctx == "":
+		kind = "migration"
 	case strings.HasPrefix(head, "resources") && ctx == "scope":
 		kind = "resources"
 	case strings.HasPrefix(head, "dataset") && ctx == "scope":
 		kind = "dataset"
 	case voltVerbSet[verb] && ctx == "scope":
 		kind = "route"
+	case (strings.HasPrefix(head, "create index") || strings.HasPrefix(head, "drop index")) && ctx == "migration":
+		kind = "standaloneindex"
 	default:
 		switch ctx {
 		case "indexes":
 			kind = "index"
-		case "checks":
-			kind = "check"
+			if outer == "shape" || outer == "rebuild" {
+				kind = "migrationindex"
+			}
 		case "enum":
 			kind = "enumvalue"
 		case "ref":
 			kind = "ref"
+		case "shape", "alter":
+			kind = "migrationcolumn"
+		case "rebuild":
+			kind = "rebuildcolumn"
 		}
 	}
 	return keywordItemsKind(settingsByContext[kind], protocol.CompletionItemKindProperty)
 }
 
-// dotChainComplete resolves `a.` and `a.b.` chains to columns, tables of a
-// schema, or enum values.
 func (d *Document) dotChainComplete(m []string) []protocol.CompletionItem {
 	first := unquote(m[1])
 	second := ""
@@ -317,6 +349,9 @@ func (d *Document) enumItems() []protocol.CompletionItem {
 func (d *Document) typeItems() []protocol.CompletionItem {
 	items := keywordItemsKind(builtinTypes, protocol.CompletionItemKindStruct)
 	items = append(items, d.enumItems()...)
+	for _, ti := range d.Info.Types {
+		items = append(items, item(ti.Decl.Name.String(), protocol.CompletionItemKindClass, "Type"))
+	}
 	return items
 }
 

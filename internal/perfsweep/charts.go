@@ -7,8 +7,6 @@ import (
 	"strings"
 )
 
-// The chart's colors: a dark surface and four categorical hues, one per
-// phase in a fixed order.
 const (
 	chartSurface = "#1a1a19"
 	chartText    = "#ffffff"

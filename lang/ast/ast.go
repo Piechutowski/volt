@@ -1,4 +1,4 @@
-// Package ast declares the types used to represent DBML syntax trees,
+// Package ast declares the types used to represent Volt syntax trees,
 // mirroring the role of go/ast. Nodes carry no semantic judgment.
 package ast
 
@@ -9,9 +9,6 @@ type Node interface {
 	Pos() token.Position // position of the first token of the node
 	End() token.Position // position immediately after the node
 }
-
-// ----------------------------------------------------------------------------
-// Expressions and shared forms
 
 // Ident is a plain or quoted identifier (spec §identifiers).
 type Ident struct {
@@ -109,9 +106,6 @@ type RefValue struct {
 func (x *RefValue) Pos() token.Position { return x.OpTok.Pos }
 func (x *RefValue) End() token.Position { return x.Endpoint.End() }
 
-// ----------------------------------------------------------------------------
-// Settings (spec §settings-lists)
-
 // SettingList is a bracketed, comma-separated settings list.
 type SettingList struct {
 	Lbrack   token.Position
@@ -150,10 +144,7 @@ func (x *Setting) End() token.Position { return x.endPos }
 // SetEnd records the setting's extent.
 func (x *Setting) SetEnd(p token.Position) { x.endPos = p }
 
-// ----------------------------------------------------------------------------
-// File and declarations (spec §program-structure)
-
-// File is one parsed DBML source file.
+// File is one parsed Volt source file.
 type File struct {
 	Name  string // file name as given to the parser
 	Decls []Decl // top-level declarations in source order
@@ -263,7 +254,7 @@ func (d *TablePartial) End() token.Position { return d.Rbrace }
 func (d *TablePartial) declNode()           {}
 
 // TableItem is implemented by everything that can appear in a Table or
-// TablePartial body: *Column, *IndexesBlock, *ChecksBlock, *Note,
+// TablePartial body: *Column, *IndexesBlock, *ValidatorsBlock, *Note,
 // *PartialRef, *Records.
 type TableItem interface {
 	Node
@@ -274,7 +265,7 @@ type TableItem interface {
 type Column struct {
 	Name        *Ident
 	Type        *TypeRef
-	LegacyFlags []*Ident // bare pk/unique between type and settings (§columns rule 7)
+	LegacyFlags []*Ident // bare pk/unique between type and settings (§columns)
 	Settings    *SettingList
 }
 
@@ -290,36 +281,28 @@ func (x *Column) End() token.Position {
 }
 func (x *Column) tableItemNode() {}
 
-// TypeRef is a column type: name, schema-qualified name, and optional
-// parenthesized arguments, e.g. varchar(255) or v2.job_status (spec §columns).
+// TypeRef is a column type: a Go type name, optionally qualified by a
+// package alias or schema, with the "[]" of []byte (spec §columns).
 type TypeRef struct {
 	Name   *QualName
-	Args   []token.Token // NUMBER or IDENT argument tokens, verbatim
-	Rparen token.Position
+	Slice  bool
+	Lbrack token.Position
 }
 
-func (x *TypeRef) Pos() token.Position { return x.Name.Pos() }
-func (x *TypeRef) End() token.Position {
-	if len(x.Args) > 0 {
-		return x.Rparen
+func (x *TypeRef) Pos() token.Position {
+	if x.Slice {
+		return x.Lbrack
 	}
-	return x.Name.End()
+	return x.Name.Pos()
 }
+func (x *TypeRef) End() token.Position { return x.Name.End() }
 
-// String returns the type as written, e.g. "decimal(10,2)".
+// String returns the type as written, e.g. "[]byte" or "time.Time".
 func (x *TypeRef) String() string {
-	s := x.Name.String()
-	if len(x.Args) > 0 {
-		s += "("
-		for i, a := range x.Args {
-			if i > 0 {
-				s += ","
-			}
-			s += a.Val
-		}
-		s += ")"
+	if x.Slice {
+		return "[]" + x.Name.String()
 	}
-	return s
+	return x.Name.String()
 }
 
 // IndexesBlock is one indexes { ... } block (spec §indexes).
@@ -349,49 +332,27 @@ func (x *Index) End() token.Position {
 	return x.Key[len(x.Key)-1].End()
 }
 
-// ChecksBlock is one checks { ... } block (spec §checks).
-type ChecksBlock struct {
-	ChecksPos token.Position
-	Checks    []*Check
-	Rbrace    token.Position
+// ValidatorsBlock is a validators block (spec §validators).
+type ValidatorsBlock struct {
+	ValidatorsPos token.Position
+	Validators    []*Validator
+	Rbrace        token.Position
 }
 
-func (x *ChecksBlock) Pos() token.Position { return x.ChecksPos }
-func (x *ChecksBlock) End() token.Position { return x.Rbrace }
-func (x *ChecksBlock) tableItemNode()      {}
+func (x *ValidatorsBlock) Pos() token.Position { return x.ValidatorsPos }
+func (x *ValidatorsBlock) End() token.Position { return x.Rbrace }
+func (x *ValidatorsBlock) tableItemNode()      {}
 
-// Check is one check constraint line (spec §checks, §validation-checks). Exactly one
-// of the three forms is set: Expr (opaque SQL, the DBML core), Pred (a
-// typed §predicates expression), or Ref+Args (a Go-reference check).
-type Check struct {
-	Expr     *FuncExpr // opaque SQL; SQL CHECK only
-	Pred     PredExpr  // typed (§validation-checks); SQL CHECK + generated validator
-	Ref      *GoRef    // Go reference (§validation-checks); generated validator only
-	Args     []*Ident  // Go-reference arguments: columns of the table
-	EndPos   token.Position
-	Settings *SettingList
+// Validator is one validator line: a Go function of the package applied
+// to columns of the table (spec §validators).
+type Validator struct {
+	Ref    *GoRef
+	Args   []*Ident
+	EndPos token.Position
 }
 
-func (x *Check) Pos() token.Position {
-	switch {
-	case x.Expr != nil:
-		return x.Expr.Pos()
-	case x.Pred != nil:
-		return x.Pred.Pos()
-	case x.Ref != nil:
-		return x.Ref.Pos()
-	}
-	return x.EndPos
-}
-func (x *Check) End() token.Position {
-	if x.Settings != nil {
-		return x.Settings.End()
-	}
-	if x.EndPos.Line() != 0 {
-		return x.EndPos
-	}
-	return x.Expr.End()
-}
+func (x *Validator) Pos() token.Position { return x.Ref.Pos() }
+func (x *Validator) End() token.Position { return x.EndPos }
 
 // PartialRef is a ~partial injection line (spec §tablepartial).
 type PartialRef struct {
@@ -455,6 +416,20 @@ type Enum struct {
 func (d *Enum) Pos() token.Position { return d.EnumPos }
 func (d *Enum) End() token.Position { return d.Rbrace }
 func (d *Enum) declNode()           {}
+
+// TypeDecl is a Type element: a Go type admitted as a column type, with
+// its storage type and import path (spec §types).
+type TypeDecl struct {
+	TypePos token.Position
+	Name    *QualName
+	Storage *TypeRef
+	From    *BasicLit
+	EndPos  token.Position
+}
+
+func (d *TypeDecl) Pos() token.Position { return d.TypePos }
+func (d *TypeDecl) End() token.Position { return d.EndPos }
+func (d *TypeDecl) declNode()           {}
 
 // EnumValue is one enum member.
 type EnumValue struct {

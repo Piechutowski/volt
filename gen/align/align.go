@@ -1,7 +1,7 @@
 // Package align lays out the column-aligned blocks gofmt produces —
 // struct fields, const and var specs — the way go/printer's tabwriter
 // does, so a generator writes gofmt-canonical text without running
-// gofmt (decision gofmt-canonical).
+// gofmt.
 //
 // The rules are text/tabwriter's as go/printer configures it (padding
 // one, spaces): a line is a sequence of cells, every cell but the last
@@ -23,7 +23,7 @@ type Block struct {
 }
 
 type line struct {
-	cells []string // nil for a verbatim line
+	cells []string
 	text  string
 }
 

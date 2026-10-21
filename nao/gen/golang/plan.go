@@ -1,4 +1,4 @@
-// The shared naming plan (decision one-naming-plan): one immutable Plan per checked
+// The shared naming plan: one immutable Plan per checked
 // package, built once after the schema pass and read by the Volt
 // checker, the generators, vet and the language server.
 package golang
@@ -12,23 +12,22 @@ import (
 )
 
 // Plan is a checked package's naming plan: every Go and SQL name of
-// every table and column, decided once (decisions subject-first-naming, singular-models, null-t, named-placeholders, create-params, keyless-tables), plus
+// every table and column, decided once, plus
 // the generated CRUD method table indexed by method name. A Plan is
 // immutable after PlanBuild and safe to share between goroutines.
 type Plan struct {
-	memo *PlanMemo // nil outside the editor session
+	memo *PlanMemo
 	f    *ast.File
 	info *check.Info
-	p    *plan // nil when err != nil
+	p    *plan
 	err  error
 
 	byKey   map[string]*tableModel
-	methods map[string]crudRef // generated CRUD method name -> owner; the first table declared wins
-	names   []string           // every CRUD method name in declaration order, for did-you-mean hints
-	base    *nameBase          // the models' names (§selects-over-groups rule 7), the memo's when there is one
+	methods map[string]crudRef
+	names   []string
+	base    *nameBase
 }
 
-// crudRef locates one generated CRUD method.
 type crudRef struct {
 	tableKey string
 	method   CRUDMethod
@@ -44,11 +43,11 @@ func PlanBuild(f *ast.File, info *check.Info) *Plan {
 
 // PlanMemo remembers a package's table models across builds of its
 // plan: a table that is the checked object it was, under the same
-// enum types, is the same model (decision check-by-declaration). The zero value is ready; a
+// enum types, is the same model. The zero value is ready; a
 // PlanMemo belongs to one package.
 type PlanMemo struct {
 	prev, next map[*check.TableInfo]*memoModel
-	base       *nameBase // the models' names, updated for the models that changed (decision check-by-declaration)
+	base       *nameBase
 	// Hits and Misses count the models reused and built by the last
 	// PlanBuildMemo.
 	Hits, Misses int
@@ -57,7 +56,7 @@ type PlanMemo struct {
 type memoModel struct {
 	tm      *tableModel
 	imports map[string]bool
-	enums   []enumType // the enum types the model was built with, sorted by key (decision keys-are-inputs)
+	enums   []enumType
 }
 
 // PlanBuildMemo is PlanBuild with a memo of the package's earlier
@@ -102,9 +101,27 @@ func PlanBuildMemo(f *ast.File, info *check.Info, memo *PlanMemo) *Plan {
 // Err reports why the plan could not be built, or nil.
 func (pl *Plan) Err() error { return pl.err }
 
-// Models renders the models file (nao_models.go) for the planned package.
+// Models renders the models file (nao_models.go) for the planned package;
+// a package-scope name the file would declare twice is an error, as it
+// is for Dyn (spec §changesets rule 12).
 func (pl *Plan) Models(opts Options) ([]byte, error) {
-	return modelsGenerate(pl.f, pl.info, pl.p, pl.err, opts)
+	out, err := modelsGenerate(pl.f, pl.info, pl.p, pl.err, opts)
+	if err != nil {
+		return nil, err
+	}
+	if err := pl.nameCollisionErr(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (pl *Plan) nameCollisionErr() error {
+	cs := pl.DynNameCollisions()
+	if len(cs) == 0 {
+		return nil
+	}
+	c := cs[0]
+	return fmt.Errorf("%s and %s both need the Go name %s; rename one (e.g. with [model:])", c.First, c.Second, c.Name)
 }
 
 // SelectRowName is the row type SelectRowType names, without its
@@ -126,7 +143,7 @@ func (pl *Plan) SelectRowName(fn SelectFn) (string, error) {
 
 // ModelRef is the identity of a table's model: the same value across
 // plans exactly when the model was reused from the plan's memo, so a
-// memo downstream can key on it (decision check-by-declaration). nil when the plan has no such
+// memo downstream can key on it. nil when the plan has no such
 // table.
 func (pl *Plan) ModelRef(tableKey string) any {
 	t, err := pl.table(tableKey)
@@ -150,7 +167,7 @@ func (pl *Plan) table(key string) (*tableModel, error) {
 // CRUDMethods lists the default CRUD methods the query generator emits
 // for one table, with the same existence rules it applies: Get, Update
 // and Delete need a primary key, Update needs a non-key column, Create
-// takes a params struct only when a column is caller-supplied (decision create-params).
+// and Update take a changeset (spec §changesets).
 func (pl *Plan) CRUDMethods(tableKey string) (model string, methods []CRUDMethod, err error) {
 	t, err := pl.table(tableKey)
 	if err != nil {
@@ -176,41 +193,27 @@ func crudMethodsBuild(t *tableModel) []CRUDMethod {
 	var methods []CRUDMethod
 	var key []SelectParam
 	for _, fp := range t.pk {
-		key = append(key, SelectParam{SQLName: fp.param, GoName: fp.arg, GoType: fp.baseType})
+		key = append(key, SelectParam{GoName: fp.arg, GoType: fp.baseType})
 	}
 	m := t.model
 	if len(t.pk) > 0 {
 		methods = append(methods, CRUDMethod{Name: m + "Get", Op: "get", Key: key, Result: m})
 	}
 	methods = append(methods, CRUDMethod{Name: m + "List", Op: "list", Result: m, Many: true})
-	create := CRUDMethod{Name: m + "Create", Op: "create", Result: m}
-	if len(t.createFields()) > 0 {
-		create.Body = m + "CreateParams"
-	}
-	methods = append(methods, create)
+	methods = append(methods, CRUDMethod{Name: m + "Create", Op: "create", Body: m + "Changeset", Params: m + "Params",
+		New: m + "New", Allow: t.handles(t.settable()), Result: m})
 	if len(t.pk) > 0 {
 		if len(t.nonPK()) > 0 {
-			methods = append(methods, CRUDMethod{Name: m + "Update", Op: "update", Key: key, Body: m + "UpdateParams", Result: m})
+			methods = append(methods, CRUDMethod{Name: m + "Update", Op: "update", Key: key, Body: m + "Changeset", Params: m + "Params",
+				Get: m + "Get", Allow: t.handles(t.nonPK()), Result: m})
 		}
 		methods = append(methods, CRUDMethod{Name: m + "Delete", Op: "delete", Key: key})
 	}
 	return methods
 }
 
-// ParamsValidators reports whether the table's CreateParams and
-// UpdateParams structs get a Validate method: each does when the struct
-// exists and carries every column of at least one check.
-func (pl *Plan) ParamsValidators(tableKey string, checks []CheckSpec) (create, update bool, err error) {
-	t, err := pl.table(tableKey)
-	if err != nil {
-		return false, false, err
-	}
-	c, u := paramsChecks(t, checks)
-	return len(c) > 0, len(u) > 0, nil
-}
-
 // ModelFields reports the exact struct fields the model generator emits
-// for the table with the given canonical key (spec §selects-over-groups rule 6, §mapping-to-go).
+// for the table with the given canonical key (spec §selects-over-groups, §mapping-to-go).
 func (pl *Plan) ModelFields(tableKey string) (model string, fields []FieldSig, err error) {
 	t, err := pl.table(tableKey)
 	if err != nil {
@@ -219,7 +222,6 @@ func (pl *Plan) ModelFields(tableKey string) (model string, fields []FieldSig, e
 	return t.model, t.sigs, nil
 }
 
-// fieldSigsBuild is the model's field signatures, built with it (decision check-by-declaration).
 func fieldSigsBuild(t *tableModel) []FieldSig {
 	sigs := make([]FieldSig, 0, len(t.fields))
 	for _, fp := range t.fields {
@@ -236,7 +238,7 @@ func fieldSigOf(fp *fieldPlan) FieldSig {
 	}
 }
 
-// SelectRowType names the row type one instantiation returns (§selects-over-groups rule 7)
+// SelectRowType names the row type one instantiation returns (§selects-over-groups)
 // and reports its fields.
 func (pl *Plan) SelectRowType(fn SelectFn) (string, []FieldSig, error) {
 	t, err := pl.table(fn.TableKey)
@@ -261,13 +263,15 @@ func (pl *Plan) SelectRowType(fn SelectFn) (string, []FieldSig, error) {
 	return row, sigs, nil
 }
 
-// SelectStatement renders the SQL one select instantiation runs.
-func (pl *Plan) SelectStatement(fn SelectFn) (string, error) {
+// SelectStatement renders the SQL one select instantiation runs through
+// the runtime (spec §predicates rule 6), with the Go expressions the
+// method binds in placeholder order.
+func (pl *Plan) SelectStatement(fn SelectFn) (string, []string, error) {
 	t, err := pl.table(fn.TableKey)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return SelectSQL(t, fn), nil
+	return SelectSQL(t, fn)
 }
 
 // DynNameCollisions reports the package-scope Go name collisions the
@@ -276,14 +280,12 @@ func (pl *Plan) DynNameCollisions() []NameCollision {
 	if pl.err != nil {
 		return nil
 	}
-	// The report is the one a walk over every minted name in minting
-	// order produces, computed from the collisions alone (decisions check-by-declaration, vet-by-declaration).
 	seen := map[string]dynOrigin{"Queries": {kind: dynQueries}}
 	var out []NameCollision
 	for _, e := range pl.info.Enums {
 		typeName, err := enumTypeName(e.Decl.Name.Schema(), e.Decl.Name.Base())
 		if err != nil {
-			continue // generation reports unusable names itself
+			continue
 		}
 		out = dynArrive(out, seen, typeName, dynOrigin{kind: dynEnum, e: e, pos: e.Decl.Pos()})
 		for _, v := range e.Decl.Values {
@@ -328,8 +330,6 @@ func (pl *Plan) DynNameCollisions() []NameCollision {
 			arrivals = append(arrivals, arrival{first, dynOriginOf(o), pl.base.pos[o.table], o.rank})
 		}
 	}
-	// Each origin mints one name, so (pos, rank) orders the arrivals
-	// totally.
 	sort.Slice(arrivals, func(i, j int) bool {
 		a, b := arrivals[i], arrivals[j]
 		if a.pos != b.pos {
@@ -343,8 +343,6 @@ func (pl *Plan) DynNameCollisions() []NameCollision {
 	return out
 }
 
-// dynArrive records one minted name: the first arrival is remembered,
-// a later one is paired with it.
 func dynArrive(out []NameCollision, seen map[string]dynOrigin, name string, o dynOrigin) []NameCollision {
 	prev, dup := seen[name]
 	if !dup {
@@ -354,7 +352,6 @@ func dynArrive(out []NameCollision, seen map[string]dynOrigin, name string, o dy
 	return append(out, dynPair(name, prev, o))
 }
 
-// dynPair reports one collision at the later of its two origins.
 func dynPair(name string, first, second dynOrigin) NameCollision {
 	if second.pos.Line() < first.pos.Line() || (second.pos.Line() == first.pos.Line() && second.pos.Column() < first.pos.Column()) {
 		first, second = second, first
@@ -362,17 +359,19 @@ func dynPair(name string, first, second dynOrigin) NameCollision {
 	return NameCollision{Name: name, First: first.describe(), Second: second.describe(), Pos: second.pos}
 }
 
-// dynOriginOf is a model's minted name as the collision report
-// describes it.
 func dynOriginOf(o *nameOrigin) dynOrigin {
 	d := dynOrigin{tm: o.table, pos: o.table.ti.Decl.Pos()}
 	switch o.kind {
 	case nameModel:
 		d.kind = dynModel
-	case nameCreateParams:
-		d.kind = dynCreateParams
-	case nameUpdateParams:
-		d.kind = dynUpdateParams
+	case nameChangeset:
+		d.kind = dynChangeset
+	case nameColumn:
+		d.kind = dynColumn
+	case nameParams:
+		d.kind = dynParams
+	case nameNew:
+		d.kind = dynNew
 	case nameHandle:
 		d.kind, d.f, d.pos = dynHandle, o.field, o.field.col.Pos()
 	case nameDynFunc:
@@ -381,59 +380,55 @@ func dynOriginOf(o *nameOrigin) dynOrigin {
 	return d
 }
 
-/* ===== the §selects-over-groups rule 7 name scope ===== */
-
 // Names is the scope of package-level Go identifiers a package's
-// generated files mint (§selects-over-groups rule 7): models, params structs, dynamic column
+// generated files mint (§selects-over-groups): models, changesets with
+// their column and params aliases and constructors (§changesets), column
 // handles and option wrappers, enum types, the Queries handle and its
-// constructor. It is read in layers, last writer first (decision check-by-declaration).
+// constructor. It is read in layers, last writer first.
 type Names struct {
-	base  *nameBase            // the models' names: read here, written by the plan build
-	enums map[string]*ast.Enum // enum type name -> declaration
-	added map[string]string    // what the checker minted, with its description
+	base  *nameBase
+	enums map[string]*ast.Enum
+	added map[string]string
 }
 
 type nameKind uint8
 
 const (
-	nameModel        nameKind = iota // the model of table
-	nameCreateParams                 // the create params of table
-	nameUpdateParams                 // the update params of table
-	nameDynFunc                      // a dynamic-layer function, named by the key itself
-	nameHandle                       // a dynamic column handle: table + field
+	nameModel nameKind = iota
+	nameChangeset
+	nameColumn
+	nameParams
+	nameNew
+	nameDynFunc
+	nameHandle
 )
 
-// nameOrigin is one name a model mints and what it is, in the order the
-// names are minted.
 type nameOrigin struct {
 	name  string
 	kind  nameKind
-	idx   int // position in the model's list: a later name of the same model wins
+	idx   int
 	table *tableModel
 	field *fieldPlan
-	// dyn says whether the dynamic layer mints this name (decision per-model-wrappers), rank
-	// where it falls in the model's minting order.
-	dyn  bool
-	rank int
+	dyn   bool
+	rank  int
 }
 
-// modelNamesBuild is every package-level name a model mints, in the
-// order the generators write them.
 func modelNamesBuild(t *tableModel) []nameOrigin {
-	names := make([]nameOrigin, 0, 3+len(dynWrapperSuffixes)+len(t.fields))
+	names := make([]nameOrigin, 0, 5+len(dynWrapperSuffixes)+len(t.fields))
 	add := func(name string, kind nameKind, field *fieldPlan, dyn bool, rank int) {
 		names = append(names, nameOrigin{name: name, kind: kind, idx: len(names), table: t, field: field, dyn: dyn, rank: rank})
 	}
-	// no queryable shape: no queries, no dynamic layer
 	queryable := len(t.fields) > 0
 	add(t.model, nameModel, nil, true, 0)
-	add(t.model+"CreateParams", nameCreateParams, nil, queryable && len(t.createFields()) > 0, 1)
-	add(t.model+"UpdateParams", nameUpdateParams, nil, queryable && len(t.pk) > 0 && len(t.nonPK()) > 0, 2)
+	add(t.model+"Changeset", nameChangeset, nil, queryable, 1)
+	add(t.model+"Column", nameColumn, nil, queryable, 2)
+	add(t.model+"Params", nameParams, nil, queryable, 3)
+	add(t.model+"New", nameNew, nil, queryable, 4)
 	for i, suffix := range dynWrapperSuffixes {
-		add(t.model+suffix, nameDynFunc, nil, queryable, 3+len(t.fields)+i)
+		add(t.model+suffix, nameDynFunc, nil, queryable, 5+len(t.fields)+i)
 	}
 	for i, fp := range t.fields {
-		add(t.model+fp.goField, nameHandle, fp, queryable, 3+i)
+		add(t.model+fp.goField, nameHandle, fp, queryable, 5+i)
 	}
 	return names
 }
@@ -442,26 +437,27 @@ func (o *nameOrigin) describe() string {
 	switch o.kind {
 	case nameModel:
 		return fmt.Sprintf("the model of table %q", o.table.ti.Decl.Name.Base())
-	case nameCreateParams:
-		return fmt.Sprintf("the create params of table %q", o.table.ti.Decl.Name.Base())
-	case nameUpdateParams:
-		return fmt.Sprintf("the update params of table %q", o.table.ti.Decl.Name.Base())
+	case nameChangeset:
+		return fmt.Sprintf("the changeset of table %q", o.table.ti.Decl.Name.Base())
+	case nameColumn:
+		return fmt.Sprintf("the column handle type of table %q", o.table.ti.Decl.Name.Base())
+	case nameParams:
+		return fmt.Sprintf("the write body type of table %q", o.table.ti.Decl.Name.Base())
+	case nameNew:
+		return fmt.Sprintf("the changeset constructor of table %q", o.table.ti.Decl.Name.Base())
 	case nameHandle:
-		return fmt.Sprintf("the dynamic column handle for %s.%s", o.table.ti.Decl.Name.Base(), o.field.colName)
+		return fmt.Sprintf("the column handle for %s.%s", o.table.ti.Decl.Name.Base(), o.field.colName)
 	}
 	return "the dynamic-layer function " + o.name
 }
 
-// nameBase is the models' names of one package, kept across plans, so a
-// plan with one model changed touches that model's names alone (decision check-by-declaration).
 type nameBase struct {
 	origins map[string]nameSlot
 	models  map[*tableModel]bool
-	pos     map[*tableModel]int // declaration position in the current plan
-	dups    map[string]bool     // names two or more models mint for the dynamic layer
+	pos     map[*tableModel]int
+	dups    map[string]bool
 }
 
-// nameSlot is a name's origins.
 type nameSlot struct {
 	first *nameOrigin
 	more  []*nameOrigin
@@ -471,8 +467,6 @@ func newNameBase() *nameBase {
 	return &nameBase{origins: map[string]nameSlot{}, models: map[*tableModel]bool{}, dups: map[string]bool{}}
 }
 
-// update makes the base the given models': the models gone are
-// removed, the models new are added, the rest stand.
 func (b *nameBase) update(tables []*tableModel) {
 	current := make(map[*tableModel]bool, len(tables))
 	b.pos = make(map[*tableModel]int, len(tables))
@@ -532,7 +526,6 @@ func (b *nameBase) remove(t *tableModel) {
 	}
 }
 
-// dupsMark keeps dups current for one name after its slot changed.
 func (b *nameBase) dupsMark(name string) {
 	n := 0
 	for _, o := range b.origins[name].all() {
@@ -547,8 +540,6 @@ func (b *nameBase) dupsMark(name string) {
 	}
 }
 
-// all lists a slot's origins, the first first; nil for a name nobody
-// mints.
 func (s nameSlot) all() []*nameOrigin {
 	if s.first == nil {
 		return nil
@@ -556,8 +547,6 @@ func (s nameSlot) all() []*nameOrigin {
 	return append([]*nameOrigin{s.first}, s.more...)
 }
 
-// lookup answers the origin kept for the name: the model declared last,
-// and its later name.
 func (b *nameBase) lookup(name string) *nameOrigin {
 	slot := b.origins[name]
 	best := slot.first

@@ -1,5 +1,5 @@
 // Package sqlite generates SQLite DDL (nao_schema.sql) from a checked
-// DBML file: CREATE TABLE per table, CREATE INDEX per non-pk index, and
+// schema file: CREATE TABLE per table, CREATE INDEX per non-pk index, and
 // INSERT statements from records. Dialect decisions follow docs/spec.md
 // §mapping-to-sqlite-ddl.
 package sqlite
@@ -17,14 +17,11 @@ import (
 
 // Options configures generation.
 type Options struct {
-	// Source is the name of the DBML input, recorded in the header.
+	// Source is the name of the schema input, recorded in the header.
 	Source string
-	// CheckSQL is every typed check's SQL rendering, lowered by the
-	// Volt checker (§validation-checks rule 4). A typed check absent from it is an error.
-	CheckSQL map[*ast.Check]string
 }
 
-// Generate renders the schema file for one checked DBML file.
+// Generate renders the schema file for one checked schema file.
 func Generate(f *ast.File, info *check.Info, opts Options) ([]byte, error) {
 	g := &generator{f: f, info: info, opts: opts}
 	if err := g.run(); err != nil {
@@ -38,7 +35,7 @@ type generator struct {
 	info *check.Info
 	opts Options
 
-	enums map[string]*check.EnumInfo // canonical key -> enum
+	enums map[string]*check.EnumInfo
 	out   strings.Builder
 }
 
@@ -62,7 +59,6 @@ func (g *generator) run() error {
 		}
 	}
 
-	// Seed data last, in source order.
 	for _, ti := range g.info.Tables {
 		for _, item := range ti.Decl.Body {
 			if r, ok := item.(*ast.Records); ok {
@@ -102,15 +98,12 @@ func canonKey(q *ast.QualName) string {
 	return q.String()
 }
 
-// sqlTableName flattens the schema qualifier: core.users -> core_users.
 func sqlTableName(q *ast.QualName) string {
 	if s := q.Schema(); s != "" && s != "public" {
 		return s + "_" + q.Base()
 	}
 	return q.Base()
 }
-
-/* ===== CREATE TABLE ===== */
 
 func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error {
 	name := sqlTableName(ti.Decl.Name)
@@ -126,7 +119,7 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 	fmt.Fprintf(&g.out, "CREATE TABLE %s (\n", identQuote(name))
 
 	pkCols := compositePKColumns(ti)
-	uniqueDone := map[string]bool{} // column sets already unique, for 1:1 dedupe
+	uniqueDone := map[string]bool{}
 
 	var lines []string
 	for _, cd := range ti.Columns {
@@ -145,41 +138,11 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 		}
 	}
 
-	// composite (or index-declared) primary key
 	if len(pkCols) > 0 {
 		lines = append(lines, "  PRIMARY KEY ("+quotedJoin(pkCols)+")")
 		uniqueDone[strings.Join(pkCols, ",")] = true
 	}
 
-	// table-level checks (spec §checks), direct and injected (§tablepartial rule 3)
-	{
-		for _, ck := range ti.Checks {
-			var expr string
-			switch {
-			case ck.Expr != nil:
-				expr = ck.Expr.Text()
-			case ck.Pred != nil:
-				// Lowered by the Volt checker (§validation-checks rule 4).
-				sql, lowered := g.opts.CheckSQL[ck]
-				if !lowered {
-					return fmt.Errorf("table %s: typed check not lowered — generate through volt gen (§validation-checks)", ti.Decl.Name.Base())
-				}
-				expr = sql
-			case ck.Ref != nil:
-				continue // validator tier only: SQLite cannot call Go (§validation-checks rule 5)
-			default:
-				continue
-			}
-			line := "  "
-			if n := settingString(ck.Settings, "name"); n != "" {
-				line += "CONSTRAINT " + identQuote(n) + " "
-			}
-			line += "CHECK (" + expr + ")"
-			lines = append(lines, line)
-		}
-	}
-
-	// foreign keys from all three ref forms (spec §relationships-ref)
 	for _, r := range g.info.Refs {
 		fk, target, ok := fkSides(r)
 		if !ok || fk.Table != ti || target.Table == nil {
@@ -195,7 +158,6 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 		}
 		lines = append(lines, line)
 
-		// one-to-one: the FK side must be unique for the cardinality to hold
 		if r.Op == token.MINUS && !g.alreadyUnique(ti, fk.Columns, uniqueDone) {
 			lines = append(lines, "  UNIQUE ("+quotedJoin(fk.Columns)+")")
 			uniqueDone[strings.Join(fk.Columns, ",")] = true
@@ -209,28 +171,30 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 }
 
 func (g *generator) columnDef(ti *check.TableInfo, cd *check.ColumnDef, pkCols []string) (string, error) {
-	col := cd.Col
-	colName := col.Name.Name()
-
-	sqlType, enumInfo, err := g.typeResolve(col)
+	sqlType, err := g.typeResolve(cd)
 	if err != nil {
-		return "", fmt.Errorf("column %q: %w", colName, err)
+		return "", fmt.Errorf("column %q: %w", cd.Col.Name.Name(), err)
 	}
+	return columnLine(cd.Col, sqlType, pkCols)
+}
 
-	singlePK := columnHas(cd, "pk") && len(pkCols) == 0
+// columnLine renders one column definition of a CREATE TABLE (spec
+// §mapping-to-sqlite-ddl): the rowid alias for int [pk, increment],
+// NOT NULL for a pk or not null column, UNIQUE and DEFAULT.
+func columnLine(col *ast.Column, sqlType string, pkCols []string) (string, error) {
+	colName := col.Name.Name()
+	singlePK := colHas(col, "pk") && len(pkCols) == 0
 	inPK := singlePK || contains(pkCols, colName)
-	rowidAlias := singlePK && sqlType == "INTEGER" && columnHas(cd, "increment")
+	rowidAlias := singlePK && sqlType == "INTEGER" && colHas(col, "increment")
 
 	parts := []string{"  " + identQuote(colName), sqlType}
 	if singlePK {
 		parts = append(parts, "PRIMARY KEY")
 	}
-	// SQLite quirk: PRIMARY KEY does not imply NOT NULL (except the rowid
-	// alias), so pk membership always gets an explicit NOT NULL.
 	if !rowidAlias && (inPK || !isNullable(col)) {
 		parts = append(parts, "NOT NULL")
 	}
-	if columnHas(cd, "unique") {
+	if colHas(col, "unique") {
 		parts = append(parts, "UNIQUE")
 	}
 	if s := col.Settings.Get("default"); s != nil {
@@ -240,81 +204,74 @@ func (g *generator) columnDef(ti *check.TableInfo, cd *check.ColumnDef, pkCols [
 		}
 		parts = append(parts, "DEFAULT "+def)
 	}
-	if enumInfo != nil {
-		var vals []string
-		for _, v := range enumInfo.Decl.Values {
-			vals = append(vals, stringQuote(v.Name.Name()))
-		}
-		parts = append(parts, "CHECK ("+identQuote(colName)+" IN ("+strings.Join(vals, ", ")+"))")
-	}
-	if columnHas(cd, "required") {
-		// The required extension (§columns, decision required-and-problems).
-		kind, _ := check.RequiredKind(col.Type.String(), enumInfo != nil)
-		var expr string
-		switch kind {
-		case "text":
-			expr = identQuote(colName) + " <> ''"
-		case "numeric":
-			expr = identQuote(colName) + " <> 0"
-		case "bytes":
-			expr = "length(" + identQuote(colName) + ") > 0"
-		}
-		if expr != "" {
-			parts = append(parts, "CONSTRAINT "+identQuote(colName+"_required")+" CHECK ("+expr+")")
-		}
-	}
-	if col.Settings != nil {
-		for _, s := range col.Settings.Settings {
-			if s.Name != "check" {
-				continue
-			}
-			if fe, ok := s.Value.(*ast.FuncExpr); ok {
-				parts = append(parts, "CHECK ("+fe.Text()+")")
-			}
-		}
-	}
 	return strings.Join(parts, " "), nil
 }
-
-/* ===== indexes ===== */
 
 func (g *generator) indexesEmit(ti *check.TableInfo) error {
 	tbl := sqlTableName(ti.Decl.Name)
 	used := map[string]bool{}
-	n := 0
 	for _, ix := range ti.Indexes {
 		if ix.Settings.Get("pk") != nil {
-			continue // emitted as the PRIMARY KEY constraint
+			continue
 		}
-		n++
-		name := settingString(ix.Settings, "name")
-		if name == "" {
-			name = fmt.Sprintf("idx_%s_%d", tbl, n)
+		name, err := IndexName(tbl, ix)
+		if err != nil {
+			return fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
 		}
 		if used[name] {
 			return fmt.Errorf("table %s: duplicate index name %q", ti.Decl.Name.String(), name)
 		}
 		used[name] = true
-
-		stmt := "CREATE INDEX"
-		if ix.Settings.Get("unique") != nil {
-			stmt = "CREATE UNIQUE INDEX"
-		}
-		var keys []string
-		for _, atom := range ix.Key {
-			switch a := atom.(type) {
-			case *ast.Ident:
-				keys = append(keys, identQuote(a.Name()))
-			case *ast.FuncExpr:
-				keys = append(keys, "("+a.Text()+")")
-			}
-		}
-		fmt.Fprintf(&g.out, "%s %s ON %s (%s);\n", stmt, identQuote(name), identQuote(tbl), strings.Join(keys, ", "))
+		g.out.WriteString(IndexDDL(tbl, name, ix) + ";\n")
 	}
 	return nil
 }
 
-/* ===== records -> INSERT ===== */
+// IndexName is the SQLite name of an index (spec §indexes,
+// §mapping-to-sqlite-ddl): name: when given, else idx_<table>_<col>
+// [_<col>...] over a key of columns; an expression key without name:
+// is an error.
+func IndexName(table string, ix *ast.Index) (string, error) {
+	if name := settingString(ix.Settings, "name"); name != "" {
+		return name, nil
+	}
+	parts := []string{"idx", table}
+	for _, atom := range ix.Key {
+		id, ok := atom.(*ast.Ident)
+		if !ok {
+			return "", fmt.Errorf("index on %s has an expression in its key and no name: (§indexes)", table)
+		}
+		parts = append(parts, id.Name())
+	}
+	return strings.Join(parts, "_"), nil
+}
+
+// IndexDDL renders one CREATE INDEX statement without the trailing
+// semicolon (spec §mapping-to-sqlite-ddl): UNIQUE for unique, the key's
+// columns quoted and its expressions parenthesized, WHERE for a partial
+// index.
+func IndexDDL(table, name string, ix *ast.Index) string {
+	stmt := "CREATE INDEX"
+	if ix.Settings.Get("unique") != nil {
+		stmt = "CREATE UNIQUE INDEX"
+	}
+	var keys []string
+	for _, atom := range ix.Key {
+		switch a := atom.(type) {
+		case *ast.Ident:
+			keys = append(keys, identQuote(a.Name()))
+		case *ast.FuncExpr:
+			keys = append(keys, "("+a.Text()+")")
+		}
+	}
+	where := ""
+	if s := ix.Settings.Get("where"); s != nil {
+		if fe, ok := s.Value.(*ast.FuncExpr); ok {
+			where = " WHERE " + fe.Text()
+		}
+	}
+	return fmt.Sprintf("%s %s ON %s (%s)%s", stmt, identQuote(name), identQuote(table), strings.Join(keys, ", "), where)
+}
 
 func (g *generator) insertsEmit(ti *check.TableInfo, r *ast.Records) error {
 	cols := make([]string, 0)
@@ -348,10 +305,6 @@ func (g *generator) insertsEmit(ti *check.TableInfo, r *ast.Records) error {
 	return nil
 }
 
-/* ===== value rendering ===== */
-
-// defaultSQL renders a §default-values default value; expressions are parenthesized
-// as SQLite requires for non-literal defaults.
 func defaultSQL(v ast.Node) (string, error) {
 	switch v := v.(type) {
 	case *ast.FuncExpr:
@@ -367,7 +320,7 @@ func valueSQL(v ast.Node) (string, error) {
 		if v.Tok.Kind == token.STRING {
 			return stringQuote(v.Tok.Val), nil
 		}
-		return v.Tok.Val, nil // number
+		return v.Tok.Val, nil
 	case *ast.NegNumber:
 		return "-" + v.Num.Tok.Val, nil
 	case *ast.FuncExpr:
@@ -388,8 +341,6 @@ func valueSQL(v ast.Node) (string, error) {
 	}
 	return "", fmt.Errorf("unsupported value at %s", v.Pos())
 }
-
-/* ===== semantic helpers (mirroring the spec rules) ===== */
 
 func compositePKColumns(ti *check.TableInfo) []string {
 	var out []string
@@ -421,16 +372,18 @@ func isNullable(col *ast.Column) bool {
 	return true
 }
 
-func columnHas(cd *check.ColumnDef, name string) bool {
-	if cd.Col.Settings != nil {
-		if cd.Col.Settings.Get(name) != nil {
+func columnHas(cd *check.ColumnDef, name string) bool { return colHas(cd.Col, name) }
+
+func colHas(col *ast.Column, name string) bool {
+	if col.Settings != nil {
+		if col.Settings.Get(name) != nil {
 			return true
 		}
-		if name == "pk" && cd.Col.Settings.Get("primary key") != nil {
+		if name == "pk" && col.Settings.Get("primary key") != nil {
 			return true
 		}
 	}
-	for _, f := range cd.Col.LegacyFlags {
+	for _, f := range col.LegacyFlags {
 		if strings.EqualFold(f.Name(), name) {
 			return true
 		}
@@ -438,7 +391,9 @@ func columnHas(cd *check.ColumnDef, name string) bool {
 	return false
 }
 
-// fkSides mirrors spec §relationships-ref rule 3: which endpoint carries the foreign key.
+// fkSides names the foreign-key endpoint and the one it references
+// (spec §relationships-ref rule 3): the left of >, the right of <, the
+// right of - in a Ref element and the declaring column of an inline -.
 func fkSides(r *check.RefInfo) (fk, target check.EndpointInfo, ok bool) {
 	switch r.Op {
 	case token.GT:
@@ -446,6 +401,9 @@ func fkSides(r *check.RefInfo) (fk, target check.EndpointInfo, ok bool) {
 	case token.LT:
 		return r.Right, r.Left, true
 	case token.MINUS:
+		if r.Inline {
+			return r.Left, r.Right, true
+		}
 		return r.Right, r.Left, true
 	default:
 		return fk, target, false
@@ -454,10 +412,14 @@ func fkSides(r *check.RefInfo) (fk, target check.EndpointInfo, ok bool) {
 
 func refAction(r *check.RefInfo, kind string) string {
 	ref, ok := r.Node.(*ast.Ref)
-	if !ok || ref.Settings == nil {
+	if !ok {
 		return ""
 	}
-	s := ref.Settings.Get(kind)
+	return actionWord(ref.Settings, kind)
+}
+
+func actionWord(sl *ast.SettingList, kind string) string {
+	s := sl.Get(kind)
 	if s == nil {
 		return ""
 	}
@@ -498,8 +460,6 @@ func (g *generator) alreadyUnique(ti *check.TableInfo, cols []string, done map[s
 	}
 	return false
 }
-
-/* ===== notes ===== */
 
 func projectNote(f *ast.File) string {
 	for _, d := range f.Decls {
@@ -552,5 +512,5 @@ func contains(ss []string, s string) bool {
 }
 
 // Ident quotes an identifier for SQLite the way the DDL generator does
-// (spec §selects-over-groups rule 6).
+// (spec §selects-over-groups).
 func Ident(name string) string { return identQuote(name) }

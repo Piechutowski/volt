@@ -1,9 +1,12 @@
 // The integration fixture: one schema exercising every v0 CRUD shape and
-// the v2 dynamic query layer against a real SQLite (decision integration-over-mocks). The
+// the v2 dynamic query layer against a real SQLite. The
 // generated siblings (nao_models.go, nao_queries.go, nao_dyn.go,
 // nao_schema.sql) are checked in and drift-tested; refresh them with
 // 'volt gen ./nao/itest --sql' from the repository root.
 package itest
+
+Type Money int
+Type pay.Cents int from 'github.com/Piechutowski/volt/nao/itest/pay'
 
 Project itest {
   note: 'Integration-test fixture for the generated query surface.'
@@ -16,29 +19,37 @@ Enum order_status {
 }
 
 Table users {
-  id integer [pk, increment]
-  email varchar [not null, unique]
-  name varchar [not null, tag: 'json:"displayName"']
-  bio text [note: 'NULL until the user writes one']
-  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  id int [pk, increment]
+  email string [not null, unique]
+  name string [not null, tag: 'json:"displayName"']
+  bio string [note: 'NULL until the user writes one']
+  created_at time.Time [not null, default: `CURRENT_TIMESTAMP`]
 
-  checks {
+  validators {
     EmailValid(email)
   }
 }
 
 Table orders {
-  id integer [pk, increment]
-  user_id integer [not null, ref: > users.id]
+  id int [pk, increment]
+  user_id int [not null, ref: > users.id]
   status order_status [not null, default: order_status.pending]
-  total decimal(10,2) [not null, required]
-  placed_at timestamp
+  total float64 [not null, required]
+  tip Money [not null, default: 0]
+  fee pay.Cents [not null]
+  placed_at time.Time
 }
+
+// §types rule 4, §predicates rule 5: a package-qualified declared type
+// compares with = and in, and a literal has the class of its storage.
+Select by_fee for orders where fee = :fee
+Select fees   for orders where fee in :fees [order: (id asc)]
+Select free   for orders where fee = 0
 
 // composite primary key, no auto-increment anywhere
 Table user_tags {
-  user_id integer [not null, ref: > users.id]
-  tag varchar [not null]
+  user_id int [not null, ref: > users.id]
+  tag string [not null]
 
   indexes {
     (user_id, tag) [pk]
@@ -48,22 +59,22 @@ Table user_tags {
 // Two uniform metric tables plus the group/pred/select layer over them
 // (spec §groups to §selects-over-groups): one select, one signature, every member.
 Table page_views {
-  id integer [pk, increment]
-  site varchar [not null]
-  day integer [not null]
-  hits integer [not null, default: 0]
+  id int [pk, increment]
+  site string [not null]
+  day int [not null]
+  hits int [not null, default: 0]
 
-  checks {
-    hits >= 0 and day >= 1 [name: 'counts_positive']
-    site like '%_'
+  validators {
+    CountsPositive(hits, day)
+    SiteShape(site)
   }
 }
 
 Table link_clicks {
-  id integer [pk, increment]
-  site varchar [not null]
-  day integer [not null]
-  target text [not null, default: '']
+  id int [pk, increment]
+  site string [not null]
+  day int [not null]
+  target string [not null, default: '']
 }
 
 Group metrics {
@@ -77,10 +88,10 @@ Pred since { day >= :from }
 Select rows for metrics where at [order: (day desc, id asc)]
 Select recent for metrics where at or since
 
-// §predicates rule 3 list parameter: one JSON array, unpacked by json_each (decision list-parameters).
+// §predicates list parameter: one JSON array, unpacked by json_each.
 Select on_sites for metrics where site in :sites [order: (id asc)]
 
-// §selects-over-groups rule 7 projections: an explicit list mints one shared row type for
+// §selects-over-groups projections: an explicit list mints one shared row type for
 // every member; the star form mints a per-member struct derivative.
 Select summary (site, day) for metrics where at
 Select public (* \ target) for link_clicks [order: (id asc)]

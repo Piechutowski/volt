@@ -1,5 +1,5 @@
-// Select round trips (spec §selects-over-groups, decision integration-over-mocks): the group-generated
-// methods run against a real SQLite through a real driver, proving the
+// Select round trips (spec §selects-over-groups): the group-generated
+// methods run against a float64 SQLite through a float64 driver, proving the
 // checker-rendered WHERE/ORDER SQL executes and filters correctly, with
 // one signature across every member of the group.
 package itest
@@ -11,24 +11,22 @@ import (
 	"testing"
 )
 
-// seedMetrics fills both members of the metrics group with rows on two
-// sites and two days.
 func seedMetrics(t *testing.T, q *Queries) {
 	t.Helper()
 	ctx := context.Background()
-	for _, r := range []PageViewCreateParams{
-		{Site: "alpha", Day: 1},
-		{Site: "alpha", Day: 1},
-		{Site: "alpha", Day: 2},
-		{Site: "beta", Day: 1},
+	for _, r := range []PageViewChangeset{
+		PageViewNew().SiteSet("alpha").DaySet(1),
+		PageViewNew().SiteSet("alpha").DaySet(1),
+		PageViewNew().SiteSet("alpha").DaySet(2),
+		PageViewNew().SiteSet("beta").DaySet(1),
 	} {
 		if _, err := q.PageViewCreate(ctx, r); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for _, r := range []LinkClickCreateParams{
-		{Site: "alpha", Day: 1},
-		{Site: "beta", Day: 2},
+	for _, r := range []LinkClickChangeset{
+		LinkClickNew().SiteSet("alpha").DaySet(1),
+		LinkClickNew().SiteSet("beta").DaySet(2),
 	} {
 		if _, err := q.LinkClickCreate(ctx, r); err != nil {
 			t.Fatal(err)
@@ -41,7 +39,6 @@ func TestSelectRowsFiltersPerMember(t *testing.T) {
 	seedMetrics(t, q)
 	ctx := context.Background()
 
-	// Same select, same signature, first member.
 	pv, err := q.PageViewRows(ctx, "alpha", 1)
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +52,6 @@ func TestSelectRowsFiltersPerMember(t *testing.T) {
 		}
 	}
 
-	// Second member, same predicate rendering.
 	lc, err := q.LinkClickRows(ctx, "beta", 2)
 	if err != nil {
 		t.Fatal(err)
@@ -64,7 +60,6 @@ func TestSelectRowsFiltersPerMember(t *testing.T) {
 		t.Fatalf("LinkClickRows(beta, 2) = %+v, want the beta row", lc)
 	}
 
-	// No match is an empty slice, not an error.
 	none, err := q.LinkClickRows(ctx, "alpha", 99)
 	if err != nil || len(none) != 0 {
 		t.Fatalf("no-match select = %v rows, err %v", len(none), err)
@@ -75,8 +70,6 @@ func TestSelectOrderDescApplies(t *testing.T) {
 	_, q := newDB(t)
 	seedMetrics(t, q)
 
-	// recent = at or since: with :from = 0 every row qualifies, so the
-	// [order: (day desc, id)] of Rows is the observable difference.
 	rows, err := q.PageViewRecent(context.Background(), "nosuch", 0, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +82,6 @@ func TestSelectOrderDescApplies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// day desc, then id asc: both rows share day 1, ids ascend.
 	if len(ordered) == 2 && ordered[0].ID > ordered[1].ID {
 		t.Errorf("order (day desc, id) violated: ids %d before %d", ordered[0].ID, ordered[1].ID)
 	}
@@ -100,8 +92,6 @@ func TestSelectProjectionSharedType(t *testing.T) {
 	seedMetrics(t, q)
 	ctx := context.Background()
 
-	// One shared row type (Summary), two sources: the §selects-over-groups rule 7 explicit
-	// list. Both methods return the same Go type.
 	pv, err := q.PageViewSummary(ctx, "alpha", 1)
 	if err != nil {
 		t.Fatal(err)
@@ -110,7 +100,7 @@ func TestSelectProjectionSharedType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rows := append(pv, lc...) // compiles only because the type is shared
+	rows := append(pv, lc...)
 	if len(pv) != 2 || len(lc) != 1 || len(rows) != 3 {
 		t.Fatalf("summary rows = %d + %d, want 2 + 1", len(pv), len(lc))
 	}
@@ -125,8 +115,6 @@ func TestSelectProjectionStructDerivative(t *testing.T) {
 	_, q := newDB(t)
 	seedMetrics(t, q)
 
-	// The star form: LinkClickPublic is LinkClick minus target, every
-	// kept field copied verbatim (§selects-over-groups rule 7).
 	rows, err := q.LinkClickPublic(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -147,7 +135,7 @@ func TestSelectProjectionStructDerivative(t *testing.T) {
 }
 
 // TestSelectListParam: `site in :sites` binds one JSON array and is
-// unpacked by json_each on the real driver (§predicates rule 3, decision list-parameters) — a
+// unpacked by json_each on the float64 driver (§predicates) — a
 // multi-value list, a single value, and the empty list that matches
 // nothing, with one signature across both members.
 func TestSelectListParam(t *testing.T) {
@@ -181,7 +169,6 @@ func TestSelectListParam(t *testing.T) {
 	if len(none) != 0 {
 		t.Fatalf("PageViewOnSites(empty) = %d rows, want 0", len(none))
 	}
-	// A value with a JSON-significant character is carried verbatim.
 	odd, err := q.PageViewOnSites(ctx, []string{`al"pha`, "alpha"})
 	if err != nil {
 		t.Fatal(err)

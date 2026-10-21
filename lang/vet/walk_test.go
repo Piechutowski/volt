@@ -16,18 +16,16 @@ import (
 func walkSources(t *testing.T) map[string]string {
 	t.Helper()
 	out := map[string]string{}
-	for _, pattern := range []string{"*.dbml", "*.volt"} {
-		files, err := filepath.Glob(filepath.Join("testdata", pattern))
+	files, err := filepath.Glob(filepath.Join("testdata", "*.volt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		src, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, file := range files {
-			src, err := os.ReadFile(file)
-			if err != nil {
-				t.Fatal(err)
-			}
-			out[file] = string(src)
-		}
+		out[file] = string(src)
 	}
 	for name, src := range corpus.Files(corpus.Spec{Packages: 2, Tables: 6, Columns: 5}) {
 		out["corpus/"+name] = src
@@ -95,9 +93,9 @@ func TestMemoMatchesFreshRun(t *testing.T) {
 	decls := len(reuseDecls(t, text))
 	round("first", text, decls)
 	round("no change", text, 0)
-	round("edit one table", strings.Replace(text, "c002 text [not null]", "c002 text [not null, note: 'edited']", 1), 2)
+	round("edit one table", strings.Replace(text, "c002 string [not null]", "c002 string [not null, note: 'edited']", 1), 2)
 	round("fix it", text, 2)
-	round("edit the partial", strings.Replace(text, "created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]", "created_at timestamp [not null]", 1), 7)
+	round("edit the partial", strings.Replace(text, "created_at time.Time [not null, default: `CURRENT_TIMESTAMP`]", "created_at time.Time [not null]", 1), 7)
 	f, _, _, _ := parser.ParseFileReuse("schema.volt", text, reuse)
 	info, _ := check.FileMemo(f, &schema)
 	RunMemo(f, info, nil, &memo, ByName("redundantnull"))

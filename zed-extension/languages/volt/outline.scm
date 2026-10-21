@@ -15,6 +15,10 @@
   "Enum" @context
   name: (table_name) @name) @item
 
+(type_definition
+  "Type" @context
+  name: (type_name) @name) @item
+
 (enum_value
   name: (_) @name) @item
 
@@ -25,8 +29,8 @@
 (indexes_block
   "indexes" @name) @item
 
-(checks_block
-  "checks" @name) @item
+(validators_block
+  "validators" @name) @item
 
 (ref_definition
   "Ref" @context
@@ -81,3 +85,7 @@
 (select_definition
   "Select" @context
   name: (select_name) @name) @item
+
+(migration_definition
+  "Migration" @context
+  name: (migration_name) @name) @item

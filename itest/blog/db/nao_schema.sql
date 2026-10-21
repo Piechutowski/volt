@@ -4,8 +4,13 @@ PRAGMA foreign_keys = ON;
 
 CREATE TABLE users (
   id INTEGER PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE CONSTRAINT email_required CHECK (email <> ''),
-  CONSTRAINT email_shape CHECK (email LIKE '%_@%_')
+  email TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+
+CREATE TABLE tags (
+  slug TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL
 );
 
 CREATE TABLE ms_revenue (

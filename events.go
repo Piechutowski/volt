@@ -140,10 +140,10 @@ func (b *Broker) Serve(w http.ResponseWriter, r *Request) error {
 			return nil
 		case ev, ok := <-ch:
 			if !ok {
-				return nil // fell behind: the client reconnects and replays
+				return nil
 			}
 			if err := writeEvent(w, ev); err != nil {
-				return nil // the client went away mid-write
+				return nil
 			}
 		case <-ticker.C:
 			if _, err := fmt.Fprint(w, ": keepalive\n\n"); err != nil {
@@ -198,8 +198,6 @@ func (c *Client) Stream(ctx context.Context, url string) <-chan Event {
 	return out
 }
 
-// streamOnce runs one connection; it reports whether any event
-// arrived, and updates last as events flow.
 func (c *Client) streamOnce(ctx context.Context, url string, last *uint64, out chan<- Event) bool {
 	req, err := http.NewRequestWithContext(ctx, "GET", c.Base+url, nil)
 	if err != nil {
@@ -244,7 +242,6 @@ func (c *Client) streamOnce(ctx context.Context, url string, last *uint64, out c
 			}
 			ev, data = Event{}, nil
 		case strings.HasPrefix(line, ":"):
-			// comment / keep-alive
 		case strings.HasPrefix(line, "id:"):
 			ev.ID, _ = strconv.ParseUint(strings.TrimSpace(line[3:]), 10, 64)
 		case strings.HasPrefix(line, "event:"):
