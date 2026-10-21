@@ -759,7 +759,7 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 				}
 				mod := list.Mods[i]
 				if mod == nil {
-					l.errorf(id.Pos(), "order: every column states its direction — write %q or %q (§selects-over-groups)", id.Name()+" asc", id.Name()+" desc")
+					l.errorf(id.Pos(), "order: every column states its direction; write %q or %q (§selects-over-groups)", id.Name()+" asc", id.Name()+" desc")
 					continue
 				}
 				desc := false

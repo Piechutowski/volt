@@ -84,7 +84,7 @@ func (c *checker) settingsCheck(sl *ast.SettingList, section string, spec settin
 		}
 		kind, known := spec.kinds[s.Name]
 		if !known {
-			c.errorf(s.Pos(), section, "unknown setting %q", s.Name)
+			c.errorf(s.Pos(), section, "unknown setting %q (§%s)", s.Name, section)
 			continue
 		}
 		if seen[s.Name] && !spec.repeatable[s.Name] {

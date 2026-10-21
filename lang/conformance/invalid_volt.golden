@@ -279,7 +279,7 @@ db/i214_migration_from_outside_rebuild.volt:13:27: error: spec/migrations: from:
 db/i215_migration_index_type.volt:19:28: error: spec/migrations: type: names an index method, which SQLite does not have, and is not a migration setting (§migrations)
 
 ## i216_migration_exec_setting.volt
-db/i216_migration_exec_setting.volt:13:68: error: spec/migrations: unknown setting "note"
+db/i216_migration_exec_setting.volt:13:68: error: spec/migrations: unknown setting "note" (§migrations)
 
 ## i217_migration_duplicate_column.volt
 db/i217_migration_duplicate_column.volt:14:5: error: spec/migrations: duplicate column name "name" in table "users" (§migrations)
@@ -343,7 +343,7 @@ db/schema.volt:5:12: error: spec/types: storage type "int32" of Type "Score" is 
 ## i225_unknown_type_order_errors_stay.volt
 db/i225_unknown_type_order_errors_stay.volt:7:8: error: spec/columns: column "hits": unknown type "int32"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
 db/i225_unknown_type_order_errors_stay.volt:13:8: error: spec/columns: column "body": unknown type "int64"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
-db/i225_unknown_type_order_errors_stay.volt:21:43: error: spec/selects-over-groups: order: every column states its direction — write "hits asc" or "hits desc" (§selects-over-groups)
+db/i225_unknown_type_order_errors_stay.volt:21:43: error: spec/selects-over-groups: order: every column states its direction; write "hits asc" or "hits desc" (§selects-over-groups)
 db/i225_unknown_type_order_errors_stay.volt:22:46: error: spec/selects-over-groups: order direction is asc or desc, not "sideways" (§selects-over-groups)
 db/i225_unknown_type_order_errors_stay.volt:23:49: error: spec/selects-over-groups: column "hits" appears twice in order: (§selects-over-groups)
 db/i225_unknown_type_order_errors_stay.volt:24:28: error: spec/selects-over-groups: column "body" ([]byte) cannot appear in a predicate (§predicates)
@@ -461,7 +461,7 @@ db/i58_select_crud_collision.volt:9:8: error: spec/selects-over-groups: select n
 db/i59_like_on_number.volt:9:33: error: spec/selects-over-groups: like needs a text column; "year" is int (§predicates)
 
 ## i60_order_direction_missing.volt
-db/i60_order_direction_missing.volt:9:65: error: spec/selects-over-groups: order: every column states its direction — write "id asc" or "id desc" (§selects-over-groups)
+db/i60_order_direction_missing.volt:9:65: error: spec/selects-over-groups: order: every column states its direction; write "id asc" or "id desc" (§selects-over-groups)
 
 ## i64_projection_missing_column.volt
 db/i64_projection_missing_column.volt:20:23: error: spec/selects-over-groups: column "hits" is missing from link_clicks — every member of "metrics" must have it (§selects-over-groups)

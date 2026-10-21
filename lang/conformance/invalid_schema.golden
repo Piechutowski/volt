@@ -113,7 +113,7 @@ i148_default_other_enum.volt:6:22: error: spec/default-values: default of "s" na
 i149_default_string_time.volt:4:26: error: spec/default-values: default of "at" (time.Time) must be an expression literal, found string (§default-values)
 
 ## i14_unknown_column_setting.volt
-i14_unknown_column_setting.volt:3:11: error: spec/columns: unknown setting "sparkly"
+i14_unknown_column_setting.volt:3:11: error: spec/columns: unknown setting "sparkly" (§columns)
 
 ## i150_default_bool_not_boolean.volt
 i150_default_bool_not_boolean.volt:4:23: error: spec/default-values: default of "live" (bool) must be a boolean, found integer (§default-values)
@@ -156,7 +156,7 @@ i227_pk_index_member_null.volt:5:19: error: spec/columns: column "tag" is a memb
 i228_bare_pk_after_type.volt:4:10: error: syntax: expected a settings list or end of line after the column type (§columns), found identifier "pk"
 
 ## i229_primary_key_unknown.volt
-i229_primary_key_unknown.volt:4:11: error: spec/columns: unknown setting "primary key"
+i229_primary_key_unknown.volt:4:11: error: spec/columns: unknown setting "primary key" (§columns)
 
 ## i22_empty_enum.volt
 i22_empty_enum.volt:2:1: error: spec/enum: enum "empty_status" must contain at least one value
@@ -180,7 +180,7 @@ i26_toplevel_records_no_columns.volt:3:1: error: spec/records-sample-data: top-l
 i27_two_notes.volt:3:3: error: spec/notes: at most one Note per Table body
 
 ## i28_bad_tablegroup_setting.volt
-i28_bad_tablegroup_setting.volt:3:15: error: spec/tablegroup: unknown setting "headercolor"
+i28_bad_tablegroup_setting.volt:3:15: error: spec/tablegroup: unknown setting "headercolor" (§tablegroup)
 
 ## i29_duplicate_category.volt
 i29_duplicate_category.volt:4:3: error: spec/diagramview: category "Tables" may appear at most once per view
@@ -207,7 +207,7 @@ i37_injection_in_partial.volt:4:3: error: spec/tablepartial: partial injection i
 i38_records_in_partial.volt:4:3: error: spec/tablepartial: records are not allowed inside TablePartial
 
 ## i39_sticky_note_bad_setting.volt
-i39_sticky_note_bad_setting.volt:2:9: error: spec/notes: unknown setting "headercolor"
+i39_sticky_note_bad_setting.volt:2:9: error: spec/notes: unknown setting "headercolor" (§notes)
 
 ## i40_alias_collision.volt
 i40_alias_collision.volt:3:17: error: spec/namespaces-and-uniqueness: table alias "users" collides with an existing table name or alias
