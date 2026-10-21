@@ -2,8 +2,8 @@
 Table users { id int }
 Table posts { user_id int }
 Table a { x int }
-Table b { x int }
-Table c { x int }
+Table b { x int [null] }
+Table c { x int [null] }
 Table d { x int }
 Ref fk1: posts.user_id > users.id [delete: cascade, update: no action]
 Ref: a.x > users.id [delete: restrict]

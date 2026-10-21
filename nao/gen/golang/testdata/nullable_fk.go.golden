@@ -143,7 +143,7 @@ type Post struct {
 	// NULL until an editor is assigned
 	EditorID   rt.Null[int]       `db:"editor_id" json:"editor_id"`
 	ReviewedAt rt.Null[time.Time] `db:"reviewed_at" json:"reviewed_at"`
-	// nil slice expresses NULL; no pointer needed
+	// rt.Null[string] expresses NULL; no pointer needed
 	Meta rt.Null[string] `db:"meta" json:"meta"`
 	Raw  []byte          `db:"raw" json:"raw"`
 }

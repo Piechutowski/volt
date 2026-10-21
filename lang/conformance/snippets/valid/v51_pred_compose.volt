@@ -6,7 +6,7 @@ Table ms_revenue {
   org string
   year int
   amount float64
-  note string
+  note string [null]
 }
 
 Pred current { org = :org and year = :year }

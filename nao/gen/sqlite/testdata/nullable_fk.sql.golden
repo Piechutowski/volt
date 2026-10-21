@@ -12,7 +12,7 @@ CREATE TABLE posts (
   -- NULL until an editor is assigned
   editor_id INTEGER,
   reviewed_at TIMESTAMP,
-  -- nil slice expresses NULL; no pointer needed
+  -- rt.Null[string] expresses NULL; no pointer needed
   meta TEXT,
   raw BLOB,
   FOREIGN KEY (author_id) REFERENCES users (id),

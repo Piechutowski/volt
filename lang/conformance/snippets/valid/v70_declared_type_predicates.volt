@@ -6,7 +6,7 @@ Type Money int
 Table orders {
   id    int   [pk, increment]
   price Money
-  tip   Money
+  tip   Money [null]
 }
 
 Select priced for orders where price = :price and tip != :tip

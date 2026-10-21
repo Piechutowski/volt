@@ -46,7 +46,7 @@ var (
 			"required": flagOnly,
 		},
 		repeatable: map[string]bool{"ref": true, "tag": true},
-		conflicts:  [][2]string{{"required", "null"}, {"required", "default"}, {"required", "increment"}},
+		conflicts:  [][2]string{{"required", "default"}, {"required", "increment"}},
 	}
 	indexSettings = settingSpec{
 		kinds: map[string]valueKind{

@@ -29,7 +29,7 @@ func (r *missingPKRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagn
 
 func tableHasPK(ti *check.TableInfo) bool {
 	for _, cd := range ti.Columns {
-		if columnHas(cd, "pk") {
+		if cd.Col.Settings.Get("pk") != nil {
 			return true
 		}
 	}
@@ -48,6 +48,9 @@ func fkSides(r *check.RefInfo) (fk, target check.EndpointInfo, ok bool) {
 	case token.LT:
 		return r.Right, r.Left, true
 	case token.MINUS:
+		if r.Inline {
+			return r.Left, r.Right, true
+		}
 		return r.Right, r.Left, true
 	default:
 		return fk, target, false
@@ -111,13 +114,13 @@ func (r *refTargetRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagn
 func endpointUnique(e check.EndpointInfo) bool {
 	if len(e.Columns) == 1 {
 		if cd := e.Table.Column(e.Columns[0]); cd != nil {
-			if columnHas(cd, "pk") || columnHas(cd, "unique") {
+			if cd.Col.Settings.Get("pk") != nil || cd.Col.Settings.Get("unique") != nil {
 				return true
 			}
 		}
 	}
 	for _, ix := range e.Table.Indexes {
-		if ix.Settings.Get("pk") == nil && ix.Settings.Get("unique") == nil {
+		if ix.Settings.Get("pk") == nil && (ix.Settings.Get("unique") == nil || ix.Settings.Get("where") != nil) {
 			continue
 		}
 		var got []string

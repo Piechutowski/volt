@@ -19,7 +19,7 @@ Migration 0001__create_t {
     table  string
     create string
     drop   string
-    index  string
+    index  string [null]
     add    string
     exec   string
   }

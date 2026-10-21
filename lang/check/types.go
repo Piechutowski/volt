@@ -240,7 +240,7 @@ func (c *checker) typesResolve(ti *TableInfo) {
 	pkIndex := pkIndexColumns(ti.Indexes)
 	for _, cd := range ti.Columns {
 		cd.Nullable = isNullable(cd.Col)
-		c.pkIndexNullCheck(cd.Col, pkIndex)
+		c.pkIndexNullCheck(cd.Col, ti.Decl.Name.String(), pkIndex)
 		cd.Type = c.env.resolve(cd.Col.Type)
 		if !cd.Type.Known() {
 			if c.env.failed[cd.Col.Type.String()] {
@@ -282,6 +282,24 @@ func (c *checker) recordsTypeCheck(ti *TableInfo, d *ast.Records) {
 			}
 			c.valueTypeCheck(cols[i], v, "records-sample-data", "record value for")
 		}
+	}
+}
+
+func (c *checker) recordsCoverageCheck(ti *TableInfo, d *ast.Records) {
+	if !d.HasColumns {
+		return
+	}
+	listed := map[string]bool{}
+	for _, id := range d.Columns {
+		listed[id.Name()] = true
+	}
+	for _, cd := range ti.Columns {
+		col := cd.Col
+		rowid := col.Settings.Get("pk") != nil && col.Settings.Get("increment") != nil
+		if listed[col.Name.Name()] || cd.Nullable || rowid || col.Settings.Get("default") != nil {
+			continue
+		}
+		c.errorf(d.Pos(), "records-sample-data", "records of table %q do not list column %q, which is NOT NULL and has no default: every row would write NULL into it; list the column (§records-sample-data)", ti.Decl.Name.String(), col.Name.Name())
 	}
 }
 
@@ -377,6 +395,4 @@ func defaultKind(v ast.Node) string {
 	return "value"
 }
 
-// isNullable reports whether the column admits NULL, which the null
-// setting alone decides (spec §columns).
 func isNullable(col *ast.Column) bool { return col.Settings.Get("null") != nil }

@@ -761,7 +761,11 @@ column setting  = "pk"
    its type says so. A key column, one carrying `pk` or a member of a
    `[pk]` index (§indexes), MUST NOT carry `null`.
 3. **`pk`** marks a single-column primary key. A composite primary key
-   MUST be expressed as an index with the `pk` setting (§indexes).
+   MUST be expressed as an index with the `pk` setting (§indexes). A
+   table has at most one primary key, one column carrying `pk` or one
+   `[pk]` index, counted over its columns and indexes after partial
+   injection (§tablepartial): a second `pk` column, a `pk` column
+   beside a `[pk]` index, or a second `[pk]` index is an error.
 4. **`increment`** marks the column auto-increment: the database
    assigns its value, and a changeset has no setter for it
    (§changesets).
@@ -883,21 +887,26 @@ index setting  = "type", ":", identifier
 3. `pk` declares the index a (composite) primary key; `unique` a unique
    index. Combining `pk` and `unique` on one index is redundant but
    permitted. The members of a `pk` index are NOT NULL and MUST NOT
-   carry `null` (§columns).
+   carry `null` (§columns). A `pk` index is the table's one primary
+   key: a table has at most one, and none beside a `pk` column
+   (§columns). Its key is columns only; an expression atom in it is an
+   error.
 4. `type` selects the index method. Any identifier is accepted; the
-   conventional, portable values are `btree` and `hash`.
+   conventional, portable values are `btree` and `hash`. A `pk` index
+   has no method, and `type:` on it is an error.
 5. **Name.** An index without `name:` whose key is columns only is
    named `idx_<table>_<col>[_<col>...]` from the SQLite table name
    and its key columns in order (§mapping-to-sqlite-ddl), so that a
    schema and a migration (§migrations) name one index one way;
    `name:` overrides it. An index with an expression atom MUST carry
    `name:`, since no name derives from an expression. A `pk` index is
-   a table constraint and has no name.
+   a table constraint and has no name: `name:` on it is an error.
 6. **`where`** takes an expression literal and makes the index
    partial: only the rows for which the condition holds are indexed,
    so the index stays small, and a unique partial index constrains
    only those rows. The DDL carries it as `WHERE <expr>`, verbatim and
-   SQLite's to judge.
+   SQLite's to judge. `where:` on a `pk` index is an error, since a
+   primary key covers every row.
 
 ```volt
 Table bookings {
@@ -955,13 +964,18 @@ ref action       = "cascade" | "restrict" | "set null"
    number of columns: `Ref: a.(x, y) > b.(x, y)`.
 3. **Foreign-key side.** For `>`, the left endpoint is the foreign key. For
    `<`, the right endpoint is the foreign key. For `-`, the *second* (right)
-   endpoint is the foreign key. For an inline ref, the declaring column is
-   the foreign key.
+   endpoint is the foreign key, except in an inline ref, where the
+   declaring column is. An inline `>` or `<` follows the general rule,
+   the declaring column being its left endpoint (rule 4).
 4. **Inline form.** `ref: <op> <endpoint>` appears as a column setting
    (§columns); the declaring column is the implicit left endpoint. Inline refs
    MUST NOT carry a relationship name or settings.
 5. **Referential actions.** `delete:` and `update:` correspond to SQL
-   `ON DELETE` / `ON UPDATE`.
+   `ON DELETE` / `ON UPDATE`. `set null` is an error unless every
+   foreign-key column of the relationship (rule 3) carries `null`, and
+   `set default` unless every one carries `null` or a `default:`
+   (§columns, §default-values), since the database would otherwise
+   write a NULL the column refuses.
 6. `inactive` and `color` are visualization-only settings (rendered as a
    dotted line / line color); they have no SQL semantics.
 7. A many-to-many (`<>`) relationship denotes an implicit junction table on
@@ -1158,6 +1172,12 @@ empty           = ;                      (* nothing between separators *)
    judge. A bare identifier other than `true`, `false` and `null` is
    **not** a value. A value that does not fit is an error naming the
    column and its type.
+5. **Coverage.** A records column list MUST name every column of the
+   table, injected columns included (§partial-injection-order), that
+   is NOT NULL, has no `default:` and is not the rowid alias (`int
+   [pk, increment]`, §mapping-to-sqlite-ddl), since the database
+   would write NULL into such a column left out and refuse the row. An
+   omitted list names every column (rule 1).
 
 ```volt
 Enum job_status {
@@ -2998,9 +3018,10 @@ Migration 0002__users_bio {
    built-in types (§columns); an enum or a declared type is not a
    type here, since the database holds its storage type. A migration
    column is NOT NULL unless it carries `null`, as a schema column is,
-   and a key column MUST NOT carry `null` (§columns). A partial
-   injection, a `validators` block, a records block and a `Note` are
-   not part of a `shape body`.
+   a key column MUST NOT carry `null`, and a `shape body` has at most
+   one primary key, one `pk` column or one `[pk]` index, as a table
+   has (§columns). A partial injection, a `validators` block, a
+   records block and a `Note` are not part of a `shape body`.
 4. **Settings whitelist.** In a migration, a column setting is one of
    `pk`, `increment`, `null`, `unique`, `default:`, `ref:`, `delete:`,
    `update:`, `note:`, and in a `rebuild` also `from:` (rule 9);
@@ -3011,9 +3032,12 @@ Migration 0002__users_bio {
    §relationships-ref (`cascade`, `restrict`, `set null`, `set
    default`, `no action`) for the column's `ref:`, so that a schema
    foreign key with an action can be matched; without a `ref:` they
-   are errors. An index setting is one of `unique`, `pk` (in a shape
-   body only, rule 10), `name:`, `where:`, `note:`; `type:` is an
-   error, since SQLite has no index methods. `tag:`, `required` and
+   are errors. As there, `set null` requires the column to carry
+   `null`, and `set default` requires `null` or a `default:`. An index
+   setting is one of `unique`, `pk` (in a shape body only, rule 10),
+   `name:`, `where:`, `note:`; `type:` is an error, since SQLite has no
+   index methods, and on a `pk` index `name:`, `where:` and an
+   expression atom are errors, as in §indexes. `tag:`, `required` and
    `model:` describe Go and are errors here, as is `headercolor:`. An
    `exec` takes `down:` and no other setting.
 5. **`create table`.** The body MUST contain at least one column;
@@ -3514,9 +3538,10 @@ rt.DBTX)`, `Tx`, `WithTx`, `WithCache`):
    keys)` exists for a single-column key; missing keys are absent, not
    errors; an empty input returns nil. `<Model>GetBy<Column>` exists
    per column that is `unique` or covered by a single-column unique
-   index and is not the key. `<Model>List` and `<Model>Create` always
-   exist; a table without a key gets List, Create, GetBy and the
-   dynamic layer.
+   index without `where:` and is not the key (a partial unique index
+   constrains only some rows, §indexes). `<Model>List` and
+   `<Model>Create` always exist; a table without a key gets List,
+   Create, GetBy and the dynamic layer.
 2. `Get`, `GetBy*` and `Update` return `rt.ErrNotFound`
    (`sql.ErrNoRows`) on a miss; `Delete` checks the affected count.
    Multi-row results are empty slices, never nil, GetMany on an empty

@@ -309,23 +309,31 @@ func (c *checker) collect(f *ast.File) {
 				c.info.byTable["public."+checked.Alias] = checked
 			}
 		}
-		c.diags = append(c.diags, partialTypeDedupe(checked, diags, reported)...)
+		c.diags = append(c.diags, partialColumnDedupe(checked, diags, reported)...)
 	}
 }
 
-func partialTypeDedupe(ti *TableInfo, diags []diag.Diagnostic, reported map[diag.Diagnostic]bool) []diag.Diagnostic {
-	at := map[token.Position]bool{}
+func partialColumnDedupe(ti *TableInfo, diags []diag.Diagnostic, reported map[diag.Diagnostic]bool) []diag.Diagnostic {
+	var spans []*ast.Column
 	for _, cd := range ti.Columns {
-		if cd.Partial != nil && !cd.Type.Known() {
-			at[cd.Col.Type.Pos()] = true
+		if cd.Partial != nil {
+			spans = append(spans, cd.Col)
 		}
 	}
-	if len(at) == 0 {
+	if len(spans) == 0 {
 		return diags
+	}
+	within := func(p token.Position) bool {
+		for _, col := range spans {
+			if p.File() == col.Pos().File() && col.Pos().Offset() <= p.Offset() && p.Offset() <= col.End().Offset() {
+				return true
+			}
+		}
+		return false
 	}
 	out := make([]diag.Diagnostic, 0, len(diags))
 	for _, d := range diags {
-		if at[d.Pos] {
+		if within(d.Pos) {
 			if reported[d] {
 				continue
 			}
@@ -429,9 +437,11 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 		ti.Columns = append(ti.Columns, s.def)
 	}
 	c.typesResolve(ti)
+	c.pkCountCheck(ti.Decl.Name.String(), ti.Columns, ti.Indexes)
 	for _, item := range ti.Decl.Body {
 		if r, ok := item.(*ast.Records); ok {
 			c.recordsTypeCheck(ti, r)
+			c.recordsCoverageCheck(ti, r)
 		}
 	}
 	c.incrementCheck(ti)

@@ -224,7 +224,7 @@ func (c *checker) operationsCheck(ops []ast.Operation, flat bool) {
 					if flat {
 						c.addColumnCheck(shape, fmt.Sprintf("drop %q from table %q, whose shape is the inverse add", item.Name.Name(), op.Name.Name()))
 					} else {
-						c.migrationColumnCheck(shape, migrationColumnSettings, nil)
+						c.migrationColumnCheck(shape, migrationColumnSettings)
 					}
 				}
 			}
@@ -260,7 +260,8 @@ func (c *checker) shapeBodyCheck(what, table string, pos token.Position, body []
 				c.errorf(item.Pos(), "migrations", "duplicate column name %q in table %q (§migrations)", name, table)
 			}
 			seen[name] = true
-			ti.Columns = append(ti.Columns, c.migrationColumnCheck(item, spec, pk))
+			ti.Columns = append(ti.Columns, c.migrationColumnCheck(item, spec))
+			c.pkIndexNullCheck(item, table, pk)
 		case *ast.IndexesBlock:
 			for _, ix := range item.Indexes {
 				c.migrationIndexCheck(table, ix, false)
@@ -270,6 +271,7 @@ func (c *checker) shapeBodyCheck(what, table string, pos token.Position, body []
 	if len(ti.Columns) == 0 {
 		c.errorf(pos, "migrations", "%s %q: the body must declare at least one column (§migrations)", what, table)
 	}
+	c.pkCountCheck(table, ti.Columns, ti.Indexes)
 	c.incrementCheck(ti)
 	return ti
 }
@@ -277,13 +279,12 @@ func (c *checker) shapeBodyCheck(what, table string, pos token.Position, body []
 // migrationColumnCheck checks one column of a migration: its settings
 // against the whitelist, its ref: against the directions a column may
 // declare, its type against the built-ins, its default against the
-// type, and null against its key (spec §migrations rules 3 and 4,
+// type, and null against pk (spec §migrations rules 3 and 4,
 // §columns).
-func (c *checker) migrationColumnCheck(col *ast.Column, spec settingSpec, pk map[string]bool) *ColumnDef {
+func (c *checker) migrationColumnCheck(col *ast.Column, spec settingSpec) *ColumnDef {
 	c.settingsCheck(col.Settings, "migrations", spec)
 	c.migrationRefCheck(col)
 	c.pkNullCheck(col)
-	c.pkIndexNullCheck(col, pk)
 	cd := &ColumnDef{Col: col, Nullable: isNullable(col)}
 	typ, ok := builtins[col.Type.String()]
 	if !ok {
@@ -318,8 +319,19 @@ func (c *checker) migrationRefCheck(col *ast.Column) {
 			}
 			if action := refActionOf(s); !refActions[action] {
 				c.errorf(s.Pos(), "migrations", "column %q: invalid referential action %q for '%s'; expected cascade, restrict, set null, set default or no action (§migrations)", name, action, s.Name)
+				continue
 			}
+			c.refActionNullCheck(s, col, name, "migrations")
 		}
+	}
+}
+
+func (c *checker) refActionNullCheck(s *ast.Setting, col *ast.Column, column, section string) {
+	switch action := refActionOf(s); {
+	case action == "set null" && !isNullable(col):
+		c.errorf(s.Pos(), section, "%s: set null on foreign-key column %q, which does not carry null: the database would write a NULL the column refuses (§%s)", s.Name, column, section)
+	case action == "set default" && !isNullable(col) && col.Settings.Get("default") == nil:
+		c.errorf(s.Pos(), section, "%s: set default on foreign-key column %q, which carries neither null nor a default:, so its default is NULL, which the column refuses (§%s)", s.Name, column, section)
 	}
 }
 
@@ -338,7 +350,7 @@ func refActionOf(s *ast.Setting) string {
 // inverse add (spec §migrations rules 8 and 12); head names the item
 // for the diagnostic.
 func (c *checker) addColumnCheck(col *ast.Column, head string) {
-	cd := c.migrationColumnCheck(col, migrationColumnSettings, nil)
+	cd := c.migrationColumnCheck(col, migrationColumnSettings)
 	keyed := false
 	for _, s := range []string{"pk", "increment"} {
 		if setting := col.Settings.Get(s); setting != nil {
@@ -347,7 +359,8 @@ func (c *checker) addColumnCheck(col *ast.Column, head string) {
 		}
 	}
 	def := col.Settings.Get("default")
-	if !cd.Nullable && def == nil && !keyed {
+	ref := col.Settings.Get("ref")
+	if !cd.Nullable && def == nil && !keyed && ref == nil {
 		c.errorf(col.Pos(), "migrations", "%s: a column without null is NOT NULL and needs a default:, since the rows already in the table must be filled (§migrations)", head)
 	}
 	if def != nil {
@@ -355,12 +368,11 @@ func (c *checker) addColumnCheck(col *ast.Column, head string) {
 			c.errorf(def.Value.Pos(), "migrations", "%s: the default must be a literal; SQLite's ADD COLUMN takes no expression default (§migrations)", head)
 		}
 	}
-	ref := col.Settings.Get("ref")
 	if ref == nil {
 		return
 	}
 	if !cd.Nullable {
-		c.errorf(ref.Pos(), "migrations", "%s: a column with ref: carries null when added, since the rows already in the table reference nothing; use rebuild table for a NOT NULL foreign key (§migrations)", head)
+		c.errorf(ref.Pos(), "migrations", "%s: a column with ref: must carry null when added, since the rows already in the table reference nothing; use rebuild table for a NOT NULL foreign key (§migrations)", head)
 	}
 	if def != nil && !isNullIdent(def.Value) {
 		c.errorf(def.Value.Pos(), "migrations", "%s: a column with ref: takes no default but null, since SQLite refuses to add a REFERENCES column with another default to a table that has rows (§migrations)", head)
@@ -379,6 +391,8 @@ func (c *checker) migrationIndexCheck(table string, ix *ast.Index, standalone bo
 	c.settingsCheck(ix.Settings, "migrations", migrationIndexSettings)
 	if pk := ix.Settings.Get("pk"); pk != nil && standalone {
 		c.errorf(pk.Pos(), "migrations", "index %s on %q: pk is not a setting of a standalone create index or drop index, since a primary key is a table constraint, declared in a create table or rebuild table body (§migrations)", indexKeyString(ix), table)
+	} else {
+		c.pkIndexCheck(table, ix, migrationIndexSettings)
 	}
 	c.indexNameCheck(table, ix)
 }

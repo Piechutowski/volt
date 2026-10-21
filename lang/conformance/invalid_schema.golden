@@ -70,9 +70,6 @@ i135_records_type_mismatch.volt:7:8: error: spec/records-sample-data: record val
 ## i136_records_null_not_null.volt
 i136_records_null_not_null.volt:7:7: error: spec/records-sample-data: record value for "n" is null, but the column is not nullable (§records-sample-data)
 
-## i137_default_null_composite_pk.volt
-i137_default_null_composite_pk.volt:4:19: error: spec/default-values: default of "a" is null, but the column is not nullable (§default-values)
-
 ## i138_enum_unqualified_other_schema.volt
 i138_enum_unqualified_other_schema.volt:6:5: error: spec/columns: column "s": unknown type "job_status"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
 
@@ -150,7 +147,7 @@ i220_unknown_type_partial_once.volt:4:11: error: spec/columns: column "version":
 i226_pk_null.volt:4:21: error: spec/columns: column "id" carries pk and null: a key column is never NULL (§columns)
 
 ## i227_pk_index_member_null.volt
-i227_pk_index_member_null.volt:5:19: error: spec/columns: column "tag" is a member of the [pk] index and carries null: a key column is never NULL (§columns)
+i227_pk_index_member_null.volt:5:19: error: spec/columns: column "tag" of table "post_tags" is a member of the [pk] index and carries null: a key column is never NULL (§columns)
 
 ## i228_bare_pk_after_type.volt
 i228_bare_pk_after_type.volt:4:10: error: syntax: expected a settings list or end of line after the column type (§columns), found identifier "pk"
@@ -164,8 +161,38 @@ i22_empty_enum.volt:2:1: error: spec/enum: enum "empty_status" must contain at l
 ## i230_use_unknown_element.volt
 i230_use_unknown_element.volt:3:1: error: syntax: unknown element type "use" (§program-structure)
 
+## i231_records_omit_not_null.volt
+i231_records_omit_not_null.volt:14:3: error: spec/records-sample-data: records of table "posts" do not list column "title", which is NOT NULL and has no default: every row would write NULL into it; list the column (§records-sample-data)
+i231_records_omit_not_null.volt:14:3: error: spec/records-sample-data: records of table "posts" do not list column "stamped_by", which is NOT NULL and has no default: every row would write NULL into it; list the column (§records-sample-data)
+i231_records_omit_not_null.volt:25:1: error: spec/records-sample-data: records of table "authors" do not list column "name", which is NOT NULL and has no default: every row would write NULL into it; list the column (§records-sample-data)
+
+## i232_ref_set_null_not_null.volt
+i232_ref_set_null_not_null.volt:14:34: error: spec/relationships-ref: delete: set null on foreign-key column "posts.author_id", which does not carry null: the database would write a NULL the column refuses (§relationships-ref)
+i232_ref_set_null_not_null.volt:15:36: error: spec/relationships-ref: update: set default on foreign-key column "posts.reviewer_id", which carries neither null nor a default:, so its default is NULL, which the column refuses (§relationships-ref)
+i232_ref_set_null_not_null.volt:16:55: error: spec/relationships-ref: update: set null on foreign-key column "posts.editor_id", which does not carry null: the database would write a NULL the column refuses (§relationships-ref)
+
+## i236_second_pk_column.volt
+i236_second_pk_column.volt:5:16: error: spec/columns: table "posts" declares a second primary key, column "slug" beside column "id": a table has one primary key, one pk column or one [pk] index (§columns)
+
+## i237_pk_column_and_pk_index.volt
+i237_pk_column_and_pk_index.volt:8:21: error: spec/columns: table "post_tags" declares a second primary key, index (post_id, tag) beside column "post_id": a table has one primary key, one pk column or one [pk] index (§columns)
+
+## i238_two_pk_indexes.volt
+i238_two_pk_indexes.volt:9:10: error: spec/columns: table "post_tags" declares a second primary key, index tag beside index (post_id, tag): a table has one primary key, one pk column or one [pk] index (§columns)
+
+## i239_partial_pk_second.volt
+i239_partial_pk_second.volt:9:16: error: spec/columns: table "posts" declares a second primary key, column "slug" beside column "id": a table has one primary key, one pk column or one [pk] index (§columns)
+
 ## i23_duplicate_enum_values.volt
 i23_duplicate_enum_values.volt:4:3: error: spec/namespaces-and-uniqueness: duplicate enum value "active"
+
+## i241_pk_index_expression.volt
+i241_pk_index_expression.volt:8:6: error: spec/indexes: index (`lower(slug)`, version) on "posts" carries pk and has an expression in its key: a primary key is columns only (§indexes)
+
+## i242_pk_index_settings.volt
+i242_pk_index_settings.volt:9:25: error: spec/indexes: index (post_id, tag) on "post_tags" carries pk and name:, which it does not take, since a primary key is a table constraint and has no name (§indexes)
+i242_pk_index_settings.volt:9:47: error: spec/indexes: index (post_id, tag) on "post_tags" carries pk and where:, which it does not take, since a primary key covers every row (§indexes)
+i242_pk_index_settings.volt:9:76: error: spec/indexes: index (post_id, tag) on "post_tags" carries pk and type:, which it does not take, since a primary key has no index method (§indexes)
 
 ## i24_records_arity.volt
 i24_records_arity.volt:6:5: error: spec/records-sample-data: record row has 3 values but 2 columns are listed

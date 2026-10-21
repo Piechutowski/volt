@@ -68,7 +68,7 @@ func TableDDL(table string, body []ast.TableItem) (string, error) {
 			return "", fmt.Errorf("table %s: %w", table, err)
 		}
 		lines = append(lines, line)
-		unique := colHas(col, "unique") || (colHas(col, "pk") && len(pkCols) == 0) || indexedUnique(body, name)
+		unique := col.Settings.Get("unique") != nil || (col.Settings.Get("pk") != nil && len(pkCols) == 0) || indexedUnique(body, name)
 		for _, rv := range refSettings(col) {
 			fk, err := inlineForeignKey(col, rv)
 			if err != nil {
@@ -139,7 +139,7 @@ func ColumnDDL(col *ast.Column) (def string, unique bool, err error) {
 		}
 		parts = append(parts, "DEFAULT "+d)
 	}
-	unique = colHas(col, "unique")
+	unique = col.Settings.Get("unique") != nil
 	for _, rv := range refSettings(col) {
 		if err := refDirectionCheck(name, rv); err != nil {
 			return "", false, err

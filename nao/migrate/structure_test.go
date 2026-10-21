@@ -169,6 +169,20 @@ CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
 		reason: "column comments.body is nullable in the schema, NOT NULL in the fold",
 	},
 	{
+		name:   "an increment only in the schema is a rebuild",
+		fold:   strings.Replace(postsDDL, "CREATE TABLE posts (\n  id INTEGER PRIMARY KEY,", "CREATE TABLE posts (\n  id INTEGER PRIMARY KEY NOT NULL,", 1),
+		target: postsDDL,
+		want:   []string{rebuildPosts},
+		reason: "column posts.id is pk, increment in the schema, pk without increment in the fold",
+	},
+	{
+		name:   "an increment only in the fold is a rebuild",
+		fold:   postsDDL,
+		target: strings.Replace(postsDDL, "CREATE TABLE posts (\n  id INTEGER PRIMARY KEY,", "CREATE TABLE posts (\n  id INTEGER PRIMARY KEY NOT NULL,", 1),
+		want:   []string{strings.Replace(rebuildPosts, "id int [pk, increment]", "id int [pk]", 1)},
+		reason: "column posts.id is pk without increment in the schema, pk, increment in the fold",
+	},
+	{
 		name:   "a unique constraint and a unique index are one structure",
 		fold:   strings.Replace(postsDDL, "slug TEXT NOT NULL UNIQUE", "slug TEXT NOT NULL", 1) + "CREATE UNIQUE INDEX idx_posts_slug ON posts (slug);",
 		target: postsDDL,
@@ -210,9 +224,9 @@ CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
 	},
 	{
 		name:   "referential actions read back as delete: and update:",
-		fold:   postsDDL,
-		target: strings.Replace(postsDDL, "REFERENCES posts (id)", "REFERENCES posts (id) ON DELETE CASCADE ON UPDATE SET NULL", 1),
-		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [ref: > posts.id, delete: cascade, update: set null]\n  body string [null]\n}"},
+		fold:   strings.Replace(postsDDL, "post_id INTEGER NOT NULL", "post_id INTEGER", 1),
+		target: strings.Replace(strings.Replace(postsDDL, "post_id INTEGER NOT NULL", "post_id INTEGER", 1), "REFERENCES posts (id)", "REFERENCES posts (id) ON DELETE CASCADE ON UPDATE SET NULL", 1),
+		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [null, ref: > posts.id, delete: cascade, update: set null]\n  body string [null]\n}"},
 		reason: "foreign key comments (post_id) references posts (id) [delete: cascade, update: set null] is in the schema but not in the fold",
 	},
 	{

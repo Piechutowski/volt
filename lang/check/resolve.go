@@ -17,6 +17,7 @@ func (c *checker) resolve(f *ast.File) {
 			ri := &RefInfo{Node: r, Op: r.OpTok.Kind}
 			ri.Left = c.endpointResolve(r.Left)
 			ri.Right = c.endpointResolve(r.Right)
+			c.refActionsNullCheck(r, ri)
 			c.info.Refs = append(c.info.Refs, ri)
 		}
 	}
@@ -141,6 +142,30 @@ func (c *checker) resolve(f *ast.File) {
 						c.errorf(nm.Pos(), "diagramview", "unknown schema %q in DiagramView", nm.String())
 					}
 				}
+			}
+		}
+	}
+}
+
+func (c *checker) refActionsNullCheck(r *ast.Ref, ri *RefInfo) {
+	fk := ri.Left
+	switch ri.Op {
+	case token.GT:
+	case token.LT, token.MINUS:
+		fk = ri.Right
+	default:
+		return
+	}
+	if fk.Table == nil || r.Settings == nil {
+		return
+	}
+	for _, s := range r.Settings.Settings {
+		if s.Name != "delete" && s.Name != "update" {
+			continue
+		}
+		for _, name := range fk.Columns {
+			if cd := fk.Table.Column(name); cd != nil {
+				c.refActionNullCheck(s, cd.Col, fk.Table.Decl.Name.String()+"."+name, "relationships-ref")
 			}
 		}
 	}

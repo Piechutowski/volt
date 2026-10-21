@@ -3,6 +3,7 @@
 package check
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/Piechutowski/volt/lang/ast"
@@ -35,6 +36,7 @@ func (c *checker) declsCheck(f *ast.File) {
 			if d.Table != nil {
 				if ti := c.info.byTable[canonKey(d.Table)]; ti != nil {
 					c.recordsTypeCheck(ti, d)
+					c.recordsCoverageCheck(ti, d)
 				}
 			}
 		}
@@ -64,6 +66,7 @@ func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.S
 			for _, ix := range item.Indexes {
 				c.settingsCheck(ix.Settings, "indexes", indexSettings)
 				c.indexNameCheck(name, ix)
+				c.pkIndexCheck(name, ix, indexSettings)
 			}
 		case *ast.ValidatorsBlock:
 		case *ast.Note:
@@ -108,21 +111,65 @@ func (c *checker) columnCheck(col *ast.Column) {
 	c.settingsCheck(col.Settings, "columns", columnSettings)
 	c.tagSettingsCheck(col.Settings)
 	c.pkNullCheck(col)
+	if req, null := col.Settings.Get("required"), col.Settings.Get("null"); req != nil && null != nil {
+		c.errorf(req.Pos(), "columns", "required on %q: a column that carries null has no empty value to refuse; NULL is absence (§columns)", col.Name.Name())
+	}
 }
 
-// pkNullCheck refuses null on the column that carries pk: a key column
-// is never NULL (spec §columns).
 func (c *checker) pkNullCheck(col *ast.Column) {
 	if s := col.Settings.Get("null"); s != nil && col.Settings.Get("pk") != nil {
 		c.errorf(s.Pos(), "columns", "column %q carries pk and null: a key column is never NULL (§columns)", col.Name.Name())
 	}
 }
 
-// pkIndexNullCheck refuses null on a member of the [pk] index whose
-// columns pkIndex names: a key column is never NULL (spec §columns).
-func (c *checker) pkIndexNullCheck(col *ast.Column, pkIndex map[string]bool) {
+func (c *checker) pkIndexNullCheck(col *ast.Column, table string, pkIndex map[string]bool) {
 	if s := col.Settings.Get("null"); s != nil && pkIndex[col.Name.Name()] && col.Settings.Get("pk") == nil {
-		c.errorf(s.Pos(), "columns", "column %q is a member of the [pk] index and carries null: a key column is never NULL (§columns)", col.Name.Name())
+		c.errorf(s.Pos(), "columns", "column %q of table %q is a member of the [pk] index and carries null: a key column is never NULL (§columns)", col.Name.Name(), table)
+	}
+}
+
+func (c *checker) pkCountCheck(table string, cols []*ColumnDef, indexes []*ast.Index) {
+	first := ""
+	for _, cd := range cols {
+		if s := cd.Col.Settings.Get("pk"); s != nil {
+			first = c.pkSecondCheck(table, first, fmt.Sprintf("column %q", cd.Col.Name.Name()), s.Pos())
+		}
+	}
+	for _, ix := range indexes {
+		if s := ix.Settings.Get("pk"); s != nil {
+			first = c.pkSecondCheck(table, first, "index "+indexKeyString(ix), s.Pos())
+		}
+	}
+}
+
+func (c *checker) pkSecondCheck(table, first, this string, pos token.Position) string {
+	if first == "" {
+		return this
+	}
+	c.errorf(pos, "columns", "table %q declares a second primary key, %s beside %s: a table has one primary key, one pk column or one [pk] index (§columns)", table, this, first)
+	return first
+}
+
+func (c *checker) pkIndexCheck(table string, ix *ast.Index, spec settingSpec) {
+	if ix.Settings.Get("pk") == nil {
+		return
+	}
+	for _, atom := range ix.Key {
+		if _, ok := atom.(*ast.FuncExpr); ok {
+			c.errorf(atom.Pos(), "indexes", "index %s on %q carries pk and has an expression in its key: a primary key is columns only (§indexes)", indexKeyString(ix), table)
+		}
+	}
+	for _, f := range []struct{ name, why string }{
+		{"name", "a primary key is a table constraint and has no name"},
+		{"where", "a primary key covers every row"},
+		{"type", "a primary key has no index method"},
+	} {
+		if _, known := spec.kinds[f.name]; !known {
+			continue
+		}
+		if s := ix.Settings.Get(f.name); s != nil {
+			c.errorf(s.Pos(), "indexes", "index %s on %q carries pk and %s:, which it does not take, since %s (§indexes)", indexKeyString(ix), table, f.name, f.why)
+		}
 	}
 }
 

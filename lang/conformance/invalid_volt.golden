@@ -58,7 +58,7 @@ app/i109_event_route_verb.volt:6:2: error: spec/scopes-and-routes: an event rout
 app/i10_wildcard_not_last.volt:5:9: error: spec/scopes-and-routes: the wildcard ':p...' must be the last path segment (§route-paths)
 
 ## i110_required_nullable.volt
-db/i110_required_nullable.volt:7:16: error: spec/columns: "required" and "null" cannot both be set
+db/i110_required_nullable.volt:7:23: error: spec/columns: required on "email": a column that carries null has no empty value to refuse; NULL is absence (§columns)
 
 ## i111_required_bool.volt
 db/i111_required_bool.volt:7:16: error: spec/columns: required on "active" (bool): a bool has no empty value — every value is a value (§columns)
@@ -164,7 +164,7 @@ db/i171_migration_add_pk.volt:18:17: error: spec/migrations: add "id" to table "
 
 ## i172_migration_add_ref_not_null.volt
 db/i172_migration_add_ref_not_null.volt:25:31: error: spec/migrations: add "user_id" to table "posts": a column with ref: takes no default but null, since SQLite refuses to add a REFERENCES column with another default to a table that has rows (§migrations)
-db/i172_migration_add_ref_not_null.volt:25:34: error: spec/migrations: add "user_id" to table "posts": a column with ref: carries null when added, since the rows already in the table reference nothing; use rebuild table for a NOT NULL foreign key (§migrations)
+db/i172_migration_add_ref_not_null.volt:25:34: error: spec/migrations: add "user_id" to table "posts": a column with ref: must carry null when added, since the rows already in the table reference nothing; use rebuild table for a NOT NULL foreign key (§migrations)
 
 ## i173_migration_rebuild_null_source.volt
 db/i173_migration_rebuild_null_source.volt:20:5: error: spec/migrations: rebuild table "users" in migration "0002__email": column "email" is NOT NULL but its source is NULL, since no column of that name exists before the rebuild; give it a from: or a default: (§migrations)
@@ -352,8 +352,23 @@ db/i225_unknown_type_order_errors_stay.volt:25:37: error: spec/selects-over-grou
 ## i22_scope_setting.volt
 app/i22_scope_setting.volt:4:10: error: spec/settings-whitelists: setting "pipes" is not valid on a Scope (§settings-whitelists); valid: pipe, name, error_handler
 
+## i233_migration_set_null_not_null.volt
+db/i233_migration_set_null_not_null.volt:24:39: error: spec/migrations: delete: set null on foreign-key column "author_id", which does not carry null: the database would write a NULL the column refuses (§migrations)
+db/i233_migration_set_null_not_null.volt:25:39: error: spec/migrations: update: set default on foreign-key column "reviewer_id", which carries neither null nor a default:, so its default is NULL, which the column refuses (§migrations)
+
+## i234_migration_add_ref_bare.volt
+db/i234_migration_add_ref_bare.volt:25:22: error: spec/migrations: add "user_id" to table "posts": a column with ref: must carry null when added, since the rows already in the table reference nothing; use rebuild table for a NOT NULL foreign key (§migrations)
+
+## i235_migration_key_null.volt
+db/i235_migration_key_null.volt:19:17: error: spec/columns: column "id" carries pk and null: a key column is never NULL (§columns)
+db/i235_migration_key_null.volt:23:21: error: spec/columns: column "tag" of table "post_tags" is a member of the [pk] index and carries null: a key column is never NULL (§columns)
+
 ## i23_route_setting.volt
 app/i23_route_setting.volt:5:14: error: spec/settings-whitelists: setting "pipe" is not valid on a route (§settings-whitelists); valid: name
+
+## i240_migration_second_pk.volt
+db/i240_migration_second_pk.volt:13:18: error: spec/columns: table "posts" declares a second primary key, column "slug" beside column "id": a table has one primary key, one pk column or one [pk] index (§columns)
+db/i240_migration_second_pk.volt:19:19: error: spec/columns: table "posts" declares a second primary key, index (id, slug) beside column "id": a table has one primary key, one pk column or one [pk] index (§columns)
 
 ## i24_toplevel_route.volt
 app/i24_toplevel_route.volt:4:1: error: syntax: routes, resources and datasets must appear inside a Scope (§scopes-and-routes)

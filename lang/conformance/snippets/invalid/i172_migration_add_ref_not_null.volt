@@ -1,5 +1,5 @@
-// spec: §migrations, a column with ref: carries null when added, since the rows already there reference nothing
-// want: carries null when added
+// spec: §migrations, a column with ref: must carry null when added, since the rows already there reference nothing
+// want: must carry null when added
 package db
 
 Table users {

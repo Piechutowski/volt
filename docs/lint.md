@@ -112,7 +112,8 @@ guarantees.
 1. `[pk, unique]` on one index — a primary key is already unique;
 2. a single-column `[unique]` index on a column already marked `unique`;
 3. a single-column `[unique]` or `[pk]` index on a column already marked `pk`;
-4. two indexes with an identical key (column order significant).
+4. two indexes with an identical key (column order significant) and the
+   same `where:` condition, or none on either.
 
 **Why.** The duplicate creates a second physical index (cost on every
 write) or a second spelling of the same constraint that can drift from the
@@ -121,9 +122,12 @@ first.
 **Examples.** [testdata/redundantindex.volt](../lang/vet/testdata/redundantindex.volt)
 — note that `(email, country)` and `(country, id)` coexisting is good:
 composite indexes with different column order are different indexes.
+So are `slug`, `slug` under `` where: `deleted_at IS NULL` `` and `slug`
+under `` where: `deleted_at IS NOT NULL` ``: a partial index covers
+only the rows its condition admits (spec §indexes).
 
-**Limitations.** Expression atoms are compared textually: `` `a+b` `` and
-`` `a + b` `` count as different keys.
+**Limitations.** Expression atoms and `where:` conditions are compared
+textually: `` `a+b` `` and `` `a + b` `` count as different keys.
 
 ### emptybody
 
@@ -221,9 +225,12 @@ column (spec §columns).
 
 **What it does.** Reports a foreign key whose referenced ("one"-side)
 column set is not guaranteed unique: not a `pk`/`unique` column and not
-covered by a matching composite `[pk]`/`[unique]` index. The FK side per
-operator follows spec §relationships-ref (`>` left, `<` right, `-` second endpoint);
-`<>` has no FK side.
+the column set of a `[pk]` index or of a `[unique]` index without
+`where:`. A unique index with `where:` constrains only the rows its
+condition admits (spec §indexes), and SQLite refuses it as a
+foreign-key target. The FK side per operator follows spec
+§relationships-ref (`>` left, `<` right, `-` second endpoint, an inline
+`-` the declaring column); `<>` has no FK side.
 
 **Why.** SQL requires FK targets to be unique; a schema that violates this
 fails at export or, worse, models a "to-one" relationship that the data
@@ -231,7 +238,9 @@ cannot uphold.
 
 **Examples.** [testdata/reftarget.volt](../lang/vet/testdata/reftarget.volt) — the
 composite case shows that only an index with **the same column set** makes
-a composite target unique.
+a composite target unique; `accounts.email`, unique only where
+`deleted_at IS NULL`, is no target, while `accounts.handle` is; an inline
+`-` names its target, so `bios.user_id [ref: - users.id]` is good.
 
 ### selfref
 

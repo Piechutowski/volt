@@ -36,8 +36,8 @@ Table posts {
     TitleShape(title)
   }
 
-  records (id, title, status, author_id) {
-    1, 'Hello', post_status.published, 1
+  records (id, title, status, author_id, updated_at) {
+    1, 'Hello', post_status.published, 1, '2024-01-15 10:30:00'
   }
 }
 

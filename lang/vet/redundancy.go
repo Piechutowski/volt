@@ -46,13 +46,13 @@ func (r *redundantIndexRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.
 		if cd == nil {
 			continue
 		}
-		if ix.Settings.Get("unique") != nil && columnHas(cd, "unique") {
+		if ix.Settings.Get("unique") != nil && cd.Col.Settings.Get("unique") != nil {
 			out = append(out, r.warnf(ix.Pos(), "unique index on %q duplicates the column's 'unique' setting", id.Name()))
 		}
-		if ix.Settings.Get("unique") != nil && columnHas(cd, "pk") {
+		if ix.Settings.Get("unique") != nil && cd.Col.Settings.Get("pk") != nil {
 			out = append(out, r.warnf(ix.Pos(), "unique index on %q is redundant; the column is already the primary key", id.Name()))
 		}
-		if ix.Settings.Get("pk") != nil && columnHas(cd, "pk") {
+		if ix.Settings.Get("pk") != nil && cd.Col.Settings.Get("pk") != nil {
 			out = append(out, r.warnf(ix.Pos(), "pk index on %q duplicates the column's 'pk' setting", id.Name()))
 		}
 	}
@@ -69,10 +69,14 @@ func indexKey(ix *ast.Index) string {
 			parts = append(parts, "`"+a.Text()+"`")
 		}
 	}
-	return "(" + strings.Join(parts, ", ") + ")"
+	key := "(" + strings.Join(parts, ", ") + ")"
+	if s := ix.Settings.Get("where"); s != nil {
+		if fe, ok := s.Value.(*ast.FuncExpr); ok {
+			key += " where `" + fe.Text() + "`"
+		}
+	}
+	return key
 }
-
-func columnHas(cd *check.ColumnDef, name string) bool { return cd.Col.Settings.Get(name) != nil }
 
 type emptyBodyRule struct{ meta }
 

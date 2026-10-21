@@ -133,7 +133,7 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 			line = b.String() + line
 		}
 		lines = append(lines, line)
-		if columnHas(cd, "unique") || (columnHas(cd, "pk") && len(pkCols) == 0) {
+		if cd.Col.Settings.Get("unique") != nil || (cd.Col.Settings.Get("pk") != nil && len(pkCols) == 0) {
 			uniqueDone[cd.Col.Name.Name()] = true
 		}
 	}
@@ -180,21 +180,21 @@ func (g *generator) columnDef(ti *check.TableInfo, cd *check.ColumnDef, pkCols [
 
 // columnLine renders one column definition of a CREATE TABLE (spec
 // §mapping-to-sqlite-ddl): the rowid alias for int [pk, increment],
-// NOT NULL for a pk column or one without null, UNIQUE and DEFAULT.
+// NOT NULL for a column without null, the rowid alias excepted, UNIQUE
+// and DEFAULT.
 func columnLine(col *ast.Column, sqlType string, pkCols []string) (string, error) {
 	colName := col.Name.Name()
-	singlePK := colHas(col, "pk") && len(pkCols) == 0
-	inPK := singlePK || contains(pkCols, colName)
-	rowidAlias := singlePK && sqlType == "INTEGER" && colHas(col, "increment")
+	singlePK := col.Settings.Get("pk") != nil && len(pkCols) == 0
+	rowidAlias := singlePK && sqlType == "INTEGER" && col.Settings.Get("increment") != nil
 
 	parts := []string{"  " + identQuote(colName), sqlType}
 	if singlePK {
 		parts = append(parts, "PRIMARY KEY")
 	}
-	if !rowidAlias && (inPK || !isNullable(col)) {
+	if !rowidAlias && !isNullable(col) {
 		parts = append(parts, "NOT NULL")
 	}
-	if colHas(col, "unique") {
+	if col.Settings.Get("unique") != nil {
 		parts = append(parts, "UNIQUE")
 	}
 	if s := col.Settings.Get("default"); s != nil {
@@ -357,13 +357,7 @@ func compositePKColumns(ti *check.TableInfo) []string {
 	return out
 }
 
-// isNullable reports whether the column admits NULL, which the null
-// setting alone decides (spec §columns).
 func isNullable(col *ast.Column) bool { return col.Settings.Get("null") != nil }
-
-func columnHas(cd *check.ColumnDef, name string) bool { return colHas(cd.Col, name) }
-
-func colHas(col *ast.Column, name string) bool { return col.Settings.Get(name) != nil }
 
 // fkSides names the foreign-key endpoint and the one it references
 // (spec §relationships-ref rule 3): the left of >, the right of <, the
@@ -411,7 +405,7 @@ func (g *generator) alreadyUnique(ti *check.TableInfo, cols []string, done map[s
 		return true
 	}
 	if len(cols) == 1 {
-		if cd := ti.Column(cols[0]); cd != nil && (columnHas(cd, "unique") || columnHas(cd, "pk")) {
+		if cd := ti.Column(cols[0]); cd != nil && (cd.Col.Settings.Get("unique") != nil || cd.Col.Settings.Get("pk") != nil) {
 			return true
 		}
 	}
@@ -474,15 +468,6 @@ func commentWrite(b *strings.Builder, indent, text string) {
 		}
 		b.WriteString(indent + "-- " + line + "\n")
 	}
-}
-
-func contains(ss []string, s string) bool {
-	for _, x := range ss {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }
 
 // Ident quotes an identifier for SQLite the way the DDL generator does

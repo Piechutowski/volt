@@ -1,5 +1,5 @@
 // spec: §validators, §columns, required refuses a null column: NULL is absence, not emptiness
-// want: "required" and "null" cannot both be set
+// want: a column that carries null has no empty value to refuse
 package db
 
 Table accounts {

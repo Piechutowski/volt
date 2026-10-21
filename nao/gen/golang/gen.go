@@ -392,9 +392,8 @@ func (g *generator) fieldEmit(cd *check.ColumnDef, fields map[string]string, row
 		g.imports[typ.imp] = true
 	}
 
-	nullable := isNullable(col)
 	goTypeName := typ.name
-	if nullable && !typ.nilable {
+	if cd.Nullable && !typ.nilable {
 		goTypeName = "rt.Null[" + goTypeName + "]"
 		g.imports[rtImport] = true
 	}
@@ -430,10 +429,6 @@ func fieldTag(col *ast.Column) string {
 	parts := append([]string{`db:"` + name + `"`, jsonPair}, extra...)
 	return strings.Join(parts, " ")
 }
-
-// isNullable reports whether the column admits NULL, which the null
-// setting alone decides (spec §columns).
-func isNullable(col *ast.Column) bool { return col.Settings.Get("null") != nil }
 
 func tableNote(t *ast.Table) string {
 	for _, item := range t.Body {

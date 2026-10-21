@@ -429,7 +429,7 @@ func tableDiff(target, fold *Table) []Drift {
 			adds = append(adds, tc)
 			continue
 		}
-		reasons = append(reasons, columnDiff(target.Name, tc, *fc)...)
+		reasons = append(reasons, columnDiff(target, fold, tc, *fc)...)
 	}
 	for _, fc := range fold.Columns {
 		if target.Column(fc.Name) == nil {
@@ -550,13 +550,17 @@ func compositeForeignKeyReasons(t *Table) []string {
 	return out
 }
 
-func columnDiff(table string, target, fold Column) []string {
+func columnDiff(tt, ft *Table, target, fold Column) []string {
 	var out []string
-	at := "column " + table + "." + target.Name
+	at := "column " + tt.Name + "." + target.Name
 	if !strings.EqualFold(target.Type, fold.Type) {
 		out = append(out, fmt.Sprintf("%s is %s in the schema, %s in the fold", at, target.Type, fold.Type))
 	}
-	if target.NotNull != fold.NotNull {
+	switch {
+	case target.NotNull == fold.NotNull:
+	case isIncrement(tt, target) || isIncrement(ft, fold):
+		out = append(out, fmt.Sprintf("%s is %s in the schema, %s in the fold", at, incrementness(tt, target), incrementness(ft, fold)))
+	default:
 		out = append(out, fmt.Sprintf("%s is %s in the schema, %s in the fold", at, nullness(target.NotNull), nullness(fold.NotNull)))
 	}
 	if target.Default != fold.Default {
@@ -566,6 +570,20 @@ func columnDiff(table string, target, fold Column) []string {
 		out = append(out, fmt.Sprintf("%s is %s in the schema, %s in the fold", at, pkness(target.PK), pkness(fold.PK)))
 	}
 	return out
+}
+
+func isIncrement(t *Table, c Column) bool {
+	return c.PK == 1 && len(pkColumns(t)) == 1 && strings.EqualFold(c.Type, "INTEGER") && !c.NotNull
+}
+
+func incrementness(t *Table, c Column) string {
+	switch {
+	case isIncrement(t, c):
+		return "pk, increment"
+	case c.PK != 0:
+		return "pk without increment"
+	}
+	return nullness(c.NotNull)
 }
 
 func nullness(notNull bool) string {
@@ -791,7 +809,7 @@ func columnVolt(t *Table, c Column) string {
 	switch {
 	case single && c.PK == 1:
 		settings = append(settings, "pk")
-		if strings.EqualFold(c.Type, "INTEGER") && !c.NotNull {
+		if isIncrement(t, c) {
 			settings = append(settings, "increment")
 		}
 	case c.PK == 0 && !c.NotNull:

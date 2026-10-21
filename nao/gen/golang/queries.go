@@ -236,7 +236,7 @@ func tableBuild(ti *check.TableInfo, enums *enumTypes) (*tableModel, map[string]
 	}
 
 	for _, f := range tm.fields {
-		if hasSetting(f.col, "pk") {
+		if f.col.Settings.Get("pk") != nil {
 			tm.pk = append(tm.pk, f)
 		}
 	}
@@ -256,7 +256,7 @@ func tableBuild(ti *check.TableInfo, enums *enumTypes) (*tableModel, map[string]
 	}
 
 	for _, ix := range ti.Indexes {
-		if ix.Settings.Get("unique") == nil || len(ix.Key) != 1 {
+		if ix.Settings.Get("unique") == nil || ix.Settings.Get("where") != nil || len(ix.Key) != 1 {
 			continue
 		}
 		if id, ok := ix.Key[0].(*ast.Ident); ok {
@@ -288,9 +288,8 @@ func fieldBuild(enumTypes map[string]string, imports map[string]bool, cd *check.
 	if typ.imp != "" {
 		imports[typ.imp] = true
 	}
-	nullable := isNullable(col)
 	goType := typ.name
-	if nullable && !typ.nilable {
+	if cd.Nullable && !typ.nilable {
 		goType = "rt.Null[" + goType + "]"
 	}
 
@@ -307,12 +306,12 @@ func fieldBuild(enumTypes map[string]string, imports map[string]bool, cd *check.
 		enum:       cd.Type.Enum,
 		imp:        typ.imp,
 		arg:        argName(goField),
-		nullable:   nullable,
+		nullable:   cd.Nullable,
 		declared:   cd.Type.Decl != nil,
-		required:   hasSetting(col, "required"),
-		increment:  hasSetting(col, "increment"),
+		required:   col.Settings.Get("required") != nil,
+		increment:  col.Settings.Get("increment") != nil,
 		hasDefault: col.Settings.Get("default") != nil,
-		unique:     hasSetting(col, "unique"),
+		unique:     col.Settings.Get("unique") != nil,
 	}, nil
 }
 
@@ -377,10 +376,6 @@ func argName(exported string) string {
 		s += "_"
 	}
 	return s
-}
-
-func hasSetting(col *ast.Column, name string) bool {
-	return col.Settings.Get(name) != nil
 }
 
 func columnList(fields []*fieldPlan) string {
