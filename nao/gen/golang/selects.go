@@ -159,7 +159,7 @@ func rowScanEmit(b *strings.Builder, row string, cols []*fieldPlan) {
 		if i > 0 {
 			b.WriteString(", ")
 		}
-		fmt.Fprintf(b, "&v.%s", f.goField)
+		b.WriteString(f.scanTarget())
 	}
 	b.WriteString(")\n\treturn v, err\n}\n\n")
 }

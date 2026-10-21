@@ -29,8 +29,13 @@ func TestMigrateBuildsTheSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(status) != 2 || !status[0].Applied || !status[1].Applied {
-		t.Fatalf("status %+v, want both applied", status)
+	if len(status) != len(Migrations) {
+		t.Fatalf("status %+v, want one entry per migration", status)
+	}
+	for _, s := range status {
+		if !s.Applied {
+			t.Fatalf("status %+v, want every migration applied", status)
+		}
 	}
 
 	target, err := rt.Open("sqlite3", ":memory:")

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"reflect"
 )
 
 // Null is the representation of a nullable column: a value
@@ -31,9 +32,19 @@ func (n Null[T]) Or(def T) T {
 	return def
 }
 
-// Scan implements sql.Scanner. Conversion from the driver value is
-// delegated to database/sql's own rules via sql.Null.
+// Scan implements sql.Scanner through database/sql's rules via sql.Null,
+// but converts a value of bool kind itself, since database/sql scans an
+// integer into a bool and not into a named bool (spec §types).
 func (n *Null[T]) Scan(src any) error {
+	if v := reflect.ValueOf(&n.V).Elem(); src != nil && v.Kind() == reflect.Bool {
+		b, err := driver.Bool.ConvertValue(src)
+		if err != nil {
+			return err
+		}
+		v.SetBool(b.(bool))
+		n.Valid = true
+		return nil
+	}
 	var s sql.Null[T]
 	if err := s.Scan(src); err != nil {
 		return err

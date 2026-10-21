@@ -26,6 +26,18 @@ func TestNullScan(t *testing.T) {
 		t.Errorf("Scan([]byte) = %+v, %v", st, err)
 	}
 
+	type flag bool
+	var f Null[flag]
+	if err := f.Scan(int64(1)); err != nil || !f.Valid || !bool(f.V) {
+		t.Errorf("Scan(int64 1) into a named bool = %+v, %v", f, err)
+	}
+	if err := f.Scan(nil); err != nil || f.Valid || bool(f.V) {
+		t.Errorf("Scan(nil) into a named bool = %+v, %v", f, err)
+	}
+	if err := f.Scan("maybe"); err == nil {
+		t.Errorf("Scan(maybe) into a named bool = %+v, want an error", f)
+	}
+
 	var ts Null[time.Time]
 	now := time.Now()
 	if err := ts.Scan(now); err != nil || !ts.V.Equal(now) {

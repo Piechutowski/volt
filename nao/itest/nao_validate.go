@@ -66,3 +66,11 @@ func (c LinkClickChangeset) Validate() LinkClickChangeset {
 	c.valid = nil
 	return c
 }
+
+// Validate runs required and the validators of site_flags over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
+func (c SiteFlagChangeset) Validate() SiteFlagChangeset {
+	c.valid = nil
+	return c
+}

@@ -12,6 +12,8 @@ Project itest [note: 'Integration-test fixture for the generated query surface.'
 }
 
 Type OrderState string
+Type Featured bool
+Type Ratio float64
 
 Table users {
   id int [pk, increment]
@@ -98,3 +100,12 @@ Select on_sites for metrics where site in :sites [order: (id asc)]
 // every member; the star form mints a per-member struct derivative.
 Select summary (site, day) for metrics where at
 Select public (* \ target) for link_clicks [order: (id asc)]
+
+// Kinded bool and float64 columns, plain and nullable (spec §types).
+Table site_flags {
+  id       int      [pk, increment]
+  featured Featured
+  pinned   Featured [null]
+  ratio    Ratio
+  weight   Ratio    [null]
+}

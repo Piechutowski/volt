@@ -546,3 +546,111 @@ func (q *Queries) LinkClickUpdateWhere(ctx context.Context, set []rt.Assign[Link
 	}
 	return res.RowsAffected()
 }
+
+const (
+	siteFlagTableSQL   = `"site_flags"`
+	siteFlagColumnsSQL = `"id", "featured", "pinned", "ratio", "weight"`
+)
+
+// SiteFlagLimit caps how many rows SiteFlagQuery returns.
+func SiteFlagLimit(n int) rt.Opt[SiteFlag] { return rt.Limit[SiteFlag](n) }
+
+// SiteFlagOffset skips n rows; keyset pagination (SiteFlagAfter) scales better.
+func SiteFlagOffset(n int) rt.Opt[SiteFlag] { return rt.Offset[SiteFlag](n) }
+
+// SiteFlagDistinct deduplicates the rows SiteFlagQuery returns.
+func SiteFlagDistinct() rt.Opt[SiteFlag] { return rt.Distinct[SiteFlag]() }
+
+// SiteFlagOrderBy sorts SiteFlagQuery's rows by Asc/Desc terms built on the
+// SiteFlag column handles.
+func SiteFlagOrderBy(terms ...rt.Order[SiteFlag]) rt.Opt[SiteFlag] { return rt.OrderBy(terms...) }
+
+// SiteFlagAfter resumes strictly after the row with the given key — keyset
+// pagination: one value per SiteFlagOrderBy term, in the same order.
+func SiteFlagAfter(key ...any) rt.Opt[SiteFlag] { return rt.After[SiteFlag](key...) }
+
+// SiteFlagSet collects the typed assignments of a SiteFlagUpdateWhere, built
+// with Set/SetNull on the SiteFlag column handles.
+func SiteFlagSet(assigns ...rt.Assign[SiteFlag]) []rt.Assign[SiteFlag] { return assigns }
+
+// SiteFlagQuery returns the site_flags rows matching every given predicate,
+// shaped by the remaining options (order, limit, offset, keyset,
+// distinct). No options means every row.
+func (q *Queries) SiteFlagQuery(ctx context.Context, opts ...rt.Opt[SiteFlag]) ([]SiteFlag, error) {
+	query, args, err := rt.SelectRender(siteFlagTableSQL, siteFlagColumnsSQL, opts)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := rt.StmtQuery(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []SiteFlag{}
+	for rows.Next() {
+		v, err := siteFlagScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// SiteFlagCount reports how many site_flags rows match every given predicate;
+// none counts the whole table.
+func (q *Queries) SiteFlagCount(ctx context.Context, preds ...rt.Pred[SiteFlag]) (int64, error) {
+	query, args, err := rt.CountRender(siteFlagTableSQL, preds)
+	if err != nil {
+		return 0, err
+	}
+	var n int64
+	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// SiteFlagExists reports whether any site_flags row matches every given predicate.
+func (q *Queries) SiteFlagExists(ctx context.Context, preds ...rt.Pred[SiteFlag]) (bool, error) {
+	query, args, err := rt.ExistsRender(siteFlagTableSQL, preds)
+	if err != nil {
+		return false, err
+	}
+	var found bool
+	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &found); err != nil {
+		return false, err
+	}
+	return found, nil
+}
+
+// SiteFlagDeleteWhere removes every site_flags row matching the predicates and
+// reports how many went. No effective predicate is an error, never a
+// full-table delete.
+func (q *Queries) SiteFlagDeleteWhere(ctx context.Context, preds ...rt.Pred[SiteFlag]) (int64, error) {
+	query, args, err := rt.DeleteRender(siteFlagTableSQL, preds)
+	if err != nil {
+		return 0, err
+	}
+	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// SiteFlagUpdateWhere applies the typed assignments (SiteFlagSet) to every site_flags
+// row matching the predicates and reports how many changed — the
+// partial update of the dynamic layer. No effective predicate
+// is an error, never a full-table rewrite.
+func (q *Queries) SiteFlagUpdateWhere(ctx context.Context, set []rt.Assign[SiteFlag], preds ...rt.Pred[SiteFlag]) (int64, error) {
+	query, args, err := rt.UpdateRender(siteFlagTableSQL, set, preds)
+	if err != nil {
+		return 0, err
+	}
+	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}

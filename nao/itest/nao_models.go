@@ -977,3 +977,206 @@ func (c LinkClickChangeset) Err() error {
 	}
 	return &rt.Invalid{Model: "LinkClick", Fields: c.Errors()}
 }
+
+// SiteFlag is a row of the site_flags table.
+type SiteFlag struct {
+	ID       int               `db:"id" json:"id"`
+	Featured Featured          `db:"featured" json:"featured"`
+	Pinned   rt.Null[Featured] `db:"pinned" json:"pinned"`
+	Ratio    Ratio             `db:"ratio" json:"ratio"`
+	Weight   rt.Null[Ratio]    `db:"weight" json:"weight"`
+}
+
+// SiteFlagColumn is a column handle of SiteFlag, the element of a Cast allow list
+// (spec §changesets).
+type SiteFlagColumn = rt.ColumnOf[SiteFlag]
+
+// SiteFlagParams is a site_flags write body as the wire carries it (spec §changesets).
+type SiteFlagParams = rt.Params[SiteFlag]
+
+// Typed column handles of SiteFlag (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter SiteFlag
+// queries; mixing models is a compile error.
+var (
+	SiteFlagID       = rt.Column[SiteFlag, int]{Name: "id"}
+	SiteFlagFeatured = rt.Column[SiteFlag, Featured]{Name: "featured"}
+	SiteFlagPinned   = rt.NullColumn[SiteFlag, Featured]{Column: rt.Column[SiteFlag, Featured]{Name: "pinned"}}
+	SiteFlagRatio    = rt.Column[SiteFlag, Ratio]{Name: "ratio"}
+	SiteFlagWeight   = rt.NullColumn[SiteFlag, Ratio]{Column: rt.Column[SiteFlag, Ratio]{Name: "weight"}}
+)
+
+// SiteFlagChangeset carries a site_flags row, the changes proposed to it and the
+// errors found so far (spec §changesets). It is a value: every method
+// returns a new changeset and leaves its receiver as it was.
+type SiteFlagChangeset struct {
+	data  SiteFlag
+	vals  SiteFlag
+	row   bool
+	set   [5]bool
+	errs  []rt.FieldError
+	valid []rt.FieldError
+}
+
+// SiteFlagNew starts a changeset for a site_flags row to create, the schema's literal
+// defaults in place (spec §changesets).
+func SiteFlagNew() SiteFlagChangeset { return SiteFlagChangeset{} }
+
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
+func (r SiteFlag) Changeset() SiteFlagChangeset { return SiteFlagChangeset{data: r, row: true} }
+
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
+func (c SiteFlagChangeset) From(r SiteFlag) SiteFlagChangeset {
+	c = c.FeaturedSet(r.Featured)
+	c = c.PinnedSet(r.Pinned)
+	c = c.RatioSet(r.Ratio)
+	c = c.WeightSet(r.Weight)
+	return c
+}
+
+// FeaturedSet sets featured and marks it (spec §changesets).
+func (c SiteFlagChangeset) FeaturedSet(v Featured) SiteFlagChangeset {
+	c.vals.Featured, c.set[1] = v, true
+	return c
+}
+
+// PinnedSet sets pinned and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
+func (c SiteFlagChangeset) PinnedSet(v rt.Null[Featured]) SiteFlagChangeset {
+	c.vals.Pinned, c.set[2] = v, true
+	return c
+}
+
+// RatioSet sets ratio and marks it (spec §changesets).
+func (c SiteFlagChangeset) RatioSet(v Ratio) SiteFlagChangeset {
+	c.vals.Ratio, c.set[3] = v, true
+	return c
+}
+
+// WeightSet sets weight and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
+func (c SiteFlagChangeset) WeightSet(v rt.Null[Ratio]) SiteFlagChangeset {
+	c.vals.Weight, c.set[4] = v, true
+	return c
+}
+
+// Cast sets every column of allow that p carries, recording a cast
+// error for a value that does not convert and an unknown_field error
+// for a key that names no column (spec §changesets).
+func (c SiteFlagChangeset) Cast(p SiteFlagParams, allow ...SiteFlagColumn) SiteFlagChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "featured", "pinned", "ratio", "weight")...)
+	for _, col := range allow {
+		switch col.ColumnName() {
+		case "featured":
+			if v, ok, err := rt.Field(p, "featured", "Featured", false, func(r *SiteFlag) Featured { return r.Featured }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "featured")
+			} else if ok {
+				c = c.FeaturedSet(v)
+			}
+		case "pinned":
+			if v, ok, err := rt.Field(p, "pinned", "Featured", true, func(r *SiteFlag) rt.Null[Featured] { return r.Pinned }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "pinned")
+			} else if ok {
+				c = c.PinnedSet(v)
+			}
+		case "ratio":
+			if v, ok, err := rt.Field(p, "ratio", "Ratio", false, func(r *SiteFlag) Ratio { return r.Ratio }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "ratio")
+			} else if ok {
+				c = c.RatioSet(v)
+			}
+		case "weight":
+			if v, ok, err := rt.Field(p, "weight", "Ratio", true, func(r *SiteFlag) rt.Null[Ratio] { return r.Weight }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "weight")
+			} else if ok {
+				c = c.WeightSet(v)
+			}
+		}
+	}
+	return c
+}
+
+// Changed reports whether col is marked (spec §changesets).
+func (c SiteFlagChangeset) Changed(col SiteFlagColumn) bool {
+	switch col.ColumnName() {
+	case "id":
+		return c.set[0]
+	case "featured":
+		return c.set[1]
+	case "pinned":
+		return c.set[2]
+	case "ratio":
+		return c.set[3]
+	case "weight":
+		return c.set[4]
+	}
+	return false
+}
+
+// Row is the data with the marked values applied (spec §changesets).
+func (c SiteFlagChangeset) Row() SiteFlag {
+	r := c.data
+	if c.set[1] {
+		r.Featured = c.vals.Featured
+	}
+	if c.set[2] {
+		r.Pinned = c.vals.Pinned
+	}
+	if c.set[3] {
+		r.Ratio = c.vals.Ratio
+	}
+	if c.set[4] {
+		r.Weight = c.vals.Weight
+	}
+	return r
+}
+
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
+func (c SiteFlagChangeset) Params() SiteFlagParams {
+	var marks []rt.Mark
+	if c.set[1] {
+		marks = append(marks, rt.Mark{Wire: "featured", Value: c.vals.Featured})
+	}
+	if c.set[2] {
+		marks = append(marks, rt.Mark{Wire: "pinned", Value: c.vals.Pinned})
+	}
+	if c.set[3] {
+		marks = append(marks, rt.Mark{Wire: "ratio", Value: c.vals.Ratio})
+	}
+	if c.set[4] {
+		marks = append(marks, rt.Mark{Wire: "weight", Value: c.vals.Weight})
+	}
+	return rt.ParamsOf(c.Row(), marks...)
+}
+
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
+func (c SiteFlagChangeset) ErrorAdd(col SiteFlagColumn, msg string) SiteFlagChangeset {
+	return c.errorAdd("custom", msg, col.ColumnName())
+}
+
+func (c SiteFlagChangeset) errorAdd(check, msg string, cols ...string) SiteFlagChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.FieldError{Check: check, Columns: cols, Message: msg})
+	return c
+}
+
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
+func (c SiteFlagChangeset) Errors() []rt.FieldError {
+	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
+}
+
+// Valid reports whether no field error was recorded (spec §changesets).
+func (c SiteFlagChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
+
+// Err is nil when c is valid and otherwise the *rt.Invalid carrying its
+// field errors (spec §changesets).
+func (c SiteFlagChangeset) Err() error {
+	if c.Valid() {
+		return nil
+	}
+	return &rt.Invalid{Model: "SiteFlag", Fields: c.Errors()}
+}

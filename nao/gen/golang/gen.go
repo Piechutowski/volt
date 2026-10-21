@@ -82,7 +82,7 @@ func (g *generator) run(p *plan, perr error) error {
 
 // typesEmit asserts the Scanner and Valuer contract of every declared
 // type but a kinded one, whose Go declaration spells its storage type
-// and which database/sql converts by kind (spec §types).
+// and which scans through that type and binds by kind (spec §types).
 func (g *generator) typesEmit() {
 	var asserted []*check.TypeInfo
 	for _, td := range g.info.Types {

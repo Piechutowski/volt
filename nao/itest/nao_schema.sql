@@ -44,3 +44,11 @@ CREATE TABLE link_clicks (
   day INTEGER NOT NULL,
   target TEXT NOT NULL DEFAULT ''
 );
+
+CREATE TABLE site_flags (
+  id INTEGER PRIMARY KEY,
+  featured INTEGER NOT NULL,
+  pinned INTEGER,
+  ratio REAL NOT NULL,
+  weight REAL
+);

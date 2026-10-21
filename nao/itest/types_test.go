@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Piechutowski/volt/nao/itest/pay"
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
 func TestDeclaredTypeRoundTrip(t *testing.T) {
@@ -94,5 +95,41 @@ func TestKindedTypeRoundTrip(t *testing.T) {
 	}
 	if n, err := q.OrderCount(ctx, OrderStatus.In(OrderStateDelivered)); err != nil || n != 1 {
 		t.Errorf("delivered count = %d, %v; want 1", n, err)
+	}
+}
+
+// TestKindedBoolAndFloatRoundTrip proves kinded types stored as bool and
+// float64 (spec §types rule 3), plain and nullable, on a real SQLite:
+// SQLite hands a bool back as an integer, which database/sql converts
+// into a bool but not into a named bool by itself.
+func TestKindedBoolAndFloatRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	_, q := newDB(t)
+
+	full, err := q.SiteFlagCreate(ctx, SiteFlagNew().FeaturedSet(true).PinnedSet(rt.Some(Featured(true))).RatioSet(0.5).WeightSet(rt.Some(Ratio(2.5))))
+	if err != nil {
+		t.Fatalf("SiteFlagCreate: %v", err)
+	}
+	empty, err := q.SiteFlagCreate(ctx, SiteFlagNew().FeaturedSet(false).PinnedSet(rt.Null[Featured]{}).RatioSet(0).WeightSet(rt.Null[Ratio]{}))
+	if err != nil {
+		t.Fatalf("SiteFlagCreate: %v", err)
+	}
+	got, err := q.SiteFlagGet(ctx, full.ID)
+	if err != nil {
+		t.Fatalf("SiteFlagGet: %v", err)
+	}
+	if !bool(got.Featured) || got.Pinned != rt.Some(Featured(true)) || got.Ratio != 0.5 || got.Weight != rt.Some(Ratio(2.5)) {
+		t.Errorf("SiteFlagGet = %+v, want featured, pinned, ratio 0.5, weight 2.5", got)
+	}
+	got, err = q.SiteFlagGet(ctx, empty.ID)
+	if err != nil {
+		t.Fatalf("SiteFlagGet: %v", err)
+	}
+	if bool(got.Featured) || got.Pinned.Valid || got.Ratio != 0 || got.Weight.Valid {
+		t.Errorf("SiteFlagGet = %+v, want not featured, ratio 0, pinned and weight NULL", got)
+	}
+	all, err := q.SiteFlagList(ctx)
+	if err != nil || len(all) != 2 {
+		t.Fatalf("SiteFlagList = %+v, %v; want both rows", all, err)
 	}
 }

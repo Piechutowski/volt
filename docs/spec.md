@@ -1070,8 +1070,10 @@ storage type = column type ;
    its storage type as its underlying type, or as the type it aliases
    (`type OrderState string`, `type Priority = int`), for storage
    `bool`, `int`, `float64` or `string`, is **kinded** (a generic
-   declaration never is): database/sql converts it by its kind, so it
-   needs neither method and generated code asserts nothing for it.
+   declaration never is): generated code scans it through a pointer to
+   its storage type (`(*bool)(&v.Featured)`), `rt.Null` converts a
+   nullable one, and database/sql binds it by its kind, so it needs
+   neither method and generated code asserts nothing for it.
    Every other declared type, every package-qualified one among them,
    MUST implement `database/sql.Scanner` on its pointer and
    `database/sql/driver.Valuer` on its value; generated code asserts

@@ -66,6 +66,21 @@ var Migrations = []rt.Migration{
 			`DROP TABLE page_views`,
 		},
 	},
+	{
+		Name: "0003__site_flags",
+		Up: []string{
+			`CREATE TABLE site_flags (
+  id INTEGER PRIMARY KEY,
+  featured INTEGER NOT NULL,
+  pinned INTEGER,
+  ratio REAL NOT NULL,
+  weight REAL
+)`,
+		},
+		Down: []string{
+			`DROP TABLE site_flags`,
+		},
+	},
 }
 
 // Migrate applies every pending migration of Migrations to db (spec

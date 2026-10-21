@@ -138,7 +138,7 @@ func (q *Queries) UserDelete(ctx context.Context, id int) error {
 
 func coreUserScan(r rt.Row) (CoreUser, error) {
 	var v CoreUser
-	err := r.Scan(&v.ID, &v.APIKey, &v.HomepageURL, &v.HTTPStatus, &v.FullName, &v.PrecisionValue, &v.Balance, &v.Kind, &v.Type, &v.Func)
+	err := r.Scan(&v.ID, &v.APIKey, &v.HomepageURL, &v.HTTPStatus, &v.FullName, &v.PrecisionValue, &v.Balance, (*string)(&v.Kind), &v.Type, &v.Func)
 	return v, rt.Refused("CoreUser", err)
 }
 

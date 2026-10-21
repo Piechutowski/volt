@@ -40,7 +40,7 @@ func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 
 func postScan(r rt.Row) (Post, error) {
 	var v Post
-	err := r.Scan(&v.ID, &v.Title, &v.Status, &v.Body, &v.PublishedAt)
+	err := r.Scan(&v.ID, &v.Title, (*string)(&v.Status), &v.Body, &v.PublishedAt)
 	return v, rt.Refused("Post", err)
 }
 

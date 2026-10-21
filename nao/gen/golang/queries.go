@@ -73,6 +73,13 @@ type fieldPlan struct {
 	unique     bool
 }
 
+func (f *fieldPlan) scanTarget() string {
+	if f.kinded && !f.nullable {
+		return "(*" + f.storage + ")(&v." + f.goField + ")"
+	}
+	return "&v." + f.goField
+}
+
 func (t *tableModel) field(colName string) *fieldPlan {
 	for _, f := range t.fields {
 		if f.colName == colName {
@@ -521,7 +528,7 @@ func (e *queryEmitter) tableEmit(t *tableModel) {
 		if i > 0 {
 			b.WriteString(", ")
 		}
-		b.WriteString("&v." + f.goField)
+		b.WriteString(f.scanTarget())
 	}
 	fmt.Fprintf(b, ")\n\treturn v, rt.Refused(%q, err)\n}\n\n", t.model)
 

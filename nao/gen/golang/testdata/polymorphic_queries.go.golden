@@ -40,7 +40,7 @@ func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 
 func commentScan(r rt.Row) (Comment, error) {
 	var v Comment
-	err := r.Scan(&v.ID, &v.CommentableType, &v.CommentableID, &v.Body)
+	err := r.Scan(&v.ID, (*string)(&v.CommentableType), &v.CommentableID, &v.Body)
 	return v, rt.Refused("Comment", err)
 }
 

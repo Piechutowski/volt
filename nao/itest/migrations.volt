@@ -44,3 +44,13 @@ Migration 0002__metrics {
     target string [default: '']
   }
 }
+
+Migration 0003__site_flags {
+  create table site_flags {
+    id       int     [pk, increment]
+    featured bool
+    pinned   bool    [null]
+    ratio    float64
+    weight   float64 [null]
+  }
+}

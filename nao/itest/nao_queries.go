@@ -192,7 +192,7 @@ func (q *Queries) UserDelete(ctx context.Context, id int) error {
 
 func orderScan(r rt.Row) (Order, error) {
 	var v Order
-	err := r.Scan(&v.ID, &v.UserID, &v.Status, &v.Total, &v.Tip, &v.Fee, &v.PlacedAt)
+	err := r.Scan(&v.ID, &v.UserID, (*string)(&v.Status), &v.Total, &v.Tip, &v.Fee, &v.PlacedAt)
 	return v, rt.Refused("Order", err)
 }
 
@@ -686,6 +686,150 @@ func (q *Queries) LinkClickDelete(ctx context.Context, id int) error {
 	res, err := q.db.ExecContext(ctx, linkClickDeleteSQL, id)
 	if err != nil {
 		return rt.Refused("LinkClick", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return rt.ErrNotFound
+	}
+	return nil
+}
+
+func siteFlagScan(r rt.Row) (SiteFlag, error) {
+	var v SiteFlag
+	err := r.Scan(&v.ID, (*bool)(&v.Featured), &v.Pinned, (*float64)(&v.Ratio), &v.Weight)
+	return v, rt.Refused("SiteFlag", err)
+}
+
+const siteFlagGetSQL = `SELECT "id", "featured", "pinned", "ratio", "weight" FROM "site_flags" WHERE "id" = ?`
+
+// SiteFlagGet fetches the site_flags row with the given primary key, or rt.ErrNotFound.
+func (q *Queries) SiteFlagGet(ctx context.Context, id int) (SiteFlag, error) {
+	return siteFlagScan(q.db.QueryRowContext(ctx, siteFlagGetSQL, id))
+}
+
+// SiteFlagGetMany fetches the site_flags rows whose primary key is in ids, in
+// database order. Missing keys are not an error; they are just absent.
+func (q *Queries) SiteFlagGetMany(ctx context.Context, ids []int) ([]SiteFlag, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	query, args, err := rt.SelectRender(siteFlagTableSQL, siteFlagColumnsSQL, []rt.Opt[SiteFlag]{SiteFlagID.In(ids...)})
+	if err != nil {
+		return nil, err
+	}
+	rows, err := q.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []SiteFlag{}
+	for rows.Next() {
+		v, err := siteFlagScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+const siteFlagListSQL = `SELECT "id", "featured", "pinned", "ratio", "weight" FROM "site_flags"`
+
+// SiteFlagList returns every site_flags row.
+func (q *Queries) SiteFlagList(ctx context.Context) ([]SiteFlag, error) {
+	rows, err := q.db.QueryContext(ctx, siteFlagListSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []SiteFlag{}
+	for rows.Next() {
+		v, err := siteFlagScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// SiteFlagCreate validates c and inserts its marked columns, returning the
+// stored site_flags row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) SiteFlagCreate(ctx context.Context, c SiteFlagChangeset) (SiteFlag, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return SiteFlag{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "featured"), append(args, v.Featured)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "pinned"), append(args, v.Pinned)
+	}
+	if c.set[3] {
+		cols, args = append(cols, "ratio"), append(args, v.Ratio)
+	}
+	if c.set[4] {
+		cols, args = append(cols, "weight"), append(args, v.Weight)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(siteFlagTableSQL, cols, siteFlagColumnsSQL), args...)
+	if err != nil {
+		return SiteFlag{}, err
+	}
+	return siteFlagScan(row)
+}
+
+// SiteFlagUpdate validates c and writes its marked columns to the site_flags row it
+// was made from, returning the stored row; nothing marked returns the row
+// untouched (spec §changesets).
+func (q *Queries) SiteFlagUpdate(ctx context.Context, c SiteFlagChangeset) (SiteFlag, error) {
+	if !c.row {
+		return SiteFlag{}, rt.ErrNoRow
+	}
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return SiteFlag{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "featured"), append(args, v.Featured)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "pinned"), append(args, v.Pinned)
+	}
+	if c.set[3] {
+		cols, args = append(cols, "ratio"), append(args, v.Ratio)
+	}
+	if c.set[4] {
+		cols, args = append(cols, "weight"), append(args, v.Weight)
+	}
+	if len(cols) == 0 {
+		return v, nil
+	}
+	args = append(args, c.data.ID)
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(siteFlagTableSQL, cols, []string{"id"}, siteFlagColumnsSQL), args...)
+	if err != nil {
+		return SiteFlag{}, err
+	}
+	return siteFlagScan(row)
+}
+
+const siteFlagDeleteSQL = `DELETE FROM "site_flags" WHERE "id" = ?`
+
+// SiteFlagDelete removes the identified site_flags row; rt.ErrNotFound reports
+// that nothing matched.
+func (q *Queries) SiteFlagDelete(ctx context.Context, id int) error {
+	res, err := q.db.ExecContext(ctx, siteFlagDeleteSQL, id)
+	if err != nil {
+		return rt.Refused("SiteFlag", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
