@@ -703,13 +703,7 @@ func tablePK(t *ast.Table) (name, goType string) {
 		if !ok {
 			continue
 		}
-		isPK := col.Settings.Get("pk") != nil || col.Settings.Get("primary key") != nil
-		for _, f := range col.LegacyFlags {
-			if strings.EqualFold(f.Name(), "pk") {
-				isPK = true
-			}
-		}
-		if isPK {
+		if col.Settings.Get("pk") != nil {
 			names = append(names, col.Name.Name())
 		}
 	}

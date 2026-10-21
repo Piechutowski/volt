@@ -5,12 +5,12 @@ package db
 Type Score int32
 
 TablePartial weighted {
-  weight Score [not null]
+  weight Score
 }
 
 Table posts {
   id    int   [pk, increment]
-  score Score [not null]
+  score Score
   ~weighted
 
   validators {

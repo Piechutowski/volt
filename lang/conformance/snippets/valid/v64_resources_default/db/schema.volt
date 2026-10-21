@@ -3,10 +3,10 @@ package db
 
 Table users {
   id    int [pk, increment]
-  email string    [not null, unique]
+  email string    [unique]
 }
 
 Table tags {
   id   int [pk, increment]
-  name string    [not null]
+  name string
 }

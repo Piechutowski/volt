@@ -3,10 +3,10 @@
  * the schema extensions, and the routing layer above them.
  *
  * Covers the full schema language of docs/spec.md Part I:
- * Project, Table (settings, alias, columns, legacy flags), TablePartial and
- * ~injection, Enum, Ref (long, short and inline forms, composite endpoints),
+ * Project, Table (settings, alias, columns), TablePartial and ~injection,
+ * Enum, Ref (long, short and inline forms, composite endpoints),
  * TableGroup, Note (member, block and sticky forms), Records (top-level and
- * in-table), DiagramView, indexes and validators blocks, use/reuse imports —
+ * in-table), DiagramView, indexes and validators blocks,
  * plus the Volt routing layer of docs/spec.md Part II: package clauses, Go-style
  * import blocks, Pipeline, Scope, routes and resources. One grammar for
  * one language in three layers (§layers-files-and-the-superset-rule): every .volt file parses here,
@@ -85,7 +85,6 @@ module.exports = grammar({
         $.sticky_note_definition,
         $.records_definition,
         $.diagram_view_definition,
-        $.import_statement,
         // Volt layer (docs/spec.md Part II)
         $.package_clause,
         $.import_block,
@@ -147,7 +146,6 @@ module.exports = grammar({
       seq(
         field('name', alias($._name, $.column_name)),
         field('type', $.column_type),
-        repeat(field('flag', $.legacy_flag)),
         optional(field('settings', $.settings_list)),
       ),
 
@@ -162,9 +160,6 @@ module.exports = grammar({
         optional(seq(field('schema', alias($._name, $.schema_name)), '.')),
         field('name', $._name),
       ),
-
-    // Bare `pk` / `unique` between type and settings (§columns, legacy).
-    legacy_flag: () => choice(kw('pk', 2), kw('unique', 2)),
 
     // ==================== TablePartial (§tablepartial) ====================
 
@@ -431,31 +426,6 @@ module.exports = grammar({
           ),
         ),
         '}',
-      ),
-
-    // ==================== Imports (§file-imports-removed) ====================
-
-    import_statement: ($) =>
-      seq(
-        field('keyword', choice(kw('use'), kw('reuse'))),
-        choice(
-          alias('*', $.wildcard),
-          seq(
-            '{',
-            repeat($._newline),
-            optional(newlineSep1($.import_item, $)),
-            '}',
-          ),
-        ),
-        kw('from'),
-        field('path', $.string),
-      ),
-
-    import_item: ($) =>
-      seq(
-        field('kind', alias($._name, $.element_kind)),
-        field('name', $.table_name),
-        optional(seq(kw('as'), field('alias', $._name))),
       ),
 
     // ==================== Volt layer (docs/spec.md Part II) ====================
@@ -881,7 +851,7 @@ module.exports = grammar({
         optional(seq(':', field('value', $._setting_value))),
       ),
 
-    // Setting names may be multi-word: `primary key`, `not null` (§settings-lists).
+    // Setting names may be multi-word: `no transaction` (§settings-lists).
     setting_name: ($) => prec.right(repeat1($._name)),
 
     _setting_value: ($) =>

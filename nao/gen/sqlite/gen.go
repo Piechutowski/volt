@@ -180,7 +180,7 @@ func (g *generator) columnDef(ti *check.TableInfo, cd *check.ColumnDef, pkCols [
 
 // columnLine renders one column definition of a CREATE TABLE (spec
 // §mapping-to-sqlite-ddl): the rowid alias for int [pk, increment],
-// NOT NULL for a pk or not null column, UNIQUE and DEFAULT.
+// NOT NULL for a pk column or one without null, UNIQUE and DEFAULT.
 func columnLine(col *ast.Column, sqlType string, pkCols []string) (string, error) {
 	colName := col.Name.Name()
 	singlePK := colHas(col, "pk") && len(pkCols) == 0
@@ -357,39 +357,13 @@ func compositePKColumns(ti *check.TableInfo) []string {
 	return out
 }
 
-func isNullable(col *ast.Column) bool {
-	s := col.Settings
-	if s != nil {
-		if s.Get("not null") != nil || s.Get("pk") != nil || s.Get("primary key") != nil || s.Get("increment") != nil {
-			return false
-		}
-	}
-	for _, f := range col.LegacyFlags {
-		if strings.EqualFold(f.Name(), "pk") {
-			return false
-		}
-	}
-	return true
-}
+// isNullable reports whether the column admits NULL, which the null
+// setting alone decides (spec §columns).
+func isNullable(col *ast.Column) bool { return col.Settings.Get("null") != nil }
 
 func columnHas(cd *check.ColumnDef, name string) bool { return colHas(cd.Col, name) }
 
-func colHas(col *ast.Column, name string) bool {
-	if col.Settings != nil {
-		if col.Settings.Get(name) != nil {
-			return true
-		}
-		if name == "pk" && col.Settings.Get("primary key") != nil {
-			return true
-		}
-	}
-	for _, f := range col.LegacyFlags {
-		if strings.EqualFold(f.Name(), name) {
-			return true
-		}
-	}
-	return false
-}
+func colHas(col *ast.Column, name string) bool { return col.Settings.Get(name) != nil }
 
 // fkSides names the foreign-key endpoint and the one it references
 // (spec §relationships-ref rule 3): the left of >, the right of <, the

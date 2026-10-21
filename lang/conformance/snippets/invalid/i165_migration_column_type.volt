@@ -9,12 +9,12 @@ Enum status {
 
 Table users {
   id    int    [pk]
-  state status [not null]
+  state status
 }
 
 Migration 0001__init {
   create table users {
     id    int    [pk]
-    state status [not null]
+    state status
   }
 }

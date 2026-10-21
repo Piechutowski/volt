@@ -101,7 +101,6 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Notes](#notes)
     - [TableGroup](#tablegroup)
     - [DiagramView](#diagramview)
-  - [File Imports (removed)](#file-imports-removed)
   - [Static Semantics](#static-semantics)
     - [Schemas](#schemas)
     - [Namespaces and Uniqueness](#namespaces-and-uniqueness)
@@ -241,7 +240,7 @@ approximate category L with ASCII `[a-zA-Z]`.
 ### Case Sensitivity and Terminology
 
 **Case sensitivity.** All *keywords* (terminals spelled with letters in
-this grammar, e.g. `"Table"`, `"pk"`, `"not null"`) are matched
+this grammar, e.g. `"Table"`, `"pk"`, `"null"`) are matched
 **case-insensitively**: `Table`, `table`, and `TABLE` are equivalent.
 User-defined names (identifiers) preserve case; implementations MUST treat
 them case-sensitively for lookup unless stated otherwise.
@@ -256,8 +255,7 @@ interpreted as described in RFC 2119.
 1. A Volt source file is a sequence of Unicode characters, conventionally
    encoded as UTF-8, using the file extension `.volt` (§layers-files-and-the-superset-rule).
 2. A *program* (§program-structure) is the content of one source file. Multiple files are
-   related only through packages (§projects-and-packages); file imports are
-   not part of the language (§file-imports-removed).
+   related only through packages (§projects-and-packages).
 
 ---
 
@@ -411,7 +409,7 @@ ordinary identifier elsewhere (e.g. a column may be named `table`).
 Element-type keywords: `Project`, `Table`, `TablePartial`, `TableGroup`,
 `Enum`, `Type`, `Ref`, `Note`, `Records`, `DiagramView`, `Migration`,
 `indexes`, `validators`, `Tables`, `Notes`, `TableGroups`, `Schemas`.
-Clause keywords: `as`, `use`, `reuse`, `from`.
+Clause keywords: `as`, `from`.
 Value keywords: `true`, `false`, `null`.
 All are case-insensitive (§case-sensitivity-and-terminology).
 
@@ -597,16 +595,15 @@ setting value = string | number | boolean | null
               | inline ref value ;
 ```
 
-1. A setting is either a flag (`pk`, `unique`, `not null`) or a key–value
+1. A setting is either a flag (`pk`, `unique`, `null`) or a key-value
    pair (`note: 'text'`, `default: 123`).
 2. Setting names are case-insensitive and may consist of multiple words
-   separated by spaces (`not null`, `primary key`, `no action`).
+   separated by spaces (`no transaction`, §migrations).
 3. Each element section below enumerates *which* settings are valid there;
    a setting not listed for a construct is invalid in that position.
 4. Within one settings list, each setting MUST appear at most once. The
    only exceptions are the column settings `ref` and `tag` (§columns), which
-   MAY be repeated. Settings that are synonyms (`pk` / `primary key`) count
-   as one setting for this rule.
+   MAY be repeated.
 5. A settings list MUST appear on the same line as (the end of) the
    construct it modifies.
 
@@ -615,7 +612,7 @@ setting value = string | number | boolean | null
 ## Program Structure
 
 ```ebnf
-program = { import statement | element } ;
+program = { element } ;
 
 element = project
         | table
@@ -629,13 +626,14 @@ element = project
         | diagram view ;
 ```
 
-1. A program is a sequence of top-level elements and import statements
-   (§file-imports-removed), in any order, separated by line breaks. Where one element ends
+1. A program is a sequence of top-level elements, in any order,
+   separated by line breaks. Where one element ends
    and the next begins is lexical (§line-structure-and-whitespace): an unquoted identifier in the
    first column outside every brace, string and comment.
 2. Forward references are permitted: an element may reference another
-   element defined later in the file (or imported). The language is fully
-   declarative; declaration order carries no semantics.
+   element defined later in the file, or in another file of its package
+   (§projects-and-packages). The language is fully declarative;
+   declaration order carries no semantics.
 
 ---
 
@@ -704,24 +702,21 @@ table setting  = "headercolor", ":", color
 ```volt
 Table core.users as U [headercolor: #3498DB] {
   id int [pk]
-  email string [not null, unique]
+  email string [unique]
 }
 ```
 
 ### Columns
 
 ```ebnf
-column          = name, column type, { legacy flag },
-                  [ column settings ], newline ;
+column          = name, column type, [ column settings ], newline ;
 
 column type     = [ "[", "]" ], type name ;
 type name       = [ identifier, "." ], identifier ;
 
-legacy flag     = "pk" | "unique" ;
-
 column settings = "[", column setting, { ",", column setting }, "]" ;
-column setting  = "primary key" | "pk"
-                | "null" | "not null"
+column setting  = "pk"
+                | "null"
                 | "unique"
                 | "increment"
                 | "required"                          (* extension, below *)
@@ -761,11 +756,12 @@ column setting  = "primary key" | "pk"
    literals a `default:` accepts (§default-values), the empty value
    `required` refuses, and the comparisons a predicate allows
    (§predicates).
-2. **Nullability.** Absent `not null`, a column is nullable. `null` and
-   `not null` are mutually exclusive.
-3. **`pk` / `primary key`** are synonyms and mutually exclusive; they mark a
-   single-column primary key. A composite primary key MUST be expressed as
-   an index with the `pk` setting (§indexes).
+2. **Nullability.** A column is NOT NULL unless it carries `null`,
+   which admits NULL. This mirrors Go, where a value is never nil unless
+   its type says so. A key column, one carrying `pk` or a member of a
+   `[pk]` index (§indexes), MUST NOT carry `null`.
+3. **`pk`** marks a single-column primary key. A composite primary key
+   MUST be expressed as an index with the `pk` setting (§indexes).
 4. **`increment`** marks the column auto-increment: the database
    assigns its value, and a changeset has no setter for it
    (§changesets).
@@ -780,23 +776,22 @@ column setting  = "primary key" | "pk"
    > column would insert NULL into a NOT NULL column at run time.
 5. **`ref`** declares an inline relationship (§relationships-ref). The setting MAY be
    repeated. Inline refs cannot carry names or settings.
-6. **Legacy flags.** For backward compatibility, the bare words `pk` and
-   `unique` MAY appear between the type and the settings list
-   (`id int pk`). New documents SHOULD use the settings list instead.
-7. Each column definition is terminated by a line break.
+6. Each column definition is terminated by a line break; the settings
+   list is the only thing that follows the type.
 
 > **Extension (this implementation).** The column setting `required`
 > declares that a value must be present
 > in the zero-value sense: under ZII a missing input decodes to the
-> type's zero value and `not null` is satisfied, so `required` is the
-> word for "and not that either". It is one of the two built-in rules
+> type's zero value and the NOT NULL column is satisfied, so `required`
+> is the word for "and not that either". It is one of the two built-in rules
 > of `Validate` (§changesets), beside enum membership, and the one the
 > schema switches on per column, the field error with check
 > `required`: it refuses `""` for `string` and enum columns, `0` for
 > `int` and `float64`, a zero length for `[]byte`, and for a declared
-> type the empty value of its storage type. It MUST accompany `not null` (or a key), and is an
-> error on a `null`, `default:` or `increment` column and on `bool`
-> and `time.Time`, where every value is a value.
+> type the empty value of its storage type. It is an error on a
+> `null` column, which has no empty value to refuse since NULL is
+> absence, on a `default:` or `increment` column, and on `bool` and
+> `time.Time`, where every value is a value.
 >
 > **The `tag` setting.** The column setting `tag: string`
 > (repeatable) passes one Go struct tag through to the generated field
@@ -823,7 +818,7 @@ column setting  = "primary key" | "pk"
 ```volt
 Table users {
   id        int [pk]
-  user_name string [not null, tag: 'json:"userName"', tag: 'xml:"user-name,attr"']
+  user_name string [tag: 'json:"userName"', tag: 'xml:"user-name,attr"']
 }
 ```
 
@@ -853,11 +848,11 @@ constant is **not** a valid default value.
    integer literal for `int`; a number for `float64`; a string for `string`;
    `true` or `false` for `bool`; a constant of the column's own enum
    for an enum column; for a declared type (§types), a literal of its
-   storage type. `null` is a default only on a nullable column. An
-   expression literal is accepted on any column and is SQLite's to
-   judge. `[]byte` and `time.Time` columns take only an expression
-   literal or `null`. A default that does not fit is an error naming
-   the column and its type.
+   storage type. `null` is a default only on a column that carries
+   `null`. An expression literal is accepted on any column and is
+   SQLite's to judge. `[]byte` and `time.Time` columns take only an
+   expression literal or `null`. A default that does not fit is an
+   error naming the column and its type.
 
 ### Indexes
 
@@ -887,7 +882,8 @@ index setting  = "type", ":", identifier
    table (after partial injection).
 3. `pk` declares the index a (composite) primary key; `unique` a unique
    index. Combining `pk` and `unique` on one index is redundant but
-   permitted.
+   permitted. The members of a `pk` index are NOT NULL and MUST NOT
+   carry `null` (§columns).
 4. `type` selects the index method. Any identifier is accepted; the
    conventional, portable values are `btree` and `hash`.
 5. **Name.** An index without `name:` whose key is columns only is
@@ -898,7 +894,9 @@ index setting  = "type", ":", identifier
    `name:`, since no name derives from an expression. A `pk` index is
    a table constraint and has no name.
 6. **`where`** takes an expression literal and makes the index
-   partial: the DDL carries it as `WHERE <expr>`, verbatim and
+   partial: only the rows for which the condition holds are indexed,
+   so the index stays small, and a unique partial index constrains
+   only those rows. The DDL carries it as `WHERE <expr>`, verbatim and
    SQLite's to judge.
 
 ```volt
@@ -906,12 +904,13 @@ Table bookings {
   id int
   country string
   booking_date time.Time
+  cancelled_at time.Time [null]
 
   indexes {
     (id, country) [pk]
     booking_date [name: 'idx_booking_date', type: hash]
     (country, `lower(country)`) [unique, name: 'idx_bookings_country_ci']
-    booking_date [where: `country <> ''`]
+    booking_date [where: `cancelled_at IS NULL`]
   }
 }
 ```
@@ -988,7 +987,7 @@ Ref {
 
 // inline form
 Table posts {
-  user_id int [ref: > core.users.id]
+  user_id int [null, ref: > core.users.id]
 }
 ```
 
@@ -1056,8 +1055,8 @@ storage type = column type ;
    generated code scans into a pointer and binds values. Generated
    code asserts both (`var _ sql.Scanner = (*pkg.Name)(nil)` and
    `var _ driver.Valuer = *new(pkg.Name)`), so a type that does not
-   fails to compile at the assertion, naming the type. A nullable
-   column of a declared type is `rt.Null[pkg.Name]`.
+   fails to compile at the assertion, naming the type. A column of a
+   declared type that carries `null` is `rt.Null[pkg.Name]`.
 4. **In predicates.** A column of a declared type compares with `=`,
    `!=`, `in` and `is null` only (§predicates).
 
@@ -1068,9 +1067,9 @@ Type Slug        string
 
 Table products {
   id    int         [pk, increment]
-  slug  Slug        [not null, unique]
-  price money.Money [not null]
-  icon  png.Png
+  slug  Slug        [unique]
+  price money.Money
+  icon  png.Png     [null]
 }
 ```
 
@@ -1105,7 +1104,7 @@ partial injection = "~", name, newline ;
 
 ```volt
 TablePartial base_template [headercolor: #ff0000] {
-  id int [pk, not null]
+  id int [pk]
   created_at time.Time [default: `now()`]
 }
 
@@ -1152,7 +1151,8 @@ empty           = ;                      (* nothing between separators *)
    `false` for `bool`; a constant of the column's own enum
    (`EnumName.value`) for an enum column; for a declared type, a
    literal of its storage type. `null` and an empty field (nothing
-   between commas) are NULL and are allowed only on a nullable column.
+   between commas) are NULL and are allowed only on a column that
+   carries `null`.
    A `[]byte` column takes an expression literal or NULL. An expression
    literal (backticks) is accepted on any column and is SQLite's to
    judge. A bare identifier other than `true`, `false` and `null` is
@@ -1167,8 +1167,8 @@ Enum job_status {
 
 Table users {
   id int [pk]
-  name string
-  status job_status
+  name string [null]
+  status job_status [null]
 
   Records (id, name, status) {
     1, 'Alice', job_status.created
@@ -1179,7 +1179,7 @@ Table users {
 
 Table posts {
   id int [pk]
-  user_id int [not null, ref: > users.id]
+  user_id int [ref: > users.id]
   posted_at time.Time
 }
 
@@ -1280,49 +1280,6 @@ DiagramView sales_view {
 
 ---
 
-## File Imports (removed)
-
-An earlier file-import syntax (`use * from './file'`, selective
-import with per-element kinds and `as` aliases, and `reuse` re-export)
-is recognized only to be refused: it **is not part of the Volt
-language**. Splitting a schema across files needs no imports at all: a
-package is a directory and every file in it shares one namespace
-(§projects-and-packages); cross-package references go through the
-package system (§imports). All four forms managed one problem, name
-conflicts caused by dumping imported declarations into the importer's
-scope, and qualified access (`db.users`) makes those conflicts
-impossible, so the machinery solving them has no place. Files that
-imported each other become one package; genuinely separate concerns
-become separate packages, imported by name (§imports) and qualified at
-every reference; an alias (`use { table users as u }`) has no
-equivalent and needs none, since the package qualifier disambiguates;
-a re-export chain flattens, each consumer importing the defining
-package directly.
-
-A conforming implementation recognizes the refused forms in order to
-reject them precisely:
-
-```ebnf
-import statement = import kw, import spec, "from", import path ;
-import kw        = "use" | "reuse" ;
-import spec      = "*" | "{", import item, newline,
-                   { import item, newline }, "}" ;
-import item      = element kind, table name, [ "as", name ] ;
-element kind     = "table" | "enum" | "tablepartial" | "note"
-                 | "schema" | "tablegroup" ;
-import path      = string ;
-```
-
-1. An `import statement` anywhere in a file is an **error** (code
-   `spec/file-imports-removed`), at every layer: the single-file schema
-   pass and the project pass alike. The diagnostic names the package
-   system as the replacement.
-2. No other behavior attaches to the statement: it declares nothing,
-   imports nothing, and suppresses only cascading unresolved-name
-   noise within its file.
-
----
-
 ## Static Semantics
 
 ### Schemas
@@ -1335,7 +1292,7 @@ import path      = string ;
 
 ### Namespaces and Uniqueness
 
-Within one compiled schema (after imports):
+Within one compiled schema:
 
 1. Table names (and aliases) MUST be unique per schema; the alias namespace
    is shared with unqualified table names.
@@ -1365,9 +1322,10 @@ Within one compiled schema (after imports):
 
 ### Nullability and Cardinality
 
-1. A column without `null`/`not null` is nullable.
+1. A column that carries `null` is nullable; every other column is
+   NOT NULL (§columns).
 2. A nullable foreign-key column yields zero-or-one / zero-or-many
-   cardinality on the FK side; `not null` yields exactly-one.
+   cardinality on the FK side; a NOT NULL one yields exactly-one.
 
 ---
 
@@ -1379,23 +1337,11 @@ above.
 ```ebnf
 (* ===== 5. Program ===== *)
 
-program              = { import statement | element } ;
+program              = { element } ;
 
 element              = project | table | table partial | enum
                      | type decl | ref element | sticky note | table group
                      | records element | diagram view ;
-
-(* ===== 7. Module system ===== *)
-
-import statement     = import kw, import spec, "from", import path ;
-import kw            = "use" | "reuse" ;
-import spec          = "*"
-                     | "{", import item, newline,
-                       { import item, newline }, "}" ;
-import item          = element kind, table name, [ "as", name ] ;
-element kind         = "table" | "enum" | "tablepartial" | "note"
-                     | "schema" | "tablegroup" ;
-import path          = string ;
 
 (* ===== 6.1 Project ===== *)
 
@@ -1414,13 +1360,11 @@ table settings       = "[", table setting, { ",", table setting }, "]" ;
 table setting        = "headercolor", ":", color
                      | "note", ":", string ;
 
-column               = name, column type, { legacy flag },
-                       [ column settings ], newline ;
+column               = name, column type, [ column settings ], newline ;
 column type          = [ "[", "]" ], type name ;
 type name            = [ identifier, "." ], identifier ;
-legacy flag          = "pk" | "unique" ;
 column settings      = "[", column setting, { ",", column setting }, "]" ;
-column setting       = "primary key" | "pk" | "null" | "not null"
+column setting       = "pk" | "null"
                      | "unique" | "increment" | "required"
                      | "default", ":", default value
                      | "note", ":", string
@@ -1613,9 +1557,7 @@ files under `invalid/` MUST be rejected.
 2. **Layering rule.** The full language is a superset of Part I: every
    valid Part I program is a valid Volt file body, and a file body
    means the same at every layer. Part II adds the package clause and
-   its own declarations and takes nothing away; the import statements
-   of Part I §file-imports-removed are refused at every layer alike
-   (§imports). The lexical grammar is
+   its own declarations and takes nothing away. The lexical grammar is
    Part I §lexical-structure with one addition:
 
    ```ebnf
@@ -1720,13 +1662,7 @@ package path = name, { slash, name } ;
    (§pipelines, §handler-references); a package MUST NOT import itself; **every import
    MUST be used** — an import whose qualifier is never referenced is
    an error.
-5. **File imports are removed.** The `use` and `reuse` statements
-   of Part I §file-imports-removed are not part of the Volt language at any layer; a
-   conforming implementation rejects them with a diagnostic naming the
-   package system. (The parser MAY still recognize the syntax so the
-   schema conformance corpus remains checkable; acceptance is what is
-   forbidden.)
-6. **Import cycles are errors.** The package import graph MUST be
+5. **Import cycles are errors.** The package import graph MUST be
    acyclic.
 
 ```volt
@@ -2653,7 +2589,7 @@ the optional projection narrows the emitted columns.
    - **Explicit list** `(a, b, c)` — at least one column, no
      duplicates. Every listed column MUST exist in every member with
      one agreed generated **field type** (§mapping-to-go — nullability
-     included, so `string` and `string [not null]` disagree); a miss or a
+     included, so `string` and `string [null]` disagree); a miss or a
      disagreement is an error naming the members and their types. The
      row type is **one shared struct** named by the select name
      mapped per §names (select `summary` → `Summary`), serving
@@ -2710,8 +2646,8 @@ than one, and their lines accumulate, injected partials' first
 
 ```volt
 Table users {
-  email string [not null, required]
-  hits  int    [not null]
+  email string [required]
+  hits  int
 
   validators {
     EmailShape(email)
@@ -3005,7 +2941,7 @@ exec settings      = "[", "down", ":", string, "]" ;
 
 shape body         = { migration column | indexes block } ;
 
-migration column          = name, column type, { legacy flag },
+migration column          = name, column type,
                             [ migration column settings ], newline ;
 migration column settings = "[", migration column setting,
                             { ",", migration column setting }, "]" ;
@@ -3015,8 +2951,8 @@ migration column setting  = column setting
                           | "update", ":", ref action ;
 ```
 
-`column type`, `legacy flag`, `column setting`, `index key`, `index
-settings` and `indexes block` are the productions of the schema core
+`column type`, `column setting`, `index key`, `index settings` and
+`indexes block` are the productions of the schema core
 (§columns, §indexes) and `ref action` is that of §relationships-ref,
 all narrowed by the rules below; a migration column adds `from:`
 (rule 9) and the referential actions `delete:` and `update:` (rule
@@ -3029,7 +2965,7 @@ keywords inside a `Migration` only; elsewhere they are identifiers.
 ```volt
 Migration 0002__users_bio {
   alter table users {
-    add bio string
+    add bio string [null]
     rename name to full_name
   }
   create index users (full_name)
@@ -3060,13 +2996,15 @@ Migration 0002__users_bio {
    elsewhere. Table, column and index names are plain names, not
    resolved against the schema. A column type MUST be one of the six
    built-in types (§columns); an enum or a declared type is not a
-   type here, since the database holds its storage type. A partial
+   type here, since the database holds its storage type. A migration
+   column is NOT NULL unless it carries `null`, as a schema column is,
+   and a key column MUST NOT carry `null` (§columns). A partial
    injection, a `validators` block, a records block and a `Note` are
    not part of a `shape body`.
 4. **Settings whitelist.** In a migration, a column setting is one of
-   `pk`, `primary key`, `increment`, `null`, `not null`, `unique`,
-   `default:`, `ref:`, `delete:`, `update:`, `note:`, and in a
-   `rebuild` also `from:` (rule 9); `from:` anywhere else is an error.
+   `pk`, `increment`, `null`, `unique`, `default:`, `ref:`, `delete:`,
+   `update:`, `note:`, and in a `rebuild` also `from:` (rule 9);
+   `from:` anywhere else is an error.
    `ref:` takes `>` or `-` only: the declaring column holds the key,
    and `<` and `<>` reference the other way and are not a column's to
    declare. `delete:` and `update:` take the referential actions of
@@ -3091,9 +3029,9 @@ Migration 0002__users_bio {
    as they are.
 8. **`alter table`.** Each item is one `ALTER TABLE` statement, in
    the written order. `add` is `ADD COLUMN` under SQLite's rules,
-   checked here rather than at run time: a `not null` column MUST
+   checked here rather than at run time: a column without `null` MUST
    carry a `default:`; the default MUST be a literal; `pk` and
-   `increment` are errors; `ref:` requires the column to be nullable;
+   `increment` are errors; `ref:` requires the column to carry `null`;
    a column with `ref:` has no `default:` other than `null`, since
    SQLite refuses to add a `REFERENCES` column with another default
    to a table that has rows; `unique` lowers to the added column plus
@@ -3111,8 +3049,8 @@ Migration 0002__users_bio {
    `DROP TABLE <table>`; `ALTER TABLE <table>__new RENAME TO
    <table>`; create every index of the body. The source of a column
    is, in order: its `from:` expression literal if given; the old
-   column of the same name; its `default:`; `NULL`. A `not null`
-   column whose source is `NULL` is an error, except a rowid alias
+   column of the same name; its `default:`; `NULL`. A column without
+   `null` whose source is `NULL` is an error, except a rowid alias
    (`int [pk, increment]`) introduced by the rebuild, which takes
    `NULL` as its source and the database assigns it. The source order
    is checked here for a table the package's migrations created; a
@@ -3197,7 +3135,7 @@ true. What is checked instead is their composition.
 4. **Lemma.** Because the fold runs on the engine that will run the
    migrations, a migration SQLite would refuse (dropping an indexed
    column, say) is refused at check time, with SQLite's own message.
-   The one run-time exception is a `not null` column added to a
+   The one run-time exception is a NOT NULL column added to a
    table that already has rows, which the fold's empty database
    cannot see and `alter table` (§migrations) guards by requiring a
    default. Once the fold is read, the check also reverts the
@@ -3285,10 +3223,10 @@ package db
 
 Table users {
   id        int    [pk, increment]
-  email     string [not null, unique, required]
-  full_name string [not null, required]
-  bio       string
-  hits      int    [not null, default: 0]
+  email     string [unique, required]
+  full_name string [required]
+  bio       string [null]
+  hits      int    [default: 0]
 
   validators {
     EmailShape(email)
@@ -3299,23 +3237,23 @@ Table users {
 Migration 0001__create_users {
   create table users {
     id    int    [pk, increment]
-    email string [not null, unique]
-    name  string [not null]
-    hits  string [not null, default: '0']
+    email string [unique]
+    name  string
+    hits  string [default: '0']
   }
 }
 
 Migration 0002__users_bio_and_int_hits [irreversible] {
   alter table users {
-    add bio string
+    add bio string [null]
     rename name to full_name
   }
   rebuild table users {
     id        int    [pk, increment]
-    email     string [not null, unique]
-    full_name string [not null]
-    bio       string
-    hits      int    [not null, default: 0, from: `CAST(hits AS INTEGER)`]
+    email     string [unique]
+    full_name string
+    bio       string [null]
+    hits      int    [default: 0, from: `CAST(hits AS INTEGER)`]
   }
 }
 ```
@@ -3401,7 +3339,7 @@ drop index op      = "drop", "index", name, index key,
 exec op            = "exec", string, [ exec settings ], newline ;
 exec settings      = "[", "down", ":", string, "]" ;
 shape body         = { migration column | indexes block } ;
-migration column          = name, column type, { legacy flag },
+migration column          = name, column type,
                             [ migration column settings ], newline ;
 migration column settings = "[", migration column setting,
                             { ",", migration column setting }, "]" ;
@@ -3507,10 +3445,9 @@ SQLite INTEGER range there, and only there.
 
 ### Nullability
 
-A column is required (`T`) when it has `not null`, `pk`/`primary key`
-(setting or legacy flag), `increment`, or is covered by a `[pk]` index —
-primary keys imply NOT NULL in SQL. Everything else is nullable and
-generated as `rt.Null[T]` — a value plus a validity bit, never a pointer.
+A column that carries `null` (§columns) is nullable and generated as
+`rt.Null[T]`, a value plus a validity bit, never a pointer. Every other
+column is required and generated as `T`.
 `[]byte`, where `nil` already expresses NULL, stays bare. A nullable
 column's handle, declared in `nao_models.go` with the rest
 (§changesets, §generated-query-surface), is an `rt.NullColumn`:
@@ -3622,6 +3559,7 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 |---|---|
 | enum-typed column | `TEXT`; SQLite has no enum type, and the value set is the generated Go type's (§go-types) |
 | `core.users` (schema) | `core_users` — SQLite has no schemas; collisions are generation errors |
+| column without `null` | `NOT NULL`, the rowid alias below excepted; a column that carries `null` has no nullability constraint (§columns) |
 | `pk` column | explicit `NOT NULL` added: SQLite's `PRIMARY KEY` does **not** imply NOT NULL |
 | `int` `[pk, increment]` | exactly `INTEGER PRIMARY KEY` (rowid alias, auto-assigned); SQLite's `AUTOINCREMENT` keyword deliberately avoided — it only adds the never-reuse-an-id bookkeeping the SQLite docs discourage. Any other `increment` placement is a check error (§columns) |
 | composite pk (`[pk]` index) | `PRIMARY KEY (a, b)` table constraint; members get `NOT NULL` |

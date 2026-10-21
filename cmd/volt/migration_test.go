@@ -81,7 +81,7 @@ func schemaDrift(t *testing.T, dir string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	drifted := strings.Replace(string(src), "  body    string [not null]\n", "  body    string [not null]\n  flagged bool   [not null, default: false]\n", 1)
+	drifted := strings.Replace(string(src), "  body    string\n", "  body    string\n  flagged bool   [default: false]\n", 1)
 	if drifted == string(src) {
 		t.Fatal("the fixture schema changed; update schemaDrift")
 	}
@@ -101,7 +101,7 @@ func TestMigrationCheck(t *testing.T) {
 	if exitCode(err) != 1 {
 		t.Fatalf("check on drift: exit %d (%v), want 1", exitCode(err), err)
 	}
-	for _, want := range []string{"1 difference(s)", "// column comments.flagged is in the schema but not in the fold", "alter table comments {\n  add flagged int [not null, default: 0]\n}"} {
+	for _, want := range []string{"1 difference(s)", "// column comments.flagged is in the schema but not in the fold", "alter table comments {\n  add flagged int [default: 0]\n}"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("drift report lacks %q:\n%s", want, out)
 		}
@@ -123,7 +123,7 @@ func TestMigrationCheck(t *testing.T) {
 		t.Errorf("gen over a migration SQLite refuses: exit %d (%v), want 1 with SQLite's message", exitCode(err), err)
 	}
 	viewed := fixtureCopy(t)
-	rebuild := "package blog\n\nMigration 0003__view [irreversible] {\n  exec 'CREATE VIEW post_titles AS SELECT title FROM posts'\n  rebuild table posts {\n    id    int    [pk, increment]\n    title string [not null]\n    body  string\n    views int    [not null, default: 0]\n\n    indexes {\n      views\n    }\n  }\n}\n"
+	rebuild := "package blog\n\nMigration 0003__view [irreversible] {\n  exec 'CREATE VIEW post_titles AS SELECT title FROM posts'\n  rebuild table posts {\n    id    int    [pk, increment]\n    title string\n    body  string [null]\n    views int    [default: 0]\n\n    indexes {\n      views\n    }\n  }\n}\n"
 	if err := os.WriteFile(filepath.Join(viewed, "0003__view.volt"), []byte(rebuild), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestMigrationExitCodes(t *testing.T) {
 	}
 	files := map[string]string{
 		"go.mod":      "module unlowerable\n\ngo 1.27\n",
-		"schema.volt": "package db\n\nTable posts {\n  id int [pk, increment]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int\n\n    indexes {\n      n\n      n [unique]\n    }\n  }\n}\n",
+		"schema.volt": "package db\n\nTable posts {\n  id int [pk, increment]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null]\n\n    indexes {\n      n\n      n [unique]\n    }\n  }\n}\n",
 	}
 	for name, src := range files {
 		if err := os.WriteFile(filepath.Join(unlowerable, name), []byte(src), 0o644); err != nil {

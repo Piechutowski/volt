@@ -7,9 +7,9 @@ Pred positive { hits >= 0 }
 
 Table page_views {
   id int [pk]
-  site string [not null]
-  hits int [not null]
-  flag bool [not null, default: false]
+  site string
+  hits int
+  flag bool [default: false]
 
   validators {
     SiteKnown(site)

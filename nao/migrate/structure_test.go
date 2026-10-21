@@ -37,7 +37,7 @@ CREATE TABLE comments (
 );
 `
 
-const rebuildPosts = "rebuild table posts {\n  id int [pk, increment]\n  slug string [not null, unique]\n  title string [not null]\n  views int [not null, default: 0]\n\n  indexes {\n    views [where: `views > 0`]\n  }\n}"
+const rebuildPosts = "rebuild table posts {\n  id int [pk, increment]\n  slug string [unique]\n  title string\n  views int [default: 0]\n\n  indexes {\n    views [where: `views > 0`]\n  }\n}"
 
 type diffCase struct {
 	name         string
@@ -69,16 +69,16 @@ CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
 `,
 	},
 	{
-		name:   "a table only in the schema, not null columns only in the schema",
+		name:   "a table only in the schema, NOT NULL columns only in the schema",
 		fold:   "CREATE TABLE posts (id INTEGER PRIMARY KEY);",
 		target: postsDDL,
 		want: []string{
-			"create table comments {\n  id int [pk, increment]\n  post_id int [not null, ref: > posts.id]\n  body string\n}",
+			"create table comments {\n  id int [pk, increment]\n  post_id int [ref: > posts.id]\n  body string [null]\n}",
 			rebuildPosts,
 		},
 		reason:   "table comments is in the schema but not in the fold",
-		also:     "column posts.slug is in the schema but not in the fold and is not null without a default, which add cannot fill: rebuild the table with a from: or a default: for it, or add it with a default:",
-		unclosed: "rule 9 refuses the rebuild while posts.slug and posts.title, not null and new, have no from: or default:; the user supplies one",
+		also:     "column posts.slug is in the schema but not in the fold and is NOT NULL without a default, which add cannot fill: rebuild the table with a from: or a default: for it, or add it with a default:",
+		unclosed: "rule 9 refuses the rebuild while posts.slug and posts.title, NOT NULL and new, have no from: or default:; the user supplies one",
 	},
 	{
 		name:   "a unique constraint only in the schema on a column the fold has",
@@ -98,7 +98,7 @@ CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
 		name:   "a column only in the schema",
 		fold:   postsDDL,
 		target: strings.Replace(postsDDL, "  body TEXT,\n", "  body TEXT,\n  flagged INTEGER NOT NULL DEFAULT 0,\n", 1),
-		want:   []string{"alter table comments {\n  add flagged int [not null, default: 0]\n}"},
+		want:   []string{"alter table comments {\n  add flagged int [default: 0]\n}"},
 		reason: "column comments.flagged is in the schema but not in the fold",
 	},
 	{
@@ -116,41 +116,41 @@ CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
 		reason: "index idx_comments_draft on comments is in the fold but not in the schema",
 	},
 	{
-		name:     "a not null column without a default only in the schema is a rebuild",
+		name:     "a NOT NULL column without a default only in the schema is a rebuild",
 		fold:     strings.Replace(postsDDL, "  title TEXT NOT NULL,\n", "", 1),
 		target:   postsDDL,
 		want:     []string{rebuildPosts},
-		reason:   "column posts.title is in the schema but not in the fold and is not null without a default, which add cannot fill",
-		unclosed: "rule 9 refuses the rebuild while posts.title, not null and new, has no from: or default:; the user supplies one",
+		reason:   "column posts.title is in the schema but not in the fold and is NOT NULL without a default, which add cannot fill",
+		unclosed: "rule 9 refuses the rebuild while posts.title, NOT NULL and new, has no from: or default:; the user supplies one",
 	},
 	{
 		name:   "a column with an expression default only in the schema is a rebuild",
 		fold:   postsDDL,
 		target: strings.Replace(postsDDL, "  body TEXT,\n", "  body TEXT,\n  seen TIMESTAMP DEFAULT (CURRENT_TIMESTAMP),\n", 1),
-		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [not null, ref: > posts.id]\n  body string\n  seen time.Time [default: `CURRENT_TIMESTAMP`]\n}"},
+		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [ref: > posts.id]\n  body string [null]\n  seen time.Time [null, default: `CURRENT_TIMESTAMP`]\n}"},
 		reason: "column comments.seen is in the schema but not in the fold and has an expression default, which add cannot take",
 	},
 	{
 		name:   "a nullable foreign key only in the schema is an add",
 		fold:   strings.Replace(strings.Replace(postsDDL, "  post_id INTEGER NOT NULL,\n", "", 1), "  body TEXT,\n  FOREIGN KEY (post_id) REFERENCES posts (id)\n", "  body TEXT\n", 1),
 		target: strings.Replace(postsDDL, "post_id INTEGER NOT NULL", "post_id INTEGER", 1),
-		want:   []string{"alter table comments {\n  add post_id int [ref: > posts.id]\n}"},
+		want:   []string{"alter table comments {\n  add post_id int [null, ref: > posts.id]\n}"},
 		reason: "column comments.post_id is in the schema but not in the fold",
 	},
 	{
-		name:     "a not null foreign key only in the schema is a rebuild",
+		name:     "a NOT NULL foreign key only in the schema is a rebuild",
 		fold:     strings.Replace(strings.Replace(postsDDL, "  post_id INTEGER NOT NULL,\n", "", 1), "  body TEXT,\n  FOREIGN KEY (post_id) REFERENCES posts (id)\n", "  body TEXT\n", 1),
 		target:   postsDDL,
-		want:     []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [not null, ref: > posts.id]\n  body string\n}"},
+		want:     []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [ref: > posts.id]\n  body string [null]\n}"},
 		reason:   "foreign key comments (post_id) references posts (id) is in the schema but not in the fold",
-		also:     "column comments.post_id is in the schema but not in the fold and is not null without a default, which add cannot fill",
-		unclosed: "rule 9 refuses the rebuild while comments.post_id, not null and new, has no from: or default:; the user supplies one",
+		also:     "column comments.post_id is in the schema but not in the fold and is NOT NULL without a default, which add cannot fill",
+		unclosed: "rule 9 refuses the rebuild while comments.post_id, NOT NULL and new, has no from: or default:; the user supplies one",
 	},
 	{
 		name:   "a foreign key with a default only in the schema is a rebuild",
 		fold:   strings.Replace(strings.Replace(postsDDL, "  post_id INTEGER NOT NULL,\n", "", 1), "  body TEXT,\n  FOREIGN KEY (post_id) REFERENCES posts (id)\n", "  body TEXT\n", 1),
 		target: strings.Replace(postsDDL, "post_id INTEGER NOT NULL", "post_id INTEGER DEFAULT 0", 1),
-		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [default: 0, ref: > posts.id]\n  body string\n}"},
+		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [null, default: 0, ref: > posts.id]\n  body string [null]\n}"},
 		reason: "foreign key comments (post_id) references posts (id) is in the schema but not in the fold",
 		also:   "column comments.post_id is in the schema but not in the fold and is a foreign key with a default, which add cannot make",
 	},
@@ -165,8 +165,8 @@ CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
 		name:   "a nullability change is a rebuild",
 		fold:   strings.Replace(postsDDL, "body TEXT,", "body TEXT NOT NULL,", 1),
 		target: postsDDL,
-		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [not null, ref: > posts.id]\n  body string\n}"},
-		reason: "column comments.body is nullable in the schema, not null in the fold",
+		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [ref: > posts.id]\n  body string [null]\n}"},
+		reason: "column comments.body is nullable in the schema, NOT NULL in the fold",
 	},
 	{
 		name:   "a unique constraint and a unique index are one structure",
@@ -205,14 +205,14 @@ CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
 		name:   "a foreign key change is a rebuild",
 		fold:   strings.Replace(postsDDL, "REFERENCES posts (id)", "REFERENCES posts (id) ON DELETE CASCADE", 1),
 		target: postsDDL,
-		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [not null, ref: > posts.id]\n  body string\n}"},
+		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [ref: > posts.id]\n  body string [null]\n}"},
 		reason: "foreign key comments (post_id) references posts (id) is in the schema but not in the fold; foreign key comments (post_id) references posts (id) [delete: cascade] is in the fold but not in the schema",
 	},
 	{
 		name:   "referential actions read back as delete: and update:",
 		fold:   postsDDL,
 		target: strings.Replace(postsDDL, "REFERENCES posts (id)", "REFERENCES posts (id) ON DELETE CASCADE ON UPDATE SET NULL", 1),
-		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [not null, ref: > posts.id, delete: cascade, update: set null]\n  body string\n}"},
+		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [ref: > posts.id, delete: cascade, update: set null]\n  body string [null]\n}"},
 		reason: "foreign key comments (post_id) references posts (id) [delete: cascade, update: set null] is in the schema but not in the fold",
 	},
 	{
@@ -237,7 +237,7 @@ CREATE UNIQUE INDEX idx_user_tags_tag_user_id ON user_tags (tag, user_id);
 `,
 		want: []string{
 			"drop table a",
-			"create table user_tags {\n  user_id int [not null]\n  tag string [not null]\n  since time.Time [not null, default: `CURRENT_TIMESTAMP`]\n  label string [default: 'it\\'s']\n\n  indexes {\n    (user_id, tag) [pk]\n    (tag, user_id) [unique]\n  }\n}",
+			"create table user_tags {\n  user_id int\n  tag string\n  since time.Time [default: `CURRENT_TIMESTAMP`]\n  label string [null, default: 'it\\'s']\n\n  indexes {\n    (user_id, tag) [pk]\n    (tag, user_id) [unique]\n  }\n}",
 		},
 		reason: "table a is in the fold but not in the schema",
 	},
@@ -254,7 +254,7 @@ CREATE TABLE invoices (
 );
 `,
 		want: []string{
-			"create table invoices {\n  id int [pk, increment]\n  merchant int\n  country string\n\n  indexes {\n    // foreign key invoices (merchant, country) references periods (merchant, country) [delete: cascade] has no shape item: write the table's CREATE TABLE with exec\n  }\n}",
+			"create table invoices {\n  id int [pk, increment]\n  merchant int [null]\n  country string [null]\n\n  indexes {\n    // foreign key invoices (merchant, country) references periods (merchant, country) [delete: cascade] has no shape item: write the table's CREATE TABLE with exec\n  }\n}",
 		},
 		reason:   "table invoices is in the schema but not in the fold; foreign key invoices (merchant, country) references periods (merchant, country) [delete: cascade] is over several columns, which no shape body holds: write the CREATE TABLE of invoices with exec",
 		unclosed: "a shape body holds no composite foreign key; the user writes the CREATE TABLE with exec",

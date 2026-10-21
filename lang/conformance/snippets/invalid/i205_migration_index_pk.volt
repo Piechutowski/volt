@@ -8,7 +8,7 @@ Table users {
 
 Migration 0001__init {
   create table users {
-    id int
+    id int [null]
   }
   create index users id [pk]
 }

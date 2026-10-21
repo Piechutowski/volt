@@ -9,7 +9,7 @@ Table users {
 Migration 0001__init {
   create table users {
     id    int    [pk]
-    email string [not null]
+    email string
   }
 }
 

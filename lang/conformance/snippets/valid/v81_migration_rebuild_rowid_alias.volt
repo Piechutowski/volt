@@ -3,18 +3,18 @@ package db
 
 Table events {
   id   int    [pk, increment]
-  name string [not null]
+  name string
 }
 
 Migration 0001__init {
   create table events {
-    name string [not null]
+    name string
   }
 }
 
 Migration 0002__events_id [irreversible] {
   rebuild table events {
     id   int    [pk, increment]
-    name string [not null]
+    name string
   }
 }

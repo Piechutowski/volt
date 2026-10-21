@@ -78,7 +78,7 @@ func TestDynNameCollisionsMatchWalk(t *testing.T) {
   id int [pk]
   foo_bar int
   limit int
-  status order_status [not null]
+  status order_status
 }
 Enum order_status {
   pending

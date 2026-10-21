@@ -107,13 +107,13 @@ Enum status {
 
 Table posts {
   id     int [pk, increment]
-  title  string    [not null]
-  status status  [not null, default: status.active]
+  title  string
+  status status  [default: status.active]
 }
 
 Table tags {
   id   int [pk, increment]
-  name string    [not null, unique]
+  name string    [unique]
 }
 
 Ref: posts.id < tags.id

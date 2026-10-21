@@ -3,8 +3,8 @@ package db
 
 Table users {
   id    int [pk, increment]
-  email string    [not null, unique]
-  name  string    [not null, default: '']
+  email string    [unique]
+  name  string    [default: '']
 }
 
 Select picked for users where id in :ids [order: (id asc)]

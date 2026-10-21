@@ -93,12 +93,12 @@ func TestMemoMatchesFreshRun(t *testing.T) {
 	decls := len(reuseDecls(t, text))
 	round("first", text, decls)
 	round("no change", text, 0)
-	round("edit one table", strings.Replace(text, "c002 string [not null]", "c002 string [not null, note: 'edited']", 1), 2)
+	round("edit one table", strings.Replace(text, "c002 string\n", "c002 string [note: 'edited']\n", 1), 2)
 	round("fix it", text, 2)
-	round("edit the partial", strings.Replace(text, "created_at time.Time [not null, default: `CURRENT_TIMESTAMP`]", "created_at time.Time [not null]", 1), 7)
+	round("edit the partial", strings.Replace(text, "created_at time.Time [default: `CURRENT_TIMESTAMP`]", "created_at time.Time", 1), 7)
 	f, _, _, _ := parser.ParseFileReuse("schema.volt", text, reuse)
 	info, _ := check.FileMemo(f, &schema)
-	RunMemo(f, info, nil, &memo, ByName("redundantnull"))
+	RunMemo(f, info, nil, &memo, ByName("emptybody"))
 	if memo.Misses != decls {
 		t.Errorf("other rules: judged %d declarations, want %d", memo.Misses, decls)
 	}

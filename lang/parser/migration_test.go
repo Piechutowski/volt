@@ -12,7 +12,7 @@ const migrationSample = `package db
 Migration 0001__create_users {
   create table users {
     id    int    [pk, increment]
-    email string [not null, unique]
+    email string [unique]
 
     indexes {
       email [unique]
@@ -24,14 +24,14 @@ Migration 0001__create_users {
 Migration 0002__users_bio [irreversible, note: 'rebuild'] {
   up {
     alter table users {
-      add bio string
+      add bio string [null]
       rename name to full_name
-      drop legacy string [not null]
+      drop legacy string [default: '']
     }
     rename table users to people
     rebuild table people {
       id  int [pk, increment]
-      bio string [from: ` + "`bio`" + `]
+      bio string [null, from: ` + "`bio`" + `]
     }
     drop index people (email) [unique]
     exec 'VACUUM' [down: 'SELECT 1']

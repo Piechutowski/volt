@@ -12,8 +12,6 @@ import (
 func (c *checker) declsCheck(f *ast.File) {
 	for _, d := range f.Decls {
 		switch d := d.(type) {
-		case *ast.Use:
-			c.useCheck(d)
 		case *ast.Project:
 		case *ast.Table:
 			if ti := c.info.byTable[canonKey(d.Name)]; ti == nil || ti.Decl != d {
@@ -41,14 +39,6 @@ func (c *checker) declsCheck(f *ast.File) {
 			}
 		}
 	}
-}
-
-func (c *checker) useCheck(d *ast.Use) {
-	kw := "use"
-	if d.Reuse {
-		kw = "reuse"
-	}
-	c.errorf(d.Pos(), "file-imports-removed", "%s is not part of the Volt language (§file-imports-removed); files of one package share a namespace without imports, and another package is reached through an import block (§imports)", kw)
 }
 
 func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.SettingList, body []ast.TableItem, isTable bool) {
@@ -115,17 +105,24 @@ func bodyPos(body []ast.TableItem, settings *ast.SettingList) token.Position {
 }
 
 func (c *checker) columnCheck(col *ast.Column) {
-	c.legacyFlagsCheck(col)
 	c.settingsCheck(col.Settings, "columns", columnSettings)
 	c.tagSettingsCheck(col.Settings)
+	c.pkNullCheck(col)
 }
 
-func (c *checker) legacyFlagsCheck(col *ast.Column) {
-	for _, f := range col.LegacyFlags {
-		low := strings.ToLower(f.Name())
-		if f.Quoted() || (low != "pk" && low != "unique") {
-			c.errorf(f.Pos(), "columns", "only the legacy flags pk and unique may follow the column type; found %q", f.Name())
-		}
+// pkNullCheck refuses null on the column that carries pk: a key column
+// is never NULL (spec §columns).
+func (c *checker) pkNullCheck(col *ast.Column) {
+	if s := col.Settings.Get("null"); s != nil && col.Settings.Get("pk") != nil {
+		c.errorf(s.Pos(), "columns", "column %q carries pk and null: a key column is never NULL (§columns)", col.Name.Name())
+	}
+}
+
+// pkIndexNullCheck refuses null on a member of the [pk] index whose
+// columns pkIndex names: a key column is never NULL (spec §columns).
+func (c *checker) pkIndexNullCheck(col *ast.Column, pkIndex map[string]bool) {
+	if s := col.Settings.Get("null"); s != nil && pkIndex[col.Name.Name()] && col.Settings.Get("pk") == nil {
+		c.errorf(s.Pos(), "columns", "column %q is a member of the [pk] index and carries null: a key column is never NULL (§columns)", col.Name.Name())
 	}
 }
 

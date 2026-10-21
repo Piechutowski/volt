@@ -109,7 +109,7 @@ func TestLSPSession(t *testing.T) {
 
 Table posts {
 	id int [pk, increment]
-	title string [not null]
+	title string
 
 	validators {
 		TitleShape(title)
@@ -124,7 +124,7 @@ Scope / {
 Migration 0001__posts {
 	create table posts {
 		id int [pk, increment]
-		title string [not null]
+		title string
 	}
 }
 `,

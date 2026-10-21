@@ -20,14 +20,14 @@ TablePartial base {
 
 Table users as U [note: 'people'] {
   ~base
-  name string [not null, unique]
-  status status [default: status.active]
+  name string [unique]
+  status status [null, default: status.active]
 }
 
 Table core.orders {
   id int [pk]
-  user_id int
-  owner_name string [ref: > U.name]
+  user_id int [null]
+  owner_name string [null, ref: > U.name]
 }
 
 Ref: users.id < core.orders.user_id
@@ -77,7 +77,7 @@ func TestDiagnosticsOnError(t *testing.T) {
 }
 
 func TestVetWarningsSurface(t *testing.T) {
-	d := doc(t, "Table t {\n  id int [pk, null]\n}\n")
+	d := doc(t, "Table t {\n  id int [pk]\n  indexes {\n  }\n}\n")
 	found := false
 	for _, dg := range d.Diags {
 		if strings.HasPrefix(dg.Code, "vet/") {
@@ -90,7 +90,7 @@ func TestVetWarningsSurface(t *testing.T) {
 }
 
 func TestModelnameAnalyzerExcluded(t *testing.T) {
-	d := doc(t, "Table status {\n  id int [pk]\n}\nTable other {\n  id int [pk]\n  s int [ref: > status.id]\n}\n")
+	d := doc(t, "Table status {\n  id int [pk]\n}\nTable other {\n  id int [pk]\n  s int [null, ref: > status.id]\n}\n")
 	for _, dg := range d.Diags {
 		if strings.Contains(dg.Code, "modelname") {
 			t.Fatalf("modelname analyzer should be excluded, got %v", dg)
@@ -248,20 +248,20 @@ func TestCompletionColumnSettings(t *testing.T) {
 	text := "Table t {\n  id int [p\n}\n"
 	d := doc(t, text)
 	items := d.Complete(protocol.Position{Line: 1, Character: protocol.UInteger(len("  id int [p"))})
-	if !hasLabel(items, "pk") || !hasLabel(items, "not null") {
+	if !hasLabel(items, "pk") || !hasLabel(items, "null") {
 		t.Fatalf("column settings completion missing: %v", labels(items))
 	}
 }
 
 func TestCompletionDefaultEnumValues(t *testing.T) {
-	text := "Enum status {\n  active\n  banned\n}\n\nTable t {\n  s status [not null, default: status.\n}\n"
+	text := "Enum status {\n  active\n  banned\n}\n\nTable t {\n  s status [unique, default: status.\n}\n"
 	d := doc(t, text)
-	line := "  s status [not null, default: status."
+	line := "  s status [unique, default: status."
 	items := d.Complete(protocol.Position{Line: 6, Character: protocol.UInteger(len(line))})
 	if !hasLabel(items, "active") || !hasLabel(items, "banned") {
 		t.Fatalf("enum value completion missing: %v", labels(items))
 	}
-	if hasLabel(items, "pk") || hasLabel(items, "not null") {
+	if hasLabel(items, "pk") || hasLabel(items, "null") {
 		t.Fatalf("column settings leaked into an enum value position: %v", labels(items))
 	}
 }
@@ -385,7 +385,7 @@ func labels(items []protocol.CompletionItem) []string {
 }
 
 func TestCRLFDocumentPositions(t *testing.T) {
-	text := "Table posts {\r\n  id int [pk]\r\n  title text\r\n  title text\r\n}\r\n\r\nRef: posts.id > posts.title\r\n"
+	text := "Table posts {\r\n  id int [pk]\r\n  title text [null]\r\n  title text [null]\r\n}\r\n\r\nRef: posts.id > posts.title\r\n"
 	d := doc(t, text)
 	found := false
 	for _, dg := range d.LSPDiagnostics() {

@@ -27,7 +27,6 @@ const (
 type settingSpec struct {
 	kinds      map[string]valueKind
 	repeatable map[string]bool
-	synonyms   map[string]string
 	conflicts  [][2]string
 	// forbidden maps a setting name to the diagnostic it gets: a
 	// setting known elsewhere that this construct refuses for a reason.
@@ -40,16 +39,14 @@ var (
 	}
 	columnSettings = settingSpec{
 		kinds: map[string]valueKind{
-			"pk": flagOnly, "primary key": flagOnly,
-			"null": flagOnly, "not null": flagOnly,
+			"pk": flagOnly, "null": flagOnly,
 			"unique": flagOnly, "increment": flagOnly,
 			"default": defaultVal,
 			"note":    strValue, "ref": refVal, "tag": strValue,
 			"required": flagOnly,
 		},
 		repeatable: map[string]bool{"ref": true, "tag": true},
-		synonyms:   map[string]string{"primary key": "pk"},
-		conflicts:  [][2]string{{"null", "not null"}, {"required", "null"}, {"required", "default"}, {"required", "increment"}},
+		conflicts:  [][2]string{{"required", "null"}, {"required", "default"}, {"required", "increment"}},
 	}
 	indexSettings = settingSpec{
 		kinds: map[string]valueKind{
@@ -81,10 +78,6 @@ func (c *checker) settingsCheck(sl *ast.SettingList, section string, spec settin
 	}
 	seen := map[string]bool{}
 	for _, s := range sl.Settings {
-		canon := s.Name
-		if alt, ok := spec.synonyms[canon]; ok {
-			canon = alt
-		}
 		if why, bad := spec.forbidden[s.Name]; bad {
 			c.errorf(s.Pos(), section, "%s", why)
 			continue
@@ -94,10 +87,10 @@ func (c *checker) settingsCheck(sl *ast.SettingList, section string, spec settin
 			c.errorf(s.Pos(), section, "unknown setting %q", s.Name)
 			continue
 		}
-		if seen[canon] && !spec.repeatable[canon] {
+		if seen[s.Name] && !spec.repeatable[s.Name] {
 			c.errorf(s.Pos(), "settings-lists", "setting %q may appear at most once", s.Name)
 		}
-		seen[canon] = true
+		seen[s.Name] = true
 		c.settingValueCheck(s, section, kind)
 	}
 	for _, pair := range spec.conflicts {
@@ -266,12 +259,7 @@ func (c *checker) incrementCheck(ti *TableInfo) {
 				"increment on %q (%s): only an int column can auto-increment (§columns, §mapping-to-sqlite-ddl)", name, col.Type.String())
 			continue
 		}
-		isPK := col.Settings.Get("pk") != nil || col.Settings.Get("primary key") != nil
-		for _, f := range col.LegacyFlags {
-			if strings.EqualFold(f.Name(), "pk") {
-				isPK = true
-			}
-		}
+		isPK := col.Settings.Get("pk") != nil
 		switch {
 		case compositePK:
 			c.errorf(inc.Pos(), "columns",
@@ -291,10 +279,6 @@ func (c *checker) requiredCheck(ti *TableInfo) {
 			continue
 		}
 		name := col.Name.Name()
-		if isNullable(col) {
-			c.errorf(req.Pos(), "columns", "required on %q needs not null: a nullable column has no empty value to refuse, NULL is absence (§columns)", name)
-			continue
-		}
 		if !cd.Type.Known() {
 			continue
 		}

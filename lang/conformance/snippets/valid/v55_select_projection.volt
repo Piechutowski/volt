@@ -5,16 +5,16 @@ package db
 
 Table page_views {
   id int [pk, increment]
-  site string [not null]
-  day int [not null]
-  hits int [not null, default: 0]
+  site string
+  day int
+  hits int [default: 0]
 }
 
 Table link_clicks {
   id int [pk, increment]
-  site string [not null]
-  day int [not null]
-  target string [not null, default: '']
+  site string
+  day int
+  target string [default: '']
 }
 
 Group metrics {

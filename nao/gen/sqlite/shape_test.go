@@ -21,23 +21,23 @@ func TestTableDDLOneToOneAndActions(t *testing.T) {
 	}{
 		{
 			name: "a plain one-to-one adds UNIQUE",
-			body: "    id      int [pk, increment]\n    user_id int [not null, ref: - users.id]\n",
+			body: "    id      int [pk, increment]\n    user_id int [ref: - users.id]\n",
 			want: "CREATE TABLE profiles (\n  id INTEGER PRIMARY KEY,\n  user_id INTEGER NOT NULL,\n  FOREIGN KEY (user_id) REFERENCES users (id),\n  UNIQUE (user_id)\n)",
 		},
 		{
 			name:    "a unique index of the body stands in for UNIQUE",
-			body:    "    id      int [pk, increment]\n    user_id int [not null, ref: - users.id]\n\n    indexes {\n      user_id [unique]\n    }\n",
+			body:    "    id      int [pk, increment]\n    user_id int [ref: - users.id]\n\n    indexes {\n      user_id [unique]\n    }\n",
 			want:    "CREATE TABLE profiles (\n  id INTEGER PRIMARY KEY,\n  user_id INTEGER NOT NULL,\n  FOREIGN KEY (user_id) REFERENCES users (id)\n)",
 			indexes: []string{"CREATE UNIQUE INDEX idx_profiles_user_id ON profiles (user_id)"},
 		},
 		{
 			name: "a unique column takes no second UNIQUE",
-			body: "    id      int [pk, increment]\n    user_id int [not null, unique, ref: - users.id]\n",
+			body: "    id      int [pk, increment]\n    user_id int [unique, ref: - users.id]\n",
 			want: "CREATE TABLE profiles (\n  id INTEGER PRIMARY KEY,\n  user_id INTEGER NOT NULL UNIQUE,\n  FOREIGN KEY (user_id) REFERENCES users (id)\n)",
 		},
 		{
 			name: "delete: and update: follow the reference",
-			body: "    id      int [pk, increment]\n    user_id int [ref: > users.id, delete: cascade, update: set null]\n",
+			body: "    id      int [pk, increment]\n    user_id int [null, ref: > users.id, delete: cascade, update: set null]\n",
 			want: "CREATE TABLE profiles (\n  id INTEGER PRIMARY KEY,\n  user_id INTEGER,\n  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE SET NULL\n)",
 		},
 	}
@@ -67,9 +67,9 @@ func TestColumnDDLActions(t *testing.T) {
 		column, want string
 		unique       bool
 	}{
-		{"user_id int [ref: > users.id, delete: set default]", "user_id INTEGER REFERENCES users (id) ON DELETE SET DEFAULT", false},
-		{"user_id int [ref: > users.id, update: no action]", "user_id INTEGER REFERENCES users (id) ON UPDATE NO ACTION", false},
-		{"twin_id int [ref: - users.id]", "twin_id INTEGER REFERENCES users (id)", true},
+		{"user_id int [null, ref: > users.id, delete: set default]", "user_id INTEGER REFERENCES users (id) ON DELETE SET DEFAULT", false},
+		{"user_id int [null, ref: > users.id, update: no action]", "user_id INTEGER REFERENCES users (id) ON UPDATE NO ACTION", false},
+		{"twin_id int [null, ref: - users.id]", "twin_id INTEGER REFERENCES users (id)", true},
 	}
 	for _, tc := range cases {
 		body := parsedBody(t, "create table profiles {\n    "+tc.column+"\n  }")

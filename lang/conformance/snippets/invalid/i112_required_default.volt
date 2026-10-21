@@ -4,5 +4,5 @@ package db
 
 Table accounts {
   id   int [pk]
-  name string [not null, required, default: '']
+  name string [required, default: '']
 }

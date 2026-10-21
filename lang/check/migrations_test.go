@@ -11,12 +11,12 @@ import (
 
 const migrationsSrc = `Table users {
   id   int    [pk, increment]
-  name string [not null]
+  name string
 }
 
 Migration 0010__users_name {
   alter table users {
-    add name string [not null, default: '']
+    add name string [default: '']
   }
 }
 
@@ -88,13 +88,13 @@ func equalBools(a, b []bool) bool {
 func TestMigrationRebuildSourcesFollowRenames(t *testing.T) {
 	src := `Table people {
   id   int    [pk]
-  name string [not null]
+  name string
 }
 
 Migration 0001__init {
   create table users {
     id        int    [pk]
-    full_name string
+    full_name string [null]
   }
 }
 
@@ -105,14 +105,14 @@ Migration 0002__people [irreversible] {
   }
   rebuild table people {
     id   int    [pk]
-    name string [not null]
+    name string
   }
 }
 
 Migration 0003__unknown_table [irreversible] {
   rebuild table audit {
     id int [pk]
-    at string [not null]
+    at string
   }
 }
 `

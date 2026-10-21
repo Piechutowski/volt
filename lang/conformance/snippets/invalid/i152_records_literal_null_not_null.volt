@@ -2,7 +2,7 @@
 // want: is null, but the column is not nullable
 Table t {
   id int [pk]
-  n int [not null]
+  n int
   records {
     1, null
   }

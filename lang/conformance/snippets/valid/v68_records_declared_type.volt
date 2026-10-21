@@ -3,8 +3,8 @@ Type money.Money int from 'example.com/app/money'
 Type Slug string
 Table products {
   id int [pk]
-  price money.Money [not null]
-  slug Slug [not null]
+  price money.Money
+  slug Slug
   records {
     1, 1999, 'first'
     2, -5, 'second'

@@ -34,12 +34,6 @@ i08_empty_table.volt:2:1: error: spec/table: table "empty" must contain at least
 ## i09_duplicate_setting.volt
 i09_duplicate_setting.volt:3:19: error: spec/settings-lists: setting "unique" may appear at most once
 
-## i10_null_not_null.volt
-i10_null_not_null.volt:3:10: error: spec/columns: "null" and "not null" cannot both be set
-
-## i11_pk_primary_key.volt
-i11_pk_primary_key.volt:3:15: error: spec/settings-lists: setting "primary key" may appear at most once
-
 ## i126_type_storage.volt
 i126_type_storage.volt:3:11: error: spec/types: storage type "text" of Type "Slug" is not a built-in: bool, int, float64, string, []byte or time.Time (§types)
 
@@ -68,7 +62,7 @@ i132_default_wrong_enum.volt:5:22: error: spec/default-values: default of "s": "
 i133_increment_declared_type.volt:5:14: error: spec/columns: increment on "id" (ID): only an int column can auto-increment (§columns, §mapping-to-sqlite-ddl)
 
 ## i134_default_null_not_null.volt
-i134_default_null_not_null.volt:4:29: error: spec/default-values: default of "n" is null, but the column is not nullable (§default-values)
+i134_default_null_not_null.volt:4:19: error: spec/default-values: default of "n" is null, but the column is not nullable (§default-values)
 
 ## i135_records_type_mismatch.volt
 i135_records_type_mismatch.volt:7:8: error: spec/records-sample-data: record value for "n" (int) must be an integer, found string (§records-sample-data)
@@ -152,8 +146,23 @@ i21_ref_endpoint_no_column.volt:4:12: error: syntax: endpoint must reference a c
 ## i220_unknown_type_partial_once.volt
 i220_unknown_type_partial_once.volt:4:11: error: spec/columns: column "version": unknown type "int64"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
 
+## i226_pk_null.volt
+i226_pk_null.volt:4:21: error: spec/columns: column "id" carries pk and null: a key column is never NULL (§columns)
+
+## i227_pk_index_member_null.volt
+i227_pk_index_member_null.volt:5:19: error: spec/columns: column "tag" is a member of the [pk] index and carries null: a key column is never NULL (§columns)
+
+## i228_bare_pk_after_type.volt
+i228_bare_pk_after_type.volt:4:10: error: syntax: expected a settings list or end of line after the column type (§columns), found identifier "pk"
+
+## i229_primary_key_unknown.volt
+i229_primary_key_unknown.volt:4:11: error: spec/columns: unknown setting "primary key"
+
 ## i22_empty_enum.volt
 i22_empty_enum.volt:2:1: error: spec/enum: enum "empty_status" must contain at least one value
+
+## i230_use_unknown_element.volt
+i230_use_unknown_element.volt:3:1: error: syntax: unknown element type "use" (§program-structure)
 
 ## i23_duplicate_enum_values.volt
 i23_duplicate_enum_values.volt:4:3: error: spec/namespaces-and-uniqueness: duplicate enum value "active"
@@ -175,12 +184,6 @@ i28_bad_tablegroup_setting.volt:3:15: error: spec/tablegroup: unknown setting "h
 
 ## i29_duplicate_category.volt
 i29_duplicate_category.volt:4:3: error: spec/diagramview: category "Tables" may appear at most once per view
-
-## i30_bad_import_kind.volt
-i30_bad_import_kind.volt:2:1: error: spec/file-imports-removed: use is not part of the Volt language (§file-imports-removed); files of one package share a namespace without imports, and another package is reached through an import block (§imports)
-
-## i31_import_missing_from.volt
-i31_import_missing_from.volt:2:7: error: syntax: expected 'from' in import statement (§file-imports-removed)
 
 ## i32_settings_next_line.volt
 i32_settings_next_line.volt:4:3: error: syntax: expected a column, indexes, validators, Note, records or '~injection' in Table body, found '[' "["
@@ -218,11 +221,6 @@ i42_bare_ident_record.volt:5:17: error: spec/records-sample-data: record values 
 ## i43_bare_ident_default.volt
 i43_bare_ident_default.volt:3:19: error: spec/default-values: default value must be a number, string, boolean, null, expression or enum constant; found bare identifier "something"
 
-## i44_file_imports.volt
-i44_file_imports.volt:2:1: error: spec/file-imports-removed: use is not part of the Volt language (§file-imports-removed); files of one package share a namespace without imports, and another package is reached through an import block (§imports)
-i44_file_imports.volt:3:1: error: spec/file-imports-removed: use is not part of the Volt language (§file-imports-removed); files of one package share a namespace without imports, and another package is reached through an import block (§imports)
-i44_file_imports.volt:12:1: error: spec/file-imports-removed: reuse is not part of the Volt language (§file-imports-removed); files of one package share a namespace without imports, and another package is reached through an import block (§imports)
-
 ## i61_tag_malformed.volt
 i61_tag_malformed.volt:4:21: error: spec/columns: tag "json=name" is not one key:"value" pair — write e.g. 'json:"name"' (§columns)
 
@@ -236,7 +234,7 @@ i63_tag_duplicate_key.volt:4:38: error: spec/columns: tag key "json" appears mor
 i78_increment_varchar.volt:4:20: error: spec/columns: increment on "code" (string): only an int column can auto-increment (§columns, §mapping-to-sqlite-ddl)
 
 ## i79_increment_not_pk.volt
-i79_increment_not_pk.volt:6:26: error: spec/columns: increment on "counter": only the primary key auto-increments; elsewhere the keyword would be silently ignored while no changeset ever marks the column (§columns, §mapping-to-sqlite-ddl)
+i79_increment_not_pk.volt:6:16: error: spec/columns: increment on "counter": only the primary key auto-increments; elsewhere the keyword would be silently ignored while no changeset ever marks the column (§columns, §mapping-to-sqlite-ddl)
 
 ## i80_increment_composite_pk.volt
 i80_increment_composite_pk.volt:4:16: error: spec/columns: increment on "user_id": a composite primary key has no auto-assigned column — SQLite auto-assigns only the single-column integer key (§columns, §mapping-to-sqlite-ddl)

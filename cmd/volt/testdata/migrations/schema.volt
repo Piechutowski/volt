@@ -4,9 +4,9 @@ package blog
 
 Table posts {
   id    int    [pk, increment]
-  title string [not null]
-  body  string
-  views int    [not null, default: 0]
+  title string
+  body  string [null]
+  views int    [default: 0]
 
   indexes {
     views
@@ -15,6 +15,6 @@ Table posts {
 
 Table comments {
   id      int    [pk, increment]
-  post_id int    [not null, ref: > posts.id]
-  body    string [not null]
+  post_id int    [ref: > posts.id]
+  body    string
 }

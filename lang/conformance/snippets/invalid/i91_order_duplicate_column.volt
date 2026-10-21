@@ -4,7 +4,7 @@ package db
 
 Table page_views {
   id int [pk]
-  day int [not null]
+  day int
 }
 
 Select rows for page_views [order: (day desc, day asc)]

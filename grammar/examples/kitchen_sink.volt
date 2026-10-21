@@ -11,12 +11,6 @@ Project shop_db {
   '''
 }
 
-use * from './base'
-reuse {
-  table auth.users as u
-  schema billing
-} from './auth'
-
 Enum status {
   active [note: 'operational']
   retired
@@ -29,22 +23,20 @@ Enum v2.job_status {
 }
 
 TablePartial base_template [headercolor: #ff0000] {
-  id int [pk, not null, increment]
-  created_at time.Time [default: `now()`]
+  id int [pk, increment]
+  created_at time.Time [null, default: `now()`]
 }
 
 Table users as U [headercolor: #3498DB, note: 'main table'] {
   ~base_template
-  name string [not null, unique]
-  full_name "double precision"
-  status status [not null, default: status.active]
-  balance float64 [default: -100.5]
-  2fa_enabled bool [default: false]
-  legacy_col int pk
-  other unique
-  job v2.job_status [default: null]
-  motto string [default: 'be kind']
-  ref_col int [ref: > core.orders.id, ref: - U.name]
+  name string [unique]
+  full_name "double precision" [null]
+  status status [default: status.active]
+  balance float64 [null, default: -100.5]
+  2fa_enabled bool [null, default: false]
+  job v2.job_status [null, default: null]
+  motto string [null, default: 'be kind']
+  ref_col int [null, ref: > core.orders.id, ref: - U.name]
 
   Note: 'user accounts'
 
@@ -66,8 +58,8 @@ Table users as U [headercolor: #3498DB, note: 'main table'] {
 
 Table core.orders {
   id int [pk]
-  user_id int
-  total float64
+  user_id int [null]
+  total float64 [null]
 }
 
 Ref: U.id < core.orders.user_id [delete: cascade, update: no action]
@@ -79,7 +71,7 @@ Ref fk_composite {
 Ref: users.id <> core.orders.id
 
 Table empty_target {
-  x int
+  x int [null]
 }
 
 Records core.orders(id, user_id, total) {

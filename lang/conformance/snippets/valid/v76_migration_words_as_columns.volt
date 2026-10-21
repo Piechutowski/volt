@@ -25,7 +25,7 @@ Migration 0001__create_t {
   }
   alter table t {
     rename to to down
-    drop index string
-    add rename string
+    drop index string [null]
+    add rename string [null]
   }
 }

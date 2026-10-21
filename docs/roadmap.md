@@ -21,6 +21,7 @@ report engine when a consumer exists.
   - [x] Parse and check by declaration; routes lowered per scope item
   - [x] Named placeholders, Go references checked by spelling
 - [x] Schema core: Project, Table, TablePartial, Records, Enum, Type, Ref, TableGroup, Notes, DiagramView
+  - [x] One spelling per meaning: `pk` is the key, a column is NOT NULL unless it carries `null`, settings follow the type in brackets only, the files of a package share a namespace without imports
 - [x] `Migration`: the element, its contextual keywords and its twelve checks; what runs it is under the data layer
   - [x] Column types are a closed Go set (`bool`, `int`, `float64`, `string`, `[]byte`, `time.Time`), enums, and `Type` declarations; defaults are typed
 - [~] Schema extensions

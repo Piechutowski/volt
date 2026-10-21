@@ -4,7 +4,7 @@ package db
 
 Table users {
   id      int       [pk]
-  created time.Time [not null]
+  created time.Time
 }
 
 Migration 0001__init {
@@ -15,6 +15,6 @@ Migration 0001__init {
 
 Migration 0002__created {
   alter table users {
-    add created time.Time [not null, default: `CURRENT_TIMESTAMP`]
+    add created time.Time [default: `CURRENT_TIMESTAMP`]
   }
 }

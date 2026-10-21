@@ -12,25 +12,6 @@ func Children(n Node) []Node {
 				out = append(out, d)
 			}
 		}
-	case *Use:
-		for _, it := range n.Items {
-			if it != nil {
-				out = append(out, it)
-			}
-		}
-		if n.Path != nil {
-			out = append(out, n.Path)
-		}
-	case *UseItem:
-		if n.Kind != nil {
-			out = append(out, n.Kind)
-		}
-		if n.Name != nil {
-			out = append(out, n.Name)
-		}
-		if n.Alias != nil {
-			out = append(out, n.Alias)
-		}
 	case *Project:
 		if n.Name != nil {
 			out = append(out, n.Name)
@@ -88,11 +69,6 @@ func Children(n Node) []Node {
 		}
 		if n.Settings != nil {
 			out = append(out, n.Settings)
-		}
-		for _, f := range n.LegacyFlags {
-			if f != nil {
-				out = append(out, f)
-			}
 		}
 	case *TypeRef:
 		if n.Name != nil {

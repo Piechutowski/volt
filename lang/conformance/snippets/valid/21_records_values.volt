@@ -5,7 +5,7 @@ Enum Status { active
 Table users {
   id int
   name string
-  age int
+  age int [null]
   status Status
   created_at time.Time
 

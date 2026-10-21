@@ -3,7 +3,7 @@ package db
 
 Table page_views {
   id int [pk]
-  site string [not null]
+  site string
 }
 
 Select nothing (* \ (id, site)) for page_views

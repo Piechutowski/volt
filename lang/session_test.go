@@ -110,7 +110,7 @@ func TestSessionReadsWhatIsOnDisk(t *testing.T) {
 		}
 	}
 	write("go.mod", "module disk\n")
-	write("db/schema.volt", "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string [not null]\n\ttitle string\n\ttitle string\n\n\tvalidators {\n\t\tEmailValid(email)\n\t}\n}\n")
+	write("db/schema.volt", "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string\n\ttitle string\n\ttitle string\n\n\tvalidators {\n\t\tEmailValid(email)\n\t}\n}\n")
 	write("db/checks.go", "package db\n\nfunc EmailValid(email string) error { return nil }\n")
 	sameStamp := func(name, from, to string) {
 		t.Helper()
@@ -276,7 +276,7 @@ func TestSessionBindsUnresolvedSelects(t *testing.T) {
 		return path
 	}
 	write("go.mod", "module unresolved\n")
-	schema := "package db\n\nTable authors {\n\tid int [pk, increment]\n\trank int32 [not null]\n}\n\nTable tags {\n\tid int [pk, increment]\n\tname string [not null]\n}\n\nSelect ranked for authors where rank >= :min\n"
+	schema := "package db\n\nTable authors {\n\tid int [pk, increment]\n\trank int32\n}\n\nTable tags {\n\tid int [pk, increment]\n\tname string\n}\n\nSelect ranked for authors where rank >= :min\n"
 	schemaPath := write("db/schema.volt", schema)
 	routes := "package app\n\nimport (\n\tdb\n)\n\nScope /api {\n\tget /ranked db.AuthorRanked [name: RankedRows]\n\tget /ranked/:min db.AuthorRanked [name: RankedFrom]\n\tdataset db.ranked\n}\n"
 	routesPath := write("app/routes.volt", routes)
@@ -311,7 +311,7 @@ func TestSessionBindsUnresolvedSelects(t *testing.T) {
 	routed := strings.Replace(routes, "Scope /api {\n", "Scope /api {\n\tget /tags db.TagList\n", 1)
 	round("route edit", map[string]string{routesPath: routed})
 	reused := s.Stats().SelectsReused
-	noted := strings.Replace(schema, "name string [not null]", "name string [not null, note: 'shown']", 1)
+	noted := strings.Replace(schema, "name string\n", "name string [note: 'shown']\n", 1)
 	round("data edit", map[string]string{schemaPath: noted, routesPath: routed})
 	if s.Stats().SelectsReused == reused {
 		t.Errorf("the data edit checked the unresolved select afresh; want it answered by the memo")
@@ -369,8 +369,8 @@ func TestSessionReparsesOneDeclaration(t *testing.T) {
 	all := work{whole.Parsed, 12, 12, 12, 13, 17, whole.Parsed}
 	round("first", text, all)
 	one := work{1, 1, 1, 1, 2, 2, 2}
-	round("edit one table", strings.Replace(text, "c002 string [not null]", "c002 string [not null, note: 'edited']", 1), one)
-	round("break it", strings.Replace(text, "c002 string [not null]", "c002 string [not null", 1), one)
+	round("edit one table", strings.Replace(text, "c002 string\n", "c002 string [note: 'edited']\n", 1), one)
+	round("break it", strings.Replace(text, "c002 string\n", "c002 string [null\n", 1), one)
 	round("fix it", text, one)
 	cur := strings.Replace(text, "get /events        volt.Events", "get /stream        volt.Events", 1)
 	round("edit a route", cur, work{1, 0, 0, 0, 0, 17, 1})

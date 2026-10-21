@@ -5,7 +5,7 @@ Table "users" {
   email string [unique]
   foo_bar int
   total int
-  status post_status [not null]
+  status post_status
   new int
   indexes {
     id [unique]
@@ -51,7 +51,7 @@ Table posts as P {
   ~audit_a
   ~audit_b
   draft int [null]
-  key int pk
+  key int [pk]
 }
 
 Table core.things {

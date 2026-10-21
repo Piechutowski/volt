@@ -9,20 +9,20 @@ Table users {
 }
 Table core.users [note: 'Same base name as public users; schema prefix disambiguates'] {
   id int [pk]
-  api_key string [not null]
-  homepage_url string
-  http_status int
-  "full name" string [not null, note: 'Quoted name with a space']
-  precision_value float64
-  balance float64
-  kind core.audit_kind [not null]
-  type string [note: 'Column named like a Go keyword']
-  func int
+  api_key string
+  homepage_url string [null]
+  http_status int [null]
+  "full name" string [note: 'Quoted name with a space']
+  precision_value float64 [null]
+  balance float64 [null]
+  kind core.audit_kind
+  type string [null, note: 'Column named like a Go keyword']
+  func int [null]
 }
 Table "2fa_codes" {
-  code string [not null]
-  user_id int [not null, ref: > users.id]
-  expires_at time.Time [not null]
+  code string
+  user_id int [ref: > users.id]
+  expires_at time.Time
   indexes {
     (user_id, code) [pk]
   }

@@ -3,8 +3,8 @@ package db
 
 Table accounts {
   id      int    [pk, increment]
-  owner   string [not null]
-  balance int    [not null, default: 0]
+  owner   string
+  balance int    [default: 0]
 
   indexes {
     owner [unique]
@@ -16,8 +16,8 @@ Table accounts {
 Migration 0001__create_accounts {
   create table ledgers {
     id    int    [pk, increment]
-    owner string [not null]
-    total int    [not null, default: 0]
+    owner string
+    total int    [default: 0]
 
     indexes {
       owner
@@ -26,8 +26,8 @@ Migration 0001__create_accounts {
   rename table ledgers to accounts
   alter table accounts {
     rename total to balance
-    add note string
-    drop note string
+    add note string [null]
+    drop note string [null]
   }
   drop index accounts owner
   create index accounts owner [unique]
@@ -37,8 +37,8 @@ Migration 0001__create_accounts {
 Migration 0002__accounts_rebuild [irreversible] {
   rebuild table accounts {
     id      int    [pk, increment]
-    owner   string [not null]
-    balance int    [not null, default: 0, from: `balance * 100`]
+    owner   string
+    balance int    [default: 0, from: `balance * 100`]
 
     indexes {
       owner [unique]

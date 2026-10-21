@@ -220,7 +220,7 @@ func (c *checker) typeDeclCheck(d *ast.TypeDecl) *TypeInfo {
 }
 
 // pkIndexColumns names the columns of the composite primary key, which
-// are not nullable whatever their settings say (spec §indexes).
+// never carry null (spec §columns, §indexes).
 func pkIndexColumns(indexes []*ast.Index) map[string]bool {
 	out := map[string]bool{}
 	for _, ix := range indexes {
@@ -239,7 +239,8 @@ func pkIndexColumns(indexes []*ast.Index) map[string]bool {
 func (c *checker) typesResolve(ti *TableInfo) {
 	pkIndex := pkIndexColumns(ti.Indexes)
 	for _, cd := range ti.Columns {
-		cd.Nullable = isNullable(cd.Col) && !pkIndex[cd.Col.Name.Name()]
+		cd.Nullable = isNullable(cd.Col)
+		c.pkIndexNullCheck(cd.Col, pkIndex)
 		cd.Type = c.env.resolve(cd.Col.Type)
 		if !cd.Type.Known() {
 			if c.env.failed[cd.Col.Type.String()] {
@@ -376,14 +377,6 @@ func defaultKind(v ast.Node) string {
 	return "value"
 }
 
-func isNullable(col *ast.Column) bool {
-	if col.Settings.Get("not null") != nil || col.Settings.Get("pk") != nil || col.Settings.Get("primary key") != nil {
-		return false
-	}
-	for _, f := range col.LegacyFlags {
-		if strings.EqualFold(f.Name(), "pk") {
-			return false
-		}
-	}
-	return true
-}
+// isNullable reports whether the column admits NULL, which the null
+// setting alone decides (spec §columns).
+func isNullable(col *ast.Column) bool { return col.Settings.Get("null") != nil }

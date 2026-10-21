@@ -8,14 +8,14 @@ Table users {
 Migration 0001__init {
   create table users {
     id    int [pk, increment]
-    hits  int [not null, default: 0]
-    owner int [ref: > users.id]
+    hits  int [default: 0]
+    owner int [null, ref: > users.id]
   }
 }
 
 Migration 0002__users_trim {
   alter table users {
-    drop hits int [not null, default: 0]
-    drop owner int [default: null, ref: > users.id]
+    drop hits int [default: 0]
+    drop owner int [null, default: null, ref: > users.id]
   }
 }

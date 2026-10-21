@@ -130,7 +130,7 @@ func (x *SettingList) Get(name string) *Setting {
 }
 
 // Setting is one entry: a flag (pk) or a key-value pair (note: '...').
-// Name is the canonical lowercased, space-normalized form ("not null").
+// Name is the canonical lowercased, space-normalized form ("no transaction").
 type Setting struct {
 	NameTok token.Token // first word of the name
 	Name    string
@@ -159,49 +159,10 @@ func (f *File) Pos() token.Position {
 }
 func (f *File) End() token.Position { return f.EOF }
 
-// HasImports reports whether the file contains use/reuse statements
-// (spec §file-imports-removed).
-func (f *File) HasImports() bool {
-	for _, d := range f.Decls {
-		if _, ok := d.(*Use); ok {
-			return true
-		}
-	}
-	return false
-}
-
 // Decl is implemented by all top-level declarations.
 type Decl interface {
 	Node
 	declNode()
-}
-
-// Use is a use/reuse import statement (spec §file-imports-removed).
-type Use struct {
-	UsePos   token.Position
-	Reuse    bool
-	Wildcard bool
-	Items    []*UseItem // nil when Wildcard
-	Path     *BasicLit  // string literal
-}
-
-func (d *Use) Pos() token.Position { return d.UsePos }
-func (d *Use) End() token.Position { return d.Path.End() }
-func (d *Use) declNode()           {}
-
-// UseItem is one selective-import item: kind name [as alias].
-type UseItem struct {
-	Kind  *Ident
-	Name  *QualName
-	Alias *Ident // nil if not aliased
-}
-
-func (x *UseItem) Pos() token.Position { return x.Kind.Pos() }
-func (x *UseItem) End() token.Position {
-	if x.Alias != nil {
-		return x.Alias.End()
-	}
-	return x.Name.End()
 }
 
 // Project is a Project element (spec §project).
@@ -263,19 +224,15 @@ type TableItem interface {
 
 // Column is one column definition (spec §columns).
 type Column struct {
-	Name        *Ident
-	Type        *TypeRef
-	LegacyFlags []*Ident // bare pk/unique between type and settings (§columns)
-	Settings    *SettingList
+	Name     *Ident
+	Type     *TypeRef
+	Settings *SettingList
 }
 
 func (x *Column) Pos() token.Position { return x.Name.Pos() }
 func (x *Column) End() token.Position {
 	if x.Settings != nil {
 		return x.Settings.End()
-	}
-	if n := len(x.LegacyFlags); n > 0 {
-		return x.LegacyFlags[n-1].End()
 	}
 	return x.Type.End()
 }

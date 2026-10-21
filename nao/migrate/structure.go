@@ -507,19 +507,19 @@ func columnIn(name string, cols []Column) bool {
 
 // addRefusal says why alter table cannot add the column under SQLite's
 // rules (spec §migrations rule 8), or "" when add makes it: a primary
-// key column, a not null column without a default, an expression
-// default, a not null foreign key and a foreign key with a default
+// key column, a NOT NULL column without a default, an expression
+// default, a NOT NULL foreign key and a foreign key with a default
 // other than NULL all take a rebuild.
 func addRefusal(t *Table, c Column) string {
 	switch {
 	case c.PK != 0:
 		return "is in the primary key, which add cannot make: rebuild the table"
 	case c.NotNull && c.Default == "":
-		return "is not null without a default, which add cannot fill: rebuild the table with a from: or a default: for it, or add it with a default:"
+		return "is NOT NULL without a default, which add cannot fill: rebuild the table with a from: or a default: for it, or add it with a default:"
 	case c.Default != "" && strings.HasPrefix(defaultVolt(c.Default), "`"):
 		return "has an expression default, which add cannot take: rebuild the table"
 	case c.NotNull && columnReferences(t, c.Name):
-		return "is a not null foreign key, which add cannot make: rebuild the table"
+		return "is a NOT NULL foreign key, which add cannot make: rebuild the table"
 	case c.Default != "" && !strings.EqualFold(c.Default, "NULL") && columnReferences(t, c.Name):
 		return "is a foreign key with a default, which add cannot make, since SQLite refuses to add a REFERENCES column with a default other than NULL to a table that has rows: rebuild the table"
 	}
@@ -570,7 +570,7 @@ func columnDiff(table string, target, fold Column) []string {
 
 func nullness(notNull bool) string {
 	if notNull {
-		return "not null"
+		return "NOT NULL"
 	}
 	return "nullable"
 }
@@ -778,9 +778,9 @@ func pkColumns(t *Table) []string {
 
 // columnVolt renders one column as a migration writes it (spec
 // §migrations rule 3): the built-in type, pk and increment for a rowid
-// alias, not null, unique for a one-column unique constraint, default:
-// and ref: for a one-column foreign key with its delete: and update:
-// actions.
+// alias, null for a nullable column outside the primary key, unique for
+// a one-column unique constraint, default: and ref: for a one-column
+// foreign key with its delete: and update: actions.
 func columnVolt(t *Table, c Column) string {
 	typ := sqlite.TypeVolt(c.Type)
 	if typ == "" {
@@ -794,8 +794,8 @@ func columnVolt(t *Table, c Column) string {
 		if strings.EqualFold(c.Type, "INTEGER") && !c.NotNull {
 			settings = append(settings, "increment")
 		}
-	case c.NotNull:
-		settings = append(settings, "not null")
+	case c.PK == 0 && !c.NotNull:
+		settings = append(settings, "null")
 	}
 	for _, ix := range t.Indexes {
 		if ix.Name == "" && ix.Where == "" && len(ix.Key) == 1 && ix.Key[0] == c.Name {

@@ -2,7 +2,7 @@
 // want: composite primary key
 Table user_tags {
   user_id int [increment]
-  tag string [not null]
+  tag string
 
   indexes {
     (user_id, tag) [pk]

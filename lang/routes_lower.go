@@ -955,18 +955,8 @@ func (l *routeLowering) pkParamType(ti *check.TableInfo, pos token.Position) (Pa
 		}
 	}
 	for _, cd := range ti.Columns {
-		col := cd.Col
-		isPK := false
-		for _, f := range col.LegacyFlags {
-			if strings.EqualFold(f.Name(), "pk") {
-				isPK = true
-			}
-		}
-		if col.Settings.Get("pk") != nil || col.Settings.Get("primary key") != nil {
-			isPK = true
-		}
-		if isPK {
-			addPK(col.Name.Name())
+		if cd.Col.Settings.Get("pk") != nil {
+			addPK(cd.Col.Name.Name())
 		}
 	}
 	for _, ix := range ti.Indexes {

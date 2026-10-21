@@ -4,7 +4,7 @@ package db
 
 Table page_views {
   id int [pk]
-  score float64 [not null]
+  score float64
 }
 
 Select hot for page_views where score > 1e400

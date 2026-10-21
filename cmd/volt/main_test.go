@@ -33,7 +33,7 @@ func TestWorkspaceLayout(t *testing.T) {
 
 Table posts {
   id    int [pk, increment]
-  title string    [not null]
+  title string
 }
 
 Select picked for posts where id in :ids [order: (id asc)]

@@ -3,7 +3,7 @@ package db
 
 Table ms_revenue {
   id int [pk]
-  org string [not null]
+  org string
 }
 
 Table ms_meta {

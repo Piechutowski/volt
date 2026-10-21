@@ -4,7 +4,7 @@ package db
 
 Table users {
   id   int    [pk]
-  name string
+  name string [null]
 
   indexes {
     name [type: hash]
@@ -14,7 +14,7 @@ Table users {
 Migration 0001__init {
   create table users {
     id   int    [pk]
-    name string
+    name string [null]
   }
   create index users name [type: hash]
 }

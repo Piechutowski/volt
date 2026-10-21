@@ -4,12 +4,12 @@ package db
 
 Table users {
   id    int    [pk]
-  email string [not null, required]
+  email string [required]
 }
 
 Migration 0001__init {
   create table users {
     id    int    [pk]
-    email string [not null, required]
+    email string [required]
   }
 }

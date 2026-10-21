@@ -54,12 +54,12 @@ var blog = map[string]string{
 
 Table users {
 	id    int [pk, increment]
-	email string    [not null, unique]
+	email string    [unique]
 }
 
 Table posts {
 	id    int [pk, increment]
-	title string    [not null]
+	title string
 }
 `,
 	"app/routes.volt": `package app
@@ -386,10 +386,10 @@ func TestErrors(t *testing.T) {
 			"app/a.volt": "package app\n",
 			"app/b.volt": "package app2\n",
 		}, "disagrees"},
-		{"use rejected", map[string]string{
+		{"use is no element", map[string]string{
 			"go.mod":     modFile,
 			"app/r.volt": "package app\nuse * from './x'\n",
-		}, "not part of the Volt language"},
+		}, `unknown element type "use"`},
 		{"unknown import", map[string]string{
 			"go.mod":     modFile,
 			"app/r.volt": "package app\nimport (\n\tnothere\n)\nScope / [pipe: p] { get /x X.Y }\n",
@@ -515,7 +515,7 @@ Scope / [pipe: api] {
 func TestQueryRoutes(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod":         modFile,
-		"db/schema.volt": "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string [not null, unique]\n}\n\nSelect picked for users where id in :ids and email like :pat\n",
+		"db/schema.volt": "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string [unique]\n}\n\nSelect picked for users where id in :ids and email like :pat\n",
 		"app/r.volt": "package app\n\nimport (\n\tdb\n)\n\nScope /api [name: api] {\n" +
 			"\tget /users/:id(int) db.UserGet\n\tpost /users db.UserCreate\n\tget /picked db.UserPicked\n\tdelete /users/:id(int) db.UserDelete\n}\n",
 	})
@@ -553,7 +553,7 @@ func TestQueryRoutes(t *testing.T) {
 }
 
 func TestQueryRouteErrors(t *testing.T) {
-	schema := "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string [not null]\n}\n\nTable notes {\n\tbody string [not null]\n}\n\nSelect picked for users where id in :ids\n"
+	schema := "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string\n}\n\nTable notes {\n\tbody string\n}\n\nSelect picked for users where id in :ids\n"
 	cases := []struct{ name, route, want string }{
 		{"unknown", "get /x db.UserFetch", "no generated query db.UserFetch"},
 		{"case hint", "get /x db.userget", `did you mean "UserGet"`},
@@ -585,7 +585,7 @@ func TestQueryRouteErrors(t *testing.T) {
 }
 
 func TestDatasetExpansion(t *testing.T) {
-	schema := "package db\n\nTable ms_revenue {\n\tid int [pk]\n\tyear int [not null]\n}\n\nTable ms_usage {\n\tid int [pk]\n\tyear int [not null]\n}\n\nTable ms_notes {\n\tid int [pk]\n\tyear int [not null]\n}\n\nGroup series {\n\tms_revenue\n\tms_usage\n\tms_notes\n}\n\nSelect browse for series where year = :year\n"
+	schema := "package db\n\nTable ms_revenue {\n\tid int [pk]\n\tyear int\n}\n\nTable ms_usage {\n\tid int [pk]\n\tyear int\n}\n\nTable ms_notes {\n\tid int [pk]\n\tyear int\n}\n\nGroup series {\n\tms_revenue\n\tms_usage\n\tms_notes\n}\n\nSelect browse for series where year = :year\n"
 	pr, diags := project(t, map[string]string{
 		"go.mod":         modFile,
 		"db/schema.volt": schema,

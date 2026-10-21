@@ -9,27 +9,27 @@ Enum mood {
 
 Table page_views {
   id   int    [pk, increment]
-  hits int32  [not null]
+  hits int32
 }
 
 Table link_clicks {
   id   int    [pk, increment]
-  path string [not null]
+  path string
 }
 
 Table feed_reads {
   id   int    [pk, increment]
-  hits int    [not null]
+  hits int
 }
 
 Table search_hits {
   id   int    [pk, increment]
-  hits string [not null]
+  hits string
 }
 
 Table mood_marks {
   id   int  [pk, increment]
-  hits mood [not null]
+  hits mood
 }
 
 Table counteds {

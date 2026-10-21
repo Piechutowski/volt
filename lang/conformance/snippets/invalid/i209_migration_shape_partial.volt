@@ -3,7 +3,7 @@
 package db
 
 TablePartial timestamps {
-  created time.Time [not null]
+  created time.Time
 }
 
 Table users {

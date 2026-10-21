@@ -4,19 +4,19 @@
 // the referenced table carries nothing of it.
 Table users {
   id    int    [pk, increment]
-  email string [not null, unique]
+  email string [unique]
 }
 
 Table profiles {
   id      int    [pk, increment]
-  user_id int    [not null, ref: - users.id]
-  bio     string
+  user_id int    [ref: - users.id]
+  bio     string [null]
 }
 
 Table avatars {
   id      int    [pk, increment]
-  user_id int    [not null, ref: - users.id]
-  url     string [not null]
+  user_id int    [ref: - users.id]
+  url     string
 
   indexes {
     user_id [unique]

@@ -127,7 +127,7 @@ func TestSelectRenderMatchesTypedHandles(t *testing.T) {
 	}
 
 	var schema strings.Builder
-	schema.WriteString("package db\n\nTable page_views {\n\tid int [pk, increment]\n\tsite string [not null]\n\tday int [not null]\n\thits int [not null]\n\tscore float64 [not null]\n\tflag bool [not null]\n\tnote string\n\t\"order\" int [not null]\n}\n\n")
+	schema.WriteString("package db\n\nTable page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n\thits int\n\tscore float64\n\tflag bool\n\tnote string [null]\n\t\"order\" int\n}\n\n")
 	schema.WriteString("Pred at { site = :site and day = :day }\nPred since { day >= :from }\n\n")
 	for i, tc := range cases {
 		fmt.Fprintf(&schema, "Select c%d for page_views", i)
@@ -180,7 +180,7 @@ func TestSelectRenderMatchesTypedHandles(t *testing.T) {
 func TestSelectInfoCarriesRendererFragments(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod": modFile,
-		"db/schema.volt": "package db\n\nTable page_views {\n\tid int [pk, increment]\n\tsite string [not null]\n\tday int [not null]\n}\n\n" +
+		"db/schema.volt": "package db\n\nTable page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n}\n\n" +
 			"Select rows for page_views where site = :site and day in :days [order: (day desc, id asc)]\n",
 	})
 	wantClean(t, diags)
@@ -214,7 +214,7 @@ func TestSelectLiteralOutsideStorageRefused(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, diags := project(t, map[string]string{
 				"go.mod": modFile,
-				"db/schema.volt": "package db\n\nType money int\n\nTable page_views {\n\tid int [pk, increment]\n\thits int [not null]\n\tscore float64 [not null]\n\tcents money [not null]\n}\n\n" +
+				"db/schema.volt": "package db\n\nType money int\n\nTable page_views {\n\tid int [pk, increment]\n\thits int\n\tscore float64\n\tcents money\n}\n\n" +
 					"Select c for page_views where " + tc.where + "\n",
 			})
 			wantError(t, diags, tc.want)
@@ -225,7 +225,7 @@ func TestSelectLiteralOutsideStorageRefused(t *testing.T) {
 func TestSelectUnresolvedKeptNotGenerated(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod": modFile,
-		"db/schema.volt": "package db\n\nTable authors {\n\tid int [pk, increment]\n\temail string [not null]\n\trank int32 [not null]\n}\n\n" +
+		"db/schema.volt": "package db\n\nTable authors {\n\tid int [pk, increment]\n\temail string\n\trank int32\n}\n\n" +
 			"Select ranked for authors where rank >= :min and email = :e [order: (rank desc)]\n" +
 			"Select shown (rank, email) for authors\n" +
 			"Select brief (* \\ rank) for authors\n" +

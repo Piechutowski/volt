@@ -4,13 +4,13 @@ package db
 
 Table users {
   id   int    [pk]
-  name string
+  name string [null]
 }
 
 Migration 0001__init {
   create table users {
     id   int    [pk]
-    name string
-    name string
+    name string [null]
+    name string [null]
   }
 }

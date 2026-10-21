@@ -4,5 +4,5 @@ package db
 
 Table accounts {
   id     int [pk]
-  active bool [not null, required]
+  active bool [required]
 }

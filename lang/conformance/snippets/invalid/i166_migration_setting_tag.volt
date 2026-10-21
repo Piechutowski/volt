@@ -4,7 +4,7 @@ package db
 
 Table users {
   id  int [pk]
-  bio string
+  bio string [null]
 }
 
 Migration 0001__init {
@@ -15,6 +15,6 @@ Migration 0001__init {
 
 Migration 0002__bio {
   alter table users {
-    add bio string [tag: 'json:"bio"']
+    add bio string [null, tag: 'json:"bio"']
   }
 }

@@ -20,10 +20,10 @@ Enum order_status {
 
 Table users {
   id int [pk, increment]
-  email string [not null, unique]
-  name string [not null, tag: 'json:"displayName"']
-  bio string [note: 'NULL until the user writes one']
-  created_at time.Time [not null, default: `CURRENT_TIMESTAMP`]
+  email string [unique]
+  name string [tag: 'json:"displayName"']
+  bio string [null, note: 'NULL until the user writes one']
+  created_at time.Time [default: `CURRENT_TIMESTAMP`]
 
   validators {
     EmailValid(email)
@@ -32,12 +32,12 @@ Table users {
 
 Table orders {
   id int [pk, increment]
-  user_id int [not null, ref: > users.id]
-  status order_status [not null, default: order_status.pending]
-  total float64 [not null, required]
-  tip Money [not null, default: 0]
-  fee pay.Cents [not null]
-  placed_at time.Time
+  user_id int [ref: > users.id]
+  status order_status [default: order_status.pending]
+  total float64 [required]
+  tip Money [default: 0]
+  fee pay.Cents
+  placed_at time.Time [null]
 }
 
 // §types rule 4, §predicates rule 5: a package-qualified declared type
@@ -48,8 +48,8 @@ Select free   for orders where fee = 0
 
 // composite primary key, no auto-increment anywhere
 Table user_tags {
-  user_id int [not null, ref: > users.id]
-  tag string [not null]
+  user_id int [ref: > users.id]
+  tag string
 
   indexes {
     (user_id, tag) [pk]
@@ -60,9 +60,9 @@ Table user_tags {
 // (spec §groups to §selects-over-groups): one select, one signature, every member.
 Table page_views {
   id int [pk, increment]
-  site string [not null]
-  day int [not null]
-  hits int [not null, default: 0]
+  site string
+  day int
+  hits int [default: 0]
 
   validators {
     CountsPositive(hits, day)
@@ -72,9 +72,9 @@ Table page_views {
 
 Table link_clicks {
   id int [pk, increment]
-  site string [not null]
-  day int [not null]
-  target string [not null, default: '']
+  site string
+  day int
+  target string [default: '']
 }
 
 Group metrics {

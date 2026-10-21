@@ -5,12 +5,6 @@ app/i01_missing_package.volt:2:1: error: spec/projects-and-packages: every .volt
 app/i02_package_not_first.volt:5:1: error: spec/projects-and-packages: the package clause must be the first declaration in the file (§projects-and-packages)
 app/i02_package_not_first.volt:5:1: error: spec/projects-and-packages: duplicate package clause (§projects-and-packages)
 
-## i03_use_rejected.volt
-app/i03_use_rejected.volt:4:1: error: spec/file-imports-removed: use is not part of the Volt language (§file-imports-removed); files of one package share a namespace without imports, and another package is reached through an import block (§imports)
-
-## i04_reuse_rejected.volt
-app/i04_reuse_rejected.volt:4:1: error: spec/file-imports-removed: reuse is not part of the Volt language (§file-imports-removed); files of one package share a namespace without imports, and another package is reached through an import block (§imports)
-
 ## i05_empty_import.volt
 app/i05_empty_import.volt:5:1: error: syntax: empty import declaration (§imports)
 
@@ -64,16 +58,16 @@ app/i109_event_route_verb.volt:6:2: error: spec/scopes-and-routes: an event rout
 app/i10_wildcard_not_last.volt:5:9: error: spec/scopes-and-routes: the wildcard ':p...' must be the last path segment (§route-paths)
 
 ## i110_required_nullable.volt
-db/i110_required_nullable.volt:7:17: error: spec/columns: required on "email" needs not null: a nullable column has no empty value to refuse, NULL is absence (§columns)
+db/i110_required_nullable.volt:7:16: error: spec/columns: "required" and "null" cannot both be set
 
 ## i111_required_bool.volt
-db/i111_required_bool.volt:7:26: error: spec/columns: required on "active" (bool): a bool has no empty value — every value is a value (§columns)
+db/i111_required_bool.volt:7:16: error: spec/columns: required on "active" (bool): a bool has no empty value — every value is a value (§columns)
 
 ## i112_required_default.volt
 db/i112_required_default.volt:7:15: error: spec/columns: "required" and "default" cannot both be set
 
 ## i113_required_time.volt
-db/i113_required_time.volt:7:27: error: spec/columns: required on "at" (time.Time): a time.Time has no empty value — every value is a value (§columns)
+db/i113_required_time.volt:7:17: error: spec/columns: required on "at" (time.Time): a time.Time has no empty value — every value is a value (§columns)
 
 ## i114_resources_default_unqualified
 app/routes.volt:6:2: error: spec/imports: package "db" imported and not used (§imports)
@@ -148,10 +142,10 @@ db/i164_migration_duplicate_name.volt:15:11: error: spec/migrations: duplicate m
 db/i165_migration_column_type.volt:18:11: error: spec/migrations: column "state": type "status" is not a built-in; a migration column is bool, int, float64, string, []byte or time.Time, since the database holds the storage type (§migrations)
 
 ## i166_migration_setting_tag.volt
-db/i166_migration_setting_tag.volt:18:21: error: spec/migrations: tag: describes the Go struct field, not the database, and is not a migration setting (§migrations)
+db/i166_migration_setting_tag.volt:18:27: error: spec/migrations: tag: describes the Go struct field, not the database, and is not a migration setting (§migrations)
 
 ## i167_migration_setting_required.volt
-db/i167_migration_setting_required.volt:13:29: error: spec/migrations: required describes Go-side validation, not the database, and is not a migration setting (§migrations)
+db/i167_migration_setting_required.volt:13:19: error: spec/migrations: required describes Go-side validation, not the database, and is not a migration setting (§migrations)
 
 ## i168_migration_setting_model.volt
 db/i168_migration_setting_model.volt:11:17: error: spec/migrations: model: names the Go model, not the database, and is not a migration setting (§migrations)
@@ -163,17 +157,17 @@ db/i169_migration_create_table_empty.volt:10:3: error: spec/migrations: create t
 app/i16_lowercase_controller.volt:5:9: error: spec/scopes-and-routes: handler must be Controller.Action, both exported Go identifiers (§handler-references), found "home.Index"
 
 ## i170_migration_add_not_null_no_default.volt
-db/i170_migration_add_not_null_no_default.volt:18:9: error: spec/migrations: add "name" to table "users": a not null column needs a default:, since the rows already in the table must be filled (§migrations)
+db/i170_migration_add_not_null_no_default.volt:18:9: error: spec/migrations: add "name" to table "users": a column without null is NOT NULL and needs a default:, since the rows already in the table must be filled (§migrations)
 
 ## i171_migration_add_pk.volt
 db/i171_migration_add_pk.volt:18:17: error: spec/migrations: add "id" to table "users": pk cannot be added to an existing table; use rebuild table (§migrations)
 
 ## i172_migration_add_ref_not_null.volt
-db/i172_migration_add_ref_not_null.volt:25:41: error: spec/migrations: add "user_id" to table "posts": a column with ref: takes no default but null, since SQLite refuses to add a REFERENCES column with another default to a table that has rows (§migrations)
-db/i172_migration_add_ref_not_null.volt:25:44: error: spec/migrations: add "user_id" to table "posts": a column with ref: must be nullable when added, since the rows already in the table reference nothing; use rebuild table for a not null foreign key (§migrations)
+db/i172_migration_add_ref_not_null.volt:25:31: error: spec/migrations: add "user_id" to table "posts": a column with ref: takes no default but null, since SQLite refuses to add a REFERENCES column with another default to a table that has rows (§migrations)
+db/i172_migration_add_ref_not_null.volt:25:34: error: spec/migrations: add "user_id" to table "posts": a column with ref: carries null when added, since the rows already in the table reference nothing; use rebuild table for a NOT NULL foreign key (§migrations)
 
 ## i173_migration_rebuild_null_source.volt
-db/i173_migration_rebuild_null_source.volt:20:5: error: spec/migrations: rebuild table "users" in migration "0002__email": column "email" is not null but its source is NULL, since no column of that name exists before the rebuild; give it a from: or a default: (§migrations)
+db/i173_migration_rebuild_null_source.volt:20:5: error: spec/migrations: rebuild table "users" in migration "0002__email": column "email" is NOT NULL but its source is NULL, since no column of that name exists before the rebuild; give it a from: or a default: (§migrations)
 
 ## i174_migration_flat_drop_table.volt
 db/i174_migration_flat_drop_table.volt:13:3: error: spec/migrations: migration "0001__init" is a flat body, which runs backward as the inverses of its operations, but drop table audit has no body to recreate the table from; mark the migration irreversible or write it as up { } down { } (§migrations)
@@ -194,7 +188,7 @@ db/i178_migration_down_without_up.volt:10:3: error: syntax: a down block follows
 app/i17_one_part_handler.volt:5:9: error: spec/scopes-and-routes: package "app" declares no tables, so it has no query Show; a query of an imported data package is written qualified (§query-routes)
 
 ## i180_migration_add_expression_default.volt
-db/i180_migration_add_expression_default.volt:18:47: error: spec/migrations: add "created" to table "users": the default must be a literal; SQLite's ADD COLUMN takes no expression default (§migrations)
+db/i180_migration_add_expression_default.volt:18:37: error: spec/migrations: add "created" to table "users": the default must be a literal; SQLite's ADD COLUMN takes no expression default (§migrations)
 
 ## i181_migration_no_tables.volt
 db/i181_migration_no_tables.volt:5:1: error: spec/migrations: migration "0001__init" in a package that declares no tables: a migration is an element of the package whose tables it migrates (§migrations)
@@ -233,7 +227,7 @@ app/i19_only_and_except.volt:9:34: error: spec/resources: only: and except: cann
 db/i200_migration_name_width.volt:16:11: error: spec/migrations: migration names "0001__init" and "00002__bio" differ in digit width: every migration name of a package has the same width, so that byte order and numeric order agree; widen every name (§migrations)
 
 ## i201_migration_drop_shape_not_null_no_default.volt
-db/i201_migration_drop_shape_not_null_no_default.volt:18:10: error: spec/migrations: drop "bio" from table "users", whose shape is the inverse add: a not null column needs a default:, since the rows already in the table must be filled (§migrations)
+db/i201_migration_drop_shape_not_null_no_default.volt:18:10: error: spec/migrations: drop "bio" from table "users", whose shape is the inverse add: a column without null is NOT NULL and needs a default:, since the rows already in the table must be filled (§migrations)
 
 ## i202_migration_drop_shape_pk.volt
 db/i202_migration_drop_shape_pk.volt:18:18: error: spec/migrations: drop "id" from table "users", whose shape is the inverse add: pk cannot be added to an existing table; use rebuild table (§migrations)
@@ -251,10 +245,10 @@ db/i205_migration_index_pk.volt:13:26: error: spec/migrations: index id on "user
 db/i206_migration_ref_direction.volt:16:17: error: spec/migrations: column "id": ref: takes > or - in a migration, since the declaring column holds the key; '<' references the other way and is not this column's to declare (§migrations)
 
 ## i207_migration_ref_action.volt
-db/i207_migration_ref_action.volt:20:35: error: spec/migrations: column "user_id": invalid referential action "explode" for 'delete'; expected cascade, restrict, set null, set default or no action (§migrations)
+db/i207_migration_ref_action.volt:20:41: error: spec/migrations: column "user_id": invalid referential action "explode" for 'delete'; expected cascade, restrict, set null, set default or no action (§migrations)
 
 ## i208_migration_add_ref_default.volt
-db/i208_migration_add_ref_default.volt:25:31: error: spec/migrations: add "user_id" to table "posts": a column with ref: takes no default but null, since SQLite refuses to add a REFERENCES column with another default to a table that has rows (§migrations)
+db/i208_migration_add_ref_default.volt:25:37: error: spec/migrations: add "user_id" to table "posts": a column with ref: takes no default but null, since SQLite refuses to add a REFERENCES column with another default to a table that has rows (§migrations)
 
 ## i209_migration_shape_partial.volt
 db/i209_migration_shape_partial.volt:17:5: error: syntax: a migration's shape body holds columns and indexes only; a partial injection, a validators block, a records block and a Note are not part of it (§migrations)
@@ -265,12 +259,12 @@ app/i20_unknown_action.volt:9:26: error: spec/resources: unknown action "browse"
 ## i210_migration_shape_validators.volt
 db/i210_migration_shape_validators.volt:15:5: error: syntax: a migration's shape body holds columns and indexes only; a partial injection, a validators block, a records block and a Note are not part of it (§migrations)
 db/i210_migration_shape_validators.volt:16:17: error: syntax: expected identifier in column type (§columns), found '(' "("
-db/i210_migration_shape_validators.volt:19:1: error: syntax: expected an element type or use/reuse at top level (§program-structure), found '}' "}"
+db/i210_migration_shape_validators.volt:19:1: error: syntax: expected an element type at top level (§program-structure), found '}' "}"
 
 ## i211_migration_shape_records.volt
 db/i211_migration_shape_records.volt:15:5: error: syntax: a migration's shape body holds columns and indexes only; a partial injection, a validators block, a records block and a Note are not part of it (§migrations)
 db/i211_migration_shape_records.volt:16:7: error: syntax: expected a column or an indexes block in create table (§migrations), found number "1"
-db/i211_migration_shape_records.volt:19:1: error: syntax: expected an element type or use/reuse at top level (§program-structure), found '}' "}"
+db/i211_migration_shape_records.volt:19:1: error: syntax: expected an element type at top level (§program-structure), found '}' "}"
 
 ## i212_migration_shape_note.volt
 db/i212_migration_shape_note.volt:15:5: error: syntax: a migration's shape body holds columns and indexes only; a partial injection, a validators block, a records block and a Note are not part of it (§migrations)
@@ -279,7 +273,7 @@ db/i212_migration_shape_note.volt:15:5: error: syntax: a migration's shape body 
 db/i213_migration_setting_headercolor.volt:11:17: error: spec/migrations: headercolor: describes the diagram, not the database, and is not a migration setting (§migrations)
 
 ## i214_migration_from_outside_rebuild.volt
-db/i214_migration_from_outside_rebuild.volt:13:37: error: spec/migrations: from: names the source of a rebuilt column and is a setting of rebuild table only (§migrations)
+db/i214_migration_from_outside_rebuild.volt:13:27: error: spec/migrations: from: names the source of a rebuilt column and is a setting of rebuild table only (§migrations)
 
 ## i215_migration_index_type.volt
 db/i215_migration_index_type.volt:19:28: error: spec/migrations: type: names an index method, which SQLite does not have, and is not a migration setting (§migrations)
@@ -291,7 +285,7 @@ db/i216_migration_exec_setting.volt:13:68: error: spec/migrations: unknown setti
 db/i217_migration_duplicate_column.volt:14:5: error: spec/migrations: duplicate column name "name" in table "users" (§migrations)
 
 ## i218_migration_action_without_ref.volt
-db/i218_migration_action_without_ref.volt:13:18: error: spec/migrations: column "user_id": delete: names the action of the column's ref:, and the column declares none (§migrations)
+db/i218_migration_action_without_ref.volt:13:24: error: spec/migrations: column "user_id": delete: names the action of the column's ref:, and the column declares none (§migrations)
 
 ## i219_unknown_type_reported_once
 db/schema.volt:4:9: error: spec/columns: column "id": unknown type "int64"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)

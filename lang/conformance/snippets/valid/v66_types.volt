@@ -7,12 +7,12 @@ Enum status { active }
 
 Table products {
   id    int         [pk, increment]
-  slug  Slug        [not null, unique, required]
-  price money.Money [not null, default: 0]
+  slug  Slug        [unique, required]
+  price money.Money [default: 0]
   icon  png.Png
-  state status      [not null, default: status.active]
+  state status      [default: status.active]
   data  []byte
-  at    time.Time   [not null, default: `CURRENT_TIMESTAMP`]
+  at    time.Time   [default: `CURRENT_TIMESTAMP`]
   ratio float64     [default: 1]
   ok    bool        [default: true]
 }

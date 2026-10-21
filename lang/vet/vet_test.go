@@ -91,11 +91,11 @@ Enum status { active
   retired }
 Table users as U {
   id int [pk, increment]
-  status status [not null]
+  status status
 }
 Table orders {
   id int [pk]
-  user_id int [not null, ref: > U.id]
+  user_id int [ref: > U.id]
 }
 TableGroup commerce { users
   orders }
@@ -128,8 +128,8 @@ Table authors {
 }
 Table posts {
   id int [pk, increment]
-  author_id int [not null, ref: > authors.id]
-  editor_id string [ref: > authors.id]
+  author_id int [ref: > authors.id]
+  editor_id string [null, ref: > authors.id]
 }
 `
 	f, diags := parser.ParseFile("unknown.volt", src)
