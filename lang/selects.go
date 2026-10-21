@@ -807,10 +807,6 @@ func (e *selectEnv) columnBind(id *ast.Ident) (b *colBinding, unknown bool) {
 			continue
 		}
 		declType := cd.Col.Type.String()
-		if cd.Type.Enum != nil {
-			e.errorf(id.Pos(), "column %q of table %q is enum-typed (%s); predicates do not compare enums; filter on a text column or use the dynamic layer (§predicates, hypotheses H5)", name, m.Decl.Name.Name(), declType)
-			return nil, false
-		}
 		if !cd.Type.Known() {
 			unknown = true
 			continue

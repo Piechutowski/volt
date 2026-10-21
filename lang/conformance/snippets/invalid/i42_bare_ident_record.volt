@@ -1,6 +1,6 @@
 // spec: §records-sample-data — bare identifiers other than true/false/null are not record values
-Enum s { a }
+Type S string
 Table t {
-  x s
+  x S
   records (x) { a }
 }

@@ -20,11 +20,11 @@ report engine when a consumer exists.
 - [x] Scanner, parser, checker, vet; project loading from `go.mod`
   - [x] Parse and check by declaration; routes lowered per scope item
   - [x] Named placeholders, Go references checked by spelling
-- [x] Schema core: Project, Table, TablePartial, Records, Enum, Type, Ref, notes
+- [x] Schema core: Project, Table, TablePartial, Records, Type, Ref, notes
   - [x] One spelling per meaning: `pk` is the key, a column is NOT NULL unless it carries `null`, settings follow the type in brackets only, the files of a package share a namespace without imports
 - [ ] One spelling per meaning, decided in review and built in steps; docs/entropy-and-purity-report.md keeps what is still open
-  - [ ] Step 1, removals
-    - [ ] Enums go: `Type OrderState string` with Go constants and a membership validator replaces `Enum`. In the same commit, a declared type whose Go declaration spells its storage type (`bool`, `int`, `float64`, `string`) needs no Scanner or Valuer, `<Model>New` seeds its literal defaults, `required` compares it directly, its bare name joins the generated name scope so a collision is a check error, and `-o DIR` with a bare declared type is refused
+  - [x] Step 1, removals
+    - [x] Enums go: `Type OrderState string` with Go constants and a membership validator replaces `Enum`. In the same commit, a declared type whose Go declaration spells its storage type (`bool`, `int`, `float64`, `string`) needs no Scanner or Valuer, `<Model>New` seeds its literal defaults, `required` compares it directly, its bare name joins the generated name scope so a collision is a check error, and `-o DIR` with a bare declared type is refused
     - [x] Diagram-only constructs go: `headercolor`, Ref `color` and `inactive`, `TableGroup` (`Group` is the one set of tables, in the tables' namespace), sticky notes, `DiagramView`, the color literal
     - [x] A note has one spelling, the `note:` setting; the body `Note: '...'` and `Note { '...' }` forms go
     - [x] Relationships have one direction, the foreign key on the left: `<`, `-` and `<>` go; an inline ref is `ref: users.id` with no operator; the Ref element keeps only `Ref: posts.author_id > users.id`, without the long form or a name; a one-to-one is `unique` plus a ref
@@ -43,7 +43,7 @@ report engine when a consumer exists.
   - [ ] Step 4, routes
     - [ ] `:slug(string)` goes, a bare path parameter is a string; PUT goes, PATCH is the partial update; a query route's verb is fixed by the generated method (List, Get and selects `get`, Create `post`, Update `patch`, Delete `delete`)
 - [x] `Migration`: the element, its contextual keywords and its twelve checks; what runs it is under the data layer
-  - [x] Column types are a closed Go set (`bool`, `int`, `float64`, `string`, `[]byte`, `time.Time`), enums, and `Type` declarations; defaults are typed
+  - [x] Column types are a closed Go set (`bool`, `int`, `float64`, `string`, `[]byte`, `time.Time`) and `Type` declarations; defaults are typed; a bare `Type` is held to its Go declaration, which decides whether it needs a Scanner and a Valuer
 - [~] Schema extensions
   - [x] `[model:]`, `[tag:]`, `[required]`, `validators`
   - [x] `Group`, `Pred`, `Select … for <group>` with projection, list parameters
@@ -55,20 +55,20 @@ report engine when a consumer exists.
     - [ ] `View`: `CREATE VIEW`, read-only struct, declared columns verified against the SQL
     - [ ] `Trigger`: deferred, drop-and-recreate
     - *hand* raw SQL strings in `.go` files; promote them to a block
-  - [ ] `[repr: int]` enums: full String/Valuer/Scanner/JSON suite, the int never escapes the process
+  - *hand* integer value sets: `Type Priority int` with Go constants and a membership validator beside it, a kinded declared type (§types); the planned `[repr: int]` enums are retired
   - [ ] `[lock_version]` optimistic locking
 - [x] Citations by heading name: every `§…` is the heading's anchor, diagnostic codes are `spec/<anchor>`, the test resolves them
 
 ## Data layer (nao)
 
-- [x] Models: structs, enums, `Null[T]`, singular names, notes as doc comments
+- [x] Models: structs, `Null[T]`, singular names, notes as doc comments
 - [x] DDL and seed `INSERT`s from `records`
 - [x] CRUD: `Get`, `GetMany`, `GetBy*`, `List`, `Count`, `Create`, `Update`, `Delete`; keyless tables get `List`/`Create`/`Count`; `Create` and `Update` take a changeset and return the stored row
 - [x] Dynamic queries: predicates as values, flat typed handles, per-model wrappers, shared verbs, keyset pagination, statement cache, `dynname` vet rule
 - [x] Changesets: the single write path (§changesets); `<Model>New()` and `row.Changeset()`, one setter per column, `Cast` of a `rt.Params[M]` wire body behind an allow list, `Validate`, `Create` and `Update` rendered from the marked columns; every refused write, a failed validator or the database's own refusal alike, is one `*rt.Invalid` itemizing its field errors, 409 for a `unique` violation, 422 otherwise
-- [x] Validation: validators are exported Go functions of the package named in the schema, `required` is the built-in one, nothing reaches the DDL; `Validate()` on the changeset runs `required`, enum membership and the validators, every failure collected; the API path answers with the changeset's `*rt.Invalid`
+- [x] Validation: validators are exported Go functions of the package named in the schema, `required` is the built-in one, nothing reaches the DDL; `Validate()` on the changeset runs `required` and the validators, every failure collected; the API path answers with the changeset's `*rt.Invalid`
   - [ ] `[on: create]` / `[on: update]` as triggers in SQL and, in Go, by whether the changeset was made from a row
-  - [x] Enum membership in the Go tier: the `enum` check of `Validate`
+  - *hand* membership in a value set: a validator written beside the declared type (§types)
   - [ ] `[message: '…']` with a runtime hook keyed by table and check
   - *no* named validation sets
 - [x] Transactions: one `Queries` over `DBTX`, `Tx` with rollback on error or panic, single-writer `Open`
@@ -110,7 +110,7 @@ report engine when a consumer exists.
 - [x] Generated Go gofmt-canonical by construction; goldens compiled by the real toolchain; every statement prepared against the generated DDL
 - [x] Parallel schedule on a worker pool; memoized sessions; the purity gate, the immutability walk, the race detector as the bar
 - [x] Language server: diagnostics, completion, hover, navigation, rename; incremental sync; keystroke under a third of a second on a thousand-table file
-  - [ ] Cross-file column occurrences: a select, enum reference or default in a sibling file is neither navigable nor renamed
+  - [ ] Cross-file column occurrences: a select or a `Type` reference in a sibling file is neither navigable nor renamed
   - [ ] Hover and definition for select parameters, columns inside a Pred body, projection and order columns of a group select; references list a table once; hover ranges on qualified references exclude the qualifier
   - [ ] Navigation into Go symbols: handler references and `error_handler:` need a Go-side index
   - [ ] The navigation index's hit path: walk occurrences by table without copying, keep name maps across builds, memoize a select's hover on its members

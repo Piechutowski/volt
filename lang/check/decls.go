@@ -21,8 +21,6 @@ func (c *checker) declsCheck(f *ast.File) {
 			}
 		case *ast.TablePartial:
 			c.tableBodyCheck(d.Pos(), d.Name.Name(), nil, d.Body, false)
-		case *ast.Enum:
-			c.enumCheck(d)
 		case *ast.Ref:
 			c.refSettingsCheck(d.Settings)
 			c.endpointArityCheck(d.Left, d.Right)
@@ -145,20 +143,6 @@ func (c *checker) pkIndexCheck(table string, ix *ast.Index, spec settingSpec) {
 	}
 }
 
-func (c *checker) enumCheck(d *ast.Enum) {
-	if len(d.Values) == 0 {
-		c.errorf(d.Pos(), "enum", "enum %q must contain at least one value", d.Name.Name())
-	}
-	seen := map[string]bool{}
-	for _, v := range d.Values {
-		if seen[v.Name.Name()] {
-			c.errorf(v.Pos(), "namespaces-and-uniqueness", "duplicate enum value %q", v.Name.Name())
-		}
-		seen[v.Name.Name()] = true
-		c.settingsCheck(v.Settings, "enum", enumValueSettings)
-	}
-}
-
 func (c *checker) endpointArityCheck(l, r *ast.RefEndpoint) {
 	if l == nil || r == nil {
 		return
@@ -200,7 +184,7 @@ func (c *checker) recordsCheck(d *ast.Records, topLevel bool) {
 			if id, ok := v.(*ast.Ident); ok {
 				low := strings.ToLower(id.Name())
 				if id.Quoted() || (low != "true" && low != "false" && low != "null") {
-					c.errorf(id.Pos(), "records-sample-data", "record values must be literals, null, true, false or enum constants; found bare identifier %q", id.Name())
+					c.errorf(id.Pos(), "records-sample-data", "record values must be literals, null, true or false; found bare identifier %q (§records-sample-data)", id.Name())
 				}
 			}
 		}

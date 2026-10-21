@@ -221,7 +221,7 @@ func TestUserDeleteWhere(t *testing.T) {
 	}
 }
 
-// TestOrderDynamic exercises the enum-typed handle and a second model's
+// TestOrderDynamic exercises the handle of a declared type and a second model's
 // surface: a Pred[Order] is a different type from a Pred[User], so
 // cross-model mixups never reach the database (a compile error).
 func TestOrderDynamic(t *testing.T) {
@@ -238,13 +238,13 @@ func TestOrderDynamic(t *testing.T) {
 		t.Fatalf("OrderCreate: %v", err)
 	}
 
-	if n, err := q.OrderCount(ctx, OrderStatus.Eq(EOrderStatusPending)); err != nil || n != 2 {
+	if n, err := q.OrderCount(ctx, OrderStatus.Eq(OrderStatePending)); err != nil || n != 2 {
 		t.Errorf("pending count = %d, %v; want 2", n, err)
 	}
-	if n, err := q.OrderUpdateWhere(ctx, OrderSet(OrderStatus.Set(EOrderStatusShipped)), OrderID.Eq(placed.ID)); err != nil || n != 1 {
+	if n, err := q.OrderUpdateWhere(ctx, OrderSet(OrderStatus.Set(OrderStateShipped)), OrderID.Eq(placed.ID)); err != nil || n != 1 {
 		t.Fatalf("ship = %d, %v", n, err)
 	}
-	shipped, err := q.OrderQuery(ctx, OrderStatus.Eq(EOrderStatusShipped))
+	shipped, err := q.OrderQuery(ctx, OrderStatus.Eq(OrderStateShipped))
 	if err != nil || len(shipped) != 1 || shipped[0].ID != placed.ID {
 		t.Errorf("shipped = %+v, %v; want just order %d", shipped, err, placed.ID)
 	}

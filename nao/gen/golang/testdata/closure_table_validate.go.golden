@@ -2,17 +2,17 @@
 
 package models
 
-// Validate runs required, enum membership and the validators of categories
-// over the row, every one every time, replacing the findings of an
-// earlier Validate (spec §changesets, §validators).
+// Validate runs required and the validators of categories over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
 func (c CategoryChangeset) Validate() CategoryChangeset {
 	c.valid = nil
 	return c
 }
 
-// Validate runs required, enum membership and the validators of category_paths
-// over the row, every one every time, replacing the findings of an
-// earlier Validate (spec §changesets, §validators).
+// Validate runs required and the validators of category_paths over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
 func (c CategoryPathChangeset) Validate() CategoryPathChangeset {
 	c.valid = nil
 	return c

@@ -11,18 +11,15 @@ type SymKind int
 
 const (
 	SymTable SymKind = iota
-	SymEnum
 	SymPartial
 	SymColumn
-	SymEnumValue
 	SymType
 )
 
-// SymbolID names one symbol. Tables and enums use their name; columns
-// live in a container, "table:<name>" for direct definitions or
-// "partial:<name>" for columns defined in a TablePartial, so every table
-// sharing the partial shares the symbol. Enum values live in
-// "enum:<name>".
+// SymbolID names one symbol. Tables, partials and declared types use
+// their name; columns live in a container, "table:<name>" for direct
+// definitions or "partial:<name>" for columns defined in a TablePartial,
+// so every table sharing the partial shares the symbol.
 type SymbolID struct {
 	Kind      SymKind
 	Container string
@@ -41,7 +38,6 @@ type Index struct {
 	Occs []Occurrence
 
 	Tables   map[string]*check.TableInfo // name -> table
-	Enums    map[string]*check.EnumInfo  // name -> enum
 	Types    map[string]*check.TypeInfo  // declared name -> Type
 	Partials map[string]*check.PartialInfo
 
@@ -65,7 +61,6 @@ type IndexMemo struct {
 type tableOccs struct {
 	ti, resolved    *check.TableInfo
 	tables          map[string]*check.TableInfo
-	enums           map[string]*check.EnumInfo
 	types           map[string]*check.TypeInfo
 	partials        map[string]bool
 	sym, cols, body []Occurrence
@@ -73,8 +68,8 @@ type tableOccs struct {
 	declMap         map[SymbolID]*ast.Ident
 }
 
-func (e *tableOccs) holds(ti, resolved *check.TableInfo, tables map[string]*check.TableInfo, enums map[string]*check.EnumInfo, types map[string]*check.TypeInfo, partials map[string]bool) bool {
-	if e.ti != ti || e.resolved != resolved || len(e.tables) != len(tables) || len(e.enums) != len(enums) || len(e.types) != len(types) || len(e.partials) != len(partials) {
+func (e *tableOccs) holds(ti, resolved *check.TableInfo, tables map[string]*check.TableInfo, types map[string]*check.TypeInfo, partials map[string]bool) bool {
+	if e.ti != ti || e.resolved != resolved || len(e.tables) != len(tables) || len(e.types) != len(types) || len(e.partials) != len(partials) {
 		return false
 	}
 	for key, t := range types {
@@ -85,12 +80,6 @@ func (e *tableOccs) holds(ti, resolved *check.TableInfo, tables map[string]*chec
 	}
 	for key, t := range tables {
 		if old, ok := e.tables[key]; !ok || old != t {
-			return false
-		}
-	}
-	for key, ei := range enums {
-		old, ok := e.enums[key]
-		if !ok || (old == nil) != (ei == nil) || (ei != nil && old.Decl != ei.Decl) {
 			return false
 		}
 	}
@@ -131,16 +120,12 @@ func NewIndex(f *ast.File, info *check.Info) *Index {
 func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 	ix := &Index{
 		Tables:   map[string]*check.TableInfo{},
-		Enums:    map[string]*check.EnumInfo{},
 		Types:    map[string]*check.TypeInfo{},
 		Partials: map[string]*check.PartialInfo{},
 		decls:    map[SymbolID]*ast.Ident{},
 	}
 	for _, ti := range info.Tables {
 		ix.Tables[ti.Key] = ti
-	}
-	for _, ei := range info.Enums {
-		ix.Enums[ei.Key] = ei
 	}
 	for _, td := range info.Types {
 		ix.Types[td.Key] = td
@@ -158,19 +143,18 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 	for _, ti := range info.Tables {
 		resolved := ix.resolveTable(ti.Decl.Name)
 		tables := ix.tablesNamed(ti.Decl)
-		enums := ix.enumsNamed(ti.Decl)
 		types := ix.typesNamed(ti.Decl)
 		partials := ix.partialsNamed(ti.Decl)
 		var e *tableOccs
 		if memo != nil {
-			if prev := memo.prev[ti.Decl]; prev != nil && prev.holds(ti, resolved, tables, enums, types, partials) {
+			if prev := memo.prev[ti.Decl]; prev != nil && prev.holds(ti, resolved, tables, types, partials) {
 				e = prev
 				memo.Hits++
 			}
 		}
 		if e == nil {
-			e = &tableOccs{ti: ti, resolved: resolved, tables: tables, enums: enums, types: types, partials: partials}
-			e.sym, e.cols, e.body, e.decls = tableOccurrences(ti.Decl, ti, resolved, tables, enums, types, partials)
+			e = &tableOccs{ti: ti, resolved: resolved, tables: tables, types: types, partials: partials}
+			e.sym, e.cols, e.body, e.decls = tableOccurrences(ti.Decl, ti, resolved, tables, types, partials)
 			e.declMap = declMapOf(e.decls)
 			if memo != nil {
 				memo.Misses++
@@ -198,12 +182,6 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		}
 		ix.declTables[ti.Key] = e
 		ix.Occs = append(ix.Occs, e.sym...)
-	}
-	for _, ei := range info.Enums {
-		ix.add(SymbolID{SymEnum, "", ei.Key}, ei.Decl.Name, true)
-		for _, v := range ei.Decl.Values {
-			ix.add(SymbolID{SymEnumValue, "enum:" + ei.Key, v.Name.Name()}, v.Name, true)
-		}
 	}
 	for _, td := range info.Types {
 		ix.add(SymbolID{SymType, "", td.Key}, lastPart(td.Decl.Name), true)
@@ -259,14 +237,13 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 			for _, c := range n.Columns {
 				ix.addColumnRef(ti, "", c)
 			}
-			ix.walkRecordRows(n.Rows)
 		}
 	}
 	return ix
 }
 
-func tableOccurrences(d *ast.Table, ti, resolved *check.TableInfo, tables map[string]*check.TableInfo, enums map[string]*check.EnumInfo, types map[string]*check.TypeInfo, partials map[string]bool) (sym, cols, body []Occurrence, decls []declEntry) {
-	acc := &Index{Tables: map[string]*check.TableInfo{}, Enums: map[string]*check.EnumInfo{}, Types: map[string]*check.TypeInfo{}, Partials: map[string]*check.PartialInfo{}, decls: map[SymbolID]*ast.Ident{}}
+func tableOccurrences(d *ast.Table, ti, resolved *check.TableInfo, tables map[string]*check.TableInfo, types map[string]*check.TypeInfo, partials map[string]bool) (sym, cols, body []Occurrence, decls []declEntry) {
+	acc := &Index{Tables: map[string]*check.TableInfo{}, Types: map[string]*check.TypeInfo{}, Partials: map[string]*check.PartialInfo{}, decls: map[SymbolID]*ast.Ident{}}
 	for key, t := range types {
 		if t != nil {
 			acc.Types[key] = t
@@ -275,11 +252,6 @@ func tableOccurrences(d *ast.Table, ti, resolved *check.TableInfo, tables map[st
 	for key, t := range tables {
 		if t != nil {
 			acc.Tables[key] = t
-		}
-	}
-	for key, e := range enums {
-		if e != nil {
-			acc.Enums[key] = e
 		}
 	}
 	for name, present := range partials {
@@ -301,47 +273,6 @@ func tableOccurrences(d *ast.Table, ti, resolved *check.TableInfo, tables map[st
 	acc.walkTableBody(d.Body, resolved, "")
 	body = acc.Occs[from:len(acc.Occs):len(acc.Occs)]
 	return sym, cols, body, decls
-}
-
-func (ix *Index) enumsNamed(d *ast.Table) map[string]*check.EnumInfo {
-	out := map[string]*check.EnumInfo{}
-	name := func(key string) { out[key] = ix.Enums[key] }
-	var settings func(s *ast.SettingList)
-	settings = func(s *ast.SettingList) {
-		if s == nil {
-			return
-		}
-		for _, st := range s.Settings {
-			if ec, ok := st.Value.(*ast.EnumConst); ok {
-				name(ec.Enum.Name())
-			}
-		}
-	}
-	rows := func(rows []*ast.RecordRow) {
-		for _, row := range rows {
-			for _, v := range row.Values {
-				if ec, ok := v.(*ast.EnumConst); ok {
-					name(ec.Enum.Name())
-				}
-			}
-		}
-	}
-	for _, item := range d.Body {
-		switch n := item.(type) {
-		case *ast.Column:
-			if n.Type != nil && n.Type.Name != nil {
-				name(n.Type.Name.String())
-			}
-			settings(n.Settings)
-		case *ast.IndexesBlock:
-			for _, index := range n.Indexes {
-				settings(index.Settings)
-			}
-		case *ast.Records:
-			rows(n.Rows)
-		}
-	}
-	return out
 }
 
 func (ix *Index) tablesNamed(d *ast.Table) map[string]*check.TableInfo {
@@ -403,8 +334,6 @@ func (ix *Index) walkTableBody(body []ast.TableItem, ti *check.TableInfo, partia
 		case *ast.Column:
 			if td := ix.Types[n.Type.String()]; td != nil {
 				ix.add(SymbolID{SymType, "", td.Key}, lastPart(n.Type.Name), false)
-			} else if ei := ix.resolveEnum(n.Type.Name); ei != nil {
-				ix.add(SymbolID{SymEnum, "", ei.Key}, lastPart(n.Type.Name), false)
 			}
 			ix.walkSettings(n.Settings)
 		case *ast.PartialRef:
@@ -424,7 +353,6 @@ func (ix *Index) walkTableBody(body []ast.TableItem, ti *check.TableInfo, partia
 			for _, c := range n.Columns {
 				ix.addColumnRef(ti, "", c)
 			}
-			ix.walkRecordRows(n.Rows)
 		case *ast.ValidatorsBlock:
 			for _, v := range n.Validators {
 				for _, a := range v.Args {
@@ -464,35 +392,8 @@ func (ix *Index) walkSettings(s *ast.SettingList) {
 		return
 	}
 	for _, setting := range s.Settings {
-		switch v := setting.Value.(type) {
-		case *ast.RefEndpoint:
+		if v, ok := setting.Value.(*ast.RefEndpoint); ok {
 			ix.walkEndpoint(v)
-		case *ast.EnumConst:
-			ix.walkEnumConst(v)
-		}
-	}
-}
-
-func (ix *Index) walkRecordRows(rows []*ast.RecordRow) {
-	for _, row := range rows {
-		for _, v := range row.Values {
-			if ec, ok := v.(*ast.EnumConst); ok {
-				ix.walkEnumConst(ec)
-			}
-		}
-	}
-}
-
-func (ix *Index) walkEnumConst(ec *ast.EnumConst) {
-	ei, ok := ix.Enums[ec.Enum.Name()]
-	if !ok {
-		return
-	}
-	ix.add(SymbolID{SymEnum, "", ei.Key}, ec.Enum, false)
-	for _, v := range ei.Decl.Values {
-		if v.Name.Name() == ec.Value.Name() {
-			ix.add(SymbolID{SymEnumValue, "enum:" + ei.Key, ec.Value.Name()}, ec.Value, false)
-			break
 		}
 	}
 }
@@ -545,13 +446,6 @@ func (ix *Index) resolveTable(id *ast.Ident) *check.TableInfo {
 		return nil
 	}
 	return ix.Tables[id.Name()]
-}
-
-func (ix *Index) resolveEnum(q *ast.QualName) *check.EnumInfo {
-	if q == nil {
-		return nil
-	}
-	return ix.Enums[q.String()]
 }
 
 func (ix *Index) add(id SymbolID, ident *ast.Ident, isDecl bool) {

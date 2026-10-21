@@ -388,3 +388,30 @@ Table page_views {
         (go_ref
           (identifier))
         (column_ref)))))
+
+==================
+volt: an error_handler qualified by the package's own name
+==================
+
+Scope / [error_handler: app.Errors] {
+	get / Home.Index
+}
+
+---
+
+(source_file
+  (scope_definition
+    (route_path)
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (qualified_value
+          (identifier)
+          (identifier))))
+    (route
+      (verb)
+      (route_path)
+      (go_ref
+        (identifier)
+        (identifier)))))

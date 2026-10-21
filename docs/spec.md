@@ -15,7 +15,7 @@ specification has two parts and the appendices:
 
 - **[Part I — The Schema Core](#part-i-the-schema-core)**: lexis,
   grammar and static semantics of the schema language: tables,
-  columns, indexes, refs, enums, types, partials, records and notes,
+  columns, indexes, refs, types, partials, records and notes,
   with Go's types as the column types.
 - **[Part II — The Project and Routing Layer](#part-ii-the-project-and-routing-layer)**:
   projects, packages, imports, pipelines, scopes, routes, resources,
@@ -45,7 +45,7 @@ suspicious schemas, every rule with executable examples — is
 
 **Status:** Normative.
 Part I is Volt's schema language: tables, columns, indexes, refs,
-enums, types, partials, records and notes, with column types drawn
+types, partials, records and notes, with column types drawn
 from Go (§columns, §types). A Part I file
 body is a valid Volt file body (§layers-files-and-the-superset-rule).
 The reference implementation is [`lang/`](../lang/); the executable
@@ -54,7 +54,7 @@ where the snippets without a `package` clause are Part I's
 (§conformance-and-the-proof-chain).
 
 The schema language is declarative: it defines tables, columns,
-indexes, constraints, relationships, enumerations, sample data and
+indexes, constraints, relationships, sample data and
 documentation metadata, and leaves storage to the generators
 (§mapping-to-sqlite-ddl).
 
@@ -98,7 +98,6 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Default Values](#default-values)
     - [Indexes](#indexes)
     - [Relationships (Ref)](#relationships-ref)
-    - [Enum](#enum)
     - [Types](#types)
     - [TablePartial](#tablepartial)
     - [Records (Sample Data)](#records-sample-data)
@@ -297,7 +296,7 @@ sp      = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
    positions counts its byte in offsets and gives it no column, so every
    position points into the file as written.
 2. Volt is **newline-sensitive**: a line break terminates statements such as
-   column definitions, enum values, record rows, and settings-free field
+   column definitions, record rows, and settings-free field
    lines. Productions in this specification reference `newline` explicitly
    wherever it is syntactically significant. A production that ends with
    `newline` is **line-oriented**: it lies on one line, and a line break
@@ -322,8 +321,8 @@ sp      = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
 6. **Recovery.** A syntax error inside an element discards the rest of
    that element, up to the next element start, and the next
    element is parsed as if the broken one were absent. Inside a braced
-   or parenthesized body of items (a table's columns, an enum's values,
-   a scope's routes, an import block's entries, and every other
+   or parenthesized body of items (a table's columns, a scope's
+   routes, an import block's entries, and every other
    one-per-line body), a syntax error discards the rest of the item's
    line, up to the next line or the body's closing bracket, and the
    following items are parsed. What a conforming front end reports
@@ -404,8 +403,8 @@ Volt has **no reserved words**. All keywords are contextual: a keyword such
 as `Table` acts as a keyword only in keyword position and remains usable as an
 ordinary identifier elsewhere (e.g. a column may be named `table`).
 
-Element-type keywords: `Project`, `Table`, `TablePartial`, `Enum`,
-`Type`, `Ref`, `Records`, `Migration`, `indexes`, `validators`.
+Element-type keywords: `Project`, `Table`, `TablePartial`, `Type`,
+`Ref`, `Records`, `Migration`, `indexes`, `validators`.
 Clause keyword: `from`.
 Value keywords: `true`, `false`, `null`.
 All are case-insensitive (§case-sensitivity-and-terminology).
@@ -549,7 +548,7 @@ among them, is a lexical error. Their roles:
 | `( )`   | composite column lists, records column lists, group sets (§groups), select projections (§selects-over-groups), import blocks (§imports) |
 | `:`     | a setting value, a project property, the body of `Ref:`, a route parameter (§route-paths), a query parameter (§predicates) |
 | `,`     | separator inside `[ ]`, `( )` and record rows               |
-| `.`     | qualification: `table.column`, `Enum.value`, `pkg.Name` (§types), `pkg.name` (§imports) |
+| `.`     | qualification: `table.column`, `pkg.Name` (§types, §scopes), `pkg.name` (§imports) |
 | `~`     | TablePartial injection prefix                               |
 | `>`     | a relationship, foreign key first (§relationships-ref); a comparison in a predicate (§predicates) |
 | `-`     | the sign of a negative number                               |
@@ -565,18 +564,18 @@ among them, is a lexical error. Their roles:
 ### Names and Qualified Names
 
 ```ebnf
-name          = identifier ;
-
-enum constant = name, ".", name ;        (* EnumName.value *)
+name = identifier ;
 ```
 
-1. A table, an enum, a partial and a column are each named by one
-   `name`; no name is qualified by a schema or any other container.
-2. `enum constant` references one value of an enum, e.g. `status.active`;
-   it is valid as a default value (§default-values) and as a record value (§records-sample-data).
-3. The qualifications Volt has are `table.column` in a relationship
-   (§relationships-ref), `pkg.Name` naming a Go type (§types) and
-   `pkg.name` naming a declaration of an imported package (§imports).
+1. A table, a partial and a column are each named by one `name`, and a
+   type of the package by one identifier (§types); no name is
+   qualified by a schema or any other container.
+2. The qualifications Volt has are `table.column` in a relationship
+   (§relationships-ref), `pkg.Name` naming a Go type (§types),
+   `pkg.name` naming a declaration of an imported package (§imports),
+   and `pkg.Name` naming a function of the package itself in a setting
+   that takes one (§scopes). A dotted name is neither a default value
+   (§default-values) nor a record value (§records-sample-data).
 
 ### Settings Lists
 
@@ -615,7 +614,6 @@ program = { element } ;
 element = project
         | table
         | table partial
-        | enum
         | type decl
         | ref element
         | records element ;
@@ -717,8 +715,7 @@ column setting  = "pk"
 
 1. **Type.** A column type is a Go type, matched case-sensitively, from
    a closed set: the built-ins `bool`, `int`, `float64`, `string`,
-   `[]byte` and `time.Time`; an enum of the package (§enum); or a type
-   declared with `Type` (§types). Anything else is an error naming the column and
+   `[]byte` and `time.Time`, or a type declared with `Type` (§types). Anything else is an error naming the column and
    the set; the `[]` of the grammar belongs to `[]byte` alone, so
    `[]string` is an unknown type. An unknown type is reported once, at
    the column, even when a TablePartial injects the column into several
@@ -785,12 +782,11 @@ column setting  = "pk"
 > in the zero-value sense: a zero value that is set, or decoded into a
 > row and passed to `From` (§changesets), satisfies a NOT NULL column,
 > except one that binds as NULL (nil for `[]byte`, rule 2), so
-> `required` is the word for "and not that either". It is one of the two built-in rules
-> of `Validate` (§changesets), beside enum membership, and the one the
-> schema switches on per column, the field error with check
-> `required`: it refuses `""` for `string` and enum columns, `0` for
-> `int` and `float64`, a zero length for `[]byte`, and for a declared
-> type the empty value of its storage type. It is an error on a
+> `required` is the word for "and not that either". It is the one built-in rule
+> of `Validate` (§changesets), which the schema switches on per column,
+> the field error with check `required`: it refuses `""` for `string`,
+> `0` for `int` and `float64`, a zero length for `[]byte`, and for a
+> declared type the empty value of its storage type. It is an error on a
 > `null` column, which has no empty value to refuse since NULL is
 > absence, on a `default:` or `increment` column, and on `bool` and
 > `time.Time`, where every value is a value.
@@ -830,8 +826,7 @@ Table users {
 default value = [ "-" ], number
               | string
               | boolean
-              | expression literal
-              | enum constant ;
+              | expression literal ;
 ```
 
 | Kind          | Example                                               |
@@ -840,16 +835,15 @@ default value = [ "-" ], number
 | string        | `default: 'direct'`                                   |
 | boolean       | `default: false`                                      |
 | expression    | `` default: `now() - interval '5 days'` ``            |
-| enum constant | `default: status.active`                              |
 
-A bare identifier that is not `true`/`false` and not a dotted enum
-constant is **not** a valid default value.
+A bare identifier other than `true` and `false`, and a dotted name
+such as `state.pending`, is **not** a valid default value.
 
 1. **Typed.** A default MUST fit the column's type (§columns): an
    integer literal for `int`; a number for `float64`; a string for `string`;
-   `true` or `false` for `bool`; a constant of the column's own enum
-   for an enum column; for a declared type (§types), a literal of its
-   storage type. An expression literal is accepted on any column and is
+   `true` or `false` for `bool`; for a declared type (§types), a
+   literal of its storage type, so the default of a value set is the
+   value as written (`default: 'pending'`). An expression literal is accepted on any column and is
    SQLite's to judge. `[]byte` and `time.Time` columns take only an
    expression literal. A default that does not fit is an error naming
    the column and its type.
@@ -1017,32 +1011,6 @@ Ref: posts.editor_id > users.id [delete: set null, update: no action]
 Ref: merchant_periods.(merchant_id, country_code) > merchants.(id, country_code)
 ```
 
-### Enum
-
-```ebnf
-enum          = "Enum", name, "{", { enum value }, "}" ;
-enum value    = name, [ enum settings ], newline ;
-
-enum settings = "[", enum setting, { ",", enum setting }, "]" ;
-enum setting  = "note", ":", string ;
-```
-
-1. An enum MUST contain at least one value. Values MUST be unique within
-   the enum.
-2. A value containing spaces or special characters MUST be written as a
-   quoted identifier: `"Not Yet Set"`.
-3. A column references an enum by using the enum name as its type:
-   `status job_status`.
-
-```volt
-Enum job_status {
-  created [note: 'Waiting to be processed']
-  running
-  done
-  failure
-}
-```
-
 ### Types
 
 A **Type** declaration admits a Go type of the application as a column
@@ -1065,24 +1033,61 @@ storage type = column type ;
    `gob` from `encoding/gob`, `http` from `net/http`, the rest from
    the path of their name), and `rt` and `volt` are never free. A bare
    `Name` without `from` names a type declared in a Go file of the data
-   package itself, and `from` on a bare name is an error, as is
-   `pkg.Name` without `from`.
+   package itself (§projects-and-packages): the project pass refuses a
+   bare `Name` that no Go file of the package declares, with an error
+   naming the line to write (`type OrderState string`), while the
+   schema pass, which reads no Go file, does not. `from` on a bare name
+   is an error, as is `pkg.Name` without `from`.
    Declared names are unique within the package and MUST NOT spell a
-   built-in type or an enum.
+   built-in type. A bare name shares the package scope with the names
+   generated code declares (§names), so it MUST NOT be one of them: a
+   model, a changeset with its aliases and constructor, a column
+   handle, an option wrapper, the `Queries` handle or its constructor
+   `New`; the error suggests a name that is free. The type of a column
+   is therefore named apart from the column's handle: `orders.status`
+   mints the handle `OrderStatus`, so its type is `OrderState`.
 2. **Storage.** The storage type is one of the six built-ins
-   (§columns), never an enum or another declared type. It fixes the
+   (§columns), never another declared type. It fixes the
    SQLite column (§mapping-to-sqlite-ddl), the empty value `required`
    refuses (§columns) and the literals a `default:` accepts
    (§default-values).
-3. **Contract.** The Go type MUST implement `database/sql.Scanner` on
-   its pointer and `database/sql/driver.Valuer` on its value, since
-   generated code scans into a pointer and binds values. Generated
-   code asserts both (`var _ sql.Scanner = (*pkg.Name)(nil)` and
+3. **Contract.** Generated code scans into a pointer and binds values,
+   and the Go type decides how. A bare type whose Go declaration spells
+   its storage type as its underlying type, or as the type it aliases
+   (`type OrderState string`, `type Priority = int`), for storage
+   `bool`, `int`, `float64` or `string`, is **kinded** (a generic
+   declaration never is): database/sql converts it by its kind, so it
+   needs neither method and generated code asserts nothing for it.
+   Every other declared type, every package-qualified one among them,
+   MUST implement `database/sql.Scanner` on its pointer and
+   `database/sql/driver.Valuer` on its value; generated code asserts
+   both
+   (`var _ sql.Scanner = (*pkg.Name)(nil)` and
    `var _ driver.Valuer = *new(pkg.Name)`), so a type that does not
-   fails to compile at the assertion, naming the type. A column of a
-   declared type that carries `null` is `rt.Null[pkg.Name]`.
+   fails to compile at the assertion, naming the type. Storage
+   `time.Time` and `[]byte` is never kinded: a struct does not convert
+   by kind, and a named byte slice scans by reflection without copying
+   the driver's buffer. The declaration is read by its spelling, as a
+   validator's signature is (§validators), and the Go compiler remains
+   the authority on what it denotes. A column of a declared type that
+   carries `null` is `rt.Null[pkg.Name]`.
 4. **In predicates.** A column of a declared type compares with `=`,
    `!=`, `in` and `is null` only (§predicates).
+5. **Value sets.** A column that holds one of a fixed set of values is
+   a column of a kinded type. Its values are Go constants and its
+   membership is a validator (§validators), both written in the Go
+   file that declares the type, so the user names the constants; its
+   defaults and records are literals of the storage type. `<Model>New`
+   seeds a literal default of a kinded type, `required` compares its
+   value with the storage type's empty value directly (§changesets),
+   and a list parameter binds as one JSON array of its values
+   (§predicates). The database stores the storage type and carries no
+   `CHECK` (§validators).
+6. **Output elsewhere.** `volt gen -o DIR` (§projects-and-packages)
+   writing Go for a package that declares a bare type is an error
+   naming the fix: the type lives in the package's own Go files, which
+   do not travel to `DIR`, so it is declared in a package of its own
+   and named `Type pkg.Name storage from 'path'`.
 
 ```volt
 Type money.Money int    from 'example.com/app/money'
@@ -1096,6 +1101,67 @@ Table products {
   icon  png.Png     [null]
 }
 ```
+
+A value set (rule 5): the schema names the type and the validators,
+and the Go file beside it declares the type, its constants and the
+validators.
+
+```volt
+Type OrderState string
+
+Table orders {
+  id     int        [pk, increment]
+  status OrderState [default: 'pending']
+  prev   OrderState [null]
+
+  validators {
+    OrderStateKnown(status)
+    OrderStateKnownNull(prev)
+  }
+
+  Records (id, status) {
+    1, 'paid'
+  }
+}
+```
+
+```go
+// OrderState is the state of an order (§types).
+type OrderState string
+
+const (
+	OrderStatePending OrderState = "pending"
+	// OrderStatePaid is settled by the processor.
+	OrderStatePaid    OrderState = "paid"
+	OrderStateShipped OrderState = "shipped"
+)
+
+// OrderStateKnown refuses a state outside the constants (§validators).
+func OrderStateKnown(s OrderState) error {
+	switch s {
+	case OrderStatePending, OrderStatePaid, OrderStateShipped:
+		return nil
+	}
+	return fmt.Errorf("%q is not an order state", string(s))
+}
+
+// OrderStateKnownNull is OrderStateKnown for a nullable column, which
+// NULL passes (§validators).
+func OrderStateKnownNull(s rt.Null[OrderState]) error {
+	if !s.Valid {
+		return nil
+	}
+	return OrderStateKnown(s.V)
+}
+```
+
+Generated code types the field `Status OrderState` and the nullable
+one `Prev rt.Null[OrderState]`, asserts nothing for `OrderState`,
+starts `OrderNew()` from `Order{Status: "pending"}`, and records a
+failed validator under its name, `OrderStateKnown`; the DDL is
+`status TEXT NOT NULL DEFAULT 'pending'`. A select over the column
+takes the type: `Select by_state for orders where status in :states`
+mints `OrderByState(ctx, states []OrderState)`.
 
 ### TablePartial
 
@@ -1159,8 +1225,7 @@ record value    = string
                 | [ "-" ], number
                 | boolean
                 | null
-                | expression literal
-                | enum constant ;        (* EnumName.value, §names-and-qualified-names *)
+                | expression literal ;
 ```
 
 1. Top-level records MUST name the target table and MUST list columns.
@@ -1172,15 +1237,14 @@ record value    = string
    (§columns), as a default must (§default-values): an integer literal
    for `int`; a number for `float64`; a string for `string` and for
    `time.Time` (ISO 8601 text, `'2024-01-15 10:30:00'`); `true` or
-   `false` for `bool`; a constant of the column's own enum
-   (`EnumName.value`) for an enum column; for a declared type, a
-   literal of its storage type. `null` is NULL and is allowed only on a
-   column that carries `null`.
+   `false` for `bool`; for a declared type, a literal of its storage
+   type (`'paid'` for a value set stored as `string`, §types). `null`
+   is NULL and is allowed only on a column that carries `null`.
    A `[]byte` column takes an expression literal or NULL. An expression
    literal (backticks) is accepted on any column and is SQLite's to
-   judge. A bare identifier other than `true`, `false` and `null` is
-   **not** a value. A value that does not fit is an error naming the
-   column and its type.
+   judge. A bare identifier other than `true`, `false` and `null`, and
+   a dotted name, is **not** a value. A value that does not fit is an
+   error naming the column and its type.
 5. **No empty field.** Every field of a row holds a value: NULL is
    written `null`, and nothing between two commas, before the first or
    after the last is an error.
@@ -1192,19 +1256,16 @@ record value    = string
    omitted list names every column (rule 1).
 
 ```volt
-Enum job_status {
-  created
-  running
-}
+Type JobState string
 
 Table users {
   id int [pk]
   name string [null]
-  status job_status [null]
+  status JobState [null]
 
   Records (id, name, status) {
-    1, 'Alice', job_status.created
-    2, 'Bob', job_status.running
+    1, 'Alice', 'created'
+    2, 'Bob', 'running'
     3, null, null
   }
 }
@@ -1227,9 +1288,10 @@ A note is human-readable documentation. It has one spelling, the
 `note:` setting, and one meaning: generated code carries it.
 
 1. `note: string` is a setting of a `Project` (§project), a `Table`
-   (§table), a column (§columns) and an enum value (§enum), and of
-   nothing else: a partial, an index, a relationship, a group and a
-   migration carry no note.
+   (§table) and a column (§columns), and of nothing else: a partial,
+   a type, an index, a relationship, a group and a migration carry no
+   note. A constant of a declared type documents itself in the Go
+   file that declares it (§types).
 2. The value is a string. A multi-line string
    (§multi-line-string-literals) is permitted and conventionally
    contains Markdown; a settings list spans lines inside its brackets
@@ -1241,18 +1303,12 @@ A note is human-readable documentation. It has one spelling, the
    (§mapping-to-sqlite-ddl).
 
 ```volt
-Enum post_status {
-  draft [note: 'Visible to its author only']
-  published
-}
-
 Table posts [note: '''
   A blog post.
   Its author sees it before anyone else.
 '''] {
   id int [pk]
   title string [note: 'Shown in lists']
-  status post_status
 }
 ```
 
@@ -1266,12 +1322,11 @@ Within one package (§projects-and-packages):
 
 1. Table names MUST be unique. Tables and groups share this namespace
    (§groups): a group MUST NOT take a table's name.
-2. Enum names MUST be unique.
+2. Declared Type names (§types) form their own namespace and MUST be
+   unique. A bare one also shares the Go package scope with the names
+   generated code declares and MUST NOT take one of them (§types).
 3. TablePartial names form their own namespace and MUST be unique.
-   Declared Type names (§types) form their own namespace, and a Type
-   MUST NOT spell an enum name.
-4. Column names MUST be unique within their table; enum values within their
-   enum.
+4. Column names MUST be unique within their table.
 
 ### Reference Resolution
 
@@ -1306,7 +1361,7 @@ above.
 
 program              = { element } ;
 
-element              = project | table | table partial | enum
+element              = project | table | table partial
                      | type decl | ref element | records element ;
 
 (* ===== Project ===== *)
@@ -1338,7 +1393,7 @@ column setting       = "pk" | "null"
                      | "tag", ":", string
                      | "ref", ":", name, ".", name ;
 default value        = [ "-" ], number | string | boolean
-                     | expression literal | enum constant ;
+                     | expression literal ;
 
 indexes block        = "indexes", "{", { index }, "}" ;
 index                = index key, [ index settings ], newline ;
@@ -1362,13 +1417,6 @@ ref setting          = "delete", ":", ref action
 ref action           = "cascade" | "restrict" | "set null" | "set default"
                      | "no action" ;
 
-(* ===== Enum ===== *)
-
-enum                 = "Enum", name, "{", { enum value }, "}" ;
-enum value           = name, [ enum settings ], newline ;
-enum settings        = "[", enum setting, { ",", enum setting }, "]" ;
-enum setting         = "note", ":", string ;
-
 (* ===== Types ===== *)
 
 type decl            = "Type", type name, storage type, [ "from", string ], newline ;
@@ -1389,12 +1437,11 @@ records block        = "Records", [ records columns ],
 records columns      = "(", name, { ",", name }, ")" ;
 record row           = record value, { ",", record value }, newline ;
 record value         = string | [ "-" ], number | boolean | null
-                     | expression literal | enum constant ;
+                     | expression literal ;
 
 (* ===== Common forms ===== *)
 
 name                 = identifier ;
-enum constant        = name, ".", name ;
 
 settings             = "[", setting, { ",", setting }, "]" ;
 setting              = setting name, [ ":", setting value ] ;
@@ -1517,7 +1564,7 @@ package clause = "package", name, newline ;
    is an error.
 3. A **package** is a directory: all `.volt` files in one directory
    MUST declare the same package name, and share one namespace per
-   element kind (tables, enums, partials, pipelines, scopes — each per
+   element kind (tables, types, partials, pipelines, scopes, each per
    Part I §namespaces-and-uniqueness extended with §pipelines and §scopes-and-routes).
 4. In every directory other than the project root, the package name
    MUST equal the directory's base name. The root directory's package
@@ -1550,7 +1597,19 @@ package clause = "package", name, newline ;
    and `sql`; the client then lands beside the models (§generated-client). A
    `.volt` file's own package clause stays mandatory: it
    names the package to the language and to the editor; only the
-   clause of what is written follows the target.
+   clause of what is written follows the target. A package that
+   declares a bare `Type` writes no Go to `DIR`, since the type lives
+   in the package's own Go files (rule 9, §types); `-parts sql` alone
+   is unaffected.
+9. **Go files.** A package's Go files are the non-test `.go` files of
+   its directory that the go tool would compile for it (go/build's
+   file constraints), less those carrying the generated marker. The Go
+   names its `.volt` files use resolve there and nowhere else, each
+   held to its spelled signature or declaration: validators
+   (§validators), plugs (§pipelines), error handlers (§scopes) and bare
+   declared types (§types). A Go file with a syntax error hides the
+   declarations after the error, and a diagnostic about a missing
+   declaration says so.
 
 ```volt
 // db/schema.volt
@@ -2369,10 +2428,9 @@ Pred chosen  { org in :orgs }
      in; one param name MUST resolve to one type across the whole use
      site — a list and a scalar use of the same name disagree — or
      the use is an error naming both positions.
-4. An enum-typed column cannot be compared in the predicate language;
-   with `[]byte` (rule 3) it is the only column type predicates
-   refuse. Whether typed enum parameters should lift this is
-   hypotheses H5.
+4. `[]byte` (rule 3) is the one column type predicates refuse: every
+   other column, a column of a declared type among them, compares
+   under rule 5.
 5. Type classes follow the column types (§columns): numeric = `int`
    and `float64`; text = `string`; date/time = `time.Time`; `bool`
    agrees with `bool` only. A column of a declared type (§types)
@@ -2380,8 +2438,10 @@ Pred chosen  { org in :orgs }
    that position has the declared Go type, a literal has the class
    of the storage type, and a declared type stored as `time.Time` or
    `[]byte` takes no literal. A list parameter of a declared type is
-   bound through the type's driver value, and a declared type stored
-   as `time.Time` cannot take one, as rule 3 says of `time.Time`.
+   bound as one JSON array of its values, by kind for a kinded type
+   and through the type's driver value otherwise (§types), and a
+   declared type stored as `time.Time` cannot take one, as rule 3
+   says of `time.Time`.
 6. **Rendering.** There is one SQL renderer, the runtime's
    (`rt.SelectRender` and its siblings), and every statement Volt
    emits is its output: the dynamic layer calls it at run time, the
@@ -2526,9 +2586,9 @@ the optional projection narrows the emitted columns.
      and the **default** tag pair `db:"col" json:"col"` (§struct-tags): the
      shared type belongs to the select, not to any one table, so
      per-table `tag:` passthroughs and doc comments do not transfer.
-     Agreement is judged on the generated field type, so an enum-typed
-     column agrees exactly when every member resolves it to the same
-     generated enum type.
+     Agreement is judged on the generated field type, so a column of a
+     declared type agrees exactly when every member types it with the
+     same declared type.
    - **Star with exclusions** `(* \ a \ b)`, or as a set
      `(* \ (a, b))`, with the same `\` and set term as group algebra
      (§groups); `-` is an error naming `\`. At least one exclusion,
@@ -2546,8 +2606,9 @@ the optional projection narrows the emitted columns.
    - Minted row-type names (the shared struct, and each derivative)
      live in the generated package scope and MUST NOT collide with any
      generated package-level name. The checker reports collisions with
-     models, enums, the `Queries` handle, another select's minted row
-     type, the generated changeset names (`Changeset`, `Column`,
+     models, the package's bare declared types (§types), the `Queries`
+     handle, another select's minted row type, the generated changeset
+     names (`Changeset`, `Column`,
      `Params` and `New` select names are rejected outright), and the
      member tables' own column handles; the Go compiler backstops the rest.
 
@@ -2607,8 +2668,8 @@ func EmailShape(email string) error {
    types>) error`, and it is checked: exactly one parameter per listed
    column, in order, each spelled exactly as the column's generated Go
    type (§mapping-to-go: `string`, `int`, `time.Time`, `[]byte`,
-   `rt.Null[T]` for a nullable column, an enum's `E<Enum>`, a declared
-   type's own name), a variadic parameter never matching, and exactly
+   `rt.Null[T]` for a nullable column, a declared type's own name), a
+   variadic parameter never matching, and exactly
    one result, `error`. Each violation is its own error, undeclared,
    unexported, generic, variadic, wrong arity, a parameter whose
    spelled type disagrees with the column, a wrong result, and every
@@ -2641,13 +2702,14 @@ func EmailShape(email string) error {
    422 for failed validators and 409 for a unique violation, itemizing
    every field error (§changesets), which the error spine renders into
    the error body (§formats) so a form can mark the fields.
-8. **`required` columns** (§columns) carry the one
-   built-in rule of `Validate` the schema switches on per column; the
-   other, enum membership, every enum column gets (§changesets). The
-   type's empty value is refused, Go only, like every validator.
+8. **`required` columns** (§columns) carry the one built-in rule of
+   `Validate`, which the schema switches on per column. The type's
+   empty value is refused, Go only, like every validator. Membership
+   in a value set is a validator like any other, written beside the
+   type (§types).
 9. **No database twin.** A validator produces no DDL. The database
-   never carries a `CHECK`: an enum column is plain `TEXT`, a
-   `required` column is `NOT NULL` and nothing more
+   never carries a `CHECK`: a column of a declared type is its storage
+   type, a `required` column is `NOT NULL` and nothing more
    (§mapping-to-sqlite-ddl).
 
 ---
@@ -2677,7 +2739,7 @@ func (c UserChangeset) Cast(p UserParams, allow ...UserColumn) UserChangeset
 func (c UserChangeset) Changed(col UserColumn) bool
 func (c UserChangeset) Row() User                                // data with changes applied
 func (c UserChangeset) Params() UserParams                       // the changes, for the wire
-func (c UserChangeset) Validate() UserChangeset                  // required, enums, validators
+func (c UserChangeset) Validate() UserChangeset                  // required, validators
 func (c UserChangeset) ErrorAdd(col UserColumn, msg string) UserChangeset
 func (c UserChangeset) Errors() []rt.FieldError
 func (c UserChangeset) Valid() bool
@@ -2701,15 +2763,15 @@ user, err := q.UserUpdate(ctx, cs)
    changeset with no coordination. No method of a changeset touches
    the database.
 2. **Data and changes.** `UserNew()` starts from the zero row with the schema's literal
-   defaults in place (a number, string, boolean or enum-constant
-   `default:` of a built-in or enum column, §default-values) and
-   nothing set, so `Row()` and `Validate` see the literal default the
-   database writes for an unmarked column that has one, and NULL for
-   an unmarked column that carries `null` with no default; an
-   expression default, and a declared type's
-   default, are the database's alone and read as the zero value until
-   the row is stored, as the auto-increment key does until the
-   database assigns it. An unmarked NOT NULL column without a default
+   defaults in place (a number, string or boolean `default:` of a
+   built-in column or of a kinded declared type, §default-values,
+   §types) and nothing set, so `Row()` and `Validate` see the literal
+   default the database writes for an unmarked column that has one,
+   and NULL for an unmarked column that carries `null` with no
+   default; an expression default, and the default of a declared type
+   that implements Scanner and Valuer, are the database's alone and
+   read as the zero value until the row is stored, as the
+   auto-increment key does until the database assigns it. An unmarked NOT NULL column without a default
    reads as its zero value too, but the insert names no value for it,
    so the database writes NULL and refuses the row as a `not_null`
    field error (rule 8), unless `Validate` refused that zero value
@@ -2754,9 +2816,8 @@ user, err := q.UserUpdate(ctx, cs)
    their JSON too. A JSON body that is not an object is a malformed
    body (400).
 6. **`Validate`.** Runs over `Row()`, in this order, every rule every
-   time: each `required` column (rule 9), each enum column's
-   membership in its value set (check `enum`), then every validator
-   of the table top-down (§validators). Every failure is collected as a field error; the
+   time: each `required` column (rule 9), then every validator of the
+   table top-down (§validators). Every failure is collected as a field error; the
    first does not stop the rest. `Validate` is pure and idempotent;
    `Create` and `Update` call it again, so forgetting it costs only an
    earlier error message.
@@ -2766,7 +2827,7 @@ user, err := q.UserUpdate(ctx, cs)
    recorded, then the findings of the last `Validate`; `Valid` is "no
    field errors"; `Err` is `nil` when valid and otherwise a
    `*rt.Invalid` carrying them. `rt.FieldError` is `{Check, Columns,
-   Message}`: the check is `required`, `enum`, `cast`,
+   Message}`: the check is `required`, `cast`,
    `unknown_field`, `custom`, a validator's name, or the database's
    `unique`, `foreign_key`, `not_null` (rule 10); the columns are the
    ones the check reads.
@@ -2785,13 +2846,13 @@ user, err := q.UserUpdate(ctx, cs)
    `rt.StmtCache` when `WithCache` was set, like the dynamic layer.
    An invalid changeset is `*rt.Invalid` from either, before any
    statement runs.
-9. **`required`** (§columns) is one of the two
-   built-in rules of `Validate`, beside enum membership (rule 6), and
-   the one the schema switches on per column: it refuses the type's
-   empty value, `""` for `string` and enum columns, `0` for `int` and
+9. **`required`** (§columns) is the one built-in rule of `Validate`
+   (rule 6), which the schema switches on per column: it refuses the
+   type's empty value, `""` for `string`, `0` for `int` and
    `float64`, a zero length for `[]byte`, and for a declared type the
-   empty value of its storage type, read through the type's
-   `driver.Valuer`. It is Go only, like every validator.
+   empty value of its storage type, compared directly for a kinded
+   type and read through the type's `driver.Valuer` otherwise
+   (§types). It is Go only, like every validator.
 10. **`rt.Invalid`.** Every refused write is one `*rt.Invalid{Model,
     Fields, Cause}`: the field errors of the changeset when validation
     failed, or the database's refusal mapped onto fields when the
@@ -2929,7 +2990,7 @@ Migration 0002__users_bio {
 3. **Self-contained.** A migration references nothing declared
    elsewhere. Table, column and index names are plain names, not
    resolved against the schema. A column type MUST be one of the six
-   built-in types (§columns); an enum or a declared type is not a
+   built-in types (§columns); a declared type is not a
    type here, since the database holds its storage type. A migration
    column is NOT NULL unless it carries `null`, as a schema column is,
    a key column MUST NOT carry `null`, and a `shape body` has at most
@@ -3365,11 +3426,13 @@ chain, each link runnable by `go test ./...`:
 pinned by the generator goldens, which are gofmt-stable and compiled by
 the real Go toolchain on every `go test ./...` run.*
 
-`nao_models.go` carries every type the wire carries: the enums, the
-row structs, the changesets with their column handles and
-`<Model>Params` (§changesets, generation contract), so a program that
-shares the models, a generated client (§generated-client) among them,
-needs nothing else.
+`nao_models.go` carries every type the wire carries that Volt
+generates: the row structs, the changesets with their column handles
+and `<Model>Params` (§changesets, generation contract), so a program
+that shares the models, a generated client (§generated-client) among
+them, needs nothing else but the declared types the models name: a
+package-qualified one from its own package, a bare one from the data
+package's Go files (§types).
 `nao_queries.go` carries the `Queries` handle and its methods, and
 imports only what their signatures name.
 
@@ -3383,8 +3446,8 @@ the set.
 |---|---|
 | `bool`, `int`, `float64`, `string`, `time.Time` | the same |
 | `[]byte` | `[]byte`; nil is NULL, never wrapped |
-| enum type | generated `type X string` + constants |
 | declared `Type pkg.Name` (§types) | `pkg.Name`, imported as `import pkg "path"` |
+| declared `Type Name` (§types) | `Name`, the data package's own type, named unqualified |
 
 `int` is Go's `int`: Volt targets 64-bit platforms (amd64 and arm64),
 so a route parameter or primary key of type `int` carries the full
@@ -3409,16 +3472,17 @@ comparisons take plain `T`, NULL is explicit (`IsNull`, `SetNull`).
 ### Names
 
 `snake_case` → `PascalCase` with the Go initialisms convention
-(`user_id` → `UserID`, `api_key` → `APIKey`). An enum's generated type
-is `E` + the PascalCase name (`order_status` → `EOrderStatus`), and each value is a
-constant of that type. Model names are the
+(`user_id` → `UserID`, `api_key` → `APIKey`). Model names are the
 singular of the table name (`users` → `User`), overridable with
 `[model:]` — the only model-naming override; `resources`' `singular:`
 setting (§settings) renames the route member helper, never the model.
 A leading digit is
 prefixed (`2fa_codes` → `X2faCode`). Two declarations mapping to the
 same Go identifier is a generation error; the `dynname` lint reports
-the dynamic layer's concatenation collisions ahead of time.
+the dynamic layer's concatenation collisions ahead of time. A bare
+declared type shares this scope, since the data package's own Go
+files declare it, and one that takes a generated name is a check
+error that suggests a free one (§types).
 
 ### Notes become doc comments
 
@@ -3429,7 +3493,6 @@ Every note is the `note:` setting (§notes):
 | `Project` | package comment |
 | `Table` | struct doc comment |
 | column | field doc comment |
-| enum value | constant doc comment |
 | injected partial column | travels with the column; a §tablepartial override brings its own note |
 
 Generated files start with the machine-readable
@@ -3511,7 +3574,6 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 
 | Declared | SQLite |
 |---|---|
-| enum-typed column | `TEXT`; SQLite has no enum type, and the value set is the generated Go type's (§go-types) |
 | column without `null`, key columns included (SQLite's `PRIMARY KEY` does not imply NOT NULL) | `NOT NULL`, the rowid alias below excepted; a column that carries `null` has no nullability constraint (§columns) |
 | `int` `[pk, increment]` | exactly `INTEGER PRIMARY KEY` (rowid alias, auto-assigned); SQLite's `AUTOINCREMENT` keyword deliberately avoided — it only adds the never-reuse-an-id bookkeeping the SQLite docs discourage. Any other `increment` placement is a check error (§columns) |
 | composite pk (`[pk]` index) | `PRIMARY KEY (a, b)` table constraint; members get `NOT NULL` |
@@ -3523,7 +3585,7 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 | `string` | `TEXT` |
 | `time.Time` | `TIMESTAMP` (ISO-8601 text; the DDL spelling is what the sqlite3 driver keys its time conversion on) |
 | `[]byte` | `BLOB` |
-| declared `Type` (§types) | the column type of its storage type |
+| declared `Type` (§types) | the column type of its storage type; a value set (§types) carries no `CHECK`, its values are the Go constants |
 | backtick expressions | verbatim; parenthesized in `DEFAULT` as SQLite requires |
 | validators, `required` | nothing; the database never carries a `CHECK` (§validators) |
 | `records` | multi-row `INSERT` statements after all tables, in source order; `null` becomes `NULL` |

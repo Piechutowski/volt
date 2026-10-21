@@ -25,7 +25,7 @@ func (s Severity) String() string {
 
 // Diagnostic is one finding. Code identifies the rule that produced it:
 // syntax errors use "syntax", semantic errors cite their spec section
-// (e.g. "spec/relationships-ref"), vet warnings carry the analyzer name (e.g. "vet/unusedenum").
+// (e.g. "spec/relationships-ref"), vet warnings carry the analyzer name (e.g. "vet/unusedpartial").
 type Diagnostic struct {
 	Pos      token.Position
 	Severity Severity

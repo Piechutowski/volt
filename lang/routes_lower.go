@@ -313,9 +313,9 @@ func selfFuncRefIn(v ast.Node, pkgName string) (string, bool) {
 		if usable(v) {
 			return v.Name(), true
 		}
-	case *ast.EnumConst:
-		if v.Enum.Name() == pkgName && usable(v.Value) {
-			return v.Value.Name(), true
+	case *ast.QualIdent:
+		if v.Qual.Name() == pkgName && usable(v.Name) {
+			return v.Name.Name(), true
 		}
 	}
 	return "", false

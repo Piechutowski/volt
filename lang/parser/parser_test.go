@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Piechutowski/volt/lang/ast"
@@ -107,7 +108,7 @@ Table t {
   records (a, b, c) {
     1, 'x', true
     null, null, null
-    -5, s.v, `+"`now()`"+`
+    -5, 'v', `+"`now()`"+`
   }
 }
 `)
@@ -123,8 +124,20 @@ Table t {
 	if _, ok := rec.Rows[2].Values[0].(*ast.NegNumber); !ok {
 		t.Error("negative number not parsed")
 	}
-	if _, ok := rec.Rows[2].Values[1].(*ast.EnumConst); !ok {
-		t.Error("enum constant not parsed")
+	if _, ok := rec.Rows[2].Values[2].(*ast.FuncExpr); !ok {
+		t.Error("expression literal not parsed")
+	}
+}
+
+func TestRecordsDottedValue(t *testing.T) {
+	src := "Table t {\n  a string\n  records (a) {\n    status.active\n    'active'\n  }\n}\n"
+	f, diags := ParseFile("t", src)
+	if len(diags) != 1 || !strings.Contains(diags[0].Msg, "a dotted name is not a record value") {
+		t.Fatalf("want one dotted-name error, got %v", diags)
+	}
+	rec := f.Decls[0].(*ast.Table).Body[1].(*ast.Records)
+	if last := rec.Rows[len(rec.Rows)-1]; len(last.Values) != 1 {
+		t.Errorf("the row after the error was not parsed")
 	}
 }
 
@@ -163,7 +176,7 @@ Table b {
   ] broken
   x int
 }
-Enum ok { v }
+Type Ok string
 `)
 	if !diag.HasErrors(diags) {
 		t.Fatal("want errors")
@@ -171,14 +184,14 @@ Enum ok { v }
 	if len(diags) < 2 {
 		t.Errorf("want at least 2 diagnostics from independent sites, got %d: %v", len(diags), diags)
 	}
-	var enums int
+	var types int
 	for _, d := range f.Decls {
-		if _, ok := d.(*ast.Enum); ok {
-			enums++
+		if _, ok := d.(*ast.TypeDecl); ok {
+			types++
 		}
 	}
-	if enums != 1 {
-		t.Errorf("recovery lost the trailing enum: decls=%d", len(f.Decls))
+	if types != 1 {
+		t.Errorf("recovery lost the trailing Type: decls=%d", len(f.Decls))
 	}
 }
 

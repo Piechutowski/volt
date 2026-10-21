@@ -58,9 +58,6 @@ var (
 	refSettings = settingSpec{
 		kinds: map[string]valueKind{"delete": actionValue, "update": actionValue},
 	}
-	enumValueSettings = settingSpec{
-		kinds: map[string]valueKind{"note": strValue},
-	}
 )
 
 func (c *checker) settingsCheck(sl *ast.SettingList, section string, spec settingSpec) {
@@ -130,17 +127,19 @@ func (c *checker) settingValueCheck(s *ast.Setting, section string, kind valueKi
 
 func (c *checker) defaultValueCheck(s *ast.Setting) {
 	switch v := s.Value.(type) {
-	case *ast.BasicLit, *ast.FuncExpr, *ast.NegNumber, *ast.EnumConst:
+	case *ast.BasicLit, *ast.FuncExpr, *ast.NegNumber:
 	case *ast.Ident:
 		low := strings.ToLower(v.Name())
 		switch {
 		case !v.Quoted() && low == "null":
 			c.errorf(v.Pos(), "default-values", "null is not a default value: a column that carries null and has no default is NULL when a write leaves it out (§default-values)")
 		case v.Quoted() || (low != "true" && low != "false"):
-			c.errorf(v.Pos(), "default-values", "default value must be a number, string, boolean, expression or enum constant; found bare identifier %q", v.Name())
+			c.errorf(v.Pos(), "default-values", "default value must be a number, string, boolean or expression literal; found bare identifier %q (§default-values)", v.Name())
 		}
+	case *ast.QualIdent:
+		c.errorf(v.Pos(), "default-values", "default value must be a number, string, boolean or expression literal; found the dotted name %s.%s, and a declared type takes a literal of its storage type (§default-values)", v.Qual.Name(), v.Name.Name())
 	default:
-		c.errorf(s.Value.Pos(), "default-values", "default value must be a number, string, boolean, expression or enum constant")
+		c.errorf(s.Value.Pos(), "default-values", "default value must be a number, string, boolean or expression literal (§default-values)")
 	}
 }
 

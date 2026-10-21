@@ -1,6 +1,6 @@
 ; Volt notes conventionally contain Markdown (docs/spec.md §notes): inject Zed's
-; built-in Markdown language into every note: setting, on a project, a table,
-; a column or an enum value.
+; built-in Markdown language into every note: setting, on a project, a table
+; or a column.
 (setting
   name: (setting_name) @_key
   value: (string

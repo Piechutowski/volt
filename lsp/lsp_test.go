@@ -9,10 +9,7 @@ import (
 	"github.com/Piechutowski/volt/lang/token"
 )
 
-const sample = `Enum status {
-  active [note: 'ok']
-  retired
-}
+const sample = `Type Status string
 
 TablePartial base {
   id int [pk]
@@ -21,7 +18,7 @@ TablePartial base {
 Table users [note: 'people'] {
   ~base
   name string [unique]
-  status status [null, default: status.active]
+  status Status [null, default: 'active']
 }
 
 Table orders {
@@ -140,16 +137,16 @@ func TestDefinitionPartialInjection(t *testing.T) {
 	}
 }
 
-func TestDefinitionEnumType(t *testing.T) {
+func TestDefinitionDeclaredType(t *testing.T) {
 	d := doc(t, sample)
-	pos := posOf(t, sample, "status status", 0)
+	pos := posOf(t, sample, "status Status", 0)
 	pos.Character += protocol.UInteger(len("status "))
 	loc := d.Definition(pos)
 	if loc == nil {
-		t.Fatal("no definition for enum type reference")
+		t.Fatal("no definition for declared type reference")
 	}
 	if loc.Range.Start.Line != 0 {
-		t.Errorf("enum definition line = %d, want 0", loc.Range.Start.Line)
+		t.Errorf("Type definition line = %d, want 0", loc.Range.Start.Line)
 	}
 }
 
@@ -204,17 +201,17 @@ func TestHoverTable(t *testing.T) {
 	}
 }
 
-func TestHoverEnumValue(t *testing.T) {
+func TestHoverDeclaredType(t *testing.T) {
 	d := doc(t, sample)
-	pos := posOf(t, sample, "status.active", 0)
-	pos.Character += protocol.UInteger(len("status."))
+	pos := posOf(t, sample, "status Status", 0)
+	pos.Character += protocol.UInteger(len("status "))
 	h := d.Hover(pos)
 	if h == nil {
-		t.Fatal("no hover for enum value")
+		t.Fatal("no hover for declared type reference")
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
-	if !strings.Contains(md, "status.active") || !strings.Contains(md, "ok") {
-		t.Errorf("unexpected enum value hover:\n%s", md)
+	if !strings.Contains(md, "Type Status string") {
+		t.Errorf("unexpected declared type hover:\n%s", md)
 	}
 }
 
@@ -226,7 +223,7 @@ func TestDocumentSymbols(t *testing.T) {
 		names = append(names, s.Name)
 	}
 	joined := strings.Join(names, " ")
-	for _, want := range []string{"status", "base", "users", "orders", "g"} {
+	for _, want := range []string{"Status", "base", "users", "orders", "g"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("outline missing %q: %v", want, names)
 		}
@@ -256,16 +253,16 @@ func TestCompletionColumnSettings(t *testing.T) {
 	}
 }
 
-func TestCompletionDefaultEnumValues(t *testing.T) {
-	text := "Enum status {\n  active\n  banned\n}\n\nTable t {\n  s status [unique, default: status.\n}\n"
+func TestCompletionDefaultValues(t *testing.T) {
+	text := "Table t {\n  s bool [unique, default: \n}\n"
 	d := doc(t, text)
-	line := "  s status [unique, default: status."
-	items := d.Complete(protocol.Position{Line: 6, Character: protocol.UInteger(len(line))})
-	if !hasLabel(items, "active") || !hasLabel(items, "banned") {
-		t.Fatalf("enum value completion missing: %v", labels(items))
+	line := "  s bool [unique, default: "
+	items := d.Complete(protocol.Position{Line: 1, Character: protocol.UInteger(len(line))})
+	if !hasLabel(items, "true") || !hasLabel(items, "false") {
+		t.Fatalf("default value completion missing: %v", labels(items))
 	}
 	if hasLabel(items, "pk") || hasLabel(items, "null") {
-		t.Fatalf("column settings leaked into an enum value position: %v", labels(items))
+		t.Fatalf("column settings, or null, leaked into a default value position: %v", labels(items))
 	}
 }
 
@@ -298,12 +295,12 @@ func TestCompletionPartialInjection(t *testing.T) {
 	}
 }
 
-func TestCompletionTypesIncludeEnums(t *testing.T) {
+func TestCompletionTypesIncludeBuiltins(t *testing.T) {
 	text := sample + "\nTable extra {\n  col v\n}\n"
 	d := doc(t, text)
 	line := protocol.UInteger(strings.Count(sample, "\n") + 2)
 	items := d.Complete(protocol.Position{Line: line, Character: protocol.UInteger(len("  col v"))})
-	if !hasLabel(items, "string") || !hasLabel(items, "status") {
+	if !hasLabel(items, "string") || !hasLabel(items, "time.Time") || !hasLabel(items, "Status") {
 		t.Fatalf("type completion missing: %v", labels(items))
 	}
 }

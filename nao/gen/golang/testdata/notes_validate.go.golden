@@ -2,28 +2,17 @@
 
 package models
 
-import (
-	"github.com/Piechutowski/volt/nao/rt"
-)
-
-// Validate runs required, enum membership and the validators of posts
-// over the row, every one every time, replacing the findings of an
-// earlier Validate (spec §changesets, §validators).
+// Validate runs required and the validators of posts over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
 func (c PostChangeset) Validate() PostChangeset {
-	v := c.Row()
-	var errs []rt.FieldError
-	switch v.Status {
-	case EPostStatusDraft, EPostStatusPublished, EPostStatusArchived:
-	default:
-		errs = append(errs, rt.FieldError{Check: "enum", Columns: []string{"status"}, Message: "status is not a value of post_status"})
-	}
-	c.valid = errs
+	c.valid = nil
 	return c
 }
 
-// Validate runs required, enum membership and the validators of tags
-// over the row, every one every time, replacing the findings of an
-// earlier Validate (spec §changesets, §validators).
+// Validate runs required and the validators of tags over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
 func (c TagChangeset) Validate() TagChangeset {
 	c.valid = nil
 	return c

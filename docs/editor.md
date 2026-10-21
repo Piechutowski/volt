@@ -84,7 +84,7 @@ Tree-sitter compiles `grammar.js` into a table-driven GLR parser in C
 load-bearing patterns, each citing the spec section it implements:
 
 - **Explicit newlines, not `extras`** (§line-structure-and-whitespace). Volt is
-  newline-sensitive — columns, enum values, records rows, routes and
+  newline-sensitive: columns, records rows, routes and
   plugs are line-terminated. `extras` holds only `[ \t\r]` + comments,
   and every body uses one `newlineSep1` helper. Falls out for free:
   `Table t { id int name string }` is a syntax error (spec-correct),
@@ -158,7 +158,7 @@ committed `extension.toml` carries a placeholder.
 **Capture-name discipline**: Zed themes style a fixed capture
 vocabulary (`@keyword`, `@type`, `@property`, `@attribute`, …); the
 queries map *roles*, not node names — tables → `@type`, columns →
-`@property`, enum values → `@variant`, setting names → `@attribute`.
+`@property`, setting names → `@attribute`.
 Later patterns win in a query file, so generic rules go first.
 
 ## 4. The language server (`lsp/`)
@@ -196,7 +196,7 @@ and schedules the project's analysis:
    could see it. A request adopts the newest result at its start.
 4. Two indexes are (re)built *after* Check, from the resolved model:
    the schema occurrence index (single-file symbols: tables, columns,
-   enums, partials) and the project index (`voltIndex`:
+   declared types, partials) and the project index (`voltIndex`:
    qualified references like `db.posts`, pipeline uses, resources).
 
 **Features on top of the indexes** — definition, references, rename,

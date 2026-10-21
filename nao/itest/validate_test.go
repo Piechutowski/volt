@@ -1,5 +1,5 @@
-// Validate round trips (spec §changesets, §validators): required, enum
-// membership and the hand-written validators run in Go over the changeset,
+// Validate round trips (spec §changesets, §validators): required and the
+// hand-written validators, membership among them, run in Go over the changeset,
 // every write validates before it touches the database, and the database
 // carries no twin of any rule.
 package itest

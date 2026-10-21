@@ -189,7 +189,7 @@ func TestQuotedIdent(t *testing.T) {
 }
 
 func TestElementStarts(t *testing.T) {
-	src := "Table a {\n  b int\n}\nx.y\n  indented\n\"quoted\" z\n2fa\nEnum e {\n  v\n}\n/* c */ w\n"
+	src := "Table a {\n  b int\n}\nx.y\n  indented\n\"quoted\" z\n2fa\nScope e {\n  v\n}\n/* c */ w\n"
 	toks, errs := Scan("t", src)
 	if len(errs) != 0 {
 		t.Fatalf("errors: %v", errs)
@@ -200,7 +200,7 @@ func TestElementStarts(t *testing.T) {
 			starts = append(starts, tk.Val)
 		}
 	}
-	if want := []string{"Table", "x", "2fa", "Enum"}; strings.Join(starts, " ") != strings.Join(want, " ") {
+	if want := []string{"Table", "x", "2fa", "Scope"}; strings.Join(starts, " ") != strings.Join(want, " ") {
 		t.Errorf("element starts %q, want %q", starts, want)
 	}
 
@@ -223,7 +223,7 @@ func TestElementStarts(t *testing.T) {
 	for text, want := range map[string]bool{
 		"x.y\n":            true,
 		"2fa x\n":          true,
-		"Enum e {":         true,
+		"Scope e {":        true,
 		"  indented\n":     false,
 		"\"quoted\" z\n":   false,
 		"// c\nTable a {}": false,

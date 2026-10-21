@@ -79,14 +79,15 @@ type NegNumber struct {
 func (x *NegNumber) Pos() token.Position { return x.MinusPos }
 func (x *NegNumber) End() token.Position { return x.Num.End() }
 
-// EnumConst is a dotted enum value reference, e.g. status.active (spec §names-and-qualified-names).
-type EnumConst struct {
-	Enum  *Ident
-	Value *Ident
+// QualIdent is a dotted setting value, pkg.Name: the function of this
+// package a Part II setting names, as error_handler does (spec §scopes).
+type QualIdent struct {
+	Qual *Ident
+	Name *Ident
 }
 
-func (x *EnumConst) Pos() token.Position { return x.Enum.Pos() }
-func (x *EnumConst) End() token.Position { return x.Value.End() }
+func (x *QualIdent) Pos() token.Position { return x.Qual.Pos() }
+func (x *QualIdent) End() token.Position { return x.Name.End() }
 
 // SettingList is a bracketed, comma-separated settings list.
 type SettingList struct {
@@ -116,7 +117,7 @@ func (x *SettingList) Get(name string) *Setting {
 type Setting struct {
 	NameTok token.Token // first word of the name
 	Name    string
-	Value   Node // nil for flags; BasicLit, Ident, FuncExpr, NegNumber, EnumConst, or RefEndpoint for ref:
+	Value   Node // nil for flags; BasicLit, Ident, FuncExpr, NegNumber, QualIdent, IdentList, or RefEndpoint for ref:
 	endPos  token.Position
 }
 
@@ -329,18 +330,6 @@ func (x *RefEndpoint) Pos() token.Position     { return x.Table.Pos() }
 func (x *RefEndpoint) End() token.Position     { return x.endPos }
 func (x *RefEndpoint) SetEnd(p token.Position) { x.endPos = p }
 
-// Enum is an Enum element (spec §enum).
-type Enum struct {
-	EnumPos token.Position
-	Name    *Ident
-	Values  []*EnumValue
-	Rbrace  token.Position
-}
-
-func (d *Enum) Pos() token.Position { return d.EnumPos }
-func (d *Enum) End() token.Position { return d.Rbrace }
-func (d *Enum) declNode()           {}
-
 // TypeDecl is a Type element: a Go type admitted as a column type, with
 // its storage type and import path (spec §types).
 type TypeDecl struct {
@@ -354,20 +343,6 @@ type TypeDecl struct {
 func (d *TypeDecl) Pos() token.Position { return d.TypePos }
 func (d *TypeDecl) End() token.Position { return d.EndPos }
 func (d *TypeDecl) declNode()           {}
-
-// EnumValue is one enum member.
-type EnumValue struct {
-	Name     *Ident
-	Settings *SettingList
-}
-
-func (x *EnumValue) Pos() token.Position { return x.Name.Pos() }
-func (x *EnumValue) End() token.Position {
-	if x.Settings != nil {
-		return x.Settings.End()
-	}
-	return x.Name.End()
-}
 
 // Records is sample data, top-level or in-table (spec §records-sample-data).
 type Records struct {
@@ -385,7 +360,7 @@ func (d *Records) declNode()           {}
 func (d *Records) tableItemNode()      {}
 
 // RecordRow is one CSV-style row. Values are *BasicLit, *Ident (true/false/
-// null), *FuncExpr, *NegNumber or *EnumConst.
+// null), *FuncExpr or *NegNumber.
 type RecordRow struct {
 	Values []Node
 }

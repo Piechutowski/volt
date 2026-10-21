@@ -57,7 +57,7 @@ func exampleDiagnostics(t *testing.T, text string) []diag.Diagnostic {
 		f, diags := parser.ParseFile("example.volt", text)
 		for _, d := range f.Decls {
 			switch d.(type) {
-			case *ast.Project, *ast.Table, *ast.TablePartial, *ast.Enum, *ast.TypeDecl, *ast.Ref, *ast.Records:
+			case *ast.Project, *ast.Table, *ast.TablePartial, *ast.TypeDecl, *ast.Ref, *ast.Records:
 			default:
 				diags = append(diags, diag.Errorf(d.Pos(), "spec/conformance-and-the-proof-chain", "a declaration of Part II is checked in its package: give the example a package clause or mark it fragment"))
 			}

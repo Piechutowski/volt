@@ -6,9 +6,9 @@ import (
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-// Validate runs required, enum membership and the validators of users
-// over the row, every one every time, replacing the findings of an
-// earlier Validate (spec §changesets, §validators).
+// Validate runs required and the validators of users over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
 func (c UserChangeset) Validate() UserChangeset {
 	v := c.Row()
 	var errs []rt.FieldError
@@ -19,35 +19,33 @@ func (c UserChangeset) Validate() UserChangeset {
 	return c
 }
 
-// Validate runs required, enum membership and the validators of orders
-// over the row, every one every time, replacing the findings of an
-// earlier Validate (spec §changesets, §validators).
+// Validate runs required and the validators of orders over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
 func (c OrderChangeset) Validate() OrderChangeset {
 	v := c.Row()
 	var errs []rt.FieldError
 	if v.Total == 0 {
 		errs = append(errs, rt.FieldError{Check: "required", Columns: []string{"total"}, Message: "total is required"})
 	}
-	switch v.Status {
-	case EOrderStatusPending, EOrderStatusShipped, EOrderStatusDelivered:
-	default:
-		errs = append(errs, rt.FieldError{Check: "enum", Columns: []string{"status"}, Message: "status is not a value of order_status"})
+	if err := OrderStateKnown(v.Status); err != nil {
+		errs = append(errs, rt.FieldError{Check: "OrderStateKnown", Columns: []string{"status"}, Message: err.Error()})
 	}
 	c.valid = errs
 	return c
 }
 
-// Validate runs required, enum membership and the validators of user_tags
-// over the row, every one every time, replacing the findings of an
-// earlier Validate (spec §changesets, §validators).
+// Validate runs required and the validators of user_tags over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
 func (c UserTagChangeset) Validate() UserTagChangeset {
 	c.valid = nil
 	return c
 }
 
-// Validate runs required, enum membership and the validators of page_views
-// over the row, every one every time, replacing the findings of an
-// earlier Validate (spec §changesets, §validators).
+// Validate runs required and the validators of page_views over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
 func (c PageViewChangeset) Validate() PageViewChangeset {
 	v := c.Row()
 	var errs []rt.FieldError
@@ -61,9 +59,9 @@ func (c PageViewChangeset) Validate() PageViewChangeset {
 	return c
 }
 
-// Validate runs required, enum membership and the validators of link_clicks
-// over the row, every one every time, replacing the findings of an
-// earlier Validate (spec §changesets, §validators).
+// Validate runs required and the validators of link_clicks over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
 func (c LinkClickChangeset) Validate() LinkClickChangeset {
 	c.valid = nil
 	return c

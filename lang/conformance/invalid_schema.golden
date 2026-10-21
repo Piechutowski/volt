@@ -50,10 +50,7 @@ i12_duplicate_columns.volt:4:3: error: spec/namespaces-and-uniqueness: duplicate
 i130_default_type_mismatch.volt:4:19: error: spec/default-values: default of "n" (int) must be an integer, found string (§default-values)
 
 ## i131_unknown_type.volt
-i131_unknown_type.volt:4:8: error: spec/columns: column "name": unknown type "varchar"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
-
-## i132_default_wrong_enum.volt
-i132_default_wrong_enum.volt:5:22: error: spec/default-values: default of "s": "gone" is not a value of enum "status" (§default-values)
+i131_unknown_type.volt:4:8: error: spec/columns: column "name": unknown type "varchar"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
 
 ## i133_increment_declared_type.volt
 i133_increment_declared_type.volt:5:14: error: spec/columns: increment on "id" (ID): only an int column can auto-increment (§columns, §mapping-to-sqlite-ddl)
@@ -78,25 +75,13 @@ i140_type_reserved_alias.volt:3:6: error: spec/types: Type "rt.X": package name 
 i141_type_reserved_alias_path.volt:3:6: error: spec/types: Type "sql.X": package name "sql" is reserved by generated code for "database/sql" (§types)
 
 ## i142_slice_not_byte.volt
-i142_slice_not_byte.volt:4:8: error: spec/columns: column "tags": unknown type "[]string"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+i142_slice_not_byte.volt:4:8: error: spec/columns: column "tags": unknown type "[]string"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
 
 ## i143_type_duplicate.volt
 i143_type_duplicate.volt:4:1: error: spec/namespaces-and-uniqueness: duplicate Type name "Slug"
 
-## i144_type_enum_collision.volt
-i144_type_enum_collision.volt:4:6: error: spec/types: Type "status" collides with the enum of that name (§types)
-
-## i145_type_storage_enum.volt
-i145_type_storage_enum.volt:4:11: error: spec/types: storage type "status" of Type "Slug" is not a built-in: bool, int, float64, string, []byte or time.Time (§types)
-
 ## i146_type_storage_type.volt
 i146_type_storage_type.volt:4:13: error: spec/types: storage type "Slug" of Type "Handle" is not a built-in: bool, int, float64, string, []byte or time.Time (§types)
-
-## i147_default_enum_const_non_enum.volt
-i147_default_enum_const_non_enum.volt:5:19: error: spec/default-values: default of "n" (int) is an enum constant but the column is not an enum (§default-values)
-
-## i148_default_other_enum.volt
-i148_default_other_enum.volt:6:22: error: spec/default-values: default of "s" names enum "role", the column's enum is "status" (§default-values)
 
 ## i149_default_string_time.volt
 i149_default_string_time.volt:4:26: error: spec/default-values: default of "at" (time.Time) must be an expression literal, found string (§default-values)
@@ -133,7 +118,7 @@ i20_bad_ref_action.volt:4:18: error: spec/relationships-ref: invalid referential
 i21_ref_endpoint_no_column.volt:4:12: error: syntax: an endpoint is table.column or table.(columns) (§relationships-ref), found '>' ">"
 
 ## i220_unknown_type_partial_once.volt
-i220_unknown_type_partial_once.volt:4:11: error: spec/columns: column "version": unknown type "int64"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+i220_unknown_type_partial_once.volt:4:11: error: spec/columns: column "version": unknown type "int64"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
 
 ## i226_pk_null.volt
 i226_pk_null.volt:4:21: error: spec/columns: column "id" carries pk and null: a key column is never NULL (§columns)
@@ -146,9 +131,6 @@ i228_bare_pk_after_type.volt:4:10: error: syntax: expected a settings list or en
 
 ## i229_primary_key_unknown.volt
 i229_primary_key_unknown.volt:4:11: error: spec/columns: unknown setting "primary key" (§columns)
-
-## i22_empty_enum.volt
-i22_empty_enum.volt:2:1: error: spec/enum: enum "empty_status" must contain at least one value
 
 ## i230_use_unknown_element.volt
 i230_use_unknown_element.volt:3:1: error: syntax: unknown element type "use" (§program-structure)
@@ -174,9 +156,6 @@ i238_two_pk_indexes.volt:9:10: error: spec/columns: table "post_tags" declares a
 
 ## i239_partial_pk_second.volt
 i239_partial_pk_second.volt:9:16: error: spec/columns: table "posts" declares a second primary key, column "slug" beside column "id": a table has one primary key, one pk column or one [pk] index (§columns)
-
-## i23_duplicate_enum_values.volt
-i23_duplicate_enum_values.volt:4:3: error: spec/namespaces-and-uniqueness: duplicate enum value "active"
 
 ## i241_pk_index_expression.volt
 i241_pk_index_expression.volt:8:6: error: spec/indexes: index (`lower(slug)`, version) on "posts" carries pk and has an expression in its key: a primary key is columns only (§indexes)
@@ -244,8 +223,17 @@ i256_index_type_note.volt:8:9: error: spec/indexes: unknown setting "note" (§in
 i258_semicolon_not_a_token.volt:4:14: error: syntax: unexpected character ";" (§lexical-structure)
 i258_semicolon_not_a_token.volt:4:14: error: syntax: expected end of line after column definition (§columns), found illegal token ";"
 
+## i259_enum_not_an_element.volt
+i259_enum_not_an_element.volt:3:1: error: syntax: unknown element type "Enum" (§program-structure)
+
 ## i25_two_records_blocks.volt
 i25_two_records_blocks.volt:3:3: error: spec/records-sample-data: at most one records block per table
+
+## i260_default_dotted_name.volt
+i260_default_dotted_name.volt:6:26: error: spec/default-values: default value must be a number, string, boolean or expression literal; found the dotted name state.pending, and a declared type takes a literal of its storage type (§default-values)
+
+## i261_record_dotted_name.volt
+i261_record_dotted_name.volt:9:13: error: syntax: a dotted name is not a record value: a record value is a literal, true, false or null, and a declared type takes a literal of its storage type (§records-sample-data)
 
 ## i26_toplevel_records_no_columns.volt
 i26_toplevel_records_no_columns.volt:3:1: error: spec/records-sample-data: top-level records must list columns
@@ -263,7 +251,7 @@ i34_project_bad_value.volt:3:18: error: syntax: expected string in project prope
 i35_duplicate_table.volt:3:1: error: spec/namespaces-and-uniqueness: duplicate table name "users"
 
 ## i36_bad_default.volt
-i36_bad_default.volt:4:20: error: spec/default-values: default value must be a number, string, boolean, expression or enum constant
+i36_bad_default.volt:4:20: error: spec/default-values: default value must be a number, string, boolean or expression literal (§default-values)
 
 ## i37_injection_in_partial.volt
 i37_injection_in_partial.volt:4:3: error: spec/tablepartial: partial injection is not allowed inside TablePartial
@@ -272,10 +260,10 @@ i37_injection_in_partial.volt:4:3: error: spec/tablepartial: partial injection i
 i38_records_in_partial.volt:4:3: error: spec/tablepartial: records are not allowed inside TablePartial
 
 ## i42_bare_ident_record.volt
-i42_bare_ident_record.volt:5:17: error: spec/records-sample-data: record values must be literals, null, true, false or enum constants; found bare identifier "a"
+i42_bare_ident_record.volt:5:17: error: spec/records-sample-data: record values must be literals, null, true or false; found bare identifier "a" (§records-sample-data)
 
 ## i43_bare_ident_default.volt
-i43_bare_ident_default.volt:3:19: error: spec/default-values: default value must be a number, string, boolean, expression or enum constant; found bare identifier "something"
+i43_bare_ident_default.volt:3:19: error: spec/default-values: default value must be a number, string, boolean or expression literal; found bare identifier "something" (§default-values)
 
 ## i61_tag_malformed.volt
 i61_tag_malformed.volt:4:21: error: spec/columns: tag "json=name" is not one key:"value" pair — write e.g. 'json:"name"' (§columns)

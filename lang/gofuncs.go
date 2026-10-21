@@ -1,7 +1,7 @@
-// Go source facts for Go references (spec §pipelines, §validators): a .volt file
+// Go source facts for Go references (spec §pipelines, §validators, §types): a .volt file
 // names Go only in the containing package's own Go files, read with the
 // standard library's parser, and every reference is held to the exact
-// spelled signature.
+// spelled signature or declaration.
 package lang
 
 import (
@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/token"
 )
 
@@ -39,6 +40,17 @@ type GoFunc struct {
 	Results  []string       // result types by spelling
 	Sig      string         // "func EmailValid(email string) error"
 	Doc      string         // doc comment text, "" when absent
+}
+
+// GoType is one top-level type spec of a package directory, its
+// underlying type by spelling (spec §types).
+type GoType struct {
+	Name       string
+	File       string
+	Pos, End   token.Position // the name's span in File
+	Underlying string         // as spelled after the name; the aliased type for an alias
+	Alias      bool           // declared with =
+	Generic    bool           // declares type parameters
 }
 
 // GoSource is one Go file of a package directory as the scan reads it
@@ -99,12 +111,13 @@ func goSourceRead(path string) (GoSource, error) {
 
 // GoFuncsOf scans a package directory's sources under go/build's file
 // constraints and returns its top-level functions (methods excluded)
-// by name. A file with a syntax error contributes the declarations
-// parsed before the error and is reported in broken ("file: line:col
-// message"). The result is a function of the sources and of the
-// process's build context.
-func GoFuncsOf(dir string, srcs []GoSource) (funcs map[string]GoFunc, broken []string) {
+// and its top-level type specs, each by name. A file with a syntax
+// error contributes the declarations parsed before the error and is
+// reported in broken ("file: line:col message"). The result is a
+// function of the sources and of the process's build context.
+func GoFuncsOf(dir string, srcs []GoSource) (funcs map[string]GoFunc, gotypes map[string]GoType, broken []string) {
 	funcs = map[string]GoFunc{}
+	gotypes = map[string]GoType{}
 	fset := gotoken.NewFileSet()
 	ctxt := build.Default
 	for _, src := range srcs {
@@ -124,6 +137,18 @@ func GoFuncsOf(dir string, srcs []GoSource) (funcs map[string]GoFunc, broken []s
 			continue
 		}
 		for _, d := range f.Decls {
+			if gd, ok := d.(*goast.GenDecl); ok && gd.Tok == gotoken.TYPE {
+				for _, spec := range gd.Specs {
+					ts, ok := spec.(*goast.TypeSpec)
+					if !ok || ts.Name == nil || ts.Type == nil {
+						continue
+					}
+					if _, dup := gotypes[ts.Name.Name]; !dup {
+						gotypes[ts.Name.Name] = goTypeOf(fset, path, ts)
+					}
+				}
+				continue
+			}
 			fn, ok := d.(*goast.FuncDecl)
 			if !ok || fn.Recv != nil || fn.Name == nil || fn.Type == nil {
 				continue
@@ -134,12 +159,25 @@ func GoFuncsOf(dir string, srcs []GoSource) (funcs map[string]GoFunc, broken []s
 			funcs[fn.Name.Name] = goFuncOf(fset, path, fn)
 		}
 	}
-	return funcs, broken
+	return funcs, gotypes, broken
 }
 
 // GoFuncsScan is GoFuncsOf over the sources on disk now.
-func GoFuncsScan(dir string) (funcs map[string]GoFunc, broken []string) {
+func GoFuncsScan(dir string) (funcs map[string]GoFunc, gotypes map[string]GoType, broken []string) {
 	return GoFuncsOf(dir, GoSourcesRead(dir))
+}
+
+func goTypeOf(fset *gotoken.FileSet, path string, ts *goast.TypeSpec) GoType {
+	start, end := fset.Position(ts.Name.Pos()), fset.Position(ts.Name.End())
+	return GoType{
+		Name:       ts.Name.Name,
+		File:       path,
+		Pos:        token.At(path, start.Offset, start.Line, start.Column),
+		End:        token.At(path, end.Offset, end.Line, end.Column),
+		Underlying: types.ExprString(ts.Type),
+		Alias:      ts.Assign.IsValid(),
+		Generic:    ts.TypeParams != nil && len(ts.TypeParams.List) > 0,
+	}
 }
 
 func goFuncOf(fset *gotoken.FileSet, path string, fn *goast.FuncDecl) GoFunc {
@@ -191,6 +229,7 @@ func goFuncOf(fset *gotoken.FileSet, path string, fn *goast.FuncDecl) GoFunc {
 type goScan struct {
 	once   sync.Once
 	funcs  map[string]GoFunc
+	types  map[string]GoType
 	broken []string
 }
 
@@ -199,9 +238,9 @@ type goFuncsCache struct {
 	by map[string]*goScan
 }
 
-func goScanOf(funcs map[string]GoFunc, broken []string) *goScan {
+func goScanOf(funcs map[string]GoFunc, gotypes map[string]GoType, broken []string) *goScan {
 	sc := &goScan{}
-	sc.once.Do(func() { sc.funcs, sc.broken = funcs, broken })
+	sc.once.Do(func() { sc.funcs, sc.types, sc.broken = funcs, gotypes, broken })
 	return sc
 }
 
@@ -219,8 +258,25 @@ func (c *checker) goFuncs(pkg *Package) *goScan {
 		c.gofuncs.by[pkg.Dir] = sc
 	}
 	c.gofuncs.mu.Unlock()
-	sc.once.Do(func() { sc.funcs, sc.broken = GoFuncsScan(pkg.Dir) })
+	sc.once.Do(func() { sc.funcs, sc.types, sc.broken = GoFuncsScan(pkg.Dir) })
 	return sc
+}
+
+func (sc *goScan) goTypes() check.GoTypes {
+	out := make(check.GoTypes, len(sc.types))
+	for name, t := range sc.types {
+		if !t.Generic {
+			out[name] = t.Underlying
+		}
+	}
+	return out
+}
+
+func (sc *goScan) brokenTypesNote() string {
+	if len(sc.broken) == 0 {
+		return ""
+	}
+	return " (note: " + strings.Join(sc.broken, "; ") + "; declarations after a syntax error are invisible)"
 }
 
 func (sc *goScan) brokenHint() string {

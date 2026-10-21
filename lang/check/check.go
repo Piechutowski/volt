@@ -17,7 +17,6 @@ import (
 // Info is the semantic model of one file, produced by File.
 type Info struct {
 	Tables   []*TableInfo
-	Enums    []*EnumInfo
 	Types    []*TypeInfo
 	Partials []*PartialInfo
 	Refs     []*RefInfo
@@ -63,12 +62,6 @@ func (t *TableInfo) Column(name string) *ColumnDef {
 	return nil
 }
 
-type EnumInfo struct {
-	Decl *ast.Enum
-	Key  string
-	Uses int // column type references within this file
-}
-
 type PartialInfo struct {
 	Decl *ast.TablePartial
 	Uses int
@@ -102,9 +95,23 @@ func File(f *ast.File) (*Info, []diag.Diagnostic) {
 // whose declaration and injected partials are the nodes they were is
 // answered from it. A nil memo checks everything.
 func FileMemo(f *ast.File, memo *Memo) (*Info, []diag.Diagnostic) {
+	return FileGo(f, memo, nil)
+}
+
+// GoTypes maps each top-level type a package's Go files declare to its
+// underlying type as spelled, or the aliased type for an alias, as the
+// Go-file scan reads them (spec §types).
+type GoTypes map[string]string
+
+// FileGo is FileMemo with the Go types of the file's package: a bare
+// declared type whose Go declaration spells its storage type is kinded
+// (spec §types). A nil map is the schema pass, which reads no Go file,
+// so every declared type keeps the Scanner and Valuer contract.
+func FileGo(f *ast.File, memo *Memo, goTypes GoTypes) (*Info, []diag.Diagnostic) {
 	c := &checker{
-		info: &Info{byName: map[string]*TableInfo{}},
-		memo: memo,
+		info:    &Info{byName: map[string]*TableInfo{}},
+		memo:    memo,
+		goTypes: goTypes,
 	}
 	if memo != nil {
 		memo.Hits, memo.Misses = 0, 0
@@ -127,8 +134,8 @@ type checker struct {
 	env   *typeEnv
 
 	partials map[string]*PartialInfo
-	enums    map[string]*EnumInfo
 	types    map[string]*TypeInfo
+	goTypes  GoTypes
 	project  *ast.Project
 }
 
@@ -138,7 +145,6 @@ func (c *checker) errorf(pos token.Position, section, format string, args ...any
 
 func (c *checker) collect(f *ast.File) {
 	c.partials = map[string]*PartialInfo{}
-	c.enums = map[string]*EnumInfo{}
 	c.types = map[string]*TypeInfo{}
 	var typeDecls []*ast.TypeDecl
 
@@ -165,15 +171,6 @@ func (c *checker) collect(f *ast.File) {
 			c.info.Tables = append(c.info.Tables, ti)
 		case *ast.TypeDecl:
 			typeDecls = append(typeDecls, d)
-		case *ast.Enum:
-			key := d.Name.Name()
-			if _, dup := c.enums[key]; dup {
-				c.errorf(d.Pos(), "namespaces-and-uniqueness", "duplicate enum name %q", key)
-				continue
-			}
-			ei := &EnumInfo{Decl: d, Key: key}
-			c.enums[key] = ei
-			c.info.Enums = append(c.info.Enums, ei)
 		case *ast.Project:
 			if c.project != nil {
 				c.errorf(d.Pos(), "project", "at most one Project element per file")
@@ -195,7 +192,7 @@ func (c *checker) collect(f *ast.File) {
 			failed[d.Name.String()] = true
 		}
 	}
-	c.env = typeEnvOf(c.enums, c.types, failed)
+	c.env = typeEnvOf(c.types, failed)
 	reported := map[diag.Diagnostic]bool{}
 	for i, ti := range c.info.Tables {
 		partials := c.partialsOf(ti.Decl)
@@ -213,7 +210,7 @@ func (c *checker) collect(f *ast.File) {
 		} else {
 			checked, diags = tableCheck(ti.Decl, ti.Key, partials, c.env)
 			if c.memo != nil {
-				c.memo.store(&memoTable{ti: checked, partials: partials, enums: c.env.keys, diags: diags})
+				c.memo.store(&memoTable{ti: checked, partials: partials, env: c.env.keys, diags: diags})
 				c.memo.Misses++
 			}
 		}

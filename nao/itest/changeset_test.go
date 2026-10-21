@@ -180,24 +180,24 @@ func TestUpdateWithNothingMarkedIsANoOp(t *testing.T) {
 	}
 }
 
-func TestEnumMembershipIsAFieldError(t *testing.T) {
+func TestMembershipIsAFieldError(t *testing.T) {
 	errs := OrderNew().StatusSet("teleported").Validate().Errors()
-	if len(errs) != 2 || errs[0].Check != "required" || errs[1].Check != "enum" || errs[1].Columns[0] != "status" || errs[1].Message != "status is not a value of order_status" {
-		t.Errorf("required first, then enum membership: %+v", errs)
+	if len(errs) != 2 || errs[0].Check != "required" || errs[1].Check != "OrderStateKnown" || errs[1].Columns[0] != "status" || errs[1].Message != `"teleported" is not a known order status` {
+		t.Errorf("required first, then the membership validator: %+v", errs)
 	}
-	if got := OrderNew().Row().Status; got != EOrderStatusPending {
-		t.Errorf("OrderNew seeds the literal default: status %q, want pending", got)
+	if got := OrderNew().Row().Status; got != OrderStatePending {
+		t.Errorf("OrderNew seeds the literal default of a declared type whose Go declaration spells its storage: status %q, want pending", got)
 	}
 	if errs := OrderNew().TotalSet(1).Validate().Errors(); len(errs) != 0 {
-		t.Errorf("an unmarked enum column on a create holds its default and passes: %+v", errs)
+		t.Errorf("an unmarked column of a declared type on a create holds its default and passes: %+v", errs)
 	}
-	if errs := OrderNew().TotalSet(1).StatusSet("").Validate().Errors(); len(errs) != 1 || errs[0].Check != "enum" {
-		t.Errorf("an enum column blanked on a create is checked: %+v", errs)
+	if errs := OrderNew().TotalSet(1).StatusSet("").Validate().Errors(); len(errs) != 1 || errs[0].Check != "OrderStateKnown" {
+		t.Errorf("a column blanked on a create is checked: %+v", errs)
 	}
-	if errs := (Order{Status: "teleported", Total: 1}).Changeset().Validate().Errors(); len(errs) != 1 || errs[0].Check != "enum" {
-		t.Errorf("a row's enum column is always checked: %+v", errs)
+	if errs := (Order{Status: "teleported", Total: 1}).Changeset().Validate().Errors(); len(errs) != 1 || errs[0].Check != "OrderStateKnown" {
+		t.Errorf("a row's column is always checked: %+v", errs)
 	}
-	if errs := (Order{Status: EOrderStatusShipped, Total: 1}).Changeset().Validate().Errors(); len(errs) != 0 {
+	if errs := (Order{Status: OrderStateShipped, Total: 1}).Changeset().Validate().Errors(); len(errs) != 0 {
 		t.Errorf("a member value passes: %+v", errs)
 	}
 }

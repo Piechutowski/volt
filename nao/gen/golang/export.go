@@ -48,7 +48,7 @@ type FieldSig struct {
 }
 
 // ValidatorFn is one table's validator surface (spec §validators): what
-// its changeset's Validate runs after required and enum membership.
+// its changeset's Validate runs after required.
 type ValidatorFn struct {
 	TableKey   string
 	Validators []ValidatorSpec
@@ -62,10 +62,6 @@ type ValidatorSpec struct {
 	Call string   // Go call over the row, e.g. "EmailValid(v.Email)"
 	Cols []string // the columns the validator reads, in first-appearance order
 }
-
-// EnumTypeName is the Go type name an enum declaration generates
-// (§names).
-func EnumTypeName(name string) (string, error) { return enumTypeName(name) }
 
 // ModelFields reports the exact struct fields the model generator emits
 // for the named table (spec §selects-over-groups, §mapping-to-go).

@@ -89,30 +89,38 @@ var colTypes = []string{
 	"string",
 	"float64 [null]",
 	"bool [default: false]",
-	"status [default: status.active]",
+	"Status [default: 'active']",
 	"string [null]",
 	"time.Time [null]",
 	"int",
 }
 
 func schemaWrite(b *strings.Builder, spec Spec, pkg string) {
-	b.WriteString("Enum status {\n\tactive\n\tretired [note: 'no longer written']\n}\n\n")
+	b.WriteString("Type Status string\n\n")
 	b.WriteString("TablePartial stamped {\n\tcreated_at time.Time [default: `CURRENT_TIMESTAMP`]\n}\n\n")
 	b.WriteString("Pred fresh { c001 >= :since }\n\n")
 	for i := 1; i <= spec.Tables; i++ {
 		fmt.Fprintf(b, "Table %s [note: 'metrics table %d of %s'] {\n", Table(i), i, pkg)
 		b.WriteString("\tid int [pk, increment]\n\t~stamped\n")
+		var known []int
 		for c := 1; c <= spec.Columns; c++ {
 			typ := colTypes[(c-1)%len(colTypes)]
 			if c == 1 {
 				typ = "int"
+			}
+			if strings.HasPrefix(typ, "Status") {
+				known = append(known, c)
 			}
 			fmt.Fprintf(b, "\tc%03d %s\n", c, typ)
 		}
 		if i > 1 {
 			fmt.Fprintf(b, "\tprev_id int [null, ref: %s.id]\n", Table(i-1))
 		}
-		b.WriteString("\n\tvalidators {\n\t\tPositive(c001)\n\t}\n}\n\n")
+		b.WriteString("\n\tvalidators {\n\t\tPositive(c001)\n")
+		for _, c := range known {
+			fmt.Fprintf(b, "\t\tStatusKnown(c%03d)\n", c)
+		}
+		b.WriteString("\t}\n}\n\n")
 	}
 	b.WriteString("Group series {\n")
 	for i := 1; i <= spec.Tables; i++ {
@@ -156,7 +164,29 @@ func routesWrite(b *strings.Builder, spec Spec, pkgs []string, single bool) {
 func checksGo(pkg string) string {
 	return "package " + pkg + `
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
+
+// Status is the declared type of the status columns (§types).
+type Status string
+
+const (
+	StatusActive Status = "active"
+	// StatusRetired is no longer written.
+	StatusRetired Status = "retired"
+)
+
+// StatusKnown refuses a value outside the constants of Status
+// (§validators).
+func StatusKnown(s Status) error {
+	switch s {
+	case StatusActive, StatusRetired:
+		return nil
+	}
+	return fmt.Errorf("%q is not a known status", string(s))
+}
 
 // Positive is the validator every table names (§validators).
 func Positive(v int) error {

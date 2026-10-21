@@ -4,39 +4,41 @@
 package models
 
 import (
+	"database/sql"
+	"database/sql/driver"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-// EVisibility is the visibility enum.
-type EVisibility string
-
-const (
-	EVisibilityPublic   EVisibility = "public"
-	EVisibilityUnlisted EVisibility = "unlisted"
+var (
+	_ sql.Scanner   = (*Cents)(nil)
+	_ driver.Valuer = *new(Cents)
 )
 
 // Post is a row of the posts table.
 type Post struct {
-	ID       int                  `db:"id" json:"id"`
-	Slug     string               `db:"slug" json:"slug"`
-	Words    int                  `db:"words" json:"words"`
-	Score    float64              `db:"score" json:"score"`
-	Cover    []byte               `db:"cover" json:"cover"`
-	State    EVisibility          `db:"state" json:"state"`
-	Reviewed rt.Null[EVisibility] `db:"reviewed" json:"reviewed"`
-	Rank     int                  `db:"rank" json:"rank"`
-	Draft    bool                 `db:"draft" json:"draft"`
-	Caption  rt.Null[string]      `db:"caption" json:"caption"`
-	Ratio    float64              `db:"ratio" json:"ratio"`
-	Weight   rt.Null[float64]     `db:"weight" json:"weight"`
-	Scale    rt.Null[float64]     `db:"scale" json:"scale"`
-	Kilo     rt.Null[float64]     `db:"kilo" json:"kilo"`
-	Shift    rt.Null[float64]     `db:"shift" json:"shift"`
-	Hits     rt.Null[int]         `db:"hits" json:"hits,omitempty"`
-	Views    int                  `db:"views" json:"views"`
-	Label    rt.Null[string]      `db:"label" json:"label"`
-	Flag     rt.Null[bool]        `db:"flag" json:"flag"`
-	Secret   rt.Null[string]      `db:"secret" json:"-"`
+	ID       int                 `db:"id" json:"id"`
+	Slug     string              `db:"slug" json:"slug"`
+	Words    int                 `db:"words" json:"words"`
+	Score    float64             `db:"score" json:"score"`
+	Cover    []byte              `db:"cover" json:"cover"`
+	State    Visibility          `db:"state" json:"state"`
+	Reviewed rt.Null[Visibility] `db:"reviewed" json:"reviewed"`
+	Audience Visibility          `db:"audience" json:"audience"`
+	Tier     rt.Null[Tier]       `db:"tier" json:"tier"`
+	Price    Cents               `db:"price" json:"price"`
+	Rank     int                 `db:"rank" json:"rank"`
+	Draft    bool                `db:"draft" json:"draft"`
+	Caption  rt.Null[string]     `db:"caption" json:"caption"`
+	Ratio    float64             `db:"ratio" json:"ratio"`
+	Weight   rt.Null[float64]    `db:"weight" json:"weight"`
+	Scale    rt.Null[float64]    `db:"scale" json:"scale"`
+	Kilo     rt.Null[float64]    `db:"kilo" json:"kilo"`
+	Shift    rt.Null[float64]    `db:"shift" json:"shift"`
+	Hits     rt.Null[int]        `db:"hits" json:"hits,omitempty"`
+	Views    int                 `db:"views" json:"views"`
+	Label    rt.Null[string]     `db:"label" json:"label"`
+	Flag     rt.Null[bool]       `db:"flag" json:"flag"`
+	Secret   rt.Null[string]     `db:"secret" json:"-"`
 }
 
 // PostColumn is a column handle of Post, the element of a Cast allow list
@@ -56,8 +58,11 @@ var (
 	PostWords    = rt.Column[Post, int]{Name: "words"}
 	PostScore    = rt.Column[Post, float64]{Name: "score"}
 	PostCover    = rt.Column[Post, []byte]{Name: "cover"}
-	PostState    = rt.Column[Post, EVisibility]{Name: "state"}
-	PostReviewed = rt.NullColumn[Post, EVisibility]{Column: rt.Column[Post, EVisibility]{Name: "reviewed"}}
+	PostState    = rt.Column[Post, Visibility]{Name: "state"}
+	PostReviewed = rt.NullColumn[Post, Visibility]{Column: rt.Column[Post, Visibility]{Name: "reviewed"}}
+	PostAudience = rt.Column[Post, Visibility]{Name: "audience"}
+	PostTier     = rt.NullColumn[Post, Tier]{Column: rt.Column[Post, Tier]{Name: "tier"}}
+	PostPrice    = rt.Column[Post, Cents]{Name: "price"}
 	PostRank     = rt.Column[Post, int]{Name: "rank"}
 	PostDraft    = rt.Column[Post, bool]{Name: "draft"}
 	PostCaption  = rt.NullColumn[Post, string]{Column: rt.Column[Post, string]{Name: "caption"}}
@@ -80,7 +85,7 @@ type PostChangeset struct {
 	data  Post
 	vals  Post
 	row   bool
-	set   [20]bool
+	set   [23]bool
 	errs  []rt.FieldError
 	valid []rt.FieldError
 }
@@ -88,7 +93,7 @@ type PostChangeset struct {
 // PostNew starts a changeset for a posts row to create, the schema's literal
 // defaults in place (spec §changesets).
 func PostNew() PostChangeset {
-	return PostChangeset{data: Post{State: EVisibilityPublic, Reviewed: rt.Some(EVisibilityUnlisted), Rank: -1, Draft: true, Caption: rt.Some("none"), Ratio: 0.5, Weight: rt.Some(1.0), Scale: rt.Some(2.0), Kilo: rt.Some(1000.0), Shift: rt.Some(-3.0), Hits: rt.Some(0), Label: rt.Some(""), Flag: rt.Some(false)}}
+	return PostChangeset{data: Post{State: "public", Reviewed: rt.Some(Visibility("unlisted")), Tier: rt.Some(Tier(3)), Rank: -1, Draft: true, Caption: rt.Some("none"), Ratio: 0.5, Weight: rt.Some(1.0), Scale: rt.Some(2.0), Kilo: rt.Some(1000.0), Shift: rt.Some(-3.0), Hits: rt.Some(0), Label: rt.Some(""), Flag: rt.Some(false)}}
 }
 
 // Changeset starts a changeset for an update of r, nothing set (spec
@@ -104,6 +109,9 @@ func (c PostChangeset) From(r Post) PostChangeset {
 	c = c.CoverSet(r.Cover)
 	c = c.StateSet(r.State)
 	c = c.ReviewedSet(r.Reviewed)
+	c = c.AudienceSet(r.Audience)
+	c = c.TierSet(r.Tier)
+	c = c.PriceSet(r.Price)
 	c = c.RankSet(r.Rank)
 	c = c.DraftSet(r.Draft)
 	c = c.CaptionSet(r.Caption)
@@ -145,102 +153,121 @@ func (c PostChangeset) CoverSet(v []byte) PostChangeset {
 }
 
 // StateSet sets state and marks it (spec §changesets).
-func (c PostChangeset) StateSet(v EVisibility) PostChangeset {
+func (c PostChangeset) StateSet(v Visibility) PostChangeset {
 	c.vals.State, c.set[5] = v, true
 	return c
 }
 
 // ReviewedSet sets reviewed and marks it; an invalid rt.Null sets NULL (spec
 // §changesets).
-func (c PostChangeset) ReviewedSet(v rt.Null[EVisibility]) PostChangeset {
+func (c PostChangeset) ReviewedSet(v rt.Null[Visibility]) PostChangeset {
 	c.vals.Reviewed, c.set[6] = v, true
+	return c
+}
+
+// AudienceSet sets audience and marks it (spec §changesets).
+func (c PostChangeset) AudienceSet(v Visibility) PostChangeset {
+	c.vals.Audience, c.set[7] = v, true
+	return c
+}
+
+// TierSet sets tier and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
+func (c PostChangeset) TierSet(v rt.Null[Tier]) PostChangeset {
+	c.vals.Tier, c.set[8] = v, true
+	return c
+}
+
+// PriceSet sets price and marks it (spec §changesets).
+func (c PostChangeset) PriceSet(v Cents) PostChangeset {
+	c.vals.Price, c.set[9] = v, true
 	return c
 }
 
 // RankSet sets rank and marks it (spec §changesets).
 func (c PostChangeset) RankSet(v int) PostChangeset {
-	c.vals.Rank, c.set[7] = v, true
+	c.vals.Rank, c.set[10] = v, true
 	return c
 }
 
 // DraftSet sets draft and marks it (spec §changesets).
 func (c PostChangeset) DraftSet(v bool) PostChangeset {
-	c.vals.Draft, c.set[8] = v, true
+	c.vals.Draft, c.set[11] = v, true
 	return c
 }
 
 // CaptionSet sets caption and marks it; an invalid rt.Null sets NULL (spec
 // §changesets).
 func (c PostChangeset) CaptionSet(v rt.Null[string]) PostChangeset {
-	c.vals.Caption, c.set[9] = v, true
+	c.vals.Caption, c.set[12] = v, true
 	return c
 }
 
 // RatioSet sets ratio and marks it (spec §changesets).
 func (c PostChangeset) RatioSet(v float64) PostChangeset {
-	c.vals.Ratio, c.set[10] = v, true
+	c.vals.Ratio, c.set[13] = v, true
 	return c
 }
 
 // WeightSet sets weight and marks it; an invalid rt.Null sets NULL (spec
 // §changesets).
 func (c PostChangeset) WeightSet(v rt.Null[float64]) PostChangeset {
-	c.vals.Weight, c.set[11] = v, true
+	c.vals.Weight, c.set[14] = v, true
 	return c
 }
 
 // ScaleSet sets scale and marks it; an invalid rt.Null sets NULL (spec
 // §changesets).
 func (c PostChangeset) ScaleSet(v rt.Null[float64]) PostChangeset {
-	c.vals.Scale, c.set[12] = v, true
+	c.vals.Scale, c.set[15] = v, true
 	return c
 }
 
 // KiloSet sets kilo and marks it; an invalid rt.Null sets NULL (spec
 // §changesets).
 func (c PostChangeset) KiloSet(v rt.Null[float64]) PostChangeset {
-	c.vals.Kilo, c.set[13] = v, true
+	c.vals.Kilo, c.set[16] = v, true
 	return c
 }
 
 // ShiftSet sets shift and marks it; an invalid rt.Null sets NULL (spec
 // §changesets).
 func (c PostChangeset) ShiftSet(v rt.Null[float64]) PostChangeset {
-	c.vals.Shift, c.set[14] = v, true
+	c.vals.Shift, c.set[17] = v, true
 	return c
 }
 
 // HitsSet sets hits and marks it; an invalid rt.Null sets NULL (spec
 // §changesets).
 func (c PostChangeset) HitsSet(v rt.Null[int]) PostChangeset {
-	c.vals.Hits, c.set[15] = v, true
+	c.vals.Hits, c.set[18] = v, true
 	return c
 }
 
 // ViewsSet sets views and marks it (spec §changesets).
 func (c PostChangeset) ViewsSet(v int) PostChangeset {
-	c.vals.Views, c.set[16] = v, true
+	c.vals.Views, c.set[19] = v, true
 	return c
 }
 
 // LabelSet sets label and marks it; an invalid rt.Null sets NULL (spec
 // §changesets).
 func (c PostChangeset) LabelSet(v rt.Null[string]) PostChangeset {
-	c.vals.Label, c.set[17] = v, true
+	c.vals.Label, c.set[20] = v, true
 	return c
 }
 
 // FlagSet sets flag and marks it; an invalid rt.Null sets NULL (spec
 // §changesets).
 func (c PostChangeset) FlagSet(v rt.Null[bool]) PostChangeset {
-	c.vals.Flag, c.set[18] = v, true
+	c.vals.Flag, c.set[21] = v, true
 	return c
 }
 
 // SecretSet sets secret and marks it; an invalid rt.Null sets NULL (spec
 // §changesets).
 func (c PostChangeset) SecretSet(v rt.Null[string]) PostChangeset {
-	c.vals.Secret, c.set[19] = v, true
+	c.vals.Secret, c.set[22] = v, true
 	return c
 }
 
@@ -248,7 +275,7 @@ func (c PostChangeset) SecretSet(v rt.Null[string]) PostChangeset {
 // error for a value that does not convert and an unknown_field error
 // for a key that names no column (spec §changesets).
 func (c PostChangeset) Cast(p PostParams, allow ...PostColumn) PostChangeset {
-	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "slug", "words", "score", "cover", "state", "reviewed", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret")...)
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "slug", "words", "score", "cover", "state", "reviewed", "audience", "tier", "price", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret")...)
 	for _, col := range allow {
 		switch col.ColumnName() {
 		case "slug":
@@ -276,16 +303,34 @@ func (c PostChangeset) Cast(p PostParams, allow ...PostColumn) PostChangeset {
 				c = c.CoverSet(v)
 			}
 		case "state":
-			if v, ok, err := rt.Field(p, "state", "visibility", false, func(r *Post) EVisibility { return r.State }); err != nil {
+			if v, ok, err := rt.Field(p, "state", "Visibility", false, func(r *Post) Visibility { return r.State }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "state")
 			} else if ok {
 				c = c.StateSet(v)
 			}
 		case "reviewed":
-			if v, ok, err := rt.Field(p, "reviewed", "visibility", true, func(r *Post) rt.Null[EVisibility] { return r.Reviewed }); err != nil {
+			if v, ok, err := rt.Field(p, "reviewed", "Visibility", true, func(r *Post) rt.Null[Visibility] { return r.Reviewed }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "reviewed")
 			} else if ok {
 				c = c.ReviewedSet(v)
+			}
+		case "audience":
+			if v, ok, err := rt.Field(p, "audience", "Visibility", false, func(r *Post) Visibility { return r.Audience }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "audience")
+			} else if ok {
+				c = c.AudienceSet(v)
+			}
+		case "tier":
+			if v, ok, err := rt.Field(p, "tier", "Tier", true, func(r *Post) rt.Null[Tier] { return r.Tier }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "tier")
+			} else if ok {
+				c = c.TierSet(v)
+			}
+		case "price":
+			if v, ok, err := rt.Field(p, "price", "Cents", false, func(r *Post) Cents { return r.Price }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "price")
+			} else if ok {
+				c = c.PriceSet(v)
 			}
 		case "rank":
 			if v, ok, err := rt.Field(p, "rank", "int", false, func(r *Post) int { return r.Rank }); err != nil {
@@ -387,32 +432,38 @@ func (c PostChangeset) Changed(col PostColumn) bool {
 		return c.set[5]
 	case "reviewed":
 		return c.set[6]
-	case "rank":
+	case "audience":
 		return c.set[7]
-	case "draft":
+	case "tier":
 		return c.set[8]
-	case "caption":
+	case "price":
 		return c.set[9]
-	case "ratio":
+	case "rank":
 		return c.set[10]
-	case "weight":
+	case "draft":
 		return c.set[11]
-	case "scale":
+	case "caption":
 		return c.set[12]
-	case "kilo":
+	case "ratio":
 		return c.set[13]
-	case "shift":
+	case "weight":
 		return c.set[14]
-	case "hits":
+	case "scale":
 		return c.set[15]
-	case "views":
+	case "kilo":
 		return c.set[16]
-	case "label":
+	case "shift":
 		return c.set[17]
-	case "flag":
+	case "hits":
 		return c.set[18]
-	case "secret":
+	case "views":
 		return c.set[19]
+	case "label":
+		return c.set[20]
+	case "flag":
+		return c.set[21]
+	case "secret":
+		return c.set[22]
 	}
 	return false
 }
@@ -439,42 +490,51 @@ func (c PostChangeset) Row() Post {
 		r.Reviewed = c.vals.Reviewed
 	}
 	if c.set[7] {
-		r.Rank = c.vals.Rank
+		r.Audience = c.vals.Audience
 	}
 	if c.set[8] {
-		r.Draft = c.vals.Draft
+		r.Tier = c.vals.Tier
 	}
 	if c.set[9] {
-		r.Caption = c.vals.Caption
+		r.Price = c.vals.Price
 	}
 	if c.set[10] {
-		r.Ratio = c.vals.Ratio
+		r.Rank = c.vals.Rank
 	}
 	if c.set[11] {
-		r.Weight = c.vals.Weight
+		r.Draft = c.vals.Draft
 	}
 	if c.set[12] {
-		r.Scale = c.vals.Scale
+		r.Caption = c.vals.Caption
 	}
 	if c.set[13] {
-		r.Kilo = c.vals.Kilo
+		r.Ratio = c.vals.Ratio
 	}
 	if c.set[14] {
-		r.Shift = c.vals.Shift
+		r.Weight = c.vals.Weight
 	}
 	if c.set[15] {
-		r.Hits = c.vals.Hits
+		r.Scale = c.vals.Scale
 	}
 	if c.set[16] {
-		r.Views = c.vals.Views
+		r.Kilo = c.vals.Kilo
 	}
 	if c.set[17] {
-		r.Label = c.vals.Label
+		r.Shift = c.vals.Shift
 	}
 	if c.set[18] {
-		r.Flag = c.vals.Flag
+		r.Hits = c.vals.Hits
 	}
 	if c.set[19] {
+		r.Views = c.vals.Views
+	}
+	if c.set[20] {
+		r.Label = c.vals.Label
+	}
+	if c.set[21] {
+		r.Flag = c.vals.Flag
+	}
+	if c.set[22] {
 		r.Secret = c.vals.Secret
 	}
 	return r
@@ -503,42 +563,51 @@ func (c PostChangeset) Params() PostParams {
 		marks = append(marks, rt.Mark{Wire: "reviewed", Value: c.vals.Reviewed})
 	}
 	if c.set[7] {
-		marks = append(marks, rt.Mark{Wire: "rank", Value: c.vals.Rank})
+		marks = append(marks, rt.Mark{Wire: "audience", Value: c.vals.Audience})
 	}
 	if c.set[8] {
-		marks = append(marks, rt.Mark{Wire: "draft", Value: c.vals.Draft})
+		marks = append(marks, rt.Mark{Wire: "tier", Value: c.vals.Tier})
 	}
 	if c.set[9] {
-		marks = append(marks, rt.Mark{Wire: "caption", Value: c.vals.Caption})
+		marks = append(marks, rt.Mark{Wire: "price", Value: c.vals.Price})
 	}
 	if c.set[10] {
-		marks = append(marks, rt.Mark{Wire: "ratio", Value: c.vals.Ratio})
+		marks = append(marks, rt.Mark{Wire: "rank", Value: c.vals.Rank})
 	}
 	if c.set[11] {
-		marks = append(marks, rt.Mark{Wire: "weight", Value: c.vals.Weight})
+		marks = append(marks, rt.Mark{Wire: "draft", Value: c.vals.Draft})
 	}
 	if c.set[12] {
-		marks = append(marks, rt.Mark{Wire: "scale", Value: c.vals.Scale})
+		marks = append(marks, rt.Mark{Wire: "caption", Value: c.vals.Caption})
 	}
 	if c.set[13] {
-		marks = append(marks, rt.Mark{Wire: "kilo", Value: c.vals.Kilo})
+		marks = append(marks, rt.Mark{Wire: "ratio", Value: c.vals.Ratio})
 	}
 	if c.set[14] {
-		marks = append(marks, rt.Mark{Wire: "shift", Value: c.vals.Shift})
+		marks = append(marks, rt.Mark{Wire: "weight", Value: c.vals.Weight})
 	}
 	if c.set[15] {
-		marks = append(marks, rt.Mark{Wire: "hits", Value: c.vals.Hits})
+		marks = append(marks, rt.Mark{Wire: "scale", Value: c.vals.Scale})
 	}
 	if c.set[16] {
-		marks = append(marks, rt.Mark{Wire: "views", Value: c.vals.Views})
+		marks = append(marks, rt.Mark{Wire: "kilo", Value: c.vals.Kilo})
 	}
 	if c.set[17] {
-		marks = append(marks, rt.Mark{Wire: "label", Value: c.vals.Label})
+		marks = append(marks, rt.Mark{Wire: "shift", Value: c.vals.Shift})
 	}
 	if c.set[18] {
-		marks = append(marks, rt.Mark{Wire: "flag", Value: c.vals.Flag})
+		marks = append(marks, rt.Mark{Wire: "hits", Value: c.vals.Hits})
 	}
 	if c.set[19] {
+		marks = append(marks, rt.Mark{Wire: "views", Value: c.vals.Views})
+	}
+	if c.set[20] {
+		marks = append(marks, rt.Mark{Wire: "label", Value: c.vals.Label})
+	}
+	if c.set[21] {
+		marks = append(marks, rt.Mark{Wire: "flag", Value: c.vals.Flag})
+	}
+	if c.set[22] {
 		marks = append(marks, rt.Mark{Wire: "secret", Value: c.vals.Secret})
 	}
 	return rt.ParamsOf(c.Row(), marks...)

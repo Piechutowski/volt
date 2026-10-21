@@ -38,14 +38,6 @@ first-class settings to add (`[sensitive]` is the candidate) and
 whether a Go-field-name override is ever needed. Mint each from a real
 need; every one costs spec, checker, generator and corpus.
 
-## H5 — Enum columns in predicates
-
-Today enum columns cannot be compared in the predicate language.
-Unsettled only in timing: a parameter typed as the generated enum with
-literals checked against the declared values is well defined in both
-tiers and should land the first time an application filters by an
-enum.
-
 ## H6 — Raw-SQL query blocks
 
 Belief: structure is Volt's and expressions are SQLite's. A declared

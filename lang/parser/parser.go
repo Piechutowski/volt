@@ -212,8 +212,6 @@ func (p *parser) decl() (d ast.Decl) {
 		return p.table()
 	case "tablepartial":
 		return p.tablePartial()
-	case "enum":
-		return p.enum()
 	case "type":
 		return p.typeDecl()
 	case "ref":
@@ -496,25 +494,6 @@ func (p *parser) refEndpoint() *ast.RefEndpoint {
 	return ep
 }
 
-func (p *parser) enum() *ast.Enum {
-	d := &ast.Enum{EnumPos: p.next().Pos}
-	d.Name = p.ident("enum name (§enum)")
-	p.expect(token.LBRACE, "Enum (§enum)")
-	for !p.at(token.RBRACE) && !p.at(token.EOF) {
-		p.item(func() {
-			p.lineBegin("enum value (§enum)")
-			v := &ast.EnumValue{Name: p.ident("enum value (§enum)")}
-			if p.at(token.LBRACKET) && !p.cur().NLBefore {
-				v.Settings = p.settingList()
-			}
-			p.endOfLine("enum value (§enum)")
-			d.Values = append(d.Values, v)
-		})
-	}
-	d.Rbrace = p.expect(token.RBRACE, "Enum (§enum)").Pos
-	return d
-}
-
 func (p *parser) typeDecl() *ast.TypeDecl {
 	d := &ast.TypeDecl{TypePos: p.next().Pos}
 	d.Name = p.qualName("declared type name (§types)")
@@ -598,8 +577,7 @@ func (p *parser) recordValue() ast.Node {
 	case token.IDENT:
 		id := p.ident("record value (§records-sample-data)")
 		if p.at(token.DOT) {
-			p.next()
-			return &ast.EnumConst{Enum: id, Value: p.ident("enum constant (§records-sample-data)")}
+			p.fail(p.cur(), "a dotted name is not a record value: a record value is a literal, true, false or null, and a declared type takes a literal of its storage type (§records-sample-data)")
 		}
 		return id
 	default:
@@ -680,7 +658,7 @@ func (p *parser) settingValue() ast.Node {
 		id := p.ident("setting value (§settings-lists)")
 		if p.at(token.DOT) {
 			p.next()
-			return &ast.EnumConst{Enum: id, Value: p.ident("enum constant (§names-and-qualified-names)")}
+			return &ast.QualIdent{Qual: id, Name: p.ident("qualified setting value (§scopes)")}
 		}
 		words := []*ast.Ident{id}
 		for p.at(token.IDENT) && !p.cur().NLBefore {

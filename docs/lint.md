@@ -42,11 +42,10 @@ A rule is judged declaration by declaration: a pure function of one
 declaration's syntax and the facts the checker resolved for it (its
 checked table, its partial, the relationships starting at its
 columns), so an editor session re-judges only the declarations an
-edit changed. The rules that need the whole file (an enum
-nothing uses, a foreign-key cycle, names that differ only in
-case across tables or enums, the generated names that collide) fold
-over the checker's model and what every declaration's rules
-summarized. Two warnings at one position stand in the order the rules
+edit changed. The rules that need the whole file (a foreign-key
+cycle, names that differ only in case across tables, the generated
+names that collide) fold over the checker's model and its naming plan.
+Two warnings at one position stand in the order the rules
 are listed below, which is the order they are registered in;
 `TestRulesDocumentation` asserts the two agree.
 
@@ -58,31 +57,20 @@ The analogue of Go's "imported and not used": a declaration nothing
 references is usually a refactoring leftover, and it keeps readers
 searching for uses that do not exist.
 
-### unusedenum
-
-**What it does.** Reports an `Enum` that no column in the file uses as its
-type.
-
-**Why.** An enum's only effect is through columns typed with it; an unused
-enum is dead weight that still occupies a name in its package.
-
-**Examples.** [testdata/unused.volt](../lang/vet/testdata/unused.volt): `orphan_status`
-is bad; `used_status` and `kind` are good.
-
-**Limitations.** Analysis is per-package: the files of a package are
-analyzed as one (§projects-and-packages), and a use from outside the
-package is not seen. Treat the warning as "unused *here*".
-
 ### unusedpartial
 
 **What it does.** Reports a `TablePartial` that no table injects.
 
-**Why.** Same as `unusedenum`; partials exist only to be injected.
+**Why.** A partial's only effect is through the tables that inject it;
+an unused partial is dead weight that still occupies a name in its
+package.
 
-**Examples.** [testdata/unused.volt](../lang/vet/testdata/unused.volt) —
+**Examples.** [testdata/unused.volt](../lang/vet/testdata/unused.volt):
 `orphan_partial` is bad; `used_partial` is good.
 
-**Limitations.** Per-package, as above.
+**Limitations.** Analysis is per-package: the files of a package are
+analyzed as one (§projects-and-packages). Treat the warning as "unused
+*here*".
 
 ---
 
@@ -241,7 +229,7 @@ pattern is legitimate and covered by `selfref` only when degenerate).
 ### casecollision
 
 **What it does.** Reports two names in one namespace differing only in
-letter case: tables, columns per table, enums.
+letter case: tables, and columns per table.
 
 **Why.** Volt names are case-sensitive (spec §case-sensitivity-and-terminology) but many databases and
 most humans are not; `users` next to `Users` is a bug generator.
@@ -289,24 +277,23 @@ struct itself, the changeset `<Model>Changeset`, the aliases
 (§changesets), the column handles `<Model><Field>`, and the option
 wrappers `<Model>Limit`, `<Model>Offset`, `<Model>Distinct`,
 `<Model>OrderBy`, `<Model>After`, `<Model>Set` of the dynamic layer,
-alongside the enum types and enum constants, so two distinct
-declarations can flatten to one Go identifier: `Table user_limits`
-mints model `UserLimit`, exactly the option wrapper of `Table users`;
-`users.foo_bar` and `user_foos.bar` both mint the handle `UserFooBar`.
+so two distinct declarations can flatten to one Go identifier: `Table
+user_limits` mints model `UserLimit`, exactly the option wrapper of
+`Table users`; `users.foo_bar` and `user_foos.bar` both mint the
+handle `UserFooBar`. A bare declared type shares that scope, since the
+package's own Go files declare it (§types); a declared type that takes
+a generated name is the checker's error, not this rule's warning.
 
 **Why.** `volt gen` refuses such schemas outright (loud failure, never a
 silent rename), but the generator can only name the first collision; this
 rule reports every collision, at the later of the two declarations, with
 both origins spelled out. The name derivation is the generator's own — the
 rule calls into `nao/gen/golang` — so rule and generator cannot drift apart.
-The *common* near-collision is already defused structurally: enum types
-carry an `E` prefix, so the idiomatic `Table orders { status
-order_status }` mints the handle `OrderStatus` and the enum type
-`EOrderStatus` without meeting.
 
-**Examples.** [testdata/dynname.volt](../lang/vet/testdata/dynname.volt) — `users`,
-`orders` and the `order_status` enum coexist fine (the `E` prefix at
-work); `user_limits` (model = users' `UserLimit` wrapper), `user_foos.bar`
+**Examples.** [testdata/dynname.volt](../lang/vet/testdata/dynname.volt): `users`,
+`orders` and the declared type `OrderState`, named apart from the
+handle `OrderStatus` of orders.status, coexist fine;
+`user_limits` (model = users' `UserLimit` wrapper), `user_foos.bar`
 and `user_foo_bars` (handle/model = users' `UserFooBar` handle),
 `users.new` (handle = users' own `UserNew` constructor), `user_columns`
 (model = users' `UserColumn` alias) and the pinned models `UserParams`

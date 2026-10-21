@@ -75,10 +75,6 @@
         },
         {
           "type": "SYMBOL",
-          "name": "enum_definition"
-        },
-        {
-          "type": "SYMBOL",
           "name": "type_definition"
         },
         {
@@ -642,127 +638,6 @@
             "named": true,
             "value": "partial_name"
           }
-        }
-      ]
-    },
-    "enum_definition": {
-      "type": "SEQ",
-      "members": [
-        {
-          "type": "ALIAS",
-          "content": {
-            "type": "TOKEN",
-            "content": {
-              "type": "PREC",
-              "value": 1,
-              "content": {
-                "type": "PATTERN",
-                "value": "[eE][nN][uU][mM]"
-              }
-            }
-          },
-          "named": false,
-          "value": "Enum"
-        },
-        {
-          "type": "FIELD",
-          "name": "name",
-          "content": {
-            "type": "ALIAS",
-            "content": {
-              "type": "SYMBOL",
-              "name": "_name"
-            },
-            "named": true,
-            "value": "enum_name"
-          }
-        },
-        {
-          "type": "STRING",
-          "value": "{"
-        },
-        {
-          "type": "REPEAT",
-          "content": {
-            "type": "SYMBOL",
-            "name": "_newline"
-          }
-        },
-        {
-          "type": "CHOICE",
-          "members": [
-            {
-              "type": "SEQ",
-              "members": [
-                {
-                  "type": "SYMBOL",
-                  "name": "enum_value"
-                },
-                {
-                  "type": "REPEAT",
-                  "content": {
-                    "type": "SEQ",
-                    "members": [
-                      {
-                        "type": "REPEAT1",
-                        "content": {
-                          "type": "SYMBOL",
-                          "name": "_newline"
-                        }
-                      },
-                      {
-                        "type": "SYMBOL",
-                        "name": "enum_value"
-                      }
-                    ]
-                  }
-                },
-                {
-                  "type": "REPEAT",
-                  "content": {
-                    "type": "SYMBOL",
-                    "name": "_newline"
-                  }
-                }
-              ]
-            },
-            {
-              "type": "BLANK"
-            }
-          ]
-        },
-        {
-          "type": "STRING",
-          "value": "}"
-        }
-      ]
-    },
-    "enum_value": {
-      "type": "SEQ",
-      "members": [
-        {
-          "type": "FIELD",
-          "name": "name",
-          "content": {
-            "type": "SYMBOL",
-            "name": "_name"
-          }
-        },
-        {
-          "type": "CHOICE",
-          "members": [
-            {
-              "type": "FIELD",
-              "name": "settings",
-              "content": {
-                "type": "SYMBOL",
-                "name": "settings_list"
-              }
-            },
-            {
-              "type": "BLANK"
-            }
-          ]
         }
       ]
     },
@@ -1525,10 +1400,6 @@
         {
           "type": "SYMBOL",
           "name": "expression"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "enum_constant"
         }
       ]
     },
@@ -4785,7 +4656,7 @@
         },
         {
           "type": "SYMBOL",
-          "name": "enum_constant"
+          "name": "qualified_value"
         },
         {
           "type": "SYMBOL",
@@ -4861,7 +4732,7 @@
         }
       ]
     },
-    "enum_constant": {
+    "qualified_value": {
       "type": "PREC",
       "value": 1,
       "content": {
@@ -4869,15 +4740,10 @@
         "members": [
           {
             "type": "FIELD",
-            "name": "enum",
+            "name": "qualifier",
             "content": {
-              "type": "ALIAS",
-              "content": {
-                "type": "SYMBOL",
-                "name": "_name"
-              },
-              "named": true,
-              "value": "enum_name"
+              "type": "SYMBOL",
+              "name": "_name"
             }
           },
           {
@@ -4886,7 +4752,7 @@
           },
           {
             "type": "FIELD",
-            "name": "value",
+            "name": "name",
             "content": {
               "type": "SYMBOL",
               "name": "_name"

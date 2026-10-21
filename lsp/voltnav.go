@@ -250,7 +250,7 @@ func (ix *voltIndex) goRefAdd(pkg *lang.Package, path string, ref *ast.GoRef) {
 		if e, kept := ix.goscans[pkg.Dir]; kept && slices.Equal(e.srcs, srcs) {
 			funcs = e.funcs
 		} else {
-			funcs, _ = lang.GoFuncsOf(pkg.Dir, srcs)
+			funcs, _, _ = lang.GoFuncsOf(pkg.Dir, srcs)
 			if ix.goscans != nil {
 				ix.goscans[pkg.Dir] = goScanEntry{srcs: srcs, funcs: funcs}
 			}

@@ -2,11 +2,11 @@
 // want: compares with =, !=, in and is null only
 package db
 
-Type Money int
+Type money.Money int from 'example.com/app/money'
 
 Table orders {
   id    int   [pk, increment]
-  price Money
+  price money.Money
 }
 
 Select cheap for orders where price < :limit

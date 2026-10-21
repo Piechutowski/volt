@@ -211,8 +211,8 @@ func (s *Session) goFuncsFor(pr *Project, paths []string) *goFuncsCache {
 			scans[i] = prev.scan
 			return
 		}
-		funcs, broken := GoFuncsOf(dirs[i], srcs)
-		scans[i] = goScanOf(funcs, broken)
+		funcs, gotypes, broken := GoFuncsOf(dirs[i], srcs)
+		scans[i] = goScanOf(funcs, gotypes, broken)
 		s.mu.Lock()
 		if s.scans == nil {
 			s.scans = map[string]*goDir{}

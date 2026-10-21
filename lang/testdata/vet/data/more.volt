@@ -37,14 +37,6 @@ Table user_foos {
 Table user_foo_bars {
   id int [pk]
 }
-Table e_users {
-  id int [pk]
-  kind int
-}
-Enum user_kind {
-  x
-}
-
 Table bonus {
   id int [pk]
 }

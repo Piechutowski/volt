@@ -10,16 +10,9 @@
   "TablePartial" @context
   name: (partial_name) @name) @item
 
-(enum_definition
-  "Enum" @context
-  name: (enum_name) @name) @item
-
 (type_definition
   "Type" @context
   name: (type_name) @name) @item
-
-(enum_value
-  name: (_) @name) @item
 
 (column_definition
   name: (column_name) @name

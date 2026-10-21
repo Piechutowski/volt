@@ -3,7 +3,11 @@ package golang
 import (
 	"bytes"
 	"flag"
+	goast "go/ast"
 	"go/format"
+	goparser "go/parser"
+	gotoken "go/token"
+	"go/types"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,13 +31,46 @@ func parseChecked(t *testing.T, path string) (*ast.File, *check.Info) {
 		t.Fatal(err)
 	}
 	f, diags := parser.ParseFile(filepath.Base(path), string(src))
-	info, semDiags := check.File(f)
+	info, semDiags := check.FileGo(f, nil, sidecarTypes(t, path))
 	diags = append(diags, semDiags...)
 	if diag.HasErrors(diags) {
 		t.Fatalf("test input must check clean: %v", diags)
 	}
 	return f, info
 }
+
+// sidecarTypes reads the Go declarations a corpus schema's bare Types
+// name, from the hand-written file beside it (x.volt, x.go), as the
+// project pass reads a package's Go files (spec §types); nil when the
+// schema has none.
+func sidecarTypes(t *testing.T, path string) check.GoTypes {
+	t.Helper()
+	src, err := os.ReadFile(sidecarOf(path))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	gf, err := goparser.ParseFile(gotoken.NewFileSet(), sidecarOf(path), src, goparser.SkipObjectResolution)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := check.GoTypes{}
+	for _, d := range gf.Decls {
+		gd, ok := d.(*goast.GenDecl)
+		if !ok || gd.Tok != gotoken.TYPE {
+			continue
+		}
+		for _, spec := range gd.Specs {
+			ts := spec.(*goast.TypeSpec)
+			out[ts.Name.Name] = types.ExprString(ts.Type)
+		}
+	}
+	return out
+}
+
+func sidecarOf(schema string) string { return strings.TrimSuffix(schema, ".volt") + ".go" }
 
 func generate(t *testing.T, path string) []byte {
 	t.Helper()
@@ -181,6 +218,11 @@ func TestGoldenCompiles(t *testing.T) {
 		}
 		if err := os.WriteFile(filepath.Join(pkgDir, outName), src, 0o644); err != nil {
 			t.Fatal(err)
+		}
+		if decls, err := os.ReadFile(sidecarOf(filepath.Join("..", "testdata", base+".volt"))); err == nil {
+			if err := os.WriteFile(filepath.Join(pkgDir, "types.go"), decls, 0o644); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 	cmd := exec.Command("go", "build", "./...")

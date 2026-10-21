@@ -35,8 +35,8 @@ type Rule interface {
 	Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic
 }
 
-// Fold is a check over the whole file: the checker's model and the
-// summaries of every declaration.
+// Fold is a check over the whole file: the checker's model and its
+// naming plan.
 type Fold interface {
 	Analyzer
 	File(p *FilePass)
@@ -53,17 +53,10 @@ type Facts struct {
 	Refs    []*check.RefInfo
 }
 
-// Summary is what the folds need of one declaration: the column types
-// it names, which the enum fold looks up by key.
-type Summary struct {
-	EnumsUsed []string
-}
-
 // FilePass carries everything a Fold may inspect.
 type FilePass struct {
-	File      *ast.File
-	Info      *check.Info
-	Summaries []Summary // one per File.Decls entry, in order
+	File *ast.File
+	Info *check.Info
 
 	plan  **golang.Plan
 	fold  Fold
@@ -112,7 +105,7 @@ func ByName(name string) Analyzer {
 }
 
 var registry = []Analyzer{
-	unusedEnum, unusedPartial,
+	unusedPartial,
 	redundantIndex, emptyBody, shadowedColumn, unnecessaryQuotes,
 	missingPK, refTypeMismatch, refTargetNotUnique, selfRef, refCycle, caseCollision,
 	modelName, dynName,
@@ -142,10 +135,9 @@ type Memo struct {
 }
 
 type memoDecl struct {
-	facts   factsKey
-	rules   []Rule
-	diags   [][]diag.Diagnostic
-	summary Summary
+	facts factsKey
+	rules []Rule
+	diags [][]diag.Diagnostic
 }
 
 type factsKey struct {
@@ -216,9 +208,8 @@ func rulesEqual(a, b []Rule) bool {
 }
 
 type declResult struct {
-	diags   [][]diag.Diagnostic
-	summary Summary
-	reused  bool
+	diags  [][]diag.Diagnostic
+	reused bool
 }
 
 // RunMemo is RunWithPlan through a memo of the file's earlier runs; a
@@ -252,12 +243,11 @@ func RunMemo(f *ast.File, info *check.Info, plan *golang.Plan, memo *Memo, analy
 		}
 		if memo != nil {
 			if e := memo.prev[d]; e != nil && e.facts.equal(factsKeyOf(facts[i])) && rulesEqual(e.rules, rules) {
-				results[i] = declResult{diags: e.diags, summary: e.summary, reused: true}
+				results[i] = declResult{diags: e.diags, reused: true}
 				return
 			}
 		}
-		diags, sum := DeclVet(d, facts[i], rules)
-		results[i] = declResult{diags: diags, summary: sum}
+		results[i] = declResult{diags: DeclVet(d, facts[i], rules)}
 	})
 	if memo != nil {
 		memo.next = make(map[ast.Decl]*memoDecl, len(f.Decls))
@@ -270,19 +260,15 @@ func RunMemo(f *ast.File, info *check.Info, plan *golang.Plan, memo *Memo, analy
 				memo.next[d] = memo.prev[d]
 			} else {
 				memo.Misses++
-				memo.next[d] = &memoDecl{facts: factsKeyOf(facts[i]), rules: rules, diags: results[i].diags, summary: results[i].summary}
+				memo.next[d] = &memoDecl{facts: factsKeyOf(facts[i]), rules: rules, diags: results[i].diags}
 			}
 		}
 		memo.prev, memo.next = memo.next, nil
 	}
 
-	summaries := make([]Summary, len(f.Decls))
-	for i := range results {
-		summaries[i] = results[i].summary
-	}
 	foldDiags := make([][]diag.Diagnostic, len(folds))
 	for j, fo := range folds {
-		p := &FilePass{File: f, Info: info, Summaries: summaries, plan: &plan, fold: fo}
+		p := &FilePass{File: f, Info: info, plan: &plan, fold: fo}
 		fo.File(p)
 		foldDiags[j] = p.diags
 	}
@@ -339,15 +325,14 @@ func factsByDecl(f *ast.File, info *check.Info) []Facts {
 
 // DeclVet judges one declaration under the given rules: a pure
 // function of the declaration's syntax, the facts the checker resolved
-// for it and the rules. It answers each rule's warnings,
-// in rule order, and the declaration's summary for the folds.
-func DeclVet(d ast.Decl, f Facts, rules []Rule) ([][]diag.Diagnostic, Summary) {
+// for it and the rules. It answers each rule's warnings, in rule order.
+func DeclVet(d ast.Decl, f Facts, rules []Rule) [][]diag.Diagnostic {
 	nodes := nodesOf(d)
 	out := make([][]diag.Diagnostic, len(rules))
 	for i, r := range rules {
 		out[i] = r.Decl(d, nodes, f)
 	}
-	return out, summaryOf(nodes, f)
+	return out
 }
 
 func nodesOf(root ast.Node) []ast.Node {
@@ -363,18 +348,4 @@ func nodesOf(root ast.Node) []ast.Node {
 		}
 	}
 	return out
-}
-
-func summaryOf(nodes []ast.Node, f Facts) Summary {
-	var s Summary
-	if f.Table != nil {
-		seen := map[string]bool{}
-		for _, cd := range f.Table.Columns {
-			if key := cd.Col.Type.String(); !seen[key] {
-				seen[key] = true
-				s.EnumsUsed = append(s.EnumsUsed, key)
-			}
-		}
-	}
-	return s
 }

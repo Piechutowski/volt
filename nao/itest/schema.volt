@@ -11,11 +11,7 @@ Type pay.Cents int from 'github.com/Piechutowski/volt/nao/itest/pay'
 Project itest [note: 'Integration-test fixture for the generated query surface.'] {
 }
 
-Enum order_status {
-  pending
-  shipped
-  delivered [note: 'Terminal state']
-}
+Type OrderState string
 
 Table users {
   id int [pk, increment]
@@ -32,11 +28,15 @@ Table users {
 Table orders {
   id int [pk, increment]
   user_id int [ref: users.id]
-  status order_status [default: order_status.pending]
+  status OrderState [default: 'pending']
   total float64 [required]
   tip Money [default: 0]
   fee pay.Cents
   placed_at time.Time [null]
+
+  validators {
+    OrderStateKnown(status)
+  }
 }
 
 // §types rule 4, §predicates rule 5: a package-qualified declared type
@@ -44,6 +44,10 @@ Table orders {
 Select by_fee for orders where fee = :fee
 Select fees   for orders where fee in :fees [order: (id asc)]
 Select free   for orders where fee = 0
+
+// §types rule 3, §predicates rule 5: a declared type whose Go declaration
+// spells its storage type binds by kind, a list of it as one JSON array.
+Select by_state for orders where status in :states [order: (id asc)]
 
 // composite primary key, no auto-increment anywhere
 Table user_tags {

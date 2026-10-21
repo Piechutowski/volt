@@ -5,7 +5,7 @@ Table table {
   checks int
   records int
   ref string
-  enum int
+  type int
   from int
   as int
 }

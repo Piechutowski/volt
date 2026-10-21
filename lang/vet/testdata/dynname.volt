@@ -13,15 +13,12 @@ Table users {
   new int //WANT dynname
 }
 
-// good: the E prefix keeps enum types out of the handle namespace —
-// orders.status mints the handle OrderStatus, the enum the type
-// EOrderStatus
-Enum order_status {
-  pending
-}
+// good: a declared type named apart from its column handle; orders.status
+// mints the handle OrderStatus, and the type is OrderState
+Type OrderState string
 Table orders {
   id int [pk]
-  status order_status
+  status OrderState
 }
 
 // model UserLimit collides with users' generated UserLimit option wrapper

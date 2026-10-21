@@ -11,7 +11,7 @@ import (
 
 var (
 	elementKeywords = []string{
-		"Project", "Table", "TablePartial", "Enum", "Type", "Ref",
+		"Project", "Table", "TablePartial", "Type", "Ref",
 		"Records", "Migration",
 		"package ", "import", "Pipeline", "Scope",
 	}
@@ -33,7 +33,6 @@ var (
 		"index":     {"name: ", "unique", "pk", "where: "},
 		"migration": {"irreversible", "no transaction"},
 		"ref":       {"delete: ", "update: "},
-		"enumvalue": {"note: "},
 		"scope":     {"pipe: ", "error_handler: ", "name: "},
 		"route":     {"name: "},
 		"resources": {"only: (", "except: (", "param: ", "singular: ", "api", "default"},
@@ -59,7 +58,6 @@ var (
 	refValueRE      = regexp.MustCompile(`(?i)\bref\s*:\s*$`)
 	afterCardRE     = regexp.MustCompile(`>\s*$`)
 	defaultValueRE  = regexp.MustCompile(`(?i)\bdefault\s*:\s*$`)
-	defaultChainRE  = regexp.MustCompile(`(?i)\bdefault\s*:\s*\S+\.$`)
 	actionValueRE   = regexp.MustCompile(`(?i)\b(delete|update)\s*:\s*\w*$`)
 	columnShapeRE   = regexp.MustCompile(`^\s*([\p{L}\p{M}\d_]+|"[^"]*")\s+[\p{L}\p{M}\d_".]*$`)
 	lineStartRE     = regexp.MustCompile(`^\s*[\p{L}\p{M}\d_"~]*$`)
@@ -175,8 +173,6 @@ func headContext(head string) string {
 		return "tablepartial"
 	case strings.HasPrefix(head, "table"):
 		return "table"
-	case strings.HasPrefix(head, "enum"):
-		return "enum"
 	case strings.HasPrefix(head, "project"):
 		return "project"
 	case strings.HasPrefix(head, "records"):
@@ -205,15 +201,8 @@ func (d *Document) settingsComplete(prefix, ctx, outer string) []protocol.Comple
 	if refValueRE.MatchString(segment) || afterCardRE.MatchString(segment) {
 		return d.tableItems()
 	}
-	if defaultChainRE.MatchString(segment) {
-		if m := dotChainRE.FindStringSubmatch(segment); m != nil {
-			return d.dotChainComplete(m)
-		}
-	}
 	if defaultValueRE.MatchString(segment) {
-		items := d.enumItems()
-		items = append(items, keywordItemsKind([]string{"true", "false", "null"}, protocol.CompletionItemKindValue)...)
-		return items
+		return keywordItemsKind([]string{"true", "false"}, protocol.CompletionItemKindValue)
 	}
 	if actionValueRE.MatchString(segment) {
 		return keywordItemsKind(refActionValues, protocol.CompletionItemKindValue)
@@ -248,8 +237,6 @@ func (d *Document) settingsComplete(prefix, ctx, outer string) []protocol.Comple
 			if outer == "shape" || outer == "rebuild" {
 				kind = "migrationindex"
 			}
-		case "enum":
-			kind = "enumvalue"
 		case "ref":
 			kind = "ref"
 		case "shape", "alter":
@@ -275,11 +262,6 @@ func (d *Document) dotChainComplete(m []string) []protocol.CompletionItem {
 	if ti, ok := d.Index.Tables[first]; ok {
 		items = append(items, d.columnItems(ti)...)
 	}
-	if ei, ok := d.Index.Enums[first]; ok {
-		for _, v := range ei.Decl.Values {
-			items = append(items, item(v.Name.Name(), protocol.CompletionItemKindEnumMember, "value of "+ei.Decl.Name.Name()))
-		}
-	}
 	return items
 }
 
@@ -304,17 +286,8 @@ func (d *Document) columnItems(ti *check.TableInfo) []protocol.CompletionItem {
 	return items
 }
 
-func (d *Document) enumItems() []protocol.CompletionItem {
-	var items []protocol.CompletionItem
-	for _, ei := range d.Info.Enums {
-		items = append(items, item(ei.Decl.Name.Name(), protocol.CompletionItemKindEnum, "Enum"))
-	}
-	return items
-}
-
 func (d *Document) typeItems() []protocol.CompletionItem {
 	items := keywordItemsKind(builtinTypes, protocol.CompletionItemKindStruct)
-	items = append(items, d.enumItems()...)
 	for _, ti := range d.Info.Types {
 		items = append(items, item(ti.Decl.Name.String(), protocol.CompletionItemKindClass, "Type"))
 	}

@@ -5,7 +5,7 @@ Table "users" {
   email string [unique]
   foo_bar int
   total int
-  status post_status
+  status PostStatus
   new int
   indexes {
     id [unique]
@@ -13,18 +13,18 @@ Table "users" {
     (email, foo_bar)
     (email, foo_bar)
   }
+
+  validators {
+    PostStatusKnown(status)
+  }
 }
 
 Project blog [note: 'the blog schema'] {
   database_type: 'SQLite'
 }
 
-Enum post_status {
-  draft
-  published
-}
-Enum orphan_status { a }
-Enum core_kind { widget }
+Type PostStatus string
+Type CoreKind string
 
 TablePartial stamps {
   id int
@@ -54,7 +54,11 @@ Table posts {
 
 Table core_things {
   id int [pk]
-  k core_kind
+  k CoreKind
+
+  validators {
+    CoreKindKnown(k)
+  }
 }
 
 Table naked {

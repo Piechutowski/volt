@@ -252,14 +252,6 @@ func (c *caseCollisionCheck) File(p *FilePass) {
 	for _, dg := range c.groups("table", names, poss) {
 		p.diags = append(p.diags, dg)
 	}
-	names, poss = nil, nil
-	for _, e := range p.Info.Enums {
-		names = append(names, e.Key)
-		poss = append(poss, e.Decl.Pos())
-	}
-	for _, dg := range c.groups("enum", names, poss) {
-		p.diags = append(p.diags, dg)
-	}
 }
 
 func (c *caseCollisionCheck) groups(kind string, names []string, poss []token.Position) []diag.Diagnostic {

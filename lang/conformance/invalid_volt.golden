@@ -106,19 +106,19 @@ app/i13_unknown_param_type.volt:5:13: error: spec/scopes-and-routes: unknown par
 app/i14_dup_param.volt:5:9: error: spec/scopes-and-routes: duplicate path parameter "id" (§route-paths)
 
 ## i155_declared_type_ordering_op.volt
-db/i155_declared_type_ordering_op.volt:12:31: error: spec/selects-over-groups: column "price" has declared type Money; a declared type compares with =, !=, in and is null only (§predicates)
+db/i155_declared_type_ordering_op.volt:12:31: error: spec/selects-over-groups: column "price" has declared type money.Money; a declared type compares with =, !=, in and is null only (§predicates)
 
 ## i156_declared_type_like.volt
-db/i156_declared_type_like.volt:12:31: error: spec/selects-over-groups: like needs a text column; "slug" is Slug (§predicates)
+db/i156_declared_type_like.volt:12:31: error: spec/selects-over-groups: like needs a text column; "slug" is slug.Slug (§predicates)
 
 ## i157_declared_type_order.volt
-db/i157_declared_type_order.volt:12:35: error: spec/selects-over-groups: column "price" has declared type Money; a declared type cannot be ordered (§selects-over-groups)
+db/i157_declared_type_order.volt:12:35: error: spec/selects-over-groups: column "price" has declared type money.Money; a declared type cannot be ordered (§selects-over-groups)
 
 ## i158_declared_type_string_literal.volt
-db/i158_declared_type_string_literal.volt:12:37: error: spec/selects-over-groups: column "price" (Money) cannot be compared with the string "x" (§predicates)
+db/i158_declared_type_string_literal.volt:12:37: error: spec/selects-over-groups: column "price" (money.Money) cannot be compared with the string "x" (§predicates)
 
 ## i159_declared_type_list_time.volt
-db/i159_declared_type_list_time.volt:12:32: error: spec/selects-over-groups: column "at" has declared type Stamp stored as time.Time; it cannot take a list parameter: JSON carries no date/time value (§predicates)
+db/i159_declared_type_list_time.volt:12:32: error: spec/selects-over-groups: column "at" has declared type stamp.Stamp stored as time.Time; it cannot take a list parameter: JSON carries no date/time value (§predicates)
 
 ## i15_keyword_param.volt
 app/i15_keyword_param.volt:5:9: error: spec/scopes-and-routes: path parameter "type" must be a valid, non-keyword Go identifier (§route-paths)
@@ -138,8 +138,8 @@ db/i163_migration_name_shape.volt:9:11: error: spec/migrations: migration name "
 ## i164_migration_duplicate_name.volt
 db/i164_migration_duplicate_name.volt:15:11: error: spec/migrations: duplicate migration name "0001__init": migration names are unique within the package (§migrations)
 
-## i165_migration_column_type.volt
-db/i165_migration_column_type.volt:18:11: error: spec/migrations: column "state": type "status" is not a built-in; a migration column is bool, int, float64, string, []byte or time.Time, since the database holds the storage type (§migrations)
+## i165_migration_column_type
+db/schema.volt:19:11: error: spec/migrations: column "state": type "State" is not a built-in; a migration column is bool, int, float64, string, []byte or time.Time, since the database holds the storage type (§migrations)
 
 ## i166_migration_setting_tag.volt
 db/i166_migration_setting_tag.volt:18:27: error: spec/migrations: tag: describes the Go struct field, not the database, and is not a migration setting (§migrations)
@@ -276,35 +276,35 @@ db/i217_migration_duplicate_column.volt:14:5: error: spec/migrations: duplicate 
 db/i218_migration_action_without_ref.volt:13:24: error: spec/migrations: column "user_id": delete: names the action of the column's ref:, and the column declares none (§migrations)
 
 ## i219_unknown_type_reported_once
-db/schema.volt:4:9: error: spec/columns: column "id": unknown type "int64"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
-db/schema.volt:6:9: error: spec/columns: column "rank": unknown type "int32"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+db/schema.volt:4:9: error: spec/columns: column "id": unknown type "int64"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
+db/schema.volt:6:9: error: spec/columns: column "rank": unknown type "int32"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
 app/routes.volt:11:3: error: spec/scopes-and-routes: route GET /api/authors/:id conflicts with the route at app/routes.volt:10:3: identical method and path shape (§route-conflicts)
 
 ## i21_unknown_table
 app/r.volt:9:15: error: spec/resources: no table "nope" in package "db" (§declaration)
 
 ## i221_unknown_type_group_errors_stay.volt
-db/i221_unknown_type_group_errors_stay.volt:12:8: error: spec/columns: column "hits": unknown type "int32"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
-db/i221_unknown_type_group_errors_stay.volt:55:31: error: spec/selects-over-groups: column "hits" is missing from link_clicks — every member of "lacking" must have it (§selects-over-groups)
-db/i221_unknown_type_group_errors_stay.volt:56:30: error: spec/selects-over-groups: column "hits" disagrees on type across "split": int in feed_reads; string in search_hits — the predicate cannot be checked for every member (§selects-over-groups)
-db/i221_unknown_type_group_errors_stay.volt:57:29: error: spec/selects-over-groups: column "hits" of table "mood_marks" is enum-typed (mood); predicates do not compare enums; filter on a text column or use the dynamic layer (§predicates, hypotheses H5)
-db/i221_unknown_type_group_errors_stay.volt:58:15: error: spec/selects-over-groups: column "hits" is missing from link_clicks — every member of "lacking" must have it (§selects-over-groups)
-db/i221_unknown_type_group_errors_stay.volt:59:16: error: spec/selects-over-groups: column "hits" disagrees on field type across "split": int in feed_reads; string in search_hits — a shared row type needs one type, nullability included (§selects-over-groups)
-db/i221_unknown_type_group_errors_stay.volt:61:8: error: spec/selects-over-groups: select "counted" mints the shared row type Counted, which collides with the model of table "counteds" (§selects-over-groups)
-db/i221_unknown_type_group_errors_stay.volt:62:44: error: spec/selects-over-groups: column "nope" is missing from page_views — every member of "page_views" must have it (§selects-over-groups)
-db/i221_unknown_type_group_errors_stay.volt:63:8: error: spec/selects-over-groups: select "hits" mints PageViewHits, which collides with the dynamic column handle for page_views.hits (§selects-over-groups)
-db/i221_unknown_type_group_errors_stay.volt:64:8: error: spec/selects-over-groups: select "page_view_hits" mints the shared row type PageViewHits, which collides with the column handle for page_views.hits (§selects-over-groups)
+db/i221_unknown_type_group_errors_stay.volt:7:8: error: spec/columns: column "hits": unknown type "int32"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
+db/i221_unknown_type_group_errors_stay.volt:50:31: error: spec/selects-over-groups: column "hits" is missing from link_clicks — every member of "lacking" must have it (§selects-over-groups)
+db/i221_unknown_type_group_errors_stay.volt:51:30: error: spec/selects-over-groups: column "hits" disagrees on type across "split": int in feed_reads; string in search_hits — the predicate cannot be checked for every member (§selects-over-groups)
+db/i221_unknown_type_group_errors_stay.volt:52:29: error: spec/selects-over-groups: column "hits" ([]byte) cannot appear in a predicate (§predicates)
+db/i221_unknown_type_group_errors_stay.volt:53:15: error: spec/selects-over-groups: column "hits" is missing from link_clicks — every member of "lacking" must have it (§selects-over-groups)
+db/i221_unknown_type_group_errors_stay.volt:54:16: error: spec/selects-over-groups: column "hits" disagrees on field type across "split": int in feed_reads; string in search_hits — a shared row type needs one type, nullability included (§selects-over-groups)
+db/i221_unknown_type_group_errors_stay.volt:56:8: error: spec/selects-over-groups: select "counted" mints the shared row type Counted, which collides with the model of table "counteds" (§selects-over-groups)
+db/i221_unknown_type_group_errors_stay.volt:57:44: error: spec/selects-over-groups: column "nope" is missing from page_views — every member of "page_views" must have it (§selects-over-groups)
+db/i221_unknown_type_group_errors_stay.volt:58:8: error: spec/selects-over-groups: select "hits" mints PageViewHits, which collides with the dynamic column handle for page_views.hits (§selects-over-groups)
+db/i221_unknown_type_group_errors_stay.volt:59:8: error: spec/selects-over-groups: select "page_view_hits" mints the shared row type PageViewHits, which collides with the column handle for page_views.hits (§selects-over-groups)
 
 ## i222_unknown_type_validator_errors_stay
-db/schema.volt:8:9: error: spec/columns: column "rank": unknown type "int32"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+db/schema.volt:8:9: error: spec/columns: column "rank": unknown type "int32"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
 db/schema.volt:11:5: error: spec/validators: no function RankSane in package db's Go files — declare func RankSane beside the schema (§validators)
 db/schema.volt:12:5: error: spec/validators: TwoArgs takes 2 parameter(s) but the validator passes 1 column(s): found func TwoArgs(rank int, email string) error, expected func TwoArgs (§validators)
 db/schema.volt:13:17: error: spec/validators: column "email" (string, Go string) but parameter 2 of Mixed is int — change the column type or the function: expected func Mixed (§validators)
 db/schema.volt:14:17: error: spec/validators: no column "nope" in table "authors" (§validators)
 
 ## i223_unknown_type_route_errors_stay
-db/schema.volt:4:9: error: spec/columns: column "id": unknown type "int64"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
-db/schema.volt:6:9: error: spec/columns: column "rank": unknown type "int32"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+db/schema.volt:4:9: error: spec/columns: column "id": unknown type "int64"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
+db/schema.volt:6:9: error: spec/columns: column "rank": unknown type "int32"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
 app/routes.volt:10:28: error: spec/scopes-and-routes: db.AuthorUpdate takes a request body (db.AuthorParams); route it with post, put or patch (§query-routes)
 app/routes.volt:11:28: error: spec/scopes-and-routes: path parameter "extra" is not a parameter of db.AuthorDelete (§query-routes)
 app/routes.volt:12:16: error: spec/scopes-and-routes: parameter "id" of db.AuthorGet cannot be a wildcard (§query-routes)
@@ -329,8 +329,8 @@ app/routes.volt:31:3: error: spec/scopes-and-routes: reverse-URL helper or clien
 db/schema.volt:5:12: error: spec/types: storage type "int32" of Type "Score" is not a built-in: bool, int, float64, string, []byte or time.Time (§types)
 
 ## i225_unknown_type_order_errors_stay.volt
-db/i225_unknown_type_order_errors_stay.volt:7:8: error: spec/columns: column "hits": unknown type "int32"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
-db/i225_unknown_type_order_errors_stay.volt:13:8: error: spec/columns: column "body": unknown type "int64"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+db/i225_unknown_type_order_errors_stay.volt:7:8: error: spec/columns: column "hits": unknown type "int32"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
+db/i225_unknown_type_order_errors_stay.volt:13:8: error: spec/columns: column "body": unknown type "int64"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
 db/i225_unknown_type_order_errors_stay.volt:21:43: error: spec/selects-over-groups: order: every column states its direction; write "hits asc" or "hits desc" (§selects-over-groups)
 db/i225_unknown_type_order_errors_stay.volt:22:46: error: spec/selects-over-groups: order direction is asc or desc, not "sideways" (§selects-over-groups)
 db/i225_unknown_type_order_errors_stay.volt:23:49: error: spec/selects-over-groups: column "hits" appears twice in order: (§selects-over-groups)
@@ -371,6 +371,16 @@ db/i257_migration_note.volt:16:13: error: spec/migrations: unknown setting "note
 
 ## i25_short_ellipsis.volt
 app/i25_short_ellipsis.volt:5:14: error: syntax: wildcard ellipsis is spelled ':name...' (§route-paths)
+
+## i262_type_no_go_declaration
+db/schema.volt:5:6: error: spec/types: Type OrderState is declared in no Go file of package db; write type OrderState string beside the schema (§types)
+db/schema.volt:6:6: error: spec/types: Type Blob is declared in no Go file of package db; write type Blob []byte beside the schema, with a Scan method on its pointer and a Value method (§types)
+
+## i263_type_takes_handle_name
+db/schema.volt:5:6: error: spec/types: Type OrderStatus takes the Go name of the column handle for orders.status; a declared type is named apart from the names generated code declares, e.g. OrderStatusKind (§types)
+
+## i264_select_row_takes_type_name
+db/schema.volt:13:8: error: spec/selects-over-groups: select "summary" mints the shared row type Summary, which collides with the declared type Summary (§selects-over-groups)
 
 ## i26_typed_wildcard.volt
 app/i26_typed_wildcard.volt:5:18: error: syntax: a wildcard cannot carry a type; ':name...' always captures a string (§route-paths)

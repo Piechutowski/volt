@@ -6,9 +6,9 @@ import (
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-// Validate runs required, enum membership and the validators of users
-// over the row, every one every time, replacing the findings of an
-// earlier Validate (spec §changesets, §validators).
+// Validate runs required and the validators of users over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
 func (c UserChangeset) Validate() UserChangeset {
 	v := c.Row()
 	var errs []rt.FieldError
@@ -25,25 +25,25 @@ func (c UserChangeset) Validate() UserChangeset {
 	return c
 }
 
-// Validate runs required, enum membership and the validators of tags
-// over the row, every one every time, replacing the findings of an
-// earlier Validate (spec §changesets, §validators).
+// Validate runs required and the validators of tags over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
 func (c TagChangeset) Validate() TagChangeset {
 	c.valid = nil
 	return c
 }
 
-// Validate runs required, enum membership and the validators of ms_revenue
-// over the row, every one every time, replacing the findings of an
-// earlier Validate (spec §changesets, §validators).
+// Validate runs required and the validators of ms_revenue over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
 func (c MsRevenueChangeset) Validate() MsRevenueChangeset {
 	c.valid = nil
 	return c
 }
 
-// Validate runs required, enum membership and the validators of ms_usage
-// over the row, every one every time, replacing the findings of an
-// earlier Validate (spec §changesets, §validators).
+// Validate runs required and the validators of ms_usage over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
 func (c MsUsageChangeset) Validate() MsUsageChangeset {
 	c.valid = nil
 	return c

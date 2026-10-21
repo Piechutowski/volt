@@ -86,16 +86,10 @@ func eachChild(n Node, visit func(Node)) {
 	case *RefEndpoint:
 		child(visit, n.Table)
 		children(visit, n.Columns)
-	case *Enum:
-		child(visit, n.Name)
-		children(visit, n.Values)
 	case *TypeDecl:
 		child(visit, n.Name)
 		child(visit, n.Storage)
 		child(visit, n.From)
-	case *EnumValue:
-		child(visit, n.Name)
-		child(visit, n.Settings)
 	case *Migration:
 		child(visit, n.Name)
 		child(visit, n.Settings)
@@ -178,8 +172,8 @@ func eachChild(n Node, visit func(Node)) {
 		children(visit, n.Parts)
 	case *NegNumber:
 		child(visit, n.Num)
-	case *EnumConst:
-		child(visit, n.Enum)
-		child(visit, n.Value)
+	case *QualIdent:
+		child(visit, n.Qual)
+		child(visit, n.Name)
 	}
 }

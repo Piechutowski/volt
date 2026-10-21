@@ -5,7 +5,6 @@ package golang
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/Piechutowski/volt/gen/align"
@@ -62,12 +61,12 @@ type fieldPlan struct {
 	goType   string
 	baseType string
 	storage  string
-	enum     *check.EnumInfo
 	imp      string
 	arg      string
 
 	nullable   bool
 	declared   bool
+	kinded     bool
 	required   bool
 	increment  bool
 	hasDefault bool
@@ -139,16 +138,9 @@ func (p *plan) fieldCount() int {
 }
 
 func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
-	g := &generator{f: f, info: info, imports: map[string]bool{}}
-	if err := g.enumTypesCollect(); err != nil {
-		return nil, err
-	}
-
-	p := &plan{imports: g.imports}
+	imports := map[string]bool{}
+	p := &plan{imports: imports}
 	typeNames := map[string]string{"Queries": "the generated Queries type"}
-	for _, e := range info.Enums {
-		typeNames[g.enumTypes[e.Key]] = "enum " + e.Decl.Name.Name()
-	}
 	sqlNames := map[string]string{}
 
 	type built struct {
@@ -156,16 +148,15 @@ func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 		imp map[string]bool
 		err error
 	}
-	enums := enumTypesOf(info, g.enumTypes)
 	tables := make([]built, len(info.Tables))
 	par.For(len(info.Tables), func(i int) {
 		if memo != nil {
-			if e := memo.prev[info.Tables[i]]; e != nil && slices.Equal(e.enums, enums.pairs) {
+			if e := memo.prev[info.Tables[i]]; e != nil {
 				tables[i] = built{e.tm, e.imports, nil}
 				return
 			}
 		}
-		tm, imports, err := tableBuild(info.Tables[i], enums)
+		tm, imports, err := tableBuild(info.Tables[i])
 		tables[i] = built{tm, imports, err}
 	})
 	if memo != nil {
@@ -177,7 +168,7 @@ func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 					memo.next[ti] = e
 				} else {
 					memo.Misses++
-					memo.next[ti] = &memoModel{tm: b.tm, imports: b.imp, enums: enums.pairs}
+					memo.next[ti] = &memoModel{tm: b.tm, imports: b.imp}
 				}
 			}
 		}
@@ -196,30 +187,14 @@ func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 		}
 		sqlNames[b.tm.sqlName] = ti.Decl.Name.Name()
 		for imp := range b.imp {
-			g.imports[imp] = true
+			imports[imp] = true
 		}
 		p.tables = append(p.tables, b.tm)
 	}
 	return p, nil
 }
 
-type enumTypes struct {
-	byKey map[string]string
-	pairs []enumType
-}
-
-type enumType struct{ key, typ string }
-
-func enumTypesOf(info *check.Info, byKey map[string]string) *enumTypes {
-	pairs := make([]enumType, 0, len(info.Enums))
-	for _, e := range info.Enums {
-		pairs = append(pairs, enumType{e.Key, byKey[e.Key]})
-	}
-	slices.SortFunc(pairs, func(a, b enumType) int { return strings.Compare(a.key, b.key) })
-	return &enumTypes{byKey: byKey, pairs: pairs}
-}
-
-func tableBuild(ti *check.TableInfo, enums *enumTypes) (*tableModel, map[string]bool, error) {
+func tableBuild(ti *check.TableInfo) (*tableModel, map[string]bool, error) {
 	model, err := modelName(ti.Decl)
 	if err != nil {
 		return nil, nil, fmt.Errorf("table %s: %w", ti.Decl.Name.Name(), err)
@@ -228,7 +203,7 @@ func tableBuild(ti *check.TableInfo, enums *enumTypes) (*tableModel, map[string]
 	imports := map[string]bool{}
 	goFields := map[string]string{}
 	for _, cd := range ti.Columns {
-		fp, err := fieldBuild(enums.byKey, imports, cd, goFields)
+		fp, err := fieldBuild(imports, cd, goFields)
 		if err != nil {
 			return nil, nil, fmt.Errorf("table %s: %w", ti.Decl.Name.Name(), err)
 		}
@@ -271,7 +246,7 @@ func tableBuild(ti *check.TableInfo, enums *enumTypes) (*tableModel, map[string]
 	return tm, imports, nil
 }
 
-func fieldBuild(enumTypes map[string]string, imports map[string]bool, cd *check.ColumnDef, goFields map[string]string) (*fieldPlan, error) {
+func fieldBuild(imports map[string]bool, cd *check.ColumnDef, goFields map[string]string) (*fieldPlan, error) {
 	col := cd.Col
 	colName := col.Name.Name()
 
@@ -284,7 +259,7 @@ func fieldBuild(enumTypes map[string]string, imports map[string]bool, cd *check.
 	}
 	goFields[goField] = colName
 
-	typ := typeOf(cd.Type, enumTypes)
+	typ := typeOf(cd.Type)
 	if typ.imp != "" {
 		imports[typ.imp] = true
 	}
@@ -303,11 +278,11 @@ func fieldBuild(enumTypes map[string]string, imports map[string]bool, cd *check.
 		goType:     goType,
 		baseType:   typ.name,
 		storage:    cd.Type.Storage,
-		enum:       cd.Type.Enum,
 		imp:        typ.imp,
 		arg:        argName(goField),
 		nullable:   cd.Nullable,
 		declared:   cd.Type.Decl != nil,
+		kinded:     cd.Type.Kinded(),
 		required:   col.Settings.Get("required") != nil,
 		increment:  col.Settings.Get("increment") != nil,
 		hasDefault: col.Settings.Get("default") != nil,

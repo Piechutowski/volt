@@ -13,16 +13,6 @@ import (
 	"time"
 )
 
-// EOrderStatus is the order_status enum.
-type EOrderStatus string
-
-const (
-	EOrderStatusPending EOrderStatus = "pending"
-	EOrderStatusShipped EOrderStatus = "shipped"
-	// Terminal state
-	EOrderStatusDelivered EOrderStatus = "delivered"
-)
-
 var (
 	_ sql.Scanner   = (*Money)(nil)
 	_ driver.Valuer = *new(Money)
@@ -237,7 +227,7 @@ func (c UserChangeset) Err() error {
 type Order struct {
 	ID       int                `db:"id" json:"id"`
 	UserID   int                `db:"user_id" json:"user_id"`
-	Status   EOrderStatus       `db:"status" json:"status"`
+	Status   OrderState         `db:"status" json:"status"`
 	Total    float64            `db:"total" json:"total"`
 	Tip      Money              `db:"tip" json:"tip"`
 	Fee      pay.Cents          `db:"fee" json:"fee"`
@@ -258,7 +248,7 @@ type OrderParams = rt.Params[Order]
 var (
 	OrderID       = rt.Column[Order, int]{Name: "id"}
 	OrderUserID   = rt.Column[Order, int]{Name: "user_id"}
-	OrderStatus   = rt.Column[Order, EOrderStatus]{Name: "status"}
+	OrderStatus   = rt.Column[Order, OrderState]{Name: "status"}
 	OrderTotal    = rt.Column[Order, float64]{Name: "total"}
 	OrderTip      = rt.Column[Order, Money]{Name: "tip"}
 	OrderFee      = rt.Column[Order, pay.Cents]{Name: "fee"}
@@ -279,7 +269,7 @@ type OrderChangeset struct {
 
 // OrderNew starts a changeset for a orders row to create, the schema's literal
 // defaults in place (spec §changesets).
-func OrderNew() OrderChangeset { return OrderChangeset{data: Order{Status: EOrderStatusPending}} }
+func OrderNew() OrderChangeset { return OrderChangeset{data: Order{Status: "pending"}} }
 
 // Changeset starts a changeset for an update of r, nothing set (spec
 // §changesets).
@@ -304,7 +294,7 @@ func (c OrderChangeset) UserIDSet(v int) OrderChangeset {
 }
 
 // StatusSet sets status and marks it (spec §changesets).
-func (c OrderChangeset) StatusSet(v EOrderStatus) OrderChangeset {
+func (c OrderChangeset) StatusSet(v OrderState) OrderChangeset {
 	c.vals.Status, c.set[2] = v, true
 	return c
 }
@@ -348,7 +338,7 @@ func (c OrderChangeset) Cast(p OrderParams, allow ...OrderColumn) OrderChangeset
 				c = c.UserIDSet(v)
 			}
 		case "status":
-			if v, ok, err := rt.Field(p, "status", "order_status", false, func(r *Order) EOrderStatus { return r.Status }); err != nil {
+			if v, ok, err := rt.Field(p, "status", "OrderState", false, func(r *Order) OrderState { return r.Status }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "status")
 			} else if ok {
 				c = c.StatusSet(v)

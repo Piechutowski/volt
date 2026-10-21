@@ -39,11 +39,15 @@ var dynWrapperSuffixes = []string{"Limit", "Offset", "Distinct", "OrderBy", "Aft
 
 // NameCollision is one Go package-scope name that generation would mint
 // twice. First and Second describe the colliding origins in declaration
-// order; Pos locates the later of the two.
+// order; Pos locates the later of the two. Type is the bare declared
+// type among them, which the checker refuses (spec §types), and With
+// describes the other origin; Type is nil when generated names collide.
 type NameCollision struct {
 	Name          string
 	First, Second string
 	Pos           token.Position
+	Type          *check.TypeInfo
+	With          string
 }
 
 // DynNameCollisions reports the package-scope Go name collisions the
@@ -58,8 +62,7 @@ type dynOrigin struct {
 	pos  token.Position
 	tm   *tableModel
 	f    *fieldPlan
-	e    *check.EnumInfo
-	v    *ast.EnumValue
+	td   *check.TypeInfo
 	sfx  string
 }
 
@@ -67,8 +70,7 @@ type dynOriginKind uint8
 
 const (
 	dynQueries dynOriginKind = iota
-	dynEnum
-	dynEnumValue
+	dynType
 	dynModel
 	dynChangeset
 	dynColumn
@@ -100,10 +102,8 @@ func (o dynOrigin) name() string {
 
 func (o dynOrigin) describe() string {
 	switch o.kind {
-	case dynEnum:
-		return "enum " + o.e.Decl.Name.Name()
-	case dynEnumValue:
-		return fmt.Sprintf("enum %s value %q", o.e.Decl.Name.Name(), o.v.Name.Name())
+	case dynType:
+		return "Type " + o.td.Key
 	case dynModel:
 		return fmt.Sprintf("table %s (model %s)", o.tm.ti.Decl.Name.Name(), o.tm.model)
 	case dynChangeset:

@@ -28,21 +28,18 @@ func dynNamesWalk(p *plan, info *check.Info) []NameCollision {
 		if second.pos.Line() < first.pos.Line() || (second.pos.Line() == first.pos.Line() && second.pos.Column() < first.pos.Column()) {
 			first, second = second, first
 		}
-		out = append(out, NameCollision{Name: name, First: first.describe(), Second: second.describe(), Pos: second.pos})
+		nc := NameCollision{Name: name, First: first.describe(), Second: second.describe(), Pos: second.pos}
+		if first.kind == dynType {
+			nc.Type, nc.With = first.td, second.describe()
+		} else if second.kind == dynType {
+			nc.Type, nc.With = second.td, first.describe()
+		}
+		out = append(out, nc)
 	}
 
-	for _, e := range info.Enums {
-		typeName, err := enumTypeName(e.Decl.Name.Name())
-		if err != nil {
-			continue
-		}
-		add(typeName, dynOrigin{kind: dynEnum, e: e, pos: e.Decl.Pos()})
-		for _, v := range e.Decl.Values {
-			constName, err := goName(v.Name.Name())
-			if err != nil {
-				continue
-			}
-			add(typeName+constName, dynOrigin{kind: dynEnumValue, e: e, v: v, pos: v.Pos()})
+	for _, td := range info.Types {
+		if td.Path == "" {
+			add(td.Key, dynOrigin{kind: dynType, td: td, pos: td.Decl.Name.Pos()})
 		}
 	}
 	for _, tm := range p.tables {
@@ -68,7 +65,11 @@ func dynNamesWalk(p *plan, info *check.Info) []NameCollision {
 func collisionsRender(cs []NameCollision) string {
 	var b strings.Builder
 	for _, c := range cs {
-		fmt.Fprintf(&b, "%s: %s | %s | %s\n", c.Pos, c.Name, c.First, c.Second)
+		fmt.Fprintf(&b, "%s: %s | %s | %s", c.Pos, c.Name, c.First, c.Second)
+		if c.Type != nil {
+			fmt.Fprintf(&b, " | Type %s with %s", c.Type.Key, c.With)
+		}
+		b.WriteString("\n")
 	}
 	return b.String()
 }
@@ -78,11 +79,9 @@ func TestDynNameCollisionsMatchWalk(t *testing.T) {
   id int [pk]
   foo_bar int
   limit int
-  status order_status
+  status OrderState
 }
-Enum order_status {
-  pending
-}
+Type OrderState string
 Table user_limits {
   id int [pk]
 }
@@ -98,12 +97,9 @@ Table e_users {
   kind int
   x int
 }
-Enum user_kind {
-  x
-}
-Enum e_user {
-  x
-}
+Type EUserKind string
+Type EUserX string
+Type UserFooBar string
 Table pinned [model: 'UserChangeset'] {
   id int [pk]
   n int

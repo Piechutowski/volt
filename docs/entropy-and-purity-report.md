@@ -22,8 +22,8 @@ kept; the text of each item records what its demo showed.
 
 ## Open follow-ups from the enum removal
 
-The enum removal is decided (roadmap.md). These questions it raises are
-not:
+The enum removal is built (roadmap.md, §types). These questions it
+raises are open:
 
 - Whether a validator of T on a nullable column of T runs on the value
   when it is present and is skipped on NULL. Today a nullable column
@@ -219,7 +219,7 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 ### 38. [decide] Keyword casing mixes PascalCase and lowercase, even among siblings in one body and between the schema and migration spellings of the same word
 
 - one table body: indexes {, validators { beside Records (...) {
-- top level: Table, Enum, Ref, Pipeline, Scope, Group, Pred, Select, Migration beside package, import
+- top level: Table, Type, Ref, Pipeline, Scope, Group, Pred, Select, Migration beside package, import
 - resources, dataset (lowercase) inside Scope (PascalCase)
 - schema Table users { ... } vs migration create table users { ... } with the identical column body; schema indexes vs migration create index
 
@@ -402,7 +402,7 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 - handler ref = name, [ ".", name ]
 - table ref = name, [ ".", name ]
 - dataset inline [ name, "." ], name
-- Part I type name, and enum constant, which the checker reuses to read error_handler: app.Errors (lang/routes_lower.go:315-319)
+- Part I type name, and the dotted setting value the checker reads error_handler: app.Errors with (ast.QualIdent, lang/routes_lower.go selfFuncRefIn), which no production of the setting grammar names
 
 **Proposal.** Define one production, `qualified name = name, [ ".", name ]`, use it everywhere, and have the parser call qualName for all of them.
 
@@ -695,10 +695,10 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 - column handles <Model><Field> (PostSlug)
 - option wrappers <Model>Limit/Offset/Distinct/OrderBy/After/Set; <Model>Changeset/Column/Params/New; select row types <Model><Select>
-- enum types E<Enum> and constants E<Enum><Value>; the E prefix exists only to keep orders.status and order_status apart
+- the package's bare declared types, which share the scope; one that takes a generated name is a check error suggesting a free one (§types), so the type of orders.status is OrderState and not OrderStatus
 - the dynname vet rule and generator errors catch whatever still collides
 
-**Proposal.** Decide whether one rule can replace the collision machinery. For example, group column handles per model (var PostC = struct{ ID rt.Column[Post, int]; ... }, used as PostC.Slug.Eq(...)) so a field name can never meet a wrapper or changeset name. The removals proposed elsewhere (Enum, OrderBy, Set, Distinct, Valid) already shrink the set.
+**Proposal.** Decide whether one rule can replace the collision machinery. For example, group column handles per model (var PostC = struct{ ID rt.Column[Post, int]; ... }, used as PostC.Slug.Eq(...)) so a field name can never meet a wrapper or changeset name. The enum removal took the E prefix out; the removals proposed elsewhere (OrderBy, Set, Distinct, Valid) shrink the set further.
 
 **Cost.** Every column-handle use site, a rewrite of the dynname rule, all the model and dyn goldens, the spec's naming text. Large.
 
@@ -1024,7 +1024,7 @@ A zero Status counts as 500. ProblemOf can be table-tested without httptest.
 
 ### 16. [do] Records (§records-sample-data, docs/spec.md:1114): nao/gen/sqlite/gen.go:276 insertsEmit; lang/check/types.go:258 recordsTypeCheck; the fold's target DDL (cmd/volt/migration.go:391)
 
-**Effect.** Records are a second write path next to changesets: verbatim INSERTs in nao_schema.sql that skip `required`, enum membership, every validator and every declared type's Valuer. That contradicts §changesets ("there is no other write path for a row"). An expression literal in a record (snippet 21_records_values uses `now()`) also ties the seed to the clock.
+**Effect.** Records are a second write path next to changesets: verbatim INSERTs in nao_schema.sql that skip `required`, every validator (membership in a value set among them) and every declared type's Valuer. That contradicts §changesets ("there is no other write path for a row"). An expression literal in a record (snippet 21_records_values uses `now()`) also ties the seed to the clock.
 
 **Bug.** Demo purity-lang/demo/cmd/defaults: with title [not null, required] and validator TitleShape, the records (1, '') and (2, 'lowercase title') load without a word. Afterwards even a no-op PostUpdate(ctx, p.Changeset()) on either row fails with 422, because Update validates before it checks for marks. Every later edit of any column on a seeded row is refused over a value nobody is touching.
 
@@ -1066,9 +1066,9 @@ MigrateDown reads the ledger and picks m (needed early for ForeignKeysOff), runs
 
 **Cost.** About 30 lines in nao/rt/migrate.go; the demo, made deterministic, is the regression test; one sentence in §migration-ledger rule 3. No generated-code or CLI change.
 
-### 20. [do] nao/gen/golang/gen.go:528 defaultGo skips f.declared; spec §changesets rule 2 ("a declared type's default ... the database's alone"), §default-values rule 1
+### 20. [do] nao/gen/golang/gen.go defaultGo skips a declared type that is not kinded; spec §changesets rule 2 ("the default of a declared type that implements Scanner and Valuer ... the database's alone"), §default-values rule 1
 
-**Effect.** For built-in and enum columns, <Model>New seeds the literal default, so Validate sees what the database will write. For a declared type it does not: Validate judges the zero value while the database stores the default. Whether the default even scans into the Go type is found out only when a row is read back.
+**Effect.** For built-in columns and kinded declared types (§types), <Model>New seeds the literal default, so Validate sees what the database will write. For a declared type that implements Scanner and Valuer it does not: Validate judges the zero value while the database stores the default. Whether the default even scans into the Go type is found out only when a row is read back.
 
 **Bug.** Demo purity-lang/demo/cmd/defaults and purity-bugs/money: with `amount Money [not null, default: 100]` and validator AmountPositive, PriceNew().Row().Amount is 0, and PriceCreate(ctx, PriceNew()) is refused with 422 "amount must be positive", although the database would have stored 100. The reverse case follows from the same rule: a Type Slug whose Scan refuses spaces, with default 'Draft Post', stores rows that every later Get fails to scan (500).
 

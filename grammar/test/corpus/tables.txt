@@ -52,14 +52,14 @@ Table users [note: 'main', model: 'Member'] {
           (identifier))))))
 
 ==================
-column types: built-ins, the [] of []byte, qualified time.Time, an enum
+column types: built-ins, the [] of []byte, qualified time.Time, a declared type
 ==================
 
 Table t {
   name string
   data []byte
   created time.Time
-  status job_status
+  status JobState
 }
 
 ---
@@ -106,7 +106,7 @@ Table t {
   d time.Time [default: `now()`]
   e float64 [default: -1.5]
   f bool [default: false]
-  h status [default: status.active]
+  h Status [default: 'active']
 }
 
 ---
@@ -205,10 +205,8 @@ Table t {
         (setting
           (setting_name
             (identifier))
-          (enum_constant
-            (enum_name
-              (identifier))
-            (identifier)))))))
+          (string
+            (string_content)))))))
 
 ==================
 inline refs in column settings

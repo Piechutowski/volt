@@ -269,6 +269,13 @@ func genRun(ctx context.Context, c *cli.Command) error {
 	if outDir != "" && len(paths) != 1 {
 		return cli.Exit(fmt.Sprintf("gen: -o writes one package; %d named", len(paths)), 2)
 	}
+	if outDir != "" && (parts["models"] || parts["queries"] || parts["router"] || parts["client"]) {
+		for _, path := range paths {
+			if err := bareTypesTravel(pr.Packages[path], outDir); err != nil {
+				return err
+			}
+		}
+	}
 	clause := c.String("package")
 	if outDir != "" && clause == "" {
 		clause = goPackageName(outDir)
@@ -555,6 +562,20 @@ func partOf(name string) string {
 	default:
 		return "router"
 	}
+}
+
+func bareTypesTravel(pkg *lang.Package, outDir string) error {
+	if pkg.Schema() == nil {
+		return nil
+	}
+	for _, td := range pkg.Schema().Types {
+		if td.Path != "" {
+			continue
+		}
+		return cli.Exit(fmt.Sprintf("gen: -o %s: Type %s of package %s is declared in that package's own Go files, which do not travel to %s; declare it in a package of its own and write Type pkg.%s %s from 'its/import/path' (§types)",
+			outDir, td.Key, pkg.Path, outDir, td.Key, td.Storage.Storage), 2)
+	}
+	return nil
 }
 
 func goPackageName(dir string) string {

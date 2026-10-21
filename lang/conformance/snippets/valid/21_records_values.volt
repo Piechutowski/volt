@@ -1,7 +1,5 @@
-// spec: §records-sample-data, every record value kind, null, enum constants
-Enum Status { active
-  inactive
-  pending }
+// spec: §records-sample-data, every record value kind, null, a string for a declared type stored as string
+Type Status string
 Table users {
   id int
   name string
@@ -10,10 +8,10 @@ Table users {
   created_at time.Time
 
   records (id, name, age, status, created_at) {
-    1, 'Alice', 30, Status.active, '2024-01-15 10:30:00'
-    2, 'Bob', null, Status.inactive, `now()`
-    3, 'Charlie', null, Status.pending, '2024-01-15'
-    4, '', -5, Status.pending, '2024-01-15T10:30:00.000+07:00'
-    5, 'Dora', 15000000000, Status.active, `uuid_generate_v4()`
+    1, 'Alice', 30, 'active', '2024-01-15 10:30:00'
+    2, 'Bob', null, 'inactive', `now()`
+    3, 'Charlie', null, 'pending', '2024-01-15'
+    4, '', -5, 'pending', '2024-01-15T10:30:00.000+07:00'
+    5, 'Dora', 15000000000, 'active', `uuid_generate_v4()`
   }
 }

@@ -15,22 +15,19 @@ data/schema.volt:11:5: warning: vet/redundantindex: unique index on "id" is redu
 data/schema.volt:12:5: warning: vet/redundantindex: unique index on "email" duplicates the column's 'unique' setting
 data/schema.volt:14:6: warning: vet/redundantindex: duplicate index on (email, foo_bar) in table "users"
 data/more.volt:16:1: warning: vet/refcycle: foreign-key cycle between tables: a, b
-data/schema.volt:26:1: warning: vet/unusedenum: enum "orphan_status" is declared but never used as a column type
 data/more.volt:28:1: warning: vet/selfref: relationship references column employees.id on both sides
 data/more.volt:30:1: warning: vet/dynname: table users (option wrapper UserLimit) and table user_limits (model UserLimit) both generate the Go name UserLimit; rename one (e.g. with [model: '...'])
 data/more.volt:35:3: warning: vet/dynname: table users column "foo_bar" (handle UserFooBar) and table user_foos column "bar" (handle UserFooBar) both generate the Go name UserFooBar; rename one (e.g. with [model: '...'])
 data/more.volt:37:1: warning: vet/dynname: table user_foos column "bar" (handle UserFooBar) and table user_foo_bars (model UserFooBar) both generate the Go name UserFooBar; rename one (e.g. with [model: '...'])
 data/schema.volt:37:3: warning: vet/shadowedcolumn: column "updated_at" in table "posts" silently overrides the definition from TablePartial "audit_a"
 data/schema.volt:39:1: warning: vet/unusedpartial: TablePartial "orphan_partial" is declared but never injected
+data/more.volt:40:1: warning: vet/modelname: cannot confidently singularize "bonus" for its Go model name (would use "bonus"); pin it with [model: '...']
 data/schema.volt:41:20: warning: vet/reftype: relationship joins comments.owner_id (string) to users.id (int); the types differ
 data/schema.volt:41:20: warning: vet/reftype: relationship joins posts.owner_id (string) to users.id (int); the types differ
-data/more.volt:44:1: warning: vet/unusedenum: enum "user_kind" is declared but never used as a column type
-data/more.volt:44:1: warning: vet/dynname: table e_users column "kind" (handle EUserKind) and enum user_kind both generate the Go name EUserKind; rename one (e.g. with [model: '...'])
+data/more.volt:43:1: warning: vet/modelname: cannot confidently singularize "axis" for its Go model name (would use "axis"); pin it with [model: '...']
 data/schema.volt:46:3: warning: vet/shadowedcolumn: column "id" in table "posts" silently overrides the definition from TablePartial "stamps"
-data/more.volt:48:1: warning: vet/modelname: cannot confidently singularize "bonus" for its Go model name (would use "bonus"); pin it with [model: '...']
-data/more.volt:51:1: warning: vet/modelname: cannot confidently singularize "axis" for its Go model name (would use "axis"); pin it with [model: '...']
-data/more.volt:55:1: warning: vet/dynname: table users (column handle type UserColumn) and table user_columns (model UserColumn) both generate the Go name UserColumn; rename one (e.g. with [model: '...'])
-data/more.volt:58:1: warning: vet/dynname: table users (write body UserParams) and table user_params (model UserParams) both generate the Go name UserParams; rename one (e.g. with [model: '...'])
-data/schema.volt:60:1: warning: vet/missingpk: table "naked" has no primary key
-data/more.volt:61:1: warning: vet/dynname: table users (changeset UserChangeset) and table drafts (model UserChangeset) both generate the Go name UserChangeset; rename one (e.g. with [model: '...'])
-data/schema.volt:62:3: warning: vet/emptybody: empty indexes block
+data/more.volt:47:1: warning: vet/dynname: table users (column handle type UserColumn) and table user_columns (model UserColumn) both generate the Go name UserColumn; rename one (e.g. with [model: '...'])
+data/more.volt:50:1: warning: vet/dynname: table users (write body UserParams) and table user_params (model UserParams) both generate the Go name UserParams; rename one (e.g. with [model: '...'])
+data/more.volt:53:1: warning: vet/dynname: table users (changeset UserChangeset) and table drafts (model UserChangeset) both generate the Go name UserChangeset; rename one (e.g. with [model: '...'])
+data/schema.volt:64:1: warning: vet/missingpk: table "naked" has no primary key
+data/schema.volt:66:3: warning: vet/emptybody: empty indexes block

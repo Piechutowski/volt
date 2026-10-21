@@ -1,11 +1,10 @@
 // Validate generation (docs/spec.md §changesets, §validators): one Validate
-// method per table on its changeset, running required, enum membership and
-// the validators of the containing package over the row.
+// method per table on its changeset, running required and the validators
+// of the containing package over the row.
 package golang
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/Piechutowski/volt/gen/align"
@@ -68,19 +67,14 @@ func validateEmit(b *strings.Builder, t *tableModel, specs []ValidatorSpec) bool
 			requiredEmit(&checks, f)
 		}
 	}
-	for _, f := range t.fields {
-		if f.enum != nil {
-			enumEmit(&checks, f)
-		}
-	}
 	for _, ck := range specs {
 		fmt.Fprintf(&checks, "\tif err := %s; err != nil {\n", ck.Call)
 		fmt.Fprintf(&checks, "\t\terrs = append(errs, rt.FieldError{Check: %q, Columns: %#v, Message: err.Error()})\n\t}\n", ck.Name, ck.Cols)
 	}
 
-	fmt.Fprintf(b, "// Validate runs required, enum membership and the validators of %s\n", tbl)
-	fmt.Fprintf(b, "// over the row, every one every time, replacing the findings of an\n")
-	fmt.Fprintf(b, "// earlier Validate (spec §changesets, §validators).\n")
+	fmt.Fprintf(b, "// Validate runs required and the validators of %s over the row,\n", tbl)
+	fmt.Fprintf(b, "// every one every time, replacing the findings of an earlier Validate\n")
+	fmt.Fprintf(b, "// (spec §changesets, §validators).\n")
 	fmt.Fprintf(b, "func (c %sChangeset) Validate() %sChangeset {\n", m, m)
 	if checks.Len() == 0 {
 		b.WriteString("\tc.valid = nil\n\treturn c\n}\n\n")
@@ -95,9 +89,9 @@ func validateEmit(b *strings.Builder, t *tableModel, specs []ValidatorSpec) bool
 func requiredEmit(b *strings.Builder, f *fieldPlan) {
 	var cond string
 	switch {
-	case f.declared:
+	case f.declared && !f.kinded:
 		cond = "rt.Blank(v." + f.goField + ")"
-	case f.enum != nil, f.storage == "string":
+	case f.storage == "string":
 		cond = "v." + f.goField + ` == ""`
 	case f.storage == "[]byte":
 		cond = "len(v." + f.goField + ") == 0"
@@ -106,28 +100,4 @@ func requiredEmit(b *strings.Builder, f *fieldPlan) {
 	}
 	fmt.Fprintf(b, "\tif %s {\n", cond)
 	fmt.Fprintf(b, "\t\terrs = append(errs, rt.FieldError{Check: \"required\", Columns: []string{%q}, Message: %q})\n\t}\n", f.colName, f.colName+" is required")
-}
-
-func enumEmit(b *strings.Builder, f *fieldPlan) {
-	var consts []string
-	for _, v := range f.enum.Decl.Values {
-		name, err := goName(v.Name.Name())
-		if err != nil {
-			continue
-		}
-		consts = append(consts, f.baseType+name)
-	}
-	value := "v." + f.goField
-	indent := "\t"
-	if f.nullable {
-		value += ".V"
-		fmt.Fprintf(b, "\tif v.%s.Valid {\n", f.goField)
-		indent = "\t\t"
-	}
-	msg := f.colName + " is not a value of " + f.enum.Decl.Name.Name()
-	fmt.Fprintf(b, "%sswitch %s {\n%scase %s:\n%sdefault:\n", indent, value, indent, strings.Join(consts, ", "), indent)
-	fmt.Fprintf(b, "%s\terrs = append(errs, rt.FieldError{Check: \"enum\", Columns: []string{%q}, Message: %s})\n%s}\n", indent, f.colName, strconv.Quote(msg), indent)
-	if f.nullable {
-		b.WriteString("\t}\n")
-	}
 }

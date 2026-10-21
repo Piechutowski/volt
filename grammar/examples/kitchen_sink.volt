@@ -10,16 +10,9 @@ Project shop_db [note: '''
   custom_key: 'implementations must accept arbitrary keys'
 }
 
-Enum status {
-  active [note: 'operational']
-  retired
-  "Not Yet Set"
-}
+Type Status string
 
-Enum v2_job_status {
-  queued
-  running
-}
+Type V2JobStatus string
 
 TablePartial base_template {
   id int [pk, increment]
@@ -30,10 +23,10 @@ Table users [note: 'user accounts'] {
   ~base_template
   name string [unique]
   full_name string [null]
-  status status [default: status.active]
+  status Status [default: 'active']
   balance float64 [null, default: -100.5]
   2fa_enabled bool [null, default: false]
-  job v2_job_status [null]
+  job V2JobStatus [null]
   motto string [null, default: 'be kind']
   ref_col int [null, ref: core_orders.id]
 

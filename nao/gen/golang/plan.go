@@ -42,9 +42,8 @@ func PlanBuild(f *ast.File, info *check.Info) *Plan {
 }
 
 // PlanMemo remembers a package's table models across builds of its
-// plan: a table that is the checked object it was, under the same
-// enum types, is the same model. The zero value is ready; a
-// PlanMemo belongs to one package.
+// plan: a table that is the checked object it was is the same model.
+// The zero value is ready; a PlanMemo belongs to one package.
 type PlanMemo struct {
 	prev, next map[*check.TableInfo]*memoModel
 	base       *nameBase
@@ -56,7 +55,6 @@ type PlanMemo struct {
 type memoModel struct {
 	tm      *tableModel
 	imports map[string]bool
-	enums   []enumType
 }
 
 // PlanBuildMemo is PlanBuild with a memo of the package's earlier
@@ -282,18 +280,9 @@ func (pl *Plan) DynNameCollisions() []NameCollision {
 	}
 	seen := map[string]dynOrigin{"Queries": {kind: dynQueries}}
 	var out []NameCollision
-	for _, e := range pl.info.Enums {
-		typeName, err := enumTypeName(e.Decl.Name.Name())
-		if err != nil {
-			continue
-		}
-		out = dynArrive(out, seen, typeName, dynOrigin{kind: dynEnum, e: e, pos: e.Decl.Pos()})
-		for _, v := range e.Decl.Values {
-			constName, err := goName(v.Name.Name())
-			if err != nil {
-				continue
-			}
-			out = dynArrive(out, seen, typeName+constName, dynOrigin{kind: dynEnumValue, e: e, v: v, pos: v.Pos()})
+	for _, td := range pl.info.Types {
+		if td.Path == "" {
+			out = dynArrive(out, seen, td.Key, dynOrigin{kind: dynType, td: td, pos: td.Decl.Name.Pos()})
 		}
 	}
 	type arrival struct {
@@ -356,7 +345,14 @@ func dynPair(name string, first, second dynOrigin) NameCollision {
 	if second.pos.Line() < first.pos.Line() || (second.pos.Line() == first.pos.Line() && second.pos.Column() < first.pos.Column()) {
 		first, second = second, first
 	}
-	return NameCollision{Name: name, First: first.describe(), Second: second.describe(), Pos: second.pos}
+	nc := NameCollision{Name: name, First: first.describe(), Second: second.describe(), Pos: second.pos}
+	switch {
+	case first.kind == dynType:
+		nc.Type, nc.With = first.td, second.describe()
+	case second.kind == dynType:
+		nc.Type, nc.With = second.td, first.describe()
+	}
+	return nc
 }
 
 func dynOriginOf(o *nameOrigin) dynOrigin {
@@ -383,11 +379,12 @@ func dynOriginOf(o *nameOrigin) dynOrigin {
 // Names is the scope of package-level Go identifiers a package's
 // generated files mint (§selects-over-groups): models, changesets with
 // their column and params aliases and constructors (§changesets), column
-// handles and option wrappers, enum types, the Queries handle and its
-// constructor. It is read in layers, last writer first.
+// handles and option wrappers, the Queries handle and its constructor,
+// beside the package's bare declared types, which its own Go files
+// declare (§types). It is read in layers, last writer first.
 type Names struct {
 	base  *nameBase
-	enums map[string]*ast.Enum
+	types map[string]*check.TypeInfo
 	added map[string]string
 }
 
@@ -561,15 +558,13 @@ func (b *nameBase) lookup(name string) *nameOrigin {
 // Names returns the package's name scope for one check: the two fixed
 // names alone when the plan could not be built.
 func (pl *Plan) Names() *Names {
-	n := &Names{base: pl.base, enums: map[string]*ast.Enum{}, added: map[string]string{}}
+	n := &Names{base: pl.base, types: map[string]*check.TypeInfo{}, added: map[string]string{}}
 	if pl.err != nil {
 		return n
 	}
-	for _, d := range pl.f.Decls {
-		if e, ok := d.(*ast.Enum); ok {
-			if typ, err := enumTypeName(e.Name.Name()); err == nil {
-				n.enums[typ] = e
-			}
+	for _, td := range pl.info.Types {
+		if td.Path == "" {
+			n.types[td.Key] = td
 		}
 	}
 	return n
@@ -586,9 +581,15 @@ func (n *Names) Lookup(name string) (desc string, ok bool) {
 	if desc, ok := n.added[name]; ok {
 		return desc, true
 	}
-	if e, ok := n.enums[name]; ok {
-		return fmt.Sprintf("the enum %q", e.Name.Name()), true
+	if _, ok := n.types[name]; ok {
+		return fmt.Sprintf("the declared type %s", name), true
 	}
+	return n.Generated(name)
+}
+
+// Generated is Lookup over the names generated code mints alone, the
+// declared types and the names added by Add left out.
+func (n *Names) Generated(name string) (desc string, ok bool) {
 	if n.base != nil {
 		if o := n.base.lookup(name); o != nil {
 			return o.describe(), true

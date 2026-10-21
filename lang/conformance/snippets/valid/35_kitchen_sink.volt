@@ -3,10 +3,7 @@ Project blog [note: 'Blogging platform'] {
   database_type: 'PostgreSQL'
 }
 
-Enum post_status {
-  draft
-  published [note: 'visible to readers']
-}
+Type PostState string
 
 TablePartial timestamps {
   created_at time.Time [default: `now()`]
@@ -26,7 +23,7 @@ Table users [note: 'Registered users'] {
 Table posts {
   id int [pk]
   title string
-  status post_status [default: post_status.draft]
+  status PostState [default: 'draft']
   author_id int [ref: users.id]
   ~timestamps
 
@@ -35,7 +32,7 @@ Table posts {
   }
 
   records (id, title, status, author_id, updated_at) {
-    1, 'Hello', post_status.published, 1, '2024-01-15 10:30:00'
+    1, 'Hello', 'published', 1, '2024-01-15 10:30:00'
   }
 }
 

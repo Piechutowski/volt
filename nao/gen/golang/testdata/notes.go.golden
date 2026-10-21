@@ -13,25 +13,14 @@ import (
 	"time"
 )
 
-// EPostStatus is the post_status enum.
-type EPostStatus string
-
-const (
-	// Not yet visible to readers
-	EPostStatusDraft EPostStatus = "draft"
-	// Live on the site
-	EPostStatusPublished EPostStatus = "published"
-	EPostStatusArchived  EPostStatus = "archived"
-)
-
 // Post is a row of the posts table.
 //
 // A blog post.
 type Post struct {
 	ID int `db:"id" json:"id"`
 	// Shown in lists and in the HTML title tag
-	Title  string      `db:"title" json:"title"`
-	Status EPostStatus `db:"status" json:"status"`
+	Title  string    `db:"title" json:"title"`
+	Status PostState `db:"status" json:"status"`
 	// Raw markdown source.
 	// Rendered to HTML at publish time.
 	Body        rt.Null[string]    `db:"body" json:"body"`
@@ -52,7 +41,7 @@ type PostParams = rt.Params[Post]
 var (
 	PostID          = rt.Column[Post, int]{Name: "id"}
 	PostTitle       = rt.Column[Post, string]{Name: "title"}
-	PostStatus      = rt.Column[Post, EPostStatus]{Name: "status"}
+	PostStatus      = rt.Column[Post, PostState]{Name: "status"}
 	PostBody        = rt.NullColumn[Post, string]{Column: rt.Column[Post, string]{Name: "body"}}
 	PostPublishedAt = rt.NullColumn[Post, time.Time]{Column: rt.Column[Post, time.Time]{Name: "published_at"}}
 )
@@ -94,7 +83,7 @@ func (c PostChangeset) TitleSet(v string) PostChangeset {
 }
 
 // StatusSet sets status and marks it (spec §changesets).
-func (c PostChangeset) StatusSet(v EPostStatus) PostChangeset {
+func (c PostChangeset) StatusSet(v PostState) PostChangeset {
 	c.vals.Status, c.set[2] = v, true
 	return c
 }
@@ -127,7 +116,7 @@ func (c PostChangeset) Cast(p PostParams, allow ...PostColumn) PostChangeset {
 				c = c.TitleSet(v)
 			}
 		case "status":
-			if v, ok, err := rt.Field(p, "status", "post_status", false, func(r *Post) EPostStatus { return r.Status }); err != nil {
+			if v, ok, err := rt.Field(p, "status", "PostState", false, func(r *Post) PostState { return r.Status }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "status")
 			} else if ok {
 				c = c.StatusSet(v)

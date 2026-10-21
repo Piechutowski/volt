@@ -68,10 +68,19 @@ func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 		if cc.memo != nil {
 			schemaMemo, planMemo = &cc.memo.schema, &cc.memo.plan
 		}
-		info, schemaDiags := check.FileMemo(pkg.merged, schemaMemo)
+		var sc *goScan
+		var goTypes check.GoTypes
+		if bareTypesDeclared(pkg.merged) {
+			sc = cc.goFuncs(pkg)
+			goTypes = sc.goTypes()
+		}
+		info, schemaDiags := check.FileGo(pkg.merged, schemaMemo, goTypes)
 		cc.diags = append(cc.diags, schemaDiags...)
 		pkg.schema = info
 		pkg.plan = golang.PlanBuildMemo(pkg.merged, info, planMemo)
+		if sc != nil {
+			cc.typesGoCheck(pkg, info, sc)
+		}
 	})
 	for _, path := range paths {
 		c.schemas[path] = pr.Packages[path].schema

@@ -1,4 +1,5 @@
-// every note level, each the note: setting: project, table, column, enum value
+// every note level, each the note: setting: project, table, column; the
+// constants of a declared type carry their notes in the Go file beside it
 Project blog [note: '''
     The blogging platform schema.
 
@@ -8,21 +9,21 @@ Project blog [note: '''
   database_type: 'PostgreSQL'
 }
 
-Enum post_status {
-  draft [note: 'Not yet visible to readers']
-  published [note: 'Live on the site']
-  archived
-}
+Type PostState string
 
 Table posts [note: 'A blog post.'] {
   id int [pk, increment]
   title string [note: 'Shown in lists and in the HTML title tag']
-  status post_status
+  status PostState
   body string [null, note: '''
     Raw markdown source.
     Rendered to HTML at publish time.
   ''']
   published_at time.Time [null]
+
+  validators {
+    PostStateKnown(status)
+  }
 }
 
 Table tags {

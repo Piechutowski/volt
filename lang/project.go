@@ -95,7 +95,7 @@ func (p *Package) Plan() *golang.Plan { return p.plan }
 
 // HasSchema reports whether the package declares data elements.
 func (p *Package) HasSchema() bool {
-	return p.schema != nil && (len(p.schema.Tables) > 0 || len(p.schema.Enums) > 0)
+	return p.schema != nil && len(p.schema.Tables) > 0
 }
 
 // PackageAt returns the loaded package whose directory is dir, or nil.

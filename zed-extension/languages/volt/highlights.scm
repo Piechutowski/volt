@@ -20,7 +20,6 @@
   "Project"
   "Table"
   "TablePartial"
-  "Enum"
   "Type"
   "Ref"
   "Records"
@@ -47,10 +46,8 @@
 (table_name name: (_) @type)
 (group_member) @type
 
-; enums
-(enum_name) @enum
-(enum_value name: (_) @variant)
-(enum_constant enum: (_) @enum value: (_) @variant)
+; a function of the package itself, as error_handler names one: app.Errors
+(qualified_value qualifier: (_) @namespace name: (_) @function)
 
 ; table partials
 (partial_name) @constructor

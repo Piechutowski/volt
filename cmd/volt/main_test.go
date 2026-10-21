@@ -146,6 +146,52 @@ func TestStressWritesABuildableProject(t *testing.T) {
 	}
 }
 
+func TestGenOutRefusesBareType(t *testing.T) {
+	volt := func(args ...string) error {
+		cmd := command()
+		cmd.ExitErrHandler = func(context.Context, *cli.Command, error) {}
+		return cmd.Run(context.Background(), append([]string{"volt"}, args...))
+	}
+	root := t.TempDir()
+	files := map[string]string{
+		"go.mod": "module shop\n\ngo 1.27\n",
+		"db/schema.volt": `package db
+
+Type OrderState string
+
+Table orders {
+  id     int        [pk, increment]
+  status OrderState [default: 'pending']
+}
+`,
+		"db/order_state.go": "package db\n\n// OrderState is the state of an order (§types).\ntype OrderState string\n",
+	}
+	for name, src := range files {
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out := filepath.Join(root, "api")
+	err := volt("gen", "-o", out, "-parts", "models", filepath.Join(root, "db"))
+	if exitCode(err) != 2 || !strings.Contains(err.Error(), "Type OrderState of package db is declared in that package's own Go files") ||
+		!strings.Contains(err.Error(), "Type pkg.OrderState string from") {
+		t.Fatalf("gen -o with a bare Type: exit %d (%v), want 2 naming the fix", exitCode(err), err)
+	}
+	if _, err := os.Stat(out); err == nil {
+		t.Errorf("the refused gen wrote %s", out)
+	}
+	if err := volt("gen", "-o", out, "-parts", "sql", filepath.Join(root, "db")); err != nil {
+		t.Fatalf("gen -o -parts sql writes no Go, so a bare Type does not matter: %v", err)
+	}
+	if err := volt("gen", filepath.Join(root, "db")); err != nil {
+		t.Fatalf("gen beside the schema: %v", err)
+	}
+}
+
 func TestGenVerifyTypeChecks(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {

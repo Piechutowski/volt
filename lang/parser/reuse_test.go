@@ -100,15 +100,12 @@ func TestParseFileReuseIsTheParse(t *testing.T) {
 func TestParseFileReuseEdits(t *testing.T) {
 	base := `package db
 
-Enum status {
-  active
-  retired
-}
+Type PostState string
 
 Table posts {
   id     int [pk, increment]
   title  string
-  status status  [default: status.active]
+  status PostState  [default: 'active']
 }
 
 Table tags {
@@ -138,7 +135,7 @@ Ref: tags.id > posts.id
 	step("broken posts", strings.Replace(base, "title  string", "title  string [", 1), 2, 3)
 	step("fixed", base, 1, 4)
 	step("append", base+"\nTable extra {\n  id int [pk]\n}\n", 2, 4)
-	step("whole rewrite", strings.ReplaceAll(base, "  ", "\t"), 4, 1)
+	step("whole rewrite", strings.ReplaceAll(base, "  ", "\t"), 3, 2)
 }
 
 func TestParseFileCRLFPositions(t *testing.T) {

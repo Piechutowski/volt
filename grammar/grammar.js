@@ -4,7 +4,7 @@
  *
  * Covers the full schema language of docs/spec.md Part I:
  * Project, Table (settings, columns), TablePartial and ~injection,
- * Enum, Type, Ref (the element and the inline ref: setting, composite
+ * Type, Ref (the element and the inline ref: setting, composite
  * endpoints), Records (top-level and in-table), indexes and validators
  * blocks, plus the Volt routing layer of docs/spec.md Part II: package clauses, Go-style
  * import blocks, Pipeline, Scope, routes and resources. One grammar for
@@ -12,7 +12,7 @@
  * whichever layer it uses.
  *
  * Design notes, driven by spec §lexical-structure:
- *  - Volt is newline-sensitive: columns, enum values, record rows, index and
+ *  - Volt is newline-sensitive: columns, record rows, index and
  *    check lines, project properties, group members and partial injections
  *    are newline-terminated. Newlines are therefore NOT extras; bodies use an
  *    explicit "items separated by one-or-more newlines" shape, which also
@@ -69,7 +69,6 @@ module.exports = grammar({
         $.project_definition,
         $.table_definition,
         $.table_partial_definition,
-        $.enum_definition,
         $.type_definition,
         $.ref_definition,
         $.records_definition,
@@ -162,24 +161,6 @@ module.exports = grammar({
 
     partial_injection: ($) =>
       seq('~', field('name', alias($._name, $.partial_name))),
-
-    // ==================== Enum (§enum) ====================
-
-    enum_definition: ($) =>
-      seq(
-        kw('Enum'),
-        field('name', alias($._name, $.enum_name)),
-        '{',
-        repeat($._newline),
-        optional(newlineSep1($.enum_value, $)),
-        '}',
-      ),
-
-    enum_value: ($) =>
-      seq(
-        field('name', $._name),
-        optional(field('settings', $.settings_list)),
-      ),
 
     // ==================== Type (§types) ====================
 
@@ -314,7 +295,6 @@ module.exports = grammar({
         $.boolean,
         $.null,
         $.expression,
-        $.enum_constant,
       ),
 
 
@@ -770,7 +750,7 @@ module.exports = grammar({
         $.boolean,
         $.null,
         $.expression,
-        $.enum_constant,
+        $.qualified_value,
         $.ident_group,
         alias($.setting_name, $.setting_value_words),
       ),
@@ -782,11 +762,13 @@ module.exports = grammar({
 
     _ident_item: ($) => seq($._name, optional(alias($._name, $.ident_modifier))),
 
-    enum_constant: ($) =>
+    // A function of the package itself, pkg.Name, as error_handler names
+    // one (§scopes).
+    qualified_value: ($) =>
       prec(1, seq(
-        field('enum', alias($._name, $.enum_name)),
+        field('qualifier', $._name),
         '.',
-        field('value', $._name),
+        field('name', $._name),
       )),
 
     signed_number: ($) => seq('-', $.number),

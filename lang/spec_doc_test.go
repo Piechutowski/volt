@@ -237,11 +237,11 @@ func TestSpecCitationsNeverNumbered(t *testing.T) {
 func TestSpecCitesParsed(t *testing.T) {
 	sect, nbsp, nnbsp := "\u00a7", "\u00a0", "\u202f"
 	for line, want := range map[string]string{
-		"see " + sect + "columns":                         "columns",
-		"see " + sect + " columns":                        "columns",
-		"see " + sect + nbsp + "query-routes":             "query-routes",
-		"see " + sect + nnbsp + "types, " + sect + "enum": "types,enum",
-		"see " + sect + "6.3":                             "",
+		"see " + sect + "columns":                          "columns",
+		"see " + sect + " columns":                         "columns",
+		"see " + sect + nbsp + "query-routes":              "query-routes",
+		"see " + sect + nnbsp + "types, " + sect + "notes": "types,notes",
+		"see " + sect + "6.3":                              "",
 	} {
 		var got []string
 		for _, m := range specCiteRE.FindAllStringSubmatch(line, -1) {

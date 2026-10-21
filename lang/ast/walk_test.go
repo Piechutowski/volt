@@ -11,10 +11,10 @@ func TestInspectSkipsUnsetFields(t *testing.T) {
 		&ast.File{}, &ast.Project{}, &ast.ProjectProp{},
 		&ast.Table{}, &ast.TablePartial{}, &ast.Column{}, &ast.TypeRef{}, &ast.IndexesBlock{},
 		&ast.Index{Key: []ast.Node{nil}}, &ast.ValidatorsBlock{}, &ast.Validator{}, &ast.PartialRef{},
-		&ast.Ref{}, &ast.RefEndpoint{}, &ast.Enum{}, &ast.EnumValue{}, &ast.Records{},
+		&ast.Ref{}, &ast.RefEndpoint{}, &ast.Records{},
 		&ast.RecordRow{Values: []ast.Node{nil}},
 		&ast.SettingList{}, &ast.Setting{}, &ast.QualName{}, &ast.NegNumber{},
-		&ast.EnumConst{},
+		&ast.QualIdent{},
 		&ast.Migration{}, &ast.CreateTable{}, &ast.DropTable{}, &ast.RenameTable{}, &ast.AlterTable{},
 		&ast.AlterAdd{}, &ast.AlterDrop{}, &ast.AlterRename{}, &ast.RebuildTable{}, &ast.CreateIndex{},
 		&ast.DropIndex{}, &ast.Exec{},
@@ -38,7 +38,7 @@ func TestInspectSkipsUnsetFields(t *testing.T) {
 	name := &ast.Ident{}
 	partial := []ast.Node{
 		&ast.Table{Name: name}, &ast.Column{Name: name}, &ast.RefEndpoint{Table: name}, &ast.Validator{Args: []*ast.Ident{name}},
-		&ast.EnumConst{Value: name}, &ast.Setting{Value: name}, &ast.Index{Key: []ast.Node{name}},
+		&ast.QualIdent{Name: name}, &ast.Setting{Value: name}, &ast.Index{Key: []ast.Node{name}},
 		&ast.Migration{Name: name}, &ast.CreateTable{Name: name}, &ast.DropTable{Name: name},
 		&ast.RenameTable{To: name}, &ast.AlterTable{Name: name}, &ast.AlterDrop{Name: name},
 		&ast.AlterRename{From: name}, &ast.RebuildTable{Name: name}, &ast.CreateIndex{Table: name},

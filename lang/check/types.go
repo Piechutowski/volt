@@ -2,25 +2,29 @@ package check
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/token"
 )
 
-// ColumnType is a column's resolved type (spec §columns): a built-in, an
-// enum, or a declared Type.
+// ColumnType is a column's resolved type (spec §columns): a built-in or
+// a declared Type.
 type ColumnType struct {
 	Go      string
 	Storage string
 	Import  string
 	Alias   string
-	Enum    *EnumInfo
 	Decl    *TypeInfo
 }
 
 // Known reports whether the type resolved.
-func (t ColumnType) Known() bool { return t.Storage != "" || t.Enum != nil }
+func (t ColumnType) Known() bool { return t.Storage != "" }
+
+// Kinded reports a declared type whose Go declaration spells its storage
+// type, which database/sql converts by kind (spec §types).
+func (t ColumnType) Kinded() bool { return t.Decl != nil && t.Decl.Kinded }
 
 // Nilable reports whether the Go type's nil already expresses NULL, so a
 // nullable column stays bare instead of rt.Null[T] (spec §mapping-to-go).
@@ -30,9 +34,6 @@ func (t ColumnType) Nilable() bool { return t.Storage == "[]byte" && t.Decl == n
 // "numeric" (not 0) or "bytes" (length > 0); false for a type with no
 // empty value (spec §columns).
 func (t ColumnType) RequiredKind() (string, bool) {
-	if t.Enum != nil {
-		return "text", true
-	}
 	switch t.Storage {
 	case "string":
 		return "text", true
@@ -48,9 +49,6 @@ func (t ColumnType) RequiredKind() (string, bool) {
 // "numeric", "text", "time", "bool", "eq" for a declared type, "" for a
 // type predicates refuse.
 func (t ColumnType) Class() string {
-	if t.Enum != nil {
-		return ""
-	}
 	if t.Decl != nil {
 		return "eq"
 	}
@@ -79,7 +77,16 @@ type TypeInfo struct {
 	Key     string
 	Storage ColumnType
 	Path    string
+	// Kinded reports a bare type whose Go declaration spells its storage
+	// type, bool, int, float64 or string: it needs neither Scanner nor
+	// Valuer, and generated code asserts nothing for it (spec §types).
+	Kinded bool
 }
+
+// KindedStorage is the set of storage types database/sql converts by
+// kind, so a declared type spelling one as its underlying type needs no
+// methods (spec §types).
+var KindedStorage = map[string]bool{"bool": true, "int": true, "float64": true, "string": true}
 
 // Builtins is the closed set of built-in column types (spec §columns).
 var Builtins = []string{"bool", "int", "float64", "string", "[]byte", "time.Time"}
@@ -100,33 +107,25 @@ func Builtin(name string) (ColumnType, bool) {
 }
 
 type typeEnv struct {
-	enums  map[string]*EnumInfo
 	types  map[string]*TypeInfo
 	failed map[string]bool
 	keys   []string
 }
 
-func typeEnvOf(enums map[string]*EnumInfo, types map[string]*TypeInfo, failed map[string]bool) *typeEnv {
-	keys := make([]string, 0, len(enums)+len(types)+len(failed))
-	for k, e := range enums {
-		key := "enum:" + k
-		for _, v := range e.Decl.Values {
-			key += "," + v.Name.Name()
-		}
-		keys = append(keys, key)
-	}
+func typeEnvOf(types map[string]*TypeInfo, failed map[string]bool) *typeEnv {
+	keys := make([]string, 0, len(types)+len(failed))
 	for k, t := range types {
-		keys = append(keys, "type:"+k+"="+t.Storage.Storage+"="+t.Path)
+		keys = append(keys, "type:"+k+"="+t.Storage.Storage+"="+t.Path+"="+strconv.FormatBool(t.Kinded))
 	}
 	for k := range failed {
 		keys = append(keys, "failed:"+k)
 	}
 	sort.Strings(keys)
-	return &typeEnv{enums: enums, types: types, failed: failed, keys: keys}
+	return &typeEnv{types: types, failed: failed, keys: keys}
 }
 
 // resolve resolves a column type (spec §columns): a built-in, then a
-// declared type, then an enum of the package.
+// declared type.
 func (e *typeEnv) resolve(tr *ast.TypeRef) ColumnType {
 	name := tr.String()
 	if b, ok := builtins[name]; ok {
@@ -137,9 +136,6 @@ func (e *typeEnv) resolve(tr *ast.TypeRef) ColumnType {
 	}
 	if ti := e.types[name]; ti != nil {
 		return ColumnType{Go: name, Storage: ti.Storage.Storage, Import: ti.Path, Alias: typeAlias(name), Decl: ti}
-	}
-	if en := e.enums[name]; en != nil {
-		return ColumnType{Storage: "string", Enum: en}
 	}
 	return ColumnType{}
 }
@@ -180,10 +176,6 @@ func (c *checker) typeDeclCheck(d *ast.TypeDecl) *TypeInfo {
 		c.errorf(d.Pos(), "namespaces-and-uniqueness", "duplicate Type name %q", key)
 		return nil
 	}
-	if en := c.enums[key]; en != nil {
-		c.errorf(d.Name.Pos(), "types", "Type %q collides with the enum of that name (§types)", key)
-		return nil
-	}
 	storage, ok := builtins[d.Storage.String()]
 	if !ok {
 		c.errorf(d.Storage.Pos(), "types", "storage type %q of Type %q is not a built-in: bool, int, float64, string, []byte or time.Time (§types)", d.Storage.String(), key)
@@ -215,6 +207,9 @@ func (c *checker) typeDeclCheck(d *ast.TypeDecl) *TypeInfo {
 		}
 		ti.Path = path
 	}
+	if d.From == nil && c.goTypes != nil && KindedStorage[storage.Storage] && c.goTypes[key] == storage.Storage {
+		ti.Kinded = true
+	}
 	return ti
 }
 
@@ -245,7 +240,7 @@ func (c *checker) typesResolve(ti *TableInfo) {
 			if c.env.failed[cd.Col.Type.String()] {
 				continue
 			}
-			c.errorf(cd.Col.Type.Pos(), "columns", "column %q: unknown type %q; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)", cd.Col.Name.Name(), cd.Col.Type.String())
+			c.errorf(cd.Col.Type.Pos(), "columns", "column %q: unknown type %q; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)", cd.Col.Name.Name(), cd.Col.Type.String())
 			continue
 		}
 		c.defaultTypeCheck(cd)
@@ -307,24 +302,7 @@ func (c *checker) recordsCoverageCheck(ti *TableInfo, d *ast.Records) {
 func (c *checker) valueTypeCheck(cd *ColumnDef, v ast.Node, section, what string) {
 	name := cd.Col.Name.Name()
 	typ := cd.Col.Type.String()
-	switch x := v.(type) {
-	case *ast.FuncExpr:
-		return
-	case *ast.EnumConst:
-		if cd.Type.Enum == nil {
-			c.errorf(x.Pos(), section, "%s %q (%s) is an enum constant but the column is not an enum (§%s)", what, name, typ, section)
-			return
-		}
-		if x.Enum.Name() != cd.Type.Enum.Key {
-			c.errorf(x.Pos(), section, "%s %q names enum %q, the column's enum is %q (§%s)", what, name, x.Enum.Name(), cd.Type.Enum.Key, section)
-			return
-		}
-		for _, ev := range cd.Type.Enum.Decl.Values {
-			if ev.Name.Name() == x.Value.Name() {
-				return
-			}
-		}
-		c.errorf(x.Pos(), section, "%s %q: %q is not a value of enum %q (§%s)", what, name, x.Value.Name(), cd.Type.Enum.Key, section)
+	if _, expr := v.(*ast.FuncExpr); expr {
 		return
 	}
 	kind := defaultKind(v)
@@ -339,8 +317,6 @@ func (c *checker) valueTypeCheck(cd *ColumnDef, v ast.Node, section, what string
 	}
 	want, article := "", "a"
 	switch {
-	case cd.Type.Enum != nil:
-		want, article = "enum constant", "an"
 	case cd.Type.Storage == "int":
 		want, article = "integer", "an"
 	case cd.Type.Storage == "float64":

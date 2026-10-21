@@ -2,11 +2,6 @@
 // want: is missing from link_clicks
 package db
 
-Enum mood {
-  happy
-  sad
-}
-
 Table page_views {
   id   int    [pk, increment]
   hits int32
@@ -27,9 +22,9 @@ Table search_hits {
   hits string
 }
 
-Table mood_marks {
-  id   int  [pk, increment]
-  hits mood
+Table raw_marks {
+  id   int    [pk, increment]
+  hits []byte
 }
 
 Table counteds {
@@ -47,14 +42,14 @@ Group split {
   search_hits
 }
 
-Group moody {
+Group rawish {
   page_views
-  mood_marks
+  raw_marks
 }
 
 Select busy for lacking where hits > :min
 Select mixed for split where hits = :h
-Select glum for moody where hits = :h
+Select raw for rawish where hits = :h
 Select tally (hits) for lacking
 Select spread (hits) for split
 Select ranked for page_views where hits > :min [order: (hits desc)]

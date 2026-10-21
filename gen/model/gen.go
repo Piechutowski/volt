@@ -16,8 +16,9 @@ type Options struct {
 	// Package overrides the package clause; empty means the Volt
 	// package's name (§projects-and-packages).
 	Package string
-	// ModelsOnly emits just nao_models.go: the structs, their changesets
-	// and the enums, every type the wire carries (spec §changesets).
+	// ModelsOnly emits just nao_models.go: the structs and their
+	// changesets, every type the wire carries that Volt generates (spec
+	// §changesets).
 	// Otherwise the query layers follow, and volt_migrations.go for a
 	// package that declares migrations (spec §migration-tooling).
 	ModelsOnly bool

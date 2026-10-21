@@ -14,10 +14,7 @@ type goType struct {
 	nilable bool
 }
 
-func typeOf(ct check.ColumnType, enumTypes map[string]string) goType {
-	if ct.Enum != nil {
-		return goType{name: enumTypes[ct.Enum.Key]}
-	}
+func typeOf(ct check.ColumnType) goType {
 	return goType{name: ct.Go, imp: importKey(ct), nilable: ct.Nilable()}
 }
 

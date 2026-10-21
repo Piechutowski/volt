@@ -2,9 +2,9 @@
 
 package models
 
-// Validate runs required, enum membership and the validators of employees
-// over the row, every one every time, replacing the findings of an
-// earlier Validate (spec §changesets, §validators).
+// Validate runs required and the validators of employees over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
 func (c EmployeeChangeset) Validate() EmployeeChangeset {
 	c.valid = nil
 	return c

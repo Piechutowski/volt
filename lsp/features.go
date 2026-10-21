@@ -54,12 +54,6 @@ func (d *Document) DocumentSymbols() []protocol.DocumentSymbol {
 			out = append(out, d.symbol(n.Name.Name(), "Table", protocol.SymbolKindStruct, n, n.Name, d.tableChildren(n.Body)))
 		case *ast.TablePartial:
 			out = append(out, d.symbol(n.Name.Name(), "TablePartial", protocol.SymbolKindInterface, n, n.Name, d.tableChildren(n.Body)))
-		case *ast.Enum:
-			var kids []protocol.DocumentSymbol
-			for _, v := range n.Values {
-				kids = append(kids, d.symbol(v.Name.Name(), "", protocol.SymbolKindEnumMember, v, v.Name, nil))
-			}
-			out = append(out, d.symbol(n.Name.Name(), "Enum", protocol.SymbolKindEnum, n, n.Name, kids))
 		case *ast.TypeDecl:
 			out = append(out, d.symbol(n.Name.String(), "Type", protocol.SymbolKindClass, n, n.Name, nil))
 		case *ast.Ref:
@@ -236,14 +230,10 @@ func (d *Document) Hover(pos protocol.Position) *protocol.Hover {
 	switch occ.ID.Kind {
 	case SymTable:
 		md = d.tableHover(occ.ID.Name)
-	case SymEnum:
-		md = d.enumHover(occ.ID.Name)
 	case SymPartial:
 		md = d.partialHover(occ.ID.Name)
 	case SymColumn:
 		md = d.columnHover(occ.ID)
-	case SymEnumValue:
-		md = d.enumValueHover(occ.ID)
 	case SymType:
 		md = d.typeHover(occ.ID.Name)
 	}
@@ -273,23 +263,6 @@ func (d *Document) tableHover(key string) string {
 	}
 	if note := tableNote(ti.Decl); note != "" {
 		b.WriteString("\n---\n" + note + "\n")
-	}
-	return b.String()
-}
-
-func (d *Document) enumHover(key string) string {
-	ei, ok := d.Index.Enums[key]
-	if !ok {
-		return ""
-	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "```volt\nEnum %s\n```\n", ei.Decl.Name.Name())
-	for _, v := range ei.Decl.Values {
-		b.WriteString("- `" + v.Name.Name() + "`")
-		if note := settingString(v.Settings, "note"); note != "" {
-			b.WriteString(" — " + note)
-		}
-		b.WriteString("\n")
 	}
 	return b.String()
 }
@@ -365,24 +338,6 @@ func (d *Document) columnHover(id SymbolID) string {
 	return b.String()
 }
 
-func (d *Document) enumValueHover(id SymbolID) string {
-	key := strings.TrimPrefix(id.Container, "enum:")
-	ei, ok := d.Index.Enums[key]
-	if !ok {
-		return ""
-	}
-	for _, v := range ei.Decl.Values {
-		if v.Name.Name() == id.Name {
-			md := fmt.Sprintf("```volt\n%s.%s\n```\n", ei.Decl.Name.Name(), id.Name)
-			if note := settingString(v.Settings, "note"); note != "" {
-				md += "\n" + note + "\n"
-			}
-			return md
-		}
-	}
-	return ""
-}
-
 func (d *Document) columnFind(id SymbolID) *ast.Column {
 	if name, ok := strings.CutPrefix(id.Container, "partial:"); ok {
 		pi, ok := d.Index.Partials[name]
@@ -445,8 +400,8 @@ func valueString(v ast.Node) string {
 		return "`" + v.Text() + "`"
 	case *ast.NegNumber:
 		return "-" + v.Num.Tok.Val
-	case *ast.EnumConst:
-		return v.Enum.Name() + "." + v.Value.Name()
+	case *ast.QualIdent:
+		return v.Qual.Name() + "." + v.Name.Name()
 	case *ast.RefEndpoint:
 		cols := identNames(v.Columns)
 		return v.Table.Name() + "." + strings.Join(cols, ", ")

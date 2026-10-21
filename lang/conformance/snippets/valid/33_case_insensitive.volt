@@ -2,7 +2,7 @@
 TABLE users {
   id int [PK]
 }
-enum status { active }
+type Status string
 table posts { user_id int [Ref: users.id] }
 table likes { user_id int }
 REF: likes.user_id > users.id

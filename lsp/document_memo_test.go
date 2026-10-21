@@ -43,7 +43,7 @@ func TestDocumentReusesItsFrontEnd(t *testing.T) {
 				d.parseStats.Reused, d.schema.Hits, d.index.Hits)
 		}
 	}
-	decls := strings.Count(text, "\nTable ") + strings.Count(text, "\nEnum ") + strings.Count(text, "\nTablePartial ") +
+	decls := strings.Count(text, "\nTable ") + strings.Count(text, "\nType ") + strings.Count(text, "\nTablePartial ") +
 		strings.Count(text, "\nScope ") + strings.Count(text, "\nPipeline ") + strings.Count(text, "\nSelect ") +
 		strings.Count(text, "\nGroup ") + strings.Count(text, "\nPred ") + strings.Count(text, "\nView ") + 1
 	round("first", text, decls, 12, 12)

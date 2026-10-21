@@ -45,35 +45,6 @@ Project {
         (string_content)))))
 
 ==================
-enum with settings and quoted value
-==================
-
-Enum status {
-  active [note: 'ok']
-  retired
-  "Not Yet Set"
-}
-
----
-
-(source_file
-  (enum_definition
-    (enum_name
-      (identifier))
-    (enum_value
-      (identifier)
-      (settings_list
-        (setting
-          (setting_name
-            (identifier))
-          (string
-            (string_content)))))
-    (enum_value
-      (identifier))
-    (enum_value
-      (quoted_identifier))))
-
-==================
 Type declarations: imported Go type with storage and path, bare type of the package
 ==================
 
@@ -110,6 +81,19 @@ Type Slug string
     (column_type
       (type_name
         (identifier)))))
+
+==================
+an Enum element is an error
+:error
+==================
+
+Enum status {
+  active
+}
+
+---
+
+
 
 ==================
 a body note is an error

@@ -130,7 +130,7 @@ func TestUserCRUD(t *testing.T) {
 	}
 }
 
-func TestOrderDefaultsEnumsAndFKs(t *testing.T) {
+func TestOrderDefaultsMembershipAndFKs(t *testing.T) {
 	ctx := context.Background()
 	db, q := newDB(t)
 	u := seedUser(t, q, "ann@example.com")
@@ -139,8 +139,8 @@ func TestOrderDefaultsEnumsAndFKs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OrderCreate: %v", err)
 	}
-	if o.Status != EOrderStatusPending {
-		t.Errorf("status = %q; want the database default %q for an unmarked column", o.Status, EOrderStatusPending)
+	if o.Status != OrderStatePending {
+		t.Errorf("status = %q; want the database default %q for an unmarked column", o.Status, OrderStatePending)
 	}
 	if o.Tip != 0 || o.PlacedAt.Valid {
 		t.Errorf("tip and placed_at take their defaults, got %+v", o)
@@ -150,11 +150,11 @@ func TestOrderDefaultsEnumsAndFKs(t *testing.T) {
 	}
 
 	placed := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
-	upd, err := q.OrderUpdate(ctx, o.Changeset().StatusSet(EOrderStatusShipped).PlacedAtSet(rt.Some(placed)))
+	upd, err := q.OrderUpdate(ctx, o.Changeset().StatusSet(OrderStateShipped).PlacedAtSet(rt.Some(placed)))
 	if err != nil {
 		t.Fatalf("OrderUpdate: %v", err)
 	}
-	if upd.Status != EOrderStatusShipped || !upd.PlacedAt.Valid || !upd.PlacedAt.V.Equal(placed) || upd.Total != o.Total {
+	if upd.Status != OrderStateShipped || !upd.PlacedAt.Valid || !upd.PlacedAt.V.Equal(placed) || upd.Total != o.Total {
 		t.Errorf("OrderUpdate returned %+v", upd)
 	}
 
@@ -169,11 +169,11 @@ func TestOrderDefaultsEnumsAndFKs(t *testing.T) {
 	}
 
 	_, err = q.OrderUpdate(ctx, o.Changeset().StatusSet("teleported"))
-	if inv := invalidOf(t, err, "enum", "status"); inv.StatusCode() != 422 || inv.Cause != nil {
-		t.Errorf("a value outside the enum is a 422 enum field error before any statement runs: %+v", inv)
+	if inv := invalidOf(t, err, "OrderStateKnown", "status"); inv.StatusCode() != 422 || inv.Cause != nil {
+		t.Errorf("a value outside the constants is a 422 field error of the membership validator before any statement runs: %+v", inv)
 	}
 	if _, err := db.ExecContext(ctx, `UPDATE orders SET status = 'teleported' WHERE id = ?`, o.ID); err != nil {
-		t.Errorf("the database carries no CHECK for an enum column: %v", err)
+		t.Errorf("the database carries no CHECK for a validated column: %v", err)
 	}
 }
 

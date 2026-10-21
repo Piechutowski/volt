@@ -119,22 +119,6 @@ func Children(n Node) []Node {
 				out = append(out, c)
 			}
 		}
-	case *Enum:
-		if n.Name != nil {
-			out = append(out, n.Name)
-		}
-		for _, v := range n.Values {
-			if v != nil {
-				out = append(out, v)
-			}
-		}
-	case *EnumValue:
-		if n.Name != nil {
-			out = append(out, n.Name)
-		}
-		if n.Settings != nil {
-			out = append(out, n.Settings)
-		}
 	case *TypeDecl:
 		if n.Name != nil {
 			out = append(out, n.Name)
@@ -287,12 +271,12 @@ func Children(n Node) []Node {
 		if n.Num != nil {
 			out = append(out, n.Num)
 		}
-	case *EnumConst:
-		if n.Enum != nil {
-			out = append(out, n.Enum)
+	case *QualIdent:
+		if n.Qual != nil {
+			out = append(out, n.Qual)
 		}
-		if n.Value != nil {
-			out = append(out, n.Value)
+		if n.Name != nil {
+			out = append(out, n.Name)
 		}
 	}
 	return out

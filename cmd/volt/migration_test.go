@@ -352,7 +352,7 @@ func TestMigrationNew(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(empty, "go.mod"), []byte("module empty\n\ngo 1.27\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(empty, "api.volt"), []byte("package api\n\nEnum color {\n  red\n}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(empty, "api.volt"), []byte("package api\n\nType kinds.Color string from 'example.com/kinds'\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, err = voltRun(t, "migration", "new", "init", empty)

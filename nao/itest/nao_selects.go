@@ -68,6 +68,26 @@ func (q *Queries) OrderFree(ctx context.Context) ([]Order, error) {
 	return out, rows.Err()
 }
 
+const orderByStateSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "status" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
+
+// OrderByState runs the "byState" select over orders (spec §selects-over-groups).
+func (q *Queries) OrderByState(ctx context.Context, states []OrderState) ([]Order, error) {
+	rows, err := q.db.QueryContext(ctx, orderByStateSQL, rt.JSONList(states))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Order{}
+	for rows.Next() {
+		v, err := orderScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
 const pageViewRowsSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE ("site" = ? AND "day" = ?) ORDER BY "day" DESC, "id" ASC`
 
 // PageViewRows runs the "rows" select over page_views (spec §selects-over-groups).
