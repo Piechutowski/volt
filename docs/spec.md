@@ -558,7 +558,7 @@ Punctuation roles (uniform across the language):
 | `,`     | separator inside `[ ]`, `( )`, and record rows              |
 | `.`     | name qualification (`schema.table.column`)                  |
 | `~`     | TablePartial injection prefix                               |
-| `*`     | wildcard (module system, DiagramView)                       |
+| `*`     | wildcard (DiagramView categories, select projections)       |
 | `< > - <>` | relationship cardinality operators                       |
 
 ---
@@ -758,8 +758,14 @@ column setting  = "pk"
    (§predicates).
 2. **Nullability.** A column is NOT NULL unless it carries `null`,
    which admits NULL. This mirrors Go, where a value is never nil unless
-   its type says so. A key column, one carrying `pk` or a member of a
-   `[pk]` index (§indexes), MUST NOT carry `null`.
+   its type says so. `[]byte` is the type that says so: its field is
+   `[]byte` with or without `null`, and nil binds as NULL
+   (§mapping-to-go), so a `[]byte` column without `null` refuses nil,
+   its Go zero value, as a `not_null` field error when a write sends
+   it (§changesets), and a non-nil empty slice stores empty bytes. A
+   value of a declared type (§types) whose `driver.Valuer` returns nil
+   binds as NULL the same way. A key column, one carrying `pk` or a
+   member of a `[pk]` index (§indexes), MUST NOT carry `null`.
 3. **`pk`** marks a single-column primary key. A composite primary key
    MUST be expressed as an index with the `pk` setting (§indexes). A
    table has at most one primary key, one column carrying `pk` or one
@@ -785,9 +791,10 @@ column setting  = "pk"
 
 > **Extension (this implementation).** The column setting `required`
 > declares that a value must be present
-> in the zero-value sense: under ZII a missing input decodes to the
-> type's zero value and the NOT NULL column is satisfied, so `required`
-> is the word for "and not that either". It is one of the two built-in rules
+> in the zero-value sense: a zero value that is set, or decoded into a
+> row and passed to `From` (§changesets), satisfies a NOT NULL column,
+> except one that binds as NULL (nil for `[]byte`, rule 2), so
+> `required` is the word for "and not that either". It is one of the two built-in rules
 > of `Validate` (§changesets), beside enum membership, and the one the
 > schema switches on per column, the field error with check
 > `required`: it refuses `""` for `string` and enum columns, `0` for
@@ -837,13 +844,14 @@ default value = [ "-" ], number
               | enum constant ;
 ```
 
-| Kind          | Example                                    |
-|---------------|--------------------------------------------|
-| number        | `default: 123`, `default: -100`            |
-| string        | `default: 'direct'`                        |
-| boolean       | `default: false`, `default: null`          |
-| expression    | `` default: `now() - interval '5 days'` `` |
-| enum constant | `default: status.active`                   |
+| Kind          | Example                                               |
+|---------------|-------------------------------------------------------|
+| number        | `default: 123`, `default: -100`                       |
+| string        | `default: 'direct'`                                   |
+| boolean       | `default: false`                                      |
+| null          | `default: null`, only on a column that carries `null` |
+| expression    | `` default: `now() - interval '5 days'` ``            |
+| enum constant | `default: status.active`                              |
 
 A bare identifier that is not `true`/`false`/`null` and not a dotted enum
 constant is **not** a valid default value.
@@ -917,7 +925,7 @@ Table bookings {
 
   indexes {
     (id, country) [pk]
-    booking_date [name: 'idx_booking_date', type: hash]
+    country [name: 'idx_country', type: hash]
     (country, `lower(country)`) [unique, name: 'idx_bookings_country_ci']
     booking_date [where: `cancelled_at IS NULL`]
   }
@@ -2795,10 +2803,17 @@ user, err := q.UserUpdate(ctx, cs)
 2. **Data and changes.** `UserNew()` starts from the zero row with the schema's literal
    defaults in place (a number, string, boolean or enum-constant
    `default:` of a built-in or enum column, §default-values) and
-   nothing set, so `Row()` and `Validate` see what the database writes
-   for an unmarked column; an expression default, and a declared
-   type's default, are the database's alone and read as the zero
-   value until the row is stored; `u.Changeset()` starts from `u` with nothing set and
+   nothing set, so `Row()` and `Validate` see the literal default the
+   database writes for an unmarked column that has one, and NULL for
+   an unmarked column that carries `null` with no default or
+   `default: null`; an expression default, and a declared type's
+   default, are the database's alone and read as the zero value until
+   the row is stored, as the auto-increment key does until the
+   database assigns it. An unmarked NOT NULL column without a default
+   reads as its zero value too, but the insert names no value for it,
+   so the database writes NULL and refuses the row as a `not_null`
+   field error (rule 8), unless `Validate` refused that zero value
+   first. `u.Changeset()` starts from `u` with nothing set and
    remembers that it was made from a row. A setter records a value
    for one column and **marks** it; `Changed` reports the mark; a
    column set to the value it already holds is still a change, since
@@ -3471,8 +3486,14 @@ SQLite INTEGER range there, and only there.
 
 A column that carries `null` (§columns) is nullable and generated as
 `rt.Null[T]`, a value plus a validity bit, never a pointer. Every other
-column is required and generated as `T`.
-`[]byte`, where `nil` already expresses NULL, stays bare. A nullable
+column is NOT NULL and generated as `T`.
+`[]byte`, where `nil` already expresses NULL, stays bare either way, so
+a `[]byte` column without `null` refuses nil, its Go zero value, as a
+`not_null` field error (§changesets), and a non-nil empty slice stores
+empty bytes (§columns). GOB does not carry an empty slice, so an
+empty slice in a GOB write body (§formats) arrives as nil, which is
+NULL: stored as NULL in a column that carries `null`, refused in one
+without. A nullable
 column's handle, declared in `nao_models.go` with the rest
 (§changesets, §generated-query-surface), is an `rt.NullColumn`:
 comparisons take plain `T`, NULL is explicit (`IsNull`, `SetNull`).
@@ -3584,8 +3605,7 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 |---|---|
 | enum-typed column | `TEXT`; SQLite has no enum type, and the value set is the generated Go type's (§go-types) |
 | `core.users` (schema) | `core_users` — SQLite has no schemas; collisions are generation errors |
-| column without `null` | `NOT NULL`, the rowid alias below excepted; a column that carries `null` has no nullability constraint (§columns) |
-| `pk` column | explicit `NOT NULL` added: SQLite's `PRIMARY KEY` does **not** imply NOT NULL |
+| column without `null`, key columns included (SQLite's `PRIMARY KEY` does not imply NOT NULL) | `NOT NULL`, the rowid alias below excepted; a column that carries `null` has no nullability constraint (§columns) |
 | `int` `[pk, increment]` | exactly `INTEGER PRIMARY KEY` (rowid alias, auto-assigned); SQLite's `AUTOINCREMENT` keyword deliberately avoided — it only adds the never-reuse-an-id bookkeeping the SQLite docs discourage. Any other `increment` placement is a check error (§columns) |
 | composite pk (`[pk]` index) | `PRIMARY KEY (a, b)` table constraint; members get `NOT NULL` |
 | index | `CREATE INDEX <name> ON <table> (<key>)`, `UNIQUE` for `unique`, `WHERE <expr>` for `where:` (§indexes); the name is `name:` when given, else `idx_<table>_<col>[_<col>...]` from the SQLite table name and the key columns; two indexes of one table that derive one name are a generation error |

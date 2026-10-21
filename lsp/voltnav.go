@@ -670,9 +670,15 @@ func tableModelHover(sym voltSym, def voltDef) string {
 		if !ok {
 			continue
 		}
+		var marks []string
+		for _, name := range []string{"pk", "null"} {
+			if col.Settings.Get(name) != nil {
+				marks = append(marks, name)
+			}
+		}
 		mark := ""
-		if col.Name.Name() == pk {
-			mark = " [pk]"
+		if len(marks) > 0 {
+			mark = " [" + strings.Join(marks, ", ") + "]"
 		}
 		fmt.Fprintf(&b, "\t%s %s%s\n", col.Name.Name(), col.Type.String(), mark)
 	}

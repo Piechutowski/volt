@@ -271,6 +271,56 @@ Table t {
                 (identifier)))))))))
 
 ==================
+settings lists spanning lines
+==================
+
+Table t [
+  note: 'x'
+] {
+  id int [pk,
+    increment]
+  title string [
+    null
+  ]
+}
+
+---
+
+(source_file
+  (table_definition
+    (table_name
+      (identifier))
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (string
+          (string_content))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier)))
+        (setting
+          (setting_name
+            (identifier)))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier)))))))
+
+==================
 case-insensitive keywords
 ==================
 
@@ -317,6 +367,8 @@ Table t {
 }
 
 ---
+
+
 
 ==================
 identifier starting with digits

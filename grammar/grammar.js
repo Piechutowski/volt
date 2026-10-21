@@ -842,8 +842,18 @@ module.exports = grammar({
 
     // ==================== Settings (§settings-lists) ====================
 
+    // A line break inside the brackets is whitespace (§line-structure-and-whitespace).
     settings_list: ($) =>
-      seq('[', $.setting, repeat(seq(',', $.setting)), ']'),
+      seq(
+        '[',
+        optional($._line_breaks),
+        $.setting,
+        repeat(seq(optional($._line_breaks), ',', optional($._line_breaks), $.setting)),
+        optional($._line_breaks),
+        ']',
+      ),
+
+    _line_breaks: ($) => repeat1($._newline),
 
     setting: ($) =>
       seq(

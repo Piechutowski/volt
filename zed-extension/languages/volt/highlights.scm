@@ -140,8 +140,9 @@
   "in"
   "like"
   "is"
-  "null"
 ] @keyword.operator
+
+(pred_null "null" @keyword.operator)
 
 ; ---------- migrations (docs/spec.md §migrations) ----------
 

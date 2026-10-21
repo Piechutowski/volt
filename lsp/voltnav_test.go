@@ -103,7 +103,7 @@ func TestVoltHoverTableShowsModel(t *testing.T) {
 		t.Fatal("no hover for db.posts")
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
-	for _, want := range []string{"Table posts", "package `db`", "Go model `Post`"} {
+	for _, want := range []string{"Table posts", "package `db`", "Go model `Post`", "id int [pk]", "title string [null]"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover missing %q:\n%s", want, md)
 		}

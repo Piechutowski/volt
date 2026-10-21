@@ -88,8 +88,10 @@ load-bearing patterns, each citing the spec section it implements:
   plugs are line-terminated. `extras` holds only `[ \t\r]` + comments,
   and every body uses one `newlineSep1` helper. Falls out for free:
   `Table t { id int name string }` is a syntax error (spec-correct),
-  one-liners still parse, settings lists are same-line only, and a line
-  comment doesn't consume its newline.
+  one-liners still parse, and a line comment doesn't consume its
+  newline. A settings list takes line breaks inside its brackets, so
+  it may span lines; the other continuations the spec allows are
+  limitations (section 7).
 - **Case-insensitive contextual keywords** (§keywords). Keywords are
   generated regexes aliased to a canonical spelling; tree-sitter's
   context-aware lexing provides the "not reserved" half — `table` in
@@ -275,14 +277,28 @@ from one implementation. The protocol library is `tliron/glsp` (LSP
 
 ## 7. Known limitations (documented trade-offs, not bugs)
 
-- **Grammar: unquoted columns named like block keywords** — `indexes`,
+- **Grammar: unquoted columns named like block keywords.** `indexes`,
   `validators`, `note`, `records` need quoting in column position (§keywords
   note above); the front end, spec-exact, accepts both.
-- **Grammar: exotic string edges** — a triple-quoted string whose
+- **Grammar: exotic string edges.** A triple-quoted string whose
   content ends in a quote immediately before the closing `'''` may
   tokenize differently from the spec's maximal-munch rule; the front
   end handles it correctly.
-- **LSP: no Go-side navigation** — handler references (`Home.Index`)
+- **Grammar: continuations other than a settings list.** An element
+  continued on an indented line (`Ref:` with its relationship on the
+  next line, §line-structure-and-whitespace) and a parenthesized list
+  spanning lines (a composite index key, a records column list, a
+  composite ref endpoint) draw an ERROR node, since a line break
+  there is not whitespace to the grammar; the front end accepts them.
+- **Grammar: an unsigned exponent in a record row.** A record value
+  such as `1e5` lexes as an identifier and draws an ERROR node;
+  `1e+5`, `1.5` and an exponent in a setting value parse. The front
+  end reads every one of them as a number (§numeric-literals).
+- **Grammar: DiagramView categories on one line.**
+  `DiagramView v { Tables { } Notes { } }` draws an ERROR node, since
+  the grammar wants a line break between categories; one category per
+  line parses, and the front end accepts both (§diagramview).
+- **LSP: no Go-side navigation.** Handler references (`Home.Index`)
   and `error_handler:` point into Go, which this server does not
   index (roadmap). A query reference (`db.UserGet`, §query-routes) is
   not navigated either; a dataset's select (`dataset db.browse`) is.
@@ -327,7 +343,7 @@ How to audit that the three components implement
 | Front end accepts/rejects exactly what the spec says | conformance corpus: `valid/` MUST pass, `invalid/` MUST fail, each snippet tagged `// spec: §…` (files without a `package` clause = the schema pass, files with one and project dirs = the project pass); every diagnostic of every invalid snippet, recovery included, is a golden | `lang/conformance/snippets/` and `lang/conformance/invalid_*.golden` via `go test ./lang/...`; refresh with `-update` after reading the diff |
 | Grammar parses everything the spec allows | corpus cases (input → expected tree, incl. `:error` cases) | `grammar/test/corpus/`, `tree-sitter test` |
 | Spec grammar and front end agree | the spec's EBNF read as data: every derived sentence parses, every one-token neighbour is decided alike by the grammar and the front end | `lang/spec_grammar_test.go` via `go test ./lang/...` |
-| Grammar and front end agree | every valid conformance snippet, `grammar/examples/*` and the spec's derived sentences (`go test ./lang -run TestSpecGrammarSentencesParse -sentences DIR`) must produce zero tree-sitter ERROR nodes **and** zero front-end diagnostics | differential run after grammar changes |
+| Grammar and front end agree | every valid conformance snippet (the files its loader reads, so not `testdata/` or a nested module) and `grammar/examples/*` must produce zero front-end diagnostics, and every derived sentence of the spec's grammar (`go test ./lang -run TestSpecGrammarSentencesParse -sentences DIR`) zero parser diagnostics; all of them must produce zero tree-sitter ERROR nodes, except where a limitation of section 7 applies: today `34_no_reserved_words` and `v51_pred_compose` (unquoted columns named like block keywords), `v55_element_continuation` (a `Ref:` continued on an indented line), the derived sentences with an unsigned exponent in a record row, and the one with two DiagramView categories on one line | differential run after grammar changes |
 | Lint rules match their doc | doc ↔ registry ↔ testdata consistency test; `//WANT` markers both directions | `lang/vet/docs_test.go` against [`lint.md`](lint.md) |
 | Generated routers implement Part II of the spec | goldens byte-compared, gofmt-stable, **compiled**; itest exercises match/404/405, typed-param 404s, pipeline order, the error spine, reverse-URL round-trip totality | `gen/router`, `itest/` |
 | Generated models implement §mapping-to-go/B | goldens compiled; every CRUD statement prepared against the generated DDL; SQL goldens executed on real SQLite | `nao/gen/...`, `nao/itest` |

@@ -30,7 +30,7 @@ TablePartial base_template [headercolor: #ff0000] {
 Table users as U [headercolor: #3498DB, note: 'main table'] {
   ~base_template
   name string [unique]
-  full_name "double precision" [null]
+  full_name string [null]
   status status [default: status.active]
   balance float64 [null, default: -100.5]
   2fa_enabled bool [null, default: false]
@@ -77,8 +77,8 @@ Table empty_target {
 Records core.orders(id, user_id, total) {
   1, 1, `1.0 + 2.0`
   2, , 3.5
-  , null, -7
-  3, 2, 'true'
+  4, null, -7
+  3, 2, 4.5
 }
 
 TableGroup commerce [color: #cccccc, note: 'sales tables'] {

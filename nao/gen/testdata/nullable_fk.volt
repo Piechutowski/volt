@@ -1,4 +1,4 @@
-// nullable vs required foreign keys and other nullable shapes
+// nullable vs NOT NULL foreign keys and other nullable shapes
 Table users {
   id int [pk]
 }
