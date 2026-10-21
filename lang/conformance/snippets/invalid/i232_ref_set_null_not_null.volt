@@ -12,5 +12,5 @@ Table posts {
 }
 
 Ref: posts.author_id > users.id [delete: set null]
-Ref: users.id < posts.reviewer_id [update: set default]
+Ref: posts.reviewer_id > users.id [update: set default]
 Ref: posts.editor_id > users.id [delete: set default, update: set null]

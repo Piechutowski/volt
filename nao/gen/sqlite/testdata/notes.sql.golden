@@ -7,7 +7,7 @@
 
 PRAGMA foreign_keys = ON;
 
--- A blog post. The body-form note wins over the setting-form note.
+-- A blog post.
 CREATE TABLE posts (
   id INTEGER PRIMARY KEY,
   -- Shown in lists and in the HTML title tag

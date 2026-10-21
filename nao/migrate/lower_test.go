@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"flag"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -301,31 +300,6 @@ func TestReversibleFlatBodyRoundTrips(t *testing.T) {
 		t.Errorf("down then up changed the structure: %+v", drifts)
 	}
 	_ = f
-}
-
-func TestRefDirectionIsRefusedByCheckAndByLower(t *testing.T) {
-	src := `package db
-
-Table users {
-  id int [pk, increment]
-}
-
-Migration 0001__init {
-  create table users {
-    id int [pk, increment, ref: < orders.user_id]
-  }
-}
-`
-	f, diags := parser.ParseFile("t.volt", src)
-	info, semDiags := check.File(f)
-	diags = append(diags, semDiags...)
-	if !diag.HasErrors(diags) || !strings.Contains(fmt.Sprint(diags), "ref: takes > or -") {
-		t.Fatalf("check: %v, want the §migrations refusal of ref: <", diags)
-	}
-	_, err := Lower(info)
-	if err == nil || !strings.Contains(err.Error(), "0001__init") || !strings.Contains(err.Error(), "ref: <") {
-		t.Fatalf("Lower: %v, want a refusal naming the migration and the operator", err)
-	}
 }
 
 func TestLowerRebuildSources(t *testing.T) {

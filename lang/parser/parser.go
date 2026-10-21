@@ -218,14 +218,8 @@ func (p *parser) decl() (d ast.Decl) {
 		return p.typeDecl()
 	case "ref":
 		return p.ref()
-	case "note":
-		return p.stickyNote()
-	case "tablegroup":
-		return p.tableGroup()
 	case "records":
 		return p.recordsDecl()
-	case "diagramview":
-		return p.diagramView()
 	case "migration":
 		return p.migration()
 	default:
@@ -268,13 +262,12 @@ func (p *parser) project() *ast.Project {
 	if p.at(token.IDENT) {
 		d.Name = p.ident("project name")
 	}
+	if p.at(token.LBRACKET) {
+		d.Settings = p.settingList()
+	}
 	p.expect(token.LBRACE, "Project (§project)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		p.item(func() {
-			if p.atNoteDef() {
-				d.Notes = append(d.Notes, p.noteDef())
-				return
-			}
 			p.lineBegin("project property (§project)")
 			key := p.ident("project property (§project)")
 			p.expect(token.COLON, "project property (§project)")
@@ -289,11 +282,7 @@ func (p *parser) project() *ast.Project {
 
 func (p *parser) table() *ast.Table {
 	d := &ast.Table{TablePos: p.next().Pos}
-	d.Name = p.qualName("table name (§table)")
-	if p.atKw("as") {
-		p.next()
-		d.Alias = p.ident("table alias (§table)")
-	}
+	d.Name = p.ident("table name (§table)")
 	if p.at(token.LBRACKET) {
 		d.Settings = p.settingList()
 	}
@@ -307,16 +296,12 @@ func (p *parser) tablePartial() *ast.TablePartial {
 	d := &ast.TablePartial{PartialPos: p.next().Pos}
 	d.Name = p.ident("TablePartial name (§tablepartial)")
 	if p.at(token.LBRACKET) {
-		d.Settings = p.settingList()
+		p.fail(p.cur(), "a TablePartial takes no settings; its body holds columns, indexes and validators (§tablepartial)")
 	}
 	p.expect(token.LBRACE, "TablePartial (§tablepartial)")
 	d.Body = p.tableBody("TablePartial")
 	d.Rbrace = p.expect(token.RBRACE, "TablePartial (§tablepartial)").Pos
 	return d
-}
-
-func (p *parser) atNoteDef() bool {
-	return p.atKw("note") && (p.peekKind(1) == token.COLON || p.peekKind(1) == token.LBRACE)
 }
 
 func (p *parser) tableBody(what string) []ast.TableItem {
@@ -353,14 +338,12 @@ func (p *parser) tableItem(what string) (item ast.TableItem) {
 		return p.indexesBlock()
 	case p.atKw("validators") && p.peekKind(1) == token.LBRACE:
 		return p.validatorsBlock()
-	case p.atNoteDef():
-		return p.noteDef()
 	case p.atKw("records") && (p.peekKind(1) == token.LPAREN || p.peekKind(1) == token.LBRACE):
 		return p.records(nil)
 	case t.Kind == token.IDENT:
 		return p.column()
 	default:
-		p.fail(t, "expected a column, indexes, validators, Note, records or '~injection' in %s body, found %s", what, t)
+		p.fail(t, "expected a column, indexes, validators, records or '~injection' in %s body, found %s", what, t)
 		return nil
 	}
 }
@@ -473,90 +456,49 @@ func (p *parser) validatorsBlock() *ast.ValidatorsBlock {
 
 func (p *parser) ref() *ast.Ref {
 	d := &ast.Ref{RefPos: p.next().Pos}
-	if p.at(token.IDENT) {
-		d.Name = p.ident("relationship name")
+	if !p.at(token.COLON) {
+		p.fail(p.cur(), "expected ':' after Ref (§relationships-ref), found %s", p.cur())
 	}
-	if p.at(token.COLON) {
-		p.next()
-		p.refBody(d)
-		d.SetEnd(p.toks[p.pos-1].End())
-		return d
-	}
-	d.Long = true
-	p.expect(token.LBRACE, "Ref (§relationships-ref)")
-	if p.at(token.RBRACE) {
-		p.fail(p.cur(), "a Ref declares exactly one relationship (§relationships-ref)")
-	}
-	p.refBody(d)
-	if !p.at(token.RBRACE) {
-		p.fail(p.cur(), "a Ref declares exactly one relationship (§relationships-ref); found %s after the first", p.cur())
-	}
-	d.SetEnd(p.expect(token.RBRACE, "Ref (§relationships-ref)").End())
-	return d
-}
-
-func (p *parser) refBody(d *ast.Ref) {
+	p.next()
 	d.Left = p.refEndpoint()
-	d.OpTok = p.relOp()
+	if !p.at(token.GT) {
+		p.fail(p.cur(), "expected '>' after the foreign key: a Ref is written foreign key > referenced columns (§relationships-ref), found %s", p.cur())
+	}
+	p.next()
 	d.Right = p.refEndpoint()
 	if p.at(token.LBRACKET) && !p.cur().NLBefore {
 		d.Settings = p.settingList()
 	}
-}
-
-func (p *parser) relOp() token.Token {
-	t := p.cur()
-	switch t.Kind {
-	case token.LT, token.GT, token.MINUS, token.LTGT:
-		return p.next()
-	}
-	p.fail(t, "expected relationship operator <, >, - or <> (§relationships-ref), found %s", t)
-	return token.Token{}
+	d.SetEnd(p.toks[p.pos-1].End())
+	return d
 }
 
 func (p *parser) refEndpoint() *ast.RefEndpoint {
-	first := p.ident("relationship endpoint (§relationships-ref)")
-	parts := []*ast.Ident{first}
-	ep := &ast.RefEndpoint{}
+	ep := &ast.RefEndpoint{Table: p.ident("relationship endpoint (§relationships-ref)")}
+	if !p.at(token.DOT) {
+		p.fail(p.cur(), "an endpoint is table.column or table.(columns) (§relationships-ref), found %s", p.cur())
+	}
+	p.next()
+	if !p.at(token.LPAREN) {
+		ep.Columns = []*ast.Ident{p.ident("endpoint column (§relationships-ref)")}
+		ep.SetEnd(ep.Columns[0].End())
+		return ep
+	}
+	p.next()
 	for {
-		if !p.at(token.DOT) {
-			p.fail(p.cur(), "endpoint must reference a column as [schema.]table.column (§relationships-ref)")
+		ep.Columns = append(ep.Columns, p.ident("endpoint column (§relationships-ref)"))
+		if !p.at(token.COMMA) {
+			break
 		}
 		p.next()
-		if p.at(token.LPAREN) {
-			p.next()
-			for {
-				ep.Columns = append(ep.Columns, p.ident("endpoint column (§relationships-ref)"))
-				if p.at(token.COMMA) {
-					p.next()
-					continue
-				}
-				break
-			}
-			ep.SetEnd(p.expect(token.RPAREN, "endpoint column group (§relationships-ref)").End())
-			break
-		}
-		parts = append(parts, p.ident("relationship endpoint (§relationships-ref)"))
-		if !p.at(token.DOT) {
-			ep.Columns = []*ast.Ident{parts[len(parts)-1]}
-			parts = parts[:len(parts)-1]
-			ep.SetEnd(ep.Columns[0].End())
-			break
-		}
-		if len(parts) == 3 {
-			p.fail(p.cur(), "endpoint has too many name parts; expected [schema.]table.column (§relationships-ref)")
-		}
 	}
-	if len(parts) == 0 || len(parts) > 2 {
-		p.fail(p.cur(), "endpoint must be [schema.]table.column (§relationships-ref)")
-	}
-	ep.Table = p.qualOf(parts...)
+	ep.SetEnd(p.expect(token.RPAREN, "endpoint column group (§relationships-ref)").End())
 	return ep
 }
 
 func (p *parser) enum() *ast.Enum {
 	d := &ast.Enum{EnumPos: p.next().Pos}
-	d.Name = p.qualName("enum name (§enum)")
+	d.Name = p.ident("enum name (§enum)")
 	p.expect(token.LBRACE, "Enum (§enum)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		p.item(func() {
@@ -589,16 +531,16 @@ func (p *parser) typeDecl() *ast.TypeDecl {
 
 func (p *parser) recordsDecl() *ast.Records {
 	pos := p.next().Pos
-	table := p.qualName("records target table (§records-sample-data)")
+	table := p.ident("records target table (§records-sample-data)")
 	return p.recordsRest(pos, table)
 }
 
-func (p *parser) records(_ *ast.QualName) *ast.Records {
+func (p *parser) records(_ *ast.Ident) *ast.Records {
 	pos := p.next().Pos
 	return p.recordsRest(pos, nil)
 }
 
-func (p *parser) recordsRest(pos token.Position, table *ast.QualName) *ast.Records {
+func (p *parser) recordsRest(pos token.Position, table *ast.Ident) *ast.Records {
 	d := &ast.Records{RecordsPos: pos, Table: table}
 	if p.at(token.LPAREN) {
 		d.HasColumns = true
@@ -624,23 +566,18 @@ func (p *parser) recordsRest(pos token.Position, table *ast.QualName) *ast.Recor
 func (p *parser) recordRow() *ast.RecordRow {
 	row := &ast.RecordRow{}
 	p.lineBegin("record row (§records-sample-data)")
-	rowStart := true
 	for {
-		switch {
-		case p.at(token.COMMA) || p.at(token.RBRACE) || p.at(token.EOF),
-			!rowStart && p.cur().NLBefore:
-			at := p.cur().Pos
-			if !rowStart {
-				at = p.toks[p.pos-1].End()
-			}
-			row.Values = append(row.Values, &ast.Empty{At: at})
-		default:
-			row.Values = append(row.Values, p.recordValue())
-			rowStart = false
+		if len(row.Values) > 0 && (p.cur().NLBefore || p.at(token.RBRACE) || p.at(token.EOF)) {
+			p.errorf(p.toks[p.pos-1], "empty record field after the last ',': every field holds a value, and NULL is written null (§records-sample-data)")
+			p.lineClear()
+			return row
 		}
-		if p.at(token.COMMA) && (!p.cur().NLBefore || rowStart) {
+		if p.at(token.COMMA) || p.at(token.RBRACE) || p.at(token.EOF) {
+			p.fail(p.cur(), "empty record field: every field holds a value, and NULL is written null (§records-sample-data)")
+		}
+		row.Values = append(row.Values, p.recordValue())
+		if p.at(token.COMMA) && !p.cur().NLBefore {
 			p.next()
-			rowStart = false
 			continue
 		}
 		p.endOfLine("record row (§records-sample-data)")
@@ -669,83 +606,6 @@ func (p *parser) recordValue() ast.Node {
 		p.fail(t, "invalid record value (§records-sample-data): found %s", t)
 		return nil
 	}
-}
-
-func (p *parser) noteDef() *ast.Note {
-	p.lineBegin("note definition (§notes)")
-	n := &ast.Note{NotePos: p.next().Pos}
-	if p.at(token.COLON) {
-		p.next()
-		n.Text = p.litOf(p.expect(token.STRING, "note value (§notes)"))
-		n.SetEnd(n.Text.End())
-		p.endOfLine("note definition (§notes)")
-		return n
-	}
-	p.lineClear()
-	p.expect(token.LBRACE, "note definition (§notes)")
-	n.Text = p.litOf(p.expect(token.STRING, "note value (§notes)"))
-	n.SetEnd(p.expect(token.RBRACE, "note definition (§notes)").End())
-	return n
-}
-
-func (p *parser) stickyNote() *ast.StickyNote {
-	d := &ast.StickyNote{NotePos: p.next().Pos}
-	d.Name = p.ident("sticky note name (§notes)")
-	if p.at(token.LBRACKET) {
-		d.Settings = p.settingList()
-	}
-	p.expect(token.LBRACE, "sticky note (§notes)")
-	d.Text = p.litOf(p.expect(token.STRING, "sticky note value (§notes)"))
-	d.Rbrace = p.expect(token.RBRACE, "sticky note (§notes)").Pos
-	return d
-}
-
-func (p *parser) tableGroup() *ast.TableGroup {
-	d := &ast.TableGroup{GroupPos: p.next().Pos}
-	d.Name = p.ident("TableGroup name (§tablegroup)")
-	if p.at(token.LBRACKET) {
-		d.Settings = p.settingList()
-	}
-	p.expect(token.LBRACE, "TableGroup (§tablegroup)")
-	for !p.at(token.RBRACE) && !p.at(token.EOF) {
-		p.item(func() {
-			if p.atNoteDef() {
-				d.Notes = append(d.Notes, p.noteDef())
-				return
-			}
-			p.lineBegin("TableGroup member (§tablegroup)")
-			d.Members = append(d.Members, p.qualName("TableGroup member (§tablegroup)"))
-			p.endOfLine("TableGroup member (§tablegroup)")
-		})
-	}
-	d.Rbrace = p.expect(token.RBRACE, "TableGroup (§tablegroup)").Pos
-	return d
-}
-
-func (p *parser) diagramView() *ast.DiagramView {
-	d := &ast.DiagramView{ViewPos: p.next().Pos}
-	d.Name = p.ident("DiagramView name (§diagramview)")
-	p.expect(token.LBRACE, "DiagramView (§diagramview)")
-	for !p.at(token.RBRACE) && !p.at(token.EOF) {
-		c := &ast.ViewCategory{Kind: p.ident("view category (§diagramview)")}
-		p.expect(token.LBRACE, "view category body (§diagramview)")
-		if p.at(token.STAR) {
-			p.next()
-			c.Wildcard = true
-		} else {
-			for !p.at(token.RBRACE) && !p.at(token.EOF) {
-				p.item(func() {
-					p.lineBegin("view category member (§diagramview)")
-					c.Names = append(c.Names, p.qualName("view category member (§diagramview)"))
-					p.endOfLine("view category member (§diagramview)")
-				})
-			}
-		}
-		c.Rbrace = p.expect(token.RBRACE, "view category body (§diagramview)").Pos
-		d.Categories = append(d.Categories, c)
-	}
-	d.Rbrace = p.expect(token.RBRACE, "DiagramView (§diagramview)").Pos
-	return d
 }
 
 func (p *parser) settingList() *ast.SettingList {
@@ -778,7 +638,11 @@ func (p *parser) setting() *ast.Setting {
 	s.SetEnd(end)
 	if p.at(token.COLON) {
 		p.next()
-		s.Value = p.settingValue()
+		if name == "ref" {
+			s.Value = p.refEndpoint()
+		} else {
+			s.Value = p.settingValue()
+		}
 		s.SetEnd(s.Value.End())
 	}
 	return s
@@ -787,20 +651,13 @@ func (p *parser) setting() *ast.Setting {
 func (p *parser) settingValue() ast.Node {
 	t := p.cur()
 	switch t.Kind {
-	case token.STRING, token.NUMBER, token.COLOR:
+	case token.STRING, token.NUMBER:
 		return p.litOf(p.next())
 	case token.FUNCEXPR:
 		return &ast.FuncExpr{Tok: p.next()}
 	case token.MINUS:
-		if p.peekKind(1) == token.IDENT {
-			op := p.next()
-			return &ast.RefValue{OpTok: op, Endpoint: p.refEndpoint()}
-		}
 		p.next()
 		return &ast.NegNumber{MinusPos: t.Pos, Num: p.litOf(p.expect(token.NUMBER, "setting value (§settings-lists)"))}
-	case token.LT, token.GT, token.LTGT:
-		op := p.next()
-		return &ast.RefValue{OpTok: op, Endpoint: p.refEndpoint()}
 	case token.LPAREN:
 		l := p.next()
 		il := &ast.IdentList{Lparen: l.Pos}

@@ -1,7 +1,6 @@
 // spec: §program-structure — representative complete schema
-Project blog {
+Project blog [note: 'Blogging platform'] {
   database_type: 'PostgreSQL'
-  Note: 'Blogging platform'
 }
 
 Enum post_status {
@@ -14,11 +13,10 @@ TablePartial timestamps {
   updated_at time.Time
 }
 
-Table users as U [headercolor: #175EE8] {
+Table users [note: 'Registered users'] {
   id int [pk, increment]
   username string [unique]
   ~timestamps
-  Note: 'Registered users'
 
   indexes {
     username [unique, name: 'idx_username']
@@ -29,7 +27,7 @@ Table posts {
   id int [pk]
   title string
   status post_status [default: post_status.draft]
-  author_id int [ref: > U.id]
+  author_id int [ref: users.id]
   ~timestamps
 
   validators {
@@ -41,12 +39,6 @@ Table posts {
   }
 }
 
-TableGroup content [color: #cccccc] {
+Group content {
   posts
-}
-
-Note todo [color: #F4D03F] { 'add comments table' }
-
-DiagramView main {
-  Tables { * }
 }

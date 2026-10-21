@@ -21,12 +21,12 @@ func TestSelectRowNameMatchesRowType(t *testing.T) {
 		t.Fatal(pl.Err())
 	}
 	for _, fn := range []SelectFn{
-		{TableKey: "public.users", MethodSuffix: "Active"},
-		{TableKey: "public.users", MethodSuffix: "Active", Cols: []string{"id", "email"}},
-		{TableKey: "public.users", MethodSuffix: "Active", Cols: []string{"id", "email"}, SharedType: "UserContact"},
-		{TableKey: "public.users", MethodSuffix: "Public", Excluded: []string{"email"}},
-		{TableKey: "public.users", MethodSuffix: "Public", Excluded: []string{"email"}, SharedType: "UserPublic"},
-		{TableKey: "public.nope", MethodSuffix: "Active"},
+		{TableKey: "users", MethodSuffix: "Active"},
+		{TableKey: "users", MethodSuffix: "Active", Cols: []string{"id", "email"}},
+		{TableKey: "users", MethodSuffix: "Active", Cols: []string{"id", "email"}, SharedType: "UserContact"},
+		{TableKey: "users", MethodSuffix: "Public", Excluded: []string{"email"}},
+		{TableKey: "users", MethodSuffix: "Public", Excluded: []string{"email"}, SharedType: "UserPublic"},
+		{TableKey: "nope", MethodSuffix: "Active"},
 	} {
 		want, _, wantErr := pl.SelectRowType(fn)
 		got, gotErr := pl.SelectRowName(fn)

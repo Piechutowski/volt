@@ -22,7 +22,7 @@ var missingPK = &missingPKRule{meta{
 func (r *missingPKRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
 	var out []diag.Diagnostic
 	if ti := f.Table; ti != nil && !tableHasPK(ti) {
-		out = append(out, r.warnf(ti.Decl.Pos(), "table %q has no primary key", ti.Decl.Name.String()))
+		out = append(out, r.warnf(ti.Decl.Pos(), "table %q has no primary key", ti.Decl.Name.Name()))
 	}
 	return out
 }
@@ -41,22 +41,6 @@ func tableHasPK(ti *check.TableInfo) bool {
 	return false
 }
 
-func fkSides(r *check.RefInfo) (fk, target check.EndpointInfo, ok bool) {
-	switch r.Op {
-	case token.GT:
-		return r.Left, r.Right, true
-	case token.LT:
-		return r.Right, r.Left, true
-	case token.MINUS:
-		if r.Inline {
-			return r.Left, r.Right, true
-		}
-		return r.Right, r.Left, true
-	default:
-		return fk, target, false
-	}
-}
-
 type refTypeRule struct{ meta }
 
 var refTypeMismatch = &refTypeRule{meta{
@@ -67,21 +51,21 @@ var refTypeMismatch = &refTypeRule{meta{
 func (r *refTypeRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
 	var out []diag.Diagnostic
 	for _, ref := range f.Refs {
-		if ref.Left.Table == nil || ref.Right.Table == nil {
+		if ref.FK.Table == nil || ref.Target.Table == nil {
 			continue
 		}
-		n := min(len(ref.Left.Columns), len(ref.Right.Columns))
+		n := min(len(ref.FK.Columns), len(ref.Target.Columns))
 		for i := 0; i < n; i++ {
-			lc := ref.Left.Table.Column(ref.Left.Columns[i])
-			rc := ref.Right.Table.Column(ref.Right.Columns[i])
+			lc := ref.FK.Table.Column(ref.FK.Columns[i])
+			rc := ref.Target.Table.Column(ref.Target.Columns[i])
 			if lc == nil || rc == nil || !lc.Type.Known() || !rc.Type.Known() {
 				continue
 			}
 			lt, rt := lc.Col.Type.String(), rc.Col.Type.String()
 			if !strings.EqualFold(lt, rt) {
 				out = append(out, r.warnf(ref.Node.Pos(), "relationship joins %s.%s (%s) to %s.%s (%s); the types differ",
-					ref.Left.Table.Decl.Name.String(), ref.Left.Columns[i], lt,
-					ref.Right.Table.Decl.Name.String(), ref.Right.Columns[i], rt))
+					ref.FK.Table.Decl.Name.Name(), ref.FK.Columns[i], lt,
+					ref.Target.Table.Decl.Name.Name(), ref.Target.Columns[i], rt))
 			}
 		}
 	}
@@ -98,15 +82,15 @@ var refTargetNotUnique = &refTargetRule{meta{
 func (r *refTargetRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
 	var out []diag.Diagnostic
 	for _, ref := range f.Refs {
-		_, target, ok := fkSides(ref)
-		if !ok || target.Table == nil {
+		target := ref.Target
+		if target.Table == nil {
 			continue
 		}
 		if endpointUnique(target) {
 			continue
 		}
 		out = append(out, r.warnf(ref.Node.Pos(), "referenced column(s) %s.(%s) are not pk or unique; the database cannot enforce this foreign key",
-			target.Table.Decl.Name.String(), strings.Join(target.Columns, ", ")))
+			target.Table.Decl.Name.Name(), strings.Join(target.Columns, ", ")))
 	}
 	return out
 }
@@ -168,12 +152,12 @@ var selfRef = &selfRefRule{meta{
 func (r *selfRefRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
 	var out []diag.Diagnostic
 	for _, ref := range f.Refs {
-		if ref.Left.Table == nil || ref.Right.Table == nil || ref.Left.Table != ref.Right.Table {
+		if ref.FK.Table == nil || ref.Target.Table == nil || ref.FK.Table != ref.Target.Table {
 			continue
 		}
-		if strings.Join(ref.Left.Columns, ",") == strings.Join(ref.Right.Columns, ",") {
+		if strings.Join(ref.FK.Columns, ",") == strings.Join(ref.Target.Columns, ",") {
 			out = append(out, r.warnf(ref.Node.Pos(), "relationship references column %s.%s on both sides",
-				ref.Left.Table.Decl.Name.String(), strings.Join(ref.Left.Columns, ",")))
+				ref.FK.Table.Decl.Name.Name(), strings.Join(ref.FK.Columns, ",")))
 		}
 	}
 	return out
@@ -189,11 +173,10 @@ var refCycle = &refCycleFold{meta{
 func (fo *refCycleFold) File(p *FilePass) {
 	edges := map[*check.TableInfo][]*check.TableInfo{}
 	for _, r := range p.Info.Refs {
-		fk, target, ok := fkSides(r)
-		if !ok || fk.Table == nil || target.Table == nil || fk.Table == target.Table {
+		if r.FK.Table == nil || r.Target.Table == nil || r.FK.Table == r.Target.Table {
 			continue
 		}
-		edges[fk.Table] = append(edges[fk.Table], target.Table)
+		edges[r.FK.Table] = append(edges[r.FK.Table], r.Target.Table)
 	}
 	const (
 		white = 0
@@ -214,7 +197,7 @@ func (fo *refCycleFold) File(p *FilePass) {
 			case gray:
 				var names []string
 				for i := len(stack) - 1; i >= 0; i-- {
-					names = append(names, stack[i].Decl.Name.String())
+					names = append(names, stack[i].Decl.Name.Name())
 					if stack[i] == next {
 						break
 					}

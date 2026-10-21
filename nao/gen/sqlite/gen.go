@@ -6,7 +6,6 @@ package sqlite
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/Piechutowski/volt/lang/ast"
@@ -52,9 +51,8 @@ func (g *generator) run() error {
 	}
 	g.out.WriteString("\nPRAGMA foreign_keys = ON;\n")
 
-	seen := map[string]string{}
 	for _, ti := range g.info.Tables {
-		if err := g.tableEmit(ti, seen); err != nil {
+		if err := g.tableEmit(ti); err != nil {
 			return err
 		}
 	}
@@ -70,9 +68,9 @@ func (g *generator) run() error {
 	}
 	for _, d := range g.f.Decls {
 		if r, ok := d.(*ast.Records); ok && r.Table != nil {
-			ti := g.tableByName(r.Table)
+			ti := g.info.Table(r.Table.Name())
 			if ti == nil {
-				return fmt.Errorf("records target %q not found", r.Table.String())
+				return fmt.Errorf("records target %q not found", r.Table.Name())
 			}
 			if err := g.insertsEmit(ti, r); err != nil {
 				return err
@@ -82,35 +80,8 @@ func (g *generator) run() error {
 	return nil
 }
 
-func (g *generator) tableByName(q *ast.QualName) *check.TableInfo {
-	for _, ti := range g.info.Tables {
-		if ti.Key == canonKey(q) || (ti.Alias != "" && q.Schema() == "" && ti.Alias == q.Base()) {
-			return ti
-		}
-	}
-	return nil
-}
-
-func canonKey(q *ast.QualName) string {
-	if q.Schema() == "" {
-		return "public." + q.Base()
-	}
-	return q.String()
-}
-
-func sqlTableName(q *ast.QualName) string {
-	if s := q.Schema(); s != "" && s != "public" {
-		return s + "_" + q.Base()
-	}
-	return q.Base()
-}
-
-func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error {
-	name := sqlTableName(ti.Decl.Name)
-	if prev, dup := seen[name]; dup {
-		return fmt.Errorf("tables %s and %s both flatten to SQLite name %q", prev, ti.Decl.Name.String(), name)
-	}
-	seen[name] = ti.Decl.Name.String()
+func (g *generator) tableEmit(ti *check.TableInfo) error {
+	name := ti.Key
 
 	g.out.WriteString("\n")
 	if note := tableNote(ti.Decl); note != "" {
@@ -119,13 +90,12 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 	fmt.Fprintf(&g.out, "CREATE TABLE %s (\n", identQuote(name))
 
 	pkCols := compositePKColumns(ti)
-	uniqueDone := map[string]bool{}
 
 	var lines []string
 	for _, cd := range ti.Columns {
 		line, err := g.columnDef(ti, cd, pkCols)
 		if err != nil {
-			return fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
+			return fmt.Errorf("table %s: %w", name, err)
 		}
 		if note := settingNote(cd.Col.Settings); note != "" {
 			var b strings.Builder
@@ -133,23 +103,18 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 			line = b.String() + line
 		}
 		lines = append(lines, line)
-		if cd.Col.Settings.Get("unique") != nil || (cd.Col.Settings.Get("pk") != nil && len(pkCols) == 0) {
-			uniqueDone[cd.Col.Name.Name()] = true
-		}
 	}
 
 	if len(pkCols) > 0 {
 		lines = append(lines, "  PRIMARY KEY ("+quotedJoin(pkCols)+")")
-		uniqueDone[strings.Join(pkCols, ",")] = true
 	}
 
 	for _, r := range g.info.Refs {
-		fk, target, ok := fkSides(r)
-		if !ok || fk.Table != ti || target.Table == nil {
+		if r.FK.Table != ti || r.Target.Table == nil {
 			continue
 		}
-		line := "  FOREIGN KEY (" + quotedJoin(fk.Columns) + ") REFERENCES " +
-			identQuote(sqlTableName(target.Table.Decl.Name)) + " (" + quotedJoin(target.Columns) + ")"
+		line := "  FOREIGN KEY (" + quotedJoin(r.FK.Columns) + ") REFERENCES " +
+			identQuote(r.Target.Table.Key) + " (" + quotedJoin(r.Target.Columns) + ")"
 		if a := refAction(r, "delete"); a != "" {
 			line += " ON DELETE " + strings.ToUpper(a)
 		}
@@ -157,11 +122,6 @@ func (g *generator) tableEmit(ti *check.TableInfo, seen map[string]string) error
 			line += " ON UPDATE " + strings.ToUpper(a)
 		}
 		lines = append(lines, line)
-
-		if r.Op == token.MINUS && !g.alreadyUnique(ti, fk.Columns, uniqueDone) {
-			lines = append(lines, "  UNIQUE ("+quotedJoin(fk.Columns)+")")
-			uniqueDone[strings.Join(fk.Columns, ",")] = true
-		}
 	}
 
 	g.out.WriteString(strings.Join(lines, ",\n"))
@@ -208,7 +168,7 @@ func columnLine(col *ast.Column, sqlType string, pkCols []string) (string, error
 }
 
 func (g *generator) indexesEmit(ti *check.TableInfo) error {
-	tbl := sqlTableName(ti.Decl.Name)
+	tbl := ti.Key
 	used := map[string]bool{}
 	for _, ix := range ti.Indexes {
 		if ix.Settings.Get("pk") != nil {
@@ -216,10 +176,10 @@ func (g *generator) indexesEmit(ti *check.TableInfo) error {
 		}
 		name, err := IndexName(tbl, ix)
 		if err != nil {
-			return fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
+			return fmt.Errorf("table %s: %w", tbl, err)
 		}
 		if used[name] {
-			return fmt.Errorf("table %s: duplicate index name %q", ti.Decl.Name.String(), name)
+			return fmt.Errorf("table %s: duplicate index name %q", tbl, name)
 		}
 		used[name] = true
 		g.out.WriteString(IndexDDL(tbl, name, ix) + ";\n")
@@ -287,14 +247,14 @@ func (g *generator) insertsEmit(ti *check.TableInfo, r *ast.Records) error {
 	if len(r.Rows) == 0 {
 		return nil
 	}
-	fmt.Fprintf(&g.out, "\nINSERT INTO %s (%s) VALUES\n", identQuote(sqlTableName(ti.Decl.Name)), quotedJoin(cols))
+	fmt.Fprintf(&g.out, "\nINSERT INTO %s (%s) VALUES\n", identQuote(ti.Key), quotedJoin(cols))
 	var rows []string
 	for _, row := range r.Rows {
 		var vals []string
 		for _, v := range row.Values {
 			sql, err := valueSQL(v)
 			if err != nil {
-				return fmt.Errorf("records for %s: %w", ti.Decl.Name.String(), err)
+				return fmt.Errorf("records for %s: %w", ti.Key, err)
 			}
 			vals = append(vals, sql)
 		}
@@ -327,8 +287,6 @@ func valueSQL(v ast.Node) (string, error) {
 		return v.Tok.Val, nil
 	case *ast.EnumConst:
 		return stringQuote(v.Value.Name()), nil
-	case *ast.Empty:
-		return "NULL", nil
 	case *ast.Ident:
 		switch strings.ToLower(v.Name()) {
 		case "true":
@@ -359,25 +317,6 @@ func compositePKColumns(ti *check.TableInfo) []string {
 
 func isNullable(col *ast.Column) bool { return col.Settings.Get("null") != nil }
 
-// fkSides names the foreign-key endpoint and the one it references
-// (spec §relationships-ref rule 3): the left of >, the right of <, the
-// right of - in a Ref element and the declaring column of an inline -.
-func fkSides(r *check.RefInfo) (fk, target check.EndpointInfo, ok bool) {
-	switch r.Op {
-	case token.GT:
-		return r.Left, r.Right, true
-	case token.LT:
-		return r.Right, r.Left, true
-	case token.MINUS:
-		if r.Inline {
-			return r.Left, r.Right, true
-		}
-		return r.Right, r.Left, true
-	default:
-		return fk, target, false
-	}
-}
-
 func refAction(r *check.RefInfo, kind string) string {
 	ref, ok := r.Node.(*ast.Ref)
 	if !ok {
@@ -400,52 +339,16 @@ func actionWord(sl *ast.SettingList, kind string) string {
 	return ""
 }
 
-func (g *generator) alreadyUnique(ti *check.TableInfo, cols []string, done map[string]bool) bool {
-	if done[strings.Join(cols, ",")] {
-		return true
-	}
-	if len(cols) == 1 {
-		if cd := ti.Column(cols[0]); cd != nil && (cd.Col.Settings.Get("unique") != nil || cd.Col.Settings.Get("pk") != nil) {
-			return true
-		}
-	}
-	want := append([]string(nil), cols...)
-	sort.Strings(want)
-	for _, ix := range ti.Indexes {
-		if ix.Settings.Get("pk") == nil && ix.Settings.Get("unique") == nil {
-			continue
-		}
-		var got []string
-		for _, atom := range ix.Key {
-			if id, ok := atom.(*ast.Ident); ok {
-				got = append(got, id.Name())
-			}
-		}
-		sort.Strings(got)
-		if strings.Join(got, ",") == strings.Join(want, ",") {
-			return true
-		}
-	}
-	return false
-}
-
 func projectNote(f *ast.File) string {
 	for _, d := range f.Decls {
-		if p, ok := d.(*ast.Project); ok && len(p.Notes) > 0 {
-			return p.Notes[len(p.Notes)-1].Text.Tok.Val
+		if p, ok := d.(*ast.Project); ok {
+			return settingNote(p.Settings)
 		}
 	}
 	return ""
 }
 
-func tableNote(t *ast.Table) string {
-	for _, item := range t.Body {
-		if n, ok := item.(*ast.Note); ok {
-			return n.Text.Tok.Val
-		}
-	}
-	return settingNote(t.Settings)
-}
+func tableNote(t *ast.Table) string { return settingNote(t.Settings) }
 
 func settingNote(sl *ast.SettingList) string { return settingString(sl, "note") }
 

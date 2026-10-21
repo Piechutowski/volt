@@ -462,7 +462,7 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 					}
 				}
 				if !ok {
-					c.errorf(s.Pos(), "scopes-and-routes", "error_handler: takes a function of this package, written Name or %s.Name (§reserved)", c.pkg.Name)
+					c.errorf(s.Pos(), "scopes-and-routes", "error_handler: takes a function of this package, written Name or %s.Name (§scopes)", c.pkg.Name)
 					continue
 				}
 				next.errHandler = name
@@ -492,17 +492,17 @@ func (o routeOracle) dataPackage(path string) (string, bool, bool) {
 	return pkg.Name, o.c.schemas[path] != nil && pkg.HasSchema(), len(pkg.Selects) > 0
 }
 
-func (o routeOracle) tableByBase(path, base string) (*check.TableInfo, string) {
+func (o routeOracle) tableByName(path, base string) (*check.TableInfo, string) {
 	info := o.c.schemas[path]
 	if info == nil {
 		return nil, ""
 	}
-	if ti := info.TableByBase(base); ti != nil {
+	if ti := info.Table(base); ti != nil {
 		return ti, ""
 	}
 	caseMatch := ""
 	for _, cand := range info.Tables {
-		if name := cand.Decl.Name.Base(); strings.EqualFold(name, base) {
+		if name := cand.Decl.Name.Name(); strings.EqualFold(name, base) {
 			caseMatch = name
 		}
 	}
@@ -511,7 +511,7 @@ func (o routeOracle) tableByBase(path, base string) (*check.TableInfo, string) {
 	}
 	for _, cand := range info.Tables {
 		if model, err := golang.ModelName(cand.Decl); err == nil && model == base {
-			return nil, fmt.Sprintf("; %q is the model of table %q — name the table", base, cand.Decl.Name.Base())
+			return nil, fmt.Sprintf("; %q is the model of table %q: name the table", base, cand.Decl.Name.Name())
 		}
 	}
 	return nil, ""

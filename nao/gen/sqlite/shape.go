@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/Piechutowski/volt/lang/ast"
-	"github.com/Piechutowski/volt/lang/token"
 )
 
 // TypeSQL is the SQLite column type of a built-in column type (spec
@@ -46,10 +45,8 @@ func DefaultSQL(v ast.Node) (string, error) { return defaultSQL(v) }
 // TableDDL renders the CREATE TABLE statement of a shape body, without
 // the trailing semicolon (spec §migrations rules 5, 6 and 9): the
 // columns, a composite primary key, and a foreign key per inline ref:
-// with its delete: and update: actions (§relationships-ref rule 5). A
-// one-to-one ref: adds UNIQUE unless the column is unique already, by
-// its own setting, as the single primary key or through a unique or pk
-// index of the body, as the schema's Table decides it.
+// with its delete: and update: actions (§relationships-ref rule 5), as
+// the schema's Table decides them.
 func TableDDL(table string, body []ast.TableItem) (string, error) {
 	pkCols := pkKeyColumns(body)
 	var lines, constraints []string
@@ -68,17 +65,8 @@ func TableDDL(table string, body []ast.TableItem) (string, error) {
 			return "", fmt.Errorf("table %s: %w", table, err)
 		}
 		lines = append(lines, line)
-		unique := col.Settings.Get("unique") != nil || (col.Settings.Get("pk") != nil && len(pkCols) == 0) || indexedUnique(body, name)
-		for _, rv := range refSettings(col) {
-			fk, err := inlineForeignKey(col, rv)
-			if err != nil {
-				return "", fmt.Errorf("table %s: %w", table, err)
-			}
-			constraints = append(constraints, fk)
-			if rv.OpTok.Kind == token.MINUS && !unique {
-				constraints = append(constraints, "  UNIQUE ("+identQuote(name)+")")
-				unique = true
-			}
+		if ep := refEndpoint(col); ep != nil {
+			constraints = append(constraints, "  FOREIGN KEY ("+identQuote(name)+") REFERENCES "+referenceSQL(col, ep))
 		}
 	}
 	if len(pkCols) > 0 {
@@ -140,36 +128,10 @@ func ColumnDDL(col *ast.Column) (def string, unique bool, err error) {
 		parts = append(parts, "DEFAULT "+d)
 	}
 	unique = col.Settings.Get("unique") != nil
-	for _, rv := range refSettings(col) {
-		if err := refDirectionCheck(name, rv); err != nil {
-			return "", false, err
-		}
-		parts = append(parts, "REFERENCES "+referenceSQL(col, rv))
-		if rv.OpTok.Kind == token.MINUS {
-			unique = true
-		}
+	if ep := refEndpoint(col); ep != nil {
+		parts = append(parts, "REFERENCES "+referenceSQL(col, ep))
 	}
 	return strings.Join(parts, " "), unique, nil
-}
-
-// indexedUnique reports whether an index of the body makes the column
-// unique on its own: a unique or pk index whose key is that column.
-func indexedUnique(body []ast.TableItem, column string) bool {
-	for _, item := range body {
-		block, ok := item.(*ast.IndexesBlock)
-		if !ok {
-			continue
-		}
-		for _, ix := range block.Indexes {
-			if (ix.Settings.Get("pk") == nil && ix.Settings.Get("unique") == nil) || len(ix.Key) != 1 {
-				continue
-			}
-			if id, ok := ix.Key[0].(*ast.Ident); ok && id.Name() == column {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func pkKeyColumns(body []ast.TableItem) []string {
@@ -193,40 +155,21 @@ func pkKeyColumns(body []ast.TableItem) []string {
 	return out
 }
 
-func refSettings(col *ast.Column) []*ast.RefValue {
-	if col.Settings == nil {
-		return nil
+// refEndpoint is the endpoint of a column's ref: setting, nil without
+// one (spec §relationships-ref).
+func refEndpoint(col *ast.Column) *ast.RefEndpoint {
+	if s := col.Settings.Get("ref"); s != nil {
+		ep, _ := s.Value.(*ast.RefEndpoint)
+		return ep
 	}
-	var out []*ast.RefValue
-	for _, s := range col.Settings.Settings {
-		if rv, ok := s.Value.(*ast.RefValue); ok && s.Name == "ref" {
-			out = append(out, rv)
-		}
-	}
-	return out
-}
-
-func refDirectionCheck(column string, rv *ast.RefValue) error {
-	switch rv.OpTok.Kind {
-	case token.GT, token.MINUS:
-		return nil
-	}
-	return fmt.Errorf("column %q: ref: %s puts the foreign key in the other table; a migration column's ref: is > or - (§migrations)", column, strings.Trim(rv.OpTok.Kind.String(), "'"))
-}
-
-func inlineForeignKey(col *ast.Column, rv *ast.RefValue) (string, error) {
-	name := col.Name.Name()
-	if err := refDirectionCheck(name, rv); err != nil {
-		return "", err
-	}
-	return "  FOREIGN KEY (" + identQuote(name) + ") REFERENCES " + referenceSQL(col, rv), nil
+	return nil
 }
 
 // referenceSQL renders the referenced table and columns of a ref: with
 // the ON DELETE and ON UPDATE clauses of the column's delete: and
 // update: settings (spec §migrations rule 4, §relationships-ref rule 5).
-func referenceSQL(col *ast.Column, rv *ast.RefValue) string {
-	out := identQuote(sqlTableName(rv.Endpoint.Table)) + " (" + quotedJoin(identNames(rv.Endpoint.Columns)) + ")"
+func referenceSQL(col *ast.Column, ep *ast.RefEndpoint) string {
+	out := identQuote(ep.Table.Name()) + " (" + quotedJoin(identNames(ep.Columns)) + ")"
 	if a := actionWord(col.Settings, "delete"); a != "" {
 		out += " ON DELETE " + strings.ToUpper(a)
 	}

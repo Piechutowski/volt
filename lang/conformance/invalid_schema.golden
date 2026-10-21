@@ -22,9 +22,6 @@ i05_unterminated_funcexpr.volt:2:28: error: syntax: unterminated expression lite
 i05_unterminated_funcexpr.volt:2:28: error: syntax: invalid setting value (§settings-lists): found end of file
 i05_unterminated_funcexpr.volt:2:28: error: syntax: expected '}' in Table (§table), found end of file
 
-## i06_bad_color.volt
-i06_bad_color.volt:2:23: error: spec/color-literals: color literal '#12ab' must be 3 or 6 hex digits
-
 ## i07_unknown_element.volt
 i07_unknown_element.volt:2:1: error: syntax: unknown element type "View" (§program-structure)
 
@@ -62,22 +59,17 @@ i132_default_wrong_enum.volt:5:22: error: spec/default-values: default of "s": "
 i133_increment_declared_type.volt:5:14: error: spec/columns: increment on "id" (ID): only an int column can auto-increment (§columns, §mapping-to-sqlite-ddl)
 
 ## i134_default_null_not_null.volt
-i134_default_null_not_null.volt:4:19: error: spec/default-values: default of "n" is null, but the column is not nullable (§default-values)
+i134_default_null_not_null.volt:4:25: error: spec/default-values: null is not a default value: a column that carries null and has no default is NULL when a write leaves it out (§default-values)
+i134_default_null_not_null.volt:5:19: error: spec/default-values: null is not a default value: a column that carries null and has no default is NULL when a write leaves it out (§default-values)
 
 ## i135_records_type_mismatch.volt
 i135_records_type_mismatch.volt:7:8: error: spec/records-sample-data: record value for "n" (int) must be an integer, found string (§records-sample-data)
 
 ## i136_records_null_not_null.volt
-i136_records_null_not_null.volt:7:7: error: spec/records-sample-data: record value for "n" is null, but the column is not nullable (§records-sample-data)
-
-## i138_enum_unqualified_other_schema.volt
-i138_enum_unqualified_other_schema.volt:6:5: error: spec/columns: column "s": unknown type "job_status"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+i136_records_null_not_null.volt:7:8: error: spec/records-sample-data: record value for "n" is null, but the column is not nullable (§records-sample-data)
 
 ## i139_type_empty_from.volt
 i139_type_empty_from.volt:3:19: error: spec/types: Type "m.M" has an empty from path; the path is a non-empty import path (§types)
-
-## i13_headercolor_not_color.volt
-i13_headercolor_not_color.volt:2:23: error: spec/table: "headercolor" must be a color literal
 
 ## i140_type_reserved_alias.volt
 i140_type_reserved_alias.volt:3:6: error: spec/types: Type "rt.X": package name "rt" is reserved by generated code (§types)
@@ -138,7 +130,7 @@ i19_ref_arity_mismatch.volt:5:17: error: spec/relationships-ref: composite relat
 i20_bad_ref_action.volt:4:18: error: spec/relationships-ref: invalid referential action "explode" for 'delete'; expected cascade, restrict, set null, set default or no action
 
 ## i21_ref_endpoint_no_column.volt
-i21_ref_endpoint_no_column.volt:4:12: error: syntax: endpoint must reference a column as [schema.]table.column (§relationships-ref)
+i21_ref_endpoint_no_column.volt:4:12: error: syntax: an endpoint is table.column or table.(columns) (§relationships-ref), found '>' ">"
 
 ## i220_unknown_type_partial_once.volt
 i220_unknown_type_partial_once.volt:4:11: error: spec/columns: column "version": unknown type "int64"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
@@ -192,10 +184,65 @@ i241_pk_index_expression.volt:8:6: error: spec/indexes: index (`lower(slug)`, ve
 ## i242_pk_index_settings.volt
 i242_pk_index_settings.volt:9:25: error: spec/indexes: index (post_id, tag) on "post_tags" carries pk and name:, which it does not take, since a primary key is a table constraint and has no name (§indexes)
 i242_pk_index_settings.volt:9:47: error: spec/indexes: index (post_id, tag) on "post_tags" carries pk and where:, which it does not take, since a primary key covers every row (§indexes)
-i242_pk_index_settings.volt:9:76: error: spec/indexes: index (post_id, tag) on "post_tags" carries pk and type:, which it does not take, since a primary key has no index method (§indexes)
+
+## i244_partial_index_duplicate.volt
+i244_partial_index_duplicate.volt:22:3: error: spec/tablepartial: TablePartial "emails" injects index (email) into table "users", which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)
+i244_partial_index_duplicate.volt:24:3: error: spec/tablepartial: TablePartial "stamps_again" injects index (created_at) into table "users", which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)
+
+## i245_records_empty_field.volt
+i245_records_empty_field.volt:8:8: error: syntax: empty record field: every field holds a value, and NULL is written null (§records-sample-data)
+i245_records_empty_field.volt:9:5: error: syntax: empty record field: every field holds a value, and NULL is written null (§records-sample-data)
+i245_records_empty_field.volt:10:5: error: spec/records-sample-data: record row has 2 values but 3 columns are listed
+i245_records_empty_field.volt:10:11: error: syntax: empty record field after the last ',': every field holds a value, and NULL is written null (§records-sample-data)
+
+## i246_ref_inline_twice.volt
+i246_ref_inline_twice.volt:6:32: error: spec/settings-lists: setting "ref" may appear at most once
+
+## i247_ref_reverse_operator.volt
+i247_ref_reverse_operator.volt:7:15: error: syntax: expected '>' after the foreign key: a Ref is written foreign key > referenced columns (§relationships-ref), found '<' "<"
+i247_ref_reverse_operator.volt:8:15: error: syntax: expected '>' after the foreign key: a Ref is written foreign key > referenced columns (§relationships-ref), found '-' "-"
+i247_ref_reverse_operator.volt:9:15: error: syntax: expected '>' after the foreign key: a Ref is written foreign key > referenced columns (§relationships-ref), found '<' "<"
+
+## i248_ref_inline_operator.volt
+i248_ref_inline_operator.volt:4:1: error: spec/table: table "posts" must contain at least one column or partial injection
+i248_ref_inline_operator.volt:5:21: error: syntax: expected identifier in relationship endpoint (§relationships-ref), found '>' ">"
+
+## i249_ref_name_long_form.volt
+i249_ref_name_long_form.volt:5:5: error: syntax: expected ':' after Ref (§relationships-ref), found identifier "fk_posts_user"
+i249_ref_name_long_form.volt:6:5: error: syntax: expected ':' after Ref (§relationships-ref), found '{' "{"
 
 ## i24_records_arity.volt
 i24_records_arity.volt:6:5: error: spec/records-sample-data: record row has 3 values but 2 columns are listed
+
+## i250_partial_settings.volt
+i250_partial_settings.volt:3:21: error: syntax: a TablePartial takes no settings; its body holds columns, indexes and validators (§tablepartial)
+i250_partial_settings.volt:8:3: error: spec/tablepartial: unknown TablePartial "stamps"
+
+## i251_table_alias.volt
+i251_table_alias.volt:3:13: error: syntax: expected '{' in Table (§table), found identifier "as"
+
+## i252_table_schema_qualified.volt
+i252_table_schema_qualified.volt:3:11: error: syntax: expected '{' in Table (§table), found '.' "."
+
+## i253_diagram_elements.volt
+i253_diagram_elements.volt:6:1: error: syntax: unknown element type "TableGroup" (§program-structure)
+i253_diagram_elements.volt:9:1: error: syntax: unknown element type "DiagramView" (§program-structure)
+i253_diagram_elements.volt:12:1: error: syntax: unknown element type "Note" (§program-structure)
+
+## i254_color_literal.volt
+i254_color_literal.volt:3:27: error: syntax: unexpected character "#" (§lexical-structure)
+i254_color_literal.volt:3:27: error: syntax: invalid setting value (§settings-lists): found illegal token "#"
+
+## i255_body_note.volt
+i255_body_note.volt:5:7: error: syntax: expected identifier in column type (§columns), found ':' ":"
+
+## i256_index_type_note.volt
+i256_index_type_note.volt:7:14: error: spec/indexes: unknown setting "type" (§indexes)
+i256_index_type_note.volt:8:9: error: spec/indexes: unknown setting "note" (§indexes)
+
+## i258_semicolon_not_a_token.volt
+i258_semicolon_not_a_token.volt:4:14: error: syntax: unexpected character ";" (§lexical-structure)
+i258_semicolon_not_a_token.volt:4:14: error: syntax: expected end of line after column definition (§columns), found illegal token ";"
 
 ## i25_two_records_blocks.volt
 i25_two_records_blocks.volt:3:3: error: spec/records-sample-data: at most one records block per table
@@ -203,20 +250,11 @@ i25_two_records_blocks.volt:3:3: error: spec/records-sample-data: at most one re
 ## i26_toplevel_records_no_columns.volt
 i26_toplevel_records_no_columns.volt:3:1: error: spec/records-sample-data: top-level records must list columns
 
-## i27_two_notes.volt
-i27_two_notes.volt:3:3: error: spec/notes: at most one Note per Table body
-
-## i28_bad_tablegroup_setting.volt
-i28_bad_tablegroup_setting.volt:3:15: error: spec/tablegroup: unknown setting "headercolor" (§tablegroup)
-
-## i29_duplicate_category.volt
-i29_duplicate_category.volt:4:3: error: spec/diagramview: category "Tables" may appear at most once per view
-
 ## i32_settings_next_line.volt
-i32_settings_next_line.volt:4:3: error: syntax: expected a column, indexes, validators, Note, records or '~injection' in Table body, found '[' "["
+i32_settings_next_line.volt:4:3: error: syntax: expected a column, indexes, validators, records or '~injection' in Table body, found '[' "["
 
 ## i33_ref_without_body.volt
-i33_ref_without_body.volt:4:1: error: syntax: expected '{' in Ref (§relationships-ref), found end of file
+i33_ref_without_body.volt:5:1: error: syntax: expected identifier in relationship endpoint (§relationships-ref), found end of file
 
 ## i34_project_bad_value.volt
 i34_project_bad_value.volt:3:18: error: syntax: expected string in project property value (§project), found number "42"
@@ -225,7 +263,7 @@ i34_project_bad_value.volt:3:18: error: syntax: expected string in project prope
 i35_duplicate_table.volt:3:1: error: spec/namespaces-and-uniqueness: duplicate table name "users"
 
 ## i36_bad_default.volt
-i36_bad_default.volt:3:20: error: spec/default-values: default value must be a number, string, boolean, null, expression or enum constant
+i36_bad_default.volt:4:20: error: spec/default-values: default value must be a number, string, boolean, expression or enum constant
 
 ## i37_injection_in_partial.volt
 i37_injection_in_partial.volt:4:3: error: spec/tablepartial: partial injection is not allowed inside TablePartial
@@ -233,20 +271,11 @@ i37_injection_in_partial.volt:4:3: error: spec/tablepartial: partial injection i
 ## i38_records_in_partial.volt
 i38_records_in_partial.volt:4:3: error: spec/tablepartial: records are not allowed inside TablePartial
 
-## i39_sticky_note_bad_setting.volt
-i39_sticky_note_bad_setting.volt:2:9: error: spec/notes: unknown setting "headercolor" (§notes)
-
-## i40_alias_collision.volt
-i40_alias_collision.volt:3:17: error: spec/namespaces-and-uniqueness: table alias "users" collides with an existing table name or alias
-
-## i41_ref_long_two_bodies.volt
-i41_ref_long_two_bodies.volt:7:3: error: syntax: a Ref declares exactly one relationship (§relationships-ref); found identifier "a" after the first
-
 ## i42_bare_ident_record.volt
 i42_bare_ident_record.volt:5:17: error: spec/records-sample-data: record values must be literals, null, true, false or enum constants; found bare identifier "a"
 
 ## i43_bare_ident_default.volt
-i43_bare_ident_default.volt:3:19: error: spec/default-values: default value must be a number, string, boolean, null, expression or enum constant; found bare identifier "something"
+i43_bare_ident_default.volt:3:19: error: spec/default-values: default value must be a number, string, boolean, expression or enum constant; found bare identifier "something"
 
 ## i61_tag_malformed.volt
 i61_tag_malformed.volt:4:21: error: spec/columns: tag "json=name" is not one key:"value" pair — write e.g. 'json:"name"' (§columns)

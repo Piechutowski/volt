@@ -20,10 +20,10 @@ Table users {
           (identifier))))))
 
 ==================
-schema-qualified table with alias and settings
+table with settings
 ==================
 
-Table core.users as U [headercolor: #3498DB, note: 'main'] {
+Table users [note: 'main', model: 'Member'] {
   id int
 }
 
@@ -32,16 +32,13 @@ Table core.users as U [headercolor: #3498DB, note: 'main'] {
 (source_file
   (table_definition
     (table_name
-      (schema_name
-        (identifier))
-      (identifier))
-    (table_alias
       (identifier))
     (settings_list
       (setting
         (setting_name
           (identifier))
-        (color))
+        (string
+          (string_content)))
       (setting
         (setting_name
           (identifier))
@@ -55,14 +52,14 @@ Table core.users as U [headercolor: #3498DB, note: 'main'] {
           (identifier))))))
 
 ==================
-column types: built-ins, the [] of []byte, qualified time.Time, schema-qualified enum
+column types: built-ins, the [] of []byte, qualified time.Time, an enum
 ==================
 
 Table t {
   name string
   data []byte
   created time.Time
-  status v2.job_status
+  status job_status
 }
 
 ---
@@ -88,7 +85,7 @@ Table t {
         (identifier))
       (column_type
         (type_name
-          (schema_name
+          (package_name
             (identifier))
           (identifier))))
     (column_definition
@@ -96,8 +93,6 @@ Table t {
         (identifier))
       (column_type
         (type_name
-          (schema_name
-            (identifier))
           (identifier))))))
 
 ==================
@@ -111,7 +106,6 @@ Table t {
   d time.Time [default: `now()`]
   e float64 [default: -1.5]
   f bool [default: false]
-  g int [default: null]
   h status [default: status.active]
 }
 
@@ -169,7 +163,7 @@ Table t {
         (identifier))
       (column_type
         (type_name
-          (schema_name
+          (package_name
             (identifier))
           (identifier)))
       (settings_list
@@ -211,17 +205,6 @@ Table t {
         (setting
           (setting_name
             (identifier))
-          (null))))
-    (column_definition
-      (column_name
-        (identifier))
-      (column_type
-        (type_name
-          (identifier)))
-      (settings_list
-        (setting
-          (setting_name
-            (identifier))
           (enum_constant
             (enum_name
               (identifier))
@@ -231,8 +214,9 @@ Table t {
 inline refs in column settings
 ==================
 
-Table t {
-  user_id int [ref: > users.id, ref: - core.users.id]
+Table posts {
+  author_id int [ref: users.id]
+  editor_id int [null, ref: users.id]
 }
 
 ---
@@ -249,26 +233,29 @@ Table t {
           (identifier)))
       (settings_list
         (setting
-          (setting_name
-            (identifier))
-          (inline_ref
-            (cardinality)
-            (ref_endpoint
-              (ref_target
-                (identifier))
-              (column_name
-                (identifier)))))
+          (setting_name)
+          (ref_endpoint
+            (table_name
+              (identifier))
+            (column_name
+              (identifier))))))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier)))
+      (settings_list
         (setting
           (setting_name
-            (identifier))
-          (inline_ref
-            (cardinality)
-            (ref_endpoint
-              (ref_target
-                (identifier)
-                (identifier))
-              (column_name
-                (identifier)))))))))
+            (identifier)))
+        (setting
+          (setting_name)
+          (ref_endpoint
+            (table_name
+              (identifier))
+            (column_name
+              (identifier))))))))
 
 ==================
 settings lists spanning lines
@@ -395,7 +382,7 @@ Table t {
 table partial definition and injection
 ==================
 
-TablePartial base [headercolor: #ff0000] {
+TablePartial base {
   id int [pk]
 }
 
@@ -410,11 +397,6 @@ Table users {
   (table_partial_definition
     (partial_name
       (identifier))
-    (settings_list
-      (setting
-        (setting_name
-          (identifier))
-        (color)))
     (column_definition
       (column_name
         (identifier))
@@ -444,6 +426,45 @@ two columns on one line is an error
 ==================
 
 Table t { id int name string }
+
+---
+
+
+
+==================
+a table alias is an error
+:error
+==================
+
+Table users as U {
+  id int
+}
+
+---
+
+
+
+==================
+a schema-qualified table name is an error
+:error
+==================
+
+Table core.users {
+  id int
+}
+
+---
+
+
+
+==================
+an inline ref with an operator is an error
+:error
+==================
+
+Table posts {
+  author_id int [ref: > users.id]
+}
 
 ---
 

@@ -1,6 +1,5 @@
 // no tables at all: enums still generate, imports section stays empty
-Project lookup {
-  Note: 'Shared enumerations'
+Project lookup [note: 'Shared enumerations'] {
 }
 Enum currency {
   eur

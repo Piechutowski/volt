@@ -28,38 +28,32 @@ type MigrationInfo struct {
 
 var (
 	migrationSettings = settingSpec{
-		kinds: map[string]valueKind{"irreversible": flagOnly, "no transaction": flagOnly, "note": strValue},
+		kinds: map[string]valueKind{"irreversible": flagOnly, "no transaction": flagOnly},
 	}
 	migrationColumnKinds = map[string]valueKind{
 		"pk": flagOnly, "null": flagOnly,
 		"unique": flagOnly, "increment": flagOnly,
 		"default": defaultVal, "ref": refVal,
 		"delete": actionValue, "update": actionValue,
-		"note": strValue,
 	}
 	migrationForbidden = map[string]string{
-		"tag":         "tag: describes the Go struct field, not the database, and is not a migration setting (§migrations)",
-		"required":    "required describes Go-side validation, not the database, and is not a migration setting (§migrations)",
-		"model":       "model: names the Go model, not the database, and is not a migration setting (§migrations)",
-		"headercolor": "headercolor: describes the diagram, not the database, and is not a migration setting (§migrations)",
+		"tag":      "tag: describes the Go struct field, not the database, and is not a migration setting (§migrations)",
+		"required": "required describes Go-side validation, not the database, and is not a migration setting (§migrations)",
+		"model":    "model: names the Go model, not the database, and is not a migration setting (§migrations)",
+		"note":     "note: documents the schema, which generated code carries, and is not a migration setting (§migrations)",
 	}
 	migrationColumnSettings = settingSpec{
-		kinds:      migrationColumnKinds,
-		repeatable: map[string]bool{"ref": true},
-		forbidden:  mapWith(migrationForbidden, "from", "from: names the source of a rebuilt column and is a setting of rebuild table only (§migrations)"),
+		kinds:     migrationColumnKinds,
+		forbidden: mapWith(migrationForbidden, "from", "from: names the source of a rebuilt column and is a setting of rebuild table only (§migrations)"),
 	}
 	rebuildColumnSettings = settingSpec{
-		kinds:      mapWith(migrationColumnKinds, "from", exprValue),
-		repeatable: map[string]bool{"ref": true},
-		forbidden:  migrationForbidden,
+		kinds:     mapWith(migrationColumnKinds, "from", exprValue),
+		forbidden: migrationForbidden,
 	}
 	migrationIndexSettings = settingSpec{
 		kinds: map[string]valueKind{
 			"unique": flagOnly, "pk": flagOnly,
-			"name": strValue, "where": exprValue, "note": strValue,
-		},
-		forbidden: map[string]string{
-			"type": "type: names an index method, which SQLite does not have, and is not a migration setting (§migrations)",
+			"name": strValue, "where": exprValue,
 		},
 	}
 	execSettings = settingSpec{
@@ -277,10 +271,9 @@ func (c *checker) shapeBodyCheck(what, table string, pos token.Position, body []
 }
 
 // migrationColumnCheck checks one column of a migration: its settings
-// against the whitelist, its ref: against the directions a column may
-// declare, its type against the built-ins, its default against the
-// type, and null against pk (spec §migrations rules 3 and 4,
-// §columns).
+// against the whitelist, the referential actions of its ref:, its type
+// against the built-ins, its default against the type, and null
+// against pk (spec §migrations rules 3 and 4, §columns).
 func (c *checker) migrationColumnCheck(col *ast.Column, spec settingSpec) *ColumnDef {
 	c.settingsCheck(col.Settings, "migrations", spec)
 	c.migrationRefCheck(col)
@@ -304,14 +297,6 @@ func (c *checker) migrationRefCheck(col *ast.Column) {
 	hasRef := col.Settings.Get("ref") != nil
 	for _, s := range col.Settings.Settings {
 		switch s.Name {
-		case "ref":
-			rv, ok := s.Value.(*ast.RefValue)
-			if !ok {
-				continue
-			}
-			if op := rv.OpTok.Kind; op == token.LT || op == token.LTGT {
-				c.errorf(s.Pos(), "migrations", "column %q: ref: takes > or - in a migration, since the declaring column holds the key; %s references the other way and is not this column's to declare (§migrations)", name, op)
-			}
 		case "delete", "update":
 			if !hasRef {
 				c.errorf(s.Pos(), "migrations", "column %q: %s: names the action of the column's ref:, and the column declares none (§migrations)", name, s.Name)
@@ -374,14 +359,9 @@ func (c *checker) addColumnCheck(col *ast.Column, head string) {
 	if !cd.Nullable {
 		c.errorf(ref.Pos(), "migrations", "%s: a column with ref: must carry null when added, since the rows already in the table reference nothing; use rebuild table for a NOT NULL foreign key (§migrations)", head)
 	}
-	if def != nil && !isNullIdent(def.Value) {
-		c.errorf(def.Value.Pos(), "migrations", "%s: a column with ref: takes no default but null, since SQLite refuses to add a REFERENCES column with another default to a table that has rows (§migrations)", head)
+	if def != nil {
+		c.errorf(def.Value.Pos(), "migrations", "%s: a column with ref: takes no default, since SQLite refuses to add a REFERENCES column with a default other than NULL to a table that has rows (§migrations)", head)
 	}
-}
-
-func isNullIdent(n ast.Node) bool {
-	id, ok := n.(*ast.Ident)
-	return ok && !id.Quoted() && strings.EqualFold(id.Name(), "null")
 }
 
 // migrationIndexCheck checks an index of a shape body or, standalone, of
@@ -412,19 +392,10 @@ func (c *checker) indexNameCheck(table string, ix *ast.Index) {
 }
 
 func indexKeyString(ix *ast.Index) string {
-	parts := make([]string, 0, len(ix.Key))
-	for _, atom := range ix.Key {
-		switch a := atom.(type) {
-		case *ast.Ident:
-			parts = append(parts, a.Name())
-		case *ast.FuncExpr:
-			parts = append(parts, "`"+a.Text()+"`")
-		}
-	}
 	if ix.Composite {
-		return "(" + strings.Join(parts, ", ") + ")"
+		return "(" + indexAtoms(ix) + ")"
 	}
-	return strings.Join(parts, ", ")
+	return indexAtoms(ix)
 }
 
 // rebuildSourcesCheck follows the column names of every table through

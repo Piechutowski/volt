@@ -11,11 +11,11 @@ import (
 
 var (
 	elementKeywords = []string{
-		"Project", "Table", "TablePartial", "Enum", "Type", "Ref", "TableGroup",
-		"Note", "Records", "DiagramView", "Migration",
+		"Project", "Table", "TablePartial", "Enum", "Type", "Ref",
+		"Records", "Migration",
 		"package ", "import", "Pipeline", "Scope",
 	}
-	tableBodyKeywords     = []string{"indexes", "validators", "Note", "Records"}
+	tableBodyKeywords     = []string{"indexes", "validators", "Records"}
 	migrationBodyKeywords = []string{
 		"create table ", "create index ", "drop table ", "drop index ",
 		"rename table ", "alter table ", "rebuild table ", "exec ", "up {", "down {",
@@ -28,22 +28,21 @@ var (
 
 	settingsByContext = map[string][]string{
 		"column":    {"pk", "null", "unique", "increment", "required", "default: ", "note: ", "ref: ", "tag: "},
-		"table":     {"headercolor: ", "note: "},
-		"index":     {"type: ", "name: ", "unique", "pk", "where: ", "note: "},
-		"migration": {"irreversible", "no transaction", "note: "},
-		"ref":       {"delete: ", "update: ", "color: ", "inactive"},
+		"project":   {"note: "},
+		"table":     {"note: "},
+		"index":     {"name: ", "unique", "pk", "where: "},
+		"migration": {"irreversible", "no transaction"},
+		"ref":       {"delete: ", "update: "},
 		"enumvalue": {"note: "},
-		"sticky":    {"color: "},
-		"group":     {"note: ", "color: "},
 		"scope":     {"pipe: ", "error_handler: ", "name: "},
 		"route":     {"name: "},
 		"resources": {"only: (", "except: (", "param: ", "singular: ", "api", "default"},
 		"dataset":   {"strip: ", "only: (", "except: ("},
 
-		"migrationcolumn": {"pk", "null", "unique", "increment", "default: ", "ref: ", "delete: ", "update: ", "note: "},
-		"rebuildcolumn":   {"pk", "null", "unique", "increment", "default: ", "ref: ", "delete: ", "update: ", "note: ", "from: "},
-		"migrationindex":  {"unique", "pk", "name: ", "where: ", "note: "},
-		"standaloneindex": {"unique", "name: ", "where: ", "note: "},
+		"migrationcolumn": {"pk", "null", "unique", "increment", "default: ", "ref: ", "delete: ", "update: "},
+		"rebuildcolumn":   {"pk", "null", "unique", "increment", "default: ", "ref: ", "delete: ", "update: ", "from: "},
+		"migrationindex":  {"unique", "pk", "name: ", "where: "},
+		"standaloneindex": {"unique", "name: ", "where: "},
 	}
 
 	builtinTypes = check.Builtins
@@ -57,8 +56,8 @@ var (
 
 	partialInjectRE = regexp.MustCompile(`~\s*[\w"]*$`)
 	dotChainRE      = regexp.MustCompile(`([\p{L}\p{M}\d_]+|"[^"]*")(\.([\p{L}\p{M}\d_]+|"[^"]*"))?\.$`)
-	refValueRE      = regexp.MustCompile(`(?i)\bref\s*:\s*(<>|[<>-])?\s*$`)
-	afterCardRE     = regexp.MustCompile(`(<>|[<>-])\s*$`)
+	refValueRE      = regexp.MustCompile(`(?i)\bref\s*:\s*$`)
+	afterCardRE     = regexp.MustCompile(`>\s*$`)
 	defaultValueRE  = regexp.MustCompile(`(?i)\bdefault\s*:\s*$`)
 	defaultChainRE  = regexp.MustCompile(`(?i)\bdefault\s*:\s*\S+\.$`)
 	actionValueRE   = regexp.MustCompile(`(?i)\b(delete|update)\s*:\s*\w*$`)
@@ -111,10 +110,6 @@ func (d *Document) Complete(pos protocol.Position) []protocol.CompletionItem {
 			items := keywordItems(tableBodyKeywords)
 			items = append(items, d.partialInjectionItems()...)
 			return items
-		}
-	case "tablegroup", "diagramview":
-		if lineStartRE.MatchString(prefix) {
-			return d.tableItems()
 		}
 	case "scope":
 		if lineStartRE.MatchString(prefix) {
@@ -178,8 +173,6 @@ func headContext(head string) string {
 		return "validators"
 	case strings.HasPrefix(head, "tablepartial"):
 		return "tablepartial"
-	case strings.HasPrefix(head, "tablegroup"):
-		return "tablegroup"
 	case strings.HasPrefix(head, "table"):
 		return "table"
 	case strings.HasPrefix(head, "enum"):
@@ -190,10 +183,6 @@ func headContext(head string) string {
 		return "records"
 	case strings.HasPrefix(head, "ref"):
 		return "ref"
-	case strings.HasPrefix(head, "diagramview"):
-		return "diagramview"
-	case strings.HasPrefix(head, "note"):
-		return "note"
 	case strings.HasPrefix(head, "pipeline"):
 		return "pipeline"
 	case strings.HasPrefix(head, "scope"):
@@ -234,14 +223,12 @@ func (d *Document) settingsComplete(prefix, ctx, outer string) []protocol.Comple
 	head := strings.ToLower(strings.TrimSpace(prefix))
 	verb := strings.SplitN(head, " ", 2)[0]
 	switch {
-	case strings.HasPrefix(head, "table") && !strings.HasPrefix(head, "tablegroup"):
+	case strings.HasPrefix(head, "table") && !strings.HasPrefix(head, "tablepartial"):
 		kind = "table"
-	case strings.HasPrefix(head, "tablegroup"):
-		kind = "group"
+	case strings.HasPrefix(head, "project") && ctx == "":
+		kind = "project"
 	case strings.HasPrefix(head, "ref"):
 		kind = "ref"
-	case strings.HasPrefix(head, "note"):
-		kind = "sticky"
 	case strings.HasPrefix(head, "scope") && (ctx == "" || ctx == "scope"):
 		kind = "scope"
 	case strings.HasPrefix(head, "migration") && ctx == "":
@@ -283,31 +270,14 @@ func (d *Document) dotChainComplete(m []string) []protocol.CompletionItem {
 	var items []protocol.CompletionItem
 
 	if second != "" {
-		if ti, ok := d.Index.Tables[first+"."+second]; ok {
-			items = append(items, d.columnItems(ti)...)
-		}
 		return items
 	}
-
-	if ti, ok := d.Index.Tables["alias:"+first]; ok {
+	if ti, ok := d.Index.Tables[first]; ok {
 		items = append(items, d.columnItems(ti)...)
 	}
-	if ti, ok := d.Index.Tables["public."+first]; ok {
-		items = append(items, d.columnItems(ti)...)
-	}
-	if ei, ok := d.Index.Enums["public."+first]; ok {
+	if ei, ok := d.Index.Enums[first]; ok {
 		for _, v := range ei.Decl.Values {
-			items = append(items, item(v.Name.Name(), protocol.CompletionItemKindEnumMember, "value of "+ei.Decl.Name.String()))
-		}
-	}
-	for key, ti := range d.Index.Tables {
-		if strings.HasPrefix(key, first+".") {
-			items = append(items, item(ti.Decl.Name.Base(), protocol.CompletionItemKindStruct, "Table "+key))
-		}
-	}
-	for key, ei := range d.Index.Enums {
-		if strings.HasPrefix(key, first+".") {
-			items = append(items, item(ei.Decl.Name.Base(), protocol.CompletionItemKindEnum, "Enum "+key))
+			items = append(items, item(v.Name.Name(), protocol.CompletionItemKindEnumMember, "value of "+ei.Decl.Name.Name()))
 		}
 	}
 	return items
@@ -317,14 +287,10 @@ func (d *Document) tableItems() []protocol.CompletionItem {
 	var items []protocol.CompletionItem
 	seen := map[string]bool{}
 	for _, ti := range d.Info.Tables {
-		label := ti.Decl.Name.String()
+		label := ti.Decl.Name.Name()
 		if !seen[label] {
 			seen[label] = true
 			items = append(items, item(label, protocol.CompletionItemKindStruct, "Table"))
-		}
-		if ti.Alias != "" && !seen[ti.Alias] {
-			seen[ti.Alias] = true
-			items = append(items, item(ti.Alias, protocol.CompletionItemKindStruct, "alias of "+label))
 		}
 	}
 	return items
@@ -341,7 +307,7 @@ func (d *Document) columnItems(ti *check.TableInfo) []protocol.CompletionItem {
 func (d *Document) enumItems() []protocol.CompletionItem {
 	var items []protocol.CompletionItem
 	for _, ei := range d.Info.Enums {
-		items = append(items, item(ei.Decl.Name.String(), protocol.CompletionItemKindEnum, "Enum"))
+		items = append(items, item(ei.Decl.Name.Name(), protocol.CompletionItemKindEnum, "Enum"))
 	}
 	return items
 }

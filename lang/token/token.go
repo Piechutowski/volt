@@ -119,7 +119,6 @@ const (
 	IDENT    // users, "quoted name" (spec §identifiers)
 	STRING   // 'text', '''multi line''' (spec §string-literals, §multi-line-string-literals)
 	NUMBER   // 42, 3.14, 1.5e10 (spec §numeric-literals)
-	COLOR    // #3498DB (spec §color-literals)
 	FUNCEXPR // `now()` (spec §expression-literals)
 
 	LBRACE   // {
@@ -132,12 +131,11 @@ const (
 	COLON    // :
 	DOT      // .
 	TILDE    // ~
-	STAR     // *
+	STAR     // * (a select's star projection, spec §selects-over-groups)
 	SLASH    // / (Volt route paths and import paths, spec §pipelines to §resources)
 
 	LT    // <
 	GT    // >
-	LTGT  // <>
 	MINUS // -
 
 	// Predicate and group operators (spec §groups to §predicates)
@@ -155,7 +153,6 @@ var kindNames = [...]string{
 	IDENT:     "identifier",
 	STRING:    "string",
 	NUMBER:    "number",
-	COLOR:     "color",
 	FUNCEXPR:  "expression literal",
 	LBRACE:    "'{'",
 	RBRACE:    "'}'",
@@ -171,7 +168,6 @@ var kindNames = [...]string{
 	SLASH:     "'/'",
 	LT:        "'<'",
 	GT:        "'>'",
-	LTGT:      "'<>'",
 	MINUS:     "'-'",
 	PLUS:      "'+'",
 	BACKSLASH: "'\\'",

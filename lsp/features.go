@@ -51,11 +51,7 @@ func (d *Document) DocumentSymbols() []protocol.DocumentSymbol {
 			}
 			out = append(out, d.symbol(name, "Project", protocol.SymbolKindNamespace, n, sel, nil))
 		case *ast.Table:
-			detail := "Table"
-			if n.Alias != nil {
-				detail = "Table (as " + n.Alias.Name() + ")"
-			}
-			out = append(out, d.symbol(n.Name.String(), detail, protocol.SymbolKindStruct, n, n.Name, d.tableChildren(n.Body)))
+			out = append(out, d.symbol(n.Name.Name(), "Table", protocol.SymbolKindStruct, n, n.Name, d.tableChildren(n.Body)))
 		case *ast.TablePartial:
 			out = append(out, d.symbol(n.Name.Name(), "TablePartial", protocol.SymbolKindInterface, n, n.Name, d.tableChildren(n.Body)))
 		case *ast.Enum:
@@ -63,28 +59,19 @@ func (d *Document) DocumentSymbols() []protocol.DocumentSymbol {
 			for _, v := range n.Values {
 				kids = append(kids, d.symbol(v.Name.Name(), "", protocol.SymbolKindEnumMember, v, v.Name, nil))
 			}
-			out = append(out, d.symbol(n.Name.String(), "Enum", protocol.SymbolKindEnum, n, n.Name, kids))
+			out = append(out, d.symbol(n.Name.Name(), "Enum", protocol.SymbolKindEnum, n, n.Name, kids))
 		case *ast.TypeDecl:
 			out = append(out, d.symbol(n.Name.String(), "Type", protocol.SymbolKindClass, n, n.Name, nil))
 		case *ast.Ref:
-			name := refLabel(n)
-			var sel ast.Node = n
-			if n.Name != nil {
-				sel = n.Name
-			}
-			out = append(out, d.symbol(name, "Ref", protocol.SymbolKindKey, n, sel, nil))
-		case *ast.TableGroup:
-			out = append(out, d.symbol(n.Name.Name(), "TableGroup", protocol.SymbolKindNamespace, n, n.Name, nil))
-		case *ast.StickyNote:
-			out = append(out, d.symbol(n.Name.Name(), "Note", protocol.SymbolKindString, n, n.Name, nil))
+			out = append(out, d.symbol(refLabel(n), "Ref", protocol.SymbolKindKey, n, n, nil))
+		case *ast.Group:
+			out = append(out, d.symbol(n.Name.Name(), "Group", protocol.SymbolKindNamespace, n, n.Name, nil))
 		case *ast.Records:
 			label := "Records"
 			if n.Table != nil {
-				label = "Records " + n.Table.String()
+				label = "Records " + n.Table.Name()
 			}
 			out = append(out, d.symbol(label, "", protocol.SymbolKindArray, n, n, nil))
-		case *ast.DiagramView:
-			out = append(out, d.symbol(n.Name.Name(), "DiagramView", protocol.SymbolKindObject, n, n.Name, nil))
 		case *ast.Migration:
 			out = append(out, d.symbol(n.Name.Name(), "Migration", protocol.SymbolKindModule, n, n.Name, nil))
 		}
@@ -124,17 +111,14 @@ func (d *Document) symbol(name, detail string, kind protocol.SymbolKind, full, s
 }
 
 func refLabel(n *ast.Ref) string {
-	if n.Name != nil {
-		return n.Name.Name()
-	}
 	left, right := "?", "?"
 	if n.Left != nil {
-		left = n.Left.Table.String() + "." + strings.Join(identNames(n.Left.Columns), ",")
+		left = n.Left.Table.Name() + "." + strings.Join(identNames(n.Left.Columns), ",")
 	}
 	if n.Right != nil {
-		right = n.Right.Table.String() + "." + strings.Join(identNames(n.Right.Columns), ",")
+		right = n.Right.Table.Name() + "." + strings.Join(identNames(n.Right.Columns), ",")
 	}
-	return fmt.Sprintf("%s %s %s", left, n.OpTok.Text(), right)
+	return fmt.Sprintf("%s > %s", left, right)
 }
 
 func identNames(ids []*ast.Ident) []string {
@@ -279,11 +263,7 @@ func (d *Document) tableHover(key string) string {
 		return ""
 	}
 	var b strings.Builder
-	header := "Table " + ti.Decl.Name.String()
-	if ti.Alias != "" {
-		header += " as " + ti.Alias
-	}
-	fmt.Fprintf(&b, "```volt\n%s\n```\n", header)
+	fmt.Fprintf(&b, "```volt\nTable %s\n```\n", ti.Decl.Name.Name())
 	for _, cd := range ti.Columns {
 		line := "- `" + cd.Col.Name.Name() + " " + cd.Col.Type.String() + "`" + settingsSuffix(cd.Col.Settings)
 		if cd.Partial != nil {
@@ -303,7 +283,7 @@ func (d *Document) enumHover(key string) string {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "```volt\nEnum %s\n```\n", ei.Decl.Name.String())
+	fmt.Fprintf(&b, "```volt\nEnum %s\n```\n", ei.Decl.Name.Name())
 	for _, v := range ei.Decl.Values {
 		b.WriteString("- `" + v.Name.Name() + "`")
 		if note := settingString(v.Settings, "note"); note != "" {
@@ -335,11 +315,7 @@ func migrationHoverMD(mi *check.MigrationInfo, i, n int) string {
 	if !mi.Reversible {
 		way = "irreversible"
 	}
-	md := fmt.Sprintf("```volt\nMigration %s\n```\nmigration %d of %d, %s\n", mi.Name, i+1, n, way)
-	if note := settingString(mi.Decl.Settings, "note"); note != "" {
-		md += "\n---\n" + note + "\n"
-	}
-	return md
+	return fmt.Sprintf("```volt\nMigration %s\n```\nmigration %d of %d, %s\n", mi.Name, i+1, n, way)
 }
 
 func (d *Document) typeHover(key string) string {
@@ -397,7 +373,7 @@ func (d *Document) enumValueHover(id SymbolID) string {
 	}
 	for _, v := range ei.Decl.Values {
 		if v.Name.Name() == id.Name {
-			md := fmt.Sprintf("```volt\n%s.%s\n```\n", ei.Decl.Name.String(), id.Name)
+			md := fmt.Sprintf("```volt\n%s.%s\n```\n", ei.Decl.Name.Name(), id.Name)
 			if note := settingString(v.Settings, "note"); note != "" {
 				md += "\n" + note + "\n"
 			}
@@ -471,21 +447,11 @@ func valueString(v ast.Node) string {
 		return "-" + v.Num.Tok.Val
 	case *ast.EnumConst:
 		return v.Enum.Name() + "." + v.Value.Name()
-	case *ast.RefValue:
-		cols := identNames(v.Endpoint.Columns)
-		return v.OpTok.Text() + " " + v.Endpoint.Table.String() + "." + strings.Join(cols, ", ")
+	case *ast.RefEndpoint:
+		cols := identNames(v.Columns)
+		return v.Table.Name() + "." + strings.Join(cols, ", ")
 	}
 	return ""
 }
 
-func tableNote(t *ast.Table) string {
-	if note := settingString(t.Settings, "note"); note != "" {
-		return note
-	}
-	for _, item := range t.Body {
-		if n, ok := item.(*ast.Note); ok {
-			return n.Text.Tok.Val
-		}
-	}
-	return ""
-}
+func tableNote(t *ast.Table) string { return settingString(t.Settings, "note") }

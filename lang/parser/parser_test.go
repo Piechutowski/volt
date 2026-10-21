@@ -5,7 +5,6 @@ import (
 
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/diag"
-	"github.com/Piechutowski/volt/lang/token"
 )
 
 func mustParse(t *testing.T, src string) *ast.File {
@@ -19,10 +18,9 @@ func mustParse(t *testing.T, src string) *ast.File {
 
 func TestTableShape(t *testing.T) {
 	f := mustParse(t, `
-Table core.users as U [headercolor: #3498DB] {
+Table core_users [note: 'people'] {
   id int [pk]
   name string
-  Note: 'people'
   indexes {
     (id, name) [unique]
   }
@@ -32,17 +30,14 @@ Table core.users as U [headercolor: #3498DB] {
 		t.Fatalf("decls = %d, want 1", len(f.Decls))
 	}
 	tb := f.Decls[0].(*ast.Table)
-	if tb.Name.String() != "core.users" || tb.Name.Schema() != "core" {
-		t.Errorf("name = %q schema = %q", tb.Name.String(), tb.Name.Schema())
+	if tb.Name.Name() != "core_users" {
+		t.Errorf("name = %q", tb.Name.Name())
 	}
-	if tb.Alias == nil || tb.Alias.Name() != "U" {
-		t.Error("alias not parsed")
+	if tb.Settings.Get("note") == nil {
+		t.Error("note setting missing")
 	}
-	if tb.Settings.Get("headercolor") == nil {
-		t.Error("headercolor setting missing")
-	}
-	if len(tb.Body) != 4 {
-		t.Fatalf("body items = %d, want 4", len(tb.Body))
+	if len(tb.Body) != 3 {
+		t.Fatalf("body items = %d, want 3", len(tb.Body))
 	}
 	col := tb.Body[0].(*ast.Column)
 	if col.Settings.Get("pk") == nil {
@@ -52,7 +47,7 @@ Table core.users as U [headercolor: #3498DB] {
 	if typ.String() != "string" {
 		t.Errorf("type = %q, want string", typ.String())
 	}
-	ix := tb.Body[3].(*ast.IndexesBlock).Indexes[0]
+	ix := tb.Body[2].(*ast.IndexesBlock).Indexes[0]
 	if !ix.Composite || len(ix.Key) != 2 {
 		t.Errorf("index composite=%v keys=%d", ix.Composite, len(ix.Key))
 	}
@@ -67,37 +62,41 @@ func TestMultiWordSettingCanonical(t *testing.T) {
 
 func TestRefForms(t *testing.T) {
 	f := mustParse(t, `
-Ref fk: a.x > b.y [delete: set null]
-Ref { c.p <> d.q }
-Table e { z int [ref: - f.w] }
+Ref: a.x > b.y [delete: set null]
+Table e { z int [unique, ref: f.w] }
 `)
-	short := f.Decls[0].(*ast.Ref)
-	if short.Name.Name() != "fk" || short.OpTok.Kind != token.GT || short.Long {
-		t.Errorf("short ref parsed wrong: %+v", short)
+	ref := f.Decls[0].(*ast.Ref)
+	if ref.Left.Table.Name() != "a" || ref.Right.Table.Name() != "b" || ref.Settings.Get("delete") == nil {
+		t.Errorf("ref parsed wrong: %+v", ref)
 	}
-	long := f.Decls[1].(*ast.Ref)
-	if !long.Long || long.OpTok.Kind != token.LTGT {
-		t.Errorf("long ref parsed wrong")
-	}
-	col := f.Decls[2].(*ast.Table).Body[0].(*ast.Column)
-	rv, ok := col.Settings.Get("ref").Value.(*ast.RefValue)
-	if !ok || rv.OpTok.Kind != token.MINUS || rv.Endpoint.Table.String() != "f" {
-		t.Errorf("inline one-to-one ref parsed wrong: %#v", col.Settings.Get("ref").Value)
+	col := f.Decls[1].(*ast.Table).Body[0].(*ast.Column)
+	ep, ok := col.Settings.Get("ref").Value.(*ast.RefEndpoint)
+	if !ok || ep.Table.Name() != "f" || len(ep.Columns) != 1 || ep.Columns[0].Name() != "w" {
+		t.Errorf("inline ref parsed wrong: %#v", col.Settings.Get("ref").Value)
 	}
 }
 
-func TestRefLongExactlyOne(t *testing.T) {
-	_, diags := ParseFile("t", "Ref { a.x > b.y\n c.p > d.q }")
-	if !diag.HasErrors(diags) {
-		t.Error("two relationships in one Ref must be a syntax error (§relationships-ref)")
+func TestRefOneSpelling(t *testing.T) {
+	for _, src := range []string{
+		"Ref: a.x < b.y",
+		"Ref: a.x - b.y",
+		"Ref: a.x <> b.y",
+		"Ref fk: a.x > b.y",
+		"Ref { a.x > b.y }",
+		"Ref: s.a.x > b.y",
+		"Table e { z int [ref: > f.w] }",
+	} {
+		if _, diags := ParseFile("t", src); !diag.HasErrors(diags) {
+			t.Errorf("%q must be a syntax error: a relationship is Ref: fk > target, an inline ref is ref: table.column (§relationships-ref)", src)
+		}
 	}
 }
 
 func TestCompositeEndpoint(t *testing.T) {
-	f := mustParse(t, "Ref: s.a.(x, y) > b.(p, q)")
+	f := mustParse(t, "Ref: a.(x, y) > b.(p, q)")
 	r := f.Decls[0].(*ast.Ref)
-	if r.Left.Table.String() != "s.a" || len(r.Left.Columns) != 2 {
-		t.Errorf("left endpoint = %q cols=%d", r.Left.Table.String(), len(r.Left.Columns))
+	if r.Left.Table.Name() != "a" || len(r.Left.Columns) != 2 {
+		t.Errorf("left endpoint = %q cols=%d", r.Left.Table.Name(), len(r.Left.Columns))
 	}
 }
 
@@ -107,7 +106,7 @@ Table t {
   a int
   records (a, b, c) {
     1, 'x', true
-    , ,
+    null, null, null
     -5, s.v, `+"`now()`"+`
   }
 }
@@ -126,6 +125,21 @@ Table t {
 	}
 	if _, ok := rec.Rows[2].Values[1].(*ast.EnumConst); !ok {
 		t.Error("enum constant not parsed")
+	}
+}
+
+func TestRecordsEmptyField(t *testing.T) {
+	for _, row := range []string{"1, , 3", ", 2, 3", "1, 2,"} {
+		src := "Table t {\n  a int\n  records (a, b, c) {\n    " + row + "\n    4, 5, 6\n  }\n}\n"
+		f, diags := ParseFile("t", src)
+		if len(diags) != 1 {
+			t.Errorf("%q: %d diagnostics, want one empty-field error: %v", row, len(diags), diags)
+			continue
+		}
+		rec := f.Decls[0].(*ast.Table).Body[1].(*ast.Records)
+		if last := rec.Rows[len(rec.Rows)-1]; len(last.Values) != 3 {
+			t.Errorf("%q: the row after the error was not parsed", row)
+		}
 	}
 }
 

@@ -1,5 +1,5 @@
-// spec: §groups — a group term must name a table, group or TableGroup
-// want: no such table, group or TableGroup
+// spec: §groups, a group term must name a table or a group
+// want: no such table or group
 package db
 
 Table ms_revenue {

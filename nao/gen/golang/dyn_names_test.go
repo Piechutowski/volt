@@ -32,7 +32,7 @@ func dynNamesWalk(p *plan, info *check.Info) []NameCollision {
 	}
 
 	for _, e := range info.Enums {
-		typeName, err := enumTypeName(e.Decl.Name.Schema(), e.Decl.Name.Base())
+		typeName, err := enumTypeName(e.Decl.Name.Name())
 		if err != nil {
 			continue
 		}

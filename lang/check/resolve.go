@@ -1,6 +1,6 @@
 // Pass 3: cross-element resolution (§reference-resolution) of relationship endpoints,
-// index columns, records columns, TableGroup members and DiagramView
-// members, and duplicate-relationship detection (§relationships-ref).
+// index columns and records columns, and duplicate-relationship
+// detection (§relationships-ref).
 package check
 
 import (
@@ -14,9 +14,7 @@ import (
 func (c *checker) resolve(f *ast.File) {
 	for _, d := range f.Decls {
 		if r, ok := d.(*ast.Ref); ok {
-			ri := &RefInfo{Node: r, Op: r.OpTok.Kind}
-			ri.Left = c.endpointResolve(r.Left)
-			ri.Right = c.endpointResolve(r.Right)
+			ri := &RefInfo{Node: r, FK: c.endpointResolve(r.Left), Target: c.endpointResolve(r.Right)}
 			c.refActionsNullCheck(r, ri)
 			c.info.Refs = append(c.info.Refs, ri)
 		}
@@ -27,19 +25,19 @@ func (c *checker) resolve(f *ast.File) {
 				continue
 			}
 			for _, s := range cd.Col.Settings.Settings {
-				rv, ok := s.Value.(*ast.RefValue)
+				ep, ok := s.Value.(*ast.RefEndpoint)
 				if s.Name != "ref" || !ok {
 					continue
 				}
-				ri := &RefInfo{Node: s, Op: rv.OpTok.Kind, Inline: true}
-				ri.Left = EndpointInfo{
+				ri := &RefInfo{Node: s, Inline: true}
+				ri.FK = EndpointInfo{
 					Table:   ti,
 					Columns: []string{cd.Col.Name.Name()},
 					Pos:     s.Pos(),
 				}
-				ri.Right = c.endpointResolve(rv.Endpoint)
-				if len(ri.Right.Columns) != 1 {
-					c.errorf(rv.Endpoint.Pos(), "relationships-ref", "an inline ref endpoint has exactly one column")
+				ri.Target = c.endpointResolve(ep)
+				if len(ri.Target.Columns) != 1 {
+					c.errorf(ep.Pos(), "relationships-ref", "an inline ref endpoint has exactly one column")
 				}
 				c.info.Refs = append(c.info.Refs, ri)
 			}
@@ -55,7 +53,7 @@ func (c *checker) resolve(f *ast.File) {
 					continue
 				}
 				if ti.Column(id.Name()) == nil {
-					c.errorf(id.Pos(), "indexes", "index references unknown column %q in table %q", id.Name(), ti.Decl.Name.String())
+					c.errorf(id.Pos(), "indexes", "index references unknown column %q in table %q", id.Name(), ti.Key)
 				}
 			}
 		}
@@ -76,70 +74,15 @@ func (c *checker) resolve(f *ast.File) {
 	}
 	for _, d := range f.Decls {
 		if r, ok := d.(*ast.Records); ok && r.Table != nil {
-			key := canonKey(r.Table)
+			key := r.Table.Name()
 			if _, dup := recordsSeen[key]; dup {
-				c.errorf(r.Pos(), "records-sample-data", "at most one records block per table (%q)", r.Table.String())
+				c.errorf(r.Pos(), "records-sample-data", "at most one records block per table (%q)", key)
 			}
 			recordsSeen[key] = r.Pos()
-			if ti := c.tableLookup(r.Table); ti != nil {
+			if ti := c.info.byName[key]; ti != nil {
 				for _, item := range ti.Decl.Body {
 					if _, ok := item.(*ast.Records); ok {
-						c.errorf(r.Pos(), "records-sample-data", "table %q already has an in-table records block", r.Table.String())
-					}
-				}
-			}
-		}
-	}
-
-	memberOf := map[string]string{}
-	for _, d := range f.Decls {
-		g, ok := d.(*ast.TableGroup)
-		if !ok {
-			continue
-		}
-		gi := &TableGroupInfo{Decl: g}
-		for _, m := range g.Members {
-			ti := c.tableLookup(m)
-			if ti == nil {
-				c.errorf(m.Pos(), "tablegroup", "unknown table %q in TableGroup %q", m.String(), g.Name.Name())
-				continue
-			}
-			if prev, ok := memberOf[ti.Key]; ok {
-				c.errorf(m.Pos(), "tablegroup", "table %q belongs to more than one TableGroup (%q and %q)", m.String(), prev, g.Name.Name())
-				continue
-			}
-			memberOf[ti.Key] = g.Name.Name()
-			gi.Members = append(gi.Members, ti)
-		}
-		c.info.TableGroups = append(c.info.TableGroups, gi)
-	}
-
-	for _, d := range f.Decls {
-		v, ok := d.(*ast.DiagramView)
-		if !ok {
-			continue
-		}
-		for _, cat := range v.Categories {
-			if cat.Wildcard {
-				continue
-			}
-			for _, nm := range cat.Names {
-				switch strings.ToLower(cat.Kind.Name()) {
-				case "tables":
-					if c.tableLookup(nm) == nil {
-						c.errorf(nm.Pos(), "diagramview", "unknown table %q in DiagramView", nm.String())
-					}
-				case "notes":
-					if _, ok := c.sticky[nm.String()]; !ok {
-						c.errorf(nm.Pos(), "diagramview", "unknown sticky note %q in DiagramView", nm.String())
-					}
-				case "tablegroups":
-					if _, ok := c.groups[nm.String()]; !ok {
-						c.errorf(nm.Pos(), "diagramview", "unknown TableGroup %q in DiagramView", nm.String())
-					}
-				case "schemas":
-					if !c.schemas[nm.String()] {
-						c.errorf(nm.Pos(), "diagramview", "unknown schema %q in DiagramView", nm.String())
+						c.errorf(r.Pos(), "records-sample-data", "table %q already has an in-table records block", key)
 					}
 				}
 			}
@@ -148,14 +91,7 @@ func (c *checker) resolve(f *ast.File) {
 }
 
 func (c *checker) refActionsNullCheck(r *ast.Ref, ri *RefInfo) {
-	fk := ri.Left
-	switch ri.Op {
-	case token.GT:
-	case token.LT, token.MINUS:
-		fk = ri.Right
-	default:
-		return
-	}
+	fk := ri.FK
 	if fk.Table == nil || r.Settings == nil {
 		return
 	}
@@ -165,14 +101,10 @@ func (c *checker) refActionsNullCheck(r *ast.Ref, ri *RefInfo) {
 		}
 		for _, name := range fk.Columns {
 			if cd := fk.Table.Column(name); cd != nil {
-				c.refActionNullCheck(s, cd.Col, fk.Table.Decl.Name.String()+"."+name, "relationships-ref")
+				c.refActionNullCheck(s, cd.Col, fk.Table.Key+"."+name, "relationships-ref")
 			}
 		}
 	}
-}
-
-func (c *checker) tableLookup(q *ast.QualName) *TableInfo {
-	return c.info.byTable[canonKey(q)]
 }
 
 func (c *checker) endpointResolve(ep *ast.RefEndpoint) EndpointInfo {
@@ -180,15 +112,15 @@ func (c *checker) endpointResolve(ep *ast.RefEndpoint) EndpointInfo {
 	for _, col := range ep.Columns {
 		out.Columns = append(out.Columns, col.Name())
 	}
-	ti := c.tableLookup(ep.Table)
+	ti := c.info.byName[ep.Table.Name()]
 	if ti == nil {
-		c.errorf(ep.Table.Pos(), "reference-resolution", "unknown table %q in relationship endpoint", ep.Table.String())
+		c.errorf(ep.Table.Pos(), "reference-resolution", "unknown table %q in relationship endpoint", ep.Table.Name())
 		return out
 	}
 	out.Table = ti
 	for _, col := range ep.Columns {
 		if ti.Column(col.Name()) == nil {
-			c.errorf(col.Pos(), "reference-resolution", "unknown column %q in table %q", col.Name(), ti.Decl.Name.String())
+			c.errorf(col.Pos(), "reference-resolution", "unknown column %q in table %q", col.Name(), ti.Key)
 		}
 	}
 	return out
@@ -201,8 +133,8 @@ func refKey(r *RefInfo) (string, bool) {
 		}
 		return e.Table.Key + "(" + strings.Join(e.Columns, ",") + ")", true
 	}
-	l, okL := side(r.Left)
-	rr, okR := side(r.Right)
+	l, okL := side(r.FK)
+	rr, okR := side(r.Target)
 	if !okL || !okR {
 		return "", false
 	}
@@ -228,9 +160,9 @@ func (c *checker) duplicateRefsCheck() {
 
 func (c *checker) recordsResolve(r *ast.Records, ti *TableInfo) {
 	if r.Table != nil {
-		ti = c.tableLookup(r.Table)
+		ti = c.info.byName[r.Table.Name()]
 		if ti == nil {
-			c.errorf(r.Table.Pos(), "records-sample-data", "unknown table %q in records", r.Table.String())
+			c.errorf(r.Table.Pos(), "records-sample-data", "unknown table %q in records", r.Table.Name())
 			return
 		}
 	}
@@ -239,13 +171,13 @@ func (c *checker) recordsResolve(r *ast.Records, ti *TableInfo) {
 	}
 	for _, col := range r.Columns {
 		if ti.Column(col.Name()) == nil {
-			c.errorf(col.Pos(), "records-sample-data", "column %q does not exist in table %q", col.Name(), ti.Decl.Name.String())
+			c.errorf(col.Pos(), "records-sample-data", "column %q does not exist in table %q", col.Name(), ti.Key)
 		}
 	}
 	if !r.HasColumns {
 		for _, row := range r.Rows {
 			if len(row.Values) != len(ti.Columns) {
-				c.errorf(row.Pos(), "records-sample-data", "record row has %d values but table %q has %d columns", len(row.Values), ti.Decl.Name.String(), len(ti.Columns))
+				c.errorf(row.Pos(), "records-sample-data", "record row has %d values but table %q has %d columns", len(row.Values), ti.Key, len(ti.Columns))
 			}
 		}
 	}

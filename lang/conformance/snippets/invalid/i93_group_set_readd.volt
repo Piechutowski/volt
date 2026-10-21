@@ -10,7 +10,7 @@ Table ms_usage {
   id int [pk]
 }
 
-TableGroup Metrics {
+Group Metrics {
   ms_revenue
   ms_usage
 }

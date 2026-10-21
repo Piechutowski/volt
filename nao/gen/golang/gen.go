@@ -73,7 +73,7 @@ func (g *generator) run(p *plan, perr error) error {
 	g.typesEmit()
 	usedNames := map[string]string{}
 	for _, e := range g.info.Enums {
-		usedNames[g.enumTypes[e.Key]] = "enum " + e.Decl.Name.String()
+		usedNames[g.enumTypes[e.Key]] = "enum " + e.Decl.Name.Name()
 	}
 	for i, ti := range g.info.Tables {
 		if err := g.tableEmit(ti, usedNames); err != nil {
@@ -123,7 +123,7 @@ func (g *generator) changesetEmit(t *tableModel) {
 	g.imports[rtImport] = true
 	b := &g.body
 	m := t.model
-	tbl := t.ti.Decl.Name.String()
+	tbl := t.ti.Decl.Name.Name()
 	settable := t.settable()
 
 	fmt.Fprintf(b, "// %sColumn is a column handle of %s, the element of a Cast allow list\n// (spec §changesets).\n", m, m)
@@ -258,21 +258,21 @@ func (g *generator) enumTypesCollect() error {
 	g.enumTypes = map[string]string{}
 	seen := map[string]string{}
 	for _, e := range g.info.Enums {
-		name, err := enumTypeName(e.Decl.Name.Schema(), e.Decl.Name.Base())
+		name, err := enumTypeName(e.Decl.Name.Name())
 		if err != nil {
-			return fmt.Errorf("enum %s: %w", e.Decl.Name.String(), err)
+			return fmt.Errorf("enum %s: %w", e.Decl.Name.Name(), err)
 		}
 		if prev, dup := seen[name]; dup {
-			return fmt.Errorf("enums %s and %s both map to Go type %s", prev, e.Decl.Name.String(), name)
+			return fmt.Errorf("enums %s and %s both map to Go type %s", prev, e.Decl.Name.Name(), name)
 		}
-		seen[name] = e.Decl.Name.String()
+		seen[name] = e.Decl.Name.Name()
 		g.enumTypes[e.Key] = name
 	}
 	return nil
 }
 
-func enumTypeName(schema, base string) (string, error) {
-	n, err := structName(schema, base)
+func enumTypeName(name string) (string, error) {
+	n, err := goName(name)
 	if err != nil {
 		return "", err
 	}
@@ -300,21 +300,17 @@ func (g *generator) header() {
 
 func (g *generator) projectNote() string {
 	for _, d := range g.f.Decls {
-		if p, ok := d.(*ast.Project); ok && len(p.Notes) > 0 {
-			return p.Notes[len(p.Notes)-1].Text.Tok.Val
+		if p, ok := d.(*ast.Project); ok {
+			return settingNote(p.Settings)
 		}
 	}
 	return ""
 }
 
 func (g *generator) enumEmit(e *ast.Enum) error {
-	typeName := g.enumTypes[canonEnumKey(e)]
+	typeName := g.enumTypes[e.Name.Name()]
 
-	fmt.Fprintf(&g.body, "// %s is the %s enum.\n", typeName, e.Name.String())
-	if note := enumNote(e); note != "" {
-		g.body.WriteString("//\n")
-		commentWrite(&g.body, note)
-	}
+	fmt.Fprintf(&g.body, "// %s is the %s enum.\n", typeName, e.Name.Name())
 	fmt.Fprintf(&g.body, "type %s string\n\n", typeName)
 
 	g.body.WriteString("const (\n")
@@ -323,11 +319,11 @@ func (g *generator) enumEmit(e *ast.Enum) error {
 	for _, v := range e.Values {
 		constName, err := goName(v.Name.Name())
 		if err != nil {
-			return fmt.Errorf("enum %s value %q: %w", e.Name.String(), v.Name.Name(), err)
+			return fmt.Errorf("enum %s value %q: %w", e.Name.Name(), v.Name.Name(), err)
 		}
 		constName = typeName + constName
 		if prev, dup := seen[constName]; dup {
-			return fmt.Errorf("enum %s: values %q and %q both map to Go constant %s", e.Name.String(), prev, v.Name.Name(), constName)
+			return fmt.Errorf("enum %s: values %q and %q both map to Go constant %s", e.Name.Name(), prev, v.Name.Name(), constName)
 		}
 		seen[constName] = v.Name.Name()
 		if note := settingNote(v.Settings); note != "" {
@@ -340,24 +336,17 @@ func (g *generator) enumEmit(e *ast.Enum) error {
 	return nil
 }
 
-func canonEnumKey(e *ast.Enum) string {
-	if e.Name.Schema() == "" {
-		return "public." + e.Name.Base()
-	}
-	return e.Name.String()
-}
-
 func (g *generator) tableEmit(ti *check.TableInfo, usedNames map[string]string) error {
 	name, err := modelName(ti.Decl)
 	if err != nil {
-		return fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
+		return fmt.Errorf("table %s: %w", ti.Decl.Name.Name(), err)
 	}
 	if prev, dup := usedNames[name]; dup {
-		return fmt.Errorf("table %s and %s both map to Go type %s", ti.Decl.Name.String(), prev, name)
+		return fmt.Errorf("table %s and %s both map to Go type %s", ti.Decl.Name.Name(), prev, name)
 	}
-	usedNames[name] = "table " + ti.Decl.Name.String()
+	usedNames[name] = "table " + ti.Decl.Name.Name()
 
-	fmt.Fprintf(&g.body, "// %s is a row of the %s table.\n", name, ti.Decl.Name.String())
+	fmt.Fprintf(&g.body, "// %s is a row of the %s table.\n", name, ti.Decl.Name.Name())
 	if note := tableNote(ti.Decl); note != "" {
 		g.body.WriteString("//\n")
 		commentWrite(&g.body, note)
@@ -368,7 +357,7 @@ func (g *generator) tableEmit(ti *check.TableInfo, usedNames map[string]string) 
 	var rows align.Block
 	for _, cd := range ti.Columns {
 		if err := g.fieldEmit(cd, fields, &rows); err != nil {
-			return fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
+			return fmt.Errorf("table %s: %w", ti.Decl.Name.Name(), err)
 		}
 	}
 	rows.WriteTo(&g.body, "\t")
@@ -430,14 +419,7 @@ func fieldTag(col *ast.Column) string {
 	return strings.Join(parts, " ")
 }
 
-func tableNote(t *ast.Table) string {
-	for _, item := range t.Body {
-		if n, ok := item.(*ast.Note); ok {
-			return n.Text.Tok.Val
-		}
-	}
-	return settingNote(t.Settings)
-}
+func tableNote(t *ast.Table) string { return settingNote(t.Settings) }
 
 func settingNote(sl *ast.SettingList) string {
 	s := sl.Get("note")
@@ -447,10 +429,6 @@ func settingNote(sl *ast.SettingList) string {
 	if lit, ok := s.Value.(*ast.BasicLit); ok {
 		return lit.Tok.Val
 	}
-	return ""
-}
-
-func enumNote(e *ast.Enum) string {
 	return ""
 }
 

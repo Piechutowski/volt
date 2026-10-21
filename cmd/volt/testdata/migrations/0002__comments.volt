@@ -7,7 +7,7 @@ Migration 0002__comments {
   create index posts views
   create table comments {
     id      int    [pk, increment]
-    post_id int    [ref: > posts.id]
+    post_id int    [ref: posts.id]
     body    string
   }
 }

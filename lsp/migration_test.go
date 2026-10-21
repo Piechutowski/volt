@@ -9,7 +9,7 @@ import (
 )
 
 const migrationSchema = "package db\n\nTable users {\n\tid int [pk, increment]\n\tbio string [null]\n}\n\n" +
-	"Migration 0002__users_bio [irreversible, note: 'bio arrived'] {\n\talter table users {\n\t\tadd bio string [null]\n\t}\n\trebuild table users {\n\t\tid int [pk, increment]\n\t\tbio string [null]\n\t}\n}\n\n" +
+	"Migration 0002__users_bio [irreversible] {\n\talter table users {\n\t\tadd bio string [null]\n\t}\n\trebuild table users {\n\t\tid int [pk, increment]\n\t\tbio string [null]\n\t}\n}\n\n" +
 	"Migration 0001__create_users {\n\tcreate table users {\n\t\tid int [pk, increment]\n\t}\n}\n"
 
 func TestDocumentSymbolsMigration(t *testing.T) {
@@ -82,7 +82,7 @@ func TestCompletionMigrationShapeSettings(t *testing.T) {
 		bracket       int
 		want, refused []string
 	}{
-		{"create table column", 0, []string{"ref:", "delete:", "update:", "note:"}, []string{"required", "tag:", "from:"}},
+		{"create table column", 0, []string{"ref:", "delete:", "update:"}, []string{"required", "tag:", "from:", "note:"}},
 		{"shape indexes", 1, []string{"pk", "where:", "name:"}, []string{"type:"}},
 		{"alter add", 2, []string{"default:", "ref:"}, []string{"required", "tag:", "from:"}},
 		{"rebuild column", 3, []string{"from:", "ref:"}, []string{"required", "tag:"}},
@@ -132,7 +132,7 @@ func TestMigrationHoverSingleFile(t *testing.T) {
 		t.Fatal("no hover on the migration name")
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
-	for _, want := range []string{"Migration 0002__users_bio", "migration 2 of 2", "irreversible", "bio arrived"} {
+	for _, want := range []string{"Migration 0002__users_bio", "migration 2 of 2", "irreversible"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover lacks %q:\n%s", want, md)
 		}

@@ -1,5 +1,5 @@
-// spec: §tablepartial — partial with settings, indexes; injection into table
-TablePartial base_template [headercolor: #ff0000] {
+// spec: §tablepartial, partials with columns and indexes injected into a table
+TablePartial base_template {
   id int [pk]
   created_at time.Time [default: `now()`]
 }

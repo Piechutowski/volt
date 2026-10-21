@@ -49,6 +49,6 @@ Ref: invites.email > accounts.email //WANT reftarget
 // it names is the target
 Table bios {
   id int [pk]
-  user_id int [null, ref: - users.id]
-  user_email string [null, ref: - users.email] //WANT reftarget
+  user_id int [null, unique, ref: users.id]
+  user_email string [null, unique, ref: users.email] //WANT reftarget
 }

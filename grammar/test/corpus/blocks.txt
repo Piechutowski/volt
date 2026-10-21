@@ -7,7 +7,7 @@ Table t {
   indexes {
     id [pk]
     (id, `lower(name)`) [name: 'ix', unique]
-    created_at [type: btree]
+    created_at [where: `created_at > 0`]
     `floor(balance)`
   }
 }
@@ -54,8 +54,8 @@ Table t {
           (setting
             (setting_name
               (identifier))
-            (setting_value_words
-              (identifier)))))
+            (expression
+              (expression_content)))))
       (index_definition
         (expression
           (expression_content))))))
@@ -96,19 +96,11 @@ Table t {
         (column_ref)))))
 
 ==================
-note forms: member colon and block
+notes: the note setting of a table and a column
 ==================
 
-Table t {
-  id int
-  Note: 'colon form'
-}
-
-Table s {
-  id int
-  Note {
-    'block form'
-  }
+Table t [note: 'table note'] {
+  id int [note: 'column note']
 }
 
 ---
@@ -117,36 +109,33 @@ Table s {
   (table_definition
     (table_name
       (identifier))
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (string
+          (string_content))))
     (column_definition
       (column_name
         (identifier))
       (column_type
         (type_name
-          (identifier))))
-    (note_definition
-      (string
-        (string_content))))
-  (table_definition
-    (table_name
-      (identifier))
-    (column_definition
-      (column_name
-        (identifier))
-      (column_type
-        (type_name
-          (identifier))))
-    (note_definition
-      (string
-        (string_content)))))
+          (identifier)))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (string
+            (string_content)))))))
 
 ==================
-records: top-level with expressions, empties and null
+records: top-level with expressions and null
 ==================
 
-Records core.orders(id, user_id, total) {
+Records orders(id, user_id, total) {
   1, 1, `1.0 + 2.0`
-  2, , 3.5
-  , null, -7
+  2, null, 3.5
+  4, null, -7
   3, 2, 'true'
 }
 
@@ -155,8 +144,6 @@ Records core.orders(id, user_id, total) {
 (source_file
   (records_definition
     (table_name
-      (schema_name
-        (identifier))
       (identifier))
     (records_columns
       (column_name
@@ -172,8 +159,10 @@ Records core.orders(id, user_id, total) {
         (expression_content)))
     (record_row
       (number)
+      (null)
       (number))
     (record_row
+      (number)
       (null)
       (signed_number
         (number)))
@@ -234,3 +223,16 @@ Table s {
         (number))
       (record_row
         (number)))))
+
+==================
+records: an empty field is an error
+:error
+==================
+
+Records orders(id, user_id) {
+  1, , 2
+}
+
+---
+
+

@@ -15,8 +15,8 @@ specification has two parts and the appendices:
 
 - **[Part I — The Schema Core](#part-i-the-schema-core)**: lexis,
   grammar and static semantics of the schema language: tables,
-  columns, indexes, refs, enums, types, partials, records, notes,
-  groups and diagram views, with Go's types as the column types.
+  columns, indexes, refs, enums, types, partials, records and notes,
+  with Go's types as the column types.
 - **[Part II — The Project and Routing Layer](#part-ii-the-project-and-routing-layer)**:
   projects, packages, imports, pipelines, scopes, routes, resources,
   and the query layer.
@@ -30,6 +30,11 @@ constraint is executable: the conformance corpus under
 [`lang/conformance/snippets/`](../lang/conformance/snippets/) tags each snippet with the
 section it exercises (`// spec: §…`); `valid/` MUST be accepted,
 `invalid/` MUST be rejected, and `go test ./...` runs the whole chain.
+The examples run too (§conformance-and-the-proof-chain): a `volt`
+block is a whole file the front end accepts, a block whose fence reads
+`volt invalid` one it rejects, and a block whose fence reads
+`volt fragment` a piece of a file, shown without its package clause or
+the Go functions and packages it names, that parses alone.
 Diagnostics cite the section they enforce. The lint annex — legal but
 suspicious schemas, every rule with executable examples — is
 [`lint.md`](lint.md); lint rules never change what conforming Volt is.
@@ -40,8 +45,8 @@ suspicious schemas, every rule with executable examples — is
 
 **Status:** Normative.
 Part I is Volt's schema language: tables, columns, indexes, refs,
-enums, types, partials, records, notes, groups and diagram views,
-with column types drawn from Go (§columns, §types). A Part I file
+enums, types, partials, records and notes, with column types drawn
+from Go (§columns, §types). A Part I file
 body is a valid Volt file body (§layers-files-and-the-superset-rule).
 The reference implementation is [`lang/`](../lang/); the executable
 corpus is [`lang/conformance/snippets/`](../lang/conformance/snippets/),
@@ -80,7 +85,6 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Escape Sequences](#escape-sequences)
     - [Numeric Literals](#numeric-literals)
     - [Boolean and Null Literals](#boolean-and-null-literals)
-    - [Color Literals](#color-literals)
     - [Expression Literals](#expression-literals)
     - [Operators and Punctuation](#operators-and-punctuation)
   - [Common Syntactic Forms](#common-syntactic-forms)
@@ -99,10 +103,7 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [TablePartial](#tablepartial)
     - [Records (Sample Data)](#records-sample-data)
     - [Notes](#notes)
-    - [TableGroup](#tablegroup)
-    - [DiagramView](#diagramview)
   - [Static Semantics](#static-semantics)
-    - [Schemas](#schemas)
     - [Namespaces and Uniqueness](#namespaces-and-uniqueness)
     - [Reference Resolution](#reference-resolution)
     - [Partial Injection Order](#partial-injection-order)
@@ -122,7 +123,6 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Generated client](#generated-client)
     - [Event routes](#event-routes)
     - [Scopes](#scopes)
-    - [Reserved](#reserved)
     - [Route names and reverse URLs](#route-names-and-reverse-urls)
     - [Route conflicts](#route-conflicts)
   - [Resources](#resources)
@@ -136,7 +136,6 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Dataset settings](#dataset-settings)
   - [Settings whitelists](#settings-whitelists)
   - [Generation contract (informative)](#generation-contract-informative)
-  - [Reserved words for future layers](#reserved-words-for-future-layers)
   - [Groups](#groups)
   - [Predicates](#predicates)
   - [Selects over groups](#selects-over-groups)
@@ -275,9 +274,9 @@ operators, punctuation) by a scanner governed by two rules:
 
 Consequences of the longest-match rule:
 
-- `<>` is a single many-to-many operator, never the two tokens `<` `>`.
 - `'''` opens a multi-line string, never the empty string `''` followed by `'`.
-- `//` begins a comment, never two `/` operators; `>=` is one token, not `>` `=`.
+- `//` begins a comment, never two `/` operators; `<=`, `>=` and `!=`
+  are one token each, never two.
 - `user_id2` is one identifier, not the identifier `user_id` followed by the
   number `2` — the scanner keeps consuming while characters can extend the
   current token.
@@ -331,15 +330,14 @@ sp      = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
    for invalid input is therefore determined by the input alone; the
    conformance corpus pins every diagnostic of every invalid snippet.
 
-```volt
-Table posts [                 // continuation lines are indented
-  headercolor: #3498DB
-] {
+```volt invalid
+Table posts {
   id int [pk]
+  author_id int
 }
 
-Ref: posts.id >
-tags.id                       // error: a new element begins here
+Ref: posts.author_id >
+users.id                      // error: a new element begins here
 ```
 
 ### Comments
@@ -406,10 +404,9 @@ Volt has **no reserved words**. All keywords are contextual: a keyword such
 as `Table` acts as a keyword only in keyword position and remains usable as an
 ordinary identifier elsewhere (e.g. a column may be named `table`).
 
-Element-type keywords: `Project`, `Table`, `TablePartial`, `TableGroup`,
-`Enum`, `Type`, `Ref`, `Note`, `Records`, `DiagramView`, `Migration`,
-`indexes`, `validators`, `Tables`, `Notes`, `TableGroups`, `Schemas`.
-Clause keywords: `as`, `from`.
+Element-type keywords: `Project`, `Table`, `TablePartial`, `Enum`,
+`Type`, `Ref`, `Records`, `Migration`, `indexes`, `validators`.
+Clause keyword: `from`.
 Value keywords: `true`, `false`, `null`.
 All are case-insensitive (§case-sensitivity-and-terminology).
 
@@ -451,13 +448,15 @@ mls body          = { ( any char - "\" ) | escape sequence }
    and a trailing newline before the closing `'''` are removed.
 
 ```volt
-Note: '''
+Table posts [note: '''
   This is a block string.
   It spans multiple lines.
-'''
+'''] {
+  id int [pk]
+}
 ```
 
-The value of the above is `This is a block string.\nIt spans multiple lines.`
+The note's value is `This is a block string.\nIt spans multiple lines.`
 
 ### Escape Sequences
 
@@ -517,15 +516,6 @@ null    = "null" ;
 
 Case-insensitive, as all keywords.
 
-### Color Literals
-
-```ebnf
-color = "#", ( 3 * hex digit | 6 * hex digit ) ;
-```
-
-1. Shorthand `#rgb` or full `#rrggbb` hexadecimal color, e.g. `#3498DB`.
-2. Used as the value of `headercolor` and `color` settings.
-
 ### Expression Literals
 
 ```ebnf
@@ -542,24 +532,31 @@ expression literal = "`", { any char - "`" }, "`" ;
 ### Operators and Punctuation
 
 ```ebnf
-rel op = "<>" | "<" | ">" | "-" ;
-punct  = "{" | "}" | "[" | "]" | "(" | ")"
-       | "," | ":" | ";" | "." | "~" | "*" ;
+punct = "{" | "}" | "[" | "]" | "(" | ")"
+      | "," | ":" | "." | "~" | "*" | "/"
+      | "<" | ">" | "-" | "+" | "\" | "="
+      | "!=" | "<=" | ">=" ;
 ```
 
-Punctuation roles (uniform across the language):
+These are every token that is neither a name nor a literal; any other
+character outside a string, an identifier or a comment, `;` and `#`
+among them, is a lexical error. Their roles:
 
 | Token   | Role                                                        |
 |---------|-------------------------------------------------------------|
-| `{ }`   | element bodies (block form)                                 |
+| `{ }`   | element bodies                                              |
 | `[ ]`   | settings lists, and the `[]` of the type `[]byte`           |
-| `( )`   | composite column lists, records column list                 |
-| `:`     | introduces an inline (single-expression) body or a setting value |
-| `,`     | separator inside `[ ]`, `( )`, and record rows              |
-| `.`     | name qualification (`schema.table.column`)                  |
+| `( )`   | composite column lists, records column lists, group sets (§groups), select projections (§selects-over-groups), import blocks (§imports) |
+| `:`     | a setting value, a project property, the body of `Ref:`, a route parameter (§route-paths), a query parameter (§predicates) |
+| `,`     | separator inside `[ ]`, `( )` and record rows               |
+| `.`     | qualification: `table.column`, `Enum.value`, `pkg.Name` (§types), `pkg.name` (§imports) |
 | `~`     | TablePartial injection prefix                               |
-| `*`     | wildcard (DiagramView categories, select projections)       |
-| `< > - <>` | relationship cardinality operators                       |
+| `>`     | a relationship, foreign key first (§relationships-ref); a comparison in a predicate (§predicates) |
+| `-`     | the sign of a negative number                               |
+| `*`     | every column of a select's target (§selects-over-groups)    |
+| `/`     | route paths (§route-paths) and import paths (§imports)      |
+| `+ \`   | group union and difference (§groups)                        |
+| `= != < <= >=` | comparisons in a predicate (§predicates)              |
 
 ---
 
@@ -570,16 +567,16 @@ Punctuation roles (uniform across the language):
 ```ebnf
 name          = identifier ;
 
-schema name   = name ;
-table name    = [ schema name, "." ], name ;
 enum constant = name, ".", name ;        (* EnumName.value *)
 ```
 
-1. `table name` optionally qualifies a table (or enum) with a schema.
-2. If the schema qualifier is omitted, the name belongs to the default
-   schema `public` (§schemas).
-3. `enum constant` references one value of an enum, e.g. `status.active`;
+1. A table, an enum, a partial and a column are each named by one
+   `name`; no name is qualified by a schema or any other container.
+2. `enum constant` references one value of an enum, e.g. `status.active`;
    it is valid as a default value (§default-values) and as a record value (§records-sample-data).
+3. The qualifications Volt has are `table.column` in a relationship
+   (§relationships-ref), `pkg.Name` naming a Go type (§types) and
+   `pkg.name` naming a declaration of an imported package (§imports).
 
 ### Settings Lists
 
@@ -591,8 +588,7 @@ settings      = "[", setting, { ",", setting }, "]" ;
 setting       = setting name, [ ":", setting value ] ;
 setting name  = identifier, { sp, { sp }, identifier } ;
 setting value = string | number | boolean | null
-              | color | expression literal | identifier
-              | inline ref value ;
+              | expression literal | identifier ;
 ```
 
 1. A setting is either a flag (`pk`, `unique`, `null`) or a key-value
@@ -601,9 +597,11 @@ setting value = string | number | boolean | null
    separated by spaces (`no transaction`, §migrations).
 3. Each element section below enumerates *which* settings are valid there;
    a setting not listed for a construct is invalid in that position.
+   The value of `ref:` is an endpoint, `table.column`, wherever `ref:`
+   is valid (§columns, §migrations).
 4. Within one settings list, each setting MUST appear at most once. The
-   only exceptions are the column settings `ref` and `tag` (§columns), which
-   MAY be repeated.
+   only exception is the column setting `tag` (§columns), which MAY be
+   repeated.
 5. A settings list MUST appear on the same line as (the end of) the
    construct it modifies.
 
@@ -620,10 +618,7 @@ element = project
         | enum
         | type decl
         | ref element
-        | sticky note
-        | table group
-        | records element
-        | diagram view ;
+        | records element ;
 ```
 
 1. A program is a sequence of top-level elements, in any order,
@@ -645,8 +640,10 @@ Declares project-level metadata. There MUST be at most one `Project` element
 per compiled schema.
 
 ```ebnf
-project          = "Project", [ name ], "{", project body, "}" ;
-project body     = { project property | note def } ;
+project          = "Project", [ name ], [ project settings ],
+                   "{", project body, "}" ;
+project settings = "[", "note", ":", string, "]" ;
+project body     = { project property } ;
 project property = identifier, ":", string, newline ;
 ```
 
@@ -654,53 +651,45 @@ project property = identifier, ":", string, newline ;
 2. Each property is a free-form key with a string value, one per line.
    The conventional well-known key is `database_type` (e.g. `'PostgreSQL'`,
    `'MySQL'`). Implementations MUST accept arbitrary property keys.
-3. A `note def` (§notes) documents the project.
+3. The `note:` setting (§notes) documents the project.
 
 ```volt
-Project ecommerce {
+Project ecommerce [note: 'E-commerce database schema'] {
   database_type: 'PostgreSQL'
-  Note: 'E-commerce database schema'
 }
 ```
 
 ### Table
 
 ```ebnf
-table          = "Table", table name, [ table alias ], [ table settings ],
+table          = "Table", name, [ table settings ],
                  "{", table body, "}" ;
-table alias    = "as", name ;
 
 table body     = { column
                  | indexes block
                  | validators block
-                 | note def
                  | partial injection
                  | records block
                  } ;
 
 table settings = "[", table setting, { ",", table setting }, "]" ;
-table setting  = "headercolor", ":", color
-               | "note", ":", string ;
+table setting  = "note", ":", string
+               | "model", ":", string ;
 ```
 
 1. A table MUST contain at least one column, either directly or via an
    injected TablePartial (§tablepartial).
-2. **Alias.** `as name` declares an alternative name usable anywhere the
-   table name is (e.g. in `Ref`s). The alias shares the namespace of
-   top-level table names and MUST be unique. The alias is not
-   schema-qualified.
-3. **Settings.** `headercolor` (visualization) and `note` are the only table
-   settings.
+2. **Name.** A table has one name, a single `name`: there is no alias
+   and no schema qualifier. Tables and groups share one namespace in a
+   package (§groups).
+3. **Settings.** `note` (§notes) and `model` are the only table
+   settings. `model:` pins the Go model name used by `volt gen` (by
+   default the singularized table name, §names); the `vet` rule
+   [`modelname`](lint.md#modelname) tells you when it is needed.
 4. Column names MUST be unique within a table after partial injection (§partial-injection-order).
 
-> **The `model` setting.** The table setting `model: string`
-> pins the Go model name used by `volt gen` (by default the
-> singularized table name). The
-> `vet` rule [`modelname`](lint.md#modelname) tells you when it is
-> needed. The core grammar above is unchanged.
-
 ```volt
-Table core.users as U [headercolor: #3498DB] {
+Table users [note: 'Registered accounts'] {
   id int [pk]
   email string [unique]
 }
@@ -719,17 +708,17 @@ column setting  = "pk"
                 | "null"
                 | "unique"
                 | "increment"
-                | "required"                          (* extension, below *)
+                | "required"
                 | "default", ":", default value
                 | "note", ":", string
-                | "ref", ":", inline ref value ;
+                | "tag", ":", string
+                | "ref", ":", name, ".", name ;   (* table.column, §relationships-ref *)
 ```
 
 1. **Type.** A column type is a Go type, matched case-sensitively, from
    a closed set: the built-ins `bool`, `int`, `float64`, `string`,
-   `[]byte` and `time.Time`; an enum of the package, optionally
-   schema-qualified (`v2.job_status`, §enum); or a type declared with
-   `Type` (§types). Anything else is an error naming the column and
+   `[]byte` and `time.Time`; an enum of the package (§enum); or a type
+   declared with `Type` (§types). Anything else is an error naming the column and
    the set; the `[]` of the grammar belongs to `[]byte` alone, so
    `[]string` is an unknown type. An unknown type is reported once, at
    the column, even when a TablePartial injects the column into several
@@ -784,8 +773,10 @@ column setting  = "pk"
    > when the primary key is composite. A keyword that is typed MUST be
    > applied; silently ignoring it while no changeset ever marks the
    > column would insert NULL into a NOT NULL column at run time.
-5. **`ref`** declares an inline relationship (§relationships-ref). The setting MAY be
-   repeated. Inline refs cannot carry names or settings.
+5. **`ref: table.column`** declares a relationship whose foreign key
+   is this column (§relationships-ref). It appears at most once on a
+   column (§settings-lists) and carries no referential actions; a
+   relationship that needs `delete:` or `update:` is a `Ref` element.
 6. Each column definition is terminated by a line break; the settings
    list is the only thing that follows the type.
 
@@ -839,7 +830,6 @@ Table users {
 default value = [ "-" ], number
               | string
               | boolean
-              | null
               | expression literal
               | enum constant ;
 ```
@@ -849,22 +839,24 @@ default value = [ "-" ], number
 | number        | `default: 123`, `default: -100`                       |
 | string        | `default: 'direct'`                                   |
 | boolean       | `default: false`                                      |
-| null          | `default: null`, only on a column that carries `null` |
 | expression    | `` default: `now() - interval '5 days'` ``            |
 | enum constant | `default: status.active`                              |
 
-A bare identifier that is not `true`/`false`/`null` and not a dotted enum
+A bare identifier that is not `true`/`false` and not a dotted enum
 constant is **not** a valid default value.
 
 1. **Typed.** A default MUST fit the column's type (§columns): an
    integer literal for `int`; a number for `float64`; a string for `string`;
    `true` or `false` for `bool`; a constant of the column's own enum
    for an enum column; for a declared type (§types), a literal of its
-   storage type. `null` is a default only on a column that carries
-   `null`. An expression literal is accepted on any column and is
+   storage type. An expression literal is accepted on any column and is
    SQLite's to judge. `[]byte` and `time.Time` columns take only an
-   expression literal or `null`. A default that does not fit is an
-   error naming the column and its type.
+   expression literal. A default that does not fit is an error naming
+   the column and its type.
+2. **NULL has one spelling.** `null` is not a default value: a column
+   that carries `null` and has no `default:` is NULL when a write
+   leaves it out, so `default: null` would only say that twice and is
+   an error.
 
 ### Indexes
 
@@ -880,12 +872,10 @@ index key      = index atom
 index atom     = name | expression literal ;
 
 index settings = "[", index setting, { ",", index setting }, "]" ;
-index setting  = "type", ":", identifier
-               | "name", ":", string
+index setting  = "name", ":", string
                | "unique"
                | "pk"
-               | "where", ":", expression literal
-               | "note", ":", string ;
+               | "where", ":", expression literal ;
 ```
 
 1. An index key is a single column, a single expression, or a parenthesized
@@ -899,22 +889,21 @@ index setting  = "type", ":", identifier
    key: a table has at most one, and none beside a `pk` column
    (§columns). Its key is columns only; an expression atom in it is an
    error.
-4. `type` selects the index method. Any identifier is accepted; the
-   conventional, portable values are `btree` and `hash`. A `pk` index
-   has no method, and `type:` on it is an error.
-5. **Name.** An index without `name:` whose key is columns only is
+4. **Name.** An index without `name:` whose key is columns only is
    named `idx_<table>_<col>[_<col>...]` from the SQLite table name
    and its key columns in order (§mapping-to-sqlite-ddl), so that a
    schema and a migration (§migrations) name one index one way;
    `name:` overrides it. An index with an expression atom MUST carry
    `name:`, since no name derives from an expression. A `pk` index is
    a table constraint and has no name: `name:` on it is an error.
-6. **`where`** takes an expression literal and makes the index
+5. **`where`** takes an expression literal and makes the index
    partial: only the rows for which the condition holds are indexed,
    so the index stays small, and a unique partial index constrains
    only those rows. The DDL carries it as `WHERE <expr>`, verbatim and
    SQLite's to judge. `where:` on a `pk` index is an error, since a
    primary key covers every row.
+6. An index carries no method and no note: SQLite has one index
+   method, and an index documents itself by its key.
 
 ```volt
 Table bookings {
@@ -925,7 +914,7 @@ Table bookings {
 
   indexes {
     (id, country) [pk]
-    country [name: 'idx_country', type: hash]
+    country [name: 'idx_country']
     (country, `lower(country)`) [unique, name: 'idx_bookings_country_ci']
     booking_date [where: `cancelled_at IS NULL`]
   }
@@ -934,103 +923,116 @@ Table bookings {
 
 ### Relationships (Ref)
 
-Relationships define foreign-key constraints. There are three syntactic
-forms: **long**, **short**, and **inline**.
+A relationship declares a foreign key. It has one direction and two
+spellings: the `Ref` element, and the column setting `ref:` (§columns).
+Both write the foreign key first.
 
 ```ebnf
-ref element      = ref long | ref short ;
+ref element  = "Ref", ":", ref endpoint, ">", ref endpoint,
+               [ ref settings ] ;
 
-ref long         = "Ref", [ name ], "{", ref body, "}" ;
-ref short        = "Ref", [ name ], ":", ref body ;
+ref endpoint = name, ".", column group ;
+column group = name
+             | "(", name, { ",", name }, ")" ;
 
-ref body         = ref endpoint, rel op, ref endpoint, [ ref settings ] ;
-
-ref endpoint     = table name, ".", column group ;
-column group     = name
-                 | "(", name, { ",", name }, ")" ;
-
-inline ref value = rel op, ref endpoint ;               (* rel op: §color-literals *)
-                   (* value of a column's ref: setting *)
-
-ref settings     = "[", ref setting, { ",", ref setting }, "]" ;
-ref setting      = "delete", ":", ref action
-                 | "update", ":", ref action
-                 | "color", ":", color
-                 | "inactive" ;
-ref action       = "cascade" | "restrict" | "set null"
-                 | "set default" | "no action" ;
+ref settings = "[", ref setting, { ",", ref setting }, "]" ;
+ref setting  = "delete", ":", ref action
+             | "update", ":", ref action ;
+ref action   = "cascade" | "restrict" | "set null"
+             | "set default" | "no action" ;
 ```
 
-1. **Cardinality operators** (left endpoint *op* right endpoint):
-   - `<` one-to-many: `users.id < posts.user_id`
-   - `>` many-to-one: `posts.user_id > users.id`
-   - `-` one-to-one: `users.id - user_infos.user_id`
-   - `<>` many-to-many: `authors.id <> books.id`
-2. **Endpoints.** Each endpoint is a (optionally schema-qualified) table
-   name — or table alias — followed by one column or a parenthesized column
-   group. In a composite relationship both endpoints MUST list the same
-   number of columns: `Ref: a.(x, y) > b.(x, y)`.
-3. **Foreign-key side.** For `>`, the left endpoint is the foreign key. For
-   `<`, the right endpoint is the foreign key. For `-`, the *second* (right)
-   endpoint is the foreign key, except in an inline ref, where the
-   declaring column is. An inline `>` or `<` follows the general rule,
-   the declaring column being its left endpoint (rule 4).
-4. **Inline form.** `ref: <op> <endpoint>` appears as a column setting
-   (§columns); the declaring column is the implicit left endpoint. Inline refs
-   MUST NOT carry a relationship name or settings.
-5. **Referential actions.** `delete:` and `update:` correspond to SQL
+1. **Direction.** The left endpoint is the foreign key and the right
+   endpoint the columns it references: `Ref: posts.user_id > users.id`
+   reads "posts.user_id references users.id". `>` is the only
+   relationship operator, and a `Ref` has no name and no braced form:
+   one relationship, one spelling.
+2. **Inline form.** The column setting `ref: table.column` declares the
+   same relationship with the declaring column as the foreign key, so
+   `user_id int [ref: users.id]` in `posts` is
+   `Ref: posts.user_id > users.id`. It names one column and carries no
+   settings (§columns).
+3. **Endpoints.** Each endpoint is a table name followed by one column
+   or a parenthesized column group. In a composite relationship both
+   endpoints MUST list the same number of columns:
+   `Ref: a.(x, y) > b.(x, y)`.
+4. **Foreign-key side.** The foreign key is the left endpoint of a
+   `Ref` and the declaring column of a `ref:`, without exception: the
+   checker, the lint rules, the DDL (§mapping-to-sqlite-ddl), the
+   generated Go and the shapes of a migration (§migrations) all read
+   it so.
+5. **One-to-one.** There is no one-to-one operator. A one-to-one
+   relationship is a foreign key that is also unique: `unique` on the
+   foreign-key column, its `pk`, or a unique index over exactly the
+   foreign-key columns, beside the reference, as in
+   `user_id int [unique, ref: users.id]`. The uniqueness is the
+   column's, and the DDL and the generated query surface treat it as
+   any unique column's (§mapping-to-sqlite-ddl, §generated-query-surface).
+6. **Many-to-many.** There is no many-to-many operator: a junction
+   table with two foreign keys models it.
+7. **Referential actions.** `delete:` and `update:` correspond to SQL
    `ON DELETE` / `ON UPDATE`. `set null` is an error unless every
-   foreign-key column of the relationship (rule 3) carries `null`, and
+   foreign-key column of the relationship carries `null`, and
    `set default` unless every one carries `null` or a `default:`
    (§columns, §default-values), since the database would otherwise
    write a NULL the column refuses.
-6. `inactive` and `color` are visualization-only settings (rendered as a
-   dotted line / line color); they have no SQL semantics.
-7. A many-to-many (`<>`) relationship denotes an implicit junction table on
-   SQL export; it MAY equivalently be modeled explicitly with two
-   many-to-one relationships.
 8. Zero-or-one / zero-or-many cardinality is not written explicitly; it is
    derived from the nullability of the foreign-key column (§columns).
 9. Duplicate relationships between the same column sets are invalid,
-   regardless of direction: `a.x > b.y` and `b.y < a.x` are the same
-   relationship.
-10. A `Ref` element declares exactly **one** relationship. The long form is
-    a stylistic variant of the short form, not a container for several
-    relationships; to declare several, write several `Ref` elements.
+   whichever side is the foreign key: `a.x > b.y` and `b.y > a.x`
+   relate the same columns.
+10. A `Ref` element declares exactly **one** relationship; to declare
+    several, write several `Ref` elements.
 
 ```volt
-// short form, with settings
-Ref fk_posts_user: posts.user_id > core.users.id [delete: cascade, update: no action]
-
-// long form
-Ref {
-  merchant_periods.(merchant_id, country_code) > merchants.(id, country_code)
+Table users {
+  id int [pk]
 }
 
-// inline form
 Table posts {
-  user_id int [null, ref: > core.users.id]
+  id int [pk]
+  user_id int [null, ref: users.id]
+  editor_id int [null]
 }
+
+Table profiles {
+  user_id int [unique, ref: users.id]
+}
+
+Table merchants {
+  id int
+  country_code string
+  indexes {
+    (id, country_code) [pk]
+  }
+}
+
+Table merchant_periods {
+  merchant_id int
+  country_code string
+}
+
+Ref: posts.editor_id > users.id [delete: set null, update: no action]
+
+Ref: merchant_periods.(merchant_id, country_code) > merchants.(id, country_code)
 ```
 
 ### Enum
 
 ```ebnf
-enum          = "Enum", table name, "{", { enum value }, "}" ;
+enum          = "Enum", name, "{", { enum value }, "}" ;
 enum value    = name, [ enum settings ], newline ;
 
 enum settings = "[", enum setting, { ",", enum setting }, "]" ;
 enum setting  = "note", ":", string ;
 ```
 
-1. The enum name MAY be schema-qualified; unqualified enums belong to
-   `public` (§schemas).
-2. An enum MUST contain at least one value. Values MUST be unique within
+1. An enum MUST contain at least one value. Values MUST be unique within
    the enum.
-3. A value containing spaces or special characters MUST be written as a
+2. A value containing spaces or special characters MUST be written as a
    quoted identifier: `"Not Yet Set"`.
-4. A column references an enum by using the (optionally schema-qualified)
-   enum name as its type: `status v2.job_status`.
+3. A column references an enum by using the enum name as its type:
+   `status job_status`.
 
 ```volt
 Enum job_status {
@@ -1101,31 +1103,33 @@ A `TablePartial` declares a reusable fragment of a table body. Tables inject
 partials by name.
 
 ```ebnf
-table partial     = "TablePartial", name, [ table settings ],
-                    "{", partial body, "}" ;
+table partial     = "TablePartial", name, "{", partial body, "}" ;
 partial body      = { column
                     | indexes block
                     | validators block
-                    | note def
                     } ;
 
 partial injection = "~", name, newline ;
 ```
 
-1. Partial names live in their own global (schema-less) namespace and MUST
-   be unique.
+1. Partial names live in their own namespace and MUST be unique.
 2. A partial body is a table body without `records` and without nested
-   partial injections.
+   partial injections. A partial takes no settings: a table's `note`
+   and `model` are its own.
 3. An injection `~p` inside a table body replaces itself with the entire
    content of partial `p` at that position. Injection order is source
    order.
-4. **Conflict resolution** when the same column, setting, or index is
-   defined more than once:
-   1. A definition written directly in the table overrides any partial.
+4. **Conflict resolution** when the same column is defined more than
+   once:
+   1. A column written directly in the table overrides any partial's.
    2. Otherwise the **last-injected** partial (in source order) wins.
+5. **Indexes are not overridden.** An index a partial injects whose key
+   is the key of an index of the table, or of an index another partial
+   injects, is an error: an index is declared once, in the table or in
+   one partial.
 
 ```volt
-TablePartial base_template [headercolor: #ff0000] {
+TablePartial base_template {
   id int [pk]
   created_at time.Time [default: `now()`]
 }
@@ -1142,7 +1146,7 @@ Table users {
 be declared at top level (naming the table) or inside a table body.
 
 ```ebnf
-records element = "Records", table name, records columns,
+records element = "Records", name, records columns,
                   "{", { record row }, "}" ;
 
 records block   = "Records", [ records columns ],
@@ -1156,9 +1160,7 @@ record value    = string
                 | boolean
                 | null
                 | expression literal
-                | enum constant          (* EnumName.value, §names-and-qualified-names *)
-                | empty ;
-empty           = ;                      (* nothing between separators *)
+                | enum constant ;        (* EnumName.value, §names-and-qualified-names *)
 ```
 
 1. Top-level records MUST name the target table and MUST list columns.
@@ -1172,15 +1174,17 @@ empty           = ;                      (* nothing between separators *)
    `time.Time` (ISO 8601 text, `'2024-01-15 10:30:00'`); `true` or
    `false` for `bool`; a constant of the column's own enum
    (`EnumName.value`) for an enum column; for a declared type, a
-   literal of its storage type. `null` and an empty field (nothing
-   between commas) are NULL and are allowed only on a column that
-   carries `null`.
+   literal of its storage type. `null` is NULL and is allowed only on a
+   column that carries `null`.
    A `[]byte` column takes an expression literal or NULL. An expression
    literal (backticks) is accepted on any column and is SQLite's to
    judge. A bare identifier other than `true`, `false` and `null` is
    **not** a value. A value that does not fit is an error naming the
    column and its type.
-5. **Coverage.** A records column list MUST name every column of the
+5. **No empty field.** Every field of a row holds a value: NULL is
+   written `null`, and nothing between two commas, before the first or
+   after the last is an error.
+6. **Coverage.** A records column list MUST name every column of the
    table, injected columns included (§partial-injection-order), that
    is NOT NULL, has no `default:` and is not the rowid alias (`int
    [pk, increment]`, §mapping-to-sqlite-ddl), since the database
@@ -1201,13 +1205,13 @@ Table users {
   Records (id, name, status) {
     1, 'Alice', job_status.created
     2, 'Bob', job_status.running
-    3, , null
+    3, null, null
   }
 }
 
 Table posts {
   id int [pk]
-  user_id int [ref: > users.id]
+  user_id int [ref: users.id]
   posted_at time.Time
 }
 
@@ -1219,90 +1223,36 @@ Records posts(id, user_id, posted_at) {
 
 ### Notes
 
-Notes attach human-readable documentation. There are two positions: a
-**note definition** inside an element body, and a top-level **sticky note**
-element.
+A note is human-readable documentation. It has one spelling, the
+`note:` setting, and one meaning: generated code carries it.
 
-```ebnf
-note def      = "Note", ":", string, newline
-              | "Note", "{", string, "}" ;
-
-sticky note   = "Note", name, [ note settings ], "{", string, "}" ;
-
-note settings = "[", "color", ":", ( color | "none" ), "]" ;
-```
-
-1. A `note def` may appear in the body of `Project`, `Table`,
-   `TablePartial`, and `TableGroup`. `Table`, `TablePartial`, and
-   `TableGroup` bodies MUST contain at most one note def; uniqueness is
-   not enforced in `Project` bodies.
-2. Notes on columns, indexes, and enum values use the `note:` setting
-   instead (§columns, §indexes, §enum).
-3. The value is a string; multi-line strings (§multi-line-string-literals) are permitted and
-   conventionally contain Markdown.
-4. A sticky note is a named, free-standing note (visualization only). Its
-   `color` setting accepts a color literal or `none` (no background).
+1. `note: string` is a setting of a `Project` (§project), a `Table`
+   (§table), a column (§columns) and an enum value (§enum), and of
+   nothing else: a partial, an index, a relationship, a group and a
+   migration carry no note.
+2. The value is a string. A multi-line string
+   (§multi-line-string-literals) is permitted and conventionally
+   contains Markdown; a settings list spans lines inside its brackets
+   (§line-structure-and-whitespace), so a long note stays readable.
+3. `Note` is not a keyword: a `Note:` line in a table body reads as a
+   column, and is an error there.
+4. Every note becomes a doc comment in generated Go
+   (§notes-become-doc-comments) and a comment in the DDL
+   (§mapping-to-sqlite-ddl).
 
 ```volt
-Note deployment_reminder [color: #F4D03F] {
-  'Remember to run migrations after deploy'
+Enum post_status {
+  draft [note: 'Visible to its author only']
+  published
 }
-```
 
-### TableGroup
-
-Groups related tables (documentation/visualization only; no SQL semantics).
-
-```ebnf
-table group          = "TableGroup", name, [ table group settings ],
-                       "{", table group body, "}" ;
-table group body     = { ( table name, newline ) | note def } ;
-
-table group settings = "[", table group setting,
-                       { ",", table group setting }, "]" ;
-table group setting  = "note", ":", string
-                     | "color", ":", color ;
-```
-
-1. Each body line names one table (optionally schema-qualified, or an
-   alias). Every named table MUST exist.
-2. A table MUST NOT belong to more than one TableGroup.
-3. A TableGroup is also a set of tables for the Volt query layer: its
-   name resolves as a group term and as a select target (Part II,
-   Groups and Selects over groups).
-
-```volt
-TableGroup e_commerce [color: #3498DB, note: 'Core commerce tables'] {
-  merchants
-  countries
-}
-```
-
-### DiagramView
-
-Declares a named view of the diagram, selecting which items are shown
-(visualization only).
-
-```ebnf
-diagram view  = "DiagramView", name, "{", { view category }, "}" ;
-
-view category = category kind, "{", category body, "}" ;
-category kind = "Tables" | "Notes" | "TableGroups" | "Schemas" ;
-category body = "*"
-              | { table name, newline } ;
-```
-
-1. Each category may appear at most once per view.
-2. `*` selects all items of that category; otherwise items are listed one
-   per line. An empty body (or omitted category) selects nothing.
-3. Listed names MUST refer to existing elements of the corresponding kind.
-
-```volt
-DiagramView sales_view {
-  Tables { users
-           orders }
-  Schemas { core }
-  Notes { * }
+Table posts [note: '''
+  A blog post.
+  Its author sees it before anyone else.
+'''] {
+  id int [pk]
+  title string [note: 'Shown in lists']
+  status post_status
 }
 ```
 
@@ -1310,35 +1260,24 @@ DiagramView sales_view {
 
 ## Static Semantics
 
-### Schemas
-
-1. Schemas are not declared; a schema exists if and only if at least one
-   table or enum names it as qualifier.
-2. Every unqualified table, enum, or relationship endpoint belongs to the
-   default schema **`public`**. An unqualified enum written as a column
-   type names the `public` enum whatever schema the table is in.
-
 ### Namespaces and Uniqueness
 
-Within one compiled schema:
+Within one package (§projects-and-packages):
 
-1. Table names (and aliases) MUST be unique per schema; the alias namespace
-   is shared with unqualified table names.
-2. Enum names MUST be unique per schema.
-3. TablePartial names, TableGroup names, sticky-note names, and DiagramView
-   names each form a single global namespace and MUST be unique. Declared
-   Type names (§types) form their own namespace, unique within the
-   package, and a Type MUST NOT spell an enum name.
+1. Table names MUST be unique. Tables and groups share this namespace
+   (§groups): a group MUST NOT take a table's name.
+2. Enum names MUST be unique.
+3. TablePartial names form their own namespace and MUST be unique.
+   Declared Type names (§types) form their own namespace, and a Type
+   MUST NOT spell an enum name.
 4. Column names MUST be unique within their table; enum values within their
    enum.
 
 ### Reference Resolution
 
-1. Relationship endpoints, index columns, records columns, TableGroup
-   members, and DiagramView members MUST resolve to existing elements.
-2. A table alias may be used interchangeably with the table name in
-   endpoints and group members.
-3. Composite relationship endpoints MUST have equal arity, and referenced
+1. Relationship endpoints, index columns and records columns MUST
+   resolve to existing elements.
+2. Composite relationship endpoints MUST have equal arity, and referenced
    column lists must match in count and order.
 
 ### Partial Injection Order
@@ -1363,30 +1302,30 @@ The complete grammar in EBNF (ISO/IEC 14977), collected from the sections
 above.
 
 ```ebnf
-(* ===== 5. Program ===== *)
+(* ===== Program structure ===== *)
 
 program              = { element } ;
 
 element              = project | table | table partial | enum
-                     | type decl | ref element | sticky note | table group
-                     | records element | diagram view ;
+                     | type decl | ref element | records element ;
 
-(* ===== 6.1 Project ===== *)
+(* ===== Project ===== *)
 
-project              = "Project", [ name ], "{", project body, "}" ;
-project body         = { project property | note def } ;
+project              = "Project", [ name ], [ project settings ],
+                       "{", project body, "}" ;
+project settings     = "[", "note", ":", string, "]" ;
+project body         = { project property } ;
 project property     = identifier, ":", string, newline ;
 
-(* ===== 6.2–6.6 Table ===== *)
+(* ===== Table, Columns, Default Values, Indexes ===== *)
 
-table                = "Table", table name, [ table alias ],
-                       [ table settings ], "{", table body, "}" ;
-table alias          = "as", name ;
+table                = "Table", name, [ table settings ],
+                       "{", table body, "}" ;
 table body           = { column | indexes block | validators block
-                       | note def | partial injection | records block } ;
+                       | partial injection | records block } ;
 table settings       = "[", table setting, { ",", table setting }, "]" ;
-table setting        = "headercolor", ":", color
-                     | "note", ":", string ;
+table setting        = "note", ":", string
+                     | "model", ":", string ;
 
 column               = name, column type, [ column settings ], newline ;
 column type          = [ "[", "]" ], type name ;
@@ -1396,8 +1335,9 @@ column setting       = "pk" | "null"
                      | "unique" | "increment" | "required"
                      | "default", ":", default value
                      | "note", ":", string
-                     | "ref", ":", inline ref value ;
-default value        = [ "-" ], number | string | boolean | null
+                     | "tag", ":", string
+                     | "ref", ":", name, ".", name ;
+default value        = [ "-" ], number | string | boolean
                      | expression literal | enum constant ;
 
 indexes block        = "indexes", "{", { index }, "}" ;
@@ -1406,99 +1346,63 @@ index key            = index atom
                      | "(", index atom, { ",", index atom }, ")" ;
 index atom           = name | expression literal ;
 index settings       = "[", index setting, { ",", index setting }, "]" ;
-index setting        = "type", ":", identifier
-                     | "name", ":", string
+index setting        = "name", ":", string
                      | "unique" | "pk"
-                     | "where", ":", expression literal
-                     | "note", ":", string ;
+                     | "where", ":", expression literal ;
 
-(* ===== 6.7 Ref ===== *)
+(* ===== Relationships ===== *)
 
-ref element          = ref long | ref short ;
-ref long             = "Ref", [ name ], "{", ref body, "}" ;
-ref short            = "Ref", [ name ], ":", ref body ;
-ref body             = ref endpoint, rel op, ref endpoint, [ ref settings ] ;
-ref endpoint         = table name, ".", column group ;
+ref element          = "Ref", ":", ref endpoint, ">", ref endpoint,
+                       [ ref settings ] ;
+ref endpoint         = name, ".", column group ;
 column group         = name | "(", name, { ",", name }, ")" ;
-inline ref value     = rel op, ref endpoint ;
 ref settings         = "[", ref setting, { ",", ref setting }, "]" ;
 ref setting          = "delete", ":", ref action
-                     | "update", ":", ref action
-                     | "color", ":", color
-                     | "inactive" ;
+                     | "update", ":", ref action ;
 ref action           = "cascade" | "restrict" | "set null" | "set default"
                      | "no action" ;
 
-(* ===== 6.8 Enum ===== *)
+(* ===== Enum ===== *)
 
-enum                 = "Enum", table name, "{", { enum value }, "}" ;
+enum                 = "Enum", name, "{", { enum value }, "}" ;
 enum value           = name, [ enum settings ], newline ;
 enum settings        = "[", enum setting, { ",", enum setting }, "]" ;
 enum setting         = "note", ":", string ;
 
-(* ===== 6.8a Types ===== *)
+(* ===== Types ===== *)
 
 type decl            = "Type", type name, storage type, [ "from", string ], newline ;
 storage type         = column type ;
 
-(* ===== 6.9 TablePartial ===== *)
+(* ===== TablePartial ===== *)
 
-table partial        = "TablePartial", name, [ table settings ],
-                       "{", partial body, "}" ;
-partial body         = { column | indexes block | validators block | note def } ;
+table partial        = "TablePartial", name, "{", partial body, "}" ;
+partial body         = { column | indexes block | validators block } ;
 partial injection    = "~", name, newline ;
 
-(* ===== 6.10 Records ===== *)
+(* ===== Records ===== *)
 
-records element      = "Records", table name, records columns,
+records element      = "Records", name, records columns,
                        "{", { record row }, "}" ;
 records block        = "Records", [ records columns ],
                        "{", { record row }, "}" ;
 records columns      = "(", name, { ",", name }, ")" ;
 record row           = record value, { ",", record value }, newline ;
 record value         = string | [ "-" ], number | boolean | null
-                     | expression literal | enum constant | empty ;
-empty                = ;
+                     | expression literal | enum constant ;
 
-(* ===== 6.11 Notes ===== *)
-
-note def             = "Note", ":", string, newline
-                     | "Note", "{", string, "}" ;
-sticky note          = "Note", name, [ note settings ], "{", string, "}" ;
-note settings        = "[", "color", ":", ( color | "none" ), "]" ;
-
-(* ===== 6.12 TableGroup ===== *)
-
-table group          = "TableGroup", name, [ table group settings ],
-                       "{", table group body, "}" ;
-table group body     = { ( table name, newline ) | note def } ;
-table group settings = "[", table group setting,
-                       { ",", table group setting }, "]" ;
-table group setting  = "note", ":", string
-                     | "color", ":", color ;
-
-(* ===== 6.13 DiagramView ===== *)
-
-diagram view         = "DiagramView", name, "{", { view category }, "}" ;
-view category        = category kind, "{", category body, "}" ;
-category kind        = "Tables" | "Notes" | "TableGroups" | "Schemas" ;
-category body        = "*" | { table name, newline } ;
-
-(* ===== 4. Common forms ===== *)
+(* ===== Common forms ===== *)
 
 name                 = identifier ;
-schema name          = name ;
-table name           = [ schema name, "." ], name ;
 enum constant        = name, ".", name ;
 
 settings             = "[", setting, { ",", setting }, "]" ;
 setting              = setting name, [ ":", setting value ] ;
 setting name         = identifier, { sp, { sp }, identifier } ;
-setting value        = string | number | boolean | null | color
-                     | expression literal | identifier
-                     | inline ref value ;
+setting value        = string | number | boolean | null
+                     | expression literal | identifier ;
 
-(* ===== 3. Lexical grammar ===== *)
+(* ===== Lexical grammar ===== *)
 
 newline              = ? U+000A LINE FEED ? ;
 sp                   = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
@@ -1545,12 +1449,11 @@ exponent             = ( "e" | "E" ), [ "+" | "-" ], digit, { digit } ;
 boolean              = "true" | "false" ;
 null                 = "null" ;
 
-color                = "#", ( 3 * hex digit | 6 * hex digit ) ;
-
 expression literal   = "`", { any char - "`" }, "`" ;
-rel op               = "<>" | "<" | ">" | "-" ;
 punct                = "{" | "}" | "[" | "]" | "(" | ")"
-                     | "," | ":" | ";" | "." | "~" | "*" ;
+                     | "," | ":" | "." | "~" | "*" | "/"
+                     | "<" | ">" | "-" | "+" | "\" | "="
+                     | "!=" | "<=" | ">=" ;
 ```
 
 ---
@@ -1559,9 +1462,7 @@ punct                = "{" | "}" | "[" | "]" | "(" | ")"
 
 # Part II — The Project and Routing Layer
 
-**Version:** 0.1 (v0 surface: packages, imports, pipelines, scopes,
-routes, resources)
-**Status:** Normative for the v0 implementation in this repository.
+**Status:** Normative.
 Part I specifies the schema core; this part specifies everything Volt
 adds above it. Both parts cite sections by heading name, never by
 number, and a diagnostic cites the section it enforces as
@@ -1693,7 +1594,7 @@ package path = name, { slash, name } ;
 5. **Import cycles are errors.** The package import graph MUST be
    acyclic.
 
-```volt
+```volt fragment
 package app
 
 import (
@@ -1717,7 +1618,7 @@ go ref   = name, [ ".", name ] ;
    `func(http.Handler) http.Handler` by name: `volt.<Name>` (the volt
    runtime), `<Name>` or `<package name>.<Name>` (a function of the
    containing package). Referencing an *imported* package's function is
-   not supported in v0 and is an error suggesting a local wrapper.
+   an error suggesting a local wrapper.
    A function of the containing package MUST exist as a non-generic
    top-level function in the package directory's non-test Go files that
    the go tool would compile for it (go/build's file constraints: no
@@ -1730,7 +1631,7 @@ go ref   = name, [ ".", name ] ;
 3. Pipelines contribute middleware in declaration order, outermost
    first, composed statically in generated code (§scopes).
 
-```volt
+```volt fragment
 Pipeline api {
 	use volt.RequestID
 	use BearerAuth
@@ -1834,8 +1735,12 @@ tables — instead of to a controller. Volt generated the
 method, so it knows the parameters and the row type, and it writes the
 handler: bind, call, render. Nothing is dispatched by name at runtime.
 
-```volt
-import ( db )
+```volt fragment
+package app
+
+import (
+	db
+)
 
 Scope /api [pipe: api] {
 	get    /users            db.UserList
@@ -2010,7 +1915,7 @@ An **event route** streams server-sent events to every connected
 client, so what one user does — starts a computation, finishes it,
 changes rows — reaches every open screen without polling.
 
-```volt
+```volt fragment
 Scope / [pipe: api] {
 	get /events volt.Events
 }
@@ -2062,8 +1967,6 @@ Scope settings (the complete set):
    shape: `func(http.ResponseWriter, *volt.Request, error)`. Routes
    without one use the runtime default.
 
-### Reserved
-
 ### Route names and reverse URLs
 
 1. Every route derives a **helper name**: the scope name prefixes
@@ -2113,7 +2016,7 @@ Scope settings (the complete set):
    checked package always registers cleanly; the registration panic
    remains as a backstop a conforming generator never triggers.
 
-```volt
+```volt fragment
 Scope / [pipe: api, error_handler: Errors] {
 	get /            Home.Index [name: root]
 	Scope /admin [name: admin] {
@@ -2189,9 +2092,8 @@ ident list = "(", name, { ",", name }, ")" ;   (* the value of only: and except:
    import used (§imports).
 2. The name matches the table's declared name **exactly**: names are
    case-sensitive, and a name differing only in case is an error naming
-   the right spelling. A qualified name that matches nothing is an
-   error; an unqualified one that matches nothing is a resource
-   without a schema (clause 6).
+   the right spelling. A name that matches nothing, qualified or not,
+   is an error (§declaration).
 3. The resolved table MUST have a single-column primary key of type
    `int` or `string`; that type becomes the key parameter's type.
    Composite, missing, or unroutable keys are errors.
@@ -2211,15 +2113,19 @@ ident list = "(", name, { ",", name }, ")" ;   (* the value of only: and except:
    former is not a resources setting (§settings-whitelists), the latter prefixes both
    sides equally.
 
-```volt
-resources db.users [only: (index, show, create)]
+```volt fragment
+Scope /api {
+	resources db.users [only: (index, show, create)]
+}
 ```
 
 ### Default handlers
 
-```volt
-resources db.users [default]
-resources db.tags  [default, except: (delete)]
+```volt fragment
+Scope /api {
+	resources db.users [default]
+	resources db.tags  [default, except: (delete)]
+}
 ```
 
 1. `[default]` turns every surviving action into a **query route**
@@ -2271,7 +2177,7 @@ the same iteration and cannot disagree.
 dataset = "dataset", [ name, "." ], name, [ settings ], newline ;
 ```
 
-```volt
+```volt fragment
 // db: Group da_farm = DA \ (da_kody, …)
 //     Select browse for da_farm where rok = :rok and idgr in :idgr
 Scope /da [pipe: api] {
@@ -2348,22 +2254,14 @@ declares migrations, `volt_migrations.go` carries them in statement form
 (§migration-tooling). All generated files carry the
 standard generated-code header and are gofmt-stable.
 
-## Reserved words for future layers
-
-No word is currently reserved. `Dataset` was reserved until the
-`dataset` scope item landed (Datasets).
-
 ---
 
 ## Groups
 
 A **Group** names a set of tables so the same code can be generated for
-every member (§selects-over-groups). It is not a diagram construct: `TableGroup`
-(Part I §tablegroup) partitions the ER diagram and allows one group per
-table; a `Group` is a query set — overlapping freely, invisible to
-diagrams. A `TableGroup` is nevertheless a set of tables, and it is
-usable as one: wherever a group is named, a TableGroup name denotes
-its members.
+every member (§selects-over-groups). It is the one set construct of the
+language: groups overlap freely, a table belonging to any number of
+them.
 
 ```ebnf
 group decl = "Group", plain name,
@@ -2376,7 +2274,7 @@ group term    = plain name
               | "(", plain name, { ",", plain name }, ")" ;
 ```
 
-```volt
+```volt fragment
 Group series {
   ms_revenue
   ms_usage
@@ -2387,13 +2285,13 @@ Group wide   = series + ks_costs \ ms_usage
 Group public = Commerce \ (audit_log, api_keys)
 ```
 
-1. Group names share one namespace per package, disjoint from tables;
-   redeclaration is an error.
-2. A name in a `group term` resolves, case-sensitively, to a table, a
-   group or a TableGroup of the same package — tables first, then
-   groups, then TableGroups. A TableGroup denotes its members in
-   declaration order. An unknown name is an error with the same
-   did-you-mean aids as §table-resolution.
+1. Tables and groups share one namespace per package
+   (§namespaces-and-uniqueness): a group MUST NOT take the name of a
+   table, and redeclaring a group is an error.
+2. A name in a `group term` resolves, case-sensitively, to a table or a
+   group of the same package, tables first; the same order resolves a
+   select's target (§selects-over-groups). An unknown name is an error
+   with the same did-you-mean aids as §table-resolution.
 3. The block form is the expression form with every member joined by
    `+`. Evaluation is left to right: `+` adds a term's member set
    (a table adds itself), `\` — set difference — removes it. A
@@ -2412,7 +2310,7 @@ Group public = Commerce \ (audit_log, api_keys)
 A **Pred** names a boolean expression over the columns of an as-yet
 unnamed table. The expression language is deliberately **closed** —
 it is not SQL and never grows toward it; anything it cannot say
-belongs in a raw `Select` body (reserved) or the dynamic layer.
+belongs in the dynamic layer (§generated-query-surface).
 
 ```ebnf
 pred decl    = "Pred", plain name, "{", { newline }, pred expr, { newline }, "}", newline ;
@@ -2434,7 +2332,7 @@ literal      = number | string | boolean ;
 pred keyword = "and" | "or" | "not" | "in" | "like" | "is" | "null" ;
 ```
 
-```volt
+```volt fragment
 Pred current { org = :org and year = :year }
 Pred recent  { year >= :since }
 Pred fresh   { current and recent }
@@ -2471,8 +2369,8 @@ Pred chosen  { org in :orgs }
      in; one param name MUST resolve to one type across the whole use
      site — a list and a scalar use of the same name disagree — or
      the use is an error naming both positions.
-4. An enum-typed column cannot be compared in the predicate language
-   in v1; with `[]byte` (rule 3) it is the only column type predicates
+4. An enum-typed column cannot be compared in the predicate language;
+   with `[]byte` (rule 3) it is the only column type predicates
    refuse. Whether typed enum parameters should lift this is
    hypotheses H5.
 5. Type classes follow the column types (§columns): numeric = `int`
@@ -2545,8 +2443,8 @@ Pred chosen  { org in :orgs }
 ## Selects over groups
 
 A **Select** declares a query once and generates it for every member
-of a target (§groups group, a TableGroup used as a set, or a single table
-treated as a one-member group).
+of a target: a group (§groups), or a single table treated as a
+one-member group.
 
 ```ebnf
 select decl = "Select", plain name, [ projection ], "for", plain name,
@@ -2559,13 +2457,13 @@ column term = column name
 column name = name ;
 ```
 
-```volt
+```volt fragment
 Select rows    for series where current [order: (year desc, id asc)]
 Select stale   for ms_usage where not recent
 Select all     for series
 Select summary (id, org, year)    for series where current
-Select public  (* \\ password_hash) for accounts
-Select brief   (* \\ (password_hash, bio, avatar)) for accounts
+Select public  (* \ password_hash) for accounts
+Select brief   (* \ (password_hash, bio, avatar)) for accounts
 ```
 
 The clauses read in SQL order — name, columns, source, filter — and
@@ -2575,8 +2473,10 @@ the optional projection narrows the emitted columns.
    the method `<Model><SelectName>` (§mapping-to-go naming). A collision
    with a generated CRUD/dynamic method name, or between two selects
    on an overlapping member, is an error.
-2. `for` resolves case-sensitively to a group, else a table, else a
-   TableGroup — whose members are the target set (§groups aids apply).
+2. `for` names a table or a group of the package, resolved as a group
+   term is (§groups): case-sensitively, tables first, with the same
+   did-you-mean aids. Since a group cannot take a table's name, at most
+   one declaration matches.
 3. `where` takes a full §predicates expression — named Preds, inline
    comparisons, and any composition of the two. Omitted = all rows.
 4. **The agreement rule.** Every column referenced by the `where`
@@ -2623,15 +2523,15 @@ the optional projection narrows the emitted columns.
      mapped per §names (select `summary` → `Summary`), serving
      every member: one wire type, N sources. Its fields keep the
      columns' declared order from the list, each with the agreed type
-     and the **default** tag pair `db:"col" json:"col"` (A.5) — the
+     and the **default** tag pair `db:"col" json:"col"` (§struct-tags): the
      shared type belongs to the select, not to any one table, so
      per-table `tag:` passthroughs and doc comments do not transfer.
      Agreement is judged on the generated field type, so an enum-typed
      column agrees exactly when every member resolves it to the same
      generated enum type.
-   - **Star with exclusions** `(* \\ a \\ b)`, or as a set
-     `(* \\ (a, b))` — the same `\\` and set term as group algebra
-     (§groups); `-` is an error naming `\\`. At least one exclusion,
+   - **Star with exclusions** `(* \ a \ b)`, or as a set
+     `(* \ (a, b))`, with the same `\` and set term as group algebra
+     (§groups); `-` is an error naming `\`. At least one exclusion,
      no duplicates. Every excluded column MUST exist in every member
      (§groups: the algebra must say something true), and no member may
      end up with zero columns. Each member projects its own columns,
@@ -2639,7 +2539,7 @@ the optional projection narrows the emitted columns.
      **struct derivative** named `<Model><SelectName>`
      (`User` + `public` → `UserPublic`): every kept field is copied
      verbatim from the model — Go name, Go type, assembled struct tag
-     (A.5, `tag:` passthroughs included), doc comment — so the
+     (§struct-tags, `tag:` passthroughs included), doc comment, so the
      derivative behaves exactly like the model minus the removed
      fields.
    - Columns referenced by `where` or `order:` need not be projected.
@@ -2741,7 +2641,7 @@ func EmailShape(email string) error {
    422 for failed validators and 409 for a unique violation, itemizing
    every field error (§changesets), which the error spine renders into
    the error body (§formats) so a form can mark the fields.
-8. **`required` columns** (Part I §columns extension) carry the one
+8. **`required` columns** (§columns) carry the one
    built-in rule of `Validate` the schema switches on per column; the
    other, enum membership, every enum column gets (§changesets). The
    type's empty value is refused, Go only, like every validator.
@@ -2805,8 +2705,8 @@ user, err := q.UserUpdate(ctx, cs)
    `default:` of a built-in or enum column, §default-values) and
    nothing set, so `Row()` and `Validate` see the literal default the
    database writes for an unmarked column that has one, and NULL for
-   an unmarked column that carries `null` with no default or
-   `default: null`; an expression default, and a declared type's
+   an unmarked column that carries `null` with no default; an
+   expression default, and a declared type's
    default, are the database's alone and read as the zero value until
    the row is stored, as the auto-increment key does until the
    database assigns it. An unmarked NOT NULL column without a default
@@ -2885,7 +2785,7 @@ user, err := q.UserUpdate(ctx, cs)
    `rt.StmtCache` when `WithCache` was set, like the dynamic layer.
    An invalid changeset is `*rt.Invalid` from either, before any
    statement runs.
-9. **`required`** (Part I §columns extension) is one of the two
+9. **`required`** (§columns) is one of the two
    built-in rules of `Validate`, beside enum membership (rule 6), and
    the one the schema switches on per column: it refuses the type's
    empty value, `""` for `string` and enum columns, `0` for `int` and
@@ -2942,8 +2842,7 @@ label              = ( letter | digit ), { letter | digit } ;
 
 migration settings = "[", migration setting, { ",", migration setting }, "]" ;
 migration setting  = "irreversible"
-                   | "no transaction"
-                   | "note", ":", string ;
+                   | "no transaction" ;
 
 migration body     = { operation }
                    | "up", "{", { operation }, "}",
@@ -2997,7 +2896,7 @@ words of a migration body (`up`, `down`, `create`, `drop`, `rename`,
 `alter`, `rebuild`, `exec`, `table`, `index`, `add`, `to`) are
 keywords inside a `Migration` only; elsewhere they are identifiers.
 
-```volt
+```volt fragment
 Migration 0002__users_bio {
   alter table users {
     add bio string [null]
@@ -3035,26 +2934,27 @@ Migration 0002__users_bio {
    column is NOT NULL unless it carries `null`, as a schema column is,
    a key column MUST NOT carry `null`, and a `shape body` has at most
    one primary key, one `pk` column or one `[pk]` index, as a table
-   has (§columns). A partial injection, a `validators` block, a
-   records block and a `Note` are not part of a `shape body`.
+   has (§columns). A partial injection, a `validators` block and a
+   records block are not part of a `shape body`.
 4. **Settings whitelist.** In a migration, a column setting is one of
    `pk`, `increment`, `null`, `unique`, `default:`, `ref:`, `delete:`,
-   `update:`, `note:`, and in a `rebuild` also `from:` (rule 9);
+   `update:`, and in a `rebuild` also `from:` (rule 9);
    `from:` anywhere else is an error.
-   `ref:` takes `>` or `-` only: the declaring column holds the key,
-   and `<` and `<>` reference the other way and are not a column's to
-   declare. `delete:` and `update:` take the referential actions of
+   `ref: table.column` is spelled as in the schema (§columns): the
+   declaring column holds the key. `delete:` and `update:` take the referential actions of
    §relationships-ref (`cascade`, `restrict`, `set null`, `set
    default`, `no action`) for the column's `ref:`, so that a schema
    foreign key with an action can be matched; without a `ref:` they
    are errors. As there, `set null` requires the column to carry
    `null`, and `set default` requires `null` or a `default:`. An index
    setting is one of `unique`, `pk` (in a shape body only, rule 10),
-   `name:`, `where:`, `note:`; `type:` is an error, since SQLite has no
-   index methods, and on a `pk` index `name:`, `where:` and an
+   `name:`, `where:`; on a `pk` index `name:`, `where:` and an
    expression atom are errors, as in §indexes. `tag:`, `required` and
-   `model:` describe Go and are errors here, as is `headercolor:`. An
-   `exec` takes `down:` and no other setting.
+   `model:` describe Go, and `note:` documents the schema, which
+   generated code carries; all four are errors here, in every position
+   of a migration. A migration takes `irreversible` and
+   `no transaction` and no other setting; an `exec` takes `down:` and
+   no other setting.
 5. **`create table`.** The body MUST contain at least one column;
    names are unique within it. It lowers by the DDL mapping exactly
    as the schema's `Table` does (§mapping-to-sqlite-ddl), index names
@@ -3071,9 +2971,9 @@ Migration 0002__users_bio {
    checked here rather than at run time: a column without `null` MUST
    carry a `default:`; the default MUST be a literal; `pk` and
    `increment` are errors; `ref:` requires the column to carry `null`;
-   a column with `ref:` has no `default:` other than `null`, since
-   SQLite refuses to add a `REFERENCES` column with another default
-   to a table that has rows; `unique` lowers to the added column plus
+   a column with `ref:` takes no `default:`, since SQLite refuses to
+   add a `REFERENCES` column with a default other than NULL to a table
+   that has rows; `unique` lowers to the added column plus
    a `CREATE UNIQUE INDEX` on it. `drop` is `DROP COLUMN`; the
    optional type and settings are the dropped column's shape, which
    in a flat body is the inverse `add` and MUST satisfy the `add`
@@ -3257,7 +3157,7 @@ true. What is checked instead is their composition.
    ever alters a database from the schema alone. The schema is the
    target; a migration is the only path to it.
 
-```volt
+```volt fragment
 package db
 
 Table users {
@@ -3353,8 +3253,7 @@ migration name     = digit, digit, digit, digit, { digit }, "__", label ;
 label              = ( letter | digit ), { letter | digit } ;
 migration settings = "[", migration setting, { ",", migration setting }, "]" ;
 migration setting  = "irreversible"
-                   | "no transaction"
-                   | "note", ":", string ;
+                   | "no transaction" ;
 migration body     = { operation }
                    | "up", "{", { operation }, "}",
                      [ "down", "{", { operation }, "}" ] ;
@@ -3407,7 +3306,7 @@ flags.
 ## Conformance and the proof chain
 
 Testing never proves software correct; a specification with an
-executable conformance surface narrows the gap deliberately. The v0
+executable conformance surface narrows the gap deliberately. The
 chain, each link runnable by `go test ./...`:
 
 1. **Corpus ↔ spec.** Every snippet in `lang/conformance/snippets/`
@@ -3445,6 +3344,15 @@ chain, each link runnable by `go test ./...`:
    them (a token dropped, inserted, or two exchanged) MUST be accepted
    by the front end exactly when the grammar accepts it. The grammar
    is not a picture of the parser; it is checked against it.
+6. **Examples ↔ front end.** Every `volt` block of this document runs
+   (`lang/spec_examples_test.go`): a plain block is a whole file the
+   front end accepts, through the schema pass without a package clause
+   and through the project pass with one, and a Part II declaration in
+   a plain block needs its package clause; a block whose fence reads
+   `volt invalid` MUST be rejected; a block whose fence reads
+   `volt fragment` is a piece of a file, shown without its package
+   clause or the Go functions and packages it names, and MUST parse
+   alone. An example cannot drift from the language it shows.
 
 ---
 
@@ -3475,7 +3383,7 @@ the set.
 |---|---|
 | `bool`, `int`, `float64`, `string`, `time.Time` | the same |
 | `[]byte` | `[]byte`; nil is NULL, never wrapped |
-| enum type (optionally schema-qualified) | generated `type X string` + constants |
+| enum type | generated `type X string` + constants |
 | declared `Type pkg.Name` (§types) | `pkg.Name`, imported as `import pkg "path"` |
 
 `int` is Go's `int`: Volt targets 64-bit platforms (amd64 and arm64),
@@ -3502,24 +3410,24 @@ comparisons take plain `T`, NULL is explicit (`IsNull`, `SetNull`).
 
 `snake_case` → `PascalCase` with the Go initialisms convention
 (`user_id` → `UserID`, `api_key` → `APIKey`). An enum's generated type
-is `E` + the PascalCase name (`order_status` → `EOrderStatus`; a
-non-`public` schema prefixes as for models), and each value is a
+is `E` + the PascalCase name (`order_status` → `EOrderStatus`), and each value is a
 constant of that type. Model names are the
 singular of the table name (`users` → `User`), overridable with
 `[model:]` — the only model-naming override; `resources`' `singular:`
 setting (§settings) renames the route member helper, never the model.
-Non-`public` schemas prefix the type (`core.users` →
-`CoreUser`) so equal base names cannot collide. A leading digit is
+A leading digit is
 prefixed (`2fa_codes` → `X2faCode`). Two declarations mapping to the
 same Go identifier is a generation error; the `dynname` lint reports
 the dynamic layer's concatenation collisions ahead of time.
 
 ### Notes become doc comments
 
+Every note is the `note:` setting (§notes):
+
 | Note on | Generated position |
 |---|---|
 | `Project` | package comment |
-| `Table` (body form wins over `[note:]`) | struct doc comment |
+| `Table` | struct doc comment |
 | column | field doc comment |
 | enum value | constant doc comment |
 | injected partial column | travels with the column; a §tablepartial override brings its own note |
@@ -3604,14 +3512,12 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 | Declared | SQLite |
 |---|---|
 | enum-typed column | `TEXT`; SQLite has no enum type, and the value set is the generated Go type's (§go-types) |
-| `core.users` (schema) | `core_users` — SQLite has no schemas; collisions are generation errors |
 | column without `null`, key columns included (SQLite's `PRIMARY KEY` does not imply NOT NULL) | `NOT NULL`, the rowid alias below excepted; a column that carries `null` has no nullability constraint (§columns) |
 | `int` `[pk, increment]` | exactly `INTEGER PRIMARY KEY` (rowid alias, auto-assigned); SQLite's `AUTOINCREMENT` keyword deliberately avoided — it only adds the never-reuse-an-id bookkeeping the SQLite docs discourage. Any other `increment` placement is a check error (§columns) |
 | composite pk (`[pk]` index) | `PRIMARY KEY (a, b)` table constraint; members get `NOT NULL` |
 | index | `CREATE INDEX <name> ON <table> (<key>)`, `UNIQUE` for `unique`, `WHERE <expr>` for `where:` (§indexes); the name is `name:` when given, else `idx_<table>_<col>[_<col>...]` from the SQLite table name and the key columns; two indexes of one table that derive one name are a generation error |
-| refs (`>`, `<`, `-`) | `FOREIGN KEY … REFERENCES` with `ON DELETE` / `ON UPDATE`; FK side per §relationships-ref |
-| one-to-one (`-`) | adds `UNIQUE` on the FK column unless something already guarantees it |
-| many-to-many (`<>`) | nothing — model the junction table explicitly |
+| relationship (`Ref:`, `ref:`) | `FOREIGN KEY (<fk>) REFERENCES <table> (<columns>)` with `ON DELETE` / `ON UPDATE`; the foreign key is the left endpoint of a `Ref` and the declaring column of a `ref:` (§relationships-ref) |
+| one-to-one (a unique foreign key, §relationships-ref) | the uniqueness as written, `UNIQUE` on the column or the unique index; the relationship adds nothing |
 | `int`, `bool` | `INTEGER` (booleans stored 0/1; `true`/`false` in records and defaults become 1/0) |
 | `float64` | `REAL` |
 | `string` | `TEXT` |
@@ -3620,7 +3526,7 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 | declared `Type` (§types) | the column type of its storage type |
 | backtick expressions | verbatim; parenthesized in `DEFAULT` as SQLite requires |
 | validators, `required` | nothing; the database never carries a `CHECK` (§validators) |
-| `records` | multi-row `INSERT` statements after all tables, in source order; empty fields become `NULL` |
+| `records` | multi-row `INSERT` statements after all tables, in source order; `null` becomes `NULL` |
 | unknown type | check error naming the column (§columns); the generator never sees one |
 
 Identifiers are quoted only when needed (not a plain lower-case name,

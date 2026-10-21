@@ -1,5 +1,6 @@
-// spec: §default-values — null is a default only on a nullable column
-// want: is null, but the column is not nullable
+// spec: §default-values, null is not a default value, on a nullable column or any other
+// want: null is not a default value
 Table t {
-  n int [default: null]
+  n int [null, default: null]
+  m int [default: null]
 }

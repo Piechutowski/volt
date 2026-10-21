@@ -15,10 +15,8 @@ Table "users" {
   }
 }
 
-Project blog {
+Project blog [note: 'the blog schema'] {
   database_type: 'SQLite'
-  Note: 'first'
-  Note: 'second'
 }
 
 Enum post_status {
@@ -26,7 +24,7 @@ Enum post_status {
   published
 }
 Enum orphan_status { a }
-Enum core.kind { widget }
+Enum core_kind { widget }
 
 TablePartial stamps {
   id int
@@ -40,10 +38,10 @@ TablePartial audit_b {
 }
 TablePartial orphan_partial { x int }
 TablePartial owned {
-  owner_id string [ref: > users.id]
+  owner_id string [ref: users.id]
 }
 
-Table posts as P {
+Table posts {
   ~stamps
   id string
   title string
@@ -54,16 +52,13 @@ Table posts as P {
   key int [pk]
 }
 
-Table core.things {
+Table core_things {
   id int [pk]
-  k core.kind
+  k core_kind
 }
 
 Table naked {
   id int
   indexes {
   }
-}
-
-TableGroup g {
 }

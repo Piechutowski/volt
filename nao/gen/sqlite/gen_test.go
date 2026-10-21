@@ -133,9 +133,9 @@ func TestGenerationErrors(t *testing.T) {
 		name, src, wantErr string
 	}{
 		{
-			name:    "flattened table collision",
-			src:     "Table core.users { id int }\nTable core_users { id int }",
-			wantErr: "both flatten to SQLite name",
+			name:    "two indexes of one table derive one name",
+			src:     "Table users {\n  id int\n  indexes {\n    id\n    id [unique]\n  }\n}",
+			wantErr: `duplicate index name "idx_users_id"`,
 		},
 	}
 	for _, tc := range cases {

@@ -26,10 +26,10 @@ func (r *modelNameRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagn
 	if t.Settings.Get("model") != nil {
 		return out
 	}
-	singular, ok := inflect.SingularLast(t.Name.Base())
+	singular, ok := inflect.SingularLast(t.Name.Name())
 	if !ok {
 		out = append(out, r.warnf(t.Pos(), "cannot confidently singularize %q for its Go model name (would use %q); pin it with [model: '...']",
-			t.Name.Base(), singular))
+			t.Name.Name(), singular))
 	}
 	return out
 }

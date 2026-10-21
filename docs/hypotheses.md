@@ -5,12 +5,13 @@
 
 ## H1 — Which schema-core constructs pay for themselves
 
-Today the schema core keeps every construct it has, whether or not a
-generator acts on it. Unsettled: whether each one keeps paying for
-itself. Schemas (`auth.users`, the implicit `public`) are the first
-candidate cut, since SQLite has none and packages already namespace;
-the presentation constructs (colors, TableGroup, DiagramView, sticky
-notes) are the one after, once a Volt-owned diagram tool exists.
+Today the schema core keeps the constructs a check or a generator acts
+on. Schemas, table aliases and the presentation constructs (colors,
+TableGroup, DiagramView, sticky notes) were cut on that test (roadmap,
+Step 1): SQLite has no schemas and packages already namespace, and a
+diagram tool, if one comes, reads the schema as it is. Unsettled:
+whether every remaining construct keeps paying for itself; the open
+items of docs/entropy-and-purity-report.md name the candidates.
 
 ## H2 — nao's ergonomic surface
 

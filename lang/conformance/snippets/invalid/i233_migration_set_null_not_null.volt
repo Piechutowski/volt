@@ -21,7 +21,7 @@ Migration 0001__init {
   }
   create table posts {
     id          int [pk]
-    author_id   int [ref: > users.id, delete: set null]
-    reviewer_id int [ref: > users.id, update: set default]
+    author_id   int [ref: users.id, delete: set null]
+    reviewer_id int [ref: users.id, update: set default]
   }
 }

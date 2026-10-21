@@ -91,6 +91,11 @@ func (c *checker) dataQueries(pkg *Package) {
 		return
 	}
 	for _, name := range groupOrder {
+		if info.Table(name) != nil {
+			c.errorf(groupDecls[name].Name.Pos(), "groups", "group %q takes the name of a table: tables and groups share one namespace (§groups)", name)
+		}
+	}
+	for _, name := range groupOrder {
 		c.groupResolve(name, groupDecls, info, map[string]bool{})
 	}
 	c.predRefCycles(pkg)
@@ -111,7 +116,7 @@ func (c *checker) dataQueries(pkg *Package) {
 				if prev, dup := seen[key]; dup {
 					c.errorf(sel.Name.Pos(), "selects-over-groups",
 						"select %q collides with select %q on table %q — both generate %s%s (§selects-over-groups)",
-						sel.Name.Name(), prev.Name.Name(), m.Decl.Name.Base(),
+						sel.Name.Name(), prev.Name.Name(), m.Decl.Name.Name(),
 						modelOrBase(m), si.MethodSuffix)
 					break
 				}
@@ -210,19 +215,15 @@ func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *gol
 	return si
 }
 
+// selectTarget resolves a select's target by the one rule of the
+// tables-and-groups namespace (spec §groups): a table, else a group.
 func (c *checker) selectTarget(sel *ast.Select, info *check.Info) ([]*check.TableInfo, bool) {
 	want := sel.Target.Name()
 	var members []*check.TableInfo
-	if g, isGroup := c.pkg.Groups[want]; isGroup {
-		members = g.Members
-	} else if ti := tableByBase(info, want); ti != nil {
+	if ti := info.Table(want); ti != nil {
 		members = []*check.TableInfo{ti}
-	} else if tg := info.TableGroup(want); tg != nil {
-		members = tg.Members
-		if len(members) == 0 {
-			c.errorf(sel.Target.Pos(), "selects-over-groups", "TableGroup %q has no members to select from (§selects-over-groups)", want)
-			return nil, false
-		}
+	} else if g, isGroup := c.pkg.Groups[want]; isGroup {
+		members = g.Members
 	} else {
 		c.nameMiss(sel.Target, info, "selects-over-groups", "select target")
 		return nil, false
@@ -304,7 +305,7 @@ func modelOrBase(t *check.TableInfo) string {
 	if m, err := golang.ModelName(t.Decl); err == nil {
 		return m
 	}
-	return t.Decl.Name.Base()
+	return t.Decl.Name.Name()
 }
 
 func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *check.Info, path map[string]bool) *GroupInfo {
@@ -324,7 +325,7 @@ func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *c
 	index := map[string]int{}
 	add := func(pos token.Position, ti *check.TableInfo) {
 		if i, present := index[ti.Key]; present && i >= 0 {
-			c.errorf(pos, "groups", "table %q is already a member (§groups)", ti.Decl.Name.Base())
+			c.errorf(pos, "groups", "table %q is already a member (§groups)", ti.Decl.Name.Name())
 			return
 		}
 		index[ti.Key] = len(g.Members)
@@ -333,7 +334,7 @@ func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *c
 	remove := func(pos token.Position, ti *check.TableInfo) {
 		i, present := index[ti.Key]
 		if !present || i < 0 {
-			c.errorf(pos, "groups", "table %q is not a member; nothing to remove (§groups)", ti.Decl.Name.Base())
+			c.errorf(pos, "groups", "table %q is not a member; nothing to remove (§groups)", ti.Decl.Name.Name())
 			return
 		}
 		g.Members = append(g.Members[:i], g.Members[i+1:]...)
@@ -355,19 +356,13 @@ func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *c
 	for _, term := range d.Terms {
 		for _, id := range term.Names {
 			want := id.Name()
-			if ti := tableByBase(info, want); ti != nil {
+			if ti := info.Table(want); ti != nil {
 				apply(id.Pos(), term.Neg, ti)
 				continue
 			}
 			if _, isGroup := decls[want]; isGroup {
 				sg := c.groupResolve(want, decls, info, path)
 				for _, ti := range sg.Members {
-					apply(id.Pos(), term.Neg, ti)
-				}
-				continue
-			}
-			if tg := info.TableGroup(want); tg != nil {
-				for _, ti := range tg.Members {
 					apply(id.Pos(), term.Neg, ti)
 				}
 				continue
@@ -382,25 +377,21 @@ func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *c
 	return g
 }
 
-func tableByBase(info *check.Info, want string) *check.TableInfo {
-	return info.TableByBase(want)
-}
-
 func (c *checker) nameMiss(id *ast.Ident, info *check.Info, section, what string) {
 	want := id.Name()
 	for _, ti := range info.Tables {
-		if strings.EqualFold(ti.Decl.Name.Base(), want) {
-			c.errorf(id.Pos(), section, "unknown %s %q; did you mean %q? names are case-sensitive (§groups)", what, want, ti.Decl.Name.Base())
+		if strings.EqualFold(ti.Decl.Name.Name(), want) {
+			c.errorf(id.Pos(), section, "unknown %s %q; did you mean %q? names are case-sensitive (§groups)", what, want, ti.Decl.Name.Name())
 			return
 		}
 	}
 	for _, ti := range info.Tables {
 		if m, err := golang.ModelName(ti.Decl); err == nil && m == want {
-			c.errorf(id.Pos(), section, "unknown %s %q; %q is the model of table %q — name the table (§groups)", what, want, want, ti.Decl.Name.Base())
+			c.errorf(id.Pos(), section, "unknown %s %q; %q is the model of table %q: name the table (§groups)", what, want, want, ti.Decl.Name.Name())
 			return
 		}
 	}
-	c.errorf(id.Pos(), section, "unknown %s %q: no such table, group or TableGroup in package %q (§groups)", what, want, c.pkg.Path)
+	c.errorf(id.Pos(), section, "unknown %s %q: no such table or group in package %q (§groups)", what, want, c.pkg.Path)
 }
 
 func (c *checker) predRefCycles(pkg *Package) {
@@ -614,14 +605,14 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 		for _, mf := range members {
 			f, has := mf.byCol[name]
 			if !has {
-				missing = append(missing, mf.ti.Decl.Name.Base())
+				missing = append(missing, mf.ti.Decl.Name.Name())
 				continue
 			}
 			if cd := mf.ti.Column(name); !sel.Star && cd != nil && !cd.Type.Known() {
 				l.unknownAdd(name)
 				continue
 			}
-			types[f.Type] = append(types[f.Type], mf.ti.Decl.Name.Base())
+			types[f.Type] = append(types[f.Type], mf.ti.Decl.Name.Name())
 		}
 		if len(missing) > 0 {
 			l.errorf(id.Pos(), "column %q is missing from %s — every member of %q must have it (§selects-over-groups)",
@@ -667,7 +658,7 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 			for _, f := range mf.fields {
 				if mf.model+f.Name == si.Shared {
 					l.errorf(sel.Name.Pos(), "select %q mints the shared row type %s, which collides with the dynamic column handle for %s.%s (§selects-over-groups)",
-						sel.Name.Name(), si.Shared, mf.ti.Decl.Name.Base(), f.Col)
+						sel.Name.Name(), si.Shared, mf.ti.Decl.Name.Name(), f.Col)
 					return false
 				}
 			}
@@ -685,13 +676,13 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 			}
 			if f.Name == si.MethodSuffix {
 				l.errorf(sel.Name.Pos(), "select %q mints %s%s, which collides with the dynamic column handle for %s.%s (§selects-over-groups)",
-					sel.Name.Name(), mf.model, si.MethodSuffix, mf.ti.Decl.Name.Base(), f.Col)
+					sel.Name.Name(), mf.model, si.MethodSuffix, mf.ti.Decl.Name.Name(), f.Col)
 				return false
 			}
 		}
 		if kept == 0 {
 			l.errorf(sel.Name.Pos(), "select %q excludes every column of %q — nothing is left to project (§selects-over-groups)",
-				sel.Name.Name(), mf.ti.Decl.Name.Base())
+				sel.Name.Name(), mf.ti.Decl.Name.Name())
 			return false
 		}
 		name := mf.model + si.MethodSuffix
@@ -700,7 +691,7 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 				sel.Name.Name(), name, prev)
 			return false
 		}
-		l.add(name, fmt.Sprintf("select %q's row type for table %q", sel.Name.Name(), mf.ti.Decl.Name.Base()))
+		l.add(name, fmt.Sprintf("select %q's row type for table %q", sel.Name.Name(), mf.ti.Decl.Name.Name()))
 	}
 	return true
 }
@@ -812,12 +803,12 @@ func (e *selectEnv) columnBind(id *ast.Ident) (b *colBinding, unknown bool) {
 	for _, m := range e.members {
 		cd := m.Column(name)
 		if cd == nil {
-			missing = append(missing, m.Decl.Name.Base())
+			missing = append(missing, m.Decl.Name.Name())
 			continue
 		}
 		declType := cd.Col.Type.String()
 		if cd.Type.Enum != nil {
-			e.errorf(id.Pos(), "column %q of table %q is enum-typed (%s); predicates do not compare enums in v1 — filter on a text column or use the dynamic layer (§predicates, hypotheses H5)", name, m.Decl.Name.Base(), declType)
+			e.errorf(id.Pos(), "column %q of table %q is enum-typed (%s); predicates do not compare enums; filter on a text column or use the dynamic layer (§predicates, hypotheses H5)", name, m.Decl.Name.Name(), declType)
 			return nil, false
 		}
 		if !cd.Type.Known() {
@@ -826,7 +817,7 @@ func (e *selectEnv) columnBind(id *ast.Ident) (b *colBinding, unknown bool) {
 		}
 		forbiddenType = declType
 		goType := cd.Type.Go
-		types[goType] = append(types[goType], m.Decl.Name.Base())
+		types[goType] = append(types[goType], m.Decl.Name.Name())
 		class = classOfType(cd.Type)
 		storage = classOfName(cd.Type.StorageClass())
 		storageGo = cd.Type.Storage

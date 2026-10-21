@@ -101,7 +101,7 @@ func (l *lowering) changesetNameCheck() {
 		}
 		if cd := l.ti.Column(f.Col); cd != nil {
 			l.diags = append(l.diags, diag.Errorf(cd.Col.Name.Pos(), "spec/changesets",
-				"column %q of table %q maps to the Go field Changeset, the name of the row's changeset method; rename the column (§changesets)", f.Col, l.ti.Decl.Name.Base()))
+				"column %q of table %q maps to the Go field Changeset, the name of the row's changeset method; rename the column (§changesets)", f.Col, l.ti.Decl.Name.Name()))
 		}
 	}
 }
@@ -137,7 +137,7 @@ func (l *lowering) validatorSpec(v *ast.Validator) (golang.ValidatorSpec, bool) 
 	for _, a := range v.Args {
 		f, has := byCol[a.Name()]
 		if !has {
-			l.errorf(a.Pos(), "no column %q in table %q (§validators)", a.Name(), l.ti.Decl.Name.Base())
+			l.errorf(a.Pos(), "no column %q in table %q (§validators)", a.Name(), l.ti.Decl.Name.Name())
 			return golang.ValidatorSpec{}, false
 		}
 		cd := l.ti.Column(a.Name())

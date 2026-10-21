@@ -20,7 +20,7 @@ Table posts {
 
 Table comments {
   id       int    [pk, increment]
-  post_id  int    [ref: > posts.id]
+  post_id  int    [ref: posts.id]
   author   string
   body     string
   flagged  bool   [default: false]
@@ -32,7 +32,7 @@ Table comments {
 }
 
 Table post_tags {
-  post_id int    [ref: > posts.id]
+  post_id int    [ref: posts.id]
   tag     string
 
   indexes {
@@ -42,7 +42,7 @@ Table post_tags {
 
 Table post_details {
   id      int    [pk, increment]
-  post_id int    [ref: - posts.id]
+  post_id int    [unique, ref: posts.id]
   summary string [null]
 }
 
@@ -74,7 +74,7 @@ Migration 0001__create_posts {
 Migration 0002__comments_and_tags {
   create table comments {
     id      int    [pk, increment]
-    post_id int    [ref: > posts.id]
+    post_id int    [ref: posts.id]
     author  string
     body    string
 
@@ -83,7 +83,7 @@ Migration 0002__comments_and_tags {
     }
   }
   create table post_tags {
-    post_id int    [ref: > posts.id]
+    post_id int    [ref: posts.id]
     tag     string
 
     indexes {
@@ -98,7 +98,7 @@ Migration 0002__comments_and_tags {
   }
 }
 
-Migration 0003__posts_created_at [irreversible, note: 'the timestamp every post should have had'] {
+Migration 0003__posts_created_at [irreversible] {
   rebuild table posts {
     id         int       [pk, increment]
     slug       string    [unique]
@@ -140,7 +140,7 @@ Migration 0006__nicknames_and_details {
   }
   create table post_details {
     id      int    [pk, increment]
-    post_id int    [ref: - posts.id]
+    post_id int    [unique, ref: posts.id]
     summary string [null]
   }
 }

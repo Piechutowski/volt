@@ -101,23 +101,23 @@ func (o dynOrigin) name() string {
 func (o dynOrigin) describe() string {
 	switch o.kind {
 	case dynEnum:
-		return "enum " + o.e.Decl.Name.String()
+		return "enum " + o.e.Decl.Name.Name()
 	case dynEnumValue:
-		return fmt.Sprintf("enum %s value %q", o.e.Decl.Name.String(), o.v.Name.Name())
+		return fmt.Sprintf("enum %s value %q", o.e.Decl.Name.Name(), o.v.Name.Name())
 	case dynModel:
-		return fmt.Sprintf("table %s (model %s)", o.tm.ti.Decl.Name.String(), o.tm.model)
+		return fmt.Sprintf("table %s (model %s)", o.tm.ti.Decl.Name.Name(), o.tm.model)
 	case dynChangeset:
-		return fmt.Sprintf("table %s (changeset %sChangeset)", o.tm.ti.Decl.Name.String(), o.tm.model)
+		return fmt.Sprintf("table %s (changeset %sChangeset)", o.tm.ti.Decl.Name.Name(), o.tm.model)
 	case dynColumn:
-		return fmt.Sprintf("table %s (column handle type %sColumn)", o.tm.ti.Decl.Name.String(), o.tm.model)
+		return fmt.Sprintf("table %s (column handle type %sColumn)", o.tm.ti.Decl.Name.Name(), o.tm.model)
 	case dynParams:
-		return fmt.Sprintf("table %s (write body %sParams)", o.tm.ti.Decl.Name.String(), o.tm.model)
+		return fmt.Sprintf("table %s (write body %sParams)", o.tm.ti.Decl.Name.Name(), o.tm.model)
 	case dynNew:
-		return fmt.Sprintf("table %s (constructor %sNew)", o.tm.ti.Decl.Name.String(), o.tm.model)
+		return fmt.Sprintf("table %s (constructor %sNew)", o.tm.ti.Decl.Name.Name(), o.tm.model)
 	case dynHandle:
-		return fmt.Sprintf("table %s column %q (handle %s%s)", o.tm.ti.Decl.Name.String(), o.f.colName, o.tm.model, o.f.goField)
+		return fmt.Sprintf("table %s column %q (handle %s%s)", o.tm.ti.Decl.Name.Name(), o.f.colName, o.tm.model, o.f.goField)
 	case dynWrapper:
-		return fmt.Sprintf("table %s (option wrapper %s%s)", o.tm.ti.Decl.Name.String(), o.tm.model, o.sfx)
+		return fmt.Sprintf("table %s (option wrapper %s%s)", o.tm.ti.Decl.Name.Name(), o.tm.model, o.sfx)
 	}
 	return "the generated Queries type"
 }
@@ -161,7 +161,7 @@ func (e *dynEmitter) tableEmit(t *tableModel) {
 	}
 	b := &e.body
 	lower := argName(t.model)
-	tbl := t.ti.Decl.Name.String()
+	tbl := t.ti.Decl.Name.Name()
 
 	b.WriteString("const (\n")
 	fmt.Fprintf(b, "\t%sTableSQL   = `%s`\n", lower, rt.Ident(t.sqlName))

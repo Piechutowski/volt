@@ -7,6 +7,4 @@ Table posts {
   ok_id int
 }
 Ref: posts.user_id > users.id //WANT reftype
-Ref good {
-  posts.ok_id > users.id
-}
+Ref: posts.ok_id > users.id

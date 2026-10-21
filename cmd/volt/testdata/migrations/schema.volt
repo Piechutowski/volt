@@ -15,6 +15,6 @@ Table posts {
 
 Table comments {
   id      int    [pk, increment]
-  post_id int    [ref: > posts.id]
+  post_id int    [ref: posts.id]
   body    string
 }

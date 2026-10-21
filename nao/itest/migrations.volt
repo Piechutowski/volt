@@ -13,7 +13,7 @@ Migration 0001__users_and_orders {
   }
   create table orders {
     id        int       [pk, increment]
-    user_id   int       [ref: > users.id]
+    user_id   int       [ref: users.id]
     status    string    [default: 'pending']
     total     float64
     tip       int       [default: 0]
@@ -21,7 +21,7 @@ Migration 0001__users_and_orders {
     placed_at time.Time [null]
   }
   create table user_tags {
-    user_id int    [ref: > users.id]
+    user_id int    [ref: users.id]
     tag     string
 
     indexes {

@@ -15,10 +15,7 @@ type valueKind int
 const (
 	flagOnly valueKind = iota
 	strValue
-	colorValue
-	colorOrNone
 	exprValue
-	identValue
 	actionValue
 	defaultVal
 	refVal
@@ -34,8 +31,11 @@ type settingSpec struct {
 }
 
 var (
+	projectSettings = settingSpec{
+		kinds: map[string]valueKind{"note": strValue},
+	}
 	tableSettings = settingSpec{
-		kinds: map[string]valueKind{"headercolor": colorValue, "note": strValue, "model": strValue},
+		kinds: map[string]valueKind{"note": strValue, "model": strValue},
 	}
 	columnSettings = settingSpec{
 		kinds: map[string]valueKind{
@@ -45,30 +45,21 @@ var (
 			"note":    strValue, "ref": refVal, "tag": strValue,
 			"required": flagOnly,
 		},
-		repeatable: map[string]bool{"ref": true, "tag": true},
+		repeatable: map[string]bool{"tag": true},
 		conflicts:  [][2]string{{"required", "default"}, {"required", "increment"}},
 	}
 	indexSettings = settingSpec{
 		kinds: map[string]valueKind{
-			"type": identValue, "name": strValue,
-			"unique": flagOnly, "pk": flagOnly, "note": strValue,
+			"name":   strValue,
+			"unique": flagOnly, "pk": flagOnly,
 			"where": exprValue,
 		},
 	}
 	refSettings = settingSpec{
-		kinds: map[string]valueKind{
-			"delete": actionValue, "update": actionValue,
-			"color": colorValue, "inactive": flagOnly,
-		},
+		kinds: map[string]valueKind{"delete": actionValue, "update": actionValue},
 	}
 	enumValueSettings = settingSpec{
 		kinds: map[string]valueKind{"note": strValue},
-	}
-	groupSettings = settingSpec{
-		kinds: map[string]valueKind{"note": strValue, "color": colorValue},
-	}
-	stickySettings = settingSpec{
-		kinds: map[string]valueKind{"color": colorOrNone},
 	}
 )
 
@@ -118,27 +109,9 @@ func (c *checker) settingValueCheck(s *ast.Setting, section string, kind valueKi
 		if !isString(s.Value) {
 			c.errorf(s.Value.Pos(), section, "%q must be a string", s.Name)
 		}
-	case colorValue, colorOrNone:
-		if kind == colorOrNone {
-			if id, ok := s.Value.(*ast.Ident); ok && strings.EqualFold(id.Name(), "none") && !id.Quoted() {
-				return
-			}
-		}
-		lit, ok := s.Value.(*ast.BasicLit)
-		if !ok || lit.Tok.Kind != token.COLOR {
-			c.errorf(s.Value.Pos(), section, "%q must be a color literal", s.Name)
-			return
-		}
-		if !validColor(lit.Tok.Val) {
-			c.errorf(s.Value.Pos(), "color-literals", "color literal '#%s' must be 3 or 6 hex digits", lit.Tok.Val)
-		}
 	case exprValue:
 		if _, ok := s.Value.(*ast.FuncExpr); !ok {
 			c.errorf(s.Value.Pos(), section, "%q must be a backtick expression", s.Name)
-		}
-	case identValue:
-		if _, ok := s.Value.(*ast.Ident); !ok {
-			c.errorf(s.Value.Pos(), section, "%q must be an identifier", s.Name)
 		}
 	case actionValue:
 		switch s.Value.(type) {
@@ -149,26 +122,25 @@ func (c *checker) settingValueCheck(s *ast.Setting, section string, kind valueKi
 	case defaultVal:
 		c.defaultValueCheck(s)
 	case refVal:
-		if _, ok := s.Value.(*ast.RefValue); !ok {
-			c.errorf(s.Value.Pos(), section, "'ref' must be a relationship operator followed by an endpoint")
+		if _, ok := s.Value.(*ast.RefEndpoint); !ok {
+			c.errorf(s.Value.Pos(), section, "'ref' must be an endpoint, table.column")
 		}
 	}
 }
 
 func (c *checker) defaultValueCheck(s *ast.Setting) {
 	switch v := s.Value.(type) {
-	case *ast.BasicLit:
-		if v.Tok.Kind == token.COLOR {
-			c.errorf(v.Pos(), "default-values", "default value must be a number, string, boolean, null, expression or enum constant")
-		}
-	case *ast.FuncExpr, *ast.NegNumber, *ast.EnumConst:
+	case *ast.BasicLit, *ast.FuncExpr, *ast.NegNumber, *ast.EnumConst:
 	case *ast.Ident:
 		low := strings.ToLower(v.Name())
-		if v.Quoted() || (low != "true" && low != "false" && low != "null") {
-			c.errorf(v.Pos(), "default-values", "default value must be a number, string, boolean, null, expression or enum constant; found bare identifier %q", v.Name())
+		switch {
+		case !v.Quoted() && low == "null":
+			c.errorf(v.Pos(), "default-values", "null is not a default value: a column that carries null and has no default is NULL when a write leaves it out (§default-values)")
+		case v.Quoted() || (low != "true" && low != "false"):
+			c.errorf(v.Pos(), "default-values", "default value must be a number, string, boolean, expression or enum constant; found bare identifier %q", v.Name())
 		}
 	default:
-		c.errorf(s.Value.Pos(), "default-values", "default value must be a number, string, boolean, null, expression or enum constant")
+		c.errorf(s.Value.Pos(), "default-values", "default value must be a number, string, boolean, expression or enum constant")
 	}
 }
 
@@ -223,18 +195,6 @@ func tagPairKey(pair string) (string, bool) {
 func isString(n ast.Node) bool {
 	lit, ok := n.(*ast.BasicLit)
 	return ok && lit.Tok.Kind == token.STRING
-}
-
-func validColor(v string) bool {
-	if len(v) != 3 && len(v) != 6 {
-		return false
-	}
-	for _, r := range v {
-		if !(('0' <= r && r <= '9') || ('a' <= r && r <= 'f') || ('A' <= r && r <= 'F')) {
-			return false
-		}
-	}
-	return true
 }
 
 func (c *checker) incrementCheck(ti *TableInfo) {

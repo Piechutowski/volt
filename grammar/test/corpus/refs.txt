@@ -1,8 +1,8 @@
 ==================
-short ref, two-part endpoints
+ref: foreign key > referenced column
 ==================
 
-Ref: users.id < orders.user_id
+Ref: orders.user_id > users.id
 
 ---
 
@@ -10,22 +10,21 @@ Ref: users.id < orders.user_id
   (ref_definition
     (ref_relation
       (ref_endpoint
-        (ref_target
+        (table_name
           (identifier))
         (column_name
           (identifier)))
-      (cardinality)
       (ref_endpoint
-        (ref_target
+        (table_name
           (identifier))
         (column_name
           (identifier))))))
 
 ==================
-short ref, three-part endpoint and settings
+ref with settings
 ==================
 
-Ref: U.id < core.orders.user_id [delete: cascade, update: no action]
+Ref: orders.user_id > users.id [delete: cascade, update: no action]
 
 ---
 
@@ -33,14 +32,12 @@ Ref: U.id < core.orders.user_id [delete: cascade, update: no action]
   (ref_definition
     (ref_relation
       (ref_endpoint
-        (ref_target
+        (table_name
           (identifier))
         (column_name
           (identifier)))
-      (cardinality)
       (ref_endpoint
-        (ref_target
-          (identifier)
+        (table_name
           (identifier))
         (column_name
           (identifier))))
@@ -56,63 +53,6 @@ Ref: U.id < core.orders.user_id [delete: cascade, update: no action]
         (setting_value_words
           (identifier)
           (identifier))))))
-
-==================
-named short ref
-==================
-
-Ref fk_user: orders.user_id > users.id
-
----
-
-(source_file
-  (ref_definition
-    (ref_name
-      (identifier))
-    (ref_relation
-      (ref_endpoint
-        (ref_target
-          (identifier))
-        (column_name
-          (identifier)))
-      (cardinality)
-      (ref_endpoint
-        (ref_target
-          (identifier))
-        (column_name
-          (identifier))))))
-
-==================
-long form ref
-==================
-
-Ref fk_name {
-  users.id - profiles.user_id [color: #00ff00]
-}
-
----
-
-(source_file
-  (ref_definition
-    (ref_name
-      (identifier))
-    (ref_relation
-      (ref_endpoint
-        (ref_target
-          (identifier))
-        (column_name
-          (identifier)))
-      (cardinality)
-      (ref_endpoint
-        (ref_target
-          (identifier))
-        (column_name
-          (identifier))))
-    (settings_list
-      (setting
-        (setting_name
-          (identifier))
-        (color)))))
 
 ==================
 composite ref
@@ -126,16 +66,15 @@ Ref: a.(x, y) > b.(x, y)
   (ref_definition
     (ref_relation
       (ref_endpoint
-        (ref_target
+        (table_name
           (identifier))
         (column_group
           (column_name
             (identifier))
           (column_name
             (identifier))))
-      (cardinality)
       (ref_endpoint
-        (ref_target
+        (table_name
           (identifier))
         (column_group
           (column_name
@@ -144,24 +83,23 @@ Ref: a.(x, y) > b.(x, y)
             (identifier)))))))
 
 ==================
-many-to-many
+a ref written referenced < foreign key is an error
+:error
 ==================
 
-Ref: authors.id <> books.id
+Ref: users.id < orders.user_id
 
 ---
 
-(source_file
-  (ref_definition
-    (ref_relation
-      (ref_endpoint
-        (ref_target
-          (identifier))
-        (column_name
-          (identifier)))
-      (cardinality)
-      (ref_endpoint
-        (ref_target
-          (identifier))
-        (column_name
-          (identifier))))))
+
+
+==================
+a named ref is an error
+:error
+==================
+
+Ref fk_user: orders.user_id > users.id
+
+---
+
+

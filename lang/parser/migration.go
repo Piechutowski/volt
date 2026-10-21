@@ -268,10 +268,10 @@ func (p *parser) shapeItem(ctx string) (item ast.TableItem) {
 	switch {
 	case p.atKw("indexes") && p.peekKind(1) == token.LBRACE:
 		return p.indexesBlock()
-	case t.Kind == token.TILDE, p.atNoteDef(),
+	case t.Kind == token.TILDE,
 		p.atKw("validators") && p.peekKind(1) == token.LBRACE,
 		p.atKw("records") && (p.peekKind(1) == token.LPAREN || p.peekKind(1) == token.LBRACE):
-		p.fail(t, "a migration's shape body holds columns and indexes only; a partial injection, a validators block, a records block and a Note are not part of it (§migrations)")
+		p.fail(t, "a migration's shape body holds columns and indexes only; a partial injection, a validators block and a records block are not part of it (§migrations)")
 		return nil
 	case t.Kind == token.IDENT:
 		return p.column()

@@ -821,12 +821,12 @@ func columnVolt(t *Table, c Column) string {
 			break
 		}
 	}
-	if c.Default != "" {
+	if c.Default != "" && !strings.EqualFold(c.Default, "NULL") {
 		settings = append(settings, "default: "+defaultVolt(c.Default))
 	}
 	for _, fk := range t.ForeignKeys {
 		if len(fk.From) == 1 && fk.From[0] == c.Name {
-			settings = append(settings, "ref: > "+fk.Table+"."+fk.To[0])
+			settings = append(settings, "ref: "+fk.Table+"."+fk.To[0])
 			settings = append(settings, actionsVolt(fk)...)
 		}
 	}
@@ -838,13 +838,12 @@ func columnVolt(t *Table, c Column) string {
 
 // defaultVolt renders a stored default as a default: value: a SQL
 // string as a Volt string, a number as itself, anything else as an
-// expression literal.
+// expression literal. A stored NULL default is no default: (spec
+// §default-values) and is never rendered.
 func defaultVolt(d string) string {
 	switch {
 	case len(d) >= 2 && d[0] == '\'' && d[len(d)-1] == '\'':
 		return "'" + strings.ReplaceAll(strings.ReplaceAll(d[1:len(d)-1], "''", "'"), "'", `\'`) + "'"
-	case strings.EqualFold(d, "NULL"):
-		return "null"
 	case strings.HasPrefix(d, "(") && strings.HasSuffix(d, ")") && parenMatches(d):
 		return "`" + strings.TrimSpace(d[1:len(d)-1]) + "`"
 	}

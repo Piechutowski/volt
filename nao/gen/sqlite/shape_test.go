@@ -9,10 +9,11 @@ import (
 	"github.com/Piechutowski/volt/lang/parser"
 )
 
-// TestTableDDLOneToOneAndActions pins the shape rendering of an inline
-// - ref and of delete: and update: beside a ref: (spec §migrations
-// rules 4 and 5): the same DDL as a schema Table of the same shape,
-// which testdata/inline_one_to_one.volt pins as a golden.
+// TestTableDDLOneToOneAndActions pins the shape rendering of a
+// one-to-one, unique plus a ref:, and of delete: and update: beside a
+// ref: (spec §migrations rules 4 and 5, §relationships-ref): the same
+// DDL as a schema Table of the same shape, which
+// testdata/inline_one_to_one.volt pins as a golden.
 func TestTableDDLOneToOneAndActions(t *testing.T) {
 	cases := []struct {
 		name, body string
@@ -20,24 +21,19 @@ func TestTableDDLOneToOneAndActions(t *testing.T) {
 		indexes    []string
 	}{
 		{
-			name: "a plain one-to-one adds UNIQUE",
-			body: "    id      int [pk, increment]\n    user_id int [ref: - users.id]\n",
-			want: "CREATE TABLE profiles (\n  id INTEGER PRIMARY KEY,\n  user_id INTEGER NOT NULL,\n  FOREIGN KEY (user_id) REFERENCES users (id),\n  UNIQUE (user_id)\n)",
-		},
-		{
-			name:    "a unique index of the body stands in for UNIQUE",
-			body:    "    id      int [pk, increment]\n    user_id int [ref: - users.id]\n\n    indexes {\n      user_id [unique]\n    }\n",
+			name:    "a unique index of the body beside a ref",
+			body:    "    id      int [pk, increment]\n    user_id int [ref: users.id]\n\n    indexes {\n      user_id [unique]\n    }\n",
 			want:    "CREATE TABLE profiles (\n  id INTEGER PRIMARY KEY,\n  user_id INTEGER NOT NULL,\n  FOREIGN KEY (user_id) REFERENCES users (id)\n)",
 			indexes: []string{"CREATE UNIQUE INDEX idx_profiles_user_id ON profiles (user_id)"},
 		},
 		{
-			name: "a unique column takes no second UNIQUE",
-			body: "    id      int [pk, increment]\n    user_id int [unique, ref: - users.id]\n",
+			name: "a one-to-one is a unique column with a ref",
+			body: "    id      int [pk, increment]\n    user_id int [unique, ref: users.id]\n",
 			want: "CREATE TABLE profiles (\n  id INTEGER PRIMARY KEY,\n  user_id INTEGER NOT NULL UNIQUE,\n  FOREIGN KEY (user_id) REFERENCES users (id)\n)",
 		},
 		{
 			name: "delete: and update: follow the reference",
-			body: "    id      int [pk, increment]\n    user_id int [null, ref: > users.id, delete: cascade, update: set null]\n",
+			body: "    id      int [pk, increment]\n    user_id int [null, ref: users.id, delete: cascade, update: set null]\n",
 			want: "CREATE TABLE profiles (\n  id INTEGER PRIMARY KEY,\n  user_id INTEGER,\n  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE SET NULL\n)",
 		},
 	}
@@ -67,9 +63,9 @@ func TestColumnDDLActions(t *testing.T) {
 		column, want string
 		unique       bool
 	}{
-		{"user_id int [null, ref: > users.id, delete: set default]", "user_id INTEGER REFERENCES users (id) ON DELETE SET DEFAULT", false},
-		{"user_id int [null, ref: > users.id, update: no action]", "user_id INTEGER REFERENCES users (id) ON UPDATE NO ACTION", false},
-		{"twin_id int [null, ref: - users.id]", "twin_id INTEGER REFERENCES users (id)", true},
+		{"user_id int [null, ref: users.id, delete: set default]", "user_id INTEGER REFERENCES users (id) ON DELETE SET DEFAULT", false},
+		{"user_id int [null, ref: users.id, update: no action]", "user_id INTEGER REFERENCES users (id) ON UPDATE NO ACTION", false},
+		{"twin_id int [null, unique, ref: users.id]", "twin_id INTEGER REFERENCES users (id)", true},
 	}
 	for _, tc := range cases {
 		body := parsedBody(t, "create table profiles {\n    "+tc.column+"\n  }")

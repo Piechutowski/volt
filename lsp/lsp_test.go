@@ -18,23 +18,23 @@ TablePartial base {
   id int [pk]
 }
 
-Table users as U [note: 'people'] {
+Table users [note: 'people'] {
   ~base
   name string [unique]
   status status [null, default: status.active]
 }
 
-Table core.orders {
+Table orders {
   id int [pk]
   user_id int [null]
-  owner_name string [null, ref: > U.name]
+  owner_name string [null, ref: users.name]
 }
 
-Ref: users.id < core.orders.user_id
+Ref: orders.user_id > users.id
 
-TableGroup g {
+Group g {
   users
-  core.orders
+  orders
 }
 `
 
@@ -90,7 +90,7 @@ func TestVetWarningsSurface(t *testing.T) {
 }
 
 func TestModelnameAnalyzerExcluded(t *testing.T) {
-	d := doc(t, "Table status {\n  id int [pk]\n}\nTable other {\n  id int [pk]\n  s int [null, ref: > status.id]\n}\n")
+	d := doc(t, "Table status {\n  id int [pk]\n}\nTable other {\n  id int [pk]\n  s int [null, ref: status.id]\n}\n")
 	for _, dg := range d.Diags {
 		if strings.Contains(dg.Code, "modelname") {
 			t.Fatalf("modelname analyzer should be excluded, got %v", dg)
@@ -100,27 +100,29 @@ func TestModelnameAnalyzerExcluded(t *testing.T) {
 
 func TestDefinitionFromRefEndpoint(t *testing.T) {
 	d := doc(t, sample)
-	pos := posOf(t, sample, "users.id <", 0)
+	pos := posOf(t, sample, "> users.id", 0)
+	pos.Character += 2
 	loc := d.Definition(pos)
 	if loc == nil {
 		t.Fatal("no definition for ref endpoint table")
 	}
-	want := posOf(t, sample, "Table users as U", 0)
+	want := posOf(t, sample, "Table users [", 0)
 	if loc.Range.Start.Line != want.Line+0 {
 		t.Errorf("definition line = %d, want %d", loc.Range.Start.Line, want.Line)
 	}
 }
 
-func TestDefinitionAliasResolvesToTable(t *testing.T) {
+func TestDefinitionFromInlineRef(t *testing.T) {
 	d := doc(t, sample)
-	pos := posOf(t, sample, "U.name", 0)
+	pos := posOf(t, sample, "ref: users.name", 0)
+	pos.Character += protocol.UInteger(len("ref: "))
 	loc := d.Definition(pos)
 	if loc == nil {
-		t.Fatal("no definition via alias")
+		t.Fatal("no definition from an inline ref")
 	}
-	declPos := posOf(t, sample, "users", 0)
+	declPos := posOf(t, sample, "Table users [", 0)
 	if loc.Range.Start.Line != declPos.Line {
-		t.Errorf("alias definition line = %d, want %d", loc.Range.Start.Line, declPos.Line)
+		t.Errorf("inline ref definition line = %d, want %d", loc.Range.Start.Line, declPos.Line)
 	}
 }
 
@@ -153,11 +155,11 @@ func TestDefinitionEnumType(t *testing.T) {
 
 func TestReferencesForTable(t *testing.T) {
 	d := doc(t, sample)
-	pos := posOf(t, sample, "Table users as U", 0)
+	pos := posOf(t, sample, "Table users [", 0)
 	pos.Character += protocol.UInteger(len("Table "))
 	refs := d.References(pos, true)
-	if len(refs) < 4 {
-		t.Fatalf("expected >= 4 references for users, got %d: %v", len(refs), refs)
+	if len(refs) < 3 {
+		t.Fatalf("expected >= 3 references for users (declaration, inline ref, Ref endpoint), got %d: %v", len(refs), refs)
 	}
 }
 
@@ -188,13 +190,14 @@ func TestRenameRejectsInvalidName(t *testing.T) {
 
 func TestHoverTable(t *testing.T) {
 	d := doc(t, sample)
-	pos := posOf(t, sample, "users.id <", 0)
+	pos := posOf(t, sample, "> users.id", 0)
+	pos.Character += 2
 	h := d.Hover(pos)
 	if h == nil {
 		t.Fatal("no hover for table reference")
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
-	for _, want := range []string{"Table users as U", "name string", "people", "from ~base"} {
+	for _, want := range []string{"Table users", "name string", "people", "from ~base"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover missing %q:\n%s", want, md)
 		}
@@ -223,7 +226,7 @@ func TestDocumentSymbols(t *testing.T) {
 		names = append(names, s.Name)
 	}
 	joined := strings.Join(names, " ")
-	for _, want := range []string{"status", "base", "users", "core.orders", "g"} {
+	for _, want := range []string{"status", "base", "users", "orders", "g"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("outline missing %q: %v", want, names)
 		}
@@ -277,10 +280,10 @@ func TestCompletionRefEndpointColumns(t *testing.T) {
 }
 
 func TestCompletionInlineRefTables(t *testing.T) {
-	text := "Table a {\n  x int [ref: > \n}\n" + sample
+	text := "Table a {\n  x int [ref: \n}\n" + sample
 	d := doc(t, text)
-	items := d.Complete(protocol.Position{Line: 1, Character: protocol.UInteger(len("  x int [ref: > "))})
-	if !hasLabel(items, "users") || !hasLabel(items, "core.orders") {
+	items := d.Complete(protocol.Position{Line: 1, Character: protocol.UInteger(len("  x int [ref: "))})
+	if !hasLabel(items, "users") || !hasLabel(items, "orders") {
 		t.Fatalf("inline ref completion missing tables: %v", labels(items))
 	}
 }

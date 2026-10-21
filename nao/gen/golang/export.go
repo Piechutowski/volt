@@ -65,10 +65,10 @@ type ValidatorSpec struct {
 
 // EnumTypeName is the Go type name an enum declaration generates
 // (§names).
-func EnumTypeName(schema, base string) (string, error) { return enumTypeName(schema, base) }
+func EnumTypeName(name string) (string, error) { return enumTypeName(name) }
 
 // ModelFields reports the exact struct fields the model generator emits
-// for the table with the given canonical key (spec §selects-over-groups, §mapping-to-go).
+// for the named table (spec §selects-over-groups, §mapping-to-go).
 // It plans the whole file.
 func ModelFields(f *ast.File, info *check.Info, tableKey string) (model string, fields []FieldSig, err error) {
 	return PlanBuild(f, info).ModelFields(tableKey)

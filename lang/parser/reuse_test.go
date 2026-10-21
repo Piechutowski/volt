@@ -116,7 +116,7 @@ Table tags {
   name string    [unique]
 }
 
-Ref: posts.id < tags.id
+Ref: tags.id > posts.id
 `
 	var prev *parser.Reuse
 	step := func(name, src string, wantParsed, wantReused int) {

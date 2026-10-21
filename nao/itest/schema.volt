@@ -8,8 +8,7 @@ package itest
 Type Money int
 Type pay.Cents int from 'github.com/Piechutowski/volt/nao/itest/pay'
 
-Project itest {
-  note: 'Integration-test fixture for the generated query surface.'
+Project itest [note: 'Integration-test fixture for the generated query surface.'] {
 }
 
 Enum order_status {
@@ -32,7 +31,7 @@ Table users {
 
 Table orders {
   id int [pk, increment]
-  user_id int [ref: > users.id]
+  user_id int [ref: users.id]
   status order_status [default: order_status.pending]
   total float64 [required]
   tip Money [default: 0]
@@ -48,7 +47,7 @@ Select free   for orders where fee = 0
 
 // composite primary key, no auto-increment anywhere
 Table user_tags {
-  user_id int [ref: > users.id]
+  user_id int [ref: users.id]
   tag string
 
   indexes {

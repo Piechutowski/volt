@@ -68,21 +68,6 @@ func modelName(t *ast.Table) (string, error) {
 			return goName(lit.Tok.Val)
 		}
 	}
-	singular, _ := inflect.SingularLast(t.Name.Base())
-	return structName(t.Name.Schema(), singular)
-}
-
-func structName(schema, base string) (string, error) {
-	n, err := goName(base)
-	if err != nil {
-		return "", err
-	}
-	if schema == "" || schema == "public" {
-		return n, nil
-	}
-	p, err := goName(schema)
-	if err != nil {
-		return "", err
-	}
-	return p + n, nil
+	singular, _ := inflect.SingularLast(t.Name.Name())
+	return goName(singular)
 }

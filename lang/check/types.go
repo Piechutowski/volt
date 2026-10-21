@@ -126,8 +126,7 @@ func typeEnvOf(enums map[string]*EnumInfo, types map[string]*TypeInfo, failed ma
 }
 
 // resolve resolves a column type (spec §columns): a built-in, then a
-// declared type, then an enum of the written schema, public when
-// unqualified (spec §schemas).
+// declared type, then an enum of the package.
 func (e *typeEnv) resolve(tr *ast.TypeRef) ColumnType {
 	name := tr.String()
 	if b, ok := builtins[name]; ok {
@@ -139,7 +138,7 @@ func (e *typeEnv) resolve(tr *ast.TypeRef) ColumnType {
 	if ti := e.types[name]; ti != nil {
 		return ColumnType{Go: name, Storage: ti.Storage.Storage, Import: ti.Path, Alias: typeAlias(name), Decl: ti}
 	}
-	if en := e.enums[canonKey(tr.Name)]; en != nil {
+	if en := e.enums[name]; en != nil {
 		return ColumnType{Storage: "string", Enum: en}
 	}
 	return ColumnType{}
@@ -181,7 +180,7 @@ func (c *checker) typeDeclCheck(d *ast.TypeDecl) *TypeInfo {
 		c.errorf(d.Pos(), "namespaces-and-uniqueness", "duplicate Type name %q", key)
 		return nil
 	}
-	if en := c.enums[canonKey(d.Name)]; en != nil {
+	if en := c.enums[key]; en != nil {
 		c.errorf(d.Name.Pos(), "types", "Type %q collides with the enum of that name (§types)", key)
 		return nil
 	}
@@ -192,10 +191,10 @@ func (c *checker) typeDeclCheck(d *ast.TypeDecl) *TypeInfo {
 	}
 	ti.Storage = storage
 	switch {
-	case d.Name.Schema() != "" && d.From == nil:
+	case d.Name.Qualifier() != "" && d.From == nil:
 		c.errorf(d.Name.Pos(), "types", "Type %q names a package but has no from path (§types)", key)
 		return nil
-	case d.Name.Schema() == "" && d.From != nil:
+	case d.Name.Qualifier() == "" && d.From != nil:
 		c.errorf(d.From.Pos(), "types", "Type %q is a type of this package and takes no from path (§types)", key)
 		return nil
 	}
@@ -205,7 +204,7 @@ func (c *checker) typeDeclCheck(d *ast.TypeDecl) *TypeInfo {
 			c.errorf(d.From.Pos(), "types", "Type %q has an empty from path; the path is a non-empty import path (§types)", key)
 			return nil
 		}
-		alias := d.Name.Schema()
+		alias := d.Name.Qualifier()
 		if std, reserved := ReservedAliases[alias]; reserved && std != path {
 			if std == "" {
 				c.errorf(d.Name.Pos(), "types", "Type %q: package name %q is reserved by generated code (§types)", key, alias)
@@ -240,7 +239,7 @@ func (c *checker) typesResolve(ti *TableInfo) {
 	pkIndex := pkIndexColumns(ti.Indexes)
 	for _, cd := range ti.Columns {
 		cd.Nullable = isNullable(cd.Col)
-		c.pkIndexNullCheck(cd.Col, ti.Decl.Name.String(), pkIndex)
+		c.pkIndexNullCheck(cd.Col, ti.Key, pkIndex)
 		cd.Type = c.env.resolve(cd.Col.Type)
 		if !cd.Type.Known() {
 			if c.env.failed[cd.Col.Type.String()] {
@@ -256,7 +255,7 @@ func (c *checker) typesResolve(ti *TableInfo) {
 // defaultTypeCheck enforces that a default fits the column's type (spec
 // §default-values).
 func (c *checker) defaultTypeCheck(cd *ColumnDef) {
-	if s := cd.Col.Settings.Get("default"); s != nil {
+	if s := cd.Col.Settings.Get("default"); s != nil && defaultKind(s.Value) != "null" {
 		c.valueTypeCheck(cd, s.Value, "default-values", "default of")
 	}
 }
@@ -299,7 +298,7 @@ func (c *checker) recordsCoverageCheck(ti *TableInfo, d *ast.Records) {
 		if listed[col.Name.Name()] || cd.Nullable || rowid || col.Settings.Get("default") != nil {
 			continue
 		}
-		c.errorf(d.Pos(), "records-sample-data", "records of table %q do not list column %q, which is NOT NULL and has no default: every row would write NULL into it; list the column (§records-sample-data)", ti.Decl.Name.String(), col.Name.Name())
+		c.errorf(d.Pos(), "records-sample-data", "records of table %q do not list column %q, which is NOT NULL and has no default: every row would write NULL into it; list the column (§records-sample-data)", ti.Key, col.Name.Name())
 	}
 }
 
@@ -316,8 +315,8 @@ func (c *checker) valueTypeCheck(cd *ColumnDef, v ast.Node, section, what string
 			c.errorf(x.Pos(), section, "%s %q (%s) is an enum constant but the column is not an enum (§%s)", what, name, typ, section)
 			return
 		}
-		if x.Enum.Name() != cd.Type.Enum.Decl.Name.Base() {
-			c.errorf(x.Pos(), section, "%s %q names enum %q, the column's enum is %q (§%s)", what, name, x.Enum.Name(), cd.Type.Enum.Decl.Name.Base(), section)
+		if x.Enum.Name() != cd.Type.Enum.Key {
+			c.errorf(x.Pos(), section, "%s %q names enum %q, the column's enum is %q (§%s)", what, name, x.Enum.Name(), cd.Type.Enum.Key, section)
 			return
 		}
 		for _, ev := range cd.Type.Enum.Decl.Values {
@@ -325,7 +324,7 @@ func (c *checker) valueTypeCheck(cd *ColumnDef, v ast.Node, section, what string
 				return
 			}
 		}
-		c.errorf(x.Pos(), section, "%s %q: %q is not a value of enum %q (§%s)", what, name, x.Value.Name(), cd.Type.Enum.Decl.Name.Base(), section)
+		c.errorf(x.Pos(), section, "%s %q: %q is not a value of enum %q (§%s)", what, name, x.Value.Name(), cd.Type.Enum.Key, section)
 		return
 	}
 	kind := defaultKind(v)
@@ -364,11 +363,8 @@ func (c *checker) valueTypeCheck(cd *ColumnDef, v ast.Node, section, what string
 func defaultKind(v ast.Node) string {
 	switch x := v.(type) {
 	case *ast.BasicLit:
-		switch x.Tok.Kind {
-		case token.STRING:
+		if x.Tok.Kind == token.STRING {
 			return "string"
-		case token.COLOR:
-			return "value"
 		}
 		if strings.ContainsAny(x.Tok.Val, ".eE") {
 			return "number"
@@ -379,8 +375,6 @@ func defaultKind(v ast.Node) string {
 			return "number"
 		}
 		return "integer"
-	case *ast.Empty:
-		return "null"
 	case *ast.Ident:
 		if x.Quoted() {
 			return "value"

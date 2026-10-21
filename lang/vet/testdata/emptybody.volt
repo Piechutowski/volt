@@ -8,10 +8,3 @@ Table t {
   validators { //WANT emptybody
   }
 }
-TableGroup g { //WANT emptybody
-}
-DiagramView v {
-  Tables { //WANT emptybody
-  }
-  Notes { * }
-}

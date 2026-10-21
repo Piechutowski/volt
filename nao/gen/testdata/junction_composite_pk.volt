@@ -8,8 +8,8 @@ Table roles {
   name string [unique]
 }
 Table user_roles [note: 'Junction table: which user holds which role'] {
-  user_id int [ref: > users.id]
-  role_id int [ref: > roles.id]
+  user_id int [ref: users.id]
+  role_id int [ref: roles.id]
   granted_at time.Time [default: `now()`]
 
   indexes {

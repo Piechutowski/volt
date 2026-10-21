@@ -147,7 +147,7 @@ func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 	p := &plan{imports: g.imports}
 	typeNames := map[string]string{"Queries": "the generated Queries type"}
 	for _, e := range info.Enums {
-		typeNames[g.enumTypes[e.Key]] = "enum " + e.Decl.Name.String()
+		typeNames[g.enumTypes[e.Key]] = "enum " + e.Decl.Name.Name()
 	}
 	sqlNames := map[string]string{}
 
@@ -188,13 +188,13 @@ func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 			return nil, b.err
 		}
 		if prev, dup := typeNames[b.tm.model]; dup {
-			return nil, fmt.Errorf("table %s and %s both map to Go type %s", ti.Decl.Name.String(), prev, b.tm.model)
+			return nil, fmt.Errorf("table %s and %s both map to Go type %s", ti.Decl.Name.Name(), prev, b.tm.model)
 		}
-		typeNames[b.tm.model] = "table " + ti.Decl.Name.String()
+		typeNames[b.tm.model] = "table " + ti.Decl.Name.Name()
 		if prev, dup := sqlNames[b.tm.sqlName]; dup {
-			return nil, fmt.Errorf("tables %s and %s both flatten to SQLite name %q", prev, ti.Decl.Name.String(), b.tm.sqlName)
+			return nil, fmt.Errorf("tables %s and %s both flatten to SQLite name %q", prev, ti.Decl.Name.Name(), b.tm.sqlName)
 		}
-		sqlNames[b.tm.sqlName] = ti.Decl.Name.String()
+		sqlNames[b.tm.sqlName] = ti.Decl.Name.Name()
 		for imp := range b.imp {
 			g.imports[imp] = true
 		}
@@ -222,15 +222,15 @@ func enumTypesOf(info *check.Info, byKey map[string]string) *enumTypes {
 func tableBuild(ti *check.TableInfo, enums *enumTypes) (*tableModel, map[string]bool, error) {
 	model, err := modelName(ti.Decl)
 	if err != nil {
-		return nil, nil, fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
+		return nil, nil, fmt.Errorf("table %s: %w", ti.Decl.Name.Name(), err)
 	}
-	tm := &tableModel{ti: ti, model: model, sqlName: sqlTableName(ti.Decl.Name)}
+	tm := &tableModel{ti: ti, model: model, sqlName: ti.Key}
 	imports := map[string]bool{}
 	goFields := map[string]string{}
 	for _, cd := range ti.Columns {
 		fp, err := fieldBuild(enums.byKey, imports, cd, goFields)
 		if err != nil {
-			return nil, nil, fmt.Errorf("table %s: %w", ti.Decl.Name.String(), err)
+			return nil, nil, fmt.Errorf("table %s: %w", ti.Decl.Name.Name(), err)
 		}
 		tm.fields = append(tm.fields, fp)
 	}
@@ -333,13 +333,6 @@ func wireName(colName, tag string) string {
 		return colName
 	}
 	return name
-}
-
-func sqlTableName(q *ast.QualName) string {
-	if s := q.Schema(); s != "" && s != "public" {
-		return s + "_" + q.Base()
-	}
-	return q.Base()
 }
 
 var goKeywords = map[string]bool{
@@ -464,7 +457,7 @@ type queryEmitter struct {
 
 func (e *queryEmitter) fail(t *tableModel, what string, err error) {
 	if e.err == nil {
-		e.err = fmt.Errorf("table %s: %s: %w", t.ti.Decl.Name.String(), what, err)
+		e.err = fmt.Errorf("table %s: %s: %w", t.ti.Decl.Name.Name(), what, err)
 	}
 }
 
@@ -536,7 +529,7 @@ func (e *queryEmitter) tableEmit(t *tableModel) {
 	}
 	b := &e.body
 	lower := argName(t.model)
-	tbl := t.ti.Decl.Name.String()
+	tbl := t.ti.Decl.Name.Name()
 
 	if len(t.pk) > 0 {
 		for _, f := range t.pk {

@@ -2,13 +2,12 @@
 /* block comment
    spanning lines */
 
-Project shop_db {
-  database_type: 'PostgreSQL'
-  custom_key: 'implementations must accept arbitrary keys'
-  Note: '''
+Project shop_db [note: '''
     # Shop database
     Multi-line **markdown** note.
-  '''
+  '''] {
+  database_type: 'PostgreSQL'
+  custom_key: 'implementations must accept arbitrary keys'
 }
 
 Enum status {
@@ -17,32 +16,30 @@ Enum status {
   "Not Yet Set"
 }
 
-Enum v2.job_status {
+Enum v2_job_status {
   queued
   running
 }
 
-TablePartial base_template [headercolor: #ff0000] {
+TablePartial base_template {
   id int [pk, increment]
   created_at time.Time [null, default: `now()`]
 }
 
-Table users as U [headercolor: #3498DB, note: 'main table'] {
+Table users [note: 'user accounts'] {
   ~base_template
   name string [unique]
   full_name string [null]
   status status [default: status.active]
   balance float64 [null, default: -100.5]
   2fa_enabled bool [null, default: false]
-  job v2.job_status [null, default: null]
+  job v2_job_status [null]
   motto string [null, default: 'be kind']
-  ref_col int [null, ref: > core.orders.id, ref: - U.name]
-
-  Note: 'user accounts'
+  ref_col int [null, ref: core_orders.id]
 
   indexes {
     (id, `lower(name)`) [name: 'ix_main', unique]
-    created_at [type: btree, note: 'time queries']
+    created_at
     `floor(balance)` [name: 'ix_balance_floor']
   }
 
@@ -56,47 +53,29 @@ Table users as U [headercolor: #3498DB, note: 'main table'] {
   }
 }
 
-Table core.orders {
+Table core_orders {
   id int [pk]
   user_id int [null]
   total float64 [null]
 }
 
-Ref: U.id < core.orders.user_id [delete: cascade, update: no action]
+Ref: core_orders.user_id > users.id [delete: cascade, update: no action]
 
-Ref fk_composite {
-  users.(id, name) > core.orders.(id, total) [color: #00ff00]
-}
-
-Ref: users.id <> core.orders.id
+Ref: users.(id, name) > core_orders.(id, total)
 
 Table empty_target {
   x int [null]
 }
 
-Records core.orders(id, user_id, total) {
+Records core_orders(id, user_id, total) {
   1, 1, `1.0 + 2.0`
-  2, , 3.5
+  2, null, 3.5
   4, null, -7
   3, 2, 4.5
 }
 
-TableGroup commerce [color: #cccccc, note: 'sales tables'] {
+Group commerce {
   users
-  core.orders
-  Note: 'group note'
+  core_orders
 }
 
-Note sticky_reminder [color: none] {
-  '''remember to *normalize*'''
-}
-
-DiagramView overview {
-  Tables {
-    users
-    core.orders
-  }
-  TableGroups { * }
-  Schemas {
-  }
-}

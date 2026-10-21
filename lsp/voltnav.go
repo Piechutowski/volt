@@ -39,14 +39,13 @@ type voltRef struct {
 }
 
 type voltDef struct {
-	span   voltSpan
-	table  *ast.Table
-	pipe   *ast.Pipeline
-	group  *ast.Group
-	tgroup *ast.TableGroup
-	pred   *ast.Pred
-	gofn   *lang.GoFunc
-	md     string
+	span  voltSpan
+	table *ast.Table
+	pipe  *ast.Pipeline
+	group *ast.Group
+	pred  *ast.Pred
+	gofn  *lang.GoFunc
+	md    string
 }
 
 type voltIndex struct {
@@ -113,13 +112,11 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 		for _, d := range pkg.Merged().Decls {
 			switch d := d.(type) {
 			case *ast.Table:
-				ix.define(voltSym{"table", path, d.Name.Base()}, voltDef{span: spanOf(d.Name), table: d})
+				ix.define(voltSym{"table", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), table: d})
 			case *ast.Pipeline:
 				ix.define(voltSym{"pipeline", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), pipe: d})
 			case *ast.Group:
 				ix.define(voltSym{"group", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), group: d})
-			case *ast.TableGroup:
-				ix.define(voltSym{"tablegroup", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), tgroup: d})
 			case *ast.Pred:
 				ix.define(voltSym{"pred", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), pred: d})
 			}
@@ -170,7 +167,7 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 			if sp.file == "" {
 				continue
 			}
-			ix.refs = append(ix.refs, voltRef{sp, sp, voltSym{"table", path, ti.Decl.Name.Base()}, occ.IsDecl, occ.Ident.Name()})
+			ix.refs = append(ix.refs, voltRef{sp, sp, voltSym{"table", path, ti.Decl.Name.Name()}, occ.IsDecl, occ.Ident.Name()})
 		}
 	}
 
@@ -201,14 +198,14 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 				for _, term := range d.Terms {
 					for _, id := range term.Names {
 						sp := spanOf(id)
-						ix.refs = append(ix.refs, voltRef{sp, sp, ix.setSym(path, id.Name(), "table", "group", "tablegroup"), false, id.Name()})
+						ix.refs = append(ix.refs, voltRef{sp, sp, ix.setSym(path, id.Name(), "table", "group"), false, id.Name()})
 					}
 				}
 			case *ast.Pred:
 				ix.predExprRefs(path, d.X)
 			case *ast.Select:
 				sp := spanOf(d.Target)
-				ix.refs = append(ix.refs, voltRef{sp, sp, ix.setSym(path, d.Target.Name(), "group", "table", "tablegroup"), false, d.Target.Name()})
+				ix.refs = append(ix.refs, voltRef{sp, sp, ix.setSym(path, d.Target.Name(), "table", "group"), false, d.Target.Name()})
 				if d.Where != nil {
 					ix.predExprRefs(path, d.Where)
 				}
@@ -455,8 +452,6 @@ func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 		md = "**package** `" + ref.sym.pkg + "`"
 	case "group":
 		md = groupHover(ref.sym, def)
-	case "tablegroup":
-		md = tableGroupHover(ref.sym, def)
 	case "pred":
 		md = predHover(ref.sym, def, d.vindex)
 	case "select", "gofunc", "migration":
@@ -540,7 +535,7 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 	}
 	b.WriteString("```go\n")
 	for _, m := range si.Members {
-		model := m.Decl.Name.Base()
+		model := m.Decl.Name.Name()
 		if mn, err := golang.ModelName(m.Decl); err == nil {
 			model = mn
 		}
@@ -613,19 +608,6 @@ func groupHover(sym voltSym, def voltDef) string {
 	return b.String()
 }
 
-func tableGroupHover(sym voltSym, def voltDef) string {
-	g := def.tgroup
-	if g == nil {
-		return ""
-	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "```volt\nTableGroup %s\n```\n", sym.name)
-	for _, m := range g.Members {
-		fmt.Fprintf(&b, "- %s\n", m.String())
-	}
-	return b.String()
-}
-
 func predHover(sym voltSym, def voltDef, ix *voltIndex) string {
 	p := def.pred
 	if p == nil {
@@ -648,7 +630,7 @@ func tableModelHover(sym voltSym, def voltDef) string {
 	}
 	var b strings.Builder
 	model, _ := golang.ModelName(t)
-	fmt.Fprintf(&b, "**`Table %s`** in package `%s`", t.Name.String(), sym.pkg)
+	fmt.Fprintf(&b, "**`Table %s`** in package `%s`", t.Name.Name(), sym.pkg)
 	if model != "" {
 		fmt.Fprintf(&b, " — Go model `%s`", model)
 	}
@@ -664,7 +646,7 @@ func tableModelHover(sym voltSym, def voltDef) string {
 	}
 
 	b.WriteString("```volt\n")
-	fmt.Fprintf(&b, "Table %s {\n", t.Name.String())
+	fmt.Fprintf(&b, "Table %s {\n", t.Name.Name())
 	for _, item := range t.Body {
 		col, ok := item.(*ast.Column)
 		if !ok {
@@ -778,7 +760,6 @@ func (d *Document) voltComplete(prefix string) []protocol.CompletionItem {
 	if m := voltSelectForRE.FindStringSubmatch(prefix); m != nil {
 		items := d.packageTableItems(d.vpkg.Path, m[1])
 		items = append(items, d.namedDefItems("group", m[1], protocol.CompletionItemKindStruct)...)
-		items = append(items, d.namedDefItems("tablegroup", m[1], protocol.CompletionItemKindStruct)...)
 		return items
 	}
 	if m := voltWhereRE.FindStringSubmatch(prefix); m != nil {
@@ -817,11 +798,7 @@ func (d *Document) namedDefItems(kind, partial string, itemKind protocol.Complet
 		if partial != "" && !strings.HasPrefix(strings.ToLower(sym.name), strings.ToLower(partial)) {
 			continue
 		}
-		label := kind
-		if kind == "tablegroup" {
-			label = "TableGroup"
-		}
-		detail := label + " " + sym.name
+		detail := kind + " " + sym.name
 		items = append(items, protocol.CompletionItem{
 			Label:  sym.name,
 			Kind:   kindPtr(itemKind),

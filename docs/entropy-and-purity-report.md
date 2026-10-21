@@ -79,7 +79,7 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 **Cost.** One count in tableBodyCheck, snippet 38 turned into an invalid case, two spec sentences. Trivial.
 
-**Evidence.** docs/spec.md:860-861 ('A body MAY contain more than one indexes block; their contents accumulate') and ~2703 (the same for validators). lang/check/check.go:412-419 appends the blocks. Note and Records are limited to one per body (lang/check/decls.go:84-90), so bodies follow two different rules. Snippet valid/38_multiple_index_blocks.volt.
+**Evidence.** docs/spec.md:860-861 ('A body MAY contain more than one indexes block; their contents accumulate') and ~2703 (the same for validators). lang/check/check.go:412-419 appends the blocks. Records is limited to one per body (lang/check/decls.go:84-90), so bodies follow two different rules. Snippet valid/38_multiple_index_blocks.volt.
 
 ### 27. [merge] Parentheses around a single index key or ref column
 
@@ -89,7 +89,7 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 **Proposal.** Allow parentheses only around two or more elements. A parenthesized single element is an error that names the bare form.
 
-**Cost.** Two parser checks, one invalid snippet, a rewrite of snippets 10 and 37. Trivial.
+**Cost.** Two parser checks, one invalid snippet, a rewrite of snippet 10. Trivial.
 
 **Evidence.** docs/spec.md: §indexes `index key`, §relationships-ref `column group`. lang/parser/parser.go:463-484 and 571-585 accept both forms. ast.Index.Composite records which spelling was used, but only diagnostics read it (check/migrations.go:419).
 
@@ -206,26 +206,26 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 ### 37. [merge] A foreign key is declared three ways: inline ref:, the Ref element, and the migration column with actions as column settings
 
-- user_id int [ref: > users.id]: no name, no actions
+- user_id int [ref: users.id]: no actions
 - Ref: posts.user_id > users.id [delete: cascade]
-- migration column: user_id int [ref: > users.id, delete: cascade]
+- migration column: user_id int [ref: users.id, delete: cascade]
 
-**Proposal.** One spelling for single-column FKs: inline ref: with delete:/update: as column settings, exactly as in migrations, so schema and migration share one production. Composite FKs need a home, and that is the open choice: keep a Ref element for composite keys only, or add a table-level form beside composite indexes. Either way the Ref name and the visual settings go (diagram and Ref-name items).
+**Proposal.** One spelling for single-column FKs: inline ref: with delete:/update: as column settings, exactly as in migrations, so schema and migration share one production. Composite FKs need a home, and that is the open choice: keep a Ref element for composite keys only, or add a table-level form beside composite indexes. The Ref name, the long form, the visual settings and the reverse operators are gone already (roadmap, Step 1), so all three spellings write the foreign key first.
 
 **Cost.** The Ref parser and AST (lang/parser/parser.go:510-541) and the resolve.go Ref pass; refSettingsCheck/endpointArityCheck move to columns; columnSettings gains delete/update with the 'requires ref:' rule already written for migrations (check/migrations.go:316-319); grammar.js ref_definition. About 14 snippets and about 21 .volt files repo-wide; §relationships-ref. Moderate.
 
-**Evidence.** docs/spec.md §relationships-ref rules 4-5: an inline ref MUST NOT carry settings, so any action forces the Ref element. §migrations (~3019) gives a migration column delete:/update: 'since ... a migration has no Ref', so the fold has to match the two spellings (lang/check/migrations.go:315-323). RefInfo already unifies both schema forms (lang/check/check.go; resolve.go:17-48). The element is only needed for composite FKs (rule 2).
+**Evidence.** docs/spec.md §relationships-ref rule 2 and §columns rule 5: an inline ref carries no settings, so any action forces the Ref element. §migrations (~3019) gives a migration column delete:/update: 'since ... a migration has no Ref', so the fold has to match the two spellings (lang/check/migrations.go:315-323). RefInfo already unifies both schema forms (lang/check/check.go; resolve.go:17-48). The element is only needed for composite FKs (§relationships-ref rule 3).
 
 ### 38. [decide] Keyword casing mixes PascalCase and lowercase, even among siblings in one body and between the schema and migration spellings of the same word
 
-- one table body: indexes {, validators { beside Note: and Records (...) {
+- one table body: indexes {, validators { beside Records (...) {
 - top level: Table, Enum, Ref, Pipeline, Scope, Group, Pred, Select, Migration beside package, import
 - resources, dataset (lowercase) inside Scope (PascalCase)
 - schema Table users { ... } vs migration create table users { ... } with the identical column body; schema indexes vs migration create index
 
-**Proposal.** Pick one casing rule and let case-sensitive matching (first item) enforce it. Option A, the lowest entropy: every keyword lowercase as in Go (table, ref, type, records, ...), so schema and migration bodies share spellings. Option B: PascalCase only for words that open a top-level declaration and lowercase for everything else, with no exceptions (in-body Records and Note become lowercase).
+**Proposal.** Pick one casing rule and let case-sensitive matching (first item) enforce it. Option A, the lowest entropy: every keyword lowercase as in Go (table, ref, type, records, ...), so schema and migration bodies share spellings. Option B: PascalCase only for words that open a top-level declaration and lowercase for everything else, with no exceptions (in-body Records becomes lowercase).
 
-**Cost.** Option A: a mechanical rewrite of every .volt file (49 outside the corpus, about 332 snippets), the spec examples, grammar.js, the LSP completion lists and editor.md section 8. Option B: only the in-body Note/Records spellings change. Several affected keywords disappear under other items anyway (DiagramView categories, TableGroup, Note).
+**Cost.** Option A: a mechanical rewrite of every .volt file (49 outside the corpus, about 332 snippets), the spec examples, grammar.js, the LSP completion lists and editor.md section 8. Option B: only the in-body Records spelling changes.
 
 **Evidence.** docs/spec.md:405-421 (§keywords), ~2148 (resources), ~2289 (dataset), 2968-2983 and 3007-3009 (migration words); the grammar/grammar.js kw() calls at lines 104-852, each displayed under a canonical spelling.
 
@@ -402,7 +402,7 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 - handler ref = name, [ ".", name ]
 - table ref = name, [ ".", name ]
 - dataset inline [ name, "." ], name
-- Part I type name / table name, and enum constant, which the checker reuses to read error_handler: app.Errors (lang/routes_lower.go:315-319)
+- Part I type name, and enum constant, which the checker reuses to read error_handler: app.Errors (lang/routes_lower.go:315-319)
 
 **Proposal.** Define one production, `qualified name = name, [ ".", name ]`, use it everywhere, and have the parser call qualName for all of them.
 
@@ -448,15 +448,15 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 ### 57. [decide] The Project element: a name and properties that nothing reads, on a SQLite-only implementation
 
-- Project ecommerce { database_type: 'PostgreSQL'  custom_key: '...'  Note: '...' }
+- Project ecommerce [note: '...'] { database_type: 'PostgreSQL'  custom_key: '...' }
 - the Go module, which Part II calls the project (§projects-and-packages)
 - a Go package comment in doc.go, Go's own place for package docs
 
 **Proposal.** Recommended: remove Project and let the package doc live where Go puts it (doc.go). Smaller step: keep only one package note, with no name and no properties.
 
-**Cost.** Parser project(), ast.Project, the uniqueness check (check.go:262-267), vet projectnotes and the emptybody branch, both generators' projectNote and the header goldens, lsp/features.go:45, grammar.js project; about 5 snippets (03, 25, 35, 40, i34) and nao/itest/schema.volt; §project and lint.md. Low.
+**Cost.** Parser project(), ast.Project, the uniqueness check (check.go:262-267), the vet emptybody branch, both generators' projectNote and the header goldens, lsp/features.go:45, grammar.js project; about 4 snippets (03, 25, 35, i34) and nao/itest/schema.volt; §project and lint.md. Low.
 
-**Evidence.** docs/spec.md:644-667 (§project; the suggested key is database_type: 'PostgreSQL'). Only the note is read, in nao/gen/golang/gen.go:301-307 and nao/gen/sqlite/gen.go:464-470, and each takes the last of several notes; vet projectnotes exists because all but one are dropped. 'Project' means two different things in the spec. nao/itest/schema.volt:11-13 writes a lowercase note: inside Project, which case folding turns into the Note element, not a property.
+**Evidence.** docs/spec.md:644-667 (§project; the suggested key is database_type: 'PostgreSQL'). Only the note is read, in nao/gen/golang/gen.go and nao/gen/sqlite/gen.go; since the removals a Project carries at most one, the `note:` setting. 'Project' means two different things in the spec. nao/itest/schema.volt declares an empty Project only to carry its note.
 
 ### 58. [decide] Two comment forms
 

@@ -4,4 +4,4 @@ Table employees {
   manager_id int [null]
 }
 Ref: employees.manager_id > employees.id
-Ref weird: employees.id - employees.id //WANT selfref
+Ref: employees.id > employees.id //WANT selfref

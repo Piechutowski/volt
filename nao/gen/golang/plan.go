@@ -213,7 +213,7 @@ func crudMethodsBuild(t *tableModel) []CRUDMethod {
 }
 
 // ModelFields reports the exact struct fields the model generator emits
-// for the table with the given canonical key (spec §selects-over-groups, §mapping-to-go).
+// for the named table (spec §selects-over-groups, §mapping-to-go).
 func (pl *Plan) ModelFields(tableKey string) (model string, fields []FieldSig, err error) {
 	t, err := pl.table(tableKey)
 	if err != nil {
@@ -283,7 +283,7 @@ func (pl *Plan) DynNameCollisions() []NameCollision {
 	seen := map[string]dynOrigin{"Queries": {kind: dynQueries}}
 	var out []NameCollision
 	for _, e := range pl.info.Enums {
-		typeName, err := enumTypeName(e.Decl.Name.Schema(), e.Decl.Name.Base())
+		typeName, err := enumTypeName(e.Decl.Name.Name())
 		if err != nil {
 			continue
 		}
@@ -436,17 +436,17 @@ func modelNamesBuild(t *tableModel) []nameOrigin {
 func (o *nameOrigin) describe() string {
 	switch o.kind {
 	case nameModel:
-		return fmt.Sprintf("the model of table %q", o.table.ti.Decl.Name.Base())
+		return fmt.Sprintf("the model of table %q", o.table.ti.Decl.Name.Name())
 	case nameChangeset:
-		return fmt.Sprintf("the changeset of table %q", o.table.ti.Decl.Name.Base())
+		return fmt.Sprintf("the changeset of table %q", o.table.ti.Decl.Name.Name())
 	case nameColumn:
-		return fmt.Sprintf("the column handle type of table %q", o.table.ti.Decl.Name.Base())
+		return fmt.Sprintf("the column handle type of table %q", o.table.ti.Decl.Name.Name())
 	case nameParams:
-		return fmt.Sprintf("the write body type of table %q", o.table.ti.Decl.Name.Base())
+		return fmt.Sprintf("the write body type of table %q", o.table.ti.Decl.Name.Name())
 	case nameNew:
-		return fmt.Sprintf("the changeset constructor of table %q", o.table.ti.Decl.Name.Base())
+		return fmt.Sprintf("the changeset constructor of table %q", o.table.ti.Decl.Name.Name())
 	case nameHandle:
-		return fmt.Sprintf("the column handle for %s.%s", o.table.ti.Decl.Name.Base(), o.field.colName)
+		return fmt.Sprintf("the column handle for %s.%s", o.table.ti.Decl.Name.Name(), o.field.colName)
 	}
 	return "the dynamic-layer function " + o.name
 }
@@ -567,7 +567,7 @@ func (pl *Plan) Names() *Names {
 	}
 	for _, d := range pl.f.Decls {
 		if e, ok := d.(*ast.Enum); ok {
-			if typ, err := enumTypeName(e.Name.Schema(), e.Name.Base()); err == nil {
+			if typ, err := enumTypeName(e.Name.Name()); err == nil {
 				n.enums[typ] = e
 			}
 		}
@@ -587,7 +587,7 @@ func (n *Names) Lookup(name string) (desc string, ok bool) {
 		return desc, true
 	}
 	if e, ok := n.enums[name]; ok {
-		return fmt.Sprintf("the enum %q", e.Name.String()), true
+		return fmt.Sprintf("the enum %q", e.Name.Name()), true
 	}
 	if n.base != nil {
 		if o := n.base.lookup(name); o != nil {

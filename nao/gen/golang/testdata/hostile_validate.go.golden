@@ -14,7 +14,7 @@ func (c UserChangeset) Validate() UserChangeset {
 	return c
 }
 
-// Validate runs required, enum membership and the validators of core.users
+// Validate runs required, enum membership and the validators of core_users
 // over the row, every one every time, replacing the findings of an
 // earlier Validate (spec §changesets, §validators).
 func (c CoreUserChangeset) Validate() CoreUserChangeset {
@@ -23,7 +23,7 @@ func (c CoreUserChangeset) Validate() CoreUserChangeset {
 	switch v.Kind {
 	case ECoreAuditKindReadWrite, ECoreAuditKindAdmin:
 	default:
-		errs = append(errs, rt.FieldError{Check: "enum", Columns: []string{"kind"}, Message: "kind is not a value of core.audit_kind"})
+		errs = append(errs, rt.FieldError{Check: "enum", Columns: []string{"kind"}, Message: "kind is not a value of core_audit_kind"})
 	}
 	c.valid = errs
 	return c

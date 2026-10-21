@@ -12,7 +12,7 @@ const groupSetSchema = "package db\n\n" +
 	"Table ms_revenue {\n\tid int [pk]\n\tyear int\n}\n\n" +
 	"Table ms_usage {\n\tid int [pk]\n\tyear int\n}\n\n" +
 	"Table ms_dict {\n\tcode string [pk]\n}\n\n" +
-	"TableGroup Metrics {\n\tms_revenue\n\tms_usage\n\tms_dict\n}\n\n" +
+	"Group Metrics {\n\tms_revenue\n\tms_usage\n\tms_dict\n}\n\n" +
 	"Group series = Metrics \\ (ms_dict)\n\n" +
 	"Select rows for series where year = :year\n" +
 	"Select everything for Metrics\n"
@@ -26,7 +26,7 @@ func groupSetDoc(t *testing.T) (*Document, string) {
 	return NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), groupSetSchema), groupSetSchema
 }
 
-func TestTableGroupTermDefinitionAndHover(t *testing.T) {
+func TestGroupTermDefinitionAndHover(t *testing.T) {
 	d, text := groupSetDoc(t)
 	if diags := d.LSPDiagnostics(); len(diags) != 0 {
 		t.Fatalf("unexpected diagnostics: %v", diags)
@@ -34,25 +34,25 @@ func TestTableGroupTermDefinitionAndHover(t *testing.T) {
 
 	loc := d.Definition(posOf(t, text, "Metrics", 1))
 	if loc == nil {
-		t.Fatal("no definition for the TableGroup term")
+		t.Fatal("no definition for the group term")
 	}
 	if want := posOf(t, text, "Metrics", 0); loc.Range.Start != want {
-		t.Errorf("definition at %+v, want the TableGroup declaration at %+v", loc.Range.Start, want)
+		t.Errorf("definition at %+v, want the group declaration at %+v", loc.Range.Start, want)
 	}
 	h := d.Hover(posOf(t, text, "Metrics", 1))
 	if h == nil {
-		t.Fatal("no hover for the TableGroup term")
+		t.Fatal("no hover for the group term")
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
-	for _, want := range []string{"TableGroup Metrics", "- ms_revenue", "- ms_dict"} {
+	for _, want := range []string{"Group Metrics", "- + ms_revenue", "- + ms_dict"} {
 		if !strings.Contains(md, want) {
-			t.Errorf("TableGroup hover missing %q:\n%s", want, md)
+			t.Errorf("group hover missing %q:\n%s", want, md)
 		}
 	}
 
 	loc = d.Definition(posOf(t, text, "Metrics", 2))
 	if loc == nil || loc.Range.Start != posOf(t, text, "Metrics", 0) {
-		t.Errorf("select target over a TableGroup did not resolve to its declaration: %+v", loc)
+		t.Errorf("select target over a group did not resolve to its declaration: %+v", loc)
 	}
 
 	h = d.Hover(posOf(t, text, "series", 0))
@@ -67,7 +67,7 @@ func TestTableGroupTermDefinitionAndHover(t *testing.T) {
 	}
 }
 
-func TestTableGroupRenameFollowsSetUses(t *testing.T) {
+func TestGroupRenameFollowsSetUses(t *testing.T) {
 	d, text := groupSetDoc(t)
 	edit, err := d.Rename(posOf(t, text, "Metrics", 1), "Series")
 	if err != nil {
@@ -90,7 +90,7 @@ func TestTableGroupRenameFollowsSetUses(t *testing.T) {
 		n += len(edits)
 	}
 	if n < 3 {
-		t.Errorf("table rename produced %d edits, want the declaration, the TableGroup member and the set term: %+v", n, edit.Changes)
+		t.Errorf("table rename produced %d edits, want the declaration, the group member and the set term: %+v", n, edit.Changes)
 	}
 }
 

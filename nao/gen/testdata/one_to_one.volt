@@ -8,4 +8,4 @@ Table user_profiles {
   bio string [null]
   avatar_url string [null]
 }
-Ref: users.id - user_profiles.user_id
+Ref: user_profiles.user_id > users.id

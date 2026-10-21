@@ -1,20 +1,20 @@
-// analyzers: unusedenum,unusedpartial,unusedalias
+// analyzers: unusedenum,unusedpartial
 Enum used_status { a }
 Enum orphan_status { a } //WANT unusedenum
-Enum core.kind { widget }
+Enum kind { widget }
 
 TablePartial used_partial { created_at time.Time }
 TablePartial orphan_partial { x int } //WANT unusedpartial
 
-Table users as U {
+Table users {
   id int
   s used_status
   ~used_partial
 }
-Table posts as P { //WANT unusedalias
+Table posts {
   id int
 }
-Table core.things {
-  k core.kind
+Table things {
+  k kind
 }
-Ref: U.id < posts.id
+Ref: posts.id > users.id

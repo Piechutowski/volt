@@ -10,11 +10,11 @@ func TestInspectSkipsUnsetFields(t *testing.T) {
 	bare := []ast.Node{
 		&ast.File{}, &ast.Project{}, &ast.ProjectProp{},
 		&ast.Table{}, &ast.TablePartial{}, &ast.Column{}, &ast.TypeRef{}, &ast.IndexesBlock{},
-		&ast.Index{Key: []ast.Node{nil}}, &ast.ValidatorsBlock{}, &ast.Validator{}, &ast.PartialRef{}, &ast.Note{},
+		&ast.Index{Key: []ast.Node{nil}}, &ast.ValidatorsBlock{}, &ast.Validator{}, &ast.PartialRef{},
 		&ast.Ref{}, &ast.RefEndpoint{}, &ast.Enum{}, &ast.EnumValue{}, &ast.Records{},
-		&ast.RecordRow{Values: []ast.Node{nil}}, &ast.StickyNote{}, &ast.TableGroup{}, &ast.DiagramView{},
-		&ast.ViewCategory{}, &ast.SettingList{}, &ast.Setting{}, &ast.QualName{}, &ast.NegNumber{},
-		&ast.EnumConst{}, &ast.RefValue{},
+		&ast.RecordRow{Values: []ast.Node{nil}},
+		&ast.SettingList{}, &ast.Setting{}, &ast.QualName{}, &ast.NegNumber{},
+		&ast.EnumConst{},
 		&ast.Migration{}, &ast.CreateTable{}, &ast.DropTable{}, &ast.RenameTable{}, &ast.AlterTable{},
 		&ast.AlterAdd{}, &ast.AlterDrop{}, &ast.AlterRename{}, &ast.RebuildTable{}, &ast.CreateIndex{},
 		&ast.DropIndex{}, &ast.Exec{},
@@ -37,7 +37,7 @@ func TestInspectSkipsUnsetFields(t *testing.T) {
 	}
 	name := &ast.Ident{}
 	partial := []ast.Node{
-		&ast.Table{Alias: name}, &ast.Column{Name: name}, &ast.Ref{Name: name}, &ast.Validator{Args: []*ast.Ident{name}},
+		&ast.Table{Name: name}, &ast.Column{Name: name}, &ast.RefEndpoint{Table: name}, &ast.Validator{Args: []*ast.Ident{name}},
 		&ast.EnumConst{Value: name}, &ast.Setting{Value: name}, &ast.Index{Key: []ast.Node{name}},
 		&ast.Migration{Name: name}, &ast.CreateTable{Name: name}, &ast.DropTable{Name: name},
 		&ast.RenameTable{To: name}, &ast.AlterTable{Name: name}, &ast.AlterDrop{Name: name},

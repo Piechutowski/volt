@@ -209,49 +209,6 @@ Table t {
             (number)))))))
 
 ==================
-colors: short and long
-==================
-
-Table t [headercolor: #fff] {
-  id int
-}
-Table s [headercolor: #3498DB] {
-  id int
-}
-
----
-
-(source_file
-  (table_definition
-    (table_name
-      (identifier))
-    (settings_list
-      (setting
-        (setting_name
-          (identifier))
-        (color)))
-    (column_definition
-      (column_name
-        (identifier))
-      (column_type
-        (type_name
-          (identifier)))))
-  (table_definition
-    (table_name
-      (identifier))
-    (settings_list
-      (setting
-        (setting_name
-          (identifier))
-        (color)))
-    (column_definition
-      (column_name
-        (identifier))
-      (column_type
-        (type_name
-          (identifier))))))
-
-==================
 quoted identifiers with spaces and escapes
 ==================
 
@@ -292,3 +249,13 @@ Table t {
 ---
 
 
+==================
+a color literal is an error
+:error
+==================
+
+Table t [note: #fff] {
+  id int
+}
+
+---

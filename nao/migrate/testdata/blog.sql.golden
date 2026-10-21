@@ -94,10 +94,9 @@ ALTER TABLE comments ADD COLUMN nickname TEXT;
 CREATE UNIQUE INDEX idx_comments_nickname ON comments (nickname);
 CREATE TABLE post_details (
   id INTEGER PRIMARY KEY,
-  post_id INTEGER NOT NULL,
+  post_id INTEGER NOT NULL UNIQUE,
   summary TEXT,
-  FOREIGN KEY (post_id) REFERENCES posts (id),
-  UNIQUE (post_id)
+  FOREIGN KEY (post_id) REFERENCES posts (id)
 );
 -- down
 DROP TABLE post_details;

@@ -89,15 +89,15 @@ func TestCleanFile(t *testing.T) {
 Project shop { database_type: 'PostgreSQL' }
 Enum status { active
   retired }
-Table users as U {
+Table users {
   id int [pk, increment]
   status status
 }
 Table orders {
   id int [pk]
-  user_id int [ref: > U.id]
+  user_id int [ref: users.id]
 }
-TableGroup commerce { users
+Group commerce { users
   orders }
 `
 	f, diags := parser.ParseFile("clean.volt", src)
@@ -128,8 +128,8 @@ Table authors {
 }
 Table posts {
   id int [pk, increment]
-  author_id int [ref: > authors.id]
-  editor_id string [null, ref: > authors.id]
+  author_id int [ref: authors.id]
+  editor_id string [null, ref: authors.id]
 }
 `
 	f, diags := parser.ParseFile("unknown.volt", src)

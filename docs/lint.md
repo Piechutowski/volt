@@ -42,9 +42,9 @@ A rule is judged declaration by declaration: a pure function of one
 declaration's syntax and the facts the checker resolved for it (its
 checked table, its partial, the relationships starting at its
 columns), so an editor session re-judges only the declarations an
-edit changed. The rules that need the whole file — an enum or
-alias nothing uses, a foreign-key cycle, names that differ only in
-case across tables or enums, the generated names that collide — fold
+edit changed. The rules that need the whole file (an enum
+nothing uses, a foreign-key cycle, names that differ only in
+case across tables or enums, the generated names that collide) fold
 over the checker's model and what every declaration's rules
 summarized. Two warnings at one position stand in the order the rules
 are listed below, which is the order they are registered in;
@@ -64,10 +64,10 @@ searching for uses that do not exist.
 type.
 
 **Why.** An enum's only effect is through columns typed with it; an unused
-enum is dead weight that still occupies a name in its schema.
+enum is dead weight that still occupies a name in its package.
 
-**Examples.** [testdata/unused.volt](../lang/vet/testdata/unused.volt) — `orphan_status`
-is bad; `used_status` and the schema-qualified `core.kind` are good.
+**Examples.** [testdata/unused.volt](../lang/vet/testdata/unused.volt): `orphan_status`
+is bad; `used_status` and `kind` are good.
 
 **Limitations.** Analysis is per-package: the files of a package are
 analyzed as one (§projects-and-packages), and a use from outside the
@@ -81,20 +81,6 @@ package is not seen. Treat the warning as "unused *here*".
 
 **Examples.** [testdata/unused.volt](../lang/vet/testdata/unused.volt) —
 `orphan_partial` is bad; `used_partial` is good.
-
-**Limitations.** Per-package, as above.
-
-### unusedalias
-
-**What it does.** Reports a table alias (`Table users as U`) that no
-relationship endpoint, TableGroup member, DiagramView member or records
-declaration uses.
-
-**Why.** The alias occupies a slot in the global table namespace (§namespaces-and-uniqueness)
-— it can collide with future table names — while providing nothing.
-
-**Examples.** [testdata/unused.volt](../lang/vet/testdata/unused.volt) — `P` is bad;
-`U` (used by `Ref: U.id < posts.id`) is good.
 
 **Limitations.** Per-package, as above.
 
@@ -131,16 +117,13 @@ textually: `` `a+b` `` and `` `a + b` `` count as different keys.
 
 ### emptybody
 
-**What it does.** Reports empty `indexes {}` and `validators {}` blocks, empty
-`TableGroup` bodies, empty (non-wildcard) DiagramView categories, and empty
-`Project` bodies.
+**What it does.** Reports empty `indexes {}` and `validators {}` blocks,
+and a `Project` with neither properties nor a `note:` (spec §project).
 
-**Why.** An empty block does nothing but implies work in progress; an empty
-DiagramView category in particular reads as "show everything" but actually
-selects nothing (spec §diagramview).
+**Why.** An empty block does nothing but implies work in progress.
 
-**Examples.** [testdata/emptybody.volt](../lang/vet/testdata/emptybody.volt) —
-`Notes { * }` is good: a wildcard is a real selection.
+**Examples.** [testdata/emptybody.volt](../lang/vet/testdata/emptybody.volt):
+every empty block warns; the table's column is the good line.
 
 ### shadowedcolumn
 
@@ -154,17 +137,6 @@ which is invisible at the partial's definition site.
 
 **Examples.** [testdata/shadowedcolumn.volt](../lang/vet/testdata/shadowedcolumn.volt)
 — both conflict directions are bad; non-overlapping columns are good.
-
-### projectnotes
-
-**What it does.** Reports a `Project` body holding more than one `Note`
-definition.
-
-**Why.** Multiple notes are accepted (spec §notes exempts Project bodies)
-but downstream tools render a single project note, so all but one are
-silently dropped. The good form is a single (possibly multi-line) note.
-
-**Examples.** [testdata/projectnotes.volt](../lang/vet/testdata/projectnotes.volt).
 
 ### unnecessaryquotes
 
@@ -228,9 +200,8 @@ column set is not guaranteed unique: not a `pk`/`unique` column and not
 the column set of a `[pk]` index or of a `[unique]` index without
 `where:`. A unique index with `where:` constrains only the rows its
 condition admits (spec §indexes), and SQLite refuses it as a
-foreign-key target. The FK side per operator follows spec
-§relationships-ref (`>` left, `<` right, `-` second endpoint, an inline
-`-` the declaring column); `<>` has no FK side.
+foreign-key target. The referenced columns are those right of `>` in a
+`Ref`, or the endpoint of a column's `ref:` (spec §relationships-ref).
 
 **Why.** SQL requires FK targets to be unique; a schema that violates this
 fails at export or, worse, models a "to-one" relationship that the data
@@ -239,13 +210,14 @@ cannot uphold.
 **Examples.** [testdata/reftarget.volt](../lang/vet/testdata/reftarget.volt) — the
 composite case shows that only an index with **the same column set** makes
 a composite target unique; `accounts.email`, unique only where
-`deleted_at IS NULL`, is no target, while `accounts.handle` is; an inline
-`-` names its target, so `bios.user_id [ref: - users.id]` is good.
+`deleted_at IS NULL`, is no target, while `accounts.handle` is; a
+one-to-one names its target like any ref, so `bios.user_id [null,
+unique, ref: users.id]` is good.
 
 ### selfref
 
 **What it does.** Reports a relationship with the same column on both
-sides (`employees.id - employees.id`).
+sides (`Ref: employees.id > employees.id`).
 
 **Why.** A column trivially equals itself; the relationship is either a
 typo for a hierarchy edge (`manager_id > id`) or meaningless.
@@ -269,7 +241,7 @@ pattern is legitimate and covered by `selfref` only when degenerate).
 ### casecollision
 
 **What it does.** Reports two names in one namespace differing only in
-letter case: tables per schema, columns per table, enums per schema.
+letter case: tables, columns per table, enums.
 
 **Why.** Volt names are case-sensitive (spec §case-sensitivity-and-terminology) but many databases and
 most humans are not; `users` next to `Users` is a bug generator.
@@ -354,13 +326,11 @@ one file in `vet/` plus one testdata file.
 
 | Candidate | What it would report | Why deferred |
 |---|---|---|
-| `junctionhint` | `<>` many-to-many refs, reminding that SQL export materializes an implicit junction table (spec §relationships-ref) | informational, not a defect; would fire on every legitimate `<>` |
 | `orphantable` | tables with no relationships at all | too noisy: lookup/config tables are legitimately standalone |
 | `nullablefk` | nullable FK columns, i.e. zero-or-many cardinality (spec §nullability-and-cardinality) | that cardinality is a valid modeling choice, not a smell |
 | `recordsdupkey` | duplicate primary-key values across record rows | belongs in `check` beside record value typing (§records-sample-data) |
 | `sqlkeyword` | unquoted names that are reserved words in common SQL dialects (`order`, `user`) | needs per-dialect wordlists and a target-dialect setting |
 | `namingstyle` | mixed naming conventions (snake_case vs camelCase) | pure style; needs configuration machinery first |
-| `unusedstickynote` | sticky notes not shown by any DiagramView | views are optional; most files have none, so every note would warn |
 
 ---
 

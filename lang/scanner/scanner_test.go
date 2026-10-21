@@ -37,8 +37,9 @@ func TestMaximalMunch(t *testing.T) {
 		src  string
 		want []token.Kind
 	}{
-		{"<>", []token.Kind{token.LTGT}},
-		{"< >", []token.Kind{token.LT, token.GT}},
+		{"<=", []token.Kind{token.LE}},
+		{"< =", []token.Kind{token.LT, token.EQ}},
+		{"<>", []token.Kind{token.LT, token.GT}},
 		{">1", []token.Kind{token.GT, token.NUMBER}},
 		{"user_id2", []token.Kind{token.IDENT}},
 		{"''''''", []token.Kind{token.STRING}},

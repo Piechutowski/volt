@@ -1,6 +1,6 @@
-// spec: §columns — every built-in type, the [] of []byte, schema-qualified and bare enum types
-Enum v2.job_status { created }
+// spec: §columns, every built-in type, the [] of []byte, enum types
 Enum job_status { queued }
+Enum grade { a }
 Table t {
   a bool
   b int
@@ -8,6 +8,6 @@ Table t {
   d string
   e []byte
   f time.Time
-  g v2.job_status
+  g grade
   h job_status
 }

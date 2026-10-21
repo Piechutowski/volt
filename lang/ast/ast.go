@@ -25,8 +25,8 @@ func (x *Ident) Name() string { return x.Tok.Val }
 // identifiers never act as keywords (spec §case-sensitivity-and-terminology).
 func (x *Ident) Quoted() bool { return x.Tok.Quoted }
 
-// QualName is a possibly schema-qualified name: name or schema.name
-// (spec §names-and-qualified-names).
+// QualName is a type name, possibly qualified by a Go package: Name or
+// pkg.Name (spec §columns, §types).
 type QualName struct {
 	Parts []*Ident // 1 or 2 elements
 }
@@ -34,8 +34,8 @@ type QualName struct {
 func (x *QualName) Pos() token.Position { return x.Parts[0].Pos() }
 func (x *QualName) End() token.Position { return x.Parts[len(x.Parts)-1].End() }
 
-// Schema returns the schema qualifier, or "" for the default schema.
-func (x *QualName) Schema() string {
+// Qualifier returns the package qualifier, or "" for a bare name.
+func (x *QualName) Qualifier() string {
 	if len(x.Parts) == 2 {
 		return x.Parts[0].Name()
 	}
@@ -45,7 +45,7 @@ func (x *QualName) Schema() string {
 // Base returns the unqualified name.
 func (x *QualName) Base() string { return x.Parts[len(x.Parts)-1].Name() }
 
-// String returns the canonical spelling, e.g. "core.users" or "users".
+// String returns the spelling, e.g. "time.Time" or "Slug".
 func (x *QualName) String() string {
 	if len(x.Parts) == 2 {
 		return x.Parts[0].Name() + "." + x.Parts[1].Name()
@@ -53,7 +53,7 @@ func (x *QualName) String() string {
 	return x.Parts[0].Name()
 }
 
-// BasicLit is a STRING, NUMBER or COLOR literal.
+// BasicLit is a STRING or NUMBER literal.
 type BasicLit struct {
 	Tok token.Token
 }
@@ -88,24 +88,6 @@ type EnumConst struct {
 func (x *EnumConst) Pos() token.Position { return x.Enum.Pos() }
 func (x *EnumConst) End() token.Position { return x.Value.End() }
 
-// Empty is a record field with nothing between separators (spec §records-sample-data).
-type Empty struct {
-	At token.Position
-}
-
-func (x *Empty) Pos() token.Position { return x.At }
-func (x *Empty) End() token.Position { return x.At }
-
-// RefValue is the value of a column's ref: setting (spec §relationships-ref):
-// an operator followed by an endpoint.
-type RefValue struct {
-	OpTok    token.Token // LT, GT, MINUS or LTGT
-	Endpoint *RefEndpoint
-}
-
-func (x *RefValue) Pos() token.Position { return x.OpTok.Pos }
-func (x *RefValue) End() token.Position { return x.Endpoint.End() }
-
 // SettingList is a bracketed, comma-separated settings list.
 type SettingList struct {
 	Lbrack   token.Position
@@ -134,7 +116,7 @@ func (x *SettingList) Get(name string) *Setting {
 type Setting struct {
 	NameTok token.Token // first word of the name
 	Name    string
-	Value   Node // nil for flags; BasicLit, Ident, FuncExpr, NegNumber, EnumConst or RefValue
+	Value   Node // nil for flags; BasicLit, Ident, FuncExpr, NegNumber, EnumConst, or RefEndpoint for ref:
 	endPos  token.Position
 }
 
@@ -169,8 +151,8 @@ type Decl interface {
 type Project struct {
 	ProjectPos token.Position
 	Name       *Ident // may be nil
+	Settings   *SettingList
 	Props      []*ProjectProp
-	Notes      []*Note
 	Rbrace     token.Position
 }
 
@@ -190,8 +172,7 @@ func (x *ProjectProp) End() token.Position { return x.Value.End() }
 // Table is a Table element (spec §table).
 type Table struct {
 	TablePos token.Position
-	Name     *QualName
-	Alias    *Ident // may be nil
+	Name     *Ident
 	Settings *SettingList
 	Body     []TableItem
 	Rbrace   token.Position
@@ -205,7 +186,6 @@ func (d *Table) declNode()           {}
 type TablePartial struct {
 	PartialPos token.Position
 	Name       *Ident
-	Settings   *SettingList
 	Body       []TableItem
 	Rbrace     token.Position
 }
@@ -215,7 +195,7 @@ func (d *TablePartial) End() token.Position { return d.Rbrace }
 func (d *TablePartial) declNode()           {}
 
 // TableItem is implemented by everything that can appear in a Table or
-// TablePartial body: *Column, *IndexesBlock, *ValidatorsBlock, *Note,
+// TablePartial body: *Column, *IndexesBlock, *ValidatorsBlock,
 // *PartialRef, *Records.
 type TableItem interface {
 	Node
@@ -239,7 +219,7 @@ func (x *Column) End() token.Position {
 func (x *Column) tableItemNode() {}
 
 // TypeRef is a column type: a Go type name, optionally qualified by a
-// package alias or schema, with the "[]" of []byte (spec §columns).
+// package alias, with the "[]" of []byte (spec §columns).
 type TypeRef struct {
 	Name   *QualName
 	Slice  bool
@@ -321,25 +301,11 @@ func (x *PartialRef) Pos() token.Position { return x.TildePos }
 func (x *PartialRef) End() token.Position { return x.Name.End() }
 func (x *PartialRef) tableItemNode()      {}
 
-// Note is an in-body note definition (spec §notes).
-type Note struct {
-	NotePos token.Position
-	Text    *BasicLit
-	endPos  token.Position
-}
-
-func (x *Note) Pos() token.Position     { return x.NotePos }
-func (x *Note) End() token.Position     { return x.endPos }
-func (x *Note) SetEnd(p token.Position) { x.endPos = p }
-func (x *Note) tableItemNode()          {}
-
-// Ref is a top-level relationship element, short or long form (spec §relationships-ref).
+// Ref is a top-level relationship element, Ref: left > right, whose
+// left endpoint is the foreign key (spec §relationships-ref).
 type Ref struct {
 	RefPos   token.Position
-	Name     *Ident // may be nil
-	Long     bool
 	Left     *RefEndpoint
-	OpTok    token.Token
 	Right    *RefEndpoint
 	Settings *SettingList
 	endPos   token.Position
@@ -350,10 +316,11 @@ func (d *Ref) End() token.Position     { return d.endPos }
 func (d *Ref) SetEnd(p token.Position) { d.endPos = p }
 func (d *Ref) declNode()               {}
 
-// RefEndpoint is one side of a relationship: a table (or alias), optionally
-// schema-qualified, and one or more columns (spec §relationships-ref).
+// RefEndpoint is one side of a relationship, a table and one or more of
+// its columns, and the value of a column's ref: setting (spec
+// §relationships-ref).
 type RefEndpoint struct {
-	Table   *QualName
+	Table   *Ident
 	Columns []*Ident
 	endPos  token.Position
 }
@@ -365,7 +332,7 @@ func (x *RefEndpoint) SetEnd(p token.Position) { x.endPos = p }
 // Enum is an Enum element (spec §enum).
 type Enum struct {
 	EnumPos token.Position
-	Name    *QualName
+	Name    *Ident
 	Values  []*EnumValue
 	Rbrace  token.Position
 }
@@ -405,8 +372,8 @@ func (x *EnumValue) End() token.Position {
 // Records is sample data, top-level or in-table (spec §records-sample-data).
 type Records struct {
 	RecordsPos token.Position
-	Table      *QualName // nil for in-table records
-	Columns    []*Ident  // nil when the column list is implicit
+	Table      *Ident   // nil for in-table records
+	Columns    []*Ident // nil when the column list is implicit
 	HasColumns bool
 	Rows       []*RecordRow
 	Rbrace     token.Position
@@ -418,60 +385,10 @@ func (d *Records) declNode()           {}
 func (d *Records) tableItemNode()      {}
 
 // RecordRow is one CSV-style row. Values are *BasicLit, *Ident (true/false/
-// null), *FuncExpr, *NegNumber, *EnumConst or *Empty.
+// null), *FuncExpr, *NegNumber or *EnumConst.
 type RecordRow struct {
 	Values []Node
 }
 
 func (x *RecordRow) Pos() token.Position { return x.Values[0].Pos() }
 func (x *RecordRow) End() token.Position { return x.Values[len(x.Values)-1].End() }
-
-// StickyNote is a top-level named note (spec §notes).
-type StickyNote struct {
-	NotePos  token.Position
-	Name     *Ident
-	Settings *SettingList
-	Text     *BasicLit
-	Rbrace   token.Position
-}
-
-func (d *StickyNote) Pos() token.Position { return d.NotePos }
-func (d *StickyNote) End() token.Position { return d.Rbrace }
-func (d *StickyNote) declNode()           {}
-
-// TableGroup is a TableGroup element (spec §tablegroup).
-type TableGroup struct {
-	GroupPos token.Position
-	Name     *Ident
-	Settings *SettingList
-	Members  []*QualName
-	Notes    []*Note
-	Rbrace   token.Position
-}
-
-func (d *TableGroup) Pos() token.Position { return d.GroupPos }
-func (d *TableGroup) End() token.Position { return d.Rbrace }
-func (d *TableGroup) declNode()           {}
-
-// DiagramView is a DiagramView element (spec §diagramview).
-type DiagramView struct {
-	ViewPos    token.Position
-	Name       *Ident
-	Categories []*ViewCategory
-	Rbrace     token.Position
-}
-
-func (d *DiagramView) Pos() token.Position { return d.ViewPos }
-func (d *DiagramView) End() token.Position { return d.Rbrace }
-func (d *DiagramView) declNode()           {}
-
-// ViewCategory is one Tables/Notes/TableGroups/Schemas selector.
-type ViewCategory struct {
-	Kind     *Ident
-	Wildcard bool
-	Names    []*QualName
-	Rbrace   token.Position
-}
-
-func (x *ViewCategory) Pos() token.Position { return x.Kind.Pos() }
-func (x *ViewCategory) End() token.Position { return x.Rbrace }

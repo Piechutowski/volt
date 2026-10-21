@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// ECoreAuditKind is the core.audit_kind enum.
+// ECoreAuditKind is the core_audit_kind enum.
 type ECoreAuditKind string
 
 const (
@@ -145,9 +145,9 @@ func (c UserChangeset) Err() error {
 	return &rt.Invalid{Model: "User", Fields: c.Errors()}
 }
 
-// CoreUser is a row of the core.users table.
+// CoreUser is a row of the core_users table.
 //
-// Same base name as public users; schema prefix disambiguates
+// Shares the stem of users; its own name keeps the models apart
 type CoreUser struct {
 	ID          int             `db:"id" json:"id"`
 	APIKey      string          `db:"api_key" json:"api_key"`
@@ -167,7 +167,7 @@ type CoreUser struct {
 // (spec §changesets).
 type CoreUserColumn = rt.ColumnOf[CoreUser]
 
-// CoreUserParams is a core.users write body as the wire carries it (spec §changesets).
+// CoreUserParams is a core_users write body as the wire carries it (spec §changesets).
 type CoreUserParams = rt.Params[CoreUser]
 
 // Typed column handles of CoreUser (spec §changesets): the Cast allow list of
@@ -187,7 +187,7 @@ var (
 	CoreUserFunc           = rt.NullColumn[CoreUser, int]{Column: rt.Column[CoreUser, int]{Name: "func"}}
 )
 
-// CoreUserChangeset carries a core.users row, the changes proposed to it and the
+// CoreUserChangeset carries a core_users row, the changes proposed to it and the
 // errors found so far (spec §changesets). It is a value: every method
 // returns a new changeset and leaves its receiver as it was.
 type CoreUserChangeset struct {
@@ -199,7 +199,7 @@ type CoreUserChangeset struct {
 	valid []rt.FieldError
 }
 
-// CoreUserNew starts a changeset for a core.users row to create, the schema's literal
+// CoreUserNew starts a changeset for a core_users row to create, the schema's literal
 // defaults in place (spec §changesets).
 func CoreUserNew() CoreUserChangeset { return CoreUserChangeset{} }
 
@@ -339,7 +339,7 @@ func (c CoreUserChangeset) Cast(p CoreUserParams, allow ...CoreUserColumn) CoreU
 				c = c.BalanceSet(v)
 			}
 		case "kind":
-			if v, ok, err := rt.Field(p, "kind", "core.audit_kind", false, func(r *CoreUser) ECoreAuditKind { return r.Kind }); err != nil {
+			if v, ok, err := rt.Field(p, "kind", "core_audit_kind", false, func(r *CoreUser) ECoreAuditKind { return r.Kind }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "kind")
 			} else if ok {
 				c = c.KindSet(v)

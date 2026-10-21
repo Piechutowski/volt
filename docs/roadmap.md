@@ -16,22 +16,22 @@ report engine when a consumer exists.
 - [x] Spec: EBNF, numbered constraints, conformance corpus
   - [x] The grammar is executable and proven against the front end
   - [x] Invalid input is a rule with goldens; the editor session is a golden
-  - [ ] Executable spec examples: run the spec's code blocks through the front end in CI
+  - [x] Executable spec examples: every `volt` block of the spec runs through the front end in `go test`, plain, `volt invalid` or `volt fragment`
 - [x] Scanner, parser, checker, vet; project loading from `go.mod`
   - [x] Parse and check by declaration; routes lowered per scope item
   - [x] Named placeholders, Go references checked by spelling
-- [x] Schema core: Project, Table, TablePartial, Records, Enum, Type, Ref, TableGroup, Notes, DiagramView
+- [x] Schema core: Project, Table, TablePartial, Records, Enum, Type, Ref, notes
   - [x] One spelling per meaning: `pk` is the key, a column is NOT NULL unless it carries `null`, settings follow the type in brackets only, the files of a package share a namespace without imports
 - [ ] One spelling per meaning, decided in review and built in steps; docs/entropy-and-purity-report.md keeps what is still open
   - [ ] Step 1, removals
     - [ ] Enums go: `Type OrderState string` with Go constants and a membership validator replaces `Enum`. In the same commit, a declared type whose Go declaration spells its storage type (`bool`, `int`, `float64`, `string`) needs no Scanner or Valuer, `<Model>New` seeds its literal defaults, `required` compares it directly, its bare name joins the generated name scope so a collision is a check error, and `-o DIR` with a bare declared type is refused
-    - [ ] Diagram-only constructs go: `headercolor`, Ref `color` and `inactive`, `TableGroup` (`Group` is the one set of tables, in the tables' namespace), sticky notes, `DiagramView`, the color literal
-    - [ ] A note has one spelling, the `note:` setting; the body `Note: '...'` and `Note { '...' }` forms go
-    - [ ] Relationships have one direction, the foreign key on the left: `<`, `-` and `<>` go; an inline ref is `ref: users.id` with no operator; the Ref element keeps only `Ref: posts.author_id > users.id`, without the long form or a name; a one-to-one is `unique` plus a ref
-    - [ ] Table aliases (`as`) and schema qualification go; a table is named by its name only
-    - [ ] Settings nothing reads go: index `type:` and `note:`, `note:` on migrations, migration columns and migration indexes; a TablePartial takes no settings and no note
-    - [ ] NULL has one spelling: `default: null` goes, a record row writes `null`, and an empty field is an error
-    - [ ] The spec says what the code does: punctuation table, the doubled exclusion backslash, the multi-line string and `import ( db )` examples, §table-resolution clause 2, the empty Reserved headings, version relics
+    - [x] Diagram-only constructs go: `headercolor`, Ref `color` and `inactive`, `TableGroup` (`Group` is the one set of tables, in the tables' namespace), sticky notes, `DiagramView`, the color literal
+    - [x] A note has one spelling, the `note:` setting; the body `Note: '...'` and `Note { '...' }` forms go
+    - [x] Relationships have one direction, the foreign key on the left: `<`, `-` and `<>` go; an inline ref is `ref: users.id` with no operator; the Ref element keeps only `Ref: posts.author_id > users.id`, without the long form or a name; a one-to-one is `unique` plus a ref
+    - [x] Table aliases (`as`) and schema qualification go; a table is named by its name only
+    - [x] Settings nothing reads go: index `type:` and `note:`, `note:` on migrations, migration columns and migration indexes; a TablePartial takes no settings and no note
+    - [x] NULL has one spelling: `default: null` goes, a record row writes `null`, and an empty field is an error
+    - [x] The spec says what the code does: punctuation table, the doubled exclusion backslash, the multi-line string and `import ( db )` examples, §table-resolution clause 2, the empty Reserved headings, version relics
   - [ ] Step 2, case and names
     - [ ] Volt is case-sensitive. Words that open an element or a block are capitalized (`Table`, `TablePartial`, `Type`, `Ref`, `Group`, `Pred`, `Select`, `Records`, `Indexes`, `Validators`, `Migration`, `Scope`, `Pipeline`, `Project`); every other word is lowercase (settings and values, `true`, `false`, `null`, clause words, route words, migration operations, `package`, `import`); a wrong case is a syntax error naming the right spelling
     - [ ] Identifiers are Go identifiers: quoted identifiers go

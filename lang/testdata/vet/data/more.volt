@@ -25,7 +25,7 @@ Table employees {
   manager_id int
 }
 Ref: employees.manager_id > employees.id
-Ref weird: employees.id - employees.id
+Ref: employees.id > employees.id
 
 Table user_limits {
   id int [pk]

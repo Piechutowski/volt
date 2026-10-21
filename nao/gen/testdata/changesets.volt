@@ -33,7 +33,7 @@ Table posts {
 }
 
 Table post_tags {
-  post_id int [ref: > posts.id]
+  post_id int [ref: posts.id]
   tag     string
 
   indexes {

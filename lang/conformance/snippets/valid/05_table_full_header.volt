@@ -1,4 +1,4 @@
-// spec: §table — schema qualification, alias, table settings
-Table core.users as U [headercolor: #3498DB, note: 'user accounts'] {
+// spec: §table, the table settings note and model
+Table users [note: 'user accounts', model: 'Account'] {
   id int
 }

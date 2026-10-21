@@ -4,8 +4,7 @@
 
 (table_definition
   "Table" @context
-  name: (table_name) @name
-  alias: (table_alias)? @context.extra) @item
+  name: (table_name) @name) @item
 
 (table_partial_definition
   "TablePartial" @context
@@ -13,7 +12,7 @@
 
 (enum_definition
   "Enum" @context
-  name: (table_name) @name) @item
+  name: (enum_name) @name) @item
 
 (type_definition
   "Type" @context
@@ -34,23 +33,11 @@
 
 (ref_definition
   "Ref" @context
-  name: (ref_name) @name) @item
-
-(table_group_definition
-  "TableGroup" @context
-  name: (_) @name) @item
-
-(sticky_note_definition
-  "Note" @context
-  name: (_) @name) @item
+  (ref_relation) @name) @item
 
 (records_definition
   "Records" @context
   table: (table_name) @name) @item
-
-(diagram_view_definition
-  "DiagramView" @context
-  name: (_) @name) @item
 
 ; ---------- Volt layer (docs/spec.md Part II) ----------
 

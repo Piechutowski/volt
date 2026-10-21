@@ -97,15 +97,17 @@ load-bearing patterns, each citing the spec section it implements:
   context-aware lexing provides the "not reserved" half — `table` in
   column-name position lexes as an identifier. Known limitation: at the
   start of a table-body line, an unquoted column literally named
-  `indexes`/`validators`/`note`/`records` lexes as the keyword; quoting
+  `indexes`/`validators`/`records` lexes as the keyword; quoting
   opts out (§case-sensitivity-and-terminology).
 - **Split string tokens for injection** (§string-literals–3.7). Delimiters and
   content are separate tokens, so `(string_content)` is a node with a
   range — exactly what `injections.scm` needs to hand note bodies to
   Markdown and backtick expressions to SQL.
-- **GLR conflict for reference chains** (§relationships-ref). `a.b.c` in a ref
-  endpoint is ambiguous at the first dot; `ref_target` is declared in
-  `conflicts` and the token after the chain kills the wrong stack.
+- **One endpoint shape** (§relationships-ref). A ref endpoint is
+  `table.column` or `table.(columns)`, in a `Ref:` and in a column's
+  `ref:` alike, so the grammar declares no conflicts: `setting` gives
+  `ref` its own alternative whose value is a `ref_endpoint`, and every
+  other setting takes the generic value.
 - **Generic settings, open vocabulary** (§settings-lists). `settings_list` parses
   any `[name: value]`; which keys are legal where is semantics, and the
   checker enforces it with positions the LSP surfaces. New settings
@@ -115,7 +117,7 @@ load-bearing patterns, each citing the spec section it implements:
   wildcards, `resources` with an optional package qualifier, and the
   query layer — `Group` algebra, the `Pred` expression grammar
   (prec.left or/and, keyword operators at the same precedence as other
-  keywords so `not` never outlexes `Note`), `Select ... for ... where`.
+  keywords), `Select ... for ... where`.
   `/` is a token per §layers-files-and-the-superset-rule.
 - **Keywords of a migration body are tokens of the migration rules
   only** (§migrations, §keywords). `up`, `down`, `create`, `drop`,
@@ -194,7 +196,7 @@ and schedules the project's analysis:
    could see it. A request adopts the newest result at its start.
 4. Two indexes are (re)built *after* Check, from the resolved model:
    the schema occurrence index (single-file symbols: tables, columns,
-   enums, partials, aliases) and the project index (`voltIndex`:
+   enums, partials) and the project index (`voltIndex`:
    qualified references like `db.posts`, pipeline uses, resources).
 
 **Features on top of the indexes** — definition, references, rename,
@@ -278,7 +280,7 @@ from one implementation. The protocol library is `tliron/glsp` (LSP
 ## 7. Known limitations (documented trade-offs, not bugs)
 
 - **Grammar: unquoted columns named like block keywords.** `indexes`,
-  `validators`, `note`, `records` need quoting in column position (§keywords
+  `validators`, `records` need quoting in column position (§keywords
   note above); the front end, spec-exact, accepts both.
 - **Grammar: exotic string edges.** A triple-quoted string whose
   content ends in a quote immediately before the closing `'''` may
@@ -294,10 +296,6 @@ from one implementation. The protocol library is `tliron/glsp` (LSP
   such as `1e5` lexes as an identifier and draws an ERROR node;
   `1e+5`, `1.5` and an exponent in a setting value parse. The front
   end reads every one of them as a number (§numeric-literals).
-- **Grammar: DiagramView categories on one line.**
-  `DiagramView v { Tables { } Notes { } }` draws an ERROR node, since
-  the grammar wants a line break between categories; one category per
-  line parses, and the front end accepts both (§diagramview).
 - **LSP: no Go-side navigation.** Handler references (`Home.Index`)
   and `error_handler:` point into Go, which this server does not
   index (roadmap). A query reference (`db.UserGet`, §query-routes) is
@@ -343,7 +341,8 @@ How to audit that the three components implement
 | Front end accepts/rejects exactly what the spec says | conformance corpus: `valid/` MUST pass, `invalid/` MUST fail, each snippet tagged `// spec: §…` (files without a `package` clause = the schema pass, files with one and project dirs = the project pass); every diagnostic of every invalid snippet, recovery included, is a golden | `lang/conformance/snippets/` and `lang/conformance/invalid_*.golden` via `go test ./lang/...`; refresh with `-update` after reading the diff |
 | Grammar parses everything the spec allows | corpus cases (input → expected tree, incl. `:error` cases) | `grammar/test/corpus/`, `tree-sitter test` |
 | Spec grammar and front end agree | the spec's EBNF read as data: every derived sentence parses, every one-token neighbour is decided alike by the grammar and the front end | `lang/spec_grammar_test.go` via `go test ./lang/...` |
-| Grammar and front end agree | every valid conformance snippet (the files its loader reads, so not `testdata/` or a nested module) and `grammar/examples/*` must produce zero front-end diagnostics, and every derived sentence of the spec's grammar (`go test ./lang -run TestSpecGrammarSentencesParse -sentences DIR`) zero parser diagnostics; all of them must produce zero tree-sitter ERROR nodes, except where a limitation of section 7 applies: today `34_no_reserved_words` and `v51_pred_compose` (unquoted columns named like block keywords), `v55_element_continuation` (a `Ref:` continued on an indented line), the derived sentences with an unsigned exponent in a record row, and the one with two DiagramView categories on one line | differential run after grammar changes |
+| Grammar and front end agree | every valid conformance snippet (the files its loader reads, so not `testdata/` or a nested module) and `grammar/examples/*` must produce zero front-end diagnostics, and every derived sentence of the spec's grammar (`go test ./lang -run TestSpecGrammarSentencesParse -sentences DIR`) zero parser diagnostics; all of them must produce zero tree-sitter ERROR nodes, except where a limitation of section 7 applies: today `34_no_reserved_words` (unquoted columns named like block keywords), `v55_element_continuation` (a `Ref:` continued on an indented line), and the derived sentences with an unsigned exponent in a record row | differential run after grammar changes |
+| Spec examples run | every `volt` block of `spec.md` (§conformance-and-the-proof-chain): a plain block is a whole file the front end accepts, a block fenced `volt invalid` one it rejects, a block fenced `volt fragment` a piece of a file that parses alone; any other fence marker fails | `lang/spec_examples_test.go` via `go test ./lang/...` |
 | Lint rules match their doc | doc ↔ registry ↔ testdata consistency test; `//WANT` markers both directions | `lang/vet/docs_test.go` against [`lint.md`](lint.md) |
 | Generated routers implement Part II of the spec | goldens byte-compared, gofmt-stable, **compiled**; itest exercises match/404/405, typed-param 404s, pipeline order, the error spine, reverse-URL round-trip totality | `gen/router`, `itest/` |
 | Generated models implement §mapping-to-go/B | goldens compiled; every CRUD statement prepared against the generated DDL; SQL goldens executed on real SQLite | `nao/gen/...`, `nao/itest` |

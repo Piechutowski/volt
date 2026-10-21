@@ -110,7 +110,7 @@ func schemaWrite(b *strings.Builder, spec Spec, pkg string) {
 			fmt.Fprintf(b, "\tc%03d %s\n", c, typ)
 		}
 		if i > 1 {
-			fmt.Fprintf(b, "\tprev_id int [null, ref: > %s.id]\n", Table(i-1))
+			fmt.Fprintf(b, "\tprev_id int [null, ref: %s.id]\n", Table(i-1))
 		}
 		b.WriteString("\n\tvalidators {\n\t\tPositive(c001)\n\t}\n}\n\n")
 	}

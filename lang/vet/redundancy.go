@@ -31,7 +31,7 @@ func (r *redundantIndexRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.
 		}
 		key := indexKey(ix)
 		if seenKeys[key] {
-			out = append(out, r.warnf(ix.Pos(), "duplicate index on %s in table %q", key, ti.Decl.Name.String()))
+			out = append(out, r.warnf(ix.Pos(), "duplicate index on %s in table %q", key, ti.Decl.Name.Name()))
 		}
 		seenKeys[key] = true
 
@@ -82,7 +82,7 @@ type emptyBodyRule struct{ meta }
 
 var emptyBody = &emptyBodyRule{meta{
 	name: "emptybody",
-	doc:  "reports empty indexes/validators blocks, TableGroups, DiagramView categories and Project bodies",
+	doc:  "reports empty indexes/validators blocks and a Project with neither properties nor a note",
 }}
 
 func (r *emptyBodyRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
@@ -97,17 +97,9 @@ func (r *emptyBodyRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagn
 			if len(n.Validators) == 0 {
 				out = append(out, r.warnf(n.Pos(), "empty validators block"))
 			}
-		case *ast.TableGroup:
-			if len(n.Members) == 0 {
-				out = append(out, r.warnf(n.Pos(), "TableGroup %q has no members", n.Name.Name()))
-			}
-		case *ast.ViewCategory:
-			if !n.Wildcard && len(n.Names) == 0 {
-				out = append(out, r.warnf(n.Pos(), "empty %s category selects nothing", n.Kind.Name()))
-			}
 		case *ast.Project:
-			if len(n.Props) == 0 && len(n.Notes) == 0 {
-				out = append(out, r.warnf(n.Pos(), "empty Project body"))
+			if len(n.Props) == 0 && n.Settings.Get("note") == nil {
+				out = append(out, r.warnf(n.Pos(), "empty Project: no properties and no note"))
 			}
 		}
 	}
@@ -133,7 +125,7 @@ func (r *shadowedColumnRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.
 			continue
 		}
 		out = append(out, r.warnf(winner.Col.Pos(), "column %q in table %q silently overrides the definition from %s",
-			sh.Col.Name.Name(), ti.Decl.Name.String(), originOf(sh)))
+			sh.Col.Name.Name(), ti.Decl.Name.Name(), originOf(sh)))
 	}
 	return out
 }
@@ -143,21 +135,6 @@ func originOf(cd *check.ColumnDef) string {
 		return "the table body"
 	}
 	return fmt.Sprintf("TablePartial %q", cd.Partial.Name.Name())
-}
-
-type projectNotesRule struct{ meta }
-
-var projectNotes = &projectNotesRule{meta{
-	name: "projectnotes",
-	doc:  "reports multiple Note definitions in a Project body; only one survives in tools",
-}}
-
-func (r *projectNotesRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
-	var out []diag.Diagnostic
-	if pr, ok := d.(*ast.Project); ok && len(pr.Notes) > 1 {
-		out = append(out, r.warnf(pr.Notes[1].Pos(), "Project has %d Note definitions; tools keep only one", len(pr.Notes)))
-	}
-	return out
 }
 
 type unnecessaryQuotesRule struct{ meta }

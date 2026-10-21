@@ -61,7 +61,7 @@ func (pl *Plan) Validators(fns []ValidatorFn, opts Options) ([]byte, error) {
 
 func validateEmit(b *strings.Builder, t *tableModel, specs []ValidatorSpec) bool {
 	m := t.model
-	tbl := t.ti.Decl.Name.String()
+	tbl := t.ti.Decl.Name.Name()
 	var checks strings.Builder
 	for _, f := range t.fields {
 		if f.required {
@@ -124,7 +124,7 @@ func enumEmit(b *strings.Builder, f *fieldPlan) {
 		fmt.Fprintf(b, "\tif v.%s.Valid {\n", f.goField)
 		indent = "\t\t"
 	}
-	msg := f.colName + " is not a value of " + f.enum.Decl.Name.String()
+	msg := f.colName + " is not a value of " + f.enum.Decl.Name.Name()
 	fmt.Fprintf(b, "%sswitch %s {\n%scase %s:\n%sdefault:\n", indent, value, indent, strings.Join(consts, ", "), indent)
 	fmt.Fprintf(b, "%s\terrs = append(errs, rt.FieldError{Check: \"enum\", Columns: []string{%q}, Message: %s})\n%s}\n", indent, f.colName, strconv.Quote(msg), indent)
 	if f.nullable {

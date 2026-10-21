@@ -14,27 +14,22 @@ func (c *checker) declsCheck(f *ast.File) {
 	for _, d := range f.Decls {
 		switch d := d.(type) {
 		case *ast.Project:
+			c.settingsCheck(d.Settings, "project", projectSettings)
 		case *ast.Table:
-			if ti := c.info.byTable[canonKey(d.Name)]; ti == nil || ti.Decl != d {
-				c.tableBodyCheck(d.Pos(), d.Name.String(), d.Settings, d.Body, true)
+			if ti := c.info.byName[d.Name.Name()]; ti == nil || ti.Decl != d {
+				c.tableBodyCheck(d.Pos(), d.Name.Name(), d.Settings, d.Body, true)
 			}
 		case *ast.TablePartial:
-			c.tableBodyCheck(d.Pos(), d.Name.Name(), d.Settings, d.Body, false)
+			c.tableBodyCheck(d.Pos(), d.Name.Name(), nil, d.Body, false)
 		case *ast.Enum:
 			c.enumCheck(d)
 		case *ast.Ref:
 			c.refSettingsCheck(d.Settings)
 			c.endpointArityCheck(d.Left, d.Right)
-		case *ast.StickyNote:
-			c.settingsCheck(d.Settings, "notes", stickySettings)
-		case *ast.TableGroup:
-			c.settingsCheck(d.Settings, "tablegroup", groupSettings)
-		case *ast.DiagramView:
-			c.viewCheck(d)
 		case *ast.Records:
 			c.recordsCheck(d, true)
 			if d.Table != nil {
-				if ti := c.info.byTable[canonKey(d.Table)]; ti != nil {
+				if ti := c.info.byName[d.Table.Name()]; ti != nil {
 					c.recordsTypeCheck(ti, d)
 					c.recordsCoverageCheck(ti, d)
 				}
@@ -47,7 +42,7 @@ func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.S
 	c.settingsCheck(settings, "table", tableSettings)
 
 	columns := map[string]bool{}
-	nCols, nInject, nNotes, nRecords := 0, 0, 0, 0
+	nCols, nInject, nRecords := 0, 0, 0
 	for _, item := range body {
 		switch item := item.(type) {
 		case *ast.Column:
@@ -69,8 +64,6 @@ func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.S
 				c.pkIndexCheck(name, ix, indexSettings)
 			}
 		case *ast.ValidatorsBlock:
-		case *ast.Note:
-			nNotes++
 		case *ast.Records:
 			if !isTable {
 				c.errorf(item.Pos(), "tablepartial", "records are not allowed inside TablePartial")
@@ -82,29 +75,9 @@ func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.S
 	if isTable && nCols == 0 && nInject == 0 {
 		c.errorf(at, "table", "table %q must contain at least one column or partial injection", name)
 	}
-	if nNotes > 1 {
-		c.errorf(bodyPos(body, settings), "notes", "at most one Note per %s body", kindWord(isTable))
-	}
 	if nRecords > 1 {
-		c.errorf(bodyPos(body, settings), "records-sample-data", "at most one records block per table")
+		c.errorf(body[0].Pos(), "records-sample-data", "at most one records block per table")
 	}
-}
-
-func kindWord(isTable bool) string {
-	if isTable {
-		return "Table"
-	}
-	return "TablePartial"
-}
-
-func bodyPos(body []ast.TableItem, settings *ast.SettingList) token.Position {
-	if len(body) > 0 {
-		return body[0].Pos()
-	}
-	if settings != nil {
-		return settings.Pos()
-	}
-	return token.Position{}
 }
 
 func (c *checker) columnCheck(col *ast.Column) {
@@ -162,7 +135,6 @@ func (c *checker) pkIndexCheck(table string, ix *ast.Index, spec settingSpec) {
 	for _, f := range []struct{ name, why string }{
 		{"name", "a primary key is a table constraint and has no name"},
 		{"where", "a primary key covers every row"},
-		{"type", "a primary key has no index method"},
 	} {
 		if _, known := spec.kinds[f.name]; !known {
 			continue
@@ -175,7 +147,7 @@ func (c *checker) pkIndexCheck(table string, ix *ast.Index, spec settingSpec) {
 
 func (c *checker) enumCheck(d *ast.Enum) {
 	if len(d.Values) == 0 {
-		c.errorf(d.Pos(), "enum", "enum %q must contain at least one value", d.Name.String())
+		c.errorf(d.Pos(), "enum", "enum %q must contain at least one value", d.Name.Name())
 	}
 	seen := map[string]bool{}
 	for _, v := range d.Values {
@@ -232,24 +204,5 @@ func (c *checker) recordsCheck(d *ast.Records, topLevel bool) {
 				}
 			}
 		}
-	}
-}
-
-var categoryKinds = map[string]bool{
-	"tables": true, "notes": true, "tablegroups": true, "schemas": true,
-}
-
-func (c *checker) viewCheck(d *ast.DiagramView) {
-	seen := map[string]bool{}
-	for _, cat := range d.Categories {
-		low := strings.ToLower(cat.Kind.Name())
-		if !categoryKinds[low] || cat.Kind.Quoted() {
-			c.errorf(cat.Kind.Pos(), "diagramview", "unknown view category %q; expected Tables, Notes, TableGroups or Schemas", cat.Kind.Name())
-			continue
-		}
-		if seen[low] {
-			c.errorf(cat.Kind.Pos(), "diagramview", "category %q may appear at most once per view", cat.Kind.Name())
-		}
-		seen[low] = true
 	}
 }

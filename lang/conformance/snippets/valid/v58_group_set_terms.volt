@@ -1,4 +1,4 @@
-// spec: §groups, §groups, §selects-over-groups — a TableGroup is a set: a group term, a select target, subtracted as a parenthesized set
+// spec: §groups, §selects-over-groups, a group is a set: a group term, a select target, subtracted as a parenthesized set
 package db
 
 Table ms_revenue {
@@ -23,7 +23,7 @@ Table ms_notes {
   body string
 }
 
-TableGroup Metrics [color: #32a891] {
+Group Metrics {
   ms_revenue
   ms_usage
   ms_dict

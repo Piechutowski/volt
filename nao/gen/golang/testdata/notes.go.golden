@@ -26,7 +26,7 @@ const (
 
 // Post is a row of the posts table.
 //
-// A blog post. The body-form note wins over the setting-form note.
+// A blog post.
 type Post struct {
 	ID int `db:"id" json:"id"`
 	// Shown in lists and in the HTML title tag

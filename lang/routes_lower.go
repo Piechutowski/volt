@@ -23,7 +23,7 @@ func (f routeFacts) equal(g routeFacts) bool {
 
 type routeEnv interface {
 	dataPackage(path string) (pkgName string, hasSchema, hasSelects bool)
-	tableByBase(path, base string) (ti *check.TableInfo, hint string)
+	tableByName(path, base string) (ti *check.TableInfo, hint string)
 	modelOf(path, key string) (model any, methods []golang.CRUDMethod, err error)
 	crudByName(path, name string) (key string, model any, cm golang.CRUDMethod, ok bool)
 	selectByMethod(path, name string) (sel *SelectInfo, member *check.TableInfo, ok bool)
@@ -35,7 +35,7 @@ type lookupKind uint8
 
 const (
 	lkDataPackage lookupKind = iota
-	lkTableByBase
+	lkTableByName
 	lkModelOf
 	lkCrudByName
 	lkSelectByMethod
@@ -59,8 +59,8 @@ func (l routeLookup) holds(env routeEnv) bool {
 	case lkDataPackage:
 		n, s, sel := env.dataPackage(l.path)
 		return n == l.pkgName && s == l.hasSchema && sel == l.hasSelects
-	case lkTableByBase:
-		ti, hint := env.tableByBase(l.path, l.name)
+	case lkTableByName:
+		ti, hint := env.tableByName(l.path, l.name)
 		return ti == l.ti && hint == l.hint
 	case lkModelOf:
 		model, _, err := env.modelOf(l.path, l.key)
@@ -121,9 +121,9 @@ func (l *routeLowering) dataPackage(path string) (string, bool, bool) {
 	return name, hasSchema, hasSelects
 }
 
-func (l *routeLowering) tableByBase(path, base string) (*check.TableInfo, string) {
-	ti, hint := l.env.tableByBase(path, base)
-	l.note(routeLookup{kind: lkTableByBase, path: path, name: base, ti: ti, hint: hint})
+func (l *routeLowering) tableByName(path, base string) (*check.TableInfo, string) {
+	ti, hint := l.env.tableByName(path, base)
+	l.note(routeLookup{kind: lkTableByName, path: path, name: base, ti: ti, hint: hint})
 	return ti, hint
 }
 
@@ -203,7 +203,7 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 	var onlyPos, exceptPos token.Position
 	members := map[string]bool{}
 	for _, m := range si.Members {
-		members[m.Decl.Name.Base()] = true
+		members[m.Decl.Name.Name()] = true
 	}
 	if ds.Settings != nil {
 		for _, s := range ds.Settings.Settings {
@@ -253,7 +253,7 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 
 	var out []*RouteInfo
 	for _, m := range si.Members {
-		base := m.Decl.Name.Base()
+		base := m.Decl.Name.Name()
 		if only != nil && !only[base] {
 			continue
 		}
@@ -690,7 +690,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 	if !ok {
 		return nil
 	}
-	tableName, singular := ti.Decl.Name.Base(), ""
+	tableName, singular := ti.Decl.Name.Name(), ""
 	if model, err := golang.ModelName(ti.Decl); err == nil {
 		singular = model
 	}
@@ -937,7 +937,7 @@ func (l *routeLowering) resourceTable(res *ast.Resources) (ti *check.TableInfo, 
 		return nil, false, true
 	}
 	want := res.Name.Name()
-	if cand, hint := l.tableByBase(pkgPath, want); cand != nil {
+	if cand, hint := l.tableByName(pkgPath, want); cand != nil {
 		return cand, true, false
 	} else {
 		l.errorf(res.Name.Pos(), "resources", "no table %q in package %q%s (§declaration)", want, pkgPath, hint)

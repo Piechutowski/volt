@@ -3,11 +3,10 @@
  * the schema extensions, and the routing layer above them.
  *
  * Covers the full schema language of docs/spec.md Part I:
- * Project, Table (settings, alias, columns), TablePartial and ~injection,
- * Enum, Ref (long, short and inline forms, composite endpoints),
- * TableGroup, Note (member, block and sticky forms), Records (top-level and
- * in-table), DiagramView, indexes and validators blocks,
- * plus the Volt routing layer of docs/spec.md Part II: package clauses, Go-style
+ * Project, Table (settings, columns), TablePartial and ~injection,
+ * Enum, Type, Ref (the element and the inline ref: setting, composite
+ * endpoints), Records (top-level and in-table), indexes and validators
+ * blocks, plus the Volt routing layer of docs/spec.md Part II: package clauses, Go-style
  * import blocks, Pipeline, Scope, routes and resources. One grammar for
  * one language in three layers (§layers-files-and-the-superset-rule): every .volt file parses here,
  * whichever layer it uses.
@@ -21,8 +20,8 @@
  *  - Keywords are case-insensitive and NOT reserved (§keywords). Each keyword is a
  *    case-insensitive regex aliased to its canonical spelling, with token
  *    precedence over plain identifiers. Consequence (documented limitation):
- *    an unquoted column named exactly `note`, `indexes`, `validators` or
- *    `records` needs quotes ("note") to parse as a column.
+ *    an unquoted column named exactly `indexes`, `validators` or
+ *    `records` needs quotes ("records") to parse as a column.
  *  - Double quotes delimit identifiers, single quotes delimit strings (§identifiers,
  *    §string-literals). String and expression contents are separate tokens so editors can
  *    inject other languages (Markdown in notes, SQL in backticks).
@@ -58,14 +57,6 @@ module.exports = grammar({
 
   word: ($) => $.identifier,
 
-  conflicts: ($) => [
-    // `a.b.c` in a ref endpoint: the target is `a` (alias/table) with column
-    // `b.c`? No — the chain is either table.column or schema.table.column;
-    // which reading holds is only known once the token after the second name
-    // arrives, so both stacks are explored (GLR).
-    [$.ref_target],
-  ],
-
   rules: {
     source_file: ($) =>
       seq(
@@ -81,10 +72,7 @@ module.exports = grammar({
         $.enum_definition,
         $.type_definition,
         $.ref_definition,
-        $.table_group_definition,
-        $.sticky_note_definition,
         $.records_definition,
-        $.diagram_view_definition,
         // Volt layer (docs/spec.md Part II)
         $.package_clause,
         $.import_block,
@@ -102,9 +90,10 @@ module.exports = grammar({
       seq(
         kw('Project'),
         optional(field('name', $._name)),
+        optional(field('settings', $.settings_list)),
         '{',
         repeat($._newline),
-        optional(newlineSep1(choice($.project_property, $.note_definition), $)),
+        optional(newlineSep1($.project_property, $)),
         '}',
       ),
 
@@ -117,7 +106,6 @@ module.exports = grammar({
       seq(
         kw('Table'),
         field('name', $.table_name),
-        optional(seq(kw('as'), field('alias', alias($._name, $.table_alias)))),
         optional(field('settings', $.settings_list)),
         '{',
         repeat($._newline),
@@ -130,17 +118,12 @@ module.exports = grammar({
         $.column_definition,
         $.indexes_block,
         $.validators_block,
-        $.note_definition,
         $.partial_injection,
         $.records_block,
       ),
 
-    // A table (or enum, or record target) name, optionally schema-qualified.
-    table_name: ($) =>
-      seq(
-        optional(seq(field('schema', alias($._name, $.schema_name)), '.')),
-        field('name', $._name),
-      ),
+    // A table name: a declaration, a records target or a ref endpoint's table.
+    table_name: ($) => field('name', $._name),
 
     column_definition: ($) =>
       seq(
@@ -155,9 +138,10 @@ module.exports = grammar({
         field('name', $.type_name),
       ),
 
+    // A Go type name, optionally qualified by a package: time.Time, money.Money.
     type_name: ($) =>
       seq(
-        optional(seq(field('schema', alias($._name, $.schema_name)), '.')),
+        optional(seq(field('package', alias($._name, $.package_name)), '.')),
         field('name', $._name),
       ),
 
@@ -167,7 +151,6 @@ module.exports = grammar({
       seq(
         kw('TablePartial'),
         field('name', alias($._name, $.partial_name)),
-        optional(field('settings', $.settings_list)),
         '{',
         repeat($._newline),
         optional(newlineSep1($._partial_item, $)),
@@ -175,7 +158,7 @@ module.exports = grammar({
       ),
 
     _partial_item: ($) =>
-      choice($.column_definition, $.indexes_block, $.validators_block, $.note_definition),
+      choice($.column_definition, $.indexes_block, $.validators_block),
 
     partial_injection: ($) =>
       seq('~', field('name', alias($._name, $.partial_name))),
@@ -185,7 +168,7 @@ module.exports = grammar({
     enum_definition: ($) =>
       seq(
         kw('Enum'),
-        field('name', $.table_name),
+        field('name', alias($._name, $.enum_name)),
         '{',
         repeat($._newline),
         optional(newlineSep1($.enum_value, $)),
@@ -210,26 +193,11 @@ module.exports = grammar({
 
     // ==================== Ref (§relationships-ref) ====================
 
+    // Ref: posts.user_id > users.id [settings]; the foreign key is left of '>'.
     ref_definition: ($) =>
       seq(
         kw('Ref'),
-        optional(field('name', alias($._name, $.ref_name))),
-        choice(
-          // short form: Ref name: a.x > b.y [settings]
-          seq(':', $._ref_body),
-          // long form: Ref name { a.x > b.y [settings] }
-          seq(
-            '{',
-            repeat($._newline),
-            $._ref_body,
-            repeat($._newline),
-            '}',
-          ),
-        ),
-      ),
-
-    _ref_body: ($) =>
-      seq(
+        ':',
         $.ref_relation,
         optional(field('settings', $.settings_list)),
       ),
@@ -237,25 +205,17 @@ module.exports = grammar({
     ref_relation: ($) =>
       seq(
         field('left', $.ref_endpoint),
-        field('operator', $.cardinality),
+        '>',
         field('right', $.ref_endpoint),
       ),
 
-    cardinality: () => choice('<>', '<', '>', '-'),
-
-    // schema.table.column, table.column, alias.column, or the same with a
-    // parenthesized column group. The chain is one or more dot-separated
-    // names ending in a name or a column group; how many leading segments
-    // are schema/table is resolved semantically by the language server.
+    // table.column, or table.(col, col) for a composite key.
     ref_endpoint: ($) =>
       seq(
-        field('table', $.ref_target),
+        field('table', $.table_name),
         '.',
         field('columns', choice(alias($._name, $.column_name), $.column_group)),
       ),
-
-    ref_target: ($) =>
-      seq($._name, optional(seq('.', $._name))),
 
     column_group: ($) =>
       seq(
@@ -306,44 +266,6 @@ module.exports = grammar({
         ')',
       ),
 
-    // ==================== Note (§notes) ====================
-
-    // Member form inside Project/Table/TablePartial/TableGroup bodies:
-    //   Note: 'text'      or      Note { 'text' }
-    note_definition: ($) =>
-      seq(
-        kw('Note'),
-        choice(
-          seq(':', field('value', $.string)),
-          seq('{', repeat($._newline), field('value', $.string), repeat($._newline), '}'),
-        ),
-      ),
-
-    // Top-level sticky note: Note name [color: #ff0000] { 'text' }
-    sticky_note_definition: ($) =>
-      seq(
-        kw('Note'),
-        field('name', $._name),
-        optional(field('settings', $.settings_list)),
-        '{',
-        repeat($._newline),
-        field('value', $.string),
-        repeat($._newline),
-        '}',
-      ),
-
-    // ==================== TableGroup (§tablegroup) ====================
-
-    table_group_definition: ($) =>
-      seq(
-        kw('TableGroup'),
-        field('name', $._name),
-        optional(field('settings', $.settings_list)),
-        '{',
-        repeat($._newline),
-        optional(newlineSep1(choice($.note_definition, alias($.table_name, $.group_member)), $)),
-        '}',
-      ),
 
     // ==================== Records (§records-sample-data) ====================
 
@@ -380,16 +302,9 @@ module.exports = grammar({
         '}',
       ),
 
-    // A row is comma-separated values; a value may be empty (§records-sample-data). A row
-    // is either a single value or anything containing at least one comma.
+    // A row is comma-separated values, none of them empty (§records-sample-data).
     record_row: ($) =>
-      choice(
-        $._record_value,
-        seq(
-          optional($._record_value),
-          repeat1(seq(',', optional($._record_value))),
-        ),
-      ),
+      seq($._record_value, repeat(seq(',', $._record_value))),
 
     _record_value: ($) =>
       choice(
@@ -402,31 +317,6 @@ module.exports = grammar({
         $.enum_constant,
       ),
 
-    // ==================== DiagramView (§diagramview) ====================
-
-    diagram_view_definition: ($) =>
-      seq(
-        kw('DiagramView'),
-        field('name', $._name),
-        '{',
-        repeat($._newline),
-        optional(newlineSep1($.view_category, $)),
-        '}',
-      ),
-
-    view_category: ($) =>
-      seq(
-        field('kind', choice(kw('Tables'), kw('Notes'), kw('TableGroups'), kw('Schemas'))),
-        '{',
-        repeat($._newline),
-        optional(
-          choice(
-            seq(alias('*', $.wildcard), repeat($._newline)),
-            newlineSep1(alias($.table_name, $.view_member), $),
-          ),
-        ),
-        '}',
-      ),
 
     // ==================== Volt layer (docs/spec.md Part II) ====================
     // The routing dialect: package clauses, Go-style import blocks,
@@ -855,10 +745,18 @@ module.exports = grammar({
 
     _line_breaks: ($) => repeat1($._newline),
 
+    // `ref:` takes an endpoint, table.column (§relationships-ref); every other
+    // setting takes a value.
     setting: ($) =>
-      seq(
-        field('name', $.setting_name),
-        optional(seq(':', field('value', $._setting_value))),
+      choice(
+        seq(
+          field('name', alias(kw('ref'), $.setting_name)),
+          optional(seq(':', field('value', $.ref_endpoint))),
+        ),
+        seq(
+          field('name', $.setting_name),
+          optional(seq(':', field('value', $._setting_value))),
+        ),
       ),
 
     // Setting names may be multi-word: `no transaction` (§settings-lists).
@@ -871,10 +769,8 @@ module.exports = grammar({
         $.number,
         $.boolean,
         $.null,
-        $.color,
         $.expression,
         $.enum_constant,
-        $.inline_ref,
         $.ident_group,
         alias($.setting_name, $.setting_value_words),
       ),
@@ -886,13 +782,8 @@ module.exports = grammar({
 
     _ident_item: ($) => seq($._name, optional(alias($._name, $.ident_modifier))),
 
-    // value of a column's `ref:` setting: `> schema.table.column` (§relationships-ref)
-    inline_ref: ($) =>
-      seq(field('operator', $.cardinality), field('target', $.ref_endpoint)),
-
     enum_constant: ($) =>
       prec(1, seq(
-        optional(seq(field('schema', alias($._name, $.schema_name)), '.')),
         field('enum', alias($._name, $.enum_name)),
         '.',
         field('value', $._name),
@@ -945,9 +836,6 @@ module.exports = grammar({
     boolean: () => choice(kw('true', 2), kw('false', 2)),
 
     null: () => kw('null'),
-
-    // #rgb or #rrggbb (§color-literals)
-    color: () => /#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?/,
 
     comment: () =>
       token(

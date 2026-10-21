@@ -7,6 +7,8 @@
 package check
 
 import (
+	"strings"
+
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/token"
@@ -19,51 +21,19 @@ type Info struct {
 	Types    []*TypeInfo
 	Partials []*PartialInfo
 	Refs     []*RefInfo
-	// TableGroups in declaration order, resolved to their member tables
-	// (unknown members dropped; §tablegroup reports them). A TableGroup is a
-	// set wherever Volt names one (spec §groups).
-	TableGroups []*TableGroupInfo
 	// Migrations in name order, the order they apply in (spec §migrations).
 	Migrations []*MigrationInfo
 
-	byTable map[string]*TableInfo
-	byBase  map[string]*TableInfo
+	byName map[string]*TableInfo
 }
 
-// TableByBase is the first table declared with the bare name, in any
-// schema, or nil: what an unqualified reference in a select or a
-// resources line means.
-func (i *Info) TableByBase(base string) *TableInfo { return i.byBase[base] }
-
-// TableByKey is the table with the canonical "schema.name" key, or nil.
-func (i *Info) TableByKey(key string) *TableInfo { return i.byTable[key] }
-
-// TableGroupInfo is one TableGroup with its members resolved.
-type TableGroupInfo struct {
-	Decl    *ast.TableGroup
-	Members []*TableInfo // declaration order, unresolved names omitted
-}
-
-// TableGroup finds a TableGroup by exact name.
-func (i *Info) TableGroup(name string) *TableGroupInfo {
-	for _, g := range i.TableGroups {
-		if g.Decl.Name.Name() == name {
-			return g
-		}
-	}
-	return nil
-}
-
-// LookupTable finds a table by its qualified name (canonical key or alias).
-func (i *Info) LookupTable(q *ast.QualName) *TableInfo {
-	return i.byTable[canonKey(q)]
-}
+// Table is the table of that name, or nil (spec §namespaces-and-uniqueness).
+func (i *Info) Table(name string) *TableInfo { return i.byName[name] }
 
 // TableInfo describes one table with partial injection applied.
 type TableInfo struct {
-	Decl  *ast.Table
-	Key   string // canonical "schema.name" with the public default applied
-	Alias string // "" if none
+	Decl *ast.Table
+	Key  string // the table's name, its key in every table map
 
 	// Columns is the effective column list in definition order after
 	// injection, conflicts resolved per spec §tablepartial.
@@ -104,27 +74,22 @@ type PartialInfo struct {
 	Uses int
 }
 
-// RefInfo is one resolved (or unresolved) relationship, from any of the
-// three syntactic forms.
+// RefInfo is one resolved (or unresolved) relationship, from a Ref
+// element or an inline ref (spec §relationships-ref). FK is the
+// foreign-key side, the left endpoint of a Ref element or the declaring
+// column of an inline ref, and Target the columns it references: the
+// one place the foreign-key side is decided.
 type RefInfo struct {
 	Node   ast.Node // *ast.Ref, or the *ast.Setting of an inline ref
-	Op     token.Kind
 	Inline bool
-	Left   EndpointInfo
-	Right  EndpointInfo
+	FK     EndpointInfo
+	Target EndpointInfo
 }
 
 type EndpointInfo struct {
 	Table   *TableInfo // nil if unresolved
 	Columns []string
 	Pos     token.Position
-}
-
-func canonKey(q *ast.QualName) string {
-	if q.Schema() == "" {
-		return "public." + q.Base()
-	}
-	return q.String()
 }
 
 // File checks one parsed file and returns its semantic model together with
@@ -138,10 +103,7 @@ func File(f *ast.File) (*Info, []diag.Diagnostic) {
 // answered from it. A nil memo checks everything.
 func FileMemo(f *ast.File, memo *Memo) (*Info, []diag.Diagnostic) {
 	c := &checker{
-		info: &Info{
-			byTable: map[string]*TableInfo{},
-			byBase:  map[string]*TableInfo{},
-		},
+		info: &Info{byName: map[string]*TableInfo{}},
 		memo: memo,
 	}
 	if memo != nil {
@@ -167,10 +129,6 @@ type checker struct {
 	partials map[string]*PartialInfo
 	enums    map[string]*EnumInfo
 	types    map[string]*TypeInfo
-	groups   map[string]*ast.TableGroup
-	sticky   map[string]*ast.StickyNote
-	views    map[string]*ast.DiagramView
-	schemas  map[string]bool
 	project  *ast.Project
 }
 
@@ -183,10 +141,6 @@ func (c *checker) collect(f *ast.File) {
 	c.enums = map[string]*EnumInfo{}
 	c.types = map[string]*TypeInfo{}
 	var typeDecls []*ast.TypeDecl
-	c.groups = map[string]*ast.TableGroup{}
-	c.sticky = map[string]*ast.StickyNote{}
-	c.views = map[string]*ast.DiagramView{}
-	c.schemas = map[string]bool{"public": true}
 
 	for _, d := range f.Decls {
 		if tp, ok := d.(*ast.TablePartial); ok {
@@ -201,61 +155,25 @@ func (c *checker) collect(f *ast.File) {
 	for _, d := range f.Decls {
 		switch d := d.(type) {
 		case *ast.Table:
-			key := canonKey(d.Name)
-			if _, dup := c.info.byTable[key]; dup {
-				c.errorf(d.Pos(), "namespaces-and-uniqueness", "duplicate table name %q", d.Name.String())
+			key := d.Name.Name()
+			if _, dup := c.info.byName[key]; dup {
+				c.errorf(d.Pos(), "namespaces-and-uniqueness", "duplicate table name %q", key)
 				continue
 			}
 			ti := &TableInfo{Decl: d, Key: key}
-			if d.Alias != nil {
-				ti.Alias = d.Alias.Name()
-				aliasKey := "public." + ti.Alias
-				if _, dup := c.info.byTable[aliasKey]; dup {
-					c.errorf(d.Alias.Pos(), "namespaces-and-uniqueness", "table alias %q collides with an existing table name or alias", ti.Alias)
-				} else {
-					c.info.byTable[aliasKey] = ti
-				}
-			}
-			c.info.byTable[key] = ti
-			if _, seen := c.info.byBase[d.Name.Base()]; !seen {
-				c.info.byBase[d.Name.Base()] = ti
-			}
+			c.info.byName[key] = ti
 			c.info.Tables = append(c.info.Tables, ti)
-			if s := d.Name.Schema(); s != "" {
-				c.schemas[s] = true
-			}
 		case *ast.TypeDecl:
 			typeDecls = append(typeDecls, d)
 		case *ast.Enum:
-			key := canonKey(d.Name)
+			key := d.Name.Name()
 			if _, dup := c.enums[key]; dup {
-				c.errorf(d.Pos(), "namespaces-and-uniqueness", "duplicate enum name %q", d.Name.String())
+				c.errorf(d.Pos(), "namespaces-and-uniqueness", "duplicate enum name %q", key)
 				continue
 			}
 			ei := &EnumInfo{Decl: d, Key: key}
 			c.enums[key] = ei
 			c.info.Enums = append(c.info.Enums, ei)
-			if s := d.Name.Schema(); s != "" {
-				c.schemas[s] = true
-			}
-		case *ast.TableGroup:
-			if _, dup := c.groups[d.Name.Name()]; dup {
-				c.errorf(d.Pos(), "namespaces-and-uniqueness", "duplicate TableGroup name %q", d.Name.Name())
-				continue
-			}
-			c.groups[d.Name.Name()] = d
-		case *ast.StickyNote:
-			if _, dup := c.sticky[d.Name.Name()]; dup {
-				c.errorf(d.Pos(), "namespaces-and-uniqueness", "duplicate sticky note name %q", d.Name.Name())
-				continue
-			}
-			c.sticky[d.Name.Name()] = d
-		case *ast.DiagramView:
-			if _, dup := c.views[d.Name.Name()]; dup {
-				c.errorf(d.Pos(), "namespaces-and-uniqueness", "duplicate DiagramView name %q", d.Name.Name())
-				continue
-			}
-			c.views[d.Name.Name()] = d
 		case *ast.Project:
 			if c.project != nil {
 				c.errorf(d.Pos(), "project", "at most one Project element per file")
@@ -293,7 +211,7 @@ func (c *checker) collect(f *ast.File) {
 			c.memo.store(e)
 			c.memo.Hits++
 		} else {
-			checked, diags = tableCheck(ti.Decl, ti.Key, ti.Alias, partials, c.env)
+			checked, diags = tableCheck(ti.Decl, ti.Key, partials, c.env)
 			if c.memo != nil {
 				c.memo.store(&memoTable{ti: checked, partials: partials, enums: c.env.keys, diags: diags})
 				c.memo.Misses++
@@ -301,13 +219,7 @@ func (c *checker) collect(f *ast.File) {
 		}
 		if checked != ti {
 			c.info.Tables[i] = checked
-			c.info.byTable[checked.Key] = checked
-			if c.info.byBase[checked.Decl.Name.Base()] == ti {
-				c.info.byBase[checked.Decl.Name.Base()] = checked
-			}
-			if checked.Alias != "" {
-				c.info.byTable["public."+checked.Alias] = checked
-			}
+			c.info.byName[checked.Key] = checked
 		}
 		c.diags = append(c.diags, partialColumnDedupe(checked, diags, reported)...)
 	}
@@ -344,11 +256,11 @@ func partialColumnDedupe(ti *TableInfo, diags []diag.Diagnostic, reported map[di
 	return out
 }
 
-func tableCheck(d *ast.Table, key, alias string, partials []*ast.TablePartial, env *typeEnv) (*TableInfo, []diag.Diagnostic) {
+func tableCheck(d *ast.Table, key string, partials []*ast.TablePartial, env *typeEnv) (*TableInfo, []diag.Diagnostic) {
 	acc := &checker{info: &Info{}, env: env}
-	ti := &TableInfo{Decl: d, Key: key, Alias: alias}
+	ti := &TableInfo{Decl: d, Key: key}
 	acc.columnsExpand(ti, partials)
-	acc.tableBodyCheck(d.Pos(), d.Name.String(), d.Settings, d.Body, true)
+	acc.tableBodyCheck(d.Pos(), key, d.Settings, d.Body, true)
 	return ti, acc.diags
 }
 
@@ -395,6 +307,7 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 		order++
 	}
 	injected := 0
+	var injections []indexInjection
 	for _, item := range ti.Decl.Body {
 		switch item := item.(type) {
 		case *ast.Column:
@@ -411,6 +324,9 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 				case *ast.Column:
 					addCol(pit, p)
 				case *ast.IndexesBlock:
+					for _, ix := range pit.Indexes {
+						injections = append(injections, indexInjection{ix, item, p})
+					}
 					ti.Indexes = append(ti.Indexes, pit.Indexes...)
 				case *ast.ValidatorsBlock:
 					ti.Validators = append(ti.Validators, pit.Validators...)
@@ -422,6 +338,7 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 			ti.Validators = append(ti.Validators, item.Validators...)
 		}
 	}
+	c.partialIndexCheck(ti, injections)
 	slots := make([]*slot, 0, len(byName))
 	for _, s := range byName {
 		slots = append(slots, s)
@@ -437,7 +354,7 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 		ti.Columns = append(ti.Columns, s.def)
 	}
 	c.typesResolve(ti)
-	c.pkCountCheck(ti.Decl.Name.String(), ti.Columns, ti.Indexes)
+	c.pkCountCheck(ti.Key, ti.Columns, ti.Indexes)
 	for _, item := range ti.Decl.Body {
 		if r, ok := item.(*ast.Records); ok {
 			c.recordsTypeCheck(ti, r)
@@ -446,4 +363,46 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 	}
 	c.incrementCheck(ti)
 	c.requiredCheck(ti)
+}
+
+type indexInjection struct {
+	ix      *ast.Index
+	at      *ast.PartialRef
+	partial *ast.TablePartial
+}
+
+// partialIndexCheck enforces that an index injected by a partial has a
+// key no other index of the table has, declared in the body or injected
+// by another partial: indexes are not overridden (spec §tablepartial).
+func (c *checker) partialIndexCheck(ti *TableInfo, injections []indexInjection) {
+	injectedAt := map[*ast.Index]int{}
+	for i, inj := range injections {
+		injectedAt[inj.ix] = i
+	}
+	for i, inj := range injections {
+		key := indexAtoms(inj.ix)
+		for _, other := range ti.Indexes {
+			if other == inj.ix || indexAtoms(other) != key {
+				continue
+			}
+			if j, injected := injectedAt[other]; injected && j > i {
+				continue
+			}
+			c.errorf(inj.at.Pos(), "tablepartial", "TablePartial %q injects index (%s) into table %q, which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)", inj.partial.Name.Name(), key, ti.Key)
+			break
+		}
+	}
+}
+
+func indexAtoms(ix *ast.Index) string {
+	parts := make([]string, 0, len(ix.Key))
+	for _, atom := range ix.Key {
+		switch a := atom.(type) {
+		case *ast.Ident:
+			parts = append(parts, a.Name())
+		case *ast.FuncExpr:
+			parts = append(parts, "`"+a.Text()+"`")
+		}
+	}
+	return strings.Join(parts, ", ")
 }

@@ -21,7 +21,7 @@ Migration 0001__create_users {
   create index users (email)
 }
 
-Migration 0002__users_bio [irreversible, note: 'rebuild'] {
+Migration 0002__users_bio [irreversible] {
   up {
     alter table users {
       add bio string [null]

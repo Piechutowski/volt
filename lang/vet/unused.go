@@ -1,10 +1,8 @@
-// Unused-declaration analyzers: a declared-but-unreferenced enum,
-// partial or alias.
+// Unused-declaration analyzers: a declared-but-unreferenced enum or
+// partial.
 package vet
 
 import (
-	"strings"
-
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/diag"
 )
@@ -25,7 +23,7 @@ func (fo *unusedEnumFold) File(p *FilePass) {
 	}
 	for _, e := range p.Info.Enums {
 		if !used[e.Key] {
-			p.Reportf(e.Decl.Pos(), "enum %q is declared but never used as a column type", e.Decl.Name.String())
+			p.Reportf(e.Decl.Pos(), "enum %q is declared but never used as a column type", e.Decl.Name.Name())
 		}
 	}
 }
@@ -43,25 +41,4 @@ func (r *unusedPartialRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.D
 		out = append(out, r.warnf(tp.Decl.Pos(), "TablePartial %q is declared but never injected", tp.Decl.Name.Name()))
 	}
 	return out
-}
-
-type unusedAliasFold struct{ meta }
-
-var unusedAlias = &unusedAliasFold{meta{
-	name: "unusedalias",
-	doc:  "reports table aliases that nothing references",
-}}
-
-func (fo *unusedAliasFold) File(p *FilePass) {
-	used := map[string]bool{}
-	for _, s := range p.Summaries {
-		for _, name := range s.NamesUsed {
-			used[name] = true
-		}
-	}
-	for _, ti := range p.Info.Tables {
-		if ti.Alias != "" && !used[ti.Alias] && !strings.EqualFold(ti.Alias, ti.Decl.Name.Base()) {
-			p.Reportf(ti.Decl.Alias.Pos(), "alias %q of table %q is never used", ti.Alias, ti.Decl.Name.String())
-		}
-	}
 }

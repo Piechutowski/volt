@@ -14,6 +14,6 @@ Table metrics {
   blob []byte [null]
   records {
     1, 0.5, 'first', true, status.active, null, '2024-01-15 10:30:00', `X'00'`
-    2, 3, 'second', false, status.retired, , , 
+    2, 3, 'second', false, status.retired, null, null, null
   }
 }

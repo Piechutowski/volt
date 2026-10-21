@@ -18,11 +18,11 @@ const (
 	SymType
 )
 
-// SymbolID names one symbol. Tables and enums use their canonical
-// "schema.name" key; columns live in a container — "table:<key>" for direct
-// definitions or "partial:<name>" for columns defined in a TablePartial, so
-// every table sharing the partial shares the symbol. Enum values live in
-// "enum:<key>".
+// SymbolID names one symbol. Tables and enums use their name; columns
+// live in a container, "table:<name>" for direct definitions or
+// "partial:<name>" for columns defined in a TablePartial, so every table
+// sharing the partial shares the symbol. Enum values live in
+// "enum:<name>".
 type SymbolID struct {
 	Kind      SymKind
 	Container string
@@ -40,13 +40,12 @@ type Occurrence struct {
 type Index struct {
 	Occs []Occurrence
 
-	Tables   map[string]*check.TableInfo // canonical key AND alias -> table
-	Enums    map[string]*check.EnumInfo  // canonical key -> enum
+	Tables   map[string]*check.TableInfo // name -> table
+	Enums    map[string]*check.EnumInfo  // name -> enum
 	Types    map[string]*check.TypeInfo  // declared name -> Type
 	Partials map[string]*check.PartialInfo
 
-	decls  map[SymbolID]*ast.Ident
-	byBase map[string]*check.TableInfo
+	decls map[SymbolID]*ast.Ident
 
 	declTables map[string]*tableOccs
 	recording  *[]declEntry
@@ -122,13 +121,6 @@ type declEntry struct {
 	ident *ast.Ident
 }
 
-func canon(q *ast.QualName) string {
-	if q.Schema() == "" {
-		return "public." + q.Base()
-	}
-	return q.String()
-}
-
 // NewIndex resolves every name in the file against the semantic model.
 func NewIndex(f *ast.File, info *check.Info) *Index {
 	return NewIndexMemo(f, info, nil)
@@ -143,23 +135,9 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		Types:    map[string]*check.TypeInfo{},
 		Partials: map[string]*check.PartialInfo{},
 		decls:    map[SymbolID]*ast.Ident{},
-		byBase:   map[string]*check.TableInfo{},
 	}
-	ambiguous := map[string]bool{}
 	for _, ti := range info.Tables {
 		ix.Tables[ti.Key] = ti
-		if ti.Alias != "" {
-			ix.Tables["alias:"+ti.Alias] = ti
-		}
-		base := ti.Decl.Name.Base()
-		if prev, seen := ix.byBase[base]; seen && prev != ti {
-			ambiguous[base] = true
-		} else if !seen {
-			ix.byBase[base] = ti
-		}
-	}
-	for base := range ambiguous {
-		delete(ix.byBase, base)
 	}
 	for _, ei := range info.Enums {
 		ix.Enums[ei.Key] = ei
@@ -222,7 +200,7 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		ix.Occs = append(ix.Occs, e.sym...)
 	}
 	for _, ei := range info.Enums {
-		ix.add(SymbolID{SymEnum, "", ei.Key}, lastPart(ei.Decl.Name), true)
+		ix.add(SymbolID{SymEnum, "", ei.Key}, ei.Decl.Name, true)
 		for _, v := range ei.Decl.Values {
 			ix.add(SymbolID{SymEnumValue, "enum:" + ei.Key, v.Name.Name()}, v.Name, true)
 		}
@@ -244,13 +222,6 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		ix.Occs = append(ix.Occs, entries[ti.Decl].cols...)
 	}
 
-	groups := map[string]bool{}
-	for _, decl := range f.Decls {
-		if g, ok := decl.(*ast.Group); ok {
-			groups[g.Name.Name()] = true
-		}
-	}
-
 	for _, decl := range f.Decls {
 		switch n := decl.(type) {
 		case *ast.Table:
@@ -265,7 +236,7 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 			ix.walkEndpoint(n.Left)
 			ix.walkEndpoint(n.Right)
 		case *ast.Select:
-			if ti := ix.tableByBase(n.Target.Name()); ti != nil && !groups[n.Target.Name()] {
+			if ti := ix.Tables[n.Target.Name()]; ti != nil {
 				for _, col := range n.Cols {
 					ix.addColumnRef(ti, "", col)
 				}
@@ -283,29 +254,12 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		case *ast.Records:
 			ti := ix.resolveTable(n.Table)
 			if ti != nil {
-				ix.add(SymbolID{SymTable, "", ti.Key}, lastPart(n.Table), false)
+				ix.add(SymbolID{SymTable, "", ti.Key}, n.Table, false)
 			}
 			for _, c := range n.Columns {
 				ix.addColumnRef(ti, "", c)
 			}
 			ix.walkRecordRows(n.Rows)
-		case *ast.TableGroup:
-			for _, m := range n.Members {
-				if ti := ix.resolveTable(m); ti != nil {
-					ix.add(SymbolID{SymTable, "", ti.Key}, lastPart(m), false)
-				}
-			}
-		case *ast.DiagramView:
-			for _, cat := range n.Categories {
-				if !equalFold(cat.Kind.Name(), "tables") {
-					continue
-				}
-				for _, m := range cat.Names {
-					if ti := ix.resolveTable(m); ti != nil {
-						ix.add(SymbolID{SymTable, "", ti.Key}, lastPart(m), false)
-					}
-				}
-			}
 		}
 	}
 	return ix
@@ -334,11 +288,7 @@ func tableOccurrences(d *ast.Table, ti, resolved *check.TableInfo, tables map[st
 		}
 	}
 	acc.recording = &decls
-	id := SymbolID{SymTable, "", ti.Key}
-	acc.add(id, lastPart(d.Name), true)
-	if d.Alias != nil {
-		acc.add(id, d.Alias, false)
-	}
+	acc.add(SymbolID{SymTable, "", ti.Key}, d.Name, true)
 	sym = acc.Occs[:len(acc.Occs):len(acc.Occs)]
 	from := len(acc.Occs)
 	for _, cd := range ti.Columns {
@@ -363,7 +313,7 @@ func (ix *Index) enumsNamed(d *ast.Table) map[string]*check.EnumInfo {
 		}
 		for _, st := range s.Settings {
 			if ec, ok := st.Value.(*ast.EnumConst); ok {
-				name("public." + ec.Enum.Name())
+				name(ec.Enum.Name())
 			}
 		}
 	}
@@ -371,7 +321,7 @@ func (ix *Index) enumsNamed(d *ast.Table) map[string]*check.EnumInfo {
 		for _, row := range rows {
 			for _, v := range row.Values {
 				if ec, ok := v.(*ast.EnumConst); ok {
-					name("public." + ec.Enum.Name())
+					name(ec.Enum.Name())
 				}
 			}
 		}
@@ -380,7 +330,7 @@ func (ix *Index) enumsNamed(d *ast.Table) map[string]*check.EnumInfo {
 		switch n := item.(type) {
 		case *ast.Column:
 			if n.Type != nil && n.Type.Name != nil {
-				name(canon(n.Type.Name))
+				name(n.Type.Name.String())
 			}
 			settings(n.Settings)
 		case *ast.IndexesBlock:
@@ -400,20 +350,16 @@ func (ix *Index) tablesNamed(d *ast.Table) map[string]*check.TableInfo {
 		if ep == nil || ep.Table == nil {
 			return
 		}
-		key := canon(ep.Table)
+		key := ep.Table.Name()
 		out[key] = ix.Tables[key]
-		if ep.Table.Schema() == "" {
-			alias := "alias:" + ep.Table.Base()
-			out[alias] = ix.Tables[alias]
-		}
 	}
 	settings := func(s *ast.SettingList) {
 		if s == nil {
 			return
 		}
 		for _, st := range s.Settings {
-			if rv, ok := st.Value.(*ast.RefValue); ok {
-				endpoint(rv.Endpoint)
+			if ep, ok := st.Value.(*ast.RefEndpoint); ok {
+				endpoint(ep)
 			}
 		}
 	}
@@ -519,8 +465,8 @@ func (ix *Index) walkSettings(s *ast.SettingList) {
 	}
 	for _, setting := range s.Settings {
 		switch v := setting.Value.(type) {
-		case *ast.RefValue:
-			ix.walkEndpoint(v.Endpoint)
+		case *ast.RefEndpoint:
+			ix.walkEndpoint(v)
 		case *ast.EnumConst:
 			ix.walkEnumConst(v)
 		}
@@ -538,8 +484,7 @@ func (ix *Index) walkRecordRows(rows []*ast.RecordRow) {
 }
 
 func (ix *Index) walkEnumConst(ec *ast.EnumConst) {
-	key := "public." + ec.Enum.Name()
-	ei, ok := ix.Enums[key]
+	ei, ok := ix.Enums[ec.Enum.Name()]
 	if !ok {
 		return
 	}
@@ -560,7 +505,7 @@ func (ix *Index) walkEndpoint(ep *ast.RefEndpoint) {
 	if ti == nil {
 		return
 	}
-	ix.add(SymbolID{SymTable, "", ti.Key}, lastPart(ep.Table), false)
+	ix.add(SymbolID{SymTable, "", ti.Key}, ep.Table, false)
 	for _, col := range ep.Columns {
 		ix.addColumnRef(ti, "", col)
 	}
@@ -595,33 +540,18 @@ func (ix *Index) addColumnRef(ti *check.TableInfo, partial string, id *ast.Ident
 	ix.add(SymbolID{SymColumn, container, id.Name()}, id, false)
 }
 
-func (ix *Index) tableByBase(base string) *check.TableInfo {
-	return ix.byBase[base]
-}
-
-func (ix *Index) resolveTable(q *ast.QualName) *check.TableInfo {
-	if q == nil {
+func (ix *Index) resolveTable(id *ast.Ident) *check.TableInfo {
+	if id == nil {
 		return nil
 	}
-	if ti, ok := ix.Tables[canon(q)]; ok {
-		return ti
-	}
-	if q.Schema() == "" {
-		if ti, ok := ix.Tables["alias:"+q.Base()]; ok {
-			return ti
-		}
-	}
-	return nil
+	return ix.Tables[id.Name()]
 }
 
 func (ix *Index) resolveEnum(q *ast.QualName) *check.EnumInfo {
 	if q == nil {
 		return nil
 	}
-	if ei, ok := ix.Enums[canon(q)]; ok {
-		return ei
-	}
-	return nil
+	return ix.Enums[q.String()]
 }
 
 func (ix *Index) add(id SymbolID, ident *ast.Ident, isDecl bool) {
@@ -679,23 +609,4 @@ func lastPart(q *ast.QualName) *ast.Ident {
 		return nil
 	}
 	return q.Parts[len(q.Parts)-1]
-}
-
-func equalFold(a, b string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		ca, cb := a[i], b[i]
-		if 'A' <= ca && ca <= 'Z' {
-			ca += 'a' - 'A'
-		}
-		if 'A' <= cb && cb <= 'Z' {
-			cb += 'a' - 'A'
-		}
-		if ca != cb {
-			return false
-		}
-	}
-	return true
 }

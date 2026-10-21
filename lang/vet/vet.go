@@ -53,12 +53,10 @@ type Facts struct {
 	Refs    []*check.RefInfo
 }
 
-// Summary is what the folds need of one declaration: the enum keys its
-// columns name, in both spellings the file-wide rules look up, and the
-// unqualified table spellings it uses.
+// Summary is what the folds need of one declaration: the column types
+// it names, which the enum fold looks up by key.
 type Summary struct {
 	EnumsUsed []string
-	NamesUsed []string
 }
 
 // FilePass carries everything a Fold may inspect.
@@ -114,8 +112,8 @@ func ByName(name string) Analyzer {
 }
 
 var registry = []Analyzer{
-	unusedEnum, unusedPartial, unusedAlias,
-	redundantIndex, emptyBody, shadowedColumn, projectNotes, unnecessaryQuotes,
+	unusedEnum, unusedPartial,
+	redundantIndex, emptyBody, shadowedColumn, unnecessaryQuotes,
 	missingPK, refTypeMismatch, refTargetNotUnique, selfRef, refCycle, caseCollision,
 	modelName, dynName,
 }
@@ -158,11 +156,10 @@ type factsKey struct {
 }
 
 type refKey struct {
-	node                ast.Node
-	op                  token.Kind
-	inline              bool
-	left, right         *check.TableInfo
-	leftCols, rightCols []string
+	node               ast.Node
+	inline             bool
+	fk, target         *check.TableInfo
+	fkCols, targetCols []string
 }
 
 func factsKeyOf(f Facts) factsKey {
@@ -172,9 +169,9 @@ func factsKeyOf(f Facts) factsKey {
 	}
 	for _, r := range f.Refs {
 		k.refs = append(k.refs, refKey{
-			node: r.Node, op: r.Op, inline: r.Inline,
-			left: r.Left.Table, right: r.Right.Table,
-			leftCols: r.Left.Columns, rightCols: r.Right.Columns,
+			node: r.Node, inline: r.Inline,
+			fk: r.FK.Table, target: r.Target.Table,
+			fkCols: r.FK.Columns, targetCols: r.Target.Columns,
 		})
 	}
 	return k
@@ -186,8 +183,8 @@ func (k factsKey) equal(o factsKey) bool {
 	}
 	for i, r := range k.refs {
 		s := o.refs[i]
-		if r.node != s.node || r.op != s.op || r.inline != s.inline || r.left != s.left || r.right != s.right ||
-			!stringsEqual(r.leftCols, s.leftCols) || !stringsEqual(r.rightCols, s.rightCols) {
+		if r.node != s.node || r.inline != s.inline || r.fk != s.fk || r.target != s.target ||
+			!stringsEqual(r.fkCols, s.fkCols) || !stringsEqual(r.targetCols, s.targetCols) {
 			return false
 		}
 	}
@@ -321,8 +318,8 @@ func factsByDecl(f *ast.File, info *check.Info) []Facts {
 	for _, r := range info.Refs {
 		if n, ok := r.Node.(*ast.Ref); ok {
 			refs[n] = append(refs[n], r)
-		} else if r.Left.Table != nil {
-			refs[r.Left.Table.Decl] = append(refs[r.Left.Table.Decl], r)
+		} else if r.FK.Table != nil {
+			refs[r.FK.Table.Decl] = append(refs[r.FK.Table.Decl], r)
 		}
 	}
 	out := make([]Facts, len(f.Decls))
@@ -373,54 +370,11 @@ func summaryOf(nodes []ast.Node, f Facts) Summary {
 	if f.Table != nil {
 		seen := map[string]bool{}
 		for _, cd := range f.Table.Columns {
-			t := cd.Col.Type.Name
-			if t.Schema() == "" {
-				s.EnumsUsed, seen = enumUse(s.EnumsUsed, seen, "public."+t.Base())
-			}
-			s.EnumsUsed, seen = enumUse(s.EnumsUsed, seen, t.String())
-		}
-	}
-	for _, r := range f.Refs {
-		switch n := r.Node.(type) {
-		case *ast.Ref:
-			s.NamesUsed = nameUse(s.NamesUsed, n.Left.Table)
-			s.NamesUsed = nameUse(s.NamesUsed, n.Right.Table)
-		case *ast.Setting:
-			if rv, ok := n.Value.(*ast.RefValue); ok {
-				s.NamesUsed = nameUse(s.NamesUsed, rv.Endpoint.Table)
-			}
-		}
-	}
-	for _, n := range nodes {
-		switch n := n.(type) {
-		case *ast.TableGroup:
-			for _, m := range n.Members {
-				s.NamesUsed = nameUse(s.NamesUsed, m)
-			}
-		case *ast.ViewCategory:
-			for _, m := range n.Names {
-				s.NamesUsed = nameUse(s.NamesUsed, m)
-			}
-		case *ast.Records:
-			if n.Table != nil {
-				s.NamesUsed = nameUse(s.NamesUsed, n.Table)
+			if key := cd.Col.Type.String(); !seen[key] {
+				seen[key] = true
+				s.EnumsUsed = append(s.EnumsUsed, key)
 			}
 		}
 	}
 	return s
-}
-
-func enumUse(out []string, seen map[string]bool, key string) ([]string, map[string]bool) {
-	if !seen[key] {
-		seen[key] = true
-		out = append(out, key)
-	}
-	return out, seen
-}
-
-func nameUse(out []string, q *ast.QualName) []string {
-	if q.Schema() == "" {
-		out = append(out, q.Base())
-	}
-	return out
 }

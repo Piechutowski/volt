@@ -141,7 +141,7 @@ func CoreUserAfter(key ...any) rt.Opt[CoreUser] { return rt.After[CoreUser](key.
 // with Set/SetNull on the CoreUser column handles.
 func CoreUserSet(assigns ...rt.Assign[CoreUser]) []rt.Assign[CoreUser] { return assigns }
 
-// CoreUserQuery returns the core.users rows matching every given predicate,
+// CoreUserQuery returns the core_users rows matching every given predicate,
 // shaped by the remaining options (order, limit, offset, keyset,
 // distinct). No options means every row.
 func (q *Queries) CoreUserQuery(ctx context.Context, opts ...rt.Opt[CoreUser]) ([]CoreUser, error) {
@@ -165,7 +165,7 @@ func (q *Queries) CoreUserQuery(ctx context.Context, opts ...rt.Opt[CoreUser]) (
 	return out, rows.Err()
 }
 
-// CoreUserCount reports how many core.users rows match every given predicate;
+// CoreUserCount reports how many core_users rows match every given predicate;
 // none counts the whole table.
 func (q *Queries) CoreUserCount(ctx context.Context, preds ...rt.Pred[CoreUser]) (int64, error) {
 	query, args, err := rt.CountRender(coreUserTableSQL, preds)
@@ -179,7 +179,7 @@ func (q *Queries) CoreUserCount(ctx context.Context, preds ...rt.Pred[CoreUser])
 	return n, nil
 }
 
-// CoreUserExists reports whether any core.users row matches every given predicate.
+// CoreUserExists reports whether any core_users row matches every given predicate.
 func (q *Queries) CoreUserExists(ctx context.Context, preds ...rt.Pred[CoreUser]) (bool, error) {
 	query, args, err := rt.ExistsRender(coreUserTableSQL, preds)
 	if err != nil {
@@ -192,7 +192,7 @@ func (q *Queries) CoreUserExists(ctx context.Context, preds ...rt.Pred[CoreUser]
 	return found, nil
 }
 
-// CoreUserDeleteWhere removes every core.users row matching the predicates and
+// CoreUserDeleteWhere removes every core_users row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
 // full-table delete.
 func (q *Queries) CoreUserDeleteWhere(ctx context.Context, preds ...rt.Pred[CoreUser]) (int64, error) {
@@ -207,7 +207,7 @@ func (q *Queries) CoreUserDeleteWhere(ctx context.Context, preds ...rt.Pred[Core
 	return res.RowsAffected()
 }
 
-// CoreUserUpdateWhere applies the typed assignments (CoreUserSet) to every core.users
+// CoreUserUpdateWhere applies the typed assignments (CoreUserSet) to every core_users
 // row matching the predicates and reports how many changed — the
 // partial update of the dynamic layer. No effective predicate
 // is an error, never a full-table rewrite.

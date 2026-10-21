@@ -1,12 +1,11 @@
-// every note level: project, table (both spellings), column, enum value
-Project blog {
-  database_type: 'PostgreSQL'
-  Note: '''
+// every note level, each the note: setting: project, table, column, enum value
+Project blog [note: '''
     The blogging platform schema.
 
     Multi-line notes keep their blank lines and become
     paragraph breaks in godoc.
-  '''
+  '''] {
+  database_type: 'PostgreSQL'
 }
 
 Enum post_status {
@@ -15,7 +14,7 @@ Enum post_status {
   archived
 }
 
-Table posts [note: 'Setting-style note: loses to the body note below'] {
+Table posts [note: 'A blog post.'] {
   id int [pk, increment]
   title string [note: 'Shown in lists and in the HTML title tag']
   status post_status
@@ -24,8 +23,6 @@ Table posts [note: 'Setting-style note: loses to the body note below'] {
     Rendered to HTML at publish time.
   ''']
   published_at time.Time [null]
-
-  Note: 'A blog post. The body-form note wins over the setting-form note.'
 }
 
 Table tags {

@@ -9,13 +9,13 @@ Table users {
 
 Table profiles {
   id      int    [pk, increment]
-  user_id int    [ref: - users.id]
+  user_id int    [unique, ref: users.id]
   bio     string [null]
 }
 
 Table avatars {
   id      int    [pk, increment]
-  user_id int    [ref: - users.id]
+  user_id int    [ref: users.id]
   url     string
 
   indexes {

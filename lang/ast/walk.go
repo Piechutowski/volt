@@ -37,14 +37,13 @@ func eachChild(n Node, visit func(Node)) {
 		}
 	case *Project:
 		child(visit, n.Name)
+		child(visit, n.Settings)
 		children(visit, n.Props)
-		children(visit, n.Notes)
 	case *ProjectProp:
 		child(visit, n.Key)
 		child(visit, n.Value)
 	case *Table:
 		child(visit, n.Name)
-		child(visit, n.Alias)
 		child(visit, n.Settings)
 		for _, it := range n.Body {
 			if it != nil {
@@ -53,7 +52,6 @@ func eachChild(n Node, visit func(Node)) {
 		}
 	case *TablePartial:
 		child(visit, n.Name)
-		child(visit, n.Settings)
 		for _, it := range n.Body {
 			if it != nil {
 				visit(it)
@@ -81,10 +79,7 @@ func eachChild(n Node, visit func(Node)) {
 		children(visit, n.Args)
 	case *PartialRef:
 		child(visit, n.Name)
-	case *Note:
-		child(visit, n.Text)
 	case *Ref:
-		child(visit, n.Name)
 		child(visit, n.Left)
 		child(visit, n.Right)
 		child(visit, n.Settings)
@@ -173,21 +168,6 @@ func eachChild(n Node, visit func(Node)) {
 				visit(v)
 			}
 		}
-	case *StickyNote:
-		child(visit, n.Name)
-		child(visit, n.Settings)
-		child(visit, n.Text)
-	case *TableGroup:
-		child(visit, n.Name)
-		child(visit, n.Settings)
-		children(visit, n.Members)
-		children(visit, n.Notes)
-	case *DiagramView:
-		child(visit, n.Name)
-		children(visit, n.Categories)
-	case *ViewCategory:
-		child(visit, n.Kind)
-		children(visit, n.Names)
 	case *SettingList:
 		children(visit, n.Settings)
 	case *Setting:
@@ -201,7 +181,5 @@ func eachChild(n Node, visit func(Node)) {
 	case *EnumConst:
 		child(visit, n.Enum)
 		child(visit, n.Value)
-	case *RefValue:
-		child(visit, n.Endpoint)
 	}
 }

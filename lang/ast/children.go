@@ -16,14 +16,12 @@ func Children(n Node) []Node {
 		if n.Name != nil {
 			out = append(out, n.Name)
 		}
+		if n.Settings != nil {
+			out = append(out, n.Settings)
+		}
 		for _, p := range n.Props {
 			if p != nil {
 				out = append(out, p)
-			}
-		}
-		for _, x := range n.Notes {
-			if x != nil {
-				out = append(out, x)
 			}
 		}
 	case *ProjectProp:
@@ -37,9 +35,6 @@ func Children(n Node) []Node {
 		if n.Name != nil {
 			out = append(out, n.Name)
 		}
-		if n.Alias != nil {
-			out = append(out, n.Alias)
-		}
 		if n.Settings != nil {
 			out = append(out, n.Settings)
 		}
@@ -51,9 +46,6 @@ func Children(n Node) []Node {
 	case *TablePartial:
 		if n.Name != nil {
 			out = append(out, n.Name)
-		}
-		if n.Settings != nil {
-			out = append(out, n.Settings)
 		}
 		for _, it := range n.Body {
 			if it != nil {
@@ -108,14 +100,7 @@ func Children(n Node) []Node {
 		if n.Name != nil {
 			out = append(out, n.Name)
 		}
-	case *Note:
-		if n.Text != nil {
-			out = append(out, n.Text)
-		}
 	case *Ref:
-		if n.Name != nil {
-			out = append(out, n.Name)
-		}
 		if n.Left != nil {
 			out = append(out, n.Left)
 		}
@@ -282,51 +267,6 @@ func Children(n Node) []Node {
 				out = append(out, v)
 			}
 		}
-	case *StickyNote:
-		if n.Name != nil {
-			out = append(out, n.Name)
-		}
-		if n.Settings != nil {
-			out = append(out, n.Settings)
-		}
-		if n.Text != nil {
-			out = append(out, n.Text)
-		}
-	case *TableGroup:
-		if n.Name != nil {
-			out = append(out, n.Name)
-		}
-		if n.Settings != nil {
-			out = append(out, n.Settings)
-		}
-		for _, m := range n.Members {
-			if m != nil {
-				out = append(out, m)
-			}
-		}
-		for _, x := range n.Notes {
-			if x != nil {
-				out = append(out, x)
-			}
-		}
-	case *DiagramView:
-		if n.Name != nil {
-			out = append(out, n.Name)
-		}
-		for _, c := range n.Categories {
-			if c != nil {
-				out = append(out, c)
-			}
-		}
-	case *ViewCategory:
-		if n.Kind != nil {
-			out = append(out, n.Kind)
-		}
-		for _, x := range n.Names {
-			if x != nil {
-				out = append(out, x)
-			}
-		}
 	case *SettingList:
 		for _, s := range n.Settings {
 			if s != nil {
@@ -353,10 +293,6 @@ func Children(n Node) []Node {
 		}
 		if n.Value != nil {
 			out = append(out, n.Value)
-		}
-	case *RefValue:
-		if n.Endpoint != nil {
-			out = append(out, n.Endpoint)
 		}
 	}
 	return out

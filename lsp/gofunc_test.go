@@ -192,13 +192,13 @@ func TestGoRefQualifiedRenameKeepsQualifier(t *testing.T) {
 	}
 }
 
-func TestSelectColumnRefsRespectGroupShadowing(t *testing.T) {
-	const text = "package db\n\nTable core.orders {\n\tid int [pk]\n\ttotal int\n}\n\n" +
+func TestSelectColumnRefsFollowTheTarget(t *testing.T) {
+	const text = "package db\n\nTable orders {\n\tid int [pk]\n\ttotal int\n}\n\n" +
 		"Table page_views {\n\tid int [pk]\n\tsite string\n}\n\n" +
 		"Table link_clicks {\n\tid int [pk]\n\tsite string\n}\n\n" +
-		"Group page_views {\n\tlink_clicks\n}\n\n" +
+		"Group clicks {\n\tlink_clicks\n}\n\n" +
 		"Select big (total) for orders where total > 1\n" +
-		"Select all (site) for page_views\n"
+		"Select all (site) for clicks\n"
 	root := voltProject(t, map[string]string{"go.mod": "module g\n", "db/schema.volt": text})
 	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), text)
 
@@ -211,7 +211,7 @@ func TestSelectColumnRefsRespectGroupShadowing(t *testing.T) {
 		n += len(edits)
 	}
 	if n != 3 {
-		t.Errorf("schema-qualified table: rename produced %d edits, want 3: %+v", n, edit.Changes)
+		t.Errorf("select over a table: rename produced %d edits, want 3: %+v", n, edit.Changes)
 	}
 
 	edit, err = d.Rename(posOf(t, text, "site", 0), "host")
@@ -223,7 +223,7 @@ func TestSelectColumnRefsRespectGroupShadowing(t *testing.T) {
 		n += len(edits)
 	}
 	if n != 1 {
-		t.Errorf("group-shadowed select: rename produced %d edits, want 1 (declaration only): %+v", n, edit.Changes)
+		t.Errorf("select over a group that does not hold the table: rename produced %d edits, want 1 (declaration only): %+v", n, edit.Changes)
 	}
 }
 

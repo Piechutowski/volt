@@ -253,8 +253,6 @@ func anyScan(s *Scanner) stateFn {
 		return quotedIdentScan
 	case r == '`':
 		return funcExprScan
-	case r == '#':
-		return colorScan
 	case isDigit(r):
 		return numberOrIdentScan
 	case isLetter(r):
@@ -443,15 +441,6 @@ func funcExprScan(s *Scanner) stateFn {
 	}
 }
 
-func colorScan(s *Scanner) stateFn {
-	s.next()
-	for isIdentChar(s.peek()) {
-		s.next()
-	}
-	s.tokEmit(token.Token{Kind: token.COLOR, Val: strings.TrimPrefix(s.rawVal(), "#")})
-	return anyScan
-}
-
 func identScan(s *Scanner) stateFn {
 	off := s.pos.Offset
 	for off < len(s.src) && asciiIdent[s.src[off]] {
@@ -539,14 +528,10 @@ var singleOps = map[rune]token.Kind{
 func operatorScan(s *Scanner) stateFn {
 	r := s.next()
 	if r == '<' {
-		switch s.peek() {
-		case '>':
-			s.next()
-			s.emit(token.LTGT, "<>")
-		case '=':
+		if s.peek() == '=' {
 			s.next()
 			s.emit(token.LE, "<=")
-		default:
+		} else {
 			s.emit(token.LT, "<")
 		}
 		return anyScan

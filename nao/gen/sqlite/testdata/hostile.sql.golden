@@ -6,7 +6,7 @@ CREATE TABLE users (
   id INTEGER PRIMARY KEY NOT NULL
 );
 
--- Same base name as public users; schema prefix disambiguates
+-- Shares the stem of users; its own name keeps the models apart
 CREATE TABLE core_users (
   id INTEGER PRIMARY KEY NOT NULL,
   api_key TEXT NOT NULL,

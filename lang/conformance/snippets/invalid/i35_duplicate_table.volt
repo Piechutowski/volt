@@ -1,3 +1,3 @@
-// spec: §namespaces-and-uniqueness — table names must be unique per schema
+// spec: §namespaces-and-uniqueness, table names are unique
 Table users { id int }
 Table users { name string }
