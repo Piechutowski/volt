@@ -168,3 +168,30 @@ func TestSelectHoverSpellsUnknownFieldType(t *testing.T) {
 		}
 	}
 }
+
+func TestSelectHoverNullableUnknownFieldType(t *testing.T) {
+	schema := "package db\n\nType Score int32\n\n" +
+		"Table authors {\n\tid int [pk, increment]\n\temail string\n\trank int32 [null]\n\tscore Score [null]\n}\n\n" +
+		"Select shown (rank, score, email) for authors\n" +
+		"Select byemail for authors where email = :e\n"
+	root := voltProject(t, map[string]string{
+		"go.mod":         "module proj\n",
+		"db/schema.volt": schema,
+	})
+	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), schema)
+	for _, needle := range []string{"shown", "byemail"} {
+		h := d.Hover(posOf(t, schema, needle, 0))
+		if h == nil {
+			t.Fatalf("no hover for the %s select", needle)
+		}
+		md := h.Contents.(protocol.MarkupContent).Value
+		for _, want := range []string{"\tRank int32 // unknown type (§columns)\n", "\tScore Score // unknown type (§columns)\n"} {
+			if !strings.Contains(md, want) {
+				t.Errorf("%s: hover missing %q:\n%s", needle, want, md)
+			}
+		}
+		if strings.Contains(md, "rt.Null[]") {
+			t.Errorf("%s: a nullable column of unknown type printed as rt.Null[]:\n%s", needle, md)
+		}
+	}
+}

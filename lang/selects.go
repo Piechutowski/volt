@@ -52,7 +52,7 @@ type SelectInfo struct {
 	Unresolved   bool     // a column of unknown type stopped the lowering (§columns); never generated
 	UnknownCols  []string // the columns of unknown type behind Unresolved, sorted
 
-	paramsPartial bool
+	droppedParams map[string]bool
 }
 
 func (c *checker) dataQueries(pkg *Package) {
@@ -537,7 +537,7 @@ func (l *selectLowering) check() *SelectInfo {
 	if sel.Where != nil {
 		where = env.exprLower(sel.Where, map[string]bool{})
 	}
-	si.paramsPartial = env.dropped
+	si.droppedParams = env.dropped
 
 	order := l.selectSettings(env)
 	if env.failed {
@@ -739,20 +739,21 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 			}
 			seenOrder := map[string]bool{}
 			for i, id := range list.Names {
-				b := env.columnBind(id)
-				if b == nil {
+				b, unknown := env.columnBind(id)
+				if b == nil && !unknown {
 					continue
 				}
-				if seenOrder[b.name] {
-					l.errorf(id.Pos(), "column %q appears twice in order: (§selects-over-groups)", b.name)
+				name := id.Name()
+				if seenOrder[name] {
+					l.errorf(id.Pos(), "column %q appears twice in order: (§selects-over-groups)", name)
 					continue
 				}
-				seenOrder[b.name] = true
-				if b.class == classEqOnly {
+				seenOrder[name] = true
+				if b != nil && b.class == classEqOnly {
 					l.errorf(id.Pos(), "column %q has declared type %s; a declared type cannot be ordered (§selects-over-groups)", b.name, b.goType)
 					continue
 				}
-				if b.class != classNumeric && b.class != classTime && b.class != classText {
+				if b != nil && b.class != classNumeric && b.class != classTime && b.class != classText {
 					l.errorf(id.Pos(), "column %q (%s) is not orderable (§selects-over-groups)", b.name, b.goType)
 					continue
 				}
@@ -770,7 +771,9 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 					l.errorf(mod.Pos(), "order direction is asc or desc, not %q (§selects-over-groups)", mod.Name())
 					continue
 				}
-				terms = append(terms, rt.OrderTerm(b.name, desc))
+				if b != nil {
+					terms = append(terms, rt.OrderTerm(b.name, desc))
+				}
 			}
 		default:
 			l.errorf(s.Pos(), "unknown select setting %q; selects take [order: (...)] (§selects-over-groups)", s.Name)
@@ -787,7 +790,7 @@ type selectEnv struct {
 	params    map[string]*SelectParam
 	paramList []SelectParam
 	failed    bool
-	dropped   bool
+	dropped   map[string]bool
 }
 
 func (e *selectEnv) errorf(pos token.Position, format string, args ...any) {
@@ -795,10 +798,10 @@ func (e *selectEnv) errorf(pos token.Position, format string, args ...any) {
 	e.l.errorf(pos, format, args...)
 }
 
-func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
+func (e *selectEnv) columnBind(id *ast.Ident) (b *colBinding, unknown bool) {
 	name := id.Name()
 	if b, done := e.cols[name]; done {
-		return b
+		return b, false
 	}
 	var missing []string
 	types := map[string][]string{}
@@ -806,7 +809,6 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 	var class, storage typeClass
 	var forbiddenType string
 	var storageGo string
-	unknown := false
 	for _, m := range e.members {
 		cd := m.Column(name)
 		if cd == nil {
@@ -816,7 +818,7 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 		declType := cd.Col.Type.String()
 		if cd.Type.Enum != nil {
 			e.errorf(id.Pos(), "column %q of table %q is enum-typed (%s); predicates do not compare enums in v1 — filter on a text column or use the dynamic layer (§predicates, hypotheses H5)", name, m.Decl.Name.Base(), declType)
-			return nil
+			return nil, false
 		}
 		if !cd.Type.Known() {
 			unknown = true
@@ -833,7 +835,7 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 	if len(missing) > 0 {
 		e.errorf(id.Pos(), "column %q is missing from %s — every member of %q must have it (§selects-over-groups)",
 			name, tableList(missing), e.sel.Target.Name())
-		return nil
+		return nil, false
 	}
 	if len(types) > 1 {
 		var parts []string
@@ -848,29 +850,39 @@ func (e *selectEnv) columnBind(id *ast.Ident) *colBinding {
 		}
 		e.errorf(id.Pos(), "column %q disagrees on type across %q: %s — the predicate cannot be checked for every member (§selects-over-groups)",
 			name, e.sel.Target.Name(), strings.Join(parts, "; "))
-		return nil
-	}
-	if unknown {
-		e.l.unknownAdd(name)
-		e.dropped = true
-		return nil
+		return nil, false
 	}
 	if len(classes) > 1 {
 		if classes[classEqOnly] {
 			class = classEqOnly
 		}
 	}
-	if class == classForbidden {
+	if len(types) > 0 && class == classForbidden {
 		e.errorf(id.Pos(), "column %q (%s) cannot appear in a predicate (§predicates)", name, forbiddenType)
-		return nil
+		return nil, false
+	}
+	if unknown {
+		e.l.unknownAdd(name)
+		return nil, true
 	}
 	var goType string
 	for t := range types {
 		goType = t
 	}
-	b := &colBinding{name: name, goType: goType, storageGo: storageGo, class: class, storage: storage}
+	b = &colBinding{name: name, goType: goType, storageGo: storageGo, class: class, storage: storage}
 	e.cols[name] = b
-	return b
+	return b, false
+}
+
+func (e *selectEnv) paramsDrop(ops ...ast.Operand) {
+	for _, op := range ops {
+		if p, ok := op.(*ast.Param); ok {
+			if e.dropped == nil {
+				e.dropped = map[string]bool{}
+			}
+			e.dropped[p.Name.Name()] = true
+		}
+	}
 }
 
 func tableList(names []string) string {
@@ -938,7 +950,7 @@ func (e *selectEnv) exprLower(x ast.PredExpr, preds map[string]bool) rt.GenPred 
 	case *ast.PredLike:
 		return e.likeLower(x)
 	case *ast.PredNull:
-		b := e.columnBind(x.Col)
+		b, _ := e.columnBind(x.Col)
 		if b == nil {
 			return rt.GenPred{}
 		}
@@ -985,8 +997,12 @@ func (e *selectEnv) compareLower(x *ast.PredCompare) rt.GenPred {
 	for _, side := range []ast.Operand{x.X, x.Y} {
 		if cr, isCol := side.(*ast.ColRef); isCol {
 			colCount++
-			if bb := e.columnBind(cr.Name); bb != nil {
+			bb, unknown := e.columnBind(cr.Name)
+			if bb != nil {
 				b = bb
+			}
+			if unknown {
+				e.paramsDrop(x.X, x.Y)
 			}
 		}
 	}
@@ -1013,7 +1029,7 @@ func (e *selectEnv) compareLower(x *ast.PredCompare) rt.GenPred {
 	if _, isCol := left.(*ast.ColRef); !isCol {
 		left, right, op = right, left, compareFlip(op)
 	}
-	col := e.columnBind(left.(*ast.ColRef).Name)
+	col, _ := e.columnBind(left.(*ast.ColRef).Name)
 	if col == nil {
 		return rt.GenPred{}
 	}
@@ -1021,7 +1037,7 @@ func (e *selectEnv) compareLower(x *ast.PredCompare) rt.GenPred {
 	var err error
 	switch o := right.(type) {
 	case *ast.ColRef:
-		other := e.columnBind(o.Name)
+		other, _ := e.columnBind(o.Name)
 		if other == nil {
 			return rt.GenPred{}
 		}
@@ -1098,7 +1114,10 @@ func numberGo(val, storage string) (string, error) {
 }
 
 func (e *selectEnv) inLower(x *ast.PredIn) rt.GenPred {
-	b := e.columnBind(x.Col)
+	b, unknown := e.columnBind(x.Col)
+	if unknown && x.List != nil {
+		e.paramsDrop(x.List)
+	}
 	if b == nil {
 		return rt.GenPred{}
 	}
@@ -1130,7 +1149,10 @@ func (e *selectEnv) inLower(x *ast.PredIn) rt.GenPred {
 }
 
 func (e *selectEnv) likeLower(x *ast.PredLike) rt.GenPred {
-	b := e.columnBind(x.Col)
+	b, unknown := e.columnBind(x.Col)
+	if unknown {
+		e.paramsDrop(x.Pattern)
+	}
 	if b == nil {
 		return rt.GenPred{}
 	}

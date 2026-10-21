@@ -12,6 +12,8 @@ type ParamType string
 const (
 	TInt    ParamType = "int"
 	TString ParamType = "string"
+
+	tUnresolved ParamType = ""
 )
 
 // KnownParamType reports whether s names a parameter type.
@@ -30,7 +32,7 @@ func (t ParamType) GoType() string { return string(t) }
 type Param struct {
 	Name   string    // as written in the path (Go-visible name is derived)
 	GoName string    // parameter name in generated signatures
-	Type   ParamType // TString for wildcards
+	Type   ParamType // TString for wildcards; "" for a resources key whose column type is unknown (§columns)
 	Wild   bool      // rest-of-path capture (":name...")
 }
 
@@ -116,6 +118,8 @@ type QueryRef struct {
 	Result    string         // row type, unqualified ("User"); "" for delete
 	Many      bool           // slice result
 	Status    int            // success status: 200, 201 for create, 204 for delete
+
+	Unresolved bool // the key's column type is unknown (§columns): checked as usual, Params lacks the key, never generated
 }
 
 // Ref renders the reference as written, e.g. "db.UserGet"; a query of

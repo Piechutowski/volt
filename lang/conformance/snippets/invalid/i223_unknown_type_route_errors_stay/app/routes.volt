@@ -20,4 +20,13 @@ Scope /api {
   dataset db.ranked [only: (posts), colour: red]
   get /missing db.AuthorMissing
   dataset db.missing
+  get /floor/:nope db.AuthorRanked [name: Floor]
+  get /authors/:id(int) db.AuthorGet [colour: blue]
+  get /authors/:id(int) Home.Show
+}
+
+Scope /v2 {
+  resources db.authors [default, colour: red, only: (index, show, bogus)]
+  get /authors/:key Home.Edit
+  get /writers/:id(int) Home.Show [name: Author]
 }

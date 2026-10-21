@@ -210,7 +210,7 @@ func TestConformanceTagged(t *testing.T) {
 	spec := specText(t)
 	partII := map[string]bool{}
 	start, end := strings.Index(spec, "\n# Part II"), strings.Index(spec, "\n# Appendices")
-	for _, m := range headingRE.FindAllStringSubmatch(spec[start:end], -1) {
+	for _, m := range specHeadings(spec[start:end]) {
 		partII[anchorOf(strings.TrimSpace(m[2]))] = true
 	}
 	for _, kind := range []string{"valid", "invalid"} {

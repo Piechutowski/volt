@@ -241,13 +241,13 @@ func TestSelectUnresolvedKeptNotGenerated(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
 		unresolved bool
-		partial    bool
+		dropped    map[string]bool
 		params     []SelectParam
 	}{
-		{"ranked", true, true, []SelectParam{{GoName: "e", GoType: "string"}}},
-		{"shown", true, false, nil},
-		{"brief", false, false, nil},
-		{"byemail", true, false, []SelectParam{{GoName: "e", GoType: "string"}}},
+		{"ranked", true, map[string]bool{"min": true}, []SelectParam{{GoName: "e", GoType: "string"}}},
+		{"shown", true, nil, nil},
+		{"brief", false, nil, nil},
+		{"byemail", true, nil, []SelectParam{{GoName: "e", GoType: "string"}}},
 	} {
 		si := got[tc.name]
 		if si == nil {
@@ -258,9 +258,9 @@ func TestSelectUnresolvedKeptNotGenerated(t *testing.T) {
 		if tc.unresolved {
 			unknown = []string{"rank"}
 		}
-		if si.Unresolved != tc.unresolved || !reflect.DeepEqual(si.UnknownCols, unknown) || si.paramsPartial != tc.partial || !reflect.DeepEqual(si.Params, tc.params) {
-			t.Errorf("select %s: Unresolved %v UnknownCols %q partial %v Params %+v; want %v %q %v %+v",
-				tc.name, si.Unresolved, si.UnknownCols, si.paramsPartial, si.Params, tc.unresolved, unknown, tc.partial, tc.params)
+		if si.Unresolved != tc.unresolved || !reflect.DeepEqual(si.UnknownCols, unknown) || !reflect.DeepEqual(si.droppedParams, tc.dropped) || !reflect.DeepEqual(si.Params, tc.params) {
+			t.Errorf("select %s: Unresolved %v UnknownCols %q dropped %v Params %+v; want %v %q %v %+v",
+				tc.name, si.Unresolved, si.UnknownCols, si.droppedParams, si.Params, tc.unresolved, unknown, tc.dropped, tc.params)
 		}
 		if si.Unresolved && (si.WhereSQL != "" || si.OrderSQL != "" || len(si.Binds) > 0) {
 			t.Errorf("select %s is unresolved but carries rendered SQL: %q %q %q", tc.name, si.WhereSQL, si.OrderSQL, si.Binds)
@@ -269,5 +269,57 @@ func TestSelectUnresolvedKeptNotGenerated(t *testing.T) {
 	fns := pr.Packages["db"].SelectFns()
 	if len(fns) != 1 || fns[0].MethodSuffix != "Brief" {
 		t.Errorf("SelectFns = %+v; want only Brief, the generator never sees an unresolved select", fns)
+	}
+}
+
+func TestSelectDroppedTermsNameTheirParams(t *testing.T) {
+	pr, diags := project(t, map[string]string{
+		"go.mod": modFile,
+		"db/schema.volt": "package db\n\nTable authors {\n\tid int [pk, increment]\n\temail string\n\trank int32 [null]\n}\n\n" +
+			"Pred floor { rank >= :min }\n\n" +
+			"Select listed for authors where rank in :ranks and email = :e\n" +
+			"Select liked for authors where rank like :pat or email like :e\n" +
+			"Select floored for authors where floor and email = :e\n" +
+			"Select fixed for authors where rank in (1, 2) and rank is not null\n",
+		"app/routes.volt": "package app\n\nimport (\n\tdb\n)\n\nScope /api {\n" +
+			"\tget /floored/:min/:e db.AuthorFloored\n" +
+			"\tget /floor/:e/:zzz db.AuthorFloored [name: Floor]\n" +
+			"\tget /fixed/:min db.AuthorFixed\n}\n",
+	})
+	var msgs []string
+	for _, d := range diags {
+		msgs = append(msgs, d.Msg)
+	}
+	want := []string{`unknown type "int32"`, `path parameter "zzz" is not a parameter of db.AuthorFloored`, `path parameter "min" is not a parameter of db.AuthorFixed`}
+	ok := len(msgs) == len(want)
+	for i := 0; ok && i < len(want); i++ {
+		ok = strings.Contains(msgs[i], want[i])
+	}
+	if !ok {
+		t.Errorf("want errors containing %q; a path parameter is skipped only when a dropped term names it; got:\n%s", want, strings.Join(msgs, "\n"))
+	}
+	got := map[string]*SelectInfo{}
+	for _, si := range pr.Packages["db"].Selects {
+		got[si.Decl.Name.Name()] = si
+	}
+	e := []SelectParam{{GoName: "e", GoType: "string"}}
+	for _, tc := range []struct {
+		name    string
+		dropped map[string]bool
+		params  []SelectParam
+	}{
+		{"listed", map[string]bool{"ranks": true}, e},
+		{"liked", map[string]bool{"pat": true}, e},
+		{"floored", map[string]bool{"min": true}, e},
+		{"fixed", nil, nil},
+	} {
+		si := got[tc.name]
+		if si == nil || !si.Unresolved {
+			t.Errorf("select %s: want it kept and unresolved, got %+v", tc.name, si)
+			continue
+		}
+		if !reflect.DeepEqual(si.droppedParams, tc.dropped) || !reflect.DeepEqual(si.Params, tc.params) {
+			t.Errorf("select %s: dropped %v Params %+v; want %v %+v", tc.name, si.droppedParams, si.Params, tc.dropped, tc.params)
+		}
 	}
 }

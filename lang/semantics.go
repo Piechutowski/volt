@@ -909,7 +909,8 @@ func paramsEqual(a, b []Param) bool {
 		return false
 	}
 	for i := range a {
-		if a[i].Type != b[i].Type || a[i].Wild != b[i].Wild || a[i].Name != b[i].Name {
+		typed := a[i].Type != tUnresolved && b[i].Type != tUnresolved
+		if (typed && a[i].Type != b[i].Type) || a[i].Wild != b[i].Wild || a[i].Name != b[i].Name {
 			return false
 		}
 	}
@@ -919,7 +920,10 @@ func paramsEqual(a, b []Param) bool {
 func paramsString(ps []Param) string {
 	parts := make([]string, len(ps))
 	for i, p := range ps {
-		parts[i] = p.Name + " " + p.Type.GoType()
+		parts[i] = p.Name
+		if p.Type != tUnresolved {
+			parts[i] += " " + p.Type.GoType()
+		}
 	}
 	return "(" + strings.Join(parts, ", ") + ")"
 }

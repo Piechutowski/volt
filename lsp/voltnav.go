@@ -556,13 +556,14 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 }
 
 func fieldTypeMD(m *check.TableInfo, f golang.FieldSig) string {
-	if f.Type != "" {
-		return f.Type
-	}
-	if cd := m.Column(f.Col); cd != nil {
+	cd := m.Column(f.Col)
+	switch {
+	case cd != nil && !cd.Type.Known():
 		return cd.Col.Type.String() + " // unknown type (§columns)"
+	case f.Type == "":
+		return "// unknown type (§columns)"
 	}
-	return "// unknown type (§columns)"
+	return f.Type
 }
 
 func selectHead(d *ast.Select) string {

@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/Piechutowski/volt/lang/diag"
 )
 
 func TestRouteIndexMatchesPairwiseScan(t *testing.T) {
@@ -91,4 +93,50 @@ func routeName(r *RouteInfo) string {
 		return "nothing"
 	}
 	return methodOrAny(r.Method) + " " + r.Spelled
+}
+
+func TestRoutesOverUnknownKeyKept(t *testing.T) {
+	pr, diags := project(t, map[string]string{
+		"go.mod":         modFile,
+		"db/schema.volt": "package db\n\nTable authors {\n\tid int64 [pk, increment]\n\temail string\n}\n",
+		"app/routes.volt": "package app\n\nimport (\n\tdb\n)\n\n" +
+			"Scope /api {\n\tget /authors/:id(int) db.AuthorGet\n\tpatch /authors/:id(int) db.AuthorUpdate\n\tget /writers db.AuthorList\n}\n\n" +
+			"Scope /v2 [name: v2] {\n\tresources db.authors [default, only: (index, show)]\n}\n\n" +
+			"Scope /admin [name: admin] {\n\tresources db.authors [only: (show, edit)]\n}\n",
+	})
+	if len(diags) != 1 || !strings.Contains(diags[0].Msg, `unknown type "int64"`) || !diag.HasErrors(diags) {
+		t.Fatalf("want the one unknown-type error, which keeps the package from the generator; got %v", diags)
+	}
+	got := map[string]*RouteInfo{}
+	for _, r := range pr.Packages["app"].Routes {
+		got[r.Method+" "+r.Pattern] = r
+	}
+	for _, tc := range []struct {
+		route      string
+		unresolved bool
+		keyed      bool
+	}{
+		{"GET /api/authors/{id}", true, false},
+		{"PATCH /api/authors/{id}", true, false},
+		{"GET /api/writers", false, false},
+		{"GET /v2/authors", false, false},
+		{"GET /v2/authors/{id}", true, true},
+		{"GET /admin/authors/{id}", false, true},
+		{"GET /admin/authors/{id}/edit", false, true},
+	} {
+		r := got[tc.route]
+		if r == nil {
+			t.Errorf("%s was dropped; a route over a key of unknown type is kept and checked", tc.route)
+			continue
+		}
+		if r.Query != nil && r.Query.Unresolved != tc.unresolved {
+			t.Errorf("%s: Query.Unresolved = %v, want %v", tc.route, r.Query.Unresolved, tc.unresolved)
+		}
+		if r.Query == nil && r.Controller != "Authors" {
+			t.Errorf("%s: neither a query nor the Authors controller: %+v", tc.route, r)
+		}
+		if tc.keyed && (len(r.Params) != 1 || r.Params[0].Type != tUnresolved) {
+			t.Errorf("%s: Params %+v; want the one key, its type unresolved", tc.route, r.Params)
+		}
+	}
 }

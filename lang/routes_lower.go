@@ -460,10 +460,11 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		body, key    bool
 	}
 	var sig []sigParam
-	found, partial := false, false
+	found := false
+	var dropped map[string]bool
 
 	if si, m, ok := l.selectByMethod(target, name); ok {
-		found, partial = true, si.paramsPartial
+		found, dropped = true, si.droppedParams
 		for _, p := range si.Params {
 			sig = append(sig, sigParam{name: p.GoName, goType: p.GoType})
 		}
@@ -514,11 +515,13 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 				bound[sp.name] = true
 				if pp.Wild {
 					l.errorf(segAt.pos(pp.Name), "scopes-and-routes", "parameter %q of %s cannot be a wildcard (§query-routes)", sp.name, ref)
+					ok = false
 				}
 			} else if sp.key {
 				l.errorf(pos, "query-routes", "%s loads the row to update by %q, which must be a path parameter of the route (§query-routes)", ref, sp.name)
+				ok = false
 			}
-			ok = false
+			qr.Unresolved = true
 			continue
 		}
 		qp := QueryParam{Name: sp.name, GoType: sp.goType}
@@ -573,7 +576,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	}
 	for _, p := range params {
 		if !bound[p.Name] {
-			if partial {
+			if dropped[p.Name] {
 				continue
 			}
 			l.errorf(segAt.pos(p.Name), "scopes-and-routes", "path parameter %q is not a parameter of %s (§query-routes)", p.Name, ref)
@@ -820,8 +823,10 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 
 	nameSeg := func(n string) *ast.Segment { return litSeg(n, res.Pos()) }
 	idSeg := &ast.Segment{Kind: ast.SegParam, MarkPos: res.Pos(),
-		Name: &ast.Ident{Tok: token.Token{Kind: token.IDENT, Val: paramName, Pos: res.Pos()}},
-		Type: &ast.Ident{Tok: token.Token{Kind: token.IDENT, Val: string(keyType), Pos: res.Pos()}}}
+		Name: &ast.Ident{Tok: token.Token{Kind: token.IDENT, Val: paramName, Pos: res.Pos()}}}
+	if keyType != tUnresolved {
+		idSeg.Type = &ast.Ident{Tok: token.Token{Kind: token.IDENT, Val: string(keyType), Pos: res.Pos()}}
+	}
 
 	var out []*RouteInfo
 	for _, a := range resourceActions {
@@ -844,6 +849,11 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 		params, ok := l.pathParams(segs)
 		if !ok {
 			continue
+		}
+		for i := range params {
+			if keyType == tUnresolved && a.OnID && params[i].Name == paramName {
+				params[i].Type = tUnresolved
+			}
 		}
 		helper := ""
 		switch a.Name {
@@ -984,7 +994,7 @@ func (l *routeLowering) pkParamType(ti *check.TableInfo, pos token.Position) (Pa
 	}
 	pk := cd.Col
 	if !cd.Type.Known() {
-		return "", false
+		return tUnresolved, true
 	}
 	switch goType := cd.Type.Go; goType {
 	case "int", "string":

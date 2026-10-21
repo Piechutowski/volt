@@ -743,12 +743,16 @@ column setting  = "primary key" | "pk"
    uses such a column, in its predicate, its order, its projection or
    as a column its row type keeps, is kept unresolved: it generates no
    method, and the query routes and datasets that name it are checked
-   as for any select (§query-routes, §dataset-declaration). One check
-   is skipped: when a predicate term over the column is dropped, a
-   path parameter that none of the select's remaining parameters names
-   is not reported, since it may belong to the dropped term. An error
-   that does not depend on the type, such as a group member that lacks
-   the column, a route conflict, a setting a route or dataset does not
+   as for any select (§query-routes, §dataset-declaration). A query
+   route to a default CRUD method keyed by such a column, and a
+   resources declaration over a table whose primary key is one, are
+   kept and checked the same way (§query-routes, §table-resolution).
+   One check is narrowed: a path parameter that a dropped predicate
+   term over the column names, and none of the select's remaining
+   parameters does, is not reported, since it belongs to the dropped
+   term. An error that does not depend on the type, such as a group
+   member that lacks the column, an `order:` term without a direction,
+   a route conflict, a setting a route, resources or dataset does not
    take, or a validator function that does not exist, is reported as
    usual. A column whose type names a `Type` declaration in error
    reports nothing: the declaration's error (§types) stands for it.

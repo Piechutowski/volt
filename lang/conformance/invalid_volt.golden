@@ -296,6 +296,7 @@ db/i218_migration_action_without_ref.volt:13:18: error: spec/migrations: column 
 ## i219_unknown_type_reported_once
 db/schema.volt:4:9: error: spec/columns: column "id": unknown type "int64"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
 db/schema.volt:6:9: error: spec/columns: column "rank": unknown type "int32"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+app/routes.volt:11:3: error: spec/scopes-and-routes: route GET /api/authors/:id conflicts with the route at app/routes.volt:10:3: identical method and path shape (§route-conflicts)
 
 ## i21_unknown_table
 app/r.volt:9:15: error: spec/resources: no table "nope" in package "db" (§declaration)
@@ -334,9 +335,25 @@ app/routes.volt:20:29: error: spec/datasets: only: "posts" is not a member of se
 app/routes.volt:20:37: error: spec/settings-whitelists: setting "colour" is not valid on a dataset (§settings-whitelists); valid: strip, only, except
 app/routes.volt:21:19: error: spec/scopes-and-routes: no generated query db.AuthorMissing in package "db" — a query route names a select method or a default CRUD method (Get, List, Create, Update, Delete) (§query-routes)
 app/routes.volt:22:14: error: spec/datasets: no select "missing" in package "db" (§dataset-declaration)
+app/routes.volt:23:14: error: spec/scopes-and-routes: path parameter "nope" is not a parameter of db.AuthorRanked (§query-routes)
+app/routes.volt:24:39: error: spec/settings-whitelists: setting "colour" is not valid on a route (§settings-whitelists); valid: name
+app/routes.volt:25:3: error: spec/scopes-and-routes: route GET /api/authors/:id(int) conflicts with the route at app/routes.volt:24:3: identical method and path shape (§route-conflicts)
+app/routes.volt:29:34: error: spec/settings-whitelists: setting "colour" is not valid on resources (§settings-whitelists); valid: api, only, except, param, singular, default
+app/routes.volt:29:67: error: spec/resources: unknown action "bogus" (§the-action-table); valid: index, new, create, show, edit, update, delete
+app/routes.volt:30:3: error: spec/scopes-and-routes: route GET /v2/authors/:key conflicts with the route at app/routes.volt:29:3: identical method and path shape (§route-conflicts)
+app/routes.volt:31:3: error: spec/scopes-and-routes: reverse-URL helper or client method "Author" already produced by the route at app/routes.volt:29:3 (§route-names-and-reverse-urls, §generated-client); disambiguate with [name:] or a scope name
 
 ## i224_failed_type_reported_once
 db/schema.volt:5:12: error: spec/types: storage type "int32" of Type "Score" is not a built-in: bool, int, float64, string, []byte or time.Time (§types)
+
+## i225_unknown_type_order_errors_stay.volt
+db/i225_unknown_type_order_errors_stay.volt:7:8: error: spec/columns: column "hits": unknown type "int32"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+db/i225_unknown_type_order_errors_stay.volt:13:8: error: spec/columns: column "body": unknown type "int64"; a column type is bool, int, float64, string, []byte, time.Time, an enum or a declared Type (§columns)
+db/i225_unknown_type_order_errors_stay.volt:21:43: error: spec/selects-over-groups: order: every column states its direction — write "hits asc" or "hits desc" (§selects-over-groups)
+db/i225_unknown_type_order_errors_stay.volt:22:46: error: spec/selects-over-groups: order direction is asc or desc, not "sideways" (§selects-over-groups)
+db/i225_unknown_type_order_errors_stay.volt:23:49: error: spec/selects-over-groups: column "hits" appears twice in order: (§selects-over-groups)
+db/i225_unknown_type_order_errors_stay.volt:24:28: error: spec/selects-over-groups: column "body" ([]byte) cannot appear in a predicate (§predicates)
+db/i225_unknown_type_order_errors_stay.volt:25:37: error: spec/selects-over-groups: column "body" ([]byte) cannot appear in a predicate (§predicates)
 
 ## i22_scope_setting.volt
 app/i22_scope_setting.volt:4:10: error: spec/settings-whitelists: setting "pipes" is not valid on a Scope (§settings-whitelists); valid: pipe, name, error_handler
