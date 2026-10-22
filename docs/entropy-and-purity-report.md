@@ -12,9 +12,7 @@ the second) and the evidence it rests on.
 Items the maintainer has decided are removed from this file. The ones
 to build are listed in roadmap.md under "One spelling per meaning";
 item 17 (the Go type of a nullable column) was decided as no change, a
-nullable column stays `rt.Null[T]`, and so was item 83 (the verbs
-`any`, `head` and `options`): a controller route keeps them, while a
-query route takes the verb its method fixes (§query-routes). The numbers are the review's
+nullable column stays `rt.Null[T]`. The numbers are the review's
 original ranking, so a gap in the numbering is a decided item. When an
 item is decided, it leaves this file in the same commit.
 
@@ -722,6 +720,18 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 **Cost.** Only the wording of one rule.
 
 **Evidence.** docs/spec.md §columns extension (required), §validators rule 8, §changesets rules 6 and 9; lang/check/settings.go:45 (the setting) and 236-251 (requiredCheck).
+
+### 83. [keep] The verbs any, head and options
+
+- any /ping Home.Ping (a pattern with no method)
+- get /x, which ServeMux also serves for HEAD, beside a separate head /x
+- options /x
+
+**Proposal.** Keep all three on controller routes. any registers a pattern that no list of verbs reproduces, head lets a HEAD handler differ from the GET one, and options serves CORS preflights. None of them is a second spelling of another verb. Their use on query routes, where they were redundant, is gone: a query route now takes the verb its generated method fixes (§query-routes).
+
+**Cost.** None.
+
+**Evidence.** docs/spec.md §routes verb production and clause 1; the blog fixture's any /ping.
 
 ### 84. [keep] resources and dataset as one-line macros over route lines
 
