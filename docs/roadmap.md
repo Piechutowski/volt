@@ -36,7 +36,7 @@ report engine when a consumer exists.
   - [ ] Step 2, case and names
     - [ ] Volt is case-sensitive. Words that open an element or a block are capitalized (`Table`, `TablePartial`, `Type`, `Ref`, `Group`, `Pred`, `Select`, `Records`, `Indexes`, `Validators`, `Migration`, `Scope`, `Pipeline`, `Project`); every other word is lowercase (settings and values, `true`, `false`, `null`, clause words, route words, migration operations, `package`, `import`); a wrong case is a syntax error naming the right spelling
     - [ ] Identifiers are Go identifiers: quoted identifiers go
-    - [ ] Strings are Go strings: `"..."` is single-line with only the escapes `\\`, `\"`, `\n` and `\t`, every other backslash sequence and line continuation an error; a raw string is `` `...` `` as in Go. Open, before building: how a SQL expression (`default:`, `where:`, `from:`, `exec`, index expression atoms, record expressions) and a multi-line note are spelled once backticks are Go raw strings, report item 88
+    - [ ] Strings are Go strings: `"..."` is single-line with only the escapes `\\`, `\"`, `\n` and `\t`, every other backslash sequence and line continuation an error; a multi-line string is `"""..."""` with its common indentation trimmed, replacing `'''...'''`; backticks stay SQL expressions (`default:`, `where:`, `from:`, `exec`, index expressions)
     - [ ] A package names its own declarations bare; `pkg.Name` always names an import (or `volt.`), and the rule that an import may not take the package's own name goes
   - [ ] Step 3, keys and indexes
     - [ ] `pk` is a column setting only: several `pk` columns form one composite key in declaration order, the `[pk]` index form goes, `increment` only on a single `int` pk
