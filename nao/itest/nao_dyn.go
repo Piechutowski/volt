@@ -654,3 +654,219 @@ func (q *Queries) SiteFlagUpdateWhere(ctx context.Context, set []rt.Assign[SiteF
 	}
 	return res.RowsAffected()
 }
+
+const (
+	attachmentTableSQL   = `"attachments"`
+	attachmentColumnsSQL = `"id", "name", "body", "thumb", "digest"`
+)
+
+// AttachmentLimit caps how many rows AttachmentQuery returns.
+func AttachmentLimit(n int) rt.Opt[Attachment] { return rt.Limit[Attachment](n) }
+
+// AttachmentOffset skips n rows; keyset pagination (AttachmentAfter) scales better.
+func AttachmentOffset(n int) rt.Opt[Attachment] { return rt.Offset[Attachment](n) }
+
+// AttachmentDistinct deduplicates the rows AttachmentQuery returns.
+func AttachmentDistinct() rt.Opt[Attachment] { return rt.Distinct[Attachment]() }
+
+// AttachmentOrderBy sorts AttachmentQuery's rows by Asc/Desc terms built on the
+// Attachment column handles.
+func AttachmentOrderBy(terms ...rt.Order[Attachment]) rt.Opt[Attachment] { return rt.OrderBy(terms...) }
+
+// AttachmentAfter resumes strictly after the row with the given key — keyset
+// pagination: one value per AttachmentOrderBy term, in the same order.
+func AttachmentAfter(key ...any) rt.Opt[Attachment] { return rt.After[Attachment](key...) }
+
+// AttachmentSet collects the typed assignments of a AttachmentUpdateWhere, built
+// with Set/SetNull on the Attachment column handles.
+func AttachmentSet(assigns ...rt.Assign[Attachment]) []rt.Assign[Attachment] { return assigns }
+
+// AttachmentQuery returns the attachments rows matching every given predicate,
+// shaped by the remaining options (order, limit, offset, keyset,
+// distinct). No options means every row.
+func (q *Queries) AttachmentQuery(ctx context.Context, opts ...rt.Opt[Attachment]) ([]Attachment, error) {
+	query, args, err := rt.SelectRender(attachmentTableSQL, attachmentColumnsSQL, opts)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := rt.StmtQuery(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Attachment{}
+	for rows.Next() {
+		v, err := attachmentScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// AttachmentCount reports how many attachments rows match every given predicate;
+// none counts the whole table.
+func (q *Queries) AttachmentCount(ctx context.Context, preds ...rt.Pred[Attachment]) (int64, error) {
+	query, args, err := rt.CountRender(attachmentTableSQL, preds)
+	if err != nil {
+		return 0, err
+	}
+	var n int64
+	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// AttachmentExists reports whether any attachments row matches every given predicate.
+func (q *Queries) AttachmentExists(ctx context.Context, preds ...rt.Pred[Attachment]) (bool, error) {
+	query, args, err := rt.ExistsRender(attachmentTableSQL, preds)
+	if err != nil {
+		return false, err
+	}
+	var found bool
+	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &found); err != nil {
+		return false, err
+	}
+	return found, nil
+}
+
+// AttachmentDeleteWhere removes every attachments row matching the predicates and
+// reports how many went. No effective predicate is an error, never a
+// full-table delete.
+func (q *Queries) AttachmentDeleteWhere(ctx context.Context, preds ...rt.Pred[Attachment]) (int64, error) {
+	query, args, err := rt.DeleteRender(attachmentTableSQL, preds)
+	if err != nil {
+		return 0, err
+	}
+	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// AttachmentUpdateWhere applies the typed assignments (AttachmentSet) to every attachments
+// row matching the predicates and reports how many changed — the
+// partial update of the dynamic layer. No effective predicate
+// is an error, never a full-table rewrite.
+func (q *Queries) AttachmentUpdateWhere(ctx context.Context, set []rt.Assign[Attachment], preds ...rt.Pred[Attachment]) (int64, error) {
+	query, args, err := rt.UpdateRender(attachmentTableSQL, set, preds)
+	if err != nil {
+		return 0, err
+	}
+	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+const (
+	blobTableSQL   = `"blobs"`
+	blobColumnsSQL = `"hash", "tag", "size"`
+)
+
+// BlobLimit caps how many rows BlobQuery returns.
+func BlobLimit(n int) rt.Opt[Blob] { return rt.Limit[Blob](n) }
+
+// BlobOffset skips n rows; keyset pagination (BlobAfter) scales better.
+func BlobOffset(n int) rt.Opt[Blob] { return rt.Offset[Blob](n) }
+
+// BlobDistinct deduplicates the rows BlobQuery returns.
+func BlobDistinct() rt.Opt[Blob] { return rt.Distinct[Blob]() }
+
+// BlobOrderBy sorts BlobQuery's rows by Asc/Desc terms built on the
+// Blob column handles.
+func BlobOrderBy(terms ...rt.Order[Blob]) rt.Opt[Blob] { return rt.OrderBy(terms...) }
+
+// BlobAfter resumes strictly after the row with the given key — keyset
+// pagination: one value per BlobOrderBy term, in the same order.
+func BlobAfter(key ...any) rt.Opt[Blob] { return rt.After[Blob](key...) }
+
+// BlobSet collects the typed assignments of a BlobUpdateWhere, built
+// with Set/SetNull on the Blob column handles.
+func BlobSet(assigns ...rt.Assign[Blob]) []rt.Assign[Blob] { return assigns }
+
+// BlobQuery returns the blobs rows matching every given predicate,
+// shaped by the remaining options (order, limit, offset, keyset,
+// distinct). No options means every row.
+func (q *Queries) BlobQuery(ctx context.Context, opts ...rt.Opt[Blob]) ([]Blob, error) {
+	query, args, err := rt.SelectRender(blobTableSQL, blobColumnsSQL, opts)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := rt.StmtQuery(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Blob{}
+	for rows.Next() {
+		v, err := blobScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// BlobCount reports how many blobs rows match every given predicate;
+// none counts the whole table.
+func (q *Queries) BlobCount(ctx context.Context, preds ...rt.Pred[Blob]) (int64, error) {
+	query, args, err := rt.CountRender(blobTableSQL, preds)
+	if err != nil {
+		return 0, err
+	}
+	var n int64
+	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// BlobExists reports whether any blobs row matches every given predicate.
+func (q *Queries) BlobExists(ctx context.Context, preds ...rt.Pred[Blob]) (bool, error) {
+	query, args, err := rt.ExistsRender(blobTableSQL, preds)
+	if err != nil {
+		return false, err
+	}
+	var found bool
+	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &found); err != nil {
+		return false, err
+	}
+	return found, nil
+}
+
+// BlobDeleteWhere removes every blobs row matching the predicates and
+// reports how many went. No effective predicate is an error, never a
+// full-table delete.
+func (q *Queries) BlobDeleteWhere(ctx context.Context, preds ...rt.Pred[Blob]) (int64, error) {
+	query, args, err := rt.DeleteRender(blobTableSQL, preds)
+	if err != nil {
+		return 0, err
+	}
+	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// BlobUpdateWhere applies the typed assignments (BlobSet) to every blobs
+// row matching the predicates and reports how many changed — the
+// partial update of the dynamic layer. No effective predicate
+// is an error, never a full-table rewrite.
+func (q *Queries) BlobUpdateWhere(ctx context.Context, set []rt.Assign[Blob], preds ...rt.Pred[Blob]) (int64, error) {
+	query, args, err := rt.UpdateRender(blobTableSQL, set, preds)
+	if err != nil {
+		return 0, err
+	}
+	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}

@@ -145,7 +145,7 @@ type Post struct {
 	ReviewedAt rt.Null[time.Time] `db:"reviewed_at" json:"reviewed_at"`
 	// rt.Null[string] expresses NULL; no pointer needed
 	Meta rt.Null[string] `db:"meta" json:"meta"`
-	Raw  []byte          `db:"raw" json:"raw"`
+	Raw  rt.Null[[]byte] `db:"raw" json:"raw"`
 }
 
 // PostColumn is a column handle of Post, the element of a Cast allow list
@@ -233,8 +233,9 @@ func (c PostChangeset) MetaSet(v rt.Null[string]) PostChangeset {
 	return c
 }
 
-// RawSet sets raw and marks it (spec §changesets).
-func (c PostChangeset) RawSet(v []byte) PostChangeset {
+// RawSet sets raw and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
+func (c PostChangeset) RawSet(v rt.Null[[]byte]) PostChangeset {
 	c.vals.Raw, c.set[5] = v, true
 	return c
 }
@@ -277,7 +278,7 @@ func (c PostChangeset) Cast(p PostParams, allow ...PostColumn) PostChangeset {
 				c = c.MetaSet(v)
 			}
 		case "raw":
-			if v, ok, err := rt.Field(p, "raw", "[]byte", true, func(r *Post) []byte { return r.Raw }); err != nil {
+			if v, ok, err := rt.Field(p, "raw", "[]byte", true, func(r *Post) rt.Null[[]byte] { return r.Raw }); err != nil {
 				c = c.errorAdd("cast", err.Error(), "raw")
 			} else if ok {
 				c = c.RawSet(v)

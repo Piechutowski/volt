@@ -66,22 +66,3 @@ the fold, since SQLite names constraint indexes by ordinal and `add
 that writes the next migration from the drift report, and how a
 rename is told from a drop and an add (`[was:]` in the schema, or a
 question at diff time).
-
-## H8: The zero value of a NOT NULL `[]byte` column
-
-Today a `[]byte` column is generated as `[]byte` with or without
-`null`, and nil binds as NULL, so a column without `null` refuses nil,
-its Go zero value, as a `not_null` field error (§columns,
-§mapping-to-go). It is the one built-in type whose zero value does not
-satisfy NOT NULL. The candidate: bind nil as `X''` for a `[]byte`
-column without `null`, so the zero value satisfies NOT NULL as it does
-for every other built-in type, and zero is initialization; a GOB write
-body, which carries an empty slice as nil, would then store the empty
-bytes its sender set instead of being refused. Against it: a row
-decoded from JSON could no longer tell `"data": null` from an absent
-field, since both decode to nil and both would be stored as empty
-bytes where today both are refused; and the empty value would pass
-unless the column carries `required`, which today only adds the
-refusal of a non-nil empty slice but would become the one refusal of
-empty bytes, as it is of `""` for `string`. Unsettled: whether to bind
-nil that way.

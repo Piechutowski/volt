@@ -414,6 +414,9 @@ app/i27_import_no_parens.volt:4:1: error: syntax: expected '(' after import (§i
 db/i281_migration_ref_action_quoted.volt:22:47: error: spec/migrations: "delete" must be a referential action: cascade, restrict, set_null or set_default (§migrations)
 db/i281_migration_ref_action_quoted.volt:22:59: error: spec/migrations: "update" requires a value
 
+## i283_bytes_null_validator_bare
+db/schema.volt:11:16: error: spec/validators: column "thumb" ([]byte, Go rt.Null[[]byte]) but parameter 1 of ThumbSmall is []byte — change the column type or the function: expected func ThumbSmall(rt.Null[[]byte]) error (§validators)
+
 ## i28_composite_pk_model.volt
 app/i28_composite_pk_model.volt:11:12: error: spec/resources: table "pairs" has a composite primary key (a, b); composite keys are not routable (§table-resolution)
 

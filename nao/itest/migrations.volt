@@ -54,3 +54,18 @@ Migration 0003__site_flags {
     weight   float64 [null]
   }
 }
+
+Migration 0004__attachments_and_blobs {
+  create table attachments {
+    id     int    [pk, increment]
+    name   string [unique]
+    body   []byte
+    thumb  []byte [null]
+    digest []byte
+  }
+  create table blobs {
+    hash []byte [pk]
+    tag  []byte [unique]
+    size int    [default: 0]
+  }
+}

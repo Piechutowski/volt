@@ -294,3 +294,23 @@ func (q *Queries) LinkClickPublic(ctx context.Context) ([]LinkClickPublic, error
 	}
 	return out, rows.Err()
 }
+
+const attachmentNamedSQL = `SELECT "id", "name", "body", "thumb", "digest" FROM "attachments" WHERE "name" = ?`
+
+// AttachmentNamed runs the "named" select over attachments (spec §selects-over-groups).
+func (q *Queries) AttachmentNamed(ctx context.Context, name string) ([]Attachment, error) {
+	rows, err := q.db.QueryContext(ctx, attachmentNamedSQL, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Attachment{}
+	for rows.Next() {
+		v, err := attachmentScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}

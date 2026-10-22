@@ -40,7 +40,7 @@ func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 
 func postScan(r rt.Row) (Post, error) {
 	var v Post
-	err := r.Scan(&v.ID, &v.Slug, &v.Words, &v.Score, &v.Cover, (*string)(&v.State), &v.Reviewed, (*string)(&v.Audience), &v.Tier, &v.Price, &v.Rank, &v.Draft, &v.Caption, &v.Ratio, &v.Weight, &v.Scale, &v.Kilo, &v.Shift, &v.Hits, &v.Views, &v.Label, &v.Flag, &v.Secret)
+	err := r.Scan(&v.ID, &v.Slug, &v.Words, &v.Score, (*rt.Bytes)(&v.Cover), (*string)(&v.State), &v.Reviewed, (*string)(&v.Audience), &v.Tier, &v.Price, &v.Rank, &v.Draft, &v.Caption, &v.Ratio, &v.Weight, &v.Scale, &v.Kilo, &v.Shift, &v.Hits, &v.Views, &v.Label, &v.Flag, &v.Secret)
 	return v, rt.Refused("Post", err)
 }
 
@@ -125,7 +125,7 @@ func (q *Queries) PostCreate(ctx context.Context, c PostChangeset) (Post, error)
 		cols, args = append(cols, "score"), append(args, v.Score)
 	}
 	if c.set[4] {
-		cols, args = append(cols, "cover"), append(args, v.Cover)
+		cols, args = append(cols, "cover"), append(args, rt.Bytes(v.Cover))
 	}
 	if c.set[5] {
 		cols, args = append(cols, "state"), append(args, v.State)
@@ -212,7 +212,7 @@ func (q *Queries) PostUpdate(ctx context.Context, c PostChangeset) (Post, error)
 		cols, args = append(cols, "score"), append(args, v.Score)
 	}
 	if c.set[4] {
-		cols, args = append(cols, "cover"), append(args, v.Cover)
+		cols, args = append(cols, "cover"), append(args, rt.Bytes(v.Cover))
 	}
 	if c.set[5] {
 		cols, args = append(cols, "state"), append(args, v.State)

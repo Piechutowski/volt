@@ -1180,3 +1180,379 @@ func (c SiteFlagChangeset) Err() error {
 	}
 	return &rt.Invalid{Model: "SiteFlag", Fields: c.Errors()}
 }
+
+// Attachment is a row of the attachments table.
+type Attachment struct {
+	ID     int             `db:"id" json:"id"`
+	Name   string          `db:"name" json:"name"`
+	Body   []byte          `db:"body" json:"body"`
+	Thumb  rt.Null[[]byte] `db:"thumb" json:"thumb"`
+	Digest []byte          `db:"digest" json:"digest"`
+}
+
+// AttachmentColumn is a column handle of Attachment, the element of a Cast allow list
+// (spec §changesets).
+type AttachmentColumn = rt.ColumnOf[Attachment]
+
+// AttachmentParams is a attachments write body as the wire carries it (spec §changesets).
+type AttachmentParams = rt.Params[Attachment]
+
+// Typed column handles of Attachment (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter Attachment
+// queries; mixing models is a compile error.
+var (
+	AttachmentID     = rt.Column[Attachment, int]{Name: "id"}
+	AttachmentName   = rt.Column[Attachment, string]{Name: "name"}
+	AttachmentBody   = rt.Column[Attachment, []byte]{Name: "body"}
+	AttachmentThumb  = rt.NullColumn[Attachment, []byte]{Column: rt.Column[Attachment, []byte]{Name: "thumb"}}
+	AttachmentDigest = rt.Column[Attachment, []byte]{Name: "digest"}
+)
+
+// AttachmentChangeset carries a attachments row, the changes proposed to it and the
+// errors found so far (spec §changesets). It is a value: every method
+// returns a new changeset and leaves its receiver as it was.
+type AttachmentChangeset struct {
+	data  Attachment
+	vals  Attachment
+	row   bool
+	set   [5]bool
+	errs  []rt.FieldError
+	valid []rt.FieldError
+}
+
+// AttachmentNew starts a changeset for a attachments row to create, the schema's literal
+// defaults in place (spec §changesets).
+func AttachmentNew() AttachmentChangeset { return AttachmentChangeset{} }
+
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
+func (r Attachment) Changeset() AttachmentChangeset { return AttachmentChangeset{data: r, row: true} }
+
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
+func (c AttachmentChangeset) From(r Attachment) AttachmentChangeset {
+	c = c.NameSet(r.Name)
+	c = c.BodySet(r.Body)
+	c = c.ThumbSet(r.Thumb)
+	c = c.DigestSet(r.Digest)
+	return c
+}
+
+// NameSet sets name and marks it (spec §changesets).
+func (c AttachmentChangeset) NameSet(v string) AttachmentChangeset {
+	c.vals.Name, c.set[1] = v, true
+	return c
+}
+
+// BodySet sets body and marks it; nil is empty bytes (spec §columns).
+func (c AttachmentChangeset) BodySet(v []byte) AttachmentChangeset {
+	c.vals.Body, c.set[2] = v, true
+	return c
+}
+
+// ThumbSet sets thumb and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
+func (c AttachmentChangeset) ThumbSet(v rt.Null[[]byte]) AttachmentChangeset {
+	c.vals.Thumb, c.set[3] = v, true
+	return c
+}
+
+// DigestSet sets digest and marks it; nil is empty bytes (spec §columns).
+func (c AttachmentChangeset) DigestSet(v []byte) AttachmentChangeset {
+	c.vals.Digest, c.set[4] = v, true
+	return c
+}
+
+// Cast sets every column of allow that p carries, recording a cast
+// error for a value that does not convert and an unknown_field error
+// for a key that names no column (spec §changesets).
+func (c AttachmentChangeset) Cast(p AttachmentParams, allow ...AttachmentColumn) AttachmentChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "name", "body", "thumb", "digest")...)
+	for _, col := range allow {
+		switch col.ColumnName() {
+		case "name":
+			if v, ok, err := rt.Field(p, "name", "string", false, func(r *Attachment) string { return r.Name }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "name")
+			} else if ok {
+				c = c.NameSet(v)
+			}
+		case "body":
+			if v, ok, err := rt.Field(p, "body", "[]byte", false, func(r *Attachment) []byte { return r.Body }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "body")
+			} else if ok {
+				c = c.BodySet(v)
+			}
+		case "thumb":
+			if v, ok, err := rt.Field(p, "thumb", "[]byte", true, func(r *Attachment) rt.Null[[]byte] { return r.Thumb }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "thumb")
+			} else if ok {
+				c = c.ThumbSet(v)
+			}
+		case "digest":
+			if v, ok, err := rt.Field(p, "digest", "[]byte", false, func(r *Attachment) []byte { return r.Digest }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "digest")
+			} else if ok {
+				c = c.DigestSet(v)
+			}
+		}
+	}
+	return c
+}
+
+// Changed reports whether col is marked (spec §changesets).
+func (c AttachmentChangeset) Changed(col AttachmentColumn) bool {
+	switch col.ColumnName() {
+	case "id":
+		return c.set[0]
+	case "name":
+		return c.set[1]
+	case "body":
+		return c.set[2]
+	case "thumb":
+		return c.set[3]
+	case "digest":
+		return c.set[4]
+	}
+	return false
+}
+
+// Row is the data with the marked values applied (spec §changesets).
+func (c AttachmentChangeset) Row() Attachment {
+	r := c.data
+	if c.set[1] {
+		r.Name = c.vals.Name
+	}
+	if c.set[2] {
+		r.Body = c.vals.Body
+	}
+	if c.set[3] {
+		r.Thumb = c.vals.Thumb
+	}
+	if c.set[4] {
+		r.Digest = c.vals.Digest
+	}
+	return r
+}
+
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
+func (c AttachmentChangeset) Params() AttachmentParams {
+	var marks []rt.Mark
+	if c.set[1] {
+		marks = append(marks, rt.Mark{Wire: "name", Value: c.vals.Name})
+	}
+	if c.set[2] {
+		marks = append(marks, rt.Mark{Wire: "body", Value: c.vals.Body})
+	}
+	if c.set[3] {
+		marks = append(marks, rt.Mark{Wire: "thumb", Value: c.vals.Thumb})
+	}
+	if c.set[4] {
+		marks = append(marks, rt.Mark{Wire: "digest", Value: c.vals.Digest})
+	}
+	return rt.ParamsOf(c.Row(), marks...)
+}
+
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
+func (c AttachmentChangeset) ErrorAdd(col AttachmentColumn, msg string) AttachmentChangeset {
+	return c.errorAdd("custom", msg, col.ColumnName())
+}
+
+func (c AttachmentChangeset) errorAdd(check, msg string, cols ...string) AttachmentChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.FieldError{Check: check, Columns: cols, Message: msg})
+	return c
+}
+
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
+func (c AttachmentChangeset) Errors() []rt.FieldError {
+	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
+}
+
+// Valid reports whether no field error was recorded (spec §changesets).
+func (c AttachmentChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
+
+// Err is nil when c is valid and otherwise the *rt.Invalid carrying its
+// field errors (spec §changesets).
+func (c AttachmentChangeset) Err() error {
+	if c.Valid() {
+		return nil
+	}
+	return &rt.Invalid{Model: "Attachment", Fields: c.Errors()}
+}
+
+// Blob is a row of the blobs table.
+type Blob struct {
+	Hash []byte `db:"hash" json:"hash"`
+	Tag  []byte `db:"tag" json:"tag"`
+	Size int    `db:"size" json:"size"`
+}
+
+// BlobColumn is a column handle of Blob, the element of a Cast allow list
+// (spec §changesets).
+type BlobColumn = rt.ColumnOf[Blob]
+
+// BlobParams is a blobs write body as the wire carries it (spec §changesets).
+type BlobParams = rt.Params[Blob]
+
+// Typed column handles of Blob (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter Blob
+// queries; mixing models is a compile error.
+var (
+	BlobHash = rt.Column[Blob, []byte]{Name: "hash"}
+	BlobTag  = rt.Column[Blob, []byte]{Name: "tag"}
+	BlobSize = rt.Column[Blob, int]{Name: "size"}
+)
+
+// BlobChangeset carries a blobs row, the changes proposed to it and the
+// errors found so far (spec §changesets). It is a value: every method
+// returns a new changeset and leaves its receiver as it was.
+type BlobChangeset struct {
+	data  Blob
+	vals  Blob
+	row   bool
+	set   [3]bool
+	errs  []rt.FieldError
+	valid []rt.FieldError
+}
+
+// BlobNew starts a changeset for a blobs row to create, the schema's literal
+// defaults in place (spec §changesets).
+func BlobNew() BlobChangeset { return BlobChangeset{} }
+
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
+func (r Blob) Changeset() BlobChangeset { return BlobChangeset{data: r, row: true} }
+
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
+func (c BlobChangeset) From(r Blob) BlobChangeset {
+	c = c.HashSet(r.Hash)
+	c = c.TagSet(r.Tag)
+	c = c.SizeSet(r.Size)
+	return c
+}
+
+// HashSet sets hash and marks it; nil is empty bytes (spec §columns).
+func (c BlobChangeset) HashSet(v []byte) BlobChangeset {
+	c.vals.Hash, c.set[0] = v, true
+	return c
+}
+
+// TagSet sets tag and marks it; nil is empty bytes (spec §columns).
+func (c BlobChangeset) TagSet(v []byte) BlobChangeset {
+	c.vals.Tag, c.set[1] = v, true
+	return c
+}
+
+// SizeSet sets size and marks it (spec §changesets).
+func (c BlobChangeset) SizeSet(v int) BlobChangeset {
+	c.vals.Size, c.set[2] = v, true
+	return c
+}
+
+// Cast sets every column of allow that p carries, recording a cast
+// error for a value that does not convert and an unknown_field error
+// for a key that names no column (spec §changesets).
+func (c BlobChangeset) Cast(p BlobParams, allow ...BlobColumn) BlobChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "hash", "tag", "size")...)
+	for _, col := range allow {
+		switch col.ColumnName() {
+		case "hash":
+			if v, ok, err := rt.Field(p, "hash", "[]byte", false, func(r *Blob) []byte { return r.Hash }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "hash")
+			} else if ok {
+				c = c.HashSet(v)
+			}
+		case "tag":
+			if v, ok, err := rt.Field(p, "tag", "[]byte", false, func(r *Blob) []byte { return r.Tag }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "tag")
+			} else if ok {
+				c = c.TagSet(v)
+			}
+		case "size":
+			if v, ok, err := rt.Field(p, "size", "int", false, func(r *Blob) int { return r.Size }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "size")
+			} else if ok {
+				c = c.SizeSet(v)
+			}
+		}
+	}
+	return c
+}
+
+// Changed reports whether col is marked (spec §changesets).
+func (c BlobChangeset) Changed(col BlobColumn) bool {
+	switch col.ColumnName() {
+	case "hash":
+		return c.set[0]
+	case "tag":
+		return c.set[1]
+	case "size":
+		return c.set[2]
+	}
+	return false
+}
+
+// Row is the data with the marked values applied (spec §changesets).
+func (c BlobChangeset) Row() Blob {
+	r := c.data
+	if c.set[0] {
+		r.Hash = c.vals.Hash
+	}
+	if c.set[1] {
+		r.Tag = c.vals.Tag
+	}
+	if c.set[2] {
+		r.Size = c.vals.Size
+	}
+	return r
+}
+
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
+func (c BlobChangeset) Params() BlobParams {
+	var marks []rt.Mark
+	if c.set[0] {
+		marks = append(marks, rt.Mark{Wire: "hash", Value: c.vals.Hash})
+	}
+	if c.set[1] {
+		marks = append(marks, rt.Mark{Wire: "tag", Value: c.vals.Tag})
+	}
+	if c.set[2] {
+		marks = append(marks, rt.Mark{Wire: "size", Value: c.vals.Size})
+	}
+	return rt.ParamsOf(c.Row(), marks...)
+}
+
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
+func (c BlobChangeset) ErrorAdd(col BlobColumn, msg string) BlobChangeset {
+	return c.errorAdd("custom", msg, col.ColumnName())
+}
+
+func (c BlobChangeset) errorAdd(check, msg string, cols ...string) BlobChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.FieldError{Check: check, Columns: cols, Message: msg})
+	return c
+}
+
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
+func (c BlobChangeset) Errors() []rt.FieldError {
+	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
+}
+
+// Valid reports whether no field error was recorded (spec §changesets).
+func (c BlobChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
+
+// Err is nil when c is valid and otherwise the *rt.Invalid carrying its
+// field errors (spec §changesets).
+func (c BlobChangeset) Err() error {
+	if c.Valid() {
+		return nil
+	}
+	return &rt.Invalid{Model: "Blob", Fields: c.Errors()}
+}

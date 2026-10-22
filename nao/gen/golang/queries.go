@@ -73,8 +73,20 @@ type fieldPlan struct {
 	unique     bool
 }
 
+func (f *fieldPlan) plainBytes() bool { return f.goType == "[]byte" }
+
+func (f *fieldPlan) bindOf(expr string) string {
+	if f.plainBytes() {
+		return "rt.Bytes(" + expr + ")"
+	}
+	return expr
+}
+
 func (f *fieldPlan) scanTarget() string {
-	if f.kinded && !f.nullable {
+	switch {
+	case f.plainBytes():
+		return "(*rt.Bytes)(&v." + f.goField + ")"
+	case f.kinded && !f.nullable:
 		return "(*" + f.storage + ")(&v." + f.goField + ")"
 	}
 	return "&v." + f.goField
@@ -271,7 +283,7 @@ func fieldBuild(imports map[string]bool, cd *check.ColumnDef, goFields map[strin
 		imports[typ.imp] = true
 	}
 	goType := typ.name
-	if cd.Nullable && !typ.nilable {
+	if cd.Nullable {
 		goType = "rt.Null[" + goType + "]"
 	}
 
@@ -368,7 +380,7 @@ func (t *tableModel) tableSQL() string { return rt.Ident(t.sqlName) }
 func (t *tableModel) keyPreds() []rt.GenPred {
 	preds := make([]rt.GenPred, len(t.pk))
 	for i, f := range t.pk {
-		preds[i] = rt.Column[rt.Gen, any]{Name: f.colName}.Eq(f.arg)
+		preds[i] = rt.Column[rt.Gen, any]{Name: f.colName}.Eq(f.bindOf(f.arg))
 	}
 	return preds
 }
@@ -401,7 +413,7 @@ func (t *tableModel) getSQL() (string, []string, error) {
 }
 
 func (t *tableModel) getBySQL(f *fieldPlan) (string, []string, error) {
-	by := rt.Column[rt.Gen, any]{Name: f.colName}.Eq(f.arg)
+	by := rt.Column[rt.Gen, any]{Name: f.colName}.Eq(f.bindOf(f.arg))
 	return genRender(rt.SelectRender(t.tableSQL(), t.columnList(), []rt.Opt[rt.Gen]{by}))
 }
 
@@ -646,7 +658,7 @@ func (e *queryEmitter) updateEmit(t *tableModel, lower, tbl string) {
 	b.WriteString("\tif len(cols) == 0 {\n\t\treturn v, nil\n\t}\n")
 	keys := make([]string, len(t.pk))
 	for i, f := range t.pk {
-		fmt.Fprintf(b, "\targs = append(args, c.data.%s)\n", f.goField)
+		fmt.Fprintf(b, "\targs = append(args, %s)\n", f.bindOf("c.data."+f.goField))
 		keys[i] = f.colName
 	}
 	fmt.Fprintf(b, "\trow, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(%sTableSQL, cols, %#v, %sColumnsSQL), args...)\n", lower, keys, lower)
@@ -660,7 +672,7 @@ func markedArgsEmit(b *strings.Builder, t *tableModel) {
 	}
 	b.WriteString("\tvar cols []string\n\tvar args []any\n")
 	for _, f := range settable {
-		fmt.Fprintf(b, "\tif c.set[%d] {\n\t\tcols, args = append(cols, %q), append(args, v.%s)\n\t}\n", t.index(f), f.colName, f.goField)
+		fmt.Fprintf(b, "\tif c.set[%d] {\n\t\tcols, args = append(cols, %q), append(args, %s)\n\t}\n", t.index(f), f.colName, f.bindOf("v."+f.goField))
 	}
 }
 

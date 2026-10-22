@@ -33,6 +33,7 @@ report engine when a consumer exists.
     - [x] NULL has one spelling: `default: null` goes, a record row writes `null`, and an empty field is an error
     - [x] The spec says what the code does: punctuation table, the doubled exclusion backslash, the multi-line string and `import ( db )` examples, §table-resolution clause 2, the empty Reserved headings, version relics
   - [x] Setting names and values are one word: `set_null`, `set_default`, `no_transaction`; `no action` goes
+  - [x] A nullable []byte is rt.Null[[]byte] like every other nullable type; a plain []byte is bytes, and nil writes empty bytes
   - [ ] Step 2, case and names
     - [ ] Volt is case-sensitive. Words that open an element or a block are capitalized (`Table`, `TablePartial`, `Type`, `Ref`, `Group`, `Pred`, `Select`, `Records`, `Indexes`, `Validators`, `Migration`, `Scope`, `Pipeline`, `Project`); every other word is lowercase (settings and values, `true`, `false`, `null`, clause words, route words, migration operations, `package`, `import`); a wrong case is a syntax error naming the right spelling
     - [ ] Identifiers are Go identifiers: quoted identifiers go

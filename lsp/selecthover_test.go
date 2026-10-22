@@ -195,3 +195,24 @@ func TestSelectHoverNullableUnknownFieldType(t *testing.T) {
 		}
 	}
 }
+
+func TestSelectHoverBytesFieldTypes(t *testing.T) {
+	schema := "package db\n\n" +
+		"Table attachments {\n\tid int [pk, increment]\n\tname string\n\tbody []byte\n\tthumb []byte [null]\n}\n\n" +
+		"Select named for attachments where name = :name\n"
+	root := voltProject(t, map[string]string{
+		"go.mod":         "module proj\n",
+		"db/schema.volt": schema,
+	})
+	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), schema)
+	h := d.Hover(posOf(t, schema, "named", 0))
+	if h == nil {
+		t.Fatal("no hover for the named select")
+	}
+	md := h.Contents.(protocol.MarkupContent).Value
+	for _, want := range []string{"\tBody []byte\n", "\tThumb rt.Null[[]byte]\n"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("hover missing %q:\n%s", want, md)
+		}
+	}
+}

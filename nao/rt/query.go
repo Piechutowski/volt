@@ -25,9 +25,9 @@ type Column[M, T any] struct {
 	Name string
 }
 
-// NullColumn is the handle of a nullable column. Comparisons take plain
-// present values (T, not Null[T]); NULL is tested with IsNull/IsNotNull
-// and assigned with SetNull.
+// NullColumn is the handle of a nullable column. Comparisons and Set take
+// present values (T, not Null[T]), so Set(nil) of a []byte is empty bytes;
+// NULL is tested with IsNull/IsNotNull and assigned with SetNull.
 type NullColumn[M, T any] struct {
 	Column[M, T]
 }
@@ -219,7 +219,7 @@ func (p Pred[M]) render(b *strings.Builder, args *[]any) error {
 	switch p.kind {
 	case predCmp:
 		b.WriteString(Ident(p.col) + " " + p.op + " ?")
-		*args = append(*args, p.vals[0])
+		*args = argsAppend(*args, p.vals[0])
 	case predColCmp:
 		b.WriteString(Ident(p.col) + " " + p.op + " " + Ident(p.col2))
 	case predIn:
@@ -236,10 +236,10 @@ func (p Pred[M]) render(b *strings.Builder, args *[]any) error {
 			b.WriteString(" NOT")
 		}
 		b.WriteString(" IN (?" + strings.Repeat(", ?", len(p.vals)-1) + ")")
-		*args = append(*args, p.vals...)
+		*args = argsAppend(*args, p.vals...)
 	case predInList:
 		b.WriteString(Ident(p.col) + " IN (SELECT value FROM json_each(?))")
-		*args = append(*args, p.vals[0])
+		*args = argsAppend(*args, p.vals[0])
 	case predNull:
 		b.WriteString(Ident(p.col) + " IS")
 		if p.not {
@@ -248,7 +248,7 @@ func (p Pred[M]) render(b *strings.Builder, args *[]any) error {
 		b.WriteString(" NULL")
 	case predRaw:
 		b.WriteString("(" + p.raw + ")")
-		*args = append(*args, p.vals...)
+		*args = argsAppend(*args, p.vals...)
 	case predAnd, predOr:
 		sep := " AND "
 		if p.kind == predOr {
@@ -469,7 +469,7 @@ func UpdateRender[M any](table string, set []Assign[M], preds []Pred[M]) (string
 			b.WriteString(", ")
 		}
 		b.WriteString(Ident(a.col) + " = ?")
-		args = append(args, a.val)
+		args = argsAppend(args, a.val)
 	}
 	where, wargs, err := WhereRender(preds)
 	if err != nil {

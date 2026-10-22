@@ -840,3 +840,301 @@ func (q *Queries) SiteFlagDelete(ctx context.Context, id int) error {
 	}
 	return nil
 }
+
+func attachmentScan(r rt.Row) (Attachment, error) {
+	var v Attachment
+	err := r.Scan(&v.ID, &v.Name, (*rt.Bytes)(&v.Body), &v.Thumb, (*rt.Bytes)(&v.Digest))
+	return v, rt.Refused("Attachment", err)
+}
+
+const attachmentGetSQL = `SELECT "id", "name", "body", "thumb", "digest" FROM "attachments" WHERE "id" = ?`
+
+// AttachmentGet fetches the attachments row with the given primary key, or rt.ErrNotFound.
+func (q *Queries) AttachmentGet(ctx context.Context, id int) (Attachment, error) {
+	return attachmentScan(q.db.QueryRowContext(ctx, attachmentGetSQL, id))
+}
+
+// AttachmentGetMany fetches the attachments rows whose primary key is in ids, in
+// database order. Missing keys are not an error; they are just absent.
+func (q *Queries) AttachmentGetMany(ctx context.Context, ids []int) ([]Attachment, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	query, args, err := rt.SelectRender(attachmentTableSQL, attachmentColumnsSQL, []rt.Opt[Attachment]{AttachmentID.In(ids...)})
+	if err != nil {
+		return nil, err
+	}
+	rows, err := q.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Attachment{}
+	for rows.Next() {
+		v, err := attachmentScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+const attachmentGetByNameSQL = `SELECT "id", "name", "body", "thumb", "digest" FROM "attachments" WHERE "name" = ?`
+
+// AttachmentGetByName fetches the attachments row with the given name (a unique column),
+// or rt.ErrNotFound.
+func (q *Queries) AttachmentGetByName(ctx context.Context, name string) (Attachment, error) {
+	return attachmentScan(q.db.QueryRowContext(ctx, attachmentGetByNameSQL, name))
+}
+
+const attachmentListSQL = `SELECT "id", "name", "body", "thumb", "digest" FROM "attachments"`
+
+// AttachmentList returns every attachments row.
+func (q *Queries) AttachmentList(ctx context.Context) ([]Attachment, error) {
+	rows, err := q.db.QueryContext(ctx, attachmentListSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Attachment{}
+	for rows.Next() {
+		v, err := attachmentScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// AttachmentCreate validates c and inserts its marked columns, returning the
+// stored attachments row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) AttachmentCreate(ctx context.Context, c AttachmentChangeset) (Attachment, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return Attachment{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "name"), append(args, v.Name)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "body"), append(args, rt.Bytes(v.Body))
+	}
+	if c.set[3] {
+		cols, args = append(cols, "thumb"), append(args, v.Thumb)
+	}
+	if c.set[4] {
+		cols, args = append(cols, "digest"), append(args, rt.Bytes(v.Digest))
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(attachmentTableSQL, cols, attachmentColumnsSQL), args...)
+	if err != nil {
+		return Attachment{}, err
+	}
+	return attachmentScan(row)
+}
+
+// AttachmentUpdate validates c and writes its marked columns to the attachments row it
+// was made from, returning the stored row; nothing marked returns the row
+// untouched (spec §changesets).
+func (q *Queries) AttachmentUpdate(ctx context.Context, c AttachmentChangeset) (Attachment, error) {
+	if !c.row {
+		return Attachment{}, rt.ErrNoRow
+	}
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return Attachment{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "name"), append(args, v.Name)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "body"), append(args, rt.Bytes(v.Body))
+	}
+	if c.set[3] {
+		cols, args = append(cols, "thumb"), append(args, v.Thumb)
+	}
+	if c.set[4] {
+		cols, args = append(cols, "digest"), append(args, rt.Bytes(v.Digest))
+	}
+	if len(cols) == 0 {
+		return v, nil
+	}
+	args = append(args, c.data.ID)
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(attachmentTableSQL, cols, []string{"id"}, attachmentColumnsSQL), args...)
+	if err != nil {
+		return Attachment{}, err
+	}
+	return attachmentScan(row)
+}
+
+const attachmentDeleteSQL = `DELETE FROM "attachments" WHERE "id" = ?`
+
+// AttachmentDelete removes the identified attachments row; rt.ErrNotFound reports
+// that nothing matched.
+func (q *Queries) AttachmentDelete(ctx context.Context, id int) error {
+	res, err := q.db.ExecContext(ctx, attachmentDeleteSQL, id)
+	if err != nil {
+		return rt.Refused("Attachment", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return rt.ErrNotFound
+	}
+	return nil
+}
+
+func blobScan(r rt.Row) (Blob, error) {
+	var v Blob
+	err := r.Scan((*rt.Bytes)(&v.Hash), (*rt.Bytes)(&v.Tag), &v.Size)
+	return v, rt.Refused("Blob", err)
+}
+
+const blobGetSQL = `SELECT "hash", "tag", "size" FROM "blobs" WHERE "hash" = ?`
+
+// BlobGet fetches the blobs row with the given primary key, or rt.ErrNotFound.
+func (q *Queries) BlobGet(ctx context.Context, hash []byte) (Blob, error) {
+	return blobScan(q.db.QueryRowContext(ctx, blobGetSQL, rt.Bytes(hash)))
+}
+
+// BlobGetMany fetches the blobs rows whose primary key is in hashs, in
+// database order. Missing keys are not an error; they are just absent.
+func (q *Queries) BlobGetMany(ctx context.Context, hashs [][]byte) ([]Blob, error) {
+	if len(hashs) == 0 {
+		return nil, nil
+	}
+	query, args, err := rt.SelectRender(blobTableSQL, blobColumnsSQL, []rt.Opt[Blob]{BlobHash.In(hashs...)})
+	if err != nil {
+		return nil, err
+	}
+	rows, err := q.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Blob{}
+	for rows.Next() {
+		v, err := blobScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+const blobGetByTagSQL = `SELECT "hash", "tag", "size" FROM "blobs" WHERE "tag" = ?`
+
+// BlobGetByTag fetches the blobs row with the given tag (a unique column),
+// or rt.ErrNotFound.
+func (q *Queries) BlobGetByTag(ctx context.Context, tag []byte) (Blob, error) {
+	return blobScan(q.db.QueryRowContext(ctx, blobGetByTagSQL, rt.Bytes(tag)))
+}
+
+const blobListSQL = `SELECT "hash", "tag", "size" FROM "blobs"`
+
+// BlobList returns every blobs row.
+func (q *Queries) BlobList(ctx context.Context) ([]Blob, error) {
+	rows, err := q.db.QueryContext(ctx, blobListSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Blob{}
+	for rows.Next() {
+		v, err := blobScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// BlobCreate validates c and inserts its marked columns, returning the
+// stored blobs row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) BlobCreate(ctx context.Context, c BlobChangeset) (Blob, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return Blob{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[0] {
+		cols, args = append(cols, "hash"), append(args, rt.Bytes(v.Hash))
+	}
+	if c.set[1] {
+		cols, args = append(cols, "tag"), append(args, rt.Bytes(v.Tag))
+	}
+	if c.set[2] {
+		cols, args = append(cols, "size"), append(args, v.Size)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(blobTableSQL, cols, blobColumnsSQL), args...)
+	if err != nil {
+		return Blob{}, err
+	}
+	return blobScan(row)
+}
+
+// BlobUpdate validates c and writes its marked columns to the blobs row it
+// was made from, returning the stored row; nothing marked returns the row
+// untouched (spec §changesets).
+func (q *Queries) BlobUpdate(ctx context.Context, c BlobChangeset) (Blob, error) {
+	if !c.row {
+		return Blob{}, rt.ErrNoRow
+	}
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return Blob{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[0] {
+		cols, args = append(cols, "hash"), append(args, rt.Bytes(v.Hash))
+	}
+	if c.set[1] {
+		cols, args = append(cols, "tag"), append(args, rt.Bytes(v.Tag))
+	}
+	if c.set[2] {
+		cols, args = append(cols, "size"), append(args, v.Size)
+	}
+	if len(cols) == 0 {
+		return v, nil
+	}
+	args = append(args, rt.Bytes(c.data.Hash))
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(blobTableSQL, cols, []string{"hash"}, blobColumnsSQL), args...)
+	if err != nil {
+		return Blob{}, err
+	}
+	return blobScan(row)
+}
+
+const blobDeleteSQL = `DELETE FROM "blobs" WHERE "hash" = ?`
+
+// BlobDelete removes the identified blobs row; rt.ErrNotFound reports
+// that nothing matched.
+func (q *Queries) BlobDelete(ctx context.Context, hash []byte) error {
+	res, err := q.db.ExecContext(ctx, blobDeleteSQL, rt.Bytes(hash))
+	if err != nil {
+		return rt.Refused("Blob", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return rt.ErrNotFound
+	}
+	return nil
+}

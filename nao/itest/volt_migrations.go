@@ -81,6 +81,27 @@ var Migrations = []rt.Migration{
 			`DROP TABLE site_flags`,
 		},
 	},
+	{
+		Name: "0004__attachments_and_blobs",
+		Up: []string{
+			`CREATE TABLE attachments (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  body BLOB NOT NULL,
+  thumb BLOB,
+  digest BLOB NOT NULL
+)`,
+			`CREATE TABLE blobs (
+  hash BLOB PRIMARY KEY NOT NULL,
+  tag BLOB NOT NULL UNIQUE,
+  size INTEGER NOT NULL DEFAULT 0
+)`,
+		},
+		Down: []string{
+			`DROP TABLE blobs`,
+			`DROP TABLE attachments`,
+		},
+	},
 }
 
 // Migrate applies every pending migration of Migrations to db (spec

@@ -146,7 +146,7 @@ func (c PostChangeset) ScoreSet(v float64) PostChangeset {
 	return c
 }
 
-// CoverSet sets cover and marks it (spec §changesets).
+// CoverSet sets cover and marks it; nil is empty bytes (spec §columns).
 func (c PostChangeset) CoverSet(v []byte) PostChangeset {
 	c.vals.Cover, c.set[4] = v, true
 	return c

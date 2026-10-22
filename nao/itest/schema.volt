@@ -109,3 +109,23 @@ Table site_flags {
   ratio    Ratio
   weight   Ratio    [null]
 }
+
+// Bytes (spec §columns rule 2, §nullability): a []byte column without
+// null is bytes and nil writes empty bytes, one with null is
+// rt.Null[[]byte], and required is the one refusal of empty bytes.
+Table attachments {
+  id     int    [pk, increment]
+  name   string [unique]
+  body   []byte
+  thumb  []byte [null]
+  digest []byte [required]
+}
+
+Select named for attachments where name = :name
+
+// A []byte key binds as every plain []byte does, on every key path.
+Table blobs {
+  hash []byte [pk]
+  tag  []byte [unique]
+  size int    [default: 0]
+}

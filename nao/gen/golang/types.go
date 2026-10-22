@@ -9,13 +9,12 @@ import (
 )
 
 type goType struct {
-	name    string
-	imp     string
-	nilable bool
+	name string
+	imp  string
 }
 
 func typeOf(ct check.ColumnType) goType {
-	return goType{name: ct.Go, imp: importKey(ct), nilable: ct.Nilable()}
+	return goType{name: ct.Go, imp: importKey(ct)}
 }
 
 func importKey(ct check.ColumnType) string {

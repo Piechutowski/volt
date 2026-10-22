@@ -898,7 +898,7 @@ func (c PostChangeset) CoverSet(v []byte) PostChangeset { c.vals.Cover, c.set[4]
 func (r Post) Changeset() PostChangeset { r.Cover = bytes.Clone(r.Cover); return PostChangeset{data: r, row: true} }
 func (c PostChangeset) Row() Post { r := c.row(); r.Cover = bytes.Clone(r.Cover); return r } // row() internal
 ```
-Validators get bytes.Clone(v.X); rt.NullClone covers rt.Null[[]byte]. FieldErrorsAppend and Details apply slices.Clone to Columns; After, OrderBy and Raw apply slices.Clone to their variadics. bytes.Clone(nil) is nil, so "nil is NULL" still holds.
+Validators get bytes.Clone(v.X); rt.NullClone covers rt.Null[[]byte]. FieldErrorsAppend and Details apply slices.Clone to Columns; After, OrderBy and Raw apply slices.Clone to their variadics. bytes.Clone(nil) is nil, which binds as empty bytes as the original did (§columns rule 2), so cloning changes nothing stored.
 
 **Cost.** 3-4 emission sites, emitted only for []byte fields (bytes is stdlib, so the import rule allows it); 5 rt constructors and helpers; goldens of tables with []byte columns; one clause in §changesets rule 1. One copy per set and per public Row() call. A declared type stored as []byte is not covered unless the generator learns its underlying type, so the spec should say declared types must behave as values.
 
@@ -1029,13 +1029,13 @@ A zero Status counts as 500. ProblemOf can be table-tested without httptest.
 
 **Cost.** 3 lines in middleware.go and one test.
 
-### 18. [do] nao/rt/null.go:50 `var jsonNull`, returned by MarshalJSON (:55) and compared against in UnmarshalJSON (:62) and rt.Field (nao/rt/changeset.go:312)
+### 18. [do] nao/rt/null.go:74 `var jsonNull`, returned by MarshalJSON (:80) and compared against in UnmarshalJSON (:87) and rt.Field (nao/rt/changeset.go:312)
 
 **Effect.** MarshalJSON returns the package's own slice, so any caller holding the result can change how NULL marshals and decodes for the whole process.
 
 **Bug.** Demo purity-bugs/null: one b[0] = 'N' on the bytes MarshalJSON returned is enough. Afterwards every rt.Null fails to marshal ("invalid character 'N'"), a JSON null decodes as Valid:true, and Cast stops refusing null on non-nullable columns. The trigger is rare (a direct caller mutating the result); the fix is trivial.
 
-**Pure form.** `func (n Null[T]) MarshalJSON() ([]byte, error) { if !n.Valid { return []byte("null"), nil }; return json.Marshal(n.V) }`, with both comparisons made against a constant string.
+**Pure form.** `func (n Null[T]) MarshalJSON() ([]byte, error) { if !n.Valid { return []byte("null"), nil }; return json.Marshal(bytesWrap(n.V)) }`, with both comparisons made against a constant string.
 
 **Cost.** Three lines, and one 4-byte allocation per NULL marshalled.
 

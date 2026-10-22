@@ -74,3 +74,24 @@ func (c SiteFlagChangeset) Validate() SiteFlagChangeset {
 	c.valid = nil
 	return c
 }
+
+// Validate runs required and the validators of attachments over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
+func (c AttachmentChangeset) Validate() AttachmentChangeset {
+	v := c.Row()
+	var errs []rt.FieldError
+	if len(v.Digest) == 0 {
+		errs = append(errs, rt.FieldError{Check: "required", Columns: []string{"digest"}, Message: "digest is required"})
+	}
+	c.valid = errs
+	return c
+}
+
+// Validate runs required and the validators of blobs over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
+func (c BlobChangeset) Validate() BlobChangeset {
+	c.valid = nil
+	return c
+}

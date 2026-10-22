@@ -27,10 +27,6 @@ func (t ColumnType) Known() bool { return t.Storage != "" }
 // type, which database/sql converts by kind (spec §types).
 func (t ColumnType) Kinded() bool { return t.Decl != nil && t.Decl.Kinded }
 
-// Nilable reports whether the Go type's nil already expresses NULL, so a
-// nullable column stays bare instead of rt.Null[T] (spec §mapping-to-go).
-func (t ColumnType) Nilable() bool { return t.Storage == "[]byte" && t.Decl == nil }
-
 // RequiredKind reports how the type spells "non-empty": "text" (not ”),
 // "numeric" (not 0) or "bytes" (length > 0); false for a type with no
 // empty value (spec §columns).

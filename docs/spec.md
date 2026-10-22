@@ -754,14 +754,22 @@ column setting  = "pk"
    (§predicates).
 2. **Nullability.** A column is NOT NULL unless it carries `null`,
    which admits NULL. This mirrors Go, where a value is never nil unless
-   its type says so. `[]byte` is the type that says so: its field is
-   `[]byte` with or without `null`, and nil binds as NULL
-   (§mapping-to-go), so a `[]byte` column without `null` refuses nil,
-   its Go zero value, as a `not_null` field error when a write sends
-   it (§changesets), and a non-nil empty slice stores empty bytes. A
-   value of a declared type (§types) whose `driver.Valuer` returns nil
-   binds as NULL the same way. A key column, one carrying `pk` or a
-   member of a `[pk]` index (§indexes), MUST NOT carry `null`.
+   its type says so, and it holds for every type alike: a column that
+   carries `null` is `rt.Null[T]`, `[]byte` among them, and NULL is
+   only an invalid `rt.Null` (§nullability). A `[]byte` field is
+   therefore bytes and never NULL: nil and a non-nil empty slice are
+   one value, empty bytes, which every bind of a `[]byte` writes as
+   `X''`, in a changeset write, a key, the dynamic layer and a valid
+   `rt.Null[[]byte]` alike, and which every read hands back as a
+   non-nil empty slice whatever the driver returns (§nullability). The
+   zero value of a `[]byte` column without `null` thus satisfies NOT
+   NULL, as every other built-in type's does, and `required` is the one
+   refusal of empty bytes, as it is of `""` for `string`. A declared
+   type (§types) stored as `[]byte` is not a plain `[]byte`: its own
+   `driver.Valuer` decides what it binds, and a value of any declared
+   type whose `driver.Valuer` returns nil binds as NULL. A key column,
+   one carrying `pk` or a member of a `[pk]` index (§indexes), MUST NOT
+   carry `null`.
 3. **`pk`** marks a single-column primary key. A composite primary key
    MUST be expressed as an index with the `pk` setting (§indexes). A
    table has at most one primary key, one column carrying `pk` or one
@@ -791,11 +799,13 @@ column setting  = "pk"
 > declares that a value must be present
 > in the zero-value sense: a zero value that is set, or decoded into a
 > row and passed to `From` (§changesets), satisfies a NOT NULL column,
-> except one that binds as NULL (nil for `[]byte`, rule 2), so
+> nil for `[]byte` among them since it binds as empty bytes (rule 2),
+> unless a declared type's `driver.Valuer` binds it as NULL, so
 > `required` is the word for "and not that either". It is the one built-in rule
 > of `Validate` (§changesets), which the schema switches on per column,
 > the field error with check `required`: it refuses `""` for `string`,
-> `0` for `int` and `float64`, a zero length for `[]byte`, and for a
+> `0` for `int` and `float64`, a zero length for `[]byte` (nil or
+> empty, and no other value), and for a
 > declared type the empty value of its storage type. It is an error on a
 > `null` column, which has no empty value to refuse since NULL is
 > absence, on a `default:` or `increment` column, and on `bool` and
@@ -1091,7 +1101,11 @@ storage type = column type ;
    fails to compile at the assertion, naming the type. Storage
    `time.Time` and `[]byte` is never kinded: a struct does not convert
    by kind, and a named byte slice scans by reflection without copying
-   the driver's buffer. The declaration is read by its spelling, as a
+   the driver's buffer. A type stored as `[]byte` is therefore never a
+   plain `[]byte` (§columns rule 2): its `driver.Valuer` and
+   `sql.Scanner` are the authority on what it binds and reads, nil and
+   NULL included, and nothing generated code or the runtime does to a
+   plain `[]byte` touches it. The declaration is read by its spelling, as a
    validator's signature is (§validators), and the Go compiler remains
    the authority on what it denotes. A column of a declared type that
    carries `null` is `rt.Null[pkg.Name]`.
@@ -1938,7 +1952,10 @@ for a format suffix.
 3. **GOB is the Go-native arm**: a client that imports the generated
    models package decodes rows into the same types the server
    encoded, with no schema on the wire. JSON is what browsers, curl and
-   every other language see.
+   every other language see. GOB carries no empty slice, so empty bytes
+   arrive as nil, which is the same value, empty bytes, in either kind
+   of `[]byte` column, and a NULL arrives as an invalid `rt.Null`
+   (§nullability).
 4. The runtime exposes the same rules to hand-written controllers as
    `volt.Negotiate`, `volt.Render`, `volt.RenderStatus` and
    `volt.Decode`, so a controller route can speak both formats without
@@ -2838,7 +2855,8 @@ user, err := q.UserUpdate(ctx, cs)
 5. **`Params`.** `rt.Params[M]` is a write body as the wire carries
    it, in either format (§formats): as JSON, an object of the changed
    columns keyed by their wire names (the `json` tag, §struct-tags),
-   each value as `encoding/json` renders it and `null` for NULL, a
+   each value as `encoding/json` renders it and `null` for NULL, but a
+   nil `[]byte` as `""`, since nil is empty bytes (§columns), and a
    marked column always among them whatever else its tag says; as
    GOB, the row and the list of marked columns, typed by the shared
    model. `c.Params()` builds one from the marks of `c`, each an
@@ -3481,7 +3499,7 @@ the set.
 | Declared | Go |
 |---|---|
 | `bool`, `int`, `float64`, `string`, `time.Time` | the same |
-| `[]byte` | `[]byte`; nil is NULL, never wrapped |
+| `[]byte` | `[]byte`, bytes and never NULL: nil is empty bytes (§nullability) |
 | declared `Type pkg.Name` (§types) | `pkg.Name`, imported as `import pkg "path"` |
 | declared `Type Name` (§types) | `Name`, the data package's own type, named unqualified |
 
@@ -3492,18 +3510,32 @@ SQLite INTEGER range there, and only there.
 ### Nullability
 
 A column that carries `null` (§columns) is nullable and generated as
-`rt.Null[T]`, a value plus a validity bit, never a pointer. Every other
-column is NOT NULL and generated as `T`.
-`[]byte`, where `nil` already expresses NULL, stays bare either way, so
-a `[]byte` column without `null` refuses nil, its Go zero value, as a
-`not_null` field error (§changesets), and a non-nil empty slice stores
-empty bytes (§columns). GOB does not carry an empty slice, so an
-empty slice in a GOB write body (§formats) arrives as nil, which is
-NULL: stored as NULL in a column that carries `null`, refused in one
-without. A nullable
+`rt.Null[T]`, a value plus a validity bit, never a pointer, for every
+type, `[]byte` included (`rt.Null[[]byte]`). Every other column is NOT
+NULL and generated as `T`. A plain `[]byte` is therefore bytes and
+never NULL (§columns rule 2), and `rt.Bytes` is the one place that says
+so: generated code binds a `[]byte` field as `rt.Bytes(v.Body)`, whose
+`Value` writes nil as empty bytes, in a changeset write and on every
+key path (`Get`, `GetBy*`, `Update`, `Delete`), and scans it through
+`(*rt.Bytes)(&v.Body)`, which reads empty bytes as a non-nil empty
+slice even when the driver hands back nil, and NULL as an error; the
+dynamic layer binds every plain `[]byte` value through it, an
+operator argument, an `In` item, a `Set`, an `After` key and a `Raw`
+argument alike. `rt.Null[[]byte]` follows the same rule when valid: a
+nil `V` binds as empty bytes, a read is never nil, and JSON renders a
+valid nil `V` as `""` and NULL as `null`, reading `""` back as valid
+empty bytes and `null` as NULL. A plain `[]byte` field renders in JSON
+as `encoding/json` renders it, and every row Volt reads holds non-nil
+bytes, so empty bytes in a response are `""`. GOB does not carry an
+empty slice, so empty bytes in a GOB write body (§formats) arrive as
+nil, which is empty bytes again: stored as empty bytes in either kind
+of column, while NULL arrives as an invalid `rt.Null` and is stored as
+NULL. A declared type stored as `[]byte` binds and reads through its
+own methods (§types). A nullable
 column's handle, declared in `nao_models.go` with the rest
 (§changesets, §generated-query-surface), is an `rt.NullColumn`:
-comparisons take plain `T`, NULL is explicit (`IsNull`, `SetNull`).
+comparisons and `Set` take plain `T`, NULL is explicit (`IsNull`,
+`SetNull`), so `Set(nil)` on a `[]byte` column assigns empty bytes.
 
 ### Names
 

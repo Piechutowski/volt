@@ -173,9 +173,12 @@ func (g *generator) changesetEmit(t *tableModel) {
 	b.WriteString("\treturn c\n}\n\n")
 
 	for _, f := range settable {
-		if f.nullable && !strings.HasPrefix(f.goType, "[]") {
+		switch {
+		case f.nullable:
 			fmt.Fprintf(b, "// %sSet sets %s and marks it; an invalid rt.Null sets NULL (spec\n// §changesets).\n", f.goField, f.colName)
-		} else {
+		case f.plainBytes():
+			fmt.Fprintf(b, "// %sSet sets %s and marks it; nil is empty bytes (spec §columns).\n", f.goField, f.colName)
+		default:
 			fmt.Fprintf(b, "// %sSet sets %s and marks it (spec §changesets).\n", f.goField, f.colName)
 		}
 		fmt.Fprintf(b, "func (c %sChangeset) %sSet(v %s) %sChangeset {\n", m, f.goField, f.goType, m)
@@ -322,7 +325,7 @@ func (g *generator) fieldEmit(cd *check.ColumnDef, fields map[string]string, row
 	}
 
 	goTypeName := typ.name
-	if cd.Nullable && !typ.nilable {
+	if cd.Nullable {
 		goTypeName = "rt.Null[" + goTypeName + "]"
 		g.imports[rtImport] = true
 	}

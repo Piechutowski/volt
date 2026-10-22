@@ -52,3 +52,17 @@ CREATE TABLE site_flags (
   ratio REAL NOT NULL,
   weight REAL
 );
+
+CREATE TABLE attachments (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  body BLOB NOT NULL,
+  thumb BLOB,
+  digest BLOB NOT NULL
+);
+
+CREATE TABLE blobs (
+  hash BLOB PRIMARY KEY NOT NULL,
+  tag BLOB NOT NULL UNIQUE,
+  size INTEGER NOT NULL DEFAULT 0
+);

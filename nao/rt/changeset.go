@@ -206,7 +206,7 @@ func (p *Params[M]) UnmarshalJSON(b []byte) error {
 
 // MarshalJSON writes the object of the marked columns by wire name, each
 // value as encoding/json renders it: an rt.Null as the value or null,
-// []byte as base64, time.Time as RFC 3339.
+// []byte as base64 and nil as "" (spec §columns), time.Time as RFC 3339.
 func (p Params[M]) MarshalJSON() ([]byte, error) {
 	fields := p.fields
 	if p.marks != nil {
@@ -224,7 +224,7 @@ func (p Params[M]) MarshalJSON() ([]byte, error) {
 func marksJSON(marks []Mark) (map[string]json.RawMessage, error) {
 	out := make(map[string]json.RawMessage, len(marks))
 	for _, m := range marks {
-		v, err := json.Marshal(m.Value)
+		v, err := json.Marshal(bytesWrap(m.Value))
 		if err != nil {
 			return nil, err
 		}
