@@ -41,6 +41,7 @@ type voltRef struct {
 type voltDef struct {
 	span  voltSpan
 	table *ast.Table
+	pkg   *lang.Package
 	pipe  *ast.Pipeline
 	group *ast.Group
 	pred  *ast.Pred
@@ -112,7 +113,7 @@ func buildVoltIndex(pr *lang.Project, overlay map[string]string, memo *voltIndex
 		for _, d := range pkg.Merged().Decls {
 			switch d := d.(type) {
 			case *ast.Table:
-				ix.define(voltSym{"table", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), table: d})
+				ix.define(voltSym{"table", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), table: d, pkg: pkg})
 			case *ast.Pipeline:
 				ix.define(voltSym{"pipeline", path, d.Name.Name()}, voltDef{span: spanOf(d.Name), pipe: d})
 			case *ast.Group:
@@ -650,7 +651,7 @@ func tableModelHover(sym voltSym, def voltDef) string {
 	}
 	b.WriteString("\n\n")
 
-	pk, pkType := tablePK(t)
+	pk, pkType := tablePK(def)
 	if pk != "" {
 		if pkType != "" {
 			fmt.Fprintf(&b, "key: `%s` → route parameter type `%s`\n\n", pk, pkType)
@@ -698,29 +699,78 @@ func pipelineHover(sym voltSym, def voltDef) string {
 	return b.String()
 }
 
-func tablePK(t *ast.Table) (name, goType string) {
-	var names []string
-	for _, item := range t.Body {
-		col, ok := item.(*ast.Column)
-		if !ok {
-			continue
-		}
-		if col.Settings.Get("pk") != nil {
-			names = append(names, col.Name.Name())
-		}
-	}
-	if len(names) != 1 {
+// tablePK is a table's single-column key and the route parameter type
+// it gives, nothing for a composite key or none (spec §columns,
+// §table-resolution).
+func tablePK(def voltDef) (name, goType string) {
+	if def.table == nil || def.pkg == nil {
 		return "", ""
 	}
-	name = names[0]
-	for _, item := range t.Body {
-		if col, ok := item.(*ast.Column); ok && col.Name.Name() == name {
-			if lang.KnownParamType(col.Type.String()) {
-				goType = col.Type.String()
+	key := tableKey(def.pkg, def.table)
+	if len(key) != 1 {
+		return "", ""
+	}
+	col := key[0]
+	if lang.KnownParamType(col.Type.String()) {
+		goType = col.Type.String()
+	}
+	return col.Name.Name(), goType
+}
+
+// tableKey is the columns of a table's primary key (spec §columns): the
+// checked table's when the package is checked, else the pk columns of
+// its body with its partials injected in source order, a column the
+// body declares overriding a partial's.
+func tableKey(pkg *lang.Package, d *ast.Table) []*ast.Column {
+	if info := pkg.Schema(); info != nil {
+		if ti := info.Table(d.Name.Name()); ti != nil && ti.Decl == d {
+			var out []*ast.Column
+			for _, cd := range ti.PK() {
+				out = append(out, cd.Col)
+			}
+			return out
+		}
+	}
+	partials := map[string]*ast.TablePartial{}
+	for _, decl := range pkg.Merged().Decls {
+		if p, ok := decl.(*ast.TablePartial); ok {
+			partials[p.Name.Name()] = p
+		}
+	}
+	var order []string
+	byName := map[string]*ast.Column{}
+	direct := map[string]bool{}
+	add := func(col *ast.Column, fromBody bool) {
+		name := col.Name.Name()
+		if _, seen := byName[name]; !seen {
+			order = append(order, name)
+		} else if direct[name] && !fromBody {
+			return
+		}
+		byName[name] = col
+		direct[name] = direct[name] || fromBody
+	}
+	for _, item := range d.Body {
+		switch item := item.(type) {
+		case *ast.Column:
+			add(item, true)
+		case *ast.PartialRef:
+			if p := partials[item.Name.Name()]; p != nil {
+				for _, pit := range p.Body {
+					if col, ok := pit.(*ast.Column); ok {
+						add(col, false)
+					}
+				}
 			}
 		}
 	}
-	return name, goType
+	var out []*ast.Column
+	for _, name := range order {
+		if col := byName[name]; col.Settings.Get("pk") != nil {
+			out = append(out, col)
+		}
+	}
+	return out
 }
 
 func (d *Document) voltRename(pos protocol.Position, newName string) (*protocol.WorkspaceEdit, bool) {
@@ -835,7 +885,7 @@ func (d *Document) packageTableItems(pkgPath, partial string) []protocol.Complet
 				continue
 			}
 			detail := "Table"
-			if pk, goType := tablePK(def.table); pk != "" && goType != "" {
+			if pk, goType := tablePK(def); pk != "" && goType != "" {
 				detail = "Table — key " + pk + " " + goType
 			}
 			rows = append(rows, row{sym.name, detail})

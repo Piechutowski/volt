@@ -1,8 +1,8 @@
 // Keys and indexes (spec §columns, §indexes): the primary key is the
 // columns that carry pk, in the table's column order; a single-column
 // index is the column setting unique or index; an Indexes block holds
-// composite, expression and partial indexes; no two indexes of a table
-// share a name.
+// composite, expression and partial indexes; no two indexes of the
+// schema share a name, and no index takes a table's.
 package check
 
 import (
@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Piechutowski/volt/lang/ast"
+	"github.com/Piechutowski/volt/lang/token"
 )
 
 // PK returns the columns of the table's primary key: the columns that
@@ -138,12 +139,14 @@ func (c *checker) indexPlainCheck(table string, ix *ast.Index) {
 }
 
 // namedIndex is one index of a table as its name is checked: the index,
-// the column whose setting declares it (nil for an Indexes entry), and
-// the partial that brought it (nil for the body's own).
+// the column whose setting declares it (nil for an Indexes entry), the
+// partial that brought it (nil for the body's own), and where a
+// diagnostic about it goes when that is not the index itself.
 type namedIndex struct {
 	ix      *ast.Index
 	col     *ast.Column
 	partial *ast.TablePartial
+	pos     token.Position
 }
 
 func (n namedIndex) describe() string {
@@ -151,6 +154,22 @@ func (n namedIndex) describe() string {
 		return fmt.Sprintf("the %s setting of column %q", columnIndexSetting(n.col).Name, n.col.Name.Name())
 	}
 	return "index " + indexKeyString(n.ix)
+}
+
+func (n namedIndex) at() token.Position {
+	if n.pos.IsValid() {
+		return n.pos
+	}
+	if n.col != nil {
+		return columnIndexSetting(n.col).Pos()
+	}
+	return n.ix.Pos()
+}
+
+// indexNamed reports whether an index of an Indexes block takes part in
+// the name rule: one carrying pk is the error of §indexes rule 5 alone.
+func indexNamed(ix *ast.Index) bool {
+	return ix.Settings.Get("pk") == nil
 }
 
 // indexNamesCheck enforces that no two indexes of a table share a name,
@@ -181,7 +200,9 @@ func (c *checker) partialIndexNamesCheck(partial string, cols []*ast.Column, ind
 		}
 	}
 	for _, ix := range indexes {
-		all = append(all, namedIndex{ix: ix})
+		if indexNamed(ix) {
+			all = append(all, namedIndex{ix: ix})
+		}
 	}
 	c.indexNamesDistinct(all, nameScope{table: "<table>", partial: partial})
 }
@@ -194,11 +215,19 @@ type nameScope struct {
 	partial string
 }
 
-func (s nameScope) subject(name string) string {
+func (s nameScope) subject(first, second string) string {
+	names := namesQuote(first, second)
 	if s.partial != "" {
-		return fmt.Sprintf("TablePartial %q declares two indexes named %q in every table that injects it", s.partial, name)
+		return fmt.Sprintf("TablePartial %q declares two indexes named %s in every table that injects it", s.partial, names)
 	}
-	return fmt.Sprintf("table %q has two indexes named %q", s.table, name)
+	return fmt.Sprintf("table %q has two indexes named %s", s.table, names)
+}
+
+func (s nameScope) advice(a, b namedIndex) string {
+	if s.partial != "" {
+		return "declare one of them in a table body instead, since a name: written in a TablePartial is the same in every table that injects it"
+	}
+	return nameAdvice(a, b)
 }
 
 // reported says whether a pair of a table's indexes of one name is
@@ -215,26 +244,202 @@ func (s nameScope) reported(a, b namedIndex) bool {
 }
 
 func (c *checker) indexNamesDistinct(all []namedIndex, s nameScope) {
-	seen := map[string]namedIndex{}
+	type entry struct {
+		n    namedIndex
+		name string
+	}
+	seen := map[string]entry{}
 	for _, n := range all {
 		name, ok := IndexName(s.table, n.ix)
-		if !ok {
+		if !ok || name == "" {
 			continue
 		}
-		first, dup := seen[name]
+		key := sqliteFold(name)
+		first, dup := seen[key]
 		if !dup {
-			seen[name] = n
+			seen[key] = entry{n, name}
 			continue
 		}
-		if s.reported(first, n) {
+		if s.reported(first.n, n) {
 			continue
 		}
-		pos := n.ix.Pos()
-		if n.col != nil {
-			pos = columnIndexSetting(n.col).Pos()
-		}
-		c.errorf(pos, "indexes", "%s, %s and %s: an index name is unique within its table; give one a name: (§indexes)", s.subject(name), first.describe(), n.describe())
+		c.errorf(n.at(), "indexes", "%s, %s and %s: SQLite names an index once in the database, so an index name is unique in the schema; %s (§indexes)", s.subject(first.name, name), first.n.describe(), n.describe(), s.advice(first.n, n))
 	}
+}
+
+func namesQuote(first, second string) string {
+	if second == first {
+		return fmt.Sprintf("%q", first)
+	}
+	return fmt.Sprintf("%q and %q (one name to SQLite)", first, second)
+}
+
+// nameAdvice says how to part two indexes of one name: give an Indexes
+// entry of a table body another name:, inject a partial that writes a
+// name: into one table, change the name: a partial writes, or rename
+// what a derived name derives from (spec §indexes).
+func nameAdvice(a, b namedIndex) string {
+	for _, n := range []namedIndex{b, a} {
+		if n.col == nil && n.partial == nil {
+			return "give " + n.describe() + " another name:"
+		}
+	}
+	if a.partial != nil && a.partial == b.partial {
+		return fmt.Sprintf("a name: written in a TablePartial is the same in every table that injects it, so TablePartial %q is injected into one table only", a.partial.Name.Name())
+	}
+	for _, n := range []namedIndex{b, a} {
+		if n.partial != nil && n.col == nil && n.ix.Settings.Get("name") != nil {
+			return fmt.Sprintf("change the name: TablePartial %q writes", n.partial.Name.Name())
+		}
+	}
+	return "rename a table or a column, since no name: reaches a column's index"
+}
+
+// sqliteFold is a name as SQLite compares it: ASCII letters fold to
+// lower case and every other character stands (spec §indexes).
+func sqliteFold(name string) string {
+	upper := false
+	for i := 0; i < len(name); i++ {
+		if 'A' <= name[i] && name[i] <= 'Z' {
+			upper = true
+			break
+		}
+	}
+	if !upper {
+		return name
+	}
+	b := []byte(name)
+	for i, ch := range b {
+		if 'A' <= ch && ch <= 'Z' {
+			b[i] = ch + 'a' - 'A'
+		}
+	}
+	return string(b)
+}
+
+// sitedIndex is one index of the schema as its name is checked across
+// tables: the table it lands in and the index.
+type sitedIndex struct {
+	ti *TableInfo
+	n  namedIndex
+}
+
+// sitedIndexes appends a table's indexes to dst as their names are
+// checked across the schema: its columns' indexes, then its Indexes
+// entries and those its partials inject in body order; a partial's
+// index, and the index of a partial's column, sit at the injection that
+// brought it (spec §indexes).
+func (c *checker) sitedIndexes(dst []sitedIndex, ti *TableInfo) []sitedIndex {
+	for _, cd := range ti.Columns {
+		ix := ColumnIndex(cd.Col)
+		if ix == nil {
+			continue
+		}
+		n := namedIndex{ix: ix, col: cd.Col, partial: cd.Partial}
+		if cd.Partial != nil {
+			n.pos = injectionOf(ti, cd.Partial)
+		}
+		dst = append(dst, sitedIndex{ti, n})
+	}
+	for _, item := range ti.Decl.Body {
+		switch item := item.(type) {
+		case *ast.IndexesBlock:
+			for _, ix := range item.Indexes {
+				if indexNamed(ix) {
+					dst = append(dst, sitedIndex{ti, namedIndex{ix: ix}})
+				}
+			}
+		case *ast.PartialRef:
+			pi := c.partials[item.Name.Name()]
+			if pi == nil {
+				continue
+			}
+			for _, pit := range pi.Decl.Body {
+				block, ok := pit.(*ast.IndexesBlock)
+				if !ok {
+					continue
+				}
+				for _, ix := range block.Indexes {
+					if indexNamed(ix) {
+						dst = append(dst, sitedIndex{ti, namedIndex{ix: ix, partial: pi.Decl, pos: item.Pos()}})
+					}
+				}
+			}
+		}
+	}
+	return dst
+}
+
+// injectionOf is the position of the last injection of p in a table's
+// body, the one whose columns stand (spec §tablepartial).
+func injectionOf(ti *TableInfo, p *ast.TablePartial) token.Position {
+	var pos token.Position
+	for _, item := range ti.Decl.Body {
+		if ref, ok := item.(*ast.PartialRef); ok && ref.Name.Name() == p.Name.Name() {
+			pos = ref.Pos()
+		}
+	}
+	return pos
+}
+
+// indexNamesSchemaCheck enforces that no two indexes of the schema share
+// a name and that no index takes a table's name, names compared as
+// SQLite compares them, since SQLite names indexes and tables in one
+// namespace per database (spec §indexes). Two indexes of one table are
+// that table's to report (indexNamesCheck), and a table whose index
+// clashes with another table's is reported once per name.
+func (c *checker) indexNamesSchemaCheck() {
+	var all []sitedIndex
+	for _, ti := range c.info.Tables {
+		all = c.sitedIndexes(all, ti)
+	}
+	if len(all) == 0 {
+		return
+	}
+	tables := make(map[string]*TableInfo, len(c.info.Tables))
+	for _, ti := range c.info.Tables {
+		tables[sqliteFold(ti.Key)] = ti
+	}
+	type owner struct {
+		ti   *TableInfo
+		n    namedIndex
+		name string
+	}
+	seen := map[string]owner{}
+	reported := map[[2]string]bool{}
+	for _, s := range all {
+		ti, n := s.ti, s.n
+		name, ok := IndexName(ti.Key, n.ix)
+		if !ok || name == "" {
+			continue
+		}
+		key := sqliteFold(name)
+		if t := tables[key]; t != nil {
+			c.errorf(n.at(), "indexes", "%s of table %q is named %q, the name of table %q: SQLite names indexes and tables in one namespace, so an index takes no table's name; %s (§indexes)", schemaDescribe(n), ti.Key, name, t.Key, nameAdvice(n, n))
+			continue
+		}
+		first, dup := seen[key]
+		if !dup {
+			seen[key] = owner{ti, n, name}
+			continue
+		}
+		if first.ti == ti || reported[[2]string{key, ti.Key}] {
+			continue
+		}
+		reported[[2]string{key, ti.Key}] = true
+		which := schemaDescribe(first.n) + " and " + schemaDescribe(n)
+		if first.n.ix == n.ix {
+			which = schemaDescribe(n) + " in both"
+		}
+		c.errorf(n.at(), "indexes", "tables %q and %q each have an index named %s, %s: SQLite names an index once in the database, so an index name is unique in the schema; %s (§indexes)", first.ti.Key, ti.Key, namesQuote(first.name, name), which, nameAdvice(first.n, n))
+	}
+}
+
+func schemaDescribe(n namedIndex) string {
+	if n.partial != nil {
+		return n.describe() + fmt.Sprintf(" of TablePartial %q", n.partial.Name.Name())
+	}
+	return n.describe()
 }
 
 func columnIndexSetting(col *ast.Column) *ast.Setting {

@@ -242,7 +242,8 @@ func argOr(c *cli.Command, i int, def string) string {
 
 // migrationPackage loads and checks the package at dir and insists it
 // declares tables, since a migration is an element of the package whose
-// tables it migrates (spec §migrations rule 1).
+// tables it migrates (spec §migrations rule 1). A package with errors
+// exits 1, as from gen and check (spec §migration-tooling rule 1).
 func migrationPackage(dir string) (*lang.Package, error) {
 	root, err := lang.FindRoot(dir)
 	if err != nil {
@@ -256,7 +257,7 @@ func migrationPackage(dir string) (*lang.Package, error) {
 		for _, d := range diags {
 			fmt.Println(d)
 		}
-		return nil, cli.Exit("migration: package has errors; fix them first (see 'volt check')", 2)
+		return nil, cli.Exit("migration: package has errors; fix them first (see 'volt check')", 1)
 	}
 	pkg := pr.PackageAt(dir)
 	if pkg == nil || pkg.Schema() == nil || len(pkg.Schema().Tables) == 0 {

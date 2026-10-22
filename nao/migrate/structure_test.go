@@ -301,6 +301,35 @@ CREATE UNIQUE INDEX idx_user_tags_tag_user_id ON user_tags (tag, user_id);
 		reason: "table a is in the fold but not in the schema",
 	},
 	{
+		name:   "a composite key in another order is a rebuild",
+		fold:   "CREATE TABLE pairs (b INTEGER NOT NULL, a INTEGER NOT NULL, v INTEGER NOT NULL, PRIMARY KEY (b, a));",
+		target: "CREATE TABLE pairs (a INTEGER NOT NULL, b INTEGER NOT NULL, v INTEGER NOT NULL, PRIMARY KEY (a, b));",
+		want:   []string{"rebuild table pairs {\n  a int [pk]\n  b int [pk]\n  v int\n}"},
+		reason: "column pairs.a is column 1 of the primary key in the schema, column 2 in the fold",
+	},
+	{
+		name:     "a unique constraint and an equal named unique index in the fold: the named one is dropped",
+		fold:     postsDDL + "CREATE UNIQUE INDEX idx_a ON posts (slug);",
+		target:   strings.Replace(postsDDL, "slug TEXT NOT NULL UNIQUE", "slug TEXT NOT NULL", 1) + "CREATE UNIQUE INDEX idx_posts_slug ON posts (slug);",
+		want:     []string{"drop index posts slug [unique, name: \"idx_a\"]"},
+		reason:   "index idx_a on posts is in the fold but not in the schema",
+		unclosed: "a shape body holds one single-column index per column, the column setting's under its derived name, so the fold's second unique index on posts (slug), named idx_a, renders as no create table the checker takes",
+	},
+	{
+		name:   "two equal indexes in the schema against one in the fold: one is created",
+		fold:   postsDDL + "CREATE INDEX idx_comments_post_id_body ON comments (post_id, body);",
+		target: postsDDL + "CREATE INDEX idx_comments_post_id_body ON comments (post_id, body);\nCREATE INDEX idx_comments_again ON comments (post_id, body);",
+		want:   []string{"create index comments (post_id, body) [name: \"idx_comments_again\"]"},
+		reason: "index idx_comments_again on comments is in the schema but not in the fold",
+	},
+	{
+		name:   "an added column with its own index and a partial index on it: the add and one create index",
+		fold:   postsDDL,
+		target: strings.Replace(postsDDL, "  body TEXT,\n", "  body TEXT,\n  slug TEXT,\n", 1) + "CREATE INDEX idx_comments_slug ON comments (slug);\nCREATE UNIQUE INDEX idx_comments_slug_live ON comments (slug) WHERE slug != '';",
+		want:   []string{"alter table comments {\n  add slug string [null, index]\n}", "create index comments slug [unique, where: `slug != ''`, name: \"idx_comments_slug_live\"]"},
+		reason: "column comments.slug is in the schema but not in the fold",
+	},
+	{
 		name: "a composite foreign key is written with exec",
 		fold: "CREATE TABLE periods (merchant INTEGER NOT NULL, country TEXT NOT NULL, PRIMARY KEY (merchant, country));",
 		target: `

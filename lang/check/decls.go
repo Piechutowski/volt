@@ -56,7 +56,9 @@ func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.S
 			for _, ix := range item.Indexes {
 				c.settingsCheck(ix.Settings, "indexes", indexSettings)
 				c.indexNameCheck(name, ix)
-				c.indexPlainCheck(name, ix)
+				if indexNamed(ix) {
+					c.indexPlainCheck(name, ix)
+				}
 			}
 		case *ast.ValidatorsBlock:
 		case *ast.Records:

@@ -153,6 +153,15 @@ func (l *lowerer) alter(op *ast.AlterTable) ([]string, error) {
 			out = append(out, stmts...)
 			cols = append(cols, item.Column.Name.Name())
 		case *ast.AlterDrop:
+			if item.Type != nil {
+				if ix := check.ColumnIndex(&ast.Column{Name: item.Name, Type: item.Type, Settings: item.Settings}); ix != nil {
+					stmts, err := indexDrop(table, ix)
+					if err != nil {
+						return nil, err
+					}
+					out = append(out, stmts...)
+				}
+			}
 			out = append(out, "ALTER TABLE "+sqlite.Ident(table)+" DROP COLUMN "+sqlite.Ident(item.Name.Name()))
 			cols = without(cols, item.Name.Name())
 		case *ast.AlterRename:

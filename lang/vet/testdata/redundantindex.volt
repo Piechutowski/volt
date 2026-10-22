@@ -15,6 +15,10 @@ Table t {
 Table counters {
   id int [pk, index] //WANT redundantindex
   hits int
+
+  Indexes {
+    id [unique, name: "idx_counters_live", where: `hits > 0`] //WANT redundantindex
+  }
 }
 
 // a composite key is unique and indexed: an index on its columns in its

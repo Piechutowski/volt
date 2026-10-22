@@ -33,7 +33,8 @@ type generator struct {
 	info *check.Info
 	opts Options
 
-	out strings.Builder
+	out        strings.Builder
+	indexNames map[string]string
 }
 
 func (g *generator) run() error {
@@ -44,6 +45,10 @@ func (g *generator) run() error {
 	}
 	g.out.WriteString("\nPRAGMA foreign_keys = ON;\n")
 
+	g.indexNames = make(map[string]string, len(g.info.Tables))
+	for _, ti := range g.info.Tables {
+		g.indexNames[nameFold(ti.Key)] = "the name of table " + ti.Key
+	}
 	for _, ti := range g.info.Tables {
 		if err := g.tableEmit(ti); err != nil {
 			return err
@@ -168,7 +173,7 @@ func (g *generator) indexesEmit(ti *check.TableInfo) error {
 	for i, cd := range ti.Columns {
 		cols[i] = cd.Col
 	}
-	stmts, err := indexStatements(ti.Key, cols, ti.Indexes)
+	stmts, err := indexStatements(ti.Key, cols, ti.Indexes, g.indexNames)
 	if err != nil {
 		return err
 	}
@@ -181,9 +186,11 @@ func (g *generator) indexesEmit(ti *check.TableInfo) error {
 // indexStatements renders the CREATE INDEX statements of a table,
 // without trailing semicolons (spec §indexes, §mapping-to-sqlite-ddl):
 // first the index of every column that carries unique or index, in
-// column order, then the indexes of its Indexes blocks in order. Two
-// indexes of one name are an error, which the checker reports first.
-func indexStatements(table string, cols []*ast.Column, indexes []*ast.Index) ([]string, error) {
+// column order, then the indexes of its Indexes blocks in order. A
+// name that used holds, the names of the indexes and tables already
+// written as SQLite compares them, is an error, which the checker
+// reports first; each name written is added to used.
+func indexStatements(table string, cols []*ast.Column, indexes []*ast.Index, used map[string]string) ([]string, error) {
 	all := make([]*ast.Index, 0, len(cols)+len(indexes))
 	for _, col := range cols {
 		if ix := check.ColumnIndex(col); ix != nil {
@@ -192,19 +199,28 @@ func indexStatements(table string, cols []*ast.Column, indexes []*ast.Index) ([]
 	}
 	all = append(all, indexes...)
 	out := make([]string, 0, len(all))
-	used := map[string]bool{}
 	for _, ix := range all {
 		name, err := IndexName(table, ix)
 		if err != nil {
 			return nil, fmt.Errorf("table %s: %w", table, err)
 		}
-		if used[name] {
-			return nil, fmt.Errorf("table %s: duplicate index name %q (§indexes)", table, name)
+		if prev, dup := used[nameFold(name)]; dup {
+			return nil, fmt.Errorf("table %s: duplicate index name %q, %s (§indexes)", table, name, prev)
 		}
-		used[name] = true
+		used[nameFold(name)] = "an index of table " + table
 		out = append(out, IndexDDL(table, name, ix))
 	}
 	return out, nil
+}
+
+func nameFold(name string) string {
+	b := []byte(name)
+	for i, ch := range b {
+		if 'A' <= ch && ch <= 'Z' {
+			b[i] = ch + 'a' - 'A'
+		}
+	}
+	return string(b)
 }
 
 // IndexName is the SQLite name of an index (spec §indexes,

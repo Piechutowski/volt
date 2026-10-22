@@ -973,12 +973,23 @@ index setting  = "name", ":", string
    and its key columns in order (§mapping-to-sqlite-ddl), so that a
    schema and a migration (§migrations) name one index one way; the
    index of a column's `unique` or `index` setting is
-   `idx_<table>_<column>`. `name:` overrides the derived name. An index
-   with an expression atom MUST carry `name:`, since no name derives
-   from an expression. Two indexes of one table, its columns' indexes
-   among them and those its partials inject, MUST NOT have one name,
-   derived or written; nor two of one partial, whose names derive for
-   every table that injects it (§tablepartial).
+   `idx_<table>_<column>`. `name:` overrides the derived name; a
+   written name is not empty and does not begin with `sqlite_`, which
+   SQLite keeps for its own objects. An index with an expression atom
+   MUST carry `name:`, since no name derives from an expression.
+   SQLite names an index once in the database, and in the namespace of
+   its tables: two indexes of the schema, its tables' columns' indexes
+   among them and those partials inject, MUST NOT have one name,
+   derived or written, and an index MUST NOT take the name of a table
+   of the package (§namespaces-and-uniqueness). Names compare as SQLite
+   compares them, the case of ASCII letters aside. The rule holds
+   across tables as within one, since a derived name joins names with
+   underscores and two tables can derive one (`a_b` with column `c`
+   and `a` with column `b_c`), and within one partial, whose names
+   derive for every table that injects it (§tablepartial). A
+   partial's `name:` is the same in every table that injects the
+   partial, so a partial whose index carries `name:` is injected into
+   at most one table.
 7. **`where`** takes an expression literal and makes the index
    partial: only the rows for which the condition holds are indexed,
    so the index stays small, and a unique partial index constrains
@@ -1444,12 +1455,18 @@ Table posts [note: """
 Within one package (§projects-and-packages):
 
 1. Table names MUST be unique. Tables and groups share this namespace
-   (§groups): a group MUST NOT take a table's name.
+   (§groups): a group MUST NOT take a table's name. Since a table name
+   is its SQLite name (§table), it MUST NOT begin with `sqlite_`, in
+   any case, which SQLite keeps for its own objects.
 2. Declared Type names (§types) form their own namespace and MUST be
    unique. A bare one also shares the Go package scope with the names
    generated code declares and MUST NOT take one of them (§types).
 3. TablePartial names form their own namespace and MUST be unique.
 4. Column names MUST be unique within their table.
+5. Index names, derived or written, MUST be unique in the package's
+   schema and MUST NOT take a table's name, compared without the case
+   of ASCII letters: SQLite names tables and indexes in one namespace
+   per database (§indexes).
 
 ### Reference Resolution
 
@@ -2994,7 +3011,9 @@ user, err := q.UserUpdate(ctx, cs)
     Fields, Cause}`: the field errors of the changeset when validation
     failed, or the database's refusal mapped onto fields when the
     statement ran: a unique violation becomes a field error with
-    check `unique` on the index's columns, a NOT NULL violation
+    check `unique` on the index's columns (on none for a unique index
+    with an expression atom, which constrains no column, §indexes, and
+    which SQLite names by the index alone), a NOT NULL violation
     `not_null` on its column, a foreign key violation `foreign_key`
     with no column (SQLite names none), each wrapping the driver's
     error as `Cause`. Its status is 409 when a `unique` field error is
@@ -3188,7 +3207,13 @@ Migration 0002__users_bio {
    in a flat body is the inverse `add` and MUST satisfy the `add`
    rules above (rule 12), and inside an `up { }` or `down { }` block
    is checked as a column only, since there the inverse is written
-   out. `rename` is `RENAME COLUMN`.
+   out. A `drop` whose shape carries `unique` or `index` lowers, in a
+   flat body as in a block, to the `DROP INDEX` of that index under
+   the derived name, then the `DROP COLUMN`, since SQLite refuses to
+   drop an indexed column: the mirror of `add`, so a typed `drop` is
+   the inverse of its own inverse. A `drop index` of that index written
+   before it would drop the index twice, which the fold refuses
+   (§the-fold). `rename` is `RENAME COLUMN`.
 9. **`rebuild table`.** The one operation for every change SQLite
    cannot `ALTER`: a type, a nullability, a default, a primary key, a
    foreign key. The body is the new shape and MUST contain at least
@@ -3273,7 +3298,9 @@ true. What is checked instead is their composition.
    with name, declared type, `NOT NULL`, default as SQLite reports it
    (a default of `NULL`, in any case, read as none, since it means
    what no default means, §default-values) and primary-key membership
-   (`PRAGMA table_xinfo`); its foreign keys
+   and position, the column's place in the key's column list
+   (`PRAGMA table_xinfo`), so that a composite key in another order is
+   a rebuild (§columns); its foreign keys
    (`PRAGMA foreign_key_list`); its indexes with uniqueness, partial
    predicate and key (`PRAGMA index_list`, `PRAGMA index_xinfo`).
    Indexes are compared by table, key, uniqueness and predicate,
@@ -3283,8 +3310,15 @@ true. What is checked instead is their composition.
    removes) is the unique index on its key, so a database whose
    unique columns an older lowering wrote as inline `UNIQUE` folds
    equal to the `CREATE UNIQUE INDEX` that `unique` writes now
-   (§mapping-to-sqlite-ddl). Such a constraint the target lacks is
-   closed by a rebuild, since only a rebuild removes it. Nothing else
+   (§mapping-to-sqlite-ddl). A constraint in the fold that the target
+   lacks (an `exec` can write one) is closed by a rebuild, since only a
+   rebuild removes it. The equality is structural only. The fold is
+   the migrations as they lower now, never the database itself, so
+   for a database whose unique columns an older lowering wrote inline
+   it holds a named index where that database holds an autoindex: a
+   schema that then drops `unique` drifts as a `drop index`, which
+   runs on a fresh database and refuses on that one (no such index),
+   and there the uniqueness goes only by `rebuild table`. Nothing else
    is compared: not index names, not column order, not row data, not
    SQL text, not the order of statements, and never the ledger table
    (§migration-ledger).
@@ -3342,7 +3376,9 @@ true. What is checked instead is their composition.
    one only (a missing file is an error and nothing is created), and
    all three refuse `:memory:`. `volt migration sql [DIR]` prints
    every migration's statements in both directions for review. Exit
-   codes, the same from `gen`: 1 for drift and for an error in the
+   codes, the same from `gen`: 1 for drift, for a package the checker
+   refuses (each command checks its package first and prints the
+   diagnostics, as `volt check` does) and for an error in the
    migrations themselves, a statement SQLite refuses in either
    direction, an irreversible migration asked to go down, a migration
    that does not lower; 2 for usage and I/O, a database that cannot
@@ -3764,7 +3800,7 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 | `pk` on one column | `PRIMARY KEY` on the column, `NOT NULL` with it, the rowid alias above excepted |
 | `pk` on several columns (composite key, §columns) | `PRIMARY KEY (a, b)` table constraint listing the `pk` columns in declaration order; members get `NOT NULL` |
 | `unique` or `index` column (§columns) | `CREATE UNIQUE INDEX` or `CREATE INDEX` `idx_<table>_<column> ON <table> (<column>)` after the table, before the indexes of its `Indexes` blocks; never an inline `UNIQUE`, which SQLite enforces the same way but no migration can drop |
-| `Indexes` entry | `CREATE INDEX <name> ON <table> (<key>)`, `UNIQUE` for `unique`, `WHERE <expr>` for `where:` (§indexes); the name is `name:` when given, else `idx_<table>_<col>[_<col>...]` from the SQLite table name and the key columns; two indexes of one table of one name are a check error (§indexes) |
+| `Indexes` entry | `CREATE INDEX <name> ON <table> (<key>)`, `UNIQUE` for `unique`, `WHERE <expr>` for `where:` (§indexes); the name is `name:` when given, else `idx_<table>_<col>[_<col>...]` from the SQLite table name and the key columns; two indexes of the schema of one name, or an index named as a table, are a check error, since SQLite names indexes per database (§indexes) |
 | relationship (`Ref:`, `ref:`) | `FOREIGN KEY (<fk>) REFERENCES <table> (<columns>)` with `ON DELETE` / `ON UPDATE`; the foreign key is the left endpoint of a `Ref` and the declaring column of a `ref:` (§relationships-ref) |
 | one-to-one (a unique foreign key, §relationships-ref) | the uniqueness as written, the column's unique index or the composite key or index; the relationship adds nothing |
 | `int`, `bool` | `INTEGER` (booleans stored 0/1; `true`/`false` in records and defaults become 1/0) |

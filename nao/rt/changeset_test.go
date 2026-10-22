@@ -38,6 +38,8 @@ func TestRefused(t *testing.T) {
 		{"NOT NULL constraint failed: users.email (1299)", "not_null", []string{"email"}, 422},
 		{"FOREIGN KEY constraint failed (787)", "foreign_key", nil, 422},
 		{"UNIQUE constraint failed: users.name (x)", "unique", []string{"name (x)"}, 409},
+		{"UNIQUE constraint failed: index 'idx_authors_handle_ci'", "unique", nil, 409},
+		{"UNIQUE constraint failed: index 'idx_a.b,c' (2067)", "unique", nil, 409},
 	}
 	for _, tc := range cases {
 		cause := errors.New(tc.msg)
@@ -55,6 +57,15 @@ func TestRefused(t *testing.T) {
 		if d := inv.Details(); len(d) != 1 || d[0].Check != tc.check || d[0].Message == "" {
 			t.Errorf("%q: details %+v", tc.msg, d)
 		}
+	}
+	db := migrateDB(t)
+	if _, err := db.Exec("CREATE TABLE authors (id INTEGER PRIMARY KEY, handle TEXT NOT NULL);\nCREATE UNIQUE INDEX idx_authors_handle_ci ON authors ((lower(handle)));\nINSERT INTO authors (handle) VALUES ('ann')"); err != nil {
+		t.Fatal(err)
+	}
+	_, err := db.Exec("INSERT INTO authors (handle) VALUES ('ANN')")
+	var inv *Invalid
+	if !errors.As(Refused("Author", err), &inv) || len(inv.Fields) != 1 || inv.Fields[0].Check != "unique" || inv.Fields[0].Columns != nil {
+		t.Errorf("a duplicate under a unique expression index (%v) → %+v, want one unique field error on no column", err, inv)
 	}
 	plain := errors.New("disk I/O error")
 	if Refused("User", plain) != plain {

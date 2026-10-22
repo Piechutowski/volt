@@ -70,7 +70,7 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 **Cost.** One count in tableBodyCheck, snippet 38 turned into an invalid case, two spec sentences. Trivial.
 
-**Evidence.** docs/spec.md:860-861 ('A body MAY contain more than one `Indexes` block; their contents accumulate') and ~2703 (the same for validators). lang/check/check.go:412-419 appends the blocks. Records is limited to one per body (lang/check/decls.go:84-90), so bodies follow two different rules. Snippet valid/38_multiple_index_blocks.volt.
+**Evidence.** docs/spec.md:933-934 ('A body MAY contain more than one `Indexes` block; their contents accumulate') and 2783-2785 (the same for validators). lang/check/check.go:325-332 and 341-347 append the blocks, a partial's and the body's. Records is limited to one per body (lang/check/decls.go:68 and 75-77), so bodies follow two different rules. Snippet valid/38_multiple_index_blocks.volt.
 
 ### 27. [merge] Parentheses around a single index key or ref column
 
@@ -85,7 +85,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** Two parser checks, one invalid snippet, a rewrite of snippet 10 and of the migration snippets that write `create index t (col)`. Trivial.
 
-**Evidence.** docs/spec.md: §indexes `index key`, §relationships-ref `column group`. lang/parser/parser.go:463-484 and 571-585 accept both forms. ast.Index.Composite records which spelling was used, but only diagnostics read it (check/migrations.go:419).
+**Evidence.** docs/spec.md: §indexes `index key`, §relationships-ref `column group`. lang/parser/parser.go:417-438 (indexRest, under index() at 410) and 483-504 (refEndpoint) accept both forms. ast.Index.Composite records which spelling was used, but only diagnostics read it (check/migrations.go:401, indexKeyString).
 
 ### 28. [merge] Numeric literals have several spellings for one value, and the minus sign is specified three different ways
 
@@ -186,7 +186,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** The records-block parser path, AST field and TableItem arm, the partial 'no records' rule, the cross-form check, the implicit branch in recordsResolve, grammar.js records_block. About 12 snippets (20, 21, 34, 35, v67, v68, i25, i38, i135, i136, i152, i153), mostly mechanical. Low to moderate.
 
-**Evidence.** docs/spec.md §records-sample-data rules 1-2. lang/parser/parser.go:626-658 (separate recordsDecl and records paths); lang/check/resolve.go:62-87 needs a cross-form 'at most one per table' check; nao/gen/sqlite/gen.go:62-80 emits in-table rows first. The implicit list follows §partial-injection-order, so reordering a partial's columns silently reorders the seed values.
+**Evidence.** docs/spec.md §records-sample-data rules 1-2. lang/parser/parser.go:626-658 (separate recordsDecl and records paths); lang/check/resolve.go:62-87 needs a cross-form 'at most one per table' check; nao/gen/sqlite/gen.go:58-77 emits in-table rows first. The implicit list follows §partial-injection-order, so reordering a partial's columns silently reorders the seed values.
 
 ### 37. [merge] A foreign key is declared three ways: inline ref:, the Ref element, and the migration column with actions as column settings
 
@@ -294,7 +294,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** About 20 files, mostly generated doc comments in goldens; the spec and itest assertions; two unused lines; the client.go fallback. Low.
 
-**Evidence.** nao/rt/rt.go:27-29 (verified); nao/rt/changeset.go:143-145; errors.go:34-39 (verified: no non-test callers of ErrBadRequest or ErrForbidden); client.go:74-83; docs/spec.md §query-routes 3 (~1925), §changesets 8 (~2907), §generated-client 2 (2007-2009) vs §formats 5 (1988-1990).
+**Evidence.** nao/rt/rt.go:27-29 (verified); nao/rt/changeset.go:145-147; errors.go:34-39 (verified: no non-test callers of ErrBadRequest or ErrForbidden); client.go:74-83; docs/spec.md §query-routes 3 (~1925), §changesets 8 (~2907), §generated-client 2 (2007-2009) vs §formats 5 (1988-1990).
 
 ### 47. [merge] Writing a response: volt.JSON, Render and RenderStatus, plus exported plumbing that nothing outside the package calls
 
@@ -365,7 +365,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** Renames across all golden families, itest/blog/db and the nao/itest generated files, partOf, the stale list, and the spec, README and editor mentions. About 19 files plus the renames. Moderate, mechanical.
 
-**Evidence.** nao/gen/golang/gen.go:283, dyn.go:143, queries.go:499, selects.go:90, validate.go:49, migrations.go:31; nao/gen/sqlite/gen.go:48; gen/router/gen.go:111; gen/model/gen.go:50-66; cmd/volt/main.go:382 (the stale-file list) and 545-560 (partOf keys on both prefixes). Verified the nao headers in generated output.
+**Evidence.** nao/gen/golang/gen.go:283, dyn.go:143, queries.go:499, selects.go:90, validate.go:49, migrations.go:31; nao/gen/sqlite/gen.go:41; gen/router/gen.go:111; gen/model/gen.go:50-66; cmd/volt/main.go:382 (the stale-file list) and 545-560 (partOf keys on both prefixes). Verified the nao headers in generated output.
 
 ### 53. [merge] The spec grammar defines the shape `name [. name]` under five names
 
@@ -403,7 +403,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** rt, the generator emit lines, the Count/Exists call sites in every *_dyn golden. About 20 files, mechanical.
 
-**Evidence.** nao/rt/query.go:460, 580; nao/rt/changeset.go:160, 405, 433; nao/rt/gen.go; docs/spec.md §predicates rule 6 ('There is one SQL renderer', 2519-2525).
+**Evidence.** nao/rt/query.go:460, 580; nao/rt/changeset.go:162, 407, 435; nao/rt/gen.go; docs/spec.md §predicates rule 6 ('There is one SQL renderer', 2519-2525).
 
 ### 56. [merge] Query parameter names: CRUD keys use the Go name, select parameters use the name as written, and the wire uses the column name
 
@@ -425,7 +425,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Proposal.** Recommended: remove Project and let the package doc live where Go puts it (doc.go). Smaller step: keep only one package note, with no name and no properties.
 
-**Cost.** Parser project(), ast.Project, the uniqueness check (check.go:262-267), the vet emptybody branch, both generators' projectNote and the header goldens, lsp/features.go:45, grammar.js project; about 4 snippets (03, 25, 35, i34) and nao/itest/schema.volt; §project and lint.md. Low.
+**Cost.** Parser project(), ast.Project, the uniqueness check (check.go:174-178), the vet emptybody branch, both generators' projectNote and the header goldens, lsp/features.go:45, grammar.js project; about 4 snippets (03, 25, 35, i34) and nao/itest/schema.volt; §project and lint.md. Low.
 
 **Evidence.** docs/spec.md:644-667 (§project; the suggested key is database_type: "PostgreSQL"). Only the note is read, in nao/gen/golang/gen.go and nao/gen/sqlite/gen.go; since the removals a Project carries at most one, the `note:` setting. 'Project' means two different things in the spec. nao/itest/schema.volt declares an empty Project only to carry its note.
 
@@ -576,7 +576,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** (a) 3 up/down snippets, one grammar alternative and one lowering branch. (b) The exec settings production, the drop shapes, inverse() in nao/migrate/lower.go, 2 exec-down snippets and a rewrite of rule 12. Low to moderate.
 
-**Evidence.** docs/spec.md §migrations grammar and rules 6, 8, 10 and 12. lang/check/migrations.go:210-245 still accepts and checks exec [down:], drop-table bodies, typed drops and drop-index settings inside up/down blocks. nao/migrate/lower.go reads them only to derive a flat body's inverse (inverse()), so inside blocks, and under [irreversible], they do nothing.
+**Evidence.** docs/spec.md §migrations grammar and rules 6, 8, 10 and 12. lang/check/migrations.go:202-238 (operationsCheck) still accepts and checks exec [down:], drop-table bodies, typed drops and drop-index settings inside up/down blocks. nao/migrate/lower.go reads them only to derive a flat body's inverse (inverse()), so inside blocks, and under [irreversible], they do nothing, with one exception: a typed drop whose shape carries unique or index drops that index before the column going forward too (lowerer.alter, §migrations rule 8), since SQLite refuses to drop an indexed column.
 
 ### 71. [decide] check, vet and lint: two commands and two nouns for the analyzer, and three meanings of 'check'
 
@@ -646,7 +646,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** The runtime's formats, client and Params code, the format branches in router handlers, formats_test and the itest client tests, §formats and §changesets 5. Moderate.
 
-**Evidence.** docs/spec.md §formats 1-5 (1953-1990), §changesets rule 5 (2868-2880); formats.go:17-90; client.go:18; nao/rt/changeset.go:160-292 (GobEncode ~240). The two arms treat unknown fields differently in hand-written controllers (§formats 2: JSON gives an itemized 400, GOB ignores them).
+**Evidence.** docs/spec.md §formats 1-5 (1953-1990), §changesets rule 5 (2868-2880); formats.go:17-90; client.go:18; nao/rt/changeset.go:162-294 (GobEncode ~242). The two arms treat unknown fields differently in hand-written controllers (§formats 2: JSON gives an itemized 400, GOB ignores them).
 
 ### 77. [decide] One word, Query, for five things
 
@@ -708,7 +708,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** None beyond one spec sentence.
 
-**Evidence.** docs/spec.md §columns rule 4; nao/gen/sqlite/gen.go:188-195; nao/gen/golang/gen.go:174 (From skips the key). In SQLite, both tables assign keys automatically: any single-column INTEGER PRIMARY KEY is the rowid alias. The real difference is on the Go surface.
+**Evidence.** docs/spec.md §columns rule 4; nao/gen/sqlite/gen.go:151-158; nao/gen/golang/gen.go:174 (From skips the key). In SQLite, both tables assign keys automatically: any single-column INTEGER PRIMARY KEY is the rowid alias. The real difference is on the Go surface.
 
 ### 82. [keep] The `required` setting versus a hand-written validator that does the same check
 
@@ -719,7 +719,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** Only the wording of one rule.
 
-**Evidence.** docs/spec.md §columns extension (required), §validators rule 8, §changesets rules 6 and 9; lang/check/settings.go:52, 295.
+**Evidence.** docs/spec.md §columns extension (required), §validators rule 8, §changesets rules 6 and 9; lang/check/settings.go:45 (the setting) and 236-251 (requiredCheck).
 
 ### 83. [keep] The verbs any, head and options
 
@@ -885,7 +885,7 @@ Validators get bytes.Clone(v.X); rt.NullClone covers rt.Null[[]byte]. FieldError
 
 **Cost.** 3-4 emission sites, emitted only for []byte fields (bytes is stdlib, so the import rule allows it); 5 rt constructors and helpers; goldens of tables with []byte columns; one clause in §changesets rule 1. One copy per set and per public Row() call. A declared type stored as []byte is not covered unless the generator learns its underlying type, so the spec should say declared types must behave as values.
 
-### 8. [do] rt.Blank (nao/rt/changeset.go:349) treats a Value error as "not blank"; requiredEmit (nao/gen/golang/validate.go:94); spec §types rule 3, §changesets rules 6 and 9
+### 8. [do] rt.Blank (nao/rt/changeset.go:351) treats a Value error as "not blank"; requiredEmit (nao/gen/golang/validate.go:94); spec §types rule 3, §changesets rules 6 and 9
 
 **Effect.** A declared type's Value method is user code that decides whether a value can be stored. Validate consults it only for `required`, and swallows its error there. The real verdict comes at bind time, inside database/sql, as a raw driver error.
 
@@ -992,7 +992,7 @@ A zero Status counts as 500. ProblemOf can be table-tested without httptest.
 
 **Cost.** volt.go, errors.go, volt_test; the signature check in lang/semantics.go and its snippets (v13_error_handler_bare and the matching invalid ones); gen/router/testdata/blog/app/mw.go; itest/blog/app/user.go, whose header hook becomes a Message; §scopes clause 3 and §formats rule 5. About 8 small sites. It removes rendering an error as a non-Problem page (HTML); such a page belongs in a controller, or in a Reply if that lands.
 
-### 16. [do] Records (§records-sample-data, docs/spec.md:1114): nao/gen/sqlite/gen.go:276 insertsEmit; lang/check/types.go:258 recordsTypeCheck; the fold's target DDL (cmd/volt/migration.go:391)
+### 16. [do] Records (§records-sample-data, docs/spec.md:1114): nao/gen/sqlite/gen.go:265 insertsEmit; lang/check/types.go:258 recordsTypeCheck; the fold's target DDL (cmd/volt/migration.go:392)
 
 **Effect.** Records are a second write path next to changesets: verbatim INSERTs in nao_schema.sql that skip `required`, every validator (membership in a value set among them) and every declared type's Valuer. That contradicts §changesets ("there is no other write path for a row"). An expression literal in a record (snippet 21_records_values uses `now()`) also ties the seed to the clock.
 
@@ -1012,7 +1012,7 @@ A zero Status counts as 500. ProblemOf can be table-tested without httptest.
 
 **Cost.** 3 lines in middleware.go and one test.
 
-### 18. [do] nao/rt/null.go:50 `var jsonNull`, returned by MarshalJSON (:55) and compared against in UnmarshalJSON (:62) and rt.Field (nao/rt/changeset.go:312)
+### 18. [do] nao/rt/null.go:50 `var jsonNull`, returned by MarshalJSON (:55) and compared against in UnmarshalJSON (:62) and rt.Field (nao/rt/changeset.go:314)
 
 **Effect.** MarshalJSON returns the package's own slice, so any caller holding the result can change how NULL marshals and decodes for the whole process.
 
@@ -1066,7 +1066,7 @@ When the replay is not complete, Serve first writes an `event: volt.reset` that 
 
 **Cost.** events.go (ID format, since, Serve, client parsing and cursor), events_test, the itest client test, and §event-routes rules 2-3, which must name the reset event. About 5 sites; best combined with the NewBroker change from the broker-config item.
 
-### 22. [consider] Generated <Model>Update (nao/gen/golang/queries.go:682), which issues UPDATE ... SET <marked> WHERE <key> through rt.UpdateRowRender (nao/rt/changeset.go:405); the generated PATCH/PUT shim (gen/router/gen.go:447-454): Get, Cast, Update, no transaction; spec §changesets rule 8, §validators rule 5
+### 22. [consider] Generated <Model>Update (nao/gen/golang/queries.go:682), which issues UPDATE ... SET <marked> WHERE <key> through rt.UpdateRowRender (nao/rt/changeset.go:407); the generated PATCH/PUT shim (gen/router/gen.go:447-454): Get, Cast, Update, no transaction; spec §changesets rule 8, §validators rule 5
 
 **Effect.** Validate judges Row(), which is the snapshot plus the marks, but the statement carries only the marks. The snapshot values a validator read for unmarked columns are a precondition the write never states, and no CHECK backs them up (§validators rule 9).
 
@@ -1106,7 +1106,7 @@ When the replay is not complete, Serve first writes an `event: volt.reset` that 
 
 **Cost.** One lang/vet rule and one lint.md entry. No runtime change.
 
-### 26. [consider] lang/gofuncs.go:109 (`ctxt := build.Default` plus MatchFile), memoized per directory in lang/session.go:198-222 (s.scans, keyed on dir and sources) and used by lsp/voltnav.go:256; spec §pipelines rule 2, §validators rule 1
+### 26. [consider] lang/gofuncs.go:109 (`ctxt := build.Default` plus MatchFile), memoized per directory in lang/session.go:198-222 (s.scans, keyed on dir and sources) and used by lsp/voltnav.go:258; spec §pipelines rule 2, §validators rule 1
 
 **Effect.** Which Go files a validator, plug or error handler resolves in depends on the process's GOOS, GOARCH and build tags, which go/build.Default reads from the environment, while the generated call sites carry no build constraint. The s.scans memo is keyed on the sources, but its result also depends on that ambient context, and GoFuncsOf is not among cmd/volt/purity_test.go's pureTargets, contrary to AGENT.md's rule that every memo is gated.
 

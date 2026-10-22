@@ -63,7 +63,12 @@ migration produces is the bug the fold exists to catch; and the fold
 compares indexes by key, uniqueness and predicate, never by name, so
 a renamed index is no drift and a UNIQUE constraint an older lowering
 wrote is one structure with the unique index `unique` writes now:
-SQLite enforces the two alike, and every single-column index is a
+SQLite enforces the two alike. That equality is structural only: on
+such a database the uniqueness is an autoindex no `drop index`
+removes, while the fold, the migrations as they lower now, holds a
+named index there, so a drift that drops it proposes `drop index`,
+which refuses on that database, and only `rebuild table` takes the
+uniqueness away. Every single-column index is a
 `CREATE INDEX` so that an index can be added to a table that has rows
 and dropped from it without a rebuild, `add ... [unique]` among them.
 A primary key is no index and changes only by a rebuild. Unsettled:

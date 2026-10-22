@@ -166,6 +166,7 @@ func (c *checker) collect(f *ast.File) {
 				c.errorf(d.Pos(), "namespaces-and-uniqueness", "duplicate table name %q", key)
 				continue
 			}
+			c.tableNameCheck(d)
 			ti := &TableInfo{Decl: d, Key: key}
 			c.info.byName[key] = ti
 			c.info.Tables = append(c.info.Tables, ti)
@@ -219,6 +220,16 @@ func (c *checker) collect(f *ast.File) {
 			c.info.byName[checked.Key] = checked
 		}
 		c.diags = append(c.diags, partialColumnDedupe(checked, diags, reported)...)
+	}
+	c.indexNamesSchemaCheck()
+}
+
+// tableNameCheck enforces that a table's name does not begin with
+// sqlite_, in any case, which SQLite keeps for its own objects (spec
+// §namespaces-and-uniqueness).
+func (c *checker) tableNameCheck(d *ast.Table) {
+	if key := d.Name.Name(); strings.HasPrefix(sqliteFold(key), "sqlite_") {
+		c.errorf(d.Name.Pos(), "namespaces-and-uniqueness", "table name %q begins with sqlite_, which SQLite keeps for its own objects (§namespaces-and-uniqueness)", key)
 	}
 }
 
@@ -325,7 +336,9 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 					for _, ix := range pit.Indexes {
 						injections = append(injections, indexInjection{ix, len(ti.Indexes), item, p})
 						ti.Indexes = append(ti.Indexes, ix)
-						named = append(named, namedIndex{ix: ix, partial: p})
+						if indexNamed(ix) {
+							named = append(named, namedIndex{ix: ix, partial: p})
+						}
 					}
 				case *ast.ValidatorsBlock:
 					for _, v := range pit.Validators {
@@ -338,7 +351,9 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 		case *ast.IndexesBlock:
 			ti.Indexes = append(ti.Indexes, item.Indexes...)
 			for _, ix := range item.Indexes {
-				named = append(named, namedIndex{ix: ix})
+				if indexNamed(ix) {
+					named = append(named, namedIndex{ix: ix})
+				}
 			}
 		case *ast.ValidatorsBlock:
 			ti.Validators = append(ti.Validators, item.Validators...)

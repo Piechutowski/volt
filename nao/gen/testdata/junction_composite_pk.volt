@@ -1,5 +1,5 @@
 // many-to-many via an explicit junction table with a composite primary key;
-// user_id/role_id carry no null: a member of the pk index is never NULL
+// user_id/role_id carry no null: a member of the composite primary key is never NULL
 Table users {
   id int [pk]
 }

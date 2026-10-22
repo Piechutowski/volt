@@ -241,7 +241,9 @@ db/i203_migration_drop_table_empty_body.volt:13:3: error: spec/migrations: drop 
 db/i204_migration_rebuild_empty_body.volt:16:3: error: spec/migrations: rebuild table "users": the body must declare at least one column (§migrations)
 
 ## i205_migration_index_pk.volt
-db/i205_migration_index_pk.volt:13:26: error: spec/migrations: pk is a column setting, not an index setting: write pk on each key column, and several pk columns form one composite primary key in declaration order (§migrations)
+db/i205_migration_index_pk.volt:15:19: error: spec/migrations: pk is a column setting, not an index setting: write pk on each key column, and several pk columns form one composite primary key in declaration order (§migrations)
+db/i205_migration_index_pk.volt:16:13: error: spec/migrations: pk is a column setting, not an index setting: write pk on each key column, and several pk columns form one composite primary key in declaration order (§migrations)
+db/i205_migration_index_pk.volt:19:26: error: spec/migrations: pk is a column setting, not an index setting: write pk on each key column, and several pk columns form one composite primary key in declaration order (§migrations)
 
 ## i207_migration_ref_action.volt
 db/i207_migration_ref_action.volt:20:39: error: spec/migrations: column "user_id": invalid referential action "explode" for 'delete'; expected cascade, restrict, set_null or set_default; leave delete: out for SQLite's default (§migrations)
@@ -481,13 +483,16 @@ app/i305_case_param_type.volt:7:18: error: syntax: write string, not String: key
 
 ## i309_migration_shape_index_plain.volt
 db/i309_migration_shape_index_plain.volt:18:7: error: spec/indexes: index owner on "accounts" is a plain single-column index: write the column setting index on "owner"; an Indexes block holds composite, expression and partial indexes (§indexes)
-db/i309_migration_shape_index_plain.volt:19:7: error: spec/indexes: table "accounts" has two indexes named "idx_accounts_email", the unique setting of column "email" and index email: an index name is unique within its table; give one a name: (§indexes)
+db/i309_migration_shape_index_plain.volt:19:7: error: spec/indexes: table "accounts" has two indexes named "idx_accounts_email", the unique setting of column "email" and index email: SQLite names an index once in the database, so an index name is unique in the schema; give index email another name: (§indexes)
 
 ## i30_unused_import
 app/r.volt:5:2: error: spec/imports: package "db" imported and not used (§imports)
 
 ## i31_cycle
 b/b.volt:4:2: error: spec/imports: import cycle: a -> b -> a (§imports)
+
+## i321_migration_unique_and_index.volt
+db/i321_migration_unique_and_index.volt:13:18: error: spec/migrations: "unique" and "index" cannot both be set (§migrations)
 
 ## i32_pkg_dir_mismatch
 app/r.volt:2:1: error: spec/projects-and-packages: package name "routes" must match its directory name "app" (§projects-and-packages)

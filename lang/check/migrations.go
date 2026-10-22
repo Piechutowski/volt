@@ -256,9 +256,11 @@ func (c *checker) shapeBodyCheck(what, table string, pos token.Position, body []
 		case *ast.IndexesBlock:
 			for _, ix := range item.Indexes {
 				c.migrationIndexCheck(table, ix)
-				c.indexPlainCheck(table, ix)
 				ti.Indexes = append(ti.Indexes, ix)
-				named = append(named, namedIndex{ix: ix})
+				if indexNamed(ix) {
+					c.indexPlainCheck(table, ix)
+					named = append(named, namedIndex{ix: ix})
+				}
 			}
 		}
 	}
@@ -372,9 +374,19 @@ func (c *checker) migrationIndexCheck(table string, ix *ast.Index) {
 }
 
 // indexNameCheck enforces that an index whose key holds an expression
-// carries name:, since no name derives from it (spec §indexes).
+// carries name:, since no name derives from it, and that a written
+// name is not empty and does not begin with sqlite_, which SQLite
+// keeps for its own objects (spec §indexes).
 func (c *checker) indexNameCheck(table string, ix *ast.Index) {
-	if ix.Settings.Get("name") != nil {
+	if s := ix.Settings.Get("name"); s != nil {
+		lit, ok := s.Value.(*ast.BasicLit)
+		switch {
+		case !ok:
+		case lit.Tok.Val == "":
+			c.errorf(s.Pos(), "indexes", "index %s on %q has an empty name:; write a name, or leave name: out for the derived one (§indexes)", indexKeyString(ix), table)
+		case strings.HasPrefix(sqliteFold(lit.Tok.Val), "sqlite_"):
+			c.errorf(s.Pos(), "indexes", "index %s on %q is named %q: a name beginning with sqlite_ is SQLite's own and refused for an index (§indexes)", indexKeyString(ix), table, lit.Tok.Val)
+		}
 		return
 	}
 	for _, atom := range ix.Key {

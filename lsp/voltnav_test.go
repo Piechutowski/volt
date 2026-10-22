@@ -6,6 +6,9 @@ import (
 	"testing"
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
+
+	"github.com/Piechutowski/volt/lang"
+	"github.com/Piechutowski/volt/lang/ast"
 )
 
 const navSchema = "package db\n\nTable posts {\n\tid    int [pk]\n\ttitle string [null]\n}\n"
@@ -133,6 +136,69 @@ func TestVoltHoverTableKeyNotRoutable(t *testing.T) {
 	}
 	if strings.Contains(md, "route parameter type") {
 		t.Errorf("a float64 key is not a route parameter type:\n%s", md)
+	}
+}
+
+// TestVoltHoverTableKeyFromPartials pins that the hover reads the key
+// after partial injection (spec §columns): a key a partial injects is
+// named, and a composite key split between the body and a partial is
+// not named as the body's one pk column.
+func TestVoltHoverTableKeyFromPartials(t *testing.T) {
+	schema := "package db\n\nTablePartial daily {\n\tday int [pk]\n}\n\nTable site_days {\n\tsite string [pk]\n\t~daily\n\tviews int\n}\n\nTablePartial base {\n\tid int [pk, increment]\n}\n\nTable posts {\n\t~base\n\ttitle string\n}\n"
+	routes := "package app\n\nimport (\n\tdb\n)\n\nScope / {\n\tresources db.site_days\n\tresources db.posts\n}\n"
+	root := voltProject(t, map[string]string{
+		"go.mod":          "module nav\n",
+		"db/schema.volt":  schema,
+		"app/routes.volt": routes,
+	})
+	d := NewDocument("file://"+filepath.Join(root, "app", "routes.volt"), routes)
+
+	h := d.Hover(posOf(t, routes, "db.site_days", 0))
+	if h == nil {
+		t.Fatal("no hover for db.site_days")
+	}
+	if md := h.Contents.(protocol.MarkupContent).Value; strings.Contains(md, "key:") {
+		t.Errorf("a composite key (site, day) has no single key to name:\n%s", md)
+	}
+	h = d.Hover(posOf(t, routes, "db.posts", 0))
+	if h == nil {
+		t.Fatal("no hover for db.posts")
+	}
+	if md := h.Contents.(protocol.MarkupContent).Value; !strings.Contains(md, "key: `id` → route parameter type `int`") {
+		t.Errorf("the key the partial injects is the table's key:\n%s", md)
+	}
+}
+
+// TestTableKeyUnchecked pins the key read from source when the package
+// has no checked model: partials injected in source order, a column of
+// the body overriding a partial's, as §tablepartial resolves them.
+func TestTableKeyUnchecked(t *testing.T) {
+	schema := "package db\n\nTablePartial daily {\n\tday int [pk]\n\tsite string\n}\n\nTable site_days {\n\tsite string [pk]\n\t~daily\n\tviews int\n}\n\nTablePartial base {\n\tid int [pk, increment]\n}\n\nTable posts {\n\t~base\n\ttitle string\n}\n"
+	root := voltProject(t, map[string]string{
+		"go.mod":         "module nav\n",
+		"db/schema.volt": schema,
+	})
+	pr, err := lang.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg := pr.PackageAt(filepath.Join(root, "db"))
+	if pkg == nil || pkg.Schema() != nil {
+		t.Fatalf("want the loaded, unchecked package db, got %v", pkg)
+	}
+	want := map[string]string{"site_days": "site, day", "posts": "id"}
+	for _, d := range pkg.Merged().Decls {
+		tbl, ok := d.(*ast.Table)
+		if !ok {
+			continue
+		}
+		var names []string
+		for _, col := range tableKey(pkg, tbl) {
+			names = append(names, col.Name.Name())
+		}
+		if got := strings.Join(names, ", "); got != want[tbl.Name.Name()] {
+			t.Errorf("key of %s = (%s), want (%s)", tbl.Name.Name(), got, want[tbl.Name.Name()])
+		}
 	}
 }
 

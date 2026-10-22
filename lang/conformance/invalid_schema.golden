@@ -304,14 +304,49 @@ i308_index_plain_single_column.volt:17:5: error: spec/indexes: index email on "u
 i308_index_plain_single_column.volt:18:6: error: spec/indexes: index (name) on "users" is a plain single-column index: write the column setting index on "name"; an Indexes block holds composite, expression and partial indexes (§indexes)
 
 ## i310_index_name_twice.volt
-i310_index_name_twice.volt:10:5: error: spec/indexes: table "users" has two indexes named "idx_users_email", the unique setting of column "email" and index email: an index name is unique within its table; give one a name: (§indexes)
-i310_index_name_twice.volt:12:6: error: spec/indexes: table "users" has two indexes named "idx_users_lookup", index (handle, region) and index (region, handle): an index name is unique within its table; give one a name: (§indexes)
+i310_index_name_twice.volt:10:5: error: spec/indexes: table "users" has two indexes named "idx_users_email", the unique setting of column "email" and index email: SQLite names an index once in the database, so an index name is unique in the schema; give index email another name: (§indexes)
+i310_index_name_twice.volt:12:6: error: spec/indexes: table "users" has two indexes named "idx_users_lookup", index (handle, region) and index (region, handle): SQLite names an index once in the database, so an index name is unique in the schema; give index (region, handle) another name: (§indexes)
 
 ## i311_unique_and_index.volt
 i311_unique_and_index.volt:5:16: error: spec/columns: "unique" and "index" cannot both be set (§columns)
 
 ## i312_partial_index_name_twice.volt
-i312_partial_index_name_twice.volt:8:6: error: spec/indexes: TablePartial "stamps" declares two indexes named "idx_<table>_created_at_updated_at" in every table that injects it, index (created_at, updated_at) and index (created_at, updated_at): an index name is unique within its table; give one a name: (§indexes)
+i312_partial_index_name_twice.volt:8:6: error: spec/indexes: TablePartial "stamps" declares two indexes named "idx_<table>_created_at_updated_at" in every table that injects it, index (created_at, updated_at) and index (created_at, updated_at): SQLite names an index once in the database, so an index name is unique in the schema; declare one of them in a table body instead, since a name: written in a TablePartial is the same in every table that injects it (§indexes)
+i312_partial_index_name_twice.volt:15:5: error: spec/indexes: TablePartial "contact" declares two indexes named "idx_<table>_email" in every table that injects it, the unique setting of column "email" and index email: SQLite names an index once in the database, so an index name is unique in the schema; declare one of them in a table body instead, since a name: written in a TablePartial is the same in every table that injects it (§indexes)
+
+## i313_index_name_two_tables.volt
+i313_index_name_two_tables.volt:18:3: error: spec/indexes: tables "users" and "admins" each have an index named "idx_email_ci", index `lower(email)` of TablePartial "contact" in both: SQLite names an index once in the database, so an index name is unique in the schema; a name: written in a TablePartial is the same in every table that injects it, so TablePartial "contact" is injected into one table only (§indexes)
+
+## i314_index_name_derived_two_tables.volt
+i314_index_name_derived_two_tables.volt:10:15: error: spec/indexes: tables "a_b" and "a" each have an index named "idx_a_b_c", the index setting of column "c" and the index setting of column "b_c": SQLite names an index once in the database, so an index name is unique in the schema; rename a table or a column, since no name: reaches a column's index (§indexes)
+i314_index_name_derived_two_tables.volt:20:16: error: spec/indexes: tables "post" and "post_tag" each have an index named "idx_post_tag_slug", the unique setting of column "tag_slug" and the index setting of column "slug": SQLite names an index once in the database, so an index name is unique in the schema; rename a table or a column, since no name: reaches a column's index (§indexes)
+
+## i315_index_name_table_name.volt
+i315_index_name_table_name.volt:5:17: error: spec/indexes: the index setting of column "title" of table "posts" is named "idx_posts_title", the name of table "idx_posts_title": SQLite names indexes and tables in one namespace, so an index takes no table's name; rename a table or a column, since no name: reaches a column's index (§indexes)
+i315_index_name_table_name.volt:9:5: error: spec/indexes: index `lower(body)` of table "posts" is named "Pages", the name of table "pages": SQLite names indexes and tables in one namespace, so an index takes no table's name; give index `lower(body)` another name: (§indexes)
+
+## i316_index_name_case.volt
+i316_index_name_case.volt:10:6: error: spec/indexes: table "posts" has two indexes named "IDX_Posts" and "idx_posts" (one name to SQLite), index (title, body) and index (body, title): SQLite names an index once in the database, so an index name is unique in the schema; give index (body, title) another name: (§indexes)
+
+## i317_index_name_sqlite_prefix.volt
+i317_index_name_sqlite_prefix.volt:9:13: error: spec/indexes: index (a, b) on "stats" is named "sqlite_ab": a name beginning with sqlite_ is SQLite's own and refused for an index (§indexes)
+i317_index_name_sqlite_prefix.volt:10:13: error: spec/indexes: index (b, a) on "stats" is named "SQLite_BA": a name beginning with sqlite_ is SQLite's own and refused for an index (§indexes)
+
+## i318_index_name_empty.volt
+i318_index_name_empty.volt:10:13: error: spec/indexes: index (a, b) on "posts" has an empty name:; write a name, or leave name: out for the derived one (§indexes)
+i318_index_name_empty.volt:11:21: error: spec/indexes: index `lower(title)` on "posts" has an empty name:; write a name, or leave name: out for the derived one (§indexes)
+
+## i319_increment_partial_composite.volt
+i319_increment_partial_composite.volt:4:15: error: spec/columns: increment on "id" in table "a", whose primary key is (id, site): a composite primary key has no auto-assigned column, since SQLite auto-assigns only a single-column int key (§columns)
+i319_increment_partial_composite.volt:4:15: error: spec/columns: increment on "id" in table "b", whose primary key is (id, site): a composite primary key has no auto-assigned column, since SQLite auto-assigns only a single-column int key (§columns)
+
+## i320_index_pk_alone.volt
+i320_index_pk_alone.volt:9:8: error: spec/indexes: pk is a column setting, not an index setting: write pk on each key column, and several pk columns form one composite primary key in declaration order (§indexes)
+i320_index_pk_alone.volt:10:13: error: spec/indexes: pk is a column setting, not an index setting: write pk on each key column, and several pk columns form one composite primary key in declaration order (§indexes)
+
+## i322_table_name_sqlite.volt
+i322_table_name_sqlite.volt:3:7: error: spec/namespaces-and-uniqueness: table name "sqlite_stats" begins with sqlite_, which SQLite keeps for its own objects (§namespaces-and-uniqueness)
+i322_table_name_sqlite.volt:7:7: error: spec/namespaces-and-uniqueness: table name "SQLite_Daily" begins with sqlite_, which SQLite keeps for its own objects (§namespaces-and-uniqueness)
 
 ## i32_settings_next_line.volt
 i32_settings_next_line.volt:4:3: error: syntax: expected a column, Indexes, Validators, Records or '~injection' in Table body, found '[' "["
@@ -356,7 +391,7 @@ i78_increment_varchar.volt:4:20: error: spec/columns: increment on "code" (strin
 i79_increment_not_pk.volt:6:16: error: spec/columns: increment on "counter": only the primary key auto-increments; elsewhere the keyword would be silently ignored while no changeset ever marks the column (§columns, §mapping-to-sqlite-ddl)
 
 ## i80_increment_composite_pk.volt
-i80_increment_composite_pk.volt:4:23: error: spec/columns: increment on "user_id": a composite primary key has no auto-assigned column, since SQLite auto-assigns only a single-column int key (§columns)
+i80_increment_composite_pk.volt:4:23: error: spec/columns: increment on "user_id" in table "user_tags", whose primary key is (user_id, tag): a composite primary key has no auto-assigned column, since SQLite auto-assigns only a single-column int key (§columns)
 
 ## i81_element_boundary.volt
 i81_element_boundary.volt:12:1: error: syntax: expected identifier in relationship endpoint (§relationships-ref), found the start of the next element (§line-structure-and-whitespace)

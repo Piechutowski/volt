@@ -588,8 +588,11 @@ func columnDiff(tt, ft *Table, target, fold Column) []string {
 	if target.Default != fold.Default {
 		out = append(out, fmt.Sprintf("%s defaults to %s in the schema, %s in the fold", at, defaultDescribe(target.Default), defaultDescribe(fold.Default)))
 	}
-	if (target.PK != 0) != (fold.PK != 0) {
+	switch {
+	case (target.PK != 0) != (fold.PK != 0):
 		out = append(out, fmt.Sprintf("%s is %s in the schema, %s in the fold", at, pkness(target.PK), pkness(fold.PK)))
+	case target.PK != fold.PK:
+		out = append(out, fmt.Sprintf("%s is column %d of the primary key in the schema, column %d in the fold", at, target.PK, fold.PK))
 	}
 	return out
 }

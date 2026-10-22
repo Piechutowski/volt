@@ -200,7 +200,8 @@ func isString(n ast.Node) bool {
 }
 
 func (c *checker) incrementCheck(ti *TableInfo) {
-	compositePK := len(ti.PK()) > 1
+	pk := ti.PK()
+	compositePK := len(pk) > 1
 	for _, cd := range ti.Columns {
 		col := cd.Col
 		inc := col.Settings.Get("increment")
@@ -219,8 +220,12 @@ func (c *checker) incrementCheck(ti *TableInfo) {
 		isPK := col.Settings.Get("pk") != nil
 		switch {
 		case compositePK:
+			key := make([]string, len(pk))
+			for i, cd := range pk {
+				key[i] = cd.Col.Name.Name()
+			}
 			c.errorf(inc.Pos(), "columns",
-				"increment on %q: a composite primary key has no auto-assigned column, since SQLite auto-assigns only a single-column int key (§columns)", name)
+				"increment on %q in table %q, whose primary key is (%s): a composite primary key has no auto-assigned column, since SQLite auto-assigns only a single-column int key (§columns)", name, ti.Key, strings.Join(key, ", "))
 		case !isPK:
 			c.errorf(inc.Pos(), "columns",
 				"increment on %q: only the primary key auto-increments; elsewhere the keyword would be silently ignored while no changeset ever marks the column (§columns, §mapping-to-sqlite-ddl)", name)

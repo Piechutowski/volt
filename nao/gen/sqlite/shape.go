@@ -97,7 +97,7 @@ func IndexesDDL(table string, body []ast.TableItem) ([]string, error) {
 			indexes = append(indexes, item.Indexes...)
 		}
 	}
-	return indexStatements(table, cols, indexes)
+	return indexStatements(table, cols, indexes, map[string]string{})
 }
 
 // ColumnDDL renders the definition of a column added by ALTER TABLE

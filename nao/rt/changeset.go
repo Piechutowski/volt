@@ -87,8 +87,10 @@ func (e *Invalid) Details() []Detail {
 // "UNIQUE constraint failed: t.a, t.b" is a unique field error on a and
 // b, "NOT NULL constraint failed: t.a" a not_null one on a, "FOREIGN KEY
 // constraint failed" a foreign_key one with no column; a trailing result
-// code such as " (2067)" is not part of the last column. Any other error
-// is returned unchanged.
+// code such as " (2067)" is not part of the last column. A unique index
+// over an expression is named as "index 'idx_...'" and constrains no
+// column, so its unique field error has none. Any other error is
+// returned unchanged.
 func Refused(model string, err error) error {
 	if err == nil {
 		return nil
@@ -106,7 +108,7 @@ func Refused(model string, err error) error {
 		}
 		f := FieldError{Check: k.check, Message: k.message}
 		detail := resultCodeTrim(strings.TrimSpace(strings.TrimPrefix(msg[i+len(prefix):], ":")))
-		if detail != "" && k.check != "foreign_key" {
+		if detail != "" && k.check != "foreign_key" && !strings.HasPrefix(detail, "index '") {
 			for _, c := range strings.Split(detail, ",") {
 				c = strings.TrimSpace(c)
 				if j := strings.LastIndexByte(c, '.'); j >= 0 {

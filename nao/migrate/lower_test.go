@@ -183,6 +183,72 @@ func TestRebuildForgetsAnIndexNotRestated(t *testing.T) {
 	}
 }
 
+// TestTypedDropOfAnIndexedColumnRoundTrips pins that a typed drop whose
+// shape carries unique or index drops that index before the column, as
+// the inverse of an add does, so the flat body folds to the schema and
+// runs down and up again on a real SQLite (spec §migrations rule 8).
+func TestTypedDropOfAnIndexedColumnRoundTrips(t *testing.T) {
+	ctx := context.Background()
+	src := "package db\n\nTable accounts {\n  id int [pk]\n}\n\nMigration 0001__init {\n  create table accounts {\n    id     int    [pk]\n    email  string [null, unique]\n    region string [null, index]\n  }\n}\n\nMigration 0002__drop {\n  alter table accounts {\n    drop email string [null, unique]\n    drop region string [null, index]\n  }\n}\n"
+	f, info := parseChecked(t, "t.volt", src)
+	ms, err := Lower(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantUp := []string{
+		"DROP INDEX idx_accounts_email",
+		"ALTER TABLE accounts DROP COLUMN email",
+		"DROP INDEX idx_accounts_region",
+		"ALTER TABLE accounts DROP COLUMN region",
+	}
+	if got := strings.Join(ms[1].Up, ";\n"); got != strings.Join(wantUp, ";\n") {
+		t.Errorf("up of 0002:\n%s\nwant:\n%s", got, strings.Join(wantUp, ";\n"))
+	}
+	db := memoryDB(t)
+	if _, err := rt.MigrateUp(ctx, db, ms[:1]); err != nil {
+		t.Fatal(err)
+	}
+	before, err := Read(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rt.MigrateUp(ctx, db, ms); err != nil {
+		t.Fatalf("the fold stopped: %v", err)
+	}
+	ddl, err := sqlite.Generate(f, info, sqlite.Options{Source: "t.volt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetDB := memoryDB(t)
+	if _, err := targetDB.ExecContext(ctx, string(ddl)); err != nil {
+		t.Fatal(err)
+	}
+	target, err := Read(ctx, targetDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fold, err := Read(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if drifts := Diff(target, fold); len(drifts) > 0 {
+		t.Errorf("the fold drifts from the schema: %+v", drifts)
+	}
+	if _, err := rt.MigrateDown(ctx, db, ms); err != nil {
+		t.Fatalf("down of 0002: %v", err)
+	}
+	after, err := Read(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if drifts := Diff(before, after); len(drifts) > 0 {
+		t.Errorf("down of 0002 left another structure than 0001 made: %+v", drifts)
+	}
+	if _, err := rt.MigrateUp(ctx, db, ms); err != nil {
+		t.Fatalf("up again: %v", err)
+	}
+}
+
 // TestRebuildUnderAViewOrTriggerFailsAtTheRename pins where the five
 // steps stop when a view, or a trigger on another table, reads the
 // table (spec §migrations rule 9): SQLite refuses the rename and names

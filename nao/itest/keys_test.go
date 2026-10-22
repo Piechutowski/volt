@@ -290,7 +290,8 @@ func TestMigrationAddsAUniqueColumnWithoutARebuild(t *testing.T) {
 // lowering of unique, an inline UNIQUE and its sqlite_autoindex, folds
 // equal to the new lowering's CREATE UNIQUE INDEX on the same key (spec
 // §the-fold rule 2): the fold compares indexes by key, uniqueness and
-// predicate, never by name, so such a database needs no migration.
+// predicate, never by name, so such a database needs no migration to
+// stay equal; dropping that uniqueness later takes a rebuild there.
 func TestOldLoweringFoldsEqual(t *testing.T) {
 	ddl := schemaDDL(t)
 	single := regexp.MustCompile(`(?m)^CREATE UNIQUE INDEX \w+ ON (\w+) \((\w+)\);\n`)

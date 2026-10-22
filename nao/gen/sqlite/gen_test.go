@@ -137,6 +137,16 @@ func TestGenerationErrors(t *testing.T) {
 			src:     "Table users {\n  id int [pk]\n  email string [unique]\n  Indexes {\n    email [where: `email != ''`]\n  }\n}",
 			wantErr: `duplicate index name "idx_users_email"`,
 		},
+		{
+			name:    "two tables derive one index name",
+			src:     "Table post {\n  id int [pk]\n  tag_slug string [unique]\n}\nTable post_tag [model: \"Label\"] {\n  id int [pk]\n  slug string [index]\n}",
+			wantErr: `duplicate index name "idx_post_tag_slug", an index of table post`,
+		},
+		{
+			name:    "an index takes a table's name in another case",
+			src:     "Table posts {\n  id int [pk]\n  a int\n  b int\n  Indexes {\n    (a, b) [name: \"Pages\"]\n  }\n}\nTable pages {\n  id int [pk]\n}",
+			wantErr: `duplicate index name "Pages", the name of table pages`,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

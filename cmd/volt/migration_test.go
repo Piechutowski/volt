@@ -146,8 +146,7 @@ func TestMigrationCheck(t *testing.T) {
 // migrations themselves and 2 for a database that fails. A migration
 // the checker refuses, a shape body with two indexes of one name
 // (§indexes), never reaches the lowering: every command refuses its
-// package first, with the diagnostic, as it refuses any package with
-// errors.
+// package first, with the diagnostic and exit 1, as gen does.
 func TestMigrationExitCodes(t *testing.T) {
 	unlowerable := filepath.Join(t.TempDir(), "db")
 	if err := os.MkdirAll(unlowerable, 0o755); err != nil {
@@ -165,12 +164,8 @@ func TestMigrationExitCodes(t *testing.T) {
 	fresh := filepath.Join(t.TempDir(), "fresh.db")
 	for _, args := range [][]string{{"migration", "sql", unlowerable}, {"migration", "check", unlowerable}, {"migration", "up", fresh, unlowerable}, {"gen", unlowerable}} {
 		out, err := voltRun(t, args...)
-		want := 2
-		if args[0] == "gen" {
-			want = 1
-		}
-		if exitCode(err) != want || !strings.Contains(out, `has two indexes named "idx_posts_n"`) {
-			t.Errorf("%s over a migration with two indexes of one name, which the checker refuses before anything lowers it: exit %d (%v), want %d naming the index\n%s", strings.Join(args[:2], " "), exitCode(err), err, want, out)
+		if exitCode(err) != 1 || !strings.Contains(out, `has two indexes named "idx_posts_n"`) {
+			t.Errorf("%s over a migration with two indexes of one name, which the checker refuses before anything lowers it: exit %d (%v), want 1 naming the index\n%s", strings.Join(args[:2], " "), exitCode(err), err, out)
 		}
 	}
 

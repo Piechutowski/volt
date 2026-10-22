@@ -86,7 +86,8 @@ guarantees.
 1. `unique` or `index` on the column of a single-column primary key,
    which is unique and indexed already;
 2. a single-column `[unique]` index under `where:` on a column that
-   carries `unique`, which holds over the whole table already;
+   carries `unique` or is the single-column primary key, either of
+   which holds over the whole table already;
 3. an index without `where:` whose key is the columns of a composite
    primary key in its order, which the key's own index already is;
 4. two indexes with an identical key (column order significant) and the
