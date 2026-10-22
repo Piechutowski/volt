@@ -22,7 +22,7 @@ report engine when a consumer exists.
   - [x] Named placeholders, Go references checked by spelling
 - [x] Schema core: Project, Table, TablePartial, Records, Type, Ref, notes
   - [x] One spelling per meaning: `pk` is the key, a column is NOT NULL unless it carries `null`, settings follow the type in brackets only, the files of a package share a namespace without imports
-- [ ] One spelling per meaning, decided in review and built in steps; docs/entropy-and-purity-report.md keeps what is still open
+- [x] One spelling per meaning, decided in review and built in steps; docs/entropy-and-purity-report.md keeps what is still open
   - [x] Step 1, removals
     - [x] Enums go: `Type OrderState string` with Go constants and a membership validator replaces `Enum`. In the same commit, a declared type whose Go declaration spells its storage type (`bool`, `int`, `float64`, `string`) needs no Scanner or Valuer, `<Model>New` seeds its literal defaults, `required` compares it directly, its name is exported and a bare one joins the generated name scope (the router's and the migration list's names included) so a collision is a check error, and `-o DIR` with a bare declared type is refused unless DIR is the package's own directory
     - [x] Diagram-only constructs go: `headercolor`, Ref `color` and `inactive`, `TableGroup` (`Group` is the one set of tables, in the tables' namespace), sticky notes, `DiagramView`, the color literal
@@ -42,8 +42,8 @@ report engine when a consumer exists.
   - [x] Step 3, keys and indexes
     - [x] `pk` is a column setting only: several `pk` columns form one composite key in declaration order, the `[pk]` index form goes, `increment` only on a single `int` pk
     - [x] A single-column index is the column setting `unique` or `index`, emitted as `CREATE [UNIQUE] INDEX` with a derived name; the `Indexes` block holds composite, expression and partial indexes only, and a plain single-column index there is an error; a partial or expression unique index never makes a column unique (GetBy, foreign-key targets); the fold compares indexes by table, key, uniqueness and condition, not by name, and a primary key by its columns and their positions; two indexes of the schema with one name, or an index named as a table, compared as SQLite compares names, are a check error, and so are an empty `name:` and one beginning with `sqlite_`; a typed `drop` of a `unique` or `index` column drops its index first
-  - [ ] Step 4, routes
-    - [ ] `:slug(string)` goes, a bare path parameter is a string; PUT goes, PATCH is the partial update; a query route's verb is fixed by the generated method (List, Get and selects `get`, Create `post`, Update `patch`, Delete `delete`)
+  - [x] Step 4, routes
+    - [x] `:slug(string)` goes, a bare path parameter is a string and `int` the one type written, `(string)` an error naming the bare form; PUT goes, PATCH is the partial update: a `put` line is an error naming `patch`, and resources' `update` is one PATCH route; a query route's verb is fixed by the generated method (List, Get and selects `get`, which ServeMux also serves for HEAD; Create `post`, Update `patch`, Delete `delete`), any other verb an error naming the right one, while a controller route keeps every verb
 - [x] `Migration`: the element, its contextual keywords and its twelve checks; what runs it is under the data layer
   - [x] Column types are a closed Go set (`bool`, `int`, `float64`, `string`, `[]byte`, `time.Time`) and `Type` declarations; defaults are typed; a bare `Type` is held to its Go declaration, which decides whether it needs a Scanner and a Valuer
 - [~] Schema extensions

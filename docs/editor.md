@@ -122,7 +122,9 @@ load-bearing patterns, each citing the spec section it implements:
   checker enforces it with positions the LSP surfaces. New settings
   parse without touching the grammar.
 - **The Volt layer** (Part II of the spec): `package` clause, `import (…)` blocks,
-  `Pipeline`, `Scope`, routes with typed parameters and `:name...`
+  `Pipeline`, `Scope`, routes (the verbs of §routes, `put` not among
+  them) with bare and `:name(int)` parameters, `int` being the one
+  type written (§route-paths), and `:name...`
   wildcards, `resources` with an optional package qualifier, and the
   query layer — `Group` algebra, the `Pred` expression grammar
   (prec.left or/and, keyword operators at the same precedence as other

@@ -213,8 +213,8 @@ func TestQueryRouteTable(t *testing.T) {
 			t.Errorf("%s %s: helper %q — only GET query routes have one", r.Method, r.Spelled, r.Helper)
 		}
 	}
-	if seen != 21 {
-		t.Errorf("query rows = %d, want 21 (seven query routes, two dataset members, twelve resources [default] routes)", seen)
+	if seen != 19 {
+		t.Errorf("query rows = %d, want 19 (seven query routes, two dataset members, ten resources [default] routes)", seen)
 	}
 }
 

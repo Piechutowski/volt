@@ -61,11 +61,14 @@ func TestResourcesDefault(t *testing.T) {
 		t.Fatalf("helpers: %q %q", app.PathRefUsers(), app.PathRefUser(7))
 	}
 	h := handlerWithDB(t)
-	if rec := call(h, "PUT", "/ref/users/1", nil); rec.Code != 400 {
-		t.Fatalf("put with no body: %d, want 400", rec.Code)
+	if rec := call(h, "PATCH", "/ref/users/1", nil); rec.Code != 400 {
+		t.Fatalf("patch with no body: %d, want 400", rec.Code)
 	}
-	if rec := call(h, "PUT", "/ref/users/1", strings.NewReader(`{}`)); rec.Code != 200 || !strings.Contains(rec.Body.String(), "one@example.com") {
-		t.Fatalf("put with an empty object: %d %s, want 200 with the unchanged row", rec.Code, rec.Body.String())
+	if rec := call(h, "PATCH", "/ref/users/1", strings.NewReader(`{}`)); rec.Code != 200 || !strings.Contains(rec.Body.String(), "one@example.com") {
+		t.Fatalf("patch with an empty object: %d %s, want 200 with the unchanged row", rec.Code, rec.Body.String())
+	}
+	if rec := call(h, "PUT", "/ref/users/1", strings.NewReader(`{}`)); rec.Code != 405 || strings.Contains(rec.Header().Get("Allow"), "PUT") {
+		t.Fatalf("put: %d, Allow %q; want 405 without PUT, the update is PATCH alone (§the-action-table)", rec.Code, rec.Header().Get("Allow"))
 	}
 }
 
@@ -89,7 +92,7 @@ func TestResourcesDefaultStringKey(t *testing.T) {
 	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &up) != nil || up.Slug != "sqlite" || up.Name != "SQLite 3" {
 		t.Fatalf("update: %d %s", rec.Code, rec.Body.String())
 	}
-	rec = call(h, "PUT", "/ref/tags/sqlite", strings.NewReader(`{"slug":"renamed","name":"SQLite"}`))
+	rec = call(h, "PATCH", "/ref/tags/sqlite", strings.NewReader(`{"slug":"renamed","name":"SQLite"}`))
 	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &up) != nil || up.Slug != "sqlite" || up.Name != "SQLite" {
 		t.Fatalf("update naming the key: %d %s, want 200 with the key unchanged (§query-routes)", rec.Code, rec.Body.String())
 	}

@@ -21,7 +21,7 @@ app/i08_helper_collision.volt:6:2: error: spec/scopes-and-routes: reverse-URL he
 app/i09_signature_conflict.volt:6:2: error: spec/scopes-and-routes: X.Show is reached by routes with different parameter signatures (§handler-references): (id string) vs (id int) (first at app/i09_signature_conflict.volt:5:2)
 
 ## i100_query_body_verb
-app/routes.volt:10:16: error: spec/scopes-and-routes: db.UserCreate takes a request body (db.UserParams); route it with post, put or patch (§query-routes)
+app/routes.volt:10:2: error: spec/query-routes: db.UserCreate is routed with post, not get: the generated method a query route binds fixes its verb (§query-routes)
 
 ## i101_query_extra_path_param
 app/routes.volt:10:13: error: spec/scopes-and-routes: path parameter "x" is not a parameter of db.UserList (§query-routes)
@@ -102,7 +102,7 @@ app/i11_wildcard_in_scope.volt:4:10: error: spec/scopes-and-routes: the wildcard
 app/i12_unknown_pipeline.volt:4:10: error: spec/scopes-and-routes: unknown Pipeline "nope" (§scopes)
 
 ## i13_unknown_param_type.volt
-app/i13_unknown_param_type.volt:5:13: error: spec/scopes-and-routes: unknown parameter type "uuid" (§route-paths); valid: int, string
+app/i13_unknown_param_type.volt:5:13: error: spec/scopes-and-routes: unknown parameter type "uuid" (§route-paths); valid: int
 
 ## i14_dup_param.volt
 app/i14_dup_param.volt:5:9: error: spec/scopes-and-routes: duplicate path parameter "id" (§route-paths)
@@ -309,10 +309,10 @@ db/schema.volt:14:17: error: spec/validators: no column "nope" in table "authors
 ## i223_unknown_type_route_errors_stay
 db/schema.volt:4:9: error: spec/columns: column "id": unknown type "int64"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
 db/schema.volt:6:9: error: spec/columns: column "rank": unknown type "int32"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
-app/routes.volt:10:28: error: spec/scopes-and-routes: db.AuthorUpdate takes a request body (db.AuthorParams); route it with post, put or patch (§query-routes)
+app/routes.volt:10:3: error: spec/query-routes: db.AuthorUpdate is routed with patch, not get: the generated method a query route binds fixes its verb (§query-routes)
 app/routes.volt:11:28: error: spec/scopes-and-routes: path parameter "extra" is not a parameter of db.AuthorDelete (§query-routes)
 app/routes.volt:12:16: error: spec/scopes-and-routes: parameter "id" of db.AuthorGet cannot be a wildcard (§query-routes)
-app/routes.volt:13:19: error: spec/query-routes: db.AuthorUpdate loads the row to update by "id", which must be a path parameter of the route (§query-routes)
+app/routes.volt:13:21: error: spec/query-routes: db.AuthorUpdate loads the row to update by "id", which must be a path parameter of the route (§query-routes)
 app/routes.volt:15:3: error: spec/scopes-and-routes: route GET /api/ranked conflicts with the route at app/routes.volt:14:3: identical method and path shape (§route-conflicts)
 app/routes.volt:16:3: error: spec/scopes-and-routes: reverse-URL helper or client method "AuthorRanked" already produced by the route at app/routes.volt:14:3 (§route-names-and-reverse-urls, §generated-client); disambiguate with [name:] or a scope name
 app/routes.volt:17:44: error: spec/settings-whitelists: setting "colour" is not valid on a route (§settings-whitelists); valid: name
@@ -479,7 +479,7 @@ app/routes.volt:6:2: error: spec/imports: import alias "ä" is not an identifier
 
 ## i305_case_param_type.volt
 app/i305_case_param_type.volt:6:17: error: syntax: write int, not INT: keywords are case-sensitive (§keywords)
-app/i305_case_param_type.volt:7:18: error: syntax: write string, not String: keywords are case-sensitive (§keywords)
+app/i305_case_param_type.volt:7:16: error: syntax: write int, not Int: keywords are case-sensitive (§keywords)
 
 ## i309_migration_shape_index_plain.volt
 db/i309_migration_shape_index_plain.volt:18:7: error: spec/indexes: index owner on "accounts" is a plain single-column index: write the column setting index on "owner"; an Indexes block holds composite, expression and partial indexes (§indexes)
@@ -494,8 +494,39 @@ b/b.volt:4:2: error: spec/imports: import cycle: a -> b -> a (§imports)
 ## i321_migration_unique_and_index.volt
 db/i321_migration_unique_and_index.volt:13:18: error: spec/migrations: "unique" and "index" cannot both be set (§migrations)
 
+## i323_param_type_string.volt
+app/i323_param_type_string.volt:5:20: error: spec/route-paths: write :blog, not :blog(string): a bare path parameter is a string, and int is the one type written (§route-paths)
+app/i323_param_type_string.volt:6:18: error: spec/route-paths: write :slug, not :slug(string): a bare path parameter is a string, and int is the one type written (§route-paths)
+app/i323_param_type_string.volt:7:19: error: spec/route-paths: write :slug, not :slug(String): a bare path parameter is a string, and int is the one type written (§route-paths)
+
+## i324_route_put.volt
+app/i324_route_put.volt:7:2: error: spec/routes: put is not a route verb: the partial update is patch, so write patch /posts/:id(int) Posts.Replace (§routes)
+app/i324_route_put.volt:8:2: error: spec/routes: put is not a route verb: the partial update is patch, so write patch /tags/:slug Tags.Replace (§routes)
+
+## i325_query_verb_list
+app/routes.volt:10:2: error: spec/query-routes: db.PostList is routed with get, not post: the generated method a query route binds fixes its verb (§query-routes)
+
+## i326_query_verb_get
+app/routes.volt:10:2: error: spec/query-routes: db.PostGet is routed with get, not delete: the generated method a query route binds fixes its verb (§query-routes)
+
+## i327_query_verb_select
+app/routes.volt:10:2: error: spec/query-routes: db.PostPopular is routed with get, not options: the generated method a query route binds fixes its verb (§query-routes)
+app/routes.volt:11:2: error: spec/query-routes: db.PostPopular is routed with get, not any: the generated method a query route binds fixes its verb (§query-routes)
+
+## i328_query_verb_update
+app/routes.volt:10:2: error: spec/query-routes: db.PostUpdate is routed with patch, not post: the generated method a query route binds fixes its verb (§query-routes)
+
+## i329_query_verb_delete
+app/routes.volt:10:2: error: spec/query-routes: db.PostDelete is routed with delete, not get: the generated method a query route binds fixes its verb (§query-routes)
+
 ## i32_pkg_dir_mismatch
 app/r.volt:2:1: error: spec/projects-and-packages: package name "routes" must match its directory name "app" (§projects-and-packages)
+
+## i330_query_verb_head
+app/routes.volt:10:2: error: spec/query-routes: db.PostGet is routed with get, not head: the generated method a query route binds fixes its verb, and ServeMux answers HEAD on a get route (§query-routes)
+
+## i331_query_route_put
+app/routes.volt:10:2: error: spec/routes: put is not a route verb: the partial update is patch, so write patch /posts/:id(int) db.PostUpdate (§routes)
 
 ## i35_reserved_param.volt
 app/i35_reserved_param.volt:5:9: error: spec/scopes-and-routes: path parameter "volt" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs

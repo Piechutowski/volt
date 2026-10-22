@@ -290,13 +290,13 @@ func TestAnyVerbMatchesEveryMethod(t *testing.T) {
 	}
 }
 
-func TestResourcesUpdateSpansPatchAndPut(t *testing.T) {
+func TestResourcesUpdateIsPatch(t *testing.T) {
 	h := handler()
-	for _, m := range []string{"PATCH", "PUT"} {
-		rec, body := serve(t, h, m, "/users/7")
-		if rec.Code != 200 || body["route"] != m+" /users/{id}" {
-			t.Errorf("%s /users/7: status %d route %v", m, rec.Code, body["route"])
-		}
+	if rec, body := serve(t, h, "PATCH", "/users/7"); rec.Code != 200 || body["route"] != "PATCH /users/{id}" {
+		t.Errorf("PATCH /users/7: status %d route %v", rec.Code, body["route"])
+	}
+	if rec, _ := serve(t, h, "PUT", "/users/7"); rec.Code != 405 || strings.Contains(rec.Header().Get("Allow"), "PUT") {
+		t.Errorf("PUT /users/7: status %d, Allow %q; want 405 without PUT (§the-action-table)", rec.Code, rec.Header().Get("Allow"))
 	}
 	if rec, body := serve(t, h, "POST", "/users"); rec.Code != 200 || body["route"] != "POST /users" {
 		t.Errorf("POST /users: %d %v", rec.Code, body["route"])

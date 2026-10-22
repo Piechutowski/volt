@@ -74,14 +74,6 @@ func register(mux *http.ServeMux, c Controllers) {
 		return c.Users.Update(w, r, voltid)
 	}, errHandlerErrors)))
 
-	mux.Handle("PUT /users/{id}", pipe0(volt.Handler("PUT /users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
-		voltid, ok := volt.ParseInt(r.PathValue("id"))
-		if !ok {
-			return volt.ErrNotFound
-		}
-		return c.Users.Update(w, r, voltid)
-	}, errHandlerErrors)))
-
 	mux.Handle("DELETE /users/{id}", pipe0(volt.Handler("DELETE /users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
 		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
@@ -328,30 +320,6 @@ func register(mux *http.ServeMux, c Controllers) {
 		return volt.RenderStatus(w, r, 200, out)
 	}, errHandlerErrors)))
 
-	mux.Handle("PUT /ref/users/{id}", pipe0(volt.Handler("PUT /ref/users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
-		if _, err := volt.Negotiate(r); err != nil {
-			return err
-		}
-		voltid, ok := volt.ParseInt(r.PathValue("id"))
-		if !ok {
-			return volt.ErrNotFound
-		}
-		var volt_params db.UserParams
-		if err := volt.Decode(r, &volt_params); err != nil {
-			return err
-		}
-		volt_row, err := c.DB.UserGet(r.Context(), voltid)
-		if err != nil {
-			return err
-		}
-		volt_cs := volt_row.Changeset().Cast(volt_params, db.UserEmail, db.UserCreatedAt)
-		out, err := c.DB.UserUpdate(r.Context(), volt_cs)
-		if err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 200, out)
-	}, errHandlerErrors)))
-
 	mux.Handle("DELETE /ref/users/{id}", pipe0(volt.Handler("DELETE /ref/users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
 		if _, err := volt.Negotiate(r); err != nil {
 			return err
@@ -405,26 +373,6 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors)))
 
 	mux.Handle("PATCH /ref/tags/{slug}", pipe0(volt.Handler("PATCH /ref/tags/{slug}", func(w http.ResponseWriter, r *volt.Request) error {
-		if _, err := volt.Negotiate(r); err != nil {
-			return err
-		}
-		var volt_params db.TagParams
-		if err := volt.Decode(r, &volt_params); err != nil {
-			return err
-		}
-		volt_row, err := c.DB.TagGet(r.Context(), r.PathValue("slug"))
-		if err != nil {
-			return err
-		}
-		volt_cs := volt_row.Changeset().Cast(volt_params, db.TagName)
-		out, err := c.DB.TagUpdate(r.Context(), volt_cs)
-		if err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 200, out)
-	}, errHandlerErrors)))
-
-	mux.Handle("PUT /ref/tags/{slug}", pipe0(volt.Handler("PUT /ref/tags/{slug}", func(w http.ResponseWriter, r *volt.Request) error {
 		if _, err := volt.Negotiate(r); err != nil {
 			return err
 		}

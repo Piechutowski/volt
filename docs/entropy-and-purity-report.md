@@ -12,7 +12,9 @@ the second) and the evidence it rests on.
 Items the maintainer has decided are removed from this file. The ones
 to build are listed in roadmap.md under "One spelling per meaning";
 item 17 (the Go type of a nullable column) was decided as no change, a
-nullable column stays `rt.Null[T]`. The numbers are the review's
+nullable column stays `rt.Null[T]`, and so was item 83 (the verbs
+`any`, `head` and `options`): a controller route keeps them, while a
+query route takes the verb its method fixes (§query-routes). The numbers are the review's
 original ranking, so a gap in the numbering is a decided item. When an
 item is decided, it leaves this file in the same commit.
 
@@ -680,7 +682,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 - settings: a generic production plus per-element EBNF in Part I, and whitelist tables in Part II
 - §settings-whitelists repeats the Scope, route, resources and dataset tables, each of which already calls itself complete
 - §collected-grammar-part-i/ii copy every production, minus an exception list
-- required's semantics appear in §columns, §validators 8 and §changesets 9; PUT-as-PATCH in §query-routes 2 and §default-handlers 6; the Validate contract in §validators 6 and §changesets 6 and 12
+- required's semantics appear in §columns, §validators 8 and §changesets 9; the Validate contract in §validators 6 and §changesets 6 and 12
 - §generation-contract-informative restates §handler-references, §query-routes 5 and §generated-client
 
 **Proposal.** State each fact once and cite it elsewhere. Keep the generic settings production in the grammar and give every element one whitelist table (key, value kind, meaning). Drop §settings-whitelists, or the per-section tables. Drop the collected grammars or generate them; the EBNF test already reads every block. Keep required's semantics in §columns and the Validate contract in §changesets.
@@ -721,26 +723,14 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Evidence.** docs/spec.md §columns extension (required), §validators rule 8, §changesets rules 6 and 9; lang/check/settings.go:45 (the setting) and 236-251 (requiredCheck).
 
-### 83. [keep] The verbs any, head and options
-
-- any /ping Home.Ping (a pattern with no method)
-- get /x, which ServeMux also serves for HEAD, beside a separate head /x
-- options /x
-
-**Proposal.** Keep all three on controller routes. any registers a pattern that no list of verbs reproduces, head lets a HEAD handler differ from the GET one, and options serves CORS preflights. None of them is a second spelling of another verb; only their use on query routes is redundant (verb item).
-
-**Cost.** None.
-
-**Evidence.** docs/spec.md §routes verb production and clause 1; lang/parser/volt.go:13-18; the blog fixture's any /ping.
-
 ### 84. [keep] resources and dataset as one-line macros over route lines
 
 - resources db.users [default] / five hand-written query-route lines
 - dataset db.browse / one get line per member
 
-**Proposal.** Keep both. Each expands from schema facts that the hand-written lines would have to repeat (table name, key type, member list), so the routes and the queries cannot disagree. Their output must match the hand-written lines exactly (naming and verb items). Optionally make the keywords agree in number (resources is plural, dataset singular).
+**Proposal.** Keep both. Each expands from schema facts that the hand-written lines would have to repeat (table name, key type, member list), so the routes and the queries cannot disagree. Their output must match the hand-written lines exactly: the verbs already do, since a query route's verb is the one its method fixes (§query-routes), and the names are the naming item. Optionally make the keywords agree in number (resources is plural, dataset singular).
 
-**Cost.** None beyond the naming and verb items.
+**Cost.** None beyond the naming item.
 
 **Evidence.** docs/spec.md §resources, §default-handlers 1, §datasets.
 
@@ -1066,7 +1056,7 @@ When the replay is not complete, Serve first writes an `event: volt.reset` that 
 
 **Cost.** events.go (ID format, since, Serve, client parsing and cursor), events_test, the itest client test, and §event-routes rules 2-3, which must name the reset event. About 5 sites; best combined with the NewBroker change from the broker-config item.
 
-### 22. [consider] Generated <Model>Update (nao/gen/golang/queries.go:682), which issues UPDATE ... SET <marked> WHERE <key> through rt.UpdateRowRender (nao/rt/changeset.go:407); the generated PATCH/PUT shim (gen/router/gen.go:447-454): Get, Cast, Update, no transaction; spec §changesets rule 8, §validators rule 5
+### 22. [consider] Generated <Model>Update (nao/gen/golang/queries.go:682), which issues UPDATE ... SET <marked> WHERE <key> through rt.UpdateRowRender (nao/rt/changeset.go:407); the generated PATCH shim (gen/router/gen.go:447-454): Get, Cast, Update, no transaction; spec §changesets rule 8, §validators rule 5
 
 **Effect.** Validate judges Row(), which is the snapshot plus the marks, but the statement carries only the marks. The snapshot values a validator read for unmarked columns are a precondition the write never states, and no CHECK backs them up (§validators rule 9).
 

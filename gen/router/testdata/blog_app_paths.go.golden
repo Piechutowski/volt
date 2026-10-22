@@ -96,7 +96,7 @@ func PathRefTags(opts ...volt.URLOption) string {
 	return volt.URL("/ref/tags", opts...)
 }
 
-// PathRefTag returns the path for GET /ref/tags/:slug(string) (db.TagGet).
+// PathRefTag returns the path for GET /ref/tags/:slug (db.TagGet).
 func PathRefTag(slug string, opts ...volt.URLOption) string {
 	return volt.URL("/ref/tags/"+volt.Seg(slug), opts...)
 }

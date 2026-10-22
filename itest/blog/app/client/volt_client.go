@@ -211,21 +211,21 @@ func (c *Client) RefCreateTag(ctx context.Context, cs db.TagChangeset) (db.Tag, 
 	return out, err
 }
 
-// RefTag calls GET /ref/tags/:slug(string) (db.TagGet).
+// RefTag calls GET /ref/tags/:slug (db.TagGet).
 func (c *Client) RefTag(ctx context.Context, slug string) (db.Tag, error) {
 	var out db.Tag
 	err := c.Do(ctx, "GET", volt.URL("/ref/tags/"+volt.Seg(slug)), nil, &out)
 	return out, err
 }
 
-// RefUpdateTag calls PATCH /ref/tags/:slug(string) (db.TagUpdate).
+// RefUpdateTag calls PATCH /ref/tags/:slug (db.TagUpdate).
 func (c *Client) RefUpdateTag(ctx context.Context, slug string, cs db.TagChangeset) (db.Tag, error) {
 	var out db.Tag
 	err := c.Do(ctx, "PATCH", volt.URL("/ref/tags/"+volt.Seg(slug)), cs.Params(), &out)
 	return out, err
 }
 
-// RefDeleteTag calls DELETE /ref/tags/:slug(string) (db.TagDelete).
+// RefDeleteTag calls DELETE /ref/tags/:slug (db.TagDelete).
 func (c *Client) RefDeleteTag(ctx context.Context, slug string) error {
 	return c.Do(ctx, "DELETE", volt.URL("/ref/tags/"+volt.Seg(slug)), nil, nil)
 }

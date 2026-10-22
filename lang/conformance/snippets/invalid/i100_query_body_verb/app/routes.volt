@@ -1,5 +1,5 @@
-// spec: §query-routes — i100_query_body_verb
-// want: takes a request body
+// spec: §query-routes, a Create is routed with post: a get naming it, which would carry no body, is an error naming post
+// want: db.UserCreate is routed with post, not get
 package app
 
 import (

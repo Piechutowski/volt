@@ -419,8 +419,8 @@ then reads it as that keyword, so the error is reported once.
 | order directions | `asc`, `desc` | §selects-over-groups |
 | literal words | `true`, `false`, `null` | §boolean-and-null-literals |
 | clause words | `from`, `for`, `where`, `and`, `or`, `not`, `in`, `like`, `is` | §types, §selects-over-groups, §predicates |
-| route words | `get`, `post`, `put`, `patch`, `delete`, `options`, `head`, `any`, `resources`, `dataset`, `use` | §routes, §resources, §datasets, §pipelines |
-| parameter types | `int`, `string` | §route-paths |
+| route words | `get`, `post`, `patch`, `delete`, `options`, `head`, `any`, `resources`, `dataset`, `use` | §routes, §resources, §datasets, §pipelines |
+| parameter types | `int` | §route-paths |
 | migration words | `up`, `down`, `create`, `drop`, `rename`, `alter`, `rebuild`, `exec`, `table`, `index`, `add`, `to` | §migrations |
 
 `Records` opens an element at top level and a block in a table body;
@@ -429,7 +429,10 @@ action, a resource action, an order direction and a parameter type are
 keywords only as the value of `delete:` or `update:`, in the `only:` or
 `except:` list of a `resources` declaration, after a column of
 `order:`, and in the parentheses of a path parameter (`:id(int)`)
-respectively; a literal word is a keyword where a value stands. The
+respectively; a literal word is a keyword where a value stands. A
+bare path parameter is a string, so `int` is the one parameter type
+(§route-paths), and `put` is no route word: PATCH is the partial
+update (§routes). The
 words of a migration body are keywords inside a `Migration` only
 (§migrations); elsewhere they are identifiers, so a column may be named
 `up` or `to`.
@@ -1849,7 +1852,7 @@ route path = slash,
 segment    = name
            | ":", name, [ "(", param type, ")" ]
            | ":", name, ".", ".", "." ;  (* three '.' tokens, contiguous *)
-param type = "int" | "string" ;
+param type = "int" ;
 ```
 
 1. All tokens of a route path are **contiguous**: interior whitespace
@@ -1862,9 +1865,13 @@ param type = "int" | "string" ;
    be one of the reserved names `w`, `r`, `opts`, `volt`, `cs` (they appear
    in generated signatures and would be shadowed), and MUST be unique
    within the route's full path (scope prefixes included).
-3. A parameter's type defaults to `string`; the closed type set is
-   `int` and `string`, the Go types the model generator emits for
-   routable primary keys.
+3. A bare `:name` is a `string` parameter and `:name(int)` an `int`
+   one: the closed type set is `int` and `string`, the Go types the
+   model generator emits for routable primary keys, and the annotation
+   names a type only when it is not the string, so `int` is the one
+   type written. `:name(string)` is an error naming the bare form, in a
+   route and in a Scope prefix alike, reported once where it is
+   written; it would spell the bare parameter a second way.
    **Types shape handler signatures, never matching**: a request
    segment that fails to parse as the declared type is that route's
    404, not a fallthrough to a sibling route.
@@ -1887,19 +1894,28 @@ param type = "int" | "string" ;
 
 ```ebnf
 route = verb, route path, handler ref, [ settings ], newline ;
-verb  = "get" | "post" | "put" | "patch" | "delete"
+verb  = "get" | "post" | "patch" | "delete"
       | "options" | "head" | "any" ;
 ```
 
 1. Routes appear only inside a Scope body. The verb is a contextual
    keyword, lowercase (§keywords); `any` registers the route for every
-   method (its registration carries no method).
-2. A route's **full path** is the enclosing scopes' prefixes followed
+   method (its registration carries no method). A controller route
+   takes every verb; a query route takes the one its method fixes
+   (§query-routes).
+2. `put` is not a verb. PATCH is the partial update, the one a
+   generated update performs (§query-routes), and PUT, which means
+   replace in HTTP, would be a second spelling of it; a route line
+   opening with `put` is an error naming `patch`, reported once, and
+   the line registers nothing.
+3. A route's **full path** is the enclosing scopes' prefixes followed
    by its own path, in nesting order.
-3. Registration semantics are `http.ServeMux` (Go ≥ 1.22) exactly:
+4. Registration semantics are `http.ServeMux` (Go ≥ 1.22) exactly:
    parameters register as `{name}`, wildcards as `{name...}`, and a
-   root full path as `/{$}`. Matching is exact — Volt never registers
-   subtree patterns.
+   root full path as `/{$}`. Matching is exact: Volt never registers
+   subtree patterns. ServeMux serves HEAD for a GET pattern, so a
+   `get` route also answers HEAD, and a `head` route on the same path
+   takes HEAD apart from it.
 
 ### Handler references
 
@@ -1958,12 +1974,19 @@ Scope /api [pipe: api] {
    `<Model>Delete`, each only where the query generator emits it
    (`Get`/`Update`/`Delete` need a primary key, `Update` a non-key
    column). Any other name is an error listing what qualifies; a name
-   differing only in case names the right spelling.
+   differing only in case names the right spelling. The method fixes
+   the route's verb: a read, `Get`, `List` or a select method, takes
+   `get`, which ServeMux also serves for HEAD (§routes); `Create` takes
+   `post`; `Update` takes `patch`, the partial update; `Delete` takes
+   `delete`. Any other verb on a query route, `head`, `options` and
+   `any` included, is an error naming the right one, so a GET never
+   writes and the route matches what resources and datasets generate
+   for the same method; a controller route keeps every verb (§routes).
 2. **Binding.** Each parameter of the method, in signature order,
    binds from exactly one source, decided at generation time:
    - a **path parameter** of the route with the same name binds it.
      Its declared type MUST spell the method's Go type
-     (`:id(int)` for `id int`; `string` needs no annotation); a
+     (`:id(int)` for `id int`, a bare `:slug` for `slug string`); a
      type a segment cannot carry (§route-paths) goes in the query string.
      A wildcard cannot bind a query parameter;
    - a **changeset** parameter (`<Model>Create`, `<Model>Update`)
@@ -1977,10 +2000,9 @@ Scope /api [pipe: api] {
      The body is decoded before the row is loaded, so a malformed body
      is a 400 whether or not the row exists. A write route always takes
      a body, `{}` when nothing is set: a table whose only column is the
-     auto-increment key still needs `{}`. The route's verb MUST be
-     `post`, `put` or `patch`; `put` is accepted as a spelling of the
-     same partial update as `patch`, the handler being the same cast,
-     and nothing the body leaves out is reset;
+     auto-increment key still needs `{}`. An update is partial: nothing
+     the body leaves out is reset, which is why it is routed with
+     `patch` (clause 1);
    - a **list parameter** (§predicates) binds from the **repeated query
      key** of its name; absent means the empty list;
    - every other parameter binds from the **query string** by name,
@@ -2002,8 +2024,8 @@ Scope /api [pipe: api] {
    `rt.Invalid`), an unknown key of the body among the fields. Any other
    error is the spine's 500.
 4. **Names.** The helper name (§route-names-and-reverse-urls) defaults to the scope name
-   prefixes followed by the method name, and only `get`/`head` query
-   routes carry one — writes have no reverse URL, as with resources
+   prefixes followed by the method name, and only the `get` routes of
+   reads carry one: writes have no reverse URL, as with resources
    (§the-action-table). `volt routes` and the route table show the reference as
    written (`db.UserGet`; a query of the package itself unqualified,
    `UserGet`) in place of `Controller.Action`.
@@ -2094,8 +2116,11 @@ the routes through typed methods instead of hand-built requests.
    repeated key, a changeset as the body: `APIUserCreate(ctx, cs
    db.UserChangeset) (db.User, error)`, `APIUserUpdate(ctx, id int, cs
    db.UserChangeset) (db.User, error)`, sent as `cs.Params()`
-   (§changesets). A changeset built from `<Model>New()` is the carrier
-   of changes on the client side, so an update needs no row in hand:
+   (§changesets). Each method sends its route's verb, the one the
+   query fixes (§query-routes): GET for a read, POST for a create,
+   PATCH for an update, DELETE for a delete. A changeset built from
+   `<Model>New()` is the carrier of changes on the client side, so an
+   update needs no row in hand:
    `APIUserUpdate(ctx, id, db.UserNew().EmailSet(e))` sets one column
    of row `id`.
 4. **Every named controller route** is one raw method with the
@@ -2251,17 +2276,21 @@ ident list = "(", name, { ",", name }, ")" ;   (* the value of only: and except:
 
 ### The action table
 
-| Action | Method(s) | Path | Helper |
+| Action | Method | Path | Helper |
 |---|---|---|---|
 | `index` | GET | `/<table>` | plural |
 | `new` | GET | `/<table>/new` | `New` + singular |
-| `create` | POST | `/<table>` | — |
+| `create` | POST | `/<table>` | none |
 | `show` | GET | `/<table>/:<param>` | singular |
 | `edit` | GET | `/<table>/:<param>/edit` | `Edit` + singular |
-| `update` | PATCH **and** PUT | `/<table>/:<param>` | — |
-| `delete` | DELETE | `/<table>/:<param>` | — |
+| `update` | PATCH | `/<table>/:<param>` | none |
+| `delete` | DELETE | `/<table>/:<param>` | none |
 
-`update` expands to two routes sharing one action and signature.
+Every action is one route. `update` is PATCH alone, the partial
+update (§routes); the methods are those §query-routes fixes for the
+CRUD method each API action maps to (§default-handlers). The key
+segment is spelled as its type is (§route-paths): `:<param>(int)` for
+an `int` key, a bare `:<param>` for a `string` one.
 
 ### Settings
 
@@ -2340,7 +2369,8 @@ Scope /api {
    those of §the-action-table and §table-resolution; only the handler side changes. Rails and
    Phoenix scaffold such a controller once and hand it over; Volt
    regenerates it forever, and an action taken back with `except:` is
-   written by hand as any route.
+   written by hand as any route, with the verb its method fixes, which
+   is the action table's (§query-routes).
 2. `default` implies `api`: `new` and `edit` are form pages, and a
    generated handler has nothing to return for them.
 3. The table's CRUD is the data package's: an imported one for a
@@ -2359,10 +2389,8 @@ Scope /api {
    reverse URL (writes never do, §query-routes) and a client method named
    `Create`/`Update`/`Delete` + singular, prefixed by the scope name
    like the form-page helpers `New`/`Edit` + singular would be.
-   `update`'s PUT route shares the PATCH route's client method, and
-   PUT is accepted as a spelling of the same partial update as PATCH:
-   the handler is the same cast, and nothing the body leaves out is
-   reset.
+   `update` is one PATCH route, the partial update: nothing the body
+   leaves out is reset.
 7. Statuses, binding, validation and rendering are §query-routes's: 201 for
    `create`, 204 for `delete`, 404 on a miss, the body cast into a
    changeset with the allow lists of §query-routes and validated by the
@@ -2398,7 +2426,8 @@ Scope /da [pipe: api] {
    that is not a select of that package is an error, with a
    case-insensitive hint.
 2. For every member of the select's target (§selects-over-groups), in member order,
-   the dataset yields one `get` **query route** (§query-routes) whose path is
+   the dataset yields one `get` **query route** (§query-routes), the
+   verb a select method fixes, whose path is
    the scope prefixes followed by one segment — the member's table
    name, with the `strip:` prefix removed — and whose handler is the
    member's select method (`<Model><SelectName>`). Every parameter of
@@ -2407,7 +2436,8 @@ Scope /da [pipe: api] {
    scope name prefixes followed by the method name (§query-routes).
 3. Expanded routes obey every rule of routes: conflicts (§route-conflicts), one
    helper namespace (§route-names-and-reverse-urls, §generated-client). To hand-write one member's route,
-   take it out with `except:` and declare it beside the dataset.
+   take it out with `except:` and declare it beside the dataset, with
+   `get`.
 
 ### Dataset settings
 
@@ -3493,7 +3523,7 @@ scope          = "Scope", route path, [ settings ],
 scope item     = route | resources | dataset | scope ;
 
 route          = verb, route path, handler ref, [ settings ], newline ;
-verb           = "get" | "post" | "put" | "patch" | "delete"
+verb           = "get" | "post" | "patch" | "delete"
                | "options" | "head" | "any" ;
 handler ref    = name, [ ".", name ] ;
 
@@ -3501,7 +3531,7 @@ route path     = slash, [ segment, { slash, segment } ] ;
 segment        = name
                | ":", name, [ "(", param type, ")" ]
                | ":", name, "." , ".", "." ;
-param type     = "int" | "string" ;
+param type     = "int" ;
 
 resources      = "resources", table ref, [ settings ], newline ;
 table ref      = name, [ ".", name ] ;

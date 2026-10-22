@@ -1,5 +1,5 @@
 // spec: §columns, §query-routes, §route-conflicts, §route-names-and-reverse-urls, §settings-whitelists, §dataset-settings (an unknown type silences only what depends on it)
-// want: takes a request body
+// want: db.AuthorUpdate is routed with patch, not get
 package app
 
 import (
@@ -10,7 +10,7 @@ Scope /api {
   get /authors/:id(int) db.AuthorUpdate
   delete /authors/:id(int)/:extra(int) db.AuthorDelete
   get /authors/:id... db.AuthorGet
-  put /authors db.AuthorUpdate
+  patch /authors db.AuthorUpdate
   get /ranked db.AuthorRanked
   get /ranked Home.Index
   get /tops Home.AuthorRanked

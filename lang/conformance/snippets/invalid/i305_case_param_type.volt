@@ -4,5 +4,5 @@ package app
 
 Scope / {
 	get /posts/:id(INT) Post.Show
-	get /tags/:slug(String) Tag.Find
+	get /tags/:id(Int)/:page(int) Tag.Find
 }

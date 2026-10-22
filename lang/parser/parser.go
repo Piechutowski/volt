@@ -212,7 +212,7 @@ func (p *parser) decl() (d ast.Decl) {
 		return p.selectDecl()
 	case "scope":
 		return p.scope()
-	case "get", "post", "put", "patch", "delete", "options", "head", "any", "resources", "dataset":
+	case "get", "post", "patch", "delete", "options", "head", "any", "resources", "dataset":
 		p.fail(t, "routes, resources and datasets must appear inside a Scope (§scopes-and-routes)")
 		return nil
 	case "project":

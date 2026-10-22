@@ -32,6 +32,7 @@ var immutableVars = map[string]bool{
 	module + "/lang.goKeywords":                   true,
 	module + "/lang.reservedParamNames":           true,
 	module + "/lang.resourceActions":              true,
+	module + "/lang.queryMethods":                 true,
 	module + "/lang.actionByLower":                true,
 	module + "/lang.queryValueTypes":              true,
 	module + "/lang/check.tableSettings":          true,

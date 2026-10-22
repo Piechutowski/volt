@@ -7,5 +7,5 @@ import (
 )
 
 Scope /api {
-	get /users/:id(string) db.UserGet
+	get /users/:id db.UserGet
 }

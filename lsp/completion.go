@@ -24,7 +24,7 @@ var (
 	}
 	alterBodyKeywords = []string{"add ", "drop ", "rename "}
 	scopeBodyKeywords = []string{
-		"get ", "post ", "put ", "patch ", "delete ", "options ", "head ",
+		"get ", "post ", "patch ", "delete ", "options ", "head ",
 		"any ", "resources ", "dataset ", "Scope ",
 	}
 

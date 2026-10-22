@@ -6,6 +6,6 @@ import (
 	db
 )
 
-Scope /farms/:id(string) {
+Scope /farms/:id {
 	resources db.plots [default]
 }

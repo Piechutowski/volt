@@ -3,5 +3,5 @@ package app
 
 Scope / {
 	get /a/:id(int) X.Show [name: showA]
-	get /b/:id(string) X.Show [name: showB]
+	get /b/:id X.Show [name: showB]
 }

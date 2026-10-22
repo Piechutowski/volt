@@ -542,6 +542,11 @@ func TestCompletionOffersTheOneSpelling(t *testing.T) {
 			t.Errorf("scope completion lacks the verb %s (§keywords)", v)
 		}
 	}
+	for _, w := range scope {
+		if !slices.Contains(parser.Verbs, w) && w != "resources" && w != "dataset" && w != "Scope" {
+			t.Errorf("scope completion offers %q, which opens no scope item (§keywords, §routes)", w)
+		}
+	}
 	for ctx, words := range settingsByContext {
 		for _, w := range trimmed(words) {
 			if !slices.Contains(parser.SettingNames, w) {

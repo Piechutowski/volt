@@ -464,6 +464,7 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 			c.errorf(seg.Pos(), "scopes-and-routes", "a Scope prefix cannot contain a wildcard (§route-paths)")
 		}
 	}
+	c.diags = append(c.diags, stringTypedErrors(sc.Path.Segments)...)
 	next := inherited{
 		prefix:     append(append([]*ast.Segment{}, inh.prefix...), sc.Path.Segments...),
 		pipes:      append([]string{}, inh.pipes...),

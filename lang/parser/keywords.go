@@ -32,12 +32,12 @@ var RefActions = []string{"cascade", "restrict", "set_null", "set_default"}
 // in only: and except: (spec §keywords).
 var ResourceActions = []string{"index", "new", "create", "show", "edit", "update", "delete"}
 
-// ParamTypes are the types a route parameter takes, written
-// :name(type) (spec §keywords, §route-paths).
-var ParamTypes = []string{"int", "string"}
+// ParamTypes are the types written in a route parameter's parentheses,
+// :name(int); a bare parameter is a string (spec §keywords, §route-paths).
+var ParamTypes = []string{"int"}
 
 // Verbs are the words that open a route (spec §keywords).
-var Verbs = []string{"get", "post", "put", "patch", "delete", "options", "head", "any"}
+var Verbs = []string{"get", "post", "patch", "delete", "options", "head", "any"}
 
 var declWords = foldMap(ElementWords)
 

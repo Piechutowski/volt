@@ -14,6 +14,8 @@ var voltVerbs = foldMap(Verbs)
 
 func isVerb(v string) bool { return voltVerbs[strings.ToLower(v)] != "" }
 
+func isPut(v string) bool { return strings.EqualFold(v, "put") }
+
 func (p *parser) contiguous() bool {
 	t := p.cur()
 	return !t.SpBefore && !t.NLBefore
@@ -141,7 +143,7 @@ func (p *parser) scopeItem() (item ast.ScopeItem) {
 		return p.resources()
 	case p.atKw("dataset"):
 		return p.dataset()
-	case isVerb(t.Val):
+	case isVerb(t.Val), isPut(t.Val):
 		return p.route()
 	default:
 		p.fail(t, "expected a verb (get, post, ...), 'resources', 'dataset' or 'Scope' in Scope body (§scopes-and-routes), found %q", t.Val)
@@ -167,7 +169,13 @@ func (p *parser) dataset() *ast.Dataset {
 
 func (p *parser) route() *ast.Route {
 	p.lineBegin("route (§scopes-and-routes)")
-	r := &ast.Route{VerbTok: p.kwTake(voltVerbs[strings.ToLower(p.cur().Val)])}
+	r := &ast.Route{}
+	if isPut(p.cur().Val) {
+		r.VerbTok = p.next()
+		r.VerbTok.Val = "put"
+	} else {
+		r.VerbTok = p.kwTake(voltVerbs[strings.ToLower(p.cur().Val)])
+	}
 	r.Path = p.routePath()
 	r.Handler = p.goRef("route handler (§scopes-and-routes)")
 	if p.at(token.LBRACKET) && !p.cur().NLBefore {

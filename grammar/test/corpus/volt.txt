@@ -209,6 +209,32 @@ Scope / {
 
 
 ==================
+volt: put is not a route verb
+:error
+==================
+
+Scope / {
+	put /users/:id(int) Users.Update
+}
+
+---
+
+
+
+==================
+volt: a bare path parameter is a string, (string) is not written
+:error
+==================
+
+Scope / {
+	get /tags/:slug(string) Tags.Show
+}
+
+---
+
+
+
+==================
 group block and algebra forms
 ==================
 

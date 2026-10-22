@@ -84,7 +84,6 @@ type UsersController interface {
 	// Edit handles GET /users/:id(int)/edit
 	Edit(w http.ResponseWriter, r *volt.Request, id int) error
 	// Update handles PATCH /users/:id(int)
-	// Update handles PUT /users/:id(int)
 	Update(w http.ResponseWriter, r *volt.Request, id int) error
 	// Delete handles DELETE /users/:id(int)
 	Delete(w http.ResponseWriter, r *volt.Request, id int) error

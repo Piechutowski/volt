@@ -1,4 +1,4 @@
-// spec: §the-action-table — the seven actions; update spans PATCH and PUT
+// spec: §the-action-table, the seven actions, one route each; update is PATCH alone
 package app
 
 Table users {

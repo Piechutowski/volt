@@ -2342,10 +2342,6 @@
     "named": true
   },
   {
-    "type": "put",
-    "named": false
-  },
-  {
     "type": "rebuild",
     "named": false
   },

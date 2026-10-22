@@ -157,20 +157,29 @@ type ActionInfo struct {
 }
 
 var resourceActions = []struct {
-	Name    string
-	Methods []string
-	Suffix  string
-	OnID    bool
-	API     bool
-	Op      string
+	Name   string
+	Method string
+	Suffix string
+	OnID   bool
+	API    bool
+	Op     string
 }{
-	{"Index", []string{"GET"}, "", false, true, "list"},
-	{"New", []string{"GET"}, "/new", false, false, ""},
-	{"Create", []string{"POST"}, "", false, true, "create"},
-	{"Show", []string{"GET"}, "", true, true, "get"},
-	{"Edit", []string{"GET"}, "/edit", true, false, ""},
-	{"Update", []string{"PATCH", "PUT"}, "", true, true, "update"},
-	{"Delete", []string{"DELETE"}, "", true, true, "delete"},
+	{"Index", "GET", "", false, true, "list"},
+	{"New", "GET", "/new", false, false, ""},
+	{"Create", "POST", "", false, true, "create"},
+	{"Show", "GET", "", true, true, "get"},
+	{"Edit", "GET", "/edit", true, false, ""},
+	{"Update", "PATCH", "", true, true, "update"},
+	{"Delete", "DELETE", "", true, true, "delete"},
+}
+
+var queryMethods = map[string]string{
+	"select": "GET",
+	"list":   "GET",
+	"get":    "GET",
+	"create": "POST",
+	"update": "PATCH",
+	"delete": "DELETE",
 }
 
 var actionByLower = func() map[string]string {

@@ -1,12 +1,12 @@
-// spec: §routes
+// spec: §routes, a controller route takes every verb, put excepted
 package app
 
 Scope / {
 	get     /r G.A
 	post    /r G.B
-	put     /r G.C
 	patch   /r G.D
 	delete  /r G.E
 	options /r G.F
 	head    /r G.H
+	any     /s G.I
 }

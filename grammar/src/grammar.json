@@ -1736,10 +1736,6 @@
         },
         {
           "type": "STRING",
-          "value": "put"
-        },
-        {
-          "type": "STRING",
           "value": "patch"
         },
         {
@@ -2856,8 +2852,11 @@
                       "content": {
                         "type": "ALIAS",
                         "content": {
-                          "type": "SYMBOL",
-                          "name": "_ident_immediate"
+                          "type": "IMMEDIATE_TOKEN",
+                          "content": {
+                            "type": "STRING",
+                            "value": "int"
+                          }
                         },
                         "named": true,
                         "value": "type_name"

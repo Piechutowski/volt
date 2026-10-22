@@ -164,7 +164,7 @@ func TestReferenceProject(t *testing.T) {
 	}
 }
 
-func TestUpdateSpansPatchAndPut(t *testing.T) {
+func TestUpdateIsPatch(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod": modFile,
 		"app/r.volt": `package app
@@ -180,8 +180,8 @@ Scope / {
 	})
 	wantClean(t, diags)
 	app := pr.Packages["app"]
-	if len(app.Routes) != 6 {
-		t.Fatalf("routes = %d, want 6", len(app.Routes))
+	if len(app.Routes) != 5 {
+		t.Fatalf("routes = %d, want 5", len(app.Routes))
 	}
 	methods := map[string]bool{}
 	for _, r := range app.Routes {
@@ -189,11 +189,11 @@ Scope / {
 			methods[r.Method] = true
 		}
 	}
-	if !methods["PATCH"] || !methods["PUT"] {
-		t.Errorf("update methods = %v, want PATCH and PUT", methods)
+	if len(methods) != 1 || !methods["PATCH"] {
+		t.Errorf("update methods = %v, want PATCH alone (§the-action-table)", methods)
 	}
-	if a := app.Controllers["Users"].Action("Update"); a == nil || len(a.Routes) != 2 {
-		t.Errorf("Update action should carry both routes")
+	if a := app.Controllers["Users"].Action("Update"); a == nil || len(a.Routes) != 1 {
+		t.Errorf("Update action should carry one route")
 	}
 }
 
@@ -213,11 +213,11 @@ Scope / {
 	})
 	wantClean(t, diags)
 	app := pr.Packages["app"]
-	if len(app.Routes) != 7 {
+	if len(app.Routes) != 6 {
 		for _, r := range app.Routes {
 			t.Logf("route: %s", r)
 		}
-		t.Fatalf("routes = %d, want 7", len(app.Routes))
+		t.Fatalf("routes = %d, want 6", len(app.Routes))
 	}
 	for _, r := range app.Routes {
 		if r.Action == "Delete" {
@@ -317,7 +317,6 @@ func TestVerbMethodMapping(t *testing.T) {
 Scope / {
 	get     /a  C.A
 	post    /b  C.B
-	put     /c  C.C
 	patch   /d  C.D
 	delete  /e  C.E
 	options /f  C.F
@@ -328,7 +327,7 @@ Scope / {
 	})
 	wantClean(t, diags)
 	want := map[string]string{
-		"/a": "GET", "/b": "POST", "/c": "PUT", "/d": "PATCH",
+		"/a": "GET", "/b": "POST", "/d": "PATCH",
 		"/e": "DELETE", "/f": "OPTIONS", "/g": "HEAD", "/h": "",
 	}
 	app := pr.Packages["app"]
@@ -339,6 +338,34 @@ Scope / {
 		if m, ok := want[r.Pattern]; !ok || r.Method != m {
 			t.Errorf("%s: Method = %q, want %q (any maps to the empty method)", r.Pattern, r.Method, want[r.Pattern])
 		}
+	}
+}
+
+func TestPutIsNoVerb(t *testing.T) {
+	pr, diags := project(t, map[string]string{
+		"go.mod": modFile,
+		"app/r.volt": `package app
+
+Scope / {
+	put   /c C.C
+	PUT   /d C.D
+	patch /c C.P
+}
+`,
+	})
+	n := 0
+	for _, d := range diags {
+		if d.Code != "spec/routes" || !strings.Contains(d.Msg, "put is not a route verb: the partial update is patch") {
+			t.Errorf("unexpected diagnostic %s", d)
+			continue
+		}
+		n++
+	}
+	if n != 2 {
+		t.Errorf("put errors = %d, want one per put line: %v", n, diags)
+	}
+	if routes := pr.Packages["app"].Routes; len(routes) != 1 || routes[0].Action != "P" {
+		t.Errorf("routes = %v, want the patch route alone", routes)
 	}
 }
 
@@ -420,7 +447,7 @@ func TestErrors(t *testing.T) {
 		}, "already produced by the route"},
 		{"signature conflict", map[string]string{
 			"go.mod":     modFile,
-			"app/r.volt": "package app\nScope / {\n\tget /a/:id(int) X.Show\n\tget /b/:id(string) X.Show\n}\n",
+			"app/r.volt": "package app\nScope / {\n\tget /a/:id(int) X.Show\n\tget /b/:id X.Show\n}\n",
 		}, "different parameter signatures"},
 		{"wildcard not last", map[string]string{
 			"go.mod":     modFile,
@@ -558,8 +585,17 @@ func TestQueryRouteErrors(t *testing.T) {
 		{"unknown", "get /x db.UserFetch", "no generated query db.UserFetch"},
 		{"case hint", "get /x db.userget", `did you mean "UserGet"`},
 		{"no pk", "get /x/:id(int) db.NoteGet", "no generated query db.NoteGet"},
-		{"path type", "get /x/:id(string) db.UserGet", "spell it :id(int)"},
-		{"body verb", "get /x db.UserCreate", "route it with post, put or patch"},
+		{"path type", "get /x/:id db.UserGet", "spell it :id(int)"},
+		{"string annotation", "get /x/:id(string) db.UserGet", "write :id, not :id(string): a bare path parameter is a string"},
+		{"list verb", "post /x db.UserList", "db.UserList is routed with get, not post: the generated method a query route binds fixes its verb (§query-routes)"},
+		{"head verb", "head /x db.UserList", "db.UserList is routed with get, not head: the generated method a query route binds fixes its verb, and ServeMux answers HEAD on a get route"},
+		{"any verb", "any /x db.UserList", "db.UserList is routed with get, not any"},
+		{"get verb", "delete /x/:id(int) db.UserGet", "db.UserGet is routed with get, not delete"},
+		{"select verb", "options /x db.UserPicked", "db.UserPicked is routed with get, not options"},
+		{"create verb", "get /x db.UserCreate", "db.UserCreate is routed with post, not get"},
+		{"update verb", "post /x/:id(int) db.UserUpdate", "db.UserUpdate is routed with patch, not post"},
+		{"put update", "put /x/:id(int) db.UserUpdate", "put is not a route verb: the partial update is patch, so write patch /x/:id(int) db.UserUpdate (§routes)"},
+		{"delete verb", "get /x/:id(int) db.UserDelete", "db.UserDelete is routed with delete, not get"},
 		{"update key", "patch /x db.UserUpdate", `db.UserUpdate loads the row to update by "id", which must be a path parameter of the route; spell it :id(int)`},
 		{"update key elsewhere", "patch /x/:email db.UserUpdate", `path parameter "email" is not a parameter of db.UserUpdate`},
 		{"extra path param", "get /x/:n(int) db.UserList", `path parameter "n" is not a parameter of db.UserList`},

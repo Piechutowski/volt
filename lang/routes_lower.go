@@ -316,6 +316,11 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 
 func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 	method := methodOf(r.Verb())
+	if r.Verb() == "put" {
+		l.errorf(r.Pos(), "routes", "put is not a route verb: the partial update is patch, so write patch %s %s (§routes)", r.Path.String(), r.Handler.String())
+		method = "PATCH"
+	}
+	l.diags = append(l.diags, stringTypedErrors(r.Path.Segments)...)
 	segs := append(append([]*ast.Segment{}, inh.prefix...), r.Path.Segments...)
 	params, ok := l.pathParams(segs)
 	if !ok {
@@ -388,12 +393,15 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 	if query != nil {
 		action = ""
 		client = helper
-		if method != "GET" && method != "HEAD" {
+		if method != "GET" {
 			helper = ""
 		}
 	}
 	if events {
 		client = helper
+	}
+	if r.Verb() == "put" {
+		return nil
 	}
 	return &RouteInfo{
 		Method:       method,
@@ -454,11 +462,11 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		body, key    bool
 	}
 	var sig []sigParam
-	found := false
+	found, op := false, ""
 	var dropped map[string]bool
 
 	if si, m, ok := l.selectByMethod(target, name); ok {
-		found, dropped = true, si.droppedParams
+		found, op, dropped = true, "select", si.droppedParams
 		for _, p := range si.Params {
 			sig = append(sig, sigParam{name: p.GoName, goType: p.GoType})
 		}
@@ -474,7 +482,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	}
 	if !found {
 		if _, _, cm, ok := l.crudByName(target, name); ok {
-			found = true
+			found, op = true, cm.Op
 			for _, k := range cm.Key {
 				sig = append(sig, sigParam{name: k.GoName, goType: k.GoType, key: cm.Op == "update"})
 			}
@@ -503,6 +511,18 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	}
 	bound := map[string]bool{}
 	ok := true
+	if want := queryMethods[op]; method != want {
+		at, written := pos, strings.ToLower(methodOrAny(method))
+		if segAt.route != nil {
+			at, written = segAt.route.Pos(), segAt.route.Verb()
+		}
+		why := "the generated method a query route binds fixes its verb"
+		if method == "HEAD" {
+			why += ", and ServeMux answers HEAD on a get route"
+		}
+		l.errorf(at, "query-routes", "%s is routed with %s, not %s: %s (§query-routes)", ref, strings.ToLower(want), written, why)
+		ok = false
+	}
 	for _, sp := range sig {
 		if sp.goType == "" {
 			if pp, inPath := byName[sp.name]; inPath {
@@ -522,14 +542,6 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		switch {
 		case sp.body:
 			qp.Source = FromBody
-			if method != "POST" && method != "PUT" && method != "PATCH" {
-				body := qr.Changeset.Params
-				if !local {
-					body = qual + "." + body
-				}
-				l.errorf(pos, "scopes-and-routes", "%s takes a request body (%s); route it with post, put or patch (§query-routes)", ref, body)
-				ok = false
-			}
 		case strings.HasPrefix(sp.goType, "[]"):
 			qp.Source = FromList
 			if pp, inPath := byName[sp.name]; inPath {
@@ -549,14 +561,18 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 					ok = false
 				} else if pp.Type.GoType() != sp.goType {
 					if KnownParamType(sp.goType) {
-						l.errorf(segAt.pos(pp.Name), "scopes-and-routes", "path parameter %q is %s but %s takes %s; spell it :%s(%s) (§query-routes)", sp.name, pp.Type.GoType(), ref, sp.goType, sp.name, sp.goType)
+						l.errorf(segAt.pos(pp.Name), "scopes-and-routes", "path parameter %q is %s but %s takes %s; spell it %s (§query-routes)", sp.name, pp.Type.GoType(), ref, sp.goType, paramSpelled(sp.name, ParamType(sp.goType)))
 					} else {
 						l.errorf(segAt.pos(pp.Name), "scopes-and-routes", "parameter %q of %s is %s, which a path segment cannot carry (§route-paths); pass it in the query string (§query-routes)", sp.name, ref, sp.goType)
 					}
 					ok = false
 				}
 			} else if sp.key {
-				l.errorf(pos, "query-routes", "%s loads the row to update by %q, which must be a path parameter of the route; spell it :%s(%s) (§query-routes)", ref, sp.name, sp.name, sp.goType)
+				spell := ""
+				if KnownParamType(sp.goType) {
+					spell = "; spell it " + paramSpelled(sp.name, ParamType(sp.goType))
+				}
+				l.errorf(pos, "query-routes", "%s loads the row to update by %q, which must be a path parameter of the route%s (§query-routes)", ref, sp.name, spell)
 				ok = false
 			} else {
 				qp.Source = FromQuery
@@ -654,17 +670,39 @@ func (l *routeLowering) pathParams(segs []*ast.Segment) ([]Param, bool) {
 			continue
 		}
 		pt := TString
-		if seg.Type != nil {
-			if !KnownParamType(seg.Type.Name()) {
-				l.errorf(seg.Type.Pos(), "scopes-and-routes", "unknown parameter type %q (§route-paths); valid: int, string", seg.Type.Name())
+		if seg.Type != nil && !stringTyped(seg) {
+			if seg.Type.Name() != string(TInt) {
+				l.errorf(seg.Type.Pos(), "scopes-and-routes", "unknown parameter type %q (§route-paths); valid: int", seg.Type.Name())
 				ok = false
 				continue
 			}
-			pt = ParamType(seg.Type.Name())
+			pt = TInt
 		}
 		params = append(params, Param{Name: name, GoName: name, Type: pt, Wild: seg.Kind == ast.SegWild})
 	}
 	return params, ok
+}
+
+func paramSpelled(name string, t ParamType) string {
+	if t == TInt {
+		return ":" + name + "(int)"
+	}
+	return ":" + name
+}
+
+func stringTyped(seg *ast.Segment) bool {
+	return seg.Kind == ast.SegParam && seg.Type != nil && strings.EqualFold(seg.Type.Name(), string(TString))
+}
+
+func stringTypedErrors(segs []*ast.Segment) []diag.Diagnostic {
+	var out []diag.Diagnostic
+	for _, seg := range segs {
+		if stringTyped(seg) {
+			n := seg.Name.Name()
+			out = append(out, diag.Errorf(seg.Type.Pos(), "spec/route-paths", "write :%s, not :%s(%s): a bare path parameter is a string, and int is the one type written (§route-paths)", n, n, seg.Type.Name()))
+		}
+	}
+	return out
 }
 
 func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInfo {
@@ -827,7 +865,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 	nameSeg := func(n string) *ast.Segment { return litSeg(n, res.Pos()) }
 	idSeg := &ast.Segment{Kind: ast.SegParam, MarkPos: res.Pos(),
 		Name: &ast.Ident{Tok: token.Token{Kind: token.IDENT, Val: paramName, Pos: res.Pos()}}}
-	if keyType != tUnresolved {
+	if keyType == TInt {
 		idSeg.Type = &ast.Ident{Tok: token.Token{Kind: token.IDENT, Val: string(keyType), Pos: res.Pos()}}
 	}
 
@@ -878,7 +916,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 					res.Ref(), a.Op, a.Name, crudAbsent(a.Op), strings.ToLower(a.Name))
 				continue
 			}
-			qr = l.queryBind(res.Name.Pos(), qualPos, a.Methods[0], params, qual, target, local, cm.Name, paramAt{at: res.Pos()})
+			qr = l.queryBind(res.Name.Pos(), qualPos, a.Method, params, qual, target, local, cm.Name, paramAt{at: res.Pos()})
 			if qr == nil {
 				continue
 			}
@@ -889,30 +927,27 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 				client = inh.namePrefix + a.Name + singular
 			}
 		}
-		for _, m := range a.Methods {
-			r := &RouteInfo{
-				Method:       m,
-				Pattern:      patternOf(segs),
-				Spelled:      spelledOf(segs),
-				Params:       params,
-				Controller:   controller,
-				Action:       a.Name,
-				Query:        qr,
-				HelperName:   helper,
-				ClientName:   client,
-				Pipes:        inh.pipes,
-				ErrorHandler: inh.errHandler,
-				Pos:          res.Pos(),
+		r := &RouteInfo{
+			Method:       a.Method,
+			Pattern:      patternOf(segs),
+			Spelled:      spelledOf(segs),
+			Params:       params,
+			Controller:   controller,
+			Action:       a.Name,
+			Query:        qr,
+			HelperName:   helper,
+			ClientName:   client,
+			Pipes:        inh.pipes,
+			ErrorHandler: inh.errHandler,
+			Pos:          res.Pos(),
 
-				FromResources: true,
-				Table:         tableName,
-			}
-			if qr != nil {
-				r.Controller, r.Action = "", ""
-			}
-			helper, client = "", ""
-			out = append(out, r)
+			FromResources: true,
+			Table:         tableName,
 		}
+		if qr != nil {
+			r.Controller, r.Action = "", ""
+		}
+		out = append(out, r)
 	}
 	return out
 }

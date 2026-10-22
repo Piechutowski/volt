@@ -375,7 +375,7 @@ module.exports = grammar({
 
     verb: () =>
       choice(
-        kw('get'), kw('post'), kw('put'), kw('patch'),
+        kw('get'), kw('post'), kw('patch'),
         kw('delete'), kw('options'), kw('head'), kw('any'),
       ),
 
@@ -579,6 +579,7 @@ module.exports = grammar({
         $.path_parameter,
       ),
 
+    // A bare parameter is a string; int is the one type written (§route-paths).
     path_parameter: ($) =>
       seq(
         token.immediate(':'),
@@ -587,7 +588,7 @@ module.exports = grammar({
           choice(
             seq(
               token.immediate('('),
-              field('type', alias($._ident_immediate, $.type_name)),
+              field('type', alias(token.immediate('int'), $.type_name)),
               token.immediate(')'),
             ),
             field('wildcard', alias(token.immediate('...'), $.wildcard_marker)),

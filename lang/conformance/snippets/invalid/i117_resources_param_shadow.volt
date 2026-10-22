@@ -6,6 +6,6 @@ Table plots {
   id int [pk]
 }
 
-Scope /farms/:id(string) {
+Scope /farms/:id {
 	resources plots
 }
