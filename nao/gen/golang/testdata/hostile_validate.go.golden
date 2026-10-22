@@ -34,3 +34,11 @@ func (c X2faCodeChangeset) Validate() X2faCodeChangeset {
 	c.valid = nil
 	return c
 }
+
+// Validate runs required and the validators of digests over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
+func (c DigestChangeset) Validate() DigestChangeset {
+	c.valid = nil
+	return c
+}

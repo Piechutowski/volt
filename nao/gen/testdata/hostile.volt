@@ -1,5 +1,6 @@
 // the unpleasant cases: quoted names, spaces,
-// initialisms, digit-leading names, names sharing a stem, keyword-ish names
+// initialisms, digit-leading names, names sharing a stem, keyword-ish names,
+// a []byte key named like the runtime package the key methods call
 Type CoreAuditKind string
 Table users {
   id int [pk]
@@ -15,6 +16,7 @@ Table core_users [note: 'Shares the stem of users; its own name keeps the models
   kind CoreAuditKind
   type string [null, note: 'Column named like a Go keyword']
   func int [null]
+  rt []byte [unique, note: 'Named like the runtime package GetByRt binds through']
 
   validators {
     CoreAuditKindKnown(kind)
@@ -27,4 +29,8 @@ Table "2fa_codes" {
   indexes {
     (user_id, code) [pk]
   }
+}
+Table digests {
+  rt   []byte [pk, note: 'Named like the runtime package Get and Delete bind through']
+  size int
 }

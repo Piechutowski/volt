@@ -575,7 +575,7 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 ### 69. [decide] Dynamic membership: In versus InList
 
 - UserID.In(ids...) → IN (?, ?, ...): the text changes with list length, so each length is a separate cached statement
-- UserID.InList(ids) → IN (SELECT value FROM json_each(?)): one text for any length. The language uses In for a literal list and InList for a :ids parameter
+- UserID.InList(ids) → IN (SELECT value FROM json_each(?)): one text for any length, except a list whose items bind as bytes, which JSON cannot carry and which renders as In does (§predicates rule 6). The language uses In for a literal list and InList for a :ids parameter
 
 **Proposal.** One method: In(vs ...T) renders json_each whenever it is given values, matching select list parameters and the cache, and InList goes. time.Time, which JSON cannot carry as a SQLite timestamp (§predicates rule 3), either keeps the placeholder form internally or is refused, as it already is for list parameters. Or keep both and document In as the literal form.
 
@@ -1029,7 +1029,7 @@ A zero Status counts as 500. ProblemOf can be table-tested without httptest.
 
 **Cost.** 3 lines in middleware.go and one test.
 
-### 18. [do] nao/rt/null.go:74 `var jsonNull`, returned by MarshalJSON (:80) and compared against in UnmarshalJSON (:87) and rt.Field (nao/rt/changeset.go:312)
+### 18. [do] nao/rt/null.go:50 `var jsonNull`, returned by MarshalJSON (:55) and compared against in UnmarshalJSON (:62) and rt.Field (nao/rt/changeset.go:312)
 
 **Effect.** MarshalJSON returns the package's own slice, so any caller holding the result can change how NULL marshals and decodes for the whole process.
 

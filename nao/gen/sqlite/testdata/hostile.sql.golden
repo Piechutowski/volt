@@ -19,7 +19,9 @@ CREATE TABLE core_users (
   kind TEXT NOT NULL,
   -- Column named like a Go keyword
   type TEXT,
-  func INTEGER
+  func INTEGER,
+  -- Named like the runtime package GetByRt binds through
+  rt BLOB NOT NULL UNIQUE
 );
 
 CREATE TABLE "2fa_codes" (
@@ -28,4 +30,10 @@ CREATE TABLE "2fa_codes" (
   expires_at TIMESTAMP NOT NULL,
   PRIMARY KEY (user_id, code),
   FOREIGN KEY (user_id) REFERENCES users (id)
+);
+
+CREATE TABLE digests (
+  -- Named like the runtime package Get and Delete bind through
+  rt BLOB PRIMARY KEY NOT NULL,
+  size INTEGER NOT NULL
 );

@@ -138,11 +138,11 @@ func (q *Queries) UserDelete(ctx context.Context, id int) error {
 
 func coreUserScan(r rt.Row) (CoreUser, error) {
 	var v CoreUser
-	err := r.Scan(&v.ID, &v.APIKey, &v.HomepageURL, &v.HTTPStatus, &v.FullName, &v.PrecisionValue, &v.Balance, (*string)(&v.Kind), &v.Type, &v.Func)
+	err := r.Scan(&v.ID, &v.APIKey, &v.HomepageURL, &v.HTTPStatus, &v.FullName, &v.PrecisionValue, &v.Balance, (*string)(&v.Kind), &v.Type, &v.Func, (*rt.Bytes)(&v.Rt))
 	return v, rt.Refused("CoreUser", err)
 }
 
-const coreUserGetSQL = `SELECT "id", "api_key", "homepage_url", "http_status", "full name", "precision_value", "balance", "kind", "type", "func" FROM "core_users" WHERE "id" = ?`
+const coreUserGetSQL = `SELECT "id", "api_key", "homepage_url", "http_status", "full name", "precision_value", "balance", "kind", "type", "func", "rt" FROM "core_users" WHERE "id" = ?`
 
 // CoreUserGet fetches the core_users row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) CoreUserGet(ctx context.Context, id int) (CoreUser, error) {
@@ -175,7 +175,15 @@ func (q *Queries) CoreUserGetMany(ctx context.Context, ids []int) ([]CoreUser, e
 	return out, rows.Err()
 }
 
-const coreUserListSQL = `SELECT "id", "api_key", "homepage_url", "http_status", "full name", "precision_value", "balance", "kind", "type", "func" FROM "core_users"`
+const coreUserGetByRtSQL = `SELECT "id", "api_key", "homepage_url", "http_status", "full name", "precision_value", "balance", "kind", "type", "func", "rt" FROM "core_users" WHERE "rt" = ?`
+
+// CoreUserGetByRt fetches the core_users row with the given rt (a unique column),
+// or rt.ErrNotFound.
+func (q *Queries) CoreUserGetByRt(ctx context.Context, rt_ []byte) (CoreUser, error) {
+	return coreUserScan(q.db.QueryRowContext(ctx, coreUserGetByRtSQL, rt.Bytes(rt_)))
+}
+
+const coreUserListSQL = `SELECT "id", "api_key", "homepage_url", "http_status", "full name", "precision_value", "balance", "kind", "type", "func", "rt" FROM "core_users"`
 
 // CoreUserList returns every core_users row.
 func (q *Queries) CoreUserList(ctx context.Context) ([]CoreUser, error) {
@@ -235,6 +243,9 @@ func (q *Queries) CoreUserCreate(ctx context.Context, c CoreUserChangeset) (Core
 	if c.set[9] {
 		cols, args = append(cols, "func"), append(args, v.Func)
 	}
+	if c.set[10] {
+		cols, args = append(cols, "rt"), append(args, rt.Bytes(v.Rt))
+	}
 	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(coreUserTableSQL, cols, coreUserColumnsSQL), args...)
 	if err != nil {
 		return CoreUser{}, err
@@ -285,6 +296,9 @@ func (q *Queries) CoreUserUpdate(ctx context.Context, c CoreUserChangeset) (Core
 	}
 	if c.set[9] {
 		cols, args = append(cols, "func"), append(args, v.Func)
+	}
+	if c.set[10] {
+		cols, args = append(cols, "rt"), append(args, rt.Bytes(v.Rt))
 	}
 	if len(cols) == 0 {
 		return v, nil
@@ -418,6 +432,138 @@ func (q *Queries) X2faCodeDelete(ctx context.Context, userID int, code string) e
 	res, err := q.db.ExecContext(ctx, x2faCodeDeleteSQL, userID, code)
 	if err != nil {
 		return rt.Refused("X2faCode", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return rt.ErrNotFound
+	}
+	return nil
+}
+
+func digestScan(r rt.Row) (Digest, error) {
+	var v Digest
+	err := r.Scan((*rt.Bytes)(&v.Rt), &v.Size)
+	return v, rt.Refused("Digest", err)
+}
+
+const digestGetSQL = `SELECT "rt", "size" FROM "digests" WHERE "rt" = ?`
+
+// DigestGet fetches the digests row with the given primary key, or rt.ErrNotFound.
+func (q *Queries) DigestGet(ctx context.Context, rt_ []byte) (Digest, error) {
+	return digestScan(q.db.QueryRowContext(ctx, digestGetSQL, rt.Bytes(rt_)))
+}
+
+// DigestGetMany fetches the digests rows whose primary key is in rt_s, in
+// database order. Missing keys are not an error; they are just absent.
+func (q *Queries) DigestGetMany(ctx context.Context, rt_s [][]byte) ([]Digest, error) {
+	if len(rt_s) == 0 {
+		return nil, nil
+	}
+	query, args, err := rt.SelectRender(digestTableSQL, digestColumnsSQL, []rt.Opt[Digest]{DigestRt.In(rt_s...)})
+	if err != nil {
+		return nil, err
+	}
+	rows, err := q.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Digest{}
+	for rows.Next() {
+		v, err := digestScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+const digestListSQL = `SELECT "rt", "size" FROM "digests"`
+
+// DigestList returns every digests row.
+func (q *Queries) DigestList(ctx context.Context) ([]Digest, error) {
+	rows, err := q.db.QueryContext(ctx, digestListSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Digest{}
+	for rows.Next() {
+		v, err := digestScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// DigestCreate validates c and inserts its marked columns, returning the
+// stored digests row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) DigestCreate(ctx context.Context, c DigestChangeset) (Digest, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return Digest{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[0] {
+		cols, args = append(cols, "rt"), append(args, rt.Bytes(v.Rt))
+	}
+	if c.set[1] {
+		cols, args = append(cols, "size"), append(args, v.Size)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(digestTableSQL, cols, digestColumnsSQL), args...)
+	if err != nil {
+		return Digest{}, err
+	}
+	return digestScan(row)
+}
+
+// DigestUpdate validates c and writes its marked columns to the digests row it
+// was made from, returning the stored row; nothing marked returns the row
+// untouched (spec §changesets).
+func (q *Queries) DigestUpdate(ctx context.Context, c DigestChangeset) (Digest, error) {
+	if !c.row {
+		return Digest{}, rt.ErrNoRow
+	}
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return Digest{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[0] {
+		cols, args = append(cols, "rt"), append(args, rt.Bytes(v.Rt))
+	}
+	if c.set[1] {
+		cols, args = append(cols, "size"), append(args, v.Size)
+	}
+	if len(cols) == 0 {
+		return v, nil
+	}
+	args = append(args, rt.Bytes(c.data.Rt))
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(digestTableSQL, cols, []string{"rt"}, digestColumnsSQL), args...)
+	if err != nil {
+		return Digest{}, err
+	}
+	return digestScan(row)
+}
+
+const digestDeleteSQL = `DELETE FROM "digests" WHERE "rt" = ?`
+
+// DigestDelete removes the identified digests row; rt.ErrNotFound reports
+// that nothing matched.
+func (q *Queries) DigestDelete(ctx context.Context, rt_ []byte) error {
+	res, err := q.db.ExecContext(ctx, digestDeleteSQL, rt.Bytes(rt_))
+	if err != nil {
+		return rt.Refused("Digest", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {

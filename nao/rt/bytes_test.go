@@ -168,6 +168,11 @@ func TestNullBytesJSON(t *testing.T) {
 
 type blobRow struct{}
 
+func bytesIs(v any, want string) bool {
+	b, ok := v.([]byte)
+	return ok && string(b) == want
+}
+
 func TestDynamicLayerBindsBytes(t *testing.T) {
 	data := Column[blobRow, []byte]{Name: "data"}
 	thumb := NullColumn[blobRow, []byte]{Column[blobRow, []byte]{Name: "thumb"}}
@@ -212,6 +217,34 @@ func TestDynamicLayerBindsBytes(t *testing.T) {
 	}
 	if v, err := driver.DefaultParameterConverter.ConvertValue(args[0]); err != nil || v != nil {
 		t.Errorf("a declared []byte type binds through its own Valuer: got %#v, %v", v, err)
+	}
+
+	query, args, err := CountRender(`"blobs"`, []Pred[blobRow]{
+		data.InList([][]byte{nil}), data.InList([][]byte{{}, []byte("x")}),
+		png.InList([]pngBlob{nil, pngBlob("hi")}), data.InList(nil),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `SELECT count(*) FROM "blobs" WHERE "data" IN (?) AND "data" IN (?, ?) AND "png" IN (?, ?) AND "data" IN (SELECT value FROM json_each(?))`; query != want {
+		t.Errorf("InList over bytes renders\n%s\nwant\n%s", query, want)
+	}
+	if len(args) != 6 {
+		t.Fatalf("args = %#v", args)
+	}
+	emptyBytes(t, "InList([nil])", args[0])
+	emptyBytes(t, "InList([{}, x])", args[1])
+	if v, err := driver.DefaultParameterConverter.ConvertValue(args[2]); err != nil || !bytesIs(v, "x") {
+		t.Errorf("InList item x binds %#v, %v", v, err)
+	}
+	if v, err := driver.DefaultParameterConverter.ConvertValue(args[3]); err != nil || v != nil {
+		t.Errorf("an InList item of a declared []byte type binds through its own Valuer: got %#v, %v", v, err)
+	}
+	if v, err := driver.DefaultParameterConverter.ConvertValue(args[4]); err != nil || !bytesIs(v, "hi") {
+		t.Errorf("InList item pngBlob(hi) binds %#v, %v", v, err)
+	}
+	if args[5] != "[]" {
+		t.Errorf("an empty InList binds %#v; want the empty JSON array, which matches no row", args[5])
 	}
 }
 

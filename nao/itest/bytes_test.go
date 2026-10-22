@@ -170,6 +170,16 @@ func TestBytesNotNullNilWritesEmptyBytes(t *testing.T) {
 				t.Fatalf("AttachmentNamed = %v, %v", named, err)
 			}
 			emptyBytes(t, "select body", named[0].Body)
+			slim, err := q.AttachmentSlim(ctx, "a")
+			if err != nil || len(slim) != 1 {
+				t.Fatalf("AttachmentSlim = %v, %v", slim, err)
+			}
+			emptyBytes(t, "projected select body", slim[0].Body)
+			heavy, err := q.AttachmentHeavy(ctx, "a")
+			if err != nil || len(heavy) != 1 || string(heavy[0].Digest) != "d" {
+				t.Fatalf("AttachmentHeavy = %v, %v", heavy, err)
+			}
+			emptyBytes(t, "derived select body", heavy[0].Body)
 			dyn, err := q.AttachmentQuery(ctx, AttachmentID.Eq(a.ID))
 			if err != nil || len(dyn) != 1 {
 				t.Fatalf("Query = %v, %v", dyn, err)
@@ -243,6 +253,22 @@ func TestBytesNullableRoundTrip(t *testing.T) {
 				if c.valid && got.Thumb.V == nil {
 					t.Errorf("%s: a valid thumb read back as nil; want non-nil bytes", c.name)
 				}
+				slim, err := q.AttachmentSlim(ctx, c.name)
+				if err != nil || len(slim) != 1 {
+					t.Fatalf("%s: AttachmentSlim = %v, %v", c.name, slim, err)
+				}
+				heavy, err := q.AttachmentHeavy(ctx, c.name)
+				if err != nil || len(heavy) != 1 {
+					t.Fatalf("%s: AttachmentHeavy = %v, %v", c.name, heavy, err)
+				}
+				for _, sel := range []struct {
+					what  string
+					thumb rt.Null[[]byte]
+				}{{"projected", slim[0].Thumb}, {"derived", heavy[0].Thumb}} {
+					if sel.thumb.Valid != c.valid || string(sel.thumb.V) != c.data || (c.valid && sel.thumb.V == nil) {
+						t.Errorf("%s: %s select thumb = %#v", c.name, sel.what, sel.thumb)
+					}
+				}
 			}
 
 			a, err := q.AttachmentGetByName(ctx, "data")
@@ -264,6 +290,10 @@ func TestBytesNullableRoundTrip(t *testing.T) {
 		})
 	}
 }
+
+type hashKey []byte
+
+func (h hashKey) Value() (driver.Value, error) { return []byte(h), nil }
 
 func TestBytesKeyPaths(t *testing.T) {
 	ctx := context.Background()
@@ -301,6 +331,18 @@ func TestBytesKeyPaths(t *testing.T) {
 	}
 	if n, err := q.BlobCount(ctx, BlobTag.In(nil, []byte("t"))); err != nil || n != 2 {
 		t.Errorf("Count In(nil, t) = %d, %v; want 2", n, err)
+	}
+	for _, list := range [][][]byte{{nil, []byte("t")}, {{}, []byte("t")}} {
+		if n, err := q.BlobCount(ctx, BlobTag.InList(list)); err != nil || n != 2 {
+			t.Errorf("Count InList(%#v) = %d, %v; want 2, as In matches", list, n, err)
+		}
+	}
+	if n, err := q.BlobCount(ctx, BlobTag.InList([][]byte{[]byte("t")})); err != nil || n != 1 {
+		t.Errorf("Count InList(t) = %d, %v; want 1", n, err)
+	}
+	hash := rt.Column[Blob, hashKey]{Name: "hash"}
+	if n, err := q.BlobCount(ctx, hash.InList([]hashKey{hashKey("h")})); err != nil || n != 1 {
+		t.Errorf("Count InList of a Valuer binding bytes = %d, %v; want 1", n, err)
 	}
 	if n, err := q.BlobCount(ctx, rt.Raw[Blob]("hash = ?", []byte(nil))); err != nil || n != 1 {
 		t.Errorf("Count Raw with a nil []byte arg = %d, %v; want 1", n, err)

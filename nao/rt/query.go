@@ -11,6 +11,7 @@ package rt
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"strings"
@@ -68,11 +69,24 @@ func (c Column[M, T]) NotIn(vs ...T) Pred[M] {
 }
 
 // InList is "column IN (SELECT value FROM json_each(?))" over the list
-// as one JSON array (spec §predicates rule 6), the dynamic twin of a
-// select's list parameter: one statement text whatever the length, and
-// an empty list matches no row.
+// as one JSON array, one statement text whatever the length, and an empty
+// list matches no row; a list whose items bind as bytes is In over them,
+// since JSON carries no blob (spec §predicates rule 6).
 func (c Column[M, T]) InList(vs []T) Pred[M] {
+	if listBytes(vs) {
+		return c.In(vs...)
+	}
 	return Pred[M]{kind: predInList, col: c.Name, vals: []any{JSONList(vs)}}
+}
+
+func listBytes[T any](vs []T) bool {
+	for _, v := range vs {
+		dv, err := driver.DefaultParameterConverter.ConvertValue(v)
+		if _, ok := dv.([]byte); ok && err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // Like is "column LIKE pattern" (SQLite LIKE: case-insensitive ASCII,

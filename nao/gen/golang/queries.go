@@ -288,6 +288,10 @@ func fieldBuild(imports map[string]bool, cd *check.ColumnDef, goFields map[strin
 	}
 
 	tag := fieldTag(col)
+	arg := argName(goField)
+	if arg == "rt" {
+		arg = "rt_"
+	}
 	return &fieldPlan{
 		col:        col,
 		colName:    colName,
@@ -298,7 +302,7 @@ func fieldBuild(imports map[string]bool, cd *check.ColumnDef, goFields map[strin
 		baseType:   typ.name,
 		storage:    cd.Type.Storage,
 		imp:        typ.imp,
-		arg:        argName(goField),
+		arg:        arg,
 		nullable:   cd.Nullable,
 		declared:   cd.Type.Decl != nil,
 		kinded:     cd.Type.Kinded(),

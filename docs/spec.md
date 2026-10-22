@@ -753,23 +753,23 @@ column setting  = "pk"
    `required` refuses, and the comparisons a predicate allows
    (§predicates).
 2. **Nullability.** A column is NOT NULL unless it carries `null`,
-   which admits NULL. This mirrors Go, where a value is never nil unless
-   its type says so, and it holds for every type alike: a column that
-   carries `null` is `rt.Null[T]`, `[]byte` among them, and NULL is
-   only an invalid `rt.Null` (§nullability). A `[]byte` field is
-   therefore bytes and never NULL: nil and a non-nil empty slice are
-   one value, empty bytes, which every bind of a `[]byte` writes as
-   `X''`, in a changeset write, a key, the dynamic layer and a valid
-   `rt.Null[[]byte]` alike, and which every read hands back as a
-   non-nil empty slice whatever the driver returns (§nullability). The
-   zero value of a `[]byte` column without `null` thus satisfies NOT
-   NULL, as every other built-in type's does, and `required` is the one
-   refusal of empty bytes, as it is of `""` for `string`. A declared
-   type (§types) stored as `[]byte` is not a plain `[]byte`: its own
-   `driver.Valuer` decides what it binds, and a value of any declared
-   type whose `driver.Valuer` returns nil binds as NULL. A key column,
-   one carrying `pk` or a member of a `[pk]` index (§indexes), MUST NOT
-   carry `null`.
+   which admits NULL. This mirrors Go, where a value is never nil
+   unless its type says so, and it holds for every type alike: a column
+   that carries `null` is `rt.Null[T]`, `[]byte` among them, and a
+   built-in type binds NULL only as an invalid `rt.Null`
+   (§nullability). A `[]byte` field is therefore bytes and never NULL:
+   nil and a non-nil empty slice are one value, empty bytes, which
+   every bind of a `[]byte` writes as `X''`, in a changeset write, a
+   key, the dynamic layer and a valid `rt.Null[[]byte]` alike, and
+   which every read hands back as a non-nil empty slice whatever the
+   driver returns (§nullability). The zero value of a `[]byte` column
+   without `null` thus satisfies NOT NULL, as every other built-in
+   type's does, and `required` is the one refusal of empty bytes, as it
+   is of `""` for `string`. A declared type (§types) stored as `[]byte`
+   is not a plain `[]byte`: its own `driver.Valuer` decides what it
+   binds, and a value of any declared type whose `driver.Valuer`
+   returns nil binds as NULL. A key column, one carrying `pk` or a
+   member of a `[pk]` index (§indexes), MUST NOT carry `null`.
 3. **`pk`** marks a single-column primary key. A composite primary key
    MUST be expressed as an index with the `pk` setting (§indexes). A
    table has at most one primary key, one column carrying `pk` or one
@@ -1954,7 +1954,8 @@ for a format suffix.
    encoded, with no schema on the wire. JSON is what browsers, curl and
    every other language see. GOB carries no empty slice, so empty bytes
    arrive as nil, which is the same value, empty bytes, in either kind
-   of `[]byte` column, and a NULL arrives as an invalid `rt.Null`
+   of `[]byte` column, and a NULL arrives as an invalid `rt.Null`;
+   re-rendered as JSON, such a nil plain `[]byte` is `null`, not `""`
    (§nullability).
 4. The runtime exposes the same rules to hand-written controllers as
    `volt.Negotiate`, `volt.Render`, `volt.RenderStatus` and
@@ -2506,7 +2507,11 @@ Pred chosen  { org in :orgs }
    - membership in values is `"col" IN (?, ?)`, `NOT IN` likewise; an
      empty list is the constant `1 = 0` (`1 = 1` negated); a list
      parameter is `"col" IN (SELECT value FROM json_each(?))`, bound
-     as one JSON array (`rt.JSONList`);
+     as one JSON array (`rt.JSONList`); the dynamic layer's `InList`
+     over a list any item of which binds as bytes, a plain `[]byte`
+     or a value whose driver value is `[]byte`, is membership in
+     values instead, each item bound as an `In` item is, since JSON
+     carries no blob (rule 5);
    - a pattern is `"col" LIKE ?`, `"col" NOT LIKE ?`; a null test
      `"col" IS NULL`, `"col" IS NOT NULL`;
    - `and` and `or` of two or more operands are parenthesized,
@@ -3520,13 +3525,17 @@ key path (`Get`, `GetBy*`, `Update`, `Delete`), and scans it through
 `(*rt.Bytes)(&v.Body)`, which reads empty bytes as a non-nil empty
 slice even when the driver hands back nil, and NULL as an error; the
 dynamic layer binds every plain `[]byte` value through it, an
-operator argument, an `In` item, a `Set`, an `After` key and a `Raw`
-argument alike. `rt.Null[[]byte]` follows the same rule when valid: a
-nil `V` binds as empty bytes, a read is never nil, and JSON renders a
-valid nil `V` as `""` and NULL as `null`, reading `""` back as valid
-empty bytes and `null` as NULL. A plain `[]byte` field renders in JSON
-as `encoding/json` renders it, and every row Volt reads holds non-nil
-bytes, so empty bytes in a response are `""`. GOB does not carry an
+operator argument, an `In` or `InList` item (§predicates rule 6), a
+`Set`, an `After` key and a `Raw` argument alike. `rt.Null[[]byte]`
+follows the same rule when valid: a nil `V` binds as empty bytes, a
+read is never nil, and JSON renders a valid nil `V` as `""` and NULL
+as `null`, reading `""` back as valid empty bytes and `null` as NULL.
+A plain `[]byte` field renders in JSON as `encoding/json` renders it,
+so nil renders as `null`: a row read from the database holds non-nil
+bytes and renders empty bytes as `""`, while a zero row, a
+changeset's `Row()` or a row the generated client decoded from GOB
+(§formats rule 3) holds nil and renders `null`, which `Cast` refuses
+on a column without `null` (§changesets rule 4). GOB does not carry an
 empty slice, so empty bytes in a GOB write body (§formats) arrive as
 nil, which is empty bytes again: stored as empty bytes in either kind
 of column, while NULL arrives as an invalid `rt.Null` and is stored as

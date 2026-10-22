@@ -314,3 +314,72 @@ func (q *Queries) AttachmentNamed(ctx context.Context, name string) ([]Attachmen
 	}
 	return out, rows.Err()
 }
+
+// Slim is the shared row type of select "slim" (spec §selects-over-groups):
+// one wire type, every member of the target a source.
+type Slim struct {
+	ID    int             `db:"id" json:"id"`
+	Body  []byte          `db:"body" json:"body"`
+	Thumb rt.Null[[]byte] `db:"thumb" json:"thumb"`
+}
+
+func slimScan(r rt.Row) (Slim, error) {
+	var v Slim
+	err := r.Scan(&v.ID, (*rt.Bytes)(&v.Body), &v.Thumb)
+	return v, err
+}
+
+const attachmentSlimSQL = `SELECT "id", "body", "thumb" FROM "attachments" WHERE "name" = ?`
+
+// AttachmentSlim runs the "slim" select over attachments (spec §selects-over-groups).
+func (q *Queries) AttachmentSlim(ctx context.Context, name string) ([]Slim, error) {
+	rows, err := q.db.QueryContext(ctx, attachmentSlimSQL, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Slim{}
+	for rows.Next() {
+		v, err := slimScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// AttachmentHeavy is Attachment minus (name) — a struct derivative of select "heavy",
+// every kept field copied verbatim (spec §selects-over-groups).
+type AttachmentHeavy struct {
+	ID     int             `db:"id" json:"id"`
+	Body   []byte          `db:"body" json:"body"`
+	Thumb  rt.Null[[]byte] `db:"thumb" json:"thumb"`
+	Digest []byte          `db:"digest" json:"digest"`
+}
+
+func attachmentHeavyScan(r rt.Row) (AttachmentHeavy, error) {
+	var v AttachmentHeavy
+	err := r.Scan(&v.ID, (*rt.Bytes)(&v.Body), &v.Thumb, (*rt.Bytes)(&v.Digest))
+	return v, err
+}
+
+const attachmentHeavySQL = `SELECT "id", "body", "thumb", "digest" FROM "attachments" WHERE "name" = ?`
+
+// AttachmentHeavy runs the "heavy" select over attachments (spec §selects-over-groups).
+func (q *Queries) AttachmentHeavy(ctx context.Context, name string) ([]AttachmentHeavy, error) {
+	rows, err := q.db.QueryContext(ctx, attachmentHeavySQL, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []AttachmentHeavy{}
+	for rows.Next() {
+		v, err := attachmentHeavyScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}

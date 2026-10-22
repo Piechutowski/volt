@@ -117,7 +117,7 @@ func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], pr
 
 const (
 	coreUserTableSQL   = `"core_users"`
-	coreUserColumnsSQL = `"id", "api_key", "homepage_url", "http_status", "full name", "precision_value", "balance", "kind", "type", "func"`
+	coreUserColumnsSQL = `"id", "api_key", "homepage_url", "http_status", "full name", "precision_value", "balance", "kind", "type", "func", "rt"`
 )
 
 // CoreUserLimit caps how many rows CoreUserQuery returns.
@@ -321,6 +321,114 @@ func (q *Queries) X2faCodeDeleteWhere(ctx context.Context, preds ...rt.Pred[X2fa
 // is an error, never a full-table rewrite.
 func (q *Queries) X2faCodeUpdateWhere(ctx context.Context, set []rt.Assign[X2faCode], preds ...rt.Pred[X2faCode]) (int64, error) {
 	query, args, err := rt.UpdateRender(x2faCodeTableSQL, set, preds)
+	if err != nil {
+		return 0, err
+	}
+	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+const (
+	digestTableSQL   = `"digests"`
+	digestColumnsSQL = `"rt", "size"`
+)
+
+// DigestLimit caps how many rows DigestQuery returns.
+func DigestLimit(n int) rt.Opt[Digest] { return rt.Limit[Digest](n) }
+
+// DigestOffset skips n rows; keyset pagination (DigestAfter) scales better.
+func DigestOffset(n int) rt.Opt[Digest] { return rt.Offset[Digest](n) }
+
+// DigestDistinct deduplicates the rows DigestQuery returns.
+func DigestDistinct() rt.Opt[Digest] { return rt.Distinct[Digest]() }
+
+// DigestOrderBy sorts DigestQuery's rows by Asc/Desc terms built on the
+// Digest column handles.
+func DigestOrderBy(terms ...rt.Order[Digest]) rt.Opt[Digest] { return rt.OrderBy(terms...) }
+
+// DigestAfter resumes strictly after the row with the given key — keyset
+// pagination: one value per DigestOrderBy term, in the same order.
+func DigestAfter(key ...any) rt.Opt[Digest] { return rt.After[Digest](key...) }
+
+// DigestSet collects the typed assignments of a DigestUpdateWhere, built
+// with Set/SetNull on the Digest column handles.
+func DigestSet(assigns ...rt.Assign[Digest]) []rt.Assign[Digest] { return assigns }
+
+// DigestQuery returns the digests rows matching every given predicate,
+// shaped by the remaining options (order, limit, offset, keyset,
+// distinct). No options means every row.
+func (q *Queries) DigestQuery(ctx context.Context, opts ...rt.Opt[Digest]) ([]Digest, error) {
+	query, args, err := rt.SelectRender(digestTableSQL, digestColumnsSQL, opts)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := rt.StmtQuery(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Digest{}
+	for rows.Next() {
+		v, err := digestScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// DigestCount reports how many digests rows match every given predicate;
+// none counts the whole table.
+func (q *Queries) DigestCount(ctx context.Context, preds ...rt.Pred[Digest]) (int64, error) {
+	query, args, err := rt.CountRender(digestTableSQL, preds)
+	if err != nil {
+		return 0, err
+	}
+	var n int64
+	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// DigestExists reports whether any digests row matches every given predicate.
+func (q *Queries) DigestExists(ctx context.Context, preds ...rt.Pred[Digest]) (bool, error) {
+	query, args, err := rt.ExistsRender(digestTableSQL, preds)
+	if err != nil {
+		return false, err
+	}
+	var found bool
+	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &found); err != nil {
+		return false, err
+	}
+	return found, nil
+}
+
+// DigestDeleteWhere removes every digests row matching the predicates and
+// reports how many went. No effective predicate is an error, never a
+// full-table delete.
+func (q *Queries) DigestDeleteWhere(ctx context.Context, preds ...rt.Pred[Digest]) (int64, error) {
+	query, args, err := rt.DeleteRender(digestTableSQL, preds)
+	if err != nil {
+		return 0, err
+	}
+	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// DigestUpdateWhere applies the typed assignments (DigestSet) to every digests
+// row matching the predicates and reports how many changed — the
+// partial update of the dynamic layer. No effective predicate
+// is an error, never a full-table rewrite.
+func (q *Queries) DigestUpdateWhere(ctx context.Context, set []rt.Assign[Digest], preds ...rt.Pred[Digest]) (int64, error) {
+	query, args, err := rt.UpdateRender(digestTableSQL, set, preds)
 	if err != nil {
 		return 0, err
 	}

@@ -123,6 +123,11 @@ Table attachments {
 
 Select named for attachments where name = :name
 
+// A projected row type and a struct derivative scan a []byte as the
+// model does: empty bytes read back non-nil (spec §nullability).
+Select slim (id, body, thumb) for attachments where name = :name
+Select heavy (* \ name) for attachments where name = :name
+
 // A []byte key binds as every plain []byte does, on every key path.
 Table blobs {
   hash []byte [pk]
