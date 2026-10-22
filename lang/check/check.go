@@ -257,7 +257,7 @@ func tableCheck(d *ast.Table, key string, partials []*ast.TablePartial, env *typ
 	acc := &checker{info: &Info{}, env: env}
 	ti := &TableInfo{Decl: d, Key: key}
 	acc.columnsExpand(ti, partials)
-	acc.tableBodyCheck(d.Pos(), key, d.Settings, d.Body, true)
+	acc.tableBodyCheck(d.Pos(), key, d.Settings, d.Body, d.Incomplete, true)
 	return ti, acc.diags
 }
 

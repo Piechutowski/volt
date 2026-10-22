@@ -199,10 +199,10 @@ func (c *checker) operationsCheck(ops []ast.Operation, flat bool) {
 	for _, op := range ops {
 		switch op := op.(type) {
 		case *ast.CreateTable:
-			c.shapeBodyCheck("create table", op.Name.Name(), op.Pos(), op.Body, migrationColumnSettings)
+			c.shapeBodyCheck("create table", op.Name.Name(), op.Pos(), op.Body, op.Incomplete, migrationColumnSettings)
 		case *ast.DropTable:
 			if op.HasBody() {
-				c.shapeBodyCheck("drop table", op.Name.Name(), op.Pos(), op.Body, migrationColumnSettings)
+				c.shapeBodyCheck("drop table", op.Name.Name(), op.Pos(), op.Body, op.Incomplete, migrationColumnSettings)
 			}
 		case *ast.AlterTable:
 			for _, item := range op.Items {
@@ -222,7 +222,7 @@ func (c *checker) operationsCheck(ops []ast.Operation, flat bool) {
 				}
 			}
 		case *ast.RebuildTable:
-			c.shapeBodyCheck("rebuild table", op.Name.Name(), op.Pos(), op.Body, rebuildColumnSettings)
+			c.shapeBodyCheck("rebuild table", op.Name.Name(), op.Pos(), op.Body, op.Incomplete, rebuildColumnSettings)
 		case *ast.CreateIndex:
 			c.migrationIndexCheck(op.Table.Name(), op.Index, true)
 		case *ast.DropIndex:
@@ -236,7 +236,7 @@ func (c *checker) operationsCheck(ops []ast.Operation, flat bool) {
 // shapeBodyCheck checks the body of a create, drop or rebuild table
 // operation as the schema checks a table (spec §migrations rules 3 to
 // 6 and 9) and returns its columns and indexes.
-func (c *checker) shapeBodyCheck(what, table string, pos token.Position, body []ast.TableItem, spec settingSpec) *TableInfo {
+func (c *checker) shapeBodyCheck(what, table string, pos token.Position, body []ast.TableItem, incomplete bool, spec settingSpec) *TableInfo {
 	ti := &TableInfo{}
 	for _, item := range body {
 		if b, ok := item.(*ast.IndexesBlock); ok {
@@ -261,7 +261,7 @@ func (c *checker) shapeBodyCheck(what, table string, pos token.Position, body []
 			}
 		}
 	}
-	if len(ti.Columns) == 0 {
+	if len(ti.Columns) == 0 && !incomplete {
 		c.errorf(pos, "migrations", "%s %q: the body must declare at least one column (§migrations)", what, table)
 	}
 	c.pkCountCheck(table, ti.Columns, ti.Indexes)
@@ -299,6 +299,9 @@ func (c *checker) migrationRefCheck(col *ast.Column) {
 		case "delete", "update":
 			if !hasRef {
 				c.errorf(s.Pos(), "migrations", "column %q: %s: names the action of the column's ref:, and the column declares none (§migrations)", name, s.Name)
+				continue
+			}
+			if _, ok := s.Value.(*ast.Ident); !ok {
 				continue
 			}
 			if action := refActionOf(s); !refActions[action] {

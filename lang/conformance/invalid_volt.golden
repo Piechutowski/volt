@@ -404,8 +404,15 @@ db/i272_group_note.volt:8:15: error: syntax: expected '{' or '=' after the group
 ## i277_migration_no_transaction_two_words.volt
 db/i277_migration_no_transaction_two_words.volt:9:26: error: syntax: expected ',' or ']' in settings list, found identifier "transaction": settings are separated by commas, and a setting name or value is one identifier (§settings-lists)
 
+## i279_migration_shape_missing_comma.volt
+db/i279_migration_shape_missing_comma.volt:11:16: error: syntax: expected ',' or ']' in settings list, found identifier "increment": settings are separated by commas, and a setting name or value is one identifier (§settings-lists)
+
 ## i27_import_no_parens.volt
 app/i27_import_no_parens.volt:4:1: error: syntax: expected '(' after import (§imports); Volt uses Go-style import blocks
+
+## i281_migration_ref_action_quoted.volt
+db/i281_migration_ref_action_quoted.volt:22:47: error: spec/migrations: "delete" must be a referential action: cascade, restrict, set_null or set_default (§migrations)
+db/i281_migration_ref_action_quoted.volt:22:59: error: spec/migrations: "update" requires a value
 
 ## i28_composite_pk_model.volt
 app/i28_composite_pk_model.volt:11:12: error: spec/resources: table "pairs" has a composite primary key (a, b); composite keys are not routable (§table-resolution)

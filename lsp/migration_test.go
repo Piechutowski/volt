@@ -73,6 +73,21 @@ func TestCompletionMigrationBody(t *testing.T) {
 	}
 }
 
+func TestCompletionRefActions(t *testing.T) {
+	for _, text := range []string{
+		"Table users {\n\tid int [pk]\n}\nTable posts {\n\tid int [pk]\n\tuser_id int [null]\n}\nRef: posts.user_id > users.id [delete: ",
+		"Migration 0001__a {\n\tcreate table posts {\n\t\tuser_id int [null, ref: users.id, update: ",
+	} {
+		d := doc(t, text)
+		lines := strings.Split(text, "\n")
+		items := d.Complete(protocol.Position{Line: protocol.UInteger(len(lines) - 1), Character: protocol.UInteger(len(lines[len(lines)-1]))})
+		if !hasWord(items, "set_null") || !hasWord(items, "set_default") || !hasWord(items, "cascade") || !hasWord(items, "restrict") ||
+			hasWord(items, "set null") || hasWord(items, "no action") || len(items) != 4 {
+			t.Errorf("ref action completion = %v, want cascade, restrict, set_null and set_default", labels(items))
+		}
+	}
+}
+
 func TestCompletionMigrationShapeSettings(t *testing.T) {
 	text := "Migration 0001__a {\n\tcreate table t {\n\t\tid int [\n\t\tindexes {\n\t\t\tid [\n\t\t}\n\t}\n" +
 		"\talter table t {\n\t\tadd bio string [\n\t}\n\trebuild table t {\n\t\tid int [\n\t}\n\tcreate index t id [\n}\n"

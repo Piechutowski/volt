@@ -285,7 +285,7 @@ func (p *parser) table() *ast.Table {
 		d.Settings = p.settingList()
 	}
 	p.expect(token.LBRACE, "Table (§table)")
-	d.Body = p.tableBody("Table")
+	d.Body, d.Incomplete = p.tableBody("Table")
 	d.Rbrace = p.expect(token.RBRACE, "Table (§table)").Pos
 	return d
 }
@@ -297,20 +297,20 @@ func (p *parser) tablePartial() *ast.TablePartial {
 		p.fail(p.cur(), "a TablePartial takes no settings; its body holds columns, indexes and validators (§tablepartial)")
 	}
 	p.expect(token.LBRACE, "TablePartial (§tablepartial)")
-	d.Body = p.tableBody("TablePartial")
+	d.Body, d.Incomplete = p.tableBody("TablePartial")
 	d.Rbrace = p.expect(token.RBRACE, "TablePartial (§tablepartial)").Pos
 	return d
 }
 
-func (p *parser) tableBody(what string) []ast.TableItem {
-	var items []ast.TableItem
+func (p *parser) tableBody(what string) (items []ast.TableItem, incomplete bool) {
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
-		item := p.tableItem(what)
-		if item != nil {
+		if item := p.tableItem(what); item != nil {
 			items = append(items, item)
+		} else {
+			incomplete = true
 		}
 	}
-	return items
+	return items, incomplete
 }
 
 func (p *parser) tableItem(what string) (item ast.TableItem) {
@@ -602,7 +602,7 @@ func (p *parser) settingList() *ast.SettingList {
 		}
 		break
 	}
-	if p.at(token.IDENT) && !p.cur().NLBefore {
+	if p.at(token.IDENT) {
 		p.fail(p.cur(), "expected ',' or ']' in settings list, found %s: settings are separated by commas, and a setting name or value is one identifier (§settings-lists)", p.cur())
 	}
 	sl.Rbrack = p.expect(token.RBRACKET, "settings list (§settings-lists)").End()

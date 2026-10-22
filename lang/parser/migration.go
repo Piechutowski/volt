@@ -97,7 +97,7 @@ func (p *parser) createOp() ast.Operation {
 		p.next()
 		d := &ast.CreateTable{CreatePos: create.Pos}
 		d.Name = p.ident("create table (§migrations)")
-		d.Body, d.Rbrace = p.shapeBody("create table (§migrations)")
+		d.Body, d.Incomplete, d.Rbrace = p.shapeBody("create table (§migrations)")
 		return d
 	case p.atKw("index"):
 		p.next()
@@ -122,7 +122,7 @@ func (p *parser) dropOp() ast.Operation {
 		d.Name = p.ident("drop table (§migrations)")
 		if p.at(token.LBRACE) && !p.cur().NLBefore {
 			d.Lbrace = p.cur().Pos
-			d.Body, d.Rbrace = p.shapeBody("drop table (§migrations)")
+			d.Body, d.Incomplete, d.Rbrace = p.shapeBody("drop table (§migrations)")
 		}
 		p.endOfLine("drop table (§migrations)")
 		return d
@@ -227,7 +227,7 @@ func (p *parser) rebuildTableOp() ast.Operation {
 	d := &ast.RebuildTable{RebuildPos: p.next().Pos}
 	p.expectKw("table", "rebuild table (§migrations)")
 	d.Name = p.ident("rebuild table (§migrations)")
-	d.Body, d.Rbrace = p.shapeBody("rebuild table (§migrations)")
+	d.Body, d.Incomplete, d.Rbrace = p.shapeBody("rebuild table (§migrations)")
 	return d
 }
 
@@ -242,15 +242,16 @@ func (p *parser) execOp() ast.Operation {
 	return d
 }
 
-func (p *parser) shapeBody(ctx string) ([]ast.TableItem, token.Position) {
+func (p *parser) shapeBody(ctx string) (items []ast.TableItem, incomplete bool, rbrace token.Position) {
 	p.expect(token.LBRACE, ctx)
-	var items []ast.TableItem
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		if item := p.shapeItem(ctx); item != nil {
 			items = append(items, item)
+		} else {
+			incomplete = true
 		}
 	}
-	return items, p.expect(token.RBRACE, ctx).Pos
+	return items, incomplete, p.expect(token.RBRACE, ctx).Pos
 }
 
 func (p *parser) shapeItem(ctx string) (item ast.TableItem) {

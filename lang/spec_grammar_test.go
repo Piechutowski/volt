@@ -99,13 +99,6 @@ func specLanguage(t *testing.T) *ebnf.Language {
 		"package path": true,
 		"param":        true,
 	}
-	for _, r := range g.Rules {
-		for _, ref := range ebnf.Refs(r.Expr) {
-			if ref == "sp" && !lexical[r.Name] {
-				contiguous[r.Name] = true
-			}
-		}
-	}
 	oneOf := func(chars string) func(rune) bool { return func(r rune) bool { return strings.ContainsRune(chars, r) } }
 	l := &ebnf.Language{
 		G:          g,

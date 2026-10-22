@@ -173,11 +173,12 @@ func (x *ProjectProp) End() token.Position { return x.Value.End() }
 
 // Table is a Table element (spec §table).
 type Table struct {
-	TablePos token.Position
-	Name     *Ident
-	Settings *SettingList
-	Body     []TableItem
-	Rbrace   token.Position
+	TablePos   token.Position
+	Name       *Ident
+	Settings   *SettingList
+	Body       []TableItem
+	Incomplete bool // true if a syntax error dropped an item from Body
+	Rbrace     token.Position
 }
 
 func (d *Table) Pos() token.Position { return d.TablePos }
@@ -189,6 +190,7 @@ type TablePartial struct {
 	PartialPos token.Position
 	Name       *Ident
 	Body       []TableItem
+	Incomplete bool // true if a syntax error dropped an item from Body
 	Rbrace     token.Position
 }
 

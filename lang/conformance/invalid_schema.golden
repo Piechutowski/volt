@@ -7,13 +7,11 @@ i02_unterminated_string.volt:3:1: error: syntax: invalid setting value (§settin
 i02_unterminated_string.volt:3:1: error: syntax: expected '}' in Table (§table), found end of file
 
 ## i03_newline_in_string.volt
-i03_newline_in_string.volt:2:1: error: spec/table: table "t" must contain at least one column or partial injection
 i03_newline_in_string.volt:3:17: error: syntax: newline in single-line string (§string-literals)
 i03_newline_in_string.volt:4:6: error: syntax: newline in single-line string (§string-literals)
 i03_newline_in_string.volt:5:1: error: syntax: expected ']' in settings list (§settings-lists), found '}' "}"
 
 ## i04_invalid_number.volt
-i04_invalid_number.volt:2:1: error: spec/table: table "t" must contain at least one column or partial injection
 i04_invalid_number.volt:3:20: error: syntax: invalid number "12.3abc" (§numeric-literals)
 i04_invalid_number.volt:3:20: error: syntax: invalid setting value (§settings-lists): found illegal token "12.3abc"
 
@@ -102,7 +100,6 @@ i152_records_literal_null_not_null.volt:7:8: error: spec/records-sample-data: re
 i153_records_declared_type_mismatch.volt:8:8: error: spec/records-sample-data: record value for "price" (money.Money) must be an integer, found string (§records-sample-data)
 
 ## i154_column_without_type.volt
-i154_column_without_type.volt:3:1: error: spec/table: table "t" must contain at least one column or partial injection
 i154_column_without_type.volt:4:6: error: syntax: expected identifier in column type (§columns), found '[' "["
 
 ## i179_index_expression_unnamed.volt
@@ -130,7 +127,7 @@ i227_pk_index_member_null.volt:5:19: error: spec/columns: column "tag" of table 
 i228_bare_pk_after_type.volt:4:10: error: syntax: expected a settings list or end of line after the column type (§columns), found identifier "pk"
 
 ## i229_primary_key_two_words.volt
-i229_primary_key_two_words.volt:4:22: error: syntax: expected ',' or ']' in settings list, found identifier "key": settings are separated by commas, and a setting name or value is one identifier (§settings-lists)
+i229_primary_key_two_words.volt:4:19: error: syntax: expected ',' or ']' in settings list, found identifier "key": settings are separated by commas, and a setting name or value is one identifier (§settings-lists)
 
 ## i230_use_unknown_element.volt
 i230_use_unknown_element.volt:3:1: error: syntax: unknown element type "use" (§program-structure)
@@ -183,7 +180,6 @@ i247_ref_reverse_operator.volt:8:15: error: syntax: expected '>' after the forei
 i247_ref_reverse_operator.volt:9:15: error: syntax: expected '>' after the foreign key: a Ref is written foreign key > referenced columns (§relationships-ref), found '<' "<"
 
 ## i248_ref_inline_operator.volt
-i248_ref_inline_operator.volt:4:1: error: spec/table: table "posts" must contain at least one column or partial injection
 i248_ref_inline_operator.volt:5:21: error: syntax: expected identifier in relationship endpoint (§relationships-ref), found '>' ">"
 
 ## i249_ref_name_long_form.volt
@@ -265,6 +261,13 @@ i276_ref_action_two_words.volt:5:44: error: syntax: expected ',' or ']' in setti
 
 ## i278_settings_missing_comma.volt
 i278_settings_missing_comma.volt:4:17: error: syntax: expected ',' or ']' in settings list, found identifier "increment": settings are separated by commas, and a setting name or value is one identifier (§settings-lists)
+
+## i280_ref_action_quoted.volt
+i280_ref_action_quoted.volt:5:40: error: spec/relationships-ref: "delete" must be a referential action: cascade, restrict, set_null or set_default (§relationships-ref)
+i280_ref_action_quoted.volt:5:52: error: spec/relationships-ref: "update" requires a value
+
+## i282_settings_missing_comma_line_break.volt
+i282_settings_missing_comma_line_break.volt:7:3: error: syntax: expected ',' or ']' in settings list, found identifier "update": settings are separated by commas, and a setting name or value is one identifier (§settings-lists)
 
 ## i32_settings_next_line.volt
 i32_settings_next_line.volt:4:3: error: syntax: expected a column, indexes, validators, records or '~injection' in Table body, found '[' "["

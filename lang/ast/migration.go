@@ -35,10 +35,11 @@ type Operation interface {
 // CreateTable is a create table operation; its body holds columns and
 // indexes blocks (spec §migrations).
 type CreateTable struct {
-	CreatePos token.Position
-	Name      *Ident
-	Body      []TableItem
-	Rbrace    token.Position
+	CreatePos  token.Position
+	Name       *Ident
+	Body       []TableItem
+	Incomplete bool // true if a syntax error dropped an item from Body
+	Rbrace     token.Position
 }
 
 func (x *CreateTable) Pos() token.Position { return x.CreatePos }
@@ -48,11 +49,12 @@ func (x *CreateTable) operationNode()      {}
 // DropTable is a drop table operation, with the dropped shape as its
 // body when the migration is to be reversible (spec §migrations).
 type DropTable struct {
-	DropPos token.Position
-	Name    *Ident
-	Body    []TableItem
-	Lbrace  token.Position // zero when no body was written
-	Rbrace  token.Position
+	DropPos    token.Position
+	Name       *Ident
+	Body       []TableItem
+	Incomplete bool           // true if a syntax error dropped an item from Body
+	Lbrace     token.Position // zero when no body was written
+	Rbrace     token.Position
 }
 
 func (x *DropTable) Pos() token.Position { return x.DropPos }
@@ -144,6 +146,7 @@ type RebuildTable struct {
 	RebuildPos token.Position
 	Name       *Ident
 	Body       []TableItem
+	Incomplete bool // true if a syntax error dropped an item from Body
 	Rbrace     token.Position
 }
 

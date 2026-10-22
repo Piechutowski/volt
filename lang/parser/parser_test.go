@@ -63,6 +63,7 @@ func TestSettingOneIdentifier(t *testing.T) {
 		"Migration 0001__a [no transaction] {\n}\n",
 		"Ref: a.x > b.y [delete: set null]\n",
 		"Table t { x int [null unique] }\n",
+		"Ref: a.x > b.y [\n  delete: set_null\n  update: cascade\n]\n",
 	} {
 		_, diags := ParseFile("t", src)
 		if len(diags) != 1 || !strings.Contains(diags[0].Msg, "expected ',' or ']' in settings list") {
@@ -205,6 +206,63 @@ Type Ok string
 	}
 	if types != 1 {
 		t.Errorf("recovery lost the trailing Type: decls=%d", len(f.Decls))
+	}
+}
+
+func TestBodyIncompleteAfterDroppedItem(t *testing.T) {
+	f, _ := ParseFile("t", `
+Table posts {
+  id int [pk increment]
+}
+Table users {
+  id int [pk]
+}
+TablePartial stamps {
+  created int [null unique]
+}
+Migration 0001__a {
+  create table posts {
+    id int [pk increment]
+  }
+  rebuild table users {
+    id int [pk increment]
+  }
+  drop table users {
+    id int [pk increment]
+  }
+  create table users {
+    id int [pk]
+  }
+}
+`)
+	var got []bool
+	for _, d := range f.Decls {
+		switch d := d.(type) {
+		case *ast.Table:
+			got = append(got, d.Incomplete)
+		case *ast.TablePartial:
+			got = append(got, d.Incomplete)
+		case *ast.Migration:
+			for _, op := range d.Up {
+				switch op := op.(type) {
+				case *ast.CreateTable:
+					got = append(got, op.Incomplete)
+				case *ast.RebuildTable:
+					got = append(got, op.Incomplete)
+				case *ast.DropTable:
+					got = append(got, op.Incomplete)
+				}
+			}
+		}
+	}
+	want := []bool{true, false, true, true, true, true, false}
+	if len(got) != len(want) {
+		t.Fatalf("bodies = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("body %d: Incomplete = %v, want %v (all: %v)", i, got[i], want[i], got)
+		}
 	}
 }
 

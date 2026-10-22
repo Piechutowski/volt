@@ -17,10 +17,10 @@ func (c *checker) declsCheck(f *ast.File) {
 			c.settingsCheck(d.Settings, "project", projectSettings)
 		case *ast.Table:
 			if ti := c.info.byName[d.Name.Name()]; ti == nil || ti.Decl != d {
-				c.tableBodyCheck(d.Pos(), d.Name.Name(), d.Settings, d.Body, true)
+				c.tableBodyCheck(d.Pos(), d.Name.Name(), d.Settings, d.Body, d.Incomplete, true)
 			}
 		case *ast.TablePartial:
-			c.tableBodyCheck(d.Pos(), d.Name.Name(), nil, d.Body, false)
+			c.tableBodyCheck(d.Pos(), d.Name.Name(), nil, d.Body, d.Incomplete, false)
 		case *ast.Ref:
 			c.refSettingsCheck(d.Settings)
 			c.endpointArityCheck(d.Left, d.Right)
@@ -36,7 +36,7 @@ func (c *checker) declsCheck(f *ast.File) {
 	}
 }
 
-func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.SettingList, body []ast.TableItem, isTable bool) {
+func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.SettingList, body []ast.TableItem, incomplete, isTable bool) {
 	c.settingsCheck(settings, "table", tableSettings)
 
 	columns := map[string]bool{}
@@ -70,7 +70,7 @@ func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.S
 			c.recordsCheck(item, false)
 		}
 	}
-	if isTable && nCols == 0 && nInject == 0 {
+	if isTable && nCols == 0 && nInject == 0 && !incomplete {
 		c.errorf(at, "table", "table %q must contain at least one column or partial injection", name)
 	}
 	if nRecords > 1 {
@@ -163,6 +163,9 @@ func (c *checker) refSettingsCheck(sl *ast.SettingList) {
 	}
 	for _, s := range sl.Settings {
 		if s.Name != "delete" && s.Name != "update" {
+			continue
+		}
+		if _, ok := s.Value.(*ast.Ident); !ok {
 			continue
 		}
 		if action := refActionOf(s); !refActions[action] {

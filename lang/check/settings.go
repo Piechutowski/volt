@@ -111,7 +111,7 @@ func (c *checker) settingValueCheck(s *ast.Setting, section string, kind valueKi
 		}
 	case actionValue:
 		if _, ok := s.Value.(*ast.Ident); !ok {
-			c.errorf(s.Value.Pos(), section, "%q must be a referential action", s.Name)
+			c.errorf(s.Value.Pos(), section, "%q must be a referential action: cascade, restrict, set_null or set_default (§%s)", s.Name, section)
 		}
 	case defaultVal:
 		c.defaultValueCheck(s)

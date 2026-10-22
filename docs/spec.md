@@ -324,7 +324,9 @@ sp      = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
    routes, an import block's entries, and every other
    one-per-line body), a syntax error discards the rest of the item's
    line, up to the next line or the body's closing bracket, and the
-   following items are parsed. What a conforming front end reports
+   following items are parsed. The broken item is absent from the body,
+   and a body that lost an item this way is never reported empty
+   (§table, §migrations). What a conforming front end reports
    for invalid input is therefore determined by the input alone; the
    conformance corpus pins every diagnostic of every invalid snippet.
 
@@ -596,10 +598,12 @@ setting value = string | number | boolean | null
 1. A setting is either a flag (`pk`, `unique`, `null`) or a key-value
    pair (`note: 'text'`, `default: 123`).
 2. Setting names are case-insensitive. A setting name is one
-   identifier, and so is a setting value that is a word; a name of
-   several words joins them with underscores (`no_transaction`,
-   §migrations; `set_null`, §relationships-ref). Two identifiers in a
-   row are a syntax error, since settings are separated by commas.
+   identifier, and so is a setting value that is a word; a name or
+   value of several words joins them with underscores
+   (`no_transaction`, §migrations; `set_null`, §relationships-ref).
+   An identifier where a setting ends, before the next comma or the
+   closing bracket, is a syntax error, since settings are separated by
+   commas.
 3. Each element section below enumerates *which* settings are valid there;
    a setting not listed for a construct is invalid in that position.
    The value of `ref:` is an endpoint, `table.column`, wherever `ref:`
@@ -2542,6 +2546,8 @@ projection  = "(", column name, { ",", column name }, ")"
 column term = column name
             | "(", column name, { ",", column name }, ")" ;
 column name = name ;
+order list  = "(", order term, { ",", order term }, ")" ;   (* the value of order:, a setting value (§settings-lists) *)
+order term  = column name, ( "asc" | "desc" ) ;
 ```
 
 ```volt fragment
@@ -3377,14 +3383,15 @@ migration column setting  = column setting
                           | "update", ":", ref action ;
 
 (* setting value, extended (Part I §settings-lists): *)
-setting value  = (* schema-layer alternatives *) | ident list ;
+setting value  = (* schema-layer alternatives *) | ident list | order list ;
 ident list     = "(", name, { ",", name }, ")" ;
 ```
 
 The `group decl`, `pred decl` and `select decl` productions — with the
 predicate expression grammar they share — are collected in §groups, §predicates
 and §selects-over-groups, and the validators block in §validators; they are not
-duplicated here.
+duplicated here. The `order list` that extends `setting value` above is the
+value of a Select's `order:` and is defined in §selects-over-groups.
 
 All tokens of a `route path` and of a `package path` MUST be contiguous
 (§route-paths, §imports) — the grammar above is subject to that adjacency
