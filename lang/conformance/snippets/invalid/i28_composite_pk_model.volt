@@ -2,9 +2,8 @@
 package app
 
 Table pairs {
-	a int
-	b int
-	Indexes { (a, b) [pk] }
+	a int [pk]
+	b int [pk]
 }
 
 Scope / {

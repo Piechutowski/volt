@@ -18,7 +18,7 @@ var ElementWords = []string{
 // SettingNames are the names of every setting of the language, in
 // their one spelling (spec §keywords).
 var SettingNames = []string{
-	"pk", "null", "unique", "increment", "default", "note", "ref", "tag",
+	"pk", "null", "unique", "index", "increment", "default", "note", "ref", "tag",
 	"required", "model", "name", "where", "delete", "update", "from",
 	"down", "irreversible", "no_transaction",
 	"pipe", "error_handler", "api", "only", "except", "param", "singular",

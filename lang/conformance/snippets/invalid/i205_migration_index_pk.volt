@@ -1,5 +1,5 @@
-// spec: §migrations, pk is not a setting of a standalone create index or drop index, since a primary key is a table constraint
-// want: pk is not a setting of a standalone create index or drop index
+// spec: §migrations, §indexes, pk is a column setting and no index setting, in a create index as in a shape body
+// want: pk is a column setting, not an index setting
 package db
 
 Table users {

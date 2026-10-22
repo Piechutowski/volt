@@ -8,5 +8,5 @@ CREATE TABLE authors (
   handle TEXT NOT NULL,
   deleted_at TIMESTAMP
 );
-CREATE UNIQUE INDEX idx_authors_email ON authors (email) WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX idx_authors_handle ON authors (handle);
+CREATE UNIQUE INDEX idx_authors_email ON authors (email) WHERE deleted_at IS NULL;

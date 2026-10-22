@@ -32,12 +32,8 @@ Table comments {
 }
 
 Table post_tags {
-  post_id int    [ref: posts.id]
-  tag     string
-
-  Indexes {
-    (post_id, tag) [pk]
-  }
+  post_id int    [pk, ref: posts.id]
+  tag     string [pk]
 }
 
 Table post_details {
@@ -83,12 +79,8 @@ Migration 0002__comments_and_tags {
     }
   }
   create table post_tags {
-    post_id int    [ref: posts.id]
-    tag     string
-
-    Indexes {
-      (post_id, tag) [pk]
-    }
+    post_id int    [pk, ref: posts.id]
+    tag     string [pk]
   }
   create table scratch {
     id int [pk]

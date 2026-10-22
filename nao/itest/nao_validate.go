@@ -95,3 +95,19 @@ func (c BlobChangeset) Validate() BlobChangeset {
 	c.valid = nil
 	return c
 }
+
+// Validate runs required and the validators of daily_hits over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
+func (c DailyHitChangeset) Validate() DailyHitChangeset {
+	c.valid = nil
+	return c
+}
+
+// Validate runs required and the validators of invites over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
+func (c InviteChangeset) Validate() InviteChangeset {
+	c.valid = nil
+	return c
+}

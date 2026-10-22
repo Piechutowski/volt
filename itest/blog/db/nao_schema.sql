@@ -4,9 +4,10 @@ PRAGMA foreign_keys = ON;
 
 CREATE TABLE users (
   id INTEGER PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE,
+  email TEXT NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP)
 );
+CREATE UNIQUE INDEX idx_users_email ON users (email);
 
 CREATE TABLE tags (
   slug TEXT PRIMARY KEY NOT NULL,

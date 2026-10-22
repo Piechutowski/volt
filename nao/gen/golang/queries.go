@@ -229,35 +229,13 @@ func tableBuild(ti *check.TableInfo) (*tableModel, map[string]bool, error) {
 		tm.fields = append(tm.fields, fp)
 	}
 
-	for _, f := range tm.fields {
-		if f.col.Settings.Get("pk") != nil {
+	for _, cd := range ti.PK() {
+		if f := tm.field(cd.Col.Name.Name()); f != nil {
 			tm.pk = append(tm.pk, f)
 		}
 	}
-	if len(tm.pk) == 0 {
-		for _, ix := range ti.Indexes {
-			if ix.Settings.Get("pk") == nil {
-				continue
-			}
-			for _, atom := range ix.Key {
-				if id, ok := atom.(*ast.Ident); ok {
-					if f := tm.field(id.Name()); f != nil {
-						tm.pk = append(tm.pk, f)
-					}
-				}
-			}
-		}
-	}
-
-	for _, ix := range ti.Indexes {
-		if ix.Settings.Get("unique") == nil || ix.Settings.Get("where") != nil || len(ix.Key) != 1 {
-			continue
-		}
-		if id, ok := ix.Key[0].(*ast.Ident); ok {
-			if f := tm.field(id.Name()); f != nil {
-				f.unique = true
-			}
-		}
+	for _, f := range tm.fields {
+		f.unique = ti.ColumnsUnique([]string{f.colName})
 	}
 	tm.crud = crudMethodsBuild(tm)
 	tm.sigs = fieldSigsBuild(tm)
@@ -309,7 +287,6 @@ func fieldBuild(imports map[string]bool, cd *check.ColumnDef, goFields map[strin
 		required:   col.Settings.Get("required") != nil,
 		increment:  col.Settings.Get("increment") != nil,
 		hasDefault: col.Settings.Get("default") != nil,
-		unique:     col.Settings.Get("unique") != nil,
 	}, nil
 }
 

@@ -6,12 +6,13 @@ PRAGMA foreign_keys = ON;
 
 CREATE TABLE users (
   id INTEGER PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE,
+  email TEXT NOT NULL,
   name TEXT NOT NULL,
   -- NULL until the user writes one
   bio TEXT,
   created_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP)
 );
+CREATE UNIQUE INDEX idx_users_email ON users (email);
 
 CREATE TABLE orders (
   id INTEGER PRIMARY KEY,
@@ -55,14 +56,35 @@ CREATE TABLE site_flags (
 
 CREATE TABLE attachments (
   id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
   body BLOB NOT NULL,
   thumb BLOB,
   digest BLOB NOT NULL
 );
+CREATE UNIQUE INDEX idx_attachments_name ON attachments (name);
 
 CREATE TABLE blobs (
   hash BLOB PRIMARY KEY NOT NULL,
-  tag BLOB NOT NULL UNIQUE,
+  tag BLOB NOT NULL,
   size INTEGER NOT NULL DEFAULT 0
 );
+CREATE UNIQUE INDEX idx_blobs_tag ON blobs (tag);
+
+CREATE TABLE daily_hits (
+  day INTEGER NOT NULL,
+  hits INTEGER NOT NULL DEFAULT 0,
+  site TEXT NOT NULL,
+  label TEXT NOT NULL DEFAULT '',
+  token TEXT,
+  PRIMARY KEY (day, site)
+);
+CREATE INDEX idx_daily_hits_label ON daily_hits (label);
+CREATE UNIQUE INDEX idx_daily_hits_token ON daily_hits (token);
+
+CREATE TABLE invites (
+  id INTEGER PRIMARY KEY,
+  user_email TEXT NOT NULL,
+  code TEXT NOT NULL,
+  FOREIGN KEY (user_email) REFERENCES users (email)
+);
+CREATE UNIQUE INDEX idx_invites_code ON invites (code);

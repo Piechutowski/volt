@@ -83,22 +83,29 @@ guarantees.
 ### redundantindex
 
 **What it does.** Reports four index patterns:
-1. `[pk, unique]` on one index — a primary key is already unique;
-2. a single-column `[unique]` index on a column already marked `unique`;
-3. a single-column `[unique]` or `[pk]` index on a column already marked `pk`;
+1. `unique` or `index` on the column of a single-column primary key,
+   which is unique and indexed already;
+2. a single-column `[unique]` index under `where:` on a column that
+   carries `unique`, which holds over the whole table already;
+3. an index without `where:` whose key is the columns of a composite
+   primary key in its order, which the key's own index already is;
 4. two indexes with an identical key (column order significant) and the
-   same `where:` condition, or none on either.
+   same `where:` condition, or none on either, under two names.
 
 **Why.** The duplicate creates a second physical index (cost on every
 write) or a second spelling of the same constraint that can drift from the
 first.
 
-**Examples.** [testdata/redundantindex.volt](../lang/vet/testdata/redundantindex.volt)
-— note that `(email, country)` and `(country, id)` coexisting is good:
-composite indexes with different column order are different indexes.
-So are `slug`, `slug` under `` where: `deleted_at IS NULL` `` and `slug`
-under `` where: `deleted_at IS NOT NULL` ``: a partial index covers
-only the rows its condition admits (spec §indexes).
+**Examples.** [testdata/redundantindex.volt](../lang/vet/testdata/redundantindex.volt):
+`(email, country)` and `(country, id)` coexisting is good, since
+composite indexes with different column order are different indexes,
+and so are a composite key `(user_id, group_id)` and an index on
+`(group_id, user_id)` or on `group_id` alone. So are a column's
+`index` on `slug`, `slug` under `` where: `deleted_at IS NULL` `` and
+`slug` under `` where: `deleted_at IS NOT NULL` ``: a partial index
+covers only the rows its condition admits (spec §indexes). Two
+indexes of one name are not this rule's: the checker refuses them
+(spec §indexes).
 
 **Limitations.** Expression atoms and `where:` conditions are compared
 textually: `` `a+b` `` and `` `a + b` `` count as different keys.
@@ -139,14 +146,14 @@ family where a warning most often prevents a production incident.
 
 ### missingpk
 
-**What it does.** Reports a table with no primary key: no `pk` column
-setting (including via injected partials) and no `[pk]` index.
+**What it does.** Reports a table with no primary key: no column
+carrying `pk`, injected partials included (spec §columns).
 
 **Why.** Tables without primary keys defeat replication, upserts, ORMs and
 row identity in general. Almost always an oversight.
 
-**Examples.** [testdata/missingpk.volt](../lang/vet/testdata/missingpk.volt): both
-ways of declaring a pk (column setting, composite index) are good.
+**Examples.** [testdata/missingpk.volt](../lang/vet/testdata/missingpk.volt): a
+single `pk` column and several, a composite key, are good.
 
 ### reftype
 
@@ -167,23 +174,30 @@ column (spec §columns).
 ### reftarget
 
 **What it does.** Reports a foreign key whose referenced ("one"-side)
-column set is not guaranteed unique: not a `pk`/`unique` column and not
-the column set of a `[pk]` index or of a `[unique]` index without
-`where:`. A unique index with `where:` constrains only the rows its
-condition admits (spec §indexes), and SQLite refuses it as a
-foreign-key target. The referenced columns are those right of `>` in a
+column set is not guaranteed unique (spec §relationships-ref, targets):
+not exactly the columns of the primary key, not one column that
+carries `unique`, and not exactly the key of a `[unique]` index whose
+key is columns only and which has no `where:`. A unique index with
+`where:` constrains only the rows its condition admits, and one with an
+expression constrains no column (spec §indexes), so SQLite refuses
+either as a foreign-key target; one member of a composite key alone is
+not unique either. The referenced columns are those right of `>` in a
 `Ref`, or the endpoint of a column's `ref:` (spec §relationships-ref).
+The generator asks the same question to give `<Model>GetBy<Column>`
+(spec §generated-query-surface).
 
 **Why.** SQL requires FK targets to be unique; a schema that violates this
 fails at export or, worse, models a "to-one" relationship that the data
 cannot uphold.
 
-**Examples.** [testdata/reftarget.volt](../lang/vet/testdata/reftarget.volt) — the
+**Examples.** [testdata/reftarget.volt](../lang/vet/testdata/reftarget.volt): the
 composite case shows that only an index with **the same column set** makes
-a composite target unique; `accounts.email`, unique only where
-`deleted_at IS NULL`, is no target, while `accounts.handle` is; a
-one-to-one names its target like any ref, so `bios.user_id [null,
-unique, ref: users.id]` is good.
+a composite target unique, and a composite key is a target as a whole,
+in any order, while one of its members alone is not; `accounts.email`,
+unique only where `deleted_at IS NULL`, and `accounts.login`, unique
+only together with an expression, are no targets, while the unique
+column `accounts.handle` is; a one-to-one names its target like any
+ref, so `bios.user_id [null, unique, ref: users.id]` is good.
 
 ### selfref
 

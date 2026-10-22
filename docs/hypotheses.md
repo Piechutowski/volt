@@ -59,10 +59,14 @@ anything that was once true; what is verified is the composition, the
 fold of every migration onto an empty SQLite against the schema's DDL
 (§migrations, §the-fold). Settled by building it: `volt gen` fails on
 drift rather than warning, since code generated against a database no
-migration produces is the bug the fold exists to catch; and a UNIQUE
-constraint and a unique index on the same key are one structure to
-the fold, since SQLite names constraint indexes by ordinal and `add
-... [unique]` can only lower to an index. Unsettled: the generator
-that writes the next migration from the drift report, and how a
-rename is told from a drop and an add (`[was:]` in the schema, or a
-question at diff time).
+migration produces is the bug the fold exists to catch; and the fold
+compares indexes by key, uniqueness and predicate, never by name, so
+a renamed index is no drift and a UNIQUE constraint an older lowering
+wrote is one structure with the unique index `unique` writes now:
+SQLite enforces the two alike, and every single-column index is a
+`CREATE INDEX` so that an index can be added to a table that has rows
+and dropped from it without a rebuild, `add ... [unique]` among them.
+A primary key is no index and changes only by a rebuild. Unsettled:
+the generator that writes the next migration from the drift report,
+and how a rename is told from a drop and an add (`[was:]` in the
+schema, or a question at diff time).

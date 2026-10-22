@@ -120,8 +120,8 @@ i220_unknown_type_partial_once.volt:4:11: error: spec/columns: column "version":
 ## i226_pk_null.volt
 i226_pk_null.volt:4:21: error: spec/columns: column "id" carries pk and null: a key column is never NULL (§columns)
 
-## i227_pk_index_member_null.volt
-i227_pk_index_member_null.volt:5:19: error: spec/columns: column "tag" of table "post_tags" is a member of the [pk] index and carries null: a key column is never NULL (§columns)
+## i227_composite_pk_member_null.volt
+i227_composite_pk_member_null.volt:5:23: error: spec/columns: column "tag" carries pk and null: a key column is never NULL (§columns)
 
 ## i228_bare_pk_after_type.volt
 i228_bare_pk_after_type.volt:4:10: error: syntax: expected a settings list or end of line after the column type (§columns), found identifier "pk"
@@ -142,29 +142,10 @@ i232_ref_set_null_not_null.volt:14:34: error: spec/relationships-ref: delete: se
 i232_ref_set_null_not_null.volt:15:36: error: spec/relationships-ref: update: set_default on foreign-key column "posts.reviewer_id", which carries neither null nor a default:, so its default is NULL, which the column refuses (§relationships-ref)
 i232_ref_set_null_not_null.volt:16:55: error: spec/relationships-ref: update: set_null on foreign-key column "posts.editor_id", which does not carry null: the database would write a NULL the column refuses (§relationships-ref)
 
-## i236_second_pk_column.volt
-i236_second_pk_column.volt:5:16: error: spec/columns: table "posts" declares a second primary key, column "slug" beside column "id": a table has one primary key, one pk column or one [pk] index (§columns)
-
-## i237_pk_column_and_pk_index.volt
-i237_pk_column_and_pk_index.volt:8:21: error: spec/columns: table "post_tags" declares a second primary key, index (post_id, tag) beside column "post_id": a table has one primary key, one pk column or one [pk] index (§columns)
-
-## i238_two_pk_indexes.volt
-i238_two_pk_indexes.volt:9:10: error: spec/columns: table "post_tags" declares a second primary key, index tag beside index (post_id, tag): a table has one primary key, one pk column or one [pk] index (§columns)
-
-## i239_partial_pk_second.volt
-i239_partial_pk_second.volt:9:16: error: spec/columns: table "posts" declares a second primary key, column "slug" beside column "id": a table has one primary key, one pk column or one [pk] index (§columns)
-
-## i241_pk_index_expression.volt
-i241_pk_index_expression.volt:8:6: error: spec/indexes: index (`lower(slug)`, version) on "posts" carries pk and has an expression in its key: a primary key is columns only (§indexes)
-
-## i242_pk_index_settings.volt
-i242_pk_index_settings.volt:9:25: error: spec/indexes: index (post_id, tag) on "post_tags" carries pk and name:, which it does not take, since a primary key is a table constraint and has no name (§indexes)
-i242_pk_index_settings.volt:9:47: error: spec/indexes: index (post_id, tag) on "post_tags" carries pk and where:, which it does not take, since a primary key covers every row (§indexes)
-
 ## i244_partial_index_duplicate.volt
-i244_partial_index_duplicate.volt:22:3: error: spec/tablepartial: TablePartial "emails" injects index (email) into table "users", which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)
-i244_partial_index_duplicate.volt:24:3: error: spec/tablepartial: TablePartial "stamps_again" injects index (created_at) into table "users", which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)
-i244_partial_index_duplicate.volt:32:3: error: spec/tablepartial: TablePartial "stamps" injects index (created_at) into table "posts", which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)
+i244_partial_index_duplicate.volt:24:3: error: spec/tablepartial: TablePartial "emails" injects index (email, name) into table "users", which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)
+i244_partial_index_duplicate.volt:26:3: error: spec/tablepartial: TablePartial "stamps_again" injects index (created_at, updated_at) into table "users", which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)
+i244_partial_index_duplicate.volt:34:3: error: spec/tablepartial: TablePartial "stamps" injects index (created_at, updated_at) into table "posts", which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)
 
 ## i245_records_empty_field.volt
 i245_records_empty_field.volt:8:8: error: syntax: empty record field: every field holds a value, and NULL is written null (§records-sample-data)
@@ -212,8 +193,8 @@ i254_color_literal.volt:3:27: error: syntax: invalid setting value (§settings-l
 i255_body_note.volt:5:7: error: syntax: expected identifier in column type (§columns), found ':' ":"
 
 ## i256_index_type_note.volt
-i256_index_type_note.volt:7:14: error: spec/indexes: unknown setting "type" (§indexes)
-i256_index_type_note.volt:8:9: error: spec/indexes: unknown setting "note" (§indexes)
+i256_index_type_note.volt:7:20: error: spec/indexes: unknown setting "type" (§indexes)
+i256_index_type_note.volt:8:20: error: spec/indexes: unknown setting "note" (§indexes)
 
 ## i258_semicolon_not_a_token.volt
 i258_semicolon_not_a_token.volt:4:14: error: syntax: unexpected character ";" (§lexical-structure)
@@ -251,7 +232,7 @@ i271_type_note.volt:2:18: error: syntax: expected end of line after Type declara
 i273_inline_ref_action.volt:8:31: error: spec/columns: unknown setting "delete" (§columns)
 
 ## i274_inline_ref_column_group.volt
-i274_inline_ref_column_group.volt:12:25: error: spec/relationships-ref: an inline ref endpoint has exactly one column
+i274_inline_ref_column_group.volt:9:25: error: spec/relationships-ref: an inline ref endpoint has exactly one column
 
 ## i275_ref_action_no_action.volt
 i275_ref_action_no_action.volt:5:49: error: spec/relationships-ref: invalid referential action "no_action" for 'update'; expected cascade, restrict, set_null or set_default; leave update: out for SQLite's default (§relationships-ref)
@@ -314,6 +295,24 @@ i297_unknown_escape.volt:8:24: error: syntax: unknown escape sequence \r: a stri
 ## i306_multiline_ends_quote.volt
 i306_multiline_ends_quote.volt:3:30: error: syntax: a multi-line string cannot end with a double quote: write it \" before the closing """ (§multi-line-string-literals)
 
+## i307_index_pk.volt
+i307_index_pk.volt:8:21: error: spec/indexes: pk is a column setting, not an index setting: write pk on each key column, and several pk columns form one composite primary key in declaration order (§indexes)
+
+## i308_index_plain_single_column.volt
+i308_index_plain_single_column.volt:6:5: error: spec/indexes: index created_at on "stamps" is a plain single-column index: write the column setting index on "created_at"; an Indexes block holds composite, expression and partial indexes (§indexes)
+i308_index_plain_single_column.volt:17:5: error: spec/indexes: index email on "users" is a plain single-column index: write the column setting unique on "email"; an Indexes block holds composite, expression and partial indexes (§indexes)
+i308_index_plain_single_column.volt:18:6: error: spec/indexes: index (name) on "users" is a plain single-column index: write the column setting index on "name"; an Indexes block holds composite, expression and partial indexes (§indexes)
+
+## i310_index_name_twice.volt
+i310_index_name_twice.volt:10:5: error: spec/indexes: table "users" has two indexes named "idx_users_email", the unique setting of column "email" and index email: an index name is unique within its table; give one a name: (§indexes)
+i310_index_name_twice.volt:12:6: error: spec/indexes: table "users" has two indexes named "idx_users_lookup", index (handle, region) and index (region, handle): an index name is unique within its table; give one a name: (§indexes)
+
+## i311_unique_and_index.volt
+i311_unique_and_index.volt:5:16: error: spec/columns: "unique" and "index" cannot both be set (§columns)
+
+## i312_partial_index_name_twice.volt
+i312_partial_index_name_twice.volt:8:6: error: spec/indexes: TablePartial "stamps" declares two indexes named "idx_<table>_created_at_updated_at" in every table that injects it, index (created_at, updated_at) and index (created_at, updated_at): an index name is unique within its table; give one a name: (§indexes)
+
 ## i32_settings_next_line.volt
 i32_settings_next_line.volt:4:3: error: syntax: expected a column, Indexes, Validators, Records or '~injection' in Table body, found '[' "["
 
@@ -357,7 +356,7 @@ i78_increment_varchar.volt:4:20: error: spec/columns: increment on "code" (strin
 i79_increment_not_pk.volt:6:16: error: spec/columns: increment on "counter": only the primary key auto-increments; elsewhere the keyword would be silently ignored while no changeset ever marks the column (§columns, §mapping-to-sqlite-ddl)
 
 ## i80_increment_composite_pk.volt
-i80_increment_composite_pk.volt:4:16: error: spec/columns: increment on "user_id": a composite primary key has no auto-assigned column — SQLite auto-assigns only the single-column integer key (§columns, §mapping-to-sqlite-ddl)
+i80_increment_composite_pk.volt:4:23: error: spec/columns: increment on "user_id": a composite primary key has no auto-assigned column, since SQLite auto-assigns only a single-column int key (§columns)
 
 ## i81_element_boundary.volt
 i81_element_boundary.volt:12:1: error: syntax: expected identifier in relationship endpoint (§relationships-ref), found the start of the next element (§line-structure-and-whitespace)

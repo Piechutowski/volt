@@ -4,12 +4,8 @@ package db
 Table users {
   id        int    [pk, increment]
   email     string [unique]
-  full_name string
+  full_name string [index]
   bio       string [null]
-
-  Indexes {
-    full_name
-  }
 }
 
 Migration 0001__create_users {

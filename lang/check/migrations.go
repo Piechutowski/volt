@@ -31,11 +31,12 @@ var (
 	}
 	migrationColumnKinds = map[string]valueKind{
 		"pk": flagOnly, "null": flagOnly,
-		"unique": flagOnly, "increment": flagOnly,
+		"unique": flagOnly, "index": flagOnly, "increment": flagOnly,
 		"default": defaultVal, "ref": refVal,
 		"delete": actionValue, "update": actionValue,
 	}
-	migrationForbidden = map[string]string{
+	migrationColumnConflicts = [][2]string{{"unique", "index"}}
+	migrationForbidden       = map[string]string{
 		"tag":      "tag: describes the Go struct field, not the database, and is not a migration setting (§migrations)",
 		"required": "required describes Go-side validation, not the database, and is not a migration setting (§migrations)",
 		"model":    "model: names the Go model, not the database, and is not a migration setting (§migrations)",
@@ -43,17 +44,20 @@ var (
 	}
 	migrationColumnSettings = settingSpec{
 		kinds:     migrationColumnKinds,
+		conflicts: migrationColumnConflicts,
 		forbidden: mapWith(migrationForbidden, "from", "from: names the source of a rebuilt column and is a setting of rebuild table only (§migrations)"),
 	}
 	rebuildColumnSettings = settingSpec{
 		kinds:     mapWith(migrationColumnKinds, "from", exprValue),
+		conflicts: migrationColumnConflicts,
 		forbidden: migrationForbidden,
 	}
 	migrationIndexSettings = settingSpec{
 		kinds: map[string]valueKind{
-			"unique": flagOnly, "pk": flagOnly,
-			"name": strValue, "where": exprValue,
+			"unique": flagOnly,
+			"name":   strValue, "where": exprValue,
 		},
+		forbidden: map[string]string{"pk": pkNotIndexSetting("migrations")},
 	}
 	execSettings = settingSpec{
 		kinds: map[string]valueKind{"down": exprValue},
@@ -224,9 +228,9 @@ func (c *checker) operationsCheck(ops []ast.Operation, flat bool) {
 		case *ast.RebuildTable:
 			c.shapeBodyCheck("rebuild table", op.Name.Name(), op.Pos(), op.Body, op.Incomplete, rebuildColumnSettings)
 		case *ast.CreateIndex:
-			c.migrationIndexCheck(op.Table.Name(), op.Index, true)
+			c.migrationIndexCheck(op.Table.Name(), op.Index)
 		case *ast.DropIndex:
-			c.migrationIndexCheck(op.Table.Name(), op.Index, true)
+			c.migrationIndexCheck(op.Table.Name(), op.Index)
 		case *ast.Exec:
 			c.settingsCheck(op.Settings, "migrations", execSettings)
 		}
@@ -235,15 +239,10 @@ func (c *checker) operationsCheck(ops []ast.Operation, flat bool) {
 
 // shapeBodyCheck checks the body of a create, drop or rebuild table
 // operation as the schema checks a table (spec §migrations rules 3 to
-// 6 and 9) and returns its columns and indexes.
+// 6 and 9, §indexes) and returns its columns and indexes.
 func (c *checker) shapeBodyCheck(what, table string, pos token.Position, body []ast.TableItem, incomplete bool, spec settingSpec) *TableInfo {
-	ti := &TableInfo{}
-	for _, item := range body {
-		if b, ok := item.(*ast.IndexesBlock); ok {
-			ti.Indexes = append(ti.Indexes, b.Indexes...)
-		}
-	}
-	pk := pkIndexColumns(ti.Indexes)
+	ti := &TableInfo{Key: table}
+	var named []namedIndex
 	seen := map[string]bool{}
 	for _, item := range body {
 		switch item := item.(type) {
@@ -254,17 +253,19 @@ func (c *checker) shapeBodyCheck(what, table string, pos token.Position, body []
 			}
 			seen[name] = true
 			ti.Columns = append(ti.Columns, c.migrationColumnCheck(item, spec))
-			c.pkIndexNullCheck(item, table, pk)
 		case *ast.IndexesBlock:
 			for _, ix := range item.Indexes {
-				c.migrationIndexCheck(table, ix, false)
+				c.migrationIndexCheck(table, ix)
+				c.indexPlainCheck(table, ix)
+				ti.Indexes = append(ti.Indexes, ix)
+				named = append(named, namedIndex{ix: ix})
 			}
 		}
 	}
 	if len(ti.Columns) == 0 && !incomplete {
 		c.errorf(pos, "migrations", "%s %q: the body must declare at least one column (§migrations)", what, table)
 	}
-	c.pkCountCheck(table, ti.Columns, ti.Indexes)
+	c.indexNamesCheck(table, ti.Columns, named)
 	c.incrementCheck(ti)
 	return ti
 }
@@ -363,23 +364,17 @@ func (c *checker) addColumnCheck(col *ast.Column, head string) {
 	}
 }
 
-// migrationIndexCheck checks an index of a shape body or, standalone, of
-// a create index or drop index operation, where pk is not a setting
-// since a primary key is a table constraint (spec §migrations rule 10).
-func (c *checker) migrationIndexCheck(table string, ix *ast.Index, standalone bool) {
+// migrationIndexCheck checks an index of a shape body or of a create
+// index or drop index operation (spec §migrations rules 4 and 10).
+func (c *checker) migrationIndexCheck(table string, ix *ast.Index) {
 	c.settingsCheck(ix.Settings, "migrations", migrationIndexSettings)
-	if pk := ix.Settings.Get("pk"); pk != nil && standalone {
-		c.errorf(pk.Pos(), "migrations", "index %s on %q: pk is not a setting of a standalone create index or drop index, since a primary key is a table constraint, declared in a create table or rebuild table body (§migrations)", indexKeyString(ix), table)
-	} else {
-		c.pkIndexCheck(table, ix, migrationIndexSettings)
-	}
 	c.indexNameCheck(table, ix)
 }
 
 // indexNameCheck enforces that an index whose key holds an expression
 // carries name:, since no name derives from it (spec §indexes).
 func (c *checker) indexNameCheck(table string, ix *ast.Index) {
-	if ix.Settings.Get("name") != nil || ix.Settings.Get("pk") != nil {
+	if ix.Settings.Get("name") != nil {
 		return
 	}
 	for _, atom := range ix.Key {

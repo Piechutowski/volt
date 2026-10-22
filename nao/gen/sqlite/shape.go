@@ -44,11 +44,16 @@ func DefaultSQL(v ast.Node) (string, error) { return defaultSQL(v) }
 
 // TableDDL renders the CREATE TABLE statement of a shape body, without
 // the trailing semicolon (spec §migrations rules 5, 6 and 9): the
-// columns, a composite primary key, and a foreign key per inline ref:
-// with its delete: and update: actions (§relationships-ref), as
-// the schema's Table decides them.
+// columns, the primary key of its pk columns in order, and a foreign
+// key per inline ref: with its delete: and update: actions
+// (§relationships-ref), as the schema's Table decides them.
 func TableDDL(table string, body []ast.TableItem) (string, error) {
-	pkCols := pkKeyColumns(body)
+	var pkCols []string
+	for _, item := range body {
+		if col, ok := item.(*ast.Column); ok && col.Settings.Get("pk") != nil {
+			pkCols = append(pkCols, col.Name.Name())
+		}
+	}
 	var lines, constraints []string
 	for _, item := range body {
 		col, ok := item.(*ast.Column)
@@ -69,52 +74,42 @@ func TableDDL(table string, body []ast.TableItem) (string, error) {
 			constraints = append(constraints, "  FOREIGN KEY ("+identQuote(name)+") REFERENCES "+referenceSQL(col, ep))
 		}
 	}
-	if len(pkCols) > 0 {
+	if len(pkCols) > 1 {
 		lines = append(lines, "  PRIMARY KEY ("+quotedJoin(pkCols)+")")
 	}
 	lines = append(lines, constraints...)
 	return "CREATE TABLE " + identQuote(table) + " (\n" + strings.Join(lines, ",\n") + "\n)", nil
 }
 
-// IndexesDDL renders the CREATE INDEX statement of every non-pk index
-// of a shape body, without trailing semicolons, named for table (spec
-// §migrations rules 5, 9 and 10).
+// IndexesDDL renders the CREATE INDEX statements of a shape body,
+// without trailing semicolons, named for table (spec §migrations rules
+// 5, 9 and 10): the index of every column that carries unique or
+// index, then the indexes of its Indexes block, as the schema's Table
+// lowers them.
 func IndexesDDL(table string, body []ast.TableItem) ([]string, error) {
-	var out []string
-	used := map[string]bool{}
+	var cols []*ast.Column
+	var indexes []*ast.Index
 	for _, item := range body {
-		block, ok := item.(*ast.IndexesBlock)
-		if !ok {
-			continue
-		}
-		for _, ix := range block.Indexes {
-			if ix.Settings.Get("pk") != nil {
-				continue
-			}
-			name, err := IndexName(table, ix)
-			if err != nil {
-				return nil, fmt.Errorf("table %s: %w", table, err)
-			}
-			if used[name] {
-				return nil, fmt.Errorf("table %s: duplicate index name %q", table, name)
-			}
-			used[name] = true
-			out = append(out, IndexDDL(table, name, ix))
+		switch item := item.(type) {
+		case *ast.Column:
+			cols = append(cols, item)
+		case *ast.IndexesBlock:
+			indexes = append(indexes, item.Indexes...)
 		}
 	}
-	return out, nil
+	return indexStatements(table, cols, indexes)
 }
 
 // ColumnDDL renders the definition of a column added by ALTER TABLE
 // ADD COLUMN (spec §migrations rule 8): its type, NOT NULL, DEFAULT
-// and REFERENCES with its delete: and update: actions. The flag says
-// the column is unique, which the caller lowers to a CREATE UNIQUE
-// INDEX, since SQLite takes no UNIQUE here.
-func ColumnDDL(col *ast.Column) (def string, unique bool, err error) {
+// and REFERENCES with its delete: and update: actions. A unique or
+// index setting is the column's CREATE INDEX, which the caller writes
+// after the ADD COLUMN, since SQLite takes no UNIQUE here.
+func ColumnDDL(col *ast.Column) (string, error) {
 	name := col.Name.Name()
 	sqlType, ok := TypeSQL(col.Type.String())
 	if !ok {
-		return "", false, fmt.Errorf("column %q: type %q is not a built-in (§migrations)", name, col.Type.String())
+		return "", fmt.Errorf("column %q: type %q is not a built-in (§migrations)", name, col.Type.String())
 	}
 	parts := []string{identQuote(name), sqlType}
 	if !isNullable(col) {
@@ -123,36 +118,14 @@ func ColumnDDL(col *ast.Column) (def string, unique bool, err error) {
 	if s := col.Settings.Get("default"); s != nil {
 		d, err := defaultSQL(s.Value)
 		if err != nil {
-			return "", false, fmt.Errorf("column %q: %w", name, err)
+			return "", fmt.Errorf("column %q: %w", name, err)
 		}
 		parts = append(parts, "DEFAULT "+d)
 	}
-	unique = col.Settings.Get("unique") != nil
 	if ep := refEndpoint(col); ep != nil {
 		parts = append(parts, "REFERENCES "+referenceSQL(col, ep))
 	}
-	return strings.Join(parts, " "), unique, nil
-}
-
-func pkKeyColumns(body []ast.TableItem) []string {
-	var out []string
-	for _, item := range body {
-		block, ok := item.(*ast.IndexesBlock)
-		if !ok {
-			continue
-		}
-		for _, ix := range block.Indexes {
-			if ix.Settings.Get("pk") == nil {
-				continue
-			}
-			for _, atom := range ix.Key {
-				if id, ok := atom.(*ast.Ident); ok {
-					out = append(out, id.Name())
-				}
-			}
-		}
-	}
-	return out
+	return strings.Join(parts, " "), nil
 }
 
 // refEndpoint is the endpoint of a column's ref: setting, nil without

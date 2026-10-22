@@ -123,7 +123,7 @@ func TestMigrationCheck(t *testing.T) {
 		t.Errorf("gen over a migration SQLite refuses: exit %d (%v), want 1 with SQLite's message", exitCode(err), err)
 	}
 	viewed := fixtureCopy(t)
-	rebuild := "package blog\n\nMigration 0003__view [irreversible] {\n  exec `CREATE VIEW post_titles AS SELECT title FROM posts`\n  rebuild table posts {\n    id    int    [pk, increment]\n    title string\n    body  string [null]\n    views int    [default: 0]\n\n    Indexes {\n      views\n    }\n  }\n}\n"
+	rebuild := "package blog\n\nMigration 0003__view [irreversible] {\n  exec `CREATE VIEW post_titles AS SELECT title FROM posts`\n  rebuild table posts {\n    id    int    [pk, increment]\n    title string\n    body  string [null]\n    views int    [index, default: 0]\n  }\n}\n"
 	if err := os.WriteFile(filepath.Join(viewed, "0003__view.volt"), []byte(rebuild), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -143,8 +143,11 @@ func TestMigrationCheck(t *testing.T) {
 
 // TestMigrationExitCodes pins the two exit codes of the database
 // commands (spec §migration-tooling rule 1): 1 for an error in the
-// migrations themselves, from every command alike, and 2 for a database
-// that fails.
+// migrations themselves and 2 for a database that fails. A migration
+// the checker refuses, a shape body with two indexes of one name
+// (§indexes), never reaches the lowering: every command refuses its
+// package first, with the diagnostic, as it refuses any package with
+// errors.
 func TestMigrationExitCodes(t *testing.T) {
 	unlowerable := filepath.Join(t.TempDir(), "db")
 	if err := os.MkdirAll(unlowerable, 0o755); err != nil {
@@ -152,7 +155,7 @@ func TestMigrationExitCodes(t *testing.T) {
 	}
 	files := map[string]string{
 		"go.mod":      "module unlowerable\n\ngo 1.27\n",
-		"schema.volt": "package db\n\nTable posts {\n  id int [pk, increment]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null]\n\n    Indexes {\n      n\n      n [unique]\n    }\n  }\n}\n",
+		"schema.volt": "package db\n\nTable posts {\n  id int [pk, increment]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null, unique]\n\n    Indexes {\n      n [where: `n > 0`]\n    }\n  }\n}\n",
 	}
 	for name, src := range files {
 		if err := os.WriteFile(filepath.Join(unlowerable, name), []byte(src), 0o644); err != nil {
@@ -161,9 +164,13 @@ func TestMigrationExitCodes(t *testing.T) {
 	}
 	fresh := filepath.Join(t.TempDir(), "fresh.db")
 	for _, args := range [][]string{{"migration", "sql", unlowerable}, {"migration", "check", unlowerable}, {"migration", "up", fresh, unlowerable}, {"gen", unlowerable}} {
-		_, err := voltRun(t, args...)
-		if exitCode(err) != 1 || !strings.Contains(err.Error(), `duplicate index name "idx_posts_n"`) {
-			t.Errorf("%s over a migration that does not lower: exit %d (%v), want 1 naming the index", strings.Join(args[:2], " "), exitCode(err), err)
+		out, err := voltRun(t, args...)
+		want := 2
+		if args[0] == "gen" {
+			want = 1
+		}
+		if exitCode(err) != want || !strings.Contains(out, `has two indexes named "idx_posts_n"`) {
+			t.Errorf("%s over a migration with two indexes of one name, which the checker refuses before anything lowers it: exit %d (%v), want %d naming the index\n%s", strings.Join(args[:2], " "), exitCode(err), err, want, out)
 		}
 	}
 

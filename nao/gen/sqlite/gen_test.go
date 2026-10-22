@@ -134,16 +134,19 @@ func TestGenerationErrors(t *testing.T) {
 	}{
 		{
 			name:    "two indexes of one table derive one name",
-			src:     "Table users {\n  id int\n  Indexes {\n    id\n    id [unique]\n  }\n}",
-			wantErr: `duplicate index name "idx_users_id"`,
+			src:     "Table users {\n  id int [pk]\n  email string [unique]\n  Indexes {\n    email [where: `email != ''`]\n  }\n}",
+			wantErr: `duplicate index name "idx_users_email"`,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			f, diags := parser.ParseFile("t", tc.src)
 			info, semDiags := check.File(f)
-			if diag.HasErrors(append(diags, semDiags...)) {
-				t.Fatalf("input unexpectedly invalid: %v %v", diags, semDiags)
+			if diag.HasErrors(diags) {
+				t.Fatalf("input unexpectedly unparsable: %v", diags)
+			}
+			if !diag.HasErrors(semDiags) {
+				t.Fatalf("the checker reports two indexes of one name first (§indexes); got %v", semDiags)
 			}
 			_, err := Generate(f, info, Options{Source: "t"})
 			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {

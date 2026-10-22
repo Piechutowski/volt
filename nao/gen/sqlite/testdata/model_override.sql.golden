@@ -11,5 +11,6 @@ CREATE TABLE menus (
 -- One row per status a customer order can be in
 CREATE TABLE order_status (
   code TEXT PRIMARY KEY NOT NULL,
-  label TEXT NOT NULL UNIQUE
+  label TEXT NOT NULL
 );
+CREATE UNIQUE INDEX idx_order_status_label ON order_status (label);

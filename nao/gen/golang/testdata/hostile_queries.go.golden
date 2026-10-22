@@ -336,11 +336,11 @@ func x2faCodeScan(r rt.Row) (X2faCode, error) {
 	return v, rt.Refused("X2faCode", err)
 }
 
-const x2faCodeGetSQL = `SELECT "code", "user_id", "expires_at" FROM "_2fa_codes" WHERE "user_id" = ? AND "code" = ?`
+const x2faCodeGetSQL = `SELECT "code", "user_id", "expires_at" FROM "_2fa_codes" WHERE "code" = ? AND "user_id" = ?`
 
 // X2faCodeGet fetches the _2fa_codes row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) X2faCodeGet(ctx context.Context, userID int, code string) (X2faCode, error) {
-	return x2faCodeScan(q.db.QueryRowContext(ctx, x2faCodeGetSQL, userID, code))
+func (q *Queries) X2faCodeGet(ctx context.Context, code string, userID int) (X2faCode, error) {
+	return x2faCodeScan(q.db.QueryRowContext(ctx, x2faCodeGetSQL, code, userID))
 }
 
 const x2faCodeListSQL = `SELECT "code", "user_id", "expires_at" FROM "_2fa_codes"`
@@ -415,21 +415,21 @@ func (q *Queries) X2faCodeUpdate(ctx context.Context, c X2faCodeChangeset) (X2fa
 	if len(cols) == 0 {
 		return v, nil
 	}
-	args = append(args, c.data.UserID)
 	args = append(args, c.data.Code)
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(x2faCodeTableSQL, cols, []string{"user_id", "code"}, x2faCodeColumnsSQL), args...)
+	args = append(args, c.data.UserID)
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(x2faCodeTableSQL, cols, []string{"code", "user_id"}, x2faCodeColumnsSQL), args...)
 	if err != nil {
 		return X2faCode{}, err
 	}
 	return x2faCodeScan(row)
 }
 
-const x2faCodeDeleteSQL = `DELETE FROM "_2fa_codes" WHERE "user_id" = ? AND "code" = ?`
+const x2faCodeDeleteSQL = `DELETE FROM "_2fa_codes" WHERE "code" = ? AND "user_id" = ?`
 
 // X2faCodeDelete removes the identified _2fa_codes row; rt.ErrNotFound reports
 // that nothing matched.
-func (q *Queries) X2faCodeDelete(ctx context.Context, userID int, code string) error {
-	res, err := q.db.ExecContext(ctx, x2faCodeDeleteSQL, userID, code)
+func (q *Queries) X2faCodeDelete(ctx context.Context, code string, userID int) error {
+	res, err := q.db.ExecContext(ctx, x2faCodeDeleteSQL, code, userID)
 	if err != nil {
 		return rt.Refused("X2faCode", err)
 	}

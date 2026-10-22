@@ -21,5 +21,6 @@ CREATE TABLE posts (
 
 CREATE TABLE tags (
   id INTEGER PRIMARY KEY NOT NULL,
-  name TEXT NOT NULL UNIQUE
+  name TEXT NOT NULL
 );
+CREATE UNIQUE INDEX idx_tags_name ON tags (name);

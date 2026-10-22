@@ -413,7 +413,7 @@ then reads it as that keyword, so the error is reported once.
 |---|---|---|
 | element and block words | `Project`, `Table`, `TablePartial`, `Type`, `Ref`, `Records`, `Group`, `Pred`, `Select`, `Migration`, `Pipeline`, `Scope`, `Indexes`, `Validators` | §program-structure, §indexes, §validators |
 | package words | `package`, `import` | §projects-and-packages, §imports |
-| setting names | `pk`, `null`, `unique`, `increment`, `default`, `note`, `ref`, `tag`, `required`, `model`, `name`, `where`, `delete`, `update`, `from`, `down`, `irreversible`, `no_transaction`, `pipe`, `error_handler`, `api`, `only`, `except`, `param`, `singular`, `strip`, `order` | §settings-lists, §settings-whitelists |
+| setting names | `pk`, `null`, `unique`, `index`, `increment`, `default`, `note`, `ref`, `tag`, `required`, `model`, `name`, `where`, `delete`, `update`, `from`, `down`, `irreversible`, `no_transaction`, `pipe`, `error_handler`, `api`, `only`, `except`, `param`, `singular`, `strip`, `order` | §settings-lists, §settings-whitelists |
 | referential actions | `cascade`, `restrict`, `set_null`, `set_default` | §relationships-ref |
 | resource actions | `index`, `new`, `create`, `show`, `edit`, `update`, `delete` | §the-action-table |
 | order directions | `asc`, `desc` | §selects-over-groups |
@@ -747,6 +747,7 @@ column settings = "[", column setting, { ",", column setting }, "]" ;
 column setting  = "pk"
                 | "null"
                 | "unique"
+                | "index"
                 | "increment"
                 | "required"
                 | "default", ":", default value
@@ -800,31 +801,49 @@ column setting  = "pk"
    is of `""` for `string`. A declared type (§types) stored as `[]byte`
    is not a plain `[]byte`: its own `driver.Valuer` decides what it
    binds, and a value of any declared type whose `driver.Valuer`
-   returns nil binds as NULL. A key column, one carrying `pk` or a
-   member of a `[pk]` index (§indexes), MUST NOT carry `null`.
-3. **`pk`** marks a single-column primary key. A composite primary key
-   MUST be expressed as an index with the `pk` setting (§indexes). A
-   table has at most one primary key, one column carrying `pk` or one
-   `[pk]` index, counted over its columns and indexes after partial
-   injection (§tablepartial): a second `pk` column, a `pk` column
-   beside a `[pk]` index, or a second `[pk]` index is an error.
+   returns nil binds as NULL. A key column, one carrying `pk`, MUST
+   NOT carry `null`.
+3. **`pk`** marks the column a member of the table's primary key, and
+   is the one spelling of a primary key: an index takes no `pk`
+   (§indexes). The primary key is the columns that carry `pk`, in
+   declaration order after partial injection, a column a partial
+   injects counted at its injected position (§partial-injection-order):
+   one such column is a single-column key, several form one composite
+   key. The key's column order is the column list of its `PRIMARY KEY`
+   (§mapping-to-sqlite-ddl) and the parameter order of `<Model>Get`,
+   `<Model>Delete` and the key `<Model>Update` writes by
+   (§generated-query-surface). A primary key is a table constraint, not
+   an index: no migration adds it to a table or drops it from one, and
+   changing it is a `rebuild table` (§migrations).
 4. **`increment`** marks the column auto-increment: the database
    assigns its value, and a changeset has no setter for it
    (§changesets).
 
-   > **Extension (this implementation).** Because the target is SQLite
-   >, `increment` is honored in exactly one shape — the table's
-   > single-column primary key of type `int`, which becomes the
-   > rowid alias (§mapping-to-sqlite-ddl) — and is an **error** anywhere else: on a
-   > non-integer column, on a column that is not the primary key, or
-   > when the primary key is composite. A keyword that is typed MUST be
-   > applied; silently ignoring it while no changeset ever marks the
-   > column would insert NULL into a NOT NULL column at run time.
+   > **Extension (this implementation).** Because the target is
+   > SQLite, `increment` is honored in exactly one shape, the table's
+   > single-column primary key of type `int`, which becomes the rowid
+   > alias (§mapping-to-sqlite-ddl), and is an **error** anywhere
+   > else: on a non-integer column, on a column that is not the
+   > primary key, or on a member of a composite key. A keyword that is
+   > typed MUST be applied; silently ignoring it while no changeset
+   > ever marks the column would insert NULL into a NOT NULL column at
+   > run time.
 5. **`ref: table.column`** declares a relationship whose foreign key
    is this column (§relationships-ref). It appears at most once on a
    column (§settings-lists) and carries no referential actions; a
    relationship that needs `delete:` or `update:` is a `Ref` element.
-6. Each column definition is terminated by a line break; the settings
+6. **`unique` and `index`** give the column an index of its own, keyed
+   by the column alone: `unique` a unique index, `index` a plain one.
+   They are the one spelling of a single-column index (§indexes): the
+   DDL writes a `CREATE UNIQUE INDEX` or `CREATE INDEX` named
+   `idx_<table>_<column>` after the table, never an inline `UNIQUE`
+   (§mapping-to-sqlite-ddl). A column carries at most one of the two,
+   since a unique index already indexes the column: both together are
+   an error. A `unique` column is unique over the whole table, not
+   only on the rows a condition admits, so it gets
+   `<Model>GetBy<Column>` (§generated-query-surface) and may be the
+   target of a foreign key (§relationships-ref).
+7. Each column definition is terminated by a line break; the settings
    list is the only thing that follows the type.
 
 > **Extension (this implementation).** The column setting `required`
@@ -907,8 +926,12 @@ such as `state.pending`, is **not** a valid default value.
 
 ### Indexes
 
-An `Indexes` block may appear inside a `Table` or `TablePartial` body. A
-body MAY contain more than one `Indexes` block; their contents accumulate.
+An index is declared one of two ways. A single-column index is the
+column setting `unique` or `index` (§columns); every other index, a
+composite one, one over an expression, or a partial one, is an entry
+of an `Indexes` block, which may appear inside a `Table` or
+`TablePartial` body. A body MAY contain more than one `Indexes` block;
+their contents accumulate.
 
 ```ebnf
 indexes block  = "Indexes", "{", { index }, "}" ;
@@ -921,7 +944,6 @@ index atom     = name | expression literal ;
 index settings = "[", index setting, { ",", index setting }, "]" ;
 index setting  = "name", ":", string
                | "unique"
-               | "pk"
                | "where", ":", expression literal ;
 ```
 
@@ -929,41 +951,54 @@ index setting  = "name", ":", string
    composite of columns and/or expressions.
 2. Every `name` in an index key MUST refer to a column of the enclosing
    table (after partial injection).
-3. `pk` declares the index a (composite) primary key; `unique` a unique
-   index. Combining `pk` and `unique` on one index is redundant but
-   permitted. The members of a `pk` index are NOT NULL and MUST NOT
-   carry `null` (§columns). A `pk` index is the table's one primary
-   key: a table has at most one, and none beside a `pk` column
-   (§columns). Its key is columns only; an expression atom in it is an
-   error.
-4. **Name.** An index without `name:` whose key is columns only is
+3. **What a block holds.** An entry of an `Indexes` block is composite,
+   has an expression atom, or carries `where:`. A plain single-column
+   index, one column without `where:` and without an expression,
+   parenthesized or not, is an error that names the column setting,
+   `unique` or `index`, which is its one spelling (§columns).
+4. **`unique`** makes the index unique. A unique index with an
+   expression atom or `where:` constrains what its expression or its
+   condition admits, not its columns: it makes no column unique, so it
+   gives no `<Model>GetBy<Column>` (§generated-query-surface) and is no
+   target of a foreign key (§relationships-ref). A composite unique
+   index without either makes its columns unique together.
+5. **No `pk`.** `pk` is a column setting only (§columns): an index
+   carrying `pk` is an error naming the column form. A primary key is
+   a table constraint and no index; SQLite enforces a unique index and a
+   `UNIQUE` constraint the same way, but an index can be added to a
+   table that has rows and dropped from it without a rebuild, while a
+   primary key cannot.
+6. **Name.** An index without `name:` whose key is columns only is
    named `idx_<table>_<col>[_<col>...]` from the SQLite table name
    and its key columns in order (§mapping-to-sqlite-ddl), so that a
-   schema and a migration (§migrations) name one index one way;
-   `name:` overrides it. An index with an expression atom MUST carry
-   `name:`, since no name derives from an expression. A `pk` index is
-   a table constraint and has no name: `name:` on it is an error.
-5. **`where`** takes an expression literal and makes the index
+   schema and a migration (§migrations) name one index one way; the
+   index of a column's `unique` or `index` setting is
+   `idx_<table>_<column>`. `name:` overrides the derived name. An index
+   with an expression atom MUST carry `name:`, since no name derives
+   from an expression. Two indexes of one table, its columns' indexes
+   among them and those its partials inject, MUST NOT have one name,
+   derived or written; nor two of one partial, whose names derive for
+   every table that injects it (§tablepartial).
+7. **`where`** takes an expression literal and makes the index
    partial: only the rows for which the condition holds are indexed,
    so the index stays small, and a unique partial index constrains
    only those rows. The DDL carries it as `WHERE <expr>`, verbatim and
-   SQLite's to judge. `where:` on a `pk` index is an error, since a
-   primary key covers every row.
-6. An index carries no method and no note: SQLite has one index
+   SQLite's to judge.
+8. An index carries no method and no note: SQLite has one index
    method, and an index documents itself by its key.
 
 ```volt
 Table bookings {
-  id int
-  country string
-  booking_date time.Time
+  id           int       [pk]
+  country      string    [pk]
+  booking_date time.Time [index]
+  reference    string    [unique]
   cancelled_at time.Time [null]
 
   Indexes {
-    (id, country) [pk]
-    country [name: "idx_country"]
-    (country, `lower(country)`) [unique, name: "idx_bookings_country_ci"]
-    booking_date [where: `cancelled_at IS NULL`]
+    (country, booking_date) [name: "idx_country_date"]
+    (country, `lower(reference)`) [unique, name: "idx_bookings_reference_ci"]
+    booking_date [name: "idx_bookings_live", where: `cancelled_at IS NULL`]
   }
 }
 ```
@@ -1009,7 +1044,8 @@ ref action   = "cascade" | "restrict" | "set_null" | "set_default" ;
    it so.
 5. **One-to-one.** There is no one-to-one operator. A one-to-one
    relationship is a foreign key that is also unique: `unique` on the
-   foreign-key column, its `pk`, or a unique index over exactly the
+   foreign-key column, the foreign-key columns being the table's
+   primary key, or a unique index without `where:` over exactly the
    foreign-key columns, beside the reference, as in
    `user_id int [unique, ref: users.id]`. The uniqueness is the
    column's, and the DDL and the generated query surface treat it as
@@ -1032,6 +1068,17 @@ ref action   = "cascade" | "restrict" | "set_null" | "set_default" ;
    relate the same columns.
 10. A `Ref` element declares exactly **one** relationship; to declare
     several, write several `Ref` elements.
+11. **Targets.** The columns a foreign key references are unique in
+    their table: exactly its primary key's columns, one column that
+    carries `unique`, or exactly the key of a unique index whose key
+    is columns only and which has no `where:` (§columns, §indexes); a
+    unique index enforces it as a `UNIQUE` constraint would, so SQLite
+    takes it as the parent key. A partial or an expression unique index
+    makes no column unique and is no target, and neither is one member
+    of a composite primary key. SQLite answers any other parent key
+    with a foreign key mismatch error at the first write that checks
+    the key; the checker does not refuse it, and the vet rule
+    [`reftarget`](lint.md#reftarget) reports it.
 
 ```volt
 Table users {
@@ -1049,11 +1096,8 @@ Table profiles {
 }
 
 Table merchants {
-  id int
-  country_code string
-  Indexes {
-    (id, country_code) [pk]
-  }
+  id           int    [pk]
+  country_code string [pk]
 }
 
 Table merchant_periods {
@@ -1268,8 +1312,10 @@ partial injection = "~", name, newline ;
    again), is an error: an index is declared once, in the table or in
    one partial. Two indexes on one key inside one partial are not this
    error; they are that partial's own redundancy, as two in a table
-   body are. A partial injected twice lists each of its validators
-   once.
+   body are, and two of one name, derived or written, are the error of
+   §indexes. The index of a column's `unique` or `index` setting comes
+   with the column. A partial injected twice lists each of its
+   validators once.
 
 ```volt
 TablePartial base_template {
@@ -1464,7 +1510,7 @@ column type          = [ "[", "]" ], type name ;
 type name            = [ identifier, "." ], identifier ;
 column settings      = "[", column setting, { ",", column setting }, "]" ;
 column setting       = "pk" | "null"
-                     | "unique" | "increment" | "required"
+                     | "unique" | "index" | "increment" | "required"
                      | "default", ":", default value
                      | "note", ":", string
                      | "tag", ":", string
@@ -1479,7 +1525,7 @@ index key            = index atom
 index atom           = name | expression literal ;
 index settings       = "[", index setting, { ",", index setting }, "]" ;
 index setting        = "name", ":", string
-                     | "unique" | "pk"
+                     | "unique"
                      | "where", ":", expression literal ;
 
 (* ===== Relationships ===== *)
@@ -3085,13 +3131,16 @@ Migration 0002__users_bio {
    built-in types (§columns); a declared type is not a
    type here, since the database holds its storage type. A migration
    column is NOT NULL unless it carries `null`, as a schema column is,
-   a key column MUST NOT carry `null`, and a `shape body` has at most
-   one primary key, one `pk` column or one `[pk]` index, as a table
-   has (§columns). A partial injection, a `Validators` block and a
-   `Records` block are not part of a `shape body`.
+   and a key column MUST NOT carry `null`. A `shape body` follows
+   §columns and §indexes as a table does: its `pk` columns form one
+   primary key in declaration order, a single-column index is the
+   column's `unique` or `index`, its `Indexes` block holds composite,
+   expression and partial indexes, and no two of its indexes share a
+   name. A partial injection, a `Validators` block and a `Records`
+   block are not part of a `shape body`.
 4. **Settings whitelist.** In a migration, a column setting is one of
-   `pk`, `increment`, `null`, `unique`, `default:`, `ref:`, `delete:`,
-   `update:`, and in a `rebuild` also `from:` (rule 9);
+   `pk`, `increment`, `null`, `unique`, `index`, `default:`, `ref:`,
+   `delete:`, `update:`, and in a `rebuild` also `from:` (rule 9);
    `from:` anywhere else is an error.
    `ref: table.column` is spelled as in the schema (§columns): the
    declaring column holds the key. `delete:` and `update:` take the referential actions of
@@ -3100,9 +3149,8 @@ Migration 0002__users_bio {
    foreign key with an action can be matched; without a `ref:` they
    are errors. As there, `set_null` requires the column to carry
    `null`, and `set_default` requires `null` or a `default:`. An index
-   setting is one of `unique`, `pk` (in a shape body only, rule 10),
-   `name:`, `where:`; on a `pk` index `name:`, `where:` and an
-   expression atom are errors, as in §indexes. `tag:`, `required` and
+   setting is one of `unique`, `name:`, `where:`; `pk` on an index is
+   an error naming the column form, as in §indexes. `tag:`, `required` and
    `model:` describe Go, and `note:` documents the schema, which
    generated code carries; all four are errors here, in every position
    of a migration. A migration takes `irreversible` and
@@ -3111,14 +3159,18 @@ Migration 0002__users_bio {
 5. **`create table`.** The body MUST contain at least one column;
    names are unique within it. It lowers by the DDL mapping exactly
    as the schema's `Table` does (§mapping-to-sqlite-ddl), index names
-   included.
+   included: the `CREATE TABLE`, then the `CREATE [UNIQUE] INDEX` of
+   every column that carries `unique` or `index`, then those of its
+   `Indexes` block.
 6. **`drop table`.** Drops the table and, with it, its indexes. The
    optional body is the shape being dropped and exists only so that
    the migration is reversible (rule 12); when written, it MUST
    contain at least one column, as a `create table` body must.
 7. **`rename table`.** `ALTER TABLE … RENAME TO`. Foreign keys that
    reference the table follow it; index names do not, and are kept
-   as they are.
+   as they are. The fold compares indexes by key, never by name
+   (§the-fold), so a kept name is no drift; a later `drop index` of
+   such an index gives its old name with `name:`.
 8. **`alter table`.** Each item is one `ALTER TABLE` statement, in
    the written order. `add` is `ADD COLUMN` under SQLite's rules,
    checked here rather than at run time: a column without `null` MUST
@@ -3126,8 +3178,12 @@ Migration 0002__users_bio {
    `increment` are errors; `ref:` requires the column to carry `null`;
    a column with `ref:` takes no `default:`, since SQLite refuses to
    add a `REFERENCES` column with a default other than NULL to a table
-   that has rows; `unique` lowers to the added column plus
-   a `CREATE UNIQUE INDEX` on it. `drop` is `DROP COLUMN`; the
+   that has rows; a column that carries `unique` or `index` lowers to
+   the `ADD COLUMN` followed by its `CREATE UNIQUE INDEX` or `CREATE
+   INDEX` under the derived name (§indexes), so a unique column is
+   added without a rebuild, where SQLite's own `ADD COLUMN ... UNIQUE`
+   is refused, and its inverse drops the index before the column.
+   `drop` is `DROP COLUMN`; the
    optional type and settings are the dropped column's shape, which
    in a flat body is the inverse `add` and MUST satisfy the `add`
    rules above (rule 12), and inside an `up { }` or `down { }` block
@@ -3139,7 +3195,8 @@ Migration 0002__users_bio {
    one column. It lowers to: create `<table>__new` from the body;
    `INSERT INTO <table>__new (<cols>) SELECT <sources> FROM <table>`;
    `DROP TABLE <table>`; `ALTER TABLE <table>__new RENAME TO
-   <table>`; create every index of the body. The source of a column
+   <table>`; create every index of the body, those of its columns'
+   `unique` and `index` first, named for `<table>`. The source of a column
    is, in order: its `from:` expression literal if given; the old
    column of the same name; its `default:`; `NULL`. A column without
    `null` whose source is `NULL` is an error, except a rowid alias
@@ -3154,14 +3211,18 @@ Migration 0002__users_bio {
    dropping and recreating them around it; a trigger on the rebuilt
    table itself goes with it; the fold surfaces both.
 10. **`create index`, `drop index`.** The index is identified by its
-    table and key exactly as in a schema `Indexes` block, so the
-    schema and the migration name the same index the same way: the
-    DDL mapping assigns the name from the table and the key columns,
-    `name:` overrides it, and an index with an expression atom MUST
-    carry `name:` (§indexes). `where:` takes an expression literal and
-    makes the index partial. `pk` is not a setting of these
-    operations: a primary key is a table constraint, declared in a
-    `create table` or `rebuild table` body.
+    table and key as in a schema `Indexes` block, so the schema and
+    the migration name the same index the same way: the DDL mapping
+    assigns the name from the table and the key columns, `name:`
+    overrides it, and an index with an expression atom MUST carry
+    `name:` (§indexes). `where:` takes an expression literal and makes
+    the index partial. These operations take a key of one plain column
+    too, since `create index t (col) [unique]` is how an existing
+    column gets the index its `unique` or `index` setting declares, and
+    `drop index t (col)` drops it, under the name the setting derives,
+    `idx_<table>_<col>`. `pk` is no index setting: a primary key is a
+    table constraint, declared by `pk` columns in a `create table` or
+    `rebuild table` body.
 11. **`exec`.** The expression literal is one or more SQL statements
     run verbatim, raw as every expression literal is
     (§expression-literals), so a SQL string inside keeps its single
@@ -3213,13 +3274,19 @@ true. What is checked instead is their composition.
    (a default of `NULL`, in any case, read as none, since it means
    what no default means, §default-values) and primary-key membership
    (`PRAGMA table_xinfo`); its foreign keys
-   (`PRAGMA foreign_key_list`); its indexes with name, uniqueness,
-   partial predicate and key (`PRAGMA index_list`, `PRAGMA
-   index_xinfo`). The index of a `UNIQUE` column constraint (SQLite's
-   autoindex) is matched by key against any unique index without a
-   predicate; every other index is compared by name. Nothing else is
-   compared: not column order, not row data, not SQL text, not the
-   order of statements, and never the ledger table
+   (`PRAGMA foreign_key_list`); its indexes with uniqueness, partial
+   predicate and key (`PRAGMA index_list`, `PRAGMA index_xinfo`).
+   Indexes are compared by table, key, uniqueness and predicate,
+   never by name, each index of one side matched with at most one of
+   the other: an index renamed is the same index, and the index of a
+   `UNIQUE` constraint (SQLite's autoindex, which no `DROP INDEX`
+   removes) is the unique index on its key, so a database whose
+   unique columns an older lowering wrote as inline `UNIQUE` folds
+   equal to the `CREATE UNIQUE INDEX` that `unique` writes now
+   (§mapping-to-sqlite-ddl). Such a constraint the target lacks is
+   closed by a rebuild, since only a rebuild removes it. Nothing else
+   is compared: not index names, not column order, not row data, not
+   SQL text, not the order of statements, and never the ledger table
    (§migration-ledger).
 3. **Drift.** `volt migration check` compares fold and target and
    reports every difference, table by table, as the operations that
@@ -3639,17 +3706,19 @@ Per table, on the `Queries` handle of `nao_queries.go` (`New(db
 rt.DBTX)`, `Tx`, `WithTx`, `WithCache`):
 
 1. `<Model>Get`, `<Model>Update` and `<Model>Delete` exist iff the
-   table has a primary key (a `pk` column or a `[pk]` index), one
-   positional argument per key column; `Update` also needs a non-key
-   column; `Create` and `Update` take a changeset and return the
-   stored row (§changesets). `<Model>GetMany(ctx,
-   keys)` exists for a single-column key; missing keys are absent, not
-   errors; an empty input returns nil. `<Model>GetBy<Column>` exists
-   per column that is `unique` or covered by a single-column unique
-   index without `where:` and is not the key (a partial unique index
-   constrains only some rows, §indexes). `<Model>List` and
-   `<Model>Create` always exist; a table without a key gets List,
-   Create, GetBy and the dynamic layer.
+   table has a primary key (one or more `pk` columns, §columns), one
+   positional argument per key column in the key's order, which is
+   the columns' declaration order, and `Update` writes by the key in
+   that order; `Update` also needs a non-key column; `Create` and
+   `Update` take a changeset and return the stored row (§changesets).
+   `<Model>GetMany(ctx, keys)` exists for a single-column key; missing
+   keys are absent, not errors; an empty input returns nil.
+   `<Model>GetBy<Column>` exists per column that carries `unique` and
+   is not the whole key, a member of a composite key among them; a
+   partial or an expression unique index makes no column unique, so it
+   gives none (§indexes). `<Model>List` and `<Model>Create` always
+   exist; a table without a key gets List, Create, GetBy and the
+   dynamic layer.
 2. `Get`, `GetBy*` and `Update` return `rt.ErrNotFound`
    (`sql.ErrNoRows`) on a miss; `Delete` checks the affected count.
    Multi-row results are empty slices, never nil, GetMany on an empty
@@ -3692,10 +3761,12 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 |---|---|
 | column without `null`, key columns included (SQLite's `PRIMARY KEY` does not imply NOT NULL) | `NOT NULL`, the rowid alias below excepted; a column that carries `null` has no nullability constraint (§columns) |
 | `int` `[pk, increment]` | exactly `INTEGER PRIMARY KEY` (rowid alias, auto-assigned); SQLite's `AUTOINCREMENT` keyword deliberately avoided — it only adds the never-reuse-an-id bookkeeping the SQLite docs discourage. Any other `increment` placement is a check error (§columns) |
-| composite pk (`[pk]` index) | `PRIMARY KEY (a, b)` table constraint; members get `NOT NULL` |
-| index | `CREATE INDEX <name> ON <table> (<key>)`, `UNIQUE` for `unique`, `WHERE <expr>` for `where:` (§indexes); the name is `name:` when given, else `idx_<table>_<col>[_<col>...]` from the SQLite table name and the key columns; two indexes of one table that derive one name are a generation error |
+| `pk` on one column | `PRIMARY KEY` on the column, `NOT NULL` with it, the rowid alias above excepted |
+| `pk` on several columns (composite key, §columns) | `PRIMARY KEY (a, b)` table constraint listing the `pk` columns in declaration order; members get `NOT NULL` |
+| `unique` or `index` column (§columns) | `CREATE UNIQUE INDEX` or `CREATE INDEX` `idx_<table>_<column> ON <table> (<column>)` after the table, before the indexes of its `Indexes` blocks; never an inline `UNIQUE`, which SQLite enforces the same way but no migration can drop |
+| `Indexes` entry | `CREATE INDEX <name> ON <table> (<key>)`, `UNIQUE` for `unique`, `WHERE <expr>` for `where:` (§indexes); the name is `name:` when given, else `idx_<table>_<col>[_<col>...]` from the SQLite table name and the key columns; two indexes of one table of one name are a check error (§indexes) |
 | relationship (`Ref:`, `ref:`) | `FOREIGN KEY (<fk>) REFERENCES <table> (<columns>)` with `ON DELETE` / `ON UPDATE`; the foreign key is the left endpoint of a `Ref` and the declaring column of a `ref:` (§relationships-ref) |
-| one-to-one (a unique foreign key, §relationships-ref) | the uniqueness as written, `UNIQUE` on the column or the unique index; the relationship adds nothing |
+| one-to-one (a unique foreign key, §relationships-ref) | the uniqueness as written, the column's unique index or the composite key or index; the relationship adds nothing |
 | `int`, `bool` | `INTEGER` (booleans stored 0/1; `true`/`false` in records and defaults become 1/0) |
 | `float64` | `REAL` |
 | `string` | `TEXT` |

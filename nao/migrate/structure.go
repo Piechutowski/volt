@@ -29,7 +29,7 @@ type Table struct {
 	Name        string
 	Columns     []Column     // in declaration order; compared as a set
 	ForeignKeys []ForeignKey // in declaration order; compared as a set
-	Indexes     []Index      // in declaration order; compared by name or key
+	Indexes     []Index      // compared by key, uniqueness and predicate
 }
 
 // Column is one column as PRAGMA table_xinfo reports it.
@@ -50,8 +50,9 @@ type ForeignKey struct {
 }
 
 // Index is one index as PRAGMA index_list and index_xinfo report it.
-// The automatic index of a UNIQUE constraint has no Name, since SQLite
-// numbers those: it matches any unique index on its key.
+// It is compared by key, uniqueness and partial predicate, never by
+// name. The automatic index of a UNIQUE constraint has no Name, since
+// SQLite numbers those and no DROP INDEX removes one.
 type Index struct {
 	Name   string
 	Unique bool
@@ -488,8 +489,10 @@ func tableDiff(target, fold *Table) []Drift {
 		})
 	}
 	for _, ix := range creates {
-		if ix.Name == "" && ix.Where == "" && len(ix.Key) == 1 && columnIn(ix.Key[0], adds) {
-			continue
+		if len(ix.Key) == 1 && columnIn(ix.Key[0], adds) {
+			if j := columnIndex(target, ix.Key[0]); j >= 0 && indexEqual(target.Indexes[j], ix) {
+				continue
+			}
 		}
 		out = append(out, Drift{
 			Table:  target.Name,
@@ -498,6 +501,21 @@ func tableDiff(target, fold *Table) []Drift {
 		})
 	}
 	return out
+}
+
+// columnIndex is the position in t.Indexes of the index a column's
+// unique or index setting writes (spec §indexes): the first index whose
+// key is that column alone and which has no predicate; -1 when none.
+func columnIndex(t *Table, column string) int {
+	if t.Column(column) == nil {
+		return -1
+	}
+	for j, ix := range t.Indexes {
+		if ix.Where == "" && len(ix.Key) == 1 && ix.Key[0] == column {
+			return j
+		}
+	}
+	return -1
 }
 
 func columnIn(name string, cols []Column) bool {
@@ -681,41 +699,32 @@ func actionVolt(sql string) string {
 	return strings.ReplaceAll(a, " ", "_")
 }
 
-// indexesDiff matches the indexes of two tables, named ones by name and
-// a unique constraint's unnamed index by its key against any unique
-// index of the same key, and returns what the fold lacks, what it has
-// too many of, and the unique constraints the fold has that no
-// operation but a rebuild removes.
+// indexesDiff matches the indexes of two tables by key, uniqueness and
+// partial predicate, never by name, each index of one side with at most
+// one of the other (spec §the-fold rule 2): a renamed index is no
+// drift, and the unnamed index of a UNIQUE constraint is the unique
+// index on its key. Among equal indexes of the fold, one of the same
+// name is taken first and a constraint's next, so that what is left to
+// drop is an index DROP INDEX removes. It returns what the fold lacks,
+// what it has too many of, and the unique constraints the fold has that
+// no operation but a rebuild removes.
 func indexesDiff(target, fold *Table) (creates, drops []Index, constraintReasons []string) {
 	tUsed := make([]bool, len(target.Indexes))
 	fUsed := make([]bool, len(fold.Indexes))
-	for i, ti := range target.Indexes {
-		if ti.Name == "" {
-			continue
-		}
-		for j, fi := range fold.Indexes {
-			if fUsed[j] || fi.Name != ti.Name {
+	for _, prefer := range []func(t, f Index) bool{
+		func(t, f Index) bool { return f.Name != "" && f.Name == t.Name },
+		func(t, f Index) bool { return f.Name == "" },
+		func(t, f Index) bool { return true },
+	} {
+		for i, ti := range target.Indexes {
+			if tUsed[i] {
 				continue
 			}
-			tUsed[i], fUsed[j] = true, true
-			if !indexEqual(ti, fi) {
-				drops = append(drops, fi)
-				creates = append(creates, ti)
-			}
-			break
-		}
-	}
-	for i, ti := range target.Indexes {
-		if tUsed[i] {
-			continue
-		}
-		for j, fi := range fold.Indexes {
-			if fUsed[j] || (ti.Name != "" && fi.Name != "") {
-				continue
-			}
-			if ti.Unique && fi.Unique && ti.Where == "" && fi.Where == "" && keyEqual(ti.Key, fi.Key) {
-				tUsed[i], fUsed[j] = true, true
-				break
+			for j, fi := range fold.Indexes {
+				if !fUsed[j] && prefer(ti, fi) && indexEqual(ti, fi) {
+					tUsed[i], fUsed[j] = true, true
+					break
+				}
 			}
 		}
 	}
@@ -762,18 +771,17 @@ func indexDescribe(ix Index) string {
 
 // shapeVolt renders a table's columns and Indexes block as the body of
 // a create table or rebuild table operation (spec §migrations), one
-// line per column, two-space indented.
+// line per column, two-space indented: the index of a column alone is
+// the column's unique or index setting, and the Indexes block holds
+// the rest.
 func shapeVolt(t *Table) string {
 	var b strings.Builder
 	for _, c := range t.Columns {
 		b.WriteString("  " + columnVolt(t, c) + "\n")
 	}
 	var lines []string
-	if pk := pkColumns(t); len(pk) > 1 {
-		lines = append(lines, "("+strings.Join(pk, ", ")+") [pk]")
-	}
-	for _, ix := range t.Indexes {
-		if ix.Name == "" && len(ix.Key) == 1 && ix.Where == "" {
+	for i, ix := range t.Indexes {
+		if len(ix.Key) == 1 && columnIndex(t, ix.Key[0]) == i {
 			continue
 		}
 		lines = append(lines, indexVolt(t.Name, ix))
@@ -809,30 +817,31 @@ func pkColumns(t *Table) []string {
 }
 
 // columnVolt renders one column as a migration writes it (spec
-// §migrations rule 3): the built-in type, pk and increment for a rowid
-// alias, null for a nullable column outside the primary key, unique for
-// a one-column unique constraint, default: and ref: for a one-column
-// foreign key with its delete: and update: actions.
+// §migrations rule 3): the built-in type, pk on every column of the
+// primary key and increment for a rowid alias, null for a nullable
+// column outside the primary key, unique or index for the index of the
+// column alone, default: and ref: for a one-column foreign key with its
+// delete: and update: actions.
 func columnVolt(t *Table, c Column) string {
 	typ := sqlite.TypeVolt(c.Type)
 	if typ == "" {
 		typ = c.Type
 	}
-	single := len(pkColumns(t)) == 1
 	var settings []string
 	switch {
-	case single && c.PK == 1:
+	case c.PK > 0:
 		settings = append(settings, "pk")
 		if isIncrement(t, c) {
 			settings = append(settings, "increment")
 		}
-	case c.PK == 0 && !c.NotNull:
+	case !c.NotNull:
 		settings = append(settings, "null")
 	}
-	for _, ix := range t.Indexes {
-		if ix.Name == "" && ix.Where == "" && len(ix.Key) == 1 && ix.Key[0] == c.Name {
+	if j := columnIndex(t, c.Name); j >= 0 {
+		if t.Indexes[j].Unique {
 			settings = append(settings, "unique")
-			break
+		} else {
+			settings = append(settings, "index")
 		}
 	}
 	hint := ""

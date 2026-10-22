@@ -39,9 +39,9 @@ report engine when a consumer exists.
     - [x] Identifiers are Go identifiers: quoted identifiers go
     - [x] Strings are Go strings: `"..."` is single-line with only the escapes `\\`, `\"`, `\n` and `\t`, every other backslash sequence and line continuation an error; a multi-line string is `"""..."""` with its common indentation trimmed, replacing `'''...'''`; backticks stay SQL expressions (`default:`, `where:`, `from:`, `exec`, index expressions)
     - [x] A package names its own declarations bare; `pkg.Name` always names an import (or `volt.`), and the rule that an import may not take the package's own name goes
-  - [ ] Step 3, keys and indexes
-    - [ ] `pk` is a column setting only: several `pk` columns form one composite key in declaration order, the `[pk]` index form goes, `increment` only on a single `int` pk
-    - [ ] A single-column index is the column setting `unique` or `index`, emitted as `CREATE [UNIQUE] INDEX` with a derived name; the `Indexes` block holds composite, expression and partial indexes only, and a plain single-column index there is an error; a partial or expression unique index never makes a column unique (GetBy, foreign-key targets); the fold compares indexes by table, key, uniqueness and condition, not by name; two indexes of one table with the same name are a check error
+  - [x] Step 3, keys and indexes
+    - [x] `pk` is a column setting only: several `pk` columns form one composite key in declaration order, the `[pk]` index form goes, `increment` only on a single `int` pk
+    - [x] A single-column index is the column setting `unique` or `index`, emitted as `CREATE [UNIQUE] INDEX` with a derived name; the `Indexes` block holds composite, expression and partial indexes only, and a plain single-column index there is an error; a partial or expression unique index never makes a column unique (GetBy, foreign-key targets); the fold compares indexes by table, key, uniqueness and condition, not by name; two indexes of one table with the same name are a check error
   - [ ] Step 4, routes
     - [ ] `:slug(string)` goes, a bare path parameter is a string; PUT goes, PATCH is the partial update; a query route's verb is fixed by the generated method (List, Get and selects `get`, Create `post`, Update `patch`, Delete `delete`)
 - [x] `Migration`: the element, its contextual keywords and its twelve checks; what runs it is under the data layer

@@ -195,6 +195,44 @@ CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
 		target: postsDDL,
 	},
 	{
+		name:   "a database of the old lowering, inline UNIQUE, folds equal to the new unique index",
+		fold:   postsDDL,
+		target: strings.Replace(postsDDL, "slug TEXT NOT NULL UNIQUE", "slug TEXT NOT NULL", 1) + "CREATE UNIQUE INDEX idx_posts_slug ON posts (slug);",
+	},
+	{
+		name:   "an index is compared by key, uniqueness and predicate, never by name",
+		fold:   strings.Replace(postsDDL, "CREATE INDEX idx_posts_views", "CREATE INDEX posts_views_positive", 1),
+		target: postsDDL,
+	},
+	{
+		name:   "a unique column only in the schema is an add and its unique index, without a rebuild",
+		fold:   postsDDL,
+		target: strings.Replace(postsDDL, "  body TEXT,\n", "  body TEXT,\n  token TEXT,\n", 1) + "CREATE UNIQUE INDEX idx_comments_token ON comments (token);",
+		want:   []string{"alter table comments {\n  add token string [null, unique]\n}"},
+		reason: "column comments.token is in the schema but not in the fold",
+	},
+	{
+		name:   "an index column only in the schema is an add and its index",
+		fold:   postsDDL,
+		target: strings.Replace(postsDDL, "  body TEXT,\n", "  body TEXT,\n  rank INTEGER NOT NULL DEFAULT 0,\n", 1) + "CREATE INDEX idx_comments_rank ON comments (rank);",
+		want:   []string{"alter table comments {\n  add rank int [index, default: 0]\n}"},
+		reason: "column comments.rank is in the schema but not in the fold",
+	},
+	{
+		name:   "an index on a column the fold has is a create index under the derived name",
+		fold:   postsDDL,
+		target: postsDDL + "CREATE INDEX idx_comments_body ON comments (body);",
+		want:   []string{"create index comments body"},
+		reason: "index idx_comments_body on comments is in the schema but not in the fold",
+	},
+	{
+		name:   "a composite key in a rebuild is pk on its columns",
+		fold:   "CREATE TABLE post_tags (post_id INTEGER NOT NULL, tag TEXT NOT NULL, note TEXT, PRIMARY KEY (post_id, tag));",
+		target: "CREATE TABLE post_tags (post_id INTEGER NOT NULL, tag TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', PRIMARY KEY (post_id, tag));\nCREATE INDEX idx_post_tags_tag ON post_tags (tag);",
+		want:   []string{"rebuild table post_tags {\n  post_id int [pk]\n  tag string [pk, index]\n  note string [default: \"\"]\n}"},
+		reason: "column post_tags.note is NOT NULL in the schema, nullable in the fold",
+	},
+	{
 		name:   "an index only in the schema",
 		fold:   strings.Replace(postsDDL, "CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;\n", "", 1),
 		target: postsDDL,
@@ -258,7 +296,7 @@ CREATE UNIQUE INDEX idx_user_tags_tag_user_id ON user_tags (tag, user_id);
 `,
 		want: []string{
 			"drop table a",
-			"create table user_tags {\n  user_id int\n  tag string\n  since time.Time [default: `CURRENT_TIMESTAMP`]\n  label string [null, default: \"it's\"]\n\n  Indexes {\n    (user_id, tag) [pk]\n    (tag, user_id) [unique]\n  }\n}",
+			"create table user_tags {\n  user_id int [pk]\n  tag string [pk]\n  since time.Time [default: `CURRENT_TIMESTAMP`]\n  label string [null, default: \"it's\"]\n\n  Indexes {\n    (tag, user_id) [unique]\n  }\n}",
 		},
 		reason: "table a is in the fold but not in the schema",
 	},

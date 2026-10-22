@@ -3,11 +3,10 @@
 Table authors {
   id         int [pk, increment]
   email      string
-  handle     string
+  handle     string [unique]
   deleted_at time.Time [null]
 
   Indexes {
     email [unique, where: `deleted_at IS NULL`]
-    handle [unique]
   }
 }

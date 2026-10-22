@@ -29,11 +29,11 @@ var (
 	}
 
 	settingsByContext = map[string][]string{
-		"column":    {"pk", "null", "unique", "increment", "required", "default: ", "note: ", "ref: ", "tag: "},
+		"column":    {"pk", "null", "unique", "index", "increment", "required", "default: ", "note: ", "ref: ", "tag: "},
 		"project":   {"note: "},
 		"table":     {"note: ", "model: "},
 		"select":    {"order: ("},
-		"index":     {"name: ", "unique", "pk", "where: "},
+		"index":     {"name: ", "unique", "where: "},
 		"migration": {"irreversible", "no_transaction"},
 		"ref":       {"delete: ", "update: "},
 		"scope":     {"pipe: ", "error_handler: ", "name: "},
@@ -41,9 +41,9 @@ var (
 		"resources": {"only: (", "except: (", "param: ", "singular: ", "api", "default"},
 		"dataset":   {"strip: ", "only: (", "except: ("},
 
-		"migrationcolumn": {"pk", "null", "unique", "increment", "default: ", "ref: ", "delete: ", "update: "},
-		"rebuildcolumn":   {"pk", "null", "unique", "increment", "default: ", "ref: ", "delete: ", "update: ", "from: "},
-		"migrationindex":  {"unique", "pk", "name: ", "where: "},
+		"migrationcolumn": {"pk", "null", "unique", "index", "increment", "default: ", "ref: ", "delete: ", "update: "},
+		"rebuildcolumn":   {"pk", "null", "unique", "index", "increment", "default: ", "ref: ", "delete: ", "update: ", "from: "},
+		"migrationindex":  {"unique", "name: ", "where: "},
 		"standaloneindex": {"unique", "name: ", "where: "},
 	}
 

@@ -20,13 +20,9 @@ Table tags {
 }
 
 Table user_roles {
-	user_id int
-	role_id int
+	user_id int [pk]
+	role_id int [pk]
 	note    string
-
-	Indexes {
-		(user_id, role_id) [pk]
-	}
 }
 
 Table ms_revenue {

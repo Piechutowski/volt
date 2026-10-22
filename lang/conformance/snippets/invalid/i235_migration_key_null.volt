@@ -1,4 +1,4 @@
-// spec: §migrations, §columns, a key column of a migration never carries null
+// spec: §migrations, §columns, a key column of a migration never carries null, a member of a composite key among them
 // want: a key column is never NULL
 package db
 
@@ -7,11 +7,8 @@ Table tags {
 }
 
 Table post_tags {
-  post_id int
-  tag     string
-  Indexes {
-    (post_id, tag) [pk]
-  }
+  post_id int    [pk]
+  tag     string [pk]
 }
 
 Migration 0001__init {
@@ -19,10 +16,7 @@ Migration 0001__init {
     id int [pk, null]
   }
   create table post_tags {
-    post_id int
-    tag     string [null]
-    Indexes {
-      (post_id, tag) [pk]
-    }
+    post_id int    [pk]
+    tag     string [pk, null]
   }
 }

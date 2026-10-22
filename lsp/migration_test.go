@@ -97,10 +97,10 @@ func TestCompletionMigrationShapeSettings(t *testing.T) {
 		bracket       int
 		want, refused []string
 	}{
-		{"create table column", 0, []string{"ref:", "delete:", "update:"}, []string{"required", "tag:", "from:", "note:"}},
-		{"shape indexes", 1, []string{"pk", "where:", "name:"}, []string{"type:"}},
-		{"alter add", 2, []string{"default:", "ref:"}, []string{"required", "tag:", "from:"}},
-		{"rebuild column", 3, []string{"from:", "ref:"}, []string{"required", "tag:"}},
+		{"create table column", 0, []string{"pk", "unique", "index", "ref:", "delete:", "update:"}, []string{"required", "tag:", "from:", "note:"}},
+		{"shape indexes", 1, []string{"unique", "where:", "name:"}, []string{"pk", "type:"}},
+		{"alter add", 2, []string{"unique", "index", "default:", "ref:"}, []string{"required", "tag:", "from:"}},
+		{"rebuild column", 3, []string{"pk", "index", "from:", "ref:"}, []string{"required", "tag:"}},
 		{"standalone create index", 4, []string{"unique", "name:", "where:"}, []string{"pk", "type:"}},
 	}
 	for _, c := range cases {
@@ -135,8 +135,12 @@ func TestCompletionIndexWhere(t *testing.T) {
 	d := doc(t, text)
 	pos := posOf(t, text, "[", 0)
 	pos.Character++
-	if items := d.Complete(pos); !hasWord(items, "where:") {
+	items := d.Complete(pos)
+	if !hasWord(items, "where:") {
 		t.Fatalf("index settings completion missing where:; got %v", labels(items))
+	}
+	if hasWord(items, "pk") {
+		t.Errorf("index settings completion offers pk, a column setting only (§indexes); got %v", labels(items))
 	}
 }
 

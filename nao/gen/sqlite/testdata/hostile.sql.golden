@@ -21,14 +21,15 @@ CREATE TABLE core_users (
   type TEXT,
   func INTEGER,
   -- Named like the runtime package GetByRt binds through
-  rt BLOB NOT NULL UNIQUE
+  rt BLOB NOT NULL
 );
+CREATE UNIQUE INDEX idx_core_users_rt ON core_users (rt);
 
 CREATE TABLE _2fa_codes (
   code TEXT NOT NULL,
   user_id INTEGER NOT NULL,
   expires_at TIMESTAMP NOT NULL,
-  PRIMARY KEY (user_id, code),
+  PRIMARY KEY (code, user_id),
   FOREIGN KEY (user_id) REFERENCES users (id)
 );
 

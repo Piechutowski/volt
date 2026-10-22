@@ -64,7 +64,7 @@ db/i110_required_nullable.volt:7:23: error: spec/columns: required on "email": a
 db/i111_required_bool.volt:7:16: error: spec/columns: required on "active" (bool): a bool has no empty value — every value is a value (§columns)
 
 ## i112_required_default.volt
-db/i112_required_default.volt:7:15: error: spec/columns: "required" and "default" cannot both be set
+db/i112_required_default.volt:7:15: error: spec/columns: "required" and "default" cannot both be set (§columns)
 
 ## i113_required_time.volt
 db/i113_required_time.volt:7:17: error: spec/columns: required on "at" (time.Time): a time.Time has no empty value — every value is a value (§columns)
@@ -241,7 +241,7 @@ db/i203_migration_drop_table_empty_body.volt:13:3: error: spec/migrations: drop 
 db/i204_migration_rebuild_empty_body.volt:16:3: error: spec/migrations: rebuild table "users": the body must declare at least one column (§migrations)
 
 ## i205_migration_index_pk.volt
-db/i205_migration_index_pk.volt:13:26: error: spec/migrations: index id on "users": pk is not a setting of a standalone create index or drop index, since a primary key is a table constraint, declared in a create table or rebuild table body (§migrations)
+db/i205_migration_index_pk.volt:13:26: error: spec/migrations: pk is a column setting, not an index setting: write pk on each key column, and several pk columns form one composite primary key in declaration order (§migrations)
 
 ## i207_migration_ref_action.volt
 db/i207_migration_ref_action.volt:20:39: error: spec/migrations: column "user_id": invalid referential action "explode" for 'delete'; expected cascade, restrict, set_null or set_default; leave delete: out for SQLite's default (§migrations)
@@ -350,15 +350,11 @@ db/i233_migration_set_null_not_null.volt:25:37: error: spec/migrations: update: 
 db/i234_migration_add_ref_bare.volt:25:22: error: spec/migrations: add "user_id" to table "posts": a column with ref: must carry null when added, since the rows already in the table reference nothing; use rebuild table for a NOT NULL foreign key (§migrations)
 
 ## i235_migration_key_null.volt
-db/i235_migration_key_null.volt:19:17: error: spec/columns: column "id" carries pk and null: a key column is never NULL (§columns)
-db/i235_migration_key_null.volt:23:21: error: spec/columns: column "tag" of table "post_tags" is a member of the [pk] index and carries null: a key column is never NULL (§columns)
+db/i235_migration_key_null.volt:16:17: error: spec/columns: column "id" carries pk and null: a key column is never NULL (§columns)
+db/i235_migration_key_null.volt:20:25: error: spec/columns: column "tag" carries pk and null: a key column is never NULL (§columns)
 
 ## i23_route_setting.volt
 app/i23_route_setting.volt:5:14: error: spec/settings-whitelists: setting "pipe" is not valid on a route (§settings-whitelists); valid: name
-
-## i240_migration_second_pk.volt
-db/i240_migration_second_pk.volt:13:18: error: spec/columns: table "posts" declares a second primary key, column "slug" beside column "id": a table has one primary key, one pk column or one [pk] index (§columns)
-db/i240_migration_second_pk.volt:19:19: error: spec/columns: table "posts" declares a second primary key, index (id, slug) beside column "id": a table has one primary key, one pk column or one [pk] index (§columns)
 
 ## i243_group_takes_table_name.volt
 db/i243_group_takes_table_name.volt:13:7: error: spec/groups: group "users" takes the name of a table: tables and groups share one namespace (§groups)
@@ -369,7 +365,7 @@ app/i24_toplevel_route.volt:4:1: error: syntax: routes, resources and datasets m
 ## i257_migration_note.volt
 db/i257_migration_note.volt:10:23: error: spec/migrations: unknown setting "note" (§migrations)
 db/i257_migration_note.volt:13:24: error: spec/migrations: note: documents the schema, which generated code carries, and is not a migration setting (§migrations)
-db/i257_migration_note.volt:16:13: error: spec/migrations: unknown setting "note" (§migrations)
+db/i257_migration_note.volt:16:19: error: spec/migrations: unknown setting "note" (§migrations)
 
 ## i25_short_ellipsis.volt
 app/i25_short_ellipsis.volt:5:14: error: syntax: wildcard ellipsis is spelled ':name...' (§route-paths)
@@ -429,7 +425,7 @@ db/i289_case_clause_word.volt:13:57: error: syntax: write null, not NULL: keywor
 db/i289_case_clause_word.volt:14:12: error: syntax: write for, not FOR: keywords are case-sensitive (§keywords)
 
 ## i28_composite_pk_model.volt
-app/i28_composite_pk_model.volt:11:12: error: spec/resources: table "pairs" has a composite primary key (a, b); composite keys are not routable (§table-resolution)
+app/i28_composite_pk_model.volt:10:12: error: spec/resources: table "pairs" has a composite primary key (a, b); composite keys are not routable (§table-resolution)
 
 ## i290_case_route_word.volt
 app/i290_case_route_word.volt:3:1: error: syntax: write package, not PACKAGE: keywords are case-sensitive (§keywords)
@@ -482,6 +478,10 @@ app/routes.volt:6:2: error: spec/imports: import alias "ä" is not an identifier
 ## i305_case_param_type.volt
 app/i305_case_param_type.volt:6:17: error: syntax: write int, not INT: keywords are case-sensitive (§keywords)
 app/i305_case_param_type.volt:7:18: error: syntax: write string, not String: keywords are case-sensitive (§keywords)
+
+## i309_migration_shape_index_plain.volt
+db/i309_migration_shape_index_plain.volt:18:7: error: spec/indexes: index owner on "accounts" is a plain single-column index: write the column setting index on "owner"; an Indexes block holds composite, expression and partial indexes (§indexes)
+db/i309_migration_shape_index_plain.volt:19:7: error: spec/indexes: table "accounts" has two indexes named "idx_accounts_email", the unique setting of column "email" and index email: an index name is unique within its table; give one a name: (§indexes)
 
 ## i30_unused_import
 app/r.volt:5:2: error: spec/imports: package "db" imported and not used (§imports)

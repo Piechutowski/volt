@@ -1,17 +1,16 @@
 package data
 
 Table users {
-  id int [pk]
+  id int [pk, unique]
   email string [unique]
   foo_bar int
   total int
   status PostStatus
   new int
   Indexes {
-    id [unique]
-    email [unique]
+    email [unique, name: "idx_users_email_live", where: `total > 0`]
     (email, foo_bar)
-    (email, foo_bar)
+    (email, foo_bar) [name: "idx_users_email_foo_bar_again"]
   }
 
   Validators {

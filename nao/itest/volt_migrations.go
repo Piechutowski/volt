@@ -17,11 +17,12 @@ var Migrations = []rt.Migration{
 		Up: []string{
 			`CREATE TABLE users (
   id INTEGER PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE,
+  email TEXT NOT NULL,
   name TEXT NOT NULL,
   bio TEXT,
   created_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP)
 )`,
+			`CREATE UNIQUE INDEX idx_users_email ON users (email)`,
 			`CREATE TABLE orders (
   id INTEGER PRIMARY KEY,
   user_id INTEGER NOT NULL,
@@ -86,20 +87,59 @@ var Migrations = []rt.Migration{
 		Up: []string{
 			`CREATE TABLE attachments (
   id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
   body BLOB NOT NULL,
   thumb BLOB,
   digest BLOB NOT NULL
 )`,
+			`CREATE UNIQUE INDEX idx_attachments_name ON attachments (name)`,
 			`CREATE TABLE blobs (
   hash BLOB PRIMARY KEY NOT NULL,
-  tag BLOB NOT NULL UNIQUE,
+  tag BLOB NOT NULL,
   size INTEGER NOT NULL DEFAULT 0
 )`,
+			`CREATE UNIQUE INDEX idx_blobs_tag ON blobs (tag)`,
 		},
 		Down: []string{
 			`DROP TABLE blobs`,
 			`DROP TABLE attachments`,
+		},
+	},
+	{
+		Name: "0005__daily_hits_and_invites",
+		Up: []string{
+			`CREATE TABLE daily_hits (
+  day INTEGER NOT NULL,
+  hits INTEGER NOT NULL DEFAULT 0,
+  site TEXT NOT NULL,
+  PRIMARY KEY (day, site)
+)`,
+			`CREATE TABLE invites (
+  id INTEGER PRIMARY KEY,
+  user_email TEXT NOT NULL,
+  code TEXT NOT NULL,
+  FOREIGN KEY (user_email) REFERENCES users (email)
+)`,
+			`CREATE UNIQUE INDEX idx_invites_code ON invites (code)`,
+		},
+		Down: []string{
+			`DROP TABLE invites`,
+			`DROP TABLE daily_hits`,
+		},
+	},
+	{
+		Name: "0006__daily_hits_label_and_token",
+		Up: []string{
+			`ALTER TABLE daily_hits ADD COLUMN label TEXT NOT NULL DEFAULT ''`,
+			`CREATE INDEX idx_daily_hits_label ON daily_hits (label)`,
+			`ALTER TABLE daily_hits ADD COLUMN token TEXT`,
+			`CREATE UNIQUE INDEX idx_daily_hits_token ON daily_hits (token)`,
+		},
+		Down: []string{
+			`DROP INDEX idx_daily_hits_token`,
+			`ALTER TABLE daily_hits DROP COLUMN token`,
+			`DROP INDEX idx_daily_hits_label`,
+			`ALTER TABLE daily_hits DROP COLUMN label`,
 		},
 	},
 }

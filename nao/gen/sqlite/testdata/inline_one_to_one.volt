@@ -16,10 +16,6 @@ Table profiles {
 
 Table avatars {
   id      int    [pk, increment]
-  user_id int    [ref: users.id]
+  user_id int    [unique, ref: users.id]
   url     string
-
-  Indexes {
-    user_id [unique]
-  }
 }

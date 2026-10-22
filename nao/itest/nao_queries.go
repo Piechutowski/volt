@@ -1138,3 +1138,276 @@ func (q *Queries) BlobDelete(ctx context.Context, hash []byte) error {
 	}
 	return nil
 }
+
+func dailyHitScan(r rt.Row) (DailyHit, error) {
+	var v DailyHit
+	err := r.Scan(&v.Day, &v.Hits, &v.Site, &v.Label, &v.Token)
+	return v, rt.Refused("DailyHit", err)
+}
+
+const dailyHitGetSQL = `SELECT "day", "hits", "site", "label", "token" FROM "daily_hits" WHERE "day" = ? AND "site" = ?`
+
+// DailyHitGet fetches the daily_hits row with the given primary key, or rt.ErrNotFound.
+func (q *Queries) DailyHitGet(ctx context.Context, day int, site string) (DailyHit, error) {
+	return dailyHitScan(q.db.QueryRowContext(ctx, dailyHitGetSQL, day, site))
+}
+
+const dailyHitGetByTokenSQL = `SELECT "day", "hits", "site", "label", "token" FROM "daily_hits" WHERE "token" = ?`
+
+// DailyHitGetByToken fetches the daily_hits row with the given token (a unique column),
+// or rt.ErrNotFound.
+func (q *Queries) DailyHitGetByToken(ctx context.Context, token rt.Null[string]) (DailyHit, error) {
+	return dailyHitScan(q.db.QueryRowContext(ctx, dailyHitGetByTokenSQL, token))
+}
+
+const dailyHitListSQL = `SELECT "day", "hits", "site", "label", "token" FROM "daily_hits"`
+
+// DailyHitList returns every daily_hits row.
+func (q *Queries) DailyHitList(ctx context.Context) ([]DailyHit, error) {
+	rows, err := q.db.QueryContext(ctx, dailyHitListSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []DailyHit{}
+	for rows.Next() {
+		v, err := dailyHitScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// DailyHitCreate validates c and inserts its marked columns, returning the
+// stored daily_hits row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) DailyHitCreate(ctx context.Context, c DailyHitChangeset) (DailyHit, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return DailyHit{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[0] {
+		cols, args = append(cols, "day"), append(args, v.Day)
+	}
+	if c.set[1] {
+		cols, args = append(cols, "hits"), append(args, v.Hits)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "site"), append(args, v.Site)
+	}
+	if c.set[3] {
+		cols, args = append(cols, "label"), append(args, v.Label)
+	}
+	if c.set[4] {
+		cols, args = append(cols, "token"), append(args, v.Token)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(dailyHitTableSQL, cols, dailyHitColumnsSQL), args...)
+	if err != nil {
+		return DailyHit{}, err
+	}
+	return dailyHitScan(row)
+}
+
+// DailyHitUpdate validates c and writes its marked columns to the daily_hits row it
+// was made from, returning the stored row; nothing marked returns the row
+// untouched (spec §changesets).
+func (q *Queries) DailyHitUpdate(ctx context.Context, c DailyHitChangeset) (DailyHit, error) {
+	if !c.row {
+		return DailyHit{}, rt.ErrNoRow
+	}
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return DailyHit{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[0] {
+		cols, args = append(cols, "day"), append(args, v.Day)
+	}
+	if c.set[1] {
+		cols, args = append(cols, "hits"), append(args, v.Hits)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "site"), append(args, v.Site)
+	}
+	if c.set[3] {
+		cols, args = append(cols, "label"), append(args, v.Label)
+	}
+	if c.set[4] {
+		cols, args = append(cols, "token"), append(args, v.Token)
+	}
+	if len(cols) == 0 {
+		return v, nil
+	}
+	args = append(args, c.data.Day)
+	args = append(args, c.data.Site)
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(dailyHitTableSQL, cols, []string{"day", "site"}, dailyHitColumnsSQL), args...)
+	if err != nil {
+		return DailyHit{}, err
+	}
+	return dailyHitScan(row)
+}
+
+const dailyHitDeleteSQL = `DELETE FROM "daily_hits" WHERE "day" = ? AND "site" = ?`
+
+// DailyHitDelete removes the identified daily_hits row; rt.ErrNotFound reports
+// that nothing matched.
+func (q *Queries) DailyHitDelete(ctx context.Context, day int, site string) error {
+	res, err := q.db.ExecContext(ctx, dailyHitDeleteSQL, day, site)
+	if err != nil {
+		return rt.Refused("DailyHit", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return rt.ErrNotFound
+	}
+	return nil
+}
+
+func inviteScan(r rt.Row) (Invite, error) {
+	var v Invite
+	err := r.Scan(&v.ID, &v.UserEmail, &v.Code)
+	return v, rt.Refused("Invite", err)
+}
+
+const inviteGetSQL = `SELECT "id", "user_email", "code" FROM "invites" WHERE "id" = ?`
+
+// InviteGet fetches the invites row with the given primary key, or rt.ErrNotFound.
+func (q *Queries) InviteGet(ctx context.Context, id int) (Invite, error) {
+	return inviteScan(q.db.QueryRowContext(ctx, inviteGetSQL, id))
+}
+
+// InviteGetMany fetches the invites rows whose primary key is in ids, in
+// database order. Missing keys are not an error; they are just absent.
+func (q *Queries) InviteGetMany(ctx context.Context, ids []int) ([]Invite, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	query, args, err := rt.SelectRender(inviteTableSQL, inviteColumnsSQL, []rt.Opt[Invite]{InviteID.In(ids...)})
+	if err != nil {
+		return nil, err
+	}
+	rows, err := q.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Invite{}
+	for rows.Next() {
+		v, err := inviteScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+const inviteGetByCodeSQL = `SELECT "id", "user_email", "code" FROM "invites" WHERE "code" = ?`
+
+// InviteGetByCode fetches the invites row with the given code (a unique column),
+// or rt.ErrNotFound.
+func (q *Queries) InviteGetByCode(ctx context.Context, code string) (Invite, error) {
+	return inviteScan(q.db.QueryRowContext(ctx, inviteGetByCodeSQL, code))
+}
+
+const inviteListSQL = `SELECT "id", "user_email", "code" FROM "invites"`
+
+// InviteList returns every invites row.
+func (q *Queries) InviteList(ctx context.Context) ([]Invite, error) {
+	rows, err := q.db.QueryContext(ctx, inviteListSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Invite{}
+	for rows.Next() {
+		v, err := inviteScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// InviteCreate validates c and inserts its marked columns, returning the
+// stored invites row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) InviteCreate(ctx context.Context, c InviteChangeset) (Invite, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return Invite{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "user_email"), append(args, v.UserEmail)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "code"), append(args, v.Code)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(inviteTableSQL, cols, inviteColumnsSQL), args...)
+	if err != nil {
+		return Invite{}, err
+	}
+	return inviteScan(row)
+}
+
+// InviteUpdate validates c and writes its marked columns to the invites row it
+// was made from, returning the stored row; nothing marked returns the row
+// untouched (spec §changesets).
+func (q *Queries) InviteUpdate(ctx context.Context, c InviteChangeset) (Invite, error) {
+	if !c.row {
+		return Invite{}, rt.ErrNoRow
+	}
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return Invite{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "user_email"), append(args, v.UserEmail)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "code"), append(args, v.Code)
+	}
+	if len(cols) == 0 {
+		return v, nil
+	}
+	args = append(args, c.data.ID)
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(inviteTableSQL, cols, []string{"id"}, inviteColumnsSQL), args...)
+	if err != nil {
+		return Invite{}, err
+	}
+	return inviteScan(row)
+}
+
+const inviteDeleteSQL = `DELETE FROM "invites" WHERE "id" = ?`
+
+// InviteDelete removes the identified invites row; rt.ErrNotFound reports
+// that nothing matched.
+func (q *Queries) InviteDelete(ctx context.Context, id int) error {
+	res, err := q.db.ExecContext(ctx, inviteDeleteSQL, id)
+	if err != nil {
+		return rt.Refused("Invite", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return rt.ErrNotFound
+	}
+	return nil
+}

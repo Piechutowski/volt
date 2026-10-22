@@ -1,12 +1,13 @@
-// spec: §tablepartial, partials with columns and indexes injected into a table
+// spec: §tablepartial, partials with columns, column indexes and an Indexes block injected into a table
 TablePartial base_template {
   id int [pk]
   created_at time.Time [default: `now()`]
 }
 TablePartial email_index {
   email string [unique]
+  email_domain string [index]
   Indexes {
-    email [unique]
+    (email_domain, email)
   }
 }
 Table users {

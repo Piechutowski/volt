@@ -53,12 +53,8 @@ Select by_state for orders where status in :states [order: (id asc)]
 
 // composite primary key, no auto-increment anywhere
 Table user_tags {
-  user_id int [ref: users.id]
-  tag string
-
-  Indexes {
-    (user_id, tag) [pk]
-  }
+  user_id int [pk, ref: users.id]
+  tag string [pk]
 }
 
 // Two uniform metric tables plus the group/pred/select layer over them
@@ -133,4 +129,23 @@ Table blobs {
   hash []byte [pk]
   tag  []byte [unique]
   size int    [default: 0]
+}
+
+// A composite primary key is its pk columns in declaration order, apart
+// or not (spec §columns): Get, Update and Delete take day, then site. A
+// column's index is its own CREATE INDEX, unique or not (§indexes).
+Table daily_hits {
+  day   int    [pk]
+  hits  int    [default: 0]
+  site  string [pk]
+  label string [index, default: ""]
+  token string [null, unique]
+}
+
+// A foreign key referencing a unique column, whose uniqueness is its
+// CREATE UNIQUE INDEX (spec §relationships-ref, §indexes).
+Table invites {
+  id         int    [pk, increment]
+  user_email string [ref: users.email]
+  code       string [unique]
 }

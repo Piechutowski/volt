@@ -15,7 +15,7 @@ type redundantIndexRule struct{ meta }
 
 var redundantIndex = &redundantIndexRule{meta{
 	name: "redundantindex",
-	doc:  "reports indexes that duplicate a column setting, another index, or combine pk with unique",
+	doc:  "reports indexes that duplicate the primary key, a column's unique setting or another index",
 }}
 
 func (r *redundantIndexRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
@@ -24,18 +24,30 @@ func (r *redundantIndexRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.
 	if ti == nil {
 		return out
 	}
+	pk := ti.PK()
+	var pkNames []string
+	for _, cd := range pk {
+		pkNames = append(pkNames, cd.Col.Name.Name())
+	}
+	if len(pk) == 1 {
+		for _, name := range []string{"unique", "index"} {
+			if s := pk[0].Col.Settings.Get(name); s != nil {
+				out = append(out, r.warnf(s.Pos(), "%s on %q is redundant; the column is the primary key, which is unique and indexed already", name, pkNames[0]))
+			}
+		}
+	}
 	seenKeys := map[string]bool{}
 	for _, ix := range ti.Indexes {
-		if ix.Settings.Get("pk") != nil && ix.Settings.Get("unique") != nil {
-			out = append(out, r.warnf(ix.Pos(), "combining 'pk' and 'unique' on one index is redundant; a primary key is already unique"))
-		}
 		key := indexKey(ix)
 		if seenKeys[key] {
 			out = append(out, r.warnf(ix.Pos(), "duplicate index on %s in table %q", key, ti.Decl.Name.Name()))
 		}
 		seenKeys[key] = true
 
-		if len(ix.Key) != 1 {
+		if len(pk) > 1 && ix.Settings.Get("where") == nil && key == "("+strings.Join(pkNames, ", ")+")" {
+			out = append(out, r.warnf(ix.Pos(), "index on %s is redundant; it is the key of the primary key, which is unique and indexed already", key))
+		}
+		if len(ix.Key) != 1 || ix.Settings.Get("unique") == nil {
 			continue
 		}
 		id, ok := ix.Key[0].(*ast.Ident)
@@ -46,14 +58,11 @@ func (r *redundantIndexRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.
 		if cd == nil {
 			continue
 		}
-		if ix.Settings.Get("unique") != nil && cd.Col.Settings.Get("unique") != nil {
-			out = append(out, r.warnf(ix.Pos(), "unique index on %q duplicates the column's 'unique' setting", id.Name()))
+		if cd.Col.Settings.Get("unique") != nil {
+			out = append(out, r.warnf(ix.Pos(), "unique index on %q is redundant; the column carries unique, which holds over the whole table", id.Name()))
 		}
-		if ix.Settings.Get("unique") != nil && cd.Col.Settings.Get("pk") != nil {
-			out = append(out, r.warnf(ix.Pos(), "unique index on %q is redundant; the column is already the primary key", id.Name()))
-		}
-		if ix.Settings.Get("pk") != nil && cd.Col.Settings.Get("pk") != nil {
-			out = append(out, r.warnf(ix.Pos(), "pk index on %q duplicates the column's 'pk' setting", id.Name()))
+		if len(pk) == 1 && pk[0] == cd {
+			out = append(out, r.warnf(ix.Pos(), "unique index on %q is redundant; the column is the primary key", id.Name()))
 		}
 	}
 	return out

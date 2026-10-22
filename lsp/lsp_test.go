@@ -261,8 +261,8 @@ func TestCompletionColumnSettings(t *testing.T) {
 	text := "Table t {\n  id int [p\n}\n"
 	d := doc(t, text)
 	items := d.Complete(protocol.Position{Line: 1, Character: protocol.UInteger(len("  id int [p"))})
-	if !hasLabel(items, "pk") || !hasLabel(items, "null") {
-		t.Fatalf("column settings completion missing: %v", labels(items))
+	if !hasLabel(items, "pk") || !hasLabel(items, "null") || !hasLabel(items, "unique") || !hasLabel(items, "index") {
+		t.Fatalf("column settings completion missing pk, null, unique or index (§columns, §indexes): %v", labels(items))
 	}
 }
 

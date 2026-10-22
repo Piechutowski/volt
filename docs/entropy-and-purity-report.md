@@ -63,7 +63,7 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 ### 26. [remove] Several Indexes or Validators blocks in one body, whose contents accumulate
 
-- Indexes { id } Indexes { name } / Indexes { id  name }
+- Indexes { (id, name) } Indexes { name [where: `id > 0`] } / Indexes { (id, name)  name [where: `id > 0`] }
 - Validators { A(x) } ... Validators { B(y) } / one Validators block
 
 **Proposal.** Allow at most one Indexes block and one Validators block per Table or TablePartial body. Partials still contribute theirs through injection.
@@ -74,13 +74,16 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 ### 27. [merge] Parentheses around a single index key or ref column
 
-- Indexes { id } / Indexes { (id) }
+- Indexes { email [where: ...] } / Indexes { (email) [where: ...] }
 - (`lower(id)`) [name: ...] / `lower(id)` [name: ...]
+- create index users full_name / create index users (full_name)
 - posts.user_id > users.id / posts.(user_id) > users.(id)
+
+A plain single-column index is no longer an entry of an Indexes block, parenthesized or not, since step 3 made it the column setting unique or index (§indexes); the single-element parentheses left are those around a partial index's one column, one expression, the one column of a standalone create index or drop index, and a ref column.
 
 **Proposal.** Allow parentheses only around two or more elements. A parenthesized single element is an error that names the bare form.
 
-**Cost.** Two parser checks, one invalid snippet, a rewrite of snippet 10. Trivial.
+**Cost.** Two parser checks, one invalid snippet, a rewrite of snippet 10 and of the migration snippets that write `create index t (col)`. Trivial.
 
 **Evidence.** docs/spec.md: §indexes `index key`, §relationships-ref `column group`. lang/parser/parser.go:463-484 and 571-585 accept both forms. ast.Index.Composite records which spelling was used, but only diagnostics read it (check/migrations.go:419).
 

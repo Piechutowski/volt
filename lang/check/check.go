@@ -305,6 +305,7 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 	}
 	injected := 0
 	var injections []indexInjection
+	var named []namedIndex
 	for _, item := range ti.Decl.Body {
 		switch item := item.(type) {
 		case *ast.Column:
@@ -324,6 +325,7 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 					for _, ix := range pit.Indexes {
 						injections = append(injections, indexInjection{ix, len(ti.Indexes), item, p})
 						ti.Indexes = append(ti.Indexes, ix)
+						named = append(named, namedIndex{ix: ix, partial: p})
 					}
 				case *ast.ValidatorsBlock:
 					for _, v := range pit.Validators {
@@ -335,6 +337,9 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 			}
 		case *ast.IndexesBlock:
 			ti.Indexes = append(ti.Indexes, item.Indexes...)
+			for _, ix := range item.Indexes {
+				named = append(named, namedIndex{ix: ix})
+			}
 		case *ast.ValidatorsBlock:
 			ti.Validators = append(ti.Validators, item.Validators...)
 		}
@@ -355,7 +360,7 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 		ti.Columns = append(ti.Columns, s.def)
 	}
 	c.typesResolve(ti)
-	c.pkCountCheck(ti.Key, ti.Columns, ti.Indexes)
+	c.indexNamesCheck(ti.Key, ti.Columns, named)
 	for _, item := range ti.Decl.Body {
 		if r, ok := item.(*ast.Records); ok {
 			c.recordsTypeCheck(ti, r)

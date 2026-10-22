@@ -1556,3 +1556,379 @@ func (c BlobChangeset) Err() error {
 	}
 	return &rt.Invalid{Model: "Blob", Fields: c.Errors()}
 }
+
+// DailyHit is a row of the daily_hits table.
+type DailyHit struct {
+	Day   int             `db:"day" json:"day"`
+	Hits  int             `db:"hits" json:"hits"`
+	Site  string          `db:"site" json:"site"`
+	Label string          `db:"label" json:"label"`
+	Token rt.Null[string] `db:"token" json:"token"`
+}
+
+// DailyHitColumn is a column handle of DailyHit, the element of a Cast allow list
+// (spec §changesets).
+type DailyHitColumn = rt.ColumnOf[DailyHit]
+
+// DailyHitParams is a daily_hits write body as the wire carries it (spec §changesets).
+type DailyHitParams = rt.Params[DailyHit]
+
+// Typed column handles of DailyHit (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter DailyHit
+// queries; mixing models is a compile error.
+var (
+	DailyHitDay   = rt.Column[DailyHit, int]{Name: "day"}
+	DailyHitHits  = rt.Column[DailyHit, int]{Name: "hits"}
+	DailyHitSite  = rt.Column[DailyHit, string]{Name: "site"}
+	DailyHitLabel = rt.Column[DailyHit, string]{Name: "label"}
+	DailyHitToken = rt.NullColumn[DailyHit, string]{Column: rt.Column[DailyHit, string]{Name: "token"}}
+)
+
+// DailyHitChangeset carries a daily_hits row, the changes proposed to it and the
+// errors found so far (spec §changesets). It is a value: every method
+// returns a new changeset and leaves its receiver as it was.
+type DailyHitChangeset struct {
+	data  DailyHit
+	vals  DailyHit
+	row   bool
+	set   [5]bool
+	errs  []rt.FieldError
+	valid []rt.FieldError
+}
+
+// DailyHitNew starts a changeset for a daily_hits row to create, the schema's literal
+// defaults in place (spec §changesets).
+func DailyHitNew() DailyHitChangeset { return DailyHitChangeset{} }
+
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
+func (r DailyHit) Changeset() DailyHitChangeset { return DailyHitChangeset{data: r, row: true} }
+
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
+func (c DailyHitChangeset) From(r DailyHit) DailyHitChangeset {
+	c = c.DaySet(r.Day)
+	c = c.HitsSet(r.Hits)
+	c = c.SiteSet(r.Site)
+	c = c.LabelSet(r.Label)
+	c = c.TokenSet(r.Token)
+	return c
+}
+
+// DaySet sets day and marks it (spec §changesets).
+func (c DailyHitChangeset) DaySet(v int) DailyHitChangeset {
+	c.vals.Day, c.set[0] = v, true
+	return c
+}
+
+// HitsSet sets hits and marks it (spec §changesets).
+func (c DailyHitChangeset) HitsSet(v int) DailyHitChangeset {
+	c.vals.Hits, c.set[1] = v, true
+	return c
+}
+
+// SiteSet sets site and marks it (spec §changesets).
+func (c DailyHitChangeset) SiteSet(v string) DailyHitChangeset {
+	c.vals.Site, c.set[2] = v, true
+	return c
+}
+
+// LabelSet sets label and marks it (spec §changesets).
+func (c DailyHitChangeset) LabelSet(v string) DailyHitChangeset {
+	c.vals.Label, c.set[3] = v, true
+	return c
+}
+
+// TokenSet sets token and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
+func (c DailyHitChangeset) TokenSet(v rt.Null[string]) DailyHitChangeset {
+	c.vals.Token, c.set[4] = v, true
+	return c
+}
+
+// Cast sets every column of allow that p carries, recording a cast
+// error for a value that does not convert and an unknown_field error
+// for a key that names no column (spec §changesets).
+func (c DailyHitChangeset) Cast(p DailyHitParams, allow ...DailyHitColumn) DailyHitChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "day", "hits", "site", "label", "token")...)
+	for _, col := range allow {
+		switch col.ColumnName() {
+		case "day":
+			if v, ok, err := rt.Field(p, "day", "int", false, func(r *DailyHit) int { return r.Day }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "day")
+			} else if ok {
+				c = c.DaySet(v)
+			}
+		case "hits":
+			if v, ok, err := rt.Field(p, "hits", "int", false, func(r *DailyHit) int { return r.Hits }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "hits")
+			} else if ok {
+				c = c.HitsSet(v)
+			}
+		case "site":
+			if v, ok, err := rt.Field(p, "site", "string", false, func(r *DailyHit) string { return r.Site }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "site")
+			} else if ok {
+				c = c.SiteSet(v)
+			}
+		case "label":
+			if v, ok, err := rt.Field(p, "label", "string", false, func(r *DailyHit) string { return r.Label }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "label")
+			} else if ok {
+				c = c.LabelSet(v)
+			}
+		case "token":
+			if v, ok, err := rt.Field(p, "token", "string", true, func(r *DailyHit) rt.Null[string] { return r.Token }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "token")
+			} else if ok {
+				c = c.TokenSet(v)
+			}
+		}
+	}
+	return c
+}
+
+// Changed reports whether col is marked (spec §changesets).
+func (c DailyHitChangeset) Changed(col DailyHitColumn) bool {
+	switch col.ColumnName() {
+	case "day":
+		return c.set[0]
+	case "hits":
+		return c.set[1]
+	case "site":
+		return c.set[2]
+	case "label":
+		return c.set[3]
+	case "token":
+		return c.set[4]
+	}
+	return false
+}
+
+// Row is the data with the marked values applied (spec §changesets).
+func (c DailyHitChangeset) Row() DailyHit {
+	r := c.data
+	if c.set[0] {
+		r.Day = c.vals.Day
+	}
+	if c.set[1] {
+		r.Hits = c.vals.Hits
+	}
+	if c.set[2] {
+		r.Site = c.vals.Site
+	}
+	if c.set[3] {
+		r.Label = c.vals.Label
+	}
+	if c.set[4] {
+		r.Token = c.vals.Token
+	}
+	return r
+}
+
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
+func (c DailyHitChangeset) Params() DailyHitParams {
+	var marks []rt.Mark
+	if c.set[0] {
+		marks = append(marks, rt.Mark{Wire: "day", Value: c.vals.Day})
+	}
+	if c.set[1] {
+		marks = append(marks, rt.Mark{Wire: "hits", Value: c.vals.Hits})
+	}
+	if c.set[2] {
+		marks = append(marks, rt.Mark{Wire: "site", Value: c.vals.Site})
+	}
+	if c.set[3] {
+		marks = append(marks, rt.Mark{Wire: "label", Value: c.vals.Label})
+	}
+	if c.set[4] {
+		marks = append(marks, rt.Mark{Wire: "token", Value: c.vals.Token})
+	}
+	return rt.ParamsOf(c.Row(), marks...)
+}
+
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
+func (c DailyHitChangeset) ErrorAdd(col DailyHitColumn, msg string) DailyHitChangeset {
+	return c.errorAdd("custom", msg, col.ColumnName())
+}
+
+func (c DailyHitChangeset) errorAdd(check, msg string, cols ...string) DailyHitChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.FieldError{Check: check, Columns: cols, Message: msg})
+	return c
+}
+
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
+func (c DailyHitChangeset) Errors() []rt.FieldError {
+	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
+}
+
+// Valid reports whether no field error was recorded (spec §changesets).
+func (c DailyHitChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
+
+// Err is nil when c is valid and otherwise the *rt.Invalid carrying its
+// field errors (spec §changesets).
+func (c DailyHitChangeset) Err() error {
+	if c.Valid() {
+		return nil
+	}
+	return &rt.Invalid{Model: "DailyHit", Fields: c.Errors()}
+}
+
+// Invite is a row of the invites table.
+type Invite struct {
+	ID        int    `db:"id" json:"id"`
+	UserEmail string `db:"user_email" json:"user_email"`
+	Code      string `db:"code" json:"code"`
+}
+
+// InviteColumn is a column handle of Invite, the element of a Cast allow list
+// (spec §changesets).
+type InviteColumn = rt.ColumnOf[Invite]
+
+// InviteParams is a invites write body as the wire carries it (spec §changesets).
+type InviteParams = rt.Params[Invite]
+
+// Typed column handles of Invite (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter Invite
+// queries; mixing models is a compile error.
+var (
+	InviteID        = rt.Column[Invite, int]{Name: "id"}
+	InviteUserEmail = rt.Column[Invite, string]{Name: "user_email"}
+	InviteCode      = rt.Column[Invite, string]{Name: "code"}
+)
+
+// InviteChangeset carries a invites row, the changes proposed to it and the
+// errors found so far (spec §changesets). It is a value: every method
+// returns a new changeset and leaves its receiver as it was.
+type InviteChangeset struct {
+	data  Invite
+	vals  Invite
+	row   bool
+	set   [3]bool
+	errs  []rt.FieldError
+	valid []rt.FieldError
+}
+
+// InviteNew starts a changeset for a invites row to create, the schema's literal
+// defaults in place (spec §changesets).
+func InviteNew() InviteChangeset { return InviteChangeset{} }
+
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
+func (r Invite) Changeset() InviteChangeset { return InviteChangeset{data: r, row: true} }
+
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
+func (c InviteChangeset) From(r Invite) InviteChangeset {
+	c = c.UserEmailSet(r.UserEmail)
+	c = c.CodeSet(r.Code)
+	return c
+}
+
+// UserEmailSet sets user_email and marks it (spec §changesets).
+func (c InviteChangeset) UserEmailSet(v string) InviteChangeset {
+	c.vals.UserEmail, c.set[1] = v, true
+	return c
+}
+
+// CodeSet sets code and marks it (spec §changesets).
+func (c InviteChangeset) CodeSet(v string) InviteChangeset {
+	c.vals.Code, c.set[2] = v, true
+	return c
+}
+
+// Cast sets every column of allow that p carries, recording a cast
+// error for a value that does not convert and an unknown_field error
+// for a key that names no column (spec §changesets).
+func (c InviteChangeset) Cast(p InviteParams, allow ...InviteColumn) InviteChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "user_email", "code")...)
+	for _, col := range allow {
+		switch col.ColumnName() {
+		case "user_email":
+			if v, ok, err := rt.Field(p, "user_email", "string", false, func(r *Invite) string { return r.UserEmail }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "user_email")
+			} else if ok {
+				c = c.UserEmailSet(v)
+			}
+		case "code":
+			if v, ok, err := rt.Field(p, "code", "string", false, func(r *Invite) string { return r.Code }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "code")
+			} else if ok {
+				c = c.CodeSet(v)
+			}
+		}
+	}
+	return c
+}
+
+// Changed reports whether col is marked (spec §changesets).
+func (c InviteChangeset) Changed(col InviteColumn) bool {
+	switch col.ColumnName() {
+	case "id":
+		return c.set[0]
+	case "user_email":
+		return c.set[1]
+	case "code":
+		return c.set[2]
+	}
+	return false
+}
+
+// Row is the data with the marked values applied (spec §changesets).
+func (c InviteChangeset) Row() Invite {
+	r := c.data
+	if c.set[1] {
+		r.UserEmail = c.vals.UserEmail
+	}
+	if c.set[2] {
+		r.Code = c.vals.Code
+	}
+	return r
+}
+
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
+func (c InviteChangeset) Params() InviteParams {
+	var marks []rt.Mark
+	if c.set[1] {
+		marks = append(marks, rt.Mark{Wire: "user_email", Value: c.vals.UserEmail})
+	}
+	if c.set[2] {
+		marks = append(marks, rt.Mark{Wire: "code", Value: c.vals.Code})
+	}
+	return rt.ParamsOf(c.Row(), marks...)
+}
+
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
+func (c InviteChangeset) ErrorAdd(col InviteColumn, msg string) InviteChangeset {
+	return c.errorAdd("custom", msg, col.ColumnName())
+}
+
+func (c InviteChangeset) errorAdd(check, msg string, cols ...string) InviteChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.FieldError{Check: check, Columns: cols, Message: msg})
+	return c
+}
+
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
+func (c InviteChangeset) Errors() []rt.FieldError {
+	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
+}
+
+// Valid reports whether no field error was recorded (spec §changesets).
+func (c InviteChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
+
+// Err is nil when c is valid and otherwise the *rt.Invalid carrying its
+// field errors (spec §changesets).
+func (c InviteChangeset) Err() error {
+	if c.Valid() {
+		return nil
+	}
+	return &rt.Invalid{Model: "Invite", Fields: c.Errors()}
+}

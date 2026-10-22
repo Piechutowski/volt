@@ -44,12 +44,8 @@ Table posts {
 }
 
 Table post_tags {
-  post_id int [ref: posts.id]
-  tag     string
-
-  Indexes {
-    (post_id, tag) [pk]
-  }
+  post_id int [pk, ref: posts.id]
+  tag     string [pk]
 }
 
 Table pings {

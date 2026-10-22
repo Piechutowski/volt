@@ -39,25 +39,32 @@ var (
 	columnSettings = settingSpec{
 		kinds: map[string]valueKind{
 			"pk": flagOnly, "null": flagOnly,
-			"unique": flagOnly, "increment": flagOnly,
+			"unique": flagOnly, "index": flagOnly, "increment": flagOnly,
 			"default": defaultVal,
 			"note":    strValue, "ref": refVal, "tag": strValue,
 			"required": flagOnly,
 		},
 		repeatable: map[string]bool{"tag": true},
-		conflicts:  [][2]string{{"required", "default"}, {"required", "increment"}},
+		conflicts:  [][2]string{{"required", "default"}, {"required", "increment"}, {"unique", "index"}},
 	}
 	indexSettings = settingSpec{
 		kinds: map[string]valueKind{
 			"name":   strValue,
-			"unique": flagOnly, "pk": flagOnly,
-			"where": exprValue,
+			"unique": flagOnly,
+			"where":  exprValue,
 		},
+		forbidden: map[string]string{"pk": pkNotIndexSetting("indexes")},
 	}
 	refSettings = settingSpec{
 		kinds: map[string]valueKind{"delete": actionValue, "update": actionValue},
 	}
 )
+
+// pkNotIndexSetting is the diagnostic of pk on an index, citing section
+// (spec §indexes, §migrations).
+func pkNotIndexSetting(section string) string {
+	return "pk is a column setting, not an index setting: write pk on each key column, and several pk columns form one composite primary key in declaration order (§" + section + ")"
+}
 
 func (c *checker) settingsCheck(sl *ast.SettingList, section string, spec settingSpec) {
 	if sl == nil {
@@ -82,7 +89,7 @@ func (c *checker) settingsCheck(sl *ast.SettingList, section string, spec settin
 	}
 	for _, pair := range spec.conflicts {
 		if seen[pair[0]] && seen[pair[1]] {
-			c.errorf(sl.Pos(), section, "%q and %q cannot both be set", pair[0], pair[1])
+			c.errorf(sl.Pos(), section, "%q and %q cannot both be set (§%s)", pair[0], pair[1], section)
 		}
 	}
 }
@@ -193,12 +200,7 @@ func isString(n ast.Node) bool {
 }
 
 func (c *checker) incrementCheck(ti *TableInfo) {
-	compositePK := false
-	for _, ix := range ti.Indexes {
-		if ix.Settings.Get("pk") != nil {
-			compositePK = true
-		}
-	}
+	compositePK := len(ti.PK()) > 1
 	for _, cd := range ti.Columns {
 		col := cd.Col
 		inc := col.Settings.Get("increment")
@@ -218,7 +220,7 @@ func (c *checker) incrementCheck(ti *TableInfo) {
 		switch {
 		case compositePK:
 			c.errorf(inc.Pos(), "columns",
-				"increment on %q: a composite primary key has no auto-assigned column — SQLite auto-assigns only the single-column integer key (§columns, §mapping-to-sqlite-ddl)", name)
+				"increment on %q: a composite primary key has no auto-assigned column, since SQLite auto-assigns only a single-column int key (§columns)", name)
 		case !isPK:
 			c.errorf(inc.Pos(), "columns",
 				"increment on %q: only the primary key auto-increments; elsewhere the keyword would be silently ignored while no changeset ever marks the column (§columns, §mapping-to-sqlite-ddl)", name)

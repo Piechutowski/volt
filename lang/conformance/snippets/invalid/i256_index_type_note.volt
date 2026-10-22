@@ -4,7 +4,7 @@ Table bookings {
   id int [pk]
   country string
   Indexes {
-    country [type: hash]
-    id [note: "by id"]
+    (country, id) [type: hash]
+    (id, country) [note: "by id"]
   }
 }

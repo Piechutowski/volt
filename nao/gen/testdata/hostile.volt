@@ -23,12 +23,9 @@ Table core_users [note: "Shares the stem of users; its own name keeps the models
   }
 }
 Table _2fa_codes {
-  code string
-  user_id int [ref: users.id]
+  code string [pk]
+  user_id int [pk, ref: users.id]
   expires_at time.Time
-  Indexes {
-    (user_id, code) [pk]
-  }
 }
 Table digests {
   rt   []byte [pk, note: "Named like the runtime package Get and Delete bind through"]

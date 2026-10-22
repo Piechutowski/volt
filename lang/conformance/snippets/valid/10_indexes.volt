@@ -1,18 +1,18 @@
-// spec: §indexes — all four index-key forms and every index setting
+// spec: §indexes, §columns, a single-column index is the column setting unique or index; an Indexes block holds every composite, expression and partial key form with every index setting
 Table bookings {
-  id int
-  country string
-  booking_date time.Time
-  created_at time.Time
+  id int [pk]
+  country string [pk]
+  booking_date time.Time [index]
+  created_at time.Time [unique]
 
   Indexes {
-    (id, country) [pk]
-    created_at [name: "created_at_index"]
-    booking_date
     (country, booking_date) [unique]
+    (country, created_at) [name: "idx_bookings_by_country"]
     (`id*2`) [name: "idx_bookings_double"]
+    `id*4` [name: "idx_bookings_quadruple"]
     (`id*3`, `getdate()`) [name: "idx_bookings_triple_now"]
     (`id*3`, id) [name: "idx_bookings_triple_id"]
     country [where: `country != ''`]
+    created_at [unique, name: "idx_bookings_created_live", where: `country != ''`]
   }
 }

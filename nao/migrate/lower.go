@@ -243,12 +243,11 @@ func inverse(op ast.Operation) ([]string, error) {
 		for i := len(op.Items) - 1; i >= 0; i-- {
 			switch item := op.Items[i].(type) {
 			case *ast.AlterAdd:
-				_, unique, err := sqlite.ColumnDDL(item.Column)
-				if err != nil {
+				if _, err := sqlite.ColumnDDL(item.Column); err != nil {
 					return nil, err
 				}
-				if unique {
-					stmts, err := indexDrop(table, uniqueIndex(item.Column.Name))
+				if ix := check.ColumnIndex(item.Column); ix != nil {
+					stmts, err := indexDrop(table, ix)
 					if err != nil {
 						return nil, err
 					}
@@ -297,26 +296,23 @@ func shapeCreate(table string, body []ast.TableItem) ([]string, error) {
 	return append([]string{create}, indexes...), nil
 }
 
-// columnAdd lowers an add item: ADD COLUMN, then the CREATE UNIQUE
-// INDEX of a unique column (spec §migrations rule 8).
+// columnAdd lowers an add item: ADD COLUMN, then the CREATE [UNIQUE]
+// INDEX of a column that carries unique or index, which SQLite's ADD
+// COLUMN takes no part of (spec §migrations rule 8).
 func columnAdd(table string, col *ast.Column) ([]string, error) {
-	def, unique, err := sqlite.ColumnDDL(col)
+	def, err := sqlite.ColumnDDL(col)
 	if err != nil {
 		return nil, fmt.Errorf("alter table %s: %w", table, err)
 	}
 	out := []string{"ALTER TABLE " + sqlite.Ident(table) + " ADD COLUMN " + def}
-	if unique {
-		stmts, err := indexCreate(table, uniqueIndex(col.Name))
+	if ix := check.ColumnIndex(col); ix != nil {
+		stmts, err := indexCreate(table, ix)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, stmts...)
 	}
 	return out, nil
-}
-
-func uniqueIndex(col *ast.Ident) *ast.Index {
-	return &ast.Index{Key: []ast.Node{col}, Settings: &ast.SettingList{Settings: []*ast.Setting{{Name: "unique"}}}}
 }
 
 func indexCreate(table string, ix *ast.Index) ([]string, error) {

@@ -5,7 +5,7 @@ Table users {
   email string
 
   indexes {
-    email
+    (email, id)
   }
   records (id, email) {
     1, "a@example.com"

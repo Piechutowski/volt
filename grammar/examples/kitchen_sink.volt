@@ -16,7 +16,7 @@ Type V2JobStatus string
 
 TablePartial base_template {
   id int [pk, increment]
-  created_at time.Time [null, default: `now()`]
+  created_at time.Time [null, index, default: `now()`]
 }
 
 Table users [note: "user accounts"] {
@@ -32,7 +32,6 @@ Table users [note: "user accounts"] {
 
   Indexes {
     (id, `lower(name)`) [name: "ix_main", unique]
-    created_at
     `floor(balance)` [name: "ix_balance_floor"]
   }
 

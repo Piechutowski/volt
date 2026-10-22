@@ -13,7 +13,7 @@ Migration 0001__init [note: "the first"] {
     name string [null, note: "display name"]
 
     Indexes {
-      name [note: "by name"]
+      (name, id) [note: "by name"]
     }
   }
 }

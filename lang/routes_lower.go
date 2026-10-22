@@ -955,27 +955,8 @@ func (l *routeLowering) resourceTable(res *ast.Resources) (ti *check.TableInfo, 
 
 func (l *routeLowering) pkParamType(ti *check.TableInfo, pos token.Position) (ParamType, bool) {
 	var pkNames []string
-	seen := map[string]bool{}
-	addPK := func(name string) {
-		if !seen[name] {
-			seen[name] = true
-			pkNames = append(pkNames, name)
-		}
-	}
-	for _, cd := range ti.Columns {
-		if cd.Col.Settings.Get("pk") != nil {
-			addPK(cd.Col.Name.Name())
-		}
-	}
-	for _, ix := range ti.Indexes {
-		if ix.Settings.Get("pk") == nil {
-			continue
-		}
-		for _, atom := range ix.Key {
-			if id, ok := atom.(*ast.Ident); ok {
-				addPK(id.Name())
-			}
-		}
+	for _, cd := range ti.PK() {
+		pkNames = append(pkNames, cd.Col.Name.Name())
 	}
 	switch {
 	case len(pkNames) == 0:

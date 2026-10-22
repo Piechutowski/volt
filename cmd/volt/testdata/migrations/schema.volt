@@ -6,11 +6,7 @@ Table posts {
   id    int    [pk, increment]
   title string
   body  string [null]
-  views int    [default: 0]
-
-  Indexes {
-    views
-  }
+  views int    [index, default: 0]
 }
 
 Table comments {

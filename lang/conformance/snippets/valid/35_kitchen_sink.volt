@@ -14,10 +14,6 @@ Table users [note: "Registered users"] {
   id int [pk, increment]
   username string [unique]
   ~timestamps
-
-  Indexes {
-    username [unique, name: "idx_username"]
-  }
 }
 
 Table posts {

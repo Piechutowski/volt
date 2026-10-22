@@ -1,5 +1,5 @@
 // Package sqlite generates SQLite DDL (nao_schema.sql) from a checked
-// schema file: CREATE TABLE per table, CREATE INDEX per non-pk index, and
+// schema file: CREATE TABLE per table, CREATE INDEX per index, and
 // INSERT statements from records. Dialect decisions follow docs/spec.md
 // §mapping-to-sqlite-ddl.
 package sqlite
@@ -82,7 +82,10 @@ func (g *generator) tableEmit(ti *check.TableInfo) error {
 	}
 	fmt.Fprintf(&g.out, "CREATE TABLE %s (\n", identQuote(name))
 
-	pkCols := compositePKColumns(ti)
+	var pkCols []string
+	for _, cd := range ti.PK() {
+		pkCols = append(pkCols, cd.Col.Name.Name())
+	}
 
 	var lines []string
 	for _, cd := range ti.Columns {
@@ -98,7 +101,7 @@ func (g *generator) tableEmit(ti *check.TableInfo) error {
 		lines = append(lines, line)
 	}
 
-	if len(pkCols) > 0 {
+	if len(pkCols) > 1 {
 		lines = append(lines, "  PRIMARY KEY ("+quotedJoin(pkCols)+")")
 	}
 
@@ -132,12 +135,15 @@ func (g *generator) columnDef(ti *check.TableInfo, cd *check.ColumnDef, pkCols [
 }
 
 // columnLine renders one column definition of a CREATE TABLE (spec
-// §mapping-to-sqlite-ddl): the rowid alias for int [pk, increment],
-// NOT NULL for a column without null, the rowid alias excepted, UNIQUE
-// and DEFAULT.
+// §mapping-to-sqlite-ddl): PRIMARY KEY on the one column of a
+// single-column key, the rowid alias for int [pk, increment], NOT NULL
+// for a column without null, the rowid alias excepted, and DEFAULT.
+// pkCols are the key's columns in order; a composite key is the
+// table's PRIMARY KEY constraint, and unique and index are CREATE
+// INDEX statements, neither on the column.
 func columnLine(col *ast.Column, sqlType string, pkCols []string) (string, error) {
 	colName := col.Name.Name()
-	singlePK := col.Settings.Get("pk") != nil && len(pkCols) == 0
+	singlePK := col.Settings.Get("pk") != nil && len(pkCols) == 1
 	rowidAlias := singlePK && sqlType == "INTEGER" && col.Settings.Get("increment") != nil
 
 	parts := []string{"  " + identQuote(colName), sqlType}
@@ -146,9 +152,6 @@ func columnLine(col *ast.Column, sqlType string, pkCols []string) (string, error
 	}
 	if !rowidAlias && !isNullable(col) {
 		parts = append(parts, "NOT NULL")
-	}
-	if col.Settings.Get("unique") != nil {
-		parts = append(parts, "UNIQUE")
 	}
 	if s := col.Settings.Get("default"); s != nil {
 		def, err := defaultSQL(s.Value)
@@ -161,23 +164,47 @@ func columnLine(col *ast.Column, sqlType string, pkCols []string) (string, error
 }
 
 func (g *generator) indexesEmit(ti *check.TableInfo) error {
-	tbl := ti.Key
-	used := map[string]bool{}
-	for _, ix := range ti.Indexes {
-		if ix.Settings.Get("pk") != nil {
-			continue
-		}
-		name, err := IndexName(tbl, ix)
-		if err != nil {
-			return fmt.Errorf("table %s: %w", tbl, err)
-		}
-		if used[name] {
-			return fmt.Errorf("table %s: duplicate index name %q", tbl, name)
-		}
-		used[name] = true
-		g.out.WriteString(IndexDDL(tbl, name, ix) + ";\n")
+	cols := make([]*ast.Column, len(ti.Columns))
+	for i, cd := range ti.Columns {
+		cols[i] = cd.Col
+	}
+	stmts, err := indexStatements(ti.Key, cols, ti.Indexes)
+	if err != nil {
+		return err
+	}
+	for _, s := range stmts {
+		g.out.WriteString(s + ";\n")
 	}
 	return nil
+}
+
+// indexStatements renders the CREATE INDEX statements of a table,
+// without trailing semicolons (spec §indexes, §mapping-to-sqlite-ddl):
+// first the index of every column that carries unique or index, in
+// column order, then the indexes of its Indexes blocks in order. Two
+// indexes of one name are an error, which the checker reports first.
+func indexStatements(table string, cols []*ast.Column, indexes []*ast.Index) ([]string, error) {
+	all := make([]*ast.Index, 0, len(cols)+len(indexes))
+	for _, col := range cols {
+		if ix := check.ColumnIndex(col); ix != nil {
+			all = append(all, ix)
+		}
+	}
+	all = append(all, indexes...)
+	out := make([]string, 0, len(all))
+	used := map[string]bool{}
+	for _, ix := range all {
+		name, err := IndexName(table, ix)
+		if err != nil {
+			return nil, fmt.Errorf("table %s: %w", table, err)
+		}
+		if used[name] {
+			return nil, fmt.Errorf("table %s: duplicate index name %q (§indexes)", table, name)
+		}
+		used[name] = true
+		out = append(out, IndexDDL(table, name, ix))
+	}
+	return out, nil
 }
 
 // IndexName is the SQLite name of an index (spec §indexes,
@@ -185,18 +212,11 @@ func (g *generator) indexesEmit(ti *check.TableInfo) error {
 // [_<col>...] over a key of columns; an expression key without name:
 // is an error.
 func IndexName(table string, ix *ast.Index) (string, error) {
-	if name := settingString(ix.Settings, "name"); name != "" {
-		return name, nil
+	name, ok := check.IndexName(table, ix)
+	if !ok {
+		return "", fmt.Errorf("index on %s has an expression in its key and no name: (§indexes)", table)
 	}
-	parts := []string{"idx", table}
-	for _, atom := range ix.Key {
-		id, ok := atom.(*ast.Ident)
-		if !ok {
-			return "", fmt.Errorf("index on %s has an expression in its key and no name: (§indexes)", table)
-		}
-		parts = append(parts, id.Name())
-	}
-	return strings.Join(parts, "_"), nil
+	return name, nil
 }
 
 // IndexDDL renders one CREATE INDEX statement without the trailing
@@ -289,21 +309,6 @@ func valueSQL(v ast.Node) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("unsupported value at %s", v.Pos())
-}
-
-func compositePKColumns(ti *check.TableInfo) []string {
-	var out []string
-	for _, ix := range ti.Indexes {
-		if ix.Settings.Get("pk") == nil {
-			continue
-		}
-		for _, atom := range ix.Key {
-			if id, ok := atom.(*ast.Ident); ok {
-				out = append(out, id.Name())
-			}
-		}
-	}
-	return out
 }
 
 func isNullable(col *ast.Column) bool { return col.Settings.Get("null") != nil }

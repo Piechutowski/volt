@@ -1,9 +1,9 @@
-// spec: §indexes, §validators — multiple indexes and validators blocks per body; contents accumulate
+// spec: §indexes, §validators, multiple Indexes and Validators blocks per body; contents accumulate
 Table t {
   id int
   name string
-  Indexes { id }
+  Indexes { (id, name) }
   Validators { IDPositive(id) }
-  Indexes { name }
+  Indexes { name [where: `id > 0`] }
   Validators { IDSmall(id) }
 }

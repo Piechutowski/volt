@@ -132,9 +132,27 @@ func TestLowerNoTransactionDisablesTheBracket(t *testing.T) {
 	}
 }
 
+// TestLowerRefusesTwoIndexesOfOneName pins that two indexes of a shape
+// body that derive one name, a column's unique and a partial index on
+// it, are the checker's error (spec §indexes, §migrations rule 3) and,
+// should an unchecked package reach it, the lowering's refusal naming
+// the migration.
 func TestLowerRefusesTwoIndexesOfOneName(t *testing.T) {
-	src := "package db\n\nTable posts {\n  id int [pk, increment]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null]\n\n    Indexes {\n      n\n      n [unique]\n    }\n  }\n}\n"
-	_, info := parseChecked(t, "t.volt", src)
+	src := "package db\n\nTable posts {\n  id int [pk, increment]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null, unique]\n\n    Indexes {\n      n [where: `n > 0`]\n    }\n  }\n}\n"
+	f, diags := parser.ParseFile("t.volt", src)
+	if diag.HasErrors(diags) {
+		t.Fatalf("test input must parse: %v", diags)
+	}
+	info, semDiags := check.File(f)
+	found := false
+	for _, d := range semDiags {
+		if strings.Contains(d.Msg, `has two indexes named "idx_posts_n"`) {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("check: %v, want the two indexes of one name reported", semDiags)
+	}
 	_, err := Lower(info)
 	if err == nil || !strings.Contains(err.Error(), "0001__init") || !strings.Contains(err.Error(), `duplicate index name "idx_posts_n"`) {
 		t.Fatalf("Lower: %v, want a refusal naming the migration and the index name", err)
@@ -143,7 +161,7 @@ func TestLowerRefusesTwoIndexesOfOneName(t *testing.T) {
 
 func TestRebuildForgetsAnIndexNotRestated(t *testing.T) {
 	ctx := context.Background()
-	src := "package db\n\nTable posts {\n  id int [pk, increment]\n  n  int [null]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null]\n\n    Indexes {\n      n\n    }\n  }\n}\n\nMigration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id int [pk, increment]\n    n  int [null]\n  }\n}\n"
+	src := "package db\n\nTable posts {\n  id int [pk, increment]\n  n  int [null]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null, index]\n  }\n}\n\nMigration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id int [pk, increment]\n    n  int [null]\n  }\n}\n"
 	_, info := parseChecked(t, "t.volt", src)
 	ms, err := Lower(info)
 	if err != nil {

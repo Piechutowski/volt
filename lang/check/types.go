@@ -235,28 +235,9 @@ func (c *checker) typeDeclCheck(d *ast.TypeDecl) *TypeInfo {
 	return ti
 }
 
-// pkIndexColumns names the columns of the composite primary key, which
-// never carry null (spec §columns, §indexes).
-func pkIndexColumns(indexes []*ast.Index) map[string]bool {
-	out := map[string]bool{}
-	for _, ix := range indexes {
-		if ix.Settings.Get("pk") == nil {
-			continue
-		}
-		for _, k := range ix.Key {
-			if id, ok := k.(*ast.Ident); ok {
-				out[id.Name()] = true
-			}
-		}
-	}
-	return out
-}
-
 func (c *checker) typesResolve(ti *TableInfo) {
-	pkIndex := pkIndexColumns(ti.Indexes)
 	for _, cd := range ti.Columns {
 		cd.Nullable = isNullable(cd.Col)
-		c.pkIndexNullCheck(cd.Col, ti.Key, pkIndex)
 		cd.Type = c.env.resolve(cd.Col.Type)
 		if !cd.Type.Known() {
 			if c.env.failed[cd.Col.Type.String()] {

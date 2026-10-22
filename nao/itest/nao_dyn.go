@@ -870,3 +870,219 @@ func (q *Queries) BlobUpdateWhere(ctx context.Context, set []rt.Assign[Blob], pr
 	}
 	return res.RowsAffected()
 }
+
+const (
+	dailyHitTableSQL   = `"daily_hits"`
+	dailyHitColumnsSQL = `"day", "hits", "site", "label", "token"`
+)
+
+// DailyHitLimit caps how many rows DailyHitQuery returns.
+func DailyHitLimit(n int) rt.Opt[DailyHit] { return rt.Limit[DailyHit](n) }
+
+// DailyHitOffset skips n rows; keyset pagination (DailyHitAfter) scales better.
+func DailyHitOffset(n int) rt.Opt[DailyHit] { return rt.Offset[DailyHit](n) }
+
+// DailyHitDistinct deduplicates the rows DailyHitQuery returns.
+func DailyHitDistinct() rt.Opt[DailyHit] { return rt.Distinct[DailyHit]() }
+
+// DailyHitOrderBy sorts DailyHitQuery's rows by Asc/Desc terms built on the
+// DailyHit column handles.
+func DailyHitOrderBy(terms ...rt.Order[DailyHit]) rt.Opt[DailyHit] { return rt.OrderBy(terms...) }
+
+// DailyHitAfter resumes strictly after the row with the given key — keyset
+// pagination: one value per DailyHitOrderBy term, in the same order.
+func DailyHitAfter(key ...any) rt.Opt[DailyHit] { return rt.After[DailyHit](key...) }
+
+// DailyHitSet collects the typed assignments of a DailyHitUpdateWhere, built
+// with Set/SetNull on the DailyHit column handles.
+func DailyHitSet(assigns ...rt.Assign[DailyHit]) []rt.Assign[DailyHit] { return assigns }
+
+// DailyHitQuery returns the daily_hits rows matching every given predicate,
+// shaped by the remaining options (order, limit, offset, keyset,
+// distinct). No options means every row.
+func (q *Queries) DailyHitQuery(ctx context.Context, opts ...rt.Opt[DailyHit]) ([]DailyHit, error) {
+	query, args, err := rt.SelectRender(dailyHitTableSQL, dailyHitColumnsSQL, opts)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := rt.StmtQuery(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []DailyHit{}
+	for rows.Next() {
+		v, err := dailyHitScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// DailyHitCount reports how many daily_hits rows match every given predicate;
+// none counts the whole table.
+func (q *Queries) DailyHitCount(ctx context.Context, preds ...rt.Pred[DailyHit]) (int64, error) {
+	query, args, err := rt.CountRender(dailyHitTableSQL, preds)
+	if err != nil {
+		return 0, err
+	}
+	var n int64
+	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// DailyHitExists reports whether any daily_hits row matches every given predicate.
+func (q *Queries) DailyHitExists(ctx context.Context, preds ...rt.Pred[DailyHit]) (bool, error) {
+	query, args, err := rt.ExistsRender(dailyHitTableSQL, preds)
+	if err != nil {
+		return false, err
+	}
+	var found bool
+	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &found); err != nil {
+		return false, err
+	}
+	return found, nil
+}
+
+// DailyHitDeleteWhere removes every daily_hits row matching the predicates and
+// reports how many went. No effective predicate is an error, never a
+// full-table delete.
+func (q *Queries) DailyHitDeleteWhere(ctx context.Context, preds ...rt.Pred[DailyHit]) (int64, error) {
+	query, args, err := rt.DeleteRender(dailyHitTableSQL, preds)
+	if err != nil {
+		return 0, err
+	}
+	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// DailyHitUpdateWhere applies the typed assignments (DailyHitSet) to every daily_hits
+// row matching the predicates and reports how many changed — the
+// partial update of the dynamic layer. No effective predicate
+// is an error, never a full-table rewrite.
+func (q *Queries) DailyHitUpdateWhere(ctx context.Context, set []rt.Assign[DailyHit], preds ...rt.Pred[DailyHit]) (int64, error) {
+	query, args, err := rt.UpdateRender(dailyHitTableSQL, set, preds)
+	if err != nil {
+		return 0, err
+	}
+	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+const (
+	inviteTableSQL   = `"invites"`
+	inviteColumnsSQL = `"id", "user_email", "code"`
+)
+
+// InviteLimit caps how many rows InviteQuery returns.
+func InviteLimit(n int) rt.Opt[Invite] { return rt.Limit[Invite](n) }
+
+// InviteOffset skips n rows; keyset pagination (InviteAfter) scales better.
+func InviteOffset(n int) rt.Opt[Invite] { return rt.Offset[Invite](n) }
+
+// InviteDistinct deduplicates the rows InviteQuery returns.
+func InviteDistinct() rt.Opt[Invite] { return rt.Distinct[Invite]() }
+
+// InviteOrderBy sorts InviteQuery's rows by Asc/Desc terms built on the
+// Invite column handles.
+func InviteOrderBy(terms ...rt.Order[Invite]) rt.Opt[Invite] { return rt.OrderBy(terms...) }
+
+// InviteAfter resumes strictly after the row with the given key — keyset
+// pagination: one value per InviteOrderBy term, in the same order.
+func InviteAfter(key ...any) rt.Opt[Invite] { return rt.After[Invite](key...) }
+
+// InviteSet collects the typed assignments of a InviteUpdateWhere, built
+// with Set/SetNull on the Invite column handles.
+func InviteSet(assigns ...rt.Assign[Invite]) []rt.Assign[Invite] { return assigns }
+
+// InviteQuery returns the invites rows matching every given predicate,
+// shaped by the remaining options (order, limit, offset, keyset,
+// distinct). No options means every row.
+func (q *Queries) InviteQuery(ctx context.Context, opts ...rt.Opt[Invite]) ([]Invite, error) {
+	query, args, err := rt.SelectRender(inviteTableSQL, inviteColumnsSQL, opts)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := rt.StmtQuery(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Invite{}
+	for rows.Next() {
+		v, err := inviteScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// InviteCount reports how many invites rows match every given predicate;
+// none counts the whole table.
+func (q *Queries) InviteCount(ctx context.Context, preds ...rt.Pred[Invite]) (int64, error) {
+	query, args, err := rt.CountRender(inviteTableSQL, preds)
+	if err != nil {
+		return 0, err
+	}
+	var n int64
+	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// InviteExists reports whether any invites row matches every given predicate.
+func (q *Queries) InviteExists(ctx context.Context, preds ...rt.Pred[Invite]) (bool, error) {
+	query, args, err := rt.ExistsRender(inviteTableSQL, preds)
+	if err != nil {
+		return false, err
+	}
+	var found bool
+	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &found); err != nil {
+		return false, err
+	}
+	return found, nil
+}
+
+// InviteDeleteWhere removes every invites row matching the predicates and
+// reports how many went. No effective predicate is an error, never a
+// full-table delete.
+func (q *Queries) InviteDeleteWhere(ctx context.Context, preds ...rt.Pred[Invite]) (int64, error) {
+	query, args, err := rt.DeleteRender(inviteTableSQL, preds)
+	if err != nil {
+		return 0, err
+	}
+	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// InviteUpdateWhere applies the typed assignments (InviteSet) to every invites
+// row matching the predicates and reports how many changed — the
+// partial update of the dynamic layer. No effective predicate
+// is an error, never a full-table rewrite.
+func (q *Queries) InviteUpdateWhere(ctx context.Context, set []rt.Assign[Invite], preds ...rt.Pred[Invite]) (int64, error) {
+	query, args, err := rt.UpdateRender(inviteTableSQL, set, preds)
+	if err != nil {
+		return 0, err
+	}
+	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}

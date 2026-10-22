@@ -4,12 +4,7 @@ Table categories {
   name string
 }
 Table category_paths [note: "Closure table over categories"] {
-  ancestor_id int [ref: categories.id]
-  descendant_id int [ref: categories.id]
+  ancestor_id int [pk, ref: categories.id]
+  descendant_id int [pk, index, ref: categories.id]
   depth int [note: "0 for the self-pair"]
-
-  Indexes {
-    (ancestor_id, descendant_id) [pk]
-    descendant_id
-  }
 }

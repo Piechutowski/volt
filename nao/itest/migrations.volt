@@ -21,12 +21,8 @@ Migration 0001__users_and_orders {
     placed_at time.Time [null]
   }
   create table user_tags {
-    user_id int    [ref: users.id]
-    tag     string
-
-    Indexes {
-      (user_id, tag) [pk]
-    }
+    user_id int    [pk, ref: users.id]
+    tag     string [pk]
   }
 }
 
@@ -67,5 +63,28 @@ Migration 0004__attachments_and_blobs {
     hash []byte [pk]
     tag  []byte [unique]
     size int    [default: 0]
+  }
+}
+
+Migration 0005__daily_hits_and_invites {
+  create table daily_hits {
+    day  int    [pk]
+    hits int    [default: 0]
+    site string [pk]
+  }
+  create table invites {
+    id         int    [pk, increment]
+    user_email string [ref: users.email]
+    code       string [unique]
+  }
+}
+
+// An index and a unique column added to a table that has rows, with no
+// rebuild: each add is its ADD COLUMN and its CREATE INDEX (spec
+// §migrations).
+Migration 0006__daily_hits_label_and_token {
+  alter table daily_hits {
+    add label string [index, default: ""]
+    add token string [null, unique]
   }
 }

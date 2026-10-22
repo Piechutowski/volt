@@ -16,29 +16,15 @@ type missingPKRule struct{ meta }
 
 var missingPK = &missingPKRule{meta{
 	name: "missingpk",
-	doc:  "reports tables with no primary key (column setting or pk index)",
+	doc:  "reports tables with no primary key, no column carrying pk",
 }}
 
 func (r *missingPKRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
 	var out []diag.Diagnostic
-	if ti := f.Table; ti != nil && !tableHasPK(ti) {
+	if ti := f.Table; ti != nil && len(ti.PK()) == 0 {
 		out = append(out, r.warnf(ti.Decl.Pos(), "table %q has no primary key", ti.Decl.Name.Name()))
 	}
 	return out
-}
-
-func tableHasPK(ti *check.TableInfo) bool {
-	for _, cd := range ti.Columns {
-		if cd.Col.Settings.Get("pk") != nil {
-			return true
-		}
-	}
-	for _, ix := range ti.Indexes {
-		if ix.Settings.Get("pk") != nil {
-			return true
-		}
-	}
-	return false
 }
 
 type refTypeRule struct{ meta }
@@ -76,7 +62,7 @@ type refTargetRule struct{ meta }
 
 var refTargetNotUnique = &refTargetRule{meta{
 	name: "reftarget",
-	doc:  "reports foreign keys referencing columns that are not pk or unique on the one side",
+	doc:  "reports foreign keys referencing columns that are not unique on the one side: not the primary key, a unique column or the key of a unique index without where:",
 }}
 
 func (r *refTargetRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
@@ -86,60 +72,13 @@ func (r *refTargetRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagn
 		if target.Table == nil {
 			continue
 		}
-		if endpointUnique(target) {
+		if target.Table.ColumnsUnique(target.Columns) {
 			continue
 		}
-		out = append(out, r.warnf(ref.Node.Pos(), "referenced column(s) %s.(%s) are not pk or unique; the database cannot enforce this foreign key",
+		out = append(out, r.warnf(ref.Node.Pos(), "referenced column(s) %s.(%s) are not unique (not the primary key, a unique column or the key of a unique index without where:), so the database cannot enforce this foreign key",
 			target.Table.Decl.Name.Name(), strings.Join(target.Columns, ", ")))
 	}
 	return out
-}
-
-func endpointUnique(e check.EndpointInfo) bool {
-	if len(e.Columns) == 1 {
-		if cd := e.Table.Column(e.Columns[0]); cd != nil {
-			if cd.Col.Settings.Get("pk") != nil || cd.Col.Settings.Get("unique") != nil {
-				return true
-			}
-		}
-	}
-	for _, ix := range e.Table.Indexes {
-		if ix.Settings.Get("pk") == nil && (ix.Settings.Get("unique") == nil || ix.Settings.Get("where") != nil) {
-			continue
-		}
-		var got []string
-		for _, a := range ix.Key {
-			if id, ok := a.(*ast.Ident); ok {
-				got = append(got, id.Name())
-			}
-		}
-		if sameColumns(got, e.Columns) {
-			return true
-		}
-	}
-	return false
-}
-
-func sameColumns(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for _, x := range a {
-		if count(a, x) != count(b, x) {
-			return false
-		}
-	}
-	return true
-}
-
-func count(list []string, x string) int {
-	n := 0
-	for _, y := range list {
-		if y == x {
-			n++
-		}
-	}
-	return n
 }
 
 type selfRefRule struct{ meta }
