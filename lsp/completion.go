@@ -33,7 +33,7 @@ var (
 		"table":     {"note: ", "model: "},
 		"select":    {"order: ("},
 		"index":     {"name: ", "unique", "pk", "where: "},
-		"migration": {"irreversible", "no transaction"},
+		"migration": {"irreversible", "no_transaction"},
 		"ref":       {"delete: ", "update: "},
 		"scope":     {"pipe: ", "error_handler: ", "name: "},
 		"route":     {"name: "},
@@ -48,7 +48,7 @@ var (
 
 	builtinTypes = check.Builtins
 
-	refActionValues = []string{"cascade", "restrict", "set null", "set default", "no action"}
+	refActionValues = []string{"cascade", "restrict", "set_null", "set_default"}
 
 	voltVerbSet = map[string]bool{
 		"get": true, "post": true, "put": true, "patch": true,

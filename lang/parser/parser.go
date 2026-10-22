@@ -602,6 +602,9 @@ func (p *parser) settingList() *ast.SettingList {
 		}
 		break
 	}
+	if p.at(token.IDENT) && !p.cur().NLBefore {
+		p.fail(p.cur(), "expected ',' or ']' in settings list, found %s: settings are separated by commas, and a setting name or value is one identifier (§settings-lists)", p.cur())
+	}
 	sl.Rbrack = p.expect(token.RBRACKET, "settings list (§settings-lists)").End()
 	return sl
 }
@@ -609,15 +612,9 @@ func (p *parser) settingList() *ast.SettingList {
 func (p *parser) setting() *ast.Setting {
 	nameTok := p.expect(token.IDENT, "setting name (§settings-lists)")
 	name := strings.ToLower(nameTok.Val)
-	end := nameTok.End()
-	for p.at(token.IDENT) && !p.cur().NLBefore {
-		w := p.next()
-		name += " " + strings.ToLower(w.Val)
-		end = w.End()
-	}
 	s := p.settings.new()
 	s.NameTok, s.Name = nameTok, name
-	s.SetEnd(end)
+	s.SetEnd(nameTok.End())
 	if p.at(token.COLON) {
 		p.next()
 		if name == "ref" {
@@ -664,34 +661,9 @@ func (p *parser) settingValue() ast.Node {
 			p.next()
 			return &ast.QualIdent{Qual: id, Name: p.ident("qualified setting value (§scopes)")}
 		}
-		words := []*ast.Ident{id}
-		for p.at(token.IDENT) && !p.cur().NLBefore {
-			words = append(words, p.ident("setting value (§settings-lists)"))
-		}
-		if len(words) == 1 {
-			return id
-		}
-		return &multiWordValue{words: words}
+		return id
 	default:
 		p.fail(t, "invalid setting value (§settings-lists): found %s", t)
 		return nil
 	}
 }
-
-type multiWordValue struct{ words []*ast.Ident }
-
-func (m *multiWordValue) Pos() token.Position { return m.words[0].Pos() }
-func (m *multiWordValue) End() token.Position { return m.words[len(m.words)-1].End() }
-
-// Words exposes the phrase.
-func (m *multiWordValue) Words() []string {
-	out := make([]string, len(m.words))
-	for i, w := range m.words {
-		out[i] = strings.ToLower(w.Name())
-	}
-	return out
-}
-
-// MultiWord is implemented by setting values consisting of several
-// space-separated identifiers.
-type MultiWord interface{ Words() []string }

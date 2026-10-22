@@ -182,8 +182,7 @@ Table t {
         (setting
           (setting_name
             (identifier))
-          (setting_value_words
-            (identifier)))))
+          (identifier))))
     (column_definition
       (column_name
         (identifier))

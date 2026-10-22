@@ -195,8 +195,7 @@ always appear quoted (`"["`, `"{"`, `"("`) when they are part of the language
 being defined.
 
 Whitespace between symbols in a production is insignificant unless a
-production explicitly references the `newline` or `sp` nonterminals: a
-production that references `sp` lays out its own spaces, and one that
+production explicitly references the `newline` nonterminal: one that
 ends with `newline` lies on one line (§line-structure-and-whitespace). A line break is
 whitespace everywhere else.
 
@@ -589,15 +588,18 @@ always delimited by square brackets and comma-separated:
 ```ebnf
 settings      = "[", setting, { ",", setting }, "]" ;
 setting       = setting name, [ ":", setting value ] ;
-setting name  = identifier, { sp, { sp }, identifier } ;
+setting name  = identifier ;
 setting value = string | number | boolean | null
               | expression literal | identifier ;
 ```
 
 1. A setting is either a flag (`pk`, `unique`, `null`) or a key-value
    pair (`note: 'text'`, `default: 123`).
-2. Setting names are case-insensitive and may consist of multiple words
-   separated by spaces (`no transaction`, §migrations).
+2. Setting names are case-insensitive. A setting name is one
+   identifier, and so is a setting value that is a word; a name of
+   several words joins them with underscores (`no_transaction`,
+   §migrations; `set_null`, §relationships-ref). Two identifiers in a
+   row are a syntax error, since settings are separated by commas.
 3. Each element section below enumerates *which* settings are valid there;
    a setting not listed for a construct is invalid in that position.
    The value of `ref:` is an endpoint, `table.column`, wherever `ref:`
@@ -936,8 +938,7 @@ column group = name
 ref settings = "[", ref setting, { ",", ref setting }, "]" ;
 ref setting  = "delete", ":", ref action
              | "update", ":", ref action ;
-ref action   = "cascade" | "restrict" | "set null"
-             | "set default" | "no action" ;
+ref action   = "cascade" | "restrict" | "set_null" | "set_default" ;
 ```
 
 1. **Direction.** The left endpoint is the foreign key and the right
@@ -969,9 +970,12 @@ ref action   = "cascade" | "restrict" | "set null"
 6. **Many-to-many.** There is no many-to-many operator: a junction
    table with two foreign keys models it.
 7. **Referential actions.** `delete:` and `update:` correspond to SQL
-   `ON DELETE` / `ON UPDATE`. `set null` is an error unless every
+   `ON DELETE` / `ON UPDATE`: `cascade` is `CASCADE`, `restrict`
+   `RESTRICT`, `set_null` `SET NULL` and `set_default` `SET DEFAULT`.
+   SQLite's default, `NO ACTION`, has no spelling: it is what leaving
+   `delete:` or `update:` out says. `set_null` is an error unless every
    foreign-key column of the relationship carries `null`, and
-   `set default` unless every one carries `null` or a `default:`
+   `set_default` unless every one carries `null` or a `default:`
    (§columns, §default-values), since the database would otherwise
    write a NULL the column refuses.
 8. Zero-or-one / zero-or-many cardinality is not written explicitly; it is
@@ -1010,7 +1014,7 @@ Table merchant_periods {
   country_code string
 }
 
-Ref: posts.editor_id > users.id [delete: set null, update: no action]
+Ref: posts.editor_id > users.id [delete: set_null, update: cascade]
 
 Ref: merchant_periods.(merchant_id, country_code) > merchants.(id, country_code)
 ```
@@ -1436,8 +1440,7 @@ column group         = name | "(", name, { ",", name }, ")" ;
 ref settings         = "[", ref setting, { ",", ref setting }, "]" ;
 ref setting          = "delete", ":", ref action
                      | "update", ":", ref action ;
-ref action           = "cascade" | "restrict" | "set null" | "set default"
-                     | "no action" ;
+ref action           = "cascade" | "restrict" | "set_null" | "set_default" ;
 
 (* ===== Types ===== *)
 
@@ -1467,7 +1470,7 @@ name                 = identifier ;
 
 settings             = "[", setting, { ",", setting }, "]" ;
 setting              = setting name, [ ":", setting value ] ;
-setting name         = identifier, { sp, { sp }, identifier } ;
+setting name         = identifier ;
 setting value        = string | number | boolean | null
                      | expression literal | identifier ;
 
@@ -2927,7 +2930,7 @@ label              = ( letter | digit ), { letter | digit } ;
 
 migration settings = "[", migration setting, { ",", migration setting }, "]" ;
 migration setting  = "irreversible"
-                   | "no transaction" ;
+                   | "no_transaction" ;
 
 migration body     = { operation }
                    | "up", "{", { operation }, "}",
@@ -3027,18 +3030,18 @@ Migration 0002__users_bio {
    `from:` anywhere else is an error.
    `ref: table.column` is spelled as in the schema (§columns): the
    declaring column holds the key. `delete:` and `update:` take the referential actions of
-   §relationships-ref (`cascade`, `restrict`, `set null`, `set
-   default`, `no action`) for the column's `ref:`, so that a schema
+   §relationships-ref (`cascade`, `restrict`, `set_null`,
+   `set_default`) for the column's `ref:`, so that a schema
    foreign key with an action can be matched; without a `ref:` they
-   are errors. As there, `set null` requires the column to carry
-   `null`, and `set default` requires `null` or a `default:`. An index
+   are errors. As there, `set_null` requires the column to carry
+   `null`, and `set_default` requires `null` or a `default:`. An index
    setting is one of `unique`, `pk` (in a shape body only, rule 10),
    `name:`, `where:`; on a `pk` index `name:`, `where:` and an
    expression atom are errors, as in §indexes. `tag:`, `required` and
    `model:` describe Go, and `note:` documents the schema, which
    generated code carries; all four are errors here, in every position
    of a migration. A migration takes `irreversible` and
-   `no transaction` and no other setting; an `exec` takes `down:` and
+   `no_transaction` and no other setting; an `exec` takes `down:` and
    no other setting.
 5. **`create table`.** The body MUST contain at least one column;
    names are unique within it. It lowers by the DDL mapping exactly
@@ -3099,7 +3102,7 @@ Migration 0002__users_bio {
     fix, a view, a trigger, a `PRAGMA`. A foreign key over several
     columns has no shape item; a table that needs one is written
     with `exec`, its `CREATE TABLE` verbatim, and the drift report
-    says so. `down:` is its inverse. With `no transaction` on the
+    says so. `down:` is its inverse. With `no_transaction` on the
     migration, `exec` statements run outside any transaction, each
     on its own.
 12. **Reversibility.** A flat body runs forward as written and
@@ -3124,7 +3127,7 @@ Migration 0002__users_bio {
     bracketed by `PRAGMA foreign_keys = OFF` before `BEGIN`, `PRAGMA
     foreign_key_check` before `COMMIT`, and `PRAGMA foreign_keys =
     ON` after; a non-empty check result rolls the migration back. The
-    tool does this; a migration never spells it. `no transaction`
+    tool does this; a migration never spells it. `no_transaction`
     disables the bracket and the transaction, for an `exec` that
     needs it (another `PRAGMA`, `VACUUM`).
 
@@ -3182,7 +3185,7 @@ true. What is checked instead is their composition.
    `volt_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT
    NULL)`, created on first use; `applied_at` is the time of
    application in RFC 3339, UTC. The row is written in the
-   migration's transaction, or, with `no transaction`, after its last
+   migration's transaction, or, with `no_transaction`, after its last
    statement.
 2. **Pending** is every migration of the package whose name has no
    row, including one that sorts before an applied one; `status`
@@ -3340,7 +3343,7 @@ migration name     = digit, digit, digit, digit, { digit }, "__", label ;
 label              = ( letter | digit ), { letter | digit } ;
 migration settings = "[", migration setting, { ",", migration setting }, "]" ;
 migration setting  = "irreversible"
-                   | "no transaction" ;
+                   | "no_transaction" ;
 migration body     = { operation }
                    | "up", "{", { operation }, "}",
                      [ "down", "{", { operation }, "}" ] ;

@@ -48,7 +48,7 @@ func (l *lowerer) migration(mi *check.MigrationInfo) (rt.Migration, error) {
 	d := mi.Decl
 	m := rt.Migration{
 		Name:          mi.Name,
-		NoTransaction: d.Settings.Get("no transaction") != nil,
+		NoTransaction: d.Settings.Get("no_transaction") != nil,
 	}
 	m.ForeignKeysOff = !m.NoTransaction && (bracketNeeded(d.Up) || bracketNeeded(d.Down))
 	up, err := l.operations(d.Up)
@@ -80,8 +80,8 @@ func (l *lowerer) migration(mi *check.MigrationInfo) (rt.Migration, error) {
 }
 
 // bracketNeeded reports whether the operations hold a rebuild table or
-// a drop table, which the foreign-key bracket surrounds unless no
-// transaction disables it (spec §migrations rule 13).
+// a drop table, which the foreign-key bracket surrounds unless
+// no_transaction disables it (spec §migrations rule 13).
 func bracketNeeded(ops []ast.Operation) bool {
 	for _, op := range ops {
 		switch op.(type) {

@@ -153,8 +153,7 @@ func (c *checker) endpointArityCheck(l, r *ast.RefEndpoint) {
 }
 
 var refActions = map[string]bool{
-	"cascade": true, "restrict": true, "set null": true,
-	"set default": true, "no action": true,
+	"cascade": true, "restrict": true, "set_null": true, "set_default": true,
 }
 
 func (c *checker) refSettingsCheck(sl *ast.SettingList) {
@@ -167,7 +166,7 @@ func (c *checker) refSettingsCheck(sl *ast.SettingList) {
 			continue
 		}
 		if action := refActionOf(s); !refActions[action] {
-			c.errorf(s.Pos(), "relationships-ref", "invalid referential action %q for '%s'; expected cascade, restrict, set null, set default or no action", action, s.Name)
+			c.errorf(s.Pos(), "relationships-ref", "invalid referential action %q for '%s'; expected cascade, restrict, set_null or set_default; leave %s: out for SQLite's default (§relationships-ref)", action, s.Name, s.Name)
 		}
 	}
 }

@@ -10,7 +10,6 @@ import (
 
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
-	"github.com/Piechutowski/volt/lang/parser"
 	"github.com/Piechutowski/volt/lang/token"
 )
 
@@ -110,10 +109,10 @@ func (g *generator) tableEmit(ti *check.TableInfo) error {
 		line := "  FOREIGN KEY (" + quotedJoin(r.FK.Columns) + ") REFERENCES " +
 			identQuote(r.Target.Table.Key) + " (" + quotedJoin(r.Target.Columns) + ")"
 		if a := refAction(r, "delete"); a != "" {
-			line += " ON DELETE " + strings.ToUpper(a)
+			line += " ON DELETE " + a
 		}
 		if a := refAction(r, "update"); a != "" {
-			line += " ON UPDATE " + strings.ToUpper(a)
+			line += " ON UPDATE " + a
 		}
 		lines = append(lines, line)
 	}
@@ -314,19 +313,16 @@ func refAction(r *check.RefInfo, kind string) string {
 	if !ok {
 		return ""
 	}
-	return actionWord(ref.Settings, kind)
+	return actionSQL(ref.Settings, kind)
 }
 
-func actionWord(sl *ast.SettingList, kind string) string {
+func actionSQL(sl *ast.SettingList, kind string) string {
 	s := sl.Get(kind)
 	if s == nil {
 		return ""
 	}
-	switch v := s.Value.(type) {
-	case *ast.Ident:
-		return v.Name()
-	case parser.MultiWord:
-		return strings.Join(v.Words(), " ")
+	if v, ok := s.Value.(*ast.Ident); ok {
+		return strings.ToUpper(strings.ReplaceAll(v.Name(), "_", " "))
 	}
 	return ""
 }

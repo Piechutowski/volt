@@ -17,7 +17,7 @@ Table posts {
 }
 
 Ref: posts.user_id > users.id [delete: cascade, update: restrict]
-Ref: posts.editor > users.id [delete: set null]
+Ref: posts.editor > users.id [delete: set_null]
 
 Migration 0001__init {
   create table users {
@@ -35,6 +35,6 @@ Migration 0001__init {
 
 Migration 0002__posts_editor {
   alter table posts {
-    add editor int [null, ref: users.id, delete: set null]
+    add editor int [null, ref: users.id, delete: set_null]
   }
 }

@@ -242,7 +242,7 @@ func TestMigrateNoTransactionRunsWhatATransactionCannot(t *testing.T) {
 	vacuum.Up = append(vacuum.Up, "PRAGMA journal_mode = DELETE")
 	applied, err := MigrateUp(ctx, db, []Migration{vacuum})
 	if err != nil || len(applied) != 1 {
-		t.Fatalf("no transaction: %v %v", applied, err)
+		t.Fatalf("no_transaction: %v %v", applied, err)
 	}
 	var mode string
 	if err := db.QueryRow("PRAGMA journal_mode").Scan(&mode); err != nil || mode != "delete" {

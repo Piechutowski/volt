@@ -113,9 +113,10 @@ func (x *SettingList) Get(name string) *Setting {
 }
 
 // Setting is one entry: a flag (pk) or a key-value pair (note: '...').
-// Name is the canonical lowercased, space-normalized form ("no transaction").
+// Name is the lowercased form of its one identifier ("no_transaction",
+// §settings-lists).
 type Setting struct {
-	NameTok token.Token // first word of the name
+	NameTok token.Token // the name as written
 	Name    string
 	Value   Node // nil for flags; BasicLit, Ident, FuncExpr, NegNumber, QualIdent, IdentList, or RefEndpoint for ref:
 	endPos  token.Position

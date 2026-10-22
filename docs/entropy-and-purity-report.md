@@ -14,7 +14,9 @@ to build are listed in roadmap.md under "One spelling per meaning";
 item 17 (the Go type of a nullable column) was decided as no change, a
 nullable column stays `rt.Null[T]`. The numbers are the review's
 original ranking, so a gap in the numbering is a decided item. When an
-item is decided, it leaves this file in the same commit.
+item is decided, it leaves this file in the same commit. Item 88 is not
+the review's: it records the question a later decision raised, and it
+cites the spec by section rather than by line.
 
 File and line references point at the code as it was at b94d08d. Names
 such as purity-bugs/null are the review's scratch demos, which were not
@@ -44,18 +46,6 @@ raises are open:
 ## Redundant duplications
 
 Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
-
-### 5. [merge] The two-word setting name and the multi-word values that remain once `primary key` and `not null` are gone, plus a value that equals the default
-
-- [no transaction] (a migration setting name)
-- delete: set null / set default / no action (accepted with any spacing and case, e.g. `NO   ACTION`)
-- delete: no action ≡ omitting delete: (SQLite's default)
-
-**Proposal.** Make every setting name and value a single identifier (`setting name = identifier`). Delete the name-joining loop, multiWordValue and MultiWord. This finishes the parser simplification the maintainer asked for. Remove `no action`, since leaving the setting out says the same. Spell the other two values as one word each, e.g. set_null and set_default (or drop set default). Rename `no transaction` to one word of the maintainer's choosing.
-
-**Cost.** Two parser loops, refActions and its two diagnostics (decls.go:170, migrations.go:321), migrationSettings, the lowering read, the structure strings, 5 .volt files (12, v80 and the migration snippets), the i20/i207 messages, three spec sections, the grammar.js setting rule. Low.
-
-**Evidence.** docs/spec.md:594 (the setting name production allows spaces), 602-603, 926-927, §migrations grammar. lang/parser/parser.go:803-812 (the loop that joins name words) and 858-894 (multiWordValue and the MultiWord interface); lang/check/settings.go:146-150; nao/gen/sqlite/gen.go:152-157, 419-422; lang/check/decls.go:155-158 (refActions); lang/check/migrations.go:30-31; nao/migrate/lower.go:51; nao/migrate/structure.go:639-649 already treats `no action` as absent. `delete: no action` emits ON DELETE NO ACTION, which has the same effect as no clause. The schema lens claimed restrict ≡ no action; that is wrong and is dropped here: SQLite's RESTRICT fires as soon as the parent key changes, while NO ACTION checks at the end of the statement, so `restrict` stays.
 
 ### 25. [merge] Generated names for the same CRUD route depend on how it was declared, controller resources use verb-first names, and singular: and [model:] fix the same name (with opposite precedence in spec and code)
 
@@ -805,6 +795,20 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 **Cost.** None.
 
 **Evidence.** nao/rt/query.go:336-352; changesets_dyn.go.golden (PostCount, PostExists); docs/spec.md §predicates rule 6, keyset, count and exists bullets (2551-2562).
+
+### 88. [decide] Go strings and the backtick
+
+- `'text'` and `'''...'''` are strings today, the second with its indentation stripped; `` `now()` `` is a SQL expression literal
+- in Go, `"text"` and `` `text` `` are both strings: a backtick delimits a raw string, not SQL
+- [default: `CURRENT_TIMESTAMP`], [where: `cancelled_at IS NULL`], [from: `CAST(hits AS INTEGER)`], (country, `lower(country)`), exec 'PRAGMA user_version = 1', [note: '''...''']
+
+**Question.** The maintainer decided that Volt strings are Go strings (roadmap.md, step 2): `"..."` is single-line with only the escapes `\\`, `\"`, `\n` and `\t`, and a raw string is written in backticks, as in Go. Today a backtick delimits a SQL expression literal, which default:, where:, from:, index expression atoms and record values take; exec takes a single-quoted string; and `'''...'''` delimits a multi-line string whose common indentation is stripped, which a multi-line note uses. Once a backtick is Go's raw string, a raw string and a `"..."` string are both just strings, so something other than the delimiter has to say which strings are SQL, and a multi-line note needs a spelling.
+
+**Proposal.** Two options. (a) A string is a string, as in Go, and the setting decides whether its content is SQL: where:, from:, exec and index key atoms are SQL by position (in an index key, a string is a SQL expression and an identifier a column); default: then takes literals only, a SQL expression default gets its own one-word setting, e.g. default_sql:, and expression record values go, a record row holding literals. (b) Backticks stay SQL-only, as today, and multi-line text gets another delimiter, a third string form that Go does not have. Recommended: (a). Volt then has exactly Go's two string forms with Go's meaning, the position that makes a string SQL is already fixed by each setting, and exec stops being the one SQL position with a different lexical form (item 32).
+
+**Cost.** Under (a): every expression default is rewritten as default_sql:, and every expression record value is rewritten as a literal or dropped; the indentation stripping of multi-line notes is either kept as a rule of note: or dropped as Go does, a raw string being taken verbatim. Either way: the scanner's string, multi-line string and expression literal forms; ast.FuncExpr and the backtick-expression value kind of default:, where: and from:; §string-literals, §multi-line-string-literals, §escape-sequences, §expression-literals and their grammar; grammar.js and the Markdown and SQL injections of the Zed queries; nearly every .volt file, since most carry a string. Quoted identifiers have to be gone first (roadmap.md, step 2), since `"..."` is a quoted identifier today. Moderate, mostly mechanical once the option is chosen.
+
+**Evidence.** docs/spec.md §string-literals; §multi-line-string-literals rules 3 (line continuation) and 4 (indentation stripping); §escape-sequences (eleven one-character escapes, line continuation, `\uHHHH`, and any other character taken as itself); §expression-literals rule 3 (computed defaults, expression indexes, expression record values); §default-values; §indexes (`index atom = name | expression literal`, `where:`); §records-sample-data; §migrations rules 9 (from:) and 11 (exec). Items 32 (two lexical forms of raw SQL) and 59 (a literal and an expression wrapping it). zed-extension/languages/volt/injections.scm injects Markdown into note: strings and SQL into backtick expressions.
 
 
 ## Effects that could be pure

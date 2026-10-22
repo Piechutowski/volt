@@ -115,7 +115,7 @@ Migration 0003__posts_created_at [irreversible] {
   }
 }
 
-Migration 0004__vacuum [no transaction] {
+Migration 0004__vacuum [no_transaction] {
   up {
     exec 'VACUUM'
   }

@@ -73,13 +73,11 @@ Scope / [pipe: api, error_handler: Errors] {
       (setting
         (setting_name
           (identifier))
-        (setting_value_words
-          (identifier)))
+        (identifier))
       (setting
         (setting_name
           (identifier))
-        (setting_value_words
-          (identifier))))
+        (identifier)))
     (route
       (verb)
       (route_path)
@@ -90,8 +88,7 @@ Scope / [pipe: api, error_handler: Errors] {
         (setting
           (setting_name
             (identifier))
-          (setting_value_words
-            (identifier)))))
+          (identifier))))
     (scope_definition
       (route_path
         (path_segment))
@@ -99,8 +96,7 @@ Scope / [pipe: api, error_handler: Errors] {
         (setting
           (setting_name
             (identifier))
-          (setting_value_words
-            (identifier))))
+          (identifier)))
       (route
         (verb)
         (route_path

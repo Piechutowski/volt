@@ -658,16 +658,26 @@ func foreignKeyDescribe(table string, fk ForeignKey) string {
 }
 
 // actionsVolt renders the delete: and update: settings of a foreign key
-// whose actions SQLite reports as other than NO ACTION, its default.
+// whose actions SQLite reports as other than NO ACTION, its default,
+// which Volt spells by leaving the setting out; SET NULL is set_null
+// (spec §relationships-ref).
 func actionsVolt(fk ForeignKey) []string {
 	var out []string
-	if a := strings.ToLower(fk.OnDelete); a != "" && a != "no action" {
+	if a := actionVolt(fk.OnDelete); a != "" {
 		out = append(out, "delete: "+a)
 	}
-	if a := strings.ToLower(fk.OnUpdate); a != "" && a != "no action" {
+	if a := actionVolt(fk.OnUpdate); a != "" {
 		out = append(out, "update: "+a)
 	}
 	return out
+}
+
+func actionVolt(sql string) string {
+	a := strings.ToLower(sql)
+	if a == "no action" {
+		return ""
+	}
+	return strings.ReplaceAll(a, " ", "_")
 }
 
 // indexesDiff matches the indexes of two tables, named ones by name and

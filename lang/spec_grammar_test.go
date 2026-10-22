@@ -211,7 +211,7 @@ func specSentences(t *testing.T) (*ebnf.Language, []ebnf.Sentence) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "comment, line comment, block comment, block comment body, punct, pred keyword"
+	want := "sp, comment, line comment, block comment, block comment body, punct, pred keyword"
 	if got := strings.Join(unreachable, ", "); got != want {
 		t.Errorf("rules no sentence reaches: %s\nwant: %s", got, want)
 	}

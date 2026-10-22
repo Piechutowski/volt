@@ -103,7 +103,7 @@ func TestLowerFlags(t *testing.T) {
 			continue
 		}
 		if (m.Down != nil) != tc.reversible || m.NoTransaction != tc.noTx || m.ForeignKeysOff != tc.foreignKeys {
-			t.Errorf("%s: down %v, no transaction %v, foreign keys off %v; want %v %v %v",
+			t.Errorf("%s: down %v, no_transaction %v, foreign keys off %v; want %v %v %v",
 				tc.name, m.Down != nil, m.NoTransaction, m.ForeignKeysOff, tc.reversible, tc.noTx, tc.foreignKeys)
 		}
 	}
@@ -119,7 +119,7 @@ func TestLowerNoTransactionDisablesTheBracket(t *testing.T) {
 		noTx, foreignKeys bool
 	}{
 		{"[irreversible]", false, true},
-		{"[irreversible, no transaction]", true, false},
+		{"[irreversible, no_transaction]", true, false},
 	} {
 		_, info := parseChecked(t, "t.volt", "package db\n\nTable posts {\n  id int [pk, increment]\n}\n\nMigration 0001__init "+tc.settings+" {"+body)
 		ms, err := Lower(info)
@@ -127,7 +127,7 @@ func TestLowerNoTransactionDisablesTheBracket(t *testing.T) {
 			t.Fatal(err)
 		}
 		if ms[0].NoTransaction != tc.noTx || ms[0].ForeignKeysOff != tc.foreignKeys {
-			t.Errorf("%s: no transaction %v, foreign keys off %v; want %v %v", tc.settings, ms[0].NoTransaction, ms[0].ForeignKeysOff, tc.noTx, tc.foreignKeys)
+			t.Errorf("%s: no_transaction %v, foreign keys off %v; want %v %v", tc.settings, ms[0].NoTransaction, ms[0].ForeignKeysOff, tc.noTx, tc.foreignKeys)
 		}
 	}
 }

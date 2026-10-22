@@ -144,7 +144,7 @@ Migration 0001__create_users {
 migration: settings, up and down blocks, a rebuild with from:
 ==================
 
-Migration 0002__int_hits [irreversible, no transaction] {
+Migration 0002__int_hits [irreversible, no_transaction] {
   up {
     rebuild table users {
       id   int [pk]
@@ -167,7 +167,6 @@ Migration 0002__int_hits [irreversible, no transaction] {
           (identifier)))
       (setting
         (setting_name
-          (identifier)
           (identifier))))
     (up_block
       (rebuild_table_op
@@ -316,6 +315,16 @@ migration: a down block without an up block
 Migration 0005__bad {
   down {
   }
+}
+
+---
+
+==================
+a migration setting of two words is an error
+:error
+==================
+
+Migration 0001__a [no transaction] {
 }
 
 ---

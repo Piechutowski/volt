@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/Piechutowski/volt/lang/ast"
-	"github.com/Piechutowski/volt/lang/parser"
 	"github.com/Piechutowski/volt/lang/token"
 )
 
@@ -111,9 +110,7 @@ func (c *checker) settingValueCheck(s *ast.Setting, section string, kind valueKi
 			c.errorf(s.Value.Pos(), section, "%q must be a backtick expression", s.Name)
 		}
 	case actionValue:
-		switch s.Value.(type) {
-		case *ast.Ident, parser.MultiWord:
-		default:
+		if _, ok := s.Value.(*ast.Ident); !ok {
 			c.errorf(s.Value.Pos(), section, "%q must be a referential action", s.Name)
 		}
 	case defaultVal:

@@ -31,7 +31,7 @@ func TestMigrationsGolden(t *testing.T) {
 func TestMigrationsEmptyAndBackquoted(t *testing.T) {
 	src := "package db\n\nTable t {\n  id int [pk, increment]\n}\n\n" +
 		"Migration 0001__init {\n}\n\n" +
-		"Migration 0002__tick [no transaction] {\n  up {\n    exec 'SELECT `x`'\n  }\n}\n"
+		"Migration 0002__tick [no_transaction] {\n  up {\n    exec 'SELECT `x`'\n  }\n}\n"
 	f, diags := parser.ParseFile("t.volt", src)
 	info, semDiags := check.File(f)
 	if diag.HasErrors(append(diags, semDiags...)) {

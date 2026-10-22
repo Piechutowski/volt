@@ -54,21 +54,34 @@ Table core_users [note: 'people'] {
 	}
 }
 
-func TestMultiWordSettingCanonical(t *testing.T) {
-	f := mustParse(t, "Migration 0001__a [No   Transaction] {\n}\n")
-	if f.Decls[0].(*ast.Migration).Settings.Get("no transaction") == nil {
-		t.Error("multi-word setting 'No   Transaction' not canonicalized")
+func TestSettingOneIdentifier(t *testing.T) {
+	f := mustParse(t, "Migration 0001__a [No_Transaction] {\n}\n")
+	if f.Decls[0].(*ast.Migration).Settings.Get("no_transaction") == nil {
+		t.Error("setting 'No_Transaction' not canonicalized to no_transaction")
+	}
+	for _, src := range []string{
+		"Migration 0001__a [no transaction] {\n}\n",
+		"Ref: a.x > b.y [delete: set null]\n",
+		"Table t { x int [null unique] }\n",
+	} {
+		_, diags := ParseFile("t", src)
+		if len(diags) != 1 || !strings.Contains(diags[0].Msg, "expected ',' or ']' in settings list") {
+			t.Errorf("%q: diagnostics %v, want one syntax error: a setting name or value is one identifier (§settings-lists)", src, diags)
+		}
 	}
 }
 
 func TestRefForms(t *testing.T) {
 	f := mustParse(t, `
-Ref: a.x > b.y [delete: set null]
+Ref: a.x > b.y [delete: set_null]
 Table e { z int [unique, ref: f.w] }
 `)
 	ref := f.Decls[0].(*ast.Ref)
 	if ref.Left.Table.Name() != "a" || ref.Right.Table.Name() != "b" || ref.Settings.Get("delete") == nil {
 		t.Errorf("ref parsed wrong: %+v", ref)
+	}
+	if v, ok := ref.Settings.Get("delete").Value.(*ast.Ident); !ok || v.Name() != "set_null" {
+		t.Errorf("delete: value = %#v, want the identifier set_null", ref.Settings.Get("delete").Value)
 	}
 	col := f.Decls[1].(*ast.Table).Body[0].(*ast.Column)
 	ep, ok := col.Settings.Get("ref").Value.(*ast.RefEndpoint)

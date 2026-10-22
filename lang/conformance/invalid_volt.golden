@@ -242,7 +242,7 @@ db/i204_migration_rebuild_empty_body.volt:16:3: error: spec/migrations: rebuild 
 db/i205_migration_index_pk.volt:13:26: error: spec/migrations: index id on "users": pk is not a setting of a standalone create index or drop index, since a primary key is a table constraint, declared in a create table or rebuild table body (§migrations)
 
 ## i207_migration_ref_action.volt
-db/i207_migration_ref_action.volt:20:39: error: spec/migrations: column "user_id": invalid referential action "explode" for 'delete'; expected cascade, restrict, set null, set default or no action (§migrations)
+db/i207_migration_ref_action.volt:20:39: error: spec/migrations: column "user_id": invalid referential action "explode" for 'delete'; expected cascade, restrict, set_null or set_default; leave delete: out for SQLite's default (§migrations)
 
 ## i208_migration_add_ref_default.volt
 db/i208_migration_add_ref_default.volt:25:37: error: spec/migrations: add "user_id" to table "posts": a column with ref: takes no default, since SQLite refuses to add a REFERENCES column with a default other than NULL to a table that has rows (§migrations)
@@ -341,8 +341,8 @@ db/i225_unknown_type_order_errors_stay.volt:25:37: error: spec/selects-over-grou
 app/i22_scope_setting.volt:4:10: error: spec/settings-whitelists: setting "pipes" is not valid on a Scope (§settings-whitelists); valid: pipe, name, error_handler
 
 ## i233_migration_set_null_not_null.volt
-db/i233_migration_set_null_not_null.volt:24:37: error: spec/migrations: delete: set null on foreign-key column "author_id", which does not carry null: the database would write a NULL the column refuses (§migrations)
-db/i233_migration_set_null_not_null.volt:25:37: error: spec/migrations: update: set default on foreign-key column "reviewer_id", which carries neither null nor a default:, so its default is NULL, which the column refuses (§migrations)
+db/i233_migration_set_null_not_null.volt:24:37: error: spec/migrations: delete: set_null on foreign-key column "author_id", which does not carry null: the database would write a NULL the column refuses (§migrations)
+db/i233_migration_set_null_not_null.volt:25:37: error: spec/migrations: update: set_default on foreign-key column "reviewer_id", which carries neither null nor a default:, so its default is NULL, which the column refuses (§migrations)
 
 ## i234_migration_add_ref_bare.volt
 db/i234_migration_add_ref_bare.volt:25:22: error: spec/migrations: add "user_id" to table "posts": a column with ref: must carry null when added, since the rows already in the table reference nothing; use rebuild table for a NOT NULL foreign key (§migrations)
@@ -400,6 +400,9 @@ app/i26_typed_wildcard.volt:5:18: error: syntax: a wildcard cannot carry a type;
 
 ## i272_group_note.volt
 db/i272_group_note.volt:8:15: error: syntax: expected '{' or '=' after the group name (§groups)
+
+## i277_migration_no_transaction_two_words.volt
+db/i277_migration_no_transaction_two_words.volt:9:26: error: syntax: expected ',' or ']' in settings list, found identifier "transaction": settings are separated by commas, and a setting name or value is one identifier (§settings-lists)
 
 ## i27_import_no_parens.volt
 app/i27_import_no_parens.volt:4:1: error: syntax: expected '(' after import (§imports); Volt uses Go-style import blocks

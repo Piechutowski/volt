@@ -112,7 +112,7 @@ i179_index_expression_unnamed.volt:8:6: error: spec/indexes: index (`lower(email
 i19_ref_arity_mismatch.volt:5:17: error: spec/relationships-ref: composite relationship endpoints must have the same number of columns: 2 vs 1
 
 ## i20_bad_ref_action.volt
-i20_bad_ref_action.volt:4:18: error: spec/relationships-ref: invalid referential action "explode" for 'delete'; expected cascade, restrict, set null, set default or no action
+i20_bad_ref_action.volt:4:18: error: spec/relationships-ref: invalid referential action "explode" for 'delete'; expected cascade, restrict, set_null or set_default; leave delete: out for SQLite's default (§relationships-ref)
 
 ## i21_ref_endpoint_no_column.volt
 i21_ref_endpoint_no_column.volt:4:12: error: syntax: an endpoint is table.column or table.(columns) (§relationships-ref), found '>' ">"
@@ -129,8 +129,8 @@ i227_pk_index_member_null.volt:5:19: error: spec/columns: column "tag" of table 
 ## i228_bare_pk_after_type.volt
 i228_bare_pk_after_type.volt:4:10: error: syntax: expected a settings list or end of line after the column type (§columns), found identifier "pk"
 
-## i229_primary_key_unknown.volt
-i229_primary_key_unknown.volt:4:11: error: spec/columns: unknown setting "primary key" (§columns)
+## i229_primary_key_two_words.volt
+i229_primary_key_two_words.volt:4:22: error: syntax: expected ',' or ']' in settings list, found identifier "key": settings are separated by commas, and a setting name or value is one identifier (§settings-lists)
 
 ## i230_use_unknown_element.volt
 i230_use_unknown_element.volt:3:1: error: syntax: unknown element type "use" (§program-structure)
@@ -141,9 +141,9 @@ i231_records_omit_not_null.volt:14:3: error: spec/records-sample-data: records o
 i231_records_omit_not_null.volt:25:1: error: spec/records-sample-data: records of table "authors" do not list column "name", which is NOT NULL and has no default: every row would write NULL into it; list the column (§records-sample-data)
 
 ## i232_ref_set_null_not_null.volt
-i232_ref_set_null_not_null.volt:14:34: error: spec/relationships-ref: delete: set null on foreign-key column "posts.author_id", which does not carry null: the database would write a NULL the column refuses (§relationships-ref)
-i232_ref_set_null_not_null.volt:15:36: error: spec/relationships-ref: update: set default on foreign-key column "posts.reviewer_id", which carries neither null nor a default:, so its default is NULL, which the column refuses (§relationships-ref)
-i232_ref_set_null_not_null.volt:16:55: error: spec/relationships-ref: update: set null on foreign-key column "posts.editor_id", which does not carry null: the database would write a NULL the column refuses (§relationships-ref)
+i232_ref_set_null_not_null.volt:14:34: error: spec/relationships-ref: delete: set_null on foreign-key column "posts.author_id", which does not carry null: the database would write a NULL the column refuses (§relationships-ref)
+i232_ref_set_null_not_null.volt:15:36: error: spec/relationships-ref: update: set_default on foreign-key column "posts.reviewer_id", which carries neither null nor a default:, so its default is NULL, which the column refuses (§relationships-ref)
+i232_ref_set_null_not_null.volt:16:55: error: spec/relationships-ref: update: set_null on foreign-key column "posts.editor_id", which does not carry null: the database would write a NULL the column refuses (§relationships-ref)
 
 ## i236_second_pk_column.volt
 i236_second_pk_column.volt:5:16: error: spec/columns: table "posts" declares a second primary key, column "slug" beside column "id": a table has one primary key, one pk column or one [pk] index (§columns)
@@ -256,6 +256,15 @@ i273_inline_ref_action.volt:8:31: error: spec/columns: unknown setting "delete" 
 
 ## i274_inline_ref_column_group.volt
 i274_inline_ref_column_group.volt:12:25: error: spec/relationships-ref: an inline ref endpoint has exactly one column
+
+## i275_ref_action_no_action.volt
+i275_ref_action_no_action.volt:5:49: error: spec/relationships-ref: invalid referential action "no_action" for 'update'; expected cascade, restrict, set_null or set_default; leave update: out for SQLite's default (§relationships-ref)
+
+## i276_ref_action_two_words.volt
+i276_ref_action_two_words.volt:5:44: error: syntax: expected ',' or ']' in settings list, found identifier "null": settings are separated by commas, and a setting name or value is one identifier (§settings-lists)
+
+## i278_settings_missing_comma.volt
+i278_settings_missing_comma.volt:4:17: error: syntax: expected ',' or ']' in settings list, found identifier "increment": settings are separated by commas, and a setting name or value is one identifier (§settings-lists)
 
 ## i32_settings_next_line.volt
 i32_settings_next_line.volt:4:3: error: syntax: expected a column, indexes, validators, records or '~injection' in Table body, found '[' "["

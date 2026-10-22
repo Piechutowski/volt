@@ -170,11 +170,11 @@ func refEndpoint(col *ast.Column) *ast.RefEndpoint {
 // update: settings (spec §migrations rule 4, §relationships-ref).
 func referenceSQL(col *ast.Column, ep *ast.RefEndpoint) string {
 	out := identQuote(ep.Table.Name()) + " (" + quotedJoin(identNames(ep.Columns)) + ")"
-	if a := actionWord(col.Settings, "delete"); a != "" {
-		out += " ON DELETE " + strings.ToUpper(a)
+	if a := actionSQL(col.Settings, "delete"); a != "" {
+		out += " ON DELETE " + a
 	}
-	if a := actionWord(col.Settings, "update"); a != "" {
-		out += " ON UPDATE " + strings.ToUpper(a)
+	if a := actionSQL(col.Settings, "update"); a != "" {
+		out += " ON UPDATE " + a
 	}
 	return out
 }

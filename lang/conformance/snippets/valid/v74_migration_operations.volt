@@ -49,7 +49,7 @@ Migration 0002__accounts_rebuild [irreversible] {
   drop table audit
 }
 
-Migration 0003__vacuum [no transaction] {
+Migration 0003__vacuum [no_transaction] {
   up {
     exec 'VACUUM'
   }

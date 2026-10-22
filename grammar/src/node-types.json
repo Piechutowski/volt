@@ -1679,6 +1679,10 @@
             "named": true
           },
           {
+            "type": "identifier",
+            "named": true
+          },
+          {
             "type": "null",
             "named": true
           },
@@ -1691,11 +1695,11 @@
             "named": true
           },
           {
-            "type": "ref_endpoint",
+            "type": "quoted_identifier",
             "named": true
           },
           {
-            "type": "setting_value_words",
+            "type": "ref_endpoint",
             "named": true
           },
           {
@@ -1715,27 +1719,8 @@
     "named": true,
     "fields": {},
     "children": {
-      "multiple": true,
+      "multiple": false,
       "required": false,
-      "types": [
-        {
-          "type": "identifier",
-          "named": true
-        },
-        {
-          "type": "quoted_identifier",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
-    "type": "setting_value_words",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": true,
-      "required": true,
       "types": [
         {
           "type": "identifier",

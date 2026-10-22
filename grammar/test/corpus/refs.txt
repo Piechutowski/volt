@@ -24,7 +24,7 @@ Ref: orders.user_id > users.id
 ref with settings
 ==================
 
-Ref: orders.user_id > users.id [delete: cascade, update: no action]
+Ref: orders.user_id > users.id [delete: cascade, update: restrict]
 
 ---
 
@@ -45,14 +45,11 @@ Ref: orders.user_id > users.id [delete: cascade, update: no action]
       (setting
         (setting_name
           (identifier))
-        (setting_value_words
-          (identifier)))
+        (identifier))
       (setting
         (setting_name
           (identifier))
-        (setting_value_words
-          (identifier)
-          (identifier))))))
+        (identifier)))))
 
 ==================
 composite ref
@@ -102,4 +99,11 @@ Ref fk_user: orders.user_id > users.id
 
 ---
 
+==================
+a referential action of two words is an error
+:error
+==================
 
+Ref: posts.user_id > users.id [delete: set null]
+
+---

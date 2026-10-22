@@ -529,4 +529,13 @@ Table posts {
 
 ---
 
+==================
+two settings without a comma are an error
+:error
+==================
 
+Table t {
+  id int [pk increment]
+}
+
+---

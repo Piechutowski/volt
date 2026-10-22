@@ -32,10 +32,11 @@ report engine when a consumer exists.
     - [x] Settings nothing reads go: index `type:` and `note:`, `note:` on migrations, migration columns and migration indexes; a TablePartial takes no settings and no note
     - [x] NULL has one spelling: `default: null` goes, a record row writes `null`, and an empty field is an error
     - [x] The spec says what the code does: punctuation table, the doubled exclusion backslash, the multi-line string and `import ( db )` examples, §table-resolution clause 2, the empty Reserved headings, version relics
+  - [x] Setting names and values are one word: `set_null`, `set_default`, `no_transaction`; `no action` goes
   - [ ] Step 2, case and names
     - [ ] Volt is case-sensitive. Words that open an element or a block are capitalized (`Table`, `TablePartial`, `Type`, `Ref`, `Group`, `Pred`, `Select`, `Records`, `Indexes`, `Validators`, `Migration`, `Scope`, `Pipeline`, `Project`); every other word is lowercase (settings and values, `true`, `false`, `null`, clause words, route words, migration operations, `package`, `import`); a wrong case is a syntax error naming the right spelling
     - [ ] Identifiers are Go identifiers: quoted identifiers go
-    - [ ] Strings escape as in Go: only `\\`, `\'`, `\n` and `\t`; every other backslash sequence, line continuation included, is an error
+    - [ ] Strings are Go strings: `"..."` is single-line with only the escapes `\\`, `\"`, `\n` and `\t`, every other backslash sequence and line continuation an error; a raw string is `` `...` `` as in Go. Open, before building: how a SQL expression (`default:`, `where:`, `from:`, `exec`, index expression atoms, record expressions) and a multi-line note are spelled once backticks are Go raw strings, report item 88
     - [ ] A package names its own declarations bare; `pkg.Name` always names an import (or `volt.`), and the rule that an import may not take the package's own name goes
   - [ ] Step 3, keys and indexes
     - [ ] `pk` is a column setting only: several `pk` columns form one composite key in declaration order, the `[pk]` index form goes, `increment` only on a single `int` pk
@@ -84,7 +85,7 @@ report engine when a consumer exists.
   - [x] The fold: every migration applied to an empty SQLite, compared with the schema's DDL table by table; `volt gen` fails on drift (§the-fold)
   - [x] The ledger `volt_migrations` and `rt.MigrateUp`, `rt.MigrateDown`, `rt.MigrateStatus` (§migration-ledger)
   - [x] `volt migration new | check | up | down | status | sql`, and `volt_migrations.go` with `Migrate` for the binary (§migration-tooling)
-  - [x] The pragma bracket around `rebuild table` and `drop table`, `foreign_key_check` before commit; `no transaction` for what needs it
+  - [x] The pragma bracket around `rebuild table` and `drop table`, `foreign_key_check` before commit; `no_transaction` for what needs it
   - [x] No fake `down`: an irreversible migration refuses `down` with its name
   - *hand* data migrations, as `exec`
 - [ ] Report engine, when a consumer exists

@@ -33,7 +33,7 @@ func TestTableDDLOneToOneAndActions(t *testing.T) {
 		},
 		{
 			name: "delete: and update: follow the reference",
-			body: "    id      int [pk, increment]\n    user_id int [null, ref: users.id, delete: cascade, update: set null]\n",
+			body: "    id      int [pk, increment]\n    user_id int [null, ref: users.id, delete: cascade, update: set_null]\n",
 			want: "CREATE TABLE profiles (\n  id INTEGER PRIMARY KEY,\n  user_id INTEGER,\n  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE SET NULL\n)",
 		},
 	}
@@ -63,8 +63,8 @@ func TestColumnDDLActions(t *testing.T) {
 		column, want string
 		unique       bool
 	}{
-		{"user_id int [null, ref: users.id, delete: set default]", "user_id INTEGER REFERENCES users (id) ON DELETE SET DEFAULT", false},
-		{"user_id int [null, ref: users.id, update: no action]", "user_id INTEGER REFERENCES users (id) ON UPDATE NO ACTION", false},
+		{"user_id int [null, ref: users.id, delete: set_default]", "user_id INTEGER REFERENCES users (id) ON DELETE SET DEFAULT", false},
+		{"user_id int [null, ref: users.id, update: restrict]", "user_id INTEGER REFERENCES users (id) ON UPDATE RESTRICT", false},
 		{"twin_id int [null, unique, ref: users.id]", "twin_id INTEGER REFERENCES users (id)", true},
 	}
 	for _, tc := range cases {

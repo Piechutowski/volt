@@ -67,7 +67,7 @@
 ; ---------- settings ----------
 
 (settings_list (setting name: (_) @attribute))
-(setting_value_words) @constant
+(setting value: [(identifier) (quoted_identifier)] @constant)
 
 ; ---------- Volt layer (docs/spec.md Part II) ----------
 

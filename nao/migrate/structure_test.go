@@ -233,8 +233,8 @@ CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
 		name:   "referential actions read back as delete: and update:",
 		fold:   strings.Replace(postsDDL, "post_id INTEGER NOT NULL", "post_id INTEGER", 1),
 		target: strings.Replace(strings.Replace(postsDDL, "post_id INTEGER NOT NULL", "post_id INTEGER", 1), "REFERENCES posts (id)", "REFERENCES posts (id) ON DELETE CASCADE ON UPDATE SET NULL", 1),
-		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [null, ref: posts.id, delete: cascade, update: set null]\n  body string [null]\n}"},
-		reason: "foreign key comments (post_id) references posts (id) [delete: cascade, update: set null] is in the schema but not in the fold",
+		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [null, ref: posts.id, delete: cascade, update: set_null]\n  body string [null]\n}"},
+		reason: "foreign key comments (post_id) references posts (id) [delete: cascade, update: set_null] is in the schema but not in the fold",
 	},
 	{
 		name:   "a unique constraint only in the fold is a rebuild",

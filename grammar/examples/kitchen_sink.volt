@@ -52,7 +52,7 @@ Table core_orders {
   total float64 [null]
 }
 
-Ref: core_orders.user_id > users.id [delete: cascade, update: no action]
+Ref: core_orders.user_id > users.id [delete: cascade]
 
 Ref: users.(id, name) > core_orders.(id, total)
 

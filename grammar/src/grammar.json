@@ -4641,15 +4641,8 @@
       ]
     },
     "setting_name": {
-      "type": "PREC_RIGHT",
-      "value": 0,
-      "content": {
-        "type": "REPEAT1",
-        "content": {
-          "type": "SYMBOL",
-          "name": "_name"
-        }
-      }
+      "type": "SYMBOL",
+      "name": "_name"
     },
     "_setting_value": {
       "type": "CHOICE",
@@ -4687,13 +4680,8 @@
           "name": "ident_group"
         },
         {
-          "type": "ALIAS",
-          "content": {
-            "type": "SYMBOL",
-            "name": "setting_name"
-          },
-          "named": true,
-          "value": "setting_value_words"
+          "type": "SYMBOL",
+          "name": "_name"
         }
       ]
     },

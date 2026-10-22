@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/Piechutowski/volt/lang/ast"
-	"github.com/Piechutowski/volt/lang/parser"
 	"github.com/Piechutowski/volt/lang/token"
 )
 
@@ -28,7 +27,7 @@ type MigrationInfo struct {
 
 var (
 	migrationSettings = settingSpec{
-		kinds: map[string]valueKind{"irreversible": flagOnly, "no transaction": flagOnly},
+		kinds: map[string]valueKind{"irreversible": flagOnly, "no_transaction": flagOnly},
 	}
 	migrationColumnKinds = map[string]valueKind{
 		"pk": flagOnly, "null": flagOnly,
@@ -303,7 +302,7 @@ func (c *checker) migrationRefCheck(col *ast.Column) {
 				continue
 			}
 			if action := refActionOf(s); !refActions[action] {
-				c.errorf(s.Pos(), "migrations", "column %q: invalid referential action %q for '%s'; expected cascade, restrict, set null, set default or no action (§migrations)", name, action, s.Name)
+				c.errorf(s.Pos(), "migrations", "column %q: invalid referential action %q for '%s'; expected cascade, restrict, set_null or set_default; leave %s: out for SQLite's default (§migrations)", name, action, s.Name, s.Name)
 				continue
 			}
 			c.refActionNullCheck(s, col, name, "migrations")
@@ -313,19 +312,16 @@ func (c *checker) migrationRefCheck(col *ast.Column) {
 
 func (c *checker) refActionNullCheck(s *ast.Setting, col *ast.Column, column, section string) {
 	switch action := refActionOf(s); {
-	case action == "set null" && !isNullable(col):
-		c.errorf(s.Pos(), section, "%s: set null on foreign-key column %q, which does not carry null: the database would write a NULL the column refuses (§%s)", s.Name, column, section)
-	case action == "set default" && !isNullable(col) && col.Settings.Get("default") == nil:
-		c.errorf(s.Pos(), section, "%s: set default on foreign-key column %q, which carries neither null nor a default:, so its default is NULL, which the column refuses (§%s)", s.Name, column, section)
+	case action == "set_null" && !isNullable(col):
+		c.errorf(s.Pos(), section, "%s: set_null on foreign-key column %q, which does not carry null: the database would write a NULL the column refuses (§%s)", s.Name, column, section)
+	case action == "set_default" && !isNullable(col) && col.Settings.Get("default") == nil:
+		c.errorf(s.Pos(), section, "%s: set_default on foreign-key column %q, which carries neither null nor a default:, so its default is NULL, which the column refuses (§%s)", s.Name, column, section)
 	}
 }
 
 func refActionOf(s *ast.Setting) string {
-	switch v := s.Value.(type) {
-	case *ast.Ident:
+	if v, ok := s.Value.(*ast.Ident); ok {
 		return strings.ToLower(v.Name())
-	case parser.MultiWord:
-		return strings.Join(v.Words(), " ")
 	}
 	return ""
 }

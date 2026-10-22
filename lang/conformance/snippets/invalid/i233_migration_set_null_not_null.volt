@@ -1,5 +1,5 @@
-// spec: §migrations, §relationships-ref, a migration column's set null needs null, set default needs null or a default:
-// want: set null on foreign-key column
+// spec: §migrations, §relationships-ref, a migration column's set_null needs null, set_default needs null or a default:
+// want: set_null on foreign-key column
 package db
 
 Table users {
@@ -12,8 +12,8 @@ Table posts {
   reviewer_id int [null]
 }
 
-Ref: posts.author_id > users.id [delete: set null]
-Ref: posts.reviewer_id > users.id [update: set default]
+Ref: posts.author_id > users.id [delete: set_null]
+Ref: posts.reviewer_id > users.id [update: set_default]
 
 Migration 0001__init {
   create table users {
@@ -21,7 +21,7 @@ Migration 0001__init {
   }
   create table posts {
     id          int [pk]
-    author_id   int [ref: users.id, delete: set null]
-    reviewer_id int [ref: users.id, update: set default]
+    author_id   int [ref: users.id, delete: set_null]
+    reviewer_id int [ref: users.id, update: set_default]
   }
 }

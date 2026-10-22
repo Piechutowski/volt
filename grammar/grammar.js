@@ -740,8 +740,8 @@ module.exports = grammar({
         ),
       ),
 
-    // Setting names may be multi-word: `no transaction` (§settings-lists).
-    setting_name: ($) => prec.right(repeat1($._name)),
+    // A setting name is one identifier: `no_transaction` (§settings-lists).
+    setting_name: ($) => $._name,
 
     _setting_value: ($) =>
       choice(
@@ -753,7 +753,7 @@ module.exports = grammar({
         $.expression,
         $.qualified_value,
         $.ident_group,
-        alias($.setting_name, $.setting_value_words),
+        $._name,
       ),
 
     // Parenthesized identifier list: only: (index, show) (volt §settings);

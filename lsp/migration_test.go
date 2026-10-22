@@ -68,7 +68,7 @@ func TestCompletionMigrationBody(t *testing.T) {
 	pos := posOf(t, text, "[", 0)
 	pos.Character++
 	items = d.Complete(pos)
-	if !hasWord(items, "irreversible") || !hasWord(items, "no transaction") {
+	if !hasWord(items, "irreversible") || !hasWord(items, "no_transaction") {
 		t.Errorf("migration settings completion = %v", labels(items))
 	}
 }
