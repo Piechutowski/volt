@@ -223,7 +223,7 @@ i258_semicolon_not_a_token.volt:4:14: error: syntax: expected end of line after 
 i259_enum_not_an_element.volt:3:1: error: syntax: unknown element type "Enum" (§program-structure)
 
 ## i25_two_records_blocks.volt
-i25_two_records_blocks.volt:3:3: error: spec/records-sample-data: at most one records block per table
+i25_two_records_blocks.volt:3:3: error: spec/records-sample-data: at most one Records block per table (§records-sample-data)
 
 ## i260_default_dotted_name.volt
 i260_default_dotted_name.volt:6:26: error: spec/default-values: default value must be a number, string, boolean or expression literal; found the dotted name state.pending, and a declared type takes a literal of its storage type (§default-values)
@@ -310,6 +310,9 @@ i297_unknown_escape.volt:5:28: error: syntax: unknown escape sequence \q: a stri
 i297_unknown_escape.volt:6:23: error: syntax: unknown escape sequence \u: a string takes \\, \", \n and \t only (§escape-sequences)
 i297_unknown_escape.volt:7:23: error: syntax: unknown escape sequence \': a string takes \\, \", \n and \t only (§escape-sequences)
 i297_unknown_escape.volt:8:24: error: syntax: unknown escape sequence \r: a string takes \\, \", \n and \t only (§escape-sequences)
+
+## i306_multiline_ends_quote.volt
+i306_multiline_ends_quote.volt:3:30: error: syntax: a multi-line string cannot end with a double quote: write it \" before the closing """ (§multi-line-string-literals)
 
 ## i32_settings_next_line.volt
 i32_settings_next_line.volt:4:3: error: syntax: expected a column, Indexes, Validators, Records or '~injection' in Table body, found '[' "["

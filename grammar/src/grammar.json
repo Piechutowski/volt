@@ -4062,7 +4062,7 @@
     },
     "migration_name": {
       "type": "PATTERN",
-      "value": "[0-9]+__[\\p{L}\\p{Nd}_]+"
+      "value": "[0-9][0-9][0-9][0-9]+__[\\p{L}\\p{Nd}_]+"
     },
     "string": {
       "type": "CHOICE",
@@ -4143,8 +4143,12 @@
     "_single_string_content": {
       "type": "IMMEDIATE_TOKEN",
       "content": {
-        "type": "PATTERN",
-        "value": "([^\"\\\\\\n]|\\\\[\"\\\\nt])+"
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "([^\"\\\\\\n]|\\\\[\"\\\\nt])+"
+        }
       }
     },
     "_triple_string_content": {
@@ -4172,8 +4176,12 @@
                 "content": {
                   "type": "IMMEDIATE_TOKEN",
                   "content": {
-                    "type": "PATTERN",
-                    "value": "[^`]+"
+                    "type": "PREC",
+                    "value": 1,
+                    "content": {
+                      "type": "PATTERN",
+                      "value": "[^`]+"
+                    }
                   }
                 },
                 "named": true,

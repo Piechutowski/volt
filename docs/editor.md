@@ -100,9 +100,9 @@ load-bearing patterns, each citing the spec section it implements:
   where the parse state admits it: that is the "not reserved" half, so
   `table` in column-name position lexes as an identifier, while `TABLE`
   at top level is an ERROR node, as the front end's error
-  (§case-sensitivity-and-terminology). Known limitation: at the start
-  of a table-body line, a column named exactly `Indexes`, `Validators`
-  or `Records` lexes as the block keyword (section 7).
+  (§case-sensitivity-and-terminology). Known limitation: a column
+  named exactly like a block keyword at the start of a body line lexes
+  as the keyword (section 7).
 - **Names are identifiers, strings are Go's** (§identifiers,
   §string-literals). An identifier is a Go identifier, the one token
   that begins with digits is a migration name, and no name is quoted;
@@ -229,8 +229,11 @@ layer:
   Migration body, the columns of the named table after `ref: table.`,
   settings per construct and none on a construct that takes none
   (§settings-lists, §settings-whitelists), and `true`/`false` after
-  `default:` only on a column stored as `bool`. Every keyword is
-  offered in its one spelling, from the parser's own lists (§keywords).
+  `default:` only on a column stored as `bool`. Every keyword
+  completion offers is in its one spelling (§keywords): the
+  referential actions are the parser's own list, and a test holds the
+  element words, the verbs and the setting names to the parser's
+  lists. Resource actions and order directions are not completed.
 - A migration's name hovers as its position among the package's
   migrations in name order ("migration 2 of 3") and whether it runs
   backward (§migrations); the project index answers it, so a
@@ -292,11 +295,19 @@ from one implementation. The protocol library is `tliron/glsp` (LSP
 
 ## 7. Known limitations (documented trade-offs, not bugs)
 
-- **Grammar: columns named exactly like block keywords.** `Indexes`,
-  `Validators` and `Records` at the start of a table-body line lex as
-  the keyword (§keywords note above); the front end, spec-exact, reads
-  them as columns. Another case of the word (`indexes`) is an
-  identifier to both.
+- **Grammar: columns named exactly like block keywords.** A line in a
+  Table or TablePartial body that starts with a column named exactly
+  `Indexes` or `Validators` (`Records` too in a Table body), or a line
+  in a create, rebuild or drop table shape body that starts with a
+  column named exactly `Indexes`, lexes as the block keyword (§keywords
+  note above); the front end, spec-exact, reads them as columns.
+  Another case of the word (`indexes`) is an identifier to both.
+- **Grammar: a multi-line string that opens with `//`.** When the
+  first characters after an opening `"""`, spaces allowed, are `//`,
+  the grammar lexes the rest of that line as a comment and draws an
+  ERROR node (`[note: """// x"""]`); the front end reads the string.
+  A `//` later in the body, and a single-line string or an expression
+  literal that begins with `//`, parse in both.
 - **Grammar: continuations outside a settings list, and a break
   before a setting's `:`.** An element continued on an indented line
   (`Ref:` with its relationship on the next line,

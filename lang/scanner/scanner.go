@@ -296,6 +296,7 @@ const (
 	msgNewlineInString  = `newline in a string: a string ends on its line, and a multi-line string is written """...""" (§string-literals)`
 	msgSingleQuote      = `a string is written in double quotes, "...", not single quotes (§string-literals)`
 	msgTripleSingle     = `a multi-line string is written """...""", not '''...''' (§multi-line-string-literals)`
+	msgQuoteBeforeClose = `a multi-line string cannot end with a double quote: write it \" before the closing """ (§multi-line-string-literals)`
 )
 
 func (s *Scanner) escapeScan(at cursor) bool {
@@ -341,7 +342,7 @@ func stringScan(s *Scanner) stateFn {
 			at := s.pos
 			s.next()
 			if !s.escapeScan(at) {
-				return anyScan
+				s.next()
 			}
 		default:
 			s.val.WriteRune(s.next())
@@ -359,9 +360,17 @@ func multiStringScan(s *Scanner) stateFn {
 			s.errorf("syntax", "unterminated multi-line string (§multi-line-string-literals)")
 			return nil
 		case r == '"' && s.peekAt(1) == '"' && s.peekAt(2) == '"':
+			at := s.pos
 			s.next()
 			s.next()
 			s.next()
+			if s.peek() == '"' {
+				s.errs = append(s.errs, diag.Errorf(at.position(s.file), "syntax", msgQuoteBeforeClose))
+				for s.peek() == '"' {
+					s.next()
+					s.val.WriteByte('"')
+				}
+			}
 			s.tokEmit(token.Token{Kind: token.STRING, Val: indentStrip(s.val.String()), Multi: true})
 			return anyScan
 		case r == '\\':
@@ -419,30 +428,28 @@ func singleQuoteScan(s *Scanner) stateFn {
 }
 
 func indentStrip(v string) string {
+	blank := func(ln string) bool { return strings.Trim(ln, " \t") == "" }
 	lines := strings.Split(v, "\n")
-	if len(lines) > 0 && strings.TrimSpace(lines[0]) == "" {
+	if len(lines) > 0 && blank(lines[0]) {
 		lines = lines[1:]
 	}
-	if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+	if len(lines) > 0 && blank(lines[len(lines)-1]) {
 		lines = lines[:len(lines)-1]
 	}
-	min := -1
+	m := -1
 	for _, ln := range lines {
-		if strings.TrimSpace(ln) == "" {
+		if blank(ln) {
 			continue
 		}
 		n := len(ln) - len(strings.TrimLeft(ln, " "))
-		if min < 0 || n < min {
-			min = n
+		if m < 0 || n < m {
+			m = n
 		}
 	}
-	if min > 0 {
+	if m > 0 {
 		for i, ln := range lines {
-			if len(ln) >= min {
-				lines[i] = ln[min:]
-			} else {
-				lines[i] = strings.TrimLeft(ln, " ")
-			}
+			n := len(ln) - len(strings.TrimLeft(ln, " "))
+			lines[i] = ln[min(n, m):]
 		}
 	}
 	return strings.Join(lines, "\n")
@@ -600,7 +607,7 @@ func operatorScan(s *Scanner) stateFn {
 	if unicode.IsMark(r) || unicode.IsDigit(r) {
 		s.errorf("syntax", "%q (U+%04X) cannot begin a name: a name is a Go identifier, a letter or underscore followed by letters, digits and underscores (§identifiers)", string(r), r)
 		s.identRest()
-		s.tokEmit(token.Token{Kind: token.ILLEGAL, Val: s.rawVal()})
+		s.tokEmit(token.Token{Kind: token.IDENT, Val: s.rawVal()})
 		return anyScan
 	}
 	s.errorf("syntax", "unexpected character %q (§lexical-structure)", string(r))
@@ -609,23 +616,24 @@ func operatorScan(s *Scanner) stateFn {
 }
 
 // Quote returns s as a Volt string literal, "..." with the four escapes
-// (§string-literals, §escape-sequences). It reports false when s holds a
-// control character other than a line feed or a tab, which no Volt
-// string spells.
+// and every other character as itself (§string-literals,
+// §escape-sequences). It reports false when s holds a carriage return,
+// the one character Volt source cannot hold, since the scanner discards
+// it (§line-structure-and-whitespace).
 func Quote(s string) (string, bool) {
 	var b strings.Builder
 	b.WriteByte('"')
 	for _, r := range s {
-		switch {
-		case r == '\\':
+		switch r {
+		case '\\':
 			b.WriteString(`\\`)
-		case r == '"':
+		case '"':
 			b.WriteString(`\"`)
-		case r == '\n':
+		case '\n':
 			b.WriteString(`\n`)
-		case r == '\t':
+		case '\t':
 			b.WriteString(`\t`)
-		case r < 0x20 || r == 0x7f:
+		case '\r':
 			return "", false
 		default:
 			b.WriteRune(r)

@@ -470,6 +470,19 @@ site/site.volt:26:12: error: spec/imports: site.posts qualifies a declaration wi
 site/site.volt:27:14: error: spec/imports: site.PostPicked qualifies a declaration with this package's own name: a package names its own declarations bare, so write PostPicked (§imports)
 site/site.volt:28:10: error: spec/imports: site.browse qualifies a declaration with this package's own name: a package names its own declarations bare, so write browse (§imports)
 
+## i302_validator_own_name_import
+site/site.volt:14:5: error: spec/validators: a validator is a function of the containing package, not of "site": write a local wrapper (§validators)
+
+## i303_package_dir_not_ascii
+żółw/żółw.volt:3:1: error: spec/imports: package directory "żółw" has the segment "żółw", which is not an identifier of ASCII letters, digits and underscores: a package's directory path is its Go import path (§imports)
+
+## i304_import_alias_not_ascii
+app/routes.volt:6:2: error: spec/imports: import alias "ä" is not an identifier of ASCII letters, digits and underscores (§imports)
+
+## i305_case_param_type.volt
+app/i305_case_param_type.volt:6:17: error: syntax: write int, not INT: keywords are case-sensitive (§keywords)
+app/i305_case_param_type.volt:7:18: error: syntax: write string, not String: keywords are case-sensitive (§keywords)
+
 ## i30_unused_import
 app/r.volt:5:2: error: spec/imports: package "db" imported and not used (§imports)
 

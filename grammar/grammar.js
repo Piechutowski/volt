@@ -21,9 +21,11 @@
  *    reserved (§keywords). Each keyword is a plain string, which
  *    tree-sitter's keyword extraction matches against the identifier
  *    token exactly, only where the parse state admits it. Consequence
- *    (documented limitation): a column named exactly `Indexes`,
- *    `Validators` or `Records` lexes as the block keyword at the start
- *    of a table-body line.
+ *    (documented limitation): a line of a Table or TablePartial body
+ *    that starts with a column named exactly `Indexes` or `Validators`
+ *    (`Records` too in a Table body), or a line of a create, rebuild or
+ *    drop table shape body that starts with a column named `Indexes`,
+ *    lexes as the block keyword.
  *  - A name is a Go identifier and is never quoted (§identifiers). Double
  *    quotes delimit strings, as in Go, and triple double quotes a
  *    multi-line string (§string-literals). String and expression contents
@@ -784,7 +786,7 @@ module.exports = grammar({
 
     // The one name that begins with digits: four or more, two underscores,
     // a label (§migrations).
-    migration_name: () => /[0-9]+__[\p{L}\p{Nd}_]+/,
+    migration_name: () => /[0-9][0-9][0-9][0-9]+__[\p{L}\p{Nd}_]+/,
 
     // Single-line ("...") and multi-line ("""...""") strings, with the four
     // escapes \\, \", \n and \t (§string-literals, §multi-line-string-literals,
@@ -805,7 +807,7 @@ module.exports = grammar({
       ),
 
     _single_string_content: () =>
-      token.immediate(/([^"\\\n]|\\["\\nt])+/),
+      token.immediate(prec(1, /([^"\\\n]|\\["\\nt])+/)),
 
     _triple_string_content: () =>
       token.immediate(/([^"\\]|\\["\\nt]|"([^"\\]|\\["\\nt])|""([^"\\]|\\["\\nt]))+/),
@@ -814,7 +816,7 @@ module.exports = grammar({
     expression: ($) =>
       seq(
         '`',
-        optional(field('content', alias(token.immediate(/[^`]+/), $.expression_content))),
+        optional(field('content', alias(token.immediate(prec(1, /[^`]+/)), $.expression_content))),
         token.immediate('`'),
       ),
 

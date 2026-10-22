@@ -127,6 +127,13 @@ func TestBackslashBeforeLineBreak(t *testing.T) {
 			t.Errorf("Scan(%q) errors %v, want one: Volt has no line continuation", src, errs)
 		}
 	}
+	toks, errs := Scan("t", "\"one \\\n  two\" x")
+	if len(errs) != 1 {
+		t.Errorf("a backslash before a line break in a string: errors %v, want one", errs)
+	}
+	if len(toks) != 3 || toks[0].Kind != token.STRING || toks[1].Kind != token.IDENT {
+		t.Errorf("a backslash before a line break in a string: %v, want the string read to its closing quote", toks)
+	}
 	if _, errs := Scan("t", "`a\\\nb` // c \\\n"); len(errs) != 0 {
 		t.Errorf("an expression literal and a comment are raw: %v", errs)
 	}
@@ -138,8 +145,8 @@ func TestNamesAreGoIdentifiers(t *testing.T) {
 		if len(errs) != 1 || !strings.Contains(errs[0].Msg, "§identifiers") {
 			t.Errorf("Scan(%q) errors %v, want one citing §identifiers", src, errs)
 		}
-		if len(toks) != 2 {
-			t.Errorf("Scan(%q) = %d tokens, want the name read as one", src, len(toks)-1)
+		if len(toks) != 2 || toks[0].Kind != token.IDENT {
+			t.Errorf("Scan(%q) = %v, want the name read as one identifier", src, toks)
 		}
 	}
 }
@@ -154,10 +161,38 @@ func TestMultilineIndentStripping(t *testing.T) {
 	if !got.Multi {
 		t.Error("Multi flag not set")
 	}
+	for _, tt := range []struct{ src, val string }{
+		{"\"\"\"\n    a\n  \t\t\t\t\n    b\n\"\"\"", "a\n\t\t\t\t\nb"},
+		{"\"\"\"\n    a\n  \n    b\n  \"\"\"", "a\n\nb"},
+		{"\"\"\"\n  a\n\t  b\n\"\"\"", "  a\n\t  b"},
+		{"\"\"\"  \t\n    a\n      b\n\t\"\"\"", "a\n  b"},
+	} {
+		if got := one(t, tt.src); got.Val != tt.val {
+			t.Errorf("Scan(%q) val = %q, want %q: only leading spaces are removed, the fewest a line with text holds", tt.src, got.Val, tt.val)
+		}
+	}
+}
+
+func TestMultilineEndsWithAQuote(t *testing.T) {
+	for _, tt := range []struct{ src, val string }{
+		{`"""a""""`, `a"`},
+		{`"""a"""""`, `a""`},
+	} {
+		toks, errs := Scan("t", tt.src)
+		if len(errs) != 1 || !strings.Contains(errs[0].Msg, `\"`) {
+			t.Errorf("Scan(%s) errors %v, want one naming \\\"", tt.src, errs)
+		}
+		if len(toks) != 2 || toks[0].Kind != token.STRING || toks[0].Val != tt.val {
+			t.Errorf("Scan(%s) = %v, want the one string %q", tt.src, toks, tt.val)
+		}
+	}
+	if got := one(t, `"""a \""""`); got.Val != `a "` {
+		t.Errorf("an escaped quote before the close: val = %q, want %q", got.Val, `a "`)
+	}
 }
 
 func TestQuote(t *testing.T) {
-	for _, v := range []string{"", "plain", `say "hi"`, `back\slash`, "two\nlines\tand a tab", "it's"} {
+	for _, v := range []string{"", "plain", `say "hi"`, `back\slash`, "two\nlines\tand a tab", "it's", "by\x00\x01email\x7f"} {
 		q, ok := Quote(v)
 		if !ok {
 			t.Errorf("Quote(%q) refused", v)
@@ -168,7 +203,7 @@ func TestQuote(t *testing.T) {
 		}
 	}
 	if _, ok := Quote("a\rb"); ok {
-		t.Error("Quote accepted a carriage return, which no Volt string spells")
+		t.Error("Quote accepted a carriage return, which the scanner discards")
 	}
 }
 

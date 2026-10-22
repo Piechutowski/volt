@@ -18,7 +18,8 @@ item is decided, it leaves this file in the same commit.
 
 File and line references point at the code as it was at b94d08d,
 except in item 29, rewritten when step 2 built part of it, whose
-references are to the code as step 2 left it. Names
+references are to the code as step 2 left it. The Volt in the items
+is written in the current syntax, whatever the review saw. Names
 such as purity-bugs/null are the review's scratch demos, which were not
 kept; the text of each item records what its demo showed.
 
@@ -52,7 +53,7 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 - get /users db.UserList in Scope api → PathAPIUserList, client APIUserList; post /users db.UserCreate → APIUserCreate
 - resources db.users [default] in Scope ref → PathRefUsers/PathRefUser, clients RefUsers, RefUser, RefCreateUser, RefUpdateUser, RefDeleteUser
 - controller resources → PathUsers, PathUser, PathNewUser, PathEditUser
-- resources series [singular: series_item] / Table series [model: 'SeriesItem']
+- resources series [singular: series_item] / Table series [model: "SeriesItem"]
 
 **Proposal.** Use one rule for every derived name: scope prefix + <Model> + <Action>. Default resources then mint RefUserList/RefUserGet/RefUserCreate/RefUserUpdate/RefUserDelete, the same names explicit query routes mint. Controller resources mint UserIndex/UserShow/UserNew/UserEdit. Plural and singular never meet, so singular:, the plural-equals-singular error (§table-resolution clause 6) and the inflector's role in routing go away. [model:] stays as the one naming override.
 
@@ -60,20 +61,20 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 **Evidence.** docs/spec.md §the-action-table Helper column (~2177-2189), §settings singular (~2199-2209), §table-resolution clauses 4-6 (2230-2244; clause 5 says [model:] 'wins when both apply'), §default-handlers clause 6, §query-routes clause 4. lang/routes_lower.go:690-692 sets singular from golang.ModelName, then 750-761 overwrites it with singular:, so singular: wins, the opposite of clause 5. lang/routes_lower.go:846-880. gen/router/testdata/blog_app_client.go.golden:70-98 vs 152-213 (verified). AGENT.md requires subject-first, verb-last names; CreateUser, NewUser and EditUser break that rule.
 
-### 26. [remove] Several indexes or validators blocks in one body, whose contents accumulate
+### 26. [remove] Several Indexes or Validators blocks in one body, whose contents accumulate
 
-- indexes { id } indexes { name } / indexes { id  name }
-- validators { A(x) } ... validators { B(y) } / one validators block
+- Indexes { id } Indexes { name } / Indexes { id  name }
+- Validators { A(x) } ... Validators { B(y) } / one Validators block
 
-**Proposal.** Allow at most one indexes block and one validators block per Table or TablePartial body. Partials still contribute theirs through injection.
+**Proposal.** Allow at most one Indexes block and one Validators block per Table or TablePartial body. Partials still contribute theirs through injection.
 
 **Cost.** One count in tableBodyCheck, snippet 38 turned into an invalid case, two spec sentences. Trivial.
 
-**Evidence.** docs/spec.md:860-861 ('A body MAY contain more than one indexes block; their contents accumulate') and ~2703 (the same for validators). lang/check/check.go:412-419 appends the blocks. Records is limited to one per body (lang/check/decls.go:84-90), so bodies follow two different rules. Snippet valid/38_multiple_index_blocks.volt.
+**Evidence.** docs/spec.md:860-861 ('A body MAY contain more than one `Indexes` block; their contents accumulate') and ~2703 (the same for validators). lang/check/check.go:412-419 appends the blocks. Records is limited to one per body (lang/check/decls.go:84-90), so bodies follow two different rules. Snippet valid/38_multiple_index_blocks.volt.
 
 ### 27. [merge] Parentheses around a single index key or ref column
 
-- indexes { id } / indexes { (id) }
+- Indexes { id } / Indexes { (id) }
 - (`lower(id)`) [name: ...] / `lower(id)` [name: ...]
 - posts.user_id > users.id / posts.(user_id) > users.(id)
 
@@ -118,14 +119,14 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 **Cost.** Move the rule from vet to check; its testdata becomes an invalid snippet, and the lint.md section is removed. Low.
 
-**Evidence.** docs/spec.md:246-247. docs/lint.md:283-292: casecollision is only a vet warning. Reviewers verified that Table users plus Table Users [model: 'Other'] passes check and gen, and the generated DDL then fails in SQLite (volt migration check: table "Users" already exists).
+**Evidence.** docs/spec.md:246-247. docs/lint.md:283-292: casecollision is only a vet warning. Reviewers verified that Table users plus Table Users [model: "Other"] passes check and gen, and the generated DDL then fails in SQLite (volt migration check: table "Users" already exists).
 
 ### 31. [merge] A setting value that names something is a string in some settings and an identifier in others, even for the same key
 
-- [model: 'Person'] must be a string (model: Person is rejected)
-- [singular: post], [param: plot_id], [name: root] must be identifiers (name: 'web' is rejected)
-- index [name: 'idx_booking_date'] is a string, while a route's [name: root] is an identifier
-- [strip: 'da_'] is a string, although da_ is an identifier
+- [model: "Person"] must be a string (model: Person is rejected)
+- [singular: post], [param: plot_id], [name: root] must be identifiers (name: "web" is rejected)
+- index [name: "idx_booking_date"] is a string, while a route's [name: root] is an identifier
+- [strip: "da_"] is a string, although da_ is an identifier
 
 **Proposal.** A value that names something (a Go name, a SQL name, a name prefix) is an identifier: model: Person, name: idx_booking_date, strip: da_. Strings remain for prose (note:), paths (from) and opaque text (tag:).
 
@@ -176,7 +177,7 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 - top level: Records posts(id, user_id) { 1, 1 }
 - inside the table with columns: Records (id, user_id) { 1, 1 }
-- inside the table without columns: Records { 1, 1, 'x' }, meaning all columns in order after partial injection
+- inside the table without columns: Records { 1, 1, "x" }, meaning all columns in order after partial injection
 
 **Proposal.** Keep one form: top-level Records table(cols) { ... } with a required column list. It can live in a seed file and never depends on injection order. Remove the in-table block and the implicit list.
 
@@ -369,7 +370,7 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 - handler ref = name, [ ".", name ]
 - table ref = name, [ ".", name ]
 - dataset inline [ name, "." ], name
-- Part I type name, and the dotted setting value the checker reads error_handler: app.Errors with (ast.QualIdent, lang/routes_lower.go selfFuncRefIn), which no production of the setting grammar names
+- Part I type name
 
 **Proposal.** Define one production, `qualified name = name, [ ".", name ]`, use it everywhere, and have the parser call qualName for all of them.
 
@@ -415,7 +416,7 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 ### 57. [decide] The Project element: a name and properties that nothing reads, on a SQLite-only implementation
 
-- Project ecommerce [note: '...'] { database_type: 'PostgreSQL'  custom_key: '...' }
+- Project ecommerce [note: "..."] { database_type: "PostgreSQL"  custom_key: "..." }
 - the Go module, which Part II calls the project (§projects-and-packages)
 - a Go package comment in doc.go, Go's own place for package docs
 
@@ -423,7 +424,7 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 **Cost.** Parser project(), ast.Project, the uniqueness check (check.go:262-267), the vet emptybody branch, both generators' projectNote and the header goldens, lsp/features.go:45, grammar.js project; about 4 snippets (03, 25, 35, i34) and nao/itest/schema.volt; §project and lint.md. Low.
 
-**Evidence.** docs/spec.md:644-667 (§project; the suggested key is database_type: 'PostgreSQL'). Only the note is read, in nao/gen/golang/gen.go and nao/gen/sqlite/gen.go; since the removals a Project carries at most one, the `note:` setting. 'Project' means two different things in the spec. nao/itest/schema.volt declares an empty Project only to carry its note.
+**Evidence.** docs/spec.md:644-667 (§project; the suggested key is database_type: "PostgreSQL"). Only the note is read, in nao/gen/golang/gen.go and nao/gen/sqlite/gen.go; since the removals a Project carries at most one, the `note:` setting. 'Project' means two different things in the spec. nao/itest/schema.volt declares an empty Project only to carry its note.
 
 ### 58. [decide] Two comment forms
 
@@ -445,7 +446,7 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 **Cost.** One check in default and record value typing, one snippet. Low.
 
-**Evidence.** docs/spec.md:838-840 (an expression literal is accepted on any column), 2821-2827 (§changesets rule 2: literal defaults prefill <Model>New(), expression defaults do not). Reviewers verified that b int [not null, default: 5] and c int [not null, default: `5`] give DEFAULT 5 and DEFAULT (5), but PostNew() starts as Post{B: 5}, so C reads 0 until the row is stored.
+**Evidence.** docs/spec.md:838-840 (an expression literal is accepted on any column), 2821-2827 (§changesets rule 2: literal defaults prefill <Model>New(), expression defaults do not). Reviewers verified that b int [default: 5] and c int [default: `5`] give DEFAULT 5 and DEFAULT (5), but PostNew() starts as Post{B: 5}, so C reads 0 until the row is stored.
 
 ### 60. [decide] Negation in predicates: equivalent predicates spelled two ways render different SQL, and the runtime has negations the language cannot write
 
@@ -499,9 +500,9 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 - element Pipeline api { ... }
 - scope setting [pipe: api]
 - line keyword use volt.RequestID
-- the spec calls each line a plug, while validators lines and group members carry no keyword
+- the spec calls each line a plug, while Validators lines and group members carry no keyword
 
-**Proposal.** One word per concept: [pipeline: api], or rename the element Pipe. Drop `use`, since a Pipeline body holds only references: Pipeline api { volt.RequestID <newline> BearerAuth }, like a validators block.
+**Proposal.** One word per concept: [pipeline: api], or rename the element Pipe. Drop `use`, since a Pipeline body holds only references: Pipeline api { volt.RequestID <newline> BearerAuth }, like a Validators block.
 
 **Cost.** plugLine, one settings key, the tree-sitter grammar, 6 Pipeline snippets, the blog fixture, the README; §pipelines and §scopes. Low.
 
@@ -510,7 +511,7 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 ### 65. [decide] A package path is written in two lexical forms
 
 - project package: import ( d2 shared/dicts ): bare slash-joined identifiers, contiguity-checked
-- Go package: Type money.Money int from 'example.com/app/money': a string
+- Go package: Type money.Money int from "example.com/app/money": a string
 
 **Proposal.** Either write project import paths as strings, as Go does, which removes package-path contiguity (route paths keep it) and the plain-identifier-only rule for path segments, or keep the bare form.
 
@@ -564,7 +565,7 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 ### 70. [decide] Reversible migrations as a flat body with derived inverses or as up/down blocks, with inverse annotations accepted where nothing reads them
 
-- flat exec 'CREATE VIEW v ...' [down: 'DROP VIEW v'] / up { exec '...' } down { exec 'DROP VIEW v' }
+- flat ``exec `CREATE VIEW v ...` [down: `DROP VIEW v`]`` / ``up { exec `...` } down { exec `DROP VIEW v` }``
 - flat drop table t { shape } / up { drop table t } down { create table t { shape } }
 - flat alter table t { drop c string [...] } / up and down blocks with add
 
@@ -693,7 +694,7 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 **Cost.** None.
 
-**Evidence.** docs/spec.md §columns rule 1, §go-types, the §mapping-to-sqlite-ddl row; lang/check/types.go:85-92. The built-in types use exactly Go's spellings, with no float, real, double or float32 alias. Verified here: m float64 [not null, default: 1E2] gives `m REAL NOT NULL ...` in SQLite and the field M float64 in Go.
+**Evidence.** docs/spec.md §columns rule 1, §go-types, the §mapping-to-sqlite-ddl row; lang/check/types.go:85-92. The built-in types use exactly Go's spellings, with no float, real, double or float32 alias. Verified here: m float64 [default: 1E2] gives `m REAL NOT NULL ...` in SQLite and the field M float64 in Go.
 
 ### 81. [keep] increment beside a plain integer pk
 
@@ -708,8 +709,8 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 ### 82. [keep] The `required` setting versus a hand-written validator that does the same check
 
-- email string [not null, required]
-- validators { EmailPresent(email) } with func EmailPresent(email string) error
+- email string [required]
+- Validators { EmailPresent(email) } with func EmailPresent(email string) error
 
 **Proposal.** Keep required. A validator must be non-generic and take the column's exact type (§validators rule 2), so one Go function cannot cover every column; required is the one rule every type shares. Under the decided nullability default, 'MUST accompany not null' becomes 'not allowed on a null column'. State its semantics once, in §columns.
 
@@ -885,7 +886,7 @@ Validators get bytes.Clone(v.X); rt.NullClone covers rt.Null[[]byte]. FieldError
 
 **Effect.** A declared type's Value method is user code that decides whether a value can be stored. Validate consults it only for `required`, and swallows its error there. The real verdict comes at bind time, inside database/sql, as a raw driver error.
 
-**Bug.** Demo purity-lang/demo/cmd/valuer, with Type Code whose Value accepts only A-Z and 0-9 and the column code [not null, required]. CouponNew().CodeSet("half off").Validate() is valid. CouponCreate then returns `sql: converting argument $1 type: code "half off": only A-Z and 0-9`, which is not an *rt.Invalid. DefaultErrorHandler therefore answers 500 "internal server error", and the form cannot mark the field. The same happens on any declared-type column without `required`.
+**Bug.** Demo purity-lang/demo/cmd/valuer, with Type Code whose Value accepts only A-Z and 0-9 and the column code [required]. CouponNew().CodeSet("half off").Validate() is valid. CouponCreate then returns `sql: converting argument $1 type: code "half off": only A-Z and 0-9`, which is not an *rt.Invalid. DefaultErrorHandler therefore answers 500 "internal server error", and the form cannot mark the field. The same happens on any declared-type column without `required`.
 
 **Pure form.** Compute the bound value once, while validating. Validate calls Value for every declared-type column and records an error as a field error; `required` reads the value that call returned.
 ```go
@@ -992,7 +993,7 @@ A zero Status counts as 500. ProblemOf can be table-tested without httptest.
 
 **Effect.** Records are a second write path next to changesets: verbatim INSERTs in nao_schema.sql that skip `required`, every validator (membership in a value set among them) and every declared type's Valuer. That contradicts §changesets ("there is no other write path for a row"). An expression literal in a record (snippet 21_records_values uses `now()`) also ties the seed to the clock.
 
-**Bug.** Demo purity-lang/demo/cmd/defaults: with title [not null, required] and validator TitleShape, the records (1, '') and (2, 'lowercase title') load without a word. Afterwards even a no-op PostUpdate(ctx, p.Changeset()) on either row fails with 422, because Update validates before it checks for marks. Every later edit of any column on a seeded row is refused over a value nobody is touching.
+**Bug.** Demo purity-lang/demo/cmd/defaults: with title [required] and validator TitleShape, the records (1, "") and (2, "lowercase title") load without a word. Afterwards even a no-op PostUpdate(ctx, p.Changeset()) on either row fails with 422, because Update validates before it checks for marks. Every later edit of any column on a seeded row is refused over a value nobody is touching.
 
 **Pure form.** Remove Records, both forms. Seed data becomes Go that goes through the one write path: `func Seed(ctx context.Context, q *db.Queries) error { _, err := q.PostCreate(ctx, db.PostNew().TitleSet("Hello")); return err }`. Every seeded row then passes Validate and the Valuer, and nao_schema.sql and the fold's target become a function of the tables alone. It also takes two syntaxes out of the language, which is the entropy reduction the maintainer asked for.
 
@@ -1036,13 +1037,13 @@ MigrateDown reads the ledger and picks m (needed early for ForeignKeysOff), runs
 
 **Effect.** For built-in columns and kinded declared types (§types), <Model>New seeds the literal default, so Validate sees what the database will write. For a declared type that implements Scanner and Valuer it does not: Validate judges the zero value while the database stores the default. Whether the default even scans into the Go type is found out only when a row is read back.
 
-**Bug.** Demo purity-lang/demo/cmd/defaults and purity-bugs/money: with `amount Money [not null, default: 100]` and validator AmountPositive, PriceNew().Row().Amount is 0, and PriceCreate(ctx, PriceNew()) is refused with 422 "amount must be positive", although the database would have stored 100. The reverse case follows from the same rule: a Type Slug whose Scan refuses spaces, with default 'Draft Post', stores rows that every later Get fails to scan (500).
+**Bug.** Demo purity-lang/demo/cmd/defaults and purity-bugs/money: with `amount Money [default: 100]` and validator AmountPositive, PriceNew().Row().Amount is 0, and PriceCreate(ctx, PriceNew()) is refused with 422 "amount must be positive", although the database would have stored 100. The reverse case follows from the same rule: a Type Slug whose Scan refuses spaces, with default: "Draft Post", stores rows that every later Get fails to scan (500).
 
 **Pure form.** Seed the default through the type's own Scan, from the storage type's canonical driver value:
 ```go
 func PriceNew() PriceChangeset { var c PriceChangeset; if err := c.data.Amount.Scan(int64(100)); err != nil { c.errs = []rt.FieldError{{Check: "default", Columns: []string{"amount"}, Message: err.Error()}} }; return c }
 ```
-Validate then judges what will be stored, and an unscannable default is an error on the first create. Lower-entropy alternative: refuse a literal default on a declared-type column (null or an expression only); itest's `tip Money [not null, default: 0]` would then set tip explicitly.
+Validate then judges what will be stored, and an unscannable default is an error on the first create. Lower-entropy alternative: refuse a literal default on a declared-type column (null or an expression only); itest's `tip Money [default: 0]` would then set tip explicitly.
 
 **Cost.** defaultGo and the New emit (about 20 lines), the itest models golden, §changesets rule 2 and §default-values rule 1. Scan becomes reachable from New, so it joins the validator gate's targets (allowed to write only its receiver). The refusal alternative is one check, one snippet and the itest edit.
 
@@ -1076,7 +1077,7 @@ When the replay is not complete, Serve first writes an `event: volt.reset` that 
 
 **Effect.** On a create, a column whose value the database decides at the write (an expression default such as CURRENT_TIMESTAMP, and a declared type's default until that item lands) holds Go's zero value in Row(). A validator that lists it judges a value that will never be stored.
 
-**Bug.** Demo purity-bugs/post: with `posted_at time.Time [not null, default: CURRENT_TIMESTAMP]` and validator PostedAtSane(posted_at) (year >= 2000), PostCreate(PostNew().TitleSet("hello")) is refused with "posted_at is before 2000", although the row the database would write passes. On update the same validator passes, so tests that only update never notice. volt vet exits 0.
+**Bug.** Demo purity-bugs/post: with ``posted_at time.Time [default: `CURRENT_TIMESTAMP`]`` and validator PostedAtSane(posted_at) (year >= 2000), PostCreate(PostNew().TitleSet("hello")) is refused with "posted_at is before 2000", although the row the database would write passes. On update the same validator passes, so tests that only update never notice. volt vet exits 0.
 
 **Pure form.** A vet warning citing spec/validators: "validator PostedAtSane reads posted_at, whose value on create is the database's (expression default): Validate sees the zero time.Time". The message points to the explicit form: the controller passes the clock with PostedAtSet(now), so Validate judges what is written.
 
@@ -1096,7 +1097,7 @@ When the replay is not complete, Serve first writes an `event: volt.reset` that 
 
 **Effect.** An exec guarded by IF NOT EXISTS or IF EXISTS makes a migration's effect depend on what the target database already holds, which the fold's empty database cannot show.
 
-**Bug.** Follows from SQLite semantics (reviewer setup in purity-lang/demo/mig). Migration 0001 is `exec 'CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, email TEXT NOT NULL)'`. `volt migration check` reports that the fold matches. `volt migration up` on a database that already has users(id) records 0001 as applied, yet users still lacks email, and every UserCreate fails. A structural `create table users` would have failed loudly.
+**Bug.** Follows from SQLite semantics (reviewer setup in purity-lang/demo/mig). Migration 0001 is ``exec `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, email TEXT NOT NULL)` ``. `volt migration check` reports that the fold matches. `volt migration up` on a database that already has users(id) records 0001 as applied, yet users still lacks email, and every UserCreate fails. A structural `create table users` would have failed loudly.
 
 **Pure form.** A vet warning on exec text containing IF NOT EXISTS or IF EXISTS (case-insensitive), citing spec/the-fold: "the fold proves nothing about an exec whose effect depends on the database's prior state". exec itself stays.
 

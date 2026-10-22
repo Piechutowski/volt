@@ -49,7 +49,7 @@ var (
 
 	builtinTypes = check.Builtins
 
-	refActionValues = []string{"cascade", "restrict", "set_null", "set_default"}
+	refActionValues = parser.RefActions
 
 	voltVerbSet = func() map[string]bool {
 		m := map[string]bool{}

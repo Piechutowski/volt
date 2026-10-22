@@ -468,3 +468,35 @@ func TestIndexSQLParse(t *testing.T) {
 		}
 	}
 }
+
+func TestVoltSpellsANameOrSaysItCannot(t *testing.T) {
+	if got, want := indexVolt("posts", Index{Name: "by\x01title", Key: []string{"title"}}), "title [name: \"by\x01title\"]"; got != want {
+		t.Errorf("indexVolt with a control character = %q, want %q", got, want)
+	}
+	got := indexVolt("posts", Index{Name: "ix\rweird", Key: []string{"title"}})
+	if !strings.HasPrefix(got, "title // index \"ix\\rweird\"") || !strings.Contains(got, "exec") {
+		t.Errorf("indexVolt with a carriage return = %q, want the key and a hint naming the index and exec", got)
+	}
+	for _, tc := range []struct {
+		d, want string
+		ok      bool
+	}{
+		{"'a`b\x01c'", "\"a`b\x01c\"", true},
+		{"'it''s'", `"it's"`, true},
+		{"'a`b\rc'", "", false},
+		{"(lower('x'))", "`lower('x')`", true},
+		{"(x || '`')", "", false},
+		{"42", "42", true},
+	} {
+		if got, ok := defaultVolt(tc.d); got != tc.want || ok != tc.ok {
+			t.Errorf("defaultVolt(%q) = %q, %v, want %q, %v", tc.d, got, ok, tc.want, tc.ok)
+		}
+	}
+	tbl := &Table{Name: "posts", Columns: []Column{{Name: "id", Type: "INTEGER", PK: 1}, {Name: "s", Type: "TEXT", NotNull: true, Default: "'a\rb'"}}}
+	if why := addRefusal(tbl, tbl.Columns[1]); why != "" {
+		t.Errorf("addRefusal of a string default = %q, want none: ADD COLUMN takes a string default", why)
+	}
+	if got := columnVolt(tbl, tbl.Columns[1]); !strings.HasPrefix(got, "s string // default ") || !strings.Contains(got, "exec") {
+		t.Errorf("columnVolt with a default no Volt string spells = %q, want the column and a hint naming exec", got)
+	}
+}

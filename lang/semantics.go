@@ -132,15 +132,16 @@ type checksMemo struct {
 }
 
 type checksEntry struct {
-	model   any
-	funcs   *goScan
-	pkgName string
-	specs   []golang.ValidatorSpec
-	diags   []diag.Diagnostic
+	model       any
+	funcs       *goScan
+	pkgName     string
+	ownImported bool
+	specs       []golang.ValidatorSpec
+	diags       []diag.Diagnostic
 }
 
-func (e *checksEntry) holds(model any, funcs *goScan, pkgName string) bool {
-	return e.model == model && e.funcs == funcs && e.pkgName == pkgName
+func (e *checksEntry) holds(model any, funcs *goScan, pkgName string, ownImported bool) bool {
+	return e.model == model && e.funcs == funcs && e.pkgName == pkgName && e.ownImported == ownImported
 }
 
 func (c *checker) perPackage(paths []string, phase func(*checker, *Package)) [][]diag.Diagnostic {
@@ -177,6 +178,15 @@ func (c *checker) fileRules(pkg *Package) {
 	if i := strings.LastIndex(base, "/"); i >= 0 {
 		base = base[i+1:]
 	}
+	badSeg := ""
+	if pkg.Path != "." {
+		for _, seg := range strings.Split(pkg.Path, "/") {
+			if !goIdentOK(seg) {
+				badSeg = seg
+				break
+			}
+		}
+	}
 	for _, f := range pkg.Files {
 		var clause *ast.PackageClause
 		for i, d := range f.Decls {
@@ -206,7 +216,11 @@ func (c *checker) fileRules(pkg *Package) {
 		} else if pkg.Name != name {
 			c.errorf(clause.Pos(), "projects-and-packages", "package name %q disagrees with %q declared elsewhere in the directory (§projects-and-packages)", name, pkg.Name)
 		}
-		if pkg.Path != "." && name != base {
+		if badSeg != "" {
+			c.errorf(clause.Pos(), "imports", "package directory %q has the segment %q, which is not an identifier of ASCII letters, digits and underscores: a package's directory path is its Go import path (§imports)", pkg.Path, badSeg)
+			badSeg = ""
+		}
+		if pkg.Path != "." && name != base && goIdentOK(base) {
 			c.errorf(clause.Pos(), "projects-and-packages", "package name %q must match its directory name %q (§projects-and-packages)", name, base)
 		}
 	}
@@ -232,6 +246,9 @@ func (c *checker) importsResolve(pkg *Package) {
 				byPath[path] = spec
 
 				qual := spec.Qualifier()
+				if spec.Alias != nil && !goIdentOK(qual) {
+					c.errorf(spec.Alias.Pos(), "imports", "import alias %q is not an identifier of ASCII letters, digits and underscores (§imports)", qual)
+				}
 				if prev, taken := pkg.Imports[qual]; taken && prev != path {
 					c.errorf(spec.Pos(), "imports", "import qualifier %q already used for package %q (§imports); alias one of them", qual, prev)
 					continue

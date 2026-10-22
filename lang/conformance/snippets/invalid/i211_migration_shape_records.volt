@@ -12,7 +12,7 @@ Migration 0001__init {
     id   int    [pk]
     name string [null]
 
-    records {
+    Records {
       1, "root"
     }
   }

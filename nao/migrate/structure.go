@@ -520,7 +520,7 @@ func addRefusal(t *Table, c Column) string {
 		return "is in the primary key, which add cannot make: rebuild the table"
 	case c.NotNull && c.Default == "":
 		return "is NOT NULL without a default, which add cannot fill: rebuild the table with a from: or a default: for it, or add it with a default:"
-	case c.Default != "" && strings.HasPrefix(defaultVolt(c.Default), "`"):
+	case c.Default != "" && defaultExpr(c.Default):
 		return "has an expression default, which add cannot take: rebuild the table"
 	case c.NotNull && columnReferences(t, c.Name):
 		return "is a NOT NULL foreign key, which add cannot make: rebuild the table"
@@ -835,8 +835,13 @@ func columnVolt(t *Table, c Column) string {
 			break
 		}
 	}
+	hint := ""
 	if c.Default != "" && !strings.EqualFold(c.Default, "NULL") {
-		settings = append(settings, "default: "+defaultVolt(c.Default))
+		if v, ok := defaultVolt(c.Default); ok {
+			settings = append(settings, "default: "+v)
+		} else {
+			hint = " // default " + strconv.Quote(c.Default) + " has no Volt spelling: write this column with exec"
+		}
 	}
 	for _, fk := range t.ForeignKeys {
 		if len(fk.From) == 1 && fk.From[0] == c.Name {
@@ -845,30 +850,43 @@ func columnVolt(t *Table, c Column) string {
 		}
 	}
 	if len(settings) == 0 {
-		return c.Name + " " + typ
+		return c.Name + " " + typ + hint
 	}
-	return c.Name + " " + typ + " [" + strings.Join(settings, ", ") + "]"
+	return c.Name + " " + typ + " [" + strings.Join(settings, ", ") + "]" + hint
 }
 
 // defaultVolt renders a stored default as a default: value: a SQL
 // string as a Volt string, a number as itself, anything else as an
-// expression literal, which also holds a SQL string no Volt string
-// spells. A stored NULL default is no default: (spec §default-values)
+// expression literal. It reports false for a default neither spells, a
+// SQL string holding a carriage return or an expression holding a
+// backtick. A stored NULL default is no default: (spec §default-values)
 // and is never rendered.
-func defaultVolt(d string) string {
+func defaultVolt(d string) (string, bool) {
 	switch {
 	case len(d) >= 2 && d[0] == '\'' && d[len(d)-1] == '\'':
-		if q, ok := scanner.Quote(strings.ReplaceAll(d[1:len(d)-1], "''", "'")); ok {
-			return q
-		}
-		return "`" + d + "`"
+		return scanner.Quote(strings.ReplaceAll(d[1:len(d)-1], "''", "'"))
 	case strings.HasPrefix(d, "(") && strings.HasSuffix(d, ")") && parenMatches(d):
-		return "`" + strings.TrimSpace(d[1:len(d)-1]) + "`"
+		return exprVolt(strings.TrimSpace(d[1 : len(d)-1]))
 	}
 	if _, err := strconv.ParseFloat(d, 64); err == nil {
-		return d
+		return d, true
 	}
-	return "`" + d + "`"
+	return exprVolt(d)
+}
+
+func exprVolt(e string) (string, bool) {
+	if strings.Contains(e, "`") {
+		return "", false
+	}
+	return "`" + e + "`", true
+}
+
+func defaultExpr(d string) bool {
+	if len(d) >= 2 && d[0] == '\'' && d[len(d)-1] == '\'' {
+		return false
+	}
+	_, err := strconv.ParseFloat(d, 64)
+	return err != nil
 }
 
 // indexVolt renders an index as an Indexes block line or the tail of a
@@ -898,15 +916,18 @@ func indexVolt(table string, ix Index) string {
 	if ix.Where != "" {
 		settings = append(settings, "where: `"+ix.Where+"`")
 	}
+	hint := ""
 	if ix.Name != "" && (!plain || ix.Name != strings.Join(derived, "_")) {
 		if q, ok := scanner.Quote(ix.Name); ok {
 			settings = append(settings, "name: "+q)
+		} else {
+			hint = " // index " + strconv.Quote(ix.Name) + " has a name no Volt string spells: write this index with exec"
 		}
 	}
 	if len(settings) == 0 {
-		return key
+		return key + hint
 	}
-	return key + " [" + strings.Join(settings, ", ") + "]"
+	return key + " [" + strings.Join(settings, ", ") + "]" + hint
 }
 
 func identLike(s string) bool {

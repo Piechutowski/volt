@@ -186,6 +186,16 @@ func TestRenameRejectsInvalidName(t *testing.T) {
 	if _, err := d.Rename(pos, "1234"); err == nil {
 		t.Fatal("expected error for all-digit name")
 	}
+	for _, name := range []string{"2fa_codes", "\u0301x", "x\u2014y", "x\u00b2", "a\u00a0b"} {
+		if _, err := d.Rename(pos, name); err == nil {
+			t.Errorf("Rename to %q accepted, a name the scanner refuses (§identifiers)", name)
+		}
+	}
+	for _, name := range []string{"ok_name", "_", "\u017c\u00f3\u0142w", "x\u0663"} {
+		if _, err := d.Rename(pos, name); err != nil {
+			t.Errorf("Rename to %q refused: %v", name, err)
+		}
+	}
 }
 
 func TestHoverTable(t *testing.T) {

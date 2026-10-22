@@ -3,6 +3,7 @@ package lang
 import (
 	"maps"
 	"strings"
+	"unicode"
 
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
@@ -607,13 +608,22 @@ func segPos(r *ast.Route, name string) token.Position {
 	return r.Pos()
 }
 
+func nameStartReported(name string) bool {
+	for _, r := range name {
+		return unicode.IsDigit(r) || unicode.IsMark(r)
+	}
+	return false
+}
+
 func (l *routeLowering) pathParams(segs []*ast.Segment) ([]Param, bool) {
 	var params []Param
 	seen := map[string]bool{}
 	ok := true
 	for i, seg := range segs {
 		if !goIdentOK(seg.Name.Name()) {
-			l.errorf(seg.Pos(), "scopes-and-routes", "path segment %q must be a plain identifier of letters, digits and underscores (§route-paths)", seg.Name.Name())
+			if !nameStartReported(seg.Name.Name()) {
+				l.errorf(seg.Pos(), "scopes-and-routes", "path segment %q must be a plain identifier of letters, digits and underscores (§route-paths)", seg.Name.Name())
+			}
 			ok = false
 			continue
 		}

@@ -8,8 +8,8 @@ Table table {
   type int
   from int
   as int
-  Type int
-  Ref string
+  Group int
+  Pipeline string
   Scope int
   PK bool
 }

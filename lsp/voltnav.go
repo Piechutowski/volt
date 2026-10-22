@@ -799,7 +799,7 @@ func (d *Document) voltComplete(prefix string) []protocol.CompletionItem {
 	return nil
 }
 
-var voltSelectForRE = regexp.MustCompile(`^\s*[Ss]elect\s+\w+\s+for\s+([A-Za-z0-9_]*)$`)
+var voltSelectForRE = regexp.MustCompile(`^\s*Select\s+\w+\s+for\s+([A-Za-z0-9_]*)$`)
 
 var voltWhereRE = regexp.MustCompile(`\b(?:where|and|or|not|\{)\s+([A-Za-z0-9_]*)$`)
 

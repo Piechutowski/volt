@@ -32,6 +32,10 @@ var RefActions = []string{"cascade", "restrict", "set_null", "set_default"}
 // in only: and except: (spec §keywords).
 var ResourceActions = []string{"index", "new", "create", "show", "edit", "update", "delete"}
 
+// ParamTypes are the types a route parameter takes, written
+// :name(type) (spec §keywords, §route-paths).
+var ParamTypes = []string{"int", "string"}
+
 // Verbs are the words that open a route (spec §keywords).
 var Verbs = []string{"get", "post", "put", "patch", "delete", "options", "head", "any"}
 

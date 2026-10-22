@@ -29,9 +29,10 @@ func TestMigrationsGolden(t *testing.T) {
 }
 
 func TestMigrationsEmptyAndQuoted(t *testing.T) {
-	src := "package db\n\nTable t {\n  id int [pk, increment]\n}\n\n" +
+	src := "package db\n\nTable t {\n  id int [pk, increment]\n  s string [default: \"a`b\"]\n}\n\n" +
 		"Migration 0001__init {\n}\n\n" +
-		"Migration 0002__tick [no_transaction] {\n  up {\n    exec `SELECT \"x\"`\n  }\n}\n"
+		"Migration 0002__tick [no_transaction] {\n  up {\n    exec `SELECT \"x\"`\n  }\n}\n\n" +
+		"Migration 0003__s {\n  alter table t {\n    add s string [default: \"a`b\"]\n  }\n}\n"
 	f, diags := parser.ParseFile("t.volt", src)
 	info, semDiags := check.File(f)
 	if diag.HasErrors(append(diags, semDiags...)) {
@@ -45,6 +46,7 @@ func TestMigrationsEmptyAndQuoted(t *testing.T) {
 	for _, want := range []string{
 		"\t\tName: \"0001__init\",\n\t\tUp:   []string{},\n\t\tDown: []string{},\n",
 		"\t\tName: \"0002__tick\",\n\t\tUp: []string{\n\t\t\t`SELECT \"x\"`,\n\t\t},\n\t\tNoTransaction: true,\n",
+		"\t\t\t\"ALTER TABLE t ADD COLUMN s TEXT NOT NULL DEFAULT 'a`b'\",\n",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output lacks\n%s\n--- got ---\n%s", want, got)

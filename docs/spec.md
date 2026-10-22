@@ -183,7 +183,7 @@ ISO/IEC 14977. Nonterminal names are lowercase words separated by spaces
 | `[ x ]`       | Option: zero or one occurrence of `x`                          |
 | `{ x }`       | Repetition: zero or more occurrences of `x`                    |
 | `x, { x }`    | Idiom for one or more occurrences of `x`                       |
-| `n * x`       | Exactly `n` occurrences of `x` (e.g. `4 * hex digit`)          |
+| `n * x`       | Exactly `n` occurrences of `x` (e.g. `4 * digit`)              |
 | `( … )`       | Grouping                                                       |
 | `x - y`       | Exception: anything matching `x` that does not match `y`       |
 | `? … ?`       | Special sequence: prose description of a match                 |
@@ -420,13 +420,15 @@ then reads it as that keyword, so the error is reported once.
 | literal words | `true`, `false`, `null` | §boolean-and-null-literals |
 | clause words | `from`, `for`, `where`, `and`, `or`, `not`, `in`, `like`, `is` | §types, §selects-over-groups, §predicates |
 | route words | `get`, `post`, `put`, `patch`, `delete`, `options`, `head`, `any`, `resources`, `dataset`, `use` | §routes, §resources, §datasets, §pipelines |
+| parameter types | `int`, `string` | §route-paths |
 | migration words | `up`, `down`, `create`, `drop`, `rename`, `alter`, `rebuild`, `exec`, `table`, `index`, `add`, `to` | §migrations |
 
 `Records` opens an element at top level and a block in a table body;
 `Ref` opens an element, and `ref` names a setting. A referential
-action, a resource action and an order direction are keywords only as
-the value of `delete:` or `update:`, in the `only:` or `except:` list
-of a `resources` declaration, and after a column of `order:`
+action, a resource action, an order direction and a parameter type are
+keywords only as the value of `delete:` or `update:`, in the `only:` or
+`except:` list of a `resources` declaration, after a column of
+`order:`, and in the parentheses of a path parameter (`:id(int)`)
 respectively; a literal word is a keyword where a value stands. The
 words of a migration body are keywords inside a `Migration` only
 (§migrations); elsewhere they are identifiers, so a column may be named
@@ -455,23 +457,31 @@ sls char           = any char - ( '"' | "\" | newline ) ;
 
 ```ebnf
 multi line string = '"""', mls body, '"""' ;
-mls body          = { ( any char - "\" ) | escape sequence }
-                    - ( ( { any char }, '"""', { any char } )
-                      | ( { any char }, '"' ) ) ;
+mls body          = { mls piece } ;
+mls piece         = mls plain | escape sequence
+                  | '"', ( mls plain | escape sequence )
+                  | '""', ( mls plain | escape sequence ) ;
+mls plain         = any char - ( "\" | '"' ) ;
 ```
 
 1. Delimited by triple double quotes `"""`; may span any number of
    lines. Longest match (§tokenization) closes it at the first `"""`,
    so a body holds no three double quotes in a row and does not end
-   with one; such a quote is written `\"`.
+   with one; such a quote is written `\"`, and a closing `"""`
+   followed by a further `"` is an error naming that spelling.
 2. The escape sequences of §escape-sequences are interpreted, the same
    four as in a single-line string, and a backslash before a line break
    is an error: each line of the value is a line of the source.
-3. **Indentation stripping:** after escape processing, compute the minimum
-   number of leading spaces over all non-empty lines; remove exactly that
-   many leading spaces from every line. A first line that is empty (the
-   common case, where content starts on the line after the opening `"""`)
-   and a trailing newline before the closing `"""` are removed.
+3. **Indentation stripping:** after escape processing, a first line
+   that holds only spaces and tabs is removed (the common case is an
+   empty one, where content starts on the line after the opening
+   `"""`), and so is a last line that holds only spaces and tabs,
+   with the line break before it (the line of an indented closing
+   `"""`). Then compute the minimum number of leading spaces over the
+   lines that hold anything else, and remove that many leading spaces
+   from every line, or all of its leading spaces from a line that has
+   fewer. A tab is not indentation: a line's leading spaces end at its
+   first tab.
 
 ```volt
 Table posts [note: """
@@ -1537,9 +1547,11 @@ string               = single line string | multi line string ;
 single line string   = '"', { sls char | escape sequence }, '"' ;
 sls char             = any char - ( '"' | "\" | newline ) ;
 multi line string    = '"""', mls body, '"""' ;
-mls body             = { ( any char - "\" ) | escape sequence }
-                     - ( ( { any char }, '"""', { any char } )
-                       | ( { any char }, '"' ) ) ;
+mls body             = { mls piece } ;
+mls piece            = mls plain | escape sequence
+                     | '"', ( mls plain | escape sequence )
+                     | '""', ( mls plain | escape sequence ) ;
+mls plain            = any char - ( "\" | '"' ) ;
 
 escape sequence      = "\", escaped item ;
 escaped item         = "\" | '"' | "n" | "t" ;
@@ -1622,8 +1634,9 @@ package clause = "package", name, newline ;
    element kind (tables, types, partials, pipelines, scopes, each per
    Part I §namespaces-and-uniqueness extended with §pipelines and §scopes-and-routes).
 4. In every directory other than the project root, the package name
-   MUST equal the directory's base name. The root directory's package
-   may take any name.
+   MUST equal the directory's base name, and the directory path is a
+   package path (§imports rule 2). The root directory's package may
+   take any name.
 5. **Layout invariance.** Splitting or merging the `.volt` files of a
    package, or reordering declarations, MUST NOT change the meaning of
    the package. Implementations MUST process a package as the
@@ -1691,7 +1704,10 @@ package path = name, { slash, name } ;
    project root, `/`-separated, with no `./`, no `..`, and no interior
    whitespace; its segments, and the alias, are identifiers of ASCII
    letters, digits and underscores (§route-paths). The path MUST name an
-   existing package of the project.
+   existing package of the project. Every package's directory path,
+   imported or not, is held to the same segments, since it is also the
+   package's Go import path: a package in a directory `żółw` is an
+   error, although its name, like any name, may be Unicode.
 3. The imported package is referenced through its **qualifier**: the
    alias when given, else the last path segment. All cross-package
    references are qualifier-prefixed (`db.User`); nothing is ever

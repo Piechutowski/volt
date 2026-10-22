@@ -12,7 +12,7 @@ Migration 0001__init {
     id    int    [pk]
     email string
 
-    validators {
+    Validators {
       EmailShape(email)
     }
   }

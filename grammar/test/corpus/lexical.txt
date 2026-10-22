@@ -40,7 +40,7 @@ string escapes
 
 Table t {
   a text [note: "it's fine"]
-  b string [note: "tab\there"]
+  b string [note: "tab\there, \"b\" \\ c"]
 }
 
 ---
@@ -81,7 +81,7 @@ triple-quoted string with inner quotes and lines
 Table t {
   a text [note: """
     line one
-    ''quoted'' and don't
+    ""quoted"" and "one" don't, \"\"\" too
   """]
 }
 

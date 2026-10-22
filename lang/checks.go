@@ -29,22 +29,23 @@ func (c *checker) tableValidators(pkg *Package) {
 		memo.Hits, memo.Misses = 0, 0
 	}
 	funcs := c.goFuncs(pkg)
+	ownImported := pkg.Imports[pkg.Name] != ""
 	hit := make([]*checksEntry, len(info.Tables))
 	par.For(len(info.Tables), func(i int) {
 		ti := info.Tables[i]
 		model := pkg.plan.ModelRef(ti.Key)
 		if memo != nil {
-			if e := memo.prev[ti]; e != nil && e.holds(model, funcs, pkg.Name) {
+			if e := memo.prev[ti]; e != nil && e.holds(model, funcs, pkg.Name, ownImported) {
 				hit[i] = e
 				outs[i] = lowered{e.specs, e.diags}
 				return
 			}
 		}
 		_, fields, err := pkg.plan.ModelFields(ti.Key)
-		specs, diags := tableSpecs(ti, fields, err, pkg.Name, funcs)
+		specs, diags := tableSpecs(ti, fields, err, pkg.Name, ownImported, funcs)
 		outs[i] = lowered{specs, diags}
 		if memo != nil {
-			hit[i] = &checksEntry{model: model, funcs: funcs, pkgName: pkg.Name, specs: specs, diags: diags}
+			hit[i] = &checksEntry{model: model, funcs: funcs, pkgName: pkg.Name, ownImported: ownImported, specs: specs, diags: diags}
 		}
 	})
 	if memo != nil {
@@ -68,11 +69,12 @@ func (c *checker) tableValidators(pkg *Package) {
 }
 
 type lowering struct {
-	ti        *check.TableInfo
-	fields    []golang.FieldSig
-	fieldsErr error
-	pkgName   string
-	funcs     *goScan
+	ti          *check.TableInfo
+	fields      []golang.FieldSig
+	fieldsErr   error
+	pkgName     string
+	ownImported bool
+	funcs       *goScan
 
 	diags []diag.Diagnostic
 }
@@ -81,8 +83,8 @@ func (l *lowering) errorf(pos token.Position, format string, args ...any) {
 	l.diags = append(l.diags, diag.Errorf(pos, "spec/validators", format, args...))
 }
 
-func tableSpecs(ti *check.TableInfo, fields []golang.FieldSig, fieldsErr error, pkgName string, funcs *goScan) (specs []golang.ValidatorSpec, diags []diag.Diagnostic) {
-	l := &lowering{ti: ti, fields: fields, fieldsErr: fieldsErr, pkgName: pkgName, funcs: funcs}
+func tableSpecs(ti *check.TableInfo, fields []golang.FieldSig, fieldsErr error, pkgName string, ownImported bool, funcs *goScan) (specs []golang.ValidatorSpec, diags []diag.Diagnostic) {
+	l := &lowering{ti: ti, fields: fields, fieldsErr: fieldsErr, pkgName: pkgName, ownImported: ownImported, funcs: funcs}
 	l.changesetNameCheck()
 	for _, v := range ti.Validators {
 		if spec, ok := l.validatorSpec(v); ok {
@@ -116,7 +118,7 @@ func exportedName(s string) bool {
 func (l *lowering) validatorSpec(v *ast.Validator) (golang.ValidatorSpec, bool) {
 	name := v.Ref.Base()
 	if q := v.Ref.Qualifier(); q != "" {
-		if _, kind := qualifierResolve(q, l.pkgName, nil); kind == qualSelf {
+		if q == l.pkgName && !l.ownImported {
 			l.diags = append(l.diags, selfQualified(v.Ref.Pos(), q, name))
 			return golang.ValidatorSpec{}, false
 		}

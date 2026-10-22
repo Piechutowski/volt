@@ -73,7 +73,7 @@ func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.S
 		c.errorf(at, "table", "table %q must contain at least one column or partial injection", name)
 	}
 	if nRecords > 1 {
-		c.errorf(body[0].Pos(), "records-sample-data", "at most one records block per table")
+		c.errorf(body[0].Pos(), "records-sample-data", "at most one Records block per table (§records-sample-data)")
 	}
 }
 

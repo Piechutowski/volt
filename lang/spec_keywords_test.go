@@ -55,6 +55,12 @@ func TestSpecKeywordsTableMatchesTheParser(t *testing.T) {
 	same("setting names", parser.SettingNames)
 	same("referential actions", parser.RefActions)
 	same("resource actions", parser.ResourceActions)
+	same("parameter types", parser.ParamTypes)
+	for _, w := range parser.ParamTypes {
+		if !KnownParamType(w) {
+			t.Errorf("parameter types: %s is in the parser's list but not a parameter type of the checker", w)
+		}
+	}
 	same("route words", append(append([]string(nil), parser.Verbs...), "resources", "dataset", "use"))
 	for class, words := range classes {
 		for _, w := range words {

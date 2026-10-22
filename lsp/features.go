@@ -3,6 +3,7 @@ package lsp
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
 
@@ -193,26 +194,12 @@ func (d *Document) Rename(pos protocol.Position, newName string) (*protocol.Work
 }
 
 func validIdentifier(s string) bool {
-	if s == "" {
-		return false
-	}
-	hasLetter := false
-	for _, r := range s {
-		switch {
-		case r == '_':
-			hasLetter = true
-		case r >= '0' && r <= '9':
-		case isLetter(r):
-			hasLetter = true
-		default:
+	for i, r := range s {
+		if r != '_' && !unicode.IsLetter(r) && (i == 0 || !unicode.IsDigit(r)) {
 			return false
 		}
 	}
-	return hasLetter
-}
-
-func isLetter(r rune) bool {
-	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r > 0x7f
+	return s != ""
 }
 
 // Hover renders documentation for the symbol at pos.

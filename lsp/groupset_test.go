@@ -127,3 +127,22 @@ func TestDatasetNavigatesToSelect(t *testing.T) {
 		}
 	}
 }
+
+func TestSelectTargetCompletionTakesTheOneSpelling(t *testing.T) {
+	for _, tc := range []struct {
+		head string
+		want bool
+	}{
+		{"Select recent for ", true},
+		{"select recent for ", false},
+		{"SELECT recent for ", false},
+	} {
+		text := groupSetSchema + tc.head
+		root := voltProject(t, map[string]string{"go.mod": "module g\n", "db/schema.volt": text})
+		d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), text)
+		items := d.Complete(protocol.Position{Line: protocol.UInteger(strings.Count(text, "\n")), Character: protocol.UInteger(len(tc.head))})
+		if got := hasLabel(items, "ms_revenue") && hasLabel(items, "Metrics"); got != tc.want {
+			t.Errorf("%q completes tables and groups: %v, want %v (§keywords)", tc.head, got, tc.want)
+		}
+	}
+}

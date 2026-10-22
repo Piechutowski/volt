@@ -225,6 +225,7 @@ func (p *parser) routePath() *ast.RoutePath {
 					p.fail(p.cur(), "parameter type is written ':name(type)' with no spaces (§route-paths)")
 				}
 				seg.Type = p.ident("parameter type (§route-paths)")
+				p.wordFold(seg.Type, ParamTypes)
 				if !p.at(token.RPAREN) || !p.contiguous() {
 					p.fail(p.cur(), "parameter type is written ':name(type)' with no spaces (§route-paths)")
 				}
