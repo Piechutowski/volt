@@ -7,5 +7,5 @@ import (
 )
 
 Scope /ms {
-	dataset db.browse [strip: 'xx_']
+	dataset db.browse [strip: "xx_"]
 }

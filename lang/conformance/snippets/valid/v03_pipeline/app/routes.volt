@@ -5,5 +5,5 @@ Pipeline api {
 	use volt.RequestID
 	use volt.Logger
 	use BearerAuth
-	use app.Session
+	use Session
 }

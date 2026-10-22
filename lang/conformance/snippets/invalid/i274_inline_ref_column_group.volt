@@ -3,7 +3,7 @@
 Table merchants {
   id           int
   country_code string
-  indexes {
+  Indexes {
     (id, country_code) [pk]
   }
 }

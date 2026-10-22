@@ -10,7 +10,7 @@ import (
 
 func (p *parser) migration() *ast.Migration {
 	d := &ast.Migration{MigrationPos: p.next().Pos}
-	d.Name = p.ident("Migration name (§migrations)")
+	d.Name = p.identOf(p.expect(token.IDENT, "Migration name (§migrations)"))
 	if p.at(token.LBRACKET) && !p.cur().NLBefore {
 		d.Settings = p.settingList()
 	}
@@ -18,16 +18,16 @@ func (p *parser) migration() *ast.Migration {
 	switch {
 	case p.atKw("up"):
 		d.UpDown = true
-		p.next()
+		p.kwTake("up")
 		d.Up = p.operationsBlock("up block (§migrations)")
 		if p.atKw("down") {
-			d.DownPos = p.next().Pos
+			d.DownPos = p.kwTake("down").Pos
 			d.Down = p.operationsBlock("down block (§migrations)")
 		}
 	case p.atKw("down"):
 		p.errorf(p.cur(), "a down block follows an up block; write up { } down { } (§migrations)")
 		d.UpDown = true
-		d.DownPos = p.next().Pos
+		d.DownPos = p.kwTake("down").Pos
 		d.Down = p.operationsBlock("down block (§migrations)")
 	default:
 		d.Up = p.operations("Migration body (§migrations)")
@@ -90,17 +90,17 @@ func (p *parser) operation(ctx string) (op ast.Operation) {
 
 func (p *parser) createOp() ast.Operation {
 	p.lineBegin("create (§migrations)")
-	create := p.next()
+	create := p.kwTake("create")
 	switch {
 	case p.atKw("table"):
 		p.lineClear()
-		p.next()
+		p.kwTake("table")
 		d := &ast.CreateTable{CreatePos: create.Pos}
 		d.Name = p.ident("create table (§migrations)")
 		d.Body, d.Incomplete, d.Rbrace = p.shapeBody("create table (§migrations)")
 		return d
 	case p.atKw("index"):
-		p.next()
+		p.kwTake("index")
 		d := &ast.CreateIndex{CreatePos: create.Pos}
 		d.Table = p.ident("create index (§migrations)")
 		d.Index = p.indexRest()
@@ -114,10 +114,10 @@ func (p *parser) createOp() ast.Operation {
 
 func (p *parser) dropOp() ast.Operation {
 	p.lineBegin("drop (§migrations)")
-	drop := p.next()
+	drop := p.kwTake("drop")
 	switch {
 	case p.atKw("table"):
-		p.next()
+		p.kwTake("table")
 		d := &ast.DropTable{DropPos: drop.Pos}
 		d.Name = p.ident("drop table (§migrations)")
 		if p.at(token.LBRACE) && !p.cur().NLBefore {
@@ -127,7 +127,7 @@ func (p *parser) dropOp() ast.Operation {
 		p.endOfLine("drop table (§migrations)")
 		return d
 	case p.atKw("index"):
-		p.next()
+		p.kwTake("index")
 		d := &ast.DropIndex{DropPos: drop.Pos}
 		d.Table = p.ident("drop index (§migrations)")
 		d.Index = p.indexRest()
@@ -141,11 +141,11 @@ func (p *parser) dropOp() ast.Operation {
 
 func (p *parser) renameTableOp() ast.Operation {
 	p.lineBegin("rename table (§migrations)")
-	d := &ast.RenameTable{RenamePos: p.next().Pos}
+	d := &ast.RenameTable{RenamePos: p.kwTake("rename").Pos}
 	if !p.atKw("table") {
 		p.fail(p.cur(), "expected 'table' after rename (§migrations), found %s", p.cur())
 	}
-	p.next()
+	p.kwTake("table")
 	d.From = p.ident("rename table (§migrations)")
 	p.expectKw("to", "rename table (§migrations)")
 	d.To = p.ident("rename table (§migrations)")
@@ -157,11 +157,11 @@ func (p *parser) expectKw(kw, ctx string) {
 	if !p.atKw(kw) {
 		p.fail(p.cur(), "expected '%s' in %s, found %s", kw, ctx, p.cur())
 	}
-	p.next()
+	p.kwTake(kw)
 }
 
 func (p *parser) alterTableOp() ast.Operation {
-	d := &ast.AlterTable{AlterPos: p.next().Pos}
+	d := &ast.AlterTable{AlterPos: p.kwTake("alter").Pos}
 	p.expectKw("table", "alter table (§migrations)")
 	d.Name = p.ident("alter table (§migrations)")
 	p.expect(token.LBRACE, "alter table (§migrations)")
@@ -188,11 +188,11 @@ func (p *parser) alterItem() (item ast.AlterItem) {
 	t := p.cur()
 	switch {
 	case p.atKw("add"):
-		pos := p.next().Pos
+		pos := p.kwTake("add").Pos
 		return &ast.AlterAdd{AddPos: pos, Column: p.column()}
 	case p.atKw("drop"):
 		p.lineBegin("drop column (§migrations)")
-		d := &ast.AlterDrop{DropPos: p.next().Pos}
+		d := &ast.AlterDrop{DropPos: p.kwTake("drop").Pos}
 		d.Name = p.ident("drop column (§migrations)")
 		if p.atTypeStart() {
 			d.Type = p.typeRef()
@@ -204,7 +204,7 @@ func (p *parser) alterItem() (item ast.AlterItem) {
 		return d
 	case p.atKw("rename"):
 		p.lineBegin("rename column (§migrations)")
-		d := &ast.AlterRename{RenamePos: p.next().Pos}
+		d := &ast.AlterRename{RenamePos: p.kwTake("rename").Pos}
 		d.From = p.ident("rename column (§migrations)")
 		p.expectKw("to", "rename column (§migrations)")
 		d.To = p.ident("rename column (§migrations)")
@@ -224,7 +224,7 @@ func (p *parser) atTypeStart() bool {
 }
 
 func (p *parser) rebuildTableOp() ast.Operation {
-	d := &ast.RebuildTable{RebuildPos: p.next().Pos}
+	d := &ast.RebuildTable{RebuildPos: p.kwTake("rebuild").Pos}
 	p.expectKw("table", "rebuild table (§migrations)")
 	d.Name = p.ident("rebuild table (§migrations)")
 	d.Body, d.Incomplete, d.Rbrace = p.shapeBody("rebuild table (§migrations)")
@@ -233,8 +233,11 @@ func (p *parser) rebuildTableOp() ast.Operation {
 
 func (p *parser) execOp() ast.Operation {
 	p.lineBegin("exec (§migrations)")
-	d := &ast.Exec{ExecPos: p.next().Pos}
-	d.SQL = p.litOf(p.expect(token.STRING, "exec (§migrations)"))
+	d := &ast.Exec{ExecPos: p.kwTake("exec").Pos}
+	if p.at(token.STRING) {
+		p.fail(p.cur(), "exec takes its SQL in backticks, an expression literal, not a string (§migrations)")
+	}
+	d.SQL = &ast.FuncExpr{Tok: p.expect(token.FUNCEXPR, "exec (§migrations)")}
 	if p.at(token.LBRACKET) && !p.cur().NLBefore {
 		d.Settings = p.settingList()
 	}
@@ -267,17 +270,17 @@ func (p *parser) shapeItem(ctx string) (item ast.TableItem) {
 
 	t := p.cur()
 	switch {
-	case p.atKw("indexes") && p.peekKind(1) == token.LBRACE:
+	case p.atKw("Indexes") && p.peekKind(1) == token.LBRACE:
 		return p.indexesBlock()
 	case t.Kind == token.TILDE,
-		p.atKw("validators") && p.peekKind(1) == token.LBRACE,
-		p.atKw("records") && (p.peekKind(1) == token.LPAREN || p.peekKind(1) == token.LBRACE):
-		p.fail(t, "a migration's shape body holds columns and indexes only; a partial injection, a validators block and a records block are not part of it (§migrations)")
+		p.atKw("Validators") && p.peekKind(1) == token.LBRACE,
+		p.atKw("Records") && (p.peekKind(1) == token.LPAREN || p.peekKind(1) == token.LBRACE):
+		p.fail(t, "a migration's shape body holds columns and indexes only; a partial injection, a Validators block and a Records block are not part of it (§migrations)")
 		return nil
 	case t.Kind == token.IDENT:
 		return p.column()
 	default:
-		p.fail(t, "expected a column or an indexes block in %s, found %s", ctx, t)
+		p.fail(t, "expected a column or an Indexes block in %s, found %s", ctx, t)
 		return nil
 	}
 }

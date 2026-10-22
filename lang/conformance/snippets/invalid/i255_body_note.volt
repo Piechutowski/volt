@@ -2,5 +2,5 @@
 // want: column type
 Table users {
   id int [pk]
-  Note: 'people'
+  Note: "people"
 }

@@ -46,11 +46,11 @@ Table user_columns { //WANT dynname
 // the derived model UserParam misses users' write body UserParams by a
 // letter; the pinned one collides, and a pinned name is checked like a
 // derived one
-Table user_params [model: 'UserParams'] { //WANT dynname
+Table user_params [model: "UserParams"] { //WANT dynname
   id int [pk]
 }
 
 // model UserChangeset, pinned, is users' changeset
-Table drafts [model: 'UserChangeset'] { //WANT dynname
+Table drafts [model: "UserChangeset"] { //WANT dynname
   id int [pk]
 }

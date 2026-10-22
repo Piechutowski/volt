@@ -79,12 +79,14 @@ app/i115_controller_field_collision.volt:12:2: error: spec/scopes-and-routes: co
 ## i115_resources_default_param
 app/routes.volt:10:31: error: spec/resources: param: does not apply with [default]; the key parameter is named by the primary-key column, as the generated CRUD spells it (§default-handlers)
 
-## i116_import_own_name
-app/routes.volt:6:2: error: spec/imports: import qualifier "app" is this package's own name (§imports); alias the import
-app/routes.volt:10:16: error: spec/resources: package "app" declares no tables; resources names a table of this package, or of an imported data package, qualified (§declaration)
-
 ## i116_resources_default_no_update
 app/routes.volt:10:15: error: spec/resources: resources db.marks [default]: the generated CRUD has no update method for "Update" (every column is part of the key, so there is nothing to update); drop the action with except: (update) (§default-handlers)
+
+## i116_unknown_qualifier
+app/routes.volt:6:2: error: spec/pipelines: unknown plug qualifier "store" (§pipelines): expected volt.X or a function of package "app"
+app/routes.volt:10:12: error: spec/resources: unknown package qualifier "store" (§declaration)
+app/routes.volt:11:10: error: spec/datasets: unknown package qualifier "store" (§dataset-declaration)
+app/routes.volt:12:9: error: spec/scopes-and-routes: handler must be Controller.Action, both exported Go identifiers (§handler-references), found "store.UserList"
 
 ## i117_resources_param_shadow.volt
 app/i117_resources_param_shadow.volt:10:12: error: spec/resources: resources "plots": the key parameter "id" is already a parameter of the enclosing scope; rename it with [param: <name>] (§settings, §route-paths)
@@ -248,19 +250,19 @@ db/i207_migration_ref_action.volt:20:39: error: spec/migrations: column "user_id
 db/i208_migration_add_ref_default.volt:25:37: error: spec/migrations: add "user_id" to table "posts": a column with ref: takes no default, since SQLite refuses to add a REFERENCES column with a default other than NULL to a table that has rows (§migrations)
 
 ## i209_migration_shape_partial.volt
-db/i209_migration_shape_partial.volt:17:5: error: syntax: a migration's shape body holds columns and indexes only; a partial injection, a validators block and a records block are not part of it (§migrations)
+db/i209_migration_shape_partial.volt:17:5: error: syntax: a migration's shape body holds columns and indexes only; a partial injection, a Validators block and a Records block are not part of it (§migrations)
 
 ## i20_unknown_action.volt
 app/i20_unknown_action.volt:9:26: error: spec/resources: unknown action "browse" (§the-action-table); valid: index, new, create, show, edit, update, delete
 
 ## i210_migration_shape_validators.volt
-db/i210_migration_shape_validators.volt:15:5: error: syntax: a migration's shape body holds columns and indexes only; a partial injection, a validators block and a records block are not part of it (§migrations)
+db/i210_migration_shape_validators.volt:15:5: error: syntax: a migration's shape body holds columns and indexes only; a partial injection, a Validators block and a Records block are not part of it (§migrations)
 db/i210_migration_shape_validators.volt:16:17: error: syntax: expected identifier in column type (§columns), found '(' "("
 db/i210_migration_shape_validators.volt:19:1: error: syntax: expected an element type at top level (§program-structure), found '}' "}"
 
 ## i211_migration_shape_records.volt
-db/i211_migration_shape_records.volt:15:5: error: syntax: a migration's shape body holds columns and indexes only; a partial injection, a validators block and a records block are not part of it (§migrations)
-db/i211_migration_shape_records.volt:16:7: error: syntax: expected a column or an indexes block in create table (§migrations), found number "1"
+db/i211_migration_shape_records.volt:15:5: error: syntax: a migration's shape body holds columns and indexes only; a partial injection, a Validators block and a Records block are not part of it (§migrations)
+db/i211_migration_shape_records.volt:16:7: error: syntax: expected a column or an Indexes block in create table (§migrations), found number "1"
 db/i211_migration_shape_records.volt:19:1: error: syntax: expected an element type at top level (§program-structure), found '}' "}"
 
 ## i214_migration_from_outside_rebuild.volt
@@ -412,17 +414,61 @@ app/i27_import_no_parens.volt:4:1: error: syntax: expected '(' after import (§i
 
 ## i281_migration_ref_action_quoted.volt
 db/i281_migration_ref_action_quoted.volt:22:47: error: spec/migrations: "delete" must be a referential action: cascade, restrict, set_null or set_default (§migrations)
-db/i281_migration_ref_action_quoted.volt:22:59: error: spec/migrations: "update" requires a value
+db/i281_migration_ref_action_quoted.volt:22:59: error: spec/migrations: "update" requires a value (§migrations)
 
 ## i283_bytes_null_validator_bare
 db/schema.volt:11:16: error: spec/validators: column "thumb" ([]byte, Go rt.Null[[]byte]) but parameter 1 of ThumbSmall is []byte — change the column type or the function: expected func ThumbSmall(rt.Null[[]byte]) error (§validators)
 
+## i289_case_clause_word.volt
+db/i289_case_clause_word.volt:5:25: error: syntax: write from, not FROM: keywords are case-sensitive (§keywords)
+db/i289_case_clause_word.volt:13:24: error: syntax: write where, not WHERE: keywords are case-sensitive (§keywords)
+db/i289_case_clause_word.volt:13:40: error: syntax: write and, not AND: keywords are case-sensitive (§keywords)
+db/i289_case_clause_word.volt:13:50: error: syntax: write is, not IS: keywords are case-sensitive (§keywords)
+db/i289_case_clause_word.volt:13:53: error: syntax: write not, not NOT: keywords are case-sensitive (§keywords)
+db/i289_case_clause_word.volt:13:57: error: syntax: write null, not NULL: keywords are case-sensitive (§keywords)
+db/i289_case_clause_word.volt:14:12: error: syntax: write for, not FOR: keywords are case-sensitive (§keywords)
+
 ## i28_composite_pk_model.volt
 app/i28_composite_pk_model.volt:11:12: error: spec/resources: table "pairs" has a composite primary key (a, b); composite keys are not routable (§table-resolution)
+
+## i290_case_route_word.volt
+app/i290_case_route_word.volt:3:1: error: syntax: write package, not PACKAGE: keywords are case-sensitive (§keywords)
+app/i290_case_route_word.volt:5:1: error: syntax: write Pipeline, not PIPELINE: keywords are case-sensitive (§keywords)
+app/i290_case_route_word.volt:6:2: error: syntax: write use, not USE: keywords are case-sensitive (§keywords)
+app/i290_case_route_word.volt:9:1: error: syntax: write Scope, not SCOPE: keywords are case-sensitive (§keywords)
+app/i290_case_route_word.volt:10:2: error: syntax: write get, not GET: keywords are case-sensitive (§keywords)
+app/i290_case_route_word.volt:11:2: error: syntax: write post, not Post: keywords are case-sensitive (§keywords)
+
+## i291_case_migration_word.volt
+db/i291_case_migration_word.volt:10:3: error: syntax: write create, not CREATE: keywords are case-sensitive (§keywords)
+db/i291_case_migration_word.volt:10:10: error: syntax: write table, not TABLE: keywords are case-sensitive (§keywords)
+
+## i292_case_value_words.volt
+db/i292_case_value_words.volt:10:37: error: syntax: write desc, not DESC: keywords are case-sensitive (§keywords)
+db/i292_case_value_words.volt:13:26: error: syntax: write index, not Index: keywords are case-sensitive (§keywords)
+
+## i298_backslash_line_break.volt
+db/i298_backslash_line_break.volt:7:34: error: syntax: a backslash before a line break continues nothing: a string ends on its line, and a multi-line string is written """...""" (§escape-sequences)
+db/i298_backslash_line_break.volt:15:22: error: syntax: a backslash before a line break continues nothing: Volt has no line continuation (§escape-sequences)
+db/i298_backslash_line_break.volt:16:3: error: syntax: unknown element type "admins" (§program-structure)
+
+## i299_exec_string.volt
+db/i299_exec_string.volt:13:8: error: syntax: exec takes its SQL in backticks, an expression literal, not a string (§migrations)
 
 ## i29_unknown_import
 app/r.volt:5:2: error: spec/imports: unknown package "nothere": no directory of .volt files at that path under the project root (§imports)
 app/r.volt:9:12: error: spec/resources: unknown package qualifier "nothere" (§declaration)
+
+## i300_exec_down_string.volt
+db/i300_exec_down_string.volt:13:41: error: spec/migrations: "down" must be a backtick expression (§migrations)
+
+## i301_self_qualified
+site/site.volt:10:5: error: spec/imports: site.TitleShape qualifies a declaration with this package's own name: a package names its own declarations bare, so write TitleShape (§imports)
+site/site.volt:22:6: error: spec/imports: site.Session qualifies a declaration with this package's own name: a package names its own declarations bare, so write Session (§imports)
+site/site.volt:25:39: error: spec/imports: site.Errors qualifies a declaration with this package's own name: a package names its own declarations bare, so write Errors (§imports)
+site/site.volt:26:12: error: spec/imports: site.posts qualifies a declaration with this package's own name: a package names its own declarations bare, so write posts (§imports)
+site/site.volt:27:14: error: spec/imports: site.PostPicked qualifies a declaration with this package's own name: a package names its own declarations bare, so write PostPicked (§imports)
+site/site.volt:28:10: error: spec/imports: site.browse qualifies a declaration with this package's own name: a package names its own declarations bare, so write browse (§imports)
 
 ## i30_unused_import
 app/r.volt:5:2: error: spec/imports: package "db" imported and not used (§imports)
@@ -432,12 +478,6 @@ b/b.volt:4:2: error: spec/imports: import cycle: a -> b -> a (§imports)
 
 ## i32_pkg_dir_mismatch
 app/r.volt:2:1: error: spec/projects-and-packages: package name "routes" must match its directory name "app" (§projects-and-packages)
-
-## i33_quoted_segment.volt
-app/i33_quoted_segment.volt:5:7: error: spec/scopes-and-routes: path segment "a b" must be a plain identifier of letters, digits and underscores (§route-paths)
-
-## i34_quoted_plug.volt
-app/i34_quoted_plug.volt:5:2: error: spec/pipelines: plug reference "weird name" must be plain, non-keyword Go identifiers (§pipelines)
 
 ## i35_reserved_param.volt
 app/i35_reserved_param.volt:5:9: error: spec/scopes-and-routes: path parameter "volt" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs
@@ -460,12 +500,9 @@ volt/i40_package_volt.volt:2:1: error: spec/projects-and-packages: package name 
 ## i41_spaced_param_type.volt
 app/i41_spaced_param_type.volt:5:18: error: syntax: parameter type is written ':name(type)' with no spaces (§route-paths)
 
-## i42_quoted_handler.volt
-app/i42_quoted_handler.volt:5:8: error: spec/scopes-and-routes: handler names are plain (unquoted) identifiers (§route-paths), found "Home.Index"
-
 ## i43_quoted_import.volt
-app/i43_quoted_import.volt:5:2: error: syntax: import path segments are plain (unquoted) identifiers (§imports)
-app/i43_quoted_import.volt:7:1: error: syntax: expected ')' in import declaration (§imports), found end of file
+app/i43_quoted_import.volt:5:2: error: syntax: expected identifier in import path (§imports), found string "\"db\""
+app/i43_quoted_import.volt:6:1: error: syntax: empty import declaration (§imports)
 
 ## i44_singular_collision.volt
 app/i44_singular_collision.volt:11:2: error: spec/resources: resources "posty": the collection and member reverse-URL helpers are both "Posty", because singularizing "posty" does not change it (§table-resolution); set the singular explicitly, e.g. [singular: <name>]

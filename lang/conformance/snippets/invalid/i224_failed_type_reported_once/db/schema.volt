@@ -13,7 +13,7 @@ Table posts {
   score Score
   ~weighted
 
-  validators {
+  Validators {
     ScoreSane(score)
   }
 }

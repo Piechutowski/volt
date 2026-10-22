@@ -7,6 +7,7 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 
 	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/lang/parser"
 )
 
 var (
@@ -16,7 +17,7 @@ var (
 		"package ", "import", "Pipeline", "Scope",
 		"Group", "Pred", "Select",
 	}
-	tableBodyKeywords     = []string{"indexes", "validators", "Records"}
+	tableBodyKeywords     = []string{"Indexes", "Validators", "Records"}
 	migrationBodyKeywords = []string{
 		"create table ", "create index ", "drop table ", "drop index ",
 		"rename table ", "alter table ", "rebuild table ", "exec ", "up {", "down {",
@@ -50,22 +51,25 @@ var (
 
 	refActionValues = []string{"cascade", "restrict", "set_null", "set_default"}
 
-	voltVerbSet = map[string]bool{
-		"get": true, "post": true, "put": true, "patch": true,
-		"delete": true, "options": true, "head": true, "any": true,
-	}
+	voltVerbSet = func() map[string]bool {
+		m := map[string]bool{}
+		for _, v := range parser.Verbs {
+			m[v] = true
+		}
+		return m
+	}()
 
-	partialInjectRE = regexp.MustCompile(`~\s*[\w"]*$`)
-	dotChainRE      = regexp.MustCompile(`([\p{L}\p{M}\d_]+|"[^"]*")(\.([\p{L}\p{M}\d_]+|"[^"]*"))?\.$`)
-	refValueRE      = regexp.MustCompile(`(?i)\bref\s*:\s*$`)
-	refDotRE        = regexp.MustCompile(`(?i)\bref\s*:\s*([\p{L}\p{M}\d_]+|"[^"]*")\.$`)
-	refHeadRE       = regexp.MustCompile(`(?i)^\s*ref\s*:\s*[\p{L}\p{M}\d_"]*$`)
-	refTargetRE     = regexp.MustCompile(`(?i)^\s*ref\s*:[^>]*>\s*[\p{L}\p{M}\d_"]*$`)
-	defaultValueRE  = regexp.MustCompile(`(?i)\bdefault\s*:\s*$`)
-	columnTypeRE    = regexp.MustCompile(`^\s*(?:add\s+)?(?:[\p{L}\p{M}\d_]+|"[^"]*")\s+([\p{L}\p{M}\d_.\[\]]+)\s*\[`)
-	actionValueRE   = regexp.MustCompile(`(?i)\b(delete|update)\s*:\s*\w*$`)
-	columnShapeRE   = regexp.MustCompile(`^\s*([\p{L}\p{M}\d_]+|"[^"]*")\s+[\p{L}\p{M}\d_".]*$`)
-	lineStartRE     = regexp.MustCompile(`^\s*[\p{L}\p{M}\d_"~]*$`)
+	partialInjectRE = regexp.MustCompile(`~\s*\w*$`)
+	dotChainRE      = regexp.MustCompile(`([\p{L}\p{Nd}_]+)(\.([\p{L}\p{Nd}_]+))?\.$`)
+	refValueRE      = regexp.MustCompile(`\bref\s*:\s*$`)
+	refDotRE        = regexp.MustCompile(`\bref\s*:\s*([\p{L}\p{Nd}_]+)\.$`)
+	refHeadRE       = regexp.MustCompile(`^\s*Ref\s*:\s*[\p{L}\p{Nd}_]*$`)
+	refTargetRE     = regexp.MustCompile(`^\s*Ref\s*:[^>]*>\s*[\p{L}\p{Nd}_]*$`)
+	defaultValueRE  = regexp.MustCompile(`\bdefault\s*:\s*$`)
+	columnTypeRE    = regexp.MustCompile(`^\s*(?:add\s+)?[\p{L}\p{Nd}_]+\s+([\p{L}\p{Nd}_.\[\]]+)\s*\[`)
+	actionValueRE   = regexp.MustCompile(`\b(delete|update)\s*:\s*\w*$`)
+	columnShapeRE   = regexp.MustCompile(`^\s*([\p{L}\p{Nd}_]+)\s+[\p{L}\p{Nd}_.]*$`)
+	lineStartRE     = regexp.MustCompile(`^\s*[\p{L}\p{Nd}_~]*$`)
 	shapeHeadRE     = regexp.MustCompile(`^(create|rebuild|drop) table\b`)
 	upDownHeadRE    = regexp.MustCompile(`^(up|down)\s*\{`)
 )
@@ -142,7 +146,7 @@ func (d *Document) Complete(pos protocol.Position) []protocol.CompletionItem {
 			return keywordItemsKind(builtinTypes, protocol.CompletionItemKindStruct)
 		}
 		if lineStartRE.MatchString(prefix) {
-			return keywordItems([]string{"indexes"})
+			return keywordItems([]string{"Indexes"})
 		}
 	}
 	return nil
@@ -160,7 +164,7 @@ func (d *Document) blockContexts(line int) (ctx, outer string) {
 			continue
 		}
 		depth = 0
-		head := headContext(strings.ToLower(strings.TrimSpace(text)))
+		head := headContext(strings.TrimSpace(text))
 		switch {
 		case head == "":
 		case ctx == "":
@@ -177,27 +181,27 @@ func (d *Document) blockContexts(line int) (ctx, outer string) {
 
 func headContext(head string) string {
 	switch {
-	case strings.HasPrefix(head, "indexes"):
+	case strings.HasPrefix(head, "Indexes"):
 		return "indexes"
-	case strings.HasPrefix(head, "validators"):
+	case strings.HasPrefix(head, "Validators"):
 		return "validators"
-	case strings.HasPrefix(head, "tablepartial"):
+	case strings.HasPrefix(head, "TablePartial"):
 		return "tablepartial"
-	case strings.HasPrefix(head, "group"):
+	case strings.HasPrefix(head, "Group"):
 		return "group"
-	case strings.HasPrefix(head, "table"):
+	case strings.HasPrefix(head, "Table"):
 		return "table"
-	case strings.HasPrefix(head, "project"):
+	case strings.HasPrefix(head, "Project"):
 		return "project"
-	case strings.HasPrefix(head, "records"):
+	case strings.HasPrefix(head, "Records"):
 		return "records"
-	case strings.HasPrefix(head, "ref"):
+	case strings.HasPrefix(head, "Ref"):
 		return "ref"
-	case strings.HasPrefix(head, "pipeline"):
+	case strings.HasPrefix(head, "Pipeline"):
 		return "pipeline"
-	case strings.HasPrefix(head, "scope"):
+	case strings.HasPrefix(head, "Scope"):
 		return "scope"
-	case strings.HasPrefix(head, "migration"), upDownHeadRE.MatchString(head):
+	case strings.HasPrefix(head, "Migration"), upDownHeadRE.MatchString(head):
 		return "migration"
 	case strings.HasPrefix(head, "rebuild table"):
 		return "rebuild"
@@ -216,7 +220,7 @@ func (d *Document) settingsComplete(prefix, ctx, outer string, top bool) []proto
 		return d.tableItems()
 	}
 	if m := refDotRE.FindStringSubmatch(segment); m != nil {
-		if ti, ok := d.Index.Tables[unquote(m[1])]; ok {
+		if ti, ok := d.Index.Tables[m[1]]; ok {
 			return d.columnItems(ti)
 		}
 		return nil
@@ -232,23 +236,23 @@ func (d *Document) settingsComplete(prefix, ctx, outer string, top bool) []proto
 	}
 
 	kind := "column"
-	head := strings.ToLower(strings.TrimSpace(prefix))
+	head := strings.TrimSpace(prefix)
 	verb := strings.SplitN(head, " ", 2)[0]
 	header := func(word string) bool { return top && strings.HasPrefix(head, word) }
 	switch {
-	case header("tablepartial"), header("group"), header("type "):
+	case header("TablePartial"), header("Group"), header("Type "):
 		return nil
-	case header("table"):
+	case header("Table"):
 		kind = "table"
-	case header("project"):
+	case header("Project"):
 		kind = "project"
-	case header("ref"):
+	case header("Ref"):
 		kind = "ref"
-	case header("select"):
+	case header("Select"):
 		kind = "select"
-	case strings.HasPrefix(head, "scope") && (top || ctx == "scope"):
+	case strings.HasPrefix(head, "Scope") && (top || ctx == "scope"):
 		kind = "scope"
-	case header("migration"):
+	case header("Migration"):
 		kind = "migration"
 	case strings.HasPrefix(head, "resources") && ctx == "scope":
 		kind = "resources"
@@ -301,11 +305,8 @@ func (d *Document) groupMemberItems(partial string) []protocol.CompletionItem {
 }
 
 func (d *Document) dotChainComplete(m []string) []protocol.CompletionItem {
-	first := unquote(m[1])
-	second := ""
-	if m[3] != "" {
-		second = unquote(m[3])
-	}
+	first := m[1]
+	second := m[3]
 	var items []protocol.CompletionItem
 
 	if second != "" {
@@ -382,13 +383,6 @@ func item(label string, kind protocol.CompletionItemKind, detail string) protoco
 		it.Detail = &det
 	}
 	return it
-}
-
-func unquote(s string) string {
-	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
-		return s[1 : len(s)-1]
-	}
-	return s
 }
 
 func min(a, b int) int {

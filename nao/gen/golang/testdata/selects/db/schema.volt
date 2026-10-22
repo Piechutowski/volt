@@ -14,7 +14,7 @@ Table link_clicks {
   id int [pk, increment]
   site string
   day int
-  target string [default: '']
+  target string [default: ""]
 }
 
 Group metrics {
@@ -28,5 +28,5 @@ Pred since { day >= :from }
 Select rows    for metrics where at or since [order: (day desc, id asc)]
 Select summary (site, day) for metrics where at
 Select public  (* \ target) for link_clicks
-Select named   for page_views where site like '%a%' and hits in (1, 2) and not (day < 1)
+Select named   for page_views where site like "%a%" and hits in (1, 2) and not (day < 1)
 Select chosen  for metrics where site in :sites and day in :days

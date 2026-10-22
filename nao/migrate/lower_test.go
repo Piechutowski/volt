@@ -133,7 +133,7 @@ func TestLowerNoTransactionDisablesTheBracket(t *testing.T) {
 }
 
 func TestLowerRefusesTwoIndexesOfOneName(t *testing.T) {
-	src := "package db\n\nTable posts {\n  id int [pk, increment]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null]\n\n    indexes {\n      n\n      n [unique]\n    }\n  }\n}\n"
+	src := "package db\n\nTable posts {\n  id int [pk, increment]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null]\n\n    Indexes {\n      n\n      n [unique]\n    }\n  }\n}\n"
 	_, info := parseChecked(t, "t.volt", src)
 	_, err := Lower(info)
 	if err == nil || !strings.Contains(err.Error(), "0001__init") || !strings.Contains(err.Error(), `duplicate index name "idx_posts_n"`) {
@@ -143,7 +143,7 @@ func TestLowerRefusesTwoIndexesOfOneName(t *testing.T) {
 
 func TestRebuildForgetsAnIndexNotRestated(t *testing.T) {
 	ctx := context.Background()
-	src := "package db\n\nTable posts {\n  id int [pk, increment]\n  n  int [null]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null]\n\n    indexes {\n      n\n    }\n  }\n}\n\nMigration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id int [pk, increment]\n    n  int [null]\n  }\n}\n"
+	src := "package db\n\nTable posts {\n  id int [pk, increment]\n  n  int [null]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null]\n\n    Indexes {\n      n\n    }\n  }\n}\n\nMigration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id int [pk, increment]\n    n  int [null]\n  }\n}\n"
 	_, info := parseChecked(t, "t.volt", src)
 	ms, err := Lower(info)
 	if err != nil {
@@ -174,10 +174,10 @@ func TestRebuildUnderAViewOrTriggerFailsAtTheRename(t *testing.T) {
 	ctx := context.Background()
 	const schema = "package db\n\nTable posts {\n  id    int    [pk, increment]\n  title string\n}\n\nTable comments {\n  id      int [pk, increment]\n  post_id int\n}\n\n"
 	const tables = "  create table posts {\n    id    int [pk, increment]\n    title string [null]\n  }\n  create table comments {\n    id      int [pk, increment]\n    post_id int\n  }\n"
-	const rebuild = "Migration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id    int    [pk, increment]\n    title string [default: '']\n  }\n}\n"
+	const rebuild = "Migration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id    int    [pk, increment]\n    title string [default: \"\"]\n  }\n}\n"
 	cases := []struct{ object, exec string }{
-		{"view post_titles", "exec 'CREATE VIEW post_titles AS SELECT title FROM posts' [down: 'DROP VIEW post_titles']"},
-		{"trigger comments_touch_posts", "exec 'CREATE TRIGGER comments_touch_posts AFTER INSERT ON comments BEGIN UPDATE posts SET title = title WHERE id = NEW.post_id; END' [down: 'DROP TRIGGER comments_touch_posts']"},
+		{"view post_titles", "exec `CREATE VIEW post_titles AS SELECT title FROM posts` [down: `DROP VIEW post_titles`]"},
+		{"trigger comments_touch_posts", "exec `CREATE TRIGGER comments_touch_posts AFTER INSERT ON comments BEGIN UPDATE posts SET title = title WHERE id = NEW.post_id; END` [down: `DROP TRIGGER comments_touch_posts`]"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.object, func(t *testing.T) {

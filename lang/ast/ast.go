@@ -10,7 +10,7 @@ type Node interface {
 	End() token.Position // position immediately after the node
 }
 
-// Ident is a plain or quoted identifier (spec §identifiers).
+// Ident is an identifier (spec §identifiers).
 type Ident struct {
 	Tok token.Token
 }
@@ -18,12 +18,10 @@ type Ident struct {
 func (x *Ident) Pos() token.Position { return x.Tok.Pos }
 func (x *Ident) End() token.Position { return x.Tok.End() }
 
-// Name returns the identifier's value with escapes applied.
+// Name returns the identifier as written; a keyword written in the
+// wrong case reads as its right spelling once the parser has reported
+// it (spec §keywords).
 func (x *Ident) Name() string { return x.Tok.Val }
-
-// Quoted reports whether the identifier was written "quoted"; quoted
-// identifiers never act as keywords (spec §case-sensitivity-and-terminology).
-func (x *Ident) Quoted() bool { return x.Tok.Quoted }
 
 // QualName is a type name, possibly qualified by a Go package: Name or
 // pkg.Name (spec §columns, §types).
@@ -112,7 +110,7 @@ func (x *SettingList) Get(name string) *Setting {
 	return nil
 }
 
-// Setting is one entry: a flag (pk) or a key-value pair (note: '...').
+// Setting is one entry: a flag (pk) or a key-value pair (note: "...").
 // Name is the lowercased form of its one identifier ("no_transaction",
 // §settings-lists).
 type Setting struct {
@@ -162,7 +160,7 @@ func (d *Project) Pos() token.Position { return d.ProjectPos }
 func (d *Project) End() token.Position { return d.Rbrace }
 func (d *Project) declNode()           {}
 
-// ProjectProp is one key: 'value' line inside a Project body.
+// ProjectProp is one key: "value" line inside a Project body.
 type ProjectProp struct {
 	Key   *Ident
 	Value *BasicLit
@@ -246,7 +244,7 @@ func (x *TypeRef) String() string {
 	return x.Name.String()
 }
 
-// IndexesBlock is one indexes { ... } block (spec §indexes).
+// IndexesBlock is one Indexes { ... } block (spec §indexes).
 type IndexesBlock struct {
 	IndexesPos token.Position
 	Indexes    []*Index
@@ -273,7 +271,7 @@ func (x *Index) End() token.Position {
 	return x.Key[len(x.Key)-1].End()
 }
 
-// ValidatorsBlock is a validators block (spec §validators).
+// ValidatorsBlock is a Validators block (spec §validators).
 type ValidatorsBlock struct {
 	ValidatorsPos token.Position
 	Validators    []*Validator

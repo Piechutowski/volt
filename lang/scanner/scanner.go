@@ -7,7 +7,6 @@
 package scanner
 
 import (
-	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -194,7 +193,7 @@ func (s *Scanner) tokEmit(t token.Token) {
 	t.Len = int32(s.pos.Offset - s.start.Offset)
 	t.NLBefore = s.nlBefore
 	t.SpBefore = s.spBefore || s.nlBefore
-	t.DeclStart = t.Kind == token.IDENT && !t.Quoted && s.start.col == 1 && s.depth == 0
+	t.DeclStart = t.Kind == token.IDENT && s.start.col == 1 && s.depth == 0
 	if t.DeclStart && s.chunk && s.start.Offset > 0 {
 		s.done = true
 		return
@@ -216,12 +215,14 @@ func (s *Scanner) errorf(code, format string, args ...any) {
 }
 
 func isLetter(r rune) bool {
-	return r == '_' || unicode.IsLetter(r) || unicode.IsMark(r)
+	if r < utf8.RuneSelf {
+		return r == '_' || ('a' <= r && r <= 'z') || ('A' <= r && r <= 'Z')
+	}
+	return unicode.IsLetter(r)
 }
-func isDigit(r rune) bool     { return '0' <= r && r <= '9' }
-func isIdentChar(r rune) bool { return isLetter(r) || isDigit(r) }
-func isHex(r rune) bool {
-	return isDigit(r) || ('a' <= r && r <= 'f') || ('A' <= r && r <= 'F')
+func isDigit(r rune) bool { return '0' <= r && r <= '9' }
+func isIdentChar(r rune) bool {
+	return isLetter(r) || isDigit(r) || (r >= utf8.RuneSelf && unicode.IsDigit(r))
 }
 
 func anyScan(s *Scanner) stateFn {
@@ -244,13 +245,13 @@ func anyScan(s *Scanner) stateFn {
 		return lineCommentScan
 	case r == '/' && s.peekAt(1) == '*':
 		return blockCommentScan
-	case r == '\'':
-		if s.peekAt(1) == '\'' && s.peekAt(2) == '\'' {
+	case r == '"':
+		if s.peekAt(1) == '"' && s.peekAt(2) == '"' {
 			return multiStringScan
 		}
 		return stringScan
-	case r == '"':
-		return quotedIdentScan
+	case r == '\'':
+		return singleQuoteScan
 	case r == '`':
 		return funcExprScan
 	case isDigit(r):
@@ -289,39 +290,37 @@ func blockCommentScan(s *Scanner) stateFn {
 	}
 }
 
-func (s *Scanner) escapeScan() {
-	switch r := s.next(); r {
-	case 't':
-		s.val.WriteByte('\t')
-	case 'n':
-		s.val.WriteByte('\n')
-	case 'r':
-		s.val.WriteByte('\r')
-	case '0':
-		s.val.WriteByte(0)
-	case 'b':
-		s.val.WriteByte('\b')
-	case 'v':
-		s.val.WriteByte('\v')
-	case 'f':
-		s.val.WriteByte('\f')
-	case '\n':
-	case 'u':
-		hex := make([]rune, 0, 4)
-		for i := 0; i < 4; i++ {
-			if !isHex(s.peek()) {
-				s.errorf("syntax", `invalid unicode escape '\u%s': exactly 4 hex digits required (§escape-sequences)`, string(hex))
-				return
-			}
-			hex = append(hex, s.next())
-		}
-		n, _ := strconv.ParseUint(string(hex), 16, 32)
-		s.val.WriteRune(rune(n))
-	case eof:
+const (
+	msgBackslashNewline = `a backslash before a line break continues nothing: a string ends on its line, and a multi-line string is written """...""" (§escape-sequences)`
+	msgUnknownEscape    = `unknown escape sequence \%c: a string takes \\, \", \n and \t only (§escape-sequences)`
+	msgNewlineInString  = `newline in a string: a string ends on its line, and a multi-line string is written """...""" (§string-literals)`
+	msgSingleQuote      = `a string is written in double quotes, "...", not single quotes (§string-literals)`
+	msgTripleSingle     = `a multi-line string is written """...""", not '''...''' (§multi-line-string-literals)`
+)
+
+func (s *Scanner) escapeScan(at cursor) bool {
+	switch r := s.peek(); r {
+	case '\\':
+		s.next()
 		s.val.WriteByte('\\')
+	case '"':
+		s.next()
+		s.val.WriteByte('"')
+	case 'n':
+		s.next()
+		s.val.WriteByte('\n')
+	case 't':
+		s.next()
+		s.val.WriteByte('\t')
+	case '\n':
+		s.errs = append(s.errs, diag.Errorf(at.position(s.file), "syntax", msgBackslashNewline))
+		return false
+	case eof:
 	default:
-		s.val.WriteRune(r)
+		s.next()
+		s.errs = append(s.errs, diag.Errorf(at.position(s.file), "syntax", msgUnknownEscape, r))
 	}
+	return true
 }
 
 func stringScan(s *Scanner) stateFn {
@@ -332,15 +331,18 @@ func stringScan(s *Scanner) stateFn {
 			s.errorf("syntax", "unterminated string (§string-literals)")
 			return nil
 		case '\n':
-			s.errorf("syntax", "newline in single-line string (§string-literals)")
+			s.errorf("syntax", msgNewlineInString)
 			return anyScan
-		case '\'':
+		case '"':
 			s.next()
 			s.tokEmit(token.Token{Kind: token.STRING, Val: s.val.String()})
 			return anyScan
 		case '\\':
+			at := s.pos
 			s.next()
-			s.escapeScan()
+			if !s.escapeScan(at) {
+				return anyScan
+			}
 		default:
 			s.val.WriteRune(s.next())
 		}
@@ -356,15 +358,60 @@ func multiStringScan(s *Scanner) stateFn {
 		case r == eof:
 			s.errorf("syntax", "unterminated multi-line string (§multi-line-string-literals)")
 			return nil
-		case r == '\'' && s.peekAt(1) == '\'' && s.peekAt(2) == '\'':
+		case r == '"' && s.peekAt(1) == '"' && s.peekAt(2) == '"':
 			s.next()
 			s.next()
 			s.next()
 			s.tokEmit(token.Token{Kind: token.STRING, Val: indentStrip(s.val.String()), Multi: true})
 			return anyScan
 		case r == '\\':
+			at := s.pos
 			s.next()
-			s.escapeScan()
+			s.escapeScan(at)
+		default:
+			s.val.WriteRune(s.next())
+		}
+	}
+}
+
+func singleQuoteScan(s *Scanner) stateFn {
+	if s.peekAt(1) == '\'' && s.peekAt(2) == '\'' {
+		s.next()
+		s.next()
+		s.next()
+		for {
+			switch r := s.peek(); {
+			case r == eof:
+				s.errorf("syntax", msgTripleSingle)
+				return nil
+			case r == '\'' && s.peekAt(1) == '\'' && s.peekAt(2) == '\'':
+				s.next()
+				s.next()
+				s.next()
+				s.errorf("syntax", msgTripleSingle)
+				s.tokEmit(token.Token{Kind: token.STRING, Val: indentStrip(s.val.String()), Multi: true})
+				return anyScan
+			default:
+				s.val.WriteRune(s.next())
+			}
+		}
+	}
+	s.next()
+	for {
+		switch r := s.peek(); r {
+		case eof, '\n':
+			s.errorf("syntax", msgSingleQuote)
+			return anyScan
+		case '\'':
+			s.next()
+			s.errorf("syntax", msgSingleQuote)
+			s.tokEmit(token.Token{Kind: token.STRING, Val: s.val.String()})
+			return anyScan
+		case '\\':
+			s.next()
+			if p := s.peek(); p != '\n' && p != eof {
+				s.val.WriteRune(s.next())
+			}
 		default:
 			s.val.WriteRune(s.next())
 		}
@@ -401,29 +448,6 @@ func indentStrip(v string) string {
 	return strings.Join(lines, "\n")
 }
 
-func quotedIdentScan(s *Scanner) stateFn {
-	s.next()
-	for {
-		switch r := s.peek(); r {
-		case eof:
-			s.errorf("syntax", "unterminated quoted identifier (§identifiers)")
-			return nil
-		case '\n':
-			s.errorf("syntax", "newline in quoted identifier (§identifiers)")
-			return anyScan
-		case '"':
-			s.next()
-			s.tokEmit(token.Token{Kind: token.IDENT, Val: s.val.String(), Quoted: true})
-			return anyScan
-		case '\\':
-			s.next()
-			s.escapeScan()
-		default:
-			s.val.WriteRune(s.next())
-		}
-	}
-}
-
 func funcExprScan(s *Scanner) stateFn {
 	s.next()
 	for {
@@ -448,11 +472,25 @@ func identScan(s *Scanner) stateFn {
 	}
 	s.pos.col += off - s.pos.Offset
 	s.pos.Offset = off
-	for isIdentChar(s.peek()) {
-		s.next()
-	}
+	s.identRest()
 	s.tokEmit(token.Token{Kind: token.IDENT, Val: s.rawVal()})
 	return anyScan
+}
+
+func (s *Scanner) identRest() {
+	for {
+		r := s.peek()
+		switch {
+		case isIdentChar(r):
+			s.next()
+		case r >= utf8.RuneSelf && unicode.IsMark(r):
+			at := s.pos
+			s.next()
+			s.errs = append(s.errs, diag.Errorf(at.position(s.file), "syntax", "U+%04X, a combining mark, cannot stand in a name: a name is a Go identifier, letters, digits and underscores (§identifiers)", r))
+		default:
+			return
+		}
+	}
 }
 
 var asciiIdent = func() (t [256]bool) {
@@ -488,6 +526,7 @@ func numberOrIdentScan(s *Scanner) stateFn {
 		case isLetter(r):
 			hasLetter = true
 			s.next()
+			s.identRest()
 		default:
 			if hasLetter {
 				if nDots > 0 {
@@ -550,11 +589,48 @@ func operatorScan(s *Scanner) stateFn {
 		s.emit(token.NEQ, "!=")
 		return anyScan
 	}
+	if r == '\\' && s.peek() == '\n' {
+		s.errorf("syntax", "a backslash before a line break continues nothing: Volt has no line continuation (§escape-sequences)")
+		return anyScan
+	}
 	if k, ok := singleOps[r]; ok {
 		s.emit(k, string(r))
+		return anyScan
+	}
+	if unicode.IsMark(r) || unicode.IsDigit(r) {
+		s.errorf("syntax", "%q (U+%04X) cannot begin a name: a name is a Go identifier, a letter or underscore followed by letters, digits and underscores (§identifiers)", string(r), r)
+		s.identRest()
+		s.tokEmit(token.Token{Kind: token.ILLEGAL, Val: s.rawVal()})
 		return anyScan
 	}
 	s.errorf("syntax", "unexpected character %q (§lexical-structure)", string(r))
 	s.tokEmit(token.Token{Kind: token.ILLEGAL, Val: string(r)})
 	return anyScan
+}
+
+// Quote returns s as a Volt string literal, "..." with the four escapes
+// (§string-literals, §escape-sequences). It reports false when s holds a
+// control character other than a line feed or a tab, which no Volt
+// string spells.
+func Quote(s string) (string, bool) {
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range s {
+		switch {
+		case r == '\\':
+			b.WriteString(`\\`)
+		case r == '"':
+			b.WriteString(`\"`)
+		case r == '\n':
+			b.WriteString(`\n`)
+		case r == '\t':
+			b.WriteString(`\t`)
+		case r < 0x20 || r == 0x7f:
+			return "", false
+		default:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
+	return b.String(), true
 }

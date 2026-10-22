@@ -23,8 +23,8 @@
   "Type"
   "Ref"
   "Records"
-  "indexes"
-  "validators"
+  "Indexes"
+  "Validators"
   "use"
   "from"
 ] @keyword
@@ -46,9 +46,6 @@
 (table_name name: (_) @type)
 (group_member) @type
 
-; a function of the package itself, as error_handler names one: app.Errors
-(qualified_value qualifier: (_) @namespace name: (_) @function)
-
 ; table partials
 (partial_name) @constructor
 
@@ -67,7 +64,7 @@
 ; ---------- settings ----------
 
 (settings_list (setting name: (_) @attribute))
-(setting value: [(identifier) (quoted_identifier)] @constant)
+(setting value: (identifier) @constant)
 
 ; ---------- Volt layer (docs/spec.md Part II) ----------
 

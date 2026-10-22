@@ -32,7 +32,7 @@ func scheduleFixture(t *testing.T) string {
 	for i := 0; i < 6; i++ {
 		write(fmt.Sprintf("d%d/schema.volt", i), fmt.Sprintf(`package d%d
 
-Type kinds.Kind string from 'example.com/kinds'
+Type kinds.Kind string from "example.com/kinds"
 
 Table posts {
   id    int [pk, increment]

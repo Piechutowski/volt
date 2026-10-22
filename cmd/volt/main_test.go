@@ -161,7 +161,7 @@ Type OrderState string
 
 Table orders {
   id     int        [pk, increment]
-  status OrderState [default: 'pending']
+  status OrderState [default: "pending"]
 }
 `,
 		"db/order_state.go": "package db\n\n// OrderState is the state of an order (§types).\ntype OrderState string\n",

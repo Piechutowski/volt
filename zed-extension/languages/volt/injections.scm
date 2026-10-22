@@ -5,7 +5,7 @@
   name: (setting_name) @_key
   value: (string
     content: (string_content) @injection.content)
-  (#match? @_key "^[nN][oO][tT][eE]$")
+  (#eq? @_key "note")
   (#set! injection.language "markdown"))
 
 ; backtick expressions are opaque SQL — highlights if a SQL extension is

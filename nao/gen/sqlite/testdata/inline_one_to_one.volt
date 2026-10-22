@@ -19,7 +19,7 @@ Table avatars {
   user_id int    [ref: users.id]
   url     string
 
-  indexes {
+  Indexes {
     user_id [unique]
   }
 }

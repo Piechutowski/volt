@@ -22,7 +22,7 @@ func TestTableDDLOneToOneAndActions(t *testing.T) {
 	}{
 		{
 			name:    "a unique index of the body beside a ref",
-			body:    "    id      int [pk, increment]\n    user_id int [ref: users.id]\n\n    indexes {\n      user_id [unique]\n    }\n",
+			body:    "    id      int [pk, increment]\n    user_id int [ref: users.id]\n\n    Indexes {\n      user_id [unique]\n    }\n",
 			want:    "CREATE TABLE profiles (\n  id INTEGER PRIMARY KEY,\n  user_id INTEGER NOT NULL,\n  FOREIGN KEY (user_id) REFERENCES users (id)\n)",
 			indexes: []string{"CREATE UNIQUE INDEX idx_profiles_user_id ON profiles (user_id)"},
 		},

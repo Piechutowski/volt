@@ -13,7 +13,7 @@ Migration 0001__init {
     name string [null]
 
     records {
-      1, 'root'
+      1, "root"
     }
   }
 }

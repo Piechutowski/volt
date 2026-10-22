@@ -235,7 +235,7 @@ func (ix *voltIndex) goRefAdd(pkg *lang.Package, path string, ref *ast.GoRef) {
 	if ref == nil || len(ref.Parts) == 0 {
 		return
 	}
-	if q := ref.Qualifier(); q != "" && q != pkg.Name {
+	if ref.Qualifier() != "" {
 		return
 	}
 	name := ref.Base()
@@ -313,7 +313,7 @@ func (ix *voltIndex) scopeRefs(pkg *lang.Package, path string, sc *ast.Scope) {
 			ix.scopeRefs(pkg, path, it)
 		case *ast.Resources:
 			target := path
-			if it.Pkg != nil && it.Pkg.Name() != pkg.Name {
+			if it.Pkg != nil {
 				t, ok := pkg.Imports[it.Pkg.Name()]
 				if !ok {
 					continue
@@ -329,7 +329,7 @@ func (ix *voltIndex) scopeRefs(pkg *lang.Package, path string, sc *ast.Scope) {
 			ix.settingRefs(pkg, path, it.Settings)
 		case *ast.Dataset:
 			target, ok := path, true
-			if it.Pkg != nil && it.Pkg.Name() != pkg.Name {
+			if it.Pkg != nil {
 				target, ok = pkg.Imports[it.Pkg.Name()]
 			}
 			if ok {

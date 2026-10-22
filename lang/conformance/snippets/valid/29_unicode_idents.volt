@@ -1,7 +1,9 @@
-// spec: §identifiers — Unicode identifiers and digit-leading identifiers
+// spec: §identifiers, §unicode-general-categories, a name is a Go identifier: letters of any script, decimal digits of any script after the first character, underscores
 Table zażółć {
   gęślą int
   jaźń string
-  2fa_codes int
+  codes_2fa int
   état string
+  _private int
+  wiersz٣ int
 }

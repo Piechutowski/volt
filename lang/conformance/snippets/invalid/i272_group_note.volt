@@ -5,6 +5,6 @@ Table posts {
   id int [pk]
 }
 
-Group content [note: 'what readers see'] {
+Group content [note: "what readers see"] {
   posts
 }

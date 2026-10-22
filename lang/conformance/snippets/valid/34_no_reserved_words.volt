@@ -1,4 +1,4 @@
-// spec: §keywords — keywords are contextual, usable as ordinary names
+// spec: §keywords, keywords are contextual: a keyword's own spelling, or another case of it, is an ordinary name outside keyword position
 Table table {
   note string
   indexes int
@@ -8,4 +8,8 @@ Table table {
   type int
   from int
   as int
+  Type int
+  Ref string
+  Scope int
+  PK bool
 }

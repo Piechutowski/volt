@@ -10,12 +10,9 @@ import (
 	"github.com/Piechutowski/volt/lang/token"
 )
 
-var voltVerbs = map[string]bool{
-	"get": true, "post": true, "put": true, "patch": true,
-	"delete": true, "options": true, "head": true, "any": true,
-}
+var voltVerbs = foldMap(Verbs)
 
-func isVerb(v string) bool { return voltVerbs[strings.ToLower(v)] }
+func isVerb(v string) bool { return voltVerbs[strings.ToLower(v)] != "" }
 
 func (p *parser) contiguous() bool {
 	t := p.cur()
@@ -26,9 +23,6 @@ func (p *parser) packageClause() *ast.PackageClause {
 	p.lineBegin("package clause (§projects-and-packages)")
 	d := &ast.PackageClause{PackagePos: p.next().Pos}
 	d.Name = p.ident("package clause (§projects-and-packages)")
-	if d.Name.Quoted() {
-		p.fail(p.toks[p.pos-1], "package name must be a plain identifier (§projects-and-packages)")
-	}
 	p.endOfLine("package clause (§projects-and-packages)")
 	return d
 }
@@ -62,14 +56,6 @@ func (p *parser) importSpec() *ast.ImportSpec {
 		}
 		spec.Path = append(spec.Path, p.ident("import path (§imports)"))
 	}
-	if spec.Alias != nil && spec.Alias.Quoted() {
-		p.fail(spec.Alias.Tok, "import alias must be a plain (unquoted) identifier (§imports)")
-	}
-	for _, seg := range spec.Path {
-		if seg.Quoted() {
-			p.fail(seg.Tok, "import path segments are plain (unquoted) identifiers (§imports)")
-		}
-	}
 	p.endOfLine("import specifier (§imports)")
 	return spec
 }
@@ -102,7 +88,7 @@ func (p *parser) plugLine() (plug *ast.Plug) {
 		p.fail(p.cur(), "expected 'use' plug line in Pipeline body (§pipelines), found %s", p.cur())
 	}
 	p.lineBegin("plug line (§pipelines)")
-	plug = &ast.Plug{UsePos: p.next().Pos}
+	plug = &ast.Plug{UsePos: p.kwTake("use").Pos}
 	plug.Ref = p.goRef("plug reference (§pipelines)")
 	p.endOfLine("plug line (§pipelines)")
 	return plug
@@ -118,7 +104,7 @@ func (p *parser) goRef(ctx string) *ast.GoRef {
 }
 
 func (p *parser) scope() *ast.Scope {
-	d := &ast.Scope{ScopePos: p.next().Pos}
+	d := &ast.Scope{ScopePos: p.kwTake("Scope").Pos}
 	d.Path = p.routePath()
 	if p.at(token.LBRACKET) {
 		d.Settings = p.settingList()
@@ -149,13 +135,13 @@ func (p *parser) scopeItem() (item ast.ScopeItem) {
 		p.fail(t, "expected a route, resources or nested Scope in Scope body (§scopes-and-routes), found %s", t)
 	}
 	switch {
-	case p.atKw("scope"):
+	case p.atKw("Scope"):
 		return p.scope()
 	case p.atKw("resources"):
 		return p.resources()
 	case p.atKw("dataset"):
 		return p.dataset()
-	case isVerb(t.Val) && !t.Quoted:
+	case isVerb(t.Val):
 		return p.route()
 	default:
 		p.fail(t, "expected a verb (get, post, ...), 'resources', 'dataset' or 'Scope' in Scope body (§scopes-and-routes), found %q", t.Val)
@@ -165,7 +151,7 @@ func (p *parser) scopeItem() (item ast.ScopeItem) {
 
 func (p *parser) dataset() *ast.Dataset {
 	p.lineBegin("dataset (§datasets)")
-	d := &ast.Dataset{DatasetPos: p.next().Pos}
+	d := &ast.Dataset{DatasetPos: p.kwTake("dataset").Pos}
 	d.Name = p.ident("dataset select name (§datasets)")
 	if p.at(token.DOT) {
 		p.next()
@@ -181,7 +167,7 @@ func (p *parser) dataset() *ast.Dataset {
 
 func (p *parser) route() *ast.Route {
 	p.lineBegin("route (§scopes-and-routes)")
-	r := &ast.Route{VerbTok: p.next()}
+	r := &ast.Route{VerbTok: p.kwTake(voltVerbs[strings.ToLower(p.cur().Val)])}
 	r.Path = p.routePath()
 	r.Handler = p.goRef("route handler (§scopes-and-routes)")
 	if p.at(token.LBRACKET) && !p.cur().NLBefore {
@@ -193,7 +179,7 @@ func (p *parser) route() *ast.Route {
 
 func (p *parser) resources() *ast.Resources {
 	p.lineBegin("resources (§resources)")
-	d := &ast.Resources{ResourcesPos: p.next().Pos}
+	d := &ast.Resources{ResourcesPos: p.kwTake("resources").Pos}
 	d.Name = p.ident("resources model name (§resources)")
 	if p.at(token.DOT) {
 		p.next()
@@ -202,6 +188,13 @@ func (p *parser) resources() *ast.Resources {
 	}
 	if p.at(token.LBRACKET) && !p.cur().NLBefore {
 		d.Settings = p.settingList()
+		for _, s := range d.Settings.Settings {
+			if l, ok := s.Value.(*ast.IdentList); ok && (s.Name == "only" || s.Name == "except") {
+				for _, id := range l.Names {
+					p.wordFold(id, ResourceActions)
+				}
+			}
+		}
 	}
 	p.endOfLine("resources (§resources)")
 	return d
@@ -276,9 +269,6 @@ func (p *parser) groupDecl() *ast.Group {
 	p.lineBegin("group declaration (§groups)")
 	d := &ast.Group{GroupPos: p.next().Pos}
 	d.Name = p.ident("group declaration (§groups)")
-	if d.Name.Quoted() {
-		p.fail(p.toks[p.pos-1], "group name must be a plain identifier (§groups)")
-	}
 	switch {
 	case p.at(token.LBRACE):
 		p.next()
@@ -334,9 +324,6 @@ func (p *parser) predDecl() *ast.Pred {
 	p.lineBegin("predicate declaration (§predicates)")
 	d := &ast.Pred{PredPos: p.next().Pos}
 	d.Name = p.ident("predicate declaration (§predicates)")
-	if d.Name.Quoted() {
-		p.fail(p.toks[p.pos-1], "predicate name must be a plain identifier (§predicates)")
-	}
 	p.expect(token.LBRACE, "predicate declaration (§predicates)")
 	d.X = p.predExpr()
 	d.Rbrace = p.expect(token.RBRACE, "predicate declaration (§predicates)").End()
@@ -347,7 +334,7 @@ func (p *parser) predDecl() *ast.Pred {
 func (p *parser) predExpr() ast.PredExpr {
 	x := p.predAnd()
 	for p.atKw("or") {
-		p.next()
+		p.kwTake("or")
 		x = &ast.PredBinary{Op: "or", X: x, Y: p.predAnd()}
 	}
 	return x
@@ -356,7 +343,7 @@ func (p *parser) predExpr() ast.PredExpr {
 func (p *parser) predAnd() ast.PredExpr {
 	x := p.predUnary()
 	for p.atKw("and") {
-		p.next()
+		p.kwTake("and")
 		x = &ast.PredBinary{Op: "and", X: x, Y: p.predUnary()}
 	}
 	return x
@@ -364,7 +351,7 @@ func (p *parser) predAnd() ast.PredExpr {
 
 func (p *parser) predUnary() ast.PredExpr {
 	if p.atKw("not") {
-		pos := p.next().Pos
+		pos := p.kwTake("not").Pos
 		return &ast.PredNot{NotPos: pos, X: p.predUnary()}
 	}
 	return p.predPrimary()
@@ -379,7 +366,7 @@ func (p *parser) predPrimary() ast.PredExpr {
 		rp := p.expect(token.RPAREN, "parenthesized predicate (§predicates)").End()
 		return &ast.PredParen{Lparen: lp, X: x, Rparen: rp}
 	case p.at(token.COLON), p.at(token.NUMBER), p.at(token.STRING), p.at(token.MINUS),
-		p.at(token.IDENT) && (strings.EqualFold(t.Val, "true") || strings.EqualFold(t.Val, "false")) && p.compOpAt(1):
+		(p.atKw("true") || p.atKw("false")) && p.compOpAt(1):
 		x := p.operand()
 		return p.comparisonTail(x)
 	case p.at(token.IDENT):
@@ -395,9 +382,6 @@ func (p *parser) predPrimary() ast.PredExpr {
 		case p.atKw("is"):
 			return p.predNull(name)
 		default:
-			if name.Quoted() {
-				p.fail(name.Tok, "a predicate reference must be a plain identifier (§predicates)")
-			}
 			return &ast.PredRef{Name: name}
 		}
 	default:
@@ -408,13 +392,11 @@ func (p *parser) predPrimary() ast.PredExpr {
 
 func (p *parser) predKeywordCheck() {
 	t := p.cur()
-	if t.Kind != token.IDENT || t.Quoted {
+	if t.Kind != token.IDENT {
 		return
 	}
-	for _, kw := range [...]string{"and", "or", "not", "in", "like", "is", "null"} {
-		if strings.EqualFold(t.Val, kw) {
-			p.fail(t, "%q is a keyword inside a predicate (§predicates); write \"%s\" to name a column", t.Val, t.Val)
-		}
+	if _, ok := foldTo(t.Val, predWords); ok {
+		p.fail(t, "%q is a keyword inside a predicate and names no column there (§predicates)", t.Val)
 	}
 }
 
@@ -443,9 +425,6 @@ func (p *parser) operand() ast.Operand {
 			p.fail(p.cur(), "':' must be directly followed by a parameter name (§predicates)")
 		}
 		name := p.ident("parameter (§predicates)")
-		if name.Quoted() {
-			p.fail(name.Tok, "parameter names are plain identifiers (§predicates)")
-		}
 		return &ast.Param{ColonPos: colon, Name: name}
 	case p.at(token.NUMBER), p.at(token.STRING):
 		return &ast.Lit{Tok: p.next()}
@@ -455,8 +434,10 @@ func (p *parser) operand() ast.Operand {
 		num.Val = "-" + num.Val
 		num.Pos = minus.Pos
 		return &ast.Lit{Tok: num}
-	case p.at(token.IDENT) && (strings.EqualFold(t.Val, "true") || strings.EqualFold(t.Val, "false")):
-		return &ast.Lit{Tok: p.next()}
+	case p.atKw("true"):
+		return &ast.Lit{Tok: p.kwTake("true")}
+	case p.atKw("false"):
+		return &ast.Lit{Tok: p.kwTake("false")}
 	case p.at(token.IDENT):
 		p.predKeywordCheck()
 		return &ast.ColRef{Name: p.ident("operand (§predicates)")}
@@ -467,7 +448,7 @@ func (p *parser) operand() ast.Operand {
 }
 
 func (p *parser) predIn(col *ast.Ident) ast.PredExpr {
-	p.next()
+	p.kwTake("in")
 	x := &ast.PredIn{Col: col}
 	if p.at(token.COLON) {
 		prm, ok := p.operand().(*ast.Param)
@@ -495,7 +476,7 @@ func (p *parser) predIn(col *ast.Ident) ast.PredExpr {
 }
 
 func (p *parser) predLike(col *ast.Ident) ast.PredExpr {
-	p.next()
+	p.kwTake("like")
 	x := &ast.PredLike{Col: col}
 	switch pat := p.operand().(type) {
 	case *ast.Lit:
@@ -512,16 +493,16 @@ func (p *parser) predLike(col *ast.Ident) ast.PredExpr {
 }
 
 func (p *parser) predNull(col *ast.Ident) ast.PredExpr {
-	p.next()
+	p.kwTake("is")
 	x := &ast.PredNull{Col: col}
 	if p.atKw("not") {
-		p.next()
+		p.kwTake("not")
 		x.Not = true
 	}
 	if !p.atKw("null") {
 		p.fail(p.cur(), "expected 'null' after 'is' (§predicates)")
 	}
-	x.EndPos = p.next().End()
+	x.EndPos = p.kwTake("null").End()
 	return x
 }
 
@@ -529,20 +510,17 @@ func (p *parser) selectDecl() *ast.Select {
 	p.lineBegin("select declaration (§selects-over-groups)")
 	d := &ast.Select{SelectPos: p.next().Pos}
 	d.Name = p.ident("select declaration (§selects-over-groups)")
-	if d.Name.Quoted() {
-		p.fail(p.toks[p.pos-1], "select name must be a plain identifier (§selects-over-groups)")
-	}
 	if p.at(token.LPAREN) {
 		p.selectProjection(d)
 	}
 	if !p.atKw("for") {
 		p.fail(p.cur(), "expected 'for' after the select name (§selects-over-groups)")
 	}
-	p.next()
+	p.kwTake("for")
 	d.Target = p.ident("select target (§selects-over-groups)")
 	d.EndPos = d.Target.End()
 	if p.atKw("where") {
-		p.next()
+		p.kwTake("where")
 		d.Where = p.predExpr()
 		d.EndPos = d.Where.End()
 	}

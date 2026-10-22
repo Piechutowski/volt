@@ -2,12 +2,12 @@
 /* block comment
    spanning lines */
 
-Project shop_db [note: '''
+Project shop_db [note: """
     # Shop database
     Multi-line **markdown** note.
-  '''] {
-  database_type: 'PostgreSQL'
-  custom_key: 'implementations must accept arbitrary keys'
+  """] {
+  database_type: "PostgreSQL"
+  custom_key: "implementations must accept arbitrary keys"
 }
 
 Type Status string
@@ -19,30 +19,30 @@ TablePartial base_template {
   created_at time.Time [null, default: `now()`]
 }
 
-Table users [note: 'user accounts'] {
+Table users [note: "user accounts"] {
   ~base_template
   name string [unique]
   full_name string [null]
-  status Status [default: 'active']
+  status Status [default: "active"]
   balance float64 [null, default: -100.5]
-  2fa_enabled bool [null, default: false]
+  two_factor_enabled bool [null, default: false]
   job V2JobStatus [null]
-  motto string [null, default: 'be kind']
+  motto string [null, default: "be kind"]
   ref_col int [null, ref: core_orders.id]
 
-  indexes {
-    (id, `lower(name)`) [name: 'ix_main', unique]
+  Indexes {
+    (id, `lower(name)`) [name: "ix_main", unique]
     created_at
-    `floor(balance)` [name: 'ix_balance_floor']
+    `floor(balance)` [name: "ix_balance_floor"]
   }
 
-  validators {
+  Validators {
     BalanceFloor(balance)
   }
 
   Records (id, name) {
-    1, 'ann'
-    2, 'bob'
+    1, "ann"
+    2, "bob"
   }
 }
 

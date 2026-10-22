@@ -5,7 +5,7 @@ Table users {
 	email      string    [required, unique]
 	created_at time.Time [default: `CURRENT_TIMESTAMP`]
 
-	validators {
+	Validators {
 		EmailShape(email)
 		EmailValid(email)
 	}

@@ -10,7 +10,7 @@ Table users {
 Migration 0001__init {
   create table users {
     id   int    [pk]
-    hits string [default: '0']
+    hits string [default: "0"]
   }
 }
 

@@ -2,13 +2,13 @@
 i01_unterminated_block_comment.volt:3:1: error: syntax: unterminated block comment (§comments)
 
 ## i02_unterminated_string.volt
-i02_unterminated_string.volt:2:25: error: syntax: newline in single-line string (§string-literals)
+i02_unterminated_string.volt:2:25: error: syntax: newline in a string: a string ends on its line, and a multi-line string is written """...""" (§string-literals)
 i02_unterminated_string.volt:3:1: error: syntax: invalid setting value (§settings-lists): found end of file
 i02_unterminated_string.volt:3:1: error: syntax: expected '}' in Table (§table), found end of file
 
 ## i03_newline_in_string.volt
-i03_newline_in_string.volt:3:17: error: syntax: newline in single-line string (§string-literals)
-i03_newline_in_string.volt:4:6: error: syntax: newline in single-line string (§string-literals)
+i03_newline_in_string.volt:3:17: error: syntax: newline in a string: a string ends on its line, and a multi-line string is written """...""" (§string-literals)
+i03_newline_in_string.volt:4:6: error: syntax: newline in a string: a string ends on its line, and a multi-line string is written """...""" (§string-literals)
 i03_newline_in_string.volt:5:1: error: syntax: expected ']' in settings list (§settings-lists), found '}' "}"
 
 ## i04_invalid_number.volt
@@ -264,13 +264,55 @@ i278_settings_missing_comma.volt:4:17: error: syntax: expected ',' or ']' in set
 
 ## i280_ref_action_quoted.volt
 i280_ref_action_quoted.volt:5:40: error: spec/relationships-ref: "delete" must be a referential action: cascade, restrict, set_null or set_default (§relationships-ref)
-i280_ref_action_quoted.volt:5:52: error: spec/relationships-ref: "update" requires a value
+i280_ref_action_quoted.volt:5:52: error: spec/relationships-ref: "update" requires a value (§relationships-ref)
 
 ## i282_settings_missing_comma_line_break.volt
 i282_settings_missing_comma_line_break.volt:7:3: error: syntax: expected ',' or ']' in settings list, found identifier "update": settings are separated by commas, and a setting name or value is one identifier (§settings-lists)
 
+## i284_case_element_word.volt
+i284_case_element_word.volt:3:1: error: syntax: write Table, not TABLE: keywords are case-sensitive (§keywords)
+i284_case_element_word.volt:7:1: error: syntax: write Table, not table: keywords are case-sensitive (§keywords)
+i284_case_element_word.volt:11:1: error: syntax: write Type, not type: keywords are case-sensitive (§keywords)
+
+## i285_case_block_word.volt
+i285_case_block_word.volt:7:3: error: syntax: write Indexes, not indexes: keywords are case-sensitive (§keywords)
+i285_case_block_word.volt:10:3: error: syntax: write Records, not records: keywords are case-sensitive (§keywords)
+
+## i286_case_setting_name.volt
+i286_case_setting_name.volt:4:16: error: syntax: write pk, not PK: keywords are case-sensitive (§keywords)
+i286_case_setting_name.volt:5:16: error: syntax: write null, not Null: keywords are case-sensitive (§keywords)
+i286_case_setting_name.volt:5:22: error: syntax: write note, not Note: keywords are case-sensitive (§keywords)
+
+## i287_case_ref_action.volt
+i287_case_ref_action.volt:5:40: error: syntax: write cascade, not CASCADE: keywords are case-sensitive (§keywords)
+i287_case_ref_action.volt:5:57: error: syntax: write set_null, not Set_Null: keywords are case-sensitive (§keywords)
+
+## i288_case_literal_word.volt
+i288_case_literal_word.volt:5:27: error: syntax: write true, not TRUE: keywords are case-sensitive (§keywords)
+i288_case_literal_word.volt:10:6: error: syntax: write false, not False: keywords are case-sensitive (§keywords)
+i288_case_literal_word.volt:10:13: error: syntax: write null, not NULL: keywords are case-sensitive (§keywords)
+
+## i293_identifier_leading_digit.volt
+i293_identifier_leading_digit.volt:5:3: error: syntax: 2fa_code begins with a digit: a name is a Go identifier, a letter or underscore followed by letters, digits and underscores (§identifiers)
+
+## i294_identifier_combining_mark.volt
+i294_identifier_combining_mark.volt:5:7: error: syntax: U+0301, a combining mark, cannot stand in a name: a name is a Go identifier, letters, digits and underscores (§identifiers)
+
+## i295_quoted_name.volt
+i295_quoted_name.volt:3:7: error: syntax: expected identifier in table name (§table), found string "\"user accounts\""
+
+## i296_single_quoted_string.volt
+i296_single_quoted_string.volt:3:20: error: syntax: a multi-line string is written """...""", not '''...''' (§multi-line-string-literals)
+i296_single_quoted_string.volt:7:23: error: syntax: a string is written in double quotes, "...", not single quotes (§string-literals)
+
+## i297_unknown_escape.volt
+i297_unknown_escape.volt:5:28: error: syntax: unknown escape sequence \q: a string takes \\, \", \n and \t only (§escape-sequences)
+i297_unknown_escape.volt:6:23: error: syntax: unknown escape sequence \u: a string takes \\, \", \n and \t only (§escape-sequences)
+i297_unknown_escape.volt:7:23: error: syntax: unknown escape sequence \': a string takes \\, \", \n and \t only (§escape-sequences)
+i297_unknown_escape.volt:8:24: error: syntax: unknown escape sequence \r: a string takes \\, \", \n and \t only (§escape-sequences)
+
 ## i32_settings_next_line.volt
-i32_settings_next_line.volt:4:3: error: syntax: expected a column, indexes, validators, records or '~injection' in Table body, found '[' "["
+i32_settings_next_line.volt:4:3: error: syntax: expected a column, Indexes, Validators, Records or '~injection' in Table body, found '[' "["
 
 ## i33_ref_without_body.volt
 i33_ref_without_body.volt:5:1: error: syntax: expected identifier in relationship endpoint (§relationships-ref), found end of file
@@ -297,13 +339,13 @@ i42_bare_ident_record.volt:5:17: error: spec/records-sample-data: record values 
 i43_bare_ident_default.volt:3:19: error: spec/default-values: default value must be a number, string, boolean or expression literal; found bare identifier "something" (§default-values)
 
 ## i61_tag_malformed.volt
-i61_tag_malformed.volt:4:21: error: spec/columns: tag "json=name" is not one key:"value" pair — write e.g. 'json:"name"' (§columns)
+i61_tag_malformed.volt:4:21: error: spec/columns: tag "json=name" is not one key:"value" pair: write e.g. "json:\"name\"" (§columns)
 
 ## i62_tag_db_reserved.volt
 i62_tag_db_reserved.volt:4:21: error: spec/columns: tag key "db" is reserved: the db tag is the scan contract (§struct-tags)
 
 ## i63_tag_duplicate_key.volt
-i63_tag_duplicate_key.volt:4:38: error: spec/columns: tag key "json" appears more than once on this column (§columns)
+i63_tag_duplicate_key.volt:4:40: error: spec/columns: tag key "json" appears more than once on this column (§columns)
 
 ## i78_increment_varchar.volt
 i78_increment_varchar.volt:4:20: error: spec/columns: increment on "code" (string): only an int column can auto-increment (§columns, §mapping-to-sqlite-ddl)

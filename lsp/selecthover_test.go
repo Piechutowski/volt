@@ -10,7 +10,7 @@ import (
 
 const projSchema = "package db\n\n" +
 	"Table page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n\thits int [default: 0]\n}\n\n" +
-	"Table link_clicks {\n\tid int [pk, increment]\n\tsite string\n\tday int\n\ttarget string [default: '']\n}\n\n" +
+	"Table link_clicks {\n\tid int [pk, increment]\n\tsite string\n\tday int\n\ttarget string [default: \"\"]\n}\n\n" +
 	"Group metrics {\n\tpage_views\n\tlink_clicks\n}\n\n" +
 	"Select summary (site, day) for metrics where day >= :from\n" +
 	"Select public (* \\ site) for link_clicks\n" +

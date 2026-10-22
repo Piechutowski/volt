@@ -144,8 +144,8 @@ type CoreUser struct {
 	APIKey      string          `db:"api_key" json:"api_key"`
 	HomepageURL rt.Null[string] `db:"homepage_url" json:"homepage_url"`
 	HTTPStatus  rt.Null[int]    `db:"http_status" json:"http_status"`
-	// Quoted name with a space
-	FullName       string           `db:"full name" json:"full name"`
+	// Once a quoted name with a space
+	FullName       string           `db:"full_name" json:"full_name"`
 	PrecisionValue rt.Null[float64] `db:"precision_value" json:"precision_value"`
 	Balance        rt.Null[float64] `db:"balance" json:"balance"`
 	Kind           CoreAuditKind    `db:"kind" json:"kind"`
@@ -172,7 +172,7 @@ var (
 	CoreUserAPIKey         = rt.Column[CoreUser, string]{Name: "api_key"}
 	CoreUserHomepageURL    = rt.NullColumn[CoreUser, string]{Column: rt.Column[CoreUser, string]{Name: "homepage_url"}}
 	CoreUserHTTPStatus     = rt.NullColumn[CoreUser, int]{Column: rt.Column[CoreUser, int]{Name: "http_status"}}
-	CoreUserFullName       = rt.Column[CoreUser, string]{Name: "full name"}
+	CoreUserFullName       = rt.Column[CoreUser, string]{Name: "full_name"}
 	CoreUserPrecisionValue = rt.NullColumn[CoreUser, float64]{Column: rt.Column[CoreUser, float64]{Name: "precision_value"}}
 	CoreUserBalance        = rt.NullColumn[CoreUser, float64]{Column: rt.Column[CoreUser, float64]{Name: "balance"}}
 	CoreUserKind           = rt.Column[CoreUser, CoreAuditKind]{Name: "kind"}
@@ -244,7 +244,7 @@ func (c CoreUserChangeset) HTTPStatusSet(v rt.Null[int]) CoreUserChangeset {
 	return c
 }
 
-// FullNameSet sets full name and marks it (spec §changesets).
+// FullNameSet sets full_name and marks it (spec §changesets).
 func (c CoreUserChangeset) FullNameSet(v string) CoreUserChangeset {
 	c.vals.FullName, c.set[4] = v, true
 	return c
@@ -294,7 +294,7 @@ func (c CoreUserChangeset) RtSet(v []byte) CoreUserChangeset {
 // error for a value that does not convert and an unknown_field error
 // for a key that names no column (spec §changesets).
 func (c CoreUserChangeset) Cast(p CoreUserParams, allow ...CoreUserColumn) CoreUserChangeset {
-	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "api_key", "homepage_url", "http_status", "full name", "precision_value", "balance", "kind", "type", "func", "rt")...)
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "api_key", "homepage_url", "http_status", "full_name", "precision_value", "balance", "kind", "type", "func", "rt")...)
 	for _, col := range allow {
 		switch col.ColumnName() {
 		case "id":
@@ -321,9 +321,9 @@ func (c CoreUserChangeset) Cast(p CoreUserParams, allow ...CoreUserColumn) CoreU
 			} else if ok {
 				c = c.HTTPStatusSet(v)
 			}
-		case "full name":
-			if v, ok, err := rt.Field(p, "full name", "string", false, func(r *CoreUser) string { return r.FullName }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "full name")
+		case "full_name":
+			if v, ok, err := rt.Field(p, "full_name", "string", false, func(r *CoreUser) string { return r.FullName }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "full_name")
 			} else if ok {
 				c = c.FullNameSet(v)
 			}
@@ -379,7 +379,7 @@ func (c CoreUserChangeset) Changed(col CoreUserColumn) bool {
 		return c.set[2]
 	case "http_status":
 		return c.set[3]
-	case "full name":
+	case "full_name":
 		return c.set[4]
 	case "precision_value":
 		return c.set[5]
@@ -453,7 +453,7 @@ func (c CoreUserChangeset) Params() CoreUserParams {
 		marks = append(marks, rt.Mark{Wire: "http_status", Value: c.vals.HTTPStatus})
 	}
 	if c.set[4] {
-		marks = append(marks, rt.Mark{Wire: "full name", Value: c.vals.FullName})
+		marks = append(marks, rt.Mark{Wire: "full_name", Value: c.vals.FullName})
 	}
 	if c.set[5] {
 		marks = append(marks, rt.Mark{Wire: "precision_value", Value: c.vals.PrecisionValue})
@@ -505,7 +505,7 @@ func (c CoreUserChangeset) Err() error {
 	return &rt.Invalid{Model: "CoreUser", Fields: c.Errors()}
 }
 
-// X2faCode is a row of the 2fa_codes table.
+// X2faCode is a row of the _2fa_codes table.
 type X2faCode struct {
 	Code      string    `db:"code" json:"code"`
 	UserID    int       `db:"user_id" json:"user_id"`
@@ -516,7 +516,7 @@ type X2faCode struct {
 // (spec §changesets).
 type X2faCodeColumn = rt.ColumnOf[X2faCode]
 
-// X2faCodeParams is a 2fa_codes write body as the wire carries it (spec §changesets).
+// X2faCodeParams is a _2fa_codes write body as the wire carries it (spec §changesets).
 type X2faCodeParams = rt.Params[X2faCode]
 
 // Typed column handles of X2faCode (spec §changesets): the Cast allow list of
@@ -529,7 +529,7 @@ var (
 	X2faCodeExpiresAt = rt.Column[X2faCode, time.Time]{Name: "expires_at"}
 )
 
-// X2faCodeChangeset carries a 2fa_codes row, the changes proposed to it and the
+// X2faCodeChangeset carries a _2fa_codes row, the changes proposed to it and the
 // errors found so far (spec §changesets). It is a value: every method
 // returns a new changeset and leaves its receiver as it was.
 type X2faCodeChangeset struct {
@@ -541,7 +541,7 @@ type X2faCodeChangeset struct {
 	valid []rt.FieldError
 }
 
-// X2faCodeNew starts a changeset for a 2fa_codes row to create, the schema's literal
+// X2faCodeNew starts a changeset for a _2fa_codes row to create, the schema's literal
 // defaults in place (spec §changesets).
 func X2faCodeNew() X2faCodeChangeset { return X2faCodeChangeset{} }
 

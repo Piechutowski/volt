@@ -17,7 +17,7 @@ Table addresses {
 Table person {
   id int [pk]
 }
-Table menus [model: 'Menu'] {
+Table menus [model: "Menu"] {
   id int [pk]
 }
 Table account_statuses {

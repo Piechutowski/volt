@@ -3,7 +3,7 @@ Table users {
   wealth int
   debt int
 
-  validators {
+  Validators {
     Solvent(wealth, debt)
     DebtNonNegative(debt)
   }

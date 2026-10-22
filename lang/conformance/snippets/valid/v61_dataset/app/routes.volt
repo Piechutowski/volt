@@ -6,6 +6,6 @@ import (
 )
 
 Scope /ms {
-	dataset db.browse [strip: 'ms_', except: (ms_notes)]
+	dataset db.browse [strip: "ms_", except: (ms_notes)]
 	get /notes Notes.Browse
 }

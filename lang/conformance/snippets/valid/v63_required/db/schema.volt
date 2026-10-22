@@ -11,7 +11,7 @@ Table accounts {
   avatar []byte  [required]
   price  float64 [required]
 
-  validators {
+  Validators {
     PlanKnown(tier)
   }
 }

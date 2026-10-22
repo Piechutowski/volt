@@ -7,7 +7,7 @@ Migration 0001__create_users {
     id    int    [pk, increment]
     email string [unique]
 
-    indexes {
+    Indexes {
       email [unique]
     }
   }
@@ -15,14 +15,14 @@ Migration 0001__create_users {
   alter table people {
     add bio string [null]
     rename email to mail
-    drop legacy string [default: 'x']
+    drop legacy string [default: "x"]
   }
   create index people (mail) [unique]
   drop index people bio
   drop table audit {
     id int [pk]
   }
-  exec 'VACUUM' [down: 'SELECT 1']
+  exec `VACUUM` [down: `SELECT 1`]
 }
 
 ---
@@ -131,14 +131,14 @@ Migration 0001__create_users {
             (setting_name
               (identifier))))))
     (exec_op
-      (string
-        (string_content))
+      (expression
+        (expression_content))
       (settings_list
         (setting
           (setting_name
             (identifier))
-          (string
-            (string_content)))))))
+          (expression
+            (expression_content)))))))
 
 ==================
 migration: settings, up and down blocks, a rebuild with from:
@@ -319,12 +319,25 @@ Migration 0005__bad {
 
 ---
 
+
+
 ==================
 a migration setting of two words is an error
 :error
 ==================
 
 Migration 0001__a [no transaction] {
+}
+
+---
+
+==================
+exec takes its SQL in backticks: a string is an error
+:error
+==================
+
+Migration 0001__a [irreversible] {
+  exec "VACUUM"
 }
 
 ---

@@ -118,7 +118,7 @@ func (p *parser) peekKind(n int) token.Kind {
 
 func (p *parser) atKw(kw string) bool {
 	t := p.cur()
-	return t.Kind == token.IDENT && !t.Quoted && strings.EqualFold(t.Val, kw)
+	return t.Kind == token.IDENT && strings.EqualFold(t.Val, kw)
 }
 
 func (p *parser) errorf(t token.Token, format string, args ...any) {
@@ -146,7 +146,11 @@ func (p *parser) endOfLine(ctx string) {
 }
 
 func (p *parser) ident(ctx string) *ast.Ident {
-	return p.identOf(p.expect(token.IDENT, ctx))
+	t := p.expect(token.IDENT, ctx)
+	if c := t.Val[0]; '0' <= c && c <= '9' {
+		p.errorf(t, "%s begins with a digit: a name is a Go identifier, a letter or underscore followed by letters, digits and underscores (§identifiers)", t.Val)
+	}
+	return p.identOf(t)
 }
 
 func (p *parser) qualName(ctx string) *ast.QualName {
@@ -184,7 +188,12 @@ func (p *parser) decl() (d ast.Decl) {
 	if t.Kind != token.IDENT {
 		p.fail(t, "expected an element type at top level (§program-structure), found %s", t)
 	}
-	switch strings.ToLower(t.Val) {
+	lower := strings.ToLower(t.Val)
+	if right, ok := declWords[lower]; ok && right != t.Val {
+		p.caseErr(t, right)
+		p.toks[p.pos].Val = right
+	}
+	switch lower {
 	case "package":
 		return p.packageClause()
 	case "import":
@@ -332,16 +341,16 @@ func (p *parser) tableItem(what string) (item ast.TableItem) {
 		pr := &ast.PartialRef{TildePos: t.Pos, Name: p.ident("partial injection (§tablepartial)")}
 		p.endOfLine("partial injection (§tablepartial)")
 		return pr
-	case p.atKw("indexes") && p.peekKind(1) == token.LBRACE:
+	case p.atKw("Indexes") && p.peekKind(1) == token.LBRACE:
 		return p.indexesBlock()
-	case p.atKw("validators") && p.peekKind(1) == token.LBRACE:
+	case p.atKw("Validators") && p.peekKind(1) == token.LBRACE:
 		return p.validatorsBlock()
-	case p.atKw("records") && (p.peekKind(1) == token.LPAREN || p.peekKind(1) == token.LBRACE):
+	case p.atKw("Records") && (p.peekKind(1) == token.LPAREN || p.peekKind(1) == token.LBRACE):
 		return p.records(nil)
 	case t.Kind == token.IDENT:
 		return p.column()
 	default:
-		p.fail(t, "expected a column, indexes, validators, records or '~injection' in %s body, found %s", what, t)
+		p.fail(t, "expected a column, Indexes, Validators, Records or '~injection' in %s body, found %s", what, t)
 		return nil
 	}
 }
@@ -376,12 +385,12 @@ func (p *parser) typeRef() *ast.TypeRef {
 }
 
 func (p *parser) indexesBlock() *ast.IndexesBlock {
-	b := &ast.IndexesBlock{IndexesPos: p.next().Pos}
-	p.expect(token.LBRACE, "indexes block (§indexes)")
+	b := &ast.IndexesBlock{IndexesPos: p.kwTake("Indexes").Pos}
+	p.expect(token.LBRACE, "Indexes block (§indexes)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		p.item(func() { b.Indexes = append(b.Indexes, p.index()) })
 	}
-	b.Rbrace = p.expect(token.RBRACE, "indexes block (§indexes)").Pos
+	b.Rbrace = p.expect(token.RBRACE, "Indexes block (§indexes)").Pos
 	return b
 }
 
@@ -429,8 +438,8 @@ func (p *parser) indexRest() *ast.Index {
 }
 
 func (p *parser) validatorsBlock() *ast.ValidatorsBlock {
-	b := &ast.ValidatorsBlock{ValidatorsPos: p.next().Pos}
-	p.expect(token.LBRACE, "validators block (§validators)")
+	b := &ast.ValidatorsBlock{ValidatorsPos: p.kwTake("Validators").Pos}
+	p.expect(token.LBRACE, "Validators block (§validators)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		p.item(func() {
 			p.lineBegin("validator (§validators)")
@@ -448,7 +457,7 @@ func (p *parser) validatorsBlock() *ast.ValidatorsBlock {
 			b.Validators = append(b.Validators, v)
 		})
 	}
-	b.Rbrace = p.expect(token.RBRACE, "validators block (§validators)").Pos
+	b.Rbrace = p.expect(token.RBRACE, "Validators block (§validators)").Pos
 	return b
 }
 
@@ -499,8 +508,8 @@ func (p *parser) typeDecl() *ast.TypeDecl {
 	d.Name = p.qualName("declared type name (§types)")
 	d.Storage = p.typeRef()
 	d.EndPos = d.Storage.End()
-	if p.at(token.IDENT) && !p.cur().NLBefore && strings.EqualFold(p.cur().Val, "from") {
-		p.next()
+	if p.atKw("from") && !p.cur().NLBefore {
+		p.kwTake("from")
 		d.From = &ast.BasicLit{Tok: p.expect(token.STRING, "import path after from (§types)")}
 		d.EndPos = d.From.End()
 	}
@@ -515,7 +524,7 @@ func (p *parser) recordsDecl() *ast.Records {
 }
 
 func (p *parser) records(_ *ast.Ident) *ast.Records {
-	pos := p.next().Pos
+	pos := p.kwTake("Records").Pos
 	return p.recordsRest(pos, nil)
 }
 
@@ -580,6 +589,7 @@ func (p *parser) recordValue() ast.Node {
 		return &ast.NegNumber{MinusPos: t.Pos, Num: p.litOf(p.expect(token.NUMBER, "record value (§records-sample-data)"))}
 	case token.IDENT:
 		id := p.ident("record value (§records-sample-data)")
+		p.wordFold(id, literalWords)
 		if p.at(token.DOT) {
 			p.fail(p.cur(), "a dotted name is not a record value: a record value is a literal, true, false or null, and a declared type takes a literal of its storage type (§records-sample-data)")
 		}
@@ -611,7 +621,11 @@ func (p *parser) settingList() *ast.SettingList {
 
 func (p *parser) setting() *ast.Setting {
 	nameTok := p.expect(token.IDENT, "setting name (§settings-lists)")
-	name := strings.ToLower(nameTok.Val)
+	if right, ok := foldTo(nameTok.Val, SettingNames); ok && right != nameTok.Val {
+		p.caseErr(nameTok, right)
+		nameTok.Val = right
+	}
+	name := nameTok.Val
 	s := p.settings.new()
 	s.NameTok, s.Name = nameTok, name
 	s.SetEnd(nameTok.End())
@@ -621,6 +635,14 @@ func (p *parser) setting() *ast.Setting {
 			s.Value = p.refEndpoint()
 		} else {
 			s.Value = p.settingValue()
+		}
+		if id, ok := s.Value.(*ast.Ident); ok {
+			switch name {
+			case "delete", "update":
+				p.wordFold(id, RefActions)
+			case "default":
+				p.wordFold(id, literalWords)
+			}
 		}
 		s.SetEnd(s.Value.End())
 	}
@@ -645,6 +667,7 @@ func (p *parser) settingValue() ast.Node {
 			var mod *ast.Ident
 			if p.at(token.IDENT) && !p.cur().NLBefore {
 				mod = p.ident("identifier list (§settings-whitelists)")
+				p.wordFold(mod, orderWords)
 			}
 			il.Mods = append(il.Mods, mod)
 			if p.at(token.COMMA) {

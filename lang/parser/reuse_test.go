@@ -58,7 +58,7 @@ func TestParseFileReuseIsTheParse(t *testing.T) {
 		"bare\n",
 		"Ref: a.b >\n",
 		"/* open\n",
-		"'''\n",
+		"\"\"\"\n",
 		"// note\n",
 	}
 	check := func(name, path, src string, prev *parser.Reuse) *parser.Reuse {
@@ -105,7 +105,7 @@ Type PostState string
 Table posts {
   id     int [pk, increment]
   title  string
-  status PostState  [default: 'active']
+  status PostState  [default: "active"]
 }
 
 Table tags {
@@ -130,7 +130,7 @@ Ref: tags.id > posts.id
 	}
 	step("first", base, 5, 0)
 	step("same", base, 0, 5)
-	step("edit tags", strings.Replace(base, "name string", "name string    [note: 'edited']", 1), 1, 4)
+	step("edit tags", strings.Replace(base, "name string", "name string    [note: \"edited\"]", 1), 1, 4)
 	step("insert above", strings.Replace(base, "Table posts", "// a comment\n\nTable posts", 1), 2, 3)
 	step("broken posts", strings.Replace(base, "title  string", "title  string [", 1), 2, 3)
 	step("fixed", base, 1, 4)

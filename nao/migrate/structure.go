@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Piechutowski/volt/lang/scanner"
 	"github.com/Piechutowski/volt/nao/gen/sqlite"
 )
 
@@ -759,7 +760,7 @@ func indexDescribe(ix Index) string {
 	return "(" + strings.Join(ix.Key, ", ") + ")"
 }
 
-// shapeVolt renders a table's columns and indexes block as the body of
+// shapeVolt renders a table's columns and Indexes block as the body of
 // a create table or rebuild table operation (spec §migrations), one
 // line per column, two-space indented.
 func shapeVolt(t *Table) string {
@@ -783,7 +784,7 @@ func shapeVolt(t *Table) string {
 		}
 	}
 	if len(lines) > 0 {
-		b.WriteString("\n  indexes {\n")
+		b.WriteString("\n  Indexes {\n")
 		for _, l := range lines {
 			b.WriteString("    " + l + "\n")
 		}
@@ -851,12 +852,16 @@ func columnVolt(t *Table, c Column) string {
 
 // defaultVolt renders a stored default as a default: value: a SQL
 // string as a Volt string, a number as itself, anything else as an
-// expression literal. A stored NULL default is no default: (spec
-// §default-values) and is never rendered.
+// expression literal, which also holds a SQL string no Volt string
+// spells. A stored NULL default is no default: (spec §default-values)
+// and is never rendered.
 func defaultVolt(d string) string {
 	switch {
 	case len(d) >= 2 && d[0] == '\'' && d[len(d)-1] == '\'':
-		return "'" + strings.ReplaceAll(strings.ReplaceAll(d[1:len(d)-1], "''", "'"), "'", `\'`) + "'"
+		if q, ok := scanner.Quote(strings.ReplaceAll(d[1:len(d)-1], "''", "'")); ok {
+			return q
+		}
+		return "`" + d + "`"
 	case strings.HasPrefix(d, "(") && strings.HasSuffix(d, ")") && parenMatches(d):
 		return "`" + strings.TrimSpace(d[1:len(d)-1]) + "`"
 	}
@@ -866,7 +871,7 @@ func defaultVolt(d string) string {
 	return "`" + d + "`"
 }
 
-// indexVolt renders an index as an indexes block line or the tail of a
+// indexVolt renders an index as an Indexes block line or the tail of a
 // create index operation (spec §migrations rule 10): the key, then
 // unique, where: and a name: that the key does not derive.
 func indexVolt(table string, ix Index) string {
@@ -894,7 +899,9 @@ func indexVolt(table string, ix Index) string {
 		settings = append(settings, "where: `"+ix.Where+"`")
 	}
 	if ix.Name != "" && (!plain || ix.Name != strings.Join(derived, "_")) {
-		settings = append(settings, "name: '"+strings.ReplaceAll(ix.Name, "'", `\'`)+"'")
+		if q, ok := scanner.Quote(ix.Name); ok {
+			settings = append(settings, "name: "+q)
+		}
 	}
 	if len(settings) == 0 {
 		return key

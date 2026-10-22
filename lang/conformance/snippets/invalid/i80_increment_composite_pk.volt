@@ -4,7 +4,7 @@ Table user_tags {
   user_id int [increment]
   tag string
 
-  indexes {
+  Indexes {
     (user_id, tag) [pk]
   }
 }

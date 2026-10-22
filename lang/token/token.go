@@ -116,8 +116,8 @@ const (
 	ILLEGAL Kind = iota
 	EOF
 
-	IDENT    // users, "quoted name" (spec §identifiers)
-	STRING   // 'text', '''multi line''' (spec §string-literals, §multi-line-string-literals)
+	IDENT    // users (spec §identifiers)
+	STRING   // "text", """multi line""" (spec §string-literals, §multi-line-string-literals)
 	NUMBER   // 42, 3.14, 1.5e10 (spec §numeric-literals)
 	FUNCEXPR // `now()` (spec §expression-literals)
 
@@ -190,8 +190,7 @@ func (k Kind) String() string {
 type Token struct {
 	Kind Kind
 
-	Quoted bool // IDENT written as "quoted identifier"
-	Multi  bool // STRING written as '''multi-line'''
+	Multi bool // STRING written as """multi-line"""
 
 	// NLBefore reports whether a line break (or start of file) precedes
 	// this token.
@@ -199,7 +198,7 @@ type Token struct {
 	// SpBefore reports whether any whitespace precedes this token.
 	SpBefore bool
 	// DeclStart reports that this token begins a top-level element
-	// (spec §line-structure-and-whitespace): an unquoted identifier in the first column of its
+	// (spec §line-structure-and-whitespace): an identifier in the first column of its
 	// line, outside every brace, string and comment. The element before
 	// it ends here.
 	DeclStart bool

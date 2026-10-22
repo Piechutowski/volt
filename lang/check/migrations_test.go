@@ -16,12 +16,12 @@ const migrationsSrc = `Table users {
 
 Migration 0010__users_name {
   alter table users {
-    add name string [default: '']
+    add name string [default: ""]
   }
 }
 
 Migration 0002__exec_only [irreversible] {
-  exec 'PRAGMA user_version = 2'
+  exec ` + "`PRAGMA user_version = 2`" + `
 }
 
 Migration 0001__create_users {
@@ -38,7 +38,7 @@ Migration 0003__up_only {
 
 Migration 0004__up_down {
   up {
-    exec 'SELECT 1'
+    exec ` + "`SELECT 1`" + `
   }
   down {
   }

@@ -117,7 +117,7 @@ func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], pr
 
 const (
 	coreUserTableSQL   = `"core_users"`
-	coreUserColumnsSQL = `"id", "api_key", "homepage_url", "http_status", "full name", "precision_value", "balance", "kind", "type", "func", "rt"`
+	coreUserColumnsSQL = `"id", "api_key", "homepage_url", "http_status", "full_name", "precision_value", "balance", "kind", "type", "func", "rt"`
 )
 
 // CoreUserLimit caps how many rows CoreUserQuery returns.
@@ -224,7 +224,7 @@ func (q *Queries) CoreUserUpdateWhere(ctx context.Context, set []rt.Assign[CoreU
 }
 
 const (
-	x2faCodeTableSQL   = `"2fa_codes"`
+	x2faCodeTableSQL   = `"_2fa_codes"`
 	x2faCodeColumnsSQL = `"code", "user_id", "expires_at"`
 )
 
@@ -249,7 +249,7 @@ func X2faCodeAfter(key ...any) rt.Opt[X2faCode] { return rt.After[X2faCode](key.
 // with Set/SetNull on the X2faCode column handles.
 func X2faCodeSet(assigns ...rt.Assign[X2faCode]) []rt.Assign[X2faCode] { return assigns }
 
-// X2faCodeQuery returns the 2fa_codes rows matching every given predicate,
+// X2faCodeQuery returns the _2fa_codes rows matching every given predicate,
 // shaped by the remaining options (order, limit, offset, keyset,
 // distinct). No options means every row.
 func (q *Queries) X2faCodeQuery(ctx context.Context, opts ...rt.Opt[X2faCode]) ([]X2faCode, error) {
@@ -273,7 +273,7 @@ func (q *Queries) X2faCodeQuery(ctx context.Context, opts ...rt.Opt[X2faCode]) (
 	return out, rows.Err()
 }
 
-// X2faCodeCount reports how many 2fa_codes rows match every given predicate;
+// X2faCodeCount reports how many _2fa_codes rows match every given predicate;
 // none counts the whole table.
 func (q *Queries) X2faCodeCount(ctx context.Context, preds ...rt.Pred[X2faCode]) (int64, error) {
 	query, args, err := rt.CountRender(x2faCodeTableSQL, preds)
@@ -287,7 +287,7 @@ func (q *Queries) X2faCodeCount(ctx context.Context, preds ...rt.Pred[X2faCode])
 	return n, nil
 }
 
-// X2faCodeExists reports whether any 2fa_codes row matches every given predicate.
+// X2faCodeExists reports whether any _2fa_codes row matches every given predicate.
 func (q *Queries) X2faCodeExists(ctx context.Context, preds ...rt.Pred[X2faCode]) (bool, error) {
 	query, args, err := rt.ExistsRender(x2faCodeTableSQL, preds)
 	if err != nil {
@@ -300,7 +300,7 @@ func (q *Queries) X2faCodeExists(ctx context.Context, preds ...rt.Pred[X2faCode]
 	return found, nil
 }
 
-// X2faCodeDeleteWhere removes every 2fa_codes row matching the predicates and
+// X2faCodeDeleteWhere removes every _2fa_codes row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
 // full-table delete.
 func (q *Queries) X2faCodeDeleteWhere(ctx context.Context, preds ...rt.Pred[X2faCode]) (int64, error) {
@@ -315,7 +315,7 @@ func (q *Queries) X2faCodeDeleteWhere(ctx context.Context, preds ...rt.Pred[X2fa
 	return res.RowsAffected()
 }
 
-// X2faCodeUpdateWhere applies the typed assignments (X2faCodeSet) to every 2fa_codes
+// X2faCodeUpdateWhere applies the typed assignments (X2faCodeSet) to every _2fa_codes
 // row matching the predicates and reports how many changed — the
 // partial update of the dynamic layer. No effective predicate
 // is an error, never a full-table rewrite.

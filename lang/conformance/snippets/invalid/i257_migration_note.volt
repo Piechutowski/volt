@@ -7,13 +7,13 @@ Table users {
   name string [null]
 }
 
-Migration 0001__init [note: 'the first'] {
+Migration 0001__init [note: "the first"] {
   create table users {
     id   int    [pk]
-    name string [null, note: 'display name']
+    name string [null, note: "display name"]
 
-    indexes {
-      name [note: 'by name']
+    Indexes {
+      name [note: "by name"]
     }
   }
 }

@@ -1,7 +1,7 @@
 // spec: §declaration
 package app
 
-Table posty [model: 'Post'] {
+Table posty [model: "Post"] {
 	id int [pk]
 }
 

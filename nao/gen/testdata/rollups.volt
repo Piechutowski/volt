@@ -17,7 +17,7 @@ Table link_clicks {
   id     int [pk, increment]
   site   string
   day    int
-  target string [default: '']
+  target string [default: ""]
 }
 
 Group traffic {

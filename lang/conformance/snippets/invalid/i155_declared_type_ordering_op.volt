@@ -2,7 +2,7 @@
 // want: compares with =, !=, in and is null only
 package db
 
-Type money.Money int from 'example.com/app/money'
+Type money.Money int from "example.com/app/money"
 
 Table orders {
   id    int   [pk, increment]

@@ -12,7 +12,7 @@ Table ms_revenue {
 Pred current { org = :org and year = :year }
 Pred recent { year >= :since }
 Pred fresh { current and (recent or year in (2024, 2025)) }
-Pred noted { note is not null and org like 'acme-%' }
+Pred noted { note is not null and org like "acme-%" }
 Pred pricey { amount > 100.5 and not (year < 2000) }
 
 Select rows for ms_revenue where fresh and noted and pricey

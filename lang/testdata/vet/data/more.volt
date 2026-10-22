@@ -1,7 +1,7 @@
 package data
 
-Table "comments" {
-  "id" int [pk]
+Table comments {
+  id int [pk]
   post_id string
   author_id string
   ~owned
@@ -47,9 +47,9 @@ Table axis {
 Table user_columns {
   id int [pk]
 }
-Table user_params [model: 'UserParams'] {
+Table user_params [model: "UserParams"] {
   id int [pk]
 }
-Table drafts [model: 'UserChangeset'] {
+Table drafts [model: "UserChangeset"] {
   id int [pk]
 }

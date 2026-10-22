@@ -10,7 +10,7 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-const goRefSchema = "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string\n\n\tvalidators {\n\t\tEmailValid(email)\n\t\tdb.Missing(email)\n\t}\n}\n"
+const goRefSchema = "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string\n\n\tValidators {\n\t\tEmailValid(email)\n\t\tMissing(email)\n\t}\n}\n"
 const goRefRoutes = "package app\n\nPipeline api {\n\tuse volt.RequestID\n\tuse Auth\n}\n"
 
 func goRefProject(t *testing.T) string {
@@ -131,7 +131,7 @@ func TestGoRefRenameRewritesVoltSpellings(t *testing.T) {
 }
 
 func TestColumnRenameFollowsIntoChecks(t *testing.T) {
-	const text = "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string\n\n\tvalidators {\n\t\tEmailValid(email)\n\t}\n}\n"
+	const text = "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string\n\n\tValidators {\n\t\tEmailValid(email)\n\t}\n}\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":         "module rn\n",
 		"db/schema.volt": text,
@@ -169,27 +169,6 @@ func TestColumnRenameFollowsIntoSingleTableSelect(t *testing.T) {
 	}
 	if n != 4 {
 		t.Errorf("column rename produced %d edits, want 4 (declaration, projection, where, order): %+v", n, edit.Changes)
-	}
-}
-
-func TestGoRefQualifiedRenameKeepsQualifier(t *testing.T) {
-	const text = "package db\n\nTable users {\n\tid int [pk]\n\temail string\n\n\tvalidators {\n\t\tdb.EmailValid(email)\n\t}\n}\n"
-	root := voltProject(t, map[string]string{
-		"go.mod":         "module q\n",
-		"db/schema.volt": text,
-		"db/checks.go":   "package db\n\nfunc EmailValid(email string) error { return nil }\n",
-	})
-	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), text)
-	edit, err := d.Rename(posOf(t, text, "EmailValid", 0), "AddressValid")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, edits := range edit.Changes {
-		for _, e := range edits {
-			if e.Range.Start.Character != 5 {
-				t.Errorf("rename edit starts at char %d, want 5 (the name, not the qualifier)", e.Range.Start.Character)
-			}
-		}
 	}
 }
 

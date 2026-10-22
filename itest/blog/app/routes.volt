@@ -49,7 +49,7 @@ Scope / [pipe: api, error_handler: Errors] {
 
 	// A dataset (§datasets): one query route per member of the group select.
 	Scope /ms {
-		dataset db.browse [strip: 'ms_']
+		dataset db.browse [strip: "ms_"]
 	}
 
 	// Default handlers (§default-handlers): every action is a query route over

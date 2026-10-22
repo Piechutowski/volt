@@ -374,10 +374,7 @@ func defaultKind(v ast.Node) string {
 		}
 		return "integer"
 	case *ast.Ident:
-		if x.Quoted() {
-			return "value"
-		}
-		switch strings.ToLower(x.Name()) {
+		switch x.Name() {
 		case "true", "false":
 			return "boolean"
 		case "null":

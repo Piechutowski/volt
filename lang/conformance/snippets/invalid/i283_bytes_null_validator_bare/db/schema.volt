@@ -7,7 +7,7 @@ Table attachments {
   id    int    [pk, increment]
   thumb []byte [null]
 
-  validators {
+  Validators {
     ThumbSmall(thumb)
   }
 }

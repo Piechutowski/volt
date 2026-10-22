@@ -175,7 +175,7 @@ func (x *Resources) End() token.Position {
 func (x *Resources) scopeItemNode() {}
 
 // Dataset expands a group select of an imported data package into one
-// query route per member (spec, Datasets): `dataset db.browse [strip: 'da_']`.
+// query route per member (spec, Datasets): `dataset db.browse [strip: "da_"]`.
 type Dataset struct {
 	DatasetPos token.Position
 	Pkg        *Ident // the package qualifier; required

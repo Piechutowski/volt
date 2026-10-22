@@ -8,6 +8,6 @@ Table users {
 
 Migration 0001__init {
   create table users {
-    id int [pk, model: 'Account']
+    id int [pk, model: "Account"]
   }
 }

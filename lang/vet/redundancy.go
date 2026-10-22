@@ -82,7 +82,7 @@ type emptyBodyRule struct{ meta }
 
 var emptyBody = &emptyBodyRule{meta{
 	name: "emptybody",
-	doc:  "reports empty indexes/validators blocks and a Project with neither properties nor a note",
+	doc:  "reports empty Indexes and Validators blocks and a Project with neither properties nor a note",
 }}
 
 func (r *emptyBodyRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
@@ -91,11 +91,11 @@ func (r *emptyBodyRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagn
 		switch n := n.(type) {
 		case *ast.IndexesBlock:
 			if len(n.Indexes) == 0 {
-				out = append(out, r.warnf(n.Pos(), "empty indexes block"))
+				out = append(out, r.warnf(n.Pos(), "empty Indexes block"))
 			}
 		case *ast.ValidatorsBlock:
 			if len(n.Validators) == 0 {
-				out = append(out, r.warnf(n.Pos(), "empty validators block"))
+				out = append(out, r.warnf(n.Pos(), "empty Validators block"))
 			}
 		case *ast.Project:
 			if len(n.Props) == 0 && n.Settings.Get("note") == nil {
@@ -140,46 +140,4 @@ func originOf(cd *check.ColumnDef) string {
 		return "the table body"
 	}
 	return fmt.Sprintf("TablePartial %q", cd.Partial.Name.Name())
-}
-
-type unnecessaryQuotesRule struct{ meta }
-
-var unnecessaryQuotes = &unnecessaryQuotesRule{meta{
-	name: "unnecessaryquotes",
-	doc:  "reports quoted identifiers that are already valid plain identifiers",
-}}
-
-func (r *unnecessaryQuotesRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
-	var out []diag.Diagnostic
-	seen := map[string]bool{}
-	for _, n := range nodes {
-		id, ok := n.(*ast.Ident)
-		if !ok || !id.Quoted() || !isPlainIdent(id.Name()) {
-			continue
-		}
-		key := fmt.Sprintf("%d:%s", id.Pos().Line(), id.Name())
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		out = append(out, r.warnf(id.Pos(), "identifier %q does not need quotes", id.Name()))
-	}
-	return out
-}
-
-func isPlainIdent(s string) bool {
-	if s == "" {
-		return false
-	}
-	hasLetter := false
-	for _, r := range s {
-		switch {
-		case r == '_' || ('a' <= r && r <= 'z') || ('A' <= r && r <= 'Z'):
-			hasLetter = true
-		case '0' <= r && r <= '9':
-		default:
-			return false
-		}
-	}
-	return hasLetter
 }

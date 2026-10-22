@@ -4,8 +4,8 @@ Table users {
   name string
   active bool
 }
-records users(id, name, active) {
-  1, 'Alice', true
-  2, 'Bob', false
-  3, 'Y', true
+Records users(id, name, active) {
+  1, "Alice", true
+  2, "Bob", false
+  3, "Y", true
 }

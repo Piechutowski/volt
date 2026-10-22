@@ -4,7 +4,7 @@ Table bookings {
   country string
   booking_date time.Time
 
-  indexes {
+  Indexes {
     booking_date [where: `country <> ''`]
     (country, booking_date) [unique]
   }

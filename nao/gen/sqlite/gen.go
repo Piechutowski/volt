@@ -279,7 +279,7 @@ func valueSQL(v ast.Node) (string, error) {
 	case *ast.FuncExpr:
 		return v.Tok.Val, nil
 	case *ast.Ident:
-		switch strings.ToLower(v.Name()) {
+		switch v.Name() {
 		case "true":
 			return "1", nil
 		case "false":

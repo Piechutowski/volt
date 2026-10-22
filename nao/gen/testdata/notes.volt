@@ -1,27 +1,27 @@
 // every note level, each the note: setting: project, table, column; the
 // constants of a declared type carry their notes in the Go file beside it
-Project blog [note: '''
+Project blog [note: """
     The blogging platform schema.
 
     Multi-line notes keep their blank lines and become
     paragraph breaks in godoc.
-  '''] {
-  database_type: 'PostgreSQL'
+  """] {
+  database_type: "PostgreSQL"
 }
 
 Type PostState string
 
-Table posts [note: 'A blog post.'] {
+Table posts [note: "A blog post."] {
   id int [pk, increment]
-  title string [note: 'Shown in lists and in the HTML title tag']
+  title string [note: "Shown in lists and in the HTML title tag"]
   status PostState
-  body string [null, note: '''
+  body string [null, note: """
     Raw markdown source.
     Rendered to HTML at publish time.
-  ''']
+  """]
   published_at time.Time [null]
 
-  validators {
+  Validators {
     PostStateKnown(status)
   }
 }

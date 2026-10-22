@@ -4,9 +4,9 @@ indexes: plain, composite, expression, settings
 
 Table t {
   id int
-  indexes {
+  Indexes {
     id [pk]
-    (id, `lower(name)`) [name: 'ix', unique]
+    (id, `lower(name)`) [name: "ix", unique]
     created_at [where: `created_at > 0`]
     `floor(balance)`
   }
@@ -66,7 +66,7 @@ validators block
 
 Table t {
   balance int
-  validators {
+  Validators {
     BalanceFloor(balance)
     db.BalanceCap(balance)
   }
@@ -99,8 +99,8 @@ Table t {
 notes: the note setting of a table and a column
 ==================
 
-Table t [note: 'table note'] {
-  id int [note: 'column note']
+Table t [note: "table note"] {
+  id int [note: "column note"]
 }
 
 ---
@@ -136,7 +136,7 @@ Records orders(id, user_id, total) {
   1, 1, `1.0 + 2.0`
   2, null, 3.5
   4, null, -7
-  3, 2, 'true'
+  3, 2, "true"
 }
 
 ---

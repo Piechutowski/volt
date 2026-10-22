@@ -240,8 +240,6 @@ func (c *checker) importsResolve(pkg *Package) {
 				switch {
 				case path == pkg.Path:
 					c.errorf(spec.Pos(), "imports", "a package cannot import itself (§imports)")
-				case qual == pkg.Name:
-					c.errorf(spec.Pos(), "imports", "import qualifier %q is this package's own name (§imports); alias the import", qual)
 				case !exists:
 					c.errorf(spec.Pos(), "imports", "unknown package %q: no directory of .volt files at that path under the project root (§imports)", path)
 				case target == pkg:
@@ -321,7 +319,7 @@ func (c *checker) routing(pkg *Package) {
 
 	for _, d := range pkg.merged.Decls {
 		if pl, ok := d.(*ast.Pipeline); ok {
-			if pl.Name.Quoted() || !goIdentOK(pl.Name.Name()) {
+			if !goIdentOK(pl.Name.Name()) {
 				c.errorf(pl.Name.Pos(), "pipelines", "Pipeline name %q must be a plain identifier (§pipelines)", pl.Name.Name())
 				continue
 			}
@@ -385,16 +383,38 @@ func (c *checker) routing(pkg *Package) {
 	}
 }
 
+func (c *checker) localFuncRef(v ast.Node) (string, bool) {
+	switch v := v.(type) {
+	case *ast.Ident:
+		if goIdentOK(v.Name()) && !goKeywords[v.Name()] {
+			return v.Name(), true
+		}
+	case *ast.QualIdent:
+		if _, kind := qualifierResolve(v.Qual.Name(), c.pkg.Name, c.pkg.Imports); kind == qualSelf {
+			c.diags = append(c.diags, selfQualified(v.Pos(), v.Qual.Name(), v.Name.Name()))
+			return v.Name.Name(), false
+		}
+	}
+	return "", false
+}
+
 func (c *checker) plugCheck(p *ast.Plug) {
 	for _, part := range p.Ref.Parts {
-		if part.Quoted() || !goIdentOK(part.Name()) || goKeywords[part.Name()] {
+		if !goIdentOK(part.Name()) || goKeywords[part.Name()] {
 			c.errorf(p.Pos(), "pipelines", "plug reference %q must be plain, non-keyword Go identifiers (§pipelines)", p.Ref.String())
 			return
 		}
 	}
-	switch q := p.Ref.Qualifier(); {
-	case q == "volt":
-	case q == "" || q == c.pkg.Name:
+	q := p.Ref.Qualifier()
+	kind := qualUnknown
+	if q != "" {
+		_, kind = qualifierResolve(q, c.pkg.Name, c.pkg.Imports)
+	}
+	switch {
+	case q != "" && kind == qualRuntime:
+	case q != "" && kind == qualSelf:
+		c.diags = append(c.diags, selfQualified(p.Ref.Pos(), q, p.Ref.Base()))
+	case q == "":
 		name := p.Ref.Base()
 		const want = "func %s(next http.Handler) http.Handler"
 		sc := c.goFuncs(c.pkg)
@@ -412,7 +432,7 @@ func (c *checker) plugCheck(p *ast.Plug) {
 			c.errorf(p.Ref.Pos(), "pipelines", "%s is not middleware: found %s, a plug is "+want+" (§pipelines)", name, gf.Sig, name)
 		}
 	default:
-		if _, isImport := c.pkg.Imports[q]; isImport {
+		if kind == qualImport {
 			c.usedQual[q] = true
 			c.errorf(p.Pos(), "pipelines", "cross-package plug %q is not supported in v0 (§pipelines); wrap it in a function of this package", p.Ref.String())
 		} else {
@@ -460,7 +480,7 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 				}
 				next.namePrefix += n
 			case "error_handler":
-				name, ok := selfFuncRefIn(s.Value, c.pkg.Name)
+				name, ok := c.localFuncRef(s.Value)
 				if ok {
 					const want = "func %s(w http.ResponseWriter, r *volt.Request, err error)"
 					sc := c.goFuncs(c.pkg)
@@ -472,7 +492,10 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 					}
 				}
 				if !ok {
-					c.errorf(s.Pos(), "scopes-and-routes", "error_handler: takes a function of this package, written Name or %s.Name (§scopes)", c.pkg.Name)
+					if name != "" {
+						continue
+					}
+					c.errorf(s.Pos(), "scopes-and-routes", "error_handler: takes a function of this package, written by its bare name (§scopes)")
 					continue
 				}
 				next.errHandler = name

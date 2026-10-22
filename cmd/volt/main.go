@@ -575,7 +575,7 @@ func bareTypesTravel(pkg *lang.Package, outDir string) error {
 		if td.Path != "" {
 			continue
 		}
-		return cli.Exit(fmt.Sprintf("gen: -o %s: Type %s of package %s is declared in that package's own Go files, which do not travel to %s; declare it in a package of its own and write Type pkg.%s %s from 'its/import/path' (§types)",
+		return cli.Exit(fmt.Sprintf("gen: -o %s: Type %s of package %s is declared in that package's own Go files, which do not travel to %s; declare it in a package of its own and write Type pkg.%s %s from \"its/import/path\" (§types)",
 			outDir, td.Key, pkg.Path, outDir, td.Key, td.Storage.Storage), 2)
 	}
 	return nil

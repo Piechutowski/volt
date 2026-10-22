@@ -5,7 +5,7 @@ Table authors {
   email string [unique]
   rank  int32
 
-  validators {
+  Validators {
     RankSane(rank)
   }
 }

@@ -80,7 +80,7 @@ func labelOK(label string) bool {
 		return false
 	}
 	for _, r := range label {
-		if r != '_' && !unicode.IsLetter(r) && !unicode.IsMark(r) && !unicode.IsDigit(r) {
+		if r != '_' && !unicode.IsLetter(r) && !unicode.IsDigit(r) {
 			return false
 		}
 	}
@@ -93,7 +93,7 @@ func migrationNewRun(_ context.Context, c *cli.Command) error {
 	}
 	label := c.Args().Get(0)
 	if !labelOK(label) {
-		return cli.Exit(fmt.Sprintf("migration new: label %q: letters, marks, digits and underscores only (§migrations)", label), 2)
+		return cli.Exit(fmt.Sprintf("migration new: label %q: letters, digits and underscores only (§migrations)", label), 2)
 	}
 	dir := argOr(c, 1, ".")
 	pkg, err := migrationPackage(dir)

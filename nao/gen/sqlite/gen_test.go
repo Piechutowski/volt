@@ -134,7 +134,7 @@ func TestGenerationErrors(t *testing.T) {
 	}{
 		{
 			name:    "two indexes of one table derive one name",
-			src:     "Table users {\n  id int\n  indexes {\n    id\n    id [unique]\n  }\n}",
+			src:     "Table users {\n  id int\n  Indexes {\n    id\n    id [unique]\n  }\n}",
 			wantErr: `duplicate index name "idx_users_id"`,
 		},
 	}

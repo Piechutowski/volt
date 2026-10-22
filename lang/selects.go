@@ -721,7 +721,7 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 	}
 	var terms []rt.GenOrder
 	for _, s := range sel.Settings.Settings {
-		switch strings.ToLower(s.Name) {
+		switch s.Name {
 		case "order":
 			list, ok := s.Value.(*ast.IdentList)
 			if !ok {
@@ -754,7 +754,7 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 					continue
 				}
 				desc := false
-				switch strings.ToLower(mod.Name()) {
+				switch mod.Name() {
 				case "asc":
 				case "desc":
 					desc = true
@@ -1074,7 +1074,7 @@ func (e *selectEnv) litSlot(l *ast.Lit, b *colBinding) (string, bool) {
 			e.errorf(l.Pos(), "column %q (%s) is not boolean (§predicates)", b.name, b.goType)
 			return "", false
 		}
-		if strings.EqualFold(l.Tok.Val, "true") {
+		if l.Tok.Val == "true" {
 			return "true", true
 		}
 		return "false", true

@@ -12,8 +12,8 @@ CREATE TABLE core_users (
   api_key TEXT NOT NULL,
   homepage_url TEXT,
   http_status INTEGER,
-  -- Quoted name with a space
-  "full name" TEXT NOT NULL,
+  -- Once a quoted name with a space
+  full_name TEXT NOT NULL,
   precision_value REAL,
   balance REAL,
   kind TEXT NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE core_users (
   rt BLOB NOT NULL UNIQUE
 );
 
-CREATE TABLE "2fa_codes" (
+CREATE TABLE _2fa_codes (
   code TEXT NOT NULL,
   user_id INTEGER NOT NULL,
   expires_at TIMESTAMP NOT NULL,

@@ -49,7 +49,7 @@ func TestKeystrokeAllocationBudget(t *testing.T) {
 	if projectAnalyze(root, map[string]string{path: text}, s, &memo) == nil {
 		t.Fatal("the project does not load")
 	}
-	edited := strings.Replace(text, anchor, "c002 string [note: 'edited']\n", 1)
+	edited := strings.Replace(text, anchor, "c002 string [note: \"edited\"]\n", 1)
 	overlay := map[string]string{path: edited}
 	document := allocated(func() { d.UpdateLocal(edited) })
 	var res *projectResult

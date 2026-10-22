@@ -9,7 +9,7 @@ Table attachments {
   body  []byte [required]
   thumb []byte [null]
 
-  validators {
+  Validators {
     BodySmall(body)
     ThumbSmall(thumb)
   }

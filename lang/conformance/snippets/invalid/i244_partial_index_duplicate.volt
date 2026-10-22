@@ -2,18 +2,18 @@
 // want: which has an index on that key already
 TablePartial emails {
   email string
-  indexes {
+  Indexes {
     email [unique]
   }
 }
 TablePartial stamps {
   created_at time.Time
-  indexes {
+  Indexes {
     created_at
   }
 }
 TablePartial stamps_again {
-  indexes {
+  Indexes {
     created_at
   }
 }
@@ -22,7 +22,7 @@ Table users {
   ~emails
   ~stamps
   ~stamps_again
-  indexes {
+  Indexes {
     email
   }
 }

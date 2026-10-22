@@ -211,36 +211,34 @@ by this specification:
 | `U+000D` | CARRIAGE RETURN — `\r` (first half of Windows CRLF)  |
 | `U+0009` | CHARACTER TABULATION — the tab character, `\t`       |
 | `U+0020` | SPACE — the ordinary space character                 |
-| `U+0000` | NUL                                                  |
-| `U+0008` | BACKSPACE                                            |
-| `U+000B` | LINE TABULATION (vertical tab)                       |
-| `U+000C` | FORM FEED                                            |
+| `U+0301` | COMBINING ACUTE ACCENT, a combining mark             |
 
 ### Unicode General Categories
 
-Unicode assigns every character a *General Category*. This specification
-uses two of them to define identifiers:
+Unicode assigns every character a *General Category*. Identifiers are
+Go's (§identifiers), and this specification defines them with two
+categories, as Go does:
 
-- **Category L (Letter)** — letters of any script: `a`–`z`, `A`–`Z`, but
-  also `ż`, `é`, `ß`, `я`, `漢`, `ا`, etc. (It is the union of the
-  subcategories Lu uppercase, Ll lowercase, Lt titlecase, Lm modifier,
-  Lo other.)
-- **Category M (Mark)** — combining marks: characters that attach to the
-  preceding character, such as a combining acute accent (U+0301). These are
-  included so that accented text in *decomposed* form — where `é` is stored
-  as `e` followed by U+0301 — is still a valid identifier.
+- **Category L (Letter)**: letters of any script, `a` to `z` and `A` to
+  `Z`, but also `ż`, `é`, `ß`, `я`, `漢`, `ا`, and the rest. It is the
+  union of the subcategories Lu uppercase, Ll lowercase, Lt titlecase,
+  Lm modifier and Lo other.
+- **Category Nd (Decimal Number)**: decimal digits of any script, `0`
+  to `9` among them.
 
-In regular-expression terms these are `\p{L}` and `\p{M}`. Any Unicode-aware
-implementation language provides them; an implementation MUST NOT
-approximate category L with ASCII `[a-zA-Z]`.
+A combining mark (category M, such as U+0301) is neither: the
+precomposed `é` (U+00E9) is a letter, while `e` followed by U+0301 is a
+letter and a mark, and no identifier. In regular-expression terms the
+two categories are `\p{L}` and `\p{Nd}`; an implementation MUST NOT
+approximate them with ASCII `[a-zA-Z]` and `[0-9]`.
 
 ### Case Sensitivity and Terminology
 
-**Case sensitivity.** All *keywords* (terminals spelled with letters in
-this grammar, e.g. `"Table"`, `"pk"`, `"null"`) are matched
-**case-insensitively**: `Table`, `table`, and `TABLE` are equivalent.
-User-defined names (identifiers) preserve case; implementations MUST treat
-them case-sensitively for lookup unless stated otherwise.
+**Case sensitivity.** Volt is case-sensitive, as Go is. Every *keyword*
+(a terminal spelled with letters in this grammar, e.g. `"Table"`,
+`"pk"`, `"null"`) has exactly one spelling, the one the grammar gives it
+(§keywords), and a name is looked up by its exact spelling: `users` and
+`Users` are two names.
 
 **Terminology.** The key words MUST, MUST NOT, SHOULD, and MAY are to be
 interpreted as described in RFC 2119.
@@ -272,7 +270,7 @@ operators, punctuation) by a scanner governed by two rules:
 
 Consequences of the longest-match rule:
 
-- `'''` opens a multi-line string, never the empty string `''` followed by `'`.
+- `"""` opens a multi-line string, never the empty string `""` followed by `"`.
 - `//` begins a comment, never two `/` operators; `<=`, `>=` and `!=`
   are one token each, never two.
 - `user_id2` is one identifier, not the identifier `user_id` followed by the
@@ -307,7 +305,7 @@ sp      = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
 3. Space and tab characters separate tokens and are otherwise insignificant.
 4. Indentation is never significant (except inside multi-line strings, §multi-line-string-literals),
    with the one exception of element boundaries.
-5. **Element boundaries.** An unquoted identifier (§identifiers) in the first column
+5. **Element boundaries.** An identifier (§identifiers) in the first column
    of a line begins a top-level element (§program-structure) whenever it lies outside every
    string, comment and brace: the brace depth counts `{` up and `}` down,
    never below zero, over the tokens before it. The element before such an
@@ -375,87 +373,111 @@ any char           = ? any Unicode character ? ;
 ### Identifiers
 
 ```ebnf
-identifier        = plain identifier | quoted identifier ;
+identifier    = letter, { letter | unicode digit } ;
 
-letter            = ? any character of Unicode category L (Letter) ?
-                  | ? any character of Unicode category M (Mark) ?
-                  | "_" ;
-digit             = "0" | "1" | "2" | "3" | "4"
-                  | "5" | "6" | "7" | "8" | "9" ;
-ident char        = letter | digit ;
-
-plain identifier  = letter, { ident char }
-                  | ( digit, { ident char } ) - number ;    (* digits alone are a number *)
-
-quoted identifier = '"', { qi char | escape sequence }, '"' ;
-qi char           = any char - ( '"' | "\" | newline ) ;
+letter        = ? any character of Unicode category L (Letter) ?
+              | "_" ;
+unicode digit = ? any character of Unicode category Nd (Decimal Number) ? ;
+digit         = "0" | "1" | "2" | "3" | "4"
+              | "5" | "6" | "7" | "8" | "9" ;
 ```
 
-1. A plain identifier is a maximal run of letters, digits, combining marks,
-   and underscores.
-2. A plain identifier MAY begin with digits, but a token consisting only of
-   digits (and at most one `.`) is a numeric literal (§numeric-literals), never an
-   identifier. E.g. `2fa_codes` is an identifier; `255` is a number.
-3. A quoted identifier (`"double quoted"`) permits any characters except an
-   unescaped `"` and a line break, and supports the escape sequences of §escape-sequences.
-   Use it for names containing spaces or other special characters.
-4. Plain and quoted identifiers are interchangeable everywhere an
-   `identifier` is expected; `users` and `"users"` denote the same name.
+1. An identifier is a Go identifier: a letter or an underscore, then
+   letters, digits and underscores, with letters and digits as Go
+   defines them (§unicode-general-categories). It is a maximal run of
+   these characters.
+2. An identifier never begins with a digit. A run of digits is a number
+   (§numeric-literals); a run of digits followed by letters is an error
+   naming the rule, except as a migration name (§migrations), the one
+   token that begins with digits. A combining mark in a name, or before
+   one, is an error.
+3. A name is written as itself and never quoted: a double quote opens a
+   string (§string-literals), and a word that is not an identifier (one
+   with a space, a hyphen or a leading digit) is no Volt name.
 
 ### Keywords
 
-Volt has **no reserved words**. All keywords are contextual: a keyword such
-as `Table` acts as a keyword only in keyword position and remains usable as an
-ordinary identifier elsewhere (e.g. a column may be named `table`).
+Volt has **no reserved words**. Every keyword is contextual: a word acts
+as a keyword only in keyword position, where the grammar places it, and
+is an ordinary identifier everywhere else (a column may be named
+`table`, `indexes` or `Type`).
 
-Element-type keywords: `Project`, `Table`, `TablePartial`, `Type`,
-`Ref`, `Records`, `Migration`, `indexes`, `validators`.
-Clause keyword: `from`.
-Value keywords: `true`, `false`, `null`.
-All are case-insensitive (§case-sensitivity-and-terminology).
+Keywords are case-sensitive (§case-sensitivity-and-terminology), and
+each has one spelling. A word that opens an element or a block is
+capitalized; every other keyword is lowercase. A word in keyword
+position that matches a keyword only when case is ignored is a syntax
+error naming the right spelling (`write Table, not TABLE`); the parser
+then reads it as that keyword, so the error is reported once.
 
-The words of a migration body (`up`, `down`, `create`, `drop`, `rename`,
-`alter`, `rebuild`, `exec`, `table`, `index`, `add`, `to`) are keywords
-inside a `Migration` only (§migrations); elsewhere they are identifiers,
-so a column may be named `up` or `to`.
+| Class | Keywords | Section |
+|---|---|---|
+| element and block words | `Project`, `Table`, `TablePartial`, `Type`, `Ref`, `Records`, `Group`, `Pred`, `Select`, `Migration`, `Pipeline`, `Scope`, `Indexes`, `Validators` | §program-structure, §indexes, §validators |
+| package words | `package`, `import` | §projects-and-packages, §imports |
+| setting names | `pk`, `null`, `unique`, `increment`, `default`, `note`, `ref`, `tag`, `required`, `model`, `name`, `where`, `delete`, `update`, `from`, `down`, `irreversible`, `no_transaction`, `pipe`, `error_handler`, `api`, `only`, `except`, `param`, `singular`, `strip`, `order` | §settings-lists, §settings-whitelists |
+| referential actions | `cascade`, `restrict`, `set_null`, `set_default` | §relationships-ref |
+| resource actions | `index`, `new`, `create`, `show`, `edit`, `update`, `delete` | §the-action-table |
+| order directions | `asc`, `desc` | §selects-over-groups |
+| literal words | `true`, `false`, `null` | §boolean-and-null-literals |
+| clause words | `from`, `for`, `where`, `and`, `or`, `not`, `in`, `like`, `is` | §types, §selects-over-groups, §predicates |
+| route words | `get`, `post`, `put`, `patch`, `delete`, `options`, `head`, `any`, `resources`, `dataset`, `use` | §routes, §resources, §datasets, §pipelines |
+| migration words | `up`, `down`, `create`, `drop`, `rename`, `alter`, `rebuild`, `exec`, `table`, `index`, `add`, `to` | §migrations |
+
+`Records` opens an element at top level and a block in a table body;
+`Ref` opens an element, and `ref` names a setting. A referential
+action, a resource action and an order direction are keywords only as
+the value of `delete:` or `update:`, in the `only:` or `except:` list
+of a `resources` declaration, and after a column of `order:`
+respectively; a literal word is a keyword where a value stands. The
+words of a migration body are keywords inside a `Migration` only
+(§migrations); elsewhere they are identifiers, so a column may be named
+`up` or `to`.
 
 ### String Literals
 
 ```ebnf
 string             = single line string | multi line string ;
 
-single line string = "'", { sls char | escape sequence }, "'" ;
-sls char           = any char - ( "'" | "\" | newline ) ;
+single line string = '"', { sls char | escape sequence }, '"' ;
+sls char           = any char - ( '"' | "\" | newline ) ;
 ```
 
-1. A single-line string is delimited by single quotes `'` and MUST NOT
-   contain an unescaped line break.
-2. Escape sequences (§escape-sequences) are interpreted.
+1. A single-line string is delimited by double quotes `"`, as in Go,
+   and lies on one line: a line break inside it is an error, and so is
+   a backslash before one (§escape-sequences).
+2. The escape sequences of §escape-sequences are interpreted; a `"`
+   inside is written `\"`, as in `[tag: "json:\"slug\""]`, and a
+   single quote stands as itself (`"it's"`).
+3. Single quotes delimit nothing: `'...'` and `'''...'''` are errors
+   naming the double-quoted spelling. Inside an expression literal a
+   single quote is SQL's string delimiter (§expression-literals).
 
 ### Multi-line String Literals
 
 ```ebnf
-multi line string = "'''", mls body, "'''" ;
+multi line string = '"""', mls body, '"""' ;
 mls body          = { ( any char - "\" ) | escape sequence }
-                    - ( { any char }, "'''", { any char } ) ;
+                    - ( ( { any char }, '"""', { any char } )
+                      | ( { any char }, '"' ) ) ;
 ```
 
-1. Delimited by triple single quotes `'''`; may span any number of lines.
-2. Escape sequences (§escape-sequences) are interpreted; escape a literal `'` as `\'` and
-   a literal `\` as `\\`.
-3. A backslash immediately before a line break is a **line continuation**:
-   both the backslash and the line break are removed from the value.
-4. **Indentation stripping:** after escape processing, compute the minimum
+1. Delimited by triple double quotes `"""`; may span any number of
+   lines. Longest match (§tokenization) closes it at the first `"""`,
+   so a body holds no three double quotes in a row and does not end
+   with one; such a quote is written `\"`.
+2. The escape sequences of §escape-sequences are interpreted, the same
+   four as in a single-line string, and a backslash before a line break
+   is an error: each line of the value is a line of the source.
+3. **Indentation stripping:** after escape processing, compute the minimum
    number of leading spaces over all non-empty lines; remove exactly that
    many leading spaces from every line. A first line that is empty (the
-   common case, where content starts on the line after the opening `'''`)
-   and a trailing newline before the closing `'''` are removed.
+   common case, where content starts on the line after the opening `"""`)
+   and a trailing newline before the closing `"""` are removed.
 
 ```volt
-Table posts [note: '''
+Table posts [note: """
   This is a block string.
   It spans multiple lines.
-'''] {
+"""] {
   id int [pk]
 }
 ```
@@ -464,38 +486,30 @@ The note's value is `This is a block string.\nIt spans multiple lines.`
 
 ### Escape Sequences
 
-Escape sequences apply inside single-line strings, multi-line strings, and
-quoted identifiers. They do **not** apply inside expression literals (§expression-literals)
-or comments.
+Escape sequences apply inside single-line and multi-line strings and
+nowhere else: an expression literal (§expression-literals) and a
+comment take a backslash as itself.
 
 ```ebnf
 escape sequence = "\", escaped item ;
-escaped item    = "t" | "n" | "r" | "0" | "b" | "v" | "f"
-                | "\" | "'" | '"' | "`"
-                | newline
-                | "u", 4 * hex digit
-                | any char - "u" ;
-hex digit       = digit
-                | "a" | "b" | "c" | "d" | "e" | "f"
-                | "A" | "B" | "C" | "D" | "E" | "F" ;
+escaped item    = "\" | '"' | "n" | "t" ;
 ```
 
-| Sequence | Value                                   |
-|----------|-----------------------------------------|
-| `\t`     | horizontal tab (U+0009)                 |
-| `\n`     | line feed (U+000A)                      |
-| `\r`     | carriage return (U+000D)                |
-| `\0`     | NUL (U+0000)                            |
-| `\b`     | backspace (U+0008)                      |
-| `\v`     | vertical tab (U+000B)                   |
-| `\f`     | form feed (U+000C)                      |
-| `\\`     | backslash                               |
-| `\'`     | single quote                            |
-| `\"`     | double quote                            |
-| `` \` `` | backtick                                |
-| `\` + newline | nothing (line continuation)        |
-| `\uHHHH` | the code unit U+HHHH (exactly 4 hex digits; fewer is an error) |
-| `\c` (any other `c`) | the character `c` itself     |
+| Sequence | Value                    |
+|----------|--------------------------|
+| `\\`     | backslash                |
+| `\"`     | double quote             |
+| `\n`     | line feed (U+000A)       |
+| `\t`     | horizontal tab (U+0009)  |
+
+1. These four are the only escapes, a subset of Go's. Every other
+   backslash sequence in a string is an error naming the four: `\'`,
+   `\r`, `\0`, `\u0041` and `\q` among them. Every other character
+   stands in a string as itself.
+2. A backslash immediately before a line break is an error wherever it
+   stands outside a comment and an expression literal, in a string or
+   between tokens: Volt has no line continuation, so a string and an
+   element read as they lie in the source.
 
 ### Numeric Literals
 
@@ -508,7 +522,8 @@ exponent = ( "e" | "E" ), [ "+" | "-" ], digit, { digit } ;
 2. A leading sign is not part of the literal; a negative value such as
    `-100` in record rows is parsed as prefix operator `-` applied to a number.
 3. At most one decimal point is permitted. A digit run followed by further
-   letters (e.g. `2fa`) lexes as an identifier (§identifiers); a digit run containing
+   letters (e.g. `2fa`) is no number and no identifier: it stands only
+   as a migration name (§migrations, §identifiers). A digit run containing
    a dot followed by letters (e.g. `12.3abc`) is a lexical error.
 
 ### Boolean and Null Literals
@@ -518,7 +533,8 @@ boolean = "true" | "false" ;
 null    = "null" ;
 ```
 
-Case-insensitive, as all keywords.
+Lowercase only, as every keyword that opens no element or block
+(§keywords).
 
 ### Expression Literals
 
@@ -530,8 +546,12 @@ expression literal = "`", { any char - "`" }, "`" ;
    backslash is **not** an escape character and there is no way to embed a
    literal backtick.
 2. May span multiple lines.
-3. Used for computed defaults (`` default: `now()` ``), expression indexes,
-   and expression values in records.
+3. Used for computed defaults (`` default: `now()` ``), expression
+   indexes, partial-index conditions (`where:`, §indexes), the sources
+   of a rebuild (`from:`) and the SQL of an `exec` with its `down:`
+   (§migrations), and expression values in records. A SQL string
+   literal inside one keeps SQL's single quotes
+   (`` where: `country != ''` ``).
 
 ### Operators and Punctuation
 
@@ -543,8 +563,8 @@ punct = "{" | "}" | "[" | "]" | "(" | ")"
 ```
 
 These are every token that is neither a name nor a literal; any other
-character outside a string, an identifier or a comment, `;` and `#`
-among them, is a lexical error. Their roles:
+character outside a string, an expression literal, an identifier or a
+comment, `;`, `#` and `'` among them, is a lexical error. Their roles:
 
 | Token   | Role                                                        |
 |---------|-------------------------------------------------------------|
@@ -553,7 +573,7 @@ among them, is a lexical error. Their roles:
 | `( )`   | composite column lists, records column lists, group sets (§groups), select projections (§selects-over-groups), import blocks (§imports) |
 | `:`     | a setting value, a project property, the body of `Ref:`, a route parameter (§route-paths), a query parameter (§predicates) |
 | `,`     | separator inside `[ ]`, `( )` and record rows               |
-| `.`     | qualification: `table.column`, `pkg.Name` (§types, §scopes), `pkg.name` (§imports) |
+| `.`     | qualification: `table.column`, `pkg.Name` (§types), `pkg.name` (§imports) |
 | `~`     | TablePartial injection prefix                               |
 | `>`     | a relationship, foreign key first (§relationships-ref); a comparison in a predicate (§predicates) |
 | `-`     | the sign of a negative number                               |
@@ -576,10 +596,11 @@ name = identifier ;
    type of the package by one identifier (§types); no name is
    qualified by a schema or any other container.
 2. The qualifications Volt has are `table.column` in a relationship
-   (§relationships-ref), `pkg.Name` naming a Go type (§types),
-   `pkg.name` naming a declaration of an imported package (§imports),
-   and `pkg.Name` naming a function of the package itself in a setting
-   that takes one (§scopes). A dotted name is neither a default value
+   (§relationships-ref), `pkg.Name` naming a Go type (§types), and
+   `pkg.name` naming a declaration of an imported package (§imports) or,
+   as `volt.Name`, of the runtime. A package names its own declarations
+   bare: a dotted reference to a declaration always names an import
+   (§imports). A dotted name is neither a default value
    (§default-values) nor a record value (§records-sample-data).
 
 ### Settings Lists
@@ -596,8 +617,9 @@ setting value = string | number | boolean | null
 ```
 
 1. A setting is either a flag (`pk`, `unique`, `null`) or a key-value
-   pair (`note: 'text'`, `default: 123`).
-2. Setting names are case-insensitive. A setting name is one
+   pair (`note: "text"`, `default: 123`).
+2. Setting names are lowercase keywords, matched exactly (§keywords). A
+   setting name is one
    identifier, and so is a setting value that is a word; a name or
    value of several words joins them with underscores
    (`no_transaction`, §migrations; `set_null`, §relationships-ref).
@@ -631,7 +653,7 @@ element = project
 
 1. A program is a sequence of top-level elements, in any order,
    separated by line breaks. Where one element ends
-   and the next begins is lexical (§line-structure-and-whitespace): an unquoted identifier in the
+   and the next begins is lexical (§line-structure-and-whitespace): an identifier in the
    first column outside every brace, string and comment.
 2. Forward references are permitted: an element may reference another
    element defined later in the file, or in another file of its package
@@ -657,13 +679,13 @@ project property = identifier, ":", string, newline ;
 
 1. `name` names the project; it MAY be omitted.
 2. Each property is a free-form key with a string value, one per line.
-   The conventional well-known key is `database_type` (e.g. `'PostgreSQL'`,
-   `'MySQL'`). Implementations MUST accept arbitrary property keys.
+   The conventional well-known key is `database_type` (e.g. `"PostgreSQL"`,
+   `"MySQL"`). Implementations MUST accept arbitrary property keys.
 3. The `note:` setting (§notes) documents the project.
 
 ```volt
-Project ecommerce [note: 'E-commerce database schema'] {
-  database_type: 'PostgreSQL'
+Project ecommerce [note: "E-commerce database schema"] {
+  database_type: "PostgreSQL"
 }
 ```
 
@@ -697,7 +719,7 @@ table setting  = "note", ":", string
 4. Column names MUST be unique within a table after partial injection (§partial-injection-order).
 
 ```volt
-Table users [note: 'Registered accounts'] {
+Table users [note: "Registered accounts"] {
   id int [pk]
   email string [unique]
 }
@@ -820,7 +842,8 @@ column setting  = "pk"
 > 1. The value MUST be exactly one `key:"value"` pair in Go struct-tag
 >    form: a key containing no spaces, colons, double quotes or
 >    backticks, then a colon, then a double-quoted value containing no
->    double quotes or backticks.
+>    double quotes or backticks. The pair is a Volt string, so its
+>    double quotes are written `\"` (`[tag: "json:\"slug\""]`).
 > 2. Within one column, tag keys MUST be unique across all `tag`
 >    settings.
 > 3. The key `db` is reserved and an error — the `db` tag is the scan
@@ -836,7 +859,7 @@ column setting  = "pk"
 ```volt
 Table users {
   id        int [pk]
-  user_name string [tag: 'json:"userName"', tag: 'xml:"user-name,attr"']
+  user_name string [tag: "json:\"userName\"", tag: "xml:\"user-name,attr\""]
 }
 ```
 
@@ -852,7 +875,7 @@ default value = [ "-" ], number
 | Kind          | Example                                               |
 |---------------|-------------------------------------------------------|
 | number        | `default: 123`, `default: -100`                       |
-| string        | `default: 'direct'`                                   |
+| string        | `default: "direct"`                                   |
 | boolean       | `default: false`                                      |
 | expression    | `` default: `now() - interval '5 days'` ``            |
 
@@ -863,7 +886,7 @@ such as `state.pending`, is **not** a valid default value.
    integer literal for `int`; a number for `float64`; a string for `string`;
    `true` or `false` for `bool`; for a declared type (§types), a
    literal of its storage type, so the default of a value set is the
-   value as written (`default: 'pending'`). An expression literal is accepted on any column and is
+   value as written (`default: "pending"`). An expression literal is accepted on any column and is
    SQLite's to judge. `[]byte` and `time.Time` columns take only an
    expression literal. A default that does not fit is an error naming
    the column and its type.
@@ -874,11 +897,11 @@ such as `state.pending`, is **not** a valid default value.
 
 ### Indexes
 
-An `indexes` block may appear inside a `Table` or `TablePartial` body. A
-body MAY contain more than one `indexes` block; their contents accumulate.
+An `Indexes` block may appear inside a `Table` or `TablePartial` body. A
+body MAY contain more than one `Indexes` block; their contents accumulate.
 
 ```ebnf
-indexes block  = "indexes", "{", { index }, "}" ;
+indexes block  = "Indexes", "{", { index }, "}" ;
 index          = index key, [ index settings ], newline ;
 
 index key      = index atom
@@ -926,10 +949,10 @@ Table bookings {
   booking_date time.Time
   cancelled_at time.Time [null]
 
-  indexes {
+  Indexes {
     (id, country) [pk]
-    country [name: 'idx_country']
-    (country, `lower(country)`) [unique, name: 'idx_bookings_country_ci']
+    country [name: "idx_country"]
+    (country, `lower(country)`) [unique, name: "idx_bookings_country_ci"]
     booking_date [where: `cancelled_at IS NULL`]
   }
 }
@@ -1018,7 +1041,7 @@ Table profiles {
 Table merchants {
   id int
   country_code string
-  indexes {
+  Indexes {
     (id, country_code) [pk]
   }
 }
@@ -1126,12 +1149,12 @@ storage type = column type ;
    other than the package's own directory, is an error naming the
    fix: the type lives in the package's own Go files, which do not
    travel to `DIR`, so it is declared in a package of its own and
-   named `Type pkg.Name storage from 'path'`. `-o` naming the
+   named `Type pkg.Name storage from "path"`. `-o` naming the
    package's own directory writes where `gen` without it does.
 
 ```volt
-Type money.Money int    from 'example.com/app/money'
-Type png.Png     []byte from 'image/png'
+Type money.Money int    from "example.com/app/money"
+Type png.Png     []byte from "image/png"
 Type Slug        string
 
 Table products {
@@ -1151,16 +1174,16 @@ Type OrderState string
 
 Table orders {
   id     int        [pk, increment]
-  status OrderState [default: 'pending']
+  status OrderState [default: "pending"]
   prev   OrderState [null]
 
-  validators {
+  Validators {
     OrderStateKnown(status)
     OrderStateKnownNull(prev)
   }
 
   Records (id, status) {
-    1, 'paid'
+    1, "paid"
   }
 }
 ```
@@ -1219,7 +1242,7 @@ partial injection = "~", name, newline ;
 ```
 
 1. Partial names live in their own namespace and MUST be unique.
-2. A partial body is a table body without `records` and without nested
+2. A partial body is a table body without `Records` and without nested
    partial injections. A partial takes no settings: a table's `note`
    and `model` are its own.
 3. An injection `~p` inside a table body replaces itself with the entire
@@ -1280,9 +1303,9 @@ record value    = string
 4. **Value typing.** Each value MUST fit the target column's type
    (§columns), as a default must (§default-values): an integer literal
    for `int`; a number for `float64`; a string for `string` and for
-   `time.Time` (ISO 8601 text, `'2024-01-15 10:30:00'`); `true` or
+   `time.Time` (ISO 8601 text, `"2024-01-15 10:30:00"`); `true` or
    `false` for `bool`; for a declared type, a literal of its storage
-   type (`'paid'` for a value set stored as `string`, §types). `null`
+   type (`"paid"` for a value set stored as `string`, §types). `null`
    is NULL and is allowed only on a column that carries `null`.
    A `[]byte` column takes an expression literal or NULL. An expression
    literal (backticks) is accepted on any column and is SQLite's to
@@ -1308,8 +1331,8 @@ Table users {
   status JobState [null]
 
   Records (id, name, status) {
-    1, 'Alice', 'created'
-    2, 'Bob', 'running'
+    1, "Alice", "created"
+    2, "Bob", "running"
     3, null, null
   }
 }
@@ -1322,7 +1345,7 @@ Table posts {
 
 Records posts(id, user_id, posted_at) {
   1, 1, `CURRENT_TIMESTAMP`
-  2, 2, '2024-01-15 10:30:00'
+  2, 2, "2024-01-15 10:30:00"
 }
 ```
 
@@ -1347,12 +1370,12 @@ A note is human-readable documentation. It has one spelling, the
    (§mapping-to-sqlite-ddl).
 
 ```volt
-Table posts [note: '''
+Table posts [note: """
   A blog post.
   Its author sees it before anyone else.
-'''] {
+"""] {
   id int [pk]
-  title string [note: 'Shown in lists']
+  title string [note: "Shown in lists"]
 }
 ```
 
@@ -1439,7 +1462,7 @@ column setting       = "pk" | "null"
 default value        = [ "-" ], number | string | boolean
                      | expression literal ;
 
-indexes block        = "indexes", "{", { index }, "}" ;
+indexes block        = "Indexes", "{", { index }, "}" ;
 index                = index key, [ index settings ], newline ;
 index key            = index atom
                      | "(", index atom, { ",", index atom }, ")" ;
@@ -1503,34 +1526,23 @@ line comment         = "//", { any char - newline } ;
 block comment        = "/*", block comment body, "*/" ;
 block comment body   = { any char } - ( { any char }, "*/", { any char } ) ;
 
-identifier           = plain identifier | quoted identifier ;
+identifier           = letter, { letter | unicode digit } ;
 letter               = ? any character of Unicode category L (Letter) ?
-                     | ? any character of Unicode category M (Mark) ?
                      | "_" ;
+unicode digit        = ? any character of Unicode category Nd (Decimal Number) ? ;
 digit                = "0" | "1" | "2" | "3" | "4"
                      | "5" | "6" | "7" | "8" | "9" ;
-ident char           = letter | digit ;
-plain identifier     = letter, { ident char }
-                     | ( digit, { ident char } ) - number ;
-quoted identifier    = '"', { qi char | escape sequence }, '"' ;
-qi char              = any char - ( '"' | "\" | newline ) ;
 
 string               = single line string | multi line string ;
-single line string   = "'", { sls char | escape sequence }, "'" ;
-sls char             = any char - ( "'" | "\" | newline ) ;
-multi line string    = "'''", mls body, "'''" ;
+single line string   = '"', { sls char | escape sequence }, '"' ;
+sls char             = any char - ( '"' | "\" | newline ) ;
+multi line string    = '"""', mls body, '"""' ;
 mls body             = { ( any char - "\" ) | escape sequence }
-                     - ( { any char }, "'''", { any char } ) ;
+                     - ( ( { any char }, '"""', { any char } )
+                       | ( { any char }, '"' ) ) ;
 
 escape sequence      = "\", escaped item ;
-escaped item         = "t" | "n" | "r" | "0" | "b" | "v" | "f"
-                     | "\" | "'" | '"' | "`"
-                     | newline
-                     | "u", 4 * hex digit
-                     | any char - "u" ;
-hex digit            = digit
-                     | "a" | "b" | "c" | "d" | "e" | "f"
-                     | "A" | "B" | "C" | "D" | "E" | "F" ;
+escaped item         = "\" | '"' | "n" | "t" ;
 
 number               = digit, { digit },
                        [ ".", digit, { digit } ], [ exponent ] ;
@@ -1601,8 +1613,8 @@ package clause = "package", name, newline ;
    `module` directive is the project's module path; every other
    directive is Go's business and ignored. There is no second manifest.
 2. Every `.volt` file MUST begin with a package clause: its first
-   declaration, at most one per file. The name is a plain (unquoted)
-   identifier. The name `volt` is reserved: generated files import the
+   declaration, at most one per file. The name is an identifier. The
+   name `volt` is reserved: generated files import the
    volt runtime under that qualifier (§generation-contract-informative), so a package of that name
    is an error.
 3. A **package** is a directory: all `.volt` files in one directory
@@ -1677,23 +1689,31 @@ package path = name, { slash, name } ;
    after the package clause, before other use of the imported names.
 2. A package path names a package by its directory path from the
    project root, `/`-separated, with no `./`, no `..`, and no interior
-   whitespace; its segments, and the alias, are plain (unquoted)
-   identifiers (§route-paths). The path MUST name an existing package of
-   the project.
+   whitespace; its segments, and the alias, are identifiers of ASCII
+   letters, digits and underscores (§route-paths). The path MUST name an
+   existing package of the project.
 3. The imported package is referenced through its **qualifier**: the
    alias when given, else the last path segment. All cross-package
    references are qualifier-prefixed (`db.User`); nothing is ever
    imported into the local scope. A `Migration` is not an importable
    element: it belongs to the package whose tables it migrates, and
    nothing of another package may name it (§migrations).
-4. Within one package (across all its files): importing the same path
+4. **A package names its own declarations bare**, as a Go package does.
+   A dotted reference to a declaration (a plug, a route handler, a
+   `resources` or `dataset` table, an error handler, a validator) names
+   an import through its qualifier, or the runtime as `volt.`
+   (§pipelines, §event-routes); the package's own name qualifies
+   nothing. A qualifier that is neither is an error, and when it is the
+   package's own name the error names the bare form: inside package
+   `app`, `app.Errors` is written `Errors`.
+5. Within one package (across all its files): importing the same path
    twice is idempotent, but with two different qualifiers it is an
-   error; two different paths MUST NOT share a qualifier, nor may one
-   take the package's own name, which qualifies its own declarations
-   (§pipelines, §handler-references); a package MUST NOT import itself; **every import
-   MUST be used** — an import whose qualifier is never referenced is
-   an error.
-5. **Import cycles are errors.** The package import graph MUST be
+   error; two different paths MUST NOT share a qualifier; a package MUST
+   NOT import itself; **every import MUST be used**: an import whose
+   qualifier is never referenced is an error. An import MAY take the
+   package's own name as its qualifier, since that name qualifies
+   nothing else (rule 4).
+6. **Import cycles are errors.** The package import graph MUST be
    acyclic.
 
 ```volt fragment
@@ -1718,8 +1738,8 @@ go ref   = name, [ ".", name ] ;
    contains only plug lines; it MAY be empty.
 2. A plug references Go middleware of type
    `func(http.Handler) http.Handler` by name: `volt.<Name>` (the volt
-   runtime), `<Name>` or `<package name>.<Name>` (a function of the
-   containing package). Referencing an *imported* package's function is
+   runtime) or `<Name>` (a function of the containing package, named
+   bare, §imports). Referencing an *imported* package's function is
    an error suggesting a local wrapper.
    A function of the containing package MUST exist as a non-generic
    top-level function in the package directory's non-test Go files that
@@ -1775,9 +1795,8 @@ param type = "int" | "string" ;
    rationale: §layers-files-and-the-superset-rule.)
 5. Grammar note: a path is assembled from ordinary tokens; the
    contiguity rule of clause 1 is what makes it one lexical island.
-6. Every segment name — literal, parameter or wildcard — MUST be a
-   plain (unquoted) identifier of ASCII letters, digits and
-   underscores. Segment names flow verbatim into registration patterns
+6. Every segment name, literal, parameter or wildcard, MUST be an
+   identifier of ASCII letters, digits and underscores. Segment names flow verbatim into registration patterns
    and generated Go; the closed character set is what makes that safe
    (and is why `{`/`}` can serve as the collision-free conflict markers
    of §route-conflicts). The same constraint applies to the `resources` table
@@ -1794,7 +1813,7 @@ verb  = "get" | "post" | "put" | "patch" | "delete"
 ```
 
 1. Routes appear only inside a Scope body. The verb is a contextual
-   keyword, case-insensitive; `any` registers the route for every
+   keyword, lowercase (§keywords); `any` registers the route for every
    method (its registration carries no method).
 2. A route's **full path** is the enclosing scopes' prefixes followed
    by its own path, in nesting order.
@@ -1815,8 +1834,8 @@ handler ref = name, [ ".", name ] ;
    reference**, which makes the route a query route (§query-routes) with no
    controller at all: `pkg.Query`, whose first part is an import
    qualifier (§imports) and whose second names a generated query of that
-   package, or `Query` or `<package name>.Query`, a generated query of
-   the package itself (§query-routes), spelled as a plug is (§pipelines). The
+   package, or `Query`, a generated query of the package itself
+   (§query-routes), named bare (§imports). The
    runtime's own handlers are `volt.<Name>` (§event-routes).
 2. Every distinct controller becomes one generated interface; every
    distinct action one method with the route's typed parameters
@@ -1917,13 +1936,13 @@ Scope /api [pipe: api] {
    for a query route.
 6. **Own tables.** A package that declares tables MAY route them
    itself, so one directory holds schema, routes and handlers.
-   `Query` or `<package name>.Query` names its own generated query;
+   `Query` names its own generated query;
    `resources t [default]` (§default-handlers) and `dataset s` (§dataset-declaration) resolve in
-   the package when bare or self-qualified. Nothing is imported, the
+   the package when bare, as every declaration of the package is named
+   (§imports). Nothing is imported, the
    generated handlers name the package's changesets bare, and the
    router's constructor is `NewRouter`, so it never collides with the
-   query layer's `New`. The package's own name is thereby a qualifier:
-   an import MUST NOT take it (§imports).
+   query layer's `New`.
 
 ### Formats
 
@@ -2059,7 +2078,7 @@ Scope settings (the complete set):
 |---|---|---|
 | `pipe` | Pipeline name | append the pipeline to the inherited chain |
 | `name` | identifier | prefix for helper names beneath this scope |
-| `error_handler` | function of this package (`Name` or `pkg.Name`) | error spine for routes beneath, nearest wins |
+| `error_handler` | function of this package, named bare (`Name`, §imports) | error spine for routes beneath, nearest wins |
 
 1. Scopes nest arbitrarily. Prefixes concatenate; `pipe` chains
    **append** (ancestors outermost); `name` prefixes concatenate;
@@ -2246,9 +2265,8 @@ Scope /api {
 2. `default` implies `api`: `new` and `edit` are form pages, and a
    generated handler has nothing to return for them.
 3. The table's CRUD is the data package's: an imported one for a
-   qualified table (`db.users`), this package's own for a bare or
-   self-qualified one (`users`, `app.users`; §query-routes), as for every
-   query route. A bare table in a package that declares none is an
+   qualified table (`db.users`), this package's own for a bare one
+   (`users`; §query-routes, §imports), as for every query route. A bare table in a package that declares none is an
    error naming the qualified form.
 4. The key parameter is named as the generated CRUD spells the
    primary-key column (`id` for `id`), because binding is by name
@@ -2287,7 +2305,7 @@ dataset = "dataset", [ name, "." ], name, [ settings ], newline ;
 // db: Group da_farm = DA \ (da_kody, …)
 //     Select browse for da_farm where rok = :rok and idgr in :idgr
 Scope /da [pipe: api] {
-	dataset db.browse [strip: 'da_', except: (da_r_r)]
+	dataset db.browse [strip: "da_", except: (da_r_r)]
 	get /r_r Da.RR
 }
 ```
@@ -2297,7 +2315,7 @@ Scope /da [pipe: api] {
 1. `dataset` appears only inside a Scope body and names a select: of
    an imported data package when qualified (`db.browse`), the
    qualifier marking the import used (§imports); of this package when
-   bare or self-qualified (`browse`, `app.browse`; §query-routes). A name
+   bare (`browse`; §query-routes, §imports). A name
    that is not a select of that package is an error, with a
    case-insensitive hint.
 2. For every member of the select's target (§selects-over-groups), in member order,
@@ -2370,14 +2388,13 @@ language: groups overlap freely, a table belonging to any number of
 them.
 
 ```ebnf
-group decl = "Group", plain name,
+group decl = "Group", name,
              ( "{", { newline }, [ group members ], "}"
              | "=", group expr ), newline ;
-group members = plain name, { newline, { newline }, plain name }, { newline } ;
-plain name    = plain identifier ;                      (* §identifiers *)
+group members = name, { newline, { newline }, name }, { newline } ;
 group expr    = group term, { ( "+" | "\" ), group term } ;
-group term    = plain name
-              | "(", plain name, { ",", plain name }, ")" ;
+group term    = name
+              | "(", name, { ",", name }, ")" ;
 ```
 
 ```volt fragment
@@ -2419,13 +2436,13 @@ it is not SQL and never grows toward it; anything it cannot say
 belongs in the dynamic layer (§generated-query-surface).
 
 ```ebnf
-pred decl    = "Pred", plain name, "{", { newline }, pred expr, { newline }, "}", newline ;
+pred decl    = "Pred", name, "{", { newline }, pred expr, { newline }, "}", newline ;
 pred expr    = pred and, { "or", pred and } ;
 pred and     = pred unary, { "and", pred unary } ;
 pred unary   = [ "not" ], pred primary ;
 pred primary = "(", pred expr, ")"
              | comparison | membership | pattern | null test
-             | plain name - pred keyword ;       (* reference to a Pred *)
+             | name - pred keyword ;       (* reference to a Pred *)
 comparison   = operand, comp op, operand ;
 comp op      = "=" | "!=" | "<" | "<=" | ">" | ">=" ;
 membership   = column ref, "in", ( "(", literal, { ",", literal }, ")" | param ) ;
@@ -2433,7 +2450,7 @@ pattern      = column ref, "like", ( string | param ) ;
 null test    = column ref, "is", [ "not" ], "null" ;
 operand      = column ref | param | literal ;
 column ref   = name - pred keyword ;
-param        = ":", plain name ;                 (* no space after ':' *)
+param        = ":", name ;                 (* no space after ':' *)
 literal      = number | string | boolean ;
 pred keyword = "and" | "or" | "not" | "in" | "like" | "is" | "null" ;
 ```
@@ -2446,8 +2463,9 @@ Pred chosen  { org in :orgs }
 ```
 
 1. `and`, `or`, `not`, `in`, `like`, `is`, `null` are keywords inside a
-   predicate expression, case-insensitive (§keywords): a column of one of
-   these names is referenced quoted (`"in" = 1`). Outside predicates
+   predicate expression, lowercase (§keywords), and so are `true` and
+   `false` where an operand stands: a column of one of these names, in
+   any case, cannot be referenced in a predicate. Outside predicates
    they are ordinary identifiers.
 2. A bare name in primary position references a Pred of the same
    package; references must exist and be acyclic.
@@ -2457,7 +2475,7 @@ Pred chosen  { org in :orgs }
    - `=` and `!=` require both operands to share a type class;
    - `<` `<=` `>` `>=` require numeric or date/time operands — text is
      **not** orderable here (`text_column > 1` and
-     `text_column > 'a'` are both errors; order text in SQL, §selects-over-groups);
+     `text_column > "a"` are both errors; order text in SQL, §selects-over-groups);
    - `like` requires a text column and a text pattern;
    - `in` items must all match the column's type;
    - a numeric literal MUST be representable in the column's storage
@@ -2560,7 +2578,7 @@ of a target: a group (§groups), or a single table treated as a
 one-member group.
 
 ```ebnf
-select decl = "Select", plain name, [ projection ], "for", plain name,
+select decl = "Select", name, [ projection ], "for", name,
               [ "where", pred expr ], [ settings ], newline ;
 
 projection  = "(", column name, { ",", column name }, ")"
@@ -2584,7 +2602,7 @@ Select brief   (* \ (password_hash, bio, avatar)) for accounts
 The clauses read in SQL order — name, columns, source, filter — and
 the optional projection narrows the emitted columns.
 
-1. The select name is a plain identifier; per target-member it mints
+1. The select name is an identifier; per target-member it mints
    the method `<Model><SelectName>` (§mapping-to-go naming). A collision
    with a generated CRUD/dynamic method name, or between two selects
    on an overlapping member, is an error.
@@ -2679,7 +2697,7 @@ Go that any code may call. Nothing about a validator reaches the
 database.
 
 ```ebnf
-validators block = "validators", "{", { validator }, "}" ;
+validators block = "Validators", "{", { validator }, "}" ;
 validator        = go ref, "(", column name, { ",", column name }, ")", newline ;
 ```
 
@@ -2693,7 +2711,7 @@ Table users {
   email string [required]
   hits  int
 
-  validators {
+  Validators {
     EmailShape(email)
     HitsSane(hits)
     Consistent(email, hits)
@@ -2711,9 +2729,10 @@ func EmailShape(email string) error {
 ```
 
 1. **Resolution.** `go ref` names a function of the **containing
-   package**, bare (`EmailShape`) or qualified by the package's own
-   name (`db.EmailShape`); an imported package's function is an error
-   suggesting a local wrapper. The function MUST exist as an exported,
+   package**, bare (`EmailShape`, §imports); an imported package's
+   function is an error suggesting a local wrapper, and the package's
+   own name as a qualifier (`db.EmailShape`) is an error naming the bare
+   form. The function MUST exist as an exported,
    non-generic, top-level function in the package directory's non-test
    Go files that the go tool would compile for it (go/build's file
    constraints, as §pipelines); a file carrying the generated marker
@@ -2987,8 +3006,8 @@ create index op    = "create", "index", name, index key,
 drop index op      = "drop", "index", name, index key,
                      [ index settings ], newline ;
 
-exec op            = "exec", string, [ exec settings ], newline ;
-exec settings      = "[", "down", ":", string, "]" ;
+exec op            = "exec", expression literal, [ exec settings ], newline ;
+exec settings      = "[", "down", ":", expression literal, "]" ;
 
 shape body         = { migration column | indexes block } ;
 
@@ -3030,8 +3049,9 @@ Migration 0002__users_bio {
    A package that declares no tables MUST NOT declare migrations.
    Migrations are never imported (§imports).
 2. **Name and order.** A migration name is a run of at least four
-   digits, two underscores and a label; it is a plain identifier
-   (§identifiers) and MUST be unique within the package. Every
+   digits, two underscores and a label; it is one token, the only name
+   that begins with digits, and no identifier (§identifiers). It MUST be
+   unique within the package. Every
    migration name of a package MUST have the same digit-run width; a
    package mixing widths is an error naming both names. Migrations
    apply in byte order of their names, which is numeric order of the
@@ -3051,8 +3071,8 @@ Migration 0002__users_bio {
    column is NOT NULL unless it carries `null`, as a schema column is,
    a key column MUST NOT carry `null`, and a `shape body` has at most
    one primary key, one `pk` column or one `[pk]` index, as a table
-   has (§columns). A partial injection, a `validators` block and a
-   records block are not part of a `shape body`.
+   has (§columns). A partial injection, a `Validators` block and a
+   `Records` block are not part of a `shape body`.
 4. **Settings whitelist.** In a migration, a column setting is one of
    `pk`, `increment`, `null`, `unique`, `default:`, `ref:`, `delete:`,
    `update:`, and in a `rebuild` also `from:` (rule 9);
@@ -3118,7 +3138,7 @@ Migration 0002__users_bio {
    dropping and recreating them around it; a trigger on the rebuilt
    table itself goes with it; the fold surfaces both.
 10. **`create index`, `drop index`.** The index is identified by its
-    table and key exactly as in a schema `indexes` block, so the
+    table and key exactly as in a schema `Indexes` block, so the
     schema and the migration name the same index the same way: the
     DDL mapping assigns the name from the table and the key columns,
     `name:` overrides it, and an index with an expression atom MUST
@@ -3126,8 +3146,10 @@ Migration 0002__users_bio {
     makes the index partial. `pk` is not a setting of these
     operations: a primary key is a table constraint, declared in a
     `create table` or `rebuild table` body.
-11. **`exec`.** The string is one or more SQL statements run
-    verbatim, for whatever the operations above do not say: a data
+11. **`exec`.** The expression literal is one or more SQL statements
+    run verbatim, raw as every expression literal is
+    (§expression-literals), so a SQL string inside keeps its single
+    quotes, for whatever the operations above do not say: a data
     fix, a view, a trigger, a `PRAGMA`. A foreign key over several
     columns has no shape item; a table that needs one is written
     with `exec`, its `CREATE TABLE` verbatim, and the drift report
@@ -3286,7 +3308,7 @@ Table users {
   bio       string [null]
   hits      int    [default: 0]
 
-  validators {
+  Validators {
     EmailShape(email)
     HitsSane(hits)
   }
@@ -3297,7 +3319,7 @@ Migration 0001__create_users {
     id    int    [pk, increment]
     email string [unique]
     name  string
-    hits  string [default: '0']
+    hits  string [default: "0"]
   }
 }
 
@@ -3316,7 +3338,7 @@ Migration 0002__users_bio_and_int_hits [irreversible] {
 }
 ```
 
-The `validators` block and the two `required` settings changed
+The `Validators` block and the two `required` settings changed
 nothing in the database and appear in no migration; they changed
 `UserChangeset.Validate`. The second migration is irreversible
 because the rebuild forgets the old type of `hits`; the first is
@@ -3393,8 +3415,8 @@ create index op    = "create", "index", name, index key,
                      [ index settings ], newline ;
 drop index op      = "drop", "index", name, index key,
                      [ index settings ], newline ;
-exec op            = "exec", string, [ exec settings ], newline ;
-exec settings      = "[", "down", ":", string, "]" ;
+exec op            = "exec", expression literal, [ exec settings ], newline ;
+exec settings      = "[", "down", ":", expression literal, "]" ;
 shape body         = { migration column | indexes block } ;
 migration column          = name, column type,
                             [ migration column settings ], newline ;
@@ -3553,8 +3575,8 @@ comparisons and `Set` take plain `T`, NULL is explicit (`IsNull`,
 singular of the table name (`users` → `User`), overridable with
 `[model:]` — the only model-naming override; `resources`' `singular:`
 setting (§settings) renames the route member helper, never the model.
-A leading digit is
-prefixed (`2fa_codes` → `X2faCode`). Two declarations mapping to the
+A name whose words begin with a digit once its underscores are
+dropped is prefixed (`_2fa_codes` → `X2faCode`). Two declarations mapping to the
 same Go identifier is a generation error; the `dynname` lint reports
 the dynamic layer's concatenation collisions ahead of time. A bare
 declared type shares this scope, since the data package's own Go
@@ -3666,12 +3688,12 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 | declared `Type` (§types) | the column type of its storage type; a value set (§types) carries no `CHECK`, its values are the Go constants |
 | backtick expressions | verbatim; parenthesized in `DEFAULT` as SQLite requires |
 | validators, `required` | nothing; the database never carries a `CHECK` (§validators) |
-| `records` | multi-row `INSERT` statements after all tables, in source order; `null` becomes `NULL` |
+| `Records` | multi-row `INSERT` statements after all tables, in source order; `null` becomes `NULL` |
 | unknown type | check error naming the column (§columns); the generator never sees one |
 
 Identifiers are quoted only when needed (not a plain lower-case name,
-or a SQLite keyword): `order` → `"order"`, `full name` → `"full name"`,
-`2fa_codes` → `"2fa_codes"`. Project note → file header comment; table
+or a SQLite keyword): `order` → `"order"`, `Users` → `"Users"`,
+`żółw` → `"żółw"`. Project note → file header comment; table
 and column notes → comments above their DDL. Output opens with
 `PRAGMA foreign_keys = ON;` and the `-- Code generated … DO NOT EDIT.`
 marker, with the same overwrite protection as §mapping-to-go.

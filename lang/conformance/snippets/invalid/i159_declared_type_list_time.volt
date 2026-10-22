@@ -2,7 +2,7 @@
 // want: cannot take a list parameter
 package db
 
-Type stamp.Stamp time.Time from 'example.com/app/stamp'
+Type stamp.Stamp time.Time from "example.com/app/stamp"
 
 Table events {
   id int   [pk, increment]

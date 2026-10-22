@@ -4,7 +4,6 @@ package check
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/token"
@@ -184,8 +183,7 @@ func (c *checker) recordsCheck(d *ast.Records, topLevel bool) {
 		}
 		for _, v := range row.Values {
 			if id, ok := v.(*ast.Ident); ok {
-				low := strings.ToLower(id.Name())
-				if id.Quoted() || (low != "true" && low != "false" && low != "null") {
+				if name := id.Name(); name != "true" && name != "false" && name != "null" {
 					c.errorf(id.Pos(), "records-sample-data", "record values must be literals, null, true or false; found bare identifier %q (§records-sample-data)", id.Name())
 				}
 			}

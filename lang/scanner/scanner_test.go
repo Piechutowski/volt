@@ -42,7 +42,9 @@ func TestMaximalMunch(t *testing.T) {
 		{"<>", []token.Kind{token.LT, token.GT}},
 		{">1", []token.Kind{token.GT, token.NUMBER}},
 		{"user_id2", []token.Kind{token.IDENT}},
-		{"''''''", []token.Kind{token.STRING}},
+		{`""""""`, []token.Kind{token.STRING}},
+		{`""`, []token.Kind{token.STRING}},
+		{`"""a""" ""`, []token.Kind{token.STRING, token.STRING}},
 	}
 	for _, tt := range tests {
 		got := kinds(t, tt.src)
@@ -73,6 +75,7 @@ func TestNumbersAndIdents(t *testing.T) {
 		{"1e2abc", token.IDENT},
 		{"żółć", token.IDENT},
 		{"_x", token.IDENT},
+		{"x\u0663", token.IDENT},
 	}
 	for _, tt := range tests {
 		if got := one(t, tt.src); got.Kind != tt.kind {
@@ -86,26 +89,63 @@ func TestNumbersAndIdents(t *testing.T) {
 
 func TestEscapes(t *testing.T) {
 	tests := []struct{ src, val string }{
-		{`'a\tb'`, "a\tb"},
-		{`'a\nb'`, "a\nb"},
-		{`'it\'s'`, "it's"},
-		{`'back\\slash'`, `back\slash`},
-		{`'A'`, "A"},
-		{`'\q'`, "q"},
-		{"'a\\\nb'", "ab"},
+		{`"a\tb"`, "a\tb"},
+		{`"a\nb"`, "a\nb"},
+		{`"say \"hi\""`, `say "hi"`},
+		{`"back\\slash"`, `back\slash`},
+		{`"it's"`, "it's"},
+		{`"json:\"slug\""`, `json:"slug"`},
+		{"\"\"\"\n  a \\\"q\\\" \\t b\n\"\"\"", "a \"q\" \t b"},
 	}
 	for _, tt := range tests {
 		if got := one(t, tt.src); got.Val != tt.val {
 			t.Errorf("Scan(%s) val = %q, want %q", tt.src, got.Val, tt.val)
 		}
 	}
-	if _, errs := Scan("t", `'\u12'`); len(errs) == 0 {
-		t.Error(`Scan('\u12'): want error for short unicode escape`)
+	for _, src := range []string{`"\q"`, `"\u0041"`, `"\r"`, `"\0"`, `"\'"`, "\"a\\\nb\"", "\"\"\"a\\\nb\"\"\"", `"""\x"""`} {
+		if _, errs := Scan("t", src); len(errs) == 0 {
+			t.Errorf("Scan(%q): want an error, a string takes four escapes and no line continuation", src)
+		}
+	}
+}
+
+func TestSingleQuotesAreNoStrings(t *testing.T) {
+	for _, src := range []string{"'a'", "'''\n  a\n'''", "'open"} {
+		toks, errs := Scan("t", src)
+		if len(errs) != 1 || !strings.Contains(errs[0].Msg, `"`) {
+			t.Errorf("Scan(%q) errors %v, want one naming the double-quoted spelling", src, errs)
+		}
+		if src != "'open" && toks[0].Kind != token.STRING {
+			t.Errorf("Scan(%q) reads %v, want a string to go on with", src, toks[0])
+		}
+	}
+}
+
+func TestBackslashBeforeLineBreak(t *testing.T) {
+	for _, src := range []string{"a \\\nb", "Group g = a \\\r\n  b"} {
+		if _, errs := Scan("t", src); len(errs) != 1 {
+			t.Errorf("Scan(%q) errors %v, want one: Volt has no line continuation", src, errs)
+		}
+	}
+	if _, errs := Scan("t", "`a\\\nb` // c \\\n"); len(errs) != 0 {
+		t.Errorf("an expression literal and a comment are raw: %v", errs)
+	}
+}
+
+func TestNamesAreGoIdentifiers(t *testing.T) {
+	for _, src := range []string{"cafe\u0301", "\u0301x", "\u0663x"} {
+		toks, errs := Scan("t", src)
+		if len(errs) != 1 || !strings.Contains(errs[0].Msg, "§identifiers") {
+			t.Errorf("Scan(%q) errors %v, want one citing §identifiers", src, errs)
+		}
+		if len(toks) != 2 {
+			t.Errorf("Scan(%q) = %d tokens, want the name read as one", src, len(toks)-1)
+		}
 	}
 }
 
 func TestMultilineIndentStripping(t *testing.T) {
-	src := "'''\n  line one\n  line two\n'''"
+	src := "\"\"\"\n  line one\n  line two\n\"\"\""
 	got := one(t, src)
 	want := "line one\nline two"
 	if got.Val != want {
@@ -113,6 +153,22 @@ func TestMultilineIndentStripping(t *testing.T) {
 	}
 	if !got.Multi {
 		t.Error("Multi flag not set")
+	}
+}
+
+func TestQuote(t *testing.T) {
+	for _, v := range []string{"", "plain", `say "hi"`, `back\slash`, "two\nlines\tand a tab", "it's"} {
+		q, ok := Quote(v)
+		if !ok {
+			t.Errorf("Quote(%q) refused", v)
+			continue
+		}
+		if got := one(t, q); got.Kind != token.STRING || got.Val != v {
+			t.Errorf("Quote(%q) = %s reads back as %q", v, q, got.Val)
+		}
+	}
+	if _, ok := Quote("a\rb"); ok {
+		t.Error("Quote accepted a carriage return, which no Volt string spells")
 	}
 }
 
@@ -151,11 +207,11 @@ func TestCRLF(t *testing.T) {
 	if e := toks[0].End(); e.Line() != 1 || e.Column() != 2 || e.Offset() != 1 {
 		t.Errorf("a ends at %s+%d, want 1:2+1", e, e.Offset())
 	}
-	toks, errs = Scan("t", "'''\r\n  ab\r\n'''\r\nx\ry [\r\n")
+	toks, errs = Scan("t", "\"\"\"\r\n  ab\r\n\"\"\"\r\nx\ry [\r\n")
 	if len(errs) > 0 {
 		t.Fatalf("errors: %v", errs)
 	}
-	if s := toks[0]; s.Val != "ab" || s.Text() != "'''\r\n  ab\r\n'''" || s.End().Line() != 3 || s.End().Column() != 4 {
+	if s := toks[0]; s.Val != "ab" || s.Text() != "\"\"\"\r\n  ab\r\n\"\"\"" || s.End().Line() != 3 || s.End().Column() != 4 {
 		t.Errorf("multi-line string = %+v (text %q), want value \"ab\" ending at 3:4", s, s.Text())
 	}
 	if id := toks[1]; id.Val != "xy" || id.Text() != "x\ry" || id.Pos.Line() != 4 || id.End().Column() != 3 {
@@ -168,11 +224,12 @@ func TestCRLF(t *testing.T) {
 
 func TestLexicalErrors(t *testing.T) {
 	for _, src := range []string{
-		"'unterminated",
-		"'line\nbreak'",
+		`"unterminated`,
+		"\"line\nbreak\"",
+		"\"\"\"unterminated",
+		"'single'",
 		"/* unterminated",
 		"`unterminated",
-		`"unterminated`,
 		"@",
 	} {
 		if _, errs := Scan("t", src); len(errs) == 0 {
@@ -181,10 +238,10 @@ func TestLexicalErrors(t *testing.T) {
 	}
 }
 
-func TestQuotedIdent(t *testing.T) {
+func TestDoubleQuotesDelimitStrings(t *testing.T) {
 	got := one(t, `"double precision"`)
-	if got.Kind != token.IDENT || !got.Quoted || got.Val != "double precision" {
-		t.Errorf("quoted ident = %+v", got)
+	if got.Kind != token.STRING || got.Val != "double precision" {
+		t.Errorf("double-quoted text = %+v, want a string", got)
 	}
 }
 

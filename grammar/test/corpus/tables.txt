@@ -23,7 +23,7 @@ Table users {
 table with settings
 ==================
 
-Table users [note: 'main', model: 'Member'] {
+Table users [note: "main", model: "Member"] {
   id int
 }
 
@@ -102,11 +102,11 @@ column settings
 Table t {
   a int [pk, unique, increment]
   b int [null]
-  c string [default: 'x', note: 'col']
+  c string [default: "x", note: "col"]
   d time.Time [default: `now()`]
   e float64 [default: -1.5]
   f bool [default: false]
-  h Status [default: 'active']
+  h Status [default: "active"]
 }
 
 ---
@@ -260,7 +260,7 @@ settings lists spanning lines
 ==================
 
 Table t [
-  note: 'x'
+  note: "x"
 ] {
   id int [pk,
     increment]
@@ -310,9 +310,9 @@ a line break after a setting's colon
 ==================
 
 Table posts [note:
-  '''
+  """
   A blog post.
-  '''] {
+  """] {
   id int [pk]
   views int [default:
     0]
@@ -369,41 +369,29 @@ Table posts [note:
               (identifier))))))))
 
 ==================
-case-insensitive keywords
+an element word in the wrong case is an error
+:error
 ==================
 
 TABLE users {
-  ID int [PK]
-}
-table posts {
-  id int
+  id int [pk]
 }
 
 ---
 
-(source_file
-  (table_definition
-    (table_name
-      (identifier))
-    (column_definition
-      (column_name
-        (identifier))
-      (column_type
-        (type_name
-          (identifier)))
-      (settings_list
-        (setting
-          (setting_name
-            (identifier))))))
-  (table_definition
-    (table_name
-      (identifier))
-    (column_definition
-      (column_name
-        (identifier))
-      (column_type
-        (type_name
-          (identifier))))))
+==================
+a block word in the wrong case is an error
+:error
+==================
+
+Table users {
+  id int [pk]
+  indexes {
+    id
+  }
+}
+
+---
 
 ==================
 a bare flag after the column type is not a column
@@ -419,7 +407,8 @@ Table t {
 
 
 ==================
-identifier starting with digits
+a name beginning with a digit is an error
+:error
 ==================
 
 Table t {
@@ -427,17 +416,6 @@ Table t {
 }
 
 ---
-
-(source_file
-  (table_definition
-    (table_name
-      (identifier))
-    (column_definition
-      (column_name
-        (identifier))
-      (column_type
-        (type_name
-          (identifier))))))
 
 ==================
 table partial definition and injection

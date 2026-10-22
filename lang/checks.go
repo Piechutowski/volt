@@ -115,8 +115,12 @@ func exportedName(s string) bool {
 
 func (l *lowering) validatorSpec(v *ast.Validator) (golang.ValidatorSpec, bool) {
 	name := v.Ref.Base()
-	if q := v.Ref.Qualifier(); q != "" && q != l.pkgName {
-		l.errorf(v.Ref.Pos(), "a validator is a function of the containing package, not of %q — write a local wrapper (§validators)", q)
+	if q := v.Ref.Qualifier(); q != "" {
+		if _, kind := qualifierResolve(q, l.pkgName, nil); kind == qualSelf {
+			l.diags = append(l.diags, selfQualified(v.Ref.Pos(), q, name))
+			return golang.ValidatorSpec{}, false
+		}
+		l.errorf(v.Ref.Pos(), "a validator is a function of the containing package, not of %q: write a local wrapper (§validators)", q)
 		return golang.ValidatorSpec{}, false
 	}
 	if !exportedName(name) {

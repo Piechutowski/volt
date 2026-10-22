@@ -7,7 +7,7 @@ Table users {
   full_name string
   bio       string [null]
 
-  indexes {
+  Indexes {
     full_name
   }
 }

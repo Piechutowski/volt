@@ -4,7 +4,7 @@ Table post_tags {
   post_id int
   tag     string [null]
 
-  indexes {
+  Indexes {
     (post_id, tag) [pk]
   }
 }

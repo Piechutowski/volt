@@ -4,7 +4,7 @@ Table users {
   id    int [pk]
   email string
 
-  indexes {
+  Indexes {
     (`lower(email)`) [unique]
   }
 }

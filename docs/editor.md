@@ -94,17 +94,24 @@ load-bearing patterns, each citing the spec section it implements:
   items of a parenthesized value), so it may span lines; a break
   before a `:` and the other continuations the spec allows are
   limitations (section 7).
-- **Case-insensitive contextual keywords** (§keywords). Keywords are
-  generated regexes aliased to a canonical spelling; tree-sitter's
-  context-aware lexing provides the "not reserved" half — `table` in
-  column-name position lexes as an identifier. Known limitation: at the
-  start of a table-body line, an unquoted column literally named
-  `indexes`/`validators`/`records` lexes as the keyword; quoting
-  opts out (§case-sensitivity-and-terminology).
-- **Split string tokens for injection** (§string-literals–3.7). Delimiters and
+- **Case-sensitive contextual keywords** (§keywords). Each keyword is a
+  plain string in its one spelling, and tree-sitter's keyword
+  extraction matches it against the identifier token exactly and only
+  where the parse state admits it: that is the "not reserved" half, so
+  `table` in column-name position lexes as an identifier, while `TABLE`
+  at top level is an ERROR node, as the front end's error
+  (§case-sensitivity-and-terminology). Known limitation: at the start
+  of a table-body line, a column named exactly `Indexes`, `Validators`
+  or `Records` lexes as the block keyword (section 7).
+- **Names are identifiers, strings are Go's** (§identifiers,
+  §string-literals). An identifier is a Go identifier, the one token
+  that begins with digits is a migration name, and no name is quoted;
+  `"..."` and `"""..."""` are the strings, with the four escapes, and a
+  single quote opens nothing.
+- **Split string tokens for injection** (§string-literals). Delimiters and
   content are separate tokens, so `(string_content)` is a node with a
   range — exactly what `injections.scm` needs to hand note bodies to
-  Markdown and backtick expressions to SQL.
+  Markdown and backtick expressions, an `exec`'s SQL among them, to SQL.
 - **One endpoint shape** (§relationships-ref). A ref endpoint is
   `table.column` or `table.(columns)`, in a `Ref:` and in a column's
   `ref:` alike, so the grammar declares no conflicts: `setting` gives
@@ -222,7 +229,8 @@ layer:
   Migration body, the columns of the named table after `ref: table.`,
   settings per construct and none on a construct that takes none
   (§settings-lists, §settings-whitelists), and `true`/`false` after
-  `default:` only on a column stored as `bool`.
+  `default:` only on a column stored as `bool`. Every keyword is
+  offered in its one spelling, from the parser's own lists (§keywords).
 - A migration's name hovers as its position among the package's
   migrations in name order ("migration 2 of 3") and whether it runs
   backward (§migrations); the project index answers it, so a
@@ -284,13 +292,11 @@ from one implementation. The protocol library is `tliron/glsp` (LSP
 
 ## 7. Known limitations (documented trade-offs, not bugs)
 
-- **Grammar: unquoted columns named like block keywords.** `indexes`,
-  `validators`, `records` need quoting in column position (§keywords
-  note above); the front end, spec-exact, accepts both.
-- **Grammar: exotic string edges.** A triple-quoted string whose
-  content ends in a quote immediately before the closing `'''` may
-  tokenize differently from the spec's maximal-munch rule; the front
-  end handles it correctly.
+- **Grammar: columns named exactly like block keywords.** `Indexes`,
+  `Validators` and `Records` at the start of a table-body line lex as
+  the keyword (§keywords note above); the front end, spec-exact, reads
+  them as columns. Another case of the word (`indexes`) is an
+  identifier to both.
 - **Grammar: continuations outside a settings list, and a break
   before a setting's `:`.** An element continued on an indented line
   (`Ref:` with its relationship on the next line,
@@ -351,7 +357,7 @@ How to audit that the three components implement
 | Front end accepts/rejects exactly what the spec says | conformance corpus: `valid/` MUST pass, `invalid/` MUST fail, each snippet tagged `// spec: §…` (files without a `package` clause = the schema pass, files with one and project dirs = the project pass); every diagnostic of every invalid snippet, recovery included, is a golden | `lang/conformance/snippets/` and `lang/conformance/invalid_*.golden` via `go test ./lang/...`; refresh with `-update` after reading the diff |
 | Grammar parses everything the spec allows | corpus cases (input → expected tree, incl. `:error` cases) | `grammar/test/corpus/`, `tree-sitter test` |
 | Spec grammar and front end agree | the spec's EBNF read as data: every derived sentence parses, every one-token neighbour is decided alike by the grammar and the front end | `lang/spec_grammar_test.go` via `go test ./lang/...` |
-| Grammar and front end agree | every valid conformance snippet (the files its loader reads, so not `testdata/` or a nested module) and `grammar/examples/*` must produce zero front-end diagnostics, and every derived sentence of the spec's grammar (`go test ./lang -run TestSpecGrammarSentencesParse -sentences DIR`) zero parser diagnostics; all of them must produce zero tree-sitter ERROR nodes, except where a limitation of section 7 applies: today `34_no_reserved_words` (unquoted columns named like block keywords) and `v55_element_continuation` (a `Ref:` continued on an indented line) | differential run after grammar changes |
+| Grammar and front end agree | every valid conformance snippet (the files its loader reads, so not `testdata/` or a nested module) and `grammar/examples/*` must produce zero front-end diagnostics, and every derived sentence of the spec's grammar (`go test ./lang -run TestSpecGrammarSentencesParse -sentences DIR`) zero parser diagnostics; all of them must produce zero tree-sitter ERROR nodes, except where a limitation of section 7 applies: today `v55_element_continuation` (a `Ref:` continued on an indented line) | differential run after grammar changes |
 | Spec examples run | every `volt` block of `spec.md` (§conformance-and-the-proof-chain): a plain block is a whole file the front end accepts, a block fenced `volt invalid` one it rejects, a block fenced `volt fragment` a piece of a file that parses alone; any other fence marker fails | `lang/spec_examples_test.go` via `go test ./lang/...` |
 | Lint rules match their doc | doc ↔ registry ↔ testdata consistency test; `//WANT` markers both directions | `lang/vet/docs_test.go` against [`lint.md`](lint.md) |
 | Generated routers implement Part II of the spec | goldens byte-compared, gofmt-stable, **compiled**; itest exercises match/404/405, typed-param 404s, pipeline order, the error spine, reverse-URL round-trip totality | `gen/router`, `itest/` |

@@ -39,8 +39,8 @@ string escapes
 ==================
 
 Table t {
-  a text [note: 'it\'s fine']
-  b string [note: 'tab\there']
+  a text [note: "it's fine"]
+  b string [note: "tab\there"]
 }
 
 ---
@@ -79,10 +79,10 @@ triple-quoted string with inner quotes and lines
 ==================
 
 Table t {
-  a text [note: '''
+  a text [note: """
     line one
     ''quoted'' and don't
-  ''']
+  """]
 }
 
 ---
@@ -182,7 +182,7 @@ Table t {
         (setting
           (setting_name
             (identifier))
-          (identifier))))
+          (number))))
     (column_definition
       (column_name
         (identifier))
@@ -208,32 +208,49 @@ Table t {
             (number)))))))
 
 ==================
-quoted identifiers with spaces and escapes
+a quoted name is an error
+:error
 ==================
 
 Table "user accounts" {
-  "column one" int
-  "quo\"ted" int
+  id int
 }
 
 ---
 
-(source_file
-  (table_definition
-    (table_name
-      (quoted_identifier))
-    (column_definition
-      (column_name
-        (quoted_identifier))
-      (column_type
-        (type_name
-          (identifier))))
-    (column_definition
-      (column_name
-        (quoted_identifier))
-      (column_type
-        (type_name
-          (identifier))))))
+==================
+single quotes delimit no string
+:error
+==================
+
+Table t [note: 'a note'] {
+  id int
+}
+
+---
+
+==================
+an unknown escape is an error
+:error
+==================
+
+Table t [note: "no \q escape"] {
+  id int
+}
+
+---
+
+==================
+a backslash before a line break is an error in a string
+:error
+==================
+
+Table t [note: "one line \
+continued"] {
+  id int
+}
+
+---
 
 ==================
 unterminated block comment is an error
@@ -248,6 +265,7 @@ Table t {
 ---
 
 
+
 ==================
 a color literal is an error
 :error
@@ -258,3 +276,5 @@ Table t [note: #fff] {
 }
 
 ---
+
+

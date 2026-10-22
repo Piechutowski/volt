@@ -359,7 +359,7 @@ Table posts {
 
 Scope /api {
 	resources posts [default]
-	get /first main.PostGet [name: first]
+	get /first PostGet [name: first]
 }
 `,
 		"main.go": `package main

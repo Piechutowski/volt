@@ -2,5 +2,5 @@
 Type S string
 Table t {
   x S
-  records (x) { a }
+  Records (x) { a }
 }

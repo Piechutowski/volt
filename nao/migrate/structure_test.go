@@ -37,7 +37,7 @@ CREATE TABLE comments (
 );
 `
 
-const rebuildPosts = "rebuild table posts {\n  id int [pk, increment]\n  slug string [unique]\n  title string\n  views int [default: 0]\n\n  indexes {\n    views [where: `views > 0`]\n  }\n}"
+const rebuildPosts = "rebuild table posts {\n  id int [pk, increment]\n  slug string [unique]\n  title string\n  views int [default: 0]\n\n  Indexes {\n    views [where: `views > 0`]\n  }\n}"
 
 type diffCase struct {
 	name         string
@@ -219,7 +219,7 @@ CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
 		name:   "an expression index with its name",
 		fold:   postsDDL,
 		target: postsDDL + "CREATE UNIQUE INDEX idx_posts_title_ci ON posts ((lower(title)));",
-		want:   []string{"create index posts (`lower(title)`) [unique, name: 'idx_posts_title_ci']"},
+		want:   []string{"create index posts (`lower(title)`) [unique, name: \"idx_posts_title_ci\"]"},
 		reason: "index idx_posts_title_ci on posts is in the schema but not in the fold",
 	},
 	{
@@ -258,7 +258,7 @@ CREATE UNIQUE INDEX idx_user_tags_tag_user_id ON user_tags (tag, user_id);
 `,
 		want: []string{
 			"drop table a",
-			"create table user_tags {\n  user_id int\n  tag string\n  since time.Time [default: `CURRENT_TIMESTAMP`]\n  label string [null, default: 'it\\'s']\n\n  indexes {\n    (user_id, tag) [pk]\n    (tag, user_id) [unique]\n  }\n}",
+			"create table user_tags {\n  user_id int\n  tag string\n  since time.Time [default: `CURRENT_TIMESTAMP`]\n  label string [null, default: \"it's\"]\n\n  Indexes {\n    (user_id, tag) [pk]\n    (tag, user_id) [unique]\n  }\n}",
 		},
 		reason: "table a is in the fold but not in the schema",
 	},
@@ -275,7 +275,7 @@ CREATE TABLE invoices (
 );
 `,
 		want: []string{
-			"create table invoices {\n  id int [pk, increment]\n  merchant int [null]\n  country string [null]\n\n  indexes {\n    // foreign key invoices (merchant, country) references periods (merchant, country) [delete: cascade] has no shape item: write the table's CREATE TABLE with exec\n  }\n}",
+			"create table invoices {\n  id int [pk, increment]\n  merchant int [null]\n  country string [null]\n\n  Indexes {\n    // foreign key invoices (merchant, country) references periods (merchant, country) [delete: cascade] has no shape item: write the table's CREATE TABLE with exec\n  }\n}",
 		},
 		reason:   "table invoices is in the schema but not in the fold; foreign key invoices (merchant, country) references periods (merchant, country) [delete: cascade] is over several columns, which no shape body holds: write the CREATE TABLE of invoices with exec",
 		unclosed: "a shape body holds no composite foreign key; the user writes the CREATE TABLE with exec",

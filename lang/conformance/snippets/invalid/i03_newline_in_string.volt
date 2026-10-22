@@ -1,5 +1,5 @@
-// spec: §string-literals — single-line string must not contain a line break
+// spec: §string-literals, a single-line string must not contain a line break
 Table t {
-  id int [note: 'spans
-lines']
+  id int [note: "spans
+lines"]
 }

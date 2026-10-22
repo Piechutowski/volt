@@ -17,7 +17,7 @@ func (fo *dynNameFold) File(p *FilePass) {
 		if c.Type != nil {
 			continue
 		}
-		p.Reportf(c.Pos, "%s and %s both generate the Go name %s; rename one (e.g. with [model: '...'])",
+		p.Reportf(c.Pos, "%s and %s both generate the Go name %s; rename one (e.g. with [model: \"...\"])",
 			c.First, c.Second, c.Name)
 	}
 }

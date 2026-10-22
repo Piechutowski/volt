@@ -33,7 +33,7 @@ type Operation interface {
 }
 
 // CreateTable is a create table operation; its body holds columns and
-// indexes blocks (spec §migrations).
+// Indexes blocks (spec §migrations).
 type CreateTable struct {
 	CreatePos  token.Position
 	Name       *Ident
@@ -155,7 +155,7 @@ func (x *RebuildTable) End() token.Position { return x.Rbrace }
 func (x *RebuildTable) operationNode()      {}
 
 // CreateIndex is a create index operation: a table and an index as a
-// schema indexes block writes it (spec §migrations).
+// schema Indexes block writes it (spec §migrations).
 type CreateIndex struct {
 	CreatePos token.Position
 	Table     *Ident
@@ -177,11 +177,11 @@ func (x *DropIndex) Pos() token.Position { return x.DropPos }
 func (x *DropIndex) End() token.Position { return x.Index.End() }
 func (x *DropIndex) operationNode()      {}
 
-// Exec is an exec operation: SQL run verbatim, with its inverse in the
-// down: setting (spec §migrations).
+// Exec is an exec operation: SQL in an expression literal run
+// verbatim, with its inverse in the down: setting (spec §migrations).
 type Exec struct {
 	ExecPos  token.Position
-	SQL      *BasicLit
+	SQL      *FuncExpr
 	Settings *SettingList
 }
 
@@ -194,14 +194,14 @@ func (x *Exec) End() token.Position {
 }
 func (x *Exec) operationNode() {}
 
-// DownSQL returns the string of the down: setting, or nil when the
-// operation has no inverse (spec §migrations).
-func (x *Exec) DownSQL() *BasicLit {
+// DownSQL returns the expression literal of the down: setting, or nil
+// when the operation has no inverse (spec §migrations).
+func (x *Exec) DownSQL() *FuncExpr {
 	s := x.Settings.Get("down")
 	if s == nil {
 		return nil
 	}
-	if lit, ok := s.Value.(*BasicLit); ok && lit.Tok.Kind == token.STRING {
+	if lit, ok := s.Value.(*FuncExpr); ok {
 		return lit
 	}
 	return nil

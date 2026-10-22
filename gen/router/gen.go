@@ -289,13 +289,6 @@ func (g *generator) handlersEmit() error {
 
 func pipeKey(pipes []string) string { return strings.Join(pipes, ",") }
 
-func plugExpr(ref string, pkgName string) string {
-	if rest, ok := strings.CutPrefix(ref, pkgName+"."); ok {
-		return rest
-	}
-	return ref
-}
-
 func (g *generator) timeParams() bool {
 	for _, r := range g.pkg.Routes {
 		if r.Query == nil {
@@ -346,7 +339,7 @@ func (g *generator) routerEmit() error {
 		for _, name := range pipes {
 			pl := g.pkg.Pipelines[name]
 			for _, plug := range pl.Plugs {
-				plugs = append(plugs, plugExpr(plug.Ref.String(), g.pkg.Name))
+				plugs = append(plugs, plug.Ref.String())
 			}
 		}
 		g.pf("\t%s := func(h http.Handler) http.Handler {\n", g.pipeVars[pipeKey(pipes)])

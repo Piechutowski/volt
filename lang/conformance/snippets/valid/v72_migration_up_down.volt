@@ -17,9 +17,9 @@ Migration 0001__create_posts {
 Migration 0002__posts_slug {
   up {
     alter table posts {
-      add slug string [default: '']
+      add slug string [default: ""]
     }
-    exec 'UPDATE posts SET slug = lower(title)'
+    exec `UPDATE posts SET slug = lower(title)`
   }
   down {
     alter table posts {

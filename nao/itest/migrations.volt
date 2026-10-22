@@ -14,7 +14,7 @@ Migration 0001__users_and_orders {
   create table orders {
     id        int       [pk, increment]
     user_id   int       [ref: users.id]
-    status    string    [default: 'pending']
+    status    string    [default: "pending"]
     total     float64
     tip       int       [default: 0]
     fee       int
@@ -24,7 +24,7 @@ Migration 0001__users_and_orders {
     user_id int    [ref: users.id]
     tag     string
 
-    indexes {
+    Indexes {
       (user_id, tag) [pk]
     }
   }
@@ -41,7 +41,7 @@ Migration 0002__metrics {
     id     int    [pk, increment]
     site   string
     day    int
-    target string [default: '']
+    target string [default: ""]
   }
 }
 

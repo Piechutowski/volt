@@ -89,7 +89,7 @@ var colTypes = []string{
 	"string",
 	"float64 [null]",
 	"bool [default: false]",
-	"Status [default: 'active']",
+	`Status [default: "active"]`,
 	"string [null]",
 	"time.Time [null]",
 	"int",
@@ -100,7 +100,7 @@ func schemaWrite(b *strings.Builder, spec Spec, pkg string) {
 	b.WriteString("TablePartial stamped {\n\tcreated_at time.Time [default: `CURRENT_TIMESTAMP`]\n}\n\n")
 	b.WriteString("Pred fresh { c001 >= :since }\n\n")
 	for i := 1; i <= spec.Tables; i++ {
-		fmt.Fprintf(b, "Table %s [note: 'metrics table %d of %s'] {\n", Table(i), i, pkg)
+		fmt.Fprintf(b, "Table %s [note: \"metrics table %d of %s\"] {\n", Table(i), i, pkg)
 		b.WriteString("\tid int [pk, increment]\n\t~stamped\n")
 		var known []int
 		for c := 1; c <= spec.Columns; c++ {
@@ -116,7 +116,7 @@ func schemaWrite(b *strings.Builder, spec Spec, pkg string) {
 		if i > 1 {
 			fmt.Fprintf(b, "\tprev_id int [null, ref: %s.id]\n", Table(i-1))
 		}
-		b.WriteString("\n\tvalidators {\n\t\tPositive(c001)\n")
+		b.WriteString("\n\tValidators {\n\t\tPositive(c001)\n")
 		for _, c := range known {
 			fmt.Fprintf(b, "\t\tStatusKnown(c%03d)\n", c)
 		}

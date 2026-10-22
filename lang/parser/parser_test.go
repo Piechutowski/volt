@@ -19,10 +19,10 @@ func mustParse(t *testing.T, src string) *ast.File {
 
 func TestTableShape(t *testing.T) {
 	f := mustParse(t, `
-Table core_users [note: 'people'] {
+Table core_users [note: "people"] {
   id int [pk]
   name string
-  indexes {
+  Indexes {
     (id, name) [unique]
   }
 }
@@ -55,9 +55,9 @@ Table core_users [note: 'people'] {
 }
 
 func TestSettingOneIdentifier(t *testing.T) {
-	f := mustParse(t, "Migration 0001__a [No_Transaction] {\n}\n")
+	f := mustParse(t, "Migration 0001__a [no_transaction] {\n}\n")
 	if f.Decls[0].(*ast.Migration).Settings.Get("no_transaction") == nil {
-		t.Error("setting 'No_Transaction' not canonicalized to no_transaction")
+		t.Error("setting no_transaction not read")
 	}
 	for _, src := range []string{
 		"Migration 0001__a [no transaction] {\n}\n",
@@ -119,10 +119,10 @@ func TestRecordsRows(t *testing.T) {
 	f := mustParse(t, `
 Table t {
   a int
-  records (a, b, c) {
-    1, 'x', true
+  Records (a, b, c) {
+    1, "x", true
     null, null, null
-    -5, 'v', `+"`now()`"+`
+    -5, "v", `+"`now()`"+`
   }
 }
 `)
@@ -144,7 +144,7 @@ Table t {
 }
 
 func TestRecordsDottedValue(t *testing.T) {
-	src := "Table t {\n  a string\n  records (a) {\n    status.active\n    'active'\n  }\n}\n"
+	src := "Table t {\n  a string\n  Records (a) {\n    status.active\n    \"active\"\n  }\n}\n"
 	f, diags := ParseFile("t", src)
 	if len(diags) != 1 || !strings.Contains(diags[0].Msg, "a dotted name is not a record value") {
 		t.Fatalf("want one dotted-name error, got %v", diags)
@@ -157,7 +157,7 @@ func TestRecordsDottedValue(t *testing.T) {
 
 func TestRecordsEmptyField(t *testing.T) {
 	for _, row := range []string{"1, , 3", ", 2, 3", "1, 2,"} {
-		src := "Table t {\n  a int\n  records (a, b, c) {\n    " + row + "\n    4, 5, 6\n  }\n}\n"
+		src := "Table t {\n  a int\n  Records (a, b, c) {\n    " + row + "\n    4, 5, 6\n  }\n}\n"
 		f, diags := ParseFile("t", src)
 		if len(diags) != 1 {
 			t.Errorf("%q: %d diagnostics, want one empty-field error: %v", row, len(diags), diags)
@@ -273,5 +273,54 @@ func TestPartialAST(t *testing.T) {
 	}
 	if len(f.Decls) == 0 {
 		t.Error("want partial AST with the first table")
+	}
+}
+
+func TestWrongCaseKeywordIsReadAsTheKeyword(t *testing.T) {
+	src := "TABLE t {\n  id int [PK, Default: 1]\n  flag bool [default: TRUE]\n  INDEXES {\n    id\n  }\n}\n\nRef: a.x > t.id [Delete: CASCADE]\n"
+	f, diags := ParseFile("t.volt", src)
+	want := []string{
+		"write Table, not TABLE",
+		"write pk, not PK",
+		"write default, not Default",
+		"write true, not TRUE",
+		"write Indexes, not INDEXES",
+		"write delete, not Delete",
+		"write cascade, not CASCADE",
+	}
+	if len(diags) != len(want) {
+		t.Fatalf("diagnostics %v, want one per misspelled keyword: %v", diags, want)
+	}
+	for i, d := range diags {
+		if !strings.Contains(d.Msg, want[i]) || !strings.HasSuffix(d.Msg, "(§keywords)") {
+			t.Errorf("diagnostic %d is %q, want %q citing §keywords", i, d.Msg, want[i])
+		}
+	}
+	tb, ok := f.Decls[0].(*ast.Table)
+	if !ok {
+		t.Fatalf("TABLE did not read as a Table: %T", f.Decls[0])
+	}
+	id := tb.Body[0].(*ast.Column)
+	if id.Settings.Get("pk") == nil || id.Settings.Get("default") == nil {
+		t.Errorf("PK and Default were not read as pk and default: %+v", id.Settings)
+	}
+	if v := tb.Body[1].(*ast.Column).Settings.Get("default").Value.(*ast.Ident); v.Name() != "true" {
+		t.Errorf("TRUE read as %q, want true", v.Name())
+	}
+	if _, ok := tb.Body[2].(*ast.IndexesBlock); !ok {
+		t.Errorf("INDEXES did not read as an Indexes block: %T", tb.Body[2])
+	}
+	if a := f.Decls[1].(*ast.Ref).Settings.Get("delete"); a == nil || a.Value.(*ast.Ident).Name() != "cascade" {
+		t.Errorf("Delete: CASCADE was not read as delete: cascade")
+	}
+}
+
+func TestWrongCaseKeywordOutsideKeywordPositionIsAName(t *testing.T) {
+	f := mustParse(t, "Table t {\n  Indexes int\n  Records string\n  TRUE bool\n}\n")
+	tb := f.Decls[0].(*ast.Table)
+	for i, want := range []string{"Indexes", "Records", "TRUE"} {
+		if c, ok := tb.Body[i].(*ast.Column); !ok || c.Name.Name() != want {
+			t.Errorf("item %d is %T, want the column %s", i, tb.Body[i], want)
+		}
 	}
 }

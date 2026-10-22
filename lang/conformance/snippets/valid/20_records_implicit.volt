@@ -4,7 +4,7 @@ Table comments {
   user_id int
   title string
 
-  records {
-    1, 2, 'First comment'
+  Records {
+    1, 2, "First comment"
   }
 }

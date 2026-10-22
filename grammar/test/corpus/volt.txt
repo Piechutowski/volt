@@ -58,7 +58,7 @@ Scope / [pipe: api, error_handler: Errors] {
 	}
 
 	resources db.users [only: (index, show)]
-	dataset db.browse [strip: 'da_', except: (da_r_r)]
+	dataset db.browse [strip: "da_", except: (da_r_r)]
 
 	get /users/:id(int)/avatar Users.Avatar
 	get /files/:path...          Files.Serve
@@ -243,7 +243,7 @@ pred with composition, in, like, is null
 ==================
 
 Pred current { org = :org and year = :year }
-Pred fresh { current and (year >= :since or year in (2024, 2025)) and not org like 'x%' and note is not null }
+Pred fresh { current and (year >= :since or year in (2024, 2025)) and not org like "x%" and note is not null }
 Pred chosen { org in :orgs }
 
 ---
@@ -378,7 +378,7 @@ Table page_views {
   hits int
   site string
 
-  validators {
+  Validators {
     CountsPositive(hits)
     EmailValid(site)
   }
@@ -413,10 +413,10 @@ Table page_views {
         (column_ref)))))
 
 ==================
-volt: an error_handler qualified by the package's own name
+volt: an error_handler named bare
 ==================
 
-Scope / [error_handler: app.Errors] {
+Scope / [error_handler: Errors] {
 	get / Home.Index
 }
 
@@ -429,12 +429,21 @@ Scope / [error_handler: app.Errors] {
       (setting
         (setting_name
           (identifier))
-        (qualified_value
-          (identifier)
-          (identifier))))
+        (identifier)))
     (route
       (verb)
       (route_path)
       (go_ref
         (identifier)
         (identifier)))))
+
+==================
+a dotted setting value is an error
+:error
+==================
+
+Scope / [error_handler: app.Errors] {
+	get / Home.Index
+}
+
+---

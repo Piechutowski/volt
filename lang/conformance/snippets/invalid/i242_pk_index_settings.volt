@@ -5,7 +5,7 @@ Table post_tags {
   tag        string
   deleted_at time.Time [null]
 
-  indexes {
-    (post_id, tag) [pk, name: 'pk_post_tags', where: `deleted_at IS NULL`]
+  Indexes {
+    (post_id, tag) [pk, name: "pk_post_tags", where: `deleted_at IS NULL`]
   }
 }

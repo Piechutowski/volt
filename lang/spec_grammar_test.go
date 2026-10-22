@@ -112,21 +112,22 @@ func specLanguage(t *testing.T) *ebnf.Language {
 			"index settings": true, "ref settings": true,
 			"migration settings": true, "migration column settings": true,
 		},
+		NoBreakAfter: map[string]bool{`\`: true},
 		Specials: map[string]func(rune) bool{
 			"U+000A LINE FEED":      oneOf("\n"),
 			"U+0020 SPACE":          oneOf(" "),
 			"U+0009 TAB":            oneOf("\t"),
 			"any Unicode character": func(rune) bool { return true },
-			"any character of Unicode category L (Letter)": unicode.IsLetter,
-			"any character of Unicode category M (Mark)":   unicode.IsMark,
+			"any character of Unicode category L (Letter)":          unicode.IsLetter,
+			"any character of Unicode category Nd (Decimal Number)": unicode.IsDigit,
 		},
 		Witness: map[string]string{
 			"U+000A LINE FEED":      "\n",
 			"U+0020 SPACE":          " ",
 			"U+0009 TAB":            "\t",
 			"any Unicode character": "a",
-			"any character of Unicode category L (Letter)": "a",
-			"any character of Unicode category M (Mark)":   "́",
+			"any character of Unicode category L (Letter)":          "a",
+			"any character of Unicode category Nd (Decimal Number)": "0",
 		},
 		Cut: true,
 	}
@@ -204,7 +205,7 @@ func specSentences(t *testing.T) (*ebnf.Language, []ebnf.Sentence) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "sp, comment, line comment, block comment, block comment body, punct, pred keyword"
+	want := "newline, sp, comment, line comment, block comment, block comment body, punct, pred keyword"
 	if got := strings.Join(unreachable, ", "); got != want {
 		t.Errorf("rules no sentence reaches: %s\nwant: %s", got, want)
 	}

@@ -7,7 +7,7 @@ Table authors {
   email string
   rank  int32
 
-  validators {
+  Validators {
     RankSane(rank)
     TwoArgs(rank)
     Mixed(rank, email)

@@ -4,7 +4,7 @@ Table users {
   email string [unique]
 }
 Table user_profiles {
-  user_id int [pk, note: 'Also the FK: one profile per user']
+  user_id int [pk, note: "Also the FK: one profile per user"]
   bio string [null]
   avatar_url string [null]
 }

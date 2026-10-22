@@ -56,7 +56,7 @@ var (
 		},
 	}
 	execSettings = settingSpec{
-		kinds: map[string]valueKind{"down": strValue},
+		kinds: map[string]valueKind{"down": exprValue},
 	}
 )
 
@@ -134,7 +134,7 @@ func migrationNameParts(name string) (number, label string, ok bool) {
 func (c *checker) migrationCheck(d *ast.Migration) *MigrationInfo {
 	name := d.Name.Name()
 	number, label, ok := migrationNameParts(name)
-	if d.Name.Quoted() || !ok {
+	if !ok {
 		c.errorf(d.Name.Pos(), "migrations", "migration name %q is not four or more digits, two underscores and a label, like 0001__create_users (§migrations)", name)
 	}
 	c.settingsCheck(d.Settings, "migrations", migrationSettings)
@@ -155,7 +155,7 @@ func (c *checker) migrationCheck(d *ast.Migration) *MigrationInfo {
 			}
 		}
 	}
-	if !ok || d.Name.Quoted() {
+	if !ok {
 		return nil
 	}
 	return &MigrationInfo{Decl: d, Name: name, Number: number, Label: label, Reversible: reversible}
@@ -324,7 +324,7 @@ func (c *checker) refActionNullCheck(s *ast.Setting, col *ast.Column, column, se
 
 func refActionOf(s *ast.Setting) string {
 	if v, ok := s.Value.(*ast.Ident); ok {
-		return strings.ToLower(v.Name())
+		return v.Name()
 	}
 	return ""
 }

@@ -6,17 +6,17 @@ Type Priority int
 
 Table orders {
   id       int        [pk, increment]
-  status   OrderState [default: 'pending']
+  status   OrderState [default: "pending"]
   prev     OrderState [null]
   priority Priority   [default: 2]
 
-  validators {
+  Validators {
     OrderStateKnown(status)
     OrderStateKnownNull(prev)
   }
 
   Records (id, status, priority) {
-    1, 'paid', 3
+    1, "paid", 3
   }
 }
 

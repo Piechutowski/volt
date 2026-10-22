@@ -12,9 +12,9 @@ Table posts {
   published  bool      [default: false]
   created_at time.Time [default: `CURRENT_TIMESTAMP`]
 
-  indexes {
+  Indexes {
     views [where: `views > 0`]
-    (`lower(title)`) [name: 'idx_posts_title_ci']
+    (`lower(title)`) [name: "idx_posts_title_ci"]
   }
 }
 
@@ -26,7 +26,7 @@ Table comments {
   flagged  bool   [default: false]
   nickname string [null, unique]
 
-  indexes {
+  Indexes {
     (post_id, author)
   }
 }
@@ -35,7 +35,7 @@ Table post_tags {
   post_id int    [ref: posts.id]
   tag     string
 
-  indexes {
+  Indexes {
     (post_id, tag) [pk]
   }
 }
@@ -54,7 +54,7 @@ Migration 0001__create_posts {
     body  string [null]
     hits  int    [default: 0]
 
-    indexes {
+    Indexes {
       hits [where: `hits > 0`]
     }
   }
@@ -65,10 +65,10 @@ Migration 0001__create_posts {
     add draft string [null]
     drop draft string [null]
   }
-  drop index posts views [name: 'idx_articles_hits', where: `views > 0`]
+  drop index posts views [name: "idx_articles_hits", where: `views > 0`]
   create index posts views [where: `views > 0`]
-  create index posts (`lower(title)`) [name: 'idx_posts_title_ci']
-  exec 'UPDATE posts SET views = 0 WHERE views < 0' [down: 'UPDATE posts SET views = 0 WHERE views < 0']
+  create index posts (`lower(title)`) [name: "idx_posts_title_ci"]
+  exec `UPDATE posts SET views = 0 WHERE views < 0` [down: `UPDATE posts SET views = 0 WHERE views < 0`]
 }
 
 Migration 0002__comments_and_tags {
@@ -78,7 +78,7 @@ Migration 0002__comments_and_tags {
     author  string
     body    string
 
-    indexes {
+    Indexes {
       (post_id, author)
     }
   }
@@ -86,7 +86,7 @@ Migration 0002__comments_and_tags {
     post_id int    [ref: posts.id]
     tag     string
 
-    indexes {
+    Indexes {
       (post_id, tag) [pk]
     }
   }
@@ -108,16 +108,16 @@ Migration 0003__posts_created_at [irreversible] {
     published  bool      [default: false]
     created_at time.Time [default: `CURRENT_TIMESTAMP`]
 
-    indexes {
+    Indexes {
       views [where: `views > 0`]
-      (`lower(title)`) [name: 'idx_posts_title_ci']
+      (`lower(title)`) [name: "idx_posts_title_ci"]
     }
   }
 }
 
 Migration 0004__vacuum [no_transaction] {
   up {
-    exec 'VACUUM'
+    exec `VACUUM`
   }
 }
 

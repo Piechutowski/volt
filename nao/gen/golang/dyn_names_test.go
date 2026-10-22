@@ -100,11 +100,11 @@ Table e_users {
 Type EUserKind string
 Type EUserX string
 Type UserFooBar string
-Table pinned [model: 'UserChangeset'] {
+Table pinned [model: "UserChangeset"] {
   id int [pk]
   n int
 }
-Table pinned_update [model: 'UserNew'] {
+Table pinned_update [model: "UserNew"] {
   id int [pk]
   n int
 }
@@ -121,7 +121,7 @@ Table nokey {
 Table allgen {
   id int [pk, increment]
 }
-Table user_offsets [model: 'UserOffset'] {
+Table user_offsets [model: "UserOffset"] {
   id int [pk]
 }
 `
@@ -129,7 +129,7 @@ Table user_offsets [model: 'UserOffset'] {
 		base,
 		strings.Replace(base, "Table user_foo_bars {", "Table user_foo_bars_x {", 1),
 		strings.Replace(base, "  bar int\n", "  baz int\n", 1),
-		strings.Replace(base, "Table allgen {", "Table allgen [model: 'UserSet'] {", 1),
+		strings.Replace(base, "Table allgen {", "Table allgen [model: \"UserSet\"] {", 1),
 		strings.Replace(base, "  n int\n}\nTable pinned_update", "  n int\n  m int\n}\nTable pinned_update", 1),
 		base,
 	}

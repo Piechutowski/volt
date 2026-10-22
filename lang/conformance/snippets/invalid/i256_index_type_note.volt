@@ -3,8 +3,8 @@
 Table bookings {
   id int [pk]
   country string
-  indexes {
+  Indexes {
     country [type: hash]
-    id [note: 'by id']
+    id [note: "by id"]
   }
 }

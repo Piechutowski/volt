@@ -19,10 +19,10 @@
   type: (column_type) @context.extra) @item
 
 (indexes_block
-  "indexes" @name) @item
+  "Indexes" @name) @item
 
 (validators_block
-  "validators" @name) @item
+  "Validators" @name) @item
 
 (ref_definition
   "Ref" @context

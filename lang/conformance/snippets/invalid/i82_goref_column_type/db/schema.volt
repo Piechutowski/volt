@@ -7,7 +7,7 @@ Table users {
   id int [pk]
   email int
 
-  validators {
+  Validators {
     EmailValid(email)
   }
 }

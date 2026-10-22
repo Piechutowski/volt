@@ -2,7 +2,7 @@
 Table t {
   id int
   name string
-  records (id, name) {
-    1, 'a', 'extra'
+  Records (id, name) {
+    1, "a", "extra"
   }
 }

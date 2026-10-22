@@ -8,7 +8,7 @@ Table users {
   id    int   [pk]
   state State
 
-  validators {
+  Validators {
     StateKnown(state)
   }
 }

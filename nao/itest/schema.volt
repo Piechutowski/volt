@@ -6,9 +6,9 @@
 package itest
 
 Type Money int
-Type pay.Cents int from 'github.com/Piechutowski/volt/nao/itest/pay'
+Type pay.Cents int from "github.com/Piechutowski/volt/nao/itest/pay"
 
-Project itest [note: 'Integration-test fixture for the generated query surface.'] {
+Project itest [note: "Integration-test fixture for the generated query surface."] {
 }
 
 Type OrderState string
@@ -18,11 +18,11 @@ Type Ratio float64
 Table users {
   id int [pk, increment]
   email string [unique]
-  name string [tag: 'json:"displayName"']
-  bio string [null, note: 'NULL until the user writes one']
+  name string [tag: "json:\"displayName\""]
+  bio string [null, note: "NULL until the user writes one"]
   created_at time.Time [default: `CURRENT_TIMESTAMP`]
 
-  validators {
+  Validators {
     EmailValid(email)
   }
 }
@@ -30,13 +30,13 @@ Table users {
 Table orders {
   id int [pk, increment]
   user_id int [ref: users.id]
-  status OrderState [default: 'pending']
+  status OrderState [default: "pending"]
   total float64 [required]
   tip Money [default: 0]
   fee pay.Cents
   placed_at time.Time [null]
 
-  validators {
+  Validators {
     OrderStateKnown(status)
   }
 }
@@ -56,7 +56,7 @@ Table user_tags {
   user_id int [ref: users.id]
   tag string
 
-  indexes {
+  Indexes {
     (user_id, tag) [pk]
   }
 }
@@ -69,7 +69,7 @@ Table page_views {
   day int
   hits int [default: 0]
 
-  validators {
+  Validators {
     CountsPositive(hits, day)
     SiteShape(site)
   }
@@ -79,7 +79,7 @@ Table link_clicks {
   id int [pk, increment]
   site string
   day int
-  target string [default: '']
+  target string [default: ""]
 }
 
 Group metrics {

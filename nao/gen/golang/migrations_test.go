@@ -28,10 +28,10 @@ func TestMigrationsGolden(t *testing.T) {
 	}
 }
 
-func TestMigrationsEmptyAndBackquoted(t *testing.T) {
+func TestMigrationsEmptyAndQuoted(t *testing.T) {
 	src := "package db\n\nTable t {\n  id int [pk, increment]\n}\n\n" +
 		"Migration 0001__init {\n}\n\n" +
-		"Migration 0002__tick [no_transaction] {\n  up {\n    exec 'SELECT `x`'\n  }\n}\n"
+		"Migration 0002__tick [no_transaction] {\n  up {\n    exec `SELECT \"x\"`\n  }\n}\n"
 	f, diags := parser.ParseFile("t.volt", src)
 	info, semDiags := check.File(f)
 	if diag.HasErrors(append(diags, semDiags...)) {
@@ -44,7 +44,7 @@ func TestMigrationsEmptyAndBackquoted(t *testing.T) {
 	got := string(out)
 	for _, want := range []string{
 		"\t\tName: \"0001__init\",\n\t\tUp:   []string{},\n\t\tDown: []string{},\n",
-		"\t\tName: \"0002__tick\",\n\t\tUp: []string{\n\t\t\t\"SELECT `x`\",\n\t\t},\n\t\tNoTransaction: true,\n",
+		"\t\tName: \"0002__tick\",\n\t\tUp: []string{\n\t\t\t`SELECT \"x\"`,\n\t\t},\n\t\tNoTransaction: true,\n",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output lacks\n%s\n--- got ---\n%s", want, got)

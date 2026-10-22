@@ -10,5 +10,5 @@ Migration 0001__init {
   create table users {
     id int [pk]
   }
-  exec 'PRAGMA user_version = 1' [down: 'PRAGMA user_version = 0', note: 'bump']
+  exec `PRAGMA user_version = 1` [down: `PRAGMA user_version = 0`, note: "bump"]
 }

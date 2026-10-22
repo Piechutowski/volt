@@ -19,6 +19,6 @@ Migration 0001__init {
   }
   create table posts {
     id      int [pk]
-    user_id int [null, ref: users.id, delete: 'set null', update]
+    user_id int [null, ref: users.id, delete: "set null", update]
   }
 }

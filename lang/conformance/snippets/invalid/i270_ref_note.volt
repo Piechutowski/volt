@@ -7,4 +7,4 @@ Table posts {
   id      int [pk]
   user_id int
 }
-Ref: posts.user_id > users.id [note: 'the author']
+Ref: posts.user_id > users.id [note: "the author"]

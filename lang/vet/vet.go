@@ -106,7 +106,7 @@ func ByName(name string) Analyzer {
 
 var registry = []Analyzer{
 	unusedPartial,
-	redundantIndex, emptyBody, shadowedColumn, unnecessaryQuotes,
+	redundantIndex, emptyBody, shadowedColumn,
 	missingPK, refTypeMismatch, refTargetNotUnique, selfRef, refCycle, caseCollision,
 	modelName, dynName,
 }

@@ -13,7 +13,7 @@ Table merchants {
   mid int
   country string
   region string
-  indexes {
+  Indexes {
     (mid, country) [unique]
   }
 }
@@ -32,7 +32,7 @@ Table accounts {
   email string
   handle string
   deleted_at time.Time [null]
-  indexes {
+  Indexes {
     email [unique, where: `deleted_at IS NULL`]
     handle [unique]
   }

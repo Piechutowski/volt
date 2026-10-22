@@ -16,7 +16,9 @@ nullable column stays `rt.Null[T]`. The numbers are the review's
 original ranking, so a gap in the numbering is a decided item. When an
 item is decided, it leaves this file in the same commit.
 
-File and line references point at the code as it was at b94d08d. Names
+File and line references point at the code as it was at b94d08d,
+except in item 29, rewritten when step 2 built part of it, whose
+references are to the code as step 2 left it. Names
 such as purity-bugs/null are the review's scratch demos, which were not
 kept; the text of each item records what its demo showed.
 
@@ -94,17 +96,18 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 **Evidence.** docs/spec.md:499-511 (§numeric-literals); 2477-2482 (§predicates lists -010, 007 and 1E2 as binding -10, 7 and 100.0). The sign is `[ "-" ], number` in defaults (~815) and records (~1116), and absent from the predicate `literal` production (~2451), although lang/parser/volt.go:445-450 accepts MINUS NUMBER there. lang/scanner/scanner.go:476-528. Exponents appear in 3 files (32_scientific_numbers, nao/gen/testdata/changesets.volt, i191).
 
-### 29. [merge] Three identifier rules: Part I allows Unicode letters, marks and a leading digit, while Part II requires ASCII Go identifiers
+### 29. [decide] Identifiers: whether a name is ASCII, and the Part I versus Part II split
 
-- Part I identifier: Unicode L + M + _, may start with a digit (2fa_codes, 漢字; café precomposed and cafe + U+0301 are two distinct names)
-- Part II plain identifier: the same set, without quotes
-- ASCII Go identifier (goIdentOK): route segments, params, pipeline names, plugs, handlers, import aliases and segments, resources names, singular:, param:
+- a Part I name (a table, a column, a partial, a group, a select) is a Go identifier: Unicode letters and decimal digits are allowed (`zażółć`, `wiersz٣`, `漢字`); step 2 refused combining marks, a leading digit and quoted names, so `café` has one spelling
+- a Part II name (route segments, parameters, pipeline names, plugs, handlers, import aliases and segments, resources names, singular:, param:) is an ASCII Go identifier (goIdentOK)
+- `漢字` checks clean and generates the field `漢字`, which Go does not export, so encoding/json silently drops it
+- `_2fa_codes` is a Go identifier whose first word is a digit once the underscores go, so its model keeps the X prefix (`X2faCode`)
 
-**Proposal.** Use one identifier rule for the whole language: Go's ASCII form [A-Za-z_][A-Za-z0-9_]* (goIdentOK). This drops categories L and M, the NFC/NFD double spelling, digit-leading names and the X-prefix rule. Migration names keep their own token form.
+**Question.** One rule for the whole language, Go's ASCII form `[A-Za-z_][A-Za-z0-9_]*` everywhere, which drops the Part I and Part II split, the unexported-field trap and the X prefix's last use; or Unicode letters stay in Part I names, which become a Go field and a SQL name, and a name whose Go spelling is not exported is refused.
 
-**Cost.** Scanner isLetter and numberOrIdentScan; delete §unicode-general-categories and rewrite §identifiers rules 1-2; drop the leading-digit rule in mapping-to-go and the prefixing in nao/gen/golang/naming.go; edit 29_unicode_idents, kitchen_sink and hostile.volt. Low.
+**Cost.** ASCII: the scanner's isLetter and isIdentChar, §identifiers and §unicode-general-categories, 29_unicode_idents and a refusal snippet, the X-prefix rule of naming.go and §names. The other option: a check that the Go name is exported, one invalid snippet. Low either way.
 
-**Evidence.** docs/spec.md:223-239 (§unicode-general-categories admits marks so that a decomposed é is valid), 377-398 (§identifiers), 1776-1801 (§route-paths rules 2 and 6), §imports rule 2, ~3513 (2fa_codes becomes X2faCode). lang/scanner/scanner.go:218-220; lang/semantics.go:946-960 (goIdentOK). Reviewers verified that columns café (NFC), café (NFD) and 漢字 check clean and generate the fields Cafe, Café and 漢字: two visually identical columns get different Go names, and 漢字 is unexported in Go, so encoding/json silently drops it.
+**Evidence.** lang/scanner/scanner.go (isLetter, isIdentChar, identRest); lang/semantics.go goIdentOK; nao/gen/golang/naming.go goName; docs/spec.md §identifiers, §route-paths rules 2 and 6, §names.
 
 ### 30. [merge] Names that differ only in case are distinct in Volt, but SQLite folds them into one
 
@@ -129,17 +132,6 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 **Cost.** The setting kind maps, the modelname lint message, about 18 .volt files, the spec tables. Low.
 
 **Evidence.** docs/spec.md:698-702, 858-877, 2065-2069, 2179-2186, 2323-2327. lang/check/settings.go:39 (model: strValue); lang/semantics.go:444 and lang/routes_lower.go:379 ('name: takes an identifier'); lang/routes_lower.go:211, 740-762. Reviewers verified both errors. model: is used in 7 files, index name: in 6, strip: in 5.
-
-### 32. [merge] Raw SQL has two lexical forms: backtick expression literals, and escaped single-quoted strings in exec
-
-- `now()`, [where: `country != ''`], [from: `CAST(hits AS INTEGER)`]: raw, no escapes
-- exec 'INSERT INTO accounts (owner) VALUES (\'root\')' [down: 'DELETE FROM accounts WHERE owner = \'root\'']: an escaped string
-
-**Proposal.** exec and its down: take an expression literal, so every piece of raw SQL in the language is in backticks, raw and never escaped.
-
-**Cost.** The parser's exec operand becomes FUNCEXPR; the check kind of down: and the drift hint writer change; about 7 .volt sites and 5 Go test strings. Low.
-
-**Evidence.** docs/spec.md:531-542 (§expression-literals), 2985-2986 and 3117-3124 (exec). valid/v74_migration_operations.volt:34 needs an escaped quote for every SQL string literal. Also v72, i177, i216, nao/migrate/testdata/blog.volt:71,120, nao/migrate/lower_test.go:180-181 (the drift hints print exec '...') and nao/gen/golang/migrations_test.go:34.
 
 ### 33. [merge] Irreversibility is marked three ways, and one of them discards a written down block
 
@@ -203,19 +195,6 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 **Cost.** The Ref parser and AST (lang/parser/parser.go:510-541) and the resolve.go Ref pass; refSettingsCheck/endpointArityCheck move to columns; columnSettings gains delete/update with the 'requires ref:' rule already written for migrations (check/migrations.go:316-319); grammar.js ref_definition. About 14 snippets and about 21 .volt files repo-wide; §relationships-ref. Moderate.
 
 **Evidence.** docs/spec.md §relationships-ref rule 2 and §columns rule 5: an inline ref carries no settings, so any action forces the Ref element. §migrations (~3019) gives a migration column delete:/update: 'since ... a migration has no Ref', so the fold has to match the two spellings (lang/check/migrations.go:315-323). RefInfo already unifies both schema forms (lang/check/check.go; resolve.go:17-48). The element is only needed for composite FKs (§relationships-ref rule 3).
-
-### 38. [decide] Keyword casing mixes PascalCase and lowercase, even among siblings in one body and between the schema and migration spellings of the same word
-
-- one table body: indexes {, validators { beside Records (...) {
-- top level: Table, Type, Ref, Pipeline, Scope, Group, Pred, Select, Migration beside package, import
-- resources, dataset (lowercase) inside Scope (PascalCase)
-- schema Table users { ... } vs migration create table users { ... } with the identical column body; schema indexes vs migration create index
-
-**Proposal.** Pick one casing rule and let case-sensitive matching (first item) enforce it. Option A, the lowest entropy: every keyword lowercase as in Go (table, ref, type, records, ...), so schema and migration bodies share spellings. Option B: PascalCase only for words that open a top-level declaration and lowercase for everything else, with no exceptions (in-body Records becomes lowercase).
-
-**Cost.** Option A: a mechanical rewrite of every .volt file (49 outside the corpus, about 332 snippets), the spec examples, grammar.js, the LSP completion lists and editor.md section 8. Option B: only the in-body Records spelling changes.
-
-**Evidence.** docs/spec.md:405-421 (§keywords), ~2148 (resources), ~2289 (dataset), 2968-2983 and 3007-3009 (migration words); the grammar/grammar.js kw() calls at lines 104-852, each displayed under a canonical spelling.
 
 ### 39. [remove] <Model>Distinct has no effect on any table with a key
 
@@ -1007,7 +986,7 @@ p := eh(req, err); if sw.wrote || p.Status >= 500 { log }; if !sw.wrote { writeP
 ```
 A zero Status counts as 500. ProblemOf can be table-tested without httptest.
 
-**Cost.** volt.go, errors.go, volt_test; the signature check in lang/semantics.go and its snippets (v13_error_handler_qualified and the matching invalid ones); gen/router/testdata/blog/app/mw.go; itest/blog/app/user.go, whose header hook becomes a Message; §scopes clause 3 and §formats rule 5. About 8 small sites. It removes rendering an error as a non-Problem page (HTML); such a page belongs in a controller, or in a Reply if that lands.
+**Cost.** volt.go, errors.go, volt_test; the signature check in lang/semantics.go and its snippets (v13_error_handler_bare and the matching invalid ones); gen/router/testdata/blog/app/mw.go; itest/blog/app/user.go, whose header hook becomes a Message; §scopes clause 3 and §formats rule 5. About 8 small sites. It removes rendering an error as a non-Problem page (HTML); such a page belongs in a controller, or in a Reply if that lands.
 
 ### 16. [do] Records (§records-sample-data, docs/spec.md:1114): nao/gen/sqlite/gen.go:276 insertsEmit; lang/check/types.go:258 recordsTypeCheck; the fold's target DDL (cmd/volt/migration.go:391)
 

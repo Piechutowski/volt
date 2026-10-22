@@ -93,7 +93,7 @@ func TestMemoMatchesFreshRun(t *testing.T) {
 	decls := len(reuseDecls(t, text))
 	round("first", text, decls)
 	round("no change", text, 0)
-	round("edit one table", strings.Replace(text, "c002 string\n", "c002 string [note: 'edited']\n", 1), 2)
+	round("edit one table", strings.Replace(text, "c002 string\n", "c002 string [note: \"edited\"]\n", 1), 2)
 	round("fix it", text, 2)
 	round("edit the partial", strings.Replace(text, "created_at time.Time [default: `CURRENT_TIMESTAMP`]", "created_at time.Time", 1), 7)
 	f, _, _, _ := parser.ParseFileReuse("schema.volt", text, reuse)

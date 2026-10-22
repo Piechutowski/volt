@@ -2,9 +2,9 @@
 project with a note and properties
 ==================
 
-Project shop [note: 'project note'] {
-  database_type: 'SQLite'
-  anything_else: 'accepted'
+Project shop [note: "project note"] {
+  database_type: "SQLite"
+  anything_else: "accepted"
 }
 
 ---
@@ -32,7 +32,7 @@ anonymous project
 ==================
 
 Project {
-  database_type: 'SQLite'
+  database_type: "SQLite"
 }
 
 ---
@@ -48,8 +48,8 @@ Project {
 Type declarations: imported Go type with storage and path, bare type of the package
 ==================
 
-Type money.Money int from 'example.com/app/money'
-Type png.Png []byte from 'image/png'
+Type money.Money int from "example.com/app/money"
+Type png.Png []byte from "image/png"
 Type Slug string
 
 ---

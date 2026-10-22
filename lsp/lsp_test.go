@@ -18,10 +18,10 @@ TablePartial base {
   id int [pk]
 }
 
-Table users [note: 'people'] {
+Table users [note: "people"] {
   ~base
   name string [unique]
-  status Status [null, default: 'active']
+  status Status [null, default: "active"]
 }
 
 Table orders {
@@ -77,7 +77,7 @@ func TestDiagnosticsOnError(t *testing.T) {
 }
 
 func TestVetWarningsSurface(t *testing.T) {
-	d := doc(t, "Table t {\n  id int [pk]\n  indexes {\n  }\n}\n")
+	d := doc(t, "Table t {\n  id int [pk]\n  Indexes {\n  }\n}\n")
 	found := false
 	for _, dg := range d.Diags {
 		if strings.HasPrefix(dg.Code, "vet/") {
@@ -370,7 +370,7 @@ func TestHoverShowsAStringDefaultQuoted(t *testing.T) {
 	if h == nil {
 		t.Fatal("no hover on the status column")
 	}
-	if md := h.Contents.(protocol.MarkupContent).Value; !strings.Contains(md, "default: 'active'") {
+	if md := h.Contents.(protocol.MarkupContent).Value; !strings.Contains(md, `default: "active"`) {
 		t.Errorf("a string default hovers as written, quoted (§default-values): %s", md)
 	}
 }
@@ -409,7 +409,7 @@ func TestCompletionTypesIncludeBuiltins(t *testing.T) {
 }
 
 func TestCompletionTypesIncludeDeclaredTypes(t *testing.T) {
-	text := "Type money.Money int from 'example.com/app/money'\nType Slug string\n\nTable products {\n  col S\n}\n"
+	text := "Type money.Money int from \"example.com/app/money\"\nType Slug string\n\nTable products {\n  col S\n}\n"
 	d := doc(t, text)
 	items := d.Complete(protocol.Position{Line: 4, Character: protocol.UInteger(len("  col S"))})
 	for _, want := range []string{"money.Money", "Slug"} {
@@ -425,7 +425,7 @@ func TestCompletionTypesIncludeDeclaredTypes(t *testing.T) {
 }
 
 func TestDocumentSymbolsTypeDecl(t *testing.T) {
-	d := doc(t, "Type money.Money int from 'example.com/app/money'\nType Slug string\n")
+	d := doc(t, "Type money.Money int from \"example.com/app/money\"\nType Slug string\n")
 	syms := d.DocumentSymbols()
 	got := map[string]protocol.DocumentSymbol{}
 	for _, s := range syms {
@@ -444,7 +444,7 @@ func TestDocumentSymbolsTypeDecl(t *testing.T) {
 }
 
 func TestUTF16Conversion(t *testing.T) {
-	text := "Table \"𝔘ser\" {\n  id int [pk]\n}\n"
+	text := "Table 𝔘ser {\n  id int [pk]\n}\n"
 	d := doc(t, text)
 	if len(d.Diags) != 0 {
 		t.Fatalf("unexpected diagnostics: %v", d.Diags)
@@ -453,7 +453,7 @@ func TestUTF16Conversion(t *testing.T) {
 	if d.Text[off:off+2] != "id" {
 		t.Errorf("FromLSP landed on %q", d.Text[off:off+2])
 	}
-	lsp := d.ToLSP(tokenPosition(t, d, `"𝔘ser"`))
+	lsp := d.ToLSP(tokenPosition(t, d, `𝔘ser`))
 	if lsp.Line != 0 || lsp.Character != protocol.UInteger(len(`Table `)) {
 		t.Errorf("ToLSP = %+v", lsp)
 	}
@@ -509,5 +509,49 @@ func TestCRLFDocumentPositions(t *testing.T) {
 	}
 	if s := loc.Range.Start; s.Line != 0 || s.Character != 6 {
 		t.Errorf("definition at %+v, want line 0 character 6", loc.Range)
+	}
+}
+
+func TestCompletionOffersTheOneSpelling(t *testing.T) {
+	trimmed := func(words []string) []string {
+		out := make([]string, len(words))
+		for i, w := range words {
+			out[i] = strings.TrimRight(w, " ({:")
+		}
+		return out
+	}
+	elements := trimmed(elementKeywords)
+	for _, w := range parser.ElementWords {
+		if !slices.Contains(elements, w) {
+			t.Errorf("top-level completion lacks %s (§keywords)", w)
+		}
+	}
+	scope := trimmed(scopeBodyKeywords)
+	for _, v := range parser.Verbs {
+		if !slices.Contains(scope, v) {
+			t.Errorf("scope completion lacks the verb %s (§keywords)", v)
+		}
+	}
+	for ctx, words := range settingsByContext {
+		for _, w := range trimmed(words) {
+			if !slices.Contains(parser.SettingNames, w) {
+				t.Errorf("%s settings complete %q, which is no setting name (§keywords)", ctx, w)
+			}
+		}
+	}
+	if !slices.Equal(refActionValues, parser.RefActions) {
+		t.Errorf("referential actions complete as %v, want %v (§keywords)", refActionValues, parser.RefActions)
+	}
+	d := doc(t, "Table t {\n  id int [pk]\n  \n}\n")
+	items := labels(d.Complete(protocol.Position{Line: 2, Character: 2}))
+	for _, w := range []string{"Indexes", "Validators", "Records"} {
+		if !slices.Contains(items, w) {
+			t.Errorf("table body completion %v lacks %s", items, w)
+		}
+	}
+	for _, w := range []string{"indexes", "validators", "records"} {
+		if slices.Contains(items, w) {
+			t.Errorf("table body completion %v offers %s, a spelling Volt refuses", items, w)
+		}
 	}
 }

@@ -11,7 +11,7 @@ import (
 func TestPartialInjectedTwiceListsValidatorsOnce(t *testing.T) {
 	f, diags := parser.ParseFile("p.volt", `TablePartial stamps {
   created_at time.Time
-  validators {
+  Validators {
     StampValid(created_at)
   }
 }
@@ -20,7 +20,7 @@ Table posts {
   id int [pk]
   ~stamps
   ~stamps
-  validators {
+  Validators {
     StampValid(created_at)
   }
 }

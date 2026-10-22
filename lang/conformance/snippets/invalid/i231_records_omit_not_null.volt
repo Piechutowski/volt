@@ -12,7 +12,7 @@ Table posts {
   ~stamped
 
   Records (id, subtitle) {
-    1, 'first'
+    1, "first"
   }
 }
 
@@ -23,5 +23,5 @@ Table authors {
 }
 
 Records authors(bio) {
-  'writes'
+  "writes"
 }

@@ -45,6 +45,11 @@ type Language struct {
 	// the line of its construct).
 	SameLine map[string]bool
 
+	// NoBreakAfter names the terminals that a line break may not
+	// immediately follow outside a lexical rule (§escape-sequences: a
+	// backslash before a line break continues nothing).
+	NoBreakAfter map[string]bool
+
 	// Specials matches one character for each special sequence of
 	// the grammar, by its text; a special sequence without an entry
 	// is an error when the language is checked.
@@ -175,8 +180,9 @@ func (m *matcher) program() bool {
 }
 
 // ElementStarts lists the offsets at which a top-level element begins
-// (§line-structure-and-whitespace): an unquoted identifier in the first column of a line,
-// outside every string, comment and brace, other than at offset 0.
+// (§line-structure-and-whitespace): an identifier in the first column of a line,
+// outside every string, expression literal, comment and brace, other
+// than at offset 0.
 func ElementStarts(text string) []int {
 	var starts []int
 	depth := 0
@@ -202,18 +208,26 @@ func ElementStarts(text string) []int {
 			i += 2 + end + 2
 			col1 = false
 			continue
-		case strings.HasPrefix(text[i:], "'''"):
-			end := strings.Index(text[i+3:], "'''")
+		case strings.HasPrefix(text[i:], `"""`):
+			end := strings.Index(text[i+3:], `"""`)
 			if end < 0 {
 				return starts
 			}
 			i += 3 + end + 3
 			col1 = false
 			continue
-		case c == '\'' || c == '"' || c == '`':
+		case c == '`':
+			end := strings.IndexByte(text[i+1:], '`')
+			if end < 0 {
+				return starts
+			}
+			i += 1 + end + 1
+			col1 = false
+			continue
+		case c == '"':
 			j := i + 1
 			for j < len(text) && text[j] != c && text[j] != '\n' {
-				if text[j] == '\\' && c != '`' {
+				if text[j] == '\\' {
 					j++
 				}
 				j++
@@ -386,6 +400,15 @@ func (m *matcher) expr(e Expr, pos int, ctx context) []int {
 		end := p + len(x.Text)
 		if !ctx.lexical && !m.boundary(p, end) {
 			return nil
+		}
+		if !ctx.lexical && m.l.NoBreakAfter[x.Text] {
+			q := end
+			for q < len(m.text) && m.text[q] == '\r' {
+				q++
+			}
+			if q < len(m.text) && m.text[q] == '\n' {
+				return nil
+			}
 		}
 		return []int{end}
 	case Special:

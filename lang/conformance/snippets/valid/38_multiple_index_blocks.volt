@@ -2,8 +2,8 @@
 Table t {
   id int
   name string
-  indexes { id }
-  validators { IDPositive(id) }
-  indexes { name }
-  validators { IDSmall(id) }
+  Indexes { id }
+  Validators { IDPositive(id) }
+  Indexes { name }
+  Validators { IDSmall(id) }
 }

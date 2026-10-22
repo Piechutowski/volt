@@ -433,9 +433,9 @@ func (f *fieldPlan) defaultGo() (string, bool) {
 		expr, zero = numberGo("-"+v.Num.Tok.Val, f.storage)
 	case *ast.Ident:
 		switch {
-		case strings.EqualFold(v.Name(), "true"):
+		case v.Name() == "true":
 			expr = "true"
-		case strings.EqualFold(v.Name(), "false"):
+		case v.Name() == "false":
 			expr, zero = "false", true
 		default:
 			return "", false

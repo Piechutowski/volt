@@ -14,7 +14,7 @@ Migration 0001__create_users {
     id    int    [pk, increment]
     email string [unique]
 
-    indexes {
+    Indexes {
       email [unique]
     }
   }
@@ -26,7 +26,7 @@ Migration 0002__users_bio [irreversible] {
     alter table users {
       add bio string [null]
       rename name to full_name
-      drop legacy string [default: '']
+      drop legacy string [default: ""]
     }
     rename table users to people
     rebuild table people {
@@ -34,7 +34,7 @@ Migration 0002__users_bio [irreversible] {
       bio string [null, from: ` + "`bio`" + `]
     }
     drop index people (email) [unique]
-    exec 'VACUUM' [down: 'SELECT 1']
+    exec ` + "`VACUUM`" + ` [down: ` + "`SELECT 1`" + `]
   }
   down {
     drop table people {

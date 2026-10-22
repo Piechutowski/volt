@@ -111,7 +111,7 @@ Table posts {
 	id int [pk, increment]
 	title string
 
-	validators {
+	Validators {
 		TitleShape(title)
 	}
 }
@@ -215,7 +215,7 @@ Migration 0001__posts {
 	typo := strings.Replace(text, "get / Home.Index", "gett / Home.Index", 1) + "\nTable tags {\n\tid int [pk]\n}\n"
 	change("edit 2: a verb misspelled, a table added", 3, typo)
 	change("edit 3: the verb fixed", 4, strings.Replace(typo, "gett /", "get /", 1))
-	typed("edit 4: a note typed into the new table's header, as a ranged change", 5, 23, 10, " [note: 'tagging']")
+	typed("edit 4: a note typed into the new table's header, as a ranged change", 5, 23, 10, " [note: \"tagging\"]")
 
 	id = s.send("textDocument/hover", map[string]any{"textDocument": map[string]any{"uri": uri}, "position": map[string]any{"line": 2, "character": 7}}, true)
 	s.response("hover on the table name", id)

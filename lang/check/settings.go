@@ -91,23 +91,23 @@ func (c *checker) settingValueCheck(s *ast.Setting, section string, kind valueKi
 	switch kind {
 	case flagOnly:
 		if s.Value != nil {
-			c.errorf(s.Pos(), section, "%q must not have a value", s.Name)
+			c.errorf(s.Pos(), section, "%q must not have a value (§%s)", s.Name, section)
 		}
 		return
 	default:
 		if s.Value == nil {
-			c.errorf(s.Pos(), section, "%q requires a value", s.Name)
+			c.errorf(s.Pos(), section, "%q requires a value (§%s)", s.Name, section)
 			return
 		}
 	}
 	switch kind {
 	case strValue:
 		if !isString(s.Value) {
-			c.errorf(s.Value.Pos(), section, "%q must be a string", s.Name)
+			c.errorf(s.Value.Pos(), section, "%q must be a string (§%s)", s.Name, section)
 		}
 	case exprValue:
 		if _, ok := s.Value.(*ast.FuncExpr); !ok {
-			c.errorf(s.Value.Pos(), section, "%q must be a backtick expression", s.Name)
+			c.errorf(s.Value.Pos(), section, "%q must be a backtick expression (§%s)", s.Name, section)
 		}
 	case actionValue:
 		if _, ok := s.Value.(*ast.Ident); !ok {
@@ -117,7 +117,7 @@ func (c *checker) settingValueCheck(s *ast.Setting, section string, kind valueKi
 		c.defaultValueCheck(s)
 	case refVal:
 		if _, ok := s.Value.(*ast.RefEndpoint); !ok {
-			c.errorf(s.Value.Pos(), section, "'ref' must be an endpoint, table.column")
+			c.errorf(s.Value.Pos(), section, "'ref' must be an endpoint, table.column (§%s)", section)
 		}
 	}
 }
@@ -126,11 +126,10 @@ func (c *checker) defaultValueCheck(s *ast.Setting) {
 	switch v := s.Value.(type) {
 	case *ast.BasicLit, *ast.FuncExpr, *ast.NegNumber:
 	case *ast.Ident:
-		low := strings.ToLower(v.Name())
-		switch {
-		case !v.Quoted() && low == "null":
+		switch name := v.Name(); {
+		case name == "null":
 			c.errorf(v.Pos(), "default-values", "null is not a default value: a column that carries null and has no default is NULL when a write leaves it out (§default-values)")
-		case v.Quoted() || (low != "true" && low != "false"):
+		case name != "true" && name != "false":
 			c.errorf(v.Pos(), "default-values", "default value must be a number, string, boolean or expression literal; found bare identifier %q (§default-values)", v.Name())
 		}
 	case *ast.QualIdent:
@@ -155,7 +154,7 @@ func (c *checker) tagSettingsCheck(sl *ast.SettingList) {
 		}
 		key, ok := tagPairKey(lit.Tok.Val)
 		if !ok {
-			c.errorf(lit.Pos(), "columns", `tag %q is not one key:"value" pair — write e.g. 'json:"name"' (§columns)`, lit.Tok.Val)
+			c.errorf(lit.Pos(), "columns", `tag %q is not one key:"value" pair: write e.g. "json:\"name\"" (§columns)`, lit.Tok.Val)
 			continue
 		}
 		if key == "db" {

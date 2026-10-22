@@ -10,5 +10,5 @@ Migration 0001__init {
   create table users {
     id int [pk]
   }
-  exec 'INSERT INTO users (id) VALUES (1)'
+  exec `INSERT INTO users (id) VALUES (1)`
 }

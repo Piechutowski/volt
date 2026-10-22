@@ -46,7 +46,7 @@ func TestSelectRenderMatchesTypedHandles(t *testing.T) {
 		{"le", "day <= :before", "", typed(rDay.Le(0)), []string{"before"}},
 		{"gt", "day > 0", "", typed(rDay.Gt(0)), []string{"0"}},
 		{"ge", "day >= :since", "", typed(rDay.Ge(0)), []string{"since"}},
-		{"like literal", "site like '%a%'", "", typed(rSite.Like("")), []string{`"%a%"`}},
+		{"like literal", `site like "%a%"`, "", typed(rSite.Like("")), []string{`"%a%"`}},
 		{"like param", "site like :pat", "", typed(rSite.Like("")), []string{"pat"}},
 		{"not like", "not site like :pat", "", typed(rt.Not(rSite.Like(""))), []string{"pat"}},
 		{"is null", "note is null", "", typed(rNote.IsNull()), nil},
@@ -98,9 +98,9 @@ func TestSelectRenderMatchesTypedHandles(t *testing.T) {
 			typed(rt.And(rt.And(rSite.Eq(""), rDay.Eq(0)), rHits.Gt(0))),
 			[]string{"site", "day", "min"},
 		},
-		{"keyword column", `"order" = :n`, "", typed(rOrder.Eq(0)), []string{"n"}},
+		{"column named like a setting", "order = :n", "", typed(rOrder.Eq(0)), []string{"n"}},
 		{"literal left", "1 < day", "", typed(rDay.Gt(0)), []string{"1"}},
-		{"literal left equal", "'x' = site", "", typed(rSite.Eq("")), []string{`"x"`}},
+		{"literal left equal", `"x" = site`, "", typed(rSite.Eq("")), []string{`"x"`}},
 		{"param left", ":since <= day", "", typed(rDay.Ge(0)), []string{"since"}},
 		{"param right", "day >= :since", "", typed(rDay.Ge(0)), []string{"since"}},
 		{"float literal", "score = 1.5", "", typed(rScore.Eq(0)), []string{"1.5"}},
@@ -117,17 +117,17 @@ func TestSelectRenderMatchesTypedHandles(t *testing.T) {
 		{"negative literal", "day > -1", "", typed(rDay.Gt(0)), []string{"-1"}},
 		{"int64 bounds", "day in (9223372036854775807, -9223372036854775808)", "", typed(rDay.In(0, 0)), []string{"9223372036854775807", "-9223372036854775808"}},
 		{"bool literal", "flag = true", "", typed(rFlag.Eq(false)), []string{"true"}},
-		{"string escape", `site = 'it\'s "x"'`, "", typed(rSite.Eq("")), []string{`"it's \"x\""`}},
+		{"string escape", `site = "it's \"x\""`, "", typed(rSite.Eq("")), []string{`"it's \"x\""`}},
 		{"two columns", "day < hits", "", typed(rDay.LtCol(rHits)), nil},
 		{"two columns flipped operand", "hits != day", "", typed(rHits.NeCol(rDay)), nil},
 		{"order asc", "", "(day asc)", typed(rt.OrderBy(rDay.Asc())), nil},
 		{"order desc then asc", "", "(day desc, id asc)", typed(rt.OrderBy(rDay.Desc(), rID.Asc())), nil},
-		{"order keyword column", "", `("order" desc)`, typed(rt.OrderBy(rOrder.Desc())), nil},
+		{"order named column", "", "(order desc)", typed(rt.OrderBy(rOrder.Desc())), nil},
 		{"where and order", "site = :site", "(id desc)", typed(rSite.Eq(""), rt.OrderBy(rID.Desc())), []string{"site"}},
 	}
 
 	var schema strings.Builder
-	schema.WriteString("package db\n\nTable page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n\thits int\n\tscore float64\n\tflag bool\n\tnote string [null]\n\t\"order\" int\n}\n\n")
+	schema.WriteString("package db\n\nTable page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n\thits int\n\tscore float64\n\tflag bool\n\tnote string [null]\n\torder int\n}\n\n")
 	schema.WriteString("Pred at { site = :site and day = :day }\nPred since { day >= :from }\n\n")
 	for i, tc := range cases {
 		fmt.Fprintf(&schema, "Select c%d for page_views", i)

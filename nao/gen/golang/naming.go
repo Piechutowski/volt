@@ -1,4 +1,4 @@
-// Identifier conversion: schema names (snake_case, quoted, Unicode) to
+// Identifier conversion: schema names (snake_case, Unicode) to
 // exported Go names, following the Go community conventions for
 // initialisms (user_id -> UserID, not UserId).
 package golang

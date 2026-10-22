@@ -5,7 +5,7 @@ Table users {
 	email      string    [required, unique]
 	created_at time.Time [default: `CURRENT_TIMESTAMP`]
 
-	validators {
+	Validators {
 		EmailShape(email)
 		EmailValid(email)
 	}
@@ -24,7 +24,7 @@ Table user_roles {
 	role_id int
 	note    string
 
-	indexes {
+	Indexes {
 		(user_id, role_id) [pk]
 	}
 }

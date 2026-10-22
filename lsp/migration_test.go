@@ -89,7 +89,7 @@ func TestCompletionRefActions(t *testing.T) {
 }
 
 func TestCompletionMigrationShapeSettings(t *testing.T) {
-	text := "Migration 0001__a {\n\tcreate table t {\n\t\tid int [\n\t\tindexes {\n\t\t\tid [\n\t\t}\n\t}\n" +
+	text := "Migration 0001__a {\n\tcreate table t {\n\t\tid int [\n\t\tIndexes {\n\t\t\tid [\n\t\t}\n\t}\n" +
 		"\talter table t {\n\t\tadd bio string [\n\t}\n\trebuild table t {\n\t\tid int [\n\t}\n\tcreate index t id [\n}\n"
 	d := doc(t, text)
 	cases := []struct {
@@ -125,13 +125,13 @@ func TestCompletionMigrationShapeSettings(t *testing.T) {
 		t.Errorf("shape column type completion = %v, want the built-ins only", labels(items))
 	}
 	items = d.Complete(protocol.Position{Line: 3, Character: 2})
-	if !hasWord(items, "indexes") || len(items) != 1 {
-		t.Errorf("shape body completion = %v, want indexes only", labels(items))
+	if !hasWord(items, "Indexes") || len(items) != 1 {
+		t.Errorf("shape body completion = %v, want Indexes only", labels(items))
 	}
 }
 
 func TestCompletionIndexWhere(t *testing.T) {
-	text := "Table t {\n\tid int\n\tindexes {\n\t\tid [\n\t}\n}\n"
+	text := "Table t {\n\tid int\n\tIndexes {\n\t\tid [\n\t}\n}\n"
 	d := doc(t, text)
 	pos := posOf(t, text, "[", 0)
 	pos.Character++

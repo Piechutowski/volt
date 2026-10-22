@@ -10,5 +10,5 @@ DiagramView overview {
   Tables { * }
 }
 Note reminder {
-  'remember'
+  "remember"
 }

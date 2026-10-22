@@ -107,6 +107,14 @@ func (l *routeLowering) note(lookup routeLookup) {
 	}
 }
 
+func (l *routeLowering) qualify(qual string) (string, qualKind) {
+	path, kind := qualifierResolve(qual, l.facts.pkgName, l.facts.imports)
+	if kind == qualImport {
+		l.used = append(l.used, qual)
+	}
+	return path, kind
+}
+
 func (l *routeLowering) importOf(qual string) (string, bool) {
 	path, ok := l.facts.imports[qual]
 	if ok {
@@ -179,10 +187,15 @@ func itemLower(item ast.Node, inh inherited, facts routeFacts, env routeEnv, rec
 func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 	qual, target, local := l.facts.pkgName, l.facts.pkgPath, true
 	qualPos := ds.Name.Pos()
-	if ds.Pkg != nil && ds.Pkg.Name() != l.facts.pkgName {
+	if ds.Pkg != nil {
 		qual, qualPos, local = ds.Pkg.Name(), ds.Pkg.Pos(), false
-		known := false
-		if target, known = l.importOf(qual); !known {
+		var kind qualKind
+		switch target, kind = l.qualify(qual); kind {
+		case qualImport:
+		case qualSelf:
+			l.diags = append(l.diags, selfQualified(ds.Pkg.Pos(), qual, ds.Name.Name()))
+			return nil
+		default:
 			l.errorf(ds.Pkg.Pos(), "datasets", "unknown package qualifier %q (§dataset-declaration)", qual)
 			return nil
 		}
@@ -300,27 +313,6 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 	return out
 }
 
-func (l *routeLowering) selfFuncRef(v ast.Node) (string, bool) {
-	return selfFuncRefIn(v, l.facts.pkgName)
-}
-
-func selfFuncRefIn(v ast.Node, pkgName string) (string, bool) {
-	usable := func(id *ast.Ident) bool {
-		return !id.Quoted() && goIdentOK(id.Name()) && !goKeywords[id.Name()]
-	}
-	switch v := v.(type) {
-	case *ast.Ident:
-		if usable(v) {
-			return v.Name(), true
-		}
-	case *ast.QualIdent:
-		if v.Qual.Name() == pkgName && usable(v.Name) {
-			return v.Name.Name(), true
-		}
-	}
-	return "", false
-}
-
 func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 	method := methodOf(r.Verb())
 	segs := append(append([]*ast.Segment{}, inh.prefix...), r.Path.Segments...)
@@ -329,20 +321,18 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 		return nil
 	}
 
-	for _, part := range r.Handler.Parts {
-		if part.Quoted() {
-			l.errorf(r.Handler.Pos(), "scopes-and-routes", "handler names are plain (unquoted) identifiers (§route-paths), found %q", r.Handler.String())
-			return nil
-		}
-	}
 	var query *QueryRef
 	events := false
 	controller, action := "", r.Handler.Parts[0].Name()
 	if len(r.Handler.Parts) == 2 {
 		controller, action = action, r.Handler.Parts[1].Name()
 	}
+	target, kind := "", qualUnknown
+	if controller != "" {
+		target, kind = l.qualify(controller)
+	}
 	switch {
-	case controller == "volt":
+	case kind == qualRuntime:
 		if action != "Events" {
 			l.errorf(r.Handler.Pos(), "scopes-and-routes", "the runtime provides no handler volt.%s; volt.Events is the event stream (§event-routes)", action)
 			return nil
@@ -352,14 +342,17 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 			return nil
 		}
 		events = true
-	case controller == "" || controller == l.facts.pkgName:
+	case controller == "":
 		query = l.queryRef(r, method, params, l.facts.pkgName, l.facts.pkgPath, true)
 		if query == nil {
 			return nil
 		}
 		controller, action = "", query.Method
+	case kind == qualSelf:
+		l.diags = append(l.diags, selfQualified(r.Handler.Pos(), controller, action))
+		return nil
 	default:
-		if target, isImport := l.importOf(controller); isImport {
+		if kind == qualImport {
 			query = l.queryRef(r, method, params, controller, target, false)
 			if query == nil {
 				return nil
@@ -619,7 +612,7 @@ func (l *routeLowering) pathParams(segs []*ast.Segment) ([]Param, bool) {
 	seen := map[string]bool{}
 	ok := true
 	for i, seg := range segs {
-		if seg.Name.Quoted() || !goIdentOK(seg.Name.Name()) {
+		if !goIdentOK(seg.Name.Name()) {
 			l.errorf(seg.Pos(), "scopes-and-routes", "path segment %q must be a plain identifier of letters, digits and underscores (§route-paths)", seg.Name.Name())
 			ok = false
 			continue
@@ -666,7 +659,7 @@ func (l *routeLowering) pathParams(segs []*ast.Segment) ([]Param, bool) {
 
 func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInfo {
 	declared := res.Name.Name()
-	if res.Name.Quoted() || !goIdentOK(declared) || (res.Pkg != nil && (res.Pkg.Quoted() || !goIdentOK(res.Pkg.Name()))) {
+	if !goIdentOK(declared) || (res.Pkg != nil && !goIdentOK(res.Pkg.Name())) {
 		l.errorf(res.Name.Pos(), "resources", "resources name %q must be a plain identifier (§route-paths)", res.Ref())
 		return nil
 	}
@@ -738,7 +731,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 				}
 				set := map[string]bool{}
 				for _, id := range list.Names {
-					canon, known := actionByLower[strings.ToLower(id.Name())]
+					canon, known := actionByLower[id.Name()]
 					if !known {
 						l.errorf(id.Pos(), "resources", "unknown action %q (§the-action-table); valid: index, new, create, show, edit, update, delete", id.Name())
 						continue
@@ -752,7 +745,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 				}
 			case "singular":
 				id, ok := s.Value.(*ast.Ident)
-				if !ok || id.Quoted() || !goIdentOK(id.Name()) {
+				if !ok || !goIdentOK(id.Name()) {
 					l.errorf(s.Pos(), "resources", "singular: takes a plain identifier (§settings)")
 					continue
 				}
@@ -789,7 +782,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 	var crud map[string]golang.CRUDMethod
 	qual, target, local := l.facts.pkgName, l.facts.pkgPath, true
 	qualPos := res.Name.Pos()
-	if res.Pkg != nil && res.Pkg.Name() != l.facts.pkgName {
+	if res.Pkg != nil {
 		qual, local = res.Pkg.Name(), false
 		target, _ = l.importOf(res.Pkg.Name())
 		qualPos = res.Pkg.Pos()
@@ -923,10 +916,15 @@ func crudAbsent(op string) string {
 
 func (l *routeLowering) resourceTable(res *ast.Resources) (ti *check.TableInfo, ok, reported bool) {
 	pkgPath := l.facts.pkgPath
-	if res.Pkg != nil && res.Pkg.Name() != l.facts.pkgName {
+	if res.Pkg != nil {
 		qual := res.Pkg.Name()
-		target, known := l.importOf(qual)
-		if !known {
+		target, kind := l.qualify(qual)
+		switch kind {
+		case qualImport:
+		case qualSelf:
+			l.diags = append(l.diags, selfQualified(res.Pkg.Pos(), qual, res.Name.Name()))
+			return nil, false, true
+		default:
 			l.errorf(res.Pkg.Pos(), "resources", "unknown package qualifier %q (§declaration)", qual)
 			return nil, false, true
 		}

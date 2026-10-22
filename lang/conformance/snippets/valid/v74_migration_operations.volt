@@ -6,10 +6,10 @@ Table accounts {
   owner   string
   balance int    [default: 0]
 
-  indexes {
+  Indexes {
     owner [unique]
     balance [where: `balance > 0`]
-    (`lower(owner)`) [name: 'idx_accounts_owner_ci']
+    (`lower(owner)`) [name: "idx_accounts_owner_ci"]
   }
 }
 
@@ -19,7 +19,7 @@ Migration 0001__create_accounts {
     owner string
     total int    [default: 0]
 
-    indexes {
+    Indexes {
       owner
     }
   }
@@ -31,7 +31,7 @@ Migration 0001__create_accounts {
   }
   drop index accounts owner
   create index accounts owner [unique]
-  exec 'INSERT INTO accounts (owner) VALUES (\'root\')' [down: 'DELETE FROM accounts WHERE owner = \'root\'']
+  exec `INSERT INTO accounts (owner) VALUES ('root')` [down: `DELETE FROM accounts WHERE owner = 'root'`]
 }
 
 Migration 0002__accounts_rebuild [irreversible] {
@@ -40,10 +40,10 @@ Migration 0002__accounts_rebuild [irreversible] {
     owner   string
     balance int    [default: 0, from: `balance * 100`]
 
-    indexes {
+    Indexes {
       owner [unique]
       balance [where: `balance > 0`]
-      (`lower(owner)`) [name: 'idx_accounts_owner_ci']
+      (`lower(owner)`) [name: "idx_accounts_owner_ci"]
     }
   }
   drop table audit
@@ -51,7 +51,7 @@ Migration 0002__accounts_rebuild [irreversible] {
 
 Migration 0003__vacuum [no_transaction] {
   up {
-    exec 'VACUUM'
+    exec `VACUUM`
   }
 }
 

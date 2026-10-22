@@ -34,11 +34,11 @@ report engine when a consumer exists.
     - [x] The spec says what the code does: punctuation table, the doubled exclusion backslash, the multi-line string and `import ( db )` examples, §table-resolution clause 2, the empty Reserved headings, version relics
   - [x] Setting names and values are one word: `set_null`, `set_default`, `no_transaction`; `no action` goes
   - [x] A nullable []byte is rt.Null[[]byte] like every other nullable type; a plain []byte is bytes, and nil writes empty bytes
-  - [ ] Step 2, case and names
-    - [ ] Volt is case-sensitive. Words that open an element or a block are capitalized (`Table`, `TablePartial`, `Type`, `Ref`, `Group`, `Pred`, `Select`, `Records`, `Indexes`, `Validators`, `Migration`, `Scope`, `Pipeline`, `Project`); every other word is lowercase (settings and values, `true`, `false`, `null`, clause words, route words, migration operations, `package`, `import`); a wrong case is a syntax error naming the right spelling
-    - [ ] Identifiers are Go identifiers: quoted identifiers go
-    - [ ] Strings are Go strings: `"..."` is single-line with only the escapes `\\`, `\"`, `\n` and `\t`, every other backslash sequence and line continuation an error; a multi-line string is `"""..."""` with its common indentation trimmed, replacing `'''...'''`; backticks stay SQL expressions (`default:`, `where:`, `from:`, `exec`, index expressions)
-    - [ ] A package names its own declarations bare; `pkg.Name` always names an import (or `volt.`), and the rule that an import may not take the package's own name goes
+  - [x] Step 2, case and names
+    - [x] Volt is case-sensitive. Words that open an element or a block are capitalized (`Table`, `TablePartial`, `Type`, `Ref`, `Group`, `Pred`, `Select`, `Records`, `Indexes`, `Validators`, `Migration`, `Scope`, `Pipeline`, `Project`); every other word is lowercase (settings and values, `true`, `false`, `null`, clause words, route words, migration operations, `package`, `import`); a wrong case is a syntax error naming the right spelling
+    - [x] Identifiers are Go identifiers: quoted identifiers go
+    - [x] Strings are Go strings: `"..."` is single-line with only the escapes `\\`, `\"`, `\n` and `\t`, every other backslash sequence and line continuation an error; a multi-line string is `"""..."""` with its common indentation trimmed, replacing `'''...'''`; backticks stay SQL expressions (`default:`, `where:`, `from:`, `exec`, index expressions)
+    - [x] A package names its own declarations bare; `pkg.Name` always names an import (or `volt.`), and the rule that an import may not take the package's own name goes
   - [ ] Step 3, keys and indexes
     - [ ] `pk` is a column setting only: several `pk` columns form one composite key in declaration order, the `[pk]` index form goes, `increment` only on a single `int` pk
     - [ ] A single-column index is the column setting `unique` or `index`, emitted as `CREATE [UNIQUE] INDEX` with a derived name; the `Indexes` block holds composite, expression and partial indexes only, and a plain single-column index there is an error; a partial or expression unique index never makes a column unique (GetBy, foreign-key targets); the fold compares indexes by table, key, uniqueness and condition, not by name; two indexes of one table with the same name are a check error
@@ -47,7 +47,7 @@ report engine when a consumer exists.
 - [x] `Migration`: the element, its contextual keywords and its twelve checks; what runs it is under the data layer
   - [x] Column types are a closed Go set (`bool`, `int`, `float64`, `string`, `[]byte`, `time.Time`) and `Type` declarations; defaults are typed; a bare `Type` is held to its Go declaration, which decides whether it needs a Scanner and a Valuer
 - [~] Schema extensions
-  - [x] `[model:]`, `[tag:]`, `[required]`, `validators`
+  - [x] `[model:]`, `[tag:]`, `[required]`, `Validators`
   - [x] `Group`, `Pred`, `Select … for <group>` with projection, list parameters
   - [ ] Raw-SQL `Select` / `View` blocks
     - [ ] `Select name (params) { … }`: declared params, select list, from and joins, opaque where/having/group/order bodies
@@ -64,14 +64,14 @@ report engine when a consumer exists.
 ## Data layer (nao)
 
 - [x] Models: structs, `Null[T]`, singular names, notes as doc comments
-- [x] DDL and seed `INSERT`s from `records`
+- [x] DDL and seed `INSERT`s from `Records`
 - [x] CRUD: `Get`, `GetMany`, `GetBy*`, `List`, `Count`, `Create`, `Update`, `Delete`; keyless tables get `List`/`Create`/`Count`; `Create` and `Update` take a changeset and return the stored row
 - [x] Dynamic queries: predicates as values, flat typed handles, per-model wrappers, shared verbs, keyset pagination, statement cache, `dynname` vet rule
 - [x] Changesets: the single write path (§changesets); `<Model>New()` and `row.Changeset()`, one setter per column, `Cast` of a `rt.Params[M]` wire body behind an allow list, `Validate`, `Create` and `Update` rendered from the marked columns; every refused write, a failed validator or the database's own refusal alike, is one `*rt.Invalid` itemizing its field errors, 409 for a `unique` violation, 422 otherwise
 - [x] Validation: validators are exported Go functions of the package named in the schema, `required` is the built-in one, nothing reaches the DDL; `Validate()` on the changeset runs `required` and the validators, every failure collected; the API path answers with the changeset's `*rt.Invalid`
   - [ ] `[on: create]` / `[on: update]` as triggers in SQL and, in Go, by whether the changeset was made from a row
   - *hand* membership in a value set: a validator written beside the declared type (§types)
-  - [ ] `[message: '…']` with a runtime hook keyed by table and check
+  - [ ] `[message: "…"]` with a runtime hook keyed by table and check
   - *no* named validation sets
 - [x] Transactions: one `Queries` over `DBTX`, `Tx` with rollback on error or panic, single-writer `Open`
   - [ ] Savepoints

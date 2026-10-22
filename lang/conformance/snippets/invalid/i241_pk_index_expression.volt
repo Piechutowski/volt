@@ -4,7 +4,7 @@ Table posts {
   slug    string
   version int
 
-  indexes {
+  Indexes {
     (`lower(slug)`, version) [pk]
   }
 }

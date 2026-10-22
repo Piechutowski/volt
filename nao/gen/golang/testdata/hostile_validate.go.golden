@@ -27,7 +27,7 @@ func (c CoreUserChangeset) Validate() CoreUserChangeset {
 	return c
 }
 
-// Validate runs required and the validators of 2fa_codes over the row,
+// Validate runs required and the validators of _2fa_codes over the row,
 // every one every time, replacing the findings of an earlier Validate
 // (spec §changesets, §validators).
 func (c X2faCodeChangeset) Validate() X2faCodeChangeset {

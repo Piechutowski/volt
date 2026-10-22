@@ -97,7 +97,7 @@ func TestGroupRenameFollowsSetUses(t *testing.T) {
 func TestDatasetNavigatesToSelect(t *testing.T) {
 	const dbText = "package db\n\nTable ms_revenue {\n\tid int [pk]\n\tyear int\n}\n\n" +
 		"Group series {\n\tms_revenue\n}\n\nSelect browse for series where year = :year\n"
-	const appText = "package app\n\nimport (\n\tdb\n)\n\nScope /ms {\n\tdataset db.browse [strip: 'ms_']\n}\n"
+	const appText = "package app\n\nimport (\n\tdb\n)\n\nScope /ms {\n\tdataset db.browse [strip: \"ms_\"]\n}\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":          "module g\n",
 		"db/schema.volt":  dbText,

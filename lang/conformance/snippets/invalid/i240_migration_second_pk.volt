@@ -15,7 +15,7 @@ Migration 0001__init [irreversible] {
   rebuild table posts {
     id   int [pk]
     slug string
-    indexes {
+    Indexes {
       (id, slug) [pk]
     }
   }

@@ -5,7 +5,7 @@
  * Covers the full schema language of docs/spec.md Part I:
  * Project, Table (settings, columns), TablePartial and ~injection,
  * Type, Ref (the element and the inline ref: setting, composite
- * endpoints), Records (top-level and in-table), indexes and validators
+ * endpoints), Records (top-level and in-table), Indexes and Validators
  * blocks, plus the Volt routing layer of docs/spec.md Part II: package clauses, Go-style
  * import blocks, Pipeline, Scope, routes and resources. One grammar for
  * one language in three layers (§layers-files-and-the-superset-rule): every .volt file parses here,
@@ -17,14 +17,18 @@
  *    are newline-terminated. Newlines are therefore NOT extras; bodies use an
  *    explicit "items separated by one-or-more newlines" shape, which also
  *    accepts a final item flush against the closing brace.
- *  - Keywords are case-insensitive and NOT reserved (§keywords). Each keyword is a
- *    case-insensitive regex aliased to its canonical spelling, with token
- *    precedence over plain identifiers. Consequence (documented limitation):
- *    an unquoted column named exactly `indexes`, `validators` or
- *    `records` needs quotes ("records") to parse as a column.
- *  - Double quotes delimit identifiers, single quotes delimit strings (§identifiers,
- *    §string-literals). String and expression contents are separate tokens so editors can
- *    inject other languages (Markdown in notes, SQL in backticks).
+ *  - Keywords are case-sensitive, have one spelling each, and are NOT
+ *    reserved (§keywords). Each keyword is a plain string, which
+ *    tree-sitter's keyword extraction matches against the identifier
+ *    token exactly, only where the parse state admits it. Consequence
+ *    (documented limitation): a column named exactly `Indexes`,
+ *    `Validators` or `Records` lexes as the block keyword at the start
+ *    of a table-body line.
+ *  - A name is a Go identifier and is never quoted (§identifiers). Double
+ *    quotes delimit strings, as in Go, and triple double quotes a
+ *    multi-line string (§string-literals). String and expression contents
+ *    are separate tokens so editors can inject other languages (Markdown
+ *    in notes, SQL in backticks).
  *  - Settings lists are generic `[name, key: value]` (§settings-lists); which keys are
  *    valid where is the language server's business, which also keeps the
  *    grammar open for the schema extensions.
@@ -33,13 +37,9 @@
 /// <reference types="tree-sitter-cli/dsl" />
 // @ts-check
 
-/** Case-insensitive keyword, displayed under its canonical spelling. */
-function kw(word, precedence = 1) {
-  const pattern = word
-    .split('')
-    .map((c) => (/[a-zA-Z]/.test(c) ? `[${c.toLowerCase()}${c.toUpperCase()}]` : c))
-    .join('');
-  return alias(token(prec(precedence, new RegExp(pattern))), word);
+/** A keyword in its one spelling (§keywords). */
+function kw(word) {
+  return word;
 }
 
 /** One-or-more `rule`s separated by one-or-more newlines, then optional
@@ -206,11 +206,11 @@ module.exports = grammar({
         ')',
       ),
 
-    // ==================== indexes / validators (§indexes, §validators) ====================
+    // ==================== Indexes / Validators (§indexes, §validators) ====================
 
     indexes_block: ($) =>
       seq(
-        kw('indexes'),
+        kw('Indexes'),
         '{',
         repeat($._newline),
         optional(newlineSep1($.index_definition, $)),
@@ -230,7 +230,7 @@ module.exports = grammar({
 
     validators_block: ($) =>
       seq(
-        kw('validators'),
+        kw('Validators'),
         '{',
         repeat($._newline),
         optional(newlineSep1($.validator, $)),
@@ -373,8 +373,8 @@ module.exports = grammar({
 
     verb: () =>
       choice(
-        kw('get', 2), kw('post', 2), kw('put', 2), kw('patch', 2),
-        kw('delete', 2), kw('options', 2), kw('head', 2), kw('any', 2),
+        kw('get'), kw('post'), kw('put'), kw('patch'),
+        kw('delete'), kw('options'), kw('head'), kw('any'),
       ),
 
     // resources names a table, optionally qualified by a package
@@ -388,7 +388,7 @@ module.exports = grammar({
       ),
 
     // dataset names a group select of an imported data package (§datasets):
-    // `dataset db.browse [strip: 'da_']`, one query route per member.
+    // `dataset db.browse [strip: "da_"]`, one query route per member.
     dataset_declaration: ($) =>
       seq(
         kw('dataset'),
@@ -595,7 +595,7 @@ module.exports = grammar({
 
     // An identifier glued to the previous token (route and import paths).
     _ident_immediate: () =>
-      token.immediate(/[0-9]*[\p{L}\p{M}_][\p{L}\p{M}\p{Nd}_]*/),
+      token.immediate(/[\p{L}_][\p{L}\p{Nd}_]*/),
 
     // ==================== Migration (§migrations) ====================
     // The words of a migration body are keyword tokens here and nowhere
@@ -605,7 +605,7 @@ module.exports = grammar({
     migration_definition: ($) =>
       seq(
         kw('Migration'),
-        field('name', alias($.identifier, $.migration_name)),
+        field('name', $.migration_name),
         optional(field('settings', $.settings_list)),
         '{',
         repeat($._newline),
@@ -691,7 +691,7 @@ module.exports = grammar({
     rebuild_table_op: ($) =>
       seq(kw('rebuild'), kw('table'), field('table', alias($._name, $.table_name)), $._shape_body),
 
-    // Columns and indexes blocks only: no injection, validators or records
+    // Columns and Indexes blocks only: no injection, Validators or Records
     // (§migrations).
     _shape_body: ($) =>
       seq(
@@ -707,8 +707,9 @@ module.exports = grammar({
     drop_index_op: ($) =>
       seq(kw('drop'), kw('index'), field('table', alias($._name, $.table_name)), $.index_definition),
 
+    // exec takes its SQL in backticks, an expression literal (§migrations).
     exec_op: ($) =>
-      seq(kw('exec'), field('sql', $.string), optional(field('settings', $.settings_list))),
+      seq(kw('exec'), field('sql', $.expression), optional(field('settings', $.settings_list))),
 
     // ==================== Settings (§settings-lists) ====================
 
@@ -751,7 +752,6 @@ module.exports = grammar({
         $.boolean,
         $.null,
         $.expression,
-        $.qualified_value,
         $.ident_group,
         $._name,
       ),
@@ -772,48 +772,43 @@ module.exports = grammar({
 
     _ident_item: ($) => seq($._name, optional(alias($._name, $.ident_modifier))),
 
-    // A function of the package itself, pkg.Name, as error_handler names
-    // one (§scopes).
-    qualified_value: ($) =>
-      prec(1, seq(
-        field('qualifier', $._name),
-        '.',
-        field('name', $._name),
-      )),
-
     signed_number: ($) => seq('-', $.number),
 
     // ==================== Terminals ====================
 
-    _name: ($) => choice($.identifier, $.quoted_identifier),
+    _name: ($) => $.identifier,
 
-    // Letters are Unicode L and M categories; identifiers may begin with
-    // digits (`2fa_codes`) but an all-digit token is a number (§identifiers).
-    identifier: () => /[0-9]*[\p{L}\p{M}_][\p{L}\p{M}\p{Nd}_]*/,
+    // A Go identifier: a Unicode letter or underscore, then letters, decimal
+    // digits and underscores (§identifiers, §unicode-general-categories).
+    identifier: () => /[\p{L}_][\p{L}\p{Nd}_]*/,
 
-    quoted_identifier: () => /"([^"\\\n]|\\[\s\S])*"/,
+    // The one name that begins with digits: four or more, two underscores,
+    // a label (§migrations).
+    migration_name: () => /[0-9]+__[\p{L}\p{Nd}_]+/,
 
-    // Single-line ('...') and multi-line ('''...''') strings (§string-literals, §multi-line-string-literals).
-    // Contents are separate tokens so editors can inject Markdown.
+    // Single-line ("...") and multi-line ("""...""") strings, with the four
+    // escapes \\, \", \n and \t (§string-literals, §multi-line-string-literals,
+    // §escape-sequences). Contents are separate tokens so editors can inject
+    // Markdown.
     string: ($) =>
       choice(
         seq(
-          "'''",
+          '"""',
           optional(field('content', alias($._triple_string_content, $.string_content))),
-          "'''",
+          '"""',
         ),
         seq(
-          "'",
+          '"',
           optional(field('content', alias($._single_string_content, $.string_content))),
-          token.immediate("'"),
+          token.immediate('"'),
         ),
       ),
 
     _single_string_content: () =>
-      token.immediate(/([^'\\\n]|\\[\s\S])+/),
+      token.immediate(/([^"\\\n]|\\["\\nt])+/),
 
     _triple_string_content: () =>
-      token.immediate(/([^'\\]|\\[\s\S]|'(\\[\s\S]|[^'\\])|''(\\[\s\S]|[^'\\]))+/),
+      token.immediate(/([^"\\]|\\["\\nt]|"([^"\\]|\\["\\nt])|""([^"\\]|\\["\\nt]))+/),
 
     // Backtick expression: opaque SQL, no escapes, may span lines (§expression-literals).
     expression: ($) =>
@@ -825,7 +820,7 @@ module.exports = grammar({
 
     number: () => /[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?/,
 
-    boolean: () => choice(kw('true', 2), kw('false', 2)),
+    boolean: () => choice(kw('true'), kw('false')),
 
     null: () => kw('null'),
 

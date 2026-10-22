@@ -304,17 +304,17 @@ func TestGenerationErrors(t *testing.T) {
 	}{
 		{
 			name:    "field collision",
-			src:     "Table t { user_id int\n \"user__id\" int }",
+			src:     "Table t { user_id int\n user__id int }",
 			wantErr: "both map to Go field",
 		},
 		{
 			name:    "struct collision",
-			src:     "Table user_roles { id int }\nTable \"user roles\" { id int }",
+			src:     "Table user_roles { id int }\nTable user__roles { id int }",
 			wantErr: "both map to Go type",
 		},
 		{
 			name:    "unusable name",
-			src:     "Table t { \"++\" int }",
+			src:     "Table t { __ int }",
 			wantErr: "no characters usable",
 		},
 		{
@@ -345,7 +345,7 @@ func TestGoNames(t *testing.T) {
 		{"http_status_url", "HTTPStatusURL"},
 		{"uuid", "UUID"},
 		{"full name", "FullName"},
-		{"2fa_codes", "X2faCodes"},
+		{"_2fa_codes", "X2faCodes"},
 		{"created_at", "CreatedAt"},
 		{"id", "ID"},
 		{"żółć", "Żółć"},

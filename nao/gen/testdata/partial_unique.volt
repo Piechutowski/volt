@@ -6,7 +6,7 @@ Table authors {
   handle     string
   deleted_at time.Time [null]
 
-  indexes {
+  Indexes {
     email [unique, where: `deleted_at IS NULL`]
     handle [unique]
   }

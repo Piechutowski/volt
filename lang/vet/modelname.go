@@ -28,7 +28,7 @@ func (r *modelNameRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagn
 	}
 	singular, ok := inflect.SingularLast(t.Name.Name())
 	if !ok {
-		out = append(out, r.warnf(t.Pos(), "cannot confidently singularize %q for its Go model name (would use %q); pin it with [model: '...']",
+		out = append(out, r.warnf(t.Pos(), "cannot confidently singularize %q for its Go model name (would use %q); pin it with [model: \"...\"]",
 			t.Name.Name(), singular))
 	}
 	return out

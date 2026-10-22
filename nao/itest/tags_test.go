@@ -22,7 +22,7 @@ func TestTagPassthroughRenamesJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(doc), `"displayName":"Ann"`) {
-		t.Errorf("model JSON did not honor [tag: 'json:\"displayName\"']: %s", doc)
+		t.Errorf(`model JSON did not honor [tag: "json:\"displayName\""]: %s`, doc)
 	}
 	if strings.Contains(string(doc), `"name"`) {
 		t.Errorf("the generated json default should have been replaced, not kept: %s", doc)

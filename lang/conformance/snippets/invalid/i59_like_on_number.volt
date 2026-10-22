@@ -6,4 +6,4 @@ Table ms_revenue {
   year int
 }
 
-Select bad for ms_revenue where year like 'x%'
+Select bad for ms_revenue where year like "x%"

@@ -33,7 +33,7 @@ dataset override ladder so selects and datasets share one idiom.
 ## H4 — Which field-property settings to mint
 
 Today every per-field property is a column setting, and anything Volt
-does not act on rides `[tag: 'key:"value"']` verbatim. Unsettled: which
+does not act on rides `[tag: "key:\"value\""]` verbatim. Unsettled: which
 first-class settings to add (`[sensitive]` is the candidate) and
 whether a Go-field-name override is ever needed. Mint each from a real
 need; every one costs spec, checker, generator and corpus.

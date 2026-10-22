@@ -265,7 +265,7 @@ func TestResourcesSingularOverride(t *testing.T) {
 func TestResourcesNamesTable(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod":         modFile,
-		"db/schema.volt": "package db\n\nTable posty [model: 'Post'] {\n\tid int [pk]\n}\n",
+		"db/schema.volt": "package db\n\nTable posty [model: \"Post\"] {\n\tid int [pk]\n}\n",
 		"app/r.volt":     "package app\nimport (\n\tdb\n)\nScope / {\n\tresources db.posty\n}\n",
 	})
 	wantClean(t, diags)
@@ -388,7 +388,7 @@ func TestErrors(t *testing.T) {
 		}, "disagrees"},
 		{"use is no element", map[string]string{
 			"go.mod":     modFile,
-			"app/r.volt": "package app\nuse * from './x'\n",
+			"app/r.volt": "package app\nuse * from \"./x\"\n",
 		}, `unknown element type "use"`},
 		{"unknown import", map[string]string{
 			"go.mod":     modFile,
@@ -589,7 +589,7 @@ func TestDatasetExpansion(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod":         modFile,
 		"db/schema.volt": schema,
-		"app/r.volt":     "package app\n\nimport (\n\tdb\n)\n\nScope /ms [name: ms] {\n\tdataset db.browse [strip: 'ms_', except: (ms_notes)]\n}\n",
+		"app/r.volt":     "package app\n\nimport (\n\tdb\n)\n\nScope /ms [name: ms] {\n\tdataset db.browse [strip: \"ms_\", except: (ms_notes)]\n}\n",
 	})
 	wantClean(t, diags)
 	routes := pr.Packages["app"].Routes
@@ -609,7 +609,7 @@ func TestDatasetExpansion(t *testing.T) {
 
 	for _, tc := range []struct{ name, line, want string }{
 		{"only keeps", "dataset db.browse [only: (ms_usage)]", ""},
-		{"strip miss", "dataset db.browse [strip: 'x_']", "is not a prefix"},
+		{"strip miss", "dataset db.browse [strip: \"x_\"]", "is not a prefix"},
 		{"both lists", "dataset db.browse [only: (ms_usage), except: (ms_notes)]", "cannot both be set"},
 		{"unknown select", "dataset db.Browse", `did you mean "browse"`},
 		{"bad setting", "dataset db.browse [api]", "not valid on a dataset"},
@@ -673,7 +673,7 @@ Type Ghost    string
 Type Tested   string
 Type Blob     []byte
 Type Stamp    time.Time
-Type kinds.Kind string from 'example.com/kinds'
+Type kinds.Kind string from "example.com/kinds"
 
 Table items {
   id     int    [pk, increment]

@@ -3,7 +3,7 @@
 Table t {
   id int [pk]
   n int
-  records {
+  Records {
     1, null
   }
 }

@@ -8,7 +8,7 @@ Table posts {
   body  string [null]
   views int    [default: 0]
 
-  indexes {
+  Indexes {
     views
   }
 }

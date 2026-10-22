@@ -115,10 +115,6 @@
         {
           "type": "identifier",
           "named": true
-        },
-        {
-          "type": "quoted_identifier",
-          "named": true
         }
       ]
     }
@@ -404,7 +400,7 @@
         "required": true,
         "types": [
           {
-            "type": "string",
+            "type": "expression",
             "named": true
           }
         ]
@@ -483,10 +479,6 @@
         {
           "type": "identifier",
           "named": true
-        },
-        {
-          "type": "quoted_identifier",
-          "named": true
         }
       ]
     }
@@ -501,10 +493,6 @@
       "types": [
         {
           "type": "identifier",
-          "named": true
-        },
-        {
-          "type": "quoted_identifier",
           "named": true
         }
       ]
@@ -719,10 +707,6 @@
         {
           "type": "identifier",
           "named": true
-        },
-        {
-          "type": "quoted_identifier",
-          "named": true
         }
       ]
     }
@@ -753,10 +737,6 @@
       "types": [
         {
           "type": "identifier",
-          "named": true
-        },
-        {
-          "type": "quoted_identifier",
           "named": true
         }
       ]
@@ -1043,10 +1023,6 @@
           {
             "type": "identifier",
             "named": true
-          },
-          {
-            "type": "quoted_identifier",
-            "named": true
           }
         ]
       },
@@ -1083,10 +1059,6 @@
           {
             "type": "identifier",
             "named": true
-          },
-          {
-            "type": "quoted_identifier",
-            "named": true
           }
         ]
       },
@@ -1096,40 +1068,6 @@
         "types": [
           {
             "type": "string",
-            "named": true
-          }
-        ]
-      }
-    }
-  },
-  {
-    "type": "qualified_value",
-    "named": true,
-    "fields": {
-      "name": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "identifier",
-            "named": true
-          },
-          {
-            "type": "quoted_identifier",
-            "named": true
-          }
-        ]
-      },
-      "qualifier": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "identifier",
-            "named": true
-          },
-          {
-            "type": "quoted_identifier",
             "named": true
           }
         ]
@@ -1691,14 +1629,6 @@
             "named": true
           },
           {
-            "type": "qualified_value",
-            "named": true
-          },
-          {
-            "type": "quoted_identifier",
-            "named": true
-          },
-          {
             "type": "ref_endpoint",
             "named": true
           },
@@ -1724,10 +1654,6 @@
       "types": [
         {
           "type": "identifier",
-          "named": true
-        },
-        {
-          "type": "quoted_identifier",
           "named": true
         }
       ]
@@ -1910,10 +1836,6 @@
           {
             "type": "identifier",
             "named": true
-          },
-          {
-            "type": "quoted_identifier",
-            "named": true
           }
         ]
       }
@@ -1924,10 +1846,6 @@
       "types": [
         {
           "type": "identifier",
-          "named": true
-        },
-        {
-          "type": "quoted_identifier",
           "named": true
         }
       ]
@@ -2013,10 +1931,6 @@
         "types": [
           {
             "type": "identifier",
-            "named": true
-          },
-          {
-            "type": "quoted_identifier",
             "named": true
           }
         ]
@@ -2127,11 +2041,11 @@
     "named": false
   },
   {
-    "type": "'",
+    "type": "\"",
     "named": false
   },
   {
-    "type": "'''",
+    "type": "\"\"\"",
     "named": false
   },
   {
@@ -2195,6 +2109,10 @@
     "named": false
   },
   {
+    "type": "Indexes",
+    "named": false
+  },
+  {
     "type": "Migration",
     "named": false
   },
@@ -2236,6 +2154,10 @@
   },
   {
     "type": "Type",
+    "named": false
+  },
+  {
+    "type": "Validators",
     "named": false
   },
   {
@@ -2356,10 +2278,6 @@
     "named": false
   },
   {
-    "type": "indexes",
-    "named": false
-  },
-  {
     "type": "is",
     "named": false
   },
@@ -2428,10 +2346,6 @@
     "named": false
   },
   {
-    "type": "quoted_identifier",
-    "named": true
-  },
-  {
     "type": "rebuild",
     "named": false
   },
@@ -2473,10 +2387,6 @@
   },
   {
     "type": "use",
-    "named": false
-  },
-  {
-    "type": "validators",
     "named": false
   },
   {

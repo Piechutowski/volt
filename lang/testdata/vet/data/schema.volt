@@ -1,26 +1,26 @@
 package data
 
-Table "users" {
-  "id" int [pk]
+Table users {
+  id int [pk]
   email string [unique]
   foo_bar int
   total int
   status PostStatus
   new int
-  indexes {
+  Indexes {
     id [unique]
     email [unique]
     (email, foo_bar)
     (email, foo_bar)
   }
 
-  validators {
+  Validators {
     PostStatusKnown(status)
   }
 }
 
-Project blog [note: 'the blog schema'] {
-  database_type: 'SQLite'
+Project blog [note: "the blog schema"] {
+  database_type: "SQLite"
 }
 
 Type PostStatus string
@@ -56,13 +56,13 @@ Table core_things {
   id int [pk]
   k CoreKind
 
-  validators {
+  Validators {
     CoreKindKnown(k)
   }
 }
 
 Table naked {
   id int
-  indexes {
+  Indexes {
   }
 }

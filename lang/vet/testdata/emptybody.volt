@@ -3,8 +3,8 @@ Project p { //WANT emptybody
 }
 Table t {
   id int
-  indexes { //WANT emptybody
+  Indexes { //WANT emptybody
   }
-  validators { //WANT emptybody
+  Validators { //WANT emptybody
   }
 }

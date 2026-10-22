@@ -86,7 +86,7 @@ func TestAnalyzers(t *testing.T) {
 
 func TestCleanFile(t *testing.T) {
 	src := `
-Project shop { database_type: 'PostgreSQL' }
+Project shop { database_type: "PostgreSQL" }
 Type Status string
 Table users {
   id int [pk, increment]

@@ -18,26 +18,26 @@ Table posts {
   words    int [required]
   score    float64 [required]
   cover    []byte [required]
-  state    Visibility [default: 'public']
-  reviewed Visibility [null, default: 'unlisted']
+  state    Visibility [default: "public"]
+  reviewed Visibility [null, default: "unlisted"]
   audience Visibility [required]
   tier     Tier [null, default: 3]
   price    Cents [default: 100]
   rank     int [default: -1]
   draft    bool [default: true]
-  caption  string [null, default: 'none']
+  caption  string [null, default: "none"]
   ratio    float64 [default: 0.5]
   weight   float64 [null, default: 1]
   scale    float64 [null, default: 2.0]
   kilo     float64 [null, default: 1e3]
   shift    float64 [null, default: -3]
-  hits     int [null, default: 0, tag: 'json:"hits,omitempty"']
+  hits     int [null, default: 0, tag: "json:\"hits,omitempty\""]
   views    int [default: 0]
-  label    string [null, default: '']
+  label    string [null, default: ""]
   flag     bool [null, default: false]
-  secret   string [null, tag: 'json:"-"']
+  secret   string [null, tag: "json:\"-\""]
 
-  validators {
+  Validators {
     VisibilityKnown(state)
     VisibilityKnownNull(reviewed)
   }
@@ -47,7 +47,7 @@ Table post_tags {
   post_id int [ref: posts.id]
   tag     string
 
-  indexes {
+  Indexes {
     (post_id, tag) [pk]
   }
 }

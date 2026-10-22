@@ -105,7 +105,7 @@ textually: `` `a+b` `` and `` `a + b` `` count as different keys.
 
 ### emptybody
 
-**What it does.** Reports empty `indexes {}` and `validators {}` blocks,
+**What it does.** Reports empty `Indexes {}` and `Validators {}` blocks,
 and a `Project` with neither properties nor a `note:` (spec §project).
 
 **Why.** An empty block does nothing but implies work in progress.
@@ -129,27 +129,6 @@ which is invisible at the partial's definition site.
 **Examples.** [testdata/shadowedcolumn.volt](../lang/vet/testdata/shadowedcolumn.volt):
 both conflict directions and a partial injected twice are bad;
 non-overlapping columns are good.
-
-### unnecessaryquotes
-
-**What it does.** Reports a quoted identifier (`"users"`) whose content is
-already a valid plain identifier.
-
-**Why.** Quoting suggests the name *needs* quoting (spaces, keywords in
-some SQL dialect); when it does not, the quotes are visual noise and invite
-inconsistent spellings of the same name.
-
-**Examples.**
-[testdata/unnecessaryquotes.volt](../lang/vet/testdata/unnecessaryquotes.volt) —
-`"full name"` and `"double precision"` are good: they contain spaces and
-genuinely need quotes.
-
-**Limitations.** "Plain" is judged by ASCII letters/digits/underscore; a
-quoted identifier containing non-ASCII letters is not reported even though
-it may be unquotable. A name quoted more than once on one line of one
-declaration is reported once; the same name on the same line of another
-declaration, or of another file of the package, is reported again
-(the rule sees one declaration at a time).
 
 ---
 
@@ -251,19 +230,19 @@ Rules that guard the schema → Go mapping (spec §mapping-to-go) rather than th
 **What it does.** Reports a table whose singular Go model name is a
 *guess*: the [inflector](../nao/inflect/) could not confidently singularize the
 table name (endings like `-us`, `-is`, `-ss` where a trailing `s` is often
-not a plural marker at all) and no `[model: '...']` setting pins the name.
+not a plural marker at all) and no `[model: "..."]` setting pins the name.
 
 **Why.** Models are singular by the singular-model rule (`users` → `User`), but
 English pluralization is not decidable by rules: `menus` wants `Menu`,
 `status` wants `Status`, and a deterministic inflector cannot know which is
 which. Generation proceeds with the guess either way; this rule marks
 exactly the places where the guess deserves a human eye. Writing
-`[model: 'Menu']` both fixes the name and silences the warning — the
+`[model: "Menu"]` both fixes the name and silences the warning; the
 setting is the documentation.
 
 **Examples.** [testdata/modelname.volt](../lang/vet/testdata/modelname.volt) —
 regular plurals (`users`, `order_items`), irregulars the inflector knows
-(`people`, `account_statuses`), and a pinned `menus [model: 'Menu']` are
+(`people`, `account_statuses`), and a pinned `menus [model: "Menu"]` are
 good; `order_status`, `bonus` and `axis` warn.
 
 **Limitations.** Only the final underscore-separated segment is inflected,
@@ -320,7 +299,7 @@ one file in `vet/` plus one testdata file.
 | `orphantable` | tables with no relationships at all | too noisy: lookup/config tables are legitimately standalone |
 | `nullablefk` | nullable FK columns, i.e. zero-or-many cardinality (spec §nullability-and-cardinality) | that cardinality is a valid modeling choice, not a smell |
 | `recordsdupkey` | duplicate primary-key values across record rows | belongs in `check` beside record value typing (§records-sample-data) |
-| `sqlkeyword` | unquoted names that are reserved words in common SQL dialects (`order`, `user`) | needs per-dialect wordlists and a target-dialect setting |
+| `sqlkeyword` | names that are reserved words in common SQL dialects (`order`, `user`) | needs per-dialect wordlists and a target-dialect setting |
 | `namingstyle` | mixed naming conventions (snake_case vs camelCase) | pure style; needs configuration machinery first |
 
 ---

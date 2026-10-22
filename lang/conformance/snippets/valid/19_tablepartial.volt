@@ -5,7 +5,7 @@ TablePartial base_template {
 }
 TablePartial email_index {
   email string [unique]
-  indexes {
+  Indexes {
     email [unique]
   }
 }

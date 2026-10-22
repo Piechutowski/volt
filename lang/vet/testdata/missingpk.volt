@@ -5,7 +5,7 @@ Table has_col_pk {
 Table has_index_pk {
   a int
   b int
-  indexes {
+  Indexes {
     (a, b) [pk]
   }
 }

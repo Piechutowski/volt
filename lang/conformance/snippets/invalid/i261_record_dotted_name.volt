@@ -7,6 +7,6 @@ Table orders {
 
   Records (id, status) {
     1, state.paid
-    2, 'paid'
+    2, "paid"
   }
 }

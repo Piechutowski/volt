@@ -2,7 +2,7 @@
 // want: stored as []byte; it cannot take a list parameter
 package db
 
-Type blob.Blob []byte from 'example.com/app/blob'
+Type blob.Blob []byte from "example.com/app/blob"
 
 Table posts {
   id   int       [pk, increment]

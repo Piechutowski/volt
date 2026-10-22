@@ -9,6 +9,7 @@ import (
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
+	"github.com/Piechutowski/volt/lang/scanner"
 	"github.com/Piechutowski/volt/lang/token"
 )
 
@@ -83,9 +84,9 @@ func (d *Document) tableChildren(body []ast.TableItem) []protocol.DocumentSymbol
 		case *ast.PartialRef:
 			kids = append(kids, d.symbol("~"+n.Name.Name(), "injected partial", protocol.SymbolKindInterface, n, n.Name, nil))
 		case *ast.IndexesBlock:
-			kids = append(kids, d.symbol("indexes", "", protocol.SymbolKindProperty, n, n, nil))
+			kids = append(kids, d.symbol("Indexes", "", protocol.SymbolKindProperty, n, n, nil))
 		case *ast.ValidatorsBlock:
-			kids = append(kids, d.symbol("validators", "", protocol.SymbolKindProperty, n, n, nil))
+			kids = append(kids, d.symbol("Validators", "", protocol.SymbolKindProperty, n, n, nil))
 		}
 	}
 	return kids
@@ -298,7 +299,9 @@ func (d *Document) typeHover(key string) string {
 	}
 	md := "```volt\nType " + td.Key + " " + td.Decl.Storage.String()
 	if td.Path != "" {
-		md += " from '" + td.Path + "'"
+		if q, ok := scanner.Quote(td.Path); ok {
+			md += " from " + q
+		}
 	}
 	return md + "\n```\n"
 }

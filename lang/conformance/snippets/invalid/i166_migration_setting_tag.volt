@@ -15,6 +15,6 @@ Migration 0001__init {
 
 Migration 0002__bio {
   alter table users {
-    add bio string [null, tag: 'json:"bio"']
+    add bio string [null, tag: "json:\"bio\""]
   }
 }
