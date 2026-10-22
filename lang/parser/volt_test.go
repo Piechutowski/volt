@@ -124,6 +124,8 @@ func TestVoltSyntaxErrors(t *testing.T) {
 		{"top-level dataset", "dataset db.browse\n", "must appear inside a Scope"},
 		{"import without parens", "import db\n", "expected '(' after import"},
 		{"top-level route", "get /users Users.Index\n", "must appear inside a Scope"},
+		{"top-level put", "put /users Users.Replace\n", "must appear inside a Scope"},
+		{"top-level put in another case", "PUT /users Users.Replace\n", "must appear inside a Scope"},
 		{"colon without name", "Scope / {\n\tget /users/: Users.Show\n}\n", "':' must be followed by a parameter name"},
 		{"short ellipsis", "Scope / {\n\tget /files/:path.. Files.Serve\n}\n", "wildcard ellipsis is spelled"},
 		{"typed wildcard", "Scope / {\n\tget /files/:path(int)... Files.Serve\n}\n", "cannot carry a type"},

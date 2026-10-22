@@ -129,7 +129,7 @@ type ScopeItem interface {
 
 // Route is one verb route line (spec §routes).
 type Route struct {
-	VerbTok  token.Token // IDENT: get, post, patch, delete, options, head, any; put, read only for the checker to name patch (§routes)
+	VerbTok  token.Token // IDENT: get, post, patch, delete, options, head, any; put, read only for the checker to name the verb to write (§routes)
 	Path     *RoutePath
 	Handler  *GoRef // Controller.Action — exactly two parts
 	Settings *SettingList

@@ -96,7 +96,6 @@ app/routes.volt:10:15: error: spec/resources: resources db.plots [default]: the 
 
 ## i11_wildcard_in_scope.volt
 app/i11_wildcard_in_scope.volt:4:10: error: spec/scopes-and-routes: a Scope prefix cannot contain a wildcard (§route-paths)
-app/i11_wildcard_in_scope.volt:4:10: error: spec/scopes-and-routes: the wildcard ':p...' must be the last path segment (§route-paths)
 
 ## i12_unknown_pipeline.volt
 app/i12_unknown_pipeline.volt:4:10: error: spec/scopes-and-routes: unknown Pipeline "nope" (§scopes)
@@ -363,6 +362,7 @@ db/i243_group_takes_table_name.volt:13:7: error: spec/groups: group "users" take
 
 ## i24_toplevel_route.volt
 app/i24_toplevel_route.volt:4:1: error: syntax: routes, resources and datasets must appear inside a Scope (§scopes-and-routes)
+app/i24_toplevel_route.volt:5:1: error: syntax: routes, resources and datasets must appear inside a Scope (§scopes-and-routes)
 
 ## i257_migration_note.volt
 db/i257_migration_note.volt:10:23: error: spec/migrations: unknown setting "note" (§migrations)
@@ -527,6 +527,27 @@ app/routes.volt:10:2: error: spec/query-routes: db.PostGet is routed with get, n
 
 ## i331_query_route_put
 app/routes.volt:10:2: error: spec/routes: put is not a route verb: the partial update is patch, so write patch /posts/:id(int) db.PostUpdate (§routes)
+app/routes.volt:11:2: error: spec/routes: put is not a route verb: db.PostList is routed with get, so write get /posts db.PostList (§routes)
+app/routes.volt:12:2: error: spec/routes: put is not a route verb: db.PostCreate is routed with post, so write post /drafts db.PostCreate (§routes)
+app/routes.volt:13:2: error: spec/routes: put is not a route verb: db.PostDelete is routed with delete, so write delete /posts/:id(int)/x db.PostDelete (§routes)
+app/routes.volt:14:2: error: spec/routes: put is not a route verb: the partial update is patch (§routes)
+app/routes.volt:14:25: error: spec/scopes-and-routes: no generated query db.PostFetch in package "db" — a query route names a select method or a default CRUD method (Get, List, Create, Update, Delete) (§query-routes)
+
+## i332_route_conflict_head.volt
+app/i332_route_conflict_head.volt:7:2: error: spec/scopes-and-routes: route HEAD /:y/b is ambiguous with the route at app/i332_route_conflict_head.volt:6:2 (GET /a/:x): both match some requests and neither is more specific (§route-conflicts)
+app/i332_route_conflict_head.volt:9:2: error: spec/scopes-and-routes: route GET /c is ambiguous with the route at app/i332_route_conflict_head.volt:8:2 (HEAD /:z): both match some requests and neither is more specific (§route-conflicts)
+
+## i333_event_route_put.volt
+app/i333_event_route_put.volt:6:2: error: spec/routes: put is not a route verb: an event route is read with get, so write get /events volt.Events (§routes)
+
+## i334_scope_prefix_once
+app/routes.volt:9:18: error: spec/scopes-and-routes: unknown parameter type "uuid" (§route-paths); valid: int
+app/routes.volt:15:10: error: spec/scopes-and-routes: path parameter "w" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs
+app/routes.volt:17:13: error: spec/scopes-and-routes: duplicate path parameter "x" (§route-paths)
+app/routes.volt:22:9: error: spec/scopes-and-routes: duplicate path parameter "n" (§route-paths)
+
+## i335_route_conflict_root.volt
+app/i335_route_conflict_root.volt:7:2: error: spec/scopes-and-routes: route HEAD /:rest... is ambiguous with the route at app/i335_route_conflict_root.volt:6:2 (GET /): both match some requests and neither is more specific (§route-conflicts)
 
 ## i35_reserved_param.volt
 app/i35_reserved_param.volt:5:9: error: spec/scopes-and-routes: path parameter "volt" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs

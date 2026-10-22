@@ -287,7 +287,7 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 			}
 		}
 		segs := append(append([]*ast.Segment{}, inh.prefix...), litSeg(seg, ds.Pos()))
-		params, ok := l.pathParams(segs)
+		params, ok := l.pathParams(segs, len(inh.prefix))
 		if !ok {
 			continue
 		}
@@ -317,12 +317,11 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 	method := methodOf(r.Verb())
 	if r.Verb() == "put" {
-		l.errorf(r.Pos(), "routes", "put is not a route verb: the partial update is patch, so write patch %s %s (§routes)", r.Path.String(), r.Handler.String())
-		method = "PATCH"
+		method = l.putReport(r)
 	}
 	l.diags = append(l.diags, stringTypedErrors(r.Path.Segments)...)
 	segs := append(append([]*ast.Segment{}, inh.prefix...), r.Path.Segments...)
-	params, ok := l.pathParams(segs)
+	params, ok := l.pathParams(segs, len(inh.prefix))
 	if !ok {
 		return nil
 	}
@@ -418,6 +417,65 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 		ErrorHandler: inh.errHandler,
 		Pos:          r.Pos(),
 	}
+}
+
+func (l *routeLowering) putReport(r *ast.Route) string {
+	parts := r.Handler.Parts
+	name := parts[len(parts)-1].Name()
+	verb, known, why := "patch", false, ""
+	if len(parts) == 1 {
+		verb, known = l.queryVerb(l.facts.pkgPath, name)
+	} else {
+		switch target, kind := qualifierResolve(parts[0].Name(), l.facts.pkgName, l.facts.imports); kind {
+		case qualRuntime:
+			verb, known = "get", name == "Events"
+			why = "an event route is read with get"
+		case qualImport:
+			verb, known = l.queryVerb(target, name)
+		case qualSelf:
+		default:
+			known = exportedIdentOK(parts[0].Name()) && exportedIdentOK(name)
+		}
+	}
+	if !known {
+		l.errorf(r.Pos(), "routes", "put is not a route verb: the partial update is patch (§routes)")
+		return "PATCH"
+	}
+	switch {
+	case why != "":
+	case verb == "patch":
+		why = "the partial update is patch"
+	default:
+		why = r.Handler.String() + " is routed with " + verb
+	}
+	l.errorf(r.Pos(), "routes", "put is not a route verb: %s, so write %s %s %s (§routes)", why, verb, pathSpelled(r.Path), r.Handler.String())
+	return strings.ToUpper(verb)
+}
+
+func (l *routeLowering) queryVerb(target, name string) (string, bool) {
+	if _, _, ok := l.selectByMethod(target, name); ok {
+		return strings.ToLower(queryMethods["select"]), true
+	}
+	if _, _, cm, ok := l.crudByName(target, name); ok {
+		return strings.ToLower(queryMethods[cm.Op]), true
+	}
+	return "", false
+}
+
+func pathSpelled(p *ast.RoutePath) string {
+	if len(p.Segments) == 0 {
+		return "/"
+	}
+	var b strings.Builder
+	for _, seg := range p.Segments {
+		b.WriteByte('/')
+		if stringTyped(seg) {
+			b.WriteString(":" + seg.Name.Name())
+		} else {
+			b.WriteString(seg.String())
+		}
+	}
+	return b.String()
 }
 
 var queryValueTypes = map[string]bool{
@@ -517,7 +575,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 			at, written = segAt.route.Pos(), segAt.route.Verb()
 		}
 		why := "the generated method a query route binds fixes its verb"
-		if method == "HEAD" {
+		if method == "HEAD" && want == "GET" {
 			why += ", and ServeMux answers HEAD on a get route"
 		}
 		l.errorf(at, "query-routes", "%s is routed with %s, not %s: %s (§query-routes)", ref, strings.ToLower(want), written, why)
@@ -631,14 +689,27 @@ func nameStartReported(name string) bool {
 	return false
 }
 
-func (l *routeLowering) pathParams(segs []*ast.Segment) ([]Param, bool) {
+func (l *routeLowering) pathParams(segs []*ast.Segment, prefix int) ([]Param, bool) {
+	params, diags, ok := paramsOf(segs, prefix)
+	l.diags = append(l.diags, diags...)
+	return params, ok
+}
+
+func paramsOf(segs []*ast.Segment, prefix int) ([]Param, []diag.Diagnostic, bool) {
 	var params []Param
+	var diags []diag.Diagnostic
 	seen := map[string]bool{}
 	ok := true
+	fail := func(i int, pos token.Position, format string, args ...any) {
+		ok = false
+		if i >= prefix {
+			diags = append(diags, diag.Errorf(pos, "spec/scopes-and-routes", format, args...))
+		}
+	}
 	for i, seg := range segs {
 		if !goIdentOK(seg.Name.Name()) {
 			if !nameStartReported(seg.Name.Name()) {
-				l.errorf(seg.Pos(), "scopes-and-routes", "path segment %q must be a plain identifier of letters, digits and underscores (§route-paths)", seg.Name.Name())
+				fail(i, seg.Pos(), "path segment %q must be a plain identifier of letters, digits and underscores (§route-paths)", seg.Name.Name())
 			}
 			ok = false
 			continue
@@ -648,39 +719,34 @@ func (l *routeLowering) pathParams(segs []*ast.Segment) ([]Param, bool) {
 			continue
 		case ast.SegWild:
 			if i != len(segs)-1 {
-				l.errorf(seg.Pos(), "scopes-and-routes", "the wildcard ':%s...' must be the last path segment (§route-paths)", seg.Name.Name())
-				ok = false
+				fail(i, seg.Pos(), "the wildcard ':%s...' must be the last path segment (§route-paths)", seg.Name.Name())
 			}
 		}
 		name := seg.Name.Name()
 		if seen[name] {
-			l.errorf(seg.Pos(), "scopes-and-routes", "duplicate path parameter %q (§route-paths)", name)
-			ok = false
+			fail(i, seg.Pos(), "duplicate path parameter %q (§route-paths)", name)
 			continue
 		}
 		seen[name] = true
 		if !goIdentOK(name) || goKeywords[name] {
-			l.errorf(seg.Pos(), "scopes-and-routes", "path parameter %q must be a valid, non-keyword Go identifier (§route-paths)", name)
-			ok = false
+			fail(i, seg.Pos(), "path parameter %q must be a valid, non-keyword Go identifier (§route-paths)", name)
 			continue
 		}
 		if reservedParamNames[name] {
-			l.errorf(seg.Pos(), "scopes-and-routes", "path parameter %q collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs", name)
-			ok = false
+			fail(i, seg.Pos(), "path parameter %q collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs", name)
 			continue
 		}
 		pt := TString
 		if seg.Type != nil && !stringTyped(seg) {
 			if seg.Type.Name() != string(TInt) {
-				l.errorf(seg.Type.Pos(), "scopes-and-routes", "unknown parameter type %q (§route-paths); valid: int", seg.Type.Name())
-				ok = false
+				fail(i, seg.Type.Pos(), "unknown parameter type %q (§route-paths); valid: int", seg.Type.Name())
 				continue
 			}
 			pt = TInt
 		}
 		params = append(params, Param{Name: name, GoName: name, Type: pt, Wild: seg.Kind == ast.SegWild})
 	}
-	return params, ok
+	return params, diags, ok
 }
 
 func paramSpelled(name string, t ParamType) string {
@@ -887,7 +953,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 		if a.Suffix != "" {
 			segs = append(segs, nameSeg(strings.TrimPrefix(a.Suffix, "/")))
 		}
-		params, ok := l.pathParams(segs)
+		params, ok := l.pathParams(segs, len(inh.prefix))
 		if !ok {
 			continue
 		}

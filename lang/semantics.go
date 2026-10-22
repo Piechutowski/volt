@@ -459,12 +459,17 @@ func (c *checker) plugCheck(p *ast.Plug) {
 }
 
 func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo *routesMemo, seenShape, seenHelper map[string]*RouteInfo) {
+	checked := append([]*ast.Segment{}, inh.prefix...)
 	for _, seg := range sc.Path.Segments {
 		if seg.Kind == ast.SegWild {
 			c.errorf(seg.Pos(), "scopes-and-routes", "a Scope prefix cannot contain a wildcard (§route-paths)")
+			continue
 		}
+		checked = append(checked, seg)
 	}
 	c.diags = append(c.diags, stringTypedErrors(sc.Path.Segments)...)
+	_, prefixDiags, _ := paramsOf(checked, len(inh.prefix))
+	c.diags = append(c.diags, prefixDiags...)
 	next := inherited{
 		prefix:     append(append([]*ast.Segment{}, inh.prefix...), sc.Path.Segments...),
 		pipes:      append([]string{}, inh.pipes...),
@@ -912,7 +917,7 @@ func pathsOverlap(a, b pathShape) bool {
 	}
 	switch {
 	case i == len(a.segs) && i == len(b.segs):
-		return a.wild == b.wild || (a.wild && b.wild)
+		return a.wild == b.wild || i == 0
 	case i == len(a.segs):
 		return a.wild
 	default:
@@ -935,11 +940,11 @@ func pathSubset(a, b pathShape) bool {
 	if len(a.segs) > len(b.segs) || a.wild {
 		return b.wild
 	}
-	return !b.wild || a.wild
+	return !b.wild || len(a.segs) == 0
 }
 
-func methodsOverlap(a, b string) bool { return a == "" || b == "" || a == b }
-func methodSubset(a, b string) bool   { return b == "" || a == b }
+func methodsOverlap(a, b string) bool { return methodSubset(a, b) || methodSubset(b, a) }
+func methodSubset(a, b string) bool   { return b == "" || a == b || (a == "HEAD" && b == "GET") }
 
 func routesAmbiguous(a, b *RouteInfo) bool {
 	if !methodsOverlap(a.Method, b.Method) {

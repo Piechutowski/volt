@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -340,18 +341,44 @@ func TestNestedScopePipelinesAppend(t *testing.T) {
 	}
 }
 
-// TestHeadMatchesGet documents the inherited ServeMux rule (§routes):
-// a GET registration also serves HEAD.
+// TestHeadMatchesGet documents the inherited ServeMux rule (§routes,
+// §query-routes): a GET registration also serves HEAD, with the status
+// and headers of the GET, generated query, default and dataset handlers included.
 func TestHeadMatchesGet(t *testing.T) {
-	h := handler()
-	rec, _ := serve(t, h, "HEAD", "/about-nothing-here")
-	if rec.Code != 404 {
-		t.Errorf("HEAD unknown: %d", rec.Code)
+	h := handlerWithDB(t)
+	for _, tc := range []struct {
+		target string
+		status int
+	}{
+		{"/users", 200},
+		{"/api/users", 200},
+		{"/api/users/1", 200},
+		{"/api/picked?ids=1", 200},
+		{"/ref/tags/go", 200},
+		{"/ms/revenue?year=1", 200},
+		{"/ref/tags/missing", 404},
+		{"/api/users/999", 404},
+		{"/ms/revenue", 400},
+		{"/about-nothing-here", 404},
+	} {
+		get, head := call(h, "GET", tc.target, nil), call(h, "HEAD", tc.target, nil)
+		if get.Code != tc.status || head.Code != tc.status {
+			t.Errorf("%s: GET %d, HEAD %d, want %d for both", tc.target, get.Code, head.Code, tc.status)
+		}
+		if g, hd := get.Header().Get("Content-Type"), head.Header().Get("Content-Type"); g == "" || g != hd {
+			t.Errorf("%s: Content-Type GET %q, HEAD %q, want the same", tc.target, g, hd)
+		}
 	}
-	rec2 := httptest.NewRecorder()
-	h.ServeHTTP(rec2, httptest.NewRequest("HEAD", "/users", nil))
-	if rec2.Code != 200 {
-		t.Errorf("HEAD on a GET route: %d, want 200 (ServeMux GET-matches-HEAD)", rec2.Code)
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	resp, err := http.Head(srv.URL + "/api/users/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil || resp.StatusCode != 200 || !strings.HasPrefix(resp.Header.Get("Content-Type"), volt.MIMEJSON) || len(body) != 0 {
+		t.Errorf("HEAD over the wire: %d %q body %q (%v), want 200 JSON with no body", resp.StatusCode, resp.Header.Get("Content-Type"), body, err)
 	}
 }
 

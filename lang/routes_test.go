@@ -1,6 +1,7 @@
 package lang
 
 import (
+	"net/http"
 	"slices"
 	"strings"
 	"testing"
@@ -25,7 +26,7 @@ func TestRouteIndexMatchesPairwiseScan(t *testing.T) {
 	gen(nil)
 	var routes []*RouteInfo
 	for _, sh := range shapes {
-		for _, method := range []string{"GET", "POST", ""} {
+		for _, method := range []string{"GET", "HEAD", "POST", ""} {
 			routes = append(routes, &RouteInfo{Method: method, shape: sh, Spelled: spelledShape(sh)})
 		}
 	}
@@ -67,6 +68,84 @@ func TestRouteIndexMatchesPairwiseScan(t *testing.T) {
 			t.Fatalf("%s: %d refused and %d accepted: the universe exercises nothing", name, refused, len(accepted))
 		}
 	}
+}
+
+func TestRouteAmbiguityMatchesServeMux(t *testing.T) {
+	var shapes []pathShape
+	var gen func(prefix []string)
+	gen = func(prefix []string) {
+		for _, wild := range []bool{false, true} {
+			shapes = append(shapes, pathShape{segs: slices.Clone(prefix), wild: wild})
+		}
+		if len(prefix) == 3 {
+			return
+		}
+		for _, seg := range []string{"a", "b", ""} {
+			gen(append(slices.Clone(prefix), seg))
+		}
+	}
+	gen(nil)
+	methods := []string{"GET", "HEAD", "POST", ""}
+	refused := 0
+	for _, sa := range shapes {
+		for _, sb := range shapes {
+			for _, ma := range methods {
+				for _, mb := range methods {
+					a, b := &RouteInfo{Method: ma, shape: sa}, &RouteInfo{Method: mb, shape: sb}
+					same := ma == mb && muxPath(sa) == muxPath(sb)
+					want := same || routesAmbiguous(a, b)
+					pa, pb := muxPattern(ma, sa, "p"), muxPattern(mb, sb, "q")
+					if got := muxRefuses(pa, pb); got != want {
+						t.Fatalf("%q then %q: ServeMux refuses %v, the checker %v (same shape %v)", pa, pb, got, want, same)
+					}
+					if want {
+						refused++
+					}
+				}
+			}
+		}
+	}
+	if refused == 0 {
+		t.Fatal("the universe exercises no conflict")
+	}
+}
+
+func muxPath(sh pathShape) string {
+	return strings.TrimPrefix(muxPattern("", sh, ""), " ")
+}
+
+func muxPattern(method string, sh pathShape, param string) string {
+	var b strings.Builder
+	for i, seg := range sh.segs {
+		b.WriteByte('/')
+		if seg == "" && param == "" {
+			b.WriteString("{}")
+		} else if seg == "" {
+			b.WriteString("{" + param + string(rune('0'+i)) + "}")
+		} else {
+			b.WriteString(seg)
+		}
+	}
+	switch {
+	case sh.wild && param == "":
+		b.WriteString("/{...}")
+	case sh.wild:
+		b.WriteString("/{" + param + "rest...}")
+	case b.Len() == 0:
+		b.WriteString("/{$}")
+	}
+	if method == "" {
+		return b.String()
+	}
+	return method + " " + b.String()
+}
+
+func muxRefuses(first, second string) (refused bool) {
+	mux := http.NewServeMux()
+	mux.Handle(first, http.NotFoundHandler())
+	defer func() { refused = recover() != nil }()
+	mux.Handle(second, http.NotFoundHandler())
+	return false
 }
 
 func spelledShape(sh pathShape) string {

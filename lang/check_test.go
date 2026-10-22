@@ -369,6 +369,64 @@ Scope / {
 	}
 }
 
+func TestPutNamesTheVerbToWrite(t *testing.T) {
+	schema := "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string\n}\n\nSelect picked for users where id in :ids\n"
+	cases := []struct{ route, advice string }{
+		{"put /x db.UserList", "db.UserList is routed with get, so write get /x db.UserList"},
+		{"put /x db.UserPicked", "db.UserPicked is routed with get, so write get /x db.UserPicked"},
+		{"put /x/:id(int) db.UserGet", "db.UserGet is routed with get, so write get /x/:id(int) db.UserGet"},
+		{"put /x db.UserCreate", "db.UserCreate is routed with post, so write post /x db.UserCreate"},
+		{"put /x/:id(int) db.UserDelete", "db.UserDelete is routed with delete, so write delete /x/:id(int) db.UserDelete"},
+		{"put /x/:id(int) db.UserUpdate", "the partial update is patch, so write patch /x/:id(int) db.UserUpdate"},
+		{"PUT /events volt.Events", "an event route is read with get, so write get /events volt.Events"},
+		{"Put /x/:id(int) Users.Replace", "the partial update is patch, so write patch /x/:id(int) Users.Replace"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.route, func(t *testing.T) {
+			files := map[string]string{
+				"go.mod":         modFile,
+				"db/schema.volt": schema,
+				"app/r.volt":     "package app\n\nimport (\n\tdb\n)\n\nScope / {\n\tget /keep db.UserList [name: keep]\n\t" + tc.route + "\n}\n",
+			}
+			_, diags := project(t, files)
+			want := "put is not a route verb: " + tc.advice + " (§routes)"
+			if len(diags) != 1 || diags[0].Code != "spec/routes" || diags[0].Msg != want {
+				t.Fatalf("want the one put error %q; got %v", want, diags)
+			}
+			line := tc.advice[strings.Index(tc.advice, "so write ")+len("so write "):]
+			files["app/r.volt"] = strings.Replace(files["app/r.volt"], tc.route, line, 1)
+			_, diags = project(t, files)
+			wantClean(t, diags)
+		})
+	}
+
+	_, diags := project(t, map[string]string{
+		"go.mod":         modFile,
+		"db/schema.volt": schema,
+		"app/r.volt":     "package app\n\nimport (\n\tdb\n)\n\nScope / {\n\tput /x db.UserFetch\n\tput /y volt.Stream\n\tput /z/:slug(string) Users.Replace\n}\n",
+	})
+	generic := "put is not a route verb: the partial update is patch (§routes)"
+	for _, want := range []string{
+		"8:2: error: spec/routes: " + generic,
+		"8:12: error: spec/scopes-and-routes: no generated query db.UserFetch",
+		"9:2: error: spec/routes: " + generic,
+		"9:9: error: spec/scopes-and-routes: the runtime provides no handler volt.Stream",
+		"10:2: error: spec/routes: put is not a route verb: the partial update is patch, so write patch /z/:slug Users.Replace (§routes)",
+		"10:15: error: spec/route-paths: write :slug, not :slug(string)",
+	} {
+		found := false
+		for _, d := range diags {
+			found = found || strings.Contains(d.String(), want)
+		}
+		if !found {
+			t.Errorf("no diagnostic %q; got %v", want, diags)
+		}
+	}
+	if len(diags) != 6 {
+		t.Errorf("want the put error once per line beside the handler and path errors, 6 in all; got %v", diags)
+	}
+}
+
 func TestVetUnusedPipeline(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod": modFile,
@@ -580,7 +638,7 @@ func TestQueryRoutes(t *testing.T) {
 }
 
 func TestQueryRouteErrors(t *testing.T) {
-	schema := "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string\n}\n\nTable notes {\n\tbody string\n}\n\nSelect picked for users where id in :ids\n"
+	schema := "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string\n}\n\nTable notes {\n\tbody string\n}\n\nSelect picked for users where id in :ids\n\nTable tags {\n\tslug string [pk]\n\tlabel string\n}\n"
 	cases := []struct{ name, route, want string }{
 		{"unknown", "get /x db.UserFetch", "no generated query db.UserFetch"},
 		{"case hint", "get /x db.userget", `did you mean "UserGet"`},
@@ -589,6 +647,7 @@ func TestQueryRouteErrors(t *testing.T) {
 		{"string annotation", "get /x/:id(string) db.UserGet", "write :id, not :id(string): a bare path parameter is a string"},
 		{"list verb", "post /x db.UserList", "db.UserList is routed with get, not post: the generated method a query route binds fixes its verb (§query-routes)"},
 		{"head verb", "head /x db.UserList", "db.UserList is routed with get, not head: the generated method a query route binds fixes its verb, and ServeMux answers HEAD on a get route"},
+		{"head on a write", "head /x db.UserCreate", "db.UserCreate is routed with post, not head: the generated method a query route binds fixes its verb (§query-routes)"},
 		{"any verb", "any /x db.UserList", "db.UserList is routed with get, not any"},
 		{"get verb", "delete /x/:id(int) db.UserGet", "db.UserGet is routed with get, not delete"},
 		{"select verb", "options /x db.UserPicked", "db.UserPicked is routed with get, not options"},
@@ -597,6 +656,8 @@ func TestQueryRouteErrors(t *testing.T) {
 		{"put update", "put /x/:id(int) db.UserUpdate", "put is not a route verb: the partial update is patch, so write patch /x/:id(int) db.UserUpdate (§routes)"},
 		{"delete verb", "get /x/:id(int) db.UserDelete", "db.UserDelete is routed with delete, not get"},
 		{"update key", "patch /x db.UserUpdate", `db.UserUpdate loads the row to update by "id", which must be a path parameter of the route; spell it :id(int)`},
+		{"string update key", "patch /x db.TagUpdate", `db.TagUpdate loads the row to update by "slug", which must be a path parameter of the route; spell it :slug (§query-routes)`},
+		{"string path type", "get /x/:slug(int) db.TagGet", "takes string; spell it :slug (§query-routes)"},
 		{"update key elsewhere", "patch /x/:email db.UserUpdate", `path parameter "email" is not a parameter of db.UserUpdate`},
 		{"extra path param", "get /x/:n(int) db.UserList", `path parameter "n" is not a parameter of db.UserList`},
 		{"list in path", "get /x/:ids db.UserPicked", "cannot be a path parameter"},

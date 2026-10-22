@@ -431,7 +431,7 @@ keywords only as the value of `delete:` or `update:`, in the `only:` or
 `order:`, and in the parentheses of a path parameter (`:id(int)`)
 respectively; a literal word is a keyword where a value stands. A
 bare path parameter is a string, so `int` is the one parameter type
-(§route-paths), and `put` is no route word: PATCH is the partial
+written (§route-paths), and `put` is no route word: PATCH is the partial
 update (§routes). The
 words of a migration body are keywords inside a `Migration` only
 (§migrations); elsewhere they are identifiers, so a column may be named
@@ -1864,14 +1864,19 @@ param type = "int" ;
    parameter name MUST be a valid, non-keyword Go identifier, MUST NOT
    be one of the reserved names `w`, `r`, `opts`, `volt`, `cs` (they appear
    in generated signatures and would be shadowed), and MUST be unique
-   within the route's full path (scope prefixes included).
+   within the route's full path (scope prefixes included). The rules
+   of this section hold for a Scope prefix where it is written: its
+   errors are reported once, an empty Scope's included, and nothing
+   beneath a prefix in error registers; a route parameter repeating a
+   prefix parameter is reported at the route.
 3. A bare `:name` is a `string` parameter and `:name(int)` an `int`
    one: the closed type set is `int` and `string`, the Go types the
    model generator emits for routable primary keys, and the annotation
    names a type only when it is not the string, so `int` is the one
-   type written. `:name(string)` is an error naming the bare form, in a
-   route and in a Scope prefix alike, reported once where it is
-   written; it would spell the bare parameter a second way.
+   type written. `:name(string)`, the word in any case, is an error
+   naming the bare form, in a route and in a Scope prefix alike,
+   reported once where it is written; it would spell the bare
+   parameter a second way.
    **Types shape handler signatures, never matching**: a request
    segment that fails to parse as the declared type is that route's
    404, not a fallthrough to a sibling route.
@@ -1905,9 +1910,13 @@ verb  = "get" | "post" | "patch" | "delete"
    (§query-routes).
 2. `put` is not a verb. PATCH is the partial update, the one a
    generated update performs (§query-routes), and PUT, which means
-   replace in HTTP, would be a second spelling of it; a route line
-   opening with `put` is an error naming `patch`, reported once, and
-   the line registers nothing.
+   replace in HTTP, would be a second spelling of it. A route line
+   opening with `put`, the word in any case, is an error naming the
+   verb the line takes: the one its method fixes on a query route
+   (§query-routes), `get` on an event route (§event-routes), and
+   `patch` otherwise. The line is read as that verb, so the error is
+   reported once, and it registers nothing. Outside a Scope a `put`
+   line is the error of clause 1.
 3. A route's **full path** is the enclosing scopes' prefixes followed
    by its own path, in nesting order.
 4. Registration semantics are `http.ServeMux` (Go ≥ 1.22) exactly:
@@ -2216,11 +2225,16 @@ Scope settings (the complete set):
    (Braces cannot appear in a literal segment, §route-paths, so the markers
    cannot collide with any literal.)
 2. Two routes **overlap** when some request matches both: their methods
-   overlap (equal, or either is `any`) and their paths overlap (some
-   request path satisfies both patterns). A route is **more specific**
-   than another when every request it matches the other also matches,
-   and not conversely. Two overlapping routes where **neither is more
-   specific** are ambiguous — an error naming both source positions.
+   overlap (equal, either is `any`, or one is `get` and the other
+   `head`, since ServeMux serves HEAD for a GET pattern, §routes) and
+   their paths overlap (some request path satisfies both patterns; the
+   root path `/` satisfies a wildcard at the root, whose rest is then
+   empty). A route is **more specific** than another when every request
+   it matches the other also matches, and not conversely; the methods
+   of a `head` route are a subset of a `get` route's. Two overlapping
+   routes where **neither is more specific** are ambiguous, an error
+   naming both source positions: `get /a/:x` and `head /:y/b` both
+   match HEAD `/a/b`.
    Identical method-and-shape is the degenerate case (reported as a
    duplicate); routes differing in literal-vs-parameter at some
    position while one is strictly more specific (e.g. `/users/new` vs

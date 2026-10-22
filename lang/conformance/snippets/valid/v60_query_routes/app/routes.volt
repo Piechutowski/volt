@@ -1,4 +1,4 @@
-// spec: §query-routes, §formats — query routes: selects and default CRUD bound by name, parameters from path, body and query string
+// spec: §query-routes, §formats, §generated-client, query routes: selects and default CRUD bound by name, parameters from path, body and query string, and a write named by [name:] takes the name for its client method
 package app
 
 import (
@@ -10,6 +10,7 @@ Scope /api {
 	get    /users/:id(int) db.UserGet
 	post   /users            db.UserCreate
 	patch  /users/:id(int) db.UserUpdate
+	patch  /people/:id(int) db.UserUpdate [name: user_amend]
 	delete /users/:id(int) db.UserDelete
 	get    /picked           db.UserPicked
 	get    /named            db.UserNamed
