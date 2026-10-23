@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"flag"
 	"os"
 	"path/filepath"
@@ -477,5 +478,157 @@ func TestLowerRebuildIntroducingARowidAlias(t *testing.T) {
 	db := memoryDB(t)
 	if _, err := rt.MigrateUp(context.Background(), db, ms); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestExpressionDefaultAddFillsRowsWithoutARebuild pins the add of a
+// column whose default is not a constant (spec §migrations rule 8): the
+// five statements, every existing row filled once, the definition the
+// schema declares, read at once by a connection that loaded the old
+// schema, no drift from the target, and down and up again.
+func TestExpressionDefaultAddFillsRowsWithoutARebuild(t *testing.T) {
+	ctx := context.Background()
+	src := "package db\n\nTable posts {\n  id         int       [pk, increment]\n  title      string\n  created_at time.Time [default: `CURRENT_TIMESTAMP`]\n  stamp      int       [null, index, default: `strftime('%s', 'now')`]\n}\n\nMigration 0001__init {\n  create table posts {\n    id    int    [pk, increment]\n    title string\n  }\n}\n\nMigration 0002__stamps {\n  alter table posts {\n    add created_at time.Time [default: `CURRENT_TIMESTAMP`]\n    add stamp int [null, index, default: `strftime('%s', 'now')`]\n  }\n}\n"
+	f, info := parseChecked(t, "t.volt", src)
+	ms, err := Lower(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantUp := []string{
+		"ALTER TABLE posts ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT 0",
+		"UPDATE posts SET created_at = (CURRENT_TIMESTAMP)",
+		"PRAGMA writable_schema = ON",
+		"UPDATE sqlite_schema SET sql = replace(sql, ', created_at TIMESTAMP NOT NULL DEFAULT 0', ', created_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP)')\nWHERE type = 'table' AND name = 'posts' COLLATE NOCASE",
+		"PRAGMA writable_schema = RESET",
+		"ALTER TABLE posts ADD COLUMN stamp INTEGER",
+		"UPDATE posts SET stamp = (strftime('%s', 'now'))",
+		"PRAGMA writable_schema = ON",
+		"UPDATE sqlite_schema SET sql = replace(sql, ', stamp INTEGER', ', stamp INTEGER DEFAULT (strftime(''%s'', ''now''))')\nWHERE type = 'table' AND name = 'posts' COLLATE NOCASE",
+		"PRAGMA writable_schema = RESET",
+		"CREATE INDEX idx_posts_stamp ON posts (stamp)",
+	}
+	if got := strings.Join(ms[1].Up, ";\n"); got != strings.Join(wantUp, ";\n") {
+		t.Errorf("up of 0002:\n%s\nwant:\n%s", got, strings.Join(wantUp, ";\n"))
+	}
+	if ms[1].ForeignKeysOff {
+		t.Error("an add takes no foreign-key bracket")
+	}
+
+	path := filepath.Join(t.TempDir(), "posts.db")
+	db, err := rt.Open("sqlite3", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	other, err := rt.Open("sqlite3", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	if _, err := rt.MigrateUp(ctx, db, ms[:1]); err != nil {
+		t.Fatal(err)
+	}
+	before, err := Read(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, "INSERT INTO posts (title) VALUES ('one'), ('two')"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := other.ExecContext(ctx, "INSERT INTO posts (title) VALUES ('three')"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rt.MigrateUp(ctx, db, ms); err != nil {
+		t.Fatalf("0002 on a table with rows: %v", err)
+	}
+
+	var filled string
+	if err := db.QueryRowContext(ctx, "SELECT group_concat(typeof(created_at) || '/' || typeof(stamp)) FROM posts").Scan(&filled); err != nil {
+		t.Fatal(err)
+	}
+	if filled != "text/integer,text/integer,text/integer" {
+		t.Errorf("existing rows hold %q, want every row filled", filled)
+	}
+	for _, conn := range []*sql.DB{db, other} {
+		if _, err := conn.ExecContext(ctx, "INSERT INTO posts (title) VALUES ('later')"); err != nil {
+			t.Fatalf("insert after 0002: %v", err)
+		}
+		if _, err := conn.ExecContext(ctx, "INSERT INTO posts (title, created_at) VALUES ('null', NULL)"); err == nil || !strings.Contains(err.Error(), "NOT NULL") {
+			t.Errorf("explicit NULL after 0002: %v, want NOT NULL refused", err)
+		}
+	}
+	var nulls int
+	if err := other.QueryRowContext(ctx, "SELECT count(*) FROM posts WHERE created_at IS NULL OR stamp IS NULL").Scan(&nulls); err != nil {
+		t.Fatal(err)
+	}
+	if nulls != 0 {
+		t.Errorf("%d rows without a default after 0002", nulls)
+	}
+	var integrity string
+	if err := db.QueryRowContext(ctx, "PRAGMA integrity_check").Scan(&integrity); err != nil || integrity != "ok" {
+		t.Errorf("integrity_check: %q %v", integrity, err)
+	}
+
+	ddl, err := sqlite.Generate(f, info, sqlite.Options{Source: "t.volt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetDB := memoryDB(t)
+	if _, err := targetDB.ExecContext(ctx, string(ddl)); err != nil {
+		t.Fatal(err)
+	}
+	target, err := Read(ctx, targetDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fold, err := Read(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if drifts := Diff(target, fold); len(drifts) > 0 {
+		t.Errorf("0002 drifts from the schema: %+v", drifts)
+	}
+	if _, err := rt.MigrateDown(ctx, db, ms); err != nil {
+		t.Fatalf("down of 0002: %v", err)
+	}
+	after, err := Read(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if drifts := Diff(before, after); len(drifts) > 0 {
+		t.Errorf("down of 0002 left another structure than 0001 made: %+v", drifts)
+	}
+	if _, err := rt.MigrateUp(ctx, db, ms); err != nil {
+		t.Fatalf("up again: %v", err)
+	}
+}
+
+// TestExpressionDefaultAddYieldingNullRollsBack pins the one failure
+// only rows reveal (spec §the-fold rule 4): a NOT NULL column whose
+// expression default yields NULL fails at the backfill, and the
+// migration leaves the table as it was.
+func TestExpressionDefaultAddYieldingNullRollsBack(t *testing.T) {
+	ctx := context.Background()
+	src := "package db\n\nTable posts {\n  id   int [pk, increment]\n  seen int [default: `nullif(1, 1)`]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n  }\n}\n\nMigration 0002__seen {\n  alter table posts {\n    add seen int [default: `nullif(1, 1)`]\n  }\n}\n"
+	_, info := parseChecked(t, "t.volt", src)
+	ms, err := Lower(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db := memoryDB(t)
+	if _, err := rt.MigrateUp(ctx, db, ms[:1]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, "INSERT INTO posts DEFAULT VALUES"); err != nil {
+		t.Fatal(err)
+	}
+	_, err = rt.MigrateUp(ctx, db, ms)
+	var me *rt.MigrationError
+	if !errors.As(err, &me) || me.Index != 2 || !strings.Contains(err.Error(), "NOT NULL") {
+		t.Fatalf("0002 over a row: %v, want the backfill refused", err)
+	}
+	var cols int
+	if err := db.QueryRowContext(ctx, "SELECT count(*) FROM pragma_table_info('posts') WHERE name = 'seen'").Scan(&cols); err != nil || cols != 0 {
+		t.Errorf("seen after the rollback: %d %v, want no column", cols, err)
 	}
 }

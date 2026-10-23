@@ -131,11 +131,11 @@ CREATE INDEX idx_posts_views ON posts (views) WHERE views > 0;
 		unclosed: "rule 9 refuses the rebuild while posts.title, NOT NULL and new, has no from: or default:; the user supplies one",
 	},
 	{
-		name:   "a column with an expression default only in the schema is a rebuild",
+		name:   "a column with an expression default only in the schema is an add",
 		fold:   postsDDL,
-		target: strings.Replace(postsDDL, "  body TEXT,\n", "  body TEXT,\n  seen TIMESTAMP DEFAULT (CURRENT_TIMESTAMP),\n", 1),
-		want:   []string{"rebuild table comments {\n  id int [pk, increment]\n  post_id int [ref: posts.id]\n  body string [null]\n  seen time.Time [null, default: `CURRENT_TIMESTAMP`]\n}"},
-		reason: "column comments.seen is in the schema but not in the fold and has an expression default, which add cannot take",
+		target: strings.Replace(postsDDL, "  body TEXT,\n", "  body TEXT,\n  seen TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP),\n", 1),
+		want:   []string{"alter table comments {\n  add seen time.Time [default: `CURRENT_TIMESTAMP`]\n}"},
+		reason: "column comments.seen is in the schema but not in the fold",
 	},
 	{
 		name:   "a nullable foreign key only in the schema is an add",

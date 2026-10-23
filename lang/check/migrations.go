@@ -142,8 +142,9 @@ func (c *checker) migrationCheck(d *ast.Migration) *MigrationInfo {
 		c.errorf(d.Name.Pos(), "migrations", "migration name %q is not four or more digits, two underscores and a label, like 0001__create_users (§migrations)", name)
 	}
 	c.settingsCheck(d.Settings, "migrations", migrationSettings)
-	c.operationsCheck(d.Up, !d.UpDown)
-	c.operationsCheck(d.Down, false)
+	noTx := d.Settings.Get("no_transaction") != nil
+	c.operationsCheck(d.Up, !d.UpDown, noTx)
+	c.operationsCheck(d.Down, false, noTx)
 
 	irreversible := d.Settings.Get("irreversible") != nil
 	reversible := !irreversible
@@ -197,9 +198,10 @@ func inversesMissing(op ast.Operation) []missingInverse {
 }
 
 // operationsCheck checks the operations of one body; flat says the
-// body is a flat one, whose typed drops are inverse adds (spec
-// §migrations rules 8 and 12).
-func (c *checker) operationsCheck(ops []ast.Operation, flat bool) {
+// body is a flat one, whose typed drops are inverse adds, and noTx
+// that the migration is no_transaction (spec §migrations rules 8 and
+// 12).
+func (c *checker) operationsCheck(ops []ast.Operation, flat, noTx bool) {
 	for _, op := range ops {
 		switch op := op.(type) {
 		case *ast.CreateTable:
@@ -212,14 +214,14 @@ func (c *checker) operationsCheck(ops []ast.Operation, flat bool) {
 			for _, item := range op.Items {
 				switch item := item.(type) {
 				case *ast.AlterAdd:
-					c.addColumnCheck(item.Column, fmt.Sprintf("add %q to table %q", item.Column.Name.Name(), op.Name.Name()))
+					c.addColumnCheck(item.Column, fmt.Sprintf("add %q to table %q", item.Column.Name.Name(), op.Name.Name()), noTx)
 				case *ast.AlterDrop:
 					if item.Type == nil {
 						break
 					}
 					shape := &ast.Column{Name: item.Name, Type: item.Type, Settings: item.Settings}
 					if flat {
-						c.addColumnCheck(shape, fmt.Sprintf("drop %q from table %q, whose shape is the inverse add", item.Name.Name(), op.Name.Name()))
+						c.addColumnCheck(shape, fmt.Sprintf("drop %q from table %q, whose shape is the inverse add", item.Name.Name(), op.Name.Name()), noTx)
 					} else {
 						c.migrationColumnCheck(shape, migrationColumnSettings)
 					}
@@ -335,8 +337,9 @@ func refActionOf(s *ast.Setting) string {
 // addColumnCheck enforces SQLite's ADD COLUMN rules on an added column
 // and, in a flat body, on the shape of a dropped one, which is the
 // inverse add (spec §migrations rules 8 and 12); head names the item
-// for the diagnostic.
-func (c *checker) addColumnCheck(col *ast.Column, head string) {
+// for the diagnostic and noTx says the migration is no_transaction,
+// which cannot hold the schema edit of an expression default.
+func (c *checker) addColumnCheck(col *ast.Column, head string, noTx bool) {
 	cd := c.migrationColumnCheck(col, migrationColumnSettings)
 	keyed := false
 	for _, s := range []string{"pk", "increment"} {
@@ -350,9 +353,9 @@ func (c *checker) addColumnCheck(col *ast.Column, head string) {
 	if !cd.Nullable && def == nil && !keyed && ref == nil {
 		c.errorf(col.Pos(), "migrations", "%s: a column without null is NOT NULL and needs a default:, since the rows already in the table must be filled (§migrations)", head)
 	}
-	if def != nil {
+	if def != nil && noTx {
 		if _, expr := def.Value.(*ast.FuncExpr); expr {
-			c.errorf(def.Value.Pos(), "migrations", "%s: the default must be a literal; SQLite's ADD COLUMN takes no expression default (§migrations)", head)
+			c.errorf(def.Value.Pos(), "migrations", "%s: an expression default is added by editing the table's definition inside the migration's transaction, and a no_transaction migration has none; move the add to a migration of its own (§migrations)", head)
 		}
 	}
 	if ref == nil {

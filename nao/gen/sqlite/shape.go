@@ -42,6 +42,10 @@ func TypeVolt(sqlType string) string {
 // string quoted, a boolean as 1 or 0.
 func DefaultSQL(v ast.Node) (string, error) { return defaultSQL(v) }
 
+// StringSQL renders s as a SQLite string literal, its single quotes
+// doubled (spec §migrations rule 8).
+func StringSQL(s string) string { return stringQuote(s) }
+
 // TableDDL renders the CREATE TABLE statement of a shape body, without
 // the trailing semicolon (spec §migrations rules 5, 6 and 9): the
 // columns, the primary key of its pk columns in order, and a foreign

@@ -188,8 +188,8 @@ db/i178_migration_down_without_up.volt:10:3: error: syntax: a down block follows
 ## i17_one_part_handler.volt
 app/i17_one_part_handler.volt:5:9: error: spec/scopes-and-routes: package "app" declares no tables, so it has no query Show; a query of an imported data package is written qualified (§query-routes)
 
-## i180_migration_add_expression_default.volt
-db/i180_migration_add_expression_default.volt:18:37: error: spec/migrations: add "created" to table "users": the default must be a literal; SQLite's ADD COLUMN takes no expression default (§migrations)
+## i180_migration_add_expression_default_no_transaction.volt
+db/i180_migration_add_expression_default_no_transaction.volt:18:37: error: spec/migrations: add "created" to table "users": an expression default is added by editing the table's definition inside the migration's transaction, and a no_transaction migration has none; move the add to a migration of its own (§migrations)
 
 ## i181_migration_no_tables.volt
 db/i181_migration_no_tables.volt:5:1: error: spec/migrations: migration "0001__init" in a package that declares no tables: a migration is an element of the package whose tables it migrates (§migrations)

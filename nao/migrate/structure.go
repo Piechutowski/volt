@@ -529,17 +529,15 @@ func columnIn(name string, cols []Column) bool {
 
 // addRefusal says why alter table cannot add the column under SQLite's
 // rules (spec §migrations rule 8), or "" when add makes it: a primary
-// key column, a NOT NULL column without a default, an expression
-// default, a NOT NULL foreign key and a foreign key with a default
-// other than NULL all take a rebuild.
+// key column, a NOT NULL column without a default, a NOT NULL foreign
+// key and a foreign key with a default other than NULL all take a
+// rebuild.
 func addRefusal(t *Table, c Column) string {
 	switch {
 	case c.PK != 0:
 		return "is in the primary key, which add cannot make: rebuild the table"
 	case c.NotNull && c.Default == "":
 		return "is NOT NULL without a default, which add cannot fill: rebuild the table with a from: or a default: for it, or add it with a default:"
-	case c.Default != "" && defaultExpr(c.Default):
-		return "has an expression default, which add cannot take: rebuild the table"
 	case c.NotNull && columnReferences(t, c.Name):
 		return "is a NOT NULL foreign key, which add cannot make: rebuild the table"
 	case c.Default != "" && !strings.EqualFold(c.Default, "NULL") && columnReferences(t, c.Name):
@@ -891,14 +889,6 @@ func exprVolt(e string) (string, bool) {
 		return "", false
 	}
 	return "`" + e + "`", true
-}
-
-func defaultExpr(d string) bool {
-	if len(d) >= 2 && d[0] == '\'' && d[len(d)-1] == '\'' {
-		return false
-	}
-	_, err := strconv.ParseFloat(d, 64)
-	return err != nil
 }
 
 // indexVolt renders an index as an Indexes block line or the tail of a

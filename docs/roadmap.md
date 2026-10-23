@@ -87,6 +87,7 @@ report engine when a consumer exists.
   - [x] The ledger `volt_migrations` and `rt.MigrateUp`, `rt.MigrateDown`, `rt.MigrateStatus` (§migration-ledger)
   - [x] `volt migration new | check | up | down | status | sql`, and `volt_migrations.go` with `Migrate` for the binary (§migration-tooling)
   - [x] The pragma bracket around `rebuild table` and `drop table`, `foreign_key_check` before commit; `no_transaction` for what needs it
+  - [x] `add` takes an expression default (`CURRENT_TIMESTAMP`) without a rebuild: the column added, every row backfilled, the definition edited through `writable_schema` in the same transaction (§migrations rule 8); the drift report proposes `add` for it
   - [x] No fake `down`: an irreversible migration refuses `down` with its name
   - *hand* data migrations, as `exec`
 - [ ] Report engine, when a consumer exists

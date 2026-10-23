@@ -3237,7 +3237,7 @@ Migration 0002__users_bio {
 8. **`alter table`.** Each item is one `ALTER TABLE` statement, in
    the written order. `add` is `ADD COLUMN` under SQLite's rules,
    checked here rather than at run time: a column without `null` MUST
-   carry a `default:`; the default MUST be a literal; `pk` and
+   carry a `default:`; `pk` and
    `increment` are errors; `ref:` requires the column to carry `null`;
    a column with `ref:` takes no `default:`, since SQLite refuses to
    add a `REFERENCES` column with a default other than NULL to a table
@@ -3246,6 +3246,31 @@ Migration 0002__users_bio {
    INDEX` under the derived name (§indexes), so a unique column is
    added without a rebuild, where SQLite's own `ADD COLUMN ... UNIQUE`
    is refused, and its inverse drops the index before the column.
+   A column whose `default:` is an expression literal is added
+   without a rebuild too, although SQLite's `ADD COLUMN` refuses a
+   default that is not a constant (`CURRENT_TIMESTAMP`) on a table
+   that has rows. It lowers to five statements, run inside the
+   migration's transaction: the `ADD COLUMN` of the column without
+   its default, NOT NULL with the placeholder `DEFAULT 0` unless it
+   carries `null`; `UPDATE <table> SET <column> = <default>`, which
+   writes the default's value into every row, so that a NOT NULL
+   column whose default yields NULL fails the migration here;
+   `PRAGMA writable_schema = ON`; an `UPDATE sqlite_schema` that
+   replaces, in the table's `CREATE TABLE` text, the definition the
+   `ADD COLUMN` appended with the column's own; and `PRAGMA
+   writable_schema = RESET`, which reloads the schema; then the
+   column's `CREATE INDEX`, as above. This is SQLite's documented
+   procedure for changing the default of a column. It is sound
+   because the `UPDATE` stores the column in every row, so no row
+   ever reads the default from the definition, and because the `ADD
+   COLUMN` advanced the schema version in the same transaction, so
+   every other connection reads the edited definition once the
+   migration commits. A `no_transaction` migration has no
+   transaction to hold the five, so an expression default there is
+   an error in an `add` and in the shape of a typed `drop` of a flat
+   body, which is its inverse `add`. A connection in SQLite's
+   defensive mode refuses the edit, and the migration fails and
+   rolls back.
    `drop` is `DROP COLUMN`; the
    optional type and settings are the dropped column's shape, which
    in a flat body is the inverse `add` and MUST satisfy the `add`
@@ -3376,10 +3401,13 @@ true. What is checked instead is their composition.
 4. **Lemma.** Because the fold runs on the engine that will run the
    migrations, a migration SQLite would refuse (dropping an indexed
    column, say) is refused at check time, with SQLite's own message.
-   The one run-time exception is a NOT NULL column added to a
-   table that already has rows, which the fold's empty database
-   cannot see and `alter table` (§migrations) guards by requiring a
-   default. Once the fold is read, the check also reverts the
+   The run-time exceptions are what only rows reveal, which the
+   fold's empty database cannot see: a NOT NULL column added to a
+   table that already has rows, which `alter table` (§migrations)
+   guards by requiring a default, and an added NOT NULL column whose
+   expression default yields NULL, which the backfill of that `add`
+   refuses with SQLite's own message, rolling the migration back.
+   Once the fold is read, the check also reverts the
    reversible migrations above the last irreversible one, from the
    top down, and applies them again in the fold database, so an
    inverse SQLite would refuse is refused at check time as well; a

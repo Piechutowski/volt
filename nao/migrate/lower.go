@@ -305,15 +305,23 @@ func shapeCreate(table string, body []ast.TableItem) ([]string, error) {
 	return append([]string{create}, indexes...), nil
 }
 
-// columnAdd lowers an add item: ADD COLUMN, then the CREATE [UNIQUE]
-// INDEX of a column that carries unique or index, which SQLite's ADD
-// COLUMN takes no part of (spec §migrations rule 8).
+// columnAdd lowers an add item: ADD COLUMN, the backfill and the schema
+// edit of an expression default, then the CREATE [UNIQUE] INDEX of a
+// column that carries unique or index, which SQLite's ADD COLUMN takes
+// no part of (spec §migrations rule 8).
 func columnAdd(table string, col *ast.Column) ([]string, error) {
 	def, err := sqlite.ColumnDDL(col)
 	if err != nil {
 		return nil, fmt.Errorf("alter table %s: %w", table, err)
 	}
 	out := []string{"ALTER TABLE " + sqlite.Ident(table) + " ADD COLUMN " + def}
+	if s := col.Settings.Get("default"); s != nil {
+		if _, expr := s.Value.(*ast.FuncExpr); expr {
+			if out, err = expressionDefaultAdd(table, col, def, s.Value); err != nil {
+				return nil, err
+			}
+		}
+	}
 	if ix := check.ColumnIndex(col); ix != nil {
 		stmts, err := indexCreate(table, ix)
 		if err != nil {
@@ -322,6 +330,31 @@ func columnAdd(table string, col *ast.Column) ([]string, error) {
 		out = append(out, stmts...)
 	}
 	return out, nil
+}
+
+// expressionDefaultAdd lowers the add of a column whose default is an
+// expression, which SQLite's ADD COLUMN refuses on a table with rows
+// unless it is a constant (spec §migrations rule 8): the column added
+// without it, every row written with its value, and the definition the
+// ADD COLUMN appended replaced by def in the table's CREATE TABLE text.
+func expressionDefaultAdd(table string, col *ast.Column, def string, value ast.Node) ([]string, error) {
+	name := col.Name.Name()
+	sqlType, _ := sqlite.TypeSQL(col.Type.String())
+	staged := sqlite.Ident(name) + " " + sqlType
+	if col.Settings.Get("null") == nil {
+		staged += " NOT NULL DEFAULT 0"
+	}
+	backfill, err := sqlite.DefaultSQL(value)
+	if err != nil {
+		return nil, fmt.Errorf("alter table %s: column %q: %w", table, name, err)
+	}
+	return []string{
+		"ALTER TABLE " + sqlite.Ident(table) + " ADD COLUMN " + staged,
+		"UPDATE " + sqlite.Ident(table) + " SET " + sqlite.Ident(name) + " = " + backfill,
+		"PRAGMA writable_schema = ON",
+		"UPDATE sqlite_schema SET sql = replace(sql, " + sqlite.StringSQL(", "+staged) + ", " + sqlite.StringSQL(", "+def) + ")\nWHERE type = 'table' AND name = " + sqlite.StringSQL(table) + " COLLATE NOCASE",
+		"PRAGMA writable_schema = RESET",
+	}, nil
 }
 
 func indexCreate(table string, ix *ast.Index) ([]string, error) {
