@@ -1,7 +1,7 @@
 // The integration fixture: one schema exercising every v0 CRUD shape and
 // the v2 dynamic query layer against a real SQLite. The
-// generated siblings (nao_models.go, nao_queries.go, nao_dyn.go,
-// nao_schema.sql) are checked in and drift-tested; refresh them with
+// generated siblings (volt_models.go, volt_queries.go, volt_dyn.go,
+// volt_schema.sql) are checked in and drift-tested; refresh them with
 // 'volt gen ./nao/itest --sql' from the repository root.
 package itest
 

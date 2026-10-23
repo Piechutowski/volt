@@ -17,6 +17,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -79,8 +80,8 @@ func command() *cli.Command {
 				Usage:     "generate Go for the named packages: models and queries for data packages, routers for routing packages. Packages as in Go: none = the current directory, dir, or dir/... for everything beneath",
 				ArgsUsage: "[packages]",
 				Flags: []cli.Flag{
-					&cli.BoolFlag{Name: "models-only", Aliases: []string{"m"}, Usage: "emit only nao_models.go; skip the query layers"},
-					&cli.BoolFlag{Name: "sql", Usage: "also write nao_schema.sql (SQLite DDL and seed inserts)"},
+					&cli.BoolFlag{Name: "models-only", Aliases: []string{"m"}, Usage: "emit only volt_models.go; skip the query layers"},
+					&cli.BoolFlag{Name: "sql", Usage: "also write volt_schema.sql (SQLite DDL and seed inserts)"},
 					&cli.BoolFlag{Name: "verify", Usage: "prove every generated Go file is gofmt-canonical and type-checks in its package before writing (a generator self-check)"},
 					&cli.StringFlag{Name: "o", Usage: "write into `DIR` instead of the package directory (one package); the client lands beside the models as volt_client.go"},
 					&cli.StringFlag{Name: "parts", Usage: "comma-separated `LIST` of what to write: models, queries (the query layers and volt_migrations.go), router, client, sql (default: every Go part)"},
@@ -386,7 +387,7 @@ func genRun(ctx context.Context, c *cli.Command) error {
 		if !pkg.HasSchema() || !parts["queries"] {
 			continue
 		}
-		for _, name := range []string{"nao_selects.go", "nao_validate.go", "volt_migrations.go"} {
+		for _, name := range []string{"volt_selects.go", "volt_validate.go", "volt_migrations.go"} {
 			stale := filepath.Join(dirOf(pkg), name)
 			if produced[stale] {
 				continue
@@ -396,6 +397,21 @@ func genRun(ctx context.Context, c *cli.Command) error {
 					return cli.Exit(err.Error(), 2)
 				}
 				fmt.Println(stale, "(removed: no longer generated)")
+			}
+		}
+	}
+	dirs := map[string]bool{}
+	for _, f := range out {
+		dirs[filepath.Dir(f.path)] = true
+	}
+	for _, dir := range slices.Sorted(maps.Keys(dirs)) {
+		for _, name := range []string{"nao_models.go", "nao_queries.go", "nao_dyn.go", "nao_validate.go", "nao_selects.go", "nao_schema.sql"} {
+			old := filepath.Join(dir, name)
+			if genMarked(old) {
+				if err := os.Remove(old); err != nil {
+					return cli.Exit(err.Error(), 2)
+				}
+				fmt.Println(old, "(removed: generated files are named volt_*)")
 			}
 		}
 	}
@@ -551,11 +567,11 @@ func partsParse(list string, modelsOnly, sql bool) (map[string]bool, error) {
 
 func partOf(name string) string {
 	switch base := filepath.Base(name); {
-	case base == "nao_models.go":
+	case base == "volt_models.go":
 		return "models"
-	case base == "nao_schema.sql":
+	case base == "volt_schema.sql":
 		return "sql"
-	case strings.HasPrefix(base, "nao_"), base == "volt_migrations.go":
+	case base == "volt_queries.go", base == "volt_dyn.go", base == "volt_validate.go", base == "volt_selects.go", base == "volt_migrations.go":
 		return "queries"
 	case base == "volt_client.go":
 		return "client"

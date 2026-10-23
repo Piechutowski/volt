@@ -1,6 +1,6 @@
 // Selects of every shape (spec §selects-over-groups): scalar parameters
 // over the model row, a list parameter, literals, a shared projection, a
-// star-form exclusion, an ordering and a bare select, so nao_selects.go
+// star-form exclusion, an ordering and a bare select, so volt_selects.go
 // has a golden beside the other generated files.
 package metrics
 

@@ -16,7 +16,7 @@ type Options struct {
 	// Package overrides the package clause; empty means the Volt
 	// package's name (§projects-and-packages).
 	Package string
-	// ModelsOnly emits just nao_models.go: the structs and their
+	// ModelsOnly emits just volt_models.go: the structs and their
 	// changesets, every type the wire carries that Volt generates (spec
 	// §changesets).
 	// Otherwise the query layers follow, and volt_migrations.go for a
@@ -48,14 +48,14 @@ func Generate(pkg *lang.Package, opts Options) ([]File, error) {
 		name string
 		fn   func() ([]byte, error)
 	}
-	emits := []emit{{"nao_models.go", func() ([]byte, error) { return plan.Models(gopts) }}}
+	emits := []emit{{"volt_models.go", func() ([]byte, error) { return plan.Models(gopts) }}}
 	if !opts.ModelsOnly {
 		emits = append(emits,
-			emit{"nao_queries.go", func() ([]byte, error) { return plan.Queries(gopts) }},
-			emit{"nao_dyn.go", func() ([]byte, error) { return plan.Dyn(gopts) }},
-			emit{"nao_validate.go", func() ([]byte, error) { return plan.Validators(pkg.Validators, gopts) }})
+			emit{"volt_queries.go", func() ([]byte, error) { return plan.Queries(gopts) }},
+			emit{"volt_dyn.go", func() ([]byte, error) { return plan.Dyn(gopts) }},
+			emit{"volt_validate.go", func() ([]byte, error) { return plan.Validators(pkg.Validators, gopts) }})
 		if fns := pkg.SelectFns(); len(fns) > 0 {
-			emits = append(emits, emit{"nao_selects.go", func() ([]byte, error) { return plan.Selects(fns, gopts) }})
+			emits = append(emits, emit{"volt_selects.go", func() ([]byte, error) { return plan.Selects(fns, gopts) }})
 		}
 		if len(pkg.Schema().Migrations) > 0 {
 			emits = append(emits, emit{"volt_migrations.go", func() ([]byte, error) {
@@ -64,7 +64,7 @@ func Generate(pkg *lang.Package, opts Options) ([]File, error) {
 		}
 	}
 	if opts.SQL {
-		emits = append(emits, emit{"nao_schema.sql", func() ([]byte, error) {
+		emits = append(emits, emit{"volt_schema.sql", func() ([]byte, error) {
 			return sqlite.Generate(pkg.Merged(), pkg.Schema(), sqlite.Options{Source: opts.Source})
 		}})
 	}

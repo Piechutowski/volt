@@ -110,7 +110,7 @@ func fixture(t *testing.T) (http.Handler, *volt.Broker) {
 	if err != nil {
 		panic(err)
 	}
-	ddl, err := os.ReadFile(filepath.Join("blog", "db", "nao_schema.sql"))
+	ddl, err := os.ReadFile(filepath.Join("blog", "db", "volt_schema.sql"))
 	if err != nil {
 		panic(err)
 	}

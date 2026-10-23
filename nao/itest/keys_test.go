@@ -340,7 +340,7 @@ func TestOldLoweringFoldsEqual(t *testing.T) {
 
 func schemaDDL(t *testing.T) string {
 	t.Helper()
-	ddl, err := os.ReadFile("nao_schema.sql")
+	ddl, err := os.ReadFile("volt_schema.sql")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -242,16 +242,16 @@ func TestGoldenCompiles(t *testing.T) {
 			t.Fatal(err)
 		}
 		base := filepath.Base(strings.TrimSuffix(golden, ".go.golden"))
-		outName := "nao_models.go"
+		outName := "volt_models.go"
 		switch {
 		case strings.HasSuffix(base, "_queries"):
-			base, outName = strings.TrimSuffix(base, "_queries"), "nao_queries.go"
+			base, outName = strings.TrimSuffix(base, "_queries"), "volt_queries.go"
 		case strings.HasSuffix(base, "_dyn"):
-			base, outName = strings.TrimSuffix(base, "_dyn"), "nao_dyn.go"
+			base, outName = strings.TrimSuffix(base, "_dyn"), "volt_dyn.go"
 		case strings.HasSuffix(base, "_validate"):
-			base, outName = strings.TrimSuffix(base, "_validate"), "nao_validate.go"
+			base, outName = strings.TrimSuffix(base, "_validate"), "volt_validate.go"
 		case strings.HasSuffix(base, "_selects"):
-			base, outName = strings.TrimSuffix(base, "_selects"), "nao_selects.go"
+			base, outName = strings.TrimSuffix(base, "_selects"), "volt_selects.go"
 		case strings.HasSuffix(base, "_migrations"):
 			base, outName = strings.TrimSuffix(base, "_migrations"), "volt_migrations.go"
 		}

@@ -99,7 +99,7 @@ func PlanBuildMemo(f *ast.File, info *check.Info, memo *PlanMemo) *Plan {
 // Err reports why the plan could not be built, or nil.
 func (pl *Plan) Err() error { return pl.err }
 
-// Models renders the models file (nao_models.go) for the planned package;
+// Models renders the models file (volt_models.go) for the planned package;
 // a package-scope name the file would declare twice is an error, as it
 // is for Dyn (spec §changesets rule 12).
 func (pl *Plan) Models(opts Options) ([]byte, error) {

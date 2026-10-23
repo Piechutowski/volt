@@ -30,7 +30,7 @@ func TestValidateRequiredDeclaredType(t *testing.T) {
 		"\tif v.Title == \"\" {\n",
 	} {
 		if !strings.Contains(string(out), want) {
-			t.Errorf("nao_validate.go lacks %q:\n%s", want, out)
+			t.Errorf("volt_validate.go lacks %q:\n%s", want, out)
 		}
 	}
 }

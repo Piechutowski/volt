@@ -103,7 +103,7 @@ func bytesDB(t *testing.T, driverName string) (*sql.DB, *Queries) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	ddl, err := os.ReadFile("nao_schema.sql")
+	ddl, err := os.ReadFile("volt_schema.sql")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -11,7 +11,7 @@ import (
 
 // TestMigrateBuildsTheSchema builds a fresh database through the
 // generated Migrate alone (spec §migration-tooling rule 2), proves it
-// has the structure of nao_schema.sql, and runs a query on it.
+// has the structure of volt_schema.sql, and runs a query on it.
 func TestMigrateBuildsTheSchema(t *testing.T) {
 	ctx := context.Background()
 	db, err := rt.Open("sqlite3", ":memory:")
@@ -43,7 +43,7 @@ func TestMigrateBuildsTheSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer target.Close()
-	ddl, err := os.ReadFile("nao_schema.sql")
+	ddl, err := os.ReadFile("volt_schema.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
