@@ -60,7 +60,7 @@ func TestDeclaredTypeRoundTrip(t *testing.T) {
 }
 
 // TestKindedTypeRoundTrip proves a declared type whose Go declaration
-// spells its storage type (spec §types rule 3) on a real SQLite: no
+// spells its storage type (spec §types) on a real SQLite: no
 // Scanner or Valuer, written and scanned back by kind, compared through
 // its handle, and bound as a list of its values in one JSON array.
 func TestKindedTypeRoundTrip(t *testing.T) {
@@ -99,7 +99,7 @@ func TestKindedTypeRoundTrip(t *testing.T) {
 }
 
 // TestKindedBoolAndFloatRoundTrip proves kinded types stored as bool and
-// float64 (spec §types rule 3), plain and nullable, on a real SQLite:
+// float64 (spec §types), plain and nullable, on a real SQLite:
 // SQLite hands a bool back as an integer, which database/sql converts
 // into a bool but not into a named bool by itself.
 func TestKindedBoolAndFloatRoundTrip(t *testing.T) {
@@ -131,5 +131,44 @@ func TestKindedBoolAndFloatRoundTrip(t *testing.T) {
 	all, err := q.SiteFlagList(ctx)
 	if err != nil || len(all) != 2 {
 		t.Fatalf("SiteFlagList = %+v, %v; want both rows", all, err)
+	}
+}
+
+// TestScannerBoolKindRoundTrip proves that a package-qualified type of Go
+// kind bool that implements sql.Scanner is scanned by its own Scan, plain
+// and nullable (spec §types): rt.Null converts a bool kind itself only for
+// a type without one, so "Y" written by Value reads back as true.
+func TestScannerBoolKindRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	db, q := newDB(t)
+
+	yes, err := q.PostFlagCreate(ctx, PostFlagNew().ReviewedSet(true).ApprovedSet(rt.Some(pay.YesNo(true))))
+	if err != nil {
+		t.Fatalf("PostFlagCreate: %v", err)
+	}
+	none, err := q.PostFlagCreate(ctx, PostFlagNew().ReviewedSet(false))
+	if err != nil {
+		t.Fatalf("PostFlagCreate: %v", err)
+	}
+	var reviewed, approved string
+	if err := db.QueryRowContext(ctx, `SELECT reviewed, approved FROM post_flags WHERE id = ?`, yes.ID).Scan(&reviewed, &approved); err != nil {
+		t.Fatal(err)
+	}
+	if reviewed != "Y" || approved != "Y" {
+		t.Errorf("stored reviewed=%q approved=%q, want Y and Y written by YesNo.Value", reviewed, approved)
+	}
+	got, err := q.PostFlagGet(ctx, yes.ID)
+	if err != nil {
+		t.Fatalf("PostFlagGet: %v", err)
+	}
+	if !bool(got.Reviewed) || !got.Approved.Valid || !bool(got.Approved.V) {
+		t.Errorf("PostFlagGet = %+v, want reviewed and approved true, read through YesNo.Scan", got)
+	}
+	got, err = q.PostFlagGet(ctx, none.ID)
+	if err != nil {
+		t.Fatalf("PostFlagGet: %v", err)
+	}
+	if bool(got.Reviewed) || got.Approved.Valid {
+		t.Errorf("PostFlagGet = %+v, want reviewed false and approved NULL", got)
 	}
 }

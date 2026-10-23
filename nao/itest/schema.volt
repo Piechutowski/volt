@@ -7,6 +7,7 @@ package itest
 
 Type Money int
 Type pay.Cents int from "github.com/Piechutowski/volt/nao/itest/pay"
+Type pay.YesNo string from "github.com/Piechutowski/volt/nao/itest/pay"
 
 Project itest [note: "Integration-test fixture for the generated query surface."] {
 }
@@ -41,13 +42,13 @@ Table orders {
   }
 }
 
-// §types rule 4, §predicates rule 5: a package-qualified declared type
+// §types, §predicates: a package-qualified declared type
 // compares with = and in, and a literal has the class of its storage.
 Select by_fee for orders where fee = :fee
 Select fees   for orders where fee in :fees [order: (id asc)]
 Select free   for orders where fee = 0
 
-// §types rule 3, §predicates rule 5: a declared type whose Go declaration
+// §types, §predicates: a declared type whose Go declaration
 // spells its storage type binds by kind, a list of it as one JSON array.
 Select by_state for orders where status in :states [order: (id asc)]
 
@@ -106,7 +107,7 @@ Table site_flags {
   weight   Ratio    [null]
 }
 
-// Bytes (spec §columns rule 2, §nullability): a []byte column without
+// Bytes (spec §columns, §nullability): a []byte column without
 // null is bytes and nil writes empty bytes, one with null is
 // rt.Null[[]byte], and required is the one refusal of empty bytes.
 Table attachments {
@@ -148,4 +149,12 @@ Table invites {
   id         int    [pk, increment]
   user_email string [ref: users.email]
   code       string [unique]
+}
+
+// A package-qualified type of Go kind bool that stores text: its own Scan
+// and Value decide, plain and nullable (spec §types).
+Table post_flags {
+  id       int       [pk, increment]
+  reviewed pay.YesNo
+  approved pay.YesNo [null]
 }

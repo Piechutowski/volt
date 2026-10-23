@@ -140,7 +140,7 @@ FROM posts`,
 }
 
 // Migrate applies every pending migration of Migrations to db (spec
-// §migration-tooling rule 2). Nothing calls it unless the application does.
+// §migration-tooling). Nothing calls it unless the application does.
 func Migrate(ctx context.Context, db *sql.DB) error {
 	_, err := rt.MigrateUp(ctx, db, Migrations)
 	return err

@@ -1086,3 +1086,111 @@ func (q *Queries) InviteUpdateWhere(ctx context.Context, set []rt.Assign[Invite]
 	}
 	return res.RowsAffected()
 }
+
+const (
+	postFlagTableSQL   = `"post_flags"`
+	postFlagColumnsSQL = `"id", "reviewed", "approved"`
+)
+
+// PostFlagLimit caps how many rows PostFlagQuery returns.
+func PostFlagLimit(n int) rt.Opt[PostFlag] { return rt.Limit[PostFlag](n) }
+
+// PostFlagOffset skips n rows; keyset pagination (PostFlagAfter) scales better.
+func PostFlagOffset(n int) rt.Opt[PostFlag] { return rt.Offset[PostFlag](n) }
+
+// PostFlagDistinct deduplicates the rows PostFlagQuery returns.
+func PostFlagDistinct() rt.Opt[PostFlag] { return rt.Distinct[PostFlag]() }
+
+// PostFlagOrderBy sorts PostFlagQuery's rows by Asc/Desc terms built on the
+// PostFlag column handles.
+func PostFlagOrderBy(terms ...rt.Order[PostFlag]) rt.Opt[PostFlag] { return rt.OrderBy(terms...) }
+
+// PostFlagAfter resumes strictly after the row with the given key — keyset
+// pagination: one value per PostFlagOrderBy term, in the same order.
+func PostFlagAfter(key ...any) rt.Opt[PostFlag] { return rt.After[PostFlag](key...) }
+
+// PostFlagSet collects the typed assignments of a PostFlagUpdateWhere, built
+// with Set/SetNull on the PostFlag column handles.
+func PostFlagSet(assigns ...rt.Assign[PostFlag]) []rt.Assign[PostFlag] { return assigns }
+
+// PostFlagQuery returns the post_flags rows matching every given predicate,
+// shaped by the remaining options (order, limit, offset, keyset,
+// distinct). No options means every row.
+func (q *Queries) PostFlagQuery(ctx context.Context, opts ...rt.Opt[PostFlag]) ([]PostFlag, error) {
+	query, args, err := rt.SelectRender(postFlagTableSQL, postFlagColumnsSQL, opts)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := rt.StmtQuery(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []PostFlag{}
+	for rows.Next() {
+		v, err := postFlagScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// PostFlagCount reports how many post_flags rows match every given predicate;
+// none counts the whole table.
+func (q *Queries) PostFlagCount(ctx context.Context, preds ...rt.Pred[PostFlag]) (int64, error) {
+	query, args, err := rt.CountRender(postFlagTableSQL, preds)
+	if err != nil {
+		return 0, err
+	}
+	var n int64
+	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// PostFlagExists reports whether any post_flags row matches every given predicate.
+func (q *Queries) PostFlagExists(ctx context.Context, preds ...rt.Pred[PostFlag]) (bool, error) {
+	query, args, err := rt.ExistsRender(postFlagTableSQL, preds)
+	if err != nil {
+		return false, err
+	}
+	var found bool
+	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &found); err != nil {
+		return false, err
+	}
+	return found, nil
+}
+
+// PostFlagDeleteWhere removes every post_flags row matching the predicates and
+// reports how many went. No effective predicate is an error, never a
+// full-table delete.
+func (q *Queries) PostFlagDeleteWhere(ctx context.Context, preds ...rt.Pred[PostFlag]) (int64, error) {
+	query, args, err := rt.DeleteRender(postFlagTableSQL, preds)
+	if err != nil {
+		return 0, err
+	}
+	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// PostFlagUpdateWhere applies the typed assignments (PostFlagSet) to every post_flags
+// row matching the predicates and reports how many changed — the
+// partial update of the dynamic layer. No effective predicate
+// is an error, never a full-table rewrite.
+func (q *Queries) PostFlagUpdateWhere(ctx context.Context, set []rt.Assign[PostFlag], preds ...rt.Pred[PostFlag]) (int64, error) {
+	query, args, err := rt.UpdateRender(postFlagTableSQL, set, preds)
+	if err != nil {
+		return 0, err
+	}
+	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}

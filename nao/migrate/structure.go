@@ -17,14 +17,14 @@ import (
 )
 
 // Schema is the structure of a database as the fold compares it (spec
-// §the-fold rule 2): its tables, each with its columns as a set, its
+// §the-fold): its tables, each with its columns as a set, its
 // foreign keys and its indexes; never the ledger, never sqlite_*
 // objects, never column order.
 type Schema struct {
 	Tables []Table // in name order
 }
 
-// Table is one table's structure (spec §the-fold rule 2).
+// Table is one table's structure (spec §the-fold).
 type Table struct {
 	Name        string
 	Columns     []Column     // in declaration order; compared as a set
@@ -80,7 +80,7 @@ func (t *Table) Column(name string) *Column {
 	return nil
 }
 
-// Read takes the structure of db (spec §the-fold rule 2), leaving out
+// Read takes the structure of db (spec §the-fold), leaving out
 // the ledger and SQLite's own objects.
 func Read(ctx context.Context, db *sql.DB) (Schema, error) {
 	rows, err := db.QueryContext(ctx, `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite\_%' ESCAPE '\' AND name <> 'volt_migrations' ORDER BY name`)
@@ -379,7 +379,7 @@ func parenMatches(atom string) bool {
 func spaceCollapse(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // Drift is one difference between the fold and the target (spec
-// §the-fold rule 3): the operation that would close it, as Volt text,
+// §the-fold): the operation that would close it, as Volt text,
 // and the reason.
 type Drift struct {
 	Table  string
@@ -389,10 +389,10 @@ type Drift struct {
 
 // Diff compares the fold with the target and returns the operations
 // that would make the fold the target, table by table in name order
-// (spec §the-fold rule 3). A missing or extra table is a create or a
+// (spec §the-fold). A missing or extra table is a create or a
 // drop; a column only on one side is an add or a drop; a column that
 // differs, a foreign key that differs, a unique constraint the target
-// lacks or a column add cannot make (§migrations rule 8) is a rebuild
+// lacks or a column add cannot make (§migrations) is a rebuild
 // of the whole table; an index only on one side or changed is a create
 // or a drop, the drops of a table before its column drops, since
 // SQLite drops no column an index uses.
@@ -528,7 +528,7 @@ func columnIn(name string, cols []Column) bool {
 }
 
 // addRefusal says why alter table cannot add the column under SQLite's
-// rules (spec §migrations rule 8), or "" when add makes it: a primary
+// rules (spec §migrations), or "" when add makes it: a primary
 // key column, a NOT NULL column without a default, an expression
 // default, a NOT NULL foreign key and a foreign key with a default
 // other than NULL all take a rebuild.
@@ -561,7 +561,7 @@ func columnReferences(t *Table, column string) bool {
 
 // compositeForeignKeyReasons says, for every foreign key over several
 // columns, that no shape body holds it, so the table's CREATE TABLE is
-// written with exec (spec §migrations rule 11).
+// written with exec (spec §migrations).
 func compositeForeignKeyReasons(t *Table) []string {
 	var out []string
 	for _, fk := range t.ForeignKeys {
@@ -634,7 +634,7 @@ func defaultDescribe(d string) string {
 
 // foreignKeysDiff names the foreign keys only one side has, leaving out
 // a one-column key of the target whose column an add carries as its
-// ref: (spec §migrations rule 8).
+// ref: (spec §migrations).
 func foreignKeysDiff(target, fold *Table, added map[string]bool) []string {
 	var out []string
 	for _, fk := range target.ForeignKeys {
@@ -704,7 +704,7 @@ func actionVolt(sql string) string {
 
 // indexesDiff matches the indexes of two tables by key, uniqueness and
 // partial predicate, never by name, each index of one side with at most
-// one of the other (spec §the-fold rule 2): a renamed index is no
+// one of the other (spec §the-fold): a renamed index is no
 // drift, and the unnamed index of a UNIQUE constraint is the unique
 // index on its key. Among equal indexes of the fold, one of the same
 // name is taken first and a constraint's next, so that what is left to
@@ -820,7 +820,7 @@ func pkColumns(t *Table) []string {
 }
 
 // columnVolt renders one column as a migration writes it (spec
-// §migrations rule 3): the built-in type, pk on every column of the
+// §migrations): the built-in type, pk on every column of the
 // primary key and increment for a rowid alias, null for a nullable
 // column outside the primary key, unique or index for the index of the
 // column alone, default: and ref: for a one-column foreign key with its
@@ -902,7 +902,7 @@ func defaultExpr(d string) bool {
 }
 
 // indexVolt renders an index as an Indexes block line or the tail of a
-// create index operation (spec §migrations rule 10): the key, then
+// create index operation (spec §migrations): the key, then
 // unique, where: and a name: that the key does not derive.
 func indexVolt(table string, ix Index) string {
 	atoms := make([]string, len(ix.Key))

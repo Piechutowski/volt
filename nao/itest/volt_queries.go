@@ -1411,3 +1411,135 @@ func (q *Queries) InviteDelete(ctx context.Context, id int) error {
 	}
 	return nil
 }
+
+func postFlagScan(r rt.Row) (PostFlag, error) {
+	var v PostFlag
+	err := r.Scan(&v.ID, &v.Reviewed, &v.Approved)
+	return v, rt.Refused("PostFlag", err)
+}
+
+const postFlagGetSQL = `SELECT "id", "reviewed", "approved" FROM "post_flags" WHERE "id" = ?`
+
+// PostFlagGet fetches the post_flags row with the given primary key, or rt.ErrNotFound.
+func (q *Queries) PostFlagGet(ctx context.Context, id int) (PostFlag, error) {
+	return postFlagScan(q.db.QueryRowContext(ctx, postFlagGetSQL, id))
+}
+
+// PostFlagGetMany fetches the post_flags rows whose primary key is in ids, in
+// database order. Missing keys are not an error; they are just absent.
+func (q *Queries) PostFlagGetMany(ctx context.Context, ids []int) ([]PostFlag, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	query, args, err := rt.SelectRender(postFlagTableSQL, postFlagColumnsSQL, []rt.Opt[PostFlag]{PostFlagID.In(ids...)})
+	if err != nil {
+		return nil, err
+	}
+	rows, err := q.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []PostFlag{}
+	for rows.Next() {
+		v, err := postFlagScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+const postFlagListSQL = `SELECT "id", "reviewed", "approved" FROM "post_flags"`
+
+// PostFlagList returns every post_flags row.
+func (q *Queries) PostFlagList(ctx context.Context) ([]PostFlag, error) {
+	rows, err := q.db.QueryContext(ctx, postFlagListSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []PostFlag{}
+	for rows.Next() {
+		v, err := postFlagScan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// PostFlagCreate validates c and inserts its marked columns, returning the
+// stored post_flags row; nothing marked inserts the defaults (spec §changesets).
+func (q *Queries) PostFlagCreate(ctx context.Context, c PostFlagChangeset) (PostFlag, error) {
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return PostFlag{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "reviewed"), append(args, v.Reviewed)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "approved"), append(args, v.Approved)
+	}
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(postFlagTableSQL, cols, postFlagColumnsSQL), args...)
+	if err != nil {
+		return PostFlag{}, err
+	}
+	return postFlagScan(row)
+}
+
+// PostFlagUpdate validates c and writes its marked columns to the post_flags row it
+// was made from, returning the stored row; nothing marked returns the row
+// untouched (spec §changesets).
+func (q *Queries) PostFlagUpdate(ctx context.Context, c PostFlagChangeset) (PostFlag, error) {
+	if !c.row {
+		return PostFlag{}, rt.ErrNoRow
+	}
+	c = c.Validate()
+	if err := c.Err(); err != nil {
+		return PostFlag{}, err
+	}
+	v := c.Row()
+	var cols []string
+	var args []any
+	if c.set[1] {
+		cols, args = append(cols, "reviewed"), append(args, v.Reviewed)
+	}
+	if c.set[2] {
+		cols, args = append(cols, "approved"), append(args, v.Approved)
+	}
+	if len(cols) == 0 {
+		return v, nil
+	}
+	args = append(args, c.data.ID)
+	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(postFlagTableSQL, cols, []string{"id"}, postFlagColumnsSQL), args...)
+	if err != nil {
+		return PostFlag{}, err
+	}
+	return postFlagScan(row)
+}
+
+const postFlagDeleteSQL = `DELETE FROM "post_flags" WHERE "id" = ?`
+
+// PostFlagDelete removes the identified post_flags row; rt.ErrNotFound reports
+// that nothing matched.
+func (q *Queries) PostFlagDelete(ctx context.Context, id int) error {
+	res, err := q.db.ExecContext(ctx, postFlagDeleteSQL, id)
+	if err != nil {
+		return rt.Refused("PostFlag", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return rt.ErrNotFound
+	}
+	return nil
+}

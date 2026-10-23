@@ -15,9 +15,10 @@ func (d *PackageClause) declNode()           {}
 
 // ImportDecl is an "import ( ... )" block (spec §imports).
 type ImportDecl struct {
-	ImportPos token.Position
-	Specs     []*ImportSpec
-	Rparen    token.Position
+	ImportPos  token.Position
+	Specs      []*ImportSpec
+	Incomplete bool // true if a syntax error dropped an entry from Specs
+	Rparen     token.Position
 }
 
 func (d *ImportDecl) Pos() token.Position { return d.ImportPos }
@@ -305,10 +306,11 @@ func lower(s string) string {
 // Group is a named set of tables for generation (spec §groups): either a
 // block of members or a `+`/`\` expression over tables and groups.
 type Group struct {
-	GroupPos token.Position
-	Name     *Ident
-	Terms    []*GroupTerm // block form: all Add, one name each; expr form: signed
-	EndPos   token.Position
+	GroupPos   token.Position
+	Name       *Ident
+	Terms      []*GroupTerm // block form: all Add, one name each; expr form: signed
+	Incomplete bool         // true if a syntax error dropped a member from a block form
+	EndPos     token.Position
 }
 
 func (d *Group) Pos() token.Position { return d.GroupPos }

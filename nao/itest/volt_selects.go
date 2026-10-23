@@ -4,7 +4,7 @@ package itest
 
 import (
 	"context"
-	"github.com/Piechutowski/volt/nao/itest/pay"
+	pay "github.com/Piechutowski/volt/nao/itest/pay"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 

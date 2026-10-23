@@ -31,6 +31,7 @@ var immutableVars = map[string]bool{
 	module + "/lang.compareSQL":                   true,
 	module + "/lang.goKeywords":                   true,
 	module + "/lang.reservedParamNames":           true,
+	module + "/lang.selectLocalNames":             true,
 	module + "/lang.resourceActions":              true,
 	module + "/lang.queryMethods":                 true,
 	module + "/lang.actionByLower":                true,

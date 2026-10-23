@@ -37,7 +37,7 @@ func (f Format) MIME() string {
 	return MIMEJSON
 }
 
-// Negotiate picks the response format from Accept (spec §formats rule 1):
+// Negotiate picks the response format from Accept (spec §formats):
 // the first listed media type that is JSON, GOB, `application/*` or `*/*`
 // decides, and an absent or empty header means JSON. A header that offers
 // nothing the server speaks is the 406 error naming both formats; a

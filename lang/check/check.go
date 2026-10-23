@@ -135,6 +135,7 @@ type checker struct {
 
 	partials map[string]*PartialInfo
 	types    map[string]*TypeInfo
+	aliases  map[string]*ast.TypeDecl
 	goTypes  GoTypes
 	project  *ast.Project
 }
@@ -146,6 +147,7 @@ func (c *checker) errorf(pos token.Position, section, format string, args ...any
 func (c *checker) collect(f *ast.File) {
 	c.partials = map[string]*PartialInfo{}
 	c.types = map[string]*TypeInfo{}
+	c.aliases = map[string]*ast.TypeDecl{}
 	var typeDecls []*ast.TypeDecl
 
 	for _, d := range f.Decls {
@@ -174,7 +176,7 @@ func (c *checker) collect(f *ast.File) {
 			typeDecls = append(typeDecls, d)
 		case *ast.Project:
 			if c.project != nil {
-				c.errorf(d.Pos(), "project", "at most one Project element per file")
+				c.errorf(d.Pos(), "project", "at most one Project element per package (§project)")
 				continue
 			}
 			c.project = d
@@ -268,8 +270,20 @@ func tableCheck(d *ast.Table, key string, partials []*ast.TablePartial, env *typ
 	acc := &checker{info: &Info{}, env: env}
 	ti := &TableInfo{Decl: d, Key: key}
 	acc.columnsExpand(ti, partials)
-	acc.tableBodyCheck(d.Pos(), key, d.Settings, d.Body, d.Incomplete, true)
+	if len(ti.Columns) == 0 && !d.Incomplete && partialsComplete(partials) {
+		acc.errorf(d.Pos(), "table", "table %q must contain at least one column, directly or from an injected TablePartial (§table)", key)
+	}
+	acc.tableBodyCheck(key, d.Settings, d.Body, true)
 	return ti, acc.diags
+}
+
+func partialsComplete(partials []*ast.TablePartial) bool {
+	for _, p := range partials {
+		if p == nil || p.Incomplete {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *checker) partialsOf(d *ast.Table) []*ast.TablePartial {

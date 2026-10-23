@@ -1,6 +1,6 @@
 // Select generation (docs/spec.md §selects-over-groups): one typed method per
 // (select × group member), its statement rendered by the runtime from the
-// predicate tree the checker lowered (§predicates rule 6), plus the
+// predicate tree the checker lowered (§predicates), plus the
 // projection row types.
 package golang
 
@@ -173,7 +173,7 @@ func selectRender(t *tableModel, fn SelectFn, cols []*fieldPlan) (string, []stri
 }
 
 // SelectSQL renders the statement of one instantiation through the
-// runtime (spec §predicates rule 6) and lists the Go expressions its
+// runtime (spec §predicates) and lists the Go expressions its
 // method binds, in placeholder order.
 func SelectSQL(t *tableModel, fn SelectFn) (string, []string, error) {
 	cols, err := selectColumns(t, fn)

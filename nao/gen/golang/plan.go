@@ -6,6 +6,7 @@ package golang
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
@@ -101,7 +102,7 @@ func (pl *Plan) Err() error { return pl.err }
 
 // Models renders the models file (volt_models.go) for the planned package;
 // a package-scope name the file would declare twice is an error, as it
-// is for Dyn (spec §changesets rule 12).
+// is for Dyn (spec §changesets).
 func (pl *Plan) Models(opts Options) ([]byte, error) {
 	out, err := modelsGenerate(pl.f, pl.info, pl.p, pl.err, opts)
 	if err != nil {
@@ -185,6 +186,46 @@ func (pl *Plan) CRUDMethod(name string) (tableKey string, m CRUDMethod, ok bool)
 // order.
 func (pl *Plan) CRUDMethodNames() []string { return pl.names }
 
+// QueryName reports whether name is a method of the generated Queries
+// handle, or the exported stem of a statement constant the query files
+// declare, and what mints it (spec §selects-over-groups,
+// §generated-query-surface): a select's method and constant must take
+// none of them.
+func (pl *Plan) QueryName(name string) (string, bool) {
+	switch name {
+	case "WithCache", "WithTx", "Tx":
+		return "the Queries method " + name, true
+	}
+	if pl.err != nil {
+		return "", false
+	}
+	if ref, ok := pl.methods[name]; ok {
+		return fmt.Sprintf("the CRUD method %s of table %q", name, ref.tableKey), true
+	}
+	for _, t := range pl.p.tables {
+		if len(t.fields) == 0 || !strings.HasPrefix(name, t.model) {
+			continue
+		}
+		tbl, rest := t.ti.Decl.Name.Name(), name[len(t.model):]
+		switch rest {
+		case "GetMany":
+			if len(t.pk) == 1 {
+				return fmt.Sprintf("the method %s of table %q", name, tbl), true
+			}
+		case "Query", "Count", "Exists", "DeleteWhere", "UpdateWhere":
+			return fmt.Sprintf("the dynamic-layer method %s of table %q", name, tbl), true
+		case "Table", "Columns":
+			return fmt.Sprintf("the statement constant %s%sSQL of table %q", argName(t.model), rest, tbl), true
+		}
+		for _, f := range t.uniqueFields() {
+			if rest == "GetBy"+f.goField {
+				return fmt.Sprintf("the method %s of table %q", name, tbl), true
+			}
+		}
+	}
+	return "", false
+}
+
 func crudMethodsOf(t *tableModel) []CRUDMethod { return t.crud }
 
 func crudMethodsBuild(t *tableModel) []CRUDMethod {
@@ -262,7 +303,7 @@ func (pl *Plan) SelectRowType(fn SelectFn) (string, []FieldSig, error) {
 }
 
 // SelectStatement renders the SQL one select instantiation runs through
-// the runtime (spec §predicates rule 6), with the Go expressions the
+// the runtime (spec §predicates), with the Go expressions the
 // method binds in placeholder order.
 func (pl *Plan) SelectStatement(fn SelectFn) (string, []string, error) {
 	t, err := pl.table(fn.TableKey)

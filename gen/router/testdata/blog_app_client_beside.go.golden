@@ -63,30 +63,30 @@ func (c *Client) Ping(ctx context.Context) (*http.Response, error) {
 
 // APIUserList calls GET /api/users (db.UserList).
 func (c *Client) APIUserList(ctx context.Context) ([]User, error) {
-	var out []User
-	err := c.Do(ctx, "GET", volt.URL("/api/users"), nil, &out)
-	return out, err
+	var voltOut []User
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/users"), nil, &voltOut)
+	return voltOut, voltErr
 }
 
 // APIUserGet calls GET /api/users/:id(int) (db.UserGet).
 func (c *Client) APIUserGet(ctx context.Context, id int) (User, error) {
-	var out User
-	err := c.Do(ctx, "GET", volt.URL("/api/users/"+volt.SegInt(id)), nil, &out)
-	return out, err
+	var voltOut User
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/users/"+volt.SegInt(id)), nil, &voltOut)
+	return voltOut, voltErr
 }
 
 // APIUserCreate calls POST /api/users (db.UserCreate).
 func (c *Client) APIUserCreate(ctx context.Context, cs UserChangeset) (User, error) {
-	var out User
-	err := c.Do(ctx, "POST", volt.URL("/api/users"), cs.Params(), &out)
-	return out, err
+	var voltOut User
+	voltErr := c.Do(ctx, "POST", volt.URL("/api/users"), cs.Params(), &voltOut)
+	return voltOut, voltErr
 }
 
 // APIUserUpdate calls PATCH /api/users/:id(int) (db.UserUpdate).
 func (c *Client) APIUserUpdate(ctx context.Context, id int, cs UserChangeset) (User, error) {
-	var out User
-	err := c.Do(ctx, "PATCH", volt.URL("/api/users/"+volt.SegInt(id)), cs.Params(), &out)
-	return out, err
+	var voltOut User
+	voltErr := c.Do(ctx, "PATCH", volt.URL("/api/users/"+volt.SegInt(id)), cs.Params(), &voltOut)
+	return voltOut, voltErr
 }
 
 // APIUserDelete calls DELETE /api/users/:id(int) (db.UserDelete).
@@ -96,79 +96,79 @@ func (c *Client) APIUserDelete(ctx context.Context, id int) error {
 
 // APIUserPicked calls GET /api/picked (db.UserPicked).
 func (c *Client) APIUserPicked(ctx context.Context, ids []int) ([]User, error) {
-	q := []volt.URLOption{}
-	for _, v := range ids {
-		q = append(q, volt.Query("ids", volt.FormatQuery(v)))
+	voltQ := []volt.URLOption{}
+	for _, voltV := range ids {
+		voltQ = append(voltQ, volt.Query("ids", volt.FormatQuery(voltV)))
 	}
-	var out []User
-	err := c.Do(ctx, "GET", volt.URL("/api/picked", q...), nil, &out)
-	return out, err
+	var voltOut []User
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/picked", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
 }
 
 // APIUserSince calls GET /api/since (db.UserSince).
 func (c *Client) APIUserSince(ctx context.Context, since time.Time) ([]User, error) {
-	q := []volt.URLOption{volt.Query("since", volt.FormatQuery(since))}
-	var out []User
-	err := c.Do(ctx, "GET", volt.URL("/api/since", q...), nil, &out)
-	return out, err
+	voltQ := []volt.URLOption{volt.Query("since", volt.FormatQuery(since))}
+	var voltOut []User
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/since", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
 }
 
 // APIUserRoleGet calls GET /api/roles/:userID(int)/:roleID(int) (db.UserRoleGet).
 func (c *Client) APIUserRoleGet(ctx context.Context, userID int, roleID int) (UserRole, error) {
-	var out UserRole
-	err := c.Do(ctx, "GET", volt.URL("/api/roles/"+volt.SegInt(userID)+"/"+volt.SegInt(roleID)), nil, &out)
-	return out, err
+	var voltOut UserRole
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/roles/"+volt.SegInt(userID)+"/"+volt.SegInt(roleID)), nil, &voltOut)
+	return voltOut, voltErr
 }
 
 // APIUserRoleUpdate calls PATCH /api/roles/:userID(int)/:roleID(int) (db.UserRoleUpdate).
 func (c *Client) APIUserRoleUpdate(ctx context.Context, userID int, roleID int, cs UserRoleChangeset) (UserRole, error) {
-	var out UserRole
-	err := c.Do(ctx, "PATCH", volt.URL("/api/roles/"+volt.SegInt(userID)+"/"+volt.SegInt(roleID)), cs.Params(), &out)
-	return out, err
+	var voltOut UserRole
+	voltErr := c.Do(ctx, "PATCH", volt.URL("/api/roles/"+volt.SegInt(userID)+"/"+volt.SegInt(roleID)), cs.Params(), &voltOut)
+	return voltOut, voltErr
 }
 
 // MsRevenueBrowse calls GET /ms/revenue (db.MsRevenueBrowse).
 func (c *Client) MsRevenueBrowse(ctx context.Context, year int) ([]MsRevenue, error) {
-	q := []volt.URLOption{volt.Query("year", volt.FormatQuery(year))}
-	var out []MsRevenue
-	err := c.Do(ctx, "GET", volt.URL("/ms/revenue", q...), nil, &out)
-	return out, err
+	voltQ := []volt.URLOption{volt.Query("year", volt.FormatQuery(year))}
+	var voltOut []MsRevenue
+	voltErr := c.Do(ctx, "GET", volt.URL("/ms/revenue", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
 }
 
 // MsUsageBrowse calls GET /ms/usage (db.MsUsageBrowse).
 func (c *Client) MsUsageBrowse(ctx context.Context, year int) ([]MsUsage, error) {
-	q := []volt.URLOption{volt.Query("year", volt.FormatQuery(year))}
-	var out []MsUsage
-	err := c.Do(ctx, "GET", volt.URL("/ms/usage", q...), nil, &out)
-	return out, err
+	voltQ := []volt.URLOption{volt.Query("year", volt.FormatQuery(year))}
+	var voltOut []MsUsage
+	voltErr := c.Do(ctx, "GET", volt.URL("/ms/usage", voltQ...), nil, &voltOut)
+	return voltOut, voltErr
 }
 
 // RefUsers calls GET /ref/users (db.UserList).
 func (c *Client) RefUsers(ctx context.Context) ([]User, error) {
-	var out []User
-	err := c.Do(ctx, "GET", volt.URL("/ref/users"), nil, &out)
-	return out, err
+	var voltOut []User
+	voltErr := c.Do(ctx, "GET", volt.URL("/ref/users"), nil, &voltOut)
+	return voltOut, voltErr
 }
 
 // RefCreateUser calls POST /ref/users (db.UserCreate).
 func (c *Client) RefCreateUser(ctx context.Context, cs UserChangeset) (User, error) {
-	var out User
-	err := c.Do(ctx, "POST", volt.URL("/ref/users"), cs.Params(), &out)
-	return out, err
+	var voltOut User
+	voltErr := c.Do(ctx, "POST", volt.URL("/ref/users"), cs.Params(), &voltOut)
+	return voltOut, voltErr
 }
 
 // RefUser calls GET /ref/users/:id(int) (db.UserGet).
 func (c *Client) RefUser(ctx context.Context, id int) (User, error) {
-	var out User
-	err := c.Do(ctx, "GET", volt.URL("/ref/users/"+volt.SegInt(id)), nil, &out)
-	return out, err
+	var voltOut User
+	voltErr := c.Do(ctx, "GET", volt.URL("/ref/users/"+volt.SegInt(id)), nil, &voltOut)
+	return voltOut, voltErr
 }
 
 // RefUpdateUser calls PATCH /ref/users/:id(int) (db.UserUpdate).
 func (c *Client) RefUpdateUser(ctx context.Context, id int, cs UserChangeset) (User, error) {
-	var out User
-	err := c.Do(ctx, "PATCH", volt.URL("/ref/users/"+volt.SegInt(id)), cs.Params(), &out)
-	return out, err
+	var voltOut User
+	voltErr := c.Do(ctx, "PATCH", volt.URL("/ref/users/"+volt.SegInt(id)), cs.Params(), &voltOut)
+	return voltOut, voltErr
 }
 
 // RefDeleteUser calls DELETE /ref/users/:id(int) (db.UserDelete).
@@ -178,30 +178,30 @@ func (c *Client) RefDeleteUser(ctx context.Context, id int) error {
 
 // RefTags calls GET /ref/tags (db.TagList).
 func (c *Client) RefTags(ctx context.Context) ([]Tag, error) {
-	var out []Tag
-	err := c.Do(ctx, "GET", volt.URL("/ref/tags"), nil, &out)
-	return out, err
+	var voltOut []Tag
+	voltErr := c.Do(ctx, "GET", volt.URL("/ref/tags"), nil, &voltOut)
+	return voltOut, voltErr
 }
 
 // RefCreateTag calls POST /ref/tags (db.TagCreate).
 func (c *Client) RefCreateTag(ctx context.Context, cs TagChangeset) (Tag, error) {
-	var out Tag
-	err := c.Do(ctx, "POST", volt.URL("/ref/tags"), cs.Params(), &out)
-	return out, err
+	var voltOut Tag
+	voltErr := c.Do(ctx, "POST", volt.URL("/ref/tags"), cs.Params(), &voltOut)
+	return voltOut, voltErr
 }
 
 // RefTag calls GET /ref/tags/:slug (db.TagGet).
 func (c *Client) RefTag(ctx context.Context, slug string) (Tag, error) {
-	var out Tag
-	err := c.Do(ctx, "GET", volt.URL("/ref/tags/"+volt.Seg(slug)), nil, &out)
-	return out, err
+	var voltOut Tag
+	voltErr := c.Do(ctx, "GET", volt.URL("/ref/tags/"+volt.Seg(slug)), nil, &voltOut)
+	return voltOut, voltErr
 }
 
 // RefUpdateTag calls PATCH /ref/tags/:slug (db.TagUpdate).
 func (c *Client) RefUpdateTag(ctx context.Context, slug string, cs TagChangeset) (Tag, error) {
-	var out Tag
-	err := c.Do(ctx, "PATCH", volt.URL("/ref/tags/"+volt.Seg(slug)), cs.Params(), &out)
-	return out, err
+	var voltOut Tag
+	voltErr := c.Do(ctx, "PATCH", volt.URL("/ref/tags/"+volt.Seg(slug)), cs.Params(), &voltOut)
+	return voltOut, voltErr
 }
 
 // RefDeleteTag calls DELETE /ref/tags/:slug (db.TagDelete).

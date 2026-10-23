@@ -48,7 +48,7 @@ raises are open:
 
 Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
-### 25. [merge] Generated names for the same CRUD route depend on how it was declared, controller resources use verb-first names, and singular: and [model:] fix the same name (with opposite precedence in spec and code)
+### 25. [merge] Generated names for the same CRUD route depend on how it was declared, controller resources use verb-first names, and singular: and [model:] fix the same name
 
 - get /users db.UserList in Scope api → PathAPIUserList, client APIUserList; post /users db.UserCreate → APIUserCreate
 - resources db.users [default] in Scope ref → PathRefUsers/PathRefUser, clients RefUsers, RefUser, RefCreateUser, RefUpdateUser, RefDeleteUser
@@ -59,7 +59,7 @@ Verdicts: remove, merge, decide (the maintainer's call), keep (pays for itself).
 
 **Cost.** The naming block of resources() in lang/routes_lower.go. Regenerate the gen/router goldens (paths, client, client_beside, routes) and itest/blog/app, and update about 7 test references in itest/resources_test.go and client_test.go. Snippets v23_singular_override and i44_singular_collision. Spec: §the-action-table, §settings, §table-resolution, §default-handlers, §settings-whitelists. Roughly 15-20 files. Behavior change: fixing a helper collision now also renames the Go model.
 
-**Evidence.** docs/spec.md §the-action-table Helper column (~2177-2189), §settings singular (~2199-2209), §table-resolution clauses 4-6 (2230-2244; clause 5 says [model:] 'wins when both apply'), §default-handlers clause 6, §query-routes clause 4. lang/routes_lower.go:690-692 sets singular from golang.ModelName, then 750-761 overwrites it with singular:, so singular: wins, the opposite of clause 5. lang/routes_lower.go:846-880. gen/router/testdata/blog_app_client.go.golden:70-98 vs 152-213 (verified). AGENT.md requires subject-first, verb-last names; CreateUser, NewUser and EditUser break that rule.
+**Evidence.** docs/spec.md §the-action-table Helper column (~2177-2189), §settings singular (~2199-2209), §table-resolution clauses 4-6 (2230-2244), §default-handlers clause 6, §query-routes clause 4. lang/routes_lower.go:690-692 sets singular from golang.ModelName, then 750-761 overwrites it with singular:, so singular: wins, as §table-resolution now says. lang/routes_lower.go:846-880. gen/router/testdata/blog_app_client.go.golden:70-98 vs 152-213 (verified). AGENT.md requires subject-first, verb-last names; CreateUser, NewUser and EditUser break that rule.
 
 ### 26. [remove] Several Indexes or Validators blocks in one body, whose contents accumulate
 
@@ -288,7 +288,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 - volt.ErrNotFound is a different value (an HTTP 404): errors.Is(err, volt.ErrNotFound) is false for a query miss on the server and true for a 404 on the client
 - rt.ErrNoRow (Update on a changeset not made from a row), one letter away from ErrNoRows
 - volt.ErrBadRequest ≡ volt.Error(400, "") and volt.ErrForbidden ≡ volt.Error(403, "") for errors.Is, with no callers
-- client errors: §generated-client says an HTTPError, §formats says a ProblemError, and client.go returns either a ProblemError or a plain statusError
+- client errors: client.go returns a ProblemError when the body decodes as a Problem and a plain statusError otherwise; §generated-client and §formats now both describe these two forms
 
 **Proposal.** Drop rt.ErrNotFound and use sql.ErrNoRows, Go's own name, on the server; keep volt.ErrNotFound as the HTTP 404. Rename rt.ErrNoRow to say what it means (e.g. rt.ErrNoKey). Remove ErrBadRequest and ErrForbidden. State one client error contract: always a ProblemError, with the body text as the message when the body is not a Problem.
 
@@ -415,7 +415,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** Parser project(), ast.Project, the uniqueness check (check.go:174-178), the vet emptybody branch, both generators' projectNote and the header goldens, lsp/features.go:45, grammar.js project; about 4 snippets (03, 25, 35, i34) and nao/itest/schema.volt; §project and lint.md. Low.
 
-**Evidence.** docs/spec.md:644-667 (§project; the suggested key is database_type: "PostgreSQL"). Only the note is read, in nao/gen/golang/gen.go and nao/gen/sqlite/gen.go; since the removals a Project carries at most one, the `note:` setting. 'Project' means two different things in the spec. nao/itest/schema.volt declares an empty Project only to carry its note.
+**Evidence.** docs/spec.md §project (properties are free-form keys that nothing reads). Only the note is read, in nao/gen/golang/gen.go and nao/gen/sqlite/gen.go; since the removals a Project carries at most one, the `note:` setting. 'Project' means two different things in the spec. nao/itest/schema.volt declares an empty Project only to carry its note.
 
 ### 58. [decide] Two comment forms
 
@@ -813,15 +813,15 @@ Apply it at the single bind point: a driver.NamedValueChecker on the connection 
 
 **Cost.** One condition in the From emission, goldens for tables with expression defaults (partials, junction_composite_pk, itest), and one clause in §changesets rule 2. An import that wants to keep its stamps calls the setter.
 
-### 4. [do] Expression defaults in examples: docs/spec.md:541 and :1105 (`now()`), :842 (`now() - interval '5 days'`, which is PostgreSQL); lang/conformance/snippets/valid/07_column_settings, 19_tablepartial, 21_records_values, 35_kitchen_sink; grammar/examples/kitchen_sink.volt:33. Rule: §default-values rule 1 ("SQLite's to judge")
+### 4. [do] Expression defaults are evaluated only at run time. Rule: §default-values rule 1 ("SQLite's to judge")
 
-**Effect.** SQLite evaluates an expression default at the first INSERT that omits the column, not at CREATE TABLE. Neither the checker nor the fold evaluates it (the fold compares structure only). The spec and four "valid" snippets teach a function SQLite does not have.
+**Effect.** SQLite evaluates an expression default at the first INSERT that omits the column, not at CREATE TABLE. Neither the checker nor the fold evaluates it (the fold compares structure only). The spec's examples and the snippets now use expressions SQLite has (`CURRENT_TIMESTAMP`, `datetime('now', '-5 days')`), but nothing refuses one it lacks.
 
-**Bug.** Checked with sqlite3 just now: `CREATE TABLE t (id INTEGER PRIMARY KEY, a TEXT DEFAULT (now()))` succeeds, and the INSERT that follows fails with "unknown function: now()". A schema copied from the spec therefore passes check, gen and the fold, and then every create that leaves created_at unmarked fails at run time.
+**Bug.** Checked with sqlite3: `CREATE TABLE t (id INTEGER PRIMARY KEY, a TEXT DEFAULT (now()))` succeeds, and the INSERT that follows fails with "unknown function: now()". A schema with such a default passes check, gen and the fold, and then every create that leaves the column unmarked fails at run time.
 
-**Pure form.** Remove the wrong examples now and use CURRENT_TIMESTAMP; the maintainer asked for incorrect syntax to be removed. Then move the evaluation to gen: evaluate each expression default once as `SELECT (<expr>)` in the in-memory SQLite the fold already opens, and report SQLite's message at the default. This uses the engine as the oracle, like the fold lemma does. Lower-entropy alternative: a closed set (CURRENT_TIMESTAMP and literals), with anything else written as a migration exec.
+**Pure form.** Move the evaluation to gen: evaluate each expression default once as `SELECT (<expr>)` in the in-memory SQLite the fold already opens, and report SQLite's message at the default. This uses the engine as the oracle, like the fold lemma does. Lower-entropy alternative: a closed set (CURRENT_TIMESTAMP and literals), with anything else written as a migration exec.
 
-**Cost.** Examples: spec (3 places), 4 snippets, grammar/examples/kitchen_sink.volt (plus sync-grammar). Probe: about 30 lines in cmd/volt next to the fold, inert without cgo just as the fold is.
+**Cost.** About 30 lines in cmd/volt next to the fold, inert without cgo just as the fold is.
 
 ### 5. [do] events.go:30-52, the exported fields Broker.Replay and Broker.Heartbeat; replay() read at :67 and :87; Heartbeat read at :130 without the lock; spec §event-routes rule 2
 

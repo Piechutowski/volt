@@ -6,7 +6,7 @@ Project blog [note: """
     Multi-line notes keep their blank lines and become
     paragraph breaks in godoc.
   """] {
-  database_type: "PostgreSQL"
+  database_type: "SQLite"
 }
 
 Type PostState string

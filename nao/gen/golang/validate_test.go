@@ -10,7 +10,7 @@ import (
 )
 
 // TestValidateRequiredDeclaredType pins the required rule over a declared
-// type (spec §changesets rule 9): the empty value is read through the
+// type (spec §changesets): the empty value is read through the
 // type's driver.Valuer by rt.Blank, since the generator cannot know the
 // type's zero value.
 func TestValidateRequiredDeclaredType(t *testing.T) {

@@ -82,7 +82,7 @@ func (c *checker) settingsCheck(sl *ast.SettingList, section string, spec settin
 			continue
 		}
 		if seen[s.Name] && !spec.repeatable[s.Name] {
-			c.errorf(s.Pos(), "settings-lists", "setting %q may appear at most once", s.Name)
+			c.errorf(s.Pos(), "settings-lists", "setting %q may appear at most once (§settings-lists)", s.Name)
 		}
 		seen[s.Name] = true
 		c.settingValueCheck(s, section, kind)
@@ -123,8 +123,11 @@ func (c *checker) settingValueCheck(s *ast.Setting, section string, kind valueKi
 	case defaultVal:
 		c.defaultValueCheck(s)
 	case refVal:
-		if _, ok := s.Value.(*ast.RefEndpoint); !ok {
+		ep, ok := s.Value.(*ast.RefEndpoint)
+		if !ok {
 			c.errorf(s.Value.Pos(), section, "'ref' must be an endpoint, table.column (§%s)", section)
+		} else if ep.Paren {
+			c.errorf(ep.Pos(), "columns", "an inline ref endpoint is table.column, without parentheses: a foreign key over several columns is a Ref element (§columns)")
 		}
 	}
 }

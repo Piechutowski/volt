@@ -1,7 +1,7 @@
 // partial-composed tables: injected columns and notes travel; the
 // table-level override of deleted_at (with its own note) wins (§tablepartial)
 TablePartial timestamps {
-  created_at time.Time [default: `now()`, note: "Set on insert"]
+  created_at time.Time [default: `CURRENT_TIMESTAMP`, note: "Set on insert"]
   updated_at time.Time [null, note: "NULL until first update"]
 }
 TablePartial soft_delete {

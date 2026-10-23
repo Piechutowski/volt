@@ -22,7 +22,7 @@ func importKey(ct check.ColumnType) string {
 }
 
 func importKeyOf(alias, path string) string {
-	if path == "" || alias == "" || alias == path[strings.LastIndexByte(path, '/')+1:] {
+	if path == "" || alias == "" || check.ReservedAliases[alias] == path {
 		return path
 	}
 	return alias + "=" + path

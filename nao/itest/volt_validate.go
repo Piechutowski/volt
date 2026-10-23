@@ -111,3 +111,11 @@ func (c InviteChangeset) Validate() InviteChangeset {
 	c.valid = nil
 	return c
 }
+
+// Validate runs required and the validators of post_flags over the row,
+// every one every time, replacing the findings of an earlier Validate
+// (spec §changesets, §validators).
+func (c PostFlagChangeset) Validate() PostFlagChangeset {
+	c.valid = nil
+	return c
+}

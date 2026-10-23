@@ -142,7 +142,7 @@ func TestMigrationCheck(t *testing.T) {
 }
 
 // TestMigrationExitCodes pins the two exit codes of the database
-// commands (spec §migration-tooling rule 1): 1 for an error in the
+// commands (spec §migration-tooling): 1 for an error in the
 // migrations themselves and 2 for a database that fails. A migration
 // the checker refuses, a shape body with two indexes of one name
 // (§indexes), never reaches the lowering: every command refuses its

@@ -1,6 +1,6 @@
 // CRUD generation (volt_queries.go): the static query surface of Not an
 // ORM, every statement rendered by the runtime (docs/spec.md
-// §generated-query-surface, §predicates rule 6).
+// §generated-query-surface, §predicates).
 package golang
 
 import (

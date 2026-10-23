@@ -24,7 +24,7 @@ type SelectParam struct {
 
 // SelectFn is one select instantiation: a method on Queries for one
 // member table, over the predicate tree and order terms the checker
-// lowered (spec §predicates rule 6) and the §selects-over-groups
+// lowered (spec §predicates) and the §selects-over-groups
 // projection already validated.
 type SelectFn struct {
 	TableKey     string // the table's name, its key into check.Info

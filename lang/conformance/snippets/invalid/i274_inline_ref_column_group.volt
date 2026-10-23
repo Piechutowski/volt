@@ -1,5 +1,5 @@
-// spec: §relationships-ref, an inline ref names one column: a composite relationship is a Ref element
-// want: an inline ref endpoint has exactly one column
+// spec: §columns, an inline ref names one column, without parentheses: a composite relationship is a Ref element
+// want: an inline ref endpoint is table.column, without parentheses
 Table merchants {
   id           int    [pk]
   country_code string [pk]

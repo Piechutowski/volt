@@ -242,8 +242,8 @@ func argOr(c *cli.Command, i int, def string) string {
 
 // migrationPackage loads and checks the package at dir and insists it
 // declares tables, since a migration is an element of the package whose
-// tables it migrates (spec §migrations rule 1). A package with errors
-// exits 1, as from gen and check (spec §migration-tooling rule 1).
+// tables it migrates (spec §migrations). A package with errors
+// exits 1, as from gen and check (spec §migration-tooling).
 func migrationPackage(dir string) (*lang.Package, error) {
 	root, err := lang.FindRoot(dir)
 	if err != nil {
@@ -268,7 +268,7 @@ func migrationPackage(dir string) (*lang.Package, error) {
 
 // migrationsLowered lowers the package's migrations to their statement
 // form; a migration that does not lower is an error in the migrations
-// themselves, exit 1 under prefix (spec §migration-tooling rule 1).
+// themselves, exit 1 under prefix (spec §migration-tooling).
 func migrationsLowered(prefix string, pkg *lang.Package) ([]rt.Migration, error) {
 	ms, err := migrate.Lower(pkg.Schema())
 	if err != nil {
@@ -278,7 +278,7 @@ func migrationsLowered(prefix string, pkg *lang.Package) ([]rt.Migration, error)
 }
 
 // migrationExit maps a failure of the fold or of a database command to
-// its exit code (spec §migration-tooling rule 1): 1 for a migration
+// its exit code (spec §migration-tooling): 1 for a migration
 // that did not run, a statement SQLite refused or a down asked of an
 // irreversible one, which is an rt.MigrationError; 2 for everything
 // else, which is the database or the machine.
@@ -387,7 +387,7 @@ func sqliteGuard(driver string) error {
 // stops the fold with SQLite's own message, in either direction: once
 // the fold is read, the reversible migrations above the last
 // irreversible one are reverted from the top and applied again
-// (§the-fold rule 4).
+// (§the-fold).
 func foldCheck(ctx context.Context, pkg *lang.Package, ms []rt.Migration) ([]migrate.Drift, error) {
 	ddl, err := sqlite.Generate(pkg.Merged(), pkg.Schema(), sqlite.Options{Source: "package " + pkg.Path})
 	if err != nil {
@@ -442,7 +442,7 @@ const viewOrTriggerHint = "a view or trigger over a rebuilt table is dropped and
 // foldStopped wraps a failure of the fold at stage with the one hint the
 // statement cannot carry: SQLite refuses the rename that ends a rebuild
 // when a view, or a trigger on another table, reads the table, and
-// names it (spec §migrations rules 9 and 11).
+// names it (spec §migrations).
 func foldStopped(stage string, err error) error {
 	var me *rt.MigrationError
 	if errors.As(err, &me) && strings.Contains(me.SQL, " RENAME TO ") {

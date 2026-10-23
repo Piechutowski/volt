@@ -112,7 +112,7 @@ func TestRendererSpellsOneInequality(t *testing.T) {
 		}
 		ast.Inspect(f, func(n ast.Node) bool {
 			if lit, ok := n.(*ast.BasicLit); ok && lit.Kind == token.STRING && strings.Contains(lit.Value, "<>") {
-				t.Errorf("%s: %s spells <>; the renderer's inequality is != (spec §predicates rule 6)", fset.Position(lit.Pos()), lit.Value)
+				t.Errorf("%s: %s spells <>; the renderer's inequality is != (spec §predicates)", fset.Position(lit.Pos()), lit.Value)
 			}
 			return true
 		})
