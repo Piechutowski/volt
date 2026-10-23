@@ -111,7 +111,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** ASCII: the scanner's isLetter and isIdentChar, §identifiers and §unicode-general-categories, 29_unicode_idents and a refusal snippet, the X-prefix rule of naming.go and §names. The other option: a check that the Go name is exported, one invalid snippet. Low either way.
 
-**Evidence.** lang/scanner/scanner.go (isLetter, isIdentChar, identRest); lang/semantics.go goIdentOK; nao/gen/golang/naming.go goName; docs/spec.md §identifiers, §route-paths rules 2 and 6, §names.
+**Evidence.** lang/scanner/scanner.go (isLetter, isIdentChar, identRest); lang/semantics.go goIdentOK; nao/naming/names.go GoName; docs/spec.md §identifiers, §route-paths rules 2 and 6, §names.
 
 ### 30. [merge] Names that differ only in case are distinct in Volt, but SQLite folds them into one
 
@@ -209,7 +209,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** dyn.go, rt/query.go and its tests, about 23 goldens (one line per model), spec ~2556 and ~3595, the lint.md dynname suffix list. Low.
 
-**Evidence.** The dynamic layer always selects the full model shape (the nao/rt/query.go header; SelectRender uses <model>ColumnsSQL), so rows with a key are already distinct. nao/gen/golang/dyn.go:185-186 emits Distinct for every model, including id int [pk] models (changesets_dyn.go.golden:21-22, verified). No Volt Select produces DISTINCT, so the `SELECT [DISTINCT ]` of §predicates rule 6 (docs/spec.md:~2556) is reachable only through this option.
+**Evidence.** The dynamic layer always selects the full model shape (the nao/rt/query.go header; SelectRender uses <model>ColumnsSQL), so rows with a key are already distinct. nao/gen/golang/dyn.go:97-98 emits Distinct for every model, including id int [pk] models (changesets_dyn.go.golden:21-22, verified). No Volt Select produces DISTINCT, so the `SELECT [DISTINCT ]` of §predicates rule 6 (docs/spec.md:~2556) is reachable only through this option.
 
 ### 40. [remove] Two ways to bind Queries to a transaction: WithTx(tx) and New(tx)
 
@@ -233,7 +233,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** One method in gen.go, one line per models golden and in itest/blog/db, the spec example. About 22 files, mechanical.
 
-**Evidence.** docs/spec.md:2815-2816, the example at 2823-2827, rule 7 (2891-2893); nao/gen/golang/gen.go:250-253; nao/gen/golang/testdata/changesets.go.golden:565-575 (verified).
+**Evidence.** docs/spec.md:2815-2816, the example at 2823-2827, rule 7 (2891-2893); nao/gen/golang/gen.go:254-257; nao/gen/golang/testdata/changesets.go.golden:565-575 (verified).
 
 ### 42. [remove] <Model>GetMany, a static name for a one-line dynamic query
 
@@ -255,7 +255,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** Two funcLines and dynWrapperSuffixes in dyn.go, two functions per model in every *_dyn golden, the dynname docs and testdata, the nao/itest call sites. About 22 files, mechanical.
 
-**Evidence.** nao/gen/golang/dyn.go:38, 187-194; changesets_dyn.go.golden (PostOrderBy, PostSet); nao/rt/query.go:302-323, whose Opt doc justifies wrappers only because 'value-less options cannot infer M'; docs/spec.md §generated-query-surface rule 4 (~3595-3596); docs/lint.md dynname (326-340).
+**Evidence.** nao/naming/collisions.go:10; nao/gen/golang/dyn.go:99-106; changesets_dyn.go.golden (PostOrderBy, PostSet); nao/rt/query.go:302-323, whose Opt doc justifies wrappers only because 'value-less options cannot infer M'; docs/spec.md §generated-query-surface rule 4 (~3595-3596); docs/lint.md dynname (326-340).
 
 ### 44. [remove] The generated db.Migrate beside rt.MigrateUp
 
@@ -294,7 +294,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** About 20 files, mostly generated doc comments in goldens; the spec and itest assertions; two unused lines; the client.go fallback. Low.
 
-**Evidence.** nao/rt/rt.go:27-29 (verified); nao/rt/changeset.go:145-147; errors.go:34-39 (verified: no non-test callers of ErrBadRequest or ErrForbidden); client.go:74-83; docs/spec.md §query-routes 3 (~1925), §changesets 8 (~2907), §generated-client 2 (2007-2009) vs §formats 5 (1988-1990).
+**Evidence.** nao/rt/rt.go:27-29 (verified); nao/rt/changeset.go:134-136; errors.go:34-39 (verified: no non-test callers of ErrBadRequest or ErrForbidden); client.go:74-83; docs/spec.md §query-routes 3 (~1925), §changesets 8 (~2907), §generated-client 2 (2007-2009) vs §formats 5 (1988-1990).
 
 ### 47. [merge] Writing a response: volt.JSON, Render and RenderStatus, plus exported plumbing that nothing outside the package calls
 
@@ -318,7 +318,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** rt/changeset.go and the rt tests that call FieldError.Error(). The generated rt.FieldError{...} literals stay valid. Trivial.
 
-**Evidence.** nao/rt/changeset.go:24-35, 71-83; errors.go:41-52 (verified: 'nao's runtime declares the identical alias').
+**Evidence.** nao/rt/changeset.go:24-35, 60-72; errors.go:41-52 (verified: 'nao's runtime declares the identical alias').
 
 ### 49. [merge] A database refusal of a write is reported two ways, depending on which method wrote
 
@@ -340,7 +340,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** dyn.go, the *_dyn goldens, the nao/itest assertions. Trivial.
 
-**Evidence.** changesets_dyn.go.golden:62, 90, 106 (verified); nao/gen/golang/dyn.go:221-260; docs/spec.md §go-types (3500-3502): Volt targets 64-bit platforms, where int carries the full range.
+**Evidence.** changesets_dyn.go.golden:62, 90, 106 (verified); nao/gen/golang/dyn.go:133-171; docs/spec.md §go-types (3500-3502): Volt targets 64-bit platforms, where int carries the full range.
 
 ### 51. [merge] Constructor names that change with the output layout, or do not say what they build
 
@@ -391,7 +391,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** rt, the generator emit lines, the Count/Exists call sites in every *_dyn golden. About 20 files, mechanical.
 
-**Evidence.** nao/rt/query.go:460, 580; nao/rt/changeset.go:162, 407, 435; nao/rt/gen.go; docs/spec.md §predicates rule 6 ('There is one SQL renderer', 2519-2525).
+**Evidence.** nao/rt/query.go:460, 580; nao/rt/changeset.go:151, 396, 424; nao/rt/gen.go; docs/spec.md §predicates rule 6 ('There is one SQL renderer', 2519-2525).
 
 ### 56. [merge] Query parameter names: CRUD keys use the Go name, select parameters use the name as written, and the wire uses the column name
 
@@ -401,9 +401,9 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Proposal.** One spelling per surface. On the wire (path segments, query keys, JSON), the column or parameter name as written (user_id). In Go, the lowerCamel name (userID), for CRUD keys and select parameters alike. The binder maps between the two, so :user_id binds userID.
 
-**Cost.** Name matching in queryBind, select-parameter Go naming in nao/gen/golang, the blog fixture paths, the handlers/client goldens and the nao select goldens; §query-routes 2, §default-handlers 4 and §selects-over-groups 6. Moderate.
+**Cost.** Name matching in queryBind, select-parameter Go naming in nao/naming, the blog fixture paths, the handlers/client goldens and the nao select goldens; §query-routes 2, §default-handlers 4 and §selects-over-groups 6. Moderate.
 
-**Evidence.** docs/spec.md §query-routes clause 2 (binding by name), §default-handlers 4. gen/router/testdata/blog/app/routes.volt (/roles/:userID(int)/:roleID(int)); blog_app_client.go.golden:122 (verified: APIUserRoleGet(ctx, userID int, roleID int)); nao/gen/golang/plan.go:196; lang/routes_lower.go:804. Reviewers verified the select signature.
+**Evidence.** docs/spec.md §query-routes clause 2 (binding by name), §default-handlers 4. gen/router/testdata/blog/app/routes.volt (/roles/:userID(int)/:roleID(int)); blog_app_client.go.golden:122 (verified: APIUserRoleGet(ctx, userID int, roleID int)); nao/naming/plan.go:236; lang/routes_lower.go:804. Reviewers verified the select signature.
 
 ### 57. [decide] The Project element: a name and properties that nothing reads, on a SQLite-only implementation
 
@@ -610,7 +610,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** From: one emitter function, two tests, the spec. Option A: the UpdateWhere/Set emission in dyn.go, rt Assign/UpdateRender and their tests, every *_dyn golden, the nao/itest dynamic tests, the partial-update bullet of §predicates rule 6, §changesets rule 11, dynname. Option B: every models golden, the client example (spec ~2022), the itest call sites. About 20 goldens either way.
 
-**Evidence.** docs/spec.md §changesets code block and rules 2, 3, 11 and 12 (2796-2820, 2849-2854, 2932-2935); the intro says 'there is no other write path for a row' (2793-2794). nao/rt/query.go:128, 131; nao/gen/golang/dyn.go:194; nao/gen/golang/gen.go:175 (From), which only tests use (nao/itest/changeset_test.go:155, crud_test.go:193); generated handlers use Cast.
+**Evidence.** docs/spec.md §changesets code block and rules 2, 3, 11 and 12 (2796-2820, 2849-2854, 2932-2935); the intro says 'there is no other write path for a row' (2793-2794). nao/rt/query.go:128, 131; nao/gen/golang/dyn.go:106; nao/gen/golang/gen.go:175 (From), which only tests use (nao/itest/changeset_test.go:155, crud_test.go:193); generated handlers use Cast.
 
 ### 75. [decide] Imports are package-scoped, and repeated imports are accepted
 
@@ -634,7 +634,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** The runtime's formats, client and Params code, the format branches in router handlers, formats_test and the itest client tests, §formats and §changesets 5. Moderate.
 
-**Evidence.** docs/spec.md §formats 1-5 (1953-1990), §changesets rule 5 (2868-2880); formats.go:17-90; client.go:18; nao/rt/changeset.go:162-294 (GobEncode ~242). The two arms treat unknown fields differently in hand-written controllers (§formats 2: JSON gives an itemized 400, GOB ignores them).
+**Evidence.** docs/spec.md §formats 1-5 (1953-1990), §changesets rule 5 (2868-2880); formats.go:17-90; client.go:18; nao/rt/changeset.go:151-283 (GobEncode ~231). The two arms treat unknown fields differently in hand-written controllers (§formats 2: JSON gives an itemized 400, GOB ignores them).
 
 ### 77. [decide] One word, Query, for five things
 
@@ -661,7 +661,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** Every column-handle use site, a rewrite of the dynname rule, all the model and dyn goldens, the spec's naming text. Large.
 
-**Evidence.** docs/lint.md dynname (326-363); docs/spec.md §names (3515-3529), §changesets rule 12 (2945-2948), §selects-over-groups rule 7 (2678-2684); nao/gen/golang/dyn.go:38.
+**Evidence.** docs/lint.md dynname (326-363); docs/spec.md §names (3515-3529), §changesets rule 12 (2945-2948), §selects-over-groups rule 7 (2678-2684); nao/naming/collisions.go:10.
 
 ### 79. [decide] The spec states the same facts in several places
 
@@ -741,7 +741,7 @@ A plain single-column index is no longer an entry of an Indexes block, parenthes
 
 **Cost.** None if kept.
 
-**Evidence.** nao/gen/golang/dyn.go:38, 180-192; nao/rt/query.go:332-352 ('Value-less options cannot infer M, so the generator emits per-model wrappers'); docs/spec.md §generated-query-surface rule 4, §changesets rule 12, §selects-over-groups rule 7 (Column and Params are rejected as select names).
+**Evidence.** nao/naming/collisions.go:10; nao/gen/golang/dyn.go:92-104; nao/rt/query.go:332-352 ('Value-less options cannot infer M, so the generator emits per-model wrappers'); docs/spec.md §generated-query-surface rule 4, §changesets rule 12, §selects-over-groups rule 7 (Column and Params are rejected as select names).
 
 ### 86. [keep] Server versus client update signature
 
@@ -857,7 +857,7 @@ Events stays optional, since a nil broker serves 503 by §event-routes.
 
 **Cost.** Router generator: one generated method plus the NewRouter signature, which changes the handlers golden. Also the itest call sites, the README examples and one clause in §handler-references. About 5 sites.
 
-### 7. [do] Generated changeset setters (nao/gen/golang/gen.go:187), Changeset() (:172), Row() (:219), and Validate's validator calls over c.Row() (nao/gen/golang/validate.go:76-90); rt.ParamsOf; rt.FieldErrorsAppend (nao/rt/changeset.go:339) and (*Invalid).Details (:78), which share Columns; rt.After (nao/rt/query.go:352), OrderBy (:323) and Raw (:195), which keep the caller's variadic slice
+### 7. [do] Generated changeset setters (nao/gen/golang/gen.go:187), Changeset() (:172), Row() (:219), and Validate's validator calls over c.Row() (nao/gen/golang/validate.go:76-90); rt.ParamsOf; rt.FieldErrorsAppend (nao/rt/changeset.go:328) and (*Invalid).Details (:67), which share Columns; rt.After (nao/rt/query.go:352), OrderBy (:323) and Raw (:195), which keep the caller's variadic slice
 
 **Effect.** §changesets rule 1 promises value semantics, and §predicates promises inert, immutable data. Neither holds for slices. A []byte column (and rt.Null[[]byte]) shares its bytes with the caller's buffer, the source row, every copy of the changeset, every Row() and Params, and every validator argument. Error Columns and option slices are shared the same way.
 
@@ -873,7 +873,7 @@ Validators get bytes.Clone(v.X); rt.NullClone covers rt.Null[[]byte]. FieldError
 
 **Cost.** 3-4 emission sites, emitted only for []byte fields (bytes is stdlib, so the import rule allows it); 5 rt constructors and helpers; goldens of tables with []byte columns; one clause in §changesets rule 1. One copy per set and per public Row() call. A declared type stored as []byte is not covered unless the generator learns its underlying type, so the spec should say declared types must behave as values.
 
-### 8. [do] rt.Blank (nao/rt/changeset.go:351) treats a Value error as "not blank"; requiredEmit (nao/gen/golang/validate.go:94); spec §types rule 3, §changesets rules 6 and 9
+### 8. [do] rt.Blank (nao/rt/changeset.go:340) treats a Value error as "not blank"; requiredEmit (nao/gen/golang/validate.go:94); spec §types rule 3, §changesets rules 6 and 9
 
 **Effect.** A declared type's Value method is user code that decides whether a value can be stored. Validate consults it only for `required`, and swallows its error there. The real verdict comes at bind time, inside database/sql, as a raw driver error.
 
@@ -889,7 +889,7 @@ Valid() then implies the bind accepts every value.
 
 **Cost.** About 15 lines in validate.go; rt.Blank and TestBlank; validate_test; itest volt_validate.go regenerated. Spec §types rule 3 and §changesets rules 6, 7 and 9 gain the check `value`. One extra Value call per declared column per Validate.
 
-### 9. [do] nao/rt/stmtcache.go:16-84: StmtCache keyed by SQL text only; Prepare takes `db DBTX` on every call and ignores it on a hit (:49, :68). The cached statement is run as-is by nao/rt/query.go:554/567/580 and nao/rt/changeset.go:433. Generated WithCache and WithTx: nao/gen/golang/queries.go:523-542
+### 9. [do] nao/rt/stmtcache.go:16-84: StmtCache keyed by SQL text only; Prepare takes `db DBTX` on every call and ignores it on a hit (:49, :68). The cached statement is run as-is by nao/rt/query.go:554/567/580 and nao/rt/changeset.go:422. Generated WithCache and WithTx: nao/gen/golang/queries.go:523-542
 
 **Effect.** The cache memoizes PrepareContext(handle, sql) but keys only on sql, so the handle is a hidden input: whichever handle first prepared that text. The rule "one cache per *sql.DB, never a transaction" exists only in a doc comment, and the types accept anything.
 
@@ -939,7 +939,7 @@ A connection succeeds when it gets a 200. Stream sends its request on a copy of 
 
 **Cost.** events.go (Stream, streamOnce), client.go, events_test, wording of §event-routes rule 3. About 4 sites. Making the http.Client an explicit New parameter is optional and would touch the client goldens.
 
-### 13. [do] volt.go:97-129 statusWriter (WriteHeader, Flush) and Request.Committed (:26); Broker.Serve's w.(http.Flusher) at events.go:113
+### 13. [do] volt.go:119-151 statusWriter (WriteHeader, Flush) and Request.Committed (:28); Broker.Serve's w.(http.Flusher) at events.go:113
 
 **Effect.** The runtime works out whether a response is committed by watching writes through a wrapper, and the wrapper guesses. Any WriteHeader call, a 1xx included, counts as a commit. Flush is advertised, but forwarded only when the writer directly inside is an http.Flusher.
 
@@ -963,7 +963,7 @@ Eviction removes the entry and marks it doomed; release closes a doomed statemen
 
 **Cost.** About 30 lines in stmtcache.go, four helper call sites and a concurrency test. No generated-code change. Best done in the same change as binding the cache to its handle.
 
-### 15. [do] volt.go:36 `type ErrorHandler func(http.ResponseWriter, *Request, error)`, :40 Handler, :57 DefaultErrorHandler; the error_handler signature check at lang/semantics.go:453; spec §scopes clause 3, §formats rule 5
+### 15. [do] volt.go:38 `type ErrorHandler func(http.ResponseWriter, *Request, error)`, :42 Handler, :58 DefaultErrorHandler; the error_handler signature check at lang/semantics.go:453; spec §scopes clause 3, §formats rule 5
 
 **Effect.** The error handler both decides (status, message, details) and writes. It must therefore honour Committed() itself, negotiate the format, and produce a volt.Problem the generated client can decode, yet writeProblem is unexported. The "must not write once committed" rule exists only in a doc comment, and the handler logs through the ambient slog.Default.
 
@@ -1000,7 +1000,7 @@ A zero Status counts as 500. ProblemOf can be table-tested without httptest.
 
 **Cost.** 3 lines in middleware.go and one test.
 
-### 18. [do] nao/rt/null.go:50 `var jsonNull`, returned by MarshalJSON (:55) and compared against in UnmarshalJSON (:62) and rt.Field (nao/rt/changeset.go:314)
+### 18. [do] nao/rt/null.go:50 `var jsonNull`, returned by MarshalJSON (:55) and compared against in UnmarshalJSON (:62) and rt.Field (nao/rt/changeset.go:303)
 
 **Effect.** MarshalJSON returns the package's own slice, so any caller holding the result can change how NULL marshals and decodes for the whole process.
 
@@ -1054,7 +1054,7 @@ When the replay is not complete, Serve first writes an `event: volt.reset` that 
 
 **Cost.** events.go (ID format, since, Serve, client parsing and cursor), events_test, the itest client test, and §event-routes rules 2-3, which must name the reset event. About 5 sites; best combined with the NewBroker change from the broker-config item.
 
-### 22. [consider] Generated <Model>Update (nao/gen/golang/queries.go:682), which issues UPDATE ... SET <marked> WHERE <key> through rt.UpdateRowRender (nao/rt/changeset.go:407); the generated PATCH shim (gen/router/gen.go:447-454): Get, Cast, Update, no transaction; spec §changesets rule 8, §validators rule 5
+### 22. [consider] Generated <Model>Update (nao/gen/golang/queries.go:682), which issues UPDATE ... SET <marked> WHERE <key> through rt.UpdateRowRender (nao/rt/changeset.go:396); the generated PATCH shim (gen/router/gen.go:447-454): Get, Cast, Update, no transaction; spec §changesets rule 8, §validators rule 5
 
 **Effect.** Validate judges Row(), which is the snapshot plus the marks, but the statement carries only the marks. The snapshot values a validator read for unmarked columns are a precondition the write never states, and no CHECK backs them up (§validators rule 9).
 

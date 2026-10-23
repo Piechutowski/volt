@@ -1,7 +1,4 @@
-// The shared naming plan: one immutable Plan per checked
-// package, built once after the schema pass and read by the Volt
-// checker, the generators, vet and the language server.
-package golang
+package naming
 
 import (
 	"fmt"
@@ -23,7 +20,7 @@ type Plan struct {
 	p    *plan
 	err  error
 
-	byKey   map[string]*tableModel
+	byKey   map[string]*Table
 	methods map[string]crudRef
 	names   []string
 	base    *nameBase
@@ -35,8 +32,8 @@ type crudRef struct {
 }
 
 // PlanBuild plans one checked file (a package's merged declarations).
-// A plan that cannot be built — an unmappable column type, a Go name
-// collision — still answers: Err reports the reason and every lookup
+// A plan that cannot be built (an unmappable column type, a Go name
+// collision) still answers: Err reports the reason and every lookup
 // fails with it.
 func PlanBuild(f *ast.File, info *check.Info) *Plan {
 	return PlanBuildMemo(f, info, nil)
@@ -54,7 +51,7 @@ type PlanMemo struct {
 }
 
 type memoModel struct {
-	tm      *tableModel
+	tm      *Table
 	imports map[string]bool
 }
 
@@ -83,14 +80,14 @@ func PlanBuildMemo(f *ast.File, info *check.Info, memo *PlanMemo) *Plan {
 		pl.base = newNameBase()
 	}
 	pl.base.update(p.tables)
-	pl.byKey = make(map[string]*tableModel, len(p.tables))
+	pl.byKey = make(map[string]*Table, len(p.tables))
 	pl.methods = make(map[string]crudRef, 5*len(p.tables))
 	for _, t := range p.tables {
-		pl.byKey[t.ti.Key] = t
+		pl.byKey[t.Info.Key] = t
 		for _, m := range crudMethodsOf(t) {
 			pl.names = append(pl.names, m.Name)
 			if _, dup := pl.methods[m.Name]; !dup {
-				pl.methods[m.Name] = crudRef{tableKey: t.ti.Key, method: m}
+				pl.methods[m.Name] = crudRef{tableKey: t.Info.Key, method: m}
 			}
 		}
 	}
@@ -100,21 +97,30 @@ func PlanBuildMemo(f *ast.File, info *check.Info, memo *PlanMemo) *Plan {
 // Err reports why the plan could not be built, or nil.
 func (pl *Plan) Err() error { return pl.err }
 
-// Models renders the models file (volt_models.go) for the planned package;
-// a package-scope name the file would declare twice is an error, as it
-// is for Dyn (spec §changesets).
-func (pl *Plan) Models(opts Options) ([]byte, error) {
-	out, err := modelsGenerate(pl.f, pl.info, pl.p, pl.err, opts)
-	if err != nil {
-		return nil, err
+// File is the checked file the plan was built from, a package's merged
+// declarations (spec §projects-and-packages).
+func (pl *Plan) File() *ast.File { return pl.f }
+
+// Info is the schema facts the plan was built from (spec §static-semantics).
+func (pl *Plan) Info() *check.Info { return pl.info }
+
+// Tables lists every table's plan in declaration order; nil when the plan
+// could not be built (spec §mapping-to-go).
+func (pl *Plan) Tables() []*Table {
+	if pl.p == nil {
+		return nil
 	}
-	if err := pl.nameCollisionErr(); err != nil {
-		return nil, err
-	}
-	return out, nil
+	return pl.p.tables
 }
 
-func (pl *Plan) nameCollisionErr() error {
+// Table is the plan of the table with the given key, or the reason there
+// is none: the plan's own error, or no such table (spec §mapping-to-go).
+func (pl *Plan) Table(key string) (*Table, error) { return pl.table(key) }
+
+// NameCollisionErr is the first package-scope name collision the generated
+// files would produce, as an error; nil when there is none (spec
+// §changesets).
+func (pl *Plan) NameCollisionErr() error {
 	cs := pl.DynNameCollisions()
 	if len(cs) == 0 {
 		return nil
@@ -135,9 +141,9 @@ func (pl *Plan) SelectRowName(fn SelectFn) (string, error) {
 	case fn.SharedType != "":
 		return fn.SharedType, nil
 	case len(fn.Excluded) > 0:
-		return t.model + fn.MethodSuffix, nil
+		return t.Model + fn.MethodSuffix, nil
 	}
-	return t.model, nil
+	return t.Model, nil
 }
 
 // ModelRef is the identity of a table's model: the same value across
@@ -152,7 +158,7 @@ func (pl *Plan) ModelRef(tableKey string) any {
 	return t
 }
 
-func (pl *Plan) table(key string) (*tableModel, error) {
+func (pl *Plan) table(key string) (*Table, error) {
 	if pl.err != nil {
 		return nil, pl.err
 	}
@@ -172,7 +178,7 @@ func (pl *Plan) CRUDMethods(tableKey string) (model string, methods []CRUDMethod
 	if err != nil {
 		return "", nil, err
 	}
-	return t.model, crudMethodsOf(t), nil
+	return t.Model, crudMethodsOf(t), nil
 }
 
 // CRUDMethod finds the generated CRUD method with the given name; when
@@ -203,22 +209,22 @@ func (pl *Plan) QueryName(name string) (string, bool) {
 		return fmt.Sprintf("the CRUD method %s of table %q", name, ref.tableKey), true
 	}
 	for _, t := range pl.p.tables {
-		if len(t.fields) == 0 || !strings.HasPrefix(name, t.model) {
+		if len(t.Fields) == 0 || !strings.HasPrefix(name, t.Model) {
 			continue
 		}
-		tbl, rest := t.ti.Decl.Name.Name(), name[len(t.model):]
+		tbl, rest := t.Info.Decl.Name.Name(), name[len(t.Model):]
 		switch rest {
 		case "GetMany":
-			if len(t.pk) == 1 {
+			if len(t.PK) == 1 {
 				return fmt.Sprintf("the method %s of table %q", name, tbl), true
 			}
 		case "Query", "Count", "Exists", "DeleteWhere", "UpdateWhere":
 			return fmt.Sprintf("the dynamic-layer method %s of table %q", name, tbl), true
 		case "Table", "Columns":
-			return fmt.Sprintf("the statement constant %s%sSQL of table %q", argName(t.model), rest, tbl), true
+			return fmt.Sprintf("the statement constant %s%sSQL of table %q", ArgName(t.Model), rest, tbl), true
 		}
-		for _, f := range t.uniqueFields() {
-			if rest == "GetBy"+f.goField {
+		for _, f := range t.UniqueFields() {
+			if rest == "GetBy"+f.GoField {
 				return fmt.Sprintf("the method %s of table %q", name, tbl), true
 			}
 		}
@@ -226,25 +232,25 @@ func (pl *Plan) QueryName(name string) (string, bool) {
 	return "", false
 }
 
-func crudMethodsOf(t *tableModel) []CRUDMethod { return t.crud }
+func crudMethodsOf(t *Table) []CRUDMethod { return t.crud }
 
-func crudMethodsBuild(t *tableModel) []CRUDMethod {
+func crudMethodsBuild(t *Table) []CRUDMethod {
 	var methods []CRUDMethod
 	var key []SelectParam
-	for _, fp := range t.pk {
-		key = append(key, SelectParam{GoName: fp.arg, GoType: fp.baseType})
+	for _, fp := range t.PK {
+		key = append(key, SelectParam{GoName: fp.Arg, GoType: fp.BaseType})
 	}
-	m := t.model
-	if len(t.pk) > 0 {
+	m := t.Model
+	if len(t.PK) > 0 {
 		methods = append(methods, CRUDMethod{Name: m + "Get", Op: "get", Key: key, Result: m})
 	}
 	methods = append(methods, CRUDMethod{Name: m + "List", Op: "list", Result: m, Many: true})
 	methods = append(methods, CRUDMethod{Name: m + "Create", Op: "create", Body: m + "Changeset", Params: m + "Params",
-		New: m + "New", Allow: t.handles(t.settable()), Result: m})
-	if len(t.pk) > 0 {
-		if len(t.nonPK()) > 0 {
+		New: m + "New", Allow: t.handles(t.Settable()), Result: m})
+	if len(t.PK) > 0 {
+		if len(t.NonPK()) > 0 {
 			methods = append(methods, CRUDMethod{Name: m + "Update", Op: "update", Key: key, Body: m + "Changeset", Params: m + "Params",
-				Get: m + "Get", Allow: t.handles(t.nonPK()), Result: m})
+				Get: m + "Get", Allow: t.handles(t.NonPK()), Result: m})
 		}
 		methods = append(methods, CRUDMethod{Name: m + "Delete", Op: "delete", Key: key})
 	}
@@ -258,22 +264,22 @@ func (pl *Plan) ModelFields(tableKey string) (model string, fields []FieldSig, e
 	if err != nil {
 		return "", nil, err
 	}
-	return t.model, t.sigs, nil
+	return t.Model, t.sigs, nil
 }
 
-func fieldSigsBuild(t *tableModel) []FieldSig {
-	sigs := make([]FieldSig, 0, len(t.fields))
-	for _, fp := range t.fields {
+func fieldSigsBuild(t *Table) []FieldSig {
+	sigs := make([]FieldSig, 0, len(t.Fields))
+	for _, fp := range t.Fields {
 		sigs = append(sigs, fieldSigOf(fp))
 	}
 	return sigs
 }
 
-func fieldSigOf(fp *fieldPlan) FieldSig {
+func fieldSigOf(fp *Field) FieldSig {
 	return FieldSig{
-		Name: fp.goField, Col: fp.colName, Type: fp.goType,
-		Tag: fp.tag, Doc: settingNote(fp.col.Settings),
-		Nullable: fp.nullable,
+		Name: fp.GoField, Col: fp.ColName, Type: fp.GoType,
+		Tag: fp.Tag, Doc: SettingNote(fp.Col.Settings),
+		Nullable: fp.Nullable,
 	}
 }
 
@@ -284,16 +290,16 @@ func (pl *Plan) SelectRowType(fn SelectFn) (string, []FieldSig, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	cols, err := selectColumns(t, fn)
+	cols, err := t.SelectColumns(fn)
 	if err != nil {
 		return "", nil, err
 	}
-	row := t.model
+	row := t.Model
 	switch {
 	case fn.SharedType != "":
 		row = fn.SharedType
 	case len(fn.Excluded) > 0:
-		row = t.model + fn.MethodSuffix
+		row = t.Model + fn.MethodSuffix
 	}
 	sigs := make([]FieldSig, 0, len(cols))
 	for _, fp := range cols {
@@ -310,11 +316,12 @@ func (pl *Plan) SelectStatement(fn SelectFn) (string, []string, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	return SelectSQL(t, fn)
+	return t.SelectSQL(fn)
 }
 
 // DynNameCollisions reports the package-scope Go name collisions the
-// generated files would produce; see the package-level function.
+// generated files would produce, in declaration order; a plan that could
+// not be built reports nothing.
 func (pl *Plan) DynNameCollisions() []NameCollision {
 	if pl.err != nil {
 		return nil
@@ -397,7 +404,7 @@ func dynPair(name string, first, second dynOrigin) NameCollision {
 }
 
 func dynOriginOf(o *nameOrigin) dynOrigin {
-	d := dynOrigin{tm: o.table, pos: o.table.ti.Decl.Pos()}
+	d := dynOrigin{tm: o.table, pos: o.table.Info.Decl.Pos()}
 	switch o.kind {
 	case nameModel:
 		d.kind = dynModel
@@ -410,9 +417,9 @@ func dynOriginOf(o *nameOrigin) dynOrigin {
 	case nameNew:
 		d.kind = dynNew
 	case nameHandle:
-		d.kind, d.f, d.pos = dynHandle, o.field, o.field.col.Pos()
+		d.kind, d.f, d.pos = dynHandle, o.field, o.field.Col.Pos()
 	case nameDynFunc:
-		d.kind, d.sfx = dynWrapper, o.name[len(o.table.model):]
+		d.kind, d.sfx = dynWrapper, o.name[len(o.table.Model):]
 	}
 	return d
 }
@@ -445,28 +452,28 @@ type nameOrigin struct {
 	name  string
 	kind  nameKind
 	idx   int
-	table *tableModel
-	field *fieldPlan
+	table *Table
+	field *Field
 	dyn   bool
 	rank  int
 }
 
-func modelNamesBuild(t *tableModel) []nameOrigin {
-	names := make([]nameOrigin, 0, 5+len(dynWrapperSuffixes)+len(t.fields))
-	add := func(name string, kind nameKind, field *fieldPlan, dyn bool, rank int) {
+func modelNamesBuild(t *Table) []nameOrigin {
+	names := make([]nameOrigin, 0, 5+len(dynWrapperSuffixes)+len(t.Fields))
+	add := func(name string, kind nameKind, field *Field, dyn bool, rank int) {
 		names = append(names, nameOrigin{name: name, kind: kind, idx: len(names), table: t, field: field, dyn: dyn, rank: rank})
 	}
-	queryable := len(t.fields) > 0
-	add(t.model, nameModel, nil, true, 0)
-	add(t.model+"Changeset", nameChangeset, nil, queryable, 1)
-	add(t.model+"Column", nameColumn, nil, queryable, 2)
-	add(t.model+"Params", nameParams, nil, queryable, 3)
-	add(t.model+"New", nameNew, nil, queryable, 4)
+	queryable := len(t.Fields) > 0
+	add(t.Model, nameModel, nil, true, 0)
+	add(t.Model+"Changeset", nameChangeset, nil, queryable, 1)
+	add(t.Model+"Column", nameColumn, nil, queryable, 2)
+	add(t.Model+"Params", nameParams, nil, queryable, 3)
+	add(t.Model+"New", nameNew, nil, queryable, 4)
 	for i, suffix := range dynWrapperSuffixes {
-		add(t.model+suffix, nameDynFunc, nil, queryable, 5+len(t.fields)+i)
+		add(t.Model+suffix, nameDynFunc, nil, queryable, 5+len(t.Fields)+i)
 	}
-	for i, fp := range t.fields {
-		add(t.model+fp.goField, nameHandle, fp, queryable, 5+i)
+	for i, fp := range t.Fields {
+		add(t.Model+fp.GoField, nameHandle, fp, queryable, 5+i)
 	}
 	return names
 }
@@ -474,25 +481,25 @@ func modelNamesBuild(t *tableModel) []nameOrigin {
 func (o *nameOrigin) describe() string {
 	switch o.kind {
 	case nameModel:
-		return fmt.Sprintf("the model of table %q", o.table.ti.Decl.Name.Name())
+		return fmt.Sprintf("the model of table %q", o.table.Info.Decl.Name.Name())
 	case nameChangeset:
-		return fmt.Sprintf("the changeset of table %q", o.table.ti.Decl.Name.Name())
+		return fmt.Sprintf("the changeset of table %q", o.table.Info.Decl.Name.Name())
 	case nameColumn:
-		return fmt.Sprintf("the column handle type of table %q", o.table.ti.Decl.Name.Name())
+		return fmt.Sprintf("the column handle type of table %q", o.table.Info.Decl.Name.Name())
 	case nameParams:
-		return fmt.Sprintf("the write body type of table %q", o.table.ti.Decl.Name.Name())
+		return fmt.Sprintf("the write body type of table %q", o.table.Info.Decl.Name.Name())
 	case nameNew:
-		return fmt.Sprintf("the changeset constructor of table %q", o.table.ti.Decl.Name.Name())
+		return fmt.Sprintf("the changeset constructor of table %q", o.table.Info.Decl.Name.Name())
 	case nameHandle:
-		return fmt.Sprintf("the column handle for %s.%s", o.table.ti.Decl.Name.Name(), o.field.colName)
+		return fmt.Sprintf("the column handle for %s.%s", o.table.Info.Decl.Name.Name(), o.field.ColName)
 	}
 	return "the dynamic-layer function " + o.name
 }
 
 type nameBase struct {
 	origins map[string]nameSlot
-	models  map[*tableModel]bool
-	pos     map[*tableModel]int
+	models  map[*Table]bool
+	pos     map[*Table]int
 	dups    map[string]bool
 }
 
@@ -502,12 +509,12 @@ type nameSlot struct {
 }
 
 func newNameBase() *nameBase {
-	return &nameBase{origins: map[string]nameSlot{}, models: map[*tableModel]bool{}, dups: map[string]bool{}}
+	return &nameBase{origins: map[string]nameSlot{}, models: map[*Table]bool{}, dups: map[string]bool{}}
 }
 
-func (b *nameBase) update(tables []*tableModel) {
-	current := make(map[*tableModel]bool, len(tables))
-	b.pos = make(map[*tableModel]int, len(tables))
+func (b *nameBase) update(tables []*Table) {
+	current := make(map[*Table]bool, len(tables))
+	b.pos = make(map[*Table]int, len(tables))
 	for i, t := range tables {
 		current[t] = true
 		b.pos[t] = i
@@ -524,7 +531,7 @@ func (b *nameBase) update(tables []*tableModel) {
 	}
 }
 
-func (b *nameBase) add(t *tableModel) {
+func (b *nameBase) add(t *Table) {
 	b.models[t] = true
 	for i := range t.names {
 		o := &t.names[i]
@@ -539,7 +546,7 @@ func (b *nameBase) add(t *tableModel) {
 	}
 }
 
-func (b *nameBase) remove(t *tableModel) {
+func (b *nameBase) remove(t *Table) {
 	delete(b.models, t)
 	for i := range t.names {
 		o := &t.names[i]

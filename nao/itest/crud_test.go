@@ -125,8 +125,8 @@ func TestUserCRUD(t *testing.T) {
 	}
 
 	_, err = q.UserCreate(ctx, UserNew().EmailSet("ann@example.com").NameSet("Imposter"))
-	if inv := invalidOf(t, err, "unique", "email"); inv.StatusCode() != 409 || inv.Cause == nil {
-		t.Errorf("a duplicate email is a 409 wrapping the driver's error: %+v", inv)
+	if inv := invalidOf(t, err, "unique", "email"); inv.Cause == nil {
+		t.Errorf("a duplicate email is a unique field error wrapping the driver's error: %+v", inv)
 	}
 }
 
@@ -159,18 +159,18 @@ func TestOrderDefaultsMembershipAndFKs(t *testing.T) {
 	}
 
 	_, err = q.OrderCreate(ctx, OrderNew().UserIDSet(999).TotalSet(1.00).FeeSet(0))
-	if inv := invalidOf(t, err, "foreign_key"); inv.StatusCode() != 422 || inv.Cause == nil {
-		t.Errorf("a dangling user_id is a 422 foreign_key field error without a column: %+v", inv)
+	if inv := invalidOf(t, err, "foreign_key"); inv.Cause == nil {
+		t.Errorf("a dangling user_id is a foreign_key field error without a column, wrapping the driver's error: %+v", inv)
 	}
 
 	_, err = q.OrderCreate(ctx, OrderNew().UserIDSet(u.ID).TotalSet(1.00))
-	if inv := invalidOf(t, err, "not_null", "fee"); inv.StatusCode() != 422 {
-		t.Errorf("an unmarked NOT NULL column without a default is a 422 not_null field error: %+v", inv)
+	if inv := invalidOf(t, err, "not_null", "fee"); inv.Cause == nil {
+		t.Errorf("an unmarked NOT NULL column without a default is a not_null field error wrapping the driver's error: %+v", inv)
 	}
 
 	_, err = q.OrderUpdate(ctx, o.Changeset().StatusSet("teleported"))
-	if inv := invalidOf(t, err, "OrderStateKnown", "status"); inv.StatusCode() != 422 || inv.Cause != nil {
-		t.Errorf("a value outside the constants is a 422 field error of the membership validator before any statement runs: %+v", inv)
+	if inv := invalidOf(t, err, "OrderStateKnown", "status"); inv.Cause != nil {
+		t.Errorf("a value outside the constants is a field error of the membership validator before any statement runs: %+v", inv)
 	}
 	if _, err := db.ExecContext(ctx, `UPDATE orders SET status = 'teleported' WHERE id = ?`, o.ID); err != nil {
 		t.Errorf("the database carries no CHECK for a validated column: %v", err)
@@ -191,8 +191,8 @@ func TestUserTagCompositePK(t *testing.T) {
 		t.Errorf("UserTagGet = %+v, %v", got, err)
 	}
 	_, err = q.UserTagCreate(ctx, UserTagNew().From(tag))
-	if inv := invalidOf(t, err, "unique", "user_id", "tag"); inv.StatusCode() != 409 {
-		t.Errorf("a duplicate composite key names both columns: %+v", inv)
+	if inv := invalidOf(t, err, "unique", "user_id", "tag"); inv.Cause == nil {
+		t.Errorf("a duplicate composite key names both columns and wraps the driver's error: %+v", inv)
 	}
 	if err := q.UserTagDelete(ctx, tag.UserID, tag.Tag); err != nil {
 		t.Errorf("UserTagDelete: %v", err)

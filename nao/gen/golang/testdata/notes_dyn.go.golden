@@ -37,66 +37,66 @@ func PostSet(assigns ...rt.Assign[Post]) []rt.Assign[Post] { return assigns }
 // shaped by the remaining options (order, limit, offset, keyset,
 // distinct). No options means every row.
 func (q *Queries) PostQuery(ctx context.Context, opts ...rt.Opt[Post]) ([]Post, error) {
-	query, args, err := rt.SelectRender(postTableSQL, postColumnsSQL, opts)
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(postTableSQL, postColumnsSQL, opts)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := rt.StmtQuery(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Post{}
-	for rows.Next() {
-		v, err := postScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Post{}
+	for voltRows.Next() {
+		voltV, voltErr := postScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // PostCount reports how many posts rows match every given predicate;
 // none counts the whole table.
 func (q *Queries) PostCount(ctx context.Context, preds ...rt.Pred[Post]) (int64, error) {
-	query, args, err := rt.CountRender(postTableSQL, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.CountRender(postTableSQL, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	var n int64
-	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &n); err != nil {
-		return 0, err
+	var voltN int64
+	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
+		return 0, voltErr
 	}
-	return n, nil
+	return voltN, nil
 }
 
 // PostExists reports whether any posts row matches every given predicate.
 func (q *Queries) PostExists(ctx context.Context, preds ...rt.Pred[Post]) (bool, error) {
-	query, args, err := rt.ExistsRender(postTableSQL, preds)
-	if err != nil {
-		return false, err
+	voltQuery, voltArgs, voltErr := rt.ExistsRender(postTableSQL, preds)
+	if voltErr != nil {
+		return false, voltErr
 	}
-	var found bool
-	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &found); err != nil {
-		return false, err
+	var voltFound bool
+	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
+		return false, voltErr
 	}
-	return found, nil
+	return voltFound, nil
 }
 
 // PostDeleteWhere removes every posts row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
 // full-table delete.
 func (q *Queries) PostDeleteWhere(ctx context.Context, preds ...rt.Pred[Post]) (int64, error) {
-	query, args, err := rt.DeleteRender(postTableSQL, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.DeleteRender(postTableSQL, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return 0, err
+	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	return res.RowsAffected()
+	return voltRes.RowsAffected()
 }
 
 // PostUpdateWhere applies the typed assignments (PostSet) to every posts
@@ -104,15 +104,15 @@ func (q *Queries) PostDeleteWhere(ctx context.Context, preds ...rt.Pred[Post]) (
 // partial update of the dynamic layer. No effective predicate
 // is an error, never a full-table rewrite.
 func (q *Queries) PostUpdateWhere(ctx context.Context, set []rt.Assign[Post], preds ...rt.Pred[Post]) (int64, error) {
-	query, args, err := rt.UpdateRender(postTableSQL, set, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.UpdateRender(postTableSQL, set, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return 0, err
+	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	return res.RowsAffected()
+	return voltRes.RowsAffected()
 }
 
 const (
@@ -145,66 +145,66 @@ func TagSet(assigns ...rt.Assign[Tag]) []rt.Assign[Tag] { return assigns }
 // shaped by the remaining options (order, limit, offset, keyset,
 // distinct). No options means every row.
 func (q *Queries) TagQuery(ctx context.Context, opts ...rt.Opt[Tag]) ([]Tag, error) {
-	query, args, err := rt.SelectRender(tagTableSQL, tagColumnsSQL, opts)
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(tagTableSQL, tagColumnsSQL, opts)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := rt.StmtQuery(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Tag{}
-	for rows.Next() {
-		v, err := tagScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Tag{}
+	for voltRows.Next() {
+		voltV, voltErr := tagScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // TagCount reports how many tags rows match every given predicate;
 // none counts the whole table.
 func (q *Queries) TagCount(ctx context.Context, preds ...rt.Pred[Tag]) (int64, error) {
-	query, args, err := rt.CountRender(tagTableSQL, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.CountRender(tagTableSQL, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	var n int64
-	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &n); err != nil {
-		return 0, err
+	var voltN int64
+	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
+		return 0, voltErr
 	}
-	return n, nil
+	return voltN, nil
 }
 
 // TagExists reports whether any tags row matches every given predicate.
 func (q *Queries) TagExists(ctx context.Context, preds ...rt.Pred[Tag]) (bool, error) {
-	query, args, err := rt.ExistsRender(tagTableSQL, preds)
-	if err != nil {
-		return false, err
+	voltQuery, voltArgs, voltErr := rt.ExistsRender(tagTableSQL, preds)
+	if voltErr != nil {
+		return false, voltErr
 	}
-	var found bool
-	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &found); err != nil {
-		return false, err
+	var voltFound bool
+	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
+		return false, voltErr
 	}
-	return found, nil
+	return voltFound, nil
 }
 
 // TagDeleteWhere removes every tags row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
 // full-table delete.
 func (q *Queries) TagDeleteWhere(ctx context.Context, preds ...rt.Pred[Tag]) (int64, error) {
-	query, args, err := rt.DeleteRender(tagTableSQL, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.DeleteRender(tagTableSQL, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return 0, err
+	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	return res.RowsAffected()
+	return voltRes.RowsAffected()
 }
 
 // TagUpdateWhere applies the typed assignments (TagSet) to every tags
@@ -212,13 +212,13 @@ func (q *Queries) TagDeleteWhere(ctx context.Context, preds ...rt.Pred[Tag]) (in
 // partial update of the dynamic layer. No effective predicate
 // is an error, never a full-table rewrite.
 func (q *Queries) TagUpdateWhere(ctx context.Context, set []rt.Assign[Tag], preds ...rt.Pred[Tag]) (int64, error) {
-	query, args, err := rt.UpdateRender(tagTableSQL, set, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.UpdateRender(tagTableSQL, set, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return 0, err
+	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	return res.RowsAffected()
+	return voltRes.RowsAffected()
 }

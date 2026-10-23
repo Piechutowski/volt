@@ -66,13 +66,13 @@ func (c UserChangeset) IDSet(v int) UserChangeset {
 // for a key that names no column (spec §changesets).
 func (c UserChangeset) Cast(p UserParams, allow ...UserColumn) UserChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "id":
-			if v, ok, err := rt.Field(p, "id", "int", false, func(r *User) int { return r.ID }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "id")
-			} else if ok {
-				c = c.IDSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *User) int { return voltR.ID }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "id")
+			} else if voltOK {
+				c = c.IDSet(voltV)
 			}
 		}
 	}
@@ -90,21 +90,21 @@ func (c UserChangeset) Changed(col UserColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c UserChangeset) Row() User {
-	r := c.data
+	voltR := c.data
 	if c.set[0] {
-		r.ID = c.vals.ID
+		voltR.ID = c.vals.ID
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c UserChangeset) Params() UserParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[0] {
-		marks = append(marks, rt.Mark{Wire: "id", Value: c.vals.ID})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "id", Value: c.vals.ID})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec
@@ -245,43 +245,43 @@ func (c PostChangeset) RawSet(v rt.Null[[]byte]) PostChangeset {
 // for a key that names no column (spec §changesets).
 func (c PostChangeset) Cast(p PostParams, allow ...PostColumn) PostChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "author_id", "editor_id", "reviewed_at", "meta", "raw")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "id":
-			if v, ok, err := rt.Field(p, "id", "int", false, func(r *Post) int { return r.ID }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "id")
-			} else if ok {
-				c = c.IDSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *Post) int { return voltR.ID }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "id")
+			} else if voltOK {
+				c = c.IDSet(voltV)
 			}
 		case "author_id":
-			if v, ok, err := rt.Field(p, "author_id", "int", false, func(r *Post) int { return r.AuthorID }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "author_id")
-			} else if ok {
-				c = c.AuthorIDSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "author_id", "int", false, func(voltR *Post) int { return voltR.AuthorID }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "author_id")
+			} else if voltOK {
+				c = c.AuthorIDSet(voltV)
 			}
 		case "editor_id":
-			if v, ok, err := rt.Field(p, "editor_id", "int", true, func(r *Post) rt.Null[int] { return r.EditorID }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "editor_id")
-			} else if ok {
-				c = c.EditorIDSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "editor_id", "int", true, func(voltR *Post) rt.Null[int] { return voltR.EditorID }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "editor_id")
+			} else if voltOK {
+				c = c.EditorIDSet(voltV)
 			}
 		case "reviewed_at":
-			if v, ok, err := rt.Field(p, "reviewed_at", "time.Time", true, func(r *Post) rt.Null[time.Time] { return r.ReviewedAt }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "reviewed_at")
-			} else if ok {
-				c = c.ReviewedAtSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "reviewed_at", "time.Time", true, func(voltR *Post) rt.Null[time.Time] { return voltR.ReviewedAt }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "reviewed_at")
+			} else if voltOK {
+				c = c.ReviewedAtSet(voltV)
 			}
 		case "meta":
-			if v, ok, err := rt.Field(p, "meta", "string", true, func(r *Post) rt.Null[string] { return r.Meta }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "meta")
-			} else if ok {
-				c = c.MetaSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "meta", "string", true, func(voltR *Post) rt.Null[string] { return voltR.Meta }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "meta")
+			} else if voltOK {
+				c = c.MetaSet(voltV)
 			}
 		case "raw":
-			if v, ok, err := rt.Field(p, "raw", "[]byte", true, func(r *Post) rt.Null[[]byte] { return r.Raw }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "raw")
-			} else if ok {
-				c = c.RawSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "raw", "[]byte", true, func(voltR *Post) rt.Null[[]byte] { return voltR.Raw }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "raw")
+			} else if voltOK {
+				c = c.RawSet(voltV)
 			}
 		}
 	}
@@ -309,51 +309,51 @@ func (c PostChangeset) Changed(col PostColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c PostChangeset) Row() Post {
-	r := c.data
+	voltR := c.data
 	if c.set[0] {
-		r.ID = c.vals.ID
+		voltR.ID = c.vals.ID
 	}
 	if c.set[1] {
-		r.AuthorID = c.vals.AuthorID
+		voltR.AuthorID = c.vals.AuthorID
 	}
 	if c.set[2] {
-		r.EditorID = c.vals.EditorID
+		voltR.EditorID = c.vals.EditorID
 	}
 	if c.set[3] {
-		r.ReviewedAt = c.vals.ReviewedAt
+		voltR.ReviewedAt = c.vals.ReviewedAt
 	}
 	if c.set[4] {
-		r.Meta = c.vals.Meta
+		voltR.Meta = c.vals.Meta
 	}
 	if c.set[5] {
-		r.Raw = c.vals.Raw
+		voltR.Raw = c.vals.Raw
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c PostChangeset) Params() PostParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[0] {
-		marks = append(marks, rt.Mark{Wire: "id", Value: c.vals.ID})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "id", Value: c.vals.ID})
 	}
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "author_id", Value: c.vals.AuthorID})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "author_id", Value: c.vals.AuthorID})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "editor_id", Value: c.vals.EditorID})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "editor_id", Value: c.vals.EditorID})
 	}
 	if c.set[3] {
-		marks = append(marks, rt.Mark{Wire: "reviewed_at", Value: c.vals.ReviewedAt})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "reviewed_at", Value: c.vals.ReviewedAt})
 	}
 	if c.set[4] {
-		marks = append(marks, rt.Mark{Wire: "meta", Value: c.vals.Meta})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "meta", Value: c.vals.Meta})
 	}
 	if c.set[5] {
-		marks = append(marks, rt.Mark{Wire: "raw", Value: c.vals.Raw})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "raw", Value: c.vals.Raw})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec

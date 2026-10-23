@@ -110,6 +110,7 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
   - [Collected grammar (Part I)](#collected-grammar-part-i)
 - **Part II — The Project and Routing Layer**
   - [Layers, files and the superset rule](#layers-files-and-the-superset-rule)
+  - [Data and network layers](#data-and-network-layers)
   - [Projects and packages](#projects-and-packages)
   - [Imports](#imports)
   - [Pipelines](#pipelines)
@@ -1713,6 +1714,46 @@ files under `invalid/` MUST be rejected.
    only the order of generated output (the DDL, the route table) and of
    diagnostics (§projects-and-packages).
 
+## Data and network layers
+
+What Volt generates falls into two layers, told apart here and nowhere
+else.
+
+1. **The data layer** is the schema core (Part I), migrations
+   (§migrations), groups (§groups), predicates (§predicates), selects
+   (§selects-over-groups), validators (§validators) and changesets
+   (§changesets). `volt gen` writes it into a package's data files,
+   `volt_models.go`, `volt_queries.go`, `volt_dyn.go`,
+   `volt_validate.go`, `volt_selects.go` and `volt_migrations.go` (with
+   `volt_schema.sql` on request), over the data runtime `nao/rt`. A data
+   file imports only the standard library, `nao/rt` and the packages of
+   the package's declared types (§types).
+2. **The network layer** is packages (§projects-and-packages), imports
+   (§imports), pipelines (§pipelines), scopes and routes
+   (§scopes-and-routes), resources (§resources) and datasets
+   (§datasets). `volt gen` writes it into the route files,
+   `volt_handlers.go`, `volt_router.go`, `volt_paths.go`,
+   `volt_routes.go` and the client's `volt_client.go`, over the root
+   `volt` package, the network runtime.
+3. **The rule.** The network layer may use the data layer, never the
+   reverse. The route files call a data package's queries and
+   changesets, and the root `volt` package reads the data runtime's
+   refused write to choose its status (§formats). No data file and no
+   package under `nao/` reaches the root `volt` package, the route
+   generator `gen/router`, the generation driver `gen/model`, the
+   language server or the tool, and `nao/rt` imports the standard
+   library alone, never `net/http`. The front end `lang/` checks both
+   layers; the names of the data layer are decided once, in
+   `nao/naming`, which the data generator renders and the front end and
+   the language server read, so no checker imports a generator. A layer
+   contract test (`cmd/volt/layers_test.go`) fails the build when any of
+   this breaks.
+4. **The data layer alone.** A package of schema files without routes,
+   whose files declare no scope, resource or dataset, generates its data
+   files alone, and a program built on it links nothing from Volt but
+   `nao/rt`. The package clause (§projects-and-packages) is the one
+   declaration of the network layer such a package carries.
+
 ## Projects and packages
 
 ```ebnf
@@ -2071,10 +2112,11 @@ Scope /api [pipe: api] {
    (Formats): rows or a row with status 200, a created row with 201,
    a delete with 204 and no body. A query's row miss (`rt.ErrNotFound`,
    which is `sql.ErrNoRows`) is a 404 through the error spine. A
-   refused write is a `*rt.Invalid` through the error spine: 409 for
-   a unique violation, 422 otherwise, itemized per field (§changesets,
-   `rt.Invalid`), an unknown key of the body among the fields. Any other
-   error is the spine's 500.
+   refused write is a `*rt.Invalid`, which carries no HTTP status
+   (§changesets, `rt.Invalid`); the error spine gives it one (§formats):
+   409 when a unique violation is among its field errors, 422 otherwise,
+   itemized per field, an unknown key of the body among the fields. Any
+   other error is the spine's 500.
 4. **Names.** The helper name (§route-names-and-reverse-urls) defaults to the scope name
    prefixes followed by the method name, and only the `get` routes of
    reads carry one: writes have no reverse URL, as with resources
@@ -2134,11 +2176,17 @@ for a format suffix.
    `volt.Decode`, so a controller route can speak both formats without
    repeating them.
 5. **Error bodies** are structured: the default error handler writes a
-   `volt.Problem` — status, message, and details (check, columns,
-   message) when the error itemizes them — in the negotiated format,
-   JSON when the client offered nothing usable. A generated client
-   decodes it into a `*volt.ProblemError`, so a caller reads
-   `errors.As(err, &pe)` and marks the fields `pe.Details` name.
+   `volt.Problem` (status, message, and details: check, columns,
+   message, when the error itemizes them) in the negotiated format,
+   JSON when the client offered nothing usable. `volt.ProblemOf` finds
+   it and is where the network layer chooses a status
+   (§data-and-network-layers): an `HTTPError` keeps its own; a refused
+   write, the data runtime's `*rt.Invalid` (§changesets), is 409 when a
+   `unique` field error is among its fields and 422 otherwise; a query's
+   row miss is 404; any other error has none and is the default
+   handler's 500. A generated client decodes the body into a
+   `*volt.ProblemError`, so a caller reads `errors.As(err, &pe)` and
+   marks the fields `pe.Details` name.
 
 ### Generated client
 
@@ -2702,9 +2750,10 @@ Pred chosen  { org in :orgs }
      type across the whole use site (a list and a scalar use of the
      same name disagree), or the later use is an error naming both
      types. A parameter name MUST be an ASCII Go identifier that is
-     neither a Go keyword nor a name the generated signatures and
-     bodies use (`ctx`, `q`, `rows`, `err`, `out`, `rt`, `w`, `r`,
-     `opts`, `volt`, `cs`, `c`).
+     neither a Go keyword nor a name the generated signatures use
+     (`ctx`, `q`, `rt`, `w`, `r`, `opts`, `volt`, `cs`, `c`), and MUST
+     NOT have the form of the generated locals, `volt`, an upper-case
+     letter and no underscore (§generated-query-surface).
 4. `[]byte` (rule 3) is the one column type predicates refuse: every
    other column, a column of a declared type among them, compares
    under rule 5.
@@ -3000,10 +3049,10 @@ func EmailShape(email string) error {
    message is the returned error's. Nothing else calls a validator;
    `Create` and `Update` call `Validate` before writing.
 7. **Statuses and attribution.** A refused `Create`, `Update` or
-   `Delete` is one `*rt.Invalid`,
-   422 for failed validators and 409 for a unique violation, itemizing
-   every field error (§changesets), which the error spine renders into
-   the error body (§formats) so a form can mark the fields.
+   `Delete` is one `*rt.Invalid` itemizing every field error
+   (§changesets), which the error spine of the network layer answers
+   with 422 for failed validators and 409 for a unique violation and
+   renders into the error body (§formats) so a form can mark the fields.
 8. **`required` columns** (§columns) carry the one built-in rule of
    `Validate`, which the schema switches on per column. The type's
    empty value is refused, Go only, like every validator. Membership
@@ -3174,10 +3223,12 @@ user, err := q.UserUpdate(ctx, cs)
     which SQLite names by the index alone), a NOT NULL violation
     `not_null` on its column, a foreign key violation `foreign_key`
     with no column (SQLite names none), each wrapping the driver's
-    error as `Cause`. Its status is 409 when a `unique` field error is
-    among them, 422 otherwise; it itemizes itself (`Details()`: check,
+    error as `Cause`. It carries no HTTP status, the data runtime
+    knowing nothing of HTTP (§data-and-network-layers): the error spine
+    answers 409 when a `unique` field error is among its fields and 422
+    otherwise (§formats). It itemizes itself (`Details()`: check,
     columns, message), which the error spine renders into the error
-    body (§formats) so a form can mark the fields. Any other database
+    body so a form can mark the fields. Any other database
     error is returned as is, and the bulk paths of rule 11 return the
     driver's error unmapped.
 11. **Bulk paths bypass.** `UpdateWhere` and `DeleteWhere` of the
@@ -3953,6 +4004,18 @@ rt.DBTX)`, `Tx`, `WithTx`, `WithCache`):
 5. `rt.Open(driver, dsn)` pins one connection and sets WAL,
    `busy_timeout = 5000` and `foreign_keys = ON`. `rt.Null[T]`
    marshals as the value or `null`.
+6. **Locals.** Every local a function of a data file declares, the
+   parameters of a function literal included, is `volt` followed by an
+   upper-case letter, with no underscore (`voltErr`, `voltRows`,
+   `voltV`). The parameter a key column takes in `Get`, `GetMany`,
+   `GetBy*` and `Delete` is its Go field name (§names) with the leading
+   initialism or letter lowered (`UserID` is `userID`), with `_`
+   appended when that is a Go keyword, `ctx`, `arg`, `q`, `rt` or of the
+   locals' form (a column `volt_err` takes `voltErr_`); `GetMany` takes
+   that name with `s` added. A select parameter cannot take that form (§predicates),
+   so no column and no parameter shadows a local: key columns named
+   `err`, `res`, `n`, `out`, `rows` or `q` generate methods that
+   compile.
 
 ---
 

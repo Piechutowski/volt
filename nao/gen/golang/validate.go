@@ -10,26 +10,28 @@ import (
 	"github.com/Piechutowski/volt/gen/align"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/nao/naming"
 )
 
 // GenerateValidators renders volt_validate.go for one checked schema file;
 // fns carries the validators the Volt checker lowered, none for a plain
 // schema.
-func GenerateValidators(f *ast.File, info *check.Info, fns []ValidatorFn, opts Options) ([]byte, error) {
-	return PlanBuild(f, info).Validators(fns, opts)
+func GenerateValidators(f *ast.File, info *check.Info, fns []naming.ValidatorFn, opts Options) ([]byte, error) {
+	return Validators(naming.PlanBuild(f, info), fns, opts)
 }
 
-// Validators renders volt_validate.go for the planned package.
-func (pl *Plan) Validators(fns []ValidatorFn, opts Options) ([]byte, error) {
+// Validators renders volt_validate.go for the planned package (spec
+// §validators).
+func Validators(pl *naming.Plan, fns []naming.ValidatorFn, opts Options) ([]byte, error) {
 	if opts.Package == "" {
 		return nil, fmt.Errorf("no package name")
 	}
-	if pl.err != nil {
-		return nil, pl.err
+	if err := pl.Err(); err != nil {
+		return nil, err
 	}
-	specs := make(map[string][]ValidatorSpec, len(fns))
+	specs := make(map[string][]naming.ValidatorSpec, len(fns))
 	for _, fn := range fns {
-		if pl.byKey[fn.TableKey] == nil {
+		if _, err := pl.Table(fn.TableKey); err != nil {
 			return nil, fmt.Errorf("validator: no table %q in the plan", fn.TableKey)
 		}
 		specs[fn.TableKey] = fn.Validators
@@ -37,11 +39,11 @@ func (pl *Plan) Validators(fns []ValidatorFn, opts Options) ([]byte, error) {
 
 	var body strings.Builder
 	usesRt := false
-	for _, t := range pl.p.tables {
-		if len(t.fields) == 0 {
+	for _, t := range pl.Tables() {
+		if len(t.Fields) == 0 {
 			continue
 		}
-		usesRt = validateEmit(&body, t, specs[t.ti.Key]) || usesRt
+		usesRt = validateEmit(&body, t, specs[t.Info.Key]) || usesRt
 	}
 
 	var out strings.Builder
@@ -58,18 +60,22 @@ func (pl *Plan) Validators(fns []ValidatorFn, opts Options) ([]byte, error) {
 	return align.Finish(out.String()), nil
 }
 
-func validateEmit(b *strings.Builder, t *tableModel, specs []ValidatorSpec) bool {
-	m := t.model
-	tbl := t.ti.Decl.Name.Name()
+func validateEmit(b *strings.Builder, t *naming.Table, specs []naming.ValidatorSpec) bool {
+	m := t.Model
+	tbl := t.Info.Decl.Name.Name()
 	var checks strings.Builder
-	for _, f := range t.fields {
-		if f.required {
+	for _, f := range t.Fields {
+		if f.Required {
 			requiredEmit(&checks, f)
 		}
 	}
 	for _, ck := range specs {
-		fmt.Fprintf(&checks, "\tif err := %s; err != nil {\n", ck.Call)
-		fmt.Fprintf(&checks, "\t\terrs = append(errs, rt.FieldError{Check: %q, Columns: %#v, Message: err.Error()})\n\t}\n", ck.Name, ck.Cols)
+		args := make([]string, len(ck.Fields))
+		for i, f := range ck.Fields {
+			args[i] = "voltV." + f
+		}
+		fmt.Fprintf(&checks, "\tif voltErr := %s(%s); voltErr != nil {\n", ck.Name, strings.Join(args, ", "))
+		fmt.Fprintf(&checks, "\t\tvoltErrs = append(voltErrs, rt.FieldError{Check: %q, Columns: %#v, Message: voltErr.Error()})\n\t}\n", ck.Name, ck.Cols)
 	}
 
 	fmt.Fprintf(b, "// Validate runs required and the validators of %s over the row,\n", tbl)
@@ -80,24 +86,24 @@ func validateEmit(b *strings.Builder, t *tableModel, specs []ValidatorSpec) bool
 		b.WriteString("\tc.valid = nil\n\treturn c\n}\n\n")
 		return false
 	}
-	b.WriteString("\tv := c.Row()\n\tvar errs []rt.FieldError\n")
+	b.WriteString("\tvoltV := c.Row()\n\tvar voltErrs []rt.FieldError\n")
 	b.WriteString(checks.String())
-	b.WriteString("\tc.valid = errs\n\treturn c\n}\n\n")
+	b.WriteString("\tc.valid = voltErrs\n\treturn c\n}\n\n")
 	return true
 }
 
-func requiredEmit(b *strings.Builder, f *fieldPlan) {
+func requiredEmit(b *strings.Builder, f *naming.Field) {
 	var cond string
 	switch {
-	case f.declared && !f.kinded:
-		cond = "rt.Blank(v." + f.goField + ")"
-	case f.storage == "string":
-		cond = "v." + f.goField + ` == ""`
-	case f.storage == "[]byte":
-		cond = "len(v." + f.goField + ") == 0"
+	case f.Declared && !f.Kinded:
+		cond = "rt.Blank(voltV." + f.GoField + ")"
+	case f.Storage == "string":
+		cond = "voltV." + f.GoField + ` == ""`
+	case f.Storage == "[]byte":
+		cond = "len(voltV." + f.GoField + ") == 0"
 	default:
-		cond = "v." + f.goField + " == 0"
+		cond = "voltV." + f.GoField + " == 0"
 	}
 	fmt.Fprintf(b, "\tif %s {\n", cond)
-	fmt.Fprintf(b, "\t\terrs = append(errs, rt.FieldError{Check: \"required\", Columns: []string{%q}, Message: %q})\n\t}\n", f.colName, f.colName+" is required")
+	fmt.Fprintf(b, "\t\tvoltErrs = append(voltErrs, rt.FieldError{Check: \"required\", Columns: []string{%q}, Message: %q})\n\t}\n", f.ColName, f.ColName+" is required")
 }

@@ -76,19 +76,19 @@ func (c MenuChangeset) PriceSet(v float64) MenuChangeset {
 // for a key that names no column (spec §changesets).
 func (c MenuChangeset) Cast(p MenuParams, allow ...MenuColumn) MenuChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "title", "price")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "title":
-			if v, ok, err := rt.Field(p, "title", "string", false, func(r *Menu) string { return r.Title }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "title")
-			} else if ok {
-				c = c.TitleSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "title", "string", false, func(voltR *Menu) string { return voltR.Title }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "title")
+			} else if voltOK {
+				c = c.TitleSet(voltV)
 			}
 		case "price":
-			if v, ok, err := rt.Field(p, "price", "float64", false, func(r *Menu) float64 { return r.Price }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "price")
-			} else if ok {
-				c = c.PriceSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "price", "float64", false, func(voltR *Menu) float64 { return voltR.Price }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "price")
+			} else if voltOK {
+				c = c.PriceSet(voltV)
 			}
 		}
 	}
@@ -110,27 +110,27 @@ func (c MenuChangeset) Changed(col MenuColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c MenuChangeset) Row() Menu {
-	r := c.data
+	voltR := c.data
 	if c.set[1] {
-		r.Title = c.vals.Title
+		voltR.Title = c.vals.Title
 	}
 	if c.set[2] {
-		r.Price = c.vals.Price
+		voltR.Price = c.vals.Price
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c MenuChangeset) Params() MenuParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "title", Value: c.vals.Title})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "title", Value: c.vals.Title})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "price", Value: c.vals.Price})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "price", Value: c.vals.Price})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec
@@ -233,19 +233,19 @@ func (c OrderStatusChangeset) LabelSet(v string) OrderStatusChangeset {
 // for a key that names no column (spec §changesets).
 func (c OrderStatusChangeset) Cast(p OrderStatusParams, allow ...OrderStatusColumn) OrderStatusChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "code", "label")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "code":
-			if v, ok, err := rt.Field(p, "code", "string", false, func(r *OrderStatus) string { return r.Code }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "code")
-			} else if ok {
-				c = c.CodeSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "code", "string", false, func(voltR *OrderStatus) string { return voltR.Code }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "code")
+			} else if voltOK {
+				c = c.CodeSet(voltV)
 			}
 		case "label":
-			if v, ok, err := rt.Field(p, "label", "string", false, func(r *OrderStatus) string { return r.Label }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "label")
-			} else if ok {
-				c = c.LabelSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "label", "string", false, func(voltR *OrderStatus) string { return voltR.Label }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "label")
+			} else if voltOK {
+				c = c.LabelSet(voltV)
 			}
 		}
 	}
@@ -265,27 +265,27 @@ func (c OrderStatusChangeset) Changed(col OrderStatusColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c OrderStatusChangeset) Row() OrderStatus {
-	r := c.data
+	voltR := c.data
 	if c.set[0] {
-		r.Code = c.vals.Code
+		voltR.Code = c.vals.Code
 	}
 	if c.set[1] {
-		r.Label = c.vals.Label
+		voltR.Label = c.vals.Label
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c OrderStatusChangeset) Params() OrderStatusParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[0] {
-		marks = append(marks, rt.Mark{Wire: "code", Value: c.vals.Code})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "code", Value: c.vals.Code})
 	}
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "label", Value: c.vals.Label})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "label", Value: c.vals.Label})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec

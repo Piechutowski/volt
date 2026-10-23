@@ -35,13 +35,13 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
 // nil error commits, anything else rolls back. q must be backed by a
 // handle that can begin a transaction (a *sql.DB).
 func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
-	return rt.Tx(ctx, q.db, func(tx *sql.Tx) error { return fn(q.WithTx(tx)) })
+	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
 }
 
 func invoiceScan(r rt.Row) (Invoice, error) {
-	var v Invoice
-	err := r.Scan(&v.ID, &v.Total, &v.CreatedAt, &v.UpdatedAt, &v.DeletedAt)
-	return v, rt.Refused("Invoice", err)
+	var voltV Invoice
+	voltErr := r.Scan(&voltV.ID, &voltV.Total, &voltV.CreatedAt, &voltV.UpdatedAt, &voltV.DeletedAt)
+	return voltV, rt.Refused("Invoice", voltErr)
 }
 
 const invoiceGetSQL = `SELECT "id", "total", "created_at", "updated_at", "deleted_at" FROM "invoices" WHERE "id" = ?`
@@ -57,76 +57,76 @@ func (q *Queries) InvoiceGetMany(ctx context.Context, ids []int) ([]Invoice, err
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	query, args, err := rt.SelectRender(invoiceTableSQL, invoiceColumnsSQL, []rt.Opt[Invoice]{InvoiceID.In(ids...)})
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(invoiceTableSQL, invoiceColumnsSQL, []rt.Opt[Invoice]{InvoiceID.In(ids...)})
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := q.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Invoice{}
-	for rows.Next() {
-		v, err := invoiceScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Invoice{}
+	for voltRows.Next() {
+		voltV, voltErr := invoiceScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 const invoiceListSQL = `SELECT "id", "total", "created_at", "updated_at", "deleted_at" FROM "invoices"`
 
 // InvoiceList returns every invoices row.
 func (q *Queries) InvoiceList(ctx context.Context) ([]Invoice, error) {
-	rows, err := q.db.QueryContext(ctx, invoiceListSQL)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, invoiceListSQL)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Invoice{}
-	for rows.Next() {
-		v, err := invoiceScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Invoice{}
+	for voltRows.Next() {
+		voltV, voltErr := invoiceScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // InvoiceCreate validates c and inserts its marked columns, returning the
 // stored invoices row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) InvoiceCreate(ctx context.Context, c InvoiceChangeset) (Invoice, error) {
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Invoice{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Invoice{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[0] {
-		cols, args = append(cols, "id"), append(args, v.ID)
+		voltCols, voltArgs = append(voltCols, "id"), append(voltArgs, voltV.ID)
 	}
 	if c.set[1] {
-		cols, args = append(cols, "total"), append(args, v.Total)
+		voltCols, voltArgs = append(voltCols, "total"), append(voltArgs, voltV.Total)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "created_at"), append(args, v.CreatedAt)
+		voltCols, voltArgs = append(voltCols, "created_at"), append(voltArgs, voltV.CreatedAt)
 	}
 	if c.set[3] {
-		cols, args = append(cols, "updated_at"), append(args, v.UpdatedAt)
+		voltCols, voltArgs = append(voltCols, "updated_at"), append(voltArgs, voltV.UpdatedAt)
 	}
 	if c.set[4] {
-		cols, args = append(cols, "deleted_at"), append(args, v.DeletedAt)
+		voltCols, voltArgs = append(voltCols, "deleted_at"), append(voltArgs, voltV.DeletedAt)
 	}
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(invoiceTableSQL, cols, invoiceColumnsSQL), args...)
-	if err != nil {
-		return Invoice{}, err
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(invoiceTableSQL, voltCols, invoiceColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Invoice{}, voltErr
 	}
-	return invoiceScan(row)
+	return invoiceScan(voltRow)
 }
 
 // InvoiceUpdate validates c and writes its marked columns to the invoices row it
@@ -137,36 +137,36 @@ func (q *Queries) InvoiceUpdate(ctx context.Context, c InvoiceChangeset) (Invoic
 		return Invoice{}, rt.ErrNoRow
 	}
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Invoice{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Invoice{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[0] {
-		cols, args = append(cols, "id"), append(args, v.ID)
+		voltCols, voltArgs = append(voltCols, "id"), append(voltArgs, voltV.ID)
 	}
 	if c.set[1] {
-		cols, args = append(cols, "total"), append(args, v.Total)
+		voltCols, voltArgs = append(voltCols, "total"), append(voltArgs, voltV.Total)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "created_at"), append(args, v.CreatedAt)
+		voltCols, voltArgs = append(voltCols, "created_at"), append(voltArgs, voltV.CreatedAt)
 	}
 	if c.set[3] {
-		cols, args = append(cols, "updated_at"), append(args, v.UpdatedAt)
+		voltCols, voltArgs = append(voltCols, "updated_at"), append(voltArgs, voltV.UpdatedAt)
 	}
 	if c.set[4] {
-		cols, args = append(cols, "deleted_at"), append(args, v.DeletedAt)
+		voltCols, voltArgs = append(voltCols, "deleted_at"), append(voltArgs, voltV.DeletedAt)
 	}
-	if len(cols) == 0 {
-		return v, nil
+	if len(voltCols) == 0 {
+		return voltV, nil
 	}
-	args = append(args, c.data.ID)
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(invoiceTableSQL, cols, []string{"id"}, invoiceColumnsSQL), args...)
-	if err != nil {
-		return Invoice{}, err
+	voltArgs = append(voltArgs, c.data.ID)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(invoiceTableSQL, voltCols, []string{"id"}, invoiceColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Invoice{}, voltErr
 	}
-	return invoiceScan(row)
+	return invoiceScan(voltRow)
 }
 
 const invoiceDeleteSQL = `DELETE FROM "invoices" WHERE "id" = ?`
@@ -174,15 +174,15 @@ const invoiceDeleteSQL = `DELETE FROM "invoices" WHERE "id" = ?`
 // InvoiceDelete removes the identified invoices row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) InvoiceDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, invoiceDeleteSQL, id)
-	if err != nil {
-		return rt.Refused("Invoice", err)
+	voltRes, voltErr := q.db.ExecContext(ctx, invoiceDeleteSQL, id)
+	if voltErr != nil {
+		return rt.Refused("Invoice", voltErr)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+	voltN, voltErr := voltRes.RowsAffected()
+	if voltErr != nil {
+		return voltErr
 	}
-	if n == 0 {
+	if voltN == 0 {
 		return rt.ErrNotFound
 	}
 	return nil

@@ -37,66 +37,66 @@ func UserSet(assigns ...rt.Assign[User]) []rt.Assign[User] { return assigns }
 // shaped by the remaining options (order, limit, offset, keyset,
 // distinct). No options means every row.
 func (q *Queries) UserQuery(ctx context.Context, opts ...rt.Opt[User]) ([]User, error) {
-	query, args, err := rt.SelectRender(userTableSQL, userColumnsSQL, opts)
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(userTableSQL, userColumnsSQL, opts)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := rt.StmtQuery(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []User{}
-	for rows.Next() {
-		v, err := userScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []User{}
+	for voltRows.Next() {
+		voltV, voltErr := userScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // UserCount reports how many users rows match every given predicate;
 // none counts the whole table.
 func (q *Queries) UserCount(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
-	query, args, err := rt.CountRender(userTableSQL, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.CountRender(userTableSQL, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	var n int64
-	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &n); err != nil {
-		return 0, err
+	var voltN int64
+	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
+		return 0, voltErr
 	}
-	return n, nil
+	return voltN, nil
 }
 
 // UserExists reports whether any users row matches every given predicate.
 func (q *Queries) UserExists(ctx context.Context, preds ...rt.Pred[User]) (bool, error) {
-	query, args, err := rt.ExistsRender(userTableSQL, preds)
-	if err != nil {
-		return false, err
+	voltQuery, voltArgs, voltErr := rt.ExistsRender(userTableSQL, preds)
+	if voltErr != nil {
+		return false, voltErr
 	}
-	var found bool
-	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &found); err != nil {
-		return false, err
+	var voltFound bool
+	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
+		return false, voltErr
 	}
-	return found, nil
+	return voltFound, nil
 }
 
 // UserDeleteWhere removes every users row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
 // full-table delete.
 func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
-	query, args, err := rt.DeleteRender(userTableSQL, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.DeleteRender(userTableSQL, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return 0, err
+	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	return res.RowsAffected()
+	return voltRes.RowsAffected()
 }
 
 // UserUpdateWhere applies the typed assignments (UserSet) to every users
@@ -104,15 +104,15 @@ func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (
 // partial update of the dynamic layer. No effective predicate
 // is an error, never a full-table rewrite.
 func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], preds ...rt.Pred[User]) (int64, error) {
-	query, args, err := rt.UpdateRender(userTableSQL, set, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.UpdateRender(userTableSQL, set, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return 0, err
+	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	return res.RowsAffected()
+	return voltRes.RowsAffected()
 }
 
 const (
@@ -145,66 +145,66 @@ func CoreUserSet(assigns ...rt.Assign[CoreUser]) []rt.Assign[CoreUser] { return 
 // shaped by the remaining options (order, limit, offset, keyset,
 // distinct). No options means every row.
 func (q *Queries) CoreUserQuery(ctx context.Context, opts ...rt.Opt[CoreUser]) ([]CoreUser, error) {
-	query, args, err := rt.SelectRender(coreUserTableSQL, coreUserColumnsSQL, opts)
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(coreUserTableSQL, coreUserColumnsSQL, opts)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := rt.StmtQuery(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []CoreUser{}
-	for rows.Next() {
-		v, err := coreUserScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []CoreUser{}
+	for voltRows.Next() {
+		voltV, voltErr := coreUserScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // CoreUserCount reports how many core_users rows match every given predicate;
 // none counts the whole table.
 func (q *Queries) CoreUserCount(ctx context.Context, preds ...rt.Pred[CoreUser]) (int64, error) {
-	query, args, err := rt.CountRender(coreUserTableSQL, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.CountRender(coreUserTableSQL, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	var n int64
-	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &n); err != nil {
-		return 0, err
+	var voltN int64
+	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
+		return 0, voltErr
 	}
-	return n, nil
+	return voltN, nil
 }
 
 // CoreUserExists reports whether any core_users row matches every given predicate.
 func (q *Queries) CoreUserExists(ctx context.Context, preds ...rt.Pred[CoreUser]) (bool, error) {
-	query, args, err := rt.ExistsRender(coreUserTableSQL, preds)
-	if err != nil {
-		return false, err
+	voltQuery, voltArgs, voltErr := rt.ExistsRender(coreUserTableSQL, preds)
+	if voltErr != nil {
+		return false, voltErr
 	}
-	var found bool
-	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &found); err != nil {
-		return false, err
+	var voltFound bool
+	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
+		return false, voltErr
 	}
-	return found, nil
+	return voltFound, nil
 }
 
 // CoreUserDeleteWhere removes every core_users row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
 // full-table delete.
 func (q *Queries) CoreUserDeleteWhere(ctx context.Context, preds ...rt.Pred[CoreUser]) (int64, error) {
-	query, args, err := rt.DeleteRender(coreUserTableSQL, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.DeleteRender(coreUserTableSQL, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return 0, err
+	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	return res.RowsAffected()
+	return voltRes.RowsAffected()
 }
 
 // CoreUserUpdateWhere applies the typed assignments (CoreUserSet) to every core_users
@@ -212,15 +212,15 @@ func (q *Queries) CoreUserDeleteWhere(ctx context.Context, preds ...rt.Pred[Core
 // partial update of the dynamic layer. No effective predicate
 // is an error, never a full-table rewrite.
 func (q *Queries) CoreUserUpdateWhere(ctx context.Context, set []rt.Assign[CoreUser], preds ...rt.Pred[CoreUser]) (int64, error) {
-	query, args, err := rt.UpdateRender(coreUserTableSQL, set, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.UpdateRender(coreUserTableSQL, set, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return 0, err
+	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	return res.RowsAffected()
+	return voltRes.RowsAffected()
 }
 
 const (
@@ -253,66 +253,66 @@ func X2faCodeSet(assigns ...rt.Assign[X2faCode]) []rt.Assign[X2faCode] { return 
 // shaped by the remaining options (order, limit, offset, keyset,
 // distinct). No options means every row.
 func (q *Queries) X2faCodeQuery(ctx context.Context, opts ...rt.Opt[X2faCode]) ([]X2faCode, error) {
-	query, args, err := rt.SelectRender(x2faCodeTableSQL, x2faCodeColumnsSQL, opts)
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(x2faCodeTableSQL, x2faCodeColumnsSQL, opts)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := rt.StmtQuery(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []X2faCode{}
-	for rows.Next() {
-		v, err := x2faCodeScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []X2faCode{}
+	for voltRows.Next() {
+		voltV, voltErr := x2faCodeScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // X2faCodeCount reports how many _2fa_codes rows match every given predicate;
 // none counts the whole table.
 func (q *Queries) X2faCodeCount(ctx context.Context, preds ...rt.Pred[X2faCode]) (int64, error) {
-	query, args, err := rt.CountRender(x2faCodeTableSQL, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.CountRender(x2faCodeTableSQL, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	var n int64
-	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &n); err != nil {
-		return 0, err
+	var voltN int64
+	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
+		return 0, voltErr
 	}
-	return n, nil
+	return voltN, nil
 }
 
 // X2faCodeExists reports whether any _2fa_codes row matches every given predicate.
 func (q *Queries) X2faCodeExists(ctx context.Context, preds ...rt.Pred[X2faCode]) (bool, error) {
-	query, args, err := rt.ExistsRender(x2faCodeTableSQL, preds)
-	if err != nil {
-		return false, err
+	voltQuery, voltArgs, voltErr := rt.ExistsRender(x2faCodeTableSQL, preds)
+	if voltErr != nil {
+		return false, voltErr
 	}
-	var found bool
-	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &found); err != nil {
-		return false, err
+	var voltFound bool
+	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
+		return false, voltErr
 	}
-	return found, nil
+	return voltFound, nil
 }
 
 // X2faCodeDeleteWhere removes every _2fa_codes row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
 // full-table delete.
 func (q *Queries) X2faCodeDeleteWhere(ctx context.Context, preds ...rt.Pred[X2faCode]) (int64, error) {
-	query, args, err := rt.DeleteRender(x2faCodeTableSQL, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.DeleteRender(x2faCodeTableSQL, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return 0, err
+	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	return res.RowsAffected()
+	return voltRes.RowsAffected()
 }
 
 // X2faCodeUpdateWhere applies the typed assignments (X2faCodeSet) to every _2fa_codes
@@ -320,15 +320,15 @@ func (q *Queries) X2faCodeDeleteWhere(ctx context.Context, preds ...rt.Pred[X2fa
 // partial update of the dynamic layer. No effective predicate
 // is an error, never a full-table rewrite.
 func (q *Queries) X2faCodeUpdateWhere(ctx context.Context, set []rt.Assign[X2faCode], preds ...rt.Pred[X2faCode]) (int64, error) {
-	query, args, err := rt.UpdateRender(x2faCodeTableSQL, set, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.UpdateRender(x2faCodeTableSQL, set, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return 0, err
+	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	return res.RowsAffected()
+	return voltRes.RowsAffected()
 }
 
 const (
@@ -361,66 +361,66 @@ func DigestSet(assigns ...rt.Assign[Digest]) []rt.Assign[Digest] { return assign
 // shaped by the remaining options (order, limit, offset, keyset,
 // distinct). No options means every row.
 func (q *Queries) DigestQuery(ctx context.Context, opts ...rt.Opt[Digest]) ([]Digest, error) {
-	query, args, err := rt.SelectRender(digestTableSQL, digestColumnsSQL, opts)
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(digestTableSQL, digestColumnsSQL, opts)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := rt.StmtQuery(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Digest{}
-	for rows.Next() {
-		v, err := digestScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Digest{}
+	for voltRows.Next() {
+		voltV, voltErr := digestScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // DigestCount reports how many digests rows match every given predicate;
 // none counts the whole table.
 func (q *Queries) DigestCount(ctx context.Context, preds ...rt.Pred[Digest]) (int64, error) {
-	query, args, err := rt.CountRender(digestTableSQL, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.CountRender(digestTableSQL, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	var n int64
-	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &n); err != nil {
-		return 0, err
+	var voltN int64
+	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
+		return 0, voltErr
 	}
-	return n, nil
+	return voltN, nil
 }
 
 // DigestExists reports whether any digests row matches every given predicate.
 func (q *Queries) DigestExists(ctx context.Context, preds ...rt.Pred[Digest]) (bool, error) {
-	query, args, err := rt.ExistsRender(digestTableSQL, preds)
-	if err != nil {
-		return false, err
+	voltQuery, voltArgs, voltErr := rt.ExistsRender(digestTableSQL, preds)
+	if voltErr != nil {
+		return false, voltErr
 	}
-	var found bool
-	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &found); err != nil {
-		return false, err
+	var voltFound bool
+	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
+		return false, voltErr
 	}
-	return found, nil
+	return voltFound, nil
 }
 
 // DigestDeleteWhere removes every digests row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
 // full-table delete.
 func (q *Queries) DigestDeleteWhere(ctx context.Context, preds ...rt.Pred[Digest]) (int64, error) {
-	query, args, err := rt.DeleteRender(digestTableSQL, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.DeleteRender(digestTableSQL, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return 0, err
+	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	return res.RowsAffected()
+	return voltRes.RowsAffected()
 }
 
 // DigestUpdateWhere applies the typed assignments (DigestSet) to every digests
@@ -428,13 +428,13 @@ func (q *Queries) DigestDeleteWhere(ctx context.Context, preds ...rt.Pred[Digest
 // partial update of the dynamic layer. No effective predicate
 // is an error, never a full-table rewrite.
 func (q *Queries) DigestUpdateWhere(ctx context.Context, set []rt.Assign[Digest], preds ...rt.Pred[Digest]) (int64, error) {
-	query, args, err := rt.UpdateRender(digestTableSQL, set, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.UpdateRender(digestTableSQL, set, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return 0, err
+	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	return res.RowsAffected()
+	return voltRes.RowsAffected()
 }

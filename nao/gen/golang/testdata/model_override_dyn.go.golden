@@ -37,66 +37,66 @@ func MenuSet(assigns ...rt.Assign[Menu]) []rt.Assign[Menu] { return assigns }
 // shaped by the remaining options (order, limit, offset, keyset,
 // distinct). No options means every row.
 func (q *Queries) MenuQuery(ctx context.Context, opts ...rt.Opt[Menu]) ([]Menu, error) {
-	query, args, err := rt.SelectRender(menuTableSQL, menuColumnsSQL, opts)
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(menuTableSQL, menuColumnsSQL, opts)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := rt.StmtQuery(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Menu{}
-	for rows.Next() {
-		v, err := menuScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Menu{}
+	for voltRows.Next() {
+		voltV, voltErr := menuScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // MenuCount reports how many menus rows match every given predicate;
 // none counts the whole table.
 func (q *Queries) MenuCount(ctx context.Context, preds ...rt.Pred[Menu]) (int64, error) {
-	query, args, err := rt.CountRender(menuTableSQL, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.CountRender(menuTableSQL, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	var n int64
-	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &n); err != nil {
-		return 0, err
+	var voltN int64
+	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
+		return 0, voltErr
 	}
-	return n, nil
+	return voltN, nil
 }
 
 // MenuExists reports whether any menus row matches every given predicate.
 func (q *Queries) MenuExists(ctx context.Context, preds ...rt.Pred[Menu]) (bool, error) {
-	query, args, err := rt.ExistsRender(menuTableSQL, preds)
-	if err != nil {
-		return false, err
+	voltQuery, voltArgs, voltErr := rt.ExistsRender(menuTableSQL, preds)
+	if voltErr != nil {
+		return false, voltErr
 	}
-	var found bool
-	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &found); err != nil {
-		return false, err
+	var voltFound bool
+	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
+		return false, voltErr
 	}
-	return found, nil
+	return voltFound, nil
 }
 
 // MenuDeleteWhere removes every menus row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
 // full-table delete.
 func (q *Queries) MenuDeleteWhere(ctx context.Context, preds ...rt.Pred[Menu]) (int64, error) {
-	query, args, err := rt.DeleteRender(menuTableSQL, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.DeleteRender(menuTableSQL, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return 0, err
+	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	return res.RowsAffected()
+	return voltRes.RowsAffected()
 }
 
 // MenuUpdateWhere applies the typed assignments (MenuSet) to every menus
@@ -104,15 +104,15 @@ func (q *Queries) MenuDeleteWhere(ctx context.Context, preds ...rt.Pred[Menu]) (
 // partial update of the dynamic layer. No effective predicate
 // is an error, never a full-table rewrite.
 func (q *Queries) MenuUpdateWhere(ctx context.Context, set []rt.Assign[Menu], preds ...rt.Pred[Menu]) (int64, error) {
-	query, args, err := rt.UpdateRender(menuTableSQL, set, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.UpdateRender(menuTableSQL, set, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return 0, err
+	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	return res.RowsAffected()
+	return voltRes.RowsAffected()
 }
 
 const (
@@ -147,66 +147,66 @@ func OrderStatusSet(assigns ...rt.Assign[OrderStatus]) []rt.Assign[OrderStatus] 
 // shaped by the remaining options (order, limit, offset, keyset,
 // distinct). No options means every row.
 func (q *Queries) OrderStatusQuery(ctx context.Context, opts ...rt.Opt[OrderStatus]) ([]OrderStatus, error) {
-	query, args, err := rt.SelectRender(orderStatusTableSQL, orderStatusColumnsSQL, opts)
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(orderStatusTableSQL, orderStatusColumnsSQL, opts)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := rt.StmtQuery(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []OrderStatus{}
-	for rows.Next() {
-		v, err := orderStatusScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []OrderStatus{}
+	for voltRows.Next() {
+		voltV, voltErr := orderStatusScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // OrderStatusCount reports how many order_status rows match every given predicate;
 // none counts the whole table.
 func (q *Queries) OrderStatusCount(ctx context.Context, preds ...rt.Pred[OrderStatus]) (int64, error) {
-	query, args, err := rt.CountRender(orderStatusTableSQL, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.CountRender(orderStatusTableSQL, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	var n int64
-	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &n); err != nil {
-		return 0, err
+	var voltN int64
+	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
+		return 0, voltErr
 	}
-	return n, nil
+	return voltN, nil
 }
 
 // OrderStatusExists reports whether any order_status row matches every given predicate.
 func (q *Queries) OrderStatusExists(ctx context.Context, preds ...rt.Pred[OrderStatus]) (bool, error) {
-	query, args, err := rt.ExistsRender(orderStatusTableSQL, preds)
-	if err != nil {
-		return false, err
+	voltQuery, voltArgs, voltErr := rt.ExistsRender(orderStatusTableSQL, preds)
+	if voltErr != nil {
+		return false, voltErr
 	}
-	var found bool
-	if err := rt.RowScan(ctx, q.db, q.cache, query, args, &found); err != nil {
-		return false, err
+	var voltFound bool
+	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
+		return false, voltErr
 	}
-	return found, nil
+	return voltFound, nil
 }
 
 // OrderStatusDeleteWhere removes every order_status row matching the predicates and
 // reports how many went. No effective predicate is an error, never a
 // full-table delete.
 func (q *Queries) OrderStatusDeleteWhere(ctx context.Context, preds ...rt.Pred[OrderStatus]) (int64, error) {
-	query, args, err := rt.DeleteRender(orderStatusTableSQL, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.DeleteRender(orderStatusTableSQL, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return 0, err
+	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	return res.RowsAffected()
+	return voltRes.RowsAffected()
 }
 
 // OrderStatusUpdateWhere applies the typed assignments (OrderStatusSet) to every order_status
@@ -214,13 +214,13 @@ func (q *Queries) OrderStatusDeleteWhere(ctx context.Context, preds ...rt.Pred[O
 // partial update of the dynamic layer. No effective predicate
 // is an error, never a full-table rewrite.
 func (q *Queries) OrderStatusUpdateWhere(ctx context.Context, set []rt.Assign[OrderStatus], preds ...rt.Pred[OrderStatus]) (int64, error) {
-	query, args, err := rt.UpdateRender(orderStatusTableSQL, set, preds)
-	if err != nil {
-		return 0, err
+	voltQuery, voltArgs, voltErr := rt.UpdateRender(orderStatusTableSQL, set, preds)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	res, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)
-	if err != nil {
-		return 0, err
+	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return 0, voltErr
 	}
-	return res.RowsAffected()
+	return voltRes.RowsAffected()
 }

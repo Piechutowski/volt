@@ -1,9 +1,9 @@
-// Package golang generates Go model structs from a checked schema file: one
-// struct per table with its changeset and column handles (spec
-// §changesets), with db and json struct tags. The output is
-// gofmt-canonical by construction and depends only on the standard
-// library, the rt runtime package and the packages of declared types;
-// nullable columns are rt.Null[T] values.
+// Package golang renders a checked package's naming plan (package naming)
+// as the Go data files: the models with their changesets and column
+// handles (spec §changesets), the static and dynamic query layers, the
+// selects, the validators and the migrations. The output is
+// gofmt-canonical by construction and imports only the standard library,
+// the rt runtime package and the packages of declared types.
 package golang
 
 import (
@@ -15,6 +15,7 @@ import (
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/token"
+	"github.com/Piechutowski/volt/nao/naming"
 )
 
 const rtImport = "github.com/Piechutowski/volt/nao/rt"
@@ -32,15 +33,22 @@ type Options struct {
 // The file must be free of check errors; Generate validates only what
 // generation itself needs (name mapping, type mapping, collisions).
 func Generate(f *ast.File, info *check.Info, opts Options) ([]byte, error) {
-	return PlanBuild(f, info).Models(opts)
+	return Models(naming.PlanBuild(f, info), opts)
 }
 
-func modelsGenerate(f *ast.File, info *check.Info, p *plan, perr error, opts Options) ([]byte, error) {
+// Models renders the models file (volt_models.go) for the planned package;
+// a package-scope name the file would declare twice is an error, as it
+// is for Dyn (spec §changesets).
+func Models(pl *naming.Plan, opts Options) ([]byte, error) {
 	if opts.Package == "" {
 		return nil, fmt.Errorf("no package name")
 	}
-	g := &generator{f: f, info: info, opts: opts, imports: map[string]bool{}}
-	if err := g.run(p, perr); err != nil {
+	if err := pl.Err(); err != nil {
+		return nil, err
+	}
+	g := &generator{f: pl.File(), info: pl.Info(), opts: opts, imports: map[string]bool{}}
+	g.run(pl.Tables())
+	if err := pl.NameCollisionErr(); err != nil {
 		return nil, err
 	}
 	return align.Finish(g.out.String()), nil
@@ -56,28 +64,24 @@ type generator struct {
 	body strings.Builder
 }
 
-func (g *generator) run(p *plan, perr error) error {
-	if p != nil {
-		g.body.Grow(p.fieldCount()*700 + len(p.tables)*4000)
+func fieldCount(tables []*naming.Table) int {
+	n := 0
+	for _, t := range tables {
+		n += len(t.Fields)
 	}
-	g.typesEmit()
-	usedNames := map[string]string{}
-	for i, ti := range g.info.Tables {
-		if err := g.tableEmit(ti, usedNames); err != nil {
-			return err
-		}
-		if p != nil {
-			g.changesetEmit(p.tables[i])
-		}
-	}
-	if perr != nil {
-		return perr
-	}
+	return n
+}
 
+func (g *generator) run(tables []*naming.Table) {
+	g.body.Grow(fieldCount(tables)*700 + len(tables)*4000)
+	g.typesEmit()
+	for _, t := range tables {
+		g.tableEmit(t)
+		g.changesetEmit(t)
+	}
 	g.header()
 	g.out.Grow(g.body.Len())
 	g.out.WriteString(g.body.String())
-	return nil
 }
 
 // typesEmit asserts the Scanner and Valuer contract of every declared
@@ -99,7 +103,7 @@ func (g *generator) typesEmit() {
 	b.WriteString("var (\n")
 	for _, td := range asserted {
 		if td.Path != "" {
-			g.imports[importKeyOf(td.Key[:strings.IndexByte(td.Key, '.')], td.Path)] = true
+			g.imports[naming.ImportKey(td.Key[:strings.IndexByte(td.Key, '.')], td.Path)] = true
 		}
 		fmt.Fprintf(b, "\t_ sql.Scanner   = (*%s)(nil)\n", td.Key)
 		fmt.Fprintf(b, "\t_ driver.Valuer = *new(%s)\n", td.Key)
@@ -110,15 +114,15 @@ func (g *generator) typesEmit() {
 // changesetEmit writes one table's changeset surface after its row
 // struct (spec §changesets): the column and params aliases, the column
 // handles, the changeset type and its methods.
-func (g *generator) changesetEmit(t *tableModel) {
-	if len(t.fields) == 0 {
+func (g *generator) changesetEmit(t *naming.Table) {
+	if len(t.Fields) == 0 {
 		return
 	}
 	g.imports[rtImport] = true
 	b := &g.body
-	m := t.model
-	tbl := t.ti.Decl.Name.Name()
-	settable := t.settable()
+	m := t.Model
+	tbl := t.Info.Decl.Name.Name()
+	settable := t.Settable()
 
 	fmt.Fprintf(b, "// %sColumn is a column handle of %s, the element of a Cast allow list\n// (spec §changesets).\n", m, m)
 	fmt.Fprintf(b, "type %sColumn = rt.ColumnOf[%s]\n\n", m, m)
@@ -131,13 +135,13 @@ func (g *generator) changesetEmit(t *tableModel) {
 	fmt.Fprintf(b, "// queries; mixing models is a compile error.\n")
 	b.WriteString("var (\n")
 	var handles align.Block
-	for _, f := range t.fields {
-		if f.nullable {
-			handles.Row(m+f.goField, fmt.Sprintf("= rt.NullColumn[%s, %s]{Column: rt.Column[%s, %s]{Name: %q}}",
-				m, f.baseType, m, f.baseType, f.colName))
+	for _, f := range t.Fields {
+		if f.Nullable {
+			handles.Row(m+f.GoField, fmt.Sprintf("= rt.NullColumn[%s, %s]{Column: rt.Column[%s, %s]{Name: %q}}",
+				m, f.BaseType, m, f.BaseType, f.ColName))
 			continue
 		}
-		handles.Row(m+f.goField, fmt.Sprintf("= rt.Column[%s, %s]{Name: %q}", m, f.baseType, f.colName))
+		handles.Row(m+f.GoField, fmt.Sprintf("= rt.Column[%s, %s]{Name: %q}", m, f.BaseType, f.ColName))
 	}
 	handles.WriteTo(b, "\t")
 	b.WriteString(")\n\n")
@@ -150,7 +154,7 @@ func (g *generator) changesetEmit(t *tableModel) {
 	fields.Row("data", m)
 	fields.Row("vals", m)
 	fields.Row("row", "bool")
-	fields.Row("set", fmt.Sprintf("[%d]bool", len(t.fields)))
+	fields.Row("set", fmt.Sprintf("[%d]bool", len(t.Fields)))
 	fields.Row("errs", "[]rt.FieldError")
 	fields.Row("valid", "[]rt.FieldError")
 	fields.WriteTo(b, "\t")
@@ -158,7 +162,7 @@ func (g *generator) changesetEmit(t *tableModel) {
 
 	fmt.Fprintf(b, "// %sNew starts a changeset for a %s row to create, the schema's literal\n// defaults in place (spec §changesets).\n", m, tbl)
 	newBody := fmt.Sprintf("return %sChangeset{}", m)
-	if seed := t.defaultsGo(); seed != "" {
+	if seed := defaultsGo(t); seed != "" {
 		newBody = fmt.Sprintf("return %sChangeset{data: %s%s}", m, m, seed)
 	}
 	funcLine(b, fmt.Sprintf("func %sNew() %sChangeset", m, m), newBody)
@@ -168,39 +172,39 @@ func (g *generator) changesetEmit(t *tableModel) {
 	fmt.Fprintf(b, "// From marks every data column of r but the auto-increment key (spec\n// §changesets).\n")
 	fmt.Fprintf(b, "func (c %sChangeset) From(r %s) %sChangeset {\n", m, m, m)
 	for _, f := range settable {
-		fmt.Fprintf(b, "\tc = c.%sSet(r.%s)\n", f.goField, f.goField)
+		fmt.Fprintf(b, "\tc = c.%sSet(r.%s)\n", f.GoField, f.GoField)
 	}
 	b.WriteString("\treturn c\n}\n\n")
 
 	for _, f := range settable {
 		switch {
-		case f.nullable:
-			fmt.Fprintf(b, "// %sSet sets %s and marks it; an invalid rt.Null sets NULL (spec\n// §changesets).\n", f.goField, f.colName)
-		case f.plainBytes():
-			fmt.Fprintf(b, "// %sSet sets %s and marks it; nil is empty bytes (spec §columns).\n", f.goField, f.colName)
+		case f.Nullable:
+			fmt.Fprintf(b, "// %sSet sets %s and marks it; an invalid rt.Null sets NULL (spec\n// §changesets).\n", f.GoField, f.ColName)
+		case f.PlainBytes():
+			fmt.Fprintf(b, "// %sSet sets %s and marks it; nil is empty bytes (spec §columns).\n", f.GoField, f.ColName)
 		default:
-			fmt.Fprintf(b, "// %sSet sets %s and marks it (spec §changesets).\n", f.goField, f.colName)
+			fmt.Fprintf(b, "// %sSet sets %s and marks it (spec §changesets).\n", f.GoField, f.ColName)
 		}
-		fmt.Fprintf(b, "func (c %sChangeset) %sSet(v %s) %sChangeset {\n", m, f.goField, f.goType, m)
-		fmt.Fprintf(b, "\tc.vals.%s, c.set[%d] = v, true\n\treturn c\n}\n\n", f.goField, t.index(f))
+		fmt.Fprintf(b, "func (c %sChangeset) %sSet(v %s) %sChangeset {\n", m, f.GoField, f.GoType, m)
+		fmt.Fprintf(b, "\tc.vals.%s, c.set[%d] = v, true\n\treturn c\n}\n\n", f.GoField, t.Index(f))
 	}
 
 	fmt.Fprintf(b, "// Cast sets every column of allow that p carries, recording a cast\n")
 	fmt.Fprintf(b, "// error for a value that does not convert and an unknown_field error\n")
 	fmt.Fprintf(b, "// for a key that names no column (spec §changesets).\n")
 	fmt.Fprintf(b, "func (c %sChangeset) Cast(p %sParams, allow ...%sColumn) %sChangeset {\n", m, m, m, m)
-	wires := make([]string, len(t.fields))
-	for i, f := range t.fields {
-		wires[i] = strconv.Quote(f.wire)
+	wires := make([]string, len(t.Fields))
+	for i, f := range t.Fields {
+		wires[i] = strconv.Quote(f.Wire)
 	}
 	fmt.Fprintf(b, "\tc.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, %s)...)\n", strings.Join(wires, ", "))
 	if len(settable) > 0 {
-		b.WriteString("\tfor _, col := range allow {\n\t\tswitch col.ColumnName() {\n")
+		b.WriteString("\tfor _, voltCol := range allow {\n\t\tswitch voltCol.ColumnName() {\n")
 		for _, f := range settable {
-			fmt.Fprintf(b, "\t\tcase %q:\n", f.colName)
-			fmt.Fprintf(b, "\t\t\tif v, ok, err := rt.Field(p, %q, %q, %t, func(r *%s) %s { return r.%s }); err != nil {\n", f.wire, f.col.Type.String(), f.nullable, m, f.goType, f.goField)
-			fmt.Fprintf(b, "\t\t\t\tc = c.errorAdd(\"cast\", err.Error(), %q)\n", f.colName)
-			fmt.Fprintf(b, "\t\t\t} else if ok {\n\t\t\t\tc = c.%sSet(v)\n\t\t\t}\n", f.goField)
+			fmt.Fprintf(b, "\t\tcase %q:\n", f.ColName)
+			fmt.Fprintf(b, "\t\t\tif voltV, voltOK, voltErr := rt.Field(p, %q, %q, %t, func(voltR *%s) %s { return voltR.%s }); voltErr != nil {\n", f.Wire, f.Col.Type.String(), f.Nullable, m, f.GoType, f.GoField)
+			fmt.Fprintf(b, "\t\t\t\tc = c.errorAdd(\"cast\", voltErr.Error(), %q)\n", f.ColName)
+			fmt.Fprintf(b, "\t\t\t} else if voltOK {\n\t\t\t\tc = c.%sSet(voltV)\n\t\t\t}\n", f.GoField)
 		}
 		b.WriteString("\t\t}\n\t}\n")
 	}
@@ -208,8 +212,8 @@ func (g *generator) changesetEmit(t *tableModel) {
 
 	fmt.Fprintf(b, "// Changed reports whether col is marked (spec §changesets).\n")
 	fmt.Fprintf(b, "func (c %sChangeset) Changed(col %sColumn) bool {\n\tswitch col.ColumnName() {\n", m, m)
-	for i, f := range t.fields {
-		fmt.Fprintf(b, "\tcase %q:\n\t\treturn c.set[%d]\n", f.colName, i)
+	for i, f := range t.Fields {
+		fmt.Fprintf(b, "\tcase %q:\n\t\treturn c.set[%d]\n", f.ColName, i)
 	}
 	b.WriteString("\t}\n\treturn false\n}\n\n")
 
@@ -218,19 +222,19 @@ func (g *generator) changesetEmit(t *tableModel) {
 	if len(settable) == 0 {
 		b.WriteString("\treturn c.data\n}\n\n")
 	} else {
-		b.WriteString("\tr := c.data\n")
+		b.WriteString("\tvoltR := c.data\n")
 		for _, f := range settable {
-			fmt.Fprintf(b, "\tif c.set[%d] {\n\t\tr.%s = c.vals.%s\n\t}\n", t.index(f), f.goField, f.goField)
+			fmt.Fprintf(b, "\tif c.set[%d] {\n\t\tvoltR.%s = c.vals.%s\n\t}\n", t.Index(f), f.GoField, f.GoField)
 		}
-		b.WriteString("\treturn r\n}\n\n")
+		b.WriteString("\treturn voltR\n}\n\n")
 	}
 
 	fmt.Fprintf(b, "// Params is the marked columns of c as a write body, each under its\n// wire name (spec §changesets).\n")
-	fmt.Fprintf(b, "func (c %sChangeset) Params() %sParams {\n\tvar marks []rt.Mark\n", m, m)
+	fmt.Fprintf(b, "func (c %sChangeset) Params() %sParams {\n\tvar voltMarks []rt.Mark\n", m, m)
 	for _, f := range settable {
-		fmt.Fprintf(b, "\tif c.set[%d] {\n\t\tmarks = append(marks, rt.Mark{Wire: %q, Value: c.vals.%s})\n\t}\n", t.index(f), f.wire, f.goField)
+		fmt.Fprintf(b, "\tif c.set[%d] {\n\t\tvoltMarks = append(voltMarks, rt.Mark{Wire: %q, Value: c.vals.%s})\n\t}\n", t.Index(f), f.Wire, f.GoField)
 	}
-	b.WriteString("\treturn rt.ParamsOf(c.Row(), marks...)\n}\n\n")
+	b.WriteString("\treturn rt.ParamsOf(c.Row(), voltMarks...)\n}\n\n")
 
 	fmt.Fprintf(b, "// ErrorAdd records a field error with check custom on col (spec\n// §changesets).\n")
 	fmt.Fprintf(b, "func (c %sChangeset) ErrorAdd(col %sColumn, msg string) %sChangeset {\n", m, m, m)
@@ -273,106 +277,35 @@ func (g *generator) header() {
 func (g *generator) projectNote() string {
 	for _, d := range g.f.Decls {
 		if p, ok := d.(*ast.Project); ok {
-			return settingNote(p.Settings)
+			return naming.SettingNote(p.Settings)
 		}
 	}
 	return ""
 }
 
-func (g *generator) tableEmit(ti *check.TableInfo, usedNames map[string]string) error {
-	name, err := modelName(ti.Decl)
-	if err != nil {
-		return fmt.Errorf("table %s: %w", ti.Decl.Name.Name(), err)
-	}
-	if prev, dup := usedNames[name]; dup {
-		return fmt.Errorf("table %s and %s both map to Go type %s", ti.Decl.Name.Name(), prev, name)
-	}
-	usedNames[name] = "table " + ti.Decl.Name.Name()
-
-	fmt.Fprintf(&g.body, "// %s is a row of the %s table.\n", name, ti.Decl.Name.Name())
-	if note := tableNote(ti.Decl); note != "" {
+func (g *generator) tableEmit(t *naming.Table) {
+	tbl := t.Info.Decl.Name.Name()
+	fmt.Fprintf(&g.body, "// %s is a row of the %s table.\n", t.Model, tbl)
+	if note := naming.SettingNote(t.Info.Decl.Settings); note != "" {
 		g.body.WriteString("//\n")
 		commentWrite(&g.body, note)
 	}
-	fmt.Fprintf(&g.body, "type %s struct {\n", name)
-
-	fields := map[string]string{}
+	fmt.Fprintf(&g.body, "type %s struct {\n", t.Model)
 	var rows align.Block
-	for _, cd := range ti.Columns {
-		if err := g.fieldEmit(cd, fields, &rows); err != nil {
-			return fmt.Errorf("table %s: %w", ti.Decl.Name.Name(), err)
+	for _, f := range t.Fields {
+		if f.Imp != "" {
+			g.imports[f.Imp] = true
 		}
+		if f.Nullable {
+			g.imports[rtImport] = true
+		}
+		if note := naming.SettingNote(f.Col.Settings); note != "" {
+			commentLines(&rows, note)
+		}
+		rows.Row(f.GoField, f.GoType, "`"+f.Tag+"`")
 	}
 	rows.WriteTo(&g.body, "\t")
 	g.body.WriteString("}\n\n")
-	return nil
-}
-
-func (g *generator) fieldEmit(cd *check.ColumnDef, fields map[string]string, rows *align.Block) error {
-	col := cd.Col
-	fieldName, err := goName(col.Name.Name())
-	if err != nil {
-		return fmt.Errorf("column %q: %w", col.Name.Name(), err)
-	}
-	if prev, dup := fields[fieldName]; dup {
-		return fmt.Errorf("columns %q and %q both map to Go field %s", prev, col.Name.Name(), fieldName)
-	}
-	fields[fieldName] = col.Name.Name()
-
-	typ := typeOf(cd.Type)
-	if typ.imp != "" {
-		g.imports[typ.imp] = true
-	}
-
-	goTypeName := typ.name
-	if cd.Nullable {
-		goTypeName = "rt.Null[" + goTypeName + "]"
-		g.imports[rtImport] = true
-	}
-
-	if note := settingNote(col.Settings); note != "" {
-		commentLines(rows, note)
-	}
-	rows.Row(fieldName, goTypeName, "`"+fieldTag(col)+"`")
-	return nil
-}
-
-func fieldTag(col *ast.Column) string {
-	name := col.Name.Name()
-	jsonPair := `json:"` + name + `"`
-	var extra []string
-	if col.Settings != nil {
-		for _, s := range col.Settings.Settings {
-			if s.Name != "tag" {
-				continue
-			}
-			lit, ok := s.Value.(*ast.BasicLit)
-			if !ok || lit.Tok.Kind != token.STRING {
-				continue
-			}
-			pair := lit.Tok.Val
-			if key, _, ok := strings.Cut(pair, ":"); ok && key == "json" {
-				jsonPair = pair
-				continue
-			}
-			extra = append(extra, pair)
-		}
-	}
-	parts := append([]string{`db:"` + name + `"`, jsonPair}, extra...)
-	return strings.Join(parts, " ")
-}
-
-func tableNote(t *ast.Table) string { return settingNote(t.Settings) }
-
-func settingNote(sl *ast.SettingList) string {
-	s := sl.Get("note")
-	if s == nil {
-		return ""
-	}
-	if lit, ok := s.Value.(*ast.BasicLit); ok {
-		return lit.Tok.Val
-	}
-	return ""
 }
 
 func commentWrite(b *strings.Builder, text string) {
@@ -395,11 +328,11 @@ func commentLines(rows *align.Block, text string) {
 	}
 }
 
-func (t *tableModel) defaultsGo() string {
+func defaultsGo(t *naming.Table) string {
 	var parts []string
-	for _, f := range t.fields {
-		if expr, ok := f.defaultGo(); ok {
-			parts = append(parts, f.goField+": "+expr)
+	for _, f := range t.Fields {
+		if expr, ok := defaultGo(f); ok {
+			parts = append(parts, f.GoField+": "+expr)
 		}
 	}
 	if len(parts) == 0 {
@@ -415,9 +348,9 @@ func (t *tableModel) defaultsGo() string {
 // column is the zero value and needs no seed; on a nullable column it is
 // a value, not NULL, and is seeded. A declared type that is not kinded
 // gets no seed: its default is the database's.
-func (f *fieldPlan) defaultGo() (string, bool) {
-	s := f.col.Settings.Get("default")
-	if s == nil || (f.declared && !f.kinded) || f.increment {
+func defaultGo(f *naming.Field) (string, bool) {
+	s := f.Col.Settings.Get("default")
+	if s == nil || (f.Declared && !f.Kinded) || f.Increment {
 		return "", false
 	}
 	var expr string
@@ -427,10 +360,10 @@ func (f *fieldPlan) defaultGo() (string, bool) {
 		if v.Tok.Kind == token.STRING {
 			expr, zero = strconv.Quote(v.Tok.Val), v.Tok.Val == ""
 		} else {
-			expr, zero = numberGo(v.Tok.Val, f.storage)
+			expr, zero = numberGo(v.Tok.Val, f.Storage)
 		}
 	case *ast.NegNumber:
-		expr, zero = numberGo("-"+v.Num.Tok.Val, f.storage)
+		expr, zero = numberGo("-"+v.Num.Tok.Val, f.Storage)
 	case *ast.Ident:
 		switch {
 		case v.Name() == "true":
@@ -443,12 +376,12 @@ func (f *fieldPlan) defaultGo() (string, bool) {
 	default:
 		return "", false
 	}
-	if expr == "" || (zero && !f.nullable) {
+	if expr == "" || (zero && !f.Nullable) {
 		return "", false
 	}
-	if f.nullable {
-		if f.kinded {
-			expr = f.baseType + "(" + expr + ")"
+	if f.Nullable {
+		if f.Kinded {
+			expr = f.BaseType + "(" + expr + ")"
 		}
 		expr = "rt.Some(" + expr + ")"
 	}

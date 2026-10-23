@@ -104,37 +104,37 @@ func (c PageViewChangeset) NoteSet(v rt.Null[string]) PageViewChangeset {
 // for a key that names no column (spec §changesets).
 func (c PageViewChangeset) Cast(p PageViewParams, allow ...PageViewColumn) PageViewChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "site", "day", "hits", "score", "note")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "site":
-			if v, ok, err := rt.Field(p, "site", "string", false, func(r *PageView) string { return r.Site }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "site")
-			} else if ok {
-				c = c.SiteSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "site", "string", false, func(voltR *PageView) string { return voltR.Site }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "site")
+			} else if voltOK {
+				c = c.SiteSet(voltV)
 			}
 		case "day":
-			if v, ok, err := rt.Field(p, "day", "int", false, func(r *PageView) int { return r.Day }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "day")
-			} else if ok {
-				c = c.DaySet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "day", "int", false, func(voltR *PageView) int { return voltR.Day }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "day")
+			} else if voltOK {
+				c = c.DaySet(voltV)
 			}
 		case "hits":
-			if v, ok, err := rt.Field(p, "hits", "int", false, func(r *PageView) int { return r.Hits }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "hits")
-			} else if ok {
-				c = c.HitsSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "hits", "int", false, func(voltR *PageView) int { return voltR.Hits }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "hits")
+			} else if voltOK {
+				c = c.HitsSet(voltV)
 			}
 		case "score":
-			if v, ok, err := rt.Field(p, "score", "float64", false, func(r *PageView) float64 { return r.Score }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "score")
-			} else if ok {
-				c = c.ScoreSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "score", "float64", false, func(voltR *PageView) float64 { return voltR.Score }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "score")
+			} else if voltOK {
+				c = c.ScoreSet(voltV)
 			}
 		case "note":
-			if v, ok, err := rt.Field(p, "note", "string", true, func(r *PageView) rt.Null[string] { return r.Note }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "note")
-			} else if ok {
-				c = c.NoteSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "note", "string", true, func(voltR *PageView) rt.Null[string] { return voltR.Note }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "note")
+			} else if voltOK {
+				c = c.NoteSet(voltV)
 			}
 		}
 	}
@@ -162,45 +162,45 @@ func (c PageViewChangeset) Changed(col PageViewColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c PageViewChangeset) Row() PageView {
-	r := c.data
+	voltR := c.data
 	if c.set[1] {
-		r.Site = c.vals.Site
+		voltR.Site = c.vals.Site
 	}
 	if c.set[2] {
-		r.Day = c.vals.Day
+		voltR.Day = c.vals.Day
 	}
 	if c.set[3] {
-		r.Hits = c.vals.Hits
+		voltR.Hits = c.vals.Hits
 	}
 	if c.set[4] {
-		r.Score = c.vals.Score
+		voltR.Score = c.vals.Score
 	}
 	if c.set[5] {
-		r.Note = c.vals.Note
+		voltR.Note = c.vals.Note
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c PageViewChangeset) Params() PageViewParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "site", Value: c.vals.Site})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "site", Value: c.vals.Site})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "day", Value: c.vals.Day})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "day", Value: c.vals.Day})
 	}
 	if c.set[3] {
-		marks = append(marks, rt.Mark{Wire: "hits", Value: c.vals.Hits})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "hits", Value: c.vals.Hits})
 	}
 	if c.set[4] {
-		marks = append(marks, rt.Mark{Wire: "score", Value: c.vals.Score})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "score", Value: c.vals.Score})
 	}
 	if c.set[5] {
-		marks = append(marks, rt.Mark{Wire: "note", Value: c.vals.Note})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "note", Value: c.vals.Note})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec
@@ -310,25 +310,25 @@ func (c LinkClickChangeset) TargetSet(v string) LinkClickChangeset {
 // for a key that names no column (spec §changesets).
 func (c LinkClickChangeset) Cast(p LinkClickParams, allow ...LinkClickColumn) LinkClickChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "site", "day", "target")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "site":
-			if v, ok, err := rt.Field(p, "site", "string", false, func(r *LinkClick) string { return r.Site }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "site")
-			} else if ok {
-				c = c.SiteSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "site", "string", false, func(voltR *LinkClick) string { return voltR.Site }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "site")
+			} else if voltOK {
+				c = c.SiteSet(voltV)
 			}
 		case "day":
-			if v, ok, err := rt.Field(p, "day", "int", false, func(r *LinkClick) int { return r.Day }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "day")
-			} else if ok {
-				c = c.DaySet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "day", "int", false, func(voltR *LinkClick) int { return voltR.Day }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "day")
+			} else if voltOK {
+				c = c.DaySet(voltV)
 			}
 		case "target":
-			if v, ok, err := rt.Field(p, "target", "string", false, func(r *LinkClick) string { return r.Target }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "target")
-			} else if ok {
-				c = c.TargetSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "target", "string", false, func(voltR *LinkClick) string { return voltR.Target }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "target")
+			} else if voltOK {
+				c = c.TargetSet(voltV)
 			}
 		}
 	}
@@ -352,33 +352,33 @@ func (c LinkClickChangeset) Changed(col LinkClickColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c LinkClickChangeset) Row() LinkClick {
-	r := c.data
+	voltR := c.data
 	if c.set[1] {
-		r.Site = c.vals.Site
+		voltR.Site = c.vals.Site
 	}
 	if c.set[2] {
-		r.Day = c.vals.Day
+		voltR.Day = c.vals.Day
 	}
 	if c.set[3] {
-		r.Target = c.vals.Target
+		voltR.Target = c.vals.Target
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c LinkClickChangeset) Params() LinkClickParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "site", Value: c.vals.Site})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "site", Value: c.vals.Site})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "day", Value: c.vals.Day})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "day", Value: c.vals.Day})
 	}
 	if c.set[3] {
-		marks = append(marks, rt.Mark{Wire: "target", Value: c.vals.Target})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "target", Value: c.vals.Target})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec

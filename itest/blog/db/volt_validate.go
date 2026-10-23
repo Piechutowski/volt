@@ -10,18 +10,18 @@ import (
 // every one every time, replacing the findings of an earlier Validate
 // (spec §changesets, §validators).
 func (c UserChangeset) Validate() UserChangeset {
-	v := c.Row()
-	var errs []rt.FieldError
-	if v.Email == "" {
-		errs = append(errs, rt.FieldError{Check: "required", Columns: []string{"email"}, Message: "email is required"})
+	voltV := c.Row()
+	var voltErrs []rt.FieldError
+	if voltV.Email == "" {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "required", Columns: []string{"email"}, Message: "email is required"})
 	}
-	if err := EmailShape(v.Email); err != nil {
-		errs = append(errs, rt.FieldError{Check: "EmailShape", Columns: []string{"email"}, Message: err.Error()})
+	if voltErr := EmailShape(voltV.Email); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "EmailShape", Columns: []string{"email"}, Message: voltErr.Error()})
 	}
-	if err := EmailValid(v.Email); err != nil {
-		errs = append(errs, rt.FieldError{Check: "EmailValid", Columns: []string{"email"}, Message: err.Error()})
+	if voltErr := EmailValid(voltV.Email); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "EmailValid", Columns: []string{"email"}, Message: voltErr.Error()})
 	}
-	c.valid = errs
+	c.valid = voltErrs
 	return c
 }
 

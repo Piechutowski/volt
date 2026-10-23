@@ -35,13 +35,13 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
 // nil error commits, anything else rolls back. q must be backed by a
 // handle that can begin a transaction (a *sql.DB).
 func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
-	return rt.Tx(ctx, q.db, func(tx *sql.Tx) error { return fn(q.WithTx(tx)) })
+	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
 }
 
 func pageViewScan(r rt.Row) (PageView, error) {
-	var v PageView
-	err := r.Scan(&v.ID, &v.Site, &v.Day, &v.Hits, &v.Score, &v.Note)
-	return v, rt.Refused("PageView", err)
+	var voltV PageView
+	voltErr := r.Scan(&voltV.ID, &voltV.Site, &voltV.Day, &voltV.Hits, &voltV.Score, &voltV.Note)
+	return voltV, rt.Refused("PageView", voltErr)
 }
 
 const pageViewGetSQL = `SELECT "id", "site", "day", "hits", "score", "note" FROM "page_views" WHERE "id" = ?`
@@ -57,76 +57,76 @@ func (q *Queries) PageViewGetMany(ctx context.Context, ids []int) ([]PageView, e
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	query, args, err := rt.SelectRender(pageViewTableSQL, pageViewColumnsSQL, []rt.Opt[PageView]{PageViewID.In(ids...)})
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(pageViewTableSQL, pageViewColumnsSQL, []rt.Opt[PageView]{PageViewID.In(ids...)})
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := q.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []PageView{}
-	for rows.Next() {
-		v, err := pageViewScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []PageView{}
+	for voltRows.Next() {
+		voltV, voltErr := pageViewScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 const pageViewListSQL = `SELECT "id", "site", "day", "hits", "score", "note" FROM "page_views"`
 
 // PageViewList returns every page_views row.
 func (q *Queries) PageViewList(ctx context.Context) ([]PageView, error) {
-	rows, err := q.db.QueryContext(ctx, pageViewListSQL)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, pageViewListSQL)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []PageView{}
-	for rows.Next() {
-		v, err := pageViewScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []PageView{}
+	for voltRows.Next() {
+		voltV, voltErr := pageViewScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // PageViewCreate validates c and inserts its marked columns, returning the
 // stored page_views row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) PageViewCreate(ctx context.Context, c PageViewChangeset) (PageView, error) {
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return PageView{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return PageView{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[1] {
-		cols, args = append(cols, "site"), append(args, v.Site)
+		voltCols, voltArgs = append(voltCols, "site"), append(voltArgs, voltV.Site)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "day"), append(args, v.Day)
+		voltCols, voltArgs = append(voltCols, "day"), append(voltArgs, voltV.Day)
 	}
 	if c.set[3] {
-		cols, args = append(cols, "hits"), append(args, v.Hits)
+		voltCols, voltArgs = append(voltCols, "hits"), append(voltArgs, voltV.Hits)
 	}
 	if c.set[4] {
-		cols, args = append(cols, "score"), append(args, v.Score)
+		voltCols, voltArgs = append(voltCols, "score"), append(voltArgs, voltV.Score)
 	}
 	if c.set[5] {
-		cols, args = append(cols, "note"), append(args, v.Note)
+		voltCols, voltArgs = append(voltCols, "note"), append(voltArgs, voltV.Note)
 	}
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(pageViewTableSQL, cols, pageViewColumnsSQL), args...)
-	if err != nil {
-		return PageView{}, err
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(pageViewTableSQL, voltCols, pageViewColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return PageView{}, voltErr
 	}
-	return pageViewScan(row)
+	return pageViewScan(voltRow)
 }
 
 // PageViewUpdate validates c and writes its marked columns to the page_views row it
@@ -137,36 +137,36 @@ func (q *Queries) PageViewUpdate(ctx context.Context, c PageViewChangeset) (Page
 		return PageView{}, rt.ErrNoRow
 	}
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return PageView{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return PageView{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[1] {
-		cols, args = append(cols, "site"), append(args, v.Site)
+		voltCols, voltArgs = append(voltCols, "site"), append(voltArgs, voltV.Site)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "day"), append(args, v.Day)
+		voltCols, voltArgs = append(voltCols, "day"), append(voltArgs, voltV.Day)
 	}
 	if c.set[3] {
-		cols, args = append(cols, "hits"), append(args, v.Hits)
+		voltCols, voltArgs = append(voltCols, "hits"), append(voltArgs, voltV.Hits)
 	}
 	if c.set[4] {
-		cols, args = append(cols, "score"), append(args, v.Score)
+		voltCols, voltArgs = append(voltCols, "score"), append(voltArgs, voltV.Score)
 	}
 	if c.set[5] {
-		cols, args = append(cols, "note"), append(args, v.Note)
+		voltCols, voltArgs = append(voltCols, "note"), append(voltArgs, voltV.Note)
 	}
-	if len(cols) == 0 {
-		return v, nil
+	if len(voltCols) == 0 {
+		return voltV, nil
 	}
-	args = append(args, c.data.ID)
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(pageViewTableSQL, cols, []string{"id"}, pageViewColumnsSQL), args...)
-	if err != nil {
-		return PageView{}, err
+	voltArgs = append(voltArgs, c.data.ID)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(pageViewTableSQL, voltCols, []string{"id"}, pageViewColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return PageView{}, voltErr
 	}
-	return pageViewScan(row)
+	return pageViewScan(voltRow)
 }
 
 const pageViewDeleteSQL = `DELETE FROM "page_views" WHERE "id" = ?`
@@ -174,24 +174,24 @@ const pageViewDeleteSQL = `DELETE FROM "page_views" WHERE "id" = ?`
 // PageViewDelete removes the identified page_views row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) PageViewDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, pageViewDeleteSQL, id)
-	if err != nil {
-		return rt.Refused("PageView", err)
+	voltRes, voltErr := q.db.ExecContext(ctx, pageViewDeleteSQL, id)
+	if voltErr != nil {
+		return rt.Refused("PageView", voltErr)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+	voltN, voltErr := voltRes.RowsAffected()
+	if voltErr != nil {
+		return voltErr
 	}
-	if n == 0 {
+	if voltN == 0 {
 		return rt.ErrNotFound
 	}
 	return nil
 }
 
 func linkClickScan(r rt.Row) (LinkClick, error) {
-	var v LinkClick
-	err := r.Scan(&v.ID, &v.Site, &v.Day, &v.Target)
-	return v, rt.Refused("LinkClick", err)
+	var voltV LinkClick
+	voltErr := r.Scan(&voltV.ID, &voltV.Site, &voltV.Day, &voltV.Target)
+	return voltV, rt.Refused("LinkClick", voltErr)
 }
 
 const linkClickGetSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE "id" = ?`
@@ -207,70 +207,70 @@ func (q *Queries) LinkClickGetMany(ctx context.Context, ids []int) ([]LinkClick,
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	query, args, err := rt.SelectRender(linkClickTableSQL, linkClickColumnsSQL, []rt.Opt[LinkClick]{LinkClickID.In(ids...)})
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(linkClickTableSQL, linkClickColumnsSQL, []rt.Opt[LinkClick]{LinkClickID.In(ids...)})
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := q.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []LinkClick{}
-	for rows.Next() {
-		v, err := linkClickScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []LinkClick{}
+	for voltRows.Next() {
+		voltV, voltErr := linkClickScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 const linkClickListSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks"`
 
 // LinkClickList returns every link_clicks row.
 func (q *Queries) LinkClickList(ctx context.Context) ([]LinkClick, error) {
-	rows, err := q.db.QueryContext(ctx, linkClickListSQL)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, linkClickListSQL)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []LinkClick{}
-	for rows.Next() {
-		v, err := linkClickScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []LinkClick{}
+	for voltRows.Next() {
+		voltV, voltErr := linkClickScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // LinkClickCreate validates c and inserts its marked columns, returning the
 // stored link_clicks row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) LinkClickCreate(ctx context.Context, c LinkClickChangeset) (LinkClick, error) {
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return LinkClick{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return LinkClick{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[1] {
-		cols, args = append(cols, "site"), append(args, v.Site)
+		voltCols, voltArgs = append(voltCols, "site"), append(voltArgs, voltV.Site)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "day"), append(args, v.Day)
+		voltCols, voltArgs = append(voltCols, "day"), append(voltArgs, voltV.Day)
 	}
 	if c.set[3] {
-		cols, args = append(cols, "target"), append(args, v.Target)
+		voltCols, voltArgs = append(voltCols, "target"), append(voltArgs, voltV.Target)
 	}
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(linkClickTableSQL, cols, linkClickColumnsSQL), args...)
-	if err != nil {
-		return LinkClick{}, err
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(linkClickTableSQL, voltCols, linkClickColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return LinkClick{}, voltErr
 	}
-	return linkClickScan(row)
+	return linkClickScan(voltRow)
 }
 
 // LinkClickUpdate validates c and writes its marked columns to the link_clicks row it
@@ -281,30 +281,30 @@ func (q *Queries) LinkClickUpdate(ctx context.Context, c LinkClickChangeset) (Li
 		return LinkClick{}, rt.ErrNoRow
 	}
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return LinkClick{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return LinkClick{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[1] {
-		cols, args = append(cols, "site"), append(args, v.Site)
+		voltCols, voltArgs = append(voltCols, "site"), append(voltArgs, voltV.Site)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "day"), append(args, v.Day)
+		voltCols, voltArgs = append(voltCols, "day"), append(voltArgs, voltV.Day)
 	}
 	if c.set[3] {
-		cols, args = append(cols, "target"), append(args, v.Target)
+		voltCols, voltArgs = append(voltCols, "target"), append(voltArgs, voltV.Target)
 	}
-	if len(cols) == 0 {
-		return v, nil
+	if len(voltCols) == 0 {
+		return voltV, nil
 	}
-	args = append(args, c.data.ID)
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(linkClickTableSQL, cols, []string{"id"}, linkClickColumnsSQL), args...)
-	if err != nil {
-		return LinkClick{}, err
+	voltArgs = append(voltArgs, c.data.ID)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(linkClickTableSQL, voltCols, []string{"id"}, linkClickColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return LinkClick{}, voltErr
 	}
-	return linkClickScan(row)
+	return linkClickScan(voltRow)
 }
 
 const linkClickDeleteSQL = `DELETE FROM "link_clicks" WHERE "id" = ?`
@@ -312,15 +312,15 @@ const linkClickDeleteSQL = `DELETE FROM "link_clicks" WHERE "id" = ?`
 // LinkClickDelete removes the identified link_clicks row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) LinkClickDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, linkClickDeleteSQL, id)
-	if err != nil {
-		return rt.Refused("LinkClick", err)
+	voltRes, voltErr := q.db.ExecContext(ctx, linkClickDeleteSQL, id)
+	if voltErr != nil {
+		return rt.Refused("LinkClick", voltErr)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+	voltN, voltErr := voltRes.RowsAffected()
+	if voltErr != nil {
+		return voltErr
 	}
-	if n == 0 {
+	if voltN == 0 {
 		return rt.ErrNotFound
 	}
 	return nil

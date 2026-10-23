@@ -111,31 +111,31 @@ func (c UserChangeset) CreatedAtSet(v time.Time) UserChangeset {
 // for a key that names no column (spec §changesets).
 func (c UserChangeset) Cast(p UserParams, allow ...UserColumn) UserChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "email", "displayName", "bio", "created_at")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "email":
-			if v, ok, err := rt.Field(p, "email", "string", false, func(r *User) string { return r.Email }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "email")
-			} else if ok {
-				c = c.EmailSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "email", "string", false, func(voltR *User) string { return voltR.Email }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "email")
+			} else if voltOK {
+				c = c.EmailSet(voltV)
 			}
 		case "name":
-			if v, ok, err := rt.Field(p, "displayName", "string", false, func(r *User) string { return r.Name }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "name")
-			} else if ok {
-				c = c.NameSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "displayName", "string", false, func(voltR *User) string { return voltR.Name }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "name")
+			} else if voltOK {
+				c = c.NameSet(voltV)
 			}
 		case "bio":
-			if v, ok, err := rt.Field(p, "bio", "string", true, func(r *User) rt.Null[string] { return r.Bio }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "bio")
-			} else if ok {
-				c = c.BioSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "bio", "string", true, func(voltR *User) rt.Null[string] { return voltR.Bio }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "bio")
+			} else if voltOK {
+				c = c.BioSet(voltV)
 			}
 		case "created_at":
-			if v, ok, err := rt.Field(p, "created_at", "time.Time", false, func(r *User) time.Time { return r.CreatedAt }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "created_at")
-			} else if ok {
-				c = c.CreatedAtSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "created_at", "time.Time", false, func(voltR *User) time.Time { return voltR.CreatedAt }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "created_at")
+			} else if voltOK {
+				c = c.CreatedAtSet(voltV)
 			}
 		}
 	}
@@ -161,39 +161,39 @@ func (c UserChangeset) Changed(col UserColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c UserChangeset) Row() User {
-	r := c.data
+	voltR := c.data
 	if c.set[1] {
-		r.Email = c.vals.Email
+		voltR.Email = c.vals.Email
 	}
 	if c.set[2] {
-		r.Name = c.vals.Name
+		voltR.Name = c.vals.Name
 	}
 	if c.set[3] {
-		r.Bio = c.vals.Bio
+		voltR.Bio = c.vals.Bio
 	}
 	if c.set[4] {
-		r.CreatedAt = c.vals.CreatedAt
+		voltR.CreatedAt = c.vals.CreatedAt
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c UserChangeset) Params() UserParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "email", Value: c.vals.Email})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "email", Value: c.vals.Email})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "displayName", Value: c.vals.Name})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "displayName", Value: c.vals.Name})
 	}
 	if c.set[3] {
-		marks = append(marks, rt.Mark{Wire: "bio", Value: c.vals.Bio})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "bio", Value: c.vals.Bio})
 	}
 	if c.set[4] {
-		marks = append(marks, rt.Mark{Wire: "created_at", Value: c.vals.CreatedAt})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "created_at", Value: c.vals.CreatedAt})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec
@@ -331,43 +331,43 @@ func (c OrderChangeset) PlacedAtSet(v rt.Null[time.Time]) OrderChangeset {
 // for a key that names no column (spec §changesets).
 func (c OrderChangeset) Cast(p OrderParams, allow ...OrderColumn) OrderChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "user_id", "status", "total", "tip", "fee", "placed_at")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "user_id":
-			if v, ok, err := rt.Field(p, "user_id", "int", false, func(r *Order) int { return r.UserID }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "user_id")
-			} else if ok {
-				c = c.UserIDSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "user_id", "int", false, func(voltR *Order) int { return voltR.UserID }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "user_id")
+			} else if voltOK {
+				c = c.UserIDSet(voltV)
 			}
 		case "status":
-			if v, ok, err := rt.Field(p, "status", "OrderState", false, func(r *Order) OrderState { return r.Status }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "status")
-			} else if ok {
-				c = c.StatusSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "status", "OrderState", false, func(voltR *Order) OrderState { return voltR.Status }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "status")
+			} else if voltOK {
+				c = c.StatusSet(voltV)
 			}
 		case "total":
-			if v, ok, err := rt.Field(p, "total", "float64", false, func(r *Order) float64 { return r.Total }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "total")
-			} else if ok {
-				c = c.TotalSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "total", "float64", false, func(voltR *Order) float64 { return voltR.Total }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "total")
+			} else if voltOK {
+				c = c.TotalSet(voltV)
 			}
 		case "tip":
-			if v, ok, err := rt.Field(p, "tip", "Money", false, func(r *Order) Money { return r.Tip }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "tip")
-			} else if ok {
-				c = c.TipSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "tip", "Money", false, func(voltR *Order) Money { return voltR.Tip }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "tip")
+			} else if voltOK {
+				c = c.TipSet(voltV)
 			}
 		case "fee":
-			if v, ok, err := rt.Field(p, "fee", "pay.Cents", false, func(r *Order) pay.Cents { return r.Fee }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "fee")
-			} else if ok {
-				c = c.FeeSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "fee", "pay.Cents", false, func(voltR *Order) pay.Cents { return voltR.Fee }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "fee")
+			} else if voltOK {
+				c = c.FeeSet(voltV)
 			}
 		case "placed_at":
-			if v, ok, err := rt.Field(p, "placed_at", "time.Time", true, func(r *Order) rt.Null[time.Time] { return r.PlacedAt }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "placed_at")
-			} else if ok {
-				c = c.PlacedAtSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "placed_at", "time.Time", true, func(voltR *Order) rt.Null[time.Time] { return voltR.PlacedAt }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "placed_at")
+			} else if voltOK {
+				c = c.PlacedAtSet(voltV)
 			}
 		}
 	}
@@ -397,51 +397,51 @@ func (c OrderChangeset) Changed(col OrderColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c OrderChangeset) Row() Order {
-	r := c.data
+	voltR := c.data
 	if c.set[1] {
-		r.UserID = c.vals.UserID
+		voltR.UserID = c.vals.UserID
 	}
 	if c.set[2] {
-		r.Status = c.vals.Status
+		voltR.Status = c.vals.Status
 	}
 	if c.set[3] {
-		r.Total = c.vals.Total
+		voltR.Total = c.vals.Total
 	}
 	if c.set[4] {
-		r.Tip = c.vals.Tip
+		voltR.Tip = c.vals.Tip
 	}
 	if c.set[5] {
-		r.Fee = c.vals.Fee
+		voltR.Fee = c.vals.Fee
 	}
 	if c.set[6] {
-		r.PlacedAt = c.vals.PlacedAt
+		voltR.PlacedAt = c.vals.PlacedAt
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c OrderChangeset) Params() OrderParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "user_id", Value: c.vals.UserID})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "user_id", Value: c.vals.UserID})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "status", Value: c.vals.Status})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "status", Value: c.vals.Status})
 	}
 	if c.set[3] {
-		marks = append(marks, rt.Mark{Wire: "total", Value: c.vals.Total})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "total", Value: c.vals.Total})
 	}
 	if c.set[4] {
-		marks = append(marks, rt.Mark{Wire: "tip", Value: c.vals.Tip})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "tip", Value: c.vals.Tip})
 	}
 	if c.set[5] {
-		marks = append(marks, rt.Mark{Wire: "fee", Value: c.vals.Fee})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "fee", Value: c.vals.Fee})
 	}
 	if c.set[6] {
-		marks = append(marks, rt.Mark{Wire: "placed_at", Value: c.vals.PlacedAt})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "placed_at", Value: c.vals.PlacedAt})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec
@@ -540,19 +540,19 @@ func (c UserTagChangeset) TagSet(v string) UserTagChangeset {
 // for a key that names no column (spec §changesets).
 func (c UserTagChangeset) Cast(p UserTagParams, allow ...UserTagColumn) UserTagChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "user_id", "tag")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "user_id":
-			if v, ok, err := rt.Field(p, "user_id", "int", false, func(r *UserTag) int { return r.UserID }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "user_id")
-			} else if ok {
-				c = c.UserIDSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "user_id", "int", false, func(voltR *UserTag) int { return voltR.UserID }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "user_id")
+			} else if voltOK {
+				c = c.UserIDSet(voltV)
 			}
 		case "tag":
-			if v, ok, err := rt.Field(p, "tag", "string", false, func(r *UserTag) string { return r.Tag }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "tag")
-			} else if ok {
-				c = c.TagSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "tag", "string", false, func(voltR *UserTag) string { return voltR.Tag }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "tag")
+			} else if voltOK {
+				c = c.TagSet(voltV)
 			}
 		}
 	}
@@ -572,27 +572,27 @@ func (c UserTagChangeset) Changed(col UserTagColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c UserTagChangeset) Row() UserTag {
-	r := c.data
+	voltR := c.data
 	if c.set[0] {
-		r.UserID = c.vals.UserID
+		voltR.UserID = c.vals.UserID
 	}
 	if c.set[1] {
-		r.Tag = c.vals.Tag
+		voltR.Tag = c.vals.Tag
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c UserTagChangeset) Params() UserTagParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[0] {
-		marks = append(marks, rt.Mark{Wire: "user_id", Value: c.vals.UserID})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "user_id", Value: c.vals.UserID})
 	}
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "tag", Value: c.vals.Tag})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "tag", Value: c.vals.Tag})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec
@@ -702,25 +702,25 @@ func (c PageViewChangeset) HitsSet(v int) PageViewChangeset {
 // for a key that names no column (spec §changesets).
 func (c PageViewChangeset) Cast(p PageViewParams, allow ...PageViewColumn) PageViewChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "site", "day", "hits")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "site":
-			if v, ok, err := rt.Field(p, "site", "string", false, func(r *PageView) string { return r.Site }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "site")
-			} else if ok {
-				c = c.SiteSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "site", "string", false, func(voltR *PageView) string { return voltR.Site }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "site")
+			} else if voltOK {
+				c = c.SiteSet(voltV)
 			}
 		case "day":
-			if v, ok, err := rt.Field(p, "day", "int", false, func(r *PageView) int { return r.Day }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "day")
-			} else if ok {
-				c = c.DaySet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "day", "int", false, func(voltR *PageView) int { return voltR.Day }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "day")
+			} else if voltOK {
+				c = c.DaySet(voltV)
 			}
 		case "hits":
-			if v, ok, err := rt.Field(p, "hits", "int", false, func(r *PageView) int { return r.Hits }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "hits")
-			} else if ok {
-				c = c.HitsSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "hits", "int", false, func(voltR *PageView) int { return voltR.Hits }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "hits")
+			} else if voltOK {
+				c = c.HitsSet(voltV)
 			}
 		}
 	}
@@ -744,33 +744,33 @@ func (c PageViewChangeset) Changed(col PageViewColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c PageViewChangeset) Row() PageView {
-	r := c.data
+	voltR := c.data
 	if c.set[1] {
-		r.Site = c.vals.Site
+		voltR.Site = c.vals.Site
 	}
 	if c.set[2] {
-		r.Day = c.vals.Day
+		voltR.Day = c.vals.Day
 	}
 	if c.set[3] {
-		r.Hits = c.vals.Hits
+		voltR.Hits = c.vals.Hits
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c PageViewChangeset) Params() PageViewParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "site", Value: c.vals.Site})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "site", Value: c.vals.Site})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "day", Value: c.vals.Day})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "day", Value: c.vals.Day})
 	}
 	if c.set[3] {
-		marks = append(marks, rt.Mark{Wire: "hits", Value: c.vals.Hits})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "hits", Value: c.vals.Hits})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec
@@ -880,25 +880,25 @@ func (c LinkClickChangeset) TargetSet(v string) LinkClickChangeset {
 // for a key that names no column (spec §changesets).
 func (c LinkClickChangeset) Cast(p LinkClickParams, allow ...LinkClickColumn) LinkClickChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "site", "day", "target")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "site":
-			if v, ok, err := rt.Field(p, "site", "string", false, func(r *LinkClick) string { return r.Site }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "site")
-			} else if ok {
-				c = c.SiteSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "site", "string", false, func(voltR *LinkClick) string { return voltR.Site }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "site")
+			} else if voltOK {
+				c = c.SiteSet(voltV)
 			}
 		case "day":
-			if v, ok, err := rt.Field(p, "day", "int", false, func(r *LinkClick) int { return r.Day }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "day")
-			} else if ok {
-				c = c.DaySet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "day", "int", false, func(voltR *LinkClick) int { return voltR.Day }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "day")
+			} else if voltOK {
+				c = c.DaySet(voltV)
 			}
 		case "target":
-			if v, ok, err := rt.Field(p, "target", "string", false, func(r *LinkClick) string { return r.Target }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "target")
-			} else if ok {
-				c = c.TargetSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "target", "string", false, func(voltR *LinkClick) string { return voltR.Target }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "target")
+			} else if voltOK {
+				c = c.TargetSet(voltV)
 			}
 		}
 	}
@@ -922,33 +922,33 @@ func (c LinkClickChangeset) Changed(col LinkClickColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c LinkClickChangeset) Row() LinkClick {
-	r := c.data
+	voltR := c.data
 	if c.set[1] {
-		r.Site = c.vals.Site
+		voltR.Site = c.vals.Site
 	}
 	if c.set[2] {
-		r.Day = c.vals.Day
+		voltR.Day = c.vals.Day
 	}
 	if c.set[3] {
-		r.Target = c.vals.Target
+		voltR.Target = c.vals.Target
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c LinkClickChangeset) Params() LinkClickParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "site", Value: c.vals.Site})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "site", Value: c.vals.Site})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "day", Value: c.vals.Day})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "day", Value: c.vals.Day})
 	}
 	if c.set[3] {
-		marks = append(marks, rt.Mark{Wire: "target", Value: c.vals.Target})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "target", Value: c.vals.Target})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec
@@ -1069,31 +1069,31 @@ func (c SiteFlagChangeset) WeightSet(v rt.Null[Ratio]) SiteFlagChangeset {
 // for a key that names no column (spec §changesets).
 func (c SiteFlagChangeset) Cast(p SiteFlagParams, allow ...SiteFlagColumn) SiteFlagChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "featured", "pinned", "ratio", "weight")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "featured":
-			if v, ok, err := rt.Field(p, "featured", "Featured", false, func(r *SiteFlag) Featured { return r.Featured }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "featured")
-			} else if ok {
-				c = c.FeaturedSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "featured", "Featured", false, func(voltR *SiteFlag) Featured { return voltR.Featured }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "featured")
+			} else if voltOK {
+				c = c.FeaturedSet(voltV)
 			}
 		case "pinned":
-			if v, ok, err := rt.Field(p, "pinned", "Featured", true, func(r *SiteFlag) rt.Null[Featured] { return r.Pinned }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "pinned")
-			} else if ok {
-				c = c.PinnedSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "pinned", "Featured", true, func(voltR *SiteFlag) rt.Null[Featured] { return voltR.Pinned }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "pinned")
+			} else if voltOK {
+				c = c.PinnedSet(voltV)
 			}
 		case "ratio":
-			if v, ok, err := rt.Field(p, "ratio", "Ratio", false, func(r *SiteFlag) Ratio { return r.Ratio }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "ratio")
-			} else if ok {
-				c = c.RatioSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "ratio", "Ratio", false, func(voltR *SiteFlag) Ratio { return voltR.Ratio }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "ratio")
+			} else if voltOK {
+				c = c.RatioSet(voltV)
 			}
 		case "weight":
-			if v, ok, err := rt.Field(p, "weight", "Ratio", true, func(r *SiteFlag) rt.Null[Ratio] { return r.Weight }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "weight")
-			} else if ok {
-				c = c.WeightSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "weight", "Ratio", true, func(voltR *SiteFlag) rt.Null[Ratio] { return voltR.Weight }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "weight")
+			} else if voltOK {
+				c = c.WeightSet(voltV)
 			}
 		}
 	}
@@ -1119,39 +1119,39 @@ func (c SiteFlagChangeset) Changed(col SiteFlagColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c SiteFlagChangeset) Row() SiteFlag {
-	r := c.data
+	voltR := c.data
 	if c.set[1] {
-		r.Featured = c.vals.Featured
+		voltR.Featured = c.vals.Featured
 	}
 	if c.set[2] {
-		r.Pinned = c.vals.Pinned
+		voltR.Pinned = c.vals.Pinned
 	}
 	if c.set[3] {
-		r.Ratio = c.vals.Ratio
+		voltR.Ratio = c.vals.Ratio
 	}
 	if c.set[4] {
-		r.Weight = c.vals.Weight
+		voltR.Weight = c.vals.Weight
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c SiteFlagChangeset) Params() SiteFlagParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "featured", Value: c.vals.Featured})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "featured", Value: c.vals.Featured})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "pinned", Value: c.vals.Pinned})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "pinned", Value: c.vals.Pinned})
 	}
 	if c.set[3] {
-		marks = append(marks, rt.Mark{Wire: "ratio", Value: c.vals.Ratio})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "ratio", Value: c.vals.Ratio})
 	}
 	if c.set[4] {
-		marks = append(marks, rt.Mark{Wire: "weight", Value: c.vals.Weight})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "weight", Value: c.vals.Weight})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec
@@ -1271,31 +1271,31 @@ func (c AttachmentChangeset) DigestSet(v []byte) AttachmentChangeset {
 // for a key that names no column (spec §changesets).
 func (c AttachmentChangeset) Cast(p AttachmentParams, allow ...AttachmentColumn) AttachmentChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "name", "body", "thumb", "digest")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "name":
-			if v, ok, err := rt.Field(p, "name", "string", false, func(r *Attachment) string { return r.Name }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "name")
-			} else if ok {
-				c = c.NameSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "name", "string", false, func(voltR *Attachment) string { return voltR.Name }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "name")
+			} else if voltOK {
+				c = c.NameSet(voltV)
 			}
 		case "body":
-			if v, ok, err := rt.Field(p, "body", "[]byte", false, func(r *Attachment) []byte { return r.Body }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "body")
-			} else if ok {
-				c = c.BodySet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "body", "[]byte", false, func(voltR *Attachment) []byte { return voltR.Body }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "body")
+			} else if voltOK {
+				c = c.BodySet(voltV)
 			}
 		case "thumb":
-			if v, ok, err := rt.Field(p, "thumb", "[]byte", true, func(r *Attachment) rt.Null[[]byte] { return r.Thumb }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "thumb")
-			} else if ok {
-				c = c.ThumbSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "thumb", "[]byte", true, func(voltR *Attachment) rt.Null[[]byte] { return voltR.Thumb }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "thumb")
+			} else if voltOK {
+				c = c.ThumbSet(voltV)
 			}
 		case "digest":
-			if v, ok, err := rt.Field(p, "digest", "[]byte", false, func(r *Attachment) []byte { return r.Digest }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "digest")
-			} else if ok {
-				c = c.DigestSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "digest", "[]byte", false, func(voltR *Attachment) []byte { return voltR.Digest }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "digest")
+			} else if voltOK {
+				c = c.DigestSet(voltV)
 			}
 		}
 	}
@@ -1321,39 +1321,39 @@ func (c AttachmentChangeset) Changed(col AttachmentColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c AttachmentChangeset) Row() Attachment {
-	r := c.data
+	voltR := c.data
 	if c.set[1] {
-		r.Name = c.vals.Name
+		voltR.Name = c.vals.Name
 	}
 	if c.set[2] {
-		r.Body = c.vals.Body
+		voltR.Body = c.vals.Body
 	}
 	if c.set[3] {
-		r.Thumb = c.vals.Thumb
+		voltR.Thumb = c.vals.Thumb
 	}
 	if c.set[4] {
-		r.Digest = c.vals.Digest
+		voltR.Digest = c.vals.Digest
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c AttachmentChangeset) Params() AttachmentParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "name", Value: c.vals.Name})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "name", Value: c.vals.Name})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "body", Value: c.vals.Body})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "body", Value: c.vals.Body})
 	}
 	if c.set[3] {
-		marks = append(marks, rt.Mark{Wire: "thumb", Value: c.vals.Thumb})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "thumb", Value: c.vals.Thumb})
 	}
 	if c.set[4] {
-		marks = append(marks, rt.Mark{Wire: "digest", Value: c.vals.Digest})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "digest", Value: c.vals.Digest})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec
@@ -1461,25 +1461,25 @@ func (c BlobChangeset) SizeSet(v int) BlobChangeset {
 // for a key that names no column (spec §changesets).
 func (c BlobChangeset) Cast(p BlobParams, allow ...BlobColumn) BlobChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "hash", "tag", "size")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "hash":
-			if v, ok, err := rt.Field(p, "hash", "[]byte", false, func(r *Blob) []byte { return r.Hash }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "hash")
-			} else if ok {
-				c = c.HashSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "hash", "[]byte", false, func(voltR *Blob) []byte { return voltR.Hash }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "hash")
+			} else if voltOK {
+				c = c.HashSet(voltV)
 			}
 		case "tag":
-			if v, ok, err := rt.Field(p, "tag", "[]byte", false, func(r *Blob) []byte { return r.Tag }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "tag")
-			} else if ok {
-				c = c.TagSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "tag", "[]byte", false, func(voltR *Blob) []byte { return voltR.Tag }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "tag")
+			} else if voltOK {
+				c = c.TagSet(voltV)
 			}
 		case "size":
-			if v, ok, err := rt.Field(p, "size", "int", false, func(r *Blob) int { return r.Size }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "size")
-			} else if ok {
-				c = c.SizeSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "size", "int", false, func(voltR *Blob) int { return voltR.Size }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "size")
+			} else if voltOK {
+				c = c.SizeSet(voltV)
 			}
 		}
 	}
@@ -1501,33 +1501,33 @@ func (c BlobChangeset) Changed(col BlobColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c BlobChangeset) Row() Blob {
-	r := c.data
+	voltR := c.data
 	if c.set[0] {
-		r.Hash = c.vals.Hash
+		voltR.Hash = c.vals.Hash
 	}
 	if c.set[1] {
-		r.Tag = c.vals.Tag
+		voltR.Tag = c.vals.Tag
 	}
 	if c.set[2] {
-		r.Size = c.vals.Size
+		voltR.Size = c.vals.Size
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c BlobChangeset) Params() BlobParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[0] {
-		marks = append(marks, rt.Mark{Wire: "hash", Value: c.vals.Hash})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "hash", Value: c.vals.Hash})
 	}
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "tag", Value: c.vals.Tag})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "tag", Value: c.vals.Tag})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "size", Value: c.vals.Size})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "size", Value: c.vals.Size})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec
@@ -1654,37 +1654,37 @@ func (c DailyHitChangeset) TokenSet(v rt.Null[string]) DailyHitChangeset {
 // for a key that names no column (spec §changesets).
 func (c DailyHitChangeset) Cast(p DailyHitParams, allow ...DailyHitColumn) DailyHitChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "day", "hits", "site", "label", "token")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "day":
-			if v, ok, err := rt.Field(p, "day", "int", false, func(r *DailyHit) int { return r.Day }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "day")
-			} else if ok {
-				c = c.DaySet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "day", "int", false, func(voltR *DailyHit) int { return voltR.Day }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "day")
+			} else if voltOK {
+				c = c.DaySet(voltV)
 			}
 		case "hits":
-			if v, ok, err := rt.Field(p, "hits", "int", false, func(r *DailyHit) int { return r.Hits }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "hits")
-			} else if ok {
-				c = c.HitsSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "hits", "int", false, func(voltR *DailyHit) int { return voltR.Hits }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "hits")
+			} else if voltOK {
+				c = c.HitsSet(voltV)
 			}
 		case "site":
-			if v, ok, err := rt.Field(p, "site", "string", false, func(r *DailyHit) string { return r.Site }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "site")
-			} else if ok {
-				c = c.SiteSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "site", "string", false, func(voltR *DailyHit) string { return voltR.Site }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "site")
+			} else if voltOK {
+				c = c.SiteSet(voltV)
 			}
 		case "label":
-			if v, ok, err := rt.Field(p, "label", "string", false, func(r *DailyHit) string { return r.Label }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "label")
-			} else if ok {
-				c = c.LabelSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "label", "string", false, func(voltR *DailyHit) string { return voltR.Label }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "label")
+			} else if voltOK {
+				c = c.LabelSet(voltV)
 			}
 		case "token":
-			if v, ok, err := rt.Field(p, "token", "string", true, func(r *DailyHit) rt.Null[string] { return r.Token }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "token")
-			} else if ok {
-				c = c.TokenSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "token", "string", true, func(voltR *DailyHit) rt.Null[string] { return voltR.Token }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "token")
+			} else if voltOK {
+				c = c.TokenSet(voltV)
 			}
 		}
 	}
@@ -1710,45 +1710,45 @@ func (c DailyHitChangeset) Changed(col DailyHitColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c DailyHitChangeset) Row() DailyHit {
-	r := c.data
+	voltR := c.data
 	if c.set[0] {
-		r.Day = c.vals.Day
+		voltR.Day = c.vals.Day
 	}
 	if c.set[1] {
-		r.Hits = c.vals.Hits
+		voltR.Hits = c.vals.Hits
 	}
 	if c.set[2] {
-		r.Site = c.vals.Site
+		voltR.Site = c.vals.Site
 	}
 	if c.set[3] {
-		r.Label = c.vals.Label
+		voltR.Label = c.vals.Label
 	}
 	if c.set[4] {
-		r.Token = c.vals.Token
+		voltR.Token = c.vals.Token
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c DailyHitChangeset) Params() DailyHitParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[0] {
-		marks = append(marks, rt.Mark{Wire: "day", Value: c.vals.Day})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "day", Value: c.vals.Day})
 	}
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "hits", Value: c.vals.Hits})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "hits", Value: c.vals.Hits})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "site", Value: c.vals.Site})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "site", Value: c.vals.Site})
 	}
 	if c.set[3] {
-		marks = append(marks, rt.Mark{Wire: "label", Value: c.vals.Label})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "label", Value: c.vals.Label})
 	}
 	if c.set[4] {
-		marks = append(marks, rt.Mark{Wire: "token", Value: c.vals.Token})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "token", Value: c.vals.Token})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec
@@ -1849,19 +1849,19 @@ func (c InviteChangeset) CodeSet(v string) InviteChangeset {
 // for a key that names no column (spec §changesets).
 func (c InviteChangeset) Cast(p InviteParams, allow ...InviteColumn) InviteChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "user_email", "code")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "user_email":
-			if v, ok, err := rt.Field(p, "user_email", "string", false, func(r *Invite) string { return r.UserEmail }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "user_email")
-			} else if ok {
-				c = c.UserEmailSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "user_email", "string", false, func(voltR *Invite) string { return voltR.UserEmail }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "user_email")
+			} else if voltOK {
+				c = c.UserEmailSet(voltV)
 			}
 		case "code":
-			if v, ok, err := rt.Field(p, "code", "string", false, func(r *Invite) string { return r.Code }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "code")
-			} else if ok {
-				c = c.CodeSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "code", "string", false, func(voltR *Invite) string { return voltR.Code }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "code")
+			} else if voltOK {
+				c = c.CodeSet(voltV)
 			}
 		}
 	}
@@ -1883,27 +1883,27 @@ func (c InviteChangeset) Changed(col InviteColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c InviteChangeset) Row() Invite {
-	r := c.data
+	voltR := c.data
 	if c.set[1] {
-		r.UserEmail = c.vals.UserEmail
+		voltR.UserEmail = c.vals.UserEmail
 	}
 	if c.set[2] {
-		r.Code = c.vals.Code
+		voltR.Code = c.vals.Code
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c InviteChangeset) Params() InviteParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "user_email", Value: c.vals.UserEmail})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "user_email", Value: c.vals.UserEmail})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "code", Value: c.vals.Code})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "code", Value: c.vals.Code})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec
@@ -2005,19 +2005,19 @@ func (c PostFlagChangeset) ApprovedSet(v rt.Null[pay.YesNo]) PostFlagChangeset {
 // for a key that names no column (spec §changesets).
 func (c PostFlagChangeset) Cast(p PostFlagParams, allow ...PostFlagColumn) PostFlagChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "reviewed", "approved")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "reviewed":
-			if v, ok, err := rt.Field(p, "reviewed", "pay.YesNo", false, func(r *PostFlag) pay.YesNo { return r.Reviewed }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "reviewed")
-			} else if ok {
-				c = c.ReviewedSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "reviewed", "pay.YesNo", false, func(voltR *PostFlag) pay.YesNo { return voltR.Reviewed }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "reviewed")
+			} else if voltOK {
+				c = c.ReviewedSet(voltV)
 			}
 		case "approved":
-			if v, ok, err := rt.Field(p, "approved", "pay.YesNo", true, func(r *PostFlag) rt.Null[pay.YesNo] { return r.Approved }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "approved")
-			} else if ok {
-				c = c.ApprovedSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "approved", "pay.YesNo", true, func(voltR *PostFlag) rt.Null[pay.YesNo] { return voltR.Approved }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "approved")
+			} else if voltOK {
+				c = c.ApprovedSet(voltV)
 			}
 		}
 	}
@@ -2039,27 +2039,27 @@ func (c PostFlagChangeset) Changed(col PostFlagColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c PostFlagChangeset) Row() PostFlag {
-	r := c.data
+	voltR := c.data
 	if c.set[1] {
-		r.Reviewed = c.vals.Reviewed
+		voltR.Reviewed = c.vals.Reviewed
 	}
 	if c.set[2] {
-		r.Approved = c.vals.Approved
+		voltR.Approved = c.vals.Approved
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c PostFlagChangeset) Params() PostFlagParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "reviewed", Value: c.vals.Reviewed})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "reviewed", Value: c.vals.Reviewed})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "approved", Value: c.vals.Approved})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "approved", Value: c.vals.Approved})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec

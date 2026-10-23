@@ -87,25 +87,25 @@ func (c AuthorChangeset) DeletedAtSet(v rt.Null[time.Time]) AuthorChangeset {
 // for a key that names no column (spec §changesets).
 func (c AuthorChangeset) Cast(p AuthorParams, allow ...AuthorColumn) AuthorChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "email", "handle", "deleted_at")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "email":
-			if v, ok, err := rt.Field(p, "email", "string", false, func(r *Author) string { return r.Email }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "email")
-			} else if ok {
-				c = c.EmailSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "email", "string", false, func(voltR *Author) string { return voltR.Email }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "email")
+			} else if voltOK {
+				c = c.EmailSet(voltV)
 			}
 		case "handle":
-			if v, ok, err := rt.Field(p, "handle", "string", false, func(r *Author) string { return r.Handle }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "handle")
-			} else if ok {
-				c = c.HandleSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "handle", "string", false, func(voltR *Author) string { return voltR.Handle }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "handle")
+			} else if voltOK {
+				c = c.HandleSet(voltV)
 			}
 		case "deleted_at":
-			if v, ok, err := rt.Field(p, "deleted_at", "time.Time", true, func(r *Author) rt.Null[time.Time] { return r.DeletedAt }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "deleted_at")
-			} else if ok {
-				c = c.DeletedAtSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "deleted_at", "time.Time", true, func(voltR *Author) rt.Null[time.Time] { return voltR.DeletedAt }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "deleted_at")
+			} else if voltOK {
+				c = c.DeletedAtSet(voltV)
 			}
 		}
 	}
@@ -129,33 +129,33 @@ func (c AuthorChangeset) Changed(col AuthorColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c AuthorChangeset) Row() Author {
-	r := c.data
+	voltR := c.data
 	if c.set[1] {
-		r.Email = c.vals.Email
+		voltR.Email = c.vals.Email
 	}
 	if c.set[2] {
-		r.Handle = c.vals.Handle
+		voltR.Handle = c.vals.Handle
 	}
 	if c.set[3] {
-		r.DeletedAt = c.vals.DeletedAt
+		voltR.DeletedAt = c.vals.DeletedAt
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c AuthorChangeset) Params() AuthorParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "email", Value: c.vals.Email})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "email", Value: c.vals.Email})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "handle", Value: c.vals.Handle})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "handle", Value: c.vals.Handle})
 	}
 	if c.set[3] {
-		marks = append(marks, rt.Mark{Wire: "deleted_at", Value: c.vals.DeletedAt})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "deleted_at", Value: c.vals.DeletedAt})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec

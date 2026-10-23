@@ -1,19 +1,6 @@
-// Exported naming and typing helpers for the Volt language layer (lang
-// package).
-package golang
+package naming
 
-import (
-	"github.com/Piechutowski/volt/lang/ast"
-	"github.com/Piechutowski/volt/lang/check"
-	"github.com/Piechutowski/volt/nao/rt"
-)
-
-// ModelName derives the Go model type name for a table:
-// the [model:] override when present, else the singularized table name.
-func ModelName(t *ast.Table) (string, error) { return modelName(t) }
-
-// GoName converts a schema name to an exported Go identifier.
-func GoName(schemaName string) (string, error) { return goName(schemaName) }
+import "github.com/Piechutowski/volt/nao/rt"
 
 // SelectParam is one Go parameter of a generated select method
 // (spec §selects-over-groups), in declaration order.
@@ -54,20 +41,14 @@ type ValidatorFn struct {
 	Validators []ValidatorSpec
 }
 
-// ValidatorSpec is one lowered validator, rendered by the Volt checker
-// (spec §validators).
+// ValidatorSpec is one lowered validator, resolved by the Volt checker
+// (spec §validators): the generated Validate calls Name with the row's
+// Fields in order.
 type ValidatorSpec struct {
-	Name string   // the validator's function name, the check of its field error
-	Src  string   // human-readable form, e.g. "EmailValid(email)"
-	Call string   // Go call over the row, e.g. "EmailValid(v.Email)"
-	Cols []string // the columns the validator reads, in first-appearance order
-}
-
-// ModelFields reports the exact struct fields the model generator emits
-// for the named table (spec §selects-over-groups, §mapping-to-go).
-// It plans the whole file.
-func ModelFields(f *ast.File, info *check.Info, tableKey string) (model string, fields []FieldSig, err error) {
-	return PlanBuild(f, info).ModelFields(tableKey)
+	Name   string   // the validator's function name, the check of its field error
+	Src    string   // human-readable form, e.g. "EmailValid(email)"
+	Fields []string // the Go fields of the row it passes, in order, e.g. "Email"
+	Cols   []string // the columns the validator reads, in first-appearance order
 }
 
 // CRUDMethod is one generated default-CRUD method of a table, as a query
@@ -85,13 +66,4 @@ type CRUDMethod struct {
 	Allow  []string      // column handles the route's Cast allows, e.g. "UserEmail"; nil otherwise
 	Result string        // row type; "" for delete
 	Many   bool          // slice result (list)
-}
-
-// CRUDMethods lists the default CRUD methods the query generator emits
-// for one table, with the same existence rules it applies: Get, Update
-// and Delete need a primary key, Update needs a non-key column, Create
-// and Update take a changeset (spec §changesets). It plans the whole
-// file.
-func CRUDMethods(f *ast.File, info *check.Info, tableKey string) (model string, methods []CRUDMethod, err error) {
-	return PlanBuild(f, info).CRUDMethods(tableKey)
 }

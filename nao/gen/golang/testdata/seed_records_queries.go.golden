@@ -35,13 +35,13 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
 // nil error commits, anything else rolls back. q must be backed by a
 // handle that can begin a transaction (a *sql.DB).
 func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
-	return rt.Tx(ctx, q.db, func(tx *sql.Tx) error { return fn(q.WithTx(tx)) })
+	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
 }
 
 func currencyScan(r rt.Row) (Currency, error) {
-	var v Currency
-	err := r.Scan(&v.Code, &v.Name)
-	return v, rt.Refused("Currency", err)
+	var voltV Currency
+	voltErr := r.Scan(&voltV.Code, &voltV.Name)
+	return voltV, rt.Refused("Currency", voltErr)
 }
 
 const currencyGetSQL = `SELECT "code", "name" FROM "currencies" WHERE "code" = ?`
@@ -57,67 +57,67 @@ func (q *Queries) CurrencyGetMany(ctx context.Context, codes []string) ([]Curren
 	if len(codes) == 0 {
 		return nil, nil
 	}
-	query, args, err := rt.SelectRender(currencyTableSQL, currencyColumnsSQL, []rt.Opt[Currency]{CurrencyCode.In(codes...)})
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(currencyTableSQL, currencyColumnsSQL, []rt.Opt[Currency]{CurrencyCode.In(codes...)})
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := q.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Currency{}
-	for rows.Next() {
-		v, err := currencyScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Currency{}
+	for voltRows.Next() {
+		voltV, voltErr := currencyScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 const currencyListSQL = `SELECT "code", "name" FROM "currencies"`
 
 // CurrencyList returns every currencies row.
 func (q *Queries) CurrencyList(ctx context.Context) ([]Currency, error) {
-	rows, err := q.db.QueryContext(ctx, currencyListSQL)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, currencyListSQL)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Currency{}
-	for rows.Next() {
-		v, err := currencyScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Currency{}
+	for voltRows.Next() {
+		voltV, voltErr := currencyScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // CurrencyCreate validates c and inserts its marked columns, returning the
 // stored currencies row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) CurrencyCreate(ctx context.Context, c CurrencyChangeset) (Currency, error) {
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Currency{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Currency{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[0] {
-		cols, args = append(cols, "code"), append(args, v.Code)
+		voltCols, voltArgs = append(voltCols, "code"), append(voltArgs, voltV.Code)
 	}
 	if c.set[1] {
-		cols, args = append(cols, "name"), append(args, v.Name)
+		voltCols, voltArgs = append(voltCols, "name"), append(voltArgs, voltV.Name)
 	}
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(currencyTableSQL, cols, currencyColumnsSQL), args...)
-	if err != nil {
-		return Currency{}, err
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(currencyTableSQL, voltCols, currencyColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Currency{}, voltErr
 	}
-	return currencyScan(row)
+	return currencyScan(voltRow)
 }
 
 // CurrencyUpdate validates c and writes its marked columns to the currencies row it
@@ -128,27 +128,27 @@ func (q *Queries) CurrencyUpdate(ctx context.Context, c CurrencyChangeset) (Curr
 		return Currency{}, rt.ErrNoRow
 	}
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Currency{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Currency{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[0] {
-		cols, args = append(cols, "code"), append(args, v.Code)
+		voltCols, voltArgs = append(voltCols, "code"), append(voltArgs, voltV.Code)
 	}
 	if c.set[1] {
-		cols, args = append(cols, "name"), append(args, v.Name)
+		voltCols, voltArgs = append(voltCols, "name"), append(voltArgs, voltV.Name)
 	}
-	if len(cols) == 0 {
-		return v, nil
+	if len(voltCols) == 0 {
+		return voltV, nil
 	}
-	args = append(args, c.data.Code)
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(currencyTableSQL, cols, []string{"code"}, currencyColumnsSQL), args...)
-	if err != nil {
-		return Currency{}, err
+	voltArgs = append(voltArgs, c.data.Code)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(currencyTableSQL, voltCols, []string{"code"}, currencyColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Currency{}, voltErr
 	}
-	return currencyScan(row)
+	return currencyScan(voltRow)
 }
 
 const currencyDeleteSQL = `DELETE FROM "currencies" WHERE "code" = ?`
@@ -156,24 +156,24 @@ const currencyDeleteSQL = `DELETE FROM "currencies" WHERE "code" = ?`
 // CurrencyDelete removes the identified currencies row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) CurrencyDelete(ctx context.Context, code string) error {
-	res, err := q.db.ExecContext(ctx, currencyDeleteSQL, code)
-	if err != nil {
-		return rt.Refused("Currency", err)
+	voltRes, voltErr := q.db.ExecContext(ctx, currencyDeleteSQL, code)
+	if voltErr != nil {
+		return rt.Refused("Currency", voltErr)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+	voltN, voltErr := voltRes.RowsAffected()
+	if voltErr != nil {
+		return voltErr
 	}
-	if n == 0 {
+	if voltN == 0 {
 		return rt.ErrNotFound
 	}
 	return nil
 }
 
 func rateScan(r rt.Row) (Rate, error) {
-	var v Rate
-	err := r.Scan(&v.ID, &v.CurrencyCode, &v.Rate, &v.FetchedAt, &v.Active, &v.Comment)
-	return v, rt.Refused("Rate", err)
+	var voltV Rate
+	voltErr := r.Scan(&voltV.ID, &voltV.CurrencyCode, &voltV.Rate, &voltV.FetchedAt, &voltV.Active, &voltV.Comment)
+	return voltV, rt.Refused("Rate", voltErr)
 }
 
 const rateGetSQL = `SELECT "id", "currency_code", "rate", "fetched_at", "active", "comment" FROM "rates" WHERE "id" = ?`
@@ -189,76 +189,76 @@ func (q *Queries) RateGetMany(ctx context.Context, ids []int) ([]Rate, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	query, args, err := rt.SelectRender(rateTableSQL, rateColumnsSQL, []rt.Opt[Rate]{RateID.In(ids...)})
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(rateTableSQL, rateColumnsSQL, []rt.Opt[Rate]{RateID.In(ids...)})
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := q.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Rate{}
-	for rows.Next() {
-		v, err := rateScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Rate{}
+	for voltRows.Next() {
+		voltV, voltErr := rateScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 const rateListSQL = `SELECT "id", "currency_code", "rate", "fetched_at", "active", "comment" FROM "rates"`
 
 // RateList returns every rates row.
 func (q *Queries) RateList(ctx context.Context) ([]Rate, error) {
-	rows, err := q.db.QueryContext(ctx, rateListSQL)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, rateListSQL)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Rate{}
-	for rows.Next() {
-		v, err := rateScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Rate{}
+	for voltRows.Next() {
+		voltV, voltErr := rateScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // RateCreate validates c and inserts its marked columns, returning the
 // stored rates row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) RateCreate(ctx context.Context, c RateChangeset) (Rate, error) {
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Rate{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Rate{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[1] {
-		cols, args = append(cols, "currency_code"), append(args, v.CurrencyCode)
+		voltCols, voltArgs = append(voltCols, "currency_code"), append(voltArgs, voltV.CurrencyCode)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "rate"), append(args, v.Rate)
+		voltCols, voltArgs = append(voltCols, "rate"), append(voltArgs, voltV.Rate)
 	}
 	if c.set[3] {
-		cols, args = append(cols, "fetched_at"), append(args, v.FetchedAt)
+		voltCols, voltArgs = append(voltCols, "fetched_at"), append(voltArgs, voltV.FetchedAt)
 	}
 	if c.set[4] {
-		cols, args = append(cols, "active"), append(args, v.Active)
+		voltCols, voltArgs = append(voltCols, "active"), append(voltArgs, voltV.Active)
 	}
 	if c.set[5] {
-		cols, args = append(cols, "comment"), append(args, v.Comment)
+		voltCols, voltArgs = append(voltCols, "comment"), append(voltArgs, voltV.Comment)
 	}
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(rateTableSQL, cols, rateColumnsSQL), args...)
-	if err != nil {
-		return Rate{}, err
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(rateTableSQL, voltCols, rateColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Rate{}, voltErr
 	}
-	return rateScan(row)
+	return rateScan(voltRow)
 }
 
 // RateUpdate validates c and writes its marked columns to the rates row it
@@ -269,36 +269,36 @@ func (q *Queries) RateUpdate(ctx context.Context, c RateChangeset) (Rate, error)
 		return Rate{}, rt.ErrNoRow
 	}
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Rate{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Rate{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[1] {
-		cols, args = append(cols, "currency_code"), append(args, v.CurrencyCode)
+		voltCols, voltArgs = append(voltCols, "currency_code"), append(voltArgs, voltV.CurrencyCode)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "rate"), append(args, v.Rate)
+		voltCols, voltArgs = append(voltCols, "rate"), append(voltArgs, voltV.Rate)
 	}
 	if c.set[3] {
-		cols, args = append(cols, "fetched_at"), append(args, v.FetchedAt)
+		voltCols, voltArgs = append(voltCols, "fetched_at"), append(voltArgs, voltV.FetchedAt)
 	}
 	if c.set[4] {
-		cols, args = append(cols, "active"), append(args, v.Active)
+		voltCols, voltArgs = append(voltCols, "active"), append(voltArgs, voltV.Active)
 	}
 	if c.set[5] {
-		cols, args = append(cols, "comment"), append(args, v.Comment)
+		voltCols, voltArgs = append(voltCols, "comment"), append(voltArgs, voltV.Comment)
 	}
-	if len(cols) == 0 {
-		return v, nil
+	if len(voltCols) == 0 {
+		return voltV, nil
 	}
-	args = append(args, c.data.ID)
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(rateTableSQL, cols, []string{"id"}, rateColumnsSQL), args...)
-	if err != nil {
-		return Rate{}, err
+	voltArgs = append(voltArgs, c.data.ID)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(rateTableSQL, voltCols, []string{"id"}, rateColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Rate{}, voltErr
 	}
-	return rateScan(row)
+	return rateScan(voltRow)
 }
 
 const rateDeleteSQL = `DELETE FROM "rates" WHERE "id" = ?`
@@ -306,15 +306,15 @@ const rateDeleteSQL = `DELETE FROM "rates" WHERE "id" = ?`
 // RateDelete removes the identified rates row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) RateDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, rateDeleteSQL, id)
-	if err != nil {
-		return rt.Refused("Rate", err)
+	voltRes, voltErr := q.db.ExecContext(ctx, rateDeleteSQL, id)
+	if voltErr != nil {
+		return rt.Refused("Rate", voltErr)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+	voltN, voltErr := voltRes.RowsAffected()
+	if voltErr != nil {
+		return voltErr
 	}
-	if n == 0 {
+	if voltN == 0 {
 		return rt.ErrNotFound
 	}
 	return nil

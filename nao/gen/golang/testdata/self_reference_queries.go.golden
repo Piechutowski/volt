@@ -35,13 +35,13 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
 // nil error commits, anything else rolls back. q must be backed by a
 // handle that can begin a transaction (a *sql.DB).
 func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
-	return rt.Tx(ctx, q.db, func(tx *sql.Tx) error { return fn(q.WithTx(tx)) })
+	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
 }
 
 func employeeScan(r rt.Row) (Employee, error) {
-	var v Employee
-	err := r.Scan(&v.ID, &v.FullName, &v.ManagerID)
-	return v, rt.Refused("Employee", err)
+	var voltV Employee
+	voltErr := r.Scan(&voltV.ID, &voltV.FullName, &voltV.ManagerID)
+	return voltV, rt.Refused("Employee", voltErr)
 }
 
 const employeeGetSQL = `SELECT "id", "full_name", "manager_id" FROM "employees" WHERE "id" = ?`
@@ -57,67 +57,67 @@ func (q *Queries) EmployeeGetMany(ctx context.Context, ids []int) ([]Employee, e
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	query, args, err := rt.SelectRender(employeeTableSQL, employeeColumnsSQL, []rt.Opt[Employee]{EmployeeID.In(ids...)})
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(employeeTableSQL, employeeColumnsSQL, []rt.Opt[Employee]{EmployeeID.In(ids...)})
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := q.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Employee{}
-	for rows.Next() {
-		v, err := employeeScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Employee{}
+	for voltRows.Next() {
+		voltV, voltErr := employeeScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 const employeeListSQL = `SELECT "id", "full_name", "manager_id" FROM "employees"`
 
 // EmployeeList returns every employees row.
 func (q *Queries) EmployeeList(ctx context.Context) ([]Employee, error) {
-	rows, err := q.db.QueryContext(ctx, employeeListSQL)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, employeeListSQL)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Employee{}
-	for rows.Next() {
-		v, err := employeeScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Employee{}
+	for voltRows.Next() {
+		voltV, voltErr := employeeScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // EmployeeCreate validates c and inserts its marked columns, returning the
 // stored employees row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) EmployeeCreate(ctx context.Context, c EmployeeChangeset) (Employee, error) {
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Employee{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Employee{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[1] {
-		cols, args = append(cols, "full_name"), append(args, v.FullName)
+		voltCols, voltArgs = append(voltCols, "full_name"), append(voltArgs, voltV.FullName)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "manager_id"), append(args, v.ManagerID)
+		voltCols, voltArgs = append(voltCols, "manager_id"), append(voltArgs, voltV.ManagerID)
 	}
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(employeeTableSQL, cols, employeeColumnsSQL), args...)
-	if err != nil {
-		return Employee{}, err
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(employeeTableSQL, voltCols, employeeColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Employee{}, voltErr
 	}
-	return employeeScan(row)
+	return employeeScan(voltRow)
 }
 
 // EmployeeUpdate validates c and writes its marked columns to the employees row it
@@ -128,27 +128,27 @@ func (q *Queries) EmployeeUpdate(ctx context.Context, c EmployeeChangeset) (Empl
 		return Employee{}, rt.ErrNoRow
 	}
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Employee{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Employee{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[1] {
-		cols, args = append(cols, "full_name"), append(args, v.FullName)
+		voltCols, voltArgs = append(voltCols, "full_name"), append(voltArgs, voltV.FullName)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "manager_id"), append(args, v.ManagerID)
+		voltCols, voltArgs = append(voltCols, "manager_id"), append(voltArgs, voltV.ManagerID)
 	}
-	if len(cols) == 0 {
-		return v, nil
+	if len(voltCols) == 0 {
+		return voltV, nil
 	}
-	args = append(args, c.data.ID)
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(employeeTableSQL, cols, []string{"id"}, employeeColumnsSQL), args...)
-	if err != nil {
-		return Employee{}, err
+	voltArgs = append(voltArgs, c.data.ID)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(employeeTableSQL, voltCols, []string{"id"}, employeeColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Employee{}, voltErr
 	}
-	return employeeScan(row)
+	return employeeScan(voltRow)
 }
 
 const employeeDeleteSQL = `DELETE FROM "employees" WHERE "id" = ?`
@@ -156,15 +156,15 @@ const employeeDeleteSQL = `DELETE FROM "employees" WHERE "id" = ?`
 // EmployeeDelete removes the identified employees row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) EmployeeDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, employeeDeleteSQL, id)
-	if err != nil {
-		return rt.Refused("Employee", err)
+	voltRes, voltErr := q.db.ExecContext(ctx, employeeDeleteSQL, id)
+	if voltErr != nil {
+		return rt.Refused("Employee", voltErr)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+	voltN, voltErr := voltRes.RowsAffected()
+	if voltErr != nil {
+		return voltErr
 	}
-	if n == 0 {
+	if voltN == 0 {
 		return rt.ErrNotFound
 	}
 	return nil

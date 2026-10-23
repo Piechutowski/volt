@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Piechutowski/volt/nao/gen/golang"
+	"github.com/Piechutowski/volt/nao/naming"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -145,7 +145,7 @@ func TestSelectRenderMatchesTypedHandles(t *testing.T) {
 	})
 	wantClean(t, diags)
 	pkg := pr.Packages["db"]
-	bySuffix := map[string]golang.SelectFn{}
+	bySuffix := map[string]naming.SelectFn{}
 	for _, fn := range pkg.SelectFns() {
 		bySuffix[fn.MethodSuffix] = fn
 	}
@@ -159,7 +159,7 @@ func TestSelectRenderMatchesTypedHandles(t *testing.T) {
 			if !ok {
 				t.Fatalf("select c%d not lowered", i)
 			}
-			got, args, err := golang.SelectSQLFor(pkg.Merged(), pkg.Schema(), fn)
+			got, args, err := pkg.Plan().SelectStatement(fn)
 			if err != nil {
 				t.Fatal(err)
 			}

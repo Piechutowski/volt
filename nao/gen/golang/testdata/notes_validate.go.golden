@@ -10,12 +10,12 @@ import (
 // every one every time, replacing the findings of an earlier Validate
 // (spec §changesets, §validators).
 func (c PostChangeset) Validate() PostChangeset {
-	v := c.Row()
-	var errs []rt.FieldError
-	if err := PostStateKnown(v.Status); err != nil {
-		errs = append(errs, rt.FieldError{Check: "PostStateKnown", Columns: []string{"status"}, Message: err.Error()})
+	voltV := c.Row()
+	var voltErrs []rt.FieldError
+	if voltErr := PostStateKnown(voltV.Status); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "PostStateKnown", Columns: []string{"status"}, Message: voltErr.Error()})
 	}
-	c.valid = errs
+	c.valid = voltErrs
 	return c
 }
 

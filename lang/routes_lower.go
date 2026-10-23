@@ -9,8 +9,8 @@ import (
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/token"
-	"github.com/Piechutowski/volt/nao/gen/golang"
 	"github.com/Piechutowski/volt/nao/inflect"
+	"github.com/Piechutowski/volt/nao/naming"
 )
 
 type routeFacts struct {
@@ -25,8 +25,8 @@ func (f routeFacts) equal(g routeFacts) bool {
 type routeEnv interface {
 	dataPackage(path string) (pkgName string, hasSchema, hasSelects bool)
 	tableByName(path, base string) (ti *check.TableInfo, hint string)
-	modelOf(path, key string) (model any, methods []golang.CRUDMethod, err error)
-	crudByName(path, name string) (key string, model any, cm golang.CRUDMethod, ok bool)
+	modelOf(path, key string) (model any, methods []naming.CRUDMethod, err error)
+	crudByName(path, name string) (key string, model any, cm naming.CRUDMethod, ok bool)
 	selectByMethod(path, name string) (sel *SelectInfo, member *check.TableInfo, ok bool)
 	selectByName(path, name string) (si *SelectInfo, hint string)
 	queryHint(path, name string) string
@@ -136,13 +136,13 @@ func (l *routeLowering) tableByName(path, base string) (*check.TableInfo, string
 	return ti, hint
 }
 
-func (l *routeLowering) modelOf(path, key string) (any, []golang.CRUDMethod, error) {
+func (l *routeLowering) modelOf(path, key string) (any, []naming.CRUDMethod, error) {
 	model, methods, err := l.env.modelOf(path, key)
 	l.note(routeLookup{kind: lkModelOf, path: path, key: key, model: model, err: errString(err)})
 	return model, methods, err
 }
 
-func (l *routeLowering) crudByName(path, name string) (string, any, golang.CRUDMethod, bool) {
+func (l *routeLowering) crudByName(path, name string) (string, any, naming.CRUDMethod, bool) {
 	key, model, cm, ok := l.env.crudByName(path, name)
 	l.note(routeLookup{kind: lkCrudByName, path: path, name: name, key: key, model: model, ok: ok})
 	return key, model, cm, ok
@@ -380,7 +380,7 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 		id, ok := s.Value.(*ast.Ident)
 		if !ok {
 			l.errorf(s.Pos(), "scopes-and-routes", "name: takes an identifier (§route-names-and-reverse-urls)")
-		} else if n, err := golang.GoName(id.Name()); err != nil {
+		} else if n, err := naming.GoName(id.Name()); err != nil {
 			l.errorf(s.Pos(), "scopes-and-routes", "route name %q: %v (§route-names-and-reverse-urls)", id.Name(), err)
 		} else {
 			helper = inh.namePrefix + n
@@ -511,7 +511,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	field := "Queries"
 	if !local {
 		var err error
-		if field, err = golang.GoName(qual); err != nil {
+		if field, err = naming.GoName(qual); err != nil {
 			l.errorf(qualPos, "scopes-and-routes", "import qualifier %q: %v (§query-routes)", qual, err)
 			return nil
 		}
@@ -805,7 +805,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 		return nil
 	}
 	tableName, singular := ti.Decl.Name.Name(), ""
-	if model, err := golang.ModelName(ti.Decl); err == nil {
+	if model, err := naming.ModelName(ti.Decl); err == nil {
 		singular = model
 	}
 	keyType, ok := l.pkParamType(ti, res.Name.Pos())
@@ -813,14 +813,14 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 		return nil
 	}
 
-	controller, err := golang.GoName(tableName)
+	controller, err := naming.GoName(tableName)
 	if err != nil {
 		l.errorf(res.Name.Pos(), "resources", "resources name %q: %v (§declaration)", declared, err)
 		return nil
 	}
 	if singular == "" {
 		singularRaw, _ := inflect.SingularLast(tableName)
-		singular, err = golang.GoName(singularRaw)
+		singular, err = naming.GoName(singularRaw)
 		if err != nil {
 			singular = controller
 		}
@@ -875,7 +875,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 					l.errorf(s.Pos(), "resources", "singular: takes a plain identifier (§settings)")
 					continue
 				}
-				gn, err := golang.GoName(id.Name())
+				gn, err := naming.GoName(id.Name())
 				if err != nil {
 					l.errorf(s.Pos(), "resources", "singular %q: %v (§settings)", id.Name(), err)
 					continue
@@ -905,7 +905,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 		except = nil
 	}
 
-	var crud map[string]golang.CRUDMethod
+	var crud map[string]naming.CRUDMethod
 	qual, target, local := l.facts.pkgName, l.facts.pkgPath, true
 	qualPos := res.Name.Pos()
 	if res.Pkg != nil {
@@ -919,7 +919,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 			l.errorf(res.Name.Pos(), "resources", "resources %s [default]: %v (§default-handlers)", res.Ref(), err)
 			return nil
 		}
-		crud = map[string]golang.CRUDMethod{}
+		crud = map[string]naming.CRUDMethod{}
 		for _, cm := range methods {
 			crud[cm.Op] = cm
 			if len(cm.Key) == 1 {

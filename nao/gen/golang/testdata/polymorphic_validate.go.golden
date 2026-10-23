@@ -10,11 +10,11 @@ import (
 // every one every time, replacing the findings of an earlier Validate
 // (spec §changesets, §validators).
 func (c CommentChangeset) Validate() CommentChangeset {
-	v := c.Row()
-	var errs []rt.FieldError
-	if err := CommentableTypeKnown(v.CommentableType); err != nil {
-		errs = append(errs, rt.FieldError{Check: "CommentableTypeKnown", Columns: []string{"commentable_type"}, Message: err.Error()})
+	voltV := c.Row()
+	var voltErrs []rt.FieldError
+	if voltErr := CommentableTypeKnown(voltV.CommentableType); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "CommentableTypeKnown", Columns: []string{"commentable_type"}, Message: voltErr.Error()})
 	}
-	c.valid = errs
+	c.valid = voltErrs
 	return c
 }

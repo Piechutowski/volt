@@ -35,13 +35,13 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
 // nil error commits, anything else rolls back. q must be backed by a
 // handle that can begin a transaction (a *sql.DB).
 func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
-	return rt.Tx(ctx, q.db, func(tx *sql.Tx) error { return fn(q.WithTx(tx)) })
+	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
 }
 
 func authorScan(r rt.Row) (Author, error) {
-	var v Author
-	err := r.Scan(&v.ID, &v.Email, &v.Handle, &v.DeletedAt)
-	return v, rt.Refused("Author", err)
+	var voltV Author
+	voltErr := r.Scan(&voltV.ID, &voltV.Email, &voltV.Handle, &voltV.DeletedAt)
+	return voltV, rt.Refused("Author", voltErr)
 }
 
 const authorGetSQL = `SELECT "id", "email", "handle", "deleted_at" FROM "authors" WHERE "id" = ?`
@@ -57,24 +57,24 @@ func (q *Queries) AuthorGetMany(ctx context.Context, ids []int) ([]Author, error
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	query, args, err := rt.SelectRender(authorTableSQL, authorColumnsSQL, []rt.Opt[Author]{AuthorID.In(ids...)})
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(authorTableSQL, authorColumnsSQL, []rt.Opt[Author]{AuthorID.In(ids...)})
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := q.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Author{}
-	for rows.Next() {
-		v, err := authorScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Author{}
+	for voltRows.Next() {
+		voltV, voltErr := authorScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 const authorGetByHandleSQL = `SELECT "id", "email", "handle", "deleted_at" FROM "authors" WHERE "handle" = ?`
@@ -89,46 +89,46 @@ const authorListSQL = `SELECT "id", "email", "handle", "deleted_at" FROM "author
 
 // AuthorList returns every authors row.
 func (q *Queries) AuthorList(ctx context.Context) ([]Author, error) {
-	rows, err := q.db.QueryContext(ctx, authorListSQL)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, authorListSQL)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Author{}
-	for rows.Next() {
-		v, err := authorScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Author{}
+	for voltRows.Next() {
+		voltV, voltErr := authorScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // AuthorCreate validates c and inserts its marked columns, returning the
 // stored authors row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) AuthorCreate(ctx context.Context, c AuthorChangeset) (Author, error) {
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Author{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Author{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[1] {
-		cols, args = append(cols, "email"), append(args, v.Email)
+		voltCols, voltArgs = append(voltCols, "email"), append(voltArgs, voltV.Email)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "handle"), append(args, v.Handle)
+		voltCols, voltArgs = append(voltCols, "handle"), append(voltArgs, voltV.Handle)
 	}
 	if c.set[3] {
-		cols, args = append(cols, "deleted_at"), append(args, v.DeletedAt)
+		voltCols, voltArgs = append(voltCols, "deleted_at"), append(voltArgs, voltV.DeletedAt)
 	}
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(authorTableSQL, cols, authorColumnsSQL), args...)
-	if err != nil {
-		return Author{}, err
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(authorTableSQL, voltCols, authorColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Author{}, voltErr
 	}
-	return authorScan(row)
+	return authorScan(voltRow)
 }
 
 // AuthorUpdate validates c and writes its marked columns to the authors row it
@@ -139,30 +139,30 @@ func (q *Queries) AuthorUpdate(ctx context.Context, c AuthorChangeset) (Author, 
 		return Author{}, rt.ErrNoRow
 	}
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Author{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Author{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[1] {
-		cols, args = append(cols, "email"), append(args, v.Email)
+		voltCols, voltArgs = append(voltCols, "email"), append(voltArgs, voltV.Email)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "handle"), append(args, v.Handle)
+		voltCols, voltArgs = append(voltCols, "handle"), append(voltArgs, voltV.Handle)
 	}
 	if c.set[3] {
-		cols, args = append(cols, "deleted_at"), append(args, v.DeletedAt)
+		voltCols, voltArgs = append(voltCols, "deleted_at"), append(voltArgs, voltV.DeletedAt)
 	}
-	if len(cols) == 0 {
-		return v, nil
+	if len(voltCols) == 0 {
+		return voltV, nil
 	}
-	args = append(args, c.data.ID)
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(authorTableSQL, cols, []string{"id"}, authorColumnsSQL), args...)
-	if err != nil {
-		return Author{}, err
+	voltArgs = append(voltArgs, c.data.ID)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(authorTableSQL, voltCols, []string{"id"}, authorColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Author{}, voltErr
 	}
-	return authorScan(row)
+	return authorScan(voltRow)
 }
 
 const authorDeleteSQL = `DELETE FROM "authors" WHERE "id" = ?`
@@ -170,15 +170,15 @@ const authorDeleteSQL = `DELETE FROM "authors" WHERE "id" = ?`
 // AuthorDelete removes the identified authors row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) AuthorDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, authorDeleteSQL, id)
-	if err != nil {
-		return rt.Refused("Author", err)
+	voltRes, voltErr := q.db.ExecContext(ctx, authorDeleteSQL, id)
+	if voltErr != nil {
+		return rt.Refused("Author", voltErr)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+	voltN, voltErr := voltRes.RowsAffected()
+	if voltErr != nil {
+		return voltErr
 	}
-	if n == 0 {
+	if voltN == 0 {
 		return rt.ErrNotFound
 	}
 	return nil

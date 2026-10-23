@@ -28,7 +28,7 @@ third-party deps. Importing `nao/rt` alone drags in nothing.
 | `lang/`          | **the language**: `token` `scanner` `parser` `ast` `diag` `check` `vet` front end, plus go.mod root discovery, package/import resolution, route expansion and conflict detection; `lang/conformance/snippets/` = the executable corpus |
 | `gen/router/`    | router generator; goldens are gofmt-stable and compiled by the real toolchain |
 | `gen/model/`     | the data half: nao's models, queries and DDL, driven by the same project load |
-| `nao/`           | **nao — the ORM**: model + query + SQLite generation (`nao/gen`), its runtime (`nao/rt`), inflector and integration tests |
+| `nao/`           | **nao, the ORM**: the naming plan every generated data name comes from (`nao/naming`), model + query + SQLite generation (`nao/gen`), its runtime (`nao/rt`), inflector and integration tests |
 | `lsp/`           | the Volt language server (`volt lsp`); project-aware diagnostics for files under a go.mod, single-file schema pass otherwise. **Own module** — glsp and its tail stay out of the library |
 | `grammar/`       | tree-sitter grammar for the whole language |
 | `zed-extension/` | Zed glue; install via `scripts/sync-grammar.sh` + Install Dev Extension |
@@ -37,6 +37,22 @@ third-party deps. Importing `nao/rt` alone drags in nothing.
 | `docs/`          | `spec.md` (the language and the generated code, normative) · `lint.md` (vet rules) · `editor.md` (grammar, extension, language server) · `hypotheses.md` (open design questions) · `roadmap.md` (what is built) |
 | `AGENT.md`       | cross-session working doctrine for AI sessions (CLAUDE.md imports it) |
 
+
+## Two layers
+
+What `volt gen` writes falls into two layers (spec
+§data-and-network-layers). The **data layer** is the schema: tables,
+types, migrations, groups, predicates, selects, validators and
+changesets, generated into the `volt_*` data files over `nao/rt`. The
+**network layer** is packages, imports, pipelines, scopes, routes,
+resources and datasets, generated into the route files over the root
+`volt` package. The network layer may use the data layer, never the
+reverse, and `cmd/volt/layers_test.go` fails the build when that
+breaks.
+
+To use the data layer alone, write a package of schema files and no
+routes: `volt gen` writes only its data files, and a program built on
+them imports nothing from Volt but `nao/rt`.
 
 ## Crib sheet
 

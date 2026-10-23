@@ -35,13 +35,13 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
 // nil error commits, anything else rolls back. q must be backed by a
 // handle that can begin a transaction (a *sql.DB).
 func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
-	return rt.Tx(ctx, q.db, func(tx *sql.Tx) error { return fn(q.WithTx(tx)) })
+	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
 }
 
 func postScan(r rt.Row) (Post, error) {
-	var v Post
-	err := r.Scan(&v.ID, &v.Slug, &v.Words, &v.Score, (*rt.Bytes)(&v.Cover), (*string)(&v.State), &v.Reviewed, (*string)(&v.Audience), &v.Tier, &v.Price, &v.Rank, &v.Draft, &v.Caption, &v.Ratio, &v.Weight, &v.Scale, &v.Kilo, &v.Shift, &v.Hits, &v.Views, &v.Label, &v.Flag, &v.Secret)
-	return v, rt.Refused("Post", err)
+	var voltV Post
+	voltErr := r.Scan(&voltV.ID, &voltV.Slug, &voltV.Words, &voltV.Score, (*rt.Bytes)(&voltV.Cover), (*string)(&voltV.State), &voltV.Reviewed, (*string)(&voltV.Audience), &voltV.Tier, &voltV.Price, &voltV.Rank, &voltV.Draft, &voltV.Caption, &voltV.Ratio, &voltV.Weight, &voltV.Scale, &voltV.Kilo, &voltV.Shift, &voltV.Hits, &voltV.Views, &voltV.Label, &voltV.Flag, &voltV.Secret)
+	return voltV, rt.Refused("Post", voltErr)
 }
 
 const postGetSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "audience", "tier", "price", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret" FROM "posts" WHERE "id" = ?`
@@ -57,24 +57,24 @@ func (q *Queries) PostGetMany(ctx context.Context, ids []int) ([]Post, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	query, args, err := rt.SelectRender(postTableSQL, postColumnsSQL, []rt.Opt[Post]{PostID.In(ids...)})
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(postTableSQL, postColumnsSQL, []rt.Opt[Post]{PostID.In(ids...)})
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := q.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Post{}
-	for rows.Next() {
-		v, err := postScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Post{}
+	for voltRows.Next() {
+		voltV, voltErr := postScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 const postGetBySlugSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "audience", "tier", "price", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret" FROM "posts" WHERE "slug" = ?`
@@ -89,103 +89,103 @@ const postListSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "r
 
 // PostList returns every posts row.
 func (q *Queries) PostList(ctx context.Context) ([]Post, error) {
-	rows, err := q.db.QueryContext(ctx, postListSQL)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, postListSQL)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Post{}
-	for rows.Next() {
-		v, err := postScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Post{}
+	for voltRows.Next() {
+		voltV, voltErr := postScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // PostCreate validates c and inserts its marked columns, returning the
 // stored posts row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) PostCreate(ctx context.Context, c PostChangeset) (Post, error) {
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Post{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Post{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[1] {
-		cols, args = append(cols, "slug"), append(args, v.Slug)
+		voltCols, voltArgs = append(voltCols, "slug"), append(voltArgs, voltV.Slug)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "words"), append(args, v.Words)
+		voltCols, voltArgs = append(voltCols, "words"), append(voltArgs, voltV.Words)
 	}
 	if c.set[3] {
-		cols, args = append(cols, "score"), append(args, v.Score)
+		voltCols, voltArgs = append(voltCols, "score"), append(voltArgs, voltV.Score)
 	}
 	if c.set[4] {
-		cols, args = append(cols, "cover"), append(args, rt.Bytes(v.Cover))
+		voltCols, voltArgs = append(voltCols, "cover"), append(voltArgs, rt.Bytes(voltV.Cover))
 	}
 	if c.set[5] {
-		cols, args = append(cols, "state"), append(args, v.State)
+		voltCols, voltArgs = append(voltCols, "state"), append(voltArgs, voltV.State)
 	}
 	if c.set[6] {
-		cols, args = append(cols, "reviewed"), append(args, v.Reviewed)
+		voltCols, voltArgs = append(voltCols, "reviewed"), append(voltArgs, voltV.Reviewed)
 	}
 	if c.set[7] {
-		cols, args = append(cols, "audience"), append(args, v.Audience)
+		voltCols, voltArgs = append(voltCols, "audience"), append(voltArgs, voltV.Audience)
 	}
 	if c.set[8] {
-		cols, args = append(cols, "tier"), append(args, v.Tier)
+		voltCols, voltArgs = append(voltCols, "tier"), append(voltArgs, voltV.Tier)
 	}
 	if c.set[9] {
-		cols, args = append(cols, "price"), append(args, v.Price)
+		voltCols, voltArgs = append(voltCols, "price"), append(voltArgs, voltV.Price)
 	}
 	if c.set[10] {
-		cols, args = append(cols, "rank"), append(args, v.Rank)
+		voltCols, voltArgs = append(voltCols, "rank"), append(voltArgs, voltV.Rank)
 	}
 	if c.set[11] {
-		cols, args = append(cols, "draft"), append(args, v.Draft)
+		voltCols, voltArgs = append(voltCols, "draft"), append(voltArgs, voltV.Draft)
 	}
 	if c.set[12] {
-		cols, args = append(cols, "caption"), append(args, v.Caption)
+		voltCols, voltArgs = append(voltCols, "caption"), append(voltArgs, voltV.Caption)
 	}
 	if c.set[13] {
-		cols, args = append(cols, "ratio"), append(args, v.Ratio)
+		voltCols, voltArgs = append(voltCols, "ratio"), append(voltArgs, voltV.Ratio)
 	}
 	if c.set[14] {
-		cols, args = append(cols, "weight"), append(args, v.Weight)
+		voltCols, voltArgs = append(voltCols, "weight"), append(voltArgs, voltV.Weight)
 	}
 	if c.set[15] {
-		cols, args = append(cols, "scale"), append(args, v.Scale)
+		voltCols, voltArgs = append(voltCols, "scale"), append(voltArgs, voltV.Scale)
 	}
 	if c.set[16] {
-		cols, args = append(cols, "kilo"), append(args, v.Kilo)
+		voltCols, voltArgs = append(voltCols, "kilo"), append(voltArgs, voltV.Kilo)
 	}
 	if c.set[17] {
-		cols, args = append(cols, "shift"), append(args, v.Shift)
+		voltCols, voltArgs = append(voltCols, "shift"), append(voltArgs, voltV.Shift)
 	}
 	if c.set[18] {
-		cols, args = append(cols, "hits"), append(args, v.Hits)
+		voltCols, voltArgs = append(voltCols, "hits"), append(voltArgs, voltV.Hits)
 	}
 	if c.set[19] {
-		cols, args = append(cols, "views"), append(args, v.Views)
+		voltCols, voltArgs = append(voltCols, "views"), append(voltArgs, voltV.Views)
 	}
 	if c.set[20] {
-		cols, args = append(cols, "label"), append(args, v.Label)
+		voltCols, voltArgs = append(voltCols, "label"), append(voltArgs, voltV.Label)
 	}
 	if c.set[21] {
-		cols, args = append(cols, "flag"), append(args, v.Flag)
+		voltCols, voltArgs = append(voltCols, "flag"), append(voltArgs, voltV.Flag)
 	}
 	if c.set[22] {
-		cols, args = append(cols, "secret"), append(args, v.Secret)
+		voltCols, voltArgs = append(voltCols, "secret"), append(voltArgs, voltV.Secret)
 	}
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(postTableSQL, cols, postColumnsSQL), args...)
-	if err != nil {
-		return Post{}, err
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(postTableSQL, voltCols, postColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Post{}, voltErr
 	}
-	return postScan(row)
+	return postScan(voltRow)
 }
 
 // PostUpdate validates c and writes its marked columns to the posts row it
@@ -196,87 +196,87 @@ func (q *Queries) PostUpdate(ctx context.Context, c PostChangeset) (Post, error)
 		return Post{}, rt.ErrNoRow
 	}
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Post{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Post{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[1] {
-		cols, args = append(cols, "slug"), append(args, v.Slug)
+		voltCols, voltArgs = append(voltCols, "slug"), append(voltArgs, voltV.Slug)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "words"), append(args, v.Words)
+		voltCols, voltArgs = append(voltCols, "words"), append(voltArgs, voltV.Words)
 	}
 	if c.set[3] {
-		cols, args = append(cols, "score"), append(args, v.Score)
+		voltCols, voltArgs = append(voltCols, "score"), append(voltArgs, voltV.Score)
 	}
 	if c.set[4] {
-		cols, args = append(cols, "cover"), append(args, rt.Bytes(v.Cover))
+		voltCols, voltArgs = append(voltCols, "cover"), append(voltArgs, rt.Bytes(voltV.Cover))
 	}
 	if c.set[5] {
-		cols, args = append(cols, "state"), append(args, v.State)
+		voltCols, voltArgs = append(voltCols, "state"), append(voltArgs, voltV.State)
 	}
 	if c.set[6] {
-		cols, args = append(cols, "reviewed"), append(args, v.Reviewed)
+		voltCols, voltArgs = append(voltCols, "reviewed"), append(voltArgs, voltV.Reviewed)
 	}
 	if c.set[7] {
-		cols, args = append(cols, "audience"), append(args, v.Audience)
+		voltCols, voltArgs = append(voltCols, "audience"), append(voltArgs, voltV.Audience)
 	}
 	if c.set[8] {
-		cols, args = append(cols, "tier"), append(args, v.Tier)
+		voltCols, voltArgs = append(voltCols, "tier"), append(voltArgs, voltV.Tier)
 	}
 	if c.set[9] {
-		cols, args = append(cols, "price"), append(args, v.Price)
+		voltCols, voltArgs = append(voltCols, "price"), append(voltArgs, voltV.Price)
 	}
 	if c.set[10] {
-		cols, args = append(cols, "rank"), append(args, v.Rank)
+		voltCols, voltArgs = append(voltCols, "rank"), append(voltArgs, voltV.Rank)
 	}
 	if c.set[11] {
-		cols, args = append(cols, "draft"), append(args, v.Draft)
+		voltCols, voltArgs = append(voltCols, "draft"), append(voltArgs, voltV.Draft)
 	}
 	if c.set[12] {
-		cols, args = append(cols, "caption"), append(args, v.Caption)
+		voltCols, voltArgs = append(voltCols, "caption"), append(voltArgs, voltV.Caption)
 	}
 	if c.set[13] {
-		cols, args = append(cols, "ratio"), append(args, v.Ratio)
+		voltCols, voltArgs = append(voltCols, "ratio"), append(voltArgs, voltV.Ratio)
 	}
 	if c.set[14] {
-		cols, args = append(cols, "weight"), append(args, v.Weight)
+		voltCols, voltArgs = append(voltCols, "weight"), append(voltArgs, voltV.Weight)
 	}
 	if c.set[15] {
-		cols, args = append(cols, "scale"), append(args, v.Scale)
+		voltCols, voltArgs = append(voltCols, "scale"), append(voltArgs, voltV.Scale)
 	}
 	if c.set[16] {
-		cols, args = append(cols, "kilo"), append(args, v.Kilo)
+		voltCols, voltArgs = append(voltCols, "kilo"), append(voltArgs, voltV.Kilo)
 	}
 	if c.set[17] {
-		cols, args = append(cols, "shift"), append(args, v.Shift)
+		voltCols, voltArgs = append(voltCols, "shift"), append(voltArgs, voltV.Shift)
 	}
 	if c.set[18] {
-		cols, args = append(cols, "hits"), append(args, v.Hits)
+		voltCols, voltArgs = append(voltCols, "hits"), append(voltArgs, voltV.Hits)
 	}
 	if c.set[19] {
-		cols, args = append(cols, "views"), append(args, v.Views)
+		voltCols, voltArgs = append(voltCols, "views"), append(voltArgs, voltV.Views)
 	}
 	if c.set[20] {
-		cols, args = append(cols, "label"), append(args, v.Label)
+		voltCols, voltArgs = append(voltCols, "label"), append(voltArgs, voltV.Label)
 	}
 	if c.set[21] {
-		cols, args = append(cols, "flag"), append(args, v.Flag)
+		voltCols, voltArgs = append(voltCols, "flag"), append(voltArgs, voltV.Flag)
 	}
 	if c.set[22] {
-		cols, args = append(cols, "secret"), append(args, v.Secret)
+		voltCols, voltArgs = append(voltCols, "secret"), append(voltArgs, voltV.Secret)
 	}
-	if len(cols) == 0 {
-		return v, nil
+	if len(voltCols) == 0 {
+		return voltV, nil
 	}
-	args = append(args, c.data.ID)
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(postTableSQL, cols, []string{"id"}, postColumnsSQL), args...)
-	if err != nil {
-		return Post{}, err
+	voltArgs = append(voltArgs, c.data.ID)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(postTableSQL, voltCols, []string{"id"}, postColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Post{}, voltErr
 	}
-	return postScan(row)
+	return postScan(voltRow)
 }
 
 const postDeleteSQL = `DELETE FROM "posts" WHERE "id" = ?`
@@ -284,24 +284,24 @@ const postDeleteSQL = `DELETE FROM "posts" WHERE "id" = ?`
 // PostDelete removes the identified posts row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) PostDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, postDeleteSQL, id)
-	if err != nil {
-		return rt.Refused("Post", err)
+	voltRes, voltErr := q.db.ExecContext(ctx, postDeleteSQL, id)
+	if voltErr != nil {
+		return rt.Refused("Post", voltErr)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+	voltN, voltErr := voltRes.RowsAffected()
+	if voltErr != nil {
+		return voltErr
 	}
-	if n == 0 {
+	if voltN == 0 {
 		return rt.ErrNotFound
 	}
 	return nil
 }
 
 func postTagScan(r rt.Row) (PostTag, error) {
-	var v PostTag
-	err := r.Scan(&v.PostID, &v.Tag)
-	return v, rt.Refused("PostTag", err)
+	var voltV PostTag
+	voltErr := r.Scan(&voltV.PostID, &voltV.Tag)
+	return voltV, rt.Refused("PostTag", voltErr)
 }
 
 const postTagGetSQL = `SELECT "post_id", "tag" FROM "post_tags" WHERE "post_id" = ? AND "tag" = ?`
@@ -315,43 +315,43 @@ const postTagListSQL = `SELECT "post_id", "tag" FROM "post_tags"`
 
 // PostTagList returns every post_tags row.
 func (q *Queries) PostTagList(ctx context.Context) ([]PostTag, error) {
-	rows, err := q.db.QueryContext(ctx, postTagListSQL)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, postTagListSQL)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []PostTag{}
-	for rows.Next() {
-		v, err := postTagScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []PostTag{}
+	for voltRows.Next() {
+		voltV, voltErr := postTagScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // PostTagCreate validates c and inserts its marked columns, returning the
 // stored post_tags row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) PostTagCreate(ctx context.Context, c PostTagChangeset) (PostTag, error) {
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return PostTag{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return PostTag{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[0] {
-		cols, args = append(cols, "post_id"), append(args, v.PostID)
+		voltCols, voltArgs = append(voltCols, "post_id"), append(voltArgs, voltV.PostID)
 	}
 	if c.set[1] {
-		cols, args = append(cols, "tag"), append(args, v.Tag)
+		voltCols, voltArgs = append(voltCols, "tag"), append(voltArgs, voltV.Tag)
 	}
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(postTagTableSQL, cols, postTagColumnsSQL), args...)
-	if err != nil {
-		return PostTag{}, err
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(postTagTableSQL, voltCols, postTagColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return PostTag{}, voltErr
 	}
-	return postTagScan(row)
+	return postTagScan(voltRow)
 }
 
 const postTagDeleteSQL = `DELETE FROM "post_tags" WHERE "post_id" = ? AND "tag" = ?`
@@ -359,24 +359,24 @@ const postTagDeleteSQL = `DELETE FROM "post_tags" WHERE "post_id" = ? AND "tag" 
 // PostTagDelete removes the identified post_tags row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) PostTagDelete(ctx context.Context, postID int, tag string) error {
-	res, err := q.db.ExecContext(ctx, postTagDeleteSQL, postID, tag)
-	if err != nil {
-		return rt.Refused("PostTag", err)
+	voltRes, voltErr := q.db.ExecContext(ctx, postTagDeleteSQL, postID, tag)
+	if voltErr != nil {
+		return rt.Refused("PostTag", voltErr)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+	voltN, voltErr := voltRes.RowsAffected()
+	if voltErr != nil {
+		return voltErr
 	}
-	if n == 0 {
+	if voltN == 0 {
 		return rt.ErrNotFound
 	}
 	return nil
 }
 
 func pingScan(r rt.Row) (Ping, error) {
-	var v Ping
-	err := r.Scan(&v.ID)
-	return v, rt.Refused("Ping", err)
+	var voltV Ping
+	voltErr := r.Scan(&voltV.ID)
+	return voltV, rt.Refused("Ping", voltErr)
 }
 
 const pingGetSQL = `SELECT "id" FROM "pings" WHERE "id" = ?`
@@ -392,60 +392,60 @@ func (q *Queries) PingGetMany(ctx context.Context, ids []int) ([]Ping, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	query, args, err := rt.SelectRender(pingTableSQL, pingColumnsSQL, []rt.Opt[Ping]{PingID.In(ids...)})
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(pingTableSQL, pingColumnsSQL, []rt.Opt[Ping]{PingID.In(ids...)})
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := q.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Ping{}
-	for rows.Next() {
-		v, err := pingScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Ping{}
+	for voltRows.Next() {
+		voltV, voltErr := pingScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 const pingListSQL = `SELECT "id" FROM "pings"`
 
 // PingList returns every pings row.
 func (q *Queries) PingList(ctx context.Context) ([]Ping, error) {
-	rows, err := q.db.QueryContext(ctx, pingListSQL)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, pingListSQL)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Ping{}
-	for rows.Next() {
-		v, err := pingScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Ping{}
+	for voltRows.Next() {
+		voltV, voltErr := pingScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // PingCreate validates c and inserts its marked columns, returning the
 // stored pings row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) PingCreate(ctx context.Context, c PingChangeset) (Ping, error) {
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Ping{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Ping{}, voltErr
 	}
-	var cols []string
-	var args []any
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(pingTableSQL, cols, pingColumnsSQL), args...)
-	if err != nil {
-		return Ping{}, err
+	var voltCols []string
+	var voltArgs []any
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(pingTableSQL, voltCols, pingColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Ping{}, voltErr
 	}
-	return pingScan(row)
+	return pingScan(voltRow)
 }
 
 const pingDeleteSQL = `DELETE FROM "pings" WHERE "id" = ?`
@@ -453,15 +453,15 @@ const pingDeleteSQL = `DELETE FROM "pings" WHERE "id" = ?`
 // PingDelete removes the identified pings row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) PingDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, pingDeleteSQL, id)
-	if err != nil {
-		return rt.Refused("Ping", err)
+	voltRes, voltErr := q.db.ExecContext(ctx, pingDeleteSQL, id)
+	if voltErr != nil {
+		return rt.Refused("Ping", voltErr)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+	voltN, voltErr := voltRes.RowsAffected()
+	if voltErr != nil {
+		return voltErr
 	}
-	if n == 0 {
+	if voltN == 0 {
 		return rt.ErrNotFound
 	}
 	return nil

@@ -50,8 +50,8 @@ the tools `lsp/` and `cmd/volt/`, which carry the third-party
 dependencies; `cmd/volt` carries the `mattn/go-sqlite3` driver for the
 fold and `volt migration up`, so the tool is built with cgo (a C
 compiler on the path; without it the driver is a stub and `volt`
-refuses with exit 2), while the library and the runtime register
-none. Go floor is the newest stable Go, declared in all three
+refuses the fold and the migration commands with exit 2), while the
+library and the runtime register none. Go floor is the newest stable Go, declared in all three
 `go.mod` files. `grammar/`, `zed-extension/` and
 `scripts/sync-grammar.sh` are the editor stack. `go test ./...` at the
 root does not cover the tool modules.
@@ -85,7 +85,9 @@ server gets a scripted stdio session; one is a golden
   Nothing else is commented, generated code included.
 - Generated files start with the `Code generated … DO NOT EDIT.`
   marker; the CLI refuses to overwrite a file without it. Generated
-  code imports the standard library, Volt's runtime and the packages of declared types only.
+  data files import the standard library, `nao/rt` and the packages of
+  declared types only; route files add the root `volt` package and the
+  data packages they route.
 - SQLite is the only database. Never: callbacks, lazy loading, dirty
   tracking, reflection in generated code (spec §non-goals).
 - A memoized computation is a pure function of explicit inputs, keyed

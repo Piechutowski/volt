@@ -21,6 +21,7 @@ import (
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/parser"
+	"github.com/Piechutowski/volt/nao/naming"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
@@ -113,14 +114,14 @@ func generateValidators(t *testing.T, path string) []byte {
 	return out
 }
 
-func validatorFns(t *testing.T, f *ast.File, info *check.Info) []ValidatorFn {
+func validatorFns(t *testing.T, f *ast.File, info *check.Info) []naming.ValidatorFn {
 	t.Helper()
-	var fns []ValidatorFn
+	var fns []naming.ValidatorFn
 	for _, ti := range info.Tables {
 		if len(ti.Validators) == 0 {
 			continue
 		}
-		_, fields, err := ModelFields(f, info, ti.Key)
+		_, fields, err := naming.PlanBuild(f, info).ModelFields(ti.Key)
 		if err != nil {
 			t.Fatalf("ModelFields(%s): %v", ti.Key, err)
 		}
@@ -128,7 +129,7 @@ func validatorFns(t *testing.T, f *ast.File, info *check.Info) []ValidatorFn {
 		for _, fs := range fields {
 			byCol[fs.Col] = fs.Name
 		}
-		fn := ValidatorFn{TableKey: ti.Key}
+		fn := naming.ValidatorFn{TableKey: ti.Key}
 		for _, v := range ti.Validators {
 			var args, src, cols []string
 			for _, a := range v.Args {
@@ -136,18 +137,18 @@ func validatorFns(t *testing.T, f *ast.File, info *check.Info) []ValidatorFn {
 				if !ok {
 					t.Fatalf("validator %s of %s names no column %q", v.Ref.String(), ti.Key, a.Name())
 				}
-				args = append(args, "v."+field)
+				args = append(args, field)
 				src = append(src, a.Name())
 				if !slices.Contains(cols, a.Name()) {
 					cols = append(cols, a.Name())
 				}
 			}
 			name := v.Ref.Base()
-			fn.Validators = append(fn.Validators, ValidatorSpec{
-				Name: name,
-				Src:  name + "(" + strings.Join(src, ", ") + ")",
-				Call: name + "(" + strings.Join(args, ", ") + ")",
-				Cols: cols,
+			fn.Validators = append(fn.Validators, naming.ValidatorSpec{
+				Name:   name,
+				Src:    name + "(" + strings.Join(src, ", ") + ")",
+				Fields: args,
+				Cols:   cols,
 			})
 		}
 		fns = append(fns, fn)
@@ -412,32 +413,5 @@ func TestGenerationErrors(t *testing.T) {
 				t.Errorf("want error containing %q, got %v", tc.wantErr, err)
 			}
 		})
-	}
-}
-
-func TestGoNames(t *testing.T) {
-	cases := []struct{ in, want string }{
-		{"user_id", "UserID"},
-		{"api_key", "APIKey"},
-		{"http_status_url", "HTTPStatusURL"},
-		{"uuid", "UUID"},
-		{"full name", "FullName"},
-		{"_2fa_codes", "X2faCodes"},
-		{"created_at", "CreatedAt"},
-		{"id", "ID"},
-		{"żółć", "Żółć"},
-	}
-	for _, tc := range cases {
-		got, err := goName(tc.in)
-		if err != nil {
-			t.Errorf("goName(%q): %v", tc.in, err)
-			continue
-		}
-		if got != tc.want {
-			t.Errorf("goName(%q) = %q, want %q", tc.in, got, tc.want)
-		}
-	}
-	if _, err := goName("__"); err == nil {
-		t.Error("goName(__): want error")
 	}
 }

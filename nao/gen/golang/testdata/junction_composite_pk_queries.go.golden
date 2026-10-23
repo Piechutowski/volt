@@ -35,13 +35,13 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
 // nil error commits, anything else rolls back. q must be backed by a
 // handle that can begin a transaction (a *sql.DB).
 func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
-	return rt.Tx(ctx, q.db, func(tx *sql.Tx) error { return fn(q.WithTx(tx)) })
+	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
 }
 
 func userScan(r rt.Row) (User, error) {
-	var v User
-	err := r.Scan(&v.ID)
-	return v, rt.Refused("User", err)
+	var voltV User
+	voltErr := r.Scan(&voltV.ID)
+	return voltV, rt.Refused("User", voltErr)
 }
 
 const userGetSQL = `SELECT "id" FROM "users" WHERE "id" = ?`
@@ -57,64 +57,64 @@ func (q *Queries) UserGetMany(ctx context.Context, ids []int) ([]User, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	query, args, err := rt.SelectRender(userTableSQL, userColumnsSQL, []rt.Opt[User]{UserID.In(ids...)})
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(userTableSQL, userColumnsSQL, []rt.Opt[User]{UserID.In(ids...)})
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := q.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []User{}
-	for rows.Next() {
-		v, err := userScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []User{}
+	for voltRows.Next() {
+		voltV, voltErr := userScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 const userListSQL = `SELECT "id" FROM "users"`
 
 // UserList returns every users row.
 func (q *Queries) UserList(ctx context.Context) ([]User, error) {
-	rows, err := q.db.QueryContext(ctx, userListSQL)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, userListSQL)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []User{}
-	for rows.Next() {
-		v, err := userScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []User{}
+	for voltRows.Next() {
+		voltV, voltErr := userScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // UserCreate validates c and inserts its marked columns, returning the
 // stored users row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) UserCreate(ctx context.Context, c UserChangeset) (User, error) {
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return User{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return User{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[0] {
-		cols, args = append(cols, "id"), append(args, v.ID)
+		voltCols, voltArgs = append(voltCols, "id"), append(voltArgs, voltV.ID)
 	}
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(userTableSQL, cols, userColumnsSQL), args...)
-	if err != nil {
-		return User{}, err
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(userTableSQL, voltCols, userColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return User{}, voltErr
 	}
-	return userScan(row)
+	return userScan(voltRow)
 }
 
 const userDeleteSQL = `DELETE FROM "users" WHERE "id" = ?`
@@ -122,24 +122,24 @@ const userDeleteSQL = `DELETE FROM "users" WHERE "id" = ?`
 // UserDelete removes the identified users row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) UserDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, userDeleteSQL, id)
-	if err != nil {
-		return rt.Refused("User", err)
+	voltRes, voltErr := q.db.ExecContext(ctx, userDeleteSQL, id)
+	if voltErr != nil {
+		return rt.Refused("User", voltErr)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+	voltN, voltErr := voltRes.RowsAffected()
+	if voltErr != nil {
+		return voltErr
 	}
-	if n == 0 {
+	if voltN == 0 {
 		return rt.ErrNotFound
 	}
 	return nil
 }
 
 func roleScan(r rt.Row) (Role, error) {
-	var v Role
-	err := r.Scan(&v.ID, &v.Name)
-	return v, rt.Refused("Role", err)
+	var voltV Role
+	voltErr := r.Scan(&voltV.ID, &voltV.Name)
+	return voltV, rt.Refused("Role", voltErr)
 }
 
 const roleGetSQL = `SELECT "id", "name" FROM "roles" WHERE "id" = ?`
@@ -155,24 +155,24 @@ func (q *Queries) RoleGetMany(ctx context.Context, ids []int) ([]Role, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	query, args, err := rt.SelectRender(roleTableSQL, roleColumnsSQL, []rt.Opt[Role]{RoleID.In(ids...)})
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(roleTableSQL, roleColumnsSQL, []rt.Opt[Role]{RoleID.In(ids...)})
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := q.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Role{}
-	for rows.Next() {
-		v, err := roleScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Role{}
+	for voltRows.Next() {
+		voltV, voltErr := roleScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 const roleGetByNameSQL = `SELECT "id", "name" FROM "roles" WHERE "name" = ?`
@@ -187,43 +187,43 @@ const roleListSQL = `SELECT "id", "name" FROM "roles"`
 
 // RoleList returns every roles row.
 func (q *Queries) RoleList(ctx context.Context) ([]Role, error) {
-	rows, err := q.db.QueryContext(ctx, roleListSQL)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, roleListSQL)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Role{}
-	for rows.Next() {
-		v, err := roleScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Role{}
+	for voltRows.Next() {
+		voltV, voltErr := roleScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // RoleCreate validates c and inserts its marked columns, returning the
 // stored roles row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) RoleCreate(ctx context.Context, c RoleChangeset) (Role, error) {
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Role{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Role{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[0] {
-		cols, args = append(cols, "id"), append(args, v.ID)
+		voltCols, voltArgs = append(voltCols, "id"), append(voltArgs, voltV.ID)
 	}
 	if c.set[1] {
-		cols, args = append(cols, "name"), append(args, v.Name)
+		voltCols, voltArgs = append(voltCols, "name"), append(voltArgs, voltV.Name)
 	}
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(roleTableSQL, cols, roleColumnsSQL), args...)
-	if err != nil {
-		return Role{}, err
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(roleTableSQL, voltCols, roleColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Role{}, voltErr
 	}
-	return roleScan(row)
+	return roleScan(voltRow)
 }
 
 // RoleUpdate validates c and writes its marked columns to the roles row it
@@ -234,27 +234,27 @@ func (q *Queries) RoleUpdate(ctx context.Context, c RoleChangeset) (Role, error)
 		return Role{}, rt.ErrNoRow
 	}
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Role{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Role{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[0] {
-		cols, args = append(cols, "id"), append(args, v.ID)
+		voltCols, voltArgs = append(voltCols, "id"), append(voltArgs, voltV.ID)
 	}
 	if c.set[1] {
-		cols, args = append(cols, "name"), append(args, v.Name)
+		voltCols, voltArgs = append(voltCols, "name"), append(voltArgs, voltV.Name)
 	}
-	if len(cols) == 0 {
-		return v, nil
+	if len(voltCols) == 0 {
+		return voltV, nil
 	}
-	args = append(args, c.data.ID)
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(roleTableSQL, cols, []string{"id"}, roleColumnsSQL), args...)
-	if err != nil {
-		return Role{}, err
+	voltArgs = append(voltArgs, c.data.ID)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(roleTableSQL, voltCols, []string{"id"}, roleColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Role{}, voltErr
 	}
-	return roleScan(row)
+	return roleScan(voltRow)
 }
 
 const roleDeleteSQL = `DELETE FROM "roles" WHERE "id" = ?`
@@ -262,24 +262,24 @@ const roleDeleteSQL = `DELETE FROM "roles" WHERE "id" = ?`
 // RoleDelete removes the identified roles row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) RoleDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, roleDeleteSQL, id)
-	if err != nil {
-		return rt.Refused("Role", err)
+	voltRes, voltErr := q.db.ExecContext(ctx, roleDeleteSQL, id)
+	if voltErr != nil {
+		return rt.Refused("Role", voltErr)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+	voltN, voltErr := voltRes.RowsAffected()
+	if voltErr != nil {
+		return voltErr
 	}
-	if n == 0 {
+	if voltN == 0 {
 		return rt.ErrNotFound
 	}
 	return nil
 }
 
 func userRoleScan(r rt.Row) (UserRole, error) {
-	var v UserRole
-	err := r.Scan(&v.UserID, &v.RoleID, &v.GrantedAt)
-	return v, rt.Refused("UserRole", err)
+	var voltV UserRole
+	voltErr := r.Scan(&voltV.UserID, &voltV.RoleID, &voltV.GrantedAt)
+	return voltV, rt.Refused("UserRole", voltErr)
 }
 
 const userRoleGetSQL = `SELECT "user_id", "role_id", "granted_at" FROM "user_roles" WHERE "user_id" = ? AND "role_id" = ?`
@@ -293,46 +293,46 @@ const userRoleListSQL = `SELECT "user_id", "role_id", "granted_at" FROM "user_ro
 
 // UserRoleList returns every user_roles row.
 func (q *Queries) UserRoleList(ctx context.Context) ([]UserRole, error) {
-	rows, err := q.db.QueryContext(ctx, userRoleListSQL)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, userRoleListSQL)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []UserRole{}
-	for rows.Next() {
-		v, err := userRoleScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []UserRole{}
+	for voltRows.Next() {
+		voltV, voltErr := userRoleScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // UserRoleCreate validates c and inserts its marked columns, returning the
 // stored user_roles row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) UserRoleCreate(ctx context.Context, c UserRoleChangeset) (UserRole, error) {
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return UserRole{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return UserRole{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[0] {
-		cols, args = append(cols, "user_id"), append(args, v.UserID)
+		voltCols, voltArgs = append(voltCols, "user_id"), append(voltArgs, voltV.UserID)
 	}
 	if c.set[1] {
-		cols, args = append(cols, "role_id"), append(args, v.RoleID)
+		voltCols, voltArgs = append(voltCols, "role_id"), append(voltArgs, voltV.RoleID)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "granted_at"), append(args, v.GrantedAt)
+		voltCols, voltArgs = append(voltCols, "granted_at"), append(voltArgs, voltV.GrantedAt)
 	}
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(userRoleTableSQL, cols, userRoleColumnsSQL), args...)
-	if err != nil {
-		return UserRole{}, err
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(userRoleTableSQL, voltCols, userRoleColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return UserRole{}, voltErr
 	}
-	return userRoleScan(row)
+	return userRoleScan(voltRow)
 }
 
 // UserRoleUpdate validates c and writes its marked columns to the user_roles row it
@@ -343,31 +343,31 @@ func (q *Queries) UserRoleUpdate(ctx context.Context, c UserRoleChangeset) (User
 		return UserRole{}, rt.ErrNoRow
 	}
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return UserRole{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return UserRole{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[0] {
-		cols, args = append(cols, "user_id"), append(args, v.UserID)
+		voltCols, voltArgs = append(voltCols, "user_id"), append(voltArgs, voltV.UserID)
 	}
 	if c.set[1] {
-		cols, args = append(cols, "role_id"), append(args, v.RoleID)
+		voltCols, voltArgs = append(voltCols, "role_id"), append(voltArgs, voltV.RoleID)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "granted_at"), append(args, v.GrantedAt)
+		voltCols, voltArgs = append(voltCols, "granted_at"), append(voltArgs, voltV.GrantedAt)
 	}
-	if len(cols) == 0 {
-		return v, nil
+	if len(voltCols) == 0 {
+		return voltV, nil
 	}
-	args = append(args, c.data.UserID)
-	args = append(args, c.data.RoleID)
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(userRoleTableSQL, cols, []string{"user_id", "role_id"}, userRoleColumnsSQL), args...)
-	if err != nil {
-		return UserRole{}, err
+	voltArgs = append(voltArgs, c.data.UserID)
+	voltArgs = append(voltArgs, c.data.RoleID)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(userRoleTableSQL, voltCols, []string{"user_id", "role_id"}, userRoleColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return UserRole{}, voltErr
 	}
-	return userRoleScan(row)
+	return userRoleScan(voltRow)
 }
 
 const userRoleDeleteSQL = `DELETE FROM "user_roles" WHERE "user_id" = ? AND "role_id" = ?`
@@ -375,15 +375,15 @@ const userRoleDeleteSQL = `DELETE FROM "user_roles" WHERE "user_id" = ? AND "rol
 // UserRoleDelete removes the identified user_roles row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) UserRoleDelete(ctx context.Context, userID int, roleID int) error {
-	res, err := q.db.ExecContext(ctx, userRoleDeleteSQL, userID, roleID)
-	if err != nil {
-		return rt.Refused("UserRole", err)
+	voltRes, voltErr := q.db.ExecContext(ctx, userRoleDeleteSQL, userID, roleID)
+	if voltErr != nil {
+		return rt.Refused("UserRole", voltErr)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+	voltN, voltErr := voltRes.RowsAffected()
+	if voltErr != nil {
+		return voltErr
 	}
-	if n == 0 {
+	if voltN == 0 {
 		return rt.ErrNotFound
 	}
 	return nil

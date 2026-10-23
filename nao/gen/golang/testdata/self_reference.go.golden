@@ -78,19 +78,19 @@ func (c EmployeeChangeset) ManagerIDSet(v rt.Null[int]) EmployeeChangeset {
 // for a key that names no column (spec §changesets).
 func (c EmployeeChangeset) Cast(p EmployeeParams, allow ...EmployeeColumn) EmployeeChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "full_name", "manager_id")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "full_name":
-			if v, ok, err := rt.Field(p, "full_name", "string", false, func(r *Employee) string { return r.FullName }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "full_name")
-			} else if ok {
-				c = c.FullNameSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "full_name", "string", false, func(voltR *Employee) string { return voltR.FullName }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "full_name")
+			} else if voltOK {
+				c = c.FullNameSet(voltV)
 			}
 		case "manager_id":
-			if v, ok, err := rt.Field(p, "manager_id", "int", true, func(r *Employee) rt.Null[int] { return r.ManagerID }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "manager_id")
-			} else if ok {
-				c = c.ManagerIDSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "manager_id", "int", true, func(voltR *Employee) rt.Null[int] { return voltR.ManagerID }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "manager_id")
+			} else if voltOK {
+				c = c.ManagerIDSet(voltV)
 			}
 		}
 	}
@@ -112,27 +112,27 @@ func (c EmployeeChangeset) Changed(col EmployeeColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c EmployeeChangeset) Row() Employee {
-	r := c.data
+	voltR := c.data
 	if c.set[1] {
-		r.FullName = c.vals.FullName
+		voltR.FullName = c.vals.FullName
 	}
 	if c.set[2] {
-		r.ManagerID = c.vals.ManagerID
+		voltR.ManagerID = c.vals.ManagerID
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c EmployeeChangeset) Params() EmployeeParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "full_name", Value: c.vals.FullName})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "full_name", Value: c.vals.FullName})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "manager_id", Value: c.vals.ManagerID})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "manager_id", Value: c.vals.ManagerID})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec

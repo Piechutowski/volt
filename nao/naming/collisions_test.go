@@ -1,4 +1,4 @@
-package golang
+package naming
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ import (
 func dynNamesWalk(p *plan, info *check.Info) []NameCollision {
 	size := 1
 	for _, tm := range p.tables {
-		size += 5 + len(dynWrapperSuffixes) + len(tm.fields)
+		size += 5 + len(dynWrapperSuffixes) + len(tm.Fields)
 	}
 	seen := make(map[string]dynOrigin, size)
 	seen["Queries"] = dynOrigin{kind: dynQueries}
@@ -43,20 +43,20 @@ func dynNamesWalk(p *plan, info *check.Info) []NameCollision {
 		}
 	}
 	for _, tm := range p.tables {
-		pos := tm.ti.Decl.Pos()
-		add(tm.model, dynOrigin{kind: dynModel, tm: tm, pos: pos})
-		if len(tm.fields) == 0 {
+		pos := tm.Info.Decl.Pos()
+		add(tm.Model, dynOrigin{kind: dynModel, tm: tm, pos: pos})
+		if len(tm.Fields) == 0 {
 			continue
 		}
-		add(tm.model+"Changeset", dynOrigin{kind: dynChangeset, tm: tm, pos: pos})
-		add(tm.model+"Column", dynOrigin{kind: dynColumn, tm: tm, pos: pos})
-		add(tm.model+"Params", dynOrigin{kind: dynParams, tm: tm, pos: pos})
-		add(tm.model+"New", dynOrigin{kind: dynNew, tm: tm, pos: pos})
-		for _, f := range tm.fields {
-			add(tm.model+f.goField, dynOrigin{kind: dynHandle, tm: tm, f: f, pos: f.col.Pos()})
+		add(tm.Model+"Changeset", dynOrigin{kind: dynChangeset, tm: tm, pos: pos})
+		add(tm.Model+"Column", dynOrigin{kind: dynColumn, tm: tm, pos: pos})
+		add(tm.Model+"Params", dynOrigin{kind: dynParams, tm: tm, pos: pos})
+		add(tm.Model+"New", dynOrigin{kind: dynNew, tm: tm, pos: pos})
+		for _, f := range tm.Fields {
+			add(tm.Model+f.GoField, dynOrigin{kind: dynHandle, tm: tm, f: f, pos: f.Col.Pos()})
 		}
 		for _, sfx := range dynWrapperSuffixes {
-			add(tm.model+sfx, dynOrigin{kind: dynWrapper, tm: tm, sfx: sfx, pos: pos})
+			add(tm.Model+sfx, dynOrigin{kind: dynWrapper, tm: tm, sfx: sfx, pos: pos})
 		}
 	}
 	return out

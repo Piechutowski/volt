@@ -11,6 +11,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
 // Request wraps *http.Request with route identity.
@@ -50,31 +52,51 @@ func Handler(route string, h HandlerFunc, eh ErrorHandler) http.Handler {
 	})
 }
 
-// DefaultErrorHandler maps HTTPError to its status and message, a
-// query's row miss (sql.ErrNoRows, which nao's rt.ErrNotFound is) to
-// 404, and everything else to a generic 500, logging the underlying
-// error. On a committed response it only logs.
+// DefaultErrorHandler writes the Problem ProblemOf finds for err, and for
+// any other error a generic 500, logging the underlying error (spec
+// §formats). On a committed response it only logs.
 func DefaultErrorHandler(w http.ResponseWriter, r *Request, err error) {
 	if r.Committed() {
 		slog.Error("volt: handler error after response commit", "route", r.Route(), "err", err)
 		return
 	}
-	var he HTTPError
-	if errors.As(err, &he) {
-		p := Problem{Status: he.StatusCode(), Message: he.Error()}
-		var d Detailer
-		if errors.As(err, &d) {
-			p.Details = d.Details()
-		}
+	if p, ok := ProblemOf(err); ok {
 		writeProblem(w, r, p)
-		return
-	}
-	if errors.Is(err, sql.ErrNoRows) {
-		writeProblem(w, r, Problem{Status: http.StatusNotFound, Message: "not found"})
 		return
 	}
 	slog.Error("volt: handler error", "route", r.Route(), "err", err)
 	writeProblem(w, r, Problem{Status: http.StatusInternalServerError, Message: "internal server error"})
+}
+
+// ProblemOf is the Problem the error spine writes for err (spec §formats):
+// an HTTPError's own status and message; a refused write, a *rt.Invalid,
+// as 409 when a unique field error is among its fields and 422 otherwise
+// (spec §changesets); a query's row miss (sql.ErrNoRows, which
+// rt.ErrNotFound is) as 404; each with the details of an error that
+// itemizes them. ok is false for any other error.
+func ProblemOf(err error) (p Problem, ok bool) {
+	var he HTTPError
+	var inv *rt.Invalid
+	switch {
+	case errors.As(err, &he):
+		p = Problem{Status: he.StatusCode(), Message: he.Error()}
+	case errors.As(err, &inv):
+		p = Problem{Status: http.StatusUnprocessableEntity, Message: inv.Error()}
+		for _, f := range inv.Fields {
+			if f.Check == "unique" {
+				p.Status = http.StatusConflict
+			}
+		}
+	case errors.Is(err, sql.ErrNoRows):
+		return Problem{Status: http.StatusNotFound, Message: "not found"}, true
+	default:
+		return Problem{}, false
+	}
+	var d Detailer
+	if errors.As(err, &d) {
+		p.Details = d.Details()
+	}
+	return p, true
 }
 
 func writeProblem(w http.ResponseWriter, r *Request, p Problem) {

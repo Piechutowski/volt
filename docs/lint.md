@@ -285,8 +285,9 @@ a generated name is the checker's error, not this rule's warning.
 **Why.** `volt gen` refuses such schemas outright (loud failure, never a
 silent rename), but the generator can only name the first collision; this
 rule reports every collision, at the later of the two declarations, with
-both origins spelled out. The name derivation is the generator's own — the
-rule calls into `nao/gen/golang` — so rule and generator cannot drift apart.
+both origins spelled out. The name derivation is the generator's own: the
+rule reads the naming plan of `nao/naming`, which the generator renders, so
+rule and generator cannot drift apart.
 
 **Examples.** [testdata/dynname.volt](../lang/vet/testdata/dynname.volt): `users`,
 `orders` and the declared type `OrderState`, named apart from the

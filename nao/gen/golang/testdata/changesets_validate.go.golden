@@ -10,30 +10,30 @@ import (
 // every one every time, replacing the findings of an earlier Validate
 // (spec §changesets, §validators).
 func (c PostChangeset) Validate() PostChangeset {
-	v := c.Row()
-	var errs []rt.FieldError
-	if v.Slug == "" {
-		errs = append(errs, rt.FieldError{Check: "required", Columns: []string{"slug"}, Message: "slug is required"})
+	voltV := c.Row()
+	var voltErrs []rt.FieldError
+	if voltV.Slug == "" {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "required", Columns: []string{"slug"}, Message: "slug is required"})
 	}
-	if v.Words == 0 {
-		errs = append(errs, rt.FieldError{Check: "required", Columns: []string{"words"}, Message: "words is required"})
+	if voltV.Words == 0 {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "required", Columns: []string{"words"}, Message: "words is required"})
 	}
-	if v.Score == 0 {
-		errs = append(errs, rt.FieldError{Check: "required", Columns: []string{"score"}, Message: "score is required"})
+	if voltV.Score == 0 {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "required", Columns: []string{"score"}, Message: "score is required"})
 	}
-	if len(v.Cover) == 0 {
-		errs = append(errs, rt.FieldError{Check: "required", Columns: []string{"cover"}, Message: "cover is required"})
+	if len(voltV.Cover) == 0 {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "required", Columns: []string{"cover"}, Message: "cover is required"})
 	}
-	if v.Audience == "" {
-		errs = append(errs, rt.FieldError{Check: "required", Columns: []string{"audience"}, Message: "audience is required"})
+	if voltV.Audience == "" {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "required", Columns: []string{"audience"}, Message: "audience is required"})
 	}
-	if err := VisibilityKnown(v.State); err != nil {
-		errs = append(errs, rt.FieldError{Check: "VisibilityKnown", Columns: []string{"state"}, Message: err.Error()})
+	if voltErr := VisibilityKnown(voltV.State); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "VisibilityKnown", Columns: []string{"state"}, Message: voltErr.Error()})
 	}
-	if err := VisibilityKnownNull(v.Reviewed); err != nil {
-		errs = append(errs, rt.FieldError{Check: "VisibilityKnownNull", Columns: []string{"reviewed"}, Message: err.Error()})
+	if voltErr := VisibilityKnownNull(voltV.Reviewed); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "VisibilityKnownNull", Columns: []string{"reviewed"}, Message: voltErr.Error()})
 	}
-	c.valid = errs
+	c.valid = voltErrs
 	return c
 }
 

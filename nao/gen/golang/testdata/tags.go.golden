@@ -78,19 +78,19 @@ func (c UserChangeset) BioSet(v rt.Null[string]) UserChangeset {
 // for a key that names no column (spec §changesets).
 func (c UserChangeset) Cast(p UserParams, allow ...UserColumn) UserChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "userName", "bio")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "user_name":
-			if v, ok, err := rt.Field(p, "userName", "string", false, func(r *User) string { return r.UserName }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "user_name")
-			} else if ok {
-				c = c.UserNameSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "userName", "string", false, func(voltR *User) string { return voltR.UserName }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "user_name")
+			} else if voltOK {
+				c = c.UserNameSet(voltV)
 			}
 		case "bio":
-			if v, ok, err := rt.Field(p, "bio", "string", true, func(r *User) rt.Null[string] { return r.Bio }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "bio")
-			} else if ok {
-				c = c.BioSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "bio", "string", true, func(voltR *User) rt.Null[string] { return voltR.Bio }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "bio")
+			} else if voltOK {
+				c = c.BioSet(voltV)
 			}
 		}
 	}
@@ -112,27 +112,27 @@ func (c UserChangeset) Changed(col UserColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c UserChangeset) Row() User {
-	r := c.data
+	voltR := c.data
 	if c.set[1] {
-		r.UserName = c.vals.UserName
+		voltR.UserName = c.vals.UserName
 	}
 	if c.set[2] {
-		r.Bio = c.vals.Bio
+		voltR.Bio = c.vals.Bio
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c UserChangeset) Params() UserParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "userName", Value: c.vals.UserName})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "userName", Value: c.vals.UserName})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "bio", Value: c.vals.Bio})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "bio", Value: c.vals.Bio})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec

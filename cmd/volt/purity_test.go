@@ -18,7 +18,7 @@ const module = "github.com/Piechutowski/volt"
 
 var pureTargets = []struct{ pkg, name string }{
 	{module + "/lang/check", "tableCheck"},
-	{module + "/nao/gen/golang", "tableBuild"},
+	{module + "/nao/naming", "tableBuild"},
 	{module + "/lang", "tableSpecs"},
 	{module + "/lang", "selectCheck"},
 	{module + "/lang", "itemLower"},
@@ -27,28 +27,27 @@ var pureTargets = []struct{ pkg, name string }{
 }
 
 var immutableVars = map[string]bool{
-	module + "/lang.crudMethodSuffixes":           true,
-	module + "/lang.compareSQL":                   true,
-	module + "/lang.goKeywords":                   true,
-	module + "/lang.reservedParamNames":           true,
-	module + "/lang.selectLocalNames":             true,
-	module + "/lang.resourceActions":              true,
-	module + "/lang.queryMethods":                 true,
-	module + "/lang.actionByLower":                true,
-	module + "/lang.queryValueTypes":              true,
-	module + "/lang/check.tableSettings":          true,
-	module + "/lang/check.columnSettings":         true,
-	module + "/lang/check.builtins":               true,
-	module + "/lang/check.indexSettings":          true,
-	module + "/lang/check.refSettings":            true,
-	module + "/lang/check.ReservedAliases":        true,
-	module + "/nao/gen/golang.commonInitialisms":  true,
-	module + "/nao/gen/golang.typeMap":            true,
-	module + "/nao/gen/golang.goKeywords":         true,
-	module + "/nao/gen/golang.dynWrapperSuffixes": true,
-	module + "/nao/gen/sqlite.sqliteKeywords":     true,
-	module + "/nao/gen/sqlite.plainIdent":         true,
-	module + "/nao/inflect.irregular":             true,
+	module + "/lang.crudMethodSuffixes":       true,
+	module + "/lang.compareSQL":               true,
+	module + "/lang.goKeywords":               true,
+	module + "/lang.reservedParamNames":       true,
+	module + "/lang.selectMethodNames":        true,
+	module + "/lang.resourceActions":          true,
+	module + "/lang.queryMethods":             true,
+	module + "/lang.actionByLower":            true,
+	module + "/lang.queryValueTypes":          true,
+	module + "/lang/check.tableSettings":      true,
+	module + "/lang/check.columnSettings":     true,
+	module + "/lang/check.builtins":           true,
+	module + "/lang/check.indexSettings":      true,
+	module + "/lang/check.refSettings":        true,
+	module + "/lang/check.ReservedAliases":    true,
+	module + "/nao/naming.commonInitialisms":  true,
+	module + "/nao/naming.goKeywords":         true,
+	module + "/nao/naming.dynWrapperSuffixes": true,
+	module + "/nao/gen/sqlite.sqliteKeywords": true,
+	module + "/nao/gen/sqlite.plainIdent":     true,
+	module + "/nao/inflect.irregular":         true,
 }
 
 var pureStdlib = map[string]bool{
@@ -1213,6 +1212,25 @@ func (p *purity) immutableVarsNeverAssigned() {
 				}
 				return true
 			})
+		}
+	}
+}
+
+// TestImmutableVarsDeclared proves every table immutableVars trusts is a
+// package variable that exists, so a table moved to another package
+// cannot leave the gate trusting a name nothing declares.
+func TestImmutableVarsDeclared(t *testing.T) {
+	p := newPurity(t, gatePackages(t), false)
+	for key := range immutableVars {
+		i := strings.LastIndexByte(key, '.')
+		path, name := key[:i], key[i+1:]
+		pkg := p.byPath[path]
+		if pkg == nil {
+			t.Errorf("immutableVars trusts %s, but package %s is not loaded", key, path)
+			continue
+		}
+		if _, ok := pkg.Types.Scope().Lookup(name).(*types.Var); !ok {
+			t.Errorf("immutableVars trusts %s, which package %s does not declare", key, path)
 		}
 	}
 }

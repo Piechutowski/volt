@@ -11,39 +11,39 @@ import (
 	"github.com/Piechutowski/volt/gen/align"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
-	"github.com/Piechutowski/volt/nao/rt"
+	"github.com/Piechutowski/volt/nao/naming"
 )
 
 // GenerateSelects renders volt_selects.go for the given instantiations.
 // fns must be non-empty.
-func GenerateSelects(f *ast.File, info *check.Info, fns []SelectFn, opts Options) ([]byte, error) {
-	return PlanBuild(f, info).Selects(fns, opts)
+func GenerateSelects(f *ast.File, info *check.Info, fns []naming.SelectFn, opts Options) ([]byte, error) {
+	return Selects(naming.PlanBuild(f, info), fns, opts)
 }
 
-// Selects renders volt_selects.go for the planned package.
-func (pl *Plan) Selects(fns []SelectFn, opts Options) ([]byte, error) {
+// Selects renders volt_selects.go for the planned package (spec
+// §selects-over-groups).
+func Selects(pl *naming.Plan, fns []naming.SelectFn, opts Options) ([]byte, error) {
 	if opts.Package == "" {
 		return nil, fmt.Errorf("no package name")
 	}
-	if pl.err != nil {
-		return nil, pl.err
+	if err := pl.Err(); err != nil {
+		return nil, err
 	}
-	byKey := pl.byKey
 
 	var body strings.Builder
 	imports := map[string]bool{"context": true}
 	sharedDone := map[string]bool{}
 	for _, fn := range fns {
-		t := byKey[fn.TableKey]
-		if t == nil {
+		t, err := pl.Table(fn.TableKey)
+		if err != nil {
 			return nil, fmt.Errorf("select %s: no table %q in the plan", fn.MethodSuffix, fn.TableKey)
 		}
 		for _, prm := range fn.Params {
-			if imp := t.typeImport(strings.TrimPrefix(prm.GoType, "[]")); imp != "" {
+			if imp := typeImport(t, strings.TrimPrefix(prm.GoType, "[]")); imp != "" {
 				imports[imp] = true
 			}
 		}
-		cols, err := selectColumns(t, fn)
+		cols, err := t.SelectColumns(fn)
 		if err != nil {
 			return nil, err
 		}
@@ -56,7 +56,7 @@ func (pl *Plan) Selects(fns []SelectFn, opts Options) ([]byte, error) {
 				var rows align.Block
 				for _, f := range cols {
 					fieldImports(imports, f)
-					rows.Row(f.goField, f.goType, fmt.Sprintf("`db:%q json:%q`", f.colName, f.colName))
+					rows.Row(f.GoField, f.GoType, fmt.Sprintf("`db:%q json:%q`", f.ColName, f.ColName))
 				}
 				rows.WriteTo(&body, "\t")
 				body.WriteString("}\n\n")
@@ -64,24 +64,24 @@ func (pl *Plan) Selects(fns []SelectFn, opts Options) ([]byte, error) {
 				imports[rtImport] = true
 			}
 		case len(fn.Excluded) > 0:
-			row := t.model + fn.MethodSuffix
+			row := t.Model + fn.MethodSuffix
 			fmt.Fprintf(&body, "// %s is %s minus (%s) — a struct derivative of select %q,\n// every kept field copied verbatim (spec §selects-over-groups).\n",
-				row, t.model, strings.Join(fn.Excluded, ", "), lowerFirstWord(fn.MethodSuffix))
+				row, t.Model, strings.Join(fn.Excluded, ", "), lowerFirstWord(fn.MethodSuffix))
 			fmt.Fprintf(&body, "type %s struct {\n", row)
 			var rows align.Block
 			for _, f := range cols {
 				fieldImports(imports, f)
-				if note := settingNote(f.col.Settings); note != "" {
+				if note := naming.SettingNote(f.Col.Settings); note != "" {
 					commentLines(&rows, note)
 				}
-				rows.Row(f.goField, f.goType, "`"+f.tag+"`")
+				rows.Row(f.GoField, f.GoType, "`"+f.Tag+"`")
 			}
 			rows.WriteTo(&body, "\t")
 			body.WriteString("}\n\n")
 			rowScanEmit(&body, row, cols)
 			imports[rtImport] = true
 		}
-		if err := selectEmit(&body, imports, t, fn, cols); err != nil {
+		if err := selectEmit(&body, imports, t, fn); err != nil {
 			return nil, err
 		}
 	}
@@ -100,99 +100,34 @@ func (pl *Plan) Selects(fns []SelectFn, opts Options) ([]byte, error) {
 	return align.Finish(out.String()), nil
 }
 
-func selectColumns(t *tableModel, fn SelectFn) ([]*fieldPlan, error) {
-	switch {
-	case len(fn.Cols) > 0:
-		out := make([]*fieldPlan, 0, len(fn.Cols))
-		for _, c := range fn.Cols {
-			f := t.field(c)
-			if f == nil {
-				return nil, fmt.Errorf("select %s: no column %q in table %s", fn.MethodSuffix, c, t.sqlName)
-			}
-			out = append(out, f)
-		}
-		return out, nil
-	case len(fn.Excluded) > 0:
-		ex := make(map[string]bool, len(fn.Excluded))
-		for _, c := range fn.Excluded {
-			if t.field(c) == nil {
-				return nil, fmt.Errorf("select %s: no column %q in table %s", fn.MethodSuffix, c, t.sqlName)
-			}
-			ex[c] = true
-		}
-		var out []*fieldPlan
-		for _, f := range t.fields {
-			if !ex[f.colName] {
-				out = append(out, f)
-			}
-		}
-		if len(out) == 0 {
-			return nil, fmt.Errorf("select %s: every column of %s excluded", fn.MethodSuffix, t.sqlName)
-		}
-		return out, nil
+func fieldImports(imports map[string]bool, f *naming.Field) {
+	if f.Imp != "" {
+		imports[f.Imp] = true
 	}
-	return t.fields, nil
-}
-
-func fieldImports(imports map[string]bool, f *fieldPlan) {
-	if f.imp != "" {
-		imports[f.imp] = true
-	}
-	if f.goType != f.baseType {
+	if f.GoType != f.BaseType {
 		imports[rtImport] = true
 	}
 }
 
-func (t *tableModel) typeImport(goType string) string {
-	for _, f := range t.fields {
-		if f.baseType == goType {
-			return f.imp
+func typeImport(t *naming.Table, goType string) string {
+	for _, f := range t.Fields {
+		if f.BaseType == goType {
+			return f.Imp
 		}
 	}
 	return ""
 }
 
-func rowScanEmit(b *strings.Builder, row string, cols []*fieldPlan) {
-	lower := argName(row)
-	fmt.Fprintf(b, "func %sScan(r rt.Row) (%s, error) {\n\tvar v %s\n\terr := r.Scan(", lower, row, row)
+func rowScanEmit(b *strings.Builder, row string, cols []*naming.Field) {
+	lower := naming.ArgName(row)
+	fmt.Fprintf(b, "func %sScan(r rt.Row) (%s, error) {\n\tvar voltV %s\n\tvoltErr := r.Scan(", lower, row, row)
 	for i, f := range cols {
 		if i > 0 {
 			b.WriteString(", ")
 		}
-		b.WriteString(f.scanTarget())
+		b.WriteString(scanTarget(f))
 	}
-	b.WriteString(")\n\treturn v, err\n}\n\n")
-}
-
-func selectRender(t *tableModel, fn SelectFn, cols []*fieldPlan) (string, []string, error) {
-	opts := []rt.Opt[rt.Gen]{fn.Where}
-	if len(fn.Order) > 0 {
-		opts = append(opts, rt.OrderBy(fn.Order...))
-	}
-	return genRender(rt.SelectRender(rt.Ident(t.sqlName), columnList(cols), opts))
-}
-
-// SelectSQL renders the statement of one instantiation through the
-// runtime (spec §predicates) and lists the Go expressions its
-// method binds, in placeholder order.
-func SelectSQL(t *tableModel, fn SelectFn) (string, []string, error) {
-	cols, err := selectColumns(t, fn)
-	if err != nil {
-		return "", nil, err
-	}
-	return selectRender(t, fn, cols)
-}
-
-// SelectSQLFor is SelectSQL keyed the way callers outside the package
-// see tables; it builds the plan itself. Test helper.
-func SelectSQLFor(f *ast.File, info *check.Info, fn SelectFn) (string, []string, error) {
-	return PlanBuild(f, info).SelectStatement(fn)
-}
-
-// SelectRowType names the row type one instantiation returns (§selects-over-groups)
-// and reports its fields. It plans the whole file.
-func SelectRowType(f *ast.File, info *check.Info, fn SelectFn) (string, []FieldSig, error) {
-	return PlanBuild(f, info).SelectRowType(fn)
+	b.WriteString(")\n\treturn voltV, voltErr\n}\n\n")
 }
 
 func lowerFirstWord(s string) string {
@@ -202,19 +137,19 @@ func lowerFirstWord(s string) string {
 	return strings.ToLower(s[:1]) + s[1:]
 }
 
-func selectEmit(b *strings.Builder, imports map[string]bool, t *tableModel, fn SelectFn, cols []*fieldPlan) error {
-	row, scanPrefix := t.model, argName(t.model)
+func selectEmit(b *strings.Builder, imports map[string]bool, t *naming.Table, fn naming.SelectFn) error {
+	row, scanPrefix := t.Model, naming.ArgName(t.Model)
 	switch {
 	case fn.SharedType != "":
-		row, scanPrefix = fn.SharedType, argName(fn.SharedType)
+		row, scanPrefix = fn.SharedType, naming.ArgName(fn.SharedType)
 	case len(fn.Excluded) > 0:
-		row = t.model + fn.MethodSuffix
-		scanPrefix = argName(row)
+		row = t.Model + fn.MethodSuffix
+		scanPrefix = naming.ArgName(row)
 	}
-	name := t.model + fn.MethodSuffix
-	constName := argName(t.model) + fn.MethodSuffix + "SQL"
+	name := t.Model + fn.MethodSuffix
+	constName := naming.ArgName(t.Model) + fn.MethodSuffix + "SQL"
 
-	sql, args, err := selectRender(t, fn, cols)
+	sql, args, err := t.SelectSQL(fn)
 	if err != nil {
 		return fmt.Errorf("select %s: %w", name, err)
 	}
@@ -233,9 +168,9 @@ func selectEmit(b *strings.Builder, imports map[string]bool, t *tableModel, fn S
 			imports[rtImport] = true
 		}
 	}
-	fmt.Fprintf(b, "// %s runs the %q select over %s (spec §selects-over-groups).\n", name, lowerFirstWord(fn.MethodSuffix), t.sqlName)
+	fmt.Fprintf(b, "// %s runs the %q select over %s (spec §selects-over-groups).\n", name, lowerFirstWord(fn.MethodSuffix), t.SQLName)
 	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context%s) ([]%s, error) {\n", name, sig.String(), row)
-	fmt.Fprintf(b, "\trows, err := q.db.QueryContext(ctx, %s%s)\n", constName, binds)
+	fmt.Fprintf(b, "\tvoltRows, voltErr := q.db.QueryContext(ctx, %s%s)\n", constName, binds)
 	rowsScanEmit(b, row, scanPrefix)
 	return nil
 }

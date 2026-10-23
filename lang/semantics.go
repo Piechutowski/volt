@@ -12,7 +12,7 @@ import (
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/token"
 	"github.com/Piechutowski/volt/lang/vet"
-	"github.com/Piechutowski/volt/nao/gen/golang"
+	"github.com/Piechutowski/volt/nao/naming"
 )
 
 // Check runs project-level semantic analysis (spec §projects-and-packages–§settings-whitelists) over a
@@ -64,7 +64,7 @@ func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 	}
 	phase(func(cc *checker, pkg *Package) {
 		var schemaMemo *check.Memo
-		var planMemo *golang.PlanMemo
+		var planMemo *naming.PlanMemo
 		if cc.memo != nil {
 			schemaMemo, planMemo = &cc.memo.schema, &cc.memo.plan
 		}
@@ -77,7 +77,7 @@ func checkWith(pr *Project, s *Session) []diag.Diagnostic {
 		info, schemaDiags := check.FileGo(pkg.merged, schemaMemo, goTypes)
 		cc.diags = append(cc.diags, schemaDiags...)
 		pkg.schema = info
-		pkg.plan = golang.PlanBuildMemo(pkg.merged, info, planMemo)
+		pkg.plan = naming.PlanBuildMemo(pkg.merged, info, planMemo)
 		if sc != nil {
 			cc.typesGoCheck(pkg, info, sc)
 		}
@@ -119,7 +119,7 @@ type checker struct {
 
 type declMemo struct {
 	schema  check.Memo
-	plan    golang.PlanMemo
+	plan    naming.PlanMemo
 	checks  checksMemo
 	selects selectsMemo
 	routes  routesMemo
@@ -136,7 +136,7 @@ type checksEntry struct {
 	funcs       *goScan
 	pkgName     string
 	ownImported bool
-	specs       []golang.ValidatorSpec
+	specs       []naming.ValidatorSpec
 	diags       []diag.Diagnostic
 }
 
@@ -501,7 +501,7 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 					c.errorf(s.Pos(), "scopes-and-routes", "name: takes an identifier (§scopes)")
 					continue
 				}
-				n, err := golang.GoName(id.Name())
+				n, err := naming.GoName(id.Name())
 				if err != nil {
 					c.errorf(s.Pos(), "scopes-and-routes", "scope name %q: %v (§scopes)", id.Name(), err)
 					continue
@@ -571,14 +571,14 @@ func (o routeOracle) tableByName(path, base string) (*check.TableInfo, string) {
 		return nil, fmt.Sprintf("; did you mean %q? names are case-sensitive", caseMatch)
 	}
 	for _, cand := range info.Tables {
-		if model, err := golang.ModelName(cand.Decl); err == nil && model == base {
+		if model, err := naming.ModelName(cand.Decl); err == nil && model == base {
 			return nil, fmt.Sprintf("; %q is the model of table %q: name the table", base, cand.Decl.Name.Name())
 		}
 	}
 	return nil, ""
 }
 
-func (o routeOracle) modelOf(path, key string) (any, []golang.CRUDMethod, error) {
+func (o routeOracle) modelOf(path, key string) (any, []naming.CRUDMethod, error) {
 	pkg := o.c.pr.Packages[path]
 	if pkg == nil || pkg.plan == nil {
 		return nil, nil, fmt.Errorf("no package %q", path)
@@ -587,14 +587,14 @@ func (o routeOracle) modelOf(path, key string) (any, []golang.CRUDMethod, error)
 	return pkg.plan.ModelRef(key), methods, err
 }
 
-func (o routeOracle) crudByName(path, name string) (string, any, golang.CRUDMethod, bool) {
+func (o routeOracle) crudByName(path, name string) (string, any, naming.CRUDMethod, bool) {
 	pkg := o.c.pr.Packages[path]
 	if pkg == nil || pkg.plan == nil {
-		return "", nil, golang.CRUDMethod{}, false
+		return "", nil, naming.CRUDMethod{}, false
 	}
 	key, cm, ok := pkg.plan.CRUDMethod(name)
 	if !ok {
-		return "", nil, golang.CRUDMethod{}, false
+		return "", nil, naming.CRUDMethod{}, false
 	}
 	return key, pkg.plan.ModelRef(key), cm, true
 }

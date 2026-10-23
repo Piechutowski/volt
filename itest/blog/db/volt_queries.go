@@ -35,13 +35,13 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
 // nil error commits, anything else rolls back. q must be backed by a
 // handle that can begin a transaction (a *sql.DB).
 func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
-	return rt.Tx(ctx, q.db, func(tx *sql.Tx) error { return fn(q.WithTx(tx)) })
+	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
 }
 
 func userScan(r rt.Row) (User, error) {
-	var v User
-	err := r.Scan(&v.ID, &v.Email, &v.CreatedAt)
-	return v, rt.Refused("User", err)
+	var voltV User
+	voltErr := r.Scan(&voltV.ID, &voltV.Email, &voltV.CreatedAt)
+	return voltV, rt.Refused("User", voltErr)
 }
 
 const userGetSQL = `SELECT "id", "email", "created_at" FROM "users" WHERE "id" = ?`
@@ -57,24 +57,24 @@ func (q *Queries) UserGetMany(ctx context.Context, ids []int) ([]User, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	query, args, err := rt.SelectRender(userTableSQL, userColumnsSQL, []rt.Opt[User]{UserID.In(ids...)})
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(userTableSQL, userColumnsSQL, []rt.Opt[User]{UserID.In(ids...)})
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := q.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []User{}
-	for rows.Next() {
-		v, err := userScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []User{}
+	for voltRows.Next() {
+		voltV, voltErr := userScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 const userGetByEmailSQL = `SELECT "id", "email", "created_at" FROM "users" WHERE "email" = ?`
@@ -89,43 +89,43 @@ const userListSQL = `SELECT "id", "email", "created_at" FROM "users"`
 
 // UserList returns every users row.
 func (q *Queries) UserList(ctx context.Context) ([]User, error) {
-	rows, err := q.db.QueryContext(ctx, userListSQL)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, userListSQL)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []User{}
-	for rows.Next() {
-		v, err := userScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []User{}
+	for voltRows.Next() {
+		voltV, voltErr := userScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // UserCreate validates c and inserts its marked columns, returning the
 // stored users row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) UserCreate(ctx context.Context, c UserChangeset) (User, error) {
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return User{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return User{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[1] {
-		cols, args = append(cols, "email"), append(args, v.Email)
+		voltCols, voltArgs = append(voltCols, "email"), append(voltArgs, voltV.Email)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "created_at"), append(args, v.CreatedAt)
+		voltCols, voltArgs = append(voltCols, "created_at"), append(voltArgs, voltV.CreatedAt)
 	}
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(userTableSQL, cols, userColumnsSQL), args...)
-	if err != nil {
-		return User{}, err
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(userTableSQL, voltCols, userColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return User{}, voltErr
 	}
-	return userScan(row)
+	return userScan(voltRow)
 }
 
 // UserUpdate validates c and writes its marked columns to the users row it
@@ -136,27 +136,27 @@ func (q *Queries) UserUpdate(ctx context.Context, c UserChangeset) (User, error)
 		return User{}, rt.ErrNoRow
 	}
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return User{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return User{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[1] {
-		cols, args = append(cols, "email"), append(args, v.Email)
+		voltCols, voltArgs = append(voltCols, "email"), append(voltArgs, voltV.Email)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "created_at"), append(args, v.CreatedAt)
+		voltCols, voltArgs = append(voltCols, "created_at"), append(voltArgs, voltV.CreatedAt)
 	}
-	if len(cols) == 0 {
-		return v, nil
+	if len(voltCols) == 0 {
+		return voltV, nil
 	}
-	args = append(args, c.data.ID)
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(userTableSQL, cols, []string{"id"}, userColumnsSQL), args...)
-	if err != nil {
-		return User{}, err
+	voltArgs = append(voltArgs, c.data.ID)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(userTableSQL, voltCols, []string{"id"}, userColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return User{}, voltErr
 	}
-	return userScan(row)
+	return userScan(voltRow)
 }
 
 const userDeleteSQL = `DELETE FROM "users" WHERE "id" = ?`
@@ -164,24 +164,24 @@ const userDeleteSQL = `DELETE FROM "users" WHERE "id" = ?`
 // UserDelete removes the identified users row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) UserDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, userDeleteSQL, id)
-	if err != nil {
-		return rt.Refused("User", err)
+	voltRes, voltErr := q.db.ExecContext(ctx, userDeleteSQL, id)
+	if voltErr != nil {
+		return rt.Refused("User", voltErr)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+	voltN, voltErr := voltRes.RowsAffected()
+	if voltErr != nil {
+		return voltErr
 	}
-	if n == 0 {
+	if voltN == 0 {
 		return rt.ErrNotFound
 	}
 	return nil
 }
 
 func tagScan(r rt.Row) (Tag, error) {
-	var v Tag
-	err := r.Scan(&v.Slug, &v.Name)
-	return v, rt.Refused("Tag", err)
+	var voltV Tag
+	voltErr := r.Scan(&voltV.Slug, &voltV.Name)
+	return voltV, rt.Refused("Tag", voltErr)
 }
 
 const tagGetSQL = `SELECT "slug", "name" FROM "tags" WHERE "slug" = ?`
@@ -197,67 +197,67 @@ func (q *Queries) TagGetMany(ctx context.Context, slugs []string) ([]Tag, error)
 	if len(slugs) == 0 {
 		return nil, nil
 	}
-	query, args, err := rt.SelectRender(tagTableSQL, tagColumnsSQL, []rt.Opt[Tag]{TagSlug.In(slugs...)})
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(tagTableSQL, tagColumnsSQL, []rt.Opt[Tag]{TagSlug.In(slugs...)})
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := q.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Tag{}
-	for rows.Next() {
-		v, err := tagScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Tag{}
+	for voltRows.Next() {
+		voltV, voltErr := tagScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 const tagListSQL = `SELECT "slug", "name" FROM "tags"`
 
 // TagList returns every tags row.
 func (q *Queries) TagList(ctx context.Context) ([]Tag, error) {
-	rows, err := q.db.QueryContext(ctx, tagListSQL)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, tagListSQL)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Tag{}
-	for rows.Next() {
-		v, err := tagScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Tag{}
+	for voltRows.Next() {
+		voltV, voltErr := tagScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // TagCreate validates c and inserts its marked columns, returning the
 // stored tags row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) TagCreate(ctx context.Context, c TagChangeset) (Tag, error) {
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Tag{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Tag{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[0] {
-		cols, args = append(cols, "slug"), append(args, v.Slug)
+		voltCols, voltArgs = append(voltCols, "slug"), append(voltArgs, voltV.Slug)
 	}
 	if c.set[1] {
-		cols, args = append(cols, "name"), append(args, v.Name)
+		voltCols, voltArgs = append(voltCols, "name"), append(voltArgs, voltV.Name)
 	}
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(tagTableSQL, cols, tagColumnsSQL), args...)
-	if err != nil {
-		return Tag{}, err
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(tagTableSQL, voltCols, tagColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Tag{}, voltErr
 	}
-	return tagScan(row)
+	return tagScan(voltRow)
 }
 
 // TagUpdate validates c and writes its marked columns to the tags row it
@@ -268,27 +268,27 @@ func (q *Queries) TagUpdate(ctx context.Context, c TagChangeset) (Tag, error) {
 		return Tag{}, rt.ErrNoRow
 	}
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Tag{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Tag{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[0] {
-		cols, args = append(cols, "slug"), append(args, v.Slug)
+		voltCols, voltArgs = append(voltCols, "slug"), append(voltArgs, voltV.Slug)
 	}
 	if c.set[1] {
-		cols, args = append(cols, "name"), append(args, v.Name)
+		voltCols, voltArgs = append(voltCols, "name"), append(voltArgs, voltV.Name)
 	}
-	if len(cols) == 0 {
-		return v, nil
+	if len(voltCols) == 0 {
+		return voltV, nil
 	}
-	args = append(args, c.data.Slug)
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(tagTableSQL, cols, []string{"slug"}, tagColumnsSQL), args...)
-	if err != nil {
-		return Tag{}, err
+	voltArgs = append(voltArgs, c.data.Slug)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(tagTableSQL, voltCols, []string{"slug"}, tagColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Tag{}, voltErr
 	}
-	return tagScan(row)
+	return tagScan(voltRow)
 }
 
 const tagDeleteSQL = `DELETE FROM "tags" WHERE "slug" = ?`
@@ -296,24 +296,24 @@ const tagDeleteSQL = `DELETE FROM "tags" WHERE "slug" = ?`
 // TagDelete removes the identified tags row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) TagDelete(ctx context.Context, slug string) error {
-	res, err := q.db.ExecContext(ctx, tagDeleteSQL, slug)
-	if err != nil {
-		return rt.Refused("Tag", err)
+	voltRes, voltErr := q.db.ExecContext(ctx, tagDeleteSQL, slug)
+	if voltErr != nil {
+		return rt.Refused("Tag", voltErr)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+	voltN, voltErr := voltRes.RowsAffected()
+	if voltErr != nil {
+		return voltErr
 	}
-	if n == 0 {
+	if voltN == 0 {
 		return rt.ErrNotFound
 	}
 	return nil
 }
 
 func msRevenueScan(r rt.Row) (MsRevenue, error) {
-	var v MsRevenue
-	err := r.Scan(&v.ID, &v.Org, &v.Year)
-	return v, rt.Refused("MsRevenue", err)
+	var voltV MsRevenue
+	voltErr := r.Scan(&voltV.ID, &voltV.Org, &voltV.Year)
+	return voltV, rt.Refused("MsRevenue", voltErr)
 }
 
 const msRevenueGetSQL = `SELECT "id", "org", "year" FROM "ms_revenue" WHERE "id" = ?`
@@ -329,67 +329,67 @@ func (q *Queries) MsRevenueGetMany(ctx context.Context, ids []int) ([]MsRevenue,
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	query, args, err := rt.SelectRender(msRevenueTableSQL, msRevenueColumnsSQL, []rt.Opt[MsRevenue]{MsRevenueID.In(ids...)})
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(msRevenueTableSQL, msRevenueColumnsSQL, []rt.Opt[MsRevenue]{MsRevenueID.In(ids...)})
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := q.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []MsRevenue{}
-	for rows.Next() {
-		v, err := msRevenueScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []MsRevenue{}
+	for voltRows.Next() {
+		voltV, voltErr := msRevenueScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 const msRevenueListSQL = `SELECT "id", "org", "year" FROM "ms_revenue"`
 
 // MsRevenueList returns every ms_revenue row.
 func (q *Queries) MsRevenueList(ctx context.Context) ([]MsRevenue, error) {
-	rows, err := q.db.QueryContext(ctx, msRevenueListSQL)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, msRevenueListSQL)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []MsRevenue{}
-	for rows.Next() {
-		v, err := msRevenueScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []MsRevenue{}
+	for voltRows.Next() {
+		voltV, voltErr := msRevenueScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // MsRevenueCreate validates c and inserts its marked columns, returning the
 // stored ms_revenue row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) MsRevenueCreate(ctx context.Context, c MsRevenueChangeset) (MsRevenue, error) {
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return MsRevenue{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return MsRevenue{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[1] {
-		cols, args = append(cols, "org"), append(args, v.Org)
+		voltCols, voltArgs = append(voltCols, "org"), append(voltArgs, voltV.Org)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "year"), append(args, v.Year)
+		voltCols, voltArgs = append(voltCols, "year"), append(voltArgs, voltV.Year)
 	}
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(msRevenueTableSQL, cols, msRevenueColumnsSQL), args...)
-	if err != nil {
-		return MsRevenue{}, err
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(msRevenueTableSQL, voltCols, msRevenueColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return MsRevenue{}, voltErr
 	}
-	return msRevenueScan(row)
+	return msRevenueScan(voltRow)
 }
 
 // MsRevenueUpdate validates c and writes its marked columns to the ms_revenue row it
@@ -400,27 +400,27 @@ func (q *Queries) MsRevenueUpdate(ctx context.Context, c MsRevenueChangeset) (Ms
 		return MsRevenue{}, rt.ErrNoRow
 	}
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return MsRevenue{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return MsRevenue{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[1] {
-		cols, args = append(cols, "org"), append(args, v.Org)
+		voltCols, voltArgs = append(voltCols, "org"), append(voltArgs, voltV.Org)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "year"), append(args, v.Year)
+		voltCols, voltArgs = append(voltCols, "year"), append(voltArgs, voltV.Year)
 	}
-	if len(cols) == 0 {
-		return v, nil
+	if len(voltCols) == 0 {
+		return voltV, nil
 	}
-	args = append(args, c.data.ID)
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(msRevenueTableSQL, cols, []string{"id"}, msRevenueColumnsSQL), args...)
-	if err != nil {
-		return MsRevenue{}, err
+	voltArgs = append(voltArgs, c.data.ID)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(msRevenueTableSQL, voltCols, []string{"id"}, msRevenueColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return MsRevenue{}, voltErr
 	}
-	return msRevenueScan(row)
+	return msRevenueScan(voltRow)
 }
 
 const msRevenueDeleteSQL = `DELETE FROM "ms_revenue" WHERE "id" = ?`
@@ -428,24 +428,24 @@ const msRevenueDeleteSQL = `DELETE FROM "ms_revenue" WHERE "id" = ?`
 // MsRevenueDelete removes the identified ms_revenue row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) MsRevenueDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, msRevenueDeleteSQL, id)
-	if err != nil {
-		return rt.Refused("MsRevenue", err)
+	voltRes, voltErr := q.db.ExecContext(ctx, msRevenueDeleteSQL, id)
+	if voltErr != nil {
+		return rt.Refused("MsRevenue", voltErr)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+	voltN, voltErr := voltRes.RowsAffected()
+	if voltErr != nil {
+		return voltErr
 	}
-	if n == 0 {
+	if voltN == 0 {
 		return rt.ErrNotFound
 	}
 	return nil
 }
 
 func msUsageScan(r rt.Row) (MsUsage, error) {
-	var v MsUsage
-	err := r.Scan(&v.ID, &v.Org, &v.Year)
-	return v, rt.Refused("MsUsage", err)
+	var voltV MsUsage
+	voltErr := r.Scan(&voltV.ID, &voltV.Org, &voltV.Year)
+	return voltV, rt.Refused("MsUsage", voltErr)
 }
 
 const msUsageGetSQL = `SELECT "id", "org", "year" FROM "ms_usage" WHERE "id" = ?`
@@ -461,67 +461,67 @@ func (q *Queries) MsUsageGetMany(ctx context.Context, ids []int) ([]MsUsage, err
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	query, args, err := rt.SelectRender(msUsageTableSQL, msUsageColumnsSQL, []rt.Opt[MsUsage]{MsUsageID.In(ids...)})
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(msUsageTableSQL, msUsageColumnsSQL, []rt.Opt[MsUsage]{MsUsageID.In(ids...)})
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := q.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []MsUsage{}
-	for rows.Next() {
-		v, err := msUsageScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []MsUsage{}
+	for voltRows.Next() {
+		voltV, voltErr := msUsageScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 const msUsageListSQL = `SELECT "id", "org", "year" FROM "ms_usage"`
 
 // MsUsageList returns every ms_usage row.
 func (q *Queries) MsUsageList(ctx context.Context) ([]MsUsage, error) {
-	rows, err := q.db.QueryContext(ctx, msUsageListSQL)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, msUsageListSQL)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []MsUsage{}
-	for rows.Next() {
-		v, err := msUsageScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []MsUsage{}
+	for voltRows.Next() {
+		voltV, voltErr := msUsageScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // MsUsageCreate validates c and inserts its marked columns, returning the
 // stored ms_usage row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) MsUsageCreate(ctx context.Context, c MsUsageChangeset) (MsUsage, error) {
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return MsUsage{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return MsUsage{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[1] {
-		cols, args = append(cols, "org"), append(args, v.Org)
+		voltCols, voltArgs = append(voltCols, "org"), append(voltArgs, voltV.Org)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "year"), append(args, v.Year)
+		voltCols, voltArgs = append(voltCols, "year"), append(voltArgs, voltV.Year)
 	}
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(msUsageTableSQL, cols, msUsageColumnsSQL), args...)
-	if err != nil {
-		return MsUsage{}, err
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(msUsageTableSQL, voltCols, msUsageColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return MsUsage{}, voltErr
 	}
-	return msUsageScan(row)
+	return msUsageScan(voltRow)
 }
 
 // MsUsageUpdate validates c and writes its marked columns to the ms_usage row it
@@ -532,27 +532,27 @@ func (q *Queries) MsUsageUpdate(ctx context.Context, c MsUsageChangeset) (MsUsag
 		return MsUsage{}, rt.ErrNoRow
 	}
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return MsUsage{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return MsUsage{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[1] {
-		cols, args = append(cols, "org"), append(args, v.Org)
+		voltCols, voltArgs = append(voltCols, "org"), append(voltArgs, voltV.Org)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "year"), append(args, v.Year)
+		voltCols, voltArgs = append(voltCols, "year"), append(voltArgs, voltV.Year)
 	}
-	if len(cols) == 0 {
-		return v, nil
+	if len(voltCols) == 0 {
+		return voltV, nil
 	}
-	args = append(args, c.data.ID)
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(msUsageTableSQL, cols, []string{"id"}, msUsageColumnsSQL), args...)
-	if err != nil {
-		return MsUsage{}, err
+	voltArgs = append(voltArgs, c.data.ID)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(msUsageTableSQL, voltCols, []string{"id"}, msUsageColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return MsUsage{}, voltErr
 	}
-	return msUsageScan(row)
+	return msUsageScan(voltRow)
 }
 
 const msUsageDeleteSQL = `DELETE FROM "ms_usage" WHERE "id" = ?`
@@ -560,15 +560,15 @@ const msUsageDeleteSQL = `DELETE FROM "ms_usage" WHERE "id" = ?`
 // MsUsageDelete removes the identified ms_usage row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) MsUsageDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, msUsageDeleteSQL, id)
-	if err != nil {
-		return rt.Refused("MsUsage", err)
+	voltRes, voltErr := q.db.ExecContext(ctx, msUsageDeleteSQL, id)
+	if voltErr != nil {
+		return rt.Refused("MsUsage", voltErr)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+	voltN, voltErr := voltRes.RowsAffected()
+	if voltErr != nil {
+		return voltErr
 	}
-	if n == 0 {
+	if voltN == 0 {
 		return rt.ErrNotFound
 	}
 	return nil

@@ -7,6 +7,7 @@ import (
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/nao/gen/golang"
 	"github.com/Piechutowski/volt/nao/gen/sqlite"
+	"github.com/Piechutowski/volt/nao/naming"
 )
 
 // Options configures generation.
@@ -41,21 +42,21 @@ func Generate(pkg *lang.Package, opts Options) ([]File, error) {
 	}
 	plan := pkg.Plan()
 	if plan == nil {
-		plan = golang.PlanBuild(pkg.Merged(), pkg.Schema())
+		plan = naming.PlanBuild(pkg.Merged(), pkg.Schema())
 	}
 
 	type emit struct {
 		name string
 		fn   func() ([]byte, error)
 	}
-	emits := []emit{{"volt_models.go", func() ([]byte, error) { return plan.Models(gopts) }}}
+	emits := []emit{{"volt_models.go", func() ([]byte, error) { return golang.Models(plan, gopts) }}}
 	if !opts.ModelsOnly {
 		emits = append(emits,
-			emit{"volt_queries.go", func() ([]byte, error) { return plan.Queries(gopts) }},
-			emit{"volt_dyn.go", func() ([]byte, error) { return plan.Dyn(gopts) }},
-			emit{"volt_validate.go", func() ([]byte, error) { return plan.Validators(pkg.Validators, gopts) }})
+			emit{"volt_queries.go", func() ([]byte, error) { return golang.Queries(plan, gopts) }},
+			emit{"volt_dyn.go", func() ([]byte, error) { return golang.Dyn(plan, gopts) }},
+			emit{"volt_validate.go", func() ([]byte, error) { return golang.Validators(plan, pkg.Validators, gopts) }})
 		if fns := pkg.SelectFns(); len(fns) > 0 {
-			emits = append(emits, emit{"volt_selects.go", func() ([]byte, error) { return plan.Selects(fns, gopts) }})
+			emits = append(emits, emit{"volt_selects.go", func() ([]byte, error) { return golang.Selects(plan, fns, gopts) }})
 		}
 		if len(pkg.Schema().Migrations) > 0 {
 			emits = append(emits, emit{"volt_migrations.go", func() ([]byte, error) {

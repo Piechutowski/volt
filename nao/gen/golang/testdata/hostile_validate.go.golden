@@ -18,12 +18,12 @@ func (c UserChangeset) Validate() UserChangeset {
 // every one every time, replacing the findings of an earlier Validate
 // (spec §changesets, §validators).
 func (c CoreUserChangeset) Validate() CoreUserChangeset {
-	v := c.Row()
-	var errs []rt.FieldError
-	if err := CoreAuditKindKnown(v.Kind); err != nil {
-		errs = append(errs, rt.FieldError{Check: "CoreAuditKindKnown", Columns: []string{"kind"}, Message: err.Error()})
+	voltV := c.Row()
+	var voltErrs []rt.FieldError
+	if voltErr := CoreAuditKindKnown(voltV.Kind); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "CoreAuditKindKnown", Columns: []string{"kind"}, Message: voltErr.Error()})
 	}
-	c.valid = errs
+	c.valid = voltErrs
 	return c
 }
 

@@ -74,19 +74,19 @@ func (c CategoryChangeset) NameSet(v string) CategoryChangeset {
 // for a key that names no column (spec §changesets).
 func (c CategoryChangeset) Cast(p CategoryParams, allow ...CategoryColumn) CategoryChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "name")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "id":
-			if v, ok, err := rt.Field(p, "id", "int", false, func(r *Category) int { return r.ID }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "id")
-			} else if ok {
-				c = c.IDSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *Category) int { return voltR.ID }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "id")
+			} else if voltOK {
+				c = c.IDSet(voltV)
 			}
 		case "name":
-			if v, ok, err := rt.Field(p, "name", "string", false, func(r *Category) string { return r.Name }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "name")
-			} else if ok {
-				c = c.NameSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "name", "string", false, func(voltR *Category) string { return voltR.Name }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "name")
+			} else if voltOK {
+				c = c.NameSet(voltV)
 			}
 		}
 	}
@@ -106,27 +106,27 @@ func (c CategoryChangeset) Changed(col CategoryColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c CategoryChangeset) Row() Category {
-	r := c.data
+	voltR := c.data
 	if c.set[0] {
-		r.ID = c.vals.ID
+		voltR.ID = c.vals.ID
 	}
 	if c.set[1] {
-		r.Name = c.vals.Name
+		voltR.Name = c.vals.Name
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c CategoryChangeset) Params() CategoryParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[0] {
-		marks = append(marks, rt.Mark{Wire: "id", Value: c.vals.ID})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "id", Value: c.vals.ID})
 	}
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "name", Value: c.vals.Name})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "name", Value: c.vals.Name})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec
@@ -239,25 +239,25 @@ func (c CategoryPathChangeset) DepthSet(v int) CategoryPathChangeset {
 // for a key that names no column (spec §changesets).
 func (c CategoryPathChangeset) Cast(p CategoryPathParams, allow ...CategoryPathColumn) CategoryPathChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "ancestor_id", "descendant_id", "depth")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "ancestor_id":
-			if v, ok, err := rt.Field(p, "ancestor_id", "int", false, func(r *CategoryPath) int { return r.AncestorID }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "ancestor_id")
-			} else if ok {
-				c = c.AncestorIDSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "ancestor_id", "int", false, func(voltR *CategoryPath) int { return voltR.AncestorID }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "ancestor_id")
+			} else if voltOK {
+				c = c.AncestorIDSet(voltV)
 			}
 		case "descendant_id":
-			if v, ok, err := rt.Field(p, "descendant_id", "int", false, func(r *CategoryPath) int { return r.DescendantID }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "descendant_id")
-			} else if ok {
-				c = c.DescendantIDSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "descendant_id", "int", false, func(voltR *CategoryPath) int { return voltR.DescendantID }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "descendant_id")
+			} else if voltOK {
+				c = c.DescendantIDSet(voltV)
 			}
 		case "depth":
-			if v, ok, err := rt.Field(p, "depth", "int", false, func(r *CategoryPath) int { return r.Depth }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "depth")
-			} else if ok {
-				c = c.DepthSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "depth", "int", false, func(voltR *CategoryPath) int { return voltR.Depth }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "depth")
+			} else if voltOK {
+				c = c.DepthSet(voltV)
 			}
 		}
 	}
@@ -279,33 +279,33 @@ func (c CategoryPathChangeset) Changed(col CategoryPathColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c CategoryPathChangeset) Row() CategoryPath {
-	r := c.data
+	voltR := c.data
 	if c.set[0] {
-		r.AncestorID = c.vals.AncestorID
+		voltR.AncestorID = c.vals.AncestorID
 	}
 	if c.set[1] {
-		r.DescendantID = c.vals.DescendantID
+		voltR.DescendantID = c.vals.DescendantID
 	}
 	if c.set[2] {
-		r.Depth = c.vals.Depth
+		voltR.Depth = c.vals.Depth
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c CategoryPathChangeset) Params() CategoryPathParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[0] {
-		marks = append(marks, rt.Mark{Wire: "ancestor_id", Value: c.vals.AncestorID})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "ancestor_id", Value: c.vals.AncestorID})
 	}
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "descendant_id", Value: c.vals.DescendantID})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "descendant_id", Value: c.vals.DescendantID})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "depth", Value: c.vals.Depth})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "depth", Value: c.vals.Depth})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec

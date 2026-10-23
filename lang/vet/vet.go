@@ -15,7 +15,7 @@ import (
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/token"
-	golang "github.com/Piechutowski/volt/nao/gen/golang"
+	"github.com/Piechutowski/volt/nao/naming"
 )
 
 // Analyzer is one vet check, named for its diagnostic code and
@@ -58,7 +58,7 @@ type FilePass struct {
 	File *ast.File
 	Info *check.Info
 
-	plan  **golang.Plan
+	plan  **naming.Plan
 	fold  Fold
 	diags []diag.Diagnostic
 }
@@ -66,9 +66,9 @@ type FilePass struct {
 // Plan is the file's naming plan: the checker's own when the caller
 // handed one to RunWithPlan, else built once for all folds of this
 // run.
-func (p *FilePass) Plan() *golang.Plan {
+func (p *FilePass) Plan() *naming.Plan {
 	if *p.plan == nil {
-		*p.plan = golang.PlanBuild(p.File, p.Info)
+		*p.plan = naming.PlanBuild(p.File, p.Info)
 	}
 	return *p.plan
 }
@@ -119,7 +119,7 @@ func Run(f *ast.File, info *check.Info, analyzers ...Analyzer) []diag.Diagnostic
 
 // RunWithPlan is Run with the file's naming plan already built, as the
 // checker has it, so no analyzer builds it again.
-func RunWithPlan(f *ast.File, info *check.Info, plan *golang.Plan, analyzers ...Analyzer) []diag.Diagnostic {
+func RunWithPlan(f *ast.File, info *check.Info, plan *naming.Plan, analyzers ...Analyzer) []diag.Diagnostic {
 	return RunMemo(f, info, plan, nil, analyzers...)
 }
 
@@ -216,7 +216,7 @@ type declResult struct {
 // nil memo judges every declaration. The warnings come analyzer by
 // analyzer in registration order, each analyzer's in declaration
 // order, then sorted by position.
-func RunMemo(f *ast.File, info *check.Info, plan *golang.Plan, memo *Memo, analyzers ...Analyzer) []diag.Diagnostic {
+func RunMemo(f *ast.File, info *check.Info, plan *naming.Plan, memo *Memo, analyzers ...Analyzer) []diag.Diagnostic {
 	if len(analyzers) == 0 {
 		analyzers = All()
 	}

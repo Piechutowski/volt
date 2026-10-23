@@ -107,37 +107,37 @@ func (c InvoiceChangeset) DeletedAtSet(v rt.Null[time.Time]) InvoiceChangeset {
 // for a key that names no column (spec §changesets).
 func (c InvoiceChangeset) Cast(p InvoiceParams, allow ...InvoiceColumn) InvoiceChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "total", "created_at", "updated_at", "deleted_at")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "id":
-			if v, ok, err := rt.Field(p, "id", "int", false, func(r *Invoice) int { return r.ID }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "id")
-			} else if ok {
-				c = c.IDSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *Invoice) int { return voltR.ID }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "id")
+			} else if voltOK {
+				c = c.IDSet(voltV)
 			}
 		case "total":
-			if v, ok, err := rt.Field(p, "total", "float64", false, func(r *Invoice) float64 { return r.Total }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "total")
-			} else if ok {
-				c = c.TotalSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "total", "float64", false, func(voltR *Invoice) float64 { return voltR.Total }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "total")
+			} else if voltOK {
+				c = c.TotalSet(voltV)
 			}
 		case "created_at":
-			if v, ok, err := rt.Field(p, "created_at", "time.Time", false, func(r *Invoice) time.Time { return r.CreatedAt }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "created_at")
-			} else if ok {
-				c = c.CreatedAtSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "created_at", "time.Time", false, func(voltR *Invoice) time.Time { return voltR.CreatedAt }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "created_at")
+			} else if voltOK {
+				c = c.CreatedAtSet(voltV)
 			}
 		case "updated_at":
-			if v, ok, err := rt.Field(p, "updated_at", "time.Time", true, func(r *Invoice) rt.Null[time.Time] { return r.UpdatedAt }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "updated_at")
-			} else if ok {
-				c = c.UpdatedAtSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "updated_at", "time.Time", true, func(voltR *Invoice) rt.Null[time.Time] { return voltR.UpdatedAt }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "updated_at")
+			} else if voltOK {
+				c = c.UpdatedAtSet(voltV)
 			}
 		case "deleted_at":
-			if v, ok, err := rt.Field(p, "deleted_at", "time.Time", true, func(r *Invoice) rt.Null[time.Time] { return r.DeletedAt }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "deleted_at")
-			} else if ok {
-				c = c.DeletedAtSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "deleted_at", "time.Time", true, func(voltR *Invoice) rt.Null[time.Time] { return voltR.DeletedAt }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "deleted_at")
+			} else if voltOK {
+				c = c.DeletedAtSet(voltV)
 			}
 		}
 	}
@@ -163,45 +163,45 @@ func (c InvoiceChangeset) Changed(col InvoiceColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c InvoiceChangeset) Row() Invoice {
-	r := c.data
+	voltR := c.data
 	if c.set[0] {
-		r.ID = c.vals.ID
+		voltR.ID = c.vals.ID
 	}
 	if c.set[1] {
-		r.Total = c.vals.Total
+		voltR.Total = c.vals.Total
 	}
 	if c.set[2] {
-		r.CreatedAt = c.vals.CreatedAt
+		voltR.CreatedAt = c.vals.CreatedAt
 	}
 	if c.set[3] {
-		r.UpdatedAt = c.vals.UpdatedAt
+		voltR.UpdatedAt = c.vals.UpdatedAt
 	}
 	if c.set[4] {
-		r.DeletedAt = c.vals.DeletedAt
+		voltR.DeletedAt = c.vals.DeletedAt
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c InvoiceChangeset) Params() InvoiceParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[0] {
-		marks = append(marks, rt.Mark{Wire: "id", Value: c.vals.ID})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "id", Value: c.vals.ID})
 	}
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "total", Value: c.vals.Total})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "total", Value: c.vals.Total})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "created_at", Value: c.vals.CreatedAt})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "created_at", Value: c.vals.CreatedAt})
 	}
 	if c.set[3] {
-		marks = append(marks, rt.Mark{Wire: "updated_at", Value: c.vals.UpdatedAt})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "updated_at", Value: c.vals.UpdatedAt})
 	}
 	if c.set[4] {
-		marks = append(marks, rt.Mark{Wire: "deleted_at", Value: c.vals.DeletedAt})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "deleted_at", Value: c.vals.DeletedAt})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec

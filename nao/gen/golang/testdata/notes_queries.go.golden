@@ -35,13 +35,13 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
 // nil error commits, anything else rolls back. q must be backed by a
 // handle that can begin a transaction (a *sql.DB).
 func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
-	return rt.Tx(ctx, q.db, func(tx *sql.Tx) error { return fn(q.WithTx(tx)) })
+	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
 }
 
 func postScan(r rt.Row) (Post, error) {
-	var v Post
-	err := r.Scan(&v.ID, &v.Title, (*string)(&v.Status), &v.Body, &v.PublishedAt)
-	return v, rt.Refused("Post", err)
+	var voltV Post
+	voltErr := r.Scan(&voltV.ID, &voltV.Title, (*string)(&voltV.Status), &voltV.Body, &voltV.PublishedAt)
+	return voltV, rt.Refused("Post", voltErr)
 }
 
 const postGetSQL = `SELECT "id", "title", "status", "body", "published_at" FROM "posts" WHERE "id" = ?`
@@ -57,73 +57,73 @@ func (q *Queries) PostGetMany(ctx context.Context, ids []int) ([]Post, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	query, args, err := rt.SelectRender(postTableSQL, postColumnsSQL, []rt.Opt[Post]{PostID.In(ids...)})
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(postTableSQL, postColumnsSQL, []rt.Opt[Post]{PostID.In(ids...)})
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := q.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Post{}
-	for rows.Next() {
-		v, err := postScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Post{}
+	for voltRows.Next() {
+		voltV, voltErr := postScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 const postListSQL = `SELECT "id", "title", "status", "body", "published_at" FROM "posts"`
 
 // PostList returns every posts row.
 func (q *Queries) PostList(ctx context.Context) ([]Post, error) {
-	rows, err := q.db.QueryContext(ctx, postListSQL)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, postListSQL)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Post{}
-	for rows.Next() {
-		v, err := postScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Post{}
+	for voltRows.Next() {
+		voltV, voltErr := postScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // PostCreate validates c and inserts its marked columns, returning the
 // stored posts row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) PostCreate(ctx context.Context, c PostChangeset) (Post, error) {
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Post{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Post{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[1] {
-		cols, args = append(cols, "title"), append(args, v.Title)
+		voltCols, voltArgs = append(voltCols, "title"), append(voltArgs, voltV.Title)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "status"), append(args, v.Status)
+		voltCols, voltArgs = append(voltCols, "status"), append(voltArgs, voltV.Status)
 	}
 	if c.set[3] {
-		cols, args = append(cols, "body"), append(args, v.Body)
+		voltCols, voltArgs = append(voltCols, "body"), append(voltArgs, voltV.Body)
 	}
 	if c.set[4] {
-		cols, args = append(cols, "published_at"), append(args, v.PublishedAt)
+		voltCols, voltArgs = append(voltCols, "published_at"), append(voltArgs, voltV.PublishedAt)
 	}
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(postTableSQL, cols, postColumnsSQL), args...)
-	if err != nil {
-		return Post{}, err
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(postTableSQL, voltCols, postColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Post{}, voltErr
 	}
-	return postScan(row)
+	return postScan(voltRow)
 }
 
 // PostUpdate validates c and writes its marked columns to the posts row it
@@ -134,33 +134,33 @@ func (q *Queries) PostUpdate(ctx context.Context, c PostChangeset) (Post, error)
 		return Post{}, rt.ErrNoRow
 	}
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Post{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Post{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[1] {
-		cols, args = append(cols, "title"), append(args, v.Title)
+		voltCols, voltArgs = append(voltCols, "title"), append(voltArgs, voltV.Title)
 	}
 	if c.set[2] {
-		cols, args = append(cols, "status"), append(args, v.Status)
+		voltCols, voltArgs = append(voltCols, "status"), append(voltArgs, voltV.Status)
 	}
 	if c.set[3] {
-		cols, args = append(cols, "body"), append(args, v.Body)
+		voltCols, voltArgs = append(voltCols, "body"), append(voltArgs, voltV.Body)
 	}
 	if c.set[4] {
-		cols, args = append(cols, "published_at"), append(args, v.PublishedAt)
+		voltCols, voltArgs = append(voltCols, "published_at"), append(voltArgs, voltV.PublishedAt)
 	}
-	if len(cols) == 0 {
-		return v, nil
+	if len(voltCols) == 0 {
+		return voltV, nil
 	}
-	args = append(args, c.data.ID)
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(postTableSQL, cols, []string{"id"}, postColumnsSQL), args...)
-	if err != nil {
-		return Post{}, err
+	voltArgs = append(voltArgs, c.data.ID)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(postTableSQL, voltCols, []string{"id"}, postColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Post{}, voltErr
 	}
-	return postScan(row)
+	return postScan(voltRow)
 }
 
 const postDeleteSQL = `DELETE FROM "posts" WHERE "id" = ?`
@@ -168,24 +168,24 @@ const postDeleteSQL = `DELETE FROM "posts" WHERE "id" = ?`
 // PostDelete removes the identified posts row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) PostDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, postDeleteSQL, id)
-	if err != nil {
-		return rt.Refused("Post", err)
+	voltRes, voltErr := q.db.ExecContext(ctx, postDeleteSQL, id)
+	if voltErr != nil {
+		return rt.Refused("Post", voltErr)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+	voltN, voltErr := voltRes.RowsAffected()
+	if voltErr != nil {
+		return voltErr
 	}
-	if n == 0 {
+	if voltN == 0 {
 		return rt.ErrNotFound
 	}
 	return nil
 }
 
 func tagScan(r rt.Row) (Tag, error) {
-	var v Tag
-	err := r.Scan(&v.ID, &v.Name)
-	return v, rt.Refused("Tag", err)
+	var voltV Tag
+	voltErr := r.Scan(&voltV.ID, &voltV.Name)
+	return voltV, rt.Refused("Tag", voltErr)
 }
 
 const tagGetSQL = `SELECT "id", "name" FROM "tags" WHERE "id" = ?`
@@ -201,24 +201,24 @@ func (q *Queries) TagGetMany(ctx context.Context, ids []int) ([]Tag, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	query, args, err := rt.SelectRender(tagTableSQL, tagColumnsSQL, []rt.Opt[Tag]{TagID.In(ids...)})
-	if err != nil {
-		return nil, err
+	voltQuery, voltArgs, voltErr := rt.SelectRender(tagTableSQL, tagColumnsSQL, []rt.Opt[Tag]{TagID.In(ids...)})
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	rows, err := q.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Tag{}
-	for rows.Next() {
-		v, err := tagScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Tag{}
+	for voltRows.Next() {
+		voltV, voltErr := tagScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 const tagGetByNameSQL = `SELECT "id", "name" FROM "tags" WHERE "name" = ?`
@@ -233,43 +233,43 @@ const tagListSQL = `SELECT "id", "name" FROM "tags"`
 
 // TagList returns every tags row.
 func (q *Queries) TagList(ctx context.Context) ([]Tag, error) {
-	rows, err := q.db.QueryContext(ctx, tagListSQL)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, tagListSQL)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []Tag{}
-	for rows.Next() {
-		v, err := tagScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []Tag{}
+	for voltRows.Next() {
+		voltV, voltErr := tagScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 // TagCreate validates c and inserts its marked columns, returning the
 // stored tags row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) TagCreate(ctx context.Context, c TagChangeset) (Tag, error) {
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Tag{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Tag{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[0] {
-		cols, args = append(cols, "id"), append(args, v.ID)
+		voltCols, voltArgs = append(voltCols, "id"), append(voltArgs, voltV.ID)
 	}
 	if c.set[1] {
-		cols, args = append(cols, "name"), append(args, v.Name)
+		voltCols, voltArgs = append(voltCols, "name"), append(voltArgs, voltV.Name)
 	}
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(tagTableSQL, cols, tagColumnsSQL), args...)
-	if err != nil {
-		return Tag{}, err
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(tagTableSQL, voltCols, tagColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Tag{}, voltErr
 	}
-	return tagScan(row)
+	return tagScan(voltRow)
 }
 
 // TagUpdate validates c and writes its marked columns to the tags row it
@@ -280,27 +280,27 @@ func (q *Queries) TagUpdate(ctx context.Context, c TagChangeset) (Tag, error) {
 		return Tag{}, rt.ErrNoRow
 	}
 	c = c.Validate()
-	if err := c.Err(); err != nil {
-		return Tag{}, err
+	if voltErr := c.Err(); voltErr != nil {
+		return Tag{}, voltErr
 	}
-	v := c.Row()
-	var cols []string
-	var args []any
+	voltV := c.Row()
+	var voltCols []string
+	var voltArgs []any
 	if c.set[0] {
-		cols, args = append(cols, "id"), append(args, v.ID)
+		voltCols, voltArgs = append(voltCols, "id"), append(voltArgs, voltV.ID)
 	}
 	if c.set[1] {
-		cols, args = append(cols, "name"), append(args, v.Name)
+		voltCols, voltArgs = append(voltCols, "name"), append(voltArgs, voltV.Name)
 	}
-	if len(cols) == 0 {
-		return v, nil
+	if len(voltCols) == 0 {
+		return voltV, nil
 	}
-	args = append(args, c.data.ID)
-	row, err := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(tagTableSQL, cols, []string{"id"}, tagColumnsSQL), args...)
-	if err != nil {
-		return Tag{}, err
+	voltArgs = append(voltArgs, c.data.ID)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(tagTableSQL, voltCols, []string{"id"}, tagColumnsSQL), voltArgs...)
+	if voltErr != nil {
+		return Tag{}, voltErr
 	}
-	return tagScan(row)
+	return tagScan(voltRow)
 }
 
 const tagDeleteSQL = `DELETE FROM "tags" WHERE "id" = ?`
@@ -308,15 +308,15 @@ const tagDeleteSQL = `DELETE FROM "tags" WHERE "id" = ?`
 // TagDelete removes the identified tags row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) TagDelete(ctx context.Context, id int) error {
-	res, err := q.db.ExecContext(ctx, tagDeleteSQL, id)
-	if err != nil {
-		return rt.Refused("Tag", err)
+	voltRes, voltErr := q.db.ExecContext(ctx, tagDeleteSQL, id)
+	if voltErr != nil {
+		return rt.Refused("Tag", voltErr)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
+	voltN, voltErr := voltRes.RowsAffected()
+	if voltErr != nil {
+		return voltErr
 	}
-	if n == 0 {
+	if voltN == 0 {
 		return rt.ErrNotFound
 	}
 	return nil

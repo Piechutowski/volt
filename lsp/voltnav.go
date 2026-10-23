@@ -16,7 +16,7 @@ import (
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/token"
-	"github.com/Piechutowski/volt/nao/gen/golang"
+	"github.com/Piechutowski/volt/nao/naming"
 )
 
 type voltSym struct {
@@ -488,8 +488,8 @@ func (d *Document) voltHover(pos protocol.Position) *protocol.Hover {
 func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 	const structCap = 4
 	var b strings.Builder
-	memberFn := func(key string) golang.SelectFn {
-		return golang.SelectFn{
+	memberFn := func(key string) naming.SelectFn {
+		return naming.SelectFn{
 			TableKey: key, MethodSuffix: si.MethodSuffix,
 			Cols: si.Cols, Excluded: si.Excluded, SharedType: si.Shared,
 		}
@@ -503,7 +503,7 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 	}
 	plan := pkg.Plan()
 	if plan == nil {
-		plan = golang.PlanBuild(pkg.Merged(), pkg.Schema())
+		plan = naming.PlanBuild(pkg.Merged(), pkg.Schema())
 	}
 	if si.Unresolved {
 		b.WriteString("```volt\n" + selectHead(si.Decl) + "\n```\n")
@@ -551,7 +551,7 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 	b.WriteString("```go\n")
 	for _, m := range si.Members {
 		model := m.Decl.Name.Name()
-		if mn, err := golang.ModelName(m.Decl); err == nil {
+		if mn, err := naming.ModelName(m.Decl); err == nil {
 			model = mn
 		}
 		row := model
@@ -565,7 +565,7 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 	return b.String()
 }
 
-func fieldTypeMD(m *check.TableInfo, f golang.FieldSig) string {
+func fieldTypeMD(m *check.TableInfo, f naming.FieldSig) string {
 	cd := m.Column(f.Col)
 	switch {
 	case cd != nil && !cd.Type.Known():
@@ -644,7 +644,7 @@ func tableModelHover(sym voltSym, def voltDef) string {
 		return ""
 	}
 	var b strings.Builder
-	model, _ := golang.ModelName(t)
+	model, _ := naming.ModelName(t)
 	fmt.Fprintf(&b, "**`Table %s`** in package `%s`", t.Name.Name(), sym.pkg)
 	if model != "" {
 		fmt.Fprintf(&b, " — Go model `%s`", model)

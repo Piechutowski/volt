@@ -12,78 +12,78 @@ const userPickedSQL = `SELECT "id", "email", "created_at" FROM "users" WHERE "id
 
 // UserPicked runs the "picked" select over users (spec §selects-over-groups).
 func (q *Queries) UserPicked(ctx context.Context, ids []int) ([]User, error) {
-	rows, err := q.db.QueryContext(ctx, userPickedSQL, rt.JSONList(ids))
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, userPickedSQL, rt.JSONList(ids))
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []User{}
-	for rows.Next() {
-		v, err := userScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []User{}
+	for voltRows.Next() {
+		voltV, voltErr := userScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 const userSinceSQL = `SELECT "id", "email", "created_at" FROM "users" WHERE "created_at" > ? ORDER BY "id" ASC`
 
 // UserSince runs the "since" select over users (spec §selects-over-groups).
 func (q *Queries) UserSince(ctx context.Context, since time.Time) ([]User, error) {
-	rows, err := q.db.QueryContext(ctx, userSinceSQL, since)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, userSinceSQL, since)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []User{}
-	for rows.Next() {
-		v, err := userScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []User{}
+	for voltRows.Next() {
+		voltV, voltErr := userScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 const msRevenueBrowseSQL = `SELECT "id", "org", "year" FROM "ms_revenue" WHERE "year" = ? ORDER BY "id" ASC`
 
 // MsRevenueBrowse runs the "browse" select over ms_revenue (spec §selects-over-groups).
 func (q *Queries) MsRevenueBrowse(ctx context.Context, year int) ([]MsRevenue, error) {
-	rows, err := q.db.QueryContext(ctx, msRevenueBrowseSQL, year)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, msRevenueBrowseSQL, year)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []MsRevenue{}
-	for rows.Next() {
-		v, err := msRevenueScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []MsRevenue{}
+	for voltRows.Next() {
+		voltV, voltErr := msRevenueScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }
 
 const msUsageBrowseSQL = `SELECT "id", "org", "year" FROM "ms_usage" WHERE "year" = ? ORDER BY "id" ASC`
 
 // MsUsageBrowse runs the "browse" select over ms_usage (spec §selects-over-groups).
 func (q *Queries) MsUsageBrowse(ctx context.Context, year int) ([]MsUsage, error) {
-	rows, err := q.db.QueryContext(ctx, msUsageBrowseSQL, year)
-	if err != nil {
-		return nil, err
+	voltRows, voltErr := q.db.QueryContext(ctx, msUsageBrowseSQL, year)
+	if voltErr != nil {
+		return nil, voltErr
 	}
-	defer rows.Close()
-	out := []MsUsage{}
-	for rows.Next() {
-		v, err := msUsageScan(rows)
-		if err != nil {
-			return nil, err
+	defer voltRows.Close()
+	voltOut := []MsUsage{}
+	for voltRows.Next() {
+		voltV, voltErr := msUsageScan(voltRows)
+		if voltErr != nil {
+			return nil, voltErr
 		}
-		out = append(out, v)
+		voltOut = append(voltOut, voltV)
 	}
-	return out, rows.Err()
+	return voltOut, voltRows.Err()
 }

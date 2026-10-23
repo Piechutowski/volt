@@ -4,29 +4,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-
-	"github.com/Piechutowski/volt/lang/check"
 )
-
-type goType struct {
-	name string
-	imp  string
-}
-
-func typeOf(ct check.ColumnType) goType {
-	return goType{name: ct.Go, imp: importKey(ct)}
-}
-
-func importKey(ct check.ColumnType) string {
-	return importKeyOf(ct.Alias, ct.Import)
-}
-
-func importKeyOf(alias, path string) string {
-	if path == "" || alias == "" || check.ReservedAliases[alias] == path {
-		return path
-	}
-	return alias + "=" + path
-}
 
 func importSplit(key string) (alias, path string) {
 	if i := strings.IndexByte(key, '='); i >= 0 {
@@ -51,8 +29,6 @@ func importKeysSort(imports map[string]bool) []string {
 	return keys
 }
 
-// importDecl renders one import line from its key: the path, or
-// alias=path for a declared type's package (spec §types).
 func importDecl(key string) string {
 	alias, path := importSplit(key)
 	if alias != "" {

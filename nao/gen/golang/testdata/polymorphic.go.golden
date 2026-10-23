@@ -89,25 +89,25 @@ func (c CommentChangeset) BodySet(v string) CommentChangeset {
 // for a key that names no column (spec §changesets).
 func (c CommentChangeset) Cast(p CommentParams, allow ...CommentColumn) CommentChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "commentable_type", "commentable_id", "body")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "commentable_type":
-			if v, ok, err := rt.Field(p, "commentable_type", "CommentableType", false, func(r *Comment) CommentableType { return r.CommentableType }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "commentable_type")
-			} else if ok {
-				c = c.CommentableTypeSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "commentable_type", "CommentableType", false, func(voltR *Comment) CommentableType { return voltR.CommentableType }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "commentable_type")
+			} else if voltOK {
+				c = c.CommentableTypeSet(voltV)
 			}
 		case "commentable_id":
-			if v, ok, err := rt.Field(p, "commentable_id", "int", false, func(r *Comment) int { return r.CommentableID }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "commentable_id")
-			} else if ok {
-				c = c.CommentableIDSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "commentable_id", "int", false, func(voltR *Comment) int { return voltR.CommentableID }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "commentable_id")
+			} else if voltOK {
+				c = c.CommentableIDSet(voltV)
 			}
 		case "body":
-			if v, ok, err := rt.Field(p, "body", "string", false, func(r *Comment) string { return r.Body }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "body")
-			} else if ok {
-				c = c.BodySet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "body", "string", false, func(voltR *Comment) string { return voltR.Body }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "body")
+			} else if voltOK {
+				c = c.BodySet(voltV)
 			}
 		}
 	}
@@ -131,33 +131,33 @@ func (c CommentChangeset) Changed(col CommentColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c CommentChangeset) Row() Comment {
-	r := c.data
+	voltR := c.data
 	if c.set[1] {
-		r.CommentableType = c.vals.CommentableType
+		voltR.CommentableType = c.vals.CommentableType
 	}
 	if c.set[2] {
-		r.CommentableID = c.vals.CommentableID
+		voltR.CommentableID = c.vals.CommentableID
 	}
 	if c.set[3] {
-		r.Body = c.vals.Body
+		voltR.Body = c.vals.Body
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c CommentChangeset) Params() CommentParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "commentable_type", Value: c.vals.CommentableType})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "commentable_type", Value: c.vals.CommentableType})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "commentable_id", Value: c.vals.CommentableID})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "commentable_id", Value: c.vals.CommentableID})
 	}
 	if c.set[3] {
-		marks = append(marks, rt.Mark{Wire: "body", Value: c.vals.Body})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "body", Value: c.vals.Body})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec

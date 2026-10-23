@@ -53,8 +53,8 @@ func TestCompositeKeyInDeclarationOrder(t *testing.T) {
 		t.Errorf("DailyHitGet on another day = %v; want rt.ErrNotFound", err)
 	}
 	_, err = q.DailyHitCreate(ctx, DailyHitNew().DaySet(20261022).SiteSet("blog.example"))
-	if inv := invalidOf(t, err, "unique", "day", "site"); inv.StatusCode() != 409 {
-		t.Errorf("a duplicate composite key is a 409 naming both columns: %+v", inv)
+	if inv := invalidOf(t, err, "unique", "day", "site"); inv.Cause == nil {
+		t.Errorf("a duplicate composite key is a unique field error naming both columns: %+v", inv)
 	}
 	if _, err := q.DailyHitCreate(ctx, DailyHitNew().DaySet(20261023).SiteSet("blog.example")); err != nil {
 		t.Errorf("the same site on another day is another key: %v", err)
@@ -120,8 +120,8 @@ func TestUniqueColumnIsAUniqueIndex(t *testing.T) {
 
 	seedUser(t, q, "ann@example.com")
 	_, err := q.UserCreate(ctx, UserNew().EmailSet("ann@example.com").NameSet("Ann again"))
-	if inv := invalidOf(t, err, "unique", "email"); inv.StatusCode() != 409 || inv.Cause == nil {
-		t.Errorf("a duplicate of a unique column is a 409 naming the column, with the database's error as its cause: %+v", inv)
+	if inv := invalidOf(t, err, "unique", "email"); inv.Cause == nil {
+		t.Errorf("a duplicate of a unique column is a unique field error naming the column, with the database's error as its cause: %+v", inv)
 	}
 
 	if _, err := q.DailyHitCreate(ctx, DailyHitNew().DaySet(1).SiteSet("a").TokenSet(rt.Some("t-1"))); err != nil {
@@ -133,8 +133,8 @@ func TestUniqueColumnIsAUniqueIndex(t *testing.T) {
 		}
 	}
 	_, err = q.DailyHitCreate(ctx, DailyHitNew().DaySet(2).SiteSet("a").TokenSet(rt.Some("t-1")))
-	if inv := invalidOf(t, err, "unique", "token"); inv.StatusCode() != 409 {
-		t.Errorf("a duplicate token is a 409 naming the column: %+v", inv)
+	if inv := invalidOf(t, err, "unique", "token"); inv.Cause == nil {
+		t.Errorf("a duplicate token is a unique field error naming the column: %+v", inv)
 	}
 }
 
@@ -279,7 +279,7 @@ func TestMigrationAddsAUniqueColumnWithoutARebuild(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = q.DailyHitUpdate(ctx, hits[1].Changeset().TokenSet(rt.Some("t-1")))
-	if inv := invalidOf(t, err, "unique", "token"); inv.StatusCode() != 409 {
+	if inv := invalidOf(t, err, "unique", "token"); inv.Cause == nil {
 		t.Errorf("the added unique column refuses a duplicate: %+v", inv)
 	}
 

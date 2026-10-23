@@ -14,7 +14,7 @@ import (
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/token"
-	"github.com/Piechutowski/volt/nao/gen/golang"
+	"github.com/Piechutowski/volt/nao/naming"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -158,7 +158,7 @@ type selectEntry struct {
 	diags   []diag.Diagnostic
 }
 
-func (e *selectEntry) holds(members []*check.TableInfo, models []any, preds map[string]*ast.Pred, names *golang.Names) bool {
+func (e *selectEntry) holds(members []*check.TableInfo, models []any, preds map[string]*ast.Pred, names *naming.Names) bool {
 	if len(members) != len(e.members) || len(preds) != len(e.preds) {
 		return false
 	}
@@ -180,7 +180,7 @@ func (e *selectEntry) holds(members []*check.TableInfo, models []any, preds map[
 	return true
 }
 
-func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *golang.Names, memo *selectsMemo) *SelectInfo {
+func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *naming.Names, memo *selectsMemo) *SelectInfo {
 	members, ok := c.selectTarget(sel, info)
 	if !ok {
 		return nil
@@ -238,7 +238,7 @@ func (c *checker) selectTarget(sel *ast.Select, info *check.Info) ([]*check.Tabl
 
 type memberModel struct {
 	model  string
-	fields []golang.FieldSig
+	fields []naming.FieldSig
 	err    error
 }
 
@@ -316,7 +316,7 @@ func (p *Package) modelOf(t *check.TableInfo) string {
 }
 
 func modelOrBase(t *check.TableInfo) string {
-	if m, err := golang.ModelName(t.Decl); err == nil {
+	if m, err := naming.ModelName(t.Decl); err == nil {
 		return m
 	}
 	return t.Decl.Name.Name()
@@ -406,7 +406,7 @@ func (c *checker) nameMiss(id *ast.Ident, info *check.Info, section, what string
 		}
 	}
 	for _, ti := range info.Tables {
-		if m, err := golang.ModelName(ti.Decl); err == nil && m == want {
+		if m, err := naming.ModelName(ti.Decl); err == nil && m == want {
 			c.errorf(id.Pos(), section, "unknown %s %q; %q is the model of table %q: name the table (§groups)", what, want, want, ti.Decl.Name.Name())
 			return
 		}
@@ -520,7 +520,7 @@ func (l *selectLowering) check() *SelectInfo {
 	sel := l.sel
 	si := &SelectInfo{Decl: sel, Members: l.members}
 
-	suffix, err := golang.GoName(sel.Name.Name())
+	suffix, err := naming.GoName(sel.Name.Name())
 	if err != nil {
 		l.errorf(sel.Name.Pos(), "select name %q does not map to a Go identifier: %v (§selects-over-groups)", sel.Name.Name(), err)
 		return nil
@@ -592,8 +592,8 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 	type memberFields struct {
 		ti     *check.TableInfo
 		model  string
-		fields []golang.FieldSig
-		byCol  map[string]golang.FieldSig
+		fields []naming.FieldSig
+		byCol  map[string]naming.FieldSig
 	}
 	members := make([]memberFields, 0, len(si.Members))
 	for i, m := range si.Members {
@@ -602,7 +602,7 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 			l.errorf(sel.Name.Pos(), "select %q: %v (§selects-over-groups)", sel.Name.Name(), err)
 			return false
 		}
-		byCol := make(map[string]golang.FieldSig, len(fields))
+		byCol := make(map[string]naming.FieldSig, len(fields))
 		for _, f := range fields {
 			byCol[f.Col] = f
 		}
@@ -913,7 +913,7 @@ func (e *selectEnv) paramBind(p *ast.Param, goType string) string {
 		return name
 	}
 	if !goParamOK(name) {
-		e.errorf(p.Name.Pos(), "parameter name %q does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, or a name the generated method uses (ctx, q, rows, err, out, rt, w, r, opts, volt, cs, c) (§predicates)", name)
+		e.errorf(p.Name.Pos(), "parameter name %q does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)", name)
 		return name
 	}
 	sp := SelectParam{GoName: name, GoType: goType}
@@ -923,15 +923,13 @@ func (e *selectEnv) paramBind(p *ast.Param, goType string) string {
 }
 
 func goParamOK(name string) bool {
-	if name == "" || goKeywords[name] || reservedParamNames[name] || selectLocalNames[name] {
+	if name == "" || goKeywords[name] || reservedParamNames[name] || selectMethodNames[name] || naming.LocalName(name) {
 		return false
 	}
 	return goIdentOK(name)
 }
 
-var selectLocalNames = map[string]bool{
-	"q": true, "rows": true, "err": true, "out": true, "rt": true,
-}
+var selectMethodNames = map[string]bool{"q": true, "rt": true}
 
 func (e *selectEnv) exprLower(x ast.PredExpr, preds map[string]bool) rt.GenPred {
 	switch x := x.(type) {
@@ -1196,14 +1194,14 @@ func (e *selectEnv) likeLower(x *ast.PredLike) rt.GenPred {
 // SelectFns lowers the package's checked selects into per-member
 // generator instructions (§selects-over-groups); an unresolved select
 // (§columns) is never lowered.
-func (p *Package) SelectFns() []golang.SelectFn {
-	var out []golang.SelectFn
+func (p *Package) SelectFns() []naming.SelectFn {
+	var out []naming.SelectFn
 	for _, si := range p.Selects {
 		if si.Unresolved {
 			continue
 		}
 		for _, m := range si.Members {
-			fn := golang.SelectFn{
+			fn := naming.SelectFn{
 				TableKey:     m.Key,
 				MethodSuffix: si.MethodSuffix,
 				Where:        si.Where,
@@ -1213,7 +1211,7 @@ func (p *Package) SelectFns() []golang.SelectFn {
 				SharedType:   si.Shared,
 			}
 			for _, prm := range si.Params {
-				fn.Params = append(fn.Params, golang.SelectParam(prm))
+				fn.Params = append(fn.Params, naming.SelectParam(prm))
 			}
 			out = append(out, fn)
 		}

@@ -10,12 +10,12 @@ import (
 // every one every time, replacing the findings of an earlier Validate
 // (spec §changesets, §validators).
 func (c UserChangeset) Validate() UserChangeset {
-	v := c.Row()
-	var errs []rt.FieldError
-	if err := EmailValid(v.Email); err != nil {
-		errs = append(errs, rt.FieldError{Check: "EmailValid", Columns: []string{"email"}, Message: err.Error()})
+	voltV := c.Row()
+	var voltErrs []rt.FieldError
+	if voltErr := EmailValid(voltV.Email); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "EmailValid", Columns: []string{"email"}, Message: voltErr.Error()})
 	}
-	c.valid = errs
+	c.valid = voltErrs
 	return c
 }
 
@@ -23,15 +23,15 @@ func (c UserChangeset) Validate() UserChangeset {
 // every one every time, replacing the findings of an earlier Validate
 // (spec §changesets, §validators).
 func (c OrderChangeset) Validate() OrderChangeset {
-	v := c.Row()
-	var errs []rt.FieldError
-	if v.Total == 0 {
-		errs = append(errs, rt.FieldError{Check: "required", Columns: []string{"total"}, Message: "total is required"})
+	voltV := c.Row()
+	var voltErrs []rt.FieldError
+	if voltV.Total == 0 {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "required", Columns: []string{"total"}, Message: "total is required"})
 	}
-	if err := OrderStateKnown(v.Status); err != nil {
-		errs = append(errs, rt.FieldError{Check: "OrderStateKnown", Columns: []string{"status"}, Message: err.Error()})
+	if voltErr := OrderStateKnown(voltV.Status); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "OrderStateKnown", Columns: []string{"status"}, Message: voltErr.Error()})
 	}
-	c.valid = errs
+	c.valid = voltErrs
 	return c
 }
 
@@ -47,15 +47,15 @@ func (c UserTagChangeset) Validate() UserTagChangeset {
 // every one every time, replacing the findings of an earlier Validate
 // (spec §changesets, §validators).
 func (c PageViewChangeset) Validate() PageViewChangeset {
-	v := c.Row()
-	var errs []rt.FieldError
-	if err := CountsPositive(v.Hits, v.Day); err != nil {
-		errs = append(errs, rt.FieldError{Check: "CountsPositive", Columns: []string{"hits", "day"}, Message: err.Error()})
+	voltV := c.Row()
+	var voltErrs []rt.FieldError
+	if voltErr := CountsPositive(voltV.Hits, voltV.Day); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "CountsPositive", Columns: []string{"hits", "day"}, Message: voltErr.Error()})
 	}
-	if err := SiteShape(v.Site); err != nil {
-		errs = append(errs, rt.FieldError{Check: "SiteShape", Columns: []string{"site"}, Message: err.Error()})
+	if voltErr := SiteShape(voltV.Site); voltErr != nil {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "SiteShape", Columns: []string{"site"}, Message: voltErr.Error()})
 	}
-	c.valid = errs
+	c.valid = voltErrs
 	return c
 }
 
@@ -79,12 +79,12 @@ func (c SiteFlagChangeset) Validate() SiteFlagChangeset {
 // every one every time, replacing the findings of an earlier Validate
 // (spec §changesets, §validators).
 func (c AttachmentChangeset) Validate() AttachmentChangeset {
-	v := c.Row()
-	var errs []rt.FieldError
-	if len(v.Digest) == 0 {
-		errs = append(errs, rt.FieldError{Check: "required", Columns: []string{"digest"}, Message: "digest is required"})
+	voltV := c.Row()
+	var voltErrs []rt.FieldError
+	if len(voltV.Digest) == 0 {
+		voltErrs = append(voltErrs, rt.FieldError{Check: "required", Columns: []string{"digest"}, Message: "digest is required"})
 	}
-	c.valid = errs
+	c.valid = voltErrs
 	return c
 }
 

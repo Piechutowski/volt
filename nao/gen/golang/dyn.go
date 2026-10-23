@@ -10,128 +10,41 @@ import (
 	"github.com/Piechutowski/volt/gen/align"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
-	"github.com/Piechutowski/volt/lang/token"
-	"github.com/Piechutowski/volt/nao/rt"
+	"github.com/Piechutowski/volt/nao/naming"
 )
 
 // GenerateDyn renders the dynamic-query file for one checked schema file.
 func GenerateDyn(f *ast.File, info *check.Info, opts Options) ([]byte, error) {
-	return PlanBuild(f, info).Dyn(opts)
+	return Dyn(naming.PlanBuild(f, info), opts)
 }
 
-// Dyn renders the dynamic-query file for the planned package.
-func (pl *Plan) Dyn(opts Options) ([]byte, error) {
+// Dyn renders the dynamic-query file (volt_dyn.go) for the planned package
+// (spec §generated-query-surface).
+func Dyn(pl *naming.Plan, opts Options) ([]byte, error) {
 	if opts.Package == "" {
 		return nil, fmt.Errorf("no package name")
 	}
-	if pl.err != nil {
-		return nil, pl.err
-	}
-	if err := pl.nameCollisionErr(); err != nil {
+	if err := pl.Err(); err != nil {
 		return nil, err
 	}
-	e := &dynEmitter{plan: pl.p, opts: opts}
+	if err := pl.NameCollisionErr(); err != nil {
+		return nil, err
+	}
+	e := &dynEmitter{tables: pl.Tables(), opts: opts}
 	e.run()
 	return align.Finish(e.out.String()), nil
 }
 
-var dynWrapperSuffixes = []string{"Limit", "Offset", "Distinct", "OrderBy", "After", "Set"}
-
-// NameCollision is one Go package-scope name that generation would mint
-// twice. First and Second describe the colliding origins in declaration
-// order; Pos locates the later of the two. Type is the bare declared
-// type among them, which the checker refuses (spec §types), and With
-// describes the other origin; Type is nil when generated names collide.
-type NameCollision struct {
-	Name          string
-	First, Second string
-	Pos           token.Position
-	Type          *check.TypeInfo
-	With          string
-}
-
-// DynNameCollisions reports the package-scope Go name collisions the
-// generated files would produce. A file that does not survive planning
-// reports nothing.
-func DynNameCollisions(f *ast.File, info *check.Info) []NameCollision {
-	return PlanBuild(f, info).DynNameCollisions()
-}
-
-type dynOrigin struct {
-	kind dynOriginKind
-	pos  token.Position
-	tm   *tableModel
-	f    *fieldPlan
-	td   *check.TypeInfo
-	sfx  string
-}
-
-type dynOriginKind uint8
-
-const (
-	dynQueries dynOriginKind = iota
-	dynType
-	dynModel
-	dynChangeset
-	dynColumn
-	dynParams
-	dynNew
-	dynHandle
-	dynWrapper
-)
-
-func (o dynOrigin) name() string {
-	switch o.kind {
-	case dynModel:
-		return o.tm.model
-	case dynChangeset:
-		return o.tm.model + "Changeset"
-	case dynColumn:
-		return o.tm.model + "Column"
-	case dynParams:
-		return o.tm.model + "Params"
-	case dynNew:
-		return o.tm.model + "New"
-	case dynHandle:
-		return o.tm.model + o.f.goField
-	case dynWrapper:
-		return o.tm.model + o.sfx
-	}
-	return "Queries"
-}
-
-func (o dynOrigin) describe() string {
-	switch o.kind {
-	case dynType:
-		return "Type " + o.td.Key
-	case dynModel:
-		return fmt.Sprintf("table %s (model %s)", o.tm.ti.Decl.Name.Name(), o.tm.model)
-	case dynChangeset:
-		return fmt.Sprintf("table %s (changeset %sChangeset)", o.tm.ti.Decl.Name.Name(), o.tm.model)
-	case dynColumn:
-		return fmt.Sprintf("table %s (column handle type %sColumn)", o.tm.ti.Decl.Name.Name(), o.tm.model)
-	case dynParams:
-		return fmt.Sprintf("table %s (write body %sParams)", o.tm.ti.Decl.Name.Name(), o.tm.model)
-	case dynNew:
-		return fmt.Sprintf("table %s (constructor %sNew)", o.tm.ti.Decl.Name.Name(), o.tm.model)
-	case dynHandle:
-		return fmt.Sprintf("table %s column %q (handle %s%s)", o.tm.ti.Decl.Name.Name(), o.f.colName, o.tm.model, o.f.goField)
-	case dynWrapper:
-		return fmt.Sprintf("table %s (option wrapper %s%s)", o.tm.ti.Decl.Name.Name(), o.tm.model, o.sfx)
-	}
-	return "the generated Queries type"
-}
-
 type dynEmitter struct {
-	plan *plan
-	opts Options
-	out  strings.Builder
-	body strings.Builder
+	tables []*naming.Table
+	opts   Options
+	out    strings.Builder
+	body   strings.Builder
 }
 
 func (e *dynEmitter) run() {
-	e.body.Grow(e.plan.fieldCount() * 80)
-	for _, t := range e.plan.tables {
+	e.body.Grow(fieldCount(e.tables) * 80)
+	for _, t := range e.tables {
 		e.tableEmit(t)
 	}
 	e.header()
@@ -155,17 +68,17 @@ func (e *dynEmitter) header() {
 	e.out.WriteString(")\n\n")
 }
 
-func (e *dynEmitter) tableEmit(t *tableModel) {
-	if len(t.fields) == 0 {
+func (e *dynEmitter) tableEmit(t *naming.Table) {
+	if len(t.Fields) == 0 {
 		return
 	}
 	b := &e.body
-	lower := argName(t.model)
-	tbl := t.ti.Decl.Name.Name()
+	lower := naming.ArgName(t.Model)
+	tbl := t.Info.Decl.Name.Name()
 
 	b.WriteString("const (\n")
-	fmt.Fprintf(b, "\t%sTableSQL   = `%s`\n", lower, rt.Ident(t.sqlName))
-	fmt.Fprintf(b, "\t%sColumnsSQL = `%s`\n)\n\n", lower, t.columnList())
+	fmt.Fprintf(b, "\t%sTableSQL   = `%s`\n", lower, t.TableSQL())
+	fmt.Fprintf(b, "\t%sColumnsSQL = `%s`\n)\n\n", lower, t.ColumnList())
 
 	e.wrappersEmit(t, tbl)
 	e.queryEmit(t, lower, tbl)
@@ -175,9 +88,9 @@ func (e *dynEmitter) tableEmit(t *tableModel) {
 	e.updateWhereEmit(t, lower, tbl)
 }
 
-func (e *dynEmitter) wrappersEmit(t *tableModel, tbl string) {
+func (e *dynEmitter) wrappersEmit(t *naming.Table, tbl string) {
 	b := &e.body
-	m := t.model
+	m := t.Model
 	fmt.Fprintf(b, "// %sLimit caps how many rows %sQuery returns.\n", m, m)
 	funcLine(b, "func "+m+"Limit(n int) rt.Opt["+m+"]", "return rt.Limit["+m+"](n)")
 	fmt.Fprintf(b, "// %sOffset skips n rows; keyset pagination (%sAfter) scales better.\n", m, m)
@@ -202,58 +115,58 @@ func funcLine(b *strings.Builder, header, body string) {
 	b.WriteString(header + " {\n\t" + body + "\n}\n\n")
 }
 
-func (e *dynEmitter) queryEmit(t *tableModel, lower, tbl string) {
+func (e *dynEmitter) queryEmit(t *naming.Table, lower, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "// %sQuery returns the %s rows matching every given predicate,\n", t.model, tbl)
+	fmt.Fprintf(b, "// %sQuery returns the %s rows matching every given predicate,\n", t.Model, tbl)
 	fmt.Fprintf(b, "// shaped by the remaining options (order, limit, offset, keyset,\n")
 	fmt.Fprintf(b, "// distinct). No options means every row.\n")
-	fmt.Fprintf(b, "func (q *Queries) %sQuery(ctx context.Context, opts ...rt.Opt[%s]) ([]%s, error) {\n", t.model, t.model, t.model)
-	fmt.Fprintf(b, "\tquery, args, err := rt.SelectRender(%sTableSQL, %sColumnsSQL, opts)\n", lower, lower)
-	b.WriteString("\tif err != nil {\n\t\treturn nil, err\n\t}\n")
-	fmt.Fprintf(b, "\trows, err := rt.StmtQuery(ctx, q.db, q.cache, query, args...)\n")
-	rowsScanEmit(b, t.model, lower)
+	fmt.Fprintf(b, "func (q *Queries) %sQuery(ctx context.Context, opts ...rt.Opt[%s]) ([]%s, error) {\n", t.Model, t.Model, t.Model)
+	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.SelectRender(%sTableSQL, %sColumnsSQL, opts)\n", lower, lower)
+	b.WriteString("\tif voltErr != nil {\n\t\treturn nil, voltErr\n\t}\n")
+	fmt.Fprintf(b, "\tvoltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)\n")
+	rowsScanEmit(b, t.Model, lower)
 }
 
-func (e *dynEmitter) countEmit(t *tableModel, lower, tbl string) {
+func (e *dynEmitter) countEmit(t *naming.Table, lower, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "// %sCount reports how many %s rows match every given predicate;\n", t.model, tbl)
+	fmt.Fprintf(b, "// %sCount reports how many %s rows match every given predicate;\n", t.Model, tbl)
 	fmt.Fprintf(b, "// none counts the whole table.\n")
-	fmt.Fprintf(b, "func (q *Queries) %sCount(ctx context.Context, preds ...rt.Pred[%s]) (int64, error) {\n", t.model, t.model)
-	fmt.Fprintf(b, "\tquery, args, err := rt.CountRender(%sTableSQL, preds)\n", lower)
-	b.WriteString("\tif err != nil {\n\t\treturn 0, err\n\t}\n")
-	b.WriteString("\tvar n int64\n\tif err := rt.RowScan(ctx, q.db, q.cache, query, args, &n); err != nil {\n\t\treturn 0, err\n\t}\n\treturn n, nil\n}\n\n")
+	fmt.Fprintf(b, "func (q *Queries) %sCount(ctx context.Context, preds ...rt.Pred[%s]) (int64, error) {\n", t.Model, t.Model)
+	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.CountRender(%sTableSQL, preds)\n", lower)
+	b.WriteString("\tif voltErr != nil {\n\t\treturn 0, voltErr\n\t}\n")
+	b.WriteString("\tvar voltN int64\n\tif voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {\n\t\treturn 0, voltErr\n\t}\n\treturn voltN, nil\n}\n\n")
 }
 
-func (e *dynEmitter) existsEmit(t *tableModel, lower, tbl string) {
+func (e *dynEmitter) existsEmit(t *naming.Table, lower, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "// %sExists reports whether any %s row matches every given predicate.\n", t.model, tbl)
-	fmt.Fprintf(b, "func (q *Queries) %sExists(ctx context.Context, preds ...rt.Pred[%s]) (bool, error) {\n", t.model, t.model)
-	fmt.Fprintf(b, "\tquery, args, err := rt.ExistsRender(%sTableSQL, preds)\n", lower)
-	b.WriteString("\tif err != nil {\n\t\treturn false, err\n\t}\n")
-	b.WriteString("\tvar found bool\n\tif err := rt.RowScan(ctx, q.db, q.cache, query, args, &found); err != nil {\n\t\treturn false, err\n\t}\n\treturn found, nil\n}\n\n")
+	fmt.Fprintf(b, "// %sExists reports whether any %s row matches every given predicate.\n", t.Model, tbl)
+	fmt.Fprintf(b, "func (q *Queries) %sExists(ctx context.Context, preds ...rt.Pred[%s]) (bool, error) {\n", t.Model, t.Model)
+	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.ExistsRender(%sTableSQL, preds)\n", lower)
+	b.WriteString("\tif voltErr != nil {\n\t\treturn false, voltErr\n\t}\n")
+	b.WriteString("\tvar voltFound bool\n\tif voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {\n\t\treturn false, voltErr\n\t}\n\treturn voltFound, nil\n}\n\n")
 }
 
-func (e *dynEmitter) deleteWhereEmit(t *tableModel, lower, tbl string) {
+func (e *dynEmitter) deleteWhereEmit(t *naming.Table, lower, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "// %sDeleteWhere removes every %s row matching the predicates and\n", t.model, tbl)
+	fmt.Fprintf(b, "// %sDeleteWhere removes every %s row matching the predicates and\n", t.Model, tbl)
 	fmt.Fprintf(b, "// reports how many went. No effective predicate is an error, never a\n")
 	fmt.Fprintf(b, "// full-table delete.\n")
-	fmt.Fprintf(b, "func (q *Queries) %sDeleteWhere(ctx context.Context, preds ...rt.Pred[%s]) (int64, error) {\n", t.model, t.model)
-	fmt.Fprintf(b, "\tquery, args, err := rt.DeleteRender(%sTableSQL, preds)\n", lower)
-	b.WriteString("\tif err != nil {\n\t\treturn 0, err\n\t}\n")
-	b.WriteString("\tres, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)\n")
-	b.WriteString("\tif err != nil {\n\t\treturn 0, err\n\t}\n\treturn res.RowsAffected()\n}\n\n")
+	fmt.Fprintf(b, "func (q *Queries) %sDeleteWhere(ctx context.Context, preds ...rt.Pred[%s]) (int64, error) {\n", t.Model, t.Model)
+	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.DeleteRender(%sTableSQL, preds)\n", lower)
+	b.WriteString("\tif voltErr != nil {\n\t\treturn 0, voltErr\n\t}\n")
+	b.WriteString("\tvoltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)\n")
+	b.WriteString("\tif voltErr != nil {\n\t\treturn 0, voltErr\n\t}\n\treturn voltRes.RowsAffected()\n}\n\n")
 }
 
-func (e *dynEmitter) updateWhereEmit(t *tableModel, lower, tbl string) {
+func (e *dynEmitter) updateWhereEmit(t *naming.Table, lower, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "// %sUpdateWhere applies the typed assignments (%sSet) to every %s\n", t.model, t.model, tbl)
+	fmt.Fprintf(b, "// %sUpdateWhere applies the typed assignments (%sSet) to every %s\n", t.Model, t.Model, tbl)
 	fmt.Fprintf(b, "// row matching the predicates and reports how many changed — the\n")
 	fmt.Fprintf(b, "// partial update of the dynamic layer. No effective predicate\n")
 	fmt.Fprintf(b, "// is an error, never a full-table rewrite.\n")
-	fmt.Fprintf(b, "func (q *Queries) %sUpdateWhere(ctx context.Context, set []rt.Assign[%s], preds ...rt.Pred[%s]) (int64, error) {\n", t.model, t.model, t.model)
-	fmt.Fprintf(b, "\tquery, args, err := rt.UpdateRender(%sTableSQL, set, preds)\n", lower)
-	b.WriteString("\tif err != nil {\n\t\treturn 0, err\n\t}\n")
-	b.WriteString("\tres, err := rt.StmtExec(ctx, q.db, q.cache, query, args...)\n")
-	b.WriteString("\tif err != nil {\n\t\treturn 0, err\n\t}\n\treturn res.RowsAffected()\n}\n\n")
+	fmt.Fprintf(b, "func (q *Queries) %sUpdateWhere(ctx context.Context, set []rt.Assign[%s], preds ...rt.Pred[%s]) (int64, error) {\n", t.Model, t.Model, t.Model)
+	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.UpdateRender(%sTableSQL, set, preds)\n", lower)
+	b.WriteString("\tif voltErr != nil {\n\t\treturn 0, voltErr\n\t}\n")
+	b.WriteString("\tvoltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)\n")
+	b.WriteString("\tif voltErr != nil {\n\t\treturn 0, voltErr\n\t}\n\treturn voltRes.RowsAffected()\n}\n\n")
 }

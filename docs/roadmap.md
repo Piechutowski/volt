@@ -63,11 +63,12 @@ report engine when a consumer exists.
 
 ## Data layer (nao)
 
+- [x] The data layer stands alone (§data-and-network-layers): a package of schema files without routes generates its data files only, and a program over it links nothing from Volt but `nao/rt`; the network layer uses the data layer and never the reverse, which `cmd/volt/layers_test.go` enforces; the data layer's names are planned in `nao/naming`, so the front end and the language server import no generator; generated locals take the form `volt` plus an upper-case word, so no key column and no select parameter shadows one
 - [x] Models: structs, `Null[T]`, singular names, notes as doc comments
 - [x] DDL and seed `INSERT`s from `Records`
 - [x] CRUD: `Get`, `GetMany`, `GetBy*`, `List`, `Count`, `Create`, `Update`, `Delete`; keyless tables get `List`/`Create`/`Count`; `Create` and `Update` take a changeset and return the stored row
 - [x] Dynamic queries: predicates as values, flat typed handles, per-model wrappers, shared verbs, keyset pagination, statement cache, `dynname` vet rule
-- [x] Changesets: the single write path (§changesets); `<Model>New()` and `row.Changeset()`, one setter per column, `Cast` of a `rt.Params[M]` wire body behind an allow list, `Validate`, `Create` and `Update` rendered from the marked columns; every refused write, a failed validator or the database's own refusal alike, is one `*rt.Invalid` itemizing its field errors, 409 for a `unique` violation, 422 otherwise
+- [x] Changesets: the single write path (§changesets); `<Model>New()` and `row.Changeset()`, one setter per column, `Cast` of a `rt.Params[M]` wire body behind an allow list, `Validate`, `Create` and `Update` rendered from the marked columns; every refused write, a failed validator or the database's own refusal alike, is one `*rt.Invalid` itemizing its field errors, which carries no HTTP status: the error spine answers 409 for a `unique` violation, 422 otherwise
 - [x] Validation: validators are exported Go functions of the package named in the schema, `required` is the built-in one, nothing reaches the DDL; `Validate()` on the changeset runs `required` and the validators, every failure collected; the API path answers with the changeset's `*rt.Invalid`
   - [ ] `[on: create]` / `[on: update]` as triggers in SQL and, in Go, by whether the changeset was made from a row
   - *hand* membership in a value set: a validator written beside the declared type (§types)

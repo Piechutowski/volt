@@ -276,139 +276,139 @@ func (c PostChangeset) SecretSet(v rt.Null[string]) PostChangeset {
 // for a key that names no column (spec §changesets).
 func (c PostChangeset) Cast(p PostParams, allow ...PostColumn) PostChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "slug", "words", "score", "cover", "state", "reviewed", "audience", "tier", "price", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "slug":
-			if v, ok, err := rt.Field(p, "slug", "string", false, func(r *Post) string { return r.Slug }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "slug")
-			} else if ok {
-				c = c.SlugSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "slug", "string", false, func(voltR *Post) string { return voltR.Slug }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "slug")
+			} else if voltOK {
+				c = c.SlugSet(voltV)
 			}
 		case "words":
-			if v, ok, err := rt.Field(p, "words", "int", false, func(r *Post) int { return r.Words }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "words")
-			} else if ok {
-				c = c.WordsSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "words", "int", false, func(voltR *Post) int { return voltR.Words }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "words")
+			} else if voltOK {
+				c = c.WordsSet(voltV)
 			}
 		case "score":
-			if v, ok, err := rt.Field(p, "score", "float64", false, func(r *Post) float64 { return r.Score }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "score")
-			} else if ok {
-				c = c.ScoreSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "score", "float64", false, func(voltR *Post) float64 { return voltR.Score }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "score")
+			} else if voltOK {
+				c = c.ScoreSet(voltV)
 			}
 		case "cover":
-			if v, ok, err := rt.Field(p, "cover", "[]byte", false, func(r *Post) []byte { return r.Cover }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "cover")
-			} else if ok {
-				c = c.CoverSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "cover", "[]byte", false, func(voltR *Post) []byte { return voltR.Cover }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "cover")
+			} else if voltOK {
+				c = c.CoverSet(voltV)
 			}
 		case "state":
-			if v, ok, err := rt.Field(p, "state", "Visibility", false, func(r *Post) Visibility { return r.State }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "state")
-			} else if ok {
-				c = c.StateSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "state", "Visibility", false, func(voltR *Post) Visibility { return voltR.State }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "state")
+			} else if voltOK {
+				c = c.StateSet(voltV)
 			}
 		case "reviewed":
-			if v, ok, err := rt.Field(p, "reviewed", "Visibility", true, func(r *Post) rt.Null[Visibility] { return r.Reviewed }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "reviewed")
-			} else if ok {
-				c = c.ReviewedSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "reviewed", "Visibility", true, func(voltR *Post) rt.Null[Visibility] { return voltR.Reviewed }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "reviewed")
+			} else if voltOK {
+				c = c.ReviewedSet(voltV)
 			}
 		case "audience":
-			if v, ok, err := rt.Field(p, "audience", "Visibility", false, func(r *Post) Visibility { return r.Audience }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "audience")
-			} else if ok {
-				c = c.AudienceSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "audience", "Visibility", false, func(voltR *Post) Visibility { return voltR.Audience }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "audience")
+			} else if voltOK {
+				c = c.AudienceSet(voltV)
 			}
 		case "tier":
-			if v, ok, err := rt.Field(p, "tier", "Tier", true, func(r *Post) rt.Null[Tier] { return r.Tier }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "tier")
-			} else if ok {
-				c = c.TierSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "tier", "Tier", true, func(voltR *Post) rt.Null[Tier] { return voltR.Tier }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "tier")
+			} else if voltOK {
+				c = c.TierSet(voltV)
 			}
 		case "price":
-			if v, ok, err := rt.Field(p, "price", "Cents", false, func(r *Post) Cents { return r.Price }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "price")
-			} else if ok {
-				c = c.PriceSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "price", "Cents", false, func(voltR *Post) Cents { return voltR.Price }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "price")
+			} else if voltOK {
+				c = c.PriceSet(voltV)
 			}
 		case "rank":
-			if v, ok, err := rt.Field(p, "rank", "int", false, func(r *Post) int { return r.Rank }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "rank")
-			} else if ok {
-				c = c.RankSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "rank", "int", false, func(voltR *Post) int { return voltR.Rank }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "rank")
+			} else if voltOK {
+				c = c.RankSet(voltV)
 			}
 		case "draft":
-			if v, ok, err := rt.Field(p, "draft", "bool", false, func(r *Post) bool { return r.Draft }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "draft")
-			} else if ok {
-				c = c.DraftSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "draft", "bool", false, func(voltR *Post) bool { return voltR.Draft }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "draft")
+			} else if voltOK {
+				c = c.DraftSet(voltV)
 			}
 		case "caption":
-			if v, ok, err := rt.Field(p, "caption", "string", true, func(r *Post) rt.Null[string] { return r.Caption }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "caption")
-			} else if ok {
-				c = c.CaptionSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "caption", "string", true, func(voltR *Post) rt.Null[string] { return voltR.Caption }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "caption")
+			} else if voltOK {
+				c = c.CaptionSet(voltV)
 			}
 		case "ratio":
-			if v, ok, err := rt.Field(p, "ratio", "float64", false, func(r *Post) float64 { return r.Ratio }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "ratio")
-			} else if ok {
-				c = c.RatioSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "ratio", "float64", false, func(voltR *Post) float64 { return voltR.Ratio }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "ratio")
+			} else if voltOK {
+				c = c.RatioSet(voltV)
 			}
 		case "weight":
-			if v, ok, err := rt.Field(p, "weight", "float64", true, func(r *Post) rt.Null[float64] { return r.Weight }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "weight")
-			} else if ok {
-				c = c.WeightSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "weight", "float64", true, func(voltR *Post) rt.Null[float64] { return voltR.Weight }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "weight")
+			} else if voltOK {
+				c = c.WeightSet(voltV)
 			}
 		case "scale":
-			if v, ok, err := rt.Field(p, "scale", "float64", true, func(r *Post) rt.Null[float64] { return r.Scale }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "scale")
-			} else if ok {
-				c = c.ScaleSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "scale", "float64", true, func(voltR *Post) rt.Null[float64] { return voltR.Scale }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "scale")
+			} else if voltOK {
+				c = c.ScaleSet(voltV)
 			}
 		case "kilo":
-			if v, ok, err := rt.Field(p, "kilo", "float64", true, func(r *Post) rt.Null[float64] { return r.Kilo }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "kilo")
-			} else if ok {
-				c = c.KiloSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "kilo", "float64", true, func(voltR *Post) rt.Null[float64] { return voltR.Kilo }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "kilo")
+			} else if voltOK {
+				c = c.KiloSet(voltV)
 			}
 		case "shift":
-			if v, ok, err := rt.Field(p, "shift", "float64", true, func(r *Post) rt.Null[float64] { return r.Shift }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "shift")
-			} else if ok {
-				c = c.ShiftSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "shift", "float64", true, func(voltR *Post) rt.Null[float64] { return voltR.Shift }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "shift")
+			} else if voltOK {
+				c = c.ShiftSet(voltV)
 			}
 		case "hits":
-			if v, ok, err := rt.Field(p, "hits", "int", true, func(r *Post) rt.Null[int] { return r.Hits }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "hits")
-			} else if ok {
-				c = c.HitsSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "hits", "int", true, func(voltR *Post) rt.Null[int] { return voltR.Hits }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "hits")
+			} else if voltOK {
+				c = c.HitsSet(voltV)
 			}
 		case "views":
-			if v, ok, err := rt.Field(p, "views", "int", false, func(r *Post) int { return r.Views }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "views")
-			} else if ok {
-				c = c.ViewsSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "views", "int", false, func(voltR *Post) int { return voltR.Views }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "views")
+			} else if voltOK {
+				c = c.ViewsSet(voltV)
 			}
 		case "label":
-			if v, ok, err := rt.Field(p, "label", "string", true, func(r *Post) rt.Null[string] { return r.Label }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "label")
-			} else if ok {
-				c = c.LabelSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "label", "string", true, func(voltR *Post) rt.Null[string] { return voltR.Label }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "label")
+			} else if voltOK {
+				c = c.LabelSet(voltV)
 			}
 		case "flag":
-			if v, ok, err := rt.Field(p, "flag", "bool", true, func(r *Post) rt.Null[bool] { return r.Flag }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "flag")
-			} else if ok {
-				c = c.FlagSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "flag", "bool", true, func(voltR *Post) rt.Null[bool] { return voltR.Flag }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "flag")
+			} else if voltOK {
+				c = c.FlagSet(voltV)
 			}
 		case "secret":
-			if v, ok, err := rt.Field(p, "secret", "string", true, func(r *Post) rt.Null[string] { return r.Secret }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "secret")
-			} else if ok {
-				c = c.SecretSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "secret", "string", true, func(voltR *Post) rt.Null[string] { return voltR.Secret }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "secret")
+			} else if voltOK {
+				c = c.SecretSet(voltV)
 			}
 		}
 	}
@@ -470,147 +470,147 @@ func (c PostChangeset) Changed(col PostColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c PostChangeset) Row() Post {
-	r := c.data
+	voltR := c.data
 	if c.set[1] {
-		r.Slug = c.vals.Slug
+		voltR.Slug = c.vals.Slug
 	}
 	if c.set[2] {
-		r.Words = c.vals.Words
+		voltR.Words = c.vals.Words
 	}
 	if c.set[3] {
-		r.Score = c.vals.Score
+		voltR.Score = c.vals.Score
 	}
 	if c.set[4] {
-		r.Cover = c.vals.Cover
+		voltR.Cover = c.vals.Cover
 	}
 	if c.set[5] {
-		r.State = c.vals.State
+		voltR.State = c.vals.State
 	}
 	if c.set[6] {
-		r.Reviewed = c.vals.Reviewed
+		voltR.Reviewed = c.vals.Reviewed
 	}
 	if c.set[7] {
-		r.Audience = c.vals.Audience
+		voltR.Audience = c.vals.Audience
 	}
 	if c.set[8] {
-		r.Tier = c.vals.Tier
+		voltR.Tier = c.vals.Tier
 	}
 	if c.set[9] {
-		r.Price = c.vals.Price
+		voltR.Price = c.vals.Price
 	}
 	if c.set[10] {
-		r.Rank = c.vals.Rank
+		voltR.Rank = c.vals.Rank
 	}
 	if c.set[11] {
-		r.Draft = c.vals.Draft
+		voltR.Draft = c.vals.Draft
 	}
 	if c.set[12] {
-		r.Caption = c.vals.Caption
+		voltR.Caption = c.vals.Caption
 	}
 	if c.set[13] {
-		r.Ratio = c.vals.Ratio
+		voltR.Ratio = c.vals.Ratio
 	}
 	if c.set[14] {
-		r.Weight = c.vals.Weight
+		voltR.Weight = c.vals.Weight
 	}
 	if c.set[15] {
-		r.Scale = c.vals.Scale
+		voltR.Scale = c.vals.Scale
 	}
 	if c.set[16] {
-		r.Kilo = c.vals.Kilo
+		voltR.Kilo = c.vals.Kilo
 	}
 	if c.set[17] {
-		r.Shift = c.vals.Shift
+		voltR.Shift = c.vals.Shift
 	}
 	if c.set[18] {
-		r.Hits = c.vals.Hits
+		voltR.Hits = c.vals.Hits
 	}
 	if c.set[19] {
-		r.Views = c.vals.Views
+		voltR.Views = c.vals.Views
 	}
 	if c.set[20] {
-		r.Label = c.vals.Label
+		voltR.Label = c.vals.Label
 	}
 	if c.set[21] {
-		r.Flag = c.vals.Flag
+		voltR.Flag = c.vals.Flag
 	}
 	if c.set[22] {
-		r.Secret = c.vals.Secret
+		voltR.Secret = c.vals.Secret
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c PostChangeset) Params() PostParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "slug", Value: c.vals.Slug})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "slug", Value: c.vals.Slug})
 	}
 	if c.set[2] {
-		marks = append(marks, rt.Mark{Wire: "words", Value: c.vals.Words})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "words", Value: c.vals.Words})
 	}
 	if c.set[3] {
-		marks = append(marks, rt.Mark{Wire: "score", Value: c.vals.Score})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "score", Value: c.vals.Score})
 	}
 	if c.set[4] {
-		marks = append(marks, rt.Mark{Wire: "cover", Value: c.vals.Cover})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "cover", Value: c.vals.Cover})
 	}
 	if c.set[5] {
-		marks = append(marks, rt.Mark{Wire: "state", Value: c.vals.State})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "state", Value: c.vals.State})
 	}
 	if c.set[6] {
-		marks = append(marks, rt.Mark{Wire: "reviewed", Value: c.vals.Reviewed})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "reviewed", Value: c.vals.Reviewed})
 	}
 	if c.set[7] {
-		marks = append(marks, rt.Mark{Wire: "audience", Value: c.vals.Audience})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "audience", Value: c.vals.Audience})
 	}
 	if c.set[8] {
-		marks = append(marks, rt.Mark{Wire: "tier", Value: c.vals.Tier})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "tier", Value: c.vals.Tier})
 	}
 	if c.set[9] {
-		marks = append(marks, rt.Mark{Wire: "price", Value: c.vals.Price})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "price", Value: c.vals.Price})
 	}
 	if c.set[10] {
-		marks = append(marks, rt.Mark{Wire: "rank", Value: c.vals.Rank})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "rank", Value: c.vals.Rank})
 	}
 	if c.set[11] {
-		marks = append(marks, rt.Mark{Wire: "draft", Value: c.vals.Draft})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "draft", Value: c.vals.Draft})
 	}
 	if c.set[12] {
-		marks = append(marks, rt.Mark{Wire: "caption", Value: c.vals.Caption})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "caption", Value: c.vals.Caption})
 	}
 	if c.set[13] {
-		marks = append(marks, rt.Mark{Wire: "ratio", Value: c.vals.Ratio})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "ratio", Value: c.vals.Ratio})
 	}
 	if c.set[14] {
-		marks = append(marks, rt.Mark{Wire: "weight", Value: c.vals.Weight})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "weight", Value: c.vals.Weight})
 	}
 	if c.set[15] {
-		marks = append(marks, rt.Mark{Wire: "scale", Value: c.vals.Scale})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "scale", Value: c.vals.Scale})
 	}
 	if c.set[16] {
-		marks = append(marks, rt.Mark{Wire: "kilo", Value: c.vals.Kilo})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "kilo", Value: c.vals.Kilo})
 	}
 	if c.set[17] {
-		marks = append(marks, rt.Mark{Wire: "shift", Value: c.vals.Shift})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "shift", Value: c.vals.Shift})
 	}
 	if c.set[18] {
-		marks = append(marks, rt.Mark{Wire: "hits", Value: c.vals.Hits})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "hits", Value: c.vals.Hits})
 	}
 	if c.set[19] {
-		marks = append(marks, rt.Mark{Wire: "views", Value: c.vals.Views})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "views", Value: c.vals.Views})
 	}
 	if c.set[20] {
-		marks = append(marks, rt.Mark{Wire: "label", Value: c.vals.Label})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "label", Value: c.vals.Label})
 	}
 	if c.set[21] {
-		marks = append(marks, rt.Mark{Wire: "flag", Value: c.vals.Flag})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "flag", Value: c.vals.Flag})
 	}
 	if c.set[22] {
-		marks = append(marks, rt.Mark{Wire: "secret", Value: c.vals.Secret})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "secret", Value: c.vals.Secret})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec
@@ -709,19 +709,19 @@ func (c PostTagChangeset) TagSet(v string) PostTagChangeset {
 // for a key that names no column (spec §changesets).
 func (c PostTagChangeset) Cast(p PostTagParams, allow ...PostTagColumn) PostTagChangeset {
 	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "post_id", "tag")...)
-	for _, col := range allow {
-		switch col.ColumnName() {
+	for _, voltCol := range allow {
+		switch voltCol.ColumnName() {
 		case "post_id":
-			if v, ok, err := rt.Field(p, "post_id", "int", false, func(r *PostTag) int { return r.PostID }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "post_id")
-			} else if ok {
-				c = c.PostIDSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "post_id", "int", false, func(voltR *PostTag) int { return voltR.PostID }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "post_id")
+			} else if voltOK {
+				c = c.PostIDSet(voltV)
 			}
 		case "tag":
-			if v, ok, err := rt.Field(p, "tag", "string", false, func(r *PostTag) string { return r.Tag }); err != nil {
-				c = c.errorAdd("cast", err.Error(), "tag")
-			} else if ok {
-				c = c.TagSet(v)
+			if voltV, voltOK, voltErr := rt.Field(p, "tag", "string", false, func(voltR *PostTag) string { return voltR.Tag }); voltErr != nil {
+				c = c.errorAdd("cast", voltErr.Error(), "tag")
+			} else if voltOK {
+				c = c.TagSet(voltV)
 			}
 		}
 	}
@@ -741,27 +741,27 @@ func (c PostTagChangeset) Changed(col PostTagColumn) bool {
 
 // Row is the data with the marked values applied (spec §changesets).
 func (c PostTagChangeset) Row() PostTag {
-	r := c.data
+	voltR := c.data
 	if c.set[0] {
-		r.PostID = c.vals.PostID
+		voltR.PostID = c.vals.PostID
 	}
 	if c.set[1] {
-		r.Tag = c.vals.Tag
+		voltR.Tag = c.vals.Tag
 	}
-	return r
+	return voltR
 }
 
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c PostTagChangeset) Params() PostTagParams {
-	var marks []rt.Mark
+	var voltMarks []rt.Mark
 	if c.set[0] {
-		marks = append(marks, rt.Mark{Wire: "post_id", Value: c.vals.PostID})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "post_id", Value: c.vals.PostID})
 	}
 	if c.set[1] {
-		marks = append(marks, rt.Mark{Wire: "tag", Value: c.vals.Tag})
+		voltMarks = append(voltMarks, rt.Mark{Wire: "tag", Value: c.vals.Tag})
 	}
-	return rt.ParamsOf(c.Row(), marks...)
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec
@@ -864,8 +864,8 @@ func (c PingChangeset) Row() Ping {
 // Params is the marked columns of c as a write body, each under its
 // wire name (spec §changesets).
 func (c PingChangeset) Params() PingParams {
-	var marks []rt.Mark
-	return rt.ParamsOf(c.Row(), marks...)
+	var voltMarks []rt.Mark
+	return rt.ParamsOf(c.Row(), voltMarks...)
 }
 
 // ErrorAdd records a field error with check custom on col (spec

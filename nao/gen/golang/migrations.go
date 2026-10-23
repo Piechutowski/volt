@@ -43,7 +43,7 @@ func GenerateMigrations(f *ast.File, info *check.Info, opts Options) ([]byte, er
 	b.WriteString("// Migrate applies every pending migration of Migrations to db (spec\n")
 	b.WriteString("// §migration-tooling). Nothing calls it unless the application does.\n")
 	b.WriteString("func Migrate(ctx context.Context, db *sql.DB) error {\n")
-	b.WriteString("\t_, err := rt.MigrateUp(ctx, db, Migrations)\n\treturn err\n}\n")
+	b.WriteString("\t_, voltErr := rt.MigrateUp(ctx, db, Migrations)\n\treturn voltErr\n}\n")
 	return []byte(b.String()), nil
 }
 

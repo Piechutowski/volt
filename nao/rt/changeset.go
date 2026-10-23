@@ -53,17 +53,6 @@ func (e *Invalid) Error() string {
 
 func (e *Invalid) Unwrap() error { return e.Cause }
 
-// StatusCode is 409 (Conflict) when a unique violation is among the
-// fields and 422 (Unprocessable Content) otherwise.
-func (e *Invalid) StatusCode() int {
-	for _, f := range e.Fields {
-		if f.Check == "unique" {
-			return 409
-		}
-	}
-	return 422
-}
-
 // Detail is the itemized form the volt runtime renders into an error
 // body: the check, its columns, the message. It aliases the same unnamed
 // struct the volt runtime aliases, so Details() satisfies volt's Detailer

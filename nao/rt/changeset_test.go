@@ -27,19 +27,18 @@ func TestRefused(t *testing.T) {
 	cases := []struct {
 		msg, check string
 		columns    []string
-		status     int
 	}{
-		{"UNIQUE constraint failed: users.email", "unique", []string{"email"}, 409},
-		{"UNIQUE constraint failed: tags.site, tags.name", "unique", []string{"site", "name"}, 409},
-		{"NOT NULL constraint failed: users.email", "not_null", []string{"email"}, 422},
-		{"FOREIGN KEY constraint failed", "foreign_key", nil, 422},
-		{"UNIQUE constraint failed: users.email (2067)", "unique", []string{"email"}, 409},
-		{"UNIQUE constraint failed: tags.site, tags.name (2067)", "unique", []string{"site", "name"}, 409},
-		{"NOT NULL constraint failed: users.email (1299)", "not_null", []string{"email"}, 422},
-		{"FOREIGN KEY constraint failed (787)", "foreign_key", nil, 422},
-		{"UNIQUE constraint failed: users.name (x)", "unique", []string{"name (x)"}, 409},
-		{"UNIQUE constraint failed: index 'idx_authors_handle_ci'", "unique", nil, 409},
-		{"UNIQUE constraint failed: index 'idx_a.b,c' (2067)", "unique", nil, 409},
+		{"UNIQUE constraint failed: users.email", "unique", []string{"email"}},
+		{"UNIQUE constraint failed: tags.site, tags.name", "unique", []string{"site", "name"}},
+		{"NOT NULL constraint failed: users.email", "not_null", []string{"email"}},
+		{"FOREIGN KEY constraint failed", "foreign_key", nil},
+		{"UNIQUE constraint failed: users.email (2067)", "unique", []string{"email"}},
+		{"UNIQUE constraint failed: tags.site, tags.name (2067)", "unique", []string{"site", "name"}},
+		{"NOT NULL constraint failed: users.email (1299)", "not_null", []string{"email"}},
+		{"FOREIGN KEY constraint failed (787)", "foreign_key", nil},
+		{"UNIQUE constraint failed: users.name (x)", "unique", []string{"name (x)"}},
+		{"UNIQUE constraint failed: index 'idx_authors_handle_ci'", "unique", nil},
+		{"UNIQUE constraint failed: index 'idx_a.b,c' (2067)", "unique", nil},
 	}
 	for _, tc := range cases {
 		cause := errors.New(tc.msg)
@@ -51,8 +50,8 @@ func TestRefused(t *testing.T) {
 		if !errors.Is(err, cause) {
 			t.Errorf("%q: must unwrap to the driver error", tc.msg)
 		}
-		if len(inv.Fields) != 1 || inv.Fields[0].Check != tc.check || !reflect.DeepEqual(inv.Fields[0].Columns, tc.columns) || inv.StatusCode() != tc.status {
-			t.Errorf("%q → %+v (status %d)", tc.msg, inv.Fields, inv.StatusCode())
+		if len(inv.Fields) != 1 || inv.Fields[0].Check != tc.check || !reflect.DeepEqual(inv.Fields[0].Columns, tc.columns) {
+			t.Errorf("%q → %+v", tc.msg, inv.Fields)
 		}
 		if d := inv.Details(); len(d) != 1 || d[0].Check != tc.check || d[0].Message == "" {
 			t.Errorf("%q: details %+v", tc.msg, d)
@@ -81,9 +80,6 @@ func TestInvalidShape(t *testing.T) {
 		{Check: "required", Columns: []string{"title"}, Message: "title is required"},
 		{Check: "unknown_field", Columns: []string{"titel"}, Message: `unknown field "titel"`},
 	}}
-	if inv.StatusCode() != 422 {
-		t.Errorf("status %d, want 422", inv.StatusCode())
-	}
 	if !strings.Contains(inv.Error(), "title: title is required; titel: unknown field") {
 		t.Errorf("message %q", inv.Error())
 	}
