@@ -495,3 +495,86 @@ func TestCorpusCompiles(t *testing.T) {
 		}
 	}
 }
+
+func TestKeyNamedLikeClientLocalCompiles(t *testing.T) {
+	snippetCompiles(t, "v93_key_named_out")
+}
+
+func snippetCompiles(t *testing.T, name string) {
+	t.Helper()
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(repoRoot, "lang", "conformance", "snippets", "valid", name)
+	dir := t.TempDir()
+	err = filepath.WalkDir(src, func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, _ := filepath.Rel(src, p)
+		if rel == "go.mod" {
+			return nil
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		dst := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(dst, b, 0o644)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gomod := "module corpus\n\ngo 1.27\n\n" +
+		"require github.com/Piechutowski/volt v0.0.0\n\n" +
+		"replace github.com/Piechutowski/volt => " + repoRoot + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pr, err := lang.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diags := lang.Check(pr); diag.HasErrors(diags) {
+		t.Fatalf("%s has errors: %v", name, diags)
+	}
+	for path, pkg := range pr.Packages {
+		write := func(file string, code []byte) {
+			t.Helper()
+			full := filepath.Join(pkg.Dir, file)
+			if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(full, code, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if pkg.HasSchema() {
+			files, err := model.Generate(pkg, model.Options{Source: "package " + path})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, f := range files {
+				write(f.Name, f.Code)
+			}
+		}
+		if pkg.HasRouting() {
+			files, err := Generate(pkg, Options{Source: "package " + path})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for file, code := range files {
+				write(file, code)
+			}
+		}
+	}
+	cmd := exec.Command("go", "vet", "./...")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("%s does not compile:\n%s", name, out)
+	}
+}

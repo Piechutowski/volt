@@ -89,10 +89,10 @@ app/routes.volt:11:10: error: spec/datasets: unknown package qualifier "store" (
 app/routes.volt:12:9: error: spec/scopes-and-routes: handler must be Controller.Action, both exported Go identifiers (§handler-references), found "store.UserList"
 
 ## i117_resources_param_shadow.volt
-app/i117_resources_param_shadow.volt:10:12: error: spec/resources: resources "plots": the key parameter "id" is already a parameter of the enclosing scope; rename it with [param: <name>] (§settings, §route-paths)
+app/i117_resources_param_shadow.volt:10:12: error: spec/resources: resources "posts": the key parameter "id" is already a parameter of the enclosing scope; rename it with [param: <name>] (§settings, §route-paths)
 
 ## i118_resources_default_param_shadow
-app/routes.volt:10:15: error: spec/resources: resources db.plots [default]: the key parameter "id" is already a parameter of the enclosing scope, and the generated CRUD fixes its name; give the scope's parameter another name (§default-handlers, §route-paths)
+app/routes.volt:10:15: error: spec/resources: resources db.posts [default]: the key parameter "id" is already a parameter of the enclosing scope, and the generated CRUD fixes its name; give the scope's parameter another name (§default-handlers, §route-paths)
 
 ## i11_wildcard_in_scope.volt
 app/i11_wildcard_in_scope.volt:4:10: error: spec/scopes-and-routes: a Scope prefix cannot contain a wildcard (§route-paths)
@@ -219,7 +219,7 @@ db/i190_literal_int_overflow.volt:10:40: error: spec/selects-over-groups: litera
 db/i191_literal_float_infinite.volt:10:41: error: spec/selects-over-groups: literal 1e400 does not fit float64, the storage type of column "score" (§predicates)
 
 ## i199_reserved_param_cs
-app/routes.volt:11:15: error: spec/scopes-and-routes: path parameter "cs" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs
+app/routes.volt:11:15: error: spec/scopes-and-routes: path parameter "cs" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx
 
 ## i19_only_and_except.volt
 app/i19_only_and_except.volt:9:34: error: spec/resources: only: and except: cannot be combined (§settings)
@@ -542,18 +542,99 @@ app/i333_event_route_put.volt:6:2: error: spec/routes: put is not a route verb: 
 
 ## i334_scope_prefix_once
 app/routes.volt:9:18: error: spec/scopes-and-routes: unknown parameter type "uuid" (§route-paths); valid: int
-app/routes.volt:15:10: error: spec/scopes-and-routes: path parameter "w" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs
+app/routes.volt:15:10: error: spec/scopes-and-routes: path parameter "w" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx
 app/routes.volt:17:13: error: spec/scopes-and-routes: duplicate path parameter "x" (§route-paths)
 app/routes.volt:22:9: error: spec/scopes-and-routes: duplicate path parameter "n" (§route-paths)
 
 ## i335_route_conflict_root.volt
 app/i335_route_conflict_root.volt:7:2: error: spec/scopes-and-routes: route HEAD /:rest... is ambiguous with the route at app/i335_route_conflict_root.volt:6:2 (GET /): both match some requests and neither is more specific (§route-conflicts)
 
+## i336_scope_setting_twice.volt
+app/i336_scope_setting_twice.volt:9:22: error: spec/settings-lists: setting "pipe" may appear at most once (§settings-lists)
+
+## i337_route_setting_twice.volt
+app/i337_route_setting_twice.volt:6:46: error: spec/settings-lists: setting "name" may appear at most once (§settings-lists)
+
+## i338_resources_setting_twice.volt
+app/i338_resources_setting_twice.volt:10:34: error: spec/settings-lists: setting "only" may appear at most once (§settings-lists)
+
+## i339_dataset_setting_twice.volt
+app/i339_dataset_setting_twice.volt:12:30: error: spec/settings-lists: setting "strip" may appear at most once (§settings-lists)
+
+## i340_select_setting_twice.volt
+app/i340_select_setting_twice.volt:10:44: error: spec/settings-lists: setting "order" may appear at most once (§settings-lists)
+
+## i341_import_lost_entry.volt
+app/i341_import_lost_entry.volt:6:2: error: syntax: expected identifier in import path (§imports), found string "\"fmt\""
+
+## i342_group_lost_member.volt
+app/i342_group_lost_member.volt:10:2: error: syntax: expected identifier in group member (§groups), found string "\"posts\""
+
+## i343_import_recovery_stops_at_paren.volt
+app/i343_import_recovery_stops_at_paren.volt:6:6: error: syntax: expected end of line after import specifier (§imports), found identifier "c"
+
+## i346_scope_settings_next_line.volt
+app/i346_scope_settings_next_line.volt:10:2: error: syntax: a settings list stays on the line of the Scope it modifies, found '[' on the next line (§settings-lists)
+
+## i351_project_twice_in_package
+db/b.volt:3:1: error: spec/project: at most one Project element per package (§project)
+
+## i352_type_takes_client_name
+app/schema.volt:5:6: error: spec/types: Type Client takes the Go name of the generated client type, which gen -o writes beside the models; a declared type is named apart from the names generated code declares (§types)
+app/schema.volt:6:6: error: spec/types: Type NewClient takes the Go name of the generated client constructor, which gen -o writes beside the models; a declared type is named apart from the names generated code declares (§types)
+
+## i353_reserved_param_ctx.volt
+app/i353_reserved_param_ctx.volt:6:9: error: spec/scopes-and-routes: path parameter "ctx" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx
+
+## i354_reserved_param_c.volt
+app/i354_reserved_param_c.volt:6:9: error: spec/scopes-and-routes: path parameter "c" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx
+
+## i355_client_method_runtime_name.volt
+app/i355_client_method_runtime_name.volt:6:2: error: spec/scopes-and-routes: client method "Raw" would take the name of the embedded volt.Client's method Raw (§generated-client); rename the route with [name:] or a scope name
+app/i355_client_method_runtime_name.volt:7:2: error: spec/scopes-and-routes: client method "Client" would take the name of the embedded volt.Client's embedded field Client (§generated-client); rename the route with [name:] or a scope name
+
+## i356_select_takes_getby.volt
+app/i356_select_takes_getby.volt:10:8: error: spec/selects-over-groups: select "get_by_email" mints UserGetByEmail for table "users", which is already the method UserGetByEmail of table "users" (§selects-over-groups)
+
+## i357_select_takes_other_table_list.volt
+app/i357_select_takes_other_table_list.volt:14:8: error: spec/selects-over-groups: select "tag_list" mints UserTagList for table "users", which is already the CRUD method UserTagList of table "user_tags" (§selects-over-groups)
+
+## i358_select_pair_across_tables.volt
+app/i358_select_pair_across_tables.volt:15:8: error: spec/selects-over-groups: select "rows" collides with select "tag_rows": both generate UserTagRows (§selects-over-groups)
+
+## i359_select_takes_queries_method.volt
+app/i359_select_takes_queries_method.volt:9:8: error: spec/selects-over-groups: select "cache" mints WithCache for table "withs", which is already the Queries method WithCache (§selects-over-groups)
+
 ## i35_reserved_param.volt
-app/i35_reserved_param.volt:5:9: error: spec/scopes-and-routes: path parameter "volt" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs
+app/i35_reserved_param.volt:5:9: error: spec/scopes-and-routes: path parameter "volt" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx
+
+## i360_time_column_string_literal.volt
+app/i360_time_column_string_literal.volt:10:36: error: spec/selects-over-groups: column "at" (time.Time) takes no literal: there is no date/time literal and a string is text; compare it with a parameter (§predicates)
+
+## i361_group_name_case.volt
+app/i361_group_name_case.volt:13:14: error: spec/selects-over-groups: unknown select target "Series"; did you mean the group "series"? names are case-sensitive (§groups)
+
+## i362_validator_unexported_signature
+db/schema.volt:10:5: error: spec/validators: validator emailShape must be exported: a validator is part of the package's API, so declare func EmailShape(string) error (§validators)
+
+## i366_param_named_like_select_local.volt
+app/i366_param_named_like_select_local.volt:10:40: error: spec/selects-over-groups: parameter name "rows" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, or a name the generated method uses (ctx, q, rows, err, out, rt, w, r, opts, volt, cs, c) (§predicates)
+app/i366_param_named_like_select_local.volt:11:40: error: spec/selects-over-groups: parameter name "err" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, or a name the generated method uses (ctx, q, rows, err, out, rt, w, r, opts, volt, cs, c) (§predicates)
+app/i366_param_named_like_select_local.volt:12:41: error: spec/selects-over-groups: parameter name "out" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, or a name the generated method uses (ctx, q, rows, err, out, rt, w, r, opts, volt, cs, c) (§predicates)
+app/i366_param_named_like_select_local.volt:13:40: error: spec/selects-over-groups: parameter name "rt" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, or a name the generated method uses (ctx, q, rows, err, out, rt, w, r, opts, volt, cs, c) (§predicates)
+
+## i369_compare_columns_go_type.volt
+app/i369_compare_columns_go_type.volt:11:41: error: spec/selects-over-groups: cannot compare column "hits" (int) with column "score" (float64) (§predicates)
 
 ## i36_reserved_param_w.volt
-app/i36_reserved_param_w.volt:5:9: error: spec/scopes-and-routes: path parameter "w" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs
+app/i36_reserved_param_w.volt:5:9: error: spec/scopes-and-routes: path parameter "w" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx
+
+## i370_comparison_without_column.volt
+app/i370_comparison_without_column.volt:10:8: error: spec/selects-over-groups: select name "Params" collides with the generated CRUD surface (§selects-over-groups)
+app/i370_comparison_without_column.volt:11:38: error: spec/selects-over-groups: a comparison needs a column on one side (§predicates)
+
+## i371_pred_redeclared.volt
+app/i371_pred_redeclared.volt:11:6: error: spec/predicates: predicate "busy" redeclared (§predicates)
 
 ## i37_ambiguous_overlap.volt
 app/i37_ambiguous_overlap.volt:8:2: error: spec/scopes-and-routes: route GET /:y/b is ambiguous with the route at app/i37_ambiguous_overlap.volt:7:2 (GET /a/:x): both match some requests and neither is more specific (§route-conflicts)
@@ -572,7 +653,6 @@ app/i41_spaced_param_type.volt:5:18: error: syntax: parameter type is written ':
 
 ## i43_quoted_import.volt
 app/i43_quoted_import.volt:5:2: error: syntax: expected identifier in import path (§imports), found string "\"db\""
-app/i43_quoted_import.volt:6:1: error: syntax: empty import declaration (§imports)
 
 ## i44_singular_collision.volt
 app/i44_singular_collision.volt:11:2: error: spec/resources: resources "posty": the collection and member reverse-URL helpers are both "Posty", because singularizing "posty" does not change it (§table-resolution); set the singular explicitly, e.g. [singular: <name>]

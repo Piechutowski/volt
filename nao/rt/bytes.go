@@ -8,7 +8,7 @@ import (
 )
 
 // Bytes is a plain []byte as generated code and the runtime bind, scan
-// and render it (spec §columns rule 2): nil and empty are one value,
+// and render it (spec §columns): nil and empty are one value,
 // empty bytes, and a plain []byte is never NULL. Every plain []byte the
 // dynamic layer binds, a Raw argument and an After key among them, binds
 // through Bytes; a declared type stored as []byte binds through its own
@@ -26,13 +26,13 @@ func (b Bytes) Value() (driver.Value, error) {
 
 // Scan reads a value through database/sql's rules into bytes that are
 // never nil, empty bytes a driver hands back as nil among them; NULL is
-// an error, as it is for every NOT NULL column (spec §columns rule 2).
+// an error, as it is for every NOT NULL column (spec §columns).
 func (b *Bytes) Scan(src any) error {
 	return bytesScan((*[]byte)(b), src)
 }
 
 // MarshalJSON writes the bytes as base64, nil as "" like empty bytes
-// (spec §columns rule 2).
+// (spec §columns).
 func (b Bytes) MarshalJSON() ([]byte, error) {
 	if b == nil {
 		b = Bytes{}

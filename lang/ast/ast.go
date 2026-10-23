@@ -324,6 +324,7 @@ func (d *Ref) declNode()               {}
 type RefEndpoint struct {
 	Table   *Ident
 	Columns []*Ident
+	Paren   bool // true if the columns were written as a parenthesized group
 	endPos  token.Position
 }
 

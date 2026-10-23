@@ -1,4 +1,4 @@
-// The volt_migrations.go emitter (spec §migration-tooling rule 2): the
+// The volt_migrations.go emitter (spec §migration-tooling): the
 // package's migrations in their statement form and Migrate, so that a
 // binary migrates its own database without the volt tool.
 package golang
@@ -15,7 +15,7 @@ import (
 )
 
 // GenerateMigrations renders volt_migrations.go for a package that
-// declares migrations (spec §migration-tooling rule 2): Migrations,
+// declares migrations (spec §migration-tooling): Migrations,
 // every migration in name order with its statements in both directions
 // and its flags, and Migrate over rt.MigrateUp. It imports context,
 // database/sql and rt only.
@@ -41,7 +41,7 @@ func GenerateMigrations(f *ast.File, info *check.Info, opts Options) ([]byte, er
 	}
 	b.WriteString("}\n\n")
 	b.WriteString("// Migrate applies every pending migration of Migrations to db (spec\n")
-	b.WriteString("// §migration-tooling rule 2). Nothing calls it unless the application does.\n")
+	b.WriteString("// §migration-tooling). Nothing calls it unless the application does.\n")
 	b.WriteString("func Migrate(ctx context.Context, db *sql.DB) error {\n")
 	b.WriteString("\t_, err := rt.MigrateUp(ctx, db, Migrations)\n\treturn err\n}\n")
 	return []byte(b.String()), nil

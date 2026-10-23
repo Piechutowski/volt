@@ -28,7 +28,7 @@ const renderColumns = `"id", "site", "day", "hits", "score", "flag", "note", "or
 func typed(opts ...rt.Opt[renderModel]) []rt.Opt[renderModel] { return opts }
 
 // TestSelectRenderMatchesTypedHandles is the differential proof of spec
-// §predicates rule 6: every predicate form of the language, lowered by
+// §predicates: every predicate form of the language, lowered by
 // the checker and rendered by the generator, spells the same bytes as
 // the typed handles rendered through the runtime, and binds the Go
 // expressions the text names in placeholder order.

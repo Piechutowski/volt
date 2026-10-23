@@ -654,13 +654,13 @@ func (g *generator) clientEmit() error {
 	}
 	doc := "// Package client calls the routes of package " + g.pkg.Name + " over HTTP\n" +
 		"// (spec §generated-client): one typed method per query route, one raw method per\n" +
-		"// named controller route. It imports the data packages and the volt\n" +
-		"// runtime only, never the server.\n"
+		"// named controller route. It imports the standard library, the data\n" +
+		"// packages and the volt runtime only, never the server.\n"
 	if local {
 		doc = "// Package client calls the routes of package " + g.pkg.Name + " over HTTP\n" +
 			"// (spec §generated-client): one typed method per query route, one raw method per\n" +
 			"// named controller route. It imports package " + g.pkg.Name + " for the row\n" +
-			"// types its routes name, and the volt runtime.\n"
+			"// types its routes name, the standard library and the volt runtime.\n"
 	}
 	ctor := "New"
 	if g.opts.ClientBeside {
@@ -711,7 +711,7 @@ func (g *generator) clientEmit() error {
 			case lang.FromQuery:
 				opts = append(opts, fmt.Sprintf("volt.Query(%q, volt.FormatQuery(%s))", p.Name, p.Name))
 			case lang.FromList:
-				fmt.Fprintf(&body, "\tfor _, v := range %s {\n\t\tq = append(q, volt.Query(%q, volt.FormatQuery(v)))\n\t}\n", p.Name, p.Name)
+				fmt.Fprintf(&body, "\tfor _, voltV := range %s {\n\t\tvoltQ = append(voltQ, volt.Query(%q, volt.FormatQuery(voltV)))\n\t}\n", p.Name, p.Name)
 			case lang.FromBody:
 				arg = p.Name
 			}
@@ -720,8 +720,8 @@ func (g *generator) clientEmit() error {
 		if len(opts) > 0 || body.Len() > 0 {
 			loops := body.String()
 			body.Reset()
-			fmt.Fprintf(&body, "\tq := []volt.URLOption{%s}\n%s", strings.Join(opts, ", "), loops)
-			url = "volt.URL(" + pathExpr(r) + ", q...)"
+			fmt.Fprintf(&body, "\tvoltQ := []volt.URLOption{%s}\n%s", strings.Join(opts, ", "), loops)
+			url = "volt.URL(" + pathExpr(r) + ", voltQ...)"
 		}
 		in := "nil"
 		if arg != "" {
@@ -746,8 +746,8 @@ func (g *generator) clientEmit() error {
 		}
 		g.pf("func (c *Client) %s(ctx context.Context%s) (%s, error) {\n", r.ClientName, sig.String(), result)
 		g.pf("%s", body.String())
-		g.pf("\tvar out %s\n", result)
-		g.pf("\terr := c.Do(ctx, %q, %s, %s, &out)\n\treturn out, err\n}\n\n", method, url, in)
+		g.pf("\tvar voltOut %s\n", result)
+		g.pf("\tvoltErr := c.Do(ctx, %q, %s, %s, &voltOut)\n\treturn voltOut, voltErr\n}\n\n", method, url, in)
 	}
 	return nil
 }

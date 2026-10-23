@@ -45,12 +45,18 @@ func Seg(s string) string {
 // SegInt renders an integer path parameter.
 func SegInt(v int) string { return strconv.Itoa(v) }
 
-// SegWild escapes a rest-of-path value, preserving its '/' separators.
-// Each element gets Seg's treatment, dot segments included.
+// SegWild escapes a rest-of-path value, preserving its '/' separators
+// but dropping its empty elements, a trailing one aside: the clean form
+// ServeMux would redirect to (spec §route-names-and-reverse-urls). Each
+// element gets Seg's treatment, dot segments included.
 func SegWild(s string) string {
 	parts := strings.Split(s, "/")
+	kept := make([]string, 0, len(parts))
 	for i, p := range parts {
-		parts[i] = Seg(p)
+		if p == "" && i < len(parts)-1 {
+			continue
+		}
+		kept = append(kept, Seg(p))
 	}
-	return strings.Join(parts, "/")
+	return strings.Join(kept, "/")
 }

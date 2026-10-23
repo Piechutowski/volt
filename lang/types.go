@@ -53,6 +53,8 @@ func (c *checker) typesRouterCheck(pkg *Package) {
 		"Controllers": "the generated Controllers manifest",
 		"NewRouter":   "the generated router constructor",
 		"Table":       "the generated route table",
+		"Client":      "the generated client type, which gen -o writes beside the models",
+		"NewClient":   "the generated client constructor, which gen -o writes beside the models",
 	}
 	for name := range pkg.Controllers {
 		router[name+"Controller"] = "the generated controller interface of " + name

@@ -312,7 +312,7 @@ one file in `vet/` plus one testdata file.
 | Candidate | What it would report | Why deferred |
 |---|---|---|
 | `orphantable` | tables with no relationships at all | too noisy: lookup/config tables are legitimately standalone |
-| `nullablefk` | nullable FK columns, i.e. zero-or-many cardinality (spec §nullability-and-cardinality) | that cardinality is a valid modeling choice, not a smell |
+| `nullablefk` | nullable FK columns, i.e. optional references (spec §nullability-and-cardinality) | an optional reference is a valid modeling choice, not a smell |
 | `recordsdupkey` | duplicate primary-key values across record rows | belongs in `check` beside record value typing (§records-sample-data) |
 | `sqlkeyword` | names that are reserved words in common SQL dialects (`order`, `user`) | needs per-dialect wordlists and a target-dialect setting |
 | `namingstyle` | mixed naming conventions (snake_case vs camelCase) | pure style; needs configuration machinery first |

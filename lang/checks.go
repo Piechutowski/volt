@@ -115,6 +115,31 @@ func exportedName(s string) bool {
 	return false
 }
 
+func (l *lowering) validatorSig(name string, v *ast.Validator) string {
+	if l.fieldsErr != nil {
+		return "func " + name
+	}
+	types := make([]string, 0, len(v.Args))
+	for _, a := range v.Args {
+		cd := l.ti.Column(a.Name())
+		if cd == nil || !cd.Type.Known() {
+			return "func " + name
+		}
+		found := false
+		for _, f := range l.fields {
+			if f.Col == a.Name() {
+				types = append(types, f.Type)
+				found = true
+				break
+			}
+		}
+		if !found {
+			return "func " + name
+		}
+	}
+	return "func " + name + "(" + strings.Join(types, ", ") + ") error"
+}
+
 func (l *lowering) validatorSpec(v *ast.Validator) (golang.ValidatorSpec, bool) {
 	name := v.Ref.Base()
 	if q := v.Ref.Qualifier(); q != "" {
@@ -126,7 +151,7 @@ func (l *lowering) validatorSpec(v *ast.Validator) (golang.ValidatorSpec, bool) 
 		return golang.ValidatorSpec{}, false
 	}
 	if !exportedName(name) {
-		l.errorf(v.Ref.Pos(), "validator %s must be exported: a validator is part of the package's API — name it %s (§validators)", name, strings.ToUpper(name[:1])+name[1:])
+		l.errorf(v.Ref.Pos(), "validator %s must be exported: a validator is part of the package's API, so declare %s (§validators)", name, l.validatorSig(strings.ToUpper(name[:1])+name[1:], v))
 		return golang.ValidatorSpec{}, false
 	}
 	if l.fieldsErr != nil {

@@ -1,7 +1,7 @@
 // Groups, predicates and selects (docs/spec.md §groups to §selects-over-groups): resolution,
 // the column-agreement rule, the typed closed expression language, and
 // the lowering to the runtime's predicate trees, which the one renderer
-// turns into the generated statements (§predicates rule 6).
+// turns into the generated statements (§predicates).
 package lang
 
 import (
@@ -19,7 +19,7 @@ import (
 )
 
 // GroupInfo is one resolved Group (§groups): its declaration and member
-// tables in first-addition order.
+// tables in the order of their last addition.
 type GroupInfo struct {
 	Decl    *ast.Group
 	Members []*check.TableInfo
@@ -33,7 +33,7 @@ type SelectParam struct {
 }
 
 // SelectInfo is one checked Select (§selects-over-groups), lowered to the
-// runtime's trees (§predicates rule 6), which the generator renders with
+// runtime's trees (§predicates), which the generator renders with
 // each member's table and columns. The agreement rule
 // (§selects-over-groups) is what makes one tree serve every member.
 type SelectInfo struct {
@@ -112,15 +112,20 @@ func (c *checker) dataQueries(pkg *Package) {
 	for _, sel := range selects {
 		if si := c.selectCheckMemo(sel, info, minted, memo); si != nil {
 			for _, m := range si.Members {
-				key := m.Key + "." + si.MethodSuffix
-				if prev, dup := seen[key]; dup {
+				method := pkg.modelOf(m) + si.MethodSuffix
+				if what, dup := pkg.plan.QueryName(method); dup {
 					c.errorf(sel.Name.Pos(), "selects-over-groups",
-						"select %q collides with select %q on table %q — both generate %s%s (§selects-over-groups)",
-						sel.Name.Name(), prev.Name.Name(), m.Decl.Name.Name(),
-						modelOrBase(m), si.MethodSuffix)
+						"select %q mints %s for table %q, which is already %s (§selects-over-groups)",
+						sel.Name.Name(), method, m.Decl.Name.Name(), what)
 					break
 				}
-				seen[key] = sel
+				if prev, dup := seen[method]; dup {
+					c.errorf(sel.Name.Pos(), "selects-over-groups",
+						"select %q collides with select %q: both generate %s (§selects-over-groups)",
+						sel.Name.Name(), prev.Name.Name(), method)
+					break
+				}
+				seen[method] = sel
 			}
 			pkg.Selects = append(pkg.Selects, si)
 		}
@@ -293,12 +298,21 @@ func (p *Package) selectIndex() {
 	for _, si := range p.Selects {
 		p.selectByName[si.Decl.Name.Name()] = si
 		for _, m := range si.Members {
-			name := modelOrBase(m) + si.MethodSuffix
+			name := p.modelOf(m) + si.MethodSuffix
 			if _, taken := p.selectByMethod[name]; !taken {
 				p.selectByMethod[name] = selectMember{si, m}
 			}
 		}
 	}
+}
+
+func (p *Package) modelOf(t *check.TableInfo) string {
+	if p.plan != nil {
+		if model, _, err := p.plan.CRUDMethods(t.Key); err == nil {
+			return model
+		}
+	}
+	return modelOrBase(t)
 }
 
 func modelOrBase(t *check.TableInfo) string {
@@ -370,7 +384,7 @@ func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *c
 			c.nameMiss(id, info, "groups", "group term")
 		}
 	}
-	if len(g.Members) == 0 {
+	if len(g.Members) == 0 && !d.Incomplete {
 		c.errorf(d.Name.Pos(), "groups", "group %q has no members (§groups)", name)
 	}
 	c.pkg.Groups[name] = g
@@ -382,6 +396,12 @@ func (c *checker) nameMiss(id *ast.Ident, info *check.Info, section, what string
 	for _, ti := range info.Tables {
 		if strings.EqualFold(ti.Decl.Name.Name(), want) {
 			c.errorf(id.Pos(), section, "unknown %s %q; did you mean %q? names are case-sensitive (§groups)", what, want, ti.Decl.Name.Name())
+			return
+		}
+	}
+	for _, d := range c.pkg.merged.Decls {
+		if g, ok := d.(*ast.Group); ok && strings.EqualFold(g.Name.Name(), want) {
+			c.errorf(id.Pos(), section, "unknown %s %q; did you mean the group %q? names are case-sensitive (§groups)", what, want, g.Name.Name())
 			return
 		}
 	}
@@ -720,7 +740,12 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 		return nil
 	}
 	var terms []rt.GenOrder
+	repeated, dupDiags := settingsRepeated(sel.Settings, "order")
+	l.diags = append(l.diags, dupDiags...)
 	for _, s := range sel.Settings.Settings {
+		if repeated[s] {
+			continue
+		}
 		switch s.Name {
 		case "order":
 			list, ok := s.Value.(*ast.IdentList)
@@ -888,7 +913,7 @@ func (e *selectEnv) paramBind(p *ast.Param, goType string) string {
 		return name
 	}
 	if !goParamOK(name) {
-		e.errorf(p.Name.Pos(), "parameter name %q does not work as a Go parameter (§predicates)", name)
+		e.errorf(p.Name.Pos(), "parameter name %q does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, or a name the generated method uses (ctx, q, rows, err, out, rt, w, r, opts, volt, cs, c) (§predicates)", name)
 		return name
 	}
 	sp := SelectParam{GoName: name, GoType: goType}
@@ -898,10 +923,14 @@ func (e *selectEnv) paramBind(p *ast.Param, goType string) string {
 }
 
 func goParamOK(name string) bool {
-	if name == "" || goKeywords[name] || reservedParamNames[name] || name == "ctx" || name == "q" {
+	if name == "" || goKeywords[name] || reservedParamNames[name] || selectLocalNames[name] {
 		return false
 	}
 	return goIdentOK(name)
+}
+
+var selectLocalNames = map[string]bool{
+	"q": true, "rows": true, "err": true, "out": true, "rt": true,
 }
 
 func (e *selectEnv) exprLower(x ast.PredExpr, preds map[string]bool) rt.GenPred {
@@ -1064,7 +1093,11 @@ func (e *selectEnv) litSlot(l *ast.Lit, b *colBinding) (string, bool) {
 		}
 		return slot, true
 	case token.STRING:
-		if lit != classText && lit != classTime {
+		if lit == classTime {
+			e.errorf(l.Pos(), "column %q (%s) takes no literal: there is no date/time literal and a string is text; compare it with a parameter (§predicates)", b.name, b.goType)
+			return "", false
+		}
+		if lit != classText {
 			e.errorf(l.Pos(), "column %q (%s) cannot be compared with the string %q (§predicates)", b.name, b.goType, l.Tok.Val)
 			return "", false
 		}

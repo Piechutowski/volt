@@ -33,10 +33,12 @@ func (p *parser) importDecl() *ast.ImportDecl {
 	d := &ast.ImportDecl{ImportPos: p.next().Pos}
 	p.expect(token.LPAREN, "import declaration (§imports)")
 	for !p.at(token.RPAREN) && !p.at(token.RBRACE) && !p.at(token.EOF) {
-		p.item(func() { d.Specs = append(d.Specs, p.importSpec()) })
+		if p.itemTo(func() { d.Specs = append(d.Specs, p.importSpec()) }, token.RPAREN, token.RBRACE) {
+			d.Incomplete = true
+		}
 	}
 	d.Rparen = p.expect(token.RPAREN, "import declaration (§imports)").End()
-	if len(d.Specs) == 0 {
+	if len(d.Specs) == 0 && !d.Incomplete {
 		p.errorf(p.toks[p.pos-1], "empty import declaration (§imports)")
 	}
 	return d
@@ -108,9 +110,7 @@ func (p *parser) goRef(ctx string) *ast.GoRef {
 func (p *parser) scope() *ast.Scope {
 	d := &ast.Scope{ScopePos: p.kwTake("Scope").Pos}
 	d.Path = p.routePath()
-	if p.at(token.LBRACKET) {
-		d.Settings = p.settingList()
-	}
+	d.Settings = p.settingsAt("Scope")
 	p.expect(token.LBRACE, "Scope (§scopes-and-routes)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		if item := p.scopeItem(); item != nil {
@@ -282,13 +282,16 @@ func (p *parser) groupDecl() *ast.Group {
 	case p.at(token.LBRACE):
 		p.next()
 		for !p.at(token.RBRACE) && !p.at(token.EOF) {
-			p.item(func() {
+			dropped := p.item(func() {
 				name := p.ident("group member (§groups)")
 				d.Terms = append(d.Terms, &ast.GroupTerm{Names: []*ast.Ident{name}})
 				if !p.at(token.RBRACE) && !p.cur().NLBefore {
 					p.fail(p.cur(), "group members are one per line (§groups)")
 				}
 			})
+			if dropped {
+				d.Incomplete = true
+			}
 		}
 		d.EndPos = p.expect(token.RBRACE, "group declaration (§groups)").End()
 		p.endOfLine("group declaration (§groups)")

@@ -142,10 +142,23 @@ var Migrations = []rt.Migration{
 			`ALTER TABLE daily_hits DROP COLUMN label`,
 		},
 	},
+	{
+		Name: "0007__post_flags",
+		Up: []string{
+			`CREATE TABLE post_flags (
+  id INTEGER PRIMARY KEY,
+  reviewed TEXT NOT NULL,
+  approved TEXT
+)`,
+		},
+		Down: []string{
+			`DROP TABLE post_flags`,
+		},
+	},
 }
 
 // Migrate applies every pending migration of Migrations to db (spec
-// §migration-tooling rule 2). Nothing calls it unless the application does.
+// §migration-tooling). Nothing calls it unless the application does.
 func Migrate(ctx context.Context, db *sql.DB) error {
 	_, err := rt.MigrateUp(ctx, db, Migrations)
 	return err

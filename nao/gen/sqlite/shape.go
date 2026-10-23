@@ -43,7 +43,7 @@ func TypeVolt(sqlType string) string {
 func DefaultSQL(v ast.Node) (string, error) { return defaultSQL(v) }
 
 // TableDDL renders the CREATE TABLE statement of a shape body, without
-// the trailing semicolon (spec §migrations rules 5, 6 and 9): the
+// the trailing semicolon (spec §migrations): the
 // columns, the primary key of its pk columns in order, and a foreign
 // key per inline ref: with its delete: and update: actions
 // (§relationships-ref), as the schema's Table decides them.
@@ -82,8 +82,8 @@ func TableDDL(table string, body []ast.TableItem) (string, error) {
 }
 
 // IndexesDDL renders the CREATE INDEX statements of a shape body,
-// without trailing semicolons, named for table (spec §migrations rules
-// 5, 9 and 10): the index of every column that carries unique or
+// without trailing semicolons, named for table (spec §migrations):
+// the index of every column that carries unique or
 // index, then the indexes of its Indexes block, as the schema's Table
 // lowers them.
 func IndexesDDL(table string, body []ast.TableItem) ([]string, error) {
@@ -101,7 +101,7 @@ func IndexesDDL(table string, body []ast.TableItem) ([]string, error) {
 }
 
 // ColumnDDL renders the definition of a column added by ALTER TABLE
-// ADD COLUMN (spec §migrations rule 8): its type, NOT NULL, DEFAULT
+// ADD COLUMN (spec §migrations): its type, NOT NULL, DEFAULT
 // and REFERENCES with its delete: and update: actions. A unique or
 // index setting is the column's CREATE INDEX, which the caller writes
 // after the ADD COLUMN, since SQLite takes no UNIQUE here.
@@ -140,7 +140,7 @@ func refEndpoint(col *ast.Column) *ast.RefEndpoint {
 
 // referenceSQL renders the referenced table and columns of a ref: with
 // the ON DELETE and ON UPDATE clauses of the column's delete: and
-// update: settings (spec §migrations rule 4, §relationships-ref).
+// update: settings (spec §migrations, §relationships-ref).
 func referenceSQL(col *ast.Column, ep *ast.RefEndpoint) string {
 	out := identQuote(ep.Table.Name()) + " (" + quotedJoin(identNames(ep.Columns)) + ")"
 	if a := actionSQL(col.Settings, "delete"); a != "" {

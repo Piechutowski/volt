@@ -17,13 +17,13 @@ import (
 )
 
 // Lower renders every migration of info in both directions, in name
-// order (spec §migrations rules 5 to 13): the up statements as written,
+// order (spec §migrations): the up statements as written,
 // the down statements as the down block or the inverses of a flat body
 // in reverse order, nil when the migration is irreversible. It has no
 // database: the shape of a table follows from the migrations alone, so
 // a rebuild of a table no create table of theirs made reads every
 // column of its body from the old table, and a column the table lacks
-// is SQLite's error when the fold runs (§the-fold rule 4).
+// is SQLite's error when the fold runs (§the-fold).
 func Lower(info *check.Info) ([]rt.Migration, error) {
 	l := &lowerer{tables: map[string][]string{}}
 	out := make([]rt.Migration, 0, len(info.Migrations))
@@ -39,7 +39,7 @@ func Lower(info *check.Info) ([]rt.Migration, error) {
 
 // lowerer follows the column names of every table the migrations
 // created, in name order, so that a rebuild knows which of its columns
-// have an old column to read (spec §migrations rule 9).
+// have an old column to read (spec §migrations).
 type lowerer struct {
 	tables map[string][]string
 }
@@ -81,7 +81,7 @@ func (l *lowerer) migration(mi *check.MigrationInfo) (rt.Migration, error) {
 
 // bracketNeeded reports whether the operations hold a rebuild table or
 // a drop table, which the foreign-key bracket surrounds unless
-// no_transaction disables it (spec §migrations rule 13).
+// no_transaction disables it (spec §migrations).
 func bracketNeeded(ops []ast.Operation) bool {
 	for _, op := range ops {
 		switch op.(type) {
@@ -234,7 +234,7 @@ func (l *lowerer) rebuild(op *ast.RebuildTable) ([]string, error) {
 }
 
 // inverse renders the statements that undo one operation of a flat
-// body (spec §migrations rule 12).
+// body (spec §migrations).
 func inverse(op ast.Operation) ([]string, error) {
 	switch op := op.(type) {
 	case *ast.CreateTable:
@@ -307,7 +307,7 @@ func shapeCreate(table string, body []ast.TableItem) ([]string, error) {
 
 // columnAdd lowers an add item: ADD COLUMN, then the CREATE [UNIQUE]
 // INDEX of a column that carries unique or index, which SQLite's ADD
-// COLUMN takes no part of (spec §migrations rule 8).
+// COLUMN takes no part of (spec §migrations).
 func columnAdd(table string, col *ast.Column) ([]string, error) {
 	def, err := sqlite.ColumnDDL(col)
 	if err != nil {
@@ -378,7 +378,7 @@ func contains(names []string, name string) bool {
 }
 
 // SQLText renders migrations for review as volt migration sql prints
-// them (spec §migration-tooling rule 1): each name, its up statements,
+// them (spec §migration-tooling): each name, its up statements,
 // then its down statements, or "-- irreversible".
 func SQLText(ms []rt.Migration) string {
 	var b strings.Builder

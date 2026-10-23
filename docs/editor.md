@@ -379,9 +379,9 @@ How to audit that the three components implement
 | LSP behaves per spec, interactively | a scripted stdio JSON-RPC session against the real server process, replaying keystrokes that break and fix a project file, one of them as a ranged change, and asking for hover, definition, completion and symbols; every reply and published diagnostic pinned as a golden | `cmd/volt/lsp_session_test.go` and `testdata/lsp_session.golden` via `go test ./cmd/volt/...`; refresh with `-update` after reading the diff |
 | A keystroke costs what the budget says | the whole in-process path of one keystroke inside one table of a one-file project, didChange to publish, and the document's own front end alone; compare against the last report of `scripts/perf.go`. The bytes the keystroke's three parts allocate (the document's pass, the project analysis, the publish) are pinned exactly, within ten percent, hardware-neutral | `go test ./lsp -run '^$' -bench 'BenchmarkKeystroke|BenchmarkDocumentUpdateLocal' -benchmem`; `go test ./lsp -run TestKeystrokeAllocationBudget -v` |
 
-The cross-check against the implementation Part I descends from
-(spec §license-and-provenance) was retired at zero disagreements;
-the corpus verdicts it pinned are the surviving record.
+Nothing checks the corpus against the DBML implementation Part I
+descends from (spec §license-and-provenance); the conformance corpus
+alone is the record.
 
 When adding a construct, every row above must gain its case — §program-structure's
 recipes say where. A construct that exists in code but has no row here

@@ -8,7 +8,7 @@ package itest
 import (
 	"database/sql"
 	"database/sql/driver"
-	"github.com/Piechutowski/volt/nao/itest/pay"
+	pay "github.com/Piechutowski/volt/nao/itest/pay"
 	"github.com/Piechutowski/volt/nao/rt"
 	"time"
 )
@@ -18,6 +18,8 @@ var (
 	_ driver.Valuer = *new(Money)
 	_ sql.Scanner   = (*pay.Cents)(nil)
 	_ driver.Valuer = *new(pay.Cents)
+	_ sql.Scanner   = (*pay.YesNo)(nil)
+	_ driver.Valuer = *new(pay.YesNo)
 )
 
 // User is a row of the users table.
@@ -1931,4 +1933,160 @@ func (c InviteChangeset) Err() error {
 		return nil
 	}
 	return &rt.Invalid{Model: "Invite", Fields: c.Errors()}
+}
+
+// PostFlag is a row of the post_flags table.
+type PostFlag struct {
+	ID       int                `db:"id" json:"id"`
+	Reviewed pay.YesNo          `db:"reviewed" json:"reviewed"`
+	Approved rt.Null[pay.YesNo] `db:"approved" json:"approved"`
+}
+
+// PostFlagColumn is a column handle of PostFlag, the element of a Cast allow list
+// (spec §changesets).
+type PostFlagColumn = rt.ColumnOf[PostFlag]
+
+// PostFlagParams is a post_flags write body as the wire carries it (spec §changesets).
+type PostFlagParams = rt.Params[PostFlag]
+
+// Typed column handles of PostFlag (spec §changesets): the Cast allow list of
+// a changeset, and the inert predicate, order and assignment builders
+// of the dynamic query layer. A predicate built here can only enter PostFlag
+// queries; mixing models is a compile error.
+var (
+	PostFlagID       = rt.Column[PostFlag, int]{Name: "id"}
+	PostFlagReviewed = rt.Column[PostFlag, pay.YesNo]{Name: "reviewed"}
+	PostFlagApproved = rt.NullColumn[PostFlag, pay.YesNo]{Column: rt.Column[PostFlag, pay.YesNo]{Name: "approved"}}
+)
+
+// PostFlagChangeset carries a post_flags row, the changes proposed to it and the
+// errors found so far (spec §changesets). It is a value: every method
+// returns a new changeset and leaves its receiver as it was.
+type PostFlagChangeset struct {
+	data  PostFlag
+	vals  PostFlag
+	row   bool
+	set   [3]bool
+	errs  []rt.FieldError
+	valid []rt.FieldError
+}
+
+// PostFlagNew starts a changeset for a post_flags row to create, the schema's literal
+// defaults in place (spec §changesets).
+func PostFlagNew() PostFlagChangeset { return PostFlagChangeset{} }
+
+// Changeset starts a changeset for an update of r, nothing set (spec
+// §changesets).
+func (r PostFlag) Changeset() PostFlagChangeset { return PostFlagChangeset{data: r, row: true} }
+
+// From marks every data column of r but the auto-increment key (spec
+// §changesets).
+func (c PostFlagChangeset) From(r PostFlag) PostFlagChangeset {
+	c = c.ReviewedSet(r.Reviewed)
+	c = c.ApprovedSet(r.Approved)
+	return c
+}
+
+// ReviewedSet sets reviewed and marks it (spec §changesets).
+func (c PostFlagChangeset) ReviewedSet(v pay.YesNo) PostFlagChangeset {
+	c.vals.Reviewed, c.set[1] = v, true
+	return c
+}
+
+// ApprovedSet sets approved and marks it; an invalid rt.Null sets NULL (spec
+// §changesets).
+func (c PostFlagChangeset) ApprovedSet(v rt.Null[pay.YesNo]) PostFlagChangeset {
+	c.vals.Approved, c.set[2] = v, true
+	return c
+}
+
+// Cast sets every column of allow that p carries, recording a cast
+// error for a value that does not convert and an unknown_field error
+// for a key that names no column (spec §changesets).
+func (c PostFlagChangeset) Cast(p PostFlagParams, allow ...PostFlagColumn) PostFlagChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, "id", "reviewed", "approved")...)
+	for _, col := range allow {
+		switch col.ColumnName() {
+		case "reviewed":
+			if v, ok, err := rt.Field(p, "reviewed", "pay.YesNo", false, func(r *PostFlag) pay.YesNo { return r.Reviewed }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "reviewed")
+			} else if ok {
+				c = c.ReviewedSet(v)
+			}
+		case "approved":
+			if v, ok, err := rt.Field(p, "approved", "pay.YesNo", true, func(r *PostFlag) rt.Null[pay.YesNo] { return r.Approved }); err != nil {
+				c = c.errorAdd("cast", err.Error(), "approved")
+			} else if ok {
+				c = c.ApprovedSet(v)
+			}
+		}
+	}
+	return c
+}
+
+// Changed reports whether col is marked (spec §changesets).
+func (c PostFlagChangeset) Changed(col PostFlagColumn) bool {
+	switch col.ColumnName() {
+	case "id":
+		return c.set[0]
+	case "reviewed":
+		return c.set[1]
+	case "approved":
+		return c.set[2]
+	}
+	return false
+}
+
+// Row is the data with the marked values applied (spec §changesets).
+func (c PostFlagChangeset) Row() PostFlag {
+	r := c.data
+	if c.set[1] {
+		r.Reviewed = c.vals.Reviewed
+	}
+	if c.set[2] {
+		r.Approved = c.vals.Approved
+	}
+	return r
+}
+
+// Params is the marked columns of c as a write body, each under its
+// wire name (spec §changesets).
+func (c PostFlagChangeset) Params() PostFlagParams {
+	var marks []rt.Mark
+	if c.set[1] {
+		marks = append(marks, rt.Mark{Wire: "reviewed", Value: c.vals.Reviewed})
+	}
+	if c.set[2] {
+		marks = append(marks, rt.Mark{Wire: "approved", Value: c.vals.Approved})
+	}
+	return rt.ParamsOf(c.Row(), marks...)
+}
+
+// ErrorAdd records a field error with check custom on col (spec
+// §changesets).
+func (c PostFlagChangeset) ErrorAdd(col PostFlagColumn, msg string) PostFlagChangeset {
+	return c.errorAdd("custom", msg, col.ColumnName())
+}
+
+func (c PostFlagChangeset) errorAdd(check, msg string, cols ...string) PostFlagChangeset {
+	c.errs = rt.FieldErrorsAppend(c.errs, rt.FieldError{Check: check, Columns: cols, Message: msg})
+	return c
+}
+
+// Errors lists every field error recorded so far (spec §changesets): casts
+// and custom errors first, then the last Validate's findings.
+func (c PostFlagChangeset) Errors() []rt.FieldError {
+	return rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)
+}
+
+// Valid reports whether no field error was recorded (spec §changesets).
+func (c PostFlagChangeset) Valid() bool { return len(c.errs) == 0 && len(c.valid) == 0 }
+
+// Err is nil when c is valid and otherwise the *rt.Invalid carrying its
+// field errors (spec §changesets).
+func (c PostFlagChangeset) Err() error {
+	if c.Valid() {
+		return nil
+	}
+	return &rt.Invalid{Model: "PostFlag", Fields: c.Errors()}
 }

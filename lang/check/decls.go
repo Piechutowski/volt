@@ -4,7 +4,6 @@ package check
 
 import (
 	"github.com/Piechutowski/volt/lang/ast"
-	"github.com/Piechutowski/volt/lang/token"
 )
 
 func (c *checker) declsCheck(f *ast.File) {
@@ -14,10 +13,10 @@ func (c *checker) declsCheck(f *ast.File) {
 			c.settingsCheck(d.Settings, "project", projectSettings)
 		case *ast.Table:
 			if ti := c.info.byName[d.Name.Name()]; ti == nil || ti.Decl != d {
-				c.tableBodyCheck(d.Pos(), d.Name.Name(), d.Settings, d.Body, d.Incomplete, true)
+				c.tableBodyCheck(d.Name.Name(), d.Settings, d.Body, true)
 			}
 		case *ast.TablePartial:
-			c.tableBodyCheck(d.Pos(), d.Name.Name(), nil, d.Body, d.Incomplete, false)
+			c.tableBodyCheck(d.Name.Name(), nil, d.Body, false)
 		case *ast.Ref:
 			c.refSettingsCheck(d.Settings)
 			c.endpointArityCheck(d.Left, d.Right)
@@ -33,11 +32,11 @@ func (c *checker) declsCheck(f *ast.File) {
 	}
 }
 
-func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.SettingList, body []ast.TableItem, incomplete, isTable bool) {
+func (c *checker) tableBodyCheck(name string, settings *ast.SettingList, body []ast.TableItem, isTable bool) {
 	c.settingsCheck(settings, "table", tableSettings)
 
 	columns := map[string]bool{}
-	nCols, nInject, nRecords := 0, 0, 0
+	nRecords := 0
 	for _, item := range body {
 		switch item := item.(type) {
 		case *ast.Column:
@@ -46,12 +45,10 @@ func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.S
 				c.errorf(item.Pos(), "namespaces-and-uniqueness", "duplicate column name %q", item.Name.Name())
 			}
 			columns[item.Name.Name()] = true
-			nCols++
 		case *ast.PartialRef:
 			if !isTable {
 				c.errorf(item.Pos(), "tablepartial", "partial injection is not allowed inside TablePartial")
 			}
-			nInject++
 		case *ast.IndexesBlock:
 			for _, ix := range item.Indexes {
 				c.settingsCheck(ix.Settings, "indexes", indexSettings)
@@ -68,9 +65,6 @@ func (c *checker) tableBodyCheck(at token.Position, name string, settings *ast.S
 			nRecords++
 			c.recordsCheck(item, false)
 		}
-	}
-	if isTable && nCols == 0 && nInject == 0 && !incomplete {
-		c.errorf(at, "table", "table %q must contain at least one column or partial injection", name)
 	}
 	if nRecords > 1 {
 		c.errorf(body[0].Pos(), "records-sample-data", "at most one Records block per table (§records-sample-data)")

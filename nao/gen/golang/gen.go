@@ -409,7 +409,7 @@ func (t *tableModel) defaultsGo() string {
 }
 
 // defaultGo renders the literal default a <Model>New seeds for one column
-// (spec §changesets rule 2): a Go constant of the column's type, wrapped
+// (spec §changesets): a Go constant of the column's type, wrapped
 // in rt.Some when nullable, converted to a kinded declared type there so
 // the wrapper takes the column's type. A zero literal on a non-nullable
 // column is the zero value and needs no seed; on a nullable column it is

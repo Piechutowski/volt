@@ -88,3 +88,9 @@ CREATE TABLE invites (
   FOREIGN KEY (user_email) REFERENCES users (email)
 );
 CREATE UNIQUE INDEX idx_invites_code ON invites (code);
+
+CREATE TABLE post_flags (
+  id INTEGER PRIMARY KEY,
+  reviewed TEXT NOT NULL,
+  approved TEXT
+);

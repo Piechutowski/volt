@@ -252,7 +252,7 @@ func TestSpecGrammarSentencesParse(t *testing.T) {
 	t.Logf("%d sentences over %d rules", len(sentences), len(byRule))
 }
 
-func specFrontEnd(t *testing.T) func(text string) bool {
+func specFrontEnd(t *testing.T) func(text string) map[string]bool {
 	t.Helper()
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, ModFile), []byte("module corpus\n"), 0o644); err != nil {
@@ -266,22 +266,37 @@ func specFrontEnd(t *testing.T) func(text string) bool {
 	if err := os.WriteFile(path, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return func(text string) bool {
+	keys := func(diags []diag.Diagnostic) map[string]bool {
+		set := make(map[string]bool, len(diags))
+		for _, d := range diags {
+			set[d.Code+": "+d.Msg] = true
+		}
+		return set
+	}
+	return func(text string) map[string]bool {
 		if _, diags := parser.ParseFile(path, text); len(diags) > 0 {
-			return false
+			return keys(diags)
 		}
 		pr, err := LoadOverlay(root, map[string]string{path: text})
 		if err != nil {
-			return false
+			return map[string]bool{"load: " + err.Error(): true}
 		}
-		return !diag.HasErrors(Check(pr))
+		var errs []diag.Diagnostic
+		for _, d := range Check(pr) {
+			if d.Severity == diag.Error {
+				errs = append(errs, d)
+			}
+		}
+		return keys(errs)
 	}
 }
 
 // Every text one token away from a derived sentence (a token dropped,
 // a token inserted, two adjacent tokens exchanged) is decided the same
 // way by the grammar and by the front end: in the grammar, the parser
-// accepts it; outside, the front end rejects it.
+// accepts it; outside, the front end reports an error it does not
+// report for the sentence the text came from. A sentence without a
+// package clause gets one, so that the project pass judges it.
 func TestSpecGrammarNeighboursAgreeWithTheFrontEnd(t *testing.T) {
 	l, sentences := specSentences(t)
 	front := specFrontEnd(t)
@@ -290,6 +305,12 @@ func TestSpecGrammarNeighboursAgreeWithTheFrontEnd(t *testing.T) {
 	disagreements := 0
 	checked := 0
 	for _, s := range sentences {
+		base := ebnf.Text(s.Pieces)
+		prefix := ""
+		if !pkgClauseRE.MatchString(base) {
+			prefix = "package app\n"
+		}
+		var baseDiags map[string]bool
 		var near []string
 		near = append(near, ebnf.Deletions(s.Pieces)...)
 		near = append(near, ebnf.Insertions(s.Pieces, inserted)...)
@@ -308,9 +329,21 @@ func TestSpecGrammarNeighboursAgreeWithTheFrontEnd(t *testing.T) {
 					}
 					disagreements++
 				}
-			} else if front(text) {
+				continue
+			}
+			if baseDiags == nil {
+				baseDiags = front(prefix + base)
+			}
+			fresh := false
+			for k := range front(prefix + text) {
+				if !baseDiags[k] {
+					fresh = true
+					break
+				}
+			}
+			if !fresh {
 				if disagreements < 60 {
-					t.Errorf("outside the grammar, accepted by the front end: %q (from a sentence of %s)", text, s.Rule)
+					t.Errorf("outside the grammar, accepted by the front end: %q (from a sentence of %s, %q)", text, s.Rule, base)
 				}
 				disagreements++
 			}

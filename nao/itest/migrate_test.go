@@ -10,7 +10,7 @@ import (
 )
 
 // TestMigrateBuildsTheSchema builds a fresh database through the
-// generated Migrate alone (spec §migration-tooling rule 2), proves it
+// generated Migrate alone (spec §migration-tooling), proves it
 // has the structure of nao_schema.sql, and runs a query on it.
 func TestMigrateBuildsTheSchema(t *testing.T) {
 	ctx := context.Background()

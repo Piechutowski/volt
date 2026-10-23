@@ -136,15 +136,15 @@ func TestDecodeByContentType(t *testing.T) {
 }
 
 func TestQueryBinding(t *testing.T) {
-	req := httptest.NewRequest("GET", "/x?rok=2024&idgr=a&idgr=b&flag=true&at=2024-01-02T03:04:05Z&f=1.5", nil)
+	req := httptest.NewRequest("GET", "/x?year=2024&site=a&site=b&flag=true&at=2024-01-02T03:04:05Z&f=1.5", nil)
 	h := func(w http.ResponseWriter, r *Request) error {
-		rok, err := QueryParam[int](r, "rok")
-		if err != nil || rok != 2024 {
-			t.Errorf("rok = %d, %v", rok, err)
+		year, err := QueryParam[int](r, "year")
+		if err != nil || year != 2024 {
+			t.Errorf("year = %d, %v", year, err)
 		}
-		idgr, err := QueryParams[string](r, "idgr")
-		if err != nil || len(idgr) != 2 || idgr[1] != "b" {
-			t.Errorf("idgr = %v, %v", idgr, err)
+		site, err := QueryParams[string](r, "site")
+		if err != nil || len(site) != 2 || site[1] != "b" {
+			t.Errorf("site = %v, %v", site, err)
 		}
 		flag, err := QueryParam[bool](r, "flag")
 		if err != nil || !flag {
@@ -165,7 +165,7 @@ func TestQueryBinding(t *testing.T) {
 		if _, err := QueryParam[int](r, "missing"); err == nil || !strings.Contains(err.Error(), "missing") {
 			t.Errorf("missing scalar should be a 400 naming it: %v", err)
 		}
-		if _, err := QueryParam[int](r, "idgr"); err == nil || !strings.Contains(err.Error(), "idgr") {
+		if _, err := QueryParam[int](r, "site"); err == nil || !strings.Contains(err.Error(), "site") {
 			t.Errorf("unparseable scalar should be a 400 naming it: %v", err)
 		}
 		return nil

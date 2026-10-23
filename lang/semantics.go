@@ -477,7 +477,12 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 		namePrefix: inh.namePrefix,
 	}
 	if sc.Settings != nil {
+		repeated, dupDiags := settingsRepeated(sc.Settings, "pipe", "name", "error_handler")
+		c.diags = append(c.diags, dupDiags...)
 		for _, s := range sc.Settings.Settings {
+			if repeated[s] {
+				continue
+			}
 			switch s.Name {
 			case "pipe":
 				id, ok := s.Value.(*ast.Ident)
@@ -727,6 +732,9 @@ func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteI
 	}
 	if r.Query == nil && !r.Events && r.HelperName != "" {
 		r.ClientName = r.HelperName
+	}
+	if what, taken := voltClientNames[r.ClientName]; taken {
+		c.errorf(r.Pos, "scopes-and-routes", "client method %q would take the name of the embedded volt.Client's %s (§generated-client); rename the route with [name:] or a scope name", r.ClientName, what)
 	}
 
 	r.ord = len(c.pkg.Routes)
@@ -990,8 +998,45 @@ func settingOf(sl *ast.SettingList, name string) *ast.Setting {
 	return sl.Get(name)
 }
 
+func settingsRepeated(sl *ast.SettingList, known ...string) (map[*ast.Setting]bool, []diag.Diagnostic) {
+	if sl == nil {
+		return nil, nil
+	}
+	var repeated map[*ast.Setting]bool
+	var diags []diag.Diagnostic
+	seen := map[string]bool{}
+	for _, s := range sl.Settings {
+		isKnown := false
+		for _, k := range known {
+			isKnown = isKnown || k == s.Name
+		}
+		if !isKnown {
+			continue
+		}
+		if seen[s.Name] {
+			if repeated == nil {
+				repeated = map[*ast.Setting]bool{}
+			}
+			repeated[s] = true
+			diags = append(diags, diag.Errorf(s.Pos(), "spec/settings-lists", "setting %q may appear at most once (§settings-lists)", s.Name))
+		}
+		seen[s.Name] = true
+	}
+	return repeated, diags
+}
+
 var reservedParamNames = map[string]bool{
-	"w": true, "r": true, "opts": true, "volt": true, "cs": true,
+	"w": true, "r": true, "opts": true, "volt": true, "cs": true, "c": true, "ctx": true,
+}
+
+var voltClientNames = map[string]string{
+	"Client": "embedded field Client",
+	"Base":   "field Base",
+	"HTTP":   "field HTTP",
+	"Format": "field Format",
+	"Do":     "method Do",
+	"Raw":    "method Raw",
+	"Stream": "method Stream",
 }
 
 var goKeywords = map[string]bool{

@@ -220,7 +220,12 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 		members[m.Decl.Name.Name()] = true
 	}
 	if ds.Settings != nil {
+		repeated, dupDiags := settingsRepeated(ds.Settings, "strip", "only", "except")
+		l.diags = append(l.diags, dupDiags...)
 		for _, s := range ds.Settings.Settings {
+			if repeated[s] {
+				continue
+			}
 			switch s.Name {
 			case "strip":
 				lit, ok := s.Value.(*ast.BasicLit)
@@ -232,7 +237,7 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 			case "only", "except":
 				list, ok := s.Value.(*ast.IdentList)
 				if !ok {
-					l.errorf(s.Pos(), "datasets", "%s: takes a table list like (da_a_a, da_b_b) (§dataset-settings)", s.Name)
+					l.errorf(s.Pos(), "datasets", "%s: takes a table list like (ms_revenue, ms_usage) (§dataset-settings)", s.Name)
 					continue
 				}
 				set := map[string]bool{}
@@ -382,6 +387,8 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 		}
 	}
 	if r.Settings != nil {
+		_, dupDiags := settingsRepeated(r.Settings, "name")
+		l.diags = append(l.diags, dupDiags...)
 		for _, s := range r.Settings.Settings {
 			if s.Name != "name" {
 				l.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a route (§settings-whitelists); valid: name", s.Name)
@@ -733,7 +740,7 @@ func paramsOf(segs []*ast.Segment, prefix int) ([]Param, []diag.Diagnostic, bool
 			continue
 		}
 		if reservedParamNames[name] {
-			fail(i, seg.Pos(), "path parameter %q collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs", name)
+			fail(i, seg.Pos(), "path parameter %q collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx", name)
 			continue
 		}
 		pt := TString
@@ -823,7 +830,12 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 	var onlyPos, exceptPos token.Position
 
 	if res.Settings != nil {
+		repeated, dupDiags := settingsRepeated(res.Settings, "api", "only", "except", "param", "singular", "default")
+		l.diags = append(l.diags, dupDiags...)
 		for _, s := range res.Settings.Settings {
+			if repeated[s] {
+				continue
+			}
 			switch s.Name {
 			case "api":
 				if s.Value != nil {

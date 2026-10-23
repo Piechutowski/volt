@@ -6,7 +6,7 @@ CREATE TABLE invoices (
   id INTEGER PRIMARY KEY NOT NULL,
   total REAL NOT NULL,
   -- Set on insert
-  created_at TIMESTAMP NOT NULL DEFAULT (now()),
+  created_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP),
   -- NULL until first update
   updated_at TIMESTAMP,
   -- Override: also records who deleted, see audit log

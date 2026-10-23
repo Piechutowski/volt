@@ -146,11 +146,15 @@ func (p *parser) endOfLine(ctx string) {
 }
 
 func (p *parser) ident(ctx string) *ast.Ident {
+	return p.identOf(p.name(ctx))
+}
+
+func (p *parser) name(ctx string) token.Token {
 	t := p.expect(token.IDENT, ctx)
 	if c := t.Val[0]; '0' <= c && c <= '9' {
 		p.errorf(t, "%s begins with a digit: a name is a Go identifier, a letter or underscore followed by letters, digits and underscores (§identifiers)", t.Val)
 	}
-	return p.identOf(t)
+	return t
 }
 
 func (p *parser) qualName(ctx string) *ast.QualName {
@@ -243,35 +247,61 @@ func (p *parser) topLevelSync() {
 }
 
 func (p *parser) lineSync() {
+	p.lineSyncTo(token.RBRACE)
+}
+
+func (p *parser) lineSyncTo(closers ...token.Kind) {
 	p.line = false
-	if !p.at(token.EOF) && !p.at(token.RBRACE) {
+	closed := func() bool {
+		for _, k := range closers {
+			if p.at(k) {
+				return true
+			}
+		}
+		return p.at(token.EOF)
+	}
+	if !closed() {
 		p.next()
 	}
-	for !p.at(token.EOF) && !p.at(token.RBRACE) && !p.cur().NLBefore {
+	for !closed() && !p.cur().NLBefore {
 		p.next()
 	}
 }
 
-func (p *parser) item(parse func()) {
+func (p *parser) item(parse func()) bool {
+	return p.itemTo(parse, token.RBRACE)
+}
+
+func (p *parser) itemTo(parse func(), closers ...token.Kind) (dropped bool) {
 	defer func() {
 		if r := recover(); r != nil {
 			if _, ok := r.(bailout); !ok {
 				panic(r)
 			}
-			p.lineSync()
+			p.lineSyncTo(closers...)
+			dropped = true
 		}
 	}()
 	parse()
+	return false
+}
+
+func (p *parser) settingsAt(construct string) *ast.SettingList {
+	if !p.at(token.LBRACKET) {
+		return nil
+	}
+	if p.cur().NLBefore {
+		p.errorf(p.cur(), "a settings list stays on the line of the %s it modifies, found '[' on the next line (§settings-lists)", construct)
+	}
+	return p.settingList()
 }
 
 func (p *parser) project() *ast.Project {
 	d := &ast.Project{ProjectPos: p.next().Pos}
 	if p.at(token.IDENT) {
-		d.Name = p.ident("project name")
+		d.Name = p.ident("project name (§project)")
 	}
-	if p.at(token.LBRACKET) {
-		d.Settings = p.settingList()
-	}
+	d.Settings = p.settingsAt("Project")
 	p.expect(token.LBRACE, "Project (§project)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		p.item(func() {
@@ -290,9 +320,7 @@ func (p *parser) project() *ast.Project {
 func (p *parser) table() *ast.Table {
 	d := &ast.Table{TablePos: p.next().Pos}
 	d.Name = p.ident("table name (§table)")
-	if p.at(token.LBRACKET) {
-		d.Settings = p.settingList()
-	}
+	d.Settings = p.settingsAt("Table")
 	p.expect(token.LBRACE, "Table (§table)")
 	d.Body, d.Incomplete = p.tableBody("Table")
 	d.Rbrace = p.expect(token.RBRACE, "Table (§table)").Pos
@@ -350,7 +378,7 @@ func (p *parser) tableItem(what string) (item ast.TableItem) {
 	case t.Kind == token.IDENT:
 		return p.column()
 	default:
-		p.fail(t, "expected a column, Indexes, Validators, Records or '~injection' in %s body, found %s", what, t)
+		p.fail(t, "expected a column, Indexes, Validators, Records or '~injection' in %s body (§%s), found %s", what, strings.ToLower(what), t)
 		return nil
 	}
 }
@@ -492,6 +520,7 @@ func (p *parser) refEndpoint() *ast.RefEndpoint {
 		return ep
 	}
 	p.next()
+	ep.Paren = true
 	for {
 		ep.Columns = append(ep.Columns, p.ident("endpoint column (§relationships-ref)"))
 		if !p.at(token.COMMA) {
@@ -504,6 +533,7 @@ func (p *parser) refEndpoint() *ast.RefEndpoint {
 }
 
 func (p *parser) typeDecl() *ast.TypeDecl {
+	p.lineBegin("Type declaration (§types)")
 	d := &ast.TypeDecl{TypePos: p.next().Pos}
 	d.Name = p.qualName("declared type name (§types)")
 	d.Storage = p.typeRef()
@@ -620,7 +650,7 @@ func (p *parser) settingList() *ast.SettingList {
 }
 
 func (p *parser) setting() *ast.Setting {
-	nameTok := p.expect(token.IDENT, "setting name (§settings-lists)")
+	nameTok := p.name("setting name (§settings-lists)")
 	if right, ok := foldTo(nameTok.Val, SettingNames); ok && right != nameTok.Val {
 		p.caseErr(nameTok, right)
 		nameTok.Val = right
@@ -644,9 +674,26 @@ func (p *parser) setting() *ast.Setting {
 				p.wordFold(id, literalWords)
 			}
 		}
+		if il, ok := s.Value.(*ast.IdentList); ok && name != "order" && name != "only" && name != "except" && !listShaped(il) {
+			p.errorf(nameTok, "the list of %s: is neither names separated by commas nor names each followed by asc or desc (§settings-lists)", name)
+		}
 		s.SetEnd(s.Value.End())
 	}
 	return s
+}
+
+func listShaped(il *ast.IdentList) bool {
+	directed := 0
+	for _, mod := range il.Mods {
+		if mod == nil {
+			continue
+		}
+		if v := mod.Name(); v != "asc" && v != "desc" {
+			return false
+		}
+		directed++
+	}
+	return directed == 0 || directed == len(il.Mods)
 }
 
 func (p *parser) settingValue() ast.Node {

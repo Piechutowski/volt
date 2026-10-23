@@ -31,7 +31,7 @@ report engine when a consumer exists.
     - [x] Table aliases (`as`) and schema qualification go; a table is named by its name only
     - [x] Settings nothing reads go: index `type:` and `note:`, `note:` on migrations, migration columns and migration indexes; a TablePartial takes no settings and no note
     - [x] NULL has one spelling: `default: null` goes, a record row writes `null`, and an empty field is an error
-    - [x] The spec says what the code does: punctuation table, the doubled exclusion backslash, the multi-line string and `import ( db )` examples, §table-resolution clause 2, the empty Reserved headings, version relics
+    - [x] The spec says what the code does: punctuation table, the doubled exclusion backslash, the multi-line string and `import ( db )` examples, §table-resolution, the empty Reserved headings, version relics
   - [x] Setting names and values are one word: `set_null`, `set_default`, `no_transaction`; `no action` goes
   - [x] A nullable []byte is rt.Null[[]byte] like every other nullable type; a plain []byte is bytes, and nil writes empty bytes
   - [x] Step 2, case and names

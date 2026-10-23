@@ -88,3 +88,11 @@ Migration 0006__daily_hits_label_and_token {
     add token string [null, unique]
   }
 }
+
+Migration 0007__post_flags {
+  create table post_flags {
+    id       int    [pk, increment]
+    reviewed string
+    approved string [null]
+  }
+}
