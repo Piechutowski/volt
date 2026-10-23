@@ -28,7 +28,7 @@ third-party deps. Importing `nao/rt` alone drags in nothing.
 | `lang/`          | **the language**: `token` `scanner` `parser` `ast` `diag` `check` `vet` front end, plus go.mod root discovery, package/import resolution, route expansion and conflict detection; `lang/conformance/snippets/` = the executable corpus |
 | `gen/router/`    | router generator; goldens are gofmt-stable and compiled by the real toolchain |
 | `gen/model/`     | the data half: nao's models, queries and DDL, driven by the same project load |
-| `nao/`           | **nao, the ORM**: the naming plan every generated data name comes from (`nao/naming`), model + query + SQLite generation (`nao/gen`), its runtime (`nao/rt`), inflector and integration tests |
+| `nao/`           | **nao, the ORM**: the naming plan every table's and column's generated names come from (`nao/naming`), model + query + SQLite generation (`nao/gen`), its runtime (`nao/rt`), inflector and integration tests |
 | `lsp/`           | the Volt language server (`volt lsp`); project-aware diagnostics for files under a go.mod, single-file schema pass otherwise. **Own module** — glsp and its tail stay out of the library |
 | `grammar/`       | tree-sitter grammar for the whole language |
 | `zed-extension/` | Zed glue; install via `scripts/sync-grammar.sh` + Install Dev Extension |
@@ -51,8 +51,9 @@ reverse, and `cmd/volt/layers_test.go` fails the build when that
 breaks.
 
 To use the data layer alone, write a package of schema files and no
-routes: `volt gen` writes only its data files, and a program built on
-them imports nothing from Volt but `nao/rt`.
+scope: `volt gen` writes only its data files, removes the route files
+it wrote while the package had a scope, and a program built on them
+imports nothing from Volt but `nao/rt`.
 
 ## Crib sheet
 

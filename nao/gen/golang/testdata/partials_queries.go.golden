@@ -38,17 +38,17 @@ func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
 }
 
-func invoiceScan(r rt.Row) (Invoice, error) {
+func voltInvoiceScan(r rt.Row) (Invoice, error) {
 	var voltV Invoice
 	voltErr := r.Scan(&voltV.ID, &voltV.Total, &voltV.CreatedAt, &voltV.UpdatedAt, &voltV.DeletedAt)
 	return voltV, rt.Refused("Invoice", voltErr)
 }
 
-const invoiceGetSQL = `SELECT "id", "total", "created_at", "updated_at", "deleted_at" FROM "invoices" WHERE "id" = ?`
+const voltInvoiceGetSQL = `SELECT "id", "total", "created_at", "updated_at", "deleted_at" FROM "invoices" WHERE "id" = ?`
 
 // InvoiceGet fetches the invoices row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) InvoiceGet(ctx context.Context, id int) (Invoice, error) {
-	return invoiceScan(q.db.QueryRowContext(ctx, invoiceGetSQL, id))
+	return voltInvoiceScan(q.db.QueryRowContext(ctx, voltInvoiceGetSQL, id))
 }
 
 // InvoiceGetMany fetches the invoices rows whose primary key is in ids, in
@@ -57,7 +57,7 @@ func (q *Queries) InvoiceGetMany(ctx context.Context, ids []int) ([]Invoice, err
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(invoiceTableSQL, invoiceColumnsSQL, []rt.Opt[Invoice]{InvoiceID.In(ids...)})
+	voltQuery, voltArgs, voltErr := rt.SelectRender(voltInvoiceTableSQL, voltInvoiceColumnsSQL, []rt.Opt[Invoice]{InvoiceID.In(ids...)})
 	if voltErr != nil {
 		return nil, voltErr
 	}
@@ -68,7 +68,7 @@ func (q *Queries) InvoiceGetMany(ctx context.Context, ids []int) ([]Invoice, err
 	defer voltRows.Close()
 	voltOut := []Invoice{}
 	for voltRows.Next() {
-		voltV, voltErr := invoiceScan(voltRows)
+		voltV, voltErr := voltInvoiceScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -77,18 +77,18 @@ func (q *Queries) InvoiceGetMany(ctx context.Context, ids []int) ([]Invoice, err
 	return voltOut, voltRows.Err()
 }
 
-const invoiceListSQL = `SELECT "id", "total", "created_at", "updated_at", "deleted_at" FROM "invoices"`
+const voltInvoiceListSQL = `SELECT "id", "total", "created_at", "updated_at", "deleted_at" FROM "invoices"`
 
 // InvoiceList returns every invoices row.
 func (q *Queries) InvoiceList(ctx context.Context) ([]Invoice, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, invoiceListSQL)
+	voltRows, voltErr := q.db.QueryContext(ctx, voltInvoiceListSQL)
 	if voltErr != nil {
 		return nil, voltErr
 	}
 	defer voltRows.Close()
 	voltOut := []Invoice{}
 	for voltRows.Next() {
-		voltV, voltErr := invoiceScan(voltRows)
+		voltV, voltErr := voltInvoiceScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -122,11 +122,11 @@ func (q *Queries) InvoiceCreate(ctx context.Context, c InvoiceChangeset) (Invoic
 	if c.set[4] {
 		voltCols, voltArgs = append(voltCols, "deleted_at"), append(voltArgs, voltV.DeletedAt)
 	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(invoiceTableSQL, voltCols, invoiceColumnsSQL), voltArgs...)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltInvoiceTableSQL, voltCols, voltInvoiceColumnsSQL), voltArgs...)
 	if voltErr != nil {
 		return Invoice{}, voltErr
 	}
-	return invoiceScan(voltRow)
+	return voltInvoiceScan(voltRow)
 }
 
 // InvoiceUpdate validates c and writes its marked columns to the invoices row it
@@ -162,19 +162,19 @@ func (q *Queries) InvoiceUpdate(ctx context.Context, c InvoiceChangeset) (Invoic
 		return voltV, nil
 	}
 	voltArgs = append(voltArgs, c.data.ID)
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(invoiceTableSQL, voltCols, []string{"id"}, invoiceColumnsSQL), voltArgs...)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(voltInvoiceTableSQL, voltCols, []string{"id"}, voltInvoiceColumnsSQL), voltArgs...)
 	if voltErr != nil {
 		return Invoice{}, voltErr
 	}
-	return invoiceScan(voltRow)
+	return voltInvoiceScan(voltRow)
 }
 
-const invoiceDeleteSQL = `DELETE FROM "invoices" WHERE "id" = ?`
+const voltInvoiceDeleteSQL = `DELETE FROM "invoices" WHERE "id" = ?`
 
 // InvoiceDelete removes the identified invoices row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) InvoiceDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, invoiceDeleteSQL, id)
+	voltRes, voltErr := q.db.ExecContext(ctx, voltInvoiceDeleteSQL, id)
 	if voltErr != nil {
 		return rt.Refused("Invoice", voltErr)
 	}

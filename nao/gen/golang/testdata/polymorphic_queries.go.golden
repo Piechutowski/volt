@@ -38,17 +38,17 @@ func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
 }
 
-func commentScan(r rt.Row) (Comment, error) {
+func voltCommentScan(r rt.Row) (Comment, error) {
 	var voltV Comment
 	voltErr := r.Scan(&voltV.ID, (*string)(&voltV.CommentableType), &voltV.CommentableID, &voltV.Body)
 	return voltV, rt.Refused("Comment", voltErr)
 }
 
-const commentGetSQL = `SELECT "id", "commentable_type", "commentable_id", "body" FROM "comments" WHERE "id" = ?`
+const voltCommentGetSQL = `SELECT "id", "commentable_type", "commentable_id", "body" FROM "comments" WHERE "id" = ?`
 
 // CommentGet fetches the comments row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) CommentGet(ctx context.Context, id int) (Comment, error) {
-	return commentScan(q.db.QueryRowContext(ctx, commentGetSQL, id))
+	return voltCommentScan(q.db.QueryRowContext(ctx, voltCommentGetSQL, id))
 }
 
 // CommentGetMany fetches the comments rows whose primary key is in ids, in
@@ -57,7 +57,7 @@ func (q *Queries) CommentGetMany(ctx context.Context, ids []int) ([]Comment, err
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(commentTableSQL, commentColumnsSQL, []rt.Opt[Comment]{CommentID.In(ids...)})
+	voltQuery, voltArgs, voltErr := rt.SelectRender(voltCommentTableSQL, voltCommentColumnsSQL, []rt.Opt[Comment]{CommentID.In(ids...)})
 	if voltErr != nil {
 		return nil, voltErr
 	}
@@ -68,7 +68,7 @@ func (q *Queries) CommentGetMany(ctx context.Context, ids []int) ([]Comment, err
 	defer voltRows.Close()
 	voltOut := []Comment{}
 	for voltRows.Next() {
-		voltV, voltErr := commentScan(voltRows)
+		voltV, voltErr := voltCommentScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -77,18 +77,18 @@ func (q *Queries) CommentGetMany(ctx context.Context, ids []int) ([]Comment, err
 	return voltOut, voltRows.Err()
 }
 
-const commentListSQL = `SELECT "id", "commentable_type", "commentable_id", "body" FROM "comments"`
+const voltCommentListSQL = `SELECT "id", "commentable_type", "commentable_id", "body" FROM "comments"`
 
 // CommentList returns every comments row.
 func (q *Queries) CommentList(ctx context.Context) ([]Comment, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, commentListSQL)
+	voltRows, voltErr := q.db.QueryContext(ctx, voltCommentListSQL)
 	if voltErr != nil {
 		return nil, voltErr
 	}
 	defer voltRows.Close()
 	voltOut := []Comment{}
 	for voltRows.Next() {
-		voltV, voltErr := commentScan(voltRows)
+		voltV, voltErr := voltCommentScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -116,11 +116,11 @@ func (q *Queries) CommentCreate(ctx context.Context, c CommentChangeset) (Commen
 	if c.set[3] {
 		voltCols, voltArgs = append(voltCols, "body"), append(voltArgs, voltV.Body)
 	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(commentTableSQL, voltCols, commentColumnsSQL), voltArgs...)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltCommentTableSQL, voltCols, voltCommentColumnsSQL), voltArgs...)
 	if voltErr != nil {
 		return Comment{}, voltErr
 	}
-	return commentScan(voltRow)
+	return voltCommentScan(voltRow)
 }
 
 // CommentUpdate validates c and writes its marked columns to the comments row it
@@ -150,19 +150,19 @@ func (q *Queries) CommentUpdate(ctx context.Context, c CommentChangeset) (Commen
 		return voltV, nil
 	}
 	voltArgs = append(voltArgs, c.data.ID)
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(commentTableSQL, voltCols, []string{"id"}, commentColumnsSQL), voltArgs...)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(voltCommentTableSQL, voltCols, []string{"id"}, voltCommentColumnsSQL), voltArgs...)
 	if voltErr != nil {
 		return Comment{}, voltErr
 	}
-	return commentScan(voltRow)
+	return voltCommentScan(voltRow)
 }
 
-const commentDeleteSQL = `DELETE FROM "comments" WHERE "id" = ?`
+const voltCommentDeleteSQL = `DELETE FROM "comments" WHERE "id" = ?`
 
 // CommentDelete removes the identified comments row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) CommentDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, commentDeleteSQL, id)
+	voltRes, voltErr := q.db.ExecContext(ctx, voltCommentDeleteSQL, id)
 	if voltErr != nil {
 		return rt.Refused("Comment", voltErr)
 	}

@@ -10,6 +10,8 @@ import (
 	"github.com/Piechutowski/volt/lang/parser"
 )
 
+var dynWrapperSuffixes = []string{"Limit", "Offset", "Distinct", "OrderBy", "After", "Set"}
+
 func dynNamesWalk(p *plan, info *check.Info) []NameCollision {
 	size := 1
 	for _, tm := range p.tables {

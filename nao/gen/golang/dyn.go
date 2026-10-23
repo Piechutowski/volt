@@ -73,38 +73,40 @@ func (e *dynEmitter) tableEmit(t *naming.Table) {
 		return
 	}
 	b := &e.body
-	lower := naming.ArgName(t.Model)
 	tbl := t.Info.Decl.Name.Name()
 
+	var consts align.Block
+	consts.Row(t.Names.TableConst, "= `"+t.TableSQL()+"`")
+	consts.Row(t.Names.ColumnsConst, "= `"+t.ColumnList()+"`")
 	b.WriteString("const (\n")
-	fmt.Fprintf(b, "\t%sTableSQL   = `%s`\n", lower, t.TableSQL())
-	fmt.Fprintf(b, "\t%sColumnsSQL = `%s`\n)\n\n", lower, t.ColumnList())
+	consts.WriteTo(b, "\t")
+	b.WriteString(")\n\n")
 
-	e.wrappersEmit(t, tbl)
-	e.queryEmit(t, lower, tbl)
-	e.countEmit(t, lower, tbl)
-	e.existsEmit(t, lower, tbl)
-	e.deleteWhereEmit(t, lower, tbl)
-	e.updateWhereEmit(t, lower, tbl)
+	e.wrappersEmit(t)
+	e.queryEmit(t, tbl)
+	e.countEmit(t, tbl)
+	e.existsEmit(t, tbl)
+	e.deleteWhereEmit(t, tbl)
+	e.updateWhereEmit(t, tbl)
 }
 
-func (e *dynEmitter) wrappersEmit(t *naming.Table, tbl string) {
+func (e *dynEmitter) wrappersEmit(t *naming.Table) {
 	b := &e.body
-	m := t.Model
-	fmt.Fprintf(b, "// %sLimit caps how many rows %sQuery returns.\n", m, m)
-	funcLine(b, "func "+m+"Limit(n int) rt.Opt["+m+"]", "return rt.Limit["+m+"](n)")
-	fmt.Fprintf(b, "// %sOffset skips n rows; keyset pagination (%sAfter) scales better.\n", m, m)
-	funcLine(b, "func "+m+"Offset(n int) rt.Opt["+m+"]", "return rt.Offset["+m+"](n)")
-	fmt.Fprintf(b, "// %sDistinct deduplicates the rows %sQuery returns.\n", m, m)
-	funcLine(b, "func "+m+"Distinct() rt.Opt["+m+"]", "return rt.Distinct["+m+"]()")
-	fmt.Fprintf(b, "// %sOrderBy sorts %sQuery's rows by Asc/Desc terms built on the\n// %s column handles.\n", m, m, m)
-	funcLine(b, "func "+m+"OrderBy(terms ...rt.Order["+m+"]) rt.Opt["+m+"]", "return rt.OrderBy(terms...)")
-	fmt.Fprintf(b, "// %sAfter resumes strictly after the row with the given key — keyset\n", m)
-	fmt.Fprintf(b, "// pagination: one value per %sOrderBy term, in the same order.\n", m)
-	funcLine(b, "func "+m+"After(key ...any) rt.Opt["+m+"]", "return rt.After["+m+"](key...)")
-	fmt.Fprintf(b, "// %sSet collects the typed assignments of a %sUpdateWhere, built\n", m, m)
+	m, n := t.Model, &t.Names
+	fmt.Fprintf(b, "// %s caps how many rows %s returns.\n", n.Limit, n.Query)
+	funcLine(b, "func "+n.Limit+"(n int) rt.Opt["+m+"]", "return rt.Limit["+m+"](n)")
+	fmt.Fprintf(b, "// %s skips n rows; keyset pagination (%s) scales better.\n", n.Offset, n.After)
+	funcLine(b, "func "+n.Offset+"(n int) rt.Opt["+m+"]", "return rt.Offset["+m+"](n)")
+	fmt.Fprintf(b, "// %s deduplicates the rows %s returns.\n", n.Distinct, n.Query)
+	funcLine(b, "func "+n.Distinct+"() rt.Opt["+m+"]", "return rt.Distinct["+m+"]()")
+	fmt.Fprintf(b, "// %s sorts %s's rows by Asc/Desc terms built on the\n// %s column handles.\n", n.OrderBy, n.Query, m)
+	funcLine(b, "func "+n.OrderBy+"(terms ...rt.Order["+m+"]) rt.Opt["+m+"]", "return rt.OrderBy(terms...)")
+	fmt.Fprintf(b, "// %s resumes strictly after the row with the given key, for keyset\n", n.After)
+	fmt.Fprintf(b, "// pagination: one value per %s term, in the same order.\n", n.OrderBy)
+	funcLine(b, "func "+n.After+"(key ...any) rt.Opt["+m+"]", "return rt.After["+m+"](key...)")
+	fmt.Fprintf(b, "// %s collects the typed assignments of a %s, built\n", n.Set, n.UpdateWhere)
 	fmt.Fprintf(b, "// with Set/SetNull on the %s column handles.\n", m)
-	funcLine(b, "func "+m+"Set(assigns ...rt.Assign["+m+"]) []rt.Assign["+m+"]", "return assigns")
+	funcLine(b, "func "+n.Set+"(assigns ...rt.Assign["+m+"]) []rt.Assign["+m+"]", "return assigns")
 }
 
 func funcLine(b *strings.Builder, header, body string) {
@@ -115,57 +117,57 @@ func funcLine(b *strings.Builder, header, body string) {
 	b.WriteString(header + " {\n\t" + body + "\n}\n\n")
 }
 
-func (e *dynEmitter) queryEmit(t *naming.Table, lower, tbl string) {
+func (e *dynEmitter) queryEmit(t *naming.Table, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "// %sQuery returns the %s rows matching every given predicate,\n", t.Model, tbl)
+	fmt.Fprintf(b, "// %s returns the %s rows matching every given predicate,\n", t.Names.Query, tbl)
 	fmt.Fprintf(b, "// shaped by the remaining options (order, limit, offset, keyset,\n")
 	fmt.Fprintf(b, "// distinct). No options means every row.\n")
-	fmt.Fprintf(b, "func (q *Queries) %sQuery(ctx context.Context, opts ...rt.Opt[%s]) ([]%s, error) {\n", t.Model, t.Model, t.Model)
-	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.SelectRender(%sTableSQL, %sColumnsSQL, opts)\n", lower, lower)
+	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, opts ...rt.Opt[%s]) ([]%s, error) {\n", t.Names.Query, t.Model, t.Model)
+	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.SelectRender(%s, %s, opts)\n", t.Names.TableConst, t.Names.ColumnsConst)
 	b.WriteString("\tif voltErr != nil {\n\t\treturn nil, voltErr\n\t}\n")
 	fmt.Fprintf(b, "\tvoltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)\n")
-	rowsScanEmit(b, t.Model, lower)
+	rowsScanEmit(b, t.Model, t.Names.Scan)
 }
 
-func (e *dynEmitter) countEmit(t *naming.Table, lower, tbl string) {
+func (e *dynEmitter) countEmit(t *naming.Table, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "// %sCount reports how many %s rows match every given predicate;\n", t.Model, tbl)
+	fmt.Fprintf(b, "// %s reports how many %s rows match every given predicate;\n", t.Names.Count, tbl)
 	fmt.Fprintf(b, "// none counts the whole table.\n")
-	fmt.Fprintf(b, "func (q *Queries) %sCount(ctx context.Context, preds ...rt.Pred[%s]) (int64, error) {\n", t.Model, t.Model)
-	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.CountRender(%sTableSQL, preds)\n", lower)
+	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, preds ...rt.Pred[%s]) (int64, error) {\n", t.Names.Count, t.Model)
+	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.CountRender(%s, preds)\n", t.Names.TableConst)
 	b.WriteString("\tif voltErr != nil {\n\t\treturn 0, voltErr\n\t}\n")
 	b.WriteString("\tvar voltN int64\n\tif voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {\n\t\treturn 0, voltErr\n\t}\n\treturn voltN, nil\n}\n\n")
 }
 
-func (e *dynEmitter) existsEmit(t *naming.Table, lower, tbl string) {
+func (e *dynEmitter) existsEmit(t *naming.Table, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "// %sExists reports whether any %s row matches every given predicate.\n", t.Model, tbl)
-	fmt.Fprintf(b, "func (q *Queries) %sExists(ctx context.Context, preds ...rt.Pred[%s]) (bool, error) {\n", t.Model, t.Model)
-	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.ExistsRender(%sTableSQL, preds)\n", lower)
+	fmt.Fprintf(b, "// %s reports whether any %s row matches every given predicate.\n", t.Names.Exists, tbl)
+	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, preds ...rt.Pred[%s]) (bool, error) {\n", t.Names.Exists, t.Model)
+	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.ExistsRender(%s, preds)\n", t.Names.TableConst)
 	b.WriteString("\tif voltErr != nil {\n\t\treturn false, voltErr\n\t}\n")
 	b.WriteString("\tvar voltFound bool\n\tif voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {\n\t\treturn false, voltErr\n\t}\n\treturn voltFound, nil\n}\n\n")
 }
 
-func (e *dynEmitter) deleteWhereEmit(t *naming.Table, lower, tbl string) {
+func (e *dynEmitter) deleteWhereEmit(t *naming.Table, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "// %sDeleteWhere removes every %s row matching the predicates and\n", t.Model, tbl)
+	fmt.Fprintf(b, "// %s removes every %s row matching the predicates and\n", t.Names.DeleteWhere, tbl)
 	fmt.Fprintf(b, "// reports how many went. No effective predicate is an error, never a\n")
 	fmt.Fprintf(b, "// full-table delete.\n")
-	fmt.Fprintf(b, "func (q *Queries) %sDeleteWhere(ctx context.Context, preds ...rt.Pred[%s]) (int64, error) {\n", t.Model, t.Model)
-	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.DeleteRender(%sTableSQL, preds)\n", lower)
+	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, preds ...rt.Pred[%s]) (int64, error) {\n", t.Names.DeleteWhere, t.Model)
+	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.DeleteRender(%s, preds)\n", t.Names.TableConst)
 	b.WriteString("\tif voltErr != nil {\n\t\treturn 0, voltErr\n\t}\n")
 	b.WriteString("\tvoltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)\n")
 	b.WriteString("\tif voltErr != nil {\n\t\treturn 0, voltErr\n\t}\n\treturn voltRes.RowsAffected()\n}\n\n")
 }
 
-func (e *dynEmitter) updateWhereEmit(t *naming.Table, lower, tbl string) {
+func (e *dynEmitter) updateWhereEmit(t *naming.Table, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "// %sUpdateWhere applies the typed assignments (%sSet) to every %s\n", t.Model, t.Model, tbl)
+	fmt.Fprintf(b, "// %s applies the typed assignments (%s) to every %s\n", t.Names.UpdateWhere, t.Names.Set, tbl)
 	fmt.Fprintf(b, "// row matching the predicates and reports how many changed — the\n")
 	fmt.Fprintf(b, "// partial update of the dynamic layer. No effective predicate\n")
 	fmt.Fprintf(b, "// is an error, never a full-table rewrite.\n")
-	fmt.Fprintf(b, "func (q *Queries) %sUpdateWhere(ctx context.Context, set []rt.Assign[%s], preds ...rt.Pred[%s]) (int64, error) {\n", t.Model, t.Model, t.Model)
-	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.UpdateRender(%sTableSQL, set, preds)\n", lower)
+	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, set []rt.Assign[%s], preds ...rt.Pred[%s]) (int64, error) {\n", t.Names.UpdateWhere, t.Model, t.Model)
+	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.UpdateRender(%s, set, preds)\n", t.Names.TableConst)
 	b.WriteString("\tif voltErr != nil {\n\t\treturn 0, voltErr\n\t}\n")
 	b.WriteString("\tvoltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)\n")
 	b.WriteString("\tif voltErr != nil {\n\t\treturn 0, voltErr\n\t}\n\treturn voltRes.RowsAffected()\n}\n\n")

@@ -739,7 +739,7 @@ func paramsOf(segs []*ast.Segment, prefix int) ([]Param, []diag.Diagnostic, bool
 			fail(i, seg.Pos(), "path parameter %q must be a valid, non-keyword Go identifier (§route-paths)", name)
 			continue
 		}
-		if reservedParamNames[name] {
+		if naming.RouteSignatureName(name) {
 			fail(i, seg.Pos(), "path parameter %q collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx", name)
 			continue
 		}
@@ -887,7 +887,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 					continue
 				}
 				id, ok := s.Value.(*ast.Ident)
-				if !ok || !goIdentOK(id.Name()) || goKeywords[id.Name()] || reservedParamNames[id.Name()] {
+				if !ok || !goIdentOK(id.Name()) || goKeywords[id.Name()] || naming.RouteSignatureName(id.Name()) {
 					l.errorf(s.Pos(), "resources", "param: takes a valid, non-keyword, non-reserved Go identifier (§settings, §route-paths)")
 					continue
 				}

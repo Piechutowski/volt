@@ -283,7 +283,7 @@ func TestStmtCache(t *testing.T) {
 	cache := rt.NewStmtCache(2)
 	defer cache.Close()
 
-	s1, err := cache.Prepare(ctx, db, userGetSQL)
+	s1, err := cache.Prepare(ctx, db, voltUserGetSQL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,15 +291,15 @@ func TestStmtCache(t *testing.T) {
 	if err := s1.QueryRowContext(ctx, 1).Scan(&u.ID, &u.Email, &u.Name, &u.Bio, &u.CreatedAt); err != nil {
 		t.Fatalf("cached statement: %v", err)
 	}
-	again, err := cache.Prepare(ctx, db, userGetSQL)
+	again, err := cache.Prepare(ctx, db, voltUserGetSQL)
 	if err != nil || again != s1 {
 		t.Errorf("second Prepare returned a different statement (%p vs %p, %v); the SQL text is the cache key", again, s1, err)
 	}
 
-	if _, err := cache.Prepare(ctx, db, userListSQL); err != nil {
+	if _, err := cache.Prepare(ctx, db, voltUserListSQL); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cache.Prepare(ctx, db, userDeleteSQL); err != nil {
+	if _, err := cache.Prepare(ctx, db, voltUserDeleteSQL); err != nil {
 		t.Fatal(err)
 	}
 	if n := cache.Len(); n != 2 {
@@ -309,7 +309,7 @@ func TestStmtCache(t *testing.T) {
 	if err := cache.Close(); err != nil {
 		t.Errorf("Close: %v", err)
 	}
-	if _, err := cache.Prepare(ctx, db, userGetSQL); err == nil {
+	if _, err := cache.Prepare(ctx, db, voltUserGetSQL); err == nil {
 		t.Error("Prepare on a closed cache unexpectedly succeeded")
 	}
 }

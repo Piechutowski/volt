@@ -1717,7 +1717,9 @@ files under `invalid/` MUST be rejected.
 ## Data and network layers
 
 What Volt generates falls into two layers, told apart here and nowhere
-else.
+else. These are not the layers of §layers-files-and-the-superset-rule,
+which are Part I and the full language; Part II specifies parts of
+both.
 
 1. **The data layer** is the schema core (Part I), migrations
    (§migrations), groups (§groups), predicates (§predicates), selects
@@ -1748,11 +1750,14 @@ else.
    the language server read, so no checker imports a generator. A layer
    contract test (`cmd/volt/layers_test.go`) fails the build when any of
    this breaks.
-4. **The data layer alone.** A package of schema files without routes,
-   whose files declare no scope, resource or dataset, generates its data
-   files alone, and a program built on it links nothing from Volt but
-   `nao/rt`. The package clause (§projects-and-packages) is the one
-   declaration of the network layer such a package carries.
+4. **The data layer alone.** A package whose files declare no scope
+   has no routes, since resources and datasets live only in scopes
+   (§scopes): it generates its data files alone, `volt gen` removes
+   the route files it wrote for the package while it had a scope, and
+   a program built on it links nothing from Volt but `nao/rt`. Beside
+   the package clause (§projects-and-packages), the one declaration of
+   the network layer such a package can carry is a pipeline, which no
+   scope pipes through and which generates nothing.
 
 ## Projects and packages
 
@@ -2296,11 +2301,15 @@ Scope settings (the complete set):
 2. A route's middleware is the concatenation of its pipeline chain's
    plugs, composed once at generation time — never iterated per
    request.
-3. The `error_handler` function is a Go reference held like a plug
-: it MUST exist in the package's compiled Go files with the
-   volt runtime's ErrorHandler
-   shape: `func(http.ResponseWriter, *volt.Request, error)`. Routes
-   without one use the runtime default.
+3. The `error_handler` function is a Go reference held like a plug:
+   it MUST exist in the package's compiled Go files with the volt
+   runtime's ErrorHandler shape:
+   `func(http.ResponseWriter, *volt.Request, error)`. Routes without
+   one use the runtime default. A custom handler gets the status,
+   message and details the default would write from
+   `volt.ProblemOf(err)` (§formats), since a refused write, a
+   `*rt.Invalid`, carries no status of its own
+   (§data-and-network-layers).
 
 ### Route names and reverse URLs
 
@@ -2620,7 +2629,10 @@ package; `volt_handlers.go`, `volt_router.go`, `volt_paths.go`,
 removes a file left under an earlier name of a data file (`nao_models.go`,
 `nao_queries.go`, `nao_dyn.go`, `nao_validate.go`, `nao_selects.go`,
 `nao_schema.sql`) when it carries the generated-code marker, and leaves
-one without it.
+one without it. By the same marker it removes a generated file it no
+longer writes: `volt_selects.go` once the package declares no select,
+`volt_migrations.go` once it declares no migration, and the route files
+once it declares no scope (§data-and-network-layers).
 
 ---
 
@@ -2750,10 +2762,12 @@ Pred chosen  { org in :orgs }
      type across the whole use site (a list and a scalar use of the
      same name disagree), or the later use is an error naming both
      types. A parameter name MUST be an ASCII Go identifier that is
-     neither a Go keyword nor a name the generated signatures use
-     (`ctx`, `q`, `rt`, `w`, `r`, `opts`, `volt`, `cs`, `c`), and MUST
-     NOT have the form of the generated locals, `volt`, an upper-case
-     letter and no underscore (§generated-query-surface).
+     neither a Go keyword, nor a name the generated signatures use
+     (`ctx`, `q`, `rt`, `w`, `r`, `opts`, `volt`, `cs`, `c`), nor `nil`
+     or `append`, the predeclared names a generated method uses, and
+     MUST NOT have the form of the generated locals and helpers,
+     `volt`, an upper-case letter and no underscore
+     (§generated-query-surface).
 4. `[]byte` (rule 3) is the one column type predicates refuse: every
    other column, a column of a declared type among them, compares
    under rule 5.
@@ -4004,18 +4018,30 @@ rt.DBTX)`, `Tx`, `WithTx`, `WithCache`):
 5. `rt.Open(driver, dsn)` pins one connection and sets WAL,
    `busy_timeout = 5000` and `foreign_keys = ON`. `rt.Null[T]`
    marshals as the value or `null`.
-6. **Locals.** Every local a function of a data file declares, the
-   parameters of a function literal included, is `volt` followed by an
-   upper-case letter, with no underscore (`voltErr`, `voltRows`,
-   `voltV`). The parameter a key column takes in `Get`, `GetMany`,
-   `GetBy*` and `Delete` is its Go field name (§names) with the leading
-   initialism or letter lowered (`UserID` is `userID`), with `_`
-   appended when that is a Go keyword, `ctx`, `arg`, `q`, `rt` or of the
-   locals' form (a column `volt_err` takes `voltErr_`); `GetMany` takes
-   that name with `s` added. A select parameter cannot take that form (§predicates),
-   so no column and no parameter shadows a local: key columns named
-   `err`, `res`, `n`, `out`, `rows` or `q` generate methods that
-   compile.
+6. **Locals and helpers.** Every local a function of a data file
+   declares, the parameters of a function literal included, is `volt`
+   followed by an upper-case letter, with no underscore (`voltErr`,
+   `voltRows`, `voltV`), and so is every unexported package-level name
+   the data files declare: the scan function `volt<Row>Scan` of a
+   model or a select's row type, and the statement constants
+   `volt<Model>TableSQL`, `volt<Model>ColumnsSQL`, `volt<Model>GetSQL`,
+   `volt<Model>GetBy<Field>SQL`, `volt<Model>ListSQL`,
+   `volt<Model>DeleteSQL` and `volt<Model><Select>SQL`. The parameter a
+   key column takes in `Get`, `GetMany`, `GetBy*` and `Delete` is its
+   Go field name (§names) with the leading initialism or letter lowered
+   (`UserID` is `userID`), with `_` appended when that is a Go keyword,
+   `ctx`, `arg`, `q` or `rt`, `nil` or `append` (the predeclared names a
+   generated method uses), a name the route files' signatures take
+   (`w`, `r`, `opts`, `volt`, `cs`, `c`), which a query route's path
+   parameter, named after the key parameter, may not take
+   (§route-paths), or of the locals' form: a column `volt_err` takes
+   `voltErr_` and a column `c` takes `c_`. `GetMany` takes that name
+   with `s` added. A select parameter is refused where a key column's
+   parameter takes `_`, `arg` aside (§predicates), so no column and no
+   parameter shadows a local, a helper or a predeclared name a method
+   uses: key columns named `err`, `res`, `n`, `out`, `rows`, `q`, `nil`
+   or `post_scan` generate methods that compile, and a table keyed on
+   `c` routes as `/:c_` (§query-routes).
 
 ---
 

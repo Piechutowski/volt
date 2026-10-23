@@ -1,12 +1,15 @@
 package golang_test
 
 import (
+	"fmt"
 	goast "go/ast"
 	goparser "go/parser"
 	gotoken "go/token"
+	"go/types"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Piechutowski/volt/lang"
@@ -17,10 +20,12 @@ import (
 
 // TestColumnsNamedLikeLocalsCompile proves that no key column and no
 // select parameter can take a name a generated data-file method declares
-// for itself (spec §generated-query-surface): the snippet keys a table on
-// columns named err, res, n, out, rows and q, reads another by single
-// keys of those names and selects with parameters named rows, err and out,
-// and its generated files build.
+// for itself or calls (spec §generated-query-surface): the snippet keys
+// tables on columns named err, res, n, out, rows, q, nil, append and like
+// the scan function and statement constants the generator once named
+// ledgerScan and ledgerGetSQL, reads another by single keys of such names
+// and selects with parameters named rows, err, out, entryScan and
+// entryByHelpersSQL, and its generated files build.
 func TestColumnsNamedLikeLocalsCompile(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
@@ -31,6 +36,49 @@ func TestColumnsNamedLikeLocalsCompile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	schemaCompiles(t, repoRoot, schema)
+}
+
+// TestPredeclaredNamesCompile proves the names a key column's parameter
+// and a select parameter avoid among Go's predeclared identifiers are
+// enough (spec §generated-query-surface, §predicates): a table keyed on a
+// column of every predeclared name, a unique column of every one, and a
+// scalar and a list select parameter of every one but nil and append,
+// which the checker refuses, generate files that build.
+func TestPredeclaredNamesCompile(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	handleTakesConstructor := map[string]bool{"new": true}
+	var b strings.Builder
+	b.WriteString("package db\n\nTable posts {\n  id    int [pk]\n  label string\n  n     int\n}\n\n")
+	var unique strings.Builder
+	names := types.Universe.Names()
+	params := 0
+	for _, name := range names {
+		if handleTakesConstructor[name] {
+			continue
+		}
+		fmt.Fprintf(&b, "Table k_%s {\n  %s int [pk]\n  label string\n}\n\n", name, name)
+		fmt.Fprintf(&unique, "  %s string [unique]\n", name)
+	}
+	fmt.Fprintf(&b, "Table uniques {\n  id int [pk]\n%s}\n\n", unique.String())
+	for _, name := range names {
+		if naming.BodyBuiltin(name) {
+			continue
+		}
+		fmt.Fprintf(&b, "Select s_%s for posts where label = :%s\nSelect l_%s for posts where n in :%s\n", name, name, name, name)
+		params += 2
+	}
+	if len(names) < 40 || params < 70 {
+		t.Fatalf("only %d predeclared names and %d select parameters", len(names), params)
+	}
+	schemaCompiles(t, repoRoot, []byte(b.String()))
+}
+
+func schemaCompiles(t *testing.T, repoRoot string, schema []byte) {
+	t.Helper()
 	dir := t.TempDir()
 	gomod := "module localscheck\n\ngo 1.27\n\n" +
 		"require github.com/Piechutowski/volt v0.0.0\n\n" +
@@ -86,8 +134,9 @@ func TestColumnsNamedLikeLocalsCompile(t *testing.T) {
 
 // TestGeneratedLocalsTakeTheLocalForm proves every local a generated data
 // file declares inside a function, function literal parameters included,
-// has the form naming.LocalName reports (spec §generated-query-surface),
-// across every generator golden and generated fixture.
+// and every unexported package-level name it declares, has the form
+// naming.LocalName reports (spec §generated-query-surface), across every
+// generator golden and generated fixture.
 func TestGeneratedLocalsTakeTheLocalForm(t *testing.T) {
 	var files []string
 	for _, pattern := range []string{
@@ -104,7 +153,7 @@ func TestGeneratedLocalsTakeTheLocalForm(t *testing.T) {
 	if len(files) < 20 {
 		t.Fatalf("only %d generated data files found", len(files))
 	}
-	checked := 0
+	checked, helpers := 0, 0
 	for _, path := range files {
 		src, err := os.ReadFile(path)
 		if err != nil {
@@ -118,13 +167,35 @@ func TestGeneratedLocalsTakeTheLocalForm(t *testing.T) {
 		bad := func(id *goast.Ident) {
 			checked++
 			if id.Name != "_" && !naming.LocalName(id.Name) {
-				t.Errorf("%s: local %s does not take the generated locals' form", fset.Position(id.Pos()), id.Name)
+				t.Errorf("%s: %s does not take the form of the generated locals and helpers", fset.Position(id.Pos()), id.Name)
 			}
 		}
 		for _, d := range f.Decls {
+			if gd, ok := d.(*goast.GenDecl); ok {
+				for _, spec := range gd.Specs {
+					switch sp := spec.(type) {
+					case *goast.ValueSpec:
+						for _, id := range sp.Names {
+							if id.Name != "_" && !id.IsExported() {
+								bad(id)
+								helpers++
+							}
+						}
+					case *goast.TypeSpec:
+						if !sp.Name.IsExported() {
+							bad(sp.Name)
+							helpers++
+						}
+					}
+				}
+			}
 			fd, ok := d.(*goast.FuncDecl)
 			if !ok || fd.Body == nil {
 				continue
+			}
+			if fd.Recv == nil && !fd.Name.IsExported() {
+				bad(fd.Name)
+				helpers++
 			}
 			goast.Inspect(fd.Body, func(n goast.Node) bool {
 				switch x := n.(type) {
@@ -159,7 +230,7 @@ func TestGeneratedLocalsTakeTheLocalForm(t *testing.T) {
 			})
 		}
 	}
-	if checked < 1000 {
-		t.Fatalf("only %d locals checked; the walk misses the generated bodies", checked)
+	if checked < 1000 || helpers < 100 {
+		t.Fatalf("only %d locals and %d package-level helpers checked; the walk misses the generated files", checked, helpers)
 	}
 }

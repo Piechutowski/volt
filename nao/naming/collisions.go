@@ -7,8 +7,6 @@ import (
 	"github.com/Piechutowski/volt/lang/token"
 )
 
-var dynWrapperSuffixes = []string{"Limit", "Offset", "Distinct", "OrderBy", "After", "Set"}
-
 // NameCollision is one Go package-scope name that generation would mint
 // twice. First and Second describe the colliding origins in declaration
 // order; Pos locates the later of the two. Type is the bare declared
@@ -50,15 +48,15 @@ func (o dynOrigin) name() string {
 	case dynModel:
 		return o.tm.Model
 	case dynChangeset:
-		return o.tm.Model + "Changeset"
+		return o.tm.Names.Changeset
 	case dynColumn:
-		return o.tm.Model + "Column"
+		return o.tm.Names.Column
 	case dynParams:
-		return o.tm.Model + "Params"
+		return o.tm.Names.Params
 	case dynNew:
-		return o.tm.Model + "New"
+		return o.tm.Names.New
 	case dynHandle:
-		return o.tm.Model + o.f.GoField
+		return o.tm.Handle(o.f)
 	case dynWrapper:
 		return o.tm.Model + o.sfx
 	}
@@ -72,15 +70,15 @@ func (o dynOrigin) describe() string {
 	case dynModel:
 		return fmt.Sprintf("table %s (model %s)", o.tm.Info.Decl.Name.Name(), o.tm.Model)
 	case dynChangeset:
-		return fmt.Sprintf("table %s (changeset %sChangeset)", o.tm.Info.Decl.Name.Name(), o.tm.Model)
+		return fmt.Sprintf("table %s (changeset %s)", o.tm.Info.Decl.Name.Name(), o.tm.Names.Changeset)
 	case dynColumn:
-		return fmt.Sprintf("table %s (column handle type %sColumn)", o.tm.Info.Decl.Name.Name(), o.tm.Model)
+		return fmt.Sprintf("table %s (column handle type %s)", o.tm.Info.Decl.Name.Name(), o.tm.Names.Column)
 	case dynParams:
-		return fmt.Sprintf("table %s (write body %sParams)", o.tm.Info.Decl.Name.Name(), o.tm.Model)
+		return fmt.Sprintf("table %s (write body %s)", o.tm.Info.Decl.Name.Name(), o.tm.Names.Params)
 	case dynNew:
-		return fmt.Sprintf("table %s (constructor %sNew)", o.tm.Info.Decl.Name.Name(), o.tm.Model)
+		return fmt.Sprintf("table %s (constructor %s)", o.tm.Info.Decl.Name.Name(), o.tm.Names.New)
 	case dynHandle:
-		return fmt.Sprintf("table %s column %q (handle %s%s)", o.tm.Info.Decl.Name.Name(), o.f.ColName, o.tm.Model, o.f.GoField)
+		return fmt.Sprintf("table %s column %q (handle %s)", o.tm.Info.Decl.Name.Name(), o.f.ColName, o.tm.Handle(o.f))
 	case dynWrapper:
 		return fmt.Sprintf("table %s (option wrapper %s%s)", o.tm.Info.Decl.Name.Name(), o.tm.Model, o.sfx)
 	}

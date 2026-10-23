@@ -61,7 +61,6 @@ func Validators(pl *naming.Plan, fns []naming.ValidatorFn, opts Options) ([]byte
 }
 
 func validateEmit(b *strings.Builder, t *naming.Table, specs []naming.ValidatorSpec) bool {
-	m := t.Model
 	tbl := t.Info.Decl.Name.Name()
 	var checks strings.Builder
 	for _, f := range t.Fields {
@@ -81,7 +80,7 @@ func validateEmit(b *strings.Builder, t *naming.Table, specs []naming.ValidatorS
 	fmt.Fprintf(b, "// Validate runs required and the validators of %s over the row,\n", tbl)
 	fmt.Fprintf(b, "// every one every time, replacing the findings of an earlier Validate\n")
 	fmt.Fprintf(b, "// (spec §changesets, §validators).\n")
-	fmt.Fprintf(b, "func (c %sChangeset) Validate() %sChangeset {\n", m, m)
+	fmt.Fprintf(b, "func (c %s) Validate() %s {\n", t.Names.Changeset, t.Names.Changeset)
 	if checks.Len() == 0 {
 		b.WriteString("\tc.valid = nil\n\treturn c\n}\n\n")
 		return false

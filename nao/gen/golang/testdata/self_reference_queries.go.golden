@@ -38,17 +38,17 @@ func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
 }
 
-func employeeScan(r rt.Row) (Employee, error) {
+func voltEmployeeScan(r rt.Row) (Employee, error) {
 	var voltV Employee
 	voltErr := r.Scan(&voltV.ID, &voltV.FullName, &voltV.ManagerID)
 	return voltV, rt.Refused("Employee", voltErr)
 }
 
-const employeeGetSQL = `SELECT "id", "full_name", "manager_id" FROM "employees" WHERE "id" = ?`
+const voltEmployeeGetSQL = `SELECT "id", "full_name", "manager_id" FROM "employees" WHERE "id" = ?`
 
 // EmployeeGet fetches the employees row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) EmployeeGet(ctx context.Context, id int) (Employee, error) {
-	return employeeScan(q.db.QueryRowContext(ctx, employeeGetSQL, id))
+	return voltEmployeeScan(q.db.QueryRowContext(ctx, voltEmployeeGetSQL, id))
 }
 
 // EmployeeGetMany fetches the employees rows whose primary key is in ids, in
@@ -57,7 +57,7 @@ func (q *Queries) EmployeeGetMany(ctx context.Context, ids []int) ([]Employee, e
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(employeeTableSQL, employeeColumnsSQL, []rt.Opt[Employee]{EmployeeID.In(ids...)})
+	voltQuery, voltArgs, voltErr := rt.SelectRender(voltEmployeeTableSQL, voltEmployeeColumnsSQL, []rt.Opt[Employee]{EmployeeID.In(ids...)})
 	if voltErr != nil {
 		return nil, voltErr
 	}
@@ -68,7 +68,7 @@ func (q *Queries) EmployeeGetMany(ctx context.Context, ids []int) ([]Employee, e
 	defer voltRows.Close()
 	voltOut := []Employee{}
 	for voltRows.Next() {
-		voltV, voltErr := employeeScan(voltRows)
+		voltV, voltErr := voltEmployeeScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -77,18 +77,18 @@ func (q *Queries) EmployeeGetMany(ctx context.Context, ids []int) ([]Employee, e
 	return voltOut, voltRows.Err()
 }
 
-const employeeListSQL = `SELECT "id", "full_name", "manager_id" FROM "employees"`
+const voltEmployeeListSQL = `SELECT "id", "full_name", "manager_id" FROM "employees"`
 
 // EmployeeList returns every employees row.
 func (q *Queries) EmployeeList(ctx context.Context) ([]Employee, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, employeeListSQL)
+	voltRows, voltErr := q.db.QueryContext(ctx, voltEmployeeListSQL)
 	if voltErr != nil {
 		return nil, voltErr
 	}
 	defer voltRows.Close()
 	voltOut := []Employee{}
 	for voltRows.Next() {
-		voltV, voltErr := employeeScan(voltRows)
+		voltV, voltErr := voltEmployeeScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -113,11 +113,11 @@ func (q *Queries) EmployeeCreate(ctx context.Context, c EmployeeChangeset) (Empl
 	if c.set[2] {
 		voltCols, voltArgs = append(voltCols, "manager_id"), append(voltArgs, voltV.ManagerID)
 	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(employeeTableSQL, voltCols, employeeColumnsSQL), voltArgs...)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltEmployeeTableSQL, voltCols, voltEmployeeColumnsSQL), voltArgs...)
 	if voltErr != nil {
 		return Employee{}, voltErr
 	}
-	return employeeScan(voltRow)
+	return voltEmployeeScan(voltRow)
 }
 
 // EmployeeUpdate validates c and writes its marked columns to the employees row it
@@ -144,19 +144,19 @@ func (q *Queries) EmployeeUpdate(ctx context.Context, c EmployeeChangeset) (Empl
 		return voltV, nil
 	}
 	voltArgs = append(voltArgs, c.data.ID)
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(employeeTableSQL, voltCols, []string{"id"}, employeeColumnsSQL), voltArgs...)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(voltEmployeeTableSQL, voltCols, []string{"id"}, voltEmployeeColumnsSQL), voltArgs...)
 	if voltErr != nil {
 		return Employee{}, voltErr
 	}
-	return employeeScan(voltRow)
+	return voltEmployeeScan(voltRow)
 }
 
-const employeeDeleteSQL = `DELETE FROM "employees" WHERE "id" = ?`
+const voltEmployeeDeleteSQL = `DELETE FROM "employees" WHERE "id" = ?`
 
 // EmployeeDelete removes the identified employees row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) EmployeeDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, employeeDeleteSQL, id)
+	voltRes, voltErr := q.db.ExecContext(ctx, voltEmployeeDeleteSQL, id)
 	if voltErr != nil {
 		return rt.Refused("Employee", voltErr)
 	}

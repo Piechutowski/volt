@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	pageViewTableSQL   = `"page_views"`
-	pageViewColumnsSQL = `"id", "site", "day", "hits", "score", "note"`
+	voltPageViewTableSQL   = `"page_views"`
+	voltPageViewColumnsSQL = `"id", "site", "day", "hits", "score", "note"`
 )
 
 // PageViewLimit caps how many rows PageViewQuery returns.
@@ -25,7 +25,7 @@ func PageViewDistinct() rt.Opt[PageView] { return rt.Distinct[PageView]() }
 // PageView column handles.
 func PageViewOrderBy(terms ...rt.Order[PageView]) rt.Opt[PageView] { return rt.OrderBy(terms...) }
 
-// PageViewAfter resumes strictly after the row with the given key — keyset
+// PageViewAfter resumes strictly after the row with the given key, for keyset
 // pagination: one value per PageViewOrderBy term, in the same order.
 func PageViewAfter(key ...any) rt.Opt[PageView] { return rt.After[PageView](key...) }
 
@@ -37,7 +37,7 @@ func PageViewSet(assigns ...rt.Assign[PageView]) []rt.Assign[PageView] { return 
 // shaped by the remaining options (order, limit, offset, keyset,
 // distinct). No options means every row.
 func (q *Queries) PageViewQuery(ctx context.Context, opts ...rt.Opt[PageView]) ([]PageView, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(pageViewTableSQL, pageViewColumnsSQL, opts)
+	voltQuery, voltArgs, voltErr := rt.SelectRender(voltPageViewTableSQL, voltPageViewColumnsSQL, opts)
 	if voltErr != nil {
 		return nil, voltErr
 	}
@@ -48,7 +48,7 @@ func (q *Queries) PageViewQuery(ctx context.Context, opts ...rt.Opt[PageView]) (
 	defer voltRows.Close()
 	voltOut := []PageView{}
 	for voltRows.Next() {
-		voltV, voltErr := pageViewScan(voltRows)
+		voltV, voltErr := voltPageViewScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -60,7 +60,7 @@ func (q *Queries) PageViewQuery(ctx context.Context, opts ...rt.Opt[PageView]) (
 // PageViewCount reports how many page_views rows match every given predicate;
 // none counts the whole table.
 func (q *Queries) PageViewCount(ctx context.Context, preds ...rt.Pred[PageView]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(pageViewTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.CountRender(voltPageViewTableSQL, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -73,7 +73,7 @@ func (q *Queries) PageViewCount(ctx context.Context, preds ...rt.Pred[PageView])
 
 // PageViewExists reports whether any page_views row matches every given predicate.
 func (q *Queries) PageViewExists(ctx context.Context, preds ...rt.Pred[PageView]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(pageViewTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltPageViewTableSQL, preds)
 	if voltErr != nil {
 		return false, voltErr
 	}
@@ -88,7 +88,7 @@ func (q *Queries) PageViewExists(ctx context.Context, preds ...rt.Pred[PageView]
 // reports how many went. No effective predicate is an error, never a
 // full-table delete.
 func (q *Queries) PageViewDeleteWhere(ctx context.Context, preds ...rt.Pred[PageView]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(pageViewTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltPageViewTableSQL, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -104,7 +104,7 @@ func (q *Queries) PageViewDeleteWhere(ctx context.Context, preds ...rt.Pred[Page
 // partial update of the dynamic layer. No effective predicate
 // is an error, never a full-table rewrite.
 func (q *Queries) PageViewUpdateWhere(ctx context.Context, set []rt.Assign[PageView], preds ...rt.Pred[PageView]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(pageViewTableSQL, set, preds)
+	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltPageViewTableSQL, set, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -116,8 +116,8 @@ func (q *Queries) PageViewUpdateWhere(ctx context.Context, set []rt.Assign[PageV
 }
 
 const (
-	linkClickTableSQL   = `"link_clicks"`
-	linkClickColumnsSQL = `"id", "site", "day", "target"`
+	voltLinkClickTableSQL   = `"link_clicks"`
+	voltLinkClickColumnsSQL = `"id", "site", "day", "target"`
 )
 
 // LinkClickLimit caps how many rows LinkClickQuery returns.
@@ -133,7 +133,7 @@ func LinkClickDistinct() rt.Opt[LinkClick] { return rt.Distinct[LinkClick]() }
 // LinkClick column handles.
 func LinkClickOrderBy(terms ...rt.Order[LinkClick]) rt.Opt[LinkClick] { return rt.OrderBy(terms...) }
 
-// LinkClickAfter resumes strictly after the row with the given key — keyset
+// LinkClickAfter resumes strictly after the row with the given key, for keyset
 // pagination: one value per LinkClickOrderBy term, in the same order.
 func LinkClickAfter(key ...any) rt.Opt[LinkClick] { return rt.After[LinkClick](key...) }
 
@@ -145,7 +145,7 @@ func LinkClickSet(assigns ...rt.Assign[LinkClick]) []rt.Assign[LinkClick] { retu
 // shaped by the remaining options (order, limit, offset, keyset,
 // distinct). No options means every row.
 func (q *Queries) LinkClickQuery(ctx context.Context, opts ...rt.Opt[LinkClick]) ([]LinkClick, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(linkClickTableSQL, linkClickColumnsSQL, opts)
+	voltQuery, voltArgs, voltErr := rt.SelectRender(voltLinkClickTableSQL, voltLinkClickColumnsSQL, opts)
 	if voltErr != nil {
 		return nil, voltErr
 	}
@@ -156,7 +156,7 @@ func (q *Queries) LinkClickQuery(ctx context.Context, opts ...rt.Opt[LinkClick])
 	defer voltRows.Close()
 	voltOut := []LinkClick{}
 	for voltRows.Next() {
-		voltV, voltErr := linkClickScan(voltRows)
+		voltV, voltErr := voltLinkClickScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -168,7 +168,7 @@ func (q *Queries) LinkClickQuery(ctx context.Context, opts ...rt.Opt[LinkClick])
 // LinkClickCount reports how many link_clicks rows match every given predicate;
 // none counts the whole table.
 func (q *Queries) LinkClickCount(ctx context.Context, preds ...rt.Pred[LinkClick]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(linkClickTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.CountRender(voltLinkClickTableSQL, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -181,7 +181,7 @@ func (q *Queries) LinkClickCount(ctx context.Context, preds ...rt.Pred[LinkClick
 
 // LinkClickExists reports whether any link_clicks row matches every given predicate.
 func (q *Queries) LinkClickExists(ctx context.Context, preds ...rt.Pred[LinkClick]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(linkClickTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltLinkClickTableSQL, preds)
 	if voltErr != nil {
 		return false, voltErr
 	}
@@ -196,7 +196,7 @@ func (q *Queries) LinkClickExists(ctx context.Context, preds ...rt.Pred[LinkClic
 // reports how many went. No effective predicate is an error, never a
 // full-table delete.
 func (q *Queries) LinkClickDeleteWhere(ctx context.Context, preds ...rt.Pred[LinkClick]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(linkClickTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltLinkClickTableSQL, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -212,7 +212,7 @@ func (q *Queries) LinkClickDeleteWhere(ctx context.Context, preds ...rt.Pred[Lin
 // partial update of the dynamic layer. No effective predicate
 // is an error, never a full-table rewrite.
 func (q *Queries) LinkClickUpdateWhere(ctx context.Context, set []rt.Assign[LinkClick], preds ...rt.Pred[LinkClick]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(linkClickTableSQL, set, preds)
+	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltLinkClickTableSQL, set, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}

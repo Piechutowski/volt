@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	invoiceTableSQL   = `"invoices"`
-	invoiceColumnsSQL = `"id", "total", "created_at", "updated_at", "deleted_at"`
+	voltInvoiceTableSQL   = `"invoices"`
+	voltInvoiceColumnsSQL = `"id", "total", "created_at", "updated_at", "deleted_at"`
 )
 
 // InvoiceLimit caps how many rows InvoiceQuery returns.
@@ -25,7 +25,7 @@ func InvoiceDistinct() rt.Opt[Invoice] { return rt.Distinct[Invoice]() }
 // Invoice column handles.
 func InvoiceOrderBy(terms ...rt.Order[Invoice]) rt.Opt[Invoice] { return rt.OrderBy(terms...) }
 
-// InvoiceAfter resumes strictly after the row with the given key — keyset
+// InvoiceAfter resumes strictly after the row with the given key, for keyset
 // pagination: one value per InvoiceOrderBy term, in the same order.
 func InvoiceAfter(key ...any) rt.Opt[Invoice] { return rt.After[Invoice](key...) }
 
@@ -37,7 +37,7 @@ func InvoiceSet(assigns ...rt.Assign[Invoice]) []rt.Assign[Invoice] { return ass
 // shaped by the remaining options (order, limit, offset, keyset,
 // distinct). No options means every row.
 func (q *Queries) InvoiceQuery(ctx context.Context, opts ...rt.Opt[Invoice]) ([]Invoice, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(invoiceTableSQL, invoiceColumnsSQL, opts)
+	voltQuery, voltArgs, voltErr := rt.SelectRender(voltInvoiceTableSQL, voltInvoiceColumnsSQL, opts)
 	if voltErr != nil {
 		return nil, voltErr
 	}
@@ -48,7 +48,7 @@ func (q *Queries) InvoiceQuery(ctx context.Context, opts ...rt.Opt[Invoice]) ([]
 	defer voltRows.Close()
 	voltOut := []Invoice{}
 	for voltRows.Next() {
-		voltV, voltErr := invoiceScan(voltRows)
+		voltV, voltErr := voltInvoiceScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -60,7 +60,7 @@ func (q *Queries) InvoiceQuery(ctx context.Context, opts ...rt.Opt[Invoice]) ([]
 // InvoiceCount reports how many invoices rows match every given predicate;
 // none counts the whole table.
 func (q *Queries) InvoiceCount(ctx context.Context, preds ...rt.Pred[Invoice]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(invoiceTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.CountRender(voltInvoiceTableSQL, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -73,7 +73,7 @@ func (q *Queries) InvoiceCount(ctx context.Context, preds ...rt.Pred[Invoice]) (
 
 // InvoiceExists reports whether any invoices row matches every given predicate.
 func (q *Queries) InvoiceExists(ctx context.Context, preds ...rt.Pred[Invoice]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(invoiceTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltInvoiceTableSQL, preds)
 	if voltErr != nil {
 		return false, voltErr
 	}
@@ -88,7 +88,7 @@ func (q *Queries) InvoiceExists(ctx context.Context, preds ...rt.Pred[Invoice]) 
 // reports how many went. No effective predicate is an error, never a
 // full-table delete.
 func (q *Queries) InvoiceDeleteWhere(ctx context.Context, preds ...rt.Pred[Invoice]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(invoiceTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltInvoiceTableSQL, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -104,7 +104,7 @@ func (q *Queries) InvoiceDeleteWhere(ctx context.Context, preds ...rt.Pred[Invoi
 // partial update of the dynamic layer. No effective predicate
 // is an error, never a full-table rewrite.
 func (q *Queries) InvoiceUpdateWhere(ctx context.Context, set []rt.Assign[Invoice], preds ...rt.Pred[Invoice]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(invoiceTableSQL, set, preds)
+	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltInvoiceTableSQL, set, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}

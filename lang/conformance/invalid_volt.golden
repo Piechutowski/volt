@@ -618,10 +618,10 @@ app/i361_group_name_case.volt:13:14: error: spec/selects-over-groups: unknown se
 db/schema.volt:10:5: error: spec/validators: validator emailShape must be exported: a validator is part of the package's API, so declare func EmailShape(string) error (§validators)
 
 ## i366_param_named_like_select_local.volt
-app/i366_param_named_like_select_local.volt:10:44: error: spec/selects-over-groups: parameter name "q" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
-app/i366_param_named_like_select_local.volt:11:44: error: spec/selects-over-groups: parameter name "rt" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
-app/i366_param_named_like_select_local.volt:12:44: error: spec/selects-over-groups: parameter name "voltRows" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
-app/i366_param_named_like_select_local.volt:13:45: error: spec/selects-over-groups: parameter name "voltErr" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+app/i366_param_named_like_select_local.volt:10:44: error: spec/selects-over-groups: parameter name "q" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil or append, which the generated methods use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+app/i366_param_named_like_select_local.volt:11:44: error: spec/selects-over-groups: parameter name "rt" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil or append, which the generated methods use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+app/i366_param_named_like_select_local.volt:12:44: error: spec/selects-over-groups: parameter name "voltRows" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil or append, which the generated methods use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+app/i366_param_named_like_select_local.volt:13:45: error: spec/selects-over-groups: parameter name "voltErr" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil or append, which the generated methods use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
 
 ## i369_compare_columns_go_type.volt
 app/i369_compare_columns_go_type.volt:11:41: error: spec/selects-over-groups: cannot compare column "hits" (int) with column "score" (float64) (§predicates)
@@ -635,6 +635,10 @@ app/i370_comparison_without_column.volt:11:38: error: spec/selects-over-groups: 
 
 ## i371_pred_redeclared.volt
 app/i371_pred_redeclared.volt:11:6: error: spec/predicates: predicate "busy" redeclared (§predicates)
+
+## i372_param_named_like_builtin.volt
+app/i372_param_named_like_builtin.volt:11:42: error: spec/selects-over-groups: parameter name "nil" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil or append, which the generated methods use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+app/i372_param_named_like_builtin.volt:12:43: error: spec/selects-over-groups: parameter name "append" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil or append, which the generated methods use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
 
 ## i37_ambiguous_overlap.volt
 app/i37_ambiguous_overlap.volt:8:2: error: spec/scopes-and-routes: route GET /:y/b is ambiguous with the route at app/i37_ambiguous_overlap.volt:7:2 (GET /a/:x): both match some requests and neither is more specific (§route-conflicts)

@@ -92,10 +92,9 @@ var goKeywords = map[string]bool{
 	"switch": true, "type": true, "var": true,
 }
 
-// ArgName is the unexported spelling of an exported Go name, the stem of
-// the package's unexported helpers (spec §generated-query-surface); a Go
-// keyword and a name the generated signatures take (ctx, arg, q) take a
-// trailing underscore.
+// ArgName is the unexported spelling of an exported Go name (spec
+// §generated-query-surface); a Go keyword and a name the generated
+// signatures take (ctx, arg, q) take a trailing underscore.
 func ArgName(exported string) string {
 	runes := []rune(exported)
 	upper := 0
@@ -125,16 +124,35 @@ func ArgName(exported string) string {
 
 func paramName(goField string) string {
 	arg := ArgName(goField)
-	if arg == "rt" || LocalName(arg) {
+	if arg == "rt" || BodyBuiltin(arg) || RouteSignatureName(arg) || LocalName(arg) {
 		arg += "_"
 	}
 	return arg
 }
 
-// LocalName reports whether name has the form of a local the data
-// generator declares: volt, an upper-case letter, and no underscore, as in
-// voltErr and voltRows (spec §generated-query-surface). No column's Go
-// parameter and no select parameter takes that form.
+var routeSignatureNames = map[string]bool{
+	"w": true, "r": true, "opts": true, "volt": true, "cs": true, "c": true, "ctx": true,
+}
+
+// RouteSignatureName reports whether name is one a generated route file
+// declares in a handler or client method beside the route's own
+// parameters: w, r, opts, volt, cs, c or ctx (spec §route-paths). No path
+// parameter and no select parameter takes one, and a key column's
+// parameter, which a query route binds by name, takes a trailing
+// underscore instead (§generated-query-surface).
+func RouteSignatureName(name string) bool { return routeSignatureNames[name] }
+
+// BodyBuiltin reports whether name is a predeclared Go identifier that a
+// generated data method uses where its parameters are in scope: nil or
+// append (spec §generated-query-surface). No select parameter takes one,
+// and a key column's parameter takes a trailing underscore instead.
+func BodyBuiltin(name string) bool { return name == "nil" || name == "append" }
+
+// LocalName reports whether name has the form of a local or an unexported
+// helper the data generator declares: volt, an upper-case letter, and no
+// underscore, as in voltErr and voltPostScan (spec
+// §generated-query-surface). No column's Go parameter and no select
+// parameter takes that form.
 func LocalName(name string) bool {
 	rest, ok := strings.CutPrefix(name, "volt")
 	if !ok || strings.Contains(rest, "_") {

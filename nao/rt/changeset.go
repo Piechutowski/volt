@@ -54,9 +54,9 @@ func (e *Invalid) Error() string {
 func (e *Invalid) Unwrap() error { return e.Cause }
 
 // Detail is the itemized form the volt runtime renders into an error
-// body: the check, its columns, the message. It aliases the same unnamed
-// struct the volt runtime aliases, so Details() satisfies volt's Detailer
-// interface without either package importing the other.
+// body: the check, its columns, the message. It aliases the unnamed
+// struct volt aliases, so Details() satisfies volt's Detailer interface
+// while nao/rt never imports volt (spec §data-and-network-layers).
 type Detail = struct {
 	Check   string   `json:"check"`
 	Columns []string `json:"columns,omitempty"`

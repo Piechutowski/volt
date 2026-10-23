@@ -7,18 +7,18 @@ import (
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-const pageViewRowsSQL = `SELECT "id", "site", "day", "hits", "score", "note" FROM "page_views" WHERE ("site" = ? AND "day" = ?)`
+const voltPageViewRowsSQL = `SELECT "id", "site", "day", "hits", "score", "note" FROM "page_views" WHERE ("site" = ? AND "day" = ?)`
 
 // PageViewRows runs the "rows" select over page_views (spec §selects-over-groups).
 func (q *Queries) PageViewRows(ctx context.Context, site string, day int) ([]PageView, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, pageViewRowsSQL, site, day)
+	voltRows, voltErr := q.db.QueryContext(ctx, voltPageViewRowsSQL, site, day)
 	if voltErr != nil {
 		return nil, voltErr
 	}
 	defer voltRows.Close()
 	voltOut := []PageView{}
 	for voltRows.Next() {
-		voltV, voltErr := pageViewScan(voltRows)
+		voltV, voltErr := voltPageViewScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -27,18 +27,18 @@ func (q *Queries) PageViewRows(ctx context.Context, site string, day int) ([]Pag
 	return voltOut, voltRows.Err()
 }
 
-const pageViewChosenSQL = `SELECT "id", "site", "day", "hits", "score", "note" FROM "page_views" WHERE "site" IN (SELECT value FROM json_each(?))`
+const voltPageViewChosenSQL = `SELECT "id", "site", "day", "hits", "score", "note" FROM "page_views" WHERE "site" IN (SELECT value FROM json_each(?))`
 
 // PageViewChosen runs the "chosen" select over page_views (spec §selects-over-groups).
 func (q *Queries) PageViewChosen(ctx context.Context, sites []string) ([]PageView, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, pageViewChosenSQL, rt.JSONList(sites))
+	voltRows, voltErr := q.db.QueryContext(ctx, voltPageViewChosenSQL, rt.JSONList(sites))
 	if voltErr != nil {
 		return nil, voltErr
 	}
 	defer voltRows.Close()
 	voltOut := []PageView{}
 	for voltRows.Next() {
-		voltV, voltErr := pageViewScan(voltRows)
+		voltV, voltErr := voltPageViewScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -47,18 +47,18 @@ func (q *Queries) PageViewChosen(ctx context.Context, sites []string) ([]PageVie
 	return voltOut, voltRows.Err()
 }
 
-const linkClickChosenSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE "site" IN (SELECT value FROM json_each(?))`
+const voltLinkClickChosenSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE "site" IN (SELECT value FROM json_each(?))`
 
 // LinkClickChosen runs the "chosen" select over link_clicks (spec §selects-over-groups).
 func (q *Queries) LinkClickChosen(ctx context.Context, sites []string) ([]LinkClick, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, linkClickChosenSQL, rt.JSONList(sites))
+	voltRows, voltErr := q.db.QueryContext(ctx, voltLinkClickChosenSQL, rt.JSONList(sites))
 	if voltErr != nil {
 		return nil, voltErr
 	}
 	defer voltRows.Close()
 	voltOut := []LinkClick{}
 	for voltRows.Next() {
-		voltV, voltErr := linkClickScan(voltRows)
+		voltV, voltErr := voltLinkClickScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -67,18 +67,18 @@ func (q *Queries) LinkClickChosen(ctx context.Context, sites []string) ([]LinkCl
 	return voltOut, voltRows.Err()
 }
 
-const pageViewBusySQL = `SELECT "id", "site", "day", "hits", "score", "note" FROM "page_views" WHERE ("hits" > ? AND "score" >= ? AND "note" IS NOT NULL)`
+const voltPageViewBusySQL = `SELECT "id", "site", "day", "hits", "score", "note" FROM "page_views" WHERE ("hits" > ? AND "score" >= ? AND "note" IS NOT NULL)`
 
 // PageViewBusy runs the "busy" select over page_views (spec §selects-over-groups).
 func (q *Queries) PageViewBusy(ctx context.Context) ([]PageView, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, pageViewBusySQL, 10, 0.5)
+	voltRows, voltErr := q.db.QueryContext(ctx, voltPageViewBusySQL, 10, 0.5)
 	if voltErr != nil {
 		return nil, voltErr
 	}
 	defer voltRows.Close()
 	voltOut := []PageView{}
 	for voltRows.Next() {
-		voltV, voltErr := pageViewScan(voltRows)
+		voltV, voltErr := voltPageViewScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -94,24 +94,24 @@ type Summary struct {
 	Day  int    `db:"day" json:"day"`
 }
 
-func summaryScan(r rt.Row) (Summary, error) {
+func voltSummaryScan(r rt.Row) (Summary, error) {
 	var voltV Summary
 	voltErr := r.Scan(&voltV.Site, &voltV.Day)
 	return voltV, voltErr
 }
 
-const pageViewSummarySQL = `SELECT "site", "day" FROM "page_views" WHERE "day" >= ?`
+const voltPageViewSummarySQL = `SELECT "site", "day" FROM "page_views" WHERE "day" >= ?`
 
 // PageViewSummary runs the "summary" select over page_views (spec §selects-over-groups).
 func (q *Queries) PageViewSummary(ctx context.Context, from int) ([]Summary, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, pageViewSummarySQL, from)
+	voltRows, voltErr := q.db.QueryContext(ctx, voltPageViewSummarySQL, from)
 	if voltErr != nil {
 		return nil, voltErr
 	}
 	defer voltRows.Close()
 	voltOut := []Summary{}
 	for voltRows.Next() {
-		voltV, voltErr := summaryScan(voltRows)
+		voltV, voltErr := voltSummaryScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -120,18 +120,18 @@ func (q *Queries) PageViewSummary(ctx context.Context, from int) ([]Summary, err
 	return voltOut, voltRows.Err()
 }
 
-const linkClickSummarySQL = `SELECT "site", "day" FROM "link_clicks" WHERE "day" >= ?`
+const voltLinkClickSummarySQL = `SELECT "site", "day" FROM "link_clicks" WHERE "day" >= ?`
 
 // LinkClickSummary runs the "summary" select over link_clicks (spec §selects-over-groups).
 func (q *Queries) LinkClickSummary(ctx context.Context, from int) ([]Summary, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, linkClickSummarySQL, from)
+	voltRows, voltErr := q.db.QueryContext(ctx, voltLinkClickSummarySQL, from)
 	if voltErr != nil {
 		return nil, voltErr
 	}
 	defer voltRows.Close()
 	voltOut := []Summary{}
 	for voltRows.Next() {
-		voltV, voltErr := summaryScan(voltRows)
+		voltV, voltErr := voltSummaryScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -148,24 +148,24 @@ type LinkClickPublic struct {
 	Day  int    `db:"day" json:"day"`
 }
 
-func linkClickPublicScan(r rt.Row) (LinkClickPublic, error) {
+func voltLinkClickPublicScan(r rt.Row) (LinkClickPublic, error) {
 	var voltV LinkClickPublic
 	voltErr := r.Scan(&voltV.ID, &voltV.Site, &voltV.Day)
 	return voltV, voltErr
 }
 
-const linkClickPublicSQL = `SELECT "id", "site", "day" FROM "link_clicks"`
+const voltLinkClickPublicSQL = `SELECT "id", "site", "day" FROM "link_clicks"`
 
 // LinkClickPublic runs the "public" select over link_clicks (spec §selects-over-groups).
 func (q *Queries) LinkClickPublic(ctx context.Context) ([]LinkClickPublic, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, linkClickPublicSQL)
+	voltRows, voltErr := q.db.QueryContext(ctx, voltLinkClickPublicSQL)
 	if voltErr != nil {
 		return nil, voltErr
 	}
 	defer voltRows.Close()
 	voltOut := []LinkClickPublic{}
 	for voltRows.Next() {
-		voltV, voltErr := linkClickPublicScan(voltRows)
+		voltV, voltErr := voltLinkClickPublicScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -174,18 +174,18 @@ func (q *Queries) LinkClickPublic(ctx context.Context) ([]LinkClickPublic, error
 	return voltOut, voltRows.Err()
 }
 
-const pageViewRecentSQL = `SELECT "id", "site", "day", "hits", "score", "note" FROM "page_views" WHERE "day" >= ? ORDER BY "day" DESC, "id" ASC`
+const voltPageViewRecentSQL = `SELECT "id", "site", "day", "hits", "score", "note" FROM "page_views" WHERE "day" >= ? ORDER BY "day" DESC, "id" ASC`
 
 // PageViewRecent runs the "recent" select over page_views (spec §selects-over-groups).
 func (q *Queries) PageViewRecent(ctx context.Context, from int) ([]PageView, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, pageViewRecentSQL, from)
+	voltRows, voltErr := q.db.QueryContext(ctx, voltPageViewRecentSQL, from)
 	if voltErr != nil {
 		return nil, voltErr
 	}
 	defer voltRows.Close()
 	voltOut := []PageView{}
 	for voltRows.Next() {
-		voltV, voltErr := pageViewScan(voltRows)
+		voltV, voltErr := voltPageViewScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -194,18 +194,18 @@ func (q *Queries) PageViewRecent(ctx context.Context, from int) ([]PageView, err
 	return voltOut, voltRows.Err()
 }
 
-const linkClickRecentSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE "day" >= ? ORDER BY "day" DESC, "id" ASC`
+const voltLinkClickRecentSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE "day" >= ? ORDER BY "day" DESC, "id" ASC`
 
 // LinkClickRecent runs the "recent" select over link_clicks (spec §selects-over-groups).
 func (q *Queries) LinkClickRecent(ctx context.Context, from int) ([]LinkClick, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, linkClickRecentSQL, from)
+	voltRows, voltErr := q.db.QueryContext(ctx, voltLinkClickRecentSQL, from)
 	if voltErr != nil {
 		return nil, voltErr
 	}
 	defer voltRows.Close()
 	voltOut := []LinkClick{}
 	for voltRows.Next() {
-		voltV, voltErr := linkClickScan(voltRows)
+		voltV, voltErr := voltLinkClickScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -214,18 +214,18 @@ func (q *Queries) LinkClickRecent(ctx context.Context, from int) ([]LinkClick, e
 	return voltOut, voltRows.Err()
 }
 
-const linkClickAllSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks"`
+const voltLinkClickAllSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks"`
 
 // LinkClickAll runs the "all" select over link_clicks (spec §selects-over-groups).
 func (q *Queries) LinkClickAll(ctx context.Context) ([]LinkClick, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, linkClickAllSQL)
+	voltRows, voltErr := q.db.QueryContext(ctx, voltLinkClickAllSQL)
 	if voltErr != nil {
 		return nil, voltErr
 	}
 	defer voltRows.Close()
 	voltOut := []LinkClick{}
 	for voltRows.Next() {
-		voltV, voltErr := linkClickScan(voltRows)
+		voltV, voltErr := voltLinkClickScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}

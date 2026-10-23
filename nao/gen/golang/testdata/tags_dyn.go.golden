@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	userTableSQL   = `"users"`
-	userColumnsSQL = `"id", "user_name", "bio"`
+	voltUserTableSQL   = `"users"`
+	voltUserColumnsSQL = `"id", "user_name", "bio"`
 )
 
 // UserLimit caps how many rows UserQuery returns.
@@ -25,7 +25,7 @@ func UserDistinct() rt.Opt[User] { return rt.Distinct[User]() }
 // User column handles.
 func UserOrderBy(terms ...rt.Order[User]) rt.Opt[User] { return rt.OrderBy(terms...) }
 
-// UserAfter resumes strictly after the row with the given key — keyset
+// UserAfter resumes strictly after the row with the given key, for keyset
 // pagination: one value per UserOrderBy term, in the same order.
 func UserAfter(key ...any) rt.Opt[User] { return rt.After[User](key...) }
 
@@ -37,7 +37,7 @@ func UserSet(assigns ...rt.Assign[User]) []rt.Assign[User] { return assigns }
 // shaped by the remaining options (order, limit, offset, keyset,
 // distinct). No options means every row.
 func (q *Queries) UserQuery(ctx context.Context, opts ...rt.Opt[User]) ([]User, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(userTableSQL, userColumnsSQL, opts)
+	voltQuery, voltArgs, voltErr := rt.SelectRender(voltUserTableSQL, voltUserColumnsSQL, opts)
 	if voltErr != nil {
 		return nil, voltErr
 	}
@@ -48,7 +48,7 @@ func (q *Queries) UserQuery(ctx context.Context, opts ...rt.Opt[User]) ([]User, 
 	defer voltRows.Close()
 	voltOut := []User{}
 	for voltRows.Next() {
-		voltV, voltErr := userScan(voltRows)
+		voltV, voltErr := voltUserScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -60,7 +60,7 @@ func (q *Queries) UserQuery(ctx context.Context, opts ...rt.Opt[User]) ([]User, 
 // UserCount reports how many users rows match every given predicate;
 // none counts the whole table.
 func (q *Queries) UserCount(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(userTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.CountRender(voltUserTableSQL, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -73,7 +73,7 @@ func (q *Queries) UserCount(ctx context.Context, preds ...rt.Pred[User]) (int64,
 
 // UserExists reports whether any users row matches every given predicate.
 func (q *Queries) UserExists(ctx context.Context, preds ...rt.Pred[User]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(userTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltUserTableSQL, preds)
 	if voltErr != nil {
 		return false, voltErr
 	}
@@ -88,7 +88,7 @@ func (q *Queries) UserExists(ctx context.Context, preds ...rt.Pred[User]) (bool,
 // reports how many went. No effective predicate is an error, never a
 // full-table delete.
 func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(userTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltUserTableSQL, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -104,7 +104,7 @@ func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (
 // partial update of the dynamic layer. No effective predicate
 // is an error, never a full-table rewrite.
 func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], preds ...rt.Pred[User]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(userTableSQL, set, preds)
+	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltUserTableSQL, set, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}

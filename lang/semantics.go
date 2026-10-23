@@ -1025,10 +1025,6 @@ func settingsRepeated(sl *ast.SettingList, known ...string) (map[*ast.Setting]bo
 	return repeated, diags
 }
 
-var reservedParamNames = map[string]bool{
-	"w": true, "r": true, "opts": true, "volt": true, "cs": true, "c": true, "ctx": true,
-}
-
 var voltClientNames = map[string]string{
 	"Client": "embedded field Client",
 	"Base":   "field Base",

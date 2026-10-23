@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	commentTableSQL   = `"comments"`
-	commentColumnsSQL = `"id", "commentable_type", "commentable_id", "body"`
+	voltCommentTableSQL   = `"comments"`
+	voltCommentColumnsSQL = `"id", "commentable_type", "commentable_id", "body"`
 )
 
 // CommentLimit caps how many rows CommentQuery returns.
@@ -25,7 +25,7 @@ func CommentDistinct() rt.Opt[Comment] { return rt.Distinct[Comment]() }
 // Comment column handles.
 func CommentOrderBy(terms ...rt.Order[Comment]) rt.Opt[Comment] { return rt.OrderBy(terms...) }
 
-// CommentAfter resumes strictly after the row with the given key — keyset
+// CommentAfter resumes strictly after the row with the given key, for keyset
 // pagination: one value per CommentOrderBy term, in the same order.
 func CommentAfter(key ...any) rt.Opt[Comment] { return rt.After[Comment](key...) }
 
@@ -37,7 +37,7 @@ func CommentSet(assigns ...rt.Assign[Comment]) []rt.Assign[Comment] { return ass
 // shaped by the remaining options (order, limit, offset, keyset,
 // distinct). No options means every row.
 func (q *Queries) CommentQuery(ctx context.Context, opts ...rt.Opt[Comment]) ([]Comment, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(commentTableSQL, commentColumnsSQL, opts)
+	voltQuery, voltArgs, voltErr := rt.SelectRender(voltCommentTableSQL, voltCommentColumnsSQL, opts)
 	if voltErr != nil {
 		return nil, voltErr
 	}
@@ -48,7 +48,7 @@ func (q *Queries) CommentQuery(ctx context.Context, opts ...rt.Opt[Comment]) ([]
 	defer voltRows.Close()
 	voltOut := []Comment{}
 	for voltRows.Next() {
-		voltV, voltErr := commentScan(voltRows)
+		voltV, voltErr := voltCommentScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -60,7 +60,7 @@ func (q *Queries) CommentQuery(ctx context.Context, opts ...rt.Opt[Comment]) ([]
 // CommentCount reports how many comments rows match every given predicate;
 // none counts the whole table.
 func (q *Queries) CommentCount(ctx context.Context, preds ...rt.Pred[Comment]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(commentTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.CountRender(voltCommentTableSQL, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -73,7 +73,7 @@ func (q *Queries) CommentCount(ctx context.Context, preds ...rt.Pred[Comment]) (
 
 // CommentExists reports whether any comments row matches every given predicate.
 func (q *Queries) CommentExists(ctx context.Context, preds ...rt.Pred[Comment]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(commentTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltCommentTableSQL, preds)
 	if voltErr != nil {
 		return false, voltErr
 	}
@@ -88,7 +88,7 @@ func (q *Queries) CommentExists(ctx context.Context, preds ...rt.Pred[Comment]) 
 // reports how many went. No effective predicate is an error, never a
 // full-table delete.
 func (q *Queries) CommentDeleteWhere(ctx context.Context, preds ...rt.Pred[Comment]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(commentTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltCommentTableSQL, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -104,7 +104,7 @@ func (q *Queries) CommentDeleteWhere(ctx context.Context, preds ...rt.Pred[Comme
 // partial update of the dynamic layer. No effective predicate
 // is an error, never a full-table rewrite.
 func (q *Queries) CommentUpdateWhere(ctx context.Context, set []rt.Assign[Comment], preds ...rt.Pred[Comment]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(commentTableSQL, set, preds)
+	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltCommentTableSQL, set, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}

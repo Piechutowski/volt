@@ -241,6 +241,84 @@ func TestGenRemovesOldDataFileNames(t *testing.T) {
 	}
 }
 
+// TestGenRouteFilesFollowScopes proves a package's route files exist
+// exactly while it declares a scope (spec §data-and-network-layers): a
+// pipeline alone writes none, and once the last scope goes, gen
+// removes the route files it wrote and leaves a hand-written one.
+func TestGenRouteFilesFollowScopes(t *testing.T) {
+	volt := func(args ...string) error {
+		cmd := command()
+		cmd.ExitErrHandler = func(context.Context, *cli.Command, error) {}
+		return cmd.Run(context.Background(), append([]string{"volt"}, args...))
+	}
+	root := t.TempDir()
+	db := filepath.Join(root, "db")
+	write := func(name, src string) {
+		t.Helper()
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("go.mod", "module blog\n\ngo 1.27\n")
+	write("db/schema.volt", "package db\n\nTable authors {\n  id   int    [pk, increment]\n  name string\n}\n")
+	write("db/pipe.volt", "package db\n\nPipeline api {\n  use volt.RequestID\n}\n")
+	data := []string{"volt_models.go", "volt_queries.go", "volt_dyn.go"}
+	routes := []string{"volt_handlers.go", "volt_router.go", "volt_paths.go", "volt_routes.go", filepath.Join("client", "volt_client.go")}
+	exist := func(name string) bool {
+		_, err := os.Stat(filepath.Join(db, name))
+		return err == nil
+	}
+	if err := volt("gen", db); err != nil {
+		t.Fatalf("gen over a pipeline and no scope: %v", err)
+	}
+	for _, name := range data {
+		if !exist(name) {
+			t.Errorf("gen over a pipeline and no scope wrote no %s", name)
+		}
+	}
+	for _, name := range routes {
+		if exist(name) {
+			t.Errorf("gen over a pipeline and no scope wrote %s; a package without a scope has no routes", name)
+		}
+	}
+	write("db/routes.volt", "package db\n\nScope /api [pipe: api] {\n  get /authors/:id(int) AuthorGet\n}\n")
+	if err := volt("gen", db); err != nil {
+		t.Fatalf("gen with a scope: %v", err)
+	}
+	for _, name := range routes {
+		if !exist(name) {
+			t.Fatalf("gen with a scope wrote no %s", name)
+		}
+	}
+	if err := os.Remove(filepath.Join(db, "routes.volt")); err != nil {
+		t.Fatal(err)
+	}
+	if err := volt("gen", db); err != nil {
+		t.Fatalf("gen after the scope went: %v", err)
+	}
+	for _, name := range routes {
+		if exist(name) {
+			t.Errorf("%s outlived the package's last scope", name)
+		}
+	}
+	for _, name := range data {
+		if !exist(name) {
+			t.Errorf("gen after the scope went removed %s", name)
+		}
+	}
+	write("db/volt_router.go", "package db\n\n// RouterHandWritten is not generated (§projects-and-packages).\nfunc RouterHandWritten() {}\n")
+	if err := volt("gen", db); err != nil {
+		t.Fatalf("gen beside a hand-written volt_router.go: %v", err)
+	}
+	if !exist("volt_router.go") {
+		t.Error("volt_router.go has no generated marker, so gen must leave it")
+	}
+}
+
 func TestGenVerifyTypeChecks(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {

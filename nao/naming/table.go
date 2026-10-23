@@ -16,12 +16,14 @@ type plan struct {
 }
 
 // Table is one table's plan (spec §mapping-to-go): the checked table, its
-// model name and SQLite name, every column's plan in declaration order and
-// the primary key's in key order. A Table is immutable once planned.
+// model name and SQLite name, the names its data files declare, every
+// column's plan in declaration order and the primary key's in key order.
+// A Table is immutable once planned.
 type Table struct {
 	Info    *check.TableInfo
 	Model   string
 	SQLName string
+	Names   TableNames
 	Fields  []*Field
 	PK      []*Field
 
@@ -29,6 +31,64 @@ type Table struct {
 	sigs  []FieldSig
 	names []nameOrigin
 }
+
+// TableNames are the Go names one table's data files declare beside its
+// model and column handles (spec §changesets, §generated-query-surface):
+// the changeset surface and the option wrappers, which the package's name
+// scope holds (Names), the Queries methods, and the unexported scan
+// function and statement constants, which take the form of the generated
+// locals (LocalName), so no parameter shadows one.
+type TableNames struct {
+	Changeset, Column, Params, New                                   string
+	Limit, Offset, Distinct, OrderBy, After, Set                     string
+	Get, GetMany, List, Create, Update, Delete                       string
+	Query, Count, Exists, DeleteWhere, UpdateWhere                   string
+	Scan, TableConst, ColumnsConst, GetConst, ListConst, DeleteConst string
+}
+
+func tableNamesBuild(m string) TableNames {
+	return TableNames{
+		Changeset: m + "Changeset", Column: m + "Column", Params: m + "Params", New: m + "New",
+		Limit: m + "Limit", Offset: m + "Offset", Distinct: m + "Distinct", OrderBy: m + "OrderBy", After: m + "After", Set: m + "Set",
+		Get: m + "Get", GetMany: m + "GetMany", List: m + "List", Create: m + "Create", Update: m + "Update", Delete: m + "Delete",
+		Query: m + "Query", Count: m + "Count", Exists: m + "Exists", DeleteWhere: m + "DeleteWhere", UpdateWhere: m + "UpdateWhere",
+		Scan: RowScan(m), TableConst: "volt" + m + "TableSQL", ColumnsConst: "volt" + m + "ColumnsSQL",
+		GetConst: "volt" + m + "GetSQL", ListConst: "volt" + m + "ListSQL", DeleteConst: "volt" + m + "DeleteSQL",
+	}
+}
+
+func (n *TableNames) wrappers() []string {
+	return []string{n.Limit, n.Offset, n.Distinct, n.OrderBy, n.After, n.Set}
+}
+
+// RowScan is the name of the unexported function that scans one row into
+// the row type row, the model or a select's row type (spec
+// §generated-query-surface); it takes the generated locals' form.
+func RowScan(row string) string { return "volt" + row + "Scan" }
+
+// Handle is the name of the column handle of f (spec §changesets).
+func (t *Table) Handle(f *Field) string { return t.Model + f.GoField }
+
+// GetBy is the name of the method that reads the table by the unique field
+// f (spec §generated-query-surface).
+func (t *Table) GetBy(f *Field) string { return t.Model + "GetBy" + f.GoField }
+
+// GetByConst is the name of the statement constant of GetBy(f), of the
+// generated locals' form (spec §generated-query-surface).
+func (t *Table) GetByConst(f *Field) string { return "volt" + t.Model + "GetBy" + f.GoField + "SQL" }
+
+// SelectMethod is the name of the Queries method a select instantiation
+// over the table mints (spec §selects-over-groups).
+func (t *Table) SelectMethod(fn SelectFn) string { return SelectMethodName(t.Model, fn.MethodSuffix) }
+
+// SelectMethodName is the method a select with the Go name suffix mints
+// for the model (spec §selects-over-groups).
+func SelectMethodName(model, suffix string) string { return model + suffix }
+
+// SelectConst is the name of the statement constant of a select
+// instantiation over the table, of the generated locals' form (spec
+// §generated-query-surface).
+func (t *Table) SelectConst(fn SelectFn) string { return "volt" + t.Model + fn.MethodSuffix + "SQL" }
 
 // Field is one column's plan (spec §mapping-to-go, §struct-tags): its Go
 // field, struct tag, wire key, Go type with and without rt.Null, storage
@@ -116,7 +176,7 @@ func (t *Table) Settable() []*Field {
 func (t *Table) handles(fields []*Field) []string {
 	out := make([]string, len(fields))
 	for i, f := range fields {
-		out[i] = t.Model + f.GoField
+		out[i] = t.Handle(f)
 	}
 	return out
 }
@@ -211,7 +271,7 @@ func tableBuild(ti *check.TableInfo) (*Table, map[string]bool, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("table %s: %w", ti.Decl.Name.Name(), err)
 	}
-	tm := &Table{Info: ti, Model: model, SQLName: ti.Key}
+	tm := &Table{Info: ti, Model: model, SQLName: ti.Key, Names: tableNamesBuild(model)}
 	imports := map[string]bool{}
 	goFields := map[string]string{}
 	for _, cd := range ti.Columns {

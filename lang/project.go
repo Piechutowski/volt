@@ -71,12 +71,11 @@ type Package struct {
 	merged *ast.File
 }
 
-// HasRouting reports whether the package declares any routing elements
-// (pipelines or scopes).
+// HasRouting reports whether the package declares any scope, the one
+// declaration that gives it routes (§data-and-network-layers).
 func (p *Package) HasRouting() bool {
 	for _, d := range p.merged.Decls {
-		switch d.(type) {
-		case *ast.Pipeline, *ast.Scope:
+		if _, ok := d.(*ast.Scope); ok {
 			return true
 		}
 	}

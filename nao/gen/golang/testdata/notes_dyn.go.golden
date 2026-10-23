@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	postTableSQL   = `"posts"`
-	postColumnsSQL = `"id", "title", "status", "body", "published_at"`
+	voltPostTableSQL   = `"posts"`
+	voltPostColumnsSQL = `"id", "title", "status", "body", "published_at"`
 )
 
 // PostLimit caps how many rows PostQuery returns.
@@ -25,7 +25,7 @@ func PostDistinct() rt.Opt[Post] { return rt.Distinct[Post]() }
 // Post column handles.
 func PostOrderBy(terms ...rt.Order[Post]) rt.Opt[Post] { return rt.OrderBy(terms...) }
 
-// PostAfter resumes strictly after the row with the given key — keyset
+// PostAfter resumes strictly after the row with the given key, for keyset
 // pagination: one value per PostOrderBy term, in the same order.
 func PostAfter(key ...any) rt.Opt[Post] { return rt.After[Post](key...) }
 
@@ -37,7 +37,7 @@ func PostSet(assigns ...rt.Assign[Post]) []rt.Assign[Post] { return assigns }
 // shaped by the remaining options (order, limit, offset, keyset,
 // distinct). No options means every row.
 func (q *Queries) PostQuery(ctx context.Context, opts ...rt.Opt[Post]) ([]Post, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(postTableSQL, postColumnsSQL, opts)
+	voltQuery, voltArgs, voltErr := rt.SelectRender(voltPostTableSQL, voltPostColumnsSQL, opts)
 	if voltErr != nil {
 		return nil, voltErr
 	}
@@ -48,7 +48,7 @@ func (q *Queries) PostQuery(ctx context.Context, opts ...rt.Opt[Post]) ([]Post, 
 	defer voltRows.Close()
 	voltOut := []Post{}
 	for voltRows.Next() {
-		voltV, voltErr := postScan(voltRows)
+		voltV, voltErr := voltPostScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -60,7 +60,7 @@ func (q *Queries) PostQuery(ctx context.Context, opts ...rt.Opt[Post]) ([]Post, 
 // PostCount reports how many posts rows match every given predicate;
 // none counts the whole table.
 func (q *Queries) PostCount(ctx context.Context, preds ...rt.Pred[Post]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(postTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.CountRender(voltPostTableSQL, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -73,7 +73,7 @@ func (q *Queries) PostCount(ctx context.Context, preds ...rt.Pred[Post]) (int64,
 
 // PostExists reports whether any posts row matches every given predicate.
 func (q *Queries) PostExists(ctx context.Context, preds ...rt.Pred[Post]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(postTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltPostTableSQL, preds)
 	if voltErr != nil {
 		return false, voltErr
 	}
@@ -88,7 +88,7 @@ func (q *Queries) PostExists(ctx context.Context, preds ...rt.Pred[Post]) (bool,
 // reports how many went. No effective predicate is an error, never a
 // full-table delete.
 func (q *Queries) PostDeleteWhere(ctx context.Context, preds ...rt.Pred[Post]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(postTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltPostTableSQL, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -104,7 +104,7 @@ func (q *Queries) PostDeleteWhere(ctx context.Context, preds ...rt.Pred[Post]) (
 // partial update of the dynamic layer. No effective predicate
 // is an error, never a full-table rewrite.
 func (q *Queries) PostUpdateWhere(ctx context.Context, set []rt.Assign[Post], preds ...rt.Pred[Post]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(postTableSQL, set, preds)
+	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltPostTableSQL, set, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -116,8 +116,8 @@ func (q *Queries) PostUpdateWhere(ctx context.Context, set []rt.Assign[Post], pr
 }
 
 const (
-	tagTableSQL   = `"tags"`
-	tagColumnsSQL = `"id", "name"`
+	voltTagTableSQL   = `"tags"`
+	voltTagColumnsSQL = `"id", "name"`
 )
 
 // TagLimit caps how many rows TagQuery returns.
@@ -133,7 +133,7 @@ func TagDistinct() rt.Opt[Tag] { return rt.Distinct[Tag]() }
 // Tag column handles.
 func TagOrderBy(terms ...rt.Order[Tag]) rt.Opt[Tag] { return rt.OrderBy(terms...) }
 
-// TagAfter resumes strictly after the row with the given key — keyset
+// TagAfter resumes strictly after the row with the given key, for keyset
 // pagination: one value per TagOrderBy term, in the same order.
 func TagAfter(key ...any) rt.Opt[Tag] { return rt.After[Tag](key...) }
 
@@ -145,7 +145,7 @@ func TagSet(assigns ...rt.Assign[Tag]) []rt.Assign[Tag] { return assigns }
 // shaped by the remaining options (order, limit, offset, keyset,
 // distinct). No options means every row.
 func (q *Queries) TagQuery(ctx context.Context, opts ...rt.Opt[Tag]) ([]Tag, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(tagTableSQL, tagColumnsSQL, opts)
+	voltQuery, voltArgs, voltErr := rt.SelectRender(voltTagTableSQL, voltTagColumnsSQL, opts)
 	if voltErr != nil {
 		return nil, voltErr
 	}
@@ -156,7 +156,7 @@ func (q *Queries) TagQuery(ctx context.Context, opts ...rt.Opt[Tag]) ([]Tag, err
 	defer voltRows.Close()
 	voltOut := []Tag{}
 	for voltRows.Next() {
-		voltV, voltErr := tagScan(voltRows)
+		voltV, voltErr := voltTagScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -168,7 +168,7 @@ func (q *Queries) TagQuery(ctx context.Context, opts ...rt.Opt[Tag]) ([]Tag, err
 // TagCount reports how many tags rows match every given predicate;
 // none counts the whole table.
 func (q *Queries) TagCount(ctx context.Context, preds ...rt.Pred[Tag]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(tagTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.CountRender(voltTagTableSQL, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -181,7 +181,7 @@ func (q *Queries) TagCount(ctx context.Context, preds ...rt.Pred[Tag]) (int64, e
 
 // TagExists reports whether any tags row matches every given predicate.
 func (q *Queries) TagExists(ctx context.Context, preds ...rt.Pred[Tag]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(tagTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltTagTableSQL, preds)
 	if voltErr != nil {
 		return false, voltErr
 	}
@@ -196,7 +196,7 @@ func (q *Queries) TagExists(ctx context.Context, preds ...rt.Pred[Tag]) (bool, e
 // reports how many went. No effective predicate is an error, never a
 // full-table delete.
 func (q *Queries) TagDeleteWhere(ctx context.Context, preds ...rt.Pred[Tag]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(tagTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltTagTableSQL, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -212,7 +212,7 @@ func (q *Queries) TagDeleteWhere(ctx context.Context, preds ...rt.Pred[Tag]) (in
 // partial update of the dynamic layer. No effective predicate
 // is an error, never a full-table rewrite.
 func (q *Queries) TagUpdateWhere(ctx context.Context, set []rt.Assign[Tag], preds ...rt.Pred[Tag]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(tagTableSQL, set, preds)
+	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltTagTableSQL, set, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}

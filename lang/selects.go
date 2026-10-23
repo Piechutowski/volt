@@ -112,7 +112,7 @@ func (c *checker) dataQueries(pkg *Package) {
 	for _, sel := range selects {
 		if si := c.selectCheckMemo(sel, info, minted, memo); si != nil {
 			for _, m := range si.Members {
-				method := pkg.modelOf(m) + si.MethodSuffix
+				method := naming.SelectMethodName(pkg.modelOf(m), si.MethodSuffix)
 				if what, dup := pkg.plan.QueryName(method); dup {
 					c.errorf(sel.Name.Pos(), "selects-over-groups",
 						"select %q mints %s for table %q, which is already %s (§selects-over-groups)",
@@ -913,7 +913,7 @@ func (e *selectEnv) paramBind(p *ast.Param, goType string) string {
 		return name
 	}
 	if !goParamOK(name) {
-		e.errorf(p.Name.Pos(), "parameter name %q does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)", name)
+		e.errorf(p.Name.Pos(), "parameter name %q does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil or append, which the generated methods use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)", name)
 		return name
 	}
 	sp := SelectParam{GoName: name, GoType: goType}
@@ -923,7 +923,7 @@ func (e *selectEnv) paramBind(p *ast.Param, goType string) string {
 }
 
 func goParamOK(name string) bool {
-	if name == "" || goKeywords[name] || reservedParamNames[name] || selectMethodNames[name] || naming.LocalName(name) {
+	if name == "" || goKeywords[name] || naming.RouteSignatureName(name) || naming.BodyBuiltin(name) || selectMethodNames[name] || naming.LocalName(name) {
 		return false
 	}
 	return goIdentOK(name)

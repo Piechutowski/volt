@@ -500,6 +500,15 @@ func TestKeyNamedLikeClientLocalCompiles(t *testing.T) {
 	snippetCompiles(t, "v93_key_named_out")
 }
 
+// TestKeyNamedLikeRouteNamesCompiles proves a table keyed on a column named
+// like a name the route files' signatures take (c, w, r, opts, cs, volt,
+// ctx) routes by its key parameter, which takes a trailing underscore, and
+// the generated program builds (spec §generated-query-surface,
+// §route-paths).
+func TestKeyNamedLikeRouteNamesCompiles(t *testing.T) {
+	snippetCompiles(t, "v95_key_named_like_route_names")
+}
+
 func snippetCompiles(t *testing.T, name string) {
 	t.Helper()
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))

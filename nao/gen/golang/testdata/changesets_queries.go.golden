@@ -38,17 +38,17 @@ func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
 }
 
-func postScan(r rt.Row) (Post, error) {
+func voltPostScan(r rt.Row) (Post, error) {
 	var voltV Post
 	voltErr := r.Scan(&voltV.ID, &voltV.Slug, &voltV.Words, &voltV.Score, (*rt.Bytes)(&voltV.Cover), (*string)(&voltV.State), &voltV.Reviewed, (*string)(&voltV.Audience), &voltV.Tier, &voltV.Price, &voltV.Rank, &voltV.Draft, &voltV.Caption, &voltV.Ratio, &voltV.Weight, &voltV.Scale, &voltV.Kilo, &voltV.Shift, &voltV.Hits, &voltV.Views, &voltV.Label, &voltV.Flag, &voltV.Secret)
 	return voltV, rt.Refused("Post", voltErr)
 }
 
-const postGetSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "audience", "tier", "price", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret" FROM "posts" WHERE "id" = ?`
+const voltPostGetSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "audience", "tier", "price", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret" FROM "posts" WHERE "id" = ?`
 
 // PostGet fetches the posts row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) PostGet(ctx context.Context, id int) (Post, error) {
-	return postScan(q.db.QueryRowContext(ctx, postGetSQL, id))
+	return voltPostScan(q.db.QueryRowContext(ctx, voltPostGetSQL, id))
 }
 
 // PostGetMany fetches the posts rows whose primary key is in ids, in
@@ -57,7 +57,7 @@ func (q *Queries) PostGetMany(ctx context.Context, ids []int) ([]Post, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(postTableSQL, postColumnsSQL, []rt.Opt[Post]{PostID.In(ids...)})
+	voltQuery, voltArgs, voltErr := rt.SelectRender(voltPostTableSQL, voltPostColumnsSQL, []rt.Opt[Post]{PostID.In(ids...)})
 	if voltErr != nil {
 		return nil, voltErr
 	}
@@ -68,7 +68,7 @@ func (q *Queries) PostGetMany(ctx context.Context, ids []int) ([]Post, error) {
 	defer voltRows.Close()
 	voltOut := []Post{}
 	for voltRows.Next() {
-		voltV, voltErr := postScan(voltRows)
+		voltV, voltErr := voltPostScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -77,26 +77,26 @@ func (q *Queries) PostGetMany(ctx context.Context, ids []int) ([]Post, error) {
 	return voltOut, voltRows.Err()
 }
 
-const postGetBySlugSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "audience", "tier", "price", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret" FROM "posts" WHERE "slug" = ?`
+const voltPostGetBySlugSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "audience", "tier", "price", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret" FROM "posts" WHERE "slug" = ?`
 
 // PostGetBySlug fetches the posts row with the given slug (a unique column),
 // or rt.ErrNotFound.
 func (q *Queries) PostGetBySlug(ctx context.Context, slug string) (Post, error) {
-	return postScan(q.db.QueryRowContext(ctx, postGetBySlugSQL, slug))
+	return voltPostScan(q.db.QueryRowContext(ctx, voltPostGetBySlugSQL, slug))
 }
 
-const postListSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "audience", "tier", "price", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret" FROM "posts"`
+const voltPostListSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "audience", "tier", "price", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret" FROM "posts"`
 
 // PostList returns every posts row.
 func (q *Queries) PostList(ctx context.Context) ([]Post, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, postListSQL)
+	voltRows, voltErr := q.db.QueryContext(ctx, voltPostListSQL)
 	if voltErr != nil {
 		return nil, voltErr
 	}
 	defer voltRows.Close()
 	voltOut := []Post{}
 	for voltRows.Next() {
-		voltV, voltErr := postScan(voltRows)
+		voltV, voltErr := voltPostScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -181,11 +181,11 @@ func (q *Queries) PostCreate(ctx context.Context, c PostChangeset) (Post, error)
 	if c.set[22] {
 		voltCols, voltArgs = append(voltCols, "secret"), append(voltArgs, voltV.Secret)
 	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(postTableSQL, voltCols, postColumnsSQL), voltArgs...)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltPostTableSQL, voltCols, voltPostColumnsSQL), voltArgs...)
 	if voltErr != nil {
 		return Post{}, voltErr
 	}
-	return postScan(voltRow)
+	return voltPostScan(voltRow)
 }
 
 // PostUpdate validates c and writes its marked columns to the posts row it
@@ -272,19 +272,19 @@ func (q *Queries) PostUpdate(ctx context.Context, c PostChangeset) (Post, error)
 		return voltV, nil
 	}
 	voltArgs = append(voltArgs, c.data.ID)
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(postTableSQL, voltCols, []string{"id"}, postColumnsSQL), voltArgs...)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(voltPostTableSQL, voltCols, []string{"id"}, voltPostColumnsSQL), voltArgs...)
 	if voltErr != nil {
 		return Post{}, voltErr
 	}
-	return postScan(voltRow)
+	return voltPostScan(voltRow)
 }
 
-const postDeleteSQL = `DELETE FROM "posts" WHERE "id" = ?`
+const voltPostDeleteSQL = `DELETE FROM "posts" WHERE "id" = ?`
 
 // PostDelete removes the identified posts row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) PostDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, postDeleteSQL, id)
+	voltRes, voltErr := q.db.ExecContext(ctx, voltPostDeleteSQL, id)
 	if voltErr != nil {
 		return rt.Refused("Post", voltErr)
 	}
@@ -298,31 +298,31 @@ func (q *Queries) PostDelete(ctx context.Context, id int) error {
 	return nil
 }
 
-func postTagScan(r rt.Row) (PostTag, error) {
+func voltPostTagScan(r rt.Row) (PostTag, error) {
 	var voltV PostTag
 	voltErr := r.Scan(&voltV.PostID, &voltV.Tag)
 	return voltV, rt.Refused("PostTag", voltErr)
 }
 
-const postTagGetSQL = `SELECT "post_id", "tag" FROM "post_tags" WHERE "post_id" = ? AND "tag" = ?`
+const voltPostTagGetSQL = `SELECT "post_id", "tag" FROM "post_tags" WHERE "post_id" = ? AND "tag" = ?`
 
 // PostTagGet fetches the post_tags row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) PostTagGet(ctx context.Context, postID int, tag string) (PostTag, error) {
-	return postTagScan(q.db.QueryRowContext(ctx, postTagGetSQL, postID, tag))
+	return voltPostTagScan(q.db.QueryRowContext(ctx, voltPostTagGetSQL, postID, tag))
 }
 
-const postTagListSQL = `SELECT "post_id", "tag" FROM "post_tags"`
+const voltPostTagListSQL = `SELECT "post_id", "tag" FROM "post_tags"`
 
 // PostTagList returns every post_tags row.
 func (q *Queries) PostTagList(ctx context.Context) ([]PostTag, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, postTagListSQL)
+	voltRows, voltErr := q.db.QueryContext(ctx, voltPostTagListSQL)
 	if voltErr != nil {
 		return nil, voltErr
 	}
 	defer voltRows.Close()
 	voltOut := []PostTag{}
 	for voltRows.Next() {
-		voltV, voltErr := postTagScan(voltRows)
+		voltV, voltErr := voltPostTagScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -347,19 +347,19 @@ func (q *Queries) PostTagCreate(ctx context.Context, c PostTagChangeset) (PostTa
 	if c.set[1] {
 		voltCols, voltArgs = append(voltCols, "tag"), append(voltArgs, voltV.Tag)
 	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(postTagTableSQL, voltCols, postTagColumnsSQL), voltArgs...)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltPostTagTableSQL, voltCols, voltPostTagColumnsSQL), voltArgs...)
 	if voltErr != nil {
 		return PostTag{}, voltErr
 	}
-	return postTagScan(voltRow)
+	return voltPostTagScan(voltRow)
 }
 
-const postTagDeleteSQL = `DELETE FROM "post_tags" WHERE "post_id" = ? AND "tag" = ?`
+const voltPostTagDeleteSQL = `DELETE FROM "post_tags" WHERE "post_id" = ? AND "tag" = ?`
 
 // PostTagDelete removes the identified post_tags row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) PostTagDelete(ctx context.Context, postID int, tag string) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, postTagDeleteSQL, postID, tag)
+	voltRes, voltErr := q.db.ExecContext(ctx, voltPostTagDeleteSQL, postID, tag)
 	if voltErr != nil {
 		return rt.Refused("PostTag", voltErr)
 	}
@@ -373,17 +373,17 @@ func (q *Queries) PostTagDelete(ctx context.Context, postID int, tag string) err
 	return nil
 }
 
-func pingScan(r rt.Row) (Ping, error) {
+func voltPingScan(r rt.Row) (Ping, error) {
 	var voltV Ping
 	voltErr := r.Scan(&voltV.ID)
 	return voltV, rt.Refused("Ping", voltErr)
 }
 
-const pingGetSQL = `SELECT "id" FROM "pings" WHERE "id" = ?`
+const voltPingGetSQL = `SELECT "id" FROM "pings" WHERE "id" = ?`
 
 // PingGet fetches the pings row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) PingGet(ctx context.Context, id int) (Ping, error) {
-	return pingScan(q.db.QueryRowContext(ctx, pingGetSQL, id))
+	return voltPingScan(q.db.QueryRowContext(ctx, voltPingGetSQL, id))
 }
 
 // PingGetMany fetches the pings rows whose primary key is in ids, in
@@ -392,7 +392,7 @@ func (q *Queries) PingGetMany(ctx context.Context, ids []int) ([]Ping, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(pingTableSQL, pingColumnsSQL, []rt.Opt[Ping]{PingID.In(ids...)})
+	voltQuery, voltArgs, voltErr := rt.SelectRender(voltPingTableSQL, voltPingColumnsSQL, []rt.Opt[Ping]{PingID.In(ids...)})
 	if voltErr != nil {
 		return nil, voltErr
 	}
@@ -403,7 +403,7 @@ func (q *Queries) PingGetMany(ctx context.Context, ids []int) ([]Ping, error) {
 	defer voltRows.Close()
 	voltOut := []Ping{}
 	for voltRows.Next() {
-		voltV, voltErr := pingScan(voltRows)
+		voltV, voltErr := voltPingScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -412,18 +412,18 @@ func (q *Queries) PingGetMany(ctx context.Context, ids []int) ([]Ping, error) {
 	return voltOut, voltRows.Err()
 }
 
-const pingListSQL = `SELECT "id" FROM "pings"`
+const voltPingListSQL = `SELECT "id" FROM "pings"`
 
 // PingList returns every pings row.
 func (q *Queries) PingList(ctx context.Context) ([]Ping, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, pingListSQL)
+	voltRows, voltErr := q.db.QueryContext(ctx, voltPingListSQL)
 	if voltErr != nil {
 		return nil, voltErr
 	}
 	defer voltRows.Close()
 	voltOut := []Ping{}
 	for voltRows.Next() {
-		voltV, voltErr := pingScan(voltRows)
+		voltV, voltErr := voltPingScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -441,19 +441,19 @@ func (q *Queries) PingCreate(ctx context.Context, c PingChangeset) (Ping, error)
 	}
 	var voltCols []string
 	var voltArgs []any
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(pingTableSQL, voltCols, pingColumnsSQL), voltArgs...)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltPingTableSQL, voltCols, voltPingColumnsSQL), voltArgs...)
 	if voltErr != nil {
 		return Ping{}, voltErr
 	}
-	return pingScan(voltRow)
+	return voltPingScan(voltRow)
 }
 
-const pingDeleteSQL = `DELETE FROM "pings" WHERE "id" = ?`
+const voltPingDeleteSQL = `DELETE FROM "pings" WHERE "id" = ?`
 
 // PingDelete removes the identified pings row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) PingDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, pingDeleteSQL, id)
+	voltRes, voltErr := q.db.ExecContext(ctx, voltPingDeleteSQL, id)
 	if voltErr != nil {
 		return rt.Refused("Ping", voltErr)
 	}

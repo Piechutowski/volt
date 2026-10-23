@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	categoryTableSQL   = `"categories"`
-	categoryColumnsSQL = `"id", "name"`
+	voltCategoryTableSQL   = `"categories"`
+	voltCategoryColumnsSQL = `"id", "name"`
 )
 
 // CategoryLimit caps how many rows CategoryQuery returns.
@@ -25,7 +25,7 @@ func CategoryDistinct() rt.Opt[Category] { return rt.Distinct[Category]() }
 // Category column handles.
 func CategoryOrderBy(terms ...rt.Order[Category]) rt.Opt[Category] { return rt.OrderBy(terms...) }
 
-// CategoryAfter resumes strictly after the row with the given key — keyset
+// CategoryAfter resumes strictly after the row with the given key, for keyset
 // pagination: one value per CategoryOrderBy term, in the same order.
 func CategoryAfter(key ...any) rt.Opt[Category] { return rt.After[Category](key...) }
 
@@ -37,7 +37,7 @@ func CategorySet(assigns ...rt.Assign[Category]) []rt.Assign[Category] { return 
 // shaped by the remaining options (order, limit, offset, keyset,
 // distinct). No options means every row.
 func (q *Queries) CategoryQuery(ctx context.Context, opts ...rt.Opt[Category]) ([]Category, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(categoryTableSQL, categoryColumnsSQL, opts)
+	voltQuery, voltArgs, voltErr := rt.SelectRender(voltCategoryTableSQL, voltCategoryColumnsSQL, opts)
 	if voltErr != nil {
 		return nil, voltErr
 	}
@@ -48,7 +48,7 @@ func (q *Queries) CategoryQuery(ctx context.Context, opts ...rt.Opt[Category]) (
 	defer voltRows.Close()
 	voltOut := []Category{}
 	for voltRows.Next() {
-		voltV, voltErr := categoryScan(voltRows)
+		voltV, voltErr := voltCategoryScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -60,7 +60,7 @@ func (q *Queries) CategoryQuery(ctx context.Context, opts ...rt.Opt[Category]) (
 // CategoryCount reports how many categories rows match every given predicate;
 // none counts the whole table.
 func (q *Queries) CategoryCount(ctx context.Context, preds ...rt.Pred[Category]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(categoryTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.CountRender(voltCategoryTableSQL, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -73,7 +73,7 @@ func (q *Queries) CategoryCount(ctx context.Context, preds ...rt.Pred[Category])
 
 // CategoryExists reports whether any categories row matches every given predicate.
 func (q *Queries) CategoryExists(ctx context.Context, preds ...rt.Pred[Category]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(categoryTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltCategoryTableSQL, preds)
 	if voltErr != nil {
 		return false, voltErr
 	}
@@ -88,7 +88,7 @@ func (q *Queries) CategoryExists(ctx context.Context, preds ...rt.Pred[Category]
 // reports how many went. No effective predicate is an error, never a
 // full-table delete.
 func (q *Queries) CategoryDeleteWhere(ctx context.Context, preds ...rt.Pred[Category]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(categoryTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltCategoryTableSQL, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -104,7 +104,7 @@ func (q *Queries) CategoryDeleteWhere(ctx context.Context, preds ...rt.Pred[Cate
 // partial update of the dynamic layer. No effective predicate
 // is an error, never a full-table rewrite.
 func (q *Queries) CategoryUpdateWhere(ctx context.Context, set []rt.Assign[Category], preds ...rt.Pred[Category]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(categoryTableSQL, set, preds)
+	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltCategoryTableSQL, set, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -116,8 +116,8 @@ func (q *Queries) CategoryUpdateWhere(ctx context.Context, set []rt.Assign[Categ
 }
 
 const (
-	categoryPathTableSQL   = `"category_paths"`
-	categoryPathColumnsSQL = `"ancestor_id", "descendant_id", "depth"`
+	voltCategoryPathTableSQL   = `"category_paths"`
+	voltCategoryPathColumnsSQL = `"ancestor_id", "descendant_id", "depth"`
 )
 
 // CategoryPathLimit caps how many rows CategoryPathQuery returns.
@@ -135,7 +135,7 @@ func CategoryPathOrderBy(terms ...rt.Order[CategoryPath]) rt.Opt[CategoryPath] {
 	return rt.OrderBy(terms...)
 }
 
-// CategoryPathAfter resumes strictly after the row with the given key — keyset
+// CategoryPathAfter resumes strictly after the row with the given key, for keyset
 // pagination: one value per CategoryPathOrderBy term, in the same order.
 func CategoryPathAfter(key ...any) rt.Opt[CategoryPath] { return rt.After[CategoryPath](key...) }
 
@@ -147,7 +147,7 @@ func CategoryPathSet(assigns ...rt.Assign[CategoryPath]) []rt.Assign[CategoryPat
 // shaped by the remaining options (order, limit, offset, keyset,
 // distinct). No options means every row.
 func (q *Queries) CategoryPathQuery(ctx context.Context, opts ...rt.Opt[CategoryPath]) ([]CategoryPath, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(categoryPathTableSQL, categoryPathColumnsSQL, opts)
+	voltQuery, voltArgs, voltErr := rt.SelectRender(voltCategoryPathTableSQL, voltCategoryPathColumnsSQL, opts)
 	if voltErr != nil {
 		return nil, voltErr
 	}
@@ -158,7 +158,7 @@ func (q *Queries) CategoryPathQuery(ctx context.Context, opts ...rt.Opt[Category
 	defer voltRows.Close()
 	voltOut := []CategoryPath{}
 	for voltRows.Next() {
-		voltV, voltErr := categoryPathScan(voltRows)
+		voltV, voltErr := voltCategoryPathScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -170,7 +170,7 @@ func (q *Queries) CategoryPathQuery(ctx context.Context, opts ...rt.Opt[Category
 // CategoryPathCount reports how many category_paths rows match every given predicate;
 // none counts the whole table.
 func (q *Queries) CategoryPathCount(ctx context.Context, preds ...rt.Pred[CategoryPath]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(categoryPathTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.CountRender(voltCategoryPathTableSQL, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -183,7 +183,7 @@ func (q *Queries) CategoryPathCount(ctx context.Context, preds ...rt.Pred[Catego
 
 // CategoryPathExists reports whether any category_paths row matches every given predicate.
 func (q *Queries) CategoryPathExists(ctx context.Context, preds ...rt.Pred[CategoryPath]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(categoryPathTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltCategoryPathTableSQL, preds)
 	if voltErr != nil {
 		return false, voltErr
 	}
@@ -198,7 +198,7 @@ func (q *Queries) CategoryPathExists(ctx context.Context, preds ...rt.Pred[Categ
 // reports how many went. No effective predicate is an error, never a
 // full-table delete.
 func (q *Queries) CategoryPathDeleteWhere(ctx context.Context, preds ...rt.Pred[CategoryPath]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(categoryPathTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltCategoryPathTableSQL, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -214,7 +214,7 @@ func (q *Queries) CategoryPathDeleteWhere(ctx context.Context, preds ...rt.Pred[
 // partial update of the dynamic layer. No effective predicate
 // is an error, never a full-table rewrite.
 func (q *Queries) CategoryPathUpdateWhere(ctx context.Context, set []rt.Assign[CategoryPath], preds ...rt.Pred[CategoryPath]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(categoryPathTableSQL, set, preds)
+	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltCategoryPathTableSQL, set, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}

@@ -38,17 +38,17 @@ func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
 }
 
-func userScan(r rt.Row) (User, error) {
+func voltUserScan(r rt.Row) (User, error) {
 	var voltV User
 	voltErr := r.Scan(&voltV.ID)
 	return voltV, rt.Refused("User", voltErr)
 }
 
-const userGetSQL = `SELECT "id" FROM "users" WHERE "id" = ?`
+const voltUserGetSQL = `SELECT "id" FROM "users" WHERE "id" = ?`
 
 // UserGet fetches the users row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) UserGet(ctx context.Context, id int) (User, error) {
-	return userScan(q.db.QueryRowContext(ctx, userGetSQL, id))
+	return voltUserScan(q.db.QueryRowContext(ctx, voltUserGetSQL, id))
 }
 
 // UserGetMany fetches the users rows whose primary key is in ids, in
@@ -57,7 +57,7 @@ func (q *Queries) UserGetMany(ctx context.Context, ids []int) ([]User, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(userTableSQL, userColumnsSQL, []rt.Opt[User]{UserID.In(ids...)})
+	voltQuery, voltArgs, voltErr := rt.SelectRender(voltUserTableSQL, voltUserColumnsSQL, []rt.Opt[User]{UserID.In(ids...)})
 	if voltErr != nil {
 		return nil, voltErr
 	}
@@ -68,7 +68,7 @@ func (q *Queries) UserGetMany(ctx context.Context, ids []int) ([]User, error) {
 	defer voltRows.Close()
 	voltOut := []User{}
 	for voltRows.Next() {
-		voltV, voltErr := userScan(voltRows)
+		voltV, voltErr := voltUserScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -77,18 +77,18 @@ func (q *Queries) UserGetMany(ctx context.Context, ids []int) ([]User, error) {
 	return voltOut, voltRows.Err()
 }
 
-const userListSQL = `SELECT "id" FROM "users"`
+const voltUserListSQL = `SELECT "id" FROM "users"`
 
 // UserList returns every users row.
 func (q *Queries) UserList(ctx context.Context) ([]User, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, userListSQL)
+	voltRows, voltErr := q.db.QueryContext(ctx, voltUserListSQL)
 	if voltErr != nil {
 		return nil, voltErr
 	}
 	defer voltRows.Close()
 	voltOut := []User{}
 	for voltRows.Next() {
-		voltV, voltErr := userScan(voltRows)
+		voltV, voltErr := voltUserScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -110,19 +110,19 @@ func (q *Queries) UserCreate(ctx context.Context, c UserChangeset) (User, error)
 	if c.set[0] {
 		voltCols, voltArgs = append(voltCols, "id"), append(voltArgs, voltV.ID)
 	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(userTableSQL, voltCols, userColumnsSQL), voltArgs...)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltUserTableSQL, voltCols, voltUserColumnsSQL), voltArgs...)
 	if voltErr != nil {
 		return User{}, voltErr
 	}
-	return userScan(voltRow)
+	return voltUserScan(voltRow)
 }
 
-const userDeleteSQL = `DELETE FROM "users" WHERE "id" = ?`
+const voltUserDeleteSQL = `DELETE FROM "users" WHERE "id" = ?`
 
 // UserDelete removes the identified users row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) UserDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, userDeleteSQL, id)
+	voltRes, voltErr := q.db.ExecContext(ctx, voltUserDeleteSQL, id)
 	if voltErr != nil {
 		return rt.Refused("User", voltErr)
 	}
@@ -136,17 +136,17 @@ func (q *Queries) UserDelete(ctx context.Context, id int) error {
 	return nil
 }
 
-func postScan(r rt.Row) (Post, error) {
+func voltPostScan(r rt.Row) (Post, error) {
 	var voltV Post
 	voltErr := r.Scan(&voltV.ID, &voltV.AuthorID, &voltV.EditorID, &voltV.ReviewedAt, &voltV.Meta, &voltV.Raw)
 	return voltV, rt.Refused("Post", voltErr)
 }
 
-const postGetSQL = `SELECT "id", "author_id", "editor_id", "reviewed_at", "meta", "raw" FROM "posts" WHERE "id" = ?`
+const voltPostGetSQL = `SELECT "id", "author_id", "editor_id", "reviewed_at", "meta", "raw" FROM "posts" WHERE "id" = ?`
 
 // PostGet fetches the posts row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) PostGet(ctx context.Context, id int) (Post, error) {
-	return postScan(q.db.QueryRowContext(ctx, postGetSQL, id))
+	return voltPostScan(q.db.QueryRowContext(ctx, voltPostGetSQL, id))
 }
 
 // PostGetMany fetches the posts rows whose primary key is in ids, in
@@ -155,7 +155,7 @@ func (q *Queries) PostGetMany(ctx context.Context, ids []int) ([]Post, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(postTableSQL, postColumnsSQL, []rt.Opt[Post]{PostID.In(ids...)})
+	voltQuery, voltArgs, voltErr := rt.SelectRender(voltPostTableSQL, voltPostColumnsSQL, []rt.Opt[Post]{PostID.In(ids...)})
 	if voltErr != nil {
 		return nil, voltErr
 	}
@@ -166,7 +166,7 @@ func (q *Queries) PostGetMany(ctx context.Context, ids []int) ([]Post, error) {
 	defer voltRows.Close()
 	voltOut := []Post{}
 	for voltRows.Next() {
-		voltV, voltErr := postScan(voltRows)
+		voltV, voltErr := voltPostScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -175,18 +175,18 @@ func (q *Queries) PostGetMany(ctx context.Context, ids []int) ([]Post, error) {
 	return voltOut, voltRows.Err()
 }
 
-const postListSQL = `SELECT "id", "author_id", "editor_id", "reviewed_at", "meta", "raw" FROM "posts"`
+const voltPostListSQL = `SELECT "id", "author_id", "editor_id", "reviewed_at", "meta", "raw" FROM "posts"`
 
 // PostList returns every posts row.
 func (q *Queries) PostList(ctx context.Context) ([]Post, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, postListSQL)
+	voltRows, voltErr := q.db.QueryContext(ctx, voltPostListSQL)
 	if voltErr != nil {
 		return nil, voltErr
 	}
 	defer voltRows.Close()
 	voltOut := []Post{}
 	for voltRows.Next() {
-		voltV, voltErr := postScan(voltRows)
+		voltV, voltErr := voltPostScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -223,11 +223,11 @@ func (q *Queries) PostCreate(ctx context.Context, c PostChangeset) (Post, error)
 	if c.set[5] {
 		voltCols, voltArgs = append(voltCols, "raw"), append(voltArgs, voltV.Raw)
 	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(postTableSQL, voltCols, postColumnsSQL), voltArgs...)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltPostTableSQL, voltCols, voltPostColumnsSQL), voltArgs...)
 	if voltErr != nil {
 		return Post{}, voltErr
 	}
-	return postScan(voltRow)
+	return voltPostScan(voltRow)
 }
 
 // PostUpdate validates c and writes its marked columns to the posts row it
@@ -266,19 +266,19 @@ func (q *Queries) PostUpdate(ctx context.Context, c PostChangeset) (Post, error)
 		return voltV, nil
 	}
 	voltArgs = append(voltArgs, c.data.ID)
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(postTableSQL, voltCols, []string{"id"}, postColumnsSQL), voltArgs...)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(voltPostTableSQL, voltCols, []string{"id"}, voltPostColumnsSQL), voltArgs...)
 	if voltErr != nil {
 		return Post{}, voltErr
 	}
-	return postScan(voltRow)
+	return voltPostScan(voltRow)
 }
 
-const postDeleteSQL = `DELETE FROM "posts" WHERE "id" = ?`
+const voltPostDeleteSQL = `DELETE FROM "posts" WHERE "id" = ?`
 
 // PostDelete removes the identified posts row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) PostDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, postDeleteSQL, id)
+	voltRes, voltErr := q.db.ExecContext(ctx, voltPostDeleteSQL, id)
 	if voltErr != nil {
 		return rt.Refused("Post", voltErr)
 	}

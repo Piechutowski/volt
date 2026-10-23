@@ -384,10 +384,25 @@ func genRun(ctx context.Context, c *cli.Command) error {
 	}
 	for _, path := range paths {
 		pkg := pr.Packages[path]
-		if !pkg.HasSchema() || !parts["queries"] {
-			continue
+		var stales []string
+		if pkg.HasSchema() && parts["queries"] {
+			stales = append(stales, "volt_selects.go", "volt_validate.go", "volt_migrations.go")
 		}
-		for _, name := range []string{"volt_selects.go", "volt_validate.go", "volt_migrations.go"} {
+		if !pkg.HasRouting() {
+			for _, name := range router.Files {
+				if name != router.ClientFile && parts["router"] {
+					stales = append(stales, name)
+				}
+			}
+			if parts["client"] {
+				if outDir != "" {
+					stales = append(stales, router.ClientBesideFile)
+				} else {
+					stales = append(stales, router.ClientFile)
+				}
+			}
+		}
+		for _, name := range stales {
 			stale := filepath.Join(dirOf(pkg), name)
 			if produced[stale] {
 				continue

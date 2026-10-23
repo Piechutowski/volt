@@ -48,17 +48,29 @@ func TestArgNames(t *testing.T) {
 }
 
 // TestParamNamesAvoidLocals pins the parameter a key column takes in a
-// generated method (spec §generated-query-surface): never rt, and never a
-// name of the form the data generator gives its own locals.
+// generated method (spec §generated-query-surface): never rt, nil, append
+// or a name the route files' signatures take, and never a name of the form
+// the data generator gives its own locals and helpers.
 func TestParamNamesAvoidLocals(t *testing.T) {
 	cases := []struct{ column, want string }{
 		{"err", "err"},
 		{"rt", "rt_"},
 		{"volt_err", "voltErr_"},
 		{"volt_rows", "voltRows_"},
+		{"volt_post_scan", "voltPostScan_"},
 		{"voltage", "voltage"},
-		{"volt", "volt"},
+		{"volt", "volt_"},
 		{"q", "q_"},
+		{"nil", "nil_"},
+		{"append", "append_"},
+		{"len", "len"},
+		{"post_scan", "postScan"},
+		{"c", "c_"},
+		{"w", "w_"},
+		{"r", "r_"},
+		{"cs", "cs_"},
+		{"opts", "opts_"},
+		{"ctx", "ctx_"},
 	}
 	for _, tc := range cases {
 		goField, err := GoName(tc.column)

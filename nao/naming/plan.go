@@ -104,13 +104,13 @@ func (pl *Plan) File() *ast.File { return pl.f }
 // Info is the schema facts the plan was built from (spec §static-semantics).
 func (pl *Plan) Info() *check.Info { return pl.info }
 
-// Tables lists every table's plan in declaration order; nil when the plan
-// could not be built (spec §mapping-to-go).
+// Tables lists every table's plan in declaration order, in a slice the
+// caller owns; nil when the plan could not be built (spec §mapping-to-go).
 func (pl *Plan) Tables() []*Table {
 	if pl.p == nil {
 		return nil
 	}
-	return pl.p.tables
+	return append([]*Table(nil), pl.p.tables...)
 }
 
 // Table is the plan of the table with the given key, or the reason there
@@ -141,7 +141,7 @@ func (pl *Plan) SelectRowName(fn SelectFn) (string, error) {
 	case fn.SharedType != "":
 		return fn.SharedType, nil
 	case len(fn.Excluded) > 0:
-		return t.Model + fn.MethodSuffix, nil
+		return t.SelectMethod(fn), nil
 	}
 	return t.Model, nil
 }
@@ -189,8 +189,8 @@ func (pl *Plan) CRUDMethod(name string) (tableKey string, m CRUDMethod, ok bool)
 }
 
 // CRUDMethodNames lists every generated CRUD method name in declaration
-// order.
-func (pl *Plan) CRUDMethodNames() []string { return pl.names }
+// order, in a slice the caller owns.
+func (pl *Plan) CRUDMethodNames() []string { return append([]string(nil), pl.names...) }
 
 // QueryName reports whether name is a method of the generated Queries
 // handle, or the exported stem of a statement constant the query files
@@ -212,19 +212,20 @@ func (pl *Plan) QueryName(name string) (string, bool) {
 		if len(t.Fields) == 0 || !strings.HasPrefix(name, t.Model) {
 			continue
 		}
-		tbl, rest := t.Info.Decl.Name.Name(), name[len(t.Model):]
-		switch rest {
-		case "GetMany":
+		tbl, n := t.Info.Decl.Name.Name(), &t.Names
+		switch name {
+		case n.GetMany:
 			if len(t.PK) == 1 {
 				return fmt.Sprintf("the method %s of table %q", name, tbl), true
 			}
-		case "Query", "Count", "Exists", "DeleteWhere", "UpdateWhere":
+		case n.Query, n.Count, n.Exists, n.DeleteWhere, n.UpdateWhere:
 			return fmt.Sprintf("the dynamic-layer method %s of table %q", name, tbl), true
-		case "Table", "Columns":
-			return fmt.Sprintf("the statement constant %s%sSQL of table %q", ArgName(t.Model), rest, tbl), true
+		}
+		if c := "volt" + name + "SQL"; c == n.TableConst || c == n.ColumnsConst {
+			return fmt.Sprintf("the statement constant %s of table %q", c, tbl), true
 		}
 		for _, f := range t.UniqueFields() {
-			if rest == "GetBy"+f.GoField {
+			if name == t.GetBy(f) {
 				return fmt.Sprintf("the method %s of table %q", name, tbl), true
 			}
 		}
@@ -240,19 +241,19 @@ func crudMethodsBuild(t *Table) []CRUDMethod {
 	for _, fp := range t.PK {
 		key = append(key, SelectParam{GoName: fp.Arg, GoType: fp.BaseType})
 	}
-	m := t.Model
+	m, n := t.Model, &t.Names
 	if len(t.PK) > 0 {
-		methods = append(methods, CRUDMethod{Name: m + "Get", Op: "get", Key: key, Result: m})
+		methods = append(methods, CRUDMethod{Name: n.Get, Op: "get", Key: key, Result: m})
 	}
-	methods = append(methods, CRUDMethod{Name: m + "List", Op: "list", Result: m, Many: true})
-	methods = append(methods, CRUDMethod{Name: m + "Create", Op: "create", Body: m + "Changeset", Params: m + "Params",
-		New: m + "New", Allow: t.handles(t.Settable()), Result: m})
+	methods = append(methods, CRUDMethod{Name: n.List, Op: "list", Result: m, Many: true})
+	methods = append(methods, CRUDMethod{Name: n.Create, Op: "create", Body: n.Changeset, Params: n.Params,
+		New: n.New, Allow: t.handles(t.Settable()), Result: m})
 	if len(t.PK) > 0 {
 		if len(t.NonPK()) > 0 {
-			methods = append(methods, CRUDMethod{Name: m + "Update", Op: "update", Key: key, Body: m + "Changeset", Params: m + "Params",
-				Get: m + "Get", Allow: t.handles(t.NonPK()), Result: m})
+			methods = append(methods, CRUDMethod{Name: n.Update, Op: "update", Key: key, Body: n.Changeset, Params: n.Params,
+				Get: n.Get, Allow: t.handles(t.NonPK()), Result: m})
 		}
-		methods = append(methods, CRUDMethod{Name: m + "Delete", Op: "delete", Key: key})
+		methods = append(methods, CRUDMethod{Name: n.Delete, Op: "delete", Key: key})
 	}
 	return methods
 }
@@ -294,12 +295,9 @@ func (pl *Plan) SelectRowType(fn SelectFn) (string, []FieldSig, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	row := t.Model
-	switch {
-	case fn.SharedType != "":
-		row = fn.SharedType
-	case len(fn.Excluded) > 0:
-		row = t.Model + fn.MethodSuffix
+	row, err := pl.SelectRowName(fn)
+	if err != nil {
+		return "", nil, err
 	}
 	sigs := make([]FieldSig, 0, len(cols))
 	for _, fp := range cols {
@@ -459,21 +457,22 @@ type nameOrigin struct {
 }
 
 func modelNamesBuild(t *Table) []nameOrigin {
-	names := make([]nameOrigin, 0, 5+len(dynWrapperSuffixes)+len(t.Fields))
+	wrappers := t.Names.wrappers()
+	names := make([]nameOrigin, 0, 5+len(wrappers)+len(t.Fields))
 	add := func(name string, kind nameKind, field *Field, dyn bool, rank int) {
 		names = append(names, nameOrigin{name: name, kind: kind, idx: len(names), table: t, field: field, dyn: dyn, rank: rank})
 	}
 	queryable := len(t.Fields) > 0
 	add(t.Model, nameModel, nil, true, 0)
-	add(t.Model+"Changeset", nameChangeset, nil, queryable, 1)
-	add(t.Model+"Column", nameColumn, nil, queryable, 2)
-	add(t.Model+"Params", nameParams, nil, queryable, 3)
-	add(t.Model+"New", nameNew, nil, queryable, 4)
-	for i, suffix := range dynWrapperSuffixes {
-		add(t.Model+suffix, nameDynFunc, nil, queryable, 5+len(t.Fields)+i)
+	add(t.Names.Changeset, nameChangeset, nil, queryable, 1)
+	add(t.Names.Column, nameColumn, nil, queryable, 2)
+	add(t.Names.Params, nameParams, nil, queryable, 3)
+	add(t.Names.New, nameNew, nil, queryable, 4)
+	for i, w := range wrappers {
+		add(w, nameDynFunc, nil, queryable, 5+len(t.Fields)+i)
 	}
 	for i, fp := range t.Fields {
-		add(t.Model+fp.GoField, nameHandle, fp, queryable, 5+i)
+		add(t.Handle(fp), nameHandle, fp, queryable, 5+i)
 	}
 	return names
 }

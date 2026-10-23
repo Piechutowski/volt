@@ -64,7 +64,10 @@ func Selects(pl *naming.Plan, fns []naming.SelectFn, opts Options) ([]byte, erro
 				imports[rtImport] = true
 			}
 		case len(fn.Excluded) > 0:
-			row := t.Model + fn.MethodSuffix
+			row, err := pl.SelectRowName(fn)
+			if err != nil {
+				return nil, err
+			}
 			fmt.Fprintf(&body, "// %s is %s minus (%s) — a struct derivative of select %q,\n// every kept field copied verbatim (spec §selects-over-groups).\n",
 				row, t.Model, strings.Join(fn.Excluded, ", "), lowerFirstWord(fn.MethodSuffix))
 			fmt.Fprintf(&body, "type %s struct {\n", row)
@@ -81,7 +84,7 @@ func Selects(pl *naming.Plan, fns []naming.SelectFn, opts Options) ([]byte, erro
 			rowScanEmit(&body, row, cols)
 			imports[rtImport] = true
 		}
-		if err := selectEmit(&body, imports, t, fn); err != nil {
+		if err := selectEmit(&body, imports, pl, t, fn); err != nil {
 			return nil, err
 		}
 	}
@@ -119,8 +122,7 @@ func typeImport(t *naming.Table, goType string) string {
 }
 
 func rowScanEmit(b *strings.Builder, row string, cols []*naming.Field) {
-	lower := naming.ArgName(row)
-	fmt.Fprintf(b, "func %sScan(r rt.Row) (%s, error) {\n\tvar voltV %s\n\tvoltErr := r.Scan(", lower, row, row)
+	fmt.Fprintf(b, "func %s(r rt.Row) (%s, error) {\n\tvar voltV %s\n\tvoltErr := r.Scan(", naming.RowScan(row), row, row)
 	for i, f := range cols {
 		if i > 0 {
 			b.WriteString(", ")
@@ -137,17 +139,13 @@ func lowerFirstWord(s string) string {
 	return strings.ToLower(s[:1]) + s[1:]
 }
 
-func selectEmit(b *strings.Builder, imports map[string]bool, t *naming.Table, fn naming.SelectFn) error {
-	row, scanPrefix := t.Model, naming.ArgName(t.Model)
-	switch {
-	case fn.SharedType != "":
-		row, scanPrefix = fn.SharedType, naming.ArgName(fn.SharedType)
-	case len(fn.Excluded) > 0:
-		row = t.Model + fn.MethodSuffix
-		scanPrefix = naming.ArgName(row)
+func selectEmit(b *strings.Builder, imports map[string]bool, pl *naming.Plan, t *naming.Table, fn naming.SelectFn) error {
+	row, err := pl.SelectRowName(fn)
+	if err != nil {
+		return err
 	}
-	name := t.Model + fn.MethodSuffix
-	constName := naming.ArgName(t.Model) + fn.MethodSuffix + "SQL"
+	name := t.SelectMethod(fn)
+	constName := t.SelectConst(fn)
 
 	sql, args, err := t.SelectSQL(fn)
 	if err != nil {
@@ -171,6 +169,6 @@ func selectEmit(b *strings.Builder, imports map[string]bool, t *naming.Table, fn
 	fmt.Fprintf(b, "// %s runs the %q select over %s (spec §selects-over-groups).\n", name, lowerFirstWord(fn.MethodSuffix), t.SQLName)
 	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context%s) ([]%s, error) {\n", name, sig.String(), row)
 	fmt.Fprintf(b, "\tvoltRows, voltErr := q.db.QueryContext(ctx, %s%s)\n", constName, binds)
-	rowsScanEmit(b, row, scanPrefix)
+	rowsScanEmit(b, row, naming.RowScan(row))
 	return nil
 }

@@ -128,7 +128,6 @@ func (e *queryEmitter) tableEmit(t *naming.Table) {
 		return
 	}
 	b := &e.body
-	lower := naming.ArgName(t.Model)
 	tbl := t.Info.Decl.Name.Name()
 
 	if len(t.PK) > 0 {
@@ -141,7 +140,7 @@ func (e *queryEmitter) tableEmit(t *naming.Table) {
 	}
 	delete(e.needImports, "")
 
-	fmt.Fprintf(b, "func %sScan(r rt.Row) (%s, error) {\n\tvar voltV %s\n\tvoltErr := r.Scan(", lower, t.Model, t.Model)
+	fmt.Fprintf(b, "func %s(r rt.Row) (%s, error) {\n\tvar voltV %s\n\tvoltErr := r.Scan(", t.Names.Scan, t.Model, t.Model)
 	for i, f := range t.Fields {
 		if i > 0 {
 			b.WriteString(", ")
@@ -151,21 +150,21 @@ func (e *queryEmitter) tableEmit(t *naming.Table) {
 	fmt.Fprintf(b, ")\n\treturn voltV, rt.Refused(%q, voltErr)\n}\n\n", t.Model)
 
 	if len(t.PK) > 0 {
-		e.getEmit(t, lower, tbl)
+		e.getEmit(t, tbl)
 		if len(t.PK) == 1 {
-			e.getManyEmit(t, lower, tbl)
+			e.getManyEmit(t, tbl)
 		}
 	}
 	for _, f := range t.UniqueFields() {
-		e.getByEmit(t, f, lower, tbl)
+		e.getByEmit(t, f, tbl)
 	}
-	e.listEmit(t, lower, tbl)
-	e.createEmit(t, lower, tbl)
+	e.listEmit(t, tbl)
+	e.createEmit(t, tbl)
 	if len(t.PK) > 0 {
 		if len(t.NonPK()) > 0 {
-			e.updateEmit(t, lower, tbl)
+			e.updateEmit(t, tbl)
 		}
-		e.deleteEmit(t, lower, tbl)
+		e.deleteEmit(t, tbl)
 	}
 }
 
@@ -177,87 +176,87 @@ func identityParams(t *naming.Table) string {
 	return strings.Join(parts, ", ")
 }
 
-func (e *queryEmitter) getEmit(t *naming.Table, lower, tbl string) {
+func (e *queryEmitter) getEmit(t *naming.Table, tbl string) {
 	b := &e.body
 	sql, args, err := t.GetSQL()
 	if err != nil {
 		e.fail(t, "Get", err)
 		return
 	}
-	fmt.Fprintf(b, "const %sGetSQL = `%s`\n\n", lower, sql)
-	fmt.Fprintf(b, "// %sGet fetches the %s row with the given primary key, or rt.ErrNotFound.\n", t.Model, tbl)
-	fmt.Fprintf(b, "func (q *Queries) %sGet(ctx context.Context, %s) (%s, error) {\n", t.Model, identityParams(t), t.Model)
-	fmt.Fprintf(b, "\treturn %sScan(q.db.QueryRowContext(ctx, %sGetSQL, %s))\n}\n\n", lower, lower, strings.Join(args, ", "))
+	fmt.Fprintf(b, "const %s = `%s`\n\n", t.Names.GetConst, sql)
+	fmt.Fprintf(b, "// %s fetches the %s row with the given primary key, or rt.ErrNotFound.\n", t.Names.Get, tbl)
+	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, %s) (%s, error) {\n", t.Names.Get, identityParams(t), t.Model)
+	fmt.Fprintf(b, "\treturn %s(q.db.QueryRowContext(ctx, %s, %s))\n}\n\n", t.Names.Scan, t.Names.GetConst, strings.Join(args, ", "))
 }
 
-func (e *queryEmitter) getManyEmit(t *naming.Table, lower, tbl string) {
+func (e *queryEmitter) getManyEmit(t *naming.Table, tbl string) {
 	b := &e.body
 	key := t.PK[0]
-	fmt.Fprintf(b, "// %sGetMany fetches the %s rows whose primary key is in %ss, in\n", t.Model, tbl, key.Arg)
+	fmt.Fprintf(b, "// %s fetches the %s rows whose primary key is in %ss, in\n", t.Names.GetMany, tbl, key.Arg)
 	fmt.Fprintf(b, "// database order. Missing keys are not an error; they are just absent.\n")
-	fmt.Fprintf(b, "func (q *Queries) %sGetMany(ctx context.Context, %ss []%s) ([]%s, error) {\n", t.Model, key.Arg, key.GoType, t.Model)
+	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, %ss []%s) ([]%s, error) {\n", t.Names.GetMany, key.Arg, key.GoType, t.Model)
 	fmt.Fprintf(b, "\tif len(%ss) == 0 {\n\t\treturn nil, nil\n\t}\n", key.Arg)
-	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.SelectRender(%sTableSQL, %sColumnsSQL, []rt.Opt[%s]{%s%s.In(%ss...)})\n", lower, lower, t.Model, t.Model, key.GoField, key.Arg)
+	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.SelectRender(%s, %s, []rt.Opt[%s]{%s.In(%ss...)})\n", t.Names.TableConst, t.Names.ColumnsConst, t.Model, t.Handle(key), key.Arg)
 	b.WriteString("\tif voltErr != nil {\n\t\treturn nil, voltErr\n\t}\n")
 	b.WriteString("\tvoltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)\n")
-	e.rowsScan(t, lower)
+	e.rowsScan(t)
 }
 
-func (e *queryEmitter) getByEmit(t *naming.Table, f *naming.Field, lower, tbl string) {
+func (e *queryEmitter) getByEmit(t *naming.Table, f *naming.Field, tbl string) {
 	b := &e.body
 	sql, args, err := t.GetBySQL(f)
 	if err != nil {
 		e.fail(t, "GetBy"+f.GoField, err)
 		return
 	}
-	fmt.Fprintf(b, "const %sGetBy%sSQL = `%s`\n\n", lower, f.GoField, sql)
-	fmt.Fprintf(b, "// %sGetBy%s fetches the %s row with the given %s (a unique column),\n// or rt.ErrNotFound.\n", t.Model, f.GoField, tbl, f.ColName)
-	fmt.Fprintf(b, "func (q *Queries) %sGetBy%s(ctx context.Context, %s %s) (%s, error) {\n", t.Model, f.GoField, f.Arg, f.GoType, t.Model)
-	fmt.Fprintf(b, "\treturn %sScan(q.db.QueryRowContext(ctx, %sGetBy%sSQL, %s))\n}\n\n", lower, lower, f.GoField, strings.Join(args, ", "))
+	fmt.Fprintf(b, "const %s = `%s`\n\n", t.GetByConst(f), sql)
+	fmt.Fprintf(b, "// %s fetches the %s row with the given %s (a unique column),\n// or rt.ErrNotFound.\n", t.GetBy(f), tbl, f.ColName)
+	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, %s %s) (%s, error) {\n", t.GetBy(f), f.Arg, f.GoType, t.Model)
+	fmt.Fprintf(b, "\treturn %s(q.db.QueryRowContext(ctx, %s, %s))\n}\n\n", t.Names.Scan, t.GetByConst(f), strings.Join(args, ", "))
 }
 
-func (e *queryEmitter) listEmit(t *naming.Table, lower, tbl string) {
+func (e *queryEmitter) listEmit(t *naming.Table, tbl string) {
 	b := &e.body
 	sql, _, err := t.ListSQL()
 	if err != nil {
 		e.fail(t, "List", err)
 		return
 	}
-	fmt.Fprintf(b, "const %sListSQL = `%s`\n\n", lower, sql)
-	fmt.Fprintf(b, "// %sList returns every %s row.\n", t.Model, tbl)
-	fmt.Fprintf(b, "func (q *Queries) %sList(ctx context.Context) ([]%s, error) {\n", t.Model, t.Model)
-	fmt.Fprintf(b, "\tvoltRows, voltErr := q.db.QueryContext(ctx, %sListSQL)\n", lower)
-	e.rowsScan(t, lower)
+	fmt.Fprintf(b, "const %s = `%s`\n\n", t.Names.ListConst, sql)
+	fmt.Fprintf(b, "// %s returns every %s row.\n", t.Names.List, tbl)
+	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context) ([]%s, error) {\n", t.Names.List, t.Model)
+	fmt.Fprintf(b, "\tvoltRows, voltErr := q.db.QueryContext(ctx, %s)\n", t.Names.ListConst)
+	e.rowsScan(t)
 }
 
-func (e *queryEmitter) rowsScan(t *naming.Table, lower string) {
-	rowsScanEmit(&e.body, t.Model, lower)
+func (e *queryEmitter) rowsScan(t *naming.Table) {
+	rowsScanEmit(&e.body, t.Model, t.Names.Scan)
 }
 
-func rowsScanEmit(b *strings.Builder, model, lower string) {
+func rowsScanEmit(b *strings.Builder, model, scan string) {
 	fmt.Fprintf(b, "\tif voltErr != nil {\n\t\treturn nil, voltErr\n\t}\n\tdefer voltRows.Close()\n")
 	fmt.Fprintf(b, "\tvoltOut := []%s{}\n\tfor voltRows.Next() {\n", model)
-	fmt.Fprintf(b, "\t\tvoltV, voltErr := %sScan(voltRows)\n\t\tif voltErr != nil {\n\t\t\treturn nil, voltErr\n\t\t}\n\t\tvoltOut = append(voltOut, voltV)\n\t}\n", lower)
+	fmt.Fprintf(b, "\t\tvoltV, voltErr := %s(voltRows)\n\t\tif voltErr != nil {\n\t\t\treturn nil, voltErr\n\t\t}\n\t\tvoltOut = append(voltOut, voltV)\n\t}\n", scan)
 	fmt.Fprintf(b, "\treturn voltOut, voltRows.Err()\n}\n\n")
 }
 
-func (e *queryEmitter) createEmit(t *naming.Table, lower, tbl string) {
+func (e *queryEmitter) createEmit(t *naming.Table, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "// %sCreate validates c and inserts its marked columns, returning the\n", t.Model)
+	fmt.Fprintf(b, "// %s validates c and inserts its marked columns, returning the\n", t.Names.Create)
 	fmt.Fprintf(b, "// stored %s row; nothing marked inserts the defaults (spec §changesets).\n", tbl)
-	fmt.Fprintf(b, "func (q *Queries) %sCreate(ctx context.Context, c %sChangeset) (%s, error) {\n", t.Model, t.Model, t.Model)
+	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, c %s) (%s, error) {\n", t.Names.Create, t.Names.Changeset, t.Model)
 	fmt.Fprintf(b, "\tc = c.Validate()\n\tif voltErr := c.Err(); voltErr != nil {\n\t\treturn %s{}, voltErr\n\t}\n", t.Model)
 	markedArgsEmit(b, t)
-	fmt.Fprintf(b, "\tvoltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(%sTableSQL, voltCols, %sColumnsSQL), voltArgs...)\n", lower, lower)
-	fmt.Fprintf(b, "\tif voltErr != nil {\n\t\treturn %s{}, voltErr\n\t}\n\treturn %sScan(voltRow)\n}\n\n", t.Model, lower)
+	fmt.Fprintf(b, "\tvoltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(%s, voltCols, %s), voltArgs...)\n", t.Names.TableConst, t.Names.ColumnsConst)
+	fmt.Fprintf(b, "\tif voltErr != nil {\n\t\treturn %s{}, voltErr\n\t}\n\treturn %s(voltRow)\n}\n\n", t.Model, t.Names.Scan)
 }
 
-func (e *queryEmitter) updateEmit(t *naming.Table, lower, tbl string) {
+func (e *queryEmitter) updateEmit(t *naming.Table, tbl string) {
 	b := &e.body
-	fmt.Fprintf(b, "// %sUpdate validates c and writes its marked columns to the %s row it\n", t.Model, tbl)
+	fmt.Fprintf(b, "// %s validates c and writes its marked columns to the %s row it\n", t.Names.Update, tbl)
 	fmt.Fprintf(b, "// was made from, returning the stored row; nothing marked returns the row\n")
 	fmt.Fprintf(b, "// untouched (spec §changesets).\n")
-	fmt.Fprintf(b, "func (q *Queries) %sUpdate(ctx context.Context, c %sChangeset) (%s, error) {\n", t.Model, t.Model, t.Model)
+	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, c %s) (%s, error) {\n", t.Names.Update, t.Names.Changeset, t.Model)
 	fmt.Fprintf(b, "\tif !c.row {\n\t\treturn %s{}, rt.ErrNoRow\n\t}\n", t.Model)
 	fmt.Fprintf(b, "\tc = c.Validate()\n\tif voltErr := c.Err(); voltErr != nil {\n\t\treturn %s{}, voltErr\n\t}\n", t.Model)
 	markedArgsEmit(b, t)
@@ -267,8 +266,8 @@ func (e *queryEmitter) updateEmit(t *naming.Table, lower, tbl string) {
 		fmt.Fprintf(b, "\tvoltArgs = append(voltArgs, %s)\n", f.BindOf("c.data."+f.GoField))
 		keys[i] = f.ColName
 	}
-	fmt.Fprintf(b, "\tvoltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(%sTableSQL, voltCols, %#v, %sColumnsSQL), voltArgs...)\n", lower, keys, lower)
-	fmt.Fprintf(b, "\tif voltErr != nil {\n\t\treturn %s{}, voltErr\n\t}\n\treturn %sScan(voltRow)\n}\n\n", t.Model, lower)
+	fmt.Fprintf(b, "\tvoltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(%s, voltCols, %#v, %s), voltArgs...)\n", t.Names.TableConst, keys, t.Names.ColumnsConst)
+	fmt.Fprintf(b, "\tif voltErr != nil {\n\t\treturn %s{}, voltErr\n\t}\n\treturn %s(voltRow)\n}\n\n", t.Model, t.Names.Scan)
 }
 
 func markedArgsEmit(b *strings.Builder, t *naming.Table) {
@@ -282,17 +281,17 @@ func markedArgsEmit(b *strings.Builder, t *naming.Table) {
 	}
 }
 
-func (e *queryEmitter) deleteEmit(t *naming.Table, lower, tbl string) {
+func (e *queryEmitter) deleteEmit(t *naming.Table, tbl string) {
 	b := &e.body
 	sql, args, err := t.DeleteSQL()
 	if err != nil {
 		e.fail(t, "Delete", err)
 		return
 	}
-	fmt.Fprintf(b, "const %sDeleteSQL = `%s`\n\n", lower, sql)
-	fmt.Fprintf(b, "// %sDelete removes the identified %s row; rt.ErrNotFound reports\n// that nothing matched.\n", t.Model, tbl)
-	fmt.Fprintf(b, "func (q *Queries) %sDelete(ctx context.Context, %s) error {\n", t.Model, identityParams(t))
-	fmt.Fprintf(b, "\tvoltRes, voltErr := q.db.ExecContext(ctx, %sDeleteSQL, %s)\n", lower, strings.Join(args, ", "))
+	fmt.Fprintf(b, "const %s = `%s`\n\n", t.Names.DeleteConst, sql)
+	fmt.Fprintf(b, "// %s removes the identified %s row; rt.ErrNotFound reports\n// that nothing matched.\n", t.Names.Delete, tbl)
+	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, %s) error {\n", t.Names.Delete, identityParams(t))
+	fmt.Fprintf(b, "\tvoltRes, voltErr := q.db.ExecContext(ctx, %s, %s)\n", t.Names.DeleteConst, strings.Join(args, ", "))
 	fmt.Fprintf(b, "\tif voltErr != nil {\n\t\treturn rt.Refused(%q, voltErr)\n\t}\n", t.Model)
 	fmt.Fprintf(b, "\tvoltN, voltErr := voltRes.RowsAffected()\n\tif voltErr != nil {\n\t\treturn voltErr\n\t}\n")
 	fmt.Fprintf(b, "\tif voltN == 0 {\n\t\treturn rt.ErrNotFound\n\t}\n\treturn nil\n}\n\n")

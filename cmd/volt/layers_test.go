@@ -84,6 +84,29 @@ func TestLayersDataUsesNoNetwork(t *testing.T) {
 	}
 }
 
+// TestLayersCheckersImportNoGenerator proves no checker imports a
+// generator (spec §data-and-network-layers): no package of the front end
+// lang/ and of the language server reaches nao/gen/ or gen/, directly or
+// through anything it imports.
+func TestLayersCheckersImportNoGenerator(t *testing.T) {
+	checked := 0
+	packages.Visit(gatePackages(t), nil, func(pkg *packages.Package) {
+		p := pkg.PkgPath
+		if p != module+"/lang" && !strings.HasPrefix(p, module+"/lang/") && p != module+"/lsp" && !strings.HasPrefix(p, module+"/lsp/") {
+			return
+		}
+		checked++
+		for path, chain := range closureOf(pkg) {
+			if strings.HasPrefix(path, module+"/nao/gen/") || strings.HasPrefix(path, module+"/gen/") {
+				t.Errorf("%s reaches %s: %s", p, path, strings.Join(chain, " -> "))
+			}
+		}
+	})
+	if checked < 9 {
+		t.Fatalf("only %d front-end packages loaded", checked)
+	}
+}
+
 // TestLayersRuntimeIsStdlib proves nao/rt, the one package a data-only
 // program links from Volt (spec §data-and-network-layers), imports the
 // standard library alone and never net/http, through anything it imports
@@ -218,9 +241,9 @@ func declaredTypePaths(t *testing.T, path string) []string {
 }
 
 // TestLayersDataOnlyProgram proves the data layer stands alone (spec
-// §data-and-network-layers): nao/itest, and a program over a package of
-// schema files without routes generated here, link nothing from Volt but
-// nao/rt and nothing of net/http, and the program builds.
+// §data-and-network-layers): nao/itest, and a program generated here over
+// a package of schema files and a pipeline but no scope, link nothing from
+// Volt but nao/rt and nothing of net/http, and the program builds.
 func TestLayersDataOnlyProgram(t *testing.T) {
 	var fixture *packages.Package
 	packages.Visit(gatePackages(t), nil, func(pkg *packages.Package) {
@@ -243,6 +266,7 @@ func TestLayersDataOnlyProgram(t *testing.T) {
 		"db/schema.volt": "package db\n\nTable authors {\n  id    int    [pk, increment]\n  email string [unique]\n  name  string [required]\n}\n\n" +
 			"Table posts {\n  id        int    [pk, increment]\n  author_id int    [ref: authors.id]\n  title     string\n  views     int    [default: 0]\n}\n\n" +
 			"Select popular for posts where views >= :least [order: (views desc)]\n",
+		"db/pipe.volt": "package db\n\nPipeline api {\n  use volt.RequestID\n}\n",
 		"db/0001__init.volt": "package db\n\nMigration 0001__init {\n  create table authors {\n    id    int    [pk, increment]\n    email string [unique]\n    name  string\n  }\n" +
 			"  create table posts {\n    id        int    [pk, increment]\n    author_id int    [ref: authors.id]\n    title     string\n    views     int    [default: 0]\n  }\n}\n",
 		"cmd/app/main.go": "package main\n\nimport (\n\t\"context\"\n\t\"database/sql\"\n\t\"fmt\"\n\n\t\"dataonly/db\"\n)\n\n" +
@@ -269,7 +293,7 @@ func TestLayersDataOnlyProgram(t *testing.T) {
 	}
 	pkg := pr.PackageAt(filepath.Join(dir, "db"))
 	if pkg == nil || !pkg.HasSchema() || pkg.HasRouting() {
-		t.Fatal("the fixture is not a package of schema files without routes")
+		t.Fatal("the fixture is not a package of schema files without a scope")
 	}
 	gen, err := model.Generate(pkg, model.Options{Source: "package db"})
 	if err != nil {

@@ -38,17 +38,17 @@ func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
 }
 
-func currencyScan(r rt.Row) (Currency, error) {
+func voltCurrencyScan(r rt.Row) (Currency, error) {
 	var voltV Currency
 	voltErr := r.Scan(&voltV.Code, &voltV.Name)
 	return voltV, rt.Refused("Currency", voltErr)
 }
 
-const currencyGetSQL = `SELECT "code", "name" FROM "currencies" WHERE "code" = ?`
+const voltCurrencyGetSQL = `SELECT "code", "name" FROM "currencies" WHERE "code" = ?`
 
 // CurrencyGet fetches the currencies row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) CurrencyGet(ctx context.Context, code string) (Currency, error) {
-	return currencyScan(q.db.QueryRowContext(ctx, currencyGetSQL, code))
+	return voltCurrencyScan(q.db.QueryRowContext(ctx, voltCurrencyGetSQL, code))
 }
 
 // CurrencyGetMany fetches the currencies rows whose primary key is in codes, in
@@ -57,7 +57,7 @@ func (q *Queries) CurrencyGetMany(ctx context.Context, codes []string) ([]Curren
 	if len(codes) == 0 {
 		return nil, nil
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(currencyTableSQL, currencyColumnsSQL, []rt.Opt[Currency]{CurrencyCode.In(codes...)})
+	voltQuery, voltArgs, voltErr := rt.SelectRender(voltCurrencyTableSQL, voltCurrencyColumnsSQL, []rt.Opt[Currency]{CurrencyCode.In(codes...)})
 	if voltErr != nil {
 		return nil, voltErr
 	}
@@ -68,7 +68,7 @@ func (q *Queries) CurrencyGetMany(ctx context.Context, codes []string) ([]Curren
 	defer voltRows.Close()
 	voltOut := []Currency{}
 	for voltRows.Next() {
-		voltV, voltErr := currencyScan(voltRows)
+		voltV, voltErr := voltCurrencyScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -77,18 +77,18 @@ func (q *Queries) CurrencyGetMany(ctx context.Context, codes []string) ([]Curren
 	return voltOut, voltRows.Err()
 }
 
-const currencyListSQL = `SELECT "code", "name" FROM "currencies"`
+const voltCurrencyListSQL = `SELECT "code", "name" FROM "currencies"`
 
 // CurrencyList returns every currencies row.
 func (q *Queries) CurrencyList(ctx context.Context) ([]Currency, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, currencyListSQL)
+	voltRows, voltErr := q.db.QueryContext(ctx, voltCurrencyListSQL)
 	if voltErr != nil {
 		return nil, voltErr
 	}
 	defer voltRows.Close()
 	voltOut := []Currency{}
 	for voltRows.Next() {
-		voltV, voltErr := currencyScan(voltRows)
+		voltV, voltErr := voltCurrencyScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -113,11 +113,11 @@ func (q *Queries) CurrencyCreate(ctx context.Context, c CurrencyChangeset) (Curr
 	if c.set[1] {
 		voltCols, voltArgs = append(voltCols, "name"), append(voltArgs, voltV.Name)
 	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(currencyTableSQL, voltCols, currencyColumnsSQL), voltArgs...)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltCurrencyTableSQL, voltCols, voltCurrencyColumnsSQL), voltArgs...)
 	if voltErr != nil {
 		return Currency{}, voltErr
 	}
-	return currencyScan(voltRow)
+	return voltCurrencyScan(voltRow)
 }
 
 // CurrencyUpdate validates c and writes its marked columns to the currencies row it
@@ -144,19 +144,19 @@ func (q *Queries) CurrencyUpdate(ctx context.Context, c CurrencyChangeset) (Curr
 		return voltV, nil
 	}
 	voltArgs = append(voltArgs, c.data.Code)
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(currencyTableSQL, voltCols, []string{"code"}, currencyColumnsSQL), voltArgs...)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(voltCurrencyTableSQL, voltCols, []string{"code"}, voltCurrencyColumnsSQL), voltArgs...)
 	if voltErr != nil {
 		return Currency{}, voltErr
 	}
-	return currencyScan(voltRow)
+	return voltCurrencyScan(voltRow)
 }
 
-const currencyDeleteSQL = `DELETE FROM "currencies" WHERE "code" = ?`
+const voltCurrencyDeleteSQL = `DELETE FROM "currencies" WHERE "code" = ?`
 
 // CurrencyDelete removes the identified currencies row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) CurrencyDelete(ctx context.Context, code string) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, currencyDeleteSQL, code)
+	voltRes, voltErr := q.db.ExecContext(ctx, voltCurrencyDeleteSQL, code)
 	if voltErr != nil {
 		return rt.Refused("Currency", voltErr)
 	}
@@ -170,17 +170,17 @@ func (q *Queries) CurrencyDelete(ctx context.Context, code string) error {
 	return nil
 }
 
-func rateScan(r rt.Row) (Rate, error) {
+func voltRateScan(r rt.Row) (Rate, error) {
 	var voltV Rate
 	voltErr := r.Scan(&voltV.ID, &voltV.CurrencyCode, &voltV.Rate, &voltV.FetchedAt, &voltV.Active, &voltV.Comment)
 	return voltV, rt.Refused("Rate", voltErr)
 }
 
-const rateGetSQL = `SELECT "id", "currency_code", "rate", "fetched_at", "active", "comment" FROM "rates" WHERE "id" = ?`
+const voltRateGetSQL = `SELECT "id", "currency_code", "rate", "fetched_at", "active", "comment" FROM "rates" WHERE "id" = ?`
 
 // RateGet fetches the rates row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) RateGet(ctx context.Context, id int) (Rate, error) {
-	return rateScan(q.db.QueryRowContext(ctx, rateGetSQL, id))
+	return voltRateScan(q.db.QueryRowContext(ctx, voltRateGetSQL, id))
 }
 
 // RateGetMany fetches the rates rows whose primary key is in ids, in
@@ -189,7 +189,7 @@ func (q *Queries) RateGetMany(ctx context.Context, ids []int) ([]Rate, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(rateTableSQL, rateColumnsSQL, []rt.Opt[Rate]{RateID.In(ids...)})
+	voltQuery, voltArgs, voltErr := rt.SelectRender(voltRateTableSQL, voltRateColumnsSQL, []rt.Opt[Rate]{RateID.In(ids...)})
 	if voltErr != nil {
 		return nil, voltErr
 	}
@@ -200,7 +200,7 @@ func (q *Queries) RateGetMany(ctx context.Context, ids []int) ([]Rate, error) {
 	defer voltRows.Close()
 	voltOut := []Rate{}
 	for voltRows.Next() {
-		voltV, voltErr := rateScan(voltRows)
+		voltV, voltErr := voltRateScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -209,18 +209,18 @@ func (q *Queries) RateGetMany(ctx context.Context, ids []int) ([]Rate, error) {
 	return voltOut, voltRows.Err()
 }
 
-const rateListSQL = `SELECT "id", "currency_code", "rate", "fetched_at", "active", "comment" FROM "rates"`
+const voltRateListSQL = `SELECT "id", "currency_code", "rate", "fetched_at", "active", "comment" FROM "rates"`
 
 // RateList returns every rates row.
 func (q *Queries) RateList(ctx context.Context) ([]Rate, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, rateListSQL)
+	voltRows, voltErr := q.db.QueryContext(ctx, voltRateListSQL)
 	if voltErr != nil {
 		return nil, voltErr
 	}
 	defer voltRows.Close()
 	voltOut := []Rate{}
 	for voltRows.Next() {
-		voltV, voltErr := rateScan(voltRows)
+		voltV, voltErr := voltRateScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -254,11 +254,11 @@ func (q *Queries) RateCreate(ctx context.Context, c RateChangeset) (Rate, error)
 	if c.set[5] {
 		voltCols, voltArgs = append(voltCols, "comment"), append(voltArgs, voltV.Comment)
 	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(rateTableSQL, voltCols, rateColumnsSQL), voltArgs...)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltRateTableSQL, voltCols, voltRateColumnsSQL), voltArgs...)
 	if voltErr != nil {
 		return Rate{}, voltErr
 	}
-	return rateScan(voltRow)
+	return voltRateScan(voltRow)
 }
 
 // RateUpdate validates c and writes its marked columns to the rates row it
@@ -294,19 +294,19 @@ func (q *Queries) RateUpdate(ctx context.Context, c RateChangeset) (Rate, error)
 		return voltV, nil
 	}
 	voltArgs = append(voltArgs, c.data.ID)
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(rateTableSQL, voltCols, []string{"id"}, rateColumnsSQL), voltArgs...)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(voltRateTableSQL, voltCols, []string{"id"}, voltRateColumnsSQL), voltArgs...)
 	if voltErr != nil {
 		return Rate{}, voltErr
 	}
-	return rateScan(voltRow)
+	return voltRateScan(voltRow)
 }
 
-const rateDeleteSQL = `DELETE FROM "rates" WHERE "id" = ?`
+const voltRateDeleteSQL = `DELETE FROM "rates" WHERE "id" = ?`
 
 // RateDelete removes the identified rates row; rt.ErrNotFound reports
 // that nothing matched.
 func (q *Queries) RateDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, rateDeleteSQL, id)
+	voltRes, voltErr := q.db.ExecContext(ctx, voltRateDeleteSQL, id)
 	if voltErr != nil {
 		return rt.Refused("Rate", voltErr)
 	}

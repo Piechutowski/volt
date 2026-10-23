@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	authorTableSQL   = `"authors"`
-	authorColumnsSQL = `"id", "email", "handle", "deleted_at"`
+	voltAuthorTableSQL   = `"authors"`
+	voltAuthorColumnsSQL = `"id", "email", "handle", "deleted_at"`
 )
 
 // AuthorLimit caps how many rows AuthorQuery returns.
@@ -25,7 +25,7 @@ func AuthorDistinct() rt.Opt[Author] { return rt.Distinct[Author]() }
 // Author column handles.
 func AuthorOrderBy(terms ...rt.Order[Author]) rt.Opt[Author] { return rt.OrderBy(terms...) }
 
-// AuthorAfter resumes strictly after the row with the given key — keyset
+// AuthorAfter resumes strictly after the row with the given key, for keyset
 // pagination: one value per AuthorOrderBy term, in the same order.
 func AuthorAfter(key ...any) rt.Opt[Author] { return rt.After[Author](key...) }
 
@@ -37,7 +37,7 @@ func AuthorSet(assigns ...rt.Assign[Author]) []rt.Assign[Author] { return assign
 // shaped by the remaining options (order, limit, offset, keyset,
 // distinct). No options means every row.
 func (q *Queries) AuthorQuery(ctx context.Context, opts ...rt.Opt[Author]) ([]Author, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(authorTableSQL, authorColumnsSQL, opts)
+	voltQuery, voltArgs, voltErr := rt.SelectRender(voltAuthorTableSQL, voltAuthorColumnsSQL, opts)
 	if voltErr != nil {
 		return nil, voltErr
 	}
@@ -48,7 +48,7 @@ func (q *Queries) AuthorQuery(ctx context.Context, opts ...rt.Opt[Author]) ([]Au
 	defer voltRows.Close()
 	voltOut := []Author{}
 	for voltRows.Next() {
-		voltV, voltErr := authorScan(voltRows)
+		voltV, voltErr := voltAuthorScan(voltRows)
 		if voltErr != nil {
 			return nil, voltErr
 		}
@@ -60,7 +60,7 @@ func (q *Queries) AuthorQuery(ctx context.Context, opts ...rt.Opt[Author]) ([]Au
 // AuthorCount reports how many authors rows match every given predicate;
 // none counts the whole table.
 func (q *Queries) AuthorCount(ctx context.Context, preds ...rt.Pred[Author]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(authorTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.CountRender(voltAuthorTableSQL, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -73,7 +73,7 @@ func (q *Queries) AuthorCount(ctx context.Context, preds ...rt.Pred[Author]) (in
 
 // AuthorExists reports whether any authors row matches every given predicate.
 func (q *Queries) AuthorExists(ctx context.Context, preds ...rt.Pred[Author]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(authorTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltAuthorTableSQL, preds)
 	if voltErr != nil {
 		return false, voltErr
 	}
@@ -88,7 +88,7 @@ func (q *Queries) AuthorExists(ctx context.Context, preds ...rt.Pred[Author]) (b
 // reports how many went. No effective predicate is an error, never a
 // full-table delete.
 func (q *Queries) AuthorDeleteWhere(ctx context.Context, preds ...rt.Pred[Author]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(authorTableSQL, preds)
+	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltAuthorTableSQL, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
@@ -104,7 +104,7 @@ func (q *Queries) AuthorDeleteWhere(ctx context.Context, preds ...rt.Pred[Author
 // partial update of the dynamic layer. No effective predicate
 // is an error, never a full-table rewrite.
 func (q *Queries) AuthorUpdateWhere(ctx context.Context, set []rt.Assign[Author], preds ...rt.Pred[Author]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(authorTableSQL, set, preds)
+	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltAuthorTableSQL, set, preds)
 	if voltErr != nil {
 		return 0, voltErr
 	}
