@@ -1728,8 +1728,8 @@ both.
    `volt_models.go`, `volt_queries.go`, `volt_dyn.go`,
    `volt_validate.go`, `volt_selects.go` and `volt_migrations.go` (with
    `volt_schema.sql` on request), over the data runtime `nao/rt`. A data
-   file imports only the standard library, `nao/rt` and the packages of
-   the package's declared types (§types).
+   file imports only the standard library other than `net/http`, `nao/rt`
+   and the packages of the package's declared types (§types).
 2. **The network layer** is packages (§projects-and-packages), imports
    (§imports), pipelines (§pipelines), scopes and routes
    (§scopes-and-routes), resources (§resources) and datasets

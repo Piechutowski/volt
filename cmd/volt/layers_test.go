@@ -136,8 +136,8 @@ func TestLayersRuntimeIsStdlib(t *testing.T) {
 
 // TestLayersGeneratedDataImports proves every generated data file, in the
 // generator goldens and the generated fixtures, imports only the standard
-// library, nao/rt and the packages of its schema's declared types (spec
-// §data-and-network-layers, §types).
+// library other than net/http, nao/rt and the packages of its schema's
+// declared types (spec §data-and-network-layers, §types).
 func TestLayersGeneratedDataImports(t *testing.T) {
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
@@ -191,8 +191,8 @@ func TestLayersGeneratedDataImports(t *testing.T) {
 		for _, f := range u.files {
 			files++
 			for _, path := range fileImports(t, f) {
-				if !stdlibPath(path) && !allowed[path] {
-					t.Errorf("%s imports %s, neither the standard library, nao/rt nor a declared type's package", f, path)
+				if (!stdlibPath(path) && !allowed[path]) || path == "net/http" {
+					t.Errorf("%s imports %s, neither the standard library other than net/http, nao/rt nor a declared type's package", f, path)
 				}
 			}
 		}
