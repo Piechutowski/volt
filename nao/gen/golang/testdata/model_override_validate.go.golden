@@ -2,18 +2,10 @@
 
 package models
 
-// Validate runs required and the validators of menus over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c MenuChangeset) Validate() MenuChangeset {
-	c.valid = nil
-	return c
+	return MenuChangeset{c.FindingsSet(nil)}
 }
 
-// Validate runs required and the validators of order_status over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c OrderStatusChangeset) Validate() OrderStatusChangeset {
-	c.valid = nil
-	return c
+	return OrderStatusChangeset{c.FindingsSet(nil)}
 }

@@ -10,7 +10,6 @@ import (
 
 const voltOrderByFeeSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "fee" = ?`
 
-// OrderByFee runs the "byFee" select over orders (spec §selects-over-groups).
 func (q *Queries) OrderByFee(ctx context.Context, fee pay.Cents) ([]Order, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltOrderByFeeSQL, fee)
 	if voltErr != nil {
@@ -30,7 +29,6 @@ func (q *Queries) OrderByFee(ctx context.Context, fee pay.Cents) ([]Order, error
 
 const voltOrderFeesSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "fee" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
 
-// OrderFees runs the "fees" select over orders (spec §selects-over-groups).
 func (q *Queries) OrderFees(ctx context.Context, fees []pay.Cents) ([]Order, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltOrderFeesSQL, rt.JSONList(fees))
 	if voltErr != nil {
@@ -50,7 +48,6 @@ func (q *Queries) OrderFees(ctx context.Context, fees []pay.Cents) ([]Order, err
 
 const voltOrderFreeSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "fee" = ?`
 
-// OrderFree runs the "free" select over orders (spec §selects-over-groups).
 func (q *Queries) OrderFree(ctx context.Context) ([]Order, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltOrderFreeSQL, 0)
 	if voltErr != nil {
@@ -70,7 +67,6 @@ func (q *Queries) OrderFree(ctx context.Context) ([]Order, error) {
 
 const voltOrderByStateSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "status" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
 
-// OrderByState runs the "byState" select over orders (spec §selects-over-groups).
 func (q *Queries) OrderByState(ctx context.Context, states []OrderState) ([]Order, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltOrderByStateSQL, rt.JSONList(states))
 	if voltErr != nil {
@@ -90,7 +86,6 @@ func (q *Queries) OrderByState(ctx context.Context, states []OrderState) ([]Orde
 
 const voltPageViewRowsSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE ("site" = ? AND "day" = ?) ORDER BY "day" DESC, "id" ASC`
 
-// PageViewRows runs the "rows" select over page_views (spec §selects-over-groups).
 func (q *Queries) PageViewRows(ctx context.Context, site string, day int) ([]PageView, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltPageViewRowsSQL, site, day)
 	if voltErr != nil {
@@ -110,7 +105,6 @@ func (q *Queries) PageViewRows(ctx context.Context, site string, day int) ([]Pag
 
 const voltLinkClickRowsSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE ("site" = ? AND "day" = ?) ORDER BY "day" DESC, "id" ASC`
 
-// LinkClickRows runs the "rows" select over link_clicks (spec §selects-over-groups).
 func (q *Queries) LinkClickRows(ctx context.Context, site string, day int) ([]LinkClick, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltLinkClickRowsSQL, site, day)
 	if voltErr != nil {
@@ -130,7 +124,6 @@ func (q *Queries) LinkClickRows(ctx context.Context, site string, day int) ([]Li
 
 const voltPageViewRecentSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE (("site" = ? AND "day" = ?) OR "day" >= ?)`
 
-// PageViewRecent runs the "recent" select over page_views (spec §selects-over-groups).
 func (q *Queries) PageViewRecent(ctx context.Context, site string, day int, from int) ([]PageView, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltPageViewRecentSQL, site, day, from)
 	if voltErr != nil {
@@ -150,7 +143,6 @@ func (q *Queries) PageViewRecent(ctx context.Context, site string, day int, from
 
 const voltLinkClickRecentSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE (("site" = ? AND "day" = ?) OR "day" >= ?)`
 
-// LinkClickRecent runs the "recent" select over link_clicks (spec §selects-over-groups).
 func (q *Queries) LinkClickRecent(ctx context.Context, site string, day int, from int) ([]LinkClick, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltLinkClickRecentSQL, site, day, from)
 	if voltErr != nil {
@@ -170,7 +162,6 @@ func (q *Queries) LinkClickRecent(ctx context.Context, site string, day int, fro
 
 const voltPageViewOnSitesSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE "site" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
 
-// PageViewOnSites runs the "onSites" select over page_views (spec §selects-over-groups).
 func (q *Queries) PageViewOnSites(ctx context.Context, sites []string) ([]PageView, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltPageViewOnSitesSQL, rt.JSONList(sites))
 	if voltErr != nil {
@@ -190,7 +181,6 @@ func (q *Queries) PageViewOnSites(ctx context.Context, sites []string) ([]PageVi
 
 const voltLinkClickOnSitesSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE "site" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
 
-// LinkClickOnSites runs the "onSites" select over link_clicks (spec §selects-over-groups).
 func (q *Queries) LinkClickOnSites(ctx context.Context, sites []string) ([]LinkClick, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltLinkClickOnSitesSQL, rt.JSONList(sites))
 	if voltErr != nil {
@@ -208,8 +198,6 @@ func (q *Queries) LinkClickOnSites(ctx context.Context, sites []string) ([]LinkC
 	return voltOut, voltRows.Err()
 }
 
-// Summary is the shared row type of select "summary" (spec §selects-over-groups):
-// one wire type, every member of the target a source.
 type Summary struct {
 	Site string `db:"site" json:"site"`
 	Day  int    `db:"day" json:"day"`
@@ -223,7 +211,6 @@ func voltSummaryScan(r rt.Row) (Summary, error) {
 
 const voltPageViewSummarySQL = `SELECT "site", "day" FROM "page_views" WHERE ("site" = ? AND "day" = ?)`
 
-// PageViewSummary runs the "summary" select over page_views (spec §selects-over-groups).
 func (q *Queries) PageViewSummary(ctx context.Context, site string, day int) ([]Summary, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltPageViewSummarySQL, site, day)
 	if voltErr != nil {
@@ -243,7 +230,6 @@ func (q *Queries) PageViewSummary(ctx context.Context, site string, day int) ([]
 
 const voltLinkClickSummarySQL = `SELECT "site", "day" FROM "link_clicks" WHERE ("site" = ? AND "day" = ?)`
 
-// LinkClickSummary runs the "summary" select over link_clicks (spec §selects-over-groups).
 func (q *Queries) LinkClickSummary(ctx context.Context, site string, day int) ([]Summary, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltLinkClickSummarySQL, site, day)
 	if voltErr != nil {
@@ -261,8 +247,6 @@ func (q *Queries) LinkClickSummary(ctx context.Context, site string, day int) ([
 	return voltOut, voltRows.Err()
 }
 
-// LinkClickPublic is LinkClick minus (target) — a struct derivative of select "public",
-// every kept field copied verbatim (spec §selects-over-groups).
 type LinkClickPublic struct {
 	ID   int    `db:"id" json:"id"`
 	Site string `db:"site" json:"site"`
@@ -277,7 +261,6 @@ func voltLinkClickPublicScan(r rt.Row) (LinkClickPublic, error) {
 
 const voltLinkClickPublicSQL = `SELECT "id", "site", "day" FROM "link_clicks" ORDER BY "id" ASC`
 
-// LinkClickPublic runs the "public" select over link_clicks (spec §selects-over-groups).
 func (q *Queries) LinkClickPublic(ctx context.Context) ([]LinkClickPublic, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltLinkClickPublicSQL)
 	if voltErr != nil {
@@ -297,7 +280,6 @@ func (q *Queries) LinkClickPublic(ctx context.Context) ([]LinkClickPublic, error
 
 const voltAttachmentNamedSQL = `SELECT "id", "name", "body", "thumb", "digest" FROM "attachments" WHERE "name" = ?`
 
-// AttachmentNamed runs the "named" select over attachments (spec §selects-over-groups).
 func (q *Queries) AttachmentNamed(ctx context.Context, name string) ([]Attachment, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltAttachmentNamedSQL, name)
 	if voltErr != nil {
@@ -315,8 +297,6 @@ func (q *Queries) AttachmentNamed(ctx context.Context, name string) ([]Attachmen
 	return voltOut, voltRows.Err()
 }
 
-// Slim is the shared row type of select "slim" (spec §selects-over-groups):
-// one wire type, every member of the target a source.
 type Slim struct {
 	ID    int             `db:"id" json:"id"`
 	Body  []byte          `db:"body" json:"body"`
@@ -331,7 +311,6 @@ func voltSlimScan(r rt.Row) (Slim, error) {
 
 const voltAttachmentSlimSQL = `SELECT "id", "body", "thumb" FROM "attachments" WHERE "name" = ?`
 
-// AttachmentSlim runs the "slim" select over attachments (spec §selects-over-groups).
 func (q *Queries) AttachmentSlim(ctx context.Context, name string) ([]Slim, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltAttachmentSlimSQL, name)
 	if voltErr != nil {
@@ -349,8 +328,6 @@ func (q *Queries) AttachmentSlim(ctx context.Context, name string) ([]Slim, erro
 	return voltOut, voltRows.Err()
 }
 
-// AttachmentHeavy is Attachment minus (name) — a struct derivative of select "heavy",
-// every kept field copied verbatim (spec §selects-over-groups).
 type AttachmentHeavy struct {
 	ID     int             `db:"id" json:"id"`
 	Body   []byte          `db:"body" json:"body"`
@@ -366,7 +343,6 @@ func voltAttachmentHeavyScan(r rt.Row) (AttachmentHeavy, error) {
 
 const voltAttachmentHeavySQL = `SELECT "id", "body", "thumb", "digest" FROM "attachments" WHERE "name" = ?`
 
-// AttachmentHeavy runs the "heavy" select over attachments (spec §selects-over-groups).
 func (q *Queries) AttachmentHeavy(ctx context.Context, name string) ([]AttachmentHeavy, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltAttachmentHeavySQL, name)
 	if voltErr != nil {

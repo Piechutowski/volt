@@ -6,9 +6,6 @@ import (
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-// Validate runs required and the validators of posts over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c PostChangeset) Validate() PostChangeset {
 	voltV := c.Row()
 	var voltErrs []rt.FieldError
@@ -33,22 +30,13 @@ func (c PostChangeset) Validate() PostChangeset {
 	if voltErr := VisibilityKnownNull(voltV.Reviewed); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "VisibilityKnownNull", Columns: []string{"reviewed"}, Message: voltErr.Error()})
 	}
-	c.valid = voltErrs
-	return c
+	return PostChangeset{c.FindingsSet(voltErrs)}
 }
 
-// Validate runs required and the validators of post_tags over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c PostTagChangeset) Validate() PostTagChangeset {
-	c.valid = nil
-	return c
+	return PostTagChangeset{c.FindingsSet(nil)}
 }
 
-// Validate runs required and the validators of pings over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c PingChangeset) Validate() PingChangeset {
-	c.valid = nil
-	return c
+	return PingChangeset{c.FindingsSet(nil)}
 }

@@ -39,11 +39,12 @@ type Table struct {
 // function and statement constants, which take the form of the generated
 // locals (LocalName), so no parameter shadows one.
 type TableNames struct {
-	Changeset, Column, Params, New                                   string
-	Limit, Offset, Distinct, OrderBy, After, Set                     string
-	Get, GetMany, List, Create, Update, Delete                       string
-	Query, Count, Exists, DeleteWhere, UpdateWhere                   string
-	Scan, TableConst, ColumnsConst, GetConst, ListConst, DeleteConst string
+	Changeset, Column, Params, New                             string
+	Limit, Offset, Distinct, OrderBy, After, Set               string
+	Get, GetMany, List, Create, Update, Delete                 string
+	Query, Count, Exists, DeleteWhere, UpdateWhere             string
+	Scan, Desc, Values, Apply, Cast                            string
+	TableConst, ColumnsConst, GetConst, ListConst, DeleteConst string
 }
 
 func tableNamesBuild(m string) TableNames {
@@ -52,7 +53,8 @@ func tableNamesBuild(m string) TableNames {
 		Limit: m + "Limit", Offset: m + "Offset", Distinct: m + "Distinct", OrderBy: m + "OrderBy", After: m + "After", Set: m + "Set",
 		Get: m + "Get", GetMany: m + "GetMany", List: m + "List", Create: m + "Create", Update: m + "Update", Delete: m + "Delete",
 		Query: m + "Query", Count: m + "Count", Exists: m + "Exists", DeleteWhere: m + "DeleteWhere", UpdateWhere: m + "UpdateWhere",
-		Scan: RowScan(m), TableConst: "volt" + m + "TableSQL", ColumnsConst: "volt" + m + "ColumnsSQL",
+		Scan: RowScan(m), Desc: "volt" + m + "Desc", Values: "volt" + m + "Values", Apply: "volt" + m + "Apply", Cast: "volt" + m + "Cast",
+		TableConst: "volt" + m + "TableSQL", ColumnsConst: "volt" + m + "ColumnsSQL",
 		GetConst: "volt" + m + "GetSQL", ListConst: "volt" + m + "ListSQL", DeleteConst: "volt" + m + "DeleteSQL",
 	}
 }
@@ -144,14 +146,15 @@ func (t *Table) Field(colName string) *Field {
 func (t *Table) NonPK() []*Field {
 	var out []*Field
 	for _, f := range t.Fields {
-		if !t.isPK(f) {
+		if !t.IsPK(f) {
 			out = append(out, f)
 		}
 	}
 	return out
 }
 
-func (t *Table) isPK(f *Field) bool {
+// IsPK reports whether f is a column of the primary key (spec §changesets).
+func (t *Table) IsPK(f *Field) bool {
 	for _, p := range t.PK {
 		if p == f {
 			return true

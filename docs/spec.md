@@ -3120,7 +3120,7 @@ and keyed update takes a changeset; `Delete` and the bulk paths of
 rule 11 are the only other writes.
 
 ```go
-type UserChangeset struct { /* unexported: data, changes, marks, errors */ }
+type UserChangeset struct{ rt.Changeset[User] }  // the generic changeset plus the typed setters
 type UserColumn = rt.ColumnOf[User]   // the column handles UserID, UserEmail, ...
 type UserParams = rt.Params[User]     // a write body on the wire
 
@@ -3279,16 +3279,37 @@ user, err := q.UserUpdate(ctx, cs)
     dynamic layer take assignments and predicates, never a row, and
     run no validator; `Delete` runs none either. They are the
     equivalent of raw SQL and are documented as such.
-12. **Generation contract.** `volt_models.go` declares per model the
-    changeset type, `<Model>New`, `Changeset`, `From`, the setters,
-    `Cast`, `Changed`, `Row`, `Params`, `ErrorAdd`, `Errors`, `Valid`,
-    `Err`, the aliases `<Model>Column` and `<Model>Params`, and the
-    column handles `<Model><Field>` (`rt.Column[M, T]`,
-    `rt.NullColumn` when nullable), so a program that shares the
-    models, a generated client among them, builds changesets with
-    nothing else. `volt_validate.go` declares `Validate`, which is
-    where the package's validator functions are called.
-    `volt_queries.go` declares `Create` and `Update`. The names
+12. **Generation contract.** Everything algorithmic lives in the
+    runtime's `rt.Changeset[M]`: the marks, `From`, `Cast` with its
+    `cast` and `unknown_field` errors, `Changed`, `Row`, `Params`,
+    `ErrorAdd`, `Errors`, `Valid`, `Err`, `FromRow`, which reports
+    whether the changeset was made from a row, and the rendering of
+    the insert and the update. What is generated is what reflection
+    would otherwise do. `volt_models.go` declares per model the
+    changeset type `<Model>Changeset struct{ rt.Changeset[M] }`, a
+    defined type embedding the generic one so it can carry the typed
+    setters; `<Model>New` and `Changeset`, which make a changeset over
+    the model's desc, the only way one is made; `From`, `Cast` and
+    `ErrorAdd` as one-line wrappers returning `<Model>Changeset` so a
+    chain keeps its setters; the setters, each marking its column
+    through `rt.Set`; the aliases `<Model>Column` and `<Model>Params`;
+    the column handles `<Model><Field>` (`rt.Column[M, T]`,
+    `rt.NullColumn` when nullable); and the unexported desc
+    `volt<Model>Desc`, an `rt.Desc[M]` carrying the model's name, its
+    quoted table and column list, one `rt.FieldDesc` per column
+    (column, wire name, type as the schema spells it, nullable, key,
+    settable), the row of literal defaults (rule 2), and the generated
+    functions `volt<Model>Scan` (a row from `rt.Row`),
+    `volt<Model>Values` (a row's bound values in column order),
+    `volt<Model>Apply` (a row with the marked values applied) and
+    `volt<Model>Cast` (one column of a write body, through the typed
+    setter). So a program that shares the models, a generated client
+    among them, builds changesets with nothing else.
+    `volt_validate.go` declares `Validate`, which is where the
+    package's validator functions are called and which replaces the
+    findings through `FindingsSet`. `volt_queries.go` declares `Create`
+    and `Update`, which render through the changeset's `InsertRender`
+    and `UpdateRender`. The names
     `<Model>Changeset`, `<Model>Column`, `<Model>Params` and
     `<Model>New` join the package-scope names the `dynname` lint and
     §selects-over-groups guard.
@@ -3919,8 +3940,8 @@ pinned by the generator goldens, which are gofmt-stable and compiled by
 the real Go toolchain on every `go test ./...` run.*
 
 `volt_models.go` carries every type the wire carries that Volt
-generates: the row structs, the changesets with their column handles
-and `<Model>Params` (§changesets, generation contract), so a program
+generates: the row structs, the changesets with their column handles,
+their descs and `<Model>Params` (§changesets, generation contract), so a program
 that shares the models, a generated client (§generated-client) among
 them, needs nothing else but the declared types the models name: a
 package-qualified one from its own package, a bare one from the data
@@ -4006,6 +4027,10 @@ Every note is the `note:` setting (§notes):
 | column | field doc comment |
 | injected partial column | travels with the column; a §tablepartial override brings its own note |
 
+These are the only comments a generated file carries besides the
+header: a note is the maintainer's text, and the generators write no
+comment of their own, so the package comment is the project note
+alone and a file without notes has no comment but the header.
 Generated files start with the machine-readable
 `// Code generated … DO NOT EDIT.` marker; `volt gen` refuses to
 overwrite a file lacking it. Generated data-layer code imports the
@@ -4082,7 +4107,9 @@ rt.DBTX)`, `Tx`, `WithTx`, `WithCache`):
    followed by an upper-case letter, with no underscore (`voltErr`,
    `voltRows`, `voltV`), and so is every unexported package-level name
    the data files declare: the scan function `volt<Row>Scan` of a
-   model or a select's row type, and the statement constants
+   model or a select's row type, a model's `volt<Model>Desc`,
+   `volt<Model>Values`, `volt<Model>Apply` and `volt<Model>Cast`
+   (§changesets), and the statement constants
    `volt<Model>TableSQL`, `volt<Model>ColumnsSQL`, `volt<Model>GetSQL`,
    `volt<Model>GetBy<Field>SQL`, `volt<Model>ListSQL`,
    `volt<Model>DeleteSQL` and `volt<Model><Select>SQL`. The parameter a

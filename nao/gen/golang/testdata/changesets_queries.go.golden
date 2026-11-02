@@ -8,51 +8,29 @@ import (
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-// Queries bundles the generated CRUD over one database handle: a
-// *sql.DB, a *sql.Tx, or anything else satisfying rt.DBTX.
 type Queries struct {
 	db    rt.DBTX
 	cache *rt.StmtCache
 }
 
-// New returns Queries running on db.
 func New(db rt.DBTX) *Queries { return &Queries{db: db} }
 
-// WithCache returns a copy of q whose run-time rendered statements (the
-// changeset writes Create and Update, and the dynamic Query, Count,
-// Exists, DeleteWhere, UpdateWhere) run through cache: identical shapes
-// render identical SQL, prepared once. Bind a cache to a *sql.DB, never
-// a transaction.
 func (q *Queries) WithCache(cache *rt.StmtCache) *Queries {
 	return &Queries{db: q.db, cache: cache}
 }
 
-// WithTx returns a copy of q running on tx. The statement cache does not
-// follow: its statements are prepared on the outer handle.
 func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
 
-// Tx runs fn inside a transaction: the Queries handed to fn joins it, a
-// nil error commits, anything else rolls back. q must be backed by a
-// handle that can begin a transaction (a *sql.DB).
 func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
 }
 
-func voltPostScan(r rt.Row) (Post, error) {
-	var voltV Post
-	voltErr := r.Scan(&voltV.ID, &voltV.Slug, &voltV.Words, &voltV.Score, (*rt.Bytes)(&voltV.Cover), (*string)(&voltV.State), &voltV.Reviewed, (*string)(&voltV.Audience), &voltV.Tier, &voltV.Price, &voltV.Rank, &voltV.Draft, &voltV.Caption, &voltV.Ratio, &voltV.Weight, &voltV.Scale, &voltV.Kilo, &voltV.Shift, &voltV.Hits, &voltV.Views, &voltV.Label, &voltV.Flag, &voltV.Secret)
-	return voltV, rt.Refused("Post", voltErr)
-}
-
 const voltPostGetSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "audience", "tier", "price", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret" FROM "posts" WHERE "id" = ?`
 
-// PostGet fetches the posts row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) PostGet(ctx context.Context, id int) (Post, error) {
 	return voltPostScan(q.db.QueryRowContext(ctx, voltPostGetSQL, id))
 }
 
-// PostGetMany fetches the posts rows whose primary key is in ids, in
-// database order. Missing keys are not an error; they are just absent.
 func (q *Queries) PostGetMany(ctx context.Context, ids []int) ([]Post, error) {
 	if len(ids) == 0 {
 		return nil, nil
@@ -79,15 +57,12 @@ func (q *Queries) PostGetMany(ctx context.Context, ids []int) ([]Post, error) {
 
 const voltPostGetBySlugSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "audience", "tier", "price", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret" FROM "posts" WHERE "slug" = ?`
 
-// PostGetBySlug fetches the posts row with the given slug (a unique column),
-// or rt.ErrNotFound.
 func (q *Queries) PostGetBySlug(ctx context.Context, slug string) (Post, error) {
 	return voltPostScan(q.db.QueryRowContext(ctx, voltPostGetBySlugSQL, slug))
 }
 
 const voltPostListSQL = `SELECT "id", "slug", "words", "score", "cover", "state", "reviewed", "audience", "tier", "price", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret" FROM "posts"`
 
-// PostList returns every posts row.
 func (q *Queries) PostList(ctx context.Context) ([]Post, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltPostListSQL)
 	if voltErr != nil {
@@ -105,174 +80,32 @@ func (q *Queries) PostList(ctx context.Context) ([]Post, error) {
 	return voltOut, voltRows.Err()
 }
 
-// PostCreate validates c and inserts its marked columns, returning the
-// stored posts row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) PostCreate(ctx context.Context, c PostChangeset) (Post, error) {
 	c = c.Validate()
 	if voltErr := c.Err(); voltErr != nil {
 		return Post{}, voltErr
 	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "slug"), append(voltArgs, voltV.Slug)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "words"), append(voltArgs, voltV.Words)
-	}
-	if c.set[3] {
-		voltCols, voltArgs = append(voltCols, "score"), append(voltArgs, voltV.Score)
-	}
-	if c.set[4] {
-		voltCols, voltArgs = append(voltCols, "cover"), append(voltArgs, rt.Bytes(voltV.Cover))
-	}
-	if c.set[5] {
-		voltCols, voltArgs = append(voltCols, "state"), append(voltArgs, voltV.State)
-	}
-	if c.set[6] {
-		voltCols, voltArgs = append(voltCols, "reviewed"), append(voltArgs, voltV.Reviewed)
-	}
-	if c.set[7] {
-		voltCols, voltArgs = append(voltCols, "audience"), append(voltArgs, voltV.Audience)
-	}
-	if c.set[8] {
-		voltCols, voltArgs = append(voltCols, "tier"), append(voltArgs, voltV.Tier)
-	}
-	if c.set[9] {
-		voltCols, voltArgs = append(voltCols, "price"), append(voltArgs, voltV.Price)
-	}
-	if c.set[10] {
-		voltCols, voltArgs = append(voltCols, "rank"), append(voltArgs, voltV.Rank)
-	}
-	if c.set[11] {
-		voltCols, voltArgs = append(voltCols, "draft"), append(voltArgs, voltV.Draft)
-	}
-	if c.set[12] {
-		voltCols, voltArgs = append(voltCols, "caption"), append(voltArgs, voltV.Caption)
-	}
-	if c.set[13] {
-		voltCols, voltArgs = append(voltCols, "ratio"), append(voltArgs, voltV.Ratio)
-	}
-	if c.set[14] {
-		voltCols, voltArgs = append(voltCols, "weight"), append(voltArgs, voltV.Weight)
-	}
-	if c.set[15] {
-		voltCols, voltArgs = append(voltCols, "scale"), append(voltArgs, voltV.Scale)
-	}
-	if c.set[16] {
-		voltCols, voltArgs = append(voltCols, "kilo"), append(voltArgs, voltV.Kilo)
-	}
-	if c.set[17] {
-		voltCols, voltArgs = append(voltCols, "shift"), append(voltArgs, voltV.Shift)
-	}
-	if c.set[18] {
-		voltCols, voltArgs = append(voltCols, "hits"), append(voltArgs, voltV.Hits)
-	}
-	if c.set[19] {
-		voltCols, voltArgs = append(voltCols, "views"), append(voltArgs, voltV.Views)
-	}
-	if c.set[20] {
-		voltCols, voltArgs = append(voltCols, "label"), append(voltArgs, voltV.Label)
-	}
-	if c.set[21] {
-		voltCols, voltArgs = append(voltCols, "flag"), append(voltArgs, voltV.Flag)
-	}
-	if c.set[22] {
-		voltCols, voltArgs = append(voltCols, "secret"), append(voltArgs, voltV.Secret)
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltPostTableSQL, voltCols, voltPostColumnsSQL), voltArgs...)
+	voltSQL, voltArgs := c.InsertRender()
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
 	if voltErr != nil {
 		return Post{}, voltErr
 	}
 	return voltPostScan(voltRow)
 }
 
-// PostUpdate validates c and writes its marked columns to the posts row it
-// was made from, returning the stored row; nothing marked returns the row
-// untouched (spec §changesets).
 func (q *Queries) PostUpdate(ctx context.Context, c PostChangeset) (Post, error) {
-	if !c.row {
+	if !c.FromRow() {
 		return Post{}, rt.ErrNoRow
 	}
 	c = c.Validate()
 	if voltErr := c.Err(); voltErr != nil {
 		return Post{}, voltErr
 	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "slug"), append(voltArgs, voltV.Slug)
+	voltSQL, voltArgs := c.UpdateRender()
+	if voltSQL == "" {
+		return c.Row(), nil
 	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "words"), append(voltArgs, voltV.Words)
-	}
-	if c.set[3] {
-		voltCols, voltArgs = append(voltCols, "score"), append(voltArgs, voltV.Score)
-	}
-	if c.set[4] {
-		voltCols, voltArgs = append(voltCols, "cover"), append(voltArgs, rt.Bytes(voltV.Cover))
-	}
-	if c.set[5] {
-		voltCols, voltArgs = append(voltCols, "state"), append(voltArgs, voltV.State)
-	}
-	if c.set[6] {
-		voltCols, voltArgs = append(voltCols, "reviewed"), append(voltArgs, voltV.Reviewed)
-	}
-	if c.set[7] {
-		voltCols, voltArgs = append(voltCols, "audience"), append(voltArgs, voltV.Audience)
-	}
-	if c.set[8] {
-		voltCols, voltArgs = append(voltCols, "tier"), append(voltArgs, voltV.Tier)
-	}
-	if c.set[9] {
-		voltCols, voltArgs = append(voltCols, "price"), append(voltArgs, voltV.Price)
-	}
-	if c.set[10] {
-		voltCols, voltArgs = append(voltCols, "rank"), append(voltArgs, voltV.Rank)
-	}
-	if c.set[11] {
-		voltCols, voltArgs = append(voltCols, "draft"), append(voltArgs, voltV.Draft)
-	}
-	if c.set[12] {
-		voltCols, voltArgs = append(voltCols, "caption"), append(voltArgs, voltV.Caption)
-	}
-	if c.set[13] {
-		voltCols, voltArgs = append(voltCols, "ratio"), append(voltArgs, voltV.Ratio)
-	}
-	if c.set[14] {
-		voltCols, voltArgs = append(voltCols, "weight"), append(voltArgs, voltV.Weight)
-	}
-	if c.set[15] {
-		voltCols, voltArgs = append(voltCols, "scale"), append(voltArgs, voltV.Scale)
-	}
-	if c.set[16] {
-		voltCols, voltArgs = append(voltCols, "kilo"), append(voltArgs, voltV.Kilo)
-	}
-	if c.set[17] {
-		voltCols, voltArgs = append(voltCols, "shift"), append(voltArgs, voltV.Shift)
-	}
-	if c.set[18] {
-		voltCols, voltArgs = append(voltCols, "hits"), append(voltArgs, voltV.Hits)
-	}
-	if c.set[19] {
-		voltCols, voltArgs = append(voltCols, "views"), append(voltArgs, voltV.Views)
-	}
-	if c.set[20] {
-		voltCols, voltArgs = append(voltCols, "label"), append(voltArgs, voltV.Label)
-	}
-	if c.set[21] {
-		voltCols, voltArgs = append(voltCols, "flag"), append(voltArgs, voltV.Flag)
-	}
-	if c.set[22] {
-		voltCols, voltArgs = append(voltCols, "secret"), append(voltArgs, voltV.Secret)
-	}
-	if len(voltCols) == 0 {
-		return voltV, nil
-	}
-	voltArgs = append(voltArgs, c.data.ID)
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(voltPostTableSQL, voltCols, []string{"id"}, voltPostColumnsSQL), voltArgs...)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
 	if voltErr != nil {
 		return Post{}, voltErr
 	}
@@ -281,8 +114,6 @@ func (q *Queries) PostUpdate(ctx context.Context, c PostChangeset) (Post, error)
 
 const voltPostDeleteSQL = `DELETE FROM "posts" WHERE "id" = ?`
 
-// PostDelete removes the identified posts row; rt.ErrNotFound reports
-// that nothing matched.
 func (q *Queries) PostDelete(ctx context.Context, id int) error {
 	voltRes, voltErr := q.db.ExecContext(ctx, voltPostDeleteSQL, id)
 	if voltErr != nil {
@@ -298,22 +129,14 @@ func (q *Queries) PostDelete(ctx context.Context, id int) error {
 	return nil
 }
 
-func voltPostTagScan(r rt.Row) (PostTag, error) {
-	var voltV PostTag
-	voltErr := r.Scan(&voltV.PostID, &voltV.Tag)
-	return voltV, rt.Refused("PostTag", voltErr)
-}
-
 const voltPostTagGetSQL = `SELECT "post_id", "tag" FROM "post_tags" WHERE "post_id" = ? AND "tag" = ?`
 
-// PostTagGet fetches the post_tags row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) PostTagGet(ctx context.Context, postID int, tag string) (PostTag, error) {
 	return voltPostTagScan(q.db.QueryRowContext(ctx, voltPostTagGetSQL, postID, tag))
 }
 
 const voltPostTagListSQL = `SELECT "post_id", "tag" FROM "post_tags"`
 
-// PostTagList returns every post_tags row.
 func (q *Queries) PostTagList(ctx context.Context) ([]PostTag, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltPostTagListSQL)
 	if voltErr != nil {
@@ -331,23 +154,13 @@ func (q *Queries) PostTagList(ctx context.Context) ([]PostTag, error) {
 	return voltOut, voltRows.Err()
 }
 
-// PostTagCreate validates c and inserts its marked columns, returning the
-// stored post_tags row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) PostTagCreate(ctx context.Context, c PostTagChangeset) (PostTag, error) {
 	c = c.Validate()
 	if voltErr := c.Err(); voltErr != nil {
 		return PostTag{}, voltErr
 	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[0] {
-		voltCols, voltArgs = append(voltCols, "post_id"), append(voltArgs, voltV.PostID)
-	}
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "tag"), append(voltArgs, voltV.Tag)
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltPostTagTableSQL, voltCols, voltPostTagColumnsSQL), voltArgs...)
+	voltSQL, voltArgs := c.InsertRender()
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
 	if voltErr != nil {
 		return PostTag{}, voltErr
 	}
@@ -356,8 +169,6 @@ func (q *Queries) PostTagCreate(ctx context.Context, c PostTagChangeset) (PostTa
 
 const voltPostTagDeleteSQL = `DELETE FROM "post_tags" WHERE "post_id" = ? AND "tag" = ?`
 
-// PostTagDelete removes the identified post_tags row; rt.ErrNotFound reports
-// that nothing matched.
 func (q *Queries) PostTagDelete(ctx context.Context, postID int, tag string) error {
 	voltRes, voltErr := q.db.ExecContext(ctx, voltPostTagDeleteSQL, postID, tag)
 	if voltErr != nil {
@@ -373,21 +184,12 @@ func (q *Queries) PostTagDelete(ctx context.Context, postID int, tag string) err
 	return nil
 }
 
-func voltPingScan(r rt.Row) (Ping, error) {
-	var voltV Ping
-	voltErr := r.Scan(&voltV.ID)
-	return voltV, rt.Refused("Ping", voltErr)
-}
-
 const voltPingGetSQL = `SELECT "id" FROM "pings" WHERE "id" = ?`
 
-// PingGet fetches the pings row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) PingGet(ctx context.Context, id int) (Ping, error) {
 	return voltPingScan(q.db.QueryRowContext(ctx, voltPingGetSQL, id))
 }
 
-// PingGetMany fetches the pings rows whose primary key is in ids, in
-// database order. Missing keys are not an error; they are just absent.
 func (q *Queries) PingGetMany(ctx context.Context, ids []int) ([]Ping, error) {
 	if len(ids) == 0 {
 		return nil, nil
@@ -414,7 +216,6 @@ func (q *Queries) PingGetMany(ctx context.Context, ids []int) ([]Ping, error) {
 
 const voltPingListSQL = `SELECT "id" FROM "pings"`
 
-// PingList returns every pings row.
 func (q *Queries) PingList(ctx context.Context) ([]Ping, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltPingListSQL)
 	if voltErr != nil {
@@ -432,16 +233,13 @@ func (q *Queries) PingList(ctx context.Context) ([]Ping, error) {
 	return voltOut, voltRows.Err()
 }
 
-// PingCreate validates c and inserts its marked columns, returning the
-// stored pings row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) PingCreate(ctx context.Context, c PingChangeset) (Ping, error) {
 	c = c.Validate()
 	if voltErr := c.Err(); voltErr != nil {
 		return Ping{}, voltErr
 	}
-	var voltCols []string
-	var voltArgs []any
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltPingTableSQL, voltCols, voltPingColumnsSQL), voltArgs...)
+	voltSQL, voltArgs := c.InsertRender()
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
 	if voltErr != nil {
 		return Ping{}, voltErr
 	}
@@ -450,8 +248,6 @@ func (q *Queries) PingCreate(ctx context.Context, c PingChangeset) (Ping, error)
 
 const voltPingDeleteSQL = `DELETE FROM "pings" WHERE "id" = ?`
 
-// PingDelete removes the identified pings row; rt.ErrNotFound reports
-// that nothing matched.
 func (q *Queries) PingDelete(ctx context.Context, id int) error {
 	voltRes, voltErr := q.db.ExecContext(ctx, voltPingDeleteSQL, id)
 	if voltErr != nil {

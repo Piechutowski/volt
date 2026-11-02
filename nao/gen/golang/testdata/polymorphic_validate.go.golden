@@ -6,15 +6,11 @@ import (
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-// Validate runs required and the validators of comments over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c CommentChangeset) Validate() CommentChangeset {
 	voltV := c.Row()
 	var voltErrs []rt.FieldError
 	if voltErr := CommentableTypeKnown(voltV.CommentableType); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "CommentableTypeKnown", Columns: []string{"commentable_type"}, Message: voltErr.Error()})
 	}
-	c.valid = voltErrs
-	return c
+	return CommentChangeset{c.FindingsSet(voltErrs)}
 }

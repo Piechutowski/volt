@@ -12,30 +12,18 @@ const (
 	voltUserColumnsSQL = `"id", "email", "created_at"`
 )
 
-// UserLimit caps how many rows UserQuery returns.
 func UserLimit(n int) rt.Opt[User] { return rt.Limit[User](n) }
 
-// UserOffset skips n rows; keyset pagination (UserAfter) scales better.
 func UserOffset(n int) rt.Opt[User] { return rt.Offset[User](n) }
 
-// UserDistinct deduplicates the rows UserQuery returns.
 func UserDistinct() rt.Opt[User] { return rt.Distinct[User]() }
 
-// UserOrderBy sorts UserQuery's rows by Asc/Desc terms built on the
-// User column handles.
 func UserOrderBy(terms ...rt.Order[User]) rt.Opt[User] { return rt.OrderBy(terms...) }
 
-// UserAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per UserOrderBy term, in the same order.
 func UserAfter(key ...any) rt.Opt[User] { return rt.After[User](key...) }
 
-// UserSet collects the typed assignments of a UserUpdateWhere, built
-// with Set/SetNull on the User column handles.
 func UserSet(assigns ...rt.Assign[User]) []rt.Assign[User] { return assigns }
 
-// UserQuery returns the users rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
 func (q *Queries) UserQuery(ctx context.Context, opts ...rt.Opt[User]) ([]User, error) {
 	voltQuery, voltArgs, voltErr := rt.SelectRender(voltUserTableSQL, voltUserColumnsSQL, opts)
 	if voltErr != nil {
@@ -57,8 +45,6 @@ func (q *Queries) UserQuery(ctx context.Context, opts ...rt.Opt[User]) ([]User, 
 	return voltOut, voltRows.Err()
 }
 
-// UserCount reports how many users rows match every given predicate;
-// none counts the whole table.
 func (q *Queries) UserCount(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.CountRender(voltUserTableSQL, preds)
 	if voltErr != nil {
@@ -71,7 +57,6 @@ func (q *Queries) UserCount(ctx context.Context, preds ...rt.Pred[User]) (int64,
 	return voltN, nil
 }
 
-// UserExists reports whether any users row matches every given predicate.
 func (q *Queries) UserExists(ctx context.Context, preds ...rt.Pred[User]) (bool, error) {
 	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltUserTableSQL, preds)
 	if voltErr != nil {
@@ -84,9 +69,6 @@ func (q *Queries) UserExists(ctx context.Context, preds ...rt.Pred[User]) (bool,
 	return voltFound, nil
 }
 
-// UserDeleteWhere removes every users row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
 func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltUserTableSQL, preds)
 	if voltErr != nil {
@@ -99,10 +81,6 @@ func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (
 	return voltRes.RowsAffected()
 }
 
-// UserUpdateWhere applies the typed assignments (UserSet) to every users
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
 func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], preds ...rt.Pred[User]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltUserTableSQL, set, preds)
 	if voltErr != nil {
@@ -120,30 +98,18 @@ const (
 	voltTagColumnsSQL = `"slug", "name"`
 )
 
-// TagLimit caps how many rows TagQuery returns.
 func TagLimit(n int) rt.Opt[Tag] { return rt.Limit[Tag](n) }
 
-// TagOffset skips n rows; keyset pagination (TagAfter) scales better.
 func TagOffset(n int) rt.Opt[Tag] { return rt.Offset[Tag](n) }
 
-// TagDistinct deduplicates the rows TagQuery returns.
 func TagDistinct() rt.Opt[Tag] { return rt.Distinct[Tag]() }
 
-// TagOrderBy sorts TagQuery's rows by Asc/Desc terms built on the
-// Tag column handles.
 func TagOrderBy(terms ...rt.Order[Tag]) rt.Opt[Tag] { return rt.OrderBy(terms...) }
 
-// TagAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per TagOrderBy term, in the same order.
 func TagAfter(key ...any) rt.Opt[Tag] { return rt.After[Tag](key...) }
 
-// TagSet collects the typed assignments of a TagUpdateWhere, built
-// with Set/SetNull on the Tag column handles.
 func TagSet(assigns ...rt.Assign[Tag]) []rt.Assign[Tag] { return assigns }
 
-// TagQuery returns the tags rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
 func (q *Queries) TagQuery(ctx context.Context, opts ...rt.Opt[Tag]) ([]Tag, error) {
 	voltQuery, voltArgs, voltErr := rt.SelectRender(voltTagTableSQL, voltTagColumnsSQL, opts)
 	if voltErr != nil {
@@ -165,8 +131,6 @@ func (q *Queries) TagQuery(ctx context.Context, opts ...rt.Opt[Tag]) ([]Tag, err
 	return voltOut, voltRows.Err()
 }
 
-// TagCount reports how many tags rows match every given predicate;
-// none counts the whole table.
 func (q *Queries) TagCount(ctx context.Context, preds ...rt.Pred[Tag]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.CountRender(voltTagTableSQL, preds)
 	if voltErr != nil {
@@ -179,7 +143,6 @@ func (q *Queries) TagCount(ctx context.Context, preds ...rt.Pred[Tag]) (int64, e
 	return voltN, nil
 }
 
-// TagExists reports whether any tags row matches every given predicate.
 func (q *Queries) TagExists(ctx context.Context, preds ...rt.Pred[Tag]) (bool, error) {
 	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltTagTableSQL, preds)
 	if voltErr != nil {
@@ -192,9 +155,6 @@ func (q *Queries) TagExists(ctx context.Context, preds ...rt.Pred[Tag]) (bool, e
 	return voltFound, nil
 }
 
-// TagDeleteWhere removes every tags row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
 func (q *Queries) TagDeleteWhere(ctx context.Context, preds ...rt.Pred[Tag]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltTagTableSQL, preds)
 	if voltErr != nil {
@@ -207,10 +167,6 @@ func (q *Queries) TagDeleteWhere(ctx context.Context, preds ...rt.Pred[Tag]) (in
 	return voltRes.RowsAffected()
 }
 
-// TagUpdateWhere applies the typed assignments (TagSet) to every tags
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
 func (q *Queries) TagUpdateWhere(ctx context.Context, set []rt.Assign[Tag], preds ...rt.Pred[Tag]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltTagTableSQL, set, preds)
 	if voltErr != nil {
@@ -228,30 +184,18 @@ const (
 	voltMsRevenueColumnsSQL = `"id", "org", "year"`
 )
 
-// MsRevenueLimit caps how many rows MsRevenueQuery returns.
 func MsRevenueLimit(n int) rt.Opt[MsRevenue] { return rt.Limit[MsRevenue](n) }
 
-// MsRevenueOffset skips n rows; keyset pagination (MsRevenueAfter) scales better.
 func MsRevenueOffset(n int) rt.Opt[MsRevenue] { return rt.Offset[MsRevenue](n) }
 
-// MsRevenueDistinct deduplicates the rows MsRevenueQuery returns.
 func MsRevenueDistinct() rt.Opt[MsRevenue] { return rt.Distinct[MsRevenue]() }
 
-// MsRevenueOrderBy sorts MsRevenueQuery's rows by Asc/Desc terms built on the
-// MsRevenue column handles.
 func MsRevenueOrderBy(terms ...rt.Order[MsRevenue]) rt.Opt[MsRevenue] { return rt.OrderBy(terms...) }
 
-// MsRevenueAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per MsRevenueOrderBy term, in the same order.
 func MsRevenueAfter(key ...any) rt.Opt[MsRevenue] { return rt.After[MsRevenue](key...) }
 
-// MsRevenueSet collects the typed assignments of a MsRevenueUpdateWhere, built
-// with Set/SetNull on the MsRevenue column handles.
 func MsRevenueSet(assigns ...rt.Assign[MsRevenue]) []rt.Assign[MsRevenue] { return assigns }
 
-// MsRevenueQuery returns the ms_revenue rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
 func (q *Queries) MsRevenueQuery(ctx context.Context, opts ...rt.Opt[MsRevenue]) ([]MsRevenue, error) {
 	voltQuery, voltArgs, voltErr := rt.SelectRender(voltMsRevenueTableSQL, voltMsRevenueColumnsSQL, opts)
 	if voltErr != nil {
@@ -273,8 +217,6 @@ func (q *Queries) MsRevenueQuery(ctx context.Context, opts ...rt.Opt[MsRevenue])
 	return voltOut, voltRows.Err()
 }
 
-// MsRevenueCount reports how many ms_revenue rows match every given predicate;
-// none counts the whole table.
 func (q *Queries) MsRevenueCount(ctx context.Context, preds ...rt.Pred[MsRevenue]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.CountRender(voltMsRevenueTableSQL, preds)
 	if voltErr != nil {
@@ -287,7 +229,6 @@ func (q *Queries) MsRevenueCount(ctx context.Context, preds ...rt.Pred[MsRevenue
 	return voltN, nil
 }
 
-// MsRevenueExists reports whether any ms_revenue row matches every given predicate.
 func (q *Queries) MsRevenueExists(ctx context.Context, preds ...rt.Pred[MsRevenue]) (bool, error) {
 	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltMsRevenueTableSQL, preds)
 	if voltErr != nil {
@@ -300,9 +241,6 @@ func (q *Queries) MsRevenueExists(ctx context.Context, preds ...rt.Pred[MsRevenu
 	return voltFound, nil
 }
 
-// MsRevenueDeleteWhere removes every ms_revenue row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
 func (q *Queries) MsRevenueDeleteWhere(ctx context.Context, preds ...rt.Pred[MsRevenue]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltMsRevenueTableSQL, preds)
 	if voltErr != nil {
@@ -315,10 +253,6 @@ func (q *Queries) MsRevenueDeleteWhere(ctx context.Context, preds ...rt.Pred[MsR
 	return voltRes.RowsAffected()
 }
 
-// MsRevenueUpdateWhere applies the typed assignments (MsRevenueSet) to every ms_revenue
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
 func (q *Queries) MsRevenueUpdateWhere(ctx context.Context, set []rt.Assign[MsRevenue], preds ...rt.Pred[MsRevenue]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltMsRevenueTableSQL, set, preds)
 	if voltErr != nil {
@@ -336,30 +270,18 @@ const (
 	voltMsUsageColumnsSQL = `"id", "org", "year"`
 )
 
-// MsUsageLimit caps how many rows MsUsageQuery returns.
 func MsUsageLimit(n int) rt.Opt[MsUsage] { return rt.Limit[MsUsage](n) }
 
-// MsUsageOffset skips n rows; keyset pagination (MsUsageAfter) scales better.
 func MsUsageOffset(n int) rt.Opt[MsUsage] { return rt.Offset[MsUsage](n) }
 
-// MsUsageDistinct deduplicates the rows MsUsageQuery returns.
 func MsUsageDistinct() rt.Opt[MsUsage] { return rt.Distinct[MsUsage]() }
 
-// MsUsageOrderBy sorts MsUsageQuery's rows by Asc/Desc terms built on the
-// MsUsage column handles.
 func MsUsageOrderBy(terms ...rt.Order[MsUsage]) rt.Opt[MsUsage] { return rt.OrderBy(terms...) }
 
-// MsUsageAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per MsUsageOrderBy term, in the same order.
 func MsUsageAfter(key ...any) rt.Opt[MsUsage] { return rt.After[MsUsage](key...) }
 
-// MsUsageSet collects the typed assignments of a MsUsageUpdateWhere, built
-// with Set/SetNull on the MsUsage column handles.
 func MsUsageSet(assigns ...rt.Assign[MsUsage]) []rt.Assign[MsUsage] { return assigns }
 
-// MsUsageQuery returns the ms_usage rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
 func (q *Queries) MsUsageQuery(ctx context.Context, opts ...rt.Opt[MsUsage]) ([]MsUsage, error) {
 	voltQuery, voltArgs, voltErr := rt.SelectRender(voltMsUsageTableSQL, voltMsUsageColumnsSQL, opts)
 	if voltErr != nil {
@@ -381,8 +303,6 @@ func (q *Queries) MsUsageQuery(ctx context.Context, opts ...rt.Opt[MsUsage]) ([]
 	return voltOut, voltRows.Err()
 }
 
-// MsUsageCount reports how many ms_usage rows match every given predicate;
-// none counts the whole table.
 func (q *Queries) MsUsageCount(ctx context.Context, preds ...rt.Pred[MsUsage]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.CountRender(voltMsUsageTableSQL, preds)
 	if voltErr != nil {
@@ -395,7 +315,6 @@ func (q *Queries) MsUsageCount(ctx context.Context, preds ...rt.Pred[MsUsage]) (
 	return voltN, nil
 }
 
-// MsUsageExists reports whether any ms_usage row matches every given predicate.
 func (q *Queries) MsUsageExists(ctx context.Context, preds ...rt.Pred[MsUsage]) (bool, error) {
 	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltMsUsageTableSQL, preds)
 	if voltErr != nil {
@@ -408,9 +327,6 @@ func (q *Queries) MsUsageExists(ctx context.Context, preds ...rt.Pred[MsUsage]) 
 	return voltFound, nil
 }
 
-// MsUsageDeleteWhere removes every ms_usage row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
 func (q *Queries) MsUsageDeleteWhere(ctx context.Context, preds ...rt.Pred[MsUsage]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltMsUsageTableSQL, preds)
 	if voltErr != nil {
@@ -423,10 +339,6 @@ func (q *Queries) MsUsageDeleteWhere(ctx context.Context, preds ...rt.Pred[MsUsa
 	return voltRes.RowsAffected()
 }
 
-// MsUsageUpdateWhere applies the typed assignments (MsUsageSet) to every ms_usage
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
 func (q *Queries) MsUsageUpdateWhere(ctx context.Context, set []rt.Assign[MsUsage], preds ...rt.Pred[MsUsage]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltMsUsageTableSQL, set, preds)
 	if voltErr != nil {

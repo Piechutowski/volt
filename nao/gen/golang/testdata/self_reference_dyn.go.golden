@@ -12,30 +12,18 @@ const (
 	voltEmployeeColumnsSQL = `"id", "full_name", "manager_id"`
 )
 
-// EmployeeLimit caps how many rows EmployeeQuery returns.
 func EmployeeLimit(n int) rt.Opt[Employee] { return rt.Limit[Employee](n) }
 
-// EmployeeOffset skips n rows; keyset pagination (EmployeeAfter) scales better.
 func EmployeeOffset(n int) rt.Opt[Employee] { return rt.Offset[Employee](n) }
 
-// EmployeeDistinct deduplicates the rows EmployeeQuery returns.
 func EmployeeDistinct() rt.Opt[Employee] { return rt.Distinct[Employee]() }
 
-// EmployeeOrderBy sorts EmployeeQuery's rows by Asc/Desc terms built on the
-// Employee column handles.
 func EmployeeOrderBy(terms ...rt.Order[Employee]) rt.Opt[Employee] { return rt.OrderBy(terms...) }
 
-// EmployeeAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per EmployeeOrderBy term, in the same order.
 func EmployeeAfter(key ...any) rt.Opt[Employee] { return rt.After[Employee](key...) }
 
-// EmployeeSet collects the typed assignments of a EmployeeUpdateWhere, built
-// with Set/SetNull on the Employee column handles.
 func EmployeeSet(assigns ...rt.Assign[Employee]) []rt.Assign[Employee] { return assigns }
 
-// EmployeeQuery returns the employees rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
 func (q *Queries) EmployeeQuery(ctx context.Context, opts ...rt.Opt[Employee]) ([]Employee, error) {
 	voltQuery, voltArgs, voltErr := rt.SelectRender(voltEmployeeTableSQL, voltEmployeeColumnsSQL, opts)
 	if voltErr != nil {
@@ -57,8 +45,6 @@ func (q *Queries) EmployeeQuery(ctx context.Context, opts ...rt.Opt[Employee]) (
 	return voltOut, voltRows.Err()
 }
 
-// EmployeeCount reports how many employees rows match every given predicate;
-// none counts the whole table.
 func (q *Queries) EmployeeCount(ctx context.Context, preds ...rt.Pred[Employee]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.CountRender(voltEmployeeTableSQL, preds)
 	if voltErr != nil {
@@ -71,7 +57,6 @@ func (q *Queries) EmployeeCount(ctx context.Context, preds ...rt.Pred[Employee])
 	return voltN, nil
 }
 
-// EmployeeExists reports whether any employees row matches every given predicate.
 func (q *Queries) EmployeeExists(ctx context.Context, preds ...rt.Pred[Employee]) (bool, error) {
 	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltEmployeeTableSQL, preds)
 	if voltErr != nil {
@@ -84,9 +69,6 @@ func (q *Queries) EmployeeExists(ctx context.Context, preds ...rt.Pred[Employee]
 	return voltFound, nil
 }
 
-// EmployeeDeleteWhere removes every employees row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
 func (q *Queries) EmployeeDeleteWhere(ctx context.Context, preds ...rt.Pred[Employee]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltEmployeeTableSQL, preds)
 	if voltErr != nil {
@@ -99,10 +81,6 @@ func (q *Queries) EmployeeDeleteWhere(ctx context.Context, preds ...rt.Pred[Empl
 	return voltRes.RowsAffected()
 }
 
-// EmployeeUpdateWhere applies the typed assignments (EmployeeSet) to every employees
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
 func (q *Queries) EmployeeUpdateWhere(ctx context.Context, set []rt.Assign[Employee], preds ...rt.Pred[Employee]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltEmployeeTableSQL, set, preds)
 	if voltErr != nil {

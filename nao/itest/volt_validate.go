@@ -6,22 +6,15 @@ import (
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-// Validate runs required and the validators of users over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c UserChangeset) Validate() UserChangeset {
 	voltV := c.Row()
 	var voltErrs []rt.FieldError
 	if voltErr := EmailValid(voltV.Email); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "EmailValid", Columns: []string{"email"}, Message: voltErr.Error()})
 	}
-	c.valid = voltErrs
-	return c
+	return UserChangeset{c.FindingsSet(voltErrs)}
 }
 
-// Validate runs required and the validators of orders over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c OrderChangeset) Validate() OrderChangeset {
 	voltV := c.Row()
 	var voltErrs []rt.FieldError
@@ -31,21 +24,13 @@ func (c OrderChangeset) Validate() OrderChangeset {
 	if voltErr := OrderStateKnown(voltV.Status); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "OrderStateKnown", Columns: []string{"status"}, Message: voltErr.Error()})
 	}
-	c.valid = voltErrs
-	return c
+	return OrderChangeset{c.FindingsSet(voltErrs)}
 }
 
-// Validate runs required and the validators of user_tags over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c UserTagChangeset) Validate() UserTagChangeset {
-	c.valid = nil
-	return c
+	return UserTagChangeset{c.FindingsSet(nil)}
 }
 
-// Validate runs required and the validators of page_views over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c PageViewChangeset) Validate() PageViewChangeset {
 	voltV := c.Row()
 	var voltErrs []rt.FieldError
@@ -55,67 +40,38 @@ func (c PageViewChangeset) Validate() PageViewChangeset {
 	if voltErr := SiteShape(voltV.Site); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "SiteShape", Columns: []string{"site"}, Message: voltErr.Error()})
 	}
-	c.valid = voltErrs
-	return c
+	return PageViewChangeset{c.FindingsSet(voltErrs)}
 }
 
-// Validate runs required and the validators of link_clicks over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c LinkClickChangeset) Validate() LinkClickChangeset {
-	c.valid = nil
-	return c
+	return LinkClickChangeset{c.FindingsSet(nil)}
 }
 
-// Validate runs required and the validators of site_flags over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c SiteFlagChangeset) Validate() SiteFlagChangeset {
-	c.valid = nil
-	return c
+	return SiteFlagChangeset{c.FindingsSet(nil)}
 }
 
-// Validate runs required and the validators of attachments over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c AttachmentChangeset) Validate() AttachmentChangeset {
 	voltV := c.Row()
 	var voltErrs []rt.FieldError
 	if len(voltV.Digest) == 0 {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "required", Columns: []string{"digest"}, Message: "digest is required"})
 	}
-	c.valid = voltErrs
-	return c
+	return AttachmentChangeset{c.FindingsSet(voltErrs)}
 }
 
-// Validate runs required and the validators of blobs over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c BlobChangeset) Validate() BlobChangeset {
-	c.valid = nil
-	return c
+	return BlobChangeset{c.FindingsSet(nil)}
 }
 
-// Validate runs required and the validators of daily_hits over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c DailyHitChangeset) Validate() DailyHitChangeset {
-	c.valid = nil
-	return c
+	return DailyHitChangeset{c.FindingsSet(nil)}
 }
 
-// Validate runs required and the validators of invites over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c InviteChangeset) Validate() InviteChangeset {
-	c.valid = nil
-	return c
+	return InviteChangeset{c.FindingsSet(nil)}
 }
 
-// Validate runs required and the validators of post_flags over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c PostFlagChangeset) Validate() PostFlagChangeset {
-	c.valid = nil
-	return c
+	return PostFlagChangeset{c.FindingsSet(nil)}
 }

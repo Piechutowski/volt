@@ -8,51 +8,29 @@ import (
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-// Queries bundles the generated CRUD over one database handle: a
-// *sql.DB, a *sql.Tx, or anything else satisfying rt.DBTX.
 type Queries struct {
 	db    rt.DBTX
 	cache *rt.StmtCache
 }
 
-// New returns Queries running on db.
 func New(db rt.DBTX) *Queries { return &Queries{db: db} }
 
-// WithCache returns a copy of q whose run-time rendered statements (the
-// changeset writes Create and Update, and the dynamic Query, Count,
-// Exists, DeleteWhere, UpdateWhere) run through cache: identical shapes
-// render identical SQL, prepared once. Bind a cache to a *sql.DB, never
-// a transaction.
 func (q *Queries) WithCache(cache *rt.StmtCache) *Queries {
 	return &Queries{db: q.db, cache: cache}
 }
 
-// WithTx returns a copy of q running on tx. The statement cache does not
-// follow: its statements are prepared on the outer handle.
 func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
 
-// Tx runs fn inside a transaction: the Queries handed to fn joins it, a
-// nil error commits, anything else rolls back. q must be backed by a
-// handle that can begin a transaction (a *sql.DB).
 func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
 	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
 }
 
-func voltCategoryScan(r rt.Row) (Category, error) {
-	var voltV Category
-	voltErr := r.Scan(&voltV.ID, &voltV.Name)
-	return voltV, rt.Refused("Category", voltErr)
-}
-
 const voltCategoryGetSQL = `SELECT "id", "name" FROM "categories" WHERE "id" = ?`
 
-// CategoryGet fetches the categories row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) CategoryGet(ctx context.Context, id int) (Category, error) {
 	return voltCategoryScan(q.db.QueryRowContext(ctx, voltCategoryGetSQL, id))
 }
 
-// CategoryGetMany fetches the categories rows whose primary key is in ids, in
-// database order. Missing keys are not an error; they are just absent.
 func (q *Queries) CategoryGetMany(ctx context.Context, ids []int) ([]Category, error) {
 	if len(ids) == 0 {
 		return nil, nil
@@ -79,7 +57,6 @@ func (q *Queries) CategoryGetMany(ctx context.Context, ids []int) ([]Category, e
 
 const voltCategoryListSQL = `SELECT "id", "name" FROM "categories"`
 
-// CategoryList returns every categories row.
 func (q *Queries) CategoryList(ctx context.Context) ([]Category, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltCategoryListSQL)
 	if voltErr != nil {
@@ -97,54 +74,32 @@ func (q *Queries) CategoryList(ctx context.Context) ([]Category, error) {
 	return voltOut, voltRows.Err()
 }
 
-// CategoryCreate validates c and inserts its marked columns, returning the
-// stored categories row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) CategoryCreate(ctx context.Context, c CategoryChangeset) (Category, error) {
 	c = c.Validate()
 	if voltErr := c.Err(); voltErr != nil {
 		return Category{}, voltErr
 	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[0] {
-		voltCols, voltArgs = append(voltCols, "id"), append(voltArgs, voltV.ID)
-	}
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "name"), append(voltArgs, voltV.Name)
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltCategoryTableSQL, voltCols, voltCategoryColumnsSQL), voltArgs...)
+	voltSQL, voltArgs := c.InsertRender()
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
 	if voltErr != nil {
 		return Category{}, voltErr
 	}
 	return voltCategoryScan(voltRow)
 }
 
-// CategoryUpdate validates c and writes its marked columns to the categories row it
-// was made from, returning the stored row; nothing marked returns the row
-// untouched (spec §changesets).
 func (q *Queries) CategoryUpdate(ctx context.Context, c CategoryChangeset) (Category, error) {
-	if !c.row {
+	if !c.FromRow() {
 		return Category{}, rt.ErrNoRow
 	}
 	c = c.Validate()
 	if voltErr := c.Err(); voltErr != nil {
 		return Category{}, voltErr
 	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[0] {
-		voltCols, voltArgs = append(voltCols, "id"), append(voltArgs, voltV.ID)
+	voltSQL, voltArgs := c.UpdateRender()
+	if voltSQL == "" {
+		return c.Row(), nil
 	}
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "name"), append(voltArgs, voltV.Name)
-	}
-	if len(voltCols) == 0 {
-		return voltV, nil
-	}
-	voltArgs = append(voltArgs, c.data.ID)
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(voltCategoryTableSQL, voltCols, []string{"id"}, voltCategoryColumnsSQL), voltArgs...)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
 	if voltErr != nil {
 		return Category{}, voltErr
 	}
@@ -153,8 +108,6 @@ func (q *Queries) CategoryUpdate(ctx context.Context, c CategoryChangeset) (Cate
 
 const voltCategoryDeleteSQL = `DELETE FROM "categories" WHERE "id" = ?`
 
-// CategoryDelete removes the identified categories row; rt.ErrNotFound reports
-// that nothing matched.
 func (q *Queries) CategoryDelete(ctx context.Context, id int) error {
 	voltRes, voltErr := q.db.ExecContext(ctx, voltCategoryDeleteSQL, id)
 	if voltErr != nil {
@@ -170,22 +123,14 @@ func (q *Queries) CategoryDelete(ctx context.Context, id int) error {
 	return nil
 }
 
-func voltCategoryPathScan(r rt.Row) (CategoryPath, error) {
-	var voltV CategoryPath
-	voltErr := r.Scan(&voltV.AncestorID, &voltV.DescendantID, &voltV.Depth)
-	return voltV, rt.Refused("CategoryPath", voltErr)
-}
-
 const voltCategoryPathGetSQL = `SELECT "ancestor_id", "descendant_id", "depth" FROM "category_paths" WHERE "ancestor_id" = ? AND "descendant_id" = ?`
 
-// CategoryPathGet fetches the category_paths row with the given primary key, or rt.ErrNotFound.
 func (q *Queries) CategoryPathGet(ctx context.Context, ancestorID int, descendantID int) (CategoryPath, error) {
 	return voltCategoryPathScan(q.db.QueryRowContext(ctx, voltCategoryPathGetSQL, ancestorID, descendantID))
 }
 
 const voltCategoryPathListSQL = `SELECT "ancestor_id", "descendant_id", "depth" FROM "category_paths"`
 
-// CategoryPathList returns every category_paths row.
 func (q *Queries) CategoryPathList(ctx context.Context) ([]CategoryPath, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltCategoryPathListSQL)
 	if voltErr != nil {
@@ -203,61 +148,32 @@ func (q *Queries) CategoryPathList(ctx context.Context) ([]CategoryPath, error) 
 	return voltOut, voltRows.Err()
 }
 
-// CategoryPathCreate validates c and inserts its marked columns, returning the
-// stored category_paths row; nothing marked inserts the defaults (spec §changesets).
 func (q *Queries) CategoryPathCreate(ctx context.Context, c CategoryPathChangeset) (CategoryPath, error) {
 	c = c.Validate()
 	if voltErr := c.Err(); voltErr != nil {
 		return CategoryPath{}, voltErr
 	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[0] {
-		voltCols, voltArgs = append(voltCols, "ancestor_id"), append(voltArgs, voltV.AncestorID)
-	}
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "descendant_id"), append(voltArgs, voltV.DescendantID)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "depth"), append(voltArgs, voltV.Depth)
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltCategoryPathTableSQL, voltCols, voltCategoryPathColumnsSQL), voltArgs...)
+	voltSQL, voltArgs := c.InsertRender()
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
 	if voltErr != nil {
 		return CategoryPath{}, voltErr
 	}
 	return voltCategoryPathScan(voltRow)
 }
 
-// CategoryPathUpdate validates c and writes its marked columns to the category_paths row it
-// was made from, returning the stored row; nothing marked returns the row
-// untouched (spec §changesets).
 func (q *Queries) CategoryPathUpdate(ctx context.Context, c CategoryPathChangeset) (CategoryPath, error) {
-	if !c.row {
+	if !c.FromRow() {
 		return CategoryPath{}, rt.ErrNoRow
 	}
 	c = c.Validate()
 	if voltErr := c.Err(); voltErr != nil {
 		return CategoryPath{}, voltErr
 	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[0] {
-		voltCols, voltArgs = append(voltCols, "ancestor_id"), append(voltArgs, voltV.AncestorID)
+	voltSQL, voltArgs := c.UpdateRender()
+	if voltSQL == "" {
+		return c.Row(), nil
 	}
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "descendant_id"), append(voltArgs, voltV.DescendantID)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "depth"), append(voltArgs, voltV.Depth)
-	}
-	if len(voltCols) == 0 {
-		return voltV, nil
-	}
-	voltArgs = append(voltArgs, c.data.AncestorID)
-	voltArgs = append(voltArgs, c.data.DescendantID)
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(voltCategoryPathTableSQL, voltCols, []string{"ancestor_id", "descendant_id"}, voltCategoryPathColumnsSQL), voltArgs...)
+	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, voltSQL, voltArgs...)
 	if voltErr != nil {
 		return CategoryPath{}, voltErr
 	}
@@ -266,8 +182,6 @@ func (q *Queries) CategoryPathUpdate(ctx context.Context, c CategoryPathChangese
 
 const voltCategoryPathDeleteSQL = `DELETE FROM "category_paths" WHERE "ancestor_id" = ? AND "descendant_id" = ?`
 
-// CategoryPathDelete removes the identified category_paths row; rt.ErrNotFound reports
-// that nothing matched.
 func (q *Queries) CategoryPathDelete(ctx context.Context, ancestorID int, descendantID int) error {
 	voltRes, voltErr := q.db.ExecContext(ctx, voltCategoryPathDeleteSQL, ancestorID, descendantID)
 	if voltErr != nil {

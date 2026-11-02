@@ -2,26 +2,14 @@
 
 package models
 
-// Validate runs required and the validators of users over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c UserChangeset) Validate() UserChangeset {
-	c.valid = nil
-	return c
+	return UserChangeset{c.FindingsSet(nil)}
 }
 
-// Validate runs required and the validators of roles over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c RoleChangeset) Validate() RoleChangeset {
-	c.valid = nil
-	return c
+	return RoleChangeset{c.FindingsSet(nil)}
 }
 
-// Validate runs required and the validators of user_roles over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c UserRoleChangeset) Validate() UserRoleChangeset {
-	c.valid = nil
-	return c
+	return UserRoleChangeset{c.FindingsSet(nil)}
 }

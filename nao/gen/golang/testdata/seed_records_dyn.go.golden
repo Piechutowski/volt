@@ -12,30 +12,18 @@ const (
 	voltCurrencyColumnsSQL = `"code", "name"`
 )
 
-// CurrencyLimit caps how many rows CurrencyQuery returns.
 func CurrencyLimit(n int) rt.Opt[Currency] { return rt.Limit[Currency](n) }
 
-// CurrencyOffset skips n rows; keyset pagination (CurrencyAfter) scales better.
 func CurrencyOffset(n int) rt.Opt[Currency] { return rt.Offset[Currency](n) }
 
-// CurrencyDistinct deduplicates the rows CurrencyQuery returns.
 func CurrencyDistinct() rt.Opt[Currency] { return rt.Distinct[Currency]() }
 
-// CurrencyOrderBy sorts CurrencyQuery's rows by Asc/Desc terms built on the
-// Currency column handles.
 func CurrencyOrderBy(terms ...rt.Order[Currency]) rt.Opt[Currency] { return rt.OrderBy(terms...) }
 
-// CurrencyAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per CurrencyOrderBy term, in the same order.
 func CurrencyAfter(key ...any) rt.Opt[Currency] { return rt.After[Currency](key...) }
 
-// CurrencySet collects the typed assignments of a CurrencyUpdateWhere, built
-// with Set/SetNull on the Currency column handles.
 func CurrencySet(assigns ...rt.Assign[Currency]) []rt.Assign[Currency] { return assigns }
 
-// CurrencyQuery returns the currencies rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
 func (q *Queries) CurrencyQuery(ctx context.Context, opts ...rt.Opt[Currency]) ([]Currency, error) {
 	voltQuery, voltArgs, voltErr := rt.SelectRender(voltCurrencyTableSQL, voltCurrencyColumnsSQL, opts)
 	if voltErr != nil {
@@ -57,8 +45,6 @@ func (q *Queries) CurrencyQuery(ctx context.Context, opts ...rt.Opt[Currency]) (
 	return voltOut, voltRows.Err()
 }
 
-// CurrencyCount reports how many currencies rows match every given predicate;
-// none counts the whole table.
 func (q *Queries) CurrencyCount(ctx context.Context, preds ...rt.Pred[Currency]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.CountRender(voltCurrencyTableSQL, preds)
 	if voltErr != nil {
@@ -71,7 +57,6 @@ func (q *Queries) CurrencyCount(ctx context.Context, preds ...rt.Pred[Currency])
 	return voltN, nil
 }
 
-// CurrencyExists reports whether any currencies row matches every given predicate.
 func (q *Queries) CurrencyExists(ctx context.Context, preds ...rt.Pred[Currency]) (bool, error) {
 	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltCurrencyTableSQL, preds)
 	if voltErr != nil {
@@ -84,9 +69,6 @@ func (q *Queries) CurrencyExists(ctx context.Context, preds ...rt.Pred[Currency]
 	return voltFound, nil
 }
 
-// CurrencyDeleteWhere removes every currencies row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
 func (q *Queries) CurrencyDeleteWhere(ctx context.Context, preds ...rt.Pred[Currency]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltCurrencyTableSQL, preds)
 	if voltErr != nil {
@@ -99,10 +81,6 @@ func (q *Queries) CurrencyDeleteWhere(ctx context.Context, preds ...rt.Pred[Curr
 	return voltRes.RowsAffected()
 }
 
-// CurrencyUpdateWhere applies the typed assignments (CurrencySet) to every currencies
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
 func (q *Queries) CurrencyUpdateWhere(ctx context.Context, set []rt.Assign[Currency], preds ...rt.Pred[Currency]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltCurrencyTableSQL, set, preds)
 	if voltErr != nil {
@@ -120,30 +98,18 @@ const (
 	voltRateColumnsSQL = `"id", "currency_code", "rate", "fetched_at", "active", "comment"`
 )
 
-// RateLimit caps how many rows RateQuery returns.
 func RateLimit(n int) rt.Opt[Rate] { return rt.Limit[Rate](n) }
 
-// RateOffset skips n rows; keyset pagination (RateAfter) scales better.
 func RateOffset(n int) rt.Opt[Rate] { return rt.Offset[Rate](n) }
 
-// RateDistinct deduplicates the rows RateQuery returns.
 func RateDistinct() rt.Opt[Rate] { return rt.Distinct[Rate]() }
 
-// RateOrderBy sorts RateQuery's rows by Asc/Desc terms built on the
-// Rate column handles.
 func RateOrderBy(terms ...rt.Order[Rate]) rt.Opt[Rate] { return rt.OrderBy(terms...) }
 
-// RateAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per RateOrderBy term, in the same order.
 func RateAfter(key ...any) rt.Opt[Rate] { return rt.After[Rate](key...) }
 
-// RateSet collects the typed assignments of a RateUpdateWhere, built
-// with Set/SetNull on the Rate column handles.
 func RateSet(assigns ...rt.Assign[Rate]) []rt.Assign[Rate] { return assigns }
 
-// RateQuery returns the rates rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
 func (q *Queries) RateQuery(ctx context.Context, opts ...rt.Opt[Rate]) ([]Rate, error) {
 	voltQuery, voltArgs, voltErr := rt.SelectRender(voltRateTableSQL, voltRateColumnsSQL, opts)
 	if voltErr != nil {
@@ -165,8 +131,6 @@ func (q *Queries) RateQuery(ctx context.Context, opts ...rt.Opt[Rate]) ([]Rate, 
 	return voltOut, voltRows.Err()
 }
 
-// RateCount reports how many rates rows match every given predicate;
-// none counts the whole table.
 func (q *Queries) RateCount(ctx context.Context, preds ...rt.Pred[Rate]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.CountRender(voltRateTableSQL, preds)
 	if voltErr != nil {
@@ -179,7 +143,6 @@ func (q *Queries) RateCount(ctx context.Context, preds ...rt.Pred[Rate]) (int64,
 	return voltN, nil
 }
 
-// RateExists reports whether any rates row matches every given predicate.
 func (q *Queries) RateExists(ctx context.Context, preds ...rt.Pred[Rate]) (bool, error) {
 	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltRateTableSQL, preds)
 	if voltErr != nil {
@@ -192,9 +155,6 @@ func (q *Queries) RateExists(ctx context.Context, preds ...rt.Pred[Rate]) (bool,
 	return voltFound, nil
 }
 
-// RateDeleteWhere removes every rates row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
 func (q *Queries) RateDeleteWhere(ctx context.Context, preds ...rt.Pred[Rate]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltRateTableSQL, preds)
 	if voltErr != nil {
@@ -207,10 +167,6 @@ func (q *Queries) RateDeleteWhere(ctx context.Context, preds ...rt.Pred[Rate]) (
 	return voltRes.RowsAffected()
 }
 
-// RateUpdateWhere applies the typed assignments (RateSet) to every rates
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
 func (q *Queries) RateUpdateWhere(ctx context.Context, set []rt.Assign[Rate], preds ...rt.Pred[Rate]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltRateTableSQL, set, preds)
 	if voltErr != nil {

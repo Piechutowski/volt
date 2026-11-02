@@ -9,91 +9,47 @@ import (
 	"github.com/Piechutowski/volt/itest/blog/db"
 )
 
-// AdminController is implemented by your code and wired through
-// Controllers; a route referencing Admin.<Action> will not build until
-// the method exists with this exact signature.
 type AdminController interface {
-	// Stats handles GET /admin/stats
 	Stats(w http.ResponseWriter, r *volt.Request) error
 }
 
-// ArchiveController is implemented by your code and wired through
-// Controllers; a route referencing Archive.<Action> will not build until
-// the method exists with this exact signature.
 type ArchiveController interface {
-	// Show handles GET /archive/:stamp(int)
 	Show(w http.ResponseWriter, r *volt.Request, stamp int) error
 }
 
-// FilesController is implemented by your code and wired through
-// Controllers; a route referencing Files.<Action> will not build until
-// the method exists with this exact signature.
 type FilesController interface {
-	// Serve handles GET /files/:path...
 	Serve(w http.ResponseWriter, r *volt.Request, path string) error
 }
 
-// HomeController is implemented by your code and wired through
-// Controllers; a route referencing Home.<Action> will not build until
-// the method exists with this exact signature.
 type HomeController interface {
-	// Index handles GET /
 	Index(w http.ResponseWriter, r *volt.Request) error
-	// Teapot handles GET /teapot
 	Teapot(w http.ResponseWriter, r *volt.Request) error
-	// Ping handles any /ping
 	Ping(w http.ResponseWriter, r *volt.Request) error
 }
 
-// OpsController is implemented by your code and wired through
-// Controllers; a route referencing Ops.<Action> will not build until
-// the method exists with this exact signature.
 type OpsController interface {
-	// Fail handles GET /ops/fail
 	Fail(w http.ResponseWriter, r *volt.Request) error
 }
 
-// PagesController is implemented by your code and wired through
-// Controllers; a route referencing Pages.<Action> will not build until
-// the method exists with this exact signature.
 type PagesController interface {
-	// Show handles GET /pages/:num(int)
 	Show(w http.ResponseWriter, r *volt.Request, num int) error
 }
 
-// TagsController is implemented by your code and wired through
-// Controllers; a route referencing Tags.<Action> will not build until
-// the method exists with this exact signature.
 type TagsController interface {
-	// Show handles GET /tags/:name
 	Show(w http.ResponseWriter, r *volt.Request, name string) error
 }
 
-// UsersController is implemented by your code and wired through
-// Controllers; a route referencing Users.<Action> will not build until
-// the method exists with this exact signature.
 type UsersController interface {
-	// Index handles GET /users
 	Index(w http.ResponseWriter, r *volt.Request) error
-	// New handles GET /users/new
 	New(w http.ResponseWriter, r *volt.Request) error
-	// Create handles POST /users
 	Create(w http.ResponseWriter, r *volt.Request) error
-	// Show handles GET /users/:id(int)
 	Show(w http.ResponseWriter, r *volt.Request, id int) error
-	// Edit handles GET /users/:id(int)/edit
 	Edit(w http.ResponseWriter, r *volt.Request, id int) error
-	// Update handles PATCH /users/:id(int)
 	Update(w http.ResponseWriter, r *volt.Request, id int) error
-	// Delete handles DELETE /users/:id(int)
 	Delete(w http.ResponseWriter, r *volt.Request, id int) error
-	// Avatar handles GET /users/:id(int)/avatar
 	Avatar(w http.ResponseWriter, r *volt.Request, id int) error
 }
 
-// Controllers is the dependency manifest of the route table: one
-// implementation per controller named in the routes, and the
-// Queries handle of every data package query routes go through (§query-routes).
 type Controllers struct {
 	Admin   AdminController
 	Archive ArchiveController
@@ -103,12 +59,10 @@ type Controllers struct {
 	Pages   PagesController
 	Tags    TagsController
 	Users   UsersController
-	DB      *db.Queries  // query routes written db.<Method>
-	Events  *volt.Broker // event routes written volt.Events (§event-routes); nil serves nothing
+	DB      *db.Queries
+	Events  *volt.Broker
 }
 
-// NewRouter builds the router: ServeMux registrations with statically
-// composed pipelines. The result is a plain http.Handler.
 func NewRouter(c Controllers) http.Handler {
 	mux := http.NewServeMux()
 	register(mux, c)

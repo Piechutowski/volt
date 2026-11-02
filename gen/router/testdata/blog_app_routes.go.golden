@@ -6,9 +6,6 @@ import (
 	"github.com/Piechutowski/volt"
 )
 
-// Table lists every route of the package, in declaration order:
-// the routing DSL as introspectable data ('volt routes', metrics
-// labels, and downstream derivations read this).
 var Table = []volt.Route{
 	{Method: "GET", Pattern: "/{$}", Spelled: "/", Controller: "Home", Action: "Index", Helper: "PathRoot"},
 	{Method: "GET", Pattern: "/about", Spelled: "/about", Controller: "Home", Action: "About", Helper: "PathAbout"},

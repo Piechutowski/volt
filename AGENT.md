@@ -81,7 +81,9 @@ server gets a scripted stdio session; one is a golden
   primitives, LSP handlers named after protocol methods.
 - The only comments are doc comments on exported identifiers, one or
   two sentences citing the spec section (`§columns`), and directives.
-  Nothing else is commented, generated code included.
+  Nothing else is commented; a generated file carries the header and
+  the doc comments its notes become (spec §notes-become-doc-comments)
+  and nothing else.
 - Generated files start with the `Code generated … DO NOT EDIT.`
   marker; the CLI refuses to overwrite a file without it. Generated
   data files import the standard library, `nao/rt` and the packages of

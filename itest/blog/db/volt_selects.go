@@ -10,7 +10,6 @@ import (
 
 const voltUserPickedSQL = `SELECT "id", "email", "created_at" FROM "users" WHERE "id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
 
-// UserPicked runs the "picked" select over users (spec §selects-over-groups).
 func (q *Queries) UserPicked(ctx context.Context, ids []int) ([]User, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltUserPickedSQL, rt.JSONList(ids))
 	if voltErr != nil {
@@ -30,7 +29,6 @@ func (q *Queries) UserPicked(ctx context.Context, ids []int) ([]User, error) {
 
 const voltUserSinceSQL = `SELECT "id", "email", "created_at" FROM "users" WHERE "created_at" > ? ORDER BY "id" ASC`
 
-// UserSince runs the "since" select over users (spec §selects-over-groups).
 func (q *Queries) UserSince(ctx context.Context, since time.Time) ([]User, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltUserSinceSQL, since)
 	if voltErr != nil {
@@ -50,7 +48,6 @@ func (q *Queries) UserSince(ctx context.Context, since time.Time) ([]User, error
 
 const voltMsRevenueBrowseSQL = `SELECT "id", "org", "year" FROM "ms_revenue" WHERE "year" = ? ORDER BY "id" ASC`
 
-// MsRevenueBrowse runs the "browse" select over ms_revenue (spec §selects-over-groups).
 func (q *Queries) MsRevenueBrowse(ctx context.Context, year int) ([]MsRevenue, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltMsRevenueBrowseSQL, year)
 	if voltErr != nil {
@@ -70,7 +67,6 @@ func (q *Queries) MsRevenueBrowse(ctx context.Context, year int) ([]MsRevenue, e
 
 const voltMsUsageBrowseSQL = `SELECT "id", "org", "year" FROM "ms_usage" WHERE "year" = ? ORDER BY "id" ASC`
 
-// MsUsageBrowse runs the "browse" select over ms_usage (spec §selects-over-groups).
 func (q *Queries) MsUsageBrowse(ctx context.Context, year int) ([]MsUsage, error) {
 	voltRows, voltErr := q.db.QueryContext(ctx, voltMsUsageBrowseSQL, year)
 	if voltErr != nil {

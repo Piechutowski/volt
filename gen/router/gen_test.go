@@ -126,8 +126,8 @@ func TestNoNamedRoutesCompiles(t *testing.T) {
 	if strings.Contains(paths, `"github.com/Piechutowski/volt"`) {
 		t.Errorf("volt_paths.go imports volt with no helper to use it:\n%s", paths)
 	}
-	if !strings.Contains(paths, "No named routes") {
-		t.Errorf("volt_paths.go missing the no-helpers note:\n%s", paths)
+	if strings.Contains(paths, "func ") {
+		t.Errorf("volt_paths.go declares a helper with no named route:\n%s", paths)
 	}
 
 	dir := t.TempDir()

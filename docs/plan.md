@@ -188,62 +188,6 @@ file without the generated marker.
 
 ---
 
-## Step 2. Generated code without comments, generic changeset
-
-Depends on: 1.
-
-**Comments.** Generated files carry the `Code generated ... DO NOT EDIT.`
-header, the doc comments that notes become (§notes-become-doc-comments:
-a note is the maintainer's text, not generator chatter, and that spec
-section says notes are the only comment a generated file carries
-besides the header), and nothing else. Remove every other comment the
-generators emit. `AGENT.md`'s comment rule changes in this step, when it
-becomes true; the goldens shrink.
-
-**Generic changeset.** Everything algorithmic moves to
-`rt.Changeset[M]`: the marks, `Changed`, `Params`, `ErrorAdd`, `Errors`,
-`Valid`, `Err`, the `Cast` loop and its `cast` and `unknown_field`
-errors. What stays generated is what reflection would otherwise do:
-
-```go
-type Metric struct { ... }
-
-var metricDesc = rt.Desc[Metric]{
-	Table:   `"metrics"`,
-	Columns: `"id", "slug", "name", "unit", "color"`,
-	Fields:  []rt.Field{{Column: "id", Wire: "id", Key: true, Increment: true}, ...},
-	Scan:    metricScan,          // rt.Row to Metric
-	Apply:   metricApply,         // Metric plus marks to Metric
-	Cast:    metricCast,          // one column of rt.Params to a typed mark
-	Defaults: metricDefaults,     // the zero row with literal defaults
-}
-
-// A defined type, not an alias: an alias cannot carry methods of its
-// own, and the typed setters are methods. The embedded generic changeset
-// supplies everything else.
-type MetricChangeset struct{ rt.Changeset[Metric] }
-
-func MetricNew() MetricChangeset            { return MetricChangeset{rt.NewChangeset(metricDesc)} }
-func (r Metric) Changeset() MetricChangeset { return MetricChangeset{rt.ChangesetOf(metricDesc, r)} }
-func (c MetricChangeset) SlugSet(v string) MetricChangeset { return MetricChangeset{rt.Set(c.Changeset, 1, v)} }
-```
-
-The methods that return a changeset (`Cast`, `Validate`, `ErrorAdd`)
-must return `MetricChangeset`, not the embedded type, so a chain keeps
-its setters; they are generated as one-line wrappers too. The public
-names `MetricChangeset`, `MetricNew`, `Changeset()`, `<Field>Set`,
-`Cast`, `Validate`, `Row`, `Params`, `Errors`, `Valid`, `Err` keep their
-spelling so applications compile unchanged.
-
-`volt_validate.go` keeps generating `Validate`, since it calls the
-package's validator functions by name.
-
-Done when: goldens regenerated and read; `nao/itest` green; the blog
-fixture compiles unchanged; the models file of a three-table package is
-near a third of its size.
-
----
-
 ## Step 3. Pure generators, purity gate widened
 
 Depends on: 1.
@@ -694,7 +638,6 @@ read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
 
 | Step | Depends on | Lands |
 |---|---|---|
-| 2 comments, generic changeset | 1 | |
 | 3 pure generators, gate | 1 | |
 | 4 values and the runner | 2, 3 | the breaking rename |
 | 6 responses, pure handlers | 4 | |

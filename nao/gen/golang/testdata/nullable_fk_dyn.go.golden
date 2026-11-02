@@ -12,30 +12,18 @@ const (
 	voltUserColumnsSQL = `"id"`
 )
 
-// UserLimit caps how many rows UserQuery returns.
 func UserLimit(n int) rt.Opt[User] { return rt.Limit[User](n) }
 
-// UserOffset skips n rows; keyset pagination (UserAfter) scales better.
 func UserOffset(n int) rt.Opt[User] { return rt.Offset[User](n) }
 
-// UserDistinct deduplicates the rows UserQuery returns.
 func UserDistinct() rt.Opt[User] { return rt.Distinct[User]() }
 
-// UserOrderBy sorts UserQuery's rows by Asc/Desc terms built on the
-// User column handles.
 func UserOrderBy(terms ...rt.Order[User]) rt.Opt[User] { return rt.OrderBy(terms...) }
 
-// UserAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per UserOrderBy term, in the same order.
 func UserAfter(key ...any) rt.Opt[User] { return rt.After[User](key...) }
 
-// UserSet collects the typed assignments of a UserUpdateWhere, built
-// with Set/SetNull on the User column handles.
 func UserSet(assigns ...rt.Assign[User]) []rt.Assign[User] { return assigns }
 
-// UserQuery returns the users rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
 func (q *Queries) UserQuery(ctx context.Context, opts ...rt.Opt[User]) ([]User, error) {
 	voltQuery, voltArgs, voltErr := rt.SelectRender(voltUserTableSQL, voltUserColumnsSQL, opts)
 	if voltErr != nil {
@@ -57,8 +45,6 @@ func (q *Queries) UserQuery(ctx context.Context, opts ...rt.Opt[User]) ([]User, 
 	return voltOut, voltRows.Err()
 }
 
-// UserCount reports how many users rows match every given predicate;
-// none counts the whole table.
 func (q *Queries) UserCount(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.CountRender(voltUserTableSQL, preds)
 	if voltErr != nil {
@@ -71,7 +57,6 @@ func (q *Queries) UserCount(ctx context.Context, preds ...rt.Pred[User]) (int64,
 	return voltN, nil
 }
 
-// UserExists reports whether any users row matches every given predicate.
 func (q *Queries) UserExists(ctx context.Context, preds ...rt.Pred[User]) (bool, error) {
 	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltUserTableSQL, preds)
 	if voltErr != nil {
@@ -84,9 +69,6 @@ func (q *Queries) UserExists(ctx context.Context, preds ...rt.Pred[User]) (bool,
 	return voltFound, nil
 }
 
-// UserDeleteWhere removes every users row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
 func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltUserTableSQL, preds)
 	if voltErr != nil {
@@ -99,10 +81,6 @@ func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (
 	return voltRes.RowsAffected()
 }
 
-// UserUpdateWhere applies the typed assignments (UserSet) to every users
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
 func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], preds ...rt.Pred[User]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltUserTableSQL, set, preds)
 	if voltErr != nil {
@@ -120,30 +98,18 @@ const (
 	voltPostColumnsSQL = `"id", "author_id", "editor_id", "reviewed_at", "meta", "raw"`
 )
 
-// PostLimit caps how many rows PostQuery returns.
 func PostLimit(n int) rt.Opt[Post] { return rt.Limit[Post](n) }
 
-// PostOffset skips n rows; keyset pagination (PostAfter) scales better.
 func PostOffset(n int) rt.Opt[Post] { return rt.Offset[Post](n) }
 
-// PostDistinct deduplicates the rows PostQuery returns.
 func PostDistinct() rt.Opt[Post] { return rt.Distinct[Post]() }
 
-// PostOrderBy sorts PostQuery's rows by Asc/Desc terms built on the
-// Post column handles.
 func PostOrderBy(terms ...rt.Order[Post]) rt.Opt[Post] { return rt.OrderBy(terms...) }
 
-// PostAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per PostOrderBy term, in the same order.
 func PostAfter(key ...any) rt.Opt[Post] { return rt.After[Post](key...) }
 
-// PostSet collects the typed assignments of a PostUpdateWhere, built
-// with Set/SetNull on the Post column handles.
 func PostSet(assigns ...rt.Assign[Post]) []rt.Assign[Post] { return assigns }
 
-// PostQuery returns the posts rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
 func (q *Queries) PostQuery(ctx context.Context, opts ...rt.Opt[Post]) ([]Post, error) {
 	voltQuery, voltArgs, voltErr := rt.SelectRender(voltPostTableSQL, voltPostColumnsSQL, opts)
 	if voltErr != nil {
@@ -165,8 +131,6 @@ func (q *Queries) PostQuery(ctx context.Context, opts ...rt.Opt[Post]) ([]Post, 
 	return voltOut, voltRows.Err()
 }
 
-// PostCount reports how many posts rows match every given predicate;
-// none counts the whole table.
 func (q *Queries) PostCount(ctx context.Context, preds ...rt.Pred[Post]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.CountRender(voltPostTableSQL, preds)
 	if voltErr != nil {
@@ -179,7 +143,6 @@ func (q *Queries) PostCount(ctx context.Context, preds ...rt.Pred[Post]) (int64,
 	return voltN, nil
 }
 
-// PostExists reports whether any posts row matches every given predicate.
 func (q *Queries) PostExists(ctx context.Context, preds ...rt.Pred[Post]) (bool, error) {
 	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltPostTableSQL, preds)
 	if voltErr != nil {
@@ -192,9 +155,6 @@ func (q *Queries) PostExists(ctx context.Context, preds ...rt.Pred[Post]) (bool,
 	return voltFound, nil
 }
 
-// PostDeleteWhere removes every posts row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
 func (q *Queries) PostDeleteWhere(ctx context.Context, preds ...rt.Pred[Post]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltPostTableSQL, preds)
 	if voltErr != nil {
@@ -207,10 +167,6 @@ func (q *Queries) PostDeleteWhere(ctx context.Context, preds ...rt.Pred[Post]) (
 	return voltRes.RowsAffected()
 }
 
-// PostUpdateWhere applies the typed assignments (PostSet) to every posts
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
 func (q *Queries) PostUpdateWhere(ctx context.Context, set []rt.Assign[Post], preds ...rt.Pred[Post]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltPostTableSQL, set, preds)
 	if voltErr != nil {

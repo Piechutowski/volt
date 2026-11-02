@@ -9,8 +9,6 @@ import (
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-// Migrations is every migration of the package in name order, in the
-// statement form the runtime applies (spec §migration-tooling).
 var Migrations = []rt.Migration{
 	{
 		Name: "0001__users_and_orders",
@@ -157,8 +155,6 @@ var Migrations = []rt.Migration{
 	},
 }
 
-// Migrate applies every pending migration of Migrations to db (spec
-// §migration-tooling). Nothing calls it unless the application does.
 func Migrate(ctx context.Context, db *sql.DB) error {
 	_, voltErr := rt.MigrateUp(ctx, db, Migrations)
 	return voltErr

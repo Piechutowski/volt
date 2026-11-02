@@ -51,7 +51,6 @@ func Selects(pl *naming.Plan, fns []naming.SelectFn, opts Options) ([]byte, erro
 		case fn.SharedType != "":
 			if !sharedDone[fn.SharedType] {
 				sharedDone[fn.SharedType] = true
-				fmt.Fprintf(&body, "// %s is the shared row type of select %q (spec §selects-over-groups):\n// one wire type, every member of the target a source.\n", fn.SharedType, lowerFirstWord(fn.MethodSuffix))
 				fmt.Fprintf(&body, "type %s struct {\n", fn.SharedType)
 				var rows align.Block
 				for _, f := range cols {
@@ -68,8 +67,6 @@ func Selects(pl *naming.Plan, fns []naming.SelectFn, opts Options) ([]byte, erro
 			if err != nil {
 				return nil, err
 			}
-			fmt.Fprintf(&body, "// %s is %s minus (%s) — a struct derivative of select %q,\n// every kept field copied verbatim (spec §selects-over-groups).\n",
-				row, t.Model, strings.Join(fn.Excluded, ", "), lowerFirstWord(fn.MethodSuffix))
 			fmt.Fprintf(&body, "type %s struct {\n", row)
 			var rows align.Block
 			for _, f := range cols {
@@ -132,13 +129,6 @@ func rowScanEmit(b *strings.Builder, row string, cols []*naming.Field) {
 	b.WriteString(")\n\treturn voltV, voltErr\n}\n\n")
 }
 
-func lowerFirstWord(s string) string {
-	if s == "" {
-		return s
-	}
-	return strings.ToLower(s[:1]) + s[1:]
-}
-
 func selectEmit(b *strings.Builder, imports map[string]bool, pl *naming.Plan, t *naming.Table, fn naming.SelectFn) error {
 	row, err := pl.SelectRowName(fn)
 	if err != nil {
@@ -166,7 +156,6 @@ func selectEmit(b *strings.Builder, imports map[string]bool, pl *naming.Plan, t 
 			imports[rtImport] = true
 		}
 	}
-	fmt.Fprintf(b, "// %s runs the %q select over %s (spec §selects-over-groups).\n", name, lowerFirstWord(fn.MethodSuffix), t.SQLName)
 	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context%s) ([]%s, error) {\n", name, sig.String(), row)
 	fmt.Fprintf(b, "\tvoltRows, voltErr := q.db.QueryContext(ctx, %s%s)\n", constName, binds)
 	rowsScanEmit(b, row, naming.RowScan(row))

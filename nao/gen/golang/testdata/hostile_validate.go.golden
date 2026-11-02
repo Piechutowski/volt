@@ -6,39 +6,23 @@ import (
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-// Validate runs required and the validators of users over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c UserChangeset) Validate() UserChangeset {
-	c.valid = nil
-	return c
+	return UserChangeset{c.FindingsSet(nil)}
 }
 
-// Validate runs required and the validators of core_users over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c CoreUserChangeset) Validate() CoreUserChangeset {
 	voltV := c.Row()
 	var voltErrs []rt.FieldError
 	if voltErr := CoreAuditKindKnown(voltV.Kind); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "CoreAuditKindKnown", Columns: []string{"kind"}, Message: voltErr.Error()})
 	}
-	c.valid = voltErrs
-	return c
+	return CoreUserChangeset{c.FindingsSet(voltErrs)}
 }
 
-// Validate runs required and the validators of _2fa_codes over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c X2faCodeChangeset) Validate() X2faCodeChangeset {
-	c.valid = nil
-	return c
+	return X2faCodeChangeset{c.FindingsSet(nil)}
 }
 
-// Validate runs required and the validators of digests over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c DigestChangeset) Validate() DigestChangeset {
-	c.valid = nil
-	return c
+	return DigestChangeset{c.FindingsSet(nil)}
 }

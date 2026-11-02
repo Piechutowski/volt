@@ -12,30 +12,18 @@ const (
 	voltUserColumnsSQL = `"id", "email", "name", "bio", "created_at"`
 )
 
-// UserLimit caps how many rows UserQuery returns.
 func UserLimit(n int) rt.Opt[User] { return rt.Limit[User](n) }
 
-// UserOffset skips n rows; keyset pagination (UserAfter) scales better.
 func UserOffset(n int) rt.Opt[User] { return rt.Offset[User](n) }
 
-// UserDistinct deduplicates the rows UserQuery returns.
 func UserDistinct() rt.Opt[User] { return rt.Distinct[User]() }
 
-// UserOrderBy sorts UserQuery's rows by Asc/Desc terms built on the
-// User column handles.
 func UserOrderBy(terms ...rt.Order[User]) rt.Opt[User] { return rt.OrderBy(terms...) }
 
-// UserAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per UserOrderBy term, in the same order.
 func UserAfter(key ...any) rt.Opt[User] { return rt.After[User](key...) }
 
-// UserSet collects the typed assignments of a UserUpdateWhere, built
-// with Set/SetNull on the User column handles.
 func UserSet(assigns ...rt.Assign[User]) []rt.Assign[User] { return assigns }
 
-// UserQuery returns the users rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
 func (q *Queries) UserQuery(ctx context.Context, opts ...rt.Opt[User]) ([]User, error) {
 	voltQuery, voltArgs, voltErr := rt.SelectRender(voltUserTableSQL, voltUserColumnsSQL, opts)
 	if voltErr != nil {
@@ -57,8 +45,6 @@ func (q *Queries) UserQuery(ctx context.Context, opts ...rt.Opt[User]) ([]User, 
 	return voltOut, voltRows.Err()
 }
 
-// UserCount reports how many users rows match every given predicate;
-// none counts the whole table.
 func (q *Queries) UserCount(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.CountRender(voltUserTableSQL, preds)
 	if voltErr != nil {
@@ -71,7 +57,6 @@ func (q *Queries) UserCount(ctx context.Context, preds ...rt.Pred[User]) (int64,
 	return voltN, nil
 }
 
-// UserExists reports whether any users row matches every given predicate.
 func (q *Queries) UserExists(ctx context.Context, preds ...rt.Pred[User]) (bool, error) {
 	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltUserTableSQL, preds)
 	if voltErr != nil {
@@ -84,9 +69,6 @@ func (q *Queries) UserExists(ctx context.Context, preds ...rt.Pred[User]) (bool,
 	return voltFound, nil
 }
 
-// UserDeleteWhere removes every users row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
 func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltUserTableSQL, preds)
 	if voltErr != nil {
@@ -99,10 +81,6 @@ func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (
 	return voltRes.RowsAffected()
 }
 
-// UserUpdateWhere applies the typed assignments (UserSet) to every users
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
 func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], preds ...rt.Pred[User]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltUserTableSQL, set, preds)
 	if voltErr != nil {
@@ -120,30 +98,18 @@ const (
 	voltOrderColumnsSQL = `"id", "user_id", "status", "total", "tip", "fee", "placed_at"`
 )
 
-// OrderLimit caps how many rows OrderQuery returns.
 func OrderLimit(n int) rt.Opt[Order] { return rt.Limit[Order](n) }
 
-// OrderOffset skips n rows; keyset pagination (OrderAfter) scales better.
 func OrderOffset(n int) rt.Opt[Order] { return rt.Offset[Order](n) }
 
-// OrderDistinct deduplicates the rows OrderQuery returns.
 func OrderDistinct() rt.Opt[Order] { return rt.Distinct[Order]() }
 
-// OrderOrderBy sorts OrderQuery's rows by Asc/Desc terms built on the
-// Order column handles.
 func OrderOrderBy(terms ...rt.Order[Order]) rt.Opt[Order] { return rt.OrderBy(terms...) }
 
-// OrderAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per OrderOrderBy term, in the same order.
 func OrderAfter(key ...any) rt.Opt[Order] { return rt.After[Order](key...) }
 
-// OrderSet collects the typed assignments of a OrderUpdateWhere, built
-// with Set/SetNull on the Order column handles.
 func OrderSet(assigns ...rt.Assign[Order]) []rt.Assign[Order] { return assigns }
 
-// OrderQuery returns the orders rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
 func (q *Queries) OrderQuery(ctx context.Context, opts ...rt.Opt[Order]) ([]Order, error) {
 	voltQuery, voltArgs, voltErr := rt.SelectRender(voltOrderTableSQL, voltOrderColumnsSQL, opts)
 	if voltErr != nil {
@@ -165,8 +131,6 @@ func (q *Queries) OrderQuery(ctx context.Context, opts ...rt.Opt[Order]) ([]Orde
 	return voltOut, voltRows.Err()
 }
 
-// OrderCount reports how many orders rows match every given predicate;
-// none counts the whole table.
 func (q *Queries) OrderCount(ctx context.Context, preds ...rt.Pred[Order]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.CountRender(voltOrderTableSQL, preds)
 	if voltErr != nil {
@@ -179,7 +143,6 @@ func (q *Queries) OrderCount(ctx context.Context, preds ...rt.Pred[Order]) (int6
 	return voltN, nil
 }
 
-// OrderExists reports whether any orders row matches every given predicate.
 func (q *Queries) OrderExists(ctx context.Context, preds ...rt.Pred[Order]) (bool, error) {
 	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltOrderTableSQL, preds)
 	if voltErr != nil {
@@ -192,9 +155,6 @@ func (q *Queries) OrderExists(ctx context.Context, preds ...rt.Pred[Order]) (boo
 	return voltFound, nil
 }
 
-// OrderDeleteWhere removes every orders row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
 func (q *Queries) OrderDeleteWhere(ctx context.Context, preds ...rt.Pred[Order]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltOrderTableSQL, preds)
 	if voltErr != nil {
@@ -207,10 +167,6 @@ func (q *Queries) OrderDeleteWhere(ctx context.Context, preds ...rt.Pred[Order])
 	return voltRes.RowsAffected()
 }
 
-// OrderUpdateWhere applies the typed assignments (OrderSet) to every orders
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
 func (q *Queries) OrderUpdateWhere(ctx context.Context, set []rt.Assign[Order], preds ...rt.Pred[Order]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltOrderTableSQL, set, preds)
 	if voltErr != nil {
@@ -228,30 +184,18 @@ const (
 	voltUserTagColumnsSQL = `"user_id", "tag"`
 )
 
-// UserTagLimit caps how many rows UserTagQuery returns.
 func UserTagLimit(n int) rt.Opt[UserTag] { return rt.Limit[UserTag](n) }
 
-// UserTagOffset skips n rows; keyset pagination (UserTagAfter) scales better.
 func UserTagOffset(n int) rt.Opt[UserTag] { return rt.Offset[UserTag](n) }
 
-// UserTagDistinct deduplicates the rows UserTagQuery returns.
 func UserTagDistinct() rt.Opt[UserTag] { return rt.Distinct[UserTag]() }
 
-// UserTagOrderBy sorts UserTagQuery's rows by Asc/Desc terms built on the
-// UserTag column handles.
 func UserTagOrderBy(terms ...rt.Order[UserTag]) rt.Opt[UserTag] { return rt.OrderBy(terms...) }
 
-// UserTagAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per UserTagOrderBy term, in the same order.
 func UserTagAfter(key ...any) rt.Opt[UserTag] { return rt.After[UserTag](key...) }
 
-// UserTagSet collects the typed assignments of a UserTagUpdateWhere, built
-// with Set/SetNull on the UserTag column handles.
 func UserTagSet(assigns ...rt.Assign[UserTag]) []rt.Assign[UserTag] { return assigns }
 
-// UserTagQuery returns the user_tags rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
 func (q *Queries) UserTagQuery(ctx context.Context, opts ...rt.Opt[UserTag]) ([]UserTag, error) {
 	voltQuery, voltArgs, voltErr := rt.SelectRender(voltUserTagTableSQL, voltUserTagColumnsSQL, opts)
 	if voltErr != nil {
@@ -273,8 +217,6 @@ func (q *Queries) UserTagQuery(ctx context.Context, opts ...rt.Opt[UserTag]) ([]
 	return voltOut, voltRows.Err()
 }
 
-// UserTagCount reports how many user_tags rows match every given predicate;
-// none counts the whole table.
 func (q *Queries) UserTagCount(ctx context.Context, preds ...rt.Pred[UserTag]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.CountRender(voltUserTagTableSQL, preds)
 	if voltErr != nil {
@@ -287,7 +229,6 @@ func (q *Queries) UserTagCount(ctx context.Context, preds ...rt.Pred[UserTag]) (
 	return voltN, nil
 }
 
-// UserTagExists reports whether any user_tags row matches every given predicate.
 func (q *Queries) UserTagExists(ctx context.Context, preds ...rt.Pred[UserTag]) (bool, error) {
 	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltUserTagTableSQL, preds)
 	if voltErr != nil {
@@ -300,9 +241,6 @@ func (q *Queries) UserTagExists(ctx context.Context, preds ...rt.Pred[UserTag]) 
 	return voltFound, nil
 }
 
-// UserTagDeleteWhere removes every user_tags row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
 func (q *Queries) UserTagDeleteWhere(ctx context.Context, preds ...rt.Pred[UserTag]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltUserTagTableSQL, preds)
 	if voltErr != nil {
@@ -315,10 +253,6 @@ func (q *Queries) UserTagDeleteWhere(ctx context.Context, preds ...rt.Pred[UserT
 	return voltRes.RowsAffected()
 }
 
-// UserTagUpdateWhere applies the typed assignments (UserTagSet) to every user_tags
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
 func (q *Queries) UserTagUpdateWhere(ctx context.Context, set []rt.Assign[UserTag], preds ...rt.Pred[UserTag]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltUserTagTableSQL, set, preds)
 	if voltErr != nil {
@@ -336,30 +270,18 @@ const (
 	voltPageViewColumnsSQL = `"id", "site", "day", "hits"`
 )
 
-// PageViewLimit caps how many rows PageViewQuery returns.
 func PageViewLimit(n int) rt.Opt[PageView] { return rt.Limit[PageView](n) }
 
-// PageViewOffset skips n rows; keyset pagination (PageViewAfter) scales better.
 func PageViewOffset(n int) rt.Opt[PageView] { return rt.Offset[PageView](n) }
 
-// PageViewDistinct deduplicates the rows PageViewQuery returns.
 func PageViewDistinct() rt.Opt[PageView] { return rt.Distinct[PageView]() }
 
-// PageViewOrderBy sorts PageViewQuery's rows by Asc/Desc terms built on the
-// PageView column handles.
 func PageViewOrderBy(terms ...rt.Order[PageView]) rt.Opt[PageView] { return rt.OrderBy(terms...) }
 
-// PageViewAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per PageViewOrderBy term, in the same order.
 func PageViewAfter(key ...any) rt.Opt[PageView] { return rt.After[PageView](key...) }
 
-// PageViewSet collects the typed assignments of a PageViewUpdateWhere, built
-// with Set/SetNull on the PageView column handles.
 func PageViewSet(assigns ...rt.Assign[PageView]) []rt.Assign[PageView] { return assigns }
 
-// PageViewQuery returns the page_views rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
 func (q *Queries) PageViewQuery(ctx context.Context, opts ...rt.Opt[PageView]) ([]PageView, error) {
 	voltQuery, voltArgs, voltErr := rt.SelectRender(voltPageViewTableSQL, voltPageViewColumnsSQL, opts)
 	if voltErr != nil {
@@ -381,8 +303,6 @@ func (q *Queries) PageViewQuery(ctx context.Context, opts ...rt.Opt[PageView]) (
 	return voltOut, voltRows.Err()
 }
 
-// PageViewCount reports how many page_views rows match every given predicate;
-// none counts the whole table.
 func (q *Queries) PageViewCount(ctx context.Context, preds ...rt.Pred[PageView]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.CountRender(voltPageViewTableSQL, preds)
 	if voltErr != nil {
@@ -395,7 +315,6 @@ func (q *Queries) PageViewCount(ctx context.Context, preds ...rt.Pred[PageView])
 	return voltN, nil
 }
 
-// PageViewExists reports whether any page_views row matches every given predicate.
 func (q *Queries) PageViewExists(ctx context.Context, preds ...rt.Pred[PageView]) (bool, error) {
 	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltPageViewTableSQL, preds)
 	if voltErr != nil {
@@ -408,9 +327,6 @@ func (q *Queries) PageViewExists(ctx context.Context, preds ...rt.Pred[PageView]
 	return voltFound, nil
 }
 
-// PageViewDeleteWhere removes every page_views row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
 func (q *Queries) PageViewDeleteWhere(ctx context.Context, preds ...rt.Pred[PageView]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltPageViewTableSQL, preds)
 	if voltErr != nil {
@@ -423,10 +339,6 @@ func (q *Queries) PageViewDeleteWhere(ctx context.Context, preds ...rt.Pred[Page
 	return voltRes.RowsAffected()
 }
 
-// PageViewUpdateWhere applies the typed assignments (PageViewSet) to every page_views
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
 func (q *Queries) PageViewUpdateWhere(ctx context.Context, set []rt.Assign[PageView], preds ...rt.Pred[PageView]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltPageViewTableSQL, set, preds)
 	if voltErr != nil {
@@ -444,30 +356,18 @@ const (
 	voltLinkClickColumnsSQL = `"id", "site", "day", "target"`
 )
 
-// LinkClickLimit caps how many rows LinkClickQuery returns.
 func LinkClickLimit(n int) rt.Opt[LinkClick] { return rt.Limit[LinkClick](n) }
 
-// LinkClickOffset skips n rows; keyset pagination (LinkClickAfter) scales better.
 func LinkClickOffset(n int) rt.Opt[LinkClick] { return rt.Offset[LinkClick](n) }
 
-// LinkClickDistinct deduplicates the rows LinkClickQuery returns.
 func LinkClickDistinct() rt.Opt[LinkClick] { return rt.Distinct[LinkClick]() }
 
-// LinkClickOrderBy sorts LinkClickQuery's rows by Asc/Desc terms built on the
-// LinkClick column handles.
 func LinkClickOrderBy(terms ...rt.Order[LinkClick]) rt.Opt[LinkClick] { return rt.OrderBy(terms...) }
 
-// LinkClickAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per LinkClickOrderBy term, in the same order.
 func LinkClickAfter(key ...any) rt.Opt[LinkClick] { return rt.After[LinkClick](key...) }
 
-// LinkClickSet collects the typed assignments of a LinkClickUpdateWhere, built
-// with Set/SetNull on the LinkClick column handles.
 func LinkClickSet(assigns ...rt.Assign[LinkClick]) []rt.Assign[LinkClick] { return assigns }
 
-// LinkClickQuery returns the link_clicks rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
 func (q *Queries) LinkClickQuery(ctx context.Context, opts ...rt.Opt[LinkClick]) ([]LinkClick, error) {
 	voltQuery, voltArgs, voltErr := rt.SelectRender(voltLinkClickTableSQL, voltLinkClickColumnsSQL, opts)
 	if voltErr != nil {
@@ -489,8 +389,6 @@ func (q *Queries) LinkClickQuery(ctx context.Context, opts ...rt.Opt[LinkClick])
 	return voltOut, voltRows.Err()
 }
 
-// LinkClickCount reports how many link_clicks rows match every given predicate;
-// none counts the whole table.
 func (q *Queries) LinkClickCount(ctx context.Context, preds ...rt.Pred[LinkClick]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.CountRender(voltLinkClickTableSQL, preds)
 	if voltErr != nil {
@@ -503,7 +401,6 @@ func (q *Queries) LinkClickCount(ctx context.Context, preds ...rt.Pred[LinkClick
 	return voltN, nil
 }
 
-// LinkClickExists reports whether any link_clicks row matches every given predicate.
 func (q *Queries) LinkClickExists(ctx context.Context, preds ...rt.Pred[LinkClick]) (bool, error) {
 	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltLinkClickTableSQL, preds)
 	if voltErr != nil {
@@ -516,9 +413,6 @@ func (q *Queries) LinkClickExists(ctx context.Context, preds ...rt.Pred[LinkClic
 	return voltFound, nil
 }
 
-// LinkClickDeleteWhere removes every link_clicks row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
 func (q *Queries) LinkClickDeleteWhere(ctx context.Context, preds ...rt.Pred[LinkClick]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltLinkClickTableSQL, preds)
 	if voltErr != nil {
@@ -531,10 +425,6 @@ func (q *Queries) LinkClickDeleteWhere(ctx context.Context, preds ...rt.Pred[Lin
 	return voltRes.RowsAffected()
 }
 
-// LinkClickUpdateWhere applies the typed assignments (LinkClickSet) to every link_clicks
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
 func (q *Queries) LinkClickUpdateWhere(ctx context.Context, set []rt.Assign[LinkClick], preds ...rt.Pred[LinkClick]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltLinkClickTableSQL, set, preds)
 	if voltErr != nil {
@@ -552,30 +442,18 @@ const (
 	voltSiteFlagColumnsSQL = `"id", "featured", "pinned", "ratio", "weight"`
 )
 
-// SiteFlagLimit caps how many rows SiteFlagQuery returns.
 func SiteFlagLimit(n int) rt.Opt[SiteFlag] { return rt.Limit[SiteFlag](n) }
 
-// SiteFlagOffset skips n rows; keyset pagination (SiteFlagAfter) scales better.
 func SiteFlagOffset(n int) rt.Opt[SiteFlag] { return rt.Offset[SiteFlag](n) }
 
-// SiteFlagDistinct deduplicates the rows SiteFlagQuery returns.
 func SiteFlagDistinct() rt.Opt[SiteFlag] { return rt.Distinct[SiteFlag]() }
 
-// SiteFlagOrderBy sorts SiteFlagQuery's rows by Asc/Desc terms built on the
-// SiteFlag column handles.
 func SiteFlagOrderBy(terms ...rt.Order[SiteFlag]) rt.Opt[SiteFlag] { return rt.OrderBy(terms...) }
 
-// SiteFlagAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per SiteFlagOrderBy term, in the same order.
 func SiteFlagAfter(key ...any) rt.Opt[SiteFlag] { return rt.After[SiteFlag](key...) }
 
-// SiteFlagSet collects the typed assignments of a SiteFlagUpdateWhere, built
-// with Set/SetNull on the SiteFlag column handles.
 func SiteFlagSet(assigns ...rt.Assign[SiteFlag]) []rt.Assign[SiteFlag] { return assigns }
 
-// SiteFlagQuery returns the site_flags rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
 func (q *Queries) SiteFlagQuery(ctx context.Context, opts ...rt.Opt[SiteFlag]) ([]SiteFlag, error) {
 	voltQuery, voltArgs, voltErr := rt.SelectRender(voltSiteFlagTableSQL, voltSiteFlagColumnsSQL, opts)
 	if voltErr != nil {
@@ -597,8 +475,6 @@ func (q *Queries) SiteFlagQuery(ctx context.Context, opts ...rt.Opt[SiteFlag]) (
 	return voltOut, voltRows.Err()
 }
 
-// SiteFlagCount reports how many site_flags rows match every given predicate;
-// none counts the whole table.
 func (q *Queries) SiteFlagCount(ctx context.Context, preds ...rt.Pred[SiteFlag]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.CountRender(voltSiteFlagTableSQL, preds)
 	if voltErr != nil {
@@ -611,7 +487,6 @@ func (q *Queries) SiteFlagCount(ctx context.Context, preds ...rt.Pred[SiteFlag])
 	return voltN, nil
 }
 
-// SiteFlagExists reports whether any site_flags row matches every given predicate.
 func (q *Queries) SiteFlagExists(ctx context.Context, preds ...rt.Pred[SiteFlag]) (bool, error) {
 	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltSiteFlagTableSQL, preds)
 	if voltErr != nil {
@@ -624,9 +499,6 @@ func (q *Queries) SiteFlagExists(ctx context.Context, preds ...rt.Pred[SiteFlag]
 	return voltFound, nil
 }
 
-// SiteFlagDeleteWhere removes every site_flags row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
 func (q *Queries) SiteFlagDeleteWhere(ctx context.Context, preds ...rt.Pred[SiteFlag]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltSiteFlagTableSQL, preds)
 	if voltErr != nil {
@@ -639,10 +511,6 @@ func (q *Queries) SiteFlagDeleteWhere(ctx context.Context, preds ...rt.Pred[Site
 	return voltRes.RowsAffected()
 }
 
-// SiteFlagUpdateWhere applies the typed assignments (SiteFlagSet) to every site_flags
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
 func (q *Queries) SiteFlagUpdateWhere(ctx context.Context, set []rt.Assign[SiteFlag], preds ...rt.Pred[SiteFlag]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltSiteFlagTableSQL, set, preds)
 	if voltErr != nil {
@@ -660,30 +528,18 @@ const (
 	voltAttachmentColumnsSQL = `"id", "name", "body", "thumb", "digest"`
 )
 
-// AttachmentLimit caps how many rows AttachmentQuery returns.
 func AttachmentLimit(n int) rt.Opt[Attachment] { return rt.Limit[Attachment](n) }
 
-// AttachmentOffset skips n rows; keyset pagination (AttachmentAfter) scales better.
 func AttachmentOffset(n int) rt.Opt[Attachment] { return rt.Offset[Attachment](n) }
 
-// AttachmentDistinct deduplicates the rows AttachmentQuery returns.
 func AttachmentDistinct() rt.Opt[Attachment] { return rt.Distinct[Attachment]() }
 
-// AttachmentOrderBy sorts AttachmentQuery's rows by Asc/Desc terms built on the
-// Attachment column handles.
 func AttachmentOrderBy(terms ...rt.Order[Attachment]) rt.Opt[Attachment] { return rt.OrderBy(terms...) }
 
-// AttachmentAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per AttachmentOrderBy term, in the same order.
 func AttachmentAfter(key ...any) rt.Opt[Attachment] { return rt.After[Attachment](key...) }
 
-// AttachmentSet collects the typed assignments of a AttachmentUpdateWhere, built
-// with Set/SetNull on the Attachment column handles.
 func AttachmentSet(assigns ...rt.Assign[Attachment]) []rt.Assign[Attachment] { return assigns }
 
-// AttachmentQuery returns the attachments rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
 func (q *Queries) AttachmentQuery(ctx context.Context, opts ...rt.Opt[Attachment]) ([]Attachment, error) {
 	voltQuery, voltArgs, voltErr := rt.SelectRender(voltAttachmentTableSQL, voltAttachmentColumnsSQL, opts)
 	if voltErr != nil {
@@ -705,8 +561,6 @@ func (q *Queries) AttachmentQuery(ctx context.Context, opts ...rt.Opt[Attachment
 	return voltOut, voltRows.Err()
 }
 
-// AttachmentCount reports how many attachments rows match every given predicate;
-// none counts the whole table.
 func (q *Queries) AttachmentCount(ctx context.Context, preds ...rt.Pred[Attachment]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.CountRender(voltAttachmentTableSQL, preds)
 	if voltErr != nil {
@@ -719,7 +573,6 @@ func (q *Queries) AttachmentCount(ctx context.Context, preds ...rt.Pred[Attachme
 	return voltN, nil
 }
 
-// AttachmentExists reports whether any attachments row matches every given predicate.
 func (q *Queries) AttachmentExists(ctx context.Context, preds ...rt.Pred[Attachment]) (bool, error) {
 	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltAttachmentTableSQL, preds)
 	if voltErr != nil {
@@ -732,9 +585,6 @@ func (q *Queries) AttachmentExists(ctx context.Context, preds ...rt.Pred[Attachm
 	return voltFound, nil
 }
 
-// AttachmentDeleteWhere removes every attachments row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
 func (q *Queries) AttachmentDeleteWhere(ctx context.Context, preds ...rt.Pred[Attachment]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltAttachmentTableSQL, preds)
 	if voltErr != nil {
@@ -747,10 +597,6 @@ func (q *Queries) AttachmentDeleteWhere(ctx context.Context, preds ...rt.Pred[At
 	return voltRes.RowsAffected()
 }
 
-// AttachmentUpdateWhere applies the typed assignments (AttachmentSet) to every attachments
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
 func (q *Queries) AttachmentUpdateWhere(ctx context.Context, set []rt.Assign[Attachment], preds ...rt.Pred[Attachment]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltAttachmentTableSQL, set, preds)
 	if voltErr != nil {
@@ -768,30 +614,18 @@ const (
 	voltBlobColumnsSQL = `"hash", "tag", "size"`
 )
 
-// BlobLimit caps how many rows BlobQuery returns.
 func BlobLimit(n int) rt.Opt[Blob] { return rt.Limit[Blob](n) }
 
-// BlobOffset skips n rows; keyset pagination (BlobAfter) scales better.
 func BlobOffset(n int) rt.Opt[Blob] { return rt.Offset[Blob](n) }
 
-// BlobDistinct deduplicates the rows BlobQuery returns.
 func BlobDistinct() rt.Opt[Blob] { return rt.Distinct[Blob]() }
 
-// BlobOrderBy sorts BlobQuery's rows by Asc/Desc terms built on the
-// Blob column handles.
 func BlobOrderBy(terms ...rt.Order[Blob]) rt.Opt[Blob] { return rt.OrderBy(terms...) }
 
-// BlobAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per BlobOrderBy term, in the same order.
 func BlobAfter(key ...any) rt.Opt[Blob] { return rt.After[Blob](key...) }
 
-// BlobSet collects the typed assignments of a BlobUpdateWhere, built
-// with Set/SetNull on the Blob column handles.
 func BlobSet(assigns ...rt.Assign[Blob]) []rt.Assign[Blob] { return assigns }
 
-// BlobQuery returns the blobs rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
 func (q *Queries) BlobQuery(ctx context.Context, opts ...rt.Opt[Blob]) ([]Blob, error) {
 	voltQuery, voltArgs, voltErr := rt.SelectRender(voltBlobTableSQL, voltBlobColumnsSQL, opts)
 	if voltErr != nil {
@@ -813,8 +647,6 @@ func (q *Queries) BlobQuery(ctx context.Context, opts ...rt.Opt[Blob]) ([]Blob, 
 	return voltOut, voltRows.Err()
 }
 
-// BlobCount reports how many blobs rows match every given predicate;
-// none counts the whole table.
 func (q *Queries) BlobCount(ctx context.Context, preds ...rt.Pred[Blob]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.CountRender(voltBlobTableSQL, preds)
 	if voltErr != nil {
@@ -827,7 +659,6 @@ func (q *Queries) BlobCount(ctx context.Context, preds ...rt.Pred[Blob]) (int64,
 	return voltN, nil
 }
 
-// BlobExists reports whether any blobs row matches every given predicate.
 func (q *Queries) BlobExists(ctx context.Context, preds ...rt.Pred[Blob]) (bool, error) {
 	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltBlobTableSQL, preds)
 	if voltErr != nil {
@@ -840,9 +671,6 @@ func (q *Queries) BlobExists(ctx context.Context, preds ...rt.Pred[Blob]) (bool,
 	return voltFound, nil
 }
 
-// BlobDeleteWhere removes every blobs row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
 func (q *Queries) BlobDeleteWhere(ctx context.Context, preds ...rt.Pred[Blob]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltBlobTableSQL, preds)
 	if voltErr != nil {
@@ -855,10 +683,6 @@ func (q *Queries) BlobDeleteWhere(ctx context.Context, preds ...rt.Pred[Blob]) (
 	return voltRes.RowsAffected()
 }
 
-// BlobUpdateWhere applies the typed assignments (BlobSet) to every blobs
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
 func (q *Queries) BlobUpdateWhere(ctx context.Context, set []rt.Assign[Blob], preds ...rt.Pred[Blob]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltBlobTableSQL, set, preds)
 	if voltErr != nil {
@@ -876,30 +700,18 @@ const (
 	voltDailyHitColumnsSQL = `"day", "hits", "site", "label", "token"`
 )
 
-// DailyHitLimit caps how many rows DailyHitQuery returns.
 func DailyHitLimit(n int) rt.Opt[DailyHit] { return rt.Limit[DailyHit](n) }
 
-// DailyHitOffset skips n rows; keyset pagination (DailyHitAfter) scales better.
 func DailyHitOffset(n int) rt.Opt[DailyHit] { return rt.Offset[DailyHit](n) }
 
-// DailyHitDistinct deduplicates the rows DailyHitQuery returns.
 func DailyHitDistinct() rt.Opt[DailyHit] { return rt.Distinct[DailyHit]() }
 
-// DailyHitOrderBy sorts DailyHitQuery's rows by Asc/Desc terms built on the
-// DailyHit column handles.
 func DailyHitOrderBy(terms ...rt.Order[DailyHit]) rt.Opt[DailyHit] { return rt.OrderBy(terms...) }
 
-// DailyHitAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per DailyHitOrderBy term, in the same order.
 func DailyHitAfter(key ...any) rt.Opt[DailyHit] { return rt.After[DailyHit](key...) }
 
-// DailyHitSet collects the typed assignments of a DailyHitUpdateWhere, built
-// with Set/SetNull on the DailyHit column handles.
 func DailyHitSet(assigns ...rt.Assign[DailyHit]) []rt.Assign[DailyHit] { return assigns }
 
-// DailyHitQuery returns the daily_hits rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
 func (q *Queries) DailyHitQuery(ctx context.Context, opts ...rt.Opt[DailyHit]) ([]DailyHit, error) {
 	voltQuery, voltArgs, voltErr := rt.SelectRender(voltDailyHitTableSQL, voltDailyHitColumnsSQL, opts)
 	if voltErr != nil {
@@ -921,8 +733,6 @@ func (q *Queries) DailyHitQuery(ctx context.Context, opts ...rt.Opt[DailyHit]) (
 	return voltOut, voltRows.Err()
 }
 
-// DailyHitCount reports how many daily_hits rows match every given predicate;
-// none counts the whole table.
 func (q *Queries) DailyHitCount(ctx context.Context, preds ...rt.Pred[DailyHit]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.CountRender(voltDailyHitTableSQL, preds)
 	if voltErr != nil {
@@ -935,7 +745,6 @@ func (q *Queries) DailyHitCount(ctx context.Context, preds ...rt.Pred[DailyHit])
 	return voltN, nil
 }
 
-// DailyHitExists reports whether any daily_hits row matches every given predicate.
 func (q *Queries) DailyHitExists(ctx context.Context, preds ...rt.Pred[DailyHit]) (bool, error) {
 	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltDailyHitTableSQL, preds)
 	if voltErr != nil {
@@ -948,9 +757,6 @@ func (q *Queries) DailyHitExists(ctx context.Context, preds ...rt.Pred[DailyHit]
 	return voltFound, nil
 }
 
-// DailyHitDeleteWhere removes every daily_hits row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
 func (q *Queries) DailyHitDeleteWhere(ctx context.Context, preds ...rt.Pred[DailyHit]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltDailyHitTableSQL, preds)
 	if voltErr != nil {
@@ -963,10 +769,6 @@ func (q *Queries) DailyHitDeleteWhere(ctx context.Context, preds ...rt.Pred[Dail
 	return voltRes.RowsAffected()
 }
 
-// DailyHitUpdateWhere applies the typed assignments (DailyHitSet) to every daily_hits
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
 func (q *Queries) DailyHitUpdateWhere(ctx context.Context, set []rt.Assign[DailyHit], preds ...rt.Pred[DailyHit]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltDailyHitTableSQL, set, preds)
 	if voltErr != nil {
@@ -984,30 +786,18 @@ const (
 	voltInviteColumnsSQL = `"id", "user_email", "code"`
 )
 
-// InviteLimit caps how many rows InviteQuery returns.
 func InviteLimit(n int) rt.Opt[Invite] { return rt.Limit[Invite](n) }
 
-// InviteOffset skips n rows; keyset pagination (InviteAfter) scales better.
 func InviteOffset(n int) rt.Opt[Invite] { return rt.Offset[Invite](n) }
 
-// InviteDistinct deduplicates the rows InviteQuery returns.
 func InviteDistinct() rt.Opt[Invite] { return rt.Distinct[Invite]() }
 
-// InviteOrderBy sorts InviteQuery's rows by Asc/Desc terms built on the
-// Invite column handles.
 func InviteOrderBy(terms ...rt.Order[Invite]) rt.Opt[Invite] { return rt.OrderBy(terms...) }
 
-// InviteAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per InviteOrderBy term, in the same order.
 func InviteAfter(key ...any) rt.Opt[Invite] { return rt.After[Invite](key...) }
 
-// InviteSet collects the typed assignments of a InviteUpdateWhere, built
-// with Set/SetNull on the Invite column handles.
 func InviteSet(assigns ...rt.Assign[Invite]) []rt.Assign[Invite] { return assigns }
 
-// InviteQuery returns the invites rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
 func (q *Queries) InviteQuery(ctx context.Context, opts ...rt.Opt[Invite]) ([]Invite, error) {
 	voltQuery, voltArgs, voltErr := rt.SelectRender(voltInviteTableSQL, voltInviteColumnsSQL, opts)
 	if voltErr != nil {
@@ -1029,8 +819,6 @@ func (q *Queries) InviteQuery(ctx context.Context, opts ...rt.Opt[Invite]) ([]In
 	return voltOut, voltRows.Err()
 }
 
-// InviteCount reports how many invites rows match every given predicate;
-// none counts the whole table.
 func (q *Queries) InviteCount(ctx context.Context, preds ...rt.Pred[Invite]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.CountRender(voltInviteTableSQL, preds)
 	if voltErr != nil {
@@ -1043,7 +831,6 @@ func (q *Queries) InviteCount(ctx context.Context, preds ...rt.Pred[Invite]) (in
 	return voltN, nil
 }
 
-// InviteExists reports whether any invites row matches every given predicate.
 func (q *Queries) InviteExists(ctx context.Context, preds ...rt.Pred[Invite]) (bool, error) {
 	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltInviteTableSQL, preds)
 	if voltErr != nil {
@@ -1056,9 +843,6 @@ func (q *Queries) InviteExists(ctx context.Context, preds ...rt.Pred[Invite]) (b
 	return voltFound, nil
 }
 
-// InviteDeleteWhere removes every invites row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
 func (q *Queries) InviteDeleteWhere(ctx context.Context, preds ...rt.Pred[Invite]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltInviteTableSQL, preds)
 	if voltErr != nil {
@@ -1071,10 +855,6 @@ func (q *Queries) InviteDeleteWhere(ctx context.Context, preds ...rt.Pred[Invite
 	return voltRes.RowsAffected()
 }
 
-// InviteUpdateWhere applies the typed assignments (InviteSet) to every invites
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
 func (q *Queries) InviteUpdateWhere(ctx context.Context, set []rt.Assign[Invite], preds ...rt.Pred[Invite]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltInviteTableSQL, set, preds)
 	if voltErr != nil {
@@ -1092,30 +872,18 @@ const (
 	voltPostFlagColumnsSQL = `"id", "reviewed", "approved"`
 )
 
-// PostFlagLimit caps how many rows PostFlagQuery returns.
 func PostFlagLimit(n int) rt.Opt[PostFlag] { return rt.Limit[PostFlag](n) }
 
-// PostFlagOffset skips n rows; keyset pagination (PostFlagAfter) scales better.
 func PostFlagOffset(n int) rt.Opt[PostFlag] { return rt.Offset[PostFlag](n) }
 
-// PostFlagDistinct deduplicates the rows PostFlagQuery returns.
 func PostFlagDistinct() rt.Opt[PostFlag] { return rt.Distinct[PostFlag]() }
 
-// PostFlagOrderBy sorts PostFlagQuery's rows by Asc/Desc terms built on the
-// PostFlag column handles.
 func PostFlagOrderBy(terms ...rt.Order[PostFlag]) rt.Opt[PostFlag] { return rt.OrderBy(terms...) }
 
-// PostFlagAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per PostFlagOrderBy term, in the same order.
 func PostFlagAfter(key ...any) rt.Opt[PostFlag] { return rt.After[PostFlag](key...) }
 
-// PostFlagSet collects the typed assignments of a PostFlagUpdateWhere, built
-// with Set/SetNull on the PostFlag column handles.
 func PostFlagSet(assigns ...rt.Assign[PostFlag]) []rt.Assign[PostFlag] { return assigns }
 
-// PostFlagQuery returns the post_flags rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
 func (q *Queries) PostFlagQuery(ctx context.Context, opts ...rt.Opt[PostFlag]) ([]PostFlag, error) {
 	voltQuery, voltArgs, voltErr := rt.SelectRender(voltPostFlagTableSQL, voltPostFlagColumnsSQL, opts)
 	if voltErr != nil {
@@ -1137,8 +905,6 @@ func (q *Queries) PostFlagQuery(ctx context.Context, opts ...rt.Opt[PostFlag]) (
 	return voltOut, voltRows.Err()
 }
 
-// PostFlagCount reports how many post_flags rows match every given predicate;
-// none counts the whole table.
 func (q *Queries) PostFlagCount(ctx context.Context, preds ...rt.Pred[PostFlag]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.CountRender(voltPostFlagTableSQL, preds)
 	if voltErr != nil {
@@ -1151,7 +917,6 @@ func (q *Queries) PostFlagCount(ctx context.Context, preds ...rt.Pred[PostFlag])
 	return voltN, nil
 }
 
-// PostFlagExists reports whether any post_flags row matches every given predicate.
 func (q *Queries) PostFlagExists(ctx context.Context, preds ...rt.Pred[PostFlag]) (bool, error) {
 	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltPostFlagTableSQL, preds)
 	if voltErr != nil {
@@ -1164,9 +929,6 @@ func (q *Queries) PostFlagExists(ctx context.Context, preds ...rt.Pred[PostFlag]
 	return voltFound, nil
 }
 
-// PostFlagDeleteWhere removes every post_flags row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
 func (q *Queries) PostFlagDeleteWhere(ctx context.Context, preds ...rt.Pred[PostFlag]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltPostFlagTableSQL, preds)
 	if voltErr != nil {
@@ -1179,10 +941,6 @@ func (q *Queries) PostFlagDeleteWhere(ctx context.Context, preds ...rt.Pred[Post
 	return voltRes.RowsAffected()
 }
 
-// PostFlagUpdateWhere applies the typed assignments (PostFlagSet) to every post_flags
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
 func (q *Queries) PostFlagUpdateWhere(ctx context.Context, set []rt.Assign[PostFlag], preds ...rt.Pred[PostFlag]) (int64, error) {
 	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltPostFlagTableSQL, set, preds)
 	if voltErr != nil {
