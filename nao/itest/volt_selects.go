@@ -187,3 +187,41 @@ const voltUserBuyersSQL = `SELECT "users"."id", "users"."name", "orders"."total"
 func UserBuyers() rt.Query[Buyers] {
 	return rt.Query[Buyers]{SQL: voltUserBuyersSQL, Args: nil, Scan: voltBuyersScan}
 }
+
+type Hourly struct {
+	Site   string  `db:"site" json:"site"`
+	Bucket int     `db:"bucket" json:"bucket"`
+	Total  int     `db:"total" json:"total"`
+	Mean   float64 `db:"mean" json:"mean"`
+	N      int     `db:"n" json:"n"`
+}
+
+func voltHourlyScan(r rt.Row) (Hourly, error) {
+	var voltV Hourly
+	voltErr := r.Scan(&voltV.Site, &voltV.Bucket, &voltV.Total, &voltV.Mean, &voltV.N)
+	return voltV, voltErr
+}
+
+const voltPageViewHourlySQL = `SELECT "site", (("day" / ?) * ?) AS "bucket", sum("hits") AS "total", avg("hits") AS "mean", count(*) AS "n" FROM "page_views" GROUP BY "site", "bucket" ORDER BY "site" ASC, "bucket" ASC`
+
+func PageViewHourly() rt.Query[Hourly] {
+	return rt.Query[Hourly]{SQL: voltPageViewHourlySQL, Args: []any{2, 2}, Scan: voltHourlyScan}
+}
+
+type Totals struct {
+	N     int          `db:"n" json:"n"`
+	Top   rt.Null[int] `db:"top" json:"top"`
+	Total rt.Null[int] `db:"total" json:"total"`
+}
+
+func voltTotalsScan(r rt.Row) (Totals, error) {
+	var voltV Totals
+	voltErr := r.Scan(&voltV.N, &voltV.Top, &voltV.Total)
+	return voltV, voltErr
+}
+
+const voltPageViewTotalsSQL = `SELECT count(*) AS "n", max("hits") AS "top", sum("hits") AS "total" FROM "page_views"`
+
+func PageViewTotals() rt.Lookup[Totals] {
+	return rt.Lookup[Totals]{SQL: voltPageViewTotalsSQL, Args: nil, Scan: voltTotalsScan}
+}

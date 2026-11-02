@@ -749,11 +749,58 @@ db/i404_ref_as_not_name.volt:19:41: error: spec/relationships-ref: "as" takes a 
 ## i405_join_qualified_order_not_joined.volt
 db/i405_join_qualified_order_not_joined.volt:19:63: error: spec/selects-over-groups: "source" is no joined relation of this select; joined: metric (§selects-over-groups)
 
+## i406_derived_without_alias.volt
+db/i406_derived_without_alias.volt:14:25: error: syntax: a derived item takes an alias: write it as name (§selects-over-groups)
+
+## i407_sum_without_column.volt
+db/i407_sum_without_column.volt:14:18: error: syntax: sum takes a column; only count() counts the rows (§selects-over-groups)
+
+## i408_alias_names_column.volt
+db/i408_alias_names_column.volt:14:25: error: spec/selects-over-groups: alias "ts" names a column of "points"; an alias names no column of the target (§selects-over-groups)
+
+## i409_alias_twice.volt
+db/i409_alias_twice.volt:14:42: error: spec/selects-over-groups: "n" appears twice in the projection (§selects-over-groups)
+
 ## i40_package_volt.volt
 volt/i40_package_volt.volt:2:1: error: spec/projects-and-packages: package name "volt" is reserved for the runtime (§projects-and-packages); generated code could not tell your package from it
 
+## i410_group_names_aggregate.volt
+db/i410_group_names_aggregate.volt:14:70: error: spec/selects-over-groups: group: names the aggregate count() as n; a group is made of the other items (§selects-over-groups)
+
+## i411_group_leaves_item_out.volt
+db/i411_group_leaves_item_out.volt:14:58: error: spec/selects-over-groups: group: leaves out label; every item that is not an aggregate is grouped by (§selects-over-groups)
+
+## i412_group_unknown.volt
+db/i412_group_unknown.volt:14:51: error: spec/selects-over-groups: group: leaves out metric_id; every item that is not an aggregate is grouped by (§selects-over-groups)
+db/i412_group_unknown.volt:14:59: error: spec/selects-over-groups: group: names "ts", which the select does not project (§selects-over-groups)
+
+## i413_sum_of_text.volt
+db/i413_sum_of_text.volt:14:18: error: spec/selects-over-groups: sum takes a numeric column; "label" is string (§selects-over-groups)
+
+## i414_arith_over_text.volt
+db/i414_arith_over_text.volt:14:14: error: spec/selects-over-groups: arithmetic takes numeric columns; "label" is string (§selects-over-groups)
+
+## i415_arith_mixed_types.volt
+db/i415_arith_mixed_types.volt:14:14: error: spec/selects-over-groups: an expression has one type: "ts" is int and "value" is float64 (§selects-over-groups)
+
+## i416_order_on_lookup.volt
+db/i416_order_on_lookup.volt:14:40: error: spec/selects-over-groups: select "rows" aggregates without group:, so it yields one row, which order: cannot sort (§selects-over-groups)
+
+## i417_where_names_alias.volt
+db/i417_where_names_alias.volt:14:56: error: spec/selects-over-groups: column "n" is missing from points — every member of "points" must have it; n is an alias, which where does not see, and Volt has no having (§selects-over-groups) (§selects-over-groups)
+
+## i418_arith_literal_not_int.volt
+db/i418_arith_literal_not_int.volt:14:19: error: spec/selects-over-groups: literal 1.5 does not fit int, the type of the expression (§selects-over-groups)
+
+## i419_arith_without_column.volt
+db/i419_arith_without_column.volt:14:14: error: spec/selects-over-groups: an expression names a column, which types it (§selects-over-groups)
+
 ## i41_spaced_param_type.volt
 app/i41_spaced_param_type.volt:5:18: error: syntax: parameter type is written ':name(type)' with no spaces (§route-paths)
+
+## i420_group_qualified.volt
+db/i420_group_qualified.volt:19:65: error: spec/selects-over-groups: group: leaves out metric.name; every item that is not an aggregate is grouped by (§selects-over-groups)
+db/i420_group_qualified.volt:19:80: error: spec/selects-over-groups: group: names an item by its name or alias; project metric.name under an alias to group by it (§selects-over-groups)
 
 ## i43_quoted_import.volt
 app/i43_quoted_import.volt:5:2: error: syntax: expected identifier in import path (§imports), found string "\"db\""

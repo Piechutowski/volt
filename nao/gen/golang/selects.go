@@ -152,7 +152,11 @@ func selectEmit(b *strings.Builder, imports map[string]bool, pl *naming.Plan, t 
 			imports[rtImport] = true
 		}
 	}
-	fmt.Fprintf(b, "func %s(%s) rt.Query[%s] {\n", name, strings.TrimPrefix(sig.String(), ", "), row)
-	fmt.Fprintf(b, "\treturn rt.Query[%s]{SQL: %s, Args: %s, Scan: %s}\n}\n\n", row, constName, argsList(args), naming.RowScan(row))
+	effect := "rt.Query"
+	if fn.Lookup {
+		effect = "rt.Lookup"
+	}
+	fmt.Fprintf(b, "func %s(%s) %s[%s] {\n", name, strings.TrimPrefix(sig.String(), ", "), effect, row)
+	fmt.Fprintf(b, "\treturn %s[%s]{SQL: %s, Args: %s, Scan: %s}\n}\n\n", effect, row, constName, argsList(args), naming.RowScan(row))
 	return nil
 }

@@ -654,13 +654,7 @@ func (p *parser) selectProjection(d *ast.Select) {
 		}
 	} else {
 		for {
-			name := p.ident("projected column (§selects-over-groups)")
-			col := &ast.ColRef{Name: name}
-			if p.at(token.DOT) {
-				p.next()
-				col = &ast.ColRef{Qual: name, Name: p.ident("projected column (§selects-over-groups)")}
-			}
-			d.Cols = append(d.Cols, col)
+			d.Items = append(d.Items, p.projItem())
 			if !p.at(token.COMMA) {
 				break
 			}
@@ -669,4 +663,113 @@ func (p *parser) selectProjection(d *ast.Select) {
 	}
 	d.Rparen = p.expect(token.RPAREN, "projection (§selects-over-groups)").End()
 	d.EndPos = d.Rparen
+}
+
+// projItem reads one item of an explicit projection (§selects-over-groups):
+// a column, an aggregate or an arithmetic expression, the derived ones
+// followed by "as" and an alias.
+func (p *parser) projItem() *ast.ProjItem {
+	item := &ast.ProjItem{}
+	if p.at(token.IDENT) && p.peekKind(1) == token.LPAREN {
+		if _, ok := foldTo(p.cur().Val, AggregateWords); ok {
+			agg := p.ident("aggregate (§selects-over-groups)")
+			p.wordFold(agg, AggregateWords)
+			item.Agg = agg
+			p.expect(token.LPAREN, "aggregate (§selects-over-groups)")
+			if !p.at(token.RPAREN) || agg.Name() != "count" {
+				if p.at(token.RPAREN) {
+					p.fail(p.cur(), "%s takes a column; only count() counts the rows (§selects-over-groups)", agg.Name())
+					return item
+				}
+				item.Col = p.colRef("aggregate column (§selects-over-groups)")
+			}
+			item.EndPos = p.expect(token.RPAREN, "aggregate (§selects-over-groups)").End()
+		}
+	}
+	if item.Agg == nil {
+		x := p.arith()
+		if x == nil {
+			return item
+		}
+		if cr, ok := x.(*ast.ColRef); ok && !p.atKw("as") {
+			item.Col, item.EndPos = cr, cr.End()
+			return item
+		}
+		item.Expr, item.EndPos = x, x.End()
+	}
+	if !p.atKw("as") {
+		p.fail(p.cur(), "a derived item takes an alias: write it as name (§selects-over-groups)")
+		return item
+	}
+	p.kwTake("as")
+	item.As = p.ident("alias (§selects-over-groups)")
+	item.EndPos = item.As.End()
+	return item
+}
+
+func (p *parser) arith() ast.ArithExpr {
+	x := p.arithTerm()
+	for x != nil && (p.at(token.PLUS) || p.at(token.MINUS)) {
+		op := "+"
+		if p.at(token.MINUS) {
+			op = "-"
+		}
+		p.next()
+		y := p.arithTerm()
+		if y == nil {
+			return nil
+		}
+		x = &ast.ArithBinary{X: x, Op: op, Y: y}
+	}
+	return x
+}
+
+func (p *parser) arithTerm() ast.ArithExpr {
+	x := p.arithFactor()
+	for x != nil && (p.at(token.STAR) || p.at(token.SLASH)) {
+		op := "*"
+		if p.at(token.SLASH) {
+			op = "/"
+		}
+		p.next()
+		y := p.arithFactor()
+		if y == nil {
+			return nil
+		}
+		x = &ast.ArithBinary{X: x, Op: op, Y: y}
+	}
+	return x
+}
+
+func (p *parser) arithFactor() ast.ArithExpr {
+	t := p.cur()
+	switch {
+	case p.at(token.LPAREN):
+		lp := p.next().Pos
+		x := p.arith()
+		if x == nil {
+			return nil
+		}
+		rp := p.expect(token.RPAREN, "parenthesized expression (§selects-over-groups)").End()
+		return &ast.ArithParen{Lparen: lp, X: x, Rparen: rp}
+	case p.at(token.NUMBER):
+		return &ast.Lit{Tok: p.next()}
+	case p.at(token.MINUS) && p.peekKind(1) == token.NUMBER:
+		minus := p.next()
+		num := p.next()
+		num.Val = "-" + num.Val
+		num.Pos = minus.Pos
+		return &ast.Lit{Tok: num}
+	case p.at(token.COLON):
+		colon := p.next().Pos
+		if !p.at(token.IDENT) || !p.contiguous() {
+			p.fail(p.cur(), "':' must be directly followed by a parameter name (§predicates)")
+		}
+		return &ast.Param{ColonPos: colon, Name: p.ident("parameter (§predicates)")}
+	case p.at(token.IDENT):
+		return p.colRef("projected column (§selects-over-groups)")
+	default:
+		p.fail(t, "expected a column, an aggregate, a number, a :param or a parenthesized expression in the projection (§selects-over-groups), found %s", t)
+		return nil
+	}
 }

@@ -56,3 +56,11 @@ Ref: visits.owner_id > hosts.id [as: owner, reverse: owned]
 Select hosted  (id, day, host.name) for visits join host where day >= :from [order: (host.name asc, id desc)]
 Select owned   (id, host.name, owner.name) for visits join host join owner
 Select traffic (id, name, visits.day) for hosts join visits where visits.day = :day
+
+// Aggregates, arithmetic and group: (spec §selects-over-groups): a
+// grouped select keeps one row per group, an ungrouped one yields one
+// row as a lookup with its aggregates rt.Null, and an expression binds
+// its numbers as arguments.
+Select daily  (site, day / 7 * 7 as week, sum(hits) as total, avg(score) as mean, count() as n) for page_views where day >= :from [group: (site, week), order: (site asc, week asc)]
+Select totals (count() as n, max(hits) as top, min(note) as first) for page_views
+Select scaled (id, hits * :factor + 1 as scaled) for page_views

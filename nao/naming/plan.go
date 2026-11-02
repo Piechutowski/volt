@@ -326,20 +326,30 @@ func (pl *Plan) SelectColumns(fn SelectFn) ([]*Field, error) {
 		q.Qualifier = t.SQLName
 		return &q
 	}
+	column := func(c string) (*Field, error) {
+		qual, col, qualified := strings.Cut(c, ".")
+		if !qualified {
+			f := t.Field(c)
+			if f == nil {
+				return nil, fmt.Errorf("select %s: no column %q in table %s", fn.MethodSuffix, c, t.SQLName)
+			}
+			return own(f), nil
+		}
+		return pl.joinedField(fn, qual, col)
+	}
 	switch {
-	case len(fn.Cols) > 0:
-		out := make([]*Field, 0, len(fn.Cols))
-		for _, c := range fn.Cols {
-			qual, col, qualified := strings.Cut(c, ".")
-			if !qualified {
-				f := t.Field(c)
-				if f == nil {
-					return nil, fmt.Errorf("select %s: no column %q in table %s", fn.MethodSuffix, c, t.SQLName)
+	case len(fn.Items) > 0:
+		out := make([]*Field, 0, len(fn.Items))
+		for _, it := range fn.Items {
+			if !it.Derived() {
+				f, err := column(it.Col)
+				if err != nil {
+					return nil, err
 				}
-				out = append(out, own(f))
+				out = append(out, f)
 				continue
 			}
-			f, err := pl.joinedField(fn, qual, col)
+			f, err := pl.derivedField(fn, it, column)
 			if err != nil {
 				return nil, err
 			}
@@ -404,6 +414,79 @@ func (pl *Plan) joinedField(fn SelectFn, qual, col string) (*Field, error) {
 	return nil, fmt.Errorf("select %s: %q is no joined relation", fn.MethodSuffix, qual)
 }
 
+// derivedField plans the row field of a derived item (spec
+// §selects-over-groups): the alias's Go name, the item's type, and the
+// scan traits of the column an aggregate keeps the type of.
+func (pl *Plan) derivedField(fn SelectFn, it SelectItem, column func(string) (*Field, error)) (*Field, error) {
+	goField, err := GoName(it.Alias)
+	if err != nil {
+		return nil, fmt.Errorf("select %s: alias %q: %w", fn.MethodSuffix, it.Alias, err)
+	}
+	f := &Field{ColName: it.Alias, Wire: it.Alias, GoField: goField, Arg: paramName(goField)}
+	base, nullable := strings.CutPrefix(it.GoType, "rt.Null[")
+	if nullable {
+		base = strings.TrimSuffix(base, "]")
+	}
+	f.GoType, f.BaseType, f.Nullable = it.GoType, base, nullable
+	switch {
+	case it.Agg == "sum" || it.Agg == "min" || it.Agg == "max":
+		src, err := column(it.Col)
+		if err != nil {
+			return nil, err
+		}
+		f.Storage, f.Imp, f.Declared, f.Kinded = src.Storage, src.Imp, src.Declared, src.Kinded
+	case it.Agg == "count":
+		f.Storage = "int"
+	case it.Agg == "avg":
+		f.Storage = "float64"
+	default:
+		f.Storage = base
+	}
+	return f, nil
+}
+
+// SelectItems lists the statement's items (spec §selects-over-groups),
+// the columns qualified as the fields are.
+func (pl *Plan) SelectItems(fn SelectFn) ([]rt.Item, error) {
+	cols, err := pl.SelectColumns(fn)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]rt.Item, len(cols))
+	for i, f := range cols {
+		it := fn.Items[i]
+		switch {
+		case it.Agg != "":
+			col := it.Col
+			if col != "" {
+				src, err := pl.selectColumn(fn, col)
+				if err != nil {
+					return nil, err
+				}
+				col = src.SQL()
+			}
+			if items[i], err = rt.ItemAgg(it.Agg, col, it.Alias); err != nil {
+				return nil, err
+			}
+		case it.Alias != "":
+			items[i] = rt.ItemExpr(it.Expr, it.Alias)
+		default:
+			items[i] = rt.ItemCol(f.SQL())
+		}
+	}
+	return items, nil
+}
+
+func (pl *Plan) selectColumn(fn SelectFn, c string) (*Field, error) {
+	one := fn
+	one.Items = []SelectItem{{Col: c}}
+	cols, err := pl.SelectColumns(one)
+	if err != nil {
+		return nil, err
+	}
+	return cols[0], nil
+}
+
 // SelectSQL renders the statement of one instantiation through the
 // runtime (spec §predicates) and lists the Go expressions its method
 // binds, in placeholder order.
@@ -417,6 +500,9 @@ func (pl *Plan) SelectSQL(fn SelectFn) (string, []string, error) {
 		return "", nil, err
 	}
 	opts := []rt.Opt[rt.Gen]{fn.Where}
+	if len(fn.Group) > 0 {
+		opts = append(opts, rt.GroupBy[rt.Gen](fn.Group...))
+	}
 	if len(fn.Order) > 0 {
 		opts = append(opts, rt.OrderBy(fn.Order...))
 	}
@@ -431,6 +517,13 @@ func (pl *Plan) SelectSQL(fn SelectFn) (string, []string, error) {
 			joins[i] = rt.Join{Table: jt.SQLName, As: j.Name, On: j.On, Left: j.Left}
 		}
 		from = rt.FromRender(t.SQLName, joins)
+	}
+	if len(fn.Items) > 0 {
+		items, err := pl.SelectItems(fn)
+		if err != nil {
+			return "", nil, err
+		}
+		return genRender(rt.SelectRenderItems(from, items, opts))
 	}
 	return genRender(rt.SelectRender(from, columnList(cols), opts))
 }

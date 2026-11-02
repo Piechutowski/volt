@@ -912,7 +912,11 @@ func TestSelectJoins(t *testing.T) {
 	if len(recent.Joins) != 2 || recent.Joins[0].Name != "metric" || recent.Joins[0].Left || recent.Joins[1].Name != "source" || !recent.Joins[1].Left {
 		t.Errorf("recent joins = %+v; want metric inner and source left", recent.Joins)
 	}
-	if got := strings.Join(recent.Cols, ","); got != "id,ts,metric.name,source.name" {
+	var cols []string
+	for _, it := range recent.Items {
+		cols = append(cols, it.Col)
+	}
+	if got := strings.Join(cols, ","); got != "id,ts,metric.name,source.name" {
 		t.Errorf("recent cols = %s", got)
 	}
 	if len(series.Joins) != 1 || !series.Joins[0].Left || series.Joins[0].Table.Key != "points" {
@@ -948,5 +952,55 @@ func TestSelectJoins(t *testing.T) {
 	}
 	if want := `SELECT "metrics"."id", "points"."ts" FROM "metrics" LEFT JOIN "points" AS "points" ON "points"."metric_id" = "metrics"."id"`; sql != want {
 		t.Errorf("series renders %s, want %s", sql, want)
+	}
+}
+
+func TestSelectAggregates(t *testing.T) {
+	pr, diags := project(t, map[string]string{
+		"go.mod": modFile,
+		"db/schema.volt": "package db\n\nTable points {\n\tid    int [pk, increment]\n\tsite  string\n\tts    int\n\tvalue float64\n\tnote  string [null]\n}\n\n" +
+			"Select hourly (site, ts / 3600 * 3600 as hour, avg(value) as mean, count() as n, max(note) as last) for points where ts >= :since [group: (site, hour), order: (hour asc, n desc)]\n" +
+			"Select totals (count() as n, sum(value) as total) for points\n" +
+			"Select scaled (id, value * :factor + 1 as scaled, note as memo) for points\n",
+	})
+	wantClean(t, diags)
+	db := pr.Packages["db"]
+	if len(db.Selects) != 3 {
+		t.Fatalf("selects = %d; want 3", len(db.Selects))
+	}
+	hourly, totals, scaled := db.Selects[0], db.Selects[1], db.Selects[2]
+	if hourly.Lookup || !totals.Lookup || scaled.Lookup {
+		t.Errorf("lookups: hourly %v, totals %v, scaled %v; want only totals", hourly.Lookup, totals.Lookup, scaled.Lookup)
+	}
+	if got := strings.Join(hourly.Group, ","); got != "site,hour" {
+		t.Errorf("hourly group = %s", got)
+	}
+	types := func(si *SelectInfo) string {
+		var out []string
+		for _, it := range si.Items {
+			out = append(out, it.Alias+":"+it.GoType)
+		}
+		return strings.Join(out, " ")
+	}
+	if got := types(hourly); got != ": hour:int mean:float64 n:int last:rt.Null[string]" {
+		t.Errorf("hourly items = %q", got)
+	}
+	if got := types(totals); got != "n:int total:rt.Null[float64]" {
+		t.Errorf("totals items = %q", got)
+	}
+	if got := types(scaled); got != ": scaled:float64 memo:rt.Null[string]" {
+		t.Errorf("scaled items = %q", got)
+	}
+	plan, fns := db.Plan(), db.SelectFns()
+	sql, args, err := plan.SelectStatement(fns[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `SELECT "site", (("ts" / ?) * ?) AS "hour", avg("value") AS "mean", count(*) AS "n", max("note") AS "last" FROM "points" WHERE "ts" >= ? GROUP BY "site", "hour" ORDER BY "hour" ASC, "n" DESC`
+	if sql != want || strings.Join(args, ",") != "3600,3600,since" {
+		t.Errorf("hourly renders\n\t%s %v\nwant\n\t%s [3600 3600 since]", sql, args, want)
+	}
+	if sql, args, err = plan.SelectStatement(fns[2]); err != nil || sql != `SELECT "id", (("value" * ?) + ?) AS "scaled", "note" AS "memo" FROM "points"` || strings.Join(args, ",") != "factor,1.0" {
+		t.Errorf("scaled renders %s %v, %v", sql, args, err)
 	}
 }

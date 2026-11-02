@@ -23,7 +23,7 @@ that lands it.
 | Models, CRUD, dynamic queries | Ecto / ActiveRecord | built | |
 | Changesets and validation | Ecto changesets / validations | built | |
 | Joins in declared queries | yes | built (`join` over relation names) | |
-| Aggregates and grouping | yes | missing | 10 |
+| Aggregates and grouping | yes | built (`count`, `sum`, `avg`, `min`, `max`, arithmetic, `group:`) | |
 | Nested results (preload / include) | yes | missing | 11 |
 | Many-to-many through a junction | yes | missing | |
 | Migrations with a ledger and a schema check | yes | built | |

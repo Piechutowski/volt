@@ -194,50 +194,6 @@ Deferred: the language first, then non-core features and tooling.
 
 ---
 
-## Step 10. Aggregates, arithmetic, `group:`
-
-Depends on: 9.
-
-```ebnf
-projection   = "(", proj item, { ",", proj item }, ")" | star projection ;
-proj item    = ( column ref | aggregate | arith ), [ "as", name ] ;
-aggregate    = "count", "(", [ column ref ], ")"
-             | ( "sum" | "avg" | "min" | "max" ), "(", column ref, ")" ;
-arith        = arith term, { ( "+" | "-" ), arith term } ;
-arith term   = arith factor, { ( "*" | "/" ), arith factor } ;
-arith factor = column ref | number | param | "(", arith, ")" ;
-```
-
-```volt
-Select hourly (metric_id, ts / 3600 * 3600 as hour, avg(value) as avg, count() as n)
-	for points where metric_id = :metric_id and ts >= :since
-	[group: (metric_id, hour), order: (hour asc)]
-```
-
-1. An aggregate or an `arith` item needs `as`; a plain column does not.
-2. `count` is `int`; `avg` is `float64`; `sum`, `min`, `max` take the
-   column's type. With `group:` every group is non-empty, so none is
-   null. Without `group:`, a select with an aggregate returns one row,
-   is generated as an `rt.Lookup`, and `sum`, `avg`, `min`, `max` are
-   `rt.Null[T]`.
-3. `group:` lists projected items by name. Every non-aggregate item must
-   be listed and every listed name must be a non-aggregate item; the
-   error names the item.
-4. `arith` follows the predicate type rules: numeric operands, one type
-   per expression, integer division on `int`. No functions beyond the five
-   aggregates, no `having`. Hand-written SQL in Go is the escape, and the
-   spec says so once.
-
-Rendering: a derived item renders `<expr> AS "hour"` with its literals
-bound as arguments; `GROUP BY` and `ORDER BY` name aliases, which SQLite
-resolves, so no expression is rendered twice; `count(*)` for a bare
-`count()`.
-
-Done when: conformance, renderer corpus, goldens, `nao/itest` checks the
-hourly example against values computed in Go.
-
----
-
 ## Step 11. `with`: nested results
 
 Depends on: 10.
@@ -373,7 +329,6 @@ read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
 
 | Step | Depends on | Lands |
 |---|---|---|
-| 10 aggregates, group | 9 | |
 | 11 with | 10 | |
 | 12 scope loads | 7 | the last step of this round |
 | 5, 13 to 19 | | deferred |

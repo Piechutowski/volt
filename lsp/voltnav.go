@@ -492,7 +492,7 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 	memberFn := func(key string) naming.SelectFn {
 		return naming.SelectFn{
 			TableKey: key, MethodSuffix: si.MethodSuffix,
-			Cols: si.Cols, Excluded: si.Excluded, SharedType: si.Shared,
+			Items: si.Items, Excluded: si.Excluded, SharedType: si.Shared, Joins: si.JoinFns(), Group: si.Group, Lookup: si.Lookup,
 		}
 	}
 
@@ -580,14 +580,18 @@ func fieldTypeMD(m *check.TableInfo, f naming.FieldSig) string {
 func selectHead(d *ast.Select) string {
 	head := "Select " + d.Name.Name()
 	if d.Projected() {
-		cols := make([]string, len(d.Cols))
-		for i, cr := range d.Cols {
-			cols[i] = cr.String()
-		}
 		if d.Star {
+			cols := make([]string, len(d.Cols))
+			for i, cr := range d.Cols {
+				cols[i] = cr.String()
+			}
 			head += " (* \\ " + strings.Join(cols, " \\ ") + ")"
 		} else {
-			head += " (" + strings.Join(cols, ", ") + ")"
+			items := make([]string, len(d.Items))
+			for i, item := range d.Items {
+				items[i] = item.String()
+			}
+			head += " (" + strings.Join(items, ", ") + ")"
 		}
 	}
 	head += " for " + d.Target.Name()

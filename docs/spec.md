@@ -469,12 +469,13 @@ then reads it as that keyword, so the error is reported once.
 |---|---|---|
 | element and block words | `Project`, `Table`, `TablePartial`, `Type`, `Ref`, `Records`, `Group`, `Pred`, `Select`, `Migration`, `Pipeline`, `Scope`, `Indexes`, `Validators` | §program-structure, §indexes, §validators |
 | package words | `package`, `import` | §projects-and-packages, §imports |
-| setting names | `pk`, `null`, `unique`, `index`, `increment`, `default`, `note`, `ref`, `tag`, `required`, `model`, `name`, `where`, `delete`, `update`, `from`, `down`, `irreversible`, `no_transaction`, `pipe`, `error_handler`, `api`, `only`, `except`, `param`, `singular`, `strip`, `order`, `as`, `reverse`, `timeout`, `body` | §settings-lists, §settings-whitelists |
+| setting names | `pk`, `null`, `unique`, `index`, `increment`, `default`, `note`, `ref`, `tag`, `required`, `model`, `name`, `where`, `delete`, `update`, `from`, `down`, `irreversible`, `no_transaction`, `pipe`, `error_handler`, `api`, `only`, `except`, `param`, `singular`, `strip`, `order`, `group`, `as`, `reverse`, `timeout`, `body` | §settings-lists, §settings-whitelists |
 | referential actions | `cascade`, `restrict`, `set_null`, `set_default` | §relationships-ref |
 | resource actions | `index`, `new`, `create`, `show`, `edit`, `update`, `delete` | §the-action-table |
 | order directions | `asc`, `desc` | §selects-over-groups |
 | literal words | `true`, `false`, `null` | §boolean-and-null-literals |
-| clause words | `from`, `for`, `join`, `where`, `and`, `or`, `not`, `in`, `like`, `is` | §types, §selects-over-groups, §predicates |
+| clause words | `from`, `for`, `join`, `where`, `as`, `and`, `or`, `not`, `in`, `like`, `is` | §types, §selects-over-groups, §predicates |
+| aggregate words | `count`, `sum`, `avg`, `min`, `max` | §selects-over-groups |
 | route words | `get`, `post`, `patch`, `delete`, `options`, `head`, `any`, `resources`, `dataset`, `use` | §routes, §resources, §datasets, §pipelines |
 | parameter types | `int` | §route-paths |
 | migration words | `up`, `down`, `create`, `drop`, `rename`, `alter`, `rebuild`, `exec`, `table`, `index`, `add`, `to` | §migrations |
@@ -485,7 +486,9 @@ action, a resource action, an order direction and a parameter type are
 keywords only as the value of `delete:` or `update:`, in the `only:` or
 `except:` list of a `resources` declaration, after a column of
 `order:`, and in the parentheses of a path parameter (`:id(int)`)
-respectively; a literal word is a keyword where a value stands. A
+respectively; an aggregate word is a keyword before `(` in a
+projection, and `as` after an item there (§selects-over-groups); a
+literal word is a keyword where a value stands. A
 bare path parameter is a string, so `int` is the one parameter type
 written (§route-paths), and `put` is no route word: PATCH is the partial
 update (§routes). The
@@ -3136,6 +3139,17 @@ Pred chosen  { org in :orgs }
      predicate is bound by the generated method like a parameter, the
      statement text carries no literal (the constants `1 = 0`, `1 = 1`
      and `-1` of `LIMIT -1 OFFSET ?` are structure, not values);
+   - a projected item (§selects-over-groups) is the column as above,
+     `count(*)` for a bare `count()`, `count("col")`, `sum("col")`,
+     `avg("col")`, `min("col")` or `max("col")`, or an arithmetic
+     expression with every operation parenthesized and every number
+     and parameter an argument, `(("ts" / ?) * ?)`; a derived item is
+     followed by ` AS "alias"`, and the select list's arguments precede
+     the WHERE clause's;
+   - a grouping is `GROUP BY` after the WHERE clause, naming a column
+     as above and a derived item by its quoted alias, which SQLite
+     resolves, so no expression is spelled twice; an ordering names an
+     alias the same way;
    - an ordering is `ORDER BY "col" ASC, "other" DESC`, the direction
      always spelled;
    - a WHERE clause is the statement's predicates joined by ` AND `,
@@ -3146,9 +3160,9 @@ Pred chosen  { org in :orgs }
      above: `("t1" > ? OR ("t1" = ? AND "t2" > ?))`, and a single term
      `"t1" > ?`;
    - a select is `SELECT [DISTINCT ]<columns> FROM <table>[ WHERE
-     <predicate>][ ORDER BY <terms>][ LIMIT ?[ OFFSET ?]]`, the column
-     list and the table the pre-rendered constants of the model; an
-     offset without a limit is `LIMIT -1 OFFSET ?`;
+     <predicate>][ GROUP BY <items>][ ORDER BY <terms>][ LIMIT ?[ OFFSET
+     ?]]`, the column list and the table the pre-rendered constants of
+     the model; an offset without a limit is `LIMIT -1 OFFSET ?`;
    - a select with joins (§selects-over-groups) is the same with
      `<table>` followed by one ` INNER JOIN <other> AS <relation> ON
      <pairs>` per join, `LEFT JOIN` for an optional relation, in
@@ -3186,8 +3200,15 @@ select decl = "Select", name, [ projection ], "for", name, { join },
               [ "where", pred expr ], [ settings ], newline ;
 join        = "join", name ;
 
-projection  = "(", column name, { ",", column name }, ")"
+projection  = "(", proj item, { ",", proj item }, ")"
             | "(", "*", "\", column term, { "\", column term }, ")" ;
+proj item   = column name
+            | ( aggregate | arith ), "as", own column ;
+aggregate   = "count", "(", [ column name ], ")"
+            | ( "sum" | "avg" | "min" | "max" ), "(", column name, ")" ;
+arith       = arith term, { ( "+" | "-" ), arith term } ;
+arith term  = arith factor, { ( "*" | "/" ), arith factor } ;
+arith factor = column name | number | param | "(", arith, ")" ;
 column term = own column
             | "(", own column, { ",", own column }, ")" ;
 column name = [ name, "." ], own column ;
@@ -3204,6 +3225,8 @@ Select summary (id, org, year)    for series where current
 Select public  (* \ password_hash) for accounts
 Select brief   (* \ (password_hash, bio, avatar)) for accounts
 Select recent  (id, ts, value, metric.name, metric.unit) for points join metric where ts >= :since [order: (ts desc)]
+Select hourly  (metric_id, ts / 3600 * 3600 as hour, avg(value) as mean, count() as n) for points where ts >= :since [group: (metric_id, hour), order: (hour asc)]
+Select totals  (count() as n, max(value) as top) for points
 ```
 
 The clauses read in SQL order — name, columns, source, filter — and
@@ -3262,8 +3285,8 @@ the optional projection narrows the emitted columns.
    driver in `nao/itest`.
 7. **Projection and row types.** Without a projection the row type is
    the member's model and the emitted columns are all of it. With one:
-   - **Explicit list** `(a, b, c)` — at least one column, no
-     duplicates. Every listed column MUST exist in every member with
+   - **Explicit list** `(a, b, c)` — at least one item, no
+     duplicates; a derived item (rule 9) is listed by its alias. Every listed column MUST exist in every member with
      one agreed generated **field type** (§mapping-to-go — nullability
      included, so `string` and `string [null]` disagree); a miss or a
      disagreement is an error naming the members and their types. The
@@ -3326,6 +3349,37 @@ the optional projection narrows the emitted columns.
    qualified once a join is present. The relation name is the SQL
    alias, which is why a relation named as its table is ambiguous
    (§relationships-ref).
+9. **Aggregates and arithmetic.** A projected item is a column, an
+   aggregate or an arithmetic expression; the latter two are
+   **derived** and carry an alias, `as name`, a lower-case identifier
+   that maps to a Go name and names no column of the target, which
+   names the item in `group:`, in `order:` and in the row type, where
+   its field is the alias's Go name with the alias as the wire name.
+   `count()` counts the rows and `count(c)` the rows where `c` is not
+   NULL, both `int`; `sum` and `avg` take a numeric column, `avg` is
+   `float64` and `sum` the column's type; `min` and `max` take a
+   numeric, date/time or text column and keep its type. An arithmetic
+   expression combines numeric columns, number literals and parameters
+   with `+`, `-`, `*` and `/`, parenthesized freely, under the type
+   rules of §predicates: its columns share one Go type, which is the
+   expression's and its parameters', a literal is representable in it,
+   and `/` on `int` is SQLite's integer division; a lone column under
+   an alias renames it, whatever its type. A derived item is
+   `rt.Null[T]` where it may be NULL: an aggregate other than `count`
+   over a nullable column or, without `group:`, over no rows; an
+   expression over a nullable column. Qualified columns reach joined
+   relations (rule 8) in aggregates and expressions alike, and a
+   derived item's Go field obeys the collision rule of rule 8.
+10. **`group:` and one-row selects.** `group:` takes an identifier list
+    naming the non-aggregate items, a column item by its name and a
+    derived one by its alias, every one of them and nothing else, each
+    once; a joined column goes in through an alias. A select that
+    aggregates without `group:` yields exactly one row, so it is
+    generated as an `rt.Lookup` of the row type rather than an
+    `rt.Query`, and `order:` on it is an error. `where` sees columns,
+    never aliases, and there is no `having`: a filter over an aggregate
+    is the one escape, a statement written in Go against the runtime
+    (§generated-query-surface).
 
 ---
 

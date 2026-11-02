@@ -543,6 +543,38 @@ module.exports = grammar({
         $._column,
       ),
 
+    // One item of an explicit projection (§selects-over-groups): a column,
+    // or an aggregate or an arithmetic expression under an alias.
+    _proj_item: ($) => choice($._column, $.derived_item),
+
+    derived_item: ($) =>
+      seq(choice($.aggregate, $.arith), kw('as'), field('alias', alias($.identifier, $.alias_name))),
+
+    aggregate: ($) =>
+      seq(
+        field('fn', alias(choice(kw('count'), kw('sum'), kw('avg'), kw('min'), kw('max')), $.aggregate_name)),
+        '(',
+        optional($._column),
+        ')',
+      ),
+
+    arith: ($) => choice($.arith_binary, $._arith_factor),
+
+    arith_binary: ($) =>
+      choice(
+        prec.left(1, seq($.arith, field('op', choice('+', '-')), $.arith)),
+        prec.left(2, seq($.arith, field('op', choice('*', '/')), $.arith)),
+      ),
+
+    _arith_factor: ($) =>
+      choice(
+        seq('(', $.arith, ')'),
+        $.number,
+        $.signed_number,
+        $.query_param,
+        $._column,
+      ),
+
     // A column of the target, or relation.column, a column of a joined
     // relation (§predicates, §selects-over-groups).
     _column: ($) => choice($.qualified_column, alias($.identifier, $.column_ref)),
@@ -575,7 +607,7 @@ module.exports = grammar({
       seq(
         '(',
         choice(
-          seq($._column, repeat(seq(',', $._column))),
+          seq($._proj_item, repeat(seq(',', $._proj_item))),
           seq(
             '*',
             repeat1(

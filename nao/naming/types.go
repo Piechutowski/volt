@@ -19,11 +19,32 @@ type SelectFn struct {
 	Where        rt.GenPred    // the zero value when the select has no where clause
 	Order        []rt.GenOrder // nil when it has no order: setting
 	Params       []SelectParam
-	Cols         []string // explicit projection, declared order, a joined column as relation.column; nil = all
-	Excluded     []string // star-form exclusions; nil = none
-	SharedType   string   // explicit list: the one shared row type name
+	Items        []SelectItem // explicit projection, declared order; nil = all or star form
+	Excluded     []string     // star-form exclusions; nil = none
+	SharedType   string       // explicit list: the one shared row type name
 	Joins        []SelectJoin
+	Group        []string // the group: items as the statement names them, a column or an alias; nil = none
+	Lookup       bool     // the select aggregates without group:, so it yields one row (spec §selects-over-groups)
 }
+
+// SelectItem is one projected item (spec §selects-over-groups): a column,
+// named as the statement names it, a joined one as relation.column; or a
+// derived item, an aggregate over a column (or the rows, for count with
+// no column) or an expression, under its alias and with its Go type,
+// rt.Null wrapped where it may be NULL.
+type SelectItem struct {
+	Col    string
+	Agg    string
+	Expr   rt.Expr
+	Alias  string
+	GoType string
+}
+
+// Derived reports whether the item is an aggregate or an expression.
+func (it SelectItem) Derived() bool { return it.Alias != "" }
+
+// Aggregate reports whether the item is an aggregate.
+func (it SelectItem) Aggregate() bool { return it.Agg != "" }
 
 // SelectJoin is one join of a select (spec §selects-over-groups): the
 // relation's name, its table, whether it joins LEFT, and the column

@@ -225,6 +225,10 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 				for _, col := range n.Cols {
 					ix.addColRef(ti, "", col)
 				}
+				for _, item := range n.Items {
+					ix.addColRef(ti, "", item.Col)
+					ix.walkArithCols(ti, item.Expr)
+				}
 				if o := n.Settings.Get("order"); o != nil {
 					if list, ok := o.Value.(*ast.IdentList); ok {
 						for i, id := range list.Names {
@@ -391,6 +395,18 @@ func (ix *Index) walkPredCols(ti *check.TableInfo, partial string, x ast.PredExp
 		ix.addColRef(ti, partial, x.Col)
 	case *ast.PredNull:
 		ix.addColRef(ti, partial, x.Col)
+	}
+}
+
+func (ix *Index) walkArithCols(ti *check.TableInfo, x ast.ArithExpr) {
+	switch x := x.(type) {
+	case *ast.ColRef:
+		ix.addColRef(ti, "", x)
+	case *ast.ArithBinary:
+		ix.walkArithCols(ti, x.X)
+		ix.walkArithCols(ti, x.Y)
+	case *ast.ArithParen:
+		ix.walkArithCols(ti, x.X)
 	}
 }
 

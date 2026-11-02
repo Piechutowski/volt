@@ -48,3 +48,8 @@ Ref: visits.owner_id > hosts.id [as: owner, reverse: owned]
 Select hosted  (id, day, host.name) for visits join host where day >= :from and host.name like "%a%" [order: (host.name asc, id desc)]
 Select owned   (id, host.name, owner.name) for visits join host join owner where owner.name is null
 Select traffic (id, name, visits.day) for hosts join visits where visits.day in :days
+
+Select daily  (site, day / 7 * 7 as week, sum(hits) as total, count() as n) for page_views where day >= :from [group: (site, week), order: (site asc, week asc)]
+Select totals (count() as n, max(hits) as top) for page_views
+Select scaled (id, hits * :factor + 1 as scaled) for page_views
+Select hosted_hits (host.name as host, count(id) as visits, max(day) as last) for visits join host [group: (host)]

@@ -22,7 +22,7 @@ var SettingNames = []string{
 	"required", "model", "name", "where", "delete", "update", "from",
 	"down", "irreversible", "no_transaction",
 	"pipe", "error_handler", "api", "only", "except", "param", "singular",
-	"strip", "order", "as", "reverse", "timeout", "body",
+	"strip", "order", "group", "as", "reverse", "timeout", "body",
 }
 
 // RefActions are the values of delete: and update: (spec §keywords).
@@ -82,5 +82,9 @@ func (p *parser) wordFold(id *ast.Ident, words []string) {
 }
 
 var literalWords = []string{"true", "false", "null"}
+
+// AggregateWords are the aggregates a projection applies (spec
+// §keywords, §selects-over-groups).
+var AggregateWords = []string{"count", "sum", "avg", "min", "max"}
 var orderWords = []string{"asc", "desc"}
 var predWords = []string{"and", "or", "not", "in", "like", "is", "null"}

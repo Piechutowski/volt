@@ -617,3 +617,46 @@ Select recent (id, ts, metric.name) for points join metric join site where ts >=
           (identifier)
           (ident_modifier
             (identifier)))))))
+
+==================
+volt: select with aggregates and arithmetic
+==================
+
+Select hourly (metric_id, ts / 3600 * 3600 as hour, avg(value) as mean, count() as n) for points [group: (metric_id, hour)]
+
+---
+
+(source_file
+  (select_definition
+    (select_name)
+    (select_projection
+      (column_ref)
+      (derived_item
+        (arith
+          (arith_binary
+            (arith
+              (arith_binary
+                (arith
+                  (column_ref))
+                (arith
+                  (number))))
+            (arith
+              (number))))
+        (alias_name))
+      (derived_item
+        (aggregate
+          (aggregate_name)
+          (column_ref))
+        (alias_name))
+      (derived_item
+        (aggregate
+          (aggregate_name))
+        (alias_name)))
+    (select_target)
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (ident_group
+          (identifier)
+          (identifier))))))

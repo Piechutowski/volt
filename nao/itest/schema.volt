@@ -165,3 +165,8 @@ Table post_flags {
 // have none, so the joined columns are rt.Null.
 Select placed (id, total, user.name, user.email) for orders join user where total >= :min [order: (id asc)]
 Select buyers (id, name, orders.total) for users join orders [order: (id asc, orders.id asc)]
+
+// Aggregates (spec §selects-over-groups): one row per group, and one row
+// for the whole table when nothing groups.
+Select hourly (site, day / 2 * 2 as bucket, sum(hits) as total, avg(hits) as mean, count() as n) for page_views [group: (site, bucket), order: (site asc, bucket asc)]
+Select totals (count() as n, max(hits) as top, sum(hits) as total) for page_views

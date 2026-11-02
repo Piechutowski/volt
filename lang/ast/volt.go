@@ -1,7 +1,11 @@
 // Volt-layer AST nodes (spec Part II, docs/spec.md).
 package ast
 
-import "github.com/Piechutowski/volt/lang/token"
+import (
+	"strconv"
+
+	"github.com/Piechutowski/volt/lang/token"
+)
 
 // PackageClause is a "package name" clause (spec §projects-and-packages).
 type PackageClause struct {
@@ -529,6 +533,14 @@ func (x *Lit) Pos() token.Position { return x.Tok.Pos }
 func (x *Lit) End() token.Position { return x.Tok.End() }
 func (x *Lit) operand()            {}
 
+// String spells the literal as written, a string quoted.
+func (x *Lit) String() string {
+	if x.Tok.Kind == token.STRING {
+		return strconv.Quote(x.Tok.Val)
+	}
+	return x.Tok.Val
+}
+
 // Select declares a query generated for every member of its target
 // (spec §selects-over-groups).
 type Select struct {
@@ -536,7 +548,8 @@ type Select struct {
 	Name      *Ident
 	Lparen    token.Position // projection parens (§selects-over-groups); zero when absent
 	Star      bool           // (* \\ a \\ (b, c)) star form
-	Cols      []*ColRef      // explicit list, qualified by a joined relation or not, or the star form's exclusions
+	Items     []*ProjItem    // explicit list: columns, aggregates and expressions (§selects-over-groups)
+	Cols      []*ColRef      // the star form's exclusions
 	Rparen    token.Position
 	Target    *Ident   // group or table name (§selects-over-groups)
 	Joins     []*Ident // the relations joined, in order (§selects-over-groups)
@@ -546,7 +559,97 @@ type Select struct {
 }
 
 // Projected reports whether the select carries a projection (§selects-over-groups).
-func (d *Select) Projected() bool { return len(d.Cols) > 0 }
+func (d *Select) Projected() bool { return len(d.Items) > 0 || len(d.Cols) > 0 }
+
+// ProjItem is one item of an explicit projection (§selects-over-groups):
+// a column; an aggregate, Agg over Col (nil for count()); or an
+// arithmetic expression, Expr; a derived item carries its alias As.
+type ProjItem struct {
+	Col    *ColRef
+	Agg    *Ident
+	Expr   ArithExpr
+	As     *Ident
+	EndPos token.Position
+}
+
+func (x *ProjItem) Pos() token.Position {
+	switch {
+	case x.Agg != nil:
+		return x.Agg.Pos()
+	case x.Expr != nil:
+		return x.Expr.Pos()
+	}
+	return x.Col.Pos()
+}
+func (x *ProjItem) End() token.Position { return x.EndPos }
+
+// Derived reports whether the item is an aggregate or an expression.
+func (x *ProjItem) Derived() bool { return x.Agg != nil || x.Expr != nil }
+
+// Name is what names the item: its alias, else the column as written.
+func (x *ProjItem) Name() string {
+	if x.As != nil {
+		return x.As.Name()
+	}
+	return x.Col.String()
+}
+
+// String spells the item as written.
+func (x *ProjItem) String() string {
+	var s string
+	switch {
+	case x.Agg != nil:
+		col := ""
+		if x.Col != nil {
+			col = x.Col.String()
+		}
+		s = x.Agg.Name() + "(" + col + ")"
+	case x.Expr != nil:
+		s = x.Expr.String()
+	default:
+		return x.Col.String()
+	}
+	return s + " as " + x.As.Name()
+}
+
+// ArithExpr is an arithmetic expression (§selects-over-groups): a
+// ColRef, a Lit, a Param, an ArithBinary or an ArithParen.
+type ArithExpr interface {
+	Node
+	String() string
+	arithExpr()
+}
+
+// ArithBinary is "x op y" with op one of + - * /.
+type ArithBinary struct {
+	X  ArithExpr
+	Op string
+	Y  ArithExpr
+}
+
+func (x *ArithBinary) Pos() token.Position { return x.X.Pos() }
+func (x *ArithBinary) End() token.Position { return x.Y.End() }
+func (x *ArithBinary) String() string      { return x.X.String() + " " + x.Op + " " + x.Y.String() }
+func (x *ArithBinary) arithExpr()          {}
+
+// ArithParen is a parenthesized expression.
+type ArithParen struct {
+	Lparen token.Position
+	X      ArithExpr
+	Rparen token.Position
+}
+
+func (x *ArithParen) Pos() token.Position { return x.Lparen }
+func (x *ArithParen) End() token.Position { return x.Rparen }
+func (x *ArithParen) String() string      { return "(" + x.X.String() + ")" }
+func (x *ArithParen) arithExpr()          {}
+
+func (x *ColRef) arithExpr() {}
+func (x *Lit) arithExpr()    {}
+func (x *Param) arithExpr()  {}
+
+// String spells the parameter as written.
+func (x *Param) String() string { return ":" + x.Name.Name() }
 
 func (d *Select) Pos() token.Position { return d.SelectPos }
 func (d *Select) End() token.Position { return d.EndPos }

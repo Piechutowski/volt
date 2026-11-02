@@ -142,3 +142,58 @@ const voltHostTrafficSQL = `SELECT "hosts"."id", "hosts"."name", "visits"."day" 
 func HostTraffic(day int) rt.Query[Traffic] {
 	return rt.Query[Traffic]{SQL: voltHostTrafficSQL, Args: []any{day}, Scan: voltTrafficScan}
 }
+
+type Daily struct {
+	Site  string  `db:"site" json:"site"`
+	Week  int     `db:"week" json:"week"`
+	Total int     `db:"total" json:"total"`
+	Mean  float64 `db:"mean" json:"mean"`
+	N     int     `db:"n" json:"n"`
+}
+
+func voltDailyScan(r rt.Row) (Daily, error) {
+	var voltV Daily
+	voltErr := r.Scan(&voltV.Site, &voltV.Week, &voltV.Total, &voltV.Mean, &voltV.N)
+	return voltV, voltErr
+}
+
+const voltPageViewDailySQL = `SELECT "site", (("day" / ?) * ?) AS "week", sum("hits") AS "total", avg("score") AS "mean", count(*) AS "n" FROM "page_views" WHERE "day" >= ? GROUP BY "site", "week" ORDER BY "site" ASC, "week" ASC`
+
+func PageViewDaily(from int) rt.Query[Daily] {
+	return rt.Query[Daily]{SQL: voltPageViewDailySQL, Args: []any{7, 7, from}, Scan: voltDailyScan}
+}
+
+type Totals struct {
+	N     int             `db:"n" json:"n"`
+	Top   rt.Null[int]    `db:"top" json:"top"`
+	First rt.Null[string] `db:"first" json:"first"`
+}
+
+func voltTotalsScan(r rt.Row) (Totals, error) {
+	var voltV Totals
+	voltErr := r.Scan(&voltV.N, &voltV.Top, &voltV.First)
+	return voltV, voltErr
+}
+
+const voltPageViewTotalsSQL = `SELECT count(*) AS "n", max("hits") AS "top", min("note") AS "first" FROM "page_views"`
+
+func PageViewTotals() rt.Lookup[Totals] {
+	return rt.Lookup[Totals]{SQL: voltPageViewTotalsSQL, Args: nil, Scan: voltTotalsScan}
+}
+
+type Scaled struct {
+	ID     int `db:"id" json:"id"`
+	Scaled int `db:"scaled" json:"scaled"`
+}
+
+func voltScaledScan(r rt.Row) (Scaled, error) {
+	var voltV Scaled
+	voltErr := r.Scan(&voltV.ID, &voltV.Scaled)
+	return voltV, voltErr
+}
+
+const voltPageViewScaledSQL = `SELECT "id", (("hits" * ?) + ?) AS "scaled" FROM "page_views"`
+
+func PageViewScaled(factor int) rt.Query[Scaled] {
+	return rt.Query[Scaled]{SQL: voltPageViewScaledSQL, Args: []any{factor, 1}, Scan: voltScaledScan}
+}
