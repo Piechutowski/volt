@@ -3,72 +3,56 @@
 > [!CAUTION]
 > **This project is an alpha version, and everything may change in the future.**
 
-Volt is my codegen-first web framework for Go: schema and routes are
-declared in `.volt` files, `volt gen` writes the router, controller
-interfaces and reverse-URL helpers onto plain `net/http.ServeMux`, and
-nao — its ORM — generates the models and queries. Everything
-resolves at compile time.
+Volt is a code-generation-first web framework for Go. You declare the
+schema and the routes in `.volt` files; `volt gen` writes the models, the
+queries, the migrations, the router and the client as plain Go that you
+read line by line. Nothing is resolved at run time: no reflection, no
+registries, no inheritance to trace.
+
+The generated code and the runtime follow the functional style: values
+that are never mutated, and effects described as data and performed in
+one place. A handler is a function from its inputs to a response value;
+the generated code runs the queries, performs the writes and sends the
+reply. That is what makes a Volt application predictable, testable
+without a database, and safe to run concurrently.
+
+## Why code generation
+
+- **One source of truth.** The `.volt` file is the contract for SQLite,
+  Go and the generated client. A disagreement is a compile error.
+- **Nothing hidden.** What runs is in a file you can open. There is no
+  run-time dispatch and no framework base class to understand.
+- **Fewer tokens.** A schema line stands for many lines of Go, for a
+  person and for a model alike, and the generated Go is the same every
+  time.
+
+## Why the functional style
+
+Avoiding mutation and avoiding side effects is what makes code easy to
+reason about and to test. Go does not enforce either, so Volt does: the
+generator produces values, `volt vet` keeps handlers pure, and every
+effect is performed by generated code you can read.
 
 ## Layout
 
-The pipeline: `.volt` → `lang` (scanner, parser, schema and project
-semantics) → `gen/router` → my app implements the generated interfaces
-and mounts a plain `http.Handler`. `nao/` is Volt's ORM, a
-sub-library of the framework the way ActiveRecord sits inside Rails.
-
-Three Go modules, stitched together by `go.work`: the **library**
-(root — runtime, `lang`, `gen`, `nao`; stdlib-only, sqlite3 is
-test-only), and the two **tools** (`lsp/`, `cmd/volt/`) that carry the
-third-party deps. Importing `nao/rt` alone drags in nothing.
-
-| Directory        | What it is |
-|------------------|------------|
-| `*.go` (root)    | package `volt` — the runtime generated code links against: error spine, param parsing, path builders, minimal middleware |
-| `cmd/volt`       | the one binary, one file: `check` `vet` `gen` `routes` `stress` `migration` `lsp` `version` — `gen` emits models, queries and routers; `stress` writes a one-file thousand-table project to feel the limits by hand. **Own module** — its CLI deps stay out of the library |
-| `lang/`          | **the language**: `token` `scanner` `parser` `ast` `diag` `check` `vet` front end, plus go.mod root discovery, package/import resolution, route expansion and conflict detection; `lang/conformance/snippets/` = the executable corpus |
-| `gen/router/`    | router generator; goldens are gofmt-stable and compiled by the real toolchain |
-| `gen/model/`     | the data half: nao's models, queries and DDL, driven by the same project load |
-| `nao/`           | **nao, the ORM**: the naming plan every table's and column's generated names come from (`nao/naming`), model + query + SQLite generation (`nao/gen`), its runtime (`nao/rt`), inflector and integration tests |
-| `lsp/`           | the Volt language server (`volt lsp`); project-aware diagnostics for files under a go.mod, single-file schema pass otherwise. **Own module** — glsp and its tail stay out of the library |
-| `grammar/`       | tree-sitter grammar for the whole language |
-| `zed-extension/` | Zed glue; install via `scripts/sync-grammar.sh` + Install Dev Extension |
-| `scripts/`       | `sync-grammar.sh` — mirrors the grammar into the local git cache Zed loads dev grammars from; `perf.go` — the performance report of this machine: the profiling sweep from 10 to 320 tables, the editor's keystroke at each size, charts and the machine's specification, as Markdown |
-| `itest/`         | committed fixture project served over httptest, drift-checked against the generator |
-| `docs/`          | `spec.md` (the language and the generated code, normative) · `lint.md` (vet rules) · `editor.md` (grammar, extension, language server) · `hypotheses.md` (open design questions) · `roadmap.md` (what is built) |
-| `AGENT.md`       | cross-session working doctrine for AI sessions (CLAUDE.md imports it) |
-
-
-## Two layers
-
-What `volt gen` writes falls into two layers (spec
-§data-and-network-layers). The **data layer** is the schema: tables,
-types, migrations, groups, predicates, selects, validators and
-changesets, generated into the `volt_*` data files over `nao/rt`. The
-**network layer** is packages, imports, pipelines, scopes, routes,
-resources and datasets, generated into the route files over the root
-`volt` package. The network layer may use the data layer, never the
-reverse, and `cmd/volt/layers_test.go` fails the build when that
-breaks.
-
-To use the data layer alone, write a package of schema files and no
-scope: `volt gen` writes only its data files, removes the route files
-it wrote while the package had a scope, and a program built on them
-imports nothing from Volt but `nao/rt`.
+| Directory | What it is |
+|---|---|
+| `*.go` (root) | the network runtime generated code links against |
+| `cmd/volt` | the one binary: `check`, `vet`, `gen`, `routes`, `stress`, `migration`, `lsp`, `version` |
+| `lang/` | the language: scanner, parser, checker, vet, conformance corpus |
+| `gen/` | the generators |
+| `nao/` | the data layer: naming, generation, the value runtime `rt` |
+| `lsp/` | the language server |
+| `grammar/`, `zed-extension/` | the editor stack |
+| `itest/` | the fixture application served over `httptest`, drift-checked against the generator |
+| `docs/` | `spec.md`, `lint.md`, `editor.md`, `roadmap.md`, `plan.md` |
 
 ## Crib sheet
 
-Requires **Go 1.27+** (all three modules and go.work declare it); with the
-default `GOTOOLCHAIN=auto` an older `go` fetches it automatically.
+Requires Go 1.27+ and a C compiler.
 
 ```sh
-go install ./cmd/volt                # with cgo (a C compiler on the path): the tool carries its own SQLite
+go install ./cmd/volt
 volt check ./app && volt gen ./app && volt routes ./app
-volt gen --sql ./app                 # models + queries + router + DDL
-go test ./... ./lsp/... ./cmd/volt/...   # everything, ORM + tooling modules
-go test ./gen/router -update         # refresh goldens after gen changes
-go run ./cmd/volt gen ./itest/blog   # refresh the itest fixture
-go test ./lang -run '^$' -bench . -benchmem > lang/testdata/bench_baseline.txt   # refresh the (ungated) baseline
-VOLT_SWEEP_DIR=/tmp/sweep go test ./lang -run TestProfileSweep -count=1 -timeout 30m -v   # time and profile every phase at 10..160 tables; charts in /tmp/sweep
-volt stress ./big && time volt check ./big && time volt gen --sql ./big && time go build -C ./big ./...   # one file, 1000 tables of 150 columns: the limits of check, gen, the LSP and the Go compiler
-./scripts/sync-grammar.sh            # mirror grammar + preflight Zed
+go test ./... ./lsp/... ./cmd/volt/...
 ```

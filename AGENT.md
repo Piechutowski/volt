@@ -18,7 +18,7 @@ one silently.
 
 ## Docs
 
-Six files in `docs/`, nothing else carries prose:
+Five files in `docs/` and the README, nothing else carries prose:
 
 - `spec.md` — the language and the generated code, normative for the
   implementation as it stands. Spec and code must agree; the language
@@ -30,13 +30,12 @@ Six files in `docs/`, nothing else carries prose:
   the build if it drifts.
 - `editor.md` — grammar, Zed extension, language server, and the
   verification checklist in its section 8.
-- `hypotheses.md` — open design questions, numbered, held loosely.
 - `roadmap.md` — what is built and what is not; a status changes in
   the commit that lands it.
-- `entropy-and-purity-report.md`: the review items not yet decided,
-  places where Volt says one thing two ways and effects that could be
-  pure; an item leaves it in the commit that decides it, and a decided
-  item to build goes to `roadmap.md`.
+- `plan.md` — the one forward-looking document: the decisions made
+  and the steps that remain, in order; a step deletes its section in
+  the commit that lands it, and a deferred step keeps one line saying
+  so.
 
 No doc is ever knowingly wrong: a change whose blast radius reaches a
 doc updates the doc in the same commit. Never weaken a test to get
@@ -88,8 +87,8 @@ server gets a scripted stdio session; one is a golden
   data files import the standard library, `nao/rt` and the packages of
   declared types only; route files add the root `volt` package and the
   data packages they route.
-- SQLite is the only database. Never: callbacks, lazy loading, dirty
-  tracking, reflection in generated code (spec §non-goals).
+- SQLite is the only database. Values and effects at the edge (spec
+  §values-and-effects, `docs/plan.md` part 0).
 - A memoized computation is a pure function of explicit inputs, keyed
   on those inputs themselves; `cmd/volt`'s purity gate and
   immutability walk enforce it, and a new memo is added to the gate's

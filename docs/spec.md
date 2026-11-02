@@ -39,6 +39,33 @@ Diagnostics cite the section they enforce. The lint annex — legal but
 suspicious schemas, every rule with executable examples — is
 [`lint.md`](lint.md); lint rules never change what conforming Volt is.
 
+## Values and effects
+
+The generated code and the runtime keep four rules. They are the
+functional style, avoiding mutation and avoiding side effects, held by
+the generator and `volt vet` where Go itself holds nothing.
+
+1. **Values.** Rows, changesets, predicates, queries, requests,
+   responses, diagnostics and every data structure of the tooling are
+   values. A method on a value returns a new value and leaves its
+   receiver as it was.
+2. **No mutation after construction.** A function may accumulate
+   locally, appending to a slice that has not escaped, since nothing
+   can observe it. It mutates neither an argument, nor a field of a
+   value another holder has, nor package state.
+3. **Effects at the edge, as data.** Whatever touches the world is
+   described as a value and performed in one place: the generated
+   shim, the runner or `main`. Hand-written application code produces
+   descriptions.
+4. **Mutable state is inventoried.** The connection pool, the
+   statement cache, the event broker's log and the logger are the
+   whole list.
+
+Where the implementation as it stands falls short of a rule,
+[`plan.md`](plan.md) names the step that closes the gap: today a
+generated query runs on its `Queries` handle (§generated-query-surface)
+and a handler writes its own response (§handler-references).
+
 ---
 
 # Part I — The Schema Core
@@ -67,6 +94,8 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
 
 ## Table of Contents
 
+- **Introduction**
+  - [Values and effects](#values-and-effects)
 - **Part I — The Schema Core**
   - [Notation](#notation)
     - [EBNF](#ebnf)
@@ -156,7 +185,6 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Struct tags](#struct-tags)
     - [Generated query surface](#generated-query-surface)
   - [Mapping to SQLite DDL](#mapping-to-sqlite-ddl)
-  - [Non-goals](#non-goals)
   - [License and Provenance](#license-and-provenance)
 
 Sections are named, not numbered. A citation is `§` followed by the
@@ -1736,7 +1764,9 @@ both.
    (§datasets). `volt gen` writes it into the route files,
    `volt_handlers.go`, `volt_router.go`, `volt_paths.go`,
    `volt_routes.go` and the client's `volt_client.go`, over the root
-   `volt` package, the network runtime.
+   `volt` package, the network runtime. A route file and the client
+   import the standard library, the root `volt` package and the data
+   packages whose models and queries they name.
 3. **The rule.** The network layer may use the data layer, never the
    reverse. The route files call a data package's queries and
    changesets, and the root `volt` package reads the data runtime's
@@ -4109,16 +4139,6 @@ and column notes → comments above their DDL. Output opens with
 marker, with the same overwrite protection as §mapping-to-go.
 
 ---
-
-## Non-goals
-
-Volt does not generate and will not generate: an identity map or unit
-of work, lazy loading, active-record `Save()`, callbacks, dirty
-tracking, default scopes, single-table inheritance, reflection in
-generated code, a Turing-complete query language. Generated code
-imports the standard library, Volt's runtime packages, the packages of
-declared types and, in the router, handler and client files, the data
-packages whose models and queries they name.
 
 ## License and Provenance
 
