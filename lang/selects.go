@@ -917,7 +917,7 @@ func (e *selectEnv) paramBind(p *ast.Param, goType string) string {
 		return name
 	}
 	if !goParamOK(name) {
-		e.errorf(p.Name.Pos(), "parameter name %q does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil or append, which the generated methods use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)", name)
+		e.errorf(p.Name.Pos(), "parameter name %q does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)", name)
 		return name
 	}
 	sp := SelectParam{GoName: name, GoType: goType}

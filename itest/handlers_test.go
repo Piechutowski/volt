@@ -22,11 +22,14 @@ func TestHandlersAreValues(t *testing.T) {
 	if !volt.Same(users{}.Show(r, 7), users{}.Show(r, 7)) || volt.Same(users{}.Show(r, 7), users{}.Show(r, 8)) {
 		t.Error("Show is not a function of its inputs")
 	}
-	if !volt.Same(users{}.Profile(r, 7), volt.Then(db.UserGet(7), func(db.User) volt.Response { return volt.NoContent() })) {
-		t.Error("Profile does not describe the lookup of its user")
+	if !volt.Same(users{}.Card(r, 7), volt.Then(db.UserGet(7), func(db.User) volt.Response { return volt.NoContent() })) {
+		t.Error("Card does not describe the lookup of its user")
 	}
-	if volt.Same(users{}.Profile(r, 7), users{}.Profile(r, 8)) {
-		t.Error("Profile of two users describes one effect")
+	if volt.Same(users{}.Card(r, 7), users{}.Card(r, 8)) {
+		t.Error("Card of two users describes one effect")
+	}
+	if !volt.Same(users{}.Profile(r, 7, db.User{Email: "a"}), volt.Render(db.User{Email: "a"})) {
+		t.Error("Profile does not render the user it was handed")
 	}
 	c := app.Controllers{Home: home{}, Users: users{}, Files: files{}, Admin: admin{}, Ops: ops{}, Tags: tags{}, Pages: pages{}, Archive: archive{}}
 	if differ := app.ControllersDeterministic(c, r); len(differ) != 0 {
@@ -35,17 +38,22 @@ func TestHandlersAreValues(t *testing.T) {
 }
 
 // TestEffectFailureInsideThenReachesTheSpine proves an effect that
-// fails inside a continuation goes to the route's error handler (spec
-// §requests-and-responses): the lookup of a missing user is a 404
-// through the scope's own error_handler.
+// fails inside a continuation, and a load that fails before the
+// handler, go to the route's error handler (spec
+// §requests-and-responses, §route-loads): the lookup of a missing user
+// is a 404 through the scope's own error_handler either way.
 func TestEffectFailureInsideThenReachesTheSpine(t *testing.T) {
 	h := handler()
-	rec, body := serve(t, h, "GET", app.PathProfile(1))
-	if rec.Code != 200 || body["email"] != "one@example.com" {
-		t.Fatalf("profile of user 1 = %d %v", rec.Code, body)
+	for _, path := range []string{app.PathCard(1), app.PathProfile(1)} {
+		rec, body := serve(t, h, "GET", path)
+		if rec.Code != 200 || body["email"] != "one@example.com" {
+			t.Fatalf("%s = %d %v", path, rec.Code, body)
+		}
 	}
-	rec, _ = serve(t, h, "GET", app.PathProfile(999))
-	if rec.Code != http.StatusNotFound || rec.Header().Get("X-Error-Handler") != "app" {
-		t.Fatalf("profile of a missing user = %d, error handler %q; want 404 through the scope's handler", rec.Code, rec.Header().Get("X-Error-Handler"))
+	for _, path := range []string{app.PathCard(999), app.PathProfile(999)} {
+		rec, _ := serve(t, h, "GET", path)
+		if rec.Code != http.StatusNotFound || rec.Header().Get("X-Error-Handler") != "app" {
+			t.Fatalf("%s = %d, error handler %q; want 404 through the scope's handler", path, rec.Code, rec.Header().Get("X-Error-Handler"))
+		}
 	}
 }

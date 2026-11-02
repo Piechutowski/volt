@@ -50,6 +50,10 @@ func PathProfile(id int, opts ...volt.URLOption) string {
 	return volt.URL("/users/"+volt.SegInt(id)+"/profile", opts...)
 }
 
+func PathCard(id int, opts ...volt.URLOption) string {
+	return volt.URL("/users/"+volt.SegInt(id)+"/card", opts...)
+}
+
 func PathServe(path string, opts ...volt.URLOption) string {
 	return volt.URL("/files/"+volt.SegWild(path), opts...)
 }

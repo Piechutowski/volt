@@ -15,6 +15,7 @@ var Table = []volt.Route{
 	{Method: "GET", Pattern: "/users/{id}", Spelled: "/users/:id(int)", Controller: "Users", Action: "Show", Helper: "PathUser", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
 	{Method: "GET", Pattern: "/files/{path...}", Spelled: "/files/:path...", Controller: "Files", Action: "Serve", Helper: "PathServe", Params: []volt.RouteParam{{Name: "path", Type: "string", Wild: true}}},
 	{Method: "GET", Pattern: "/users/{id}/avatar", Spelled: "/users/:id(int)/avatar", Controller: "Users", Action: "Avatar", Helper: "PathAvatar", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
+	{Method: "GET", Pattern: "/users/{id}/profile", Spelled: "/users/:id(int)/profile", Controller: "Users", Action: "Profile", Helper: "PathProfile", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
 	{Method: "", Pattern: "/ping", Spelled: "/ping", Controller: "Home", Action: "Ping", Helper: "PathPing"},
 	{Method: "GET", Pattern: "/api/users", Spelled: "/api/users", Query: "db.UserList", Helper: "PathAPIUserList"},
 	{Method: "GET", Pattern: "/api/users/{id}", Spelled: "/api/users/:id(int)", Query: "db.UserGet", Helper: "PathAPIUserGet", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},

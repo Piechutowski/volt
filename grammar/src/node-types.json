@@ -604,6 +604,73 @@
     }
   },
   {
+    "type": "load",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "load_name",
+            "named": true
+          }
+        ]
+      },
+      "query": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "go_ref",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "signed_number",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "load_block",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "load",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "migration_definition",
     "named": true,
     "fields": {
@@ -1412,6 +1479,16 @@
         "types": [
           {
             "type": "go_ref",
+            "named": true
+          }
+        ]
+      },
+      "loads": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "load_block",
             "named": true
           }
         ]
@@ -2284,6 +2361,10 @@
   {
     "type": "like",
     "named": false
+  },
+  {
+    "type": "load_name",
+    "named": true
   },
   {
     "type": "migration_name",

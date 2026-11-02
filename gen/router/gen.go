@@ -225,13 +225,16 @@ func sigParams(ps []lang.Param) string {
 
 func (g *generator) handlersEmit() error {
 	imports := []string{"net/http", "", voltImport, runImport}
+	for _, q := range g.loadPackages() {
+		imports = append(imports, dataImport(q))
+	}
 	g.header(imports...)
 
 	for _, name := range g.controllerNames() {
 		ci := g.pkg.Controllers[name]
 		g.pf("type %sController interface {\n", name)
 		for _, a := range ci.Actions {
-			g.pf("\t%s(r volt.Request%s) volt.Response\n", a.Name, sigParams(a.Params))
+			g.pf("\t%s(r volt.Request%s%s) volt.Response\n", a.Name, sigParams(a.Params), loadParams(a.Loads))
 		}
 		g.pf("}\n\n")
 	}
@@ -258,7 +261,7 @@ func (g *generator) handlersEmit() error {
 	g.pf("\tvar voltOut []string\n")
 	for _, name := range g.controllerNames() {
 		for _, a := range g.pkg.Controllers[name].Actions {
-			call := fmt.Sprintf("c.%s.%s(r%s)", name, a.Name, zeroArgs(a.Params))
+			call := fmt.Sprintf("c.%s.%s(r%s%s)", name, a.Name, zeroArgs(a.Params), zeroLoads(a.Loads))
 			g.pf("\tif !volt.Same(%s, %s) {\n\t\tvoltOut = append(voltOut, %q)\n\t}\n", call, call, name+"."+a.Name)
 		}
 	}
@@ -270,6 +273,9 @@ func pipeKey(pipes []string) string { return strings.Join(pipes, ",") }
 
 func (g *generator) timeParams() bool {
 	for _, r := range g.pkg.Routes {
+		if r.Timeout > 0 {
+			return true
+		}
 		if r.Query == nil {
 			continue
 		}
@@ -288,8 +294,10 @@ func (g *generator) routerEmit() error {
 		imports = append(imports, "time")
 	}
 	imports = append(imports, "", voltImport, runImport)
-	for _, q := range g.dataPackages() {
-		if !q.Local {
+	seen := map[string]bool{}
+	for _, q := range append(g.dataPackages(), g.loadPackages()...) {
+		if !q.Local && !seen[q.Qualifier] {
+			seen[q.Qualifier] = true
 			imports = append(imports, dataImport(q))
 		}
 	}
@@ -446,15 +454,36 @@ func (g *generator) routeEmit(r *lang.RouteInfo) {
 		if r.Query != nil {
 			g.queryShimBody(r)
 		} else {
+			parsed := map[string]string{}
 			call := make([]string, 0, len(r.Params))
 			for _, p := range r.Params {
-				call = append(call, pathParse(&g.out, p))
+				parsed[p.Name] = pathParse(&g.out, p)
+				call = append(call, parsed[p.Name])
 			}
-			g.pf("\t\treturn c.%s.%s(r%s)\n", r.Controller, r.Action, prefixEach(call, ", "))
+			handler := fmt.Sprintf("c.%s.%s(r%s", r.Controller, r.Action, prefixEach(call, ", "))
+			for _, ld := range r.Loads {
+				handler += ", " + ld.Name
+			}
+			handler += ")"
+			if len(r.Loads) > 0 {
+				g.loadsEmit(r, parsed, handler)
+			} else {
+				g.pf("\t\treturn %s\n", handler)
+			}
 		}
 		g.pf("\t}, %s, voltPerform", eh)
-		for _, p := range r.Params {
-			g.pf(", %q", p.Name)
+		if len(r.Params) > 0 {
+			g.pf(", volt.Params(")
+			for i, p := range r.Params {
+				if i > 0 {
+					g.pf(", ")
+				}
+				g.pf("%q", p.Name)
+			}
+			g.pf(")")
+		}
+		if r.Timeout > 0 {
+			g.pf(", volt.Timeout(%d*time.Second)", r.Timeout)
 		}
 		g.pf(")")
 	}
@@ -710,4 +739,85 @@ func (g *generator) queryResult(q *lang.QueryRef) string {
 		result = "[]" + result
 	}
 	return result
+}
+
+func (g *generator) loadPackages() []*lang.QueryRef {
+	seen := map[string]*lang.QueryRef{}
+	for _, r := range g.pkg.Routes {
+		for _, ld := range r.Loads {
+			if !ld.Query.Local && seen[ld.Query.Qualifier] == nil {
+				seen[ld.Query.Qualifier] = ld.Query
+			}
+		}
+	}
+	quals := make([]string, 0, len(seen))
+	for q := range seen {
+		quals = append(quals, q)
+	}
+	sort.Strings(quals)
+	out := make([]*lang.QueryRef, len(quals))
+	for i, q := range quals {
+		out[i] = seen[q]
+	}
+	return out
+}
+
+func loadParams(ls []lang.LoadInfo) string {
+	var b strings.Builder
+	for _, ld := range ls {
+		b.WriteString(", " + ld.Name + " " + ld.GoType())
+	}
+	return b.String()
+}
+
+func zeroLoads(ls []lang.LoadInfo) string {
+	var b strings.Builder
+	for _, ld := range ls {
+		if ld.Query.Many {
+			b.WriteString(", nil")
+		} else {
+			b.WriteString(", " + ld.GoType() + "{}")
+		}
+	}
+	return b.String()
+}
+
+func (g *generator) loadsEmit(r *lang.RouteInfo, parsed map[string]string, call string) {
+	argsOf := make([][]string, len(r.Loads))
+	for i, ld := range r.Loads {
+		argsOf[i] = make([]string, len(ld.Query.Params))
+		for j, p := range ld.Query.Params {
+			switch p.Source {
+			case lang.FromPath:
+				argsOf[i][j] = parsed[p.Name]
+			case lang.FromLiteral:
+				argsOf[i][j] = p.Literal
+			case lang.FromList:
+				v := "volt_" + ld.Name + "_" + p.Name
+				g.pf("\t\t%s, err := volt.QueryParams[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn volt.Fail(err)\n\t\t}\n", v, strings.TrimPrefix(p.GoType, "[]"), p.Name)
+				argsOf[i][j] = v
+			default:
+				v := "volt_" + ld.Name + "_" + p.Name
+				g.pf("\t\t%s, err := volt.QueryParam[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn volt.Fail(err)\n\t\t}\n", v, p.GoType, p.Name)
+				argsOf[i][j] = v
+			}
+		}
+	}
+	indent := "\t\t"
+	var closers []string
+	for i, ld := range r.Loads {
+		q := ld.Query
+		args := argsOf[i]
+		fn := q.Method
+		if !q.Local {
+			fn = q.Qualifier + "." + fn
+		}
+		g.pf("%sreturn volt.Then(%s(%s), func(%s %s) volt.Response {\n", indent, fn, strings.Join(args, ", "), ld.Name, ld.GoType())
+		closers = append(closers, indent+"})\n")
+		indent += "\t"
+	}
+	g.pf("%sreturn %s\n", indent, call)
+	for i := len(closers) - 1; i >= 0; i-- {
+		g.pf("%s", closers[i])
+	}
 }

@@ -234,6 +234,7 @@ func TestGoldenCompiles(t *testing.T) {
 import (
 	"net/http"
 
+	"blog/db"
 	"github.com/Piechutowski/volt"
 )
 
@@ -253,6 +254,9 @@ func (stub) Serve(r volt.Request, path string) volt.Response { return volt.NoCon
 func (stub) Show(r volt.Request, id int) volt.Response { return volt.NoContent() }
 func (stub) Create(r volt.Request) volt.Response { return volt.NoContent() }
 func (stub) Avatar(r volt.Request, id int) volt.Response { return volt.NoContent() }
+func (stub) Profile(r volt.Request, id int, user db.User, picked, since []db.User) volt.Response {
+	return volt.NoContent()
+}
 
 // wire proves New accepts stub implementations of every interface.
 var _ http.Handler = NewRouter(Controllers{

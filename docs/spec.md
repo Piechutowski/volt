@@ -156,6 +156,7 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Routes](#routes)
     - [Handler references](#handler-references)
     - [Requests and responses](#requests-and-responses)
+    - [Route loads](#route-loads)
     - [Query routes](#query-routes)
     - [Formats](#formats)
     - [Generated client](#generated-client)
@@ -2030,7 +2031,7 @@ param type = "int" ;
 ### Routes
 
 ```ebnf
-route = verb, route path, handler ref, [ settings ], newline ;
+route = verb, route path, handler ref, [ settings ], [ load block ], newline ;
 verb  = "get" | "post" | "patch" | "delete"
       | "options" | "head" | "any" ;
 ```
@@ -2075,11 +2076,13 @@ handler ref = name, [ ".", name ] ;
    runtime's own handlers are `volt.<Name>` (§event-routes).
 2. Every distinct controller becomes one generated interface; every
    distinct action one method with the route's typed parameters
-   appended after `(r volt.Request)`, returning `volt.Response`
-   (§requests-and-responses); the type that implements it is an empty
-   struct (`lint.md`, `handlerreceiver`).
+   appended after `(r volt.Request)` and the route's loads after them
+   (§route-loads), returning `volt.Response` (§requests-and-responses);
+   the type that implements it is an empty struct (`lint.md`,
+   `handlerreceiver`).
 3. Two routes MAY share `Controller.Action` only with identical
-   parameter signatures (names, types and wildcard-ness, in order).
+   parameter signatures (names, types and wildcard-ness, in order) and
+   identical loads (names and types, in order; §route-loads).
 4. The generated `Controllers` manifest is one namespace: a controller
    MUST NOT take the name of a field the manifest holds for a data
    the query routes run on (`DB`; §query-routes) or for the event broker
@@ -2171,6 +2174,72 @@ func (r Response) Rescue(on func(error) Response) Response
    `goroutine`), and every `Stream` is reported (`streamcount`). Not
    caught: reflection, `unsafe`, cgo, and a package imported under
    another name.
+
+### Route loads
+
+```ebnf
+load block = "{", { load }, "}" ;
+load       = name, query call, newline ;
+query call = query ref, "(", [ arg, { ",", arg } ], ")" ;
+query ref  = name, [ ".", name ] ;
+arg        = name | literal ;
+```
+
+```volt fragment
+Scope / {
+	get /charts Pages.Charts [timeout: 5] {
+		metrics  db.MetricOrdered()
+		settings db.SettingGet(1)
+	}
+}
+```
+
+A controller route may carry a **load block** before its newline:
+the rows the handler needs, loaded before it runs and handed to it as
+parameters, so the handler reads them and never asks for them.
+
+1. A load names a generated read of a data package
+   (§generated-query-surface): a select function, `Get` or `List`,
+   written `pkg.Query` for an imported data package or `Query` for the
+   package's own tables, as a query route names one (§query-routes). A
+   write, `Create`, `Update` or `Delete`, is an error, and so is a
+   name that is no generated query. The load's name is the parameter
+   the handler receives the value under: a lower-case Go identifier
+   that is not `r`, not a path parameter of the route and not another
+   load of it.
+2. **Arguments** are given in the function's order and number, each a
+   name or a literal. A name that is a path parameter of the route
+   binds it, and the parameter's type MUST spell the function's Go
+   type, as for a query route; a wildcard cannot bind one, nor can a
+   path parameter bind a list parameter. Any other name binds from the
+   query string by that name, a list parameter from the repeated key,
+   with the types the query string carries (§query-routes); a missing
+   or unparseable value is a 400 naming the key, before any load runs.
+   A literal binds as itself and MUST spell the parameter's Go type: a
+   string literal a `string`, a number an `int` when it is whole and
+   a `float64` otherwise, `true` or `false` a `bool`; a type the
+   query string cannot carry takes a literal or nothing.
+3. **Order and the shim.** Loads run in declaration order before the
+   handler, each a continuation of the shim (§requests-and-responses),
+   and every argument is bound before the first runs. The handler's
+   signature is generated from them: after the route's parameters, one
+   parameter per load named as the load is, typed as the query yields,
+   the row type for `Get`, a slice of it for `List` and a select,
+   qualified by the package unless the query is the package's own:
+   `Charts(r volt.Request, metrics []db.Metric, settings db.Setting)
+   volt.Response`. Two routes sharing an action share its loads
+   (§handler-references).
+4. **Failure.** A load that fails goes to the error spine as an effect of
+   the handler would (§requests-and-responses): a missing row is a 404,
+   and the handler never sees it. A route that must decide on a miss
+   loads nothing and uses `Then` with `Rescue`.
+5. **`timeout`.** A route setting, a positive integer of seconds,
+   bounds the whole chain, loads and the handler's own effects, with
+   one deadline from the request's arrival; an effect the deadline
+   cuts off is a 504 through the error spine. A query route takes it
+   too.
+6. A load block on a query route or an event route is an error: their
+   handlers are generated.
 
 ### Query routes
 
@@ -2730,7 +2799,7 @@ an element is an error on that element):
 | Element | Settings |
 |---|---|
 | Scope | `pipe`, `name`, `error_handler` |
-| route | `name` |
+| route | `name`, `timeout` |
 | resources | `api`, `only`, `except`, `param`, `singular`, `default` |
 | dataset | `strip`, `only`, `except` |
 | Select | `order` |
@@ -2901,8 +2970,9 @@ Pred chosen  { org in :orgs }
      same name disagree), or the later use is an error naming both
      types. A parameter name MUST be an ASCII Go identifier that is
      neither a Go keyword, nor a name the generated signatures use
-     (`ctx`, `q`, `rt`, `w`, `r`, `opts`, `volt`, `cs`, `c`), nor `nil`
-     or `append`, the predeclared names a generated method uses, and
+     (`ctx`, `q`, `rt`, `w`, `r`, `opts`, `volt`, `cs`, `c`), nor `nil`,
+     `append`, `any` or `true`, the predeclared names a generated
+     function uses, and
      MUST NOT have the form of the generated locals and helpers,
      `volt`, an upper-case letter and no underscore
      (§generated-query-surface).
@@ -3913,10 +3983,16 @@ scope          = "Scope", route path, [ settings ],
                  "{", { scope item }, "}" ;
 scope item     = route | resources | dataset | scope ;
 
-route          = verb, route path, handler ref, [ settings ], newline ;
+route          = verb, route path, handler ref, [ settings ],
+                 [ load block ], newline ;
 verb           = "get" | "post" | "patch" | "delete"
                | "options" | "head" | "any" ;
 handler ref    = name, [ ".", name ] ;
+load block     = "{", { load }, "}" ;
+load           = name, query call, newline ;
+query call     = query ref, "(", [ arg, { ",", arg } ], ")" ;
+query ref      = name, [ ".", name ] ;
+arg            = name | literal ;
 
 route path     = slash, [ segment, { slash, segment } ] ;
 segment        = name

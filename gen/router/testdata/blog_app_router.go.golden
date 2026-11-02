@@ -43,11 +43,11 @@ func register(mux *http.ServeMux, c Controllers) {
 			return volt.Fail(volt.ErrNotFound)
 		}
 		return c.Users.Show(r, voltid)
-	}, errHandlerErrors, voltPerform, "id")))
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
 	mux.Handle("GET /files/{path...}", pipe0(volt.Handler("GET /files/{path...}", func(r volt.Request) volt.Response {
 		return c.Files.Serve(r, r.PathValue("path"))
-	}, errHandlerErrors, voltPerform, "path")))
+	}, errHandlerErrors, voltPerform, volt.Params("path"))))
 
 	mux.Handle("GET /users/{id}/avatar", pipe0(volt.Handler("GET /users/{id}/avatar", func(r volt.Request) volt.Response {
 		voltid, ok := volt.ParseInt(r.PathValue("id"))
@@ -55,7 +55,29 @@ func register(mux *http.ServeMux, c Controllers) {
 			return volt.Fail(volt.ErrNotFound)
 		}
 		return c.Users.Avatar(r, voltid)
-	}, errHandlerErrors, voltPerform, "id")))
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
+
+	mux.Handle("GET /users/{id}/profile", pipe0(volt.Handler("GET /users/{id}/profile", func(r volt.Request) volt.Response {
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
+		if !ok {
+			return volt.Fail(volt.ErrNotFound)
+		}
+		volt_picked_ids, err := volt.QueryParams[int](r, "ids")
+		if err != nil {
+			return volt.Fail(err)
+		}
+		volt_since_since, err := volt.QueryParam[time.Time](r, "since")
+		if err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.UserGet(voltid), func(user db.User) volt.Response {
+			return volt.Then(db.UserPicked(volt_picked_ids), func(picked []db.User) volt.Response {
+				return volt.Then(db.UserSince(volt_since_since), func(since []db.User) volt.Response {
+					return c.Users.Profile(r, voltid, user, picked, since)
+				})
+			})
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("id"), volt.Timeout(5*time.Second))))
 
 	mux.Handle("/ping", pipe0(volt.Handler("/ping", func(r volt.Request) volt.Response {
 		return c.Home.Ping(r)
@@ -81,7 +103,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		return volt.Then(db.UserGet(voltid), func(voltOut db.User) volt.Response {
 			return volt.RenderStatus(200, voltOut)
 		})
-	}, errHandlerErrors, voltPerform, "id")))
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
 	mux.Handle("POST /api/users", pipe0(volt.Handler("POST /api/users", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
@@ -115,7 +137,7 @@ func register(mux *http.ServeMux, c Controllers) {
 				return volt.RenderStatus(200, voltOut)
 			})
 		})
-	}, errHandlerErrors, voltPerform, "id")))
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
 	mux.Handle("DELETE /api/users/{id}", pipe0(volt.Handler("DELETE /api/users/{id}", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
@@ -128,7 +150,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		return volt.Then(db.UserDelete(voltid), func(int64) volt.Response {
 			return volt.RenderStatus(204, nil)
 		})
-	}, errHandlerErrors, voltPerform, "id")))
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
 	mux.Handle("GET /api/picked", pipe0(volt.Handler("GET /api/picked", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
@@ -171,7 +193,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		return volt.Then(db.UserRoleGet(voltuserID, voltroleID), func(voltOut db.UserRole) volt.Response {
 			return volt.RenderStatus(200, voltOut)
 		})
-	}, errHandlerErrors, voltPerform, "userID", "roleID")))
+	}, errHandlerErrors, voltPerform, volt.Params("userID", "roleID"))))
 
 	mux.Handle("PATCH /api/roles/{userID}/{roleID}", pipe0(volt.Handler("PATCH /api/roles/{userID}/{roleID}", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
@@ -195,7 +217,7 @@ func register(mux *http.ServeMux, c Controllers) {
 				return volt.RenderStatus(200, voltOut)
 			})
 		})
-	}, errHandlerErrors, voltPerform, "userID", "roleID")))
+	}, errHandlerErrors, voltPerform, volt.Params("userID", "roleID"))))
 
 	mux.Handle("GET /ms/revenue", pipe0(volt.Handler("GET /ms/revenue", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
@@ -257,7 +279,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		return volt.Then(db.UserGet(voltid), func(voltOut db.User) volt.Response {
 			return volt.RenderStatus(200, voltOut)
 		})
-	}, errHandlerErrors, voltPerform, "id")))
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
 	mux.Handle("PATCH /ref/users/{id}", pipe0(volt.Handler("PATCH /ref/users/{id}", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
@@ -277,7 +299,7 @@ func register(mux *http.ServeMux, c Controllers) {
 				return volt.RenderStatus(200, voltOut)
 			})
 		})
-	}, errHandlerErrors, voltPerform, "id")))
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
 	mux.Handle("DELETE /ref/users/{id}", pipe0(volt.Handler("DELETE /ref/users/{id}", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
@@ -290,7 +312,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		return volt.Then(db.UserDelete(voltid), func(int64) volt.Response {
 			return volt.RenderStatus(204, nil)
 		})
-	}, errHandlerErrors, voltPerform, "id")))
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
 	mux.Handle("GET /ref/tags", pipe0(volt.Handler("GET /ref/tags", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
@@ -322,7 +344,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		return volt.Then(db.TagGet(r.PathValue("slug")), func(voltOut db.Tag) volt.Response {
 			return volt.RenderStatus(200, voltOut)
 		})
-	}, errHandlerErrors, voltPerform, "slug")))
+	}, errHandlerErrors, voltPerform, volt.Params("slug"))))
 
 	mux.Handle("PATCH /ref/tags/{slug}", pipe0(volt.Handler("PATCH /ref/tags/{slug}", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
@@ -338,7 +360,7 @@ func register(mux *http.ServeMux, c Controllers) {
 				return volt.RenderStatus(200, voltOut)
 			})
 		})
-	}, errHandlerErrors, voltPerform, "slug")))
+	}, errHandlerErrors, voltPerform, volt.Params("slug"))))
 
 	mux.Handle("DELETE /ref/tags/{slug}", pipe0(volt.Handler("DELETE /ref/tags/{slug}", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
@@ -347,7 +369,7 @@ func register(mux *http.ServeMux, c Controllers) {
 		return volt.Then(db.TagDelete(r.PathValue("slug")), func(int64) volt.Response {
 			return volt.RenderStatus(204, nil)
 		})
-	}, errHandlerErrors, voltPerform, "slug")))
+	}, errHandlerErrors, voltPerform, volt.Params("slug"))))
 
 	mux.Handle("GET /events", pipe0(volt.EventsHandler(c.Events)))
 }

@@ -30,7 +30,10 @@ Scope / [pipe: api, error_handler: Errors] {
 	resources db.users
 
 	get /users/:id(int)/avatar Users.Avatar
-	get /users/:id(int)/profile Users.Profile [name: profile]
+	get /users/:id(int)/profile Users.Profile [name: profile, timeout: 5] {
+		user db.UserGet(id)
+	}
+	get /users/:id(int)/card    Users.Card    [name: card]
 	get /files/:path...          Files.Serve
 
 	get /tags/:name             Tags.Show    [name: tag]

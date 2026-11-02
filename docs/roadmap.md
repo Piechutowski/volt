@@ -12,7 +12,7 @@ that lands it.
 | Area | Phoenix / Rails | Volt | Step |
 |---|---|---|---|
 | Routing: scopes, pipelines, resources, reverse URLs | yes | built | |
-| Route-level data loading | plugs / before_action | missing | 7 |
+| Route-level data loading | plugs / before_action | built | |
 | Handlers as pure functions | no | built | |
 | Strong parameters | yes | built (`Cast` allow lists) | |
 | Request bodies bound to changesets on controller routes | yes | missing | 8 |

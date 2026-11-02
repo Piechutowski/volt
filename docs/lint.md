@@ -407,6 +407,24 @@ each use keeps the count visible, so it stays the exception.
 
 ---
 
+### loadspelledlong
+
+**What it does.** Reports a handler that returns `volt.Then` over a
+query whose every argument is a parameter of the handler or a literal.
+
+**Why.** A route load (spec §route-loads) spells that lookup once, in
+the route, and hands the handler the row: the handler never sees a
+miss, the shim binds the arguments, and the signature says what the
+handler reads. A continuation is for a lookup that depends on the
+request's body, its headers or a computed value.
+
+**Examples.** [testdata/loadspelledlong.go](../lang/vet/testdata/loadspelledlong.go):
+`Show` looks a metric up by its path parameter and warns; `Peers`
+computes an argument from the query string and `Recent` builds a
+dynamic query, so both pass.
+
+---
+
 ## Candidate rules — considered, not implemented
 
 Reviewed and deliberately deferred; listed so a reader can see what was

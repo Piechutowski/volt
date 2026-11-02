@@ -21,6 +21,11 @@ Scope / [pipe: api, error_handler: Errors] {
 
 	get /files/:path...          Files.Serve
 	get /users/:id(int)/avatar Users.Avatar
+	get /users/:id(int)/profile Users.Profile [timeout: 5] {
+		user   db.UserGet(id)
+		picked db.UserPicked(ids)
+		since  db.UserSince(since)
+	}
 	any /ping                    Home.Ping
 
 	Scope /api [name: api] {

@@ -18,7 +18,7 @@ app/i07_dup_route_shape.volt:6:2: error: spec/scopes-and-routes: route GET /user
 app/i08_helper_collision.volt:6:2: error: spec/scopes-and-routes: reverse-URL helper or client method "Show" already produced by the route at app/i08_helper_collision.volt:5:2 (§route-names-and-reverse-urls, §generated-client); disambiguate with [name:] or a scope name
 
 ## i09_signature_conflict.volt
-app/i09_signature_conflict.volt:6:2: error: spec/scopes-and-routes: X.Show is reached by routes with different parameter signatures (§handler-references): (id string) vs (id int) (first at app/i09_signature_conflict.volt:5:2)
+app/i09_signature_conflict.volt:6:2: error: spec/scopes-and-routes: X.Show is reached by routes with different signatures (§handler-references, §route-loads): (id string) {} vs (id int) {} (first at app/i09_signature_conflict.volt:5:2)
 
 ## i100_query_body_verb
 app/routes.volt:10:2: error: spec/query-routes: db.UserCreate is routed with post, not get: the generated method a query route binds fixes its verb (§query-routes)
@@ -314,14 +314,14 @@ app/routes.volt:12:16: error: spec/scopes-and-routes: parameter "id" of db.Autho
 app/routes.volt:13:21: error: spec/query-routes: db.AuthorUpdate loads the row to update by "id", which must be a path parameter of the route (§query-routes)
 app/routes.volt:15:3: error: spec/scopes-and-routes: route GET /api/ranked conflicts with the route at app/routes.volt:14:3: identical method and path shape (§route-conflicts)
 app/routes.volt:16:3: error: spec/scopes-and-routes: reverse-URL helper or client method "AuthorRanked" already produced by the route at app/routes.volt:14:3 (§route-names-and-reverse-urls, §generated-client); disambiguate with [name:] or a scope name
-app/routes.volt:17:44: error: spec/settings-whitelists: setting "colour" is not valid on a route (§settings-whitelists); valid: name
+app/routes.volt:17:44: error: spec/settings-whitelists: setting "colour" is not valid on a route (§settings-whitelists); valid: name, timeout
 app/routes.volt:19:17: error: spec/scopes-and-routes: path parameter "zzz" is not a parameter of db.AuthorShown (§query-routes)
 app/routes.volt:20:29: error: spec/datasets: only: "posts" is not a member of select "ranked"'s target (§dataset-settings)
 app/routes.volt:20:37: error: spec/settings-whitelists: setting "colour" is not valid on a dataset (§settings-whitelists); valid: strip, only, except
-app/routes.volt:21:19: error: spec/scopes-and-routes: no generated query db.AuthorMissing in package "db" — a query route names a select method or a default CRUD method (Get, List, Create, Update, Delete) (§query-routes)
+app/routes.volt:21:19: error: spec/scopes-and-routes: no generated query db.AuthorMissing in package "db" — a query route names a select function or a default CRUD function (Get, List, Create, Update, Delete) (§query-routes)
 app/routes.volt:22:14: error: spec/datasets: no select "missing" in package "db" (§dataset-declaration)
 app/routes.volt:23:14: error: spec/scopes-and-routes: path parameter "nope" is not a parameter of db.AuthorRanked (§query-routes)
-app/routes.volt:24:39: error: spec/settings-whitelists: setting "colour" is not valid on a route (§settings-whitelists); valid: name
+app/routes.volt:24:39: error: spec/settings-whitelists: setting "colour" is not valid on a route (§settings-whitelists); valid: name, timeout
 app/routes.volt:25:3: error: spec/scopes-and-routes: route GET /api/authors/:id(int) conflicts with the route at app/routes.volt:24:3: identical method and path shape (§route-conflicts)
 app/routes.volt:29:34: error: spec/settings-whitelists: setting "colour" is not valid on resources (§settings-whitelists); valid: api, only, except, param, singular, default
 app/routes.volt:29:67: error: spec/resources: unknown action "bogus" (§the-action-table); valid: index, new, create, show, edit, update, delete
@@ -355,7 +355,7 @@ db/i235_migration_key_null.volt:16:17: error: spec/columns: column "id" carries 
 db/i235_migration_key_null.volt:20:25: error: spec/columns: column "tag" carries pk and null: a key column is never NULL (§columns)
 
 ## i23_route_setting.volt
-app/i23_route_setting.volt:5:14: error: spec/settings-whitelists: setting "pipe" is not valid on a route (§settings-whitelists); valid: name
+app/i23_route_setting.volt:5:14: error: spec/settings-whitelists: setting "pipe" is not valid on a route (§settings-whitelists); valid: name, timeout
 
 ## i243_group_takes_table_name.volt
 db/i243_group_takes_table_name.volt:13:7: error: spec/groups: group "users" takes the name of a table: tables and groups share one namespace (§groups)
@@ -530,7 +530,7 @@ app/routes.volt:11:2: error: spec/routes: put is not a route verb: db.PostList i
 app/routes.volt:12:2: error: spec/routes: put is not a route verb: db.PostCreate is routed with post, so write post /drafts db.PostCreate (§routes)
 app/routes.volt:13:2: error: spec/routes: put is not a route verb: db.PostDelete is routed with delete, so write delete /posts/:id(int)/x db.PostDelete (§routes)
 app/routes.volt:14:2: error: spec/routes: put is not a route verb: the partial update is patch (§routes)
-app/routes.volt:14:25: error: spec/scopes-and-routes: no generated query db.PostFetch in package "db" — a query route names a select method or a default CRUD method (Get, List, Create, Update, Delete) (§query-routes)
+app/routes.volt:14:25: error: spec/scopes-and-routes: no generated query db.PostFetch in package "db" — a query route names a select function or a default CRUD function (Get, List, Create, Update, Delete) (§query-routes)
 
 ## i332_route_conflict_head.volt
 app/i332_route_conflict_head.volt:7:2: error: spec/scopes-and-routes: route HEAD /:y/b is ambiguous with the route at app/i332_route_conflict_head.volt:6:2 (GET /a/:x): both match some requests and neither is more specific (§route-conflicts)
@@ -614,10 +614,10 @@ app/i361_group_name_case.volt:13:14: error: spec/selects-over-groups: unknown se
 db/schema.volt:10:5: error: spec/validators: validator emailShape must be exported: a validator is part of the package's API, so declare func EmailShape(string) error (§validators)
 
 ## i366_param_named_like_select_local.volt
-app/i366_param_named_like_select_local.volt:10:44: error: spec/selects-over-groups: parameter name "q" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil or append, which the generated methods use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
-app/i366_param_named_like_select_local.volt:11:44: error: spec/selects-over-groups: parameter name "rt" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil or append, which the generated methods use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
-app/i366_param_named_like_select_local.volt:12:44: error: spec/selects-over-groups: parameter name "voltRows" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil or append, which the generated methods use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
-app/i366_param_named_like_select_local.volt:13:45: error: spec/selects-over-groups: parameter name "voltErr" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil or append, which the generated methods use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+app/i366_param_named_like_select_local.volt:10:44: error: spec/selects-over-groups: parameter name "q" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+app/i366_param_named_like_select_local.volt:11:44: error: spec/selects-over-groups: parameter name "rt" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+app/i366_param_named_like_select_local.volt:12:44: error: spec/selects-over-groups: parameter name "voltRows" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+app/i366_param_named_like_select_local.volt:13:45: error: spec/selects-over-groups: parameter name "voltErr" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
 
 ## i369_compare_columns_go_type.volt
 app/i369_compare_columns_go_type.volt:11:41: error: spec/selects-over-groups: cannot compare column "hits" (int) with column "score" (float64) (§predicates)
@@ -633,8 +633,34 @@ app/i370_comparison_without_column.volt:11:38: error: spec/selects-over-groups: 
 app/i371_pred_redeclared.volt:11:6: error: spec/predicates: predicate "busy" redeclared (§predicates)
 
 ## i372_param_named_like_builtin.volt
-app/i372_param_named_like_builtin.volt:11:42: error: spec/selects-over-groups: parameter name "nil" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil or append, which the generated methods use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
-app/i372_param_named_like_builtin.volt:12:43: error: spec/selects-over-groups: parameter name "append" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil or append, which the generated methods use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+app/i372_param_named_like_builtin.volt:11:42: error: spec/selects-over-groups: parameter name "nil" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+app/i372_param_named_like_builtin.volt:12:43: error: spec/selects-over-groups: parameter name "append" does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)
+
+## i373_load_on_query_route
+app/routes.volt:11:3: error: spec/route-loads: a load block belongs to a controller route; db.MetricList is a query route, whose handler is generated (§route-loads)
+
+## i374_load_unknown_query
+app/routes.volt:11:11: error: spec/route-loads: no generated query db.MetricRecent in package "db"; a load names a select function, Get or List (§route-loads)
+
+## i375_load_writes
+app/routes.volt:11:8: error: spec/route-loads: db.MetricDelete writes; a load reads: a select function, Get or List (§route-loads)
+
+## i376_load_arity
+app/routes.volt:11:10: error: spec/route-loads: db.MetricGet takes 1 argument(s), the load gives 2 (§route-loads)
+
+## i377_load_arg_type
+app/routes.volt:13:23: error: spec/route-loads: path parameter "id" is string but db.MetricGet takes int (§route-loads)
+app/routes.volt:16:25: error: spec/route-loads: argument 1 of db.MetricByUnit is string, which the number 3 does not spell (§route-loads)
+app/routes.volt:16:28: error: spec/route-loads: list parameter "ids" of db.MetricByUnit cannot come from a path parameter; name a query-string key (§route-loads)
+
+## i378_load_name_taken
+app/routes.volt:13:3: error: spec/route-loads: load "id" takes the name of a path parameter of the route (§route-loads)
+app/routes.volt:14:3: error: spec/route-loads: load "r" is not a name a handler parameter can take: a lower-case Go identifier that is not r (§route-loads)
+app/routes.volt:16:3: error: spec/route-loads: load "metric" is declared twice (first at app/routes.volt:15:3) (§route-loads)
+
+## i379_timeout_not_seconds
+app/routes.volt:6:28: error: spec/route-loads: timeout: takes a positive integer of seconds (§route-loads)
+app/routes.volt:7:28: error: spec/route-loads: timeout: takes a positive integer of seconds (§route-loads)
 
 ## i37_ambiguous_overlap.volt
 app/i37_ambiguous_overlap.volt:8:2: error: spec/scopes-and-routes: route GET /:y/b is ambiguous with the route at app/i37_ambiguous_overlap.volt:7:2 (GET /a/:x): both match some requests and neither is more specific (§route-conflicts)
@@ -773,7 +799,7 @@ db/i96_list_param_time.volt:10:36: error: spec/selects-over-groups: column "at" 
 db/i97_list_param_scalar_conflict.volt:10:60: error: spec/selects-over-groups: parameter :site used as string here but []string earlier — one name, one type (§predicates)
 
 ## i98_query_unknown
-app/routes.volt:10:16: error: spec/scopes-and-routes: no generated query db.UserLst in package "db" — a query route names a select method or a default CRUD method (Get, List, Create, Update, Delete) (§query-routes)
+app/routes.volt:10:16: error: spec/scopes-and-routes: no generated query db.UserLst in package "db" — a query route names a select function or a default CRUD function (Get, List, Create, Update, Delete) (§query-routes)
 
 ## i99_query_path_type
 app/routes.volt:10:13: error: spec/scopes-and-routes: path parameter "id" is string but db.UserGet takes int; spell it :id(int) (§query-routes)

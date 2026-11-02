@@ -110,7 +110,7 @@ var registry = []Analyzer{
 	redundantIndex, emptyBody, shadowedColumn,
 	missingPK, refTypeMismatch, refTargetNotUnique, selfRef, refCycle, caseCollision,
 	modelName, dynName,
-	handlerReceiver, handlerImports, handlerClock, packageState, goroutine, streamCount,
+	handlerReceiver, handlerImports, handlerClock, packageState, goroutine, streamCount, loadSpelledLong,
 }
 
 // Run executes the given analyzers (all registered ones if none are named)

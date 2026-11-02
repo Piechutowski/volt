@@ -371,7 +371,29 @@ module.exports = grammar({
         field('path', $.route_path),
         field('handler', $.go_ref),
         optional(field('settings', $.settings_list)),
+        optional(field('loads', $.load_block)),
       ),
+
+    // A controller route's loads (§route-loads): `name query(args)` per
+    // line, each a read of a data package the handler receives.
+    load_block: ($) =>
+      seq(
+        '{',
+        repeat($._newline),
+        optional(newlineSep1($.load, $)),
+        '}',
+      ),
+
+    load: ($) =>
+      seq(
+        field('name', alias($.identifier, $.load_name)),
+        field('query', $.go_ref),
+        '(',
+        optional(seq($._load_arg, repeat(seq(',', $._load_arg)))),
+        ')',
+      ),
+
+    _load_arg: ($) => choice($.identifier, $.string, $.number, $.signed_number, $.boolean),
 
     verb: () =>
       choice(

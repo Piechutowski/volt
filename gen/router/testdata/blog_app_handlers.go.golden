@@ -5,6 +5,7 @@ package app
 import (
 	"net/http"
 
+	"blog/db"
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/nao/run"
 )
@@ -28,6 +29,7 @@ type UsersController interface {
 	Create(r volt.Request) volt.Response
 	Show(r volt.Request, id int) volt.Response
 	Avatar(r volt.Request, id int) volt.Response
+	Profile(r volt.Request, id int, user db.User, picked []db.User, since []db.User) volt.Response
 }
 
 type Controllers struct {
@@ -73,6 +75,9 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	}
 	if !volt.Same(c.Users.Avatar(r, 0), c.Users.Avatar(r, 0)) {
 		voltOut = append(voltOut, "Users.Avatar")
+	}
+	if !volt.Same(c.Users.Profile(r, 0, db.User{}, nil, nil), c.Users.Profile(r, 0, db.User{}, nil, nil)) {
+		voltOut = append(voltOut, "Users.Profile")
 	}
 	return voltOut
 }

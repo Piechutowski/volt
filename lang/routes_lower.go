@@ -386,13 +386,29 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 			helper = inh.namePrefix + n
 		}
 	}
+	timeout := 0
 	if r.Settings != nil {
-		_, dupDiags := settingsRepeated(r.Settings, "name")
+		_, dupDiags := settingsRepeated(r.Settings, "name", "timeout")
 		l.diags = append(l.diags, dupDiags...)
 		for _, s := range r.Settings.Settings {
-			if s.Name != "name" {
-				l.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a route (§settings-whitelists); valid: name", s.Name)
+			switch s.Name {
+			case "name":
+			case "timeout":
+				timeout, _ = l.timeout(s)
+			default:
+				l.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a route (§settings-whitelists); valid: name, timeout", s.Name)
 			}
+		}
+	}
+	var loads []LoadInfo
+	if len(r.Loads) > 0 {
+		if query != nil || events {
+			l.errorf(r.Loads[0].Pos(), "route-loads", "a load block belongs to a controller route; %s is a %s route, whose handler is generated (§route-loads)", r.Handler.String(), routeKind(query, events))
+			return nil
+		}
+		var ok bool
+		if loads, ok = l.loads(r, params); !ok {
+			return nil
 		}
 	}
 
@@ -422,8 +438,20 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 		ClientName:   client,
 		Pipes:        inh.pipes,
 		ErrorHandler: inh.errHandler,
+		Loads:        loads,
+		Timeout:      timeout,
 		Pos:          r.Pos(),
 	}
+}
+
+func routeKind(query *QueryRef, events bool) string {
+	if events {
+		return "event"
+	}
+	if query != nil {
+		return "query"
+	}
+	return "controller"
 }
 
 func (l *routeLowering) putReport(r *ast.Route) string {
@@ -531,7 +559,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		case si.Shared != "":
 			qr.Result = si.Shared
 		case len(si.Excluded) > 0:
-			qr.Result = name
+			qr.Result = name + "Row"
 		default:
 			qr.Result = modelOrBase(m)
 		}
@@ -558,7 +586,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	}
 	if !found {
 		hint := l.queryHint(target, name)
-		l.errorf(pos, "scopes-and-routes", "no generated query %s in package %q%s — a query route names a select method or a default CRUD method (Get, List, Create, Update, Delete) (§query-routes)", ref, target, hint)
+		l.errorf(pos, "scopes-and-routes", "no generated query %s in package %q%s — a query route names a select function or a default CRUD function (Get, List, Create, Update, Delete) (§query-routes)", ref, target, hint)
 		return nil
 	}
 

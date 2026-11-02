@@ -181,8 +181,61 @@ func (p *parser) route() *ast.Route {
 	if p.at(token.LBRACKET) && !p.cur().NLBefore {
 		r.Settings = p.settingList()
 	}
+	if p.at(token.LBRACE) && !p.cur().NLBefore {
+		p.lineClear()
+		p.next()
+		for !p.at(token.RBRACE) && !p.at(token.EOF) {
+			if ld := p.load(); ld != nil {
+				r.Loads = append(r.Loads, ld)
+			}
+		}
+		r.Rbrace = p.expect(token.RBRACE, "load block (§route-loads)").End()
+	}
 	p.endOfLine("route (§scopes-and-routes)")
 	return r
+}
+
+func (p *parser) load() (ld *ast.Load) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(bailout); !ok {
+				panic(r)
+			}
+			ld = nil
+			p.lineSync()
+		}
+	}()
+	ld = &ast.Load{Name: p.ident("load name (§route-loads)")}
+	ld.Query = p.goRef("load query (§route-loads)")
+	p.expect(token.LPAREN, "load query call (§route-loads)")
+	for !p.at(token.RPAREN) {
+		ld.Args = append(ld.Args, p.loadArg())
+		if !p.at(token.COMMA) {
+			break
+		}
+		p.next()
+		if p.at(token.RPAREN) {
+			p.fail(p.cur(), "expected a load argument after the comma (§route-loads), found %s", p.cur())
+		}
+	}
+	ld.Rparen = p.expect(token.RPAREN, "load query call (§route-loads)").End()
+	p.endOfLine("load (§route-loads)")
+	return ld
+}
+
+func (p *parser) loadArg() ast.Node {
+	t := p.cur()
+	switch t.Kind {
+	case token.STRING, token.NUMBER:
+		return p.litOf(p.next())
+	case token.MINUS:
+		p.next()
+		return &ast.NegNumber{MinusPos: t.Pos, Num: p.litOf(p.expect(token.NUMBER, "load argument (§route-loads)"))}
+	case token.IDENT:
+		return p.ident("load argument (§route-loads)")
+	}
+	p.fail(t, "expected a name or a literal as a load argument (§route-loads), found %s", t)
+	return nil
 }
 
 func (p *parser) resources() *ast.Resources {

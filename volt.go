@@ -8,6 +8,7 @@
 package volt
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log/slog"
@@ -27,23 +28,55 @@ type HandlerFunc func(Request) Response
 // error_handler use.
 type ErrorHandler func(Request, error) Response
 
+// HandlerOption configures a shim: Params names the path parameters the
+// request value reads, Timeout bounds the whole chain (§route-loads).
+type HandlerOption func(*shim)
+
+type shim struct {
+	params  []string
+	timeout time.Duration
+}
+
+// Params names the route's path parameters, read once into the request
+// value.
+func Params(names ...string) HandlerOption {
+	return func(s *shim) { s.params = append(s.params, names...) }
+}
+
+// Timeout bounds the handler and every effect it describes with one
+// deadline from the request's arrival (spec §route-loads); an effect the
+// deadline cuts off is a 504 through the error handler.
+func Timeout(d time.Duration) HandlerOption {
+	return func(s *shim) { s.timeout = d }
+}
+
 // Handler is the shim: it builds the request value, calls h, performs
 // every continuation through perform, hands failures to eh and writes
 // the response (spec §requests-and-responses).
-func Handler(route string, h HandlerFunc, eh ErrorHandler, perform Performer, params ...string) http.Handler {
+func Handler(route string, h HandlerFunc, eh ErrorHandler, perform Performer, opts ...HandlerOption) http.Handler {
 	if eh == nil {
 		eh = DefaultErrorHandler
 	}
+	var s shim
+	for _, o := range opts {
+		o(&s)
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, hr *http.Request) {
+		ctx := hr.Context()
+		if s.timeout > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, s.timeout)
+			defer cancel()
+		}
 		body, err := bodyRead(hr)
-		req := RequestOf(hr, route, time.Now(), body, params...)
+		req := RequestOf(hr, route, time.Now(), body, s.params...)
 		var resp Response
 		if err != nil {
 			resp = eh(req, err)
 		} else {
 			resp = h(req)
 		}
-		resp = resolve(hr.Context(), req, resp, eh, perform)
+		resp = resolve(ctx, req, resp, eh, perform)
 		if err := resp.write(w, hr, req); err != nil {
 			slog.Error("volt: writing the response", "route", route, "err", err)
 		}

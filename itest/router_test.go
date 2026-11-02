@@ -40,15 +40,16 @@ func (home) Teapot(r volt.Request) volt.Response {
 
 type users struct{}
 
-func (users) Index(r volt.Request) volt.Response          { return echo(r) }
-func (users) New(r volt.Request) volt.Response            { return echo(r) }
-func (users) Create(r volt.Request) volt.Response         { return echo(r) }
-func (users) Show(r volt.Request, id int) volt.Response   { return echo(r, id) }
-func (users) Edit(r volt.Request, id int) volt.Response   { return echo(r, id) }
-func (users) Update(r volt.Request, id int) volt.Response { return echo(r, id) }
-func (users) Delete(r volt.Request, id int) volt.Response { return echo(r, id) }
-func (users) Avatar(r volt.Request, id int) volt.Response { return echo(r, id) }
-func (users) Profile(r volt.Request, id int) volt.Response {
+func (users) Index(r volt.Request) volt.Response                         { return echo(r) }
+func (users) New(r volt.Request) volt.Response                           { return echo(r) }
+func (users) Create(r volt.Request) volt.Response                        { return echo(r) }
+func (users) Show(r volt.Request, id int) volt.Response                  { return echo(r, id) }
+func (users) Edit(r volt.Request, id int) volt.Response                  { return echo(r, id) }
+func (users) Update(r volt.Request, id int) volt.Response                { return echo(r, id) }
+func (users) Delete(r volt.Request, id int) volt.Response                { return echo(r, id) }
+func (users) Avatar(r volt.Request, id int) volt.Response                { return echo(r, id) }
+func (users) Profile(r volt.Request, id int, user db.User) volt.Response { return volt.Render(user) }
+func (users) Card(r volt.Request, id int) volt.Response {
 	return volt.Then(db.UserGet(id), func(u db.User) volt.Response { return volt.Render(u) })
 }
 
@@ -154,6 +155,7 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathEditUser":        {"GET", app.PathEditUser(7)},
 		"PathAvatar":          {"GET", app.PathAvatar(7)},
 		"PathProfile":         {"GET", app.PathProfile(1)},
+		"PathCard":            {"GET", app.PathCard(1)},
 		"PathServe":           {"GET", app.PathServe("a/b c.txt")},
 		"PathOpsFail":         {"GET", app.PathOpsFail()},
 		"PathTag":             {"GET", app.PathTag("hello world")},
@@ -171,7 +173,7 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathRefTag":          {"GET", app.PathRefTag("go")},
 		"PathEvents":          {"GET", app.PathEvents()},
 	}
-	queryRoutes := map[string]bool{"PathProfile": true}
+	queryRoutes := map[string]bool{"PathProfile": true, "PathCard": true}
 	for _, r := range app.Table {
 		if r.Query != "" && r.Helper != "" {
 			queryRoutes[r.Helper] = true
@@ -463,7 +465,7 @@ func TestTableMatchesServedReality(t *testing.T) {
 		if row.Spelled == "/teapot" || row.Spelled == "/ops/fail" {
 			continue
 		}
-		if row.Action == "Profile" {
+		if row.Action == "Profile" || row.Action == "Card" {
 			if rec.Code != 404 {
 				t.Errorf("%s %s: the profile of a sampled user = %d, want 404 through the lookup", method, url, rec.Code)
 			}

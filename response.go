@@ -217,6 +217,9 @@ func resolve(ctx context.Context, req Request, resp Response, eh ErrorHandler, p
 			}
 			v, err := perform(ctx, resp.then.effect)
 			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					err = Error(http.StatusGatewayTimeout, "the route's timeout expired")
+				}
 				if on := resp.then.on; on != nil {
 					resp = on(err)
 				} else {

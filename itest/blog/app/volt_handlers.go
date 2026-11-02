@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/Piechutowski/volt"
+	"github.com/Piechutowski/volt/itest/blog/db"
 	"github.com/Piechutowski/volt/nao/run"
 )
 
@@ -48,7 +49,8 @@ type UsersController interface {
 	Update(r volt.Request, id int) volt.Response
 	Delete(r volt.Request, id int) volt.Response
 	Avatar(r volt.Request, id int) volt.Response
-	Profile(r volt.Request, id int) volt.Response
+	Profile(r volt.Request, id int, user db.User) volt.Response
+	Card(r volt.Request, id int) volt.Response
 }
 
 type Controllers struct {
@@ -123,8 +125,11 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	if !volt.Same(c.Users.Avatar(r, 0), c.Users.Avatar(r, 0)) {
 		voltOut = append(voltOut, "Users.Avatar")
 	}
-	if !volt.Same(c.Users.Profile(r, 0), c.Users.Profile(r, 0)) {
+	if !volt.Same(c.Users.Profile(r, 0, db.User{}), c.Users.Profile(r, 0, db.User{})) {
 		voltOut = append(voltOut, "Users.Profile")
+	}
+	if !volt.Same(c.Users.Card(r, 0), c.Users.Card(r, 0)) {
+		voltOut = append(voltOut, "Users.Card")
 	}
 	return voltOut
 }

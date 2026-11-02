@@ -507,7 +507,7 @@ func TestErrors(t *testing.T) {
 		{"signature conflict", map[string]string{
 			"go.mod":     modFile,
 			"app/r.volt": "package app\nScope / {\n\tget /a/:id(int) X.Show\n\tget /b/:id X.Show\n}\n",
-		}, "different parameter signatures"},
+		}, "different signatures"},
 		{"wildcard not last", map[string]string{
 			"go.mod":     modFile,
 			"app/r.volt": "package app\nScope / {\n\tget /f/:p.../x F.S\n}\n",
@@ -821,5 +821,38 @@ Table items {
 		if strings.Contains(d.Msg, "Type State") && (!strings.Contains(d.Msg, "declarations after a syntax error are invisible") || !strings.HasSuffix(d.Msg, "(§types)")) {
 			t.Errorf("the note names the broken file and the message ends with its section: %s", d.Msg)
 		}
+	}
+}
+
+func TestRouteLoads(t *testing.T) {
+	pr, diags := project(t, map[string]string{
+		"go.mod":         modFile,
+		"db/schema.volt": "package db\n\nTable metrics {\n\tid   int [pk, increment]\n\tunit string\n}\n\nSelect ordered for metrics [order: (id asc)]\nSelect by_unit for metrics where unit = :unit and id in :ids\n",
+		"app/r.volt": "package app\n\nimport (\n\tdb\n)\n\nScope / {\n" +
+			"\tget /metrics/:id(int) Metrics.Show [timeout: 5] {\n\t\tmetric db.MetricGet(id)\n\t\tpeers  db.MetricByUnit(\"ms\", ids)\n\t\tall    db.MetricOrdered()\n\t}\n}\n",
+	})
+	wantClean(t, diags)
+	app := pr.Packages["app"]
+	if len(app.Routes) != 1 || len(app.Controllers) != 1 {
+		t.Fatalf("routes = %d, controllers = %d; want 1 and 1", len(app.Routes), len(app.Controllers))
+	}
+	r := app.Routes[0]
+	if r.Timeout != 5 || len(r.Loads) != 3 {
+		t.Fatalf("route = %+v; want a timeout of 5 and three loads", r)
+	}
+	metric, peers, all := r.Loads[0], r.Loads[1], r.Loads[2]
+	if metric.Name != "metric" || metric.GoType() != "db.Metric" || len(metric.Query.Params) != 1 || metric.Query.Params[0].Source != FromPath {
+		t.Errorf("metric load = %+v %+v", metric, metric.Query)
+	}
+	if peers.GoType() != "[]db.Metric" || len(peers.Query.Params) != 2 || peers.Query.Params[0].Source != FromLiteral || peers.Query.Params[0].Literal != `"ms"` ||
+		peers.Query.Params[1].Source != FromList || peers.Query.Params[1].GoType != "[]int" {
+		t.Errorf("peers load = %+v", peers.Query.Params)
+	}
+	if all.GoType() != "[]db.Metric" || len(all.Query.Params) != 0 {
+		t.Errorf("all load = %+v", all.Query)
+	}
+	action := app.Controllers["Metrics"].Actions[0]
+	if action.Name != "Show" || len(action.Loads) != 3 || action.Loads[0].Name != "metric" {
+		t.Errorf("action = %+v; want Show with the three loads in order", action)
 	}
 }

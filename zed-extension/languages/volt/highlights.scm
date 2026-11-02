@@ -87,6 +87,7 @@
 ; pipelines and Go references (plugs, route handlers, error handlers)
 (pipeline_name) @label
 (go_ref (identifier) @function)
+(load_name) @variable.parameter
 
 ; route paths: literals as paths, parameters as parameters
 (route_path "/" @string.special)

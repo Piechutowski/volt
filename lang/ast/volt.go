@@ -128,22 +128,41 @@ type ScopeItem interface {
 	scopeItemNode()
 }
 
-// Route is one verb route line (spec §routes).
+// Route is one verb route line (spec §routes), with its load block when
+// it has one (§route-loads).
 type Route struct {
 	VerbTok  token.Token // IDENT: get, post, patch, delete, options, head, any; put, read only for the checker to name the verb to write (§routes)
 	Path     *RoutePath
 	Handler  *GoRef // Controller.Action — exactly two parts
 	Settings *SettingList
+	Loads    []*Load
+	Rbrace   token.Position // valid when the route has a load block
 }
 
 func (x *Route) Pos() token.Position { return x.VerbTok.Pos }
 func (x *Route) End() token.Position {
+	if x.Rbrace.IsValid() {
+		return x.Rbrace
+	}
 	if x.Settings != nil {
 		return x.Settings.End()
 	}
 	return x.Handler.End()
 }
-func (x *Route) scopeItemNode() {}
+
+// Load is one line of a route's load block (spec §route-loads): the name
+// the handler receives the value under, the query function called and
+// its arguments, each an Ident, a BasicLit or a NegNumber.
+type Load struct {
+	Name   *Ident
+	Query  *GoRef
+	Args   []Node
+	Rparen token.Position
+}
+
+func (x *Load) Pos() token.Position { return x.Name.Pos() }
+func (x *Load) End() token.Position { return x.Rparen }
+func (x *Route) scopeItemNode()     {}
 
 // Verb returns the lowercased verb.
 func (x *Route) Verb() string { return lower(x.VerbTok.Val) }

@@ -473,3 +473,47 @@ Scope / [error_handler: app.Errors] {
 }
 
 ---
+
+==================
+volt: route with a load block
+==================
+
+Scope / {
+	get /charts Pages.Charts [timeout: 5] {
+		metrics  db.MetricOrdered()
+		settings db.SettingGet(1, "x", true)
+	}
+}
+
+---
+
+(source_file
+  (scope_definition
+    (route_path)
+    (route
+      (verb)
+      (route_path
+        (path_segment))
+      (go_ref
+        (identifier)
+        (identifier))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (number)))
+      (load_block
+        (load
+          (load_name)
+          (go_ref
+            (identifier)
+            (identifier)))
+        (load
+          (load_name)
+          (go_ref
+            (identifier)
+            (identifier))
+          (number)
+          (string
+            (string_content))
+          (boolean))))))

@@ -61,6 +61,11 @@ type RouteInfo struct {
 	// are empty.
 	Query *QueryRef
 
+	// Loads are the route's loads in declaration order (§route-loads), and
+	// Timeout the seconds of its timeout: setting, 0 when none.
+	Loads   []LoadInfo
+	Timeout int
+
 	Pos           token.Position
 	FromResources bool
 	Table         string // the resources declaration's table name, when FromResources
@@ -75,18 +80,41 @@ type RouteInfo struct {
 type QuerySource int
 
 const (
-	FromPath  QuerySource = iota // a typed path parameter of the route
-	FromQuery                    // one query-string key, parsed to the type
-	FromList                     // a repeated query-string key (list parameter)
-	FromBody                     // the request body, decoded by Content-Type
+	FromPath    QuerySource = iota // a typed path parameter of the route
+	FromQuery                      // one query-string key, parsed to the type
+	FromList                       // a repeated query-string key (list parameter)
+	FromBody                       // the request body, decoded by Content-Type
+	FromLiteral                    // a literal written in a load (§route-loads)
 )
 
-// QueryParam is one parameter of a query route's method, in signature
-// order after ctx.
+// QueryParam is one parameter of a query function, in signature order.
 type QueryParam struct {
-	Name   string // Go parameter name, also the URL key
-	GoType string // unqualified Go type ("int", "[]string"); a changeset is qualified ("db.UserChangeset")
-	Source QuerySource
+	Name    string // Go parameter name, also the URL key
+	GoType  string // unqualified Go type ("int", "[]string"); a changeset is qualified ("db.UserChangeset")
+	Source  QuerySource
+	Literal string // the Go spelling of a FromLiteral argument (§route-loads)
+}
+
+// LoadInfo is one load of a controller route (§route-loads): the name the
+// handler receives the value under and the query it runs, its parameters
+// bound from the route, the query string or literals.
+type LoadInfo struct {
+	Name  string
+	Query *QueryRef
+}
+
+// GoType is the Go type of the loaded value as the routes package spells
+// it: the row type, qualified unless the query is the package's own, a
+// slice of it for a query of many rows.
+func (ld LoadInfo) GoType() string {
+	t := ld.Query.Result
+	if !ld.Query.Local {
+		t = ld.Query.Qualifier + "." + t
+	}
+	if ld.Query.Many {
+		t = "[]" + t
+	}
+	return t
 }
 
 // ChangesetBind is how a query route builds the changeset of a write
@@ -152,6 +180,7 @@ func (c *ControllerInfo) Action(name string) *ActionInfo {
 type ActionInfo struct {
 	Name   string
 	Params []Param
+	Loads  []LoadInfo // the loaded values the action receives after its parameters (§route-loads)
 	Routes []*RouteInfo
 }
 

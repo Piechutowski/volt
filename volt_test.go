@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Piechutowski/volt/nao/rt"
 )
@@ -55,7 +56,7 @@ func TestCustomErrorHandlerSeesRoute(t *testing.T) {
 		return Reject(400, "custom")
 	}
 	rec := httptest.NewRecorder()
-	Handler("GET /users/{id}", func(r Request) Response { return Fail(errors.New("x")) }, eh, nil, "id").
+	Handler("GET /users/{id}", func(r Request) Response { return Fail(errors.New("x")) }, eh, nil, Params("id")).
 		ServeHTTP(rec, httptest.NewRequest("GET", "/users/7", nil))
 	if gotRoute != "GET /users/{id}" || rec.Code != 400 {
 		t.Fatalf("route=%q code=%d", gotRoute, rec.Code)
@@ -77,7 +78,7 @@ func TestRequestValue(t *testing.T) {
 	mux.Handle("GET /users/{id}", Handler("GET /users/{id}", func(r Request) Response {
 		got = r
 		return NoContent()
-	}, nil, nil, "id"))
+	}, nil, nil, Params("id")))
 	req := httptest.NewRequest("GET", "/users/7?tab=x", strings.NewReader("body"))
 	req.Header.Set("X-Test", "yes")
 	rec := httptest.NewRecorder()
@@ -270,5 +271,20 @@ func TestRequestID(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
 	if seen == "" || rec.Header().Get("X-Request-ID") != seen {
 		t.Fatalf("request id not set consistently: %q vs %q", seen, rec.Header().Get("X-Request-ID"))
+	}
+}
+
+func TestTimeoutIs504(t *testing.T) {
+	slow := func(ctx context.Context, e rt.AnyEffect) (any, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	h := func(Request) Response {
+		return Then(rt.Query[int]{SQL: "SELECT 1"}, func([]int) Response { return NoContent() })
+	}
+	rec := httptest.NewRecorder()
+	Handler("GET /x", h, nil, slow, Timeout(10*time.Millisecond)).ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))
+	if rec.Code != http.StatusGatewayTimeout {
+		t.Fatalf("a chain past its timeout = %d, want 504", rec.Code)
 	}
 }

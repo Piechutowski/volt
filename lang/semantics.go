@@ -746,14 +746,14 @@ func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteI
 		c.pkg.Controllers[r.Controller] = ci
 	}
 	if a := ci.Action(r.Action); a != nil {
-		if !paramsEqual(a.Params, r.Params) {
-			c.errorf(r.Pos, "scopes-and-routes", "%s.%s is reached by routes with different parameter signatures (§handler-references): %s vs %s (first at %s)",
-				r.Controller, r.Action, paramsString(r.Params), paramsString(a.Params), a.Routes[0].Pos)
+		if !paramsEqual(a.Params, r.Params) || !loadsEqual(a.Loads, r.Loads) {
+			c.errorf(r.Pos, "scopes-and-routes", "%s.%s is reached by routes with different signatures (§handler-references, §route-loads): %s %s vs %s %s (first at %s)",
+				r.Controller, r.Action, paramsString(r.Params), loadsString(r.Loads), paramsString(a.Params), loadsString(a.Loads), a.Routes[0].Pos)
 			return
 		}
 		a.Routes = append(a.Routes, &r)
 	} else {
-		ci.Actions = append(ci.Actions, &ActionInfo{Name: r.Action, Params: r.Params, Routes: []*RouteInfo{&r}})
+		ci.Actions = append(ci.Actions, &ActionInfo{Name: r.Action, Params: r.Params, Loads: r.Loads, Routes: []*RouteInfo{&r}})
 	}
 	c.routeAccept(&r)
 }

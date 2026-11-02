@@ -194,46 +194,6 @@ Deferred: the language first, then non-core features and tooling.
 
 ---
 
-## Step 7. Route loads
-
-Depends on: 6.
-
-```ebnf
-route      = verb, route path, handler ref, [ settings ], ( newline | load block ) ;
-load block = "{", { load }, "}" ;
-load       = name, query call, newline ;
-query call = query ref, "(", [ arg, { ",", arg } ], ")" ;
-arg        = name | literal ;
-```
-
-```volt
-get /charts Pages.Charts {
-	metrics  db.MetricOrdered()
-	settings db.SettingGet(1)
-}
-```
-
-1. A load names a generated query and gives its arguments. A name binds as
-   query routes bind today: a path parameter of that name, else the query
-   string, typed by the query's signature. A literal binds as itself.
-2. Loads run in declaration order before the handler, each a `Then` in the
-   shim. The handler's signature is generated from them,
-   `Charts(r volt.Request, metrics []db.Metric, settings db.Setting)
-   volt.Response`, and the checker holds the Go method to it.
-3. A load that fails goes to the spine; a handler never sees a missing
-   row. A route that must decide on a miss loads nothing and uses `Then`
-   with `Rescue`.
-4. `[timeout: 5]`, integer seconds, a route setting the shim applies to
-   the whole chain with `context.WithTimeout`; 504 on expiry.
-
-Vet: `load-spelled-long`, a handler whose `Then` runs a query whose
-arguments are all route parameters.
-
-Done when: conformance snippets for the grammar and every constraint;
-goldens; the blog fixture uses loads.
-
----
-
 ## Step 8. Request bodies on controller routes
 
 Depends on: 7.
@@ -497,7 +457,6 @@ read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
 
 | Step | Depends on | Lands |
 |---|---|---|
-| 7 route loads | 6 | |
 | 8 bodies | 7 | |
 | 9 relations, join | 4 | |
 | 10 aggregates, group | 9 | |
