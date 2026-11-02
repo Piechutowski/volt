@@ -580,14 +580,21 @@ func fieldTypeMD(m *check.TableInfo, f naming.FieldSig) string {
 func selectHead(d *ast.Select) string {
 	head := "Select " + d.Name.Name()
 	if d.Projected() {
-		cols := identNames(d.Cols)
+		cols := make([]string, len(d.Cols))
+		for i, cr := range d.Cols {
+			cols[i] = cr.String()
+		}
 		if d.Star {
 			head += " (* \\ " + strings.Join(cols, " \\ ") + ")"
 		} else {
 			head += " (" + strings.Join(cols, ", ") + ")"
 		}
 	}
-	return head + " for " + d.Target.Name()
+	head += " for " + d.Target.Name()
+	for _, rel := range d.Joins {
+		head += " join " + rel.Name()
+	}
+	return head
 }
 
 func (ix *voltIndex) setSym(path, name string, kinds ...string) voltSym {

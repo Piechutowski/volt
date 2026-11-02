@@ -158,3 +158,10 @@ Table post_flags {
   reviewed pay.YesNo
   approved pay.YesNo [null]
 }
+
+// Joins (spec §selects-over-groups): orders reach their user through the
+// forward relation of user_id, inner since the key is required; users
+// reach their orders through the reverse relation, left since a user may
+// have none, so the joined columns are rt.Null.
+Select placed (id, total, user.name, user.email) for orders join user where total >= :min [order: (id asc)]
+Select buyers (id, name, orders.total) for users join orders [order: (id asc, orders.id asc)]

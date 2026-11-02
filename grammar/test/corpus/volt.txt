@@ -568,3 +568,52 @@ Scope / {
           (setting_name
             (identifier))
           (identifier))))))
+
+==================
+volt: select with a join and qualified columns
+==================
+
+Select recent (id, ts, metric.name) for points join metric join site where ts >= :since and metric.unit = "ms" and site.name is not null [order: (metric.name asc, ts desc)]
+
+---
+
+(source_file
+  (select_definition
+    (select_name)
+    (select_projection
+      (column_ref)
+      (column_ref)
+      (qualified_column
+        (relation_name)
+        (column_ref)))
+    (select_target)
+    (relation_name)
+    (relation_name)
+    (pred_expr
+      (pred_compare
+        (column_ref)
+        (query_param
+          (parameter_name)))
+      (pred_compare
+        (qualified_column
+          (relation_name)
+          (column_ref))
+        (string
+          (string_content)))
+      (pred_null
+        (qualified_column
+          (relation_name)
+          (column_ref))))
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (ident_group
+          (qualified_column
+            (relation_name)
+            (column_ref))
+          (ident_modifier
+            (identifier))
+          (identifier)
+          (ident_modifier
+            (identifier)))))))

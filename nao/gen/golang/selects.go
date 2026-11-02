@@ -43,7 +43,7 @@ func Selects(pl *naming.Plan, fns []naming.SelectFn, opts Options) ([]byte, erro
 				imports[imp] = true
 			}
 		}
-		cols, err := t.SelectColumns(fn)
+		cols, err := pl.SelectColumns(fn)
 		if err != nil {
 			return nil, err
 		}
@@ -55,7 +55,7 @@ func Selects(pl *naming.Plan, fns []naming.SelectFn, opts Options) ([]byte, erro
 				var rows align.Block
 				for _, f := range cols {
 					fieldImports(imports, f)
-					rows.Row(f.GoField, f.GoType, fmt.Sprintf("`db:%q json:%q`", f.ColName, f.ColName))
+					rows.Row(f.GoField, f.GoType, fmt.Sprintf("`db:%q json:%q`", f.WireName(), f.WireName()))
 				}
 				rows.WriteTo(&body, "\t")
 				body.WriteString("}\n\n")
@@ -137,7 +137,7 @@ func selectEmit(b *strings.Builder, imports map[string]bool, pl *naming.Plan, t 
 	name := t.SelectMethod(fn)
 	constName := t.SelectConst(fn)
 
-	sql, args, err := t.SelectSQL(fn)
+	sql, args, err := pl.SelectSQL(fn)
 	if err != nil {
 		return fmt.Errorf("select %s: %w", name, err)
 	}

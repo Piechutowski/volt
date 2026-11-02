@@ -88,3 +88,57 @@ const voltLinkClickAllSQL = `SELECT "id", "site", "day", "target" FROM "link_cli
 func LinkClickAll() rt.Query[LinkClick] {
 	return rt.Query[LinkClick]{SQL: voltLinkClickAllSQL, Args: nil, Scan: voltLinkClickScan}
 }
+
+type Hosted struct {
+	ID       int    `db:"id" json:"id"`
+	Day      int    `db:"day" json:"day"`
+	HostName string `db:"host_name" json:"host_name"`
+}
+
+func voltHostedScan(r rt.Row) (Hosted, error) {
+	var voltV Hosted
+	voltErr := r.Scan(&voltV.ID, &voltV.Day, &voltV.HostName)
+	return voltV, voltErr
+}
+
+const voltVisitHostedSQL = `SELECT "visits"."id", "visits"."day", "host"."name" FROM "visits" INNER JOIN "hosts" AS "host" ON "host"."id" = "visits"."host_id" WHERE "visits"."day" >= ? ORDER BY "host"."name" ASC, "visits"."id" DESC`
+
+func VisitHosted(from int) rt.Query[Hosted] {
+	return rt.Query[Hosted]{SQL: voltVisitHostedSQL, Args: []any{from}, Scan: voltHostedScan}
+}
+
+type Owned struct {
+	ID        int             `db:"id" json:"id"`
+	HostName  string          `db:"host_name" json:"host_name"`
+	OwnerName rt.Null[string] `db:"owner_name" json:"owner_name"`
+}
+
+func voltOwnedScan(r rt.Row) (Owned, error) {
+	var voltV Owned
+	voltErr := r.Scan(&voltV.ID, &voltV.HostName, &voltV.OwnerName)
+	return voltV, voltErr
+}
+
+const voltVisitOwnedSQL = `SELECT "visits"."id", "host"."name", "owner"."name" FROM "visits" INNER JOIN "hosts" AS "host" ON "host"."id" = "visits"."host_id" LEFT JOIN "hosts" AS "owner" ON "owner"."id" = "visits"."owner_id"`
+
+func VisitOwned() rt.Query[Owned] {
+	return rt.Query[Owned]{SQL: voltVisitOwnedSQL, Args: nil, Scan: voltOwnedScan}
+}
+
+type Traffic struct {
+	ID        int          `db:"id" json:"id"`
+	Name      string       `db:"name" json:"name"`
+	VisitsDay rt.Null[int] `db:"visits_day" json:"visits_day"`
+}
+
+func voltTrafficScan(r rt.Row) (Traffic, error) {
+	var voltV Traffic
+	voltErr := r.Scan(&voltV.ID, &voltV.Name, &voltV.VisitsDay)
+	return voltV, voltErr
+}
+
+const voltHostTrafficSQL = `SELECT "hosts"."id", "hosts"."name", "visits"."day" FROM "hosts" LEFT JOIN "visits" AS "visits" ON "visits"."host_id" = "hosts"."id" WHERE "visits"."day" = ?`
+
+func HostTraffic(day int) rt.Query[Traffic] {
+	return rt.Query[Traffic]{SQL: voltHostTrafficSQL, Args: []any{day}, Scan: voltTrafficScan}
+}

@@ -83,7 +83,7 @@ var allocBudget = struct {
 	load, check, gen uint64
 }{
 	load:  1069912,
-	check: 2092448,
+	check: 2303176,
 	gen:   7567336,
 }
 

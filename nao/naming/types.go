@@ -19,9 +19,20 @@ type SelectFn struct {
 	Where        rt.GenPred    // the zero value when the select has no where clause
 	Order        []rt.GenOrder // nil when it has no order: setting
 	Params       []SelectParam
-	Cols         []string // explicit projection, declared order; nil = all
+	Cols         []string // explicit projection, declared order, a joined column as relation.column; nil = all
 	Excluded     []string // star-form exclusions; nil = none
 	SharedType   string   // explicit list: the one shared row type name
+	Joins        []SelectJoin
+}
+
+// SelectJoin is one join of a select (spec §selects-over-groups): the
+// relation's name, its table, whether it joins LEFT, and the column
+// pairs the join matches, the joined table's column first.
+type SelectJoin struct {
+	Name     string
+	TableKey string
+	Left     bool
+	On       [][2]string
 }
 
 // FieldSig is one generated struct field.

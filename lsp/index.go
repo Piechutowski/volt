@@ -40,6 +40,7 @@ type Index struct {
 	Tables   map[string]*check.TableInfo // name -> table
 	Types    map[string]*check.TypeInfo  // declared name -> Type
 	Partials map[string]*check.PartialInfo
+	Info     *check.Info
 
 	decls map[SymbolID]*ast.Ident
 
@@ -122,6 +123,7 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 		Tables:   map[string]*check.TableInfo{},
 		Types:    map[string]*check.TypeInfo{},
 		Partials: map[string]*check.PartialInfo{},
+		Info:     info,
 		decls:    map[SymbolID]*ast.Ident{},
 	}
 	for _, ti := range info.Tables {
@@ -215,13 +217,18 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 			ix.walkEndpoint(n.Right)
 		case *ast.Select:
 			if ti := ix.Tables[n.Target.Name()]; ti != nil {
+				for _, rel := range n.Joins {
+					if r, _ := ix.Info.Relation(ti.Key, rel.Name()); r != nil {
+						ix.add(SymbolID{SymTable, "", r.Table.Key}, rel, false)
+					}
+				}
 				for _, col := range n.Cols {
-					ix.addColumnRef(ti, "", col)
+					ix.addColRef(ti, "", col)
 				}
 				if o := n.Settings.Get("order"); o != nil {
 					if list, ok := o.Value.(*ast.IdentList); ok {
-						for _, id := range list.Names {
-							ix.addColumnRef(ti, "", id)
+						for i, id := range list.Names {
+							ix.addColRef(ti, "", &ast.ColRef{Qual: list.Quals[i], Name: id})
 						}
 					}
 				}
@@ -375,16 +382,38 @@ func (ix *Index) walkPredCols(ti *check.TableInfo, partial string, x ast.PredExp
 	case *ast.PredCompare:
 		for _, side := range []ast.Operand{x.X, x.Y} {
 			if cr, ok := side.(*ast.ColRef); ok {
-				ix.addColumnRef(ti, partial, cr.Name)
+				ix.addColRef(ti, partial, cr)
 			}
 		}
 	case *ast.PredIn:
-		ix.addColumnRef(ti, partial, x.Col)
+		ix.addColRef(ti, partial, x.Col)
 	case *ast.PredLike:
-		ix.addColumnRef(ti, partial, x.Col)
+		ix.addColRef(ti, partial, x.Col)
 	case *ast.PredNull:
-		ix.addColumnRef(ti, partial, x.Col)
+		ix.addColRef(ti, partial, x.Col)
 	}
+}
+
+// addColRef records a column reference: a bare one against the table
+// (or partial) in scope, a qualified one against the table the
+// relation leads to (spec §selects-over-groups).
+func (ix *Index) addColRef(ti *check.TableInfo, partial string, cr *ast.ColRef) {
+	if cr == nil {
+		return
+	}
+	if cr.Qual == nil {
+		ix.addColumnRef(ti, partial, cr.Name)
+		return
+	}
+	if ti == nil || ix.Info == nil {
+		return
+	}
+	r, _ := ix.Info.Relation(ti.Key, cr.Qual.Name())
+	if r == nil {
+		return
+	}
+	ix.add(SymbolID{SymTable, "", r.Table.Key}, cr.Qual, false)
+	ix.addColumnRef(r.Table, "", cr.Name)
 }
 
 func (ix *Index) walkSettings(s *ast.SettingList) {

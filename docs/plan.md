@@ -194,53 +194,6 @@ Deferred: the language first, then non-core features and tooling.
 
 ---
 
-## Step 9. Relation names and `join`
-
-Depends on: 4.
-
-**Relation names**, derived from the simplified `ref`, one way:
-
-- forward: the column name without a trailing `_id` (`metric_id` gives
-  `metric`), else the column name;
-- reverse: the referencing table's name (`points`);
-- a collision is an error naming the fix, a single `as:` setting on the
-  ref, which exists for that case alone.
-
-A nullable ref is an optional relation; that fact decides the join kind.
-
-```ebnf
-select decl = "Select", name, [ projection ], "for", name, { join },
-              [ "where", pred expr ], [ settings ], newline ;
-join        = "join", name ;                 (* a relation of the target *)
-column ref  = name | name, ".", name ;       (* qualified by relation name *)
-```
-
-```volt
-Select recent (id, ts, value, metric.name, metric.unit)
-	for points join metric where ts >= :since [order: (ts desc)]
-```
-
-1. `join` names a relation of the `for` table. Inner for a required ref,
-   left for a nullable ref, and under a left join the joined columns are
-   `rt.Null[T]`. No join keyword exists.
-2. A qualified column's Go field is `<Relation><Column>` and its wire name
-   `<relation>_<column>`; `as` overrides and exists for that alone.
-3. A projection is mandatory with a join. The row type is the shared
-   struct the select name mints.
-4. Joins only when `for` names a table, not a group.
-5. `where` and `order:` may use qualified columns under the existing type
-   rules.
-
-Rendering (added to the renderer's fixed spellings in §predicates):
-`FROM "points" INNER JOIN "metrics" AS "metric" ON "metric"."id" =
-"points"."metric_id"`, `LEFT JOIN` for nullable, every column qualified
-when a join is present.
-
-Done when: conformance, the renderer corpus, goldens, `nao/itest`
-executes a join against real SQLite.
-
----
-
 ## Step 10. Aggregates, arithmetic, `group:`
 
 Depends on: 9.
@@ -420,7 +373,6 @@ read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
 
 | Step | Depends on | Lands |
 |---|---|---|
-| 9 relations, join | 4 | |
 | 10 aggregates, group | 9 | |
 | 11 with | 10 | |
 | 12 scope loads | 7 | the last step of this round |

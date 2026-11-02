@@ -479,6 +479,10 @@
         {
           "type": "identifier",
           "named": true
+        },
+        {
+          "type": "qualified_column",
+          "named": true
         }
       ]
     }
@@ -939,6 +943,10 @@
           "named": true
         },
         {
+          "type": "qualified_column",
+          "named": true
+        },
+        {
           "type": "query_param",
           "named": true
         },
@@ -1031,6 +1039,10 @@
           "named": true
         },
         {
+          "type": "qualified_column",
+          "named": true
+        },
+        {
           "type": "query_param",
           "named": true
         },
@@ -1054,6 +1066,10 @@
           "named": true
         },
         {
+          "type": "qualified_column",
+          "named": true
+        },
+        {
           "type": "query_param",
           "named": true
         },
@@ -1074,6 +1090,10 @@
       "types": [
         {
           "type": "column_ref",
+          "named": true
+        },
+        {
+          "type": "qualified_column",
           "named": true
         }
       ]
@@ -1139,6 +1159,25 @@
           }
         ]
       }
+    }
+  },
+  {
+    "type": "qualified_column",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "column_ref",
+          "named": true
+        },
+        {
+          "type": "relation_name",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -1638,6 +1677,16 @@
     "type": "select_definition",
     "named": true,
     "fields": {
+      "join": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "relation_name",
+            "named": true
+          }
+        ]
+      },
       "name": {
         "multiple": false,
         "required": true,
@@ -1700,6 +1749,10 @@
       "types": [
         {
           "type": "column_ref",
+          "named": true
+        },
+        {
+          "type": "qualified_column",
           "named": true
         }
       ]
@@ -2405,6 +2458,10 @@
     "named": false
   },
   {
+    "type": "join",
+    "named": false
+  },
+  {
     "type": "like",
     "named": false
   },
@@ -2471,6 +2528,10 @@
   {
     "type": "rebuild",
     "named": false
+  },
+  {
+    "type": "relation_name",
+    "named": true
   },
   {
     "type": "rename",

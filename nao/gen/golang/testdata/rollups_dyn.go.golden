@@ -89,3 +89,87 @@ func LinkClickUpdateWhere(set []rt.Assign[LinkClick], preds ...rt.Pred[LinkClick
 	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltLinkClickTableSQL, set, preds)
 	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
+
+const (
+	voltHostTableSQL   = `"hosts"`
+	voltHostColumnsSQL = `"id", "name"`
+)
+
+func HostLimit(n int) rt.Opt[Host] { return rt.Limit[Host](n) }
+
+func HostOffset(n int) rt.Opt[Host] { return rt.Offset[Host](n) }
+
+func HostDistinct() rt.Opt[Host] { return rt.Distinct[Host]() }
+
+func HostOrderBy(terms ...rt.Order[Host]) rt.Opt[Host] { return rt.OrderBy(terms...) }
+
+func HostAfter(key ...any) rt.Opt[Host] { return rt.After[Host](key...) }
+
+func HostSet(assigns ...rt.Assign[Host]) []rt.Assign[Host] { return assigns }
+
+func HostQuery(opts ...rt.Opt[Host]) rt.Query[Host] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltHostTableSQL, voltHostColumnsSQL, opts)
+	return rt.Query[Host]{SQL: voltSQL, Args: voltArgs, Scan: voltHostScan, Err: voltErr}
+}
+
+func HostCount(preds ...rt.Pred[Host]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltHostTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
+}
+
+func HostExists(preds ...rt.Pred[Host]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltHostTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
+}
+
+func HostDeleteWhere(preds ...rt.Pred[Host]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltHostTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+func HostUpdateWhere(set []rt.Assign[Host], preds ...rt.Pred[Host]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltHostTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+const (
+	voltVisitTableSQL   = `"visits"`
+	voltVisitColumnsSQL = `"id", "host_id", "owner_id", "day"`
+)
+
+func VisitLimit(n int) rt.Opt[Visit] { return rt.Limit[Visit](n) }
+
+func VisitOffset(n int) rt.Opt[Visit] { return rt.Offset[Visit](n) }
+
+func VisitDistinct() rt.Opt[Visit] { return rt.Distinct[Visit]() }
+
+func VisitOrderBy(terms ...rt.Order[Visit]) rt.Opt[Visit] { return rt.OrderBy(terms...) }
+
+func VisitAfter(key ...any) rt.Opt[Visit] { return rt.After[Visit](key...) }
+
+func VisitSet(assigns ...rt.Assign[Visit]) []rt.Assign[Visit] { return assigns }
+
+func VisitQuery(opts ...rt.Opt[Visit]) rt.Query[Visit] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltVisitTableSQL, voltVisitColumnsSQL, opts)
+	return rt.Query[Visit]{SQL: voltSQL, Args: voltArgs, Scan: voltVisitScan, Err: voltErr}
+}
+
+func VisitCount(preds ...rt.Pred[Visit]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltVisitTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
+}
+
+func VisitExists(preds ...rt.Pred[Visit]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltVisitTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
+}
+
+func VisitDeleteWhere(preds ...rt.Pred[Visit]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltVisitTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+func VisitUpdateWhere(set []rt.Assign[Visit], preds ...rt.Pred[Visit]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltVisitTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}

@@ -149,6 +149,7 @@
 (select_name) @label
 (select_target) @type
 (column_ref) @property
+(relation_name) @variable.parameter
 (query_param ":" @operator)
 (query_param name: (parameter_name) @variable.parameter)
 (pred_compare op: _ @operator)

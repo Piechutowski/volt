@@ -265,3 +265,189 @@ func voltLinkClickCast(c rt.Changeset[LinkClick], p rt.Params[LinkClick], i int)
 	}
 	return c, nil
 }
+
+type Host struct {
+	ID   int    `db:"id" json:"id"`
+	Name string `db:"name" json:"name"`
+}
+
+type HostColumn = rt.ColumnOf[Host]
+
+type HostParams = rt.Params[Host]
+
+var (
+	HostID   = rt.Column[Host, int]{Name: "id"}
+	HostName = rt.Column[Host, string]{Name: "name"}
+)
+
+var voltHostDesc = &rt.Desc[Host]{
+	Model:   "Host",
+	Table:   `"hosts"`,
+	Columns: `"id", "name"`,
+	Fields: []rt.FieldDesc{
+		{Column: "id", Wire: "id", Key: true},
+		{Column: "name", Wire: "name", Settable: true},
+	},
+	Scan:   voltHostScan,
+	Values: voltHostValues,
+	Apply:  voltHostApply,
+	Cast:   voltHostCast,
+}
+
+type HostChangeset struct{ rt.Changeset[Host] }
+
+func HostNew() HostChangeset { return HostChangeset{rt.NewChangeset(voltHostDesc)} }
+
+func (r Host) Changeset() HostChangeset { return HostChangeset{rt.ChangesetOf(voltHostDesc, r)} }
+
+func (c HostChangeset) From(r Host) HostChangeset { return HostChangeset{c.Changeset.From(r)} }
+
+func (c HostChangeset) NameSet(v string) HostChangeset {
+	return HostChangeset{rt.Set(c.Changeset, 1, func(voltR *Host) { voltR.Name = v })}
+}
+
+func (c HostChangeset) Cast(p HostParams, allow ...HostColumn) HostChangeset {
+	return HostChangeset{c.Changeset.Cast(p, allow...)}
+}
+
+func (c HostChangeset) ErrorAdd(col HostColumn, msg string) HostChangeset {
+	return HostChangeset{c.Changeset.ErrorAdd(col, msg)}
+}
+
+func voltHostScan(r rt.Row) (Host, error) {
+	var voltV Host
+	voltErr := r.Scan(&voltV.ID, &voltV.Name)
+	return voltV, rt.Refused("Host", voltErr)
+}
+
+func voltHostValues(voltR Host) []any { return []any{voltR.ID, voltR.Name} }
+
+func voltHostApply(voltData, voltVals Host, voltSet []bool) Host {
+	voltR := voltData
+	if voltSet[1] {
+		voltR.Name = voltVals.Name
+	}
+	return voltR
+}
+
+func voltHostCast(c rt.Changeset[Host], p rt.Params[Host], i int) (rt.Changeset[Host], error) {
+	switch i {
+	case 1:
+		voltV, voltOK, voltErr := rt.Field(p, "name", "string", false, func(voltR *Host) string { return voltR.Name })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return HostChangeset{c}.NameSet(voltV).Changeset, nil
+	}
+	return c, nil
+}
+
+type Visit struct {
+	ID      int          `db:"id" json:"id"`
+	HostID  int          `db:"host_id" json:"host_id"`
+	OwnerID rt.Null[int] `db:"owner_id" json:"owner_id"`
+	Day     int          `db:"day" json:"day"`
+}
+
+type VisitColumn = rt.ColumnOf[Visit]
+
+type VisitParams = rt.Params[Visit]
+
+var (
+	VisitID      = rt.Column[Visit, int]{Name: "id"}
+	VisitHostID  = rt.Column[Visit, int]{Name: "host_id"}
+	VisitOwnerID = rt.NullColumn[Visit, int]{Column: rt.Column[Visit, int]{Name: "owner_id"}}
+	VisitDay     = rt.Column[Visit, int]{Name: "day"}
+)
+
+var voltVisitDesc = &rt.Desc[Visit]{
+	Model:   "Visit",
+	Table:   `"visits"`,
+	Columns: `"id", "host_id", "owner_id", "day"`,
+	Fields: []rt.FieldDesc{
+		{Column: "id", Wire: "id", Key: true},
+		{Column: "host_id", Wire: "host_id", Settable: true},
+		{Column: "owner_id", Wire: "owner_id", Settable: true},
+		{Column: "day", Wire: "day", Settable: true},
+	},
+	Scan:   voltVisitScan,
+	Values: voltVisitValues,
+	Apply:  voltVisitApply,
+	Cast:   voltVisitCast,
+}
+
+type VisitChangeset struct{ rt.Changeset[Visit] }
+
+func VisitNew() VisitChangeset { return VisitChangeset{rt.NewChangeset(voltVisitDesc)} }
+
+func (r Visit) Changeset() VisitChangeset { return VisitChangeset{rt.ChangesetOf(voltVisitDesc, r)} }
+
+func (c VisitChangeset) From(r Visit) VisitChangeset { return VisitChangeset{c.Changeset.From(r)} }
+
+func (c VisitChangeset) HostIDSet(v int) VisitChangeset {
+	return VisitChangeset{rt.Set(c.Changeset, 1, func(voltR *Visit) { voltR.HostID = v })}
+}
+
+func (c VisitChangeset) OwnerIDSet(v rt.Null[int]) VisitChangeset {
+	return VisitChangeset{rt.Set(c.Changeset, 2, func(voltR *Visit) { voltR.OwnerID = v })}
+}
+
+func (c VisitChangeset) DaySet(v int) VisitChangeset {
+	return VisitChangeset{rt.Set(c.Changeset, 3, func(voltR *Visit) { voltR.Day = v })}
+}
+
+func (c VisitChangeset) Cast(p VisitParams, allow ...VisitColumn) VisitChangeset {
+	return VisitChangeset{c.Changeset.Cast(p, allow...)}
+}
+
+func (c VisitChangeset) ErrorAdd(col VisitColumn, msg string) VisitChangeset {
+	return VisitChangeset{c.Changeset.ErrorAdd(col, msg)}
+}
+
+func voltVisitScan(r rt.Row) (Visit, error) {
+	var voltV Visit
+	voltErr := r.Scan(&voltV.ID, &voltV.HostID, &voltV.OwnerID, &voltV.Day)
+	return voltV, rt.Refused("Visit", voltErr)
+}
+
+func voltVisitValues(voltR Visit) []any {
+	return []any{voltR.ID, voltR.HostID, voltR.OwnerID, voltR.Day}
+}
+
+func voltVisitApply(voltData, voltVals Visit, voltSet []bool) Visit {
+	voltR := voltData
+	if voltSet[1] {
+		voltR.HostID = voltVals.HostID
+	}
+	if voltSet[2] {
+		voltR.OwnerID = voltVals.OwnerID
+	}
+	if voltSet[3] {
+		voltR.Day = voltVals.Day
+	}
+	return voltR
+}
+
+func voltVisitCast(c rt.Changeset[Visit], p rt.Params[Visit], i int) (rt.Changeset[Visit], error) {
+	switch i {
+	case 1:
+		voltV, voltOK, voltErr := rt.Field(p, "host_id", "int", false, func(voltR *Visit) int { return voltR.HostID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return VisitChangeset{c}.HostIDSet(voltV).Changeset, nil
+	case 2:
+		voltV, voltOK, voltErr := rt.Field(p, "owner_id", "int", true, func(voltR *Visit) rt.Null[int] { return voltR.OwnerID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return VisitChangeset{c}.OwnerIDSet(voltV).Changeset, nil
+	case 3:
+		voltV, voltOK, voltErr := rt.Field(p, "day", "int", false, func(voltR *Visit) int { return voltR.Day })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return VisitChangeset{c}.DaySet(voltV).Changeset, nil
+	}
+	return c, nil
+}

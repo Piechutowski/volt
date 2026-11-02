@@ -35,3 +35,24 @@ Select summary (site, day) for traffic where since
 Select public  (* \ target) for link_clicks
 Select recent  for traffic where since [order: (day desc, id asc)]
 Select all     for link_clicks
+
+// Joins (spec §selects-over-groups, §relationships-ref): a forward
+// relation joins inner, a nullable one left with its columns rt.Null, and
+// a reverse relation, named outright where two would collide, joins left.
+Table hosts {
+  id   int [pk, increment]
+  name string
+}
+
+Table visits {
+  id       int [pk, increment]
+  host_id  int [ref: hosts.id]
+  owner_id int [null]
+  day      int
+}
+
+Ref: visits.owner_id > hosts.id [as: owner, reverse: owned]
+
+Select hosted  (id, day, host.name) for visits join host where day >= :from [order: (host.name asc, id desc)]
+Select owned   (id, host.name, owner.name) for visits join host join owner
+Select traffic (id, name, visits.day) for hosts join visits where visits.day = :day

@@ -2,6 +2,8 @@ package naming
 
 import (
 	"fmt"
+
+	"github.com/Piechutowski/volt/nao/rt"
 	"sort"
 	"strings"
 
@@ -284,11 +286,7 @@ func fieldSigOf(fp *Field) FieldSig {
 // SelectRowType names the row type one instantiation returns (§selects-over-groups)
 // and reports its fields.
 func (pl *Plan) SelectRowType(fn SelectFn) (string, []FieldSig, error) {
-	t, err := pl.table(fn.TableKey)
-	if err != nil {
-		return "", nil, err
-	}
-	cols, err := t.SelectColumns(fn)
+	cols, err := pl.SelectColumns(fn)
 	if err != nil {
 		return "", nil, err
 	}
@@ -307,11 +305,134 @@ func (pl *Plan) SelectRowType(fn SelectFn) (string, []FieldSig, error) {
 // the runtime (spec §predicates), with the Go expressions the
 // method binds in placeholder order.
 func (pl *Plan) SelectStatement(fn SelectFn) (string, []string, error) {
+	return pl.SelectSQL(fn)
+}
+
+// SelectColumns lists the fields one select instantiation reads, in its
+// projection's order (spec §selects-over-groups): the table's own, and
+// under a join those of the joined tables, each reached through its
+// relation, qualified for the statement and prefixed for the row type.
+func (pl *Plan) SelectColumns(fn SelectFn) ([]*Field, error) {
+	t, err := pl.table(fn.TableKey)
+	if err != nil {
+		return nil, err
+	}
+	joined := len(fn.Joins) > 0
+	own := func(f *Field) *Field {
+		if !joined {
+			return f
+		}
+		q := *f
+		q.Qualifier = t.SQLName
+		return &q
+	}
+	switch {
+	case len(fn.Cols) > 0:
+		out := make([]*Field, 0, len(fn.Cols))
+		for _, c := range fn.Cols {
+			qual, col, qualified := strings.Cut(c, ".")
+			if !qualified {
+				f := t.Field(c)
+				if f == nil {
+					return nil, fmt.Errorf("select %s: no column %q in table %s", fn.MethodSuffix, c, t.SQLName)
+				}
+				out = append(out, own(f))
+				continue
+			}
+			f, err := pl.joinedField(fn, qual, col)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, f)
+		}
+		return out, nil
+	case len(fn.Excluded) > 0:
+		ex := make(map[string]bool, len(fn.Excluded))
+		for _, c := range fn.Excluded {
+			if t.Field(c) == nil {
+				return nil, fmt.Errorf("select %s: no column %q in table %s", fn.MethodSuffix, c, t.SQLName)
+			}
+			ex[c] = true
+		}
+		var out []*Field
+		for _, f := range t.Fields {
+			if !ex[f.ColName] {
+				out = append(out, own(f))
+			}
+		}
+		if len(out) == 0 {
+			return nil, fmt.Errorf("select %s: every column of %s excluded", fn.MethodSuffix, t.SQLName)
+		}
+		return out, nil
+	}
+	if !joined {
+		return t.Fields, nil
+	}
+	out := make([]*Field, len(t.Fields))
+	for i, f := range t.Fields {
+		out[i] = own(f)
+	}
+	return out, nil
+}
+
+func (pl *Plan) joinedField(fn SelectFn, qual, col string) (*Field, error) {
+	for _, j := range fn.Joins {
+		if j.Name != qual {
+			continue
+		}
+		jt, err := pl.table(j.TableKey)
+		if err != nil {
+			return nil, err
+		}
+		f := jt.Field(col)
+		if f == nil {
+			return nil, fmt.Errorf("select %s: no column %q in table %s, joined as %s", fn.MethodSuffix, col, jt.SQLName, qual)
+		}
+		prefix, err := GoName(qual)
+		if err != nil {
+			return nil, fmt.Errorf("select %s: relation %q: %w", fn.MethodSuffix, qual, err)
+		}
+		q := *f
+		q.Qualifier, q.Relation = qual, qual
+		q.GoField = prefix + f.GoField
+		q.Arg = paramName(q.GoField)
+		if j.Left && !f.Nullable {
+			q.GoType, q.Nullable = "rt.Null["+f.GoType+"]", true
+		}
+		return &q, nil
+	}
+	return nil, fmt.Errorf("select %s: %q is no joined relation", fn.MethodSuffix, qual)
+}
+
+// SelectSQL renders the statement of one instantiation through the
+// runtime (spec §predicates) and lists the Go expressions its method
+// binds, in placeholder order.
+func (pl *Plan) SelectSQL(fn SelectFn) (string, []string, error) {
 	t, err := pl.table(fn.TableKey)
 	if err != nil {
 		return "", nil, err
 	}
-	return t.SelectSQL(fn)
+	cols, err := pl.SelectColumns(fn)
+	if err != nil {
+		return "", nil, err
+	}
+	opts := []rt.Opt[rt.Gen]{fn.Where}
+	if len(fn.Order) > 0 {
+		opts = append(opts, rt.OrderBy(fn.Order...))
+	}
+	from := rt.Ident(t.SQLName)
+	if len(fn.Joins) > 0 {
+		joins := make([]rt.Join, len(fn.Joins))
+		for i, j := range fn.Joins {
+			jt, err := pl.table(j.TableKey)
+			if err != nil {
+				return "", nil, err
+			}
+			joins[i] = rt.Join{Table: jt.SQLName, As: j.Name, On: j.On, Left: j.Left}
+		}
+		from = rt.FromRender(t.SQLName, joins)
+	}
+	return genRender(rt.SelectRender(from, columnList(cols), opts))
 }
 
 // DynNameCollisions reports the package-scope Go name collisions the

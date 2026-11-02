@@ -893,3 +893,60 @@ func TestRequestBodies(t *testing.T) {
 		t.Errorf("Save action = %+v; want the route's body", a)
 	}
 }
+
+func TestSelectJoins(t *testing.T) {
+	pr, diags := project(t, map[string]string{
+		"go.mod": modFile,
+		"db/schema.volt": "package db\n\nTable metrics {\n\tid   int [pk, increment]\n\tname string\n}\n\n" +
+			"Table points {\n\tid        int [pk, increment]\n\tmetric_id int [ref: metrics.id]\n\tsource_id int [null]\n\tts        int\n}\n\n" +
+			"Ref: points.source_id > metrics.id [as: source, reverse: sourced]\n\n" +
+			"Select recent (id, ts, metric.name, source.name) for points join metric join source where ts >= :since and metric.name = :name [order: (metric.name asc, ts desc)]\n" +
+			"Select series (id, points.ts) for metrics join points\n",
+	})
+	wantClean(t, diags)
+	db := pr.Packages["db"]
+	if len(db.Selects) != 2 {
+		t.Fatalf("selects = %d; want 2", len(db.Selects))
+	}
+	recent, series := db.Selects[0], db.Selects[1]
+	if len(recent.Joins) != 2 || recent.Joins[0].Name != "metric" || recent.Joins[0].Left || recent.Joins[1].Name != "source" || !recent.Joins[1].Left {
+		t.Errorf("recent joins = %+v; want metric inner and source left", recent.Joins)
+	}
+	if got := strings.Join(recent.Cols, ","); got != "id,ts,metric.name,source.name" {
+		t.Errorf("recent cols = %s", got)
+	}
+	if len(series.Joins) != 1 || !series.Joins[0].Left || series.Joins[0].Table.Key != "points" {
+		t.Errorf("series joins = %+v; want the reverse relation, left", series.Joins)
+	}
+	plan := db.Plan()
+	fns := db.SelectFns()
+	if len(fns) != 2 {
+		t.Fatalf("select functions = %d; want 2", len(fns))
+	}
+	sql, args, err := plan.SelectStatement(fns[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `SELECT "points"."id", "points"."ts", "metric"."name", "source"."name" FROM "points" INNER JOIN "metrics" AS "metric" ON "metric"."id" = "points"."metric_id" LEFT JOIN "metrics" AS "source" ON "source"."id" = "points"."source_id" WHERE ("points"."ts" >= ? AND "metric"."name" = ?) ORDER BY "metric"."name" ASC, "points"."ts" DESC`
+	if sql != want || strings.Join(args, ",") != "since,name" {
+		t.Errorf("recent renders\n\t%s %v\nwant\n\t%s [since name]", sql, args, want)
+	}
+	row, fields, err := plan.SelectRowType(fns[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sigs []string
+	for _, f := range fields {
+		sigs = append(sigs, f.Name+" "+f.Type+" "+f.Col)
+	}
+	if row != "Recent" || strings.Join(sigs, "; ") != "ID int id; Ts int ts; MetricName string name; SourceName rt.Null[string] name" {
+		t.Errorf("recent row = %s %v", row, sigs)
+	}
+	sql, _, err = plan.SelectStatement(fns[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `SELECT "metrics"."id", "points"."ts" FROM "metrics" LEFT JOIN "points" AS "points" ON "points"."metric_id" = "metrics"."id"`; sql != want {
+		t.Errorf("series renders %s, want %s", sql, want)
+	}
+}

@@ -710,7 +710,14 @@ func (p *parser) settingValue() ast.Node {
 		l := p.next()
 		il := &ast.IdentList{Lparen: l.Pos}
 		for {
-			il.Names = append(il.Names, p.ident("identifier list (§settings-whitelists)"))
+			name := p.ident("identifier list (§settings-whitelists)")
+			var qual *ast.Ident
+			if p.at(token.DOT) {
+				p.next()
+				qual, name = name, p.ident("identifier list (§settings-whitelists)")
+			}
+			il.Names = append(il.Names, name)
+			il.Quals = append(il.Quals, qual)
 			var mod *ast.Ident
 			if p.at(token.IDENT) && !p.cur().NLBefore {
 				mod = p.ident("identifier list (§settings-whitelists)")

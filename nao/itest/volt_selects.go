@@ -150,3 +150,40 @@ const voltAttachmentHeavySQL = `SELECT "id", "body", "thumb", "digest" FROM "att
 func AttachmentHeavy(name string) rt.Query[AttachmentHeavyRow] {
 	return rt.Query[AttachmentHeavyRow]{SQL: voltAttachmentHeavySQL, Args: []any{name}, Scan: voltAttachmentHeavyRowScan}
 }
+
+type Placed struct {
+	ID        int     `db:"id" json:"id"`
+	Total     float64 `db:"total" json:"total"`
+	UserName  string  `db:"user_name" json:"user_name"`
+	UserEmail string  `db:"user_email" json:"user_email"`
+}
+
+func voltPlacedScan(r rt.Row) (Placed, error) {
+	var voltV Placed
+	voltErr := r.Scan(&voltV.ID, &voltV.Total, &voltV.UserName, &voltV.UserEmail)
+	return voltV, voltErr
+}
+
+const voltOrderPlacedSQL = `SELECT "orders"."id", "orders"."total", "user"."name", "user"."email" FROM "orders" INNER JOIN "users" AS "user" ON "user"."id" = "orders"."user_id" WHERE "orders"."total" >= ? ORDER BY "orders"."id" ASC`
+
+func OrderPlaced(min float64) rt.Query[Placed] {
+	return rt.Query[Placed]{SQL: voltOrderPlacedSQL, Args: []any{min}, Scan: voltPlacedScan}
+}
+
+type Buyers struct {
+	ID          int              `db:"id" json:"id"`
+	Name        string           `db:"name" json:"name"`
+	OrdersTotal rt.Null[float64] `db:"orders_total" json:"orders_total"`
+}
+
+func voltBuyersScan(r rt.Row) (Buyers, error) {
+	var voltV Buyers
+	voltErr := r.Scan(&voltV.ID, &voltV.Name, &voltV.OrdersTotal)
+	return voltV, voltErr
+}
+
+const voltUserBuyersSQL = `SELECT "users"."id", "users"."name", "orders"."total" FROM "users" LEFT JOIN "orders" AS "orders" ON "orders"."user_id" = "users"."id" ORDER BY "users"."id" ASC, "orders"."id" ASC`
+
+func UserBuyers() rt.Query[Buyers] {
+	return rt.Query[Buyers]{SQL: voltUserBuyersSQL, Args: nil, Scan: voltBuyersScan}
+}

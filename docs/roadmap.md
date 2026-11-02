@@ -22,7 +22,7 @@ that lands it.
 | Generated Elm client | no | missing | |
 | Models, CRUD, dynamic queries | Ecto / ActiveRecord | built | |
 | Changesets and validation | Ecto changesets / validations | built | |
-| Joins in declared queries | yes | missing | 9 |
+| Joins in declared queries | yes | built (`join` over relation names) | |
 | Aggregates and grouping | yes | missing | 10 |
 | Nested results (preload / include) | yes | missing | 11 |
 | Many-to-many through a junction | yes | missing | |

@@ -312,6 +312,10 @@ func (x *Segment) String() string {
 type IdentList struct {
 	Lparen token.Position
 	Names  []*Ident
+	// Quals holds an optional qualifier per name (parallel to Names, nil
+	// entries when absent): an order list reaches a joined relation's
+	// column as relation.column (§selects-over-groups).
+	Quals []*Ident
 	// Mods holds an optional one-word modifier per name (parallel to
 	// Names, nil entries when absent): order lists use it for asc/desc
 	// (§selects-over-groups).
@@ -439,7 +443,7 @@ func (x *PredCompare) predExpr()           {}
 // PredIn is "col in (lit, ...)" or "col in :list" — the latter a list
 // parameter, typed as a slice of the column's type (spec §predicates).
 type PredIn struct {
-	Col    *Ident
+	Col    *ColRef
 	Items  []*Lit // literal form; nil when List is set
 	List   *Param // list-parameter form; nil for the literal form
 	Rparen token.Position
@@ -456,7 +460,7 @@ func (x *PredIn) predExpr() {}
 
 // PredLike is "col like pattern" (pattern: string literal or param).
 type PredLike struct {
-	Col     *Ident
+	Col     *ColRef
 	Pattern Operand // *Lit (string) or *Param
 }
 
@@ -466,7 +470,7 @@ func (x *PredLike) predExpr()           {}
 
 // PredNull is "col is [not] null".
 type PredNull struct {
-	Col    *Ident
+	Col    *ColRef
 	Not    bool
 	EndPos token.Position
 }
@@ -481,14 +485,30 @@ type Operand interface {
 	operand()
 }
 
-// ColRef is a column reference inside a predicate.
+// ColRef is a column reference inside a predicate or a projection: a
+// column of the target, or relation.column, a column of a joined
+// relation (§predicates, §selects-over-groups).
 type ColRef struct {
+	Qual *Ident // the relation, nil for a column of the target
 	Name *Ident
 }
 
-func (x *ColRef) Pos() token.Position { return x.Name.Pos() }
+func (x *ColRef) Pos() token.Position {
+	if x.Qual != nil {
+		return x.Qual.Pos()
+	}
+	return x.Name.Pos()
+}
 func (x *ColRef) End() token.Position { return x.Name.End() }
 func (x *ColRef) operand()            {}
+
+// String spells the reference as written, relation.column or column.
+func (x *ColRef) String() string {
+	if x.Qual != nil {
+		return x.Qual.Name() + "." + x.Name.Name()
+	}
+	return x.Name.Name()
+}
 
 // Param is a ":name" query parameter (spec §predicates).
 type Param struct {
@@ -516,9 +536,10 @@ type Select struct {
 	Name      *Ident
 	Lparen    token.Position // projection parens (§selects-over-groups); zero when absent
 	Star      bool           // (* \\ a \\ (b, c)) star form
-	Cols      []*Ident       // explicit list, or the star form's exclusions
+	Cols      []*ColRef      // explicit list, qualified by a joined relation or not, or the star form's exclusions
 	Rparen    token.Position
 	Target    *Ident   // group or table name (§selects-over-groups)
+	Joins     []*Ident // the relations joined, in order (§selects-over-groups)
 	Where     PredExpr // nil = all rows
 	Settings  *SettingList
 	EndPos    token.Position

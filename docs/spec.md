@@ -469,12 +469,12 @@ then reads it as that keyword, so the error is reported once.
 |---|---|---|
 | element and block words | `Project`, `Table`, `TablePartial`, `Type`, `Ref`, `Records`, `Group`, `Pred`, `Select`, `Migration`, `Pipeline`, `Scope`, `Indexes`, `Validators` | §program-structure, §indexes, §validators |
 | package words | `package`, `import` | §projects-and-packages, §imports |
-| setting names | `pk`, `null`, `unique`, `index`, `increment`, `default`, `note`, `ref`, `tag`, `required`, `model`, `name`, `where`, `delete`, `update`, `from`, `down`, `irreversible`, `no_transaction`, `pipe`, `error_handler`, `api`, `only`, `except`, `param`, `singular`, `strip`, `order` | §settings-lists, §settings-whitelists |
+| setting names | `pk`, `null`, `unique`, `index`, `increment`, `default`, `note`, `ref`, `tag`, `required`, `model`, `name`, `where`, `delete`, `update`, `from`, `down`, `irreversible`, `no_transaction`, `pipe`, `error_handler`, `api`, `only`, `except`, `param`, `singular`, `strip`, `order`, `as`, `reverse`, `timeout`, `body` | §settings-lists, §settings-whitelists |
 | referential actions | `cascade`, `restrict`, `set_null`, `set_default` | §relationships-ref |
 | resource actions | `index`, `new`, `create`, `show`, `edit`, `update`, `delete` | §the-action-table |
 | order directions | `asc`, `desc` | §selects-over-groups |
 | literal words | `true`, `false`, `null` | §boolean-and-null-literals |
-| clause words | `from`, `for`, `where`, `and`, `or`, `not`, `in`, `like`, `is` | §types, §selects-over-groups, §predicates |
+| clause words | `from`, `for`, `join`, `where`, `and`, `or`, `not`, `in`, `like`, `is` | §types, §selects-over-groups, §predicates |
 | route words | `get`, `post`, `patch`, `delete`, `options`, `head`, `any`, `resources`, `dataset`, `use` | §routes, §resources, §datasets, §pipelines |
 | parameter types | `int` | §route-paths |
 | migration words | `up`, `down`, `create`, `drop`, `rename`, `alter`, `rebuild`, `exec`, `table`, `index`, `add`, `to` | §migrations |
@@ -1087,7 +1087,9 @@ column group = name
 
 ref settings = "[", ref setting, { ",", ref setting }, "]" ;
 ref setting  = "delete", ":", ref action
-             | "update", ":", ref action ;
+             | "update", ":", ref action
+             | "as", ":", name
+             | "reverse", ":", name ;
 ref action   = "cascade" | "restrict" | "set_null" | "set_default" ;
 ```
 
@@ -1150,6 +1152,31 @@ ref action   = "cascade" | "restrict" | "set_null" | "set_default" ;
     with a foreign key mismatch error at the first write that checks
     the key; the checker does not refuse it, and the vet rule
     [`reftarget`](lint.md#reftarget) reports it.
+12. **Relation names.** Every relationship whose endpoints resolve
+    gives each of its tables a **relation**, the name a select joins
+    by (§selects-over-groups). The foreign-key table's relation, the
+    **forward** one, leads to the one row the key references and is
+    named after the foreign-key column: the column name without a
+    trailing `_id` (`metric_id` names `metric`), else the column name,
+    and the referenced table's name for a composite key. The
+    referenced table's relation, the **reverse** one, leads to the
+    rows that reference it and is named after the foreign-key table
+    (`points`). A forward relation is **optional** when any of its
+    columns carries `null`; a reverse relation always is, since no row
+    need reference a given one. The name maps to a Go name (§names),
+    which prefixes the fields of the columns reached through it.
+13. **Ambiguity, `as:` and `reverse:`.** A table's relations and its
+    own name form one namespace, which the derivation does not keep:
+    two relationships from one table to another repeat the reverse
+    name, two composite ones the forward name too, and the reverse
+    relation of a self-reference takes the table's own name. A name
+    two relations share, or that is the table's, is **ambiguous**:
+    nothing can join it (§selects-over-groups), and the error names
+    the relationships and the fix. The settings of a `Ref` element
+    name its relations outright, `as:` the forward one and `reverse:`
+    the reverse one, each an identifier that maps to a Go name; they
+    exist for that case alone. An inline `ref:` carries no settings
+    (rule 2): to name its relations, write it as a `Ref`.
 
 ```volt
 Table users {
@@ -1626,7 +1653,9 @@ ref endpoint         = name, ".", column group ;
 column group         = name | "(", name, { ",", name }, ")" ;
 ref settings         = "[", ref setting, { ",", ref setting }, "]" ;
 ref setting          = "delete", ":", ref action
-                     | "update", ":", ref action ;
+                     | "update", ":", ref action
+                     | "as", ":", name
+                     | "reverse", ":", name ;
 ref action           = "cascade" | "restrict" | "set_null" | "set_default" ;
 
 (* ===== Types ===== *)
@@ -2991,7 +3020,7 @@ membership   = column ref, "in", ( "(", literal, { ",", literal }, ")" | param )
 pattern      = column ref, "like", ( string | param ) ;
 null test    = column ref, "is", [ "not" ], "null" ;
 operand      = column ref | param | literal ;
-column ref   = name - pred keyword ;
+column ref   = [ name - pred keyword, "." ], name - pred keyword ;
 param        = ":", name ;                 (* no space after ':' *)
 literal      = [ "-" ], number | string | boolean ;
 pred keyword = "and" | "or" | "not" | "in" | "like" | "is" | "null" ;
@@ -3018,7 +3047,10 @@ Pred chosen  { org in :orgs }
    its column names. The rules:
    - a comparison MUST name a column on at least one side; a parameter
      or literal on each side is an error;
-   - a `column ref` must resolve in the target's environment (§selects-over-groups);
+   - a `column ref` must resolve in the target's environment
+     (§selects-over-groups): a bare name is a column of the target, a
+     qualified one, `metric.name`, a column of a relation the use site
+     joins, typed as its own table types it;
    - `=` and `!=` require both operands to share a type class;
    - a comparison of two columns requires one Go type, nullability
      aside: an `int` column does not compare with a `float64` column,
@@ -3079,7 +3111,8 @@ Pred chosen  { org in :orgs }
    predicate spells the same bytes on both paths. Its spellings are
    fixed and it produces no other:
    - an identifier is always double-quoted (`"email"`), a `"` inside
-     it doubled;
+     it doubled; a qualified column quotes both parts,
+     `"metric"."name"`;
    - a comparison is `"col" <op> ?` or `"col" <op> "other"` with
      `<op>` one of `=`, `!=`, `<`, `<=`, `>`, `>=`; `!=` is the one
      spelling of inequality, `<>` is never produced and the dynamic
@@ -3116,6 +3149,13 @@ Pred chosen  { org in :orgs }
      <predicate>][ ORDER BY <terms>][ LIMIT ?[ OFFSET ?]]`, the column
      list and the table the pre-rendered constants of the model; an
      offset without a limit is `LIMIT -1 OFFSET ?`;
+   - a select with joins (§selects-over-groups) is the same with
+     `<table>` followed by one ` INNER JOIN <other> AS <relation> ON
+     <pairs>` per join, `LEFT JOIN` for an optional relation, in
+     declaration order; `<pairs>` is `"<relation>"."<column>" =
+     "<table>"."<column>"` per key column, joined by ` AND `, and every
+     column of the statement is qualified, the table's own by the
+     table's name;
    - a count is `SELECT count(*) FROM <table>[ WHERE <predicate>]`, an
      existence test `SELECT EXISTS (SELECT 1 FROM <table>[ WHERE
      <predicate>])`;
@@ -3142,14 +3182,16 @@ of a target: a group (§groups), or a single table treated as a
 one-member group.
 
 ```ebnf
-select decl = "Select", name, [ projection ], "for", name,
+select decl = "Select", name, [ projection ], "for", name, { join },
               [ "where", pred expr ], [ settings ], newline ;
+join        = "join", name ;
 
 projection  = "(", column name, { ",", column name }, ")"
             | "(", "*", "\", column term, { "\", column term }, ")" ;
-column term = column name
-            | "(", column name, { ",", column name }, ")" ;
-column name = name ;
+column term = own column
+            | "(", own column, { ",", own column }, ")" ;
+column name = [ name, "." ], own column ;
+own column  = name ;
 order list  = "(", order term, { ",", order term }, ")" ;   (* the value of order:, a setting value (§settings-lists) *)
 order term  = column name, ( "asc" | "desc" ) ;
 ```
@@ -3161,6 +3203,7 @@ Select all     for series
 Select summary (id, org, year)    for series where current
 Select public  (* \ password_hash) for accounts
 Select brief   (* \ (password_hash, bio, avatar)) for accounts
+Select recent  (id, ts, value, metric.name, metric.unit) for points join metric where ts >= :since [order: (ts desc)]
 ```
 
 The clauses read in SQL order — name, columns, source, filter — and
@@ -3260,6 +3303,29 @@ the optional projection narrows the emitted columns.
      declared types (§types), and another select's minted row type; the select names `Changeset`,
      `Column`, `Params` and `New` are rejected outright (rule 1). The Go
      compiler backstops the rest.
+8. **Joins.** `join` names a relation of the `for` table
+   (§relationships-ref), each at most once and none ambiguous; the
+   target MUST be a table, since a group has no relations. A required relation joins
+   inner and an optional one left. The joined table's columns are
+   reached **qualified** by the relation's name, `metric.name`, in
+   the projection, in `where` and in `order:`, and a bare name stays
+   the `for` table's own; a qualifier that names no joined relation,
+   or a column the relation's table lacks, is an error. A select with
+   a join MUST carry an explicit projection, whose row type is the
+   shared struct the select name mints (rule 7): a qualified column's
+   field is `<Relation><Column>`, typed as the column is in its table
+   but `rt.Null[T]` under a left join, with the wire name
+   `<relation>_<column>`; two projected columns with one Go field name
+   are an error naming both. Under `where` and `order:` a qualified
+   column obeys the rules of its own table's column (§predicates). The
+   statement is the renderer's join spelling (§predicates, rendering):
+   `SELECT "points"."id", "points"."ts", "metric"."name" FROM "points"
+   INNER JOIN "metrics" AS "metric" ON "metric"."id" =
+   "points"."metric_id" WHERE "points"."ts" >= ?`, `LEFT JOIN` for an
+   optional relation, a composite key `AND`ing its pairs, every column
+   qualified once a join is present. The relation name is the SQL
+   alias, which is why a relation named as its table is ambiguous
+   (§relationships-ref).
 
 ---
 

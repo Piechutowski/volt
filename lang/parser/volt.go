@@ -442,19 +442,21 @@ func (p *parser) predPrimary() ast.PredExpr {
 		x := p.operand()
 		return p.comparisonTail(x)
 	case p.at(token.IDENT):
-		p.predKeywordCheck()
-		name := p.ident("predicate (§predicates)")
+		col := p.colRef("predicate (§predicates)")
 		switch {
 		case p.compOpAt(0):
-			return p.comparisonTail(&ast.ColRef{Name: name})
+			return p.comparisonTail(col)
 		case p.atKw("in"):
-			return p.predIn(name)
+			return p.predIn(col)
 		case p.atKw("like"):
-			return p.predLike(name)
+			return p.predLike(col)
 		case p.atKw("is"):
-			return p.predNull(name)
+			return p.predNull(col)
+		case col.Qual != nil:
+			p.fail(p.cur(), "expected a comparison operator, in, like or is after the column %s (§predicates)", col.String())
+			return nil
 		default:
-			return &ast.PredRef{Name: name}
+			return &ast.PredRef{Name: col.Name}
 		}
 	default:
 		p.fail(t, "expected a predicate expression (§predicates), found %s", t)
@@ -511,15 +513,28 @@ func (p *parser) operand() ast.Operand {
 	case p.atKw("false"):
 		return &ast.Lit{Tok: p.kwTake("false")}
 	case p.at(token.IDENT):
-		p.predKeywordCheck()
-		return &ast.ColRef{Name: p.ident("operand (§predicates)")}
+		return p.colRef("operand (§predicates)")
 	default:
 		p.fail(t, "expected a column, :param or literal (§predicates), found %s", t)
 		return nil
 	}
 }
 
-func (p *parser) predIn(col *ast.Ident) ast.PredExpr {
+// colRef reads a column reference: a name, or relation.column
+// (§predicates, §selects-over-groups); neither part is a predicate
+// keyword.
+func (p *parser) colRef(ctx string) *ast.ColRef {
+	p.predKeywordCheck()
+	name := p.ident(ctx)
+	if !p.at(token.DOT) {
+		return &ast.ColRef{Name: name}
+	}
+	p.next()
+	p.predKeywordCheck()
+	return &ast.ColRef{Qual: name, Name: p.ident(ctx)}
+}
+
+func (p *parser) predIn(col *ast.ColRef) ast.PredExpr {
 	p.kwTake("in")
 	x := &ast.PredIn{Col: col}
 	if p.at(token.COLON) {
@@ -547,7 +562,7 @@ func (p *parser) predIn(col *ast.Ident) ast.PredExpr {
 	return x
 }
 
-func (p *parser) predLike(col *ast.Ident) ast.PredExpr {
+func (p *parser) predLike(col *ast.ColRef) ast.PredExpr {
 	p.kwTake("like")
 	x := &ast.PredLike{Col: col}
 	switch pat := p.operand().(type) {
@@ -564,7 +579,7 @@ func (p *parser) predLike(col *ast.Ident) ast.PredExpr {
 	return x
 }
 
-func (p *parser) predNull(col *ast.Ident) ast.PredExpr {
+func (p *parser) predNull(col *ast.ColRef) ast.PredExpr {
 	p.kwTake("is")
 	x := &ast.PredNull{Col: col}
 	if p.atKw("not") {
@@ -591,6 +606,12 @@ func (p *parser) selectDecl() *ast.Select {
 	p.kwTake("for")
 	d.Target = p.ident("select target (§selects-over-groups)")
 	d.EndPos = d.Target.End()
+	for p.atKw("join") {
+		p.kwTake("join")
+		rel := p.ident("join (§selects-over-groups)")
+		d.Joins = append(d.Joins, rel)
+		d.EndPos = rel.End()
+	}
 	if p.atKw("where") {
 		p.kwTake("where")
 		d.Where = p.predExpr()
@@ -615,12 +636,12 @@ func (p *parser) selectProjection(d *ast.Select) {
 			}
 			p.next()
 			if !p.at(token.LPAREN) {
-				d.Cols = append(d.Cols, p.ident("excluded column (§selects-over-groups)"))
+				d.Cols = append(d.Cols, &ast.ColRef{Name: p.ident("excluded column (§selects-over-groups)")})
 				continue
 			}
 			p.next()
 			for {
-				d.Cols = append(d.Cols, p.ident("excluded column (§selects-over-groups)"))
+				d.Cols = append(d.Cols, &ast.ColRef{Name: p.ident("excluded column (§selects-over-groups)")})
 				if !p.at(token.COMMA) {
 					break
 				}
@@ -633,7 +654,13 @@ func (p *parser) selectProjection(d *ast.Select) {
 		}
 	} else {
 		for {
-			d.Cols = append(d.Cols, p.ident("projected column (§selects-over-groups)"))
+			name := p.ident("projected column (§selects-over-groups)")
+			col := &ast.ColRef{Name: name}
+			if p.at(token.DOT) {
+				p.next()
+				col = &ast.ColRef{Qual: name, Name: p.ident("projected column (§selects-over-groups)")}
+			}
+			d.Cols = append(d.Cols, col)
 			if !p.at(token.COMMA) {
 				break
 			}

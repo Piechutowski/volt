@@ -558,5 +558,42 @@ func afterPred[M any](orders []Order[M], key []any) (Pred[M], error) {
 // Ident is the one spelling of an identifier in every statement (spec
 // §predicates): always double-quoted, a quote inside doubled.
 func Ident(name string) string {
+	if i := strings.IndexByte(name, '.'); i >= 0 {
+		return Ident(name[:i]) + "." + Ident(name[i+1:])
+	}
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
+// Join is one join of a generated select (spec §selects-over-groups):
+// the joined table under the relation's name as its alias, matched on
+// the column pairs, the joined table's column first and the base
+// table's second; Left joins it LEFT, else INNER.
+type Join struct {
+	Table string
+	As    string
+	On    [][2]string
+	Left  bool
+}
+
+// FromRender renders the source of a select with joins (spec
+// §predicates, rendering): the base table followed by one INNER JOIN or
+// LEFT JOIN per join, in order, each ON its pairs joined by AND.
+func FromRender(table string, joins []Join) string {
+	var b strings.Builder
+	b.WriteString(Ident(table))
+	for _, j := range joins {
+		if j.Left {
+			b.WriteString(" LEFT JOIN ")
+		} else {
+			b.WriteString(" INNER JOIN ")
+		}
+		b.WriteString(Ident(j.Table) + " AS " + Ident(j.As) + " ON ")
+		for i, pair := range j.On {
+			if i > 0 {
+				b.WriteString(" AND ")
+			}
+			b.WriteString(Ident(j.As) + "." + Ident(pair[0]) + " = " + Ident(table) + "." + Ident(pair[1]))
+		}
+	}
+	return b.String()
 }

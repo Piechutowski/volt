@@ -126,12 +126,38 @@ type Field struct {
 	Imp      string
 	Arg      string
 
+	// Qualifier is what a select with joins renders the column under,
+	// the table's name or a relation's; "" in a statement without a
+	// join. Relation is the relation a joined column is reached
+	// through, "" for the table's own (spec §selects-over-groups).
+	Qualifier string
+	Relation  string
+
 	Nullable  bool
 	Declared  bool
 	Kinded    bool
 	Required  bool
 	Increment bool
 	Unique    bool
+}
+
+// SQL is the column as a statement names it: qualified when the
+// statement joins (spec §predicates, rendering).
+func (f *Field) SQL() string {
+	if f.Qualifier != "" {
+		return f.Qualifier + "." + f.ColName
+	}
+	return f.ColName
+}
+
+// WireName is the name a shared row type's tags carry for the field
+// (spec §selects-over-groups): the column's, prefixed by the relation
+// it is reached through.
+func (f *Field) WireName() string {
+	if f.Relation != "" {
+		return f.Relation + "_" + f.ColName
+	}
+	return f.ColName
 }
 
 // PlainBytes reports whether the field is a non-nullable []byte column
@@ -362,7 +388,7 @@ func fieldBuild(imports map[string]bool, cd *check.ColumnDef, goFields map[strin
 func columnList(fields []*Field) string {
 	names := make([]string, len(fields))
 	for i, f := range fields {
-		names[i] = rt.Ident(f.ColName)
+		names[i] = rt.Ident(f.SQL())
 	}
 	return strings.Join(names, ", ")
 }
@@ -428,55 +454,4 @@ func (t *Table) ListSQL() (string, []string, error) {
 // §generated-query-surface).
 func (t *Table) DeleteSQL() (string, []string, error) {
 	return genRender(rt.DeleteRender(t.TableSQL(), t.keyPreds()))
-}
-
-// SelectColumns lists the fields one select instantiation reads, in its
-// projection's order (spec §selects-over-groups).
-func (t *Table) SelectColumns(fn SelectFn) ([]*Field, error) {
-	switch {
-	case len(fn.Cols) > 0:
-		out := make([]*Field, 0, len(fn.Cols))
-		for _, c := range fn.Cols {
-			f := t.Field(c)
-			if f == nil {
-				return nil, fmt.Errorf("select %s: no column %q in table %s", fn.MethodSuffix, c, t.SQLName)
-			}
-			out = append(out, f)
-		}
-		return out, nil
-	case len(fn.Excluded) > 0:
-		ex := make(map[string]bool, len(fn.Excluded))
-		for _, c := range fn.Excluded {
-			if t.Field(c) == nil {
-				return nil, fmt.Errorf("select %s: no column %q in table %s", fn.MethodSuffix, c, t.SQLName)
-			}
-			ex[c] = true
-		}
-		var out []*Field
-		for _, f := range t.Fields {
-			if !ex[f.ColName] {
-				out = append(out, f)
-			}
-		}
-		if len(out) == 0 {
-			return nil, fmt.Errorf("select %s: every column of %s excluded", fn.MethodSuffix, t.SQLName)
-		}
-		return out, nil
-	}
-	return t.Fields, nil
-}
-
-// SelectSQL renders the statement of one instantiation through the
-// runtime (spec §predicates) and lists the Go expressions its method
-// binds, in placeholder order.
-func (t *Table) SelectSQL(fn SelectFn) (string, []string, error) {
-	cols, err := t.SelectColumns(fn)
-	if err != nil {
-		return "", nil, err
-	}
-	opts := []rt.Opt[rt.Gen]{fn.Where}
-	if len(fn.Order) > 0 {
-		opts = append(opts, rt.OrderBy(fn.Order...))
-	}
-	return genRender(rt.SelectRender(rt.Ident(t.SQLName), columnList(cols), opts))
 }

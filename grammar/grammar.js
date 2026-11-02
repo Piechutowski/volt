@@ -513,7 +513,7 @@ module.exports = grammar({
 
     pred_in: ($) =>
       seq(
-        alias($.identifier, $.column_ref),
+        $._column,
         kw('in'),
         choice(
           seq('(', $._pred_literal, repeat(seq(',', $._pred_literal)), ')'),
@@ -523,14 +523,14 @@ module.exports = grammar({
 
     pred_like: ($) =>
       seq(
-        alias($.identifier, $.column_ref),
+        $._column,
         kw('like'),
         choice($.string, $.query_param),
       ),
 
     pred_null: ($) =>
       seq(
-        alias($.identifier, $.column_ref),
+        $._column,
         kw('is'),
         optional(kw('not')),
         kw('null'),
@@ -540,8 +540,15 @@ module.exports = grammar({
       choice(
         $.query_param,
         $._pred_literal,
-        alias($.identifier, $.column_ref),
+        $._column,
       ),
+
+    // A column of the target, or relation.column, a column of a joined
+    // relation (§predicates, §selects-over-groups).
+    _column: ($) => choice($.qualified_column, alias($.identifier, $.column_ref)),
+
+    qualified_column: ($) =>
+      seq(alias($.identifier, $.relation_name), '.', alias($.identifier, $.column_ref)),
 
     _pred_literal: ($) =>
       choice($.number, seq('-', $.number), $.string, $.boolean),
@@ -558,6 +565,7 @@ module.exports = grammar({
         optional(field('projection', $.select_projection)),
         kw('for'),
         field('target', alias($.identifier, $.select_target)),
+        repeat(seq(kw('join'), field('join', alias($.identifier, $.relation_name)))),
         optional(seq(kw('where'), field('where', $.pred_expr))),
         optional(field('settings', $.settings_list)),
       ),
@@ -567,10 +575,7 @@ module.exports = grammar({
       seq(
         '(',
         choice(
-          seq(
-            alias($.identifier, $.column_ref),
-            repeat(seq(',', alias($.identifier, $.column_ref))),
-          ),
+          seq($._column, repeat(seq(',', $._column))),
           seq(
             '*',
             repeat1(
@@ -806,7 +811,11 @@ module.exports = grammar({
         ')',
       ),
 
-    _ident_item: ($) => seq($._name, optional(alias($._name, $.ident_modifier))),
+    _ident_item: ($) =>
+      seq(
+        choice($.qualified_column, $._name),
+        optional(alias($._name, $.ident_modifier)),
+      ),
 
     signed_number: ($) => seq('-', $.number),
 

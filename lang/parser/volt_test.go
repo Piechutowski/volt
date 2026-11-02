@@ -221,7 +221,7 @@ func TestProjectionSetTerms(t *testing.T) {
 	}
 	got := make([]string, len(sel.Cols))
 	for i, c := range sel.Cols {
-		got[i] = c.Name()
+		got[i] = c.String()
 	}
 	if strings.Join(got, ",") != "a,b,c,d" {
 		t.Errorf("exclusions = %v, want a,b,c,d", got)

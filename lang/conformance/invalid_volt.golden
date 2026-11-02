@@ -707,8 +707,47 @@ app/routes.volt:12:3: error: spec/route-loads: load "body" is not a name a handl
 ## i392_param_named_body
 app/routes.volt:11:15: error: spec/scopes-and-routes: path parameter "body" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx, body
 
+## i393_join_on_group.volt
+db/i393_join_on_group.volt:24:31: error: spec/selects-over-groups: join needs a table: "all" is a group, and a group has no relations (§selects-over-groups)
+
+## i394_join_unknown_relation.volt
+db/i394_join_unknown_relation.volt:19:46: error: spec/selects-over-groups: table "points" has no relation "owner" to join; its relations: metric, source (§selects-over-groups, §relationships-ref)
+
+## i395_join_ambiguous_relation.volt
+db/i395_join_ambiguous_relation.volt:19:46: error: spec/selects-over-groups: relation "points" of table "metrics" is ambiguous: it is the reverse relation to "points" (at db/i395_join_ambiguous_relation.volt:13:20; name it with [reverse: name] on a Ref element) and the reverse relation to "points" (at db/i395_join_ambiguous_relation.volt:14:26; name it with [reverse: name] on a Ref element) (§relationships-ref, §selects-over-groups)
+
+## i396_join_self_name.volt
+db/i396_join_self_name.volt:11:49: error: spec/selects-over-groups: relation "metrics" of table "metrics" takes the table's own name, which the join's alias needs: it is the reverse relation to "metrics" (at db/i396_join_self_name.volt:8:24; name it with [reverse: name] on a Ref element) (§relationships-ref, §selects-over-groups)
+
+## i397_join_twice.volt
+db/i397_join_twice.volt:19:59: error: spec/selects-over-groups: relation "metric" is joined twice (§selects-over-groups)
+
+## i398_join_without_projection.volt
+db/i398_join_without_projection.volt:19:8: error: spec/selects-over-groups: select "rows" joins, so it lists the columns it projects, its own and the joined relations' as relation.column (§selects-over-groups)
+
+## i399_join_star_projection.volt
+db/i399_join_star_projection.volt:19:8: error: spec/selects-over-groups: select "rows" joins, so it lists the columns it projects, its own and the joined relations' as relation.column (§selects-over-groups)
+
 ## i39_qualifier_conflict
 app/r.volt:8:2: error: spec/imports: import qualifier "db" already used for package "db" (§imports); alias one of them
+
+## i400_qualified_not_joined.volt
+db/i400_qualified_not_joined.volt:19:18: error: spec/selects-over-groups: "source" is no joined relation of this select; joined: metric (§selects-over-groups)
+
+## i401_qualified_unknown_column.volt
+db/i401_qualified_unknown_column.volt:19:25: error: spec/selects-over-groups: table "metrics", joined as "metric", has no column "colour" (§selects-over-groups)
+
+## i402_qualified_in_where_not_joined.volt
+db/i402_qualified_in_where_not_joined.volt:19:35: error: spec/selects-over-groups: metric.name names a column of a relation, and the select joins none (§selects-over-groups)
+
+## i403_join_field_collision.volt
+db/i403_join_field_collision.volt:20:27: error: spec/selects-over-groups: columns metric_name and metric.name both map to the Go field MetricName (§selects-over-groups)
+
+## i404_ref_as_not_name.volt
+db/i404_ref_as_not_name.volt:19:41: error: spec/relationships-ref: "as" takes a name (§relationships-ref)
+
+## i405_join_qualified_order_not_joined.volt
+db/i405_join_qualified_order_not_joined.volt:19:63: error: spec/selects-over-groups: "source" is no joined relation of this select; joined: metric (§selects-over-groups)
 
 ## i40_package_volt.volt
 volt/i40_package_volt.volt:2:1: error: spec/projects-and-packages: package name "volt" is reserved for the runtime (§projects-and-packages); generated code could not tell your package from it

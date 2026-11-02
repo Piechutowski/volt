@@ -159,7 +159,7 @@ func TestClientValidationErrors(t *testing.T) {
 	}
 }
 
-// TestClientBodyRoutes proves §generated-client rule 4 for routes that
+// TestClientBodyRoutes proves §generated-client for routes that
 // bind a body (§request-bodies): the raw method of a changeset body
 // sends the changeset's Params, in GOB as well as JSON, and the raw
 // method of a struct body sends whatever value it is handed.

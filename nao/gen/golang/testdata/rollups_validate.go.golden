@@ -9,3 +9,11 @@ func (c PageViewChangeset) Validate() PageViewChangeset {
 func (c LinkClickChangeset) Validate() LinkClickChangeset {
 	return LinkClickChangeset{c.WithFindings(nil)}
 }
+
+func (c HostChangeset) Validate() HostChangeset {
+	return HostChangeset{c.WithFindings(nil)}
+}
+
+func (c VisitChangeset) Validate() VisitChangeset {
+	return VisitChangeset{c.WithFindings(nil)}
+}

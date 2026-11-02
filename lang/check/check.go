@@ -23,7 +23,8 @@ type Info struct {
 	// Migrations in name order, the order they apply in (spec §migrations).
 	Migrations []*MigrationInfo
 
-	byName map[string]*TableInfo
+	byName    map[string]*TableInfo
+	relations map[string][]*RelationInfo
 }
 
 // Table is the table of that name, or nil (spec §namespaces-and-uniqueness).
@@ -120,6 +121,7 @@ func FileGo(f *ast.File, memo *Memo, goTypes GoTypes) (*Info, []diag.Diagnostic)
 	c.migrationsCheck(f)
 	c.declsCheck(f)
 	c.resolve(f)
+	c.relationsBuild()
 	if memo != nil {
 		memo.finish()
 	}
