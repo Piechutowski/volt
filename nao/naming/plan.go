@@ -301,6 +301,33 @@ func (pl *Plan) SelectRowType(fn SelectFn) (string, []FieldSig, error) {
 	return row, sigs, nil
 }
 
+// WithChildSQL renders the statement that loads the children of a
+// nested select (spec §selects-over-groups): the child table's rows
+// whose key is among the parent keys, one JSON array, in primary-key
+// order.
+func (pl *Plan) WithChildSQL(fn SelectFn) (string, error) {
+	if fn.With == nil {
+		return "", fmt.Errorf("select %s nests nothing", fn.MethodSuffix)
+	}
+	child, err := pl.table(fn.With.TableKey)
+	if err != nil {
+		return "", err
+	}
+	if child.Field(fn.With.ChildKey) == nil {
+		return "", fmt.Errorf("select %s: no column %q in table %s", fn.MethodSuffix, fn.With.ChildKey, child.SQLName)
+	}
+	opts := []rt.Opt[rt.Gen]{rt.PredInList(fn.With.ChildKey, "keys")}
+	var order []rt.GenOrder
+	for _, f := range child.PK {
+		order = append(order, rt.OrderTerm(f.ColName, false))
+	}
+	if len(order) > 0 {
+		opts = append(opts, rt.OrderBy(order...))
+	}
+	sql, _, err := rt.SelectRender(child.TableSQL(), child.ColumnList(), opts)
+	return sql, err
+}
+
 // SelectStatement renders the SQL one select instantiation runs through
 // the runtime (spec §predicates), with the Go expressions the
 // method binds in placeholder order.

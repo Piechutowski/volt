@@ -170,3 +170,8 @@ Select buyers (id, name, orders.total) for users join orders [order: (id asc, or
 // for the whole table when nothing groups.
 Select hourly (site, day / 2 * 2 as bucket, sum(hits) as total, avg(hits) as mean, count() as n) for page_views [group: (site, bucket), order: (site asc, bucket asc)]
 Select totals (count() as n, max(hits) as top, sum(hits) as total) for page_views
+
+// Nested results (spec §selects-over-groups): a user with the orders that
+// refer to it, two statements in one transaction.
+Select carts    for users with orders where id = :id
+Select everyone for users with orders [order: (id asc)]

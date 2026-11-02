@@ -197,3 +197,57 @@ const voltPageViewScaledSQL = `SELECT "id", (("hits" * ?) + ?) AS "scaled" FROM 
 func PageViewScaled(factor int) rt.Query[Scaled] {
 	return rt.Query[Scaled]{SQL: voltPageViewScaledSQL, Args: []any{factor, 1}, Scan: voltScaledScan}
 }
+
+type HostBoardRow struct {
+	ID int `db:"id" json:"id"`
+}
+
+func voltHostBoardRowScan(r rt.Row) (HostBoardRow, error) {
+	var voltV HostBoardRow
+	voltErr := r.Scan(&voltV.ID)
+	return voltV, voltErr
+}
+
+const voltHostBoardSQL = `SELECT "id" FROM "hosts" WHERE "id" >= ? ORDER BY "id" ASC`
+
+func HostBoard(from int) rt.With[HostBoardRow, Visit, int, HostBoardRowWithVisits] {
+	return rt.With[HostBoardRow, Visit, int, HostBoardRowWithVisits]{
+		Parent:    rt.Query[HostBoardRow]{SQL: voltHostBoardSQL, Args: []any{from}, Scan: voltHostBoardRowScan},
+		Child:     voltHostBoardChildrenSQL,
+		ChildScan: voltVisitScan,
+		ParentKey: func(voltP HostBoardRow) int { return voltP.ID },
+		ChildKey:  func(voltC Visit) int { return voltC.HostID },
+		Build: func(voltP HostBoardRow, voltCs []Visit) HostBoardRowWithVisits {
+			return HostBoardRowWithVisits{HostBoardRow: voltP, Visits: voltCs}
+		},
+	}
+}
+
+type HostBoardRowWithVisits struct {
+	HostBoardRow
+	Visits []Visit
+}
+
+const voltHostBoardChildrenSQL = `SELECT "id", "host_id", "owner_id", "day" FROM "visits" WHERE "host_id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
+
+const voltHostLineupSQL = `SELECT "id", "name" FROM "hosts"`
+
+func HostLineup() rt.With[Host, Visit, int, HostWithVisits] {
+	return rt.With[Host, Visit, int, HostWithVisits]{
+		Parent:    rt.Query[Host]{SQL: voltHostLineupSQL, Args: nil, Scan: voltHostScan},
+		Child:     voltHostLineupChildrenSQL,
+		ChildScan: voltVisitScan,
+		ParentKey: func(voltP Host) int { return voltP.ID },
+		ChildKey:  func(voltC Visit) int { return voltC.HostID },
+		Build: func(voltP Host, voltCs []Visit) HostWithVisits {
+			return HostWithVisits{Host: voltP, Visits: voltCs}
+		},
+	}
+}
+
+type HostWithVisits struct {
+	Host
+	Visits []Visit
+}
+
+const voltHostLineupChildrenSQL = `SELECT "id", "host_id", "owner_id", "day" FROM "visits" WHERE "host_id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`

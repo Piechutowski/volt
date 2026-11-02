@@ -612,6 +612,11 @@ func (p *parser) selectDecl() *ast.Select {
 		d.Joins = append(d.Joins, rel)
 		d.EndPos = rel.End()
 	}
+	if p.atKw("with") {
+		p.kwTake("with")
+		d.With = p.ident("with (§selects-over-groups)")
+		d.EndPos = d.With.End()
+	}
 	if p.atKw("where") {
 		p.kwTake("where")
 		d.Where = p.predExpr()

@@ -1873,6 +1873,16 @@
             "named": true
           }
         ]
+      },
+      "with": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "relation_name",
+            "named": true
+          }
+        ]
       }
     }
   },
@@ -2733,6 +2743,10 @@
   {
     "type": "wildcard_marker",
     "named": true
+  },
+  {
+    "type": "with",
+    "named": false
   },
   {
     "type": "{",

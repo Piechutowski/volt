@@ -660,3 +660,22 @@ Select hourly (metric_id, ts / 3600 * 3600 as hour, avg(value) as mean, count() 
         (ident_group
           (identifier)
           (identifier))))))
+
+==================
+volt: select with nested results
+==================
+
+Select board for metrics with points where unit = :unit
+
+---
+
+(source_file
+  (select_definition
+    (select_name)
+    (select_target)
+    (relation_name)
+    (pred_expr
+      (pred_compare
+        (column_ref)
+        (query_param
+          (parameter_name))))))

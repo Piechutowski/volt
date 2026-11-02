@@ -53,3 +53,6 @@ Select daily  (site, day / 7 * 7 as week, sum(hits) as total, count() as n) for 
 Select totals (count() as n, max(hits) as top) for page_views
 Select scaled (id, hits * :factor + 1 as scaled) for page_views
 Select hosted_hits (host.name as host, count(id) as visits, max(day) as last) for visits join host [group: (host)]
+
+Select board  for hosts with visits where name like "%a%" [order: (id asc)]
+Select lineup (id, name) for hosts with owned

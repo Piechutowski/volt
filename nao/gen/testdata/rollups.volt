@@ -64,3 +64,8 @@ Select traffic (id, name, visits.day) for hosts join visits where visits.day = :
 Select daily  (site, day / 7 * 7 as week, sum(hits) as total, avg(score) as mean, count() as n) for page_views where day >= :from [group: (site, week), order: (site asc, week asc)]
 Select totals (count() as n, max(hits) as top, min(note) as first) for page_views
 Select scaled (id, hits * :factor + 1 as scaled) for page_views
+
+// Nested results (spec §selects-over-groups): each host with its visits,
+// the children loaded by one statement over the parent keys.
+Select board (* \ name) for hosts with visits where id >= :from [order: (id asc)]
+Select lineup for hosts with visits

@@ -24,7 +24,7 @@ that lands it.
 | Changesets and validation | Ecto changesets / validations | built | |
 | Joins in declared queries | yes | built (`join` over relation names) | |
 | Aggregates and grouping | yes | built (`count`, `sum`, `avg`, `min`, `max`, arithmetic, `group:`) | |
-| Nested results (preload / include) | yes | missing | 11 |
+| Nested results (preload / include) | yes | built (`with` over a reverse relation) | |
 | Many-to-many through a junction | yes | missing | |
 | Migrations with a ledger and a schema check | yes | built | |
 | Migration generation from drift | yes | missing | |

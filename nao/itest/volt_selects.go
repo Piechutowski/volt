@@ -225,3 +225,42 @@ const voltPageViewTotalsSQL = `SELECT count(*) AS "n", max("hits") AS "top", sum
 func PageViewTotals() rt.Lookup[Totals] {
 	return rt.Lookup[Totals]{SQL: voltPageViewTotalsSQL, Args: nil, Scan: voltTotalsScan}
 }
+
+const voltUserCartsSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE "id" = ?`
+
+func UserCarts(id int) rt.With[User, Order, int, UserWithOrders] {
+	return rt.With[User, Order, int, UserWithOrders]{
+		Parent:    rt.Query[User]{SQL: voltUserCartsSQL, Args: []any{id}, Scan: voltUserScan},
+		Child:     voltUserCartsChildrenSQL,
+		ChildScan: voltOrderScan,
+		ParentKey: func(voltP User) int { return voltP.ID },
+		ChildKey:  func(voltC Order) int { return voltC.UserID },
+		Build: func(voltP User, voltCs []Order) UserWithOrders {
+			return UserWithOrders{User: voltP, Orders: voltCs}
+		},
+	}
+}
+
+type UserWithOrders struct {
+	User
+	Orders []Order
+}
+
+const voltUserCartsChildrenSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "user_id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
+
+const voltUserEveryoneSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" ORDER BY "id" ASC`
+
+func UserEveryone() rt.With[User, Order, int, UserWithOrders] {
+	return rt.With[User, Order, int, UserWithOrders]{
+		Parent:    rt.Query[User]{SQL: voltUserEveryoneSQL, Args: nil, Scan: voltUserScan},
+		Child:     voltUserEveryoneChildrenSQL,
+		ChildScan: voltOrderScan,
+		ParentKey: func(voltP User) int { return voltP.ID },
+		ChildKey:  func(voltC Order) int { return voltC.UserID },
+		Build: func(voltP User, voltCs []Order) UserWithOrders {
+			return UserWithOrders{User: voltP, Orders: voltCs}
+		},
+	}
+}
+
+const voltUserEveryoneChildrenSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "user_id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`

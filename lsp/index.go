@@ -217,7 +217,11 @@ func NewIndexMemo(f *ast.File, info *check.Info, memo *IndexMemo) *Index {
 			ix.walkEndpoint(n.Right)
 		case *ast.Select:
 			if ti := ix.Tables[n.Target.Name()]; ti != nil {
-				for _, rel := range n.Joins {
+				rels := n.Joins
+				if n.With != nil {
+					rels = append(append([]*ast.Ident{}, rels...), n.With)
+				}
+				for _, rel := range rels {
 					if r, _ := ix.Info.Relation(ti.Key, rel.Name()); r != nil {
 						ix.add(SymbolID{SymTable, "", r.Table.Key}, rel, false)
 					}

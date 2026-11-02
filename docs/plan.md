@@ -194,34 +194,6 @@ Deferred: the language first, then non-core features and tooling.
 
 ---
 
-## Step 11. `with`: nested results
-
-Depends on: 10.
-
-```ebnf
-select decl = "Select", name, [ projection ], "for", name, { join }, [ with ],
-              [ "where", pred expr ], [ settings ], newline ;
-with        = "with", name ;                 (* a reverse relation *)
-```
-
-```volt
-Select board for metrics with points
-```
-
-Mints `MetricWithPoints { Metric; Points []Point }`. Runs as two
-statements: the parent query, then the child table's full rows with
-`"metric_id" IN (SELECT value FROM json_each(?))` over the parent keys,
-grouped in memory by key, in parent order, child order by the child's
-primary key. The runner wraps both in one deferred read transaction so
-they see one snapshot. `with` takes a reverse relation only, no
-projection of the children, one level. Later, when needed: `with` across
-a junction table for many-to-many.
-
-Done when: conformance, goldens, `nao/itest` with an empty parent set, a
-parent with no children, and a thousand children.
-
----
-
 ## Step 12. Scope loads
 
 Depends on: 7.
@@ -329,7 +301,6 @@ read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
 
 | Step | Depends on | Lands |
 |---|---|---|
-| 11 with | 10 | |
 | 12 scope loads | 7 | the last step of this round |
 | 5, 13 to 19 | | deferred |
 

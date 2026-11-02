@@ -598,6 +598,7 @@ module.exports = grammar({
         kw('for'),
         field('target', alias($.identifier, $.select_target)),
         repeat(seq(kw('join'), field('join', alias($.identifier, $.relation_name)))),
+        optional(seq(kw('with'), field('with', alias($.identifier, $.relation_name)))),
         optional(seq(kw('where'), field('where', $.pred_expr))),
         optional(field('settings', $.settings_list)),
       ),

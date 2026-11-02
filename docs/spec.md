@@ -474,7 +474,7 @@ then reads it as that keyword, so the error is reported once.
 | resource actions | `index`, `new`, `create`, `show`, `edit`, `update`, `delete` | §the-action-table |
 | order directions | `asc`, `desc` | §selects-over-groups |
 | literal words | `true`, `false`, `null` | §boolean-and-null-literals |
-| clause words | `from`, `for`, `join`, `where`, `as`, `and`, `or`, `not`, `in`, `like`, `is` | §types, §selects-over-groups, §predicates |
+| clause words | `from`, `for`, `join`, `with`, `where`, `as`, `and`, `or`, `not`, `in`, `like`, `is` | §types, §selects-over-groups, §predicates |
 | aggregate words | `count`, `sum`, `avg`, `min`, `max` | §selects-over-groups |
 | route words | `get`, `post`, `patch`, `delete`, `options`, `head`, `any`, `resources`, `dataset`, `use` | §routes, §resources, §datasets, §pipelines |
 | parameter types | `int` | §route-paths |
@@ -3197,8 +3197,9 @@ one-member group.
 
 ```ebnf
 select decl = "Select", name, [ projection ], "for", name, { join },
-              [ "where", pred expr ], [ settings ], newline ;
+              [ with ], [ "where", pred expr ], [ settings ], newline ;
 join        = "join", name ;
+with        = "with", name ;
 
 projection  = "(", proj item, { ",", proj item }, ")"
             | "(", "*", "\", column term, { "\", column term }, ")" ;
@@ -3227,6 +3228,7 @@ Select brief   (* \ (password_hash, bio, avatar)) for accounts
 Select recent  (id, ts, value, metric.name, metric.unit) for points join metric where ts >= :since [order: (ts desc)]
 Select hourly  (metric_id, ts / 3600 * 3600 as hour, avg(value) as mean, count() as n) for points where ts >= :since [group: (metric_id, hour), order: (hour asc)]
 Select totals  (count() as n, max(value) as top) for points
+Select board   for metrics with points where unit = :unit [order: (name asc)]
 ```
 
 The clauses read in SQL order — name, columns, source, filter — and
@@ -3380,6 +3382,26 @@ the optional projection narrows the emitted columns.
     never aliases, and there is no `having`: a filter over an aggregate
     is the one escape, a statement written in Go against the runtime
     (§generated-query-surface).
+11. **`with`: nested results.** `with` names a reverse relation of the
+    `for` table (§relationships-ref), which MUST be a table, over one
+    key column; the relation is not ambiguous, the select does not
+    aggregate, and when it projects, the key column is a bare item of
+    the projection. The row type is `<Row>With<Relation>`, a struct
+    embedding the parent's row type `<Row>` (rule 7) with a field named
+    after the relation that holds the children, the child table's full
+    rows: `MetricWithPoints { Metric; Points []Point }`; the name joins
+    the minted names of rule 7, selects that nest one relation under
+    one parent row type share it, and a parent field of the child
+    field's name is an error. The function yields `rt.With[Parent, Child, Key,
+    Row]`, an effect of `[]Row` (§generated-query-surface), performed
+    as two statements in one deferred transaction, so both read one
+    snapshot: the parent statement as any select's, then the child
+    table's rows `WHERE "<key>" IN (SELECT value FROM json_each(?))`
+    over the parent keys, ordered by the child's primary key, grouped
+    in memory by key and nested in parent order. No child statement
+    runs for no parents, a parent without children carries an empty
+    slice, and a NULL key never matches. One level, no projection of
+    the children, and no `with` across a junction table.
 
 ---
 
@@ -4452,6 +4474,7 @@ type Query[T any]  struct { SQL string; Args []any; Scan func(Row) (T, error); E
 type Lookup[T any] struct { SQL string; Args []any; Scan func(Row) (T, error); Err error }  // one row, or ErrNotFound
 type Write[M any]  struct { SQL string; Args []any; Scan func(Row) (M, error); Row M; Err error }  // insert or update of a changeset
 type Exec          struct { SQL string; Args []any; Model string; One bool; Err error }    // rows affected
+type With[P, C any, K comparable, R any] struct { Parent Query[P]; Child string; ChildScan func(Row) (C, error); ParentKey func(P) K; ChildKey func(C) K; Build func(P, []C) R }  // parents with their children, []R
 func Tx(steps ...AnyEffect) Transaction   // all or nothing, results in order
 func All(steps ...AnyEffect) Parallel     // at once, first error cancels, results in order
 func Insert[M any](c Changeset[M]) Write[M]

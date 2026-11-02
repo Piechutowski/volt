@@ -1004,3 +1004,29 @@ func TestSelectAggregates(t *testing.T) {
 		t.Errorf("scaled renders %s %v, %v", sql, args, err)
 	}
 }
+
+func TestSelectWith(t *testing.T) {
+	pr, diags := project(t, map[string]string{
+		"go.mod": modFile,
+		"db/schema.volt": "package db\n\nTable metrics {\n\tid   int [pk, increment]\n\tname string\n}\n\n" +
+			"Table points {\n\tid        int [pk, increment]\n\tmetric_id int [ref: metrics.id]\n\tts        int\n}\n\n" +
+			"Select board for metrics with points where name = :name [order: (id asc)]\n",
+	})
+	wantClean(t, diags)
+	db := pr.Packages["db"]
+	if len(db.Selects) != 1 || db.Selects[0].With == nil {
+		t.Fatalf("selects = %+v; want one nested select", db.Selects)
+	}
+	w := db.Selects[0].With
+	if w.Name != "points" || w.Table.Key != "points" || w.ParentKey != "id" || w.ChildKey != "metric_id" || w.Field != "Points" || w.RowType != "MetricWithPoints" {
+		t.Errorf("with = %+v", w)
+	}
+	fns := db.SelectFns()
+	child, err := db.Plan().WithChildSQL(fns[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `SELECT "id", "metric_id", "ts" FROM "points" WHERE "metric_id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`; child != want {
+		t.Errorf("children render %s, want %s", child, want)
+	}
+}

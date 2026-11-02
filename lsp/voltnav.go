@@ -492,7 +492,7 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 	memberFn := func(key string) naming.SelectFn {
 		return naming.SelectFn{
 			TableKey: key, MethodSuffix: si.MethodSuffix,
-			Items: si.Items, Excluded: si.Excluded, SharedType: si.Shared, Joins: si.JoinFns(), Group: si.Group, Lookup: si.Lookup,
+			Items: si.Items, Excluded: si.Excluded, SharedType: si.Shared, Joins: si.JoinFns(), Group: si.Group, Lookup: si.Lookup, With: si.WithFn(),
 		}
 	}
 
@@ -597,6 +597,9 @@ func selectHead(d *ast.Select) string {
 	head += " for " + d.Target.Name()
 	for _, rel := range d.Joins {
 		head += " join " + rel.Name()
+	}
+	if d.With != nil {
+		head += " with " + d.With.Name()
 	}
 	return head
 }

@@ -802,6 +802,27 @@ app/i41_spaced_param_type.volt:5:18: error: syntax: parameter type is written ':
 db/i420_group_qualified.volt:19:65: error: spec/selects-over-groups: group: leaves out metric.name; every item that is not an aggregate is grouped by (§selects-over-groups)
 db/i420_group_qualified.volt:19:80: error: spec/selects-over-groups: group: names an item by its name or alias; project metric.name under an alias to group by it (§selects-over-groups)
 
+## i421_with_on_group.volt
+db/i421_with_on_group.volt:22:26: error: spec/selects-over-groups: with needs a table: "all" is a group, and a group has no relations (§selects-over-groups)
+
+## i422_with_forward_relation.volt
+db/i422_with_forward_relation.volt:17:29: error: spec/selects-over-groups: with takes a reverse relation, the rows that refer to each parent; "metric" leads to the one row points refers to, which join reaches (§selects-over-groups)
+
+## i423_with_unknown_relation.volt
+db/i423_with_unknown_relation.volt:17:30: error: spec/selects-over-groups: table "metrics" has no relation "owners" to nest; its relations: points (§selects-over-groups, §relationships-ref)
+
+## i424_with_composite_key.volt
+db/i424_with_composite_key.volt:18:32: error: spec/selects-over-groups: with takes a relation over one key column; "periods" matches 2 (§selects-over-groups)
+
+## i425_with_key_not_projected.volt
+db/i425_with_key_not_projected.volt:17:37: error: spec/selects-over-groups: with points matches the parent's "id", which the projection must carry as a bare column (§selects-over-groups)
+
+## i426_with_on_aggregate.volt
+db/i426_with_on_aggregate.volt:17:45: error: spec/selects-over-groups: with nests rows under each parent row, and an aggregate yields none to nest under (§selects-over-groups)
+
+## i427_with_field_collision.volt
+db/i427_with_field_collision.volt:18:30: error: spec/selects-over-groups: the parent row's field Points and the children's field, named after "points", collide (§selects-over-groups)
+
 ## i43_quoted_import.volt
 app/i43_quoted_import.volt:5:2: error: syntax: expected identifier in import path (§imports), found string "\"db\""
 

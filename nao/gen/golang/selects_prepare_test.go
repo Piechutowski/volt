@@ -50,6 +50,13 @@ func TestSelectsPrepare(t *testing.T) {
 			t.Fatal(err)
 		}
 		stmts[fn.TableKey+"."+fn.MethodSuffix] = stmtCase{SQL: sql, N: len(args)}
+		if fn.With != nil {
+			child, err := plan.WithChildSQL(fn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			stmts[fn.TableKey+"."+fn.MethodSuffix+".children"] = stmtCase{SQL: child, N: 1}
+		}
 	}
 	input, err := json.Marshal(map[string]any{"ddl": string(ddl), "stmts": stmts})
 	if err != nil {

@@ -553,6 +553,7 @@ type Select struct {
 	Rparen    token.Position
 	Target    *Ident   // group or table name (§selects-over-groups)
 	Joins     []*Ident // the relations joined, in order (§selects-over-groups)
+	With      *Ident   // the reverse relation whose rows nest under each parent (§selects-over-groups); nil when none
 	Where     PredExpr // nil = all rows
 	Settings  *SettingList
 	EndPos    token.Position

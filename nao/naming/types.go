@@ -25,6 +25,20 @@ type SelectFn struct {
 	Joins        []SelectJoin
 	Group        []string // the group: items as the statement names them, a column or an alias; nil = none
 	Lookup       bool     // the select aggregates without group:, so it yields one row (spec §selects-over-groups)
+	With         *SelectWith
+}
+
+// SelectWith is the nesting of a select (spec §selects-over-groups): the
+// reverse relation whose rows each parent carries, its table, the key
+// columns the rows match on, the parent's and the child's, and the Go
+// names of the field that holds the children and of the row type.
+type SelectWith struct {
+	Name      string
+	TableKey  string
+	ParentKey string
+	ChildKey  string
+	Field     string
+	RowType   string
 }
 
 // SelectItem is one projected item (spec §selects-over-groups): a column,

@@ -41,8 +41,8 @@ type Executor interface {
 
 // Effect is a computation over the database described as a value and
 // performed by the runner (spec §values-and-effects): a Query, a
-// Lookup, a Write, an Exec, a Transaction or an All, nothing else, since
-// effect is unexported. T is what performing it yields.
+// Lookup, a Write, an Exec, a With, a Transaction or an All, nothing
+// else, since effect is unexported. T is what performing it yields.
 type Effect[T any] interface {
 	Perform(ctx context.Context, x Executor) (T, error)
 	PerformAny(ctx context.Context, x Executor) (any, error)
