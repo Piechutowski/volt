@@ -7,7 +7,6 @@ package lang
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -17,6 +16,7 @@ import (
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/parser"
+	"github.com/Piechutowski/volt/lang/source"
 	"github.com/Piechutowski/volt/lang/token"
 	"github.com/Piechutowski/volt/nao/naming"
 )
@@ -32,11 +32,16 @@ type Project struct {
 	Root     string // absolute path of the directory holding go.mod
 	Module   string // the Go module path, from go.mod's module directive
 	Packages map[string]*Package
+	src      source.Source
 
 	// Diags collects load-time diagnostics (parse errors, go.mod
 	// problems). Check appends semantic diagnostics.
 	Diags []diag.Diagnostic
 }
+
+// Source is where the project was loaded from (spec
+// §values-and-effects); Check reads the packages' Go files through it.
+func (pr *Project) Source() source.Source { return pr.src }
 
 // Package is one directory of .volt files sharing a namespace (§projects-and-packages).
 type Package struct {
@@ -113,13 +118,13 @@ func (pr *Project) PackageAt(dir string) *Package {
 
 // FindRoot walks up from dir to the nearest directory holding go.mod
 // (spec §projects-and-packages): the Go module is the Volt project.
-func FindRoot(dir string) (string, error) {
+func FindRoot(src source.Source, dir string) (string, error) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
 		return "", err
 	}
 	for {
-		if _, err := os.Stat(filepath.Join(abs, ModFile)); err == nil {
+		if src.Exists(filepath.Join(abs, ModFile)) {
 			return abs, nil
 		}
 		parent := filepath.Dir(abs)
@@ -132,25 +137,25 @@ func FindRoot(dir string) (string, error) {
 
 // Load loads every package under root — the ./... pattern (§projects-and-packages),
 // with §projects-and-packages's exclusions. Parse errors are collected, not fatal.
-func Load(root string) (*Project, error) {
-	return LoadOverlay(root, nil)
+func Load(src source.Source, root string) (*Project, error) {
+	return LoadOverlay(src, root, nil)
 }
 
 // LoadOverlay is Load with in-memory contents taking precedence over
 // the disk: overlay maps absolute file paths to their current text.
-func LoadOverlay(root string, overlay map[string]string) (*Project, error) {
-	dirs, err := PackageDirs(root, root)
+func LoadOverlay(src source.Source, root string, overlay map[string]string) (*Project, error) {
+	dirs, err := PackageDirs(src, root, root)
 	if err != nil {
 		return nil, err
 	}
-	return LoadDirs(root, dirs, overlay)
+	return LoadDirs(src, root, dirs, overlay)
 }
 
 // PackageDirs enumerates the directories under dir that hold .volt
 // files — the ./... pattern — applying §projects-and-packages: directories named with a
 // leading dot or underscore, testdata and node_modules are skipped, and
 // so is any subtree with its own go.mod (a different project).
-func PackageDirs(root, dir string) ([]string, error) {
+func PackageDirs(src source.Source, root, dir string) ([]string, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -159,31 +164,35 @@ func PackageDirs(root, dir string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var out []string
-	err = filepath.WalkDir(abs, func(path string, d os.DirEntry, err error) error {
+	var walk func(path string) ([]string, error)
+	walk = func(path string) ([]string, error) {
+		if path != absRoot && src.Exists(filepath.Join(path, ModFile)) {
+			return nil, nil
+		}
+		entries, err := src.ReadDir(path)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if !d.IsDir() {
-			return nil
-		}
-		if path != abs && excludedDir(d.Name()) {
-			return filepath.SkipDir
-		}
-		if path != absRoot {
-			if _, err := os.Stat(filepath.Join(path, ModFile)); err == nil {
-				return filepath.SkipDir
+		var out []string
+		volt := false
+		for _, e := range entries {
+			switch {
+			case e.Dir && !excludedDir(e.Name):
+				sub, err := walk(filepath.Join(path, e.Name))
+				if err != nil {
+					return nil, err
+				}
+				out = append(out, sub...)
+			case !e.Dir && strings.HasSuffix(e.Name, ".volt"):
+				volt = true
 			}
 		}
-		if hasVoltFiles(path) {
-			out = append(out, path)
+		if volt {
+			out = append([]string{path}, out...)
 		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
+		return out, nil
 	}
-	return out, nil
+	return walk(abs)
 }
 
 func excludedDir(name string) bool {
@@ -191,13 +200,13 @@ func excludedDir(name string) bool {
 		name == "testdata" || name == "node_modules"
 }
 
-func hasVoltFiles(dir string) bool {
-	entries, err := os.ReadDir(dir)
+func hasVoltFiles(src source.Source, dir string) bool {
+	entries, err := src.ReadDir(dir)
 	if err != nil {
 		return false
 	}
 	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".volt") {
+		if !e.Dir && strings.HasSuffix(e.Name, ".volt") {
 			return true
 		}
 	}
@@ -207,19 +216,19 @@ func hasVoltFiles(dir string) bool {
 // LoadDirs loads the packages in dirs and, transitively, the packages
 // they import (§projects-and-packages). Every dir MUST lie under root; a dir without
 // .volt files is an error.
-func LoadDirs(root string, dirs []string, overlay map[string]string) (*Project, error) {
-	return loadDirs(root, dirs, overlay, nil)
+func LoadDirs(src source.Source, root string, dirs []string, overlay map[string]string) (*Project, error) {
+	return loadDirs(src, root, dirs, overlay, nil)
 }
 
-func loadDirs(root string, dirs []string, overlay map[string]string, s *Session) (*Project, error) {
+func loadDirs(src source.Source, root string, dirs []string, overlay map[string]string, s *Session) (*Project, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
 	}
-	pr := &Project{Root: abs, Packages: map[string]*Package{}}
+	pr := &Project{Root: abs, Packages: map[string]*Package{}, src: src}
 
 	modPath := filepath.Join(abs, ModFile)
-	modSrc, err := os.ReadFile(modPath)
+	modSrc, err := src.ReadFile(modPath)
 	if err != nil {
 		return nil, fmt.Errorf("not a Volt project: %w", err)
 	}
@@ -235,7 +244,7 @@ func loadDirs(root string, dirs []string, overlay map[string]string, s *Session)
 		if err != nil || strings.HasPrefix(rel, "..") {
 			return nil, fmt.Errorf("%s is outside the project rooted at %s", d, abs)
 		}
-		if !hasVoltFiles(ad) {
+		if !hasVoltFiles(src, ad) {
 			return nil, fmt.Errorf("no Volt package in %s (no .volt files)", d)
 		}
 		queue = append(queue, ad)
@@ -269,12 +278,12 @@ func loadDirs(root string, dirs []string, overlay map[string]string, s *Session)
 					}
 					for _, spec := range id.Specs {
 						target := filepath.Join(abs, filepath.FromSlash(spec.PathString()))
-						if why := importExcluded(abs, spec.PathString()); why != "" {
+						if why := importExcluded(src, abs, spec.PathString()); why != "" {
 							pr.Diags = append(pr.Diags, diag.Errorf(spec.Pos(), "spec/projects-and-packages",
 								"import %q names %s, which is not part of this project (§projects-and-packages)", spec.PathString(), why))
 							continue
 						}
-						if hasVoltFiles(target) {
+						if hasVoltFiles(src, target) {
 							wave = append(wave, target)
 						}
 					}
@@ -285,7 +294,7 @@ func loadDirs(root string, dirs []string, overlay map[string]string, s *Session)
 	return pr, nil
 }
 
-func importExcluded(root, path string) string {
+func importExcluded(src source.Source, root, path string) string {
 	dir := root
 	for _, seg := range strings.Split(path, "/") {
 		if seg == "" || seg == "." {
@@ -295,7 +304,7 @@ func importExcluded(root, path string) string {
 			return "an excluded directory (" + seg + ")"
 		}
 		dir = filepath.Join(dir, seg)
-		if _, err := os.Stat(filepath.Join(dir, ModFile)); err == nil {
+		if src.Exists(filepath.Join(dir, ModFile)) {
 			return "a nested module (" + seg + " has its own " + ModFile + ")"
 		}
 	}
@@ -313,7 +322,7 @@ func (pr *Project) packagesParse(dirs []string, overlay map[string]string, s *Se
 	pkgs := make([]*Package, len(dirs))
 	var jobs []fileParse
 	for i, dir := range dirs {
-		entries, err := os.ReadDir(dir)
+		entries, err := pr.src.ReadDir(dir)
 		if err != nil {
 			return nil, err
 		}
@@ -322,31 +331,31 @@ func (pr *Project) packagesParse(dirs []string, overlay map[string]string, s *Se
 			return nil, err
 		}
 		for _, e := range entries {
-			if e.IsDir() || !strings.HasSuffix(e.Name(), ".volt") {
+			if e.Dir || !strings.HasSuffix(e.Name, ".volt") {
 				continue
 			}
 			if pkgs[i] == nil {
 				pkgs[i] = &Package{Path: filepath.ToSlash(rel), Dir: dir, Imports: map[string]string{}}
 			}
-			jobs = append(jobs, fileParse{pkg: i, path: filepath.Join(dir, e.Name())})
+			jobs = append(jobs, fileParse{pkg: i, path: filepath.Join(dir, e.Name)})
 		}
 	}
 	par.For(len(jobs), func(j int) {
 		job := &jobs[j]
 		if s != nil {
-			job.file, job.diags, job.err = s.parse(job.path, overlay)
+			job.file, job.diags, job.err = s.parse(pr.src, job.path, overlay)
 			return
 		}
-		src, overlaid := overlay[job.path]
+		text, overlaid := overlay[job.path]
 		if !overlaid {
-			b, err := os.ReadFile(job.path)
+			b, err := pr.src.ReadFile(job.path)
 			if err != nil {
 				job.err = err
 				return
 			}
-			src = string(b)
+			text = string(b)
 		}
-		job.file, job.diags = parser.ParseFile(job.path, src)
+		job.file, job.diags = parser.ParseFile(job.path, text)
 	})
 	for j := range jobs {
 		job := &jobs[j]

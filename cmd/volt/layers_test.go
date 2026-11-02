@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/Piechutowski/volt/gen/model"
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/diag"
@@ -284,7 +285,7 @@ func TestLayersDataOnlyProgram(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	pr, err := lang.Load(dir)
+	pr, err := lang.Load(disk.Source{}, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,8 +303,8 @@ func TestLayersDataOnlyProgram(t *testing.T) {
 	if len(gen) < 6 {
 		t.Fatalf("only %d data files generated", len(gen))
 	}
-	for _, f := range gen {
-		if err := os.WriteFile(filepath.Join(pkg.Dir, f.Name), f.Code, 0o644); err != nil {
+	for voltName, voltCode := range gen {
+		if err := os.WriteFile(filepath.Join(pkg.Dir, voltName), voltCode, 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -335,5 +336,38 @@ func dataOnly(t *testing.T, pkg *packages.Package, data string) {
 		if path == module || (strings.HasPrefix(path, module+"/") && path != rtPath && !strings.HasPrefix(path, data)) || path == "net/http" {
 			t.Errorf("%s links %s: %s", pkg.PkgPath, path, strings.Join(chain, " -> "))
 		}
+	}
+}
+
+var worldPackages = []string{"os", "io/fs", "database/sql", "net"}
+
+// TestLayersPurePhasesTouchNoWorld proves the front end and the
+// generators are functions from values to values (spec
+// §values-and-effects): no package under lang/, gen/ or nao/gen imports
+// os, io/fs, database/sql or net. The loader reads through a
+// source.Source the tool hands it, and volt gen writes the maps the
+// generators return.
+func TestLayersPurePhasesTouchNoWorld(t *testing.T) {
+	checked := 0
+	packages.Visit(gatePackages(t), nil, func(pkg *packages.Package) {
+		p := pkg.PkgPath
+		pure := false
+		for _, prefix := range []string{module + "/lang", module + "/gen", module + "/nao/gen"} {
+			if p == prefix || strings.HasPrefix(p, prefix+"/") {
+				pure = true
+			}
+		}
+		if !pure {
+			return
+		}
+		checked++
+		for _, world := range worldPackages {
+			if _, imported := pkg.Imports[world]; imported {
+				t.Errorf("%s imports %s", p, world)
+			}
+		}
+	})
+	if checked < 12 {
+		t.Fatalf("only %d pure packages loaded", checked)
 	}
 }

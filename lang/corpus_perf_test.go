@@ -6,6 +6,7 @@ import (
 	"github.com/Piechutowski/volt/gen/model"
 	"github.com/Piechutowski/volt/gen/router"
 	"github.com/Piechutowski/volt/internal/corpus"
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 )
@@ -24,7 +25,7 @@ func corpusPhases(t testing.TB, root string) (load, check, gen uint64) {
 	var pr *lang.Project
 	load = allocated(func() {
 		var err error
-		if pr, err = lang.Load(root); err != nil {
+		if pr, err = lang.Load(disk.Source{}, root); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -112,7 +113,7 @@ func BenchmarkLoad(b *testing.B) {
 	root := corpusRoot(b, benchSpec)
 	b.ReportAllocs()
 	for b.Loop() {
-		if _, err := lang.Load(root); err != nil {
+		if _, err := lang.Load(disk.Source{}, root); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -123,7 +124,7 @@ func BenchmarkCheck(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
 		b.StopTimer()
-		pr, err := lang.Load(root)
+		pr, err := lang.Load(disk.Source{}, root)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -136,7 +137,7 @@ func BenchmarkCheck(b *testing.B) {
 
 func BenchmarkGenerate(b *testing.B) {
 	root := corpusRoot(b, benchSpec)
-	pr, err := lang.Load(root)
+	pr, err := lang.Load(disk.Source{}, root)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -152,7 +153,7 @@ func BenchmarkGenerate(b *testing.B) {
 func BenchmarkSessionEdit(b *testing.B) {
 	root := corpusRoot(b, benchSpec)
 	var s lang.Session
-	pr, err := s.Load(root, nil)
+	pr, err := s.Load(disk.Source{}, root, nil)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -162,7 +163,7 @@ func BenchmarkSessionEdit(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; b.Loop(); i++ {
 		edited := text + "\n// keystroke " + string(rune('a'+i%26)) + "\n"
-		pr, err := s.Load(root, map[string]string{path: edited})
+		pr, err := s.Load(disk.Source{}, root, map[string]string{path: edited})
 		if err != nil {
 			b.Fatal(err)
 		}

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 	sqlitegen "github.com/Piechutowski/volt/nao/gen/sqlite"
@@ -18,7 +19,7 @@ func TestSelectsPrepare(t *testing.T) {
 		t.Skip("python3 not available")
 	}
 	root := filepath.Join("testdata", "selects")
-	pr, err := lang.LoadDirs(root, []string{filepath.Join(root, "db")}, nil)
+	pr, err := lang.LoadDirs(disk.Source{}, root, []string{filepath.Join(root, "db")}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

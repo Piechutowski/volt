@@ -9,6 +9,7 @@ import (
 	"testing"
 	"unicode"
 
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/ebnf"
 	"github.com/Piechutowski/volt/lang/parser"
@@ -277,7 +278,7 @@ func specFrontEnd(t *testing.T) func(text string) map[string]bool {
 		if _, diags := parser.ParseFile(path, text); len(diags) > 0 {
 			return keys(diags)
 		}
-		pr, err := LoadOverlay(root, map[string]string{path: text})
+		pr, err := LoadOverlay(disk.Source{}, root, map[string]string{path: text})
 		if err != nil {
 			return map[string]bool{"load: " + err.Error(): true}
 		}

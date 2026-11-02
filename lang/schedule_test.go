@@ -12,6 +12,7 @@ import (
 
 	"github.com/Piechutowski/volt/gen/model"
 	"github.com/Piechutowski/volt/gen/router"
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 )
@@ -71,7 +72,7 @@ func withProcs(n int, fn func()) {
 func TestCheckScheduleIndependent(t *testing.T) {
 	root := scheduleFixture(t)
 	run := func() string {
-		pr, err := lang.Load(root)
+		pr, err := lang.Load(disk.Source{}, root)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -108,8 +109,8 @@ func TestGenerateScheduleIndependent(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				for _, f := range files {
-					out[path+"/"+f.Name] = f.Code
+				for name, code := range files {
+					out[path+"/"+name] = code
 				}
 			}
 			if pkg.HasRouting() {
@@ -144,7 +145,7 @@ func TestGenerateScheduleIndependent(t *testing.T) {
 
 func TestCheckIsIdempotent(t *testing.T) {
 	root := scheduleFixture(t)
-	pr, err := lang.Load(root)
+	pr, err := lang.Load(disk.Source{}, root)
 	if err != nil {
 		t.Fatal(err)
 	}

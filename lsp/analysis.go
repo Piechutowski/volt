@@ -7,6 +7,7 @@ import (
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/token"
@@ -36,7 +37,7 @@ func projectRootOf(path string) (string, bool) {
 	if !filepath.IsAbs(path) {
 		return "", false
 	}
-	root, err := lang.FindRoot(filepath.Dir(path))
+	root, err := lang.FindRoot(disk.Source{}, filepath.Dir(path))
 	return root, err == nil
 }
 
@@ -44,9 +45,9 @@ func projectAnalyze(root string, overlay map[string]string, session *lang.Sessio
 	var pr *lang.Project
 	var err error
 	if session != nil {
-		pr, err = session.Load(root, overlay)
+		pr, err = session.Load(disk.Source{}, root, overlay)
 	} else {
-		pr, err = lang.LoadOverlay(root, overlay)
+		pr, err = lang.LoadOverlay(disk.Source{}, root, overlay)
 	}
 	if err != nil {
 		return nil

@@ -188,32 +188,14 @@ file without the generated marker.
 
 ---
 
-## Step 3. Pure generators, purity gate widened
-
-Depends on: 1.
-
-**`volt fmt`.** Deferred: the language first, then non-core features
-and tooling. Nothing of it lands here: no formatter, no `-l` or `-w`,
-no LSP formatting, no unformatted-file warning in `volt check`.
-
-**Pure generators.** Each generator returns `map[string][]byte`;
-`cmd/volt` writes the map at the end, removing stale generated files as
-today. The fold's SQLite is opened by `cmd/volt`, never by `gen/` or
-`lang/`.
-
-**Purity gate.** Widen `cmd/volt`'s gate: no package under `lang/`,
-`gen/` or `nao/gen` imports `os`, `io/fs`, `database/sql` or `net`; the
-memo rules stay. `nao/rt` imports no `database/sql` (only
-`database/sql/driver`), which step 4 needs.
-
-Done when: the gate test exists, generators have no file writes.
-
----
-
 ## Step 4. Queries, lookups and writes as values; the runner
 
 Depends on: 2, 3. The one breaking rename of the query surface; finish it
-before anyone writes an application on Volt.
+before anyone writes an application on Volt. The split of `nao/rt` from
+`database/sql` lands here with the runner, not in step 3: the generated
+`Queries` still runs its statements through `rt` until this step
+removes it, and an intermediate shape would be built only to be torn
+down.
 
 **Today.** A generated query is a method on `*Queries`, which holds the
 database handle and builds, runs and scans in one call. Handlers hold a
@@ -638,7 +620,6 @@ read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
 
 | Step | Depends on | Lands |
 |---|---|---|
-| 3 pure generators, gate | 1 | |
 | 4 values and the runner | 2, 3 | the breaking rename |
 | 6 responses, pure handlers | 4 | |
 | 7 route loads | 6 | |

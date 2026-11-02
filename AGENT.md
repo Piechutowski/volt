@@ -94,7 +94,9 @@ server gets a scripted stdio session; one is a golden
 - A memoized computation is a pure function of explicit inputs, keyed
   on those inputs themselves; `cmd/volt`'s purity gate and
   immutability walk enforce it, and a new memo is added to the gate's
-  targets in the same commit.
+  targets in the same commit. The front end and the generators touch
+  no file and no database: a loader reads through `lang/source` and a
+  generator returns a map `volt gen` writes (spec §values-and-effects).
 - Test data is neutral (blog and metrics domains, never agriculture).
   A test that needs a project of some size writes one with
   `internal/corpus`.

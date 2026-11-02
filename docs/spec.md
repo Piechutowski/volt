@@ -60,6 +60,14 @@ the generator and `volt vet` where Go itself holds nothing.
 4. **Mutable state is inventoried.** The connection pool, the
    statement cache, the event broker's log and the logger are the
    whole list.
+5. **Pure phases in the tooling.** The scanner, the parser, the
+   checker, the fold and the generators are functions from values to
+   values. The loader reads a project through a `source.Source` the
+   tool or the language server hands it (`lang/source`), every
+   generator returns a map from file name to content, and `volt gen`
+   writes the maps in one step at the end. No package under `lang/`,
+   `gen/` or `nao/gen` imports `os`, `io/fs`, `database/sql` or
+   `net`; `cmd/volt/layers_test.go` holds it.
 
 Where the implementation as it stands falls short of a rule,
 [`plan.md`](plan.md) names the step that closes the gap: today a

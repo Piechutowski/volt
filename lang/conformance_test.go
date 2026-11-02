@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang/diag"
 )
 
@@ -95,7 +96,7 @@ func corpusRunAt(t *testing.T, path string) ([]diag.Diagnostic, string) {
 			t.Fatal(err)
 		}
 	}
-	pr, err := Load(root)
+	pr, err := Load(disk.Source{}, root)
 	if err != nil {
 		t.Fatal(err)
 	}

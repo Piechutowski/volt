@@ -14,12 +14,12 @@ import (
 	gotoken "go/token"
 	"go/types"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
 	"github.com/Piechutowski/volt/lang/check"
+	"github.com/Piechutowski/volt/lang/source"
 	"github.com/Piechutowski/volt/lang/token"
 )
 
@@ -63,50 +63,38 @@ type GoSource struct {
 	Head bool // Text is the file's first bytes only: a generated file
 }
 
-// GoSourcesRead reads the non-test Go files directly in dir, by name.
-// A file that cannot be read is absent, as it is for the go tool.
-func GoSourcesRead(dir string) []GoSource {
-	entries, err := os.ReadDir(dir)
+// GoSourcesRead reads the non-test Go files directly in dir through
+// src, by name. A file that cannot be read is absent, as it is for the
+// go tool.
+func GoSourcesRead(src source.Source, dir string) []GoSource {
+	entries, err := src.ReadDir(dir)
 	if err != nil {
 		return nil
 	}
 	var srcs []GoSource
 	for _, e := range entries {
-		name := e.Name()
-		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+		if e.Dir || !strings.HasSuffix(e.Name, ".go") || strings.HasSuffix(e.Name, "_test.go") {
 			continue
 		}
-		src, err := goSourceRead(filepath.Join(dir, name))
+		b, err := src.ReadFile(filepath.Join(dir, e.Name))
 		if err != nil {
 			continue
 		}
-		src.Name = name
-		srcs = append(srcs, src)
+		srcs = append(srcs, goSourceOf(e.Name, b))
 	}
 	return srcs
 }
 
-func goSourceRead(path string) (GoSource, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return GoSource{}, err
+func goSourceOf(name string, b []byte) GoSource {
+	head := b
+	if len(head) > 256 {
+		head = head[:256]
 	}
-	defer f.Close()
-	var head [256]byte
-	n, err := io.ReadFull(f, head[:])
-	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
-		return GoSource{}, err
-	}
-	line, _, _ := bytes.Cut(head[:n], []byte("\n"))
+	line, _, _ := bytes.Cut(head, []byte("\n"))
 	if bytes.HasPrefix(line, []byte("// Code generated ")) && bytes.HasSuffix(bytes.TrimSpace(line), []byte("DO NOT EDIT.")) {
-		return GoSource{Text: string(head[:n]), Head: true}, nil
+		return GoSource{Name: name, Text: string(head), Head: true}
 	}
-	var text bytes.Buffer
-	text.Write(head[:n])
-	if _, err := text.ReadFrom(f); err != nil {
-		return GoSource{}, err
-	}
-	return GoSource{Text: text.String()}, nil
+	return GoSource{Name: name, Text: string(b)}
 }
 
 // GoFuncsOf scans a package directory's sources under go/build's file
@@ -162,9 +150,9 @@ func GoFuncsOf(dir string, srcs []GoSource) (funcs map[string]GoFunc, gotypes ma
 	return funcs, gotypes, broken
 }
 
-// GoFuncsScan is GoFuncsOf over the sources on disk now.
-func GoFuncsScan(dir string) (funcs map[string]GoFunc, gotypes map[string]GoType, broken []string) {
-	return GoFuncsOf(dir, GoSourcesRead(dir))
+// GoFuncsScan is GoFuncsOf over the sources src holds now.
+func GoFuncsScan(src source.Source, dir string) (funcs map[string]GoFunc, gotypes map[string]GoType, broken []string) {
+	return GoFuncsOf(dir, GoSourcesRead(src, dir))
 }
 
 func goTypeOf(fset *gotoken.FileSet, path string, ts *goast.TypeSpec) GoType {
@@ -258,7 +246,7 @@ func (c *checker) goFuncs(pkg *Package) *goScan {
 		c.gofuncs.by[pkg.Dir] = sc
 	}
 	c.gofuncs.mu.Unlock()
-	sc.once.Do(func() { sc.funcs, sc.types, sc.broken = GoFuncsScan(pkg.Dir) })
+	sc.once.Do(func() { sc.funcs, sc.types, sc.broken = GoFuncsScan(c.pr.src, pkg.Dir) })
 	return sc
 }
 

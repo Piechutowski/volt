@@ -12,6 +12,7 @@ import (
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
 
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
@@ -60,7 +61,7 @@ type voltIndex struct {
 
 func (ix *voltIndex) goStale() bool {
 	for dir, srcs := range ix.gosrcs {
-		if !slices.Equal(lang.GoSourcesRead(dir), srcs) {
+		if !slices.Equal(lang.GoSourcesRead(disk.Source{}, dir), srcs) {
 			return true
 		}
 	}
@@ -275,7 +276,7 @@ func (ix *voltIndex) goSourcesNote(pkg *lang.Package) []lang.GoSource {
 	if srcs, ok := ix.gosrcs[pkg.Dir]; ok {
 		return srcs
 	}
-	srcs := lang.GoSourcesRead(pkg.Dir)
+	srcs := lang.GoSourcesRead(disk.Source{}, pkg.Dir)
 	if ix.gosrcs == nil {
 		ix.gosrcs = map[string][]lang.GoSource{}
 	}

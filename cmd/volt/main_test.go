@@ -10,6 +10,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 )
@@ -117,7 +118,7 @@ func TestStressWritesABuildableProject(t *testing.T) {
 	if err := volt("stress", "-tables", "3", "-columns", "9", "-volt", repoRoot, dir); err != nil {
 		t.Fatalf("stress: %v", err)
 	}
-	pr, err := lang.Load(dir)
+	pr, err := lang.Load(disk.Source{}, dir)
 	if err != nil {
 		t.Fatal(err)
 	}

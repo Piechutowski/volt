@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/nao/gen/golang"
@@ -93,7 +94,7 @@ func schemaCompiles(t *testing.T, repoRoot string, schema []byte) {
 	if err := os.WriteFile(filepath.Join(pkgDir, "schema.volt"), schema, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	pr, err := lang.Load(dir)
+	pr, err := lang.Load(disk.Source{}, dir)
 	if err != nil {
 		t.Fatal(err)
 	}

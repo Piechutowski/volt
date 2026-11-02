@@ -13,6 +13,7 @@ import (
 
 	"github.com/Piechutowski/volt/gen/model"
 	"github.com/Piechutowski/volt/internal/corpus"
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 )
@@ -21,7 +22,7 @@ var update = flag.Bool("update", false, "rewrite golden files")
 
 func fixture(t *testing.T) *lang.Project {
 	t.Helper()
-	pr, err := lang.Load(filepath.Join("testdata", "blog"))
+	pr, err := lang.Load(disk.Source{}, filepath.Join("testdata", "blog"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +112,7 @@ func TestNoNamedRoutesCompiles(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(src, "app", "r.volt"), []byte(routes), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	pr, err := lang.Load(src)
+	pr, err := lang.Load(disk.Source{}, src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,8 +198,8 @@ func TestGoldenCompiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range dbFiles {
-		if err := os.WriteFile(filepath.Join(dbDir, f.Name), f.Code, 0o644); err != nil {
+	for voltName, voltCode := range dbFiles {
+		if err := os.WriteFile(filepath.Join(dbDir, voltName), voltCode, 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -270,7 +271,7 @@ var _ http.Handler = NewRouter(Controllers{
 
 func TestSinglePackageCompiles(t *testing.T) {
 	root := filepath.Join("..", "..", "lang", "conformance", "snippets", "valid", "v65_single_package")
-	pr, err := lang.Load(root)
+	pr, err := lang.Load(disk.Source{}, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -304,8 +305,8 @@ func TestSinglePackageCompiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range models {
-		write(f.Name, f.Code)
+	for voltName, voltCode := range models {
+		write(voltName, voltCode)
 	}
 	files, err := Generate(pkg, Options{Source: "package site"})
 	if err != nil {
@@ -374,7 +375,7 @@ func main() { http.ListenAndServe(":0", NewRouter(Controllers{Queries: New(nil)}
 			t.Fatal(err)
 		}
 	}
-	pr, err := lang.Load(dir)
+	pr, err := lang.Load(disk.Source{}, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -386,8 +387,8 @@ func main() { http.ListenAndServe(":0", NewRouter(Controllers{Queries: New(nil)}
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range models {
-		if err := os.WriteFile(filepath.Join(dir, f.Name), f.Code, 0o644); err != nil {
+	for voltName, voltCode := range models {
+		if err := os.WriteFile(filepath.Join(dir, voltName), voltCode, 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -451,7 +452,7 @@ func TestCorpusCompiles(t *testing.T) {
 		if err := corpus.Write(dir, spec); err != nil {
 			t.Fatal(err)
 		}
-		pr, err := lang.Load(dir)
+		pr, err := lang.Load(disk.Source{}, dir)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -474,8 +475,8 @@ func TestCorpusCompiles(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				for _, f := range files {
-					write(f.Name, f.Code)
+				for voltName, voltCode := range files {
+					write(voltName, voltCode)
 				}
 			}
 			if pkg.HasRouting() {
@@ -544,7 +545,7 @@ func snippetCompiles(t *testing.T, name string) {
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	pr, err := lang.Load(dir)
+	pr, err := lang.Load(disk.Source{}, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -567,8 +568,8 @@ func snippetCompiles(t *testing.T, name string) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, f := range files {
-				write(f.Name, f.Code)
+			for voltName, voltCode := range files {
+				write(voltName, voltCode)
 			}
 		}
 		if pkg.HasRouting() {

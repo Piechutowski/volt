@@ -10,6 +10,7 @@ import (
 
 	"github.com/Piechutowski/volt/gen/model"
 	"github.com/Piechutowski/volt/gen/router"
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 )
@@ -22,8 +23,8 @@ func canonicalCheck(t *testing.T, pr *lang.Project) {
 			if err != nil {
 				t.Fatalf("%s: %v", path, err)
 			}
-			for _, f := range files {
-				canonicalAssert(t, path+"/"+f.Name, f.Code)
+			for voltName, voltCode := range files {
+				canonicalAssert(t, path+"/"+voltName, voltCode)
 			}
 		}
 		if pkg.HasRouting() {
@@ -97,11 +98,11 @@ func TestGeneratedGoIsCanonical(t *testing.T) {
 			continue
 		}
 		t.Run(e.Name(), func(t *testing.T) {
-			dirs, err := lang.PackageDirs(root, root)
+			dirs, err := lang.PackageDirs(disk.Source{}, root, root)
 			if err != nil {
 				t.Fatal(err)
 			}
-			pr, err := lang.LoadDirs(root, dirs, nil)
+			pr, err := lang.LoadDirs(disk.Source{}, root, dirs, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

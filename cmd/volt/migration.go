@@ -21,6 +21,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/urfave/cli/v3"
 
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/nao/gen/sqlite"
@@ -245,11 +246,11 @@ func argOr(c *cli.Command, i int, def string) string {
 // tables it migrates (spec §migrations). A package with errors
 // exits 1, as from gen and check (spec §migration-tooling).
 func migrationPackage(dir string) (*lang.Package, error) {
-	root, err := lang.FindRoot(dir)
+	root, err := lang.FindRoot(disk.Source{}, dir)
 	if err != nil {
 		return nil, cli.Exit(err.Error(), 2)
 	}
-	pr, err := lang.LoadDirs(root, []string{dir}, nil)
+	pr, err := lang.LoadDirs(disk.Source{}, root, []string{dir}, nil)
 	if err != nil {
 		return nil, cli.Exit(err.Error(), 2)
 	}

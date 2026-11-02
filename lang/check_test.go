@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang/diag"
 )
 
@@ -21,7 +22,7 @@ func project(t *testing.T, files map[string]string) (*Project, []diag.Diagnostic
 			t.Fatal(err)
 		}
 	}
-	pr, err := Load(root)
+	pr, err := Load(disk.Source{}, root)
 	if err != nil {
 		t.Fatal(err)
 	}

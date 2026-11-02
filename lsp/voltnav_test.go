@@ -7,6 +7,7 @@ import (
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
 
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/ast"
 )
@@ -178,7 +179,7 @@ func TestTableKeyUnchecked(t *testing.T) {
 		"go.mod":         "module nav\n",
 		"db/schema.volt": schema,
 	})
-	pr, err := lang.Load(root)
+	pr, err := lang.Load(disk.Source{}, root)
 	if err != nil {
 		t.Fatal(err)
 	}

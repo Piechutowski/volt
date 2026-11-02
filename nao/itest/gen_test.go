@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Piechutowski/volt/gen/model"
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 )
@@ -17,11 +18,11 @@ import (
 // `volt gen` takes, so the test and the tool cannot disagree.
 // On failure: go generate ./nao/itest
 func TestGeneratedFilesCurrent(t *testing.T) {
-	root, err := lang.FindRoot(".")
+	root, err := lang.FindRoot(disk.Source{}, ".")
 	if err != nil {
 		t.Fatal(err)
 	}
-	pr, err := lang.LoadDirs(root, []string{"."}, nil)
+	pr, err := lang.LoadDirs(disk.Source{}, root, []string{"."}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,14 +38,14 @@ func TestGeneratedFilesCurrent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range files {
-		got, err := os.ReadFile(f.Name)
+	for voltName, voltCode := range files {
+		got, err := os.ReadFile(voltName)
 		if err != nil {
-			t.Errorf("%s: %v (run 'go generate ./nao/itest')", f.Name, err)
+			t.Errorf("%s: %v (run 'go generate ./nao/itest')", voltName, err)
 			continue
 		}
-		if !bytes.Equal(got, f.Code) {
-			t.Errorf("%s is stale; run 'go generate ./nao/itest'", f.Name)
+		if !bytes.Equal(got, voltCode) {
+			t.Errorf("%s is stale; run 'go generate ./nao/itest'", voltName)
 		}
 	}
 }

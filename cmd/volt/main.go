@@ -31,6 +31,7 @@ import (
 	"github.com/Piechutowski/volt/gen/model"
 	"github.com/Piechutowski/volt/gen/router"
 	"github.com/Piechutowski/volt/internal/corpus"
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/internal/par"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
@@ -144,7 +145,7 @@ func load(c *cli.Command) (pr *lang.Project, named []string, diags []diag.Diagno
 				base = "."
 			}
 		}
-		r, err := lang.FindRoot(base)
+		r, err := lang.FindRoot(disk.Source{}, base)
 		if err != nil {
 			return nil, nil, nil, cli.Exit(err.Error(), 2)
 		}
@@ -154,7 +155,7 @@ func load(c *cli.Command) (pr *lang.Project, named []string, diags []diag.Diagno
 			return nil, nil, nil, cli.Exit(fmt.Sprintf("%s belongs to a different project (%s); one project per invocation", arg, r), 2)
 		}
 		if recursive {
-			found, err := lang.PackageDirs(root, base)
+			found, err := lang.PackageDirs(disk.Source{}, root, base)
 			if err != nil {
 				return nil, nil, nil, cli.Exit(err.Error(), 2)
 			}
@@ -166,7 +167,7 @@ func load(c *cli.Command) (pr *lang.Project, named []string, diags []diag.Diagno
 			dirs = append(dirs, base)
 		}
 	}
-	pr, err = lang.LoadDirs(root, dirs, nil)
+	pr, err = lang.LoadDirs(disk.Source{}, root, dirs, nil)
 	if err != nil {
 		return nil, nil, nil, cli.Exit(err.Error(), 2)
 	}
@@ -302,9 +303,9 @@ func genRun(ctx context.Context, c *cli.Command) error {
 			if err != nil {
 				return nil, err
 			}
-			for _, f := range gen {
-				if parts[partOf(f.Name)] {
-					files = append(files, outFile{path: filepath.Join(dir, f.Name), code: f.Code})
+			for _, name := range slices.Sorted(maps.Keys(gen)) {
+				if parts[partOf(name)] {
+					files = append(files, outFile{path: filepath.Join(dir, name), code: gen[name]})
 				}
 			}
 		}

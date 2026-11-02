@@ -12,6 +12,7 @@ import (
 	"github.com/Piechutowski/volt/gen/model"
 	"github.com/Piechutowski/volt/gen/router"
 	"github.com/Piechutowski/volt/internal/corpus"
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/parser"
@@ -28,12 +29,12 @@ func diagsRender(ds []diag.Diagnostic) string {
 
 func sessionRound(t *testing.T, s *lang.Session, root string, overlay map[string]string, before lang.SessionStats) (*lang.Project, lang.SessionStats) {
 	t.Helper()
-	pr, err := s.Load(root, overlay)
+	pr, err := s.Load(disk.Source{}, root, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := diagsRender(s.Check(pr))
-	fresh, err := lang.LoadOverlay(root, overlay)
+	fresh, err := lang.LoadOverlay(disk.Source{}, root, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,8 +175,8 @@ func TestSessionGeneratesIdentically(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				for _, f := range files {
-					out[path+"/"+f.Name] = string(f.Code)
+				for name, code := range files {
+					out[path+"/"+name] = string(code)
 				}
 			}
 			if pkg.HasRouting() {
@@ -199,7 +200,7 @@ func TestSessionGeneratesIdentically(t *testing.T) {
 	edited := strings.Replace(string(src), "Table m_t0001s {\n", "Table m_t0001s {\n  extra string\n", 1)
 	for i, overlay := range []map[string]string{nil, {schema: edited}, {schema: edited}, nil} {
 		pr, _ := sessionRound(t, &s, root, overlay, s.Stats())
-		fresh, err := lang.LoadOverlay(root, overlay)
+		fresh, err := lang.LoadOverlay(disk.Source{}, root, overlay)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -227,13 +228,13 @@ func TestSessionVetMemo(t *testing.T) {
 	round := func(name string, overlay map[string]string, checked int) {
 		t.Helper()
 		before := s.Stats()
-		pr, err := s.Load(root, overlay)
+		pr, err := s.Load(disk.Source{}, root, overlay)
 		if err != nil {
 			t.Fatal(err)
 		}
 		s.Check(pr)
 		got := diagsRender(s.Vet(pr))
-		fresh, err := lang.LoadOverlay(root, overlay)
+		fresh, err := lang.LoadOverlay(disk.Source{}, root, overlay)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -288,7 +289,7 @@ func TestSessionBindsUnresolvedSelects(t *testing.T) {
 		if sels := pr.Packages["db"].Selects; len(sels) != 1 || !sels[0].Unresolved || !slices.Equal(sels[0].UnknownCols, []string{"rank"}) {
 			t.Fatalf("%s: want the one select kept and unresolved over rank, got %+v", name, sels)
 		}
-		fresh, err := lang.LoadOverlay(root, overlay)
+		fresh, err := lang.LoadOverlay(disk.Source{}, root, overlay)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -338,13 +339,13 @@ func TestSessionReparsesOneDeclaration(t *testing.T) {
 		t.Helper()
 		before := s.Stats()
 		overlay := map[string]string{path: text}
-		pr, err := s.Load(root, overlay)
+		pr, err := s.Load(disk.Source{}, root, overlay)
 		if err != nil {
 			t.Fatal(err)
 		}
 		got := diagsRender(s.Check(pr))
 		gotVet := diagsRender(s.Vet(pr))
-		fresh, err := lang.LoadOverlay(root, overlay)
+		fresh, err := lang.LoadOverlay(disk.Source{}, root, overlay)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -411,13 +412,13 @@ func TestSessionConcurrentCallersAgreeWithFreshAnalysis(t *testing.T) {
 				}
 				text = strings.Replace(text, "Table tags {", fmt.Sprintf("Table tags_%d_%d {", c, r), 1)
 				overlay := map[string]string{d2: text}
-				pr, err := s.Load(root, overlay)
+				pr, err := s.Load(disk.Source{}, root, overlay)
 				if err != nil {
 					errs[c] = err
 					return
 				}
 				got := diagsRender(s.Check(pr))
-				fresh, err := lang.LoadOverlay(root, overlay)
+				fresh, err := lang.LoadOverlay(disk.Source{}, root, overlay)
 				if err != nil {
 					errs[c] = err
 					return
