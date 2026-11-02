@@ -3,9 +3,9 @@
 package models
 
 func (c PageViewChangeset) Validate() PageViewChangeset {
-	return PageViewChangeset{c.FindingsSet(nil)}
+	return PageViewChangeset{c.WithFindings(nil)}
 }
 
 func (c LinkClickChangeset) Validate() LinkClickChangeset {
-	return LinkClickChangeset{c.FindingsSet(nil)}
+	return LinkClickChangeset{c.WithFindings(nil)}
 }

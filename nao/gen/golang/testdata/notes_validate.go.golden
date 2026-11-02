@@ -12,9 +12,9 @@ func (c PostChangeset) Validate() PostChangeset {
 	if voltErr := PostStateKnown(voltV.Status); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "PostStateKnown", Columns: []string{"status"}, Message: voltErr.Error()})
 	}
-	return PostChangeset{c.FindingsSet(voltErrs)}
+	return PostChangeset{c.WithFindings(voltErrs)}
 }
 
 func (c TagChangeset) Validate() TagChangeset {
-	return TagChangeset{c.FindingsSet(nil)}
+	return TagChangeset{c.WithFindings(nil)}
 }

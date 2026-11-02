@@ -12,5 +12,5 @@ func (c CommentChangeset) Validate() CommentChangeset {
 	if voltErr := CommentableTypeKnown(voltV.CommentableType); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "CommentableTypeKnown", Columns: []string{"commentable_type"}, Message: voltErr.Error()})
 	}
-	return CommentChangeset{c.FindingsSet(voltErrs)}
+	return CommentChangeset{c.WithFindings(voltErrs)}
 }

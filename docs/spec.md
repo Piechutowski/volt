@@ -3310,8 +3310,7 @@ user, err := run.Run(ctx, db, db.UserUpdate(cs))
     `rt.NullColumn` when nullable); and the unexported desc
     `volt<Model>Desc`, an `rt.Desc[M]` carrying the model's name, its
     quoted table and column list, one `rt.FieldDesc` per column
-    (column, wire name, type as the schema spells it, nullable, key,
-    settable), the row of literal defaults (rule 2), and the generated
+    (column, wire name, key, settable), the row of literal defaults (rule 2), and the generated
     functions `volt<Model>Scan` (a row from `rt.Row`),
     `volt<Model>Values` (a row's bound values in column order),
     `volt<Model>Apply` (a row with the marked values applied) and
@@ -3320,7 +3319,7 @@ user, err := run.Run(ctx, db, db.UserUpdate(cs))
     among them, builds changesets with nothing else.
     `volt_validate.go` declares `Validate`, which is where the
     package's validator functions are called and which replaces the
-    findings through `FindingsSet`. `volt_queries.go` declares `Create`
+    findings through `WithFindings`. `volt_queries.go` declares `Create`
     and `Update`, over `rt.Insert` and `rt.Update`, which render
     through the changeset's `InsertRender` and `UpdateRender`. The names
     `<Model>Changeset`, `<Model>Column`, `<Model>Params` and

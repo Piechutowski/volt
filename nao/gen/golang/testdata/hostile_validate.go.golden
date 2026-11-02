@@ -7,7 +7,7 @@ import (
 )
 
 func (c UserChangeset) Validate() UserChangeset {
-	return UserChangeset{c.FindingsSet(nil)}
+	return UserChangeset{c.WithFindings(nil)}
 }
 
 func (c CoreUserChangeset) Validate() CoreUserChangeset {
@@ -16,13 +16,13 @@ func (c CoreUserChangeset) Validate() CoreUserChangeset {
 	if voltErr := CoreAuditKindKnown(voltV.Kind); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "CoreAuditKindKnown", Columns: []string{"kind"}, Message: voltErr.Error()})
 	}
-	return CoreUserChangeset{c.FindingsSet(voltErrs)}
+	return CoreUserChangeset{c.WithFindings(voltErrs)}
 }
 
 func (c X2faCodeChangeset) Validate() X2faCodeChangeset {
-	return X2faCodeChangeset{c.FindingsSet(nil)}
+	return X2faCodeChangeset{c.WithFindings(nil)}
 }
 
 func (c DigestChangeset) Validate() DigestChangeset {
-	return DigestChangeset{c.FindingsSet(nil)}
+	return DigestChangeset{c.WithFindings(nil)}
 }

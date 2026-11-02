@@ -199,8 +199,6 @@ func dataImport(q *lang.QueryRef) string {
 	return q.Qualifier + " " + fmt.Sprintf("%q", q.Import)
 }
 
-func handlerLabel(r *lang.RouteInfo) string { return r.HandlerRef() }
-
 func (g *generator) controllerNames() []string {
 	names := make([]string, 0, len(g.pkg.Controllers))
 	for n := range g.pkg.Controllers {
@@ -572,13 +570,6 @@ func (g *generator) routesEmit() error {
 	}
 	g.pf("}\n")
 	return nil
-}
-
-func methodOrAny(m string) string {
-	if m == "" {
-		return "any"
-	}
-	return m
 }
 
 func (g *generator) clientEmit() error {

@@ -17,9 +17,9 @@ var entryDesc = &Desc[entry]{
 	Table:   `"entries"`,
 	Columns: `"id", "title", "body"`,
 	Fields: []FieldDesc{
-		{Column: "id", Wire: "id", Type: "int", Key: true},
-		{Column: "title", Wire: "title", Type: "string", Settable: true},
-		{Column: "body", Wire: "body", Type: "string", Nullable: true, Settable: true},
+		{Column: "id", Wire: "id", Key: true},
+		{Column: "title", Wire: "title", Settable: true},
+		{Column: "body", Wire: "body", Settable: true},
 	},
 	Defaults: entry{Title: "untitled"},
 	Scan: func(r Row) (entry, error) {
@@ -122,11 +122,11 @@ func TestChangesetCast(t *testing.T) {
 	if err := c.Err(); !errors.As(err, &inv) || inv.Model != "Post" || len(inv.Fields) != 2 {
 		t.Errorf("Err = %v", err)
 	}
-	custom := c.ErrorAdd(entryTitle, "taken").FindingsSet([]FieldError{{Check: "required", Columns: []string{"title"}}})
+	custom := c.ErrorAdd(entryTitle, "taken").WithFindings([]FieldError{{Check: "required", Columns: []string{"title"}}})
 	if got := custom.Errors(); len(got) != 4 || got[2].Check != "custom" || got[3].Check != "required" {
-		t.Errorf("Errors after ErrorAdd and FindingsSet = %v", got)
+		t.Errorf("Errors after ErrorAdd and WithFindings = %v", got)
 	}
-	if len(c.Errors()) != 2 || custom.FindingsSet(nil).Errors()[2].Check != "custom" || len(custom.FindingsSet(nil).Errors()) != 3 {
-		t.Errorf("ErrorAdd or FindingsSet touched its receiver")
+	if len(c.Errors()) != 2 || custom.WithFindings(nil).Errors()[2].Check != "custom" || len(custom.WithFindings(nil).Errors()) != 3 {
+		t.Errorf("ErrorAdd or WithFindings touched its receiver")
 	}
 }

@@ -73,8 +73,6 @@ func (e *dynEmitter) tableEmit(t *naming.Table) {
 		return
 	}
 	b := &e.body
-	tbl := t.Info.Decl.Name.Name()
-
 	var consts align.Block
 	consts.Row(t.Names.TableConst, "= `"+t.TableSQL()+"`")
 	consts.Row(t.Names.ColumnsConst, "= `"+t.ColumnList()+"`")
@@ -83,11 +81,11 @@ func (e *dynEmitter) tableEmit(t *naming.Table) {
 	b.WriteString(")\n\n")
 
 	e.wrappersEmit(t)
-	e.queryEmit(t, tbl)
-	e.countEmit(t, tbl)
-	e.existsEmit(t, tbl)
-	e.deleteWhereEmit(t, tbl)
-	e.updateWhereEmit(t, tbl)
+	e.queryEmit(t)
+	e.countEmit(t)
+	e.existsEmit(t)
+	e.deleteWhereEmit(t)
+	e.updateWhereEmit(t)
 }
 
 func (e *dynEmitter) wrappersEmit(t *naming.Table) {
@@ -109,35 +107,35 @@ func funcLine(b *strings.Builder, header, body string) {
 	b.WriteString(header + " {\n\t" + body + "\n}\n\n")
 }
 
-func (e *dynEmitter) queryEmit(t *naming.Table, tbl string) {
+func (e *dynEmitter) queryEmit(t *naming.Table) {
 	b := &e.body
 	fmt.Fprintf(b, "func %s(opts ...rt.Opt[%s]) rt.Query[%s] {\n", t.Names.Query, t.Model, t.Model)
 	fmt.Fprintf(b, "\tvoltSQL, voltArgs, voltErr := rt.SelectRender(%s, %s, opts)\n", t.Names.TableConst, t.Names.ColumnsConst)
 	queryReturn(b, t.Model, t.Names.Scan)
 }
 
-func (e *dynEmitter) countEmit(t *naming.Table, tbl string) {
+func (e *dynEmitter) countEmit(t *naming.Table) {
 	b := &e.body
 	fmt.Fprintf(b, "func %s(preds ...rt.Pred[%s]) rt.Lookup[int64] {\n", t.Names.Count, t.Model)
 	fmt.Fprintf(b, "\tvoltSQL, voltArgs, voltErr := rt.CountRender(%s, preds)\n", t.Names.TableConst)
 	b.WriteString("\treturn rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}\n}\n\n")
 }
 
-func (e *dynEmitter) existsEmit(t *naming.Table, tbl string) {
+func (e *dynEmitter) existsEmit(t *naming.Table) {
 	b := &e.body
 	fmt.Fprintf(b, "func %s(preds ...rt.Pred[%s]) rt.Lookup[bool] {\n", t.Names.Exists, t.Model)
 	fmt.Fprintf(b, "\tvoltSQL, voltArgs, voltErr := rt.ExistsRender(%s, preds)\n", t.Names.TableConst)
 	b.WriteString("\treturn rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}\n}\n\n")
 }
 
-func (e *dynEmitter) deleteWhereEmit(t *naming.Table, tbl string) {
+func (e *dynEmitter) deleteWhereEmit(t *naming.Table) {
 	b := &e.body
 	fmt.Fprintf(b, "func %s(preds ...rt.Pred[%s]) rt.Exec {\n", t.Names.DeleteWhere, t.Model)
 	fmt.Fprintf(b, "\tvoltSQL, voltArgs, voltErr := rt.DeleteRender(%s, preds)\n", t.Names.TableConst)
 	b.WriteString("\treturn rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}\n}\n\n")
 }
 
-func (e *dynEmitter) updateWhereEmit(t *naming.Table, tbl string) {
+func (e *dynEmitter) updateWhereEmit(t *naming.Table) {
 	b := &e.body
 	fmt.Fprintf(b, "func %s(set []rt.Assign[%s], preds ...rt.Pred[%s]) rt.Exec {\n", t.Names.UpdateWhere, t.Model, t.Model)
 	fmt.Fprintf(b, "\tvoltSQL, voltArgs, voltErr := rt.UpdateRender(%s, set, preds)\n", t.Names.TableConst)

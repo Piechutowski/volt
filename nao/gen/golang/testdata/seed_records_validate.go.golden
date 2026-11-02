@@ -3,9 +3,9 @@
 package models
 
 func (c CurrencyChangeset) Validate() CurrencyChangeset {
-	return CurrencyChangeset{c.FindingsSet(nil)}
+	return CurrencyChangeset{c.WithFindings(nil)}
 }
 
 func (c RateChangeset) Validate() RateChangeset {
-	return RateChangeset{c.FindingsSet(nil)}
+	return RateChangeset{c.WithFindings(nil)}
 }

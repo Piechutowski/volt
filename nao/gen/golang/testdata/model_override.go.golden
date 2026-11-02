@@ -27,9 +27,9 @@ var voltMenuDesc = &rt.Desc[Menu]{
 	Table:   `"menus"`,
 	Columns: `"id", "title", "price"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Type: "int", Key: true},
-		{Column: "title", Wire: "title", Type: "string", Settable: true},
-		{Column: "price", Wire: "price", Type: "float64", Settable: true},
+		{Column: "id", Wire: "id", Key: true},
+		{Column: "title", Wire: "title", Settable: true},
+		{Column: "price", Wire: "price", Settable: true},
 	},
 	Scan:   voltMenuScan,
 	Values: voltMenuValues,
@@ -118,8 +118,8 @@ var voltOrderStatusDesc = &rt.Desc[OrderStatus]{
 	Table:   `"order_status"`,
 	Columns: `"code", "label"`,
 	Fields: []rt.FieldDesc{
-		{Column: "code", Wire: "code", Type: "string", Key: true, Settable: true},
-		{Column: "label", Wire: "label", Type: "string", Settable: true},
+		{Column: "code", Wire: "code", Key: true, Settable: true},
+		{Column: "label", Wire: "label", Settable: true},
 	},
 	Scan:   voltOrderStatusScan,
 	Values: voltOrderStatusValues,

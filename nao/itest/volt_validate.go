@@ -12,7 +12,7 @@ func (c UserChangeset) Validate() UserChangeset {
 	if voltErr := EmailValid(voltV.Email); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "EmailValid", Columns: []string{"email"}, Message: voltErr.Error()})
 	}
-	return UserChangeset{c.FindingsSet(voltErrs)}
+	return UserChangeset{c.WithFindings(voltErrs)}
 }
 
 func (c OrderChangeset) Validate() OrderChangeset {
@@ -24,11 +24,11 @@ func (c OrderChangeset) Validate() OrderChangeset {
 	if voltErr := OrderStateKnown(voltV.Status); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "OrderStateKnown", Columns: []string{"status"}, Message: voltErr.Error()})
 	}
-	return OrderChangeset{c.FindingsSet(voltErrs)}
+	return OrderChangeset{c.WithFindings(voltErrs)}
 }
 
 func (c UserTagChangeset) Validate() UserTagChangeset {
-	return UserTagChangeset{c.FindingsSet(nil)}
+	return UserTagChangeset{c.WithFindings(nil)}
 }
 
 func (c PageViewChangeset) Validate() PageViewChangeset {
@@ -40,15 +40,15 @@ func (c PageViewChangeset) Validate() PageViewChangeset {
 	if voltErr := SiteShape(voltV.Site); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "SiteShape", Columns: []string{"site"}, Message: voltErr.Error()})
 	}
-	return PageViewChangeset{c.FindingsSet(voltErrs)}
+	return PageViewChangeset{c.WithFindings(voltErrs)}
 }
 
 func (c LinkClickChangeset) Validate() LinkClickChangeset {
-	return LinkClickChangeset{c.FindingsSet(nil)}
+	return LinkClickChangeset{c.WithFindings(nil)}
 }
 
 func (c SiteFlagChangeset) Validate() SiteFlagChangeset {
-	return SiteFlagChangeset{c.FindingsSet(nil)}
+	return SiteFlagChangeset{c.WithFindings(nil)}
 }
 
 func (c AttachmentChangeset) Validate() AttachmentChangeset {
@@ -57,21 +57,21 @@ func (c AttachmentChangeset) Validate() AttachmentChangeset {
 	if len(voltV.Digest) == 0 {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "required", Columns: []string{"digest"}, Message: "digest is required"})
 	}
-	return AttachmentChangeset{c.FindingsSet(voltErrs)}
+	return AttachmentChangeset{c.WithFindings(voltErrs)}
 }
 
 func (c BlobChangeset) Validate() BlobChangeset {
-	return BlobChangeset{c.FindingsSet(nil)}
+	return BlobChangeset{c.WithFindings(nil)}
 }
 
 func (c DailyHitChangeset) Validate() DailyHitChangeset {
-	return DailyHitChangeset{c.FindingsSet(nil)}
+	return DailyHitChangeset{c.WithFindings(nil)}
 }
 
 func (c InviteChangeset) Validate() InviteChangeset {
-	return InviteChangeset{c.FindingsSet(nil)}
+	return InviteChangeset{c.WithFindings(nil)}
 }
 
 func (c PostFlagChangeset) Validate() PostFlagChangeset {
-	return PostFlagChangeset{c.FindingsSet(nil)}
+	return PostFlagChangeset{c.WithFindings(nil)}
 }

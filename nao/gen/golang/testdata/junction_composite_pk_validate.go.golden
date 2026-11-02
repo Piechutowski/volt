@@ -3,13 +3,13 @@
 package models
 
 func (c UserChangeset) Validate() UserChangeset {
-	return UserChangeset{c.FindingsSet(nil)}
+	return UserChangeset{c.WithFindings(nil)}
 }
 
 func (c RoleChangeset) Validate() RoleChangeset {
-	return RoleChangeset{c.FindingsSet(nil)}
+	return RoleChangeset{c.WithFindings(nil)}
 }
 
 func (c UserRoleChangeset) Validate() UserRoleChangeset {
-	return UserRoleChangeset{c.FindingsSet(nil)}
+	return UserRoleChangeset{c.WithFindings(nil)}
 }

@@ -6,6 +6,7 @@ package itest
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/Piechutowski/volt/nao/run"
 	"testing"
 
@@ -171,5 +172,28 @@ func TestScannerBoolKindRoundTrip(t *testing.T) {
 	}
 	if bool(got.Reviewed) || got.Approved.Valid {
 		t.Errorf("PostFlagGet = %+v, want reviewed false and approved NULL", got)
+	}
+}
+
+func TestCastOnDeclaredTypes(t *testing.T) {
+	var p OrderParams
+	if err := json.Unmarshal([]byte(`{"status": "shipped", "tip": 300, "fee": 250, "total": 2.5, "placed_at": null}`), &p); err != nil {
+		t.Fatal(err)
+	}
+	cs := OrderNew().Cast(p, OrderStatus, OrderTip, OrderFee, OrderTotal, OrderPlacedAt)
+	if errs := cs.Errors(); len(errs) != 0 {
+		t.Fatalf("Cast over declared types = %v", errs)
+	}
+	row := cs.Row()
+	if row.Status != OrderStateShipped || row.Tip != Money(300) || row.Fee != pay.Cents(250) || row.Total != 2.5 || row.PlacedAt.Valid {
+		t.Errorf("Cast row = %+v; want each declared type converted and placed_at NULL", row)
+	}
+	var bad OrderParams
+	if err := json.Unmarshal([]byte(`{"status": 5, "fee": "lots"}`), &bad); err != nil {
+		t.Fatal(err)
+	}
+	errs := OrderNew().Cast(bad, OrderStatus, OrderFee).Errors()
+	if len(errs) != 2 || errs[0].Check != "cast" || errs[0].Message != "status: expected OrderState" || errs[1].Message != "fee: expected pay.Cents" {
+		t.Errorf("Cast of wrong types = %v; want two cast errors naming the schema's types", errs)
 	}
 }

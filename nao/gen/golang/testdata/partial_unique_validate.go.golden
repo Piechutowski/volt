@@ -3,5 +3,5 @@
 package models
 
 func (c AuthorChangeset) Validate() AuthorChangeset {
-	return AuthorChangeset{c.FindingsSet(nil)}
+	return AuthorChangeset{c.WithFindings(nil)}
 }

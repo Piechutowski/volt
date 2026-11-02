@@ -3,5 +3,5 @@
 package models
 
 func (c EmployeeChangeset) Validate() EmployeeChangeset {
-	return EmployeeChangeset{c.FindingsSet(nil)}
+	return EmployeeChangeset{c.WithFindings(nil)}
 }

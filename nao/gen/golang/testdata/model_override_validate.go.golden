@@ -3,9 +3,9 @@
 package models
 
 func (c MenuChangeset) Validate() MenuChangeset {
-	return MenuChangeset{c.FindingsSet(nil)}
+	return MenuChangeset{c.WithFindings(nil)}
 }
 
 func (c OrderStatusChangeset) Validate() OrderStatusChangeset {
-	return OrderStatusChangeset{c.FindingsSet(nil)}
+	return OrderStatusChangeset{c.WithFindings(nil)}
 }

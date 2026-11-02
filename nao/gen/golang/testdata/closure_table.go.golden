@@ -25,8 +25,8 @@ var voltCategoryDesc = &rt.Desc[Category]{
 	Table:   `"categories"`,
 	Columns: `"id", "name"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Type: "int", Key: true, Settable: true},
-		{Column: "name", Wire: "name", Type: "string", Settable: true},
+		{Column: "id", Wire: "id", Key: true, Settable: true},
+		{Column: "name", Wire: "name", Settable: true},
 	},
 	Scan:   voltCategoryScan,
 	Values: voltCategoryValues,
@@ -122,9 +122,9 @@ var voltCategoryPathDesc = &rt.Desc[CategoryPath]{
 	Table:   `"category_paths"`,
 	Columns: `"ancestor_id", "descendant_id", "depth"`,
 	Fields: []rt.FieldDesc{
-		{Column: "ancestor_id", Wire: "ancestor_id", Type: "int", Key: true, Settable: true},
-		{Column: "descendant_id", Wire: "descendant_id", Type: "int", Key: true, Settable: true},
-		{Column: "depth", Wire: "depth", Type: "int", Settable: true},
+		{Column: "ancestor_id", Wire: "ancestor_id", Key: true, Settable: true},
+		{Column: "descendant_id", Wire: "descendant_id", Key: true, Settable: true},
+		{Column: "depth", Wire: "depth", Settable: true},
 	},
 	Scan:   voltCategoryPathScan,
 	Values: voltCategoryPathValues,

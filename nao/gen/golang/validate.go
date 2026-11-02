@@ -78,12 +78,12 @@ func validateEmit(b *strings.Builder, t *naming.Table, specs []naming.ValidatorS
 
 	fmt.Fprintf(b, "func (c %s) Validate() %s {\n", t.Names.Changeset, t.Names.Changeset)
 	if checks.Len() == 0 {
-		fmt.Fprintf(b, "\treturn %s{c.FindingsSet(nil)}\n}\n\n", t.Names.Changeset)
+		fmt.Fprintf(b, "\treturn %s{c.WithFindings(nil)}\n}\n\n", t.Names.Changeset)
 		return false
 	}
 	b.WriteString("\tvoltV := c.Row()\n\tvar voltErrs []rt.FieldError\n")
 	b.WriteString(checks.String())
-	fmt.Fprintf(b, "\treturn %s{c.FindingsSet(voltErrs)}\n}\n\n", t.Names.Changeset)
+	fmt.Fprintf(b, "\treturn %s{c.WithFindings(voltErrs)}\n}\n\n", t.Names.Changeset)
 	return true
 }
 

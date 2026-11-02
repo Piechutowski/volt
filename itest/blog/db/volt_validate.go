@@ -18,17 +18,17 @@ func (c UserChangeset) Validate() UserChangeset {
 	if voltErr := EmailValid(voltV.Email); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "EmailValid", Columns: []string{"email"}, Message: voltErr.Error()})
 	}
-	return UserChangeset{c.FindingsSet(voltErrs)}
+	return UserChangeset{c.WithFindings(voltErrs)}
 }
 
 func (c TagChangeset) Validate() TagChangeset {
-	return TagChangeset{c.FindingsSet(nil)}
+	return TagChangeset{c.WithFindings(nil)}
 }
 
 func (c MsRevenueChangeset) Validate() MsRevenueChangeset {
-	return MsRevenueChangeset{c.FindingsSet(nil)}
+	return MsRevenueChangeset{c.WithFindings(nil)}
 }
 
 func (c MsUsageChangeset) Validate() MsUsageChangeset {
-	return MsUsageChangeset{c.FindingsSet(nil)}
+	return MsUsageChangeset{c.WithFindings(nil)}
 }

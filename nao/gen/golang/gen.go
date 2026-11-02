@@ -197,8 +197,6 @@ func (g *generator) changesetEmit(t *naming.Table) {
 	b.WriteString("\treturn c, nil\n}\n\n")
 }
 
-// descEmit writes the desc of one table (spec §changesets): the names,
-// the columns, the literal defaults and the generated functions.
 func (g *generator) descEmit(t *naming.Table) {
 	b := &g.body
 	m, n := t.Model, &t.Names
@@ -210,10 +208,7 @@ func (g *generator) descEmit(t *naming.Table) {
 	head.WriteTo(b, "\t")
 	b.WriteString("\tFields: []rt.FieldDesc{\n")
 	for _, f := range t.Fields {
-		fmt.Fprintf(b, "\t\t{Column: %q, Wire: %q, Type: %q", f.ColName, f.Wire, f.Col.Type.String())
-		if f.Nullable {
-			b.WriteString(", Nullable: true")
-		}
+		fmt.Fprintf(b, "\t\t{Column: %q, Wire: %q", f.ColName, f.Wire)
 		if t.IsPK(f) {
 			b.WriteString(", Key: true")
 		}

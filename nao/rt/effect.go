@@ -154,7 +154,7 @@ func Insert[M any](c Changeset[M]) Write[M] {
 		return Write[M]{Err: err}
 	}
 	sql, args := c.InsertRender()
-	return Write[M]{SQL: sql, Args: args, Scan: c.desc.Scan}
+	return Write[M]{SQL: sql, Args: args, Scan: c.d().Scan}
 }
 
 // Update is the Write that writes the marked columns of c to the row it
@@ -169,7 +169,7 @@ func Update[M any](c Changeset[M]) Write[M] {
 		return Write[M]{Err: err}
 	}
 	sql, args := c.UpdateRender()
-	return Write[M]{SQL: sql, Args: args, Scan: c.desc.Scan, Row: c.Row()}
+	return Write[M]{SQL: sql, Args: args, Scan: c.d().Scan, Row: c.Row()}
 }
 
 // Exec is a statement that returns no rows and yields how many it

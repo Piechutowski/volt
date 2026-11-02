@@ -3,5 +3,5 @@
 package models
 
 func (c InvoiceChangeset) Validate() InvoiceChangeset {
-	return InvoiceChangeset{c.FindingsSet(nil)}
+	return InvoiceChangeset{c.WithFindings(nil)}
 }

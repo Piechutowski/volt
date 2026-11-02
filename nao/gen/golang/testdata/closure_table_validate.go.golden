@@ -3,9 +3,9 @@
 package models
 
 func (c CategoryChangeset) Validate() CategoryChangeset {
-	return CategoryChangeset{c.FindingsSet(nil)}
+	return CategoryChangeset{c.WithFindings(nil)}
 }
 
 func (c CategoryPathChangeset) Validate() CategoryPathChangeset {
-	return CategoryPathChangeset{c.FindingsSet(nil)}
+	return CategoryPathChangeset{c.WithFindings(nil)}
 }

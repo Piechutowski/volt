@@ -28,9 +28,9 @@ var voltEmployeeDesc = &rt.Desc[Employee]{
 	Table:   `"employees"`,
 	Columns: `"id", "full_name", "manager_id"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Type: "int", Key: true},
-		{Column: "full_name", Wire: "full_name", Type: "string", Settable: true},
-		{Column: "manager_id", Wire: "manager_id", Type: "int", Nullable: true, Settable: true},
+		{Column: "id", Wire: "id", Key: true},
+		{Column: "full_name", Wire: "full_name", Settable: true},
+		{Column: "manager_id", Wire: "manager_id", Settable: true},
 	},
 	Scan:   voltEmployeeScan,
 	Values: voltEmployeeValues,

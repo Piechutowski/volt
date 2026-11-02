@@ -30,13 +30,13 @@ func (c PostChangeset) Validate() PostChangeset {
 	if voltErr := VisibilityKnownNull(voltV.Reviewed); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "VisibilityKnownNull", Columns: []string{"reviewed"}, Message: voltErr.Error()})
 	}
-	return PostChangeset{c.FindingsSet(voltErrs)}
+	return PostChangeset{c.WithFindings(voltErrs)}
 }
 
 func (c PostTagChangeset) Validate() PostTagChangeset {
-	return PostTagChangeset{c.FindingsSet(nil)}
+	return PostTagChangeset{c.WithFindings(nil)}
 }
 
 func (c PingChangeset) Validate() PingChangeset {
-	return PingChangeset{c.FindingsSet(nil)}
+	return PingChangeset{c.WithFindings(nil)}
 }

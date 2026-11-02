@@ -3,9 +3,9 @@
 package models
 
 func (c UserChangeset) Validate() UserChangeset {
-	return UserChangeset{c.FindingsSet(nil)}
+	return UserChangeset{c.WithFindings(nil)}
 }
 
 func (c UserProfileChangeset) Validate() UserProfileChangeset {
-	return UserProfileChangeset{c.FindingsSet(nil)}
+	return UserProfileChangeset{c.WithFindings(nil)}
 }
