@@ -66,6 +66,9 @@ go test  -race ./lang/... ./lsp/...
 gofmt -l . | grep -v zed-extension        # must be empty
 ```
 
+`.github/workflows/test.yml` runs the same bar on every push and pull
+request; the two change together.
+
 Golden refresh is `go test ./gen/router -update` and `go test
 ./nao/gen/... -update`; read the diff, goldens exist to surface
 unintended output changes. Grammar changes also need `tree-sitter
