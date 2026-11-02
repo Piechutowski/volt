@@ -175,9 +175,10 @@ func (l *lowerer) alter(op *ast.AlterTable) ([]string, error) {
 	return out, nil
 }
 
-// rebuild lowers a rebuild table to its five steps (spec §migrations
-// rule 9): the new table, the copy, the drop, the rename and the
-// body's indexes, named for the table as it stands after the rename.
+// rebuild lowers a rebuild table to its steps (spec §migrations): the
+// new table, the copy, the high-water mark carried over when the
+// body's key is AUTOINCREMENT, the drop, the rename and the body's
+// indexes, named for the table as it stands after the rename.
 // The source of a column of a table the migrations created is its
 // from:, else the old column of its name, else its default:, else
 // NULL, which is what a rowid alias the rebuild introduces reads. A
@@ -222,15 +223,43 @@ func (l *lowerer) rebuild(op *ast.RebuildTable) ([]string, error) {
 	out := []string{
 		create,
 		"INSERT INTO " + sqlite.Ident(tmp) + " (" + strings.Join(cols, ", ") + ")\nSELECT " + strings.Join(sources, ", ") + "\nFROM " + sqlite.Ident(table),
-		"DROP TABLE " + sqlite.Ident(table),
-		"ALTER TABLE " + sqlite.Ident(tmp) + " RENAME TO " + sqlite.Ident(table),
 	}
+	if autoincrementHas(op.Body) {
+		out = append(out, sequenceCarry(table, tmp)...)
+	}
+	out = append(out,
+		"DROP TABLE "+sqlite.Ident(table),
+		"ALTER TABLE "+sqlite.Ident(tmp)+" RENAME TO "+sqlite.Ident(table),
+	)
 	indexes, err := sqlite.IndexesDDL(table, op.Body)
 	if err != nil {
 		return nil, err
 	}
 	l.tables[table] = shapeColumns(op.Body)
 	return append(out, indexes...), nil
+}
+
+// autoincrementHas reports whether a shape body's key carries
+// autoincrement (spec §columns).
+func autoincrementHas(body []ast.TableItem) bool {
+	for _, item := range body {
+		if col, ok := item.(*ast.Column); ok && col.Settings.Get("autoincrement") != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// sequenceCarry renders the statements that give the rebuilt table the
+// larger of its own high-water mark and the old table's before the
+// drop deletes the old one's row of sqlite_sequence, so a rebuild never
+// lets an AUTOINCREMENT key reuse an id (spec §migrations).
+func sequenceCarry(table, tmp string) []string {
+	t, n := sqlite.StringSQL(table), sqlite.StringSQL(tmp)
+	return []string{
+		"UPDATE sqlite_sequence SET seq = (SELECT max(seq) FROM sqlite_sequence WHERE name IN (" + t + ", " + n + "))\nWHERE name = " + n,
+		"INSERT INTO sqlite_sequence (name, seq)\nSELECT " + n + ", seq FROM sqlite_sequence\nWHERE name = " + t + " AND NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name = " + n + ")",
+	}
 }
 
 // inverse renders the statements that undo one operation of a flat

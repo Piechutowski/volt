@@ -1,4 +1,4 @@
-// spec: §columns, the auto-assigning setting is spelled autoincrement, SQLite's own word; increment is no setting of the language
+// spec: §columns, SQLite's keyword is spelled autoincrement; increment is no setting of the language
 // want: unknown setting "increment"
 table posts {
   id    int [pk, increment]

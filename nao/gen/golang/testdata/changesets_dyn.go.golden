@@ -131,3 +131,45 @@ func PingUpdateWhere(set []rt.Assign[Ping], preds ...rt.Pred[Ping]) rt.Exec {
 	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltPingTableSQL, set, preds)
 	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
+
+const (
+	voltLevelTableSQL   = `"levels"`
+	voltLevelColumnsSQL = `"id", "label"`
+)
+
+func LevelLimit(n int) rt.Opt[Level] { return rt.Limit[Level](n) }
+
+func LevelOffset(n int) rt.Opt[Level] { return rt.Offset[Level](n) }
+
+func LevelDistinct() rt.Opt[Level] { return rt.Distinct[Level]() }
+
+func LevelOrderBy(terms ...rt.Order[Level]) rt.Opt[Level] { return rt.OrderBy(terms...) }
+
+func LevelAfter(key ...any) rt.Opt[Level] { return rt.After[Level](key...) }
+
+func LevelSet(assigns ...rt.Assign[Level]) []rt.Assign[Level] { return assigns }
+
+func LevelQuery(opts ...rt.Opt[Level]) rt.Query[Level] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltLevelTableSQL, voltLevelColumnsSQL, opts)
+	return rt.Query[Level]{SQL: voltSQL, Args: voltArgs, Scan: voltLevelScan, Err: voltErr}
+}
+
+func LevelCount(preds ...rt.Pred[Level]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltLevelTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
+}
+
+func LevelExists(preds ...rt.Pred[Level]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltLevelTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
+}
+
+func LevelDeleteWhere(preds ...rt.Pred[Level]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltLevelTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+func LevelUpdateWhere(set []rt.Assign[Level], preds ...rt.Pred[Level]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltLevelTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}

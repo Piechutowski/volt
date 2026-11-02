@@ -901,12 +901,15 @@ column setting  = "pk"
    SQLite says it does: the rowid alias becomes `INTEGER PRIMARY KEY
    AUTOINCREMENT`, so the database never reuses an id, not even the
    largest one after its row is deleted, and SQLite keeps the high-water
-   mark in its `sqlite_sequence` table. It does nothing else: the key
+   mark in its `sqlite_sequence` table, which a `rebuild table` that
+   keeps `autoincrement` carries over (§migrations). It does nothing else: the key
    is the rowid alias with or without it. It is valid only on the
-   rowid alias and is an **error** anywhere else, as SQLite refuses
-   it there: on a column that is not of type `int`, on a declared type
-   stored as `int`, on a column that is not the primary key, and on a
-   member of a composite key.
+   rowid alias and is an **error** anywhere else: on a column that is
+   not of type `int`, on a column that is not the primary key and on a
+   member of a composite key, where SQLite refuses it, and on a
+   declared type stored as `int`, which SQLite would accept but Volt
+   refuses, since it treats that key as an ordinary key (above) and
+   not as the rowid alias.
 5. **`ref: table.column`** declares a relationship whose foreign key
    is this column (§relationships-ref). It appears at most once on a
    column (§settings-lists) and carries no referential actions; a
@@ -4012,6 +4015,12 @@ migration 0002__users_bio {
    `autoincrement` added or removed, a foreign key. The body is the new shape and MUST contain at least
    one column. It lowers to: create `<table>__new` from the body;
    `INSERT INTO <table>__new (<cols>) SELECT <sources> FROM <table>`;
+   when the body's key carries `autoincrement`, the two statements that
+   give `<table>__new` the larger of its own `sqlite_sequence` mark and
+   the old table's, so the high-water mark survives the rebuild and no
+   deleted id is assigned again (§columns), while a rebuild that adds
+   `autoincrement` starts the mark at the largest copied id, since a
+   table without it keeps none;
    `DROP TABLE <table>`; `ALTER TABLE <table>__new RENAME TO
    <table>`; create every index of the body, those of its columns'
    `unique` and `index` first, named for `<table>`. The source of a column

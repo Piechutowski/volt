@@ -606,3 +606,92 @@ func voltPingCast(c rt.Changeset[Ping], p rt.Params[Ping], i int) (rt.Changeset[
 	}
 	return c, nil
 }
+
+type Level struct {
+	ID    Tier   `db:"id" json:"id"`
+	Label string `db:"label" json:"label"`
+}
+
+type LevelColumn = rt.ColumnOf[Level]
+
+type LevelParams = rt.Params[Level]
+
+var (
+	LevelID    = rt.Column[Level, Tier]{Name: "id"}
+	LevelLabel = rt.Column[Level, string]{Name: "label"}
+)
+
+var voltLevelDesc = &rt.Desc[Level]{
+	Model:   "Level",
+	Table:   `"levels"`,
+	Columns: `"id", "label"`,
+	Fields: []rt.FieldDesc{
+		{Column: "id", Wire: "id", Key: true},
+		{Column: "label", Wire: "label"},
+	},
+	Scan:   voltLevelScan,
+	Values: voltLevelValues,
+	Apply:  voltLevelApply,
+	Cast:   voltLevelCast,
+}
+
+type LevelChangeset struct{ rt.Changeset[Level] }
+
+func LevelNew() LevelChangeset { return LevelChangeset{rt.NewChangeset(voltLevelDesc)} }
+
+func (r Level) Changeset() LevelChangeset { return LevelChangeset{rt.ChangesetOf(voltLevelDesc, r)} }
+
+func (c LevelChangeset) From(r Level) LevelChangeset { return LevelChangeset{c.Changeset.From(r)} }
+
+func (c LevelChangeset) IDSet(v Tier) LevelChangeset {
+	return LevelChangeset{rt.Set(c.Changeset, 0, func(voltR *Level) { voltR.ID = v })}
+}
+
+func (c LevelChangeset) LabelSet(v string) LevelChangeset {
+	return LevelChangeset{rt.Set(c.Changeset, 1, func(voltR *Level) { voltR.Label = v })}
+}
+
+func (c LevelChangeset) Cast(p LevelParams, allow ...LevelColumn) LevelChangeset {
+	return LevelChangeset{c.Changeset.Cast(p, allow...)}
+}
+
+func (c LevelChangeset) ErrorAdd(col LevelColumn, msg string) LevelChangeset {
+	return LevelChangeset{c.Changeset.ErrorAdd(col, msg)}
+}
+
+func voltLevelScan(r rt.Row) (Level, error) {
+	var voltV Level
+	voltErr := r.Scan((*int)(&voltV.ID), &voltV.Label)
+	return voltV, rt.Refused("Level", voltErr)
+}
+
+func voltLevelValues(voltR Level) []any { return []any{voltR.ID, voltR.Label} }
+
+func voltLevelApply(voltData, voltVals Level, voltSet []bool) Level {
+	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
+	if voltSet[1] {
+		voltR.Label = voltVals.Label
+	}
+	return voltR
+}
+
+func voltLevelCast(c rt.Changeset[Level], p rt.Params[Level], i int) (rt.Changeset[Level], error) {
+	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "Tier", false, func(voltR *Level) Tier { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return LevelChangeset{c}.IDSet(voltV).Changeset, nil
+	case 1:
+		voltV, voltOK, voltErr := rt.Field(p, "label", "string", false, func(voltR *Level) string { return voltR.Label })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return LevelChangeset{c}.LabelSet(voltV).Changeset, nil
+	}
+	return c, nil
+}

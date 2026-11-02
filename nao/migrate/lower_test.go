@@ -169,7 +169,7 @@ func TestRebuildForgetsAnIndexNotRestated(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(ms[1].Up) != 4 {
-		t.Errorf("the rebuild has %d statements, want the five steps less the indexes: 4\n%s", len(ms[1].Up), strings.Join(ms[1].Up, ";\n"))
+		t.Errorf("the rebuild has %d statements, want the new table, the copy, the drop and the rename: 4\n%s", len(ms[1].Up), strings.Join(ms[1].Up, ";\n"))
 	}
 	db := memoryDB(t)
 	if _, err := run.MigrateUp(ctx, db, ms); err != nil {
@@ -403,6 +403,59 @@ func TestFoldAutoincrement(t *testing.T) {
 	if len(drifts) != 1 || drifts[0].Table != "events" || !strings.HasPrefix(drifts[0].Volt, "rebuild table events {\n  id int [pk, autoincrement]\n") ||
 		!strings.Contains(drifts[0].Reason, "column events.id is AUTOINCREMENT in the schema, without AUTOINCREMENT in the fold") {
 		t.Errorf("drifts %+v, want the rebuild of events that adds autoincrement", drifts)
+	}
+}
+
+// TestRebuildKeepsTheHighWaterMark runs rebuilds of an autoincrement
+// table on SQLite (spec §migrations): one that keeps
+// autoincrement carries sqlite_sequence over, so the id of a deleted
+// row, the largest included, is never assigned again, and one that
+// adds it starts the mark at the largest copied id, since a table
+// without it keeps none.
+func TestRebuildKeepsTheHighWaterMark(t *testing.T) {
+	ctx := context.Background()
+	src := "package db\n\ntable events {\n  id   int    [pk, autoincrement]\n  name string\n  note string [null]\n}\n\ntable points {\n  id    int     [pk, autoincrement]\n  value float64\n}\n\nmigration 0001__init {\n  create table events {\n    id   int    [pk, autoincrement]\n    name string\n  }\n  create table points {\n    id    int     [pk]\n    value float64\n  }\n}\n\nmigration 0002__rebuild [irreversible] {\n  rebuild table events {\n    id   int    [pk, autoincrement]\n    name string\n    note string [null]\n  }\n  rebuild table points {\n    id    int     [pk, autoincrement]\n    value float64\n  }\n}\n"
+	_, info := parseChecked(t, "t.volt", src)
+	ms, err := Lower(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db := memoryDB(t)
+	if _, err := run.MigrateUp(ctx, db, ms[:1]); err != nil {
+		t.Fatal(err)
+	}
+	pool := db.Pool()
+	for _, stmt := range []string{
+		"INSERT INTO events (name) VALUES ('a'), ('b'), ('c')",
+		"DELETE FROM events WHERE id = 3",
+		"INSERT INTO points (value) VALUES (1), (2), (3)",
+		"DELETE FROM points WHERE id = 3",
+	} {
+		if _, err := pool.ExecContext(ctx, stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := run.MigrateUp(ctx, db, ms); err != nil {
+		t.Fatal(err)
+	}
+	if drifts := foldDiff(t, "t.volt", src); len(drifts) > 0 {
+		t.Errorf("drift: %+v", drifts)
+	}
+	for _, c := range []struct {
+		insert string
+		table  string
+		want   int64
+	}{
+		{"INSERT INTO events (name) VALUES ('d')", "events", 4},
+		{"INSERT INTO points (value) VALUES (4)", "points", 3},
+	} {
+		res, err := pool.ExecContext(ctx, c.insert)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if id, err := res.LastInsertId(); err != nil || id != c.want {
+			t.Errorf("%s after the rebuild got id %d (%v), want %d", c.table, id, err, c.want)
+		}
 	}
 }
 

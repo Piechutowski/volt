@@ -3,9 +3,11 @@
 // for declared types whose Go declaration spells their storage type and
 // left to the database for one that implements Scanner and Valuer
 // (spec §types), membership validators on a plain and a nullable
-// declared column, a composite key with no Update, and a table whose
+// declared column, a composite key with no Update, a table whose
 // only column is the rowid alias key with autoincrement, so From marks
-// nothing and a generated create casts nothing.
+// nothing and a generated create casts nothing, and a single key of a
+// declared type stored as int, written INTEGER PRIMARY KEY but an
+// ordinary key in Go (spec §columns).
 package metrics
 
 type Visibility string
@@ -50,4 +52,9 @@ table post_tags {
 
 table pings {
   id int [pk, autoincrement]
+}
+
+table levels {
+  id    Tier [pk]
+  label string
 }

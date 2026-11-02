@@ -896,6 +896,11 @@ app/i44_singular_collision.volt:11:2: error: spec/resources: resources "posty": 
 ## i450_migration_add_autoincrement.volt
 db/i450_migration_add_autoincrement.volt:20:24: error: spec/migrations: add "seq" to table "users": autoincrement cannot be added to an existing table; use rebuild table (§migrations)
 
+## i451_migration_shape_autoincrement_misplaced.volt
+db/i451_migration_shape_autoincrement_misplaced.volt:17:22: error: spec/columns: autoincrement on "slug" (string): only an int column can be the rowid alias, which alone takes AUTOINCREMENT (§columns, §mapping-to-sqlite-ddl)
+db/i451_migration_shape_autoincrement_misplaced.volt:21:25: error: spec/columns: autoincrement on "post_id" in table "post_tags", whose primary key is (post_id, tag): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key (§columns)
+db/i451_migration_shape_autoincrement_misplaced.volt:29:24: error: spec/columns: autoincrement on "hits": only the rowid alias, the single-column int primary key, takes AUTOINCREMENT; elsewhere SQLite refuses the keyword (§columns, §mapping-to-sqlite-ddl)
+
 ## i45_model_setting_removed.volt
 app/i45_model_setting_removed.volt:10:19: error: spec/resources: model: is not a setting; name the table in the declaration itself — `resources <table>` (§declaration)
 
