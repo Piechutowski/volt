@@ -158,6 +158,7 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Requests and responses](#requests-and-responses)
     - [Request bodies](#request-bodies)
     - [Route loads](#route-loads)
+    - [Scope loads](#scope-loads)
     - [Query routes](#query-routes)
     - [Formats](#formats)
     - [Generated client](#generated-client)
@@ -476,7 +477,7 @@ then reads it as that keyword, so the error is reported once.
 | literal words | `true`, `false`, `null` | §boolean-and-null-literals |
 | clause words | `from`, `for`, `join`, `with`, `where`, `as`, `and`, `or`, `not`, `in`, `like`, `is` | §types, §selects-over-groups, §predicates |
 | aggregate words | `count`, `sum`, `avg`, `min`, `max` | §selects-over-groups |
-| route words | `get`, `post`, `patch`, `delete`, `options`, `head`, `any`, `resources`, `dataset`, `use` | §routes, §resources, §datasets, §pipelines |
+| route words | `get`, `post`, `patch`, `delete`, `options`, `head`, `any`, `resources`, `dataset`, `use`, `load` | §routes, §resources, §datasets, §pipelines, §scope-loads |
 | parameter types | `int` | §route-paths |
 | migration words | `up`, `down`, `create`, `drop`, `rename`, `alter`, `rebuild`, `exec`, `table`, `index`, `add`, `to` | §migrations |
 
@@ -2108,15 +2109,17 @@ handler ref = name, [ ".", name ] ;
    (§query-routes), named bare (§imports). The
    runtime's own handlers are `volt.<Name>` (§event-routes).
 2. Every distinct controller becomes one generated interface; every
-   distinct action one method with the route's typed parameters
-   appended after `(r volt.Request)`, its body after them
-   (§request-bodies) and its loads last (§route-loads), returning
+   distinct action one method with the scope loads of its scopes
+   first (§scope-loads), the route's typed parameters appended after
+   them, its body after those (§request-bodies) and its loads last
+   (§route-loads), returning
    `volt.Response` (§requests-and-responses); the type that implements
    it is an empty struct (`lint.md`, `handlerreceiver`).
-3. Two routes MAY share `Controller.Action` only with identical
-   parameter signatures (names, types and wildcard-ness, in order),
-   the same body type or none (§request-bodies) and identical loads
-   (names and types, in order; §route-loads).
+3. Two routes MAY share `Controller.Action` only with identical scope
+   loads (§scope-loads), identical parameter signatures (names, types
+   and wildcard-ness, in order), the same body type or none
+   (§request-bodies) and identical loads (names and types, in order;
+   §route-loads).
 4. The generated `Controllers` manifest is one namespace: a controller
    MUST NOT take the name of a field the manifest holds for a data
    the query routes run on (`DB`; §query-routes) or for the event broker
@@ -2344,6 +2347,61 @@ parameters, so the handler reads them and never asks for them.
    too.
 6. A load block on a query route or an event route is an error: their
    handlers are generated.
+
+### Scope loads
+
+```ebnf
+scope load = "load", name, go ref, newline ;
+```
+
+```volt fragment
+Scope /me [pipe: app] {
+	load user CurrentUser
+	get /       Me.Show
+	get /orders db.OrderList
+}
+```
+
+```go
+func CurrentUser(r volt.Request) volt.Load[db.User] {
+	id, err := strconv.Atoi(r.Header().Get("X-User"))
+	if err != nil {
+		return volt.Halt[db.User](volt.Reject(401, "sign in"))
+	}
+	return volt.LoadWith(db.UserGet(id))
+}
+```
+
+A scope may **load** a value for every route beneath it: a function
+of the routes package decides, from the request alone, what the
+routes need and whether the request goes on.
+
+1. A scope load names the parameter and a Go function of this
+   package, written by its bare name (§imports), whose shape the
+   checker holds: `func(volt.Request) volt.Load[T]`. `volt.Load[T]`
+   is a sealed sum built by `volt.LoadWith(e)`, an effect of `T` the
+   shim performs, or `volt.Halt[T](response)`, a done response that
+   ends the request before anything beneath runs. The function is a
+   pure function of the request like a handler (§requests-and-responses),
+   and the Go rules of `lint.md` read it so.
+2. `T` is a type of this package, or `pkg.Type` where `pkg` is an
+   import of this package (§imports); the generated handlers file
+   imports it. The load's name is a lower-case Go identifier that is
+   not reserved (§route-paths) and that no route beneath uses for a
+   path parameter, a route load or another scope load.
+3. **Order and the shim.** Scope loads run for every route beneath
+   the scope, controller and query routes alike, outermost scope
+   first and in declaration order within a scope, after the path
+   parameters parse and before the body (§request-bodies) and the
+   route loads (§route-loads); a halt answers with its response, an
+   effect that fails goes to the error spine (§requests-and-responses).
+   A controller route's handler receives the values as its leading
+   parameters, after `r` and before the route's parameters, nested
+   scopes appending: `Show(r volt.Request, user db.User) volt.Response`.
+   Two routes sharing an action share its scope loads
+   (§handler-references). A query route runs them for the halt and
+   drops the values. An event route (§event-routes) runs no load, so
+   one beneath a scope load is an error.
 
 ### Query routes
 
@@ -2594,7 +2652,7 @@ Scope / [pipe: api] {
 
 ```ebnf
 scope      = "Scope", route path, [ settings ], "{", { scope item }, "}" ;
-scope item = route | resources | dataset | scope ;
+scope item = route | resources | dataset | scope | scope load ;
 ```
 
 Scope settings (the complete set):
@@ -4200,7 +4258,8 @@ go ref         = name, [ ".", name ] ;
 
 scope          = "Scope", route path, [ settings ],
                  "{", { scope item }, "}" ;
-scope item     = route | resources | dataset | scope ;
+scope item     = route | resources | dataset | scope | scope load ;
+scope load     = "load", name, go ref, newline ;
 
 route          = verb, route path, handler ref, [ settings ],
                  [ load block ], newline ;

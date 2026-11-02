@@ -33,7 +33,7 @@ func TestHandlersAreValues(t *testing.T) {
 	if !volt.Same(users{}.Profile(r, 7, db.User{Email: "a"}), volt.Render(db.User{Email: "a"})) {
 		t.Error("Profile does not render the user it was handed")
 	}
-	c := app.Controllers{Home: home{}, Users: users{}, Files: files{}, Admin: admin{}, Ops: ops{}, Tags: tags{}, Pages: pages{}, Archive: archive{}, Session: session{}}
+	c := app.Controllers{Home: home{}, Users: users{}, Files: files{}, Admin: admin{}, Ops: ops{}, Tags: tags{}, Pages: pages{}, Archive: archive{}, Session: session{}, Me: me{}}
 	if differ := app.ControllersDeterministic(c, r); len(differ) != 0 {
 		t.Errorf("handlers that answered two different values for one request: %v", differ)
 	}
@@ -133,5 +133,55 @@ func TestRequestBodies(t *testing.T) {
 	r := volt.RequestOf(httptest.NewRequest("POST", "/login", nil), "POST /login", time.Unix(1700000000, 0), nil)
 	if !volt.Same(session{}.Login(r, app.LoginForm{Password: "open sesame"}), session{}.Login(r, app.LoginForm{Password: "open sesame"})) {
 		t.Error("Login is not a function of its body")
+	}
+}
+
+// TestScopeLoads proves spec §scope-loads end to end: the scope's load
+// halts with its own response when the header is missing, hands the
+// loaded user to the handler beneath when present, sends a failing
+// effect to the error spine, and runs for a query route beneath too.
+func TestScopeLoads(t *testing.T) {
+	h := handler()
+	get := func(path, user string) (*httptest.ResponseRecorder, map[string]any) {
+		t.Helper()
+		req := httptest.NewRequest("GET", path, nil)
+		if user != "" {
+			req.Header.Set("X-User", user)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		var out map[string]any
+		if strings.HasPrefix(rec.Header().Get("Content-Type"), "application/json") {
+			json.Unmarshal(rec.Body.Bytes(), &out)
+		}
+		return rec, out
+	}
+	rec, body := get(app.PathMeShow(), "")
+	if rec.Code != http.StatusUnauthorized || body["message"] != "sign in" {
+		t.Fatalf("no user = %d %v; want the load's own 401", rec.Code, body)
+	}
+	rec, body = get(app.PathMeShow(), "1")
+	if rec.Code != 200 || body["email"] != "one@example.com" {
+		t.Fatalf("user 1 = %d %v; want the loaded user rendered", rec.Code, body)
+	}
+	rec, _ = get(app.PathMeShow(), "999")
+	if rec.Code != http.StatusNotFound || rec.Header().Get("X-Error-Handler") != "app" {
+		t.Fatalf("unknown user = %d via %q; want 404 through the scope's error handler", rec.Code, rec.Header().Get("X-Error-Handler"))
+	}
+	rec, _ = get(app.PathMeUserList(), "")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("query route without a user = %d; want the load's 401", rec.Code)
+	}
+	rec, _ = get(app.PathMeUserList(), "1")
+	if rec.Code != 200 {
+		t.Fatalf("query route with a user = %d; want 200", rec.Code)
+	}
+	r := volt.RequestOf(httptest.NewRequest("GET", "/me", nil), "GET /me", time.Unix(1700000000, 0), nil)
+	if !volt.Same(me{}.Show(r, db.User{Email: "a"}), volt.Render(db.User{Email: "a"})) {
+		t.Error("Show does not render the user it was handed")
+	}
+	halted := volt.Continue(app.CurrentUser(r), func(db.User) volt.Response { return volt.NoContent() })
+	if !volt.Same(halted, volt.Reject(http.StatusUnauthorized, "sign in")) {
+		t.Error("CurrentUser without a header does not halt with its 401")
 	}
 }

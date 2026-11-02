@@ -256,13 +256,14 @@ func (g *generator) handlersEmit() error {
 	for _, q := range g.loadPackages() {
 		imports = append(imports, dataImport(q))
 	}
+	imports = append(imports, g.scopeLoadImports(imports)...)
 	g.header(imports...)
 
 	for _, name := range g.controllerNames() {
 		ci := g.pkg.Controllers[name]
 		g.pf("type %sController interface {\n", name)
 		for _, a := range ci.Actions {
-			g.pf("\t%s(r volt.Request%s%s%s) volt.Response\n", a.Name, sigParams(a.Params), bodyParam(a.Body), loadParams(a.Loads))
+			g.pf("\t%s(r volt.Request%s%s%s%s) volt.Response\n", a.Name, scopeLoadParams(a.ScopeLoads), sigParams(a.Params), bodyParam(a.Body), loadParams(a.Loads))
 		}
 		g.pf("}\n\n")
 	}
@@ -289,7 +290,7 @@ func (g *generator) handlersEmit() error {
 	g.pf("\tvar voltOut []string\n")
 	for _, name := range g.controllerNames() {
 		for _, a := range g.pkg.Controllers[name].Actions {
-			call := fmt.Sprintf("c.%s.%s(r%s%s%s)", name, a.Name, zeroArgs(a.Params), zeroBody(a.Body), zeroLoads(a.Loads))
+			call := fmt.Sprintf("c.%s.%s(r%s%s%s%s)", name, a.Name, zeroScopeLoads(a.ScopeLoads), zeroArgs(a.Params), zeroBody(a.Body), zeroLoads(a.Loads))
 			g.pf("\tif !volt.Same(%s, %s) {\n\t\tvoltOut = append(voltOut, %q)\n\t}\n", call, call, name+"."+a.Name)
 		}
 	}
@@ -329,6 +330,7 @@ func (g *generator) routerEmit() error {
 			imports = append(imports, dataImport(q))
 		}
 	}
+	imports = append(imports, g.scopeLoadImports(imports)...)
 	g.header(imports...)
 
 	g.pf("func register(mux *http.ServeMux, c Controllers) {\n")
@@ -415,7 +417,6 @@ func (g *generator) queryShimBody(r *lang.RouteInfo) {
 	for _, p := range r.Params {
 		byName[p.Name] = p
 	}
-	g.pf("\t\tif _, err := volt.Negotiate(r); err != nil {\n\t\t\treturn volt.Fail(err)\n\t\t}\n")
 	name := func(n string) string {
 		if q.Local {
 			return n
@@ -480,7 +481,8 @@ func (g *generator) routeEmit(r *lang.RouteInfo) {
 	} else {
 		g.pf("volt.Handler(%q, func(r volt.Request) volt.Response {\n", pattern)
 		if r.Query != nil {
-			g.queryShimBody(r)
+			g.pf("\t\tif _, err := volt.Negotiate(r); err != nil {\n\t\t\treturn volt.Fail(err)\n\t\t}\n")
+			g.scopeLoadsEmit(r, func() { g.queryShimBody(r) })
 		} else {
 			parsed := map[string]string{}
 			call := make([]string, 0, len(r.Params))
@@ -488,7 +490,11 @@ func (g *generator) routeEmit(r *lang.RouteInfo) {
 				parsed[p.Name] = pathParse(&g.out, p)
 				call = append(call, parsed[p.Name])
 			}
-			handler := fmt.Sprintf("c.%s.%s(r%s", r.Controller, r.Action, prefixEach(call, ", "))
+			handler := fmt.Sprintf("c.%s.%s(r", r.Controller, r.Action)
+			for _, sl := range r.ScopeLoads {
+				handler += ", " + sl.Name
+			}
+			handler += prefixEach(call, ", ")
 			if r.Body != nil {
 				handler += ", voltBody"
 			}
@@ -496,13 +502,15 @@ func (g *generator) routeEmit(r *lang.RouteInfo) {
 				handler += ", " + ld.Name
 			}
 			handler += ")"
-			indent, closer := g.bodyEmit(r, parsed)
-			if len(r.Loads) > 0 {
-				g.loadsEmit(r, parsed, handler, indent)
-			} else {
-				g.pf("%sreturn %s\n", indent, handler)
-			}
-			g.pf("%s", closer)
+			g.scopeLoadsEmit(r, func() {
+				indent, closer := g.bodyEmit(r, parsed)
+				if len(r.Loads) > 0 {
+					g.loadsEmit(r, parsed, handler, indent)
+				} else {
+					g.pf("%sreturn %s\n", indent, handler)
+				}
+				g.pf("%s", closer)
+			})
 		}
 		g.pf("\t}, %s, voltPerform", eh)
 		if len(r.Params) > 0 {
@@ -928,4 +936,75 @@ func (g *generator) bodyEmit(r *lang.RouteInfo, parsed map[string]string) (inden
 	}
 	g.pf("%svoltBody := %s.Cast(voltParams%s).Validate()\n", indent, start, prefixEach(allow, ", "))
 	return indent, closer
+}
+
+// scopeLoadsEmit writes the shim's steps over the route's scope loads
+// (spec §scope-loads), outermost first, and the rest of the shim, which
+// inner writes at the shim's base indent, inside them.
+func (g *generator) scopeLoadsEmit(r *lang.RouteInfo, inner func()) {
+	if len(r.ScopeLoads) == 0 {
+		inner()
+		return
+	}
+	indent := "\t\t"
+	for _, sl := range r.ScopeLoads {
+		g.pf("%sreturn volt.Continue(%s(r), func(%s %s) volt.Response {\n", indent, sl.Func, sl.Name, sl.GoType)
+		indent += "\t"
+	}
+	saved := g.out
+	g.out = strings.Builder{}
+	inner()
+	body := g.out.String()
+	g.out = saved
+	extra := strings.Repeat("\t", len(r.ScopeLoads))
+	for _, line := range strings.SplitAfter(body, "\n") {
+		if line == "" {
+			continue
+		}
+		g.pf("%s%s", extra, line)
+	}
+	for i := len(r.ScopeLoads) - 1; i >= 0; i-- {
+		g.pf("%s})\n", "\t\t"+strings.Repeat("\t", i))
+	}
+}
+
+func scopeLoadParams(ls []lang.ScopeLoad) string {
+	var b strings.Builder
+	for _, sl := range ls {
+		b.WriteString(", " + sl.Name + " " + sl.GoType)
+	}
+	return b.String()
+}
+
+func zeroScopeLoads(ls []lang.ScopeLoad) string {
+	var b strings.Builder
+	for _, sl := range ls {
+		b.WriteString(", *new(" + sl.GoType + ")")
+	}
+	return b.String()
+}
+
+// scopeLoadImports lists the imports the scope loads' types need beyond
+// the ones already listed, one per qualifier, in order.
+func (g *generator) scopeLoadImports(have []string) []string {
+	seen := map[string]bool{}
+	for _, im := range have {
+		seen[importPath(im)] = true
+	}
+	var out []string
+	for _, r := range g.pkg.Routes {
+		for _, sl := range r.ScopeLoads {
+			if sl.Import == "" || seen[sl.Import] {
+				continue
+			}
+			seen[sl.Import] = true
+			if sl.Qualifier == sl.PkgName {
+				out = append(out, sl.Import)
+			} else {
+				out = append(out, sl.Qualifier+" "+fmt.Sprintf("%q", sl.Import))
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
 }

@@ -20,6 +20,8 @@ var Table = []volt.Route{
 	{Method: "POST", Pattern: "/signup", Spelled: "/signup", Controller: "Users", Action: "Signup", Helper: "PathSignup"},
 	{Method: "POST", Pattern: "/login", Spelled: "/login", Controller: "Session", Action: "Login", Helper: "PathLogin"},
 	{Method: "", Pattern: "/ping", Spelled: "/ping", Controller: "Home", Action: "Ping", Helper: "PathPing"},
+	{Method: "GET", Pattern: "/me", Spelled: "/me", Controller: "Me", Action: "Show", Helper: "PathMeShow"},
+	{Method: "GET", Pattern: "/me/peers", Spelled: "/me/peers", Query: "db.UserList", Helper: "PathMeUserList"},
 	{Method: "GET", Pattern: "/api/users", Spelled: "/api/users", Query: "db.UserList", Helper: "PathAPIUserList"},
 	{Method: "GET", Pattern: "/api/users/{id}", Spelled: "/api/users/:id(int)", Query: "db.UserGet", Helper: "PathAPIUserGet", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
 	{Method: "POST", Pattern: "/api/users", Spelled: "/api/users", Query: "db.UserCreate"},

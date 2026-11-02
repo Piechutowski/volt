@@ -66,6 +66,14 @@ func PathServe(path string, opts ...volt.URLOption) string {
 	return volt.URL("/files/"+volt.SegWild(path), opts...)
 }
 
+func PathMeShow(opts ...volt.URLOption) string {
+	return volt.URL("/me", opts...)
+}
+
+func PathMeUserList(opts ...volt.URLOption) string {
+	return volt.URL("/me/peers", opts...)
+}
+
 func PathTag(name string, opts ...volt.URLOption) string {
 	return volt.URL("/tags/"+volt.Seg(name), opts...)
 }

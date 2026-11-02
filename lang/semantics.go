@@ -326,6 +326,7 @@ type inherited struct {
 	pipes      []string
 	errHandler string
 	namePrefix string
+	loads      []ScopeLoad
 }
 
 func (c *checker) routing(pkg *Package) {
@@ -477,6 +478,14 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 		pipes:      append([]string{}, inh.pipes...),
 		errHandler: inh.errHandler,
 		namePrefix: inh.namePrefix,
+		loads:      append([]ScopeLoad{}, inh.loads...),
+	}
+	for _, item := range sc.Items {
+		if ld, ok := item.(*ast.ScopeLoad); ok {
+			if sl, ok := c.scopeLoad(ld, next.loads); ok {
+				next.loads = append(next.loads, sl)
+			}
+		}
 	}
 	if sc.Settings != nil {
 		repeated, dupDiags := settingsRepeated(sc.Settings, "pipe", "name", "error_handler")
@@ -535,14 +544,76 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 		}
 	}
 	for _, item := range sc.Items {
-		if nested, ok := item.(*ast.Scope); ok {
-			c.scopeWalk(nested, next, facts, memo, seenShape, seenHelper)
+		switch item := item.(type) {
+		case *ast.Scope:
+			c.scopeWalk(item, next, facts, memo, seenShape, seenHelper)
+			continue
+		case *ast.ScopeLoad:
 			continue
 		}
 		for _, r := range c.itemLowerMemo(item, next, facts, memo) {
 			c.routeAdd(*r, seenShape, seenHelper)
 		}
 	}
+}
+
+// scopeLoad checks one scope load (spec §scope-loads): a usable name
+// and a function of the package shaped func(volt.Request) volt.Load[T],
+// whose T names this package or an import of it.
+func (c *checker) scopeLoad(ld *ast.ScopeLoad, above []ScopeLoad) (ScopeLoad, bool) {
+	name := ld.Name.Name()
+	if !loadNameOK(name) {
+		c.errorf(ld.Name.Pos(), "scope-loads", "load %q is not a name a handler parameter can take: a lower-case Go identifier that is not reserved (§scope-loads, §route-paths)", name)
+		return ScopeLoad{}, false
+	}
+	if scopeLoadNamed(above, name) {
+		c.errorf(ld.Name.Pos(), "scope-loads", "load %q is already loaded by this scope or one above it (§scope-loads)", name)
+		return ScopeLoad{}, false
+	}
+	if len(ld.Ref.Parts) != 1 {
+		if _, kind := qualifierResolve(ld.Ref.Parts[0].Name(), c.pkg.Name, c.pkg.Imports); kind == qualSelf {
+			c.diags = append(c.diags, selfQualified(ld.Ref.Pos(), ld.Ref.Parts[0].Name(), ld.Ref.Parts[1].Name()))
+		} else {
+			c.errorf(ld.Ref.Pos(), "scope-loads", "a scope load names a function of this package, written by its bare name (§scope-loads)")
+		}
+		return ScopeLoad{}, false
+	}
+	fn := ld.Ref.Parts[0].Name()
+	const want = "func %s(r volt.Request) volt.Load[T]"
+	sc := c.goFuncs(c.pkg)
+	gf, found := sc.funcs[fn]
+	if !found {
+		c.errorf(ld.Ref.Pos(), "scope-loads", "no function %s in package %s's Go files — declare "+want+" beside the routes (§scope-loads)%s", fn, c.pkg.Name, fn, sc.brokenHint())
+		return ScopeLoad{}, false
+	}
+	result := ""
+	if len(gf.Results) == 1 {
+		result = gf.Results[0]
+	}
+	inner, isLoad := strings.CutPrefix(result, "volt.Load[")
+	if gf.Generic || gf.Variadic || len(gf.Params) != 1 || gf.Params[0].Type != "volt.Request" || !isLoad || !strings.HasSuffix(inner, "]") {
+		c.errorf(ld.Ref.Pos(), "scope-loads", "%s is not a scope load: found %s, expected "+want+" (§scope-loads)", fn, gf.Sig, fn)
+		return ScopeLoad{}, false
+	}
+	goType := strings.TrimSuffix(inner, "]")
+	sl := ScopeLoad{Name: name, Func: fn, GoType: goType, Pos: ld.Pos()}
+	base := strings.TrimLeft(goType, "[]*")
+	if qual, _, qualified := strings.Cut(base, "."); qualified {
+		target, kind := qualifierResolve(qual, c.pkg.Name, c.pkg.Imports)
+		if kind != qualImport {
+			c.errorf(ld.Ref.Pos(), "scope-loads", "%s loads %s, and %q is not an import of this package (§scope-loads, §imports)", fn, goType, qual)
+			return ScopeLoad{}, false
+		}
+		sl.Qualifier, sl.Import = qual, c.pr.Module
+		if target != "." {
+			sl.Import += "/" + target
+		}
+		if pkg := c.pr.Packages[target]; pkg != nil {
+			sl.PkgName = pkg.Name
+		}
+		c.usedQual[qual] = true
+	}
+	return sl, true
 }
 
 type routeOracle struct{ c *checker }
@@ -674,7 +745,7 @@ func (e *routesEntry) holds(inh inherited, facts routeFacts, env routeEnv) bool 
 }
 
 func inheritedEqual(a, b inherited) bool {
-	return slices.Equal(a.prefix, b.prefix) && slices.Equal(a.pipes, b.pipes) && a.errHandler == b.errHandler && a.namePrefix == b.namePrefix
+	return slices.Equal(a.prefix, b.prefix) && slices.Equal(a.pipes, b.pipes) && a.errHandler == b.errHandler && a.namePrefix == b.namePrefix && slices.Equal(a.loads, b.loads)
 }
 
 func (c *checker) itemLowerMemo(item ast.Node, inh inherited, facts routeFacts, memo *routesMemo) []*RouteInfo {
@@ -750,14 +821,14 @@ func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteI
 		c.pkg.Controllers[r.Controller] = ci
 	}
 	if a := ci.Action(r.Action); a != nil {
-		if !paramsEqual(a.Params, r.Params) || !bodiesEqual(a.Body, r.Body) || !loadsEqual(a.Loads, r.Loads) {
-			c.errorf(r.Pos, "scopes-and-routes", "%s.%s is reached by routes with different signatures (§handler-references, §request-bodies, §route-loads): %s vs %s (first at %s)",
-				r.Controller, r.Action, signatureString(r.Params, r.Body, r.Loads), signatureString(a.Params, a.Body, a.Loads), a.Routes[0].Pos)
+		if !scopeLoadsEqual(a.ScopeLoads, r.ScopeLoads) || !paramsEqual(a.Params, r.Params) || !bodiesEqual(a.Body, r.Body) || !loadsEqual(a.Loads, r.Loads) {
+			c.errorf(r.Pos, "scopes-and-routes", "%s.%s is reached by routes with different signatures (§handler-references, §scope-loads, §request-bodies, §route-loads): %s vs %s (first at %s)",
+				r.Controller, r.Action, signatureString(r.ScopeLoads, r.Params, r.Body, r.Loads), signatureString(a.ScopeLoads, a.Params, a.Body, a.Loads), a.Routes[0].Pos)
 			return
 		}
 		a.Routes = append(a.Routes, &r)
 	} else {
-		ci.Actions = append(ci.Actions, &ActionInfo{Name: r.Action, Params: r.Params, Body: r.Body, Loads: r.Loads, Routes: []*RouteInfo{&r}})
+		ci.Actions = append(ci.Actions, &ActionInfo{Name: r.Action, Params: r.Params, Body: r.Body, Loads: r.Loads, ScopeLoads: r.ScopeLoads, Routes: []*RouteInfo{&r}})
 	}
 	c.routeAccept(&r)
 }

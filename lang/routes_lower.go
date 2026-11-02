@@ -340,6 +340,12 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 	if !ok {
 		return nil
 	}
+	for _, p := range params {
+		if scopeLoadNamed(inh.loads, p.Name) {
+			l.errorf(r.Path.Pos(), "scope-loads", "path parameter %q takes the name of a scope load above the route (§scope-loads, §route-paths)", p.Name)
+			return nil
+		}
+	}
 
 	var query *QueryRef
 	events := false
@@ -359,6 +365,10 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 		}
 		if method != "GET" {
 			l.errorf(r.Pos(), "scopes-and-routes", "an event route is read with get (§event-routes)")
+			return nil
+		}
+		if len(inh.loads) > 0 {
+			l.errorf(r.Pos(), "scope-loads", "an event route runs no load; %q is loaded by the scope above it (§scope-loads, §event-routes)", inh.loads[0].Name)
 			return nil
 		}
 		events = true
@@ -437,7 +447,7 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 			return nil
 		}
 		var ok bool
-		if loads, ok = l.loads(r, params); !ok {
+		if loads, ok = l.loads(r, params, inh); !ok {
 			return nil
 		}
 	}
@@ -469,6 +479,7 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 		Pipes:        inh.pipes,
 		ErrorHandler: inh.errHandler,
 		Body:         body,
+		ScopeLoads:   inh.loads,
 		Loads:        loads,
 		Timeout:      timeout,
 		Pos:          r.Pos(),

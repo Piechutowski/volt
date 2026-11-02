@@ -289,3 +289,26 @@ func (r Response) write(w http.ResponseWriter, hr *http.Request, req Request) er
 		return nil
 	}
 }
+
+// Load is what a scope load decides for a request (spec §scope-loads):
+// an effect to perform, whose value the routes beneath receive, or a
+// response that halts the request; LoadWith and Halt build it.
+type Load[T any] struct {
+	effect rt.Effect[T]
+	halt   *Response
+}
+
+// LoadWith is the Load that performs e and hands its value on.
+func LoadWith[T any](e rt.Effect[T]) Load[T] { return Load[T]{effect: e} }
+
+// Halt is the Load that answers with resp and runs nothing beneath.
+func Halt[T any](resp Response) Load[T] { return Load[T]{halt: &resp} }
+
+// Continue is a shim's step over a scope load (spec §scope-loads): the
+// halt's response, or the continuation over the effect's value.
+func Continue[T any](l Load[T], next func(T) Response) Response {
+	if l.halt != nil {
+		return *l.halt
+	}
+	return Then(l.effect, next)
+}

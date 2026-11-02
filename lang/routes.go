@@ -1,6 +1,8 @@
 package lang
 
 import (
+	"strings"
+
 	"github.com/Piechutowski/volt/lang/token"
 )
 
@@ -61,6 +63,9 @@ type RouteInfo struct {
 	// are empty.
 	Query *QueryRef
 
+	// ScopeLoads are the loads of the enclosing scopes, outermost first
+	// (§scope-loads), which the handler receives before its parameters.
+	ScopeLoads []ScopeLoad
 	// Loads are the route's loads in declaration order (§route-loads), and
 	// Timeout the seconds of its timeout: setting, 0 when none.
 	Loads   []LoadInfo
@@ -183,11 +188,12 @@ func (c *ControllerInfo) Action(name string) *ActionInfo {
 // ActionInfo is one interface method: its name and parameter signature.
 // Two routes may share an action only with identical signatures (§handler-references).
 type ActionInfo struct {
-	Name   string
-	Params []Param
-	Body   *BodyInfo  // the body the action receives after its parameters, nil when none (§request-bodies)
-	Loads  []LoadInfo // the loaded values the action receives after the body (§route-loads)
-	Routes []*RouteInfo
+	Name       string
+	Params     []Param
+	Body       *BodyInfo   // the body the action receives after its parameters, nil when none (§request-bodies)
+	ScopeLoads []ScopeLoad // the scope loads the action receives first (§scope-loads)
+	Loads      []LoadInfo  // the loaded values the action receives after the body (§route-loads)
+	Routes     []*RouteInfo
 }
 
 var resourceActions = []struct {
@@ -232,4 +238,41 @@ func lowerASCII(s string) string {
 		}
 	}
 	return string(b)
+}
+
+// ScopeLoad is one scope load as a route beneath it sees it (§scope-loads):
+// the parameter's name, the function of the routes package that
+// decides it, the Go type it loads and, for a type of an imported
+// package, the qualifier and the import.
+type ScopeLoad struct {
+	Name      string
+	Func      string
+	GoType    string
+	Qualifier string // the import qualifier GoType names, "" for a type of this package
+	Import    string // the Go import path behind Qualifier
+	PkgName   string // the imported package's Go name
+	Pos       token.Position
+}
+
+func scopeLoadsEqual(a, b []ScopeLoad) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Name != b[i].Name || a[i].GoType != b[i].GoType {
+			return false
+		}
+	}
+	return true
+}
+
+func scopeLoadsString(ls []ScopeLoad) string {
+	if len(ls) == 0 {
+		return ""
+	}
+	parts := make([]string, len(ls))
+	for i, ld := range ls {
+		parts[i] = ld.Name + " " + ld.GoType
+	}
+	return "<" + strings.Join(parts, ", ") + "> "
 }

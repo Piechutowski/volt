@@ -363,7 +363,15 @@ module.exports = grammar({
       ),
 
     _scope_item: ($) =>
-      choice($.route, $.resources_declaration, $.dataset_declaration, $.scope_definition),
+      choice($.route, $.resources_declaration, $.dataset_declaration, $.scope_load, $.scope_definition),
+
+    // load name Func (§scope-loads): a value every route beneath receives.
+    scope_load: ($) =>
+      seq(
+        kw('load'),
+        field('name', alias($.identifier, $.load_name)),
+        field('ref', $.go_ref),
+      ),
 
     route: ($) =>
       seq(

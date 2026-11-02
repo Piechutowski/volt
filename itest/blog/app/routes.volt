@@ -38,6 +38,14 @@ Scope / [pipe: api, error_handler: Errors] {
 	post  /login                Session.Login     [name: login, body: LoginForm]
 	get /files/:path...          Files.Serve
 
+	// Scope loads (§scope-loads): the current user, read from a header,
+	// reaches every route beneath, and a query route runs it for the halt.
+	Scope /me [name: me] {
+		load user CurrentUser
+		get /      Me.Show
+		get /peers db.UserList
+	}
+
 	get /tags/:name             Tags.Show    [name: tag]
 	get /pages/:num(int)        Pages.Show   [name: page]
 	get /archive/:stamp(int)  Archive.Show [name: archive]

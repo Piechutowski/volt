@@ -24,6 +24,10 @@ type HomeController interface {
 	Ping(r volt.Request) volt.Response
 }
 
+type MeController interface {
+	Show(r volt.Request, user db.User) volt.Response
+}
+
 type SessionController interface {
 	Login(r volt.Request, body LoginForm) volt.Response
 }
@@ -42,6 +46,7 @@ type Controllers struct {
 	Admin   AdminController
 	Files   FilesController
 	Home    HomeController
+	Me      MeController
 	Session SessionController
 	Users   UsersController
 	DB      run.DB
@@ -70,6 +75,9 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	}
 	if !volt.Same(c.Home.Ping(r), c.Home.Ping(r)) {
 		voltOut = append(voltOut, "Home.Ping")
+	}
+	if !volt.Same(c.Me.Show(r, *new(db.User)), c.Me.Show(r, *new(db.User))) {
+		voltOut = append(voltOut, "Me.Show")
 	}
 	if !volt.Same(c.Session.Login(r, LoginForm{}), c.Session.Login(r, LoginForm{})) {
 		voltOut = append(voltOut, "Session.Login")

@@ -68,6 +68,10 @@ func (session) Login(r volt.Request, body app.LoginForm) volt.Response {
 	return volt.Render(map[string]any{"email": body.Email})
 }
 
+type me struct{}
+
+func (me) Show(r volt.Request, user db.User) volt.Response { return volt.Render(user) }
+
 type files struct{}
 
 func (files) Serve(r volt.Request, path string) volt.Response { return echo(r, path) }
@@ -127,7 +131,7 @@ func fixture(t *testing.T) (http.Handler, *volt.Broker) {
 	broker := &volt.Broker{Heartbeat: 20 * time.Millisecond}
 	return app.NewRouter(app.Controllers{
 		Home: home{}, Users: users{}, Files: files{}, Admin: admin{},
-		Ops: ops{}, Tags: tags{}, Pages: pages{}, Archive: archive{}, Session: session{},
+		Ops: ops{}, Tags: tags{}, Pages: pages{}, Archive: archive{}, Session: session{}, Me: me{},
 		DB:     dbh,
 		Events: broker,
 	}), broker
@@ -173,6 +177,8 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathCard":            {"GET", app.PathCard(1)},
 		"PathChangeEmail":     {"PATCH", app.PathChangeEmail(1)},
 		"PathLogin":           {"POST", app.PathLogin()},
+		"PathMeShow":          {"GET", app.PathMeShow()},
+		"PathMeUserList":      {"GET", app.PathMeUserList()},
 		"PathServe":           {"GET", app.PathServe("a/b c.txt")},
 		"PathOpsFail":         {"GET", app.PathOpsFail()},
 		"PathTag":             {"GET", app.PathTag("hello world")},
@@ -192,6 +198,7 @@ func TestRoundTripTotality(t *testing.T) {
 	}
 	queryRoutes := map[string]bool{"PathProfile": true, "PathCard": true}
 	bodyRoutes := map[string]bool{"PathChangeEmail": true, "PathLogin": true}
+	haltRoutes := map[string]bool{"PathMeShow": true, "PathMeUserList": true}
 	for _, r := range app.Table {
 		if r.Query != "" && r.Helper != "" {
 			queryRoutes[r.Helper] = true
@@ -227,6 +234,12 @@ func TestRoundTripTotality(t *testing.T) {
 		if bodyRoutes[helper] {
 			if rec.Code != http.StatusBadRequest {
 				t.Errorf("%s → %s without a body: status %d, want 400", helper, b.url, rec.Code)
+			}
+			continue
+		}
+		if haltRoutes[helper] {
+			if rec.Code != http.StatusUnauthorized {
+				t.Errorf("%s → %s without a user: status %d, want the scope load's 401", helper, b.url, rec.Code)
 			}
 			continue
 		}
@@ -498,6 +511,12 @@ func TestTableMatchesServedReality(t *testing.T) {
 		if row.Action == "ChangeEmail" || row.Action == "Login" {
 			if rec.Code != 400 {
 				t.Errorf("%s %s: a body route without a body = %d, want 400 before anything loads", method, url, rec.Code)
+			}
+			continue
+		}
+		if strings.HasPrefix(row.Spelled, "/me") {
+			if rec.Code != 401 {
+				t.Errorf("%s %s: a route under a scope load without a user = %d, want the halt's 401", method, url, rec.Code)
 			}
 			continue
 		}

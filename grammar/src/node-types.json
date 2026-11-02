@@ -1806,8 +1806,38 @@
         {
           "type": "scope_definition",
           "named": true
+        },
+        {
+          "type": "scope_load",
+          "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "scope_load",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "load_name",
+            "named": true
+          }
+        ]
+      },
+      "ref": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "go_ref",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
@@ -2626,6 +2656,10 @@
   },
   {
     "type": "like",
+    "named": false
+  },
+  {
+    "type": "load",
     "named": false
   },
   {

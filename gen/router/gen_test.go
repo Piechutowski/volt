@@ -263,6 +263,12 @@ func (stub) ChangeEmail(r volt.Request, id int, body db.UserChangeset) volt.Resp
 func (stub) Signup(r volt.Request, body db.UserChangeset) volt.Response { return volt.NoContent() }
 func (stub) Login(r volt.Request, body LoginForm) volt.Response        { return volt.NoContent() }
 
+type me struct{}
+
+func (me) Show(r volt.Request, user db.User) volt.Response { return volt.NoContent() }
+
+func CurrentUser(r volt.Request) volt.Load[db.User] { return volt.LoadWith(db.UserGet(1)) }
+
 type LoginForm struct {
 	Email    string
 	Password string
@@ -270,7 +276,7 @@ type LoginForm struct {
 
 // wire proves New accepts stub implementations of every interface.
 var _ http.Handler = NewRouter(Controllers{
-	Admin: stub{}, Files: stub{}, Home: stub{}, Session: stub{}, Users: stub{},
+	Admin: stub{}, Files: stub{}, Home: stub{}, Me: me{}, Session: stub{}, Users: stub{},
 })
 `
 	if err := os.WriteFile(filepath.Join(pkgDir, "user.go"), []byte(user), 0o644); err != nil {

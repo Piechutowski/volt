@@ -54,6 +54,14 @@ func PathPing(opts ...volt.URLOption) string {
 	return volt.URL("/ping", opts...)
 }
 
+func PathMeShow(opts ...volt.URLOption) string {
+	return volt.URL("/me", opts...)
+}
+
+func PathMeUserList(opts ...volt.URLOption) string {
+	return volt.URL("/me/peers", opts...)
+}
+
 func PathAPIUserList(opts ...volt.URLOption) string {
 	return volt.URL("/api/users", opts...)
 }

@@ -194,43 +194,6 @@ Deferred: the language first, then non-core features and tooling.
 
 ---
 
-## Step 12. Scope loads
-
-Depends on: 7.
-
-```ebnf
-scope item = route | resources | dataset | scope | scope load ;
-scope load = "load", name, go ref, newline ;
-```
-
-```volt
-Scope / [pipe: app, error_handler: Errors] {
-	load user CurrentUser
-	...
-}
-```
-
-```go
-func CurrentUser(r volt.Request) volt.Load[db.User] {
-	id, err := strconv.Atoi(r.Header("X-User"))
-	if err != nil {
-		return volt.Halt[db.User](volt.Problem(401, "sign in"))
-	}
-	return volt.Query(db.UserGet(id))
-}
-```
-
-`volt.Load[T]` is a sealed sum: run this effect, or halt with this
-response. The checker holds the Go function to `func(volt.Request)
-volt.Load[T]`. Scope loads run before route loads and every route
-beneath receives the value as a leading parameter after `r`. Nested
-scopes append. The itest's `CurrentUser` reads a header, as above; a
-session is step 13's and does not exist yet.
-
-Done when: conformance, goldens, itest with a halt and a success.
-
----
-
 ## Step 13. Sessions
 
 Deferred: the language first, then non-core features and tooling.
@@ -301,7 +264,6 @@ read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
 
 | Step | Depends on | Lands |
 |---|---|---|
-| 12 scope loads | 7 | the last step of this round |
 | 5, 13 to 19 | | deferred |
 
 Measured at each step on the blog fixture and recorded in the commit

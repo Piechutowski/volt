@@ -13,7 +13,16 @@ import (
 // every load names a read of a data package and binds its arguments from
 // the route's parameters, the query string or literals. It reports every
 // fault and answers ok only when all of them lowered.
-func (l *routeLowering) loads(r *ast.Route, params []Param) (loads []LoadInfo, ok bool) {
+func scopeLoadNamed(loads []ScopeLoad, name string) bool {
+	for _, ld := range loads {
+		if ld.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (l *routeLowering) loads(r *ast.Route, params []Param, inh inherited) (loads []LoadInfo, ok bool) {
 	ok = true
 	byName := map[string]Param{}
 	for _, p := range params {
@@ -29,6 +38,10 @@ func (l *routeLowering) loads(r *ast.Route, params []Param) (loads []LoadInfo, o
 			continue
 		case byName[name].Name != "":
 			l.errorf(ld.Name.Pos(), "route-loads", "load %q takes the name of a path parameter of the route (§route-loads)", name)
+			ok = false
+			continue
+		case scopeLoadNamed(inh.loads, name):
+			l.errorf(ld.Name.Pos(), "route-loads", "load %q takes the name of a scope load above the route (§route-loads, §scope-loads)", name)
 			ok = false
 			continue
 		}
@@ -502,8 +515,8 @@ func bodiesEqual(a, b *BodyInfo) bool {
 	return a == nil || a.GoType() == b.GoType()
 }
 
-func signatureString(ps []Param, b *BodyInfo, ls []LoadInfo) string {
-	s := paramsString(ps)
+func signatureString(sl []ScopeLoad, ps []Param, b *BodyInfo, ls []LoadInfo) string {
+	s := scopeLoadsString(sl) + paramsString(ps)
 	if b != nil {
 		s += " [body: " + b.GoType() + "]"
 	}

@@ -1030,3 +1030,34 @@ func TestSelectWith(t *testing.T) {
 		t.Errorf("children render %s, want %s", child, want)
 	}
 }
+
+func TestScopeLoads(t *testing.T) {
+	pr, diags := project(t, map[string]string{
+		"go.mod":         modFile,
+		"db/schema.volt": "package db\n\nTable users {\n\tid int [pk, increment]\n}\n",
+		"app/loads.go": "package app\n\nimport (\n\t\"github.com/Piechutowski/volt\"\n\t\"blog/db\"\n)\n\n" +
+			"func CurrentUser(r volt.Request) volt.Load[db.User] { return volt.LoadWith(db.UserGet(1)) }\n" +
+			"func Tenant(r volt.Request) volt.Load[string] { return volt.Halt[string](volt.NoContent()) }\n",
+		"app/r.volt": "package app\n\nimport (\n\tdb\n)\n\nScope / {\n\tload user CurrentUser\n\tget /me Me.Show\n" +
+			"\tScope /t {\n\t\tload tenant Tenant\n\t\tget /stats Admin.Stats\n\t\tget /users db.UserList\n\t}\n}\n",
+	})
+	wantClean(t, diags)
+	app := pr.Packages["app"]
+	if len(app.Routes) != 3 {
+		t.Fatalf("routes = %d; want 3", len(app.Routes))
+	}
+	show, stats, list := app.Routes[0], app.Routes[1], app.Routes[2]
+	if len(show.ScopeLoads) != 1 || show.ScopeLoads[0].Name != "user" || show.ScopeLoads[0].Func != "CurrentUser" || show.ScopeLoads[0].GoType != "db.User" ||
+		show.ScopeLoads[0].Qualifier != "db" || show.ScopeLoads[0].Import != "blog/db" || show.ScopeLoads[0].PkgName != "db" {
+		t.Errorf("show loads = %+v", show.ScopeLoads)
+	}
+	if len(stats.ScopeLoads) != 2 || stats.ScopeLoads[1].Name != "tenant" || stats.ScopeLoads[1].GoType != "string" || stats.ScopeLoads[1].Import != "" {
+		t.Errorf("stats loads = %+v; want user then tenant", stats.ScopeLoads)
+	}
+	if len(list.ScopeLoads) != 2 || list.Query == nil {
+		t.Errorf("list = %+v; want a query route under both loads", list)
+	}
+	if a := app.Controllers["Admin"].Action("Stats"); a == nil || len(a.ScopeLoads) != 2 || len(a.Params) != 0 {
+		t.Errorf("Stats action = %+v; want two scope loads and no parameter", a)
+	}
+}

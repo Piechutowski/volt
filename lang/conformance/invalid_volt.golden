@@ -18,7 +18,7 @@ app/i07_dup_route_shape.volt:6:2: error: spec/scopes-and-routes: route GET /user
 app/i08_helper_collision.volt:6:2: error: spec/scopes-and-routes: reverse-URL helper or client method "Show" already produced by the route at app/i08_helper_collision.volt:5:2 (§route-names-and-reverse-urls, §generated-client); disambiguate with [name:] or a scope name
 
 ## i09_signature_conflict.volt
-app/i09_signature_conflict.volt:6:2: error: spec/scopes-and-routes: X.Show is reached by routes with different signatures (§handler-references, §request-bodies, §route-loads): (id string) {} vs (id int) {} (first at app/i09_signature_conflict.volt:5:2)
+app/i09_signature_conflict.volt:6:2: error: spec/scopes-and-routes: X.Show is reached by routes with different signatures (§handler-references, §scope-loads, §request-bodies, §route-loads): (id string) {} vs (id int) {} (first at app/i09_signature_conflict.volt:5:2)
 
 ## i100_query_body_verb
 app/routes.volt:10:2: error: spec/query-routes: db.UserCreate is routed with post, not get: the generated method a query route binds fixes its verb (§query-routes)
@@ -699,7 +699,7 @@ app/routes.volt:6:35: error: spec/request-bodies: Clock is int, not a struct typ
 app/i38_trailing_slash.volt:5:12: error: syntax: '/' must be followed by a path segment; routes match exactly, without a trailing slash (§route-paths)
 
 ## i390_body_signature_conflict
-app/routes.volt:7:2: error: spec/scopes-and-routes: Session.Login is reached by routes with different signatures (§handler-references, §request-bodies, §route-loads): () {} vs () [body: LoginForm] {} (first at app/routes.volt:6:2)
+app/routes.volt:7:2: error: spec/scopes-and-routes: Session.Login is reached by routes with different signatures (§handler-references, §scope-loads, §request-bodies, §route-loads): () {} vs () [body: LoginForm] {} (first at app/routes.volt:6:2)
 
 ## i391_load_named_body
 app/routes.volt:12:3: error: spec/route-loads: load "body" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved (§route-loads, §route-paths)
@@ -822,6 +822,34 @@ db/i426_with_on_aggregate.volt:17:45: error: spec/selects-over-groups: with nest
 
 ## i427_with_field_collision.volt
 db/i427_with_field_collision.volt:18:30: error: spec/selects-over-groups: the parent row's field Points and the children's field, named after "points", collide (§selects-over-groups)
+
+## i428_scope_load_missing_function
+app/routes.volt:6:2: error: spec/imports: package "db" imported and not used (§imports)
+app/routes.volt:10:12: error: spec/scope-loads: no function Nobody in package app's Go files — declare func Nobody(r volt.Request) volt.Load[T] beside the routes (§scope-loads)
+
+## i429_scope_load_wrong_shape
+app/routes.volt:6:2: error: spec/imports: package "db" imported and not used (§imports)
+app/routes.volt:10:12: error: spec/scope-loads: Plain is not a scope load: found func Plain(r volt.Request) volt.Response, expected func Plain(r volt.Request) volt.Load[T] (§scope-loads)
+
+## i430_scope_load_reserved_name
+app/routes.volt:6:2: error: spec/imports: package "db" imported and not used (§imports)
+app/routes.volt:10:7: error: spec/scope-loads: load "body" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved (§scope-loads, §route-paths)
+
+## i431_scope_load_path_param
+app/routes.volt:11:6: error: spec/scope-loads: path parameter "user" takes the name of a scope load above the route (§scope-loads, §route-paths)
+
+## i432_scope_load_twice
+app/routes.volt:12:8: error: spec/scope-loads: load "user" is already loaded by this scope or one above it (§scope-loads)
+
+## i433_scope_load_event_route
+app/routes.volt:11:2: error: spec/scope-loads: an event route runs no load; "user" is loaded by the scope above it (§scope-loads, §event-routes)
+
+## i434_scope_load_route_load_name
+app/routes.volt:12:3: error: spec/route-loads: load "user" takes the name of a scope load above the route (§route-loads, §scope-loads)
+
+## i435_scope_load_qualified
+app/routes.volt:6:2: error: spec/imports: package "db" imported and not used (§imports)
+app/routes.volt:10:12: error: spec/scope-loads: a scope load names a function of this package, written by its bare name (§scope-loads)
 
 ## i43_quoted_import.volt
 app/i43_quoted_import.volt:5:2: error: syntax: expected identifier in import path (§imports), found string "\"db\""

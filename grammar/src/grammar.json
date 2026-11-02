@@ -1674,7 +1674,41 @@
         },
         {
           "type": "SYMBOL",
+          "name": "scope_load"
+        },
+        {
+          "type": "SYMBOL",
           "name": "scope_definition"
+        }
+      ]
+    },
+    "scope_load": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "load"
+        },
+        {
+          "type": "FIELD",
+          "name": "name",
+          "content": {
+            "type": "ALIAS",
+            "content": {
+              "type": "SYMBOL",
+              "name": "identifier"
+            },
+            "named": true,
+            "value": "load_name"
+          }
+        },
+        {
+          "type": "FIELD",
+          "name": "ref",
+          "content": {
+            "type": "SYMBOL",
+            "name": "go_ref"
+          }
         }
       ]
     },

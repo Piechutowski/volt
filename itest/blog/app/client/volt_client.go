@@ -79,6 +79,16 @@ func (c *Client) Serve(ctx context.Context, path string) (*http.Response, error)
 	return c.Raw(ctx, "GET", volt.URL("/files/"+volt.SegWild(path)), nil)
 }
 
+func (c *Client) MeShow(ctx context.Context) (*http.Response, error) {
+	return c.Raw(ctx, "GET", volt.URL("/me"), nil)
+}
+
+func (c *Client) MeUserList(ctx context.Context) ([]db.User, error) {
+	var voltOut []db.User
+	voltErr := c.Do(ctx, "GET", volt.URL("/me/peers"), nil, &voltOut)
+	return voltOut, voltErr
+}
+
 func (c *Client) Tag(ctx context.Context, name string) (*http.Response, error) {
 	return c.Raw(ctx, "GET", volt.URL("/tags/"+volt.Seg(name)), nil)
 }

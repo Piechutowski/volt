@@ -137,6 +137,23 @@ func register(mux *http.ServeMux, c Controllers) {
 		return c.Files.Serve(r, r.PathValue("path"))
 	}, errHandlerErrors, voltPerform, volt.Params("path"))))
 
+	mux.Handle("GET /me", pipe0(volt.Handler("GET /me", func(r volt.Request) volt.Response {
+		return volt.Continue(CurrentUser(r), func(user db.User) volt.Response {
+			return c.Me.Show(r, user)
+		})
+	}, errHandlerErrors, voltPerform)))
+
+	mux.Handle("GET /me/peers", pipe0(volt.Handler("GET /me/peers", func(r volt.Request) volt.Response {
+		if _, err := volt.Negotiate(r); err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Continue(CurrentUser(r), func(user db.User) volt.Response {
+			return volt.Then(db.UserList(), func(voltOut []db.User) volt.Response {
+				return volt.RenderStatus(200, voltOut)
+			})
+		})
+	}, errHandlerErrors, voltPerform)))
+
 	mux.Handle("GET /tags/{name}", pipe0(volt.Handler("GET /tags/{name}", func(r volt.Request) volt.Response {
 		return c.Tags.Show(r, r.PathValue("name"))
 	}, errHandlerErrors, voltPerform, volt.Params("name"))))

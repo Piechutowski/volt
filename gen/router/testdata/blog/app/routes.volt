@@ -31,6 +31,12 @@ Scope / [pipe: api, error_handler: Errors] {
 	post  /login                 Session.Login     [body: LoginForm]
 	any /ping                    Home.Ping
 
+	Scope /me [name: me] {
+		load user CurrentUser
+		get /      Me.Show
+		get /peers db.UserList
+	}
+
 	Scope /api [name: api] {
 		get    /users            db.UserList
 		get    /users/:id(int) db.UserGet

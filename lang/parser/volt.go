@@ -143,12 +143,23 @@ func (p *parser) scopeItem() (item ast.ScopeItem) {
 		return p.resources()
 	case p.atKw("dataset"):
 		return p.dataset()
+	case p.atKw("load"):
+		return p.scopeLoad()
 	case isVerb(t.Val), isPut(t.Val):
 		return p.route()
 	default:
-		p.fail(t, "expected a verb (get, post, ...), 'resources', 'dataset' or 'Scope' in Scope body (§scopes-and-routes), found %q", t.Val)
+		p.fail(t, "expected a verb (get, post, ...), 'resources', 'dataset', 'load' or 'Scope' in Scope body (§scopes-and-routes), found %q", t.Val)
 		return nil
 	}
+}
+
+func (p *parser) scopeLoad() *ast.ScopeLoad {
+	p.lineBegin("scope load (§scope-loads)")
+	d := &ast.ScopeLoad{LoadPos: p.kwTake("load").Pos}
+	d.Name = p.ident("scope load name (§scope-loads)")
+	d.Ref = p.goRef("scope load function (§scope-loads)")
+	p.endOfLine("scope load (§scope-loads)")
+	return d
 }
 
 func (p *parser) dataset() *ast.Dataset {

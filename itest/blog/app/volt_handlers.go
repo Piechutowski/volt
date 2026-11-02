@@ -28,6 +28,10 @@ type HomeController interface {
 	Ping(r volt.Request) volt.Response
 }
 
+type MeController interface {
+	Show(r volt.Request, user db.User) volt.Response
+}
+
 type OpsController interface {
 	Fail(r volt.Request) volt.Response
 }
@@ -63,6 +67,7 @@ type Controllers struct {
 	Archive ArchiveController
 	Files   FilesController
 	Home    HomeController
+	Me      MeController
 	Ops     OpsController
 	Pages   PagesController
 	Session SessionController
@@ -97,6 +102,9 @@ func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	}
 	if !volt.Same(c.Home.Ping(r), c.Home.Ping(r)) {
 		voltOut = append(voltOut, "Home.Ping")
+	}
+	if !volt.Same(c.Me.Show(r, *new(db.User)), c.Me.Show(r, *new(db.User))) {
+		voltOut = append(voltOut, "Me.Show")
 	}
 	if !volt.Same(c.Ops.Fail(r), c.Ops.Fail(r)) {
 		voltOut = append(voltOut, "Ops.Fail")

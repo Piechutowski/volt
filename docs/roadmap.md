@@ -33,7 +33,7 @@ that lands it.
 | Sessions | yes | missing | |
 | Password hashing | yes | missing | |
 | CSRF | yes | missing | |
-| Current user and authorization hooks | yes | missing | 12 |
+| Current user and authorization hooks | yes | built (scope loads; the user comes from a header until sessions land) | |
 | Background jobs | Oban / ActiveJob | missing | |
 | Mail | Swoosh / ActionMailer | missing | |
 | Realtime push | Channels / ActionCable | partial (SSE broker) | |

@@ -234,6 +234,18 @@ func (x *Dataset) End() token.Position {
 }
 func (x *Dataset) scopeItemNode() {}
 
+// ScopeLoad is "load name Func" in a Scope body (§scope-loads): a value
+// every route beneath receives, from a function of the package.
+type ScopeLoad struct {
+	LoadPos token.Position
+	Name    *Ident
+	Ref     *GoRef
+}
+
+func (x *ScopeLoad) Pos() token.Position { return x.LoadPos }
+func (x *ScopeLoad) End() token.Position { return x.Ref.End() }
+func (x *ScopeLoad) scopeItemNode()      {}
+
 // RoutePath is a route or scope path: "/" or "/seg/:param(type)/*rest"
 // (spec §route-paths). Tokens within a path are contiguous.
 type RoutePath struct {

@@ -5,8 +5,10 @@ package app
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/Piechutowski/volt"
+	"github.com/Piechutowski/volt/itest/blog/db"
 )
 
 // TagOuter and TagInner record middleware execution order in the
@@ -51,4 +53,15 @@ func TagExtra(next http.Handler) http.Handler {
 type LoginForm struct {
 	Email    string
 	Password string
+}
+
+// CurrentUser is the scope load of /me (§scope-loads): the user the
+// X-User header names, or a 401 that halts the request; a session is
+// not part of the language yet, so a header stands in for it.
+func CurrentUser(r volt.Request) volt.Load[db.User] {
+	id, err := strconv.Atoi(r.Header().Get("X-User"))
+	if err != nil {
+		return volt.Halt[db.User](volt.Reject(http.StatusUnauthorized, "sign in"))
+	}
+	return volt.LoadWith(db.UserGet(id))
 }

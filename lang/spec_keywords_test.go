@@ -61,7 +61,7 @@ func TestSpecKeywordsTableMatchesTheParser(t *testing.T) {
 			t.Errorf("parameter types: %s is in the parser's list but not a parameter type of the checker", w)
 		}
 	}
-	same("route words", append(append([]string(nil), parser.Verbs...), "resources", "dataset", "use"))
+	same("route words", append(append([]string(nil), parser.Verbs...), "resources", "dataset", "use", "load"))
 	for class, words := range classes {
 		for _, w := range words {
 			lower := strings.ToLower(w)
