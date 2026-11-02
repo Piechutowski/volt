@@ -315,7 +315,7 @@ func TestTypeImportAliasCompiles(t *testing.T) {
 type v2.Level int from "aliascheck/levels/v2"
 
 table orders {
-  id    int         [pk, increment]
+  id    int         [pk]
   total cash.Amount
   tier  v2.Level    [null]
 }

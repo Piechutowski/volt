@@ -40,11 +40,11 @@ var voltPostDesc = &rt.Desc[Post]{
 	Table:   `"posts"`,
 	Columns: `"id", "title", "status", "body", "published_at"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "title", Wire: "title", Settable: true},
-		{Column: "status", Wire: "status", Settable: true},
-		{Column: "body", Wire: "body", Settable: true},
-		{Column: "published_at", Wire: "published_at", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "title", Wire: "title"},
+		{Column: "status", Wire: "status"},
+		{Column: "body", Wire: "body"},
+		{Column: "published_at", Wire: "published_at"},
 	},
 	Scan:   voltPostScan,
 	Values: voltPostValues,
@@ -59,6 +59,10 @@ func PostNew() PostChangeset { return PostChangeset{rt.NewChangeset(voltPostDesc
 func (r Post) Changeset() PostChangeset { return PostChangeset{rt.ChangesetOf(voltPostDesc, r)} }
 
 func (c PostChangeset) From(r Post) PostChangeset { return PostChangeset{c.Changeset.From(r)} }
+
+func (c PostChangeset) IDSet(v int) PostChangeset {
+	return PostChangeset{rt.Set(c.Changeset, 0, func(voltR *Post) { voltR.ID = v })}
+}
 
 func (c PostChangeset) TitleSet(v string) PostChangeset {
 	return PostChangeset{rt.Set(c.Changeset, 1, func(voltR *Post) { voltR.Title = v })}
@@ -96,6 +100,9 @@ func voltPostValues(voltR Post) []any {
 
 func voltPostApply(voltData, voltVals Post, voltSet []bool) Post {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.Title = voltVals.Title
 	}
@@ -113,6 +120,12 @@ func voltPostApply(voltData, voltVals Post, voltSet []bool) Post {
 
 func voltPostCast(c rt.Changeset[Post], p rt.Params[Post], i int) (rt.Changeset[Post], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *Post) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return PostChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "title", "string", false, func(voltR *Post) string { return voltR.Title })
 		if voltErr != nil || !voltOK {
@@ -160,8 +173,8 @@ var voltTagDesc = &rt.Desc[Tag]{
 	Table:   `"tags"`,
 	Columns: `"id", "name"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Settable: true},
-		{Column: "name", Wire: "name", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "name", Wire: "name"},
 	},
 	Scan:   voltTagScan,
 	Values: voltTagValues,

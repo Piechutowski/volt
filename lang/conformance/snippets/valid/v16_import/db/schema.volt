@@ -2,5 +2,5 @@
 package db
 
 table users {
-	id int [pk, increment]
+	id int [pk]
 }

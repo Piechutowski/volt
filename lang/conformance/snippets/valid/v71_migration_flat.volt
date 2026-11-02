@@ -2,7 +2,7 @@
 package db
 
 table users {
-  id        int    [pk, increment]
+  id        int    [pk]
   email     string [unique]
   full_name string [index]
   bio       string [null]
@@ -10,7 +10,7 @@ table users {
 
 migration 0001__create_users {
   create table users {
-    id    int    [pk, increment]
+    id    int    [pk]
     email string [unique]
     name  string
   }

@@ -47,12 +47,12 @@ CREATE TABLE post_tags (
   FOREIGN KEY (post_id) REFERENCES posts (id)
 );
 CREATE TABLE scratch (
-  id INTEGER PRIMARY KEY NOT NULL
+  id INTEGER PRIMARY KEY
 );
 DROP TABLE scratch;
 -- down
 CREATE TABLE scratch (
-  id INTEGER PRIMARY KEY NOT NULL
+  id INTEGER PRIMARY KEY
 );
 DROP TABLE scratch;
 DROP TABLE post_tags;

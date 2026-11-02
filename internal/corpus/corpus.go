@@ -101,7 +101,11 @@ func schemaWrite(b *strings.Builder, spec Spec, pkg string) {
 	b.WriteString("pred fresh { c001 >= :since }\n\n")
 	for i := 1; i <= spec.Tables; i++ {
 		fmt.Fprintf(b, "table %s [note: \"metrics table %d of %s\"] {\n", Table(i), i, pkg)
-		b.WriteString("\tid int [pk, increment]\n\t~stamped\n")
+		if i%2 == 0 {
+			b.WriteString("\tid int [pk, autoincrement]\n\t~stamped\n")
+		} else {
+			b.WriteString("\tid int [pk]\n\t~stamped\n")
+		}
 		var known []int
 		for c := 1; c <= spec.Columns; c++ {
 			typ := colTypes[(c-1)%len(colTypes)]

@@ -27,9 +27,9 @@ var voltMenuDesc = &rt.Desc[Menu]{
 	Table:   `"menus"`,
 	Columns: `"id", "title", "price"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "title", Wire: "title", Settable: true},
-		{Column: "price", Wire: "price", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "title", Wire: "title"},
+		{Column: "price", Wire: "price"},
 	},
 	Scan:   voltMenuScan,
 	Values: voltMenuValues,
@@ -44,6 +44,10 @@ func MenuNew() MenuChangeset { return MenuChangeset{rt.NewChangeset(voltMenuDesc
 func (r Menu) Changeset() MenuChangeset { return MenuChangeset{rt.ChangesetOf(voltMenuDesc, r)} }
 
 func (c MenuChangeset) From(r Menu) MenuChangeset { return MenuChangeset{c.Changeset.From(r)} }
+
+func (c MenuChangeset) IDSet(v int) MenuChangeset {
+	return MenuChangeset{rt.Set(c.Changeset, 0, func(voltR *Menu) { voltR.ID = v })}
+}
 
 func (c MenuChangeset) TitleSet(v string) MenuChangeset {
 	return MenuChangeset{rt.Set(c.Changeset, 1, func(voltR *Menu) { voltR.Title = v })}
@@ -71,6 +75,9 @@ func voltMenuValues(voltR Menu) []any { return []any{voltR.ID, voltR.Title, volt
 
 func voltMenuApply(voltData, voltVals Menu, voltSet []bool) Menu {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.Title = voltVals.Title
 	}
@@ -82,6 +89,12 @@ func voltMenuApply(voltData, voltVals Menu, voltSet []bool) Menu {
 
 func voltMenuCast(c rt.Changeset[Menu], p rt.Params[Menu], i int) (rt.Changeset[Menu], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *Menu) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return MenuChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "title", "string", false, func(voltR *Menu) string { return voltR.Title })
 		if voltErr != nil || !voltOK {
@@ -118,8 +131,8 @@ var voltOrderStatusDesc = &rt.Desc[OrderStatus]{
 	Table:   `"order_status"`,
 	Columns: `"code", "label"`,
 	Fields: []rt.FieldDesc{
-		{Column: "code", Wire: "code", Key: true, Settable: true},
-		{Column: "label", Wire: "label", Settable: true},
+		{Column: "code", Wire: "code", Key: true},
+		{Column: "label", Wire: "label"},
 	},
 	Scan:   voltOrderStatusScan,
 	Values: voltOrderStatusValues,

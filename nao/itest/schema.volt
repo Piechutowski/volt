@@ -17,7 +17,7 @@ type Featured bool
 type Ratio float64
 
 table users {
-  id int [pk, increment]
+  id int [pk]
   email string [unique]
   name string [tag: "json:\"displayName\""]
   bio string [null, note: "NULL until the user writes one"]
@@ -29,7 +29,7 @@ table users {
 }
 
 table orders {
-  id int [pk, increment]
+  id int [pk]
   user_id int [ref: users.id]
   status OrderState [default: "pending"]
   total float64 [required]
@@ -52,7 +52,7 @@ select free   for orders where fee = 0
 // spells its storage type binds by kind, a list of it as one JSON array.
 select by_state for orders where status in :states [order: (id asc)]
 
-// composite primary key, no auto-increment anywhere
+// composite primary key, no rowid alias
 table user_tags {
   user_id int [pk, ref: users.id]
   tag string [pk]
@@ -61,7 +61,7 @@ table user_tags {
 // Two uniform metric tables plus the group/pred/select layer over them
 // (spec §groups to §selects-over-groups): one select, one signature, every member.
 table page_views {
-  id int [pk, increment]
+  id int [pk]
   site string
   day int
   hits int [default: 0]
@@ -73,7 +73,7 @@ table page_views {
 }
 
 table link_clicks {
-  id int [pk, increment]
+  id int [pk]
   site string
   day int
   target string [default: ""]
@@ -100,7 +100,7 @@ select public (* \ target) for link_clicks [order: (id asc)]
 
 // Kinded bool and float64 columns, plain and nullable (spec §types).
 table site_flags {
-  id       int      [pk, increment]
+  id       int      [pk]
   featured Featured
   pinned   Featured [null]
   ratio    Ratio
@@ -111,7 +111,7 @@ table site_flags {
 // null is bytes and nil writes empty bytes, one with null is
 // rt.Null[[]byte], and required is the one refusal of empty bytes.
 table attachments {
-  id     int    [pk, increment]
+  id     int    [pk]
   name   string [unique]
   body   []byte
   thumb  []byte [null]
@@ -146,7 +146,7 @@ table daily_hits {
 // A foreign key referencing a unique column, whose uniqueness is its
 // CREATE UNIQUE INDEX (spec §relationships-ref, §indexes).
 table invites {
-  id         int    [pk, increment]
+  id         int    [pk]
   user_email string [ref: users.email]
   code       string [unique]
 }
@@ -154,7 +154,7 @@ table invites {
 // A package-qualified type of Go kind bool that stores text: its own Scan
 // and Value decide, plain and nullable (spec §types).
 table post_flags {
-  id       int       [pk, increment]
+  id       int       [pk]
   reviewed pay.YesNo
   approved pay.YesNo [null]
 }
@@ -175,3 +175,10 @@ select totals (count() as n, max(hits) as top, sum(hits) as total) for page_view
 // refer to it, two statements in one transaction.
 select carts    for users with orders where id = :id
 select everyone for users with orders [order: (id asc)]
+
+// §columns: the rowid alias with SQLite's AUTOINCREMENT, whose ids are
+// never reused, beside the plain rowid alias of users.
+table metric_events {
+  id   int    [pk, autoincrement]
+  name string
+}

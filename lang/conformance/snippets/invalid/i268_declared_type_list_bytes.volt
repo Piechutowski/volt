@@ -5,7 +5,7 @@ package db
 type blob.Blob []byte from "example.com/app/blob"
 
 table posts {
-  id   int       [pk, increment]
+  id   int       [pk]
   icon blob.Blob
 }
 

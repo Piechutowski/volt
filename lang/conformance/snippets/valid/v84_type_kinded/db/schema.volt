@@ -5,7 +5,7 @@ type OrderState string
 type Priority int
 
 table orders {
-  id       int        [pk, increment]
+  id       int        [pk]
   status   OrderState [default: "pending"]
   prev     OrderState [null]
   priority Priority   [default: 2]

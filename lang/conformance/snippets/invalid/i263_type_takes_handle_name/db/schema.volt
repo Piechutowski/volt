@@ -5,6 +5,6 @@ package db
 type OrderStatus string
 
 table orders {
-  id     int         [pk, increment]
+  id     int         [pk]
   status OrderStatus
 }

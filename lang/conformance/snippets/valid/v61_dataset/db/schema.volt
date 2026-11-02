@@ -2,19 +2,19 @@
 package db
 
 table ms_revenue {
-  id int [pk, increment]
+  id int [pk]
   org string
   year int
 }
 
 table ms_usage {
-  id int [pk, increment]
+  id int [pk]
   org string
   year int
 }
 
 table ms_notes {
-  id int [pk, increment]
+  id int [pk]
   org string
   year int
 }

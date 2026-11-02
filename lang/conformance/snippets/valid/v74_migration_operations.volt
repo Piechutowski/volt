@@ -2,7 +2,7 @@
 package db
 
 table accounts {
-  id      int    [pk, increment]
+  id      int    [pk]
   owner   string [unique]
   balance int    [default: 0]
 
@@ -14,7 +14,7 @@ table accounts {
 
 migration 0001__create_accounts {
   create table ledgers {
-    id    int    [pk, increment]
+    id    int    [pk]
     owner string [index]
     total int    [default: 0]
   }
@@ -31,7 +31,7 @@ migration 0001__create_accounts {
 
 migration 0002__accounts_rebuild [irreversible] {
   rebuild table accounts {
-    id      int    [pk, increment]
+    id      int    [pk]
     owner   string [unique]
     balance int    [default: 0, from: `balance * 100`]
 

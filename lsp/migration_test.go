@@ -8,9 +8,9 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-const migrationSchema = "package db\n\ntable users {\n\tid int [pk, increment]\n\tbio string [null]\n}\n\n" +
-	"migration 0002__users_bio [irreversible] {\n\talter table users {\n\t\tadd bio string [null]\n\t}\n\trebuild table users {\n\t\tid int [pk, increment]\n\t\tbio string [null]\n\t}\n}\n\n" +
-	"migration 0001__create_users {\n\tcreate table users {\n\t\tid int [pk, increment]\n\t}\n}\n"
+const migrationSchema = "package db\n\ntable users {\n\tid int [pk]\n\tbio string [null]\n}\n\n" +
+	"migration 0002__users_bio [irreversible] {\n\talter table users {\n\t\tadd bio string [null]\n\t}\n\trebuild table users {\n\t\tid int [pk]\n\t\tbio string [null]\n\t}\n}\n\n" +
+	"migration 0001__create_users {\n\tcreate table users {\n\t\tid int [pk]\n\t}\n}\n"
 
 func TestDocumentSymbolsMigration(t *testing.T) {
 	d := doc(t, migrationSchema)

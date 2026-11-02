@@ -40,13 +40,13 @@ var (
 	columnSettings = settingSpec{
 		kinds: map[string]valueKind{
 			"pk": flagOnly, "null": flagOnly,
-			"unique": flagOnly, "index": flagOnly, "increment": flagOnly,
+			"unique": flagOnly, "index": flagOnly, "autoincrement": flagOnly,
 			"default": defaultVal,
 			"note":    strValue, "ref": refVal, "tag": strValue,
 			"required": flagOnly,
 		},
 		repeatable: map[string]bool{"tag": true},
-		conflicts:  [][2]string{{"required", "default"}, {"required", "increment"}, {"unique", "index"}},
+		conflicts:  [][2]string{{"required", "default"}, {"unique", "index"}},
 	}
 	indexSettings = settingSpec{
 		kinds: map[string]valueKind{
@@ -207,41 +207,42 @@ func isString(n ast.Node) bool {
 	return ok && lit.Tok.Kind == token.STRING
 }
 
-func (c *checker) incrementCheck(ti *TableInfo) {
+// rowidAliasCheck enforces that autoincrement is written on the rowid
+// alias alone (spec §columns), the one column SQLite takes it on.
+func (c *checker) rowidAliasCheck(ti *TableInfo) {
 	pk := ti.PK()
-	compositePK := len(pk) > 1
+	alias := ti.RowidAlias()
 	for _, cd := range ti.Columns {
 		col := cd.Col
-		inc := col.Settings.Get("increment")
-		if inc == nil {
-			continue
-		}
 		name := col.Name.Name()
-		if !cd.Type.Known() {
-			continue
-		}
-		if cd.Type.Storage != "int" || cd.Type.Decl != nil {
-			c.errorf(inc.Pos(), "columns",
-				"increment on %q (%s): only an int column can auto-increment (§columns, §mapping-to-sqlite-ddl)", name, col.Type.String())
+		auto := col.Settings.Get("autoincrement")
+		if cd == alias || auto == nil || !cd.Type.Known() {
 			continue
 		}
 		isPK := col.Settings.Get("pk") != nil
 		switch {
-		case compositePK:
+		case cd.Type.Decl != nil && cd.Type.Storage == "int":
+			c.errorf(auto.Pos(), "columns",
+				"autoincrement on %q (%s): only a key of the built-in int is the rowid alias, which alone takes AUTOINCREMENT; a declared type stored as int is not (§columns, §mapping-to-sqlite-ddl)", name, col.Type.String())
+		case cd.Type.Storage != "int" || cd.Type.Decl != nil:
+			c.errorf(auto.Pos(), "columns",
+				"autoincrement on %q (%s): only an int column can be the rowid alias, which alone takes AUTOINCREMENT (§columns, §mapping-to-sqlite-ddl)", name, col.Type.String())
+		case len(pk) > 1 && isPK:
 			key := make([]string, len(pk))
 			for i, cd := range pk {
 				key[i] = cd.Col.Name.Name()
 			}
-			c.errorf(inc.Pos(), "columns",
-				"increment on %q in table %q, whose primary key is (%s): a composite primary key has no auto-assigned column, since SQLite auto-assigns only a single-column int key (§columns)", name, ti.Key, strings.Join(key, ", "))
-		case !isPK:
-			c.errorf(inc.Pos(), "columns",
-				"increment on %q: only the primary key auto-increments; elsewhere the keyword would be silently ignored while no changeset ever marks the column (§columns, §mapping-to-sqlite-ddl)", name)
+			c.errorf(auto.Pos(), "columns",
+				"autoincrement on %q in table %q, whose primary key is (%s): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key (§columns)", name, ti.Key, strings.Join(key, ", "))
+		default:
+			c.errorf(auto.Pos(), "columns",
+				"autoincrement on %q: only the rowid alias, the single-column int primary key, takes AUTOINCREMENT; elsewhere SQLite refuses the keyword (§columns, §mapping-to-sqlite-ddl)", name)
 		}
 	}
 }
 
 func (c *checker) requiredCheck(ti *TableInfo) {
+	alias := ti.RowidAlias()
 	for _, cd := range ti.Columns {
 		col := cd.Col
 		req := col.Settings.Get("required")
@@ -250,6 +251,10 @@ func (c *checker) requiredCheck(ti *TableInfo) {
 		}
 		name := col.Name.Name()
 		if !cd.Type.Known() {
+			continue
+		}
+		if cd == alias {
+			c.errorf(req.Pos(), "columns", "required on %q, the rowid alias of table %q: the database assigns it whenever an insert leaves it unmarked, so its zero value is no missing value (§columns, §changesets)", name, ti.Key)
 			continue
 		}
 		if _, ok := cd.Type.RequiredKind(); !ok {

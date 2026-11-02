@@ -398,7 +398,7 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 			c.recordsCoverageCheck(ti, r)
 		}
 	}
-	c.incrementCheck(ti)
+	c.rowidAliasCheck(ti)
 	c.requiredCheck(ti)
 }
 

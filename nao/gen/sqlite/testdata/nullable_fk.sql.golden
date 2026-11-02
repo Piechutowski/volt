@@ -3,11 +3,11 @@
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE users (
-  id INTEGER PRIMARY KEY NOT NULL
+  id INTEGER PRIMARY KEY
 );
 
 CREATE TABLE posts (
-  id INTEGER PRIMARY KEY NOT NULL,
+  id INTEGER PRIMARY KEY,
   author_id INTEGER NOT NULL,
   -- NULL until an editor is assigned
   editor_id INTEGER,

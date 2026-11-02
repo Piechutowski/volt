@@ -3,13 +3,13 @@ package rt
 import "slices"
 
 // FieldDesc is one column as a changeset knows it (spec §changesets): its
-// SQL name, its wire name, and whether it is part of the key or
-// settable, which every column is but the auto-increment key.
+// SQL name, its wire name, whether it is part of the key, and whether
+// it is the rowid alias key, which From leaves unmarked.
 type FieldDesc struct {
-	Column   string
-	Wire     string
-	Key      bool
-	Settable bool
+	Column     string
+	Wire       string
+	Key        bool
+	RowidAlias bool
 }
 
 // Desc is what a changeset knows of its model and reflection would
@@ -90,13 +90,13 @@ func Set[M any](c Changeset[M], i int, set func(*M)) Changeset[M] {
 	return c
 }
 
-// From marks every settable column with its value in r (spec
-// §changesets).
+// From marks every column but the rowid alias key with its value in r
+// (spec §changesets), so a zero row never inserts the key 0.
 func (c Changeset[M]) From(r M) Changeset[M] {
 	c.vals = r
 	marks := make([]bool, len(c.d().Fields))
 	for i, f := range c.d().Fields {
-		marks[i] = f.Settable
+		marks[i] = !f.RowidAlias
 	}
 	c.set = marks
 	return c
@@ -106,7 +106,7 @@ func (c Changeset[M]) From(r M) Changeset[M] {
 // (spec §changesets).
 func (c Changeset[M]) FromRow() bool { return c.row }
 
-// Cast sets every settable column of allow that p carries, recording a
+// Cast sets every column of allow that p carries, recording a
 // cast error for a value that does not convert and an unknown_field
 // error for a key that names no column (spec §changesets).
 func (c Changeset[M]) Cast(p Params[M], allow ...ColumnOf[M]) Changeset[M] {
@@ -117,7 +117,7 @@ func (c Changeset[M]) Cast(p Params[M], allow ...ColumnOf[M]) Changeset[M] {
 	c.errs = FieldErrorsAppend(c.errs, UnknownFields(p, wires...)...)
 	for _, col := range allow {
 		i := c.d().index(col.ColumnName())
-		if i < 0 || !c.d().Fields[i].Settable {
+		if i < 0 {
 			continue
 		}
 		next, err := c.d().Cast(c, p, i)

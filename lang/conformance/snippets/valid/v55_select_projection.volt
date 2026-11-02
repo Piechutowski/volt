@@ -4,14 +4,14 @@
 package db
 
 table page_views {
-  id int [pk, increment]
+  id int [pk]
   site string
   day int
   hits int [default: 0]
 }
 
 table link_clicks {
-  id int [pk, increment]
+  id int [pk]
   site string
   day int
   target string [default: ""]

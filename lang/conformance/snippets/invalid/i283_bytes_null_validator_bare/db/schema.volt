@@ -4,7 +4,7 @@
 package db
 
 table attachments {
-  id    int    [pk, increment]
+  id    int    [pk]
   thumb []byte [null]
 
   validators {

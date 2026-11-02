@@ -150,4 +150,16 @@ var Migrations = []rt.Migration{
 			`DROP TABLE post_flags`,
 		},
 	},
+	{
+		Name: "0008__metric_events",
+		Up: []string{
+			`CREATE TABLE metric_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL
+)`,
+		},
+		Down: []string{
+			`DROP TABLE metric_events`,
+		},
+	},
 }

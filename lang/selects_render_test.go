@@ -127,7 +127,7 @@ func TestSelectRenderMatchesTypedHandles(t *testing.T) {
 	}
 
 	var schema strings.Builder
-	schema.WriteString("package db\n\ntable page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n\thits int\n\tscore float64\n\tflag bool\n\tnote string [null]\n\torder int\n}\n\n")
+	schema.WriteString("package db\n\ntable page_views {\n\tid int [pk]\n\tsite string\n\tday int\n\thits int\n\tscore float64\n\tflag bool\n\tnote string [null]\n\torder int\n}\n\n")
 	schema.WriteString("pred at { site = :site and day = :day }\npred since { day >= :from }\n\n")
 	for i, tc := range cases {
 		fmt.Fprintf(&schema, "select c%d for page_views", i)
@@ -180,7 +180,7 @@ func TestSelectRenderMatchesTypedHandles(t *testing.T) {
 func TestSelectInfoCarriesRendererFragments(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod": modFile,
-		"db/schema.volt": "package db\n\ntable page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n}\n\n" +
+		"db/schema.volt": "package db\n\ntable page_views {\n\tid int [pk]\n\tsite string\n\tday int\n}\n\n" +
 			"select rows for page_views where site = :site and day in :days [order: (day desc, id asc)]\n",
 	})
 	wantClean(t, diags)
@@ -214,7 +214,7 @@ func TestSelectLiteralOutsideStorageRefused(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, diags := project(t, map[string]string{
 				"go.mod": modFile,
-				"db/schema.volt": "package db\n\ntype Money int\n\ntable page_views {\n\tid int [pk, increment]\n\thits int\n\tscore float64\n\tcents Money\n}\n\n" +
+				"db/schema.volt": "package db\n\ntype Money int\n\ntable page_views {\n\tid int [pk]\n\thits int\n\tscore float64\n\tcents Money\n}\n\n" +
 					"select c for page_views where " + tc.where + "\n",
 			})
 			wantError(t, diags, tc.want)
@@ -225,7 +225,7 @@ func TestSelectLiteralOutsideStorageRefused(t *testing.T) {
 func TestSelectUnresolvedKeptNotGenerated(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod": modFile,
-		"db/schema.volt": "package db\n\ntable authors {\n\tid int [pk, increment]\n\temail string\n\trank int32\n}\n\n" +
+		"db/schema.volt": "package db\n\ntable authors {\n\tid int [pk]\n\temail string\n\trank int32\n}\n\n" +
 			"select ranked for authors where rank >= :min and email = :e [order: (rank desc)]\n" +
 			"select shown (rank, email) for authors\n" +
 			"select brief (* \\ rank) for authors\n" +
@@ -275,7 +275,7 @@ func TestSelectUnresolvedKeptNotGenerated(t *testing.T) {
 func TestSelectDroppedTermsNameTheirParams(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod": modFile,
-		"db/schema.volt": "package db\n\ntable authors {\n\tid int [pk, increment]\n\temail string\n\trank int32 [null]\n}\n\n" +
+		"db/schema.volt": "package db\n\ntable authors {\n\tid int [pk]\n\temail string\n\trank int32 [null]\n}\n\n" +
 			"pred floor { rank >= :min }\n\n" +
 			"select listed for authors where rank in :ranks and email = :e\n" +
 			"select liked for authors where rank like :pat or email like :e\n" +

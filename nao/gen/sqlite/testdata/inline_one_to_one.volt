@@ -4,18 +4,18 @@
 // nothing, and the referenced table carries nothing of it
 // (§mapping-to-sqlite-ddl).
 table users {
-  id    int    [pk, increment]
+  id    int    [pk]
   email string [unique]
 }
 
 table profiles {
-  id      int    [pk, increment]
+  id      int    [pk]
   user_id int    [unique, ref: users.id]
   bio     string [null]
 }
 
 table avatars {
-  id      int    [pk, increment]
+  id      int    [pk]
   user_id int    [unique, ref: users.id]
   url     string
 }

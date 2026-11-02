@@ -3,7 +3,7 @@
 package db
 
 table points {
-  id        int     [pk, increment]
+  id        int     [pk]
   metric_id int
   ts        int
   value     float64

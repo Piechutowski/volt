@@ -7,7 +7,7 @@ table runs {
 }
 
 table samples {
-  id             int       [pk, increment]
+  id             int       [pk]
   run_started_at time.Time [ref: runs.started_at]
 }
 

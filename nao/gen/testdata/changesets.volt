@@ -4,8 +4,8 @@
 // left to the database for one that implements Scanner and Valuer
 // (spec §types), membership validators on a plain and a nullable
 // declared column, a composite key with no Update, and a table whose
-// only column is the auto-increment key, so Cast and From have nothing
-// to set.
+// only column is the rowid alias key with autoincrement, so From marks
+// nothing and a generated create casts nothing.
 package metrics
 
 type Visibility string
@@ -13,7 +13,7 @@ type Tier int
 type Cents int
 
 table posts {
-  id       int [pk, increment]
+  id       int [pk]
   slug     string [required, unique]
   words    int [required]
   score    float64 [required]
@@ -49,5 +49,5 @@ table post_tags {
 }
 
 table pings {
-  id int [pk, increment]
+  id int [pk, autoincrement]
 }

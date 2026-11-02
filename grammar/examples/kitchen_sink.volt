@@ -15,7 +15,7 @@ type Status string
 type V2JobStatus string
 
 table_partial base_template {
-  id int [pk, increment]
+  id int [pk]
   created_at time.Time [null, index, default: `CURRENT_TIMESTAMP`]
 }
 

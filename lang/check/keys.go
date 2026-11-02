@@ -26,6 +26,21 @@ func (t *TableInfo) PK() []*ColumnDef {
 	return out
 }
 
+// RowidAlias is the column SQLite aliases to the rowid as Volt treats it
+// (spec §columns): the one column of a single-column primary key of the
+// built-in int, nil for any other key. The database assigns it whenever
+// an insert leaves it unmarked.
+func (t *TableInfo) RowidAlias() *ColumnDef {
+	pk := t.PK()
+	if len(pk) != 1 {
+		return nil
+	}
+	if cd := pk[0]; cd.Type.Known() && cd.Type.Storage == "int" && cd.Type.Decl == nil {
+		return cd
+	}
+	return nil
+}
+
 // ColumnsUnique reports whether the named columns are unique together
 // (spec §indexes, §relationships-ref): they are exactly the primary
 // key's columns, or one column that carries unique, or exactly the key

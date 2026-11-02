@@ -2,7 +2,7 @@
 package db
 
 table accounts {
-  id     int    [pk, increment]
+  id     int    [pk]
   email  string [unique]
   handle string [null, unique]
   region string [index]
@@ -17,7 +17,7 @@ table accounts {
 
 migration 0001__create_accounts {
   create table accounts {
-    id     int    [pk, increment]
+    id     int    [pk]
     email  string [unique]
     region string [index]
     owner  string

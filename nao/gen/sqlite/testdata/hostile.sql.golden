@@ -3,12 +3,12 @@
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE users (
-  id INTEGER PRIMARY KEY NOT NULL
+  id INTEGER PRIMARY KEY
 );
 
 -- Shares the stem of users; its own name keeps the models apart
 CREATE TABLE core_users (
-  id INTEGER PRIMARY KEY NOT NULL,
+  id INTEGER PRIMARY KEY,
   api_key TEXT NOT NULL,
   homepage_url TEXT,
   http_status INTEGER,

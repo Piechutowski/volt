@@ -3,5 +3,5 @@
 package żółw
 
 table users {
-  id int [pk, increment]
+  id int [pk]
 }

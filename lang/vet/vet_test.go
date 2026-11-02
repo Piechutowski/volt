@@ -89,7 +89,7 @@ func TestCleanFile(t *testing.T) {
 project shop { database_type: "SQLite" }
 type Status string
 table users {
-  id int [pk, increment]
+  id int [pk]
   status Status
 }
 table orders {
@@ -124,10 +124,10 @@ func TestAnalyzerDocs(t *testing.T) {
 func TestRefTypeSkipsUnknownTypes(t *testing.T) {
 	src := `
 table authors {
-  id int64 [pk, increment]
+  id int64 [pk]
 }
 table posts {
-  id int [pk, increment]
+  id int [pk]
   author_id int [ref: authors.id]
   editor_id string [null, ref: authors.id]
 }

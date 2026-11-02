@@ -2,16 +2,16 @@
 package db
 
 table users {
-  id int [pk, increment]
+  id int [pk]
 }
 
 table profiles {
-  id      int [pk, increment]
+  id      int [pk]
   user_id int [unique, ref: users.id]
 }
 
 table posts {
-  id      int [pk, increment]
+  id      int [pk]
   user_id int
   editor  int [null]
 }
@@ -21,14 +21,14 @@ ref: posts.editor > users.id [delete: set_null]
 
 migration 0001__init {
   create table users {
-    id int [pk, increment]
+    id int [pk]
   }
   create table profiles {
-    id      int [pk, increment]
+    id      int [pk]
     user_id int [unique, ref: users.id]
   }
   create table posts {
-    id      int [pk, increment]
+    id      int [pk]
     user_id int [ref: users.id, delete: cascade, update: restrict]
   }
 }

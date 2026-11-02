@@ -73,7 +73,7 @@ func TestResourcesDefault(t *testing.T) {
 }
 
 // TestResourcesDefaultStringKey (§default-handlers, §query-routes): a table
-// keyed by a string column without increment takes its key in the
+// keyed by a string column, not the rowid alias, takes its key in the
 // create body, and an update ignores a body that names the key, which
 // is outside the update's allow list.
 func TestResourcesDefaultStringKey(t *testing.T) {

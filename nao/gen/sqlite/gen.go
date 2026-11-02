@@ -136,24 +136,29 @@ func (g *generator) columnDef(ti *check.TableInfo, cd *check.ColumnDef, pkCols [
 	if err != nil {
 		return "", fmt.Errorf("column %q: %w", cd.Col.Name.Name(), err)
 	}
-	return columnLine(cd.Col, sqlType, pkCols)
+	return columnLine(cd.Col, sqlType, cd.Type.Storage == "int", pkCols)
 }
 
 // columnLine renders one column definition of a CREATE TABLE (spec
 // §mapping-to-sqlite-ddl): PRIMARY KEY on the one column of a
-// single-column key, the rowid alias for int [pk, increment], NOT NULL
-// for a column without null, the rowid alias excepted, and DEFAULT.
+// single-column key, INTEGER PRIMARY KEY for one stored as int, which
+// SQLite aliases to the rowid, AUTOINCREMENT after it for
+// autoincrement, NOT NULL for a column without null, that key
+// excepted, and DEFAULT. intStorage says the column is stored as int;
 // pkCols are the key's columns in order; a composite key is the
 // table's PRIMARY KEY constraint, and unique and index are CREATE
 // INDEX statements, neither on the column.
-func columnLine(col *ast.Column, sqlType string, pkCols []string) (string, error) {
+func columnLine(col *ast.Column, sqlType string, intStorage bool, pkCols []string) (string, error) {
 	colName := col.Name.Name()
 	singlePK := col.Settings.Get("pk") != nil && len(pkCols) == 1
-	rowidAlias := singlePK && sqlType == "INTEGER" && col.Settings.Get("increment") != nil
+	rowidAlias := singlePK && intStorage
 
 	parts := []string{"  " + identQuote(colName), sqlType}
 	if singlePK {
 		parts = append(parts, "PRIMARY KEY")
+	}
+	if rowidAlias && col.Settings.Get("autoincrement") != nil {
+		parts = append(parts, "AUTOINCREMENT")
 	}
 	if !rowidAlias && !isNullable(col) {
 		parts = append(parts, "NOT NULL")

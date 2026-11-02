@@ -7,7 +7,7 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-const typeSchema = "package db\n\ntype money.Money int from \"example.com/app/money\"\ntype Slug string\n\ntable products {\n\tid int [pk, increment]\n\tslug Slug\n\tprice money.Money\n}\n"
+const typeSchema = "package db\n\ntype money.Money int from \"example.com/app/money\"\ntype Slug string\n\ntable products {\n\tid int [pk]\n\tslug Slug\n\tprice money.Money\n}\n"
 
 func TestTypeHoverAndDefinition(t *testing.T) {
 	d := NewDocument("file:///lone.volt", typeSchema)

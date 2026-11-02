@@ -3,7 +3,7 @@
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE categories (
-  id INTEGER PRIMARY KEY NOT NULL,
+  id INTEGER PRIMARY KEY,
   name TEXT NOT NULL
 );
 

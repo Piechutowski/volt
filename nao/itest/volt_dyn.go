@@ -467,3 +467,47 @@ func PostFlagUpdateWhere(set []rt.Assign[PostFlag], preds ...rt.Pred[PostFlag]) 
 	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltPostFlagTableSQL, set, preds)
 	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
+
+const (
+	voltMetricEventTableSQL   = `"metric_events"`
+	voltMetricEventColumnsSQL = `"id", "name"`
+)
+
+func MetricEventLimit(n int) rt.Opt[MetricEvent] { return rt.Limit[MetricEvent](n) }
+
+func MetricEventOffset(n int) rt.Opt[MetricEvent] { return rt.Offset[MetricEvent](n) }
+
+func MetricEventDistinct() rt.Opt[MetricEvent] { return rt.Distinct[MetricEvent]() }
+
+func MetricEventOrderBy(terms ...rt.Order[MetricEvent]) rt.Opt[MetricEvent] {
+	return rt.OrderBy(terms...)
+}
+
+func MetricEventAfter(key ...any) rt.Opt[MetricEvent] { return rt.After[MetricEvent](key...) }
+
+func MetricEventSet(assigns ...rt.Assign[MetricEvent]) []rt.Assign[MetricEvent] { return assigns }
+
+func MetricEventQuery(opts ...rt.Opt[MetricEvent]) rt.Query[MetricEvent] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltMetricEventTableSQL, voltMetricEventColumnsSQL, opts)
+	return rt.Query[MetricEvent]{SQL: voltSQL, Args: voltArgs, Scan: voltMetricEventScan, Err: voltErr}
+}
+
+func MetricEventCount(preds ...rt.Pred[MetricEvent]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltMetricEventTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
+}
+
+func MetricEventExists(preds ...rt.Pred[MetricEvent]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltMetricEventTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
+}
+
+func MetricEventDeleteWhere(preds ...rt.Pred[MetricEvent]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltMetricEventTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+func MetricEventUpdateWhere(set []rt.Assign[MetricEvent], preds ...rt.Pred[MetricEvent]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltMetricEventTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}

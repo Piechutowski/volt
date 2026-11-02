@@ -5,14 +5,14 @@ package itest
 
 migration 0001__users_and_orders {
   create table users {
-    id         int       [pk, increment]
+    id         int       [pk]
     email      string    [unique]
     name       string
     bio        string    [null]
     created_at time.Time [default: `CURRENT_TIMESTAMP`]
   }
   create table orders {
-    id        int       [pk, increment]
+    id        int       [pk]
     user_id   int       [ref: users.id]
     status    string    [default: "pending"]
     total     float64
@@ -28,13 +28,13 @@ migration 0001__users_and_orders {
 
 migration 0002__metrics {
   create table page_views {
-    id   int    [pk, increment]
+    id   int    [pk]
     site string
     day  int
     hits int    [default: 0]
   }
   create table link_clicks {
-    id     int    [pk, increment]
+    id     int    [pk]
     site   string
     day    int
     target string [default: ""]
@@ -43,7 +43,7 @@ migration 0002__metrics {
 
 migration 0003__site_flags {
   create table site_flags {
-    id       int     [pk, increment]
+    id       int     [pk]
     featured bool
     pinned   bool    [null]
     ratio    float64
@@ -53,7 +53,7 @@ migration 0003__site_flags {
 
 migration 0004__attachments_and_blobs {
   create table attachments {
-    id     int    [pk, increment]
+    id     int    [pk]
     name   string [unique]
     body   []byte
     thumb  []byte [null]
@@ -73,7 +73,7 @@ migration 0005__daily_hits_and_invites {
     site string [pk]
   }
   create table invites {
-    id         int    [pk, increment]
+    id         int    [pk]
     user_email string [ref: users.email]
     code       string [unique]
   }
@@ -91,8 +91,15 @@ migration 0006__daily_hits_label_and_token {
 
 migration 0007__post_flags {
   create table post_flags {
-    id       int    [pk, increment]
+    id       int    [pk]
     reviewed string
     approved string [null]
+  }
+}
+
+migration 0008__metric_events {
+  create table metric_events {
+    id   int    [pk, autoincrement]
+    name string
   }
 }

@@ -4,14 +4,14 @@
 package db
 
 table page_views {
-  id int [pk, increment]
+  id int [pk]
   site string
   day int
   hits int [default: 0]
 }
 
 table link_clicks {
-  id int [pk, increment]
+  id int [pk]
   site string
   day int
   target string [default: ""]
@@ -32,12 +32,12 @@ select named   for page_views where site like "%a%" and hits in (1, 2) and not (
 select chosen  for metrics where site in :sites and day in :days
 
 table hosts {
-  id   int [pk, increment]
+  id   int [pk]
   name string
 }
 
 table visits {
-  id       int [pk, increment]
+  id       int [pk]
   host_id  int [ref: hosts.id]
   owner_id int [null]
   day      int
@@ -64,7 +64,7 @@ table merchants {
 }
 
 table merchant_periods {
-  id           int    [pk, increment]
+  id           int    [pk]
   merchant_id  int
   country_code string
 }

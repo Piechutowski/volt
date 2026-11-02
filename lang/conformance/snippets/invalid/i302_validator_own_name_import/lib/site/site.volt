@@ -1,6 +1,6 @@
 package site
 
 table tags {
-  id   int    [pk, increment]
+  id   int    [pk]
   name string
 }

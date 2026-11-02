@@ -2,20 +2,20 @@
 package db
 
 table users {
-  id   int [pk, increment]
+  id   int [pk]
   hits int [default: 0]
 }
 
 migration 0001__create_users {
   create table users {
-    id   int    [pk, increment]
+    id   int    [pk]
     hits string [default: "0"]
   }
 }
 
 migration 0002__int_hits [irreversible] {
   rebuild table users {
-    id   int [pk, increment]
+    id   int [pk]
     hits int [default: 0, from: `CAST(hits AS INTEGER)`]
   }
 }

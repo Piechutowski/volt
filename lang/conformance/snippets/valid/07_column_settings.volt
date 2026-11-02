@@ -1,6 +1,6 @@
-// spec: §columns, §default-values, pk, increment, unique, null, note: and typed defaults
+// spec: §columns, §default-values, pk, autoincrement, unique, null, note: and typed defaults
 table t {
-  id int [pk, increment]
+  id int [pk, autoincrement]
   a string [unique, default: "direct", note: "source"]
   b int [null, default: 123]
   c float64 [default: 123.456]

@@ -5,7 +5,7 @@ package db
 type stamp.Stamp time.Time from "example.com/app/stamp"
 
 table events {
-  id int   [pk, increment]
+  id int   [pk]
   at stamp.Stamp
 }
 

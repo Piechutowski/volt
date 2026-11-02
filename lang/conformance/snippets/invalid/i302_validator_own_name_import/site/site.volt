@@ -7,7 +7,7 @@ import (
 )
 
 table posts {
-  id    int    [pk, increment]
+  id    int    [pk]
   title string
 
   validators {

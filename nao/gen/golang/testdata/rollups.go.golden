@@ -33,12 +33,12 @@ var voltPageViewDesc = &rt.Desc[PageView]{
 	Table:   `"page_views"`,
 	Columns: `"id", "site", "day", "hits", "score", "note"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "site", Wire: "site", Settable: true},
-		{Column: "day", Wire: "day", Settable: true},
-		{Column: "hits", Wire: "hits", Settable: true},
-		{Column: "score", Wire: "score", Settable: true},
-		{Column: "note", Wire: "note", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "site", Wire: "site"},
+		{Column: "day", Wire: "day"},
+		{Column: "hits", Wire: "hits"},
+		{Column: "score", Wire: "score"},
+		{Column: "note", Wire: "note"},
 	},
 	Scan:   voltPageViewScan,
 	Values: voltPageViewValues,
@@ -56,6 +56,10 @@ func (r PageView) Changeset() PageViewChangeset {
 
 func (c PageViewChangeset) From(r PageView) PageViewChangeset {
 	return PageViewChangeset{c.Changeset.From(r)}
+}
+
+func (c PageViewChangeset) IDSet(v int) PageViewChangeset {
+	return PageViewChangeset{rt.Set(c.Changeset, 0, func(voltR *PageView) { voltR.ID = v })}
 }
 
 func (c PageViewChangeset) SiteSet(v string) PageViewChangeset {
@@ -98,6 +102,9 @@ func voltPageViewValues(voltR PageView) []any {
 
 func voltPageViewApply(voltData, voltVals PageView, voltSet []bool) PageView {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.Site = voltVals.Site
 	}
@@ -118,6 +125,12 @@ func voltPageViewApply(voltData, voltVals PageView, voltSet []bool) PageView {
 
 func voltPageViewCast(c rt.Changeset[PageView], p rt.Params[PageView], i int) (rt.Changeset[PageView], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *PageView) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return PageViewChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "site", "string", false, func(voltR *PageView) string { return voltR.Site })
 		if voltErr != nil || !voltOK {
@@ -175,10 +188,10 @@ var voltLinkClickDesc = &rt.Desc[LinkClick]{
 	Table:   `"link_clicks"`,
 	Columns: `"id", "site", "day", "target"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "site", Wire: "site", Settable: true},
-		{Column: "day", Wire: "day", Settable: true},
-		{Column: "target", Wire: "target", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "site", Wire: "site"},
+		{Column: "day", Wire: "day"},
+		{Column: "target", Wire: "target"},
 	},
 	Scan:   voltLinkClickScan,
 	Values: voltLinkClickValues,
@@ -196,6 +209,10 @@ func (r LinkClick) Changeset() LinkClickChangeset {
 
 func (c LinkClickChangeset) From(r LinkClick) LinkClickChangeset {
 	return LinkClickChangeset{c.Changeset.From(r)}
+}
+
+func (c LinkClickChangeset) IDSet(v int) LinkClickChangeset {
+	return LinkClickChangeset{rt.Set(c.Changeset, 0, func(voltR *LinkClick) { voltR.ID = v })}
 }
 
 func (c LinkClickChangeset) SiteSet(v string) LinkClickChangeset {
@@ -230,6 +247,9 @@ func voltLinkClickValues(voltR LinkClick) []any {
 
 func voltLinkClickApply(voltData, voltVals LinkClick, voltSet []bool) LinkClick {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.Site = voltVals.Site
 	}
@@ -244,6 +264,12 @@ func voltLinkClickApply(voltData, voltVals LinkClick, voltSet []bool) LinkClick 
 
 func voltLinkClickCast(c rt.Changeset[LinkClick], p rt.Params[LinkClick], i int) (rt.Changeset[LinkClick], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *LinkClick) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return LinkClickChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "site", "string", false, func(voltR *LinkClick) string { return voltR.Site })
 		if voltErr != nil || !voltOK {
@@ -285,8 +311,8 @@ var voltHostDesc = &rt.Desc[Host]{
 	Table:   `"hosts"`,
 	Columns: `"id", "name"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "name", Wire: "name", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "name", Wire: "name"},
 	},
 	Scan:   voltHostScan,
 	Values: voltHostValues,
@@ -301,6 +327,10 @@ func HostNew() HostChangeset { return HostChangeset{rt.NewChangeset(voltHostDesc
 func (r Host) Changeset() HostChangeset { return HostChangeset{rt.ChangesetOf(voltHostDesc, r)} }
 
 func (c HostChangeset) From(r Host) HostChangeset { return HostChangeset{c.Changeset.From(r)} }
+
+func (c HostChangeset) IDSet(v int) HostChangeset {
+	return HostChangeset{rt.Set(c.Changeset, 0, func(voltR *Host) { voltR.ID = v })}
+}
 
 func (c HostChangeset) NameSet(v string) HostChangeset {
 	return HostChangeset{rt.Set(c.Changeset, 1, func(voltR *Host) { voltR.Name = v })}
@@ -324,6 +354,9 @@ func voltHostValues(voltR Host) []any { return []any{voltR.ID, voltR.Name} }
 
 func voltHostApply(voltData, voltVals Host, voltSet []bool) Host {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.Name = voltVals.Name
 	}
@@ -332,6 +365,12 @@ func voltHostApply(voltData, voltVals Host, voltSet []bool) Host {
 
 func voltHostCast(c rt.Changeset[Host], p rt.Params[Host], i int) (rt.Changeset[Host], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *Host) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return HostChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "name", "string", false, func(voltR *Host) string { return voltR.Name })
 		if voltErr != nil || !voltOK {
@@ -365,10 +404,10 @@ var voltVisitDesc = &rt.Desc[Visit]{
 	Table:   `"visits"`,
 	Columns: `"id", "host_id", "owner_id", "day"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "host_id", Wire: "host_id", Settable: true},
-		{Column: "owner_id", Wire: "owner_id", Settable: true},
-		{Column: "day", Wire: "day", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "host_id", Wire: "host_id"},
+		{Column: "owner_id", Wire: "owner_id"},
+		{Column: "day", Wire: "day"},
 	},
 	Scan:   voltVisitScan,
 	Values: voltVisitValues,
@@ -383,6 +422,10 @@ func VisitNew() VisitChangeset { return VisitChangeset{rt.NewChangeset(voltVisit
 func (r Visit) Changeset() VisitChangeset { return VisitChangeset{rt.ChangesetOf(voltVisitDesc, r)} }
 
 func (c VisitChangeset) From(r Visit) VisitChangeset { return VisitChangeset{c.Changeset.From(r)} }
+
+func (c VisitChangeset) IDSet(v int) VisitChangeset {
+	return VisitChangeset{rt.Set(c.Changeset, 0, func(voltR *Visit) { voltR.ID = v })}
+}
 
 func (c VisitChangeset) HostIDSet(v int) VisitChangeset {
 	return VisitChangeset{rt.Set(c.Changeset, 1, func(voltR *Visit) { voltR.HostID = v })}
@@ -416,6 +459,9 @@ func voltVisitValues(voltR Visit) []any {
 
 func voltVisitApply(voltData, voltVals Visit, voltSet []bool) Visit {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.HostID = voltVals.HostID
 	}
@@ -430,6 +476,12 @@ func voltVisitApply(voltData, voltVals Visit, voltSet []bool) Visit {
 
 func voltVisitCast(c rt.Changeset[Visit], p rt.Params[Visit], i int) (rt.Changeset[Visit], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *Visit) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return VisitChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "host_id", "int", false, func(voltR *Visit) int { return voltR.HostID })
 		if voltErr != nil || !voltOK {
@@ -473,9 +525,9 @@ var voltMerchantDesc = &rt.Desc[Merchant]{
 	Table:   `"merchants"`,
 	Columns: `"id", "country_code", "name"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true, Settable: true},
-		{Column: "country_code", Wire: "country_code", Key: true, Settable: true},
-		{Column: "name", Wire: "name", Settable: true},
+		{Column: "id", Wire: "id", Key: true},
+		{Column: "country_code", Wire: "country_code", Key: true},
+		{Column: "name", Wire: "name"},
 	},
 	Scan:   voltMerchantScan,
 	Values: voltMerchantValues,
@@ -582,9 +634,9 @@ var voltMerchantPeriodDesc = &rt.Desc[MerchantPeriod]{
 	Table:   `"merchant_periods"`,
 	Columns: `"id", "merchant_id", "country_code"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "merchant_id", Wire: "merchant_id", Settable: true},
-		{Column: "country_code", Wire: "country_code", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "merchant_id", Wire: "merchant_id"},
+		{Column: "country_code", Wire: "country_code"},
 	},
 	Scan:   voltMerchantPeriodScan,
 	Values: voltMerchantPeriodValues,
@@ -604,6 +656,10 @@ func (r MerchantPeriod) Changeset() MerchantPeriodChangeset {
 
 func (c MerchantPeriodChangeset) From(r MerchantPeriod) MerchantPeriodChangeset {
 	return MerchantPeriodChangeset{c.Changeset.From(r)}
+}
+
+func (c MerchantPeriodChangeset) IDSet(v int) MerchantPeriodChangeset {
+	return MerchantPeriodChangeset{rt.Set(c.Changeset, 0, func(voltR *MerchantPeriod) { voltR.ID = v })}
 }
 
 func (c MerchantPeriodChangeset) MerchantIDSet(v int) MerchantPeriodChangeset {
@@ -634,6 +690,9 @@ func voltMerchantPeriodValues(voltR MerchantPeriod) []any {
 
 func voltMerchantPeriodApply(voltData, voltVals MerchantPeriod, voltSet []bool) MerchantPeriod {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.MerchantID = voltVals.MerchantID
 	}
@@ -645,6 +704,12 @@ func voltMerchantPeriodApply(voltData, voltVals MerchantPeriod, voltSet []bool) 
 
 func voltMerchantPeriodCast(c rt.Changeset[MerchantPeriod], p rt.Params[MerchantPeriod], i int) (rt.Changeset[MerchantPeriod], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *MerchantPeriod) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return MerchantPeriodChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "merchant_id", "int", false, func(voltR *MerchantPeriod) int { return voltR.MerchantID })
 		if voltErr != nil || !voltOK {

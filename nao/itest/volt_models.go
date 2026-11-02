@@ -46,11 +46,11 @@ var voltUserDesc = &rt.Desc[User]{
 	Table:   `"users"`,
 	Columns: `"id", "email", "name", "bio", "created_at"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "email", Wire: "email", Settable: true},
-		{Column: "name", Wire: "displayName", Settable: true},
-		{Column: "bio", Wire: "bio", Settable: true},
-		{Column: "created_at", Wire: "created_at", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "email", Wire: "email"},
+		{Column: "name", Wire: "displayName"},
+		{Column: "bio", Wire: "bio"},
+		{Column: "created_at", Wire: "created_at"},
 	},
 	Scan:   voltUserScan,
 	Values: voltUserValues,
@@ -65,6 +65,10 @@ func UserNew() UserChangeset { return UserChangeset{rt.NewChangeset(voltUserDesc
 func (r User) Changeset() UserChangeset { return UserChangeset{rt.ChangesetOf(voltUserDesc, r)} }
 
 func (c UserChangeset) From(r User) UserChangeset { return UserChangeset{c.Changeset.From(r)} }
+
+func (c UserChangeset) IDSet(v int) UserChangeset {
+	return UserChangeset{rt.Set(c.Changeset, 0, func(voltR *User) { voltR.ID = v })}
+}
 
 func (c UserChangeset) EmailSet(v string) UserChangeset {
 	return UserChangeset{rt.Set(c.Changeset, 1, func(voltR *User) { voltR.Email = v })}
@@ -102,6 +106,9 @@ func voltUserValues(voltR User) []any {
 
 func voltUserApply(voltData, voltVals User, voltSet []bool) User {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.Email = voltVals.Email
 	}
@@ -119,6 +126,12 @@ func voltUserApply(voltData, voltVals User, voltSet []bool) User {
 
 func voltUserCast(c rt.Changeset[User], p rt.Params[User], i int) (rt.Changeset[User], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *User) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return UserChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "email", "string", false, func(voltR *User) string { return voltR.Email })
 		if voltErr != nil || !voltOK {
@@ -176,13 +189,13 @@ var voltOrderDesc = &rt.Desc[Order]{
 	Table:   `"orders"`,
 	Columns: `"id", "user_id", "status", "total", "tip", "fee", "placed_at"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "user_id", Wire: "user_id", Settable: true},
-		{Column: "status", Wire: "status", Settable: true},
-		{Column: "total", Wire: "total", Settable: true},
-		{Column: "tip", Wire: "tip", Settable: true},
-		{Column: "fee", Wire: "fee", Settable: true},
-		{Column: "placed_at", Wire: "placed_at", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "user_id", Wire: "user_id"},
+		{Column: "status", Wire: "status"},
+		{Column: "total", Wire: "total"},
+		{Column: "tip", Wire: "tip"},
+		{Column: "fee", Wire: "fee"},
+		{Column: "placed_at", Wire: "placed_at"},
 	},
 	Defaults: Order{Status: "pending"},
 	Scan:     voltOrderScan,
@@ -198,6 +211,10 @@ func OrderNew() OrderChangeset { return OrderChangeset{rt.NewChangeset(voltOrder
 func (r Order) Changeset() OrderChangeset { return OrderChangeset{rt.ChangesetOf(voltOrderDesc, r)} }
 
 func (c OrderChangeset) From(r Order) OrderChangeset { return OrderChangeset{c.Changeset.From(r)} }
+
+func (c OrderChangeset) IDSet(v int) OrderChangeset {
+	return OrderChangeset{rt.Set(c.Changeset, 0, func(voltR *Order) { voltR.ID = v })}
+}
 
 func (c OrderChangeset) UserIDSet(v int) OrderChangeset {
 	return OrderChangeset{rt.Set(c.Changeset, 1, func(voltR *Order) { voltR.UserID = v })}
@@ -243,6 +260,9 @@ func voltOrderValues(voltR Order) []any {
 
 func voltOrderApply(voltData, voltVals Order, voltSet []bool) Order {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.UserID = voltVals.UserID
 	}
@@ -266,6 +286,12 @@ func voltOrderApply(voltData, voltVals Order, voltSet []bool) Order {
 
 func voltOrderCast(c rt.Changeset[Order], p rt.Params[Order], i int) (rt.Changeset[Order], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *Order) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return OrderChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "user_id", "int", false, func(voltR *Order) int { return voltR.UserID })
 		if voltErr != nil || !voltOK {
@@ -325,8 +351,8 @@ var voltUserTagDesc = &rt.Desc[UserTag]{
 	Table:   `"user_tags"`,
 	Columns: `"user_id", "tag"`,
 	Fields: []rt.FieldDesc{
-		{Column: "user_id", Wire: "user_id", Key: true, Settable: true},
-		{Column: "tag", Wire: "tag", Key: true, Settable: true},
+		{Column: "user_id", Wire: "user_id", Key: true},
+		{Column: "tag", Wire: "tag", Key: true},
 	},
 	Scan:   voltUserTagScan,
 	Values: voltUserTagValues,
@@ -422,10 +448,10 @@ var voltPageViewDesc = &rt.Desc[PageView]{
 	Table:   `"page_views"`,
 	Columns: `"id", "site", "day", "hits"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "site", Wire: "site", Settable: true},
-		{Column: "day", Wire: "day", Settable: true},
-		{Column: "hits", Wire: "hits", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "site", Wire: "site"},
+		{Column: "day", Wire: "day"},
+		{Column: "hits", Wire: "hits"},
 	},
 	Scan:   voltPageViewScan,
 	Values: voltPageViewValues,
@@ -443,6 +469,10 @@ func (r PageView) Changeset() PageViewChangeset {
 
 func (c PageViewChangeset) From(r PageView) PageViewChangeset {
 	return PageViewChangeset{c.Changeset.From(r)}
+}
+
+func (c PageViewChangeset) IDSet(v int) PageViewChangeset {
+	return PageViewChangeset{rt.Set(c.Changeset, 0, func(voltR *PageView) { voltR.ID = v })}
 }
 
 func (c PageViewChangeset) SiteSet(v string) PageViewChangeset {
@@ -477,6 +507,9 @@ func voltPageViewValues(voltR PageView) []any {
 
 func voltPageViewApply(voltData, voltVals PageView, voltSet []bool) PageView {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.Site = voltVals.Site
 	}
@@ -491,6 +524,12 @@ func voltPageViewApply(voltData, voltVals PageView, voltSet []bool) PageView {
 
 func voltPageViewCast(c rt.Changeset[PageView], p rt.Params[PageView], i int) (rt.Changeset[PageView], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *PageView) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return PageViewChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "site", "string", false, func(voltR *PageView) string { return voltR.Site })
 		if voltErr != nil || !voltOK {
@@ -536,10 +575,10 @@ var voltLinkClickDesc = &rt.Desc[LinkClick]{
 	Table:   `"link_clicks"`,
 	Columns: `"id", "site", "day", "target"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "site", Wire: "site", Settable: true},
-		{Column: "day", Wire: "day", Settable: true},
-		{Column: "target", Wire: "target", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "site", Wire: "site"},
+		{Column: "day", Wire: "day"},
+		{Column: "target", Wire: "target"},
 	},
 	Scan:   voltLinkClickScan,
 	Values: voltLinkClickValues,
@@ -557,6 +596,10 @@ func (r LinkClick) Changeset() LinkClickChangeset {
 
 func (c LinkClickChangeset) From(r LinkClick) LinkClickChangeset {
 	return LinkClickChangeset{c.Changeset.From(r)}
+}
+
+func (c LinkClickChangeset) IDSet(v int) LinkClickChangeset {
+	return LinkClickChangeset{rt.Set(c.Changeset, 0, func(voltR *LinkClick) { voltR.ID = v })}
 }
 
 func (c LinkClickChangeset) SiteSet(v string) LinkClickChangeset {
@@ -591,6 +634,9 @@ func voltLinkClickValues(voltR LinkClick) []any {
 
 func voltLinkClickApply(voltData, voltVals LinkClick, voltSet []bool) LinkClick {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.Site = voltVals.Site
 	}
@@ -605,6 +651,12 @@ func voltLinkClickApply(voltData, voltVals LinkClick, voltSet []bool) LinkClick 
 
 func voltLinkClickCast(c rt.Changeset[LinkClick], p rt.Params[LinkClick], i int) (rt.Changeset[LinkClick], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *LinkClick) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return LinkClickChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "site", "string", false, func(voltR *LinkClick) string { return voltR.Site })
 		if voltErr != nil || !voltOK {
@@ -652,11 +704,11 @@ var voltSiteFlagDesc = &rt.Desc[SiteFlag]{
 	Table:   `"site_flags"`,
 	Columns: `"id", "featured", "pinned", "ratio", "weight"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "featured", Wire: "featured", Settable: true},
-		{Column: "pinned", Wire: "pinned", Settable: true},
-		{Column: "ratio", Wire: "ratio", Settable: true},
-		{Column: "weight", Wire: "weight", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "featured", Wire: "featured"},
+		{Column: "pinned", Wire: "pinned"},
+		{Column: "ratio", Wire: "ratio"},
+		{Column: "weight", Wire: "weight"},
 	},
 	Scan:   voltSiteFlagScan,
 	Values: voltSiteFlagValues,
@@ -674,6 +726,10 @@ func (r SiteFlag) Changeset() SiteFlagChangeset {
 
 func (c SiteFlagChangeset) From(r SiteFlag) SiteFlagChangeset {
 	return SiteFlagChangeset{c.Changeset.From(r)}
+}
+
+func (c SiteFlagChangeset) IDSet(v int) SiteFlagChangeset {
+	return SiteFlagChangeset{rt.Set(c.Changeset, 0, func(voltR *SiteFlag) { voltR.ID = v })}
 }
 
 func (c SiteFlagChangeset) FeaturedSet(v Featured) SiteFlagChangeset {
@@ -712,6 +768,9 @@ func voltSiteFlagValues(voltR SiteFlag) []any {
 
 func voltSiteFlagApply(voltData, voltVals SiteFlag, voltSet []bool) SiteFlag {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.Featured = voltVals.Featured
 	}
@@ -729,6 +788,12 @@ func voltSiteFlagApply(voltData, voltVals SiteFlag, voltSet []bool) SiteFlag {
 
 func voltSiteFlagCast(c rt.Changeset[SiteFlag], p rt.Params[SiteFlag], i int) (rt.Changeset[SiteFlag], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *SiteFlag) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return SiteFlagChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "featured", "Featured", false, func(voltR *SiteFlag) Featured { return voltR.Featured })
 		if voltErr != nil || !voltOK {
@@ -782,11 +847,11 @@ var voltAttachmentDesc = &rt.Desc[Attachment]{
 	Table:   `"attachments"`,
 	Columns: `"id", "name", "body", "thumb", "digest"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "name", Wire: "name", Settable: true},
-		{Column: "body", Wire: "body", Settable: true},
-		{Column: "thumb", Wire: "thumb", Settable: true},
-		{Column: "digest", Wire: "digest", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "name", Wire: "name"},
+		{Column: "body", Wire: "body"},
+		{Column: "thumb", Wire: "thumb"},
+		{Column: "digest", Wire: "digest"},
 	},
 	Scan:   voltAttachmentScan,
 	Values: voltAttachmentValues,
@@ -806,6 +871,10 @@ func (r Attachment) Changeset() AttachmentChangeset {
 
 func (c AttachmentChangeset) From(r Attachment) AttachmentChangeset {
 	return AttachmentChangeset{c.Changeset.From(r)}
+}
+
+func (c AttachmentChangeset) IDSet(v int) AttachmentChangeset {
+	return AttachmentChangeset{rt.Set(c.Changeset, 0, func(voltR *Attachment) { voltR.ID = v })}
 }
 
 func (c AttachmentChangeset) NameSet(v string) AttachmentChangeset {
@@ -844,6 +913,9 @@ func voltAttachmentValues(voltR Attachment) []any {
 
 func voltAttachmentApply(voltData, voltVals Attachment, voltSet []bool) Attachment {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.Name = voltVals.Name
 	}
@@ -861,6 +933,12 @@ func voltAttachmentApply(voltData, voltVals Attachment, voltSet []bool) Attachme
 
 func voltAttachmentCast(c rt.Changeset[Attachment], p rt.Params[Attachment], i int) (rt.Changeset[Attachment], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *Attachment) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return AttachmentChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "name", "string", false, func(voltR *Attachment) string { return voltR.Name })
 		if voltErr != nil || !voltOK {
@@ -910,9 +988,9 @@ var voltBlobDesc = &rt.Desc[Blob]{
 	Table:   `"blobs"`,
 	Columns: `"hash", "tag", "size"`,
 	Fields: []rt.FieldDesc{
-		{Column: "hash", Wire: "hash", Key: true, Settable: true},
-		{Column: "tag", Wire: "tag", Settable: true},
-		{Column: "size", Wire: "size", Settable: true},
+		{Column: "hash", Wire: "hash", Key: true},
+		{Column: "tag", Wire: "tag"},
+		{Column: "size", Wire: "size"},
 	},
 	Scan:   voltBlobScan,
 	Values: voltBlobValues,
@@ -1021,11 +1099,11 @@ var voltDailyHitDesc = &rt.Desc[DailyHit]{
 	Table:   `"daily_hits"`,
 	Columns: `"day", "hits", "site", "label", "token"`,
 	Fields: []rt.FieldDesc{
-		{Column: "day", Wire: "day", Key: true, Settable: true},
-		{Column: "hits", Wire: "hits", Settable: true},
-		{Column: "site", Wire: "site", Key: true, Settable: true},
-		{Column: "label", Wire: "label", Settable: true},
-		{Column: "token", Wire: "token", Settable: true},
+		{Column: "day", Wire: "day", Key: true},
+		{Column: "hits", Wire: "hits"},
+		{Column: "site", Wire: "site", Key: true},
+		{Column: "label", Wire: "label"},
+		{Column: "token", Wire: "token"},
 	},
 	Scan:   voltDailyHitScan,
 	Values: voltDailyHitValues,
@@ -1160,9 +1238,9 @@ var voltInviteDesc = &rt.Desc[Invite]{
 	Table:   `"invites"`,
 	Columns: `"id", "user_email", "code"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "user_email", Wire: "user_email", Settable: true},
-		{Column: "code", Wire: "code", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "user_email", Wire: "user_email"},
+		{Column: "code", Wire: "code"},
 	},
 	Scan:   voltInviteScan,
 	Values: voltInviteValues,
@@ -1179,6 +1257,10 @@ func (r Invite) Changeset() InviteChangeset {
 }
 
 func (c InviteChangeset) From(r Invite) InviteChangeset { return InviteChangeset{c.Changeset.From(r)} }
+
+func (c InviteChangeset) IDSet(v int) InviteChangeset {
+	return InviteChangeset{rt.Set(c.Changeset, 0, func(voltR *Invite) { voltR.ID = v })}
+}
 
 func (c InviteChangeset) UserEmailSet(v string) InviteChangeset {
 	return InviteChangeset{rt.Set(c.Changeset, 1, func(voltR *Invite) { voltR.UserEmail = v })}
@@ -1206,6 +1288,9 @@ func voltInviteValues(voltR Invite) []any { return []any{voltR.ID, voltR.UserEma
 
 func voltInviteApply(voltData, voltVals Invite, voltSet []bool) Invite {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.UserEmail = voltVals.UserEmail
 	}
@@ -1217,6 +1302,12 @@ func voltInviteApply(voltData, voltVals Invite, voltSet []bool) Invite {
 
 func voltInviteCast(c rt.Changeset[Invite], p rt.Params[Invite], i int) (rt.Changeset[Invite], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *Invite) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return InviteChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "user_email", "string", false, func(voltR *Invite) string { return voltR.UserEmail })
 		if voltErr != nil || !voltOK {
@@ -1254,9 +1345,9 @@ var voltPostFlagDesc = &rt.Desc[PostFlag]{
 	Table:   `"post_flags"`,
 	Columns: `"id", "reviewed", "approved"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "reviewed", Wire: "reviewed", Settable: true},
-		{Column: "approved", Wire: "approved", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "reviewed", Wire: "reviewed"},
+		{Column: "approved", Wire: "approved"},
 	},
 	Scan:   voltPostFlagScan,
 	Values: voltPostFlagValues,
@@ -1274,6 +1365,10 @@ func (r PostFlag) Changeset() PostFlagChangeset {
 
 func (c PostFlagChangeset) From(r PostFlag) PostFlagChangeset {
 	return PostFlagChangeset{c.Changeset.From(r)}
+}
+
+func (c PostFlagChangeset) IDSet(v int) PostFlagChangeset {
+	return PostFlagChangeset{rt.Set(c.Changeset, 0, func(voltR *PostFlag) { voltR.ID = v })}
 }
 
 func (c PostFlagChangeset) ReviewedSet(v pay.YesNo) PostFlagChangeset {
@@ -1302,6 +1397,9 @@ func voltPostFlagValues(voltR PostFlag) []any { return []any{voltR.ID, voltR.Rev
 
 func voltPostFlagApply(voltData, voltVals PostFlag, voltSet []bool) PostFlag {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.Reviewed = voltVals.Reviewed
 	}
@@ -1313,6 +1411,12 @@ func voltPostFlagApply(voltData, voltVals PostFlag, voltSet []bool) PostFlag {
 
 func voltPostFlagCast(c rt.Changeset[PostFlag], p rt.Params[PostFlag], i int) (rt.Changeset[PostFlag], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *PostFlag) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return PostFlagChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "reviewed", "pay.YesNo", false, func(voltR *PostFlag) pay.YesNo { return voltR.Reviewed })
 		if voltErr != nil || !voltOK {
@@ -1325,6 +1429,101 @@ func voltPostFlagCast(c rt.Changeset[PostFlag], p rt.Params[PostFlag], i int) (r
 			return c, voltErr
 		}
 		return PostFlagChangeset{c}.ApprovedSet(voltV).Changeset, nil
+	}
+	return c, nil
+}
+
+type MetricEvent struct {
+	ID   int    `db:"id" json:"id"`
+	Name string `db:"name" json:"name"`
+}
+
+type MetricEventColumn = rt.ColumnOf[MetricEvent]
+
+type MetricEventParams = rt.Params[MetricEvent]
+
+var (
+	MetricEventID   = rt.Column[MetricEvent, int]{Name: "id"}
+	MetricEventName = rt.Column[MetricEvent, string]{Name: "name"}
+)
+
+var voltMetricEventDesc = &rt.Desc[MetricEvent]{
+	Model:   "MetricEvent",
+	Table:   `"metric_events"`,
+	Columns: `"id", "name"`,
+	Fields: []rt.FieldDesc{
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "name", Wire: "name"},
+	},
+	Scan:   voltMetricEventScan,
+	Values: voltMetricEventValues,
+	Apply:  voltMetricEventApply,
+	Cast:   voltMetricEventCast,
+}
+
+type MetricEventChangeset struct{ rt.Changeset[MetricEvent] }
+
+func MetricEventNew() MetricEventChangeset {
+	return MetricEventChangeset{rt.NewChangeset(voltMetricEventDesc)}
+}
+
+func (r MetricEvent) Changeset() MetricEventChangeset {
+	return MetricEventChangeset{rt.ChangesetOf(voltMetricEventDesc, r)}
+}
+
+func (c MetricEventChangeset) From(r MetricEvent) MetricEventChangeset {
+	return MetricEventChangeset{c.Changeset.From(r)}
+}
+
+func (c MetricEventChangeset) IDSet(v int) MetricEventChangeset {
+	return MetricEventChangeset{rt.Set(c.Changeset, 0, func(voltR *MetricEvent) { voltR.ID = v })}
+}
+
+func (c MetricEventChangeset) NameSet(v string) MetricEventChangeset {
+	return MetricEventChangeset{rt.Set(c.Changeset, 1, func(voltR *MetricEvent) { voltR.Name = v })}
+}
+
+func (c MetricEventChangeset) Cast(p MetricEventParams, allow ...MetricEventColumn) MetricEventChangeset {
+	return MetricEventChangeset{c.Changeset.Cast(p, allow...)}
+}
+
+func (c MetricEventChangeset) ErrorAdd(col MetricEventColumn, msg string) MetricEventChangeset {
+	return MetricEventChangeset{c.Changeset.ErrorAdd(col, msg)}
+}
+
+func voltMetricEventScan(r rt.Row) (MetricEvent, error) {
+	var voltV MetricEvent
+	voltErr := r.Scan(&voltV.ID, &voltV.Name)
+	return voltV, rt.Refused("MetricEvent", voltErr)
+}
+
+func voltMetricEventValues(voltR MetricEvent) []any { return []any{voltR.ID, voltR.Name} }
+
+func voltMetricEventApply(voltData, voltVals MetricEvent, voltSet []bool) MetricEvent {
+	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
+	if voltSet[1] {
+		voltR.Name = voltVals.Name
+	}
+	return voltR
+}
+
+func voltMetricEventCast(c rt.Changeset[MetricEvent], p rt.Params[MetricEvent], i int) (rt.Changeset[MetricEvent], error) {
+	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *MetricEvent) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return MetricEventChangeset{c}.IDSet(voltV).Changeset, nil
+	case 1:
+		voltV, voltOK, voltErr := rt.Field(p, "name", "string", false, func(voltR *MetricEvent) string { return voltR.Name })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return MetricEventChangeset{c}.NameSet(voltV).Changeset, nil
 	}
 	return c, nil
 }

@@ -75,3 +75,7 @@ func (c InviteChangeset) Validate() InviteChangeset {
 func (c PostFlagChangeset) Validate() PostFlagChangeset {
 	return PostFlagChangeset{c.WithFindings(nil)}
 }
+
+func (c MetricEventChangeset) Validate() MetricEventChangeset {
+	return MetricEventChangeset{c.WithFindings(nil)}
+}

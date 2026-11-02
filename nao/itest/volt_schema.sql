@@ -94,3 +94,8 @@ CREATE TABLE post_flags (
   reviewed TEXT NOT NULL,
   approved TEXT
 );
+
+CREATE TABLE metric_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL
+);

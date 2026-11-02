@@ -2,7 +2,7 @@
 // cannot know better: "menus" strips to "menu" only by English knowledge,
 // and "order_status" is a singular the plural-table convention never fits.
 table menus [model: "Menu"] {
-  id int [pk, increment]
+  id int [pk]
   title string
   price float64 [default: 0]
 }

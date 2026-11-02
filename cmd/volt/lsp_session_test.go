@@ -108,7 +108,7 @@ func TestLSPSession(t *testing.T) {
 		"app/schema.volt": `package app
 
 table posts {
-	id int [pk, increment]
+	id int [pk, autoincrement]
 	title string
 
 	validators {
@@ -123,7 +123,7 @@ scope / {
 
 migration 0001__posts {
 	create table posts {
-		id int [pk, increment]
+		id int [pk, autoincrement]
 		title string
 	}
 }
@@ -210,7 +210,7 @@ migration 0001__posts {
 	s.send("textDocument/didOpen", map[string]any{"textDocument": map[string]any{"uri": uri, "languageId": "volt", "version": 1, "text": text}}, false)
 	s.notification("open: a clean file", "textDocument/publishDiagnostics")
 
-	broken := strings.Replace(text, "[pk, increment]", "[pk, increment", 1)
+	broken := strings.Replace(text, "[pk, autoincrement]", "[pk, autoincrement", 1)
 	change("edit 1: a settings list left open", 2, broken)
 	typo := strings.Replace(text, "get / Home.Index", "gett / Home.Index", 1) + "\ntable tags {\n\tid int [pk]\n}\n"
 	change("edit 2: a verb misspelled, a table added", 3, typo)

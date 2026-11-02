@@ -11,7 +11,7 @@ table_partial timestamps {
 }
 
 table users [note: "Registered users"] {
-  id int [pk, increment]
+  id int [pk]
   username string [unique]
   ~timestamps
 }

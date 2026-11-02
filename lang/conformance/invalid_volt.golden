@@ -404,7 +404,7 @@ db/i272_group_note.volt:8:15: error: syntax: expected '{' or '=' after the group
 db/i277_migration_no_transaction_two_words.volt:9:26: error: syntax: expected ',' or ']' in settings list, found identifier "transaction": settings are separated by commas, and a setting name or value is one identifier (§settings-lists)
 
 ## i279_migration_shape_missing_comma.volt
-db/i279_migration_shape_missing_comma.volt:11:16: error: syntax: expected ',' or ']' in settings list, found identifier "increment": settings are separated by commas, and a setting name or value is one identifier (§settings-lists)
+db/i279_migration_shape_missing_comma.volt:11:16: error: syntax: expected ',' or ']' in settings list, found identifier "autoincrement": settings are separated by commas, and a setting name or value is one identifier (§settings-lists)
 
 ## i27_import_no_parens.volt
 app/i27_import_no_parens.volt:4:1: error: syntax: expected '(' after import (§imports); Volt uses Go-style import blocks
@@ -892,6 +892,9 @@ db/i447_relation_case_ambiguous.volt:21:47: error: spec/selects-over-groups: rel
 
 ## i44_singular_collision.volt
 app/i44_singular_collision.volt:11:2: error: spec/resources: resources "posty": the collection and member reverse-URL helpers are both "Posty", because singularizing "posty" does not change it (§table-resolution); set the singular explicitly, e.g. [singular: <name>]
+
+## i450_migration_add_autoincrement.volt
+db/i450_migration_add_autoincrement.volt:20:24: error: spec/migrations: add "seq" to table "users": autoincrement cannot be added to an existing table; use rebuild table (§migrations)
 
 ## i45_model_setting_removed.volt
 app/i45_model_setting_removed.volt:10:19: error: spec/resources: model: is not a setting; name the table in the declaration itself — `resources <table>` (§declaration)

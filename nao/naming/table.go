@@ -133,12 +133,15 @@ type Field struct {
 	Qualifier string
 	Relation  string
 
-	Nullable  bool
-	Declared  bool
-	Kinded    bool
-	Required  bool
-	Increment bool
-	Unique    bool
+	Nullable bool
+	Declared bool
+	Kinded   bool
+	Required bool
+	// RowidAlias says the field is the table's rowid alias key (spec
+	// §columns): From leaves it unmarked and a generated create does not
+	// cast it, so the database assigns it.
+	RowidAlias bool
+	Unique     bool
 }
 
 // SQL is the column as a statement names it: qualified when the
@@ -207,12 +210,13 @@ func (t *Table) IsPK(f *Field) bool {
 	return false
 }
 
-// Settable lists the fields a changeset sets: every one but the
-// auto-increment key (spec §changesets).
-func (t *Table) Settable() []*Field {
+// CreateCast lists the fields a generated create casts from a request
+// body: every one but the rowid alias key, which the database assigns
+// (spec §changesets, §query-routes).
+func (t *Table) CreateCast() []*Field {
 	var out []*Field
 	for _, f := range t.Fields {
-		if f.Increment {
+		if f.RowidAlias {
 			continue
 		}
 		out = append(out, f)
@@ -337,6 +341,11 @@ func tableBuild(ti *check.TableInfo) (*Table, map[string]bool, error) {
 	for _, f := range tm.Fields {
 		f.Unique = ti.ColumnsUnique([]string{f.ColName})
 	}
+	if alias := ti.RowidAlias(); alias != nil {
+		if f := tm.Field(alias.Col.Name.Name()); f != nil {
+			f.RowidAlias = true
+		}
+	}
 	tm.crud = crudMethodsBuild(tm)
 	tm.sigs = fieldSigsBuild(tm)
 	tm.names = modelNamesBuild(tm)
@@ -367,21 +376,20 @@ func fieldBuild(imports map[string]bool, cd *check.ColumnDef, goFields map[strin
 
 	tag := fieldTag(col)
 	return &Field{
-		Col:       col,
-		ColName:   colName,
-		Wire:      wireName(colName, tag),
-		GoField:   goField,
-		Tag:       tag,
-		GoType:    goType,
-		BaseType:  cd.Type.Go,
-		Storage:   cd.Type.Storage,
-		Imp:       imp,
-		Arg:       paramName(goField),
-		Nullable:  cd.Nullable,
-		Declared:  cd.Type.Decl != nil,
-		Kinded:    cd.Type.Kinded(),
-		Required:  col.Settings.Get("required") != nil,
-		Increment: col.Settings.Get("increment") != nil,
+		Col:      col,
+		ColName:  colName,
+		Wire:     wireName(colName, tag),
+		GoField:  goField,
+		Tag:      tag,
+		GoType:   goType,
+		BaseType: cd.Type.Go,
+		Storage:  cd.Type.Storage,
+		Imp:      imp,
+		Arg:      paramName(goField),
+		Nullable: cd.Nullable,
+		Declared: cd.Type.Decl != nil,
+		Kinded:   cd.Type.Kinded(),
+		Required: col.Settings.Get("required") != nil,
 	}, nil
 }
 

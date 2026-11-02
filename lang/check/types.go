@@ -312,13 +312,13 @@ func (c *checker) recordsCoverageCheck(ti *TableInfo, d *ast.Records) {
 	for _, id := range d.Columns {
 		listed[id.Name()] = true
 	}
+	alias := ti.RowidAlias()
 	for _, cd := range ti.Columns {
 		col := cd.Col
-		rowid := col.Settings.Get("pk") != nil && col.Settings.Get("increment") != nil
-		if listed[col.Name.Name()] || cd.Nullable || rowid || col.Settings.Get("default") != nil {
+		if listed[col.Name.Name()] || cd.Nullable || cd == alias || col.Settings.Get("default") != nil {
 			continue
 		}
-		c.errorf(d.Pos(), "records-sample-data", "records of table %q do not list column %q, which is NOT NULL and has no default: only increment leaves a column's value to the database, so every row gives it; list the column (§records-sample-data)", ti.Key, col.Name.Name())
+		c.errorf(d.Pos(), "records-sample-data", "records of table %q do not list column %q, which is NOT NULL and has no default: only the rowid alias leaves a column's value to the database, so every row gives it; list the column (§records-sample-data)", ti.Key, col.Name.Name())
 	}
 }
 

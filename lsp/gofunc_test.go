@@ -10,7 +10,7 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-const goRefSchema = "package db\n\ntable users {\n\tid int [pk, increment]\n\temail string\n\n\tvalidators {\n\t\tEmailValid(email)\n\t\tMissing(email)\n\t}\n}\n"
+const goRefSchema = "package db\n\ntable users {\n\tid int [pk]\n\temail string\n\n\tvalidators {\n\t\tEmailValid(email)\n\t\tMissing(email)\n\t}\n}\n"
 const goRefRoutes = "package app\n\npipeline api {\n\tuse volt.RequestID\n\tuse Auth\n}\n"
 
 func goRefProject(t *testing.T) string {
@@ -131,7 +131,7 @@ func TestGoRefRenameRewritesVoltSpellings(t *testing.T) {
 }
 
 func TestColumnRenameFollowsIntoChecks(t *testing.T) {
-	const text = "package db\n\ntable users {\n\tid int [pk, increment]\n\temail string\n\n\tvalidators {\n\t\tEmailValid(email)\n\t}\n}\n"
+	const text = "package db\n\ntable users {\n\tid int [pk]\n\temail string\n\n\tvalidators {\n\t\tEmailValid(email)\n\t}\n}\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":         "module rn\n",
 		"db/schema.volt": text,
@@ -152,7 +152,7 @@ func TestColumnRenameFollowsIntoChecks(t *testing.T) {
 }
 
 func TestColumnRenameFollowsIntoSingleTableSelect(t *testing.T) {
-	const text = "package db\n\ntable page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n}\n\n" +
+	const text = "package db\n\ntable page_views {\n\tid int [pk]\n\tsite string\n\tday int\n}\n\n" +
 		"select rows (site, day) for page_views where site = :s [order: (day desc, site asc)]\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":         "module rn\n",
@@ -252,7 +252,7 @@ func TestGoFileChangeNoticedForBareTypesAndErrorHandlers(t *testing.T) {
 		{
 			name:    "bare Type",
 			file:    "db/schema.volt",
-			text:    "package db\n\ntype Slug string\n\ntable posts {\n\tid   int  [pk, increment]\n\tslug Slug\n}\n",
+			text:    "package db\n\ntype Slug string\n\ntable posts {\n\tid   int  [pk]\n\tslug Slug\n}\n",
 			goFile:  "db/types.go",
 			goSrc:   "package db\n\n// Slug is a URL segment (§types).\ntype Slug string\n",
 			missing: "type Slug is declared in no Go file",

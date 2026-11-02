@@ -4,7 +4,7 @@ package db
 type Money int
 
 table orders {
-  id    int   [pk, increment]
+  id    int   [pk]
   price Money
   tip   Money [null]
 }

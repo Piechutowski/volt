@@ -32,10 +32,10 @@ var voltCommentDesc = &rt.Desc[Comment]{
 	Table:   `"comments"`,
 	Columns: `"id", "commentable_type", "commentable_id", "body"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "commentable_type", Wire: "commentable_type", Settable: true},
-		{Column: "commentable_id", Wire: "commentable_id", Settable: true},
-		{Column: "body", Wire: "body", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "commentable_type", Wire: "commentable_type"},
+		{Column: "commentable_id", Wire: "commentable_id"},
+		{Column: "body", Wire: "body"},
 	},
 	Scan:   voltCommentScan,
 	Values: voltCommentValues,
@@ -53,6 +53,10 @@ func (r Comment) Changeset() CommentChangeset {
 
 func (c CommentChangeset) From(r Comment) CommentChangeset {
 	return CommentChangeset{c.Changeset.From(r)}
+}
+
+func (c CommentChangeset) IDSet(v int) CommentChangeset {
+	return CommentChangeset{rt.Set(c.Changeset, 0, func(voltR *Comment) { voltR.ID = v })}
 }
 
 func (c CommentChangeset) CommentableTypeSet(v CommentableType) CommentChangeset {
@@ -87,6 +91,9 @@ func voltCommentValues(voltR Comment) []any {
 
 func voltCommentApply(voltData, voltVals Comment, voltSet []bool) Comment {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.CommentableType = voltVals.CommentableType
 	}
@@ -101,6 +108,12 @@ func voltCommentApply(voltData, voltVals Comment, voltSet []bool) Comment {
 
 func voltCommentCast(c rt.Changeset[Comment], p rt.Params[Comment], i int) (rt.Changeset[Comment], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *Comment) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return CommentChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "commentable_type", "CommentableType", false, func(voltR *Comment) CommentableType { return voltR.CommentableType })
 		if voltErr != nil || !voltOK {

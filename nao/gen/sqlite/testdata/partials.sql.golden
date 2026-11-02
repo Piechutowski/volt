@@ -3,7 +3,7 @@
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE invoices (
-  id INTEGER PRIMARY KEY NOT NULL,
+  id INTEGER PRIMARY KEY,
   total REAL NOT NULL,
   -- Set on insert
   created_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP),

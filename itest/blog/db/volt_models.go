@@ -28,9 +28,9 @@ var voltUserDesc = &rt.Desc[User]{
 	Table:   `"users"`,
 	Columns: `"id", "email", "created_at"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "email", Wire: "email", Settable: true},
-		{Column: "created_at", Wire: "created_at", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "email", Wire: "email"},
+		{Column: "created_at", Wire: "created_at"},
 	},
 	Scan:   voltUserScan,
 	Values: voltUserValues,
@@ -45,6 +45,10 @@ func UserNew() UserChangeset { return UserChangeset{rt.NewChangeset(voltUserDesc
 func (r User) Changeset() UserChangeset { return UserChangeset{rt.ChangesetOf(voltUserDesc, r)} }
 
 func (c UserChangeset) From(r User) UserChangeset { return UserChangeset{c.Changeset.From(r)} }
+
+func (c UserChangeset) IDSet(v int) UserChangeset {
+	return UserChangeset{rt.Set(c.Changeset, 0, func(voltR *User) { voltR.ID = v })}
+}
 
 func (c UserChangeset) EmailSet(v string) UserChangeset {
 	return UserChangeset{rt.Set(c.Changeset, 1, func(voltR *User) { voltR.Email = v })}
@@ -72,6 +76,9 @@ func voltUserValues(voltR User) []any { return []any{voltR.ID, voltR.Email, volt
 
 func voltUserApply(voltData, voltVals User, voltSet []bool) User {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.Email = voltVals.Email
 	}
@@ -83,6 +90,12 @@ func voltUserApply(voltData, voltVals User, voltSet []bool) User {
 
 func voltUserCast(c rt.Changeset[User], p rt.Params[User], i int) (rt.Changeset[User], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *User) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return UserChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "email", "string", false, func(voltR *User) string { return voltR.Email })
 		if voltErr != nil || !voltOK {
@@ -118,8 +131,8 @@ var voltTagDesc = &rt.Desc[Tag]{
 	Table:   `"tags"`,
 	Columns: `"slug", "name"`,
 	Fields: []rt.FieldDesc{
-		{Column: "slug", Wire: "slug", Key: true, Settable: true},
-		{Column: "name", Wire: "name", Settable: true},
+		{Column: "slug", Wire: "slug", Key: true},
+		{Column: "name", Wire: "name"},
 	},
 	Scan:   voltTagScan,
 	Values: voltTagValues,
@@ -209,9 +222,9 @@ var voltMsRevenueDesc = &rt.Desc[MsRevenue]{
 	Table:   `"ms_revenue"`,
 	Columns: `"id", "org", "year"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "org", Wire: "org", Settable: true},
-		{Column: "year", Wire: "year", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "org", Wire: "org"},
+		{Column: "year", Wire: "year"},
 	},
 	Scan:   voltMsRevenueScan,
 	Values: voltMsRevenueValues,
@@ -229,6 +242,10 @@ func (r MsRevenue) Changeset() MsRevenueChangeset {
 
 func (c MsRevenueChangeset) From(r MsRevenue) MsRevenueChangeset {
 	return MsRevenueChangeset{c.Changeset.From(r)}
+}
+
+func (c MsRevenueChangeset) IDSet(v int) MsRevenueChangeset {
+	return MsRevenueChangeset{rt.Set(c.Changeset, 0, func(voltR *MsRevenue) { voltR.ID = v })}
 }
 
 func (c MsRevenueChangeset) OrgSet(v string) MsRevenueChangeset {
@@ -257,6 +274,9 @@ func voltMsRevenueValues(voltR MsRevenue) []any { return []any{voltR.ID, voltR.O
 
 func voltMsRevenueApply(voltData, voltVals MsRevenue, voltSet []bool) MsRevenue {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.Org = voltVals.Org
 	}
@@ -268,6 +288,12 @@ func voltMsRevenueApply(voltData, voltVals MsRevenue, voltSet []bool) MsRevenue 
 
 func voltMsRevenueCast(c rt.Changeset[MsRevenue], p rt.Params[MsRevenue], i int) (rt.Changeset[MsRevenue], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *MsRevenue) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return MsRevenueChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "org", "string", false, func(voltR *MsRevenue) string { return voltR.Org })
 		if voltErr != nil || !voltOK {
@@ -305,9 +331,9 @@ var voltMsUsageDesc = &rt.Desc[MsUsage]{
 	Table:   `"ms_usage"`,
 	Columns: `"id", "org", "year"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "org", Wire: "org", Settable: true},
-		{Column: "year", Wire: "year", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "org", Wire: "org"},
+		{Column: "year", Wire: "year"},
 	},
 	Scan:   voltMsUsageScan,
 	Values: voltMsUsageValues,
@@ -325,6 +351,10 @@ func (r MsUsage) Changeset() MsUsageChangeset {
 
 func (c MsUsageChangeset) From(r MsUsage) MsUsageChangeset {
 	return MsUsageChangeset{c.Changeset.From(r)}
+}
+
+func (c MsUsageChangeset) IDSet(v int) MsUsageChangeset {
+	return MsUsageChangeset{rt.Set(c.Changeset, 0, func(voltR *MsUsage) { voltR.ID = v })}
 }
 
 func (c MsUsageChangeset) OrgSet(v string) MsUsageChangeset {
@@ -353,6 +383,9 @@ func voltMsUsageValues(voltR MsUsage) []any { return []any{voltR.ID, voltR.Org, 
 
 func voltMsUsageApply(voltData, voltVals MsUsage, voltSet []bool) MsUsage {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.Org = voltVals.Org
 	}
@@ -364,6 +397,12 @@ func voltMsUsageApply(voltData, voltVals MsUsage, voltSet []bool) MsUsage {
 
 func voltMsUsageCast(c rt.Changeset[MsUsage], p rt.Params[MsUsage], i int) (rt.Changeset[MsUsage], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *MsUsage) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return MsUsageChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "org", "string", false, func(voltR *MsUsage) string { return voltR.Org })
 		if voltErr != nil || !voltOK {

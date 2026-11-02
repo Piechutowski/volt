@@ -1,7 +1,7 @@
 package db
 
 table users {
-	id         int       [pk, increment]
+	id         int       [pk]
 	email      string    [required, unique]
 	created_at time.Time [default: `CURRENT_TIMESTAMP`]
 
@@ -20,13 +20,13 @@ table tags {
 }
 
 table ms_revenue {
-	id   int [pk, increment]
+	id   int [pk]
 	org  string
 	year int
 }
 
 table ms_usage {
-	id   int [pk, increment]
+	id   int [pk]
 	org  string
 	year int
 }

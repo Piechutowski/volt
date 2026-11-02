@@ -9,8 +9,8 @@ import (
 )
 
 const projSchema = "package db\n\n" +
-	"table page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n\thits int [default: 0]\n}\n\n" +
-	"table link_clicks {\n\tid int [pk, increment]\n\tsite string\n\tday int\n\ttarget string [default: \"\"]\n}\n\n" +
+	"table page_views {\n\tid int [pk]\n\tsite string\n\tday int\n\thits int [default: 0]\n}\n\n" +
+	"table link_clicks {\n\tid int [pk]\n\tsite string\n\tday int\n\ttarget string [default: \"\"]\n}\n\n" +
 	"group metrics {\n\tpage_views\n\tlink_clicks\n}\n\n" +
 	"select summary (site, day) for metrics where day >= :from\n" +
 	"select public (* \\ site) for link_clicks\n" +
@@ -114,7 +114,7 @@ func TestSelectHoverBindsInPlaceholderOrder(t *testing.T) {
 }
 
 const unresolvedSchema = "package db\n\n" +
-	"table authors {\n\tid int [pk, increment]\n\temail string\n\trank int32\n}\n\n" +
+	"table authors {\n\tid int [pk]\n\temail string\n\trank int32\n}\n\n" +
 	"select ranked for authors where rank >= :min and email = :e [order: (rank desc)]\n" +
 	"select shown (rank, email) for authors\n" +
 	"select byemail for authors where email = :e\n"
@@ -171,7 +171,7 @@ func TestSelectHoverSpellsUnknownFieldType(t *testing.T) {
 
 func TestSelectHoverNullableUnknownFieldType(t *testing.T) {
 	schema := "package db\n\ntype Score int32\n\n" +
-		"table authors {\n\tid int [pk, increment]\n\temail string\n\trank int32 [null]\n\tscore Score [null]\n}\n\n" +
+		"table authors {\n\tid int [pk]\n\temail string\n\trank int32 [null]\n\tscore Score [null]\n}\n\n" +
 		"select shown (rank, score, email) for authors\n" +
 		"select byemail for authors where email = :e\n"
 	root := voltProject(t, map[string]string{
@@ -198,7 +198,7 @@ func TestSelectHoverNullableUnknownFieldType(t *testing.T) {
 
 func TestSelectHoverBytesFieldTypes(t *testing.T) {
 	schema := "package db\n\n" +
-		"table attachments {\n\tid int [pk, increment]\n\tname string\n\tbody []byte\n\tthumb []byte [null]\n}\n\n" +
+		"table attachments {\n\tid int [pk]\n\tname string\n\tbody []byte\n\tthumb []byte [null]\n}\n\n" +
 		"select named for attachments where name = :name\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":         "module proj\n",

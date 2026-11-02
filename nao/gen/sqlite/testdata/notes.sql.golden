@@ -20,7 +20,7 @@ CREATE TABLE posts (
 );
 
 CREATE TABLE tags (
-  id INTEGER PRIMARY KEY NOT NULL,
+  id INTEGER PRIMARY KEY,
   name TEXT NOT NULL
 );
 CREATE UNIQUE INDEX idx_tags_name ON tags (name);

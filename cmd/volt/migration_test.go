@@ -123,7 +123,7 @@ func TestMigrationCheck(t *testing.T) {
 		t.Errorf("gen over a migration SQLite refuses: exit %d (%v), want 1 with SQLite's message", exitCode(err), err)
 	}
 	viewed := fixtureCopy(t)
-	rebuild := "package blog\n\nmigration 0003__view [irreversible] {\n  exec `CREATE VIEW post_titles AS SELECT title FROM posts`\n  rebuild table posts {\n    id    int    [pk, increment]\n    title string\n    body  string [null]\n    views int    [index, default: 0]\n  }\n}\n"
+	rebuild := "package blog\n\nmigration 0003__view [irreversible] {\n  exec `CREATE VIEW post_titles AS SELECT title FROM posts`\n  rebuild table posts {\n    id    int    [pk]\n    title string\n    body  string [null]\n    views int    [index, default: 0]\n  }\n}\n"
 	if err := os.WriteFile(filepath.Join(viewed, "0003__view.volt"), []byte(rebuild), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestMigrationExitCodes(t *testing.T) {
 	}
 	files := map[string]string{
 		"go.mod":      "module unlowerable\n\ngo 1.27\n",
-		"schema.volt": "package db\n\ntable posts {\n  id int [pk, increment]\n}\n\nmigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null, unique]\n\n    indexes {\n      n [where: `n > 0`]\n    }\n  }\n}\n",
+		"schema.volt": "package db\n\ntable posts {\n  id int [pk]\n}\n\nmigration 0001__init {\n  create table posts {\n    id int [pk]\n    n  int [null, unique]\n\n    indexes {\n      n [where: `n > 0`]\n    }\n  }\n}\n",
 	}
 	for name, src := range files {
 		if err := os.WriteFile(filepath.Join(unlowerable, name), []byte(src), 0o644); err != nil {
@@ -272,7 +272,7 @@ func TestMigrationNew(t *testing.T) {
 	}
 	files := map[string]string{
 		"go.mod":      "module newfixture\n\ngo 1.27\n",
-		"schema.volt": "package db\n\ntable posts {\n  id int [pk, increment]\n}\n",
+		"schema.volt": "package db\n\ntable posts {\n  id int [pk]\n}\n",
 	}
 	for name, src := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o644); err != nil {
@@ -337,7 +337,7 @@ func TestMigrationNew(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(full, "go.mod"), []byte("module full\n\ngo 1.27\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(full, "schema.volt"), []byte("package db\n\ntable posts {\n  id int [pk, increment]\n}\n\nmigration 9999__last {\n}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(full, "schema.volt"), []byte("package db\n\ntable posts {\n  id int [pk]\n}\n\nmigration 9999__last {\n}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, err = voltRun(t, "migration", "new", "overflow", full)

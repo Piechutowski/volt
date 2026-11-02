@@ -74,29 +74,29 @@ var voltPostDesc = &rt.Desc[Post]{
 	Table:   `"posts"`,
 	Columns: `"id", "slug", "words", "score", "cover", "state", "reviewed", "audience", "tier", "price", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "slug", Wire: "slug", Settable: true},
-		{Column: "words", Wire: "words", Settable: true},
-		{Column: "score", Wire: "score", Settable: true},
-		{Column: "cover", Wire: "cover", Settable: true},
-		{Column: "state", Wire: "state", Settable: true},
-		{Column: "reviewed", Wire: "reviewed", Settable: true},
-		{Column: "audience", Wire: "audience", Settable: true},
-		{Column: "tier", Wire: "tier", Settable: true},
-		{Column: "price", Wire: "price", Settable: true},
-		{Column: "rank", Wire: "rank", Settable: true},
-		{Column: "draft", Wire: "draft", Settable: true},
-		{Column: "caption", Wire: "caption", Settable: true},
-		{Column: "ratio", Wire: "ratio", Settable: true},
-		{Column: "weight", Wire: "weight", Settable: true},
-		{Column: "scale", Wire: "scale", Settable: true},
-		{Column: "kilo", Wire: "kilo", Settable: true},
-		{Column: "shift", Wire: "shift", Settable: true},
-		{Column: "hits", Wire: "hits", Settable: true},
-		{Column: "views", Wire: "views", Settable: true},
-		{Column: "label", Wire: "label", Settable: true},
-		{Column: "flag", Wire: "flag", Settable: true},
-		{Column: "secret", Wire: "secret", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "slug", Wire: "slug"},
+		{Column: "words", Wire: "words"},
+		{Column: "score", Wire: "score"},
+		{Column: "cover", Wire: "cover"},
+		{Column: "state", Wire: "state"},
+		{Column: "reviewed", Wire: "reviewed"},
+		{Column: "audience", Wire: "audience"},
+		{Column: "tier", Wire: "tier"},
+		{Column: "price", Wire: "price"},
+		{Column: "rank", Wire: "rank"},
+		{Column: "draft", Wire: "draft"},
+		{Column: "caption", Wire: "caption"},
+		{Column: "ratio", Wire: "ratio"},
+		{Column: "weight", Wire: "weight"},
+		{Column: "scale", Wire: "scale"},
+		{Column: "kilo", Wire: "kilo"},
+		{Column: "shift", Wire: "shift"},
+		{Column: "hits", Wire: "hits"},
+		{Column: "views", Wire: "views"},
+		{Column: "label", Wire: "label"},
+		{Column: "flag", Wire: "flag"},
+		{Column: "secret", Wire: "secret"},
 	},
 	Defaults: Post{State: "public", Reviewed: rt.Some(Visibility("unlisted")), Tier: rt.Some(Tier(3)), Rank: -1, Draft: true, Caption: rt.Some("none"), Ratio: 0.5, Weight: rt.Some(1.0), Scale: rt.Some(2.0), Kilo: rt.Some(1000.0), Shift: rt.Some(-3.0), Hits: rt.Some(0), Label: rt.Some(""), Flag: rt.Some(false)},
 	Scan:     voltPostScan,
@@ -112,6 +112,10 @@ func PostNew() PostChangeset { return PostChangeset{rt.NewChangeset(voltPostDesc
 func (r Post) Changeset() PostChangeset { return PostChangeset{rt.ChangesetOf(voltPostDesc, r)} }
 
 func (c PostChangeset) From(r Post) PostChangeset { return PostChangeset{c.Changeset.From(r)} }
+
+func (c PostChangeset) IDSet(v int) PostChangeset {
+	return PostChangeset{rt.Set(c.Changeset, 0, func(voltR *Post) { voltR.ID = v })}
+}
 
 func (c PostChangeset) SlugSet(v string) PostChangeset {
 	return PostChangeset{rt.Set(c.Changeset, 1, func(voltR *Post) { voltR.Slug = v })}
@@ -221,6 +225,9 @@ func voltPostValues(voltR Post) []any {
 
 func voltPostApply(voltData, voltVals Post, voltSet []bool) Post {
 	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
 	if voltSet[1] {
 		voltR.Slug = voltVals.Slug
 	}
@@ -292,6 +299,12 @@ func voltPostApply(voltData, voltVals Post, voltSet []bool) Post {
 
 func voltPostCast(c rt.Changeset[Post], p rt.Params[Post], i int) (rt.Changeset[Post], error) {
 	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *Post) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return PostChangeset{c}.IDSet(voltV).Changeset, nil
 	case 1:
 		voltV, voltOK, voltErr := rt.Field(p, "slug", "string", false, func(voltR *Post) string { return voltR.Slug })
 		if voltErr != nil || !voltOK {
@@ -447,8 +460,8 @@ var voltPostTagDesc = &rt.Desc[PostTag]{
 	Table:   `"post_tags"`,
 	Columns: `"post_id", "tag"`,
 	Fields: []rt.FieldDesc{
-		{Column: "post_id", Wire: "post_id", Key: true, Settable: true},
-		{Column: "tag", Wire: "tag", Key: true, Settable: true},
+		{Column: "post_id", Wire: "post_id", Key: true},
+		{Column: "tag", Wire: "tag", Key: true},
 	},
 	Scan:   voltPostTagScan,
 	Values: voltPostTagValues,
@@ -538,7 +551,7 @@ var voltPingDesc = &rt.Desc[Ping]{
 	Table:   `"pings"`,
 	Columns: `"id"`,
 	Fields: []rt.FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
 	},
 	Scan:   voltPingScan,
 	Values: voltPingValues,
@@ -553,6 +566,10 @@ func PingNew() PingChangeset { return PingChangeset{rt.NewChangeset(voltPingDesc
 func (r Ping) Changeset() PingChangeset { return PingChangeset{rt.ChangesetOf(voltPingDesc, r)} }
 
 func (c PingChangeset) From(r Ping) PingChangeset { return PingChangeset{c.Changeset.From(r)} }
+
+func (c PingChangeset) IDSet(v int) PingChangeset {
+	return PingChangeset{rt.Set(c.Changeset, 0, func(voltR *Ping) { voltR.ID = v })}
+}
 
 func (c PingChangeset) Cast(p PingParams, allow ...PingColumn) PingChangeset {
 	return PingChangeset{c.Changeset.Cast(p, allow...)}
@@ -571,9 +588,21 @@ func voltPingScan(r rt.Row) (Ping, error) {
 func voltPingValues(voltR Ping) []any { return []any{voltR.ID} }
 
 func voltPingApply(voltData, voltVals Ping, voltSet []bool) Ping {
-	return voltData
+	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
+	return voltR
 }
 
 func voltPingCast(c rt.Changeset[Ping], p rt.Params[Ping], i int) (rt.Changeset[Ping], error) {
+	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *Ping) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return PingChangeset{c}.IDSet(voltV).Changeset, nil
+	}
 	return c, nil
 }

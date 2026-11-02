@@ -5,7 +5,7 @@
 package metrics
 
 table page_views {
-  id    int [pk, increment]
+  id    int [pk]
   site  string
   day   int
   hits  int [default: 0]
@@ -14,7 +14,7 @@ table page_views {
 }
 
 table link_clicks {
-  id     int [pk, increment]
+  id     int [pk]
   site   string
   day    int
   target string [default: ""]
@@ -40,12 +40,12 @@ select all     for link_clicks
 // relation joins inner, a nullable one left with its columns rt.Null, and
 // a reverse relation, named outright where two would collide, joins left.
 table hosts {
-  id   int [pk, increment]
+  id   int [pk]
   name string
 }
 
 table visits {
-  id       int [pk, increment]
+  id       int [pk]
   host_id  int [ref: hosts.id]
   owner_id int [null]
   day      int
@@ -79,7 +79,7 @@ table merchants {
 }
 
 table merchant_periods {
-  id           int    [pk, increment]
+  id           int    [pk]
   merchant_id  int
   country_code string
 }

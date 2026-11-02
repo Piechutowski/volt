@@ -2,7 +2,7 @@
 package db
 
 table posts {
-  id         int       [pk, increment]
+  id         int       [pk]
   title      string
   created_at time.Time [default: `CURRENT_TIMESTAMP`]
   seen_at    time.Time [null, default: `CURRENT_TIMESTAMP`]
@@ -10,7 +10,7 @@ table posts {
 
 migration 0001__init {
   create table posts {
-    id    int    [pk, increment]
+    id    int    [pk]
     title string
   }
 }

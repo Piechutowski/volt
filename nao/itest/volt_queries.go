@@ -349,3 +349,37 @@ const voltPostFlagDeleteSQL = `DELETE FROM "post_flags" WHERE "id" = ?`
 func PostFlagDelete(id int) rt.Exec {
 	return rt.Exec{SQL: voltPostFlagDeleteSQL, Args: []any{id}, Model: "PostFlag", One: true}
 }
+
+const voltMetricEventGetSQL = `SELECT "id", "name" FROM "metric_events" WHERE "id" = ?`
+
+func MetricEventGet(id int) rt.Lookup[MetricEvent] {
+	return rt.Lookup[MetricEvent]{SQL: voltMetricEventGetSQL, Args: []any{id}, Scan: voltMetricEventScan}
+}
+
+func MetricEventGetMany(ids []int) rt.Query[MetricEvent] {
+	if len(ids) == 0 {
+		return rt.Query[MetricEvent]{}
+	}
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltMetricEventTableSQL, voltMetricEventColumnsSQL, []rt.Opt[MetricEvent]{MetricEventID.In(ids...)})
+	return rt.Query[MetricEvent]{SQL: voltSQL, Args: voltArgs, Scan: voltMetricEventScan, Err: voltErr}
+}
+
+const voltMetricEventListSQL = `SELECT "id", "name" FROM "metric_events"`
+
+func MetricEventList() rt.Query[MetricEvent] {
+	return rt.Query[MetricEvent]{SQL: voltMetricEventListSQL, Scan: voltMetricEventScan}
+}
+
+func MetricEventCreate(c MetricEventChangeset) rt.Write[MetricEvent] {
+	return rt.Insert(c.Validate().Changeset)
+}
+
+func MetricEventUpdate(c MetricEventChangeset) rt.Write[MetricEvent] {
+	return rt.Update(c.Validate().Changeset)
+}
+
+const voltMetricEventDeleteSQL = `DELETE FROM "metric_events" WHERE "id" = ?`
+
+func MetricEventDelete(id int) rt.Exec {
+	return rt.Exec{SQL: voltMetricEventDeleteSQL, Args: []any{id}, Model: "MetricEvent", One: true}
+}

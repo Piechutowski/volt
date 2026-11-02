@@ -145,7 +145,7 @@ func TestVoltHoverTableKeyNotRoutable(t *testing.T) {
 // named, and a composite key split between the body and a partial is
 // not named as the body's one pk column.
 func TestVoltHoverTableKeyFromPartials(t *testing.T) {
-	schema := "package db\n\ntable_partial daily {\n\tday int [pk]\n}\n\ntable site_days {\n\tsite string [pk]\n\t~daily\n\tviews int\n}\n\ntable_partial base {\n\tid int [pk, increment]\n}\n\ntable posts {\n\t~base\n\ttitle string\n}\n"
+	schema := "package db\n\ntable_partial daily {\n\tday int [pk]\n}\n\ntable site_days {\n\tsite string [pk]\n\t~daily\n\tviews int\n}\n\ntable_partial base {\n\tid int [pk]\n}\n\ntable posts {\n\t~base\n\ttitle string\n}\n"
 	routes := "package app\n\nimport (\n\tdb\n)\n\nscope / {\n\tresources db.site_days\n\tresources db.posts\n}\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":          "module nav\n",
@@ -174,7 +174,7 @@ func TestVoltHoverTableKeyFromPartials(t *testing.T) {
 // has no checked model: partials injected in source order, a column of
 // the body overriding a partial's, as §tablepartial resolves them.
 func TestTableKeyUnchecked(t *testing.T) {
-	schema := "package db\n\ntable_partial daily {\n\tday int [pk]\n\tsite string\n}\n\ntable site_days {\n\tsite string [pk]\n\t~daily\n\tviews int\n}\n\ntable_partial base {\n\tid int [pk, increment]\n}\n\ntable posts {\n\t~base\n\ttitle string\n}\n"
+	schema := "package db\n\ntable_partial daily {\n\tday int [pk]\n\tsite string\n}\n\ntable site_days {\n\tsite string [pk]\n\t~daily\n\tviews int\n}\n\ntable_partial base {\n\tid int [pk]\n}\n\ntable posts {\n\t~base\n\ttitle string\n}\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":         "module nav\n",
 		"db/schema.volt": schema,

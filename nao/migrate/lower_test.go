@@ -114,7 +114,7 @@ func TestLowerFlags(t *testing.T) {
 }
 
 func TestLowerNoTransactionDisablesTheBracket(t *testing.T) {
-	const body = "\n  create table posts {\n    id int [pk, increment]\n  }\n  drop table scratch\n}\n"
+	const body = "\n  create table posts {\n    id int [pk]\n  }\n  drop table scratch\n}\n"
 	for _, tc := range []struct {
 		settings          string
 		noTx, foreignKeys bool
@@ -122,7 +122,7 @@ func TestLowerNoTransactionDisablesTheBracket(t *testing.T) {
 		{"[irreversible]", false, true},
 		{"[irreversible, no_transaction]", true, false},
 	} {
-		_, info := parseChecked(t, "t.volt", "package db\n\ntable posts {\n  id int [pk, increment]\n}\n\nmigration 0001__init "+tc.settings+" {"+body)
+		_, info := parseChecked(t, "t.volt", "package db\n\ntable posts {\n  id int [pk]\n}\n\nmigration 0001__init "+tc.settings+" {"+body)
 		ms, err := Lower(info)
 		if err != nil {
 			t.Fatal(err)
@@ -139,7 +139,7 @@ func TestLowerNoTransactionDisablesTheBracket(t *testing.T) {
 // should an unchecked package reach it, the lowering's refusal naming
 // the migration.
 func TestLowerRefusesTwoIndexesOfOneName(t *testing.T) {
-	src := "package db\n\ntable posts {\n  id int [pk, increment]\n}\n\nmigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null, unique]\n\n    indexes {\n      n [where: `n > 0`]\n    }\n  }\n}\n"
+	src := "package db\n\ntable posts {\n  id int [pk]\n}\n\nmigration 0001__init {\n  create table posts {\n    id int [pk]\n    n  int [null, unique]\n\n    indexes {\n      n [where: `n > 0`]\n    }\n  }\n}\n"
 	f, diags := parser.ParseFile("t.volt", src)
 	if diag.HasErrors(diags) {
 		t.Fatalf("test input must parse: %v", diags)
@@ -162,7 +162,7 @@ func TestLowerRefusesTwoIndexesOfOneName(t *testing.T) {
 
 func TestRebuildForgetsAnIndexNotRestated(t *testing.T) {
 	ctx := context.Background()
-	src := "package db\n\ntable posts {\n  id int [pk, increment]\n  n  int [null]\n}\n\nmigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null, index]\n  }\n}\n\nmigration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id int [pk, increment]\n    n  int [null]\n  }\n}\n"
+	src := "package db\n\ntable posts {\n  id int [pk]\n  n  int [null]\n}\n\nmigration 0001__init {\n  create table posts {\n    id int [pk]\n    n  int [null, index]\n  }\n}\n\nmigration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id int [pk]\n    n  int [null]\n  }\n}\n"
 	_, info := parseChecked(t, "t.volt", src)
 	ms, err := Lower(info)
 	if err != nil {
@@ -257,9 +257,9 @@ func TestTypedDropOfAnIndexedColumnRoundTrips(t *testing.T) {
 // the rebuild.
 func TestRebuildUnderAViewOrTriggerFailsAtTheRename(t *testing.T) {
 	ctx := context.Background()
-	const schema = "package db\n\ntable posts {\n  id    int    [pk, increment]\n  title string\n}\n\ntable comments {\n  id      int [pk, increment]\n  post_id int\n}\n\n"
-	const tables = "  create table posts {\n    id    int [pk, increment]\n    title string [null]\n  }\n  create table comments {\n    id      int [pk, increment]\n    post_id int\n  }\n"
-	const rebuild = "migration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id    int    [pk, increment]\n    title string [default: \"\"]\n  }\n}\n"
+	const schema = "package db\n\ntable posts {\n  id    int    [pk]\n  title string\n}\n\ntable comments {\n  id      int [pk]\n  post_id int\n}\n\n"
+	const tables = "  create table posts {\n    id    int [pk]\n    title string [null]\n  }\n  create table comments {\n    id      int [pk]\n    post_id int\n  }\n"
+	const rebuild = "migration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id    int    [pk]\n    title string [default: \"\"]\n  }\n}\n"
 	cases := []struct{ object, exec string }{
 		{"view post_titles", "exec `CREATE VIEW post_titles AS SELECT title FROM posts` [down: `DROP VIEW post_titles`]"},
 		{"trigger comments_touch_posts", "exec `CREATE TRIGGER comments_touch_posts AFTER INSERT ON comments BEGIN UPDATE posts SET title = title WHERE id = NEW.post_id; END` [down: `DROP TRIGGER comments_touch_posts`]"},
@@ -346,6 +346,66 @@ func TestFoldMatchesTheSchema(t *testing.T) {
 	}
 }
 
+// foldDiff is the fold of §the-fold over one source: its migrations
+// applied to one empty database, its schema's DDL to another, and the
+// drift between them.
+func foldDiff(t *testing.T, name, src string) []Drift {
+	t.Helper()
+	ctx := context.Background()
+	f, info := parseChecked(t, name, src)
+	ms, err := Lower(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foldDB := memoryDB(t)
+	if _, err := run.MigrateUp(ctx, foldDB, ms); err != nil {
+		t.Fatalf("the fold stopped: %v", err)
+	}
+	ddl, err := sqlite.Generate(f, info, sqlite.Options{Source: name})
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetDB := memoryDB(t)
+	if _, err := targetDB.Pool().ExecContext(ctx, string(ddl)); err != nil {
+		t.Fatalf("schema DDL: %v", err)
+	}
+	fold, err := Read(ctx, foldDB.Pool())
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := Read(ctx, targetDB.Pool())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return Diff(target, fold)
+}
+
+// TestFoldAutoincrement folds the conformance snippet whose migrations
+// create and rebuild tables with and without autoincrement (spec
+// §the-fold, §migrations): it agrees with its schema, and the same
+// migrations without the rebuild's autoincrement drift, closed by a
+// rebuild.
+func TestFoldAutoincrement(t *testing.T) {
+	path := filepath.Join("..", "..", "lang", "conformance", "snippets", "valid", "v105_migration_autoincrement.volt")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(raw)
+	for _, d := range foldDiff(t, "v105.volt", src) {
+		t.Errorf("drift: %s\n%s", d.Reason, d.Volt)
+	}
+	const rebuilt = "  rebuild table events {\n    id   int    [pk, autoincrement]\n"
+	if !strings.Contains(src, rebuilt) {
+		t.Fatalf("the snippet changed; update TestFoldAutoincrement")
+	}
+	drifts := foldDiff(t, "v105.volt", strings.Replace(src, rebuilt, "  rebuild table events {\n    id   int    [pk]\n", 1))
+	if len(drifts) != 1 || drifts[0].Table != "events" || !strings.HasPrefix(drifts[0].Volt, "rebuild table events {\n  id int [pk, autoincrement]\n") ||
+		!strings.Contains(drifts[0].Reason, "column events.id is AUTOINCREMENT in the schema, without AUTOINCREMENT in the fold") {
+		t.Errorf("drifts %+v, want the rebuild of events that adds autoincrement", drifts)
+	}
+}
+
 func TestReversibleFlatBodyRoundTrips(t *testing.T) {
 	ctx := context.Background()
 	f, info := fixture(t)
@@ -391,7 +451,7 @@ func TestLowerRebuildSources(t *testing.T) {
 	src := `package db
 
 table users {
-  id    int    [pk, increment]
+  id    int    [pk]
   email string
   hits  int    [default: 0]
   note  string [null]
@@ -399,14 +459,14 @@ table users {
 
 migration 0001__init {
   create table users {
-    id   int    [pk, increment]
+    id   int    [pk]
     mail string
   }
 }
 
 migration 0002__rebuild [irreversible] {
   rebuild table users {
-    id    int    [pk, increment]
+    id    int    [pk]
     email string [from: ` + "`mail`" + `]
     hits  int    [default: 0]
     note  string [null]
@@ -437,14 +497,14 @@ func TestLowerRebuildSourcesOfAnUnknownTable(t *testing.T) {
 	src := `package db
 
 table users {
-  id   int    [pk, increment]
+  id   int    [pk]
   hits int    [default: 0]
   note string [null]
 }
 
 migration 0001__rebuild [irreversible] {
   rebuild table users {
-    id   int    [pk, increment]
+    id   int    [pk]
     hits int    [default: 0]
     note string [null]
   }
@@ -462,10 +522,10 @@ migration 0001__rebuild [irreversible] {
 }
 
 // TestLowerRebuildIntroducingARowidAlias pins NULL as the source of an
-// int [pk, increment] column the old table lacks, the one NOT NULL
+// int [pk] column the old table lacks, the one NOT NULL
 // column the checker admits without a source (spec §migrations).
 func TestLowerRebuildIntroducingARowidAlias(t *testing.T) {
-	src := "package db\n\ntable posts {\n  id int [pk, increment]\n  n  int [null]\n}\n\nmigration 0001__init {\n  create table posts {\n    n int [null]\n  }\n}\n\nmigration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id int [pk, increment]\n    n  int [null]\n  }\n}\n"
+	src := "package db\n\ntable posts {\n  id int [pk]\n  n  int [null]\n}\n\nmigration 0001__init {\n  create table posts {\n    n int [null]\n  }\n}\n\nmigration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id int [pk]\n    n  int [null]\n  }\n}\n"
 	_, info := parseChecked(t, "t.volt", src)
 	ms, err := Lower(info)
 	if err != nil {
@@ -488,7 +548,7 @@ func TestLowerRebuildIntroducingARowidAlias(t *testing.T) {
 // schema, no drift from the target, and down and up again.
 func TestExpressionDefaultAddFillsRowsWithoutARebuild(t *testing.T) {
 	ctx := context.Background()
-	src := "package db\n\ntable posts {\n  id         int       [pk, increment]\n  title      string\n  created_at time.Time [default: `CURRENT_TIMESTAMP`]\n  stamp      int       [null, index, default: `strftime('%s', 'now')`]\n}\n\nmigration 0001__init {\n  create table posts {\n    id    int    [pk, increment]\n    title string\n  }\n}\n\nmigration 0002__stamps {\n  alter table posts {\n    add created_at time.Time [default: `CURRENT_TIMESTAMP`]\n    add stamp int [null, index, default: `strftime('%s', 'now')`]\n  }\n}\n"
+	src := "package db\n\ntable posts {\n  id         int       [pk]\n  title      string\n  created_at time.Time [default: `CURRENT_TIMESTAMP`]\n  stamp      int       [null, index, default: `strftime('%s', 'now')`]\n}\n\nmigration 0001__init {\n  create table posts {\n    id    int    [pk]\n    title string\n  }\n}\n\nmigration 0002__stamps {\n  alter table posts {\n    add created_at time.Time [default: `CURRENT_TIMESTAMP`]\n    add stamp int [null, index, default: `strftime('%s', 'now')`]\n  }\n}\n"
 	f, info := parseChecked(t, "t.volt", src)
 	ms, err := Lower(info)
 	if err != nil {
@@ -609,7 +669,7 @@ func TestExpressionDefaultAddFillsRowsWithoutARebuild(t *testing.T) {
 // migration leaves the table as it was.
 func TestExpressionDefaultAddYieldingNullRollsBack(t *testing.T) {
 	ctx := context.Background()
-	src := "package db\n\ntable posts {\n  id   int [pk, increment]\n  seen int [default: `nullif(1, 1)`]\n}\n\nmigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n  }\n}\n\nmigration 0002__seen {\n  alter table posts {\n    add seen int [default: `nullif(1, 1)`]\n  }\n}\n"
+	src := "package db\n\ntable posts {\n  id   int [pk]\n  seen int [default: `nullif(1, 1)`]\n}\n\nmigration 0001__init {\n  create table posts {\n    id int [pk]\n  }\n}\n\nmigration 0002__seen {\n  alter table posts {\n    add seen int [default: `nullif(1, 1)`]\n  }\n}\n"
 	_, info := parseChecked(t, "t.volt", src)
 	ms, err := Lower(info)
 	if err != nil {

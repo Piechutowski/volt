@@ -12,7 +12,7 @@ project blog [note: """
 type PostState string
 
 table posts [note: "A blog post."] {
-  id int [pk, increment]
+  id int [pk]
   title string [note: "Shown in lists and in the HTML title tag"]
   status PostState
   body string [null, note: """

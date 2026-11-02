@@ -3,7 +3,7 @@
 package db
 
 table metrics {
-  id        int [pk, increment]
+  id        int [pk]
   name      string
   parent_id int [null, ref: metrics.id]
 }

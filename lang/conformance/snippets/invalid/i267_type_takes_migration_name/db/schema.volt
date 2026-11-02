@@ -6,14 +6,14 @@ type Migrations string
 type Migrate    string
 
 table posts {
-  id int        [pk, increment]
+  id int        [pk]
   a  Migrations
   b  Migrate
 }
 
 migration 0001__posts {
   create table posts {
-    id int    [pk, increment]
+    id int    [pk]
     a  string
     b  string
   }

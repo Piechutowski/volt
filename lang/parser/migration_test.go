@@ -11,7 +11,7 @@ const migrationSample = `package db
 
 migration 0001__create_users {
   create table users {
-    id    int    [pk, increment]
+    id    int    [pk]
     email string [unique]
 
     indexes {
@@ -30,7 +30,7 @@ migration 0002__users_bio [irreversible] {
     }
     rename table users to people
     rebuild table people {
-      id  int [pk, increment]
+      id  int [pk]
       bio string [null, from: ` + "`bio`" + `]
     }
     drop index people (email) [unique]

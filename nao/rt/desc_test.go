@@ -17,9 +17,9 @@ var entryDesc = &Desc[entry]{
 	Table:   `"entries"`,
 	Columns: `"id", "title", "body"`,
 	Fields: []FieldDesc{
-		{Column: "id", Wire: "id", Key: true},
-		{Column: "title", Wire: "title", Settable: true},
-		{Column: "body", Wire: "body", Settable: true},
+		{Column: "id", Wire: "id", Key: true, RowidAlias: true},
+		{Column: "title", Wire: "title"},
+		{Column: "body", Wire: "body"},
 	},
 	Defaults: entry{Title: "untitled"},
 	Scan: func(r Row) (entry, error) {
@@ -28,6 +28,9 @@ var entryDesc = &Desc[entry]{
 	},
 	Values: func(r entry) []any { return []any{r.ID, r.Title, r.Body} },
 	Apply: func(data, vals entry, set []bool) entry {
+		if set[0] {
+			data.ID = vals.ID
+		}
 		if set[1] {
 			data.Title = vals.Title
 		}
@@ -38,6 +41,12 @@ var entryDesc = &Desc[entry]{
 	},
 	Cast: func(c Changeset[entry], p Params[entry], i int) (Changeset[entry], error) {
 		switch i {
+		case 0:
+			v, ok, err := Field(p, "id", "int", false, func(r *entry) int { return r.ID })
+			if err != nil || !ok {
+				return c, err
+			}
+			return Set(c, 0, func(r *entry) { r.ID = v }), nil
 		case 1:
 			v, ok, err := Field(p, "title", "string", false, func(r *entry) string { return r.Title })
 			if err != nil || !ok {
@@ -115,8 +124,11 @@ func TestChangesetCast(t *testing.T) {
 	if len(errs) != 2 || errs[0].Check != "unknown_field" || errs[0].Columns[0] != "nope" || errs[1].Check != "cast" || errs[1].Columns[0] != "title" {
 		t.Errorf("Cast errors = %v", errs)
 	}
-	if c.Changed(entryTitle) || !c.Changed(entryBody) || c.Changed(entryID) || c.Row().Body.Valid {
-		t.Errorf("Cast marks: title %v body %v id %v", c.Changed(entryTitle), c.Changed(entryBody), c.Changed(entryID))
+	if c.Changed(entryTitle) || !c.Changed(entryBody) || !c.Changed(entryID) || c.Row().Body.Valid || c.Row().ID != 9 {
+		t.Errorf("Cast marks: title %v body %v id %v (%d)", c.Changed(entryTitle), c.Changed(entryBody), c.Changed(entryID), c.Row().ID)
+	}
+	if keyless := NewChangeset(entryDesc).Cast(p, entryTitle, entryBody); keyless.Changed(entryID) {
+		t.Errorf("Cast set the rowid alias key its allow list leaves out")
 	}
 	var inv *Invalid
 	if err := c.Err(); !errors.As(err, &inv) || inv.Model != "Post" || len(inv.Fields) != 2 {

@@ -9,7 +9,7 @@ table_partial weighted {
 }
 
 table posts {
-  id    int   [pk, increment]
+  id    int   [pk]
   score Score
   ~weighted
 
@@ -19,7 +19,7 @@ table posts {
 }
 
 table comments {
-  id int [pk, increment]
+  id int [pk]
   ~weighted
 }
 

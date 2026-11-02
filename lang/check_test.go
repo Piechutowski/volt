@@ -54,12 +54,12 @@ var blog = map[string]string{
 	"db/schema.volt": `package db
 
 table users {
-	id    int [pk, increment]
+	id    int [pk]
 	email string    [unique]
 }
 
 table posts {
-	id    int [pk, increment]
+	id    int [pk]
 	title string
 }
 `,
@@ -371,7 +371,7 @@ scope / {
 }
 
 func TestPutNamesTheVerbToWrite(t *testing.T) {
-	schema := "package db\n\ntable users {\n\tid int [pk, increment]\n\temail string\n}\n\nselect picked for users where id in :ids\n"
+	schema := "package db\n\ntable users {\n\tid int [pk]\n\temail string\n}\n\nselect picked for users where id in :ids\n"
 	cases := []struct{ route, advice string }{
 		{"put /x db.UserList", "db.UserList is routed with get, so write get /x db.UserList"},
 		{"put /x db.UserPicked", "db.UserPicked is routed with get, so write get /x db.UserPicked"},
@@ -601,7 +601,7 @@ scope / [pipe: api] {
 func TestQueryRoutes(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod":         modFile,
-		"db/schema.volt": "package db\n\ntable users {\n\tid int [pk, increment]\n\temail string [unique]\n}\n\nselect picked for users where id in :ids and email like :pat\n",
+		"db/schema.volt": "package db\n\ntable users {\n\tid int [pk]\n\temail string [unique]\n}\n\nselect picked for users where id in :ids and email like :pat\n",
 		"app/r.volt": "package app\n\nimport (\n\tdb\n)\n\nscope /api [name: api] {\n" +
 			"\tget /users/:id(int) db.UserGet\n\tpost /users db.UserCreate\n\tget /picked db.UserPicked\n\tdelete /users/:id(int) db.UserDelete\n}\n",
 	})
@@ -639,7 +639,7 @@ func TestQueryRoutes(t *testing.T) {
 }
 
 func TestQueryRouteErrors(t *testing.T) {
-	schema := "package db\n\ntable users {\n\tid int [pk, increment]\n\temail string\n}\n\ntable notes {\n\tbody string\n}\n\nselect picked for users where id in :ids\n\ntable tags {\n\tslug string [pk]\n\tlabel string\n}\n"
+	schema := "package db\n\ntable users {\n\tid int [pk]\n\temail string\n}\n\ntable notes {\n\tbody string\n}\n\nselect picked for users where id in :ids\n\ntable tags {\n\tslug string [pk]\n\tlabel string\n}\n"
 	cases := []struct{ name, route, want string }{
 		{"unknown", "get /x db.UserFetch", "no generated query db.UserFetch"},
 		{"case hint", "get /x db.userget", `did you mean "UserGet"`},
@@ -774,7 +774,7 @@ type Stamp    time.Time
 type kinds.Kind string from "example.com/kinds"
 
 table items {
-  id     int    [pk, increment]
+  id     int    [pk]
   state  State
   level  Level
   rank   Rank
@@ -827,7 +827,7 @@ table items {
 func TestRouteLoads(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod":         modFile,
-		"db/schema.volt": "package db\n\ntable metrics {\n\tid   int [pk, increment]\n\tunit string\n}\n\nselect ordered for metrics [order: (id asc)]\nselect by_unit for metrics where unit = :unit and id in :ids\n",
+		"db/schema.volt": "package db\n\ntable metrics {\n\tid   int [pk]\n\tunit string\n}\n\nselect ordered for metrics [order: (id asc)]\nselect by_unit for metrics where unit = :unit and id in :ids\n",
 		"app/r.volt": "package app\n\nimport (\n\tdb\n)\n\nscope / {\n" +
 			"\tget /metrics/:id(int) Metrics.Show [timeout: 5] {\n\t\tmetric db.MetricGet(id)\n\t\tpeers  db.MetricByUnit(\"ms\", ids)\n\t\tall    db.MetricOrdered()\n\t}\n}\n",
 	})
@@ -860,7 +860,7 @@ func TestRouteLoads(t *testing.T) {
 func TestRequestBodies(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod":         modFile,
-		"db/schema.volt": "package db\n\ntable metrics {\n\tid   int [pk, increment]\n\tunit string\n\tnote string\n}\n",
+		"db/schema.volt": "package db\n\ntable metrics {\n\tid   int [pk]\n\tunit string\n\tnote string\n}\n",
 		"app/forms.go":   "package app\n\ntype LoginForm struct {\n\tEmail string\n}\n",
 		"app/r.volt": "package app\n\nimport (\n\tdb\n)\n\nscope / {\n" +
 			"\tpatch /metrics/:id(int) Metrics.Save [body: db.MetricUpdate(id), only: (unit)]\n" +
@@ -897,8 +897,8 @@ func TestRequestBodies(t *testing.T) {
 func TestSelectJoins(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod": modFile,
-		"db/schema.volt": "package db\n\ntable metrics {\n\tid   int [pk, increment]\n\tname string\n}\n\n" +
-			"table points {\n\tid        int [pk, increment]\n\tmetric_id int [ref: metrics.id]\n\tsource_id int [null]\n\tts        int\n}\n\n" +
+		"db/schema.volt": "package db\n\ntable metrics {\n\tid   int [pk]\n\tname string\n}\n\n" +
+			"table points {\n\tid        int [pk]\n\tmetric_id int [ref: metrics.id]\n\tsource_id int [null]\n\tts        int\n}\n\n" +
 			"ref: points.source_id > metrics.id [as: source, reverse: sourced]\n\n" +
 			"select recent (id, ts, metric.name, source.name) for points join metric join source where ts >= :since and metric.name = :name [order: (metric.name asc, ts desc)]\n" +
 			"select series (id, points.ts) for metrics join points\n",
@@ -958,7 +958,7 @@ func TestSelectJoins(t *testing.T) {
 func TestSelectAggregates(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod": modFile,
-		"db/schema.volt": "package db\n\ntable points {\n\tid    int [pk, increment]\n\tsite  string\n\tts    int\n\tvalue float64\n\tnote  string [null]\n}\n\n" +
+		"db/schema.volt": "package db\n\ntable points {\n\tid    int [pk]\n\tsite  string\n\tts    int\n\tvalue float64\n\tnote  string [null]\n}\n\n" +
 			"select hourly (site, ts / 3600 * 3600 as hour, avg(value) as mean, count() as n, max(note) as last) for points where ts >= :since [group: (site, hour), order: (hour asc, n desc)]\n" +
 			"select totals (count() as n, sum(value) as total) for points\n" +
 			"select scaled (id, value * :factor + 1 as scaled, note as memo) for points\n",
@@ -1008,8 +1008,8 @@ func TestSelectAggregates(t *testing.T) {
 func TestSelectWith(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod": modFile,
-		"db/schema.volt": "package db\n\ntable metrics {\n\tid   int [pk, increment]\n\tname string\n}\n\n" +
-			"table points {\n\tid        int [pk, increment]\n\tmetric_id int [ref: metrics.id]\n\tts        int\n}\n\n" +
+		"db/schema.volt": "package db\n\ntable metrics {\n\tid   int [pk]\n\tname string\n}\n\n" +
+			"table points {\n\tid        int [pk]\n\tmetric_id int [ref: metrics.id]\n\tts        int\n}\n\n" +
 			"select board for metrics with points where name = :name [order: (id asc)]\n",
 	})
 	wantClean(t, diags)
@@ -1034,7 +1034,7 @@ func TestSelectWith(t *testing.T) {
 func TestScopeLoads(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod":         modFile,
-		"db/schema.volt": "package db\n\ntable users {\n\tid int [pk, increment]\n}\n",
+		"db/schema.volt": "package db\n\ntable users {\n\tid int [pk]\n}\n",
 		"app/loads.go": "package app\n\nimport (\n\t\"github.com/Piechutowski/volt\"\n\t\"blog/db\"\n)\n\n" +
 			"func CurrentUser(r volt.Request) volt.Load[db.User] { return volt.LoadWith(db.UserGet(1)) }\n" +
 			"func Tenant(r volt.Request) volt.Load[string] { return volt.Halt[string](volt.NoContent()) }\n",
@@ -1065,7 +1065,7 @@ func TestScopeLoads(t *testing.T) {
 func TestQueryRoutesOverDerivedSelects(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod": modFile,
-		"db/schema.volt": "package db\n\ntable metrics {\n\tid int [pk, increment]\n}\n\ntable points {\n\tid        int [pk, increment]\n\tmetric_id int [ref: metrics.id]\n}\n\n" +
+		"db/schema.volt": "package db\n\ntable metrics {\n\tid int [pk]\n}\n\ntable points {\n\tid        int [pk]\n\tmetric_id int [ref: metrics.id]\n}\n\n" +
 			"select totals (count() as n) for points\nselect board for metrics with points\n",
 		"app/r.volt": "package app\n\nimport (\n\tdb\n)\n\nscope / {\n\tget /totals db.PointTotals\n\tget /board db.MetricBoard\n" +
 			"\tget /stats Pages.Stats {\n\t\ttotals db.PointTotals()\n\t\tboard db.MetricBoard()\n\t}\n}\n",

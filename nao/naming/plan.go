@@ -246,7 +246,7 @@ func crudMethodsBuild(t *Table) []CRUDMethod {
 	}
 	methods = append(methods, CRUDMethod{Name: n.List, Op: "list", Result: m, Many: true})
 	methods = append(methods, CRUDMethod{Name: n.Create, Op: "create", Body: n.Changeset, Params: n.Params,
-		New: n.New, Allow: t.handles(t.Settable()), Result: m})
+		New: n.New, Allow: t.handles(t.CreateCast()), Result: m})
 	if len(t.PK) > 0 {
 		if len(t.NonPK()) > 0 {
 			methods = append(methods, CRUDMethod{Name: n.Update, Op: "update", Key: key, Body: n.Changeset, Params: n.Params,

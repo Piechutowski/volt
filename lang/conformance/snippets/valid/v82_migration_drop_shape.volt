@@ -2,12 +2,12 @@
 package db
 
 table users {
-  id int [pk, increment]
+  id int [pk]
 }
 
 migration 0001__init {
   create table users {
-    id    int [pk, increment]
+    id    int [pk]
     hits  int [default: 0]
     owner int [null, ref: users.id]
   }

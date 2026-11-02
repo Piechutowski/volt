@@ -1,7 +1,7 @@
 package db
 
 table users {
-	id         int       [pk, increment]
+	id         int       [pk]
 	email      string    [required, unique]
 	created_at time.Time [default: `CURRENT_TIMESTAMP`]
 
@@ -26,13 +26,13 @@ table user_roles {
 }
 
 table ms_revenue {
-	id   int [pk, increment]
+	id   int [pk]
 	org  string
 	year int
 }
 
 table ms_usage {
-	id   int [pk, increment]
+	id   int [pk]
 	org  string
 	year int
 }
@@ -45,7 +45,7 @@ group series {
 select browse for series where year = :year [order: (id asc)]
 
 table posts {
-  id      int    [pk, increment]
+  id      int    [pk]
   user_id int    [ref: users.id]
   title   string
 }

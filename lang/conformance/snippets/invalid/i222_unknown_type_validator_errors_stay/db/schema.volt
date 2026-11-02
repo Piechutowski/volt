@@ -3,7 +3,7 @@
 package db
 
 table authors {
-  id    int    [pk, increment]
+  id    int    [pk]
   email string
   rank  int32
 

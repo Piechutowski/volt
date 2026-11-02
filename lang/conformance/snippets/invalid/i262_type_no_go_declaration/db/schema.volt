@@ -6,7 +6,7 @@ type OrderState string
 type Blob []byte
 
 table orders {
-  id     int        [pk, increment]
+  id     int        [pk]
   status OrderState
   data   Blob
 }

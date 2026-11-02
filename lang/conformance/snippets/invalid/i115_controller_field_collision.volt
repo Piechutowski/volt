@@ -3,7 +3,7 @@
 package app
 
 table posts {
-  id    int [pk, increment]
+  id    int [pk]
   title string
 }
 
