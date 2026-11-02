@@ -2,13 +2,13 @@
 // want: "as" takes a name
 package db
 
-Table metrics {
+table metrics {
   id   int    [pk, increment]
   name string
   unit string [null]
 }
 
-Table points {
+table points {
   id        int   [pk, increment]
   metric_id int   [ref: metrics.id]
   source_id int   [null]
@@ -16,4 +16,4 @@ Table points {
   value     float64
 }
 
-Ref: points.source_id > metrics.id [as: "source"]
+ref: points.source_id > metrics.id [as: "source"]

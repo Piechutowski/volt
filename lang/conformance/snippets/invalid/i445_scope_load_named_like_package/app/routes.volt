@@ -6,7 +6,7 @@ import (
 	db
 )
 
-Scope / {
+scope / {
 	load app CurrentUser
 	get /me Me.Show
 	get /ordered db.MetricOrdered

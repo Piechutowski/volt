@@ -5,7 +5,7 @@ import (
 	db
 )
 
-Scope / {
+scope / {
 	patch /settings/:id(int) Settings.Save   [body: db.SettingUpdate(id), only: (refresh, note)]
 	patch /settings/first    Settings.First  [body: db.SettingUpdate(1)]
 	post  /metrics           Metrics.Create  [body: db.MetricCreate]

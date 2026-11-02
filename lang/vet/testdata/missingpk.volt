@@ -1,11 +1,11 @@
 // analyzers: missingpk
-Table has_col_pk {
+table has_col_pk {
   id int [pk]
 }
-Table has_composite_pk {
+table has_composite_pk {
   a int [pk]
   b int [pk]
 }
-Table naked { //WANT missingpk
+table naked { //WANT missingpk
   id int
 }

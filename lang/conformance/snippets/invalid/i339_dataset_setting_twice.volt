@@ -2,12 +2,12 @@
 // want: setting "strip" may appear at most once
 package app
 
-Table ms_revenue {
+table ms_revenue {
 	id int [pk]
 }
 
-Select rows for ms_revenue
+select rows for ms_revenue
 
-Scope /ms {
+scope /ms {
 	dataset rows [strip: "ms_", strip: "ms"]
 }

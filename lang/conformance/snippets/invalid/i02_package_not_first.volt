@@ -1,5 +1,5 @@
 // spec: §projects-and-packages
 package app
 
-Table t { id int [pk] }
+table t { id int [pk] }
 package again

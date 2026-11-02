@@ -1,7 +1,7 @@
 // spec: §columns, every built-in type, the [] of []byte, declared types
-Type JobStatus string
-Type Grade string
-Table t {
+type JobStatus string
+type Grade string
+table t {
   a bool
   b int
   c float64

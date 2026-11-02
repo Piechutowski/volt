@@ -1,6 +1,6 @@
 // spec: §types — a qualified declared name needs its from path
 // want: has no from path
-Type money.Money int
-Table t {
+type money.Money int
+table t {
   m money.Money
 }

@@ -76,62 +76,62 @@ func collisionsRender(cs []NameCollision) string {
 }
 
 func TestDynNameCollisionsMatchWalk(t *testing.T) {
-	base := `Table users {
+	base := `table users {
   id int [pk]
   foo_bar int
   limit int
   status OrderState
 }
-Type OrderState string
-Table user_limits {
+type OrderState string
+table user_limits {
   id int [pk]
 }
-Table user_foos {
+table user_foos {
   id int [pk]
   bar int
 }
-Table user_foo_bars {
+table user_foo_bars {
   id int [pk]
 }
-Table e_users {
+table e_users {
   id int [pk]
   kind int
   x int
 }
-Type EUserKind string
-Type EUserX string
-Type UserFooBar string
-Table pinned [model: "UserChangeset"] {
+type EUserKind string
+type EUserX string
+type UserFooBar string
+table pinned [model: "UserChangeset"] {
   id int [pk]
   n int
 }
-Table pinned_update [model: "UserNew"] {
+table pinned_update [model: "UserNew"] {
   id int [pk]
   n int
 }
-Table user_columns {
+table user_columns {
   id int [pk]
 }
-Table user_params {
+table user_params {
   id int [pk]
 }
-Table nokey {
+table nokey {
   a int
   b int
 }
-Table allgen {
+table allgen {
   id int [pk, increment]
 }
-Table user_offsets [model: "UserOffset"] {
+table user_offsets [model: "UserOffset"] {
   id int [pk]
 }
 `
 	edits := []string{
 		base,
-		strings.Replace(base, "Table user_foo_bars {", "Table user_foo_bars_x {", 1),
+		strings.Replace(base, "table user_foo_bars {", "table user_foo_bars_x {", 1),
 		strings.Replace(base, "  bar int\n", "  baz int\n", 1),
-		strings.Replace(base, "Table allgen {", "Table allgen [model: \"UserSet\"] {", 1),
-		strings.Replace(base, "  n int\n}\nTable pinned_update", "  n int\n  m int\n}\nTable pinned_update", 1),
+		strings.Replace(base, "table allgen {", "table allgen [model: \"UserSet\"] {", 1),
+		strings.Replace(base, "  n int\n}\ntable pinned_update", "  n int\n  m int\n}\ntable pinned_update", 1),
 		base,
 	}
 	var reuse *parser.Reuse

@@ -578,7 +578,7 @@ func fieldTypeMD(m *check.TableInfo, f naming.FieldSig) string {
 }
 
 func selectHead(d *ast.Select) string {
-	head := "Select " + d.Name.Name()
+	head := "select " + d.Name.Name()
 	if d.Projected() {
 		if d.Star {
 			cols := make([]string, len(d.Cols))
@@ -619,7 +619,7 @@ func groupHover(sym voltSym, def voltDef) string {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "```volt\nGroup %s\n```\n", sym.name)
+	fmt.Fprintf(&b, "```volt\ngroup %s\n```\n", sym.name)
 	for _, t := range g.Terms {
 		op := "+"
 		if t.Neg {
@@ -643,7 +643,7 @@ func predHover(sym voltSym, def voltDef, ix *voltIndex) string {
 	if p == nil {
 		return ""
 	}
-	md := "```volt\nPred " + sym.name + "\n```\n"
+	md := "```volt\npred " + sym.name + "\n```\n"
 	if text, ok := ix.texts[def.span.file]; ok && p.X != nil {
 		start, end := int(p.X.Pos().Offset()), int(p.X.End().Offset())
 		if start >= 0 && end <= len(text) && start < end {
@@ -660,7 +660,7 @@ func tableModelHover(sym voltSym, def voltDef) string {
 	}
 	var b strings.Builder
 	model, _ := naming.ModelName(t)
-	fmt.Fprintf(&b, "**`Table %s`** in package `%s`", t.Name.Name(), sym.pkg)
+	fmt.Fprintf(&b, "**`table %s`** in package `%s`", t.Name.Name(), sym.pkg)
 	if model != "" {
 		fmt.Fprintf(&b, " — Go model `%s`", model)
 	}
@@ -676,7 +676,7 @@ func tableModelHover(sym voltSym, def voltDef) string {
 	}
 
 	b.WriteString("```volt\n")
-	fmt.Fprintf(&b, "Table %s {\n", t.Name.Name())
+	fmt.Fprintf(&b, "table %s {\n", t.Name.Name())
 	for _, item := range t.Body {
 		col, ok := item.(*ast.Column)
 		if !ok {
@@ -705,8 +705,8 @@ func pipelineHover(sym voltSym, def voltDef) string {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "**Pipeline `%s`** — %d plug(s), outermost first\n\n```volt\n", sym.name, len(p.Plugs))
-	fmt.Fprintf(&b, "Pipeline %s {\n", sym.name)
+	fmt.Fprintf(&b, "**pipeline `%s`** — %d plug(s), outermost first\n\n```volt\n", sym.name, len(p.Plugs))
+	fmt.Fprintf(&b, "pipeline %s {\n", sym.name)
 	for _, plug := range p.Plugs {
 		fmt.Fprintf(&b, "\tuse %s\n", plug.Ref.String())
 	}
@@ -864,7 +864,7 @@ func (d *Document) voltComplete(prefix string) []protocol.CompletionItem {
 	return nil
 }
 
-var voltSelectForRE = regexp.MustCompile(`^\s*Select\s+\w+\s+for\s+([A-Za-z0-9_]*)$`)
+var voltSelectForRE = regexp.MustCompile(`^\s*select\s+\w+\s+for\s+([A-Za-z0-9_]*)$`)
 
 var voltWhereRE = regexp.MustCompile(`\b(?:where|and|or|not|\{)\s+([A-Za-z0-9_]*)$`)
 
@@ -899,9 +899,9 @@ func (d *Document) packageTableItems(pkgPath, partial string) []protocol.Complet
 			if filter != "" && !strings.HasPrefix(strings.ToLower(sym.name), strings.ToLower(filter)) {
 				continue
 			}
-			detail := "Table"
+			detail := "table"
 			if pk, goType := tablePK(def); pk != "" && goType != "" {
-				detail = "Table — key " + pk + " " + goType
+				detail = "table — key " + pk + " " + goType
 			}
 			rows = append(rows, row{sym.name, detail})
 		}

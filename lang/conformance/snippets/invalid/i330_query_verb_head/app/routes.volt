@@ -6,7 +6,7 @@ import (
 	db
 )
 
-Scope /api {
+scope /api {
 	head /posts/:id(int) db.PostGet
 	head /posts          Posts.Probe
 }

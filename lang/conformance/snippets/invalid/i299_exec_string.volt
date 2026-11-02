@@ -2,11 +2,11 @@
 // want: exec takes its SQL in backticks
 package db
 
-Table users {
+table users {
   id int [pk, increment]
 }
 
-Migration 0001__init [irreversible] {
+migration 0001__init [irreversible] {
   create table users {
     id int [pk, increment]
   }

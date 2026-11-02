@@ -6,6 +6,6 @@ import (
 	db
 )
 
-Scope /api {
+scope /api {
 	post /posts/:id(int) db.PostUpdate
 }

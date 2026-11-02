@@ -2,9 +2,9 @@
 // want: exclusion is spelled '\'
 package db
 
-Table page_views {
+table page_views {
   id int [pk]
   site string
 }
 
-Select public (* - site) for page_views
+select public (* - site) for page_views

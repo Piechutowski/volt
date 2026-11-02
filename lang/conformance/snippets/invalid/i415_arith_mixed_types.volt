@@ -2,7 +2,7 @@
 // want: an expression has one type
 package db
 
-Table points {
+table points {
   id        int     [pk, increment]
   metric_id int
   ts        int
@@ -11,4 +11,4 @@ Table points {
   note      string  [null]
 }
 
-Select rows (ts + value as mixed) for points
+select rows (ts + value as mixed) for points

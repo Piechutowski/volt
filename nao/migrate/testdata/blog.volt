@@ -3,7 +3,7 @@
 // it. The Lower golden is blog.sql.golden.
 package blog
 
-Table posts {
+table posts {
   id         int       [pk, increment]
   slug       string    [unique]
   title      string
@@ -12,13 +12,13 @@ Table posts {
   published  bool      [default: false]
   created_at time.Time [default: `CURRENT_TIMESTAMP`]
 
-  Indexes {
+  indexes {
     views [where: `views > 0`]
     (`lower(title)`) [name: "idx_posts_title_ci"]
   }
 }
 
-Table comments {
+table comments {
   id       int    [pk, increment]
   post_id  int    [ref: posts.id]
   author   string
@@ -26,23 +26,23 @@ Table comments {
   flagged  bool   [default: false]
   nickname string [null, unique]
 
-  Indexes {
+  indexes {
     (post_id, author)
   }
 }
 
-Table post_tags {
+table post_tags {
   post_id int    [pk, ref: posts.id]
   tag     string [pk]
 }
 
-Table post_details {
+table post_details {
   id      int    [pk, increment]
   post_id int    [unique, ref: posts.id]
   summary string [null]
 }
 
-Migration 0001__create_posts {
+migration 0001__create_posts {
   create table articles {
     id    int    [pk, increment]
     slug  string [unique]
@@ -50,7 +50,7 @@ Migration 0001__create_posts {
     body  string [null]
     hits  int    [default: 0]
 
-    Indexes {
+    indexes {
       hits [where: `hits > 0`]
     }
   }
@@ -67,14 +67,14 @@ Migration 0001__create_posts {
   exec `UPDATE posts SET views = 0 WHERE views < 0` [down: `UPDATE posts SET views = 0 WHERE views < 0`]
 }
 
-Migration 0002__comments_and_tags {
+migration 0002__comments_and_tags {
   create table comments {
     id      int    [pk, increment]
     post_id int    [ref: posts.id]
     author  string
     body    string
 
-    Indexes {
+    indexes {
       (post_id, author)
     }
   }
@@ -90,7 +90,7 @@ Migration 0002__comments_and_tags {
   }
 }
 
-Migration 0003__posts_created_at [irreversible] {
+migration 0003__posts_created_at [irreversible] {
   rebuild table posts {
     id         int       [pk, increment]
     slug       string    [unique]
@@ -100,20 +100,20 @@ Migration 0003__posts_created_at [irreversible] {
     published  bool      [default: false]
     created_at time.Time [default: `CURRENT_TIMESTAMP`]
 
-    Indexes {
+    indexes {
       views [where: `views > 0`]
       (`lower(title)`) [name: "idx_posts_title_ci"]
     }
   }
 }
 
-Migration 0004__vacuum [no_transaction] {
+migration 0004__vacuum [no_transaction] {
   up {
     exec `VACUUM`
   }
 }
 
-Migration 0005__comments_flagged {
+migration 0005__comments_flagged {
   up {
     alter table comments {
       add flagged bool [default: false]
@@ -126,7 +126,7 @@ Migration 0005__comments_flagged {
   }
 }
 
-Migration 0006__nicknames_and_details {
+migration 0006__nicknames_and_details {
   alter table comments {
     add nickname string [null, unique]
   }

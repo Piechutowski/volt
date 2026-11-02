@@ -6,6 +6,6 @@ import (
 	db
 )
 
-Scope /ms {
+scope /ms {
 	dataset db.brows
 }

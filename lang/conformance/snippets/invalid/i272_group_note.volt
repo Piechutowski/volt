@@ -1,10 +1,10 @@
 // spec: §notes, §groups, a group carries no note
 package db
 
-Table posts {
+table posts {
   id int [pk]
 }
 
-Group content [note: "what readers see"] {
+group content [note: "what readers see"] {
   posts
 }

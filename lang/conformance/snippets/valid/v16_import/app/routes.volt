@@ -5,6 +5,6 @@ import (
 	db
 )
 
-Scope / {
+scope / {
 	resources db.users
 }

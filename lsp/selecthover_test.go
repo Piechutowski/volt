@@ -9,13 +9,13 @@ import (
 )
 
 const projSchema = "package db\n\n" +
-	"Table page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n\thits int [default: 0]\n}\n\n" +
-	"Table link_clicks {\n\tid int [pk, increment]\n\tsite string\n\tday int\n\ttarget string [default: \"\"]\n}\n\n" +
-	"Group metrics {\n\tpage_views\n\tlink_clicks\n}\n\n" +
-	"Select summary (site, day) for metrics where day >= :from\n" +
-	"Select public (* \\ site) for link_clicks\n" +
-	"Select chosen for metrics where site in :sites and day in :days\n" +
-	"Select busy for page_views where hits > 10 and site = :site and day in :days\n"
+	"table page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n\thits int [default: 0]\n}\n\n" +
+	"table link_clicks {\n\tid int [pk, increment]\n\tsite string\n\tday int\n\ttarget string [default: \"\"]\n}\n\n" +
+	"group metrics {\n\tpage_views\n\tlink_clicks\n}\n\n" +
+	"select summary (site, day) for metrics where day >= :from\n" +
+	"select public (* \\ site) for link_clicks\n" +
+	"select chosen for metrics where site in :sites and day in :days\n" +
+	"select busy for page_views where hits > 10 and site = :site and day in :days\n"
 
 func projSelectDoc(t *testing.T) (*Document, string) {
 	t.Helper()
@@ -114,10 +114,10 @@ func TestSelectHoverBindsInPlaceholderOrder(t *testing.T) {
 }
 
 const unresolvedSchema = "package db\n\n" +
-	"Table authors {\n\tid int [pk, increment]\n\temail string\n\trank int32\n}\n\n" +
-	"Select ranked for authors where rank >= :min and email = :e [order: (rank desc)]\n" +
-	"Select shown (rank, email) for authors\n" +
-	"Select byemail for authors where email = :e\n"
+	"table authors {\n\tid int [pk, increment]\n\temail string\n\trank int32\n}\n\n" +
+	"select ranked for authors where rank >= :min and email = :e [order: (rank desc)]\n" +
+	"select shown (rank, email) for authors\n" +
+	"select byemail for authors where email = :e\n"
 
 func unresolvedHover(t *testing.T, needle string) string {
 	t.Helper()
@@ -135,8 +135,8 @@ func unresolvedHover(t *testing.T, needle string) string {
 
 func TestSelectHoverUnresolved(t *testing.T) {
 	for _, tc := range []struct{ needle, head string }{
-		{"ranked", "Select ranked for authors"},
-		{"shown", "Select shown (rank, email) for authors"},
+		{"ranked", "select ranked for authors"},
+		{"shown", "select shown (rank, email) for authors"},
 	} {
 		md := unresolvedHover(t, tc.needle)
 		for _, want := range []string{"```volt\n" + tc.head + "\n```\n", "unresolved: column rank has an unknown type (§columns)\n"} {
@@ -170,10 +170,10 @@ func TestSelectHoverSpellsUnknownFieldType(t *testing.T) {
 }
 
 func TestSelectHoverNullableUnknownFieldType(t *testing.T) {
-	schema := "package db\n\nType Score int32\n\n" +
-		"Table authors {\n\tid int [pk, increment]\n\temail string\n\trank int32 [null]\n\tscore Score [null]\n}\n\n" +
-		"Select shown (rank, score, email) for authors\n" +
-		"Select byemail for authors where email = :e\n"
+	schema := "package db\n\ntype Score int32\n\n" +
+		"table authors {\n\tid int [pk, increment]\n\temail string\n\trank int32 [null]\n\tscore Score [null]\n}\n\n" +
+		"select shown (rank, score, email) for authors\n" +
+		"select byemail for authors where email = :e\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":         "module proj\n",
 		"db/schema.volt": schema,
@@ -198,8 +198,8 @@ func TestSelectHoverNullableUnknownFieldType(t *testing.T) {
 
 func TestSelectHoverBytesFieldTypes(t *testing.T) {
 	schema := "package db\n\n" +
-		"Table attachments {\n\tid int [pk, increment]\n\tname string\n\tbody []byte\n\tthumb []byte [null]\n}\n\n" +
-		"Select named for attachments where name = :name\n"
+		"table attachments {\n\tid int [pk, increment]\n\tname string\n\tbody []byte\n\tthumb []byte [null]\n}\n\n" +
+		"select named for attachments where name = :name\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":         "module proj\n",
 		"db/schema.volt": schema,

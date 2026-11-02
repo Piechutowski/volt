@@ -10,8 +10,8 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-const goRefSchema = "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string\n\n\tValidators {\n\t\tEmailValid(email)\n\t\tMissing(email)\n\t}\n}\n"
-const goRefRoutes = "package app\n\nPipeline api {\n\tuse volt.RequestID\n\tuse Auth\n}\n"
+const goRefSchema = "package db\n\ntable users {\n\tid int [pk, increment]\n\temail string\n\n\tvalidators {\n\t\tEmailValid(email)\n\t\tMissing(email)\n\t}\n}\n"
+const goRefRoutes = "package app\n\npipeline api {\n\tuse volt.RequestID\n\tuse Auth\n}\n"
 
 func goRefProject(t *testing.T) string {
 	t.Helper()
@@ -131,7 +131,7 @@ func TestGoRefRenameRewritesVoltSpellings(t *testing.T) {
 }
 
 func TestColumnRenameFollowsIntoChecks(t *testing.T) {
-	const text = "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string\n\n\tValidators {\n\t\tEmailValid(email)\n\t}\n}\n"
+	const text = "package db\n\ntable users {\n\tid int [pk, increment]\n\temail string\n\n\tvalidators {\n\t\tEmailValid(email)\n\t}\n}\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":         "module rn\n",
 		"db/schema.volt": text,
@@ -152,8 +152,8 @@ func TestColumnRenameFollowsIntoChecks(t *testing.T) {
 }
 
 func TestColumnRenameFollowsIntoSingleTableSelect(t *testing.T) {
-	const text = "package db\n\nTable page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n}\n\n" +
-		"Select rows (site, day) for page_views where site = :s [order: (day desc, site asc)]\n"
+	const text = "package db\n\ntable page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n}\n\n" +
+		"select rows (site, day) for page_views where site = :s [order: (day desc, site asc)]\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":         "module rn\n",
 		"db/schema.volt": text,
@@ -173,12 +173,12 @@ func TestColumnRenameFollowsIntoSingleTableSelect(t *testing.T) {
 }
 
 func TestSelectColumnRefsFollowTheTarget(t *testing.T) {
-	const text = "package db\n\nTable orders {\n\tid int [pk]\n\ttotal int\n}\n\n" +
-		"Table page_views {\n\tid int [pk]\n\tsite string\n}\n\n" +
-		"Table link_clicks {\n\tid int [pk]\n\tsite string\n}\n\n" +
-		"Group clicks {\n\tlink_clicks\n}\n\n" +
-		"Select big (total) for orders where total > 1\n" +
-		"Select all (site) for clicks\n"
+	const text = "package db\n\ntable orders {\n\tid int [pk]\n\ttotal int\n}\n\n" +
+		"table page_views {\n\tid int [pk]\n\tsite string\n}\n\n" +
+		"table link_clicks {\n\tid int [pk]\n\tsite string\n}\n\n" +
+		"group clicks {\n\tlink_clicks\n}\n\n" +
+		"select big (total) for orders where total > 1\n" +
+		"select all (site) for clicks\n"
 	root := voltProject(t, map[string]string{"go.mod": "module g\n", "db/schema.volt": text})
 	d := NewDocument("file://"+filepath.Join(root, "db", "schema.volt"), text)
 
@@ -252,15 +252,15 @@ func TestGoFileChangeNoticedForBareTypesAndErrorHandlers(t *testing.T) {
 		{
 			name:    "bare Type",
 			file:    "db/schema.volt",
-			text:    "package db\n\nType Slug string\n\nTable posts {\n\tid   int  [pk, increment]\n\tslug Slug\n}\n",
+			text:    "package db\n\ntype Slug string\n\ntable posts {\n\tid   int  [pk, increment]\n\tslug Slug\n}\n",
 			goFile:  "db/types.go",
 			goSrc:   "package db\n\n// Slug is a URL segment (§types).\ntype Slug string\n",
-			missing: "Type Slug is declared in no Go file",
+			missing: "type Slug is declared in no Go file",
 		},
 		{
 			name:    "error handler",
 			file:    "app/routes.volt",
-			text:    "package app\n\nScope / [error_handler: Errors] {\n\tget / volt.Events\n}\n",
+			text:    "package app\n\nscope / [error_handler: Errors] {\n\tget / volt.Events\n}\n",
 			goFile:  "app/errors.go",
 			goSrc:   "package app\n\nimport (\n\t\"net/http\"\n\n\t\"github.com/Piechutowski/volt\"\n)\n\n// Errors renders failures (§scopes).\nfunc Errors(r volt.Request, err error) volt.Response { return volt.DefaultErrorHandler(r, err) }\n",
 			missing: "no function Errors",

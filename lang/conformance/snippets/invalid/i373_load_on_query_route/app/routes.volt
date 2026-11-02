@@ -6,7 +6,7 @@ import (
 	db
 )
 
-Scope / {
+scope / {
 	get /metrics db.MetricList {
 		settings db.SettingGet(1)
 	}

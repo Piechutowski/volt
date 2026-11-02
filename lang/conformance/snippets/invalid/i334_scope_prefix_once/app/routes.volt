@@ -6,18 +6,18 @@ import (
 	db
 )
 
-Scope /orgs/:org(uuid) {
+scope /orgs/:org(uuid) {
 	get /a Orgs.A
 	get /b Orgs.B
 	resources db.tags
 }
 
-Scope /w/:w {}
+scope /w/:w {}
 
-Scope /d/:x/:x {
+scope /d/:x/:x {
 	get /a Dups.A
 }
 
-Scope /n/:n {
+scope /n/:n {
 	get /m/:n Nests.M
 }

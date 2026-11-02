@@ -66,14 +66,14 @@ func (p *parser) importSpec() *ast.ImportSpec {
 
 func (p *parser) pipeline() *ast.Pipeline {
 	d := &ast.Pipeline{PipelinePos: p.next().Pos}
-	d.Name = p.ident("Pipeline name (§pipelines)")
-	p.expect(token.LBRACE, "Pipeline (§pipelines)")
+	d.Name = p.ident("pipeline name (§pipelines)")
+	p.expect(token.LBRACE, "pipeline (§pipelines)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		if plug := p.plugLine(); plug != nil {
 			d.Plugs = append(d.Plugs, plug)
 		}
 	}
-	d.Rbrace = p.expect(token.RBRACE, "Pipeline (§pipelines)").Pos
+	d.Rbrace = p.expect(token.RBRACE, "pipeline (§pipelines)").Pos
 	return d
 }
 
@@ -89,7 +89,7 @@ func (p *parser) plugLine() (plug *ast.Plug) {
 	}()
 
 	if !p.atKw("use") {
-		p.fail(p.cur(), "expected 'use' plug line in Pipeline body (§pipelines), found %s", p.cur())
+		p.fail(p.cur(), "expected 'use' plug line in pipeline body (§pipelines), found %s", p.cur())
 	}
 	p.lineBegin("plug line (§pipelines)")
 	plug = &ast.Plug{UsePos: p.kwTake("use").Pos}
@@ -108,16 +108,16 @@ func (p *parser) goRef(ctx string) *ast.GoRef {
 }
 
 func (p *parser) scope() *ast.Scope {
-	d := &ast.Scope{ScopePos: p.kwTake("Scope").Pos}
+	d := &ast.Scope{ScopePos: p.kwTake("scope").Pos}
 	d.Path = p.routePath()
-	d.Settings = p.settingsAt("Scope")
-	p.expect(token.LBRACE, "Scope (§scopes-and-routes)")
+	d.Settings = p.settingsAt("scope")
+	p.expect(token.LBRACE, "scope (§scopes-and-routes)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		if item := p.scopeItem(); item != nil {
 			d.Items = append(d.Items, item)
 		}
 	}
-	d.Rbrace = p.expect(token.RBRACE, "Scope (§scopes-and-routes)").Pos
+	d.Rbrace = p.expect(token.RBRACE, "scope (§scopes-and-routes)").Pos
 	return d
 }
 
@@ -134,10 +134,10 @@ func (p *parser) scopeItem() (item ast.ScopeItem) {
 
 	t := p.cur()
 	if t.Kind != token.IDENT {
-		p.fail(t, "expected a route, resources or nested Scope in Scope body (§scopes-and-routes), found %s", t)
+		p.fail(t, "expected a route, resources or nested scope in scope body (§scopes-and-routes), found %s", t)
 	}
 	switch {
-	case p.atKw("Scope"):
+	case p.atKw("scope"):
 		return p.scope()
 	case p.atKw("resources"):
 		return p.resources()
@@ -148,7 +148,7 @@ func (p *parser) scopeItem() (item ast.ScopeItem) {
 	case isVerb(t.Val), isPut(t.Val):
 		return p.route()
 	default:
-		p.fail(t, "expected a verb (get, post, ...), 'resources', 'dataset', 'load' or 'Scope' in Scope body (§scopes-and-routes), found %q", t.Val)
+		p.fail(t, "expected a verb (get, post, ...), 'resources', 'dataset', 'load' or 'scope' in scope body (§scopes-and-routes), found %q", t.Val)
 		return nil
 	}
 }

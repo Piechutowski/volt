@@ -1,37 +1,37 @@
 // spec: §generated-query-surface, §route-paths, key columns named like the route files' signature names route by their parameter, which takes a trailing underscore
 package db
 
-Table gauges {
+table gauges {
   c     int [pk]
   label string
 }
 
-Table counters {
+table counters {
   w     string [pk]
   label string
 }
 
-Table meters {
+table meters {
   r     int [pk]
   label string
 }
 
-Table samples {
+table samples {
   opts  int [pk]
   label string
 }
 
-Table spans {
+table spans {
   cs    int [pk]
   label string
 }
 
-Table probes {
+table probes {
   volt  int [pk]
   label string
 }
 
-Table traces {
+table traces {
   ctx   int [pk]
   label string
 }

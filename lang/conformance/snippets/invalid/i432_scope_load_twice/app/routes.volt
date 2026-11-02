@@ -6,9 +6,9 @@ import (
 	db
 )
 
-Scope / {
+scope / {
 	load user CurrentUser
-	Scope /admin {
+	scope /admin {
 		load user Tenant
 		get /stats Admin.Stats
 	}

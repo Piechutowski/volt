@@ -3,11 +3,11 @@
 // want: no function EmailValid
 package db
 
-Table users {
+table users {
   id int [pk]
   email string
 
-  Validators {
+  validators {
     EmailValid(email)
   }
 }

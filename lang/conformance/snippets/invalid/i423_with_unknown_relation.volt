@@ -2,16 +2,16 @@
 // want: has no relation "owners" to nest
 package db
 
-Table metrics {
+table metrics {
   id   int    [pk, increment]
   name string
   unit string [null]
 }
 
-Table points {
+table points {
   id        int   [pk, increment]
   metric_id int   [ref: metrics.id]
   ts        int
 }
 
-Select rows for metrics with owners
+select rows for metrics with owners

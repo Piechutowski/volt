@@ -6,7 +6,7 @@ import (
 	db
 )
 
-Scope / {
+scope / {
 	get /charts Pages.Charts {
 		metrics db.MetricRecent()
 	}

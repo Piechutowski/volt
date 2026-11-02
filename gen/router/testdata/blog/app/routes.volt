@@ -4,16 +4,16 @@ import (
 	db
 )
 
-Pipeline api {
+pipeline api {
 	use volt.RequestID
 	use BearerAuth
 }
 
-Scope / [pipe: api, error_handler: Errors] {
+scope / [pipe: api, error_handler: Errors] {
 	get  /        Home.Index [name: root]
 	get  /about   Home.About
 
-	Scope /admin [name: admin] {
+	scope /admin [name: admin] {
 		get /stats Admin.Stats {
 			totals db.UserTotals()
 			feed   db.UserFeed()
@@ -34,13 +34,13 @@ Scope / [pipe: api, error_handler: Errors] {
 	post  /login                 Session.Login     [body: LoginForm]
 	any /ping                    Home.Ping
 
-	Scope /me [name: me] {
+	scope /me [name: me] {
 		load user CurrentUser
 		get /      Me.Show
 		get /peers db.UserList
 	}
 
-	Scope /api [name: api] {
+	scope /api [name: api] {
 		get    /users            db.UserList
 		get    /users/:id(int) db.UserGet
 		post   /users            db.UserCreate
@@ -55,13 +55,13 @@ Scope / [pipe: api, error_handler: Errors] {
 	}
 
 	// A dataset (§datasets): one query route per member of the group select.
-	Scope /ms {
+	scope /ms {
 		dataset db.browse [strip: "ms_"]
 	}
 
 	// Default handlers (§default-handlers): every action is a query route over
 	// the table's generated CRUD; no controller to write.
-	Scope /ref [name: ref] {
+	scope /ref [name: ref] {
 		resources db.users [default]
 		resources db.tags  [default]
 	}

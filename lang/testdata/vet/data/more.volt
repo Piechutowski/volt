@@ -1,55 +1,55 @@
 package data
 
-Table comments {
+table comments {
   id int [pk]
   post_id string
   author_id string
   ~owned
 }
-Ref: comments.author_id > users.id
-Ref: comments.post_id > posts.title
+ref: comments.author_id > users.id
+ref: comments.post_id > posts.title
 
-Table a {
+table a {
   id int [pk]
   b_id int
 }
-Table b {
+table b {
   id int [pk]
   a_id int
 }
-Ref: a.b_id > b.id
-Ref: b.a_id > a.id
+ref: a.b_id > b.id
+ref: b.a_id > a.id
 
-Table employees {
+table employees {
   id int [pk]
   manager_id int
 }
-Ref: employees.manager_id > employees.id
-Ref: employees.id > employees.id
+ref: employees.manager_id > employees.id
+ref: employees.id > employees.id
 
-Table user_limits {
+table user_limits {
   id int [pk]
 }
-Table user_foos {
+table user_foos {
   id int [pk]
   bar int
 }
-Table user_foo_bars {
+table user_foo_bars {
   id int [pk]
 }
-Table bonus {
+table bonus {
   id int [pk]
 }
-Table axis {
+table axis {
   id int [pk]
 }
 
-Table user_columns {
+table user_columns {
   id int [pk]
 }
-Table user_params [model: "UserParams"] {
+table user_params [model: "UserParams"] {
   id int [pk]
 }
-Table drafts [model: "UserChangeset"] {
+table drafts [model: "UserChangeset"] {
   id int [pk]
 }

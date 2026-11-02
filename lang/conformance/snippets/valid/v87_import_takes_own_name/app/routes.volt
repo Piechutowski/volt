@@ -5,6 +5,6 @@ import (
 	app db
 )
 
-Scope /api {
+scope /api {
 	resources app.users [default]
 }

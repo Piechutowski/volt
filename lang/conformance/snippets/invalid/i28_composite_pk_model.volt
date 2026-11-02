@@ -1,11 +1,11 @@
 // spec: §table-resolution
 package app
 
-Table pairs {
+table pairs {
 	a int [pk]
 	b int [pk]
 }
 
-Scope / {
+scope / {
 	resources pairs
 }

@@ -2,6 +2,6 @@
 // want: is int, not a struct type
 package app
 
-Scope / {
+scope / {
 	post /clock Session.Clock [body: Clock]
 }

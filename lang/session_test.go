@@ -81,7 +81,7 @@ func TestSessionMatchesFreshAnalysis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	routed := strings.Replace(string(src), "Scope /api {\n", "Scope /api {\n\tget /extra Extra.Show\n", 1)
+	routed := strings.Replace(string(src), "scope /api {\n", "scope /api {\n\tget /extra Extra.Show\n", 1)
 	_, work = sessionRound(t, &s, root, map[string]string{d2: fixed, r3: routed}, s.Stats())
 	expect("route edit in the editor", work, 1, 1)
 
@@ -111,7 +111,7 @@ func TestSessionReadsWhatIsOnDisk(t *testing.T) {
 		}
 	}
 	write("go.mod", "module disk\n")
-	write("db/schema.volt", "package db\n\nTable users {\n\tid int [pk, increment]\n\temail string\n\ttitle string\n\ttitle string\n\n\tValidators {\n\t\tEmailValid(email)\n\t}\n}\n")
+	write("db/schema.volt", "package db\n\ntable users {\n\tid int [pk, increment]\n\temail string\n\ttitle string\n\ttitle string\n\n\tvalidators {\n\t\tEmailValid(email)\n\t}\n}\n")
 	write("db/checks.go", "package db\n\nfunc EmailValid(email string) error { return nil }\n")
 	sameStamp := func(name, from, to string) {
 		t.Helper()
@@ -197,7 +197,7 @@ func TestSessionGeneratesIdentically(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	edited := strings.Replace(string(src), "Table m_t0001s {\n", "Table m_t0001s {\n  extra string\n", 1)
+	edited := strings.Replace(string(src), "table m_t0001s {\n", "table m_t0001s {\n  extra string\n", 1)
 	for i, overlay := range []map[string]string{nil, {schema: edited}, {schema: edited}, nil} {
 		pr, _ := sessionRound(t, &s, root, overlay, s.Stats())
 		fresh, err := lang.LoadOverlay(disk.Source{}, root, overlay)
@@ -277,9 +277,9 @@ func TestSessionBindsUnresolvedSelects(t *testing.T) {
 		return path
 	}
 	write("go.mod", "module unresolved\n")
-	schema := "package db\n\nTable authors {\n\tid int [pk, increment]\n\trank int32\n}\n\nTable tags {\n\tid int [pk, increment]\n\tname string\n}\n\nSelect ranked for authors where rank >= :min\n"
+	schema := "package db\n\ntable authors {\n\tid int [pk, increment]\n\trank int32\n}\n\ntable tags {\n\tid int [pk, increment]\n\tname string\n}\n\nselect ranked for authors where rank >= :min\n"
 	schemaPath := write("db/schema.volt", schema)
-	routes := "package app\n\nimport (\n\tdb\n)\n\nScope /api {\n\tget /ranked db.AuthorRanked [name: RankedRows]\n\tget /ranked/:min db.AuthorRanked [name: RankedFrom]\n\tdataset db.ranked\n}\n"
+	routes := "package app\n\nimport (\n\tdb\n)\n\nscope /api {\n\tget /ranked db.AuthorRanked [name: RankedRows]\n\tget /ranked/:min db.AuthorRanked [name: RankedFrom]\n\tdataset db.ranked\n}\n"
 	routesPath := write("app/routes.volt", routes)
 
 	var s lang.Session
@@ -309,7 +309,7 @@ func TestSessionBindsUnresolvedSelects(t *testing.T) {
 		}
 	}
 	round("first load", nil)
-	routed := strings.Replace(routes, "Scope /api {\n", "Scope /api {\n\tget /tags db.TagList\n", 1)
+	routed := strings.Replace(routes, "scope /api {\n", "scope /api {\n\tget /tags db.TagList\n", 1)
 	round("route edit", map[string]string{routesPath: routed})
 	reused := s.Stats().SelectsReused
 	noted := strings.Replace(schema, "name string\n", "name string [note: \"shown\"]\n", 1)
@@ -377,11 +377,11 @@ func TestSessionReparsesOneDeclaration(t *testing.T) {
 	round("edit a route", cur, work{1, 0, 0, 0, 0, 17, 1})
 	cur = strings.Replace(cur, "created_at time.Time", "created_at time.Time [note: \"stamped\"]", 1)
 	round("edit the partial", cur, work{1, 12, 12, 12, 13, 13, 13})
-	cur = strings.Replace(cur, "Type Status string", "Type Status  string", 1)
+	cur = strings.Replace(cur, "type Status string", "type Status  string", 1)
 	round("respace the Type", cur, work{1, 0, 0, 0, 0, 0, 1})
-	cur = strings.Replace(cur, "TablePartial stamped", "Type kinds.Kind string from \"example.com/kinds\"\n\nTablePartial stamped", 1)
+	cur = strings.Replace(cur, "table_partial stamped", "type kinds.Kind string from \"example.com/kinds\"\n\ntable_partial stamped", 1)
 	round("add a Type", cur, work{1, 12, 12, 12, 13, 13, 13})
-	cur = strings.Replace(cur, "Pred fresh { c001 >= :since }", "Pred fresh { c001 > :since }", 1)
+	cur = strings.Replace(cur, "pred fresh { c001 >= :since }", "pred fresh { c001 > :since }", 1)
 	round("edit the pred", cur, work{1, 0, 0, 0, 13, 1, 1})
 	if err := os.WriteFile(filepath.Join(root, "extra.go"), []byte("package main\n\nfunc Extra() {}\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -410,7 +410,7 @@ func TestSessionConcurrentCallersAgreeWithFreshAnalysis(t *testing.T) {
 				if (c+r)%2 == 1 {
 					text = strings.Replace(base, "  title string\n", "", 1)
 				}
-				text = strings.Replace(text, "Table tags {", fmt.Sprintf("Table tags_%d_%d {", c, r), 1)
+				text = strings.Replace(text, "table tags {", fmt.Sprintf("table tags_%d_%d {", c, r), 1)
 				overlay := map[string]string{d2: text}
 				pr, err := s.Load(disk.Source{}, root, overlay)
 				if err != nil {

@@ -59,7 +59,7 @@ searching for uses that do not exist.
 
 ### unusedpartial
 
-**What it does.** Reports a `TablePartial` that no table injects.
+**What it does.** Reports a `table_partial` that no table injects.
 
 **Why.** A partial's only effect is through the tables that inject it;
 an unused partial is dead weight that still occupies a name in its
@@ -114,14 +114,14 @@ textually: `` `a+b` `` and `` `a + b` `` count as different keys.
 ### emptybody
 
 **What it does.** Reports empty `Indexes {}` and `Validators {}` blocks,
-and a `Project` with neither properties nor a `note:` (spec §project).
+and a `project` with neither properties nor a `note:` (spec §project).
 
 **Why.** An empty block does nothing but implies work in progress.
 
 **Examples.** [testdata/emptybody.volt](../lang/vet/testdata/emptybody.volt):
 every empty block warns; the table's column is the good line.
 [testdata/emptybody_note.volt](../lang/vet/testdata/emptybody_note.volt):
-a `Project` that carries only a note is not empty, and draws nothing.
+a `project` that carries only a note is not empty, and draws nothing.
 
 ### shadowedcolumn
 
@@ -183,7 +183,7 @@ key is columns only and which has no `where:`. A unique index with
 expression constrains no column (spec §indexes), so SQLite refuses
 either as a foreign-key target; one member of a composite key alone is
 not unique either. The referenced columns are those right of `>` in a
-`Ref`, or the endpoint of a column's `ref:` (spec §relationships-ref).
+`ref`, or the endpoint of a column's `ref:` (spec §relationships-ref).
 The generator asks the same question to give `<Model>GetBy<Column>`
 (spec §generated-query-surface).
 

@@ -2,7 +2,7 @@
 // want: arithmetic takes numeric columns
 package db
 
-Table points {
+table points {
   id        int     [pk, increment]
   metric_id int
   ts        int
@@ -11,4 +11,4 @@ Table points {
   note      string  [null]
 }
 
-Select rows (label + 1 as next) for points
+select rows (label + 1 as next) for points

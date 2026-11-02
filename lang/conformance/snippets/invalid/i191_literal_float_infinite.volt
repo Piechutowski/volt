@@ -2,9 +2,9 @@
 // want: does not fit float64
 package db
 
-Table page_views {
+table page_views {
   id int [pk]
   score float64
 }
 
-Select hot for page_views where score > 1e400
+select hot for page_views where score > 1e400

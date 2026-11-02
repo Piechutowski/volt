@@ -1,13 +1,13 @@
-// spec: §keywords, §indexes, §validators, §records-sample-data, a word that opens a block in a table body is capitalized: indexes, validators and records are errors naming the right spelling
-// want: write Indexes, not indexes
-Table users {
+// spec: §keywords, §indexes, §validators, §records-sample-data, a word that opens a block in a table body is lowercase: Indexes, Validators and Records are errors naming the right spelling
+// want: write indexes, not Indexes
+table users {
   id    int [pk]
   email string
 
-  indexes {
+  Indexes {
     (email, id)
   }
-  records (id, email) {
+  Records (id, email) {
     1, "a@example.com"
   }
 }

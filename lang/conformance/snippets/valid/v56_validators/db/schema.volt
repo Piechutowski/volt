@@ -3,15 +3,15 @@
 // checks (validator only), named bare as every declaration of the package is
 package db
 
-Pred positive { hits >= 0 }
+pred positive { hits >= 0 }
 
-Table page_views {
+table page_views {
   id int [pk]
   site string
   hits int
   flag bool [default: false]
 
-  Validators {
+  validators {
     SiteKnown(site)
     SiteKnown(site)
   }

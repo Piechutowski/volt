@@ -2,19 +2,19 @@
 // included: string and string [null] disagree
 package db
 
-Table page_views {
+table page_views {
   id int [pk]
   site string
 }
 
-Table link_clicks {
+table link_clicks {
   id int [pk]
   site string [null]
 }
 
-Group metrics {
+group metrics {
   page_views
   link_clicks
 }
 
-Select summary (site) for metrics
+select summary (site) for metrics

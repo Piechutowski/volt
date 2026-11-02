@@ -1,11 +1,11 @@
 // the unpleasant cases: initialisms, an underscore-led name whose
 // first word is a digit, names sharing a stem, keyword-ish names,
 // a []byte key named like the runtime package the key methods call
-Type CoreAuditKind string
-Table users {
+type CoreAuditKind string
+table users {
   id int [pk]
 }
-Table core_users [note: "Shares the stem of users; its own name keeps the models apart"] {
+table core_users [note: "Shares the stem of users; its own name keeps the models apart"] {
   id int [pk]
   api_key string
   homepage_url string [null]
@@ -18,16 +18,16 @@ Table core_users [note: "Shares the stem of users; its own name keeps the models
   func int [null]
   rt []byte [unique, note: "Named like the runtime package GetByRt binds through"]
 
-  Validators {
+  validators {
     CoreAuditKindKnown(kind)
   }
 }
-Table _2fa_codes {
+table _2fa_codes {
   code string [pk]
   user_id int [pk, ref: users.id]
   expires_at time.Time
 }
-Table digests {
+table digests {
   rt   []byte [pk, note: "Named like the runtime package Get and Delete bind through"]
   size int
 }

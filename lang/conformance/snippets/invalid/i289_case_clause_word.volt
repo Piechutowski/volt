@@ -2,13 +2,13 @@
 // want: write where, not WHERE
 package db
 
-Type money.Money string FROM "example.com/money"
+type money.Money string FROM "example.com/money"
 
-Table posts {
+table posts {
   id    int    [pk]
   title string [null]
   views int
 }
 
-Select fresh for posts WHERE views > 0 AND title IS NOT NULL
-Select all FOR posts
+select fresh for posts WHERE views > 0 AND title IS NOT NULL
+select all FOR posts

@@ -113,7 +113,7 @@ load-bearing patterns, each citing the spec section it implements:
   range — exactly what `injections.scm` needs to hand note bodies to
   Markdown and backtick expressions, an `exec`'s SQL among them, to SQL.
 - **One endpoint shape** (§relationships-ref). A ref endpoint is
-  `table.column` or `table.(columns)`, in a `Ref:` and in a column's
+  `table.column` or `table.(columns)`, in a `ref:` and in a column's
   `ref:` alike, so the grammar declares no conflicts: `setting` gives
   `ref` its own alternative whose value is a `ref_endpoint`, and every
   other setting takes the generic value.
@@ -122,11 +122,11 @@ load-bearing patterns, each citing the spec section it implements:
   checker enforces it with positions the LSP surfaces. New settings
   parse without touching the grammar.
 - **The Volt layer** (Part II of the spec): `package` clause, `import (…)` blocks,
-  `Pipeline`, `Scope`, routes (the verbs of §routes, `put` not among
+  `pipeline`, `scope`, routes (the verbs of §routes, `put` not among
   them) with bare and `:name(int)` parameters, `int` being the one
   type written (§route-paths), and `:name...`
   wildcards, `resources` with an optional package qualifier, and the
-  query layer — `Group` algebra, the `Pred` expression grammar
+  query layer — `group` algebra, the `pred` expression grammar
   (prec.left or/and, keyword operators at the same precedence as other
   keywords), `Select ... for ... where`.
   `/` is a token per §layers-files-and-the-superset-rule.
@@ -219,16 +219,16 @@ layer:
   occurrences whose spelling matches the one under the cursor, and
   validates the new name against the identifier grammar (§identifiers).
 - Column identity is container-scoped; a column injected from a
-  TablePartial resolves into the partial, so renaming it updates the
+  `table_partial` resolves into the partial, so renaming it updates the
   partial once plus every reference through every injecting table
   (§tablepartial).
 - Completion is textual-context + semantic-fill: where-am-I is
   answered by line-prefix regexes plus a `{`/`}`-balance scanner (the
   current line usually doesn't parse mid-keystroke); candidates come
   from the last coherent semantic model — real tables after `db.`
-  (case-insensitively filtered), verbs and `resources` in Scope
-  bodies, tables and groups in a Group body, operations in a
-  Migration body, the columns of the named table after `ref: table.`,
+  (case-insensitively filtered), verbs and `resources` in `scope`
+  bodies, tables and groups in a `group` body, operations in a
+  `migration` body, the columns of the named table after `ref: table.`,
   settings per construct and none on a construct that takes none
   (§settings-lists, §settings-whitelists), and `true`/`false` after
   `default:` only on a column stored as `bool`. Every keyword
@@ -298,10 +298,10 @@ from one implementation. The protocol library is `tliron/glsp` (LSP
 ## 7. Known limitations (documented trade-offs, not bugs)
 
 - **Grammar: columns named exactly like block keywords.** A line in a
-  Table or TablePartial body that starts with a column named exactly
-  `Indexes` or `Validators` (`Records` too in a Table body), or a line
+  `table` or `table_partial` body that starts with a column named exactly
+  `indexes` or `validators` (`records` too in a `table` body), or a line
   in a create, rebuild or drop table shape body that starts with a
-  column named exactly `Indexes`, lexes as the block keyword (§keywords
+  column named exactly `indexes`, lexes as the block keyword (§keywords
   note above); the front end, spec-exact, reads them as columns.
   Another case of the word (`indexes`) is an identifier to both.
 - **Grammar: a multi-line string that opens with `//`.** When the
@@ -312,7 +312,7 @@ from one implementation. The protocol library is `tliron/glsp` (LSP
   literal that begins with `//`, parse in both.
 - **Grammar: continuations outside a settings list, and a break
   before a setting's `:`.** An element continued on an indented line
-  (`Ref:` with its relationship on the next line,
+  (`ref:` with its relationship on the next line,
   §line-structure-and-whitespace), a parenthesized list spanning
   lines outside a settings list (a composite index key, a records
   column list, a composite ref endpoint) and a line break between a
@@ -323,7 +323,7 @@ from one implementation. The protocol library is `tliron/glsp` (LSP
   and `error_handler:` point into Go, which this server does not
   index (roadmap). A query reference (`db.UserGet`, §query-routes) is
   not navigated either; a dataset's select (`dataset db.browse`) is.
-  Definition and hover on a bare declared type stay on its `Type`
+  Definition and hover on a bare declared type stay on its `type`
   line and do not open the Go type (§types).
 
 ### Go references
@@ -357,7 +357,7 @@ count: the Go buffers themselves belong to gopls, not to this server. Rename on 
 the Go declaration is gopls' job, and the existence error then points
 at whichever side is still behind. Rename on a column follows it into
 the table's validators (their arguments); a column named through a
-group, in a `Pred` body or a group select, is left alone, and the
+group, in a `pred` body or a group select, is left alone, and the
 agreement error (§selects-over-groups) names what is now missing.
 
 ## 8. The verification checklist
@@ -370,7 +370,7 @@ How to audit that the three components implement
 | Front end accepts/rejects exactly what the spec says | conformance corpus: `valid/` MUST pass, `invalid/` MUST fail, each snippet tagged `// spec: §…` (files without a `package` clause = the schema pass, files with one and project dirs = the project pass); every diagnostic of every invalid snippet, recovery included, is a golden | `lang/conformance/snippets/` and `lang/conformance/invalid_*.golden` via `go test ./lang/...`; refresh with `-update` after reading the diff |
 | Grammar parses everything the spec allows | corpus cases (input → expected tree, incl. `:error` cases) | `grammar/test/corpus/`, `tree-sitter test` |
 | Spec grammar and front end agree | the spec's EBNF read as data: every derived sentence parses, every one-token neighbour is decided alike by the grammar and the front end | `lang/spec_grammar_test.go` via `go test ./lang/...` |
-| Grammar and front end agree | every valid conformance snippet (the files its loader reads, so not `testdata/` or a nested module) and `grammar/examples/*` must produce zero front-end diagnostics, and every derived sentence of the spec's grammar (`go test ./lang -run TestSpecGrammarSentencesParse -sentences DIR`) zero parser diagnostics; all of them must produce zero tree-sitter ERROR nodes, except where a limitation of section 7 applies: today `v55_element_continuation` (a `Ref:` continued on an indented line) | differential run after grammar changes |
+| Grammar and front end agree | every valid conformance snippet (the files its loader reads, so not `testdata/` or a nested module) and `grammar/examples/*` must produce zero front-end diagnostics, and every derived sentence of the spec's grammar (`go test ./lang -run TestSpecGrammarSentencesParse -sentences DIR`) zero parser diagnostics; all of them must produce zero tree-sitter ERROR nodes, except where a limitation of section 7 applies: today `v55_element_continuation` (a `ref:` continued on an indented line) | differential run after grammar changes |
 | Spec examples run | every `volt` block of `spec.md` (§conformance-and-the-proof-chain): a plain block is a whole file the front end accepts, a block fenced `volt invalid` one it rejects, a block fenced `volt fragment` a piece of a file that parses alone; any other fence marker fails | `lang/spec_examples_test.go` via `go test ./lang/...` |
 | Lint rules match their doc | doc ↔ registry ↔ testdata consistency test; `//WANT` markers both directions | `lang/vet/docs_test.go` against [`lint.md`](lint.md) |
 | Generated routers implement Part II of the spec | goldens byte-compared, gofmt-stable, **compiled**; itest exercises match/404/405, typed-param 404s, pipeline order, the error spine, reverse-URL round-trip totality | `gen/router`, `itest/` |

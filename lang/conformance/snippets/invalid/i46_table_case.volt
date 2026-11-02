@@ -1,11 +1,11 @@
 // spec: §declaration
 package app
 
-Table posts {
+table posts {
 	id int [pk]
 }
 
 // Names are case-sensitive: the table is "posts", not "Posts".
-Scope / {
+scope / {
 	resources Posts
 }

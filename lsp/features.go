@@ -46,31 +46,31 @@ func (d *Document) DocumentSymbols() []protocol.DocumentSymbol {
 	for _, decl := range d.File.Decls {
 		switch n := decl.(type) {
 		case *ast.Project:
-			name := "Project"
+			name := "project"
 			var sel ast.Node = n
 			if n.Name != nil {
 				name = n.Name.Name()
 				sel = n.Name
 			}
-			out = append(out, d.symbol(name, "Project", protocol.SymbolKindNamespace, n, sel, nil))
+			out = append(out, d.symbol(name, "project", protocol.SymbolKindNamespace, n, sel, nil))
 		case *ast.Table:
-			out = append(out, d.symbol(n.Name.Name(), "Table", protocol.SymbolKindStruct, n, n.Name, d.tableChildren(n.Body)))
+			out = append(out, d.symbol(n.Name.Name(), "table", protocol.SymbolKindStruct, n, n.Name, d.tableChildren(n.Body)))
 		case *ast.TablePartial:
-			out = append(out, d.symbol(n.Name.Name(), "TablePartial", protocol.SymbolKindInterface, n, n.Name, d.tableChildren(n.Body)))
+			out = append(out, d.symbol(n.Name.Name(), "table_partial", protocol.SymbolKindInterface, n, n.Name, d.tableChildren(n.Body)))
 		case *ast.TypeDecl:
-			out = append(out, d.symbol(n.Name.String(), "Type", protocol.SymbolKindClass, n, n.Name, nil))
+			out = append(out, d.symbol(n.Name.String(), "type", protocol.SymbolKindClass, n, n.Name, nil))
 		case *ast.Ref:
-			out = append(out, d.symbol(refLabel(n), "Ref", protocol.SymbolKindKey, n, n, nil))
+			out = append(out, d.symbol(refLabel(n), "ref", protocol.SymbolKindKey, n, n, nil))
 		case *ast.Group:
-			out = append(out, d.symbol(n.Name.Name(), "Group", protocol.SymbolKindNamespace, n, n.Name, nil))
+			out = append(out, d.symbol(n.Name.Name(), "group", protocol.SymbolKindNamespace, n, n.Name, nil))
 		case *ast.Records:
-			label := "Records"
+			label := "records"
 			if n.Table != nil {
-				label = "Records " + n.Table.Name()
+				label = "records " + n.Table.Name()
 			}
 			out = append(out, d.symbol(label, "", protocol.SymbolKindArray, n, n, nil))
 		case *ast.Migration:
-			out = append(out, d.symbol(n.Name.Name(), "Migration", protocol.SymbolKindModule, n, n.Name, nil))
+			out = append(out, d.symbol(n.Name.Name(), "migration", protocol.SymbolKindModule, n, n.Name, nil))
 		}
 	}
 	return out
@@ -85,9 +85,9 @@ func (d *Document) tableChildren(body []ast.TableItem) []protocol.DocumentSymbol
 		case *ast.PartialRef:
 			kids = append(kids, d.symbol("~"+n.Name.Name(), "injected partial", protocol.SymbolKindInterface, n, n.Name, nil))
 		case *ast.IndexesBlock:
-			kids = append(kids, d.symbol("Indexes", "", protocol.SymbolKindProperty, n, n, nil))
+			kids = append(kids, d.symbol("indexes", "", protocol.SymbolKindProperty, n, n, nil))
 		case *ast.ValidatorsBlock:
-			kids = append(kids, d.symbol("Validators", "", protocol.SymbolKindProperty, n, n, nil))
+			kids = append(kids, d.symbol("validators", "", protocol.SymbolKindProperty, n, n, nil))
 		}
 	}
 	return kids
@@ -241,7 +241,7 @@ func (d *Document) tableHover(key string) string {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "```volt\nTable %s\n```\n", ti.Decl.Name.Name())
+	fmt.Fprintf(&b, "```volt\ntable %s\n```\n", ti.Decl.Name.Name())
 	for _, cd := range ti.Columns {
 		line := "- `" + cd.Col.Name.Name() + " " + cd.Col.Type.String() + "`" + settingsSuffix(cd.Col.Settings)
 		if cd.Partial != nil {
@@ -276,7 +276,7 @@ func migrationHoverMD(mi *check.MigrationInfo, i, n int) string {
 	if !mi.Reversible {
 		way = "irreversible"
 	}
-	return fmt.Sprintf("```volt\nMigration %s\n```\nmigration %d of %d, %s\n", mi.Name, i+1, n, way)
+	return fmt.Sprintf("```volt\nmigration %s\n```\nmigration %d of %d, %s\n", mi.Name, i+1, n, way)
 }
 
 func (d *Document) typeHover(key string) string {
@@ -284,7 +284,7 @@ func (d *Document) typeHover(key string) string {
 	if !ok {
 		return ""
 	}
-	md := "```volt\nType " + td.Key + " " + td.Decl.Storage.String()
+	md := "```volt\ntype " + td.Key + " " + td.Decl.Storage.String()
 	if td.Path != "" {
 		if q, ok := scanner.Quote(td.Path); ok {
 			md += " from " + q
@@ -299,7 +299,7 @@ func (d *Document) partialHover(name string) string {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "```volt\nTablePartial %s\n```\n", name)
+	fmt.Fprintf(&b, "```volt\ntable_partial %s\n```\n", name)
 	for _, item := range pi.Decl.Body {
 		if col, ok := item.(*ast.Column); ok {
 			b.WriteString("- `" + col.Name.Name() + " " + col.Type.String() + "`" + settingsSuffix(col.Settings) + "\n")
@@ -320,7 +320,7 @@ func (d *Document) columnHover(id SymbolID) string {
 		b.WriteString(strings.TrimSpace(s) + "\n")
 	}
 	if strings.HasPrefix(id.Container, "partial:") {
-		b.WriteString("\nDefined in TablePartial `" + strings.TrimPrefix(id.Container, "partial:") + "`.\n")
+		b.WriteString("\nDefined in table_partial `" + strings.TrimPrefix(id.Container, "partial:") + "`.\n")
 	}
 	if note := settingString(col.Settings, "note"); note != "" {
 		b.WriteString("\n---\n" + note + "\n")

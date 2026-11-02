@@ -1,11 +1,11 @@
 // spec: §selects-over-groups — the data package a query route binds to
 package db
 
-Table users {
+table users {
   id    int [pk, increment]
   email string    [unique]
   name  string    [default: ""]
 }
 
-Select picked for users where id in :ids [order: (id asc)]
-Select named  for users where name = :name
+select picked for users where id in :ids [order: (id asc)]
+select named  for users where name = :name

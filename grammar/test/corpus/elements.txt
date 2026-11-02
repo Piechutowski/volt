@@ -2,7 +2,7 @@
 project with a note and properties
 ==================
 
-Project shop [note: "project note"] {
+project shop [note: "project note"] {
   database_type: "SQLite"
   anything_else: "accepted"
 }
@@ -31,7 +31,7 @@ Project shop [note: "project note"] {
 anonymous project
 ==================
 
-Project {
+project {
   database_type: "SQLite"
 }
 
@@ -45,12 +45,12 @@ Project {
         (string_content)))))
 
 ==================
-Type declarations: imported Go type with storage and path, bare type of the package
+type declarations: imported Go type with storage and path, bare type of the package
 ==================
 
-Type money.Money int from "example.com/app/money"
-Type png.Png []byte from "image/png"
-Type Slug string
+type money.Money int from "example.com/app/money"
+type png.Png []byte from "image/png"
+type Slug string
 
 ---
 
@@ -100,7 +100,7 @@ a body note is an error
 :error
 ==================
 
-Table t {
+table t {
   id int
   Note: 'body form'
 }
@@ -120,11 +120,11 @@ use * from './base'
 
 
 ==================
-Type name takes no slice prefix
+type name takes no slice prefix
 :error
 ==================
 
-Type []Slug string
+type []Slug string
 
 ---
 

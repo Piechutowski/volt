@@ -339,11 +339,11 @@ func (c *checker) routing(pkg *Package) {
 	for _, d := range pkg.merged.Decls {
 		if pl, ok := d.(*ast.Pipeline); ok {
 			if !goIdentOK(pl.Name.Name()) {
-				c.errorf(pl.Name.Pos(), "pipelines", "Pipeline name %q must be a plain identifier (§pipelines)", pl.Name.Name())
+				c.errorf(pl.Name.Pos(), "pipelines", "pipeline name %q must be a plain identifier (§pipelines)", pl.Name.Name())
 				continue
 			}
 			if _, dup := pkg.Pipelines[pl.Name.Name()]; dup {
-				c.errorf(pl.Pos(), "pipelines", "duplicate Pipeline name %q (§pipelines)", pl.Name.Name())
+				c.errorf(pl.Pos(), "pipelines", "duplicate pipeline name %q (§pipelines)", pl.Name.Name())
 				continue
 			}
 			pkg.Pipelines[pl.Name.Name()] = pl
@@ -465,7 +465,7 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 	checked := append([]*ast.Segment{}, inh.prefix...)
 	for _, seg := range sc.Path.Segments {
 		if seg.Kind == ast.SegWild {
-			c.errorf(seg.Pos(), "scopes-and-routes", "a Scope prefix cannot contain a wildcard (§route-paths)")
+			c.errorf(seg.Pos(), "scopes-and-routes", "a scope prefix cannot contain a wildcard (§route-paths)")
 			continue
 		}
 		checked = append(checked, seg)
@@ -498,11 +498,11 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 			case "pipe":
 				id, ok := s.Value.(*ast.Ident)
 				if !ok {
-					c.errorf(s.Pos(), "scopes-and-routes", "pipe: takes a Pipeline name (§scopes)")
+					c.errorf(s.Pos(), "scopes-and-routes", "pipe: takes a pipeline name (§scopes)")
 					continue
 				}
 				if _, exists := c.pkg.Pipelines[id.Name()]; !exists {
-					c.errorf(s.Pos(), "scopes-and-routes", "unknown Pipeline %q (§scopes)", id.Name())
+					c.errorf(s.Pos(), "scopes-and-routes", "unknown pipeline %q (§scopes)", id.Name())
 					continue
 				}
 				next.pipes = append(next.pipes, id.Name())
@@ -539,7 +539,7 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 				}
 				next.errHandler = name
 			default:
-				c.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a Scope (§settings-whitelists); valid: pipe, name, error_handler", s.Name)
+				c.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a scope (§settings-whitelists); valid: pipe, name, error_handler", s.Name)
 			}
 		}
 	}

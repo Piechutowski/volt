@@ -6,7 +6,7 @@ import (
 	db
 )
 
-Scope / {
+scope / {
 	load user Nobody
 	get /me Me.Show
 }

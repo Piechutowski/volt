@@ -6,7 +6,7 @@ import (
 	db
 )
 
-Scope /api {
+scope /api {
 	options /popular db.PostPopular
 	any     /hot     db.PostPopular [name: hot]
 }

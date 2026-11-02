@@ -2,7 +2,7 @@
 // want: write int, not INT
 package app
 
-Scope / {
+scope / {
 	get /posts/:id(INT) Post.Show
 	get /tags/:id(Int)/:page(int) Tag.Find
 }

@@ -53,30 +53,30 @@ func TestIncrementalSync(t *testing.T) {
 
 	uri := "file:///lone.volt"
 	if err := s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{TextDocument: protocol.TextDocumentItem{URI: uri, Version: 1,
-		Text: "Table users {\n  id int [pk]\n  name bool\n}\n"}}); err != nil {
+		Text: "table users {\n  id int [pk]\n  name bool\n}\n"}}); err != nil {
 		t.Fatal(err)
 	}
 	change(uri, 2,
 		ranged(rangeAt(1, 5, 1, 8), "float64"),
 		ranged(rangeAt(2, 11, 2, 11), " [null]"))
-	expect(uri, "Table users {\n  id float64 [pk]\n  name bool [null]\n}\n", 2)
+	expect(uri, "table users {\n  id float64 [pk]\n  name bool [null]\n}\n", 2)
 	change(uri, 3, ranged(rangeAt(2, 7, 2, 11), "\"na😀\""))
 	change(uri, 4, ranged(rangeAt(2, 13, 2, 13), "y"))
-	expect(uri, "Table users {\n  id float64 [pk]\n  name \"na😀\"y [null]\n}\n", 4)
-	change(uri, 5, protocol.TextDocumentContentChangeEventWhole{Text: "Table t {\n  id int\n}\n"}, ranged(rangeAt(1, 8, 1, 8), " [pk]"))
-	expect(uri, "Table t {\n  id int [pk]\n}\n", 5)
+	expect(uri, "table users {\n  id float64 [pk]\n  name \"na😀\"y [null]\n}\n", 4)
+	change(uri, 5, protocol.TextDocumentContentChangeEventWhole{Text: "table t {\n  id int\n}\n"}, ranged(rangeAt(1, 8, 1, 8), " [pk]"))
+	expect(uri, "table t {\n  id int [pk]\n}\n", 5)
 
 	crlf := "file:///crlf.volt"
 	if err := s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{TextDocument: protocol.TextDocumentItem{URI: crlf, Version: 1,
-		Text: "Table t {\r\n  id int [pk]\r\n  x int\r\n}\r\n"}}); err != nil {
+		Text: "table t {\r\n  id int [pk]\r\n  x int\r\n}\r\n"}}); err != nil {
 		t.Fatal(err)
 	}
 	change(crlf, 2, ranged(rangeAt(1, 13, 2, 0), " "))
-	expect(crlf, "Table t {\r\n  id int [pk]   x int\r\n}\r\n", 2)
+	expect(crlf, "table t {\r\n  id int [pk]   x int\r\n}\r\n", 2)
 	change(crlf, 3, ranged(rangeAt(9, 0, 9, 0), "// end"), ranged(rangeAt(0, 40, 0, 40), " // head"))
-	expect(crlf, "Table t { // head\r\n  id int [pk]   x int\r\n}\r\n// end", 3)
+	expect(crlf, "table t { // head\r\n  id int [pk]   x int\r\n}\r\n// end", 3)
 	change(crlf, 4, ranged(rangeAt(0, 9, 0, 17), ""))
-	expect(crlf, "Table t {\r\n  id int [pk]   x int\r\n}\r\n// end", 4)
+	expect(crlf, "table t {\r\n  id int [pk]   x int\r\n}\r\n// end", 4)
 }
 
 func TestPublishCarriesVersion(t *testing.T) {
@@ -110,7 +110,7 @@ func TestPublishCarriesVersion(t *testing.T) {
 	s.debounce = 0
 
 	lone := "file:///lone.volt"
-	if err := s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{TextDocument: protocol.TextDocumentItem{URI: lone, Version: 7, Text: "Table t {\n  id int [pk]\n}\n"}}); err != nil {
+	if err := s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{TextDocument: protocol.TextDocumentItem{URI: lone, Version: 7, Text: "table t {\n  id int [pk]\n}\n"}}); err != nil {
 		t.Fatal(err)
 	}
 	if v := version(last(lone)); v != 7 {
@@ -128,7 +128,7 @@ func TestPublishCarriesVersion(t *testing.T) {
 
 	root := voltProject(t, map[string]string{
 		"go.mod":          "module lsptest\n",
-		"app/routes.volt": "package app\n\nScope / {\n\tget / Home.Index\n}\n",
+		"app/routes.volt": "package app\n\nscope / {\n\tget / Home.Index\n}\n",
 	})
 	uri := "file://" + filepath.Join(root, "app", "routes.volt")
 	waitVersion := func(want int) {
@@ -142,7 +142,7 @@ func TestPublishCarriesVersion(t *testing.T) {
 		}
 		t.Fatalf("no publish with version %d; last %+v", want, last(uri))
 	}
-	if err := s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{TextDocument: protocol.TextDocumentItem{URI: uri, Version: 3, Text: "package app\n\nScope / {\n\tget / Home.Index\n}\n"}}); err != nil {
+	if err := s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{TextDocument: protocol.TextDocumentItem{URI: uri, Version: 3, Text: "package app\n\nscope / {\n\tget / Home.Index\n}\n"}}); err != nil {
 		t.Fatal(err)
 	}
 	waitVersion(3)

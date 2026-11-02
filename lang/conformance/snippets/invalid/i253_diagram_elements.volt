@@ -1,6 +1,6 @@
 // spec: §program-structure, TableGroup, DiagramView and sticky notes are not elements
 // want: unknown element type "TableGroup"
-Table users {
+table users {
   id int [pk]
 }
 TableGroup accounts {

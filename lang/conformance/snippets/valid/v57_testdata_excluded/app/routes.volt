@@ -2,6 +2,6 @@
 // rule): the broken file beside this package is never loaded
 package app
 
-Scope / {
+scope / {
 	get / Home.Index
 }

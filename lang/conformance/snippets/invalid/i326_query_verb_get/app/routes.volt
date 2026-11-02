@@ -6,6 +6,6 @@ import (
 	db
 )
 
-Scope /api {
+scope /api {
 	delete /posts/:id(int) db.PostGet
 }

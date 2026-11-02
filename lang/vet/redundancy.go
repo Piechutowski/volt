@@ -91,7 +91,7 @@ type emptyBodyRule struct{ meta }
 
 var emptyBody = &emptyBodyRule{meta{
 	name: "emptybody",
-	doc:  "reports empty Indexes and Validators blocks and a Project with neither properties nor a note",
+	doc:  "reports empty indexes and validators blocks and a project with neither properties nor a note",
 }}
 
 func (r *emptyBodyRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
@@ -100,15 +100,15 @@ func (r *emptyBodyRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagn
 		switch n := n.(type) {
 		case *ast.IndexesBlock:
 			if len(n.Indexes) == 0 {
-				out = append(out, r.warnf(n.Pos(), "empty Indexes block"))
+				out = append(out, r.warnf(n.Pos(), "empty indexes block"))
 			}
 		case *ast.ValidatorsBlock:
 			if len(n.Validators) == 0 {
-				out = append(out, r.warnf(n.Pos(), "empty Validators block"))
+				out = append(out, r.warnf(n.Pos(), "empty validators block"))
 			}
 		case *ast.Project:
 			if len(n.Props) == 0 && n.Settings.Get("note") == nil {
-				out = append(out, r.warnf(n.Pos(), "empty Project: no properties and no note"))
+				out = append(out, r.warnf(n.Pos(), "empty project: no properties and no note"))
 			}
 		}
 	}
@@ -148,5 +148,5 @@ func originOf(cd *check.ColumnDef) string {
 	if cd.Partial == nil {
 		return "the table body"
 	}
-	return fmt.Sprintf("TablePartial %q", cd.Partial.Name.Name())
+	return fmt.Sprintf("table_partial %q", cd.Partial.Name.Name())
 }

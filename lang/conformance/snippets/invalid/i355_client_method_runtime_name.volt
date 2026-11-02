@@ -2,7 +2,7 @@
 // want: client method "Raw" would take the name of the embedded volt.Client's method Raw
 package app
 
-Scope / {
+scope / {
 	get /raw Home.Raw
 	get /client Home.Client
 }

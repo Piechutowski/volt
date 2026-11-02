@@ -2,13 +2,13 @@
 // want: cannot travel as one JSON list
 package db
 
-Table runs {
+table runs {
   started_at time.Time [unique]
 }
 
-Table samples {
+table samples {
   id             int       [pk, increment]
   run_started_at time.Time [ref: runs.started_at]
 }
 
-Select trail for runs with samples
+select trail for runs with samples

@@ -2,6 +2,6 @@
 // want: no type Signup in package app
 package app
 
-Scope / {
+scope / {
 	post /signup Session.Signup [body: Signup]
 }

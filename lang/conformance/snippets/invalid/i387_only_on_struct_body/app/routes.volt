@@ -2,6 +2,6 @@
 // want: is a struct of this package
 package app
 
-Scope / {
+scope / {
 	post /login Session.Login [body: LoginForm, only: (Email)]
 }

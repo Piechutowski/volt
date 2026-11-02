@@ -3,11 +3,19 @@
 > [!CAUTION]
 > **This project is an alpha version, and everything may change in the future.**
 
-Volt is a code-generation-first web framework for Go. You declare the
-schema and the routes in `.volt` files; `volt gen` writes the models, the
-queries, the migrations, the router and the client as plain Go that you
-read line by line. Nothing is resolved at run time: no reflection, no
-registries, no inheritance to trace.
+Volt is a web framework for Go built around a small schema language.
+Tables, queries and routes live in `.volt` files, and `volt gen` turns
+them into ordinary Go: models, query functions, a router, handler
+interfaces, reverse-URL helpers and an HTTP client. The output is meant
+to be read, and nothing in it is resolved at run time: no reflection,
+no registries, no base class to trace.
+
+Migrations are not generated. Each one is written by hand as a
+`migration` element; the checker folds the migrations against the
+declared schema and refuses the project when the two disagree, and
+`volt migration up` applies them in order. A tool that guesses a
+migration from a diff gets a rename wrong sooner or later, so there is
+none.
 
 The generated code and the runtime follow the functional style: values
 that are never mutated, and effects described as data and performed in

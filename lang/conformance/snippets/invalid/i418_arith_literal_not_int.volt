@@ -2,7 +2,7 @@
 // want: does not fit int
 package db
 
-Table points {
+table points {
   id        int     [pk, increment]
   metric_id int
   ts        int
@@ -11,4 +11,4 @@ Table points {
   note      string  [null]
 }
 
-Select rows (ts / 1.5 as half) for points
+select rows (ts / 1.5 as half) for points

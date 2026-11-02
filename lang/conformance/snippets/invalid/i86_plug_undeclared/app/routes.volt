@@ -2,10 +2,10 @@
 // want: no function BearerAuth
 package app
 
-Pipeline api {
+pipeline api {
 	use BearerAuth
 }
 
-Scope / [pipe: api] {
+scope / [pipe: api] {
 	get / Home.Index
 }

@@ -2,13 +2,13 @@
 // want: both map to the Go field
 package db
 
-Table metrics {
+table metrics {
   id   int    [pk, increment]
   name string
   unit string [null]
 }
 
-Table points {
+table points {
   id        int   [pk, increment]
   metric_id int   [ref: metrics.id]
   source_id int   [null, ref: metrics.id]
@@ -17,4 +17,4 @@ Table points {
   metric_name string
 }
 
-Select rows (metric_name, metric.name) for points join metric
+select rows (metric_name, metric.name) for points join metric

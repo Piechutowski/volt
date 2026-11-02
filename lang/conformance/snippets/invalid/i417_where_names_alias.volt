@@ -2,7 +2,7 @@
 // want: is an alias, which where does not see
 package db
 
-Table points {
+table points {
   id        int     [pk, increment]
   metric_id int
   ts        int
@@ -11,4 +11,4 @@ Table points {
   note      string  [null]
 }
 
-Select rows (metric_id, count() as n) for points where n > 1 [group: (metric_id)]
+select rows (metric_id, count() as n) for points where n > 1 [group: (metric_id)]

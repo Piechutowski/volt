@@ -1,6 +1,6 @@
 // polymorphic association: one comments table pointing at several owners
-Type CommentableType string
-Table comments [note: """
+type CommentableType string
+table comments [note: """
   Polymorphic: (commentable_type, commentable_id) addresses a row
   in whichever table the type names. No FK can enforce this.
 """] {
@@ -9,11 +9,11 @@ Table comments [note: """
   commentable_id int [note: "ID within the table selected by commentable_type"]
   body string
 
-  Indexes {
+  indexes {
     (commentable_type, commentable_id)
   }
 
-  Validators {
+  validators {
     CommentableTypeKnown(commentable_type)
   }
 }

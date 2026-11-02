@@ -6,6 +6,6 @@ import (
 	db
 )
 
-Scope /blogs/:id {
+scope /blogs/:id {
 	resources db.posts [default]
 }

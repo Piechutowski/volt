@@ -5,13 +5,13 @@ import (
 	db
 )
 
-Scope / [error_handler: Errors] {
+scope / [error_handler: Errors] {
 	get /ping Home.Ping
-	Scope /me [name: me] {
+	scope /me [name: me] {
 		load user CurrentUser
 		get /          Me.Show
 		get /peers     db.UserList
-		Scope /admin {
+		scope /admin {
 			load tenant Tenant
 			get /stats Admin.Stats
 		}

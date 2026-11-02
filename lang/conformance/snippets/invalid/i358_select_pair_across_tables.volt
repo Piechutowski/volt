@@ -2,14 +2,14 @@
 // want: both generate UserTagRows
 package app
 
-Table users {
+table users {
 	id int [pk]
 }
 
-Table user_tags {
+table user_tags {
 	id   int [pk]
 	name string
 }
 
-Select tag_rows for users
-Select rows     for user_tags
+select tag_rows for users
+select rows     for user_tags

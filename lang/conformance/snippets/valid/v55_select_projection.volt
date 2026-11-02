@@ -3,24 +3,24 @@
 // projected
 package db
 
-Table page_views {
+table page_views {
   id int [pk, increment]
   site string
   day int
   hits int [default: 0]
 }
 
-Table link_clicks {
+table link_clicks {
   id int [pk, increment]
   site string
   day int
   target string [default: ""]
 }
 
-Group metrics {
+group metrics {
   page_views
   link_clicks
 }
 
-Select summary (site, day) for metrics where day >= :from
-Select public (* \ site) for metrics [order: (id asc)]
+select summary (site, day) for metrics where day >= :from
+select public (* \ site) for metrics [order: (id asc)]

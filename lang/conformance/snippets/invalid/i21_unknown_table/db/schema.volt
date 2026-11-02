@@ -1,5 +1,5 @@
 package db
 
-Table posts {
+table posts {
 	id int [pk]
 }

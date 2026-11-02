@@ -2,25 +2,25 @@
 // want: is not a built-in
 package db
 
-Type Score int32
+type Score int32
 
-TablePartial weighted {
+table_partial weighted {
   weight Score
 }
 
-Table posts {
+table posts {
   id    int   [pk, increment]
   score Score
   ~weighted
 
-  Validators {
+  validators {
     ScoreSane(score)
   }
 }
 
-Table comments {
+table comments {
   id int [pk, increment]
   ~weighted
 }
 
-Select top for posts where score > :min [order: (score desc)]
+select top for posts where score > :min [order: (score desc)]

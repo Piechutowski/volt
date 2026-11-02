@@ -27,8 +27,8 @@ that lands it.
 | Nested results (preload / include) | yes | built (`with` over a reverse relation) | |
 | Many-to-many through a junction | yes | missing | |
 | Migrations with a ledger and a schema check | yes | built | |
-| Migration generation from drift | yes | missing | |
-| Seeds | yes | built (`Records`) | |
+| Migration generation from drift | yes | not planned: a migration is written by hand, and the checker folds the migrations against the schema instead of guessing one from a diff | |
+| Seeds | yes | built (`records`) | |
 | Transactions | yes | built (as values) | |
 | Sessions | yes | missing | |
 | Password hashing | yes | missing | |

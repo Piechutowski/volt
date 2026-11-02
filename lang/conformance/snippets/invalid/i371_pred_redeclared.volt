@@ -2,12 +2,12 @@
 // want: predicate "busy" redeclared
 package app
 
-Table page_views {
+table page_views {
 	id   int [pk]
 	hits int
 }
 
-Pred busy { hits > 100 }
-Pred busy { hits > 1000 }
+pred busy { hits > 100 }
+pred busy { hits > 1000 }
 
-Select loud for page_views where busy
+select loud for page_views where busy

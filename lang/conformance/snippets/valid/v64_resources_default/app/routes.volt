@@ -5,7 +5,7 @@ import (
 	db
 )
 
-Scope /api [name: api] {
+scope /api [name: api] {
 	resources db.users [default]
 	resources db.tags  [default, except: (delete)]
 

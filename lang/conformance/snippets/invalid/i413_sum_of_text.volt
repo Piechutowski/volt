@@ -2,7 +2,7 @@
 // want: sum takes a numeric column
 package db
 
-Table points {
+table points {
   id        int     [pk, increment]
   metric_id int
   ts        int
@@ -11,4 +11,4 @@ Table points {
   note      string  [null]
 }
 
-Select rows (sum(label) as total) for points
+select rows (sum(label) as total) for points

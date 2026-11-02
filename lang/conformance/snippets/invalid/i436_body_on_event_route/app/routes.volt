@@ -6,7 +6,7 @@ import (
 	db
 )
 
-Scope / {
+scope / {
 	get /events volt.Events [body: db.MetricCreate]
 	get /ordered db.MetricOrdered
 }

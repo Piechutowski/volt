@@ -2,9 +2,9 @@
 // want: collides with the generated CRUD surface
 package db
 
-Table users {
+table users {
   id int [pk]
   email string
 }
 
-Select column for users
+select column for users

@@ -6,6 +6,6 @@ import (
 	db
 )
 
-Scope / {
+scope / {
 	patch /settings Settings.Save [body: db.SettingUpdate]
 }

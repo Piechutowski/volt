@@ -1,3 +1,3 @@
 package app
 
-Pipeline api { use volt.RequestID }
+pipeline api { use volt.RequestID }

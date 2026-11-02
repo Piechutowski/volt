@@ -16,7 +16,7 @@ var unusedPartial = &unusedPartialRule{meta{
 func (r *unusedPartialRule) Decl(d ast.Decl, nodes []ast.Node, f Facts) []diag.Diagnostic {
 	var out []diag.Diagnostic
 	if tp := f.Partial; tp != nil && tp.Uses == 0 {
-		out = append(out, r.warnf(tp.Decl.Pos(), "TablePartial %q is declared but never injected", tp.Decl.Name.Name()))
+		out = append(out, r.warnf(tp.Decl.Pos(), "table_partial %q is declared but never injected", tp.Decl.Name.Name()))
 	}
 	return out
 }

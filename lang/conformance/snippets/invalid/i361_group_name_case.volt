@@ -2,12 +2,12 @@
 // want: did you mean the group "series"? names are case-sensitive
 package app
 
-Table ms_usage {
+table ms_usage {
 	id int [pk]
 }
 
-Group series {
+group series {
 	ms_usage
 }
 
-Select s for Series
+select s for Series

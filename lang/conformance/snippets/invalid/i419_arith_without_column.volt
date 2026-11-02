@@ -2,7 +2,7 @@
 // want: an expression names a column
 package db
 
-Table points {
+table points {
   id        int     [pk, increment]
   metric_id int
   ts        int
@@ -11,4 +11,4 @@ Table points {
   note      string  [null]
 }
 
-Select rows (1 + :x as y) for points
+select rows (1 + :x as y) for points

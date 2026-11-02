@@ -2,10 +2,10 @@
 // want: is declared in no Go file of package db
 package db
 
-Type OrderState string
-Type Blob []byte
+type OrderState string
+type Blob []byte
 
-Table orders {
+table orders {
   id     int        [pk, increment]
   status OrderState
   data   Blob

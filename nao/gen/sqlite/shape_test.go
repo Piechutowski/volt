@@ -30,7 +30,7 @@ func TestTableDDLOneToOneAndActions(t *testing.T) {
 		},
 		{
 			name:    "pk columns form one composite key in declaration order, and index is a plain index",
-			body:    "    user_id int    [pk, ref: users.id]\n    label   string [index]\n    slot    int    [pk]\n\n    Indexes {\n      (label, slot) [unique]\n    }\n",
+			body:    "    user_id int    [pk, ref: users.id]\n    label   string [index]\n    slot    int    [pk]\n\n    indexes {\n      (label, slot) [unique]\n    }\n",
 			want:    "CREATE TABLE profiles (\n  user_id INTEGER NOT NULL,\n  label TEXT NOT NULL,\n  slot INTEGER NOT NULL,\n  PRIMARY KEY (user_id, slot),\n  FOREIGN KEY (user_id) REFERENCES users (id)\n)",
 			indexes: []string{"CREATE INDEX idx_profiles_label ON profiles (label)", "CREATE UNIQUE INDEX idx_profiles_label_slot ON profiles (label, slot)"},
 		},
@@ -91,7 +91,7 @@ func TestColumnDDLActions(t *testing.T) {
 // first on checked input: a column's index and an Indexes entry that
 // derive one name.
 func TestIndexesDDLRefusesOneNameTwice(t *testing.T) {
-	body := parsedBody(t, "create table profiles {\n    email string [unique]\n    Indexes {\n      email [where: `email != ''`]\n    }\n  }")
+	body := parsedBody(t, "create table profiles {\n    email string [unique]\n    indexes {\n      email [where: `email != ''`]\n    }\n  }")
 	_, err := IndexesDDL("profiles", body)
 	if err == nil || !strings.Contains(err.Error(), `duplicate index name "idx_profiles_email"`) {
 		t.Errorf("IndexesDDL: want the duplicate name refused, got %v", err)
@@ -100,7 +100,7 @@ func TestIndexesDDLRefusesOneNameTwice(t *testing.T) {
 
 func parsedBody(t *testing.T, op string) []ast.TableItem {
 	t.Helper()
-	f, diags := parser.ParseFile("t.volt", "package db\n\nMigration 0001__shape {\n  "+op+"\n}\n")
+	f, diags := parser.ParseFile("t.volt", "package db\n\nmigration 0001__shape {\n  "+op+"\n}\n")
 	if diag.HasErrors(diags) {
 		t.Fatalf("test input must parse: %v", diags)
 	}

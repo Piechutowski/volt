@@ -1,4 +1,4 @@
 // spec: §projects-and-packages
-Scope / {
+scope / {
 	get /x X.Y
 }

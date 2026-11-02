@@ -1,9 +1,9 @@
 // spec: §records-sample-data — a record value must fit the column's type
 // want: must be an integer, found string
-Table t {
+table t {
   id int [pk]
   n int
-  Records {
+  records {
     1, "seven"
   }
 }

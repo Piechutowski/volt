@@ -2,11 +2,11 @@
 // want: a declared type cannot be ordered
 package db
 
-Type money.Money int from "example.com/app/money"
+type money.Money int from "example.com/app/money"
 
-Table orders {
+table orders {
   id    int   [pk, increment]
   price money.Money
 }
 
-Select sorted for orders [order: (price asc)]
+select sorted for orders [order: (price asc)]

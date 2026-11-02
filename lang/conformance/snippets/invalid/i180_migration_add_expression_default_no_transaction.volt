@@ -2,18 +2,18 @@
 // want: a no_transaction migration has none
 package db
 
-Table users {
+table users {
   id      int       [pk]
   created time.Time [default: `CURRENT_TIMESTAMP`]
 }
 
-Migration 0001__init {
+migration 0001__init {
   create table users {
     id int [pk]
   }
 }
 
-Migration 0002__created [no_transaction] {
+migration 0002__created [no_transaction] {
   alter table users {
     add created time.Time [default: `CURRENT_TIMESTAMP`]
   }

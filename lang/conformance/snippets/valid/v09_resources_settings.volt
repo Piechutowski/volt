@@ -1,19 +1,19 @@
 // spec: §settings
 package app
 
-Table users {
+table users {
 	id int [pk]
 }
 
-Table posts {
+table posts {
 	id int [pk]
 }
 
-Table drafts {
+table drafts {
 	id int [pk]
 }
 
-Scope / {
+scope / {
 	resources users  [api, param: uid]
 	resources posts  [only: (index, show)]
 	resources drafts [except: (delete)]

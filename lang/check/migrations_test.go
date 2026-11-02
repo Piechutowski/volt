@@ -9,34 +9,34 @@ import (
 	"github.com/Piechutowski/volt/lang/parser"
 )
 
-const migrationsSrc = `Table users {
+const migrationsSrc = `table users {
   id   int    [pk, increment]
   name string
 }
 
-Migration 0010__users_name {
+migration 0010__users_name {
   alter table users {
     add name string [default: ""]
   }
 }
 
-Migration 0002__exec_only [irreversible] {
+migration 0002__exec_only [irreversible] {
   exec ` + "`PRAGMA user_version = 2`" + `
 }
 
-Migration 0001__create_users {
+migration 0001__create_users {
   create table users {
     id int [pk, increment]
   }
 }
 
-Migration 0003__up_only {
+migration 0003__up_only {
   up {
     create index users (name)
   }
 }
 
-Migration 0004__up_down {
+migration 0004__up_down {
   up {
     exec ` + "`SELECT 1`" + `
   }
@@ -86,19 +86,19 @@ func equalBools(a, b []bool) bool {
 }
 
 func TestMigrationRebuildSourcesFollowRenames(t *testing.T) {
-	src := `Table people {
+	src := `table people {
   id   int    [pk]
   name string
 }
 
-Migration 0001__init {
+migration 0001__init {
   create table users {
     id        int    [pk]
     full_name string [null]
   }
 }
 
-Migration 0002__people [irreversible] {
+migration 0002__people [irreversible] {
   rename table users to people
   alter table people {
     rename full_name to name
@@ -109,7 +109,7 @@ Migration 0002__people [irreversible] {
   }
 }
 
-Migration 0003__unknown_table [irreversible] {
+migration 0003__unknown_table [irreversible] {
   rebuild table audit {
     id int [pk]
     at string

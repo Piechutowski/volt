@@ -2,7 +2,7 @@
 // want: reached by routes with different signatures
 package app
 
-Scope / {
+scope / {
 	post /login  Session.Login [body: LoginForm]
 	post /login2 Session.Login [name: login2]
 }

@@ -3,7 +3,7 @@
 // carries them for the tests that build a database through Migrate.
 package itest
 
-Migration 0001__users_and_orders {
+migration 0001__users_and_orders {
   create table users {
     id         int       [pk, increment]
     email      string    [unique]
@@ -26,7 +26,7 @@ Migration 0001__users_and_orders {
   }
 }
 
-Migration 0002__metrics {
+migration 0002__metrics {
   create table page_views {
     id   int    [pk, increment]
     site string
@@ -41,7 +41,7 @@ Migration 0002__metrics {
   }
 }
 
-Migration 0003__site_flags {
+migration 0003__site_flags {
   create table site_flags {
     id       int     [pk, increment]
     featured bool
@@ -51,7 +51,7 @@ Migration 0003__site_flags {
   }
 }
 
-Migration 0004__attachments_and_blobs {
+migration 0004__attachments_and_blobs {
   create table attachments {
     id     int    [pk, increment]
     name   string [unique]
@@ -66,7 +66,7 @@ Migration 0004__attachments_and_blobs {
   }
 }
 
-Migration 0005__daily_hits_and_invites {
+migration 0005__daily_hits_and_invites {
   create table daily_hits {
     day  int    [pk]
     hits int    [default: 0]
@@ -82,14 +82,14 @@ Migration 0005__daily_hits_and_invites {
 // An index and a unique column added to a table that has rows, with no
 // rebuild: each add is its ADD COLUMN and its CREATE INDEX (spec
 // §migrations).
-Migration 0006__daily_hits_label_and_token {
+migration 0006__daily_hits_label_and_token {
   alter table daily_hits {
     add label string [index, default: ""]
     add token string [null, unique]
   }
 }
 
-Migration 0007__post_flags {
+migration 0007__post_flags {
   create table post_flags {
     id       int    [pk, increment]
     reviewed string

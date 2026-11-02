@@ -1,10 +1,10 @@
 // spec: §records-sample-data — top-level records naming the table
-Table users {
+table users {
   id int [pk]
   name string
   active bool
 }
-Records users(id, name, active) {
+records users(id, name, active) {
   1, "Alice", true
   2, "Bob", false
   3, "Y", true

@@ -1,15 +1,15 @@
 package db
 
-Table metrics {
+table metrics {
   id   int    [pk, increment]
   slug string [unique]
   unit string
 }
 
-Table settings {
+table settings {
   id      int [pk]
   refresh int [default: 60]
 }
 
-Select ordered for metrics [order: (slug asc)]
-Select by_unit for metrics where unit = :unit and id in :ids
+select ordered for metrics [order: (slug asc)]
+select by_unit for metrics where unit = :unit and id in :ids

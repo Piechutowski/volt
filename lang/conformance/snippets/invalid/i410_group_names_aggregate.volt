@@ -2,7 +2,7 @@
 // want: names the aggregate
 package db
 
-Table points {
+table points {
   id        int     [pk, increment]
   metric_id int
   ts        int
@@ -11,4 +11,4 @@ Table points {
   note      string  [null]
 }
 
-Select rows (metric_id, count() as n) for points [group: (metric_id, n)]
+select rows (metric_id, count() as n) for points [group: (metric_id, n)]

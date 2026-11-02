@@ -1,6 +1,6 @@
 // spec: §records-sample-data — at most one records block per table
-Table t {
+table t {
   id int
-  Records (id) { 1 }
-  Records (id) { 2 }
+  records (id) { 1 }
+  records (id) { 2 }
 }

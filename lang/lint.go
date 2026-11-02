@@ -89,7 +89,7 @@ func vetUnusedPipelines(pkg *Package) []diag.Diagnostic {
 	for name, pl := range pkg.Pipelines {
 		if !used[name] {
 			out = append(out, diag.Warningf(pl.Pos(), "vet/pipeline",
-				"Pipeline %q is declared and never piped through by any scope", name))
+				"pipeline %q is declared and never piped through by any scope", name))
 		}
 	}
 	return out

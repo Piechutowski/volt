@@ -8,6 +8,6 @@ import (
 	db backup/db
 )
 
-Scope / {
+scope / {
 	resources db.users
 }

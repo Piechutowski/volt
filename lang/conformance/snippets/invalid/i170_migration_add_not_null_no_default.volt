@@ -2,18 +2,18 @@
 // want: a column without null is NOT NULL and needs a default:
 package db
 
-Table users {
+table users {
   id   int    [pk]
   name string
 }
 
-Migration 0001__init {
+migration 0001__init {
   create table users {
     id int [pk]
   }
 }
 
-Migration 0002__name {
+migration 0002__name {
   alter table users {
     add name string
   }

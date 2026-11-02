@@ -2,20 +2,20 @@
 // want: without regard to case
 package db
 
-Table metrics {
+table metrics {
   id   int    [pk, increment]
   name string
   unit string [null]
   hour int
 }
 
-Table points {
+table points {
   id        int   [pk, increment]
   metric_id int
   ts        int
   value     float64
 }
 
-Ref: points.metric_id > metrics.id [as: Points]
+ref: points.metric_id > metrics.id [as: Points]
 
-Select rows (id, Points.name) for points join Points
+select rows (id, Points.name) for points join Points

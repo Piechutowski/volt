@@ -95,10 +95,10 @@ app/i117_resources_param_shadow.volt:10:12: error: spec/resources: resources "po
 app/routes.volt:10:15: error: spec/resources: resources db.posts [default]: the key parameter "id" is already a parameter of the enclosing scope, and the generated CRUD fixes its name; give the scope's parameter another name (§default-handlers, §route-paths)
 
 ## i11_wildcard_in_scope.volt
-app/i11_wildcard_in_scope.volt:4:10: error: spec/scopes-and-routes: a Scope prefix cannot contain a wildcard (§route-paths)
+app/i11_wildcard_in_scope.volt:4:10: error: spec/scopes-and-routes: a scope prefix cannot contain a wildcard (§route-paths)
 
 ## i12_unknown_pipeline.volt
-app/i12_unknown_pipeline.volt:4:10: error: spec/scopes-and-routes: unknown Pipeline "nope" (§scopes)
+app/i12_unknown_pipeline.volt:4:10: error: spec/scopes-and-routes: unknown pipeline "nope" (§scopes)
 
 ## i13_unknown_param_type.volt
 app/i13_unknown_param_type.volt:5:13: error: spec/scopes-and-routes: unknown parameter type "uuid" (§route-paths); valid: int
@@ -210,7 +210,7 @@ db/i187_select_name_params.volt:10:8: error: spec/selects-over-groups: select na
 db/i188_select_name_new.volt:10:8: error: spec/selects-over-groups: select name "New" collides with the generated CRUD surface (§selects-over-groups)
 
 ## i18_dataset_not_an_element.volt
-app/i18_dataset_not_an_element.volt:5:1: error: syntax: routes, resources and datasets must appear inside a Scope (§scopes-and-routes)
+app/i18_dataset_not_an_element.volt:5:1: error: syntax: routes, resources and datasets must appear inside a scope (§scopes-and-routes)
 
 ## i190_literal_int_overflow.volt
 db/i190_literal_int_overflow.volt:10:40: error: spec/selects-over-groups: literal 9223372036854775808 does not fit int, the storage type of column "hits" (§predicates)
@@ -251,19 +251,19 @@ db/i207_migration_ref_action.volt:20:39: error: spec/migrations: column "user_id
 db/i208_migration_add_ref_default.volt:25:37: error: spec/migrations: add "user_id" to table "posts": a column with ref: takes no default, since SQLite refuses to add a REFERENCES column with a default other than NULL to a table that has rows (§migrations)
 
 ## i209_migration_shape_partial.volt
-db/i209_migration_shape_partial.volt:17:5: error: syntax: a migration's shape body holds columns and indexes only; a partial injection, a Validators block and a Records block are not part of it (§migrations)
+db/i209_migration_shape_partial.volt:17:5: error: syntax: a migration's shape body holds columns and indexes only; a partial injection, a validators block and a records block are not part of it (§migrations)
 
 ## i20_unknown_action.volt
 app/i20_unknown_action.volt:9:26: error: spec/resources: unknown action "browse" (§the-action-table); valid: index, new, create, show, edit, update, delete
 
 ## i210_migration_shape_validators.volt
-db/i210_migration_shape_validators.volt:15:5: error: syntax: a migration's shape body holds columns and indexes only; a partial injection, a Validators block and a Records block are not part of it (§migrations)
+db/i210_migration_shape_validators.volt:15:5: error: syntax: a migration's shape body holds columns and indexes only; a partial injection, a validators block and a records block are not part of it (§migrations)
 db/i210_migration_shape_validators.volt:16:17: error: syntax: expected identifier in column type (§columns), found '(' "("
 db/i210_migration_shape_validators.volt:19:1: error: syntax: expected an element type at top level (§program-structure), found '}' "}"
 
 ## i211_migration_shape_records.volt
-db/i211_migration_shape_records.volt:15:5: error: syntax: a migration's shape body holds columns and indexes only; a partial injection, a Validators block and a Records block are not part of it (§migrations)
-db/i211_migration_shape_records.volt:16:7: error: syntax: expected a column or an Indexes block in create table (§migrations), found number "1"
+db/i211_migration_shape_records.volt:15:5: error: syntax: a migration's shape body holds columns and indexes only; a partial injection, a validators block and a records block are not part of it (§migrations)
+db/i211_migration_shape_records.volt:16:7: error: syntax: expected a column or an indexes block in create table (§migrations), found number "1"
 db/i211_migration_shape_records.volt:19:1: error: syntax: expected an element type at top level (§program-structure), found '}' "}"
 
 ## i214_migration_from_outside_rebuild.volt
@@ -341,7 +341,7 @@ db/i225_unknown_type_order_errors_stay.volt:24:28: error: spec/selects-over-grou
 db/i225_unknown_type_order_errors_stay.volt:25:37: error: spec/selects-over-groups: column "body" ([]byte) cannot appear in a predicate (§predicates)
 
 ## i22_scope_setting.volt
-app/i22_scope_setting.volt:4:10: error: spec/settings-whitelists: setting "pipes" is not valid on a Scope (§settings-whitelists); valid: pipe, name, error_handler
+app/i22_scope_setting.volt:4:10: error: spec/settings-whitelists: setting "pipes" is not valid on a scope (§settings-whitelists); valid: pipe, name, error_handler
 
 ## i233_migration_set_null_not_null.volt
 db/i233_migration_set_null_not_null.volt:24:37: error: spec/migrations: delete: set_null on foreign-key column "author_id", which does not carry null: the database would write a NULL the column refuses (§migrations)
@@ -361,8 +361,8 @@ app/i23_route_setting.volt:5:14: error: spec/settings-whitelists: setting "pipe"
 db/i243_group_takes_table_name.volt:13:7: error: spec/groups: group "users" takes the name of a table: tables and groups share one namespace (§groups)
 
 ## i24_toplevel_route.volt
-app/i24_toplevel_route.volt:4:1: error: syntax: routes, resources and datasets must appear inside a Scope (§scopes-and-routes)
-app/i24_toplevel_route.volt:5:1: error: syntax: routes, resources and datasets must appear inside a Scope (§scopes-and-routes)
+app/i24_toplevel_route.volt:4:1: error: syntax: routes, resources and datasets must appear inside a scope (§scopes-and-routes)
+app/i24_toplevel_route.volt:5:1: error: syntax: routes, resources and datasets must appear inside a scope (§scopes-and-routes)
 
 ## i257_migration_note.volt
 db/i257_migration_note.volt:10:23: error: spec/migrations: unknown setting "note" (§migrations)
@@ -373,23 +373,23 @@ db/i257_migration_note.volt:16:19: error: spec/migrations: unknown setting "note
 app/i25_short_ellipsis.volt:5:14: error: syntax: wildcard ellipsis is spelled ':name...' (§route-paths)
 
 ## i262_type_no_go_declaration
-db/schema.volt:5:6: error: spec/types: Type OrderState is declared in no Go file of package db; write type OrderState string beside the schema (§types)
-db/schema.volt:6:6: error: spec/types: Type Blob is declared in no Go file of package db; write type Blob []byte beside the schema, with a Scan method on its pointer and a Value method (§types)
+db/schema.volt:5:6: error: spec/types: type OrderState is declared in no Go file of package db; write type OrderState string beside the schema (§types)
+db/schema.volt:6:6: error: spec/types: type Blob is declared in no Go file of package db; write type Blob []byte beside the schema, with a Scan method on its pointer and a Value method (§types)
 
 ## i263_type_takes_handle_name
-db/schema.volt:5:6: error: spec/types: Type OrderStatus takes the Go name of the column handle for orders.status; a declared type is named apart from the names generated code declares, e.g. OrderStatusKind (§types)
+db/schema.volt:5:6: error: spec/types: type OrderStatus takes the Go name of the column handle for orders.status; a declared type is named apart from the names generated code declares, e.g. OrderStatusKind (§types)
 
 ## i264_select_row_takes_type_name
 db/schema.volt:13:8: error: spec/selects-over-groups: select "summary" mints the shared row type Summary, which collides with the declared type Summary (§selects-over-groups)
 
 ## i266_type_takes_router_name
-app/schema.volt:5:6: error: spec/types: Type Controllers takes the Go name of the generated Controllers manifest; a declared type is named apart from the names generated code declares (§types)
-app/schema.volt:6:6: error: spec/types: Type NewRouter takes the Go name of the generated router constructor; a declared type is named apart from the names generated code declares (§types)
-app/schema.volt:7:6: error: spec/types: Type PagesController takes the Go name of the generated controller interface of Pages; a declared type is named apart from the names generated code declares (§types)
-app/schema.volt:8:6: error: spec/types: Type PathHome takes the Go name of the generated reverse-URL helper of GET /; a declared type is named apart from the names generated code declares (§types)
+app/schema.volt:5:6: error: spec/types: type Controllers takes the Go name of the generated Controllers manifest; a declared type is named apart from the names generated code declares (§types)
+app/schema.volt:6:6: error: spec/types: type NewRouter takes the Go name of the generated router constructor; a declared type is named apart from the names generated code declares (§types)
+app/schema.volt:7:6: error: spec/types: type PagesController takes the Go name of the generated controller interface of Pages; a declared type is named apart from the names generated code declares (§types)
+app/schema.volt:8:6: error: spec/types: type PathHome takes the Go name of the generated reverse-URL helper of GET /; a declared type is named apart from the names generated code declares (§types)
 
 ## i267_type_takes_migration_name
-db/schema.volt:5:6: error: spec/types: Type Migrations takes the Go name of the generated migration list; a declared type is named apart from the names generated code declares (§types)
+db/schema.volt:5:6: error: spec/types: type Migrations takes the Go name of the generated migration list; a declared type is named apart from the names generated code declares (§types)
 
 ## i268_declared_type_list_bytes.volt
 db/i268_declared_type_list_bytes.volt:13:31: error: spec/selects-over-groups: column "icon" has declared type blob.Blob stored as []byte; it cannot take a list parameter: JSON carries no blob, and its text never equals the stored bytes (§predicates)
@@ -430,9 +430,9 @@ app/i28_composite_pk_model.volt:10:12: error: spec/resources: table "pairs" has 
 
 ## i290_case_route_word.volt
 app/i290_case_route_word.volt:3:1: error: syntax: write package, not PACKAGE: keywords are case-sensitive (§keywords)
-app/i290_case_route_word.volt:5:1: error: syntax: write Pipeline, not PIPELINE: keywords are case-sensitive (§keywords)
+app/i290_case_route_word.volt:5:1: error: syntax: write pipeline, not PIPELINE: keywords are case-sensitive (§keywords)
 app/i290_case_route_word.volt:6:2: error: syntax: write use, not USE: keywords are case-sensitive (§keywords)
-app/i290_case_route_word.volt:9:1: error: syntax: write Scope, not SCOPE: keywords are case-sensitive (§keywords)
+app/i290_case_route_word.volt:9:1: error: syntax: write scope, not SCOPE: keywords are case-sensitive (§keywords)
 app/i290_case_route_word.volt:10:2: error: syntax: write get, not GET: keywords are case-sensitive (§keywords)
 app/i290_case_route_word.volt:11:2: error: syntax: write post, not Post: keywords are case-sensitive (§keywords)
 
@@ -481,7 +481,7 @@ app/i305_case_param_type.volt:6:17: error: syntax: write int, not INT: keywords 
 app/i305_case_param_type.volt:7:16: error: syntax: write int, not Int: keywords are case-sensitive (§keywords)
 
 ## i309_migration_shape_index_plain.volt
-db/i309_migration_shape_index_plain.volt:18:7: error: spec/indexes: index owner on "accounts" is a plain single-column index: write the column setting index on "owner"; an Indexes block holds composite, expression and partial indexes (§indexes)
+db/i309_migration_shape_index_plain.volt:18:7: error: spec/indexes: index owner on "accounts" is a plain single-column index: write the column setting index on "owner"; an indexes block holds composite, expression and partial indexes (§indexes)
 db/i309_migration_shape_index_plain.volt:19:7: error: spec/indexes: table "accounts" has two indexes named "idx_accounts_email", the unique setting of column "email" and index email: SQLite names an index once in the database, so an index name is unique in the schema; give index email another name: (§indexes)
 
 ## i30_unused_import
@@ -573,14 +573,14 @@ app/i342_group_lost_member.volt:10:2: error: syntax: expected identifier in grou
 app/i343_import_recovery_stops_at_paren.volt:6:6: error: syntax: expected end of line after import specifier (§imports), found identifier "c"
 
 ## i346_scope_settings_next_line.volt
-app/i346_scope_settings_next_line.volt:10:2: error: syntax: a settings list stays on the line of the Scope it modifies, found '[' on the next line (§settings-lists)
+app/i346_scope_settings_next_line.volt:10:2: error: syntax: a settings list stays on the line of the scope it modifies, found '[' on the next line (§settings-lists)
 
 ## i351_project_twice_in_package
-db/b.volt:3:1: error: spec/project: at most one Project element per package (§project)
+db/b.volt:3:1: error: spec/project: at most one project element per package (§project)
 
 ## i352_type_takes_client_name
-app/schema.volt:5:6: error: spec/types: Type Client takes the Go name of the generated client type, which gen -o writes beside the models; a declared type is named apart from the names generated code declares (§types)
-app/schema.volt:6:6: error: spec/types: Type NewClient takes the Go name of the generated client constructor, which gen -o writes beside the models; a declared type is named apart from the names generated code declares (§types)
+app/schema.volt:5:6: error: spec/types: type Client takes the Go name of the generated client type, which gen -o writes beside the models; a declared type is named apart from the names generated code declares (§types)
+app/schema.volt:6:6: error: spec/types: type NewClient takes the Go name of the generated client constructor, which gen -o writes beside the models; a declared type is named apart from the names generated code declares (§types)
 
 ## i353_reserved_param_ctx.volt
 app/i353_reserved_param_ctx.volt:6:9: error: spec/scopes-and-routes: path parameter "ctx" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx, body
@@ -714,10 +714,10 @@ db/i393_join_on_group.volt:24:31: error: spec/selects-over-groups: join needs a 
 db/i394_join_unknown_relation.volt:19:46: error: spec/selects-over-groups: table "points" has no relation "owner" to join; its relations: metric, source (§selects-over-groups, §relationships-ref)
 
 ## i395_join_ambiguous_relation.volt
-db/i395_join_ambiguous_relation.volt:19:46: error: spec/selects-over-groups: relation "points" of table "metrics" is ambiguous, read as SQLite reads an alias, without regard to case: it is the reverse relation to "points" (at db/i395_join_ambiguous_relation.volt:13:20; name it with [reverse: name] on a Ref element) and the reverse relation to "points" (at db/i395_join_ambiguous_relation.volt:14:26; name it with [reverse: name] on a Ref element) (§relationships-ref, §selects-over-groups)
+db/i395_join_ambiguous_relation.volt:19:46: error: spec/selects-over-groups: relation "points" of table "metrics" is ambiguous, read as SQLite reads an alias, without regard to case: it is the reverse relation to "points" (at db/i395_join_ambiguous_relation.volt:13:20; name it with [reverse: name] on a ref element) and the reverse relation to "points" (at db/i395_join_ambiguous_relation.volt:14:26; name it with [reverse: name] on a ref element) (§relationships-ref, §selects-over-groups)
 
 ## i396_join_self_name.volt
-db/i396_join_self_name.volt:11:49: error: spec/selects-over-groups: relation "metrics" of table "metrics" takes the table's own name, which the join's alias needs, read as SQLite reads it, without regard to case: it is the reverse relation to "metrics" (at db/i396_join_self_name.volt:8:24; name it with [reverse: name] on a Ref element) (§relationships-ref, §selects-over-groups)
+db/i396_join_self_name.volt:11:49: error: spec/selects-over-groups: relation "metrics" of table "metrics" takes the table's own name, which the join's alias needs, read as SQLite reads it, without regard to case: it is the reverse relation to "metrics" (at db/i396_join_self_name.volt:8:24; name it with [reverse: name] on a ref element) (§relationships-ref, §selects-over-groups)
 
 ## i397_join_twice.volt
 db/i397_join_twice.volt:19:59: error: spec/selects-over-groups: relation "metric" is joined twice (§selects-over-groups)
@@ -888,7 +888,7 @@ app/routes.volt:10:7: error: spec/scope-loads: load "app" takes the name of a pa
 app/routes.volt:10:27: error: spec/route-loads: an event route takes no timeout: the runtime serves the stream (§route-loads, §event-routes)
 
 ## i447_relation_case_ambiguous.volt
-db/i447_relation_case_ambiguous.volt:21:47: error: spec/selects-over-groups: relation "Points" of table "points" takes the table's own name, which the join's alias needs, read as SQLite reads it, without regard to case: it is the forward relation to "metrics" (at db/i447_relation_case_ambiguous.volt:19:41; name it with [as: name] on a Ref element) (§relationships-ref, §selects-over-groups)
+db/i447_relation_case_ambiguous.volt:21:47: error: spec/selects-over-groups: relation "Points" of table "points" takes the table's own name, which the join's alias needs, read as SQLite reads it, without regard to case: it is the forward relation to "metrics" (at db/i447_relation_case_ambiguous.volt:19:41; name it with [as: name] on a ref element) (§relationships-ref, §selects-over-groups)
 
 ## i44_singular_collision.volt
 app/i44_singular_collision.volt:11:2: error: spec/resources: resources "posty": the collection and member reverse-URL helpers are both "Posty", because singularizing "posty" does not change it (§table-resolution); set the singular explicitly, e.g. [singular: <name>]

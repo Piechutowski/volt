@@ -1,9 +1,9 @@
 // spec: §tablepartial, a TablePartial takes no settings; its body holds columns, indexes and validators
-// want: a TablePartial takes no settings
-TablePartial stamps [note: "timestamps"] {
+// want: a table_partial takes no settings
+table_partial stamps [note: "timestamps"] {
   created_at time.Time
 }
-Table users {
+table users {
   id int [pk]
   ~stamps
 }

@@ -1,5 +1,5 @@
 // spec: §string-literals, a single-line string must not contain a line break
-Table t {
+table t {
   id int [note: "spans
 lines"]
 }

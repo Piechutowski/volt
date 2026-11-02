@@ -2,18 +2,18 @@
 // want: names a column of "metrics", joined as "metric"
 package db
 
-Table metrics {
+table metrics {
   id   int    [pk, increment]
   name string
   unit string [null]
   hour int
 }
 
-Table points {
+table points {
   id        int   [pk, increment]
   metric_id int   [ref: metrics.id]
   ts        int
   value     float64
 }
 
-Select hourly (metric_id, ts / 3600 as hour, count() as n) for points join metric [group: (metric_id, hour)]
+select hourly (metric_id, ts / 3600 as hour, count() as n) for points join metric [group: (metric_id, hour)]

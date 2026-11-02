@@ -767,7 +767,7 @@ func relationAmbiguity(table, name string, named []*check.RelationInfo) string {
 		if r.Forward {
 			fix = "as"
 		}
-		parts[i] = fmt.Sprintf("the %s relation to %q (at %s; name it with [%s: name] on a Ref element)", r.Side(), r.Table.Key, r.Pos, fix)
+		parts[i] = fmt.Sprintf("the %s relation to %q (at %s; name it with [%s: name] on a ref element)", r.Side(), r.Table.Key, r.Pos, fix)
 	}
 	if strings.EqualFold(name, table) {
 		return fmt.Sprintf("relation %q of table %q takes the table's own name, which the join's alias needs, read as SQLite reads it, without regard to case: it is %s", name, table, strings.Join(parts, " and "))

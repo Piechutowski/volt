@@ -4,6 +4,6 @@ Enum order_state {
   pending
   paid
 }
-Table orders {
+table orders {
   id int [pk]
 }

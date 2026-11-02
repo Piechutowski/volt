@@ -1,8 +1,8 @@
 // nullable vs NOT NULL foreign keys and other nullable shapes
-Table users {
+table users {
   id int [pk]
 }
-Table posts {
+table posts {
   id int [pk]
   author_id int [ref: users.id]
   editor_id int [null, ref: users.id, note: "NULL until an editor is assigned"]

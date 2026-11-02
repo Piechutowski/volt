@@ -33,7 +33,7 @@ func perfFixture(t *testing.T, tables, cols int, def bool) string {
 	var db strings.Builder
 	db.WriteString("package db\n\n")
 	for i := 1; i <= tables; i++ {
-		fmt.Fprintf(&db, "Table m_t%04ds {\n\tid int [pk, increment]\n", i)
+		fmt.Fprintf(&db, "table m_t%04ds {\n\tid int [pk, increment]\n", i)
 		for c := 1; c < cols; c++ {
 			typ := "string"
 			if c%2 == 1 {
@@ -46,7 +46,7 @@ func perfFixture(t *testing.T, tables, cols int, def bool) string {
 	write("db/schema.volt", db.String())
 
 	var app strings.Builder
-	app.WriteString("package app\n\nimport (\n\tdb\n)\n\nScope / {\n")
+	app.WriteString("package app\n\nimport (\n\tdb\n)\n\nscope / {\n")
 	for i := 1; i <= tables; i++ {
 		if def {
 			fmt.Fprintf(&app, "\tresources db.m_t%04ds [default]\n", i)

@@ -2462,62 +2462,6 @@
     "named": false
   },
   {
-    "type": "Group",
-    "named": false
-  },
-  {
-    "type": "Indexes",
-    "named": false
-  },
-  {
-    "type": "Migration",
-    "named": false
-  },
-  {
-    "type": "Pipeline",
-    "named": false
-  },
-  {
-    "type": "Pred",
-    "named": false
-  },
-  {
-    "type": "Project",
-    "named": false
-  },
-  {
-    "type": "Records",
-    "named": false
-  },
-  {
-    "type": "Ref",
-    "named": false
-  },
-  {
-    "type": "Scope",
-    "named": false
-  },
-  {
-    "type": "Select",
-    "named": false
-  },
-  {
-    "type": "Table",
-    "named": false
-  },
-  {
-    "type": "TablePartial",
-    "named": false
-  },
-  {
-    "type": "Type",
-    "named": false
-  },
-  {
-    "type": "Validators",
-    "named": false
-  },
-  {
     "type": "[",
     "named": false
   },
@@ -2615,6 +2559,10 @@
     "named": false
   },
   {
+    "type": "group",
+    "named": false
+  },
+  {
     "type": "group_member",
     "named": true
   },
@@ -2647,6 +2595,10 @@
     "named": false
   },
   {
+    "type": "indexes",
+    "named": false
+  },
+  {
     "type": "is",
     "named": false
   },
@@ -2665,6 +2617,10 @@
   {
     "type": "load_name",
     "named": true
+  },
+  {
+    "type": "migration",
+    "named": false
   },
   {
     "type": "migration_name",
@@ -2707,11 +2663,19 @@
     "named": true
   },
   {
+    "type": "pipeline",
+    "named": false
+  },
+  {
     "type": "pipeline_name",
     "named": true
   },
   {
     "type": "post",
+    "named": false
+  },
+  {
+    "type": "pred",
     "named": false
   },
   {
@@ -2723,7 +2687,19 @@
     "named": true
   },
   {
+    "type": "project",
+    "named": false
+  },
+  {
     "type": "rebuild",
+    "named": false
+  },
+  {
+    "type": "records",
+    "named": false
+  },
+  {
+    "type": "ref",
     "named": false
   },
   {
@@ -2736,6 +2712,14 @@
   },
   {
     "type": "resources",
+    "named": false
+  },
+  {
+    "type": "scope",
+    "named": false
+  },
+  {
+    "type": "select",
     "named": false
   },
   {
@@ -2755,6 +2739,10 @@
     "named": false
   },
   {
+    "type": "table_partial",
+    "named": false
+  },
+  {
     "type": "to",
     "named": false
   },
@@ -2763,11 +2751,19 @@
     "named": false
   },
   {
+    "type": "type",
+    "named": false
+  },
+  {
     "type": "up",
     "named": false
   },
   {
     "type": "use",
+    "named": false
+  },
+  {
+    "type": "validators",
     "named": false
   },
   {

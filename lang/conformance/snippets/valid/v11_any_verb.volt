@@ -1,6 +1,6 @@
 // spec: §routes — any registers without a method
 package app
 
-Scope / {
+scope / {
 	any /webhook Hooks.Receive
 }

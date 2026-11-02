@@ -2,9 +2,9 @@
 indexes: plain, composite, expression, settings
 ==================
 
-Table t {
+table t {
   id int
-  Indexes {
+  indexes {
     id [pk]
     (id, `lower(name)`) [name: "ix", unique]
     created_at [where: `created_at > 0`]
@@ -64,9 +64,9 @@ Table t {
 validators block
 ==================
 
-Table t {
+table t {
   balance int
-  Validators {
+  validators {
     BalanceFloor(balance)
     db.BalanceCap(balance)
   }
@@ -99,7 +99,7 @@ Table t {
 notes: the note setting of a table and a column
 ==================
 
-Table t [note: "table note"] {
+table t [note: "table note"] {
   id int [note: "column note"]
 }
 
@@ -132,7 +132,7 @@ Table t [note: "table note"] {
 records: top-level with expressions and null
 ==================
 
-Records orders(id, user_id, total) {
+records orders(id, user_id, total) {
   1, 1, `1.0 + 2.0`
   2, null, 3.5
   4, null, -7
@@ -176,16 +176,16 @@ Records orders(id, user_id, total) {
 records: in-table with and without column list
 ==================
 
-Table t {
+table t {
   id int
-  Records (id) {
+  records (id) {
     1
   }
 }
 
-Table s {
+table s {
   id int
-  Records {
+  records {
     1
     2
   }
@@ -228,9 +228,9 @@ Table s {
 records: an unsigned exponent is a number
 ==================
 
-Table metrics {
+table metrics {
   value float64 [pk]
-  Records {
+  records {
     1e5
     2E10
   }
@@ -263,7 +263,7 @@ records: an empty field is an error
 :error
 ==================
 
-Records orders(id, user_id) {
+records orders(id, user_id) {
   1, , 2
 }
 

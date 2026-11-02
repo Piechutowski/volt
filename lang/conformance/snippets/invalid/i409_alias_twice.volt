@@ -2,7 +2,7 @@
 // want: appears twice in the projection
 package db
 
-Table points {
+table points {
   id        int     [pk, increment]
   metric_id int
   ts        int
@@ -11,4 +11,4 @@ Table points {
   note      string  [null]
 }
 
-Select rows (count() as n, sum(value) as n) for points
+select rows (count() as n, sum(value) as n) for points

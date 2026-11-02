@@ -6,6 +6,6 @@ import (
 	db
 )
 
-Scope / {
+scope / {
 	patch /settings/:id(int) Settings.Save [body: db.SettingUpdate(id), only: (refresh, refresh)]
 }

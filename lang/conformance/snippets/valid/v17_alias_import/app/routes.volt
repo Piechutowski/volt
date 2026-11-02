@@ -5,6 +5,6 @@ import (
 	d shared/db
 )
 
-Scope / {
+scope / {
 	resources d.posts
 }

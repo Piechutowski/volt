@@ -1,12 +1,12 @@
 // spec: §predicates — predicate references must be acyclic
 package db
 
-Table ms_revenue {
+table ms_revenue {
   id int [pk]
   year int
 }
 
-Pred a { b and year = :y }
-Pred b { a }
+pred a { b and year = :y }
+pred b { a }
 
-Select rows for ms_revenue where a
+select rows for ms_revenue where a

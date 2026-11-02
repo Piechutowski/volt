@@ -2,9 +2,9 @@
 // column must exist in every member
 package db
 
-Table page_views {
+table page_views {
   id int [pk]
   site string
 }
 
-Select public (* \ hits) for page_views
+select public (* \ hits) for page_views

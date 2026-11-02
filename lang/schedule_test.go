@@ -33,16 +33,16 @@ func scheduleFixture(t *testing.T) string {
 	for i := 0; i < 6; i++ {
 		write(fmt.Sprintf("d%d/schema.volt", i), fmt.Sprintf(`package d%d
 
-Type kinds.Kind string from "example.com/kinds"
+type kinds.Kind string from "example.com/kinds"
 
-Table posts {
+table posts {
   id    int [pk, increment]
   title string
   title string [null]
   body  string    [null]
 }
 
-Table tags {
+table tags {
   id int [pk]
 }
 `, i))
@@ -52,7 +52,7 @@ import (
 	d%d
 )
 
-Scope /api {
+scope /api {
 	resources d%d.posts [default]
 	get /nope d%d.PostNope
 	get /tags/:id Tags.Show

@@ -2,7 +2,7 @@
 // want: timeout: takes a positive integer of seconds
 package app
 
-Scope / {
+scope / {
 	get /charts Pages.Charts [timeout: "5s"]
 	get /slow   Pages.Slow   [timeout: 0]
 }

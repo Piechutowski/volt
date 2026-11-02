@@ -1,6 +1,6 @@
 package site
 
-Table tags {
+table tags {
   id   int    [pk, increment]
   name string
 }

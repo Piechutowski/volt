@@ -6,6 +6,6 @@ import (
 	db
 )
 
-Scope /ms {
+scope /ms {
 	dataset db.browse [only: (ms_revenue), except: (ms_usage)]
 }

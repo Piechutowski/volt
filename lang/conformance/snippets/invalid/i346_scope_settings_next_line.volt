@@ -1,12 +1,12 @@
 // spec: §settings-lists, §scopes, a Scope's settings list stays on the line of the Scope
-// want: a settings list stays on the line of the Scope it modifies
+// want: a settings list stays on the line of the scope it modifies
 package app
 
-Pipeline api {
+pipeline api {
 	use volt.RequestID
 }
 
-Scope /
+scope /
 	[pipe: api] {
 	get /ping Home.Ping
 }

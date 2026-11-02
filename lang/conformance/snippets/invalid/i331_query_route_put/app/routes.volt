@@ -6,7 +6,7 @@ import (
 	db
 )
 
-Scope /api {
+scope /api {
 	put /posts/:id(int) db.PostUpdate
 	put /posts          db.PostList
 	put /drafts         db.PostCreate

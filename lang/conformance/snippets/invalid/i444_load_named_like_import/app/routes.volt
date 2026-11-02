@@ -6,7 +6,7 @@ import (
 	db
 )
 
-Scope / {
+scope / {
 	get /ordered db.MetricOrdered
 	get /metrics Metrics.Index {
 		db db.MetricOrdered()

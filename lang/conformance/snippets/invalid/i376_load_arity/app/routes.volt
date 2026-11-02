@@ -6,7 +6,7 @@ import (
 	db
 )
 
-Scope / {
+scope / {
 	get /metrics/:id(int) Metrics.Show {
 		metric db.MetricGet(id, 1)
 	}

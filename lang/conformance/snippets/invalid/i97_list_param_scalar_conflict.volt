@@ -2,9 +2,9 @@
 // want: one name, one type
 package db
 
-Table page_views {
+table page_views {
   id int [pk]
   site string
 }
 
-Select picked for page_views where site in :site or site = :site
+select picked for page_views where site in :site or site = :site

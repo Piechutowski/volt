@@ -3,11 +3,11 @@
 // want: column "thumb" ([]byte, Go rt.Null[[]byte]) but parameter 1 of ThumbSmall is []byte
 package db
 
-Table attachments {
+table attachments {
   id    int    [pk, increment]
   thumb []byte [null]
 
-  Validators {
+  validators {
     ThumbSmall(thumb)
   }
 }

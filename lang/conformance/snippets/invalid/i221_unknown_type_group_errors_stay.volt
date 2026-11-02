@@ -2,58 +2,58 @@
 // want: is missing from link_clicks
 package db
 
-Table page_views {
+table page_views {
   id   int    [pk, increment]
   hits int32
 }
 
-Table link_clicks {
+table link_clicks {
   id   int    [pk, increment]
   path string
 }
 
-Table feed_reads {
+table feed_reads {
   id   int    [pk, increment]
   hits int
 }
 
-Table search_hits {
+table search_hits {
   id   int    [pk, increment]
   hits string
 }
 
-Table raw_marks {
+table raw_marks {
   id   int    [pk, increment]
   hits []byte
 }
 
-Table counteds {
+table counteds {
   id int [pk, increment]
 }
 
-Group lacking {
+group lacking {
   page_views
   link_clicks
 }
 
-Group split {
+group split {
   page_views
   feed_reads
   search_hits
 }
 
-Group rawish {
+group rawish {
   page_views
   raw_marks
 }
 
-Select busy for lacking where hits > :min
-Select mixed for split where hits = :h
-Select raw for rawish where hits = :h
-Select tally (hits) for lacking
-Select spread (hits) for split
-Select ranked for page_views where hits > :min [order: (hits desc)]
-Select counted (hits) for page_views
-Select located (hits) for page_views where nope = :x
-Select hits (* \ id) for page_views
-Select page_view_hits (hits) for page_views
+select busy for lacking where hits > :min
+select mixed for split where hits = :h
+select raw for rawish where hits = :h
+select tally (hits) for lacking
+select spread (hits) for split
+select ranked for page_views where hits > :min [order: (hits desc)]
+select counted (hits) for page_views
+select located (hits) for page_views where nope = :x
+select hits (* \ id) for page_views
+select page_view_hits (hits) for page_views

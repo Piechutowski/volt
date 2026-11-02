@@ -6,7 +6,7 @@ import (
 	db
 )
 
-Scope / {
+scope / {
 	get /metrics/:id(int) Metrics.Show {
 		gone db.MetricDelete(id)
 	}

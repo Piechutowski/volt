@@ -2,7 +2,7 @@
 // want: leaves out label
 package db
 
-Table points {
+table points {
   id        int     [pk, increment]
   metric_id int
   ts        int
@@ -11,4 +11,4 @@ Table points {
   note      string  [null]
 }
 
-Select rows (metric_id, label, count() as n) for points [group: (metric_id)]
+select rows (metric_id, label, count() as n) for points [group: (metric_id)]

@@ -1,6 +1,6 @@
 // spec: §settings-whitelists
 package app
 
-Scope / [pipes: api] {
+scope / [pipes: api] {
 	get /x X.Y
 }

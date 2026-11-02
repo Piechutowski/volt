@@ -6,7 +6,7 @@ import (
 	db
 )
 
-Scope / {
+scope / {
 	load body CurrentUser
 	get /me Me.Show
 }

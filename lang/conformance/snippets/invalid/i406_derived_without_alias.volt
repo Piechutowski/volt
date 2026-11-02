@@ -2,7 +2,7 @@
 // want: a derived item takes an alias
 package db
 
-Table points {
+table points {
   id        int     [pk, increment]
   metric_id int
   ts        int
@@ -11,4 +11,4 @@ Table points {
   note      string  [null]
 }
 
-Select rows (id, count()) for points
+select rows (id, count()) for points

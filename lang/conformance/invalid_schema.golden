@@ -4,7 +4,7 @@ i01_unterminated_block_comment.volt:3:1: error: syntax: unterminated block comme
 ## i02_unterminated_string.volt
 i02_unterminated_string.volt:2:25: error: syntax: newline in a string: a string ends on its line, and a multi-line string is written """...""" (§string-literals)
 i02_unterminated_string.volt:3:1: error: syntax: invalid setting value (§settings-lists): found end of file
-i02_unterminated_string.volt:3:1: error: syntax: expected '}' in Table (§table), found end of file
+i02_unterminated_string.volt:3:1: error: syntax: expected '}' in table (§table), found end of file
 
 ## i03_newline_in_string.volt
 i03_newline_in_string.volt:3:17: error: syntax: newline in a string: a string ends on its line, and a multi-line string is written """...""" (§string-literals)
@@ -18,13 +18,13 @@ i04_invalid_number.volt:3:20: error: syntax: invalid setting value (§settings-l
 ## i05_unterminated_funcexpr.volt
 i05_unterminated_funcexpr.volt:2:28: error: syntax: unterminated expression literal (§expression-literals)
 i05_unterminated_funcexpr.volt:2:28: error: syntax: invalid setting value (§settings-lists): found end of file
-i05_unterminated_funcexpr.volt:2:28: error: syntax: expected '}' in Table (§table), found end of file
+i05_unterminated_funcexpr.volt:2:28: error: syntax: expected '}' in table (§table), found end of file
 
 ## i07_unknown_element.volt
 i07_unknown_element.volt:2:1: error: syntax: unknown element type "View" (§program-structure)
 
 ## i08_empty_table.volt
-i08_empty_table.volt:2:1: error: spec/table: table "empty" must contain at least one column, directly or from an injected TablePartial (§table)
+i08_empty_table.volt:2:1: error: spec/table: table "empty" must contain at least one column, directly or from an injected table_partial (§table)
 
 ## i09_duplicate_setting.volt
 i09_duplicate_setting.volt:3:19: error: spec/settings-lists: setting "unique" may appear at most once (§settings-lists)
@@ -33,13 +33,13 @@ i09_duplicate_setting.volt:3:19: error: spec/settings-lists: setting "unique" ma
 i126_type_storage.volt:3:11: error: spec/types: storage type "text" of Type "Slug" is not a built-in: bool, int, float64, string, []byte or time.Time (§types)
 
 ## i127_type_bare_from.volt
-i127_type_bare_from.volt:3:23: error: spec/types: Type "Slug" is a type of this package and takes no from path (§types)
+i127_type_bare_from.volt:3:23: error: spec/types: type "Slug" is a type of this package and takes no from path (§types)
 
 ## i128_type_pkg_no_from.volt
-i128_type_pkg_no_from.volt:3:6: error: spec/types: Type "money.Money" names a package but has no from path (§types)
+i128_type_pkg_no_from.volt:3:6: error: spec/types: type "money.Money" names a package but has no from path (§types)
 
 ## i129_type_builtin_name.volt
-i129_type_builtin_name.volt:3:6: error: spec/types: Type "string" spells a built-in type (§types)
+i129_type_builtin_name.volt:3:6: error: spec/types: type "string" spells a built-in type (§types)
 
 ## i12_duplicate_columns.volt
 i12_duplicate_columns.volt:4:3: error: spec/namespaces-and-uniqueness: duplicate column name "id"
@@ -64,19 +64,19 @@ i135_records_type_mismatch.volt:7:8: error: spec/records-sample-data: record val
 i136_records_null_not_null.volt:7:8: error: spec/records-sample-data: record value for "n" is null, but the column is not nullable (§records-sample-data)
 
 ## i139_type_empty_from.volt
-i139_type_empty_from.volt:3:19: error: spec/types: Type "m.M" has an empty from path; the path is a non-empty import path (§types)
+i139_type_empty_from.volt:3:19: error: spec/types: type "m.M" has an empty from path; the path is a non-empty import path (§types)
 
 ## i140_type_reserved_alias.volt
-i140_type_reserved_alias.volt:3:6: error: spec/types: Type "rt.X": package name "rt" is reserved by generated code (§types)
+i140_type_reserved_alias.volt:3:6: error: spec/types: type "rt.X": package name "rt" is reserved by generated code (§types)
 
 ## i141_type_reserved_alias_path.volt
-i141_type_reserved_alias_path.volt:3:6: error: spec/types: Type "sql.X": package name "sql" is reserved by generated code for "database/sql" (§types)
+i141_type_reserved_alias_path.volt:3:6: error: spec/types: type "sql.X": package name "sql" is reserved by generated code for "database/sql" (§types)
 
 ## i142_slice_not_byte.volt
 i142_slice_not_byte.volt:4:8: error: spec/columns: column "tags": unknown type "[]string"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
 
 ## i143_type_duplicate.volt
-i143_type_duplicate.volt:4:1: error: spec/namespaces-and-uniqueness: duplicate Type name "Slug"
+i143_type_duplicate.volt:4:1: error: spec/namespaces-and-uniqueness: duplicate type name "Slug"
 
 ## i146_type_storage_type.volt
 i146_type_storage_type.volt:4:13: error: spec/types: storage type "Slug" of Type "Handle" is not a built-in: bool, int, float64, string, []byte or time.Time (§types)
@@ -143,9 +143,9 @@ i232_ref_set_null_not_null.volt:15:36: error: spec/relationships-ref: update: se
 i232_ref_set_null_not_null.volt:16:55: error: spec/relationships-ref: update: set_null on foreign-key column "posts.editor_id", which does not carry null: the database would write a NULL the column refuses (§relationships-ref)
 
 ## i244_partial_index_duplicate.volt
-i244_partial_index_duplicate.volt:24:3: error: spec/tablepartial: TablePartial "emails" injects index (email, name) into table "users", which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)
-i244_partial_index_duplicate.volt:26:3: error: spec/tablepartial: TablePartial "stamps_again" injects index (created_at, updated_at) into table "users", which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)
-i244_partial_index_duplicate.volt:34:3: error: spec/tablepartial: TablePartial "stamps" injects index (created_at, updated_at) into table "posts", which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)
+i244_partial_index_duplicate.volt:24:3: error: spec/tablepartial: table_partial "emails" injects index (email, name) into table "users", which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)
+i244_partial_index_duplicate.volt:26:3: error: spec/tablepartial: table_partial "stamps_again" injects index (created_at, updated_at) into table "users", which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)
+i244_partial_index_duplicate.volt:34:3: error: spec/tablepartial: table_partial "stamps" injects index (created_at, updated_at) into table "posts", which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)
 
 ## i245_records_empty_field.volt
 i245_records_empty_field.volt:8:8: error: syntax: empty record field: every field holds a value, and NULL is written null (§records-sample-data)
@@ -171,14 +171,14 @@ i249_ref_name_long_form.volt:6:5: error: syntax: expected ':' after Ref (§relat
 i24_records_arity.volt:6:5: error: spec/records-sample-data: record row has 3 values but 2 columns are listed
 
 ## i250_partial_settings.volt
-i250_partial_settings.volt:3:21: error: syntax: a TablePartial takes no settings; its body holds columns, indexes and validators (§tablepartial)
-i250_partial_settings.volt:8:3: error: spec/tablepartial: unknown TablePartial "stamps"
+i250_partial_settings.volt:3:22: error: syntax: a table_partial takes no settings; its body holds columns, indexes and validators (§tablepartial)
+i250_partial_settings.volt:8:3: error: spec/tablepartial: unknown table_partial "stamps"
 
 ## i251_table_alias.volt
-i251_table_alias.volt:3:13: error: syntax: expected '{' in Table (§table), found identifier "as"
+i251_table_alias.volt:3:13: error: syntax: expected '{' in table (§table), found identifier "as"
 
 ## i252_table_schema_qualified.volt
-i252_table_schema_qualified.volt:3:11: error: syntax: expected '{' in Table (§table), found '.' "."
+i252_table_schema_qualified.volt:3:11: error: syntax: expected '{' in table (§table), found '.' "."
 
 ## i253_diagram_elements.volt
 i253_diagram_elements.volt:6:1: error: syntax: unknown element type "TableGroup" (§program-structure)
@@ -204,7 +204,7 @@ i258_semicolon_not_a_token.volt:4:14: error: syntax: expected end of line after 
 i259_enum_not_an_element.volt:3:1: error: syntax: unknown element type "Enum" (§program-structure)
 
 ## i25_two_records_blocks.volt
-i25_two_records_blocks.volt:3:3: error: spec/records-sample-data: at most one Records block per table (§records-sample-data)
+i25_two_records_blocks.volt:3:3: error: spec/records-sample-data: at most one records block per table (§records-sample-data)
 
 ## i260_default_dotted_name.volt
 i260_default_dotted_name.volt:6:26: error: spec/default-values: default value must be a number, string, boolean or expression literal; found the dotted name state.pending, and a declared type takes a literal of its storage type (§default-values)
@@ -213,8 +213,8 @@ i260_default_dotted_name.volt:6:26: error: spec/default-values: default value mu
 i261_record_dotted_name.volt:9:13: error: syntax: a dotted name is not a record value: a record value is a literal, true, false or null, and a declared type takes a literal of its storage type (§records-sample-data)
 
 ## i265_type_unexported_name.volt
-i265_type_unexported_name.volt:3:6: error: spec/types: Type "slug" is not an exported Go name; a declared type's name begins with an upper-case letter, as Slug does (§types)
-i265_type_unexported_name.volt:4:6: error: spec/types: Type "money.amount" names an unexported Go type of package money, which no other package can name (§types)
+i265_type_unexported_name.volt:3:6: error: spec/types: type "slug" is not an exported Go name; a declared type's name begins with an upper-case letter, as Slug does (§types)
+i265_type_unexported_name.volt:4:6: error: spec/types: type "money.amount" names an unexported Go type of package money, which no other package can name (§types)
 
 ## i269_table_unknown_setting.volt
 i269_table_unknown_setting.volt:3:14: error: spec/table: unknown setting "headercolor" (§table)
@@ -226,13 +226,13 @@ i26_toplevel_records_no_columns.volt:3:1: error: spec/records-sample-data: top-l
 i270_ref_note.volt:10:32: error: spec/relationships-ref: unknown setting "note" (§relationships-ref)
 
 ## i271_type_note.volt
-i271_type_note.volt:2:18: error: syntax: expected end of line after Type declaration (§types), found '[' "["
+i271_type_note.volt:2:18: error: syntax: expected end of line after type declaration (§types), found '[' "["
 
 ## i273_inline_ref_action.volt
 i273_inline_ref_action.volt:8:31: error: spec/columns: unknown setting "delete" (§columns)
 
 ## i274_inline_ref_column_group.volt
-i274_inline_ref_column_group.volt:9:25: error: spec/columns: an inline ref endpoint is table.column, without parentheses: a foreign key over several columns is a Ref element (§columns)
+i274_inline_ref_column_group.volt:9:25: error: spec/columns: an inline ref endpoint is table.column, without parentheses: a foreign key over several columns is a ref element (§columns)
 
 ## i275_ref_action_no_action.volt
 i275_ref_action_no_action.volt:5:49: error: spec/relationships-ref: invalid referential action "no_action" for 'update'; expected cascade, restrict, set_null or set_default; leave update: out for SQLite's default (§relationships-ref)
@@ -251,13 +251,11 @@ i280_ref_action_quoted.volt:5:52: error: spec/relationships-ref: "update" requir
 i282_settings_missing_comma_line_break.volt:7:3: error: syntax: expected ',' or ']' in settings list, found identifier "update": settings are separated by commas, and a setting name or value is one identifier (§settings-lists)
 
 ## i284_case_element_word.volt
-i284_case_element_word.volt:3:1: error: syntax: write Table, not TABLE: keywords are case-sensitive (§keywords)
-i284_case_element_word.volt:7:1: error: syntax: write Table, not table: keywords are case-sensitive (§keywords)
-i284_case_element_word.volt:11:1: error: syntax: write Type, not type: keywords are case-sensitive (§keywords)
+i284_case_element_word.volt:3:1: error: syntax: write table, not TABLE: keywords are case-sensitive (§keywords)
 
 ## i285_case_block_word.volt
-i285_case_block_word.volt:7:3: error: syntax: write Indexes, not indexes: keywords are case-sensitive (§keywords)
-i285_case_block_word.volt:10:3: error: syntax: write Records, not records: keywords are case-sensitive (§keywords)
+i285_case_block_word.volt:7:3: error: syntax: write indexes, not Indexes: keywords are case-sensitive (§keywords)
+i285_case_block_word.volt:10:3: error: syntax: write records, not Records: keywords are case-sensitive (§keywords)
 
 ## i286_case_setting_name.volt
 i286_case_setting_name.volt:4:16: error: syntax: write pk, not PK: keywords are case-sensitive (§keywords)
@@ -299,9 +297,9 @@ i306_multiline_ends_quote.volt:3:30: error: syntax: a multi-line string cannot e
 i307_index_pk.volt:8:21: error: spec/indexes: pk is a column setting, not an index setting: write pk on each key column, and several pk columns form one composite primary key in declaration order (§indexes)
 
 ## i308_index_plain_single_column.volt
-i308_index_plain_single_column.volt:6:5: error: spec/indexes: index created_at on "stamps" is a plain single-column index: write the column setting index on "created_at"; an Indexes block holds composite, expression and partial indexes (§indexes)
-i308_index_plain_single_column.volt:17:5: error: spec/indexes: index email on "users" is a plain single-column index: write the column setting unique on "email"; an Indexes block holds composite, expression and partial indexes (§indexes)
-i308_index_plain_single_column.volt:18:6: error: spec/indexes: index (name) on "users" is a plain single-column index: write the column setting index on "name"; an Indexes block holds composite, expression and partial indexes (§indexes)
+i308_index_plain_single_column.volt:6:5: error: spec/indexes: index created_at on "stamps" is a plain single-column index: write the column setting index on "created_at"; an indexes block holds composite, expression and partial indexes (§indexes)
+i308_index_plain_single_column.volt:17:5: error: spec/indexes: index email on "users" is a plain single-column index: write the column setting unique on "email"; an indexes block holds composite, expression and partial indexes (§indexes)
+i308_index_plain_single_column.volt:18:6: error: spec/indexes: index (name) on "users" is a plain single-column index: write the column setting index on "name"; an indexes block holds composite, expression and partial indexes (§indexes)
 
 ## i310_index_name_twice.volt
 i310_index_name_twice.volt:10:5: error: spec/indexes: table "users" has two indexes named "idx_users_email", the unique setting of column "email" and index email: SQLite names an index once in the database, so an index name is unique in the schema; give index email another name: (§indexes)
@@ -311,11 +309,11 @@ i310_index_name_twice.volt:12:6: error: spec/indexes: table "users" has two inde
 i311_unique_and_index.volt:5:16: error: spec/columns: "unique" and "index" cannot both be set (§columns)
 
 ## i312_partial_index_name_twice.volt
-i312_partial_index_name_twice.volt:8:6: error: spec/indexes: TablePartial "stamps" declares two indexes named "idx_<table>_created_at_updated_at" in every table that injects it, index (created_at, updated_at) and index (created_at, updated_at): SQLite names an index once in the database, so an index name is unique in the schema; declare one of them in a table body instead, since a name: written in a TablePartial is the same in every table that injects it (§indexes)
-i312_partial_index_name_twice.volt:15:5: error: spec/indexes: TablePartial "contact" declares two indexes named "idx_<table>_email" in every table that injects it, the unique setting of column "email" and index email: SQLite names an index once in the database, so an index name is unique in the schema; declare one of them in a table body instead, since a name: written in a TablePartial is the same in every table that injects it (§indexes)
+i312_partial_index_name_twice.volt:8:6: error: spec/indexes: table_partial "stamps" declares two indexes named "idx_<table>_created_at_updated_at" in every table that injects it, index (created_at, updated_at) and index (created_at, updated_at): SQLite names an index once in the database, so an index name is unique in the schema; declare one of them in a table body instead, since a name: written in a table_partial is the same in every table that injects it (§indexes)
+i312_partial_index_name_twice.volt:15:5: error: spec/indexes: table_partial "contact" declares two indexes named "idx_<table>_email" in every table that injects it, the unique setting of column "email" and index email: SQLite names an index once in the database, so an index name is unique in the schema; declare one of them in a table body instead, since a name: written in a table_partial is the same in every table that injects it (§indexes)
 
 ## i313_index_name_two_tables.volt
-i313_index_name_two_tables.volt:18:3: error: spec/indexes: tables "users" and "admins" each have an index named "idx_email_ci", index `lower(email)` of TablePartial "contact" in both: SQLite names an index once in the database, so an index name is unique in the schema; a name: written in a TablePartial is the same in every table that injects it, so TablePartial "contact" is injected into one table only (§indexes)
+i313_index_name_two_tables.volt:18:3: error: spec/indexes: tables "users" and "admins" each have an index named "idx_email_ci", index `lower(email)` of table_partial "contact" in both: SQLite names an index once in the database, so an index name is unique in the schema; a name: written in a table_partial is the same in every table that injects it, so table_partial "contact" is injected into one table only (§indexes)
 
 ## i314_index_name_derived_two_tables.volt
 i314_index_name_derived_two_tables.volt:10:15: error: spec/indexes: tables "a_b" and "a" each have an index named "idx_a_b_c", the index setting of column "c" and the index setting of column "b_c": SQLite names an index once in the database, so an index name is unique in the schema; rename a table or a column, since no name: reaches a column's index (§indexes)
@@ -349,27 +347,27 @@ i322_table_name_sqlite.volt:3:7: error: spec/namespaces-and-uniqueness: table na
 i322_table_name_sqlite.volt:7:7: error: spec/namespaces-and-uniqueness: table name "SQLite_Daily" begins with sqlite_, which SQLite keeps for its own objects (§namespaces-and-uniqueness)
 
 ## i32_settings_next_line.volt
-i32_settings_next_line.volt:4:3: error: syntax: expected a column, Indexes, Validators, Records or '~injection' in Table body (§table), found '[' "["
+i32_settings_next_line.volt:4:3: error: syntax: expected a column, indexes, validators, records or '~injection' in table body (§table), found '[' "["
 
 ## i33_ref_without_body.volt
 i33_ref_without_body.volt:5:1: error: syntax: expected identifier in relationship endpoint (§relationships-ref), found end of file
 
 ## i344_project_settings_next_line.volt
-i344_project_settings_next_line.volt:4:3: error: syntax: a settings list stays on the line of the Project it modifies, found '[' on the next line (§settings-lists)
+i344_project_settings_next_line.volt:4:3: error: syntax: a settings list stays on the line of the project it modifies, found '[' on the next line (§settings-lists)
 
 ## i345_table_settings_next_line.volt
-i345_table_settings_next_line.volt:4:3: error: syntax: a settings list stays on the line of the Table it modifies, found '[' on the next line (§settings-lists)
-i345_table_settings_next_line.volt:9:1: error: syntax: a settings list stays on the line of the Table it modifies, found '[' on the next line (§settings-lists)
+i345_table_settings_next_line.volt:4:3: error: syntax: a settings list stays on the line of the table it modifies, found '[' on the next line (§settings-lists)
+i345_table_settings_next_line.volt:9:1: error: syntax: a settings list stays on the line of the table it modifies, found '[' on the next line (§settings-lists)
 
 ## i347_inline_ref_paren.volt
-i347_inline_ref_paren.volt:9:17: error: spec/columns: an inline ref endpoint is table.column, without parentheses: a foreign key over several columns is a Ref element (§columns)
+i347_inline_ref_paren.volt:9:17: error: spec/columns: an inline ref endpoint is table.column, without parentheses: a foreign key over several columns is a ref element (§columns)
 
 ## i348_setting_name_digit.volt
 i348_setting_name_digit.volt:5:14: error: syntax: 2fa begins with a digit: a name is a Go identifier, a letter or underscore followed by letters, digits and underscores (§identifiers)
 i348_setting_name_digit.volt:5:14: error: spec/columns: unknown setting "2fa" (§columns)
 
 ## i349_table_empty_partial.volt
-i349_table_empty_partial.volt:6:1: error: spec/table: table "t" must contain at least one column, directly or from an injected TablePartial (§table)
+i349_table_empty_partial.volt:6:1: error: spec/table: table "t" must contain at least one column, directly or from an injected table_partial (§table)
 
 ## i34_project_bad_value.volt
 i34_project_bad_value.volt:3:18: error: syntax: expected string in project property value (§project), found number "42"
@@ -381,17 +379,17 @@ i350_ref_duplicate_permuted.volt:15:1: error: spec/relationships-ref: duplicate 
 i35_duplicate_table.volt:3:1: error: spec/namespaces-and-uniqueness: duplicate table name "users"
 
 ## i363_type_alias_two_paths.volt
-i363_type_alias_two_paths.volt:4:6: error: spec/types: Type "a.Hits" imports "example.com/two/a" under the alias a, which Type "a.Views" at i363_type_alias_two_paths.volt:3:1 binds to "example.com/one/a": one alias names one package (§types)
+i363_type_alias_two_paths.volt:4:6: error: spec/types: type "a.Hits" imports "example.com/two/a" under the alias a, which Type "a.Views" at i363_type_alias_two_paths.volt:3:1 binds to "example.com/one/a": one alias names one package (§types)
 
 ## i364_type_from_not_import_path.volt
-i364_type_from_not_import_path.volt:3:27: error: spec/types: Type "money.Money" has from path "not a path!", which is not a Go import path (§types)
+i364_type_from_not_import_path.volt:3:27: error: spec/types: type "money.Money" has from path "not a path!", which is not a Go import path (§types)
 
 ## i365_records_time_not_iso.volt
 i365_records_time_not_iso.volt:10:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be ISO 8601 text such as "2024-01-15 10:30:00", found "not a date at all" (§records-sample-data)
 
 ## i367_type_from_next_line.volt
-i367_type_from_next_line.volt:4:3: error: syntax: expected end of line after Type declaration (§types), found string "\"example.com/app/money\""
-i367_type_from_next_line.volt:7:3: error: syntax: expected end of line after Type declaration (§types), found identifier "string"
+i367_type_from_next_line.volt:4:3: error: syntax: expected end of line after type declaration (§types), found string "\"example.com/app/money\""
+i367_type_from_next_line.volt:7:3: error: syntax: expected end of line after type declaration (§types), found identifier "string"
 i367_type_from_next_line.volt:11:9: error: spec/columns: column "price": unknown type "money.Money"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
 i367_type_from_next_line.volt:12:9: error: spec/columns: column "slug": unknown type "Slug"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
 
@@ -403,10 +401,10 @@ i368_setting_list_shape.volt:4:21: error: spec/columns: "note" must be a string 
 i36_bad_default.volt:4:20: error: spec/default-values: default value must be a number, string, boolean or expression literal (§default-values)
 
 ## i37_injection_in_partial.volt
-i37_injection_in_partial.volt:4:3: error: spec/tablepartial: partial injection is not allowed inside TablePartial
+i37_injection_in_partial.volt:4:3: error: spec/tablepartial: partial injection is not allowed inside table_partial
 
 ## i38_records_in_partial.volt
-i38_records_in_partial.volt:4:3: error: spec/tablepartial: records are not allowed inside TablePartial
+i38_records_in_partial.volt:4:3: error: spec/tablepartial: records are not allowed inside table_partial
 
 ## i42_bare_ident_record.volt
 i42_bare_ident_record.volt:5:17: error: spec/records-sample-data: record values must be literals, null, true or false; found bare identifier "a" (§records-sample-data)

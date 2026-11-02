@@ -1,10 +1,10 @@
 // spec: §settings
 package app
 
-Table users {
+table users {
 	id int [pk]
 }
 
-Scope / {
+scope / {
 	resources users [only: (index), except: (show)]
 }

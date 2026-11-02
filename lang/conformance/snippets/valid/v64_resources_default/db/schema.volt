@@ -1,12 +1,12 @@
 // spec: §selects-over-groups — the data package whose default CRUD the resources bind
 package db
 
-Table users {
+table users {
   id    int [pk, increment]
   email string    [unique]
 }
 
-Table tags {
+table tags {
   id   int [pk, increment]
   name string
 }

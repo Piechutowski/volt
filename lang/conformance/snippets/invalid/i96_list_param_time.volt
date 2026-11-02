@@ -2,9 +2,9 @@
 // want: cannot take a list parameter
 package db
 
-Table page_views {
+table page_views {
   id int [pk]
   at time.Time
 }
 
-Select picked for page_views where at in :stamps
+select picked for page_views where at in :stamps

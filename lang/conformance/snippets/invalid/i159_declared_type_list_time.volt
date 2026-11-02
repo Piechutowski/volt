@@ -2,11 +2,11 @@
 // want: cannot take a list parameter
 package db
 
-Type stamp.Stamp time.Time from "example.com/app/stamp"
+type stamp.Stamp time.Time from "example.com/app/stamp"
 
-Table events {
+table events {
   id int   [pk, increment]
   at stamp.Stamp
 }
 
-Select picked for events where at in :stamps
+select picked for events where at in :stamps

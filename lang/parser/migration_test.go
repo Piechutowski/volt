@@ -9,19 +9,19 @@ import (
 
 const migrationSample = `package db
 
-Migration 0001__create_users {
+migration 0001__create_users {
   create table users {
     id    int    [pk, increment]
     email string [unique]
 
-    Indexes {
+    indexes {
       email [unique]
     }
   }
   create index users (email)
 }
 
-Migration 0002__users_bio [irreversible] {
+migration 0002__users_bio [irreversible] {
   up {
     alter table users {
       add bio string [null]
@@ -100,7 +100,7 @@ func TestMigrationSampleParses(t *testing.T) {
 }
 
 func TestMigrationWordsAreIdentifiersElsewhere(t *testing.T) {
-	src := "Table t {\n  up int\n  to string\n  table string\n  create string\n  drop string\n  add string\n}\n"
+	src := "table t {\n  up int\n  to string\n  table string\n  create string\n  drop string\n  add string\n}\n"
 	f, diags := ParseFile("t.volt", src)
 	if len(diags) != 0 {
 		t.Fatalf("unexpected diagnostics: %v", diags)
@@ -116,13 +116,13 @@ func TestMigrationWordsAreIdentifiersElsewhere(t *testing.T) {
 
 func TestMigrationSyntaxErrors(t *testing.T) {
 	cases := []struct{ src, want string }{
-		{"Migration 0001__a {\n  down {\n  }\n}\n", "a down block follows an up block"},
-		{"Migration 0001__a {\n  up {\n  }\n  create table t {\n    id int\n  }\n}\n", "expected '}' in Migration"},
-		{"Migration 0001__a {\n  rename t to u\n}\n", "expected 'table' after rename"},
-		{"Migration 0001__a {\n  create\n  index t id\n}\n", "expected end of line after create"},
-		{"Migration 0001__a {\n  alter table t {\n    drop bio [pk]\n  }\n}\n", "expected end of line after drop column"},
-		{"Migration 0001__a {\n  create table t {\n    ~base\n  }\n}\n", "not part of it"},
-		{"Migration 0001__a\n[irreversible] {\n}\n", "expected '{' in Migration"},
+		{"migration 0001__a {\n  down {\n  }\n}\n", "a down block follows an up block"},
+		{"migration 0001__a {\n  up {\n  }\n  create table t {\n    id int\n  }\n}\n", "expected '}' in migration"},
+		{"migration 0001__a {\n  rename t to u\n}\n", "expected 'table' after rename"},
+		{"migration 0001__a {\n  create\n  index t id\n}\n", "expected end of line after create"},
+		{"migration 0001__a {\n  alter table t {\n    drop bio [pk]\n  }\n}\n", "expected end of line after drop column"},
+		{"migration 0001__a {\n  create table t {\n    ~base\n  }\n}\n", "not part of it"},
+		{"migration 0001__a\n[irreversible] {\n}\n", "expected '{' in migration"},
 	}
 	for _, tc := range cases {
 		_, diags := ParseFile("t.volt", tc.src)

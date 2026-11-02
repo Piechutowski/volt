@@ -1,15 +1,15 @@
 // spec: §columns, §tablepartial (a partial's unknown type is reported once, however many tables inject it)
 // want: unknown type "int64"
-TablePartial stamped {
+table_partial stamped {
   version int64
 }
 
-Table authors {
+table authors {
   id int [pk, increment]
   ~stamped
 }
 
-Table posts {
+table posts {
   id int [pk, increment]
   ~stamped
 }

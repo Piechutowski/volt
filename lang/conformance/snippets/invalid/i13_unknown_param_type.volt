@@ -1,6 +1,6 @@
 // spec: §route-paths
 package app
 
-Scope / {
+scope / {
 	get /x/:id(uuid) X.Y
 }

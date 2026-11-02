@@ -2,17 +2,17 @@
 // want: a migration's shape body holds columns and indexes only
 package db
 
-Table users {
+table users {
   id   int    [pk]
   name string [null]
 }
 
-Migration 0001__init {
+migration 0001__init {
   create table users {
     id   int    [pk]
     name string [null]
 
-    Records {
+    records {
       1, "root"
     }
   }

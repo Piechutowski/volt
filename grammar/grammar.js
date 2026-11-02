@@ -89,7 +89,7 @@ module.exports = grammar({
 
     project_definition: ($) =>
       seq(
-        kw('Project'),
+        kw('project'),
         optional(field('name', $._name)),
         optional(field('settings', $.settings_list)),
         '{',
@@ -105,7 +105,7 @@ module.exports = grammar({
 
     table_definition: ($) =>
       seq(
-        kw('Table'),
+        kw('table'),
         field('name', $.table_name),
         optional(field('settings', $.settings_list)),
         '{',
@@ -150,7 +150,7 @@ module.exports = grammar({
 
     table_partial_definition: ($) =>
       seq(
-        kw('TablePartial'),
+        kw('table_partial'),
         field('name', alias($._name, $.partial_name)),
         '{',
         repeat($._newline),
@@ -168,7 +168,7 @@ module.exports = grammar({
 
     type_definition: ($) =>
       seq(
-        kw('Type'),
+        kw('type'),
         field('name', $.type_name),
         field('storage', $.column_type),
         optional(seq(kw('from'), field('path', $.string))),
@@ -179,7 +179,7 @@ module.exports = grammar({
     // Ref: posts.user_id > users.id [settings]; the foreign key is left of '>'.
     ref_definition: ($) =>
       seq(
-        kw('Ref'),
+        kw('ref'),
         ':',
         $.ref_relation,
         optional(field('settings', $.settings_list)),
@@ -212,7 +212,7 @@ module.exports = grammar({
 
     indexes_block: ($) =>
       seq(
-        kw('Indexes'),
+        kw('indexes'),
         '{',
         repeat($._newline),
         optional(newlineSep1($.index_definition, $)),
@@ -232,7 +232,7 @@ module.exports = grammar({
 
     validators_block: ($) =>
       seq(
-        kw('Validators'),
+        kw('validators'),
         '{',
         repeat($._newline),
         optional(newlineSep1($.validator, $)),
@@ -255,7 +255,7 @@ module.exports = grammar({
     // Top level: Records users(id, name) { ... }
     records_definition: ($) =>
       seq(
-        kw('Records'),
+        kw('records'),
         field('table', $.table_name),
         field('columns', $.records_columns),
         $._records_body,
@@ -264,7 +264,7 @@ module.exports = grammar({
     // In-table: Records { ... } or Records (id, name) { ... }
     records_block: ($) =>
       seq(
-        kw('Records'),
+        kw('records'),
         optional(field('columns', $.records_columns)),
         $._records_body,
       ),
@@ -338,7 +338,7 @@ module.exports = grammar({
     // Pipeline name { use ref ... } (§pipelines)
     pipeline_definition: ($) =>
       seq(
-        kw('Pipeline'),
+        kw('pipeline'),
         field('name', alias($.identifier, $.pipeline_name)),
         '{',
         repeat($._newline),
@@ -353,7 +353,7 @@ module.exports = grammar({
     // Scope path [settings] { routes | resources | Scope } (§scopes-and-routes)
     scope_definition: ($) =>
       seq(
-        kw('Scope'),
+        kw('scope'),
         field('path', $.route_path),
         optional(field('settings', $.settings_list)),
         '{',
@@ -444,7 +444,7 @@ module.exports = grammar({
     // Group name { members } | Group name = a + b \ c (§groups)
     group_definition: ($) =>
       seq(
-        kw('Group'),
+        kw('group'),
         field('name', alias($.identifier, $.group_name)),
         choice(
           seq(
@@ -476,7 +476,7 @@ module.exports = grammar({
     // Pred name { expr } (§predicates) — the closed predicate language.
     pred_definition: ($) =>
       seq(
-        kw('Pred'),
+        kw('pred'),
         field('name', alias($.identifier, $.pred_name)),
         '{',
         repeat($._newline),
@@ -600,7 +600,7 @@ module.exports = grammar({
     // [settings] (§selects-over-groups, §predicates)
     select_definition: ($) =>
       seq(
-        kw('Select'),
+        kw('select'),
         field('name', alias($.identifier, $.select_name)),
         optional(field('projection', $.select_projection)),
         kw('for'),
@@ -685,7 +685,7 @@ module.exports = grammar({
 
     migration_definition: ($) =>
       seq(
-        kw('Migration'),
+        kw('migration'),
         field('name', $.migration_name),
         optional(field('settings', $.settings_list)),
         '{',

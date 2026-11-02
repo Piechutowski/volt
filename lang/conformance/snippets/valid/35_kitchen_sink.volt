@@ -1,37 +1,37 @@
 // spec: §program-structure — representative complete schema
-Project blog [note: "Blogging platform"] {
+project blog [note: "Blogging platform"] {
   database_type: "SQLite"
 }
 
-Type PostState string
+type PostState string
 
-TablePartial timestamps {
+table_partial timestamps {
   created_at time.Time [default: `CURRENT_TIMESTAMP`]
   updated_at time.Time
 }
 
-Table users [note: "Registered users"] {
+table users [note: "Registered users"] {
   id int [pk, increment]
   username string [unique]
   ~timestamps
 }
 
-Table posts {
+table posts {
   id int [pk]
   title string
   status PostState [default: "draft"]
   author_id int [ref: users.id]
   ~timestamps
 
-  Validators {
+  validators {
     TitleShape(title)
   }
 
-  Records (id, title, status, author_id, updated_at) {
+  records (id, title, status, author_id, updated_at) {
     1, "Hello", "published", 1, "2024-01-15 10:30:00"
   }
 }
 
-Group content {
+group content {
   posts
 }

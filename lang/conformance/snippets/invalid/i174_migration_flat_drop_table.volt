@@ -2,11 +2,11 @@
 // want: drop table audit has no body
 package db
 
-Table users {
+table users {
   id int [pk]
 }
 
-Migration 0001__init {
+migration 0001__init {
   create table users {
     id int [pk]
   }

@@ -1,9 +1,9 @@
 // spec: §groups — group references must be acyclic
 package db
 
-Table ms_revenue {
+table ms_revenue {
   id int [pk]
 }
 
-Group a = b + ms_revenue
-Group b = a
+group a = b + ms_revenue
+group b = a

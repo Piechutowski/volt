@@ -5,7 +5,7 @@ import (
 	db
 )
 
-Scope /ms {
+scope /ms {
 	dataset db.browse [strip: "ms_", except: (ms_notes)]
 	get /notes Notes.Browse
 }

@@ -1,10 +1,10 @@
 package db
 
-Table users {
+table users {
   id    int [pk, increment]
   email string    [unique]
 }
 
-Table marks {
+table marks {
   id int [pk]
 }

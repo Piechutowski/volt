@@ -2,12 +2,12 @@
 // want: project metric.name under an alias
 package db
 
-Table metrics {
+table metrics {
   id   int [pk, increment]
   name string
 }
 
-Table points {
+table points {
   id        int     [pk, increment]
   metric_id int [ref: metrics.id]
   ts        int
@@ -16,4 +16,4 @@ Table points {
   note      string  [null]
 }
 
-Select rows (metric.name, count() as n) for points join metric [group: (metric.name)]
+select rows (metric.name, count() as n) for points join metric [group: (metric.name)]

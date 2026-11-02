@@ -108,7 +108,7 @@ func TestNoNamedRoutesCompiles(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(src, "app"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	routes := "package app\n\nTable users {\n\tid int [pk]\n}\n\nScope / {\n\tresources users [only: (create)]\n}\n"
+	routes := "package app\n\ntable users {\n\tid int [pk]\n}\n\nscope / {\n\tresources users [only: (create)]\n}\n"
 	if err := os.WriteFile(filepath.Join(src, "app", "r.volt"), []byte(routes), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -375,12 +375,12 @@ func TestMainPackageCompiles(t *testing.T) {
 		"go.mod": gomod,
 		"schema.volt": `package main
 
-Table posts {
+table posts {
   id    int [pk, increment]
   title string
 }
 
-Scope /api {
+scope /api {
 	resources posts [default]
 	get /first PostGet [name: first]
 }

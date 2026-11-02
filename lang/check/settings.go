@@ -132,7 +132,7 @@ func (c *checker) settingValueCheck(s *ast.Setting, section string, kind valueKi
 		if !ok {
 			c.errorf(s.Value.Pos(), section, "'ref' must be an endpoint, table.column (§%s)", section)
 		} else if ep.Paren {
-			c.errorf(ep.Pos(), "columns", "an inline ref endpoint is table.column, without parentheses: a foreign key over several columns is a Ref element (§columns)")
+			c.errorf(ep.Pos(), "columns", "an inline ref endpoint is table.column, without parentheses: a foreign key over several columns is a ref element (§columns)")
 		}
 	}
 }

@@ -19,7 +19,7 @@ func TestVetRunsAnalyzers(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "db"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	src := "package db\n\nTable posts {\n  title string\n}\n\nPipeline api {\n\tuse volt.RequestID\n}\n\nScope / {\n\tget /x Home.Index\n}\n"
+	src := "package db\n\ntable posts {\n  title string\n}\n\npipeline api {\n\tuse volt.RequestID\n}\n\nscope / {\n\tget /x Home.Index\n}\n"
 	if err := os.WriteFile(filepath.Join(root, "db", "schema.volt"), []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}

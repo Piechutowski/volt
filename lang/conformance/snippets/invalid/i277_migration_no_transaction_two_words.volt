@@ -2,11 +2,11 @@
 // want: expected ',' or ']' in settings list, found identifier "transaction"
 package db
 
-Table users {
+table users {
   id int [pk]
 }
 
-Migration 0001__init [no transaction] {
+migration 0001__init [no transaction] {
   create table users {
     id int [pk]
   }

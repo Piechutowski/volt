@@ -2,7 +2,7 @@
 minimal table
 ==================
 
-Table users {
+table users {
   id int
 }
 
@@ -23,7 +23,7 @@ Table users {
 table with settings
 ==================
 
-Table users [note: "main", model: "Member"] {
+table users [note: "main", model: "Member"] {
   id int
 }
 
@@ -55,7 +55,7 @@ Table users [note: "main", model: "Member"] {
 column types: built-ins, the [] of []byte, qualified time.Time, a declared type
 ==================
 
-Table t {
+table t {
   name string
   data []byte
   created time.Time
@@ -99,7 +99,7 @@ Table t {
 column settings
 ==================
 
-Table t {
+table t {
   a int [pk, unique, increment]
   b int [null]
   c string [default: "x", note: "col"]
@@ -212,7 +212,7 @@ Table t {
 inline refs in column settings
 ==================
 
-Table posts {
+table posts {
   author_id int [ref: users.id]
   editor_id int [null, ref: users.id]
 }
@@ -259,7 +259,7 @@ Table posts {
 settings lists spanning lines
 ==================
 
-Table t [
+table t [
   note: "x"
 ] {
   id int [pk,
@@ -309,7 +309,7 @@ Table t [
 a line break after a setting's colon
 ==================
 
-Table posts [note:
+table posts [note:
   """
   A blog post.
   """] {
@@ -384,9 +384,9 @@ a block word in the wrong case is an error
 :error
 ==================
 
-Table users {
+table users {
   id int [pk]
-  indexes {
+  Indexes {
     id
   }
 }
@@ -398,7 +398,7 @@ a bare flag after the column type is not a column
 :error
 ==================
 
-Table t {
+table t {
   id int pk
 }
 
@@ -411,7 +411,7 @@ a name beginning with a digit is an error
 :error
 ==================
 
-Table t {
+table t {
   2fa_enabled bool
 }
 
@@ -421,11 +421,11 @@ Table t {
 table partial definition and injection
 ==================
 
-TablePartial base {
+table_partial base {
   id int [pk]
 }
 
-Table users {
+table users {
   ~base
   name string
 }
@@ -464,7 +464,7 @@ two columns on one line is an error
 :error
 ==================
 
-Table t { id int name string }
+table t { id int name string }
 
 ---
 
@@ -475,7 +475,7 @@ a table alias is an error
 :error
 ==================
 
-Table users as U {
+table users as U {
   id int
 }
 
@@ -488,7 +488,7 @@ a schema-qualified table name is an error
 :error
 ==================
 
-Table core.users {
+table core.users {
   id int
 }
 
@@ -501,7 +501,7 @@ an inline ref with an operator is an error
 :error
 ==================
 
-Table posts {
+table posts {
   author_id int [ref: > users.id]
 }
 
@@ -512,7 +512,7 @@ two settings without a comma are an error
 :error
 ==================
 
-Table t {
+table t {
   id int [pk increment]
 }
 

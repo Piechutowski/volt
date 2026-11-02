@@ -3,38 +3,38 @@
 // bare (§imports)
 package site
 
-Table posts {
+table posts {
   id    int [pk, increment]
   title string
 }
 
-Table tags {
+table tags {
   id   int [pk, increment]
   name string    [unique]
 }
 
-Select picked for posts where id in :ids [order: (id asc)]
+select picked for posts where id in :ids [order: (id asc)]
 
-Table ms_revenue {
+table ms_revenue {
   id   int [pk, increment]
   org  string
   year int
 }
 
-Table ms_usage {
+table ms_usage {
   id   int [pk, increment]
   org  string
   year int
 }
 
-Group series {
+group series {
   ms_revenue
   ms_usage
 }
 
-Select browse for series where year = :year [order: (id asc)]
+select browse for series where year = :year [order: (id asc)]
 
-Scope /api [name: api] {
+scope /api [name: api] {
 	resources posts     [default]
 	resources tags      [default, except: (delete)]
 

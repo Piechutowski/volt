@@ -127,10 +127,10 @@ func TestSelectRenderMatchesTypedHandles(t *testing.T) {
 	}
 
 	var schema strings.Builder
-	schema.WriteString("package db\n\nTable page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n\thits int\n\tscore float64\n\tflag bool\n\tnote string [null]\n\torder int\n}\n\n")
-	schema.WriteString("Pred at { site = :site and day = :day }\nPred since { day >= :from }\n\n")
+	schema.WriteString("package db\n\ntable page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n\thits int\n\tscore float64\n\tflag bool\n\tnote string [null]\n\torder int\n}\n\n")
+	schema.WriteString("pred at { site = :site and day = :day }\npred since { day >= :from }\n\n")
 	for i, tc := range cases {
-		fmt.Fprintf(&schema, "Select c%d for page_views", i)
+		fmt.Fprintf(&schema, "select c%d for page_views", i)
 		if tc.where != "" {
 			schema.WriteString(" where " + tc.where)
 		}
@@ -180,8 +180,8 @@ func TestSelectRenderMatchesTypedHandles(t *testing.T) {
 func TestSelectInfoCarriesRendererFragments(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod": modFile,
-		"db/schema.volt": "package db\n\nTable page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n}\n\n" +
-			"Select rows for page_views where site = :site and day in :days [order: (day desc, id asc)]\n",
+		"db/schema.volt": "package db\n\ntable page_views {\n\tid int [pk, increment]\n\tsite string\n\tday int\n}\n\n" +
+			"select rows for page_views where site = :site and day in :days [order: (day desc, id asc)]\n",
 	})
 	wantClean(t, diags)
 	si := pr.Packages["db"].Selects[0]
@@ -214,8 +214,8 @@ func TestSelectLiteralOutsideStorageRefused(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, diags := project(t, map[string]string{
 				"go.mod": modFile,
-				"db/schema.volt": "package db\n\nType Money int\n\nTable page_views {\n\tid int [pk, increment]\n\thits int\n\tscore float64\n\tcents Money\n}\n\n" +
-					"Select c for page_views where " + tc.where + "\n",
+				"db/schema.volt": "package db\n\ntype Money int\n\ntable page_views {\n\tid int [pk, increment]\n\thits int\n\tscore float64\n\tcents Money\n}\n\n" +
+					"select c for page_views where " + tc.where + "\n",
 			})
 			wantError(t, diags, tc.want)
 		})
@@ -225,11 +225,11 @@ func TestSelectLiteralOutsideStorageRefused(t *testing.T) {
 func TestSelectUnresolvedKeptNotGenerated(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod": modFile,
-		"db/schema.volt": "package db\n\nTable authors {\n\tid int [pk, increment]\n\temail string\n\trank int32\n}\n\n" +
-			"Select ranked for authors where rank >= :min and email = :e [order: (rank desc)]\n" +
-			"Select shown (rank, email) for authors\n" +
-			"Select brief (* \\ rank) for authors\n" +
-			"Select byemail for authors where email = :e\n",
+		"db/schema.volt": "package db\n\ntable authors {\n\tid int [pk, increment]\n\temail string\n\trank int32\n}\n\n" +
+			"select ranked for authors where rank >= :min and email = :e [order: (rank desc)]\n" +
+			"select shown (rank, email) for authors\n" +
+			"select brief (* \\ rank) for authors\n" +
+			"select byemail for authors where email = :e\n",
 	})
 	if len(diags) != 1 || !strings.Contains(diags[0].Msg, `unknown type "int32"`) {
 		t.Fatalf("want the one unknown-type error, got %v", diags)
@@ -275,13 +275,13 @@ func TestSelectUnresolvedKeptNotGenerated(t *testing.T) {
 func TestSelectDroppedTermsNameTheirParams(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod": modFile,
-		"db/schema.volt": "package db\n\nTable authors {\n\tid int [pk, increment]\n\temail string\n\trank int32 [null]\n}\n\n" +
-			"Pred floor { rank >= :min }\n\n" +
-			"Select listed for authors where rank in :ranks and email = :e\n" +
-			"Select liked for authors where rank like :pat or email like :e\n" +
-			"Select floored for authors where floor and email = :e\n" +
-			"Select fixed for authors where rank in (1, 2) and rank is not null\n",
-		"app/routes.volt": "package app\n\nimport (\n\tdb\n)\n\nScope /api {\n" +
+		"db/schema.volt": "package db\n\ntable authors {\n\tid int [pk, increment]\n\temail string\n\trank int32 [null]\n}\n\n" +
+			"pred floor { rank >= :min }\n\n" +
+			"select listed for authors where rank in :ranks and email = :e\n" +
+			"select liked for authors where rank like :pat or email like :e\n" +
+			"select floored for authors where floor and email = :e\n" +
+			"select fixed for authors where rank in (1, 2) and rank is not null\n",
+		"app/routes.volt": "package app\n\nimport (\n\tdb\n)\n\nscope /api {\n" +
 			"\tget /floored/:min/:e db.AuthorFloored\n" +
 			"\tget /floor/:e/:zzz db.AuthorFloored [name: Floor]\n" +
 			"\tget /fixed/:min db.AuthorFixed\n}\n",

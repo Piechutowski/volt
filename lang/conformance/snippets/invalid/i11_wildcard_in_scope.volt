@@ -1,6 +1,6 @@
 // spec: §route-paths
 package app
 
-Scope /f/:p... {
+scope /f/:p... {
 	get /x F.S
 }

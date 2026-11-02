@@ -6,7 +6,7 @@ import (
 	db
 )
 
-Scope / {
+scope / {
 	load user CurrentUser
 	get /me Me.Show {
 		user db.UserGet(1)

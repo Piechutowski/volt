@@ -2,15 +2,15 @@
 // want: takes the Go name of the generated client constructor
 package app
 
-Type Client    string
-Type NewClient string
+type Client    string
+type NewClient string
 
-Table posts {
+table posts {
   id int       [pk, increment]
   a  Client
   b  NewClient
 }
 
-Scope / {
+scope / {
   get / Pages.Home
 }

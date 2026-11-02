@@ -2,6 +2,6 @@
 // want: the route has no body
 package app
 
-Scope / {
+scope / {
 	patch /settings/:id(int) Settings.Save [only: (refresh)]
 }

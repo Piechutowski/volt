@@ -2,14 +2,14 @@
 // want: takes the name of a table
 package db
 
-Table users {
+table users {
   id int [pk]
 }
 
-Table posts {
+table posts {
   id int [pk]
 }
 
-Group users {
+group users {
   posts
 }

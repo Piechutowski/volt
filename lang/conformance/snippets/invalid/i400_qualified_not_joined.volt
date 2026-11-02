@@ -2,13 +2,13 @@
 // want: is no joined relation
 package db
 
-Table metrics {
+table metrics {
   id   int    [pk, increment]
   name string
   unit string [null]
 }
 
-Table points {
+table points {
   id        int   [pk, increment]
   metric_id int   [ref: metrics.id]
   source_id int   [null, ref: metrics.id]
@@ -16,4 +16,4 @@ Table points {
   value     float64
 }
 
-Select rows (id, source.name) for points join metric
+select rows (id, source.name) for points join metric

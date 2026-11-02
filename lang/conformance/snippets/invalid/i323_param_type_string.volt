@@ -2,7 +2,7 @@
 // want: write :slug, not :slug(string)
 package app
 
-Scope /blogs/:blog(string) {
+scope /blogs/:blog(string) {
 	get /tags/:slug(string)  Tags.Find
 	get /posts/:slug(String) Posts.Read
 	get /pages/:num(int)     Pages.Page

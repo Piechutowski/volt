@@ -1,6 +1,6 @@
 // spec: §projects-and-packages — layout invariance
 package app
 
-Table users {
+table users {
 	id int [pk]
 }

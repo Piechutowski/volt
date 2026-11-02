@@ -2,7 +2,7 @@
 // want: route HEAD /:y/b is ambiguous with the route at
 package app
 
-Scope / {
+scope / {
 	get  /a/:x A.One
 	head /:y/b A.Two
 	head /:z   A.Three

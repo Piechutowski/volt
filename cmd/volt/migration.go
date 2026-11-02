@@ -39,7 +39,7 @@ func migrationCommand() *cli.Command {
 		Commands: []*cli.Command{
 			{
 				Name:      "new",
-				Usage:     "write <next>__LABEL.volt holding an empty Migration into the package at DIR (default: the current directory)",
+				Usage:     "write <next>__LABEL.volt holding an empty migration into the package at DIR (default: the current directory)",
 				ArgsUsage: "LABEL [DIR]",
 				Action:    migrationNewRun,
 			},
@@ -119,7 +119,7 @@ func migrationNewRun(_ context.Context, c *cli.Command) error {
 	if _, err := os.Stat(path); err == nil {
 		return cli.Exit(fmt.Sprintf("migration new: %s exists; refusing to overwrite", path), 2)
 	}
-	src := fmt.Sprintf("package %s\n\nMigration %s {\n}\n", pkg.Name, name)
+	src := fmt.Sprintf("package %s\n\nmigration %s {\n}\n", pkg.Name, name)
 	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
 		return cli.Exit("migration new: "+err.Error(), 2)
 	}

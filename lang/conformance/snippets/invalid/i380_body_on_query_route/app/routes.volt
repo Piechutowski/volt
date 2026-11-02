@@ -6,6 +6,6 @@ import (
 	db
 )
 
-Scope / {
+scope / {
 	post /metrics db.MetricCreate [body: db.MetricCreate]
 }

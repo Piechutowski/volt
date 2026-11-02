@@ -19,10 +19,10 @@ func mustParse(t *testing.T, src string) *ast.File {
 
 func TestTableShape(t *testing.T) {
 	f := mustParse(t, `
-Table core_users [note: "people"] {
+table core_users [note: "people"] {
   id int [pk]
   name string
-  Indexes {
+  indexes {
     (id, name) [unique]
   }
 }
@@ -55,15 +55,15 @@ Table core_users [note: "people"] {
 }
 
 func TestSettingOneIdentifier(t *testing.T) {
-	f := mustParse(t, "Migration 0001__a [no_transaction] {\n}\n")
+	f := mustParse(t, "migration 0001__a [no_transaction] {\n}\n")
 	if f.Decls[0].(*ast.Migration).Settings.Get("no_transaction") == nil {
 		t.Error("setting no_transaction not read")
 	}
 	for _, src := range []string{
-		"Migration 0001__a [no transaction] {\n}\n",
-		"Ref: a.x > b.y [delete: set null]\n",
-		"Table t { x int [null unique] }\n",
-		"Ref: a.x > b.y [\n  delete: set_null\n  update: cascade\n]\n",
+		"migration 0001__a [no transaction] {\n}\n",
+		"ref: a.x > b.y [delete: set null]\n",
+		"table t { x int [null unique] }\n",
+		"ref: a.x > b.y [\n  delete: set_null\n  update: cascade\n]\n",
 	} {
 		_, diags := ParseFile("t", src)
 		if len(diags) != 1 || !strings.Contains(diags[0].Msg, "expected ',' or ']' in settings list") {
@@ -74,8 +74,8 @@ func TestSettingOneIdentifier(t *testing.T) {
 
 func TestRefForms(t *testing.T) {
 	f := mustParse(t, `
-Ref: a.x > b.y [delete: set_null]
-Table e { z int [unique, ref: f.w] }
+ref: a.x > b.y [delete: set_null]
+table e { z int [unique, ref: f.w] }
 `)
 	ref := f.Decls[0].(*ast.Ref)
 	if ref.Left.Table.Name() != "a" || ref.Right.Table.Name() != "b" || ref.Settings.Get("delete") == nil {
@@ -93,13 +93,13 @@ Table e { z int [unique, ref: f.w] }
 
 func TestRefOneSpelling(t *testing.T) {
 	for _, src := range []string{
-		"Ref: a.x < b.y",
-		"Ref: a.x - b.y",
-		"Ref: a.x <> b.y",
-		"Ref fk: a.x > b.y",
-		"Ref { a.x > b.y }",
-		"Ref: s.a.x > b.y",
-		"Table e { z int [ref: > f.w] }",
+		"ref: a.x < b.y",
+		"ref: a.x - b.y",
+		"ref: a.x <> b.y",
+		"ref fk: a.x > b.y",
+		"ref { a.x > b.y }",
+		"ref: s.a.x > b.y",
+		"table e { z int [ref: > f.w] }",
 	} {
 		if _, diags := ParseFile("t", src); !diag.HasErrors(diags) {
 			t.Errorf("%q must be a syntax error: a relationship is Ref: fk > target, an inline ref is ref: table.column (§relationships-ref)", src)
@@ -108,7 +108,7 @@ func TestRefOneSpelling(t *testing.T) {
 }
 
 func TestCompositeEndpoint(t *testing.T) {
-	f := mustParse(t, "Ref: a.(x, y) > b.(p, q)")
+	f := mustParse(t, "ref: a.(x, y) > b.(p, q)")
 	r := f.Decls[0].(*ast.Ref)
 	if r.Left.Table.Name() != "a" || len(r.Left.Columns) != 2 {
 		t.Errorf("left endpoint = %q cols=%d", r.Left.Table.Name(), len(r.Left.Columns))
@@ -117,9 +117,9 @@ func TestCompositeEndpoint(t *testing.T) {
 
 func TestRecordsRows(t *testing.T) {
 	f := mustParse(t, `
-Table t {
+table t {
   a int
-  Records (a, b, c) {
+  records (a, b, c) {
     1, "x", true
     null, null, null
     -5, "v", `+"`now()`"+`
@@ -144,7 +144,7 @@ Table t {
 }
 
 func TestRecordsDottedValue(t *testing.T) {
-	src := "Table t {\n  a string\n  Records (a) {\n    status.active\n    \"active\"\n  }\n}\n"
+	src := "table t {\n  a string\n  records (a) {\n    status.active\n    \"active\"\n  }\n}\n"
 	f, diags := ParseFile("t", src)
 	if len(diags) != 1 || !strings.Contains(diags[0].Msg, "a dotted name is not a record value") {
 		t.Fatalf("want one dotted-name error, got %v", diags)
@@ -157,7 +157,7 @@ func TestRecordsDottedValue(t *testing.T) {
 
 func TestRecordsEmptyField(t *testing.T) {
 	for _, row := range []string{"1, , 3", ", 2, 3", "1, 2,"} {
-		src := "Table t {\n  a int\n  Records (a, b, c) {\n    " + row + "\n    4, 5, 6\n  }\n}\n"
+		src := "table t {\n  a int\n  records (a, b, c) {\n    " + row + "\n    4, 5, 6\n  }\n}\n"
 		f, diags := ParseFile("t", src)
 		if len(diags) != 1 {
 			t.Errorf("%q: %d diagnostics, want one empty-field error: %v", row, len(diags), diags)
@@ -172,7 +172,7 @@ func TestRecordsEmptyField(t *testing.T) {
 
 func TestKeywordsAreContextual(t *testing.T) {
 	mustParse(t, `
-Table table {
+table table {
   note string
   indexes int
   ref string
@@ -182,15 +182,15 @@ Table table {
 
 func TestErrorRecovery(t *testing.T) {
 	f, diags := ParseFile("t", `
-Table a {
+table a {
   id int [
   name string
 }
-Table b {
+table b {
   ] broken
   x int
 }
-Type Ok string
+type Ok string
 `)
 	if !diag.HasErrors(diags) {
 		t.Fatal("want errors")
@@ -211,16 +211,16 @@ Type Ok string
 
 func TestBodyIncompleteAfterDroppedItem(t *testing.T) {
 	f, _ := ParseFile("t", `
-Table posts {
+table posts {
   id int [pk increment]
 }
-Table users {
+table users {
   id int [pk]
 }
-TablePartial stamps {
+table_partial stamps {
   created int [null unique]
 }
-Migration 0001__a {
+migration 0001__a {
   create table posts {
     id int [pk increment]
   }
@@ -267,7 +267,7 @@ Migration 0001__a {
 }
 
 func TestPartialAST(t *testing.T) {
-	f, diags := ParseFile("t", "Table ok { id int }\nTable broken {")
+	f, diags := ParseFile("t", "table ok { id int }\ntable broken {")
 	if !diag.HasErrors(diags) {
 		t.Fatal("want errors")
 	}
@@ -277,14 +277,14 @@ func TestPartialAST(t *testing.T) {
 }
 
 func TestWrongCaseKeywordIsReadAsTheKeyword(t *testing.T) {
-	src := "TABLE t {\n  id int [PK, Default: 1]\n  flag bool [default: TRUE]\n  INDEXES {\n    id\n  }\n}\n\nRef: a.x > t.id [Delete: CASCADE]\n"
+	src := "TABLE t {\n  id int [PK, Default: 1]\n  flag bool [default: TRUE]\n  INDEXES {\n    id\n  }\n}\n\nref: a.x > t.id [Delete: CASCADE]\n"
 	f, diags := ParseFile("t.volt", src)
 	want := []string{
-		"write Table, not TABLE",
+		"write table, not TABLE",
 		"write pk, not PK",
 		"write default, not Default",
 		"write true, not TRUE",
-		"write Indexes, not INDEXES",
+		"write indexes, not INDEXES",
 		"write delete, not Delete",
 		"write cascade, not CASCADE",
 	}
@@ -316,9 +316,9 @@ func TestWrongCaseKeywordIsReadAsTheKeyword(t *testing.T) {
 }
 
 func TestWrongCaseKeywordOutsideKeywordPositionIsAName(t *testing.T) {
-	f := mustParse(t, "Table t {\n  Indexes int\n  Records string\n  TRUE bool\n}\n")
+	f := mustParse(t, "table t {\n  indexes int\n  records string\n  TRUE bool\n}\n")
 	tb := f.Decls[0].(*ast.Table)
-	for i, want := range []string{"Indexes", "Records", "TRUE"} {
+	for i, want := range []string{"indexes", "records", "TRUE"} {
 		if c, ok := tb.Body[i].(*ast.Column); !ok || c.Name.Name() != want {
 			t.Errorf("item %d is %T, want the column %s", i, tb.Body[i], want)
 		}

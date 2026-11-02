@@ -311,10 +311,10 @@ func TestTypeImportAliasCompiles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	src := `Type cash.Amount int from "aliascheck/cash"
-Type v2.Level int from "aliascheck/levels/v2"
+	src := `type cash.Amount int from "aliascheck/cash"
+type v2.Level int from "aliascheck/levels/v2"
 
-Table orders {
+table orders {
   id    int         [pk, increment]
   total cash.Amount
   tier  v2.Level    [null]
@@ -382,22 +382,22 @@ func TestGenerationErrors(t *testing.T) {
 	}{
 		{
 			name:    "field collision",
-			src:     "Table t { user_id int\n user__id int }",
+			src:     "table t { user_id int\n user__id int }",
 			wantErr: "both map to Go field",
 		},
 		{
 			name:    "struct collision",
-			src:     "Table user_roles { id int }\nTable user__roles { id int }",
+			src:     "table user_roles { id int }\ntable user__roles { id int }",
 			wantErr: "both map to Go type",
 		},
 		{
 			name:    "unusable name",
-			src:     "Table t { __ int }",
+			src:     "table t { __ int }",
 			wantErr: "no characters usable",
 		},
 		{
 			name:    "package-scope name collision",
-			src:     "Table clashes { id int [pk]\n new int\n column int\n params int }",
+			src:     "table clashes { id int [pk]\n new int\n column int\n params int }",
 			wantErr: "both need the Go name",
 		},
 	}

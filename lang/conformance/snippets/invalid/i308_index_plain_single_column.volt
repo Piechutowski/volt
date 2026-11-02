@@ -1,19 +1,19 @@
 // spec: §indexes, a plain single-column index, one column without where:, is the column setting unique or index and not an entry of an Indexes block, in a table or a partial
 // want: is a plain single-column index: write the column setting unique on "email"
-TablePartial stamps {
+table_partial stamps {
   created_at time.Time
-  Indexes {
+  indexes {
     created_at
   }
 }
 
-Table users {
+table users {
   id    int    [pk]
   email string
   name  string
   ~stamps
 
-  Indexes {
+  indexes {
     email [unique]
     (name) [name: "idx_users_by_name"]
   }

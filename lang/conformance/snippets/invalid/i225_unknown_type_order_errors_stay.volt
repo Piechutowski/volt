@@ -2,24 +2,24 @@
 // want: every column states its direction
 package db
 
-Table page_views {
+table page_views {
   id   int    [pk, increment]
   hits int32
   body []byte
 }
 
-Table link_clicks {
+table link_clicks {
   id   int    [pk, increment]
   body int64
 }
 
-Group pages {
+group pages {
   page_views
   link_clicks
 }
 
-Select undirected for page_views [order: (hits)]
-Select sideways for page_views [order: (hits sideways)]
-Select twice for page_views [order: (hits desc, hits asc)]
-Select raw for pages where body = :b
-Select raw_order for pages [order: (body desc)]
+select undirected for page_views [order: (hits)]
+select sideways for page_views [order: (hits sideways)]
+select twice for page_views [order: (hits desc, hits asc)]
+select raw for pages where body = :b
+select raw_order for pages [order: (body desc)]

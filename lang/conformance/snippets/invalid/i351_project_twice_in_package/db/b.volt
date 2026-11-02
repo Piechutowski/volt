@@ -1,4 +1,4 @@
 package db
 
-Project metrics {
+project metrics {
 }

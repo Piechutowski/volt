@@ -5,7 +5,7 @@ import (
 	db
 )
 
-Scope / {
+scope / {
 	get /charts Pages.Charts [timeout: 5] {
 		metrics  db.MetricOrdered()
 		settings db.SettingGet(1)

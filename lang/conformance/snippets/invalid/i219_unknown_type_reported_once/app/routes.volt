@@ -6,7 +6,7 @@ import (
   db
 )
 
-Scope /api {
+scope /api {
   get /authors/:id(int) db.AuthorGet
   resources db.authors [default]
   get /ranked db.AuthorRanked

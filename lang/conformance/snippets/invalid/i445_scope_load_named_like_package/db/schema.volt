@@ -1,12 +1,12 @@
 package db
 
-Table users {
+table users {
   id    int    [pk, increment]
   email string [unique]
 }
 
-Table metrics {
+table metrics {
   id int [pk, increment]
 }
 
-Select ordered for metrics
+select ordered for metrics

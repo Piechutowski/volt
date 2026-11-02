@@ -124,7 +124,7 @@
       "members": [
         {
           "type": "STRING",
-          "value": "Project"
+          "value": "project"
         },
         {
           "type": "CHOICE",
@@ -248,7 +248,7 @@
       "members": [
         {
           "type": "STRING",
-          "value": "Table"
+          "value": "table"
         },
         {
           "type": "FIELD",
@@ -491,7 +491,7 @@
       "members": [
         {
           "type": "STRING",
-          "value": "TablePartial"
+          "value": "table_partial"
         },
         {
           "type": "FIELD",
@@ -610,7 +610,7 @@
       "members": [
         {
           "type": "STRING",
-          "value": "Type"
+          "value": "type"
         },
         {
           "type": "FIELD",
@@ -660,7 +660,7 @@
       "members": [
         {
           "type": "STRING",
-          "value": "Ref"
+          "value": "ref"
         },
         {
           "type": "STRING",
@@ -800,7 +800,7 @@
       "members": [
         {
           "type": "STRING",
-          "value": "Indexes"
+          "value": "indexes"
         },
         {
           "type": "STRING",
@@ -952,7 +952,7 @@
       "members": [
         {
           "type": "STRING",
-          "value": "Validators"
+          "value": "validators"
         },
         {
           "type": "STRING",
@@ -1070,7 +1070,7 @@
       "members": [
         {
           "type": "STRING",
-          "value": "Records"
+          "value": "records"
         },
         {
           "type": "FIELD",
@@ -1099,7 +1099,7 @@
       "members": [
         {
           "type": "STRING",
-          "value": "Records"
+          "value": "records"
         },
         {
           "type": "CHOICE",
@@ -1444,7 +1444,7 @@
       "members": [
         {
           "type": "STRING",
-          "value": "Pipeline"
+          "value": "pipeline"
         },
         {
           "type": "FIELD",
@@ -1571,7 +1571,7 @@
       "members": [
         {
           "type": "STRING",
-          "value": "Scope"
+          "value": "scope"
         },
         {
           "type": "FIELD",
@@ -2156,7 +2156,7 @@
       "members": [
         {
           "type": "STRING",
-          "value": "Group"
+          "value": "group"
         },
         {
           "type": "FIELD",
@@ -2351,7 +2351,7 @@
       "members": [
         {
           "type": "STRING",
-          "value": "Pred"
+          "value": "pred"
         },
         {
           "type": "FIELD",
@@ -3037,7 +3037,7 @@
       "members": [
         {
           "type": "STRING",
-          "value": "Select"
+          "value": "select"
         },
         {
           "type": "FIELD",
@@ -3468,7 +3468,7 @@
       "members": [
         {
           "type": "STRING",
-          "value": "Migration"
+          "value": "migration"
         },
         {
           "type": "FIELD",

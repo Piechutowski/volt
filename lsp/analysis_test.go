@@ -21,7 +21,7 @@ func TestServerAnalyzesInBackground(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(root, "app", "routes.volt")
-	broken := "package app\n\nScope /api {\n\tget /users Users.index\n}\n"
+	broken := "package app\n\nscope /api {\n\tget /users Users.index\n}\n"
 	if err := os.WriteFile(path, []byte(broken), 0o644); err != nil {
 		t.Fatal(err)
 	}

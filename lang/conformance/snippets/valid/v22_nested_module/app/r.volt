@@ -1,6 +1,6 @@
 // spec: §projects-and-packages
 package app
 
-Scope / {
+scope / {
 	get / Home.Index
 }

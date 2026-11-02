@@ -17,14 +17,14 @@
 ; ---------- keywords ----------
 
 [
-  "Project"
-  "Table"
-  "TablePartial"
-  "Type"
-  "Ref"
-  "Records"
-  "Indexes"
-  "Validators"
+  "project"
+  "table"
+  "table_partial"
+  "type"
+  "ref"
+  "records"
+  "indexes"
+  "validators"
   "use"
   "from"
 ] @keyword
@@ -71,8 +71,8 @@
 [
   "package"
   "import"
-  "Pipeline"
-  "Scope"
+  "pipeline"
+  "scope"
   "resources"
   "dataset"
 ] @keyword
@@ -102,9 +102,9 @@
 ; ---------- groups, predicates, selects (docs/spec.md §groups to §selects-over-groups) ----------
 
 [
-  "Group"
-  "Pred"
-  "Select"
+  "group"
+  "pred"
+  "select"
   "for"
   "where"
 ] @keyword
@@ -123,7 +123,7 @@
 ; ---------- migrations (docs/spec.md §migrations) ----------
 
 [
-  "Migration"
+  "migration"
   "up"
   "down"
   "create"

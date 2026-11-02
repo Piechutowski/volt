@@ -2,19 +2,19 @@
 // want: its source is NULL
 package db
 
-Table users {
+table users {
   id    int    [pk]
   email string
 }
 
-Migration 0001__init {
+migration 0001__init {
   create table users {
     id   int    [pk]
     name string [null]
   }
 }
 
-Migration 0002__email [irreversible] {
+migration 0002__email [irreversible] {
   rebuild table users {
     id    int    [pk]
     email string

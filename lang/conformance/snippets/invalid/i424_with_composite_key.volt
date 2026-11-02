@@ -2,17 +2,17 @@
 // want: over one key column
 package db
 
-Table merchants {
+table merchants {
   id           int    [pk]
   country_code string [pk]
 }
 
-Table periods {
+table periods {
   id           int    [pk, increment]
   merchant_id  int
   country_code string
 }
 
-Ref: periods.(merchant_id, country_code) > merchants.(id, country_code)
+ref: periods.(merchant_id, country_code) > merchants.(id, country_code)
 
-Select rows for merchants with periods
+select rows for merchants with periods

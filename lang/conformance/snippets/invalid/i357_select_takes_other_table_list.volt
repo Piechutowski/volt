@@ -2,13 +2,13 @@
 // want: which is already the CRUD method UserTagList of table "user_tags"
 package app
 
-Table users {
+table users {
 	id int [pk]
 }
 
-Table user_tags {
+table user_tags {
 	id   int [pk]
 	name string
 }
 
-Select tag_list for users
+select tag_list for users

@@ -2,12 +2,12 @@
 // want: no function RankSane
 package db
 
-Table authors {
+table authors {
   id    int    [pk, increment]
   email string
   rank  int32
 
-  Validators {
+  validators {
     RankSane(rank)
     TwoArgs(rank)
     Mixed(rank, email)

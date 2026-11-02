@@ -1,14 +1,14 @@
 // spec: §relationships-ref, a composite that pairs the same column sets differently is another relationship
-Table b {
+table b {
   p int [pk]
   q int [pk]
 }
 
-Table a {
+table a {
   x int
   y int
 }
 
-Ref: a.(x, y) > b.(p, q)
+ref: a.(x, y) > b.(p, q)
 
-Ref: a.(x, y) > b.(q, p)
+ref: a.(x, y) > b.(q, p)

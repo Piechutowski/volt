@@ -2,12 +2,12 @@
 // want: takes the Go name of the generated Controllers manifest
 package app
 
-Type Controllers     string
-Type NewRouter       string
-Type PagesController string
-Type PathHome        string
+type Controllers     string
+type NewRouter       string
+type PagesController string
+type PathHome        string
 
-Table posts {
+table posts {
   id    int             [pk, increment]
   a     Controllers
   b     NewRouter
@@ -15,6 +15,6 @@ Table posts {
   d     PathHome
 }
 
-Scope / {
+scope / {
   get / Pages.Home
 }

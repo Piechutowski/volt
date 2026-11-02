@@ -34,7 +34,7 @@ func TestSelectRowNameMatchesRowType(t *testing.T) {
 // TestPlanSlicesAreCopies proves a Plan stays immutable when a caller
 // writes into the slices it hands out (spec §mapping-to-go).
 func TestPlanSlicesAreCopies(t *testing.T) {
-	f, diags := parser.ParseFile("two.volt", "Table users {\n  id int [pk]\n}\n\nTable posts {\n  id int [pk]\n}\n")
+	f, diags := parser.ParseFile("two.volt", "table users {\n  id int [pk]\n}\n\ntable posts {\n  id int [pk]\n}\n")
 	if len(diags) > 0 {
 		t.Fatal(diags)
 	}
@@ -64,7 +64,7 @@ func TestPlanSlicesAreCopies(t *testing.T) {
 
 func usersPlan(t *testing.T) *Plan {
 	t.Helper()
-	f, diags := parser.ParseFile("rows.volt", "Table users {\n  id int [pk]\n  email string\n  name string [null]\n}\n")
+	f, diags := parser.ParseFile("rows.volt", "table users {\n  id int [pk]\n  email string\n  name string [null]\n}\n")
 	if len(diags) > 0 {
 		t.Fatal(diags)
 	}

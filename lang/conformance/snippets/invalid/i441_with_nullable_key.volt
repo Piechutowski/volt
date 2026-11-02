@@ -2,14 +2,14 @@
 // want: which carries null
 package db
 
-Table hosts {
+table hosts {
   id   int    [pk, increment]
   code string [null, unique]
 }
 
-Table visits {
+table visits {
   id        int    [pk, increment]
   host_code string [null, ref: hosts.code]
 }
 
-Select lineup for hosts with visits
+select lineup for hosts with visits

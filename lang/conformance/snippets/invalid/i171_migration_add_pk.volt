@@ -2,18 +2,18 @@
 // want: pk cannot be added to an existing table
 package db
 
-Table users {
+table users {
   id    int    [pk]
   email string
 }
 
-Migration 0001__init {
+migration 0001__init {
   create table users {
     email string
   }
 }
 
-Migration 0002__id {
+migration 0002__id {
   alter table users {
     add id int [pk]
   }

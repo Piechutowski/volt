@@ -1,7 +1,7 @@
 // spec: §selects-over-groups — aggregates and arithmetic under aliases, grouped per group: or one row as a lookup
 package db
 
-Table points {
+table points {
   id        int     [pk, increment]
   metric_id int
   ts        int
@@ -10,7 +10,7 @@ Table points {
   note      string  [null]
 }
 
-Select hourly (metric_id, ts / 3600 * 3600 as hour, avg(value) as mean, count() as n, max(note) as last) for points where ts >= :since [group: (metric_id, hour), order: (hour asc, mean desc)]
-Select totals (count() as n, sum(value) as total, min(ts) as first) for points
-Select scaled (id, value * :factor + 1 as scaled, (ts - :epoch) / 60 as minute) for points
-Select renamed (id, label as tag) for points
+select hourly (metric_id, ts / 3600 * 3600 as hour, avg(value) as mean, count() as n, max(note) as last) for points where ts >= :since [group: (metric_id, hour), order: (hour asc, mean desc)]
+select totals (count() as n, sum(value) as total, min(ts) as first) for points
+select scaled (id, value * :factor + 1 as scaled, (ts - :epoch) / 60 as minute) for points
+select renamed (id, label as tag) for points

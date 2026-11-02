@@ -65,7 +65,7 @@ func (o dynOrigin) name() string {
 func (o dynOrigin) describe() string {
 	switch o.kind {
 	case dynType:
-		return "Type " + o.td.Key
+		return "type " + o.td.Key
 	case dynModel:
 		return fmt.Sprintf("table %s (model %s)", o.tm.Info.Decl.Name.Name(), o.tm.Model)
 	case dynChangeset:

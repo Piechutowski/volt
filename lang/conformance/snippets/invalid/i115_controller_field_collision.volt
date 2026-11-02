@@ -2,12 +2,12 @@
 // want: takes the name of the Controllers field
 package app
 
-Table posts {
+table posts {
   id    int [pk, increment]
   title string
 }
 
-Scope /api {
+scope /api {
 	get /posts       PostList
 	get /queries/:id DB.Show
 }

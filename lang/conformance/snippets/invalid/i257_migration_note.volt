@@ -2,17 +2,17 @@
 // want: note: documents the schema
 package db
 
-Table users {
+table users {
   id   int [pk]
   name string [null]
 }
 
-Migration 0001__init [note: "the first"] {
+migration 0001__init [note: "the first"] {
   create table users {
     id   int    [pk]
     name string [null, note: "display name"]
 
-    Indexes {
+    indexes {
       (name, id) [note: "by name"]
     }
   }

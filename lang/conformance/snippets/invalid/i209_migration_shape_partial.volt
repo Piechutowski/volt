@@ -2,16 +2,16 @@
 // want: a migration's shape body holds columns and indexes only
 package db
 
-TablePartial timestamps {
+table_partial timestamps {
   created time.Time
 }
 
-Table users {
+table users {
   id int [pk]
   ~timestamps
 }
 
-Migration 0001__init {
+migration 0001__init {
   create table users {
     id int [pk]
     ~timestamps

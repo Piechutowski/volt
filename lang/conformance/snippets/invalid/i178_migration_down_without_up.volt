@@ -2,11 +2,11 @@
 // want: a down block follows an up block
 package db
 
-Table users {
+table users {
   id int [pk]
 }
 
-Migration 0001__init {
+migration 0001__init {
   down {
     drop table users
   }

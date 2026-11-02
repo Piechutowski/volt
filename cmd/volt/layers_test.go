@@ -267,11 +267,11 @@ func TestLayersDataOnlyProgram(t *testing.T) {
 	dir := t.TempDir()
 	files := map[string]string{
 		"go.mod": "module dataonly\n\ngo 1.27\n\nrequire github.com/Piechutowski/volt v0.0.0\n\nreplace github.com/Piechutowski/volt => " + root + "\n",
-		"db/schema.volt": "package db\n\nTable authors {\n  id    int    [pk, increment]\n  email string [unique]\n  name  string [required]\n}\n\n" +
-			"Table posts {\n  id        int    [pk, increment]\n  author_id int    [ref: authors.id]\n  title     string\n  views     int    [default: 0]\n}\n\n" +
-			"Select popular for posts where views >= :least [order: (views desc)]\n",
-		"db/pipe.volt": "package db\n\nPipeline api {\n  use volt.RequestID\n}\n",
-		"db/0001__init.volt": "package db\n\nMigration 0001__init {\n  create table authors {\n    id    int    [pk, increment]\n    email string [unique]\n    name  string\n  }\n" +
+		"db/schema.volt": "package db\n\ntable authors {\n  id    int    [pk, increment]\n  email string [unique]\n  name  string [required]\n}\n\n" +
+			"table posts {\n  id        int    [pk, increment]\n  author_id int    [ref: authors.id]\n  title     string\n  views     int    [default: 0]\n}\n\n" +
+			"select popular for posts where views >= :least [order: (views desc)]\n",
+		"db/pipe.volt": "package db\n\npipeline api {\n  use volt.RequestID\n}\n",
+		"db/0001__init.volt": "package db\n\nmigration 0001__init {\n  create table authors {\n    id    int    [pk, increment]\n    email string [unique]\n    name  string\n  }\n" +
 			"  create table posts {\n    id        int    [pk, increment]\n    author_id int    [ref: authors.id]\n    title     string\n    views     int    [default: 0]\n  }\n}\n",
 		"cmd/app/main.go": "package main\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\n\t\"dataonly/db\"\n\t\"github.com/Piechutowski/volt/nao/run\"\n)\n\n" +
 			"func main() {\n\tctx := context.Background()\n\tconn, err := run.Open(\"sqlite3\", \":memory:\")\n\tif err != nil {\n\t\tpanic(err)\n\t}\n" +

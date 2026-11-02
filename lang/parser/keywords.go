@@ -11,8 +11,8 @@ import (
 // one spelling (spec §keywords).
 var ElementWords = []string{
 	"package", "import",
-	"Project", "Table", "TablePartial", "Type", "Ref", "Records",
-	"Pipeline", "Scope", "Group", "Pred", "Select", "Migration",
+	"project", "table", "table_partial", "type", "ref", "records",
+	"pipeline", "scope", "group", "pred", "select", "migration",
 }
 
 // SettingNames are the names of every setting of the language, in

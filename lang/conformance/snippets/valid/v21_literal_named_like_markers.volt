@@ -2,7 +2,7 @@
 // parameter and wildcard shape markers
 package app
 
-Scope / {
+scope / {
 	get /P     A.LitP
 	get /:q    A.ParQ
 	get /W/x   B.LitW

@@ -1,46 +1,46 @@
 package data
 
-Table users {
+table users {
   id int [pk, unique]
   email string [unique]
   foo_bar int
   total int
   status PostStatus
   new int
-  Indexes {
+  indexes {
     email [unique, name: "idx_users_email_live", where: `total > 0`]
     (email, foo_bar)
     (email, foo_bar) [name: "idx_users_email_foo_bar_again"]
   }
 
-  Validators {
+  validators {
     PostStatusKnown(status)
   }
 }
 
-Project blog [note: "the blog schema"] {
+project blog [note: "the blog schema"] {
   database_type: "SQLite"
 }
 
-Type PostStatus string
-Type CoreKind string
+type PostStatus string
+type CoreKind string
 
-TablePartial stamps {
+table_partial stamps {
   id int
   created_at time.Time
 }
-TablePartial audit_a {
+table_partial audit_a {
   updated_at time.Time
 }
-TablePartial audit_b {
+table_partial audit_b {
   updated_at time.Time
 }
-TablePartial orphan_partial { x int }
-TablePartial owned {
+table_partial orphan_partial { x int }
+table_partial owned {
   owner_id string [ref: users.id]
 }
 
-Table posts {
+table posts {
   ~stamps
   id string
   title string
@@ -51,17 +51,17 @@ Table posts {
   key int [pk]
 }
 
-Table core_things {
+table core_things {
   id int [pk]
   k CoreKind
 
-  Validators {
+  validators {
     CoreKindKnown(k)
   }
 }
 
-Table naked {
+table naked {
   id int
-  Indexes {
+  indexes {
   }
 }

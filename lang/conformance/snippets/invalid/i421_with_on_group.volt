@@ -2,21 +2,21 @@
 // want: with needs a table
 package db
 
-Table metrics {
+table metrics {
   id   int    [pk, increment]
   name string
   unit string [null]
 }
 
-Table points {
+table points {
   id        int   [pk, increment]
   metric_id int   [ref: metrics.id]
   ts        int
 }
 
-Group all {
+group all {
   metrics
   points
 }
 
-Select rows for all with points
+select rows for all with points

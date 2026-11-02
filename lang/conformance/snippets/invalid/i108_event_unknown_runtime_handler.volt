@@ -2,6 +2,6 @@
 // want: the runtime provides no handler volt.Stream
 package app
 
-Scope / {
+scope / {
 	get /events volt.Stream
 }

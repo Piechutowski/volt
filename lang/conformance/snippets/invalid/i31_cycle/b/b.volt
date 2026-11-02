@@ -4,6 +4,6 @@ import (
 	a
 )
 
-Table users { id int [pk] }
+table users { id int [pk] }
 
-Scope /b { resources a.users }
+scope /b { resources a.users }

@@ -2,9 +2,9 @@
 // want: select "get_by_email" mints UserGetByEmail for table "users", which is already the method UserGetByEmail
 package app
 
-Table users {
+table users {
 	id    int    [pk]
 	email string [unique]
 }
 
-Select get_by_email for users where email = :e
+select get_by_email for users where email = :e
