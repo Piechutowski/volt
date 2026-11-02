@@ -1829,6 +1829,23 @@
         }
       ]
     },
+    "_query_ref": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "identifier"
+        },
+        {
+          "type": "STRING",
+          "value": "."
+        },
+        {
+          "type": "SYMBOL",
+          "name": "identifier"
+        }
+      ]
+    },
     "_load_arg": {
       "type": "CHOICE",
       "members": [
@@ -4360,6 +4377,15 @@
         {
           "type": "SYMBOL",
           "name": "query_call"
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_query_ref"
+          },
+          "named": true,
+          "value": "go_ref"
         },
         {
           "type": "SYMBOL",

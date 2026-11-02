@@ -464,8 +464,7 @@ scope / [error_handler: Errors] {
         (identifier)))))
 
 ==================
-a dotted setting value is an error
-:error
+volt: a dotted setting value parses, the checker judges it
 ==================
 
 scope / [error_handler: app.Errors] {
@@ -473,6 +472,23 @@ scope / [error_handler: app.Errors] {
 }
 
 ---
+
+(source_file
+  (scope_definition
+    (route_path)
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (go_ref
+          (identifier)
+          (identifier))))
+    (route
+      (verb)
+      (route_path)
+      (go_ref
+        (identifier)
+        (identifier)))))
 
 ==================
 volt: route with a load block
@@ -524,6 +540,7 @@ volt: route with a body setting
 
 scope / {
 	patch /settings/:id(int) Settings.Save [body: db.SettingUpdate(id), only: (unit)]
+	post  /metrics           Metrics.Create [body: db.MetricCreate]
 	post  /login             Session.Login [body: LoginForm]
 }
 
@@ -555,6 +572,20 @@ scope / {
           (setting_name
             (identifier))
           (ident_group
+            (identifier)))))
+    (route
+      (verb)
+      (route_path
+        (path_segment))
+      (go_ref
+        (identifier)
+        (identifier))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (go_ref
+            (identifier)
             (identifier)))))
     (route
       (verb)

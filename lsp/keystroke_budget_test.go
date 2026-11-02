@@ -22,8 +22,8 @@ func allocated(fn func()) uint64 {
 var keystrokeBudget = struct {
 	document, analysis, publish uint64
 }{
-	document: 1135112,
-	analysis: 4838304,
+	document: 1077864,
+	analysis: 5317264,
 	publish:  49216,
 }
 

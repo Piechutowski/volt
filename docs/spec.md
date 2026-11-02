@@ -1833,8 +1833,9 @@ package clause = "package", name, newline ;
    `module` directive is the project's module path; every other
    directive is Go's business and ignored. There is no second manifest.
 2. Every `.volt` file MUST begin with a package clause: its first
-   declaration, at most one per file. The name is an identifier. The
-   name `volt` is reserved: generated files import the
+   declaration, at most one per file. The name is an identifier, and
+   the clause takes no settings list: a package carries no note
+   (§notes). The name `volt` is reserved: generated files import the
    volt runtime under that qualifier (§generation-contract-informative), so a package of that name
    is an error.
 3. A **package** is a directory: all `.volt` files in one directory

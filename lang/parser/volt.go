@@ -21,10 +21,22 @@ func (p *parser) contiguous() bool {
 	return !t.SpBefore && !t.NLBefore
 }
 
-func (p *parser) packageClause() *ast.PackageClause {
+func (p *parser) packageClause() (d *ast.PackageClause) {
 	p.lineBegin("package clause (§projects-and-packages)")
-	d := &ast.PackageClause{PackagePos: p.next().Pos}
+	d = &ast.PackageClause{PackagePos: p.next().Pos}
 	d.Name = p.ident("package clause (§projects-and-packages)")
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(bailout); !ok {
+				panic(r)
+			}
+			p.topLevelSync()
+		}
+	}()
+	if p.at(token.LBRACKET) && !p.cur().NLBefore {
+		p.errorf(p.cur(), "a package clause takes no settings list: a package carries no note (§notes), and its doc comment is written in a hand-written Go file of the package (§notes-become-doc-comments)")
+		p.settingList()
+	}
 	p.endOfLine("package clause (§projects-and-packages)")
 	return d
 }

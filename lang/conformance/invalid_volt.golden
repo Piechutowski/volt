@@ -898,6 +898,9 @@ db/i451_migration_shape_autoincrement_misplaced.volt:17:22: error: spec/columns:
 db/i451_migration_shape_autoincrement_misplaced.volt:21:25: error: spec/columns: autoincrement on "post_id" in table "post_tags", whose primary key is (post_id, tag): a composite primary key has no rowid alias, since SQLite aliases the rowid only by a single-column int key (§columns)
 db/i451_migration_shape_autoincrement_misplaced.volt:29:24: error: spec/columns: autoincrement on "hits": only the rowid alias, the single-column int primary key, takes AUTOINCREMENT; elsewhere SQLite refuses the keyword (§columns, §mapping-to-sqlite-ddl)
 
+## i453_package_note.volt
+db/i453_package_note.volt:3:12: error: syntax: a package clause takes no settings list: a package carries no note (§notes), and its doc comment is written in a hand-written Go file of the package (§notes-become-doc-comments)
+
 ## i45_model_setting_removed.volt
 app/i45_model_setting_removed.volt:10:19: error: spec/resources: model: is not a setting; name the table in the declaration itself — `resources <table>` (§declaration)
 

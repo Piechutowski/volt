@@ -246,6 +246,32 @@ func TestPipelineRecoversPerPlug(t *testing.T) {
 	}
 }
 
+func TestPackageClauseSurvivesTrailingError(t *testing.T) {
+	for _, tc := range []struct{ src, kinds string }{
+		{"package db [note: \"the blog data\"]\n\ntable posts {\n\tid int [pk]\n}\n", "package,table"},
+		{"package db extra\n\ntable posts {\n\tid int [pk]\n}\n", "package,table"},
+	} {
+		f, diags := ParseFile("db.volt", tc.src)
+		if len(diags) != 1 {
+			t.Errorf("%q: diagnostics = %v, want one", tc.src, diags)
+		}
+		var kinds []string
+		for _, d := range f.Decls {
+			switch d.(type) {
+			case *ast.PackageClause:
+				kinds = append(kinds, "package")
+			case *ast.Table:
+				kinds = append(kinds, "table")
+			default:
+				kinds = append(kinds, "other")
+			}
+		}
+		if got := strings.Join(kinds, ","); got != tc.kinds {
+			t.Errorf("%q: decls = %s, want %s", tc.src, got, tc.kinds)
+		}
+	}
+}
+
 func TestVoltLayerIsSuperset(t *testing.T) {
 	src := "table users {\n\tid int [pk]\n}\n"
 	f, diags := ParseFile("s.volt", src)

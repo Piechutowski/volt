@@ -1904,6 +1904,10 @@
             "named": true
           },
           {
+            "type": "go_ref",
+            "named": true
+          },
+          {
             "type": "ident_group",
             "named": true
           },

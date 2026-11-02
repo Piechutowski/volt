@@ -394,6 +394,12 @@ module.exports = grammar({
         ')',
       ),
 
+    // A bare query ref as a setting value, the value of a route's body:
+    // naming a write without arguments (§request-bodies): `db.MetricCreate`.
+    // A single name is a plain identifier value, so only the qualified
+    // form is a go_ref here.
+    _query_ref: ($) => seq($.identifier, '.', $.identifier),
+
     _load_arg: ($) => choice($.identifier, $.string, $.number, $.signed_number, $.boolean),
 
     verb: () =>
@@ -818,6 +824,7 @@ module.exports = grammar({
         $.expression,
         $.ident_group,
         $.query_call,
+        alias($._query_ref, $.go_ref),
         $._name,
       ),
 
