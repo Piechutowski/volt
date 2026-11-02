@@ -14,16 +14,16 @@ import (
 	d2 shared/dicts
 )
 
-Pipeline api {
+pipeline api {
 	use volt.RequestID
 	use BearerAuth
 }
 
-Scope / [pipe: api, error_handler: Errors] {
+scope / [pipe: api, error_handler: Errors] {
 	get  /            Home.Index [name: root]
 	get  /about       Home.About
 
-	Scope /admin [name: admin] {
+	scope /admin [name: admin] {
 		get /stats  Admin.Stats
 	}
 
@@ -120,39 +120,39 @@ func TestVoltSyntaxErrors(t *testing.T) {
 	cases := []struct {
 		name, src, wantMsg string
 	}{
-		{"space in path", "Scope / {\n\tget /users /:id Users.Show\n}\n", "expected identifier in route handler"},
-		{"top-level dataset", "dataset db.browse\n", "must appear inside a Scope"},
+		{"space in path", "scope / {\n\tget /users /:id Users.Show\n}\n", "expected identifier in route handler"},
+		{"top-level dataset", "dataset db.browse\n", "must appear inside a scope"},
 		{"import without parens", "import db\n", "expected '(' after import"},
-		{"top-level route", "get /users Users.Index\n", "must appear inside a Scope"},
-		{"top-level put", "put /users Users.Replace\n", "must appear inside a Scope"},
-		{"top-level put in another case", "PUT /users Users.Replace\n", "must appear inside a Scope"},
-		{"colon without name", "Scope / {\n\tget /users/: Users.Show\n}\n", "':' must be followed by a parameter name"},
-		{"short ellipsis", "Scope / {\n\tget /files/:path.. Files.Serve\n}\n", "wildcard ellipsis is spelled"},
-		{"typed wildcard", "Scope / {\n\tget /files/:path(int)... Files.Serve\n}\n", "cannot carry a type"},
+		{"top-level route", "get /users Users.Index\n", "must appear inside a scope"},
+		{"top-level put", "put /users Users.Replace\n", "must appear inside a scope"},
+		{"top-level put in another case", "PUT /users Users.Replace\n", "must appear inside a scope"},
+		{"colon without name", "scope / {\n\tget /users/: Users.Show\n}\n", "':' must be followed by a parameter name"},
+		{"short ellipsis", "scope / {\n\tget /files/:path.. Files.Serve\n}\n", "wildcard ellipsis is spelled"},
+		{"typed wildcard", "scope / {\n\tget /files/:path(int)... Files.Serve\n}\n", "cannot carry a type"},
 		{"empty import block", "import (\n)\n", "empty import declaration"},
 		{"space in import path", "import (\n\tshared / dicts\n)\n", "expected end of line after import specifier"},
-		{"plug without use", "Pipeline api {\n\tRequestID\n}\n", "expected 'use' plug line"},
-		{"trailing slash", "Scope / {\n\tget /users/ Users.Index\n}\n", "without a trailing slash"},
-		{"space in type annotation", "Scope / {\n\tget /users/:id( int32 ) Users.Show\n}\n", "with no spaces"},
-		{"space before closing paren", "Scope / {\n\tget /users/:id(int32 ) Users.Show\n}\n", "with no spaces"},
+		{"plug without use", "pipeline api {\n\tRequestID\n}\n", "expected 'use' plug line"},
+		{"trailing slash", "scope / {\n\tget /users/ Users.Index\n}\n", "without a trailing slash"},
+		{"space in type annotation", "scope / {\n\tget /users/:id( int32 ) Users.Show\n}\n", "with no spaces"},
+		{"space before closing paren", "scope / {\n\tget /users/:id(int32 ) Users.Show\n}\n", "with no spaces"},
 		{"string import path", "import (\n\t\"db\"\n)\n", "expected identifier in import path"},
 		{"string import alias", "import (\n\t\"d\" shared/db\n)\n", "expected identifier in import path"},
-		{"scope in the wrong case", "SCOPE / {\n\tget / A.Index\n}\n", "write Scope, not SCOPE"},
-		{"verb in the wrong case", "Scope / {\n\tGet / A.Index\n}\n", "write get, not Get"},
-		{"use in the wrong case", "Pipeline api {\n\tUse volt.RequestID\n}\n", "write use, not Use"},
-		{"clause word in the wrong case", "Select s for t Where a = 1\n", "write where, not Where"},
-		{"predicate word in the wrong case", "Pred p { a = 1 OR b = 2 }\n", "write or, not OR"},
-		{"resource action in the wrong case", "Scope / {\n\tresources db.t [only: (Show)]\n}\n", "write show, not Show"},
-		{"trailing slash on scope", "Scope /admin/ {\n\tget / A.Index\n}\n", "without a trailing slash"},
-		{"non-segment after slash", "Scope / {\n\tget /users/[name: root] Users.Index\n}\n", "'/' must be followed by a path segment"},
-		{"group minus", "Group narrow = wide - ms_usage\n", "set difference is spelled '\\'"},
-		{"group empty set", "Group narrow = wide \\ ()\n", "expected identifier in group set member"},
-		{"group unclosed set", "Group narrow = wide \\ (a, b\n", "expected ')'"},
-		{"projection minus", "Select p (* - a) for t\n", "exclusion is spelled '\\'"},
-		{"projection star alone", "Select p (*) for t\n", "needs at least one"},
-		{"projection unclosed set", "Select p (* \\ (a, b for t\n", "expected ')'"},
-		{"in without list", "Pred p { site in }\n", "expected '('"},
-		{"in with column", "Pred p { site in other }\n", "expected '('"},
+		{"scope in the wrong case", "SCOPE / {\n\tget / A.Index\n}\n", "write scope, not SCOPE"},
+		{"verb in the wrong case", "scope / {\n\tGet / A.Index\n}\n", "write get, not Get"},
+		{"use in the wrong case", "pipeline api {\n\tUse volt.RequestID\n}\n", "write use, not Use"},
+		{"clause word in the wrong case", "select s for t Where a = 1\n", "write where, not Where"},
+		{"predicate word in the wrong case", "pred p { a = 1 OR b = 2 }\n", "write or, not OR"},
+		{"resource action in the wrong case", "scope / {\n\tresources db.t [only: (Show)]\n}\n", "write show, not Show"},
+		{"trailing slash on scope", "scope /admin/ {\n\tget / A.Index\n}\n", "without a trailing slash"},
+		{"non-segment after slash", "scope / {\n\tget /users/[name: root] Users.Index\n}\n", "'/' must be followed by a path segment"},
+		{"group minus", "group narrow = wide - ms_usage\n", "set difference is spelled '\\'"},
+		{"group empty set", "group narrow = wide \\ ()\n", "expected identifier in group set member"},
+		{"group unclosed set", "group narrow = wide \\ (a, b\n", "expected ')'"},
+		{"projection minus", "select p (* - a) for t\n", "exclusion is spelled '\\'"},
+		{"projection star alone", "select p (*) for t\n", "needs at least one"},
+		{"projection unclosed set", "select p (* \\ (a, b for t\n", "expected ')'"},
+		{"in without list", "pred p { site in }\n", "expected '('"},
+		{"in with column", "pred p { site in other }\n", "expected '('"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -174,7 +174,7 @@ func TestVoltSyntaxErrors(t *testing.T) {
 }
 
 func TestGroupSetTerms(t *testing.T) {
-	f, diags := ParseFile("t.volt", "package db\nGroup series = Metrics \\ (ms_dict, ms_notes) + extra\n")
+	f, diags := ParseFile("t.volt", "package db\ngroup series = Metrics \\ (ms_dict, ms_notes) + extra\n")
 	if len(diags) != 0 {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
@@ -206,7 +206,7 @@ func TestGroupSetTerms(t *testing.T) {
 }
 
 func TestProjectionSetTerms(t *testing.T) {
-	f, diags := ParseFile("t.volt", "package db\nSelect p (* \\ a \\ (b, c) \\ d) for t\n")
+	f, diags := ParseFile("t.volt", "package db\nselect p (* \\ a \\ (b, c) \\ d) for t\n")
 	if len(diags) != 0 {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
@@ -221,7 +221,7 @@ func TestProjectionSetTerms(t *testing.T) {
 	}
 	got := make([]string, len(sel.Cols))
 	for i, c := range sel.Cols {
-		got[i] = c.Name()
+		got[i] = c.String()
 	}
 	if strings.Join(got, ",") != "a,b,c,d" {
 		t.Errorf("exclusions = %v, want a,b,c,d", got)
@@ -229,7 +229,7 @@ func TestProjectionSetTerms(t *testing.T) {
 }
 
 func TestPipelineRecoversPerPlug(t *testing.T) {
-	src := "Pipeline api {\n\tuse volt.RequestID\n\tRequestID\n\tBearerAuth extra\n\tuse Last\n}\n"
+	src := "pipeline api {\n\tuse volt.RequestID\n\tRequestID\n\tBearerAuth extra\n\tuse Last\n}\n"
 	f, diags := ParseFile("p.volt", src)
 	if len(diags) != 2 {
 		t.Fatalf("diagnostics = %d (%v), want 2 — one per bad plug line", len(diags), diags)
@@ -247,7 +247,7 @@ func TestPipelineRecoversPerPlug(t *testing.T) {
 }
 
 func TestVoltLayerIsSuperset(t *testing.T) {
-	src := "Table users {\n\tid int [pk]\n}\n"
+	src := "table users {\n\tid int [pk]\n}\n"
 	f, diags := ParseFile("s.volt", src)
 	if len(diags) != 0 {
 		t.Fatalf("unexpected diagnostics: %v", diags)
@@ -261,7 +261,7 @@ func TestVoltLayerIsSuperset(t *testing.T) {
 }
 
 func TestRouteHandlerForms(t *testing.T) {
-	f, diags := ParseFile("t.volt", "package app\nScope / {\n\tget /a Users.Show\n\tget /b db.UserList\n\tget /c UserList\n}\n")
+	f, diags := ParseFile("t.volt", "package app\nscope / {\n\tget /a Users.Show\n\tget /b db.UserList\n\tget /c UserList\n}\n")
 	if len(diags) != 0 {
 		t.Fatal(diags)
 	}

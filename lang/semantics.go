@@ -112,6 +112,7 @@ type checker struct {
 	conflicts *routeIndex
 
 	gofuncs *goFuncsCache
+	goTypes map[string]GoType // the routes package's Go types, scanned before its routes lower (§request-bodies)
 
 	memos map[string]*declMemo
 	memo  *declMemo
@@ -325,6 +326,7 @@ type inherited struct {
 	pipes      []string
 	errHandler string
 	namePrefix string
+	loads      []ScopeLoad
 }
 
 func (c *checker) routing(pkg *Package) {
@@ -337,11 +339,11 @@ func (c *checker) routing(pkg *Package) {
 	for _, d := range pkg.merged.Decls {
 		if pl, ok := d.(*ast.Pipeline); ok {
 			if !goIdentOK(pl.Name.Name()) {
-				c.errorf(pl.Name.Pos(), "pipelines", "Pipeline name %q must be a plain identifier (§pipelines)", pl.Name.Name())
+				c.errorf(pl.Name.Pos(), "pipelines", "pipeline name %q must be a plain identifier (§pipelines)", pl.Name.Name())
 				continue
 			}
 			if _, dup := pkg.Pipelines[pl.Name.Name()]; dup {
-				c.errorf(pl.Pos(), "pipelines", "duplicate Pipeline name %q (§pipelines)", pl.Name.Name())
+				c.errorf(pl.Pos(), "pipelines", "duplicate pipeline name %q (§pipelines)", pl.Name.Name())
 				continue
 			}
 			pkg.Pipelines[pl.Name.Name()] = pl
@@ -362,6 +364,9 @@ func (c *checker) routing(pkg *Package) {
 	seenHelper := map[string]*RouteInfo{}
 	for _, d := range pkg.merged.Decls {
 		if sc, ok := d.(*ast.Scope); ok {
+			if c.goTypes == nil {
+				c.goTypes = c.goFuncs(pkg).types
+			}
 			c.scopeWalk(sc, inherited{}, facts, memo, seenShape, seenHelper)
 		}
 	}
@@ -372,10 +377,8 @@ func (c *checker) routing(pkg *Package) {
 	held := map[string]string{}
 	for _, r := range pkg.Routes {
 		switch {
-		case r.Query != nil && r.Query.Local:
-			held[r.Query.Field] = "this package's query routes"
 		case r.Query != nil:
-			held[r.Query.Field] = "the query routes through package " + r.Query.Qualifier
+			held["DB"] = "the database the query routes run on"
 		case r.Events:
 			held["Events"] = "the event routes (§event-routes)"
 		}
@@ -462,7 +465,7 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 	checked := append([]*ast.Segment{}, inh.prefix...)
 	for _, seg := range sc.Path.Segments {
 		if seg.Kind == ast.SegWild {
-			c.errorf(seg.Pos(), "scopes-and-routes", "a Scope prefix cannot contain a wildcard (§route-paths)")
+			c.errorf(seg.Pos(), "scopes-and-routes", "a scope prefix cannot contain a wildcard (§route-paths)")
 			continue
 		}
 		checked = append(checked, seg)
@@ -475,6 +478,14 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 		pipes:      append([]string{}, inh.pipes...),
 		errHandler: inh.errHandler,
 		namePrefix: inh.namePrefix,
+		loads:      append([]ScopeLoad{}, inh.loads...),
+	}
+	for _, item := range sc.Items {
+		if ld, ok := item.(*ast.ScopeLoad); ok {
+			if sl, ok := c.scopeLoad(ld, next.loads); ok {
+				next.loads = append(next.loads, sl)
+			}
+		}
 	}
 	if sc.Settings != nil {
 		repeated, dupDiags := settingsRepeated(sc.Settings, "pipe", "name", "error_handler")
@@ -487,11 +498,11 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 			case "pipe":
 				id, ok := s.Value.(*ast.Ident)
 				if !ok {
-					c.errorf(s.Pos(), "scopes-and-routes", "pipe: takes a Pipeline name (§scopes)")
+					c.errorf(s.Pos(), "scopes-and-routes", "pipe: takes a pipeline name (§scopes)")
 					continue
 				}
 				if _, exists := c.pkg.Pipelines[id.Name()]; !exists {
-					c.errorf(s.Pos(), "scopes-and-routes", "unknown Pipeline %q (§scopes)", id.Name())
+					c.errorf(s.Pos(), "scopes-and-routes", "unknown pipeline %q (§scopes)", id.Name())
 					continue
 				}
 				next.pipes = append(next.pipes, id.Name())
@@ -510,12 +521,12 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 			case "error_handler":
 				name, ok := c.localFuncRef(s.Value)
 				if ok {
-					const want = "func %s(w http.ResponseWriter, r *volt.Request, err error)"
+					const want = "func %s(r volt.Request, err error) volt.Response"
 					sc := c.goFuncs(c.pkg)
 					if gf, found := sc.funcs[name]; !found {
 						c.errorf(s.Pos(), "scopes-and-routes", "no function %s in package %s's Go files — declare "+want+" beside the routes (§scopes)%s", name, c.pkg.Name, name, sc.brokenHint())
-					} else if gf.Generic || gf.Variadic || len(gf.Params) != 3 || gf.Params[0].Type != "http.ResponseWriter" ||
-						gf.Params[1].Type != "*volt.Request" || gf.Params[2].Type != "error" || len(gf.Results) != 0 {
+					} else if gf.Generic || gf.Variadic || len(gf.Params) != 2 || gf.Params[0].Type != "volt.Request" ||
+						gf.Params[1].Type != "error" || len(gf.Results) != 1 || gf.Results[0] != "volt.Response" {
 						c.errorf(s.Pos(), "scopes-and-routes", "%s is not an error handler: found %s, expected "+want+" (§scopes)", name, gf.Sig, name)
 					}
 				}
@@ -528,19 +539,85 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 				}
 				next.errHandler = name
 			default:
-				c.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a Scope (§settings-whitelists); valid: pipe, name, error_handler", s.Name)
+				c.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a scope (§settings-whitelists); valid: pipe, name, error_handler", s.Name)
 			}
 		}
 	}
 	for _, item := range sc.Items {
-		if nested, ok := item.(*ast.Scope); ok {
-			c.scopeWalk(nested, next, facts, memo, seenShape, seenHelper)
+		switch item := item.(type) {
+		case *ast.Scope:
+			c.scopeWalk(item, next, facts, memo, seenShape, seenHelper)
+			continue
+		case *ast.ScopeLoad:
 			continue
 		}
 		for _, r := range c.itemLowerMemo(item, next, facts, memo) {
 			c.routeAdd(*r, seenShape, seenHelper)
 		}
 	}
+}
+
+// scopeLoad checks one scope load (spec §scope-loads): a usable name
+// and a function of the package shaped func(volt.Request) volt.Load[T],
+// whose T names this package or an import of it.
+func (c *checker) scopeLoad(ld *ast.ScopeLoad, above []ScopeLoad) (ScopeLoad, bool) {
+	name := ld.Name.Name()
+	if !loadNameOK(name) {
+		c.errorf(ld.Name.Pos(), "scope-loads", "load %q is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, and not shaped like a generated local (§scope-loads, §route-paths)", name)
+		return ScopeLoad{}, false
+	}
+	if loadNameQualifier(name, c.pkg.Name, c.pkg.Imports) {
+		c.errorf(ld.Name.Pos(), "scope-loads", "load %q takes the name of a package the generated code refers to (§scope-loads, §imports)", name)
+		return ScopeLoad{}, false
+	}
+	if scopeLoadNamed(above, name) {
+		c.errorf(ld.Name.Pos(), "scope-loads", "load %q is already loaded by this scope or one above it (§scope-loads)", name)
+		return ScopeLoad{}, false
+	}
+	if len(ld.Ref.Parts) != 1 {
+		if _, kind := qualifierResolve(ld.Ref.Parts[0].Name(), c.pkg.Name, c.pkg.Imports); kind == qualSelf {
+			c.diags = append(c.diags, selfQualified(ld.Ref.Pos(), ld.Ref.Parts[0].Name(), ld.Ref.Parts[1].Name()))
+		} else {
+			c.errorf(ld.Ref.Pos(), "scope-loads", "a scope load names a function of this package, written by its bare name (§scope-loads)")
+		}
+		return ScopeLoad{}, false
+	}
+	fn := ld.Ref.Parts[0].Name()
+	const want = "func %s(r volt.Request) volt.Load[T]"
+	sc := c.goFuncs(c.pkg)
+	gf, found := sc.funcs[fn]
+	if !found {
+		c.errorf(ld.Ref.Pos(), "scope-loads", "no function %s in package %s's Go files — declare "+want+" beside the routes (§scope-loads)%s", fn, c.pkg.Name, fn, sc.brokenHint())
+		return ScopeLoad{}, false
+	}
+	result := ""
+	if len(gf.Results) == 1 {
+		result = gf.Results[0]
+	}
+	inner, isLoad := strings.CutPrefix(result, "volt.Load[")
+	if gf.Generic || gf.Variadic || len(gf.Params) != 1 || gf.Params[0].Type != "volt.Request" || !isLoad || !strings.HasSuffix(inner, "]") {
+		c.errorf(ld.Ref.Pos(), "scope-loads", "%s is not a scope load: found %s, expected "+want+" (§scope-loads)", fn, gf.Sig, fn)
+		return ScopeLoad{}, false
+	}
+	goType := strings.TrimSuffix(inner, "]")
+	sl := ScopeLoad{Name: name, Func: fn, GoType: goType, Pos: ld.Pos()}
+	base := strings.TrimLeft(goType, "[]*")
+	if qual, _, qualified := strings.Cut(base, "."); qualified {
+		target, kind := qualifierResolve(qual, c.pkg.Name, c.pkg.Imports)
+		if kind != qualImport {
+			c.errorf(ld.Ref.Pos(), "scope-loads", "%s loads %s, and %q is not an import of this package (§scope-loads, §imports)", fn, goType, qual)
+			return ScopeLoad{}, false
+		}
+		sl.Qualifier, sl.Import = qual, c.pr.Module
+		if target != "." {
+			sl.Import += "/" + target
+		}
+		if pkg := c.pr.Packages[target]; pkg != nil {
+			sl.PkgName = pkg.Name
+		}
+		c.usedQual[qual] = true
+	}
+	return sl, true
 }
 
 type routeOracle struct{ c *checker }
@@ -672,7 +749,7 @@ func (e *routesEntry) holds(inh inherited, facts routeFacts, env routeEnv) bool 
 }
 
 func inheritedEqual(a, b inherited) bool {
-	return slices.Equal(a.prefix, b.prefix) && slices.Equal(a.pipes, b.pipes) && a.errHandler == b.errHandler && a.namePrefix == b.namePrefix
+	return slices.Equal(a.prefix, b.prefix) && slices.Equal(a.pipes, b.pipes) && a.errHandler == b.errHandler && a.namePrefix == b.namePrefix && slices.Equal(a.loads, b.loads)
 }
 
 func (c *checker) itemLowerMemo(item ast.Node, inh inherited, facts routeFacts, memo *routesMemo) []*RouteInfo {
@@ -748,14 +825,14 @@ func (c *checker) routeAdd(r RouteInfo, seenShape, seenHelper map[string]*RouteI
 		c.pkg.Controllers[r.Controller] = ci
 	}
 	if a := ci.Action(r.Action); a != nil {
-		if !paramsEqual(a.Params, r.Params) {
-			c.errorf(r.Pos, "scopes-and-routes", "%s.%s is reached by routes with different parameter signatures (§handler-references): %s vs %s (first at %s)",
-				r.Controller, r.Action, paramsString(r.Params), paramsString(a.Params), a.Routes[0].Pos)
+		if !scopeLoadsEqual(a.ScopeLoads, r.ScopeLoads) || !paramsEqual(a.Params, r.Params) || !bodiesEqual(a.Body, r.Body) || !loadsEqual(a.Loads, r.Loads) {
+			c.errorf(r.Pos, "scopes-and-routes", "%s.%s is reached by routes with different signatures (§handler-references, §scope-loads, §request-bodies, §route-loads): %s vs %s (first at %s)",
+				r.Controller, r.Action, signatureString(r.ScopeLoads, r.Params, r.Body, r.Loads), signatureString(a.ScopeLoads, a.Params, a.Body, a.Loads), a.Routes[0].Pos)
 			return
 		}
 		a.Routes = append(a.Routes, &r)
 	} else {
-		ci.Actions = append(ci.Actions, &ActionInfo{Name: r.Action, Params: r.Params, Routes: []*RouteInfo{&r}})
+		ci.Actions = append(ci.Actions, &ActionInfo{Name: r.Action, Params: r.Params, Body: r.Body, Loads: r.Loads, ScopeLoads: r.ScopeLoads, Routes: []*RouteInfo{&r}})
 	}
 	c.routeAccept(&r)
 }
@@ -1081,4 +1158,28 @@ func (r *RouteInfo) HandlerRef() string {
 		return r.Query.Ref()
 	}
 	return r.Controller + "." + r.Action
+}
+
+func (o routeOracle) columnHandle(path, tableKey, col string) (string, bool) {
+	pkg := o.c.pr.Packages[path]
+	if pkg == nil || pkg.plan == nil {
+		return "", false
+	}
+	t, err := pkg.plan.Table(tableKey)
+	if err != nil {
+		return "", false
+	}
+	f := t.Field(col)
+	if f == nil {
+		return "", false
+	}
+	return t.Handle(f), true
+}
+
+func (o routeOracle) goType(name string) (string, bool) {
+	gt, ok := o.c.goTypes[name]
+	if !ok || gt.Generic {
+		return "", false
+	}
+	return gt.Underlying, true
 }

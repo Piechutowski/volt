@@ -1,6 +1,6 @@
 // spec: §route-paths
 package app
 
-Scope / {
+scope / {
 	get /users/:id( int32 ) Users.Show
 }

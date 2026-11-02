@@ -1,6 +1,6 @@
 package blog
 
-Migration 0002__comments {
+migration 0002__comments {
   alter table posts {
     add views int [default: 0]
   }

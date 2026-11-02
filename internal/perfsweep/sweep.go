@@ -18,6 +18,7 @@ import (
 	"github.com/Piechutowski/volt/gen/model"
 	"github.com/Piechutowski/volt/gen/router"
 	"github.com/Piechutowski/volt/internal/corpus"
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 )
 
@@ -76,7 +77,7 @@ func Run(dir string, spec Spec, log func(format string, args ...any)) ([]Row, er
 			run  func() int
 		}{
 			{"load", func() int {
-				if pr, phaseErr = lang.Load(root); phaseErr != nil {
+				if pr, phaseErr = lang.Load(disk.Source{}, root); phaseErr != nil {
 					return 0
 				}
 				return 0
@@ -166,8 +167,8 @@ func generate(pr *lang.Project) (int, error) {
 			if err != nil {
 				return 0, err
 			}
-			for _, f := range files {
-				n += len(f.Code)
+			for _, code := range files {
+				n += len(code)
 			}
 		}
 		if pkg.HasRouting() {

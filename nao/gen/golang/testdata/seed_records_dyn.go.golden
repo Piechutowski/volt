@@ -3,7 +3,6 @@
 package models
 
 import (
-	"context"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -12,107 +11,41 @@ const (
 	voltCurrencyColumnsSQL = `"code", "name"`
 )
 
-// CurrencyLimit caps how many rows CurrencyQuery returns.
 func CurrencyLimit(n int) rt.Opt[Currency] { return rt.Limit[Currency](n) }
 
-// CurrencyOffset skips n rows; keyset pagination (CurrencyAfter) scales better.
 func CurrencyOffset(n int) rt.Opt[Currency] { return rt.Offset[Currency](n) }
 
-// CurrencyDistinct deduplicates the rows CurrencyQuery returns.
 func CurrencyDistinct() rt.Opt[Currency] { return rt.Distinct[Currency]() }
 
-// CurrencyOrderBy sorts CurrencyQuery's rows by Asc/Desc terms built on the
-// Currency column handles.
 func CurrencyOrderBy(terms ...rt.Order[Currency]) rt.Opt[Currency] { return rt.OrderBy(terms...) }
 
-// CurrencyAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per CurrencyOrderBy term, in the same order.
 func CurrencyAfter(key ...any) rt.Opt[Currency] { return rt.After[Currency](key...) }
 
-// CurrencySet collects the typed assignments of a CurrencyUpdateWhere, built
-// with Set/SetNull on the Currency column handles.
 func CurrencySet(assigns ...rt.Assign[Currency]) []rt.Assign[Currency] { return assigns }
 
-// CurrencyQuery returns the currencies rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
-func (q *Queries) CurrencyQuery(ctx context.Context, opts ...rt.Opt[Currency]) ([]Currency, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltCurrencyTableSQL, voltCurrencyColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Currency{}
-	for voltRows.Next() {
-		voltV, voltErr := voltCurrencyScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func CurrencyQuery(opts ...rt.Opt[Currency]) rt.Query[Currency] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltCurrencyTableSQL, voltCurrencyColumnsSQL, opts)
+	return rt.Query[Currency]{SQL: voltSQL, Args: voltArgs, Scan: voltCurrencyScan, Err: voltErr}
 }
 
-// CurrencyCount reports how many currencies rows match every given predicate;
-// none counts the whole table.
-func (q *Queries) CurrencyCount(ctx context.Context, preds ...rt.Pred[Currency]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltCurrencyTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func CurrencyCount(preds ...rt.Pred[Currency]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltCurrencyTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-// CurrencyExists reports whether any currencies row matches every given predicate.
-func (q *Queries) CurrencyExists(ctx context.Context, preds ...rt.Pred[Currency]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltCurrencyTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func CurrencyExists(preds ...rt.Pred[Currency]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltCurrencyTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-// CurrencyDeleteWhere removes every currencies row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
-func (q *Queries) CurrencyDeleteWhere(ctx context.Context, preds ...rt.Pred[Currency]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltCurrencyTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func CurrencyDeleteWhere(preds ...rt.Pred[Currency]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltCurrencyTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-// CurrencyUpdateWhere applies the typed assignments (CurrencySet) to every currencies
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
-func (q *Queries) CurrencyUpdateWhere(ctx context.Context, set []rt.Assign[Currency], preds ...rt.Pred[Currency]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltCurrencyTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func CurrencyUpdateWhere(set []rt.Assign[Currency], preds ...rt.Pred[Currency]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltCurrencyTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -120,105 +53,39 @@ const (
 	voltRateColumnsSQL = `"id", "currency_code", "rate", "fetched_at", "active", "comment"`
 )
 
-// RateLimit caps how many rows RateQuery returns.
 func RateLimit(n int) rt.Opt[Rate] { return rt.Limit[Rate](n) }
 
-// RateOffset skips n rows; keyset pagination (RateAfter) scales better.
 func RateOffset(n int) rt.Opt[Rate] { return rt.Offset[Rate](n) }
 
-// RateDistinct deduplicates the rows RateQuery returns.
 func RateDistinct() rt.Opt[Rate] { return rt.Distinct[Rate]() }
 
-// RateOrderBy sorts RateQuery's rows by Asc/Desc terms built on the
-// Rate column handles.
 func RateOrderBy(terms ...rt.Order[Rate]) rt.Opt[Rate] { return rt.OrderBy(terms...) }
 
-// RateAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per RateOrderBy term, in the same order.
 func RateAfter(key ...any) rt.Opt[Rate] { return rt.After[Rate](key...) }
 
-// RateSet collects the typed assignments of a RateUpdateWhere, built
-// with Set/SetNull on the Rate column handles.
 func RateSet(assigns ...rt.Assign[Rate]) []rt.Assign[Rate] { return assigns }
 
-// RateQuery returns the rates rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
-func (q *Queries) RateQuery(ctx context.Context, opts ...rt.Opt[Rate]) ([]Rate, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltRateTableSQL, voltRateColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Rate{}
-	for voltRows.Next() {
-		voltV, voltErr := voltRateScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func RateQuery(opts ...rt.Opt[Rate]) rt.Query[Rate] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltRateTableSQL, voltRateColumnsSQL, opts)
+	return rt.Query[Rate]{SQL: voltSQL, Args: voltArgs, Scan: voltRateScan, Err: voltErr}
 }
 
-// RateCount reports how many rates rows match every given predicate;
-// none counts the whole table.
-func (q *Queries) RateCount(ctx context.Context, preds ...rt.Pred[Rate]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltRateTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func RateCount(preds ...rt.Pred[Rate]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltRateTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-// RateExists reports whether any rates row matches every given predicate.
-func (q *Queries) RateExists(ctx context.Context, preds ...rt.Pred[Rate]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltRateTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func RateExists(preds ...rt.Pred[Rate]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltRateTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-// RateDeleteWhere removes every rates row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
-func (q *Queries) RateDeleteWhere(ctx context.Context, preds ...rt.Pred[Rate]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltRateTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func RateDeleteWhere(preds ...rt.Pred[Rate]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltRateTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-// RateUpdateWhere applies the typed assignments (RateSet) to every rates
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
-func (q *Queries) RateUpdateWhere(ctx context.Context, set []rt.Assign[Rate], preds ...rt.Pred[Rate]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltRateTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func RateUpdateWhere(set []rt.Assign[Rate], preds ...rt.Pred[Rate]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltRateTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }

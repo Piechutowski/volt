@@ -2,10 +2,10 @@
 // want: expected identifier in group member
 package app
 
-Table posts {
+table posts {
 	id int [pk]
 }
 
-Group g {
+group g {
 	"posts"
 }

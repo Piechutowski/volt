@@ -32,8 +32,7 @@ type dynOrigin struct {
 type dynOriginKind uint8
 
 const (
-	dynQueries dynOriginKind = iota
-	dynType
+	dynType dynOriginKind = iota
 	dynModel
 	dynChangeset
 	dynColumn
@@ -60,13 +59,13 @@ func (o dynOrigin) name() string {
 	case dynWrapper:
 		return o.tm.Model + o.sfx
 	}
-	return "Queries"
+	return ""
 }
 
 func (o dynOrigin) describe() string {
 	switch o.kind {
 	case dynType:
-		return "Type " + o.td.Key
+		return "type " + o.td.Key
 	case dynModel:
 		return fmt.Sprintf("table %s (model %s)", o.tm.Info.Decl.Name.Name(), o.tm.Model)
 	case dynChangeset:
@@ -80,7 +79,7 @@ func (o dynOrigin) describe() string {
 	case dynHandle:
 		return fmt.Sprintf("table %s column %q (handle %s)", o.tm.Info.Decl.Name.Name(), o.f.ColName, o.tm.Handle(o.f))
 	case dynWrapper:
-		return fmt.Sprintf("table %s (option wrapper %s%s)", o.tm.Info.Decl.Name.Name(), o.tm.Model, o.sfx)
+		return fmt.Sprintf("table %s (generated function %s%s)", o.tm.Info.Decl.Name.Name(), o.tm.Model, o.sfx)
 	}
-	return "the generated Queries type"
+	return ""
 }

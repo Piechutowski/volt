@@ -66,14 +66,14 @@ func (p *parser) importSpec() *ast.ImportSpec {
 
 func (p *parser) pipeline() *ast.Pipeline {
 	d := &ast.Pipeline{PipelinePos: p.next().Pos}
-	d.Name = p.ident("Pipeline name (§pipelines)")
-	p.expect(token.LBRACE, "Pipeline (§pipelines)")
+	d.Name = p.ident("pipeline name (§pipelines)")
+	p.expect(token.LBRACE, "pipeline (§pipelines)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		if plug := p.plugLine(); plug != nil {
 			d.Plugs = append(d.Plugs, plug)
 		}
 	}
-	d.Rbrace = p.expect(token.RBRACE, "Pipeline (§pipelines)").Pos
+	d.Rbrace = p.expect(token.RBRACE, "pipeline (§pipelines)").Pos
 	return d
 }
 
@@ -89,7 +89,7 @@ func (p *parser) plugLine() (plug *ast.Plug) {
 	}()
 
 	if !p.atKw("use") {
-		p.fail(p.cur(), "expected 'use' plug line in Pipeline body (§pipelines), found %s", p.cur())
+		p.fail(p.cur(), "expected 'use' plug line in pipeline body (§pipelines), found %s", p.cur())
 	}
 	p.lineBegin("plug line (§pipelines)")
 	plug = &ast.Plug{UsePos: p.kwTake("use").Pos}
@@ -108,16 +108,16 @@ func (p *parser) goRef(ctx string) *ast.GoRef {
 }
 
 func (p *parser) scope() *ast.Scope {
-	d := &ast.Scope{ScopePos: p.kwTake("Scope").Pos}
+	d := &ast.Scope{ScopePos: p.kwTake("scope").Pos}
 	d.Path = p.routePath()
-	d.Settings = p.settingsAt("Scope")
-	p.expect(token.LBRACE, "Scope (§scopes-and-routes)")
+	d.Settings = p.settingsAt("scope")
+	p.expect(token.LBRACE, "scope (§scopes-and-routes)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		if item := p.scopeItem(); item != nil {
 			d.Items = append(d.Items, item)
 		}
 	}
-	d.Rbrace = p.expect(token.RBRACE, "Scope (§scopes-and-routes)").Pos
+	d.Rbrace = p.expect(token.RBRACE, "scope (§scopes-and-routes)").Pos
 	return d
 }
 
@@ -134,21 +134,32 @@ func (p *parser) scopeItem() (item ast.ScopeItem) {
 
 	t := p.cur()
 	if t.Kind != token.IDENT {
-		p.fail(t, "expected a route, resources or nested Scope in Scope body (§scopes-and-routes), found %s", t)
+		p.fail(t, "expected a route, resources or nested scope in scope body (§scopes-and-routes), found %s", t)
 	}
 	switch {
-	case p.atKw("Scope"):
+	case p.atKw("scope"):
 		return p.scope()
 	case p.atKw("resources"):
 		return p.resources()
 	case p.atKw("dataset"):
 		return p.dataset()
+	case p.atKw("load"):
+		return p.scopeLoad()
 	case isVerb(t.Val), isPut(t.Val):
 		return p.route()
 	default:
-		p.fail(t, "expected a verb (get, post, ...), 'resources', 'dataset' or 'Scope' in Scope body (§scopes-and-routes), found %q", t.Val)
+		p.fail(t, "expected a verb (get, post, ...), 'resources', 'dataset', 'load' or 'scope' in scope body (§scopes-and-routes), found %q", t.Val)
 		return nil
 	}
+}
+
+func (p *parser) scopeLoad() *ast.ScopeLoad {
+	p.lineBegin("scope load (§scope-loads)")
+	d := &ast.ScopeLoad{LoadPos: p.kwTake("load").Pos}
+	d.Name = p.ident("scope load name (§scope-loads)")
+	d.Ref = p.goRef("scope load function (§scope-loads)")
+	p.endOfLine("scope load (§scope-loads)")
+	return d
 }
 
 func (p *parser) dataset() *ast.Dataset {
@@ -181,8 +192,68 @@ func (p *parser) route() *ast.Route {
 	if p.at(token.LBRACKET) && !p.cur().NLBefore {
 		r.Settings = p.settingList()
 	}
+	if p.at(token.LBRACE) && !p.cur().NLBefore {
+		p.lineClear()
+		p.next()
+		for !p.at(token.RBRACE) && !p.at(token.EOF) {
+			if ld := p.load(); ld != nil {
+				r.Loads = append(r.Loads, ld)
+			}
+		}
+		r.Rbrace = p.expect(token.RBRACE, "load block (§route-loads)").End()
+	}
 	p.endOfLine("route (§scopes-and-routes)")
 	return r
+}
+
+func (p *parser) load() (ld *ast.Load) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(bailout); !ok {
+				panic(r)
+			}
+			ld = nil
+			p.lineSync()
+		}
+	}()
+	ld = &ast.Load{Name: p.ident("load name (§route-loads)")}
+	ld.Call = p.queryCall(p.goRef("load query (§route-loads)"), "load (§route-loads)")
+	p.endOfLine("load (§route-loads)")
+	return ld
+}
+
+// queryCall parses the argument list of a query call after its reference
+// (spec §route-loads): a load's query, or a body: setting's.
+func (p *parser) queryCall(ref *ast.GoRef, ctx string) *ast.QueryCall {
+	call := &ast.QueryCall{Ref: ref}
+	p.expect(token.LPAREN, "query call in "+ctx)
+	for !p.at(token.RPAREN) {
+		call.Args = append(call.Args, p.loadArg(ctx))
+		if !p.at(token.COMMA) {
+			break
+		}
+		p.next()
+		if p.at(token.RPAREN) {
+			p.fail(p.cur(), "expected an argument after the comma in %s, found %s", ctx, p.cur())
+		}
+	}
+	call.Rparen = p.expect(token.RPAREN, "query call in "+ctx).End()
+	return call
+}
+
+func (p *parser) loadArg(ctx string) ast.Node {
+	t := p.cur()
+	switch t.Kind {
+	case token.STRING, token.NUMBER:
+		return p.litOf(p.next())
+	case token.MINUS:
+		p.next()
+		return &ast.NegNumber{MinusPos: t.Pos, Num: p.litOf(p.expect(token.NUMBER, "argument in "+ctx))}
+	case token.IDENT:
+		return p.ident("argument in " + ctx)
+	}
+	p.fail(t, "expected a name or a literal as an argument in %s, found %s", ctx, t)
+	return nil
 }
 
 func (p *parser) resources() *ast.Resources {
@@ -382,19 +453,21 @@ func (p *parser) predPrimary() ast.PredExpr {
 		x := p.operand()
 		return p.comparisonTail(x)
 	case p.at(token.IDENT):
-		p.predKeywordCheck()
-		name := p.ident("predicate (§predicates)")
+		col := p.colRef("predicate (§predicates)")
 		switch {
 		case p.compOpAt(0):
-			return p.comparisonTail(&ast.ColRef{Name: name})
+			return p.comparisonTail(col)
 		case p.atKw("in"):
-			return p.predIn(name)
+			return p.predIn(col)
 		case p.atKw("like"):
-			return p.predLike(name)
+			return p.predLike(col)
 		case p.atKw("is"):
-			return p.predNull(name)
+			return p.predNull(col)
+		case col.Qual != nil:
+			p.fail(p.cur(), "expected a comparison operator, in, like or is after the column %s (§predicates)", col.String())
+			return nil
 		default:
-			return &ast.PredRef{Name: name}
+			return &ast.PredRef{Name: col.Name}
 		}
 	default:
 		p.fail(t, "expected a predicate expression (§predicates), found %s", t)
@@ -451,15 +524,28 @@ func (p *parser) operand() ast.Operand {
 	case p.atKw("false"):
 		return &ast.Lit{Tok: p.kwTake("false")}
 	case p.at(token.IDENT):
-		p.predKeywordCheck()
-		return &ast.ColRef{Name: p.ident("operand (§predicates)")}
+		return p.colRef("operand (§predicates)")
 	default:
 		p.fail(t, "expected a column, :param or literal (§predicates), found %s", t)
 		return nil
 	}
 }
 
-func (p *parser) predIn(col *ast.Ident) ast.PredExpr {
+// colRef reads a column reference: a name, or relation.column
+// (§predicates, §selects-over-groups); neither part is a predicate
+// keyword.
+func (p *parser) colRef(ctx string) *ast.ColRef {
+	p.predKeywordCheck()
+	name := p.ident(ctx)
+	if !p.at(token.DOT) {
+		return &ast.ColRef{Name: name}
+	}
+	p.next()
+	p.predKeywordCheck()
+	return &ast.ColRef{Qual: name, Name: p.ident(ctx)}
+}
+
+func (p *parser) predIn(col *ast.ColRef) ast.PredExpr {
 	p.kwTake("in")
 	x := &ast.PredIn{Col: col}
 	if p.at(token.COLON) {
@@ -487,7 +573,7 @@ func (p *parser) predIn(col *ast.Ident) ast.PredExpr {
 	return x
 }
 
-func (p *parser) predLike(col *ast.Ident) ast.PredExpr {
+func (p *parser) predLike(col *ast.ColRef) ast.PredExpr {
 	p.kwTake("like")
 	x := &ast.PredLike{Col: col}
 	switch pat := p.operand().(type) {
@@ -504,7 +590,7 @@ func (p *parser) predLike(col *ast.Ident) ast.PredExpr {
 	return x
 }
 
-func (p *parser) predNull(col *ast.Ident) ast.PredExpr {
+func (p *parser) predNull(col *ast.ColRef) ast.PredExpr {
 	p.kwTake("is")
 	x := &ast.PredNull{Col: col}
 	if p.atKw("not") {
@@ -531,6 +617,17 @@ func (p *parser) selectDecl() *ast.Select {
 	p.kwTake("for")
 	d.Target = p.ident("select target (§selects-over-groups)")
 	d.EndPos = d.Target.End()
+	for p.atKw("join") {
+		p.kwTake("join")
+		rel := p.ident("join (§selects-over-groups)")
+		d.Joins = append(d.Joins, rel)
+		d.EndPos = rel.End()
+	}
+	if p.atKw("with") {
+		p.kwTake("with")
+		d.With = p.ident("with (§selects-over-groups)")
+		d.EndPos = d.With.End()
+	}
 	if p.atKw("where") {
 		p.kwTake("where")
 		d.Where = p.predExpr()
@@ -555,12 +652,12 @@ func (p *parser) selectProjection(d *ast.Select) {
 			}
 			p.next()
 			if !p.at(token.LPAREN) {
-				d.Cols = append(d.Cols, p.ident("excluded column (§selects-over-groups)"))
+				d.Cols = append(d.Cols, &ast.ColRef{Name: p.ident("excluded column (§selects-over-groups)")})
 				continue
 			}
 			p.next()
 			for {
-				d.Cols = append(d.Cols, p.ident("excluded column (§selects-over-groups)"))
+				d.Cols = append(d.Cols, &ast.ColRef{Name: p.ident("excluded column (§selects-over-groups)")})
 				if !p.at(token.COMMA) {
 					break
 				}
@@ -573,7 +670,7 @@ func (p *parser) selectProjection(d *ast.Select) {
 		}
 	} else {
 		for {
-			d.Cols = append(d.Cols, p.ident("projected column (§selects-over-groups)"))
+			d.Items = append(d.Items, p.projItem())
 			if !p.at(token.COMMA) {
 				break
 			}
@@ -582,4 +679,113 @@ func (p *parser) selectProjection(d *ast.Select) {
 	}
 	d.Rparen = p.expect(token.RPAREN, "projection (§selects-over-groups)").End()
 	d.EndPos = d.Rparen
+}
+
+// projItem reads one item of an explicit projection (§selects-over-groups):
+// a column, an aggregate or an arithmetic expression, the derived ones
+// followed by "as" and an alias.
+func (p *parser) projItem() *ast.ProjItem {
+	item := &ast.ProjItem{}
+	if p.at(token.IDENT) && p.peekKind(1) == token.LPAREN {
+		if _, ok := foldTo(p.cur().Val, AggregateWords); ok {
+			agg := p.ident("aggregate (§selects-over-groups)")
+			p.wordFold(agg, AggregateWords)
+			item.Agg = agg
+			p.expect(token.LPAREN, "aggregate (§selects-over-groups)")
+			if !p.at(token.RPAREN) || agg.Name() != "count" {
+				if p.at(token.RPAREN) {
+					p.fail(p.cur(), "%s takes a column; only count() counts the rows (§selects-over-groups)", agg.Name())
+					return item
+				}
+				item.Col = p.colRef("aggregate column (§selects-over-groups)")
+			}
+			item.EndPos = p.expect(token.RPAREN, "aggregate (§selects-over-groups)").End()
+		}
+	}
+	if item.Agg == nil {
+		x := p.arith()
+		if x == nil {
+			return item
+		}
+		if cr, ok := x.(*ast.ColRef); ok && !p.atKw("as") {
+			item.Col, item.EndPos = cr, cr.End()
+			return item
+		}
+		item.Expr, item.EndPos = x, x.End()
+	}
+	if !p.atKw("as") {
+		p.fail(p.cur(), "a derived item takes an alias: write it as name (§selects-over-groups)")
+		return item
+	}
+	p.kwTake("as")
+	item.As = p.ident("alias (§selects-over-groups)")
+	item.EndPos = item.As.End()
+	return item
+}
+
+func (p *parser) arith() ast.ArithExpr {
+	x := p.arithTerm()
+	for x != nil && (p.at(token.PLUS) || p.at(token.MINUS)) {
+		op := "+"
+		if p.at(token.MINUS) {
+			op = "-"
+		}
+		p.next()
+		y := p.arithTerm()
+		if y == nil {
+			return nil
+		}
+		x = &ast.ArithBinary{X: x, Op: op, Y: y}
+	}
+	return x
+}
+
+func (p *parser) arithTerm() ast.ArithExpr {
+	x := p.arithFactor()
+	for x != nil && (p.at(token.STAR) || p.at(token.SLASH)) {
+		op := "*"
+		if p.at(token.SLASH) {
+			op = "/"
+		}
+		p.next()
+		y := p.arithFactor()
+		if y == nil {
+			return nil
+		}
+		x = &ast.ArithBinary{X: x, Op: op, Y: y}
+	}
+	return x
+}
+
+func (p *parser) arithFactor() ast.ArithExpr {
+	t := p.cur()
+	switch {
+	case p.at(token.LPAREN):
+		lp := p.next().Pos
+		x := p.arith()
+		if x == nil {
+			return nil
+		}
+		rp := p.expect(token.RPAREN, "parenthesized expression (§selects-over-groups)").End()
+		return &ast.ArithParen{Lparen: lp, X: x, Rparen: rp}
+	case p.at(token.NUMBER):
+		return &ast.Lit{Tok: p.next()}
+	case p.at(token.MINUS) && p.peekKind(1) == token.NUMBER:
+		minus := p.next()
+		num := p.next()
+		num.Val = "-" + num.Val
+		num.Pos = minus.Pos
+		return &ast.Lit{Tok: num}
+	case p.at(token.COLON):
+		colon := p.next().Pos
+		if !p.at(token.IDENT) || !p.contiguous() {
+			p.fail(p.cur(), "':' must be directly followed by a parameter name (§predicates)")
+		}
+		return &ast.Param{ColonPos: colon, Name: p.ident("parameter (§predicates)")}
+	case p.at(token.IDENT):
+		return p.colRef("projected column (§selects-over-groups)")
+	default:
+		p.fail(t, "expected a column, an aggregate, a number, a :param or a parenthesized expression in the projection (§selects-over-groups), found %s", t)
+		return nil
+	}
 }

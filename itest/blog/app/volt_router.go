@@ -8,9 +8,11 @@ import (
 
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/itest/blog/db"
+	"github.com/Piechutowski/volt/nao/run"
 )
 
 func register(mux *http.ServeMux, c Controllers) {
+	voltPerform := run.Performer(c.DB)
 	pipe0 := func(h http.Handler) http.Handler {
 		return volt.Chain(h, volt.RequestID, TagOuter, TagInner)
 	}
@@ -18,396 +20,408 @@ func register(mux *http.ServeMux, c Controllers) {
 		return volt.Chain(h, volt.RequestID, TagOuter, TagInner, TagExtra)
 	}
 
-	mux.Handle("GET /{$}", pipe0(volt.Handler("GET /{$}", func(w http.ResponseWriter, r *volt.Request) error {
-		return c.Home.Index(w, r)
-	}, errHandlerErrors)))
+	mux.Handle("GET /{$}", pipe0(volt.Handler("GET /{$}", func(r volt.Request) volt.Response {
+		return c.Home.Index(r)
+	}, errHandlerErrors, voltPerform)))
 
-	mux.Handle("GET /teapot", pipe0(volt.Handler("GET /teapot", func(w http.ResponseWriter, r *volt.Request) error {
-		return c.Home.Teapot(w, r)
-	}, errHandlerErrors)))
+	mux.Handle("GET /teapot", pipe0(volt.Handler("GET /teapot", func(r volt.Request) volt.Response {
+		return c.Home.Teapot(r)
+	}, errHandlerErrors, voltPerform)))
 
-	mux.Handle("/ping", pipe0(volt.Handler("/ping", func(w http.ResponseWriter, r *volt.Request) error {
-		return c.Home.Ping(w, r)
-	}, errHandlerErrors)))
+	mux.Handle("/ping", pipe0(volt.Handler("/ping", func(r volt.Request) volt.Response {
+		return c.Home.Ping(r)
+	}, errHandlerErrors, voltPerform)))
 
-	mux.Handle("GET /admin/stats", pipe1(volt.Handler("GET /admin/stats", func(w http.ResponseWriter, r *volt.Request) error {
-		return c.Admin.Stats(w, r)
-	}, errHandlerErrors)))
+	mux.Handle("GET /admin/stats", pipe1(volt.Handler("GET /admin/stats", func(r volt.Request) volt.Response {
+		return c.Admin.Stats(r)
+	}, errHandlerErrors, voltPerform)))
 
-	mux.Handle("GET /ops/fail", pipe0(volt.Handler("GET /ops/fail", func(w http.ResponseWriter, r *volt.Request) error {
-		return c.Ops.Fail(w, r)
-	}, errHandlerOpsErrors)))
+	mux.Handle("GET /ops/fail", pipe0(volt.Handler("GET /ops/fail", func(r volt.Request) volt.Response {
+		return c.Ops.Fail(r)
+	}, errHandlerOpsErrors, voltPerform)))
 
-	mux.Handle("GET /users", pipe0(volt.Handler("GET /users", func(w http.ResponseWriter, r *volt.Request) error {
-		return c.Users.Index(w, r)
-	}, errHandlerErrors)))
+	mux.Handle("GET /users", pipe0(volt.Handler("GET /users", func(r volt.Request) volt.Response {
+		return c.Users.Index(r)
+	}, errHandlerErrors, voltPerform)))
 
-	mux.Handle("GET /users/new", pipe0(volt.Handler("GET /users/new", func(w http.ResponseWriter, r *volt.Request) error {
-		return c.Users.New(w, r)
-	}, errHandlerErrors)))
+	mux.Handle("GET /users/new", pipe0(volt.Handler("GET /users/new", func(r volt.Request) volt.Response {
+		return c.Users.New(r)
+	}, errHandlerErrors, voltPerform)))
 
-	mux.Handle("POST /users", pipe0(volt.Handler("POST /users", func(w http.ResponseWriter, r *volt.Request) error {
-		return c.Users.Create(w, r)
-	}, errHandlerErrors)))
+	mux.Handle("POST /users", pipe0(volt.Handler("POST /users", func(r volt.Request) volt.Response {
+		return c.Users.Create(r)
+	}, errHandlerErrors, voltPerform)))
 
-	mux.Handle("GET /users/{id}", pipe0(volt.Handler("GET /users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("GET /users/{id}", pipe0(volt.Handler("GET /users/{id}", func(r volt.Request) volt.Response {
 		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
-			return volt.ErrNotFound
+			return volt.Fail(volt.ErrNotFound)
 		}
-		return c.Users.Show(w, r, voltid)
-	}, errHandlerErrors)))
+		return c.Users.Show(r, voltid)
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
-	mux.Handle("GET /users/{id}/edit", pipe0(volt.Handler("GET /users/{id}/edit", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("GET /users/{id}/edit", pipe0(volt.Handler("GET /users/{id}/edit", func(r volt.Request) volt.Response {
 		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
-			return volt.ErrNotFound
+			return volt.Fail(volt.ErrNotFound)
 		}
-		return c.Users.Edit(w, r, voltid)
-	}, errHandlerErrors)))
+		return c.Users.Edit(r, voltid)
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
-	mux.Handle("PATCH /users/{id}", pipe0(volt.Handler("PATCH /users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("PATCH /users/{id}", pipe0(volt.Handler("PATCH /users/{id}", func(r volt.Request) volt.Response {
 		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
-			return volt.ErrNotFound
+			return volt.Fail(volt.ErrNotFound)
 		}
-		return c.Users.Update(w, r, voltid)
-	}, errHandlerErrors)))
+		return c.Users.Update(r, voltid)
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
-	mux.Handle("DELETE /users/{id}", pipe0(volt.Handler("DELETE /users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("DELETE /users/{id}", pipe0(volt.Handler("DELETE /users/{id}", func(r volt.Request) volt.Response {
 		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
-			return volt.ErrNotFound
+			return volt.Fail(volt.ErrNotFound)
 		}
-		return c.Users.Delete(w, r, voltid)
-	}, errHandlerErrors)))
+		return c.Users.Delete(r, voltid)
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
-	mux.Handle("GET /users/{id}/avatar", pipe0(volt.Handler("GET /users/{id}/avatar", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("GET /users/{id}/avatar", pipe0(volt.Handler("GET /users/{id}/avatar", func(r volt.Request) volt.Response {
 		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
-			return volt.ErrNotFound
+			return volt.Fail(volt.ErrNotFound)
 		}
-		return c.Users.Avatar(w, r, voltid)
-	}, errHandlerErrors)))
+		return c.Users.Avatar(r, voltid)
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
-	mux.Handle("GET /files/{path...}", pipe0(volt.Handler("GET /files/{path...}", func(w http.ResponseWriter, r *volt.Request) error {
-		return c.Files.Serve(w, r, r.PathValue("path"))
-	}, errHandlerErrors)))
+	mux.Handle("GET /users/{id}/profile", pipe0(volt.Handler("GET /users/{id}/profile", func(r volt.Request) volt.Response {
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
+		if !ok {
+			return volt.Fail(volt.ErrNotFound)
+		}
+		return volt.Then(db.UserGet(voltid), func(user db.User) volt.Response {
+			return c.Users.Profile(r, voltid, user)
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("id"), volt.Timeout(5*time.Second))))
 
-	mux.Handle("GET /tags/{name}", pipe0(volt.Handler("GET /tags/{name}", func(w http.ResponseWriter, r *volt.Request) error {
-		return c.Tags.Show(w, r, r.PathValue("name"))
-	}, errHandlerErrors)))
+	mux.Handle("GET /users/{id}/card", pipe0(volt.Handler("GET /users/{id}/card", func(r volt.Request) volt.Response {
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
+		if !ok {
+			return volt.Fail(volt.ErrNotFound)
+		}
+		return c.Users.Card(r, voltid)
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
-	mux.Handle("GET /pages/{num}", pipe0(volt.Handler("GET /pages/{num}", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("PATCH /users/{id}/email", pipe0(volt.Handler("PATCH /users/{id}/email", func(r volt.Request) volt.Response {
+		voltid, ok := volt.ParseInt(r.PathValue("id"))
+		if !ok {
+			return volt.Fail(volt.ErrNotFound)
+		}
+		var voltParams db.UserParams
+		if err := volt.Decode(r, &voltParams); err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.UserGet(voltid), func(voltRow db.User) volt.Response {
+			voltBody := voltRow.Changeset().Cast(voltParams, db.UserEmail).Validate()
+			return c.Users.ChangeEmail(r, voltid, voltBody)
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
+
+	mux.Handle("POST /login", pipe0(volt.Handler("POST /login", func(r volt.Request) volt.Response {
+		var voltBody LoginForm
+		if err := volt.Decode(r, &voltBody); err != nil {
+			return volt.Fail(err)
+		}
+		return c.Session.Login(r, voltBody)
+	}, errHandlerErrors, voltPerform)))
+
+	mux.Handle("GET /files/{path...}", pipe0(volt.Handler("GET /files/{path...}", func(r volt.Request) volt.Response {
+		return c.Files.Serve(r, r.PathValue("path"))
+	}, errHandlerErrors, voltPerform, volt.Params("path"))))
+
+	mux.Handle("GET /me", pipe0(volt.Handler("GET /me", func(r volt.Request) volt.Response {
+		return volt.Continue(CurrentUser(r), func(user db.User) volt.Response {
+			return c.Me.Show(r, user)
+		})
+	}, errHandlerErrors, voltPerform)))
+
+	mux.Handle("GET /me/peers", pipe0(volt.Handler("GET /me/peers", func(r volt.Request) volt.Response {
+		if _, err := volt.Negotiate(r); err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Continue(CurrentUser(r), func(user db.User) volt.Response {
+			return volt.Then(db.UserList(), func(voltOut []db.User) volt.Response {
+				return volt.RenderStatus(200, voltOut)
+			})
+		})
+	}, errHandlerErrors, voltPerform)))
+
+	mux.Handle("GET /tags/{name}", pipe0(volt.Handler("GET /tags/{name}", func(r volt.Request) volt.Response {
+		return c.Tags.Show(r, r.PathValue("name"))
+	}, errHandlerErrors, voltPerform, volt.Params("name"))))
+
+	mux.Handle("GET /pages/{num}", pipe0(volt.Handler("GET /pages/{num}", func(r volt.Request) volt.Response {
 		voltnum, ok := volt.ParseInt(r.PathValue("num"))
 		if !ok {
-			return volt.ErrNotFound
+			return volt.Fail(volt.ErrNotFound)
 		}
-		return c.Pages.Show(w, r, voltnum)
-	}, errHandlerErrors)))
+		return c.Pages.Show(r, voltnum)
+	}, errHandlerErrors, voltPerform, volt.Params("num"))))
 
-	mux.Handle("GET /archive/{stamp}", pipe0(volt.Handler("GET /archive/{stamp}", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("GET /archive/{stamp}", pipe0(volt.Handler("GET /archive/{stamp}", func(r volt.Request) volt.Response {
 		voltstamp, ok := volt.ParseInt(r.PathValue("stamp"))
 		if !ok {
-			return volt.ErrNotFound
+			return volt.Fail(volt.ErrNotFound)
 		}
-		return c.Archive.Show(w, r, voltstamp)
-	}, errHandlerErrors)))
+		return c.Archive.Show(r, voltstamp)
+	}, errHandlerErrors, voltPerform, volt.Params("stamp"))))
 
-	mux.Handle("GET /api/users", pipe0(volt.Handler("GET /api/users", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("GET /api/users", pipe0(volt.Handler("GET /api/users", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
-			return err
+			return volt.Fail(err)
 		}
-		out, err := c.DB.UserList(r.Context())
-		if err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 200, out)
-	}, errHandlerErrors)))
+		return volt.Then(db.UserList(), func(voltOut []db.User) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
 
-	mux.Handle("GET /api/users/{id}", pipe0(volt.Handler("GET /api/users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("GET /api/users/{id}", pipe0(volt.Handler("GET /api/users/{id}", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
-			return err
+			return volt.Fail(err)
 		}
 		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
-			return volt.ErrNotFound
+			return volt.Fail(volt.ErrNotFound)
 		}
-		out, err := c.DB.UserGet(r.Context(), voltid)
-		if err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 200, out)
-	}, errHandlerErrors)))
+		return volt.Then(db.UserGet(voltid), func(voltOut db.User) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
-	mux.Handle("POST /api/users", pipe0(volt.Handler("POST /api/users", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("POST /api/users", pipe0(volt.Handler("POST /api/users", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
-			return err
+			return volt.Fail(err)
 		}
 		var volt_params db.UserParams
 		if err := volt.Decode(r, &volt_params); err != nil {
-			return err
+			return volt.Fail(err)
 		}
 		volt_cs := db.UserNew().Cast(volt_params, db.UserEmail, db.UserCreatedAt)
-		out, err := c.DB.UserCreate(r.Context(), volt_cs)
-		if err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 201, out)
-	}, errHandlerErrors)))
+		return volt.Then(db.UserCreate(volt_cs), func(voltOut db.User) volt.Response {
+			return volt.RenderStatus(201, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
 
-	mux.Handle("PATCH /api/users/{id}", pipe0(volt.Handler("PATCH /api/users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("PATCH /api/users/{id}", pipe0(volt.Handler("PATCH /api/users/{id}", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
-			return err
+			return volt.Fail(err)
 		}
 		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
-			return volt.ErrNotFound
+			return volt.Fail(volt.ErrNotFound)
 		}
 		var volt_params db.UserParams
 		if err := volt.Decode(r, &volt_params); err != nil {
-			return err
+			return volt.Fail(err)
 		}
-		volt_row, err := c.DB.UserGet(r.Context(), voltid)
-		if err != nil {
-			return err
-		}
-		volt_cs := volt_row.Changeset().Cast(volt_params, db.UserEmail, db.UserCreatedAt)
-		out, err := c.DB.UserUpdate(r.Context(), volt_cs)
-		if err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 200, out)
-	}, errHandlerErrors)))
+		return volt.Then(db.UserGet(voltid), func(volt_row db.User) volt.Response {
+			volt_cs := volt_row.Changeset().Cast(volt_params, db.UserEmail, db.UserCreatedAt)
+			return volt.Then(db.UserUpdate(volt_cs), func(voltOut db.User) volt.Response {
+				return volt.RenderStatus(200, voltOut)
+			})
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
-	mux.Handle("DELETE /api/users/{id}", pipe0(volt.Handler("DELETE /api/users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("DELETE /api/users/{id}", pipe0(volt.Handler("DELETE /api/users/{id}", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
-			return err
+			return volt.Fail(err)
 		}
 		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
-			return volt.ErrNotFound
+			return volt.Fail(volt.ErrNotFound)
 		}
-		if err := c.DB.UserDelete(r.Context(), voltid); err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 204, nil)
-	}, errHandlerErrors)))
+		return volt.Then(db.UserDelete(voltid), func(int64) volt.Response {
+			return volt.RenderStatus(204, nil)
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
-	mux.Handle("GET /api/picked", pipe0(volt.Handler("GET /api/picked", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("GET /api/picked", pipe0(volt.Handler("GET /api/picked", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
-			return err
+			return volt.Fail(err)
 		}
 		voltids, err := volt.QueryParams[int](r, "ids")
 		if err != nil {
-			return err
+			return volt.Fail(err)
 		}
-		out, err := c.DB.UserPicked(r.Context(), voltids)
-		if err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 200, out)
-	}, errHandlerErrors)))
+		return volt.Then(db.UserPicked(voltids), func(voltOut []db.User) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
 
-	mux.Handle("GET /api/since", pipe0(volt.Handler("GET /api/since", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("GET /api/since", pipe0(volt.Handler("GET /api/since", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
-			return err
+			return volt.Fail(err)
 		}
 		voltsince, err := volt.QueryParam[time.Time](r, "since")
 		if err != nil {
-			return err
+			return volt.Fail(err)
 		}
-		out, err := c.DB.UserSince(r.Context(), voltsince)
-		if err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 200, out)
-	}, errHandlerErrors)))
+		return volt.Then(db.UserSince(voltsince), func(voltOut []db.User) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
 
-	mux.Handle("GET /ms/revenue", pipe0(volt.Handler("GET /ms/revenue", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("GET /ms/revenue", pipe0(volt.Handler("GET /ms/revenue", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
-			return err
+			return volt.Fail(err)
 		}
 		voltyear, err := volt.QueryParam[int](r, "year")
 		if err != nil {
-			return err
+			return volt.Fail(err)
 		}
-		out, err := c.DB.MsRevenueBrowse(r.Context(), voltyear)
-		if err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 200, out)
-	}, errHandlerErrors)))
+		return volt.Then(db.MsRevenueBrowse(voltyear), func(voltOut []db.MsRevenue) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
 
-	mux.Handle("GET /ms/usage", pipe0(volt.Handler("GET /ms/usage", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("GET /ms/usage", pipe0(volt.Handler("GET /ms/usage", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
-			return err
+			return volt.Fail(err)
 		}
 		voltyear, err := volt.QueryParam[int](r, "year")
 		if err != nil {
-			return err
+			return volt.Fail(err)
 		}
-		out, err := c.DB.MsUsageBrowse(r.Context(), voltyear)
-		if err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 200, out)
-	}, errHandlerErrors)))
+		return volt.Then(db.MsUsageBrowse(voltyear), func(voltOut []db.MsUsage) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
 
-	mux.Handle("GET /ref/users", pipe0(volt.Handler("GET /ref/users", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("GET /ref/users", pipe0(volt.Handler("GET /ref/users", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
-			return err
+			return volt.Fail(err)
 		}
-		out, err := c.DB.UserList(r.Context())
-		if err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 200, out)
-	}, errHandlerErrors)))
+		return volt.Then(db.UserList(), func(voltOut []db.User) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
 
-	mux.Handle("POST /ref/users", pipe0(volt.Handler("POST /ref/users", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("POST /ref/users", pipe0(volt.Handler("POST /ref/users", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
-			return err
+			return volt.Fail(err)
 		}
 		var volt_params db.UserParams
 		if err := volt.Decode(r, &volt_params); err != nil {
-			return err
+			return volt.Fail(err)
 		}
 		volt_cs := db.UserNew().Cast(volt_params, db.UserEmail, db.UserCreatedAt)
-		out, err := c.DB.UserCreate(r.Context(), volt_cs)
-		if err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 201, out)
-	}, errHandlerErrors)))
+		return volt.Then(db.UserCreate(volt_cs), func(voltOut db.User) volt.Response {
+			return volt.RenderStatus(201, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
 
-	mux.Handle("GET /ref/users/{id}", pipe0(volt.Handler("GET /ref/users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("GET /ref/users/{id}", pipe0(volt.Handler("GET /ref/users/{id}", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
-			return err
+			return volt.Fail(err)
 		}
 		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
-			return volt.ErrNotFound
+			return volt.Fail(volt.ErrNotFound)
 		}
-		out, err := c.DB.UserGet(r.Context(), voltid)
-		if err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 200, out)
-	}, errHandlerErrors)))
+		return volt.Then(db.UserGet(voltid), func(voltOut db.User) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
-	mux.Handle("PATCH /ref/users/{id}", pipe0(volt.Handler("PATCH /ref/users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("PATCH /ref/users/{id}", pipe0(volt.Handler("PATCH /ref/users/{id}", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
-			return err
+			return volt.Fail(err)
 		}
 		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
-			return volt.ErrNotFound
+			return volt.Fail(volt.ErrNotFound)
 		}
 		var volt_params db.UserParams
 		if err := volt.Decode(r, &volt_params); err != nil {
-			return err
+			return volt.Fail(err)
 		}
-		volt_row, err := c.DB.UserGet(r.Context(), voltid)
-		if err != nil {
-			return err
-		}
-		volt_cs := volt_row.Changeset().Cast(volt_params, db.UserEmail, db.UserCreatedAt)
-		out, err := c.DB.UserUpdate(r.Context(), volt_cs)
-		if err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 200, out)
-	}, errHandlerErrors)))
+		return volt.Then(db.UserGet(voltid), func(volt_row db.User) volt.Response {
+			volt_cs := volt_row.Changeset().Cast(volt_params, db.UserEmail, db.UserCreatedAt)
+			return volt.Then(db.UserUpdate(volt_cs), func(voltOut db.User) volt.Response {
+				return volt.RenderStatus(200, voltOut)
+			})
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
-	mux.Handle("DELETE /ref/users/{id}", pipe0(volt.Handler("DELETE /ref/users/{id}", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("DELETE /ref/users/{id}", pipe0(volt.Handler("DELETE /ref/users/{id}", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
-			return err
+			return volt.Fail(err)
 		}
 		voltid, ok := volt.ParseInt(r.PathValue("id"))
 		if !ok {
-			return volt.ErrNotFound
+			return volt.Fail(volt.ErrNotFound)
 		}
-		if err := c.DB.UserDelete(r.Context(), voltid); err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 204, nil)
-	}, errHandlerErrors)))
+		return volt.Then(db.UserDelete(voltid), func(int64) volt.Response {
+			return volt.RenderStatus(204, nil)
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("id"))))
 
-	mux.Handle("GET /ref/tags", pipe0(volt.Handler("GET /ref/tags", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("GET /ref/tags", pipe0(volt.Handler("GET /ref/tags", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
-			return err
+			return volt.Fail(err)
 		}
-		out, err := c.DB.TagList(r.Context())
-		if err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 200, out)
-	}, errHandlerErrors)))
+		return volt.Then(db.TagList(), func(voltOut []db.Tag) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
 
-	mux.Handle("POST /ref/tags", pipe0(volt.Handler("POST /ref/tags", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("POST /ref/tags", pipe0(volt.Handler("POST /ref/tags", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
-			return err
+			return volt.Fail(err)
 		}
 		var volt_params db.TagParams
 		if err := volt.Decode(r, &volt_params); err != nil {
-			return err
+			return volt.Fail(err)
 		}
 		volt_cs := db.TagNew().Cast(volt_params, db.TagSlug, db.TagName)
-		out, err := c.DB.TagCreate(r.Context(), volt_cs)
-		if err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 201, out)
-	}, errHandlerErrors)))
+		return volt.Then(db.TagCreate(volt_cs), func(voltOut db.Tag) volt.Response {
+			return volt.RenderStatus(201, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
 
-	mux.Handle("GET /ref/tags/{slug}", pipe0(volt.Handler("GET /ref/tags/{slug}", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("GET /ref/tags/{slug}", pipe0(volt.Handler("GET /ref/tags/{slug}", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
-			return err
+			return volt.Fail(err)
 		}
-		out, err := c.DB.TagGet(r.Context(), r.PathValue("slug"))
-		if err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 200, out)
-	}, errHandlerErrors)))
+		return volt.Then(db.TagGet(r.PathValue("slug")), func(voltOut db.Tag) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("slug"))))
 
-	mux.Handle("PATCH /ref/tags/{slug}", pipe0(volt.Handler("PATCH /ref/tags/{slug}", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("PATCH /ref/tags/{slug}", pipe0(volt.Handler("PATCH /ref/tags/{slug}", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
-			return err
+			return volt.Fail(err)
 		}
 		var volt_params db.TagParams
 		if err := volt.Decode(r, &volt_params); err != nil {
-			return err
+			return volt.Fail(err)
 		}
-		volt_row, err := c.DB.TagGet(r.Context(), r.PathValue("slug"))
-		if err != nil {
-			return err
-		}
-		volt_cs := volt_row.Changeset().Cast(volt_params, db.TagName)
-		out, err := c.DB.TagUpdate(r.Context(), volt_cs)
-		if err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 200, out)
-	}, errHandlerErrors)))
+		return volt.Then(db.TagGet(r.PathValue("slug")), func(volt_row db.Tag) volt.Response {
+			volt_cs := volt_row.Changeset().Cast(volt_params, db.TagName)
+			return volt.Then(db.TagUpdate(volt_cs), func(voltOut db.Tag) volt.Response {
+				return volt.RenderStatus(200, voltOut)
+			})
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("slug"))))
 
-	mux.Handle("DELETE /ref/tags/{slug}", pipe0(volt.Handler("DELETE /ref/tags/{slug}", func(w http.ResponseWriter, r *volt.Request) error {
+	mux.Handle("DELETE /ref/tags/{slug}", pipe0(volt.Handler("DELETE /ref/tags/{slug}", func(r volt.Request) volt.Response {
 		if _, err := volt.Negotiate(r); err != nil {
-			return err
+			return volt.Fail(err)
 		}
-		if err := c.DB.TagDelete(r.Context(), r.PathValue("slug")); err != nil {
-			return err
-		}
-		return volt.RenderStatus(w, r, 204, nil)
-	}, errHandlerErrors)))
+		return volt.Then(db.TagDelete(r.PathValue("slug")), func(int64) volt.Response {
+			return volt.RenderStatus(204, nil)
+		})
+	}, errHandlerErrors, voltPerform, volt.Params("slug"))))
 
-	mux.Handle("GET /events", pipe0(volt.Handler("GET /events", func(w http.ResponseWriter, r *volt.Request) error {
-		if c.Events == nil {
-			return volt.Error(http.StatusServiceUnavailable, "no event broker configured")
-		}
-		return c.Events.Serve(w, r)
-	}, errHandlerErrors)))
+	mux.Handle("GET /events", pipe0(volt.EventsHandler(c.Events)))
 }
 
 var errHandlerErrors = volt.ErrorHandler(Errors)

@@ -28,7 +28,7 @@ import (
 volt: pipeline with plugs
 ==================
 
-Pipeline api {
+pipeline api {
 	use volt.RequestID
 	use BearerAuth
 }
@@ -50,10 +50,10 @@ Pipeline api {
 volt: scope with routes, resources, nesting
 ==================
 
-Scope / [pipe: api, error_handler: Errors] {
+scope / [pipe: api, error_handler: Errors] {
 	get / Home.Index [name: root]
 
-	Scope /admin [name: admin] {
+	scope /admin [name: admin] {
 		get /stats Admin.Stats
 	}
 
@@ -156,11 +156,11 @@ volt: routing beside tables (superset)
 
 package app
 
-Table users {
+table users {
 	id int [pk]
 }
 
-Scope / {
+scope / {
 	get /users/:id(int) Users.Show
 }
 
@@ -200,7 +200,7 @@ volt: whitespace splits a route path
 :error
 ==================
 
-Scope / {
+scope / {
 	get /users /:id Users.Show
 }
 
@@ -213,7 +213,7 @@ volt: put is not a route verb
 :error
 ==================
 
-Scope / {
+scope / {
 	put /users/:id(int) Users.Update
 }
 
@@ -226,7 +226,7 @@ volt: a bare path parameter is a string, (string) is not written
 :error
 ==================
 
-Scope / {
+scope / {
 	get /tags/:slug(string) Tags.Show
 }
 
@@ -238,13 +238,13 @@ Scope / {
 group block and algebra forms
 ==================
 
-Group series {
+group series {
   ms_revenue
   ms_usage
 }
 
-Group wide = series + ks_costs \ ms_usage
-Group farm = Metrics \ (ms_dict, ms_notes)
+group wide = series + ks_costs \ ms_usage
+group farm = Metrics \ (ms_dict, ms_notes)
 
 ---
 
@@ -268,9 +268,9 @@ Group farm = Metrics \ (ms_dict, ms_notes)
 pred with composition, in, like, is null
 ==================
 
-Pred current { org = :org and year = :year }
-Pred fresh { current and (year >= :since or year in (2024, 2025)) and not org like "x%" and note is not null }
-Pred chosen { org in :orgs }
+pred current { org = :org and year = :year }
+pred fresh { current and (year >= :since or year in (2024, 2025)) and not org like "x%" and note is not null }
+pred chosen { org in :orgs }
 
 ---
 
@@ -317,8 +317,8 @@ Pred chosen { org in :orgs }
 select for group with where and order
 ==================
 
-Select rows for series where current and year >= 2000 [order: (year desc, id)]
-Select all for ms_usage
+select rows for series where current and year >= 2000 [order: (year desc, id)]
+select all for ms_usage
 
 ---
 
@@ -348,7 +348,7 @@ Select all for ms_usage
 select with an order list spanning lines
 ==================
 
-Select rows for series [order: (
+select rows for series [order: (
   year desc,
   id asc
 )]
@@ -375,8 +375,8 @@ Select rows for series [order: (
 select projections
 ==================
 
-Select summary (site, day) for metrics where at
-Select public (* \ (password_hash, email)) for accounts
+select summary (site, day) for metrics where at
+select public (* \ (password_hash, email)) for accounts
 
 ---
 
@@ -400,11 +400,11 @@ Select public (* \ (password_hash, email)) for accounts
 validators
 ==================
 
-Table page_views {
+table page_views {
   hits int
   site string
 
-  Validators {
+  validators {
     CountsPositive(hits)
     EmailValid(site)
   }
@@ -442,7 +442,7 @@ Table page_views {
 volt: an error_handler named bare
 ==================
 
-Scope / [error_handler: Errors] {
+scope / [error_handler: Errors] {
 	get / Home.Index
 }
 
@@ -468,8 +468,240 @@ a dotted setting value is an error
 :error
 ==================
 
-Scope / [error_handler: app.Errors] {
+scope / [error_handler: app.Errors] {
 	get / Home.Index
 }
 
 ---
+
+==================
+volt: route with a load block
+==================
+
+scope / {
+	get /charts Pages.Charts [timeout: 5] {
+		metrics  db.MetricOrdered()
+		settings db.SettingGet(1, "x", true)
+	}
+}
+
+---
+
+(source_file
+  (scope_definition
+    (route_path)
+    (route
+      (verb)
+      (route_path
+        (path_segment))
+      (go_ref
+        (identifier)
+        (identifier))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (number)))
+      (load_block
+        (load
+          (load_name)
+          (go_ref
+            (identifier)
+            (identifier)))
+        (load
+          (load_name)
+          (go_ref
+            (identifier)
+            (identifier))
+          (number)
+          (string
+            (string_content))
+          (boolean))))))
+
+==================
+volt: route with a body setting
+==================
+
+scope / {
+	patch /settings/:id(int) Settings.Save [body: db.SettingUpdate(id), only: (unit)]
+	post  /login             Session.Login [body: LoginForm]
+}
+
+---
+
+(source_file
+  (scope_definition
+    (route_path)
+    (route
+      (verb)
+      (route_path
+        (path_segment)
+        (path_parameter
+          (parameter_name)
+          (type_name)))
+      (go_ref
+        (identifier)
+        (identifier))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (query_call
+            (go_ref
+              (identifier)
+              (identifier))
+            (identifier)))
+        (setting
+          (setting_name
+            (identifier))
+          (ident_group
+            (identifier)))))
+    (route
+      (verb)
+      (route_path
+        (path_segment))
+      (go_ref
+        (identifier)
+        (identifier))
+      (settings_list
+        (setting
+          (setting_name
+            (identifier))
+          (identifier))))))
+
+==================
+volt: select with a join and qualified columns
+==================
+
+select recent (id, ts, metric.name) for points join metric join site where ts >= :since and metric.unit = "ms" and site.name is not null [order: (metric.name asc, ts desc)]
+
+---
+
+(source_file
+  (select_definition
+    (select_name)
+    (select_projection
+      (column_ref)
+      (column_ref)
+      (qualified_column
+        (relation_name)
+        (column_ref)))
+    (select_target)
+    (relation_name)
+    (relation_name)
+    (pred_expr
+      (pred_compare
+        (column_ref)
+        (query_param
+          (parameter_name)))
+      (pred_compare
+        (qualified_column
+          (relation_name)
+          (column_ref))
+        (string
+          (string_content)))
+      (pred_null
+        (qualified_column
+          (relation_name)
+          (column_ref))))
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (ident_group
+          (qualified_column
+            (relation_name)
+            (column_ref))
+          (ident_modifier
+            (identifier))
+          (identifier)
+          (ident_modifier
+            (identifier)))))))
+
+==================
+volt: select with aggregates and arithmetic
+==================
+
+select hourly (metric_id, ts / 3600 * 3600 as hour, avg(value) as mean, count() as n) for points [group: (metric_id, hour)]
+
+---
+
+(source_file
+  (select_definition
+    (select_name)
+    (select_projection
+      (column_ref)
+      (derived_item
+        (arith
+          (arith_binary
+            (arith
+              (arith_binary
+                (arith
+                  (column_ref))
+                (arith
+                  (number))))
+            (arith
+              (number))))
+        (alias_name))
+      (derived_item
+        (aggregate
+          (aggregate_name)
+          (column_ref))
+        (alias_name))
+      (derived_item
+        (aggregate
+          (aggregate_name))
+        (alias_name)))
+    (select_target)
+    (settings_list
+      (setting
+        (setting_name
+          (identifier))
+        (ident_group
+          (identifier)
+          (identifier))))))
+
+==================
+volt: select with nested results
+==================
+
+select board for metrics with points where unit = :unit
+
+---
+
+(source_file
+  (select_definition
+    (select_name)
+    (select_target)
+    (relation_name)
+    (pred_expr
+      (pred_compare
+        (column_ref)
+        (query_param
+          (parameter_name))))))
+
+==================
+volt: scope with a load
+==================
+
+scope /me {
+	load user CurrentUser
+	get / Me.Show
+}
+
+---
+
+(source_file
+  (scope_definition
+    (route_path
+      (path_segment))
+    (scope_load
+      (load_name)
+      (go_ref
+        (identifier)))
+    (route
+      (verb)
+      (route_path)
+      (go_ref
+        (identifier)
+        (identifier)))))

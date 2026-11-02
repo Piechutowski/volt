@@ -183,13 +183,8 @@ func TestQueriesGenerationErrors(t *testing.T) {
 	}{
 		{
 			name:    "model collision after singularization",
-			src:     "Table users { id int [pk] }\nTable user { id int [pk] }",
+			src:     "table users { id int [pk] }\ntable user { id int [pk] }",
 			wantErr: "both map to Go type",
-		},
-		{
-			name:    "reserved model name",
-			src:     "Table jobs [model: \"Queries\"] { id int [pk] }",
-			wantErr: "Queries",
 		},
 	}
 	for _, tc := range cases {

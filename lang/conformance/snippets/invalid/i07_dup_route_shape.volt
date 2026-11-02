@@ -1,7 +1,7 @@
 // spec: §route-conflicts
 package app
 
-Scope / {
+scope / {
 	get /users/:id   Users.Show
 	get /users/:name Users.ByName
 }

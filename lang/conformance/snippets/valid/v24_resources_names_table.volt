@@ -1,12 +1,12 @@
 // spec: §declaration
 package app
 
-Table posty [model: "Post"] {
+table posty [model: "Post"] {
 	id int [pk]
 }
 
 // The declaration spells the table exactly as declared; the URL keeps
 // that name and the member helper takes the model's (PathPost).
-Scope / {
+scope / {
 	resources posty
 }

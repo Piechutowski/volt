@@ -2,11 +2,11 @@
 // want: parameter name "nil" does not work as a Go parameter
 package app
 
-Table users {
+table users {
 	id   int    [pk]
 	nick string [null]
 	rank int
 }
 
-Select by_nil    for users where nick = :nil
-Select by_append for users where rank in :append
+select by_nil    for users where nick = :nil
+select by_append for users where rank in :append

@@ -1,10 +1,10 @@
 package db
 
-Type money.Money int from "example.com/app/money"
+type money.Money int from "example.com/app/money"
 
-Table products {
+table products {
   id    int         [pk, increment]
   price money.Money
 }
 
-Select costing for products where price = :price
+select costing for products where price = :price

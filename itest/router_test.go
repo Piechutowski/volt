@@ -21,77 +21,82 @@ import (
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/itest/blog/app"
 	"github.com/Piechutowski/volt/itest/blog/db"
-	"github.com/Piechutowski/volt/nao/rt"
+	"github.com/Piechutowski/volt/nao/run"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func echo(w http.ResponseWriter, r *volt.Request, params ...any) error {
-	return volt.JSON(w, map[string]any{"route": r.Route(), "params": fmt.Sprint(params...)})
+func echo(r volt.Request, params ...any) volt.Response {
+	return volt.Render(map[string]any{"route": r.Route(), "params": fmt.Sprint(params...)})
 }
 
 type home struct{}
 
-func (home) Index(w http.ResponseWriter, r *volt.Request) error { return echo(w, r) }
-func (home) Ping(w http.ResponseWriter, r *volt.Request) error  { return echo(w, r) }
-func (home) Teapot(w http.ResponseWriter, r *volt.Request) error {
-	return volt.Error(http.StatusTeapot, "short and stout")
+func (home) Index(r volt.Request) volt.Response { return echo(r) }
+func (home) Ping(r volt.Request) volt.Response  { return echo(r) }
+func (home) Teapot(r volt.Request) volt.Response {
+	return volt.Fail(volt.Error(http.StatusTeapot, "short and stout"))
 }
 
 type users struct{}
 
-func (users) Index(w http.ResponseWriter, r *volt.Request) error  { return echo(w, r) }
-func (users) New(w http.ResponseWriter, r *volt.Request) error    { return echo(w, r) }
-func (users) Create(w http.ResponseWriter, r *volt.Request) error { return echo(w, r) }
-func (users) Show(w http.ResponseWriter, r *volt.Request, id int) error {
-	return echo(w, r, id)
+func (users) Index(r volt.Request) volt.Response                         { return echo(r) }
+func (users) New(r volt.Request) volt.Response                           { return echo(r) }
+func (users) Create(r volt.Request) volt.Response                        { return echo(r) }
+func (users) Show(r volt.Request, id int) volt.Response                  { return echo(r, id) }
+func (users) Edit(r volt.Request, id int) volt.Response                  { return echo(r, id) }
+func (users) Update(r volt.Request, id int) volt.Response                { return echo(r, id) }
+func (users) Delete(r volt.Request, id int) volt.Response                { return echo(r, id) }
+func (users) Avatar(r volt.Request, id int) volt.Response                { return echo(r, id) }
+func (users) Profile(r volt.Request, id int, user db.User) volt.Response { return volt.Render(user) }
+func (users) Card(r volt.Request, id int) volt.Response {
+	return volt.Then(db.UserGet(id), func(u db.User) volt.Response { return volt.Render(u) })
 }
-func (users) Edit(w http.ResponseWriter, r *volt.Request, id int) error {
-	return echo(w, r, id)
+func (users) ChangeEmail(r volt.Request, id int, body db.UserChangeset) volt.Response {
+	if !body.Valid() {
+		return volt.Reject(http.StatusUnprocessableEntity, "check the fields").WithDetails(body.Errors())
+	}
+	return volt.Then(db.UserUpdate(body), func(u db.User) volt.Response { return volt.Render(u) })
 }
-func (users) Update(w http.ResponseWriter, r *volt.Request, id int) error {
-	return echo(w, r, id)
+
+type session struct{}
+
+func (session) Login(r volt.Request, body app.LoginForm) volt.Response {
+	if body.Password != "open sesame" {
+		return volt.Reject(http.StatusUnauthorized, "wrong password")
+	}
+	return volt.Render(map[string]any{"email": body.Email})
 }
-func (users) Delete(w http.ResponseWriter, r *volt.Request, id int) error {
-	return echo(w, r, id)
-}
-func (users) Avatar(w http.ResponseWriter, r *volt.Request, id int) error {
-	return echo(w, r, id)
-}
+
+type me struct{}
+
+func (me) Show(r volt.Request, user db.User) volt.Response { return volt.Render(user) }
 
 type files struct{}
 
-func (files) Serve(w http.ResponseWriter, r *volt.Request, path string) error {
-	return echo(w, r, path)
-}
+func (files) Serve(r volt.Request, path string) volt.Response { return echo(r, path) }
 
 type admin struct{}
 
-func (admin) Stats(w http.ResponseWriter, r *volt.Request) error { return echo(w, r) }
+func (admin) Stats(r volt.Request) volt.Response { return echo(r) }
 
 type ops struct{}
 
-func (ops) Fail(w http.ResponseWriter, r *volt.Request) error {
-	return volt.Error(http.StatusServiceUnavailable, "ops down")
+func (ops) Fail(r volt.Request) volt.Response {
+	return volt.Fail(volt.Error(http.StatusServiceUnavailable, "ops down"))
 }
 
 type tags struct{}
 
-func (tags) Show(w http.ResponseWriter, r *volt.Request, name string) error {
-	return echo(w, r, name)
-}
+func (tags) Show(r volt.Request, name string) volt.Response { return echo(r, name) }
 
 type pages struct{}
 
-func (pages) Show(w http.ResponseWriter, r *volt.Request, num int) error {
-	return echo(w, r, num)
-}
+func (pages) Show(r volt.Request, num int) volt.Response { return echo(r, num) }
 
 type archive struct{}
 
-func (archive) Show(w http.ResponseWriter, r *volt.Request, stamp int) error {
-	return echo(w, r, stamp)
-}
+func (archive) Show(r volt.Request, stamp int) volt.Response { return echo(r, stamp) }
 
 func handler() http.Handler {
 	return handlerWithDB(nil)
@@ -106,7 +111,7 @@ func fixture(t *testing.T) (http.Handler, *volt.Broker) {
 	if t == nil {
 		t = &testing.T{}
 	}
-	sqlDB, err := rt.Open("sqlite3", ":memory:")
+	dbh, err := run.Open("sqlite3", ":memory:")
 	if err != nil {
 		panic(err)
 	}
@@ -114,21 +119,20 @@ func fixture(t *testing.T) (http.Handler, *volt.Broker) {
 	if err != nil {
 		panic(err)
 	}
-	if _, err := sqlDB.Exec(string(ddl)); err != nil {
+	if _, err := dbh.Pool().Exec(string(ddl)); err != nil {
 		panic(err)
 	}
-	q := db.New(sqlDB)
-	if _, err := q.UserCreate(context.Background(), db.UserNew().EmailSet("one@example.com")); err != nil {
+	if _, err := run.Run(context.Background(), dbh, db.UserCreate(db.UserNew().EmailSet("one@example.com"))); err != nil {
 		panic(err)
 	}
-	if _, err := q.TagCreate(context.Background(), db.TagNew().SlugSet("go").NameSet("Go")); err != nil {
+	if _, err := run.Run(context.Background(), dbh, db.TagCreate(db.TagNew().SlugSet("go").NameSet("Go"))); err != nil {
 		panic(err)
 	}
 	broker := &volt.Broker{Heartbeat: 20 * time.Millisecond}
 	return app.NewRouter(app.Controllers{
 		Home: home{}, Users: users{}, Files: files{}, Admin: admin{},
-		Ops: ops{}, Tags: tags{}, Pages: pages{}, Archive: archive{},
-		DB:     q,
+		Ops: ops{}, Tags: tags{}, Pages: pages{}, Archive: archive{}, Session: session{}, Me: me{},
+		DB:     dbh,
 		Events: broker,
 	}), broker
 }
@@ -169,6 +173,12 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathUser":            {"GET", app.PathUser(7)},
 		"PathEditUser":        {"GET", app.PathEditUser(7)},
 		"PathAvatar":          {"GET", app.PathAvatar(7)},
+		"PathProfile":         {"GET", app.PathProfile(1)},
+		"PathCard":            {"GET", app.PathCard(1)},
+		"PathChangeEmail":     {"PATCH", app.PathChangeEmail(1)},
+		"PathLogin":           {"POST", app.PathLogin()},
+		"PathMeShow":          {"GET", app.PathMeShow()},
+		"PathMeUserList":      {"GET", app.PathMeUserList()},
 		"PathServe":           {"GET", app.PathServe("a/b c.txt")},
 		"PathOpsFail":         {"GET", app.PathOpsFail()},
 		"PathTag":             {"GET", app.PathTag("hello world")},
@@ -186,7 +196,9 @@ func TestRoundTripTotality(t *testing.T) {
 		"PathRefTag":          {"GET", app.PathRefTag("go")},
 		"PathEvents":          {"GET", app.PathEvents()},
 	}
-	queryRoutes := map[string]bool{}
+	queryRoutes := map[string]bool{"PathProfile": true, "PathCard": true}
+	bodyRoutes := map[string]bool{"PathChangeEmail": true, "PathLogin": true}
+	haltRoutes := map[string]bool{"PathMeShow": true, "PathMeUserList": true}
 	for _, r := range app.Table {
 		if r.Query != "" && r.Helper != "" {
 			queryRoutes[r.Helper] = true
@@ -219,6 +231,18 @@ func TestRoundTripTotality(t *testing.T) {
 			continue
 		}
 		rec, body := serve(t, h, b.method, b.url)
+		if bodyRoutes[helper] {
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("%s → %s without a body: status %d, want 400", helper, b.url, rec.Code)
+			}
+			continue
+		}
+		if haltRoutes[helper] {
+			if rec.Code != http.StatusUnauthorized {
+				t.Errorf("%s → %s without a user: status %d, want the scope load's 401", helper, b.url, rec.Code)
+			}
+			continue
+		}
 		if helper == "PathTeapot" {
 			if rec.Code != http.StatusTeapot {
 				t.Errorf("%s: status %d", helper, rec.Code)
@@ -476,6 +500,24 @@ func TestTableMatchesServedReality(t *testing.T) {
 		}
 		rec, body := serve(t, h, method, url)
 		if row.Spelled == "/teapot" || row.Spelled == "/ops/fail" {
+			continue
+		}
+		if row.Action == "Profile" || row.Action == "Card" {
+			if rec.Code != 404 {
+				t.Errorf("%s %s: the profile of a sampled user = %d, want 404 through the lookup", method, url, rec.Code)
+			}
+			continue
+		}
+		if row.Action == "ChangeEmail" || row.Action == "Login" {
+			if rec.Code != 400 {
+				t.Errorf("%s %s: a body route without a body = %d, want 400 before anything loads", method, url, rec.Code)
+			}
+			continue
+		}
+		if strings.HasPrefix(row.Spelled, "/me") {
+			if rec.Code != 401 {
+				t.Errorf("%s %s: a route under a scope load without a user = %d, want the halt's 401", method, url, rec.Code)
+			}
 			continue
 		}
 		if row.Query != "" {

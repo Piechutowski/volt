@@ -17,14 +17,14 @@
 ; ---------- keywords ----------
 
 [
-  "Project"
-  "Table"
-  "TablePartial"
-  "Type"
-  "Ref"
-  "Records"
-  "Indexes"
-  "Validators"
+  "project"
+  "table"
+  "table_partial"
+  "type"
+  "ref"
+  "records"
+  "indexes"
+  "validators"
   "use"
   "from"
 ] @keyword
@@ -71,8 +71,8 @@
 [
   "package"
   "import"
-  "Pipeline"
-  "Scope"
+  "pipeline"
+  "scope"
   "resources"
   "dataset"
 ] @keyword
@@ -87,6 +87,7 @@
 ; pipelines and Go references (plugs, route handlers, error handlers)
 (pipeline_name) @label
 (go_ref (identifier) @function)
+(load_name) @variable.parameter
 
 ; route paths: literals as paths, parameters as parameters
 (route_path "/" @string.special)
@@ -101,9 +102,9 @@
 ; ---------- groups, predicates, selects (docs/spec.md §groups to §selects-over-groups) ----------
 
 [
-  "Group"
-  "Pred"
-  "Select"
+  "group"
+  "pred"
+  "select"
   "for"
   "where"
 ] @keyword
@@ -122,7 +123,7 @@
 ; ---------- migrations (docs/spec.md §migrations) ----------
 
 [
-  "Migration"
+  "migration"
   "up"
   "down"
   "create"
@@ -148,6 +149,9 @@
 (select_name) @label
 (select_target) @type
 (column_ref) @property
+(relation_name) @variable.parameter
+(aggregate_name) @function
+(alias_name) @variable
 (query_param ":" @operator)
 (query_param name: (parameter_name) @variable.parameter)
 (pred_compare op: _ @operator)

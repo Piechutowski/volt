@@ -10,11 +10,11 @@ import (
 
 func (p *parser) migration() *ast.Migration {
 	d := &ast.Migration{MigrationPos: p.next().Pos}
-	d.Name = p.identOf(p.expect(token.IDENT, "Migration name (§migrations)"))
+	d.Name = p.identOf(p.expect(token.IDENT, "migration name (§migrations)"))
 	if p.at(token.LBRACKET) && !p.cur().NLBefore {
 		d.Settings = p.settingList()
 	}
-	p.expect(token.LBRACE, "Migration (§migrations)")
+	p.expect(token.LBRACE, "migration (§migrations)")
 	switch {
 	case p.atKw("up"):
 		d.UpDown = true
@@ -30,9 +30,9 @@ func (p *parser) migration() *ast.Migration {
 		d.DownPos = p.kwTake("down").Pos
 		d.Down = p.operationsBlock("down block (§migrations)")
 	default:
-		d.Up = p.operations("Migration body (§migrations)")
+		d.Up = p.operations("migration body (§migrations)")
 	}
-	d.Rbrace = p.expect(token.RBRACE, "Migration (§migrations)").Pos
+	d.Rbrace = p.expect(token.RBRACE, "migration (§migrations)").Pos
 	return d
 }
 
@@ -81,7 +81,7 @@ func (p *parser) operation(ctx string) (op ast.Operation) {
 	case p.atKw("down"):
 		p.fail(t, "a down block follows an up block; write up { } down { } (§migrations)")
 	case p.atKw("up"):
-		p.fail(t, "an up block opens the Migration body; nothing precedes it (§migrations)")
+		p.fail(t, "an up block opens the migration body; nothing precedes it (§migrations)")
 	default:
 		p.fail(t, "expected an operation (create, drop, rename, alter, rebuild, exec) in %s, found %s", ctx, t)
 	}
@@ -270,17 +270,17 @@ func (p *parser) shapeItem(ctx string) (item ast.TableItem) {
 
 	t := p.cur()
 	switch {
-	case p.atKw("Indexes") && p.peekKind(1) == token.LBRACE:
+	case p.atKw("indexes") && p.peekKind(1) == token.LBRACE:
 		return p.indexesBlock()
 	case t.Kind == token.TILDE,
-		p.atKw("Validators") && p.peekKind(1) == token.LBRACE,
-		p.atKw("Records") && (p.peekKind(1) == token.LPAREN || p.peekKind(1) == token.LBRACE):
-		p.fail(t, "a migration's shape body holds columns and indexes only; a partial injection, a Validators block and a Records block are not part of it (§migrations)")
+		p.atKw("validators") && p.peekKind(1) == token.LBRACE,
+		p.atKw("records") && (p.peekKind(1) == token.LPAREN || p.peekKind(1) == token.LBRACE):
+		p.fail(t, "a migration's shape body holds columns and indexes only; a partial injection, a validators block and a records block are not part of it (§migrations)")
 		return nil
 	case t.Kind == token.IDENT:
 		return p.column()
 	default:
-		p.fail(t, "expected a column or an Indexes block in %s, found %s", ctx, t)
+		p.fail(t, "expected a column or an indexes block in %s, found %s", ctx, t)
 		return nil
 	}
 }

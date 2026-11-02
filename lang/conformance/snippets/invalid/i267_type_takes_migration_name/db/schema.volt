@@ -2,16 +2,16 @@
 // want: takes the Go name of the generated migration list
 package db
 
-Type Migrations string
-Type Migrate    string
+type Migrations string
+type Migrate    string
 
-Table posts {
+table posts {
   id int        [pk, increment]
   a  Migrations
   b  Migrate
 }
 
-Migration 0001__posts {
+migration 0001__posts {
   create table posts {
     id int    [pk, increment]
     a  string

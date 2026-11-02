@@ -1,15 +1,15 @@
 // analyzers: refcycle
-Table a {
+table a {
   id int [pk]
   b_id int
 }
-Table b { //WANT refcycle
+table b { //WANT refcycle
   id int [pk]
   a_id int
 }
-Table c {
+table c {
   id int [pk]
   a_id int [ref: a.id]
 }
-Ref: a.b_id > b.id
-Ref: b.a_id > a.id
+ref: a.b_id > b.id
+ref: b.a_id > a.id

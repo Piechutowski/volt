@@ -2,6 +2,6 @@
 // want: package directory "żółw" has the segment "żółw", which is not an identifier of ASCII letters, digits and underscores
 package żółw
 
-Table users {
+table users {
   id int [pk, increment]
 }

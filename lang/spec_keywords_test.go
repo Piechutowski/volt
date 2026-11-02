@@ -50,7 +50,7 @@ func TestSpecKeywordsTableMatchesTheParser(t *testing.T) {
 			elements = append(elements, w)
 		}
 	}
-	same("element and block words", append(elements, "Indexes", "Validators"))
+	same("element and block words", append(elements, "indexes", "validators"))
 	same("package words", []string{"package", "import"})
 	same("setting names", parser.SettingNames)
 	same("referential actions", parser.RefActions)
@@ -61,15 +61,11 @@ func TestSpecKeywordsTableMatchesTheParser(t *testing.T) {
 			t.Errorf("parameter types: %s is in the parser's list but not a parameter type of the checker", w)
 		}
 	}
-	same("route words", append(append([]string(nil), parser.Verbs...), "resources", "dataset", "use"))
+	same("route words", append(append([]string(nil), parser.Verbs...), "resources", "dataset", "use", "load"))
 	for class, words := range classes {
 		for _, w := range words {
-			lower := strings.ToLower(w)
-			if class != "element and block words" && w != lower {
-				t.Errorf("%s: %s is not lowercase, and only the element and block words are capitalized", class, w)
-			}
-			if class == "element and block words" && w == lower {
-				t.Errorf("%s: %s is not capitalized", class, w)
+			if w != strings.ToLower(w) {
+				t.Errorf("%s: %s is not lowercase, and every keyword is", class, w)
 			}
 		}
 	}

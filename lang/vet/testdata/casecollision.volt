@@ -1,7 +1,7 @@
 // analyzers: casecollision
-Table users { id int }
-Table Users { id int } //WANT casecollision
-Table clean {
+table users { id int }
+table Users { id int } //WANT casecollision
+table clean {
   total int
   Total int //WANT casecollision
 }

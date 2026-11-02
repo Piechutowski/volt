@@ -1,9 +1,9 @@
 // spec: §records-sample-data, a literal null is allowed only on a nullable column
 // want: is null, but the column is not nullable
-Table t {
+table t {
   id int [pk]
   n int
-  Records {
+  records {
     1, null
   }
 }

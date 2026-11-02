@@ -1,14 +1,14 @@
 // spec: §predicates, §types: a declared type compares with =, !=, in and is null; a literal has the class of the storage type
 package db
 
-Type Money int
+type Money int
 
-Table orders {
+table orders {
   id    int   [pk, increment]
   price Money
   tip   Money [null]
 }
 
-Select priced for orders where price = :price and tip != :tip
-Select among  for orders where price in :prices and tip is null
-Select cheap  for orders where price = 5 or price in (1, 2)
+select priced for orders where price = :price and tip != :tip
+select among  for orders where price in :prices and tip is null
+select cheap  for orders where price = 5 or price in (1, 2)

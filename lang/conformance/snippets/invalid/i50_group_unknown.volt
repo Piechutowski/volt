@@ -2,11 +2,11 @@
 // want: no such table or group
 package db
 
-Table ms_revenue {
+table ms_revenue {
   id int [pk]
 }
 
-Group series {
+group series {
   ms_revenue
   ms_revenu
 }

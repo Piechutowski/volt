@@ -1,5 +1,5 @@
 package app
 
-Scope / [pipe: api] {
+scope / [pipe: api] {
 	resources users
 }

@@ -6,7 +6,8 @@
 // Each check is an Analyzer with a name and a doc string, judged
 // declaration by declaration (a Rule: a pure function of one
 // declaration's syntax and the facts the checker resolved for it),
-// or over the whole file (a Fold), or both.
+// over the whole file (a Fold), or over one hand-written Go file of a
+// routes package (a GoRule).
 package vet
 
 import (
@@ -109,6 +110,7 @@ var registry = []Analyzer{
 	redundantIndex, emptyBody, shadowedColumn,
 	missingPK, refTypeMismatch, refTargetNotUnique, selfRef, refCycle, caseCollision,
 	modelName, dynName,
+	handlerReceiver, handlerImports, handlerClock, packageState, goroutine, streamCount, loadSpelledLong,
 }
 
 // Run executes the given analyzers (all registered ones if none are named)

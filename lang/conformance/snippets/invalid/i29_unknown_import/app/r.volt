@@ -5,6 +5,6 @@ import (
 	nothere
 )
 
-Scope / {
+scope / {
 	resources nothere.users
 }

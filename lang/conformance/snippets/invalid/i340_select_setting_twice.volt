@@ -2,9 +2,9 @@
 // want: setting "order" may appear at most once
 package app
 
-Table posts {
+table posts {
 	id    int [pk]
 	title string
 }
 
-Select recent for posts [order: (id desc), order: (title asc)]
+select recent for posts [order: (id desc), order: (title asc)]

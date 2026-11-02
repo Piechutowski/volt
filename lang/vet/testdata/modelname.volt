@@ -1,37 +1,37 @@
 // analyzers: modelname
-Table users {
+table users {
   id int [pk]
 }
-Table order_items {
+table order_items {
   id int [pk]
 }
-Table people {
+table people {
   id int [pk]
 }
-Table categories {
+table categories {
   id int [pk]
 }
-Table addresses {
+table addresses {
   id int [pk]
 }
-Table person {
+table person {
   id int [pk]
 }
-Table menus [model: "Menu"] {
+table menus [model: "Menu"] {
   id int [pk]
 }
-Table account_statuses {
+table account_statuses {
   id int [pk]
 }
-Table order_status { //WANT modelname
+table order_status { //WANT modelname
   code string [pk]
 }
-Table bonus { //WANT modelname
+table bonus { //WANT modelname
   id int [pk]
 }
-Table analysis_results {
+table analysis_results {
   id int [pk]
 }
-Table axis { //WANT modelname
+table axis { //WANT modelname
   id int [pk]
 }

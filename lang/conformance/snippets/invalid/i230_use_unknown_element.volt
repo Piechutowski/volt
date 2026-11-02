@@ -2,6 +2,6 @@
 // want: unknown element type "use"
 use * from "./base"
 
-Table posts {
+table posts {
   id int [pk]
 }

@@ -1,7 +1,7 @@
 // spec: §route-names-and-reverse-urls
 package app
 
-Scope / {
+scope / {
 	get /a A.Show
 	get /b B.Other [name: show]
 }

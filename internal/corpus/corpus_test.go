@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Piechutowski/volt/internal/corpus"
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 )
@@ -14,7 +15,7 @@ func TestCorpusChecks(t *testing.T) {
 		if err := corpus.Write(root, spec); err != nil {
 			t.Fatal(err)
 		}
-		pr, err := lang.Load(root)
+		pr, err := lang.Load(disk.Source{}, root)
 		if err != nil {
 			t.Fatal(err)
 		}

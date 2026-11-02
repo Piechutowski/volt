@@ -131,7 +131,7 @@ func paramName(goField string) string {
 }
 
 var routeSignatureNames = map[string]bool{
-	"w": true, "r": true, "opts": true, "volt": true, "cs": true, "c": true, "ctx": true,
+	"w": true, "r": true, "opts": true, "volt": true, "cs": true, "c": true, "ctx": true, "body": true,
 }
 
 // RouteSignatureName reports whether name is one a generated route file
@@ -143,10 +143,13 @@ var routeSignatureNames = map[string]bool{
 func RouteSignatureName(name string) bool { return routeSignatureNames[name] }
 
 // BodyBuiltin reports whether name is a predeclared Go identifier that a
-// generated data method uses where its parameters are in scope: nil or
-// append (spec §generated-query-surface). No select parameter takes one,
-// and a key column's parameter takes a trailing underscore instead.
-func BodyBuiltin(name string) bool { return name == "nil" || name == "append" }
+// generated query function uses where its parameters are in scope: nil,
+// append, any or true (spec §generated-query-surface). No select parameter
+// takes one, and a key column's parameter takes a trailing underscore
+// instead.
+func BodyBuiltin(name string) bool {
+	return name == "nil" || name == "append" || name == "any" || name == "true"
+}
 
 // LocalName reports whether name has the form of a local or an unexported
 // helper the data generator declares: volt, an upper-case letter, and no

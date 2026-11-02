@@ -217,13 +217,13 @@ func (p *parser) decl() (d ast.Decl) {
 	case "scope":
 		return p.scope()
 	case "get", "post", "put", "patch", "delete", "options", "head", "any", "resources", "dataset":
-		p.fail(t, "routes, resources and datasets must appear inside a Scope (§scopes-and-routes)")
+		p.fail(t, "routes, resources and datasets must appear inside a scope (§scopes-and-routes)")
 		return nil
 	case "project":
 		return p.project()
 	case "table":
 		return p.table()
-	case "tablepartial":
+	case "table_partial":
 		return p.tablePartial()
 	case "type":
 		return p.typeDecl()
@@ -301,8 +301,8 @@ func (p *parser) project() *ast.Project {
 	if p.at(token.IDENT) {
 		d.Name = p.ident("project name (§project)")
 	}
-	d.Settings = p.settingsAt("Project")
-	p.expect(token.LBRACE, "Project (§project)")
+	d.Settings = p.settingsAt("project")
+	p.expect(token.LBRACE, "project (§project)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		p.item(func() {
 			p.lineBegin("project property (§project)")
@@ -313,29 +313,29 @@ func (p *parser) project() *ast.Project {
 			p.endOfLine("project property (§project)")
 		})
 	}
-	d.Rbrace = p.expect(token.RBRACE, "Project (§project)").Pos
+	d.Rbrace = p.expect(token.RBRACE, "project (§project)").Pos
 	return d
 }
 
 func (p *parser) table() *ast.Table {
 	d := &ast.Table{TablePos: p.next().Pos}
 	d.Name = p.ident("table name (§table)")
-	d.Settings = p.settingsAt("Table")
-	p.expect(token.LBRACE, "Table (§table)")
-	d.Body, d.Incomplete = p.tableBody("Table")
-	d.Rbrace = p.expect(token.RBRACE, "Table (§table)").Pos
+	d.Settings = p.settingsAt("table")
+	p.expect(token.LBRACE, "table (§table)")
+	d.Body, d.Incomplete = p.tableBody("table")
+	d.Rbrace = p.expect(token.RBRACE, "table (§table)").Pos
 	return d
 }
 
 func (p *parser) tablePartial() *ast.TablePartial {
 	d := &ast.TablePartial{PartialPos: p.next().Pos}
-	d.Name = p.ident("TablePartial name (§tablepartial)")
+	d.Name = p.ident("table_partial name (§tablepartial)")
 	if p.at(token.LBRACKET) {
-		p.fail(p.cur(), "a TablePartial takes no settings; its body holds columns, indexes and validators (§tablepartial)")
+		p.fail(p.cur(), "a table_partial takes no settings; its body holds columns, indexes and validators (§tablepartial)")
 	}
-	p.expect(token.LBRACE, "TablePartial (§tablepartial)")
-	d.Body, d.Incomplete = p.tableBody("TablePartial")
-	d.Rbrace = p.expect(token.RBRACE, "TablePartial (§tablepartial)").Pos
+	p.expect(token.LBRACE, "table_partial (§tablepartial)")
+	d.Body, d.Incomplete = p.tableBody("table_partial")
+	d.Rbrace = p.expect(token.RBRACE, "table_partial (§tablepartial)").Pos
 	return d
 }
 
@@ -369,16 +369,16 @@ func (p *parser) tableItem(what string) (item ast.TableItem) {
 		pr := &ast.PartialRef{TildePos: t.Pos, Name: p.ident("partial injection (§tablepartial)")}
 		p.endOfLine("partial injection (§tablepartial)")
 		return pr
-	case p.atKw("Indexes") && p.peekKind(1) == token.LBRACE:
+	case p.atKw("indexes") && p.peekKind(1) == token.LBRACE:
 		return p.indexesBlock()
-	case p.atKw("Validators") && p.peekKind(1) == token.LBRACE:
+	case p.atKw("validators") && p.peekKind(1) == token.LBRACE:
 		return p.validatorsBlock()
-	case p.atKw("Records") && (p.peekKind(1) == token.LPAREN || p.peekKind(1) == token.LBRACE):
+	case p.atKw("records") && (p.peekKind(1) == token.LPAREN || p.peekKind(1) == token.LBRACE):
 		return p.records(nil)
 	case t.Kind == token.IDENT:
 		return p.column()
 	default:
-		p.fail(t, "expected a column, Indexes, Validators, Records or '~injection' in %s body (§%s), found %s", what, strings.ToLower(what), t)
+		p.fail(t, "expected a column, indexes, validators, records or '~injection' in %s body (§%s), found %s", what, strings.ToLower(what), t)
 		return nil
 	}
 }
@@ -413,12 +413,12 @@ func (p *parser) typeRef() *ast.TypeRef {
 }
 
 func (p *parser) indexesBlock() *ast.IndexesBlock {
-	b := &ast.IndexesBlock{IndexesPos: p.kwTake("Indexes").Pos}
-	p.expect(token.LBRACE, "Indexes block (§indexes)")
+	b := &ast.IndexesBlock{IndexesPos: p.kwTake("indexes").Pos}
+	p.expect(token.LBRACE, "indexes block (§indexes)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		p.item(func() { b.Indexes = append(b.Indexes, p.index()) })
 	}
-	b.Rbrace = p.expect(token.RBRACE, "Indexes block (§indexes)").Pos
+	b.Rbrace = p.expect(token.RBRACE, "indexes block (§indexes)").Pos
 	return b
 }
 
@@ -466,8 +466,8 @@ func (p *parser) indexRest() *ast.Index {
 }
 
 func (p *parser) validatorsBlock() *ast.ValidatorsBlock {
-	b := &ast.ValidatorsBlock{ValidatorsPos: p.kwTake("Validators").Pos}
-	p.expect(token.LBRACE, "Validators block (§validators)")
+	b := &ast.ValidatorsBlock{ValidatorsPos: p.kwTake("validators").Pos}
+	p.expect(token.LBRACE, "validators block (§validators)")
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		p.item(func() {
 			p.lineBegin("validator (§validators)")
@@ -485,7 +485,7 @@ func (p *parser) validatorsBlock() *ast.ValidatorsBlock {
 			b.Validators = append(b.Validators, v)
 		})
 	}
-	b.Rbrace = p.expect(token.RBRACE, "Validators block (§validators)").Pos
+	b.Rbrace = p.expect(token.RBRACE, "validators block (§validators)").Pos
 	return b
 }
 
@@ -533,7 +533,7 @@ func (p *parser) refEndpoint() *ast.RefEndpoint {
 }
 
 func (p *parser) typeDecl() *ast.TypeDecl {
-	p.lineBegin("Type declaration (§types)")
+	p.lineBegin("type declaration (§types)")
 	d := &ast.TypeDecl{TypePos: p.next().Pos}
 	d.Name = p.qualName("declared type name (§types)")
 	d.Storage = p.typeRef()
@@ -543,7 +543,7 @@ func (p *parser) typeDecl() *ast.TypeDecl {
 		d.From = &ast.BasicLit{Tok: p.expect(token.STRING, "import path after from (§types)")}
 		d.EndPos = d.From.End()
 	}
-	p.endOfLine("Type declaration (§types)")
+	p.endOfLine("type declaration (§types)")
 	return d
 }
 
@@ -554,7 +554,7 @@ func (p *parser) recordsDecl() *ast.Records {
 }
 
 func (p *parser) records(_ *ast.Ident) *ast.Records {
-	pos := p.kwTake("Records").Pos
+	pos := p.kwTake("records").Pos
 	return p.recordsRest(pos, nil)
 }
 
@@ -710,7 +710,14 @@ func (p *parser) settingValue() ast.Node {
 		l := p.next()
 		il := &ast.IdentList{Lparen: l.Pos}
 		for {
-			il.Names = append(il.Names, p.ident("identifier list (§settings-whitelists)"))
+			name := p.ident("identifier list (§settings-whitelists)")
+			var qual *ast.Ident
+			if p.at(token.DOT) {
+				p.next()
+				qual, name = name, p.ident("identifier list (§settings-whitelists)")
+			}
+			il.Names = append(il.Names, name)
+			il.Quals = append(il.Quals, qual)
 			var mod *ast.Ident
 			if p.at(token.IDENT) && !p.cur().NLBefore {
 				mod = p.ident("identifier list (§settings-whitelists)")
@@ -729,7 +736,14 @@ func (p *parser) settingValue() ast.Node {
 		id := p.ident("setting value (§settings-lists)")
 		if p.at(token.DOT) {
 			p.next()
-			return &ast.QualIdent{Qual: id, Name: p.ident("qualified setting value (§scopes)")}
+			name := p.ident("qualified setting value (§scopes)")
+			if p.at(token.LPAREN) {
+				return p.queryCall(&ast.GoRef{Parts: []*ast.Ident{id, name}}, "a body: setting (§request-bodies)")
+			}
+			return &ast.QualIdent{Qual: id, Name: name}
+		}
+		if p.at(token.LPAREN) {
+			return p.queryCall(&ast.GoRef{Parts: []*ast.Ident{id}}, "a body: setting (§request-bodies)")
 		}
 		return id
 	default:

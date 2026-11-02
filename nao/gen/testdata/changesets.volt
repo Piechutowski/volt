@@ -8,11 +8,11 @@
 // to set.
 package metrics
 
-Type Visibility string
-Type Tier int
-Type Cents int
+type Visibility string
+type Tier int
+type Cents int
 
-Table posts {
+table posts {
   id       int [pk, increment]
   slug     string [required, unique]
   words    int [required]
@@ -37,17 +37,17 @@ Table posts {
   flag     bool [null, default: false]
   secret   string [null, tag: "json:\"-\""]
 
-  Validators {
+  validators {
     VisibilityKnown(state)
     VisibilityKnownNull(reviewed)
   }
 }
 
-Table post_tags {
+table post_tags {
   post_id int [pk, ref: posts.id]
   tag     string [pk]
 }
 
-Table pings {
+table pings {
   id int [pk, increment]
 }

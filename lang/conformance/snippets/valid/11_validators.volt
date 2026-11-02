@@ -1,9 +1,9 @@
 // spec: §validators — a validators block names Go functions of the package over columns of the table
-Table users {
+table users {
   wealth int
   debt int
 
-  Validators {
+  validators {
     Solvent(wealth, debt)
     DebtNonNegative(debt)
   }

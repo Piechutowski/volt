@@ -6,6 +6,6 @@ import (
 	ä db
 )
 
-Scope /api {
+scope /api {
 	get /users ä.UserList
 }

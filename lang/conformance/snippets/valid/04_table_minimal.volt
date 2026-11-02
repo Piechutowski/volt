@@ -1,4 +1,4 @@
 // spec: §table — minimal table
-Table users {
+table users {
   id int
 }

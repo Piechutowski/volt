@@ -86,17 +86,17 @@ func TestAnalyzers(t *testing.T) {
 
 func TestCleanFile(t *testing.T) {
 	src := `
-Project shop { database_type: "SQLite" }
-Type Status string
-Table users {
+project shop { database_type: "SQLite" }
+type Status string
+table users {
   id int [pk, increment]
   status Status
 }
-Table orders {
+table orders {
   id int [pk]
   user_id int [ref: users.id]
 }
-Group commerce { users
+group commerce { users
   orders }
 `
 	f, diags := parser.ParseFile("clean.volt", src)
@@ -114,7 +114,8 @@ func TestAnalyzerDocs(t *testing.T) {
 	for _, a := range vet.All() {
 		_, rule := a.(vet.Rule)
 		_, fold := a.(vet.Fold)
-		if a.Name() == "" || a.Doc() == "" || (!rule && !fold) {
+		_, goRule := a.(vet.GoRule)
+		if a.Name() == "" || a.Doc() == "" || (!rule && !fold && !goRule) {
 			t.Errorf("analyzer %+v is missing name, doc or a check", a)
 		}
 	}
@@ -122,10 +123,10 @@ func TestAnalyzerDocs(t *testing.T) {
 
 func TestRefTypeSkipsUnknownTypes(t *testing.T) {
 	src := `
-Table authors {
+table authors {
   id int64 [pk, increment]
 }
-Table posts {
+table posts {
   id int [pk, increment]
   author_id int [ref: authors.id]
   editor_id string [null, ref: authors.id]

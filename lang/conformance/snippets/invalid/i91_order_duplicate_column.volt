@@ -2,9 +2,9 @@
 // want: appears twice in order
 package db
 
-Table page_views {
+table page_views {
   id int [pk]
   day int
 }
 
-Select rows for page_views [order: (day desc, day asc)]
+select rows for page_views [order: (day desc, day asc)]

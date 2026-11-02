@@ -2,7 +2,7 @@
 // want: put is not a route verb: the partial update is patch, so write patch /posts/:id(int) Posts.Replace (§routes)
 package app
 
-Scope / {
+scope / {
 	patch /posts/:id(int) Posts.Update
 	put   /posts/:id(int) Posts.Replace
 	PUT   /tags/:slug Tags.Replace

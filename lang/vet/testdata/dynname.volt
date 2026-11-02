@@ -6,7 +6,7 @@
 // Distinct declarations can demand the same Go name; generation
 // refuses, this rule names both origins.
 
-Table users {
+table users {
   id int [pk]
   foo_bar int
   // handle UserNew collides with users' own changeset constructor UserNew
@@ -15,42 +15,42 @@ Table users {
 
 // good: a declared type named apart from its column handle; orders.status
 // mints the handle OrderStatus, and the type is OrderState
-Type OrderState string
-Table orders {
+type OrderState string
+table orders {
   id int [pk]
   status OrderState
 }
 
 // model UserLimit collides with users' generated UserLimit option wrapper
-Table user_limits { //WANT dynname
+table user_limits { //WANT dynname
   id int [pk]
 }
 
 // handle UserFooBar already belongs to users.foo_bar
-Table user_foos {
+table user_foos {
   id int [pk]
   bar int //WANT dynname
 }
 
 // model UserFooBar (the singular of user_foo_bars) collides with that
 // same users.foo_bar handle
-Table user_foo_bars { //WANT dynname
+table user_foo_bars { //WANT dynname
   id int [pk]
 }
 
 // model UserColumn collides with users' column handle type UserColumn
-Table user_columns { //WANT dynname
+table user_columns { //WANT dynname
   id int [pk]
 }
 
 // the derived model UserParam misses users' write body UserParams by a
 // letter; the pinned one collides, and a pinned name is checked like a
 // derived one
-Table user_params [model: "UserParams"] { //WANT dynname
+table user_params [model: "UserParams"] { //WANT dynname
   id int [pk]
 }
 
 // model UserChangeset, pinned, is users' changeset
-Table drafts [model: "UserChangeset"] { //WANT dynname
+table drafts [model: "UserChangeset"] { //WANT dynname
   id int [pk]
 }

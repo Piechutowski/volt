@@ -51,12 +51,12 @@ func snippetPaths(t *testing.T) []string {
 
 func TestParseFileReuseIsTheParse(t *testing.T) {
 	inserts := []string{
-		"Table zz {\n  id int [pk]\n}\n",
+		"table zz {\n  id int [pk]\n}\n",
 		"  indented\n",
 		"{\n",
 		"}\n",
 		"bare\n",
-		"Ref: a.b >\n",
+		"ref: a.b >\n",
 		"/* open\n",
 		"\"\"\"\n",
 		"// note\n",
@@ -100,20 +100,20 @@ func TestParseFileReuseIsTheParse(t *testing.T) {
 func TestParseFileReuseEdits(t *testing.T) {
 	base := `package db
 
-Type PostState string
+type PostState string
 
-Table posts {
+table posts {
   id     int [pk, increment]
   title  string
   status PostState  [default: "active"]
 }
 
-Table tags {
+table tags {
   id   int [pk, increment]
   name string    [unique]
 }
 
-Ref: tags.id > posts.id
+ref: tags.id > posts.id
 `
 	var prev *parser.Reuse
 	step := func(name, src string, wantParsed, wantReused int) {
@@ -131,10 +131,10 @@ Ref: tags.id > posts.id
 	step("first", base, 5, 0)
 	step("same", base, 0, 5)
 	step("edit tags", strings.Replace(base, "name string", "name string    [note: \"edited\"]", 1), 1, 4)
-	step("insert above", strings.Replace(base, "Table posts", "// a comment\n\nTable posts", 1), 2, 3)
+	step("insert above", strings.Replace(base, "table posts", "// a comment\n\ntable posts", 1), 2, 3)
 	step("broken posts", strings.Replace(base, "title  string", "title  string [", 1), 2, 3)
 	step("fixed", base, 1, 4)
-	step("append", base+"\nTable extra {\n  id int [pk]\n}\n", 2, 4)
+	step("append", base+"\ntable extra {\n  id int [pk]\n}\n", 2, 4)
 	step("whole rewrite", strings.ReplaceAll(base, "  ", "\t"), 3, 2)
 }
 

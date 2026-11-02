@@ -1,18 +1,18 @@
 // spec: §migrations, every operation of a migration body, in both forms, with every migration setting
 package db
 
-Table accounts {
+table accounts {
   id      int    [pk, increment]
   owner   string [unique]
   balance int    [default: 0]
 
-  Indexes {
+  indexes {
     balance [where: `balance > 0`]
     (`lower(owner)`) [name: "idx_accounts_owner_ci"]
   }
 }
 
-Migration 0001__create_accounts {
+migration 0001__create_accounts {
   create table ledgers {
     id    int    [pk, increment]
     owner string [index]
@@ -29,13 +29,13 @@ Migration 0001__create_accounts {
   exec `INSERT INTO accounts (owner) VALUES ('root')` [down: `DELETE FROM accounts WHERE owner = 'root'`]
 }
 
-Migration 0002__accounts_rebuild [irreversible] {
+migration 0002__accounts_rebuild [irreversible] {
   rebuild table accounts {
     id      int    [pk, increment]
     owner   string [unique]
     balance int    [default: 0, from: `balance * 100`]
 
-    Indexes {
+    indexes {
       balance [where: `balance > 0`]
       (`lower(owner)`) [name: "idx_accounts_owner_ci"]
     }
@@ -43,13 +43,13 @@ Migration 0002__accounts_rebuild [irreversible] {
   drop table audit
 }
 
-Migration 0003__vacuum [no_transaction] {
+migration 0003__vacuum [no_transaction] {
   up {
     exec `VACUUM`
   }
 }
 
-Migration 0004__drop_scratch {
+migration 0004__drop_scratch {
   drop table scratch {
     id int [pk]
   }

@@ -6,6 +6,7 @@ package lang
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -46,13 +47,57 @@ type SelectInfo struct {
 	Binds        []string      // the Go expressions behind WhereSQL's placeholders, in order
 	OrderSQL     string        // Order as the renderer spells it; "" when none
 	Params       []SelectParam
-	Cols         []string // explicit projection, declared order (§selects-over-groups)
-	Excluded     []string // star-form exclusions (§selects-over-groups)
-	Shared       string   // shared row type name; "" unless explicit list
-	Unresolved   bool     // a column of unknown type stopped the lowering (§columns); never generated
-	UnknownCols  []string // the columns of unknown type behind Unresolved, sorted
+	Items        []naming.SelectItem // explicit projection, declared order (§selects-over-groups)
+	Group        []string            // the group: items as the statement names them (§selects-over-groups)
+	Lookup       bool                // aggregates without group:, one row (§selects-over-groups)
+	Excluded     []string            // star-form exclusions (§selects-over-groups)
+	Shared       string              // shared row type name; "" unless explicit list
+	Unresolved   bool                // a column of unknown type stopped the lowering (§columns); never generated
+	UnknownCols  []string            // the columns of unknown type behind Unresolved, sorted
+	Joins        []JoinInfo          // the relations joined, in declaration order (§selects-over-groups)
+	With         *WithInfo           // the nesting, nil when none (§selects-over-groups)
 
 	droppedParams map[string]bool
+}
+
+// JoinInfo is one join of a select (§selects-over-groups): the relation
+// joined, which is the statement's alias, the table it leads to, whether
+// it joins LEFT, and the column pairs matched, the target's own column
+// first and the joined table's second, as the relation lists them.
+type JoinInfo struct {
+	Name  string
+	Table *check.TableInfo
+	Left  bool
+	On    [][2]string
+}
+
+func relationEqual(a, b *check.RelationInfo) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Name == b.Name && a.Forward == b.Forward && a.Table == b.Table && a.Optional == b.Optional && slices.Equal(a.On, b.On)
+}
+
+// WithInfo is the nesting of a select (§selects-over-groups): the reverse
+// relation, its table, the key columns, the parent's and the child's,
+// and the Go names of the field holding the children and of the row
+// type.
+type WithInfo struct {
+	Name      string
+	Table     *check.TableInfo
+	ParentKey string
+	ChildKey  string
+	Field     string
+	RowType   string
+}
+
+// joinTarget is one join as selectCheckMemo resolves it: the relation,
+// nil when the target has none of that name or the name is ambiguous
+// (why says which), and the joined table's model.
+type joinTarget struct {
+	rel   *check.RelationInfo
+	why   string
+	model memberModel
 }
 
 func (c *checker) dataQueries(pkg *Package) {
@@ -113,7 +158,11 @@ func (c *checker) dataQueries(pkg *Package) {
 		if si := c.selectCheckMemo(sel, info, minted, memo); si != nil {
 			for _, m := range si.Members {
 				method := naming.SelectMethodName(pkg.modelOf(m), si.MethodSuffix)
-				if what, dup := pkg.plan.QueryName(method); dup {
+				what, dup := pkg.plan.QueryName(method)
+				if !dup {
+					what, dup = minted.Generated(method)
+				}
+				if dup {
 					c.errorf(sel.Name.Pos(), "selects-over-groups",
 						"select %q mints %s for table %q, which is already %s (§selects-over-groups)",
 						sel.Name.Name(), method, m.Decl.Name.Name(), what)
@@ -151,6 +200,11 @@ type selectsMemo struct {
 type selectEntry struct {
 	members []*check.TableInfo
 	models  []any
+	joins   []*check.RelationInfo
+	joined  []any
+	with    *check.RelationInfo
+	withRef any
+	whys    []string // why each join or the with resolved to no relation, the relation names last
 	preds   map[string]*ast.Pred
 	lookups []nameLookup
 	adds    []nameAdd
@@ -158,12 +212,20 @@ type selectEntry struct {
 	diags   []diag.Diagnostic
 }
 
-func (e *selectEntry) holds(members []*check.TableInfo, models []any, preds map[string]*ast.Pred, names *naming.Names) bool {
-	if len(members) != len(e.members) || len(preds) != len(e.preds) {
+func (e *selectEntry) holds(members []*check.TableInfo, models []any, joins []*check.RelationInfo, joined []any, with *check.RelationInfo, withRef any, whys []string, preds map[string]*ast.Pred, names *naming.Names) bool {
+	if len(members) != len(e.members) || len(preds) != len(e.preds) || len(joins) != len(e.joins) || !slices.Equal(whys, e.whys) {
+		return false
+	}
+	if !relationEqual(with, e.with) || withRef != e.withRef {
 		return false
 	}
 	for i, m := range members {
 		if m != e.members[i] || models[i] != e.models[i] {
+			return false
+		}
+	}
+	for i, j := range joins {
+		if !relationEqual(j, e.joins[i]) || joined[i] != e.joined[i] {
 			return false
 		}
 	}
@@ -192,13 +254,51 @@ func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *nam
 		models[i] = memberModel{model: model, fields: fields, err: err}
 		refs[i] = c.pkg.plan.ModelRef(m.Key)
 	}
+	joins := make([]joinTarget, len(sel.Joins))
+	rels := make([]*check.RelationInfo, len(sel.Joins))
+	joined := make([]any, len(sel.Joins))
+	for i, id := range sel.Joins {
+		if info.Table(sel.Target.Name()) == nil {
+			continue
+		}
+		rel, named := info.Relation(members[0].Key, id.Name())
+		if rel == nil {
+			joins[i].why = relationAmbiguity(members[0].Key, id.Name(), named)
+			continue
+		}
+		model, fields, err := c.pkg.plan.ModelFields(rel.Table.Key)
+		joins[i] = joinTarget{rel: rel, model: memberModel{model: model, fields: fields, err: err}}
+		rels[i], joined[i] = rel, c.pkg.plan.ModelRef(rel.Table.Key)
+	}
+	var with joinTarget
+	var withRel *check.RelationInfo
+	var withRef any
+	if sel.With != nil && info.Table(sel.Target.Name()) != nil {
+		rel, named := info.Relation(members[0].Key, sel.With.Name())
+		if rel == nil {
+			with.why = relationAmbiguity(members[0].Key, sel.With.Name(), named)
+		} else {
+			model, fields, err := c.pkg.plan.ModelFields(rel.Table.Key)
+			with = joinTarget{rel: rel, model: memberModel{model: model, fields: fields, err: err}}
+			withRel, withRef = rel, c.pkg.plan.ModelRef(rel.Table.Key)
+		}
+	}
 	var where []ast.PredExpr
 	if sel.Where != nil {
 		where = append(where, sel.Where)
 	}
 	preds := predsIn(where, c.pkg.Preds)
+	var relationNames []string
+	if len(sel.Joins) > 0 || sel.With != nil {
+		relationNames = info.RelationNames(members[0].Key)
+	}
+	whys := make([]string, 0, len(joins)+2)
+	for _, j := range joins {
+		whys = append(whys, j.why)
+	}
+	whys = append(whys, with.why, strings.Join(relationNames, ","))
 	if memo != nil {
-		if e := memo.prev[sel]; e != nil && e.holds(members, refs, preds, minted) {
+		if e := memo.prev[sel]; e != nil && e.holds(members, refs, rels, joined, withRel, withRef, whys, preds, minted) {
 			for _, a := range e.adds {
 				minted.Add(a.name, a.desc)
 			}
@@ -208,13 +308,13 @@ func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *nam
 			return e.si
 		}
 	}
-	si, lookups, adds, diags := selectCheck(sel, members, models, preds, minted)
+	si, lookups, adds, diags := selectCheck(sel, members, models, joins, with, relationNames, preds, minted)
 	for _, a := range adds {
 		minted.Add(a.name, a.desc)
 	}
 	c.diags = append(c.diags, diags...)
 	if memo != nil {
-		memo.next[sel] = &selectEntry{members: members, models: refs, preds: preds, lookups: lookups, adds: adds, si: si, diags: diags}
+		memo.next[sel] = &selectEntry{members: members, models: refs, joins: rels, joined: joined, with: withRel, withRef: withRef, whys: whys, preds: preds, lookups: lookups, adds: adds, si: si, diags: diags}
 		memo.Misses++
 	}
 	return si
@@ -247,11 +347,16 @@ type nameScope interface {
 }
 
 type selectLowering struct {
-	sel     *ast.Select
-	members []*check.TableInfo
-	models  []memberModel
-	preds   map[string]*ast.Pred
-	names   nameScope
+	si            *SelectInfo
+	with          joinTarget
+	goFields      map[string]string // the Go fields projected so far, by name
+	joins         []joinTarget
+	relationNames string // the target table's relations, for the join diagnostics
+	sel           *ast.Select
+	members       []*check.TableInfo
+	models        []memberModel
+	preds         map[string]*ast.Pred
+	names         nameScope
 
 	lookups []nameLookup
 	adds    []nameAdd
@@ -498,6 +603,7 @@ type colBinding struct {
 	storageGo string
 	class     typeClass
 	storage   typeClass
+	nullable  bool
 }
 
 func (b *colBinding) litClass() typeClass {
@@ -510,8 +616,8 @@ func (b *colBinding) litClass() typeClass {
 	return b.storage
 }
 
-func selectCheck(sel *ast.Select, members []*check.TableInfo, models []memberModel, preds map[string]*ast.Pred, names nameScope) (*SelectInfo, []nameLookup, []nameAdd, []diag.Diagnostic) {
-	l := &selectLowering{sel: sel, members: members, models: models, preds: preds, names: names}
+func selectCheck(sel *ast.Select, members []*check.TableInfo, models []memberModel, joins []joinTarget, with joinTarget, relationNames []string, preds map[string]*ast.Pred, names nameScope) (*SelectInfo, []nameLookup, []nameAdd, []diag.Diagnostic) {
+	l := &selectLowering{sel: sel, members: members, models: models, joins: joins, with: with, relationNames: relationList(relationNames), preds: preds, names: names}
 	si := l.check()
 	return si, l.lookups, l.adds, l.diags
 }
@@ -519,6 +625,7 @@ func selectCheck(sel *ast.Select, members []*check.TableInfo, models []memberMod
 func (l *selectLowering) check() *SelectInfo {
 	sel := l.sel
 	si := &SelectInfo{Decl: sel, Members: l.members}
+	l.si = si
 
 	suffix, err := naming.GoName(sel.Name.Name())
 	if err != nil {
@@ -531,18 +638,28 @@ func (l *selectLowering) check() *SelectInfo {
 		return nil
 	}
 
-	if sel.Projected() && !l.projectionCheck(si) {
+	if !l.joinsCheck(si) {
 		return nil
 	}
-	l.keptUnknown()
-
 	env := &selectEnv{
 		l:       l,
 		sel:     sel,
 		members: si.Members,
+		joins:   si.Joins,
 		cols:    map[string]*colBinding{},
 		params:  map[string]*SelectParam{},
+		aliases: map[string]*ast.ProjItem{},
 	}
+	if len(si.Joins) > 0 {
+		env.base = si.Members[0].Key
+	}
+	if sel.Projected() && !l.projectionCheck(si, env) {
+		return nil
+	}
+	if !l.withCheck(si) {
+		return nil
+	}
+	l.keptUnknown()
 
 	var where rt.GenPred
 	if sel.Where != nil {
@@ -552,6 +669,15 @@ func (l *selectLowering) check() *SelectInfo {
 
 	order := l.selectSettings(env)
 	if env.failed {
+		return nil
+	}
+	for _, it := range si.Items {
+		if it.Aggregate() && si.Group == nil {
+			si.Lookup = true
+		}
+	}
+	if si.Lookup && len(order) > 0 {
+		l.errorf(sel.Settings.Get("order").Pos(), "select %q aggregates without group:, so it yields one row, which order: cannot sort (§selects-over-groups)", sel.Name.Name())
 		return nil
 	}
 	if len(l.unknown) > 0 {
@@ -587,7 +713,191 @@ var crudMethodSuffixes = map[string]bool{
 	"Changeset": true, "Column": true, "Params": true, "New": true,
 }
 
-func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
+// joinsCheck resolves the select's joins (§selects-over-groups):
+// relations of a table target, each once, under an explicit projection.
+func (l *selectLowering) joinsCheck(si *SelectInfo) bool {
+	sel := l.sel
+	if len(sel.Joins) == 0 {
+		return true
+	}
+	if len(l.members) != 1 || l.members[0].Key != sel.Target.Name() {
+		l.errorf(sel.Joins[0].Pos(), "join needs a table: %q is a group, and a group has no relations (§selects-over-groups)", sel.Target.Name())
+		return false
+	}
+	target := l.members[0]
+	seen := map[string]bool{}
+	for i, id := range sel.Joins {
+		name := id.Name()
+		jt := l.joins[i]
+		if jt.rel == nil {
+			if jt.why != "" {
+				l.errorf(id.Pos(), "%s (§relationships-ref, §selects-over-groups)", jt.why)
+				return false
+			}
+			l.errorf(id.Pos(), "table %q has no relation %q to join; its relations: %s (§selects-over-groups, §relationships-ref)", target.Key, name, l.relationNames)
+			return false
+		}
+		if seen[name] {
+			l.errorf(id.Pos(), "relation %q is joined twice (§selects-over-groups)", name)
+			return false
+		}
+		seen[name] = true
+		if jt.model.err != nil {
+			l.errorf(id.Pos(), "select %q: %v (§selects-over-groups)", sel.Name.Name(), jt.model.err)
+			return false
+		}
+		si.Joins = append(si.Joins, JoinInfo{Name: name, Table: jt.rel.Table, Left: jt.rel.Optional, On: jt.rel.On})
+	}
+	if !sel.Projected() || sel.Star {
+		l.errorf(sel.Name.Pos(), "select %q joins, so it lists the columns it projects, its own and the joined relations' as relation.column (§selects-over-groups)", sel.Name.Name())
+		return false
+	}
+	return true
+}
+
+// relationAmbiguity says why a relation name cannot be joined (spec
+// §relationships-ref): "" when the table simply has none.
+func relationAmbiguity(table, name string, named []*check.RelationInfo) string {
+	if len(named) == 0 {
+		return ""
+	}
+	parts := make([]string, len(named))
+	for i, r := range named {
+		fix := "reverse"
+		if r.Forward {
+			fix = "as"
+		}
+		parts[i] = fmt.Sprintf("the %s relation to %q (at %s; name it with [%s: name] on a ref element)", r.Side(), r.Table.Key, r.Pos, fix)
+	}
+	if strings.EqualFold(name, table) {
+		return fmt.Sprintf("relation %q of table %q takes the table's own name, which the join's alias needs, read as SQLite reads it, without regard to case: it is %s", name, table, strings.Join(parts, " and "))
+	}
+	return fmt.Sprintf("relation %q of table %q is ambiguous, read as SQLite reads an alias, without regard to case: it is %s", name, table, strings.Join(parts, " and "))
+}
+
+// withCheck resolves the select's with (spec §selects-over-groups): a
+// reverse relation of a table target over one key, which the parent row
+// carries, under no aggregate; it mints the row type, shared with any
+// select that nests the same relation under the same parent row type.
+func (l *selectLowering) withCheck(si *SelectInfo) bool {
+	sel := l.sel
+	if sel.With == nil {
+		return true
+	}
+	id := sel.With
+	name := id.Name()
+	if len(l.members) != 1 || l.members[0].Key != sel.Target.Name() {
+		l.errorf(id.Pos(), "with needs a table: %q is a group, and a group has no relations (§selects-over-groups)", sel.Target.Name())
+		return false
+	}
+	target := l.members[0]
+	wt := l.with
+	if wt.rel == nil {
+		if wt.why != "" {
+			l.errorf(id.Pos(), "%s (§relationships-ref, §selects-over-groups)", wt.why)
+			return false
+		}
+		l.errorf(id.Pos(), "table %q has no relation %q to nest; its relations: %s (§selects-over-groups, §relationships-ref)", target.Key, name, l.relationNames)
+		return false
+	}
+	if wt.rel.Forward {
+		l.errorf(id.Pos(), "with takes a reverse relation, the rows that refer to each parent; %q leads to the one row %s refers to, which join reaches (§selects-over-groups)", name, target.Key)
+		return false
+	}
+	if len(wt.rel.On) != 1 {
+		l.errorf(id.Pos(), "with takes a relation over one key column; %q matches %d (§selects-over-groups)", name, len(wt.rel.On))
+		return false
+	}
+	if wt.model.err != nil {
+		l.errorf(id.Pos(), "select %q: %v (§selects-over-groups)", sel.Name.Name(), wt.model.err)
+		return false
+	}
+	for _, it := range si.Items {
+		if it.Aggregate() {
+			l.errorf(id.Pos(), "with nests rows under each parent row, and an aggregate yields none to nest under (§selects-over-groups)")
+			return false
+		}
+	}
+	parentKey, childKey := wt.rel.On[0][0], wt.rel.On[0][1]
+	if cd := target.Column(parentKey); cd != nil {
+		switch {
+		case cd.Nullable:
+			l.errorf(id.Pos(), "with %s matches the parent's %q, which carries null; a NULL key matches no child, so the key is a column that is never NULL (§selects-over-groups)", name, parentKey)
+			return false
+		case cd.Type.Known() && (cd.Type.Storage == "time.Time" || cd.Type.Storage == "[]byte"):
+			l.errorf(id.Pos(), "with %s matches the parent's %q (%s), whose keys cannot travel as one JSON list, as a list parameter cannot (§selects-over-groups, §predicates)", name, parentKey, cd.Col.Type.String())
+			return false
+		}
+	}
+	excluded := map[string]bool{}
+	for _, cr := range sel.Cols {
+		excluded[cr.String()] = true
+	}
+	if sel.Projected() {
+		carried := sel.Star && !excluded[parentKey]
+		for _, item := range sel.Items {
+			if !item.Derived() && item.Col.Qual == nil && item.Col.Name.Name() == parentKey {
+				carried = true
+			}
+		}
+		if !carried {
+			l.errorf(id.Pos(), "with %s matches the parent's %q, which the projection must carry as a bare column (§selects-over-groups)", name, parentKey)
+			return false
+		}
+	}
+	field, err := naming.GoName(name)
+	if err != nil {
+		l.errorf(id.Pos(), "relation %q does not map to a Go name: %v (§relationships-ref)", name, err)
+		return false
+	}
+	collides := l.goFields[field] != ""
+	if !sel.Projected() || sel.Star {
+		for _, f := range l.models[0].fields {
+			if f.Name == field && !excluded[f.Col] {
+				collides = true
+			}
+		}
+	}
+	if collides {
+		l.errorf(id.Pos(), "the parent row's field %s and the children's field, named after %q, collide (§selects-over-groups)", field, name)
+		return false
+	}
+	parentRow := l.models[0].model
+	switch {
+	case si.Shared != "":
+		parentRow = si.Shared
+	case sel.Star:
+		parentRow = l.models[0].model + si.MethodSuffix + "Row"
+	}
+	rowType := parentRow + "With" + field
+	desc := fmt.Sprintf("the nested row type of %s with %s", parentRow, name)
+	if prev, dup := l.lookup(rowType); dup && prev != desc {
+		l.errorf(sel.Name.Pos(), "select %q mints the row type %s, which collides with %s (§selects-over-groups)", sel.Name.Name(), rowType, prev)
+		return false
+	} else if !dup {
+		l.add(rowType, desc)
+	}
+	si.With = &WithInfo{Name: name, Table: wt.rel.Table, ParentKey: parentKey, ChildKey: childKey, Field: field, RowType: rowType}
+	return true
+}
+
+func relationList(names []string) string {
+	if len(names) == 0 {
+		return "none"
+	}
+	return strings.Join(names, ", ")
+}
+
+func (l *selectLowering) join(name string) *joinTarget {
+	for i, id := range l.sel.Joins {
+		if id.Name() == name && l.joins[i].rel != nil {
+			return &l.joins[i]
+		}
+	}
+	return nil
+}
+
+func (l *selectLowering) projectionCheck(si *SelectInfo, env *selectEnv) bool {
 	sel := l.sel
 	type memberFields struct {
 		ti     *check.TableInfo
@@ -611,14 +921,70 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 
 	ok := true
 	seen := map[string]bool{}
-	for _, id := range sel.Cols {
-		name := id.Name()
+	l.goFields = map[string]string{}
+	for _, item := range sel.Items {
+		if item.Derived() {
+			name := item.As.Name()
+			if seen[name] {
+				l.errorf(item.As.Pos(), "%q appears twice in the projection (§selects-over-groups)", name)
+				ok = false
+				continue
+			}
+			seen[name] = true
+			it, good := l.deriveItem(si, env, item)
+			if !good {
+				ok = false
+				continue
+			}
+			si.Items = append(si.Items, it)
+			continue
+		}
+		cr := item.Col
+		name := cr.String()
 		if seen[name] {
-			l.errorf(id.Pos(), "column %q appears twice in the projection (§selects-over-groups)", name)
+			l.errorf(cr.Pos(), "column %q appears twice in the projection (§selects-over-groups)", name)
 			ok = false
 			continue
 		}
 		seen[name] = true
+		si.Items = append(si.Items, naming.SelectItem{Col: name})
+		if cr.Qual != nil {
+			jt := l.join(cr.Qual.Name())
+			switch {
+			case len(si.Joins) == 0:
+				l.errorf(cr.Pos(), "%s names a column of a relation, and the select joins none (§selects-over-groups)", name)
+				ok = false
+			case jt == nil:
+				l.errorf(cr.Qual.Pos(), "%q is no joined relation of this select; joined: %s (§selects-over-groups)", cr.Qual.Name(), joinList(sel))
+				ok = false
+			default:
+				f, has := fieldByCol(jt.model.fields, cr.Name.Name())
+				if !has {
+					l.errorf(cr.Name.Pos(), "table %q, joined as %q, has no column %q (§selects-over-groups)", jt.rel.Table.Key, cr.Qual.Name(), cr.Name.Name())
+					ok = false
+					continue
+				}
+				if cd := jt.rel.Table.Column(cr.Name.Name()); cd != nil && !cd.Type.Known() {
+					l.unknownAdd(name)
+					continue
+				}
+				prefix, err := naming.GoName(cr.Qual.Name())
+				if err != nil {
+					l.errorf(cr.Qual.Pos(), "relation %q does not map to a Go name: %v (§relationships-ref)", cr.Qual.Name(), err)
+					ok = false
+					continue
+				}
+				if !l.fieldOnce(cr.Pos(), name, prefix+f.Name) {
+					ok = false
+				}
+			}
+			continue
+		}
+		id := cr.Name
+		if f, has := members[0].byCol[id.Name()]; has && !l.fieldOnce(cr.Pos(), name, f.Name) {
+			ok = false
+			continue
+		}
 
 		var missing []string
 		types := map[string][]string{}
@@ -628,7 +994,7 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 				missing = append(missing, mf.ti.Decl.Name.Name())
 				continue
 			}
-			if cd := mf.ti.Column(name); !sel.Star && cd != nil && !cd.Type.Known() {
+			if cd := mf.ti.Column(name); cd != nil && !cd.Type.Known() {
 				l.unknownAdd(name)
 				continue
 			}
@@ -640,7 +1006,7 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 			ok = false
 			continue
 		}
-		if !sel.Star && len(types) > 1 {
+		if len(types) > 1 {
 			var goTypes []string
 			for t := range types {
 				goTypes = append(goTypes, t)
@@ -657,17 +1023,31 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 			continue
 		}
 	}
+	for _, cr := range sel.Cols {
+		name := cr.String()
+		if seen[name] {
+			l.errorf(cr.Pos(), "column %q appears twice in the projection (§selects-over-groups)", name)
+			ok = false
+			continue
+		}
+		seen[name] = true
+		var missing []string
+		for _, mf := range members {
+			if _, has := mf.byCol[name]; !has {
+				missing = append(missing, mf.ti.Decl.Name.Name())
+			}
+		}
+		if len(missing) > 0 {
+			l.errorf(cr.Pos(), "column %q is missing from %s — every member of %q must have it (§selects-over-groups)",
+				name, tableList(missing), sel.Target.Name())
+			ok = false
+		}
+	}
 	if !ok {
 		return false
 	}
 
-	cols := make([]string, len(sel.Cols))
-	for i, id := range sel.Cols {
-		cols[i] = id.Name()
-	}
-
 	if !sel.Star {
-		si.Cols = cols
 		si.Shared = si.MethodSuffix
 		if prev, dup := l.lookup(si.Shared); dup {
 			l.errorf(sel.Name.Pos(), "select %q mints the shared row type %s, which collides with %s (§selects-over-groups)",
@@ -687,6 +1067,10 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 		return true
 	}
 
+	cols := make([]string, len(sel.Cols))
+	for i, cr := range sel.Cols {
+		cols[i] = cr.String()
+	}
 	si.Excluded = cols
 	for _, mf := range members {
 		kept := 0
@@ -716,14 +1100,203 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 	return true
 }
 
+// fieldOnce records a projected item's Go field (spec
+// §selects-over-groups): two items with one field are an error.
+func (l *selectLowering) fieldOnce(pos token.Position, written, goField string) bool {
+	if prev, dup := l.goFields[goField]; dup {
+		l.errorf(pos, "columns %s and %s both map to the Go field %s (§selects-over-groups)", prev, written, goField)
+		return false
+	}
+	l.goFields[goField] = written
+	return true
+}
+
+// deriveItem lowers an aggregate or an arithmetic item (spec
+// §selects-over-groups): its alias, its Go type and the renderer's item.
+func (l *selectLowering) deriveItem(si *SelectInfo, env *selectEnv, item *ast.ProjItem) (naming.SelectItem, bool) {
+	alias := item.As.Name()
+	goField, err := naming.GoName(alias)
+	if err != nil || alias[0] < 'a' || alias[0] > 'z' {
+		l.errorf(item.As.Pos(), "alias %q is not a lower-case identifier that maps to a Go name (§selects-over-groups)", alias)
+		return naming.SelectItem{}, false
+	}
+	for _, m := range l.members {
+		if m.Column(alias) != nil {
+			l.errorf(item.As.Pos(), "alias %q names a column of %q; an alias names no column of the target or of a joined table, which SQLite would group by instead (§selects-over-groups)", alias, m.Key)
+			return naming.SelectItem{}, false
+		}
+	}
+	for _, j := range si.Joins {
+		if j.Table.Column(alias) != nil {
+			l.errorf(item.As.Pos(), "alias %q names a column of %q, joined as %q; an alias names no column of the target or of a joined table, which SQLite would group by instead (§selects-over-groups)", alias, j.Table.Key, j.Name)
+			return naming.SelectItem{}, false
+		}
+	}
+	if !l.fieldOnce(item.As.Pos(), alias, goField) {
+		return naming.SelectItem{}, false
+	}
+	env.aliases[alias] = item
+	it := naming.SelectItem{Alias: alias}
+	nullable := false
+	if item.Agg != nil {
+		it.Agg = item.Agg.Name()
+		var b *colBinding
+		if item.Col != nil {
+			var unknown bool
+			b, unknown = env.columnBind(item.Col)
+			if b == nil {
+				return it, unknown
+			}
+			it.Col = item.Col.String()
+			nullable = b.nullable
+		}
+		switch it.Agg {
+		case "count":
+			it.GoType = "int"
+			nullable = false
+		case "sum", "avg":
+			if b.class != classNumeric {
+				l.errorf(item.Col.Pos(), "%s takes a numeric column; %q is %s (§selects-over-groups)", it.Agg, b.name, b.goType)
+				return it, false
+			}
+			it.GoType = b.goType
+			if it.Agg == "avg" {
+				it.GoType = "float64"
+			}
+		default:
+			if b.class != classNumeric && b.class != classTime && b.class != classText {
+				l.errorf(item.Col.Pos(), "%s takes a numeric, date/time or text column; %q is %s (§selects-over-groups)", it.Agg, b.name, b.goType)
+				return it, false
+			}
+			it.GoType = b.goType
+		}
+		if it.Agg != "count" && !si.hasGroup() {
+			nullable = true
+		}
+	} else if cr, renamed := item.Expr.(*ast.ColRef); renamed {
+		b, unknown := env.columnBind(cr)
+		if b == nil {
+			return it, unknown
+		}
+		it.Col, it.Expr, it.GoType, nullable = cr.String(), rt.ExprCol(b.name), b.goType, b.nullable
+	} else {
+		var cols []*colBinding
+		unknown := false
+		for _, cr := range arithCols(item.Expr, nil) {
+			b, u := env.columnBind(cr)
+			if u {
+				unknown = true
+			}
+			if b != nil {
+				cols = append(cols, b)
+			}
+		}
+		if unknown {
+			return it, true
+		}
+		if len(cols) == 0 {
+			l.errorf(item.Expr.Pos(), "an expression names a column, which types it (§selects-over-groups)")
+			return it, false
+		}
+		typ := cols[0]
+		for _, b := range cols {
+			if b.class != classNumeric {
+				l.errorf(item.Expr.Pos(), "arithmetic takes numeric columns; %q is %s (§selects-over-groups)", b.name, b.goType)
+				return it, false
+			}
+			if b.goType != typ.goType {
+				l.errorf(item.Expr.Pos(), "an expression has one type: %q is %s and %q is %s (§selects-over-groups)", typ.name, typ.goType, b.name, b.goType)
+				return it, false
+			}
+			if b.nullable {
+				nullable = true
+			}
+		}
+		expr, good := env.arithLower(item.Expr, typ)
+		if !good {
+			return it, false
+		}
+		it.Expr, it.GoType = expr, typ.goType
+	}
+	if nullable {
+		it.GoType = "rt.Null[" + it.GoType + "]"
+	}
+	return it, true
+}
+
+func (si *SelectInfo) hasGroup() bool {
+	if si.Decl.Settings == nil {
+		return false
+	}
+	return si.Decl.Settings.Get("group") != nil
+}
+
+func arithCols(x ast.ArithExpr, acc []*ast.ColRef) []*ast.ColRef {
+	switch x := x.(type) {
+	case *ast.ColRef:
+		return append(acc, x)
+	case *ast.ArithBinary:
+		return arithCols(x.Y, arithCols(x.X, acc))
+	case *ast.ArithParen:
+		return arithCols(x.X, acc)
+	}
+	return acc
+}
+
+// arithLower builds the renderer's expression (spec
+// §selects-over-groups): columns by their bound names, literals
+// representable in the expression's storage type and parameters of its
+// Go type as slots.
+func (e *selectEnv) arithLower(x ast.ArithExpr, typ *colBinding) (rt.Expr, bool) {
+	switch x := x.(type) {
+	case *ast.ColRef:
+		b, _ := e.columnBind(x)
+		if b == nil {
+			return rt.Expr{}, false
+		}
+		return rt.ExprCol(b.name), true
+	case *ast.Lit:
+		if x.Tok.Kind != token.NUMBER {
+			e.errorf(x.Pos(), "arithmetic takes numbers; found %s (§selects-over-groups)", x.String())
+			return rt.Expr{}, false
+		}
+		slot, err := numberGo(x.Tok.Val, typ.storageGo)
+		if err != nil {
+			e.errorf(x.Pos(), "literal %s does not fit %s, the type of the expression (§selects-over-groups)", x.Tok.Val, typ.storageGo)
+			return rt.Expr{}, false
+		}
+		return rt.ExprVal(slot), true
+	case *ast.Param:
+		return rt.ExprVal(e.paramBind(x, typ.goType)), true
+	case *ast.ArithParen:
+		return e.arithLower(x.X, typ)
+	case *ast.ArithBinary:
+		l, ok := e.arithLower(x.X, typ)
+		if !ok {
+			return rt.Expr{}, false
+		}
+		r, ok := e.arithLower(x.Y, typ)
+		if !ok {
+			return rt.Expr{}, false
+		}
+		expr, err := rt.ExprBin(x.Op, l, r)
+		if err != nil {
+			e.errorf(x.Pos(), "%v (§selects-over-groups)", err)
+			return rt.Expr{}, false
+		}
+		return expr, true
+	}
+	return rt.Expr{}, false
+}
+
 func (l *selectLowering) keptUnknown() {
 	sel := l.sel
 	if sel.Projected() && !sel.Star {
 		return
 	}
 	excluded := map[string]bool{}
-	for _, id := range sel.Cols {
-		excluded[id.Name()] = true
+	for _, cr := range sel.Cols {
+		excluded[cr.String()] = true
 	}
 	for _, m := range l.members {
 		for _, cd := range m.Columns {
@@ -740,13 +1313,15 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 		return nil
 	}
 	var terms []rt.GenOrder
-	repeated, dupDiags := settingsRepeated(sel.Settings, "order")
+	repeated, dupDiags := settingsRepeated(sel.Settings, "order", "group")
 	l.diags = append(l.diags, dupDiags...)
 	for _, s := range sel.Settings.Settings {
 		if repeated[s] {
 			continue
 		}
 		switch s.Name {
+		case "group":
+			l.groupSetting(env, s)
 		case "order":
 			list, ok := s.Value.(*ast.IdentList)
 			if !ok {
@@ -755,11 +1330,18 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 			}
 			seenOrder := map[string]bool{}
 			for i, id := range list.Names {
-				b, unknown := env.columnBind(id)
+				cr := &ast.ColRef{Qual: list.Quals[i], Name: id}
+				var b *colBinding
+				var unknown bool
+				if item, isAlias := env.aliases[id.Name()]; isAlias && cr.Qual == nil {
+					b = env.aliasBinding(item)
+				} else {
+					b, unknown = env.columnBind(cr)
+				}
 				if b == nil && !unknown {
 					continue
 				}
-				name := id.Name()
+				name := cr.String()
 				if seenOrder[name] {
 					l.errorf(id.Pos(), "column %q appears twice in order: (§selects-over-groups)", name)
 					continue
@@ -792,16 +1374,121 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 				}
 			}
 		default:
-			l.errorf(s.Pos(), "unknown select setting %q; selects take [order: (...)] (§selects-over-groups)", s.Name)
+			l.errorf(s.Pos(), "unknown select setting %q; selects take [order: (...)] and [group: (...)] (§selects-over-groups)", s.Name)
 		}
 	}
 	return terms
+}
+
+// aliasBinding is the binding an order: term takes for a derived item
+// (spec §selects-over-groups): the alias, typed as the item is.
+func (e *selectEnv) aliasBinding(item *ast.ProjItem) *colBinding {
+	alias := item.As.Name()
+	for _, it := range e.l.si.Items {
+		if it.Alias != alias {
+			continue
+		}
+		goType, _ := strings.CutPrefix(it.GoType, "rt.Null[")
+		goType = strings.TrimSuffix(goType, "]")
+		class := classForbidden
+		switch goType {
+		case "int", "float64":
+			class = classNumeric
+		case "string":
+			class = classText
+		case "time.Time":
+			class = classTime
+		default:
+			if it.Agg == "min" || it.Agg == "max" {
+				class = classEqOnly
+			}
+		}
+		return &colBinding{name: alias, goType: goType, storageGo: goType, class: class, storage: class}
+	}
+	return nil
+}
+
+// groupSetting lowers group: (spec §selects-over-groups): every
+// non-aggregate item by its name, nothing else, each once.
+func (l *selectLowering) groupSetting(env *selectEnv, s *ast.Setting) {
+	si := l.si
+	list, ok := s.Value.(*ast.IdentList)
+	if !ok {
+		l.errorf(s.Pos(), "group: takes a parenthesized list of the projected items (§selects-over-groups)")
+		return
+	}
+	if len(l.sel.Items) == 0 {
+		l.errorf(s.Pos(), "group: lists projected items, and the select projects none; list the columns it groups (§selects-over-groups)")
+		return
+	}
+	byName := map[string]int{}
+	for i, item := range l.sel.Items {
+		byName[item.Name()] = i
+	}
+	seen := map[string]bool{}
+	ok = true
+	var names []string
+	for i, id := range list.Names {
+		if list.Quals[i] != nil {
+			l.errorf(id.Pos(), "group: names an item by its name or alias; project %s.%s under an alias to group by it (§selects-over-groups)", list.Quals[i].Name(), id.Name())
+			ok = false
+			continue
+		}
+		if list.Mods[i] != nil {
+			l.errorf(list.Mods[i].Pos(), "group: entries are item names; %q does not belong after %q (§selects-over-groups)", list.Mods[i].Name(), id.Name())
+			ok = false
+			continue
+		}
+		name := id.Name()
+		idx, found := byName[name]
+		if !found {
+			l.errorf(id.Pos(), "group: names %q, which the select does not project (§selects-over-groups)", name)
+			ok = false
+			continue
+		}
+		item := l.sel.Items[idx]
+		if item.Agg != nil {
+			l.errorf(id.Pos(), "group: names the aggregate %s; a group is made of the other items (§selects-over-groups)", item.String())
+			ok = false
+			continue
+		}
+		if seen[name] {
+			l.errorf(id.Pos(), "group: names %q twice (§selects-over-groups)", name)
+			ok = false
+			continue
+		}
+		seen[name] = true
+		if item.Derived() {
+			names = append(names, name)
+			continue
+		}
+		b, _ := env.columnBind(item.Col)
+		if b == nil {
+			ok = false
+			continue
+		}
+		names = append(names, b.name)
+	}
+	for _, item := range l.sel.Items {
+		if item.Agg == nil && !seen[item.Name()] {
+			l.errorf(s.Pos(), "group: leaves out %s; every item that is not an aggregate is grouped by (§selects-over-groups)", item.String())
+			ok = false
+		}
+	}
+	if !ok || len(names) == 0 {
+		env.failed = true
+		return
+	}
+	si.Group = names
 }
 
 type selectEnv struct {
 	l         *selectLowering
 	sel       *ast.Select
 	members   []*check.TableInfo
+	joins     []JoinInfo
+	base      string // the qualifier of the target's own columns, its name, once a join is present; "" otherwise
+	aliases   map[string]*ast.ProjItem
 	cols      map[string]*colBinding
 	params    map[string]*SelectParam
 	paramList []SelectParam
@@ -814,10 +1501,64 @@ func (e *selectEnv) errorf(pos token.Position, format string, args ...any) {
 	e.l.errorf(pos, format, args...)
 }
 
-func (e *selectEnv) columnBind(id *ast.Ident) (b *colBinding, unknown bool) {
-	name := id.Name()
-	if b, done := e.cols[name]; done {
+func (e *selectEnv) join(name string) *JoinInfo {
+	for i := range e.joins {
+		if e.joins[i].Name == name {
+			return &e.joins[i]
+		}
+	}
+	return nil
+}
+
+func joinList(sel *ast.Select) string {
+	names := make([]string, len(sel.Joins))
+	for i, id := range sel.Joins {
+		names[i] = id.Name()
+	}
+	return strings.Join(names, ", ")
+}
+
+func fieldByCol(fields []naming.FieldSig, col string) (naming.FieldSig, bool) {
+	for _, f := range fields {
+		if f.Col == col {
+			return f, true
+		}
+	}
+	return naming.FieldSig{}, false
+}
+
+// columnBind resolves a column reference in the select's environment
+// (§predicates): a bare name over every member, a qualified one
+// over the joined relation's table; the binding's name is what the
+// statement spells, qualified once a join is present.
+func (e *selectEnv) columnBind(cr *ast.ColRef) (b *colBinding, unknown bool) {
+	written := cr.String()
+	if b, done := e.cols[written]; done {
 		return b, false
+	}
+	id := cr.Name
+	name := id.Name()
+	tables, sqlName := e.members, name
+	leftJoined := false
+	if e.base != "" {
+		sqlName = e.base + "." + name
+	}
+	if cr.Qual != nil {
+		j := e.join(cr.Qual.Name())
+		if j == nil {
+			if len(e.joins) == 0 {
+				e.errorf(cr.Pos(), "%s names a column of a relation, and the select joins none (§selects-over-groups)", written)
+			} else {
+				e.errorf(cr.Qual.Pos(), "%q is no joined relation of this select; joined: %s (§selects-over-groups)", cr.Qual.Name(), joinList(e.sel))
+			}
+			return nil, false
+		}
+		if j.Table.Column(name) == nil {
+			e.errorf(id.Pos(), "table %q, joined as %q, has no column %q (§selects-over-groups)", j.Table.Key, j.Name, name)
+			return nil, false
+		}
+		tables, sqlName = []*check.TableInfo{j.Table}, j.Name+"."+name
+		leftJoined = j.Left
 	}
 	var missing []string
 	types := map[string][]string{}
@@ -825,11 +1566,15 @@ func (e *selectEnv) columnBind(id *ast.Ident) (b *colBinding, unknown bool) {
 	var class, storage typeClass
 	var forbiddenType string
 	var storageGo string
-	for _, m := range e.members {
+	nullable := false
+	for _, m := range tables {
 		cd := m.Column(name)
 		if cd == nil {
 			missing = append(missing, m.Decl.Name.Name())
 			continue
+		}
+		if cd.Nullable {
+			nullable = true
 		}
 		declType := cd.Col.Type.String()
 		if !cd.Type.Known() {
@@ -845,8 +1590,12 @@ func (e *selectEnv) columnBind(id *ast.Ident) (b *colBinding, unknown bool) {
 		classes[class] = true
 	}
 	if len(missing) > 0 {
-		e.errorf(id.Pos(), "column %q is missing from %s — every member of %q must have it (§selects-over-groups)",
-			name, tableList(missing), e.sel.Target.Name())
+		hint := ""
+		if _, isAlias := e.aliases[name]; isAlias && cr.Qual == nil {
+			hint = "; " + name + " is an alias, which where does not see, and Volt has no having (§selects-over-groups)"
+		}
+		e.errorf(id.Pos(), "column %q is missing from %s — every member of %q must have it%s (§selects-over-groups)",
+			name, tableList(missing), e.sel.Target.Name(), hint)
 		return nil, false
 	}
 	if len(types) > 1 {
@@ -874,15 +1623,15 @@ func (e *selectEnv) columnBind(id *ast.Ident) (b *colBinding, unknown bool) {
 		return nil, false
 	}
 	if unknown {
-		e.l.unknownAdd(name)
+		e.l.unknownAdd(written)
 		return nil, true
 	}
 	var goType string
 	for t := range types {
 		goType = t
 	}
-	b = &colBinding{name: name, goType: goType, storageGo: storageGo, class: class, storage: storage}
-	e.cols[name] = b
+	b = &colBinding{name: sqlName, goType: goType, storageGo: storageGo, class: class, storage: storage, nullable: nullable || leftJoined}
+	e.cols[written] = b
 	return b, false
 }
 
@@ -913,7 +1662,7 @@ func (e *selectEnv) paramBind(p *ast.Param, goType string) string {
 		return name
 	}
 	if !goParamOK(name) {
-		e.errorf(p.Name.Pos(), "parameter name %q does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil or append, which the generated methods use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)", name)
+		e.errorf(p.Name.Pos(), "parameter name %q does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil, append, any or true, which the generated functions use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)", name)
 		return name
 	}
 	sp := SelectParam{GoName: name, GoType: goType}
@@ -1011,7 +1760,7 @@ func (e *selectEnv) compareLower(x *ast.PredCompare) rt.GenPred {
 	for _, side := range []ast.Operand{x.X, x.Y} {
 		if cr, isCol := side.(*ast.ColRef); isCol {
 			colCount++
-			bb, unknown := e.columnBind(cr.Name)
+			bb, unknown := e.columnBind(cr)
 			if bb != nil {
 				b = bb
 			}
@@ -1043,7 +1792,7 @@ func (e *selectEnv) compareLower(x *ast.PredCompare) rt.GenPred {
 	if _, isCol := left.(*ast.ColRef); !isCol {
 		left, right, op = right, left, compareFlip(op)
 	}
-	col, _ := e.columnBind(left.(*ast.ColRef).Name)
+	col, _ := e.columnBind(left.(*ast.ColRef))
 	if col == nil {
 		return rt.GenPred{}
 	}
@@ -1051,7 +1800,7 @@ func (e *selectEnv) compareLower(x *ast.PredCompare) rt.GenPred {
 	var err error
 	switch o := right.(type) {
 	case *ast.ColRef:
-		other, _ := e.columnBind(o.Name)
+		other, _ := e.columnBind(o)
 		if other == nil {
 			return rt.GenPred{}
 		}
@@ -1191,6 +1940,30 @@ func (e *selectEnv) likeLower(x *ast.PredLike) rt.GenPred {
 	return rt.GenPred{}
 }
 
+// WithFn is the select's nesting as the generator takes it, nil when
+// none (§selects-over-groups).
+func (si *SelectInfo) WithFn() *naming.SelectWith {
+	w := si.With
+	if w == nil {
+		return nil
+	}
+	return &naming.SelectWith{Name: w.Name, TableKey: w.Table.Key, ParentKey: w.ParentKey, ChildKey: w.ChildKey, Field: w.Field, RowType: w.RowType}
+}
+
+// JoinFns lists the select's joins as the generator takes them, the
+// joined table's column first in every pair (§selects-over-groups).
+func (si *SelectInfo) JoinFns() []naming.SelectJoin {
+	var out []naming.SelectJoin
+	for _, j := range si.Joins {
+		on := make([][2]string, len(j.On))
+		for k, pair := range j.On {
+			on[k] = [2]string{pair[1], pair[0]}
+		}
+		out = append(out, naming.SelectJoin{Name: j.Name, TableKey: j.Table.Key, Left: j.Left, On: on})
+	}
+	return out
+}
+
 // SelectFns lowers the package's checked selects into per-member
 // generator instructions (§selects-over-groups); an unresolved select
 // (§columns) is never lowered.
@@ -1206,9 +1979,13 @@ func (p *Package) SelectFns() []naming.SelectFn {
 				MethodSuffix: si.MethodSuffix,
 				Where:        si.Where,
 				Order:        si.Order,
-				Cols:         si.Cols,
+				Items:        si.Items,
 				Excluded:     si.Excluded,
 				SharedType:   si.Shared,
+				Joins:        si.JoinFns(),
+				Group:        si.Group,
+				Lookup:       si.Lookup,
+				With:         si.WithFn(),
 			}
 			for _, prm := range si.Params {
 				fn.Params = append(fn.Params, naming.SelectParam(prm))

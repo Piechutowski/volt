@@ -3,4 +3,4 @@
 /* block
    comment spanning
    lines */
-Table t { id int } // trailing comment
+table t { id int } // trailing comment

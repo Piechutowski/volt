@@ -2,9 +2,9 @@
 // want: does not fit int
 package db
 
-Table page_views {
+table page_views {
   id int [pk]
   hits int
 }
 
-Select big for page_views where hits > 9223372036854775808
+select big for page_views where hits > 9223372036854775808

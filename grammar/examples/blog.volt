@@ -8,16 +8,16 @@ import (
 	d2 shared/dicts
 )
 
-Pipeline api {
+pipeline api {
 	use volt.RequestID
 	use BearerAuth
 }
 
-Scope / [pipe: api, error_handler: Errors] {
+scope / [pipe: api, error_handler: Errors] {
 	get /        Home.Index [name: root]
 	any /ping    Home.Ping
 
-	Scope /admin [name: admin] {
+	scope /admin [name: admin] {
 		get /stats Admin.Stats
 	}
 

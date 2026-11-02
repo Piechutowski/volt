@@ -2,18 +2,18 @@
 // want: is not a built-in
 package db
 
-Type State string
+type State string
 
-Table users {
+table users {
   id    int   [pk]
   state State
 
-  Validators {
+  validators {
     StateKnown(state)
   }
 }
 
-Migration 0001__init {
+migration 0001__init {
   create table users {
     id    int   [pk]
     state State

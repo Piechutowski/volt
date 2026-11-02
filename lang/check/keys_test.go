@@ -27,18 +27,18 @@ func keysInfo(t *testing.T, src string) *check.Info {
 // partial injects counted at its injected position, whatever the order
 // of anything else.
 func TestPKInDeclarationOrder(t *testing.T) {
-	info := keysInfo(t, `TablePartial daily {
+	info := keysInfo(t, `table_partial daily {
   day int [pk]
 }
 
-Table site_days {
+table site_days {
   site  string [pk]
   ~daily
   views int
   slot  int    [pk]
 }
 
-Table day_sites {
+table day_sites {
   ~daily
   site string [pk]
 }
@@ -63,7 +63,7 @@ Table day_sites {
 // never one member of a composite key, a plain index, a partial unique
 // index or an expression unique index.
 func TestColumnsUnique(t *testing.T) {
-	info := keysInfo(t, `Table accounts {
+	info := keysInfo(t, `table accounts {
   region string [pk]
   slot   int    [pk]
   email  string [unique]
@@ -72,7 +72,7 @@ func TestColumnsUnique(t *testing.T) {
   team   string
   code   string
 
-  Indexes {
+  indexes {
     (login, team) [unique]
     code [unique, where: `+"`region != ''`"+`]
     (team, `+"`lower(login)`"+`) [unique, name: "idx_accounts_team_login_ci"]

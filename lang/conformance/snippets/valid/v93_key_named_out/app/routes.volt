@@ -4,7 +4,7 @@ import (
 	db
 )
 
-Scope / {
+scope / {
 	get /usage/:out(int) db.MsUsageGet
 	get /usage           db.MsUsageByErr
 }

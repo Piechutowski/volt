@@ -7,110 +7,149 @@ import (
 
 	"github.com/Piechutowski/volt"
 	"github.com/Piechutowski/volt/itest/blog/db"
+	"github.com/Piechutowski/volt/nao/run"
 )
 
-// AdminController is implemented by your code and wired through
-// Controllers; a route referencing Admin.<Action> will not build until
-// the method exists with this exact signature.
 type AdminController interface {
-	// Stats handles GET /admin/stats
-	Stats(w http.ResponseWriter, r *volt.Request) error
+	Stats(r volt.Request) volt.Response
 }
 
-// ArchiveController is implemented by your code and wired through
-// Controllers; a route referencing Archive.<Action> will not build until
-// the method exists with this exact signature.
 type ArchiveController interface {
-	// Show handles GET /archive/:stamp(int)
-	Show(w http.ResponseWriter, r *volt.Request, stamp int) error
+	Show(r volt.Request, stamp int) volt.Response
 }
 
-// FilesController is implemented by your code and wired through
-// Controllers; a route referencing Files.<Action> will not build until
-// the method exists with this exact signature.
 type FilesController interface {
-	// Serve handles GET /files/:path...
-	Serve(w http.ResponseWriter, r *volt.Request, path string) error
+	Serve(r volt.Request, path string) volt.Response
 }
 
-// HomeController is implemented by your code and wired through
-// Controllers; a route referencing Home.<Action> will not build until
-// the method exists with this exact signature.
 type HomeController interface {
-	// Index handles GET /
-	Index(w http.ResponseWriter, r *volt.Request) error
-	// Teapot handles GET /teapot
-	Teapot(w http.ResponseWriter, r *volt.Request) error
-	// Ping handles any /ping
-	Ping(w http.ResponseWriter, r *volt.Request) error
+	Index(r volt.Request) volt.Response
+	Teapot(r volt.Request) volt.Response
+	Ping(r volt.Request) volt.Response
 }
 
-// OpsController is implemented by your code and wired through
-// Controllers; a route referencing Ops.<Action> will not build until
-// the method exists with this exact signature.
+type MeController interface {
+	Show(r volt.Request, user db.User) volt.Response
+}
+
 type OpsController interface {
-	// Fail handles GET /ops/fail
-	Fail(w http.ResponseWriter, r *volt.Request) error
+	Fail(r volt.Request) volt.Response
 }
 
-// PagesController is implemented by your code and wired through
-// Controllers; a route referencing Pages.<Action> will not build until
-// the method exists with this exact signature.
 type PagesController interface {
-	// Show handles GET /pages/:num(int)
-	Show(w http.ResponseWriter, r *volt.Request, num int) error
+	Show(r volt.Request, num int) volt.Response
 }
 
-// TagsController is implemented by your code and wired through
-// Controllers; a route referencing Tags.<Action> will not build until
-// the method exists with this exact signature.
+type SessionController interface {
+	Login(r volt.Request, body LoginForm) volt.Response
+}
+
 type TagsController interface {
-	// Show handles GET /tags/:name
-	Show(w http.ResponseWriter, r *volt.Request, name string) error
+	Show(r volt.Request, name string) volt.Response
 }
 
-// UsersController is implemented by your code and wired through
-// Controllers; a route referencing Users.<Action> will not build until
-// the method exists with this exact signature.
 type UsersController interface {
-	// Index handles GET /users
-	Index(w http.ResponseWriter, r *volt.Request) error
-	// New handles GET /users/new
-	New(w http.ResponseWriter, r *volt.Request) error
-	// Create handles POST /users
-	Create(w http.ResponseWriter, r *volt.Request) error
-	// Show handles GET /users/:id(int)
-	Show(w http.ResponseWriter, r *volt.Request, id int) error
-	// Edit handles GET /users/:id(int)/edit
-	Edit(w http.ResponseWriter, r *volt.Request, id int) error
-	// Update handles PATCH /users/:id(int)
-	Update(w http.ResponseWriter, r *volt.Request, id int) error
-	// Delete handles DELETE /users/:id(int)
-	Delete(w http.ResponseWriter, r *volt.Request, id int) error
-	// Avatar handles GET /users/:id(int)/avatar
-	Avatar(w http.ResponseWriter, r *volt.Request, id int) error
+	Index(r volt.Request) volt.Response
+	New(r volt.Request) volt.Response
+	Create(r volt.Request) volt.Response
+	Show(r volt.Request, id int) volt.Response
+	Edit(r volt.Request, id int) volt.Response
+	Update(r volt.Request, id int) volt.Response
+	Delete(r volt.Request, id int) volt.Response
+	Avatar(r volt.Request, id int) volt.Response
+	Profile(r volt.Request, id int, user db.User) volt.Response
+	Card(r volt.Request, id int) volt.Response
+	ChangeEmail(r volt.Request, id int, body db.UserChangeset) volt.Response
 }
 
-// Controllers is the dependency manifest of the route table: one
-// implementation per controller named in the routes, and the
-// Queries handle of every data package query routes go through (§query-routes).
 type Controllers struct {
 	Admin   AdminController
 	Archive ArchiveController
 	Files   FilesController
 	Home    HomeController
+	Me      MeController
 	Ops     OpsController
 	Pages   PagesController
+	Session SessionController
 	Tags    TagsController
 	Users   UsersController
-	DB      *db.Queries  // query routes written db.<Method>
-	Events  *volt.Broker // event routes written volt.Events (§event-routes); nil serves nothing
+	DB      run.DB
+	Events  *volt.Broker
 }
 
-// NewRouter builds the router: ServeMux registrations with statically
-// composed pipelines. The result is a plain http.Handler.
 func NewRouter(c Controllers) http.Handler {
 	mux := http.NewServeMux()
 	register(mux, c)
 	return mux
+}
+
+func ControllersDeterministic(c Controllers, r volt.Request) []string {
+	var voltOut []string
+	if !volt.Same(c.Admin.Stats(r), c.Admin.Stats(r)) {
+		voltOut = append(voltOut, "Admin.Stats")
+	}
+	if !volt.Same(c.Archive.Show(r, 0), c.Archive.Show(r, 0)) {
+		voltOut = append(voltOut, "Archive.Show")
+	}
+	if !volt.Same(c.Files.Serve(r, ""), c.Files.Serve(r, "")) {
+		voltOut = append(voltOut, "Files.Serve")
+	}
+	if !volt.Same(c.Home.Index(r), c.Home.Index(r)) {
+		voltOut = append(voltOut, "Home.Index")
+	}
+	if !volt.Same(c.Home.Teapot(r), c.Home.Teapot(r)) {
+		voltOut = append(voltOut, "Home.Teapot")
+	}
+	if !volt.Same(c.Home.Ping(r), c.Home.Ping(r)) {
+		voltOut = append(voltOut, "Home.Ping")
+	}
+	if !volt.Same(c.Me.Show(r, *new(db.User)), c.Me.Show(r, *new(db.User))) {
+		voltOut = append(voltOut, "Me.Show")
+	}
+	if !volt.Same(c.Ops.Fail(r), c.Ops.Fail(r)) {
+		voltOut = append(voltOut, "Ops.Fail")
+	}
+	if !volt.Same(c.Pages.Show(r, 0), c.Pages.Show(r, 0)) {
+		voltOut = append(voltOut, "Pages.Show")
+	}
+	if !volt.Same(c.Session.Login(r, LoginForm{}), c.Session.Login(r, LoginForm{})) {
+		voltOut = append(voltOut, "Session.Login")
+	}
+	if !volt.Same(c.Tags.Show(r, ""), c.Tags.Show(r, "")) {
+		voltOut = append(voltOut, "Tags.Show")
+	}
+	if !volt.Same(c.Users.Index(r), c.Users.Index(r)) {
+		voltOut = append(voltOut, "Users.Index")
+	}
+	if !volt.Same(c.Users.New(r), c.Users.New(r)) {
+		voltOut = append(voltOut, "Users.New")
+	}
+	if !volt.Same(c.Users.Create(r), c.Users.Create(r)) {
+		voltOut = append(voltOut, "Users.Create")
+	}
+	if !volt.Same(c.Users.Show(r, 0), c.Users.Show(r, 0)) {
+		voltOut = append(voltOut, "Users.Show")
+	}
+	if !volt.Same(c.Users.Edit(r, 0), c.Users.Edit(r, 0)) {
+		voltOut = append(voltOut, "Users.Edit")
+	}
+	if !volt.Same(c.Users.Update(r, 0), c.Users.Update(r, 0)) {
+		voltOut = append(voltOut, "Users.Update")
+	}
+	if !volt.Same(c.Users.Delete(r, 0), c.Users.Delete(r, 0)) {
+		voltOut = append(voltOut, "Users.Delete")
+	}
+	if !volt.Same(c.Users.Avatar(r, 0), c.Users.Avatar(r, 0)) {
+		voltOut = append(voltOut, "Users.Avatar")
+	}
+	if !volt.Same(c.Users.Profile(r, 0, db.User{}), c.Users.Profile(r, 0, db.User{})) {
+		voltOut = append(voltOut, "Users.Profile")
+	}
+	if !volt.Same(c.Users.Card(r, 0), c.Users.Card(r, 0)) {
+		voltOut = append(voltOut, "Users.Card")
+	}
+	if !volt.Same(c.Users.ChangeEmail(r, 0, db.UserChangeset{}), c.Users.ChangeEmail(r, 0, db.UserChangeset{})) {
+		voltOut = append(voltOut, "Users.ChangeEmail")
+	}
+	return voltOut
 }

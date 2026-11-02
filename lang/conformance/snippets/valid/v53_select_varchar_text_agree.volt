@@ -1,19 +1,19 @@
 // spec: §selects-over-groups — agreement is judged on the Go type: varchar and text agree
 package db
 
-Table ms_revenue {
+table ms_revenue {
   id int [pk]
   org string
 }
 
-Table ms_usage {
+table ms_usage {
   id int [pk]
   org string
 }
 
-Group series {
+group series {
   ms_revenue
   ms_usage
 }
 
-Select by_org for series where org = :org
+select by_org for series where org = :org

@@ -2,16 +2,16 @@
 // want: is not a member
 package db
 
-Table ms_revenue {
+table ms_revenue {
   id int [pk]
 }
 
-Table ms_usage {
+table ms_usage {
   id int [pk]
 }
 
-Table ms_dict {
+table ms_dict {
   code string [pk]
 }
 
-Group series = (ms_revenue, ms_usage) \ (ms_usage, ms_dict)
+group series = (ms_revenue, ms_usage) \ (ms_usage, ms_dict)

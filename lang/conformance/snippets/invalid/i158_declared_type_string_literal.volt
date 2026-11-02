@@ -2,11 +2,11 @@
 // want: cannot be compared with the string
 package db
 
-Type money.Money int from "example.com/app/money"
+type money.Money int from "example.com/app/money"
 
-Table orders {
+table orders {
   id    int   [pk, increment]
   price money.Money
 }
 
-Select odd for orders where price = "x"
+select odd for orders where price = "x"

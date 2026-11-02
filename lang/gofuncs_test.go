@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/Piechutowski/volt/internal/disk"
 )
 
 func TestGoFuncsScanSkipsGenerated(t *testing.T) {
@@ -19,12 +21,12 @@ func TestGoFuncsScanSkipsGenerated(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, src := range GoSourcesRead(dir) {
+	for _, src := range GoSourcesRead(disk.Source{}, dir) {
 		if want := src.Name == "volt_models.go"; src.Head != want {
 			t.Errorf("%s read as a head: %v, want %v", src.Name, src.Head, want)
 		}
 	}
-	funcs, gotypes, broken := GoFuncsScan(dir)
+	funcs, gotypes, broken := GoFuncsScan(disk.Source{}, dir)
 	if len(broken) != 0 {
 		t.Fatalf("broken: %v", broken)
 	}

@@ -3,7 +3,6 @@ package migrate
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"errors"
 	"flag"
 	"os"
@@ -17,6 +16,7 @@ import (
 	"github.com/Piechutowski/volt/lang/parser"
 	"github.com/Piechutowski/volt/nao/gen/sqlite"
 	"github.com/Piechutowski/volt/nao/rt"
+	"github.com/Piechutowski/volt/nao/run"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -43,9 +43,9 @@ func fixture(t *testing.T) (*ast.File, *check.Info) {
 	return parseChecked(t, filepath.Base(path), string(src))
 }
 
-func memoryDB(t *testing.T) *sql.DB {
+func memoryDB(t *testing.T) run.DB {
 	t.Helper()
-	db, err := rt.Open("sqlite3", ":memory:")
+	db, err := run.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestLowerNoTransactionDisablesTheBracket(t *testing.T) {
 		{"[irreversible]", false, true},
 		{"[irreversible, no_transaction]", true, false},
 	} {
-		_, info := parseChecked(t, "t.volt", "package db\n\nTable posts {\n  id int [pk, increment]\n}\n\nMigration 0001__init "+tc.settings+" {"+body)
+		_, info := parseChecked(t, "t.volt", "package db\n\ntable posts {\n  id int [pk, increment]\n}\n\nmigration 0001__init "+tc.settings+" {"+body)
 		ms, err := Lower(info)
 		if err != nil {
 			t.Fatal(err)
@@ -139,7 +139,7 @@ func TestLowerNoTransactionDisablesTheBracket(t *testing.T) {
 // should an unchecked package reach it, the lowering's refusal naming
 // the migration.
 func TestLowerRefusesTwoIndexesOfOneName(t *testing.T) {
-	src := "package db\n\nTable posts {\n  id int [pk, increment]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null, unique]\n\n    Indexes {\n      n [where: `n > 0`]\n    }\n  }\n}\n"
+	src := "package db\n\ntable posts {\n  id int [pk, increment]\n}\n\nmigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null, unique]\n\n    indexes {\n      n [where: `n > 0`]\n    }\n  }\n}\n"
 	f, diags := parser.ParseFile("t.volt", src)
 	if diag.HasErrors(diags) {
 		t.Fatalf("test input must parse: %v", diags)
@@ -162,7 +162,7 @@ func TestLowerRefusesTwoIndexesOfOneName(t *testing.T) {
 
 func TestRebuildForgetsAnIndexNotRestated(t *testing.T) {
 	ctx := context.Background()
-	src := "package db\n\nTable posts {\n  id int [pk, increment]\n  n  int [null]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null, index]\n  }\n}\n\nMigration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id int [pk, increment]\n    n  int [null]\n  }\n}\n"
+	src := "package db\n\ntable posts {\n  id int [pk, increment]\n  n  int [null]\n}\n\nmigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null, index]\n  }\n}\n\nmigration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id int [pk, increment]\n    n  int [null]\n  }\n}\n"
 	_, info := parseChecked(t, "t.volt", src)
 	ms, err := Lower(info)
 	if err != nil {
@@ -172,10 +172,10 @@ func TestRebuildForgetsAnIndexNotRestated(t *testing.T) {
 		t.Errorf("the rebuild has %d statements, want the five steps less the indexes: 4\n%s", len(ms[1].Up), strings.Join(ms[1].Up, ";\n"))
 	}
 	db := memoryDB(t)
-	if _, err := rt.MigrateUp(ctx, db, ms); err != nil {
+	if _, err := run.MigrateUp(ctx, db, ms); err != nil {
 		t.Fatal(err)
 	}
-	s, err := Read(ctx, db)
+	s, err := Read(ctx, db.Pool())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestRebuildForgetsAnIndexNotRestated(t *testing.T) {
 // runs down and up again on a real SQLite (spec §migrations).
 func TestTypedDropOfAnIndexedColumnRoundTrips(t *testing.T) {
 	ctx := context.Background()
-	src := "package db\n\nTable accounts {\n  id int [pk]\n}\n\nMigration 0001__init {\n  create table accounts {\n    id     int    [pk]\n    email  string [null, unique]\n    region string [null, index]\n  }\n}\n\nMigration 0002__drop {\n  alter table accounts {\n    drop email string [null, unique]\n    drop region string [null, index]\n  }\n}\n"
+	src := "package db\n\ntable accounts {\n  id int [pk]\n}\n\nmigration 0001__init {\n  create table accounts {\n    id     int    [pk]\n    email  string [null, unique]\n    region string [null, index]\n  }\n}\n\nmigration 0002__drop {\n  alter table accounts {\n    drop email string [null, unique]\n    drop region string [null, index]\n  }\n}\n"
 	f, info := parseChecked(t, "t.volt", src)
 	ms, err := Lower(info)
 	if err != nil {
@@ -206,14 +206,14 @@ func TestTypedDropOfAnIndexedColumnRoundTrips(t *testing.T) {
 		t.Errorf("up of 0002:\n%s\nwant:\n%s", got, strings.Join(wantUp, ";\n"))
 	}
 	db := memoryDB(t)
-	if _, err := rt.MigrateUp(ctx, db, ms[:1]); err != nil {
+	if _, err := run.MigrateUp(ctx, db, ms[:1]); err != nil {
 		t.Fatal(err)
 	}
-	before, err := Read(ctx, db)
+	before, err := Read(ctx, db.Pool())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := rt.MigrateUp(ctx, db, ms); err != nil {
+	if _, err := run.MigrateUp(ctx, db, ms); err != nil {
 		t.Fatalf("the fold stopped: %v", err)
 	}
 	ddl, err := sqlite.Generate(f, info, sqlite.Options{Source: "t.volt"})
@@ -221,31 +221,31 @@ func TestTypedDropOfAnIndexedColumnRoundTrips(t *testing.T) {
 		t.Fatal(err)
 	}
 	targetDB := memoryDB(t)
-	if _, err := targetDB.ExecContext(ctx, string(ddl)); err != nil {
+	if _, err := targetDB.Pool().ExecContext(ctx, string(ddl)); err != nil {
 		t.Fatal(err)
 	}
-	target, err := Read(ctx, targetDB)
+	target, err := Read(ctx, targetDB.Pool())
 	if err != nil {
 		t.Fatal(err)
 	}
-	fold, err := Read(ctx, db)
+	fold, err := Read(ctx, db.Pool())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if drifts := Diff(target, fold); len(drifts) > 0 {
 		t.Errorf("the fold drifts from the schema: %+v", drifts)
 	}
-	if _, err := rt.MigrateDown(ctx, db, ms); err != nil {
+	if _, err := run.MigrateDown(ctx, db, ms); err != nil {
 		t.Fatalf("down of 0002: %v", err)
 	}
-	after, err := Read(ctx, db)
+	after, err := Read(ctx, db.Pool())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if drifts := Diff(before, after); len(drifts) > 0 {
 		t.Errorf("down of 0002 left another structure than 0001 made: %+v", drifts)
 	}
-	if _, err := rt.MigrateUp(ctx, db, ms); err != nil {
+	if _, err := run.MigrateUp(ctx, db, ms); err != nil {
 		t.Fatalf("up again: %v", err)
 	}
 }
@@ -257,22 +257,22 @@ func TestTypedDropOfAnIndexedColumnRoundTrips(t *testing.T) {
 // the rebuild.
 func TestRebuildUnderAViewOrTriggerFailsAtTheRename(t *testing.T) {
 	ctx := context.Background()
-	const schema = "package db\n\nTable posts {\n  id    int    [pk, increment]\n  title string\n}\n\nTable comments {\n  id      int [pk, increment]\n  post_id int\n}\n\n"
+	const schema = "package db\n\ntable posts {\n  id    int    [pk, increment]\n  title string\n}\n\ntable comments {\n  id      int [pk, increment]\n  post_id int\n}\n\n"
 	const tables = "  create table posts {\n    id    int [pk, increment]\n    title string [null]\n  }\n  create table comments {\n    id      int [pk, increment]\n    post_id int\n  }\n"
-	const rebuild = "Migration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id    int    [pk, increment]\n    title string [default: \"\"]\n  }\n}\n"
+	const rebuild = "migration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id    int    [pk, increment]\n    title string [default: \"\"]\n  }\n}\n"
 	cases := []struct{ object, exec string }{
 		{"view post_titles", "exec `CREATE VIEW post_titles AS SELECT title FROM posts` [down: `DROP VIEW post_titles`]"},
 		{"trigger comments_touch_posts", "exec `CREATE TRIGGER comments_touch_posts AFTER INSERT ON comments BEGIN UPDATE posts SET title = title WHERE id = NEW.post_id; END` [down: `DROP TRIGGER comments_touch_posts`]"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.object, func(t *testing.T) {
-			_, info := parseChecked(t, "t.volt", schema+"Migration 0001__init {\n"+tables+"  "+tc.exec+"\n}\n\n"+rebuild)
+			_, info := parseChecked(t, "t.volt", schema+"migration 0001__init {\n"+tables+"  "+tc.exec+"\n}\n\n"+rebuild)
 			ms, err := Lower(info)
 			if err != nil {
 				t.Fatal(err)
 			}
 			db := memoryDB(t)
-			applied, err := rt.MigrateUp(ctx, db, ms)
+			applied, err := run.MigrateUp(ctx, db, ms)
 			if err == nil {
 				t.Fatalf("a rebuild under a %s ran through", tc.object)
 			}
@@ -307,7 +307,7 @@ func TestFoldMatchesTheSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	foldDB := memoryDB(t)
-	if _, err := rt.MigrateUp(ctx, foldDB, ms); err != nil {
+	if _, err := run.MigrateUp(ctx, foldDB, ms); err != nil {
 		t.Fatalf("the fold stopped: %v", err)
 	}
 	ddl, err := sqlite.Generate(f, info, sqlite.Options{Source: "blog.volt"})
@@ -315,14 +315,14 @@ func TestFoldMatchesTheSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	targetDB := memoryDB(t)
-	if _, err := targetDB.ExecContext(ctx, string(ddl)); err != nil {
+	if _, err := targetDB.Pool().ExecContext(ctx, string(ddl)); err != nil {
 		t.Fatalf("schema DDL: %v", err)
 	}
-	fold, err := Read(ctx, foldDB)
+	fold, err := Read(ctx, foldDB.Pool())
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := Read(ctx, targetDB)
+	target, err := Read(ctx, targetDB.Pool())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,12 +335,12 @@ func TestFoldMatchesTheSchema(t *testing.T) {
 		t.Errorf("%d tables read, want 4", len(target.Tables))
 	}
 	for _, want := range []string{"0006__nicknames_and_details", "0005__comments_flagged"} {
-		name, err := rt.MigrateDown(ctx, foldDB, ms)
+		name, err := run.MigrateDown(ctx, foldDB, ms)
 		if err != nil || name != want {
 			t.Fatalf("down: %q %v, want %s", name, err, want)
 		}
 	}
-	_, err = rt.MigrateDown(ctx, foldDB, ms)
+	_, err = run.MigrateDown(ctx, foldDB, ms)
 	if err == nil || !strings.Contains(err.Error(), "0004__vacuum") {
 		t.Fatalf("down over the irreversible 0004: %v", err)
 	}
@@ -355,29 +355,29 @@ func TestReversibleFlatBodyRoundTrips(t *testing.T) {
 	}
 	db := memoryDB(t)
 	first := ms[:2]
-	if _, err := rt.MigrateUp(ctx, db, first); err != nil {
+	if _, err := run.MigrateUp(ctx, db, first); err != nil {
 		t.Fatal(err)
 	}
-	before, err := Read(ctx, db)
+	before, err := Read(ctx, db.Pool())
 	if err != nil {
 		t.Fatal(err)
 	}
 	for range first {
-		if _, err := rt.MigrateDown(ctx, db, first); err != nil {
+		if _, err := run.MigrateDown(ctx, db, first); err != nil {
 			t.Fatal(err)
 		}
 	}
-	empty, err := Read(ctx, db)
+	empty, err := Read(ctx, db.Pool())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(empty.Tables) != 0 {
 		t.Errorf("after down of every reversible migration: %d tables left", len(empty.Tables))
 	}
-	if _, err := rt.MigrateUp(ctx, db, first); err != nil {
+	if _, err := run.MigrateUp(ctx, db, first); err != nil {
 		t.Fatal(err)
 	}
-	after, err := Read(ctx, db)
+	after, err := Read(ctx, db.Pool())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -390,21 +390,21 @@ func TestReversibleFlatBodyRoundTrips(t *testing.T) {
 func TestLowerRebuildSources(t *testing.T) {
 	src := `package db
 
-Table users {
+table users {
   id    int    [pk, increment]
   email string
   hits  int    [default: 0]
   note  string [null]
 }
 
-Migration 0001__init {
+migration 0001__init {
   create table users {
     id   int    [pk, increment]
     mail string
   }
 }
 
-Migration 0002__rebuild [irreversible] {
+migration 0002__rebuild [irreversible] {
   rebuild table users {
     id    int    [pk, increment]
     email string [from: ` + "`mail`" + `]
@@ -436,13 +436,13 @@ Migration 0002__rebuild [irreversible] {
 func TestLowerRebuildSourcesOfAnUnknownTable(t *testing.T) {
 	src := `package db
 
-Table users {
+table users {
   id   int    [pk, increment]
   hits int    [default: 0]
   note string [null]
 }
 
-Migration 0001__rebuild [irreversible] {
+migration 0001__rebuild [irreversible] {
   rebuild table users {
     id   int    [pk, increment]
     hits int    [default: 0]
@@ -465,7 +465,7 @@ Migration 0001__rebuild [irreversible] {
 // int [pk, increment] column the old table lacks, the one NOT NULL
 // column the checker admits without a source (spec §migrations).
 func TestLowerRebuildIntroducingARowidAlias(t *testing.T) {
-	src := "package db\n\nTable posts {\n  id int [pk, increment]\n  n  int [null]\n}\n\nMigration 0001__init {\n  create table posts {\n    n int [null]\n  }\n}\n\nMigration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id int [pk, increment]\n    n  int [null]\n  }\n}\n"
+	src := "package db\n\ntable posts {\n  id int [pk, increment]\n  n  int [null]\n}\n\nmigration 0001__init {\n  create table posts {\n    n int [null]\n  }\n}\n\nmigration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id int [pk, increment]\n    n  int [null]\n  }\n}\n"
 	_, info := parseChecked(t, "t.volt", src)
 	ms, err := Lower(info)
 	if err != nil {
@@ -476,7 +476,7 @@ func TestLowerRebuildIntroducingARowidAlias(t *testing.T) {
 		t.Errorf("copy statement:\n%s\nwant:\n%s", got, want)
 	}
 	db := memoryDB(t)
-	if _, err := rt.MigrateUp(context.Background(), db, ms); err != nil {
+	if _, err := run.MigrateUp(context.Background(), db, ms); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -488,7 +488,7 @@ func TestLowerRebuildIntroducingARowidAlias(t *testing.T) {
 // schema, no drift from the target, and down and up again.
 func TestExpressionDefaultAddFillsRowsWithoutARebuild(t *testing.T) {
 	ctx := context.Background()
-	src := "package db\n\nTable posts {\n  id         int       [pk, increment]\n  title      string\n  created_at time.Time [default: `CURRENT_TIMESTAMP`]\n  stamp      int       [null, index, default: `strftime('%s', 'now')`]\n}\n\nMigration 0001__init {\n  create table posts {\n    id    int    [pk, increment]\n    title string\n  }\n}\n\nMigration 0002__stamps {\n  alter table posts {\n    add created_at time.Time [default: `CURRENT_TIMESTAMP`]\n    add stamp int [null, index, default: `strftime('%s', 'now')`]\n  }\n}\n"
+	src := "package db\n\ntable posts {\n  id         int       [pk, increment]\n  title      string\n  created_at time.Time [default: `CURRENT_TIMESTAMP`]\n  stamp      int       [null, index, default: `strftime('%s', 'now')`]\n}\n\nmigration 0001__init {\n  create table posts {\n    id    int    [pk, increment]\n    title string\n  }\n}\n\nmigration 0002__stamps {\n  alter table posts {\n    add created_at time.Time [default: `CURRENT_TIMESTAMP`]\n    add stamp int [null, index, default: `strftime('%s', 'now')`]\n  }\n}\n"
 	f, info := parseChecked(t, "t.volt", src)
 	ms, err := Lower(info)
 	if err != nil {
@@ -515,57 +515,57 @@ func TestExpressionDefaultAddFillsRowsWithoutARebuild(t *testing.T) {
 	}
 
 	path := filepath.Join(t.TempDir(), "posts.db")
-	db, err := rt.Open("sqlite3", path)
+	db, err := run.Open("sqlite3", path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	other, err := rt.Open("sqlite3", path)
+	other, err := run.Open("sqlite3", path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer other.Close()
-	if _, err := rt.MigrateUp(ctx, db, ms[:1]); err != nil {
+	if _, err := run.MigrateUp(ctx, db, ms[:1]); err != nil {
 		t.Fatal(err)
 	}
-	before, err := Read(ctx, db)
+	before, err := Read(ctx, db.Pool())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, "INSERT INTO posts (title) VALUES ('one'), ('two')"); err != nil {
+	if _, err := db.Pool().ExecContext(ctx, "INSERT INTO posts (title) VALUES ('one'), ('two')"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := other.ExecContext(ctx, "INSERT INTO posts (title) VALUES ('three')"); err != nil {
+	if _, err := other.Pool().ExecContext(ctx, "INSERT INTO posts (title) VALUES ('three')"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := rt.MigrateUp(ctx, db, ms); err != nil {
+	if _, err := run.MigrateUp(ctx, db, ms); err != nil {
 		t.Fatalf("0002 on a table with rows: %v", err)
 	}
 
 	var filled string
-	if err := db.QueryRowContext(ctx, "SELECT group_concat(typeof(created_at) || '/' || typeof(stamp)) FROM posts").Scan(&filled); err != nil {
+	if err := db.Pool().QueryRowContext(ctx, "SELECT group_concat(typeof(created_at) || '/' || typeof(stamp)) FROM posts").Scan(&filled); err != nil {
 		t.Fatal(err)
 	}
 	if filled != "text/integer,text/integer,text/integer" {
 		t.Errorf("existing rows hold %q, want every row filled", filled)
 	}
-	for _, conn := range []*sql.DB{db, other} {
-		if _, err := conn.ExecContext(ctx, "INSERT INTO posts (title) VALUES ('later')"); err != nil {
+	for _, conn := range []run.DB{db, other} {
+		if _, err := conn.Pool().ExecContext(ctx, "INSERT INTO posts (title) VALUES ('later')"); err != nil {
 			t.Fatalf("insert after 0002: %v", err)
 		}
-		if _, err := conn.ExecContext(ctx, "INSERT INTO posts (title, created_at) VALUES ('null', NULL)"); err == nil || !strings.Contains(err.Error(), "NOT NULL") {
+		if _, err := conn.Pool().ExecContext(ctx, "INSERT INTO posts (title, created_at) VALUES ('null', NULL)"); err == nil || !strings.Contains(err.Error(), "NOT NULL") {
 			t.Errorf("explicit NULL after 0002: %v, want NOT NULL refused", err)
 		}
 	}
 	var nulls int
-	if err := other.QueryRowContext(ctx, "SELECT count(*) FROM posts WHERE created_at IS NULL OR stamp IS NULL").Scan(&nulls); err != nil {
+	if err := other.Pool().QueryRowContext(ctx, "SELECT count(*) FROM posts WHERE created_at IS NULL OR stamp IS NULL").Scan(&nulls); err != nil {
 		t.Fatal(err)
 	}
 	if nulls != 0 {
 		t.Errorf("%d rows without a default after 0002", nulls)
 	}
 	var integrity string
-	if err := db.QueryRowContext(ctx, "PRAGMA integrity_check").Scan(&integrity); err != nil || integrity != "ok" {
+	if err := db.Pool().QueryRowContext(ctx, "PRAGMA integrity_check").Scan(&integrity); err != nil || integrity != "ok" {
 		t.Errorf("integrity_check: %q %v", integrity, err)
 	}
 
@@ -574,31 +574,31 @@ func TestExpressionDefaultAddFillsRowsWithoutARebuild(t *testing.T) {
 		t.Fatal(err)
 	}
 	targetDB := memoryDB(t)
-	if _, err := targetDB.ExecContext(ctx, string(ddl)); err != nil {
+	if _, err := targetDB.Pool().ExecContext(ctx, string(ddl)); err != nil {
 		t.Fatal(err)
 	}
-	target, err := Read(ctx, targetDB)
+	target, err := Read(ctx, targetDB.Pool())
 	if err != nil {
 		t.Fatal(err)
 	}
-	fold, err := Read(ctx, db)
+	fold, err := Read(ctx, db.Pool())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if drifts := Diff(target, fold); len(drifts) > 0 {
 		t.Errorf("0002 drifts from the schema: %+v", drifts)
 	}
-	if _, err := rt.MigrateDown(ctx, db, ms); err != nil {
+	if _, err := run.MigrateDown(ctx, db, ms); err != nil {
 		t.Fatalf("down of 0002: %v", err)
 	}
-	after, err := Read(ctx, db)
+	after, err := Read(ctx, db.Pool())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if drifts := Diff(before, after); len(drifts) > 0 {
 		t.Errorf("down of 0002 left another structure than 0001 made: %+v", drifts)
 	}
-	if _, err := rt.MigrateUp(ctx, db, ms); err != nil {
+	if _, err := run.MigrateUp(ctx, db, ms); err != nil {
 		t.Fatalf("up again: %v", err)
 	}
 }
@@ -609,26 +609,26 @@ func TestExpressionDefaultAddFillsRowsWithoutARebuild(t *testing.T) {
 // migration leaves the table as it was.
 func TestExpressionDefaultAddYieldingNullRollsBack(t *testing.T) {
 	ctx := context.Background()
-	src := "package db\n\nTable posts {\n  id   int [pk, increment]\n  seen int [default: `nullif(1, 1)`]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n  }\n}\n\nMigration 0002__seen {\n  alter table posts {\n    add seen int [default: `nullif(1, 1)`]\n  }\n}\n"
+	src := "package db\n\ntable posts {\n  id   int [pk, increment]\n  seen int [default: `nullif(1, 1)`]\n}\n\nmigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n  }\n}\n\nmigration 0002__seen {\n  alter table posts {\n    add seen int [default: `nullif(1, 1)`]\n  }\n}\n"
 	_, info := parseChecked(t, "t.volt", src)
 	ms, err := Lower(info)
 	if err != nil {
 		t.Fatal(err)
 	}
 	db := memoryDB(t)
-	if _, err := rt.MigrateUp(ctx, db, ms[:1]); err != nil {
+	if _, err := run.MigrateUp(ctx, db, ms[:1]); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, "INSERT INTO posts DEFAULT VALUES"); err != nil {
+	if _, err := db.Pool().ExecContext(ctx, "INSERT INTO posts DEFAULT VALUES"); err != nil {
 		t.Fatal(err)
 	}
-	_, err = rt.MigrateUp(ctx, db, ms)
+	_, err = run.MigrateUp(ctx, db, ms)
 	var me *rt.MigrationError
 	if !errors.As(err, &me) || me.Index != 2 || !strings.Contains(err.Error(), "NOT NULL") {
 		t.Fatalf("0002 over a row: %v, want the backfill refused", err)
 	}
 	var cols int
-	if err := db.QueryRowContext(ctx, "SELECT count(*) FROM pragma_table_info('posts') WHERE name = 'seen'").Scan(&cols); err != nil || cols != 0 {
+	if err := db.Pool().QueryRowContext(ctx, "SELECT count(*) FROM pragma_table_info('posts') WHERE name = 'seen'").Scan(&cols); err != nil || cols != 0 {
 		t.Errorf("seen after the rollback: %d %v, want no column", cols, err)
 	}
 }

@@ -3,11 +3,11 @@
 // want: parameter 1 of EmailValid is int
 package db
 
-Table users {
+table users {
   id int [pk]
   email string
 
-  Validators {
+  validators {
     EmailValid(email)
   }
 }

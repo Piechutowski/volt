@@ -1,7 +1,7 @@
 // spec: §generated-query-surface, §predicates, key columns and select parameters named like the generated methods' locals and helpers once were, or like the predeclared names they use
 package db
 
-Table ledgers {
+table ledgers {
   err            int [pk]
   res            int [pk]
   n              int [pk]
@@ -16,7 +16,7 @@ Table ledgers {
   note           string
 }
 
-Table entries {
+table entries {
   row        int    [pk]
   err        string [unique]
   res        string [unique]
@@ -25,27 +25,26 @@ Table entries {
   rows       string [unique]
   q          string [unique]
   v          string [unique]
-  query      string [unique]
   args       string [unique]
   cols       string [unique]
   entry_scan string [unique]
   found      bool
 }
 
-Table volt_keys {
+table volt_keys {
   volt_row int [pk]
   label    string
 }
 
-Table marks {
+table marks {
   nil   int [pk]
   label string
 }
 
-Table tallies {
+table tallies {
   append int [pk]
   label  string
 }
 
-Select by_locals for entries where err = :err and res = :rows and n in :out and v = :v and query = :query and args = :args
-Select by_helpers for entries where err = :entryScan and n in :entryByHelpersSQL
+select by_locals for entries where err = :err and res = :rows and n in :out and v = :v and args = :args
+select by_helpers for entries where err = :entryScan and n in :entryByHelpersSQL

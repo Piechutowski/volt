@@ -6,127 +6,126 @@ import (
 	"github.com/Piechutowski/volt"
 )
 
-// PathRoot returns the path for GET / (Home.Index).
 func PathRoot(opts ...volt.URLOption) string {
 	return volt.URL("/", opts...)
 }
 
-// PathTeapot returns the path for GET /teapot (Home.Teapot).
 func PathTeapot(opts ...volt.URLOption) string {
 	return volt.URL("/teapot", opts...)
 }
 
-// PathPing returns the path for any /ping (Home.Ping).
 func PathPing(opts ...volt.URLOption) string {
 	return volt.URL("/ping", opts...)
 }
 
-// PathAdminStats returns the path for GET /admin/stats (Admin.Stats).
 func PathAdminStats(opts ...volt.URLOption) string {
 	return volt.URL("/admin/stats", opts...)
 }
 
-// PathOpsFail returns the path for GET /ops/fail (Ops.Fail).
 func PathOpsFail(opts ...volt.URLOption) string {
 	return volt.URL("/ops/fail", opts...)
 }
 
-// PathUsers returns the path for GET /users (Users.Index).
 func PathUsers(opts ...volt.URLOption) string {
 	return volt.URL("/users", opts...)
 }
 
-// PathNewUser returns the path for GET /users/new (Users.New).
 func PathNewUser(opts ...volt.URLOption) string {
 	return volt.URL("/users/new", opts...)
 }
 
-// PathUser returns the path for GET /users/:id(int) (Users.Show).
 func PathUser(id int, opts ...volt.URLOption) string {
 	return volt.URL("/users/"+volt.SegInt(id), opts...)
 }
 
-// PathEditUser returns the path for GET /users/:id(int)/edit (Users.Edit).
 func PathEditUser(id int, opts ...volt.URLOption) string {
 	return volt.URL("/users/"+volt.SegInt(id)+"/edit", opts...)
 }
 
-// PathAvatar returns the path for GET /users/:id(int)/avatar (Users.Avatar).
 func PathAvatar(id int, opts ...volt.URLOption) string {
 	return volt.URL("/users/"+volt.SegInt(id)+"/avatar", opts...)
 }
 
-// PathServe returns the path for GET /files/:path... (Files.Serve).
+func PathProfile(id int, opts ...volt.URLOption) string {
+	return volt.URL("/users/"+volt.SegInt(id)+"/profile", opts...)
+}
+
+func PathCard(id int, opts ...volt.URLOption) string {
+	return volt.URL("/users/"+volt.SegInt(id)+"/card", opts...)
+}
+
+func PathChangeEmail(id int, opts ...volt.URLOption) string {
+	return volt.URL("/users/"+volt.SegInt(id)+"/email", opts...)
+}
+
+func PathLogin(opts ...volt.URLOption) string {
+	return volt.URL("/login", opts...)
+}
+
 func PathServe(path string, opts ...volt.URLOption) string {
 	return volt.URL("/files/"+volt.SegWild(path), opts...)
 }
 
-// PathTag returns the path for GET /tags/:name (Tags.Show).
+func PathMeShow(opts ...volt.URLOption) string {
+	return volt.URL("/me", opts...)
+}
+
+func PathMeUserList(opts ...volt.URLOption) string {
+	return volt.URL("/me/peers", opts...)
+}
+
 func PathTag(name string, opts ...volt.URLOption) string {
 	return volt.URL("/tags/"+volt.Seg(name), opts...)
 }
 
-// PathPage returns the path for GET /pages/:num(int) (Pages.Show).
 func PathPage(num int, opts ...volt.URLOption) string {
 	return volt.URL("/pages/"+volt.SegInt(num), opts...)
 }
 
-// PathArchive returns the path for GET /archive/:stamp(int) (Archive.Show).
 func PathArchive(stamp int, opts ...volt.URLOption) string {
 	return volt.URL("/archive/"+volt.SegInt(stamp), opts...)
 }
 
-// PathAPIUserList returns the path for GET /api/users (db.UserList).
 func PathAPIUserList(opts ...volt.URLOption) string {
 	return volt.URL("/api/users", opts...)
 }
 
-// PathAPIUserGet returns the path for GET /api/users/:id(int) (db.UserGet).
 func PathAPIUserGet(id int, opts ...volt.URLOption) string {
 	return volt.URL("/api/users/"+volt.SegInt(id), opts...)
 }
 
-// PathAPIUserPicked returns the path for GET /api/picked (db.UserPicked).
 func PathAPIUserPicked(opts ...volt.URLOption) string {
 	return volt.URL("/api/picked", opts...)
 }
 
-// PathAPIUserSince returns the path for GET /api/since (db.UserSince).
 func PathAPIUserSince(opts ...volt.URLOption) string {
 	return volt.URL("/api/since", opts...)
 }
 
-// PathMsRevenueBrowse returns the path for GET /ms/revenue (db.MsRevenueBrowse).
 func PathMsRevenueBrowse(opts ...volt.URLOption) string {
 	return volt.URL("/ms/revenue", opts...)
 }
 
-// PathMsUsageBrowse returns the path for GET /ms/usage (db.MsUsageBrowse).
 func PathMsUsageBrowse(opts ...volt.URLOption) string {
 	return volt.URL("/ms/usage", opts...)
 }
 
-// PathRefUsers returns the path for GET /ref/users (db.UserList).
 func PathRefUsers(opts ...volt.URLOption) string {
 	return volt.URL("/ref/users", opts...)
 }
 
-// PathRefUser returns the path for GET /ref/users/:id(int) (db.UserGet).
 func PathRefUser(id int, opts ...volt.URLOption) string {
 	return volt.URL("/ref/users/"+volt.SegInt(id), opts...)
 }
 
-// PathRefTags returns the path for GET /ref/tags (db.TagList).
 func PathRefTags(opts ...volt.URLOption) string {
 	return volt.URL("/ref/tags", opts...)
 }
 
-// PathRefTag returns the path for GET /ref/tags/:slug (db.TagGet).
 func PathRefTag(slug string, opts ...volt.URLOption) string {
 	return volt.URL("/ref/tags/"+volt.Seg(slug), opts...)
 }
 
-// PathEvents returns the path for GET /events (volt.Events).
 func PathEvents(opts ...volt.URLOption) string {
 	return volt.URL("/events", opts...)
 }

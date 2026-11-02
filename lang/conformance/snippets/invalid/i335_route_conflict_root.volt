@@ -2,7 +2,7 @@
 // want: route HEAD /:rest... is ambiguous with the route at
 package app
 
-Scope / {
+scope / {
 	get  /         Home.Index
 	head /:rest... Files.Probe
 }

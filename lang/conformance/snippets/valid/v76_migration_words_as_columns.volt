@@ -1,7 +1,7 @@
 // spec: §migrations, the words of a migration body are identifiers outside a Migration and names inside its operations
 package db
 
-Table t {
+table t {
   up     int [pk]
   to     string
   table  string
@@ -12,7 +12,7 @@ Table t {
   exec   string
 }
 
-Migration 0001__create_t {
+migration 0001__create_t {
   create table t {
     up     int [pk]
     to     string

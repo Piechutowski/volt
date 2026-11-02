@@ -2,6 +2,6 @@
 // want: setting "name" may appear at most once
 package app
 
-Scope / {
+scope / {
 	get /posts/:id(int) Posts.Show [name: post, name: entry]
 }

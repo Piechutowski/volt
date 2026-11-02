@@ -3,1543 +3,349 @@
 package itest
 
 import (
-	"context"
-	"database/sql"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-// Queries bundles the generated CRUD over one database handle: a
-// *sql.DB, a *sql.Tx, or anything else satisfying rt.DBTX.
-type Queries struct {
-	db    rt.DBTX
-	cache *rt.StmtCache
-}
-
-// New returns Queries running on db.
-func New(db rt.DBTX) *Queries { return &Queries{db: db} }
-
-// WithCache returns a copy of q whose run-time rendered statements (the
-// changeset writes Create and Update, and the dynamic Query, Count,
-// Exists, DeleteWhere, UpdateWhere) run through cache: identical shapes
-// render identical SQL, prepared once. Bind a cache to a *sql.DB, never
-// a transaction.
-func (q *Queries) WithCache(cache *rt.StmtCache) *Queries {
-	return &Queries{db: q.db, cache: cache}
-}
-
-// WithTx returns a copy of q running on tx. The statement cache does not
-// follow: its statements are prepared on the outer handle.
-func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
-
-// Tx runs fn inside a transaction: the Queries handed to fn joins it, a
-// nil error commits, anything else rolls back. q must be backed by a
-// handle that can begin a transaction (a *sql.DB).
-func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
-	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
-}
-
-func voltUserScan(r rt.Row) (User, error) {
-	var voltV User
-	voltErr := r.Scan(&voltV.ID, &voltV.Email, &voltV.Name, &voltV.Bio, &voltV.CreatedAt)
-	return voltV, rt.Refused("User", voltErr)
-}
-
 const voltUserGetSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE "id" = ?`
 
-// UserGet fetches the users row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) UserGet(ctx context.Context, id int) (User, error) {
-	return voltUserScan(q.db.QueryRowContext(ctx, voltUserGetSQL, id))
+func UserGet(id int) rt.Lookup[User] {
+	return rt.Lookup[User]{SQL: voltUserGetSQL, Args: []any{id}, Scan: voltUserScan}
 }
 
-// UserGetMany fetches the users rows whose primary key is in ids, in
-// database order. Missing keys are not an error; they are just absent.
-func (q *Queries) UserGetMany(ctx context.Context, ids []int) ([]User, error) {
+func UserGetMany(ids []int) rt.Query[User] {
 	if len(ids) == 0 {
-		return nil, nil
+		return rt.Query[User]{}
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltUserTableSQL, voltUserColumnsSQL, []rt.Opt[User]{UserID.In(ids...)})
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []User{}
-	for voltRows.Next() {
-		voltV, voltErr := voltUserScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltUserTableSQL, voltUserColumnsSQL, []rt.Opt[User]{UserID.In(ids...)})
+	return rt.Query[User]{SQL: voltSQL, Args: voltArgs, Scan: voltUserScan, Err: voltErr}
 }
 
 const voltUserGetByEmailSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users" WHERE "email" = ?`
 
-// UserGetByEmail fetches the users row with the given email (a unique column),
-// or rt.ErrNotFound.
-func (q *Queries) UserGetByEmail(ctx context.Context, email string) (User, error) {
-	return voltUserScan(q.db.QueryRowContext(ctx, voltUserGetByEmailSQL, email))
+func UserGetByEmail(email string) rt.Lookup[User] {
+	return rt.Lookup[User]{SQL: voltUserGetByEmailSQL, Args: []any{email}, Scan: voltUserScan}
 }
 
 const voltUserListSQL = `SELECT "id", "email", "name", "bio", "created_at" FROM "users"`
 
-// UserList returns every users row.
-func (q *Queries) UserList(ctx context.Context) ([]User, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltUserListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []User{}
-	for voltRows.Next() {
-		voltV, voltErr := voltUserScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
-}
+func UserList() rt.Query[User] { return rt.Query[User]{SQL: voltUserListSQL, Scan: voltUserScan} }
 
-// UserCreate validates c and inserts its marked columns, returning the
-// stored users row; nothing marked inserts the defaults (spec §changesets).
-func (q *Queries) UserCreate(ctx context.Context, c UserChangeset) (User, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return User{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "email"), append(voltArgs, voltV.Email)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "name"), append(voltArgs, voltV.Name)
-	}
-	if c.set[3] {
-		voltCols, voltArgs = append(voltCols, "bio"), append(voltArgs, voltV.Bio)
-	}
-	if c.set[4] {
-		voltCols, voltArgs = append(voltCols, "created_at"), append(voltArgs, voltV.CreatedAt)
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltUserTableSQL, voltCols, voltUserColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return User{}, voltErr
-	}
-	return voltUserScan(voltRow)
-}
+func UserCreate(c UserChangeset) rt.Write[User] { return rt.Insert(c.Validate().Changeset) }
 
-// UserUpdate validates c and writes its marked columns to the users row it
-// was made from, returning the stored row; nothing marked returns the row
-// untouched (spec §changesets).
-func (q *Queries) UserUpdate(ctx context.Context, c UserChangeset) (User, error) {
-	if !c.row {
-		return User{}, rt.ErrNoRow
-	}
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return User{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "email"), append(voltArgs, voltV.Email)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "name"), append(voltArgs, voltV.Name)
-	}
-	if c.set[3] {
-		voltCols, voltArgs = append(voltCols, "bio"), append(voltArgs, voltV.Bio)
-	}
-	if c.set[4] {
-		voltCols, voltArgs = append(voltCols, "created_at"), append(voltArgs, voltV.CreatedAt)
-	}
-	if len(voltCols) == 0 {
-		return voltV, nil
-	}
-	voltArgs = append(voltArgs, c.data.ID)
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(voltUserTableSQL, voltCols, []string{"id"}, voltUserColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return User{}, voltErr
-	}
-	return voltUserScan(voltRow)
-}
+func UserUpdate(c UserChangeset) rt.Write[User] { return rt.Update(c.Validate().Changeset) }
 
 const voltUserDeleteSQL = `DELETE FROM "users" WHERE "id" = ?`
 
-// UserDelete removes the identified users row; rt.ErrNotFound reports
-// that nothing matched.
-func (q *Queries) UserDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltUserDeleteSQL, id)
-	if voltErr != nil {
-		return rt.Refused("User", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
-}
-
-func voltOrderScan(r rt.Row) (Order, error) {
-	var voltV Order
-	voltErr := r.Scan(&voltV.ID, &voltV.UserID, (*string)(&voltV.Status), &voltV.Total, &voltV.Tip, &voltV.Fee, &voltV.PlacedAt)
-	return voltV, rt.Refused("Order", voltErr)
+func UserDelete(id int) rt.Exec {
+	return rt.Exec{SQL: voltUserDeleteSQL, Args: []any{id}, Model: "User", One: true}
 }
 
 const voltOrderGetSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders" WHERE "id" = ?`
 
-// OrderGet fetches the orders row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) OrderGet(ctx context.Context, id int) (Order, error) {
-	return voltOrderScan(q.db.QueryRowContext(ctx, voltOrderGetSQL, id))
+func OrderGet(id int) rt.Lookup[Order] {
+	return rt.Lookup[Order]{SQL: voltOrderGetSQL, Args: []any{id}, Scan: voltOrderScan}
 }
 
-// OrderGetMany fetches the orders rows whose primary key is in ids, in
-// database order. Missing keys are not an error; they are just absent.
-func (q *Queries) OrderGetMany(ctx context.Context, ids []int) ([]Order, error) {
+func OrderGetMany(ids []int) rt.Query[Order] {
 	if len(ids) == 0 {
-		return nil, nil
+		return rt.Query[Order]{}
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltOrderTableSQL, voltOrderColumnsSQL, []rt.Opt[Order]{OrderID.In(ids...)})
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Order{}
-	for voltRows.Next() {
-		voltV, voltErr := voltOrderScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltOrderTableSQL, voltOrderColumnsSQL, []rt.Opt[Order]{OrderID.In(ids...)})
+	return rt.Query[Order]{SQL: voltSQL, Args: voltArgs, Scan: voltOrderScan, Err: voltErr}
 }
 
 const voltOrderListSQL = `SELECT "id", "user_id", "status", "total", "tip", "fee", "placed_at" FROM "orders"`
 
-// OrderList returns every orders row.
-func (q *Queries) OrderList(ctx context.Context) ([]Order, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltOrderListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Order{}
-	for voltRows.Next() {
-		voltV, voltErr := voltOrderScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
-}
+func OrderList() rt.Query[Order] { return rt.Query[Order]{SQL: voltOrderListSQL, Scan: voltOrderScan} }
 
-// OrderCreate validates c and inserts its marked columns, returning the
-// stored orders row; nothing marked inserts the defaults (spec §changesets).
-func (q *Queries) OrderCreate(ctx context.Context, c OrderChangeset) (Order, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return Order{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "user_id"), append(voltArgs, voltV.UserID)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "status"), append(voltArgs, voltV.Status)
-	}
-	if c.set[3] {
-		voltCols, voltArgs = append(voltCols, "total"), append(voltArgs, voltV.Total)
-	}
-	if c.set[4] {
-		voltCols, voltArgs = append(voltCols, "tip"), append(voltArgs, voltV.Tip)
-	}
-	if c.set[5] {
-		voltCols, voltArgs = append(voltCols, "fee"), append(voltArgs, voltV.Fee)
-	}
-	if c.set[6] {
-		voltCols, voltArgs = append(voltCols, "placed_at"), append(voltArgs, voltV.PlacedAt)
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltOrderTableSQL, voltCols, voltOrderColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return Order{}, voltErr
-	}
-	return voltOrderScan(voltRow)
-}
+func OrderCreate(c OrderChangeset) rt.Write[Order] { return rt.Insert(c.Validate().Changeset) }
 
-// OrderUpdate validates c and writes its marked columns to the orders row it
-// was made from, returning the stored row; nothing marked returns the row
-// untouched (spec §changesets).
-func (q *Queries) OrderUpdate(ctx context.Context, c OrderChangeset) (Order, error) {
-	if !c.row {
-		return Order{}, rt.ErrNoRow
-	}
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return Order{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "user_id"), append(voltArgs, voltV.UserID)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "status"), append(voltArgs, voltV.Status)
-	}
-	if c.set[3] {
-		voltCols, voltArgs = append(voltCols, "total"), append(voltArgs, voltV.Total)
-	}
-	if c.set[4] {
-		voltCols, voltArgs = append(voltCols, "tip"), append(voltArgs, voltV.Tip)
-	}
-	if c.set[5] {
-		voltCols, voltArgs = append(voltCols, "fee"), append(voltArgs, voltV.Fee)
-	}
-	if c.set[6] {
-		voltCols, voltArgs = append(voltCols, "placed_at"), append(voltArgs, voltV.PlacedAt)
-	}
-	if len(voltCols) == 0 {
-		return voltV, nil
-	}
-	voltArgs = append(voltArgs, c.data.ID)
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(voltOrderTableSQL, voltCols, []string{"id"}, voltOrderColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return Order{}, voltErr
-	}
-	return voltOrderScan(voltRow)
-}
+func OrderUpdate(c OrderChangeset) rt.Write[Order] { return rt.Update(c.Validate().Changeset) }
 
 const voltOrderDeleteSQL = `DELETE FROM "orders" WHERE "id" = ?`
 
-// OrderDelete removes the identified orders row; rt.ErrNotFound reports
-// that nothing matched.
-func (q *Queries) OrderDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltOrderDeleteSQL, id)
-	if voltErr != nil {
-		return rt.Refused("Order", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
-}
-
-func voltUserTagScan(r rt.Row) (UserTag, error) {
-	var voltV UserTag
-	voltErr := r.Scan(&voltV.UserID, &voltV.Tag)
-	return voltV, rt.Refused("UserTag", voltErr)
+func OrderDelete(id int) rt.Exec {
+	return rt.Exec{SQL: voltOrderDeleteSQL, Args: []any{id}, Model: "Order", One: true}
 }
 
 const voltUserTagGetSQL = `SELECT "user_id", "tag" FROM "user_tags" WHERE "user_id" = ? AND "tag" = ?`
 
-// UserTagGet fetches the user_tags row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) UserTagGet(ctx context.Context, userID int, tag string) (UserTag, error) {
-	return voltUserTagScan(q.db.QueryRowContext(ctx, voltUserTagGetSQL, userID, tag))
+func UserTagGet(userID int, tag string) rt.Lookup[UserTag] {
+	return rt.Lookup[UserTag]{SQL: voltUserTagGetSQL, Args: []any{userID, tag}, Scan: voltUserTagScan}
 }
 
 const voltUserTagListSQL = `SELECT "user_id", "tag" FROM "user_tags"`
 
-// UserTagList returns every user_tags row.
-func (q *Queries) UserTagList(ctx context.Context) ([]UserTag, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltUserTagListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []UserTag{}
-	for voltRows.Next() {
-		voltV, voltErr := voltUserTagScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func UserTagList() rt.Query[UserTag] {
+	return rt.Query[UserTag]{SQL: voltUserTagListSQL, Scan: voltUserTagScan}
 }
 
-// UserTagCreate validates c and inserts its marked columns, returning the
-// stored user_tags row; nothing marked inserts the defaults (spec §changesets).
-func (q *Queries) UserTagCreate(ctx context.Context, c UserTagChangeset) (UserTag, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return UserTag{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[0] {
-		voltCols, voltArgs = append(voltCols, "user_id"), append(voltArgs, voltV.UserID)
-	}
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "tag"), append(voltArgs, voltV.Tag)
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltUserTagTableSQL, voltCols, voltUserTagColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return UserTag{}, voltErr
-	}
-	return voltUserTagScan(voltRow)
-}
+func UserTagCreate(c UserTagChangeset) rt.Write[UserTag] { return rt.Insert(c.Validate().Changeset) }
 
 const voltUserTagDeleteSQL = `DELETE FROM "user_tags" WHERE "user_id" = ? AND "tag" = ?`
 
-// UserTagDelete removes the identified user_tags row; rt.ErrNotFound reports
-// that nothing matched.
-func (q *Queries) UserTagDelete(ctx context.Context, userID int, tag string) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltUserTagDeleteSQL, userID, tag)
-	if voltErr != nil {
-		return rt.Refused("UserTag", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
-}
-
-func voltPageViewScan(r rt.Row) (PageView, error) {
-	var voltV PageView
-	voltErr := r.Scan(&voltV.ID, &voltV.Site, &voltV.Day, &voltV.Hits)
-	return voltV, rt.Refused("PageView", voltErr)
+func UserTagDelete(userID int, tag string) rt.Exec {
+	return rt.Exec{SQL: voltUserTagDeleteSQL, Args: []any{userID, tag}, Model: "UserTag", One: true}
 }
 
 const voltPageViewGetSQL = `SELECT "id", "site", "day", "hits" FROM "page_views" WHERE "id" = ?`
 
-// PageViewGet fetches the page_views row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) PageViewGet(ctx context.Context, id int) (PageView, error) {
-	return voltPageViewScan(q.db.QueryRowContext(ctx, voltPageViewGetSQL, id))
+func PageViewGet(id int) rt.Lookup[PageView] {
+	return rt.Lookup[PageView]{SQL: voltPageViewGetSQL, Args: []any{id}, Scan: voltPageViewScan}
 }
 
-// PageViewGetMany fetches the page_views rows whose primary key is in ids, in
-// database order. Missing keys are not an error; they are just absent.
-func (q *Queries) PageViewGetMany(ctx context.Context, ids []int) ([]PageView, error) {
+func PageViewGetMany(ids []int) rt.Query[PageView] {
 	if len(ids) == 0 {
-		return nil, nil
+		return rt.Query[PageView]{}
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltPageViewTableSQL, voltPageViewColumnsSQL, []rt.Opt[PageView]{PageViewID.In(ids...)})
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []PageView{}
-	for voltRows.Next() {
-		voltV, voltErr := voltPageViewScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltPageViewTableSQL, voltPageViewColumnsSQL, []rt.Opt[PageView]{PageViewID.In(ids...)})
+	return rt.Query[PageView]{SQL: voltSQL, Args: voltArgs, Scan: voltPageViewScan, Err: voltErr}
 }
 
 const voltPageViewListSQL = `SELECT "id", "site", "day", "hits" FROM "page_views"`
 
-// PageViewList returns every page_views row.
-func (q *Queries) PageViewList(ctx context.Context) ([]PageView, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltPageViewListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []PageView{}
-	for voltRows.Next() {
-		voltV, voltErr := voltPageViewScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func PageViewList() rt.Query[PageView] {
+	return rt.Query[PageView]{SQL: voltPageViewListSQL, Scan: voltPageViewScan}
 }
 
-// PageViewCreate validates c and inserts its marked columns, returning the
-// stored page_views row; nothing marked inserts the defaults (spec §changesets).
-func (q *Queries) PageViewCreate(ctx context.Context, c PageViewChangeset) (PageView, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return PageView{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "site"), append(voltArgs, voltV.Site)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "day"), append(voltArgs, voltV.Day)
-	}
-	if c.set[3] {
-		voltCols, voltArgs = append(voltCols, "hits"), append(voltArgs, voltV.Hits)
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltPageViewTableSQL, voltCols, voltPageViewColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return PageView{}, voltErr
-	}
-	return voltPageViewScan(voltRow)
-}
+func PageViewCreate(c PageViewChangeset) rt.Write[PageView] { return rt.Insert(c.Validate().Changeset) }
 
-// PageViewUpdate validates c and writes its marked columns to the page_views row it
-// was made from, returning the stored row; nothing marked returns the row
-// untouched (spec §changesets).
-func (q *Queries) PageViewUpdate(ctx context.Context, c PageViewChangeset) (PageView, error) {
-	if !c.row {
-		return PageView{}, rt.ErrNoRow
-	}
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return PageView{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "site"), append(voltArgs, voltV.Site)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "day"), append(voltArgs, voltV.Day)
-	}
-	if c.set[3] {
-		voltCols, voltArgs = append(voltCols, "hits"), append(voltArgs, voltV.Hits)
-	}
-	if len(voltCols) == 0 {
-		return voltV, nil
-	}
-	voltArgs = append(voltArgs, c.data.ID)
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(voltPageViewTableSQL, voltCols, []string{"id"}, voltPageViewColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return PageView{}, voltErr
-	}
-	return voltPageViewScan(voltRow)
-}
+func PageViewUpdate(c PageViewChangeset) rt.Write[PageView] { return rt.Update(c.Validate().Changeset) }
 
 const voltPageViewDeleteSQL = `DELETE FROM "page_views" WHERE "id" = ?`
 
-// PageViewDelete removes the identified page_views row; rt.ErrNotFound reports
-// that nothing matched.
-func (q *Queries) PageViewDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltPageViewDeleteSQL, id)
-	if voltErr != nil {
-		return rt.Refused("PageView", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
-}
-
-func voltLinkClickScan(r rt.Row) (LinkClick, error) {
-	var voltV LinkClick
-	voltErr := r.Scan(&voltV.ID, &voltV.Site, &voltV.Day, &voltV.Target)
-	return voltV, rt.Refused("LinkClick", voltErr)
+func PageViewDelete(id int) rt.Exec {
+	return rt.Exec{SQL: voltPageViewDeleteSQL, Args: []any{id}, Model: "PageView", One: true}
 }
 
 const voltLinkClickGetSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks" WHERE "id" = ?`
 
-// LinkClickGet fetches the link_clicks row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) LinkClickGet(ctx context.Context, id int) (LinkClick, error) {
-	return voltLinkClickScan(q.db.QueryRowContext(ctx, voltLinkClickGetSQL, id))
+func LinkClickGet(id int) rt.Lookup[LinkClick] {
+	return rt.Lookup[LinkClick]{SQL: voltLinkClickGetSQL, Args: []any{id}, Scan: voltLinkClickScan}
 }
 
-// LinkClickGetMany fetches the link_clicks rows whose primary key is in ids, in
-// database order. Missing keys are not an error; they are just absent.
-func (q *Queries) LinkClickGetMany(ctx context.Context, ids []int) ([]LinkClick, error) {
+func LinkClickGetMany(ids []int) rt.Query[LinkClick] {
 	if len(ids) == 0 {
-		return nil, nil
+		return rt.Query[LinkClick]{}
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltLinkClickTableSQL, voltLinkClickColumnsSQL, []rt.Opt[LinkClick]{LinkClickID.In(ids...)})
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []LinkClick{}
-	for voltRows.Next() {
-		voltV, voltErr := voltLinkClickScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltLinkClickTableSQL, voltLinkClickColumnsSQL, []rt.Opt[LinkClick]{LinkClickID.In(ids...)})
+	return rt.Query[LinkClick]{SQL: voltSQL, Args: voltArgs, Scan: voltLinkClickScan, Err: voltErr}
 }
 
 const voltLinkClickListSQL = `SELECT "id", "site", "day", "target" FROM "link_clicks"`
 
-// LinkClickList returns every link_clicks row.
-func (q *Queries) LinkClickList(ctx context.Context) ([]LinkClick, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltLinkClickListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []LinkClick{}
-	for voltRows.Next() {
-		voltV, voltErr := voltLinkClickScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func LinkClickList() rt.Query[LinkClick] {
+	return rt.Query[LinkClick]{SQL: voltLinkClickListSQL, Scan: voltLinkClickScan}
 }
 
-// LinkClickCreate validates c and inserts its marked columns, returning the
-// stored link_clicks row; nothing marked inserts the defaults (spec §changesets).
-func (q *Queries) LinkClickCreate(ctx context.Context, c LinkClickChangeset) (LinkClick, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return LinkClick{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "site"), append(voltArgs, voltV.Site)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "day"), append(voltArgs, voltV.Day)
-	}
-	if c.set[3] {
-		voltCols, voltArgs = append(voltCols, "target"), append(voltArgs, voltV.Target)
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltLinkClickTableSQL, voltCols, voltLinkClickColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return LinkClick{}, voltErr
-	}
-	return voltLinkClickScan(voltRow)
+func LinkClickCreate(c LinkClickChangeset) rt.Write[LinkClick] {
+	return rt.Insert(c.Validate().Changeset)
 }
 
-// LinkClickUpdate validates c and writes its marked columns to the link_clicks row it
-// was made from, returning the stored row; nothing marked returns the row
-// untouched (spec §changesets).
-func (q *Queries) LinkClickUpdate(ctx context.Context, c LinkClickChangeset) (LinkClick, error) {
-	if !c.row {
-		return LinkClick{}, rt.ErrNoRow
-	}
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return LinkClick{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "site"), append(voltArgs, voltV.Site)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "day"), append(voltArgs, voltV.Day)
-	}
-	if c.set[3] {
-		voltCols, voltArgs = append(voltCols, "target"), append(voltArgs, voltV.Target)
-	}
-	if len(voltCols) == 0 {
-		return voltV, nil
-	}
-	voltArgs = append(voltArgs, c.data.ID)
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(voltLinkClickTableSQL, voltCols, []string{"id"}, voltLinkClickColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return LinkClick{}, voltErr
-	}
-	return voltLinkClickScan(voltRow)
+func LinkClickUpdate(c LinkClickChangeset) rt.Write[LinkClick] {
+	return rt.Update(c.Validate().Changeset)
 }
 
 const voltLinkClickDeleteSQL = `DELETE FROM "link_clicks" WHERE "id" = ?`
 
-// LinkClickDelete removes the identified link_clicks row; rt.ErrNotFound reports
-// that nothing matched.
-func (q *Queries) LinkClickDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltLinkClickDeleteSQL, id)
-	if voltErr != nil {
-		return rt.Refused("LinkClick", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
-}
-
-func voltSiteFlagScan(r rt.Row) (SiteFlag, error) {
-	var voltV SiteFlag
-	voltErr := r.Scan(&voltV.ID, (*bool)(&voltV.Featured), &voltV.Pinned, (*float64)(&voltV.Ratio), &voltV.Weight)
-	return voltV, rt.Refused("SiteFlag", voltErr)
+func LinkClickDelete(id int) rt.Exec {
+	return rt.Exec{SQL: voltLinkClickDeleteSQL, Args: []any{id}, Model: "LinkClick", One: true}
 }
 
 const voltSiteFlagGetSQL = `SELECT "id", "featured", "pinned", "ratio", "weight" FROM "site_flags" WHERE "id" = ?`
 
-// SiteFlagGet fetches the site_flags row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) SiteFlagGet(ctx context.Context, id int) (SiteFlag, error) {
-	return voltSiteFlagScan(q.db.QueryRowContext(ctx, voltSiteFlagGetSQL, id))
+func SiteFlagGet(id int) rt.Lookup[SiteFlag] {
+	return rt.Lookup[SiteFlag]{SQL: voltSiteFlagGetSQL, Args: []any{id}, Scan: voltSiteFlagScan}
 }
 
-// SiteFlagGetMany fetches the site_flags rows whose primary key is in ids, in
-// database order. Missing keys are not an error; they are just absent.
-func (q *Queries) SiteFlagGetMany(ctx context.Context, ids []int) ([]SiteFlag, error) {
+func SiteFlagGetMany(ids []int) rt.Query[SiteFlag] {
 	if len(ids) == 0 {
-		return nil, nil
+		return rt.Query[SiteFlag]{}
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltSiteFlagTableSQL, voltSiteFlagColumnsSQL, []rt.Opt[SiteFlag]{SiteFlagID.In(ids...)})
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []SiteFlag{}
-	for voltRows.Next() {
-		voltV, voltErr := voltSiteFlagScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltSiteFlagTableSQL, voltSiteFlagColumnsSQL, []rt.Opt[SiteFlag]{SiteFlagID.In(ids...)})
+	return rt.Query[SiteFlag]{SQL: voltSQL, Args: voltArgs, Scan: voltSiteFlagScan, Err: voltErr}
 }
 
 const voltSiteFlagListSQL = `SELECT "id", "featured", "pinned", "ratio", "weight" FROM "site_flags"`
 
-// SiteFlagList returns every site_flags row.
-func (q *Queries) SiteFlagList(ctx context.Context) ([]SiteFlag, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltSiteFlagListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []SiteFlag{}
-	for voltRows.Next() {
-		voltV, voltErr := voltSiteFlagScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func SiteFlagList() rt.Query[SiteFlag] {
+	return rt.Query[SiteFlag]{SQL: voltSiteFlagListSQL, Scan: voltSiteFlagScan}
 }
 
-// SiteFlagCreate validates c and inserts its marked columns, returning the
-// stored site_flags row; nothing marked inserts the defaults (spec §changesets).
-func (q *Queries) SiteFlagCreate(ctx context.Context, c SiteFlagChangeset) (SiteFlag, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return SiteFlag{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "featured"), append(voltArgs, voltV.Featured)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "pinned"), append(voltArgs, voltV.Pinned)
-	}
-	if c.set[3] {
-		voltCols, voltArgs = append(voltCols, "ratio"), append(voltArgs, voltV.Ratio)
-	}
-	if c.set[4] {
-		voltCols, voltArgs = append(voltCols, "weight"), append(voltArgs, voltV.Weight)
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltSiteFlagTableSQL, voltCols, voltSiteFlagColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return SiteFlag{}, voltErr
-	}
-	return voltSiteFlagScan(voltRow)
-}
+func SiteFlagCreate(c SiteFlagChangeset) rt.Write[SiteFlag] { return rt.Insert(c.Validate().Changeset) }
 
-// SiteFlagUpdate validates c and writes its marked columns to the site_flags row it
-// was made from, returning the stored row; nothing marked returns the row
-// untouched (spec §changesets).
-func (q *Queries) SiteFlagUpdate(ctx context.Context, c SiteFlagChangeset) (SiteFlag, error) {
-	if !c.row {
-		return SiteFlag{}, rt.ErrNoRow
-	}
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return SiteFlag{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "featured"), append(voltArgs, voltV.Featured)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "pinned"), append(voltArgs, voltV.Pinned)
-	}
-	if c.set[3] {
-		voltCols, voltArgs = append(voltCols, "ratio"), append(voltArgs, voltV.Ratio)
-	}
-	if c.set[4] {
-		voltCols, voltArgs = append(voltCols, "weight"), append(voltArgs, voltV.Weight)
-	}
-	if len(voltCols) == 0 {
-		return voltV, nil
-	}
-	voltArgs = append(voltArgs, c.data.ID)
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(voltSiteFlagTableSQL, voltCols, []string{"id"}, voltSiteFlagColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return SiteFlag{}, voltErr
-	}
-	return voltSiteFlagScan(voltRow)
-}
+func SiteFlagUpdate(c SiteFlagChangeset) rt.Write[SiteFlag] { return rt.Update(c.Validate().Changeset) }
 
 const voltSiteFlagDeleteSQL = `DELETE FROM "site_flags" WHERE "id" = ?`
 
-// SiteFlagDelete removes the identified site_flags row; rt.ErrNotFound reports
-// that nothing matched.
-func (q *Queries) SiteFlagDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltSiteFlagDeleteSQL, id)
-	if voltErr != nil {
-		return rt.Refused("SiteFlag", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
-}
-
-func voltAttachmentScan(r rt.Row) (Attachment, error) {
-	var voltV Attachment
-	voltErr := r.Scan(&voltV.ID, &voltV.Name, (*rt.Bytes)(&voltV.Body), &voltV.Thumb, (*rt.Bytes)(&voltV.Digest))
-	return voltV, rt.Refused("Attachment", voltErr)
+func SiteFlagDelete(id int) rt.Exec {
+	return rt.Exec{SQL: voltSiteFlagDeleteSQL, Args: []any{id}, Model: "SiteFlag", One: true}
 }
 
 const voltAttachmentGetSQL = `SELECT "id", "name", "body", "thumb", "digest" FROM "attachments" WHERE "id" = ?`
 
-// AttachmentGet fetches the attachments row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) AttachmentGet(ctx context.Context, id int) (Attachment, error) {
-	return voltAttachmentScan(q.db.QueryRowContext(ctx, voltAttachmentGetSQL, id))
+func AttachmentGet(id int) rt.Lookup[Attachment] {
+	return rt.Lookup[Attachment]{SQL: voltAttachmentGetSQL, Args: []any{id}, Scan: voltAttachmentScan}
 }
 
-// AttachmentGetMany fetches the attachments rows whose primary key is in ids, in
-// database order. Missing keys are not an error; they are just absent.
-func (q *Queries) AttachmentGetMany(ctx context.Context, ids []int) ([]Attachment, error) {
+func AttachmentGetMany(ids []int) rt.Query[Attachment] {
 	if len(ids) == 0 {
-		return nil, nil
+		return rt.Query[Attachment]{}
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltAttachmentTableSQL, voltAttachmentColumnsSQL, []rt.Opt[Attachment]{AttachmentID.In(ids...)})
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Attachment{}
-	for voltRows.Next() {
-		voltV, voltErr := voltAttachmentScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltAttachmentTableSQL, voltAttachmentColumnsSQL, []rt.Opt[Attachment]{AttachmentID.In(ids...)})
+	return rt.Query[Attachment]{SQL: voltSQL, Args: voltArgs, Scan: voltAttachmentScan, Err: voltErr}
 }
 
 const voltAttachmentGetByNameSQL = `SELECT "id", "name", "body", "thumb", "digest" FROM "attachments" WHERE "name" = ?`
 
-// AttachmentGetByName fetches the attachments row with the given name (a unique column),
-// or rt.ErrNotFound.
-func (q *Queries) AttachmentGetByName(ctx context.Context, name string) (Attachment, error) {
-	return voltAttachmentScan(q.db.QueryRowContext(ctx, voltAttachmentGetByNameSQL, name))
+func AttachmentGetByName(name string) rt.Lookup[Attachment] {
+	return rt.Lookup[Attachment]{SQL: voltAttachmentGetByNameSQL, Args: []any{name}, Scan: voltAttachmentScan}
 }
 
 const voltAttachmentListSQL = `SELECT "id", "name", "body", "thumb", "digest" FROM "attachments"`
 
-// AttachmentList returns every attachments row.
-func (q *Queries) AttachmentList(ctx context.Context) ([]Attachment, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltAttachmentListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Attachment{}
-	for voltRows.Next() {
-		voltV, voltErr := voltAttachmentScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func AttachmentList() rt.Query[Attachment] {
+	return rt.Query[Attachment]{SQL: voltAttachmentListSQL, Scan: voltAttachmentScan}
 }
 
-// AttachmentCreate validates c and inserts its marked columns, returning the
-// stored attachments row; nothing marked inserts the defaults (spec §changesets).
-func (q *Queries) AttachmentCreate(ctx context.Context, c AttachmentChangeset) (Attachment, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return Attachment{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "name"), append(voltArgs, voltV.Name)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "body"), append(voltArgs, rt.Bytes(voltV.Body))
-	}
-	if c.set[3] {
-		voltCols, voltArgs = append(voltCols, "thumb"), append(voltArgs, voltV.Thumb)
-	}
-	if c.set[4] {
-		voltCols, voltArgs = append(voltCols, "digest"), append(voltArgs, rt.Bytes(voltV.Digest))
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltAttachmentTableSQL, voltCols, voltAttachmentColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return Attachment{}, voltErr
-	}
-	return voltAttachmentScan(voltRow)
+func AttachmentCreate(c AttachmentChangeset) rt.Write[Attachment] {
+	return rt.Insert(c.Validate().Changeset)
 }
 
-// AttachmentUpdate validates c and writes its marked columns to the attachments row it
-// was made from, returning the stored row; nothing marked returns the row
-// untouched (spec §changesets).
-func (q *Queries) AttachmentUpdate(ctx context.Context, c AttachmentChangeset) (Attachment, error) {
-	if !c.row {
-		return Attachment{}, rt.ErrNoRow
-	}
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return Attachment{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "name"), append(voltArgs, voltV.Name)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "body"), append(voltArgs, rt.Bytes(voltV.Body))
-	}
-	if c.set[3] {
-		voltCols, voltArgs = append(voltCols, "thumb"), append(voltArgs, voltV.Thumb)
-	}
-	if c.set[4] {
-		voltCols, voltArgs = append(voltCols, "digest"), append(voltArgs, rt.Bytes(voltV.Digest))
-	}
-	if len(voltCols) == 0 {
-		return voltV, nil
-	}
-	voltArgs = append(voltArgs, c.data.ID)
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(voltAttachmentTableSQL, voltCols, []string{"id"}, voltAttachmentColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return Attachment{}, voltErr
-	}
-	return voltAttachmentScan(voltRow)
+func AttachmentUpdate(c AttachmentChangeset) rt.Write[Attachment] {
+	return rt.Update(c.Validate().Changeset)
 }
 
 const voltAttachmentDeleteSQL = `DELETE FROM "attachments" WHERE "id" = ?`
 
-// AttachmentDelete removes the identified attachments row; rt.ErrNotFound reports
-// that nothing matched.
-func (q *Queries) AttachmentDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltAttachmentDeleteSQL, id)
-	if voltErr != nil {
-		return rt.Refused("Attachment", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
-}
-
-func voltBlobScan(r rt.Row) (Blob, error) {
-	var voltV Blob
-	voltErr := r.Scan((*rt.Bytes)(&voltV.Hash), (*rt.Bytes)(&voltV.Tag), &voltV.Size)
-	return voltV, rt.Refused("Blob", voltErr)
+func AttachmentDelete(id int) rt.Exec {
+	return rt.Exec{SQL: voltAttachmentDeleteSQL, Args: []any{id}, Model: "Attachment", One: true}
 }
 
 const voltBlobGetSQL = `SELECT "hash", "tag", "size" FROM "blobs" WHERE "hash" = ?`
 
-// BlobGet fetches the blobs row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) BlobGet(ctx context.Context, hash []byte) (Blob, error) {
-	return voltBlobScan(q.db.QueryRowContext(ctx, voltBlobGetSQL, rt.Bytes(hash)))
+func BlobGet(hash []byte) rt.Lookup[Blob] {
+	return rt.Lookup[Blob]{SQL: voltBlobGetSQL, Args: []any{rt.Bytes(hash)}, Scan: voltBlobScan}
 }
 
-// BlobGetMany fetches the blobs rows whose primary key is in hashs, in
-// database order. Missing keys are not an error; they are just absent.
-func (q *Queries) BlobGetMany(ctx context.Context, hashs [][]byte) ([]Blob, error) {
+func BlobGetMany(hashs [][]byte) rt.Query[Blob] {
 	if len(hashs) == 0 {
-		return nil, nil
+		return rt.Query[Blob]{}
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltBlobTableSQL, voltBlobColumnsSQL, []rt.Opt[Blob]{BlobHash.In(hashs...)})
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Blob{}
-	for voltRows.Next() {
-		voltV, voltErr := voltBlobScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltBlobTableSQL, voltBlobColumnsSQL, []rt.Opt[Blob]{BlobHash.In(hashs...)})
+	return rt.Query[Blob]{SQL: voltSQL, Args: voltArgs, Scan: voltBlobScan, Err: voltErr}
 }
 
 const voltBlobGetByTagSQL = `SELECT "hash", "tag", "size" FROM "blobs" WHERE "tag" = ?`
 
-// BlobGetByTag fetches the blobs row with the given tag (a unique column),
-// or rt.ErrNotFound.
-func (q *Queries) BlobGetByTag(ctx context.Context, tag []byte) (Blob, error) {
-	return voltBlobScan(q.db.QueryRowContext(ctx, voltBlobGetByTagSQL, rt.Bytes(tag)))
+func BlobGetByTag(tag []byte) rt.Lookup[Blob] {
+	return rt.Lookup[Blob]{SQL: voltBlobGetByTagSQL, Args: []any{rt.Bytes(tag)}, Scan: voltBlobScan}
 }
 
 const voltBlobListSQL = `SELECT "hash", "tag", "size" FROM "blobs"`
 
-// BlobList returns every blobs row.
-func (q *Queries) BlobList(ctx context.Context) ([]Blob, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltBlobListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Blob{}
-	for voltRows.Next() {
-		voltV, voltErr := voltBlobScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
-}
+func BlobList() rt.Query[Blob] { return rt.Query[Blob]{SQL: voltBlobListSQL, Scan: voltBlobScan} }
 
-// BlobCreate validates c and inserts its marked columns, returning the
-// stored blobs row; nothing marked inserts the defaults (spec §changesets).
-func (q *Queries) BlobCreate(ctx context.Context, c BlobChangeset) (Blob, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return Blob{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[0] {
-		voltCols, voltArgs = append(voltCols, "hash"), append(voltArgs, rt.Bytes(voltV.Hash))
-	}
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "tag"), append(voltArgs, rt.Bytes(voltV.Tag))
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "size"), append(voltArgs, voltV.Size)
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltBlobTableSQL, voltCols, voltBlobColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return Blob{}, voltErr
-	}
-	return voltBlobScan(voltRow)
-}
+func BlobCreate(c BlobChangeset) rt.Write[Blob] { return rt.Insert(c.Validate().Changeset) }
 
-// BlobUpdate validates c and writes its marked columns to the blobs row it
-// was made from, returning the stored row; nothing marked returns the row
-// untouched (spec §changesets).
-func (q *Queries) BlobUpdate(ctx context.Context, c BlobChangeset) (Blob, error) {
-	if !c.row {
-		return Blob{}, rt.ErrNoRow
-	}
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return Blob{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[0] {
-		voltCols, voltArgs = append(voltCols, "hash"), append(voltArgs, rt.Bytes(voltV.Hash))
-	}
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "tag"), append(voltArgs, rt.Bytes(voltV.Tag))
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "size"), append(voltArgs, voltV.Size)
-	}
-	if len(voltCols) == 0 {
-		return voltV, nil
-	}
-	voltArgs = append(voltArgs, rt.Bytes(c.data.Hash))
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(voltBlobTableSQL, voltCols, []string{"hash"}, voltBlobColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return Blob{}, voltErr
-	}
-	return voltBlobScan(voltRow)
-}
+func BlobUpdate(c BlobChangeset) rt.Write[Blob] { return rt.Update(c.Validate().Changeset) }
 
 const voltBlobDeleteSQL = `DELETE FROM "blobs" WHERE "hash" = ?`
 
-// BlobDelete removes the identified blobs row; rt.ErrNotFound reports
-// that nothing matched.
-func (q *Queries) BlobDelete(ctx context.Context, hash []byte) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltBlobDeleteSQL, rt.Bytes(hash))
-	if voltErr != nil {
-		return rt.Refused("Blob", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
-}
-
-func voltDailyHitScan(r rt.Row) (DailyHit, error) {
-	var voltV DailyHit
-	voltErr := r.Scan(&voltV.Day, &voltV.Hits, &voltV.Site, &voltV.Label, &voltV.Token)
-	return voltV, rt.Refused("DailyHit", voltErr)
+func BlobDelete(hash []byte) rt.Exec {
+	return rt.Exec{SQL: voltBlobDeleteSQL, Args: []any{rt.Bytes(hash)}, Model: "Blob", One: true}
 }
 
 const voltDailyHitGetSQL = `SELECT "day", "hits", "site", "label", "token" FROM "daily_hits" WHERE "day" = ? AND "site" = ?`
 
-// DailyHitGet fetches the daily_hits row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) DailyHitGet(ctx context.Context, day int, site string) (DailyHit, error) {
-	return voltDailyHitScan(q.db.QueryRowContext(ctx, voltDailyHitGetSQL, day, site))
+func DailyHitGet(day int, site string) rt.Lookup[DailyHit] {
+	return rt.Lookup[DailyHit]{SQL: voltDailyHitGetSQL, Args: []any{day, site}, Scan: voltDailyHitScan}
 }
 
 const voltDailyHitGetByTokenSQL = `SELECT "day", "hits", "site", "label", "token" FROM "daily_hits" WHERE "token" = ?`
 
-// DailyHitGetByToken fetches the daily_hits row with the given token (a unique column),
-// or rt.ErrNotFound.
-func (q *Queries) DailyHitGetByToken(ctx context.Context, token rt.Null[string]) (DailyHit, error) {
-	return voltDailyHitScan(q.db.QueryRowContext(ctx, voltDailyHitGetByTokenSQL, token))
+func DailyHitGetByToken(token rt.Null[string]) rt.Lookup[DailyHit] {
+	return rt.Lookup[DailyHit]{SQL: voltDailyHitGetByTokenSQL, Args: []any{token}, Scan: voltDailyHitScan}
 }
 
 const voltDailyHitListSQL = `SELECT "day", "hits", "site", "label", "token" FROM "daily_hits"`
 
-// DailyHitList returns every daily_hits row.
-func (q *Queries) DailyHitList(ctx context.Context) ([]DailyHit, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltDailyHitListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []DailyHit{}
-	for voltRows.Next() {
-		voltV, voltErr := voltDailyHitScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func DailyHitList() rt.Query[DailyHit] {
+	return rt.Query[DailyHit]{SQL: voltDailyHitListSQL, Scan: voltDailyHitScan}
 }
 
-// DailyHitCreate validates c and inserts its marked columns, returning the
-// stored daily_hits row; nothing marked inserts the defaults (spec §changesets).
-func (q *Queries) DailyHitCreate(ctx context.Context, c DailyHitChangeset) (DailyHit, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return DailyHit{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[0] {
-		voltCols, voltArgs = append(voltCols, "day"), append(voltArgs, voltV.Day)
-	}
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "hits"), append(voltArgs, voltV.Hits)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "site"), append(voltArgs, voltV.Site)
-	}
-	if c.set[3] {
-		voltCols, voltArgs = append(voltCols, "label"), append(voltArgs, voltV.Label)
-	}
-	if c.set[4] {
-		voltCols, voltArgs = append(voltCols, "token"), append(voltArgs, voltV.Token)
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltDailyHitTableSQL, voltCols, voltDailyHitColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return DailyHit{}, voltErr
-	}
-	return voltDailyHitScan(voltRow)
-}
+func DailyHitCreate(c DailyHitChangeset) rt.Write[DailyHit] { return rt.Insert(c.Validate().Changeset) }
 
-// DailyHitUpdate validates c and writes its marked columns to the daily_hits row it
-// was made from, returning the stored row; nothing marked returns the row
-// untouched (spec §changesets).
-func (q *Queries) DailyHitUpdate(ctx context.Context, c DailyHitChangeset) (DailyHit, error) {
-	if !c.row {
-		return DailyHit{}, rt.ErrNoRow
-	}
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return DailyHit{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[0] {
-		voltCols, voltArgs = append(voltCols, "day"), append(voltArgs, voltV.Day)
-	}
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "hits"), append(voltArgs, voltV.Hits)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "site"), append(voltArgs, voltV.Site)
-	}
-	if c.set[3] {
-		voltCols, voltArgs = append(voltCols, "label"), append(voltArgs, voltV.Label)
-	}
-	if c.set[4] {
-		voltCols, voltArgs = append(voltCols, "token"), append(voltArgs, voltV.Token)
-	}
-	if len(voltCols) == 0 {
-		return voltV, nil
-	}
-	voltArgs = append(voltArgs, c.data.Day)
-	voltArgs = append(voltArgs, c.data.Site)
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(voltDailyHitTableSQL, voltCols, []string{"day", "site"}, voltDailyHitColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return DailyHit{}, voltErr
-	}
-	return voltDailyHitScan(voltRow)
-}
+func DailyHitUpdate(c DailyHitChangeset) rt.Write[DailyHit] { return rt.Update(c.Validate().Changeset) }
 
 const voltDailyHitDeleteSQL = `DELETE FROM "daily_hits" WHERE "day" = ? AND "site" = ?`
 
-// DailyHitDelete removes the identified daily_hits row; rt.ErrNotFound reports
-// that nothing matched.
-func (q *Queries) DailyHitDelete(ctx context.Context, day int, site string) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltDailyHitDeleteSQL, day, site)
-	if voltErr != nil {
-		return rt.Refused("DailyHit", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
-}
-
-func voltInviteScan(r rt.Row) (Invite, error) {
-	var voltV Invite
-	voltErr := r.Scan(&voltV.ID, &voltV.UserEmail, &voltV.Code)
-	return voltV, rt.Refused("Invite", voltErr)
+func DailyHitDelete(day int, site string) rt.Exec {
+	return rt.Exec{SQL: voltDailyHitDeleteSQL, Args: []any{day, site}, Model: "DailyHit", One: true}
 }
 
 const voltInviteGetSQL = `SELECT "id", "user_email", "code" FROM "invites" WHERE "id" = ?`
 
-// InviteGet fetches the invites row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) InviteGet(ctx context.Context, id int) (Invite, error) {
-	return voltInviteScan(q.db.QueryRowContext(ctx, voltInviteGetSQL, id))
+func InviteGet(id int) rt.Lookup[Invite] {
+	return rt.Lookup[Invite]{SQL: voltInviteGetSQL, Args: []any{id}, Scan: voltInviteScan}
 }
 
-// InviteGetMany fetches the invites rows whose primary key is in ids, in
-// database order. Missing keys are not an error; they are just absent.
-func (q *Queries) InviteGetMany(ctx context.Context, ids []int) ([]Invite, error) {
+func InviteGetMany(ids []int) rt.Query[Invite] {
 	if len(ids) == 0 {
-		return nil, nil
+		return rt.Query[Invite]{}
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltInviteTableSQL, voltInviteColumnsSQL, []rt.Opt[Invite]{InviteID.In(ids...)})
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Invite{}
-	for voltRows.Next() {
-		voltV, voltErr := voltInviteScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltInviteTableSQL, voltInviteColumnsSQL, []rt.Opt[Invite]{InviteID.In(ids...)})
+	return rt.Query[Invite]{SQL: voltSQL, Args: voltArgs, Scan: voltInviteScan, Err: voltErr}
 }
 
 const voltInviteGetByCodeSQL = `SELECT "id", "user_email", "code" FROM "invites" WHERE "code" = ?`
 
-// InviteGetByCode fetches the invites row with the given code (a unique column),
-// or rt.ErrNotFound.
-func (q *Queries) InviteGetByCode(ctx context.Context, code string) (Invite, error) {
-	return voltInviteScan(q.db.QueryRowContext(ctx, voltInviteGetByCodeSQL, code))
+func InviteGetByCode(code string) rt.Lookup[Invite] {
+	return rt.Lookup[Invite]{SQL: voltInviteGetByCodeSQL, Args: []any{code}, Scan: voltInviteScan}
 }
 
 const voltInviteListSQL = `SELECT "id", "user_email", "code" FROM "invites"`
 
-// InviteList returns every invites row.
-func (q *Queries) InviteList(ctx context.Context) ([]Invite, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltInviteListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Invite{}
-	for voltRows.Next() {
-		voltV, voltErr := voltInviteScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func InviteList() rt.Query[Invite] {
+	return rt.Query[Invite]{SQL: voltInviteListSQL, Scan: voltInviteScan}
 }
 
-// InviteCreate validates c and inserts its marked columns, returning the
-// stored invites row; nothing marked inserts the defaults (spec §changesets).
-func (q *Queries) InviteCreate(ctx context.Context, c InviteChangeset) (Invite, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return Invite{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "user_email"), append(voltArgs, voltV.UserEmail)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "code"), append(voltArgs, voltV.Code)
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltInviteTableSQL, voltCols, voltInviteColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return Invite{}, voltErr
-	}
-	return voltInviteScan(voltRow)
-}
+func InviteCreate(c InviteChangeset) rt.Write[Invite] { return rt.Insert(c.Validate().Changeset) }
 
-// InviteUpdate validates c and writes its marked columns to the invites row it
-// was made from, returning the stored row; nothing marked returns the row
-// untouched (spec §changesets).
-func (q *Queries) InviteUpdate(ctx context.Context, c InviteChangeset) (Invite, error) {
-	if !c.row {
-		return Invite{}, rt.ErrNoRow
-	}
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return Invite{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "user_email"), append(voltArgs, voltV.UserEmail)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "code"), append(voltArgs, voltV.Code)
-	}
-	if len(voltCols) == 0 {
-		return voltV, nil
-	}
-	voltArgs = append(voltArgs, c.data.ID)
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(voltInviteTableSQL, voltCols, []string{"id"}, voltInviteColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return Invite{}, voltErr
-	}
-	return voltInviteScan(voltRow)
-}
+func InviteUpdate(c InviteChangeset) rt.Write[Invite] { return rt.Update(c.Validate().Changeset) }
 
 const voltInviteDeleteSQL = `DELETE FROM "invites" WHERE "id" = ?`
 
-// InviteDelete removes the identified invites row; rt.ErrNotFound reports
-// that nothing matched.
-func (q *Queries) InviteDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltInviteDeleteSQL, id)
-	if voltErr != nil {
-		return rt.Refused("Invite", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
-}
-
-func voltPostFlagScan(r rt.Row) (PostFlag, error) {
-	var voltV PostFlag
-	voltErr := r.Scan(&voltV.ID, &voltV.Reviewed, &voltV.Approved)
-	return voltV, rt.Refused("PostFlag", voltErr)
+func InviteDelete(id int) rt.Exec {
+	return rt.Exec{SQL: voltInviteDeleteSQL, Args: []any{id}, Model: "Invite", One: true}
 }
 
 const voltPostFlagGetSQL = `SELECT "id", "reviewed", "approved" FROM "post_flags" WHERE "id" = ?`
 
-// PostFlagGet fetches the post_flags row with the given primary key, or rt.ErrNotFound.
-func (q *Queries) PostFlagGet(ctx context.Context, id int) (PostFlag, error) {
-	return voltPostFlagScan(q.db.QueryRowContext(ctx, voltPostFlagGetSQL, id))
+func PostFlagGet(id int) rt.Lookup[PostFlag] {
+	return rt.Lookup[PostFlag]{SQL: voltPostFlagGetSQL, Args: []any{id}, Scan: voltPostFlagScan}
 }
 
-// PostFlagGetMany fetches the post_flags rows whose primary key is in ids, in
-// database order. Missing keys are not an error; they are just absent.
-func (q *Queries) PostFlagGetMany(ctx context.Context, ids []int) ([]PostFlag, error) {
+func PostFlagGetMany(ids []int) rt.Query[PostFlag] {
 	if len(ids) == 0 {
-		return nil, nil
+		return rt.Query[PostFlag]{}
 	}
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltPostFlagTableSQL, voltPostFlagColumnsSQL, []rt.Opt[PostFlag]{PostFlagID.In(ids...)})
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []PostFlag{}
-	for voltRows.Next() {
-		voltV, voltErr := voltPostFlagScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltPostFlagTableSQL, voltPostFlagColumnsSQL, []rt.Opt[PostFlag]{PostFlagID.In(ids...)})
+	return rt.Query[PostFlag]{SQL: voltSQL, Args: voltArgs, Scan: voltPostFlagScan, Err: voltErr}
 }
 
 const voltPostFlagListSQL = `SELECT "id", "reviewed", "approved" FROM "post_flags"`
 
-// PostFlagList returns every post_flags row.
-func (q *Queries) PostFlagList(ctx context.Context) ([]PostFlag, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltPostFlagListSQL)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []PostFlag{}
-	for voltRows.Next() {
-		voltV, voltErr := voltPostFlagScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func PostFlagList() rt.Query[PostFlag] {
+	return rt.Query[PostFlag]{SQL: voltPostFlagListSQL, Scan: voltPostFlagScan}
 }
 
-// PostFlagCreate validates c and inserts its marked columns, returning the
-// stored post_flags row; nothing marked inserts the defaults (spec §changesets).
-func (q *Queries) PostFlagCreate(ctx context.Context, c PostFlagChangeset) (PostFlag, error) {
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return PostFlag{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "reviewed"), append(voltArgs, voltV.Reviewed)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "approved"), append(voltArgs, voltV.Approved)
-	}
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(voltPostFlagTableSQL, voltCols, voltPostFlagColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return PostFlag{}, voltErr
-	}
-	return voltPostFlagScan(voltRow)
-}
+func PostFlagCreate(c PostFlagChangeset) rt.Write[PostFlag] { return rt.Insert(c.Validate().Changeset) }
 
-// PostFlagUpdate validates c and writes its marked columns to the post_flags row it
-// was made from, returning the stored row; nothing marked returns the row
-// untouched (spec §changesets).
-func (q *Queries) PostFlagUpdate(ctx context.Context, c PostFlagChangeset) (PostFlag, error) {
-	if !c.row {
-		return PostFlag{}, rt.ErrNoRow
-	}
-	c = c.Validate()
-	if voltErr := c.Err(); voltErr != nil {
-		return PostFlag{}, voltErr
-	}
-	voltV := c.Row()
-	var voltCols []string
-	var voltArgs []any
-	if c.set[1] {
-		voltCols, voltArgs = append(voltCols, "reviewed"), append(voltArgs, voltV.Reviewed)
-	}
-	if c.set[2] {
-		voltCols, voltArgs = append(voltCols, "approved"), append(voltArgs, voltV.Approved)
-	}
-	if len(voltCols) == 0 {
-		return voltV, nil
-	}
-	voltArgs = append(voltArgs, c.data.ID)
-	voltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(voltPostFlagTableSQL, voltCols, []string{"id"}, voltPostFlagColumnsSQL), voltArgs...)
-	if voltErr != nil {
-		return PostFlag{}, voltErr
-	}
-	return voltPostFlagScan(voltRow)
-}
+func PostFlagUpdate(c PostFlagChangeset) rt.Write[PostFlag] { return rt.Update(c.Validate().Changeset) }
 
 const voltPostFlagDeleteSQL = `DELETE FROM "post_flags" WHERE "id" = ?`
 
-// PostFlagDelete removes the identified post_flags row; rt.ErrNotFound reports
-// that nothing matched.
-func (q *Queries) PostFlagDelete(ctx context.Context, id int) error {
-	voltRes, voltErr := q.db.ExecContext(ctx, voltPostFlagDeleteSQL, id)
-	if voltErr != nil {
-		return rt.Refused("PostFlag", voltErr)
-	}
-	voltN, voltErr := voltRes.RowsAffected()
-	if voltErr != nil {
-		return voltErr
-	}
-	if voltN == 0 {
-		return rt.ErrNotFound
-	}
-	return nil
+func PostFlagDelete(id int) rt.Exec {
+	return rt.Exec{SQL: voltPostFlagDeleteSQL, Args: []any{id}, Model: "PostFlag", One: true}
 }

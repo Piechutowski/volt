@@ -1,32 +1,32 @@
 // analyzers: shadowedcolumn
-TablePartial base {
+table_partial base {
   id int
   created_at time.Time
 }
-Table t {
+table t {
   ~base
   id string //WANT shadowedcolumn
   name string
 }
 
 // between two partials, the later injection silently wins (§tablepartial)
-TablePartial audit_a {
+table_partial audit_a {
   updated_at time.Time
 }
-TablePartial audit_b {
+table_partial audit_b {
   updated_at time.Time //WANT shadowedcolumn
 }
-Table u {
+table u {
   ~audit_a
   ~audit_b
   x int
 }
 
 // a partial injected twice brings each of its columns twice
-TablePartial stamps {
+table_partial stamps {
   created_at time.Time //WANT shadowedcolumn
 }
-Table v {
+table v {
   id int
   ~stamps
   ~stamps

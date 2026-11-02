@@ -31,7 +31,7 @@ func Selects(pl *naming.Plan, fns []naming.SelectFn, opts Options) ([]byte, erro
 	}
 
 	var body strings.Builder
-	imports := map[string]bool{"context": true}
+	imports := map[string]bool{rtImport: true}
 	sharedDone := map[string]bool{}
 	for _, fn := range fns {
 		t, err := pl.Table(fn.TableKey)
@@ -43,7 +43,7 @@ func Selects(pl *naming.Plan, fns []naming.SelectFn, opts Options) ([]byte, erro
 				imports[imp] = true
 			}
 		}
-		cols, err := t.SelectColumns(fn)
+		cols, err := pl.SelectColumns(fn)
 		if err != nil {
 			return nil, err
 		}
@@ -51,12 +51,11 @@ func Selects(pl *naming.Plan, fns []naming.SelectFn, opts Options) ([]byte, erro
 		case fn.SharedType != "":
 			if !sharedDone[fn.SharedType] {
 				sharedDone[fn.SharedType] = true
-				fmt.Fprintf(&body, "// %s is the shared row type of select %q (spec §selects-over-groups):\n// one wire type, every member of the target a source.\n", fn.SharedType, lowerFirstWord(fn.MethodSuffix))
 				fmt.Fprintf(&body, "type %s struct {\n", fn.SharedType)
 				var rows align.Block
 				for _, f := range cols {
 					fieldImports(imports, f)
-					rows.Row(f.GoField, f.GoType, fmt.Sprintf("`db:%q json:%q`", f.ColName, f.ColName))
+					rows.Row(f.GoField, f.GoType, fmt.Sprintf("`db:%q json:%q`", f.WireName(), f.WireName()))
 				}
 				rows.WriteTo(&body, "\t")
 				body.WriteString("}\n\n")
@@ -68,8 +67,6 @@ func Selects(pl *naming.Plan, fns []naming.SelectFn, opts Options) ([]byte, erro
 			if err != nil {
 				return nil, err
 			}
-			fmt.Fprintf(&body, "// %s is %s minus (%s) — a struct derivative of select %q,\n// every kept field copied verbatim (spec §selects-over-groups).\n",
-				row, t.Model, strings.Join(fn.Excluded, ", "), lowerFirstWord(fn.MethodSuffix))
 			fmt.Fprintf(&body, "type %s struct {\n", row)
 			var rows align.Block
 			for _, f := range cols {
@@ -86,6 +83,11 @@ func Selects(pl *naming.Plan, fns []naming.SelectFn, opts Options) ([]byte, erro
 		}
 		if err := selectEmit(&body, imports, pl, t, fn); err != nil {
 			return nil, err
+		}
+		if fn.With != nil {
+			if err := withEmit(&body, pl, t, fn, sharedDone); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -132,13 +134,6 @@ func rowScanEmit(b *strings.Builder, row string, cols []*naming.Field) {
 	b.WriteString(")\n\treturn voltV, voltErr\n}\n\n")
 }
 
-func lowerFirstWord(s string) string {
-	if s == "" {
-		return s
-	}
-	return strings.ToLower(s[:1]) + s[1:]
-}
-
 func selectEmit(b *strings.Builder, imports map[string]bool, pl *naming.Plan, t *naming.Table, fn naming.SelectFn) error {
 	row, err := pl.SelectRowName(fn)
 	if err != nil {
@@ -147,7 +142,7 @@ func selectEmit(b *strings.Builder, imports map[string]bool, pl *naming.Plan, t 
 	name := t.SelectMethod(fn)
 	constName := t.SelectConst(fn)
 
-	sql, args, err := t.SelectSQL(fn)
+	sql, args, err := pl.SelectSQL(fn)
 	if err != nil {
 		return fmt.Errorf("select %s: %w", name, err)
 	}
@@ -157,18 +152,70 @@ func selectEmit(b *strings.Builder, imports map[string]bool, pl *naming.Plan, t 
 	for _, prm := range fn.Params {
 		fmt.Fprintf(&sig, ", %s %s", prm.GoName, prm.GoType)
 	}
-	binds := ""
-	if len(args) > 0 {
-		binds = ", " + strings.Join(args, ", ")
-	}
 	for _, a := range args {
 		if strings.HasPrefix(a, "rt.") {
 			imports[rtImport] = true
 		}
 	}
-	fmt.Fprintf(b, "// %s runs the %q select over %s (spec §selects-over-groups).\n", name, lowerFirstWord(fn.MethodSuffix), t.SQLName)
-	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context%s) ([]%s, error) {\n", name, sig.String(), row)
-	fmt.Fprintf(b, "\tvoltRows, voltErr := q.db.QueryContext(ctx, %s%s)\n", constName, binds)
-	rowsScanEmit(b, row, naming.RowScan(row))
+	effect := "rt.Query"
+	if fn.Lookup {
+		effect = "rt.Lookup"
+	}
+	if w := fn.With; w != nil {
+		child, err := pl.Table(w.TableKey)
+		if err != nil {
+			return err
+		}
+		key := t.Field(w.ParentKey)
+		childKey := child.Field(w.ChildKey)
+		if key == nil || childKey == nil {
+			return fmt.Errorf("select %s: the key columns of with are not in the plan", name)
+		}
+		childValue := "voltC." + childKey.GoField
+		if childKey.Nullable {
+			childValue += ".V"
+		}
+		kind := fmt.Sprintf("rt.With[%s, %s, %s, %s]", row, child.Model, key.BaseType, w.RowType)
+		fmt.Fprintf(b, "func %s(%s) %s {\n", name, strings.TrimPrefix(sig.String(), ", "), kind)
+		fmt.Fprintf(b, "\treturn %s{\n", kind)
+		fmt.Fprintf(b, "\t\tParent:    rt.Query[%s]{SQL: %s, Args: %s, Scan: %s},\n", row, constName, argsList(args), naming.RowScan(row))
+		fmt.Fprintf(b, "\t\tChild:     %s,\n", withConst(t, fn))
+		fmt.Fprintf(b, "\t\tChildScan: %s,\n", child.Names.Scan)
+		fmt.Fprintf(b, "\t\tParentKey: func(voltP %s) %s { return voltP.%s },\n", row, key.BaseType, key.GoField)
+		fmt.Fprintf(b, "\t\tChildKey:  func(voltC %s) %s { return %s },\n", child.Model, key.BaseType, childValue)
+		fmt.Fprintf(b, "\t\tBuild: func(voltP %s, voltCs []%s) %s {\n\t\t\treturn %s{%s: voltP, %s: voltCs}\n\t\t},\n", row, child.Model, w.RowType, w.RowType, row, w.Field)
+		b.WriteString("\t}\n}\n\n")
+		return nil
+	}
+	fmt.Fprintf(b, "func %s(%s) %s[%s] {\n", name, strings.TrimPrefix(sig.String(), ", "), effect, row)
+	fmt.Fprintf(b, "\treturn %s[%s]{SQL: %s, Args: %s, Scan: %s}\n}\n\n", effect, row, constName, argsList(args), naming.RowScan(row))
 	return nil
+}
+
+// withEmit writes the row type of a nested select and the statement that
+// loads its children (spec §selects-over-groups).
+func withEmit(b *strings.Builder, pl *naming.Plan, t *naming.Table, fn naming.SelectFn, done map[string]bool) error {
+	w := fn.With
+	child, err := pl.Table(w.TableKey)
+	if err != nil {
+		return err
+	}
+	row, err := pl.SelectRowName(fn)
+	if err != nil {
+		return err
+	}
+	if !done[w.RowType] {
+		done[w.RowType] = true
+		fmt.Fprintf(b, "type %s struct {\n\t%s\n\t%s []%s\n}\n\n", w.RowType, row, w.Field, child.Model)
+	}
+	sql, err := pl.WithChildSQL(fn)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(b, "const %s = `%s`\n\n", withConst(t, fn), sql)
+	return nil
+}
+
+func withConst(t *naming.Table, fn naming.SelectFn) string {
+	return "volt" + t.Model + fn.MethodSuffix + "ChildrenSQL"
 }

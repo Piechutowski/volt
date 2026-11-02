@@ -21,11 +21,13 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/urfave/cli/v3"
 
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/nao/gen/sqlite"
 	"github.com/Piechutowski/volt/nao/migrate"
 	"github.com/Piechutowski/volt/nao/rt"
+	"github.com/Piechutowski/volt/nao/run"
 )
 
 const sqliteDriver = "sqlite3"
@@ -37,7 +39,7 @@ func migrationCommand() *cli.Command {
 		Commands: []*cli.Command{
 			{
 				Name:      "new",
-				Usage:     "write <next>__LABEL.volt holding an empty Migration into the package at DIR (default: the current directory)",
+				Usage:     "write <next>__LABEL.volt holding an empty migration into the package at DIR (default: the current directory)",
 				ArgsUsage: "LABEL [DIR]",
 				Action:    migrationNewRun,
 			},
@@ -117,7 +119,7 @@ func migrationNewRun(_ context.Context, c *cli.Command) error {
 	if _, err := os.Stat(path); err == nil {
 		return cli.Exit(fmt.Sprintf("migration new: %s exists; refusing to overwrite", path), 2)
 	}
-	src := fmt.Sprintf("package %s\n\nMigration %s {\n}\n", pkg.Name, name)
+	src := fmt.Sprintf("package %s\n\nmigration %s {\n}\n", pkg.Name, name)
 	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
 		return cli.Exit("migration new: "+err.Error(), 2)
 	}
@@ -174,7 +176,7 @@ func migrationUpRun(ctx context.Context, c *cli.Command) error {
 		return err
 	}
 	defer db.Close()
-	applied, err := rt.MigrateUp(ctx, db, ms)
+	applied, err := run.MigrateUp(ctx, db, ms)
 	for _, name := range applied {
 		fmt.Println("applied", name)
 	}
@@ -193,7 +195,7 @@ func migrationDownRun(ctx context.Context, c *cli.Command) error {
 		return err
 	}
 	defer db.Close()
-	name, err := rt.MigrateDown(ctx, db, ms)
+	name, err := run.MigrateDown(ctx, db, ms)
 	if err != nil {
 		return migrationExit("migration down: ", err)
 	}
@@ -207,7 +209,7 @@ func migrationStatusRun(ctx context.Context, c *cli.Command) error {
 		return err
 	}
 	defer db.Close()
-	status, err := rt.MigrateStatus(ctx, db, ms)
+	status, err := run.MigrateStatus(ctx, db, ms)
 	if err != nil {
 		return migrationExit("migration status: ", err)
 	}
@@ -245,11 +247,11 @@ func argOr(c *cli.Command, i int, def string) string {
 // tables it migrates (spec §migrations). A package with errors
 // exits 1, as from gen and check (spec §migration-tooling).
 func migrationPackage(dir string) (*lang.Package, error) {
-	root, err := lang.FindRoot(dir)
+	root, err := lang.FindRoot(disk.Source{}, dir)
 	if err != nil {
 		return nil, cli.Exit(err.Error(), 2)
 	}
-	pr, err := lang.LoadDirs(root, []string{dir}, nil)
+	pr, err := lang.LoadDirs(disk.Source{}, root, []string{dir}, nil)
 	if err != nil {
 		return nil, cli.Exit(err.Error(), 2)
 	}
@@ -290,56 +292,56 @@ func migrationExit(prefix string, err error) error {
 	return cli.Exit(prefix+err.Error(), 2)
 }
 
-func migrationDatabase(ctx context.Context, c *cli.Command, sub string) (*sql.DB, []rt.Migration, error) {
+func migrationDatabase(ctx context.Context, c *cli.Command, sub string) (run.DB, []rt.Migration, error) {
 	if c.Args().Len() < 1 || c.Args().Len() > 2 {
-		return nil, nil, cli.Exit("migration "+sub+": DSN [DIR]", 2)
+		return run.DB{}, nil, cli.Exit("migration "+sub+": DSN [DIR]", 2)
 	}
 	dsn := c.Args().Get(0)
 	if dsnIsMemory(dsn) {
-		return nil, nil, cli.Exit("migration "+sub+": "+dsn+" holds nothing once the command returns; name a file", 2)
+		return run.DB{}, nil, cli.Exit("migration "+sub+": "+dsn+" holds nothing once the command returns; name a file", 2)
 	}
 	pkg, err := migrationPackage(argOr(c, 1, "."))
 	if err != nil {
-		return nil, nil, err
+		return run.DB{}, nil, err
 	}
 	ms, err := migrationsLowered("migration "+sub+": ", pkg)
 	if err != nil {
-		return nil, nil, err
+		return run.DB{}, nil, err
 	}
 	if err := sqliteGuard(sqliteDriver); err != nil {
-		return nil, nil, err
+		return run.DB{}, nil, err
 	}
 	db, err := databaseOpen(ctx, sub, dsn)
 	if err != nil {
-		return nil, nil, cli.Exit("migration "+sub+": "+dsn+": "+err.Error(), 2)
+		return run.DB{}, nil, cli.Exit("migration "+sub+": "+dsn+": "+err.Error(), 2)
 	}
 	return db, ms, nil
 }
 
-func databaseOpen(ctx context.Context, sub, dsn string) (*sql.DB, error) {
+func databaseOpen(ctx context.Context, sub, dsn string) (run.DB, error) {
 	switch sub {
 	case "status":
 		db, err := sql.Open(sqliteDriver, dsnWithMode(dsn, "ro"))
 		if err != nil {
-			return nil, err
+			return run.DB{}, err
 		}
 		db.SetMaxOpenConns(1)
 		if _, err := db.ExecContext(ctx, "PRAGMA busy_timeout = 5000"); err != nil {
 			_ = db.Close()
-			return nil, err
+			return run.DB{}, err
 		}
-		return db, nil
+		return run.Wrap(db), nil
 	case "down":
 		dsn = dsnWithMode(dsn, "rw")
 	}
 	if err := databasePing(ctx, dsn); err != nil {
-		return nil, err
+		return run.DB{}, err
 	}
-	return rt.Open(sqliteDriver, dsn)
+	return run.Open(sqliteDriver, dsn)
 }
 
 // databasePing opens one connection to dsn and closes it, so that a
-// database that cannot be opened is reported as that, before rt.Open
+// database that cannot be opened is reported as that, before run.Open
 // runs its pragmas on it and reports the first of them instead.
 func databasePing(ctx context.Context, dsn string) error {
 	db, err := sql.Open(sqliteDriver, dsn)
@@ -393,27 +395,27 @@ func foldCheck(ctx context.Context, pkg *lang.Package, ms []rt.Migration) ([]mig
 	if err != nil {
 		return nil, err
 	}
-	foldDB, err := rt.Open(sqliteDriver, ":memory:")
+	foldDB, err := run.Open(sqliteDriver, ":memory:")
 	if err != nil {
 		return nil, err
 	}
 	defer foldDB.Close()
-	if _, err := rt.MigrateUp(ctx, foldDB, ms); err != nil {
+	if _, err := run.MigrateUp(ctx, foldDB, ms); err != nil {
 		return nil, foldStopped("", err)
 	}
-	targetDB, err := rt.Open(sqliteDriver, ":memory:")
+	targetDB, err := run.Open(sqliteDriver, ":memory:")
 	if err != nil {
 		return nil, err
 	}
 	defer targetDB.Close()
-	if _, err := targetDB.ExecContext(ctx, string(ddl)); err != nil {
+	if _, err := targetDB.Pool().ExecContext(ctx, string(ddl)); err != nil {
 		return nil, fmt.Errorf("the schema's DDL: %w", err)
 	}
-	fold, err := migrate.Read(ctx, foldDB)
+	fold, err := migrate.Read(ctx, foldDB.Pool())
 	if err != nil {
 		return nil, err
 	}
-	target, err := migrate.Read(ctx, targetDB)
+	target, err := migrate.Read(ctx, targetDB.Pool())
 	if err != nil {
 		return nil, err
 	}
@@ -423,15 +425,15 @@ func foldCheck(ctx context.Context, pkg *lang.Package, ms []rt.Migration) ([]mig
 	return migrate.Diff(target, fold), nil
 }
 
-func foldRoundTrip(ctx context.Context, db *sql.DB, ms []rt.Migration) error {
+func foldRoundTrip(ctx context.Context, db run.DB, ms []rt.Migration) error {
 	byName := append([]rt.Migration(nil), ms...)
 	sort.Slice(byName, func(i, j int) bool { return byName[i].Name < byName[j].Name })
 	for i := len(byName) - 1; i >= 0 && byName[i].Down != nil; i-- {
-		if _, err := rt.MigrateDown(ctx, db, ms); err != nil {
+		if _, err := run.MigrateDown(ctx, db, ms); err != nil {
 			return foldStopped(" on the way down", err)
 		}
 	}
-	if _, err := rt.MigrateUp(ctx, db, ms); err != nil {
+	if _, err := run.MigrateUp(ctx, db, ms); err != nil {
 		return foldStopped(" on the way up again", err)
 	}
 	return nil

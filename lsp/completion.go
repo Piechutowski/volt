@@ -12,12 +12,12 @@ import (
 
 var (
 	elementKeywords = []string{
-		"Project", "Table", "TablePartial", "Type", "Ref",
-		"Records", "Migration",
-		"package ", "import", "Pipeline", "Scope",
-		"Group", "Pred", "Select",
+		"project", "table", "table_partial", "type", "ref",
+		"records", "migration",
+		"package ", "import", "pipeline", "scope",
+		"group", "pred", "select",
 	}
-	tableBodyKeywords     = []string{"Indexes", "Validators", "Records"}
+	tableBodyKeywords     = []string{"indexes", "validators", "records"}
 	migrationBodyKeywords = []string{
 		"create table ", "create index ", "drop table ", "drop index ",
 		"rename table ", "alter table ", "rebuild table ", "exec ", "up {", "down {",
@@ -25,7 +25,7 @@ var (
 	alterBodyKeywords = []string{"add ", "drop ", "rename "}
 	scopeBodyKeywords = []string{
 		"get ", "post ", "patch ", "delete ", "options ", "head ",
-		"any ", "resources ", "dataset ", "Scope ",
+		"any ", "resources ", "dataset ", "scope ",
 	}
 
 	settingsByContext = map[string][]string{
@@ -63,8 +63,8 @@ var (
 	dotChainRE      = regexp.MustCompile(`([\p{L}\p{Nd}_]+)(\.([\p{L}\p{Nd}_]+))?\.$`)
 	refValueRE      = regexp.MustCompile(`\bref\s*:\s*$`)
 	refDotRE        = regexp.MustCompile(`\bref\s*:\s*([\p{L}\p{Nd}_]+)\.$`)
-	refHeadRE       = regexp.MustCompile(`^\s*Ref\s*:\s*[\p{L}\p{Nd}_]*$`)
-	refTargetRE     = regexp.MustCompile(`^\s*Ref\s*:[^>]*>\s*[\p{L}\p{Nd}_]*$`)
+	refHeadRE       = regexp.MustCompile(`^\s*ref\s*:\s*[\p{L}\p{Nd}_]*$`)
+	refTargetRE     = regexp.MustCompile(`^\s*ref\s*:[^>]*>\s*[\p{L}\p{Nd}_]*$`)
 	defaultValueRE  = regexp.MustCompile(`\bdefault\s*:\s*$`)
 	columnTypeRE    = regexp.MustCompile(`^\s*(?:add\s+)?[\p{L}\p{Nd}_]+\s+([\p{L}\p{Nd}_.\[\]]+)\s*\[`)
 	actionValueRE   = regexp.MustCompile(`\b(delete|update)\s*:\s*\w*$`)
@@ -146,7 +146,7 @@ func (d *Document) Complete(pos protocol.Position) []protocol.CompletionItem {
 			return keywordItemsKind(builtinTypes, protocol.CompletionItemKindStruct)
 		}
 		if lineStartRE.MatchString(prefix) {
-			return keywordItems([]string{"Indexes"})
+			return keywordItems([]string{"indexes"})
 		}
 	}
 	return nil
@@ -181,27 +181,27 @@ func (d *Document) blockContexts(line int) (ctx, outer string) {
 
 func headContext(head string) string {
 	switch {
-	case strings.HasPrefix(head, "Indexes"):
+	case strings.HasPrefix(head, "indexes"):
 		return "indexes"
-	case strings.HasPrefix(head, "Validators"):
+	case strings.HasPrefix(head, "validators"):
 		return "validators"
-	case strings.HasPrefix(head, "TablePartial"):
+	case strings.HasPrefix(head, "table_partial"):
 		return "tablepartial"
-	case strings.HasPrefix(head, "Group"):
+	case strings.HasPrefix(head, "group"):
 		return "group"
-	case strings.HasPrefix(head, "Table"):
+	case strings.HasPrefix(head, "table"):
 		return "table"
-	case strings.HasPrefix(head, "Project"):
+	case strings.HasPrefix(head, "project"):
 		return "project"
-	case strings.HasPrefix(head, "Records"):
+	case strings.HasPrefix(head, "records"):
 		return "records"
-	case strings.HasPrefix(head, "Ref"):
+	case strings.HasPrefix(head, "ref"):
 		return "ref"
-	case strings.HasPrefix(head, "Pipeline"):
+	case strings.HasPrefix(head, "pipeline"):
 		return "pipeline"
-	case strings.HasPrefix(head, "Scope"):
+	case strings.HasPrefix(head, "scope"):
 		return "scope"
-	case strings.HasPrefix(head, "Migration"), upDownHeadRE.MatchString(head):
+	case strings.HasPrefix(head, "migration"), upDownHeadRE.MatchString(head):
 		return "migration"
 	case strings.HasPrefix(head, "rebuild table"):
 		return "rebuild"
@@ -240,19 +240,19 @@ func (d *Document) settingsComplete(prefix, ctx, outer string, top bool) []proto
 	verb := strings.SplitN(head, " ", 2)[0]
 	header := func(word string) bool { return top && strings.HasPrefix(head, word) }
 	switch {
-	case header("TablePartial"), header("Group"), header("Type "):
+	case header("table_partial"), header("group"), header("type "):
 		return nil
-	case header("Table"):
+	case header("table"):
 		kind = "table"
-	case header("Project"):
+	case header("project"):
 		kind = "project"
-	case header("Ref"):
+	case header("ref"):
 		kind = "ref"
-	case header("Select"):
+	case header("select"):
 		kind = "select"
-	case strings.HasPrefix(head, "Scope") && (top || ctx == "scope"):
+	case strings.HasPrefix(head, "scope") && (top || ctx == "scope"):
 		kind = "scope"
-	case header("Migration"):
+	case header("migration"):
 		kind = "migration"
 	case strings.HasPrefix(head, "resources") && ctx == "scope":
 		kind = "resources"
@@ -325,7 +325,7 @@ func (d *Document) tableItems() []protocol.CompletionItem {
 		label := ti.Decl.Name.Name()
 		if !seen[label] {
 			seen[label] = true
-			items = append(items, item(label, protocol.CompletionItemKindStruct, "Table"))
+			items = append(items, item(label, protocol.CompletionItemKindStruct, "table"))
 		}
 	}
 	return items
@@ -342,7 +342,7 @@ func (d *Document) columnItems(ti *check.TableInfo) []protocol.CompletionItem {
 func (d *Document) typeItems() []protocol.CompletionItem {
 	items := keywordItemsKind(builtinTypes, protocol.CompletionItemKindStruct)
 	for _, ti := range d.Info.Types {
-		items = append(items, item(ti.Decl.Name.String(), protocol.CompletionItemKindClass, "Type"))
+		items = append(items, item(ti.Decl.Name.String(), protocol.CompletionItemKindClass, "type"))
 	}
 	return items
 }
@@ -350,7 +350,7 @@ func (d *Document) typeItems() []protocol.CompletionItem {
 func (d *Document) partialItems() []protocol.CompletionItem {
 	var items []protocol.CompletionItem
 	for _, pi := range d.Info.Partials {
-		items = append(items, item(pi.Decl.Name.Name(), protocol.CompletionItemKindInterface, "TablePartial"))
+		items = append(items, item(pi.Decl.Name.Name(), protocol.CompletionItemKindInterface, "table_partial"))
 	}
 	return items
 }
@@ -358,7 +358,7 @@ func (d *Document) partialItems() []protocol.CompletionItem {
 func (d *Document) partialInjectionItems() []protocol.CompletionItem {
 	var items []protocol.CompletionItem
 	for _, pi := range d.Info.Partials {
-		items = append(items, item("~"+pi.Decl.Name.Name(), protocol.CompletionItemKindInterface, "inject TablePartial"))
+		items = append(items, item("~"+pi.Decl.Name.Name(), protocol.CompletionItemKindInterface, "inject table_partial"))
 	}
 	return items
 }

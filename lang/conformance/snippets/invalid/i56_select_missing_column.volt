@@ -1,18 +1,18 @@
 // spec: §selects-over-groups — every member must have every referenced column
 package db
 
-Table ms_revenue {
+table ms_revenue {
   id int [pk]
   org string
 }
 
-Table ms_meta {
+table ms_meta {
   id int [pk]
 }
 
-Group series {
+group series {
   ms_revenue
   ms_meta
 }
 
-Select rows for series where org = :org
+select rows for series where org = :org

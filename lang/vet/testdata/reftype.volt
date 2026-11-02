@@ -1,10 +1,10 @@
 // analyzers: reftype
-Table users {
+table users {
   id int [pk]
 }
-Table posts {
+table posts {
   user_id string
   ok_id int
 }
-Ref: posts.user_id > users.id //WANT reftype
-Ref: posts.ok_id > users.id
+ref: posts.user_id > users.id //WANT reftype
+ref: posts.ok_id > users.id

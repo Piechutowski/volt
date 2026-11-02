@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 	sqlitegen "github.com/Piechutowski/volt/nao/gen/sqlite"
@@ -18,7 +19,7 @@ func TestSelectsPrepare(t *testing.T) {
 		t.Skip("python3 not available")
 	}
 	root := filepath.Join("testdata", "selects")
-	pr, err := lang.LoadDirs(root, []string{filepath.Join(root, "db")}, nil)
+	pr, err := lang.LoadDirs(disk.Source{}, root, []string{filepath.Join(root, "db")}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,6 +50,13 @@ func TestSelectsPrepare(t *testing.T) {
 			t.Fatal(err)
 		}
 		stmts[fn.TableKey+"."+fn.MethodSuffix] = stmtCase{SQL: sql, N: len(args)}
+		if fn.With != nil {
+			child, err := plan.WithChildSQL(fn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			stmts[fn.TableKey+"."+fn.MethodSuffix+".children"] = stmtCase{SQL: child, N: 1}
+		}
 	}
 	input, err := json.Marshal(map[string]any{"ddl": string(ddl), "stmts": stmts})
 	if err != nil {

@@ -18,6 +18,7 @@ const (
 	actionValue
 	defaultVal
 	refVal
+	nameValue
 )
 
 type settingSpec struct {
@@ -56,7 +57,7 @@ var (
 		forbidden: map[string]string{"pk": pkNotIndexSetting("indexes")},
 	}
 	refSettings = settingSpec{
-		kinds: map[string]valueKind{"delete": actionValue, "update": actionValue},
+		kinds: map[string]valueKind{"delete": actionValue, "update": actionValue, "as": nameValue, "reverse": nameValue},
 	}
 )
 
@@ -120,6 +121,10 @@ func (c *checker) settingValueCheck(s *ast.Setting, section string, kind valueKi
 		if _, ok := s.Value.(*ast.Ident); !ok {
 			c.errorf(s.Value.Pos(), section, "%q must be a referential action: cascade, restrict, set_null or set_default (§%s)", s.Name, section)
 		}
+	case nameValue:
+		if _, ok := s.Value.(*ast.Ident); !ok {
+			c.errorf(s.Value.Pos(), section, "%q takes a name (§%s)", s.Name, section)
+		}
 	case defaultVal:
 		c.defaultValueCheck(s)
 	case refVal:
@@ -127,7 +132,7 @@ func (c *checker) settingValueCheck(s *ast.Setting, section string, kind valueKi
 		if !ok {
 			c.errorf(s.Value.Pos(), section, "'ref' must be an endpoint, table.column (§%s)", section)
 		} else if ep.Paren {
-			c.errorf(ep.Pos(), "columns", "an inline ref endpoint is table.column, without parentheses: a foreign key over several columns is a Ref element (§columns)")
+			c.errorf(ep.Pos(), "columns", "an inline ref endpoint is table.column, without parentheses: a foreign key over several columns is a ref element (§columns)")
 		}
 	}
 }

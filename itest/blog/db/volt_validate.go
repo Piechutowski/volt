@@ -6,9 +6,6 @@ import (
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-// Validate runs required and the validators of users over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c UserChangeset) Validate() UserChangeset {
 	voltV := c.Row()
 	var voltErrs []rt.FieldError
@@ -21,30 +18,17 @@ func (c UserChangeset) Validate() UserChangeset {
 	if voltErr := EmailValid(voltV.Email); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "EmailValid", Columns: []string{"email"}, Message: voltErr.Error()})
 	}
-	c.valid = voltErrs
-	return c
+	return UserChangeset{c.WithFindings(voltErrs)}
 }
 
-// Validate runs required and the validators of tags over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c TagChangeset) Validate() TagChangeset {
-	c.valid = nil
-	return c
+	return TagChangeset{c.WithFindings(nil)}
 }
 
-// Validate runs required and the validators of ms_revenue over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c MsRevenueChangeset) Validate() MsRevenueChangeset {
-	c.valid = nil
-	return c
+	return MsRevenueChangeset{c.WithFindings(nil)}
 }
 
-// Validate runs required and the validators of ms_usage over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c MsUsageChangeset) Validate() MsUsageChangeset {
-	c.valid = nil
-	return c
+	return MsUsageChangeset{c.WithFindings(nil)}
 }

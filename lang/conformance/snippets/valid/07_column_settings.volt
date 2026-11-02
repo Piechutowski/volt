@@ -1,5 +1,5 @@
 // spec: §columns, §default-values, pk, increment, unique, null, note: and typed defaults
-Table t {
+table t {
   id int [pk, increment]
   a string [unique, default: "direct", note: "source"]
   b int [null, default: 123]

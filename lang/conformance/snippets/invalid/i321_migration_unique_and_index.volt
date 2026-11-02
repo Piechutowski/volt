@@ -2,12 +2,12 @@
 // want: "unique" and "index" cannot both be set
 package db
 
-Table users {
+table users {
   id    int    [pk]
   email string [unique]
 }
 
-Migration 0001__init {
+migration 0001__init {
   create table users {
     id    int    [pk]
     email string [unique, index]

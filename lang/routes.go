@@ -1,6 +1,8 @@
 package lang
 
 import (
+	"strings"
+
 	"github.com/Piechutowski/volt/lang/token"
 )
 
@@ -61,6 +63,17 @@ type RouteInfo struct {
 	// are empty.
 	Query *QueryRef
 
+	// ScopeLoads are the loads of the enclosing scopes, outermost first
+	// (§scope-loads), which the handler receives before its parameters.
+	ScopeLoads []ScopeLoad
+	// Loads are the route's loads in declaration order (§route-loads), and
+	// Timeout the seconds of its timeout: setting, 0 when none.
+	Loads   []LoadInfo
+	Timeout int
+	// Body is how a controller route binds its request body, nil when it
+	// takes none (§request-bodies).
+	Body *BodyInfo
+
 	Pos           token.Position
 	FromResources bool
 	Table         string // the resources declaration's table name, when FromResources
@@ -75,18 +88,41 @@ type RouteInfo struct {
 type QuerySource int
 
 const (
-	FromPath  QuerySource = iota // a typed path parameter of the route
-	FromQuery                    // one query-string key, parsed to the type
-	FromList                     // a repeated query-string key (list parameter)
-	FromBody                     // the request body, decoded by Content-Type
+	FromPath    QuerySource = iota // a typed path parameter of the route
+	FromQuery                      // one query-string key, parsed to the type
+	FromList                       // a repeated query-string key (list parameter)
+	FromBody                       // the request body, decoded by Content-Type
+	FromLiteral                    // a literal written in a load (§route-loads)
 )
 
-// QueryParam is one parameter of a query route's method, in signature
-// order after ctx.
+// QueryParam is one parameter of a query function, in signature order.
 type QueryParam struct {
-	Name   string // Go parameter name, also the URL key
-	GoType string // unqualified Go type ("int", "[]string"); a changeset is qualified ("db.UserChangeset")
-	Source QuerySource
+	Name    string // Go parameter name, also the URL key
+	GoType  string // unqualified Go type ("int", "[]string"); a changeset is qualified ("db.UserChangeset")
+	Source  QuerySource
+	Literal string // the Go spelling of a FromLiteral argument (§route-loads)
+}
+
+// LoadInfo is one load of a controller route (§route-loads): the name the
+// handler receives the value under and the query it runs, its parameters
+// bound from the route, the query string or literals.
+type LoadInfo struct {
+	Name  string
+	Query *QueryRef
+}
+
+// GoType is the Go type of the loaded value as the routes package spells
+// it: the row type, qualified unless the query is the package's own, a
+// slice of it for a query of many rows.
+func (ld LoadInfo) GoType() string {
+	t := ld.Query.Result
+	if !ld.Query.Local {
+		t = ld.Query.Qualifier + "." + t
+	}
+	if ld.Query.Many {
+		t = "[]" + t
+	}
+	return t
 }
 
 // ChangesetBind is how a query route builds the changeset of a write
@@ -96,10 +132,12 @@ type QueryParam struct {
 // is the FromPath parameters that precede the body in Params; every
 // key column of an update is one. The names are unqualified.
 type ChangesetBind struct {
+	Type   string   // changeset type, e.g. "UserChangeset"
 	Params string   // write body type, e.g. "UserParams"
 	New    string   // constructor of a create, e.g. "UserNew"; "" for an update
 	Get    string   // row loader of an update, e.g. "UserGet"; "" for a create
 	Allow  []string // column handles the cast allows, e.g. "UserEmail"
+	Table  string   // the table's key in its package, which only: of a body reads (§request-bodies)
 }
 
 // QueryRef binds a route to a generated query method of a data package
@@ -107,11 +145,10 @@ type ChangesetBind struct {
 // declares the tables (Local).
 type QueryRef struct {
 	Qualifier string // the import qualifier as written, e.g. "db"; the package's own name when Local
-	Field     string // the Controllers field holding *pkg.Queries: the qualifier as a Go name, e.g. "DB"; "Queries" when Local
 	Package   string // root-relative package path
 	Import    string // Go import path of the package
 	PkgName   string // the package's Go name (its directory name)
-	Local     bool   // the query is this package's own (§query-routes): no import, the field is Queries *Queries
+	Local     bool   // the query is this package's own (§query-routes): no import, the call is unqualified
 	Method    string // generated method name, e.g. "UserGet"
 	Params    []QueryParam
 	Changeset *ChangesetBind // how a write's body becomes its changeset (§changesets); nil for a read
@@ -151,9 +188,12 @@ func (c *ControllerInfo) Action(name string) *ActionInfo {
 // ActionInfo is one interface method: its name and parameter signature.
 // Two routes may share an action only with identical signatures (§handler-references).
 type ActionInfo struct {
-	Name   string
-	Params []Param
-	Routes []*RouteInfo
+	Name       string
+	Params     []Param
+	Body       *BodyInfo   // the body the action receives after its parameters, nil when none (§request-bodies)
+	ScopeLoads []ScopeLoad // the scope loads the action receives first (§scope-loads)
+	Loads      []LoadInfo  // the loaded values the action receives after the body (§route-loads)
+	Routes     []*RouteInfo
 }
 
 var resourceActions = []struct {
@@ -198,4 +238,41 @@ func lowerASCII(s string) string {
 		}
 	}
 	return string(b)
+}
+
+// ScopeLoad is one scope load as a route beneath it sees it (§scope-loads):
+// the parameter's name, the function of the routes package that
+// decides it, the Go type it loads and, for a type of an imported
+// package, the qualifier and the import.
+type ScopeLoad struct {
+	Name      string
+	Func      string
+	GoType    string
+	Qualifier string // the import qualifier GoType names, "" for a type of this package
+	Import    string // the Go import path behind Qualifier
+	PkgName   string // the imported package's Go name
+	Pos       token.Position
+}
+
+func scopeLoadsEqual(a, b []ScopeLoad) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Name != b[i].Name || a[i].GoType != b[i].GoType {
+			return false
+		}
+	}
+	return true
+}
+
+func scopeLoadsString(ls []ScopeLoad) string {
+	if len(ls) == 0 {
+		return ""
+	}
+	parts := make([]string, len(ls))
+	for i, ld := range ls {
+		parts[i] = ld.Name + " " + ld.GoType
+	}
+	return "<" + strings.Join(parts, ", ") + "> "
 }

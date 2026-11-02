@@ -4,13 +4,13 @@ import (
 	data
 )
 
-Pipeline api {
+pipeline api {
 	use volt.RequestID
 }
-Pipeline dead {
+pipeline dead {
 	use volt.Logger
 }
 
-Scope /api [pipe: api] {
+scope /api [pipe: api] {
 	resources data.posts [default]
 }

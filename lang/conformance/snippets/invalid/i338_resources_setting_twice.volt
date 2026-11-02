@@ -2,10 +2,10 @@
 // want: setting "only" may appear at most once
 package app
 
-Table posts {
+table posts {
 	id int [pk]
 }
 
-Scope / {
+scope / {
 	resources posts [only: (index), only: (show)]
 }

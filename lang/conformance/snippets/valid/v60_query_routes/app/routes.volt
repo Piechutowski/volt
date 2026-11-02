@@ -5,7 +5,7 @@ import (
 	db
 )
 
-Scope /api {
+scope /api {
 	get    /users            db.UserList
 	get    /users/:id(int) db.UserGet
 	post   /users            db.UserCreate

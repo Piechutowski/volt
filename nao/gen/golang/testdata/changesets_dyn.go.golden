@@ -3,7 +3,6 @@
 package models
 
 import (
-	"context"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -12,107 +11,41 @@ const (
 	voltPostColumnsSQL = `"id", "slug", "words", "score", "cover", "state", "reviewed", "audience", "tier", "price", "rank", "draft", "caption", "ratio", "weight", "scale", "kilo", "shift", "hits", "views", "label", "flag", "secret"`
 )
 
-// PostLimit caps how many rows PostQuery returns.
 func PostLimit(n int) rt.Opt[Post] { return rt.Limit[Post](n) }
 
-// PostOffset skips n rows; keyset pagination (PostAfter) scales better.
 func PostOffset(n int) rt.Opt[Post] { return rt.Offset[Post](n) }
 
-// PostDistinct deduplicates the rows PostQuery returns.
 func PostDistinct() rt.Opt[Post] { return rt.Distinct[Post]() }
 
-// PostOrderBy sorts PostQuery's rows by Asc/Desc terms built on the
-// Post column handles.
 func PostOrderBy(terms ...rt.Order[Post]) rt.Opt[Post] { return rt.OrderBy(terms...) }
 
-// PostAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per PostOrderBy term, in the same order.
 func PostAfter(key ...any) rt.Opt[Post] { return rt.After[Post](key...) }
 
-// PostSet collects the typed assignments of a PostUpdateWhere, built
-// with Set/SetNull on the Post column handles.
 func PostSet(assigns ...rt.Assign[Post]) []rt.Assign[Post] { return assigns }
 
-// PostQuery returns the posts rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
-func (q *Queries) PostQuery(ctx context.Context, opts ...rt.Opt[Post]) ([]Post, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltPostTableSQL, voltPostColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Post{}
-	for voltRows.Next() {
-		voltV, voltErr := voltPostScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func PostQuery(opts ...rt.Opt[Post]) rt.Query[Post] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltPostTableSQL, voltPostColumnsSQL, opts)
+	return rt.Query[Post]{SQL: voltSQL, Args: voltArgs, Scan: voltPostScan, Err: voltErr}
 }
 
-// PostCount reports how many posts rows match every given predicate;
-// none counts the whole table.
-func (q *Queries) PostCount(ctx context.Context, preds ...rt.Pred[Post]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltPostTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func PostCount(preds ...rt.Pred[Post]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltPostTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-// PostExists reports whether any posts row matches every given predicate.
-func (q *Queries) PostExists(ctx context.Context, preds ...rt.Pred[Post]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltPostTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func PostExists(preds ...rt.Pred[Post]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltPostTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-// PostDeleteWhere removes every posts row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
-func (q *Queries) PostDeleteWhere(ctx context.Context, preds ...rt.Pred[Post]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltPostTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func PostDeleteWhere(preds ...rt.Pred[Post]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltPostTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-// PostUpdateWhere applies the typed assignments (PostSet) to every posts
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
-func (q *Queries) PostUpdateWhere(ctx context.Context, set []rt.Assign[Post], preds ...rt.Pred[Post]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltPostTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func PostUpdateWhere(set []rt.Assign[Post], preds ...rt.Pred[Post]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltPostTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -120,107 +53,41 @@ const (
 	voltPostTagColumnsSQL = `"post_id", "tag"`
 )
 
-// PostTagLimit caps how many rows PostTagQuery returns.
 func PostTagLimit(n int) rt.Opt[PostTag] { return rt.Limit[PostTag](n) }
 
-// PostTagOffset skips n rows; keyset pagination (PostTagAfter) scales better.
 func PostTagOffset(n int) rt.Opt[PostTag] { return rt.Offset[PostTag](n) }
 
-// PostTagDistinct deduplicates the rows PostTagQuery returns.
 func PostTagDistinct() rt.Opt[PostTag] { return rt.Distinct[PostTag]() }
 
-// PostTagOrderBy sorts PostTagQuery's rows by Asc/Desc terms built on the
-// PostTag column handles.
 func PostTagOrderBy(terms ...rt.Order[PostTag]) rt.Opt[PostTag] { return rt.OrderBy(terms...) }
 
-// PostTagAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per PostTagOrderBy term, in the same order.
 func PostTagAfter(key ...any) rt.Opt[PostTag] { return rt.After[PostTag](key...) }
 
-// PostTagSet collects the typed assignments of a PostTagUpdateWhere, built
-// with Set/SetNull on the PostTag column handles.
 func PostTagSet(assigns ...rt.Assign[PostTag]) []rt.Assign[PostTag] { return assigns }
 
-// PostTagQuery returns the post_tags rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
-func (q *Queries) PostTagQuery(ctx context.Context, opts ...rt.Opt[PostTag]) ([]PostTag, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltPostTagTableSQL, voltPostTagColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []PostTag{}
-	for voltRows.Next() {
-		voltV, voltErr := voltPostTagScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func PostTagQuery(opts ...rt.Opt[PostTag]) rt.Query[PostTag] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltPostTagTableSQL, voltPostTagColumnsSQL, opts)
+	return rt.Query[PostTag]{SQL: voltSQL, Args: voltArgs, Scan: voltPostTagScan, Err: voltErr}
 }
 
-// PostTagCount reports how many post_tags rows match every given predicate;
-// none counts the whole table.
-func (q *Queries) PostTagCount(ctx context.Context, preds ...rt.Pred[PostTag]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltPostTagTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func PostTagCount(preds ...rt.Pred[PostTag]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltPostTagTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-// PostTagExists reports whether any post_tags row matches every given predicate.
-func (q *Queries) PostTagExists(ctx context.Context, preds ...rt.Pred[PostTag]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltPostTagTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func PostTagExists(preds ...rt.Pred[PostTag]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltPostTagTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-// PostTagDeleteWhere removes every post_tags row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
-func (q *Queries) PostTagDeleteWhere(ctx context.Context, preds ...rt.Pred[PostTag]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltPostTagTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func PostTagDeleteWhere(preds ...rt.Pred[PostTag]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltPostTagTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-// PostTagUpdateWhere applies the typed assignments (PostTagSet) to every post_tags
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
-func (q *Queries) PostTagUpdateWhere(ctx context.Context, set []rt.Assign[PostTag], preds ...rt.Pred[PostTag]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltPostTagTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func PostTagUpdateWhere(set []rt.Assign[PostTag], preds ...rt.Pred[PostTag]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltPostTagTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -228,105 +95,39 @@ const (
 	voltPingColumnsSQL = `"id"`
 )
 
-// PingLimit caps how many rows PingQuery returns.
 func PingLimit(n int) rt.Opt[Ping] { return rt.Limit[Ping](n) }
 
-// PingOffset skips n rows; keyset pagination (PingAfter) scales better.
 func PingOffset(n int) rt.Opt[Ping] { return rt.Offset[Ping](n) }
 
-// PingDistinct deduplicates the rows PingQuery returns.
 func PingDistinct() rt.Opt[Ping] { return rt.Distinct[Ping]() }
 
-// PingOrderBy sorts PingQuery's rows by Asc/Desc terms built on the
-// Ping column handles.
 func PingOrderBy(terms ...rt.Order[Ping]) rt.Opt[Ping] { return rt.OrderBy(terms...) }
 
-// PingAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per PingOrderBy term, in the same order.
 func PingAfter(key ...any) rt.Opt[Ping] { return rt.After[Ping](key...) }
 
-// PingSet collects the typed assignments of a PingUpdateWhere, built
-// with Set/SetNull on the Ping column handles.
 func PingSet(assigns ...rt.Assign[Ping]) []rt.Assign[Ping] { return assigns }
 
-// PingQuery returns the pings rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
-func (q *Queries) PingQuery(ctx context.Context, opts ...rt.Opt[Ping]) ([]Ping, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltPingTableSQL, voltPingColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Ping{}
-	for voltRows.Next() {
-		voltV, voltErr := voltPingScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func PingQuery(opts ...rt.Opt[Ping]) rt.Query[Ping] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltPingTableSQL, voltPingColumnsSQL, opts)
+	return rt.Query[Ping]{SQL: voltSQL, Args: voltArgs, Scan: voltPingScan, Err: voltErr}
 }
 
-// PingCount reports how many pings rows match every given predicate;
-// none counts the whole table.
-func (q *Queries) PingCount(ctx context.Context, preds ...rt.Pred[Ping]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltPingTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func PingCount(preds ...rt.Pred[Ping]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltPingTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-// PingExists reports whether any pings row matches every given predicate.
-func (q *Queries) PingExists(ctx context.Context, preds ...rt.Pred[Ping]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltPingTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func PingExists(preds ...rt.Pred[Ping]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltPingTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-// PingDeleteWhere removes every pings row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
-func (q *Queries) PingDeleteWhere(ctx context.Context, preds ...rt.Pred[Ping]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltPingTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func PingDeleteWhere(preds ...rt.Pred[Ping]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltPingTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-// PingUpdateWhere applies the typed assignments (PingSet) to every pings
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
-func (q *Queries) PingUpdateWhere(ctx context.Context, set []rt.Assign[Ping], preds ...rt.Pred[Ping]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltPingTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func PingUpdateWhere(set []rt.Assign[Ping], preds ...rt.Pred[Ping]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltPingTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }

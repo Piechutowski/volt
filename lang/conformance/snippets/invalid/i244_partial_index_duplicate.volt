@@ -1,34 +1,34 @@
 // spec: §tablepartial, an index is not overridden: one a partial injects may not repeat the key of an index of the table or of another injection, the same partial injected twice included
 // want: which has an index on that key already
-TablePartial emails {
+table_partial emails {
   email string
   name  string
-  Indexes {
+  indexes {
     (email, name) [unique]
   }
 }
-TablePartial stamps {
+table_partial stamps {
   created_at time.Time
   updated_at time.Time
-  Indexes {
+  indexes {
     (created_at, updated_at)
   }
 }
-TablePartial stamps_again {
-  Indexes {
+table_partial stamps_again {
+  indexes {
     (created_at, updated_at)
   }
 }
-Table users {
+table users {
   id int [pk]
   ~emails
   ~stamps
   ~stamps_again
-  Indexes {
+  indexes {
     (email, name)
   }
 }
-Table posts {
+table posts {
   id int [pk]
   ~stamps
   ~stamps

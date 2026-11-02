@@ -19,4 +19,4 @@ func TitleShape(title string) error {
 func Session(next http.Handler) http.Handler { return next }
 
 // Errors is the error handler (§scopes).
-func Errors(w http.ResponseWriter, r *volt.Request, err error) {}
+func Errors(r volt.Request, err error) volt.Response { return volt.DefaultErrorHandler(r, err) }

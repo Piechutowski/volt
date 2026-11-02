@@ -3,7 +3,6 @@
 package models
 
 import (
-	"context"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -12,107 +11,41 @@ const (
 	voltUserColumnsSQL = `"id"`
 )
 
-// UserLimit caps how many rows UserQuery returns.
 func UserLimit(n int) rt.Opt[User] { return rt.Limit[User](n) }
 
-// UserOffset skips n rows; keyset pagination (UserAfter) scales better.
 func UserOffset(n int) rt.Opt[User] { return rt.Offset[User](n) }
 
-// UserDistinct deduplicates the rows UserQuery returns.
 func UserDistinct() rt.Opt[User] { return rt.Distinct[User]() }
 
-// UserOrderBy sorts UserQuery's rows by Asc/Desc terms built on the
-// User column handles.
 func UserOrderBy(terms ...rt.Order[User]) rt.Opt[User] { return rt.OrderBy(terms...) }
 
-// UserAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per UserOrderBy term, in the same order.
 func UserAfter(key ...any) rt.Opt[User] { return rt.After[User](key...) }
 
-// UserSet collects the typed assignments of a UserUpdateWhere, built
-// with Set/SetNull on the User column handles.
 func UserSet(assigns ...rt.Assign[User]) []rt.Assign[User] { return assigns }
 
-// UserQuery returns the users rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
-func (q *Queries) UserQuery(ctx context.Context, opts ...rt.Opt[User]) ([]User, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltUserTableSQL, voltUserColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []User{}
-	for voltRows.Next() {
-		voltV, voltErr := voltUserScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func UserQuery(opts ...rt.Opt[User]) rt.Query[User] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltUserTableSQL, voltUserColumnsSQL, opts)
+	return rt.Query[User]{SQL: voltSQL, Args: voltArgs, Scan: voltUserScan, Err: voltErr}
 }
 
-// UserCount reports how many users rows match every given predicate;
-// none counts the whole table.
-func (q *Queries) UserCount(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltUserTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func UserCount(preds ...rt.Pred[User]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltUserTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-// UserExists reports whether any users row matches every given predicate.
-func (q *Queries) UserExists(ctx context.Context, preds ...rt.Pred[User]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltUserTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func UserExists(preds ...rt.Pred[User]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltUserTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-// UserDeleteWhere removes every users row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
-func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltUserTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func UserDeleteWhere(preds ...rt.Pred[User]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltUserTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-// UserUpdateWhere applies the typed assignments (UserSet) to every users
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
-func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], preds ...rt.Pred[User]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltUserTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltUserTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -120,105 +53,39 @@ const (
 	voltPostColumnsSQL = `"id", "author_id", "editor_id", "reviewed_at", "meta", "raw"`
 )
 
-// PostLimit caps how many rows PostQuery returns.
 func PostLimit(n int) rt.Opt[Post] { return rt.Limit[Post](n) }
 
-// PostOffset skips n rows; keyset pagination (PostAfter) scales better.
 func PostOffset(n int) rt.Opt[Post] { return rt.Offset[Post](n) }
 
-// PostDistinct deduplicates the rows PostQuery returns.
 func PostDistinct() rt.Opt[Post] { return rt.Distinct[Post]() }
 
-// PostOrderBy sorts PostQuery's rows by Asc/Desc terms built on the
-// Post column handles.
 func PostOrderBy(terms ...rt.Order[Post]) rt.Opt[Post] { return rt.OrderBy(terms...) }
 
-// PostAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per PostOrderBy term, in the same order.
 func PostAfter(key ...any) rt.Opt[Post] { return rt.After[Post](key...) }
 
-// PostSet collects the typed assignments of a PostUpdateWhere, built
-// with Set/SetNull on the Post column handles.
 func PostSet(assigns ...rt.Assign[Post]) []rt.Assign[Post] { return assigns }
 
-// PostQuery returns the posts rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
-func (q *Queries) PostQuery(ctx context.Context, opts ...rt.Opt[Post]) ([]Post, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltPostTableSQL, voltPostColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Post{}
-	for voltRows.Next() {
-		voltV, voltErr := voltPostScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func PostQuery(opts ...rt.Opt[Post]) rt.Query[Post] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltPostTableSQL, voltPostColumnsSQL, opts)
+	return rt.Query[Post]{SQL: voltSQL, Args: voltArgs, Scan: voltPostScan, Err: voltErr}
 }
 
-// PostCount reports how many posts rows match every given predicate;
-// none counts the whole table.
-func (q *Queries) PostCount(ctx context.Context, preds ...rt.Pred[Post]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltPostTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func PostCount(preds ...rt.Pred[Post]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltPostTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-// PostExists reports whether any posts row matches every given predicate.
-func (q *Queries) PostExists(ctx context.Context, preds ...rt.Pred[Post]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltPostTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func PostExists(preds ...rt.Pred[Post]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltPostTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-// PostDeleteWhere removes every posts row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
-func (q *Queries) PostDeleteWhere(ctx context.Context, preds ...rt.Pred[Post]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltPostTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func PostDeleteWhere(preds ...rt.Pred[Post]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltPostTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-// PostUpdateWhere applies the typed assignments (PostSet) to every posts
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
-func (q *Queries) PostUpdateWhere(ctx context.Context, set []rt.Assign[Post], preds ...rt.Pred[Post]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltPostTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func PostUpdateWhere(set []rt.Assign[Post], preds ...rt.Pred[Post]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltPostTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }

@@ -1,7 +1,7 @@
 // analyzers: selfref
-Table employees {
+table employees {
   id int [pk]
   manager_id int [null]
 }
-Ref: employees.manager_id > employees.id
-Ref: employees.id > employees.id //WANT selfref
+ref: employees.manager_id > employees.id
+ref: employees.id > employees.id //WANT selfref

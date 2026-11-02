@@ -1,3 +1,3 @@
 // spec: §namespaces-and-uniqueness, table names are unique
-Table users { id int }
-Table users { name string }
+table users { id int }
+table users { name string }

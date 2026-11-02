@@ -30,6 +30,8 @@ type routeEnv interface {
 	selectByMethod(path, name string) (sel *SelectInfo, member *check.TableInfo, ok bool)
 	selectByName(path, name string) (si *SelectInfo, hint string)
 	queryHint(path, name string) string
+	columnHandle(path, tableKey, col string) (handle string, ok bool)
+	goType(name string) (underlying string, ok bool)
 }
 
 type lookupKind uint8
@@ -42,6 +44,8 @@ const (
 	lkSelectByMethod
 	lkSelectByName
 	lkQueryHint
+	lkColumnHandle
+	lkGoType
 )
 
 type routeLookup struct {
@@ -77,6 +81,12 @@ func (l routeLookup) holds(env routeEnv) bool {
 		return si == l.sel && hint == l.hint
 	case lkQueryHint:
 		return env.queryHint(l.path, l.name) == l.hint
+	case lkColumnHandle:
+		h, ok := env.columnHandle(l.path, l.key, l.name)
+		return h == l.hint && ok == l.ok
+	case lkGoType:
+		u, ok := env.goType(l.name)
+		return u == l.hint && ok == l.ok
 	}
 	return false
 }
@@ -314,6 +324,7 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 			ErrorHandler: inh.errHandler,
 			Pos:          ds.Pos(),
 			FromDataset:  true,
+			ScopeLoads:   inh.loads,
 		})
 	}
 	return out
@@ -329,6 +340,12 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 	params, ok := l.pathParams(segs, len(inh.prefix))
 	if !ok {
 		return nil
+	}
+	for _, p := range params {
+		if scopeLoadNamed(inh.loads, p.Name) {
+			l.errorf(r.Path.Pos(), "scope-loads", "path parameter %q takes the name of a scope load above the route (§scope-loads, §route-paths)", p.Name)
+			return nil
+		}
 	}
 
 	var query *QueryRef
@@ -349,6 +366,10 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 		}
 		if method != "GET" {
 			l.errorf(r.Pos(), "scopes-and-routes", "an event route is read with get (§event-routes)")
+			return nil
+		}
+		if len(inh.loads) > 0 {
+			l.errorf(r.Pos(), "scope-loads", "an event route runs no load; %q is loaded by the scope above it (§scope-loads, §event-routes)", inh.loads[0].Name)
 			return nil
 		}
 		events = true
@@ -386,13 +407,53 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 			helper = inh.namePrefix + n
 		}
 	}
+	timeout := 0
+	var bodyS, onlyS *ast.Setting
 	if r.Settings != nil {
-		_, dupDiags := settingsRepeated(r.Settings, "name")
+		_, dupDiags := settingsRepeated(r.Settings, "name", "timeout", "body", "only")
 		l.diags = append(l.diags, dupDiags...)
 		for _, s := range r.Settings.Settings {
-			if s.Name != "name" {
-				l.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a route (§settings-whitelists); valid: name", s.Name)
+			switch s.Name {
+			case "name":
+			case "timeout":
+				if events {
+					l.errorf(s.Pos(), "route-loads", "an event route takes no timeout: the runtime serves the stream (§route-loads, §event-routes)")
+					return nil
+				}
+				timeout, _ = l.timeout(s)
+			case "body":
+				bodyS = s
+			case "only":
+				onlyS = s
+			default:
+				l.errorf(s.Pos(), "settings-whitelists", "setting %q is not valid on a route (§settings-whitelists); valid: name, timeout, body, only", s.Name)
 			}
+		}
+	}
+	var body *BodyInfo
+	if bodyS != nil || onlyS != nil {
+		if query != nil || events {
+			s := bodyS
+			if s == nil {
+				s = onlyS
+			}
+			l.errorf(s.Pos(), "request-bodies", "%s: belongs to a controller route; %s is %s route, whose handler is generated (§request-bodies)", s.Name, r.Handler.String(), routeKindArticled(query, events))
+			return nil
+		}
+		var ok bool
+		if body, ok = l.body(r, params, bodyS, onlyS); !ok {
+			return nil
+		}
+	}
+	var loads []LoadInfo
+	if len(r.Loads) > 0 {
+		if query != nil || events {
+			l.errorf(r.Loads[0].Pos(), "route-loads", "a load block belongs to a controller route; %s is %s route, whose handler is generated (§route-loads)", r.Handler.String(), routeKindArticled(query, events))
+			return nil
+		}
+		var ok bool
+		if loads, ok = l.loads(r, params, inh); !ok {
+			return nil
 		}
 	}
 
@@ -422,8 +483,29 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 		ClientName:   client,
 		Pipes:        inh.pipes,
 		ErrorHandler: inh.errHandler,
+		Body:         body,
+		ScopeLoads:   inh.loads,
+		Loads:        loads,
+		Timeout:      timeout,
 		Pos:          r.Pos(),
 	}
+}
+
+func routeKindArticled(query *QueryRef, events bool) string {
+	if events {
+		return "an event"
+	}
+	return "a " + routeKind(query, events)
+}
+
+func routeKind(query *QueryRef, events bool) string {
+	if events {
+		return "event"
+	}
+	if query != nil {
+		return "query"
+	}
+	return "controller"
 }
 
 func (l *routeLowering) putReport(r *ast.Route) string {
@@ -508,19 +590,11 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		}
 		return nil
 	}
-	field := "Queries"
-	if !local {
-		var err error
-		if field, err = naming.GoName(qual); err != nil {
-			l.errorf(qualPos, "scopes-and-routes", "import qualifier %q: %v (§query-routes)", qual, err)
-			return nil
-		}
-	}
 	importPath := l.facts.module
 	if target != "." {
 		importPath += "/" + target
 	}
-	qr := &QueryRef{Qualifier: qual, Field: field, Package: target, Import: importPath, PkgName: pkgName, Local: local, Method: name, Status: 200}
+	qr := &QueryRef{Qualifier: qual, Package: target, Import: importPath, PkgName: pkgName, Local: local, Method: name, Status: 200}
 
 	type sigParam struct {
 		name, goType string
@@ -536,24 +610,26 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 			sig = append(sig, sigParam{name: p.GoName, goType: p.GoType})
 		}
 		switch {
+		case si.With != nil:
+			qr.Result = si.With.RowType
 		case si.Shared != "":
 			qr.Result = si.Shared
 		case len(si.Excluded) > 0:
-			qr.Result = name
+			qr.Result = name + "Row"
 		default:
 			qr.Result = modelOrBase(m)
 		}
-		qr.Many = true
+		qr.Many = !si.Lookup
 	}
 	if !found {
-		if _, _, cm, ok := l.crudByName(target, name); ok {
+		if key, _, cm, ok := l.crudByName(target, name); ok {
 			found, op = true, cm.Op
 			for _, k := range cm.Key {
 				sig = append(sig, sigParam{name: k.GoName, goType: k.GoType, key: cm.Op == "update"})
 			}
 			if cm.Body != "" {
 				sig = append(sig, sigParam{name: "cs", goType: qual + "." + cm.Body, body: true})
-				qr.Changeset = &ChangesetBind{Params: cm.Params, New: cm.New, Get: cm.Get, Allow: cm.Allow}
+				qr.Changeset = &ChangesetBind{Type: cm.Body, Params: cm.Params, New: cm.New, Get: cm.Get, Allow: cm.Allow, Table: key}
 			}
 			qr.Result, qr.Many = cm.Result, cm.Many
 			switch cm.Op {
@@ -566,7 +642,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 	}
 	if !found {
 		hint := l.queryHint(target, name)
-		l.errorf(pos, "scopes-and-routes", "no generated query %s in package %q%s — a query route names a select method or a default CRUD method (Get, List, Create, Update, Delete) (§query-routes)", ref, target, hint)
+		l.errorf(pos, "scopes-and-routes", "no generated query %s in package %q%s — a query route names a select function or a default CRUD function (Get, List, Create, Update, Delete) (§query-routes)", ref, target, hint)
 		return nil
 	}
 
@@ -740,7 +816,7 @@ func paramsOf(segs []*ast.Segment, prefix int) ([]Param, []diag.Diagnostic, bool
 			continue
 		}
 		if naming.RouteSignatureName(name) {
-			fail(i, seg.Pos(), "path parameter %q collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx", name)
+			fail(i, seg.Pos(), "path parameter %q collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx, body", name)
 			continue
 		}
 		pt := TString
@@ -1020,6 +1096,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 			Pos:          res.Pos(),
 
 			FromResources: true,
+			ScopeLoads:    inh.loads,
 			Table:         tableName,
 		}
 		if qr != nil {
@@ -1095,4 +1172,16 @@ func (l *routeLowering) pkParamType(ti *check.TableInfo, pos token.Position) (Pa
 		l.errorf(pos, "resources", "primary-key type %q of table %q cannot be a route parameter (§table-resolution); routable: int, string", pk.Type.String(), ti.Key)
 		return "", false
 	}
+}
+
+func (l *routeLowering) columnHandle(path, tableKey, col string) (string, bool) {
+	h, ok := l.env.columnHandle(path, tableKey, col)
+	l.note(routeLookup{kind: lkColumnHandle, path: path, key: tableKey, name: col, hint: h, ok: ok})
+	return h, ok
+}
+
+func (l *routeLowering) goType(name string) (string, bool) {
+	u, ok := l.env.goType(name)
+	l.note(routeLookup{kind: lkGoType, name: name, hint: u, ok: ok})
+	return u, ok
 }

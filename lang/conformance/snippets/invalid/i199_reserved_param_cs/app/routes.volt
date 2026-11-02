@@ -6,7 +6,7 @@ import (
 	db
 )
 
-Scope /api {
+scope /api {
 	get   /marks          db.MarkList
 	patch /marks/:cs(int) db.MarkUpdate
 }

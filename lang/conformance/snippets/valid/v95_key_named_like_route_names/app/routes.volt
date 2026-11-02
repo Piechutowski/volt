@@ -4,7 +4,7 @@ import (
 	db
 )
 
-Scope /api {
+scope /api {
 	resources db.gauges   [default]
 	resources db.counters [default]
 	resources db.meters   [default]

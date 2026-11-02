@@ -3,7 +3,6 @@
 package models
 
 import (
-	"context"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -12,107 +11,41 @@ const (
 	voltUserColumnsSQL = `"id"`
 )
 
-// UserLimit caps how many rows UserQuery returns.
 func UserLimit(n int) rt.Opt[User] { return rt.Limit[User](n) }
 
-// UserOffset skips n rows; keyset pagination (UserAfter) scales better.
 func UserOffset(n int) rt.Opt[User] { return rt.Offset[User](n) }
 
-// UserDistinct deduplicates the rows UserQuery returns.
 func UserDistinct() rt.Opt[User] { return rt.Distinct[User]() }
 
-// UserOrderBy sorts UserQuery's rows by Asc/Desc terms built on the
-// User column handles.
 func UserOrderBy(terms ...rt.Order[User]) rt.Opt[User] { return rt.OrderBy(terms...) }
 
-// UserAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per UserOrderBy term, in the same order.
 func UserAfter(key ...any) rt.Opt[User] { return rt.After[User](key...) }
 
-// UserSet collects the typed assignments of a UserUpdateWhere, built
-// with Set/SetNull on the User column handles.
 func UserSet(assigns ...rt.Assign[User]) []rt.Assign[User] { return assigns }
 
-// UserQuery returns the users rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
-func (q *Queries) UserQuery(ctx context.Context, opts ...rt.Opt[User]) ([]User, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltUserTableSQL, voltUserColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []User{}
-	for voltRows.Next() {
-		voltV, voltErr := voltUserScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func UserQuery(opts ...rt.Opt[User]) rt.Query[User] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltUserTableSQL, voltUserColumnsSQL, opts)
+	return rt.Query[User]{SQL: voltSQL, Args: voltArgs, Scan: voltUserScan, Err: voltErr}
 }
 
-// UserCount reports how many users rows match every given predicate;
-// none counts the whole table.
-func (q *Queries) UserCount(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltUserTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func UserCount(preds ...rt.Pred[User]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltUserTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-// UserExists reports whether any users row matches every given predicate.
-func (q *Queries) UserExists(ctx context.Context, preds ...rt.Pred[User]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltUserTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func UserExists(preds ...rt.Pred[User]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltUserTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-// UserDeleteWhere removes every users row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
-func (q *Queries) UserDeleteWhere(ctx context.Context, preds ...rt.Pred[User]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltUserTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func UserDeleteWhere(preds ...rt.Pred[User]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltUserTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-// UserUpdateWhere applies the typed assignments (UserSet) to every users
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
-func (q *Queries) UserUpdateWhere(ctx context.Context, set []rt.Assign[User], preds ...rt.Pred[User]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltUserTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func UserUpdateWhere(set []rt.Assign[User], preds ...rt.Pred[User]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltUserTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -120,107 +53,41 @@ const (
 	voltCoreUserColumnsSQL = `"id", "api_key", "homepage_url", "http_status", "full_name", "precision_value", "balance", "kind", "type", "func", "rt"`
 )
 
-// CoreUserLimit caps how many rows CoreUserQuery returns.
 func CoreUserLimit(n int) rt.Opt[CoreUser] { return rt.Limit[CoreUser](n) }
 
-// CoreUserOffset skips n rows; keyset pagination (CoreUserAfter) scales better.
 func CoreUserOffset(n int) rt.Opt[CoreUser] { return rt.Offset[CoreUser](n) }
 
-// CoreUserDistinct deduplicates the rows CoreUserQuery returns.
 func CoreUserDistinct() rt.Opt[CoreUser] { return rt.Distinct[CoreUser]() }
 
-// CoreUserOrderBy sorts CoreUserQuery's rows by Asc/Desc terms built on the
-// CoreUser column handles.
 func CoreUserOrderBy(terms ...rt.Order[CoreUser]) rt.Opt[CoreUser] { return rt.OrderBy(terms...) }
 
-// CoreUserAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per CoreUserOrderBy term, in the same order.
 func CoreUserAfter(key ...any) rt.Opt[CoreUser] { return rt.After[CoreUser](key...) }
 
-// CoreUserSet collects the typed assignments of a CoreUserUpdateWhere, built
-// with Set/SetNull on the CoreUser column handles.
 func CoreUserSet(assigns ...rt.Assign[CoreUser]) []rt.Assign[CoreUser] { return assigns }
 
-// CoreUserQuery returns the core_users rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
-func (q *Queries) CoreUserQuery(ctx context.Context, opts ...rt.Opt[CoreUser]) ([]CoreUser, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltCoreUserTableSQL, voltCoreUserColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []CoreUser{}
-	for voltRows.Next() {
-		voltV, voltErr := voltCoreUserScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func CoreUserQuery(opts ...rt.Opt[CoreUser]) rt.Query[CoreUser] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltCoreUserTableSQL, voltCoreUserColumnsSQL, opts)
+	return rt.Query[CoreUser]{SQL: voltSQL, Args: voltArgs, Scan: voltCoreUserScan, Err: voltErr}
 }
 
-// CoreUserCount reports how many core_users rows match every given predicate;
-// none counts the whole table.
-func (q *Queries) CoreUserCount(ctx context.Context, preds ...rt.Pred[CoreUser]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltCoreUserTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func CoreUserCount(preds ...rt.Pred[CoreUser]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltCoreUserTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-// CoreUserExists reports whether any core_users row matches every given predicate.
-func (q *Queries) CoreUserExists(ctx context.Context, preds ...rt.Pred[CoreUser]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltCoreUserTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func CoreUserExists(preds ...rt.Pred[CoreUser]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltCoreUserTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-// CoreUserDeleteWhere removes every core_users row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
-func (q *Queries) CoreUserDeleteWhere(ctx context.Context, preds ...rt.Pred[CoreUser]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltCoreUserTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func CoreUserDeleteWhere(preds ...rt.Pred[CoreUser]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltCoreUserTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-// CoreUserUpdateWhere applies the typed assignments (CoreUserSet) to every core_users
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
-func (q *Queries) CoreUserUpdateWhere(ctx context.Context, set []rt.Assign[CoreUser], preds ...rt.Pred[CoreUser]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltCoreUserTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func CoreUserUpdateWhere(set []rt.Assign[CoreUser], preds ...rt.Pred[CoreUser]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltCoreUserTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -228,107 +95,41 @@ const (
 	voltX2faCodeColumnsSQL = `"code", "user_id", "expires_at"`
 )
 
-// X2faCodeLimit caps how many rows X2faCodeQuery returns.
 func X2faCodeLimit(n int) rt.Opt[X2faCode] { return rt.Limit[X2faCode](n) }
 
-// X2faCodeOffset skips n rows; keyset pagination (X2faCodeAfter) scales better.
 func X2faCodeOffset(n int) rt.Opt[X2faCode] { return rt.Offset[X2faCode](n) }
 
-// X2faCodeDistinct deduplicates the rows X2faCodeQuery returns.
 func X2faCodeDistinct() rt.Opt[X2faCode] { return rt.Distinct[X2faCode]() }
 
-// X2faCodeOrderBy sorts X2faCodeQuery's rows by Asc/Desc terms built on the
-// X2faCode column handles.
 func X2faCodeOrderBy(terms ...rt.Order[X2faCode]) rt.Opt[X2faCode] { return rt.OrderBy(terms...) }
 
-// X2faCodeAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per X2faCodeOrderBy term, in the same order.
 func X2faCodeAfter(key ...any) rt.Opt[X2faCode] { return rt.After[X2faCode](key...) }
 
-// X2faCodeSet collects the typed assignments of a X2faCodeUpdateWhere, built
-// with Set/SetNull on the X2faCode column handles.
 func X2faCodeSet(assigns ...rt.Assign[X2faCode]) []rt.Assign[X2faCode] { return assigns }
 
-// X2faCodeQuery returns the _2fa_codes rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
-func (q *Queries) X2faCodeQuery(ctx context.Context, opts ...rt.Opt[X2faCode]) ([]X2faCode, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltX2faCodeTableSQL, voltX2faCodeColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []X2faCode{}
-	for voltRows.Next() {
-		voltV, voltErr := voltX2faCodeScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func X2faCodeQuery(opts ...rt.Opt[X2faCode]) rt.Query[X2faCode] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltX2faCodeTableSQL, voltX2faCodeColumnsSQL, opts)
+	return rt.Query[X2faCode]{SQL: voltSQL, Args: voltArgs, Scan: voltX2faCodeScan, Err: voltErr}
 }
 
-// X2faCodeCount reports how many _2fa_codes rows match every given predicate;
-// none counts the whole table.
-func (q *Queries) X2faCodeCount(ctx context.Context, preds ...rt.Pred[X2faCode]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltX2faCodeTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func X2faCodeCount(preds ...rt.Pred[X2faCode]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltX2faCodeTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-// X2faCodeExists reports whether any _2fa_codes row matches every given predicate.
-func (q *Queries) X2faCodeExists(ctx context.Context, preds ...rt.Pred[X2faCode]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltX2faCodeTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func X2faCodeExists(preds ...rt.Pred[X2faCode]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltX2faCodeTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-// X2faCodeDeleteWhere removes every _2fa_codes row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
-func (q *Queries) X2faCodeDeleteWhere(ctx context.Context, preds ...rt.Pred[X2faCode]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltX2faCodeTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func X2faCodeDeleteWhere(preds ...rt.Pred[X2faCode]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltX2faCodeTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-// X2faCodeUpdateWhere applies the typed assignments (X2faCodeSet) to every _2fa_codes
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
-func (q *Queries) X2faCodeUpdateWhere(ctx context.Context, set []rt.Assign[X2faCode], preds ...rt.Pred[X2faCode]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltX2faCodeTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func X2faCodeUpdateWhere(set []rt.Assign[X2faCode], preds ...rt.Pred[X2faCode]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltX2faCodeTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -336,105 +137,39 @@ const (
 	voltDigestColumnsSQL = `"rt", "size"`
 )
 
-// DigestLimit caps how many rows DigestQuery returns.
 func DigestLimit(n int) rt.Opt[Digest] { return rt.Limit[Digest](n) }
 
-// DigestOffset skips n rows; keyset pagination (DigestAfter) scales better.
 func DigestOffset(n int) rt.Opt[Digest] { return rt.Offset[Digest](n) }
 
-// DigestDistinct deduplicates the rows DigestQuery returns.
 func DigestDistinct() rt.Opt[Digest] { return rt.Distinct[Digest]() }
 
-// DigestOrderBy sorts DigestQuery's rows by Asc/Desc terms built on the
-// Digest column handles.
 func DigestOrderBy(terms ...rt.Order[Digest]) rt.Opt[Digest] { return rt.OrderBy(terms...) }
 
-// DigestAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per DigestOrderBy term, in the same order.
 func DigestAfter(key ...any) rt.Opt[Digest] { return rt.After[Digest](key...) }
 
-// DigestSet collects the typed assignments of a DigestUpdateWhere, built
-// with Set/SetNull on the Digest column handles.
 func DigestSet(assigns ...rt.Assign[Digest]) []rt.Assign[Digest] { return assigns }
 
-// DigestQuery returns the digests rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
-func (q *Queries) DigestQuery(ctx context.Context, opts ...rt.Opt[Digest]) ([]Digest, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltDigestTableSQL, voltDigestColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []Digest{}
-	for voltRows.Next() {
-		voltV, voltErr := voltDigestScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func DigestQuery(opts ...rt.Opt[Digest]) rt.Query[Digest] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltDigestTableSQL, voltDigestColumnsSQL, opts)
+	return rt.Query[Digest]{SQL: voltSQL, Args: voltArgs, Scan: voltDigestScan, Err: voltErr}
 }
 
-// DigestCount reports how many digests rows match every given predicate;
-// none counts the whole table.
-func (q *Queries) DigestCount(ctx context.Context, preds ...rt.Pred[Digest]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltDigestTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func DigestCount(preds ...rt.Pred[Digest]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltDigestTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-// DigestExists reports whether any digests row matches every given predicate.
-func (q *Queries) DigestExists(ctx context.Context, preds ...rt.Pred[Digest]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltDigestTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func DigestExists(preds ...rt.Pred[Digest]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltDigestTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-// DigestDeleteWhere removes every digests row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
-func (q *Queries) DigestDeleteWhere(ctx context.Context, preds ...rt.Pred[Digest]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltDigestTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func DigestDeleteWhere(preds ...rt.Pred[Digest]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltDigestTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-// DigestUpdateWhere applies the typed assignments (DigestSet) to every digests
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
-func (q *Queries) DigestUpdateWhere(ctx context.Context, set []rt.Assign[Digest], preds ...rt.Pred[Digest]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltDigestTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func DigestUpdateWhere(set []rt.Assign[Digest], preds ...rt.Pred[Digest]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltDigestTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }

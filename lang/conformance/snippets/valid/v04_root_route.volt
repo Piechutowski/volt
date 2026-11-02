@@ -1,6 +1,6 @@
 // spec: §routes — the root full path registers as /{$}
 package app
 
-Scope / {
+scope / {
 	get / Home.Index
 }

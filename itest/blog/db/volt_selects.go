@@ -3,87 +3,30 @@
 package db
 
 import (
-	"context"
 	"github.com/Piechutowski/volt/nao/rt"
 	"time"
 )
 
 const voltUserPickedSQL = `SELECT "id", "email", "created_at" FROM "users" WHERE "id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
 
-// UserPicked runs the "picked" select over users (spec §selects-over-groups).
-func (q *Queries) UserPicked(ctx context.Context, ids []int) ([]User, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltUserPickedSQL, rt.JSONList(ids))
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []User{}
-	for voltRows.Next() {
-		voltV, voltErr := voltUserScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func UserPicked(ids []int) rt.Query[User] {
+	return rt.Query[User]{SQL: voltUserPickedSQL, Args: []any{rt.JSONList(ids)}, Scan: voltUserScan}
 }
 
 const voltUserSinceSQL = `SELECT "id", "email", "created_at" FROM "users" WHERE "created_at" > ? ORDER BY "id" ASC`
 
-// UserSince runs the "since" select over users (spec §selects-over-groups).
-func (q *Queries) UserSince(ctx context.Context, since time.Time) ([]User, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltUserSinceSQL, since)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []User{}
-	for voltRows.Next() {
-		voltV, voltErr := voltUserScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func UserSince(since time.Time) rt.Query[User] {
+	return rt.Query[User]{SQL: voltUserSinceSQL, Args: []any{since}, Scan: voltUserScan}
 }
 
 const voltMsRevenueBrowseSQL = `SELECT "id", "org", "year" FROM "ms_revenue" WHERE "year" = ? ORDER BY "id" ASC`
 
-// MsRevenueBrowse runs the "browse" select over ms_revenue (spec §selects-over-groups).
-func (q *Queries) MsRevenueBrowse(ctx context.Context, year int) ([]MsRevenue, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltMsRevenueBrowseSQL, year)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []MsRevenue{}
-	for voltRows.Next() {
-		voltV, voltErr := voltMsRevenueScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func MsRevenueBrowse(year int) rt.Query[MsRevenue] {
+	return rt.Query[MsRevenue]{SQL: voltMsRevenueBrowseSQL, Args: []any{year}, Scan: voltMsRevenueScan}
 }
 
 const voltMsUsageBrowseSQL = `SELECT "id", "org", "year" FROM "ms_usage" WHERE "year" = ? ORDER BY "id" ASC`
 
-// MsUsageBrowse runs the "browse" select over ms_usage (spec §selects-over-groups).
-func (q *Queries) MsUsageBrowse(ctx context.Context, year int) ([]MsUsage, error) {
-	voltRows, voltErr := q.db.QueryContext(ctx, voltMsUsageBrowseSQL, year)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []MsUsage{}
-	for voltRows.Next() {
-		voltV, voltErr := voltMsUsageScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func MsUsageBrowse(year int) rt.Query[MsUsage] {
+	return rt.Query[MsUsage]{SQL: voltMsUsageBrowseSQL, Args: []any{year}, Scan: voltMsUsageScan}
 }

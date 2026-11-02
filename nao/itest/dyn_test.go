@@ -6,6 +6,7 @@ package itest
 import (
 	"context"
 	"errors"
+	"github.com/Piechutowski/volt/nao/run"
 	"strings"
 	"testing"
 	"time"
@@ -13,13 +14,11 @@ import (
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-var errTxAbort = errors.New("abort")
-
-func dynSeed(t *testing.T, q *Queries) (ann, bea, bob User) {
+func dynSeed(t *testing.T, db run.DB) (ann, bea, bob User) {
 	t.Helper()
 	ctx := context.Background()
 	create := func(email, name string, bio rt.Null[string]) User {
-		u, err := q.UserCreate(ctx, UserNew().EmailSet(email).NameSet(name).BioSet(bio))
+		u, err := run.Run(ctx, db, UserCreate(UserNew().EmailSet(email).NameSet(name).BioSet(bio)))
 		if err != nil {
 			t.Fatalf("UserCreate(%s): %v", email, err)
 		}
@@ -41,8 +40,8 @@ func emails(us []User) []string {
 
 func TestUserQueryPredicates(t *testing.T) {
 	ctx := context.Background()
-	_, q := newDB(t)
-	ann, bea, bob := dynSeed(t, q)
+	db := newDB(t)
+	ann, bea, bob := dynSeed(t, db)
 
 	cases := []struct {
 		name string
@@ -73,7 +72,7 @@ func TestUserQueryPredicates(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := q.UserQuery(ctx, tc.opts...)
+			got, err := run.Run(ctx, db, UserQuery(tc.opts...))
 			if err != nil {
 				t.Fatalf("UserQuery: %v", err)
 			}
@@ -98,10 +97,10 @@ func equalStrings(a, b []string) bool {
 
 func TestUserQueryShaping(t *testing.T) {
 	ctx := context.Background()
-	_, q := newDB(t)
-	dynSeed(t, q)
+	db := newDB(t)
+	dynSeed(t, db)
 
-	got, err := q.UserQuery(ctx, UserOrderBy(UserEmail.Desc()), UserLimit(2))
+	got, err := run.Run(ctx, db, UserQuery(UserOrderBy(UserEmail.Desc()), UserLimit(2)))
 	if err != nil {
 		t.Fatalf("UserQuery: %v", err)
 	}
@@ -109,7 +108,7 @@ func TestUserQueryShaping(t *testing.T) {
 		t.Errorf("desc+limit = %v, want %v", emails(got), want)
 	}
 
-	got, err = q.UserQuery(ctx, UserOrderBy(UserEmail.Asc()), UserLimit(2), UserOffset(2))
+	got, err = run.Run(ctx, db, UserQuery(UserOrderBy(UserEmail.Asc()), UserLimit(2), UserOffset(2)))
 	if err != nil {
 		t.Fatalf("UserQuery: %v", err)
 	}
@@ -124,15 +123,15 @@ func TestUserQueryShaping(t *testing.T) {
 // rows shift between pages.
 func TestUserQueryKeyset(t *testing.T) {
 	ctx := context.Background()
-	_, q := newDB(t)
-	dynSeed(t, q)
+	db := newDB(t)
+	dynSeed(t, db)
 
 	var walked []string
 	var opts []rt.Opt[User]
 	base := []rt.Opt[User]{UserOrderBy(UserName.Asc(), UserID.Desc()), UserLimit(1)}
 	opts = base
 	for i := 0; i < 10; i++ {
-		page, err := q.UserQuery(ctx, opts...)
+		page, err := run.Run(ctx, db, UserQuery(opts...))
 		if err != nil {
 			t.Fatalf("page %d: %v", i, err)
 		}
@@ -147,76 +146,76 @@ func TestUserQueryKeyset(t *testing.T) {
 		t.Errorf("keyset walk = %v, want %v", walked, want)
 	}
 
-	if _, err := q.UserQuery(ctx, UserAfter("x")); err == nil || !strings.Contains(err.Error(), "OrderBy") {
+	if _, err := run.Run(ctx, db, UserQuery(UserAfter("x"))); err == nil || !strings.Contains(err.Error(), "OrderBy") {
 		t.Errorf("After without OrderBy: err = %v", err)
 	}
 }
 
 func TestUserCountExists(t *testing.T) {
 	ctx := context.Background()
-	_, q := newDB(t)
-	dynSeed(t, q)
+	db := newDB(t)
+	dynSeed(t, db)
 
-	if n, err := q.UserCount(ctx); err != nil || n != 3 {
+	if n, err := run.Run(ctx, db, UserCount()); err != nil || n != 3 {
 		t.Errorf("bare UserCount = %d, %v; want 3", n, err)
 	}
-	if n, err := q.UserCount(ctx, UserName.Eq("Bo")); err != nil || n != 2 {
+	if n, err := run.Run(ctx, db, UserCount(UserName.Eq("Bo"))); err != nil || n != 2 {
 		t.Errorf("filtered UserCount = %d, %v; want 2", n, err)
 	}
-	if ok, err := q.UserExists(ctx, UserBio.IsNotNull()); err != nil || !ok {
+	if ok, err := run.Run(ctx, db, UserExists(UserBio.IsNotNull())); err != nil || !ok {
 		t.Errorf("UserExists(bio set) = %v, %v; want true", ok, err)
 	}
-	if ok, err := q.UserExists(ctx, UserEmail.Eq("nobody@example.com")); err != nil || ok {
+	if ok, err := run.Run(ctx, db, UserExists(UserEmail.Eq("nobody@example.com"))); err != nil || ok {
 		t.Errorf("UserExists(missing) = %v, %v; want false", ok, err)
 	}
 }
 
 func TestUserUpdateWhere(t *testing.T) {
 	ctx := context.Background()
-	_, q := newDB(t)
-	ann, _, _ := dynSeed(t, q)
+	db := newDB(t)
+	ann, _, _ := dynSeed(t, db)
 
-	n, err := q.UserUpdateWhere(ctx, UserSet(UserBio.Set("beekeeper")), UserID.Eq(ann.ID))
+	n, err := run.Run(ctx, db, UserUpdateWhere(UserSet(UserBio.Set("beekeeper")), UserID.Eq(ann.ID)))
 	if err != nil || n != 1 {
 		t.Fatalf("UserUpdateWhere = %d, %v; want 1 row", n, err)
 	}
-	got, err := q.UserGet(ctx, ann.ID)
+	got, err := run.Run(ctx, db, UserGet(ann.ID))
 	if err != nil || got.Bio.Or("") != "beekeeper" || got.Email != ann.Email {
 		t.Errorf("after update: %+v, %v", got, err)
 	}
 
-	if n, err := q.UserUpdateWhere(ctx, UserSet(UserBio.SetNull()), UserID.Eq(ann.ID)); err != nil || n != 1 {
+	if n, err := run.Run(ctx, db, UserUpdateWhere(UserSet(UserBio.SetNull()), UserID.Eq(ann.ID))); err != nil || n != 1 {
 		t.Fatalf("SetNull = %d, %v", n, err)
 	}
-	if got, _ := q.UserGet(ctx, ann.ID); got.Bio.Valid {
+	if got, _ := run.Run(ctx, db, UserGet(ann.ID)); got.Bio.Valid {
 		t.Errorf("bio still set after SetNull: %+v", got.Bio)
 	}
 
-	if n, err := q.UserUpdateWhere(ctx, UserSet(UserName.Set("x")), UserID.Eq(99)); err != nil || n != 0 {
+	if n, err := run.Run(ctx, db, UserUpdateWhere(UserSet(UserName.Set("x")), UserID.Eq(99))); err != nil || n != 0 {
 		t.Errorf("miss = %d, %v; want 0, nil", n, err)
 	}
 
-	if _, err := q.UserUpdateWhere(ctx, UserSet(UserName.Set("x"))); err == nil {
+	if _, err := run.Run(ctx, db, UserUpdateWhere(UserSet(UserName.Set("x")))); err == nil {
 		t.Error("UserUpdateWhere without predicate: want error")
 	}
-	if n, err := q.UserUpdateWhere(ctx, UserSet(UserName.Set("Everyone")), rt.Raw[User]("1 = 1")); err != nil || n != 3 {
+	if n, err := run.Run(ctx, db, UserUpdateWhere(UserSet(UserName.Set("Everyone")), rt.Raw[User]("1 = 1"))); err != nil || n != 3 {
 		t.Errorf("explicit all-rows update = %d, %v; want 3", n, err)
 	}
 }
 
 func TestUserDeleteWhere(t *testing.T) {
 	ctx := context.Background()
-	_, q := newDB(t)
-	dynSeed(t, q)
+	db := newDB(t)
+	dynSeed(t, db)
 
-	if _, err := q.UserDeleteWhere(ctx); err == nil {
+	if _, err := run.Run(ctx, db, UserDeleteWhere()); err == nil {
 		t.Error("UserDeleteWhere without predicate: want error")
 	}
-	n, err := q.UserDeleteWhere(ctx, UserName.Eq("Bo"))
+	n, err := run.Run(ctx, db, UserDeleteWhere(UserName.Eq("Bo")))
 	if err != nil || n != 2 {
 		t.Fatalf("UserDeleteWhere = %d, %v; want 2", n, err)
 	}
-	if left, err := q.UserCount(ctx); err != nil || left != 1 {
+	if left, err := run.Run(ctx, db, UserCount()); err != nil || left != 1 {
 		t.Errorf("rows left = %d, %v; want 1", left, err)
 	}
 }
@@ -226,114 +225,106 @@ func TestUserDeleteWhere(t *testing.T) {
 // cross-model mixups never reach the database (a compile error).
 func TestOrderDynamic(t *testing.T) {
 	ctx := context.Background()
-	_, q := newDB(t)
-	ann, _, _ := dynSeed(t, q)
+	db := newDB(t)
+	ann, _, _ := dynSeed(t, db)
 
-	placed, err := q.OrderCreate(ctx, OrderNew().UserIDSet(ann.ID).TotalSet(9.99).FeeSet(0).PlacedAtSet(rt.Some(time.Now().UTC())))
+	placed, err := run.Run(ctx, db, OrderCreate(OrderNew().UserIDSet(ann.ID).TotalSet(9.99).FeeSet(0).PlacedAtSet(rt.Some(time.Now().UTC()))))
 	if err != nil {
 		t.Fatalf("OrderCreate: %v", err)
 	}
-	unplaced, err := q.OrderCreate(ctx, OrderNew().UserIDSet(ann.ID).TotalSet(15.00).FeeSet(0).PlacedAtSet(rt.Null[time.Time]{}))
+	unplaced, err := run.Run(ctx, db, OrderCreate(OrderNew().UserIDSet(ann.ID).TotalSet(15.00).FeeSet(0).PlacedAtSet(rt.Null[time.Time]{})))
 	if err != nil {
 		t.Fatalf("OrderCreate: %v", err)
 	}
 
-	if n, err := q.OrderCount(ctx, OrderStatus.Eq(OrderStatePending)); err != nil || n != 2 {
+	if n, err := run.Run(ctx, db, OrderCount(OrderStatus.Eq(OrderStatePending))); err != nil || n != 2 {
 		t.Errorf("pending count = %d, %v; want 2", n, err)
 	}
-	if n, err := q.OrderUpdateWhere(ctx, OrderSet(OrderStatus.Set(OrderStateShipped)), OrderID.Eq(placed.ID)); err != nil || n != 1 {
+	if n, err := run.Run(ctx, db, OrderUpdateWhere(OrderSet(OrderStatus.Set(OrderStateShipped)), OrderID.Eq(placed.ID))); err != nil || n != 1 {
 		t.Fatalf("ship = %d, %v", n, err)
 	}
-	shipped, err := q.OrderQuery(ctx, OrderStatus.Eq(OrderStateShipped))
+	shipped, err := run.Run(ctx, db, OrderQuery(OrderStatus.Eq(OrderStateShipped)))
 	if err != nil || len(shipped) != 1 || shipped[0].ID != placed.ID {
 		t.Errorf("shipped = %+v, %v; want just order %d", shipped, err, placed.ID)
 	}
-	if never, err := q.OrderQuery(ctx, OrderPlacedAt.IsNull()); err != nil || len(never) != 1 || never[0].ID != unplaced.ID {
+	if never, err := run.Run(ctx, db, OrderQuery(OrderPlacedAt.IsNull())); err != nil || len(never) != 1 || never[0].ID != unplaced.ID {
 		t.Errorf("unplaced = %+v, %v; want just order %d", never, err, unplaced.ID)
 	}
 }
 
 // TestDynStmtCache proves the statement cache wiring end to end: same option shape,
 // different values -> one prepared statement; a new shape -> a second.
-func TestDynStmtCache(t *testing.T) {
-	ctx := context.Background()
-	db, q := newDB(t)
-	dynSeed(t, q)
-
-	cache := rt.NewStmtCache(8)
-	defer cache.Close()
-	qc := New(db).WithCache(cache)
-
-	for _, name := range []string{"Ann", "Bo", "Nobody"} {
-		if _, err := qc.UserQuery(ctx, UserName.Eq(name), UserLimit(5)); err != nil {
-			t.Fatalf("cached query (%s): %v", name, err)
-		}
-	}
-	if n := cache.Len(); n != 1 {
-		t.Errorf("cache holds %d statements after 3 same-shape queries; want 1 — values must ride as parameters", n)
-	}
-	if _, err := qc.UserQuery(ctx, UserName.Eq("Ann"), UserBio.IsNull(), UserLimit(5)); err != nil {
-		t.Fatal(err)
-	}
-	if n := cache.Len(); n != 2 {
-		t.Errorf("cache holds %d statements after a second shape; want 2", n)
-	}
-}
 
 // TestDynInTx runs dynamic verbs inside Queries.Tx: the transactional
 // copy drops the statement cache by construction (its statements
 // belong to the outer handle) and a rollback undoes the writes.
-func TestDynInTx(t *testing.T) {
-	ctx := context.Background()
-	db, _ := newDB(t)
-	cache := rt.NewStmtCache(8)
-	defer cache.Close()
-	q := New(db).WithCache(cache)
-	dynSeed(t, q)
-
-	failed := errTxAbort
-	err := q.Tx(ctx, func(qt *Queries) error {
-		if n, err := qt.UserDeleteWhere(ctx, UserName.Eq("Bo")); err != nil || n != 2 {
-			t.Errorf("in-tx delete = %d, %v; want 2", n, err)
-		}
-		return failed
-	})
-	if err != failed {
-		t.Fatalf("Tx err = %v, want the abort sentinel", err)
-	}
-	if n, err := q.UserCount(ctx); err != nil || n != 3 {
-		t.Errorf("after rollback count = %d, %v; want 3", n, err)
-	}
-
-	if err := q.Tx(ctx, func(qt *Queries) error {
-		_, err := qt.UserDeleteWhere(ctx, UserName.Eq("Bo"))
-		return err
-	}); err != nil {
-		t.Fatalf("committing tx: %v", err)
-	}
-	if n, err := q.UserCount(ctx); err != nil || n != 1 {
-		t.Errorf("after commit count = %d, %v; want 1", n, err)
-	}
-}
 
 // TestUserUpdateWhereRunsNoValidator pins the bulk-path bypass of
 // §changesets: UpdateWhere takes assignments, never a row, so a value
 // EmailValid refuses in Validate is written and read back unchanged.
 func TestUserUpdateWhereRunsNoValidator(t *testing.T) {
 	ctx := context.Background()
-	_, q := newDB(t)
-	ann, _, _ := dynSeed(t, q)
+	db := newDB(t)
+	ann, _, _ := dynSeed(t, db)
 
 	const bad = "not-an-address"
 	if UserNew().EmailSet(bad).Validate().Valid() {
 		t.Fatalf("EmailValid accepted %q; the test needs a value Validate refuses", bad)
 	}
-	n, err := q.UserUpdateWhere(ctx, UserSet(UserEmail.Set(bad)), UserID.Eq(ann.ID))
+	n, err := run.Run(ctx, db, UserUpdateWhere(UserSet(UserEmail.Set(bad)), UserID.Eq(ann.ID)))
 	if err != nil || n != 1 {
 		t.Fatalf("UserUpdateWhere = %d, %v; want 1 row and no validator", n, err)
 	}
-	got, err := q.UserGet(ctx, ann.ID)
+	got, err := run.Run(ctx, db, UserGet(ann.ID))
 	if err != nil || got.Email != bad {
 		t.Errorf("after the bulk write: %+v, %v; want email %q", got, err, bad)
+	}
+}
+
+func TestDynStmtCache(t *testing.T) {
+	ctx := context.Background()
+	db := newDB(t)
+	dynSeed(t, db)
+	before := db.Statements()
+
+	for _, name := range []string{"Ann", "Bo", "Nobody"} {
+		if _, err := run.Run(ctx, db, UserQuery(UserName.Eq(name), UserLimit(5))); err != nil {
+			t.Fatalf("cached query (%s): %v", name, err)
+		}
+	}
+	if n := db.Statements() - before; n != 1 {
+		t.Errorf("cache grew by %d statements after 3 same-shape queries; want 1, values must ride as parameters", n)
+	}
+	if _, err := run.Run(ctx, db, UserQuery(UserName.Eq("Ann"), UserBio.IsNull(), UserLimit(5))); err != nil {
+		t.Fatal(err)
+	}
+	if n := db.Statements() - before; n != 2 {
+		t.Errorf("cache grew by %d statements after a second shape; want 2", n)
+	}
+}
+
+func TestDynInTx(t *testing.T) {
+	ctx := context.Background()
+	db := newDB(t)
+	dynSeed(t, db)
+
+	_, err := run.Run(ctx, db, rt.Tx(
+		UserDeleteWhere(UserName.Eq("Bo")),
+		UserCreate(UserNew().EmailSet("ann@example.com").NameSet("Dup")),
+	))
+	var inv *rt.Invalid
+	if !errors.As(err, &inv) {
+		t.Fatalf("Tx err = %v, want the refused create", err)
+	}
+	if n, err := run.Run(ctx, db, UserCount()); err != nil || n != 3 {
+		t.Errorf("after rollback count = %d, %v; want 3", n, err)
+	}
+
+	out, err := run.Run(ctx, db, rt.Tx(UserDeleteWhere(UserName.Eq("Bo"))))
+	if err != nil || len(out) != 1 || out[0] != int64(2) {
+		t.Fatalf("committing tx = %v, %v; want two rows deleted", out, err)
+	}
+	if n, err := run.Run(ctx, db, UserCount()); err != nil || n != 1 {
+		t.Errorf("after commit count = %d, %v; want 1", n, err)
 	}
 }

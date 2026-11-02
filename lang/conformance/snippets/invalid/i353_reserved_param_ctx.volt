@@ -2,6 +2,6 @@
 // want: path parameter "ctx" collides with a name in generated signatures
 package app
 
-Scope / {
+scope / {
 	get /x/:ctx Home.X
 }

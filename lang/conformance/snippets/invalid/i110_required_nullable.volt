@@ -2,7 +2,7 @@
 // want: a column that carries null has no empty value to refuse
 package db
 
-Table accounts {
+table accounts {
   id    int [pk]
   email string [null, required]
 }

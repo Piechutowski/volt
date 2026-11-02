@@ -2,10 +2,10 @@
 // want: setting "pipe" may appear at most once
 package app
 
-Pipeline api {
+pipeline api {
 	use volt.RequestID
 }
 
-Scope /x [pipe: api, pipe: api] {
+scope /x [pipe: api, pipe: api] {
 	get /ping Home.Ping
 }

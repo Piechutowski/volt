@@ -9,13 +9,13 @@ import (
 )
 
 const groupSetSchema = "package db\n\n" +
-	"Table ms_revenue {\n\tid int [pk]\n\tyear int\n}\n\n" +
-	"Table ms_usage {\n\tid int [pk]\n\tyear int\n}\n\n" +
-	"Table ms_dict {\n\tcode string [pk]\n}\n\n" +
-	"Group Metrics {\n\tms_revenue\n\tms_usage\n\tms_dict\n}\n\n" +
-	"Group series = Metrics \\ (ms_dict)\n\n" +
-	"Select rows for series where year = :year\n" +
-	"Select everything for Metrics\n"
+	"table ms_revenue {\n\tid int [pk]\n\tyear int\n}\n\n" +
+	"table ms_usage {\n\tid int [pk]\n\tyear int\n}\n\n" +
+	"table ms_dict {\n\tcode string [pk]\n}\n\n" +
+	"group Metrics {\n\tms_revenue\n\tms_usage\n\tms_dict\n}\n\n" +
+	"group series = Metrics \\ (ms_dict)\n\n" +
+	"select rows for series where year = :year\n" +
+	"select everything for Metrics\n"
 
 func groupSetDoc(t *testing.T) (*Document, string) {
 	t.Helper()
@@ -44,7 +44,7 @@ func TestGroupTermDefinitionAndHover(t *testing.T) {
 		t.Fatal("no hover for the group term")
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
-	for _, want := range []string{"Group Metrics", "- + ms_revenue", "- + ms_dict"} {
+	for _, want := range []string{"group Metrics", "- + ms_revenue", "- + ms_dict"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("group hover missing %q:\n%s", want, md)
 		}
@@ -95,9 +95,9 @@ func TestGroupRenameFollowsSetUses(t *testing.T) {
 }
 
 func TestDatasetNavigatesToSelect(t *testing.T) {
-	const dbText = "package db\n\nTable ms_revenue {\n\tid int [pk]\n\tyear int\n}\n\n" +
-		"Group series {\n\tms_revenue\n}\n\nSelect browse for series where year = :year\n"
-	const appText = "package app\n\nimport (\n\tdb\n)\n\nScope /ms {\n\tdataset db.browse [strip: \"ms_\"]\n}\n"
+	const dbText = "package db\n\ntable ms_revenue {\n\tid int [pk]\n\tyear int\n}\n\n" +
+		"group series {\n\tms_revenue\n}\n\nselect browse for series where year = :year\n"
+	const appText = "package app\n\nimport (\n\tdb\n)\n\nscope /ms {\n\tdataset db.browse [strip: \"ms_\"]\n}\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":          "module g\n",
 		"db/schema.volt":  dbText,
@@ -133,8 +133,8 @@ func TestSelectTargetCompletionTakesTheOneSpelling(t *testing.T) {
 		head string
 		want bool
 	}{
-		{"Select recent for ", true},
-		{"select recent for ", false},
+		{"select recent for ", true},
+		{"Select recent for ", false},
 		{"SELECT recent for ", false},
 	} {
 		text := groupSetSchema + tc.head

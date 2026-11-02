@@ -9,12 +9,12 @@ import (
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/parser"
 	"github.com/Piechutowski/volt/nao/gen/sqlite"
-	"github.com/Piechutowski/volt/nao/rt"
+	"github.com/Piechutowski/volt/nao/run"
 )
 
 func ddlDB(t *testing.T, ddl string) *sql.DB {
 	t.Helper()
-	db := memoryDB(t)
+	db := memoryDB(t).Pool()
 	if _, err := db.Exec(ddl); err != nil {
 		t.Fatalf("DDL rejected: %v\n%s", err, ddl)
 	}
@@ -37,7 +37,7 @@ CREATE TABLE comments (
 );
 `
 
-const rebuildPosts = "rebuild table posts {\n  id int [pk, increment]\n  slug string [unique]\n  title string\n  views int [default: 0]\n\n  Indexes {\n    views [where: `views > 0`]\n  }\n}"
+const rebuildPosts = "rebuild table posts {\n  id int [pk, increment]\n  slug string [unique]\n  title string\n  views int [default: 0]\n\n  indexes {\n    views [where: `views > 0`]\n  }\n}"
 
 type diffCase struct {
 	name         string
@@ -296,7 +296,7 @@ CREATE UNIQUE INDEX idx_user_tags_tag_user_id ON user_tags (tag, user_id);
 `,
 		want: []string{
 			"drop table a",
-			"create table user_tags {\n  user_id int [pk]\n  tag string [pk]\n  since time.Time [default: `CURRENT_TIMESTAMP`]\n  label string [null, default: \"it's\"]\n\n  Indexes {\n    (tag, user_id) [unique]\n  }\n}",
+			"create table user_tags {\n  user_id int [pk]\n  tag string [pk]\n  since time.Time [default: `CURRENT_TIMESTAMP`]\n  label string [null, default: \"it's\"]\n\n  indexes {\n    (tag, user_id) [unique]\n  }\n}",
 		},
 		reason: "table a is in the fold but not in the schema",
 	},
@@ -342,7 +342,7 @@ CREATE TABLE invoices (
 );
 `,
 		want: []string{
-			"create table invoices {\n  id int [pk, increment]\n  merchant int [null]\n  country string [null]\n\n  Indexes {\n    // foreign key invoices (merchant, country) references periods (merchant, country) [delete: cascade] has no shape item: write the table's CREATE TABLE with exec\n  }\n}",
+			"create table invoices {\n  id int [pk, increment]\n  merchant int [null]\n  country string [null]\n\n  indexes {\n    // foreign key invoices (merchant, country) references periods (merchant, country) [delete: cascade] has no shape item: write the table's CREATE TABLE with exec\n  }\n}",
 		},
 		reason:   "table invoices is in the schema but not in the fold; foreign key invoices (merchant, country) references periods (merchant, country) [delete: cascade] is over several columns, which no shape body holds: write the CREATE TABLE of invoices with exec",
 		unclosed: "a shape body holds no composite foreign key; the user writes the CREATE TABLE with exec",
@@ -419,28 +419,28 @@ func TestDriftCloses(t *testing.T) {
 			for _, d := range Diff(target, fold) {
 				ops = append(ops, operationIndent(d.Volt))
 			}
-			closing := "Migration 0001__close [irreversible] {\n" + strings.Join(ops, "\n") + "\n}\n"
-			src := "package db\n\nTable keep {\n  id int [pk]\n}\n\nMigration 0000__fold {\n" + strings.Join(made, "\n") + "\n}\n\n" + closing
+			closing := "migration 0001__close [irreversible] {\n" + strings.Join(ops, "\n") + "\n}\n"
+			src := "package db\n\ntable keep {\n  id int [pk]\n}\n\nmigration 0000__fold {\n" + strings.Join(made, "\n") + "\n}\n\n" + closing
 			_, info := parseChecked(t, "close.volt", src)
 			ms, err := Lower(info)
 			if err != nil {
 				t.Fatalf("%v\n%s", err, src)
 			}
 			db := memoryDB(t)
-			if _, err := rt.MigrateUp(ctx, db, ms[:1]); err != nil {
+			if _, err := run.MigrateUp(ctx, db, ms[:1]); err != nil {
 				t.Fatalf("%v\n%s", err, src)
 			}
-			remade, err := Read(ctx, db)
+			remade, err := Read(ctx, db.Pool())
 			if err != nil {
 				t.Fatal(err)
 			}
 			for _, d := range Diff(fold, remade) {
 				t.Errorf("the fold rendered and remade differs: %s\n%s", d.Reason, d.Volt)
 			}
-			if _, err := rt.MigrateUp(ctx, db, ms); err != nil {
+			if _, err := run.MigrateUp(ctx, db, ms); err != nil {
 				t.Fatalf("%v\n%s", err, src)
 			}
-			after, err := Read(ctx, db)
+			after, err := Read(ctx, db.Pool())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -473,7 +473,7 @@ func TestForeignKeyActionsRoundTrip(t *testing.T) {
 	if len(drifts) != 1 || !strings.HasPrefix(drifts[0].Volt, "rebuild table comments {") {
 		t.Fatalf("drifts %+v, want one rebuild of comments", drifts)
 	}
-	f, diags := parser.ParseFile("t.volt", "package db\n\nMigration 0001__actions {\n  "+strings.ReplaceAll(drifts[0].Volt, "\n", "\n  ")+"\n}\n")
+	f, diags := parser.ParseFile("t.volt", "package db\n\nmigration 0001__actions {\n  "+strings.ReplaceAll(drifts[0].Volt, "\n", "\n  ")+"\n}\n")
 	if len(diags) > 0 {
 		t.Fatalf("the drift does not parse: %v\n%s", diags, drifts[0].Volt)
 	}

@@ -1,6 +1,6 @@
-// CRUD generation (volt_queries.go): the static query surface of Not an
-// ORM, every statement rendered by the runtime (docs/spec.md
-// §generated-query-surface, §predicates).
+// CRUD generation (volt_queries.go): the static query surface as values,
+// one function per statement returning the rt effect the runner
+// performs (docs/spec.md §generated-query-surface, §predicates).
 package golang
 
 import (
@@ -63,12 +63,11 @@ func (e *queryEmitter) fail(t *naming.Table, what string, err error) {
 
 func (e *queryEmitter) run() {
 	e.needImports = map[string]bool{}
-	e.body.Grow(fieldCount(e.tables)*200 + len(e.tables)*2000)
+	e.body.Grow(fieldCount(e.tables)*100 + len(e.tables)*1200)
 	for _, t := range e.tables {
 		e.tableEmit(t)
 	}
 	e.header()
-	e.prologue()
 	e.out.Grow(e.body.Len())
 	e.out.WriteString(e.body.String())
 }
@@ -78,7 +77,7 @@ func (e *queryEmitter) header() {
 	e.out.WriteString("\n")
 	fmt.Fprintf(&e.out, "package %s\n\n", e.opts.Package)
 
-	imports := map[string]bool{"context": true, "database/sql": true, rtImport: true}
+	imports := map[string]bool{rtImport: true}
 	for imp := range e.needImports {
 		imports[imp] = true
 	}
@@ -89,47 +88,10 @@ func (e *queryEmitter) header() {
 	e.out.WriteString(")\n\n")
 }
 
-func (e *queryEmitter) prologue() {
-	e.out.WriteString(`// Queries bundles the generated CRUD over one database handle: a
-// *sql.DB, a *sql.Tx, or anything else satisfying rt.DBTX.
-type Queries struct {
-	db    rt.DBTX
-	cache *rt.StmtCache
-}
-
-// New returns Queries running on db.
-func New(db rt.DBTX) *Queries { return &Queries{db: db} }
-
-// WithCache returns a copy of q whose run-time rendered statements (the
-// changeset writes Create and Update, and the dynamic Query, Count,
-// Exists, DeleteWhere, UpdateWhere) run through cache: identical shapes
-// render identical SQL, prepared once. Bind a cache to a *sql.DB, never
-// a transaction.
-func (q *Queries) WithCache(cache *rt.StmtCache) *Queries {
-	return &Queries{db: q.db, cache: cache}
-}
-
-// WithTx returns a copy of q running on tx. The statement cache does not
-// follow: its statements are prepared on the outer handle.
-func (q *Queries) WithTx(tx *sql.Tx) *Queries { return &Queries{db: tx} }
-
-// Tx runs fn inside a transaction: the Queries handed to fn joins it, a
-// nil error commits, anything else rolls back. q must be backed by a
-// handle that can begin a transaction (a *sql.DB).
-func (q *Queries) Tx(ctx context.Context, fn func(*Queries) error) error {
-	return rt.Tx(ctx, q.db, func(voltTx *sql.Tx) error { return fn(q.WithTx(voltTx)) })
-}
-
-`)
-}
-
 func (e *queryEmitter) tableEmit(t *naming.Table) {
 	if len(t.Fields) == 0 {
 		return
 	}
-	b := &e.body
-	tbl := t.Info.Decl.Name.Name()
-
 	if len(t.PK) > 0 {
 		for _, f := range t.PK {
 			e.needImports[f.Imp] = true
@@ -140,31 +102,22 @@ func (e *queryEmitter) tableEmit(t *naming.Table) {
 	}
 	delete(e.needImports, "")
 
-	fmt.Fprintf(b, "func %s(r rt.Row) (%s, error) {\n\tvar voltV %s\n\tvoltErr := r.Scan(", t.Names.Scan, t.Model, t.Model)
-	for i, f := range t.Fields {
-		if i > 0 {
-			b.WriteString(", ")
-		}
-		b.WriteString(scanTarget(f))
-	}
-	fmt.Fprintf(b, ")\n\treturn voltV, rt.Refused(%q, voltErr)\n}\n\n", t.Model)
-
 	if len(t.PK) > 0 {
-		e.getEmit(t, tbl)
+		e.getEmit(t)
 		if len(t.PK) == 1 {
-			e.getManyEmit(t, tbl)
+			e.getManyEmit(t)
 		}
 	}
 	for _, f := range t.UniqueFields() {
-		e.getByEmit(t, f, tbl)
+		e.getByEmit(t, f)
 	}
-	e.listEmit(t, tbl)
-	e.createEmit(t, tbl)
+	e.listEmit(t)
+	e.createEmit(t)
 	if len(t.PK) > 0 {
 		if len(t.NonPK()) > 0 {
-			e.updateEmit(t, tbl)
+			e.updateEmit(t)
 		}
-		e.deleteEmit(t, tbl)
+		e.deleteEmit(t)
 	}
 }
 
@@ -176,7 +129,14 @@ func identityParams(t *naming.Table) string {
 	return strings.Join(parts, ", ")
 }
 
-func (e *queryEmitter) getEmit(t *naming.Table, tbl string) {
+func argsList(args []string) string {
+	if len(args) == 0 {
+		return "nil"
+	}
+	return "[]any{" + strings.Join(args, ", ") + "}"
+}
+
+func (e *queryEmitter) getEmit(t *naming.Table) {
 	b := &e.body
 	sql, args, err := t.GetSQL()
 	if err != nil {
@@ -184,25 +144,24 @@ func (e *queryEmitter) getEmit(t *naming.Table, tbl string) {
 		return
 	}
 	fmt.Fprintf(b, "const %s = `%s`\n\n", t.Names.GetConst, sql)
-	fmt.Fprintf(b, "// %s fetches the %s row with the given primary key, or rt.ErrNotFound.\n", t.Names.Get, tbl)
-	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, %s) (%s, error) {\n", t.Names.Get, identityParams(t), t.Model)
-	fmt.Fprintf(b, "\treturn %s(q.db.QueryRowContext(ctx, %s, %s))\n}\n\n", t.Names.Scan, t.Names.GetConst, strings.Join(args, ", "))
+	fmt.Fprintf(b, "func %s(%s) rt.Lookup[%s] {\n", t.Names.Get, identityParams(t), t.Model)
+	fmt.Fprintf(b, "\treturn rt.Lookup[%s]{SQL: %s, Args: %s, Scan: %s}\n}\n\n", t.Model, t.Names.GetConst, argsList(args), t.Names.Scan)
 }
 
-func (e *queryEmitter) getManyEmit(t *naming.Table, tbl string) {
+func (e *queryEmitter) getManyEmit(t *naming.Table) {
 	b := &e.body
 	key := t.PK[0]
-	fmt.Fprintf(b, "// %s fetches the %s rows whose primary key is in %ss, in\n", t.Names.GetMany, tbl, key.Arg)
-	fmt.Fprintf(b, "// database order. Missing keys are not an error; they are just absent.\n")
-	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, %ss []%s) ([]%s, error) {\n", t.Names.GetMany, key.Arg, key.GoType, t.Model)
-	fmt.Fprintf(b, "\tif len(%ss) == 0 {\n\t\treturn nil, nil\n\t}\n", key.Arg)
-	fmt.Fprintf(b, "\tvoltQuery, voltArgs, voltErr := rt.SelectRender(%s, %s, []rt.Opt[%s]{%s.In(%ss...)})\n", t.Names.TableConst, t.Names.ColumnsConst, t.Model, t.Handle(key), key.Arg)
-	b.WriteString("\tif voltErr != nil {\n\t\treturn nil, voltErr\n\t}\n")
-	b.WriteString("\tvoltRows, voltErr := q.db.QueryContext(ctx, voltQuery, voltArgs...)\n")
-	e.rowsScan(t)
+	fmt.Fprintf(b, "func %s(%ss []%s) rt.Query[%s] {\n", t.Names.GetMany, key.Arg, key.GoType, t.Model)
+	fmt.Fprintf(b, "\tif len(%ss) == 0 {\n\t\treturn rt.Query[%s]{}\n\t}\n", key.Arg, t.Model)
+	fmt.Fprintf(b, "\tvoltSQL, voltArgs, voltErr := rt.SelectRender(%s, %s, []rt.Opt[%s]{%s.In(%ss...)})\n", t.Names.TableConst, t.Names.ColumnsConst, t.Model, t.Handle(key), key.Arg)
+	queryReturn(b, t.Model, t.Names.Scan)
 }
 
-func (e *queryEmitter) getByEmit(t *naming.Table, f *naming.Field, tbl string) {
+func queryReturn(b *strings.Builder, model, scan string) {
+	fmt.Fprintf(b, "\treturn rt.Query[%s]{SQL: voltSQL, Args: voltArgs, Scan: %s, Err: voltErr}\n}\n\n", model, scan)
+}
+
+func (e *queryEmitter) getByEmit(t *naming.Table, f *naming.Field) {
 	b := &e.body
 	sql, args, err := t.GetBySQL(f)
 	if err != nil {
@@ -210,12 +169,11 @@ func (e *queryEmitter) getByEmit(t *naming.Table, f *naming.Field, tbl string) {
 		return
 	}
 	fmt.Fprintf(b, "const %s = `%s`\n\n", t.GetByConst(f), sql)
-	fmt.Fprintf(b, "// %s fetches the %s row with the given %s (a unique column),\n// or rt.ErrNotFound.\n", t.GetBy(f), tbl, f.ColName)
-	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, %s %s) (%s, error) {\n", t.GetBy(f), f.Arg, f.GoType, t.Model)
-	fmt.Fprintf(b, "\treturn %s(q.db.QueryRowContext(ctx, %s, %s))\n}\n\n", t.Names.Scan, t.GetByConst(f), strings.Join(args, ", "))
+	fmt.Fprintf(b, "func %s(%s %s) rt.Lookup[%s] {\n", t.GetBy(f), f.Arg, f.GoType, t.Model)
+	fmt.Fprintf(b, "\treturn rt.Lookup[%s]{SQL: %s, Args: %s, Scan: %s}\n}\n\n", t.Model, t.GetByConst(f), argsList(args), t.Names.Scan)
 }
 
-func (e *queryEmitter) listEmit(t *naming.Table, tbl string) {
+func (e *queryEmitter) listEmit(t *naming.Table) {
 	b := &e.body
 	sql, _, err := t.ListSQL()
 	if err != nil {
@@ -223,65 +181,21 @@ func (e *queryEmitter) listEmit(t *naming.Table, tbl string) {
 		return
 	}
 	fmt.Fprintf(b, "const %s = `%s`\n\n", t.Names.ListConst, sql)
-	fmt.Fprintf(b, "// %s returns every %s row.\n", t.Names.List, tbl)
-	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context) ([]%s, error) {\n", t.Names.List, t.Model)
-	fmt.Fprintf(b, "\tvoltRows, voltErr := q.db.QueryContext(ctx, %s)\n", t.Names.ListConst)
-	e.rowsScan(t)
+	funcLine(b, fmt.Sprintf("func %s() rt.Query[%s]", t.Names.List, t.Model),
+		fmt.Sprintf("return rt.Query[%s]{SQL: %s, Scan: %s}", t.Model, t.Names.ListConst, t.Names.Scan))
 }
 
-func (e *queryEmitter) rowsScan(t *naming.Table) {
-	rowsScanEmit(&e.body, t.Model, t.Names.Scan)
+func (e *queryEmitter) createEmit(t *naming.Table) {
+	funcLine(&e.body, fmt.Sprintf("func %s(c %s) rt.Write[%s]", t.Names.Create, t.Names.Changeset, t.Model),
+		"return rt.Insert(c.Validate().Changeset)")
 }
 
-func rowsScanEmit(b *strings.Builder, model, scan string) {
-	fmt.Fprintf(b, "\tif voltErr != nil {\n\t\treturn nil, voltErr\n\t}\n\tdefer voltRows.Close()\n")
-	fmt.Fprintf(b, "\tvoltOut := []%s{}\n\tfor voltRows.Next() {\n", model)
-	fmt.Fprintf(b, "\t\tvoltV, voltErr := %s(voltRows)\n\t\tif voltErr != nil {\n\t\t\treturn nil, voltErr\n\t\t}\n\t\tvoltOut = append(voltOut, voltV)\n\t}\n", scan)
-	fmt.Fprintf(b, "\treturn voltOut, voltRows.Err()\n}\n\n")
+func (e *queryEmitter) updateEmit(t *naming.Table) {
+	funcLine(&e.body, fmt.Sprintf("func %s(c %s) rt.Write[%s]", t.Names.Update, t.Names.Changeset, t.Model),
+		"return rt.Update(c.Validate().Changeset)")
 }
 
-func (e *queryEmitter) createEmit(t *naming.Table, tbl string) {
-	b := &e.body
-	fmt.Fprintf(b, "// %s validates c and inserts its marked columns, returning the\n", t.Names.Create)
-	fmt.Fprintf(b, "// stored %s row; nothing marked inserts the defaults (spec §changesets).\n", tbl)
-	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, c %s) (%s, error) {\n", t.Names.Create, t.Names.Changeset, t.Model)
-	fmt.Fprintf(b, "\tc = c.Validate()\n\tif voltErr := c.Err(); voltErr != nil {\n\t\treturn %s{}, voltErr\n\t}\n", t.Model)
-	markedArgsEmit(b, t)
-	fmt.Fprintf(b, "\tvoltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.InsertRender(%s, voltCols, %s), voltArgs...)\n", t.Names.TableConst, t.Names.ColumnsConst)
-	fmt.Fprintf(b, "\tif voltErr != nil {\n\t\treturn %s{}, voltErr\n\t}\n\treturn %s(voltRow)\n}\n\n", t.Model, t.Names.Scan)
-}
-
-func (e *queryEmitter) updateEmit(t *naming.Table, tbl string) {
-	b := &e.body
-	fmt.Fprintf(b, "// %s validates c and writes its marked columns to the %s row it\n", t.Names.Update, tbl)
-	fmt.Fprintf(b, "// was made from, returning the stored row; nothing marked returns the row\n")
-	fmt.Fprintf(b, "// untouched (spec §changesets).\n")
-	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, c %s) (%s, error) {\n", t.Names.Update, t.Names.Changeset, t.Model)
-	fmt.Fprintf(b, "\tif !c.row {\n\t\treturn %s{}, rt.ErrNoRow\n\t}\n", t.Model)
-	fmt.Fprintf(b, "\tc = c.Validate()\n\tif voltErr := c.Err(); voltErr != nil {\n\t\treturn %s{}, voltErr\n\t}\n", t.Model)
-	markedArgsEmit(b, t)
-	b.WriteString("\tif len(voltCols) == 0 {\n\t\treturn voltV, nil\n\t}\n")
-	keys := make([]string, len(t.PK))
-	for i, f := range t.PK {
-		fmt.Fprintf(b, "\tvoltArgs = append(voltArgs, %s)\n", f.BindOf("c.data."+f.GoField))
-		keys[i] = f.ColName
-	}
-	fmt.Fprintf(b, "\tvoltRow, voltErr := rt.StmtQueryRow(ctx, q.db, q.cache, rt.UpdateRowRender(%s, voltCols, %#v, %s), voltArgs...)\n", t.Names.TableConst, keys, t.Names.ColumnsConst)
-	fmt.Fprintf(b, "\tif voltErr != nil {\n\t\treturn %s{}, voltErr\n\t}\n\treturn %s(voltRow)\n}\n\n", t.Model, t.Names.Scan)
-}
-
-func markedArgsEmit(b *strings.Builder, t *naming.Table) {
-	settable := t.Settable()
-	if len(settable) > 0 {
-		b.WriteString("\tvoltV := c.Row()\n")
-	}
-	b.WriteString("\tvar voltCols []string\n\tvar voltArgs []any\n")
-	for _, f := range settable {
-		fmt.Fprintf(b, "\tif c.set[%d] {\n\t\tvoltCols, voltArgs = append(voltCols, %q), append(voltArgs, %s)\n\t}\n", t.Index(f), f.ColName, f.BindOf("voltV."+f.GoField))
-	}
-}
-
-func (e *queryEmitter) deleteEmit(t *naming.Table, tbl string) {
+func (e *queryEmitter) deleteEmit(t *naming.Table) {
 	b := &e.body
 	sql, args, err := t.DeleteSQL()
 	if err != nil {
@@ -289,10 +203,6 @@ func (e *queryEmitter) deleteEmit(t *naming.Table, tbl string) {
 		return
 	}
 	fmt.Fprintf(b, "const %s = `%s`\n\n", t.Names.DeleteConst, sql)
-	fmt.Fprintf(b, "// %s removes the identified %s row; rt.ErrNotFound reports\n// that nothing matched.\n", t.Names.Delete, tbl)
-	fmt.Fprintf(b, "func (q *Queries) %s(ctx context.Context, %s) error {\n", t.Names.Delete, identityParams(t))
-	fmt.Fprintf(b, "\tvoltRes, voltErr := q.db.ExecContext(ctx, %s, %s)\n", t.Names.DeleteConst, strings.Join(args, ", "))
-	fmt.Fprintf(b, "\tif voltErr != nil {\n\t\treturn rt.Refused(%q, voltErr)\n\t}\n", t.Model)
-	fmt.Fprintf(b, "\tvoltN, voltErr := voltRes.RowsAffected()\n\tif voltErr != nil {\n\t\treturn voltErr\n\t}\n")
-	fmt.Fprintf(b, "\tif voltN == 0 {\n\t\treturn rt.ErrNotFound\n\t}\n\treturn nil\n}\n\n")
+	fmt.Fprintf(b, "func %s(%s) rt.Exec {\n", t.Names.Delete, identityParams(t))
+	fmt.Fprintf(b, "\treturn rt.Exec{SQL: %s, Args: %s, Model: %q, One: true}\n}\n\n", t.Names.DeleteConst, argsList(args), t.Model)
 }

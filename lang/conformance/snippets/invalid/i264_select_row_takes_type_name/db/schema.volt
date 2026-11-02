@@ -2,12 +2,12 @@
 // want: collides with the declared type Summary
 package db
 
-Type Summary string
+type Summary string
 
-Table page_views {
+table page_views {
   id   int     [pk, increment]
   site string
   note Summary
 }
 
-Select summary (site) for page_views
+select summary (site) for page_views

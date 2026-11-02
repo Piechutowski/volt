@@ -37,7 +37,7 @@ func TestCLIClobberProtection(t *testing.T) {
 		}
 	}
 	write("go.mod", "module clobber\n")
-	write(filepath.Join("app", "r.volt"), "package app\n\nScope / {\n\tget / Home.Index\n}\n")
+	write(filepath.Join("app", "r.volt"), "package app\n\nscope / {\n\tget / Home.Index\n}\n")
 
 	hand := "package app\n\n// hand-written: mine, not the generator's\n"
 	write(filepath.Join("app", "volt_router.go"), hand)

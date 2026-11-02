@@ -1,10 +1,10 @@
 // analyzers: emptybody
-Project p { //WANT emptybody
+project p { //WANT emptybody
 }
-Table t {
+table t {
   id int
-  Indexes { //WANT emptybody
+  indexes { //WANT emptybody
   }
-  Validators { //WANT emptybody
+  validators { //WANT emptybody
   }
 }

@@ -1,11 +1,11 @@
 // spec: §types — declared Go types as column types, qualified with a from path and bare for the package's own
-Type money.Money int    from "example.com/app/money"
-Type png.Png     []byte from "image/png"
-Type Slug        string
+type money.Money int    from "example.com/app/money"
+type png.Png     []byte from "image/png"
+type Slug        string
 
-Type Status string
+type Status string
 
-Table products {
+table products {
   id    int         [pk, increment]
   slug  Slug        [unique, required]
   price money.Money [default: 0]

@@ -6,23 +6,15 @@ import (
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
-// Validate runs required and the validators of posts over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c PostChangeset) Validate() PostChangeset {
 	voltV := c.Row()
 	var voltErrs []rt.FieldError
 	if voltErr := PostStateKnown(voltV.Status); voltErr != nil {
 		voltErrs = append(voltErrs, rt.FieldError{Check: "PostStateKnown", Columns: []string{"status"}, Message: voltErr.Error()})
 	}
-	c.valid = voltErrs
-	return c
+	return PostChangeset{c.WithFindings(voltErrs)}
 }
 
-// Validate runs required and the validators of tags over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c TagChangeset) Validate() TagChangeset {
-	c.valid = nil
-	return c
+	return TagChangeset{c.WithFindings(nil)}
 }

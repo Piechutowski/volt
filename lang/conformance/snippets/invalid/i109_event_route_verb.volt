@@ -2,6 +2,6 @@
 // want: read with get
 package app
 
-Scope / {
+scope / {
 	post /events volt.Events
 }

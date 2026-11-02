@@ -1,12 +1,12 @@
 // analyzers: unusedpartial
-TablePartial used_partial { created_at time.Time }
-TablePartial orphan_partial { x int } //WANT unusedpartial
+table_partial used_partial { created_at time.Time }
+table_partial orphan_partial { x int } //WANT unusedpartial
 
-Table users {
+table users {
   id int
   ~used_partial
 }
-Table posts {
+table posts {
   id int
 }
-Ref: posts.id > users.id
+ref: posts.id > users.id

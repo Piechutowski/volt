@@ -177,11 +177,11 @@ func routeName(r *RouteInfo) string {
 func TestRoutesOverUnknownKeyKept(t *testing.T) {
 	pr, diags := project(t, map[string]string{
 		"go.mod":         modFile,
-		"db/schema.volt": "package db\n\nTable authors {\n\tid int64 [pk, increment]\n\temail string\n}\n",
+		"db/schema.volt": "package db\n\ntable authors {\n\tid int64 [pk, increment]\n\temail string\n}\n",
 		"app/routes.volt": "package app\n\nimport (\n\tdb\n)\n\n" +
-			"Scope /api {\n\tget /authors/:id(int) db.AuthorGet\n\tpatch /authors/:id(int) db.AuthorUpdate\n\tget /writers db.AuthorList\n}\n\n" +
-			"Scope /v2 [name: v2] {\n\tresources db.authors [default, only: (index, show)]\n}\n\n" +
-			"Scope /admin [name: admin] {\n\tresources db.authors [only: (show, edit)]\n}\n",
+			"scope /api {\n\tget /authors/:id(int) db.AuthorGet\n\tpatch /authors/:id(int) db.AuthorUpdate\n\tget /writers db.AuthorList\n}\n\n" +
+			"scope /v2 [name: v2] {\n\tresources db.authors [default, only: (index, show)]\n}\n\n" +
+			"scope /admin [name: admin] {\n\tresources db.authors [only: (show, edit)]\n}\n",
 	})
 	if len(diags) != 1 || !strings.Contains(diags[0].Msg, `unknown type "int64"`) || !diag.HasErrors(diags) {
 		t.Fatalf("want the one unknown-type error, which keeps the package from the generator; got %v", diags)

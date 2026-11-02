@@ -2,27 +2,27 @@
 // want: qualifies a declaration with this package's own name
 package site
 
-Table posts {
+table posts {
   id    int    [pk, increment]
   title string
 
-  Validators {
+  validators {
     site.TitleShape(title)
   }
 }
 
-Group pages {
+group pages {
   posts
 }
 
-Select browse for pages [order: (id asc)]
-Select picked for posts where id in :ids
+select browse for pages [order: (id asc)]
+select picked for posts where id in :ids
 
-Pipeline api {
+pipeline api {
 	use site.Session
 }
 
-Scope /api [pipe: api, error_handler: site.Errors] {
+scope /api [pipe: api, error_handler: site.Errors] {
 	resources site.posts [default]
 	get /picked site.PostPicked
 	dataset site.browse

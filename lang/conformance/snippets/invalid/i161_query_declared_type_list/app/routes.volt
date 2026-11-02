@@ -6,6 +6,6 @@ import (
 	db
 )
 
-Scope /api {
+scope /api {
 	get /priced db.ProductPriced
 }

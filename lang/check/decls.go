@@ -47,7 +47,7 @@ func (c *checker) tableBodyCheck(name string, settings *ast.SettingList, body []
 			columns[item.Name.Name()] = true
 		case *ast.PartialRef:
 			if !isTable {
-				c.errorf(item.Pos(), "tablepartial", "partial injection is not allowed inside TablePartial")
+				c.errorf(item.Pos(), "tablepartial", "partial injection is not allowed inside table_partial")
 			}
 		case *ast.IndexesBlock:
 			for _, ix := range item.Indexes {
@@ -60,14 +60,14 @@ func (c *checker) tableBodyCheck(name string, settings *ast.SettingList, body []
 		case *ast.ValidatorsBlock:
 		case *ast.Records:
 			if !isTable {
-				c.errorf(item.Pos(), "tablepartial", "records are not allowed inside TablePartial")
+				c.errorf(item.Pos(), "tablepartial", "records are not allowed inside table_partial")
 			}
 			nRecords++
 			c.recordsCheck(item, false)
 		}
 	}
 	if nRecords > 1 {
-		c.errorf(body[0].Pos(), "records-sample-data", "at most one Records block per table (§records-sample-data)")
+		c.errorf(body[0].Pos(), "records-sample-data", "at most one records block per table (§records-sample-data)")
 	}
 	if !isTable {
 		var cols []*ast.Column

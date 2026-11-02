@@ -1,6 +1,6 @@
 // spec: §imports, §table-resolution — cross-package model resolution
 package db
 
-Table users {
+table users {
 	id int [pk, increment]
 }

@@ -5,30 +5,30 @@
 // 'volt gen ./nao/itest --sql' from the repository root.
 package itest
 
-Type Money int
-Type pay.Cents int from "github.com/Piechutowski/volt/nao/itest/pay"
-Type pay.YesNo string from "github.com/Piechutowski/volt/nao/itest/pay"
+type Money int
+type pay.Cents int from "github.com/Piechutowski/volt/nao/itest/pay"
+type pay.YesNo string from "github.com/Piechutowski/volt/nao/itest/pay"
 
-Project itest [note: "Integration-test fixture for the generated query surface."] {
+project itest [note: "Integration-test fixture for the generated query surface."] {
 }
 
-Type OrderState string
-Type Featured bool
-Type Ratio float64
+type OrderState string
+type Featured bool
+type Ratio float64
 
-Table users {
+table users {
   id int [pk, increment]
   email string [unique]
   name string [tag: "json:\"displayName\""]
   bio string [null, note: "NULL until the user writes one"]
   created_at time.Time [default: `CURRENT_TIMESTAMP`]
 
-  Validators {
+  validators {
     EmailValid(email)
   }
 }
 
-Table orders {
+table orders {
   id int [pk, increment]
   user_id int [ref: users.id]
   status OrderState [default: "pending"]
@@ -37,69 +37,69 @@ Table orders {
   fee pay.Cents
   placed_at time.Time [null]
 
-  Validators {
+  validators {
     OrderStateKnown(status)
   }
 }
 
 // §types, §predicates: a package-qualified declared type
 // compares with = and in, and a literal has the class of its storage.
-Select by_fee for orders where fee = :fee
-Select fees   for orders where fee in :fees [order: (id asc)]
-Select free   for orders where fee = 0
+select by_fee for orders where fee = :fee
+select fees   for orders where fee in :fees [order: (id asc)]
+select free   for orders where fee = 0
 
 // §types, §predicates: a declared type whose Go declaration
 // spells its storage type binds by kind, a list of it as one JSON array.
-Select by_state for orders where status in :states [order: (id asc)]
+select by_state for orders where status in :states [order: (id asc)]
 
 // composite primary key, no auto-increment anywhere
-Table user_tags {
+table user_tags {
   user_id int [pk, ref: users.id]
   tag string [pk]
 }
 
 // Two uniform metric tables plus the group/pred/select layer over them
 // (spec §groups to §selects-over-groups): one select, one signature, every member.
-Table page_views {
+table page_views {
   id int [pk, increment]
   site string
   day int
   hits int [default: 0]
 
-  Validators {
+  validators {
     CountsPositive(hits, day)
     SiteShape(site)
   }
 }
 
-Table link_clicks {
+table link_clicks {
   id int [pk, increment]
   site string
   day int
   target string [default: ""]
 }
 
-Group metrics {
+group metrics {
   page_views
   link_clicks
 }
 
-Pred at { site = :site and day = :day }
-Pred since { day >= :from }
+pred at { site = :site and day = :day }
+pred since { day >= :from }
 
-Select rows for metrics where at [order: (day desc, id asc)]
-Select recent for metrics where at or since
+select rows for metrics where at [order: (day desc, id asc)]
+select recent for metrics where at or since
 
 // §predicates list parameter: one JSON array, unpacked by json_each.
-Select on_sites for metrics where site in :sites [order: (id asc)]
+select on_sites for metrics where site in :sites [order: (id asc)]
 
 // §selects-over-groups projections: an explicit list mints one shared row type for
 // every member; the star form mints a per-member struct derivative.
-Select summary (site, day) for metrics where at
-Select public (* \ target) for link_clicks [order: (id asc)]
+select summary (site, day) for metrics where at
+select public (* \ target) for link_clicks [order: (id asc)]
 
 // Kinded bool and float64 columns, plain and nullable (spec §types).
-Table site_flags {
+table site_flags {
   id       int      [pk, increment]
   featured Featured
   pinned   Featured [null]
@@ -110,7 +110,7 @@ Table site_flags {
 // Bytes (spec §columns, §nullability): a []byte column without
 // null is bytes and nil writes empty bytes, one with null is
 // rt.Null[[]byte], and required is the one refusal of empty bytes.
-Table attachments {
+table attachments {
   id     int    [pk, increment]
   name   string [unique]
   body   []byte
@@ -118,15 +118,15 @@ Table attachments {
   digest []byte [required]
 }
 
-Select named for attachments where name = :name
+select named for attachments where name = :name
 
 // A projected row type and a struct derivative scan a []byte as the
 // model does: empty bytes read back non-nil (spec §nullability).
-Select slim (id, body, thumb) for attachments where name = :name
-Select heavy (* \ name) for attachments where name = :name
+select slim (id, body, thumb) for attachments where name = :name
+select heavy (* \ name) for attachments where name = :name
 
 // A []byte key binds as every plain []byte does, on every key path.
-Table blobs {
+table blobs {
   hash []byte [pk]
   tag  []byte [unique]
   size int    [default: 0]
@@ -135,7 +135,7 @@ Table blobs {
 // A composite primary key is its pk columns in declaration order, apart
 // or not (spec §columns): Get, Update and Delete take day, then site. A
 // column's index is its own CREATE INDEX, unique or not (§indexes).
-Table daily_hits {
+table daily_hits {
   day   int    [pk]
   hits  int    [default: 0]
   site  string [pk]
@@ -145,7 +145,7 @@ Table daily_hits {
 
 // A foreign key referencing a unique column, whose uniqueness is its
 // CREATE UNIQUE INDEX (spec §relationships-ref, §indexes).
-Table invites {
+table invites {
   id         int    [pk, increment]
   user_email string [ref: users.email]
   code       string [unique]
@@ -153,8 +153,25 @@ Table invites {
 
 // A package-qualified type of Go kind bool that stores text: its own Scan
 // and Value decide, plain and nullable (spec §types).
-Table post_flags {
+table post_flags {
   id       int       [pk, increment]
   reviewed pay.YesNo
   approved pay.YesNo [null]
 }
+
+// Joins (spec §selects-over-groups): orders reach their user through the
+// forward relation of user_id, inner since the key is required; users
+// reach their orders through the reverse relation, left since a user may
+// have none, so the joined columns are rt.Null.
+select placed (id, total, user.name, user.email) for orders join user where total >= :min [order: (id asc)]
+select buyers (id, name, orders.total) for users join orders [order: (id asc, orders.id asc)]
+
+// Aggregates (spec §selects-over-groups): one row per group, and one row
+// for the whole table when nothing groups.
+select hourly (site, day / 2 * 2 as bucket, sum(hits) as total, avg(hits) as mean, count() as n) for page_views [group: (site, bucket), order: (site asc, bucket asc)]
+select totals (count() as n, max(hits) as top, sum(hits) as total) for page_views
+
+// Nested results (spec §selects-over-groups): a user with the orders that
+// refer to it, two statements in one transaction.
+select carts    for users with orders where id = :id
+select everyone for users with orders [order: (id asc)]

@@ -1,5 +1,5 @@
 package db
 
-Table archive {
+table archive {
 	id int [pk]
 }

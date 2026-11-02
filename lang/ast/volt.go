@@ -1,7 +1,11 @@
 // Volt-layer AST nodes (spec Part II, docs/spec.md).
 package ast
 
-import "github.com/Piechutowski/volt/lang/token"
+import (
+	"strconv"
+
+	"github.com/Piechutowski/volt/lang/token"
+)
 
 // PackageClause is a "package name" clause (spec §projects-and-packages).
 type PackageClause struct {
@@ -128,22 +132,51 @@ type ScopeItem interface {
 	scopeItemNode()
 }
 
-// Route is one verb route line (spec §routes).
+// Route is one verb route line (spec §routes), with its load block when
+// it has one (§route-loads).
 type Route struct {
 	VerbTok  token.Token // IDENT: get, post, patch, delete, options, head, any; put, read only for the checker to name the verb to write (§routes)
 	Path     *RoutePath
 	Handler  *GoRef // Controller.Action — exactly two parts
 	Settings *SettingList
+	Loads    []*Load
+	Rbrace   token.Position // valid when the route has a load block
 }
 
 func (x *Route) Pos() token.Position { return x.VerbTok.Pos }
 func (x *Route) End() token.Position {
+	if x.Rbrace.IsValid() {
+		return x.Rbrace
+	}
 	if x.Settings != nil {
 		return x.Settings.End()
 	}
 	return x.Handler.End()
 }
-func (x *Route) scopeItemNode() {}
+
+// Load is one line of a route's load block (spec §route-loads): the name
+// the handler receives the value under and the query call that loads it.
+type Load struct {
+	Name *Ident
+	Call *QueryCall
+}
+
+func (x *Load) Pos() token.Position { return x.Name.Pos() }
+func (x *Load) End() token.Position { return x.Call.End() }
+
+// QueryCall names a generated query of a data package with its
+// arguments, each an Ident, a BasicLit or a NegNumber (spec
+// §route-loads, §request-bodies): a load's query, or the value of a
+// body: setting.
+type QueryCall struct {
+	Ref    *GoRef
+	Args   []Node
+	Rparen token.Position
+}
+
+func (x *QueryCall) Pos() token.Position { return x.Ref.Pos() }
+func (x *QueryCall) End() token.Position { return x.Rparen }
+func (x *Route) scopeItemNode()          {}
 
 // Verb returns the lowercased verb.
 func (x *Route) Verb() string { return lower(x.VerbTok.Val) }
@@ -200,6 +233,18 @@ func (x *Dataset) End() token.Position {
 	return x.Name.End()
 }
 func (x *Dataset) scopeItemNode() {}
+
+// ScopeLoad is "load name Func" in a Scope body (§scope-loads): a value
+// every route beneath receives, from a function of the package.
+type ScopeLoad struct {
+	LoadPos token.Position
+	Name    *Ident
+	Ref     *GoRef
+}
+
+func (x *ScopeLoad) Pos() token.Position { return x.LoadPos }
+func (x *ScopeLoad) End() token.Position { return x.Ref.End() }
+func (x *ScopeLoad) scopeItemNode()      {}
 
 // RoutePath is a route or scope path: "/" or "/seg/:param(type)/*rest"
 // (spec §route-paths). Tokens within a path are contiguous.
@@ -283,6 +328,10 @@ func (x *Segment) String() string {
 type IdentList struct {
 	Lparen token.Position
 	Names  []*Ident
+	// Quals holds an optional qualifier per name (parallel to Names, nil
+	// entries when absent): an order list reaches a joined relation's
+	// column as relation.column (§selects-over-groups).
+	Quals []*Ident
 	// Mods holds an optional one-word modifier per name (parallel to
 	// Names, nil entries when absent): order lists use it for asc/desc
 	// (§selects-over-groups).
@@ -410,7 +459,7 @@ func (x *PredCompare) predExpr()           {}
 // PredIn is "col in (lit, ...)" or "col in :list" — the latter a list
 // parameter, typed as a slice of the column's type (spec §predicates).
 type PredIn struct {
-	Col    *Ident
+	Col    *ColRef
 	Items  []*Lit // literal form; nil when List is set
 	List   *Param // list-parameter form; nil for the literal form
 	Rparen token.Position
@@ -427,7 +476,7 @@ func (x *PredIn) predExpr() {}
 
 // PredLike is "col like pattern" (pattern: string literal or param).
 type PredLike struct {
-	Col     *Ident
+	Col     *ColRef
 	Pattern Operand // *Lit (string) or *Param
 }
 
@@ -437,7 +486,7 @@ func (x *PredLike) predExpr()           {}
 
 // PredNull is "col is [not] null".
 type PredNull struct {
-	Col    *Ident
+	Col    *ColRef
 	Not    bool
 	EndPos token.Position
 }
@@ -452,14 +501,30 @@ type Operand interface {
 	operand()
 }
 
-// ColRef is a column reference inside a predicate.
+// ColRef is a column reference inside a predicate or a projection: a
+// column of the target, or relation.column, a column of a joined
+// relation (§predicates, §selects-over-groups).
 type ColRef struct {
+	Qual *Ident // the relation, nil for a column of the target
 	Name *Ident
 }
 
-func (x *ColRef) Pos() token.Position { return x.Name.Pos() }
+func (x *ColRef) Pos() token.Position {
+	if x.Qual != nil {
+		return x.Qual.Pos()
+	}
+	return x.Name.Pos()
+}
 func (x *ColRef) End() token.Position { return x.Name.End() }
 func (x *ColRef) operand()            {}
+
+// String spells the reference as written, relation.column or column.
+func (x *ColRef) String() string {
+	if x.Qual != nil {
+		return x.Qual.Name() + "." + x.Name.Name()
+	}
+	return x.Name.Name()
+}
 
 // Param is a ":name" query parameter (spec §predicates).
 type Param struct {
@@ -480,6 +545,14 @@ func (x *Lit) Pos() token.Position { return x.Tok.Pos }
 func (x *Lit) End() token.Position { return x.Tok.End() }
 func (x *Lit) operand()            {}
 
+// String spells the literal as written, a string quoted.
+func (x *Lit) String() string {
+	if x.Tok.Kind == token.STRING {
+		return strconv.Quote(x.Tok.Val)
+	}
+	return x.Tok.Val
+}
+
 // Select declares a query generated for every member of its target
 // (spec §selects-over-groups).
 type Select struct {
@@ -487,16 +560,109 @@ type Select struct {
 	Name      *Ident
 	Lparen    token.Position // projection parens (§selects-over-groups); zero when absent
 	Star      bool           // (* \\ a \\ (b, c)) star form
-	Cols      []*Ident       // explicit list, or the star form's exclusions
+	Items     []*ProjItem    // explicit list: columns, aggregates and expressions (§selects-over-groups)
+	Cols      []*ColRef      // the star form's exclusions
 	Rparen    token.Position
 	Target    *Ident   // group or table name (§selects-over-groups)
+	Joins     []*Ident // the relations joined, in order (§selects-over-groups)
+	With      *Ident   // the reverse relation whose rows nest under each parent (§selects-over-groups); nil when none
 	Where     PredExpr // nil = all rows
 	Settings  *SettingList
 	EndPos    token.Position
 }
 
 // Projected reports whether the select carries a projection (§selects-over-groups).
-func (d *Select) Projected() bool { return len(d.Cols) > 0 }
+func (d *Select) Projected() bool { return len(d.Items) > 0 || len(d.Cols) > 0 }
+
+// ProjItem is one item of an explicit projection (§selects-over-groups):
+// a column; an aggregate, Agg over Col (nil for count()); or an
+// arithmetic expression, Expr; a derived item carries its alias As.
+type ProjItem struct {
+	Col    *ColRef
+	Agg    *Ident
+	Expr   ArithExpr
+	As     *Ident
+	EndPos token.Position
+}
+
+func (x *ProjItem) Pos() token.Position {
+	switch {
+	case x.Agg != nil:
+		return x.Agg.Pos()
+	case x.Expr != nil:
+		return x.Expr.Pos()
+	}
+	return x.Col.Pos()
+}
+func (x *ProjItem) End() token.Position { return x.EndPos }
+
+// Derived reports whether the item is an aggregate or an expression.
+func (x *ProjItem) Derived() bool { return x.Agg != nil || x.Expr != nil }
+
+// Name is what names the item: its alias, else the column as written.
+func (x *ProjItem) Name() string {
+	if x.As != nil {
+		return x.As.Name()
+	}
+	return x.Col.String()
+}
+
+// String spells the item as written.
+func (x *ProjItem) String() string {
+	var s string
+	switch {
+	case x.Agg != nil:
+		col := ""
+		if x.Col != nil {
+			col = x.Col.String()
+		}
+		s = x.Agg.Name() + "(" + col + ")"
+	case x.Expr != nil:
+		s = x.Expr.String()
+	default:
+		return x.Col.String()
+	}
+	return s + " as " + x.As.Name()
+}
+
+// ArithExpr is an arithmetic expression (§selects-over-groups): a
+// ColRef, a Lit, a Param, an ArithBinary or an ArithParen.
+type ArithExpr interface {
+	Node
+	String() string
+	arithExpr()
+}
+
+// ArithBinary is "x op y" with op one of + - * /.
+type ArithBinary struct {
+	X  ArithExpr
+	Op string
+	Y  ArithExpr
+}
+
+func (x *ArithBinary) Pos() token.Position { return x.X.Pos() }
+func (x *ArithBinary) End() token.Position { return x.Y.End() }
+func (x *ArithBinary) String() string      { return x.X.String() + " " + x.Op + " " + x.Y.String() }
+func (x *ArithBinary) arithExpr()          {}
+
+// ArithParen is a parenthesized expression.
+type ArithParen struct {
+	Lparen token.Position
+	X      ArithExpr
+	Rparen token.Position
+}
+
+func (x *ArithParen) Pos() token.Position { return x.Lparen }
+func (x *ArithParen) End() token.Position { return x.Rparen }
+func (x *ArithParen) String() string      { return "(" + x.X.String() + ")" }
+func (x *ArithParen) arithExpr()          {}
+
+func (x *ColRef) arithExpr() {}
+func (x *Lit) arithExpr()    {}
+func (x *Param) arithExpr()  {}
+
+// String spells the parameter as written.
+func (x *Param) String() string { return ":" + x.Name.Name() }
 
 func (d *Select) Pos() token.Position { return d.SelectPos }
 func (d *Select) End() token.Position { return d.EndPos }

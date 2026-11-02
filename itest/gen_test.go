@@ -8,6 +8,7 @@ import (
 
 	"github.com/Piechutowski/volt/gen/model"
 	"github.com/Piechutowski/volt/gen/router"
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 )
@@ -17,11 +18,11 @@ import (
 // suite always exercises current generator output. Refresh with
 // 'go run ./cmd/volt gen ./itest/blog/app' after intentional changes.
 func TestFixtureNotDrifted(t *testing.T) {
-	root, err := lang.FindRoot(".")
+	root, err := lang.FindRoot(disk.Source{}, ".")
 	if err != nil {
 		t.Fatal(err)
 	}
-	pr, err := lang.LoadDirs(root, []string{filepath.Join("blog", "app")}, nil)
+	pr, err := lang.LoadDirs(disk.Source{}, root, []string{filepath.Join("blog", "app")}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,13 +56,13 @@ func TestFixtureNotDrifted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range dbFiles {
-		got, err := os.ReadFile(filepath.Join("blog", "db", f.Name))
+	for voltName, voltCode := range dbFiles {
+		got, err := os.ReadFile(filepath.Join("blog", "db", voltName))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !bytes.Equal(got, f.Code) {
-			t.Errorf("%s drifted from generator output; re-run volt gen --sql ./itest/blog/db", f.Name)
+		if !bytes.Equal(got, voltCode) {
+			t.Errorf("%s drifted from generator output; re-run volt gen --sql ./itest/blog/db", voltName)
 		}
 	}
 }

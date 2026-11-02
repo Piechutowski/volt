@@ -2,9 +2,9 @@
 // want: takes the Go name of the column handle for orders.status
 package db
 
-Type OrderStatus string
+type OrderStatus string
 
-Table orders {
+table orders {
   id     int         [pk, increment]
   status OrderStatus
 }

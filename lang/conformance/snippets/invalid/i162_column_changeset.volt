@@ -2,7 +2,7 @@
 // want: maps to the Go field Changeset
 package db
 
-Table drafts {
+table drafts {
   id int [pk]
   changeset string
 }

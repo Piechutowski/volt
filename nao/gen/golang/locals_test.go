@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/nao/gen/golang"
@@ -50,25 +51,25 @@ func TestPredeclaredNamesCompile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handleTakesConstructor := map[string]bool{"new": true}
+	handleTakesFunction := map[string]bool{"new": true, "delete": true}
 	var b strings.Builder
-	b.WriteString("package db\n\nTable posts {\n  id    int [pk]\n  label string\n  n     int\n}\n\n")
+	b.WriteString("package db\n\ntable posts {\n  id    int [pk]\n  label string\n  n     int\n}\n\n")
 	var unique strings.Builder
 	names := types.Universe.Names()
 	params := 0
 	for _, name := range names {
-		if handleTakesConstructor[name] {
+		if handleTakesFunction[name] {
 			continue
 		}
-		fmt.Fprintf(&b, "Table k_%s {\n  %s int [pk]\n  label string\n}\n\n", name, name)
+		fmt.Fprintf(&b, "table k_%s {\n  %s int [pk]\n  label string\n}\n\n", name, name)
 		fmt.Fprintf(&unique, "  %s string [unique]\n", name)
 	}
-	fmt.Fprintf(&b, "Table uniques {\n  id int [pk]\n%s}\n\n", unique.String())
+	fmt.Fprintf(&b, "table uniques {\n  id int [pk]\n%s}\n\n", unique.String())
 	for _, name := range names {
 		if naming.BodyBuiltin(name) {
 			continue
 		}
-		fmt.Fprintf(&b, "Select s_%s for posts where label = :%s\nSelect l_%s for posts where n in :%s\n", name, name, name, name)
+		fmt.Fprintf(&b, "select s_%s for posts where label = :%s\nselect l_%s for posts where n in :%s\n", name, name, name, name)
 		params += 2
 	}
 	if len(names) < 40 || params < 70 {
@@ -93,7 +94,7 @@ func schemaCompiles(t *testing.T, repoRoot string, schema []byte) {
 	if err := os.WriteFile(filepath.Join(pkgDir, "schema.volt"), schema, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	pr, err := lang.Load(dir)
+	pr, err := lang.Load(disk.Source{}, dir)
 	if err != nil {
 		t.Fatal(err)
 	}

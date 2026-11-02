@@ -1,5 +1,5 @@
 // spec: §keywords, keywords are contextual: a keyword's own spelling, or another case of it, is an ordinary name outside keyword position
-Table table {
+table table {
   note string
   indexes int
   checks int
@@ -8,8 +8,8 @@ Table table {
   type int
   from int
   as int
-  Group int
-  Pipeline string
-  Scope int
+  group int
+  pipeline string
+  scope int
   PK bool
 }

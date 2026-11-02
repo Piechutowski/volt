@@ -2,12 +2,12 @@
 // want: names the action of the column's ref:, and the column declares none
 package db
 
-Table posts {
+table posts {
   id      int [pk]
   user_id int [null]
 }
 
-Migration 0001__init {
+migration 0001__init {
   create table posts {
     id      int [pk]
     user_id int [null, delete: cascade]

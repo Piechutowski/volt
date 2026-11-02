@@ -1,9 +1,9 @@
 // spec: §selects-over-groups — no member may end up with zero columns
 package db
 
-Table page_views {
+table page_views {
   id int [pk]
   site string
 }
 
-Select nothing (* \ (id, site)) for page_views
+select nothing (* \ (id, site)) for page_views

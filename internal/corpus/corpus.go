@@ -96,11 +96,11 @@ var colTypes = []string{
 }
 
 func schemaWrite(b *strings.Builder, spec Spec, pkg string) {
-	b.WriteString("Type Status string\n\n")
-	b.WriteString("TablePartial stamped {\n\tcreated_at time.Time [default: `CURRENT_TIMESTAMP`]\n}\n\n")
-	b.WriteString("Pred fresh { c001 >= :since }\n\n")
+	b.WriteString("type Status string\n\n")
+	b.WriteString("table_partial stamped {\n\tcreated_at time.Time [default: `CURRENT_TIMESTAMP`]\n}\n\n")
+	b.WriteString("pred fresh { c001 >= :since }\n\n")
 	for i := 1; i <= spec.Tables; i++ {
-		fmt.Fprintf(b, "Table %s [note: \"metrics table %d of %s\"] {\n", Table(i), i, pkg)
+		fmt.Fprintf(b, "table %s [note: \"metrics table %d of %s\"] {\n", Table(i), i, pkg)
 		b.WriteString("\tid int [pk, increment]\n\t~stamped\n")
 		var known []int
 		for c := 1; c <= spec.Columns; c++ {
@@ -116,21 +116,21 @@ func schemaWrite(b *strings.Builder, spec Spec, pkg string) {
 		if i > 1 {
 			fmt.Fprintf(b, "\tprev_id int [null, ref: %s.id]\n", Table(i-1))
 		}
-		b.WriteString("\n\tValidators {\n\t\tPositive(c001)\n")
+		b.WriteString("\n\tvalidators {\n\t\tPositive(c001)\n")
 		for _, c := range known {
 			fmt.Fprintf(b, "\t\tStatusKnown(c%03d)\n", c)
 		}
 		b.WriteString("\t}\n}\n\n")
 	}
-	b.WriteString("Group series {\n")
+	b.WriteString("group series {\n")
 	for i := 1; i <= spec.Tables; i++ {
 		fmt.Fprintf(b, "\t%s\n", Table(i))
 	}
 	b.WriteString("}\n\n")
 	for i := 1; i <= spec.Tables; i++ {
-		fmt.Fprintf(b, "Select brief%03d (id, c001) for %s where fresh [order: (id desc)]\n", i, Table(i))
+		fmt.Fprintf(b, "select brief%03d (id, c001) for %s where fresh [order: (id desc)]\n", i, Table(i))
 	}
-	b.WriteString("\nSelect browse for series where fresh [order: (id asc)]\n")
+	b.WriteString("\nselect browse for series where fresh [order: (id asc)]\n")
 }
 
 func routesWrite(b *strings.Builder, spec Spec, pkgs []string, single bool) {
@@ -141,8 +141,8 @@ func routesWrite(b *strings.Builder, spec Spec, pkgs []string, single bool) {
 		}
 		b.WriteString(")\n\n")
 	}
-	b.WriteString("Pipeline api {\n\tuse volt.RequestID\n\tuse BearerAuth\n}\n\n")
-	b.WriteString("Scope / [pipe: api, error_handler: Errors] {\n")
+	b.WriteString("pipeline api {\n\tuse volt.RequestID\n\tuse BearerAuth\n}\n\n")
+	b.WriteString("scope / [pipe: api, error_handler: Errors] {\n")
 	b.WriteString("\tget /              Home.Index [name: root]\n")
 	b.WriteString("\tget /files/:path... Files.Serve\n")
 	b.WriteString("\tget /events        volt.Events\n\n")
@@ -151,12 +151,12 @@ func routesWrite(b *strings.Builder, spec Spec, pkgs []string, single bool) {
 		if single {
 			qual = ""
 		}
-		fmt.Fprintf(b, "\tScope /%s [name: %s] {\n", p, p)
+		fmt.Fprintf(b, "\tscope /%s [name: %s] {\n", p, p)
 		fmt.Fprintf(b, "\t\tget /stats Stats.%s\n", actionOf(p))
 		for i := 1; i <= spec.Tables; i++ {
 			fmt.Fprintf(b, "\t\tresources %s%s [default]\n", qual, Table(i))
 		}
-		fmt.Fprintf(b, "\t\tScope /browse [name: browse] {\n\t\t\tdataset %sbrowse\n\t\t}\n\t}\n", qual)
+		fmt.Fprintf(b, "\t\tscope /browse [name: browse] {\n\t\t\tdataset %sbrowse\n\t\t}\n\t}\n", qual)
 	}
 	b.WriteString("}\n")
 }
@@ -211,8 +211,8 @@ import (
 func BearerAuth(next http.Handler) http.Handler { return next }
 
 // Errors is the error_handler the root scope names (§scopes).
-func Errors(w http.ResponseWriter, r *volt.Request, err error) {
-	volt.DefaultErrorHandler(w, r, err)
+func Errors(r volt.Request, err error) volt.Response {
+	return volt.DefaultErrorHandler(r, err)
 }
 `
 }
@@ -221,13 +221,13 @@ func controllersGo(pkg string, stats []string, main bool) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "package %s\n\nimport (\n\t\"net/http\"\n\n\tvolt \"github.com/Piechutowski/volt\"\n)\n\n", pkg)
 	b.WriteString("// stub answers every controller action the routes name.\ntype stub struct{}\n\n")
-	b.WriteString("func (stub) Index(w http.ResponseWriter, r *volt.Request) error { return nil }\n\n")
-	b.WriteString("func (stub) Serve(w http.ResponseWriter, r *volt.Request, path string) error { return nil }\n")
+	b.WriteString("func (stub) Index(r volt.Request) volt.Response { return volt.NoContent() }\n\n")
+	b.WriteString("func (stub) Serve(r volt.Request, path string) volt.Response { return volt.NoContent() }\n")
 	for _, a := range stats {
-		fmt.Fprintf(&b, "\nfunc (stub) %s(w http.ResponseWriter, r *volt.Request) error { return nil }\n", a)
+		fmt.Fprintf(&b, "\nfunc (stub) %s(r volt.Request) volt.Response { return volt.NoContent() }\n", a)
 	}
 	if main {
-		b.WriteString("\nfunc main() {\n\thttp.ListenAndServe(\":0\", NewRouter(Controllers{Home: stub{}, Files: stub{}, Stats: stub{}, Queries: New(nil)}))\n}\n")
+		b.WriteString("\nfunc main() {\n\thttp.ListenAndServe(\":0\", NewRouter(Controllers{Home: stub{}, Files: stub{}, Stats: stub{}}))\n}\n")
 	} else {
 		b.WriteString("\nvar _ http.Handler = NewRouter(Controllers{Home: stub{}, Files: stub{}, Stats: stub{}})\n")
 	}

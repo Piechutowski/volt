@@ -2,11 +2,11 @@
 // want: unknown package qualifier "store"
 package app
 
-Pipeline api {
+pipeline api {
 	use store.Auth
 }
 
-Scope /api [pipe: api] {
+scope /api [pipe: api] {
 	resources store.users [default]
 	dataset store.browse
 	get /x store.UserList

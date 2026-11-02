@@ -1,4 +1,4 @@
 // spec: §default-values, a bare identifier is not a default value
-Table t {
+table t {
   x int [default: something]
 }

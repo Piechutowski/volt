@@ -2,16 +2,16 @@
 // want: a key column is never NULL
 package db
 
-Table tags {
+table tags {
   id int [pk]
 }
 
-Table post_tags {
+table post_tags {
   post_id int    [pk]
   tag     string [pk]
 }
 
-Migration 0001__init {
+migration 0001__init {
   create table tags {
     id int [pk, null]
   }

@@ -31,6 +31,7 @@ import (
 	"github.com/Piechutowski/volt/gen/model"
 	"github.com/Piechutowski/volt/gen/router"
 	"github.com/Piechutowski/volt/internal/corpus"
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/internal/par"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
@@ -60,7 +61,7 @@ func command() *cli.Command {
 				ArgsUsage: "[packages]",
 				Flags:     []cli.Flag{jsonFlag},
 				Action: func(_ context.Context, c *cli.Command) error {
-					return run(c, "check")
+					return modeRun(c, "check")
 				},
 			},
 			{
@@ -72,7 +73,7 @@ func command() *cli.Command {
 					&cli.BoolFlag{Name: "werror", Usage: "treat warnings as errors in the exit status"},
 				},
 				Action: func(_ context.Context, c *cli.Command) error {
-					return run(c, "vet")
+					return modeRun(c, "vet")
 				},
 			},
 			{
@@ -144,7 +145,7 @@ func load(c *cli.Command) (pr *lang.Project, named []string, diags []diag.Diagno
 				base = "."
 			}
 		}
-		r, err := lang.FindRoot(base)
+		r, err := lang.FindRoot(disk.Source{}, base)
 		if err != nil {
 			return nil, nil, nil, cli.Exit(err.Error(), 2)
 		}
@@ -154,7 +155,7 @@ func load(c *cli.Command) (pr *lang.Project, named []string, diags []diag.Diagno
 			return nil, nil, nil, cli.Exit(fmt.Sprintf("%s belongs to a different project (%s); one project per invocation", arg, r), 2)
 		}
 		if recursive {
-			found, err := lang.PackageDirs(root, base)
+			found, err := lang.PackageDirs(disk.Source{}, root, base)
 			if err != nil {
 				return nil, nil, nil, cli.Exit(err.Error(), 2)
 			}
@@ -166,7 +167,7 @@ func load(c *cli.Command) (pr *lang.Project, named []string, diags []diag.Diagno
 			dirs = append(dirs, base)
 		}
 	}
-	pr, err = lang.LoadDirs(root, dirs, nil)
+	pr, err = lang.LoadDirs(disk.Source{}, root, dirs, nil)
 	if err != nil {
 		return nil, nil, nil, cli.Exit(err.Error(), 2)
 	}
@@ -180,7 +181,7 @@ func load(c *cli.Command) (pr *lang.Project, named []string, diags []diag.Diagno
 	return pr, named, lang.Check(pr), nil
 }
 
-func run(c *cli.Command, mode string) error {
+func modeRun(c *cli.Command, mode string) error {
 	pr, _, diags, err := load(c)
 	if err != nil {
 		return err
@@ -302,9 +303,9 @@ func genRun(ctx context.Context, c *cli.Command) error {
 			if err != nil {
 				return nil, err
 			}
-			for _, f := range gen {
-				if parts[partOf(f.Name)] {
-					files = append(files, outFile{path: filepath.Join(dir, f.Name), code: f.Code})
+			for _, name := range slices.Sorted(maps.Keys(gen)) {
+				if parts[partOf(name)] {
+					files = append(files, outFile{path: filepath.Join(dir, name), code: gen[name]})
 				}
 			}
 		}
@@ -606,7 +607,7 @@ func bareTypesTravel(pkg *lang.Package, outDir string) error {
 		if td.Path != "" {
 			continue
 		}
-		return cli.Exit(fmt.Sprintf("gen: -o %s: Type %s of package %s is declared in that package's own Go files, which do not travel to %s; declare it in a package of its own and write Type pkg.%s %s from \"its/import/path\" (§types)",
+		return cli.Exit(fmt.Sprintf("gen: -o %s: type %s of package %s is declared in that package's own Go files, which do not travel to %s; declare it in a package of its own and write type pkg.%s %s from \"its/import/path\" (§types)",
 			outDir, td.Key, pkg.Path, outDir, td.Key, td.Storage.Storage), 2)
 	}
 	return nil

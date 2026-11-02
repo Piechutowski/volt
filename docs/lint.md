@@ -59,7 +59,7 @@ searching for uses that do not exist.
 
 ### unusedpartial
 
-**What it does.** Reports a `TablePartial` that no table injects.
+**What it does.** Reports a `table_partial` that no table injects.
 
 **Why.** A partial's only effect is through the tables that inject it;
 an unused partial is dead weight that still occupies a name in its
@@ -114,14 +114,14 @@ textually: `` `a+b` `` and `` `a + b` `` count as different keys.
 ### emptybody
 
 **What it does.** Reports empty `Indexes {}` and `Validators {}` blocks,
-and a `Project` with neither properties nor a `note:` (spec §project).
+and a `project` with neither properties nor a `note:` (spec §project).
 
 **Why.** An empty block does nothing but implies work in progress.
 
 **Examples.** [testdata/emptybody.volt](../lang/vet/testdata/emptybody.volt):
 every empty block warns; the table's column is the good line.
 [testdata/emptybody_note.volt](../lang/vet/testdata/emptybody_note.volt):
-a `Project` that carries only a note is not empty, and draws nothing.
+a `project` that carries only a note is not empty, and draws nothing.
 
 ### shadowedcolumn
 
@@ -183,7 +183,7 @@ key is columns only and which has no `where:`. A unique index with
 expression constrains no column (spec §indexes), so SQLite refuses
 either as a foreign-key target; one member of a composite key alone is
 not unique either. The referenced columns are those right of `>` in a
-`Ref`, or the endpoint of a column's `ref:` (spec §relationships-ref).
+`ref`, or the endpoint of a column's `ref:` (spec §relationships-ref).
 The generator asks the same question to give `<Model>GetBy<Column>`
 (spec §generated-query-surface).
 
@@ -272,12 +272,15 @@ names* collide in Go package scope. Generation mints flat
 package-scope names by concatenation from the model name: the model
 struct itself, the changeset `<Model>Changeset`, the aliases
 `<Model>Column` and `<Model>Params`, the constructor `<Model>New`
-(§changesets), the column handles `<Model><Field>`, and the option
+(§changesets), the column handles `<Model><Field>`, the option
 wrappers `<Model>Limit`, `<Model>Offset`, `<Model>Distinct`,
-`<Model>OrderBy`, `<Model>After`, `<Model>Set` of the dynamic layer,
-so two distinct declarations can flatten to one Go identifier: `Table
-user_limits` mints model `UserLimit`, exactly the option wrapper of
-`Table users`; `users.foo_bar` and `user_foos.bar` both mint the
+`<Model>OrderBy`, `<Model>After`, `<Model>Set` of the dynamic layer and
+the query functions `<Model>Get`, `<Model>List`, `<Model>Count` and the
+rest (§generated-query-surface), so two distinct declarations can
+flatten to one Go identifier: `Table user_limits` mints model
+`UserLimit`, exactly the option wrapper of `Table users`; a column
+`count` of `users` mints the handle `UserCount`, exactly its count
+function; `users.foo_bar` and `user_foos.bar` both mint the
 handle `UserFooBar`. A bare declared type shares that scope, since the
 package's own Go files declare it (§types); a declared type that takes
 a generated name is the checker's error, not this rule's warning.
@@ -301,6 +304,124 @@ and `UserChangeset` (users' write body and changeset) all warn.
 **Limitations.** Per-file, like every rule here. A schema that fails
 generation planning altogether (unusable names, field collisions) reports
 nothing from this rule — generation raises those errors itself.
+
+---
+
+## Handlers
+
+The rules of this group read the hand-written Go files of a routes
+package, not its `.volt` files: with the standard library's parser and
+no type information, they hold a handler to what makes it a pure
+function (spec §requests-and-responses, §values-and-effects). A
+*handler file* is one that declares a method taking a `volt.Request`
+first and returning a `volt.Response`. Generated files are never read.
+Not caught, by the spec's own account: reflection, `unsafe`, cgo, a
+package imported under another name, and a call through a function
+value.
+
+### handlerreceiver
+
+**What it does.** Reports a controller type, the receiver of a
+handler-shaped method, that is not an empty struct.
+
+**Why.** The generated interface fixes every handler's parameters, so
+the receiver is the one place a handler could smuggle a database
+handle, a clock or a cache in. An empty struct carries nothing, and
+the determinism helper the router generates (`ControllersDeterministic`)
+can then call every handler twice and compare.
+
+**Examples.** [testdata/handlerreceiver.go](../lang/vet/testdata/handlerreceiver.go):
+`Home` is `struct{}` and passes; `Users` carries a field and warns; a
+type with no handler method is not a controller and is free.
+
+**Limitations.** A receiver type declared in another package is not
+seen.
+
+### handlerimports
+
+**What it does.** Reports a handler file that imports a package that
+touches the world: the runner `nao/run`, `database/sql`, `net`, `os`,
+`os/exec`, `math/rand`, `math/rand/v2` or `crypto/rand`.
+
+**Why.** A handler describes its effects as values and the shim
+performs them; a handler that could open a socket or read a file is
+no longer a function of its inputs. `net/http` stays allowed: a handler
+names its status constants and cookie types, and a request made
+through it is among what the spec lists as not caught.
+
+**Examples.** [testdata/handlerimports.go](../lang/vet/testdata/handlerimports.go):
+`database/sql`, `os` and `nao/run` warn at their import lines;
+`net/http` and the runtime do not.
+
+### handlerclock
+
+**What it does.** Reports `time.Now`, `time.Since` and `time.Until` in a
+handler file.
+
+**Why.** The shim captures the time once and the handler reads
+`r.Now()`, so two calls with the same request see the same clock and a
+test fixes it.
+
+**Examples.** [testdata/handlerclock.go](../lang/vet/testdata/handlerclock.go):
+arithmetic on `r.Now()` passes; `time.Now()` and `time.Since` warn.
+
+### packagestate
+
+**What it does.** Reports package state in any hand-written file of a
+routes package: a package-level `var` whose every initializer is not a
+composite or basic literal, an `init` function, and an assignment or
+`++` whose target is a package-level var.
+
+**Why.** Package state is what two requests share without saying so. A
+constant table (`var statuses = map[string]int{...}`) is a value a
+handler reads; a counter is not.
+
+**Examples.** [testdata/packagestate.go](../lang/vet/testdata/packagestate.go):
+the map table passes; the counter, the var initialized by a call, the
+`init` and the two writes to `counter` warn; a local is free.
+
+**Limitations.** A local that shadows a package-level var is reported as
+the var; a write through a pointer to it is not seen.
+
+### goroutine
+
+**What it does.** Reports every `go` statement in a hand-written file of
+a routes package.
+
+**Why.** A goroutine is an effect owned by whoever owns a lifetime, and a
+handler owns none: parallel effects go through `rt.All`, work after the
+request to a job, periodic work to `main`.
+
+**Examples.** [testdata/goroutine.go](../lang/vet/testdata/goroutine.go).
+
+### streamcount
+
+**What it does.** Reports every call of `volt.Stream`.
+
+**Why.** `Stream` is the one response written by a function rather than
+described as a value, kept for what values cannot express; reporting
+each use keeps the count visible, so it stays the exception.
+
+**Examples.** [testdata/streamcount.go](../lang/vet/testdata/streamcount.go):
+`Render` passes, `Stream` warns.
+
+---
+
+### loadspelledlong
+
+**What it does.** Reports a handler that returns `volt.Then` over a
+query whose every argument is a parameter of the handler or a literal.
+
+**Why.** A route load (spec §route-loads) spells that lookup once, in
+the route, and hands the handler the row: the handler never sees a
+miss, the shim binds the arguments, and the signature says what the
+handler reads. A continuation is for a lookup that depends on the
+request's body, its headers or a computed value.
+
+**Examples.** [testdata/loadspelledlong.go](../lang/vet/testdata/loadspelledlong.go):
+`Show` looks a metric up by its path parameter and warns; `Peers`
+computes an argument from the query string and `Recent` builds a
+dynamic query, so both pass.
 
 ---
 

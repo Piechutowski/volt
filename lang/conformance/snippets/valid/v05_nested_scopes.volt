@@ -1,11 +1,11 @@
 // spec: §scopes — prefixes concatenate, pipes append, names prefix
 package app
 
-Pipeline a { use volt.RequestID }
-Pipeline b { use volt.Logger }
+pipeline a { use volt.RequestID }
+pipeline b { use volt.Logger }
 
-Scope /api [pipe: a, name: api] {
-	Scope /v1 [pipe: b, name: v1] {
+scope /api [pipe: a, name: api] {
+	scope /v1 [pipe: b, name: v1] {
 		get /health Health.Check
 	}
 }

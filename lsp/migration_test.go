@@ -8,9 +8,9 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-const migrationSchema = "package db\n\nTable users {\n\tid int [pk, increment]\n\tbio string [null]\n}\n\n" +
-	"Migration 0002__users_bio [irreversible] {\n\talter table users {\n\t\tadd bio string [null]\n\t}\n\trebuild table users {\n\t\tid int [pk, increment]\n\t\tbio string [null]\n\t}\n}\n\n" +
-	"Migration 0001__create_users {\n\tcreate table users {\n\t\tid int [pk, increment]\n\t}\n}\n"
+const migrationSchema = "package db\n\ntable users {\n\tid int [pk, increment]\n\tbio string [null]\n}\n\n" +
+	"migration 0002__users_bio [irreversible] {\n\talter table users {\n\t\tadd bio string [null]\n\t}\n\trebuild table users {\n\t\tid int [pk, increment]\n\t\tbio string [null]\n\t}\n}\n\n" +
+	"migration 0001__create_users {\n\tcreate table users {\n\t\tid int [pk, increment]\n\t}\n}\n"
 
 func TestDocumentSymbolsMigration(t *testing.T) {
 	d := doc(t, migrationSchema)
@@ -24,8 +24,8 @@ func TestDocumentSymbolsMigration(t *testing.T) {
 			t.Errorf("outline missing Migration %q: %v", want, got)
 			continue
 		}
-		if s.Detail == nil || *s.Detail != "Migration" || s.Kind != protocol.SymbolKindModule {
-			t.Errorf("Migration %q detail = %v kind = %v, want Migration, Module", want, s.Detail, s.Kind)
+		if s.Detail == nil || *s.Detail != "migration" || s.Kind != protocol.SymbolKindModule {
+			t.Errorf("migration %q detail = %v kind = %v, want Migration, Module", want, s.Detail, s.Kind)
 		}
 	}
 }
@@ -34,7 +34,7 @@ func TestCompletionTopLevelMigration(t *testing.T) {
 	text := sample + "\nM"
 	d := doc(t, text)
 	items := d.Complete(protocol.Position{Line: protocol.UInteger(strings.Count(text, "\n")), Character: 1})
-	if !hasLabel(items, "Migration") {
+	if !hasLabel(items, "migration") {
 		t.Fatalf("top-level completion missing Migration: %v", labels(items))
 	}
 }
@@ -49,7 +49,7 @@ func hasWord(items []protocol.CompletionItem, word string) bool {
 }
 
 func TestCompletionMigrationBody(t *testing.T) {
-	text := "Migration 0001__a {\n\t\n}\n"
+	text := "migration 0001__a {\n\t\n}\n"
 	d := doc(t, text)
 	items := d.Complete(posOf(t, text, "\t", 0))
 	for _, want := range []string{"create table", "alter table", "exec", "up {"} {
@@ -57,13 +57,13 @@ func TestCompletionMigrationBody(t *testing.T) {
 			t.Errorf("migration body completion missing %q; got %v", want, labels(items))
 		}
 	}
-	text = "Migration 0001__a {\n\talter table t {\n\t\t\n\t}\n}\n"
+	text = "migration 0001__a {\n\talter table t {\n\t\t\n\t}\n}\n"
 	d = doc(t, text)
 	items = d.Complete(posOf(t, text, "\t\t", 0))
 	if !hasWord(items, "add") || !hasWord(items, "rename") {
 		t.Errorf("alter body completion = %v, want add, drop, rename", labels(items))
 	}
-	text = "Migration 0001__a [\n"
+	text = "migration 0001__a [\n"
 	d = doc(t, text)
 	pos := posOf(t, text, "[", 0)
 	pos.Character++
@@ -75,8 +75,8 @@ func TestCompletionMigrationBody(t *testing.T) {
 
 func TestCompletionRefActions(t *testing.T) {
 	for _, text := range []string{
-		"Table users {\n\tid int [pk]\n}\nTable posts {\n\tid int [pk]\n\tuser_id int [null]\n}\nRef: posts.user_id > users.id [delete: ",
-		"Migration 0001__a {\n\tcreate table posts {\n\t\tuser_id int [null, ref: users.id, update: ",
+		"table users {\n\tid int [pk]\n}\ntable posts {\n\tid int [pk]\n\tuser_id int [null]\n}\nref: posts.user_id > users.id [delete: ",
+		"migration 0001__a {\n\tcreate table posts {\n\t\tuser_id int [null, ref: users.id, update: ",
 	} {
 		d := doc(t, text)
 		lines := strings.Split(text, "\n")
@@ -89,7 +89,7 @@ func TestCompletionRefActions(t *testing.T) {
 }
 
 func TestCompletionMigrationShapeSettings(t *testing.T) {
-	text := "Migration 0001__a {\n\tcreate table t {\n\t\tid int [\n\t\tIndexes {\n\t\t\tid [\n\t\t}\n\t}\n" +
+	text := "migration 0001__a {\n\tcreate table t {\n\t\tid int [\n\t\tindexes {\n\t\t\tid [\n\t\t}\n\t}\n" +
 		"\talter table t {\n\t\tadd bio string [\n\t}\n\trebuild table t {\n\t\tid int [\n\t}\n\tcreate index t id [\n}\n"
 	d := doc(t, text)
 	cases := []struct {
@@ -118,20 +118,20 @@ func TestCompletionMigrationShapeSettings(t *testing.T) {
 			}
 		}
 	}
-	text = "Migration 0001__a {\n\tcreate table t {\n\t\tid i\n\t\t\n\t}\n}\n"
+	text = "migration 0001__a {\n\tcreate table t {\n\t\tid i\n\t\t\n\t}\n}\n"
 	d = doc(t, text)
 	items := d.Complete(protocol.Position{Line: 2, Character: protocol.UInteger(len("\t\tid i"))})
 	if !hasWord(items, "int") || len(items) != len(builtinTypes) {
 		t.Errorf("shape column type completion = %v, want the built-ins only", labels(items))
 	}
 	items = d.Complete(protocol.Position{Line: 3, Character: 2})
-	if !hasWord(items, "Indexes") || len(items) != 1 {
+	if !hasWord(items, "indexes") || len(items) != 1 {
 		t.Errorf("shape body completion = %v, want Indexes only", labels(items))
 	}
 }
 
 func TestCompletionIndexWhere(t *testing.T) {
-	text := "Table t {\n\tid int\n\tIndexes {\n\t\tid [\n\t}\n}\n"
+	text := "table t {\n\tid int\n\tindexes {\n\t\tid [\n\t}\n}\n"
 	d := doc(t, text)
 	pos := posOf(t, text, "[", 0)
 	pos.Character++
@@ -151,7 +151,7 @@ func TestMigrationHoverSingleFile(t *testing.T) {
 		t.Fatal("no hover on the migration name")
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
-	for _, want := range []string{"Migration 0002__users_bio", "migration 2 of 2", "irreversible"} {
+	for _, want := range []string{"migration 0002__users_bio", "migration 2 of 2", "irreversible"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover lacks %q:\n%s", want, md)
 		}
@@ -167,7 +167,7 @@ func TestMigrationHoverSingleFile(t *testing.T) {
 }
 
 func TestMigrationHoverCountsThePackage(t *testing.T) {
-	const later = "package db\n\nMigration 0003__drop_bio [irreversible] {\n\talter table users {\n\t\tdrop bio\n\t}\n}\n"
+	const later = "package db\n\nmigration 0003__drop_bio [irreversible] {\n\talter table users {\n\t\tdrop bio\n\t}\n}\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":         "module m\n",
 		"db/schema.volt": migrationSchema,

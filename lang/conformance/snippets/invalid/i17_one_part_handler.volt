@@ -1,6 +1,6 @@
 // spec: §handler-references
 package app
 
-Scope / {
+scope / {
 	get /x Show
 }

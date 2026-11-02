@@ -4,12 +4,12 @@
 // (§columns, §nullability)
 package db
 
-Table attachments {
+table attachments {
   id    int    [pk, increment]
   body  []byte [required]
   thumb []byte [null]
 
-  Validators {
+  validators {
     BodySmall(body)
     ThumbSmall(thumb)
   }

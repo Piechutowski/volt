@@ -242,12 +242,11 @@ func TestSpecCitationsNeverNumbered(t *testing.T) {
 		if err != nil {
 			continue
 		}
-		review := filepath.Base(path) == "entropy-and-purity-report.md"
 		for i, line := range strings.Split(string(b), "\n") {
 			for _, m := range numberedCitations(line) {
 				bad = append(bad, fmt.Sprintf("%s:%d: %q", path, i+1, m))
 			}
-			if m := specRuleRE.FindString(line); m != "" && !review {
+			if m := specRuleRE.FindString(line); m != "" {
 				bad = append(bad, fmt.Sprintf("%s:%d: %q", path, i+1, m))
 			}
 		}

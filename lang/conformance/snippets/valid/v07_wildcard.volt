@@ -1,6 +1,6 @@
 // spec: §route-paths — ':name...' captures the rest of the path
 package app
 
-Scope / {
+scope / {
 	get /files/:path... Files.Serve
 }

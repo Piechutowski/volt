@@ -2,18 +2,26 @@
 
 package models
 
-// Validate runs required and the validators of page_views over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c PageViewChangeset) Validate() PageViewChangeset {
-	c.valid = nil
-	return c
+	return PageViewChangeset{c.WithFindings(nil)}
 }
 
-// Validate runs required and the validators of link_clicks over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c LinkClickChangeset) Validate() LinkClickChangeset {
-	c.valid = nil
-	return c
+	return LinkClickChangeset{c.WithFindings(nil)}
+}
+
+func (c HostChangeset) Validate() HostChangeset {
+	return HostChangeset{c.WithFindings(nil)}
+}
+
+func (c VisitChangeset) Validate() VisitChangeset {
+	return VisitChangeset{c.WithFindings(nil)}
+}
+
+func (c MerchantChangeset) Validate() MerchantChangeset {
+	return MerchantChangeset{c.WithFindings(nil)}
+}
+
+func (c MerchantPeriodChangeset) Validate() MerchantPeriodChangeset {
+	return MerchantPeriodChangeset{c.WithFindings(nil)}
 }

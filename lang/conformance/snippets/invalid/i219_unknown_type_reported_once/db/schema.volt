@@ -1,13 +1,13 @@
 package db
 
-Table authors {
+table authors {
   id    int64  [pk, increment]
   email string [unique]
   rank  int32
 
-  Validators {
+  validators {
     RankSane(rank)
   }
 }
 
-Select ranked for authors where rank >= :min [order: (rank desc)]
+select ranked for authors where rank >= :min [order: (rank desc)]

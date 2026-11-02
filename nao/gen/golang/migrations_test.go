@@ -18,21 +18,21 @@ func TestMigrationsGolden(t *testing.T) {
 		t.Fatalf("GenerateMigrations: %v", err)
 	}
 	compareGolden(t, out, filepath.Join("testdata", "blog_migrations.go.golden"))
-	for _, want := range []string{`"context"`, `"database/sql"`, `"github.com/Piechutowski/volt/nao/rt"`} {
+	for _, want := range []string{`"github.com/Piechutowski/volt/nao/rt"`} {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("missing import %s", want)
 		}
 	}
-	if strings.Count(string(out), "\n\t\"") != 3 {
-		t.Errorf("volt_migrations.go imports context, database/sql and rt only:\n%s", out)
+	if strings.Count(string(out), "\n\t\"") != 1 {
+		t.Errorf("volt_migrations.go imports rt only:\n%s", out)
 	}
 }
 
 func TestMigrationsEmptyAndQuoted(t *testing.T) {
-	src := "package db\n\nTable t {\n  id int [pk, increment]\n  s string [default: \"a`b\"]\n}\n\n" +
-		"Migration 0001__init {\n}\n\n" +
-		"Migration 0002__tick [no_transaction] {\n  up {\n    exec `SELECT \"x\"`\n  }\n}\n\n" +
-		"Migration 0003__s {\n  alter table t {\n    add s string [default: \"a`b\"]\n  }\n}\n"
+	src := "package db\n\ntable t {\n  id int [pk, increment]\n  s string [default: \"a`b\"]\n}\n\n" +
+		"migration 0001__init {\n}\n\n" +
+		"migration 0002__tick [no_transaction] {\n  up {\n    exec `SELECT \"x\"`\n  }\n}\n\n" +
+		"migration 0003__s {\n  alter table t {\n    add s string [default: \"a`b\"]\n  }\n}\n"
 	f, diags := parser.ParseFile("t.volt", src)
 	info, semDiags := check.File(f)
 	if diag.HasErrors(append(diags, semDiags...)) {

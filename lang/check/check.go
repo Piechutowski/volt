@@ -23,7 +23,8 @@ type Info struct {
 	// Migrations in name order, the order they apply in (spec §migrations).
 	Migrations []*MigrationInfo
 
-	byName map[string]*TableInfo
+	byName    map[string]*TableInfo
+	relations map[string][]*RelationInfo
 }
 
 // Table is the table of that name, or nil (spec §namespaces-and-uniqueness).
@@ -120,6 +121,7 @@ func FileGo(f *ast.File, memo *Memo, goTypes GoTypes) (*Info, []diag.Diagnostic)
 	c.migrationsCheck(f)
 	c.declsCheck(f)
 	c.resolve(f)
+	c.relationsBuild()
 	if memo != nil {
 		memo.finish()
 	}
@@ -153,7 +155,7 @@ func (c *checker) collect(f *ast.File) {
 	for _, d := range f.Decls {
 		if tp, ok := d.(*ast.TablePartial); ok {
 			if _, dup := c.partials[tp.Name.Name()]; dup {
-				c.errorf(tp.Pos(), "namespaces-and-uniqueness", "duplicate TablePartial name %q", tp.Name.Name())
+				c.errorf(tp.Pos(), "namespaces-and-uniqueness", "duplicate table_partial name %q", tp.Name.Name())
 				continue
 			}
 			c.partials[tp.Name.Name()] = &PartialInfo{Decl: tp}
@@ -176,7 +178,7 @@ func (c *checker) collect(f *ast.File) {
 			typeDecls = append(typeDecls, d)
 		case *ast.Project:
 			if c.project != nil {
-				c.errorf(d.Pos(), "project", "at most one Project element per package (§project)")
+				c.errorf(d.Pos(), "project", "at most one project element per package (§project)")
 				continue
 			}
 			c.project = d
@@ -271,7 +273,7 @@ func tableCheck(d *ast.Table, key string, partials []*ast.TablePartial, env *typ
 	ti := &TableInfo{Decl: d, Key: key}
 	acc.columnsExpand(ti, partials)
 	if len(ti.Columns) == 0 && !d.Incomplete && partialsComplete(partials) {
-		acc.errorf(d.Pos(), "table", "table %q must contain at least one column, directly or from an injected TablePartial (§table)", key)
+		acc.errorf(d.Pos(), "table", "table %q must contain at least one column, directly or from an injected table_partial (§table)", key)
 	}
 	acc.tableBodyCheck(key, d.Settings, d.Body, true)
 	return ti, acc.diags
@@ -339,7 +341,7 @@ func (c *checker) columnsExpand(ti *TableInfo, partials []*ast.TablePartial) {
 			p := partials[injected]
 			injected++
 			if p == nil {
-				c.errorf(item.Pos(), "tablepartial", "unknown TablePartial %q", item.Name.Name())
+				c.errorf(item.Pos(), "tablepartial", "unknown table_partial %q", item.Name.Name())
 				continue
 			}
 			for _, pit := range p.Body {
@@ -434,7 +436,7 @@ func (c *checker) partialIndexCheck(ti *TableInfo, injections []indexInjection) 
 			if at, injected := injectedBy[pos]; injected && (at == inj.at || pos > inj.pos) {
 				continue
 			}
-			c.errorf(inj.at.Pos(), "tablepartial", "TablePartial %q injects index (%s) into table %q, which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)", inj.partial.Name.Name(), key, ti.Key)
+			c.errorf(inj.at.Pos(), "tablepartial", "table_partial %q injects index (%s) into table %q, which has an index on that key already; an index is declared once, in the table or in one partial (§tablepartial)", inj.partial.Name.Name(), key, ti.Key)
 			break
 		}
 	}

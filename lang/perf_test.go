@@ -10,6 +10,7 @@ import (
 
 	"github.com/Piechutowski/volt/gen/model"
 	"github.com/Piechutowski/volt/gen/router"
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 )
@@ -32,7 +33,7 @@ func perfFixture(t *testing.T, tables, cols int, def bool) string {
 	var db strings.Builder
 	db.WriteString("package db\n\n")
 	for i := 1; i <= tables; i++ {
-		fmt.Fprintf(&db, "Table m_t%04ds {\n\tid int [pk, increment]\n", i)
+		fmt.Fprintf(&db, "table m_t%04ds {\n\tid int [pk, increment]\n", i)
 		for c := 1; c < cols; c++ {
 			typ := "string"
 			if c%2 == 1 {
@@ -45,7 +46,7 @@ func perfFixture(t *testing.T, tables, cols int, def bool) string {
 	write("db/schema.volt", db.String())
 
 	var app strings.Builder
-	app.WriteString("package app\n\nimport (\n\tdb\n)\n\nScope / {\n")
+	app.WriteString("package app\n\nimport (\n\tdb\n)\n\nscope / {\n")
 	for i := 1; i <= tables; i++ {
 		if def {
 			fmt.Fprintf(&app, "\tresources db.m_t%04ds [default]\n", i)
@@ -60,11 +61,11 @@ func perfFixture(t *testing.T, tables, cols int, def bool) string {
 
 func perfLoad(t *testing.T, root string) *lang.Project {
 	t.Helper()
-	dirs, err := lang.PackageDirs(root, root)
+	dirs, err := lang.PackageDirs(disk.Source{}, root, root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pr, err := lang.LoadDirs(root, dirs, nil)
+	pr, err := lang.LoadDirs(disk.Source{}, root, dirs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,11 +96,11 @@ func linear(t *testing.T, what string, small, large uint64) {
 func TestCheckScalesLinearlyInDefaultResources(t *testing.T) {
 	measure := func(tables int) uint64 {
 		root := perfFixture(t, tables, 24, true)
-		dirs, err := lang.PackageDirs(root, root)
+		dirs, err := lang.PackageDirs(disk.Source{}, root, root)
 		if err != nil {
 			t.Fatal(err)
 		}
-		pr, err := lang.LoadDirs(root, dirs, nil)
+		pr, err := lang.LoadDirs(disk.Source{}, root, dirs, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -115,11 +116,11 @@ func TestCheckScalesLinearlyInDefaultResources(t *testing.T) {
 func TestCheckScalesLinearlyInRoutes(t *testing.T) {
 	measure := func(tables int) uint64 {
 		root := perfFixture(t, tables, 4, false)
-		dirs, err := lang.PackageDirs(root, root)
+		dirs, err := lang.PackageDirs(disk.Source{}, root, root)
 		if err != nil {
 			t.Fatal(err)
 		}
-		pr, err := lang.LoadDirs(root, dirs, nil)
+		pr, err := lang.LoadDirs(disk.Source{}, root, dirs, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -1,10 +1,10 @@
 package db
 
-Table authors {
+table authors {
   id    int64  [pk, increment]
   email string [unique]
   rank  int32
 }
 
-Select ranked for authors where rank >= :min [order: (rank desc)]
-Select shown (rank, email) for authors where email = :e
+select ranked for authors where rank >= :min [order: (rank desc)]
+select shown (rank, email) for authors where email = :e

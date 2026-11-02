@@ -135,7 +135,7 @@ func (c *checker) indexPlainCheck(table string, ix *ast.Index) {
 	if ix.Settings.Get("unique") != nil {
 		setting = "unique"
 	}
-	c.errorf(ix.Pos(), "indexes", "index %s on %q is a plain single-column index: write the column setting %s on %q; an Indexes block holds composite, expression and partial indexes (§indexes)", indexKeyString(ix), table, setting, id.Name())
+	c.errorf(ix.Pos(), "indexes", "index %s on %q is a plain single-column index: write the column setting %s on %q; an indexes block holds composite, expression and partial indexes (§indexes)", indexKeyString(ix), table, setting, id.Name())
 }
 
 // namedIndex is one index of a table as its name is checked: the index,
@@ -218,14 +218,14 @@ type nameScope struct {
 func (s nameScope) subject(first, second string) string {
 	names := namesQuote(first, second)
 	if s.partial != "" {
-		return fmt.Sprintf("TablePartial %q declares two indexes named %s in every table that injects it", s.partial, names)
+		return fmt.Sprintf("table_partial %q declares two indexes named %s in every table that injects it", s.partial, names)
 	}
 	return fmt.Sprintf("table %q has two indexes named %s", s.table, names)
 }
 
 func (s nameScope) advice(a, b namedIndex) string {
 	if s.partial != "" {
-		return "declare one of them in a table body instead, since a name: written in a TablePartial is the same in every table that injects it"
+		return "declare one of them in a table body instead, since a name: written in a table_partial is the same in every table that injects it"
 	}
 	return nameAdvice(a, b)
 }
@@ -285,11 +285,11 @@ func nameAdvice(a, b namedIndex) string {
 		}
 	}
 	if a.partial != nil && a.partial == b.partial {
-		return fmt.Sprintf("a name: written in a TablePartial is the same in every table that injects it, so TablePartial %q is injected into one table only", a.partial.Name.Name())
+		return fmt.Sprintf("a name: written in a table_partial is the same in every table that injects it, so table_partial %q is injected into one table only", a.partial.Name.Name())
 	}
 	for _, n := range []namedIndex{b, a} {
 		if n.partial != nil && n.col == nil && n.ix.Settings.Get("name") != nil {
-			return fmt.Sprintf("change the name: TablePartial %q writes", n.partial.Name.Name())
+			return fmt.Sprintf("change the name: table_partial %q writes", n.partial.Name.Name())
 		}
 	}
 	return "rename a table or a column, since no name: reaches a column's index"
@@ -437,7 +437,7 @@ func (c *checker) indexNamesSchemaCheck() {
 
 func schemaDescribe(n namedIndex) string {
 	if n.partial != nil {
-		return n.describe() + fmt.Sprintf(" of TablePartial %q", n.partial.Name.Name())
+		return n.describe() + fmt.Sprintf(" of table_partial %q", n.partial.Name.Name())
 	}
 	return n.describe()
 }

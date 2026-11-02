@@ -2,18 +2,18 @@
 // want: "delete" must be a referential action: cascade, restrict, set_null or set_default
 package db
 
-Table users {
+table users {
   id int [pk]
 }
 
-Table posts {
+table posts {
   id      int [pk]
   user_id int [null]
 }
 
-Ref: posts.user_id > users.id
+ref: posts.user_id > users.id
 
-Migration 0001__init {
+migration 0001__init {
   create table users {
     id int [pk]
   }

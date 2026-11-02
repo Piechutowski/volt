@@ -2,18 +2,10 @@
 
 package models
 
-// Validate runs required and the validators of currencies over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c CurrencyChangeset) Validate() CurrencyChangeset {
-	c.valid = nil
-	return c
+	return CurrencyChangeset{c.WithFindings(nil)}
 }
 
-// Validate runs required and the validators of rates over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c RateChangeset) Validate() RateChangeset {
-	c.valid = nil
-	return c
+	return RateChangeset{c.WithFindings(nil)}
 }

@@ -2,19 +2,19 @@
 // want: is a plain single-column index: write the column setting index on "owner"
 package db
 
-Table accounts {
+table accounts {
   id    int    [pk, increment]
   owner string [index]
   email string [unique]
 }
 
-Migration 0001__create_accounts {
+migration 0001__create_accounts {
   create table accounts {
     id    int    [pk, increment]
     owner string
     email string [unique]
 
-    Indexes {
+    indexes {
       owner
       email [name: "idx_accounts_email", where: `email != ''`]
     }

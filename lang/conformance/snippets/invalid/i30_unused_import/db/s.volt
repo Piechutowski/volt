@@ -1,4 +1,4 @@
 // spec: §imports
 package db
 
-Table users { id int [pk] }
+table users { id int [pk] }

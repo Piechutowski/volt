@@ -2,6 +2,6 @@
 // want: put is not a route verb: an event route is read with get, so write get /events volt.Events (§routes)
 package app
 
-Scope / {
+scope / {
 	put /events volt.Events
 }

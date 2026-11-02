@@ -2,10 +2,10 @@
 // want: rename it with [param:
 package app
 
-Table posts {
+table posts {
   id int [pk]
 }
 
-Scope /blogs/:id {
+scope /blogs/:id {
 	resources posts
 }

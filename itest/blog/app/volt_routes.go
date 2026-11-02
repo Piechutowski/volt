@@ -6,9 +6,6 @@ import (
 	"github.com/Piechutowski/volt"
 )
 
-// Table lists every route of the package, in declaration order:
-// the routing DSL as introspectable data ('volt routes', metrics
-// labels, and downstream derivations read this).
 var Table = []volt.Route{
 	{Method: "GET", Pattern: "/{$}", Spelled: "/", Controller: "Home", Action: "Index", Helper: "PathRoot"},
 	{Method: "GET", Pattern: "/teapot", Spelled: "/teapot", Controller: "Home", Action: "Teapot", Helper: "PathTeapot"},
@@ -23,7 +20,13 @@ var Table = []volt.Route{
 	{Method: "PATCH", Pattern: "/users/{id}", Spelled: "/users/:id(int)", Controller: "Users", Action: "Update", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
 	{Method: "DELETE", Pattern: "/users/{id}", Spelled: "/users/:id(int)", Controller: "Users", Action: "Delete", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
 	{Method: "GET", Pattern: "/users/{id}/avatar", Spelled: "/users/:id(int)/avatar", Controller: "Users", Action: "Avatar", Helper: "PathAvatar", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
+	{Method: "GET", Pattern: "/users/{id}/profile", Spelled: "/users/:id(int)/profile", Controller: "Users", Action: "Profile", Helper: "PathProfile", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
+	{Method: "GET", Pattern: "/users/{id}/card", Spelled: "/users/:id(int)/card", Controller: "Users", Action: "Card", Helper: "PathCard", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
+	{Method: "PATCH", Pattern: "/users/{id}/email", Spelled: "/users/:id(int)/email", Controller: "Users", Action: "ChangeEmail", Helper: "PathChangeEmail", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
+	{Method: "POST", Pattern: "/login", Spelled: "/login", Controller: "Session", Action: "Login", Helper: "PathLogin"},
 	{Method: "GET", Pattern: "/files/{path...}", Spelled: "/files/:path...", Controller: "Files", Action: "Serve", Helper: "PathServe", Params: []volt.RouteParam{{Name: "path", Type: "string", Wild: true}}},
+	{Method: "GET", Pattern: "/me", Spelled: "/me", Controller: "Me", Action: "Show", Helper: "PathMeShow"},
+	{Method: "GET", Pattern: "/me/peers", Spelled: "/me/peers", Query: "db.UserList", Helper: "PathMeUserList"},
 	{Method: "GET", Pattern: "/tags/{name}", Spelled: "/tags/:name", Controller: "Tags", Action: "Show", Helper: "PathTag", Params: []volt.RouteParam{{Name: "name", Type: "string"}}},
 	{Method: "GET", Pattern: "/pages/{num}", Spelled: "/pages/:num(int)", Controller: "Pages", Action: "Show", Helper: "PathPage", Params: []volt.RouteParam{{Name: "num", Type: "int"}}},
 	{Method: "GET", Pattern: "/archive/{stamp}", Spelled: "/archive/:stamp(int)", Controller: "Archive", Action: "Show", Helper: "PathArchive", Params: []volt.RouteParam{{Name: "stamp", Type: "int"}}},

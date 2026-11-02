@@ -35,15 +35,16 @@ type Table struct {
 // TableNames are the Go names one table's data files declare beside its
 // model and column handles (spec §changesets, §generated-query-surface):
 // the changeset surface and the option wrappers, which the package's name
-// scope holds (Names), the Queries methods, and the unexported scan
+// scope holds (Names), the query functions, and the unexported scan
 // function and statement constants, which take the form of the generated
 // locals (LocalName), so no parameter shadows one.
 type TableNames struct {
-	Changeset, Column, Params, New                                   string
-	Limit, Offset, Distinct, OrderBy, After, Set                     string
-	Get, GetMany, List, Create, Update, Delete                       string
-	Query, Count, Exists, DeleteWhere, UpdateWhere                   string
-	Scan, TableConst, ColumnsConst, GetConst, ListConst, DeleteConst string
+	Changeset, Column, Params, New                             string
+	Limit, Offset, Distinct, OrderBy, After, Set               string
+	Get, GetMany, List, Create, Update, Delete                 string
+	Query, Count, Exists, DeleteWhere, UpdateWhere             string
+	Scan, Desc, Values, Apply, Cast                            string
+	TableConst, ColumnsConst, GetConst, ListConst, DeleteConst string
 }
 
 func tableNamesBuild(m string) TableNames {
@@ -52,13 +53,32 @@ func tableNamesBuild(m string) TableNames {
 		Limit: m + "Limit", Offset: m + "Offset", Distinct: m + "Distinct", OrderBy: m + "OrderBy", After: m + "After", Set: m + "Set",
 		Get: m + "Get", GetMany: m + "GetMany", List: m + "List", Create: m + "Create", Update: m + "Update", Delete: m + "Delete",
 		Query: m + "Query", Count: m + "Count", Exists: m + "Exists", DeleteWhere: m + "DeleteWhere", UpdateWhere: m + "UpdateWhere",
-		Scan: RowScan(m), TableConst: "volt" + m + "TableSQL", ColumnsConst: "volt" + m + "ColumnsSQL",
+		Scan: RowScan(m), Desc: "volt" + m + "Desc", Values: "volt" + m + "Values", Apply: "volt" + m + "Apply", Cast: "volt" + m + "Cast",
+		TableConst: "volt" + m + "TableSQL", ColumnsConst: "volt" + m + "ColumnsSQL",
 		GetConst: "volt" + m + "GetSQL", ListConst: "volt" + m + "ListSQL", DeleteConst: "volt" + m + "DeleteSQL",
 	}
 }
 
-func (n *TableNames) wrappers() []string {
-	return []string{n.Limit, n.Offset, n.Distinct, n.OrderBy, n.After, n.Set}
+// functions lists the package-scope functions the dynamic and the static
+// query layers mint for the table (spec §generated-query-surface): the
+// option wrappers and every query function, which share the package
+// scope with the column handles.
+func (t *Table) functions() []string {
+	n := &t.Names
+	out := []string{n.Limit, n.Offset, n.Distinct, n.OrderBy, n.After, n.Set, n.List, n.Create, n.Query, n.Count, n.Exists, n.DeleteWhere, n.UpdateWhere}
+	if len(t.PK) > 0 {
+		out = append(out, n.Get, n.Delete)
+		if len(t.PK) == 1 {
+			out = append(out, n.GetMany)
+		}
+		if len(t.NonPK()) > 0 {
+			out = append(out, n.Update)
+		}
+	}
+	for _, f := range t.UniqueFields() {
+		out = append(out, t.GetBy(f))
+	}
+	return out
 }
 
 // RowScan is the name of the unexported function that scans one row into
@@ -77,7 +97,7 @@ func (t *Table) GetBy(f *Field) string { return t.Model + "GetBy" + f.GoField }
 // generated locals' form (spec §generated-query-surface).
 func (t *Table) GetByConst(f *Field) string { return "volt" + t.Model + "GetBy" + f.GoField + "SQL" }
 
-// SelectMethod is the name of the Queries method a select instantiation
+// SelectMethod is the name of the query function a select instantiation
 // over the table mints (spec §selects-over-groups).
 func (t *Table) SelectMethod(fn SelectFn) string { return SelectMethodName(t.Model, fn.MethodSuffix) }
 
@@ -106,12 +126,38 @@ type Field struct {
 	Imp      string
 	Arg      string
 
+	// Qualifier is what a select with joins renders the column under,
+	// the table's name or a relation's; "" in a statement without a
+	// join. Relation is the relation a joined column is reached
+	// through, "" for the table's own (spec §selects-over-groups).
+	Qualifier string
+	Relation  string
+
 	Nullable  bool
 	Declared  bool
 	Kinded    bool
 	Required  bool
 	Increment bool
 	Unique    bool
+}
+
+// SQL is the column as a statement names it: qualified when the
+// statement joins (spec §predicates, rendering).
+func (f *Field) SQL() string {
+	if f.Qualifier != "" {
+		return f.Qualifier + "." + f.ColName
+	}
+	return f.ColName
+}
+
+// WireName is the name a shared row type's tags carry for the field
+// (spec §selects-over-groups): the column's, prefixed by the relation
+// it is reached through.
+func (f *Field) WireName() string {
+	if f.Relation != "" {
+		return f.Relation + "_" + f.ColName
+	}
+	return f.ColName
 }
 
 // PlainBytes reports whether the field is a non-nullable []byte column
@@ -144,14 +190,15 @@ func (t *Table) Field(colName string) *Field {
 func (t *Table) NonPK() []*Field {
 	var out []*Field
 	for _, f := range t.Fields {
-		if !t.isPK(f) {
+		if !t.IsPK(f) {
 			out = append(out, f)
 		}
 	}
 	return out
 }
 
-func (t *Table) isPK(f *Field) bool {
+// IsPK reports whether f is a column of the primary key (spec §changesets).
+func (t *Table) IsPK(f *Field) bool {
 	for _, p := range t.PK {
 		if p == f {
 			return true
@@ -212,7 +259,7 @@ func (t *Table) UniqueFields() []*Field {
 func planBuild(f *ast.File, info *check.Info, memo *PlanMemo) (*plan, error) {
 	imports := map[string]bool{}
 	p := &plan{imports: imports}
-	typeNames := map[string]string{"Queries": "the generated Queries type"}
+	typeNames := map[string]string{}
 	sqlNames := map[string]string{}
 
 	type built struct {
@@ -341,7 +388,7 @@ func fieldBuild(imports map[string]bool, cd *check.ColumnDef, goFields map[strin
 func columnList(fields []*Field) string {
 	names := make([]string, len(fields))
 	for i, f := range fields {
-		names[i] = rt.Ident(f.ColName)
+		names[i] = rt.Ident(f.SQL())
 	}
 	return strings.Join(names, ", ")
 }
@@ -407,55 +454,4 @@ func (t *Table) ListSQL() (string, []string, error) {
 // §generated-query-surface).
 func (t *Table) DeleteSQL() (string, []string, error) {
 	return genRender(rt.DeleteRender(t.TableSQL(), t.keyPreds()))
-}
-
-// SelectColumns lists the fields one select instantiation reads, in its
-// projection's order (spec §selects-over-groups).
-func (t *Table) SelectColumns(fn SelectFn) ([]*Field, error) {
-	switch {
-	case len(fn.Cols) > 0:
-		out := make([]*Field, 0, len(fn.Cols))
-		for _, c := range fn.Cols {
-			f := t.Field(c)
-			if f == nil {
-				return nil, fmt.Errorf("select %s: no column %q in table %s", fn.MethodSuffix, c, t.SQLName)
-			}
-			out = append(out, f)
-		}
-		return out, nil
-	case len(fn.Excluded) > 0:
-		ex := make(map[string]bool, len(fn.Excluded))
-		for _, c := range fn.Excluded {
-			if t.Field(c) == nil {
-				return nil, fmt.Errorf("select %s: no column %q in table %s", fn.MethodSuffix, c, t.SQLName)
-			}
-			ex[c] = true
-		}
-		var out []*Field
-		for _, f := range t.Fields {
-			if !ex[f.ColName] {
-				out = append(out, f)
-			}
-		}
-		if len(out) == 0 {
-			return nil, fmt.Errorf("select %s: every column of %s excluded", fn.MethodSuffix, t.SQLName)
-		}
-		return out, nil
-	}
-	return t.Fields, nil
-}
-
-// SelectSQL renders the statement of one instantiation through the
-// runtime (spec §predicates) and lists the Go expressions its method
-// binds, in placeholder order.
-func (t *Table) SelectSQL(fn SelectFn) (string, []string, error) {
-	cols, err := t.SelectColumns(fn)
-	if err != nil {
-		return "", nil, err
-	}
-	opts := []rt.Opt[rt.Gen]{fn.Where}
-	if len(fn.Order) > 0 {
-		opts = append(opts, rt.OrderBy(fn.Order...))
-	}
-	return genRender(rt.SelectRender(rt.Ident(t.SQLName), columnList(cols), opts))
 }

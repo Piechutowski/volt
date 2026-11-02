@@ -1,24 +1,24 @@
 // spec: §selects-over-groups — one select, one signature, every member; order setting
 package db
 
-Table ms_revenue {
+table ms_revenue {
   id int [pk]
   org string
   year int
 }
 
-Table ms_usage {
+table ms_usage {
   id int [pk]
   org string
   year int
 }
 
-Group series {
+group series {
   ms_revenue
   ms_usage
 }
 
-Pred current { org = :org and year = :year }
+pred current { org = :org and year = :year }
 
-Select rows for series where current [order: (year desc, id asc)]
-Select all for series
+select rows for series where current [order: (year desc, id asc)]
+select all for series

@@ -792,7 +792,7 @@ func shapeVolt(t *Table) string {
 		}
 	}
 	if len(lines) > 0 {
-		b.WriteString("\n  Indexes {\n")
+		b.WriteString("\n  indexes {\n")
 		for _, l := range lines {
 			b.WriteString("    " + l + "\n")
 		}

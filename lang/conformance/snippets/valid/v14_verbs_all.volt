@@ -1,7 +1,7 @@
 // spec: §routes, a controller route takes every verb, put excepted
 package app
 
-Scope / {
+scope / {
 	get     /r G.A
 	post    /r G.B
 	patch   /r G.D

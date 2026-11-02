@@ -12,27 +12,27 @@ import (
 	"github.com/Piechutowski/volt/lang/token"
 )
 
-const sample = `Type Status string
+const sample = `type Status string
 
-TablePartial base {
+table_partial base {
   id int [pk]
 }
 
-Table users [note: "people"] {
+table users [note: "people"] {
   ~base
   name string [unique]
   status Status [null, default: "active"]
 }
 
-Table orders {
+table orders {
   id int [pk]
   user_id int [null]
   owner_name string [null, ref: users.name]
 }
 
-Ref: orders.user_id > users.id
+ref: orders.user_id > users.id
 
-Group g {
+group g {
   users
   orders
 }
@@ -66,7 +66,7 @@ func TestCleanSampleHasNoDiagnostics(t *testing.T) {
 }
 
 func TestDiagnosticsOnError(t *testing.T) {
-	d := doc(t, "Table t {\n  id int [pk\n}\n")
+	d := doc(t, "table t {\n  id int [pk\n}\n")
 	got := d.LSPDiagnostics()
 	if len(got) == 0 {
 		t.Fatal("expected diagnostics for unclosed settings")
@@ -77,7 +77,7 @@ func TestDiagnosticsOnError(t *testing.T) {
 }
 
 func TestVetWarningsSurface(t *testing.T) {
-	d := doc(t, "Table t {\n  id int [pk]\n  Indexes {\n  }\n}\n")
+	d := doc(t, "table t {\n  id int [pk]\n  indexes {\n  }\n}\n")
 	found := false
 	for _, dg := range d.Diags {
 		if strings.HasPrefix(dg.Code, "vet/") {
@@ -90,7 +90,7 @@ func TestVetWarningsSurface(t *testing.T) {
 }
 
 func TestModelnameAnalyzerExcluded(t *testing.T) {
-	d := doc(t, "Table status {\n  id int [pk]\n}\nTable other {\n  id int [pk]\n  s int [null, ref: status.id]\n}\n")
+	d := doc(t, "table status {\n  id int [pk]\n}\ntable other {\n  id int [pk]\n  s int [null, ref: status.id]\n}\n")
 	for _, dg := range d.Diags {
 		if strings.Contains(dg.Code, "modelname") {
 			t.Fatalf("modelname analyzer should be excluded, got %v", dg)
@@ -106,7 +106,7 @@ func TestDefinitionFromRefEndpoint(t *testing.T) {
 	if loc == nil {
 		t.Fatal("no definition for ref endpoint table")
 	}
-	want := posOf(t, sample, "Table users [", 0)
+	want := posOf(t, sample, "table users [", 0)
 	if loc.Range.Start.Line != want.Line+0 {
 		t.Errorf("definition line = %d, want %d", loc.Range.Start.Line, want.Line)
 	}
@@ -120,7 +120,7 @@ func TestDefinitionFromInlineRef(t *testing.T) {
 	if loc == nil {
 		t.Fatal("no definition from an inline ref")
 	}
-	declPos := posOf(t, sample, "Table users [", 0)
+	declPos := posOf(t, sample, "table users [", 0)
 	if loc.Range.Start.Line != declPos.Line {
 		t.Errorf("inline ref definition line = %d, want %d", loc.Range.Start.Line, declPos.Line)
 	}
@@ -134,7 +134,7 @@ func TestDefinitionPartialInjection(t *testing.T) {
 	if loc == nil {
 		t.Fatal("no definition for ~base")
 	}
-	want := posOf(t, sample, "TablePartial base", 0)
+	want := posOf(t, sample, "table_partial base", 0)
 	if loc.Range.Start.Line != want.Line {
 		t.Errorf("partial definition line = %d, want %d", loc.Range.Start.Line, want.Line)
 	}
@@ -149,14 +149,14 @@ func TestDefinitionDeclaredType(t *testing.T) {
 		t.Fatal("no definition for declared type reference")
 	}
 	if loc.Range.Start.Line != 0 {
-		t.Errorf("Type definition line = %d, want 0", loc.Range.Start.Line)
+		t.Errorf("type definition line = %d, want 0", loc.Range.Start.Line)
 	}
 }
 
 func TestReferencesForTable(t *testing.T) {
 	d := doc(t, sample)
-	pos := posOf(t, sample, "Table users [", 0)
-	pos.Character += protocol.UInteger(len("Table "))
+	pos := posOf(t, sample, "table users [", 0)
+	pos.Character += protocol.UInteger(len("table "))
 	refs := d.References(pos, true)
 	if len(refs) < 3 {
 		t.Fatalf("expected >= 3 references for users (declaration, inline ref, Ref endpoint; a Group member is a reference in a package, which TestGroupRenameFollowsSetUses covers), got %d: %v", len(refs), refs)
@@ -178,8 +178,8 @@ func TestRenameColumnFromPartial(t *testing.T) {
 
 func TestRenameRejectsInvalidName(t *testing.T) {
 	d := doc(t, sample)
-	pos := posOf(t, sample, "Table users", 0)
-	pos.Character += protocol.UInteger(len("Table "))
+	pos := posOf(t, sample, "table users", 0)
+	pos.Character += protocol.UInteger(len("table "))
 	if _, err := d.Rename(pos, "not valid!"); err == nil {
 		t.Fatal("expected error for invalid identifier")
 	}
@@ -207,7 +207,7 @@ func TestHoverTable(t *testing.T) {
 		t.Fatal("no hover for table reference")
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
-	for _, want := range []string{"Table users", "name string", "people", "from ~base"} {
+	for _, want := range []string{"table users", "name string", "people", "from ~base"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover missing %q:\n%s", want, md)
 		}
@@ -223,7 +223,7 @@ func TestHoverDeclaredType(t *testing.T) {
 		t.Fatal("no hover for declared type reference")
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
-	if !strings.Contains(md, "Type Status string") {
+	if !strings.Contains(md, "type Status string") {
 		t.Errorf("unexpected declared type hover:\n%s", md)
 	}
 }
@@ -252,13 +252,13 @@ func TestCompletionTopLevel(t *testing.T) {
 	text := sample + "\nT"
 	d := doc(t, text)
 	items := d.Complete(protocol.Position{Line: protocol.UInteger(strings.Count(text, "\n")), Character: 1})
-	if !hasLabel(items, "Table") || !hasLabel(items, "TablePartial") || !hasLabel(items, "Type") {
+	if !hasLabel(items, "table") || !hasLabel(items, "table_partial") || !hasLabel(items, "type") {
 		t.Fatalf("top-level completion missing element keywords: %v", labels(items))
 	}
 }
 
 func TestCompletionColumnSettings(t *testing.T) {
-	text := "Table t {\n  id int [p\n}\n"
+	text := "table t {\n  id int [p\n}\n"
 	d := doc(t, text)
 	items := d.Complete(protocol.Position{Line: 1, Character: protocol.UInteger(len("  id int [p"))})
 	if !hasLabel(items, "pk") || !hasLabel(items, "null") || !hasLabel(items, "unique") || !hasLabel(items, "index") {
@@ -267,7 +267,7 @@ func TestCompletionColumnSettings(t *testing.T) {
 }
 
 func TestCompletionDefaultValues(t *testing.T) {
-	text := "Table t {\n  s bool [unique, default: \n}\n"
+	text := "table t {\n  s bool [unique, default: \n}\n"
 	d := doc(t, text)
 	line := "  s bool [unique, default: "
 	items := d.Complete(protocol.Position{Line: 1, Character: protocol.UInteger(len(line))})
@@ -280,17 +280,17 @@ func TestCompletionDefaultValues(t *testing.T) {
 }
 
 func TestCompletionRefEndpointColumns(t *testing.T) {
-	text := sample + "\nRef: x.y > users."
+	text := sample + "\nref: x.y > users."
 	d := doc(t, text)
 	line := protocol.UInteger(strings.Count(text, "\n"))
-	items := d.Complete(protocol.Position{Line: line, Character: protocol.UInteger(len("Ref: x.y > users."))})
+	items := d.Complete(protocol.Position{Line: line, Character: protocol.UInteger(len("ref: x.y > users."))})
 	if !hasLabel(items, "name") || !hasLabel(items, "id") {
 		t.Fatalf("ref endpoint completion missing columns: %v", labels(items))
 	}
 }
 
 func TestCompletionInlineRefTables(t *testing.T) {
-	text := "Table a {\n  x int [ref: \n}\n" + sample
+	text := "table a {\n  x int [ref: \n}\n" + sample
 	d := doc(t, text)
 	items := d.Complete(protocol.Position{Line: 1, Character: protocol.UInteger(len("  x int [ref: "))})
 	if !hasLabel(items, "users") || !hasLabel(items, "orders") {
@@ -302,7 +302,7 @@ func TestCompletionTopLevelOffersQueryElements(t *testing.T) {
 	text := sample + "\nS"
 	d := doc(t, text)
 	items := d.Complete(protocol.Position{Line: protocol.UInteger(strings.Count(text, "\n")), Character: 1})
-	for _, want := range []string{"Group", "Pred", "Select"} {
+	for _, want := range []string{"group", "pred", "select"} {
 		if !hasLabel(items, want) {
 			t.Errorf("top-level completion misses %s (§groups, §predicates, §selects-over-groups): %v", want, labels(items))
 		}
@@ -310,23 +310,23 @@ func TestCompletionTopLevelOffersQueryElements(t *testing.T) {
 }
 
 func TestCompletionSettingsPerHeader(t *testing.T) {
-	text := sample + "\nTablePartial tp [\nType Slug string [\nTable t2 [\nSelect s for users [\nTable t3 {\n  tablename string [\n  refcount int [\n}\n"
+	text := sample + "\ntable_partial tp [\ntype Slug string [\ntable t2 [\nselect s for users [\ntable t3 {\n  tablename string [\n  refcount int [\n}\n"
 	d := doc(t, text)
 	at := func(needle string) []string {
 		pos := posOf(t, text, needle, 0)
 		pos.Character += protocol.UInteger(len(needle))
 		return labels(d.Complete(pos))
 	}
-	if got := at("TablePartial tp ["); len(got) != 0 {
+	if got := at("table_partial tp ["); len(got) != 0 {
 		t.Errorf("a TablePartial takes no settings (§tablepartial), completion offers %v", got)
 	}
-	if got := at("Type Slug string ["); len(got) != 0 {
+	if got := at("type Slug string ["); len(got) != 0 {
 		t.Errorf("a Type takes no settings (§types), completion offers %v", got)
 	}
-	if got := strings.Join(at("Table t2 ["), " "); got != "note:  model: " {
+	if got := strings.Join(at("table t2 ["), " "); got != "note:  model: " {
 		t.Errorf("table settings are note and model (§table), completion offers %q", got)
 	}
-	if got := strings.Join(at("Select s for users ["), " "); got != "order: (" {
+	if got := strings.Join(at("select s for users ["), " "); got != "order: (" {
 		t.Errorf("a select takes order: (§selects-over-groups), completion offers %q", got)
 	}
 	for _, needle := range []string{"  tablename string [", "  refcount int ["} {
@@ -337,16 +337,16 @@ func TestCompletionSettingsPerHeader(t *testing.T) {
 }
 
 func TestCompletionGroupBody(t *testing.T) {
-	text := sample + "\nGroup gg {\n  \n}\n"
+	text := sample + "\ngroup gg {\n  \n}\n"
 	d := doc(t, text)
 	items := d.Complete(protocol.Position{Line: protocol.UInteger(strings.Count(sample, "\n") + 2), Character: 2})
-	if !hasLabel(items, "users") || !hasLabel(items, "orders") || hasLabel(items, "Table") {
+	if !hasLabel(items, "users") || !hasLabel(items, "orders") || hasLabel(items, "table") {
 		t.Fatalf("a Group body completes members, tables, not element keywords (§groups): %v", labels(items))
 	}
 }
 
 func TestCompletionInlineRefColumns(t *testing.T) {
-	text := sample + "\nTable t4 {\n  uid int [ref: users.\n  vid int [pk, ref: users.\n  wid int [ref: > \n}\n"
+	text := sample + "\ntable t4 {\n  uid int [ref: users.\n  vid int [pk, ref: users.\n  wid int [ref: > \n}\n"
 	d := doc(t, text)
 	for _, needle := range []string{"  uid int [ref: users.", "  vid int [pk, ref: users."} {
 		pos := posOf(t, text, needle, 0)
@@ -363,7 +363,7 @@ func TestCompletionInlineRefColumns(t *testing.T) {
 }
 
 func TestCompletionDefaultValuesFollowTheColumnType(t *testing.T) {
-	text := "Type Flag bool\nType Slug string\n\nTable t {\n  a string [default: \n  b Slug [default: \n  c Flag [default: \n}\n"
+	text := "type Flag bool\ntype Slug string\n\ntable t {\n  a string [default: \n  b Slug [default: \n  c Flag [default: \n}\n"
 	d := doc(t, text)
 	for needle, want := range map[string]bool{"  a string [default: ": false, "  b Slug [default: ": false, "  c Flag [default: ": true} {
 		pos := posOf(t, text, needle, 0)
@@ -386,7 +386,7 @@ func TestHoverShowsAStringDefaultQuoted(t *testing.T) {
 }
 
 func TestValueStringSpellsACompositeEndpoint(t *testing.T) {
-	f, _ := parser.ParseFile("x.volt", "Table periods {\n  a int [ref: merchants.(id, country_code)]\n  b int [ref: merchants.id]\n}\n")
+	f, _ := parser.ParseFile("x.volt", "table periods {\n  a int [ref: merchants.(id, country_code)]\n  b int [ref: merchants.id]\n}\n")
 	var got []string
 	for _, item := range f.Decls[0].(*ast.Table).Body {
 		if col, ok := item.(*ast.Column); ok {
@@ -399,7 +399,7 @@ func TestValueStringSpellsACompositeEndpoint(t *testing.T) {
 }
 
 func TestCompletionPartialInjection(t *testing.T) {
-	text := sample + "\nTable extra {\n  ~\n}\n"
+	text := sample + "\ntable extra {\n  ~\n}\n"
 	d := doc(t, text)
 	line := protocol.UInteger(strings.Count(sample, "\n") + 2)
 	items := d.Complete(protocol.Position{Line: line, Character: 3})
@@ -409,7 +409,7 @@ func TestCompletionPartialInjection(t *testing.T) {
 }
 
 func TestCompletionTypesIncludeBuiltins(t *testing.T) {
-	text := sample + "\nTable extra {\n  col v\n}\n"
+	text := sample + "\ntable extra {\n  col v\n}\n"
 	d := doc(t, text)
 	line := protocol.UInteger(strings.Count(sample, "\n") + 2)
 	items := d.Complete(protocol.Position{Line: line, Character: protocol.UInteger(len("  col v"))})
@@ -419,7 +419,7 @@ func TestCompletionTypesIncludeBuiltins(t *testing.T) {
 }
 
 func TestCompletionTypesIncludeDeclaredTypes(t *testing.T) {
-	text := "Type money.Money int from \"example.com/app/money\"\nType Slug string\n\nTable products {\n  col S\n}\n"
+	text := "type money.Money int from \"example.com/app/money\"\ntype Slug string\n\ntable products {\n  col S\n}\n"
 	d := doc(t, text)
 	items := d.Complete(protocol.Position{Line: 4, Character: protocol.UInteger(len("  col S"))})
 	for _, want := range []string{"money.Money", "Slug"} {
@@ -428,14 +428,14 @@ func TestCompletionTypesIncludeDeclaredTypes(t *testing.T) {
 		}
 	}
 	for _, it := range items {
-		if (it.Label == "money.Money" || it.Label == "Slug") && (it.Detail == nil || *it.Detail != "Type") {
+		if (it.Label == "money.Money" || it.Label == "Slug") && (it.Detail == nil || *it.Detail != "type") {
 			t.Errorf("declared type %q should carry the detail Type, got %v", it.Label, it.Detail)
 		}
 	}
 }
 
 func TestDocumentSymbolsTypeDecl(t *testing.T) {
-	d := doc(t, "Type money.Money int from \"example.com/app/money\"\nType Slug string\n")
+	d := doc(t, "type money.Money int from \"example.com/app/money\"\ntype Slug string\n")
 	syms := d.DocumentSymbols()
 	got := map[string]protocol.DocumentSymbol{}
 	for _, s := range syms {
@@ -447,14 +447,14 @@ func TestDocumentSymbolsTypeDecl(t *testing.T) {
 			t.Errorf("outline missing Type %q: %v", want, syms)
 			continue
 		}
-		if s.Detail == nil || *s.Detail != "Type" {
-			t.Errorf("Type %q detail = %v, want Type", want, s.Detail)
+		if s.Detail == nil || *s.Detail != "type" {
+			t.Errorf("type %q detail = %v, want Type", want, s.Detail)
 		}
 	}
 }
 
 func TestUTF16Conversion(t *testing.T) {
-	text := "Table 𝔘ser {\n  id int [pk]\n}\n"
+	text := "table 𝔘ser {\n  id int [pk]\n}\n"
 	d := doc(t, text)
 	if len(d.Diags) != 0 {
 		t.Fatalf("unexpected diagnostics: %v", d.Diags)
@@ -464,7 +464,7 @@ func TestUTF16Conversion(t *testing.T) {
 		t.Errorf("FromLSP landed on %q", d.Text[off:off+2])
 	}
 	lsp := d.ToLSP(tokenPosition(t, d, `𝔘ser`))
-	if lsp.Line != 0 || lsp.Character != protocol.UInteger(len(`Table `)) {
+	if lsp.Line != 0 || lsp.Character != protocol.UInteger(len(`table `)) {
 		t.Errorf("ToLSP = %+v", lsp)
 	}
 }
@@ -498,7 +498,7 @@ func labels(items []protocol.CompletionItem) []string {
 }
 
 func TestCRLFDocumentPositions(t *testing.T) {
-	text := "Table posts {\r\n  id int [pk]\r\n  title text [null]\r\n  title text [null]\r\n}\r\n\r\nRef: posts.id > posts.title\r\n"
+	text := "table posts {\r\n  id int [pk]\r\n  title text [null]\r\n  title text [null]\r\n}\r\n\r\nref: posts.id > posts.title\r\n"
 	d := doc(t, text)
 	found := false
 	for _, dg := range d.LSPDiagnostics() {
@@ -543,7 +543,7 @@ func TestCompletionOffersTheOneSpelling(t *testing.T) {
 		}
 	}
 	for _, w := range scope {
-		if !slices.Contains(parser.Verbs, w) && w != "resources" && w != "dataset" && w != "Scope" {
+		if !slices.Contains(parser.Verbs, w) && w != "resources" && w != "dataset" && w != "scope" {
 			t.Errorf("scope completion offers %q, which opens no scope item (§keywords, §routes)", w)
 		}
 	}
@@ -557,14 +557,14 @@ func TestCompletionOffersTheOneSpelling(t *testing.T) {
 	if !slices.Equal(refActionValues, parser.RefActions) {
 		t.Errorf("referential actions complete as %v, want %v (§keywords)", refActionValues, parser.RefActions)
 	}
-	d := doc(t, "Table t {\n  id int [pk]\n  \n}\n")
+	d := doc(t, "table t {\n  id int [pk]\n  \n}\n")
 	items := labels(d.Complete(protocol.Position{Line: 2, Character: 2}))
-	for _, w := range []string{"Indexes", "Validators", "Records"} {
+	for _, w := range []string{"indexes", "validators", "records"} {
 		if !slices.Contains(items, w) {
 			t.Errorf("table body completion %v lacks %s", items, w)
 		}
 	}
-	for _, w := range []string{"indexes", "validators", "records"} {
+	for _, w := range []string{"Indexes", "Validators", "Records"} {
 		if slices.Contains(items, w) {
 			t.Errorf("table body completion %v offers %s, a spelling Volt refuses", items, w)
 		}

@@ -1,6 +1,6 @@
 package db
 
-Table tags {
+table tags {
   slug  string [pk]
   label string
 }

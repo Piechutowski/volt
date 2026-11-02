@@ -3,7 +3,7 @@ comments everywhere
 ==================
 
 // leading comment
-Table t { // trailing
+table t { // trailing
   /* block */ id int // after
   /* multi
      line */
@@ -38,7 +38,7 @@ Table t { // trailing
 string escapes
 ==================
 
-Table t {
+table t {
   a text [note: "it's fine"]
   b string [note: "tab\there, \"b\" \\ c"]
 }
@@ -78,7 +78,7 @@ Table t {
 triple-quoted string with inner quotes and lines
 ==================
 
-Table t {
+table t {
   a text [note: """
     line one
     ""quoted"" and "one" don't, \"\"\" too
@@ -108,7 +108,7 @@ Table t {
 expression literal spanning lines
 ==================
 
-Table t {
+table t {
   a timestamp [default: `now()
     - interval '5 days'`]
 }
@@ -136,7 +136,7 @@ Table t {
 numbers: integer, decimal, exponent, negative default
 ==================
 
-Table t {
+table t {
   a int [default: 42]
   b float64 [default: 3.14]
   c float64 [default: 1e2]
@@ -212,7 +212,7 @@ a quoted name is an error
 :error
 ==================
 
-Table "user accounts" {
+table "user accounts" {
   id int
 }
 
@@ -223,7 +223,7 @@ single quotes delimit no string
 :error
 ==================
 
-Table t [note: 'a note'] {
+table t [note: 'a note'] {
   id int
 }
 
@@ -234,7 +234,7 @@ an unknown escape is an error
 :error
 ==================
 
-Table t [note: "no \q escape"] {
+table t [note: "no \q escape"] {
   id int
 }
 
@@ -245,7 +245,7 @@ a backslash before a line break is an error in a string
 :error
 ==================
 
-Table t [note: "one line \
+table t [note: "one line \
 continued"] {
   id int
 }
@@ -257,7 +257,7 @@ unterminated block comment is an error
 :error
 ==================
 
-Table t {
+table t {
   id int
 }
 /* never closed
@@ -271,7 +271,7 @@ a color literal is an error
 :error
 ==================
 
-Table t [note: #fff] {
+table t [note: #fff] {
   id int
 }
 

@@ -3,7 +3,6 @@
 package models
 
 import (
-	"context"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -12,107 +11,41 @@ const (
 	voltPageViewColumnsSQL = `"id", "site", "day", "hits", "score", "note"`
 )
 
-// PageViewLimit caps how many rows PageViewQuery returns.
 func PageViewLimit(n int) rt.Opt[PageView] { return rt.Limit[PageView](n) }
 
-// PageViewOffset skips n rows; keyset pagination (PageViewAfter) scales better.
 func PageViewOffset(n int) rt.Opt[PageView] { return rt.Offset[PageView](n) }
 
-// PageViewDistinct deduplicates the rows PageViewQuery returns.
 func PageViewDistinct() rt.Opt[PageView] { return rt.Distinct[PageView]() }
 
-// PageViewOrderBy sorts PageViewQuery's rows by Asc/Desc terms built on the
-// PageView column handles.
 func PageViewOrderBy(terms ...rt.Order[PageView]) rt.Opt[PageView] { return rt.OrderBy(terms...) }
 
-// PageViewAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per PageViewOrderBy term, in the same order.
 func PageViewAfter(key ...any) rt.Opt[PageView] { return rt.After[PageView](key...) }
 
-// PageViewSet collects the typed assignments of a PageViewUpdateWhere, built
-// with Set/SetNull on the PageView column handles.
 func PageViewSet(assigns ...rt.Assign[PageView]) []rt.Assign[PageView] { return assigns }
 
-// PageViewQuery returns the page_views rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
-func (q *Queries) PageViewQuery(ctx context.Context, opts ...rt.Opt[PageView]) ([]PageView, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltPageViewTableSQL, voltPageViewColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []PageView{}
-	for voltRows.Next() {
-		voltV, voltErr := voltPageViewScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func PageViewQuery(opts ...rt.Opt[PageView]) rt.Query[PageView] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltPageViewTableSQL, voltPageViewColumnsSQL, opts)
+	return rt.Query[PageView]{SQL: voltSQL, Args: voltArgs, Scan: voltPageViewScan, Err: voltErr}
 }
 
-// PageViewCount reports how many page_views rows match every given predicate;
-// none counts the whole table.
-func (q *Queries) PageViewCount(ctx context.Context, preds ...rt.Pred[PageView]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltPageViewTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func PageViewCount(preds ...rt.Pred[PageView]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltPageViewTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-// PageViewExists reports whether any page_views row matches every given predicate.
-func (q *Queries) PageViewExists(ctx context.Context, preds ...rt.Pred[PageView]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltPageViewTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func PageViewExists(preds ...rt.Pred[PageView]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltPageViewTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-// PageViewDeleteWhere removes every page_views row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
-func (q *Queries) PageViewDeleteWhere(ctx context.Context, preds ...rt.Pred[PageView]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltPageViewTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func PageViewDeleteWhere(preds ...rt.Pred[PageView]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltPageViewTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-// PageViewUpdateWhere applies the typed assignments (PageViewSet) to every page_views
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
-func (q *Queries) PageViewUpdateWhere(ctx context.Context, set []rt.Assign[PageView], preds ...rt.Pred[PageView]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltPageViewTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func PageViewUpdateWhere(set []rt.Assign[PageView], preds ...rt.Pred[PageView]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltPageViewTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
 const (
@@ -120,105 +53,211 @@ const (
 	voltLinkClickColumnsSQL = `"id", "site", "day", "target"`
 )
 
-// LinkClickLimit caps how many rows LinkClickQuery returns.
 func LinkClickLimit(n int) rt.Opt[LinkClick] { return rt.Limit[LinkClick](n) }
 
-// LinkClickOffset skips n rows; keyset pagination (LinkClickAfter) scales better.
 func LinkClickOffset(n int) rt.Opt[LinkClick] { return rt.Offset[LinkClick](n) }
 
-// LinkClickDistinct deduplicates the rows LinkClickQuery returns.
 func LinkClickDistinct() rt.Opt[LinkClick] { return rt.Distinct[LinkClick]() }
 
-// LinkClickOrderBy sorts LinkClickQuery's rows by Asc/Desc terms built on the
-// LinkClick column handles.
 func LinkClickOrderBy(terms ...rt.Order[LinkClick]) rt.Opt[LinkClick] { return rt.OrderBy(terms...) }
 
-// LinkClickAfter resumes strictly after the row with the given key, for keyset
-// pagination: one value per LinkClickOrderBy term, in the same order.
 func LinkClickAfter(key ...any) rt.Opt[LinkClick] { return rt.After[LinkClick](key...) }
 
-// LinkClickSet collects the typed assignments of a LinkClickUpdateWhere, built
-// with Set/SetNull on the LinkClick column handles.
 func LinkClickSet(assigns ...rt.Assign[LinkClick]) []rt.Assign[LinkClick] { return assigns }
 
-// LinkClickQuery returns the link_clicks rows matching every given predicate,
-// shaped by the remaining options (order, limit, offset, keyset,
-// distinct). No options means every row.
-func (q *Queries) LinkClickQuery(ctx context.Context, opts ...rt.Opt[LinkClick]) ([]LinkClick, error) {
-	voltQuery, voltArgs, voltErr := rt.SelectRender(voltLinkClickTableSQL, voltLinkClickColumnsSQL, opts)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	voltRows, voltErr := rt.StmtQuery(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return nil, voltErr
-	}
-	defer voltRows.Close()
-	voltOut := []LinkClick{}
-	for voltRows.Next() {
-		voltV, voltErr := voltLinkClickScan(voltRows)
-		if voltErr != nil {
-			return nil, voltErr
-		}
-		voltOut = append(voltOut, voltV)
-	}
-	return voltOut, voltRows.Err()
+func LinkClickQuery(opts ...rt.Opt[LinkClick]) rt.Query[LinkClick] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltLinkClickTableSQL, voltLinkClickColumnsSQL, opts)
+	return rt.Query[LinkClick]{SQL: voltSQL, Args: voltArgs, Scan: voltLinkClickScan, Err: voltErr}
 }
 
-// LinkClickCount reports how many link_clicks rows match every given predicate;
-// none counts the whole table.
-func (q *Queries) LinkClickCount(ctx context.Context, preds ...rt.Pred[LinkClick]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.CountRender(voltLinkClickTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	var voltN int64
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltN); voltErr != nil {
-		return 0, voltErr
-	}
-	return voltN, nil
+func LinkClickCount(preds ...rt.Pred[LinkClick]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltLinkClickTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
 }
 
-// LinkClickExists reports whether any link_clicks row matches every given predicate.
-func (q *Queries) LinkClickExists(ctx context.Context, preds ...rt.Pred[LinkClick]) (bool, error) {
-	voltQuery, voltArgs, voltErr := rt.ExistsRender(voltLinkClickTableSQL, preds)
-	if voltErr != nil {
-		return false, voltErr
-	}
-	var voltFound bool
-	if voltErr := rt.RowScan(ctx, q.db, q.cache, voltQuery, voltArgs, &voltFound); voltErr != nil {
-		return false, voltErr
-	}
-	return voltFound, nil
+func LinkClickExists(preds ...rt.Pred[LinkClick]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltLinkClickTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
 }
 
-// LinkClickDeleteWhere removes every link_clicks row matching the predicates and
-// reports how many went. No effective predicate is an error, never a
-// full-table delete.
-func (q *Queries) LinkClickDeleteWhere(ctx context.Context, preds ...rt.Pred[LinkClick]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.DeleteRender(voltLinkClickTableSQL, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func LinkClickDeleteWhere(preds ...rt.Pred[LinkClick]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltLinkClickTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
 
-// LinkClickUpdateWhere applies the typed assignments (LinkClickSet) to every link_clicks
-// row matching the predicates and reports how many changed — the
-// partial update of the dynamic layer. No effective predicate
-// is an error, never a full-table rewrite.
-func (q *Queries) LinkClickUpdateWhere(ctx context.Context, set []rt.Assign[LinkClick], preds ...rt.Pred[LinkClick]) (int64, error) {
-	voltQuery, voltArgs, voltErr := rt.UpdateRender(voltLinkClickTableSQL, set, preds)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	voltRes, voltErr := rt.StmtExec(ctx, q.db, q.cache, voltQuery, voltArgs...)
-	if voltErr != nil {
-		return 0, voltErr
-	}
-	return voltRes.RowsAffected()
+func LinkClickUpdateWhere(set []rt.Assign[LinkClick], preds ...rt.Pred[LinkClick]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltLinkClickTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+const (
+	voltHostTableSQL   = `"hosts"`
+	voltHostColumnsSQL = `"id", "name"`
+)
+
+func HostLimit(n int) rt.Opt[Host] { return rt.Limit[Host](n) }
+
+func HostOffset(n int) rt.Opt[Host] { return rt.Offset[Host](n) }
+
+func HostDistinct() rt.Opt[Host] { return rt.Distinct[Host]() }
+
+func HostOrderBy(terms ...rt.Order[Host]) rt.Opt[Host] { return rt.OrderBy(terms...) }
+
+func HostAfter(key ...any) rt.Opt[Host] { return rt.After[Host](key...) }
+
+func HostSet(assigns ...rt.Assign[Host]) []rt.Assign[Host] { return assigns }
+
+func HostQuery(opts ...rt.Opt[Host]) rt.Query[Host] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltHostTableSQL, voltHostColumnsSQL, opts)
+	return rt.Query[Host]{SQL: voltSQL, Args: voltArgs, Scan: voltHostScan, Err: voltErr}
+}
+
+func HostCount(preds ...rt.Pred[Host]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltHostTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
+}
+
+func HostExists(preds ...rt.Pred[Host]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltHostTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
+}
+
+func HostDeleteWhere(preds ...rt.Pred[Host]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltHostTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+func HostUpdateWhere(set []rt.Assign[Host], preds ...rt.Pred[Host]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltHostTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+const (
+	voltVisitTableSQL   = `"visits"`
+	voltVisitColumnsSQL = `"id", "host_id", "owner_id", "day"`
+)
+
+func VisitLimit(n int) rt.Opt[Visit] { return rt.Limit[Visit](n) }
+
+func VisitOffset(n int) rt.Opt[Visit] { return rt.Offset[Visit](n) }
+
+func VisitDistinct() rt.Opt[Visit] { return rt.Distinct[Visit]() }
+
+func VisitOrderBy(terms ...rt.Order[Visit]) rt.Opt[Visit] { return rt.OrderBy(terms...) }
+
+func VisitAfter(key ...any) rt.Opt[Visit] { return rt.After[Visit](key...) }
+
+func VisitSet(assigns ...rt.Assign[Visit]) []rt.Assign[Visit] { return assigns }
+
+func VisitQuery(opts ...rt.Opt[Visit]) rt.Query[Visit] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltVisitTableSQL, voltVisitColumnsSQL, opts)
+	return rt.Query[Visit]{SQL: voltSQL, Args: voltArgs, Scan: voltVisitScan, Err: voltErr}
+}
+
+func VisitCount(preds ...rt.Pred[Visit]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltVisitTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
+}
+
+func VisitExists(preds ...rt.Pred[Visit]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltVisitTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
+}
+
+func VisitDeleteWhere(preds ...rt.Pred[Visit]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltVisitTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+func VisitUpdateWhere(set []rt.Assign[Visit], preds ...rt.Pred[Visit]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltVisitTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+const (
+	voltMerchantTableSQL   = `"merchants"`
+	voltMerchantColumnsSQL = `"id", "country_code", "name"`
+)
+
+func MerchantLimit(n int) rt.Opt[Merchant] { return rt.Limit[Merchant](n) }
+
+func MerchantOffset(n int) rt.Opt[Merchant] { return rt.Offset[Merchant](n) }
+
+func MerchantDistinct() rt.Opt[Merchant] { return rt.Distinct[Merchant]() }
+
+func MerchantOrderBy(terms ...rt.Order[Merchant]) rt.Opt[Merchant] { return rt.OrderBy(terms...) }
+
+func MerchantAfter(key ...any) rt.Opt[Merchant] { return rt.After[Merchant](key...) }
+
+func MerchantSet(assigns ...rt.Assign[Merchant]) []rt.Assign[Merchant] { return assigns }
+
+func MerchantQuery(opts ...rt.Opt[Merchant]) rt.Query[Merchant] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltMerchantTableSQL, voltMerchantColumnsSQL, opts)
+	return rt.Query[Merchant]{SQL: voltSQL, Args: voltArgs, Scan: voltMerchantScan, Err: voltErr}
+}
+
+func MerchantCount(preds ...rt.Pred[Merchant]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltMerchantTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
+}
+
+func MerchantExists(preds ...rt.Pred[Merchant]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltMerchantTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
+}
+
+func MerchantDeleteWhere(preds ...rt.Pred[Merchant]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltMerchantTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+func MerchantUpdateWhere(set []rt.Assign[Merchant], preds ...rt.Pred[Merchant]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltMerchantTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+const (
+	voltMerchantPeriodTableSQL   = `"merchant_periods"`
+	voltMerchantPeriodColumnsSQL = `"id", "merchant_id", "country_code"`
+)
+
+func MerchantPeriodLimit(n int) rt.Opt[MerchantPeriod] { return rt.Limit[MerchantPeriod](n) }
+
+func MerchantPeriodOffset(n int) rt.Opt[MerchantPeriod] { return rt.Offset[MerchantPeriod](n) }
+
+func MerchantPeriodDistinct() rt.Opt[MerchantPeriod] { return rt.Distinct[MerchantPeriod]() }
+
+func MerchantPeriodOrderBy(terms ...rt.Order[MerchantPeriod]) rt.Opt[MerchantPeriod] {
+	return rt.OrderBy(terms...)
+}
+
+func MerchantPeriodAfter(key ...any) rt.Opt[MerchantPeriod] { return rt.After[MerchantPeriod](key...) }
+
+func MerchantPeriodSet(assigns ...rt.Assign[MerchantPeriod]) []rt.Assign[MerchantPeriod] {
+	return assigns
+}
+
+func MerchantPeriodQuery(opts ...rt.Opt[MerchantPeriod]) rt.Query[MerchantPeriod] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltMerchantPeriodTableSQL, voltMerchantPeriodColumnsSQL, opts)
+	return rt.Query[MerchantPeriod]{SQL: voltSQL, Args: voltArgs, Scan: voltMerchantPeriodScan, Err: voltErr}
+}
+
+func MerchantPeriodCount(preds ...rt.Pred[MerchantPeriod]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltMerchantPeriodTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
+}
+
+func MerchantPeriodExists(preds ...rt.Pred[MerchantPeriod]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltMerchantPeriodTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
+}
+
+func MerchantPeriodDeleteWhere(preds ...rt.Pred[MerchantPeriod]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltMerchantPeriodTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+func MerchantPeriodUpdateWhere(set []rt.Assign[MerchantPeriod], preds ...rt.Pred[MerchantPeriod]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltMerchantPeriodTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }

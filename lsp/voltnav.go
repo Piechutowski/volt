@@ -12,6 +12,7 @@ import (
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
 
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
@@ -60,7 +61,7 @@ type voltIndex struct {
 
 func (ix *voltIndex) goStale() bool {
 	for dir, srcs := range ix.gosrcs {
-		if !slices.Equal(lang.GoSourcesRead(dir), srcs) {
+		if !slices.Equal(lang.GoSourcesRead(disk.Source{}, dir), srcs) {
 			return true
 		}
 	}
@@ -275,7 +276,7 @@ func (ix *voltIndex) goSourcesNote(pkg *lang.Package) []lang.GoSource {
 	if srcs, ok := ix.gosrcs[pkg.Dir]; ok {
 		return srcs
 	}
-	srcs := lang.GoSourcesRead(pkg.Dir)
+	srcs := lang.GoSourcesRead(disk.Source{}, pkg.Dir)
 	if ix.gosrcs == nil {
 		ix.gosrcs = map[string][]lang.GoSource{}
 	}
@@ -491,7 +492,7 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 	memberFn := func(key string) naming.SelectFn {
 		return naming.SelectFn{
 			TableKey: key, MethodSuffix: si.MethodSuffix,
-			Cols: si.Cols, Excluded: si.Excluded, SharedType: si.Shared,
+			Items: si.Items, Excluded: si.Excluded, SharedType: si.Shared, Joins: si.JoinFns(), Group: si.Group, Lookup: si.Lookup, With: si.WithFn(),
 		}
 	}
 
@@ -558,8 +559,8 @@ func selectHoverMD(pkg *lang.Package, si *lang.SelectInfo) string {
 		if r, err := plan.SelectRowName(memberFn(m.Key)); err == nil {
 			row = r
 		}
-		fmt.Fprintf(&b, "func (q *Queries) %s%s(ctx context.Context%s) ([]%s, error)\n",
-			model, si.MethodSuffix, params.String(), row)
+		fmt.Fprintf(&b, "func %s%s(%s) rt.Query[%s]\n",
+			model, si.MethodSuffix, strings.TrimPrefix(params.String(), ", "), row)
 	}
 	b.WriteString("```\n")
 	return b.String()
@@ -577,16 +578,30 @@ func fieldTypeMD(m *check.TableInfo, f naming.FieldSig) string {
 }
 
 func selectHead(d *ast.Select) string {
-	head := "Select " + d.Name.Name()
+	head := "select " + d.Name.Name()
 	if d.Projected() {
-		cols := identNames(d.Cols)
 		if d.Star {
+			cols := make([]string, len(d.Cols))
+			for i, cr := range d.Cols {
+				cols[i] = cr.String()
+			}
 			head += " (* \\ " + strings.Join(cols, " \\ ") + ")"
 		} else {
-			head += " (" + strings.Join(cols, ", ") + ")"
+			items := make([]string, len(d.Items))
+			for i, item := range d.Items {
+				items[i] = item.String()
+			}
+			head += " (" + strings.Join(items, ", ") + ")"
 		}
 	}
-	return head + " for " + d.Target.Name()
+	head += " for " + d.Target.Name()
+	for _, rel := range d.Joins {
+		head += " join " + rel.Name()
+	}
+	if d.With != nil {
+		head += " with " + d.With.Name()
+	}
+	return head
 }
 
 func (ix *voltIndex) setSym(path, name string, kinds ...string) voltSym {
@@ -604,7 +619,7 @@ func groupHover(sym voltSym, def voltDef) string {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "```volt\nGroup %s\n```\n", sym.name)
+	fmt.Fprintf(&b, "```volt\ngroup %s\n```\n", sym.name)
 	for _, t := range g.Terms {
 		op := "+"
 		if t.Neg {
@@ -628,7 +643,7 @@ func predHover(sym voltSym, def voltDef, ix *voltIndex) string {
 	if p == nil {
 		return ""
 	}
-	md := "```volt\nPred " + sym.name + "\n```\n"
+	md := "```volt\npred " + sym.name + "\n```\n"
 	if text, ok := ix.texts[def.span.file]; ok && p.X != nil {
 		start, end := int(p.X.Pos().Offset()), int(p.X.End().Offset())
 		if start >= 0 && end <= len(text) && start < end {
@@ -645,7 +660,7 @@ func tableModelHover(sym voltSym, def voltDef) string {
 	}
 	var b strings.Builder
 	model, _ := naming.ModelName(t)
-	fmt.Fprintf(&b, "**`Table %s`** in package `%s`", t.Name.Name(), sym.pkg)
+	fmt.Fprintf(&b, "**`table %s`** in package `%s`", t.Name.Name(), sym.pkg)
 	if model != "" {
 		fmt.Fprintf(&b, " — Go model `%s`", model)
 	}
@@ -661,7 +676,7 @@ func tableModelHover(sym voltSym, def voltDef) string {
 	}
 
 	b.WriteString("```volt\n")
-	fmt.Fprintf(&b, "Table %s {\n", t.Name.Name())
+	fmt.Fprintf(&b, "table %s {\n", t.Name.Name())
 	for _, item := range t.Body {
 		col, ok := item.(*ast.Column)
 		if !ok {
@@ -690,8 +705,8 @@ func pipelineHover(sym voltSym, def voltDef) string {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "**Pipeline `%s`** — %d plug(s), outermost first\n\n```volt\n", sym.name, len(p.Plugs))
-	fmt.Fprintf(&b, "Pipeline %s {\n", sym.name)
+	fmt.Fprintf(&b, "**pipeline `%s`** — %d plug(s), outermost first\n\n```volt\n", sym.name, len(p.Plugs))
+	fmt.Fprintf(&b, "pipeline %s {\n", sym.name)
 	for _, plug := range p.Plugs {
 		fmt.Fprintf(&b, "\tuse %s\n", plug.Ref.String())
 	}
@@ -849,7 +864,7 @@ func (d *Document) voltComplete(prefix string) []protocol.CompletionItem {
 	return nil
 }
 
-var voltSelectForRE = regexp.MustCompile(`^\s*Select\s+\w+\s+for\s+([A-Za-z0-9_]*)$`)
+var voltSelectForRE = regexp.MustCompile(`^\s*select\s+\w+\s+for\s+([A-Za-z0-9_]*)$`)
 
 var voltWhereRE = regexp.MustCompile(`\b(?:where|and|or|not|\{)\s+([A-Za-z0-9_]*)$`)
 
@@ -884,9 +899,9 @@ func (d *Document) packageTableItems(pkgPath, partial string) []protocol.Complet
 			if filter != "" && !strings.HasPrefix(strings.ToLower(sym.name), strings.ToLower(filter)) {
 				continue
 			}
-			detail := "Table"
+			detail := "table"
 			if pk, goType := tablePK(def); pk != "" && goType != "" {
-				detail = "Table — key " + pk + " " + goType
+				detail = "table — key " + pk + " " + goType
 			}
 			rows = append(rows, row{sym.name, detail})
 		}

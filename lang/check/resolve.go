@@ -73,13 +73,13 @@ func (c *checker) resolve(f *ast.File) {
 		if r, ok := d.(*ast.Records); ok && r.Table != nil {
 			key := r.Table.Name()
 			if _, dup := recordsSeen[key]; dup {
-				c.errorf(r.Pos(), "records-sample-data", "at most one Records block per table, and %q has another (§records-sample-data)", key)
+				c.errorf(r.Pos(), "records-sample-data", "at most one records block per table, and %q has another (§records-sample-data)", key)
 			}
 			recordsSeen[key] = r.Pos()
 			if ti := c.info.byName[key]; ti != nil {
 				for _, item := range ti.Decl.Body {
 					if _, ok := item.(*ast.Records); ok {
-						c.errorf(r.Pos(), "records-sample-data", "table %q already has an in-table Records block (§records-sample-data)", key)
+						c.errorf(r.Pos(), "records-sample-data", "table %q already has an in-table records block (§records-sample-data)", key)
 						break
 					}
 				}

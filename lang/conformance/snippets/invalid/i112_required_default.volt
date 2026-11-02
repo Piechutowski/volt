@@ -2,7 +2,7 @@
 // want: "required" and "default" cannot both be set
 package db
 
-Table accounts {
+table accounts {
   id   int [pk]
   name string [required, default: ""]
 }

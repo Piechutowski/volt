@@ -27,15 +27,11 @@ type Options struct {
 	SQL bool
 }
 
-// File is one generated file: its base name and its contents.
-type File struct {
-	Name string
-	Code []byte
-}
-
-// Generate renders the data files for one checked package. The package
-// must be free of check errors and declare data elements.
-func Generate(pkg *lang.Package, opts Options) ([]File, error) {
+// Generate renders the data files for one checked package, by base name
+// (spec §values-and-effects): a map the caller writes, nothing written
+// here. The package must be free of check errors and declare data
+// elements.
+func Generate(pkg *lang.Package, opts Options) (map[string][]byte, error) {
 	gopts := golang.Options{Package: pkg.Name, Source: opts.Source}
 	if opts.Package != "" {
 		gopts.Package = opts.Package
@@ -69,16 +65,15 @@ func Generate(pkg *lang.Package, opts Options) ([]File, error) {
 			return sqlite.Generate(pkg.Merged(), pkg.Schema(), sqlite.Options{Source: opts.Source})
 		}})
 	}
-	out := make([]File, len(emits))
+	codes := make([][]byte, len(emits))
 	errs := make([]error, len(emits))
-	par.For(len(emits), func(i int) {
-		code, err := emits[i].fn()
-		out[i], errs[i] = File{emits[i].name, code}, err
-	})
-	for _, err := range errs {
-		if err != nil {
-			return nil, err
+	par.For(len(emits), func(i int) { codes[i], errs[i] = emits[i].fn() })
+	out := make(map[string][]byte, len(emits))
+	for i, e := range emits {
+		if errs[i] != nil {
+			return nil, errs[i]
 		}
+		out[e.name] = codes[i]
 	}
 	return out, nil
 }

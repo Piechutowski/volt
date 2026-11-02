@@ -2,15 +2,15 @@
 // want: a backslash before a line break continues nothing
 package db
 
-Table users {
+table users {
   id   int    [pk]
   name string [note: """one line \
   continued"""]
 }
 
-Table admins {
+table admins {
   id int [pk]
 }
 
-Group people = users \
+group people = users \
   admins

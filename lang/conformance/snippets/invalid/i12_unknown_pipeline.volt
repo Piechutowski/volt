@@ -1,6 +1,6 @@
 // spec: §scopes
 package app
 
-Scope / [pipe: nope] {
+scope / [pipe: nope] {
 	get /x X.Y
 }

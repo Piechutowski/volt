@@ -122,7 +122,7 @@ func TestSingleQuotesAreNoStrings(t *testing.T) {
 }
 
 func TestBackslashBeforeLineBreak(t *testing.T) {
-	for _, src := range []string{"a \\\nb", "Group g = a \\\r\n  b"} {
+	for _, src := range []string{"a \\\nb", "group g = a \\\r\n  b"} {
 		if _, errs := Scan("t", src); len(errs) != 1 {
 			t.Errorf("Scan(%q) errors %v, want one: Volt has no line continuation", src, errs)
 		}
@@ -281,7 +281,7 @@ func TestDoubleQuotesDelimitStrings(t *testing.T) {
 }
 
 func TestElementStarts(t *testing.T) {
-	src := "Table a {\n  b int\n}\nx.y\n  indented\n\"quoted\" z\n2fa\nScope e {\n  v\n}\n/* c */ w\n"
+	src := "table a {\n  b int\n}\nx.y\n  indented\n\"quoted\" z\n2fa\nscope e {\n  v\n}\n/* c */ w\n"
 	toks, errs := Scan("t", src)
 	if len(errs) != 0 {
 		t.Fatalf("errors: %v", errs)
@@ -292,7 +292,7 @@ func TestElementStarts(t *testing.T) {
 			starts = append(starts, tk.Val)
 		}
 	}
-	if want := []string{"Table", "x", "2fa", "Scope"}; strings.Join(starts, " ") != strings.Join(want, " ") {
+	if want := []string{"table", "x", "2fa", "scope"}; strings.Join(starts, " ") != strings.Join(want, " ") {
 		t.Errorf("element starts %q, want %q", starts, want)
 	}
 
@@ -307,7 +307,7 @@ func TestElementStarts(t *testing.T) {
 	if got := len(chunk) - 1; got != 6 {
 		t.Errorf("chunk holds %d tokens, want 6", got)
 	}
-	open := "Table a {\n  b int\n"
+	open := "table a {\n  b int\n"
 	if _, _, end, bound := ScanChunk(token.NewFile("t", open), nil); end != len(open) || bound {
 		t.Errorf("open chunk ends at %d bound=%v, want %d and false", end, bound, len(open))
 	}
@@ -315,10 +315,10 @@ func TestElementStarts(t *testing.T) {
 	for text, want := range map[string]bool{
 		"x.y\n":            true,
 		"2fa x\n":          true,
-		"Scope e {":        true,
+		"scope e {":        true,
 		"  indented\n":     false,
 		"\"quoted\" z\n":   false,
-		"// c\nTable a {}": false,
+		"// c\ntable a {}": false,
 		"123\n":            false,
 		"{\n":              false,
 		"":                 false,

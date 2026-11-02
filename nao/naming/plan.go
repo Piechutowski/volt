@@ -2,6 +2,8 @@ package naming
 
 import (
 	"fmt"
+
+	"github.com/Piechutowski/volt/nao/rt"
 	"sort"
 	"strings"
 
@@ -131,7 +133,8 @@ func (pl *Plan) NameCollisionErr() error {
 
 // SelectRowName is the row type SelectRowType names, without its
 // fields: the model, the shared type, or the model with the method
-// suffix when columns are excluded.
+// suffix and Row when columns are excluded, since the query function
+// takes the model with the suffix.
 func (pl *Plan) SelectRowName(fn SelectFn) (string, error) {
 	t, err := pl.table(fn.TableKey)
 	if err != nil {
@@ -141,7 +144,7 @@ func (pl *Plan) SelectRowName(fn SelectFn) (string, error) {
 	case fn.SharedType != "":
 		return fn.SharedType, nil
 	case len(fn.Excluded) > 0:
-		return t.SelectMethod(fn), nil
+		return t.SelectMethod(fn) + "Row", nil
 	}
 	return t.Model, nil
 }
@@ -192,16 +195,12 @@ func (pl *Plan) CRUDMethod(name string) (tableKey string, m CRUDMethod, ok bool)
 // order, in a slice the caller owns.
 func (pl *Plan) CRUDMethodNames() []string { return append([]string(nil), pl.names...) }
 
-// QueryName reports whether name is a method of the generated Queries
-// handle, or the exported stem of a statement constant the query files
-// declare, and what mints it (spec §selects-over-groups,
+// QueryName reports whether name is a generated query function, or the
+// exported stem of a statement constant the query files declare, and
+// what mints it (spec §selects-over-groups,
 // §generated-query-surface): a select's method and constant must take
 // none of them.
 func (pl *Plan) QueryName(name string) (string, bool) {
-	switch name {
-	case "WithCache", "WithTx", "Tx":
-		return "the Queries method " + name, true
-	}
 	if pl.err != nil {
 		return "", false
 	}
@@ -287,11 +286,7 @@ func fieldSigOf(fp *Field) FieldSig {
 // SelectRowType names the row type one instantiation returns (§selects-over-groups)
 // and reports its fields.
 func (pl *Plan) SelectRowType(fn SelectFn) (string, []FieldSig, error) {
-	t, err := pl.table(fn.TableKey)
-	if err != nil {
-		return "", nil, err
-	}
-	cols, err := t.SelectColumns(fn)
+	cols, err := pl.SelectColumns(fn)
 	if err != nil {
 		return "", nil, err
 	}
@@ -306,15 +301,258 @@ func (pl *Plan) SelectRowType(fn SelectFn) (string, []FieldSig, error) {
 	return row, sigs, nil
 }
 
+// WithChildSQL renders the statement that loads the children of a
+// nested select (spec §selects-over-groups): the child table's rows
+// whose key is among the parent keys, one JSON array, in primary-key
+// order.
+func (pl *Plan) WithChildSQL(fn SelectFn) (string, error) {
+	if fn.With == nil {
+		return "", fmt.Errorf("select %s nests nothing", fn.MethodSuffix)
+	}
+	child, err := pl.table(fn.With.TableKey)
+	if err != nil {
+		return "", err
+	}
+	if child.Field(fn.With.ChildKey) == nil {
+		return "", fmt.Errorf("select %s: no column %q in table %s", fn.MethodSuffix, fn.With.ChildKey, child.SQLName)
+	}
+	opts := []rt.Opt[rt.Gen]{rt.PredInList(fn.With.ChildKey, "keys")}
+	var order []rt.GenOrder
+	for _, f := range child.PK {
+		order = append(order, rt.OrderTerm(f.ColName, false))
+	}
+	if len(order) > 0 {
+		opts = append(opts, rt.OrderBy(order...))
+	}
+	sql, _, err := rt.SelectRender(child.TableSQL(), child.ColumnList(), opts)
+	return sql, err
+}
+
 // SelectStatement renders the SQL one select instantiation runs through
 // the runtime (spec §predicates), with the Go expressions the
 // method binds in placeholder order.
 func (pl *Plan) SelectStatement(fn SelectFn) (string, []string, error) {
+	return pl.SelectSQL(fn)
+}
+
+// SelectColumns lists the fields one select instantiation reads, in its
+// projection's order (spec §selects-over-groups): the table's own, and
+// under a join those of the joined tables, each reached through its
+// relation, qualified for the statement and prefixed for the row type.
+func (pl *Plan) SelectColumns(fn SelectFn) ([]*Field, error) {
+	t, err := pl.table(fn.TableKey)
+	if err != nil {
+		return nil, err
+	}
+	joined := len(fn.Joins) > 0
+	own := func(f *Field) *Field {
+		if !joined {
+			return f
+		}
+		q := *f
+		q.Qualifier = t.SQLName
+		return &q
+	}
+	column := func(c string) (*Field, error) {
+		qual, col, qualified := strings.Cut(c, ".")
+		if !qualified {
+			f := t.Field(c)
+			if f == nil {
+				return nil, fmt.Errorf("select %s: no column %q in table %s", fn.MethodSuffix, c, t.SQLName)
+			}
+			return own(f), nil
+		}
+		return pl.joinedField(fn, qual, col)
+	}
+	switch {
+	case len(fn.Items) > 0:
+		out := make([]*Field, 0, len(fn.Items))
+		for _, it := range fn.Items {
+			if !it.Derived() {
+				f, err := column(it.Col)
+				if err != nil {
+					return nil, err
+				}
+				out = append(out, f)
+				continue
+			}
+			f, err := pl.derivedField(fn, it, column)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, f)
+		}
+		return out, nil
+	case len(fn.Excluded) > 0:
+		ex := make(map[string]bool, len(fn.Excluded))
+		for _, c := range fn.Excluded {
+			if t.Field(c) == nil {
+				return nil, fmt.Errorf("select %s: no column %q in table %s", fn.MethodSuffix, c, t.SQLName)
+			}
+			ex[c] = true
+		}
+		var out []*Field
+		for _, f := range t.Fields {
+			if !ex[f.ColName] {
+				out = append(out, own(f))
+			}
+		}
+		if len(out) == 0 {
+			return nil, fmt.Errorf("select %s: every column of %s excluded", fn.MethodSuffix, t.SQLName)
+		}
+		return out, nil
+	}
+	if !joined {
+		return t.Fields, nil
+	}
+	out := make([]*Field, len(t.Fields))
+	for i, f := range t.Fields {
+		out[i] = own(f)
+	}
+	return out, nil
+}
+
+func (pl *Plan) joinedField(fn SelectFn, qual, col string) (*Field, error) {
+	for _, j := range fn.Joins {
+		if j.Name != qual {
+			continue
+		}
+		jt, err := pl.table(j.TableKey)
+		if err != nil {
+			return nil, err
+		}
+		f := jt.Field(col)
+		if f == nil {
+			return nil, fmt.Errorf("select %s: no column %q in table %s, joined as %s", fn.MethodSuffix, col, jt.SQLName, qual)
+		}
+		prefix, err := GoName(qual)
+		if err != nil {
+			return nil, fmt.Errorf("select %s: relation %q: %w", fn.MethodSuffix, qual, err)
+		}
+		q := *f
+		q.Qualifier, q.Relation = qual, qual
+		q.GoField = prefix + f.GoField
+		q.Arg = paramName(q.GoField)
+		if j.Left && !f.Nullable {
+			q.GoType, q.Nullable = "rt.Null["+f.GoType+"]", true
+		}
+		return &q, nil
+	}
+	return nil, fmt.Errorf("select %s: %q is no joined relation", fn.MethodSuffix, qual)
+}
+
+// derivedField plans the row field of a derived item (spec
+// §selects-over-groups): the alias's Go name, the item's type, and the
+// scan traits of the column an aggregate keeps the type of.
+func (pl *Plan) derivedField(fn SelectFn, it SelectItem, column func(string) (*Field, error)) (*Field, error) {
+	goField, err := GoName(it.Alias)
+	if err != nil {
+		return nil, fmt.Errorf("select %s: alias %q: %w", fn.MethodSuffix, it.Alias, err)
+	}
+	f := &Field{ColName: it.Alias, Wire: it.Alias, GoField: goField, Arg: paramName(goField)}
+	base, nullable := strings.CutPrefix(it.GoType, "rt.Null[")
+	if nullable {
+		base = strings.TrimSuffix(base, "]")
+	}
+	f.GoType, f.BaseType, f.Nullable = it.GoType, base, nullable
+	switch {
+	case it.Agg == "sum" || it.Agg == "min" || it.Agg == "max" || (it.Agg == "" && it.Col != ""):
+		src, err := column(it.Col)
+		if err != nil {
+			return nil, err
+		}
+		f.Storage, f.Imp, f.Declared, f.Kinded = src.Storage, src.Imp, src.Declared, src.Kinded
+	case it.Agg == "count":
+		f.Storage = "int"
+	case it.Agg == "avg":
+		f.Storage = "float64"
+	default:
+		f.Storage = base
+	}
+	return f, nil
+}
+
+// SelectItems lists the statement's items (spec §selects-over-groups),
+// the columns qualified as the fields are.
+func (pl *Plan) SelectItems(fn SelectFn) ([]rt.Item, error) {
+	cols, err := pl.SelectColumns(fn)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]rt.Item, len(cols))
+	for i, f := range cols {
+		it := fn.Items[i]
+		switch {
+		case it.Agg != "":
+			col := it.Col
+			if col != "" {
+				src, err := pl.selectColumn(fn, col)
+				if err != nil {
+					return nil, err
+				}
+				col = src.SQL()
+			}
+			if items[i], err = rt.ItemAgg(it.Agg, col, it.Alias); err != nil {
+				return nil, err
+			}
+		case it.Alias != "":
+			items[i] = rt.ItemExpr(it.Expr, it.Alias)
+		default:
+			items[i] = rt.ItemCol(f.SQL())
+		}
+	}
+	return items, nil
+}
+
+func (pl *Plan) selectColumn(fn SelectFn, c string) (*Field, error) {
+	one := fn
+	one.Items = []SelectItem{{Col: c}}
+	cols, err := pl.SelectColumns(one)
+	if err != nil {
+		return nil, err
+	}
+	return cols[0], nil
+}
+
+// SelectSQL renders the statement of one instantiation through the
+// runtime (spec §predicates) and lists the Go expressions its method
+// binds, in placeholder order.
+func (pl *Plan) SelectSQL(fn SelectFn) (string, []string, error) {
 	t, err := pl.table(fn.TableKey)
 	if err != nil {
 		return "", nil, err
 	}
-	return t.SelectSQL(fn)
+	cols, err := pl.SelectColumns(fn)
+	if err != nil {
+		return "", nil, err
+	}
+	opts := []rt.Opt[rt.Gen]{fn.Where}
+	if len(fn.Group) > 0 {
+		opts = append(opts, rt.GroupBy[rt.Gen](fn.Group...))
+	}
+	if len(fn.Order) > 0 {
+		opts = append(opts, rt.OrderBy(fn.Order...))
+	}
+	from := rt.Ident(t.SQLName)
+	if len(fn.Joins) > 0 {
+		joins := make([]rt.Join, len(fn.Joins))
+		for i, j := range fn.Joins {
+			jt, err := pl.table(j.TableKey)
+			if err != nil {
+				return "", nil, err
+			}
+			joins[i] = rt.Join{Table: jt.SQLName, As: j.Name, On: j.On, Left: j.Left}
+		}
+		from = rt.FromRender(t.SQLName, joins)
+	}
+	if len(fn.Items) > 0 {
+		items, err := pl.SelectItems(fn)
+		if err != nil {
+			return "", nil, err
+		}
+		return genRender(rt.SelectRenderItems(from, items, opts))
+	}
+	return genRender(rt.SelectRender(from, columnList(cols), opts))
 }
 
 // DynNameCollisions reports the package-scope Go name collisions the
@@ -324,7 +562,7 @@ func (pl *Plan) DynNameCollisions() []NameCollision {
 	if pl.err != nil {
 		return nil
 	}
-	seen := map[string]dynOrigin{"Queries": {kind: dynQueries}}
+	seen := map[string]dynOrigin{}
 	var out []NameCollision
 	for _, td := range pl.info.Types {
 		if td.Path == "" {
@@ -425,7 +663,7 @@ func dynOriginOf(o *nameOrigin) dynOrigin {
 // Names is the scope of package-level Go identifiers a package's
 // generated files mint (§selects-over-groups): models, changesets with
 // their column and params aliases and constructors (§changesets), column
-// handles and option wrappers, the Queries handle and its constructor,
+// handles and option wrappers,
 // beside the package's bare declared types, which its own Go files
 // declare (§types). It is read in layers, last writer first.
 type Names struct {
@@ -457,7 +695,7 @@ type nameOrigin struct {
 }
 
 func modelNamesBuild(t *Table) []nameOrigin {
-	wrappers := t.Names.wrappers()
+	wrappers := t.functions()
 	names := make([]nameOrigin, 0, 5+len(wrappers)+len(t.Fields))
 	add := func(name string, kind nameKind, field *Field, dyn bool, rank int) {
 		names = append(names, nameOrigin{name: name, kind: kind, idx: len(names), table: t, field: field, dyn: dyn, rank: rank})
@@ -492,7 +730,7 @@ func (o *nameOrigin) describe() string {
 	case nameHandle:
 		return fmt.Sprintf("the column handle for %s.%s", o.table.Info.Decl.Name.Name(), o.field.ColName)
 	}
-	return "the dynamic-layer function " + o.name
+	return "the generated function " + o.name
 }
 
 type nameBase struct {
@@ -641,12 +879,6 @@ func (n *Names) Generated(name string) (desc string, ok bool) {
 		if o := n.base.lookup(name); o != nil {
 			return o.describe(), true
 		}
-	}
-	switch name {
-	case "Queries":
-		return "the generated Queries handle", true
-	case "New":
-		return "the generated constructor", true
 	}
 	return "", false
 }

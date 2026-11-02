@@ -2,13 +2,13 @@
 // want: write desc, not DESC
 package db
 
-Table posts {
+table posts {
   id    int [pk, increment]
   views int
 }
 
-Select top for posts [order: (views DESC)]
+select top for posts [order: (views DESC)]
 
-Scope /api {
+scope /api {
 	resources posts [only: (Index, show)]
 }

@@ -1,7 +1,6 @@
 package lang
 
 import (
-	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -11,6 +10,7 @@ import (
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/parser"
+	"github.com/Piechutowski/volt/lang/source"
 	"github.com/Piechutowski/volt/nao/naming"
 )
 
@@ -119,19 +119,19 @@ func (r pkgResult) restore(pkg *Package) {
 }
 
 // Load is LoadOverlay through the session's caches.
-func (s *Session) Load(root string, overlay map[string]string) (*Project, error) {
-	dirs, err := PackageDirs(root, root)
+func (s *Session) Load(src source.Source, root string, overlay map[string]string) (*Project, error) {
+	dirs, err := PackageDirs(src, root, root)
 	if err != nil {
 		return nil, err
 	}
-	return s.LoadDirs(root, dirs, overlay)
+	return s.LoadDirs(src, root, dirs, overlay)
 }
 
 // LoadDirs is the package-level LoadDirs through the session's caches.
-func (s *Session) LoadDirs(root string, dirs []string, overlay map[string]string) (*Project, error) {
+func (s *Session) LoadDirs(src source.Source, root string, dirs []string, overlay map[string]string) (*Project, error) {
 	s.op.Lock()
 	defer s.op.Unlock()
-	return loadDirs(root, dirs, overlay, s)
+	return loadDirs(src, root, dirs, overlay, s)
 }
 
 // Check is the package-level Check with the session's memo: a package
@@ -203,7 +203,7 @@ func (s *Session) goFuncsFor(pr *Project, paths []string) *goFuncsCache {
 	}
 	scans := make([]*goScan, len(dirs))
 	par.For(len(dirs), func(i int) {
-		srcs := GoSourcesRead(dirs[i])
+		srcs := GoSourcesRead(pr.src, dirs[i])
 		s.mu.Lock()
 		prev := s.scans[dirs[i]]
 		s.mu.Unlock()
@@ -260,10 +260,10 @@ func (s *Session) Stats() SessionStats {
 	return s.stats
 }
 
-func (s *Session) parse(path string, overlay map[string]string) (*ast.File, []diag.Diagnostic, error) {
+func (s *Session) parse(src source.Source, path string, overlay map[string]string) (*ast.File, []diag.Diagnostic, error) {
 	text, overlaid := overlay[path]
 	if !overlaid {
-		b, err := os.ReadFile(path)
+		b, err := src.ReadFile(path)
 		if err != nil {
 			return nil, nil, err
 		}

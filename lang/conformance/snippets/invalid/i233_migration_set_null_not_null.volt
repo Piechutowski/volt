@@ -2,20 +2,20 @@
 // want: set_null on foreign-key column
 package db
 
-Table users {
+table users {
   id int [pk]
 }
 
-Table posts {
+table posts {
   id          int [pk]
   author_id   int [null]
   reviewer_id int [null]
 }
 
-Ref: posts.author_id > users.id [delete: set_null]
-Ref: posts.reviewer_id > users.id [update: set_default]
+ref: posts.author_id > users.id [delete: set_null]
+ref: posts.reviewer_id > users.id [update: set_default]
 
-Migration 0001__init {
+migration 0001__init {
   create table users {
     id int [pk]
   }

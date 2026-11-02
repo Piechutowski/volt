@@ -1,10 +1,10 @@
 // spec: §indexes, where: makes an index partial and a key of columns names it
-Table bookings {
+table bookings {
   id int [pk]
   country string
   booking_date time.Time
 
-  Indexes {
+  indexes {
     booking_date [where: `country <> ''`]
     (country, booking_date) [unique]
   }

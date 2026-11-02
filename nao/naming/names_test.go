@@ -37,7 +37,7 @@ func TestArgNames(t *testing.T) {
 		{"HTTPStatus", "httpStatus"},
 		{"Name", "name"},
 		{"X2faCode", "x2faCode"},
-		{"Type", "type_"},
+		{"type", "type_"},
 		{"Ctx", "ctx_"},
 	}
 	for _, tc := range cases {

@@ -2,7 +2,7 @@
 // want: has no empty value
 package db
 
-Table accounts {
+table accounts {
   id int [pk]
   at time.Time [required]
 }

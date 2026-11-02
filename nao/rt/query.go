@@ -9,8 +9,6 @@
 package rt
 
 import (
-	"context"
-	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"fmt"
@@ -324,6 +322,7 @@ type querySpec[M any] struct {
 	after     []any
 	afterSet  bool
 	distinct  bool
+	groups    []string
 }
 
 func (p Pred[M]) optApply(s *querySpec[M]) { s.preds = append(s.preds, p) }
@@ -365,6 +364,15 @@ func (o afterOpt[M]) optApply(s *querySpec[M]) { s.after, s.afterSet = o.key, tr
 // columns are not paginated over; keep keyset columns NOT NULL.
 func After[M any](key ...any) Opt[M] { return afterOpt[M]{key: key} }
 
+type groupOpt[M any] struct{ cols []string }
+
+func (o groupOpt[M]) optApply(s *querySpec[M]) { s.groups = append(s.groups, o.cols...) }
+
+// GroupBy groups the rows by the named items, a column or an alias
+// (spec §selects-over-groups); the generator's selects use it, the
+// dynamic layer has no grouping.
+func GroupBy[M any](cols ...string) Opt[M] { return groupOpt[M]{cols: cols} }
+
 type distinctOpt[M any] struct{}
 
 func (distinctOpt[M]) optApply(s *querySpec[M]) { s.distinct = true }
@@ -378,6 +386,20 @@ func Distinct[M any]() Opt[M] { return distinctOpt[M]{} }
 // values render identical SQL. Argument order matches placeholder order
 // by construction.
 func SelectRender[M any](table, columns string, opts []Opt[M]) (string, []any, error) {
+	return selectRenderOver(table, columns, nil, opts)
+}
+
+// SelectRenderItems is SelectRender over a rendered select list of
+// items (spec §selects-over-groups), whose arguments come first.
+func SelectRenderItems[M any](table string, items []Item, opts []Opt[M]) (string, []any, error) {
+	columns, args, err := ItemsRender(items)
+	if err != nil {
+		return "", nil, err
+	}
+	return selectRenderOver(table, columns, args, opts)
+}
+
+func selectRenderOver[M any](table, columns string, columnArgs []any, opts []Opt[M]) (string, []any, error) {
 	var s querySpec[M]
 	for _, o := range opts {
 		if o != nil {
@@ -386,7 +408,7 @@ func SelectRender[M any](table, columns string, opts []Opt[M]) (string, []any, e
 	}
 
 	var b strings.Builder
-	var args []any
+	args := append([]any(nil), columnArgs...)
 	b.WriteString("SELECT ")
 	if s.distinct {
 		b.WriteString("DISTINCT ")
@@ -410,6 +432,13 @@ func SelectRender[M any](table, columns string, opts []Opt[M]) (string, []any, e
 		args = append(args, wargs...)
 	}
 
+	if len(s.groups) > 0 {
+		names := make([]string, len(s.groups))
+		for i, g := range s.groups {
+			names[i] = Ident(g)
+		}
+		b.WriteString(" GROUP BY " + strings.Join(names, ", "))
+	}
 	if len(s.orders) > 0 {
 		b.WriteString(" ORDER BY " + OrderRender(s.orders))
 	}
@@ -560,44 +589,42 @@ func afterPred[M any](orders []Order[M], key []any) (Pred[M], error) {
 // Ident is the one spelling of an identifier in every statement (spec
 // §predicates): always double-quoted, a quote inside doubled.
 func Ident(name string) string {
+	if i := strings.IndexByte(name, '.'); i >= 0 {
+		return Ident(name[:i]) + "." + Ident(name[i+1:])
+	}
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }
 
-// StmtQuery runs a row-returning statement on db, through cache when one
-// is given (nil runs directly).
-func StmtQuery(ctx context.Context, db DBTX, cache *StmtCache, query string, args ...any) (*sql.Rows, error) {
-	if cache != nil {
-		stmt, err := cache.Prepare(ctx, db, query)
-		if err != nil {
-			return nil, err
-		}
-		return stmt.QueryContext(ctx, args...)
-	}
-	return db.QueryContext(ctx, query, args...)
+// Join is one join of a generated select (spec §selects-over-groups):
+// the joined table under the relation's name as its alias, matched on
+// the column pairs, the joined table's column first and the base
+// table's second; Left joins it LEFT, else INNER.
+type Join struct {
+	Table string
+	As    string
+	On    [][2]string
+	Left  bool
 }
 
-// StmtExec runs a non-row statement on db, through cache when one is
-// given (nil runs directly).
-func StmtExec(ctx context.Context, db DBTX, cache *StmtCache, query string, args ...any) (sql.Result, error) {
-	if cache != nil {
-		stmt, err := cache.Prepare(ctx, db, query)
-		if err != nil {
-			return nil, err
+// FromRender renders the source of a select with joins (spec
+// §predicates, rendering): the base table followed by one INNER JOIN or
+// LEFT JOIN per join, in order, each ON its pairs joined by AND.
+func FromRender(table string, joins []Join) string {
+	var b strings.Builder
+	b.WriteString(Ident(table))
+	for _, j := range joins {
+		if j.Left {
+			b.WriteString(" LEFT JOIN ")
+		} else {
+			b.WriteString(" INNER JOIN ")
 		}
-		return stmt.ExecContext(ctx, args...)
-	}
-	return db.ExecContext(ctx, query, args...)
-}
-
-// RowScan runs a single-row statement and scans its columns into dest,
-// through cache when one is given (nil runs directly).
-func RowScan(ctx context.Context, db DBTX, cache *StmtCache, query string, args []any, dest ...any) error {
-	if cache != nil {
-		stmt, err := cache.Prepare(ctx, db, query)
-		if err != nil {
-			return err
+		b.WriteString(Ident(j.Table) + " AS " + Ident(j.As) + " ON ")
+		for i, pair := range j.On {
+			if i > 0 {
+				b.WriteString(" AND ")
+			}
+			b.WriteString(Ident(j.As) + "." + Ident(pair[0]) + " = " + Ident(table) + "." + Ident(pair[1]))
 		}
-		return stmt.QueryRowContext(ctx, args...).Scan(dest...)
 	}
-	return db.QueryRowContext(ctx, query, args...).Scan(dest...)
+	return b.String()
 }

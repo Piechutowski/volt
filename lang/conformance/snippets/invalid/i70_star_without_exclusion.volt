@@ -2,9 +2,9 @@
 // the parens to select every column
 package db
 
-Table page_views {
+table page_views {
   id int [pk]
   site string
 }
 
-Select all (*) for page_views
+select all (*) for page_views

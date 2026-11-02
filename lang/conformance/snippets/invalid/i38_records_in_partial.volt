@@ -1,5 +1,5 @@
 // spec: §tablepartial — partial body has no records
-TablePartial p {
+table_partial p {
   id int
-  Records (id) { 1 }
+  records (id) { 1 }
 }

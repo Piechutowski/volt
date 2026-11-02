@@ -1,6 +1,6 @@
 // spec: §route-paths
 package app
 
-Scope / {
+scope / {
 	get /x/:w(int) X.Y
 }

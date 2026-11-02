@@ -1,9 +1,9 @@
 package db
 
-Table posts {
+table posts {
   id    int [pk, increment]
   title string
   views int
 }
 
-Select popular for posts where views >= :min [order: (views desc)]
+select popular for posts where views >= :min [order: (views desc)]

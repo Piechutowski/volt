@@ -7,12 +7,13 @@ import (
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
 
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/ast"
 )
 
-const navSchema = "package db\n\nTable posts {\n\tid    int [pk]\n\ttitle string [null]\n}\n"
-const navRoutes = "package app\n\nimport (\n\tdb\n)\n\nPipeline api {\n\tuse volt.RequestID\n}\n\nScope / [pipe: api] {\n\tresources db.posts\n}\n"
+const navSchema = "package db\n\ntable posts {\n\tid    int [pk]\n\ttitle string [null]\n}\n"
+const navRoutes = "package app\n\nimport (\n\tdb\n)\n\npipeline api {\n\tuse volt.RequestID\n}\n\nscope / [pipe: api] {\n\tresources db.posts\n}\n"
 
 func navProject(t *testing.T) (root, schema, routes string) {
 	t.Helper()
@@ -106,7 +107,7 @@ func TestVoltHoverTableShowsModel(t *testing.T) {
 		t.Fatal("no hover for db.posts")
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
-	for _, want := range []string{"Table posts", "package `db`", "Go model `Post`", "id int [pk]", "title string [null]"} {
+	for _, want := range []string{"table posts", "package `db`", "Go model `Post`", "id int [pk]", "title string [null]"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("hover missing %q:\n%s", want, md)
 		}
@@ -117,8 +118,8 @@ func TestVoltHoverTableShowsModel(t *testing.T) {
 }
 
 func TestVoltHoverTableKeyNotRoutable(t *testing.T) {
-	schema := "package db\n\nTable samples {\n\tid    float64 [pk]\n\tlabel string  [null]\n}\n"
-	routes := "package app\n\nimport (\n\tdb\n)\n\nScope / {\n\tresources db.samples\n}\n"
+	schema := "package db\n\ntable samples {\n\tid    float64 [pk]\n\tlabel string  [null]\n}\n"
+	routes := "package app\n\nimport (\n\tdb\n)\n\nscope / {\n\tresources db.samples\n}\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":          "module nav\n",
 		"db/schema.volt":  schema,
@@ -144,8 +145,8 @@ func TestVoltHoverTableKeyNotRoutable(t *testing.T) {
 // named, and a composite key split between the body and a partial is
 // not named as the body's one pk column.
 func TestVoltHoverTableKeyFromPartials(t *testing.T) {
-	schema := "package db\n\nTablePartial daily {\n\tday int [pk]\n}\n\nTable site_days {\n\tsite string [pk]\n\t~daily\n\tviews int\n}\n\nTablePartial base {\n\tid int [pk, increment]\n}\n\nTable posts {\n\t~base\n\ttitle string\n}\n"
-	routes := "package app\n\nimport (\n\tdb\n)\n\nScope / {\n\tresources db.site_days\n\tresources db.posts\n}\n"
+	schema := "package db\n\ntable_partial daily {\n\tday int [pk]\n}\n\ntable site_days {\n\tsite string [pk]\n\t~daily\n\tviews int\n}\n\ntable_partial base {\n\tid int [pk, increment]\n}\n\ntable posts {\n\t~base\n\ttitle string\n}\n"
+	routes := "package app\n\nimport (\n\tdb\n)\n\nscope / {\n\tresources db.site_days\n\tresources db.posts\n}\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":          "module nav\n",
 		"db/schema.volt":  schema,
@@ -173,12 +174,12 @@ func TestVoltHoverTableKeyFromPartials(t *testing.T) {
 // has no checked model: partials injected in source order, a column of
 // the body overriding a partial's, as §tablepartial resolves them.
 func TestTableKeyUnchecked(t *testing.T) {
-	schema := "package db\n\nTablePartial daily {\n\tday int [pk]\n\tsite string\n}\n\nTable site_days {\n\tsite string [pk]\n\t~daily\n\tviews int\n}\n\nTablePartial base {\n\tid int [pk, increment]\n}\n\nTable posts {\n\t~base\n\ttitle string\n}\n"
+	schema := "package db\n\ntable_partial daily {\n\tday int [pk]\n\tsite string\n}\n\ntable site_days {\n\tsite string [pk]\n\t~daily\n\tviews int\n}\n\ntable_partial base {\n\tid int [pk, increment]\n}\n\ntable posts {\n\t~base\n\ttitle string\n}\n"
 	root := voltProject(t, map[string]string{
 		"go.mod":         "module nav\n",
 		"db/schema.volt": schema,
 	})
-	pr, err := lang.Load(root)
+	pr, err := lang.Load(disk.Source{}, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +212,7 @@ func TestVoltHoverPipeline(t *testing.T) {
 		t.Fatal("no hover for pipe: api")
 	}
 	md := h.Contents.(protocol.MarkupContent).Value
-	if !strings.Contains(md, "Pipeline `api`") || !strings.Contains(md, "volt.RequestID") {
+	if !strings.Contains(md, "pipeline `api`") || !strings.Contains(md, "volt.RequestID") {
 		t.Errorf("pipeline hover wrong:\n%s", md)
 	}
 }
@@ -306,7 +307,7 @@ func TestSiblingDiagnosticsFollowSchemaEdits(t *testing.T) {
 		t.Fatalf("clean project reports %v", d.Diags)
 	}
 
-	schemaText = strings.Replace(navSchema, "Table posts", "Table articles", 1)
+	schemaText = strings.Replace(navSchema, "table posts", "table articles", 1)
 	d.Update(d.Text)
 	found := false
 	for _, dg := range d.Diags {
@@ -360,12 +361,12 @@ func TestVoltCompleteResourcesOffersTablesAndImports(t *testing.T) {
 func TestVoltCompleteLeavesSchemaChains(t *testing.T) {
 	root := voltProject(t, map[string]string{
 		"go.mod": "module lsptest\n",
-		"db/schema.volt": "package db\n\nTable users {\n\tid int [pk]\n\temail string [null]\n}\n\n" +
-			"Table posts {\n\tid int [pk]\n\tauthor_id int [null]\n}\n\nRef: posts.author_id > users.id\n",
+		"db/schema.volt": "package db\n\ntable users {\n\tid int [pk]\n\temail string [null]\n}\n\n" +
+			"table posts {\n\tid int [pk]\n\tauthor_id int [null]\n}\n\nref: posts.author_id > users.id\n",
 	})
 	path := root + "/db/schema.volt"
-	text := "package db\n\nTable users {\n\tid int [pk]\n\temail string [null]\n}\n\n" +
-		"Table posts {\n\tid int [pk]\n\tauthor_id int [null]\n}\n\nRef: posts.author_id > users.\n"
+	text := "package db\n\ntable users {\n\tid int [pk]\n\temail string [null]\n}\n\n" +
+		"table posts {\n\tid int [pk]\n\tauthor_id int [null]\n}\n\nref: posts.author_id > users.\n"
 	d := NewDocument("file://"+path, text)
 	if d.vpkg == nil {
 		t.Fatal("project index should be active for this file")

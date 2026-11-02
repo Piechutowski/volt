@@ -43,9 +43,9 @@ func TestDocumentReusesItsFrontEnd(t *testing.T) {
 				d.parseStats.Reused, d.schema.Hits, d.index.Hits)
 		}
 	}
-	decls := strings.Count(text, "\nTable ") + strings.Count(text, "\nType ") + strings.Count(text, "\nTablePartial ") +
-		strings.Count(text, "\nScope ") + strings.Count(text, "\nPipeline ") + strings.Count(text, "\nSelect ") +
-		strings.Count(text, "\nGroup ") + strings.Count(text, "\nPred ") + strings.Count(text, "\nView ") + 1
+	decls := strings.Count(text, "\ntable ") + strings.Count(text, "\ntype ") + strings.Count(text, "\ntable_partial ") +
+		strings.Count(text, "\nscope ") + strings.Count(text, "\npipeline ") + strings.Count(text, "\nselect ") +
+		strings.Count(text, "\ngroup ") + strings.Count(text, "\npred ") + strings.Count(text, "\nView ") + 1
 	round("first", text, decls, 12, 12)
 	round("no change", text, 0, 0, 0)
 	round("edit one table", strings.Replace(text, "c002 string\n", "c002 text [note: \"edited\"]\n", 1), 1, 1, 2)
@@ -65,7 +65,7 @@ func diagsText(ds []diag.Diagnostic) string {
 func TestServerForeignFileVerdict(t *testing.T) {
 	root := voltProject(t, map[string]string{
 		"go.mod":          "module lsptest\n",
-		"app/routes.volt": "package app\n\nScope / {\n\tget / Home.Index\n}\n",
+		"app/routes.volt": "package app\n\nscope / {\n\tget / Home.Index\n}\n",
 	})
 	path := filepath.Join(root, "app", "notes.txt")
 	s := NewServer()
@@ -82,7 +82,7 @@ func TestServerForeignFileVerdict(t *testing.T) {
 	}}
 	uri := "file://" + path
 	if err := s.didOpen(ctx, &protocol.DidOpenTextDocumentParams{
-		TextDocument: protocol.TextDocumentItem{URI: uri, Text: "Table t {\n  id int [pk]\n  Indexes {\n  }\n}\n"},
+		TextDocument: protocol.TextDocumentItem{URI: uri, Text: "table t {\n  id int [pk]\n  indexes {\n  }\n}\n"},
 	}); err != nil {
 		t.Fatal(err)
 	}

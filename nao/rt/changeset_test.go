@@ -2,6 +2,7 @@ package rt
 
 import (
 	"bytes"
+	"database/sql"
 	"database/sql/driver"
 	"encoding/gob"
 	"encoding/json"
@@ -10,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type post struct {
@@ -57,11 +60,15 @@ func TestRefused(t *testing.T) {
 			t.Errorf("%q: details %+v", tc.msg, d)
 		}
 	}
-	db := migrateDB(t)
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
 	if _, err := db.Exec("CREATE TABLE authors (id INTEGER PRIMARY KEY, handle TEXT NOT NULL);\nCREATE UNIQUE INDEX idx_authors_handle_ci ON authors ((lower(handle)));\nINSERT INTO authors (handle) VALUES ('ann')"); err != nil {
 		t.Fatal(err)
 	}
-	_, err := db.Exec("INSERT INTO authors (handle) VALUES ('ANN')")
+	_, err = db.Exec("INSERT INTO authors (handle) VALUES ('ANN')")
 	var inv *Invalid
 	if !errors.As(Refused("Author", err), &inv) || len(inv.Fields) != 1 || inv.Fields[0].Check != "unique" || inv.Fields[0].Columns != nil {
 		t.Errorf("a duplicate under a unique expression index (%v) → %+v, want one unique field error on no column", err, inv)

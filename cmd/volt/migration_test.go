@@ -111,7 +111,7 @@ func TestMigrationCheck(t *testing.T) {
 		t.Errorf("check outside a project: exit %d (%v), want 2", exitCode(err), err)
 	}
 	broken := fixtureCopy(t)
-	if err := os.WriteFile(filepath.Join(broken, "0003__bad.volt"), []byte("package blog\n\nMigration 0003__bad [irreversible] {\n  exec `DROP TABLE missing`\n}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(broken, "0003__bad.volt"), []byte("package blog\n\nmigration 0003__bad [irreversible] {\n  exec `DROP TABLE missing`\n}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, err = voltRun(t, "migration", "check", broken)
@@ -123,7 +123,7 @@ func TestMigrationCheck(t *testing.T) {
 		t.Errorf("gen over a migration SQLite refuses: exit %d (%v), want 1 with SQLite's message", exitCode(err), err)
 	}
 	viewed := fixtureCopy(t)
-	rebuild := "package blog\n\nMigration 0003__view [irreversible] {\n  exec `CREATE VIEW post_titles AS SELECT title FROM posts`\n  rebuild table posts {\n    id    int    [pk, increment]\n    title string\n    body  string [null]\n    views int    [index, default: 0]\n  }\n}\n"
+	rebuild := "package blog\n\nmigration 0003__view [irreversible] {\n  exec `CREATE VIEW post_titles AS SELECT title FROM posts`\n  rebuild table posts {\n    id    int    [pk, increment]\n    title string\n    body  string [null]\n    views int    [index, default: 0]\n  }\n}\n"
 	if err := os.WriteFile(filepath.Join(viewed, "0003__view.volt"), []byte(rebuild), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestMigrationExitCodes(t *testing.T) {
 	}
 	files := map[string]string{
 		"go.mod":      "module unlowerable\n\ngo 1.27\n",
-		"schema.volt": "package db\n\nTable posts {\n  id int [pk, increment]\n}\n\nMigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null, unique]\n\n    Indexes {\n      n [where: `n > 0`]\n    }\n  }\n}\n",
+		"schema.volt": "package db\n\ntable posts {\n  id int [pk, increment]\n}\n\nmigration 0001__init {\n  create table posts {\n    id int [pk, increment]\n    n  int [null, unique]\n\n    indexes {\n      n [where: `n > 0`]\n    }\n  }\n}\n",
 	}
 	for name, src := range files {
 		if err := os.WriteFile(filepath.Join(unlowerable, name), []byte(src), 0o644); err != nil {
@@ -178,14 +178,14 @@ func TestMigrationExitCodes(t *testing.T) {
 	if out, err := voltRun(t, "migration", "up", dsn, dir); err != nil {
 		t.Fatalf("up: %v\n%s", err, out)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "0003__bad.volt"), []byte("package blog\n\nMigration 0003__bad [irreversible] {\n  exec `DROP TABLE missing`\n}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "0003__bad.volt"), []byte("package blog\n\nmigration 0003__bad [irreversible] {\n  exec `DROP TABLE missing`\n}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, err = voltRun(t, "migration", "up", dsn, dir)
 	if exitCode(err) != 1 || !strings.Contains(err.Error(), "0003__bad") || !strings.Contains(err.Error(), "no such table") {
 		t.Errorf("up over a migration SQLite refuses: exit %d (%v), want 1 with SQLite's message", exitCode(err), err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "0003__bad.volt"), []byte("package blog\n\nMigration 0003__bump [irreversible] {\n  exec `PRAGMA user_version = 3`\n}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "0003__bad.volt"), []byte("package blog\n\nmigration 0003__bump [irreversible] {\n  exec `PRAGMA user_version = 3`\n}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if out, err := voltRun(t, "migration", "up", dsn, dir); err != nil || out != "applied 0003__bump\n" {
@@ -208,7 +208,7 @@ func TestMigrationExitCodes(t *testing.T) {
 
 func TestMigrationCheckRunsEveryDown(t *testing.T) {
 	dir := fixtureCopy(t)
-	src := "package blog\n\nMigration 0003__bad_down {\n  up {\n    exec `CREATE TABLE scratch (id INTEGER)`\n    exec `DROP TABLE scratch`\n  }\n  down {\n    exec `DROP TABLE missing`\n  }\n}\n"
+	src := "package blog\n\nmigration 0003__bad_down {\n  up {\n    exec `CREATE TABLE scratch (id INTEGER)`\n    exec `DROP TABLE scratch`\n  }\n  down {\n    exec `DROP TABLE missing`\n  }\n}\n"
 	if err := os.WriteFile(filepath.Join(dir, "0003__bad_down.volt"), []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +272,7 @@ func TestMigrationNew(t *testing.T) {
 	}
 	files := map[string]string{
 		"go.mod":      "module newfixture\n\ngo 1.27\n",
-		"schema.volt": "package db\n\nTable posts {\n  id int [pk, increment]\n}\n",
+		"schema.volt": "package db\n\ntable posts {\n  id int [pk, increment]\n}\n",
 	}
 	for name, src := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o644); err != nil {
@@ -291,7 +291,7 @@ func TestMigrationNew(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(src) != "package db\n\nMigration 0001__init {\n}\n" {
+	if string(src) != "package db\n\nmigration 0001__init {\n}\n" {
 		t.Errorf("0001__init.volt:\n%s", src)
 	}
 	if _, err := voltRun(t, "migration", "new", "add_views", dir); err != nil {
@@ -308,8 +308,8 @@ func TestMigrationNew(t *testing.T) {
 		t.Errorf("new over an existing file: %v, want a refusal", err)
 	}
 	wider := map[string]string{
-		"0001__init.volt":      "package db\n\nMigration 00001__init {\n}\n",
-		"0002__add_views.volt": "package db\n\nMigration 00010__wide {\n}\n",
+		"0001__init.volt":      "package db\n\nmigration 00001__init {\n}\n",
+		"0002__add_views.volt": "package db\n\nmigration 00010__wide {\n}\n",
 	}
 	for name, src := range wider {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o644); err != nil {
@@ -337,7 +337,7 @@ func TestMigrationNew(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(full, "go.mod"), []byte("module full\n\ngo 1.27\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(full, "schema.volt"), []byte("package db\n\nTable posts {\n  id int [pk, increment]\n}\n\nMigration 9999__last {\n}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(full, "schema.volt"), []byte("package db\n\ntable posts {\n  id int [pk, increment]\n}\n\nmigration 9999__last {\n}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, err = voltRun(t, "migration", "new", "overflow", full)
@@ -354,7 +354,7 @@ func TestMigrationNew(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(empty, "go.mod"), []byte("module empty\n\ngo 1.27\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(empty, "api.volt"), []byte("package api\n\nType kinds.Color string from \"example.com/kinds\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(empty, "api.volt"), []byte("package api\n\ntype kinds.Color string from \"example.com/kinds\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, err = voltRun(t, "migration", "new", "init", empty)
@@ -483,7 +483,7 @@ func TestGenWritesMigrationsAndRefusesDrift(t *testing.T) {
 	if err != nil {
 		t.Fatalf("gen did not write volt_migrations.go: %v\n%s", err, out)
 	}
-	for _, want := range []string{"// Code generated by volt gen from package .. DO NOT EDIT.", "var Migrations = []rt.Migration{", `Name: "0002__comments"`, "func Migrate(ctx context.Context, db *sql.DB) error"} {
+	for _, want := range []string{"// Code generated by volt gen from package .. DO NOT EDIT.", "var Migrations = []rt.Migration{", `Name: "0002__comments"`} {
 		if !strings.Contains(string(src), want) {
 			t.Errorf("volt_migrations.go lacks %q", want)
 		}

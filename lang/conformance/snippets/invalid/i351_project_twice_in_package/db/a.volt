@@ -1,10 +1,10 @@
 // spec: §project, §projects-and-packages, a package holds at most one Project, whichever files declare them
-// want: at most one Project element per package
+// want: at most one project element per package
 package db
 
-Project blog {
+project blog {
 }
 
-Table posts {
+table posts {
   id int [pk]
 }

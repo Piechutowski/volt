@@ -1,6 +1,6 @@
 package db
 
-Table marks {
+table marks {
   cs    int [pk, increment]
   label string
 }

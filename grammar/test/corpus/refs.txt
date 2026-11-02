@@ -2,7 +2,7 @@
 ref: foreign key > referenced column
 ==================
 
-Ref: orders.user_id > users.id
+ref: orders.user_id > users.id
 
 ---
 
@@ -24,7 +24,7 @@ Ref: orders.user_id > users.id
 ref with settings
 ==================
 
-Ref: orders.user_id > users.id [delete: cascade, update: restrict]
+ref: orders.user_id > users.id [delete: cascade, update: restrict]
 
 ---
 
@@ -55,7 +55,7 @@ Ref: orders.user_id > users.id [delete: cascade, update: restrict]
 composite ref
 ==================
 
-Ref: a.(x, y) > b.(x, y)
+ref: a.(x, y) > b.(x, y)
 
 ---
 
@@ -84,7 +84,7 @@ a ref written referenced < foreign key is an error
 :error
 ==================
 
-Ref: users.id < orders.user_id
+ref: users.id < orders.user_id
 
 ---
 
@@ -95,7 +95,7 @@ a named ref is an error
 :error
 ==================
 
-Ref fk_user: orders.user_id > users.id
+ref fk_user: orders.user_id > users.id
 
 ---
 
@@ -104,6 +104,6 @@ a referential action of two words is an error
 :error
 ==================
 
-Ref: posts.user_id > users.id [delete: set null]
+ref: posts.user_id > users.id [delete: set null]
 
 ---

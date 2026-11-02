@@ -107,21 +107,21 @@ func TestLSPSession(t *testing.T) {
 		"app/title.go": "package app\n\n// TitleShape keeps a title non-blank.\nfunc TitleShape(title string) error { return nil }\n",
 		"app/schema.volt": `package app
 
-Table posts {
+table posts {
 	id int [pk, increment]
 	title string
 
-	Validators {
+	validators {
 		TitleShape(title)
 	}
 }
 
-Scope / {
+scope / {
 	get / Home.Index
 	resources posts
 }
 
-Migration 0001__posts {
+migration 0001__posts {
 	create table posts {
 		id int [pk, increment]
 		title string
@@ -212,7 +212,7 @@ Migration 0001__posts {
 
 	broken := strings.Replace(text, "[pk, increment]", "[pk, increment", 1)
 	change("edit 1: a settings list left open", 2, broken)
-	typo := strings.Replace(text, "get / Home.Index", "gett / Home.Index", 1) + "\nTable tags {\n\tid int [pk]\n}\n"
+	typo := strings.Replace(text, "get / Home.Index", "gett / Home.Index", 1) + "\ntable tags {\n\tid int [pk]\n}\n"
 	change("edit 2: a verb misspelled, a table added", 3, typo)
 	change("edit 3: the verb fixed", 4, strings.Replace(typo, "gett /", "get /", 1))
 	typed("edit 4: a note typed into the new table's header, as a ranged change", 5, 23, 10, " [note: \"tagging\"]")

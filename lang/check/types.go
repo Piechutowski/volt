@@ -193,11 +193,11 @@ func (c *checker) typeDeclCheck(d *ast.TypeDecl) *TypeInfo {
 	key := d.Name.String()
 	ti := &TypeInfo{Decl: d, Key: key}
 	if _, ok := builtins[key]; ok {
-		c.errorf(d.Name.Pos(), "types", "Type %q spells a built-in type (§types)", key)
+		c.errorf(d.Name.Pos(), "types", "type %q spells a built-in type (§types)", key)
 		return nil
 	}
 	if _, dup := c.types[key]; dup {
-		c.errorf(d.Pos(), "namespaces-and-uniqueness", "duplicate Type name %q", key)
+		c.errorf(d.Pos(), "namespaces-and-uniqueness", "duplicate type name %q", key)
 		return nil
 	}
 	storage, ok := builtins[d.Storage.String()]
@@ -208,41 +208,41 @@ func (c *checker) typeDeclCheck(d *ast.TypeDecl) *TypeInfo {
 	ti.Storage = storage
 	switch {
 	case d.Name.Qualifier() != "" && d.From == nil:
-		c.errorf(d.Name.Pos(), "types", "Type %q names a package but has no from path (§types)", key)
+		c.errorf(d.Name.Pos(), "types", "type %q names a package but has no from path (§types)", key)
 		return nil
 	case d.Name.Qualifier() == "" && d.From != nil:
-		c.errorf(d.From.Pos(), "types", "Type %q is a type of this package and takes no from path (§types)", key)
+		c.errorf(d.From.Pos(), "types", "type %q is a type of this package and takes no from path (§types)", key)
 		return nil
 	}
 	if base := d.Name.Base(); !exported(base) {
 		if d.Name.Qualifier() == "" {
-			c.errorf(d.Name.Pos(), "types", "Type %q is not an exported Go name; a declared type's name begins with an upper-case letter, as %s does (§types)", key, exportedSpelling(base))
+			c.errorf(d.Name.Pos(), "types", "type %q is not an exported Go name; a declared type's name begins with an upper-case letter, as %s does (§types)", key, exportedSpelling(base))
 		} else {
-			c.errorf(d.Name.Pos(), "types", "Type %q names an unexported Go type of package %s, which no other package can name (§types)", key, d.Name.Qualifier())
+			c.errorf(d.Name.Pos(), "types", "type %q names an unexported Go type of package %s, which no other package can name (§types)", key, d.Name.Qualifier())
 		}
 		return nil
 	}
 	if d.From != nil {
 		path := d.From.Tok.Val
 		if path == "" {
-			c.errorf(d.From.Pos(), "types", "Type %q has an empty from path; the path is a non-empty import path (§types)", key)
+			c.errorf(d.From.Pos(), "types", "type %q has an empty from path; the path is a non-empty import path (§types)", key)
 			return nil
 		}
 		if !importPathOK(path) {
-			c.errorf(d.From.Pos(), "types", "Type %q has from path %q, which is not a Go import path (§types)", key, path)
+			c.errorf(d.From.Pos(), "types", "type %q has from path %q, which is not a Go import path (§types)", key, path)
 			return nil
 		}
 		alias := d.Name.Qualifier()
 		if std, reserved := ReservedAliases[alias]; reserved && std != path {
 			if std == "" {
-				c.errorf(d.Name.Pos(), "types", "Type %q: package name %q is reserved by generated code (§types)", key, alias)
+				c.errorf(d.Name.Pos(), "types", "type %q: package name %q is reserved by generated code (§types)", key, alias)
 			} else {
-				c.errorf(d.Name.Pos(), "types", "Type %q: package name %q is reserved by generated code for %q (§types)", key, alias, std)
+				c.errorf(d.Name.Pos(), "types", "type %q: package name %q is reserved by generated code for %q (§types)", key, alias, std)
 			}
 			return nil
 		}
 		if prev, bound := c.aliases[alias]; bound && prev.From.Tok.Val != path {
-			c.errorf(d.Name.Pos(), "types", "Type %q imports %q under the alias %s, which Type %q at %s binds to %q: one alias names one package (§types)",
+			c.errorf(d.Name.Pos(), "types", "type %q imports %q under the alias %s, which Type %q at %s binds to %q: one alias names one package (§types)",
 				key, path, alias, prev.Name.String(), prev.Pos(), prev.From.Tok.Val)
 			return nil
 		}

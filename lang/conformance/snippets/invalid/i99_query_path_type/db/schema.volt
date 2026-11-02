@@ -1,8 +1,8 @@
 package db
 
-Table users {
+table users {
   id    int [pk, increment]
   email string    [unique]
 }
 
-Select picked for users where id in :ids
+select picked for users where id in :ids

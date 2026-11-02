@@ -89,7 +89,7 @@ module.exports = grammar({
 
     project_definition: ($) =>
       seq(
-        kw('Project'),
+        kw('project'),
         optional(field('name', $._name)),
         optional(field('settings', $.settings_list)),
         '{',
@@ -105,7 +105,7 @@ module.exports = grammar({
 
     table_definition: ($) =>
       seq(
-        kw('Table'),
+        kw('table'),
         field('name', $.table_name),
         optional(field('settings', $.settings_list)),
         '{',
@@ -150,7 +150,7 @@ module.exports = grammar({
 
     table_partial_definition: ($) =>
       seq(
-        kw('TablePartial'),
+        kw('table_partial'),
         field('name', alias($._name, $.partial_name)),
         '{',
         repeat($._newline),
@@ -168,7 +168,7 @@ module.exports = grammar({
 
     type_definition: ($) =>
       seq(
-        kw('Type'),
+        kw('type'),
         field('name', $.type_name),
         field('storage', $.column_type),
         optional(seq(kw('from'), field('path', $.string))),
@@ -179,7 +179,7 @@ module.exports = grammar({
     // Ref: posts.user_id > users.id [settings]; the foreign key is left of '>'.
     ref_definition: ($) =>
       seq(
-        kw('Ref'),
+        kw('ref'),
         ':',
         $.ref_relation,
         optional(field('settings', $.settings_list)),
@@ -212,7 +212,7 @@ module.exports = grammar({
 
     indexes_block: ($) =>
       seq(
-        kw('Indexes'),
+        kw('indexes'),
         '{',
         repeat($._newline),
         optional(newlineSep1($.index_definition, $)),
@@ -232,7 +232,7 @@ module.exports = grammar({
 
     validators_block: ($) =>
       seq(
-        kw('Validators'),
+        kw('validators'),
         '{',
         repeat($._newline),
         optional(newlineSep1($.validator, $)),
@@ -255,7 +255,7 @@ module.exports = grammar({
     // Top level: Records users(id, name) { ... }
     records_definition: ($) =>
       seq(
-        kw('Records'),
+        kw('records'),
         field('table', $.table_name),
         field('columns', $.records_columns),
         $._records_body,
@@ -264,7 +264,7 @@ module.exports = grammar({
     // In-table: Records { ... } or Records (id, name) { ... }
     records_block: ($) =>
       seq(
-        kw('Records'),
+        kw('records'),
         optional(field('columns', $.records_columns)),
         $._records_body,
       ),
@@ -338,7 +338,7 @@ module.exports = grammar({
     // Pipeline name { use ref ... } (§pipelines)
     pipeline_definition: ($) =>
       seq(
-        kw('Pipeline'),
+        kw('pipeline'),
         field('name', alias($.identifier, $.pipeline_name)),
         '{',
         repeat($._newline),
@@ -353,7 +353,7 @@ module.exports = grammar({
     // Scope path [settings] { routes | resources | Scope } (§scopes-and-routes)
     scope_definition: ($) =>
       seq(
-        kw('Scope'),
+        kw('scope'),
         field('path', $.route_path),
         optional(field('settings', $.settings_list)),
         '{',
@@ -363,7 +363,15 @@ module.exports = grammar({
       ),
 
     _scope_item: ($) =>
-      choice($.route, $.resources_declaration, $.dataset_declaration, $.scope_definition),
+      choice($.route, $.resources_declaration, $.dataset_declaration, $.scope_load, $.scope_definition),
+
+    // load name Func (§scope-loads): a value every route beneath receives.
+    scope_load: ($) =>
+      seq(
+        kw('load'),
+        field('name', alias($.identifier, $.load_name)),
+        field('ref', $.go_ref),
+      ),
 
     route: ($) =>
       seq(
@@ -371,7 +379,39 @@ module.exports = grammar({
         field('path', $.route_path),
         field('handler', $.go_ref),
         optional(field('settings', $.settings_list)),
+        optional(field('loads', $.load_block)),
       ),
+
+    // A controller route's loads (§route-loads): `name query(args)` per
+    // line, each a read of a data package the handler receives.
+    load_block: ($) =>
+      seq(
+        '{',
+        repeat($._newline),
+        optional(newlineSep1($.load, $)),
+        '}',
+      ),
+
+    load: ($) =>
+      seq(
+        field('name', alias($.identifier, $.load_name)),
+        field('query', $.go_ref),
+        '(',
+        optional(seq($._load_arg, repeat(seq(',', $._load_arg)))),
+        ')',
+      ),
+
+    // A query call as a setting value, the value of a route's body:
+    // (§request-bodies): `db.SettingUpdate(id)`.
+    query_call: ($) =>
+      seq(
+        field('query', $.go_ref),
+        '(',
+        optional(seq($._load_arg, repeat(seq(',', $._load_arg)))),
+        ')',
+      ),
+
+    _load_arg: ($) => choice($.identifier, $.string, $.number, $.signed_number, $.boolean),
 
     verb: () =>
       choice(
@@ -404,7 +444,7 @@ module.exports = grammar({
     // Group name { members } | Group name = a + b \ c (§groups)
     group_definition: ($) =>
       seq(
-        kw('Group'),
+        kw('group'),
         field('name', alias($.identifier, $.group_name)),
         choice(
           seq(
@@ -436,7 +476,7 @@ module.exports = grammar({
     // Pred name { expr } (§predicates) — the closed predicate language.
     pred_definition: ($) =>
       seq(
-        kw('Pred'),
+        kw('pred'),
         field('name', alias($.identifier, $.pred_name)),
         '{',
         repeat($._newline),
@@ -481,7 +521,7 @@ module.exports = grammar({
 
     pred_in: ($) =>
       seq(
-        alias($.identifier, $.column_ref),
+        $._column,
         kw('in'),
         choice(
           seq('(', $._pred_literal, repeat(seq(',', $._pred_literal)), ')'),
@@ -491,14 +531,14 @@ module.exports = grammar({
 
     pred_like: ($) =>
       seq(
-        alias($.identifier, $.column_ref),
+        $._column,
         kw('like'),
         choice($.string, $.query_param),
       ),
 
     pred_null: ($) =>
       seq(
-        alias($.identifier, $.column_ref),
+        $._column,
         kw('is'),
         optional(kw('not')),
         kw('null'),
@@ -508,8 +548,47 @@ module.exports = grammar({
       choice(
         $.query_param,
         $._pred_literal,
-        alias($.identifier, $.column_ref),
+        $._column,
       ),
+
+    // One item of an explicit projection (§selects-over-groups): a column,
+    // or an aggregate or an arithmetic expression under an alias.
+    _proj_item: ($) => choice($._column, $.derived_item),
+
+    derived_item: ($) =>
+      seq(choice($.aggregate, $.arith), kw('as'), field('alias', alias($.identifier, $.alias_name))),
+
+    aggregate: ($) =>
+      seq(
+        field('fn', alias(choice(kw('count'), kw('sum'), kw('avg'), kw('min'), kw('max')), $.aggregate_name)),
+        '(',
+        optional($._column),
+        ')',
+      ),
+
+    arith: ($) => choice($.arith_binary, $._arith_factor),
+
+    arith_binary: ($) =>
+      choice(
+        prec.left(1, seq($.arith, field('op', choice('+', '-')), $.arith)),
+        prec.left(2, seq($.arith, field('op', choice('*', '/')), $.arith)),
+      ),
+
+    _arith_factor: ($) =>
+      choice(
+        seq('(', $.arith, ')'),
+        $.number,
+        $.signed_number,
+        $.query_param,
+        $._column,
+      ),
+
+    // A column of the target, or relation.column, a column of a joined
+    // relation (§predicates, §selects-over-groups).
+    _column: ($) => choice($.qualified_column, alias($.identifier, $.column_ref)),
+
+    qualified_column: ($) =>
+      seq(alias($.identifier, $.relation_name), '.', alias($.identifier, $.column_ref)),
 
     _pred_literal: ($) =>
       choice($.number, seq('-', $.number), $.string, $.boolean),
@@ -521,11 +600,13 @@ module.exports = grammar({
     // [settings] (§selects-over-groups, §predicates)
     select_definition: ($) =>
       seq(
-        kw('Select'),
+        kw('select'),
         field('name', alias($.identifier, $.select_name)),
         optional(field('projection', $.select_projection)),
         kw('for'),
         field('target', alias($.identifier, $.select_target)),
+        repeat(seq(kw('join'), field('join', alias($.identifier, $.relation_name)))),
+        optional(seq(kw('with'), field('with', alias($.identifier, $.relation_name)))),
         optional(seq(kw('where'), field('where', $.pred_expr))),
         optional(field('settings', $.settings_list)),
       ),
@@ -535,10 +616,7 @@ module.exports = grammar({
       seq(
         '(',
         choice(
-          seq(
-            alias($.identifier, $.column_ref),
-            repeat(seq(',', alias($.identifier, $.column_ref))),
-          ),
+          seq($._proj_item, repeat(seq(',', $._proj_item))),
           seq(
             '*',
             repeat1(
@@ -607,7 +685,7 @@ module.exports = grammar({
 
     migration_definition: ($) =>
       seq(
-        kw('Migration'),
+        kw('migration'),
         field('name', $.migration_name),
         optional(field('settings', $.settings_list)),
         '{',
@@ -756,6 +834,7 @@ module.exports = grammar({
         $.null,
         $.expression,
         $.ident_group,
+        $.query_call,
         $._name,
       ),
 
@@ -773,7 +852,11 @@ module.exports = grammar({
         ')',
       ),
 
-    _ident_item: ($) => seq($._name, optional(alias($._name, $.ident_modifier))),
+    _ident_item: ($) =>
+      seq(
+        choice($.qualified_column, $._name),
+        optional(alias($._name, $.ident_modifier)),
+      ),
 
     signed_number: ($) => seq('-', $.number),
 

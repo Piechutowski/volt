@@ -1,6 +1,6 @@
 // spec: §tablepartial — partial body has no nested injections
-TablePartial a { id int }
-TablePartial b {
+table_partial a { id int }
+table_partial b {
   ~a
   name string
 }

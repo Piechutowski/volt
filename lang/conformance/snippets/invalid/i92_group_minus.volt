@@ -2,17 +2,17 @@
 // want: set difference is spelled '\'
 package db
 
-Table ms_revenue {
+table ms_revenue {
   id int [pk]
 }
 
-Table ms_usage {
+table ms_usage {
   id int [pk]
 }
 
-Group series {
+group series {
   ms_revenue
   ms_usage
 }
 
-Group narrow = series - ms_usage
+group narrow = series - ms_usage

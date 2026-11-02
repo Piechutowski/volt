@@ -15,6 +15,36 @@
     }
   },
   {
+    "type": "aggregate",
+    "named": true,
+    "fields": {
+      "fn": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "aggregate_name",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "column_ref",
+          "named": true
+        },
+        {
+          "type": "qualified_column",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "alter_table_op",
     "named": true,
     "fields": {
@@ -43,6 +73,83 @@
         },
         {
           "type": "rename_column",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "arith",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "arith",
+          "named": true
+        },
+        {
+          "type": "arith_binary",
+          "named": true
+        },
+        {
+          "type": "column_ref",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "qualified_column",
+          "named": true
+        },
+        {
+          "type": "query_param",
+          "named": true
+        },
+        {
+          "type": "signed_number",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "arith_binary",
+    "named": true,
+    "fields": {
+      "op": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "*",
+            "named": false
+          },
+          {
+            "type": "+",
+            "named": false
+          },
+          {
+            "type": "-",
+            "named": false
+          },
+          {
+            "type": "/",
+            "named": false
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "arith",
           "named": true
         }
       ]
@@ -244,6 +351,36 @@
           }
         ]
       }
+    }
+  },
+  {
+    "type": "derived_item",
+    "named": true,
+    "fields": {
+      "alias": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "alias_name",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "aggregate",
+          "named": true
+        },
+        {
+          "type": "arith",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -479,6 +616,10 @@
         {
           "type": "identifier",
           "named": true
+        },
+        {
+          "type": "qualified_column",
+          "named": true
         }
       ]
     }
@@ -598,6 +739,73 @@
       "types": [
         {
           "type": "index_definition",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "load",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "load_name",
+            "named": true
+          }
+        ]
+      },
+      "query": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "go_ref",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "signed_number",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "load_block",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "load",
           "named": true
         }
       ]
@@ -872,6 +1080,10 @@
           "named": true
         },
         {
+          "type": "qualified_column",
+          "named": true
+        },
+        {
           "type": "query_param",
           "named": true
         },
@@ -964,6 +1176,10 @@
           "named": true
         },
         {
+          "type": "qualified_column",
+          "named": true
+        },
+        {
           "type": "query_param",
           "named": true
         },
@@ -987,6 +1203,10 @@
           "named": true
         },
         {
+          "type": "qualified_column",
+          "named": true
+        },
+        {
           "type": "query_param",
           "named": true
         },
@@ -1007,6 +1227,10 @@
       "types": [
         {
           "type": "column_ref",
+          "named": true
+        },
+        {
+          "type": "qualified_column",
           "named": true
         }
       ]
@@ -1072,6 +1296,67 @@
           }
         ]
       }
+    }
+  },
+  {
+    "type": "qualified_column",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "column_ref",
+          "named": true
+        },
+        {
+          "type": "relation_name",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "query_call",
+    "named": true,
+    "fields": {
+      "query": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "go_ref",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "signed_number",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -1416,6 +1701,16 @@
           }
         ]
       },
+      "loads": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "load_block",
+            "named": true
+          }
+        ]
+      },
       "path": {
         "multiple": false,
         "required": true,
@@ -1511,14 +1806,54 @@
         {
           "type": "scope_definition",
           "named": true
+        },
+        {
+          "type": "scope_load",
+          "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "scope_load",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "load_name",
+            "named": true
+          }
+        ]
+      },
+      "ref": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "go_ref",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
     "type": "select_definition",
     "named": true,
     "fields": {
+      "join": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "relation_name",
+            "named": true
+          }
+        ]
+      },
       "name": {
         "multiple": false,
         "required": true,
@@ -1568,6 +1903,16 @@
             "named": true
           }
         ]
+      },
+      "with": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "relation_name",
+            "named": true
+          }
+        ]
       }
     }
   },
@@ -1581,6 +1926,14 @@
       "types": [
         {
           "type": "column_ref",
+          "named": true
+        },
+        {
+          "type": "derived_item",
+          "named": true
+        },
+        {
+          "type": "qualified_column",
           "named": true
         }
       ]
@@ -1626,6 +1979,10 @@
           },
           {
             "type": "number",
+            "named": true
+          },
+          {
+            "type": "query_call",
             "named": true
           },
           {
@@ -2105,62 +2462,6 @@
     "named": false
   },
   {
-    "type": "Group",
-    "named": false
-  },
-  {
-    "type": "Indexes",
-    "named": false
-  },
-  {
-    "type": "Migration",
-    "named": false
-  },
-  {
-    "type": "Pipeline",
-    "named": false
-  },
-  {
-    "type": "Pred",
-    "named": false
-  },
-  {
-    "type": "Project",
-    "named": false
-  },
-  {
-    "type": "Records",
-    "named": false
-  },
-  {
-    "type": "Ref",
-    "named": false
-  },
-  {
-    "type": "Scope",
-    "named": false
-  },
-  {
-    "type": "Select",
-    "named": false
-  },
-  {
-    "type": "Table",
-    "named": false
-  },
-  {
-    "type": "TablePartial",
-    "named": false
-  },
-  {
-    "type": "Type",
-    "named": false
-  },
-  {
-    "type": "Validators",
-    "named": false
-  },
-  {
     "type": "[",
     "named": false
   },
@@ -2181,6 +2482,14 @@
     "named": false
   },
   {
+    "type": "aggregate_name",
+    "named": true
+  },
+  {
+    "type": "alias_name",
+    "named": true
+  },
+  {
     "type": "alter",
     "named": false
   },
@@ -2190,6 +2499,10 @@
   },
   {
     "type": "any",
+    "named": false
+  },
+  {
+    "type": "as",
     "named": false
   },
   {
@@ -2246,6 +2559,10 @@
     "named": false
   },
   {
+    "type": "group",
+    "named": false
+  },
+  {
     "type": "group_member",
     "named": true
   },
@@ -2278,11 +2595,31 @@
     "named": false
   },
   {
+    "type": "indexes",
+    "named": false
+  },
+  {
     "type": "is",
     "named": false
   },
   {
+    "type": "join",
+    "named": false
+  },
+  {
     "type": "like",
+    "named": false
+  },
+  {
+    "type": "load",
+    "named": false
+  },
+  {
+    "type": "load_name",
+    "named": true
+  },
+  {
+    "type": "migration",
     "named": false
   },
   {
@@ -2326,11 +2663,19 @@
     "named": true
   },
   {
+    "type": "pipeline",
+    "named": false
+  },
+  {
     "type": "pipeline_name",
     "named": true
   },
   {
     "type": "post",
+    "named": false
+  },
+  {
+    "type": "pred",
     "named": false
   },
   {
@@ -2342,8 +2687,24 @@
     "named": true
   },
   {
+    "type": "project",
+    "named": false
+  },
+  {
     "type": "rebuild",
     "named": false
+  },
+  {
+    "type": "records",
+    "named": false
+  },
+  {
+    "type": "ref",
+    "named": false
+  },
+  {
+    "type": "relation_name",
+    "named": true
   },
   {
     "type": "rename",
@@ -2351,6 +2712,14 @@
   },
   {
     "type": "resources",
+    "named": false
+  },
+  {
+    "type": "scope",
+    "named": false
+  },
+  {
+    "type": "select",
     "named": false
   },
   {
@@ -2370,11 +2739,19 @@
     "named": false
   },
   {
+    "type": "table_partial",
+    "named": false
+  },
+  {
     "type": "to",
     "named": false
   },
   {
     "type": "true",
+    "named": false
+  },
+  {
+    "type": "type",
     "named": false
   },
   {
@@ -2386,12 +2763,20 @@
     "named": false
   },
   {
+    "type": "validators",
+    "named": false
+  },
+  {
     "type": "where",
     "named": false
   },
   {
     "type": "wildcard_marker",
     "named": true
+  },
+  {
+    "type": "with",
+    "named": false
   },
   {
     "type": "{",

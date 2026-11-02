@@ -17,3 +17,31 @@ CREATE TABLE link_clicks (
   day INTEGER NOT NULL,
   target TEXT NOT NULL DEFAULT ''
 );
+
+CREATE TABLE hosts (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL
+);
+
+CREATE TABLE visits (
+  id INTEGER PRIMARY KEY,
+  host_id INTEGER NOT NULL,
+  owner_id INTEGER,
+  day INTEGER NOT NULL,
+  FOREIGN KEY (owner_id) REFERENCES hosts (id),
+  FOREIGN KEY (host_id) REFERENCES hosts (id)
+);
+
+CREATE TABLE merchants (
+  id INTEGER NOT NULL,
+  country_code TEXT NOT NULL,
+  name TEXT NOT NULL,
+  PRIMARY KEY (id, country_code)
+);
+
+CREATE TABLE merchant_periods (
+  id INTEGER PRIMARY KEY,
+  merchant_id INTEGER NOT NULL,
+  country_code TEXT NOT NULL,
+  FOREIGN KEY (merchant_id, country_code) REFERENCES merchants (id, country_code)
+);

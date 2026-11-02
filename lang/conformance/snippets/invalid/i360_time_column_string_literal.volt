@@ -2,9 +2,9 @@
 // want: column "at" (time.Time) takes no literal
 package app
 
-Table events {
+table events {
 	id int       [pk]
 	at time.Time
 }
 
-Select since for events where at > "2024-01-01"
+select since for events where at > "2024-01-01"

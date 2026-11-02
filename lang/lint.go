@@ -36,7 +36,7 @@ func vetWith(pr *Project, s *Session) []diag.Diagnostic {
 			memo = &memos[paths[i]].vet
 			fresh[i] = true
 		}
-		per[i] = vetPackage(pkg, memo)
+		per[i] = vetPackage(pr, pkg, memo)
 		if s != nil {
 			s.vetStore(paths[i], keys[paths[i]], per[i])
 		}
@@ -58,10 +58,19 @@ func vetWith(pr *Project, s *Session) []diag.Diagnostic {
 	return out
 }
 
-func vetPackage(pkg *Package, memo *vet.Memo) []diag.Diagnostic {
+func vetPackage(pr *Project, pkg *Package, memo *vet.Memo) []diag.Diagnostic {
 	var out []diag.Diagnostic
 	if pkg.HasSchema() {
 		out = vet.RunMemo(pkg.merged, pkg.schema, pkg.plan, memo, vet.All()...)
+	}
+	if pkg.HasRouting() {
+		var srcs []vet.GoSource
+		for _, s := range GoSourcesRead(pr.src, pkg.Dir) {
+			if !s.Head {
+				srcs = append(srcs, vet.GoSource{Name: s.Name, Text: s.Text})
+			}
+		}
+		out = append(out, vet.RunGo(pkg.Dir, srcs)...)
 	}
 	return append(out, vetUnusedPipelines(pkg)...)
 }
@@ -80,7 +89,7 @@ func vetUnusedPipelines(pkg *Package) []diag.Diagnostic {
 	for name, pl := range pkg.Pipelines {
 		if !used[name] {
 			out = append(out, diag.Warningf(pl.Pos(), "vet/pipeline",
-				"Pipeline %q is declared and never piped through by any scope", name))
+				"pipeline %q is declared and never piped through by any scope", name))
 		}
 	}
 	return out

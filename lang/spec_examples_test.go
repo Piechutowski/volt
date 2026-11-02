@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
@@ -76,7 +77,7 @@ func exampleDiagnostics(t *testing.T, text string) []diag.Diagnostic {
 	if err := os.WriteFile(filepath.Join(dir, "example.volt"), []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	pr, err := Load(root)
+	pr, err := Load(disk.Source{}, root)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,6 +1,6 @@
 // spec: §route-names-and-reverse-urls
 package app
 
-Scope / {
+scope / {
 	get / Home.Index [name: root]
 }

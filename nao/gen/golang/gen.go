@@ -2,8 +2,10 @@
 // as the Go data files: the models with their changesets and column
 // handles (spec §changesets), the static and dynamic query layers, the
 // selects, the validators and the migrations. The output is
-// gofmt-canonical by construction and imports only the standard library,
-// the rt runtime package and the packages of declared types.
+// gofmt-canonical by construction, carries no comment but the header and
+// the notes (spec §notes-become-doc-comments), and imports only the
+// standard library, the rt runtime package and the packages of declared
+// types.
 package golang
 
 import (
@@ -73,7 +75,7 @@ func fieldCount(tables []*naming.Table) int {
 }
 
 func (g *generator) run(tables []*naming.Table) {
-	g.body.Grow(fieldCount(tables)*700 + len(tables)*4000)
+	g.body.Grow(fieldCount(tables)*500 + len(tables)*2000)
 	g.typesEmit()
 	for _, t := range tables {
 		g.tableEmit(t)
@@ -113,7 +115,8 @@ func (g *generator) typesEmit() {
 
 // changesetEmit writes one table's changeset surface after its row
 // struct (spec §changesets): the column and params aliases, the column
-// handles, the changeset type and its methods.
+// handles, the desc, the changeset type with its typed methods, and the
+// functions the desc carries.
 func (g *generator) changesetEmit(t *naming.Table) {
 	if len(t.Fields) == 0 {
 		return
@@ -121,18 +124,11 @@ func (g *generator) changesetEmit(t *naming.Table) {
 	g.imports[rtImport] = true
 	b := &g.body
 	m, n := t.Model, &t.Names
-	tbl := t.Info.Decl.Name.Name()
 	settable := t.Settable()
 
-	fmt.Fprintf(b, "// %s is a column handle of %s, the element of a Cast allow list\n// (spec §changesets).\n", n.Column, m)
 	fmt.Fprintf(b, "type %s = rt.ColumnOf[%s]\n\n", n.Column, m)
-	fmt.Fprintf(b, "// %s is a %s write body as the wire carries it (spec §changesets).\n", n.Params, tbl)
 	fmt.Fprintf(b, "type %s = rt.Params[%s]\n\n", n.Params, m)
 
-	fmt.Fprintf(b, "// Typed column handles of %s (spec §changesets): the Cast allow list of\n", m)
-	fmt.Fprintf(b, "// a changeset, and the inert predicate, order and assignment builders\n")
-	fmt.Fprintf(b, "// of the dynamic query layer. A predicate built here can only enter %s\n", m)
-	fmt.Fprintf(b, "// queries; mixing models is a compile error.\n")
 	b.WriteString("var (\n")
 	var handles align.Block
 	for _, f := range t.Fields {
@@ -146,121 +142,97 @@ func (g *generator) changesetEmit(t *naming.Table) {
 	handles.WriteTo(b, "\t")
 	b.WriteString(")\n\n")
 
-	fmt.Fprintf(b, "// %s carries a %s row, the changes proposed to it and the\n", n.Changeset, tbl)
-	fmt.Fprintf(b, "// errors found so far (spec §changesets). It is a value: every method\n")
-	fmt.Fprintf(b, "// returns a new changeset and leaves its receiver as it was.\n")
-	fmt.Fprintf(b, "type %s struct {\n", n.Changeset)
-	var fields align.Block
-	fields.Row("data", m)
-	fields.Row("vals", m)
-	fields.Row("row", "bool")
-	fields.Row("set", fmt.Sprintf("[%d]bool", len(t.Fields)))
-	fields.Row("errs", "[]rt.FieldError")
-	fields.Row("valid", "[]rt.FieldError")
-	fields.WriteTo(b, "\t")
-	b.WriteString("}\n\n")
+	g.descEmit(t)
 
-	fmt.Fprintf(b, "// %s starts a changeset for a %s row to create, the schema's literal\n// defaults in place (spec §changesets).\n", n.New, tbl)
-	newBody := fmt.Sprintf("return %s{}", n.Changeset)
-	if seed := defaultsGo(t); seed != "" {
-		newBody = fmt.Sprintf("return %s{data: %s%s}", n.Changeset, m, seed)
-	}
-	funcLine(b, fmt.Sprintf("func %s() %s", n.New, n.Changeset), newBody)
-	fmt.Fprintf(b, "// Changeset starts a changeset for an update of r, nothing set (spec\n// §changesets).\n")
-	funcLine(b, fmt.Sprintf("func (r %s) Changeset() %s", m, n.Changeset), fmt.Sprintf("return %s{data: r, row: true}", n.Changeset))
-
-	fmt.Fprintf(b, "// From marks every data column of r but the auto-increment key (spec\n// §changesets).\n")
-	fmt.Fprintf(b, "func (c %s) From(r %s) %s {\n", n.Changeset, m, n.Changeset)
+	fmt.Fprintf(b, "type %s struct{ rt.Changeset[%s] }\n\n", n.Changeset, m)
+	funcLine(b, fmt.Sprintf("func %s() %s", n.New, n.Changeset), fmt.Sprintf("return %s{rt.NewChangeset(%s)}", n.Changeset, n.Desc))
+	funcLine(b, fmt.Sprintf("func (r %s) Changeset() %s", m, n.Changeset), fmt.Sprintf("return %s{rt.ChangesetOf(%s, r)}", n.Changeset, n.Desc))
+	funcLine(b, fmt.Sprintf("func (c %s) From(r %s) %s", n.Changeset, m, n.Changeset), fmt.Sprintf("return %s{c.Changeset.From(r)}", n.Changeset))
 	for _, f := range settable {
-		fmt.Fprintf(b, "\tc = c.%sSet(r.%s)\n", f.GoField, f.GoField)
+		funcLine(b, fmt.Sprintf("func (c %s) %sSet(v %s) %s", n.Changeset, f.GoField, f.GoType, n.Changeset),
+			fmt.Sprintf("return %s{rt.Set(c.Changeset, %d, func(voltR *%s) { voltR.%s = v })}", n.Changeset, t.Index(f), m, f.GoField))
 	}
-	b.WriteString("\treturn c\n}\n\n")
+	funcLine(b, fmt.Sprintf("func (c %s) Cast(p %s, allow ...%s) %s", n.Changeset, n.Params, n.Column, n.Changeset),
+		fmt.Sprintf("return %s{c.Changeset.Cast(p, allow...)}", n.Changeset))
+	funcLine(b, fmt.Sprintf("func (c %s) ErrorAdd(col %s, msg string) %s", n.Changeset, n.Column, n.Changeset),
+		fmt.Sprintf("return %s{c.Changeset.ErrorAdd(col, msg)}", n.Changeset))
 
-	for _, f := range settable {
-		switch {
-		case f.Nullable:
-			fmt.Fprintf(b, "// %sSet sets %s and marks it; an invalid rt.Null sets NULL (spec\n// §changesets).\n", f.GoField, f.ColName)
-		case f.PlainBytes():
-			fmt.Fprintf(b, "// %sSet sets %s and marks it; nil is empty bytes (spec §columns).\n", f.GoField, f.ColName)
-		default:
-			fmt.Fprintf(b, "// %sSet sets %s and marks it (spec §changesets).\n", f.GoField, f.ColName)
-		}
-		fmt.Fprintf(b, "func (c %s) %sSet(v %s) %s {\n", n.Changeset, f.GoField, f.GoType, n.Changeset)
-		fmt.Fprintf(b, "\tc.vals.%s, c.set[%d] = v, true\n\treturn c\n}\n\n", f.GoField, t.Index(f))
-	}
-
-	fmt.Fprintf(b, "// Cast sets every column of allow that p carries, recording a cast\n")
-	fmt.Fprintf(b, "// error for a value that does not convert and an unknown_field error\n")
-	fmt.Fprintf(b, "// for a key that names no column (spec §changesets).\n")
-	fmt.Fprintf(b, "func (c %s) Cast(p %s, allow ...%s) %s {\n", n.Changeset, n.Params, n.Column, n.Changeset)
-	wires := make([]string, len(t.Fields))
+	fmt.Fprintf(b, "func %s(r rt.Row) (%s, error) {\n\tvar voltV %s\n\tvoltErr := r.Scan(", n.Scan, m, m)
 	for i, f := range t.Fields {
-		wires[i] = strconv.Quote(f.Wire)
-	}
-	fmt.Fprintf(b, "\tc.errs = rt.FieldErrorsAppend(c.errs, rt.UnknownFields(p, %s)...)\n", strings.Join(wires, ", "))
-	if len(settable) > 0 {
-		b.WriteString("\tfor _, voltCol := range allow {\n\t\tswitch voltCol.ColumnName() {\n")
-		for _, f := range settable {
-			fmt.Fprintf(b, "\t\tcase %q:\n", f.ColName)
-			fmt.Fprintf(b, "\t\t\tif voltV, voltOK, voltErr := rt.Field(p, %q, %q, %t, func(voltR *%s) %s { return voltR.%s }); voltErr != nil {\n", f.Wire, f.Col.Type.String(), f.Nullable, m, f.GoType, f.GoField)
-			fmt.Fprintf(b, "\t\t\t\tc = c.errorAdd(\"cast\", voltErr.Error(), %q)\n", f.ColName)
-			fmt.Fprintf(b, "\t\t\t} else if voltOK {\n\t\t\t\tc = c.%sSet(voltV)\n\t\t\t}\n", f.GoField)
+		if i > 0 {
+			b.WriteString(", ")
 		}
-		b.WriteString("\t\t}\n\t}\n")
+		b.WriteString(scanTarget(f))
 	}
-	b.WriteString("\treturn c\n}\n\n")
+	fmt.Fprintf(b, ")\n\treturn voltV, rt.Refused(%q, voltErr)\n}\n\n", m)
 
-	fmt.Fprintf(b, "// Changed reports whether col is marked (spec §changesets).\n")
-	fmt.Fprintf(b, "func (c %s) Changed(col %s) bool {\n\tswitch col.ColumnName() {\n", n.Changeset, n.Column)
+	vals := make([]string, len(t.Fields))
 	for i, f := range t.Fields {
-		fmt.Fprintf(b, "\tcase %q:\n\t\treturn c.set[%d]\n", f.ColName, i)
+		vals[i] = f.BindOf("voltR." + f.GoField)
 	}
-	b.WriteString("\t}\n\treturn false\n}\n\n")
+	funcLine(b, fmt.Sprintf("func %s(voltR %s) []any", n.Values, m), "return []any{"+strings.Join(vals, ", ")+"}")
 
-	fmt.Fprintf(b, "// Row is the data with the marked values applied (spec §changesets).\n")
-	fmt.Fprintf(b, "func (c %s) Row() %s {\n", n.Changeset, m)
+	fmt.Fprintf(b, "func %s(voltData, voltVals %s, voltSet []bool) %s {\n", n.Apply, m, m)
 	if len(settable) == 0 {
-		b.WriteString("\treturn c.data\n}\n\n")
+		b.WriteString("\treturn voltData\n}\n\n")
 	} else {
-		b.WriteString("\tvoltR := c.data\n")
+		b.WriteString("\tvoltR := voltData\n")
 		for _, f := range settable {
-			fmt.Fprintf(b, "\tif c.set[%d] {\n\t\tvoltR.%s = c.vals.%s\n\t}\n", t.Index(f), f.GoField, f.GoField)
+			fmt.Fprintf(b, "\tif voltSet[%d] {\n\t\tvoltR.%s = voltVals.%s\n\t}\n", t.Index(f), f.GoField, f.GoField)
 		}
 		b.WriteString("\treturn voltR\n}\n\n")
 	}
 
-	fmt.Fprintf(b, "// Params is the marked columns of c as a write body, each under its\n// wire name (spec §changesets).\n")
-	fmt.Fprintf(b, "func (c %s) Params() %s {\n\tvar voltMarks []rt.Mark\n", n.Changeset, n.Params)
-	for _, f := range settable {
-		fmt.Fprintf(b, "\tif c.set[%d] {\n\t\tvoltMarks = append(voltMarks, rt.Mark{Wire: %q, Value: c.vals.%s})\n\t}\n", t.Index(f), f.Wire, f.GoField)
+	fmt.Fprintf(b, "func %s(c rt.Changeset[%s], p rt.Params[%s], i int) (rt.Changeset[%s], error) {\n", n.Cast, m, m, m)
+	if len(settable) > 0 {
+		b.WriteString("\tswitch i {\n")
+		for _, f := range settable {
+			fmt.Fprintf(b, "\tcase %d:\n", t.Index(f))
+			fmt.Fprintf(b, "\t\tvoltV, voltOK, voltErr := rt.Field(p, %q, %q, %t, func(voltR *%s) %s { return voltR.%s })\n", f.Wire, f.Col.Type.String(), f.Nullable, m, f.GoType, f.GoField)
+			b.WriteString("\t\tif voltErr != nil || !voltOK {\n\t\t\treturn c, voltErr\n\t\t}\n")
+			fmt.Fprintf(b, "\t\treturn %s{c}.%sSet(voltV).Changeset, nil\n", n.Changeset, f.GoField)
+		}
+		b.WriteString("\t}\n")
 	}
-	b.WriteString("\treturn rt.ParamsOf(c.Row(), voltMarks...)\n}\n\n")
+	b.WriteString("\treturn c, nil\n}\n\n")
+}
 
-	fmt.Fprintf(b, "// ErrorAdd records a field error with check custom on col (spec\n// §changesets).\n")
-	fmt.Fprintf(b, "func (c %s) ErrorAdd(col %s, msg string) %s {\n", n.Changeset, n.Column, n.Changeset)
-	b.WriteString("\treturn c.errorAdd(\"custom\", msg, col.ColumnName())\n}\n\n")
-	fmt.Fprintf(b, "func (c %s) errorAdd(check, msg string, cols ...string) %s {\n", n.Changeset, n.Changeset)
-	b.WriteString("\tc.errs = rt.FieldErrorsAppend(c.errs, rt.FieldError{Check: check, Columns: cols, Message: msg})\n\treturn c\n}\n\n")
-
-	fmt.Fprintf(b, "// Errors lists every field error recorded so far (spec §changesets): casts\n")
-	fmt.Fprintf(b, "// and custom errors first, then the last Validate's findings.\n")
-	fmt.Fprintf(b, "func (c %s) Errors() []rt.FieldError {\n", n.Changeset)
-	b.WriteString("\treturn rt.FieldErrorsAppend(rt.FieldErrorsAppend(nil, c.errs...), c.valid...)\n}\n\n")
-
-	fmt.Fprintf(b, "// Valid reports whether no field error was recorded (spec §changesets).\n")
-	funcLine(b, fmt.Sprintf("func (c %s) Valid() bool", n.Changeset), "return len(c.errs) == 0 && len(c.valid) == 0")
-
-	fmt.Fprintf(b, "// Err is nil when c is valid and otherwise the *rt.Invalid carrying its\n// field errors (spec §changesets).\n")
-	fmt.Fprintf(b, "func (c %s) Err() error {\n\tif c.Valid() {\n\t\treturn nil\n\t}\n", n.Changeset)
-	fmt.Fprintf(b, "\treturn &rt.Invalid{Model: %q, Fields: c.Errors()}\n}\n\n", m)
+func (g *generator) descEmit(t *naming.Table) {
+	b := &g.body
+	m, n := t.Model, &t.Names
+	fmt.Fprintf(b, "var %s = &rt.Desc[%s]{\n", n.Desc, m)
+	var head align.Block
+	head.Row("Model:", strconv.Quote(m)+",")
+	head.Row("Table:", "`"+t.TableSQL()+"`,")
+	head.Row("Columns:", "`"+t.ColumnList()+"`,")
+	head.WriteTo(b, "\t")
+	b.WriteString("\tFields: []rt.FieldDesc{\n")
+	for _, f := range t.Fields {
+		fmt.Fprintf(b, "\t\t{Column: %q, Wire: %q", f.ColName, f.Wire)
+		if t.IsPK(f) {
+			b.WriteString(", Key: true")
+		}
+		if !f.Increment {
+			b.WriteString(", Settable: true")
+		}
+		b.WriteString("},\n")
+	}
+	b.WriteString("\t},\n")
+	var tail align.Block
+	if seed := defaultsGo(t); seed != "" {
+		tail.Row("Defaults:", m+seed+",")
+	}
+	tail.Row("Scan:", n.Scan+",")
+	tail.Row("Values:", n.Values+",")
+	tail.Row("Apply:", n.Apply+",")
+	tail.Row("Cast:", n.Cast+",")
+	tail.WriteTo(b, "\t")
+	b.WriteString("}\n\n")
 }
 
 func (g *generator) header() {
 	fmt.Fprintf(&g.out, "// Code generated by volt gen from %s. DO NOT EDIT.\n\n", g.opts.Source)
-
-	fmt.Fprintf(&g.out, "// Package %s contains data models generated from %s.\n", g.opts.Package, g.opts.Source)
 	if note := g.projectNote(); note != "" {
-		g.out.WriteString("//\n")
 		commentWrite(&g.out, note)
 	}
 	fmt.Fprintf(&g.out, "package %s\n\n", g.opts.Package)
@@ -284,10 +256,7 @@ func (g *generator) projectNote() string {
 }
 
 func (g *generator) tableEmit(t *naming.Table) {
-	tbl := t.Info.Decl.Name.Name()
-	fmt.Fprintf(&g.body, "// %s is a row of the %s table.\n", t.Model, tbl)
 	if note := naming.SettingNote(t.Info.Decl.Settings); note != "" {
-		g.body.WriteString("//\n")
 		commentWrite(&g.body, note)
 	}
 	fmt.Fprintf(&g.body, "type %s struct {\n", t.Model)

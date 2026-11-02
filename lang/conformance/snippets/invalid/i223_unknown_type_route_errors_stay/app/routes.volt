@@ -6,7 +6,7 @@ import (
   db
 )
 
-Scope /api {
+scope /api {
   get /authors/:id(int) db.AuthorUpdate
   delete /authors/:id(int)/:extra(int) db.AuthorDelete
   get /authors/:id... db.AuthorGet
@@ -25,7 +25,7 @@ Scope /api {
   get /authors/:id(int) Home.Show
 }
 
-Scope /v2 {
+scope /v2 {
   resources db.authors [default, colour: red, only: (index, show, bogus)]
   get /authors/:key Home.Edit
   get /writers/:id(int) Home.Show [name: Author]

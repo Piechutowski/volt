@@ -1,10 +1,10 @@
 // spec: §table-resolution — model resolution within the package
 package app
 
-Table users {
+table users {
 	id int [pk, increment]
 }
 
-Scope / {
+scope / {
 	resources users
 }

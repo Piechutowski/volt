@@ -2,10 +2,6 @@
 
 package models
 
-// Validate runs required and the validators of invoices over the row,
-// every one every time, replacing the findings of an earlier Validate
-// (spec §changesets, §validators).
 func (c InvoiceChangeset) Validate() InvoiceChangeset {
-	c.valid = nil
-	return c
+	return InvoiceChangeset{c.WithFindings(nil)}
 }

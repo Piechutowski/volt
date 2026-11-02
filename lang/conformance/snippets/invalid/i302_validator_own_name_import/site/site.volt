@@ -6,15 +6,15 @@ import (
 	lib/site
 )
 
-Table posts {
+table posts {
   id    int    [pk, increment]
   title string
 
-  Validators {
+  validators {
     site.TitleShape(title)
   }
 }
 
-Scope /api {
+scope /api {
 	resources site.tags [default]
 }

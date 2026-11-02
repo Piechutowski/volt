@@ -2,11 +2,11 @@
 // want: write create, not CREATE
 package db
 
-Table users {
+table users {
   id int [pk, increment]
 }
 
-Migration 0001__init {
+migration 0001__init {
   CREATE TABLE users {
     id int [pk, increment]
   }

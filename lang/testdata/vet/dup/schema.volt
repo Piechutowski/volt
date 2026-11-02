@@ -1,13 +1,13 @@
 package dup
 
-Table t {
+table t {
   id int [pk]
   total int
   Total int
 }
-Table t {
+table t {
   id int [pk]
 }
-Table T {
+table T {
   id int [pk]
 }

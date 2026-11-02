@@ -13,6 +13,7 @@ import (
 
 	"github.com/Piechutowski/volt/gen/model"
 	"github.com/Piechutowski/volt/internal/corpus"
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
 )
@@ -21,7 +22,7 @@ var update = flag.Bool("update", false, "rewrite golden files")
 
 func fixture(t *testing.T) *lang.Project {
 	t.Helper()
-	pr, err := lang.Load(filepath.Join("testdata", "blog"))
+	pr, err := lang.Load(disk.Source{}, filepath.Join("testdata", "blog"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,11 +108,11 @@ func TestNoNamedRoutesCompiles(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(src, "app"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	routes := "package app\n\nTable users {\n\tid int [pk]\n}\n\nScope / {\n\tresources users [only: (create)]\n}\n"
+	routes := "package app\n\ntable users {\n\tid int [pk]\n}\n\nscope / {\n\tresources users [only: (create)]\n}\n"
 	if err := os.WriteFile(filepath.Join(src, "app", "r.volt"), []byte(routes), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	pr, err := lang.Load(src)
+	pr, err := lang.Load(disk.Source{}, src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,8 +127,8 @@ func TestNoNamedRoutesCompiles(t *testing.T) {
 	if strings.Contains(paths, `"github.com/Piechutowski/volt"`) {
 		t.Errorf("volt_paths.go imports volt with no helper to use it:\n%s", paths)
 	}
-	if !strings.Contains(paths, "No named routes") {
-		t.Errorf("volt_paths.go missing the no-helpers note:\n%s", paths)
+	if strings.Contains(paths, "func ") {
+		t.Errorf("volt_paths.go declares a helper with no named route:\n%s", paths)
 	}
 
 	dir := t.TempDir()
@@ -163,7 +164,7 @@ import (
 
 type stub struct{}
 
-func (stub) Create(w http.ResponseWriter, r *volt.Request) error { return nil }
+func (stub) Create(r volt.Request) volt.Response { return volt.NoContent() }
 
 var _ http.Handler = NewRouter(Controllers{Users: stub{}})
 `
@@ -197,8 +198,8 @@ func TestGoldenCompiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range dbFiles {
-		if err := os.WriteFile(filepath.Join(dbDir, f.Name), f.Code, 0o644); err != nil {
+	for voltName, voltCode := range dbFiles {
+		if err := os.WriteFile(filepath.Join(dbDir, voltName), voltCode, 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -233,29 +234,51 @@ func TestGoldenCompiles(t *testing.T) {
 import (
 	"net/http"
 
+	"blog/db"
 	"github.com/Piechutowski/volt"
 )
 
 func BearerAuth(next http.Handler) http.Handler { return next }
 
-func Errors(w http.ResponseWriter, r *volt.Request, err error) {
-	volt.DefaultErrorHandler(w, r, err)
+func Errors(r volt.Request, err error) volt.Response {
+	return volt.DefaultErrorHandler(r, err)
 }
 
 type stub struct{}
 
-func (stub) Index(w http.ResponseWriter, r *volt.Request) error              { return nil }
-func (stub) About(w http.ResponseWriter, r *volt.Request) error              { return nil }
-func (stub) Ping(w http.ResponseWriter, r *volt.Request) error               { return nil }
-func (stub) Stats(w http.ResponseWriter, r *volt.Request) error              { return nil }
-func (stub) Serve(w http.ResponseWriter, r *volt.Request, path string) error { return nil }
-func (stub) Show(w http.ResponseWriter, r *volt.Request, id int) error     { return nil }
-func (stub) Create(w http.ResponseWriter, r *volt.Request) error             { return nil }
-func (stub) Avatar(w http.ResponseWriter, r *volt.Request, id int) error   { return nil }
+func (stub) Index(r volt.Request) volt.Response { return volt.NoContent() }
+func (stub) About(r volt.Request) volt.Response { return volt.NoContent() }
+func (stub) Ping(r volt.Request) volt.Response { return volt.NoContent() }
+func (stub) Stats(r volt.Request, totals db.Totals, feed []db.UserWithPosts) volt.Response {
+	return volt.NoContent()
+}
+func (stub) Serve(r volt.Request, path string) volt.Response { return volt.NoContent() }
+func (stub) Show(r volt.Request, id int) volt.Response { return volt.NoContent() }
+func (stub) Create(r volt.Request) volt.Response { return volt.NoContent() }
+func (stub) Avatar(r volt.Request, id int) volt.Response { return volt.NoContent() }
+func (stub) Profile(r volt.Request, id int, user db.User, picked, since []db.User) volt.Response {
+	return volt.NoContent()
+}
+func (stub) ChangeEmail(r volt.Request, id int, body db.UserChangeset) volt.Response {
+	return volt.NoContent()
+}
+func (stub) Signup(r volt.Request, body db.UserChangeset) volt.Response { return volt.NoContent() }
+func (stub) Login(r volt.Request, body LoginForm) volt.Response        { return volt.NoContent() }
+
+type me struct{}
+
+func (me) Show(r volt.Request, user db.User) volt.Response { return volt.NoContent() }
+
+func CurrentUser(r volt.Request) volt.Load[db.User] { return volt.LoadWith(db.UserGet(1)) }
+
+type LoginForm struct {
+	Email    string
+	Password string
+}
 
 // wire proves New accepts stub implementations of every interface.
 var _ http.Handler = NewRouter(Controllers{
-	Admin: stub{}, Files: stub{}, Home: stub{}, Users: stub{},
+	Admin: stub{}, Files: stub{}, Home: stub{}, Me: me{}, Session: stub{}, Users: stub{},
 })
 `
 	if err := os.WriteFile(filepath.Join(pkgDir, "user.go"), []byte(user), 0o644); err != nil {
@@ -270,7 +293,7 @@ var _ http.Handler = NewRouter(Controllers{
 
 func TestSinglePackageCompiles(t *testing.T) {
 	root := filepath.Join("..", "..", "lang", "conformance", "snippets", "valid", "v65_single_package")
-	pr, err := lang.Load(root)
+	pr, err := lang.Load(disk.Source{}, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -304,8 +327,8 @@ func TestSinglePackageCompiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range models {
-		write(f.Name, f.Code)
+	for voltName, voltCode := range models {
+		write(voltName, voltCode)
 	}
 	files, err := Generate(pkg, Options{Source: "package site"})
 	if err != nil {
@@ -328,9 +351,9 @@ import (
 
 type stub struct{}
 
-func (stub) Purge(w http.ResponseWriter, r *volt.Request, id int) error { return nil }
+func (stub) Purge(r volt.Request, id int) volt.Response { return volt.NoContent() }
 
-var _ http.Handler = NewRouter(Controllers{Tags: stub{}, Queries: &Queries{}})
+var _ http.Handler = NewRouter(Controllers{Tags: stub{}})
 `))
 	cmd := exec.Command("go", "build", "./...")
 	cmd.Dir = dir
@@ -352,12 +375,12 @@ func TestMainPackageCompiles(t *testing.T) {
 		"go.mod": gomod,
 		"schema.volt": `package main
 
-Table posts {
+table posts {
   id    int [pk, increment]
   title string
 }
 
-Scope /api {
+scope /api {
 	resources posts [default]
 	get /first PostGet [name: first]
 }
@@ -366,7 +389,7 @@ Scope /api {
 
 import "net/http"
 
-func main() { http.ListenAndServe(":0", NewRouter(Controllers{Queries: New(nil)})) }
+func main() { http.ListenAndServe(":0", NewRouter(Controllers{})) }
 `,
 	}
 	for name, src := range files {
@@ -374,7 +397,7 @@ func main() { http.ListenAndServe(":0", NewRouter(Controllers{Queries: New(nil)}
 			t.Fatal(err)
 		}
 	}
-	pr, err := lang.Load(dir)
+	pr, err := lang.Load(disk.Source{}, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -386,8 +409,8 @@ func main() { http.ListenAndServe(":0", NewRouter(Controllers{Queries: New(nil)}
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range models {
-		if err := os.WriteFile(filepath.Join(dir, f.Name), f.Code, 0o644); err != nil {
+	for voltName, voltCode := range models {
+		if err := os.WriteFile(filepath.Join(dir, voltName), voltCode, 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -451,7 +474,7 @@ func TestCorpusCompiles(t *testing.T) {
 		if err := corpus.Write(dir, spec); err != nil {
 			t.Fatal(err)
 		}
-		pr, err := lang.Load(dir)
+		pr, err := lang.Load(disk.Source{}, dir)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -474,8 +497,8 @@ func TestCorpusCompiles(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				for _, f := range files {
-					write(f.Name, f.Code)
+				for voltName, voltCode := range files {
+					write(voltName, voltCode)
 				}
 			}
 			if pkg.HasRouting() {
@@ -544,7 +567,7 @@ func snippetCompiles(t *testing.T, name string) {
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	pr, err := lang.Load(dir)
+	pr, err := lang.Load(disk.Source{}, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -567,8 +590,8 @@ func snippetCompiles(t *testing.T, name string) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, f := range files {
-				write(f.Name, f.Code)
+			for voltName, voltCode := range files {
+				write(voltName, voltCode)
 			}
 		}
 		if pkg.HasRouting() {

@@ -1,10 +1,10 @@
 // spec: §the-action-table, the seven actions, one route each; update is PATCH alone
 package app
 
-Table users {
+table users {
 	id int [pk]
 }
 
-Scope / {
+scope / {
 	resources users
 }

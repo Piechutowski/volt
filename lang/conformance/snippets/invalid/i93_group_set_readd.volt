@@ -2,17 +2,17 @@
 // want: already a member
 package db
 
-Table ms_revenue {
+table ms_revenue {
   id int [pk]
 }
 
-Table ms_usage {
+table ms_usage {
   id int [pk]
 }
 
-Group Metrics {
+group Metrics {
   ms_revenue
   ms_usage
 }
 
-Group wide = Metrics + (ms_revenue)
+group wide = Metrics + (ms_revenue)

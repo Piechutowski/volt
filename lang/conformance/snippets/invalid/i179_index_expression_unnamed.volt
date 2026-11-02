@@ -1,10 +1,10 @@
 // spec: §indexes, an index with an expression in its key carries name:
 // want: must carry name:
-Table users {
+table users {
   id    int [pk]
   email string
 
-  Indexes {
+  indexes {
     (`lower(email)`) [unique]
   }
 }

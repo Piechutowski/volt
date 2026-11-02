@@ -1,6 +1,6 @@
 // spec: §route-paths
 package app
 
-Scope / {
+scope / {
 	get /f/:p(int)... F.S
 }

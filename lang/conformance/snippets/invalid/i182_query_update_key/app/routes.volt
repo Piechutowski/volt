@@ -6,6 +6,6 @@ import (
 	db
 )
 
-Scope /api {
+scope /api {
 	patch /users db.UserUpdate
 }

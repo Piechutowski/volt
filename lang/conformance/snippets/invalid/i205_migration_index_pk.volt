@@ -2,16 +2,16 @@
 // want: pk is a column setting, not an index setting
 package db
 
-Table users {
+table users {
   id int [pk]
 }
 
-Migration 0001__init {
+migration 0001__init {
   create table users {
     id   int [null]
     name string
 
-    Indexes {
+    indexes {
       (id, name) [pk]
       name [pk]
     }

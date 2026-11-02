@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/Piechutowski/volt/gen/model"
+	"github.com/Piechutowski/volt/internal/disk"
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/diag"
@@ -19,7 +20,10 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-const rtPath = module + "/nao/rt"
+const (
+	rtPath  = module + "/nao/rt"
+	runPath = module + "/nao/run"
+)
 
 var networkPackages = []string{module + "/gen/router", module + "/gen/model", module + "/lsp", module + "/cmd"}
 
@@ -263,17 +267,17 @@ func TestLayersDataOnlyProgram(t *testing.T) {
 	dir := t.TempDir()
 	files := map[string]string{
 		"go.mod": "module dataonly\n\ngo 1.27\n\nrequire github.com/Piechutowski/volt v0.0.0\n\nreplace github.com/Piechutowski/volt => " + root + "\n",
-		"db/schema.volt": "package db\n\nTable authors {\n  id    int    [pk, increment]\n  email string [unique]\n  name  string [required]\n}\n\n" +
-			"Table posts {\n  id        int    [pk, increment]\n  author_id int    [ref: authors.id]\n  title     string\n  views     int    [default: 0]\n}\n\n" +
-			"Select popular for posts where views >= :least [order: (views desc)]\n",
-		"db/pipe.volt": "package db\n\nPipeline api {\n  use volt.RequestID\n}\n",
-		"db/0001__init.volt": "package db\n\nMigration 0001__init {\n  create table authors {\n    id    int    [pk, increment]\n    email string [unique]\n    name  string\n  }\n" +
+		"db/schema.volt": "package db\n\ntable authors {\n  id    int    [pk, increment]\n  email string [unique]\n  name  string [required]\n}\n\n" +
+			"table posts {\n  id        int    [pk, increment]\n  author_id int    [ref: authors.id]\n  title     string\n  views     int    [default: 0]\n}\n\n" +
+			"select popular for posts where views >= :least [order: (views desc)]\n",
+		"db/pipe.volt": "package db\n\npipeline api {\n  use volt.RequestID\n}\n",
+		"db/0001__init.volt": "package db\n\nmigration 0001__init {\n  create table authors {\n    id    int    [pk, increment]\n    email string [unique]\n    name  string\n  }\n" +
 			"  create table posts {\n    id        int    [pk, increment]\n    author_id int    [ref: authors.id]\n    title     string\n    views     int    [default: 0]\n  }\n}\n",
-		"cmd/app/main.go": "package main\n\nimport (\n\t\"context\"\n\t\"database/sql\"\n\t\"fmt\"\n\n\t\"dataonly/db\"\n)\n\n" +
-			"func main() {\n\tctx := context.Background()\n\tconn, err := sql.Open(\"sqlite3\", \":memory:\")\n\tif err != nil {\n\t\tpanic(err)\n\t}\n" +
-			"\tif err := db.Migrate(ctx, conn); err != nil {\n\t\tfmt.Println(err)\n\t}\n\tq := db.New(conn)\n" +
-			"\ta, err := q.AuthorCreate(ctx, db.AuthorNew().EmailSet(\"ann@example.com\").NameSet(\"Ann\"))\n\tfmt.Println(a, err)\n" +
-			"\tposts, err := q.PostPopular(ctx, 10)\n\tfmt.Println(len(posts), err)\n}\n",
+		"cmd/app/main.go": "package main\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\n\t\"dataonly/db\"\n\t\"github.com/Piechutowski/volt/nao/run\"\n)\n\n" +
+			"func main() {\n\tctx := context.Background()\n\tconn, err := run.Open(\"sqlite3\", \":memory:\")\n\tif err != nil {\n\t\tpanic(err)\n\t}\n" +
+			"\tif _, err := run.MigrateUp(ctx, conn, db.Migrations); err != nil {\n\t\tfmt.Println(err)\n\t}\n" +
+			"\ta, err := run.Run(ctx, conn, db.AuthorCreate(db.AuthorNew().EmailSet(\"ann@example.com\").NameSet(\"Ann\")))\n\tfmt.Println(a, err)\n" +
+			"\tposts, err := run.Run(ctx, conn, db.PostPopular(10))\n\tfmt.Println(len(posts), err)\n}\n",
 	}
 	for name, src := range files {
 		path := filepath.Join(dir, name)
@@ -284,7 +288,7 @@ func TestLayersDataOnlyProgram(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	pr, err := lang.Load(dir)
+	pr, err := lang.Load(disk.Source{}, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,8 +306,8 @@ func TestLayersDataOnlyProgram(t *testing.T) {
 	if len(gen) < 6 {
 		t.Fatalf("only %d data files generated", len(gen))
 	}
-	for _, f := range gen {
-		if err := os.WriteFile(filepath.Join(pkg.Dir, f.Name), f.Code, 0o644); err != nil {
+	for voltName, voltCode := range gen {
+		if err := os.WriteFile(filepath.Join(pkg.Dir, voltName), voltCode, 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -332,8 +336,41 @@ func dataOnly(t *testing.T, pkg *packages.Package, data string) {
 		t.Fatalf("%s does not reach nao/rt; the walk sees too little", pkg.PkgPath)
 	}
 	for path, chain := range via {
-		if path == module || (strings.HasPrefix(path, module+"/") && path != rtPath && !strings.HasPrefix(path, data)) || path == "net/http" {
+		if path == module || (strings.HasPrefix(path, module+"/") && path != rtPath && path != runPath && !strings.HasPrefix(path, data)) || path == "net/http" {
 			t.Errorf("%s links %s: %s", pkg.PkgPath, path, strings.Join(chain, " -> "))
 		}
+	}
+}
+
+var worldPackages = []string{"os", "io/fs", "database/sql", "net"}
+
+// TestLayersPurePhasesTouchNoWorld proves the front end and the
+// generators are functions from values to values (spec
+// §values-and-effects): no package under lang/, gen/ or nao/gen imports
+// os, io/fs, database/sql or net. The loader reads through a
+// source.Source the tool hands it, and volt gen writes the maps the
+// generators return.
+func TestLayersPurePhasesTouchNoWorld(t *testing.T) {
+	checked := 0
+	packages.Visit(gatePackages(t), nil, func(pkg *packages.Package) {
+		p := pkg.PkgPath
+		pure := false
+		for _, prefix := range []string{module + "/lang", module + "/gen", module + "/nao/gen"} {
+			if p == prefix || strings.HasPrefix(p, prefix+"/") {
+				pure = true
+			}
+		}
+		if !pure {
+			return
+		}
+		checked++
+		for _, world := range worldPackages {
+			if _, imported := pkg.Imports[world]; imported {
+				t.Errorf("%s imports %s", p, world)
+			}
+		}
+	})
+	if checked < 12 {
+		t.Fatalf("only %d pure packages loaded", checked)
 	}
 }

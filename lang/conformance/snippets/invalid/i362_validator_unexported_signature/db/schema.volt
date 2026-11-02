@@ -2,11 +2,11 @@
 // want: so declare func EmailShape(string) error
 package db
 
-Table users {
+table users {
   id    int    [pk]
   email string
 
-  Validators {
+  validators {
     emailShape(email)
   }
 }

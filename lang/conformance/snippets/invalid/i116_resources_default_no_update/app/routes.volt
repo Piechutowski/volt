@@ -6,6 +6,6 @@ import (
 	db
 )
 
-Scope /api {
+scope /api {
 	resources db.marks [default]
 }
