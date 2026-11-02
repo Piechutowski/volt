@@ -86,7 +86,6 @@ func TestAnalyzers(t *testing.T) {
 
 func TestCleanFile(t *testing.T) {
 	src := `
-project shop { database_type: "SQLite" }
 type Status string
 table users {
   id int [pk]

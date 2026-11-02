@@ -45,14 +45,6 @@ func (d *Document) DocumentSymbols() []protocol.DocumentSymbol {
 	var out []protocol.DocumentSymbol
 	for _, decl := range d.File.Decls {
 		switch n := decl.(type) {
-		case *ast.Project:
-			name := "project"
-			var sel ast.Node = n
-			if n.Name != nil {
-				name = n.Name.Name()
-				sel = n.Name
-			}
-			out = append(out, d.symbol(name, "project", protocol.SymbolKindNamespace, n, sel, nil))
 		case *ast.Table:
 			out = append(out, d.symbol(n.Name.Name(), "table", protocol.SymbolKindStruct, n, n.Name, d.tableChildren(n.Body)))
 		case *ast.TablePartial:

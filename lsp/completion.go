@@ -12,7 +12,7 @@ import (
 
 var (
 	elementKeywords = []string{
-		"project", "table", "table_partial", "type", "ref",
+		"table", "table_partial", "type", "ref",
 		"records", "migration",
 		"package ", "import", "pipeline", "scope",
 		"group", "pred", "select",
@@ -30,7 +30,6 @@ var (
 
 	settingsByContext = map[string][]string{
 		"column":    {"pk", "null", "unique", "index", "autoincrement", "required", "default: ", "note: ", "ref: ", "tag: "},
-		"project":   {"note: "},
 		"table":     {"note: ", "model: "},
 		"select":    {"order: ("},
 		"index":     {"name: ", "unique", "where: "},
@@ -191,8 +190,6 @@ func headContext(head string) string {
 		return "group"
 	case strings.HasPrefix(head, "table"):
 		return "table"
-	case strings.HasPrefix(head, "project"):
-		return "project"
 	case strings.HasPrefix(head, "records"):
 		return "records"
 	case strings.HasPrefix(head, "ref"):
@@ -244,8 +241,6 @@ func (d *Document) settingsComplete(prefix, ctx, outer string, top bool) []proto
 		return nil
 	case header("table"):
 		kind = "table"
-	case header("project"):
-		kind = "project"
 	case header("ref"):
 		kind = "ref"
 	case header("select"):

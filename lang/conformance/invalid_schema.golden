@@ -352,9 +352,6 @@ i32_settings_next_line.volt:4:3: error: syntax: expected a column, indexes, vali
 ## i33_ref_without_body.volt
 i33_ref_without_body.volt:5:1: error: syntax: expected identifier in relationship endpoint (§relationships-ref), found end of file
 
-## i344_project_settings_next_line.volt
-i344_project_settings_next_line.volt:4:3: error: syntax: a settings list stays on the line of the project it modifies, found '[' on the next line (§settings-lists)
-
 ## i345_table_settings_next_line.volt
 i345_table_settings_next_line.volt:4:3: error: syntax: a settings list stays on the line of the table it modifies, found '[' on the next line (§settings-lists)
 i345_table_settings_next_line.volt:9:1: error: syntax: a settings list stays on the line of the table it modifies, found '[' on the next line (§settings-lists)
@@ -368,9 +365,6 @@ i348_setting_name_digit.volt:5:14: error: spec/columns: unknown setting "2fa" (�
 
 ## i349_table_empty_partial.volt
 i349_table_empty_partial.volt:6:1: error: spec/table: table "t" must contain at least one column, directly or from an injected table_partial (§table)
-
-## i34_project_bad_value.volt
-i34_project_bad_value.volt:3:18: error: syntax: expected string in project property value (§project), found number "42"
 
 ## i350_ref_duplicate_permuted.volt
 i350_ref_duplicate_permuted.volt:15:1: error: spec/relationships-ref: duplicate relationship: the same endpoints are already related
@@ -418,6 +412,9 @@ i448_increment_unknown_setting.volt:4:18: error: spec/columns: unknown setting "
 ## i449_required_rowid_alias.volt
 i449_required_rowid_alias.volt:4:18: error: spec/columns: required on "id", the rowid alias of table "posts": the database assigns it whenever an insert leaves it unmarked, so its zero value is no missing value (§columns, §changesets)
 i449_required_rowid_alias.volt:9:32: error: spec/columns: required on "id", the rowid alias of table "events": the database assigns it whenever an insert leaves it unmarked, so its zero value is no missing value (§columns, §changesets)
+
+## i452_project_not_an_element.volt
+i452_project_not_an_element.volt:3:1: error: syntax: unknown element type "project" (§program-structure)
 
 ## i61_tag_malformed.volt
 i61_tag_malformed.volt:4:21: error: spec/columns: tag "json=name" is not one key:"value" pair: write e.g. "json:\"name\"" (§columns)

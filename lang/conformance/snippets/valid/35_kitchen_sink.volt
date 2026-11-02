@@ -1,8 +1,4 @@
 // spec: §program-structure — representative complete schema
-project blog [note: "Blogging platform"] {
-  database_type: "SQLite"
-}
-
 type PostState string
 
 table_partial timestamps {

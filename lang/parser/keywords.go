@@ -11,7 +11,7 @@ import (
 // one spelling (spec §keywords).
 var ElementWords = []string{
 	"package", "import",
-	"project", "table", "table_partial", "type", "ref", "records",
+	"table", "table_partial", "type", "ref", "records",
 	"pipeline", "scope", "group", "pred", "select", "migration",
 }
 

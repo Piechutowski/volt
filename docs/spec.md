@@ -129,7 +129,6 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Settings Lists](#settings-lists)
   - [Program Structure](#program-structure)
   - [Element Definitions](#element-definitions)
-    - [Project](#project)
     - [Table](#table)
     - [Columns](#columns)
     - [Default Values](#default-values)
@@ -339,7 +338,7 @@ sp      = ? U+0020 SPACE ? | ? U+0009 TAB ? ;
    positions counts its byte in offsets and gives it no column, so every
    position points into the file as written.
 2. Volt is **newline-sensitive**: a line break terminates statements such as
-   column definitions, record rows and project properties. Productions
+   column definitions and record rows. Productions
    in this specification reference `newline` explicitly wherever it is
    syntactically significant, except before a settings list
    (§settings-lists). A production that ends with
@@ -467,7 +466,7 @@ then reads it as that keyword, so the error is reported once.
 
 | Class | Keywords | Section |
 |---|---|---|
-| element and block words | `project`, `table`, `table_partial`, `type`, `ref`, `records`, `group`, `pred`, `select`, `migration`, `pipeline`, `scope`, `indexes`, `validators` | §program-structure, §indexes, §validators |
+| element and block words | `table`, `table_partial`, `type`, `ref`, `records`, `group`, `pred`, `select`, `migration`, `pipeline`, `scope`, `indexes`, `validators` | §program-structure, §indexes, §validators |
 | package words | `package`, `import` | §projects-and-packages, §imports |
 | setting names | `pk`, `null`, `unique`, `index`, `autoincrement`, `default`, `note`, `ref`, `tag`, `required`, `model`, `name`, `where`, `delete`, `update`, `from`, `down`, `irreversible`, `no_transaction`, `pipe`, `error_handler`, `api`, `only`, `except`, `param`, `singular`, `strip`, `order`, `group`, `as`, `reverse`, `timeout`, `body` | §settings-lists, §settings-whitelists |
 | referential actions | `cascade`, `restrict`, `set_null`, `set_default` | §relationships-ref |
@@ -643,7 +642,7 @@ comment, `;`, `#` and `'` among them, is a lexical error. Their roles:
 | `{ }`   | element bodies and the blocks inside them                   |
 | `[ ]`   | settings lists, and the `[]` of the type `[]byte`           |
 | `( )`   | composite column lists (index keys, `table.(a, b)` endpoints), records column lists, group sets (§groups), select projections and their exclusion sets (§selects-over-groups), import blocks (§imports), a path parameter's type (§route-paths), validator arguments (§validators), the lists of `only:`, `except:` and `order:` (§settings-whitelists), predicate grouping and `in` lists (§predicates) |
-| `:`     | a setting value, a project property, the body of `ref:`, a route parameter (§route-paths), a query parameter (§predicates) |
+| `:`     | a setting value, the body of `ref:`, a route parameter (§route-paths), a query parameter (§predicates) |
 | `,`     | separator inside `[ ]`, `( )` and record rows               |
 | `.`     | qualification: `table.column`, `pkg.Name` (§types), `pkg.name` (§imports), `Controller.Action` (§handler-references); three contiguous `.` end a wildcard, `:name...` (§route-paths) |
 | `~`     | `table_partial` injection prefix                               |
@@ -717,8 +716,7 @@ setting value = string | number | boolean | null
 ```ebnf
 program = { element } ;
 
-element = project
-        | table
+element = table
         | table partial
         | type decl
         | ref element
@@ -742,30 +740,6 @@ element = project
 ---
 
 ## Element Definitions
-
-### Project
-
-Declares project-level metadata. There MUST be at most one `project` element
-per package (§projects-and-packages).
-
-```ebnf
-project          = "project", [ name ], [ project settings ],
-                   "{", project body, "}" ;
-project settings = "[", "note", ":", string, "]" ;
-project body     = { project property } ;
-project property = identifier, ":", string, newline ;
-```
-
-1. `name` names the project; it MAY be omitted.
-2. Each property is a free-form key with a string value, one per line.
-   Any key is accepted and none is read: of a `project`, only the
-   `note:` setting reaches the generated files.
-3. The `note:` setting (§notes) documents the project.
-
-```volt
-project ecommerce [note: "E-commerce database schema"] {
-}
-```
 
 ### Table
 
@@ -1539,11 +1513,12 @@ records posts(id, user_id, posted_at) {
 A note is human-readable documentation. It has one spelling, the
 `note:` setting, and one meaning: generated code carries it.
 
-1. `note: string` is a setting of a `project` (§project), a `table`
-   (§table) and a column (§columns), and of nothing else: a partial,
-   a type, an index, a relationship, a group and a migration carry no
-   note. A constant of a declared type documents itself in the Go
-   file that declares it (§types).
+1. `note: string` is a setting of a `table` (§table) and a column
+   (§columns), and of nothing else: a package, a partial, a type, an
+   index, a relationship, a group and a migration carry no note. A
+   constant of a declared type documents itself in the Go file that
+   declares it (§types), and a package in a hand-written Go file of
+   its own (§notes-become-doc-comments).
 2. The value is a string. A multi-line string
    (§multi-line-string-literals) is permitted and conventionally
    contains Markdown; a settings list spans lines inside its brackets
@@ -1623,16 +1598,8 @@ above.
 
 program              = { element } ;
 
-element              = project | table | table partial
+element              = table | table partial
                      | type decl | ref element | records element ;
-
-(* ===== Project ===== *)
-
-project              = "project", [ name ], [ project settings ],
-                       "{", project body, "}" ;
-project settings     = "[", "note", ":", string, "]" ;
-project body         = { project property } ;
-project property     = identifier, ":", string, newline ;
 
 (* ===== Table, Columns, Default Values, Indexes ===== *)
 
@@ -4536,15 +4503,16 @@ Every note is the `note:` setting (§notes):
 
 | Note on | Generated position |
 |---|---|
-| `project` | package comment |
 | `table` | struct doc comment |
 | column | field doc comment |
 | injected partial column | travels with the column; a §tablepartial override brings its own note |
 
 These are the only comments a generated file carries besides the
 header: a note is the maintainer's text, and the generators write no
-comment of their own, so the package comment is the project note
-alone and a file without notes has no comment but the header.
+comment of their own, so a generated file has no package comment and
+a file without notes has no comment but the header. A package doc
+comment, if wanted, is written in a hand-written Go file of the
+package, as any Go package documents itself.
 Generated files start with the machine-readable
 `// Code generated … DO NOT EDIT.` marker; `volt gen` refuses to
 overwrite a file lacking it. Generated data-layer code imports the
@@ -4727,8 +4695,8 @@ goldens that are executed on a real SQLite (`PRAGMA foreign_keys = ON`,
 
 Identifiers are quoted only when needed (not a plain lower-case name,
 or a SQLite keyword): `order` → `"order"`, `Users` → `"Users"`,
-`żółw` → `"żółw"`. `project` note → file header comment; table
-and column notes → comments above their DDL. Output opens with
+`żółw` → `"żółw"`. Table and column notes → comments above their
+DDL. Output opens with
 `PRAGMA foreign_keys = ON;` and the `-- Code generated … DO NOT EDIT.`
 marker, with the same overwrite protection as §mapping-to-go.
 

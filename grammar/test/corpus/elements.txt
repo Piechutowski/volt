@@ -1,48 +1,23 @@
 ==================
-project with a note and properties
+project is an ordinary name: a table and a column named project
 ==================
 
-project shop [note: "project note"] {
-  database_type: "SQLite"
-  anything_else: "accepted"
+table project {
+  project string
 }
 
 ---
 
 (source_file
-  (project_definition
-    (identifier)
-    (settings_list
-      (setting
-        (setting_name
-          (identifier))
-        (string
-          (string_content))))
-    (project_property
-      (identifier)
-      (string
-        (string_content)))
-    (project_property
-      (identifier)
-      (string
-        (string_content)))))
-
-==================
-anonymous project
-==================
-
-project {
-  database_type: "SQLite"
-}
-
----
-
-(source_file
-  (project_definition
-    (project_property
-      (identifier)
-      (string
-        (string_content)))))
+  (table_definition
+    (table_name
+      (identifier))
+    (column_definition
+      (column_name
+        (identifier))
+      (column_type
+        (type_name
+          (identifier))))))
 
 ==================
 type declarations: imported Go type with storage and path, bare type of the package

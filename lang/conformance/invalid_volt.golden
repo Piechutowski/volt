@@ -575,9 +575,6 @@ app/i343_import_recovery_stops_at_paren.volt:6:6: error: syntax: expected end of
 ## i346_scope_settings_next_line.volt
 app/i346_scope_settings_next_line.volt:10:2: error: syntax: a settings list stays on the line of the scope it modifies, found '[' on the next line (§settings-lists)
 
-## i351_project_twice_in_package
-db/b.volt:3:1: error: spec/project: at most one project element per package (§project)
-
 ## i352_type_takes_client_name
 app/schema.volt:5:6: error: spec/types: type Client takes the Go name of the generated client type, which gen -o writes beside the models; a declared type is named apart from the names generated code declares (§types)
 app/schema.volt:6:6: error: spec/types: type NewClient takes the Go name of the generated client constructor, which gen -o writes beside the models; a declared type is named apart from the names generated code declares (§types)

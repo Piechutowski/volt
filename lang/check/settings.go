@@ -31,9 +31,6 @@ type settingSpec struct {
 }
 
 var (
-	projectSettings = settingSpec{
-		kinds: map[string]valueKind{"note": strValue},
-	}
 	tableSettings = settingSpec{
 		kinds: map[string]valueKind{"note": strValue, "model": strValue},
 	}

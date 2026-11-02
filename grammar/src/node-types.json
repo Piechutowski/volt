@@ -1237,68 +1237,6 @@
     }
   },
   {
-    "type": "project_definition",
-    "named": true,
-    "fields": {
-      "name": {
-        "multiple": false,
-        "required": false,
-        "types": [
-          {
-            "type": "identifier",
-            "named": true
-          }
-        ]
-      },
-      "settings": {
-        "multiple": false,
-        "required": false,
-        "types": [
-          {
-            "type": "settings_list",
-            "named": true
-          }
-        ]
-      }
-    },
-    "children": {
-      "multiple": true,
-      "required": false,
-      "types": [
-        {
-          "type": "project_property",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
-    "type": "project_property",
-    "named": true,
-    "fields": {
-      "key": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "identifier",
-            "named": true
-          }
-        ]
-      },
-      "value": {
-        "multiple": false,
-        "required": true,
-        "types": [
-          {
-            "type": "string",
-            "named": true
-          }
-        ]
-      }
-    }
-  },
-  {
     "type": "qualified_column",
     "named": true,
     "fields": {},
@@ -2080,10 +2018,6 @@
           "named": true
         },
         {
-          "type": "project_definition",
-          "named": true
-        },
-        {
           "type": "records_definition",
           "named": true
         },
@@ -2685,10 +2619,6 @@
   {
     "type": "pred_ref",
     "named": true
-  },
-  {
-    "type": "project",
-    "named": false
   },
   {
     "type": "rebuild",

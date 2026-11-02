@@ -109,7 +109,7 @@ func specLanguage(t *testing.T) *ebnf.Language {
 		Newline:    "newline",
 		Contiguous: contiguous,
 		SameLine: map[string]bool{
-			"settings": true, "project settings": true, "table settings": true, "column settings": true,
+			"settings": true, "table settings": true, "column settings": true,
 			"index settings": true, "ref settings": true,
 			"migration settings": true, "migration column settings": true,
 		},

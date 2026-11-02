@@ -147,28 +147,6 @@ type Decl interface {
 	declNode()
 }
 
-// Project is a Project element (spec §project).
-type Project struct {
-	ProjectPos token.Position
-	Name       *Ident // may be nil
-	Settings   *SettingList
-	Props      []*ProjectProp
-	Rbrace     token.Position
-}
-
-func (d *Project) Pos() token.Position { return d.ProjectPos }
-func (d *Project) End() token.Position { return d.Rbrace }
-func (d *Project) declNode()           {}
-
-// ProjectProp is one key: "value" line inside a Project body.
-type ProjectProp struct {
-	Key   *Ident
-	Value *BasicLit
-}
-
-func (x *ProjectProp) Pos() token.Position { return x.Key.Pos() }
-func (x *ProjectProp) End() token.Position { return x.Value.End() }
-
 // Table is a Table element (spec §table).
 type Table struct {
 	TablePos   token.Position

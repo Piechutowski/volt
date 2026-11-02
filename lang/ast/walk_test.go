@@ -8,7 +8,7 @@ import (
 
 func TestInspectSkipsUnsetFields(t *testing.T) {
 	bare := []ast.Node{
-		&ast.File{}, &ast.Project{}, &ast.ProjectProp{},
+		&ast.File{},
 		&ast.Table{}, &ast.TablePartial{}, &ast.Column{}, &ast.TypeRef{}, &ast.IndexesBlock{},
 		&ast.Index{Key: []ast.Node{nil}}, &ast.ValidatorsBlock{}, &ast.Validator{}, &ast.PartialRef{},
 		&ast.Ref{}, &ast.RefEndpoint{}, &ast.Records{},

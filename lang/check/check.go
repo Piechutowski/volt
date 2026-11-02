@@ -139,7 +139,6 @@ type checker struct {
 	types    map[string]*TypeInfo
 	aliases  map[string]*ast.TypeDecl
 	goTypes  GoTypes
-	project  *ast.Project
 }
 
 func (c *checker) errorf(pos token.Position, section, format string, args ...any) {
@@ -176,12 +175,6 @@ func (c *checker) collect(f *ast.File) {
 			c.info.Tables = append(c.info.Tables, ti)
 		case *ast.TypeDecl:
 			typeDecls = append(typeDecls, d)
-		case *ast.Project:
-			if c.project != nil {
-				c.errorf(d.Pos(), "project", "at most one project element per package (§project)")
-				continue
-			}
-			c.project = d
 		}
 	}
 	for _, pi := range c.partials {

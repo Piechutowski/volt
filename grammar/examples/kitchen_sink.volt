@@ -2,14 +2,6 @@
 /* block comment
    spanning lines */
 
-project shop_db [note: """
-    # Shop database
-    Multi-line **markdown** note.
-  """] {
-  database_type: "SQLite"
-  custom_key: "implementations must accept arbitrary keys"
-}
-
 type Status string
 
 type V2JobStatus string
@@ -19,7 +11,10 @@ table_partial base_template {
   created_at time.Time [null, index, default: `CURRENT_TIMESTAMP`]
 }
 
-table users [note: "user accounts"] {
+table users [note: """
+    # User accounts
+    Multi-line **markdown** note.
+  """] {
   ~base_template
   name string [unique]
   full_name string [null]

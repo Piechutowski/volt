@@ -3,7 +3,7 @@
  * the schema extensions, and the routing layer above them.
  *
  * Covers the full schema language of docs/spec.md Part I:
- * Project, Table (settings, columns), TablePartial and ~injection,
+ * Table (settings, columns), TablePartial and ~injection,
  * Type, Ref (the element and the inline ref: setting, composite
  * endpoints), Records (top-level and in-table), Indexes and Validators
  * blocks, plus the Volt routing layer of docs/spec.md Part II: package clauses, Go-style
@@ -13,7 +13,7 @@
  *
  * Design notes, driven by spec §lexical-structure:
  *  - Volt is newline-sensitive: columns, record rows, index and
- *    validator lines, project properties, group members and partial injections
+ *    validator lines, group members and partial injections
  *    are newline-terminated. Newlines are therefore NOT extras; bodies use an
  *    explicit "items separated by one-or-more newlines" shape, which also
  *    accepts a final item flush against the closing brace.
@@ -68,7 +68,6 @@ module.exports = grammar({
 
     _element: ($) =>
       choice(
-        $.project_definition,
         $.table_definition,
         $.table_partial_definition,
         $.type_definition,
@@ -84,22 +83,6 @@ module.exports = grammar({
         $.select_definition,
         $.migration_definition,
       ),
-
-    // ==================== Project (§project) ====================
-
-    project_definition: ($) =>
-      seq(
-        kw('project'),
-        optional(field('name', $._name)),
-        optional(field('settings', $.settings_list)),
-        '{',
-        repeat($._newline),
-        optional(newlineSep1($.project_property, $)),
-        '}',
-      ),
-
-    project_property: ($) =>
-      seq(field('key', $._name), ':', field('value', $.string)),
 
     // ==================== Table (§table, §columns) ====================
 

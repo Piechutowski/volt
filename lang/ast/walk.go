@@ -35,13 +35,6 @@ func eachChild(n Node, visit func(Node)) {
 				visit(d)
 			}
 		}
-	case *Project:
-		child(visit, n.Name)
-		child(visit, n.Settings)
-		children(visit, n.Props)
-	case *ProjectProp:
-		child(visit, n.Key)
-		child(visit, n.Value)
 	case *Table:
 		child(visit, n.Name)
 		child(visit, n.Settings)

@@ -17,7 +17,6 @@
 ; ---------- keywords ----------
 
 [
-  "project"
   "table"
   "table_partial"
   "type"
@@ -56,10 +55,6 @@
 
 ; column types
 (type_name) @type
-
-; project
-(project_definition name: (_) @title)
-(project_property key: (_) @property)
 
 ; ---------- settings ----------
 

@@ -9,9 +9,6 @@ type Money int
 type pay.Cents int from "github.com/Piechutowski/volt/nao/itest/pay"
 type pay.YesNo string from "github.com/Piechutowski/volt/nao/itest/pay"
 
-project itest [note: "Integration-test fixture for the generated query surface."] {
-}
-
 type OrderState string
 type Featured bool
 type Ratio float64

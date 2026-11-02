@@ -23,17 +23,17 @@ app/handlers.go:23:10: warning: vet/streamcount: volt.Stream writes the body wit
 data/more.volt:28:1: warning: vet/selfref: relationship references column employees.id on both sides
 data/more.volt:30:1: warning: vet/dynname: table users (generated function UserLimit) and table user_limits (model UserLimit) both generate the Go name UserLimit; rename one (e.g. with [model: "..."])
 app/handlers.go:31:19: warning: vet/loadspelledlong: data.PostGet runs on the route's parameters alone; a load of the route hands the handler its result and spells it once (§route-loads)
+data/schema.volt:32:3: warning: vet/shadowedcolumn: column "updated_at" in table "posts" silently overrides the definition from table_partial "audit_a"
+data/schema.volt:34:1: warning: vet/unusedpartial: table_partial "orphan_partial" is declared but never injected
 data/more.volt:35:3: warning: vet/dynname: table users column "foo_bar" (handle UserFooBar) and table user_foos column "bar" (handle UserFooBar) both generate the Go name UserFooBar; rename one (e.g. with [model: "..."])
-data/schema.volt:36:3: warning: vet/shadowedcolumn: column "updated_at" in table "posts" silently overrides the definition from table_partial "audit_a"
+data/schema.volt:36:20: warning: vet/reftype: relationship joins comments.owner_id (string) to users.id (int); the types differ
+data/schema.volt:36:20: warning: vet/reftype: relationship joins posts.owner_id (string) to users.id (int); the types differ
 data/more.volt:37:1: warning: vet/dynname: table user_foos column "bar" (handle UserFooBar) and table user_foo_bars (model UserFooBar) both generate the Go name UserFooBar; rename one (e.g. with [model: "..."])
-data/schema.volt:38:1: warning: vet/unusedpartial: table_partial "orphan_partial" is declared but never injected
 data/more.volt:40:1: warning: vet/modelname: cannot confidently singularize "bonus" for its Go model name (would use "bonus"); pin it with [model: "..."]
-data/schema.volt:40:20: warning: vet/reftype: relationship joins comments.owner_id (string) to users.id (int); the types differ
-data/schema.volt:40:20: warning: vet/reftype: relationship joins posts.owner_id (string) to users.id (int); the types differ
+data/schema.volt:41:3: warning: vet/shadowedcolumn: column "id" in table "posts" silently overrides the definition from table_partial "stamps"
 data/more.volt:43:1: warning: vet/modelname: cannot confidently singularize "axis" for its Go model name (would use "axis"); pin it with [model: "..."]
-data/schema.volt:45:3: warning: vet/shadowedcolumn: column "id" in table "posts" silently overrides the definition from table_partial "stamps"
 data/more.volt:47:1: warning: vet/dynname: table users (column handle type UserColumn) and table user_columns (model UserColumn) both generate the Go name UserColumn; rename one (e.g. with [model: "..."])
 data/more.volt:50:1: warning: vet/dynname: table users (write body UserParams) and table user_params (model UserParams) both generate the Go name UserParams; rename one (e.g. with [model: "..."])
 data/more.volt:53:1: warning: vet/dynname: table users (changeset UserChangeset) and table drafts (model UserChangeset) both generate the Go name UserChangeset; rename one (e.g. with [model: "..."])
-data/schema.volt:63:1: warning: vet/missingpk: table "naked" has no primary key
-data/schema.volt:65:3: warning: vet/emptybody: empty indexes block
+data/schema.volt:59:1: warning: vet/missingpk: table "naked" has no primary key
+data/schema.volt:61:3: warning: vet/emptybody: empty indexes block

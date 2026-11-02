@@ -113,15 +113,12 @@ textually: `` `a+b` `` and `` `a + b` `` count as different keys.
 
 ### emptybody
 
-**What it does.** Reports empty `Indexes {}` and `Validators {}` blocks,
-and a `project` with neither properties nor a `note:` (spec §project).
+**What it does.** Reports empty `indexes {}` and `validators {}` blocks.
 
 **Why.** An empty block does nothing but implies work in progress.
 
 **Examples.** [testdata/emptybody.volt](../lang/vet/testdata/emptybody.volt):
 every empty block warns; the table's column is the good line.
-[testdata/emptybody_note.volt](../lang/vet/testdata/emptybody_note.volt):
-a `project` that carries only a note is not empty, and draws nothing.
 
 ### shadowedcolumn
 
