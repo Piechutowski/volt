@@ -187,3 +187,14 @@ func (r errRow) Scan(...any) error { return r.err }
 // Statements is how many statements the cache holds, for tests and
 // observability.
 func (db DB) Statements() int { return db.cache.Len() }
+
+// Perform is Run for an effect of any result, as the shim holds one.
+func Perform(ctx context.Context, db DB, e rt.AnyEffect) (any, error) {
+	return e.PerformAny(ctx, poolExecutor{db})
+}
+
+// Performer is the function the generated router hands the shim: Perform
+// over db (spec §requests-and-responses).
+func Performer(db DB) func(context.Context, rt.AnyEffect) (any, error) {
+	return func(ctx context.Context, e rt.AnyEffect) (any, error) { return Perform(ctx, db, e) }
+}

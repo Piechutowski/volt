@@ -109,7 +109,7 @@ func (b *Broker) Subscribe(after uint64) (<-chan Event, func()) {
 // §event-routes): a text/event-stream response that replays from the
 // request's Last-Event-ID, then forwards every published event until
 // the client goes away, with keep-alive comments in between.
-func (b *Broker) Serve(w http.ResponseWriter, r *Request) error {
+func (b *Broker) Serve(w http.ResponseWriter, r *http.Request) error {
 	flusher, _ := w.(http.Flusher)
 	var after uint64
 	if v := r.Header.Get("Last-Event-ID"); v != "" {
@@ -251,4 +251,16 @@ func (c *Client) streamOnce(ctx context.Context, url string, last *uint64, out c
 		}
 	}
 	return got
+}
+
+// EventsHandler is the http.Handler of an event route (§event-routes):
+// the broker's Serve, or 503 when the application configured none.
+func EventsHandler(b *Broker) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if b == nil {
+			http.Error(w, "no event broker configured", http.StatusServiceUnavailable)
+			return
+		}
+		_ = b.Serve(w, r)
+	})
 }

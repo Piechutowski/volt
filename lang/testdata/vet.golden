@@ -2,15 +2,24 @@ check:
 dup/schema.volt:8:1: error: spec/namespaces-and-uniqueness: duplicate table name "t"
 vet:
 data/schema.volt:4:15: warning: vet/redundantindex: unique on "id" is redundant; the column is the primary key, which is unique and indexed already
+app/handlers.go:5:2: warning: vet/handlerimports: a file that declares a handler imports os; a handler describes its effects and the shim performs them (§requests-and-responses)
 dup/schema.volt:6:3: warning: vet/casecollision: column names total and Total differ only in case
 data/more.volt:9:1: warning: vet/reftype: relationship joins comments.author_id (string) to users.id (int); the types differ
 data/schema.volt:9:3: warning: vet/dynname: table users (constructor UserNew) and table users column "new" (handle UserNew) both generate the Go name UserNew; rename one (e.g. with [model: "..."])
 app/routes.volt:10:1: warning: vet/pipeline: Pipeline "dead" is declared and never piped through by any scope
 data/more.volt:10:1: warning: vet/reftarget: referenced column(s) posts.(title) are not unique (not the primary key, a unique column or the key of a unique index without where:), so the database cannot enforce this foreign key
 dup/schema.volt:11:1: warning: vet/casecollision: table names t and T differ only in case
+app/handlers.go:11:5: warning: vet/packagestate: package-level var hits is state; a routes package holds constant tables alone (§requests-and-responses)
 data/schema.volt:11:5: warning: vet/redundantindex: unique index on "email" is redundant; the column carries unique, which holds over the whole table
+app/handlers.go:13:1: warning: vet/packagestate: init runs before anything is asked; a routes package has nothing to initialize (§requests-and-responses)
 data/schema.volt:13:6: warning: vet/redundantindex: duplicate index on (email, foo_bar) in table "users"
+app/handlers.go:13:15: warning: vet/packagestate: assigns to the package-level var hits; a handler returns a new value instead (§requests-and-responses)
+app/handlers.go:15:6: warning: vet/handlerreceiver: controller Home carries state: a handler's receiver is an empty struct (struct{}), so nothing reaches a handler but its parameters
 data/more.volt:16:1: warning: vet/refcycle: foreign-key cycle between tables: a, b
+app/handlers.go:18:2: warning: vet/packagestate: changes the package-level var hits; a handler returns a new value instead (§requests-and-responses)
+app/handlers.go:19:2: warning: vet/goroutine: starts a goroutine; a handler owns no lifetime, so parallel effects go through rt.All and work after the request to a job (§values-and-effects)
+app/handlers.go:21:5: warning: vet/handlerclock: time.Since reads the clock; a handler reads r.Now(), the time the shim captured (§requests-and-responses)
+app/handlers.go:22:10: warning: vet/streamcount: volt.Stream writes the body with a function, the one escape from response values; keep the count low (§requests-and-responses)
 data/more.volt:28:1: warning: vet/selfref: relationship references column employees.id on both sides
 data/more.volt:30:1: warning: vet/dynname: table users (generated function UserLimit) and table user_limits (model UserLimit) both generate the Go name UserLimit; rename one (e.g. with [model: "..."])
 data/more.volt:35:3: warning: vet/dynname: table users column "foo_bar" (handle UserFooBar) and table user_foos column "bar" (handle UserFooBar) both generate the Go name UserFooBar; rename one (e.g. with [model: "..."])

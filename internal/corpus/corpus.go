@@ -211,8 +211,8 @@ import (
 func BearerAuth(next http.Handler) http.Handler { return next }
 
 // Errors is the error_handler the root scope names (§scopes).
-func Errors(w http.ResponseWriter, r *volt.Request, err error) {
-	volt.DefaultErrorHandler(w, r, err)
+func Errors(r volt.Request, err error) volt.Response {
+	return volt.DefaultErrorHandler(r, err)
 }
 `
 }
@@ -221,10 +221,10 @@ func controllersGo(pkg string, stats []string, main bool) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "package %s\n\nimport (\n\t\"net/http\"\n\n\tvolt \"github.com/Piechutowski/volt\"\n)\n\n", pkg)
 	b.WriteString("// stub answers every controller action the routes name.\ntype stub struct{}\n\n")
-	b.WriteString("func (stub) Index(w http.ResponseWriter, r *volt.Request) error { return nil }\n\n")
-	b.WriteString("func (stub) Serve(w http.ResponseWriter, r *volt.Request, path string) error { return nil }\n")
+	b.WriteString("func (stub) Index(r volt.Request) volt.Response { return volt.NoContent() }\n\n")
+	b.WriteString("func (stub) Serve(r volt.Request, path string) volt.Response { return volt.NoContent() }\n")
 	for _, a := range stats {
-		fmt.Fprintf(&b, "\nfunc (stub) %s(w http.ResponseWriter, r *volt.Request) error { return nil }\n", a)
+		fmt.Fprintf(&b, "\nfunc (stub) %s(r volt.Request) volt.Response { return volt.NoContent() }\n", a)
 	}
 	if main {
 		b.WriteString("\nfunc main() {\n\thttp.ListenAndServe(\":0\", NewRouter(Controllers{Home: stub{}, Files: stub{}, Stats: stub{}}))\n}\n")

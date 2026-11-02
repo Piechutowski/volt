@@ -508,12 +508,12 @@ func (c *checker) scopeWalk(sc *ast.Scope, inh inherited, facts routeFacts, memo
 			case "error_handler":
 				name, ok := c.localFuncRef(s.Value)
 				if ok {
-					const want = "func %s(w http.ResponseWriter, r *volt.Request, err error)"
+					const want = "func %s(r volt.Request, err error) volt.Response"
 					sc := c.goFuncs(c.pkg)
 					if gf, found := sc.funcs[name]; !found {
 						c.errorf(s.Pos(), "scopes-and-routes", "no function %s in package %s's Go files — declare "+want+" beside the routes (§scopes)%s", name, c.pkg.Name, name, sc.brokenHint())
-					} else if gf.Generic || gf.Variadic || len(gf.Params) != 3 || gf.Params[0].Type != "http.ResponseWriter" ||
-						gf.Params[1].Type != "*volt.Request" || gf.Params[2].Type != "error" || len(gf.Results) != 0 {
+					} else if gf.Generic || gf.Variadic || len(gf.Params) != 2 || gf.Params[0].Type != "volt.Request" ||
+						gf.Params[1].Type != "error" || len(gf.Results) != 1 || gf.Results[0] != "volt.Response" {
 						c.errorf(s.Pos(), "scopes-and-routes", "%s is not an error handler: found %s, expected "+want+" (§scopes)", name, gf.Sig, name)
 					}
 				}

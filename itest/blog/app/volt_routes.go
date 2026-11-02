@@ -20,6 +20,7 @@ var Table = []volt.Route{
 	{Method: "PATCH", Pattern: "/users/{id}", Spelled: "/users/:id(int)", Controller: "Users", Action: "Update", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
 	{Method: "DELETE", Pattern: "/users/{id}", Spelled: "/users/:id(int)", Controller: "Users", Action: "Delete", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
 	{Method: "GET", Pattern: "/users/{id}/avatar", Spelled: "/users/:id(int)/avatar", Controller: "Users", Action: "Avatar", Helper: "PathAvatar", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
+	{Method: "GET", Pattern: "/users/{id}/profile", Spelled: "/users/:id(int)/profile", Controller: "Users", Action: "Profile", Helper: "PathProfile", Params: []volt.RouteParam{{Name: "id", Type: "int"}}},
 	{Method: "GET", Pattern: "/files/{path...}", Spelled: "/files/:path...", Controller: "Files", Action: "Serve", Helper: "PathServe", Params: []volt.RouteParam{{Name: "path", Type: "string", Wild: true}}},
 	{Method: "GET", Pattern: "/tags/{name}", Spelled: "/tags/:name", Controller: "Tags", Action: "Show", Helper: "PathTag", Params: []volt.RouteParam{{Name: "name", Type: "string"}}},
 	{Method: "GET", Pattern: "/pages/{num}", Spelled: "/pages/:num(int)", Controller: "Pages", Action: "Show", Helper: "PathPage", Params: []volt.RouteParam{{Name: "num", Type: "int"}}},

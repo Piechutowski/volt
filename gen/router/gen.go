@@ -224,21 +224,14 @@ func sigParams(ps []lang.Param) string {
 }
 
 func (g *generator) handlersEmit() error {
-	imports := []string{"net/http", ""}
-	if len(g.pkg.Controllers) > 0 || g.hasEvents() {
-		imports = append(imports, voltImport)
-	}
-	data := g.dataPackages()
-	if len(data) > 0 {
-		imports = append(imports, runImport)
-	}
+	imports := []string{"net/http", "", voltImport, runImport}
 	g.header(imports...)
 
 	for _, name := range g.controllerNames() {
 		ci := g.pkg.Controllers[name]
 		g.pf("type %sController interface {\n", name)
 		for _, a := range ci.Actions {
-			g.pf("\t%s(w http.ResponseWriter, r *volt.Request%s) error\n", a.Name, sigParams(a.Params))
+			g.pf("\t%s(r volt.Request%s) volt.Response\n", a.Name, sigParams(a.Params))
 		}
 		g.pf("}\n\n")
 	}
@@ -248,9 +241,7 @@ func (g *generator) handlersEmit() error {
 	for _, name := range g.controllerNames() {
 		fields.Row(name, name+"Controller")
 	}
-	if len(data) > 0 {
-		fields.Row("DB", "run.DB")
-	}
+	fields.Row("DB", "run.DB")
 	if g.hasEvents() {
 		fields.Row("Events", "*volt.Broker")
 	}
@@ -261,7 +252,17 @@ func (g *generator) handlersEmit() error {
 	g.pf("\tmux := http.NewServeMux()\n")
 	g.pf("\tregister(mux, c)\n")
 	g.pf("\treturn mux\n")
-	g.pf("}\n")
+	g.pf("}\n\n")
+
+	g.pf("func ControllersDeterministic(c Controllers, r volt.Request) []string {\n")
+	g.pf("\tvar voltOut []string\n")
+	for _, name := range g.controllerNames() {
+		for _, a := range g.pkg.Controllers[name].Actions {
+			call := fmt.Sprintf("c.%s.%s(r%s)", name, a.Name, zeroArgs(a.Params))
+			g.pf("\tif !volt.Same(%s, %s) {\n\t\tvoltOut = append(voltOut, %q)\n\t}\n", call, call, name+"."+a.Name)
+		}
+	}
+	g.pf("\treturn voltOut\n}\n")
 	return nil
 }
 
@@ -286,18 +287,16 @@ func (g *generator) routerEmit() error {
 	if g.timeParams() {
 		imports = append(imports, "time")
 	}
-	imports = append(imports, "", voltImport)
-	if data := g.dataPackages(); len(data) > 0 {
-		imports = append(imports, runImport)
-		for _, q := range data {
-			if !q.Local {
-				imports = append(imports, dataImport(q))
-			}
+	imports = append(imports, "", voltImport, runImport)
+	for _, q := range g.dataPackages() {
+		if !q.Local {
+			imports = append(imports, dataImport(q))
 		}
 	}
 	g.header(imports...)
 
 	g.pf("func register(mux *http.ServeMux, c Controllers) {\n")
+	g.pf("\tvoltPerform := run.Performer(c.DB)\n")
 
 	g.pipeVars = map[string]string{}
 	var seqs [][]string
@@ -370,7 +369,7 @@ func pathParse(body *strings.Builder, p lang.Param) string {
 		return fmt.Sprintf("r.PathValue(%q)", p.Name)
 	}
 	fmt.Fprintf(body, "\t\tvolt%s, ok := volt.ParseInt(r.PathValue(%q))\n", p.GoName, p.Name)
-	fmt.Fprintf(body, "\t\tif !ok {\n\t\t\treturn volt.ErrNotFound\n\t\t}\n")
+	fmt.Fprintf(body, "\t\tif !ok {\n\t\t\treturn volt.Fail(volt.ErrNotFound)\n\t\t}\n")
 	return "volt" + p.GoName
 }
 
@@ -380,7 +379,7 @@ func (g *generator) queryShimBody(r *lang.RouteInfo) {
 	for _, p := range r.Params {
 		byName[p.Name] = p
 	}
-	g.pf("\t\tif _, err := volt.Negotiate(r); err != nil {\n\t\t\treturn err\n\t\t}\n")
+	g.pf("\t\tif _, err := volt.Negotiate(r); err != nil {\n\t\t\treturn volt.Fail(err)\n\t\t}\n")
 	name := func(n string) string {
 		if q.Local {
 			return n
@@ -388,40 +387,41 @@ func (g *generator) queryShimBody(r *lang.RouteInfo) {
 		return q.Qualifier + "." + n
 	}
 	args := make([]string, 0, len(q.Params))
+	indent := "\t\t"
+	var load string
 	for _, p := range q.Params {
 		switch p.Source {
 		case lang.FromPath:
 			args = append(args, pathParse(&g.out, byName[p.Name]))
 		case lang.FromQuery:
-			g.pf("\t\tvolt%s, err := volt.QueryParam[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name, p.GoType, p.Name)
+			g.pf("\t\tvolt%s, err := volt.QueryParam[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn volt.Fail(err)\n\t\t}\n", p.Name, p.GoType, p.Name)
 			args = append(args, "volt"+p.Name)
 		case lang.FromList:
-			g.pf("\t\tvolt%s, err := volt.QueryParams[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", p.Name, strings.TrimPrefix(p.GoType, "[]"), p.Name)
+			g.pf("\t\tvolt%s, err := volt.QueryParams[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn volt.Fail(err)\n\t\t}\n", p.Name, strings.TrimPrefix(p.GoType, "[]"), p.Name)
 			args = append(args, "volt"+p.Name)
 		case lang.FromBody:
 			cb := q.Changeset
-			g.pf("\t\tvar volt_params %s\n\t\tif err := volt.Decode(r, &volt_params); err != nil {\n\t\t\treturn err\n\t\t}\n", name(cb.Params))
+			g.pf("\t\tvar volt_params %s\n\t\tif err := volt.Decode(r, &volt_params); err != nil {\n\t\t\treturn volt.Fail(err)\n\t\t}\n", name(cb.Params))
 			start := name(cb.New) + "()"
 			if cb.Get != "" {
-				g.pf("\t\tvolt_row, err := run.Run(r.Context(), c.DB, %s(%s))\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", name(cb.Get), strings.Join(args, ", "))
-				args, start = nil, "volt_row.Changeset()"
+				g.pf("\t\treturn volt.Then(%s(%s), func(volt_row %s) volt.Response {\n", name(cb.Get), strings.Join(args, ", "), name(q.Result))
+				args, start, indent, load = nil, "volt_row.Changeset()", "\t\t\t", "\t\t})\n"
 			}
 			allow := make([]string, len(cb.Allow))
 			for i, h := range cb.Allow {
 				allow[i] = name(h)
 			}
-			g.pf("\t\tvolt_cs := %s.Cast(volt_params%s)\n", start, prefixEach(allow, ", "))
+			g.pf("%svolt_cs := %s.Cast(volt_params%s)\n", indent, start, prefixEach(allow, ", "))
 			args = append(args, "volt_cs")
 		}
 	}
-	call := fmt.Sprintf("run.Run(r.Context(), c.DB, %s(%s))", name(q.Method), strings.Join(args, ", "))
+	call := fmt.Sprintf("%s(%s)", name(q.Method), strings.Join(args, ", "))
 	if q.Result == "" {
-		g.pf("\t\tif _, err := %s; err != nil {\n\t\t\treturn err\n\t\t}\n", call)
-		g.pf("\t\treturn volt.RenderStatus(w, r, %d, nil)\n", q.Status)
-		return
+		g.pf("%sreturn volt.Then(%s, func(int64) volt.Response {\n%s\treturn volt.RenderStatus(%d, nil)\n%s})\n", indent, call, indent, q.Status, indent)
+	} else {
+		g.pf("%sreturn volt.Then(%s, func(voltOut %s) volt.Response {\n%s\treturn volt.RenderStatus(%d, voltOut)\n%s})\n", indent, call, g.queryResult(q), indent, q.Status, indent)
 	}
-	g.pf("\t\tout, err := %s\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n", call)
-	g.pf("\t\treturn volt.RenderStatus(w, r, %d, out)\n", q.Status)
+	g.pf("%s", load)
 }
 
 func (g *generator) routeEmit(r *lang.RouteInfo) {
@@ -439,21 +439,25 @@ func (g *generator) routeEmit(r *lang.RouteInfo) {
 	if pipe != "" {
 		g.pf("%s(", pipe)
 	}
-	g.pf("volt.Handler(%q, func(w http.ResponseWriter, r *volt.Request) error {\n", pattern)
-	switch {
-	case r.Events:
-		g.pf("\t\tif c.Events == nil {\n\t\t\treturn volt.Error(http.StatusServiceUnavailable, \"no event broker configured\")\n\t\t}\n")
-		g.pf("\t\treturn c.Events.Serve(w, r)\n")
-	case r.Query != nil:
-		g.queryShimBody(r)
-	default:
-		call := make([]string, 0, len(r.Params))
-		for _, p := range r.Params {
-			call = append(call, pathParse(&g.out, p))
+	if r.Events {
+		g.pf("volt.EventsHandler(c.Events)")
+	} else {
+		g.pf("volt.Handler(%q, func(r volt.Request) volt.Response {\n", pattern)
+		if r.Query != nil {
+			g.queryShimBody(r)
+		} else {
+			call := make([]string, 0, len(r.Params))
+			for _, p := range r.Params {
+				call = append(call, pathParse(&g.out, p))
+			}
+			g.pf("\t\treturn c.%s.%s(r%s)\n", r.Controller, r.Action, prefixEach(call, ", "))
 		}
-		g.pf("\t\treturn c.%s.%s(w, r%s)\n", r.Controller, r.Action, prefixEach(call, ", "))
+		g.pf("\t}, %s, voltPerform", eh)
+		for _, p := range r.Params {
+			g.pf(", %q", p.Name)
+		}
+		g.pf(")")
 	}
-	g.pf("\t}, %s)", eh)
 	if pipe != "" {
 		g.pf(")")
 	}
@@ -680,4 +684,30 @@ func (g *generator) clientEmit() error {
 		g.pf("\tvoltErr := c.Do(ctx, %q, %s, %s, &voltOut)\n\treturn voltOut, voltErr\n}\n\n", method, url, in)
 	}
 	return nil
+}
+
+func zeroArgs(ps []lang.Param) string {
+	var b strings.Builder
+	for _, p := range ps {
+		if p.Type == lang.TString {
+			b.WriteString(`, ""`)
+		} else {
+			b.WriteString(", 0")
+		}
+	}
+	return b.String()
+}
+
+func (g *generator) queryResult(q *lang.QueryRef) string {
+	if q.Result == "" {
+		return "int64"
+	}
+	result := q.Result
+	if !q.Local {
+		result = q.Qualifier + "." + result
+	}
+	if q.Many {
+		result = "[]" + result
+	}
+	return result
 }

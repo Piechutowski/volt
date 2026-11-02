@@ -1,31 +1,33 @@
 package volt
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/Piechutowski/volt/nao/rt"
 )
 
-func TestHandlerErrorSpine(t *testing.T) {
-	h := Handler("GET /x", func(w http.ResponseWriter, r *Request) error {
-		return Error(418, "teapot")
-	}, nil)
+func serveWith(h HandlerFunc, eh ErrorHandler, perform Performer, req *http.Request) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))
+	Handler("GET /x", h, eh, perform).ServeHTTP(rec, req)
+	return rec
+}
+
+func TestHandlerErrorSpine(t *testing.T) {
+	rec := serveWith(func(Request) Response { return Fail(Error(418, "teapot")) }, nil, nil, httptest.NewRequest("GET", "/x", nil))
 	if rec.Code != 418 || !strings.Contains(rec.Body.String(), "teapot") {
 		t.Fatalf("got %d %q", rec.Code, rec.Body.String())
 	}
 }
 
 func TestHandlerGenericErrorIs500(t *testing.T) {
-	h := Handler("GET /x", func(w http.ResponseWriter, r *Request) error {
-		return errors.New("secret database detail")
-	}, nil)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))
+	rec := serveWith(func(Request) Response { return Fail(errors.New("secret database detail")) }, nil, nil, httptest.NewRequest("GET", "/x", nil))
 	if rec.Code != 500 {
 		t.Fatalf("status = %d, want 500", rec.Code)
 	}
@@ -34,62 +36,129 @@ func TestHandlerGenericErrorIs500(t *testing.T) {
 	}
 }
 
-func TestCommittedResponseIsLogOnly(t *testing.T) {
-	h := Handler("GET /x", func(w http.ResponseWriter, r *Request) error {
-		w.WriteHeader(200)
-		w.Write([]byte("partial"))
-		if !r.Committed() {
-			t.Error("Committed() should be true after write")
-		}
-		return errors.New("late failure")
-	}, nil)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))
+func TestStreamFailureIsLogOnly(t *testing.T) {
+	rec := serveWith(func(Request) Response {
+		return Stream(func(w io.Writer) error {
+			w.Write([]byte("partial"))
+			return errors.New("late failure")
+		})
+	}, nil, nil, httptest.NewRequest("GET", "/x", nil))
 	if rec.Code != 200 || rec.Body.String() != "partial" {
-		t.Fatalf("committed response was modified: %d %q", rec.Code, rec.Body.String())
+		t.Fatalf("a committed stream was modified: %d %q", rec.Code, rec.Body.String())
 	}
 }
 
 func TestCustomErrorHandlerSeesRoute(t *testing.T) {
 	var gotRoute string
-	eh := func(w http.ResponseWriter, r *Request, err error) {
+	eh := func(r Request, err error) Response {
 		gotRoute = r.Route()
-		http.Error(w, "custom", 400)
+		return Reject(400, "custom")
 	}
-	h := Handler("GET /users/{id}", func(w http.ResponseWriter, r *Request) error {
-		return errors.New("x")
-	}, eh)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/users/7", nil))
+	Handler("GET /users/{id}", func(r Request) Response { return Fail(errors.New("x")) }, eh, nil, "id").
+		ServeHTTP(rec, httptest.NewRequest("GET", "/users/7", nil))
 	if gotRoute != "GET /users/{id}" || rec.Code != 400 {
 		t.Fatalf("route=%q code=%d", gotRoute, rec.Code)
 	}
 }
 
 func TestWrappedHTTPErrorUnwraps(t *testing.T) {
-	h := Handler("GET /x", func(w http.ResponseWriter, r *Request) error {
-		return fmt.Errorf("saving draft: %w", Error(422, "title required"))
-	}, nil)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))
+	rec := serveWith(func(Request) Response {
+		return Fail(fmt.Errorf("saving draft: %w", Error(422, "title required")))
+	}, nil, nil, httptest.NewRequest("GET", "/x", nil))
 	if rec.Code != 422 {
 		t.Fatalf("status = %d, want 422 (wrapped HTTPError must unwrap)", rec.Code)
 	}
 }
 
-func TestFlushCommits(t *testing.T) {
-	h := Handler("GET /x", func(w http.ResponseWriter, r *Request) error {
-		w.Write([]byte("chunk"))
-		w.(http.Flusher).Flush()
-		if !r.Committed() {
-			t.Error("Committed() should be true after Flush")
-		}
-		return Error(500, "too late")
-	}, nil)
+func TestRequestValue(t *testing.T) {
+	mux := http.NewServeMux()
+	var got Request
+	mux.Handle("GET /users/{id}", Handler("GET /users/{id}", func(r Request) Response {
+		got = r
+		return NoContent()
+	}, nil, nil, "id"))
+	req := httptest.NewRequest("GET", "/users/7?tab=x", strings.NewReader("body"))
+	req.Header.Set("X-Test", "yes")
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))
-	if rec.Code != 200 || rec.Body.String() != "chunk" {
-		t.Fatalf("flushed response was modified: %d %q", rec.Code, rec.Body.String())
+	mux.ServeHTTP(rec, req)
+	if rec.Code != 204 || got.Method() != "GET" || got.Path() != "/users/7" || got.Route() != "GET /users/{id}" ||
+		got.PathValue("id") != "7" || got.Query().Get("tab") != "x" || got.Header().Get("X-Test") != "yes" ||
+		string(got.Body()) != "body" || got.Now().IsZero() {
+		t.Fatalf("request value = %+v (%d)", got, rec.Code)
+	}
+}
+
+type fakeEffect struct {
+	rt.Query[int]
+	rows []int
+	err  error
+}
+
+func performFake(ctx context.Context, e rt.AnyEffect) (any, error) {
+	f := e.(fakeEffect)
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.rows, nil
+}
+
+func TestThenPerformsThroughThePerformer(t *testing.T) {
+	h := func(Request) Response {
+		return Then(rt.Query[int]{SQL: "SELECT 1"}, func(rows []int) Response { return Render(len(rows)) })
+	}
+	perform := func(ctx context.Context, e rt.AnyEffect) (any, error) { return []int{1, 2, 3}, nil }
+	rec := serveWith(h, nil, perform, httptest.NewRequest("GET", "/x", nil))
+	if rec.Code != 200 || strings.TrimSpace(rec.Body.String()) != "3" {
+		t.Fatalf("Then = %d %q", rec.Code, rec.Body.String())
+	}
+	boom := func(ctx context.Context, e rt.AnyEffect) (any, error) { return nil, rt.ErrNotFound }
+	rec = serveWith(h, nil, boom, httptest.NewRequest("GET", "/x", nil))
+	if rec.Code != 404 {
+		t.Fatalf("a failed effect = %d, want 404 through the spine", rec.Code)
+	}
+	rescued := func(Request) Response {
+		return Then(rt.Query[int]{SQL: "SELECT 1"}, func([]int) Response { return NoContent() }).
+			Rescue(func(err error) Response { return Redirect("/login") })
+	}
+	rec = serveWith(rescued, nil, boom, httptest.NewRequest("GET", "/x", nil))
+	if rec.Code != 303 || rec.Header().Get("Location") != "/login" {
+		t.Fatalf("Rescue = %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+	rec = serveWith(h, nil, nil, httptest.NewRequest("GET", "/x", nil))
+	if rec.Code != 500 {
+		t.Fatalf("Then with no performer = %d, want 500", rec.Code)
+	}
+}
+
+func TestResponseValues(t *testing.T) {
+	a := Render(1).WithHeader("X-A", "1").WithCookie(http.Cookie{Name: "c", Value: "v"})
+	b := a.WithStatus(202)
+	if a.Status() != 200 || b.Status() != 202 || a.header.Get("X-A") != "1" || len(a.cookies) != 1 {
+		t.Errorf("With* mutated its receiver: %+v %+v", a, b)
+	}
+	if !Same(Render(1), Render(1)) || Same(Render(1), Render(2)) || Same(Render(1), Created(1)) {
+		t.Error("Same disagrees on rendered responses")
+	}
+	q := rt.Query[int]{SQL: "SELECT ?", Args: []any{1}}
+	next := func([]int) Response { return NoContent() }
+	if !Same(Then(q, next), Then(q, next)) || Same(Then(q, next), Then(rt.Query[int]{SQL: "SELECT 2"}, next)) {
+		t.Error("Same disagrees on continuations")
+	}
+	if !Same(Fail(errors.New("x")), Fail(errors.New("x"))) || Same(Then(q, next), Render(1)) {
+		t.Error("Same disagrees on failures")
+	}
+	rec := httptest.NewRecorder()
+	Handler("GET /x", func(Request) Response { return HTML([]byte("<p>hi</p>")) }, nil, nil).ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))
+	if rec.Code != 200 || rec.Header().Get("Content-Type") != "text/html; charset=utf-8" || rec.Body.String() != "<p>hi</p>" {
+		t.Errorf("HTML = %d %q %q", rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	Handler("GET /x", func(Request) Response {
+		return Reject(422, "check the fields").WithDetails([]rt.FieldError{{Check: "required", Columns: []string{"title"}, Message: "title is required"}})
+	}, nil, nil).ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))
+	if rec.Code != 422 || !strings.Contains(rec.Body.String(), `"check":"required"`) {
+		t.Errorf("Reject with details = %d %q", rec.Code, rec.Body.String())
 	}
 }
 

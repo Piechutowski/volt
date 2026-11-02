@@ -6,15 +6,14 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Piechutowski/volt/nao/rt"
-	"time"
 )
 
 type row struct {
@@ -25,9 +24,11 @@ type row struct {
 func serve(t *testing.T, h HandlerFunc, req *http.Request) *httptest.ResponseRecorder {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	Handler("GET /x", h, nil).ServeHTTP(rec, req)
+	Handler("GET /x", h, nil, nil).ServeHTTP(rec, req)
 	return rec
 }
+
+func requestOf(req *http.Request) Request { return RequestOf(req, "GET /x", time.Time{}, nil) }
 
 func TestNegotiate(t *testing.T) {
 	cases := []struct {
@@ -49,7 +50,7 @@ func TestNegotiate(t *testing.T) {
 		if tc.accept != "" {
 			req.Header.Set("Accept", tc.accept)
 		}
-		got, err := Negotiate(&Request{Request: req})
+		got, err := Negotiate(requestOf(req))
 		if got != tc.want || (err == nil) != tc.ok {
 			t.Errorf("Accept %q: got (%v, %v), want (%v, ok=%v)", tc.accept, got, err, tc.want, tc.ok)
 		}
@@ -62,7 +63,7 @@ func TestNegotiate(t *testing.T) {
 
 func TestRenderJSONAndGOB(t *testing.T) {
 	rows := []row{{1, "a"}, {2, "b"}}
-	h := func(w http.ResponseWriter, r *Request) error { return Render(w, r, rows) }
+	h := func(Request) Response { return Render(rows) }
 
 	rec := serve(t, h, httptest.NewRequest("GET", "/x", nil))
 	if rec.Code != 200 || rec.Header().Get("Content-Type") != MIMEJSON {
@@ -91,21 +92,19 @@ func TestRenderJSONAndGOB(t *testing.T) {
 		t.Fatalf("unacceptable: %d, want 406", rec.Code)
 	}
 
-	rec = serve(t, func(w http.ResponseWriter, r *Request) error { return RenderStatus(w, r, 204, nil) },
-		httptest.NewRequest("GET", "/x", nil))
+	rec = serve(t, func(Request) Response { return RenderStatus(204, nil) }, httptest.NewRequest("GET", "/x", nil))
 	if rec.Code != 204 || rec.Body.Len() != 0 {
 		t.Fatalf("nil render: %d %q", rec.Code, rec.Body.String())
 	}
 }
 
 func TestDecodeByContentType(t *testing.T) {
-	decode := func(w http.ResponseWriter, r *Request) error {
+	decode := func(r Request) Response {
 		var v row
 		if err := Decode(r, &v); err != nil {
-			return err
+			return Fail(err)
 		}
-		fmt.Fprint(w, v.Name)
-		return nil
+		return HTML([]byte(v.Name))
 	}
 	req := httptest.NewRequest("POST", "/x", strings.NewReader(`{"ID":1,"Name":"json"}`))
 	if rec := serve(t, decode, req); rec.Code != 200 || rec.Body.String() != "json" {
@@ -137,45 +136,41 @@ func TestDecodeByContentType(t *testing.T) {
 }
 
 func TestQueryBinding(t *testing.T) {
-	req := httptest.NewRequest("GET", "/x?year=2024&site=a&site=b&flag=true&at=2024-01-02T03:04:05Z&f=1.5", nil)
-	h := func(w http.ResponseWriter, r *Request) error {
-		year, err := QueryParam[int](r, "year")
-		if err != nil || year != 2024 {
-			t.Errorf("year = %d, %v", year, err)
-		}
-		site, err := QueryParams[string](r, "site")
-		if err != nil || len(site) != 2 || site[1] != "b" {
-			t.Errorf("site = %v, %v", site, err)
-		}
-		flag, err := QueryParam[bool](r, "flag")
-		if err != nil || !flag {
-			t.Errorf("flag = %v, %v", flag, err)
-		}
-		at, err := QueryParam[time.Time](r, "at")
-		if err != nil || at.Year() != 2024 || at.Hour() != 3 {
-			t.Errorf("at = %v, %v", at, err)
-		}
-		f, err := QueryParam[float64](r, "f")
-		if err != nil || f != 1.5 {
-			t.Errorf("f = %v, %v", f, err)
-		}
-		none, err := QueryParams[int](r, "none")
-		if err != nil || len(none) != 0 {
-			t.Errorf("absent list = %v, %v; want empty, nil", none, err)
-		}
-		if _, err := QueryParam[int](r, "missing"); err == nil || !strings.Contains(err.Error(), "missing") {
-			t.Errorf("missing scalar should be a 400 naming it: %v", err)
-		}
-		if _, err := QueryParam[int](r, "site"); err == nil || !strings.Contains(err.Error(), "site") {
-			t.Errorf("unparseable scalar should be a 400 naming it: %v", err)
-		}
-		return nil
+	r := requestOf(httptest.NewRequest("GET", "/x?year=2024&site=a&site=b&flag=true&at=2024-01-02T03:04:05Z&f=1.5", nil))
+	year, err := QueryParam[int](r, "year")
+	if err != nil || year != 2024 {
+		t.Errorf("year = %d, %v", year, err)
 	}
-	serve(t, h, req)
+	site, err := QueryParams[string](r, "site")
+	if err != nil || len(site) != 2 || site[1] != "b" {
+		t.Errorf("site = %v, %v", site, err)
+	}
+	flag, err := QueryParam[bool](r, "flag")
+	if err != nil || !flag {
+		t.Errorf("flag = %v, %v", flag, err)
+	}
+	at, err := QueryParam[time.Time](r, "at")
+	if err != nil || at.Year() != 2024 || at.Hour() != 3 {
+		t.Errorf("at = %v, %v", at, err)
+	}
+	f, err := QueryParam[float64](r, "f")
+	if err != nil || f != 1.5 {
+		t.Errorf("f = %v, %v", f, err)
+	}
+	none, err := QueryParams[int](r, "none")
+	if err != nil || len(none) != 0 {
+		t.Errorf("absent list = %v, %v; want empty, nil", none, err)
+	}
+	if _, err := QueryParam[int](r, "missing"); err == nil || !strings.Contains(err.Error(), "missing") {
+		t.Errorf("missing scalar should be a 400 naming it: %v", err)
+	}
+	if _, err := QueryParam[int](r, "site"); err == nil || !strings.Contains(err.Error(), "site") {
+		t.Errorf("unparseable scalar should be a 400 naming it: %v", err)
+	}
 
-	rec := serve(t, func(w http.ResponseWriter, r *Request) error {
+	rec := serve(t, func(r Request) Response {
 		_, err := QueryParam[int](r, "n")
-		return err
+		return Fail(err)
 	}, httptest.NewRequest("GET", "/x?n=abc", nil))
 	if rec.Code != 400 || !strings.Contains(rec.Body.String(), "n") {
 		t.Fatalf("bad value: %d %q", rec.Code, rec.Body.String())
@@ -183,9 +178,7 @@ func TestQueryBinding(t *testing.T) {
 }
 
 func TestNoRowsIs404(t *testing.T) {
-	rec := serve(t, func(w http.ResponseWriter, r *Request) error {
-		return fmt.Errorf("get: %w", rt.ErrNotFound)
-	}, httptest.NewRequest("GET", "/x", nil))
+	rec := serve(t, func(Request) Response { return Fail(rt.ErrNotFound) }, httptest.NewRequest("GET", "/x", nil))
 	if rec.Code != 404 {
 		t.Fatalf("rt.ErrNotFound: %d, want 404", rec.Code)
 	}
@@ -193,10 +186,9 @@ func TestNoRowsIs404(t *testing.T) {
 
 func TestFormatQueryRoundTrip(t *testing.T) {
 	at := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
-	req := httptest.NewRequest("GET", URL("/x",
+	r := requestOf(httptest.NewRequest("GET", URL("/x",
 		Query("s", FormatQuery("a b")), Query("i", FormatQuery(-7)),
-		Query("f", FormatQuery(1.25)), Query("b", FormatQuery(true)), Query("t", FormatQuery(at))), nil)
-	r := &Request{Request: req}
+		Query("f", FormatQuery(1.25)), Query("b", FormatQuery(true)), Query("t", FormatQuery(at))), nil))
 	if v, _ := QueryParam[string](r, "s"); v != "a b" {
 		t.Errorf("s = %q", v)
 	}
@@ -215,24 +207,24 @@ func TestFormatQueryRoundTrip(t *testing.T) {
 }
 
 func TestClientDoAndErrors(t *testing.T) {
-	srv := httptest.NewServer(Handler("GET /x", func(w http.ResponseWriter, r *Request) error {
-		switch r.URL.Path {
+	srv := httptest.NewServer(Handler("GET /x", func(r Request) Response {
+		switch r.Path() {
 		case "/rows":
 			var in row
-			if r.Method == "POST" {
+			if r.Method() == "POST" {
 				if err := Decode(r, &in); err != nil {
-					return err
+					return Fail(err)
 				}
-				return RenderStatus(w, r, 201, in)
+				return Created(in)
 			}
-			return Render(w, r, []row{{1, "a"}})
+			return Render([]row{{1, "a"}})
 		case "/gone":
-			return ErrNotFound
+			return Fail(ErrNotFound)
 		case "/none":
-			return RenderStatus(w, r, 204, nil)
+			return NoContent()
 		}
-		return Error(418, "teapot")
-	}, nil))
+		return Fail(Error(418, "teapot"))
+	}, nil, nil))
 	defer srv.Close()
 
 	for _, f := range []Format{FormatJSON, FormatGOB} {
@@ -265,12 +257,12 @@ func TestClientDoAndErrors(t *testing.T) {
 }
 
 func TestDecodeStrictAndBounded(t *testing.T) {
-	decode := func(w http.ResponseWriter, r *Request) error {
+	decode := func(r Request) Response {
 		var v row
 		if err := Decode(r, &v); err != nil {
-			return err
+			return Fail(err)
 		}
-		return Render(w, r, v)
+		return Render(v)
 	}
 	rec := serve(t, decode, httptest.NewRequest("POST", "/x", strings.NewReader(`{"ID":1,"Nmae":"typo"}`)))
 	if rec.Code != 400 {
@@ -306,9 +298,7 @@ func (e itemized) Details() []Detail {
 }
 
 func TestProblemBodyRoundTrip(t *testing.T) {
-	srv := httptest.NewServer(Handler("GET /x", func(w http.ResponseWriter, r *Request) error {
-		return itemized{"email required"}
-	}, nil))
+	srv := httptest.NewServer(Handler("GET /x", func(Request) Response { return Fail(itemized{"email required"}) }, nil, nil))
 	defer srv.Close()
 	for _, f := range []Format{FormatJSON, FormatGOB} {
 		c := &Client{Base: srv.URL, Format: f}
@@ -321,7 +311,7 @@ func TestProblemBodyRoundTrip(t *testing.T) {
 			t.Errorf("%v: a problem matches its status", f)
 		}
 	}
-	rec := serve(t, func(w http.ResponseWriter, r *Request) error { return ErrNotFound }, httptest.NewRequest("GET", "/x", nil))
+	rec := serve(t, func(Request) Response { return Fail(ErrNotFound) }, httptest.NewRequest("GET", "/x", nil))
 	var p Problem
 	if rec.Code != 404 || json.Unmarshal(rec.Body.Bytes(), &p) != nil || p.Status != 404 || p.Message != "not found" {
 		t.Fatalf("problem body = %d %q", rec.Code, rec.Body.String())

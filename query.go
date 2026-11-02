@@ -17,9 +17,9 @@ type QueryValue interface {
 // QueryParam binds one scalar parameter from the query string by name, as a
 // generated query route does (§query-routes). A missing or unparseable value is
 // a 400 naming the parameter.
-func QueryParam[T QueryValue](r *Request, name string) (T, error) {
+func QueryParam[T QueryValue](r Request, name string) (T, error) {
 	var v T
-	vals, ok := r.URL.Query()[name]
+	vals, ok := r.Query()[name]
 	if !ok || len(vals) == 0 {
 		return v, Error(http.StatusBadRequest, "missing query parameter "+name)
 	}
@@ -32,8 +32,8 @@ func QueryParam[T QueryValue](r *Request, name string) (T, error) {
 // QueryParams binds a list parameter (§predicates): every value of a repeated
 // query key, in order. An absent key is an empty list, never an error;
 // an element that does not parse is a 400 naming the parameter.
-func QueryParams[T QueryValue](r *Request, name string) ([]T, error) {
-	vals := r.URL.Query()[name]
+func QueryParams[T QueryValue](r Request, name string) ([]T, error) {
+	vals := r.Query()[name]
 	out := make([]T, 0, len(vals))
 	for _, s := range vals {
 		var v T

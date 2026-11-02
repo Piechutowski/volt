@@ -13,7 +13,7 @@ that lands it.
 |---|---|---|---|
 | Routing: scopes, pipelines, resources, reverse URLs | yes | built | |
 | Route-level data loading | plugs / before_action | missing | 7 |
-| Handlers as pure functions | no | missing | 6 |
+| Handlers as pure functions | no | built | |
 | Strong parameters | yes | built (`Cast` allow lists) | |
 | Request bodies bound to changesets on controller routes | yes | missing | 8 |
 | HTML templates | HEEx / ERB | not planned (Elm and guigui are the UIs) | |

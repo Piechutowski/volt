@@ -30,6 +30,7 @@ Scope / [pipe: api, error_handler: Errors] {
 	resources db.users
 
 	get /users/:id(int)/avatar Users.Avatar
+	get /users/:id(int)/profile Users.Profile [name: profile]
 	get /files/:path...          Files.Serve
 
 	get /tags/:name             Tags.Show    [name: tag]

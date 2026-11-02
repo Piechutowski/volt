@@ -27,21 +27,15 @@ func TagInner(next http.Handler) http.Handler {
 
 // Errors is the error_handler declared in routes.volt: it marks the
 // response so the proof suite can tell the DSL-configured spine ran,
-// then defers to the default mapping.
-func Errors(w http.ResponseWriter, r *volt.Request, err error) {
-	if !r.Committed() {
-		w.Header().Set("X-Error-Handler", "app")
-	}
-	volt.DefaultErrorHandler(w, r, err)
+// over the default mapping.
+func Errors(r volt.Request, err error) volt.Response {
+	return volt.DefaultErrorHandler(r, err).WithHeader("X-Error-Handler", "app")
 }
 
 // OpsErrors is the /ops scope's own error_handler: nearest wins
 // (§scopes), so routes under /ops reach this one, not Errors.
-func OpsErrors(w http.ResponseWriter, r *volt.Request, err error) {
-	if !r.Committed() {
-		w.Header().Set("X-Error-Handler", "ops")
-	}
-	volt.DefaultErrorHandler(w, r, err)
+func OpsErrors(r volt.Request, err error) volt.Response {
+	return volt.DefaultErrorHandler(r, err).WithHeader("X-Error-Handler", "ops")
 }
 
 // TagExtra marks the nested scope's appended pipeline (§scopes).

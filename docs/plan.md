@@ -194,59 +194,6 @@ Deferred: the language first, then non-core features and tooling.
 
 ---
 
-## Step 6. Responses as values; handlers as pure functions
-
-Depends on: 4.
-
-A handler returns `volt.Response`, a sealed sum:
-
-- a done response: status, headers, cookies and a body, where the body is
-  a negotiated render of a value, a redirect, a problem, a static file
-  from an `fs.FS`, an HTML page given as bytes (the SPA shell), or a
-  stream (a writer function, the one escape, named so vet can count it);
-- a continuation: `Then(effect, next)`.
-
-```go
-func Render(v any) Response                      // JSON or GOB by Accept
-func Created(v any) Response                     // 201
-func NoContent() Response
-func Redirect(url string) Response
-func Problem(status int, msg string) Response
-func File(fsys fs.FS, path string) Response
-func HTML(b []byte) Response
-func Stream(func(w io.Writer) error) Response
-func (r Response) WithStatus(code int) Response
-func (r Response) WithHeader(k, v string) Response
-func (r Response) WithCookie(c http.Cookie) Response
-
-func Then[T any](e rt.Effect[T], next func(T) Response) Response
-func Rescue[T any](e rt.Effect[T], on func(error) Response) rt.Effect[T]
-```
-
-The shim is a loop: run the effect, call `next`, repeat until done, then
-write. An effect that fails goes to the error spine as a handler error
-does today (404, 409, 422, 500) unless wrapped in `Rescue`. `Then` is the
-only mechanism the runtime knows; step 7's loads are sugar that produce
-`Then` chains in the shim.
-
-`volt.Request` becomes a value: method, path, parameters, query, headers
-and `Now()`. No writer, no context. The shim
-holds both. `volt.Events` stays a runtime handler. Controller types are
-empty structs (vet, step 0's rule 1). The generated interface changes
-from `(w, r, params...) error` to `(r volt.Request, params...)
-volt.Response`.
-
-Vet rules (new entries in `lint.md`, each with executable examples):
-`handler-receiver`, `handler-imports`, `handler-clock`, `package-state`,
-`goroutine`, `stream-count`. The determinism test helper is generated
-beside the handlers.
-
-Done when: the blog fixture's handlers rewritten and table-tested without
-a database; the itest proves the spine for an effect that fails inside
-`Then`; vet rules documented and tested.
-
----
-
 ## Step 7. Route loads
 
 Depends on: 6.
@@ -550,7 +497,6 @@ read the diff. Grammar: `tree-sitter generate`, `tree-sitter test`, the
 
 | Step | Depends on | Lands |
 |---|---|---|
-| 6 responses, pure handlers | 4 | |
 | 7 route loads | 6 | |
 | 8 bodies | 7 | |
 | 9 relations, join | 4 | |

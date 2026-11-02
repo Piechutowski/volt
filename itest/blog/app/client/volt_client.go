@@ -59,6 +59,10 @@ func (c *Client) Avatar(ctx context.Context, id int) (*http.Response, error) {
 	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/avatar"))
 }
 
+func (c *Client) Profile(ctx context.Context, id int) (*http.Response, error) {
+	return c.Raw(ctx, "GET", volt.URL("/users/"+volt.SegInt(id)+"/profile"))
+}
+
 func (c *Client) Serve(ctx context.Context, path string) (*http.Response, error) {
 	return c.Raw(ctx, "GET", volt.URL("/files/"+volt.SegWild(path)))
 }

@@ -2,7 +2,6 @@ package volt
 
 import (
 	"context"
-	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -14,9 +13,7 @@ type progress struct {
 
 func TestBrokerFanOutReplayAndReconnect(t *testing.T) {
 	b := &Broker{Replay: 8, Heartbeat: 20 * time.Millisecond}
-	srv := httptest.NewServer(Handler("GET /events", func(w http.ResponseWriter, r *Request) error {
-		return b.Serve(w, r)
-	}, nil))
+	srv := httptest.NewServer(EventsHandler(b))
 	defer srv.Close()
 
 	if err := b.Publish("compute.started", progress{0, 3}); err != nil {
@@ -94,7 +91,7 @@ func TestBrokerDropsStalledSubscriber(t *testing.T) {
 
 func TestStreamReconnectsAfterServerRestart(t *testing.T) {
 	b := &Broker{Heartbeat: 10 * time.Millisecond}
-	h := Handler("GET /events", func(w http.ResponseWriter, r *Request) error { return b.Serve(w, r) }, nil)
+	h := EventsHandler(b)
 	srv := httptest.NewServer(h)
 	c := &Client{Base: srv.URL}
 	ctx, cancel := context.WithCancel(context.Background())

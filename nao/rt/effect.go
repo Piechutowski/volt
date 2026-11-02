@@ -3,6 +3,8 @@ package rt
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -43,6 +45,7 @@ type Executor interface {
 // effect is unexported. T is what performing it yields.
 type Effect[T any] interface {
 	Perform(ctx context.Context, x Executor) (T, error)
+	PerformAny(ctx context.Context, x Executor) (any, error)
 	effect()
 }
 
@@ -310,3 +313,40 @@ func ScanOne[T any](r Row) (T, error) {
 	err := r.Scan(&v)
 	return v, err
 }
+
+// Describe spells an effect for comparison and logs (spec
+// §requests-and-responses): its kind, statement and arguments, a
+// transaction's or a parallel's steps in order, an error it carries.
+func Describe(e AnyEffect) string {
+	switch e := e.(type) {
+	case describer:
+		return e.describe()
+	case Transaction:
+		return "tx(" + describeAll(e.Steps) + ")"
+	case Parallel:
+		return "all(" + describeAll(e.Steps) + ")"
+	}
+	return fmt.Sprintf("%T", e)
+}
+
+type describer interface{ describe() string }
+
+func describeAll(steps []AnyEffect) string {
+	parts := make([]string, len(steps))
+	for i, s := range steps {
+		parts[i] = Describe(s)
+	}
+	return strings.Join(parts, "; ")
+}
+
+func describeStatement(kind, sql string, args []any, err error) string {
+	if err != nil {
+		return kind + " error: " + err.Error()
+	}
+	return fmt.Sprintf("%s %s %v", kind, sql, args)
+}
+
+func (q Query[T]) describe() string  { return describeStatement("query", q.SQL, q.Args, q.Err) }
+func (l Lookup[T]) describe() string { return describeStatement("lookup", l.SQL, l.Args, l.Err) }
+func (w Write[M]) describe() string  { return describeStatement("write", w.SQL, w.Args, w.Err) }
+func (e Exec) describe() string      { return describeStatement("exec", e.SQL, e.Args, e.Err) }

@@ -50,7 +50,7 @@ const modFile = "module blog\n"
 
 var blog = map[string]string{
 	"go.mod":    modFile,
-	"app/mw.go": "package app\n\nimport (\n\t\"net/http\"\n\n\tvolt \"github.com/Piechutowski/volt\"\n)\n\nfunc BearerAuth(next http.Handler) http.Handler { return next }\nfunc Errors(w http.ResponseWriter, r *volt.Request, err error) {}\n",
+	"app/mw.go": "package app\n\nimport (\n\t\"net/http\"\n\n\tvolt \"github.com/Piechutowski/volt\"\n)\n\nfunc BearerAuth(next http.Handler) http.Handler { return next }\nfunc Errors(r volt.Request, err error) volt.Response { return volt.DefaultErrorHandler(r, err) }\n",
 	"db/schema.volt": `package db
 
 Table users {

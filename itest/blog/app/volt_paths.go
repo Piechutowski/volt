@@ -46,6 +46,10 @@ func PathAvatar(id int, opts ...volt.URLOption) string {
 	return volt.URL("/users/"+volt.SegInt(id)+"/avatar", opts...)
 }
 
+func PathProfile(id int, opts ...volt.URLOption) string {
+	return volt.URL("/users/"+volt.SegInt(id)+"/profile", opts...)
+}
+
 func PathServe(path string, opts ...volt.URLOption) string {
 	return volt.URL("/files/"+volt.SegWild(path), opts...)
 }

@@ -164,7 +164,7 @@ import (
 
 type stub struct{}
 
-func (stub) Create(w http.ResponseWriter, r *volt.Request) error { return nil }
+func (stub) Create(r volt.Request) volt.Response { return volt.NoContent() }
 
 var _ http.Handler = NewRouter(Controllers{Users: stub{}})
 `
@@ -239,20 +239,20 @@ import (
 
 func BearerAuth(next http.Handler) http.Handler { return next }
 
-func Errors(w http.ResponseWriter, r *volt.Request, err error) {
-	volt.DefaultErrorHandler(w, r, err)
+func Errors(r volt.Request, err error) volt.Response {
+	return volt.DefaultErrorHandler(r, err)
 }
 
 type stub struct{}
 
-func (stub) Index(w http.ResponseWriter, r *volt.Request) error              { return nil }
-func (stub) About(w http.ResponseWriter, r *volt.Request) error              { return nil }
-func (stub) Ping(w http.ResponseWriter, r *volt.Request) error               { return nil }
-func (stub) Stats(w http.ResponseWriter, r *volt.Request) error              { return nil }
-func (stub) Serve(w http.ResponseWriter, r *volt.Request, path string) error { return nil }
-func (stub) Show(w http.ResponseWriter, r *volt.Request, id int) error     { return nil }
-func (stub) Create(w http.ResponseWriter, r *volt.Request) error             { return nil }
-func (stub) Avatar(w http.ResponseWriter, r *volt.Request, id int) error   { return nil }
+func (stub) Index(r volt.Request) volt.Response { return volt.NoContent() }
+func (stub) About(r volt.Request) volt.Response { return volt.NoContent() }
+func (stub) Ping(r volt.Request) volt.Response { return volt.NoContent() }
+func (stub) Stats(r volt.Request) volt.Response { return volt.NoContent() }
+func (stub) Serve(r volt.Request, path string) volt.Response { return volt.NoContent() }
+func (stub) Show(r volt.Request, id int) volt.Response { return volt.NoContent() }
+func (stub) Create(r volt.Request) volt.Response { return volt.NoContent() }
+func (stub) Avatar(r volt.Request, id int) volt.Response { return volt.NoContent() }
 
 // wire proves New accepts stub implementations of every interface.
 var _ http.Handler = NewRouter(Controllers{
@@ -329,7 +329,7 @@ import (
 
 type stub struct{}
 
-func (stub) Purge(w http.ResponseWriter, r *volt.Request, id int) error { return nil }
+func (stub) Purge(r volt.Request, id int) volt.Response { return volt.NoContent() }
 
 var _ http.Handler = NewRouter(Controllers{Tags: stub{}})
 `))

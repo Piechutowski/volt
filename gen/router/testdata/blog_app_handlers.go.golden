@@ -10,24 +10,24 @@ import (
 )
 
 type AdminController interface {
-	Stats(w http.ResponseWriter, r *volt.Request) error
+	Stats(r volt.Request) volt.Response
 }
 
 type FilesController interface {
-	Serve(w http.ResponseWriter, r *volt.Request, path string) error
+	Serve(r volt.Request, path string) volt.Response
 }
 
 type HomeController interface {
-	Index(w http.ResponseWriter, r *volt.Request) error
-	About(w http.ResponseWriter, r *volt.Request) error
-	Ping(w http.ResponseWriter, r *volt.Request) error
+	Index(r volt.Request) volt.Response
+	About(r volt.Request) volt.Response
+	Ping(r volt.Request) volt.Response
 }
 
 type UsersController interface {
-	Index(w http.ResponseWriter, r *volt.Request) error
-	Create(w http.ResponseWriter, r *volt.Request) error
-	Show(w http.ResponseWriter, r *volt.Request, id int) error
-	Avatar(w http.ResponseWriter, r *volt.Request, id int) error
+	Index(r volt.Request) volt.Response
+	Create(r volt.Request) volt.Response
+	Show(r volt.Request, id int) volt.Response
+	Avatar(r volt.Request, id int) volt.Response
 }
 
 type Controllers struct {
@@ -43,4 +43,36 @@ func NewRouter(c Controllers) http.Handler {
 	mux := http.NewServeMux()
 	register(mux, c)
 	return mux
+}
+
+func ControllersDeterministic(c Controllers, r volt.Request) []string {
+	var voltOut []string
+	if !volt.Same(c.Admin.Stats(r), c.Admin.Stats(r)) {
+		voltOut = append(voltOut, "Admin.Stats")
+	}
+	if !volt.Same(c.Files.Serve(r, ""), c.Files.Serve(r, "")) {
+		voltOut = append(voltOut, "Files.Serve")
+	}
+	if !volt.Same(c.Home.Index(r), c.Home.Index(r)) {
+		voltOut = append(voltOut, "Home.Index")
+	}
+	if !volt.Same(c.Home.About(r), c.Home.About(r)) {
+		voltOut = append(voltOut, "Home.About")
+	}
+	if !volt.Same(c.Home.Ping(r), c.Home.Ping(r)) {
+		voltOut = append(voltOut, "Home.Ping")
+	}
+	if !volt.Same(c.Users.Index(r), c.Users.Index(r)) {
+		voltOut = append(voltOut, "Users.Index")
+	}
+	if !volt.Same(c.Users.Create(r), c.Users.Create(r)) {
+		voltOut = append(voltOut, "Users.Create")
+	}
+	if !volt.Same(c.Users.Show(r, 0), c.Users.Show(r, 0)) {
+		voltOut = append(voltOut, "Users.Show")
+	}
+	if !volt.Same(c.Users.Avatar(r, 0), c.Users.Avatar(r, 0)) {
+		voltOut = append(voltOut, "Users.Avatar")
+	}
+	return voltOut
 }

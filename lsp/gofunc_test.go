@@ -262,7 +262,7 @@ func TestGoFileChangeNoticedForBareTypesAndErrorHandlers(t *testing.T) {
 			file:    "app/routes.volt",
 			text:    "package app\n\nScope / [error_handler: Errors] {\n\tget / volt.Events\n}\n",
 			goFile:  "app/errors.go",
-			goSrc:   "package app\n\nimport (\n\t\"net/http\"\n\n\t\"github.com/Piechutowski/volt\"\n)\n\n// Errors renders failures (§scopes).\nfunc Errors(w http.ResponseWriter, r *volt.Request, err error) {}\n",
+			goSrc:   "package app\n\nimport (\n\t\"net/http\"\n\n\t\"github.com/Piechutowski/volt\"\n)\n\n// Errors renders failures (§scopes).\nfunc Errors(r volt.Request, err error) volt.Response { return volt.DefaultErrorHandler(r, err) }\n",
 			missing: "no function Errors",
 		},
 	} {

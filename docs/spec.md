@@ -69,9 +69,10 @@ the generator and `volt vet` where Go itself holds nothing.
    `gen/` or `nao/gen` imports `os`, `io/fs`, `database/sql` or
    `net`; `cmd/volt/layers_test.go` holds it.
 
-Where the implementation as it stands falls short of a rule,
-[`plan.md`](plan.md) names the step that closes the gap: today a
-handler writes its own response (§handler-references).
+A hand-written handler is a function from a request value to a
+response value (§requests-and-responses): it holds no database, reads
+the clock from the request, and describes its effects for the
+generated shim to perform; the vet rules of `lint.md` hold it to that.
 
 ---
 
@@ -154,6 +155,7 @@ by (1) a grammar production in EBNF, (2) an enumerated list of constraints, and
     - [Route paths](#route-paths)
     - [Routes](#routes)
     - [Handler references](#handler-references)
+    - [Requests and responses](#requests-and-responses)
     - [Query routes](#query-routes)
     - [Formats](#formats)
     - [Generated client](#generated-client)
@@ -2073,14 +2075,102 @@ handler ref = name, [ ".", name ] ;
    runtime's own handlers are `volt.<Name>` (§event-routes).
 2. Every distinct controller becomes one generated interface; every
    distinct action one method with the route's typed parameters
-   appended after `(w http.ResponseWriter, r *volt.Request)`, returning
-   `error`.
+   appended after `(r volt.Request)`, returning `volt.Response`
+   (§requests-and-responses); the type that implements it is an empty
+   struct (`lint.md`, `handlerreceiver`).
 3. Two routes MAY share `Controller.Action` only with identical
    parameter signatures (names, types and wildcard-ness, in order).
 4. The generated `Controllers` manifest is one namespace: a controller
    MUST NOT take the name of a field the manifest holds for a data
    the query routes run on (`DB`; §query-routes) or for the event broker
    (`Events`; §event-routes). The error names the field.
+
+### Requests and responses
+
+A handler is a pure function from a request value to a response value
+(§values-and-effects): it reads the request, describes what the
+database should do and what the client should receive, and the
+generated shim does both.
+
+```go
+type Request struct { /* unexported */ }
+func (r Request) Method() string
+func (r Request) Path() string
+func (r Request) Route() string            // the matched ServeMux pattern
+func (r Request) PathValue(name string) string
+func (r Request) Query() url.Values
+func (r Request) Header() http.Header
+func (r Request) Body() []byte             // read once by the shim, at most MaxBodyBytes
+func (r Request) Now() time.Time           // the clock, captured once
+
+type Response struct { /* unexported: a done response, or a continuation */ }
+func Render(v any) Response                // 200, JSON or GOB by Accept (§formats)
+func RenderStatus(status int, v any) Response
+func Created(v any) Response               // 201
+func NoContent() Response                  // 204
+func Redirect(url string) Response         // 303
+func Reject(status int, msg string) Response   // a Problem body (§formats)
+func Fail(err error) Response              // the error handler chooses (§scopes)
+func File(fsys fs.FS, path string) Response
+func HTML(b []byte) Response
+func Stream(fn func(io.Writer) error) Response   // the one escape
+func (r Response) WithStatus(code int) Response
+func (r Response) WithHeader(k, v string) Response
+func (r Response) WithCookie(c http.Cookie) Response
+func (r Response) WithDetails(errs []rt.FieldError) Response
+
+func Then[T any](e rt.Effect[T], next func(T) Response) Response
+func (r Response) Rescue(on func(error) Response) Response
+```
+
+1. **The request value.** The shim builds one `volt.Request` per
+   request: the method, the path, the matched route, the path
+   parameters the route captures, the query string, the headers, the
+   body, read once up to `volt.MaxBodyBytes` (a larger body is a 413
+   before the handler runs), and the time, captured once, which
+   `Now()` returns. It carries no writer and no context; the shim holds
+   both. Nothing a handler reads from it changes between two reads.
+2. **The response value.** A response is either **done**, a status,
+   headers, cookies and a body, or a **continuation**: `Then(e, next)`
+   names an effect of `nao/rt` (§generated-query-surface) and the
+   function that turns its result into the next response. The shim is
+   a loop: perform the effect, call `next`, repeat until done, then
+   write. `Then` is the only way a handler reaches the database, and
+   a handler calls nothing that performs one.
+3. **Failure.** An effect that fails, and a `Fail(err)` a handler
+   returns, go to the route's error handler (§scopes), which answers
+   404 for a row miss, 409 or 422 for a refused write, an `HTTPError`'s
+   own status, and 500 otherwise (§formats). `Rescue` on a continuation
+   names the function that answers for its effect's failure instead,
+   for a route that must decide on a miss; on a done response it does
+   nothing. `Reject` is a Problem body of the handler's own, with
+   `WithDetails` for the field errors of a changeset it judged.
+4. **Bodies.** `Render` and `RenderStatus` write a value in the
+   negotiated format; `File` serves a file of an `fs.FS` as `net/http`
+   does; `HTML` writes bytes as `text/html`; `Redirect` writes a
+   `Location`; `Stream` hands the body to a function, the one response
+   that is not a value, which the lint annex counts (`lint.md`,
+   `streamcount`); a failure inside it is logged, the response being
+   committed. `WithHeader` and `WithCookie` return a response with the
+   addition and leave their receiver as it was.
+5. **Determinism.** Two calls of a handler with one request value
+   return the same response value, and `volt_handlers.go` declares
+   `ControllersDeterministic(c Controllers, r volt.Request) []string`,
+   which calls every action twice with zero-valued parameters and
+   names the ones whose responses differ (`volt.Same`: the same status,
+   headers, cookies and body, or continuations of the same effect;
+   streams compare as the same). An application's test calls it with
+   its controllers and asserts an empty list.
+6. **What keeps a handler pure** is the generated interface, which
+   fixes every parameter, and the vet rules of `lint.md`:
+   a controller is an empty struct (`handlerreceiver`), a file that
+   declares a handler imports neither the runner nor `database/sql`,
+   `net`, `os`, `os/exec` nor a random source (`handlerimports`), it
+   reads no clock but `r.Now()` (`handlerclock`), a routes package holds
+   no package state and starts no goroutine (`packagestate`,
+   `goroutine`), and every `Stream` is reported (`streamcount`). Not
+   caught: reflection, `unsafe`, cgo, and a package imported under
+   another name.
 
 ### Query routes
 
@@ -2169,11 +2259,12 @@ Scope /api [pipe: api] {
    (§the-action-table). `volt routes` and the route table show the reference as
    written (`db.UserGet`; a query of the package itself unqualified,
    `UserGet`) in place of `Controller.Action`.
-5. **Wiring.** The generated `Controllers` manifest (§handler-references) gains one
-   field, `DB run.DB`, when the package has a query route: the one
-   database every query route runs on, which the application opens
-   with `run.Open` (§generated-query-surface). The shim performs the
-   query with `run.Run`. No interface is generated for a query route.
+5. **Wiring.** The generated `Controllers` manifest (§handler-references) holds
+   `DB run.DB`, the one database every effect of the package runs on,
+   which the application opens with `run.Open`
+   (§generated-query-surface). The shim performs the query as a
+   continuation (§requests-and-responses). No interface is generated
+   for a query route.
 6. **Own tables.** A package that declares tables MAY route them
    itself, so one directory holds schema, routes and handlers.
    `Query` names its own generated query;
@@ -2216,10 +2307,11 @@ for a format suffix.
    of `[]byte` column, and a NULL arrives as an invalid `rt.Null`;
    re-rendered as JSON, such a nil plain `[]byte` is `null`, not `""`
    (§nullability).
-4. The runtime exposes the same rules to hand-written controllers as
-   `volt.Negotiate`, `volt.Render`, `volt.RenderStatus` and
-   `volt.Decode`, so a controller route can speak both formats without
-   repeating them.
+4. The runtime exposes the same rules to hand-written handlers as
+   `volt.Render`, `volt.RenderStatus`, `volt.Created`, `volt.Reject`
+   and `volt.Decode` over the request value's body
+   (§requests-and-responses), so a controller route speaks both
+   formats without repeating them.
 5. **Error bodies** are structured: the default error handler writes a
    `volt.Problem` (status, message, and details: check, columns,
    message, when the error itemizes them) in the negotiated format,
@@ -2302,7 +2394,9 @@ Scope / [pipe: api] {
 ```
 
 1. The handler `volt.Events` names the runtime's event stream; it is
-   the only handler the runtime provides, and it takes `get`. The
+   the only handler the runtime provides, an `http.Handler` of its own
+   that streams for as long as the client listens rather than a
+   function to a response value, and it takes `get`. The
    route otherwise behaves as any route: prefixes, pipelines, error
    handler, a helper and a client method named by the action
    (`PathEvents`, `client.Events`).
@@ -2344,9 +2438,11 @@ Scope settings (the complete set):
 3. The `error_handler` function is a Go reference held like a plug:
    it MUST exist in the package's compiled Go files with the volt
    runtime's ErrorHandler shape:
-   `func(http.ResponseWriter, *volt.Request, error)`. Routes without
-   one use the runtime default. A custom handler gets the status,
-   message and details the default would write from
+   `func(volt.Request, error) volt.Response`, a function from the
+   request and the failure to a done response
+   (§requests-and-responses). Routes without one use the runtime
+   default, `volt.DefaultErrorHandler`, which a custom handler calls
+   for the status, message and details the default would write from
    `volt.ProblemOf(err)` (§formats), since a refused write, a
    `*rt.Invalid`, carries no status of its own
    (§data-and-network-layers).
@@ -2649,12 +2745,14 @@ an action list on resources, a table list on a dataset.
 The normative output contract is the golden corpus under
 `gen/router/testdata/` and the proof suite under `itest/`. In prose:
 one `<Controller>Controller` interface per controller and a
-`Controllers` struct (§handler-references), with the `DB run.DB` field when
-query routes exist (§query-routes); `NewRouter(Controllers) http.Handler`
+`Controllers` struct (§handler-references), with the `DB run.DB` field the
+shim performs effects on (§query-routes); `NewRouter(Controllers) http.Handler`
 registering every route onto a `http.ServeMux` with its pipeline chain
 composed statically and its typed shim parsing parameters per §route-paths
-— for a query route the shim is the whole handler: it binds every
-parameter per §query-routes, calls the query and renders per §formats;
+— the shim is a loop that performs a response's continuations and
+writes the done response (§requests-and-responses), and for a query
+route it is the whole handler: it binds every parameter per
+§query-routes and returns the continuation that renders per §formats;
 `Path*` helpers per §route-names-and-reverse-urls; a `Table []volt.Route` mirroring the
 expanded route list in declaration order, with `Query` set on query
 routes; and the client package of §generated-client. For a data package that

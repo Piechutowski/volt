@@ -114,7 +114,8 @@ func TestAnalyzerDocs(t *testing.T) {
 	for _, a := range vet.All() {
 		_, rule := a.(vet.Rule)
 		_, fold := a.(vet.Fold)
-		if a.Name() == "" || a.Doc() == "" || (!rule && !fold) {
+		_, goRule := a.(vet.GoRule)
+		if a.Name() == "" || a.Doc() == "" || (!rule && !fold && !goRule) {
 			t.Errorf("analyzer %+v is missing name, doc or a check", a)
 		}
 	}

@@ -64,7 +64,7 @@ func TestRefusedWriteStatus(t *testing.T) {
 			}
 
 			rec := httptest.NewRecorder()
-			Handler("POST /x", func(w http.ResponseWriter, r *Request) error { return tc.err }, nil).
+			Handler("POST /x", func(Request) Response { return Fail(tc.err) }, nil, nil).
 				ServeHTTP(rec, httptest.NewRequest("POST", "/x", nil))
 			var body Problem
 			if rec.Code != tc.status || json.Unmarshal(rec.Body.Bytes(), &body) != nil || body.Status != tc.status || len(body.Details) != len(inv.Fields) {
