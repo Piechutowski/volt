@@ -1,4 +1,4 @@
-// spec: §default-handlers — i118_resources_default_param_shadow
+// spec: §default-handlers, under [default] the key parameter is the generated CRUD's, so the scope's parameter is the one to rename
 // want: give the scope's parameter another name
 package app
 
@@ -6,6 +6,6 @@ import (
 	db
 )
 
-Scope /farms/:id {
-	resources db.plots [default]
+Scope /blogs/:id {
+	resources db.posts [default]
 }

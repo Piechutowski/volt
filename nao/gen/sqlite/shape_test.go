@@ -62,7 +62,7 @@ func TestTableDDLOneToOneAndActions(t *testing.T) {
 }
 
 // TestColumnDDLActions pins an added column's definition (spec
-// §migrations rule 8): its referential actions follow the reference,
+// §migrations): its referential actions follow the reference,
 // and a unique or index setting is not part of it, since the add's
 // CREATE INDEX carries it.
 func TestColumnDDLActions(t *testing.T) {

@@ -71,7 +71,7 @@ func (c Column[M, T]) NotIn(vs ...T) Pred[M] {
 // InList is "column IN (SELECT value FROM json_each(?))" over the list
 // as one JSON array, one statement text whatever the length, and an empty
 // list matches no row; a list whose items bind as bytes is In over them,
-// since JSON carries no blob (spec §predicates rule 6).
+// since JSON carries no blob (spec §predicates).
 func (c Column[M, T]) InList(vs []T) Pred[M] {
 	if listBytes(vs) {
 		return c.In(vs...)
@@ -117,7 +117,7 @@ func (c Column[M, T]) cmpCol(op string, o Column[M, T]) Pred[M] {
 // EqCol compares two columns of the same model: "a = b".
 func (c Column[M, T]) EqCol(o Column[M, T]) Pred[M] { return c.cmpCol("=", o) }
 
-// NeCol is "a != b" (spec §predicates rule 6).
+// NeCol is "a != b" (spec §predicates).
 func (c Column[M, T]) NeCol(o Column[M, T]) Pred[M] { return c.cmpCol("!=", o) }
 
 // GtCol is "a > b".
@@ -360,7 +360,7 @@ func (o afterOpt[M]) optApply(s *querySpec[M]) { s.after, s.afterSet = o.key, tr
 // After positions the query strictly after the row with the given key
 // (keyset pagination): the previous page's last row's values for
 // the ORDER BY columns, one per term, in the same order. It renders as
-// one more predicate of the WHERE clause (spec §predicates rule 6) and
+// one more predicate of the WHERE clause (spec §predicates) and
 // requires an OrderBy and one key value per term. NULLs in keyset
 // columns are not paginated over; keep keyset columns NOT NULL.
 func After[M any](key ...any) Opt[M] { return afterOpt[M]{key: key} }
@@ -373,7 +373,7 @@ func (distinctOpt[M]) optApply(s *querySpec[M]) { s.distinct = true }
 func Distinct[M any]() Opt[M] { return distinctOpt[M]{} }
 
 // SelectRender renders a SELECT over the model's fixed shape (spec
-// §predicates rule 6): table and columns come pre-rendered from generated
+// §predicates): table and columns come pre-rendered from generated
 // code, everything else from the options. Deterministic: identical option
 // values render identical SQL. Argument order matches placeholder order
 // by construction.
@@ -497,7 +497,7 @@ func UpdateRender[M any](table string, set []Assign[M], preds []Pred[M]) (string
 }
 
 // WhereRender renders the text after WHERE for the conjunction of the
-// predicates (spec §predicates rule 6), "" when none survives; every
+// predicates (spec §predicates), "" when none survives; every
 // statement renderer reads its WHERE clause from it.
 func WhereRender[M any](preds []Pred[M]) (string, []any, error) {
 	var w strings.Builder
@@ -517,7 +517,7 @@ func WhereRender[M any](preds []Pred[M]) (string, []any, error) {
 }
 
 // OrderRender renders the text after ORDER BY for the terms (spec
-// §predicates rule 6), every direction spelled.
+// §predicates), every direction spelled.
 func OrderRender[M any](terms []Order[M]) string {
 	var b strings.Builder
 	for i, o := range terms {
@@ -558,7 +558,7 @@ func afterPred[M any](orders []Order[M], key []any) (Pred[M], error) {
 }
 
 // Ident is the one spelling of an identifier in every statement (spec
-// §predicates rule 6): always double-quoted, a quote inside doubled.
+// §predicates): always double-quoted, a quote inside doubled.
 func Ident(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }

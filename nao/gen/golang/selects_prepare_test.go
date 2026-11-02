@@ -9,8 +9,8 @@ import (
 
 	"github.com/Piechutowski/volt/lang"
 	"github.com/Piechutowski/volt/lang/diag"
-	"github.com/Piechutowski/volt/nao/gen/golang"
 	sqlitegen "github.com/Piechutowski/volt/nao/gen/sqlite"
+	"github.com/Piechutowski/volt/nao/naming"
 )
 
 func TestSelectsPrepare(t *testing.T) {
@@ -34,6 +34,7 @@ func TestSelectsPrepare(t *testing.T) {
 		t.Fatal(err)
 	}
 	fns := pkg.SelectFns()
+	plan := naming.PlanBuild(pkg.Merged(), pkg.Schema())
 	if len(fns) < 4 {
 		t.Fatalf("fixture declares too few select instantiations: %d", len(fns))
 	}
@@ -43,7 +44,7 @@ func TestSelectsPrepare(t *testing.T) {
 	}
 	stmts := map[string]stmtCase{}
 	for _, fn := range fns {
-		sql, args, err := golang.SelectSQLFor(pkg.Merged(), pkg.Schema(), fn)
+		sql, args, err := plan.SelectStatement(fn)
 		if err != nil {
 			t.Fatal(err)
 		}

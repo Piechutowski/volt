@@ -108,7 +108,7 @@ func (c *checker) migrationsCheck(f *ast.File) {
 
 // migrationWidthCheck enforces one digit-run width across the package's
 // migration names, so that byte order and numeric order agree (spec
-// §migrations rule 2); a name of another width than the narrowest is
+// §migrations); a name of another width than the narrowest is
 // reported with the first name of that width.
 func (c *checker) migrationWidthCheck() {
 	var narrowest *MigrationInfo
@@ -172,7 +172,7 @@ type missingInverse struct {
 }
 
 // inversesMissing lists what in an operation has no inverse, an alter
-// table item at its own position (spec §migrations rule 12).
+// table item at its own position (spec §migrations).
 func inversesMissing(op ast.Operation) []missingInverse {
 	switch op := op.(type) {
 	case *ast.DropTable:
@@ -199,8 +199,7 @@ func inversesMissing(op ast.Operation) []missingInverse {
 
 // operationsCheck checks the operations of one body; flat says the
 // body is a flat one, whose typed drops are inverse adds, and noTx
-// that the migration is no_transaction (spec §migrations rules 8 and
-// 12).
+// that the migration is no_transaction (spec §migrations).
 func (c *checker) operationsCheck(ops []ast.Operation, flat, noTx bool) {
 	for _, op := range ops {
 		switch op := op.(type) {
@@ -240,8 +239,8 @@ func (c *checker) operationsCheck(ops []ast.Operation, flat, noTx bool) {
 }
 
 // shapeBodyCheck checks the body of a create, drop or rebuild table
-// operation as the schema checks a table (spec §migrations rules 3 to
-// 6 and 9, §indexes) and returns its columns and indexes.
+// operation as the schema checks a table (spec §migrations, §indexes)
+// and returns its columns and indexes.
 func (c *checker) shapeBodyCheck(what, table string, pos token.Position, body []ast.TableItem, incomplete bool, spec settingSpec) *TableInfo {
 	ti := &TableInfo{Key: table}
 	var named []namedIndex
@@ -277,7 +276,7 @@ func (c *checker) shapeBodyCheck(what, table string, pos token.Position, body []
 // migrationColumnCheck checks one column of a migration: its settings
 // against the whitelist, the referential actions of its ref:, its type
 // against the built-ins, its default against the type, and null
-// against pk (spec §migrations rules 3 and 4, §columns).
+// against pk (spec §migrations, §columns).
 func (c *checker) migrationColumnCheck(col *ast.Column, spec settingSpec) *ColumnDef {
 	c.settingsCheck(col.Settings, "migrations", spec)
 	c.migrationRefCheck(col)
@@ -336,9 +335,9 @@ func refActionOf(s *ast.Setting) string {
 
 // addColumnCheck enforces SQLite's ADD COLUMN rules on an added column
 // and, in a flat body, on the shape of a dropped one, which is the
-// inverse add (spec §migrations rules 8 and 12); head names the item
-// for the diagnostic and noTx says the migration is no_transaction,
-// which cannot hold the schema edit of an expression default.
+// inverse add (spec §migrations); head names the item for the
+// diagnostic and noTx says the migration is no_transaction, which
+// cannot hold the schema edit of an expression default.
 func (c *checker) addColumnCheck(col *ast.Column, head string, noTx bool) {
 	cd := c.migrationColumnCheck(col, migrationColumnSettings)
 	keyed := false
@@ -370,7 +369,7 @@ func (c *checker) addColumnCheck(col *ast.Column, head string, noTx bool) {
 }
 
 // migrationIndexCheck checks an index of a shape body or of a create
-// index or drop index operation (spec §migrations rules 4 and 10).
+// index or drop index operation (spec §migrations).
 func (c *checker) migrationIndexCheck(table string, ix *ast.Index) {
 	c.settingsCheck(ix.Settings, "migrations", migrationIndexSettings)
 	c.indexNameCheck(table, ix)
@@ -410,7 +409,7 @@ func indexKeyString(ix *ast.Index) string {
 // rebuildSourcesCheck follows the column names of every table through
 // the package's migrations in name order, so that a rebuild's NOT NULL
 // column whose source would be NULL, no from:, no default:, no old
-// column of its name, is an error (spec §migrations rule 9). A rowid
+// column of its name, is an error (spec §migrations). A rowid
 // alias (int [pk, increment]) takes NULL and the database assigns it.
 // A table no create table operation made is unknown and goes unchecked.
 func (c *checker) rebuildSourcesCheck() {

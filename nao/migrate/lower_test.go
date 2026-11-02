@@ -135,7 +135,7 @@ func TestLowerNoTransactionDisablesTheBracket(t *testing.T) {
 
 // TestLowerRefusesTwoIndexesOfOneName pins that two indexes of a shape
 // body that derive one name, a column's unique and a partial index on
-// it, are the checker's error (spec §indexes, §migrations rule 3) and,
+// it, are the checker's error (spec §indexes, §migrations) and,
 // should an unchecked package reach it, the lowering's refusal naming
 // the migration.
 func TestLowerRefusesTwoIndexesOfOneName(t *testing.T) {
@@ -187,7 +187,7 @@ func TestRebuildForgetsAnIndexNotRestated(t *testing.T) {
 // TestTypedDropOfAnIndexedColumnRoundTrips pins that a typed drop whose
 // shape carries unique or index drops that index before the column, as
 // the inverse of an add does, so the flat body folds to the schema and
-// runs down and up again on a real SQLite (spec §migrations rule 8).
+// runs down and up again on a real SQLite (spec §migrations).
 func TestTypedDropOfAnIndexedColumnRoundTrips(t *testing.T) {
 	ctx := context.Background()
 	src := "package db\n\nTable accounts {\n  id int [pk]\n}\n\nMigration 0001__init {\n  create table accounts {\n    id     int    [pk]\n    email  string [null, unique]\n    region string [null, index]\n  }\n}\n\nMigration 0002__drop {\n  alter table accounts {\n    drop email string [null, unique]\n    drop region string [null, index]\n  }\n}\n"
@@ -252,7 +252,7 @@ func TestTypedDropOfAnIndexedColumnRoundTrips(t *testing.T) {
 
 // TestRebuildUnderAViewOrTriggerFailsAtTheRename pins where the five
 // steps stop when a view, or a trigger on another table, reads the
-// table (spec §migrations rule 9): SQLite refuses the rename and names
+// table (spec §migrations): SQLite refuses the rename and names
 // the view or trigger, which exec (rule 11) drops and recreates around
 // the rebuild.
 func TestRebuildUnderAViewOrTriggerFailsAtTheRename(t *testing.T) {
@@ -463,7 +463,7 @@ Migration 0001__rebuild [irreversible] {
 
 // TestLowerRebuildIntroducingARowidAlias pins NULL as the source of an
 // int [pk, increment] column the old table lacks, the one NOT NULL
-// column the checker admits without a source (spec §migrations rule 9).
+// column the checker admits without a source (spec §migrations).
 func TestLowerRebuildIntroducingARowidAlias(t *testing.T) {
 	src := "package db\n\nTable posts {\n  id int [pk, increment]\n  n  int [null]\n}\n\nMigration 0001__init {\n  create table posts {\n    n int [null]\n  }\n}\n\nMigration 0002__rebuild [irreversible] {\n  rebuild table posts {\n    id int [pk, increment]\n    n  int [null]\n  }\n}\n"
 	_, info := parseChecked(t, "t.volt", src)
@@ -482,7 +482,7 @@ func TestLowerRebuildIntroducingARowidAlias(t *testing.T) {
 }
 
 // TestExpressionDefaultAddFillsRowsWithoutARebuild pins the add of a
-// column whose default is not a constant (spec §migrations rule 8): the
+// column whose default is not a constant (spec §migrations): the
 // five statements, every existing row filled once, the definition the
 // schema declares, read at once by a connection that loaded the old
 // schema, no drift from the target, and down and up again.
@@ -604,7 +604,7 @@ func TestExpressionDefaultAddFillsRowsWithoutARebuild(t *testing.T) {
 }
 
 // TestExpressionDefaultAddYieldingNullRollsBack pins the one failure
-// only rows reveal (spec §the-fold rule 4): a NOT NULL column whose
+// only rows reveal (spec §the-fold): a NOT NULL column whose
 // expression default yields NULL fails at the backfill, and the
 // migration leaves the table as it was.
 func TestExpressionDefaultAddYieldingNullRollsBack(t *testing.T) {

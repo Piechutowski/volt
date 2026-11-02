@@ -31,7 +31,7 @@ report engine when a consumer exists.
     - [x] Table aliases (`as`) and schema qualification go; a table is named by its name only
     - [x] Settings nothing reads go: index `type:` and `note:`, `note:` on migrations, migration columns and migration indexes; a TablePartial takes no settings and no note
     - [x] NULL has one spelling: `default: null` goes, a record row writes `null`, and an empty field is an error
-    - [x] The spec says what the code does: punctuation table, the doubled exclusion backslash, the multi-line string and `import ( db )` examples, §table-resolution clause 2, the empty Reserved headings, version relics
+    - [x] The spec says what the code does: punctuation table, the doubled exclusion backslash, the multi-line string and `import ( db )` examples, §table-resolution, the empty Reserved headings, version relics
   - [x] Setting names and values are one word: `set_null`, `set_default`, `no_transaction`; `no action` goes
   - [x] A nullable []byte is rt.Null[[]byte] like every other nullable type; a plain []byte is bytes, and nil writes empty bytes
   - [x] Step 2, case and names
@@ -63,11 +63,12 @@ report engine when a consumer exists.
 
 ## Data layer (nao)
 
+- [x] The data layer stands alone (§data-and-network-layers): a package that declares no scope generates its data files only, `volt gen` removes the route files it wrote while the package had one, and a program over it links nothing from Volt but `nao/rt`; the network layer uses the data layer and never the reverse, which `cmd/volt/layers_test.go` enforces; the data layer's names are planned in `nao/naming`, which the data generator renders, so the front end and the language server import no generator; generated locals and the unexported scan functions and statement constants take the form `volt` plus an upper-case word, and a key column's parameter takes a trailing underscore where a select parameter is refused (`nil`, `append`, the route files' `w`, `r`, `opts`, `volt`, `cs`, `c`), so no key column and no select parameter shadows a local, a helper or a predeclared name a method uses, and a table keyed on `c` routes
 - [x] Models: structs, `Null[T]`, singular names, notes as doc comments
 - [x] DDL and seed `INSERT`s from `Records`
 - [x] CRUD: `Get`, `GetMany`, `GetBy*`, `List`, `Count`, `Create`, `Update`, `Delete`; keyless tables get `List`/`Create`/`Count`; `Create` and `Update` take a changeset and return the stored row
 - [x] Dynamic queries: predicates as values, flat typed handles, per-model wrappers, shared verbs, keyset pagination, statement cache, `dynname` vet rule
-- [x] Changesets: the single write path (§changesets); `<Model>New()` and `row.Changeset()`, one setter per column, `Cast` of a `rt.Params[M]` wire body behind an allow list, `Validate`, `Create` and `Update` rendered from the marked columns; every refused write, a failed validator or the database's own refusal alike, is one `*rt.Invalid` itemizing its field errors, 409 for a `unique` violation, 422 otherwise
+- [x] Changesets: the single write path (§changesets); `<Model>New()` and `row.Changeset()`, one setter per column, `Cast` of a `rt.Params[M]` wire body behind an allow list, `Validate`, `Create` and `Update` rendered from the marked columns; every refused write, a failed validator or the database's own refusal alike, is one `*rt.Invalid` itemizing its field errors, which carries no HTTP status: the error spine answers 409 for a `unique` violation, 422 otherwise
 - [x] Validation: validators are exported Go functions of the package named in the schema, `required` is the built-in one, nothing reaches the DDL; `Validate()` on the changeset runs `required` and the validators, every failure collected; the API path answers with the changeset's `*rt.Invalid`
   - [ ] `[on: create]` / `[on: update]` as triggers in SQL and, in Go, by whether the changeset was made from a row
   - *hand* membership in a value set: a validator written beside the declared type (§types)
@@ -87,7 +88,7 @@ report engine when a consumer exists.
   - [x] The ledger `volt_migrations` and `rt.MigrateUp`, `rt.MigrateDown`, `rt.MigrateStatus` (§migration-ledger)
   - [x] `volt migration new | check | up | down | status | sql`, and `volt_migrations.go` with `Migrate` for the binary (§migration-tooling)
   - [x] The pragma bracket around `rebuild table` and `drop table`, `foreign_key_check` before commit; `no_transaction` for what needs it
-  - [x] `add` takes an expression default (`CURRENT_TIMESTAMP`) without a rebuild: the column added, every row backfilled, the definition edited through `writable_schema` in the same transaction (§migrations rule 8); the drift report proposes `add` for it
+  - [x] `add` takes an expression default (`CURRENT_TIMESTAMP`) without a rebuild: the column added, every row backfilled, the definition edited through `writable_schema` in the same transaction (§migrations); the drift report proposes `add` for it
   - [x] No fake `down`: an irreversible migration refuses `down` with its name
   - *hand* data migrations, as `exec`
 - [ ] Report engine, when a consumer exists

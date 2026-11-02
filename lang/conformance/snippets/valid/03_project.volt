@@ -1,5 +1,5 @@
-// spec: §project, project with well-known and custom properties and the note setting
+// spec: §project, project with free-form properties and the note setting
 Project ecommerce [note: "project documentation"] {
-  database_type: "PostgreSQL"
-  custom_key: "implementations must accept arbitrary keys"
+  owner: "platform team"
+  custom_key: "any key is accepted and none is read"
 }

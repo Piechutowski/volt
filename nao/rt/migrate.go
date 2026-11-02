@@ -15,20 +15,20 @@ import (
 )
 
 // Migration is the statement form of one migration (spec
-// §migration-tooling rule 3): what volt migration sql prints and
+// §migration-tooling): what volt migration sql prints and
 // volt_migrations.go carries.
 type Migration struct {
 	Name string
 	// Up and Down are the statements of each direction; Down is nil
-	// when the migration is irreversible (spec §migrations rule 12).
+	// when the migration is irreversible (spec §migrations).
 	Up, Down []string
 	// NoTransaction runs the statements outside any transaction, one
 	// by one, with the ledger write after the last, and disables the
-	// foreign-key bracket (spec §migrations rule 13).
+	// foreign-key bracket (spec §migrations).
 	NoTransaction bool
 	// ForeignKeysOff brackets the migration with PRAGMA foreign_keys =
 	// OFF, PRAGMA foreign_key_check before the commit and PRAGMA
-	// foreign_keys = ON after (spec §migrations rule 13).
+	// foreign_keys = ON after (spec §migrations).
 	ForeignKeysOff bool
 }
 
@@ -40,7 +40,7 @@ type MigrationStatus struct {
 	Applied   bool
 	AppliedAt string // RFC 3339 UTC; "" while pending
 	// OutOfOrder marks a pending migration that sorts before an applied
-	// one (spec §migration-ledger rule 2).
+	// one (spec §migration-ledger).
 	OutOfOrder bool
 	// Note is "not in the package" for a ledger row whose name no
 	// migration has, and "" otherwise.
@@ -48,7 +48,7 @@ type MigrationStatus struct {
 }
 
 // MigrationError is a migration that did not run (spec
-// §migration-tooling rule 1): the statement SQLite refused, counted
+// §migration-tooling): the statement SQLite refused, counted
 // from one, with its text, or, at Index zero, a failed foreign-key
 // check or a down asked of an irreversible migration, which Cause
 // says. Any other error of MigrateUp and MigrateDown is the database.
@@ -72,7 +72,7 @@ func (e *MigrationError) Unwrap() error { return e.Cause }
 
 // ErrIrreversible is the cause of the MigrationError that MigrateDown
 // returns for a migration without down statements (spec
-// §migration-ledger rule 3).
+// §migration-ledger).
 var ErrIrreversible = errors.New("irreversible, with no down to run")
 
 const (
@@ -85,7 +85,7 @@ const (
 )
 
 // MigrateUp applies every pending migration in name order and returns
-// the names applied, in order (spec §migration-ledger rule 2). Each
+// the names applied, in order (spec §migration-ledger). Each
 // migration runs under an immediate transaction that re-reads its
 // ledger row first, so that two runners over one database apply it
 // once. It stops at the first failure, a MigrationError when the
@@ -125,7 +125,7 @@ func MigrateUp(ctx context.Context, db *sql.DB, migrations []Migration) (applied
 
 // MigrateDown reverts the applied migration with the greatest name by
 // running its down statements and deleting its row, and returns its
-// name (spec §migration-ledger rule 3). An irreversible migration, a
+// name (spec §migration-ledger). An irreversible migration, a
 // ledger row no migration has, an empty ledger and a row another
 // runner deleted first are errors.
 func MigrateDown(ctx context.Context, db *sql.DB, migrations []Migration) (name string, err error) {
@@ -172,8 +172,8 @@ func MigrateDown(ctx context.Context, db *sql.DB, migrations []Migration) (name 
 
 // MigrateStatus lists every migration of the package and every ledger
 // row, in name order, with whether and when each was applied and
-// whether a pending one is out of order (spec §migration-tooling rule
-// 3). It only reads: a database without the ledger has nothing
+// whether a pending one is out of order (spec §migration-tooling).
+// It only reads: a database without the ledger has nothing
 // applied, and a read-only connection serves.
 func MigrateStatus(ctx context.Context, db *sql.DB, migrations []Migration) ([]MigrationStatus, error) {
 	conn, err := db.Conn(ctx)
@@ -253,7 +253,7 @@ func ledgerHas(ctx context.Context, conn *sql.Conn, name string) (bool, error) {
 // migrationRun runs one direction of m on conn and then the ledger
 // statement: under one immediate transaction, or statement by statement
 // with NoTransaction, inside the foreign-key bracket with ForeignKeysOff
-// and no NoTransaction (spec §migrations rule 13). It re-reads the
+// and no NoTransaction (spec §migrations). It re-reads the
 // ledger row once the transaction holds the write lock, or right before
 // the first statement, and skips the migration when the row is not as
 // the direction expects: present before a down, absent before an up.

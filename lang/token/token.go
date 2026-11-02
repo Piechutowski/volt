@@ -119,7 +119,7 @@ const (
 	IDENT    // users (spec §identifiers)
 	STRING   // "text", """multi line""" (spec §string-literals, §multi-line-string-literals)
 	NUMBER   // 42, 3.14, 1.5e10 (spec §numeric-literals)
-	FUNCEXPR // `now()` (spec §expression-literals)
+	FUNCEXPR // `CURRENT_TIMESTAMP` (spec §expression-literals)
 
 	LBRACE   // {
 	RBRACE   // }

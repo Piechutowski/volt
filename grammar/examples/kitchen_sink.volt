@@ -6,7 +6,7 @@ Project shop_db [note: """
     # Shop database
     Multi-line **markdown** note.
   """] {
-  database_type: "PostgreSQL"
+  database_type: "SQLite"
   custom_key: "implementations must accept arbitrary keys"
 }
 
@@ -16,7 +16,7 @@ Type V2JobStatus string
 
 TablePartial base_template {
   id int [pk, increment]
-  created_at time.Time [null, index, default: `now()`]
+  created_at time.Time [null, index, default: `CURRENT_TIMESTAMP`]
 }
 
 Table users [note: "user accounts"] {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Piechutowski/volt/nao/gen/golang"
+	"github.com/Piechutowski/volt/nao/naming"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
@@ -28,7 +28,7 @@ const renderColumns = `"id", "site", "day", "hits", "score", "flag", "note", "or
 func typed(opts ...rt.Opt[renderModel]) []rt.Opt[renderModel] { return opts }
 
 // TestSelectRenderMatchesTypedHandles is the differential proof of spec
-// §predicates rule 6: every predicate form of the language, lowered by
+// §predicates: every predicate form of the language, lowered by
 // the checker and rendered by the generator, spells the same bytes as
 // the typed handles rendered through the runtime, and binds the Go
 // expressions the text names in placeholder order.
@@ -145,7 +145,7 @@ func TestSelectRenderMatchesTypedHandles(t *testing.T) {
 	})
 	wantClean(t, diags)
 	pkg := pr.Packages["db"]
-	bySuffix := map[string]golang.SelectFn{}
+	bySuffix := map[string]naming.SelectFn{}
 	for _, fn := range pkg.SelectFns() {
 		bySuffix[fn.MethodSuffix] = fn
 	}
@@ -159,7 +159,7 @@ func TestSelectRenderMatchesTypedHandles(t *testing.T) {
 			if !ok {
 				t.Fatalf("select c%d not lowered", i)
 			}
-			got, args, err := golang.SelectSQLFor(pkg.Merged(), pkg.Schema(), fn)
+			got, args, err := pkg.Plan().SelectStatement(fn)
 			if err != nil {
 				t.Fatal(err)
 			}

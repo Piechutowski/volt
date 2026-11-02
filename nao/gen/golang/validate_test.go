@@ -10,7 +10,7 @@ import (
 )
 
 // TestValidateRequiredDeclaredType pins the required rule over a declared
-// type (spec §changesets rule 9): the empty value is read through the
+// type (spec §changesets): the empty value is read through the
 // type's driver.Valuer by rt.Blank, since the generator cannot know the
 // type's zero value.
 func TestValidateRequiredDeclaredType(t *testing.T) {
@@ -25,12 +25,12 @@ func TestValidateRequiredDeclaredType(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"\tif rt.Blank(v.Price) {\n",
+		"\tif rt.Blank(voltV.Price) {\n",
 		`Check: "required", Columns: []string{"price"}, Message: "price is required"`,
-		"\tif v.Title == \"\" {\n",
+		"\tif voltV.Title == \"\" {\n",
 	} {
 		if !strings.Contains(string(out), want) {
-			t.Errorf("nao_validate.go lacks %q:\n%s", want, out)
+			t.Errorf("volt_validate.go lacks %q:\n%s", want, out)
 		}
 	}
 }

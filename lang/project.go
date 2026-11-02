@@ -18,7 +18,7 @@ import (
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/parser"
 	"github.com/Piechutowski/volt/lang/token"
-	"github.com/Piechutowski/volt/nao/gen/golang"
+	"github.com/Piechutowski/volt/nao/naming"
 )
 
 // ModFile is the project root marker (spec §projects-and-packages): the Go module file.
@@ -60,23 +60,22 @@ type Package struct {
 	Groups map[string]*GroupInfo
 	Preds  map[string]*ast.Pred
 	// Validators is the validator surface (§validators), lowered by Check.
-	Validators     []golang.ValidatorFn
+	Validators     []naming.ValidatorFn
 	Selects        []*SelectInfo
 	selectByMethod map[string]selectMember
 	selectByName   map[string]*SelectInfo
 
 	schema *check.Info
-	plan   *golang.Plan
+	plan   *naming.Plan
 
 	merged *ast.File
 }
 
-// HasRouting reports whether the package declares any routing elements
-// (pipelines or scopes).
+// HasRouting reports whether the package declares any scope, the one
+// declaration that gives it routes (§data-and-network-layers).
 func (p *Package) HasRouting() bool {
 	for _, d := range p.merged.Decls {
-		switch d.(type) {
-		case *ast.Pipeline, *ast.Scope:
+		if _, ok := d.(*ast.Scope); ok {
 			return true
 		}
 	}
@@ -91,7 +90,7 @@ func (p *Package) Schema() *check.Info { return p.schema }
 
 // Plan returns the package's naming plan (nil before Check): every
 // generated Go and SQL name, decided once.
-func (p *Package) Plan() *golang.Plan { return p.plan }
+func (p *Package) Plan() *naming.Plan { return p.plan }
 
 // HasSchema reports whether the package declares data elements.
 func (p *Package) HasSchema() bool {

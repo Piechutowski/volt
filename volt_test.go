@@ -163,6 +163,35 @@ func TestSegDotSegments(t *testing.T) {
 	}
 }
 
+func TestSegWildClean(t *testing.T) {
+	mux := http.NewServeMux()
+	var got string
+	mux.HandleFunc("GET /files/{path...}", func(w http.ResponseWriter, r *http.Request) { got = r.PathValue("path") })
+	for value, want := range map[string]string{
+		"a//b":  "a/b",
+		"/a":    "a",
+		"a/":    "a/",
+		"a//":   "a/",
+		"":      "",
+		"/":     "",
+		"a b/c": "a%20b/c",
+	} {
+		seg := SegWild(value)
+		if seg != want {
+			t.Errorf("SegWild(%q) = %q, want %q", value, seg, want)
+		}
+		got = "unset"
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest("GET", "/files/"+seg, nil))
+		if rec.Code != http.StatusOK {
+			t.Errorf("GET /files/%s = %d, want 200 without a redirect", seg, rec.Code)
+		}
+		if got == "unset" {
+			t.Errorf("GET /files/%s reached no handler", seg)
+		}
+	}
+}
+
 func TestRequestID(t *testing.T) {
 	var seen string
 	h := RequestID(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

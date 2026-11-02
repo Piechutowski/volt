@@ -53,8 +53,8 @@ func TestCompositeKeyInDeclarationOrder(t *testing.T) {
 		t.Errorf("DailyHitGet on another day = %v; want rt.ErrNotFound", err)
 	}
 	_, err = q.DailyHitCreate(ctx, DailyHitNew().DaySet(20261022).SiteSet("blog.example"))
-	if inv := invalidOf(t, err, "unique", "day", "site"); inv.StatusCode() != 409 {
-		t.Errorf("a duplicate composite key is a 409 naming both columns: %+v", inv)
+	if inv := invalidOf(t, err, "unique", "day", "site"); inv.Cause == nil {
+		t.Errorf("a duplicate composite key is a unique field error naming both columns: %+v", inv)
 	}
 	if _, err := q.DailyHitCreate(ctx, DailyHitNew().DaySet(20261023).SiteSet("blog.example")); err != nil {
 		t.Errorf("the same site on another day is another key: %v", err)
@@ -120,8 +120,8 @@ func TestUniqueColumnIsAUniqueIndex(t *testing.T) {
 
 	seedUser(t, q, "ann@example.com")
 	_, err := q.UserCreate(ctx, UserNew().EmailSet("ann@example.com").NameSet("Ann again"))
-	if inv := invalidOf(t, err, "unique", "email"); inv.StatusCode() != 409 || inv.Cause == nil {
-		t.Errorf("a duplicate of a unique column is a 409 naming the column, with the database's error as its cause: %+v", inv)
+	if inv := invalidOf(t, err, "unique", "email"); inv.Cause == nil {
+		t.Errorf("a duplicate of a unique column is a unique field error naming the column, with the database's error as its cause: %+v", inv)
 	}
 
 	if _, err := q.DailyHitCreate(ctx, DailyHitNew().DaySet(1).SiteSet("a").TokenSet(rt.Some("t-1"))); err != nil {
@@ -133,8 +133,8 @@ func TestUniqueColumnIsAUniqueIndex(t *testing.T) {
 		}
 	}
 	_, err = q.DailyHitCreate(ctx, DailyHitNew().DaySet(2).SiteSet("a").TokenSet(rt.Some("t-1")))
-	if inv := invalidOf(t, err, "unique", "token"); inv.StatusCode() != 409 {
-		t.Errorf("a duplicate token is a 409 naming the column: %+v", inv)
+	if inv := invalidOf(t, err, "unique", "token"); inv.Cause == nil {
+		t.Errorf("a duplicate token is a unique field error naming the column: %+v", inv)
 	}
 }
 
@@ -177,8 +177,8 @@ func TestIndexColumn(t *testing.T) {
 }
 
 // TestGetByUniqueColumn runs <Model>GetBy<Column> over unique columns, a
-// NOT NULL one and a nullable one (spec §generated-query-surface rule
-// 1): the row, or rt.ErrNotFound.
+// NOT NULL one and a nullable one (spec §generated-query-surface):
+// the row, or rt.ErrNotFound.
 func TestGetByUniqueColumn(t *testing.T) {
 	ctx := context.Background()
 	_, q := newDB(t)
@@ -225,10 +225,11 @@ func TestForeignKeyToAUniqueIndexedColumn(t *testing.T) {
 
 // TestMigrationAddsAUniqueColumnWithoutARebuild applies the fixture's
 // migrations up to 0005, writes rows, and applies 0006, which adds an
-// index column and a unique column (spec §migrations rule 8): each add
+// index column and a unique column (spec §migrations): each add
 // is its ADD COLUMN and its CREATE INDEX, no rebuild, where SQLite's
 // own ADD COLUMN ... UNIQUE is refused; the rows stay, the unique index
-// holds from then on, and the database folds to the schema.
+// holds from then on, and once the later migrations apply the database
+// folds to the schema.
 func TestMigrationAddsAUniqueColumnWithoutARebuild(t *testing.T) {
 	ctx := context.Background()
 	db, err := rt.Open("sqlite3", ":memory:")
@@ -236,10 +237,16 @@ func TestMigrationAddsAUniqueColumnWithoutARebuild(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	last := Migrations[len(Migrations)-1]
-	if last.Name != "0006__daily_hits_label_and_token" {
-		t.Fatalf("the fixture's last migration is %s; update this test", last.Name)
+	at := -1
+	for i, m := range Migrations {
+		if m.Name == "0006__daily_hits_label_and_token" {
+			at = i
+		}
 	}
+	if at < 0 {
+		t.Fatal("the fixture has no migration 0006__daily_hits_label_and_token; update this test")
+	}
+	last := Migrations[at]
 	want := []string{
 		"ALTER TABLE daily_hits ADD COLUMN label TEXT NOT NULL DEFAULT ''",
 		"CREATE INDEX idx_daily_hits_label ON daily_hits (label)",
@@ -250,7 +257,7 @@ func TestMigrationAddsAUniqueColumnWithoutARebuild(t *testing.T) {
 		t.Fatalf("0006 lowers to %q (bracket %v); want the adds and their indexes, no rebuild:\n%q", last.Up, last.ForeignKeysOff, want)
 	}
 
-	if _, err := rt.MigrateUp(ctx, db, Migrations[:len(Migrations)-1]); err != nil {
+	if _, err := rt.MigrateUp(ctx, db, Migrations[:at]); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.ExecContext(ctx, "INSERT INTO daily_hits (day, site, hits) VALUES (1, 'a', 3), (1, 'b', 4)"); err != nil {
@@ -259,7 +266,7 @@ func TestMigrationAddsAUniqueColumnWithoutARebuild(t *testing.T) {
 	if _, err := db.ExecContext(ctx, "ALTER TABLE daily_hits ADD COLUMN other TEXT UNIQUE"); err == nil || !strings.Contains(err.Error(), "UNIQUE") {
 		t.Fatalf("SQLite's ADD COLUMN ... UNIQUE = %v; want it refused, which is why add lowers to an index", err)
 	}
-	if applied, err := rt.MigrateUp(ctx, db, Migrations); err != nil || len(applied) != 1 || applied[0] != last.Name {
+	if applied, err := rt.MigrateUp(ctx, db, Migrations[:at+1]); err != nil || len(applied) != 1 || applied[0] != last.Name {
 		t.Fatalf("MigrateUp of 0006 over rows = %v, %v", applied, err)
 	}
 
@@ -272,24 +279,27 @@ func TestMigrationAddsAUniqueColumnWithoutARebuild(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = q.DailyHitUpdate(ctx, hits[1].Changeset().TokenSet(rt.Some("t-1")))
-	if inv := invalidOf(t, err, "unique", "token"); inv.StatusCode() != 409 {
+	if inv := invalidOf(t, err, "unique", "token"); inv.Cause == nil {
 		t.Errorf("the added unique column refuses a duplicate: %+v", inv)
 	}
 
+	if _, err := rt.MigrateUp(ctx, db, Migrations); err != nil {
+		t.Fatalf("MigrateUp of the migrations after 0006: %v", err)
+	}
 	fold, err := migrate.Read(ctx, db)
 	if err != nil {
 		t.Fatal(err)
 	}
 	target := schemaRead(t, schemaDDL(t))
 	for _, d := range migrate.Diff(target, fold) {
-		t.Errorf("drift after 0006: %s\n%s", d.Reason, d.Volt)
+		t.Errorf("drift after 0006 and the migrations after it: %s\n%s", d.Reason, d.Volt)
 	}
 }
 
 // TestOldLoweringFoldsEqual proves that a database built by the old
 // lowering of unique, an inline UNIQUE and its sqlite_autoindex, folds
 // equal to the new lowering's CREATE UNIQUE INDEX on the same key (spec
-// §the-fold rule 2): the fold compares indexes by key, uniqueness and
+// §the-fold): the fold compares indexes by key, uniqueness and
 // predicate, never by name, so such a database needs no migration to
 // stay equal; dropping that uniqueness later takes a rebuild there.
 func TestOldLoweringFoldsEqual(t *testing.T) {
@@ -340,7 +350,7 @@ func TestOldLoweringFoldsEqual(t *testing.T) {
 
 func schemaDDL(t *testing.T) string {
 	t.Helper()
-	ddl, err := os.ReadFile("nao_schema.sql")
+	ddl, err := os.ReadFile("volt_schema.sql")
 	if err != nil {
 		t.Fatal(err)
 	}

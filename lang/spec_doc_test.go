@@ -16,6 +16,7 @@ var (
 
 	specCiteRE     = regexp.MustCompile(`§[\s\p{Zs}]*([a-z][a-z0-9-]*)`)
 	specNumberedRE = regexp.MustCompile(`§[\s\p{Zs}]*[0-9A-Z]|\bAppendix[\s\p{Zs}]+[A-Z]+\b|\bspec/[A-Z]*[0-9]`)
+	specRuleRE     = regexp.MustCompile(`§[\s\p{Zs}]*[a-z][a-z0-9-]*[\s\p{Zs}]+(?:rule|clause)s?(?:[\s\p{Zs}]+[0-9]|[\s\p{Zs}]*$)`)
 	specRFCRE      = regexp.MustCompile(`RFC[\s\p{Zs}]+[0-9]+(?:` + rfcSep + rfcRef + `)*` + rfcSep + `§?$`)
 	specCodeRE     = regexp.MustCompile(`spec/([A-Za-z0-9][A-Za-z0-9-]*)`)
 	mdAnchorLinkRE = regexp.MustCompile(`\]\(([A-Za-z0-9_./-]*\.md)?#([^)\s]+)(?:\s+` + mdTitle + `)?\)`)
@@ -216,6 +217,24 @@ func TestNumberedCitationsCaught(t *testing.T) {
 	}
 }
 
+func TestRuleCitationsCaught(t *testing.T) {
+	sect, nbsp := "\u00a7", "\u00a0"
+	for line, want := range map[string]bool{
+		"see " + sect + "columns rule 2":               true,
+		"see " + sect + "migrations rules 8 and 12":    true,
+		"see " + sect + "table-resolution clause 2":    true,
+		"see " + sect + "predicates" + nbsp + "rule 6": true,
+		"(spec " + sect + "predicates rule":            true,
+		"see " + sect + "columns, rule 2":              false,
+		"see " + sect + "columns and the rule":         false,
+		"the rules of " + sect + "indexes":             false,
+	} {
+		if got := specRuleRE.MatchString(line); got != want {
+			t.Errorf("specRuleRE on %q = %v, want %v", line, got, want)
+		}
+	}
+}
+
 func TestSpecCitationsNeverNumbered(t *testing.T) {
 	var bad []string
 	for _, path := range repoTextFiles(t) {
@@ -223,8 +242,12 @@ func TestSpecCitationsNeverNumbered(t *testing.T) {
 		if err != nil {
 			continue
 		}
+		review := filepath.Base(path) == "entropy-and-purity-report.md"
 		for i, line := range strings.Split(string(b), "\n") {
 			for _, m := range numberedCitations(line) {
+				bad = append(bad, fmt.Sprintf("%s:%d: %q", path, i+1, m))
+			}
+			if m := specRuleRE.FindString(line); m != "" && !review {
 				bad = append(bad, fmt.Sprintf("%s:%d: %q", path, i+1, m))
 			}
 		}

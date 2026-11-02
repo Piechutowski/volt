@@ -33,7 +33,7 @@ func TestValidatorsRunTopDownAndOnlyInGo(t *testing.T) {
 		t.Errorf("a failed validator carries its message and the columns it reads: %+v", errs[0])
 	}
 	var inv *rt.Invalid
-	if err := bad.Err(); !errors.As(err, &inv) || inv.Model != "PageView" || inv.StatusCode() != 422 || len(inv.Details()) != 2 {
+	if err := bad.Err(); !errors.As(err, &inv) || inv.Model != "PageView" || inv.Cause != nil || len(inv.Details()) != 2 {
 		t.Errorf("Err is the *rt.Invalid of the field errors: %v", err)
 	}
 
@@ -68,8 +68,8 @@ func TestWritesValidateBeforeTouchingTheDatabase(t *testing.T) {
 
 	_, err := q.UserCreate(ctx, UserNew().EmailSet("nope").NameSet("N"))
 	inv := invalidOf(t, err, "EmailValid", "email")
-	if inv.StatusCode() != 422 || inv.Cause != nil || inv.Details()[0].Columns[0] != "email" {
-		t.Errorf("a failed validator is a 422 with no driver error beneath it: %+v", inv)
+	if inv.Cause != nil || inv.Details()[0].Columns[0] != "email" {
+		t.Errorf("a failed validator is a field error with no driver error beneath it: %+v", inv)
 	}
 	if n, _ := q.UserCount(ctx); n != 0 {
 		t.Errorf("an invalid changeset must write nothing, count = %d", n)
@@ -93,7 +93,7 @@ func TestWritesValidateBeforeTouchingTheDatabase(t *testing.T) {
 	}
 }
 
-func TestInvalidCarriesStatus(t *testing.T) {
+func TestInvalidOfARefusedWrite(t *testing.T) {
 	db, q := newDB(t)
 	ctx := context.Background()
 	if _, err := q.UserCreate(ctx, UserNew().EmailSet("one@example.com").NameSet("One")); err != nil {
@@ -101,7 +101,7 @@ func TestInvalidCarriesStatus(t *testing.T) {
 	}
 	_, err := q.UserCreate(ctx, UserNew().EmailSet("one@example.com").NameSet("Two"))
 	inv := invalidOf(t, err, "unique", "email")
-	if inv.StatusCode() != 409 || inv.Model != "User" || !errors.Is(err, inv.Cause) || inv.Cause == nil {
+	if inv.Model != "User" || !errors.Is(err, inv.Cause) || inv.Cause == nil {
 		t.Fatalf("duplicate = %v (%+v)", err, inv)
 	}
 	if !strings.Contains(err.Error(), "User: email: already exists") {
@@ -112,7 +112,7 @@ func TestInvalidCarriesStatus(t *testing.T) {
 	}
 
 	_, raw := db.ExecContext(ctx, `INSERT INTO users (email) VALUES ('two@example.com')`)
-	if inv := invalidOf(t, rt.Refused("User", raw), "not_null", "name"); inv.StatusCode() != 422 {
+	if inv := invalidOf(t, rt.Refused("User", raw), "not_null", "name"); !errors.Is(inv, raw) {
 		t.Fatalf("not-null violation = %v (%+v)", raw, inv)
 	}
 }
@@ -131,8 +131,8 @@ func TestRequiredIsAFieldErrorOnly(t *testing.T) {
 		t.Fatalf("the explicit empty value is refused too: %+v", errs)
 	}
 	_, err := q.OrderCreate(ctx, OrderNew().UserIDSet(u.ID).FeeSet(0))
-	if inv := invalidOf(t, err, "required", "total"); inv.StatusCode() != 422 {
-		t.Errorf("Create refuses it with a 422: %+v", inv)
+	if inv := invalidOf(t, err, "required", "total"); inv.Cause != nil {
+		t.Errorf("Create refuses it before any statement runs: %+v", inv)
 	}
 
 	if _, err := db.ExecContext(ctx, `INSERT INTO orders (user_id, status, total, fee) VALUES (?, 'pending', 0, 0)`, u.ID); err != nil {

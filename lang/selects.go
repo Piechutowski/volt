@@ -1,7 +1,7 @@
 // Groups, predicates and selects (docs/spec.md §groups to §selects-over-groups): resolution,
 // the column-agreement rule, the typed closed expression language, and
 // the lowering to the runtime's predicate trees, which the one renderer
-// turns into the generated statements (§predicates rule 6).
+// turns into the generated statements (§predicates).
 package lang
 
 import (
@@ -14,12 +14,12 @@ import (
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/token"
-	"github.com/Piechutowski/volt/nao/gen/golang"
+	"github.com/Piechutowski/volt/nao/naming"
 	"github.com/Piechutowski/volt/nao/rt"
 )
 
 // GroupInfo is one resolved Group (§groups): its declaration and member
-// tables in first-addition order.
+// tables in the order of their last addition.
 type GroupInfo struct {
 	Decl    *ast.Group
 	Members []*check.TableInfo
@@ -33,7 +33,7 @@ type SelectParam struct {
 }
 
 // SelectInfo is one checked Select (§selects-over-groups), lowered to the
-// runtime's trees (§predicates rule 6), which the generator renders with
+// runtime's trees (§predicates), which the generator renders with
 // each member's table and columns. The agreement rule
 // (§selects-over-groups) is what makes one tree serve every member.
 type SelectInfo struct {
@@ -112,15 +112,20 @@ func (c *checker) dataQueries(pkg *Package) {
 	for _, sel := range selects {
 		if si := c.selectCheckMemo(sel, info, minted, memo); si != nil {
 			for _, m := range si.Members {
-				key := m.Key + "." + si.MethodSuffix
-				if prev, dup := seen[key]; dup {
+				method := naming.SelectMethodName(pkg.modelOf(m), si.MethodSuffix)
+				if what, dup := pkg.plan.QueryName(method); dup {
 					c.errorf(sel.Name.Pos(), "selects-over-groups",
-						"select %q collides with select %q on table %q — both generate %s%s (§selects-over-groups)",
-						sel.Name.Name(), prev.Name.Name(), m.Decl.Name.Name(),
-						modelOrBase(m), si.MethodSuffix)
+						"select %q mints %s for table %q, which is already %s (§selects-over-groups)",
+						sel.Name.Name(), method, m.Decl.Name.Name(), what)
 					break
 				}
-				seen[key] = sel
+				if prev, dup := seen[method]; dup {
+					c.errorf(sel.Name.Pos(), "selects-over-groups",
+						"select %q collides with select %q: both generate %s (§selects-over-groups)",
+						sel.Name.Name(), prev.Name.Name(), method)
+					break
+				}
+				seen[method] = sel
 			}
 			pkg.Selects = append(pkg.Selects, si)
 		}
@@ -153,7 +158,7 @@ type selectEntry struct {
 	diags   []diag.Diagnostic
 }
 
-func (e *selectEntry) holds(members []*check.TableInfo, models []any, preds map[string]*ast.Pred, names *golang.Names) bool {
+func (e *selectEntry) holds(members []*check.TableInfo, models []any, preds map[string]*ast.Pred, names *naming.Names) bool {
 	if len(members) != len(e.members) || len(preds) != len(e.preds) {
 		return false
 	}
@@ -175,7 +180,7 @@ func (e *selectEntry) holds(members []*check.TableInfo, models []any, preds map[
 	return true
 }
 
-func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *golang.Names, memo *selectsMemo) *SelectInfo {
+func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *naming.Names, memo *selectsMemo) *SelectInfo {
 	members, ok := c.selectTarget(sel, info)
 	if !ok {
 		return nil
@@ -233,7 +238,7 @@ func (c *checker) selectTarget(sel *ast.Select, info *check.Info) ([]*check.Tabl
 
 type memberModel struct {
 	model  string
-	fields []golang.FieldSig
+	fields []naming.FieldSig
 	err    error
 }
 
@@ -293,7 +298,7 @@ func (p *Package) selectIndex() {
 	for _, si := range p.Selects {
 		p.selectByName[si.Decl.Name.Name()] = si
 		for _, m := range si.Members {
-			name := modelOrBase(m) + si.MethodSuffix
+			name := p.modelOf(m) + si.MethodSuffix
 			if _, taken := p.selectByMethod[name]; !taken {
 				p.selectByMethod[name] = selectMember{si, m}
 			}
@@ -301,8 +306,17 @@ func (p *Package) selectIndex() {
 	}
 }
 
+func (p *Package) modelOf(t *check.TableInfo) string {
+	if p.plan != nil {
+		if model, _, err := p.plan.CRUDMethods(t.Key); err == nil {
+			return model
+		}
+	}
+	return modelOrBase(t)
+}
+
 func modelOrBase(t *check.TableInfo) string {
-	if m, err := golang.ModelName(t.Decl); err == nil {
+	if m, err := naming.ModelName(t.Decl); err == nil {
 		return m
 	}
 	return t.Decl.Name.Name()
@@ -370,7 +384,7 @@ func (c *checker) groupResolve(name string, decls map[string]*ast.Group, info *c
 			c.nameMiss(id, info, "groups", "group term")
 		}
 	}
-	if len(g.Members) == 0 {
+	if len(g.Members) == 0 && !d.Incomplete {
 		c.errorf(d.Name.Pos(), "groups", "group %q has no members (§groups)", name)
 	}
 	c.pkg.Groups[name] = g
@@ -385,8 +399,14 @@ func (c *checker) nameMiss(id *ast.Ident, info *check.Info, section, what string
 			return
 		}
 	}
+	for _, d := range c.pkg.merged.Decls {
+		if g, ok := d.(*ast.Group); ok && strings.EqualFold(g.Name.Name(), want) {
+			c.errorf(id.Pos(), section, "unknown %s %q; did you mean the group %q? names are case-sensitive (§groups)", what, want, g.Name.Name())
+			return
+		}
+	}
 	for _, ti := range info.Tables {
-		if m, err := golang.ModelName(ti.Decl); err == nil && m == want {
+		if m, err := naming.ModelName(ti.Decl); err == nil && m == want {
 			c.errorf(id.Pos(), section, "unknown %s %q; %q is the model of table %q: name the table (§groups)", what, want, want, ti.Decl.Name.Name())
 			return
 		}
@@ -500,7 +520,7 @@ func (l *selectLowering) check() *SelectInfo {
 	sel := l.sel
 	si := &SelectInfo{Decl: sel, Members: l.members}
 
-	suffix, err := golang.GoName(sel.Name.Name())
+	suffix, err := naming.GoName(sel.Name.Name())
 	if err != nil {
 		l.errorf(sel.Name.Pos(), "select name %q does not map to a Go identifier: %v (§selects-over-groups)", sel.Name.Name(), err)
 		return nil
@@ -572,8 +592,8 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 	type memberFields struct {
 		ti     *check.TableInfo
 		model  string
-		fields []golang.FieldSig
-		byCol  map[string]golang.FieldSig
+		fields []naming.FieldSig
+		byCol  map[string]naming.FieldSig
 	}
 	members := make([]memberFields, 0, len(si.Members))
 	for i, m := range si.Members {
@@ -582,7 +602,7 @@ func (l *selectLowering) projectionCheck(si *SelectInfo) bool {
 			l.errorf(sel.Name.Pos(), "select %q: %v (§selects-over-groups)", sel.Name.Name(), err)
 			return false
 		}
-		byCol := make(map[string]golang.FieldSig, len(fields))
+		byCol := make(map[string]naming.FieldSig, len(fields))
 		for _, f := range fields {
 			byCol[f.Col] = f
 		}
@@ -720,7 +740,12 @@ func (l *selectLowering) selectSettings(env *selectEnv) []rt.GenOrder {
 		return nil
 	}
 	var terms []rt.GenOrder
+	repeated, dupDiags := settingsRepeated(sel.Settings, "order")
+	l.diags = append(l.diags, dupDiags...)
 	for _, s := range sel.Settings.Settings {
+		if repeated[s] {
+			continue
+		}
 		switch s.Name {
 		case "order":
 			list, ok := s.Value.(*ast.IdentList)
@@ -888,7 +913,7 @@ func (e *selectEnv) paramBind(p *ast.Param, goType string) string {
 		return name
 	}
 	if !goParamOK(name) {
-		e.errorf(p.Name.Pos(), "parameter name %q does not work as a Go parameter (§predicates)", name)
+		e.errorf(p.Name.Pos(), "parameter name %q does not work as a Go parameter: it is a Go keyword, not an ASCII identifier, a name the generated signatures use (ctx, q, rt, w, r, opts, volt, cs, c), nil or append, which the generated methods use, or volt followed by an upper-case letter and no underscore, the form of the generated locals (§predicates)", name)
 		return name
 	}
 	sp := SelectParam{GoName: name, GoType: goType}
@@ -898,11 +923,13 @@ func (e *selectEnv) paramBind(p *ast.Param, goType string) string {
 }
 
 func goParamOK(name string) bool {
-	if name == "" || goKeywords[name] || reservedParamNames[name] || name == "ctx" || name == "q" {
+	if name == "" || goKeywords[name] || naming.RouteSignatureName(name) || naming.BodyBuiltin(name) || selectMethodNames[name] || naming.LocalName(name) {
 		return false
 	}
 	return goIdentOK(name)
 }
+
+var selectMethodNames = map[string]bool{"q": true, "rt": true}
 
 func (e *selectEnv) exprLower(x ast.PredExpr, preds map[string]bool) rt.GenPred {
 	switch x := x.(type) {
@@ -1064,7 +1091,11 @@ func (e *selectEnv) litSlot(l *ast.Lit, b *colBinding) (string, bool) {
 		}
 		return slot, true
 	case token.STRING:
-		if lit != classText && lit != classTime {
+		if lit == classTime {
+			e.errorf(l.Pos(), "column %q (%s) takes no literal: there is no date/time literal and a string is text; compare it with a parameter (§predicates)", b.name, b.goType)
+			return "", false
+		}
+		if lit != classText {
 			e.errorf(l.Pos(), "column %q (%s) cannot be compared with the string %q (§predicates)", b.name, b.goType, l.Tok.Val)
 			return "", false
 		}
@@ -1163,14 +1194,14 @@ func (e *selectEnv) likeLower(x *ast.PredLike) rt.GenPred {
 // SelectFns lowers the package's checked selects into per-member
 // generator instructions (§selects-over-groups); an unresolved select
 // (§columns) is never lowered.
-func (p *Package) SelectFns() []golang.SelectFn {
-	var out []golang.SelectFn
+func (p *Package) SelectFns() []naming.SelectFn {
+	var out []naming.SelectFn
 	for _, si := range p.Selects {
 		if si.Unresolved {
 			continue
 		}
 		for _, m := range si.Members {
-			fn := golang.SelectFn{
+			fn := naming.SelectFn{
 				TableKey:     m.Key,
 				MethodSuffix: si.MethodSuffix,
 				Where:        si.Where,
@@ -1180,7 +1211,7 @@ func (p *Package) SelectFns() []golang.SelectFn {
 				SharedType:   si.Shared,
 			}
 			for _, prm := range si.Params {
-				fn.Params = append(fn.Params, golang.SelectParam(prm))
+				fn.Params = append(fn.Params, naming.SelectParam(prm))
 			}
 			out = append(out, fn)
 		}

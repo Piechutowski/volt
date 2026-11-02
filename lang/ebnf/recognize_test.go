@@ -117,6 +117,12 @@ func TestElementStarts(t *testing.T) {
 		"a\néb":                    {2},
 		"a\n\n\n":                  nil,
 		"a\n[\nb":                  {4},
+		"a\n0\nb":                  {4},
+		"a\n1.5\nb":                {6},
+		"a\n1e2\nb":                {6},
+		"a\n1e+2\nb":               {7},
+		"a\n2fa\nb":                {2, 6},
+		"a\n1e2x\nb":               {2, 7},
 	}
 	for text, want := range cases {
 		got := ElementStarts(text)

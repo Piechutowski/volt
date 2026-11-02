@@ -21,6 +21,7 @@ import (
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/parser"
+	"github.com/Piechutowski/volt/nao/naming"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
@@ -113,14 +114,14 @@ func generateValidators(t *testing.T, path string) []byte {
 	return out
 }
 
-func validatorFns(t *testing.T, f *ast.File, info *check.Info) []ValidatorFn {
+func validatorFns(t *testing.T, f *ast.File, info *check.Info) []naming.ValidatorFn {
 	t.Helper()
-	var fns []ValidatorFn
+	var fns []naming.ValidatorFn
 	for _, ti := range info.Tables {
 		if len(ti.Validators) == 0 {
 			continue
 		}
-		_, fields, err := ModelFields(f, info, ti.Key)
+		_, fields, err := naming.PlanBuild(f, info).ModelFields(ti.Key)
 		if err != nil {
 			t.Fatalf("ModelFields(%s): %v", ti.Key, err)
 		}
@@ -128,7 +129,7 @@ func validatorFns(t *testing.T, f *ast.File, info *check.Info) []ValidatorFn {
 		for _, fs := range fields {
 			byCol[fs.Col] = fs.Name
 		}
-		fn := ValidatorFn{TableKey: ti.Key}
+		fn := naming.ValidatorFn{TableKey: ti.Key}
 		for _, v := range ti.Validators {
 			var args, src, cols []string
 			for _, a := range v.Args {
@@ -136,18 +137,18 @@ func validatorFns(t *testing.T, f *ast.File, info *check.Info) []ValidatorFn {
 				if !ok {
 					t.Fatalf("validator %s of %s names no column %q", v.Ref.String(), ti.Key, a.Name())
 				}
-				args = append(args, "v."+field)
+				args = append(args, field)
 				src = append(src, a.Name())
 				if !slices.Contains(cols, a.Name()) {
 					cols = append(cols, a.Name())
 				}
 			}
 			name := v.Ref.Base()
-			fn.Validators = append(fn.Validators, ValidatorSpec{
-				Name: name,
-				Src:  name + "(" + strings.Join(src, ", ") + ")",
-				Call: name + "(" + strings.Join(args, ", ") + ")",
-				Cols: cols,
+			fn.Validators = append(fn.Validators, naming.ValidatorSpec{
+				Name:   name,
+				Src:    name + "(" + strings.Join(src, ", ") + ")",
+				Fields: args,
+				Cols:   cols,
 			})
 		}
 		fns = append(fns, fn)
@@ -242,16 +243,16 @@ func TestGoldenCompiles(t *testing.T) {
 			t.Fatal(err)
 		}
 		base := filepath.Base(strings.TrimSuffix(golden, ".go.golden"))
-		outName := "nao_models.go"
+		outName := "volt_models.go"
 		switch {
 		case strings.HasSuffix(base, "_queries"):
-			base, outName = strings.TrimSuffix(base, "_queries"), "nao_queries.go"
+			base, outName = strings.TrimSuffix(base, "_queries"), "volt_queries.go"
 		case strings.HasSuffix(base, "_dyn"):
-			base, outName = strings.TrimSuffix(base, "_dyn"), "nao_dyn.go"
+			base, outName = strings.TrimSuffix(base, "_dyn"), "volt_dyn.go"
 		case strings.HasSuffix(base, "_validate"):
-			base, outName = strings.TrimSuffix(base, "_validate"), "nao_validate.go"
+			base, outName = strings.TrimSuffix(base, "_validate"), "volt_validate.go"
 		case strings.HasSuffix(base, "_selects"):
-			base, outName = strings.TrimSuffix(base, "_selects"), "nao_selects.go"
+			base, outName = strings.TrimSuffix(base, "_selects"), "volt_selects.go"
 		case strings.HasSuffix(base, "_migrations"):
 			base, outName = strings.TrimSuffix(base, "_migrations"), "volt_migrations.go"
 		}
@@ -272,6 +273,83 @@ func TestGoldenCompiles(t *testing.T) {
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("golden files do not compile:\n%s", out)
+	}
+}
+
+// TestTypeImportAliasCompiles proves generated code imports a Type's
+// package as `import pkg "path"` (spec §types) when the package's
+// declared name is not the path's last element: a directory cash that
+// declares package money, and a versioned path ending in v2.
+func TestTypeImportAliasCompiles(t *testing.T) {
+	dir := t.TempDir()
+	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	scanner := func(pkg, typ string) string {
+		return "package " + pkg + "\n\nimport \"database/sql/driver\"\n\n" +
+			"type " + typ + " int\n\n" +
+			"func (a *" + typ + ") Scan(src any) error { *a = " + typ + "(src.(int64)); return nil }\n\n" +
+			"func (a " + typ + ") Value() (driver.Value, error) { return int64(a), nil }\n"
+	}
+	files := map[string]string{
+		"go.mod": "module aliascheck\n\ngo 1.27\n\n" +
+			"require github.com/Piechutowski/volt v0.0.0\n\n" +
+			"replace github.com/Piechutowski/volt => " + repoRoot + "\n",
+		"cash/money.go":    scanner("money", "Amount"),
+		"levels/v2/lvl.go": scanner("levels", "Level"),
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "models"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, src := range files {
+		path := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	src := `Type cash.Amount int from "aliascheck/cash"
+Type v2.Level int from "aliascheck/levels/v2"
+
+Table orders {
+  id    int         [pk, increment]
+  total cash.Amount
+  tier  v2.Level    [null]
+}
+`
+	f, diags := parser.ParseFile("schema.volt", src)
+	info, semDiags := check.File(f)
+	if diags = append(diags, semDiags...); diag.HasErrors(diags) {
+		t.Fatalf("schema must check clean: %v", diags)
+	}
+	opts := Options{Package: "models", Source: "schema.volt"}
+	validators := func(f *ast.File, info *check.Info, opts Options) ([]byte, error) {
+		return GenerateValidators(f, info, nil, opts)
+	}
+	for name, gen := range map[string]func(*ast.File, *check.Info, Options) ([]byte, error){
+		"volt_models.go":   Generate,
+		"volt_queries.go":  GenerateQueries,
+		"volt_dyn.go":      GenerateDyn,
+		"volt_validate.go": validators,
+	} {
+		code, err := gen(f, info, opts)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if name == "volt_models.go" && (!bytes.Contains(code, []byte(`cash "aliascheck/cash"`)) || !bytes.Contains(code, []byte(`v2 "aliascheck/levels/v2"`))) {
+			t.Errorf("%s does not import the Type packages under their aliases:\n%s", name, code)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "models", name), code, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cmd := exec.Command("go", "build", "./...")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("generated code does not compile:\n%s", out)
 	}
 }
 
@@ -335,32 +413,5 @@ func TestGenerationErrors(t *testing.T) {
 				t.Errorf("want error containing %q, got %v", tc.wantErr, err)
 			}
 		})
-	}
-}
-
-func TestGoNames(t *testing.T) {
-	cases := []struct{ in, want string }{
-		{"user_id", "UserID"},
-		{"api_key", "APIKey"},
-		{"http_status_url", "HTTPStatusURL"},
-		{"uuid", "UUID"},
-		{"full name", "FullName"},
-		{"_2fa_codes", "X2faCodes"},
-		{"created_at", "CreatedAt"},
-		{"id", "ID"},
-		{"żółć", "Żółć"},
-	}
-	for _, tc := range cases {
-		got, err := goName(tc.in)
-		if err != nil {
-			t.Errorf("goName(%q): %v", tc.in, err)
-			continue
-		}
-		if got != tc.want {
-			t.Errorf("goName(%q) = %q, want %q", tc.in, got, tc.want)
-		}
-	}
-	if _, err := goName("__"); err == nil {
-		t.Error("goName(__): want error")
 	}
 }

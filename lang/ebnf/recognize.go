@@ -245,7 +245,7 @@ func ElementStarts(text string) []int {
 				depth--
 			}
 		default:
-			if col1 && depth == 0 && i > 0 && isWordStart(text[i:]) {
+			if col1 && depth == 0 && i > 0 && identStart(text[i:]) {
 				starts = append(starts, i)
 			}
 		}
@@ -258,6 +258,29 @@ func ElementStarts(text string) []int {
 func isWordStart(text string) bool {
 	r, _ := utf8.DecodeRuneInString(text)
 	return isWordRune(r)
+}
+
+func identStart(text string) bool {
+	if text == "" || text[0] < '0' || text[0] > '9' {
+		return isWordStart(text)
+	}
+	digits := func(i int) int {
+		for i < len(text) && '0' <= text[i] && text[i] <= '9' {
+			i++
+		}
+		return i
+	}
+	i := digits(0)
+	if i < len(text) && (text[i] == 'e' || text[i] == 'E') {
+		j := i + 1
+		if j < len(text) && (text[j] == '+' || text[j] == '-') {
+			j++
+		}
+		if j < len(text) && '0' <= text[j] && text[j] <= '9' {
+			i = digits(j)
+		}
+	}
+	return i < len(text) && text[i] != '.' && isWordStart(text[i:])
 }
 
 func isWordRune(r rune) bool {

@@ -285,8 +285,9 @@ a generated name is the checker's error, not this rule's warning.
 **Why.** `volt gen` refuses such schemas outright (loud failure, never a
 silent rename), but the generator can only name the first collision; this
 rule reports every collision, at the later of the two declarations, with
-both origins spelled out. The name derivation is the generator's own — the
-rule calls into `nao/gen/golang` — so rule and generator cannot drift apart.
+both origins spelled out. The name derivation is the generator's own: the
+rule reads the naming plan of `nao/naming`, which the generator renders, so
+rule and generator cannot drift apart.
 
 **Examples.** [testdata/dynname.volt](../lang/vet/testdata/dynname.volt): `users`,
 `orders` and the declared type `OrderState`, named apart from the
@@ -312,7 +313,7 @@ one file in `vet/` plus one testdata file.
 | Candidate | What it would report | Why deferred |
 |---|---|---|
 | `orphantable` | tables with no relationships at all | too noisy: lookup/config tables are legitimately standalone |
-| `nullablefk` | nullable FK columns, i.e. zero-or-many cardinality (spec §nullability-and-cardinality) | that cardinality is a valid modeling choice, not a smell |
+| `nullablefk` | nullable FK columns, i.e. optional references (spec §nullability-and-cardinality) | an optional reference is a valid modeling choice, not a smell |
 | `recordsdupkey` | duplicate primary-key values across record rows | belongs in `check` beside record value typing (§records-sample-data) |
 | `sqlkeyword` | names that are reserved words in common SQL dialects (`order`, `user`) | needs per-dialect wordlists and a target-dialect setting |
 | `namingstyle` | mixed naming conventions (snake_case vs camelCase) | pure style; needs configuration machinery first |

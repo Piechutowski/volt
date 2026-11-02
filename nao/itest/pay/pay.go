@@ -26,3 +26,31 @@ func (c *Cents) Scan(src any) error {
 
 // Value implements driver.Valuer on the value (spec §types).
 func (c Cents) Value() (driver.Value, error) { return int64(c), nil }
+
+// YesNo is a declared column type of Go kind bool stored as the text
+// "Y" or "N" (spec §types): its own Scan and Value are the authority,
+// not the bool kind.
+type YesNo bool
+
+// Scan implements sql.Scanner on the pointer, reading "Y" or "N" (spec
+// §types).
+func (y *YesNo) Scan(src any) error {
+	switch src {
+	case "Y":
+		*y = true
+	case "N":
+		*y = false
+	default:
+		return fmt.Errorf("pay: cannot scan %v as YesNo", src)
+	}
+	return nil
+}
+
+// Value implements driver.Valuer on the value, writing "Y" or "N" (spec
+// §types).
+func (y YesNo) Value() (driver.Value, error) {
+	if y {
+		return "Y", nil
+	}
+	return "N", nil
+}

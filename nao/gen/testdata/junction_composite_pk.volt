@@ -10,5 +10,5 @@ Table roles {
 Table user_roles [note: "Junction table: which user holds which role"] {
   user_id int [pk, ref: users.id]
   role_id int [pk, ref: roles.id]
-  granted_at time.Time [default: `now()`]
+  granted_at time.Time [default: `CURRENT_TIMESTAMP`]
 }

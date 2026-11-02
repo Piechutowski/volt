@@ -36,9 +36,6 @@ func (c *checker) resolve(f *ast.File) {
 					Pos:     s.Pos(),
 				}
 				ri.Target = c.endpointResolve(ep)
-				if len(ri.Target.Columns) != 1 {
-					c.errorf(ep.Pos(), "relationships-ref", "an inline ref endpoint has exactly one column")
-				}
 				c.info.Refs = append(c.info.Refs, ri)
 			}
 		}
@@ -128,20 +125,18 @@ func (c *checker) endpointResolve(ep *ast.RefEndpoint) EndpointInfo {
 }
 
 func refKey(r *RefInfo) (string, bool) {
-	side := func(e EndpointInfo) (string, bool) {
-		if e.Table == nil {
-			return "", false
-		}
-		return e.Table.Key + "(" + strings.Join(e.Columns, ",") + ")", true
-	}
-	l, okL := side(r.FK)
-	rr, okR := side(r.Target)
-	if !okL || !okR {
+	if r.FK.Table == nil || r.Target.Table == nil || len(r.FK.Columns) != len(r.Target.Columns) {
 		return "", false
 	}
-	pair := []string{l, rr}
-	sort.Strings(pair)
-	return pair[0] + "|" + pair[1], true
+	forward := make([]string, len(r.FK.Columns))
+	reverse := make([]string, len(r.FK.Columns))
+	for i := range r.FK.Columns {
+		fk, target := r.FK.Table.Key+"."+r.FK.Columns[i], r.Target.Table.Key+"."+r.Target.Columns[i]
+		forward[i], reverse[i] = fk+">"+target, target+">"+fk
+	}
+	sort.Strings(forward)
+	sort.Strings(reverse)
+	return min(strings.Join(forward, "|"), strings.Join(reverse, "|")), true
 }
 
 func (c *checker) duplicateRefsCheck() {

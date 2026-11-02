@@ -11,7 +11,7 @@ import (
 // Null is the representation of a nullable column: a value
 // plus a validity bit, never a pointer. The zero value is NULL. JSON shows
 // the value or null. A valid Null[[]byte] is bytes, a nil V empty bytes,
-// as a plain []byte is (spec §columns rule 2).
+// as a plain []byte is (spec §columns).
 type Null[T any] struct {
 	V     T
 	Valid bool
@@ -34,9 +34,10 @@ func (n Null[T]) Or(def T) T {
 }
 
 // Scan implements sql.Scanner through database/sql's rules via sql.Null,
-// but converts a value of bool kind itself, since database/sql scans an
-// integer into a bool and not into a named bool (spec §types), and reads
-// a valid []byte through Bytes, never nil (spec §columns rule 2).
+// but converts a value of bool kind itself unless the type implements
+// sql.Scanner, since database/sql scans an integer into a bool and not
+// into a named bool (spec §types), and reads a valid []byte through
+// Bytes, never nil (spec §columns).
 func (n *Null[T]) Scan(src any) error {
 	if b, ok := any(&n.V).(*[]byte); ok && src != nil {
 		if err := bytesScan(b, src); err != nil {
@@ -45,7 +46,8 @@ func (n *Null[T]) Scan(src any) error {
 		n.Valid = true
 		return nil
 	}
-	if v := reflect.ValueOf(&n.V).Elem(); src != nil && v.Kind() == reflect.Bool {
+	_, scanner := any(&n.V).(sql.Scanner)
+	if v := reflect.ValueOf(&n.V).Elem(); src != nil && v.Kind() == reflect.Bool && !scanner {
 		b, err := driver.Bool.ConvertValue(src)
 		if err != nil {
 			return err
@@ -63,7 +65,7 @@ func (n *Null[T]) Scan(src any) error {
 }
 
 // Value implements driver.Valuer: the value, or nil for NULL; a valid
-// []byte binds through Bytes, nil as empty bytes (spec §columns rule 2).
+// []byte binds through Bytes, nil as empty bytes (spec §columns).
 func (n Null[T]) Value() (driver.Value, error) {
 	if b, ok := any(n.V).([]byte); ok && n.Valid {
 		return Bytes(b).Value()
@@ -74,7 +76,7 @@ func (n Null[T]) Value() (driver.Value, error) {
 var jsonNull = []byte("null")
 
 // MarshalJSON writes the value, or null; a valid []byte is base64, nil
-// as "" (spec §columns rule 2).
+// as "" (spec §columns).
 func (n Null[T]) MarshalJSON() ([]byte, error) {
 	if !n.Valid {
 		return jsonNull, nil

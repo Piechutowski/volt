@@ -167,7 +167,7 @@ func (n namedIndex) at() token.Position {
 }
 
 // indexNamed reports whether an index of an Indexes block takes part in
-// the name rule: one carrying pk is the error of §indexes rule 5 alone.
+// the name rule: one carrying pk is the error of §indexes alone.
 func indexNamed(ix *ast.Index) bool {
 	return ix.Settings.Get("pk") == nil
 }

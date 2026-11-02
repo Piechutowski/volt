@@ -53,8 +53,8 @@ func TestCastReportsUnknownKeysAndIgnoresDisallowedOnes(t *testing.T) {
 		t.Error("the known key is still cast")
 	}
 	var inv *rt.Invalid
-	if err := cs.Err(); !errors.As(err, &inv) || inv.StatusCode() != 422 {
-		t.Errorf("Err = %v; want a 422 *rt.Invalid", err)
+	if err := cs.Err(); !errors.As(err, &inv) || len(inv.Fields) != 1 || inv.Fields[0].Check != "unknown_field" {
+		t.Errorf("Err = %v; want the *rt.Invalid of the unknown_field error", err)
 	}
 
 	outside := UserNew().Cast(paramsOf(t, `{"id": 7, "displayName": "Bo"}`), UserEmail)

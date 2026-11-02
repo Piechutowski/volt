@@ -24,10 +24,10 @@ i05_unterminated_funcexpr.volt:2:28: error: syntax: expected '}' in Table (§tab
 i07_unknown_element.volt:2:1: error: syntax: unknown element type "View" (§program-structure)
 
 ## i08_empty_table.volt
-i08_empty_table.volt:2:1: error: spec/table: table "empty" must contain at least one column or partial injection
+i08_empty_table.volt:2:1: error: spec/table: table "empty" must contain at least one column, directly or from an injected TablePartial (§table)
 
 ## i09_duplicate_setting.volt
-i09_duplicate_setting.volt:3:19: error: spec/settings-lists: setting "unique" may appear at most once
+i09_duplicate_setting.volt:3:19: error: spec/settings-lists: setting "unique" may appear at most once (§settings-lists)
 
 ## i126_type_storage.volt
 i126_type_storage.volt:3:11: error: spec/types: storage type "text" of Type "Slug" is not a built-in: bool, int, float64, string, []byte or time.Time (§types)
@@ -133,9 +133,9 @@ i229_primary_key_two_words.volt:4:19: error: syntax: expected ',' or ']' in sett
 i230_use_unknown_element.volt:3:1: error: syntax: unknown element type "use" (§program-structure)
 
 ## i231_records_omit_not_null.volt
-i231_records_omit_not_null.volt:14:3: error: spec/records-sample-data: records of table "posts" do not list column "title", which is NOT NULL and has no default: every row would write NULL into it; list the column (§records-sample-data)
-i231_records_omit_not_null.volt:14:3: error: spec/records-sample-data: records of table "posts" do not list column "stamped_by", which is NOT NULL and has no default: every row would write NULL into it; list the column (§records-sample-data)
-i231_records_omit_not_null.volt:25:1: error: spec/records-sample-data: records of table "authors" do not list column "name", which is NOT NULL and has no default: every row would write NULL into it; list the column (§records-sample-data)
+i231_records_omit_not_null.volt:14:3: error: spec/records-sample-data: records of table "posts" do not list column "title", which is NOT NULL and has no default: only increment leaves a column's value to the database, so every row gives it; list the column (§records-sample-data)
+i231_records_omit_not_null.volt:14:3: error: spec/records-sample-data: records of table "posts" do not list column "stamped_by", which is NOT NULL and has no default: only increment leaves a column's value to the database, so every row gives it; list the column (§records-sample-data)
+i231_records_omit_not_null.volt:25:1: error: spec/records-sample-data: records of table "authors" do not list column "name", which is NOT NULL and has no default: only increment leaves a column's value to the database, so every row gives it; list the column (§records-sample-data)
 
 ## i232_ref_set_null_not_null.volt
 i232_ref_set_null_not_null.volt:14:34: error: spec/relationships-ref: delete: set_null on foreign-key column "posts.author_id", which does not carry null: the database would write a NULL the column refuses (§relationships-ref)
@@ -153,7 +153,7 @@ i245_records_empty_field.volt:9:5: error: syntax: empty record field: every fiel
 i245_records_empty_field.volt:10:11: error: syntax: empty record field after the last ',': every field holds a value, and NULL is written null (§records-sample-data)
 
 ## i246_ref_inline_twice.volt
-i246_ref_inline_twice.volt:6:32: error: spec/settings-lists: setting "ref" may appear at most once
+i246_ref_inline_twice.volt:6:32: error: spec/settings-lists: setting "ref" may appear at most once (§settings-lists)
 
 ## i247_ref_reverse_operator.volt
 i247_ref_reverse_operator.volt:7:15: error: syntax: expected '>' after the foreign key: a Ref is written foreign key > referenced columns (§relationships-ref), found '<' "<"
@@ -232,7 +232,7 @@ i271_type_note.volt:2:18: error: syntax: expected end of line after Type declara
 i273_inline_ref_action.volt:8:31: error: spec/columns: unknown setting "delete" (§columns)
 
 ## i274_inline_ref_column_group.volt
-i274_inline_ref_column_group.volt:9:25: error: spec/relationships-ref: an inline ref endpoint has exactly one column
+i274_inline_ref_column_group.volt:9:25: error: spec/columns: an inline ref endpoint is table.column, without parentheses: a foreign key over several columns is a Ref element (§columns)
 
 ## i275_ref_action_no_action.volt
 i275_ref_action_no_action.volt:5:49: error: spec/relationships-ref: invalid referential action "no_action" for 'update'; expected cascade, restrict, set_null or set_default; leave update: out for SQLite's default (§relationships-ref)
@@ -349,16 +349,55 @@ i322_table_name_sqlite.volt:3:7: error: spec/namespaces-and-uniqueness: table na
 i322_table_name_sqlite.volt:7:7: error: spec/namespaces-and-uniqueness: table name "SQLite_Daily" begins with sqlite_, which SQLite keeps for its own objects (§namespaces-and-uniqueness)
 
 ## i32_settings_next_line.volt
-i32_settings_next_line.volt:4:3: error: syntax: expected a column, Indexes, Validators, Records or '~injection' in Table body, found '[' "["
+i32_settings_next_line.volt:4:3: error: syntax: expected a column, Indexes, Validators, Records or '~injection' in Table body (§table), found '[' "["
 
 ## i33_ref_without_body.volt
 i33_ref_without_body.volt:5:1: error: syntax: expected identifier in relationship endpoint (§relationships-ref), found end of file
 
+## i344_project_settings_next_line.volt
+i344_project_settings_next_line.volt:4:3: error: syntax: a settings list stays on the line of the Project it modifies, found '[' on the next line (§settings-lists)
+
+## i345_table_settings_next_line.volt
+i345_table_settings_next_line.volt:4:3: error: syntax: a settings list stays on the line of the Table it modifies, found '[' on the next line (§settings-lists)
+i345_table_settings_next_line.volt:9:1: error: syntax: a settings list stays on the line of the Table it modifies, found '[' on the next line (§settings-lists)
+
+## i347_inline_ref_paren.volt
+i347_inline_ref_paren.volt:9:17: error: spec/columns: an inline ref endpoint is table.column, without parentheses: a foreign key over several columns is a Ref element (§columns)
+
+## i348_setting_name_digit.volt
+i348_setting_name_digit.volt:5:14: error: syntax: 2fa begins with a digit: a name is a Go identifier, a letter or underscore followed by letters, digits and underscores (§identifiers)
+i348_setting_name_digit.volt:5:14: error: spec/columns: unknown setting "2fa" (§columns)
+
+## i349_table_empty_partial.volt
+i349_table_empty_partial.volt:6:1: error: spec/table: table "t" must contain at least one column, directly or from an injected TablePartial (§table)
+
 ## i34_project_bad_value.volt
 i34_project_bad_value.volt:3:18: error: syntax: expected string in project property value (§project), found number "42"
 
+## i350_ref_duplicate_permuted.volt
+i350_ref_duplicate_permuted.volt:15:1: error: spec/relationships-ref: duplicate relationship: the same endpoints are already related
+
 ## i35_duplicate_table.volt
 i35_duplicate_table.volt:3:1: error: spec/namespaces-and-uniqueness: duplicate table name "users"
+
+## i363_type_alias_two_paths.volt
+i363_type_alias_two_paths.volt:4:6: error: spec/types: Type "a.Hits" imports "example.com/two/a" under the alias a, which Type "a.Views" at i363_type_alias_two_paths.volt:3:1 binds to "example.com/one/a": one alias names one package (§types)
+
+## i364_type_from_not_import_path.volt
+i364_type_from_not_import_path.volt:3:27: error: spec/types: Type "money.Money" has from path "not a path!", which is not a Go import path (§types)
+
+## i365_records_time_not_iso.volt
+i365_records_time_not_iso.volt:10:6: error: spec/records-sample-data: record value for "posted_at" (time.Time) must be ISO 8601 text such as "2024-01-15 10:30:00", found "not a date at all" (§records-sample-data)
+
+## i367_type_from_next_line.volt
+i367_type_from_next_line.volt:4:3: error: syntax: expected end of line after Type declaration (§types), found string "\"example.com/app/money\""
+i367_type_from_next_line.volt:7:3: error: syntax: expected end of line after Type declaration (§types), found identifier "string"
+i367_type_from_next_line.volt:11:9: error: spec/columns: column "price": unknown type "money.Money"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
+i367_type_from_next_line.volt:12:9: error: spec/columns: column "slug": unknown type "Slug"; a column type is bool, int, float64, string, []byte, time.Time or a declared Type (§columns)
+
+## i368_setting_list_shape.volt
+i368_setting_list_shape.volt:4:15: error: syntax: the list of note: is neither names separated by commas nor names each followed by asc or desc (§settings-lists)
+i368_setting_list_shape.volt:4:21: error: spec/columns: "note" must be a string (§columns)
 
 ## i36_bad_default.volt
 i36_bad_default.volt:4:20: error: spec/default-values: default value must be a number, string, boolean or expression literal (§default-values)

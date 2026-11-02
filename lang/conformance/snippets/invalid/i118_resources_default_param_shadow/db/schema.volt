@@ -1,6 +1,6 @@
 package db
 
-Table plots {
+Table posts {
   id   int [pk, increment]
-  farm string
+  blog string
 }

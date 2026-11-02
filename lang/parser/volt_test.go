@@ -174,7 +174,7 @@ func TestVoltSyntaxErrors(t *testing.T) {
 }
 
 func TestGroupSetTerms(t *testing.T) {
-	f, diags := ParseFile("t.volt", "package db\nGroup farm = Metrics \\ (ms_dict, ms_notes) + extra\n")
+	f, diags := ParseFile("t.volt", "package db\nGroup series = Metrics \\ (ms_dict, ms_notes) + extra\n")
 	if len(diags) != 0 {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}

@@ -3,7 +3,7 @@ package lang
 import (
 	"github.com/Piechutowski/volt/lang/ast"
 	"github.com/Piechutowski/volt/lang/check"
-	"github.com/Piechutowski/volt/nao/gen/golang"
+	"github.com/Piechutowski/volt/nao/naming"
 )
 
 func bareTypesDeclared(f *ast.File) bool {
@@ -53,6 +53,8 @@ func (c *checker) typesRouterCheck(pkg *Package) {
 		"Controllers": "the generated Controllers manifest",
 		"NewRouter":   "the generated router constructor",
 		"Table":       "the generated route table",
+		"Client":      "the generated client type, which gen -o writes beside the models",
+		"NewClient":   "the generated client constructor, which gen -o writes beside the models",
 	}
 	for name := range pkg.Controllers {
 		router[name+"Controller"] = "the generated controller interface of " + name
@@ -72,7 +74,7 @@ func (c *checker) typesRouterCheck(pkg *Package) {
 	}
 }
 
-func typeNameFree(names *golang.Names, name string) string {
+func typeNameFree(names *naming.Names, name string) string {
 	for _, suffix := range []string{"Kind", "Value", "Type"} {
 		if _, taken := names.Lookup(name + suffix); !taken {
 			return name + suffix

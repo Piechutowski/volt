@@ -11,7 +11,7 @@ import (
 	"github.com/Piechutowski/volt/lang/check"
 	"github.com/Piechutowski/volt/lang/diag"
 	"github.com/Piechutowski/volt/lang/parser"
-	"github.com/Piechutowski/volt/nao/gen/golang"
+	"github.com/Piechutowski/volt/nao/naming"
 )
 
 // Session caches parses and check results for one project root. The
@@ -89,11 +89,11 @@ func (k pkgKey) equal(o pkgKey) bool {
 
 type pkgResult struct {
 	schema      *check.Info
-	plan        *golang.Plan
+	plan        *naming.Plan
 	groups      map[string]*GroupInfo
 	preds       map[string]*ast.Pred
 	selects     []*SelectInfo
-	validators  []golang.ValidatorFn
+	validators  []naming.ValidatorFn
 	pipelines   map[string]*ast.Pipeline
 	routes      []*RouteInfo
 	controllers map[string]*ControllerInfo

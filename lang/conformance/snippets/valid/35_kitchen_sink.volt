@@ -1,12 +1,12 @@
 // spec: §program-structure — representative complete schema
 Project blog [note: "Blogging platform"] {
-  database_type: "PostgreSQL"
+  database_type: "SQLite"
 }
 
 Type PostState string
 
 TablePartial timestamps {
-  created_at time.Time [default: `now()`]
+  created_at time.Time [default: `CURRENT_TIMESTAMP`]
   updated_at time.Time
 }
 

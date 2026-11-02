@@ -1,4 +1,4 @@
-// Bytes on real SQLite (spec §columns rule 2, §nullability): a []byte
+// Bytes on real SQLite (spec §columns, §nullability): a []byte
 // column without null is bytes and nil writes empty bytes on every bind
 // path, one with null is rt.Null[[]byte] and NULL is only Valid false,
 // reads never hand back nil for empty bytes, and JSON and GOB carry both
@@ -103,7 +103,7 @@ func bytesDB(t *testing.T, driverName string) (*sql.DB, *Queries) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	ddl, err := os.ReadFile("nao_schema.sql")
+	ddl, err := os.ReadFile("volt_schema.sql")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -172,6 +172,16 @@ func exportedSpelling(name string) string {
 	return "X" + name
 }
 
+func importPathOK(path string) bool {
+	const illegal = "!\"#$%&'()*,:;<=>?[\\]^`{|}\uFFFD"
+	for _, r := range path {
+		if !unicode.IsGraphic(r) || unicode.IsSpace(r) || strings.ContainsRune(illegal, r) {
+			return false
+		}
+	}
+	return path != ""
+}
+
 func typeAlias(name string) string {
 	if i := strings.IndexByte(name, '.'); i >= 0 {
 		return name[:i]
@@ -218,6 +228,10 @@ func (c *checker) typeDeclCheck(d *ast.TypeDecl) *TypeInfo {
 			c.errorf(d.From.Pos(), "types", "Type %q has an empty from path; the path is a non-empty import path (§types)", key)
 			return nil
 		}
+		if !importPathOK(path) {
+			c.errorf(d.From.Pos(), "types", "Type %q has from path %q, which is not a Go import path (§types)", key, path)
+			return nil
+		}
 		alias := d.Name.Qualifier()
 		if std, reserved := ReservedAliases[alias]; reserved && std != path {
 			if std == "" {
@@ -226,6 +240,14 @@ func (c *checker) typeDeclCheck(d *ast.TypeDecl) *TypeInfo {
 				c.errorf(d.Name.Pos(), "types", "Type %q: package name %q is reserved by generated code for %q (§types)", key, alias, std)
 			}
 			return nil
+		}
+		if prev, bound := c.aliases[alias]; bound && prev.From.Tok.Val != path {
+			c.errorf(d.Name.Pos(), "types", "Type %q imports %q under the alias %s, which Type %q at %s binds to %q: one alias names one package (§types)",
+				key, path, alias, prev.Name.String(), prev.Pos(), prev.From.Tok.Val)
+			return nil
+		}
+		if _, bound := c.aliases[alias]; !bound {
+			c.aliases[alias] = d
 		}
 		ti.Path = path
 	}
@@ -296,7 +318,7 @@ func (c *checker) recordsCoverageCheck(ti *TableInfo, d *ast.Records) {
 		if listed[col.Name.Name()] || cd.Nullable || rowid || col.Settings.Get("default") != nil {
 			continue
 		}
-		c.errorf(d.Pos(), "records-sample-data", "records of table %q do not list column %q, which is NOT NULL and has no default: every row would write NULL into it; list the column (§records-sample-data)", ti.Key, col.Name.Name())
+		c.errorf(d.Pos(), "records-sample-data", "records of table %q do not list column %q, which is NOT NULL and has no default: only increment leaves a column's value to the database, so every row gives it; list the column (§records-sample-data)", ti.Key, col.Name.Name())
 	}
 }
 
@@ -336,7 +358,95 @@ func (c *checker) valueTypeCheck(cd *ColumnDef, v ast.Node, section, what string
 	ok := kind == want || (want == "number" && kind == "integer")
 	if !ok {
 		c.errorf(v.Pos(), section, "%s %q (%s) must be %s %s, found %s (§%s)", what, name, typ, article, want, kind, section)
+		return
 	}
+	if lit, isLit := v.(*ast.BasicLit); isLit && cd.Type.Storage == "time.Time" && !isoTimeOK(lit.Tok.Val) {
+		c.errorf(v.Pos(), section, "%s %q (%s) must be ISO 8601 text such as \"2024-01-15 10:30:00\", found %q (§%s)", what, name, typ, lit.Tok.Val, section)
+	}
+}
+
+func isoTimeOK(s string) bool {
+	s = strings.TrimSuffix(s, "Z")
+	num := func(min, max int) (int, bool) {
+		n, v := 0, 0
+		for n < max && n < len(s) && '0' <= s[n] && s[n] <= '9' {
+			v = v*10 + int(s[n]-'0')
+			n++
+		}
+		s = s[n:]
+		return v, n >= min
+	}
+	lit := func(c byte) bool {
+		if s == "" || s[0] != c {
+			return false
+		}
+		s = s[1:]
+		return true
+	}
+	year, okY := num(4, 4)
+	if !okY || !lit('-') {
+		return false
+	}
+	month, okM := num(2, 2)
+	if !okM || !lit('-') {
+		return false
+	}
+	day, okD := num(2, 2)
+	if !okD || month < 1 || month > 12 || day < 1 || day > monthDays(year, month) {
+		return false
+	}
+	if s == "" {
+		return true
+	}
+	if !lit(' ') && !lit('T') {
+		return false
+	}
+	hour, okH := num(1, 2)
+	if !okH || hour > 23 || !lit(':') {
+		return false
+	}
+	if minute, ok := num(2, 2); !ok || minute > 59 {
+		return false
+	}
+	if s == "" {
+		return true
+	}
+	if !lit(':') {
+		return false
+	}
+	if second, ok := num(2, 2); !ok || second > 59 {
+		return false
+	}
+	if lit('.') {
+		if _, ok := num(1, 9); !ok {
+			return false
+		}
+	}
+	if s == "" {
+		return true
+	}
+	if !lit('+') && !lit('-') {
+		return false
+	}
+	offHour, okOH := num(2, 2)
+	if !okOH || offHour > 23 || !lit(':') {
+		return false
+	}
+	offMinute, okOM := num(2, 2)
+	return okOM && offMinute <= 59 && s == ""
+}
+
+func monthDays(year, month int) int {
+	switch month {
+	case 2:
+		if year%4 == 0 && (year%100 != 0 || year%400 == 0) {
+			return 29
+		}
+		return 28
+	case 4, 6, 9, 11:
+		return 30
+	}
+	return 31
 }
 
 func defaultKind(v ast.Node) string {

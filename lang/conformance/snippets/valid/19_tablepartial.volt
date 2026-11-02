@@ -1,7 +1,7 @@
 // spec: §tablepartial, partials with columns, column indexes and an Indexes block injected into a table
 TablePartial base_template {
   id int [pk]
-  created_at time.Time [default: `now()`]
+  created_at time.Time [default: `CURRENT_TIMESTAMP`]
 }
 TablePartial email_index {
   email string [unique]
