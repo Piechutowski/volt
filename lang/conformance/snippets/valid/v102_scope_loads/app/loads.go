@@ -15,7 +15,7 @@ func CurrentUser(r volt.Request) volt.Load[db.User] {
 	return volt.LoadWith(db.UserGet(id))
 }
 
-func Tenant(r volt.Request) volt.Load[string] { return volt.LoadWith(db.UserGet(1)) }
+func Tenant(r volt.Request) volt.Load[string] { return volt.Halt[string](volt.NoContent()) }
 
 func Plain(r volt.Request) volt.Response { return volt.NoContent() }
 

@@ -204,6 +204,7 @@ type selectEntry struct {
 	joined  []any
 	with    *check.RelationInfo
 	withRef any
+	whys    []string // why each join or the with resolved to no relation, the relation names last
 	preds   map[string]*ast.Pred
 	lookups []nameLookup
 	adds    []nameAdd
@@ -211,8 +212,8 @@ type selectEntry struct {
 	diags   []diag.Diagnostic
 }
 
-func (e *selectEntry) holds(members []*check.TableInfo, models []any, joins []*check.RelationInfo, joined []any, with *check.RelationInfo, withRef any, preds map[string]*ast.Pred, names *naming.Names) bool {
-	if len(members) != len(e.members) || len(preds) != len(e.preds) || len(joins) != len(e.joins) {
+func (e *selectEntry) holds(members []*check.TableInfo, models []any, joins []*check.RelationInfo, joined []any, with *check.RelationInfo, withRef any, whys []string, preds map[string]*ast.Pred, names *naming.Names) bool {
+	if len(members) != len(e.members) || len(preds) != len(e.preds) || len(joins) != len(e.joins) || !slices.Equal(whys, e.whys) {
 		return false
 	}
 	if !relationEqual(with, e.with) || withRef != e.withRef {
@@ -287,8 +288,17 @@ func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *nam
 		where = append(where, sel.Where)
 	}
 	preds := predsIn(where, c.pkg.Preds)
+	var relationNames []string
+	if len(sel.Joins) > 0 || sel.With != nil {
+		relationNames = info.RelationNames(members[0].Key)
+	}
+	whys := make([]string, 0, len(joins)+2)
+	for _, j := range joins {
+		whys = append(whys, j.why)
+	}
+	whys = append(whys, with.why, strings.Join(relationNames, ","))
 	if memo != nil {
-		if e := memo.prev[sel]; e != nil && e.holds(members, refs, rels, joined, withRel, withRef, preds, minted) {
+		if e := memo.prev[sel]; e != nil && e.holds(members, refs, rels, joined, withRel, withRef, whys, preds, minted) {
 			for _, a := range e.adds {
 				minted.Add(a.name, a.desc)
 			}
@@ -298,17 +308,13 @@ func (c *checker) selectCheckMemo(sel *ast.Select, info *check.Info, minted *nam
 			return e.si
 		}
 	}
-	var relationNames []string
-	if len(sel.Joins) > 0 || sel.With != nil {
-		relationNames = info.RelationNames(members[0].Key)
-	}
 	si, lookups, adds, diags := selectCheck(sel, members, models, joins, with, relationNames, preds, minted)
 	for _, a := range adds {
 		minted.Add(a.name, a.desc)
 	}
 	c.diags = append(c.diags, diags...)
 	if memo != nil {
-		memo.next[sel] = &selectEntry{members: members, models: refs, joins: rels, joined: joined, with: withRel, withRef: withRef, preds: preds, lookups: lookups, adds: adds, si: si, diags: diags}
+		memo.next[sel] = &selectEntry{members: members, models: refs, joins: rels, joined: joined, with: withRel, withRef: withRef, whys: whys, preds: preds, lookups: lookups, adds: adds, si: si, diags: diags}
 		memo.Misses++
 	}
 	return si
@@ -763,10 +769,10 @@ func relationAmbiguity(table, name string, named []*check.RelationInfo) string {
 		}
 		parts[i] = fmt.Sprintf("the %s relation to %q (at %s; name it with [%s: name] on a Ref element)", r.Side(), r.Table.Key, r.Pos, fix)
 	}
-	if name == table {
-		return fmt.Sprintf("relation %q of table %q takes the table's own name, which the join's alias needs: it is %s", name, table, strings.Join(parts, " and "))
+	if strings.EqualFold(name, table) {
+		return fmt.Sprintf("relation %q of table %q takes the table's own name, which the join's alias needs, read as SQLite reads it, without regard to case: it is %s", name, table, strings.Join(parts, " and "))
 	}
-	return fmt.Sprintf("relation %q of table %q is ambiguous: it is %s", name, table, strings.Join(parts, " and "))
+	return fmt.Sprintf("relation %q of table %q is ambiguous, read as SQLite reads an alias, without regard to case: it is %s", name, table, strings.Join(parts, " and "))
 }
 
 // withCheck resolves the select's with (spec §selects-over-groups): a
@@ -813,6 +819,16 @@ func (l *selectLowering) withCheck(si *SelectInfo) bool {
 		}
 	}
 	parentKey, childKey := wt.rel.On[0][0], wt.rel.On[0][1]
+	if cd := target.Column(parentKey); cd != nil {
+		switch {
+		case cd.Nullable:
+			l.errorf(id.Pos(), "with %s matches the parent's %q, which carries null; a NULL key matches no child, so the key is a column that is never NULL (§selects-over-groups)", name, parentKey)
+			return false
+		case cd.Type.Known() && (cd.Type.Storage == "time.Time" || cd.Type.Storage == "[]byte"):
+			l.errorf(id.Pos(), "with %s matches the parent's %q (%s), whose keys cannot travel as one JSON list, as a list parameter cannot (§selects-over-groups, §predicates)", name, parentKey, cd.Col.Type.String())
+			return false
+		}
+	}
 	excluded := map[string]bool{}
 	for _, cr := range sel.Cols {
 		excluded[cr.String()] = true
@@ -1106,7 +1122,13 @@ func (l *selectLowering) deriveItem(si *SelectInfo, env *selectEnv, item *ast.Pr
 	}
 	for _, m := range l.members {
 		if m.Column(alias) != nil {
-			l.errorf(item.As.Pos(), "alias %q names a column of %q; an alias names no column of the target (§selects-over-groups)", alias, m.Key)
+			l.errorf(item.As.Pos(), "alias %q names a column of %q; an alias names no column of the target or of a joined table, which SQLite would group by instead (§selects-over-groups)", alias, m.Key)
+			return naming.SelectItem{}, false
+		}
+	}
+	for _, j := range si.Joins {
+		if j.Table.Column(alias) != nil {
+			l.errorf(item.As.Pos(), "alias %q names a column of %q, joined as %q; an alias names no column of the target or of a joined table, which SQLite would group by instead (§selects-over-groups)", alias, j.Table.Key, j.Name)
 			return naming.SelectItem{}, false
 		}
 	}
@@ -1156,7 +1178,7 @@ func (l *selectLowering) deriveItem(si *SelectInfo, env *selectEnv, item *ast.Pr
 		if b == nil {
 			return it, unknown
 		}
-		it.Expr, it.GoType, nullable = rt.ExprCol(b.name), b.goType, b.nullable
+		it.Col, it.Expr, it.GoType, nullable = cr.String(), rt.ExprCol(b.name), b.goType, b.nullable
 	} else {
 		var cols []*colBinding
 		unknown := false
@@ -1517,6 +1539,7 @@ func (e *selectEnv) columnBind(cr *ast.ColRef) (b *colBinding, unknown bool) {
 	id := cr.Name
 	name := id.Name()
 	tables, sqlName := e.members, name
+	leftJoined := false
 	if e.base != "" {
 		sqlName = e.base + "." + name
 	}
@@ -1535,6 +1558,7 @@ func (e *selectEnv) columnBind(cr *ast.ColRef) (b *colBinding, unknown bool) {
 			return nil, false
 		}
 		tables, sqlName = []*check.TableInfo{j.Table}, j.Name+"."+name
+		leftJoined = j.Left
 	}
 	var missing []string
 	types := map[string][]string{}
@@ -1606,7 +1630,7 @@ func (e *selectEnv) columnBind(cr *ast.ColRef) (b *colBinding, unknown bool) {
 	for t := range types {
 		goType = t
 	}
-	b = &colBinding{name: sqlName, goType: goType, storageGo: storageGo, class: class, storage: storage, nullable: nullable}
+	b = &colBinding{name: sqlName, goType: goType, storageGo: storageGo, class: class, storage: storage, nullable: nullable || leftJoined}
 	e.cols[written] = b
 	return b, false
 }

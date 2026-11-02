@@ -173,3 +173,91 @@ func VisitUpdateWhere(set []rt.Assign[Visit], preds ...rt.Pred[Visit]) rt.Exec {
 	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltVisitTableSQL, set, preds)
 	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
 }
+
+const (
+	voltMerchantTableSQL   = `"merchants"`
+	voltMerchantColumnsSQL = `"id", "country_code", "name"`
+)
+
+func MerchantLimit(n int) rt.Opt[Merchant] { return rt.Limit[Merchant](n) }
+
+func MerchantOffset(n int) rt.Opt[Merchant] { return rt.Offset[Merchant](n) }
+
+func MerchantDistinct() rt.Opt[Merchant] { return rt.Distinct[Merchant]() }
+
+func MerchantOrderBy(terms ...rt.Order[Merchant]) rt.Opt[Merchant] { return rt.OrderBy(terms...) }
+
+func MerchantAfter(key ...any) rt.Opt[Merchant] { return rt.After[Merchant](key...) }
+
+func MerchantSet(assigns ...rt.Assign[Merchant]) []rt.Assign[Merchant] { return assigns }
+
+func MerchantQuery(opts ...rt.Opt[Merchant]) rt.Query[Merchant] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltMerchantTableSQL, voltMerchantColumnsSQL, opts)
+	return rt.Query[Merchant]{SQL: voltSQL, Args: voltArgs, Scan: voltMerchantScan, Err: voltErr}
+}
+
+func MerchantCount(preds ...rt.Pred[Merchant]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltMerchantTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
+}
+
+func MerchantExists(preds ...rt.Pred[Merchant]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltMerchantTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
+}
+
+func MerchantDeleteWhere(preds ...rt.Pred[Merchant]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltMerchantTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+func MerchantUpdateWhere(set []rt.Assign[Merchant], preds ...rt.Pred[Merchant]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltMerchantTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+const (
+	voltMerchantPeriodTableSQL   = `"merchant_periods"`
+	voltMerchantPeriodColumnsSQL = `"id", "merchant_id", "country_code"`
+)
+
+func MerchantPeriodLimit(n int) rt.Opt[MerchantPeriod] { return rt.Limit[MerchantPeriod](n) }
+
+func MerchantPeriodOffset(n int) rt.Opt[MerchantPeriod] { return rt.Offset[MerchantPeriod](n) }
+
+func MerchantPeriodDistinct() rt.Opt[MerchantPeriod] { return rt.Distinct[MerchantPeriod]() }
+
+func MerchantPeriodOrderBy(terms ...rt.Order[MerchantPeriod]) rt.Opt[MerchantPeriod] {
+	return rt.OrderBy(terms...)
+}
+
+func MerchantPeriodAfter(key ...any) rt.Opt[MerchantPeriod] { return rt.After[MerchantPeriod](key...) }
+
+func MerchantPeriodSet(assigns ...rt.Assign[MerchantPeriod]) []rt.Assign[MerchantPeriod] {
+	return assigns
+}
+
+func MerchantPeriodQuery(opts ...rt.Opt[MerchantPeriod]) rt.Query[MerchantPeriod] {
+	voltSQL, voltArgs, voltErr := rt.SelectRender(voltMerchantPeriodTableSQL, voltMerchantPeriodColumnsSQL, opts)
+	return rt.Query[MerchantPeriod]{SQL: voltSQL, Args: voltArgs, Scan: voltMerchantPeriodScan, Err: voltErr}
+}
+
+func MerchantPeriodCount(preds ...rt.Pred[MerchantPeriod]) rt.Lookup[int64] {
+	voltSQL, voltArgs, voltErr := rt.CountRender(voltMerchantPeriodTableSQL, preds)
+	return rt.Lookup[int64]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[int64], Err: voltErr}
+}
+
+func MerchantPeriodExists(preds ...rt.Pred[MerchantPeriod]) rt.Lookup[bool] {
+	voltSQL, voltArgs, voltErr := rt.ExistsRender(voltMerchantPeriodTableSQL, preds)
+	return rt.Lookup[bool]{SQL: voltSQL, Args: voltArgs, Scan: rt.ScanOne[bool], Err: voltErr}
+}
+
+func MerchantPeriodDeleteWhere(preds ...rt.Pred[MerchantPeriod]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.DeleteRender(voltMerchantPeriodTableSQL, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}
+
+func MerchantPeriodUpdateWhere(set []rt.Assign[MerchantPeriod], preds ...rt.Pred[MerchantPeriod]) rt.Exec {
+	voltSQL, voltArgs, voltErr := rt.UpdateRender(voltMerchantPeriodTableSQL, set, preds)
+	return rt.Exec{SQL: voltSQL, Args: voltArgs, Err: voltErr}
+}

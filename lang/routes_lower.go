@@ -324,6 +324,7 @@ func (l *routeLowering) dataset(ds *ast.Dataset, inh inherited) []*RouteInfo {
 			ErrorHandler: inh.errHandler,
 			Pos:          ds.Pos(),
 			FromDataset:  true,
+			ScopeLoads:   inh.loads,
 		})
 	}
 	return out
@@ -415,6 +416,10 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 			switch s.Name {
 			case "name":
 			case "timeout":
+				if events {
+					l.errorf(s.Pos(), "route-loads", "an event route takes no timeout: the runtime serves the stream (§route-loads, §event-routes)")
+					return nil
+				}
 				timeout, _ = l.timeout(s)
 			case "body":
 				bodyS = s
@@ -432,7 +437,7 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 			if s == nil {
 				s = onlyS
 			}
-			l.errorf(s.Pos(), "request-bodies", "%s: belongs to a controller route; %s is a %s route, whose handler is generated (§request-bodies)", s.Name, r.Handler.String(), routeKind(query, events))
+			l.errorf(s.Pos(), "request-bodies", "%s: belongs to a controller route; %s is %s route, whose handler is generated (§request-bodies)", s.Name, r.Handler.String(), routeKindArticled(query, events))
 			return nil
 		}
 		var ok bool
@@ -443,7 +448,7 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 	var loads []LoadInfo
 	if len(r.Loads) > 0 {
 		if query != nil || events {
-			l.errorf(r.Loads[0].Pos(), "route-loads", "a load block belongs to a controller route; %s is a %s route, whose handler is generated (§route-loads)", r.Handler.String(), routeKind(query, events))
+			l.errorf(r.Loads[0].Pos(), "route-loads", "a load block belongs to a controller route; %s is %s route, whose handler is generated (§route-loads)", r.Handler.String(), routeKindArticled(query, events))
 			return nil
 		}
 		var ok bool
@@ -484,6 +489,13 @@ func (l *routeLowering) route(r *ast.Route, inh inherited) *RouteInfo {
 		Timeout:      timeout,
 		Pos:          r.Pos(),
 	}
+}
+
+func routeKindArticled(query *QueryRef, events bool) string {
+	if events {
+		return "an event"
+	}
+	return "a " + routeKind(query, events)
 }
 
 func routeKind(query *QueryRef, events bool) string {
@@ -598,6 +610,8 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 			sig = append(sig, sigParam{name: p.GoName, goType: p.GoType})
 		}
 		switch {
+		case si.With != nil:
+			qr.Result = si.With.RowType
 		case si.Shared != "":
 			qr.Result = si.Shared
 		case len(si.Excluded) > 0:
@@ -605,7 +619,7 @@ func (l *routeLowering) queryBind(pos, qualPos token.Position, method string, pa
 		default:
 			qr.Result = modelOrBase(m)
 		}
-		qr.Many = true
+		qr.Many = !si.Lookup
 	}
 	if !found {
 		if key, _, cm, ok := l.crudByName(target, name); ok {
@@ -1082,6 +1096,7 @@ func (l *routeLowering) resources(res *ast.Resources, inh inherited) []*RouteInf
 			Pos:          res.Pos(),
 
 			FromResources: true,
+			ScopeLoads:    inh.loads,
 			Table:         tableName,
 		}
 		if qr != nil {

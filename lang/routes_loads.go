@@ -33,7 +33,11 @@ func (l *routeLowering) loads(r *ast.Route, params []Param, inh inherited) (load
 		name := ld.Name.Name()
 		switch {
 		case !loadNameOK(name):
-			l.errorf(ld.Name.Pos(), "route-loads", "load %q is not a name a handler parameter can take: a lower-case Go identifier that is not reserved (§route-loads, §route-paths)", name)
+			l.errorf(ld.Name.Pos(), "route-loads", "load %q is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, and not shaped like a generated local (§route-loads, §route-paths)", name)
+			ok = false
+			continue
+		case loadNameQualifier(name, l.facts.pkgName, l.facts.imports):
+			l.errorf(ld.Name.Pos(), "route-loads", "load %q takes the name of a package the generated code refers to (§route-loads, §imports)", name)
 			ok = false
 			continue
 		case byName[name].Name != "":
@@ -61,11 +65,25 @@ func (l *routeLowering) loads(r *ast.Route, params []Param, inh inherited) (load
 	return loads, ok
 }
 
+// loadNameOK reports whether a load may be named so (spec §route-loads,
+// §scope-loads): a lower-case Go identifier that is neither reserved
+// nor err or ok, which the shim declares beside it, nor shaped like a
+// generated local.
 func loadNameOK(name string) bool {
-	if naming.RouteSignatureName(name) || name == "_" || !exportedIdentOK(strings.ToUpper(name[:1])+name[1:]) {
+	if naming.RouteSignatureName(name) || name == "_" || name == "err" || name == "ok" || naming.LocalName(name) || !exportedIdentOK(strings.ToUpper(name[:1])+name[1:]) {
 		return false
 	}
 	return name[0] >= 'a' && name[0] <= 'z'
+}
+
+// loadNameQualifier reports whether name is the package's own name or
+// one of its import qualifiers, which a load cannot shadow.
+func loadNameQualifier(name, pkgName string, imports map[string]string) bool {
+	if name == pkgName {
+		return true
+	}
+	_, ok := imports[name]
+	return ok
 }
 
 func (l *routeLowering) loadQuery(ld *ast.Load, byName map[string]Param) *QueryRef {
@@ -115,6 +133,8 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 			sig = append(sig, sigParam{p.GoName, p.GoType})
 		}
 		switch {
+		case si.With != nil:
+			qr.Result = si.With.RowType
 		case si.Shared != "":
 			qr.Result = si.Shared
 		case len(si.Excluded) > 0:
@@ -122,7 +142,7 @@ func (l *routeLowering) callQuery(what string, call *ast.QueryCall, byName map[s
 		default:
 			qr.Result = modelOrBase(m)
 		}
-		qr.Many = true
+		qr.Many = !si.Lookup
 		if si.Unresolved {
 			qr.Unresolved = true
 		}
@@ -420,6 +440,10 @@ func (l *routeLowering) bodyQuery(call *ast.QueryCall, byName map[string]Param) 
 	qr := &QueryRef{Qualifier: qual, Package: target, Import: importPath, PkgName: pkgName, Local: local, Method: name, Status: 200,
 		Result: cm.Result, Changeset: &ChangesetBind{Type: cm.Body, Params: cm.Params, New: cm.New, Get: cm.Get, Allow: cm.Allow, Table: key}}
 	if len(call.Args) != len(cm.Key) {
+		if len(cm.Key) == 0 {
+			l.errorf(call.Ref.Pos(), "request-bodies", "%s takes no argument: a create loads no row, the body: gives %d (§request-bodies)", ref, len(call.Args))
+			return nil
+		}
 		l.errorf(call.Ref.Pos(), "request-bodies", "%s loads the row to update by %d key column(s), the body: gives %d argument(s) (§request-bodies)", ref, len(cm.Key), len(call.Args))
 		return nil
 	}

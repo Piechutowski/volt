@@ -43,3 +43,12 @@ Group series {
 }
 
 Select browse for series where year = :year [order: (id asc)]
+
+Table posts {
+  id      int    [pk, increment]
+  user_id int    [ref: users.id]
+  title   string
+}
+
+Select totals (count() as n, max(id) as last) for users
+Select feed   for users with posts [order: (id asc)]

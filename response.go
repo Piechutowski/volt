@@ -310,5 +310,8 @@ func Continue[T any](l Load[T], next func(T) Response) Response {
 	if l.halt != nil {
 		return *l.halt
 	}
+	if l.effect == nil {
+		return Fail(errors.New("volt: a scope load decided nothing; a Load is built by LoadWith or Halt"))
+	}
 	return Then(l.effect, next)
 }

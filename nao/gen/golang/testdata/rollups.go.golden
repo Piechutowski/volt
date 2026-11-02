@@ -451,3 +451,212 @@ func voltVisitCast(c rt.Changeset[Visit], p rt.Params[Visit], i int) (rt.Changes
 	}
 	return c, nil
 }
+
+type Merchant struct {
+	ID          int    `db:"id" json:"id"`
+	CountryCode string `db:"country_code" json:"country_code"`
+	Name        string `db:"name" json:"name"`
+}
+
+type MerchantColumn = rt.ColumnOf[Merchant]
+
+type MerchantParams = rt.Params[Merchant]
+
+var (
+	MerchantID          = rt.Column[Merchant, int]{Name: "id"}
+	MerchantCountryCode = rt.Column[Merchant, string]{Name: "country_code"}
+	MerchantName        = rt.Column[Merchant, string]{Name: "name"}
+)
+
+var voltMerchantDesc = &rt.Desc[Merchant]{
+	Model:   "Merchant",
+	Table:   `"merchants"`,
+	Columns: `"id", "country_code", "name"`,
+	Fields: []rt.FieldDesc{
+		{Column: "id", Wire: "id", Key: true, Settable: true},
+		{Column: "country_code", Wire: "country_code", Key: true, Settable: true},
+		{Column: "name", Wire: "name", Settable: true},
+	},
+	Scan:   voltMerchantScan,
+	Values: voltMerchantValues,
+	Apply:  voltMerchantApply,
+	Cast:   voltMerchantCast,
+}
+
+type MerchantChangeset struct{ rt.Changeset[Merchant] }
+
+func MerchantNew() MerchantChangeset { return MerchantChangeset{rt.NewChangeset(voltMerchantDesc)} }
+
+func (r Merchant) Changeset() MerchantChangeset {
+	return MerchantChangeset{rt.ChangesetOf(voltMerchantDesc, r)}
+}
+
+func (c MerchantChangeset) From(r Merchant) MerchantChangeset {
+	return MerchantChangeset{c.Changeset.From(r)}
+}
+
+func (c MerchantChangeset) IDSet(v int) MerchantChangeset {
+	return MerchantChangeset{rt.Set(c.Changeset, 0, func(voltR *Merchant) { voltR.ID = v })}
+}
+
+func (c MerchantChangeset) CountryCodeSet(v string) MerchantChangeset {
+	return MerchantChangeset{rt.Set(c.Changeset, 1, func(voltR *Merchant) { voltR.CountryCode = v })}
+}
+
+func (c MerchantChangeset) NameSet(v string) MerchantChangeset {
+	return MerchantChangeset{rt.Set(c.Changeset, 2, func(voltR *Merchant) { voltR.Name = v })}
+}
+
+func (c MerchantChangeset) Cast(p MerchantParams, allow ...MerchantColumn) MerchantChangeset {
+	return MerchantChangeset{c.Changeset.Cast(p, allow...)}
+}
+
+func (c MerchantChangeset) ErrorAdd(col MerchantColumn, msg string) MerchantChangeset {
+	return MerchantChangeset{c.Changeset.ErrorAdd(col, msg)}
+}
+
+func voltMerchantScan(r rt.Row) (Merchant, error) {
+	var voltV Merchant
+	voltErr := r.Scan(&voltV.ID, &voltV.CountryCode, &voltV.Name)
+	return voltV, rt.Refused("Merchant", voltErr)
+}
+
+func voltMerchantValues(voltR Merchant) []any { return []any{voltR.ID, voltR.CountryCode, voltR.Name} }
+
+func voltMerchantApply(voltData, voltVals Merchant, voltSet []bool) Merchant {
+	voltR := voltData
+	if voltSet[0] {
+		voltR.ID = voltVals.ID
+	}
+	if voltSet[1] {
+		voltR.CountryCode = voltVals.CountryCode
+	}
+	if voltSet[2] {
+		voltR.Name = voltVals.Name
+	}
+	return voltR
+}
+
+func voltMerchantCast(c rt.Changeset[Merchant], p rt.Params[Merchant], i int) (rt.Changeset[Merchant], error) {
+	switch i {
+	case 0:
+		voltV, voltOK, voltErr := rt.Field(p, "id", "int", false, func(voltR *Merchant) int { return voltR.ID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return MerchantChangeset{c}.IDSet(voltV).Changeset, nil
+	case 1:
+		voltV, voltOK, voltErr := rt.Field(p, "country_code", "string", false, func(voltR *Merchant) string { return voltR.CountryCode })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return MerchantChangeset{c}.CountryCodeSet(voltV).Changeset, nil
+	case 2:
+		voltV, voltOK, voltErr := rt.Field(p, "name", "string", false, func(voltR *Merchant) string { return voltR.Name })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return MerchantChangeset{c}.NameSet(voltV).Changeset, nil
+	}
+	return c, nil
+}
+
+type MerchantPeriod struct {
+	ID          int    `db:"id" json:"id"`
+	MerchantID  int    `db:"merchant_id" json:"merchant_id"`
+	CountryCode string `db:"country_code" json:"country_code"`
+}
+
+type MerchantPeriodColumn = rt.ColumnOf[MerchantPeriod]
+
+type MerchantPeriodParams = rt.Params[MerchantPeriod]
+
+var (
+	MerchantPeriodID          = rt.Column[MerchantPeriod, int]{Name: "id"}
+	MerchantPeriodMerchantID  = rt.Column[MerchantPeriod, int]{Name: "merchant_id"}
+	MerchantPeriodCountryCode = rt.Column[MerchantPeriod, string]{Name: "country_code"}
+)
+
+var voltMerchantPeriodDesc = &rt.Desc[MerchantPeriod]{
+	Model:   "MerchantPeriod",
+	Table:   `"merchant_periods"`,
+	Columns: `"id", "merchant_id", "country_code"`,
+	Fields: []rt.FieldDesc{
+		{Column: "id", Wire: "id", Key: true},
+		{Column: "merchant_id", Wire: "merchant_id", Settable: true},
+		{Column: "country_code", Wire: "country_code", Settable: true},
+	},
+	Scan:   voltMerchantPeriodScan,
+	Values: voltMerchantPeriodValues,
+	Apply:  voltMerchantPeriodApply,
+	Cast:   voltMerchantPeriodCast,
+}
+
+type MerchantPeriodChangeset struct{ rt.Changeset[MerchantPeriod] }
+
+func MerchantPeriodNew() MerchantPeriodChangeset {
+	return MerchantPeriodChangeset{rt.NewChangeset(voltMerchantPeriodDesc)}
+}
+
+func (r MerchantPeriod) Changeset() MerchantPeriodChangeset {
+	return MerchantPeriodChangeset{rt.ChangesetOf(voltMerchantPeriodDesc, r)}
+}
+
+func (c MerchantPeriodChangeset) From(r MerchantPeriod) MerchantPeriodChangeset {
+	return MerchantPeriodChangeset{c.Changeset.From(r)}
+}
+
+func (c MerchantPeriodChangeset) MerchantIDSet(v int) MerchantPeriodChangeset {
+	return MerchantPeriodChangeset{rt.Set(c.Changeset, 1, func(voltR *MerchantPeriod) { voltR.MerchantID = v })}
+}
+
+func (c MerchantPeriodChangeset) CountryCodeSet(v string) MerchantPeriodChangeset {
+	return MerchantPeriodChangeset{rt.Set(c.Changeset, 2, func(voltR *MerchantPeriod) { voltR.CountryCode = v })}
+}
+
+func (c MerchantPeriodChangeset) Cast(p MerchantPeriodParams, allow ...MerchantPeriodColumn) MerchantPeriodChangeset {
+	return MerchantPeriodChangeset{c.Changeset.Cast(p, allow...)}
+}
+
+func (c MerchantPeriodChangeset) ErrorAdd(col MerchantPeriodColumn, msg string) MerchantPeriodChangeset {
+	return MerchantPeriodChangeset{c.Changeset.ErrorAdd(col, msg)}
+}
+
+func voltMerchantPeriodScan(r rt.Row) (MerchantPeriod, error) {
+	var voltV MerchantPeriod
+	voltErr := r.Scan(&voltV.ID, &voltV.MerchantID, &voltV.CountryCode)
+	return voltV, rt.Refused("MerchantPeriod", voltErr)
+}
+
+func voltMerchantPeriodValues(voltR MerchantPeriod) []any {
+	return []any{voltR.ID, voltR.MerchantID, voltR.CountryCode}
+}
+
+func voltMerchantPeriodApply(voltData, voltVals MerchantPeriod, voltSet []bool) MerchantPeriod {
+	voltR := voltData
+	if voltSet[1] {
+		voltR.MerchantID = voltVals.MerchantID
+	}
+	if voltSet[2] {
+		voltR.CountryCode = voltVals.CountryCode
+	}
+	return voltR
+}
+
+func voltMerchantPeriodCast(c rt.Changeset[MerchantPeriod], p rt.Params[MerchantPeriod], i int) (rt.Changeset[MerchantPeriod], error) {
+	switch i {
+	case 1:
+		voltV, voltOK, voltErr := rt.Field(p, "merchant_id", "int", false, func(voltR *MerchantPeriod) int { return voltR.MerchantID })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return MerchantPeriodChangeset{c}.MerchantIDSet(voltV).Changeset, nil
+	case 2:
+		voltV, voltOK, voltErr := rt.Field(p, "country_code", "string", false, func(voltR *MerchantPeriod) string { return voltR.CountryCode })
+		if voltErr != nil || !voltOK {
+			return c, voltErr
+		}
+		return MerchantPeriodChangeset{c}.CountryCodeSet(voltV).Changeset, nil
+	}
+	return c, nil
+}

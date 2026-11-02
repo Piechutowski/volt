@@ -35,11 +35,11 @@ func (i *Info) Relations(table string) []*RelationInfo { return i.relations[tabl
 // §relationships-ref).
 func (i *Info) Relation(table, name string) (rel *RelationInfo, named []*RelationInfo) {
 	for _, r := range i.relations[table] {
-		if r.Name == name {
+		if strings.EqualFold(r.Name, name) {
 			named = append(named, r)
 		}
 	}
-	if len(named) == 1 && name != table {
+	if len(named) == 1 && named[0].Name == name && !strings.EqualFold(name, table) {
 		return named[0], named
 	}
 	return nil, named
@@ -50,11 +50,12 @@ func (i *Info) Relation(table, name string) (rel *RelationInfo, named []*Relatio
 func (i *Info) RelationNames(table string) []string {
 	seen := map[string]int{}
 	for _, r := range i.relations[table] {
-		seen[r.Name]++
+		seen[strings.ToLower(r.Name)]++
 	}
 	out := make([]string, 0, len(seen))
-	for name, n := range seen {
-		if n > 1 || name == table {
+	for _, r := range i.relations[table] {
+		name := r.Name
+		if seen[strings.ToLower(name)] > 1 || strings.EqualFold(name, table) {
 			name += " (ambiguous)"
 		}
 		out = append(out, name)

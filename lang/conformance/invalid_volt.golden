@@ -655,7 +655,7 @@ app/routes.volt:16:28: error: spec/route-loads: list parameter "ids" of db.Metri
 
 ## i378_load_name_taken
 app/routes.volt:13:3: error: spec/route-loads: load "id" takes the name of a path parameter of the route (§route-loads)
-app/routes.volt:14:3: error: spec/route-loads: load "r" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved (§route-loads, §route-paths)
+app/routes.volt:14:3: error: spec/route-loads: load "r" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, and not shaped like a generated local (§route-loads, §route-paths)
 app/routes.volt:16:3: error: spec/route-loads: load "metric" is declared twice (first at app/routes.volt:15:3) (§route-loads)
 
 ## i379_timeout_not_seconds
@@ -702,7 +702,7 @@ app/i38_trailing_slash.volt:5:12: error: syntax: '/' must be followed by a path 
 app/routes.volt:7:2: error: spec/scopes-and-routes: Session.Login is reached by routes with different signatures (§handler-references, §scope-loads, §request-bodies, §route-loads): () {} vs () [body: LoginForm] {} (first at app/routes.volt:6:2)
 
 ## i391_load_named_body
-app/routes.volt:12:3: error: spec/route-loads: load "body" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved (§route-loads, §route-paths)
+app/routes.volt:12:3: error: spec/route-loads: load "body" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, and not shaped like a generated local (§route-loads, §route-paths)
 
 ## i392_param_named_body
 app/routes.volt:11:15: error: spec/scopes-and-routes: path parameter "body" collides with a name in generated signatures (§route-paths); reserved: w, r, opts, volt, cs, c, ctx, body
@@ -714,10 +714,10 @@ db/i393_join_on_group.volt:24:31: error: spec/selects-over-groups: join needs a 
 db/i394_join_unknown_relation.volt:19:46: error: spec/selects-over-groups: table "points" has no relation "owner" to join; its relations: metric, source (§selects-over-groups, §relationships-ref)
 
 ## i395_join_ambiguous_relation.volt
-db/i395_join_ambiguous_relation.volt:19:46: error: spec/selects-over-groups: relation "points" of table "metrics" is ambiguous: it is the reverse relation to "points" (at db/i395_join_ambiguous_relation.volt:13:20; name it with [reverse: name] on a Ref element) and the reverse relation to "points" (at db/i395_join_ambiguous_relation.volt:14:26; name it with [reverse: name] on a Ref element) (§relationships-ref, §selects-over-groups)
+db/i395_join_ambiguous_relation.volt:19:46: error: spec/selects-over-groups: relation "points" of table "metrics" is ambiguous, read as SQLite reads an alias, without regard to case: it is the reverse relation to "points" (at db/i395_join_ambiguous_relation.volt:13:20; name it with [reverse: name] on a Ref element) and the reverse relation to "points" (at db/i395_join_ambiguous_relation.volt:14:26; name it with [reverse: name] on a Ref element) (§relationships-ref, §selects-over-groups)
 
 ## i396_join_self_name.volt
-db/i396_join_self_name.volt:11:49: error: spec/selects-over-groups: relation "metrics" of table "metrics" takes the table's own name, which the join's alias needs: it is the reverse relation to "metrics" (at db/i396_join_self_name.volt:8:24; name it with [reverse: name] on a Ref element) (§relationships-ref, §selects-over-groups)
+db/i396_join_self_name.volt:11:49: error: spec/selects-over-groups: relation "metrics" of table "metrics" takes the table's own name, which the join's alias needs, read as SQLite reads it, without regard to case: it is the reverse relation to "metrics" (at db/i396_join_self_name.volt:8:24; name it with [reverse: name] on a Ref element) (§relationships-ref, §selects-over-groups)
 
 ## i397_join_twice.volt
 db/i397_join_twice.volt:19:59: error: spec/selects-over-groups: relation "metric" is joined twice (§selects-over-groups)
@@ -756,7 +756,7 @@ db/i406_derived_without_alias.volt:14:25: error: syntax: a derived item takes an
 db/i407_sum_without_column.volt:14:18: error: syntax: sum takes a column; only count() counts the rows (§selects-over-groups)
 
 ## i408_alias_names_column.volt
-db/i408_alias_names_column.volt:14:25: error: spec/selects-over-groups: alias "ts" names a column of "points"; an alias names no column of the target (§selects-over-groups)
+db/i408_alias_names_column.volt:14:25: error: spec/selects-over-groups: alias "ts" names a column of "points"; an alias names no column of the target or of a joined table, which SQLite would group by instead (§selects-over-groups)
 
 ## i409_alias_twice.volt
 db/i409_alias_twice.volt:14:42: error: spec/selects-over-groups: "n" appears twice in the projection (§selects-over-groups)
@@ -833,7 +833,7 @@ app/routes.volt:10:12: error: spec/scope-loads: Plain is not a scope load: found
 
 ## i430_scope_load_reserved_name
 app/routes.volt:6:2: error: spec/imports: package "db" imported and not used (§imports)
-app/routes.volt:10:7: error: spec/scope-loads: load "body" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved (§scope-loads, §route-paths)
+app/routes.volt:10:7: error: spec/scope-loads: load "body" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, and not shaped like a generated local (§scope-loads, §route-paths)
 
 ## i431_scope_load_path_param
 app/routes.volt:11:6: error: spec/scope-loads: path parameter "user" takes the name of a scope load above the route (§scope-loads, §route-paths)
@@ -851,8 +851,44 @@ app/routes.volt:12:3: error: spec/route-loads: load "user" takes the name of a s
 app/routes.volt:6:2: error: spec/imports: package "db" imported and not used (§imports)
 app/routes.volt:10:12: error: spec/scope-loads: a scope load names a function of this package, written by its bare name (§scope-loads)
 
+## i436_body_on_event_route
+app/routes.volt:10:27: error: spec/request-bodies: body: belongs to a controller route; volt.Events is an event route, whose handler is generated (§request-bodies)
+
+## i437_load_on_event_route
+app/routes.volt:12:3: error: spec/route-loads: a load block belongs to a controller route; volt.Events is an event route, whose handler is generated (§route-loads)
+
+## i438_body_create_with_argument
+app/routes.volt:10:38: error: spec/request-bodies: db.MetricCreate takes no argument: a create loads no row, the body: gives 1 (§request-bodies)
+
+## i439_only_twice
+app/routes.volt:10:86: error: spec/request-bodies: only: names "refresh" twice (§request-bodies)
+
 ## i43_quoted_import.volt
 app/i43_quoted_import.volt:5:2: error: syntax: expected identifier in import path (§imports), found string "\"db\""
+
+## i440_alias_names_joined_column.volt
+db/i440_alias_names_joined_column.volt:19:40: error: spec/selects-over-groups: alias "hour" names a column of "metrics", joined as "metric"; an alias names no column of the target or of a joined table, which SQLite would group by instead (§selects-over-groups)
+
+## i441_with_nullable_key.volt
+db/i441_with_nullable_key.volt:15:30: error: spec/selects-over-groups: with visits matches the parent's "code", which carries null; a NULL key matches no child, so the key is a column that is never NULL (§selects-over-groups)
+
+## i442_with_time_key.volt
+db/i442_with_time_key.volt:14:28: error: spec/selects-over-groups: with samples matches the parent's "started_at" (time.Time), whose keys cannot travel as one JSON list, as a list parameter cannot (§selects-over-groups, §predicates)
+
+## i443_load_named_err
+app/routes.volt:12:3: error: spec/route-loads: load "err" is not a name a handler parameter can take: a lower-case Go identifier that is not reserved, not err or ok, and not shaped like a generated local (§route-loads, §route-paths)
+
+## i444_load_named_like_import
+app/routes.volt:12:3: error: spec/route-loads: load "db" takes the name of a package the generated code refers to (§route-loads, §imports)
+
+## i445_scope_load_named_like_package
+app/routes.volt:10:7: error: spec/scope-loads: load "app" takes the name of a package the generated code refers to (§scope-loads, §imports)
+
+## i446_event_route_timeout
+app/routes.volt:10:27: error: spec/route-loads: an event route takes no timeout: the runtime serves the stream (§route-loads, §event-routes)
+
+## i447_relation_case_ambiguous.volt
+db/i447_relation_case_ambiguous.volt:21:47: error: spec/selects-over-groups: relation "Points" of table "points" takes the table's own name, which the join's alias needs, read as SQLite reads it, without regard to case: it is the forward relation to "metrics" (at db/i447_relation_case_ambiguous.volt:19:41; name it with [as: name] on a Ref element) (§relationships-ref, §selects-over-groups)
 
 ## i44_singular_collision.volt
 app/i44_singular_collision.volt:11:2: error: spec/resources: resources "posty": the collection and member reverse-URL helpers are both "Posty", because singularizing "posty" does not change it (§table-resolution); set the singular explicitly, e.g. [singular: <name>]

@@ -26,7 +26,11 @@ func register(mux *http.ServeMux, c Controllers) {
 	}, errHandlerErrors, voltPerform)))
 
 	mux.Handle("GET /admin/stats", pipe0(volt.Handler("GET /admin/stats", func(r volt.Request) volt.Response {
-		return c.Admin.Stats(r)
+		return volt.Then(db.UserTotals(), func(totals db.Totals) volt.Response {
+			return volt.Then(db.UserFeed(), func(feed []db.UserWithPosts) volt.Response {
+				return c.Admin.Stats(r, totals, feed)
+			})
+		})
 	}, errHandlerErrors, voltPerform)))
 
 	mux.Handle("GET /users", pipe0(volt.Handler("GET /users", func(r volt.Request) volt.Response {
@@ -223,6 +227,24 @@ func register(mux *http.ServeMux, c Controllers) {
 			return volt.Fail(err)
 		}
 		return volt.Then(db.UserSince(voltsince), func(voltOut []db.User) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
+
+	mux.Handle("GET /api/totals", pipe0(volt.Handler("GET /api/totals", func(r volt.Request) volt.Response {
+		if _, err := volt.Negotiate(r); err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.UserTotals(), func(voltOut db.Totals) volt.Response {
+			return volt.RenderStatus(200, voltOut)
+		})
+	}, errHandlerErrors, voltPerform)))
+
+	mux.Handle("GET /api/feed", pipe0(volt.Handler("GET /api/feed", func(r volt.Request) volt.Response {
+		if _, err := volt.Negotiate(r); err != nil {
+			return volt.Fail(err)
+		}
+		return volt.Then(db.UserFeed(), func(voltOut []db.UserWithPosts) volt.Response {
 			return volt.RenderStatus(200, voltOut)
 		})
 	}, errHandlerErrors, voltPerform)))

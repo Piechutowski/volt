@@ -56,3 +56,19 @@ Select hosted_hits (host.name as host, count(id) as visits, max(day) as last) fo
 
 Select board  for hosts with visits where name like "%a%" [order: (id asc)]
 Select lineup (id, name) for hosts with owned
+
+Table merchants {
+  id           int    [pk]
+  country_code string [pk]
+  name         string
+}
+
+Table merchant_periods {
+  id           int    [pk, increment]
+  merchant_id  int
+  country_code string
+}
+
+Ref: merchant_periods.(merchant_id, country_code) > merchants.(id, country_code)
+
+Select placed (id, merchants.name) for merchant_periods join merchants

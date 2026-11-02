@@ -11,7 +11,7 @@ import (
 )
 
 type AdminController interface {
-	Stats(r volt.Request) volt.Response
+	Stats(r volt.Request, totals db.Totals, feed []db.UserWithPosts) volt.Response
 }
 
 type FilesController interface {
@@ -61,7 +61,7 @@ func NewRouter(c Controllers) http.Handler {
 
 func ControllersDeterministic(c Controllers, r volt.Request) []string {
 	var voltOut []string
-	if !volt.Same(c.Admin.Stats(r), c.Admin.Stats(r)) {
+	if !volt.Same(c.Admin.Stats(r, db.Totals{}, nil), c.Admin.Stats(r, db.Totals{}, nil)) {
 		voltOut = append(voltOut, "Admin.Stats")
 	}
 	if !volt.Same(c.Files.Serve(r, ""), c.Files.Serve(r, "")) {

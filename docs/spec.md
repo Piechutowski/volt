@@ -1174,7 +1174,8 @@ ref action   = "cascade" | "restrict" | "set_null" | "set_default" ;
     two relationships from one table to another repeat the reverse
     name, two composite ones the forward name too, and the reverse
     relation of a self-reference takes the table's own name. A name
-    two relations share, or that is the table's, is **ambiguous**:
+    two relations share, or that is the table's, read as SQLite reads
+    an alias, without regard to case, is **ambiguous**:
     nothing can join it (§selects-over-groups), and the error names
     the relationships and the fix. The settings of a `Ref` element
     name its relations outright, `as:` the forward one and `reverse:`
@@ -2311,8 +2312,11 @@ parameters, so the handler reads them and never asks for them.
    write, `Create`, `Update` or `Delete`, is an error, and so is a
    name that is no generated query. The load's name is the parameter
    the handler receives the value under: a lower-case Go identifier
-   that is not a reserved name (§route-paths), not a path parameter of
-   the route and not another load of it.
+   that is not a reserved name (§route-paths), not `err` or `ok`,
+   which the shim declares beside it, not shaped like a generated
+   local (`volt` and an upper-case letter), not the package's name or
+   an import qualifier (§imports), not a path parameter of the route
+   and not another load of it or of a scope above (§scope-loads).
 2. **Arguments** are given in the function's order and number, each a
    name or a literal. A name that is a path parameter of the route
    binds it, and the parameter's type MUST spell the function's Go
@@ -2344,7 +2348,7 @@ parameters, so the handler reads them and never asks for them.
    bounds the whole chain, loads and the handler's own effects, with
    one deadline from the request's arrival; an effect the deadline
    cuts off is a 504 through the error spine. A query route takes it
-   too.
+   too; an event route, whose stream the runtime serves, takes none.
 6. A load block on a query route or an event route is an error: their
    handlers are generated.
 
@@ -2381,14 +2385,16 @@ routes need and whether the request goes on.
    checker holds: `func(volt.Request) volt.Load[T]`. `volt.Load[T]`
    is a sealed sum built by `volt.LoadWith(e)`, an effect of `T` the
    shim performs, or `volt.Halt[T](response)`, a done response that
-   ends the request before anything beneath runs. The function is a
-   pure function of the request like a handler (§requests-and-responses),
-   and the Go rules of `lint.md` read it so.
-2. `T` is a type of this package, or `pkg.Type` where `pkg` is an
-   import of this package (§imports); the generated handlers file
-   imports it. The load's name is a lower-case Go identifier that is
-   not reserved (§route-paths) and that no route beneath uses for a
-   path parameter, a route load or another scope load.
+   ends the request before anything beneath runs; the zero `Load`,
+   which decides nothing, is an error through the error spine. The
+   function is a pure function of the request like a handler
+   (§requests-and-responses), and the Go rules of `lint.md` read it so.
+2. `T` is any Go type the file spells; a package it names by a
+   qualifier is an import of this package (§imports), which the
+   generated handlers file imports under the same qualifier. The
+   load's name obeys the rules of a route load's (§route-loads), and
+   no route beneath uses it for a path parameter, a route load or
+   another scope load.
 3. **Order and the shim.** Scope loads run for every route beneath
    the scope, controller and query routes alike, outermost scope
    first and in declaration order within a scope, after the path
@@ -3412,9 +3418,11 @@ the optional projection narrows the emitted columns.
 9. **Aggregates and arithmetic.** A projected item is a column, an
    aggregate or an arithmetic expression; the latter two are
    **derived** and carry an alias, `as name`, a lower-case identifier
-   that maps to a Go name and names no column of the target, which
-   names the item in `group:`, in `order:` and in the row type, where
-   its field is the alias's Go name with the alias as the wire name.
+   that maps to a Go name and names no column of the target or of a
+   joined table, since SQLite resolves a `GROUP BY` name against the
+   tables before the aliases; the alias names the item in `group:`, in
+   `order:` and in the row type, where its field is the alias's Go
+   name with the alias as the wire name.
    `count()` counts the rows and `count(c)` the rows where `c` is not
    NULL, both `int`; `sum` and `avg` take a numeric column, `avg` is
    `float64` and `sum` the column's type; `min` and `max` take a
@@ -3427,7 +3435,8 @@ the optional projection narrows the emitted columns.
    an alias renames it, whatever its type. A derived item is
    `rt.Null[T]` where it may be NULL: an aggregate other than `count`
    over a nullable column or, without `group:`, over no rows; an
-   expression over a nullable column. Qualified columns reach joined
+   expression over a nullable column; and a column reached through a
+   left join counts as nullable here, as it does projected bare. Qualified columns reach joined
    relations (rule 8) in aggregates and expressions alike, and a
    derived item's Go field obeys the collision rule of rule 8.
 10. **`group:` and one-row selects.** `group:` takes an identifier list
@@ -3442,9 +3451,10 @@ the optional projection narrows the emitted columns.
     (§generated-query-surface).
 11. **`with`: nested results.** `with` names a reverse relation of the
     `for` table (§relationships-ref), which MUST be a table, over one
-    key column; the relation is not ambiguous, the select does not
-    aggregate, and when it projects, the key column is a bare item of
-    the projection. The row type is `<Row>With<Relation>`, a struct
+    key column that is never NULL and travels as a list parameter
+    does (§predicates: not `time.Time`, not `[]byte`); the relation is
+    not ambiguous, the select does not aggregate, and when it
+    projects, the key column is a bare item of the projection. The row type is `<Row>With<Relation>`, a struct
     embedding the parent's row type `<Row>` (rule 7) with a field named
     after the relation that holds the children, the child table's full
     rows: `MetricWithPoints { Metric; Points []Point }`; the name joins

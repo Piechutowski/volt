@@ -411,12 +411,8 @@ func pathParse(body *strings.Builder, p lang.Param) string {
 	return "volt" + p.GoName
 }
 
-func (g *generator) queryShimBody(r *lang.RouteInfo) {
+func (g *generator) queryShimBody(r *lang.RouteInfo, parsed map[string]string) {
 	q := r.Query
-	byName := map[string]lang.Param{}
-	for _, p := range r.Params {
-		byName[p.Name] = p
-	}
 	name := func(n string) string {
 		if q.Local {
 			return n
@@ -429,7 +425,7 @@ func (g *generator) queryShimBody(r *lang.RouteInfo) {
 	for _, p := range q.Params {
 		switch p.Source {
 		case lang.FromPath:
-			args = append(args, pathParse(&g.out, byName[p.Name]))
+			args = append(args, parsed[p.Name])
 		case lang.FromQuery:
 			g.pf("\t\tvolt%s, err := volt.QueryParam[%s](r, %q)\n\t\tif err != nil {\n\t\t\treturn volt.Fail(err)\n\t\t}\n", p.Name, p.GoType, p.Name)
 			args = append(args, "volt"+p.Name)
@@ -482,7 +478,11 @@ func (g *generator) routeEmit(r *lang.RouteInfo) {
 		g.pf("volt.Handler(%q, func(r volt.Request) volt.Response {\n", pattern)
 		if r.Query != nil {
 			g.pf("\t\tif _, err := volt.Negotiate(r); err != nil {\n\t\t\treturn volt.Fail(err)\n\t\t}\n")
-			g.scopeLoadsEmit(r, func() { g.queryShimBody(r) })
+			parsed := map[string]string{}
+			for _, p := range r.Params {
+				parsed[p.Name] = pathParse(&g.out, p)
+			}
+			g.scopeLoadsEmit(r, func() { g.queryShimBody(r, parsed) })
 		} else {
 			parsed := map[string]string{}
 			call := make([]string, 0, len(r.Params))

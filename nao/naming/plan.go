@@ -456,7 +456,7 @@ func (pl *Plan) derivedField(fn SelectFn, it SelectItem, column func(string) (*F
 	}
 	f.GoType, f.BaseType, f.Nullable = it.GoType, base, nullable
 	switch {
-	case it.Agg == "sum" || it.Agg == "min" || it.Agg == "max":
+	case it.Agg == "sum" || it.Agg == "min" || it.Agg == "max" || (it.Agg == "" && it.Col != ""):
 		src, err := column(it.Col)
 		if err != nil {
 			return nil, err

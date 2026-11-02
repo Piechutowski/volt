@@ -251,3 +251,20 @@ type HostWithVisits struct {
 }
 
 const voltHostLineupChildrenSQL = `SELECT "id", "host_id", "owner_id", "day" FROM "visits" WHERE "host_id" IN (SELECT value FROM json_each(?)) ORDER BY "id" ASC`
+
+type Placed struct {
+	ID            int    `db:"id" json:"id"`
+	MerchantsName string `db:"merchants_name" json:"merchants_name"`
+}
+
+func voltPlacedScan(r rt.Row) (Placed, error) {
+	var voltV Placed
+	voltErr := r.Scan(&voltV.ID, &voltV.MerchantsName)
+	return voltV, voltErr
+}
+
+const voltMerchantPeriodPlacedSQL = `SELECT "merchant_periods"."id", "merchants"."name" FROM "merchant_periods" INNER JOIN "merchants" AS "merchants" ON "merchants"."id" = "merchant_periods"."merchant_id" AND "merchants"."country_code" = "merchant_periods"."country_code" WHERE "merchants"."name" LIKE ?`
+
+func MerchantPeriodPlaced(pattern string) rt.Query[Placed] {
+	return rt.Query[Placed]{SQL: voltMerchantPeriodPlacedSQL, Args: []any{pattern}, Scan: voltPlacedScan}
+}

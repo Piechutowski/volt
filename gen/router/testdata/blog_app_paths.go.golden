@@ -78,6 +78,14 @@ func PathAPIUserSince(opts ...volt.URLOption) string {
 	return volt.URL("/api/since", opts...)
 }
 
+func PathAPIUserTotals(opts ...volt.URLOption) string {
+	return volt.URL("/api/totals", opts...)
+}
+
+func PathAPIUserFeed(opts ...volt.URLOption) string {
+	return volt.URL("/api/feed", opts...)
+}
+
 func PathAPIUserRoleGet(userID int, roleID int, opts ...volt.URLOption) string {
 	return volt.URL("/api/roles/"+volt.SegInt(userID)+"/"+volt.SegInt(roleID), opts...)
 }

@@ -122,6 +122,18 @@ func (c *Client) APIUserSince(ctx context.Context, since time.Time) ([]db.User, 
 	return voltOut, voltErr
 }
 
+func (c *Client) APIUserTotals(ctx context.Context) (db.Totals, error) {
+	var voltOut db.Totals
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/totals"), nil, &voltOut)
+	return voltOut, voltErr
+}
+
+func (c *Client) APIUserFeed(ctx context.Context) ([]db.UserWithPosts, error) {
+	var voltOut []db.UserWithPosts
+	voltErr := c.Do(ctx, "GET", volt.URL("/api/feed"), nil, &voltOut)
+	return voltOut, voltErr
+}
+
 func (c *Client) APIUserRoleGet(ctx context.Context, userID int, roleID int) (db.UserRole, error) {
 	var voltOut db.UserRole
 	voltErr := c.Do(ctx, "GET", volt.URL("/api/roles/"+volt.SegInt(userID)+"/"+volt.SegInt(roleID)), nil, &voltOut)

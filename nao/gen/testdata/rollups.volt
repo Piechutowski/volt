@@ -69,3 +69,21 @@ Select scaled (id, hits * :factor + 1 as scaled) for page_views
 // the children loaded by one statement over the parent keys.
 Select board (* \ name) for hosts with visits where id >= :from [order: (id asc)]
 Select lineup for hosts with visits
+
+// A composite key joins on every pair, the forward relation named after
+// the referenced table (spec §relationships-ref).
+Table merchants {
+  id           int    [pk]
+  country_code string [pk]
+  name         string
+}
+
+Table merchant_periods {
+  id           int    [pk, increment]
+  merchant_id  int
+  country_code string
+}
+
+Ref: merchant_periods.(merchant_id, country_code) > merchants.(id, country_code)
+
+Select placed (id, merchants.name) for merchant_periods join merchants where merchants.name like :pattern

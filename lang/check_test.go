@@ -1061,3 +1061,28 @@ func TestScopeLoads(t *testing.T) {
 		t.Errorf("Stats action = %+v; want two scope loads and no parameter", a)
 	}
 }
+
+func TestQueryRoutesOverDerivedSelects(t *testing.T) {
+	pr, diags := project(t, map[string]string{
+		"go.mod": modFile,
+		"db/schema.volt": "package db\n\nTable metrics {\n\tid int [pk, increment]\n}\n\nTable points {\n\tid        int [pk, increment]\n\tmetric_id int [ref: metrics.id]\n}\n\n" +
+			"Select totals (count() as n) for points\nSelect board for metrics with points\n",
+		"app/r.volt": "package app\n\nimport (\n\tdb\n)\n\nScope / {\n\tget /totals db.PointTotals\n\tget /board db.MetricBoard\n" +
+			"\tget /stats Pages.Stats {\n\t\ttotals db.PointTotals()\n\t\tboard db.MetricBoard()\n\t}\n}\n",
+	})
+	wantClean(t, diags)
+	app := pr.Packages["app"]
+	if len(app.Routes) != 3 {
+		t.Fatalf("routes = %d; want 3", len(app.Routes))
+	}
+	if q := app.Routes[0].Query; q.Many || q.Result != "Totals" {
+		t.Errorf("totals route = %+v; want one Totals row", q)
+	}
+	if q := app.Routes[1].Query; !q.Many || q.Result != "MetricWithPoints" {
+		t.Errorf("board route = %+v; want many MetricWithPoints rows", q)
+	}
+	loads := app.Routes[2].Loads
+	if len(loads) != 2 || loads[0].GoType() != "db.Totals" || loads[1].GoType() != "[]db.MetricWithPoints" {
+		t.Errorf("stats loads = %+v", loads)
+	}
+}

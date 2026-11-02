@@ -17,3 +17,11 @@ func (c HostChangeset) Validate() HostChangeset {
 func (c VisitChangeset) Validate() VisitChangeset {
 	return VisitChangeset{c.WithFindings(nil)}
 }
+
+func (c MerchantChangeset) Validate() MerchantChangeset {
+	return MerchantChangeset{c.WithFindings(nil)}
+}
+
+func (c MerchantPeriodChangeset) Validate() MerchantPeriodChangeset {
+	return MerchantPeriodChangeset{c.WithFindings(nil)}
+}

@@ -14,7 +14,10 @@ Scope / [pipe: api, error_handler: Errors] {
 	get  /about   Home.About
 
 	Scope /admin [name: admin] {
-		get /stats Admin.Stats
+		get /stats Admin.Stats {
+			totals db.UserTotals()
+			feed   db.UserFeed()
+		}
 	}
 
 	resources db.users [only: (index, show, create)]
@@ -45,6 +48,8 @@ Scope / [pipe: api, error_handler: Errors] {
 		delete /users/:id(int) db.UserDelete
 		get    /picked           db.UserPicked
 		get    /since            db.UserSince
+		get    /totals           db.UserTotals
+		get    /feed             db.UserFeed
 		get    /roles/:userID(int)/:roleID(int) db.UserRoleGet
 		patch  /roles/:userID(int)/:roleID(int) db.UserRoleUpdate
 	}
